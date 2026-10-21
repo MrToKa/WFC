@@ -5,7 +5,7 @@ import { Button, Caption1, Portal, Spinner } from '@fluentui/react-components';
 import type { CableEndpointSelectionAccess } from '@/hooks/useCableEndpointSelection';
 import { useCableEndpointPairSelection } from '@/hooks/useCableEndpointPairSelection';
 import type { CableWorkflowRow } from '../../../shared/pathfinderCableWorkflow';
-import { useCableInformationPanelStyles } from '@/pages/ProjectDetails/CableInformationPanel.styles';
+import { CablePopupSurface, type CablePopupSurfaceStyles } from '@/components/CablePopupSurface';
 
 export type PathFinderCableRoutingPanelProps = {
   access: Omit<CableEndpointSelectionAccess, 'end' | 'cableId'>;
@@ -30,7 +30,7 @@ function FloatingRoutingPanel(props: PathFinderCableRoutingPanelProps & { cable:
 }
 function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalculate, onTogglePath, pathVisible = false,
   actionsBusy = false, calculatedRouting, calculatedDesignLength, floating }: PathFinderCableRoutingPanelProps & { cable: CableWorkflowRow; floating: ReturnType<typeof useFloatingCablePanel> }) {
-  const styles = useCableInformationPanelStyles(), title = useId(), panel = floating.panelRef;
+  const title = useId(), panel = floating.panelRef;
   const [collapsed, setCollapsed] = useState(false), previousOpen = useRef(false), focusReturn = useRef<HTMLElement | null>(null);
   const active = access.active && open && !collapsed;
   const assignment = useCableEndpointPairSelection({ ...access, cableId: cable.cable.id, active });
@@ -52,13 +52,15 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
     ownerDocument.addEventListener('keydown', escape); return () => ownerDocument.removeEventListener('keydown', escape);
   }, [open, floating.portalTarget]);
   if (!open || !access.active) return null;
-  const endpoint = (end: 'from' | 'to', state: Endpoint) => {
+  const endpoint = (end: 'from' | 'to', state: Endpoint, styles: CablePopupSurfaceStyles) => {
     const side = end === 'from' ? 'From' : 'To', name = end === 'from' ? cable.cable.fromLocation : cable.cable.toLocation;
-    const automatic = state.context?.automaticSelection, confirmed = state.context?.confirmedSelection;
-    const point = state.draft?.point ?? automatic?.pointProjectMetres ?? confirmed?.pointProjectMetres ?? state.context?.head?.pointProjectMetres;
+    const automatic = state.context?.automaticSelection, confirmed = state.context?.confirmedSelection,
+      savedDisplay = state.context?.confirmedDisplaySelection;
+    const point = state.draft?.point ?? automatic?.pointProjectMetres ?? confirmed?.pointProjectMetres ?? savedDisplay?.pointProjectMetres ?? state.context?.head?.pointProjectMetres;
     const selectedDraft = state.draftSource === 'selected';
     const objectName = selectedDraft ? state.displaySelection?.name || (state.draft?.mode === 'fixed-world' ? 'Fixed point' : 'Selected model object')
-      : automatic?.name ?? confirmed?.name ?? (state.context?.head ? 'Saved endpoint' : 'No model object assigned');
+      : automatic?.name ?? confirmed?.name ?? savedDisplay?.name ?? (savedDisplay ? `Saved model object (ID ${savedDisplay.sdkObjectId})`
+        : state.context?.head ? `Saved point for ${name ?? 'this location'}` : 'No model object assigned');
     const value = [objectName, point ? `X: ${point[0]} m; Y: ${point[1]} m; Z: ${point[2]} m` : ''].filter(Boolean).join('\n');
     return <section aria-label={`${side} endpoint`} className={styles.field}>
       <h4 className={styles.heading}>{side}: {name?.trim() ? name : 'Location name is missing.'}</h4>
@@ -74,7 +76,7 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
       {state.notice ? <p role="status" className={styles.note}>{state.notice}</p> : null}
     </section>;
   };
-  const content = <div ref={panel} className={styles.panel} style={floating.panelStyle} role="dialog" aria-modal="false" aria-labelledby={title}
+  const content = <CablePopupSurface targetDocument={floating.portalTarget?.ownerDocument}>{styles => <div ref={panel} className={styles.panel} style={floating.panelStyle} role="dialog" aria-modal="false" aria-labelledby={title}
     tabIndex={-1} data-cable-id={cable.cable.id} data-collapsed={String(collapsed)} onClick={event => event.stopPropagation()}>
     <div {...floating.dragHandleProps}><h3 id={title} className={styles.heading}>{cable.cable.tag?.trim() ? cable.cable.tag : 'Cable routing'}</h3></div>
     <div className={styles.actions}><Button onClick={floating.isPoppedOut ? floating.returnToPage : floating.openInWindow}>{floating.isPoppedOut ? 'Return to page' : 'Open in separate window'}</Button>
@@ -93,7 +95,7 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
         <div className={styles.actions}><Button disabled={busy || !legacyRecovery.canRetry} onClick={() => void legacyRecovery.retry()}>Retry earlier endpoint save</Button>
           <Button disabled={busy || !legacyRecovery.canRetry} onClick={() => void legacyRecovery.close()}>Close earlier endpoint command</Button></div>
       </section> : null}
-      {endpoint('from', from)}{endpoint('to', to)}
+      {endpoint('from', from, styles)}{endpoint('to', to, styles)}
       <section className={styles.field} aria-label="Cable routing actions">
         <h4 className={styles.heading}>{calculatedRouting !== undefined ? 'Calculated routing' : 'Cable list routing'}</h4>
         <textarea aria-label="Cable routing" className={styles.value} readOnly value={(calculatedRouting === undefined ? cable.cable.routing : calculatedRouting) ?? ''} placeholder="No routing calculated" rows={3} />
@@ -113,6 +115,6 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
         <Button disabled={busy || Boolean(pending) || !assignment.enabled} onClick={() => void assignment.refresh()}>Refresh endpoint contexts</Button>
       </details>
     </>}
-  </div>;
+  </div>}</CablePopupSurface>;
   return floating.portalTarget ? createPortal(content, floating.portalTarget) : <Portal>{content}</Portal>;
 }

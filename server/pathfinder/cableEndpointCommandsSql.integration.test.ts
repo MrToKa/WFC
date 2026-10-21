@@ -34,6 +34,8 @@ CREATE TABLE pf_location_aliases(project_id uuid,normalized_alias text,display_a
 CREATE TABLE project_model_selections(project_id uuid PRIMARY KEY REFERENCES projects(id),active_model_version_id uuid,selection_revision bigint);
 CREATE TABLE model_versions(project_id uuid REFERENCES projects(id),id uuid,content_fingerprint text,state text,health text,PRIMARY KEY(project_id,id));
 CREATE TABLE pf_project_preparations(project_id uuid PRIMARY KEY REFERENCES projects(id),current_aggregate_id uuid,current_artifact_id uuid,geometry_revision bigint);
+CREATE TABLE pf_preparation_sessions(id uuid PRIMARY KEY,project_id uuid NOT NULL REFERENCES projects(id),plan jsonb NOT NULL,
+ UNIQUE(project_id,id));
 CREATE TABLE pf_preparation_aggregates(id uuid PRIMARY KEY,project_id uuid REFERENCES projects(id),session_id uuid,model_version_id uuid,
  artifact_id uuid,geometry_revision bigint,manifest jsonb NOT NULL,UNIQUE(project_id,id));
 CREATE TABLE pf_artifacts(project_id uuid REFERENCES projects(id),id uuid,model_version_id uuid,snapshot_sha256 text,snapshot_bytes bigint,
@@ -61,6 +63,10 @@ async function seed(useAliases = false) {
   await pool.query("INSERT INTO model_versions VALUES($1,$2,$3,'ready','healthy')", [projectId, aggregate.modelVersionId, aggregate.contentFingerprint]);
   await pool.query('INSERT INTO pf_artifacts VALUES($1,$2,$3,$4,$5,$6)', [projectId, aggregate.artifactId, aggregate.modelVersionId,
     aggregate.projection.sha256, aggregate.projection.bytes, aggregate.contentFingerprint]);
+  // Keep the genuine frozen v1 plan paired with its builder-produced aggregate.
+  // Current automatic matching reads this retained source before deciding that
+  // a pre-v3 visibility capture cannot supply an unconfirmed automatic point.
+  await pool.query('INSERT INTO pf_preparation_sessions(id,project_id,plan) VALUES($1,$2,$3)', [sample.plan.id, projectId, sample.plan]);
   await pool.query('INSERT INTO pf_preparation_aggregates VALUES($1,$2,$3,$4,$5,$6,$7)', [aggregate.id, projectId, aggregate.sessionId,
     aggregate.modelVersionId, aggregate.artifactId, aggregate.geometryRevision, aggregate]);
   await pool.query('INSERT INTO pf_project_preparations VALUES($1,$2,$3,$4)', [projectId, aggregate.id, aggregate.artifactId, aggregate.geometryRevision]);
@@ -187,6 +193,41 @@ describe.runIf(Boolean(fixturePath))('PF-U2 real atomic cable endpoint commands 
     expect(receipt.binding.binding).toMatchObject({ mode: 'fixed-world', pointProjectMetres: [3, 4, 5], derivation: 'manual-world-point',
       sourceObject: null, attachment: null, qualifiedProjectFrameId: null });
     expect((await state()).cable_hash).toBe(before.cable_hash);
+  });
+  it('recovers a historical fixed-world parent display hint on both ends and aliases by normal context GET with no writes', async () => {
+    await pool.query('TRUNCATE pfu2_commands.projects,pfu2_commands.users,pfu2_commands.viewer_login_bindings CASCADE'); await seed(true);
+    const { command } = await commandFor(cableIds[10]), projectId = sample.aggregate.projectId;
+    // The old strict command has an SDK hint but no newly added optional label.
+    const manual = cableEndpointCommandSchema.parse({ ...command, selection: { mode: 'fixed-world', pointProjectMetres: [3, 4, 5],
+      derivation: 'manual-world-point', displaySdkObjectId: 900 } });
+    const receipt = await commands.save(projectId, who, cableIds[10], 'from', manual), beforeRead = await state();
+    for (const [cableId, end] of [[cableIds[0], 'from'], [cableIds[5], 'to'], [cableIds[15], 'to']] as const) {
+      const context = await commands.context(projectId, other, cableId, end);
+      expect(context.confirmedDisplaySelection).toMatchObject({ sdkObjectId: 900, bindingId: receipt.binding.binding.id,
+        bindingContentSha256: receipt.binding.binding.contentSha256, pointProjectMetres: [3, 4, 5] });
+      expect(context.confirmedDisplaySelection).not.toHaveProperty('name'); expect(context.confirmedSelection).toBe(null);
+      expect(context.head?.sourceObject).toBe(null); expect(context.head?.attachment).toBe(null);
+    }
+    expect(await state()).toEqual(beforeRead);
+    await pool.query('UPDATE project_model_selections SET selection_revision=2 WHERE project_id=$1', [projectId]);
+    expect((await commands.context(projectId, who, cableIds[0], 'from')).confirmedDisplaySelection).toBe(null);
+  });
+  it('retains an explicit label across another administrator no-op and lets a later explicit null clear display only', async () => {
+    const projectId = sample.aggregate.projectId, { command } = await commandFor();
+    const manual = cableEndpointCommandSchema.parse({ ...command, selection: { mode: 'fixed-world', pointProjectMetres: [3, 4, 5],
+      derivation: 'manual-world-point', displaySdkObjectId: 900, displayObjectName: '/Manual parent' } });
+    const original = await commands.save(projectId, who, cableIds[0], 'from', manual);
+    const next = await commandFor(cableIds[0], 'from', other, id(51));
+    const otherCommand = cableEndpointCommandSchema.parse({ ...next.command, selection: manual.selection });
+    const noop = await commands.save(projectId, other, cableIds[0], 'from', otherCommand);
+    expect(noop.actorId).toBe(other.userId); expect(noop.binding.binding.confirmedBy).toBe(who.userId); expect(noop.binding.duplicate).toBe(true);
+    expect((await commands.context(projectId, who, cableIds[5], 'to')).confirmedDisplaySelection).toMatchObject({ sdkObjectId: 900, name: '/Manual parent' });
+    const third = await commandFor(cableIds[5], 'to', other, id(52));
+    const clear = cableEndpointCommandSchema.parse({ ...third.command, selection: { mode: 'fixed-world', pointProjectMetres: [3, 4, 5],
+      derivation: 'manual-world-point', displaySdkObjectId: null } });
+    await commands.save(projectId, other, cableIds[5], 'to', clear);
+    const context = await commands.context(projectId, who, cableIds[0], 'from');
+    expect(context.head?.id).toBe(original.binding.binding.id); expect(context.confirmedDisplaySelection).toBe(null); expect(context.head?.sourceObject).toBe(null);
   });
   it('rolls back new location, aliases, head, revision and registry when actual command receipt insertion fails', async () => {
     const { command } = await commandFor(), before = await state(), projectId = sample.aggregate.projectId;

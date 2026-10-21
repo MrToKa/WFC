@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { isCanonicalPoint, type CanonicalPoint, type ViewerSelection } from '../../viewer-runtime/protocol.mjs';
 import { endpointPointSchema, type EndpointCurrentScope, type EndpointObjectRef } from '../../shared/pathfinderEndpointBindings';
-import { cableEndpointCommandSchema } from '../../shared/pathfinderCableEndpoints';
+import { cableEndpointCommandSchema, cableEndpointDisplayObjectNameSchema } from '../../shared/pathfinderCableEndpoints';
 import { canonicalPurposeJson, policyUuidSchema } from '../../shared/pathfinderPurposePolicy';
 import { locationImpactCalculationSchema, type LocationImpactCalculation } from '../../shared/pathfinderLocationImpacts';
 import { initialFillPolicySchema, type InitialFillPolicy } from '../../shared/pathfinderInitialFill';
@@ -26,6 +26,13 @@ export type CableEndpointSelectionAccess = {
 type Draft = { mode: 'object-derived'; sdkObjectId: number; object: EndpointObjectRef; point: CanonicalPoint }
   | { mode: 'fixed-world'; point: CanonicalPoint; derivation: 'manual-world-point' | 'picked-surface-point'; displaySdkObjectId: number | null };
 type DisplaySelection = { sdkObjectId: number; name: string; point: CanonicalPoint };
+/** Preserve a selected label only alongside the same display object and anchor. */
+export function endpointDisplayNameHint(draft: Draft, display: DisplaySelection | null) {
+  if (draft.mode !== 'fixed-world' || draft.displaySdkObjectId === null || !display
+    || display.sdkObjectId !== draft.displaySdkObjectId || draft.point.some((coordinate, index) => coordinate !== display.point[index])) return {};
+  const name = cableEndpointDisplayObjectNameSchema.safeParse(display.name);
+  return name.success ? { displayObjectName: name.data } : {};
+}
 type State = { identity: string; context: CableEndpointContext | null; draft: Draft | null; displaySelection: DisplaySelection | null;
   pending: PendingCableEndpoint | null; storageReady: boolean; busy: boolean; error: string | null; notice: string | null; receipt: CableEndpointReceipt | null };
 const initial = (identity: string): State => ({ identity, context: null, draft: null, displaySelection: null, pending: null, storageReady: false, busy: false, error: null, notice: null, receipt: null });
@@ -201,7 +208,8 @@ export function useCableEndpointSelection(access: CableEndpointSelectionAccess) 
       expectedRegistryRevision: context.registryRevision, expectedLocationId: context.location?.id ?? null, expectedLocationRevision: context.location?.revision ?? null,
       expectedHeadId: context.head?.id ?? null, expectedCurrent: context.current, reason,
       selection: draft.mode === 'object-derived' ? { mode: draft.mode, sdkObjectId: draft.sdkObjectId, object: draft.object }
-        : { mode: draft.mode, pointProjectMetres: draft.point, derivation: draft.derivation, displaySdkObjectId: draft.displaySdkObjectId } });
+        : { mode: draft.mode, pointProjectMetres: draft.point, derivation: draft.derivation, displaySdkObjectId: draft.displaySdkObjectId,
+          ...endpointDisplayNameHint(draft, data.current.displaySelection) } });
     const intent = await retainPendingCableEndpoint(owner(), context.cableId, context.end, command);
     if (!live() || abort.signal.aborted) return false;
     update({ pending: intent }); return execute(intent, abort);

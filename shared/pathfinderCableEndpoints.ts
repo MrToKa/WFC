@@ -10,6 +10,9 @@ import { initialFillPolicySchema, initialFillMandateReferenceSchema } from './pa
 export const CABLE_ENDPOINT_LIMITS = Object.freeze({ controlBytes: 65536, responseBytes: 1024 * 1024, projectCables: 10000, impactTextBytes: 8 * 1024 * 1024, reasonCodes: 64 });
 export const cableEndpointEndSchema = z.enum(['from', 'to']);
 export const cableEndpointSdkObjectIdSchema = z.number().int().min(1).max(2147483647);
+export const cableEndpointDisplayObjectNameSchema = z.string().min(1).max(500).refine(value => value.trim().length > 0
+  && !/[\u0000-\u001f\u007f-\u009f]/u.test(value)
+  && [...value].every(character => character.length !== 1 || character.charCodeAt(0) < 0xd800 || character.charCodeAt(0) > 0xdfff));
 const reasonCodes = z.array(recalculationReasonSchema).max(CABLE_ENDPOINT_LIMITS.reasonCodes).refine(values => new Set(values).size === values.length);
 const logicalName = z.string().max(4096).nullable();
 export const cableEndpointAutomaticSelectionSchema = z.object({ source: z.literal('automatic-unconfirmed'),
@@ -18,12 +21,17 @@ export const cableEndpointAutomaticSelectionSchema = z.object({ source: z.litera
 export const cableEndpointConfirmedSelectionSchema = cableEndpointAutomaticSelectionSchema.omit({ source: true, confirmed: true }).extend({
   source: z.literal('confirmed'), confirmed: z.literal(true),
 }).strict();
+/** A display hint is not retained geometry, an attachment or automatic matching authority. */
+export const cableEndpointConfirmedDisplaySelectionSchema = z.object({ source: z.literal('confirmed-display-only'), mode: z.literal('fixed-world'),
+  sdkObjectId: cableEndpointSdkObjectIdSchema, name: cableEndpointDisplayObjectNameSchema.optional(), pointProjectMetres: endpointPointSchema,
+  current: endpointCurrentScopeSchema, bindingId: policyUuidSchema, bindingContentSha256: policyHashSchema, commandSha256: policyHashSchema }).strict();
 export const cableEndpointContextSchema = z.object({ schemaVersion: z.literal('wfc.pf.cable-endpoint-context.v1'),
   projectId: policyUuidSchema, cableId: policyUuidSchema, end: cableEndpointEndSchema, cableWriteRevision: policyRevisionSchema,
   logicalName, logicalKey: logicalName, mto: z.string().max(96).nullable(), canBind: z.boolean(), reasonCodes,
   registryRevision: policyRevisionSchema, location: endpointLocationSchema.nullable(), head: endpointBindingSchema.nullable(),
   current: endpointCurrentScopeSchema.nullable(), automaticSelection: cableEndpointAutomaticSelectionSchema.nullable().optional(),
   confirmedSelection: cableEndpointConfirmedSelectionSchema.nullable().optional(),
+  confirmedDisplaySelection: cableEndpointConfirmedDisplaySelectionSchema.nullable().optional(),
   contextSha256: policyHashSchema }).strict().superRefine((value, context) => {
   if (value.logicalName !== null && value.logicalName !== value.logicalName.normalize('NFC').trim()
     || value.logicalKey !== (value.logicalName?.normalize('NFC').trim().toUpperCase() || null))
@@ -41,6 +49,16 @@ export const cableEndpointContextSchema = z.object({ schemaVersion: z.literal('w
     || canonicalPurposeJson(value.confirmedSelection.object) !== canonicalPurposeJson(value.head.sourceObject)
     || canonicalPurposeJson(value.confirmedSelection.pointProjectMetres) !== canonicalPurposeJson(value.head.pointProjectMetres)))
     context.addIssue({ code: 'custom', message: 'Confirmed model display belongs to the exact current object-derived head.' });
+  const display = value.confirmedDisplaySelection;
+  if (display && (!value.canBind || !value.current || !value.head || !value.location || value.head.status !== 'confirmed'
+    || value.head.mode !== 'fixed-world' || value.head.sourceObject !== null || value.head.attachment !== null
+    || value.head.locationRevision !== value.location.revision || display.bindingId !== value.head.id || display.bindingContentSha256 !== value.head.contentSha256
+    || canonicalPurposeJson(display.current) !== canonicalPurposeJson(value.current)
+    || value.head.modelVersionId !== value.current.modelVersionId || value.head.artifactId !== value.current.artifactId
+    || value.head.aggregateId !== value.current.aggregateId || value.head.captureFrameId !== value.current.captureFrameId
+    || value.head.projectionSha256 !== value.current.projectionSha256
+    || canonicalPurposeJson(display.pointProjectMetres) !== canonicalPurposeJson(value.head.pointProjectMetres)))
+    context.addIssue({ code: 'custom', message: 'A display-only hint belongs to the exact current confirmed fixed-world head.' });
 });
 export type CableEndpointContext = z.infer<typeof cableEndpointContextSchema>;
 export function cableEndpointContextHashInput(value: CableEndpointContext) {
@@ -70,8 +88,8 @@ const common = { schemaVersion: z.literal('wfc.pf.cable-endpoint-command.v1'), i
 const selection = z.discriminatedUnion('mode', [
   z.object({ mode: z.literal('object-derived'), sdkObjectId: cableEndpointSdkObjectIdSchema, object: endpointObjectRefSchema }).strict(),
   z.object({ mode: z.literal('fixed-world'), pointProjectMetres: endpointPointSchema, derivation: z.enum(['manual-world-point', 'picked-surface-point']),
-    displaySdkObjectId: cableEndpointSdkObjectIdSchema.nullable() }).strict(),
-]);
+    displaySdkObjectId: cableEndpointSdkObjectIdSchema.nullable(), displayObjectName: cableEndpointDisplayObjectNameSchema.optional() }).strict(),
+]).refine(value => value.mode !== 'fixed-world' || value.displayObjectName === undefined || value.displaySdkObjectId !== null);
 const locationExpectation = (value: { expectedLocationId: string | null; expectedLocationRevision: string | null; expectedHeadId: string | null }) => value.expectedLocationId === null ? value.expectedLocationRevision === null && value.expectedHeadId === null : value.expectedLocationRevision !== null;
 const legacyCommand = z.object({ ...common, selection }).strict().refine(locationExpectation);
 const impactCommand = z.object({ ...common, schemaVersion: z.literal('wfc.pf.cable-endpoint-command.v2'), selection,

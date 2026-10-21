@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parsePathFinderProposal, type PathFinderPreview, type PathFinderState } from '@/api/pathfinder';
 import { EndpointBindingApiError, fetchEndpointBinding } from '@/api/pathfinderEndpointBindings';
 import { GeometryTraceApiError, fetchGeometryObjectRevision } from '@/api/pathfinderGeometryTrace';
+import { CableEndpointApiError, fetchCableEndpointContext, type CableEndpointContext } from '@/api/pathfinderCableEndpoints';
 import { endpointBindingFixture, endpointIds as ids } from '@/test/endpointBindingFixtures';
 import { geometryTraceFixture } from '@/test/geometryTraceFixtures';
 import { canonicalPurposeJson } from '../../../shared/pathfinderPurposePolicy';
@@ -12,6 +13,7 @@ import { computedPathObjectIds, previewEndpointObjectIds, proposalEndpointObject
 
 vi.mock('@/api/pathfinderEndpointBindings', async importOriginal => ({ ...await importOriginal<typeof import('@/api/pathfinderEndpointBindings')>(), fetchEndpointBinding: vi.fn() }));
 vi.mock('@/api/pathfinderGeometryTrace', async importOriginal => ({ ...await importOriginal<typeof import('@/api/pathfinderGeometryTrace')>(), fetchGeometryObjectRevision: vi.fn() }));
+vi.mock('@/api/pathfinderCableEndpoints', async importOriginal => ({ ...await importOriginal<typeof import('@/api/pathfinderCableEndpoints')>(), fetchCableEndpointContext: vi.fn() }));
 const key = (n: number) => `74000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const hash = (value: unknown) => createHash('sha256').update(canonicalPurposeJson(value)).digest('hex');
 function fixture() {
@@ -59,6 +61,21 @@ function fixture() {
       stale: false, engineeringAccepted: false, acceptanceScope: 'standalone-preview', canApply: false } };
   return { binding, context, record, bound, automatic, raw, state, access, preview };
 }
+function fixedDisplayFixture() {
+  const f = fixture(), head = structuredClone(f.binding);
+  head.mode = 'fixed-world'; head.derivation = 'manual-world-point'; head.sourceObject = null;
+  head.contentSha256 = hash(endpointBindingContentHashInput(head));
+  const bound = { ...f.bound, mode: 'fixed-world', bindingContentSha256: head.contentSha256, sourceObjectRevisionId: null };
+  const context: CableEndpointContext = { schemaVersion: 'wfc.pf.cable-endpoint-context.v1', projectId: ids.project, cableId: f.raw.cableId,
+    end: 'to', cableWriteRevision: f.raw.cableWriteRevision, logicalName: 'Synthetic equipment', logicalKey: 'SYNTHETIC EQUIPMENT',
+    mto: 'LV', canBind: true, reasonCodes: [], registryRevision: '2', location: structuredClone(f.context.location), head,
+    current: structuredClone(f.context.current), contextSha256: 'e'.repeat(64), confirmedDisplaySelection: {
+      source: 'confirmed-display-only', mode: 'fixed-world', sdkObjectId: 901, name: '/Selected parent', pointProjectMetres: [...head.pointProjectMetres],
+      current: structuredClone(f.context.current!), bindingId: head.id, bindingContentSha256: head.contentSha256, commandSha256: 'd'.repeat(64),
+    } };
+  const proposal = parsePathFinderProposal({ ...f.raw, dependencies: { ...f.raw.dependencies, to: bound } });
+  return { ...f, context, proposal };
+}
 beforeEach(() => vi.clearAllMocks());
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
@@ -103,6 +120,57 @@ describe('Path Finder endpoint foreground evidence', () => {
       to: { ...f.bound, mode: 'fixed-world', sourceObjectRevisionId: null } } });
     expect(await proposalEndpointObjectIds(proposal, f.state, f.access)).toEqual(['dbid:74']);
     expect(fetchEndpointBinding).not.toHaveBeenCalled(); expect(fetchGeometryObjectRevision).not.toHaveBeenCalled();
+  });
+  it('keeps the explicitly assigned parent object visible using display-only evidence from the exact saved endpoint', async () => {
+    const f = fixedDisplayFixture(); vi.mocked(fetchCableEndpointContext).mockResolvedValue(f.context);
+    const before = structuredClone(f.proposal);
+    expect(await proposalEndpointObjectIds(f.proposal, f.state, f.access)).toEqual(['dbid:74', 'dbid:901']);
+    expect(fetchCableEndpointContext).toHaveBeenCalledExactlyOnceWith(ids.project, f.access.token, f.proposal.cableId, 'to', expect.any(AbortSignal));
+    expect(fetchEndpointBinding).not.toHaveBeenCalled(); expect(fetchGeometryObjectRevision).not.toHaveBeenCalled();
+    expect(f.proposal).toEqual(before); expect(f.context.head?.sourceObject).toBe(null); expect(f.context.head?.attachment).toBe(null);
+  });
+  it.each(['missing', 'unavailable', 'cable', 'end', 'location', 'location-revision', 'head', 'hash', 'point', 'unconfirmed', 'model', 'selection', 'fingerprint', 'artifact', 'aggregate', 'frame', 'projection', 'display-head', 'display-hash', 'display-point', 'display-model', 'attachment'])(
+    'omits stale or invalid fixed-world %s display evidence without changing the route', async field => {
+      const f = fixedDisplayFixture();
+      if (field === 'missing') f.context.confirmedDisplaySelection = null;
+      if (field === 'unavailable') f.context.canBind = false;
+      if (field === 'cable') f.context.cableId = key(99);
+      if (field === 'end') f.context.end = 'from';
+      if (field === 'location') f.context.location!.id = key(99);
+      if (field === 'location-revision') f.context.location!.revision = '999';
+      if (field === 'head') f.context.head!.id = key(99);
+      if (field === 'hash') f.context.head!.contentSha256 = 'f'.repeat(64);
+      if (field === 'point') f.context.head!.pointProjectMetres = [999, 2, 3];
+      if (field === 'unconfirmed') f.context.head!.status = 'stale';
+      if (field === 'model') f.context.current!.modelVersionId = key(99);
+      if (field === 'selection') f.context.current!.selectionRevision = '999';
+      if (field === 'fingerprint') f.context.current!.contentFingerprint = 'f'.repeat(64);
+      if (field === 'artifact') f.context.current!.artifactId = key(99);
+      if (field === 'aggregate') f.context.current!.aggregateId = key(99);
+      if (field === 'frame') f.context.current!.captureFrameId = key(99);
+      if (field === 'projection') f.context.current!.projectionSha256 = 'f'.repeat(64);
+      if (field === 'display-head') f.context.confirmedDisplaySelection!.bindingId = key(99);
+      if (field === 'display-hash') f.context.confirmedDisplaySelection!.bindingContentSha256 = 'f'.repeat(64);
+      if (field === 'display-point') f.context.confirmedDisplaySelection!.pointProjectMetres = [999, 2, 3];
+      if (field === 'display-model') f.context.confirmedDisplaySelection!.current.modelVersionId = key(99);
+      if (field === 'attachment') Object.assign(f.context.head!, { sourceObject: f.binding.sourceObject });
+      vi.mocked(fetchCableEndpointContext).mockResolvedValue(f.context);
+      expect(await proposalEndpointObjectIds(f.proposal, f.state, f.access)).toEqual(['dbid:74']); expect(fetchGeometryObjectRevision).not.toHaveBeenCalled();
+    });
+  it.each([401, 403])('propagates fixed-world current authority failure %i', async status => {
+    const f = fixedDisplayFixture(), error = new CableEndpointApiError('ADMIN_REQUIRED', status, 'Current access was refused.');
+    vi.mocked(fetchCableEndpointContext).mockRejectedValue(error);
+    await expect(proposalEndpointObjectIds(f.proposal, f.state, f.access)).rejects.toBe(error);
+  });
+  it('bounds fixed-world display to the existing total deadline and honors explicit cancellation', async () => {
+    vi.useFakeTimers(); const f = fixedDisplayFixture();
+    vi.mocked(fetchCableEndpointContext).mockImplementation((_project, _token, _cable, _end, signal) => new Promise((_resolve, reject) => {
+      signal!.addEventListener('abort', () => reject(signal!.reason), { once: true });
+    }));
+    const pending = proposalEndpointObjectIds(f.proposal, f.state, f.access); await vi.advanceTimersByTimeAsync(ENDPOINT_VISIBILITY_DEADLINE_MS);
+    expect(await pending).toEqual(['dbid:74']);
+    const stop = new AbortController(), cancelled = proposalEndpointObjectIds(f.proposal, f.state, f.access, stop.signal);
+    stop.abort(); await expect(cancelled).rejects.toMatchObject({ name: 'AbortError' });
   });
   it.each(['binding-id', 'binding-hash', 'binding-point', 'binding-model', 'binding-frame', 'unconfirmed', 'object-hash', 'object-model', 'object-frame', 'object-dbId'])(
     'omits an inconsistent confirmed %s and preserves the valid automatic end', async field => {

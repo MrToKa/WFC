@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { FluentProvider, webDarkTheme } from '@fluentui/react-components';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useCableEndpointSelection } from '@/hooks/useCableEndpointSelection';
@@ -92,6 +93,17 @@ describe('persistent nonmodal cable routing panel with atomic drafts', () => {
     expect(screen.getByRole('textbox', { name: 'From assigned model object' })).toHaveValue('Panel object 001\nX: 1 m; Y: 2 m; Z: 3 m');
     expect(screen.getAllByText('Saved shared location.')).toHaveLength(2); expect(screen.queryByText('Automatically matched — confirm with Save.')).toBeNull();
     expect(screen.getByRole('button', { name: 'Calculate routing' })).toBeEnabled(); expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled(); expect(assignment.save).not.toHaveBeenCalled();
+  });
+  it('shows the saved fixed-world object label and coordinates while preserving the cable logical name', () => {
+    const base = context('from', 'confirmed'), head = { ...base.head!, mode: 'fixed-world' as const, derivation: 'manual-world-point' as const, sourceObject: null, attachment: null };
+    assignment.from.context = cableEndpointContextSchema.parse({ ...base, head, confirmedSelection: null, confirmedDisplaySelection: {
+      source: 'confirmed-display-only', mode: 'fixed-world', sdkObjectId: 444, name: 'Equipment parent /actual-model-name',
+      pointProjectMetres: head.pointProjectMetres, current: base.current!, bindingId: head.id, bindingContentSha256: head.contentSha256, commandSha256: 'e'.repeat(64),
+    } });
+    render(<PathFinderCableRoutingPanel {...props()} />);
+    expect(screen.getByRole('heading', { name: 'From: Panel 001' })).toBeVisible();
+    expect(screen.getByRole('textbox', { name: 'From assigned model object' })).toHaveValue('Equipment parent /actual-model-name\nX: 1 m; Y: 2 m; Z: 3 m');
+    expect(assignment.save).not.toHaveBeenCalled(); expect(assignment.from.selectObject).not.toHaveBeenCalled();
   });
   it('collapses without discarding ownership, pauses work and retains uncertain Save recovery', () => {
     assignment.pending = { cableId: id(3) } as Assignment['pending']; assignment.canRetry = true;
@@ -201,8 +213,12 @@ describe('Path Finder detached window integration', () => {
     Object.defineProperty(popup, 'closed', { configurable: true, value: false }); popup.focus = vi.fn(); popup.close = vi.fn();
     assignment.from.draft = { mode: 'fixed-world', point: [7, 8, 9], derivation: 'manual-world-point', displaySdkObjectId: 55 };
     assignment.from.draftSource = 'selected'; assignment.from.displaySelection = { sdkObjectId: 55, name: 'Parent equipment', point: [7, 8, 9] }; assignment.canSave = true;
-    const view = render(<PathFinderCableRoutingPanel {...p} requestedPopup={{ window: popup, blocked: false, id: 'clicked' }} />);
+    const view = render(<FluentProvider theme={webDarkTheme}><PathFinderCableRoutingPanel {...p} requestedPopup={{ window: popup, blocked: false, id: 'clicked' }} /></FluentProvider>);
     const child = within(popup.document.body); expect(child.getByRole('dialog', { name: 'Cable <literal>' })).toBeInTheDocument();
+    const nativePanel = child.getByRole('dialog'), nativeProvider = nativePanel.closest('.fui-FluentProvider')!;
+    expect(popup.getComputedStyle(nativeProvider).getPropertyValue('--colorNeutralBackground1')).toBe(webDarkTheme.colorNeutralBackground1);
+    expect(popup.getComputedStyle(nativePanel).display).toBe('flex');
+    expect(child.getByRole('textbox', { name: 'From assigned model object' })).toHaveValue('Parent equipment\nX: 7 m; Y: 8 m; Z: 9 m');
     fireEvent.click(child.getByRole('button', { name: 'Assign To' })); expect(assignment.to.selectObject).toHaveBeenCalledOnce(); expect(assignment.save).not.toHaveBeenCalled();
     fireEvent.click(child.getByRole('button', { name: 'Return to page' })); expect(popup.close).toHaveBeenCalled();
     expect(screen.getByRole('textbox', { name: 'From assigned model object' })).toHaveValue('Parent equipment\nX: 7 m; Y: 8 m; Z: 9 m');

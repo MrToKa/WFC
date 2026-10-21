@@ -26,6 +26,13 @@ function fixture() {
       if (sql.startsWith('/* cable-endpoint:location */')) { const l = f.state.locations.get(p[1]); return { rows: l ? [{ ...l, oversized: false }] : [] }; }
       if (sql.startsWith('/* cable-endpoint:aliases */')) return { rows: [...f.state.aliases.values()].filter(a => a.location_id === p[1]).map(a => ({ ...a, oversized: false })) };
       if (sql.startsWith('/* cable-endpoint:head */')) { const b = f.state.bindings.get(f.state.heads.get(p[1]) ?? ''); return { rows: b ? [{ binding_id: b.id, binding_revision: b.bindingRevision, record_sha256: b.contentSha256, record: b }] : [] }; }
+      if (sql.startsWith('/* cable-endpoint:display-command */')) return { rows: [...f.state.commands.entries()].reverse().flatMap(([key, value]) => {
+        const stored = value.receipt as { status?: string; receipt?: { locationId?: string; binding?: { binding?: { id?: string; contentSha256?: string } } } };
+        const request = value.request as { schemaVersion?: string };
+        return request.schemaVersion === 'wfc.pf.cable-endpoint-command-owner.v1' && stored.status === 'saved' && stored.receipt?.locationId === p[1]
+          && stored.receipt.binding?.binding?.id === p[2] && stored.receipt.binding.binding.contentSha256 === p[3]
+          ? [{ ...value, actor_id: key.split(':')[0], idempotency_key: key.split(':')[1] }] : [];
+      }).slice(0, 1) };
       if (sql.startsWith('/* cable-endpoint:impact */')) return { rows: f.state.cables.map(c => ({ ...c, oversized: false, total_text_bytes: settings.impactBytes })) };
       if (sql.startsWith('/* cable-endpoint:command */') || sql.startsWith('/* cable-endpoint:pair-command */')) { const c = f.state.commands.get(p[1] + ':' + p[2]); return { rows: c ? [c] : [] }; }
       if (sql.startsWith('/* cable-endpoint:automatic-name */')) { const record = f.built.records.find(item => item.id === p[2]); return { rows: record ? [{ name: record.historicalModel.name, sdk_object_id: record.identity.dbId }] : [] }; }
@@ -343,6 +350,22 @@ describe('atomic cable endpoint pair saves using synthetic SQL', () => {
 });
 
 describe('automatic endpoint context is a verified unconfirmed suggestion', () => {
+  it('recovers an explicitly assigned fixed-world parent across a different cable/end without a new Save or source object', async () => {
+    const f = fixture(), input = f.command(await f.read());
+    input.selection = { mode: 'fixed-world', pointProjectMetres: [2, 3, 4], derivation: 'manual-world-point', displaySdkObjectId: 900, displayObjectName: '/Selected parent' };
+    await f.save(input); const before = f.state.commands.size, c = await f.read(id(11), 'to');
+    expect(c.head?.sourceObject).toBe(null); expect(c.confirmedSelection).toBe(null);
+    expect(c.confirmedDisplaySelection).toMatchObject({ sdkObjectId: 900, name: '/Selected parent', bindingId: c.head?.id, pointProjectMetres: [2, 3, 4] });
+    expect(c.contextSha256).toBe(endpointBindingHash(cableEndpointContextHashInput(c))); expect(f.state.commands.size).toBe(before);
+    f.state.selectedRevision = '2'; expect((await f.read(id(11), 'to')).confirmedDisplaySelection).toBe(null);
+  });
+  it('a later explicit fixed point without an object clears a previous display hint', async () => {
+    const f = fixture(), input = f.command(await f.read());
+    input.selection = { mode: 'fixed-world', pointProjectMetres: [2, 3, 4], derivation: 'manual-world-point', displaySdkObjectId: 900 };
+    const saved = await f.save(input); expect((await f.read()).confirmedDisplaySelection?.sdkObjectId).toBe(900);
+    await f.save(f.command(await f.read())); const c = await f.read();
+    expect(c.head?.id).toBe(saved.binding.binding.id); expect(c.confirmedDisplaySelection).toBe(null);
+  });
   it('offers only a unique v3-visible retained object without creating a location/head or write authority', async () => {
     const f = fixture(), objectId = f.object.identity.objectId;
     mocks.automatic.mockResolvedValue({ status: 'automatic-ready', candidateObjectIds: [objectId], objectId, point: f.object.geometry.equipmentAnchor!.pointMetres });

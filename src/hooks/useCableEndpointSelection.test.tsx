@@ -6,7 +6,7 @@ import {
   type CableEndpointContext, type CableEndpointCommand, type CableEndpointReceipt,
 } from '@/api/pathfinderCableEndpoints';
 import { readPendingCableEndpoint, retainPendingCableEndpoint } from './cableEndpointPendingStore';
-import { useCableEndpointSelection, type CableEndpointSelectionAccess } from './useCableEndpointSelection';
+import { endpointDisplayNameHint, useCableEndpointSelection, type CableEndpointSelectionAccess } from './useCableEndpointSelection';
 
 vi.mock('@/api/pathfinderCableEndpoints', async original => ({ ...(await original<typeof import('@/api/pathfinderCableEndpoints')>()),
   fetchCableEndpointContext: vi.fn(), fetchCableEndpointSelection: vi.fn(), saveCableEndpoint: vi.fn(), closePendingCableEndpoint: vi.fn() }));
@@ -378,6 +378,16 @@ describe('persistent owned cable endpoint selection', () => {
 });
 
 describe('explicit popup selected bounding-box bottom-centre draft', () => {
+  it('retains only a valid label belonging to the exact selected object and point', () => {
+    const draft = { mode: 'fixed-world' as const, point: [1, 2, 3] as [number, number, number], derivation: 'manual-world-point' as const, displaySdkObjectId: 55 };
+    const display = { sdkObjectId: 55, point: [1, 2, 3] as [number, number, number], name: 'Selected equipment' };
+    expect(endpointDisplayNameHint(draft, display)).toEqual({ displayObjectName: 'Selected equipment' });
+    for (const name of ['', ' ', 'bad\nlabel', 'x'.repeat(501), '\ud800']) expect(endpointDisplayNameHint(draft, { ...display, name })).toEqual({});
+    expect(endpointDisplayNameHint(draft, { ...display, sdkObjectId: 56 })).toEqual({});
+    expect(endpointDisplayNameHint(draft, { ...display, point: [1, 2, 4] })).toEqual({});
+    expect(endpointDisplayNameHint({ ...draft, displaySdkObjectId: null }, display)).toEqual({});
+    expect(endpointDisplayNameHint(draft, null)).toEqual({});
+  });
   it('stages the unretained selected bottom face independently of its name and writes only after explicit Save', async () => {
     vi.mocked(fetchCableEndpointSelection).mockImplementationOnce(async (_project, _token, current) => unavailableEvidence(['SDK_OBJECT_NOT_RETAINED'], 'unavailable', current));
     const props = normalAccess(), view = renderHook(() => useCableEndpointSelection(props)); await waitFor(() => expect(view.result.current.canSelect).toBe(true));
@@ -390,7 +400,8 @@ describe('explicit popup selected bounding-box bottom-centre draft', () => {
     expect(readPendingCableEndpoint(owner)).toBeNull();
     await act(async () => { expect(await view.result.current.save('Save selected bottom centre')).toBe(true); });
     expect(vi.mocked(saveCableEndpoint).mock.calls[0][4]).toMatchObject({ expectedLogicalName: 'LP-001', selection: {
-      mode: 'fixed-world', pointProjectMetres: [1, 2, 3], derivation: 'manual-world-point', displaySdkObjectId: 99999 } });
+      mode: 'fixed-world', pointProjectMetres: [1, 2, 3], derivation: 'manual-world-point', displaySdkObjectId: 99999,
+      displayObjectName: 'Different arbitrary SDK display name' } });
     expect(view.result.current.receipt?.binding.binding.pointProjectMetres).toEqual([1, 2, 3]);
     expect(view.result.current.receipt?.binding.binding.sourceObject).toBeNull();
   });

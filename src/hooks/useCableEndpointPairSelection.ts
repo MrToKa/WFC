@@ -6,7 +6,7 @@ import { locationImpactCalculationSchema } from '../../shared/pathfinderLocation
 import { initialFillPolicySchema } from '../../shared/pathfinderInitialFill';
 import { CableEndpointApiError, type CableEndpointEnd } from '@/api/pathfinderCableEndpoints';
 import { saveCableEndpointPair, closePendingCableEndpointPair } from '@/api/pathfinderCableEndpointPairs';
-import { useCableEndpointSelection, type CableEndpointSelectionAccess } from './useCableEndpointSelection';
+import { endpointDisplayNameHint, useCableEndpointSelection, type CableEndpointSelectionAccess } from './useCableEndpointSelection';
 import { CABLE_ENDPOINT_PENDING_PREFIX, readPendingCableEndpoint } from './cableEndpointPendingStore';
 import { CABLE_ENDPOINT_PAIR_PENDING_PREFIX, CableEndpointPairStorageError, readPendingCableEndpointPair,
   retainPendingCableEndpointPair, verifyPendingCableEndpointPair, clearPendingCableEndpointPair, type PendingCableEndpointPair } from './cableEndpointPairPendingStore';
@@ -150,7 +150,8 @@ export function useCableEndpointPairSelection(access: CableEndpointPairSelection
         expectedCableWriteRevision: context.cableWriteRevision, expectedLogicalName: context.logicalName, expectedRegistryRevision: context.registryRevision,
         expectedLocationId: context.location?.id ?? null, expectedLocationRevision: context.location?.revision ?? null, expectedHeadId: context.head?.id ?? null,
         expectedCurrent: context.current, reason, selection: draft.mode === 'object-derived' ? { mode: draft.mode, sdkObjectId: draft.sdkObjectId, object: draft.object }
-          : { mode: draft.mode, pointProjectMetres: draft.point, derivation: draft.derivation, displaySdkObjectId: draft.displaySdkObjectId } });
+          : { mode: draft.mode, pointProjectMetres: draft.point, derivation: draft.derivation, displaySdkObjectId: draft.displaySdkObjectId,
+            ...endpointDisplayNameHint(draft, child.displaySelection) } });
       if (command.schemaVersion !== 'wfc.pf.cable-endpoint-command.v3') return false;
       endpoints.push({ end: side, command });
     }

@@ -18,6 +18,7 @@ import { readCableEndpointSelection } from './cableEndpointSelection.js';
 import { appendLocationImpactInTransaction } from './locationImpactRepository.js';
 import { appendInitialFillMandateInTransaction } from './initialFillMandates.js';
 import { readAutomaticNamedEndpointCandidate } from './automaticEndpointCandidates.js';
+import { readCableEndpointDisplay } from './cableEndpointDisplay.js';
 import { CABLE_ENDPOINT_PAIR_LIMITS, cableEndpointPairCommandSchema, cableEndpointPairReceiptSchema,
   cableEndpointPairClosedSchema, cableEndpointPairRecoverySchema, type CableEndpointPairCommand } from '../../shared/pathfinderCableEndpointPair.js';
 
@@ -126,9 +127,12 @@ async function context(client: PoolClient, projectId: string, cableId: string, e
         confirmedSelection = { source: 'confirmed', ...display, object: selected.object, pointProjectMetres: head.pointProjectMetres, approximate: true, confirmed: true };
     }
   }
+  const confirmedDisplaySelection = head && location && current && reasons.length === 0
+    ? await readCableEndpointDisplay(client, { projectId, head, location, current }, check) : null;
   const draft = cableEndpointContextSchema.parse({ schemaVersion: 'wfc.pf.cable-endpoint-context.v1', projectId, cableId, end,
     cableWriteRevision: cable.cable_write_revision, logicalName, logicalKey, mto: cable.mto, canBind: reasons.length === 0,
-    reasonCodes: reasons, registryRevision: registry.revision, location, head, current, automaticSelection, confirmedSelection, contextSha256: '0'.repeat(64) });
+    reasonCodes: reasons, registryRevision: registry.revision, location, head, current, automaticSelection, confirmedSelection,
+    confirmedDisplaySelection, contextSha256: '0'.repeat(64) });
   return budget(cableEndpointContextSchema.parse({ ...draft, contextSha256: endpointBindingHash(cableEndpointContextHashInput(draft)) }));
 }
 

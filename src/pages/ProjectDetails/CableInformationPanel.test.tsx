@@ -25,6 +25,20 @@ beforeEach(() => { vi.useFakeTimers(); route.mockReset(); vi.spyOn(window, 'open
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe('interactive nonmodal cable information portal', () => {
+  it('renders native cable information with the application theme and retains its values on return', () => {
+    const frame = document.createElement('iframe'); document.body.appendChild(frame); const popup = frame.contentWindow!;
+    Object.defineProperty(popup, 'closed', { configurable: true, value: false }); popup.focus = vi.fn(); popup.close = vi.fn();
+    vi.mocked(window.open).mockReturnValue(popup);
+    const view = render(<Harness dark />); fireEvent.click(screen.getByRole('button', { name: 'Ａ <Cable>' }));
+    const child = within(popup.document.body), dialog = child.getByRole('dialog', { name: 'Ａ <Cable>' }), provider = dialog.closest('.fui-FluentProvider')!;
+    expect(popup.getComputedStyle(provider).getPropertyValue('--colorNeutralBackground1')).toBe(webDarkTheme.colorNeutralBackground1);
+    expect(popup.getComputedStyle(dialog).display).toBe('flex');
+    expect(child.getByRole('textbox', { name: 'From' })).toHaveValue(original.fromLocation);
+    fireEvent.click(child.getByRole('button', { name: 'Return to page' })); expect(popup.close).toHaveBeenCalled();
+    expect(screen.getByRole('textbox', { name: 'From' })).toHaveValue(original.fromLocation);
+    expect(screen.getByRole('dialog')).toHaveAttribute('data-pinned', 'true');
+    expect(route).toHaveBeenCalledExactlyOnceWith(a); view.unmount(); frame.remove();
+  });
   it('renders one titled nonmodal dialog with exact readonly values after1000ms, without hover autofocus or any route action', () => {
     render(<Harness />); const search = screen.getByRole('textbox', { name: 'Search cable tags' }); search.focus(); open();
     const dialog = screen.getByRole('dialog', { name: 'Ａ <Cable>' });

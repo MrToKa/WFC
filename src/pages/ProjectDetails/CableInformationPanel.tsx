@@ -3,13 +3,12 @@ import { createPortal } from 'react-dom';
 import { Button, Portal } from '@fluentui/react-components';
 import type { CableInformationPanelProps } from './hooks/useCableInformationPanel';
 import { useFloatingCablePanel } from '@/hooks/useFloatingCablePanel';
-import { useCableInformationPanelStyles } from './CableInformationPanel.styles';
+import { CablePopupSurface } from '@/components/CablePopupSurface';
 
 export type { CableInformationPanelProps } from './hooks/useCableInformationPanel';
 
 /** The portal is nonmodal: opening on hover never moves focus or traps Tab. */
 export function CableInformationPanel(props: CableInformationPanelProps) {
-  const styles = useCableInformationPanelStyles();
   const floating = useFloatingCablePanel({ open: true, title: `Cable: ${props.cable.tag}`, scopeKey: props.scopeKey,
     width: 416, preferredTop: props.anchorRect.top, onInteract: props.onPin, requestedPopup: props.requestedPopup });
   const panel = floating.panelRef;
@@ -32,7 +31,7 @@ export function CableInformationPanel(props: CableInformationPanelProps) {
     const target = props.fallbackField === 'all' ? all.current : props.fallbackField === 'fromLocation' ? from.current : props.fallbackField === 'toLocation' ? to.current : routing.current;
     target?.focus({ preventScroll: true }); target?.select();
   }, [props.fallbackField, props.copyAttempt]);
-  const content = <div ref={panel} className={styles.panel} style={floating.panelStyle} id={props.id} role="dialog" aria-modal="false" aria-labelledby={titleId}
+  const content = <CablePopupSurface targetDocument={floating.portalTarget?.ownerDocument}>{styles => <div ref={panel} className={styles.panel} style={floating.panelStyle} id={props.id} role="dialog" aria-modal="false" aria-labelledby={titleId}
       tabIndex={-1} data-cable-id={props.cable.id} data-pinned={String(props.pinned)} data-popped-out={String(floating.isPoppedOut)}
       onPointerEnter={props.onPointerEnter} onPointerLeave={props.onPointerLeave} onFocus={props.onFocus} onBlur={props.onBlur} onKeyDown={props.onKeyDown}
       onClick={event => event.stopPropagation()}>
@@ -71,6 +70,6 @@ export function CableInformationPanel(props: CableInformationPanelProps) {
         <summary>Copy all text manually</summary>
         <textarea ref={all} className={styles.value} aria-label="Copy all text" readOnly value={props.allText} rows={5} />
       </details>
-    </div>;
+    </div>}</CablePopupSurface>;
   return floating.portalTarget ? createPortal(content, floating.portalTarget) : <Portal>{content}</Portal>;
 }

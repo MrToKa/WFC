@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cableEndpointCommandHashInput, cableEndpointCommandSchema, cableEndpointContextHashInput, cableEndpointContextSchema,
-  cableEndpointImpactSchema, cableEndpointClosedSchema, cableEndpointRecoverySchema, cableEndpointSelectionEvidenceSchema } from './pathfinderCableEndpoints.js';
+  cableEndpointImpactSchema, cableEndpointClosedSchema, cableEndpointRecoverySchema, cableEndpointSelectionEvidenceSchema,
+  cableEndpointConfirmedDisplaySelectionSchema } from './pathfinderCableEndpoints.js';
 const id = (n: number) => `f1000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const current = { modelVersionId: id(3), selectionRevision: '1', contentFingerprint: 'a'.repeat(64), aggregateId: id(4), artifactId: id(5),
   projectionSha256: 'b'.repeat(64), captureFrameId: id(6), geometryRevision: '2', traceId: id(7) };
@@ -66,6 +67,22 @@ describe('strict cable endpoint command and display contracts', () => {
     const v1 = command(), v2 = { ...v1, schemaVersion: 'wfc.pf.cable-endpoint-command.v2', calculation: null };
     expect(cableEndpointCommandSchema.parse(v1)).toEqual(v1); expect(cableEndpointCommandSchema.parse(v2)).toEqual(v2);
     expect(Object.hasOwn(cableEndpointCommandSchema.parse(v2), 'initialFill')).toBe(false);
+    expect(Object.hasOwn(cableEndpointCommandSchema.parse(v1).selection, 'displayObjectName')).toBe(false);
+  });
+  it('permits only an explicit valid object label beside a display SDK hint without inserting defaults', () => {
+    const input = command(), selection = { ...input.selection, displaySdkObjectId: 42, displayObjectName: '/Parent equipment' };
+    expect(cableEndpointCommandSchema.parse({ ...input, selection }).selection).toEqual(selection);
+    for (const name of ['', ' ', 'bad\u0001name', '\ud800', 'x'.repeat(501)])
+      expect(cableEndpointCommandSchema.safeParse({ ...input, selection: { ...selection, displayObjectName: name } }).success).toBe(false);
+    expect(cableEndpointCommandSchema.safeParse({ ...input, selection: { ...selection, displaySdkObjectId: null } }).success).toBe(false);
+  });
+  it('keeps display-only confirmation strict and separate from retained-object/attachment evidence', () => {
+    const hint = { source: 'confirmed-display-only', mode: 'fixed-world', sdkObjectId: 42, pointProjectMetres: [1, 2, 3],
+      current, bindingId: id(9), bindingContentSha256: 'b'.repeat(64), commandSha256: 'c'.repeat(64) };
+    expect(cableEndpointConfirmedDisplaySelectionSchema.parse(hint)).toEqual(hint);
+    for (const extra of [{ object: { traceId: id(7), objectRevisionId: id(10), recordSha256: 'a'.repeat(64) } },
+      { attachment: {} }, { confirmed: true }, { approximate: true }, { mode: 'object-attached' }])
+      expect(cableEndpointConfirmedDisplaySelectionSchema.safeParse({ ...hint, ...extra }).success).toBe(false);
   });
   it('v3 requires an explicit nullable policy while a policy cannot silently promote older commands', () => {
     const v2 = { ...command(), schemaVersion: 'wfc.pf.cable-endpoint-command.v2', calculation: null };

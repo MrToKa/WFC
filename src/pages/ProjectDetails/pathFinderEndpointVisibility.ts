@@ -1,7 +1,9 @@
 import type { PathFinderPreview, PathFinderProposal, PathFinderState } from '@/api/pathfinder';
 import { EndpointBindingApiError, fetchEndpointBinding } from '@/api/pathfinderEndpointBindings';
 import { GeometryTraceApiError, fetchGeometryObjectRevision } from '@/api/pathfinderGeometryTrace';
+import { CableEndpointApiError, fetchCableEndpointContext } from '@/api/pathfinderCableEndpoints';
 import { canonicalPurposeJson } from '../../../shared/pathfinderPurposePolicy';
+import { cableEndpointConfirmedDisplaySelectionSchema } from '../../../shared/pathfinderCableEndpoints';
 
 export const ENDPOINT_VISIBILITY_DEADLINE_MS = 10_000;
 const dbId = (value: string): number | null => {
@@ -39,7 +41,7 @@ async function digest(value: unknown): Promise<string> {
   return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalPurposeJson(value))))]
     .map(byte => byte.toString(16).padStart(2, '0')).join('');
 }
-const authFailure = (error: unknown) => (error instanceof EndpointBindingApiError || error instanceof GeometryTraceApiError)
+const authFailure = (error: unknown) => (error instanceof EndpointBindingApiError || error instanceof GeometryTraceApiError || error instanceof CableEndpointApiError)
   && [401, 403].includes(error.status ?? 0);
 
 /** Resolve display foreground only. This never changes endpoints, calculations or approval. */
@@ -62,7 +64,7 @@ export async function proposalEndpointObjectIds(proposal: PathFinderProposal, st
   const deadline = setTimeout(() => controller.abort(new DOMException('Endpoint display lookup timed out.', 'TimeoutError')), ENDPOINT_VISIBILITY_DEADLINE_MS);
   const results: string[] = [];
   try {
-    for (const endpoint of [evidence.from, evidence.to]) {
+    for (const [end, endpoint] of [['from', evidence.from], ['to', evidence.to]] as const) {
       signal?.throwIfAborted();
       if (endpoint.aggregateId !== preparation.aggregateId || endpoint.captureFrameId !== preparation.captureFrameId
         || endpoint.projectionSha256 !== preparation.projectionSha256) continue;
@@ -71,7 +73,35 @@ export async function proposalEndpointObjectIds(proposal: PathFinderProposal, st
           results.push(endpoint.sourceObjectId);
         continue;
       }
-      // A manually entered fixed point has no equipment identity to infer.
+      // A successful explicit Assign may retain a version-local DISPLAY hint in
+      // its command ledger, while its computational binding remains fixed-world.
+      if (endpoint.mode === 'fixed-world' && endpoint.sourceObjectRevisionId === null && !controller.signal.aborted) {
+        try {
+          const context = await fetchCableEndpointContext(access.projectId, access.token, proposal.cableId, end, controller.signal);
+          controller.signal.throwIfAborted(); signal?.throwIfAborted();
+          const head = context.head, current = context.current, display = cableEndpointConfirmedDisplaySelectionSchema.safeParse(context.confirmedDisplaySelection);
+          if (!context.canBind || context.projectId !== state.projectId || context.cableId !== proposal.cableId || context.end !== end
+            || context.location?.id !== endpoint.locationId || context.location.revision !== endpoint.locationRevision
+            || !current || current.modelVersionId !== active.modelVersionId || current.selectionRevision !== active.selectionRevision
+            || current.contentFingerprint !== active.contentFingerprint || current.artifactId !== artifact.id
+            || current.aggregateId !== preparation.aggregateId || current.captureFrameId !== preparation.captureFrameId
+            || current.projectionSha256 !== preparation.projectionSha256
+            || !head || head.id !== endpoint.bindingId || head.contentSha256 !== endpoint.bindingContentSha256
+            || head.bindingRevision !== endpoint.bindingRevision || head.locationRevision !== endpoint.locationRevision
+            || head.projectId !== state.projectId || head.locationId !== endpoint.locationId || head.status !== 'confirmed'
+            || head.mode !== 'fixed-world' || head.sourceObject !== null || head.attachment !== null
+            || head.modelVersionId !== active.modelVersionId || head.artifactId !== artifact.id || head.aggregateId !== preparation.aggregateId
+            || head.captureFrameId !== preparation.captureFrameId || head.projectionSha256 !== preparation.projectionSha256
+            || head.qualifiedProjectFrameId !== endpoint.qualifiedProjectFrameId || head.sourceDecisionId !== endpoint.migrationDecisionId
+            || !samePoint(head.pointProjectMetres, endpoint.point) || !display.success
+            || display.data.bindingId !== head.id || display.data.bindingContentSha256 !== head.contentSha256
+            || canonicalPurposeJson(display.data.current) !== canonicalPurposeJson(current)
+            || !samePoint(display.data.pointProjectMetres, endpoint.point)) continue;
+          results.push(`dbid:${display.data.sdkObjectId}`);
+        } catch (error) { if (authFailure(error)) throw error; signal?.throwIfAborted(); }
+        continue;
+      }
+      // Manual coordinates alone never imply an equipment identity.
       if (!endpoint.sourceObjectRevisionId || controller.signal.aborted) continue;
       try {
         const context = await fetchEndpointBinding(access.projectId, access.token, endpoint.locationId, controller.signal);

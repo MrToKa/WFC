@@ -229,8 +229,8 @@ describe('explicit selected-object bottom-centre pair assignment', () => {
     expect(saveCableEndpointPair).toHaveBeenCalledOnce();
     const command = vi.mocked(saveCableEndpointPair).mock.calls[0][3];
     expect(command.endpoints.map(item => [item.end, item.command.expectedLogicalName, item.command.selection])).toEqual([
-      ['from', 'LP-001', { mode: 'fixed-world', pointProjectMetres: [1, 2, 3], derivation: 'manual-world-point', displaySdkObjectId: 55 }],
-      ['to', 'LP-002', { mode: 'fixed-world', pointProjectMetres: [1, 2, 3], derivation: 'manual-world-point', displaySdkObjectId: 55 }],
+      ['from', 'LP-001', { mode: 'fixed-world', pointProjectMetres: [1, 2, 3], derivation: 'manual-world-point', displaySdkObjectId: 55, displayObjectName: 'Selected equipment 55' }],
+      ['to', 'LP-002', { mode: 'fixed-world', pointProjectMetres: [1, 2, 3], derivation: 'manual-world-point', displaySdkObjectId: 55, displayObjectName: 'Selected equipment 55' }],
     ]);
     expect(readPendingCableEndpointPair(owner)).toBeNull(); expect(props.onSaved).toHaveBeenCalledTimes(2);
   });

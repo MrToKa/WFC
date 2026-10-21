@@ -1,5 +1,39 @@
 # PathFinder local implementation progress
 
+## In progress — popup theme and saved From/To display recovery
+
+Branch `pf-popup-theme-and-endpoints-local-20261021`, inherits abe2c1f.
+Native popup surfaces now use a child-document Griffel renderer and Fluent
+theme provider. Exact successful fixed-world assignment commands supply a
+separate display-only SDK object hint; new commands can also retain its name.
+Logical cable names, bbox-bottom-centre points, binding mode and calculation
+identity remain separate. Show foreground now includes verified From/To hints.
+No geometry attachment or engineering acceptance is inferred from this hint.
+
+Root checks: final 659 PASS / 0 FAIL / 18 files; client/server types and scoped
+lint PASS. Actual separate PostgreSQL18 fixture: 11 PASS, latest null clearing,
+other-admin/alias reuse and stale-scope refusal. 5001-row synthetic query:
+20.190/20.399/20.373 ms. Fixture retired by exact new owner/name/container ID.
+Initial fixture startup race and historical missing preparation-session table
+were repaired; failed receipts retained. Independent source reviews PASS.
+Computer-use on independent no-data CSS fixture5193 verified actual popup
+dark/light colors, Segoe UI, spacing/button styles and draft retention. This
+does not establish actual Aalborg/Brave/multimonitor acceptance.
+
+Root is preparing a fresh cold5191 DB/model/volume/image archive before the
+API+web update. First attempt failed model audit with a 64MiB temporary helper
+filesystem, below the actual largest233991168-byte model resource. Services
+were resumed automatically; failure receipt retained. New owned attempt uses
+512MiB temporary capacity within existing helper limits. Original5180/5190,
+sources, denied paths and production cable values remain outside this change.
+Current operator: project mirror work/pf-popup-theme-endpoints/update-runtime.mjs;
+private outputs: pathfinder-engine/.scratch/popup-theme-endpoints-update-20261021-2.
+NEXT: finish backup, commit checked source, build exact API/web images, verify
+unchanged calculation identity and data services, activate only5191, record75.
+Real Aalborg UI remains NOT_RUN due unchanged saved origin refusal; do not
+retry/bypass it. Conditional Simplified Preparer5180 remains queued after PF
+technical/browser gate; no Preparer deployment is claimed.
+
 ## Current checkpoint — separate cable windows delivered
 
 Branch pf-floating-cable-windows-local-20261021, product 8eed67c996352ece4ef207b039328aa1d2166fc0.
