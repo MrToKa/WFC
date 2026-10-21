@@ -1,31 +1,43 @@
 # PathFinder local implementation progress
 
-## In progress — direct cable text search
+## Delivered — direct cable text search
 
-Branch pf-direct-cable-search-local-20261021 inherits0a3cd4f. User wants a text
-search to return the cable without manual Continue scan. Server now safely
-prefilters printable ASCII literal matches before201-candidate limit; Unicode,
-control and oversize cases retain the exact existing JS matcher/refusal. Client
-automatically skips empty search portions under one30s deadline and51-portion
-bound, retaining query/context/auth/cursor checks and visible-page history.
-Search UI uses Next results, truthful filter-specific empty messages, and same
-query resubmission refresh. Blank browsing and all non-MV/state filters preserved.
-No selection, calculation, binding/model/math/Review/Apply side effects.
+Branch `pf-direct-cable-search-local-20261021`, product
+`dbf67a2bb0380a1852f2d2098ccf4194cec7b32f`, inherits0a3cd4f. Report76 and
+evidence/cable-workflow/direct-cable-search-actual.json. Seven source/test files:
+server cableWorkflowRepository + test + SQL test, client workflow hook + test,
+NeedsRoutingList + test. Text search safely prefilters proven ASCII nonmatches
+before the201-row candidate limit and automatically skips empty search portions
+under one30s/51-portion bound. Unicode exact matching, role/project/context/cursor/
+state/MV guards and visible history retained. No automatic selection or write.
 
-Root PASS367 regression tests/12 files,9 actual isolated PostgreSQL18 read/auth/
-cursor tests, client/server types, changed-file strict lint and diff checks.
-Independent hook review PASS plus requested visible-history regression added.
-Actual computer-use synthetic fixture5193 PASS: real component+hook+API parser,
-one Search click traverses2empty portions to late CABLE-LATE-405; noauto-selection.
-This is not actualAalborg/browser/native acceptance. Fixture tab/server closed.
-Backup active: exact5191 owner8fffd6b8/projectwfc-pathfinder-local-0cba87606e9b,
-engine scratch/direct-cable-search-update-20261021, root-only operator project
-mirror work/pf-popup-theme-endpoints/update-direct-search.mjs. API/web/MinIO
-temporarily stopped only for own cold archive; outside/original/5190 untouched.
-NEXT: finish archive, commit checked source, build exact API/web, activate only
-5191, unchangedengine + read-only protected-row checks, report76/handoff.
-Existing untracked .pf0-work/.pf2-work and historical denied paths untouched.
-Preparer remains queued under prior sequencing; no Preparer changes in this task.
+PASS367 regression tests/12 files,9 separate actual PostgreSQL18 tests, client/
+server types, strict changed-file lint/diff, independent hook review and API/web
+builds. Actual synthetic computer-use fixture5193 PASS with one Search click across
+two empty portions; not actual Aalborg acceptance. Current-project read-only SQL
+PASS2 candidates/1 exact searched tag/7.594ms, not full HTTP/UI classification.
+
+Fresh complete cold archive PASS c388f3f6-dada-4f05-9faf-6b0b9f628907,
+3159728840B in engine scratch/direct-cable-search-update-20261021/cold-backup,
+separate private companion retained; no restore this task. Only exact owned5191
+services stopped/resumed for archive. API/web delivery PASS2026-10-21T09:20:18.341Z,
+API c5f12fb2685d169527da50586ee45614d6a2bbc28a6f976b309be72a2a77da44,
+web c111ff208fffc832871d3eb0f1dc64263c912886bdbf20c95ff383e4ea17a0da.
+HTTP200/healthy; engine ebb19973d052848e544e5d75e382f599498453375a6478ef84000c306836021d
+and served runtime/adapter unchanged. PG/MinIO/outside identities/configs preserved.
+Post-update read-only protected-row hashes PASS against archive2026-10-21T09:21:10.552Z.
+No Save/calculation/grant/Review/Apply or new migration. Root sole runtime executor.
+Exact SQL fixture retired;5193 tab/server/generated files removed. No active test
+helper. Needed archive/rollback/evidence, foreign .pf0-work/.pf2-work and denied
+paths retained. Original5180/5190/sources untouched; no prune/push/PR/merge.
+
+Original cleanmain96e63f13 matches live GitHub main observed09:18:55.180Z; no
+feature PR returned, unpublished CI NOT_RUN. Cached3behind/136ahead at product
+is not remote parity. NEXT: PF-U7-direct-search-browser-check.md; real5191 browser
+gate remains NOT_RUN due unchanged saved refusal. No repeat/bypass. After required
+real PF checks, queued Simplified Preparer on main5180 with fresh inventory/tests/
+backups. No Preparer changes by this correction. Existing automation last PAUSED;
+no unauthorized workaround or false reactivation claim.
 
 ## Current checkpoint — popup theme and saved From/To display delivered
 
