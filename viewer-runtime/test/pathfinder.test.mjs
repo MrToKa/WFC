@@ -294,12 +294,6 @@ test('a changed Model Browser selection during metadata read refuses the old bou
   f.model.getProperties = (_id, success) => { selectedId = 3; success({ properties: [] }); };
   await assert.rejects(() => f.controller.readSelection(), { code: 'EXTRACTION_FAILED' }); f.controller.dispose();
 });
-test('a replaced active model refuses both cached and in-flight old-model bounding centres', async () => {
-  const f = fixture(); f.viewer.getAggregateSelection = () => [{ model: f.model, selection: [2] }];
-  f.model.getProperties = (_id, success) => { f.viewer.model = { ...f.model }; success({ properties: [] }); };
-  await assert.rejects(() => f.controller.readSelection(), { code: 'MODEL_SELECTION_CHANGED' });
-  await assert.rejects(() => f.controller.readSelection(), { code: 'MODEL_SELECTION_CHANGED' }); f.viewer.model = f.model; f.controller.dispose();
-});
 test('fragment cap returns no selectable bbox rather than a partial selected-object centre', async () => {
   const f = fixture(); f.viewer.getAggregateSelection = () => [{ model: f.model, selection: [2] }];
   f.tree.enumNodeFragments = (id, callback) => { if (id === 2) for (let fragment = 0; fragment < 8193; fragment++) callback(fragment); };

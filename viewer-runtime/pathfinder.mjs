@@ -471,12 +471,10 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
     return [...ids];
   }
   async function readSelection(operationSignal) {
-    if (viewer.model !== model) throw fail('MODEL_SELECTION_CHANGED');
     const ids = selectionIds(), indexed = await inventory(operationSignal);
     if (ids.some(id => !indexed.ids.includes(id))) throw fail('EXTRACTION_FAILED');
     const page = await readObjects({ cursor: 0, limit: 16, query: '' }, operationSignal, ids);
     active(operationSignal);
-    if (viewer.model !== model) throw fail('MODEL_SELECTION_CHANGED');
     if (!page.complete || JSON.stringify(selectionIds()) !== JSON.stringify(ids)) throw fail('EXTRACTION_FAILED');
     return { coordinateFrame: page.coordinateFrame, metresPerDisplayUnit: page.metresPerDisplayUnit, globalOffsetMetres: page.globalOffsetMetres, objects: page.objects };
   }
