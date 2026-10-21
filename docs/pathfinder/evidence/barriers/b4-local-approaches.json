@@ -1,0 +1,130 @@
+{
+  "schemaVersion": "wfc.pf.local-approaches-stage-evidence.v1",
+  "productCommit": "a7aa8bce1c2ffdda8e1a9fea10661a58624d2a96",
+  "branch": "pf-b4-local-approaches-local-20261021",
+  "recordedUtc": "2026-10-21T12:22:34.4470763+00:00",
+  "checks": {
+    "b3Constrained": {
+      "status": "PASS",
+      "passed": 54,
+      "failed": 0
+    },
+    "combinedApiEngine512MiB": "NOT_RUN",
+    "actualBrowser": "NOT_RUN",
+    "maximumCapacity": "NOT_RUN",
+    "localConnectors": {
+      "failed": 0,
+      "passed": 40,
+      "numericPreflightThreadAllocatedBytes": 2400,
+      "status": "PASS",
+      "processPeakWorkingSetBytes": 59256832,
+      "elapsedMilliseconds": 449.7756,
+      "qualification": "This synthetic test process only, not maximum/representative/combined capacity."
+    },
+    "sourceReview": "PASS",
+    "stagedWhitespace": "PASS",
+    "ledger": {
+      "status": "PASS",
+      "passed": 35,
+      "failed": 0
+    },
+    "pinnedHashesAndFrozenFixtures": "PASS",
+    "frozenParity": {
+      "status": "PASS",
+      "passed": 215,
+      "failed": 0,
+      "cases": 43
+    },
+    "directSecondary": {
+      "status": "PASS",
+      "passed": 63,
+      "failed": 0
+    },
+    "sharedTypeScript": {
+      "status": "PASS",
+      "reason": "No TypeScript product changes",
+      "stage": "B3",
+      "rerun": false
+    },
+    "actualConverted": "NOT_RUN",
+    "legacyRegression": {
+      "status": "PASS",
+      "passed": 105
+    }
+  },
+  "initialFailure": {
+    "passed": 36,
+    "failed": 1,
+    "cause": "New direct bypass disposition stayed unavailable; fixed bypassed before nested result construction. Original test retained."
+  },
+  "sourceFiles": [
+    {
+      "path": "pathfinder-engine/src/PathFinder.Core/Support/ConstrainedRoute.cs",
+      "sha256": "21909cb0acf2e202201de93cf18e12ccd01e5258e37bd897daf6cb8b2693ca6c"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Core/Support/ConstrainedSecondaryRoute.cs",
+      "sha256": "8fb50276295806312ca78355c012eb065967cbe3a05b6da3d593cab21dbfc00f"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Core/Support/LocalApproachRoute.cs",
+      "sha256": "84c2238d8a6c76fa0d13b3b0f00d9f111425fe4ec16b1d0c0bf37edc80689f65"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Core/Support/LocalConnectorModels.cs",
+      "sha256": "e56bbb8676e0ba41b9ef56fee993a3a3bb1e9088e55a7b805f257643cc046212"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Core/Support/LocalConnectorPlanner.cs",
+      "sha256": "00fe5d63cd65ed80abe7a4819f77c67672aa53a17e5dc13dd5705ea0142ca905"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.LocalConnectors.Tests/Fixtures.cs",
+      "sha256": "f4a72b7ed078114af8ec0a033e1948622522f3ed6ceecd051b54da966c2786e7"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.LocalConnectors.Tests/PathFinder.LocalConnectors.Tests.csproj",
+      "sha256": "873a23871b82c983f9328978eb5dc6d3c7189f6810935166db7c7000f761e79a"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.LocalConnectors.Tests/Program.cs",
+      "sha256": "f85d304797f741e1301316c8d5546fff122fab60ef06089d6be855a0c3214b7b"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.LocalConnectors.Tests/README.md",
+      "sha256": "ddb6fe1c084700cbf40d5bb851ff86366d63e96c799e82eccab418ffe7ab9d97"
+    }
+  ],
+  "rawEvidenceRoot": "pathfinder-engine/.scratch/local-connectors-20261021-6d29c5f6-b3ed-495c-a3f6-f076be1e2039",
+  "profile": {
+    "maxEdgeChecks": 16384,
+    "qualification": "Bounded guidance/refusal limits, not physical cable clearance or global path optimality.",
+    "stepMeters": 0.25,
+    "maxNodes": 4096,
+    "maxPlans": 8,
+    "maxAxisSpanMeters": 20,
+    "maxStraightPairs": 8,
+    "paddingMeters": 1
+  },
+  "boundaries": {
+    "engineeringAccepted": false,
+    "actualDataWrites": 0,
+    "nativeParity": "not-performed",
+    "runtimeChanges": 0,
+    "physicalCableRadiusChecked": false,
+    "original11Unchanged": true
+  },
+  "remaining": [
+    "B5 admin UI and immutable drilling choice",
+    "B6 frozen dependency/runner/jobs/cache migration",
+    "B7 write guards/history",
+    "B8 actual Aalborg/capacity/integration",
+    "B9 fresh backup/coherent isolated delivery/recovery"
+  ],
+  "remote": {
+    "branchPrCount": 0,
+    "ci": "No new remote CI acceptance",
+    "observedUtc": "2026-10-21T12:19:15.515Z",
+    "main": "96e63f13fdc2b1d30b8f8ff658dd662f25fac104"
+  }
+}
