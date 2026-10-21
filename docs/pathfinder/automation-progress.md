@@ -2,6 +2,13 @@
 
 ## Current: PF-B11 cable actions/obstacle display technically delivered
 
+Delivery recorda85b051 committed. Next prompt SP-0-baseline-diagnostics.md is now
+executing in separate WFC-preparer-local-20261020, source checkpoint31d8ce7 marked
+INCOMPLETE. C diagnostic harness/A backup-finalization source writers; B independent
+review, root actual executor. PF5191 retained healthy onweb75187b0a/APIsameac0d16ab;
+no additional PF source/runtime writes planned. Actual human obstacle capture and
+freshbarrier-qualified cable recalculation still pending; no realApply byroot.
+
 Branch pf-b11-saved-obstacles-local-20261022 inherits e171c6a. Executing committed
 handoff PF-B11-saved-obstacle-persistence.md immediately. C owns barrier API/hook/
 panel and their tests (six files); root docs/actual tests/runtime; A independent
