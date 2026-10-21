@@ -5,7 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using PathFinder.Barriers;
 
-internal static class Program
+internal static partial class Program
 {
     private static readonly List<object> Checks = [];
     private static int failures, diagnosticSerial;
@@ -19,6 +19,11 @@ internal static class Program
     }
     private static async Task<int> Main(string[] args)
     {
+        if (args is ["--workload", "--work-root", var workloadRoot]) return GenerateWorkload(workloadRoot);
+        if (args is ["--verify-workload", "--manifest", var manifest, "--responses", var responses])
+            return VerifyWorkload(manifest, responses, null);
+        if (args is ["--verify-workload", "--manifest", var fullManifest, "--responses", var fullResponses, "--oneshot-responses", var oneShotResponses])
+            return VerifyWorkload(fullManifest, fullResponses, oneShotResponses);
         if (args is not ["--runner", var runner, "--work-root", var work] || !Path.IsPathFullyQualified(runner) || !File.Exists(runner)
             || !Path.IsPathFullyQualified(work) || Directory.Exists(work) || File.Exists(work)) return 2;
         Directory.CreateDirectory(work); var timer = Stopwatch.StartNew();
