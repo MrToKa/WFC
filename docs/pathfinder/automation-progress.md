@@ -1,5 +1,31 @@
 # PathFinder local implementation progress
 
+## PF-B3 technically checked — constrained routing; PF-B4 next
+
+Branch pf-b3-constrained-routing-local-20261021 inherits b98a9d844d9fd641d1bd21257c0d4000ca0787ff,
+B2 producta967ddd12c8a7052f61abc290491554df75d2388/report82/publicreceipt complete.
+Detailed handoff PF-B3-constrained-routing.md created through prepare-stage-handoff
+and executing immediately. Root sole executor owns reports/progress/integration.
+barrier_engine_map owns ONLY new Core/Support constrained files; barrier_geometry_map
+owns ONLY new PathFinder.Constrained.Tests project; barrier_registry owns ONLY new
+shared/pathfinderBarrierDecisions.ts+test. These modules are implemented and checked.
+Do not modify11pinnedRoutingfiles/oldSupport/oldschemas/frozenexpected data. Actual
+model/browser unchanged NOT_RUN; no policy-refusal retry. AllB2testcontainersretired.
+B3 uses new own scratch when needed, never deniedB2children/parent cleanup. Need
+accurate shell-level proof without invented hitpoint/fragment; exactlegacypairfirst,
+bounded freshgraphperpair, allactualedges+finalpolyline checked, explicitdrillbypass.
+ROOT actual final checks:54 constrained geometry/bitwise/decimal/cancel/work checks PASS;
+140 shared contract checks (62new/58B0/20direct) PASS;105 regression and43 frozen
+cases/215 parity checks PASS;35 ledger and63 direct actual runner transport checks PASS.
+Initial test compile had2 params-constructor fixture errors, corrected; no product
+compile failure. Review corrected user-cancel race, success Blocking diagnostics,
+performed-oracle work accounting/overflow and additive v2 constant alignment.
+Original11Core hashes and frozen expected/input hashes unchanged. Final client/server
+types and changedTS lint PASS. Evidence in new owned scratch/barrier-routing-20261021-7e52ad81-3875-4701-adbc-4fb38acc9d1e.
+Next local productcommit/report83/publicreceipt, prepare B4 handoff and execute.
+Automation remains ACTIVE, no routine stage stop. B4 must retain exact local-detour
+waypoints/lengths under the same budget, never detour off a blocked internal tray.
+
 ## PF-B2 completed technically; PF-B3 next
 
 B2 producta967ddd12c8a7052f61abc290491554df75d2388 on branch pf-b2-barrier-capture-local-20261021 inherits B1 product66c1772 and report
