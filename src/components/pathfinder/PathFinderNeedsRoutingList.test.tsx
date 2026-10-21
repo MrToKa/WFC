@@ -38,6 +38,71 @@ describe('read-only Needs routing list', () => {
     fireEvent.change(screen.getByLabelText('Cable state'), { target: { value: 'ready-for-review' } });
     expect(vi.mocked(usePathFinderCableWorkflow).mock.calls.at(-1)?.[0].query?.filter).toBe('ready-for-review');
   });
+  it('offers subsequent search results without manual scanning and never selects a match automatically', () => {
+    const current = { ...state(), page: { ...page(), nextCursor: 'next_match' } }, options = props();
+    vi.mocked(usePathFinderCableWorkflow).mockReturnValue(current); mount(options);
+    fireEvent.change(screen.getByLabelText('Search tags, From or To'), { target: { value: 'C-001' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Search cables' }));
+    expect(screen.queryByRole('button', { name: 'Continue scan' })).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('More matching results may be available.');
+    fireEvent.click(screen.getByRole('button', { name: 'Next results' }));
+    expect(current.nextPage).toHaveBeenCalledOnce(); expect(options.onSelect).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /Apply|Calculate|Save/ })).not.toBeInTheDocument();
+  });
+  it('reports automatic search loading only after the draft is submitted', () => {
+    const current = { ...state(), page: null, loading: true, busy: true };
+    vi.mocked(usePathFinderCableWorkflow).mockReturnValue(current); mount();
+    fireEvent.change(screen.getByLabelText('Search tags, From or To'), { target: { value: 'FROM-A' } });
+    expect(screen.getByRole('status')).toHaveTextContent('Loading cable diagnostics…');
+    fireEvent.click(screen.getByRole('button', { name: 'Search cables' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Searching for matching cables…');
+    expect(screen.queryByRole('button', { name: 'Continue scan' })).not.toBeInTheDocument();
+  });
+  it('explains a completed empty search in the chosen state without changing that filter', () => {
+    vi.mocked(usePathFinderCableWorkflow).mockReturnValue({ ...state(), page: { ...page(), rows: [] } }); mount();
+    fireEvent.change(screen.getByLabelText('Search tags, From or To'), { target: { value: 'NOT-FOUND' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Search cables' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Search complete.');
+    expect(screen.getByText(/No cables match this search in the selected cable state/)).toHaveTextContent('Choose All non-MV cables to search other states.');
+    expect(screen.getByLabelText('Cable state')).toHaveValue('needs-routing');
+    expect(screen.getByRole('button', { name: 'Next results' })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Cable state'), { target: { value: 'all' } });
+    expect(screen.getByText('No non-MV cables match this search.')).toBeVisible();
+  });
+  it('keeps previous search results distinguishable from a globally empty search', () => {
+    vi.mocked(usePathFinderCableWorkflow).mockReturnValue({ ...state(), hasPrevious: true, page: { ...page(), rows: [] } }); mount();
+    fireEvent.change(screen.getByLabelText('Search tags, From or To'), { target: { value: 'C-001' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Search cables' }));
+    expect(screen.getByText('No further matching cables. Previous results are still available.')).toBeVisible();
+    expect(screen.queryByText(/No cables match this search in the selected cable state/)).not.toBeInTheDocument();
+  });
+  it('does not present an incomplete empty search as complete or require Continue scan', () => {
+    vi.mocked(usePathFinderCableWorkflow).mockReturnValue({ ...state(), page: { ...page(), rows: [], nextCursor: 'next_200' } }); mount();
+    fireEvent.change(screen.getByLabelText('Search tags, From or To'), { target: { value: 'C-001' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Search cables' }));
+    expect(screen.getByText('The search is incomplete. Refresh cables to try again.')).toBeVisible();
+    expect(screen.getByRole('status')).not.toHaveTextContent('Search complete.');
+    expect(screen.getByRole('button', { name: 'Next results' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Continue scan' })).not.toBeInTheDocument();
+  });
+  it('refreshes a repeated normalized search on button or Enter submission, without duplicate first reads or writes', () => {
+    const current = state(), options = props(); vi.mocked(usePathFinderCableWorkflow).mockReturnValue(current); mount(options);
+    const input = screen.getByLabelText('Search tags, From or To');
+    fireEvent.change(input, { target: { value: 'Å-10' } }); fireEvent.click(screen.getByRole('button', { name: 'Search cables' }));
+    expect(current.refresh).not.toHaveBeenCalled();
+    fireEvent.change(input, { target: { value: '  A\u030a-10  ' } }); fireEvent.click(screen.getByRole('button', { name: 'Search cables' }));
+    expect(current.refresh).toHaveBeenCalledOnce();
+    fireEvent.submit(input.closest('form')!); expect(current.refresh).toHaveBeenCalledTimes(2);
+    expect(options.onSelect).not.toHaveBeenCalled(); expect(current.nextPage).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /Apply|Calculate|Save/ })).not.toBeInTheDocument();
+  });
+  it('does not launch another read when the same search is submitted while busy', () => {
+    const current = { ...state(), loading: true, busy: true }; vi.mocked(usePathFinderCableWorkflow).mockReturnValue(current); mount();
+    fireEvent.change(screen.getByLabelText('Search tags, From or To'), { target: { value: 'C-001' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Search cables' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Search cables' }));
+    expect(current.refresh).not.toHaveBeenCalled(); expect(current.nextPage).not.toHaveBeenCalled();
+  });
   it('labels an empty continuing scan truthfully and provides explicit bounded navigation', () => {
     const current = { ...state(), page: { ...page(), rows: [], scannedCount: 200, nextCursor: 'next_200' }, hasPrevious: true };
     vi.mocked(usePathFinderCableWorkflow).mockReturnValue(current); mount();

@@ -61,16 +61,28 @@ async function context(client: PoolClient, projectId: string) {
   return value;
 }
 
+const inputOversizeSql = `(COALESCE(octet_length(c.tag),0)>4096 OR COALESCE(octet_length(c.from_location),0)>4096 OR COALESCE(octet_length(c.to_location),0)>4096
+ OR COALESCE(char_length(c.routing),0)>8000 OR COALESCE(octet_length(c.routing),0)>32000 OR COALESCE(octet_length(c.mto),0)>96)`;
+/** SQL only excludes proven ASCII nonmatches; the exact Unicode matcher remains in JavaScript. */
+function asciiSearchNeedle(search: string): string | null {
+  const needle = search.toUpperCase();
+  return /^[\x20-\x7e]+$/.test(needle) ? needle : null;
+}
 const candidatesSql = `/* cable-workflow:candidates */ SELECT c.id,c.cable_type_id,c.cable_write_revision::text,
  CASE WHEN octet_length(c.tag)<=4096 THEN c.tag ELSE NULL END AS tag,
  CASE WHEN octet_length(c.from_location)<=4096 THEN c.from_location ELSE NULL END AS from_location,
  CASE WHEN octet_length(c.to_location)<=4096 THEN c.to_location ELSE NULL END AS to_location,
  CASE WHEN char_length(c.routing)<=8000 AND octet_length(c.routing)<=32000 THEN c.routing ELSE NULL END AS routing,
  CASE WHEN octet_length(c.mto)<=96 THEN c.mto ELSE NULL END AS mto,c.design_length::text,c.install_length::text,
- (COALESCE(octet_length(c.tag),0)>4096 OR COALESCE(octet_length(c.from_location),0)>4096 OR COALESCE(octet_length(c.to_location),0)>4096
- OR COALESCE(char_length(c.routing),0)>8000 OR COALESCE(octet_length(c.routing),0)>32000 OR COALESCE(octet_length(c.mto),0)>96) AS input_oversize
+ ${inputOversizeSql} AS input_oversize
  FROM cables c WHERE c.project_id=$1 AND c.mto IS DISTINCT FROM 'MV' AND ($2::uuid IS NULL OR c.id>$2)
- AND ($3::uuid IS NULL OR c.id=$3) ORDER BY c.id LIMIT 201`;
+ AND ($3::uuid IS NULL OR c.id=$3)
+ AND ($4::text IS NULL OR ${inputOversizeSql}
+   OR strpos(translate(c.tag,'abcdefghijklmnopqrstuvwxyz','ABCDEFGHIJKLMNOPQRSTUVWXYZ'),$4)>0
+   OR strpos(translate(c.from_location,'abcdefghijklmnopqrstuvwxyz','ABCDEFGHIJKLMNOPQRSTUVWXYZ'),$4)>0
+   OR strpos(translate(c.to_location,'abcdefghijklmnopqrstuvwxyz','ABCDEFGHIJKLMNOPQRSTUVWXYZ'),$4)>0
+   OR c.tag COLLATE "C" ~ '[^ -~]' OR c.from_location COLLATE "C" ~ '[^ -~]' OR c.to_location COLLATE "C" ~ '[^ -~]')
+ ORDER BY c.id LIMIT 201`;
 
 async function metadata(client: PoolClient, projectId: string, ids: string[]): Promise<Map<string, Data>> {
   if (!ids.length) return new Map();
@@ -188,7 +200,7 @@ export function createCableWorkflowRepository(pool: Pool, options: { cursorKey?:
         const scope = await context(client, projectId), shared = { commonCache: new Map<string, Promise<CommonCalculationCollection>>() };
         const provisional = await readRows(client, projectId, [], query, check, scope, shared);
         const after = cursors.decode(query.cursor, projectId, queryHash, provisional.contextHash, who);
-        const source = (await client.query<Data>(candidatesSql, [projectId, after, null])).rows; check();
+        const source = (await client.query<Data>(candidatesSql, [projectId, after, null, asciiSearchNeedle(query.search)])).rows; check();
         if (source.length > CABLE_WORKFLOW_LIMITS.maxScan + 1 || source.some((value, index) => after !== null && value.id <= after || index > 0 && source[index - 1].id >= value.id)) return fail('WORKFLOW_SCAN_INTEGRITY');
         const candidates = source.slice(0, CABLE_WORKFLOW_LIMITS.maxScan);
         for (const candidate of candidates) snapshot(candidate);
@@ -214,7 +226,7 @@ export function createCableWorkflowRepository(pool: Pool, options: { cursorKey?:
     async detail(projectId: string, who: JobPrincipal, cableId: string, raw: unknown, signal?: AbortSignal, http = false) {
       return cableWorkflowReadTransaction(pool, projectId, who, async (client, check) => {
         policyUuidSchema.parse(cableId); const query = http ? parseCableWorkflowDetailHttpQuery(raw) : cableWorkflowDetailQuerySchema.parse(raw), queryHash = hash(cableWorkflowDetailQueryHashInput(query));
-        const scope = await context(client, projectId), values = (await client.query<Data>(candidatesSql, [projectId, null, cableId])).rows;
+        const scope = await context(client, projectId), values = (await client.query<Data>(candidatesSql, [projectId, null, cableId, null])).rows;
         if (values.length !== 1) return fail('CABLE_NOT_FOUND', 404);
         const reader = await readRows(client, projectId, values, query, check, scope, { commonCache: new Map() });
         return bounded(cableWorkflowDetailSchema.parse({ schemaVersion: 'wfc.pf.cable-workflow-detail.v1', projectId, cableId, querySha256: queryHash, contextSha256: reader.contextHash, row: await reader.row(values[0]) }));

@@ -4,6 +4,10 @@ import {
   type CableWorkflowPage, type CableWorkflowQuery, type CableWorkflowDetail,
 } from '@/api/pathfinderCableWorkflow';
 import { cableWorkflowQuerySchema } from '../../shared/pathfinderCableWorkflowQueries';
+import { pathFinderRequestDeadline } from '@/api/pathfinderRequestDeadline';
+
+export const CABLE_WORKFLOW_SEARCH_PAGE_LIMIT = 51;
+export const CABLE_WORKFLOW_SEARCH_MILLISECONDS = 30_000;
 
 export type PathFinderCableWorkflowAccess = {
   projectId: string | null; loadedProjectId: string | null; accountId: string | null; token: string | null;
@@ -45,20 +49,36 @@ export function usePathFinderCableWorkflow(access: PathFinderCableWorkflowAccess
     if (!canRead() || inFlight.current || queryKey === null) return;
     const abort = new AbortController(); inFlight.current = abort;
     const before = selection.current;
+    const deadline = pathFinderRequestDeadline(abort.signal, CABLE_WORKFLOW_SEARCH_MILLISECONDS, () =>
+      new PathFinderCableWorkflowApiError('REQUEST_TIMEOUT', null, 'The cable search timed out. Use a more specific tag, From or To and try again.'));
     setState(value => ({ ...value, page: null, detail: null, loading: true, detailLoading: false, error: null, hasPrevious: history.length > 0 }));
     try {
       const query: CableWorkflowQuery = JSON.parse(queryKey);
-      const page = await fetchPathFinderCableWorkflowPage(access.projectId!, access.token!, { ...query, ...(cursor ? { cursor } : {}) }, abort.signal);
-      if (latest.current !== identity || abort.signal.aborted) return;
-      if (!reset && before.context !== null && (before.context !== page.contextSha256 || before.queryHash !== page.querySha256)) throw changed();
-      if (page.nextCursor !== null && (page.nextCursor === cursor || history.includes(page.nextCursor))) throw changed();
-      if (page.scannedCount !== 0 && cursor !== null && cursor === before.page?.nextCursor && before.page.scannedThroughCableId !== null
-        && (page.scannedThroughCableId === null || page.scannedThroughCableId <= before.page.scannedThroughCableId
-          || page.rows.some(row => row.cable.id <= before.page!.scannedThroughCableId!))) throw changed();
-      selection.current = { identity, cursor, history, context: page.contextSha256, queryHash: page.querySha256, page };
-      setState({ ...initial(identity), page, hasPrevious: history.length > 0 });
+      let next = cursor, previousPage = before.page, context = reset ? null : before.context, queryHash = reset ? null : before.queryHash;
+      const visited = new Set(history);
+      for (let portion = 0; portion < CABLE_WORKFLOW_SEARCH_PAGE_LIMIT; portion++) {
+        visited.add(next);
+        const page = await deadline.wait(() => fetchPathFinderCableWorkflowPage(access.projectId!, access.token!,
+          { ...query, ...(next ? { cursor: next } : {}) }, deadline.signal));
+        if (latest.current !== identity || abort.signal.aborted) return;
+        if (context !== null && (context !== page.contextSha256 || queryHash !== page.querySha256)) throw changed();
+        if (page.nextCursor !== null && visited.has(page.nextCursor)) throw changed();
+        if (page.scannedCount !== 0 && next !== null && next === previousPage?.nextCursor && previousPage.scannedThroughCableId !== null
+          && (page.scannedThroughCableId === null || page.scannedThroughCableId <= previousPage.scannedThroughCableId
+            || page.rows.some(row => row.cable.id <= previousPage!.scannedThroughCableId!))) throw changed();
+        context = page.contextSha256; queryHash = page.querySha256;
+        // Skip empty filtered portions only for an explicit text search. They
+        // are transport work, not visible pages that require a user's click.
+        if (query.search !== '' && page.rows.length === 0 && page.nextCursor !== null) {
+          previousPage = page; next = page.nextCursor; continue;
+        }
+        selection.current = { identity, cursor: next, history, context, queryHash, page };
+        setState({ ...initial(identity), page, hasPrevious: history.length > 0 }); return;
+      }
+      throw new PathFinderCableWorkflowApiError('WORKFLOW_SEARCH_LIMIT', null,
+        'The cable search reached its scan limit. Use a more specific tag, From or To and try again.');
     } catch (error) { if (latest.current === identity && !abort.signal.aborted) failure(error); }
-    finally { if (inFlight.current === abort) inFlight.current = null; }
+    finally { deadline.dispose(); if (inFlight.current === abort) inFlight.current = null; }
   }, [canRead, queryKey, access.projectId, access.token, identity, failure]);
   useEffect(() => {
     inFlight.current?.abort(); inFlight.current = null;

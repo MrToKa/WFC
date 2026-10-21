@@ -1,5 +1,32 @@
 # PathFinder local implementation progress
 
+## In progress — direct cable text search
+
+Branch pf-direct-cable-search-local-20261021 inherits0a3cd4f. User wants a text
+search to return the cable without manual Continue scan. Server now safely
+prefilters printable ASCII literal matches before201-candidate limit; Unicode,
+control and oversize cases retain the exact existing JS matcher/refusal. Client
+automatically skips empty search portions under one30s deadline and51-portion
+bound, retaining query/context/auth/cursor checks and visible-page history.
+Search UI uses Next results, truthful filter-specific empty messages, and same
+query resubmission refresh. Blank browsing and all non-MV/state filters preserved.
+No selection, calculation, binding/model/math/Review/Apply side effects.
+
+Root PASS367 regression tests/12 files,9 actual isolated PostgreSQL18 read/auth/
+cursor tests, client/server types, changed-file strict lint and diff checks.
+Independent hook review PASS plus requested visible-history regression added.
+Actual computer-use synthetic fixture5193 PASS: real component+hook+API parser,
+one Search click traverses2empty portions to late CABLE-LATE-405; noauto-selection.
+This is not actualAalborg/browser/native acceptance. Fixture tab/server closed.
+Backup active: exact5191 owner8fffd6b8/projectwfc-pathfinder-local-0cba87606e9b,
+engine scratch/direct-cable-search-update-20261021, root-only operator project
+mirror work/pf-popup-theme-endpoints/update-direct-search.mjs. API/web/MinIO
+temporarily stopped only for own cold archive; outside/original/5190 untouched.
+NEXT: finish archive, commit checked source, build exact API/web, activate only
+5191, unchangedengine + read-only protected-row checks, report76/handoff.
+Existing untracked .pf0-work/.pf2-work and historical denied paths untouched.
+Preparer remains queued under prior sequencing; no Preparer changes in this task.
+
 ## Current checkpoint — popup theme and saved From/To display delivered
 
 Branch `pf-popup-theme-and-endpoints-local-20261021`, product

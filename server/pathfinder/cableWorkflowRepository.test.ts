@@ -30,8 +30,11 @@ function fixture(count = 1) {
     if (sql.includes('cable-workflow:context')) return { rows: [{ active_model_version_id: id(5), selection_revision: '1', admission_count: state.admissionCount,
       context: { generation: state.generation, latest: state.latest } }] };
     if (sql.includes('cable-workflow:candidates')) {
-      const after = values[1] as string | null, exact = values[2] as string | null;
-      const found = state.cables.filter(value => value.mto !== 'MV' && (!after || value.id > after) && (!exact || value.id === exact)).slice(0, 201);
+      const after = values[1] as string | null, exact = values[2] as string | null, asciiNeedle = values[3] as string | null;
+      // Simulate only the conservative candidate protocol; real PostgreSQL tests verify its SQL implementation.
+      const found = state.cables.filter(value => value.mto !== 'MV' && (!after || value.id > after) && (!exact || value.id === exact)
+        && (asciiNeedle === null || value.input_oversize || [value.tag, value.from_location, value.to_location]
+          .some(text => text !== null && (/[^\x20-\x7e]/.test(text) || text.toUpperCase().includes(asciiNeedle))))).slice(0, 201);
       return { rows: state.badScan && found.length ? [found[0], found[0]] : found };
     }
     if (sql.includes('cable-workflow:needed-locations')) return { rows: state.aliases ? [{ normalized_alias: 'A', id: id(20), name: 'A', revision: '1', has_legacy: false },
@@ -73,6 +76,27 @@ describe('bounded cable diagnostics, mocked SQL protocol and explicit proof/auth
     const result = await f.repo.page(projectId, who, { filter: 'all', search: '  CAFÉ_%\\  ' });
     expect(result.rows.map(value => value.cable.id)).toEqual([id(1001)]); expect(result.scannedCount).toBe(3);
     expect(f.query.mock.calls.find(([sql]) => sql.includes('cable-workflow:candidates'))?.[0]).not.toMatch(/LIKE|ILIKE/);
+  });
+  it('finds a literal ASCII target beyond the first400 project rows in the first bounded page', async () => {
+    const f = fixture(405); f.state.cables[404].tag = 'Last_%\\target';
+    const result = await f.repo.page(projectId, who, { filter: 'all', search: '_%\\TARGET' });
+    expect(result.rows.map(value => value.cable.id)).toEqual([id(1404)]);
+    expect(result.scannedCount).toBe(1); expect(result.nextCursor).toBeNull();
+    expect(f.query.mock.calls.find(([sql]) => sql.includes('cable-workflow:candidates'))?.[1])
+      .toEqual([projectId, null, null, '_%\\TARGET']);
+  });
+  it.each([['Straße', 'strasse', 'STRASSE'], ['\u212aelvin', 'kelvin', 'KELVIN'], ['cafe\u0301', 'CAFÉ', null]] as const)
+    ('retains exact Unicode matching for %s without a lossy SQL uppercase comparison', async (tag, search, sqlNeedle) => {
+      const f = fixture(3); f.state.cables[1].tag = tag;
+      const result = await f.repo.page(projectId, who, { filter: 'all', search });
+      expect(result.rows.map(value => value.cable.id)).toEqual([id(1001)]);
+      const candidateQuery = f.query.mock.calls.find(([sql]) => sql.includes('cable-workflow:candidates'))!;
+      expect(candidateQuery[1]?.[3]).toBe(sqlNeedle);
+      expect(candidateQuery[0]).toContain('COLLATE "C" ~ \'[^ -~]\'');
+    });
+  it('never filters away an oversized nonmatching candidate before its existing refusal', async () => {
+    const f = fixture(2); f.state.cables[0].input_oversize = true;
+    await expect(f.repo.page(projectId, who, { search: 'NO-MATCH' })).rejects.toMatchObject({ code: 'WORKFLOW_CABLE_INPUT_LIMIT' });
   });
   it('rejects query/context/account cursor changes, excessive history and nonadvancing scan rows', async () => {
     const f = fixture(2), first = await f.repo.page(projectId, who, { filter: 'all', limit: 1 });

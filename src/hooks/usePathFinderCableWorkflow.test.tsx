@@ -1,8 +1,8 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchPathFinderCableWorkflowPage, fetchPathFinderCableWorkflowDetail, PathFinderCableWorkflowApiError, type CableWorkflowPage } from '@/api/pathfinderCableWorkflow';
 import { cableWorkflowPageSchema } from '../../shared/pathfinderCableWorkflow';
-import { usePathFinderCableWorkflow, type PathFinderCableWorkflowAccess } from './usePathFinderCableWorkflow';
+import { CABLE_WORKFLOW_SEARCH_MILLISECONDS, CABLE_WORKFLOW_SEARCH_PAGE_LIMIT, usePathFinderCableWorkflow, type PathFinderCableWorkflowAccess } from './usePathFinderCableWorkflow';
 
 vi.mock('@/api/pathfinderCableWorkflow', async original => ({ ...(await original<typeof import('@/api/pathfinderCableWorkflow')>()),
   fetchPathFinderCableWorkflowPage: vi.fn(), fetchPathFinderCableWorkflowDetail: vi.fn() }));
@@ -18,6 +18,76 @@ function page(): CableWorkflowPage {
 }
 const access = (): PathFinderCableWorkflowAccess => ({ projectId: project, loadedProjectId: project, accountId: id(2), token: 'token', isAdmin: true, active: true, modelScopeKey: 'model-current', onAuthorityLost: vi.fn() });
 beforeEach(() => { vi.resetAllMocks(); vi.mocked(fetchPathFinderCableWorkflowPage).mockResolvedValue(page()); });
+afterEach(() => { vi.useRealTimers(); });
+
+describe('direct text search across bounded workflow portions', () => {
+  const empty = (boundary: number, cursor: string | null): CableWorkflowPage => ({ ...page(), rows: [], scannedCount: 200,
+    scannedThroughCableId: id(boundary), nextCursor: cursor });
+  it('automatically reaches a late match without exposing empty transport portions or requiring Next', async () => {
+    const late = { ...page(), rows: [{ ...page().rows[0], cable: { ...page().rows[0].cable, id: id(401) } }], scannedThroughCableId: id(401) };
+    vi.mocked(fetchPathFinderCableWorkflowPage).mockResolvedValueOnce(empty(200, 'a')).mockResolvedValueOnce(empty(400, 'b')).mockResolvedValueOnce(late);
+    const view = renderHook(() => usePathFinderCableWorkflow({ ...access(), query: { search: 'Cable A', filter: 'needs-routing' } }));
+    await waitFor(() => expect(view.result.current.page?.rows[0].cable.id).toBe(id(401)));
+    expect(view.result.current.hasPrevious).toBe(false); expect(view.result.current.error).toBeNull();
+    expect(vi.mocked(fetchPathFinderCableWorkflowPage).mock.calls.map(call => call[2]?.cursor)).toEqual([undefined, 'a', 'b']);
+    expect(vi.mocked(fetchPathFinderCableWorkflowPage).mock.calls.every(call => call[2]?.filter === 'needs-routing')).toBe(true);
+    expect(fetchPathFinderCableWorkflowDetail).not.toHaveBeenCalled();
+  });
+  it('reports no matches only after exhaustion and does not offer earlier invisible portions', async () => {
+    vi.mocked(fetchPathFinderCableWorkflowPage).mockResolvedValueOnce(empty(200, 'a')).mockResolvedValueOnce({ ...page(), rows: [], scannedCount: 0, scannedThroughCableId: null });
+    const view = renderHook(() => usePathFinderCableWorkflow({ ...access(), query: { search: 'absent' } }));
+    await waitFor(() => expect(view.result.current.page?.scannedCount).toBe(0));
+    expect(view.result.current.page?.nextCursor).toBeNull(); expect(view.result.current.hasPrevious).toBe(false); expect(view.result.current.error).toBeNull();
+  });
+  it('returns to the previous visible results without navigating through skipped empty portions', async () => {
+    const visible = (at: number, cursor: string) => ({ ...page(), rows: [{ ...page().rows[0], cable: { ...page().rows[0].cable, id: id(at) } }], scannedThroughCableId: id(at), nextCursor: cursor });
+    vi.mocked(fetchPathFinderCableWorkflowPage).mockResolvedValueOnce(empty(200, 'a')).mockResolvedValueOnce(visible(201, 'b'))
+      .mockResolvedValueOnce(empty(400, 'c')).mockResolvedValueOnce(visible(401, 'd')).mockResolvedValueOnce(visible(201, 'b'));
+    const view = renderHook(() => usePathFinderCableWorkflow({ ...access(), query: { search: 'Cable A' } }));
+    await waitFor(() => expect(view.result.current.page?.rows[0].cable.id).toBe(id(201)));
+    act(() => view.result.current.nextPage()); await waitFor(() => expect(view.result.current.page?.rows[0].cable.id).toBe(id(401)));
+    expect(view.result.current.hasPrevious).toBe(true);
+    act(() => view.result.current.previousPage()); await waitFor(() => expect(view.result.current.page?.rows[0].cable.id).toBe(id(201)));
+    expect(view.result.current.hasPrevious).toBe(false); expect(view.result.current.error).toBeNull();
+    expect(vi.mocked(fetchPathFinderCableWorkflowPage).mock.calls.map(call => call[2]?.cursor)).toEqual([undefined, 'a', 'b', 'c', 'a']);
+  });
+  it.each(['context', 'query', 'cursor', 'boundary'] as const)('refuses changed or nonadvancing automatic search evidence: %s', async kind => {
+    const next = { ...empty(400, 'b'), ...(kind === 'context' ? { contextSha256: 'b'.repeat(64) }
+      : kind === 'query' ? { querySha256: 'b'.repeat(64) } : kind === 'cursor' ? { nextCursor: 'a' } : { scannedThroughCableId: id(200) }) };
+    vi.mocked(fetchPathFinderCableWorkflowPage).mockResolvedValueOnce(empty(200, 'a')).mockResolvedValueOnce(next);
+    const view = renderHook(() => usePathFinderCableWorkflow({ ...access(), query: { search: 'Cable A' } }));
+    await waitFor(() => expect(view.result.current.error).toContain('project changed'));
+    expect(view.result.current.page).toBeNull(); expect(fetchPathFinderCableWorkflowPage).toHaveBeenCalledTimes(2);
+  });
+  it('aborts the automatic chain on a new query and ignores the old late response', async () => {
+    let finish!: (value: CableWorkflowPage) => void;
+    vi.mocked(fetchPathFinderCableWorkflowPage).mockResolvedValueOnce(empty(200, 'a')).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; })).mockResolvedValueOnce(page());
+    const props = { ...access(), query: { search: 'old' } }, view = renderHook(value => usePathFinderCableWorkflow(value), { initialProps: props });
+    await waitFor(() => expect(fetchPathFinderCableWorkflowPage).toHaveBeenCalledTimes(2)); const signal = vi.mocked(fetchPathFinderCableWorkflowPage).mock.calls[1][3];
+    view.rerender({ ...props, query: { search: 'new' } }); expect(signal?.aborted).toBe(true);
+    await waitFor(() => expect(view.result.current.page?.rows).toHaveLength(1));
+    await act(async () => finish(empty(400, 'b'))); expect(fetchPathFinderCableWorkflowPage).toHaveBeenCalledTimes(3); expect(view.result.current.error).toBeNull();
+  });
+  it('stops immediately when current administrator authority is denied during automatic continuation', async () => {
+    const props = { ...access(), query: { search: 'Cable A' } };
+    vi.mocked(fetchPathFinderCableWorkflowPage).mockResolvedValueOnce(empty(200, 'a')).mockRejectedValueOnce(new PathFinderCableWorkflowApiError('ADMIN_REQUIRED', 403, 'Administrator access is required.'));
+    const view = renderHook(() => usePathFinderCableWorkflow(props)); await waitFor(() => expect(view.result.current.enabled).toBe(false));
+    expect(view.result.current.page).toBeNull(); expect(props.onAuthorityLost).toHaveBeenCalledOnce(); expect(fetchPathFinderCableWorkflowPage).toHaveBeenCalledTimes(2);
+  });
+  it('bounds endless distinct continuations without publishing a false no-match result', async () => {
+    let portion = 0; vi.mocked(fetchPathFinderCableWorkflowPage).mockImplementation(async () => empty(++portion * 200, 'cursor_'+portion));
+    const view = renderHook(() => usePathFinderCableWorkflow({ ...access(), query: { search: 'Cable A' } }));
+    await waitFor(() => expect(view.result.current.error).toContain('scan limit'));
+    expect(fetchPathFinderCableWorkflowPage).toHaveBeenCalledTimes(CABLE_WORKFLOW_SEARCH_PAGE_LIMIT); expect(view.result.current.page).toBeNull(); expect(view.result.current.busy).toBe(false);
+  });
+  it('bounds total search time even when a continuation ignores cancellation', async () => {
+    vi.useFakeTimers(); vi.mocked(fetchPathFinderCableWorkflowPage).mockImplementationOnce(async () => empty(200, 'a')).mockImplementationOnce(() => new Promise(() => {}));
+    const view = renderHook(() => usePathFinderCableWorkflow({ ...access(), query: { search: 'Cable A' } }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(CABLE_WORKFLOW_SEARCH_MILLISECONDS); });
+    expect(view.result.current.error).toContain('timed out'); expect(view.result.current.busy).toBe(false); expect(view.result.current.page).toBeNull();
+    expect(vi.mocked(fetchPathFinderCableWorkflowPage).mock.calls[1][3]?.aborted).toBe(true);
+  });
+});
 
 describe('owned cable workflow reads', () => {
   it('does not read or expose rows for an inactive/nonadmin/unowned account or project', async () => {

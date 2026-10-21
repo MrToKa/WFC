@@ -76,9 +76,15 @@ function OwnedCableWorkflowList(props: PathFinderNeedsRoutingListProps) {
   const filterId = useId();
   const workflow = usePathFinderCableWorkflow({ ...props, query: { ...props.preferences, filter, search, limit: 100 } });
   const page = workflow.page;
+  const searching = search.normalize('NFC').trim().length > 0;
+  const submitSearch = () => {
+    if (searchDraft.normalize('NFC').trim() === search.normalize('NFC').trim()) {
+      if (!workflow.busy) workflow.refresh();
+    } else setSearch(searchDraft);
+  };
   return <section className={`${styles.root}${props.className ? ` ${props.className}` : ''}`} aria-label="Cable routing diagnostics" aria-busy={workflow.busy}>
     <h3>Path Finder cables</h3>
-    <form className={styles.controls} onSubmit={event => { event.preventDefault(); setSearch(searchDraft); }}>
+    <form className={styles.controls} onSubmit={event => { event.preventDefault(); submitSearch(); }}>
       <Field label={{ children: 'Cable state', htmlFor: filterId }}><select id={filterId} className={styles.select} value={filter} onChange={event => setFilter(event.target.value as Filter)}>
         <option value="needs-routing">Needs routing</option><option value="calculating">Calculating</option><option value="ready-for-review">Ready for review</option>
         <option value="up-to-date">Updated</option><option value="all">All non-MV cables</option>
@@ -88,15 +94,20 @@ function OwnedCableWorkflowList(props: PathFinderNeedsRoutingListProps) {
     </form>
     <p className={styles.small}>MV cables are excluded. Selecting a cable opens its workflow without changing cable values.</p>
     <p className={styles.small}>Each page shows live observations. Refresh to update earlier pages as calculations progress.</p>
-    {workflow.loading ? <p role="status">Loading cable diagnostics…</p> : null}
+    {workflow.loading ? <p role="status">{searching ? 'Searching for matching cables…' : 'Loading cable diagnostics…'}</p> : null}
     {workflow.error ? <p role="alert">{workflow.error}</p> : null}
     {page ? <>
       <p role="status">{page.rows.length} matching {page.rows.length === 1 ? 'cable' : 'cables'} on this page; {page.scannedCount} checked.
-        {page.nextCursor !== null ? ' More cables remain to be checked.' : ' End of this scan.'}</p>
-      {!page.rows.length ? <p>{page.nextCursor !== null
-        ? 'No matches in this checked portion. Continue to check the remaining cables.'
-        : workflow.hasPrevious ? 'No matches in this final portion. Previous pages may contain matches.'
-          : 'No cables match this filter in the completed scan.'}</p> : null}
+        {searching ? page.nextCursor !== null ? ' More matching results may be available.' : ' Search complete.'
+          : page.nextCursor !== null ? ' More cables remain to be checked.' : ' End of this scan.'}</p>
+      {!page.rows.length ? <p>{searching ? page.nextCursor !== null
+        ? 'The search is incomplete. Refresh cables to try again.'
+        : workflow.hasPrevious ? 'No further matching cables. Previous results are still available.'
+          : filter === 'all' ? 'No non-MV cables match this search.'
+            : 'No cables match this search in the selected cable state. Choose All non-MV cables to search other states.'
+        : page.nextCursor !== null ? 'No matches in this checked portion. Continue to check the remaining cables.'
+          : workflow.hasPrevious ? 'No matches in this final portion. Previous pages may contain matches.'
+            : 'No cables match this filter in the completed scan.'}</p> : null}
       <ul className={styles.list} aria-label="Matching cables">{page.rows.map(row => {
         const decision = classifyCableWorkflow(row);
         return <li className={styles.row} key={row.cable.id}>
@@ -114,7 +125,7 @@ function OwnedCableWorkflowList(props: PathFinderNeedsRoutingListProps) {
         </li>;
       })}</ul>
       <div className={styles.controls}><Button disabled={workflow.busy || !workflow.hasPrevious || !workflow.enabled} onClick={workflow.previousPage}>Previous page</Button>
-        <Button disabled={workflow.busy || page.nextCursor === null || !workflow.enabled} onClick={workflow.nextPage}>Continue scan</Button></div>
+        <Button disabled={workflow.busy || page.nextCursor === null || !workflow.enabled || (searching && page.rows.length === 0)} onClick={workflow.nextPage}>{searching ? 'Next results' : 'Continue scan'}</Button></div>
     </> : null}
   </section>;
 }

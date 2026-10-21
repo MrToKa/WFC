@@ -87,16 +87,49 @@ describe.runIf(Boolean(fixturePath))('PF-U1 real SQL slice in an explicitly owne
   });
   afterAll(async () => { await pool?.end(); });
 
-  it('walks empty literal-filter pages and finds a cable beyond the first400 candidates without DML', async () => {
+  it('finds a literal target beyond the first400 project rows in its first page without DML', async () => {
     const names = Array.from({ length: 405 }, (_, index) => index === 404 ? 'Last_%\\target' : `Earlier ${index}`);
     const data = await seed(405, names), repo = repository();
+    await pool.query('UPDATE cables SET tag=$2,mto=$3 WHERE id=$1', [data[403].id, 'Last_%\\target', 'MV']);
+    await pool.query(`INSERT INTO cables(project_id,id,cable_type_id,tag,from_location,to_location,mto)
+      VALUES($1,$2,$3,$4,'FROM','TO','LV')`, [id(99), id(999), id(9), 'Last_%\\target']);
+    queries.length = 0;
     const first = await repo.page(projectId, who, { search: '_%\\target' });
-    expect(first.rows).toEqual([]); expect(first.scannedCount).toBe(200); expect(first.nextCursor).not.toBeNull();
-    const second = await repo.page(projectId, who, { search: '_%\\target', cursor: first.nextCursor });
-    expect(second.rows).toEqual([]); expect(second.scannedCount).toBe(200); expect(second.nextCursor).not.toBeNull();
-    const third = await repo.page(projectId, who, { search: '_%\\target', cursor: second.nextCursor });
-    expect(third.rows.map(row => row.cable.id)).toEqual([data[404].id]); expect(third.scannedCount).toBe(5); expect(third.nextCursor).toBeNull();
+    expect(first.rows.map(row => row.cable.id)).toEqual([data[404].id]); expect(first.scannedCount).toBe(1); expect(first.nextCursor).toBeNull();
     expect(queries.some(sql => /^\s*(?:INSERT|UPDATE|DELETE|CREATE|ALTER|DROP)\b/i.test(sql))).toBe(false);
+  });
+  it('retains ASCII-search Unicode expansions and NFC matching without granting wildcard syntax', async () => {
+    const data = await seed(7, ['Straße', 'STRASSE', '\u212aelvin', 'cafe\u0301_%\\', 'CAFÉ_%\\', 'CAFE.*', 'Earlier']);
+    const repo = repository();
+    const sharpS = await repo.page(projectId, who, { filter: 'all', search: 'strasse' });
+    expect(sharpS.rows.map(row => row.cable.id)).toEqual([data[0].id, data[1].id]);
+    const kelvin = await repo.page(projectId, who, { filter: 'all', search: 'KELVIN' });
+    expect(kelvin.rows.map(row => row.cable.id)).toEqual([data[2].id]);
+    const accent = await repo.page(projectId, who, { filter: 'all', search: ' CAFÉ_%\\ ' });
+    expect(accent.rows.map(row => row.cable.id)).toEqual([data[3].id, data[4].id]);
+    const literal = await repo.page(projectId, who, { filter: 'all', search: 'CAFE.*' });
+    expect(literal.rows.map(row => row.cable.id)).toEqual([data[5].id]);
+  });
+  it('searches all three fields before the candidate limit and resumes matching pages without duplicates', async () => {
+    const data = await seed(405);
+    await pool.query('UPDATE cables SET from_location=$2 WHERE id=ANY($1::uuid[])', [data.slice(200, 402).map(row => row.id), 'shared-panel']);
+    await pool.query('UPDATE cables SET to_location=$2 WHERE id=$1', [data[404].id, 'shared-panel']);
+    const repo = repository(), ids: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await repo.page(projectId, who, { filter: 'all', search: 'SHARED-panel', cursor });
+      ids.push(...page.rows.map(row => row.cable.id));
+      expect(page.scannedCount).toBeLessThanOrEqual(200);
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor);
+    expect(ids).toEqual([...data.slice(200, 402), data[404]].map(row => row.id));
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+  it('retains existing oversized-input refusal even for an ASCII text nonmatch', async () => {
+    const data = await seed(2);
+    await pool.query('UPDATE cables SET routing=$2 WHERE id=$1', [data[0].id, 'x'.repeat(8001)]);
+    await expect(repository().page(projectId, who, { filter: 'all', search: 'NO-MATCH' }))
+      .rejects.toMatchObject({ code: 'WORKFLOW_CABLE_INPUT_LIMIT', status: 413 });
   });
   it('stops at a requested10th match without consuming the next match; excludes MV and retains unknown categories', async () => {
     const data = await seed(22);
