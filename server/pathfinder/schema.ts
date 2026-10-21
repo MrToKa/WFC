@@ -21,6 +21,7 @@ import { initializeGrantOperationSchema } from './grantOperationSchema.js';
 import { initializeProducerResourceSchema } from './producerResourceSchema.js';
 import { initializeRevisionResultSchema } from './revisionResultSchema.js';
 import { initializeApplyRecoverySchema } from './applyRecoverySchema.js';
+import { initializeBarrierRegistrySchema } from './barrierRegistrySchema.js';
 
 export async function initializePathFinder(pool: Pool): Promise<void> {
   const client = await pool.connect();
@@ -134,6 +135,7 @@ export async function initializePathFinder(pool: Pool): Promise<void> {
   await initializeDrawingExportSchema(pool);
   await initializePreparationSchema(pool);
   await initializeGeometryTraceSchema(pool);
+  await initializeBarrierRegistrySchema(pool);
   await initializeEndpointBindingSchema(pool);
   await initializeRevisionComparisonSchema(pool);
   await initializeWorkerScheduling(pool);

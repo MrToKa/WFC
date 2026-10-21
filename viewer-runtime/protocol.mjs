@@ -1,13 +1,14 @@
 import { isStagedModelCaptureStart, isModelCaptureInputAppend, validateModelCaptureInputAck } from './capture-input.mjs';
 import { validatePreparationDiscoveryRequest, validatePreparationDiscoveryPage, validatePreparationSlice } from './preparation-input.mjs';
+import { validateBarrierCaptureRequest } from './barrier-capture.mjs';
 
 export const CHANNEL = 'wfc-routings-viewer';
 export const PROTOCOL_VERSION = 1;
 export const SDK_VERSION = '7.130.0';
 export const MAX_MESSAGE_BYTES = 65536;
 export const FRAME_PATH = '/viewer-runtime/7.130.0/index.html';
-export const PARENT_TYPES = Object.freeze(['INIT', 'LOAD_MODEL', 'SHOW_ROUTE', 'CLEAR_ROUTE', 'ZOOM_ROUTE', 'CANCEL_REQUEST', 'DISPOSE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'READ_MODEL_OBJECTS', 'READ_PREPARATION_OBJECTS', 'READ_SELECTION', 'SET_PATH_TRANSPARENCY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE']);
-export const FRAME_TYPES = Object.freeze(['HELLO', 'RUNTIME_READY', 'MODEL_PROGRESS', 'MODEL_LOADED', 'ROUTE_RESULT', 'ROUTE_CLEARED', 'ROUTE_ZOOMED', 'REQUEST_CANCELLED', 'DISPOSED', 'WARNING', 'ERROR', 'COMPUTED_PATH_UPDATED', 'POINT_PICKED', 'MODEL_OBJECTS', 'PREPARATION_OBJECTS', 'MODEL_SELECTION', 'PATH_TRANSPARENCY_UPDATED', 'MODEL_CAPTURE_EVENT', 'MODEL_CAPTURE_PROGRESS', 'MODEL_CAPTURE_INPUT_ACK']);
+export const PARENT_TYPES = Object.freeze(['INIT', 'LOAD_MODEL', 'SHOW_ROUTE', 'CLEAR_ROUTE', 'ZOOM_ROUTE', 'CANCEL_REQUEST', 'DISPOSE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'READ_MODEL_OBJECTS', 'READ_PREPARATION_OBJECTS', 'READ_SELECTION', 'SET_PATH_TRANSPARENCY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE']);
+export const FRAME_TYPES = Object.freeze(['HELLO', 'RUNTIME_READY', 'MODEL_PROGRESS', 'MODEL_LOADED', 'ROUTE_RESULT', 'ROUTE_CLEARED', 'ROUTE_ZOOMED', 'REQUEST_CANCELLED', 'DISPOSED', 'WARNING', 'ERROR', 'COMPUTED_PATH_UPDATED', 'POINT_PICKED', 'MODEL_OBJECTS', 'PREPARATION_OBJECTS', 'MODEL_SELECTION', 'PATH_TRANSPARENCY_UPDATED', 'MODEL_CAPTURE_EVENT', 'MODEL_CAPTURE_PROGRESS', 'MODEL_CAPTURE_INPUT_ACK', 'BARRIER_CAPTURE_EVENT', 'BARRIER_CAPTURE_PROGRESS']);
 export const MAX_PATH_POINTS = 20000;
 export const MAX_PATH_CHUNK_POINTS = 128;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -105,13 +106,15 @@ function payload(type, value) {
     case 'READ_PREPARATION_OBJECTS': return validatePreparationDiscoveryRequest(value);
     case 'PREPARATION_OBJECTS': return validatePreparationDiscoveryPage(value);
     case 'START_MODEL_CAPTURE': return captureRequest(value);
+    case 'START_BARRIER_CAPTURE': return validateBarrierCaptureRequest(value);
+    case 'READ_BARRIER_CAPTURE': return exact(value, ['captureId', 'index']) && isUuid(value.captureId) && integer(value.index) && value.index < 3000;
     case 'READ_SELECTION': return exact(value, []);
     case 'MODEL_SELECTION': return exact(value, ['coordinateFrame', 'metresPerDisplayUnit', 'globalOffsetMetres', 'objects']) && payload('MODEL_OBJECTS', { cursor: 0, nextCursor: null, complete: true, query: '', ...value }) && new Set(value.objects.map(object => object.objectId)).size === value.objects.length;
     case 'SET_PATH_TRANSPARENCY': case 'PATH_TRANSPARENCY_UPDATED': return exact(value, ['routeRequestId', 'percent']) && isUuid(value.routeRequestId) && integer(value.percent) && value.percent <= 100;
     case 'READ_MODEL_CAPTURE': return isModelCaptureInputAppend(value) || exact(value, ['captureId', 'index']) && isUuid(value.captureId) && integer(value.index) && value.index < 3000;
     case 'MODEL_CAPTURE_INPUT_ACK': return validateModelCaptureInputAck(value);
-    case 'MODEL_CAPTURE_EVENT': return exact(value, ['captureId', 'index', 'done', 'eventJson']) && isUuid(value.captureId) && integer(value.index) && value.index < 3000 && typeof value.done === 'boolean' && text(value.eventJson, 49152) && new TextEncoder().encode(value.eventJson).byteLength <= 24576;
-    case 'MODEL_CAPTURE_PROGRESS': return exact(value, ['captureId', 'phase', 'loaded', 'total']) && isUuid(value.captureId) && oneOf(value.phase, ['index', 'properties', 'geometry']) && integer(value.loaded) && integer(value.total) && value.loaded <= value.total && value.total <= 1000000;
+    case 'BARRIER_CAPTURE_EVENT': case 'MODEL_CAPTURE_EVENT': return exact(value, ['captureId', 'index', 'done', 'eventJson']) && isUuid(value.captureId) && integer(value.index) && value.index < 3000 && typeof value.done === 'boolean' && text(value.eventJson, 49152) && new TextEncoder().encode(value.eventJson).byteLength <= 24576;
+    case 'BARRIER_CAPTURE_PROGRESS': case 'MODEL_CAPTURE_PROGRESS': return exact(value, ['captureId', 'phase', 'loaded', 'total']) && isUuid(value.captureId) && oneOf(value.phase, ['index', 'properties', 'geometry']) && integer(value.loaded) && integer(value.total) && value.loaded <= value.total && value.total <= 1000000;
     case 'BEGIN_COMPUTED_PATH': return exact(value, ['pathId', 'pointCount', 'objectIds']) && isUuid(value.pathId) && integer(value.pointCount) && value.pointCount >= 1 && value.pointCount <= MAX_PATH_POINTS && boundedIds(value.objectIds);
     case 'APPEND_COMPUTED_PATH': return exact(value, ['pathId', 'offset', 'points']) && isUuid(value.pathId) && integer(value.offset) && value.offset < MAX_PATH_POINTS && Array.isArray(value.points) && value.points.length > 0 && value.points.length <= MAX_PATH_CHUNK_POINTS && value.points.every(isCanonicalPoint);
     case 'COMMIT_COMPUTED_PATH': return exact(value, ['pathId']) && isUuid(value.pathId);
@@ -148,6 +151,7 @@ export function validateEnvelope(value, direction) {
         !nullableUuid(value.modelVersionId) || !nullableUuid(value.loadId) || (value.modelVersionId === null) !== (value.loadId === null)) return null;
     const allowed = direction === 'parent-to-frame' ? PARENT_TYPES : direction === 'frame-to-parent' ? FRAME_TYPES : [...PARENT_TYPES, ...FRAME_TYPES];
     if (!allowed.includes(value.type) || !payload(value.type, value.payload)) return null;
+    if (value.type.includes('BARRIER_CAPTURE') && (value.modelVersionId === null || value.type === 'START_BARRIER_CAPTURE' && (value.payload.scope.projectId !== value.projectId || value.payload.scope.modelVersionId !== value.modelVersionId))) return null;
     const handshake = ['HELLO', 'INIT', 'RUNTIME_READY'].includes(value.type);
     if (handshake ? value.modelVersionId !== null : ['LOAD_MODEL', 'MODEL_PROGRESS', 'MODEL_LOADED', 'SHOW_ROUTE', 'ROUTE_RESULT', 'ZOOM_ROUTE', 'ROUTE_ZOOMED', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'COMPUTED_PATH_UPDATED', 'PICK_POINT', 'POINT_PICKED', 'READ_MODEL_OBJECTS', 'MODEL_OBJECTS', 'READ_PREPARATION_OBJECTS', 'PREPARATION_OBJECTS', 'READ_SELECTION', 'MODEL_SELECTION', 'SET_PATH_TRANSPARENCY', 'PATH_TRANSPARENCY_UPDATED', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'MODEL_CAPTURE_EVENT', 'MODEL_CAPTURE_PROGRESS', 'MODEL_CAPTURE_INPUT_ACK'].includes(value.type) && value.modelVersionId === null) return null;
     const serialized = JSON.stringify(value);

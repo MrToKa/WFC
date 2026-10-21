@@ -1,6 +1,7 @@
 import { createRouteController } from './routes.mjs';
 import { createPathFinderController } from './pathfinder.mjs';
 import { captureSelectedModel } from './model-capture.mjs';
+import { captureSelectedBarriers } from './barrier-capture.mjs';
 import { createModelCaptureInputStage, isStagedModelCaptureStart, isModelCaptureInputAppend, CAPTURE_INPUT_LIMITS } from './capture-input.mjs';
 import { SDK_VERSION } from './protocol.mjs';
 import { parseRoutingBindings } from './routing-bindings.mjs';
@@ -204,6 +205,9 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
         finally { currentCapture.reading = false; operationSignal?.removeEventListener('abort', abort); }
       }
       function captureIterator(state, request, eventLimit = CAPTURE_INPUT_LIMITS.responses) {
+        if (state.kind === 'barrier') return captureSelectedBarriers(viewer, request, { loadId: descriptor.loadId,
+          signal: AbortSignal.any([signal, state.controller.signal].filter(Boolean)), startedAt: state.startedAt, eventLimit,
+          onProgress(progress) { if (capture === state) state.onProgress?.(progress); } });
         prepareForEndpointVisibility();
         return captureSelectedModel(viewer, { ...request, projectId: descriptor.projectId, modelVersionId: descriptor.modelVersionId, contentFingerprint: descriptor.contentFingerprint,loadId:descriptor.loadId }, { signal: AbortSignal.any([signal, state.controller.signal].filter(Boolean)), startedAt: state.startedAt, eventLimit, onProgress(progress) { if (capture === state) state.onProgress?.(progress); } });
       }
@@ -274,10 +278,28 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
           return captureEvent(request.captureId, 0, operationSignal, onProgress);
         },
         readModelCapture(request, operationSignal, onProgress) {
+          if (capture?.kind === 'barrier') throw safeError('EXTRACTION_FAILED');
           if (isModelCaptureInputAppend(request)) {
             if (!capture || capture.id !== request.captureId || !capture.stage) throw safeError('EXTRACTION_FAILED');
             return inputAck(capture, request, operationSignal);
           }
+          return captureEvent(request.captureId, request.index, operationSignal, onProgress);
+        },
+        async startBarrierCapture(request, operationSignal, onProgress, { startedAt = Date.now() } = {}) {
+          cancelCapture(); active(operationSignal);
+          if (!descriptor || request.scope.projectId !== descriptor.projectId || request.scope.modelVersionId !== descriptor.modelVersionId
+            || request.scope.contentFingerprint !== descriptor.contentFingerprint || !Number.isFinite(startedAt) || startedAt > Date.now()
+            || Date.now() - startedAt > CAPTURE_INPUT_LIMITS.milliseconds) throw safeError('EXTRACTION_FAILED');
+          const controller = new AbortController();
+          const state = { id: request.captureId, kind: 'barrier', index: 0, reading: false, controller, onProgress, iterator: null,
+            stage: null, startedAt, responses: 0, deadline: null };
+          capture = state;
+          state.deadline = setTimeout(() => { if (capture === state) cancelCapture(); }, Math.max(1, CAPTURE_INPUT_LIMITS.milliseconds - (Date.now() - startedAt)));
+          state.iterator = captureIterator(state, request);
+          return captureEvent(request.captureId, 0, operationSignal, onProgress);
+        },
+        readBarrierCapture(request, operationSignal, onProgress) {
+          if (capture?.kind !== 'barrier') throw safeError('EXTRACTION_FAILED');
           return captureEvent(request.captureId, request.index, operationSignal, onProgress);
         },
       };

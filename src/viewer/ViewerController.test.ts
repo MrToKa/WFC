@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ViewerController, type ViewerEvent, type ViewerOptions, type ViewerCaptureTiming } from './ViewerController';
 import { invalidateViewerLogin } from './loginLifecycle';
-import { webcrypto } from 'node:crypto';
+import { createHash, webcrypto } from 'node:crypto';
 import * as captureRuntime from '../../viewer-runtime/model-capture.mjs';
 import * as captureInputRuntime from '../../viewer-runtime/capture-input.mjs';
 import { PREPARATION_MATCHING_POLICY } from '../../viewer-runtime/preparation-input.mjs';
+import { barrierCanonicalJson, validateBarrierFrameObservation, type BarrierCaptureRequest } from '../../viewer-runtime/barrier-capture.mjs';
+import { barrierCaptureSchema } from '../../shared/pathfinderBarriers';
 
 const projectId = '11111111-1111-4111-8111-111111111111';
 const versionId = '22222222-2222-4222-8222-222222222222';
@@ -32,6 +34,37 @@ function setup(token = 'login-a', onCaptureTiming?: ViewerOptions['onCaptureTimi
   };
   return { c, events, send, message, hello, ready };
 }
+function barrierRequest(): BarrierCaptureRequest {
+  return { captureId: crypto.randomUUID(), scope: { projectId, modelVersionId: versionId, contentFingerprint: 'b'.repeat(64), selectionRevision: '1',
+    captureFrameId: '55555555-5555-4555-8555-555555555555', captureFrameSha256: 'd'.repeat(64), coordinateFrame: 'canonical-world-metres' },
+  selectedParents: [{ selectionId: '66666666-6666-4666-8666-666666666666', kind: 'wall', objectId: 'dbid:23', dbId: 23, externalId: null,
+    name: 'Selected wall', identityBasis: 'version-local-only', inclusion: 'own-and-all-descendant-fragments' }] };
+}
+function barrierStream(input: BarrierCaptureRequest, loadId: string): Array<Record<string, unknown>> {
+  const sha = (value: unknown) => createHash('sha256').update(barrierCanonicalJson(value)).digest('hex');
+  const matrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+  const frameInput = { schemaVersion: 'wfc.pf.barrier-frame-observation.v1', projectId, modelVersionId: versionId, contentFingerprint: input.scope.contentFingerprint,
+    loadId, sdkVersion: '7.130.0', matrixPrecision: 'binary64', coordinateFrame: 'canonical-world-metres', sourceUnits: 'm', metresPerDisplayUnit: 1,
+    upVector: [0, 0, 1], globalOffsetDisplayUnits: [0, 0, 0], globalOffsetMetres: [0, 0, 0], displayToWorldMetres: matrix, modelTransform: null, placementTransform: null };
+  const frameObservation = { ...frameInput, contentSha256: sha(frameInput) };
+  const source = { fragmentId: 0, ownerObjectId: 'dbid:23', parentSelectionIds: [input.selectedParents[0].selectionId], sourceUnits: 'm', metresPerSourceUnit: 1,
+    sourceToWorldMetres: matrix, transformSha256: sha(matrix) };
+  const fragments = [{ source, bounds: { minimum: [0, 0, 0], maximum: [1, 1, 1] }, verticesMetres: [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0],
+    [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]], triangleIndices: [0, 3, 2, 0, 2, 1, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 3, 7, 6, 3, 6, 2, 0, 4, 7, 0, 7, 3, 1, 2, 6, 1, 6, 5] }];
+  const enumeration = { selectedParents: input.selectedParents, enumeratedFragmentIds: [0], membership: [{ fragmentId: 0, ownerObjectId: source.ownerObjectId, parentSelectionIds: source.parentSelectionIds }] };
+  const capture = { schemaVersion: 'wfc.pf.barrier-capture.v1', captureId: input.captureId, scope: input.scope, selectedParents: input.selectedParents, fragments,
+    observation: { state: 'reported-complete', verification: 'unverified', enumeratedFragmentIds: [0], unavailableFragmentIds: [], enumerationSha256: sha(enumeration) } };
+  return [{ type: 'metadata', captureId: input.captureId, schemaVersion: 'wfc.pf.barrier-capture.events.v1', scope: input.scope, selectedParentCount: 1, frameObservation },
+    { type: 'capture-part', captureId: input.captureId, partIndex: 0, final: true, text: barrierCanonicalJson(capture) },
+    { type: 'complete', captureId: input.captureId, captureSha256: sha(capture), fragmentCount: 1, vertexCount: 8, triangleCount: 12 }];
+}
+function barrierObservation(input: BarrierCaptureRequest, loadId: string): Awaited<ReturnType<ViewerController['captureBarriers']>> {
+  const events = barrierStream(input, loadId), frameObservation = events[0].frameObservation;
+  if (!validateBarrierFrameObservation(frameObservation)) throw new Error('Synthetic frame fixture is invalid');
+  return { capture: barrierCaptureSchema.parse(JSON.parse(String(events[1].text))), frameObservation };
+}
+const barrierPublicationReceipt = (input: BarrierCaptureRequest) => ({ schemaVersion: 'wfc.pf.barrier-publication-receipt.v1',
+  snapshot: { snapshotId: '77777777-7777-4777-8777-777777777777', scope: structuredClone(input.scope), registryRevision: '1', contentSha256: 'e'.repeat(64), mode: 'mesh-set' }, duplicate: false });
 
 describe('PathFinder protected Viewer capabilities', () => {
   async function loaded(sessionDuration = 300_000, onCaptureTiming?: ViewerOptions['onCaptureTiming']) {
@@ -53,6 +86,200 @@ describe('PathFinder protected Viewer capabilities', () => {
     s.message('MODEL_LOADED', { sdkVersion: '7.130.0', format: 'svf', nodeIndexReady: true }, command.requestId, identity);
     return { ...s, identity };
   }
+  it('assembles a request-bound barrier capture with a separate observed frame and final model check', async () => {
+    const s = await loaded(), input = barrierRequest(), events = barrierStream(input, s.identity.loadId);
+    s.send.mockImplementation(value => {
+      if (!['START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE'].includes(value.type)) return;
+      const index = value.type === 'START_BARRIER_CAPTURE' ? 0 : value.payload.index;
+      void Promise.resolve().then(() => s.message('BARRIER_CAPTURE_EVENT', { captureId: input.captureId, index, done: index === events.length - 1,
+        eventJson: JSON.stringify(events[index]) }, value.requestId, s.identity));
+    });
+    await expect(s.c.captureBarriers(input)).resolves.toMatchObject({ capture: { captureId: input.captureId, observation: { verification: 'unverified' } }, frameObservation: { loadId: s.identity.loadId } });
+    expect(s.send.mock.calls.filter(call => call[0].type === 'READ_BARRIER_CAPTURE')).toHaveLength(2);
+  });
+  it('superseded barrier cleanup cannot cancel a newer capture even when the caller reuses its capture UUID', async () => {
+    const s = await loaded(), input = barrierRequest(), events = barrierStream(input, s.identity.loadId);
+    let finishOld!: (response: Response) => void;
+    vi.mocked(globalThis.fetch).mockImplementationOnce(() => new Promise<Response>(resolve => { finishOld = resolve; }));
+    s.send.mockImplementation(value => {
+      if (value.type !== 'READ_BARRIER_CAPTURE') return;
+      const index = value.payload.index; void Promise.resolve().then(() => s.message('BARRIER_CAPTURE_EVENT', { captureId: input.captureId, index,
+        done: index === events.length - 1, eventJson: JSON.stringify(events[index]) }, value.requestId, s.identity));
+    });
+    const old = s.c.captureBarriers(input), oldRejected = expect(old).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.waitFor(() => expect(finishOld).toBeTypeOf('function'));
+    const next = s.c.captureBarriers(input), nextResult = expect(next).resolves.toMatchObject({ capture: { captureId: input.captureId } });
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'START_BARRIER_CAPTURE')).toBe(true));
+    const command = s.send.mock.calls.find(call => call[0].type === 'START_BARRIER_CAPTURE')![0];
+    finishOld(Response.json({ selection: { activeModelVersionId: versionId, selectionRevision: 1 } })); await oldRejected;
+    expect(s.send.mock.calls.some(call => call[0].type === 'CANCEL_REQUEST' && call[0].payload.targetRequestId === command.requestId)).toBe(false);
+    s.message('BARRIER_CAPTURE_EVENT', { captureId: input.captureId, index: 0, done: false, eventJson: JSON.stringify(events[0]) }, command.requestId, s.identity);
+    await nextResult;
+  });
+  it.each(['index', 'capture UUID', 'part order', 'frame hash', 'premature terminal'])('rejects malformed barrier %s before returning a capture', async kind => {
+    const s = await loaded(), input = barrierRequest(), events = barrierStream(input, s.identity.loadId);
+    if (kind === 'part order') events[1].partIndex = 1;
+    if (kind === 'frame hash') (events[0].frameObservation as { globalOffsetMetres: number[] }).globalOffsetMetres[0] = 99;
+    s.send.mockImplementation(value => {
+      if (!['START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE'].includes(value.type)) return;
+      const index = value.type === 'START_BARRIER_CAPTURE' ? 0 : value.payload.index;
+      void Promise.resolve().then(() => s.message('BARRIER_CAPTURE_EVENT', { captureId: kind === 'capture UUID' ? crypto.randomUUID() : input.captureId,
+        index: kind === 'index' ? index + 1 : index, done: kind === 'premature terminal' || index === events.length - 1,
+        eventJson: JSON.stringify(events[index]) }, value.requestId, s.identity));
+    });
+    await expect(s.c.captureBarriers(input)).rejects.toBeDefined();
+  });
+  it('ignores a barrier response from a foreign load and accepts only its current exact reply', async () => {
+    const s = await loaded(), input = barrierRequest(), events = barrierStream(input, s.identity.loadId);
+    s.send.mockImplementation(value => {
+      if (!['START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE'].includes(value.type)) return;
+      const index = value.type === 'START_BARRIER_CAPTURE' ? 0 : value.payload.index, payload = { captureId: input.captureId, index,
+        done: index === events.length - 1, eventJson: JSON.stringify(events[index]) };
+      void Promise.resolve().then(() => { s.message('BARRIER_CAPTURE_EVENT', payload, value.requestId, { ...s.identity, loadId: crypto.randomUUID() }); s.message('BARRIER_CAPTURE_EVENT', payload, value.requestId, s.identity); });
+    });
+    await expect(s.c.captureBarriers(input)).resolves.toMatchObject({ capture: { captureId: input.captureId } });
+  });
+  it('a model selection change at final barrier verification prevents publication of an otherwise intact capture', async () => {
+    const s = await loaded(), input = barrierRequest(), events = barrierStream(input, s.identity.loadId);
+    s.send.mockImplementation(value => {
+      if (!['START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE'].includes(value.type)) return;
+      const index = value.type === 'START_BARRIER_CAPTURE' ? 0 : value.payload.index;
+      if (index === events.length - 1) vi.mocked(globalThis.fetch).mockImplementationOnce(async () => Response.json({ selection: { activeModelVersionId: versionId, selectionRevision: 2 } }));
+      void Promise.resolve().then(() => s.message('BARRIER_CAPTURE_EVENT', { captureId: input.captureId, index, done: index === events.length - 1,
+        eventJson: JSON.stringify(events[index]) }, value.requestId, s.identity));
+    });
+    await expect(s.c.captureBarriers(input)).rejects.toBeDefined();
+  });
+  it('absolute barrier deadline cannot be extended by progress keepalives', async () => {
+    const s = await loaded(900_000), input = barrierRequest();
+    s.send.mockImplementation(value => {
+      if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
+      if (value.type === 'CANCEL_REQUEST') s.message('REQUEST_CANCELLED', { targetRequestId: value.payload.targetRequestId, outcome: 'cancelled' }, value.requestId, s.identity);
+    });
+    const capture = s.c.captureBarriers(input), rejected = expect(capture).rejects.toThrow(/deadline/);
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'START_BARRIER_CAPTURE')).toBe(true));
+    const command = s.send.mock.calls.find(call => call[0].type === 'START_BARRIER_CAPTURE')![0];
+    const progress = window.setInterval(() => s.message('BARRIER_CAPTURE_PROGRESS', { captureId: input.captureId, phase: 'geometry', loaded: 0, total: 1 }, command.requestId, s.identity), 100_000);
+    await vi.advanceTimersByTimeAsync(315_001); window.clearInterval(progress); await rejected;
+    expect(s.send.mock.calls.some(call => call[0].type === 'CANCEL_REQUEST' && call[0].payload.targetRequestId === command.requestId)).toBe(true);
+  });
+  it('publishes barriers only through the exact current session cookie path with its own bearer and bounded signal', async () => {
+    const s = await loaded(), input = barrierRequest(), observation = barrierObservation(input, s.identity.loadId), receipt = barrierPublicationReceipt(input);
+    const baseline = vi.mocked(globalThis.fetch).getMockImplementation()!, uploads: Array<{ url: RequestInfo | URL; options?: RequestInit }> = [];
+    vi.mocked(globalThis.fetch).mockImplementation(async (url, options) => {
+      if (options?.method !== 'PUT') return baseline(url, options); uploads.push({ url, options }); return Response.json(receipt);
+    });
+    await expect(s.c.publishBarriers(input.captureId, observation)).resolves.toEqual(receipt);
+    expect(uploads).toHaveLength(1); const upload = uploads[0], session = s.send.mock.calls.find(call => call[0].type === 'LOAD_MODEL')![0].payload.sessionId;
+    expect(upload.url).toBe(`/api/projects/${projectId}/model-versions/${versionId}/viewer-sessions/${session}/barriers/captures/${input.captureId}`);
+    expect(upload.options).toMatchObject({ method: 'PUT', credentials: 'same-origin', cache: 'no-store', mode: 'same-origin', redirect: 'error' });
+    expect(new Headers(upload.options?.headers).get('Authorization')).toBe('Bearer login-a');
+    expect(new Headers(upload.options?.headers).get('Content-Type')).toBe('application/json');
+    expect(upload.options?.signal).toBeInstanceOf(AbortSignal); expect(upload.options?.signal?.aborted).toBe(false);
+    expect(JSON.parse(String(upload.options?.body))).toEqual(observation);
+    expect(JSON.stringify(upload.options?.body)).not.toContain('login-a');
+  });
+  it('accepts an in-flight barrier publication across an ordinary renewal of the same Viewer session', async () => {
+    const s = await loaded(), input = barrierRequest(), observation = barrierObservation(input, s.identity.loadId), receipt = barrierPublicationReceipt(input);
+    // Start the write just before the real scheduled renewal, leaving its own
+    // independent 180-second publication deadline well beyond the renewal.
+    await vi.advanceTimersByTimeAsync(179_000);
+    const baseline = vi.mocked(globalThis.fetch).getMockImplementation()!;
+    let finish!: (value: Response) => void, uploadSignal: AbortSignal | null | undefined;
+    vi.mocked(globalThis.fetch).mockImplementation(async (url, options) => {
+      if (options?.method !== 'PUT') return baseline(url, options);
+      uploadSignal = options.signal; return await new Promise<Response>(resolve => { finish = resolve; });
+    });
+    const writing = s.c.publishBarriers(input.captureId, observation), accepted = expect(writing).resolves.toEqual(receipt);
+    await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(vi.mocked(globalThis.fetch).mock.calls.filter(call => call[1]?.method === 'POST' && String(call[0]).endsWith('/renew'))).toHaveLength(1);
+    expect(s.send.mock.calls.filter(call => call[0].type === 'LOAD_MODEL')).toHaveLength(1);
+    expect(uploadSignal?.aborted).toBe(false);
+    finish(Response.json(receipt)); await accepted;
+    expect(s.c.getLoadSnapshot()).toMatchObject({ ready: true, modelVersionId: versionId, loadId: s.identity.loadId });
+    expect(vi.mocked(globalThis.fetch).mock.calls.filter(call => call[1]?.method === 'PUT')).toHaveLength(1);
+  });
+  it.each(['capture project', 'capture model', 'capture UUID', 'capture revision', 'frame load', 'frame project', 'frame model', 'frame fingerprint', 'frame extra', 'frame digest'])('refuses foreign or invalid barrier %s before starting an upload', async kind => {
+    const s = await loaded(), input = barrierRequest(), observation = barrierObservation(input, s.identity.loadId);
+    if (kind === 'capture project') observation.capture.scope.projectId = crypto.randomUUID();
+    if (kind === 'capture model') observation.capture.scope.modelVersionId = crypto.randomUUID();
+    if (kind === 'capture UUID') observation.capture.captureId = crypto.randomUUID();
+    if (kind === 'capture revision') observation.capture.scope.selectionRevision = '2';
+    if (kind === 'frame load') observation.frameObservation.loadId = crypto.randomUUID();
+    if (kind === 'frame project') observation.frameObservation.projectId = crypto.randomUUID();
+    if (kind === 'frame model') observation.frameObservation.modelVersionId = crypto.randomUUID();
+    if (kind === 'frame fingerprint') observation.frameObservation.contentFingerprint = 'f'.repeat(64);
+    if (kind === 'frame extra') (observation.frameObservation as unknown as Record<string, unknown>).verified = true;
+    if (kind === 'frame digest') observation.frameObservation.contentSha256 = 'f'.repeat(64);
+    await expect(s.c.publishBarriers(input.captureId, observation)).rejects.toBeDefined();
+    expect(vi.mocked(globalThis.fetch).mock.calls.filter(call => call[1]?.method === 'PUT')).toHaveLength(0);
+  });
+  it.each(['receipt extra', 'snapshot extra', 'project', 'model', 'fingerprint', 'selection revision', 'frame ID', 'frame hash', 'duplicate type', 'schema', 'explicit empty'])('refuses a barrier publication receipt with changed %s', async kind => {
+    const s = await loaded(), input = barrierRequest(), observation = barrierObservation(input, s.identity.loadId), receipt = barrierPublicationReceipt(input);
+    if (kind === 'receipt extra') (receipt as unknown as Record<string, unknown>).ready = true;
+    if (kind === 'snapshot extra') (receipt.snapshot as unknown as Record<string, unknown>).ready = true;
+    if (kind === 'project') receipt.snapshot.scope.projectId = crypto.randomUUID();
+    if (kind === 'model') receipt.snapshot.scope.modelVersionId = crypto.randomUUID();
+    if (kind === 'fingerprint') receipt.snapshot.scope.contentFingerprint = 'f'.repeat(64);
+    if (kind === 'selection revision') receipt.snapshot.scope.selectionRevision = '2';
+    if (kind === 'frame ID') receipt.snapshot.scope.captureFrameId = crypto.randomUUID();
+    if (kind === 'frame hash') receipt.snapshot.scope.captureFrameSha256 = 'f'.repeat(64);
+    if (kind === 'duplicate type') (receipt as unknown as Record<string, unknown>).duplicate = 'yes';
+    if (kind === 'schema') receipt.schemaVersion = 'untrusted.version';
+    if (kind === 'explicit empty') receipt.snapshot.mode = 'explicit-empty';
+    const baseline = vi.mocked(globalThis.fetch).getMockImplementation()!;
+    vi.mocked(globalThis.fetch).mockImplementation(async (url, options) => options?.method === 'PUT' ? Response.json(receipt) : baseline(url, options));
+    await expect(s.c.publishBarriers(input.captureId, observation)).rejects.toBeDefined();
+    expect(vi.mocked(globalThis.fetch).mock.calls.filter(call => call[1]?.method === 'PUT')).toHaveLength(1);
+  });
+  it('does not retry a barrier publication after a 401 or emit automatic success', async () => {
+    const s = await loaded(), input = barrierRequest(), observation = barrierObservation(input, s.identity.loadId), baseline = vi.mocked(globalThis.fetch).getMockImplementation()!;
+    vi.mocked(globalThis.fetch).mockImplementation(async (url, options) => options?.method === 'PUT'
+      ? Response.json({ code: 'SESSION_EXPIRED' }, { status: 401 }) : baseline(url, options));
+    const before = s.events.length; await expect(s.c.publishBarriers(input.captureId, observation)).rejects.toMatchObject({ status: 401, code: 'SESSION_EXPIRED' });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(vi.mocked(globalThis.fetch).mock.calls.filter(call => call[1]?.method === 'PUT')).toHaveLength(1);
+    expect(s.events.slice(before).some(event => event.type.includes('BARRIER'))).toBe(false);
+  });
+  it.each(['caller', 'logout', 'dispose', 'timeout'])('aborts an uncertain barrier write on %s without retrying its intent', async reason => {
+    const s = await loaded(900_000), input = barrierRequest(), observation = barrierObservation(input, s.identity.loadId), baseline = vi.mocked(globalThis.fetch).getMockImplementation()!;
+    const caller = new AbortController(); let uploadSignal: AbortSignal | null | undefined;
+    vi.mocked(globalThis.fetch).mockImplementation(async (url, options) => {
+      if (options?.method !== 'PUT') return baseline(url, options);
+      uploadSignal = options.signal; return await new Promise<Response>((_resolve, reject) => uploadSignal?.addEventListener('abort', () => reject(new DOMException('Synthetic upload interrupted.', 'AbortError')), { once: true }));
+    });
+    const writing = s.c.publishBarriers(input.captureId, observation, caller.signal), rejected = expect(writing).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.waitFor(() => expect(uploadSignal).toBeDefined());
+    if (reason === 'caller') caller.abort();
+    if (reason === 'logout') invalidateViewerLogin('login-a');
+    if (reason === 'dispose') s.c.dispose();
+    if (reason === 'timeout') await vi.advanceTimersByTimeAsync(180_001);
+    await rejected; expect(uploadSignal?.aborted).toBe(true);
+    expect(vi.mocked(globalThis.fetch).mock.calls.filter(call => call[1]?.method === 'PUT')).toHaveLength(1);
+  });
+  it('enforces the barrier write timeout even when fetch ignores abort and discards its late successful receipt', async () => {
+    const s = await loaded(900_000), input = barrierRequest(), observation = barrierObservation(input, s.identity.loadId), receipt = barrierPublicationReceipt(input);
+    const baseline = vi.mocked(globalThis.fetch).getMockImplementation()!; let finish!: (value: Response) => void, uploadSignal: AbortSignal | null | undefined;
+    vi.mocked(globalThis.fetch).mockImplementation(async (url, options) => {
+      if (options?.method !== 'PUT') return baseline(url, options); uploadSignal = options.signal; return await new Promise<Response>(resolve => { finish = resolve; });
+    });
+    let success = false; const writing = s.c.publishBarriers(input.captureId, observation); void writing.then(() => { success = true; }, () => {});
+    const rejected = expect(writing).rejects.toMatchObject({ name: 'AbortError' }); await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+    await vi.advanceTimersByTimeAsync(180_001); await rejected; expect(uploadSignal?.aborted).toBe(true);
+    finish(Response.json(receipt)); await Promise.resolve(); await Promise.resolve(); expect(success).toBe(false);
+    expect(vi.mocked(globalThis.fetch).mock.calls.filter(call => call[1]?.method === 'PUT')).toHaveLength(1);
+  });
+  it('logout cancels an in-flight write even if its transport later returns a valid receipt', async () => {
+    const s = await loaded(), input = barrierRequest(), observation = barrierObservation(input, s.identity.loadId), receipt = barrierPublicationReceipt(input);
+    const baseline = vi.mocked(globalThis.fetch).getMockImplementation()!; let finish!: (value: Response) => void;
+    vi.mocked(globalThis.fetch).mockImplementation(async (url, options) => options?.method === 'PUT'
+      ? await new Promise<Response>(resolve => { finish = resolve; }) : baseline(url, options));
+    const writing = s.c.publishBarriers(input.captureId, observation), rejected = expect(writing).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.waitFor(() => expect(finish).toBeTypeOf('function')); invalidateViewerLogin('login-a'); await rejected;
+    finish(Response.json(receipt)); await Promise.resolve(); await Promise.resolve();
+    expect(vi.mocked(globalThis.fetch).mock.calls.filter(call => call[1]?.method === 'PUT')).toHaveLength(1);
+  });
   it('preparation discovery freezes exact scope, validates echoed scope and rechecks the current model',async()=>{
     const s=await loaded(),request={schemaVersion:'wfc.pf.viewer-discovery.v1' as const,mode:'names' as const,names:['TRAY-001'],rootObjectId:null,cursor:0,limit:128};
     s.send.mockImplementation(value=>{if(value.type==='READ_PREPARATION_OBJECTS')s.message('PREPARATION_OBJECTS',{schemaVersion:request.schemaVersion,mode:'names',names:value.payload.names,rootObjectId:null,cursor:0,matchingPolicyVersion:PREPARATION_MATCHING_POLICY,visibilityScope:discoveryVisibility,indexedObjectCount:1,propertyScan:null,objects:[],nextCursor:null,complete:true},value.requestId,s.identity);});

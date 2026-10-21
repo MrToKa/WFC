@@ -1,12 +1,39 @@
 # PathFinder local implementation progress
 
+## PF-B2 technically checked — selected-scope capture and immutable registry
+
+Branch pf-b2-barrier-capture-local-20261021 inherits B1 product66c1772 and report
+c23f798. B1 standalone complete:94rootchecks/workloadsmoke/11hashaudit, report81.
+Root owns protocol/bridge/adapter/controller/API integration and sole execution.
+barrier_geometry_map owns new barrier-capture module/tests; barrier_engine_map owns
+new independent BarrierVerifier CLI/library/tests; barrier_registry owns new server
+storage/schema/repository/tests. Preserve concurrent edits. No 5191/runtime delivery changes.
+Actual5191 capture remains NOT_RUN due unchanged browser refusal, no retry/bypass;
+independent implementation continues. Automation ACTIVE. Next finish B2, execute
+checks, report/commit and prepare-stage-handoff B3 immediately.
+ROOT actual checks:39capture +48C#verifier +311combinedTS +55bridge +29runtime PASS;
+real TS→C#stdin→strictTSreceipt PASS.9actualLinuxPostgreSQL18/storage tests PASS,
+4actualLinux.NETwrapper tests PASS, exact current-frame SQL1/2frame check PASS.
+InitialWindowsSQL3PASS6FAIL retained: directoryfsync unsupported and REAL allocation
+JSONBwirebug (fixed explicitJSONtext+regression); Linux9PASS afterfix, no guardweakening.
+Initiallint/type fixtureissues repaired, client/servertypes+changedTSlintPASS;
+normal-session-renew false failure repaired with stable identity tuple; final88controller tests PASS.
+All own test containers retired, receipts in engine .scratch/barrier-capture-20261021.
+OriginalWFC main clean96e63f13;11Corehashesunchanged. No5191/originaldata/runtimewrites.
+
+NEW cleanup refusal: automatic approval review rejected recursive deletion of
+engine .scratch/barrier-capture-20261021/sql-root and linux-sql with reason
+"blocked by policy". Whole command rejected before execution. Preserve both
+targets and their parents; no retry/alternate tool/parent deletion. This does not
+block independent implementation. Historic seven denied targets also preserved.
+
+
 ## PF-B1 technically checked — standalone kernel only
 
 Current branch pf-b1-barrier-kernel-local-20261021 inherits dc939bd22976aa26e663440651325dd1d216ebd8.
 B0 product95db3a0a0077e1592806a9841c6e67d382cd4246/report80 complete:58actual
 contracttests/client+servertypes/lint/diffPASS, no runtimechanges. PF-B1 detailed
-prompt prepared and executed immediately; independent kernel sources remain
-untracked pending qualification. Agents own new library/test project; root sole
+prompt executed; standalone kernel committed66c1772436e131d19f4fa3deec3dbf768ecb4a0c. Agents own new library/test project; root sole
 executor, new own scratch/barrier-kernel-tests-20261021 and .NET9.0.319 outputs.
 
 Initial88PASS was not final acceptance; review found and root CONFIRMED unsafe
@@ -19,8 +46,7 @@ build517.4916ms,queries34.9566ms,processpeak52543488B, notmaximumcapacity/combin
 Independent finalsource review approved standaloneB1 scope. Read-only sourceaudit
 PASS11originalCore hashes vs frozenprovenance. No runtime/API/DB/model/cablewrites.
 Closedsolids/centrelineonly; nocapsule/detour/actualmodelcoverage/geometryrepair or
-generalBRepvoidcertificate. Activeautomation continues; NEXTrecordB1localcommit/
-report/PF-B2handoff and execute independentB2capture/storage. Actualconverted/
+generalBRepvoidcertificate. Activeautomation continues; Report81/PF-B2handoff committedc23f798; independentB2 capture/storage executing. Actualconverted/
 browsergatesstillNOT_RUN dueunchangedrefusal, no retry/bypass.
 
 ## Completed B0 baseline — contracts and independent discovery
@@ -1152,4 +1178,3 @@ previous finiteauthority expired09:11UTC. Never resumeall2140 or renewauthority.
 - Automationpath-finder-purpose-rules-and-model-revisionsACTIVE. Continueuseful
   independentauthorizedwork; no routine-stagepause. Onceonlyhumanstepsremain,
   pauseautomationthroughapptool andstateexactmanualnextsteps. Noacceptanceinvented.
-

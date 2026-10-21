@@ -28,6 +28,7 @@ import { createDrawingSnapshotRouter } from './pathfinder/drawingSnapshotRoutes.
 import { createPreparationRouter } from './pathfinder/preparationRoutes.js';
 import { getPathFinderRuntime } from './pathfinder/runtime.js';
 import { createGeometryTraceRouter } from './pathfinder/geometryTraceRoutes.js';
+import { createBarrierRouter } from './pathfinder/barrierRoutes.js';
 import { createEndpointBindingRouter } from './pathfinder/endpointBindingRoutes.js';
 import { createCableEndpointRouter } from './pathfinder/cableEndpointRoutes.js';
 import { createRevisionComparisonRouter } from './pathfinder/revisionComparisonRoutes.js';
@@ -63,6 +64,7 @@ export const createApp = (): Express => {
   app.use(createProducerResourceRouter({runtime:getPathFinderRuntime().producerResources}));
   app.use(createManagedProducerControlRouter(getPathFinderRuntime().managedControl));
   app.use((_req,res,next)=>{if(app.get('wfcShuttingDown')===true){res.status(503).json({code:'APPLICATION_STOPPING'});return;}next();});
+  app.use('/api/projects/:projectId/model-versions/:modelVersionId/viewer-sessions/:sessionId/barriers', createBarrierRouter(pool, 'viewer'));
   app.use(createViewerSessionRouter());
 
   app.use(
@@ -77,6 +79,7 @@ export const createApp = (): Express => {
   app.use('/api/projects/:projectId/pathfinder', createCalculationGrantRouter(pool,getPathFinderRuntime().calculationGrants));
   app.use('/api/projects/:projectId/pathfinder', createDrawingPurposePolicyRouter(pool));
   app.use('/api/projects/:projectId/pathfinder', createGeometryTraceRouter(pool,getPathFinderRuntime().geometryTraces));
+  app.use('/api/projects/:projectId/pathfinder', createBarrierRouter(pool));
   app.use('/api/projects/:projectId/pathfinder', createEndpointBindingRouter(pool,getPathFinderRuntime().endpointBindings));
   app.use('/api/projects/:projectId/pathfinder', createCableEndpointRouter(pool));
   app.use('/api/projects/:projectId/pathfinder', createRevisionComparisonRouter(pool,getPathFinderRuntime().revisionComparisons));

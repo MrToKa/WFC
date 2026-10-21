@@ -1,5 +1,7 @@
 import { FRAME_PATH, MAX_PATH_POINTS, MAX_PATH_CHUNK_POINTS, isCanonicalPoint, validateEnvelope, type BridgeEnvelope, type ComputedPath, type PickedPoint, type ViewerModelObjectsPage, type ViewerSelection, type ModelCaptureRequest, type ModelCaptureProgress } from '../../viewer-runtime/protocol.mjs';
 import { createModelCaptureAssembler } from '../../viewer-runtime/model-capture.mjs';
+import { createBarrierCaptureAssembler, validateBarrierCaptureRequest, validateBarrierFrameObservation, barrierFrameObservationHashInput, type BarrierCaptureRequest } from '../../viewer-runtime/barrier-capture.mjs';
+import { BARRIER_LIMITS, barrierCanonicalJson, barrierCaptureSchema, barrierSnapshotReferenceSchema } from '../../shared/pathfinderBarriers';
 import { bindCompletedCaptureEvidence,verifyCompletedCaptureEvidence,type CompletedModelCaptureSummary } from '../../viewer-runtime/capture-evidence.mjs';
 import { CAPTURE_INPUT_LIMITS, planModelCaptureInput, validateModelCaptureInputAck, validateModelCaptureInputScope, type ModelCaptureInputDescriptor } from '../../viewer-runtime/capture-input.mjs';
 import { validatePreparationDiscoveryRequest, validatePreparationDiscoveryPage, type PreparationDiscoveryRequest, type PreparationDiscoveryPage } from '../../viewer-runtime/preparation-input.mjs';
@@ -104,7 +106,7 @@ export class ViewerController {
       this.fail(pending.envelope.type === 'LOAD_MODEL' ? 'MODEL_TIMEOUT' : 'REQUEST_TIMEOUT');
     // A discovery page may build the bounded model-wide property index (300s
     // inside the frame). Allow its terminal reply to arrive before failing load.
-    }, pending.envelope.type === 'READ_PREPARATION_OBJECTS' ? 310_000 : ['START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE'].includes(pending.envelope.type) ? 125_000 : ['CLEAR_ROUTE', 'COMMIT_COMPUTED_PATH', 'SET_PATH_TRANSPARENCY'].includes(pending.envelope.type) ? MODEL_APPEARANCE_TIMEOUT_MILLISECONDS : ['LOAD_MODEL', 'READ_MODEL_OBJECTS', 'READ_SELECTION'].includes(pending.envelope.type) ? 60_000 : pending.envelope.type === 'PICK_POINT' ? 125_000 : 10_000);
+    }, pending.envelope.type === 'READ_PREPARATION_OBJECTS' ? 310_000 : ['START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE'].includes(pending.envelope.type) ? 125_000 : ['CLEAR_ROUTE', 'COMMIT_COMPUTED_PATH', 'SET_PATH_TRANSPARENCY'].includes(pending.envelope.type) ? MODEL_APPEARANCE_TIMEOUT_MILLISECONDS : ['LOAD_MODEL', 'READ_MODEL_OBJECTS', 'READ_SELECTION'].includes(pending.envelope.type) ? 60_000 : pending.envelope.type === 'PICK_POINT' ? 125_000 : 10_000);
   }
 
   private send(type: string, payload: Record<string, unknown>, terminal: string, callbacks: Pick<Pending, 'resolve' | 'reject'> = {}): string {
@@ -154,6 +156,9 @@ export class ViewerController {
     if (message.type === 'MODEL_CAPTURE_PROGRESS' && ['START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE'].includes(pending.envelope.type) && message.payload.captureId === pending.envelope.payload.captureId) {
       this.arm(pending); this.emit(message.type, message.payload, message.requestId, identity); return;
     }
+    if (message.type === 'BARRIER_CAPTURE_PROGRESS' && ['START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE'].includes(pending.envelope.type) && message.payload.captureId === pending.envelope.payload.captureId) {
+      this.arm(pending); this.emit(message.type, message.payload, message.requestId, identity); return;
+    }
     if (message.type === 'WARNING') { this.emit(message.type, message.payload, message.requestId, identity); return; }
     if (message.type !== pending.terminal && message.type !== 'ERROR') return;
     window.clearTimeout(pending.timer);
@@ -197,6 +202,9 @@ export class ViewerController {
     }
     if (message.type === 'MODEL_CAPTURE_EVENT' && (message.payload.captureId !== pending.envelope.payload.captureId || message.payload.index !== (pending.envelope.type === 'START_MODEL_CAPTURE' ? 0 : pending.envelope.payload.index))) {
       pending.reject?.(new Error('Model capture identity mismatch')); this.fail('ROUTE_RESULT_MISMATCH'); return;
+    }
+    if (message.type === 'BARRIER_CAPTURE_EVENT' && (message.payload.captureId !== pending.envelope.payload.captureId || message.payload.index !== (pending.envelope.type === 'START_BARRIER_CAPTURE' ? 0 : pending.envelope.payload.index))) {
+      pending.reject?.(new Error('Barrier capture identity mismatch')); this.fail('ROUTE_RESULT_MISMATCH'); return;
     }
     if (message.type === 'PATH_TRANSPARENCY_UPDATED' && (message.payload.routeRequestId !== pending.envelope.payload.routeRequestId || message.payload.percent !== pending.envelope.payload.percent)) {
       pending.reject?.(new Error('Path transparency acknowledgement mismatch')); return;
@@ -337,7 +345,7 @@ export class ViewerController {
 
   async showRoute(rawRouting: string, source: 'manual' | 'cable' = 'manual', cableId: string | null = null): Promise<string | null> {
     if (this.disposed || !this.loaded) throw new Error('Model is not ready');
-    this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'READ_SELECTION', 'SET_PATH_TRANSPARENCY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE']);
+    this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'READ_SELECTION', 'SET_PATH_TRANSPARENCY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE']);
     this.routeRequestId = null;
     const generation = ++this.routeGeneration;
     // Clear immediately, even for malformed input or a superseded access check.
@@ -352,7 +360,7 @@ export class ViewerController {
     if (!UUID.test(path.pathId) || !Array.isArray(path.points) || path.points.length < 1 || path.points.length > MAX_PATH_POINTS || !path.points.every(isCanonicalPoint) || !Array.isArray(path.objectIds) || path.objectIds.length > 512 || !path.objectIds.every(id => Number.isInteger(id) && id > 0 && id <= 2147483647) || new Set(path.objectIds).size !== path.objectIds.length) throw new Error('Invalid computed path');
     // Freeze caller-owned arrays before asynchronous selection and capability checks.
     const points = path.points.map(point => [...point]), objectIds = [...path.objectIds], pathId = path.pathId;
-    this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'READ_SELECTION', 'SET_PATH_TRANSPARENCY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE']);
+    this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'READ_SELECTION', 'SET_PATH_TRANSPARENCY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE']);
     this.routeRequestId = null;
     const generation = ++this.routeGeneration;
     // BEGIN clears the frame's previous route too. Do not arm its small-message
@@ -423,6 +431,99 @@ export class ViewerController {
 
   cancelPicking(): void {
     for (const pending of [...this.pending.values()]) if (pending.envelope.type === 'PICK_POINT') this.cancel(pending.envelope.requestId);
+  }
+
+  /** Selected barrier geometry is a separate observation, never a ready certificate. */
+  async captureBarriers(request: BarrierCaptureRequest, options: { signal?: AbortSignal; isCurrent?: () => boolean } = {}) {
+    if (!validateBarrierCaptureRequest(request) || this.disposed || !this.loaded) throw new Error('Barrier capture is unavailable');
+    const input: BarrierCaptureRequest = JSON.parse(JSON.stringify(request));
+    this.clear('selection');
+    const generation = this.routeGeneration, { instanceId, modelVersionId, loadId } = this;
+    if (!loadId || !modelVersionId || input.scope.projectId !== this.options.projectId || input.scope.modelVersionId !== modelVersionId
+      || input.scope.selectionRevision !== String(this.selectionRevision)) throw new Error('Barrier capture scope changed');
+    const operation = new AbortController(); this.captureInputAbort = operation;
+    const ownedRequests = new Set<string>();
+    const abort = () => { operation.abort(); for (const pending of [...this.pending.values()])
+      if (!this.disposed && ownedRequests.has(pending.envelope.requestId)) this.cancel(pending.envelope.requestId); };
+    options.signal?.addEventListener('abort', abort, { once: true });
+    if (options.signal?.aborted) abort();
+    const deadlineAt = Date.now() + CAPTURE_WALL_MILLISECONDS;
+    let rejectDeadline!: (error: Error) => void;
+    const deadline = new Promise<never>((_resolve, reject) => { rejectDeadline = reject; });
+    void deadline.catch(() => {});
+    const timer = window.setTimeout(() => { rejectDeadline(new Error('Barrier capture deadline exceeded')); abort(); }, CAPTURE_WALL_MILLISECONDS);
+    const current = () => {
+      if (this.disposed || operation.signal.aborted || options.isCurrent?.() === false || Date.now() >= deadlineAt
+        || this.routeGeneration !== generation || this.instanceId !== instanceId || this.modelVersionId !== modelVersionId
+        || this.loadId !== loadId || String(this.selectionRevision) !== input.scope.selectionRevision)
+        throw new DOMException('Barrier capture cancelled or changed.', 'AbortError');
+    };
+    const bounded = async <T,>(invoke: () => Promise<T>) => { current(); const value = await Promise.race([invoke(), deadline]); current(); return value; };
+    const round = (type: string, payload: Record<string, unknown>) => new Promise<ViewerEvent>((resolve, reject) => {
+      try { ownedRequests.add(this.send(type, payload, 'BARRIER_CAPTURE_EVENT', { resolve, reject })); } catch (error) { reject(error); }
+    });
+    try {
+      if (!await bounded(() => this.checkSelection())) throw new Error('Barrier model selection changed');
+      const assembler = createBarrierCaptureAssembler({ expectedRequest: input, loadId, eventLimit: 3000 });
+      let reply = await bounded(() => round('START_BARRIER_CAPTURE', { ...input }));
+      for (let index = 0; index < 3000; index++) {
+        current();
+        if (reply.payload.captureId !== input.captureId || reply.payload.index !== index) throw new Error('Barrier capture reply mismatch');
+        const event: unknown = JSON.parse(String(reply.payload.eventJson)); assembler.accept(event);
+        if (reply.payload.done === true) {
+          if ((event as { type?: string }).type !== 'complete') throw new Error('Barrier capture ended incompletely');
+          const result = await bounded(() => assembler.finish());
+          if (!await bounded(() => this.checkSelection())) throw new Error('Barrier model selection changed');
+          return result;
+        }
+        reply = await bounded(() => round('READ_BARRIER_CAPTURE', { captureId: input.captureId, index: index + 1 }));
+      }
+      throw new Error('Barrier capture response budget exceeded');
+    } catch (error) { abort(); throw error; }
+    finally { window.clearTimeout(timer); options.signal?.removeEventListener('abort', abort); if (this.captureInputAbort === operation) this.captureInputAbort = null; }
+  }
+
+  /** The upload stays on the same-origin session cookie path. It cannot borrow a
+   * different login/model/load, and an uncertain response is never retried here. */
+  async publishBarriers(intentId: string, observation: Awaited<ReturnType<ViewerController['captureBarriers']>>, signal?: AbortSignal) {
+    if (!UUID.test(intentId) || this.disposed || !this.loaded || !this.session || !await this.checkSelection()) throw new Error('Barrier publication is unavailable');
+    const session = this.session, capture = barrierCaptureSchema.parse(observation.capture), frame = JSON.parse(JSON.stringify(observation.frameObservation)) as typeof observation.frameObservation;
+    const publicationGeneration = this.generation;
+    const sameSession = () => {
+      const live = this.session;
+      return !this.disposed && this.loaded && this.generation === publicationGeneration && live !== null
+        && live.sessionId === session.sessionId && live.projectId === session.projectId && live.modelVersionId === session.modelVersionId
+        && live.loadId === session.loadId && live.absoluteExpiresAt === session.absoluteExpiresAt
+        && this.modelVersionId === session.modelVersionId && this.loadId === session.loadId;
+    };
+    if (capture.captureId !== intentId || capture.scope.projectId !== session.projectId || capture.scope.modelVersionId !== session.modelVersionId
+      || capture.scope.selectionRevision !== String(this.selectionRevision) || !validateBarrierFrameObservation(frame) || frame.loadId !== session.loadId
+      || frame.projectId !== capture.scope.projectId || frame.modelVersionId !== capture.scope.modelVersionId
+      || frame.contentFingerprint !== capture.scope.contentFingerprint) throw new Error('Barrier publication scope changed');
+    const frameDigest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(barrierCanonicalJson(barrierFrameObservationHashInput(frame)))))]
+      .map(value => value.toString(16).padStart(2, '0')).join('');
+    if (frameDigest !== frame.contentSha256 || !sameSession()) throw new Error('Barrier publication frame changed');
+    if (new TextEncoder().encode(JSON.stringify(observation)).byteLength > BARRIER_LIMITS.captureBytes + 16 * 1024) throw new Error('Barrier publication exceeds its byte limit');
+    const controller = new AbortController(); this.requests.add(controller);
+    let rejectCancellation!: (error: Error) => void;
+    const cancelled = new Promise<never>((_resolve, reject) => { rejectCancellation = reject; }); void cancelled.catch(() => {});
+    const onCancelled = () => rejectCancellation(new DOMException('Barrier publication cancelled; reconcile its receipt before retrying.', 'AbortError'));
+    controller.signal.addEventListener('abort', onCancelled, { once: true });
+    const abort = () => controller.abort(); signal?.addEventListener('abort', abort, { once: true }); if (signal?.aborted) abort();
+    const timer = window.setTimeout(abort, 180_000);
+    try {
+      const upload = viewerRequest<{ schemaVersion: string; snapshot: unknown; duplicate: unknown }>(
+        sessionBase(session.projectId, session.modelVersionId, session.sessionId) + 'barriers/captures/' + intentId,
+        this.options.token, { method: 'PUT', body: { capture, frameObservation: frame }, signal: controller.signal });
+      const result = await Promise.race([upload, cancelled]);
+      if (controller.signal.aborted || !sameSession()
+        || String(this.selectionRevision) !== capture.scope.selectionRevision) throw new Error('Barrier publication response arrived after its context changed');
+      if (result.schemaVersion !== 'wfc.pf.barrier-publication-receipt.v1' || typeof result.duplicate !== 'boolean'
+        || Object.keys(result).length !== 3) throw new Error('Barrier publication receipt is invalid');
+      const snapshot = barrierSnapshotReferenceSchema.parse(result.snapshot);
+      if (snapshot.mode !== 'mesh-set' || barrierCanonicalJson(snapshot.scope) !== barrierCanonicalJson(capture.scope)) throw new Error('Barrier publication receipt scope changed');
+      return { schemaVersion: 'wfc.pf.barrier-publication-receipt.v1' as const, snapshot, duplicate: result.duplicate };
+    } finally { window.clearTimeout(timer); signal?.removeEventListener('abort', abort); controller.signal.removeEventListener('abort', onCancelled); this.requests.delete(controller); }
   }
 
   async captureModel(request: ModelCaptureRequest, onProgress: (progress: ModelCaptureProgress) => void = () => {}, options: {signal?:AbortSignal;isCurrent?:()=>boolean} = {}): Promise<{ snapshot: unknown; summary: CompletedModelCaptureSummary }> {
@@ -558,7 +659,7 @@ export class ViewerController {
     this.captureInputAbort?.abort(); this.captureInputAbort = null;
     ++this.routeGeneration;
     this.routeRequestId = null;
-    this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'READ_SELECTION', 'SET_PATH_TRANSPARENCY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE']);
+    this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'READ_SELECTION', 'SET_PATH_TRANSPARENCY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE']);
     return this.send('CLEAR_ROUTE', { reason }, 'ROUTE_CLEARED');
   }
   zoom(): string {

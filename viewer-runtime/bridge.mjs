@@ -120,9 +120,9 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     computed = undefined;
     for (const [id, controller] of capabilities) {
       const entry = requests.get(id);
-      if (id !== exceptRequestId && (entry?.command.type.includes('COMPUTED_PATH') || entry?.command.type.includes('MODEL_CAPTURE') || ['PICK_POINT', 'READ_SELECTION', 'SET_PATH_TRANSPARENCY'].includes(entry?.command.type))) {
+      if (id !== exceptRequestId && (entry?.command.type.includes('COMPUTED_PATH') || entry?.command.type.includes('MODEL_CAPTURE') || entry?.command.type.includes('BARRIER_CAPTURE') || ['PICK_POINT', 'READ_SELECTION', 'SET_PATH_TRANSPARENCY'].includes(entry?.command.type))) {
         if (entry?.status === 'pending') entry.status = 'cancelled';
-        if (entry?.command.type === 'START_MODEL_CAPTURE') releaseCapture(entry.captureScope, true);
+        if (['START_MODEL_CAPTURE', 'START_BARRIER_CAPTURE'].includes(entry?.command.type)) releaseCapture(entry.captureScope, true);
         controller.abort();
       }
     }
@@ -153,8 +153,10 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
   async function pathFinder(command) {
     if (capabilities.size >= 2) { error(command, failure('INVALID_STATE')); return; }
     const controller = new AbortController(); capabilities.set(command.requestId, controller);
-    const capturing = command.type === 'START_MODEL_CAPTURE' || command.type === 'READ_MODEL_CAPTURE';
-    const ownedCapture = command.type === 'START_MODEL_CAPTURE' ? beginCapture(command) : capturing ? captureScope : undefined;
+    const barrierCapture = command.type === 'START_BARRIER_CAPTURE' || command.type === 'READ_BARRIER_CAPTURE';
+    const captureStart = command.type === 'START_MODEL_CAPTURE' || command.type === 'START_BARRIER_CAPTURE';
+    const capturing = barrierCapture || command.type === 'START_MODEL_CAPTURE' || command.type === 'READ_MODEL_CAPTURE';
+    const ownedCapture = captureStart ? beginCapture(command) : capturing ? captureScope : undefined;
     if (capturing) requests.get(command.requestId).captureScope = ownedCapture;
     const signal = AbortSignal.any([lifetime.signal, loadController.signal, controller.signal, ...(ownedCapture ? [ownedCapture.controller.signal] : [])]);
     const live = () => !disposed && !signal.aborted && identityMatches(command) && requests.get(command.requestId)?.status === 'pending';
@@ -165,20 +167,25 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
       if (command.type === 'READ_PREPARATION_OBJECTS' && requests.size > 4000) throw failure('CAPTURE_RELOAD_REQUIRED');
       if (capturing) checkCapture(ownedCapture);
       if (!live()) return;
-      if (command.type === 'START_MODEL_CAPTURE' || command.type === 'READ_MODEL_CAPTURE') {
+      if (capturing) {
         // Reserve the complete 3,000 ACK+output response budget inside the
         // unchanged 4,096-command replay budget, leaving room for cleanup.
-        if (command.type === 'START_MODEL_CAPTURE' && requests.size > 1091) throw failure('CAPTURE_RELOAD_REQUIRED');
-        if (command.type === 'START_MODEL_CAPTURE') { stopRoute(command.requestId); captureScope = ownedCapture; ownedCapture.installed = true; }
-        const progress = value => { if (live()) emit(command, 'MODEL_CAPTURE_PROGRESS', { captureId: command.payload.captureId, ...value }); };
-        const result = await measuredCapture(ownedCapture, 'adapter', () => command.type === 'START_MODEL_CAPTURE' ? handle.startModelCapture(command.payload, signal, progress, { startedAt: ownedCapture.startedAt }) : handle.readModelCapture(command.payload, signal, progress));
+        if (captureStart && requests.size > 1091) throw failure('CAPTURE_RELOAD_REQUIRED');
+        if (barrierCapture && command.type === 'START_BARRIER_CAPTURE' && command.payload.scope.contentFingerprint !== loadedDescriptor.contentFingerprint) throw failure('MODEL_SELECTION_CHANGED');
+        if (captureStart) { stopRoute(command.requestId); captureScope = ownedCapture; ownedCapture.installed = true; ownedCapture.kind = barrierCapture ? 'barrier' : 'model'; }
+        if (ownedCapture.kind !== (barrierCapture ? 'barrier' : 'model')) throw failure('EXTRACTION_FAILED');
+        const progress = value => { if (live()) emit(command, barrierCapture ? 'BARRIER_CAPTURE_PROGRESS' : 'MODEL_CAPTURE_PROGRESS', { captureId: command.payload.captureId, ...value }); };
+        const result = await measuredCapture(ownedCapture, 'adapter', () => barrierCapture
+          ? captureStart ? handle.startBarrierCapture(command.payload, signal, progress, { startedAt: ownedCapture.startedAt }) : handle.readBarrierCapture(command.payload, signal, progress)
+          : captureStart ? handle.startModelCapture(command.payload, signal, progress, { startedAt: ownedCapture.startedAt }) : handle.readModelCapture(command.payload, signal, progress));
+        if (barrierCapture && (result.captureId !== command.payload.captureId || result.index !== (captureStart ? 0 : command.payload.index))) throw failure('EXTRACTION_FAILED');
         checkCapture(ownedCapture);
         await measuredCapture(ownedCapture, 'authorization', () => requirePathFinder(command, signal));
         checkCapture(ownedCapture);
         if (!live()) return;
-        const terminal = isStagedModelCaptureStart(command.payload) || command.type === 'READ_MODEL_CAPTURE' && isModelCaptureInputAppend(command.payload) ? 'MODEL_CAPTURE_INPUT_ACK' : 'MODEL_CAPTURE_EVENT';
+        const terminal = barrierCapture ? 'BARRIER_CAPTURE_EVENT' : isStagedModelCaptureStart(command.payload) || command.type === 'READ_MODEL_CAPTURE' && isModelCaptureInputAppend(command.payload) ? 'MODEL_CAPTURE_INPUT_ACK' : 'MODEL_CAPTURE_EVENT';
         if (!emit(command, terminal, result)) throw failure('EXTRACTION_FAILED');
-        if (terminal === 'MODEL_CAPTURE_EVENT' && result.done) releaseCapture(ownedCapture);
+        if (['MODEL_CAPTURE_EVENT', 'BARRIER_CAPTURE_EVENT'].includes(terminal) && result.done) releaseCapture(ownedCapture);
       } else if (command.type === 'BEGIN_COMPUTED_PATH') {
         stopRoute(command.requestId); computed = { pathId: command.payload.pathId, pointCount: command.payload.pointCount, objectIds: command.payload.objectIds, points: [] };
         emit(command, 'COMPUTED_PATH_UPDATED', { pathId: computed.pathId, phase: 'begun', received: 0 });
@@ -226,7 +233,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
         try { handle?.clearRoute(); } catch (cleanup) { cause = cleanup; }
       }
       error(command, cause);
-    } finally { capabilities.delete(command.requestId); if (command.type === 'START_MODEL_CAPTURE' && captureScope !== ownedCapture) releaseCapture(ownedCapture, true); }
+    } finally { capabilities.delete(command.requestId); if (captureStart && captureScope !== ownedCapture) releaseCapture(ownedCapture, true); }
   }
   async function load(command) {
     stopLoad();
@@ -317,7 +324,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
       else if (command.type !== 'DISPOSE') return;
     } else requests.set(command.requestId, { command, status: 'pending' });
     try { switch (command.type) {
-      case 'BEGIN_COMPUTED_PATH': case 'APPEND_COMPUTED_PATH': case 'COMMIT_COMPUTED_PATH': case 'PICK_POINT': case 'READ_MODEL_OBJECTS': case 'READ_PREPARATION_OBJECTS': case 'READ_SELECTION': case 'SET_PATH_TRANSPARENCY': case 'START_MODEL_CAPTURE': case 'READ_MODEL_CAPTURE':
+      case 'BEGIN_COMPUTED_PATH': case 'APPEND_COMPUTED_PATH': case 'COMMIT_COMPUTED_PATH': case 'PICK_POINT': case 'READ_MODEL_OBJECTS': case 'READ_PREPARATION_OBJECTS': case 'READ_SELECTION': case 'SET_PATH_TRANSPARENCY': case 'START_MODEL_CAPTURE': case 'READ_MODEL_CAPTURE': case 'START_BARRIER_CAPTURE': case 'READ_BARRIER_CAPTURE':
         if (phase !== 'loaded' || !handle) { error(command, failure('INVALID_STATE')); return; }
         void pathFinder(command); break;
       case 'INIT':
@@ -349,7 +356,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
           if (entry.command === current) { stopLoad(); phase = 'initialized'; }
           else if (entry.command === routeRequest) stopRoute();
           else if (entry.command === initCommand) { initController?.abort(); initCommand = undefined; phase = 'hello'; }
-          else if (capabilities.has(entry.command.requestId)) { capabilities.get(entry.command.requestId).abort(); if (entry.command.type.includes('COMPUTED_PATH') || entry.command.type.includes('MODEL_CAPTURE')) stopRoute(); }
+          else if (capabilities.has(entry.command.requestId)) { capabilities.get(entry.command.requestId).abort(); if (entry.command.type.includes('COMPUTED_PATH') || entry.command.type.includes('MODEL_CAPTURE') || entry.command.type.includes('BARRIER_CAPTURE')) stopRoute(); }
         }
         finish(command); emit(command, 'REQUEST_CANCELLED', { targetRequestId: command.payload.targetRequestId, outcome }); break;
       }

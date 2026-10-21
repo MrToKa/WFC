@@ -11,7 +11,7 @@ await assertCanonicalPath(path.dirname(directory), { directory: true });
 await fs.mkdir(directory, { recursive: true });
 await assertCanonicalPath(directory, { directory: true });
 const copied = [];
-for (const name of ['equipment-names.mjs', 'display-visibility.mjs', 'routing-bindings.mjs', 'preparation-input.mjs', 'capture-evidence.mjs','capture-input.mjs','pathfinder.mjs','model-capture.mjs','protocol.mjs']) {
+for (const name of ['equipment-names.mjs', 'display-visibility.mjs', 'routing-bindings.mjs', 'preparation-input.mjs', 'capture-evidence.mjs','capture-input.mjs','pathfinder.mjs','model-capture.mjs', 'barrier-capture.mjs','protocol.mjs']) {
 const source = fileURLToPath(new URL('../viewer-runtime/' + name, import.meta.url));
 const destination = path.join(directory, name);
 await assertCanonicalPath(source);

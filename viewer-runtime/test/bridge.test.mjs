@@ -17,7 +17,7 @@ function fixture(options = {}) {
   const window = { location: { origin: 'http://localhost:18085' }, crypto: { randomUUID: () => uuid(next++) },
     parent: { postMessage(value, origin) { sent.push({ value, origin }); } },
     addEventListener(type, fn) { if (type === 'message') listeners.add(fn); }, removeEventListener(type, fn) { if (type === 'message') listeners.delete(fn); } };
-  const facts = { clears: 0, fits: 0, finishes: 0, disposed: 0, shows: [], bindingShows: [] };
+  const facts = { clears: 0, fits: 0, finishes: 0, disposed: 0, shows: [], bindingShows: [], barrierStarts: 0, barrierReads: 0 };
   const handle = { finish() { facts.finishes++; }, prepareIndex: options.prepareIndex ?? (async () => {}),
     clearRoute() { facts.clears++; return options.clearRoute?.(); }, fitRoute() { facts.fits++; },
     showComputedPath(value) { facts.computedPath = structuredClone(value); },
@@ -28,6 +28,8 @@ function fixture(options = {}) {
     setPathTransparency: options.setPathTransparency ?? (async (percent, _signal, beforeCommit) => { await beforeCommit(); facts.transparency = percent; }),
     startModelCapture: options.startModelCapture ?? (async ({ captureId }) => ({ captureId, index: 0, done: false, eventJson: JSON.stringify({ type: 'metadata', captureId }) })),
     readModelCapture: options.readModelCapture ?? (async ({ captureId, index }) => ({ captureId, index, done: true, eventJson: JSON.stringify({ type: 'complete', captureId }) })),
+    async startBarrierCapture(...args) { facts.barrierStarts++; return options.startBarrierCapture ? options.startBarrierCapture(...args) : { captureId: args[0].captureId, index: 0, done: false, eventJson: '{}' }; },
+    async readBarrierCapture(...args) { facts.barrierReads++; return options.readBarrierCapture ? options.readBarrierCapture(...args) : { captureId: args[0].captureId, index: args[0].index, done: true, eventJson: '{}' }; },
     showRoute: options.showRoute ?? (async (raw, value) => { facts.shows.push(raw); facts.bindingShows.push(value.routingBindings); return { segments: parseRouting(raw).segments.map(() => ({ status: 'found', count: 1, drawable: true })), lineCount: 1, diagnostics: {} }; }) };
   const adapter = { initialize: options.initialize ?? (async () => {}), async load(value) { loads.push(value); return options.load ? options.load(value) : handle; }, dispose() { facts.disposed++; } };
   const fetchImpl = async (url, init) => {
@@ -40,7 +42,7 @@ function fixture(options = {}) {
     }
     return Response.json({ projectId: bootstrap.projectId, ...identity, contentFingerprint: 'b'.repeat(64), supportProfile: 'svf-local-7.130.0-v1', format: 'svf', sdkVersion: '7.130.0', entrypoint: 'resources/output/0/0.svf', resourceCount: 342, totalBytes: 439007803 });
   };
-  const bridge = createRuntimeBridge({ window, bootstrap, adapter, fetchImpl, onState: state => states.push(state) });
+  const bridge = createRuntimeBridge({ window, bootstrap, adapter, fetchImpl, onState: state => states.push(state), resourceMode: options.resourceMode ?? 'human' });
   const send = (type, payload, overrides = {}, eventOverrides = {}) => {
     if (type === 'LOAD_MODEL') identity = { modelVersionId: overrides.modelVersionId ?? uuid(3), loadId: overrides.loadId ?? uuid(4) };
     const value = { channel: CHANNEL, protocolVersion: 1, ...bootstrap, ...identity, requestId: uuid(next++), type, payload, ...overrides };
@@ -52,6 +54,97 @@ function fixture(options = {}) {
   const loaded = async () => { await init(); const command = send('LOAD_MODEL', { sessionId: uuid(6) }); await turn(); return command; };
   return { bridge, send, sent, messages, init, loaded, facts, fetches, loads, states, listeners, window, handle };
 }
+
+const barrierRequest = () => ({ captureId: uuid(9100), scope: { projectId: uuid(2), modelVersionId: uuid(3), contentFingerprint: 'b'.repeat(64),
+  selectionRevision: '12', captureFrameId: uuid(9101), captureFrameSha256: 'd'.repeat(64), coordinateFrame: 'canonical-world-metres' }, selectedParents: [{
+  selectionId: uuid(9102), kind: 'wall', objectId: 'dbid:23', dbId: 23, externalId: null, name: 'Selected wall', identityBasis: 'version-local-only', inclusion: 'own-and-all-descendant-fragments' }] });
+const descriptorResponse = () => Response.json({ projectId: uuid(2), modelVersionId: uuid(3), loadId: uuid(4), contentFingerprint: 'b'.repeat(64),
+  supportProfile: 'svf-local-7.130.0-v1', format: 'svf', sdkVersion: '7.130.0', entrypoint: 'resources/output/0/0.svf', resourceCount: 1, totalBytes: 1 });
+
+test('barrier capture authorizes every extracted part before and after its SDK wait', async () => {
+  const f = fixture(); await f.loaded(); const input = barrierRequest();
+  f.send('START_BARRIER_CAPTURE', input); await turn(); f.send('READ_BARRIER_CAPTURE', { captureId: input.captureId, index: 1 }); await turn();
+  assert.equal(f.facts.barrierStarts, 1); assert.equal(f.facts.barrierReads, 1); assert.equal(f.messages('BARRIER_CAPTURE_EVENT').length, 2);
+  const authorizations = f.fetches.filter(value => value.url.endsWith('/pathfinder-authorization')); assert.equal(authorizations.length, 4);
+  assert.ok(authorizations.every(value => value.init.credentials === 'same-origin' && value.init.cache === 'no-store' && value.init.redirect === 'error'));
+  f.bridge.dispose();
+});
+test('barrier capture initial admin refusal prevents all SDK work', async () => {
+  const f = fixture({ fetchImpl: async url => url.endsWith('/pathfinder-authorization') ? new Response(null, { status: 403 }) : descriptorResponse() });
+  await f.loaded(); f.send('START_BARRIER_CAPTURE', barrierRequest()); await turn();
+  assert.equal(f.facts.barrierStarts, 0); assert.equal(f.messages('BARRIER_CAPTURE_EVENT').length, 0); assert.equal(f.messages('ERROR').at(-1).payload.code, 'ACCESS_REVOKED'); f.bridge.dispose();
+});
+test('barrier capture role loss during SDK extraction suppresses all extracted geometry', async () => {
+  const pending = deferred(); let authorization = 0;
+  const f = fixture({ startBarrierCapture: () => pending.promise, fetchImpl: async url => url.endsWith('/pathfinder-authorization')
+    ? ++authorization === 1 ? Response.json({ authorized: true, loadId: uuid(4) }) : new Response(null, { status: 403 }) : descriptorResponse() });
+  await f.loaded(); const input = barrierRequest(); f.send('START_BARRIER_CAPTURE', input); await turn(); assert.equal(f.facts.barrierStarts, 1);
+  pending.resolve({ captureId: input.captureId, index: 0, done: false, eventJson: '{"privateGeometry":"must not escape"}' }); await turn();
+  assert.equal(authorization, 2); assert.equal(f.messages('BARRIER_CAPTURE_EVENT').length, 0); assert.equal(JSON.stringify(f.sent).includes('privateGeometry'), false);
+  assert.equal(f.messages('ERROR').at(-1).payload.code, 'ACCESS_REVOKED'); f.bridge.dispose();
+});
+test('barrier fingerprint, project/model/load identity and invalid index cannot reach SDK extraction', async () => {
+  const f = fixture(); await f.loaded(); const input = barrierRequest();
+  f.send('START_BARRIER_CAPTURE', { ...input, scope: { ...input.scope, contentFingerprint: 'e'.repeat(64) } }); await turn();
+  assert.equal(f.messages('ERROR').at(-1).payload.code, 'MODEL_SELECTION_CHANGED');
+  const prior = f.bridge.getState().requests;
+  f.send('START_BARRIER_CAPTURE', { ...input, scope: { ...input.scope, projectId: uuid(999) } });
+  f.send('START_BARRIER_CAPTURE', { ...input, scope: { ...input.scope, modelVersionId: uuid(999) } });
+  f.send('START_BARRIER_CAPTURE', input, { loadId: uuid(999) });
+  f.send('READ_BARRIER_CAPTURE', { captureId: input.captureId, index: 3000 }); await turn();
+  assert.equal(f.bridge.getState().requests, prior); assert.equal(f.facts.barrierStarts, 0); assert.equal(f.facts.barrierReads, 0); f.bridge.dispose();
+});
+test('barrier and tray capture response kinds cannot consume one another', async () => {
+  for (const kind of ['barrier', 'model']) {
+    const f = fixture(); await f.loaded(); const input = barrierRequest();
+    if (kind === 'barrier') { f.send('START_BARRIER_CAPTURE', input); await turn(); f.send('READ_MODEL_CAPTURE', { captureId: input.captureId, index: 1 }); }
+    else { f.send('START_MODEL_CAPTURE', { captureId: input.captureId, routeCodes: ['BC1'], allowedCategories: ['LV'], equipmentNames: [] }); await turn(); f.send('READ_BARRIER_CAPTURE', { captureId: input.captureId, index: 1 }); }
+    await turn(); assert.equal(f.messages('ERROR').at(-1).payload.code, 'EXTRACTION_FAILED'); assert.equal(f.facts.barrierReads, 0); f.bridge.dispose();
+  }
+});
+test('barrier capture replay is ignored and foreign capture UUID cannot consume its active scope', async () => {
+  const f = fixture(); await f.loaded(); const input = barrierRequest(), start = f.send('START_BARRIER_CAPTURE', input); await turn();
+  f.send(start.type, start.payload, start); await turn(); assert.equal(f.facts.barrierStarts, 1);
+  f.send('READ_BARRIER_CAPTURE', { captureId: uuid(999), index: 1 }); await turn();
+  assert.equal(f.facts.barrierReads, 0); assert.equal(f.messages('ERROR').at(-1).payload.code, 'EXTRACTION_FAILED'); f.bridge.dispose();
+});
+test('cancelling barrier extraction suppresses a late SDK geometry reply', async () => {
+  const pending = deferred(); let capturedSignal;
+  const f = fixture({ startBarrierCapture: (_input, signal) => { capturedSignal = signal; return pending.promise; } });
+  await f.loaded(); const input = barrierRequest(), command = f.send('START_BARRIER_CAPTURE', input); await turn();
+  f.send('CANCEL_REQUEST', { targetRequestId: command.requestId }); assert.equal(capturedSignal.aborted, true);
+  pending.resolve({ captureId: input.captureId, index: 0, done: false, eventJson: '{}' }); await turn();
+  assert.equal(f.messages('BARRIER_CAPTURE_EVENT').length, 0); assert.equal(f.messages('REQUEST_CANCELLED').at(-1).payload.outcome, 'cancelled'); f.bridge.dispose();
+});
+test('producer sessions categorically exclude all new barrier extraction commands', async () => {
+  const f = fixture({ resourceMode: 'producer' }); await f.loaded(); const before = f.bridge.getState().requests;
+  f.send('START_BARRIER_CAPTURE', barrierRequest()); f.send('READ_BARRIER_CAPTURE', { captureId: barrierRequest().captureId, index: 0 }); await turn();
+  assert.equal(f.bridge.getState().requests, before); assert.equal(f.facts.barrierStarts, 0); assert.equal(f.facts.barrierReads, 0); f.bridge.dispose();
+});
+test('barrier extraction reserves its full response allowance and refuses a saturated starting lane', async () => {
+  const f = fixture(); await f.loaded(); for (let i = f.bridge.getState().requests; i < 1091; i++) f.send('CLEAR_ROUTE', { reason: 'user' });
+  f.send('START_BARRIER_CAPTURE', barrierRequest()); await turn(); assert.equal(f.facts.barrierStarts, 0);
+  assert.equal(f.messages('ERROR').at(-1).payload.code, 'CAPTURE_RELOAD_REQUIRED'); f.bridge.dispose();
+});
+test('barrier extraction shares the unchanged two-operation capability ceiling', async () => {
+  const permission = deferred(), f = fixture({ fetchImpl: async url => {
+    if (url.endsWith('/pathfinder-authorization')) { await permission.promise; return Response.json({ authorized: true, loadId: uuid(4) }); }
+    return descriptorResponse();
+  } });
+  await f.loaded(); f.send('START_BARRIER_CAPTURE', barrierRequest()); f.send('READ_MODEL_OBJECTS', { cursor: 0, limit: 1, query: '' });
+  const rejected = f.send('READ_SELECTION', {}); await turn();
+  assert.equal(f.messages('ERROR').find(value => value.requestId === rejected.requestId).payload.code, 'INVALID_STATE'); assert.equal(f.facts.barrierStarts, 0);
+  permission.resolve(); await turn(); assert.equal(f.facts.barrierStarts, 1); f.bridge.dispose();
+});
+test('barrier adapter replies must echo the exact requested capture UUID and part index before emission', async () => {
+  for (const mismatch of ['captureId', 'index']) {
+    const f = fixture({ startBarrierCapture: async ({ captureId }) => ({ captureId: mismatch === 'captureId' ? uuid(999) : captureId,
+      index: mismatch === 'index' ? 1 : 0, done: false, eventJson: '{"privateGeometry":"wrong-scope"}' }) });
+    await f.loaded(); f.send('START_BARRIER_CAPTURE', barrierRequest()); await turn();
+    assert.equal(f.messages('BARRIER_CAPTURE_EVENT').length, 0); assert.equal(f.messages('ERROR').at(-1).payload.code, 'EXTRACTION_FAILED');
+    assert.equal(JSON.stringify(f.sent).includes('privateGeometry'), false); f.bridge.dispose();
+  }
+});
 
 test('capture timing emits one bounded aggregate without identities or model values', async () => {
   const f = fixture(), observations = [];
