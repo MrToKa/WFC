@@ -1,6 +1,29 @@
 # PathFinder local implementation progress
 
-## In progress — PF-B0 contracts and independent B1 collision kernel
+## PF-B1 technically checked — standalone kernel only
+
+Current branch pf-b1-barrier-kernel-local-20261021 inherits dc939bd22976aa26e663440651325dd1d216ebd8.
+B0 product95db3a0a0077e1592806a9841c6e67d382cd4246/report80 complete:58actual
+contracttests/client+servertypes/lint/diffPASS, no runtimechanges. PF-B1 detailed
+prompt prepared and executed immediately; independent kernel sources remain
+untracked pending qualification. Agents own new library/test project; root sole
+executor, new own scratch/barrier-kernel-tests-20261021 and .NET9.0.319 outputs.
+
+Initial88PASS was not final acceptance; review found and root CONFIRMED unsafe
+Clear on a very long/slender box (88PASS/1FAIL receipt numeric-repro.log retained).
+Corrected closest-point arithmetic and conservative conditioning now guard build,
+query, containment AND embedding validation; unsupported arithmetic refuses or is
+indeterminate. Final ROOT94PASS/0FAIL, seeded200trials159Ready/41Refused/318Blocked,
+all40ordinaryReady, no unsafeClear. Smoke200solids/2400tris/2000queriesPASS:
+build517.4916ms,queries34.9566ms,processpeak52543488B, notmaximumcapacity/combinedRSS.
+Independent finalsource review approved standaloneB1 scope. Read-only sourceaudit
+PASS11originalCore hashes vs frozenprovenance. No runtime/API/DB/model/cablewrites.
+Closedsolids/centrelineonly; nocapsule/detour/actualmodelcoverage/geometryrepair or
+generalBRepvoidcertificate. Activeautomation continues; NEXTrecordB1localcommit/
+report/PF-B2handoff and execute independentB2capture/storage. Actualconverted/
+browsergatesstillNOT_RUN dueunchangedrefusal, no retry/bypass.
+
+## Completed B0 baseline — contracts and independent discovery
 
 New user requirement supersedes routine next-PF-browser step: execute plan78
 PF-B0–B9 for explicit wall/floor/ceiling meshes and actual holes. User confirmed
@@ -25,9 +48,8 @@ prompt includes isolation, per-stage handoff+execution, real-data gates and quie
 notifications. This supersedes older PAUSED records below for current automation.
 No permission-file/TOML edit or browser bypass. Real5191 browser refusal unchanged;
 actual converted obstacle capture/SDK acceptance still pending, never syntheticPASS.
-NEXT: finish B0 source/tests, validate exact bounds/contracts, local commit/report,
-PF-B1 prompt + inherited branch, finish/run independent geometry kernel. Continue
-all independent work before any real access blocker. Preparer remains queued.
+B0 completed as reported above; continue current B1 qualification before B2.
+All independent work precedes any external-only stop. Preparer remains queued.
 
 ## Delivered — From/To display after cable-list updates
 
