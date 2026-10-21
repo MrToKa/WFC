@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { createViewerAdapter } from '../adapter.mjs';
 import { createRouteController } from '../routes.mjs';
 import { planModelCaptureInput } from '../capture-input.mjs';
@@ -18,8 +19,8 @@ function sdkFixture(options = {}) {
     getProperties(id, success, failure) { facts.propertyReads++; if (options.getProperties) options.getProperties(id, success, failure); else success({ properties: [{ displayName: 'Length', displayValue: '1' }, { displayName: 'Width', displayValue: '2' }] }); },
     getFragmentList: () => ({ getCount: () => 12 }), getData: () => ({ fragments: { length: 12 } }), isLoadDone: () => false };
   class Viewer {
-    constructor() {
-      this.model = model; this.listeners = new Map(); this.theme = null;
+    constructor(_container, config = {}) {
+      this.config = config; this.model = model; this.listeners = new Map(); this.theme = null;
       this.prefs = { get: () => true };
       this.impl = { showGhosting: true, toggleGhosting(value) { this.showGhosting = value; }, fadeMaterial: { opacity: 0.4, variants: [{ opacity: 0.5 }] }, invalidate() {}, setTonemapMethod: value => { this.tonemap = value; }, setTonemapExposureBias: value => { this.exposure = value; } };
       this.overlays = { removeMesh() {}, removeScene() {}, addScene() {}, addMesh() {} };
@@ -70,6 +71,85 @@ test('SDK initialization uses pinned local assets, explicit local worker root an
   assert.equal(f.facts.webgpuAtInitialization, false);
   await f.adapter.initialize(); assert.equal(f.assets.length, 2); f.adapter.dispose();
   assert.equal(f.facts.featureFlagWrites.length, 1);
+});
+
+
+test('adapter config makes ordinary Model Browser clicks selectOnly and retains pinned modifier actions', async t => {
+  const f = sdkFixture(), previous = globalThis.window; globalThis.window = f.window;
+  t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
+  await f.adapter.initialize();
+  await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf' });
+  assert.deepEqual(f.viewers[0].config.docStructureConfig, {
+    click: { onObject: ['selectOnly'] },
+    clickShift: { onObject: ['toggleMultipleOverlayedSelection'] },
+    clickCtrl: { onObject: ['toggleVisibility'] },
+  });
+});
+
+test('pinned SDK selectOnly keeps a clicked parent and reads its descendant bottom centre without isolation or implicit promotion', async t => {
+  // Source-backed SDK callback execution, with a synthetic public-API model.
+  // This does not claim a real browser or model acceptance check.
+  const sdk = readFileSync(new URL('../sdk/7.130.0/viewer3D.min.js', import.meta.url), 'utf8');
+  assert.ok(sdk.includes('this.clickConfig=r&&r.docStructureConfig?r.docStructureConfig:wK'));
+  assert.ok(sdk.includes('var wK={click:{onObject:["isolate"]},clickShift:{onObject:["toggleMultipleOverlayedSelection"]},clickCtrl:{onObject:["toggleVisibility"]}}'));
+  const sdkSelectOnly = sdk.match(/onSelectOnly:function\((\w+),(\w+)\)\{(\w+)\.select\(\1,\2\)\}/);
+  assert.ok(sdkSelectOnly, 'Pinned Model Browser selectOnly forwards the clicked ID and model.');
+  const f = sdkFixture(), previous = globalThis.window; globalThis.window = f.window;
+  t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
+  class Box3 {
+    constructor() { this.min = { x: Infinity, y: Infinity, z: Infinity }; this.max = { x: -Infinity, y: -Infinity, z: -Infinity }; }
+    union(box) { for (const axis of ['x', 'y', 'z']) { this.min[axis] = Math.min(this.min[axis], box.min[axis]); this.max[axis] = Math.max(this.max[axis], box.max[axis]); } return this; }
+    isEmpty() { return ['x', 'y', 'z'].some(axis => this.min[axis] > this.max[axis]); }
+  }
+  f.window.THREE.Box3 = Box3;
+  const children = new Map([[1, [2]], [2, [4, 5]]]), fragmentsById = new Map([[4, [0]], [5, [1]]]);
+  Object.assign(f.tree, {
+    getNodeParentId: id => id === 1 ? 0 : id === 2 ? 1 : 2,
+    getChildCount: id => children.get(id)?.length ?? 0,
+    getNodeName: id => ({ 1: 'Model', 2: 'Equipment parent', 4: 'Front module', 5: 'Rear module' })[id],
+    enumNodeChildren(id, callback, recursive) {
+      if (recursive && callback(id)) return id;
+      const visit = parent => { for (const child of children.get(parent) ?? []) { if (callback(child) || recursive && visit(child)) return true; } return false; };
+      return visit(id) ? id : undefined;
+    },
+    enumNodeFragments(id, callback, recursive) {
+      const visit = node => { for (const fragment of fragmentsById.get(node) ?? []) if (callback(fragment)) return true; if (recursive) for (const child of children.get(node) ?? []) if (visit(child)) return true; return false; };
+      return visit(id) ? id : undefined;
+    },
+  });
+  const fragmentBounds = [
+    { min: { x: -2, y: 4, z: 6 }, max: { x: 2, y: 10, z: 8 } },
+    { min: { x: 4, y: -2, z: 3 }, max: { x: 8, y: 2, z: 5 } },
+  ];
+  Object.assign(f.model, {
+    getUnitScale: () => 1, getUpVector: () => [0, 0, 1], getGlobalOffset: () => [0, 0, 0],
+    getExternalIdMapping: success => success({ parent: 2, front: 4, rear: 5 }),
+    getFragmentList: () => ({ getCount: () => 2, getWorldBounds(id, box) { Object.assign(box.min, fragmentBounds[id].min); Object.assign(box.max, fragmentBounds[id].max); } }),
+  });
+  await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf' });
+  const viewer = f.viewers[0]; let selection = [4], fits = 0;
+  const manualVisibility = { hiddenIds: [17], isolatedIds: [] }, ghost = { ...viewer.impl.fadeMaterial };
+  viewer.getSelection = () => [...selection]; viewer.getAggregateSelection = () => [{ model: f.model, selection: [...selection] }];
+  viewer.select = (id, model) => { assert.equal(model, f.model); selection = Array.isArray(id) ? [...id] : [id]; };
+  viewer.fitToView = () => { fits++; };
+  viewer.isolate = ids => { f.facts.isolated.push(ids); manualVisibility.isolatedIds = [...ids]; };
+  // Use the exact pinned SDK callback rather than a replacement action handler.
+  const onSelectOnly = new Function(sdkSelectOnly[3], 'return ' + sdkSelectOnly[0].slice('onSelectOnly:'.length))(viewer);
+  assert.deepEqual(viewer.config.docStructureConfig.click.onObject, ['selectOnly']);
+  onSelectOnly(2, f.model);
+  const parent = await handle.readSelection();
+  assert.deepEqual(viewer.getSelection(), [2]); assert.deepEqual(parent.objects.map(object => object.objectId), [2]);
+  assert.equal(parent.objects[0].name, 'Equipment parent');
+  assert.deepEqual(parent.objects[0].bounds, { minimum: [-2, -2, 3], maximum: [8, 10, 8] });
+  assert.deepEqual(parent.objects[0].bottomCentre, [3, 4, 3]);
+  let ownFragments = 0; f.tree.enumNodeFragments(2, () => { ownFragments++; }, false); assert.equal(ownFragments, 0);
+  assert.equal(fits, 0); assert.deepEqual(f.facts.isolated, []);
+  assert.deepEqual(manualVisibility, { hiddenIds: [17], isolatedIds: [] }); assert.deepEqual(viewer.impl.fadeMaterial, ghost);
+  onSelectOnly(4, f.model);
+  const child = await handle.readSelection(); assert.deepEqual(child.objects.map(object => object.objectId), [4]); assert.deepEqual(child.objects[0].bottomCentre, [0, 7, 6]);
+  selection = [4, 5];
+  const multiple = await handle.readSelection(); assert.deepEqual(multiple.objects.map(object => object.objectId), [4, 5]);
+  assert.equal(fits, 0); assert.deepEqual(f.facts.isolated, []);
 });
 
 test('capture adapter preserves only the typed empty lookup scope error and keeps unexpected SDK errors generic', async t => {

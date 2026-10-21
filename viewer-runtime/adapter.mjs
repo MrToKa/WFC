@@ -116,7 +116,15 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
     await initialization;
     active(signal);
     current?.finish();
-    const viewing = window.Autodesk.Viewing, viewer = new viewing.GuiViewer3D(container);
+    const viewing = window.Autodesk.Viewing, viewer = new viewing.GuiViewer3D(container, {
+      // The pinned SDK otherwise isolates tree clicks without changing selection.
+      // Select the clicked group itself; descendant highlighting is SDK-owned.
+      docStructureConfig: {
+        click: { onObject: ['selectOnly'] },
+        clickShift: { onObject: ['toggleMultipleOverlayedSelection'] },
+        clickCtrl: { onObject: ['toggleVisibility'] },
+      },
+    });
     let finished = false, routes, pathfinder, observer, geometryLoaded = false, nodeIndexReady = false, nodeCount = 0;
     let capture;
     const cancelCapture = () => { if (!capture) return; const old = capture; capture = undefined; clearTimeout(old.deadline); old.controller.abort(); if (old.iterator) void old.iterator.return().catch(() => {}); };
