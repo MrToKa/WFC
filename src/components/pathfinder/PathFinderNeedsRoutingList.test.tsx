@@ -24,12 +24,23 @@ function mount(options = props()) { return render(<FluentProvider theme={webLigh
 beforeEach(() => { vi.resetAllMocks(); vi.mocked(usePathFinderCableWorkflow).mockReturnValue(state()); });
 
 describe('read-only Needs routing list', () => {
-  it('shows literal tag/endpoints and a readable reason, selecting only after explicit click', () => {
-    const options = props(); mount(options);
-    expect(screen.getByText('From: FROM-A', { exact: false })).toHaveTextContent('To: TO-B');
-    expect(screen.getByText(/From point was not found/)).toBeVisible(); expect(options.onSelect).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: '<b>C-001</b>' })); expect(options.onSelect).toHaveBeenCalledExactlyOnceWith(page().rows[0]);
+  it('shows compact literal tag buttons without inline endpoint, reason or technical details', () => {
+    const options = { ...props(), selectedCableId: cable }; mount(options);
+    const tag = screen.getByRole('button', { name: '<b>C-001</b>' });
+    expect(tag).toHaveAttribute('aria-pressed', 'true'); expect(tag.closest('li')?.textContent).toBe('<b>C-001</b>');
+    expect(screen.queryByText(/From: FROM-A|To: TO-B|From point was not found|Technical details/)).not.toBeInTheDocument();
+    expect(options.onSelect).not.toHaveBeenCalled(); fireEvent.click(tag); expect(options.onSelect).toHaveBeenCalledExactlyOnceWith(page().rows[0]);
     expect(document.querySelector('b')).toBeNull(); expect(screen.queryByRole('button', { name: /Apply|Calculate|Save/ })).not.toBeInTheDocument();
+  });
+  it('opens only the exact clicked compact row and leaves other cables unselected', () => {
+    const current = state(), first = current.page.rows[0], second = { ...first, cable: { ...first.cable, id: id(11), tag: 'C-002' } };
+    current.page = { ...current.page, rows: [first, second], scannedCount: 2, scannedThroughCableId: id(11) };
+    vi.mocked(usePathFinderCableWorkflow).mockReturnValue(current);
+    const options = props(); mount(options);
+    expect(options.onSelect).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'C-002' }));
+    expect(options.onSelect).toHaveBeenCalledExactlyOnceWith(second);
+    expect(screen.getByRole('button', { name: '<b>C-001</b>' })).toHaveAttribute('aria-pressed', 'false');
   });
   it('submits literal search and state/preferences to the owned hook without writes', () => {
     mount(); fireEvent.change(screen.getByLabelText('Search tags, From or To'), { target: { value: '  Å_10%\\  ' } });

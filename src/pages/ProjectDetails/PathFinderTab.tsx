@@ -79,6 +79,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
   const [routeRulesDirty, setRouteRulesDirty] = useState(false), [externalSnapshotRevision, setExternalSnapshotRevision] = useState(0);
   const secondaryValue = secondaryDistance.trim() ? Number(secondaryDistance) : NaN;
   const validSecondary = Number.isFinite(secondaryValue) && secondaryValue >= 0 && secondaryValue <= 1_000_000;
+  const readPreferences = validSecondary ? { secondaryDistanceMeters: secondaryValue, preferVerticalApproach: preferVertical } : null;
   const preferences: PathFinderPreferences | null = validSecondary && barrierRouting && !barrierAuthoring.dirty && !barrierAuthoring.pending
     ? { secondaryDistanceMeters: secondaryValue, preferVerticalApproach: preferVertical, barrierRouting } : null;
   const backgroundBarrierRouting = createBarrierAdmissionIntent(currentBarrierRegistry, false);
@@ -227,7 +228,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
         {!validSecondary ? <Body1 role="alert">Enter a SECONDARY trigger distance from 0 to 1,000,000 metres.</Body1> : null}
         <label><input type="checkbox" checked={preferVertical} onChange={event => { restoreView(); setPreferVertical(event.target.checked); }} />Prefer vertical approach</label>
         <PathFinderCableWorkspace projectId={projectId} loadedProjectId={loadedProjectId} accountId={accountId ?? null} token={token} isAdmin={isAdmin}
-          pf={pf} active={mode === 'path' && !routeRulesDirty} selectedCableId={selectedCableId} refreshKey={cableWriteRefresh} preferences={preferences}
+          pf={pf} active={mode === 'path' && !routeRulesDirty} selectedCableId={selectedCableId} refreshKey={cableWriteRefresh} preferences={preferences} readPreferences={preferences ?? readPreferences}
           display={workflowDisplay} review={popupReview} onCalculationStart={workflowCalculationStarted} onTogglePath={cableId => setWorkflowDisplayRequest(previous => ({ cableId, requestId: (previous?.requestId ?? 0) + 1,
             action: workflowDisplay.cableId === cableId && workflowDisplay.visible ? 'hide' : 'show' }))}
           onSelect={row => { setSelectedCableId(row.cable.id); setWorkflowSelection(row); }} />

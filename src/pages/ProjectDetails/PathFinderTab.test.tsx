@@ -14,6 +14,7 @@ import type { PathFinderBarriersPanelProps } from './PathFinderBarriersPanel';
 import { barrierCalculationFixture } from '@/test/pathfinderBarrierFixtures';
 import { fetchPathFinderCableWorkflowDetail } from '@/api/pathfinderCableWorkflow';
 import { cableWorkflowDetailSchema } from '../../../shared/pathfinderCableWorkflowQueries';
+import type { PathFinderCableWorkspaceProps } from '@/components/pathfinder/PathFinderCableWorkspace';
 vi.mock('@/api/pathfinderEndpointBindings', async original => ({ ...await original<typeof import('@/api/pathfinderEndpointBindings')>(), fetchEndpointBinding: vi.fn(), fetchEndpointBindingHistory: vi.fn(), saveEndpointBinding: vi.fn() }));
 
 vi.mock('./hooks/usePathFinder', () => ({ usePathFinder: vi.fn() }));
@@ -25,23 +26,31 @@ vi.mock('@/api/pathfinderCableWorkflow', () => ({ fetchPathFinderCableWorkflowDe
 vi.mock('./hooks/useRoutingsViewerHeight', () => ({ useRoutingsViewerHeight: () => 720 }));
 // Persistent workspace has its own component/API suites; these historical cases
 // exercise the retained advanced tools and exact proposal ownership only.
-vi.mock('@/components/pathfinder/PathFinderCableWorkspace', () => ({ PathFinderCableWorkspace: () => null }));
+const workspaceCapture = vi.hoisted(() => ({ render: vi.fn() }));
+vi.mock('@/components/pathfinder/PathFinderCableWorkspace', () => ({ PathFinderCableWorkspace: (props: PathFinderCableWorkspaceProps) => {
+  workspaceCapture.render(props); return null;
+} }));
 // These network panels have dedicated contract/authority tests. This suite owns
 // Tab tool composition and the real pending-Apply hook, not incidental reads.
 vi.mock('./PathFinderCalculationGrantPanel', () => ({ PathFinderCalculationGrantPanel: () => null }));
 // Barrier authoring has independent lifecycle tests; composition uses an explicit
 // synthetic empty declaration, never inferred real model coverage.
+const barrierComposition = vi.hoisted(() => ({ mode: 'ready' as 'ready' | 'missing' | 'unconfigured' | 'dirty' | 'pending' }));
 vi.mock('./PathFinderBarriersPanel', async () => {
   const { useEffect } = await import('react');
   return { PathFinderBarriersPanel: (props: PathFinderBarriersPanelProps) => {
     const model = props.pf.data?.activeModel;
+    const mode = barrierComposition.mode;
     useEffect(() => {
       if (!props.projectId || !model?.modelVersionId || !model.contentFingerprint) return;
+      if (mode === 'missing' || mode === 'pending') {
+        props.onStateChange?.({ registry: null, dirty: false, pending: mode === 'pending' }); return;
+      }
       const scope = { projectId: props.projectId, modelVersionId: model.modelVersionId, selectionRevision: model.selectionRevision,
         contentFingerprint: model.contentFingerprint, captureFrameId: '88888888-8888-4888-8888-888888888888', captureFrameSha256: 'c'.repeat(64), coordinateFrame: 'canonical-world-metres' as const };
-      props.onStateChange?.({ registry: { schemaVersion: 'wfc.pf.barrier-registry.v1', scope, registryRevision: '1', state: 'ready', selectedParents: [],
-        snapshot: { snapshotId: '99999999-9999-4999-8999-999999999999', scope, registryRevision: '1', contentSha256: 'd'.repeat(64), mode: 'explicit-empty' }, reasonCodes: [] }, dirty: false, pending: false });
-    }, [props.projectId, props.onStateChange, model]);
+      props.onStateChange?.({ registry: { schemaVersion: 'wfc.pf.barrier-registry.v1', scope, registryRevision: '1', state: mode === 'unconfigured' ? 'unconfigured' : 'ready', selectedParents: [],
+        snapshot: mode === 'unconfigured' ? null : { snapshotId: '99999999-9999-4999-8999-999999999999', scope, registryRevision: '1', contentSha256: 'd'.repeat(64), mode: 'explicit-empty' }, reasonCodes: [] }, dirty: mode === 'dirty', pending: false });
+    }, [props.projectId, props.onStateChange, model, mode]);
     return null;
   } };
 });
@@ -81,7 +90,7 @@ function model() {
 function viewerObject(objectId: number, name: string): ViewerModelObject { return { objectId, name, parentId: null, externalId: null, bounds: { minimum: [1, 2, 3], maximum: [3, 4, 5] }, bottomCentre: [2, 3, 3], derivation: 'display-aabb-bottom-centre', nativeVisibility: 'unknown', properties: [], propertiesTruncated: false }; }
 let pf: ReturnType<typeof model>;
 function proposalModel() { return { ...pf, preparationAccess: { projectId, loadedProjectId: projectId, token: 'isolated-test-token', isAdmin: true } }; }
-beforeEach(() => { vi.clearAllMocks(); sessionStorage.clear(); pf = model(); vi.mocked(usePathFinder).mockReturnValue(pf);
+beforeEach(() => { vi.clearAllMocks(); barrierComposition.mode = 'ready'; sessionStorage.clear(); pf = model(); vi.mocked(usePathFinder).mockReturnValue(pf);
   vi.mocked(fetchPathFinderCableWorkflowDetail).mockImplementation(async (_project, _token, cableId) => {
     const current = vi.mocked(usePathFinder).mock.results.at(-1)?.value as ReturnType<typeof usePathFinder>;
     const cable = current.data!.cables.find(value => value.id === cableId)!, available = { status: 'confirmed-ready', pointAvailable: true,
@@ -152,6 +161,30 @@ function preview(id: string, reverse = false): PathFinderPreview { return { id, 
 
 // Fluent's expanded sidebar makes jsdom role/style queries expensive; assertions still use their normal wait budgets.
 describe('admin PathFinder interface', { timeout: 60_000 }, () => {
+  it.each(['missing', 'unconfigured', 'dirty', 'pending'] as const)('keeps cable read preferences while %s barriers block calculations with drilling off', async mode => {
+    barrierComposition.mode = mode;
+    const current = proposalModel(); vi.mocked(usePathFinder).mockReturnValue(current);
+    render(<PathFinderTab projectId={projectId} loadedProjectId={projectId} token="isolated-test-token" accountId={accountId} isAdmin />);
+    await waitFor(() => {
+      const workspace = workspaceCapture.render.mock.calls.at(-1)?.[0] as PathFinderCableWorkspaceProps;
+      expect(workspace).toMatchObject({ active: true, preferences: null,
+        readPreferences: { secondaryDistanceMeters: 2, preferVerticalApproach: true } });
+      expect(workspace.readPreferences).not.toHaveProperty('barrierRouting');
+    });
+    expect(screen.getByRole('checkbox', { name: 'Drill through the walls' })).not.toBeChecked();
+    expect(screen.getByRole('button', { name: 'Calculate non-MV cables' })).toBeDisabled();
+    expect(current.calculate).not.toHaveBeenCalled(); expect(current.action).not.toHaveBeenCalled();
+    expect(current.reviewProposal).not.toHaveBeenCalled(); expect(saveEndpointBinding).not.toHaveBeenCalled();
+  });
+  it('preserves exact barrier read and calculation preferences when the registry is ready', async () => {
+    vi.mocked(usePathFinder).mockReturnValue(proposalModel());
+    render(<PathFinderTab projectId={projectId} loadedProjectId={projectId} token="isolated-test-token" accountId={accountId} isAdmin />);
+    await waitFor(() => {
+      const workspace = workspaceCapture.render.mock.calls.at(-1)?.[0] as PathFinderCableWorkspaceProps;
+      expect(workspace.preferences?.barrierRouting).toMatchObject({ drillThroughWalls: false, expectedRegistryRevision: '1' });
+      expect(workspace.readPreferences).toEqual(workspace.preferences);
+    });
+  });
   it('forwards the exact successful selected item to the separate ordinary Auto read without approving or refreshing the model', async () => {
     const detail = proposal(true), current = { ...proposalModel(), data: { ...pf.data, proposals: [detail] },
       readProposal: vi.fn(async () => detail), showPath: vi.fn(async () => 'displayed') };

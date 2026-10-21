@@ -11,8 +11,6 @@ export type PathFinderNeedsRoutingListProps = Omit<PathFinderCableWorkflowAccess
   onPreview?: (row: CableWorkflowRow, anchor: HTMLElement) => void; onPreviewLeave?: () => void;
   onSelect: (row: CableWorkflowRow) => void; selectedCableId?: string | null; className?: string;
 };
-const labels = { 'needs-routing': 'Needs routing', calculating: 'Calculating', 'ready-for-review': 'Ready for review',
-  'up-to-date': 'Updated', excluded: 'Excluded', blocked: 'Action required' } as const;
 const reasons: Record<string, string> = {
   CABLE_CATEGORY_REQUIRED: 'Choose a supported cable category.', SETTINGS_REQUIRED: 'Complete the cable length settings in Project Details.',
   MODEL_REQUIRED: 'Choose and prepare the active 3D model.', CALCULATION_RESOURCE_LIMIT: 'The calculation reached a resource limit. Review the prepared network and retry.',
@@ -56,10 +54,9 @@ export function cableWorkflowReason(row: CableWorkflowRow): string {
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS, minWidth: 0 },
   controls: { display: 'flex', gap: tokens.spacingHorizontalS, flexWrap: 'wrap', alignItems: 'end' },
-  list: { listStyleType: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS },
-  row: { border: `1px solid ${tokens.colorNeutralStroke1}`, borderRadius: tokens.borderRadiusMedium, padding: tokens.spacingHorizontalM,
-    overflowWrap: 'anywhere', backgroundColor: tokens.colorNeutralBackground1 },
-  tag: { justifyContent: 'flex-start', maxWidth: '100%', whiteSpace: 'normal', textAlign: 'left' },
+  list: { listStyleType: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXXS },
+  row: { minWidth: 0 },
+  tag: { justifyContent: 'flex-start', width: '100%', maxWidth: '100%', whiteSpace: 'normal', textAlign: 'left', overflowWrap: 'anywhere' },
   small: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
   select: { padding: tokens.spacingHorizontalS, backgroundColor: tokens.colorNeutralBackground1, color: tokens.colorNeutralForeground1,
     border: `1px solid ${tokens.colorNeutralStroke1}`, borderRadius: tokens.borderRadiusMedium },
@@ -108,9 +105,7 @@ function OwnedCableWorkflowList(props: PathFinderNeedsRoutingListProps) {
         : page.nextCursor !== null ? 'No matches in this checked portion. Continue to check the remaining cables.'
           : workflow.hasPrevious ? 'No matches in this final portion. Previous pages may contain matches.'
             : 'No cables match this filter in the completed scan.'}</p> : null}
-      <ul className={styles.list} aria-label="Matching cables">{page.rows.map(row => {
-        const decision = classifyCableWorkflow(row);
-        return <li className={styles.row} key={row.cable.id}>
+      <ul className={styles.list} aria-label="Matching cables">{page.rows.map(row => <li className={styles.row} key={row.cable.id}>
           <Button className={styles.tag} appearance={props.selectedCableId === row.cable.id ? 'primary' : 'subtle'}
             aria-pressed={props.selectedCableId === row.cable.id} aria-haspopup="dialog" aria-keyshortcuts="Alt+Enter"
             disabled={workflow.busy || !workflow.enabled} onClick={() => props.onSelect(row)}
@@ -119,11 +114,7 @@ function OwnedCableWorkflowList(props: PathFinderNeedsRoutingListProps) {
             onKeyDown={event => { if (event.altKey && event.key === 'Enter') { event.preventDefault(); props.onSelect(row); } }}>
             {row.cable.tag ?? 'Untagged cable'}
           </Button>
-          <p>From: {row.cable.fromLocation ?? 'No location name'}<br />To: {row.cable.toLocation ?? 'No location name'}</p>
-          <p><strong>{labels[decision.status]}</strong> — {cableWorkflowReason(row)}</p>
-          {decision.reasonCodes.length ? <details><summary>Technical details</summary><ul>{decision.reasonCodes.map(code => <li key={code}><code>{code}</code></li>)}</ul></details> : null}
-        </li>;
-      })}</ul>
+        </li>)}</ul>
       <div className={styles.controls}><Button disabled={workflow.busy || !workflow.hasPrevious || !workflow.enabled} onClick={workflow.previousPage}>Previous page</Button>
         <Button disabled={workflow.busy || page.nextCursor === null || !workflow.enabled || (searching && page.rows.length === 0)} onClick={workflow.nextPage}>{searching ? 'Next results' : 'Continue scan'}</Button></div>
     </> : null}

@@ -1,6 +1,25 @@
 # PathFinder local implementation progress
 
-## Current: PF-B9 technical delivery PASS; civil acceptance BLOCKED
+## Current: PF-B10 cable workspace repair; delivery ACTIVE
+
+Branch pf-b10-cable-workspace-availability-local-20261022 inherits b3f941b.
+User priority: restore cable search, compact tag list and click-open native popup
+on5191 first; saved obstacle persistence next; Simplified Preparer remains queued.
+Six UI files separate read readiness from exact calculation/barrier admission and
+remove verbose inline cards. Search/hover/click/Alt+Enter remain; calculation/new
+Save/Review/Apply guards remain. Pure web-only image installer added separately.
+Actual root checks:84 component cases PASS;5 targeted Tab cases PASS (61 intentionally
+unselected);16 web-only planner cases PASS; full typecheck PASS, final frontend
+typecheck after compact-list edits PASS. Initial1024MiB typecheck OOM and interrupted
+broad UI run retained as FAIL/INCOMPLETE, not counted as successful suites.
+Operation9bd528af-e78b-4c1e-a58b-5c99af915751 read-only prepare PASS; old web archive
+and state/env/resource pins verified. Next: local commit, web-runtime-only build,
+exact5191 web replacement, normal public health/page/asset checks. Keep same running
+API ac0d16ab; no SQL/migration/model/cable writes. Actual browser/civil/manual review
+BLOCKED/NOT_RUN. No forbidden browser retry or denied scratch cleanup.
+Agents source-only and frozen; root sole actual executor. Report93 holds scope.
+
+## Previous: PF-B9 technical delivery PASS; civil acceptance BLOCKED
 
 Product 3d86cb2b34baa0dbc7ada8fc93f7979eb4aa34ed, branch pf-b9-barrier-delivery-local-20261021.
 Operation 1335da29-4a1d-4e2f-9084-8feae288d992 completed all nine phases PASS.

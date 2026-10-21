@@ -4,7 +4,7 @@ import { requestFloatingCableWindow, type FloatingCableWindowRequest } from '@/h
 import { useCableInformationPanelStyles } from '@/pages/ProjectDetails/CableInformationPanel.styles';
 import type { PathFinderPreferences } from '@/api/pathfinder';
 import { sameBarrierAdmissionIntent } from '../../../shared/pathfinderBarrierAdmission';
-import { fetchPathFinderCableWorkflowDetail, type CableWorkflowRow } from '@/api/pathfinderCableWorkflow';
+import { fetchPathFinderCableWorkflowDetail, type CableWorkflowDetailQuery, type CableWorkflowRow } from '@/api/pathfinderCableWorkflow';
 import { fetchLocationImpacts } from '@/api/pathfinderLocationImpacts';
 import type { CableEndpointReceipt } from '@/api/pathfinderCableEndpoints';
 import { usePathfinderLocationImpactProgress } from '@/hooks/usePathfinderLocationImpactProgress';
@@ -20,14 +20,16 @@ import { PathFinderCableRoutingPanel } from './PathFinderCableRoutingPanel';
 type Access = { projectId: string | null; loadedProjectId: string | null; accountId: string | null; token: string | null; isAdmin: boolean };
 export type PathFinderCableWorkspaceProps = Access & { pf: ReturnType<typeof usePathFinder>; active: boolean;
   preferences: PathFinderPreferences | null; selectedCableId?: string | null; refreshKey?: number; onSelect: (row: CableWorkflowRow) => void;
+  readPreferences?: CableWorkflowDetailQuery | null;
   display?: PathFinderWorkflowDisplay; onTogglePath?: (cableId: string) => void; review?: PathFinderWorkflowReview | null;
   onCalculationStart?: (cableId: string) => void };
 type Impact = { id: string; current: EndpointCurrentScope; calculation: LocationImpactCalculation | null; originCableId: string | null };
+const workflowReadPreferences = (props: PathFinderCableWorkspaceProps) => props.readPreferences === undefined ? props.preferences : props.readPreferences;
 
 /** One account/model/preferences owns this workspace. No action here uses full-state polling. */
 export function PathFinderCableWorkspace(props: PathFinderCableWorkspaceProps) {
   const access = props.pf.preparationAccess, model = props.pf.data?.activeModel;
-  const owner = JSON.stringify([props.projectId, props.loadedProjectId, props.accountId, props.token, props.isAdmin, model, props.preferences]);
+  const owner = JSON.stringify([props.projectId, props.loadedProjectId, props.accountId, props.token, props.isAdmin, model, workflowReadPreferences(props), props.preferences]);
   if (!props.isAdmin || !props.accountId || !props.token || !props.projectId || props.projectId !== props.loadedProjectId
     || access?.projectId !== props.projectId || access.loadedProjectId !== props.projectId || access.token !== props.token || !access.isAdmin) return null;
   return <OwnedWorkspace key={owner} {...props} owner={owner} />;
@@ -64,17 +66,19 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   const alive = useRef(false), read = useRef<AbortController | null>(null), historyRead = useRef<AbortController | null>(null);
   const lastCalculation = useRef(''), lastWrite = useRef('');
   const lastExternalRefresh = useRef(props.refreshKey);
-  const model = props.pf.data?.activeModel, preferences = props.preferences;
+  const model = props.pf.data?.activeModel, preferences = props.preferences, readPreferences = workflowReadPreferences(props);
   const barrierPreferenceKey = JSON.stringify(preferences?.barrierRouting);
-  const enabled = props.active && props.pf.viewerPhase === 'ready' && Boolean(preferences && model?.modelVersionId);
-  const calculation = preferences ? { preferences, timeoutMilliseconds: 120000 } : null;
+  const enabled = props.active && props.pf.viewerPhase === 'ready' && Boolean(readPreferences && model?.modelVersionId);
+  const calculationEnabled = enabled && Boolean(preferences);
+  const calculation = calculationEnabled && preferences ? { preferences, timeoutMilliseconds: 120000 } : null;
   const authorityLost = useCallback(() => callbacks.current.pf.refresh(), []);
   const refreshSelected = useCallback(async () => {
     const row = selectedRef.current, current = callbacks.current;
-    if (!alive.current || !row || !current.active || !current.preferences || !current.projectId || !current.token) return;
+    const query = workflowReadPreferences(current);
+    if (!alive.current || !row || !current.active || !query || !current.projectId || !current.token) return;
     read.current?.abort(); const ticket = new AbortController(); read.current = ticket;
     try {
-      const detail = await fetchPathFinderCableWorkflowDetail(current.projectId, current.token, row.cable.id, current.preferences, ticket.signal);
+      const detail = await fetchPathFinderCableWorkflowDetail(current.projectId, current.token, row.cable.id, query, ticket.signal);
       if (!alive.current || ticket.signal.aborted || read.current !== ticket || selectedRef.current?.cable.id !== row.cable.id || !callbacks.current.active
         || callbacks.current.selectedCableId !== undefined && callbacks.current.selectedCableId !== row.cable.id) return;
       setSelected(detail.row); current.onSelect(detail.row);
@@ -104,7 +108,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   // Restore only the most recent matching owned impact from a bounded history page.
   // Its original authority is never renewed by this GET or a browser reload.
   useEffect(() => {
-    if (!enabled || impact || !props.projectId || !props.token || !props.accountId || !preferences) return;
+    if (!calculationEnabled || impact || !props.projectId || !props.token || !props.accountId || !preferences) return;
     const expectedBarrierIntent: unknown = barrierPreferenceKey === undefined ? undefined : JSON.parse(barrierPreferenceKey);
     const ticket = new AbortController(); historyRead.current = ticket;
     void fetchLocationImpacts(props.projectId, props.token, props.accountId, { limit: 25 }, ticket.signal).then(page => {
@@ -116,7 +120,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
       if (found) setImpact({ id: found.id, current: found.current, calculation: found.calculation, originCableId: null });
     }).catch(() => { /* Explicit progress refresh remains available; no automatic retry storm. */ });
     return () => { ticket.abort(); if (historyRead.current === ticket) historyRead.current = null; };
-  }, [enabled, impact, props.projectId, props.token, props.accountId, model?.modelVersionId, model?.selectionRevision, model?.contentFingerprint, preferences?.secondaryDistanceMeters, preferences?.preferVerticalApproach, barrierPreferenceKey]);
+  }, [calculationEnabled, impact, props.projectId, props.token, props.accountId, model?.modelVersionId, model?.selectionRevision, model?.contentFingerprint, preferences?.secondaryDistanceMeters, preferences?.preferVerticalApproach, barrierPreferenceKey]);
   const calculationChanged = useCallback((value: NonNullable<ReturnType<typeof usePathfinderLocationImpactProgress>['impact']>) => {
       const key = JSON.stringify([value.id, value.status, value.completed, value.readyCables, value.blockedCables]);
       if (key === lastCalculation.current) return; lastCalculation.current = key;
@@ -127,9 +131,9 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
       if (key === lastWrite.current) return; lastWrite.current = key;
       if (!value.outstanding || value.counters.written + value.counters['already-written'] > 0) refreshDiagnostics();
   }, [refreshDiagnostics]);
-  const progress = usePathfinderLocationImpactProgress({ ...props, active: enabled && Boolean(impact), current: impact?.current ?? null,
+  const progress = usePathfinderLocationImpactProgress({ ...props, active: calculationEnabled && Boolean(impact), current: impact?.current ?? null,
     calculation: impact?.calculation ?? null, impactId: impact?.id ?? null, onAuthorityLost: authorityLost, onChanged: calculationChanged });
-  const writes = usePathfinderInitialFillProgress({ ...props, active: enabled && Boolean(impact), impactId: impact?.id ?? null,
+  const writes = usePathfinderInitialFillProgress({ ...props, active: calculationEnabled && Boolean(impact), impactId: impact?.id ?? null,
     cableId: selected?.cable.id === impact?.originCableId ? selected?.cable.id ?? null : null, onAuthorityLost: authorityLost, onChanged: writeChanged });
   // First reads may already be terminal: observing them must also refresh the
   // receipt-backed cable row, without waiting for a change that will never come.
@@ -145,7 +149,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   // Follow only an explicitly submitted selected-cable calculation. This is a
   // bounded read of its current metadata, never a second calculation or write.
   useEffect(() => {
-    if (!submittedCalculation || calculating || !enabled || !props.projectId || !props.token || !preferences) return;
+    if (!submittedCalculation || calculating || !calculationEnabled || !props.projectId || !props.token || !preferences) return;
     const submitted = submittedCalculation, projectId = props.projectId, token = props.token, ticket = new AbortController();
     let stopped = false, timer: ReturnType<typeof setTimeout> | undefined, reads = 0;
     const deadline = Date.now() + 120000;
@@ -179,11 +183,11 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
     };
     void poll();
     return () => { stopped = true; ticket.abort(); if (timer) clearTimeout(timer); };
-  }, [submittedCalculation, calculating, enabled, props.projectId, props.token, barrierPreferenceKey,
+  }, [submittedCalculation, calculating, calculationEnabled, props.projectId, props.token, barrierPreferenceKey,
     preferences?.secondaryDistanceMeters, preferences?.preferVerticalApproach, authorityLost]);
   const calculateSelected = async () => {
     const row = selectedRef.current, current = callbacks.current;
-    if (!enabled || calculating || submittedRef.current || !row || !current.preferences || row.calculation.jobStatus === 'queued' || row.calculation.jobStatus === 'running') return;
+    if (!alive.current || !calculationEnabled || calculating || submittedRef.current || !row || !current.preferences || row.calculation.jobStatus === 'queued' || row.calculation.jobStatus === 'running') return;
     const submitted = { cableId: row.cable.id, jobId: null as string | null, previousJobId: row.calculation.jobId, previousProposalId: row.calculation.proposalId };
     submittedRef.current = submitted;
     setSubmittedCalculation(submitted); setCalculating(true); setNotice(null); current.onCalculationStart?.(row.cable.id);
@@ -196,11 +200,12 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
     finally { if (alive.current) setCalculating(false); }
   };
   const popupReview = props.review && selected && props.review.cableId === selected.cable.id
-    && (props.review.pending || !submittedCalculation && props.review.proposalId === selected.calculation.proposalId) ? props.review : null;
+    && (props.review.pending || calculationEnabled && !submittedCalculation && props.review.proposalId === selected.calculation.proposalId) ? props.review : null;
   return <section aria-label="Cable routing workspace">
     <PathFinderNeedsRoutingList {...props} active={enabled} modelScopeKey={JSON.stringify([props.owner, revision])}
-      preferences={preferences ?? { secondaryDistanceMeters: 2, preferVerticalApproach: true }} selectedCableId={selected?.cable.id ?? null}
+      preferences={readPreferences ?? { secondaryDistanceMeters: 2, preferVerticalApproach: true }} selectedCableId={selected?.cable.id ?? null}
       onAuthorityLost={authorityLost} onSelect={openCable} onPreview={previewCable} onPreviewLeave={leavePreview} />
+    {enabled && !calculationEnabled ? <p role="status">Calculation and endpoint Save are unavailable until the current route settings and barrier configuration are ready. You can still search cables and open their windows.</p> : null}
     {preview && !open && props.active ? <CableHoverPreview row={preview.row} anchor={preview.anchor} onEnter={keepPreview} onLeave={leavePreview}
       onClose={dismissPreview} onOpen={() => openCable(preview.row)} /> : null}
     {notice ? <p role="status">{notice}</p> : null}
@@ -225,8 +230,10 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
       active: enabled, model: model?.modelVersionId && model.contentFingerprint ? { modelVersionId: model.modelVersionId,
         selectionRevision: model.selectionRevision, contentFingerprint: model.contentFingerprint } : null,
       preparationKey: JSON.stringify([props.pf.preparationViewerGeneration, props.pf.data?.artifacts.map(item => [item.id, item.snapshotSha256])]),
-      calculation, initialFill: { mode: 'when-both-empty' }, readSelection: props.pf.readSelection, onSaved: saved, onAuthorityLost: authorityLost,
-    }} onCalculate={enabled && !submittedCalculation && selected?.calculation.jobStatus !== 'queued' && selected?.calculation.jobStatus !== 'running' ? calculateSelected : undefined}
+      // New endpoint Save requires the explicit calculation and fill policy.
+      // Omission blocks new writes without hiding retained recovery controls.
+      calculation, initialFill: calculationEnabled ? { mode: 'when-both-empty' } : undefined, readSelection: props.pf.readSelection, onSaved: saved, onAuthorityLost: authorityLost,
+    }} onCalculate={calculationEnabled && !submittedCalculation && selected?.calculation.jobStatus !== 'queued' && selected?.calculation.jobStatus !== 'running' ? calculateSelected : undefined}
       onTogglePath={selected && props.onTogglePath ? () => props.onTogglePath?.(selected.cable.id) : undefined}
       pathVisible={props.display?.cableId === selected?.cable.id && props.display?.visible}
       calculatedRouting={props.display?.cableId === selected?.cable.id ? props.display?.routing : undefined}
