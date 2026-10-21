@@ -1,5 +1,103 @@
 # PathFinder local implementation progress
 
+## PF-B6 technically checked — PF-B7 next, automatic execution ACTIVE
+
+B6 product2ccec7524d3e793fb5fdb01844a70b45fc90e979 on
+pf-b6-barrier-runtime-local-20261021;92source/testfiles committed. Report86,
+evidence/barriers/b6-runtime.json +sourcefiles, handoff PF-B7-barrier-writes.md.
+Rootactual Windows39/Linux39/Node64/productionpolicy15/crosslanguage44 PASS;
+finalcurrentness206 and reader/UI236 PASS; prior relevant groups recorded without
+double-counting. Serverbuild/clienttypes/changedfilelint/whitespace PASS. Preservation
+11pinned/3frozen PASS;105regression/43frozen215checks/ledger35/direct63/constrained54/
+local40 PASS. Initial failures and exact logs retained. Two newB6containers retired
+by verifiedID/owner/stage; original/5190/5191 runtime unchanged. User restartedDocker
+externally; no assumption of agent-owned original startup. No active root processes.
+
+B6 independent review fixed stalehistory and mid-dispatch barrier publication;
+newresults remain readable and per-item stale instead of failing wholejobs. MV is
+excluded fresh; historicalreaders remain. B7writegates remain pending. Next:
+commit B6docs, create inheriting pf-b7-protected-writes-local-20261021, define shared
+stored/live guard+strict provenance interfaces, split writers, executeB7 immediately.
+ActualAalborg/capacity/browserdemo NOT_RUN; origin refusal not retried/bypassed. All
+historically refused cleanup paths/parents intact. No realApply/push/PR/merge/deploy.
+AutomationACTIVE; SimplifiedPreparer queued after currentPF implementation/checks.
+
+## Historical resume — PF-B6, 21 October 2026
+
+User resumed work; prior pause is revoked. App heartbeat is ACTIVE again, preserving
+its existing prompt/schedule/thread. Live branch/head and working changes match the
+checkpoint below. No other live agents existed at resume. Root sole executor; new
+b6_runtime_review owns read-only correctness audit, b6_ui_tests owns only interrupted
+Results.test additions, b7_write_map owns read-only next-stage write-gate map.
+Root fixes final lint/test seams, executes focused checks, records B6 product/report
+and prepare-stage-handoff, then immediately begins B7. No runtime5191/original edits.
+
+## Historical pause — PF-B6 unfinished checkpoint
+
+Latest explicit user request: pause, 21 October 2026. Heartbeat
+path-finder-purpose-rules-and-model-revisions is PAUSED through the app tool and
+its saved status was checked. Active geometry/registry agents were interrupted;
+other agents had completed. All root test/build/type/lint sessions were joined.
+No further stage execution until the user resumes. Working changes are preserved
+without a completion commit on pf-b6-barrier-runtime-local-20261021, HEAD
+7a6bf355084d104110371461e0827edfbe293145.
+
+New own synthetic SQL container5716ebcd515a/owner03f90f30/port55440 was verified
+against sql-owner.json and stopped only; no original or5191 container was changed.
+Its disposable tmpfs data is not a persistent backup. SQL12PASS receipt is retained.
+Scratch: pathfinder-engine/.scratch/barrier-runtime-20261021-ba1faf33-2a5f-43be-bea1-2c960c4a9b66.
+
+Actual completed checks include C#transport39PASS, Node transport64PASS, protected
+production-policy replay14PASS, contracts/dependencies490PASS, admission376PASS,
+endpoint/API/UI314PASS, UI68PASS, result/projection197PASS, actual SQL12PASS;
+groups overlap and are not a unique total. Legacy105/43frozen cases215checks/
+ledger35/direct63, constrained54 and local40 PASS. Type checks passed before latest
+test/readiness edits; rerun after final freeze. worker-proof-check14 had328PASS/1FAIL
+from an old mocked freezer seam; root updated the unit boundary mock but has NOT
+rerun that file. lint-check15 has4FAIL: TS overload no-redeclare(2), deliberate sparse
+test literal no-sparse-arrays(2); not fixed yet. No checks are represented as a full
+release or actual Aalborg/browser acceptance.
+
+On resume: inspect branch/status and agent partial edits, especially interrupted
+Results.test UI additions; finish focused tests/types/lint, source review and exact
+source/receipt preservation. B6 report86/local commit/handoff B7 still NOT_DONE.
+B7 Review/Apply/initial-fill physical proof/provenance gates remain unimplemented;
+read-only registry agent map is available in this chat. Browser refusal and all
+historically denied cleanup targets/parents remain untouched. Preparer is queued
+after current Path Finder implementation/checks; no new Preparer changes made.
+
+## PF-B6 implementation record — before pause
+
+Branch pf-b6-barrier-runtime-local-20261021 inherits7a6bf355084d104110371461e0827edfbe293145.
+B5 product07fe6dd79676c1ed45153d2ab3cd79a1ac96680e/report85/evidence checked,
+handoff PF-B6-barrier-runtime.md prepared through skill and executing immediately.
+Root sole executor/writer sharedRuntime/identity/jobContracts/jobs/worker/client/
+scheduler/docs. barrier_engine_map owns C#runner/session/cache/newSupport finalproof;
+barrier_registry newtransactionreader+dependencies/batch+tests;barrier_geometry_map
+newsharedRuntime tests+newC#transport testproject. Preserve others' changes.
+Small strict BarrierRuntimeContext/profile agreed; no inlined meshes/peritemmanifest,
+historical readers retained and freshv8 may never downgrade. Newownscratch barrier-runtime-
+20261021-ba1faf33-2a5f-43be-bea1-2c960c4a9b66. Root actual38C#transport PASS at
+check3; actual43responses parsed by TS,2eligibleproductionstrategyguards PASS.
+Contracts/dependencies/serializers/identity/observer check4:490PASS. Server/client
+types check5/7 PASS. Initial failures retained: Windowslongpath nativeopen fixed,
+malformedinput typedrefusal fixed, fixture/signedzero durablehash expectations being
+updated. Hash-only normalizes signedzero for JSONB; all otherbits/order/count/coremath
+unchanged. Strategy check7:355PASS/2oldzeroexpectationsFAIL; corrections awaitingrun.
+Freshmanual/preview/scoped commands requireintent; closedbrowser/currentlogin
+producer derives currentpublication/drillfalse. New v8sealedapplicability and result
+status UI authored. Engineagent owns admissiontests+39th C#zeroregression; geometry
+agent newownedSQLtest; registryagent endpointSaveguard+tests. Rootowns otherfiles.
+OwnedSQLfixture sql-owner.json port55440/container5716ebcd515a, memory256MiB/tmpfs,
+onlysynthetic; existingcontainers read-onlyinventory retained. No5191changes. Need
+complete finalbuild/transport, crosslanguageproductionrequests, SQL/scheduler, fresh
+admission/UI/currentness tests and independentreview before B6technicalPASS/B7.
+Actual browser/converted
+checks NOT_RUN due unchanged refusal, no bypass. No original5180/5190/5191 runtime
+changes. Denied paths/parents preserved; Preparer future source-readiness recovered
+only (worktree WFC-preparer-local-20261020, uncommitted securityNOT_STARTED/backups
+NOT_RUN), no implementation before current PF code/checks.
+
 ## PF-B5 active — administrator barrier authoring
 
 Branch pf-b5-barrier-authoring-local-20261021 inherits658997b4223be2f61daaa7dccc48e7cb563eb8b3,

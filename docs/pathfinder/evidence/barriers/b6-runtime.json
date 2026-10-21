@@ -1,0 +1,379 @@
+{
+  "schemaVersion": "wfc.pf.barrier-runtime-stage-receipt.v1",
+  "stage": "PF-B6",
+  "status": "TECHNICALLY_CHECKED",
+  "product": {
+    "branch": "pf-b6-barrier-runtime-local-20261021",
+    "sourceFiles": 92,
+    "capturedUtc": "2026-10-21T15:30:04.5203919Z",
+    "productCommit": "2ccec7524d3e793fb5fdb01844a70b45fc90e979"
+  },
+  "capturedAt": "2026-10-21T15:34:51.191Z",
+  "sourceFiles": 92,
+  "checks": [
+    {
+      "receipt": "contracts-dependencies-check4.json",
+      "sha256": "a38b0ebcfa6e12eda813d3ca19535f549344214f12e20ac8fce74276c5fc886c",
+      "scope": "Initial expanded contracts, dependencies, serializers and identity group",
+      "status": "PASS",
+      "total": 490,
+      "passed": 490,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "receipt": "resume-check17.json",
+      "sha256": "12e134141895e7aeb464fc7d673e37aa2e01d3bb44944bc0fde0ce108a418e62",
+      "scope": "Resumed integrity/projection/endpoint/identity tests",
+      "status": "PASS",
+      "total": 487,
+      "passed": 487,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "receipt": "admission-check10.json",
+      "sha256": "150294b6287cc080279659173f32202c62d81999db8dc4cb84d830ab6d521b59",
+      "scope": "Fresh admission, strategy and sealed result integrity",
+      "status": "PASS",
+      "total": 376,
+      "passed": 376,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "receipt": "endpoint-ui-check11.json",
+      "sha256": "fee9869f85e41d331dcbe54110ce7e48adbf680019c9efd1d0c6d4b660ca4efb",
+      "scope": "Endpoint command, API, barrier result UI and batch integrity",
+      "status": "PASS",
+      "total": 314,
+      "passed": 314,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "receipt": "ui-check8.json",
+      "sha256": "c58a0686d137afa6d91bc2a9ab34efddba080a9cd71c0069e216bfccbd45557f",
+      "scope": "Barrier panel/result, preview, grant and batch UI",
+      "status": "PASS",
+      "total": 68,
+      "passed": 68,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "receipt": "result-projection-check16.json",
+      "sha256": "2e05751a14c7f31e958fc29c2fbfd3fabb0e6afebafeed77da30a22e83ffa423",
+      "scope": "Worker projection, stored proof and revision/results UI",
+      "status": "PASS",
+      "total": 197,
+      "passed": 197,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "receipt": "resume-ui-reader-check19.json",
+      "sha256": "2e06f68d8d283106834c88ad3a3c64162db6d1de66f4f284b7c54481cfc680c0",
+      "scope": "Final MV/reader and exact scoped v8 UI behavior",
+      "status": "PASS",
+      "total": 236,
+      "passed": 236,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "receipt": "currentness-check21.json",
+      "sha256": "35b3d9ab7603ce72e10c3861b958a4a09918cb5925b73e97e07e90d45d4b35f5",
+      "scope": "Final currentness fixes including52 newly authored cases",
+      "status": "PASS",
+      "total": 206,
+      "passed": 206,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "receipt": "node-transport-check12.json",
+      "sha256": "f05018fbb776a0e2fa352346643d0cf79dd183a9b2ea0bc8d2961535f67ec134",
+      "scope": "Production Node one-shot actual dotnet and session transport",
+      "status": "PASS",
+      "total": 64,
+      "passed": 64,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "receipt": "sql-check11.json",
+      "sha256": "cd13bef6a9a9706332ff53a84b460d9d0fc3a21990c95b6bbe74a2724e7653ee",
+      "scope": "Actual PG18 owned publication, trigger, migration and transaction tests",
+      "status": "PASS",
+      "total": 12,
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "windowsTransport": {
+    "status": "PASS",
+    "passed": 39,
+    "failed": 0,
+    "elapsedMilliseconds": 19662.558
+  },
+  "linuxTransport": {
+    "status": "PASS",
+    "passed": 39,
+    "failed": 0,
+    "elapsedMilliseconds": 31382.8359,
+    "environment": "Own read-only-image/network-none Linux fixture; synthetic inputs only"
+  },
+  "crossLanguage": {
+    "parsed": 44,
+    "eligibleStrategyGuards": 3,
+    "failures": 0
+  },
+  "productionPolicyReplay": {
+    "passed": 15,
+    "failed": 0
+  },
+  "coreRegression": {
+    "status": "PASS",
+    "cases": 105
+  },
+  "frozenParity": {
+    "status": "PASS",
+    "cases": 43,
+    "checks": 215
+  },
+  "lengthLedger": {
+    "status": "PASS",
+    "cases": 35
+  },
+  "directSecondary": {
+    "status": "PASS",
+    "cases": 63
+  },
+  "constrained": {
+    "status": "PASS",
+    "cases": 54
+  },
+  "localConnectors": {
+    "status": "PASS",
+    "cases": 40
+  },
+  "preservation": {
+    "status": "PASS",
+    "fixtures": [
+      {
+        "path": "docs/pathfinder/fixtures/pf-core-v1.inputs.json",
+        "sha256": "1fd49428742284e30071a0b293cca0a8f5eff8b47a2aaab10f1184cf73cd7e78",
+        "expected": "1fd49428742284e30071a0b293cca0a8f5eff8b47a2aaab10f1184cf73cd7e78",
+        "matches": true
+      },
+      {
+        "path": "docs/pathfinder/fixtures/pf-core-v1.expected.json",
+        "sha256": "43ea08d2e7e5ff4e56d1fe5c4435bada300a215b0da3164f5179d27ca4b23a5a",
+        "expected": "43ea08d2e7e5ff4e56d1fe5c4435bada300a215b0da3164f5179d27ca4b23a5a",
+        "matches": true
+      },
+      {
+        "path": "docs/pathfinder/fixtures/pf-core-v1.schema.json",
+        "sha256": "b65addd83e0e3b400246e28da6b9a0dedfcb6517008b643a0203694f2f36f759",
+        "expected": "b65addd83e0e3b400246e28da6b9a0dedfcb6517008b643a0203694f2f36f759",
+        "matches": true
+      }
+    ],
+    "core": [
+      {
+        "path": "pathfinder-engine/src/PathFinder.Core/Routing/CableDesignLength.cs",
+        "sha256": "fa489d2948f3c7a4af8931cb79d775a61f4718d5ad3187bd5637598665d1ff5f",
+        "expected": "fa489d2948f3c7a4af8931cb79d775a61f4718d5ad3187bd5637598665d1ff5f",
+        "matches": true
+      },
+      {
+        "path": "pathfinder-engine/src/PathFinder.Core/Routing/RouteCalculator.cs",
+        "sha256": "12e96c787902850bffad660d5d2a43333960d9920890cf8f547a730f67e0d0b8",
+        "expected": "12e96c787902850bffad660d5d2a43333960d9920890cf8f547a730f67e0d0b8",
+        "matches": true
+      },
+      {
+        "path": "pathfinder-engine/src/PathFinder.Core/Routing/RouteCodeParser.cs",
+        "sha256": "a97e2358374f0798c94103a8f0b20bf7c5a04208de523ea384afa528f70ec05f",
+        "expected": "a97e2358374f0798c94103a8f0b20bf7c5a04208de523ea384afa528f70ec05f",
+        "matches": true
+      },
+      {
+        "path": "pathfinder-engine/src/PathFinder.Core/Routing/RouteLookupCalculator.cs",
+        "sha256": "1914b875b675bc61e274a46f221d0633e5db21eab2fe0e34214c7c05aa5485ae",
+        "expected": "1914b875b675bc61e274a46f221d0633e5db21eab2fe0e34214c7c05aa5485ae",
+        "matches": true
+      },
+      {
+        "path": "pathfinder-engine/src/PathFinder.Core/Routing/RouteNameResolver.cs",
+        "sha256": "9bf4964a00833f91a38f11f34e2eb377f1fb27ccd48d389731248ecf07174c34",
+        "expected": "9bf4964a00833f91a38f11f34e2eb377f1fb27ccd48d389731248ecf07174c34",
+        "matches": true
+      },
+      {
+        "path": "pathfinder-engine/src/PathFinder.Core/Routing/RoutingModels.cs",
+        "sha256": "2de71cc5410e04cce309276cbd2591d218530d5ddfca4c77a2ad98f2ee02e4ea",
+        "expected": "2de71cc5410e04cce309276cbd2591d218530d5ddfca4c77a2ad98f2ee02e4ea",
+        "matches": true
+      },
+      {
+        "path": "pathfinder-engine/src/PathFinder.Core/Routing/TrayBendMeshGeometry.cs",
+        "sha256": "4d6f0c574166fbcb880cdc38bd10e589905fc74b1fe5709c33fd5e2ecab35948",
+        "expected": "4d6f0c574166fbcb880cdc38bd10e589905fc74b1fe5709c33fd5e2ecab35948",
+        "matches": true
+      },
+      {
+        "path": "pathfinder-engine/src/PathFinder.Core/Routing/TrayGeometryBuilder.cs",
+        "sha256": "9dd9abe707b3908c8d55a404e12d6b79b7785659f284dc4d84d9d2391dd225c7",
+        "expected": "9dd9abe707b3908c8d55a404e12d6b79b7785659f284dc4d84d9d2391dd225c7",
+        "matches": true
+      },
+      {
+        "path": "pathfinder-engine/src/PathFinder.Core/Routing/TrayMeshClearance.cs",
+        "sha256": "75075cbf5b13d385f9932e1ad755815e39934e55bcbf123b657ae3b5363541e8",
+        "expected": "75075cbf5b13d385f9932e1ad755815e39934e55bcbf123b657ae3b5363541e8",
+        "matches": true
+      },
+      {
+        "path": "pathfinder-engine/src/PathFinder.Core/Routing/TrayMeshData.cs",
+        "sha256": "4ff9170f90a57f8509a9acb5b84dd95262e55b942d6ee892a0dd231563b3af31",
+        "expected": "4ff9170f90a57f8509a9acb5b84dd95262e55b942d6ee892a0dd231563b3af31",
+        "matches": true
+      },
+      {
+        "path": "pathfinder-engine/src/PathFinder.Core/Routing/TrayMeshGeometry.cs",
+        "sha256": "c88ed49513778ef809e581ecf8b4418b746b982c5b12f533d96478275de8deba",
+        "expected": "c88ed49513778ef809e581ecf8b4418b746b982c5b12f533d96478275de8deba",
+        "matches": true
+      }
+    ]
+  },
+  "fixtures": {
+    "historicallyDeniedCleanupRetried": false,
+    "retired": [
+      {
+        "previousState": "running",
+        "exitCode": 0,
+        "id": "5716ebcd515a96d4528638fe7aeedc7430df24cca9c49b94e20f76cbdc0372d8",
+        "container": "wfc-pf-b6-sql-03f90f30",
+        "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+        "oomKilled": false,
+        "owner": "03f90f30-b67f-4bb5-b2e6-055b4cf0bfa6"
+      },
+      {
+        "previousState": "exited",
+        "exitCode": 0,
+        "id": "be9f63cea625195ba9b684f87c328fb82c3d0d57577f7f399ec8435b0bbe2a43",
+        "container": "wfc-pf-b6-linux-29697f29",
+        "image": "sha256:c5f12fb2685d169527da50586ee45614d6a2bbc28a6f976b309be72a2a77da44",
+        "oomKilled": false,
+        "owner": "29697f29-ca61-415b-99ad-58b69141fdf1"
+      }
+    ],
+    "scope": "only proved-owned B6 disposable SQL/Linux fixtures",
+    "originalOr5191Changes": false
+  },
+  "modules": [
+    {
+      "name": "PathFinder.ModelRunner.dll",
+      "bytes": 200704,
+      "sha256": "d88785c9369b49d748105bdd3ea567befe27341595e4974288903287f2ef74d4"
+    },
+    {
+      "name": "PathFinder.Model.dll",
+      "bytes": 111104,
+      "sha256": "301bf7966c5a0c39492c151ee0c3dcc531414376ad339d6bb6b2e3369536c3b8"
+    },
+    {
+      "name": "PathFinder.Core.dll",
+      "bytes": 173056,
+      "sha256": "b988e37d6d60b62a618c18a077e4f5edc53a7ad4b7726f61b52ff686822c1399"
+    },
+    {
+      "name": "PathFinder.Adapter.dll",
+      "bytes": 88064,
+      "sha256": "61e9dd0b77ea6a19c0e13a9db4c02213cd2eabc69f4ba64b04ca737d21ea1f0f"
+    },
+    {
+      "name": "PathFinder.Barriers.dll",
+      "bytes": 57344,
+      "sha256": "b0c05565cbb5e3e4f80e047226c703add2d9fe4c818aa65d16f666dac1930dbb"
+    },
+    {
+      "name": "PathFinder.BarrierVerifier.dll",
+      "bytes": 76800,
+      "sha256": "c0683d6af86cc79ab58011e8aba54bf352c89cb107fe67d2c93e5223be35d04e"
+    }
+  ],
+  "files": {
+    "runner-build-check10.log": {
+      "bytes": 1562,
+      "sha256": "6873a4d7991d3b2a2b6266fbd01fc180b0553e66715d020bbe1eaf71e5f416e2"
+    },
+    "transport-build-check10.log": {
+      "bytes": 1589,
+      "sha256": "2c56ee84108450a8bb35ceb9b1c356ad477b5800aaeb66700765e8a29431846f"
+    },
+    "server-build-check22.log": {
+      "bytes": 1463,
+      "sha256": "973e4f87ceeb2f06f4bcc6c00548c07445882b742fe1f2981e29a1c698b7e4b6"
+    },
+    "client-types-check22.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "lint-final22.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "preservation-final23.json": {
+      "bytes": 4136,
+      "sha256": "02a79ead957a63b61abe2b954928fdae4b381a635a8628f42e696c2d344f130d"
+    },
+    "fixture-retirement-final23.json": {
+      "bytes": 918,
+      "sha256": "dee2161b00cf3c386bb5feb05d681617309d5a247b00b0636b927d7f1cc26ea6"
+    }
+  },
+  "initialFailuresRetained": [
+    "contracts-initial.json",
+    "transport-initial.log",
+    "transport-diagnostic2.log",
+    "strategy-check7.json",
+    "worker-proof-check14.json",
+    "lint-check15.log",
+    "client-types-check20.log"
+  ],
+  "scopeNote": "Incremental groups overlap; do not sum them. Final relevant changed boundaries were rechecked. Synthetic/converted/native/engineering acceptance are distinct.",
+  "remote": {
+    "observationStartedAt": "2026-10-21 15:34:49 UTC",
+    "observationFinishedAt": "2026-10-21 15:34:50 UTC",
+    "main": "96e63f13fdc2b1d30b8f8ff658dd662f25fac104",
+    "stagePrs": 0,
+    "ci": "NOT_RUN",
+    "cachedDivergence": "152\t3"
+  },
+  "remaining": {
+    "actualAalborgCapture": "NOT_RUN",
+    "reportedCableCounterexample": "NOT_RUN",
+    "representativeCapacity": "NOT_RUN",
+    "browserDemo": "BLOCKED_SAVED_ORIGIN_REFUSAL",
+    "nativeEngineeringParity": "NOT_RUN_USER_CHOSE_MANUAL_REVIEW",
+    "B7WriteGates": "NOT_IMPLEMENTED",
+    "userEngineeringAcceptance": false
+  },
+  "isolation": {
+    "originalMain": "96e63f13fdc2b1d30b8f8ff658dd662f25fac104",
+    "originalMainClean": true,
+    "originalOr5190Or5191Writes": false,
+    "realCableApply": false,
+    "push": false,
+    "pullRequest": false,
+    "merge": false,
+    "deployment": false,
+    "deniedCleanupRetried": false,
+    "rootOnlyExecution": true
+  }
+}
