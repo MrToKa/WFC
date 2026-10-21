@@ -1,5 +1,32 @@
 # PathFinder local implementation progress
 
+## Current checkpoint — Model Browser parent selection delivered
+
+Branchpf-parent-modelbrowser-local-20261021, productf52017d3cf79f5abfb71d587aad8ffac386eeec7.
+Report73 + evidence/cable-workflow/model-browser-parent-selection-actual.json.
+Rootcause: pinnedSDK ordinary ModelBrowserclick isolates but does notselect,
+leavingpreviouschild/emptyselection. Adapterconfig now selectOnly onlabelclick;
+Shift/Ctrl unchanged. ExactparentID uses existingdescendantbbox union and bottom
+[midX,midY,minZ]. No autoLCA/childsubstitution/protocol/cap/matching changes.
+Native search-resultclick and usersaved FIRST/LAST modes remain separate scopes.
+
+PASS16adapter sourcemock tests (2new; pinnedcallbackexecuted onsyntheticparent),
+8focusedViewer selection/bounds tests, syntax/diff/build/independentreview.
+Actualstaticwebdelivery PASS2026-10-21T05:09:19.596Z: web1e520581/containere11ce1f4;
+servedadapter21469bc0. API3476333e/PG/MinIO identity/config/start unchanged;
+computationalpathfinderbf4c8f76 unchanged. Nonwebidentity/config preserved;
+originalbackend externalprocesschanges observed. NoSQL/modelwrites, realSave/
+Review/Apply/newgrants/engineidentitytransition. Rollback55296512byte tarSHA
+ aea55713c3c151e701217b2803870adf95c54e925bd6c6cfa58d1558a2bece65 +privateenv/state
+kept; existing DB/modelbackups kept; onlystaticwebchanged. No newtestcontainers/
+volumes/unneededbuilds; no prune/deniedcleanup/original5180/5190/source writes.
+
+No activehelper/test. RealAalborg reread/actualModelBrowser/Assign/Save stillBLOCKED
+savedoriginrefusal; no unchangedretry/bypass. Next selfcontainedprompt
+handoffs/PF-U7-parent-model-browser-check.md. Automation remainsPAUSED; latest
+PFtechnicalchecks→SimplifiedPreparer5180 withfreshDB/modelbackup sequencing kept.
+No push/PR/merge; live remote/PR/CI NOT_RUN for this correction.
+
 ## Current checkpoint — selected-object bottom-centre fix delivered
 
 Branch pf-u9-selected-bounds-local-20261021, productfee2d78861c7c0ec9b1dfcb5792f3f1487814992.
