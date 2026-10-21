@@ -1,5 +1,48 @@
 # PathFinder local implementation progress
 
+## PF-B8 independent checks delivered; PF-B8a ACTIVE; actual-model failure open
+
+Latest user instruction21October2026: at the end of tests run a REAL Aalborg-model
+test, including reported cable =H1=KF1=TAC1=WGA1. This is a required final gate;
+synthetic counts/measurement cannot satisfy it. Use actual model/FromTo/Details,
+and actual civil triangles for wall/opening claims. No real-data Apply. Complete
+permitted real-input replay/inspection and record exact absent/protected-capture
+dependencies honestly; do not retry/bypass saved browser refusal without new fact.
+
+B8 product8770104 on pf-b8-barrier-qualification-local-20261021; report89 and
+public evidence/barriers/b8-qualification.json +b8-source-files.json record exact
+scope. Core11/frozen3 preservation, golden43/215, regression105, kernel94/verifier48/
+constrained54/local40/ledger35/direct63/session308PASS. Contracts468/Node.NET18/
+transport39/driver34/realSQLgrantAuto4PASS; groups overlap, synthetic physicalinputs.
+Types/lint/syntaxPASS. One staleDLL interop failure corrected with owned freshDLL.
+
+OwnedLinuxproductiondefault69session+6oneshotPASS,2supervisors and real64→65,
+16endpointpairs/3categories/65syntheticmeshes/800triangles. IndependentC#69results/
+6DTOcomparisons/4226clearsegmentsPASS. Sampledengine181329920bytes/Node138231808;
+30.515s, sessionmedian169.745ms/p95628.418ms. Not2140actualcapacity or exactpeak.
+Retain attempt1missinghelper and attempt2no-init/request64reapFAIL; attempt3 used
+actualcomposeinit:true, exited0/OOMfalse with unchanged512MiBguard/1GiBhardbound.
+Root retired ONLY4 exactownedB8fixtures(PG55443+3Linux), evidence/inputs retained.
+
+Actual5191READONLY owner/port/image checked; copied exact current fullsnapshot+
+durableprojection+traceindex with hash/bytes. Actual330trays/1165leaves/2965objects,
+snapshot114111391bytes SHA27f8cf8c..., current2confirmedfixedworldheads validated,
+Details7/5/10/gap1. Actual reportedcable replay FAILresource_limit ~987.685ms:
+'Combined worker RSS exceeds the sampled memory budget.' No route/Apply/writes.
+This is a real capacity failure, not externalBLOCKED. Sourcebookends unchanged.
+Current5191hasnobarrierregistry; actualcivil/openingcapture remainsBLOCKED and
+savedbrowserrefusaluntouched. Userrequiredsources:3D-Modell_BIS_20260304.rvm and
+DB2401_DESIGN_01-PIPE+GRID_20260304.rvm. Do not substitute AABBs/synthetic/empty scope.
+
+Next handoffPF-B8a-mixed-obstacles preparedwithskill/executing: oneagent's11source
+draftsfrozen (shared/runtime/C#strictkind+EnglishUI+tests), rootverificationpending.
+ThenPF-B8b eliminate repeated snapshotmaterialization under SAME512MiB/math/guards,
+actualcold/disk/warm+64→65+realreplay; sourceauditfound doubleSnapshotReader/fullDOM/
+MemoryStreamcopy. No safe raw-free currentfitartifact. B9 and Preparerqueued,
+automationACTIVE. Rootsoleexecutor; no active tests/SQL/HTTP now, nextfocusedchecks.
+Original/liveoriginmain96e63f13 verified18:05Z; no push/PR/CI. All denied paths/parents
+andforeignchangespreserved. Actualcivil/native/useracceptance notclaimed.
+
 ## PF-B7a technically checked — preparing and executing PF-B8
 
 Product d5cec2b00cb4815add3a9dd4ec8bffef26e13b24, branch

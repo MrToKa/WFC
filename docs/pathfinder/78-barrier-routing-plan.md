@@ -259,6 +259,26 @@ routes/lengths, confirm review and replace the pair with installLength unchanged
 Accept: scope-specific PASS/FAIL/BLOCKED/NOT_RUN receipts; user engineering review
 is separate. Never call synthetic/converted checks native parity or human acceptance.
 
+### B8a — Mixed source obstacles (21 October clarification)
+
+The user identified `3D-Modell_BIS_20260304.rvm` and
+`DB2401_DESIGN_01-PIPE+GRID_20260304.rvm` as source groups containing structural
+barriers, pipes, tanks and other physical obstacles. Add accurate generic Obstacle
+classification across shared/runtime/C# strict contracts and English authoring;
+preserve explicit selection, old kinds, unknown refusal, geometry and all limits.
+Whole actual group capture/capacity/closed-shell acceptance remains unproved.
+See PF-B8a-mixed-obstacles.md; execute after B8 independent qualification report.
+
+### B8b — Real Aalborg snapshot memory (observed failure)
+
+B8 actual330-tray snapshot replay returned resource_limit at the unchanged512MiB
+guard before routing. Remove redundant whole-snapshot allocations/strict parses,
+preserving original SHA/identities/geometry/physical surfaces/algorithm/limits and
+all purpose/category guards. Existing fitted trace/cache is not a raw-free safe
+executable model. Qualify cold/disk/warm/corruption/cancellation/64→65 behavior and
+repeat actual current Aalborg inputs; synthetic PASS cannot close this gate.
+No unchanged retry or arbitrary larger limit. Actual civil/opening gate remains.
+
 ### B9 — Local delivery, recovery and cleanup
 
 1. Fresh verified owned5191 DB/model/PF backup and private companion before schema/

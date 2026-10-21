@@ -12,6 +12,12 @@ User explicitly authorizes automatic next-stage execution; do not pause routinel
 
 ## Objective, baseline and boundaries
 
+User explicitly reconfirmed21October2026 that the end of qualification must include
+a real Aalborg-model test. The reported cable =H1=KF1=TAC1=WGA1 is included. This
+cannot be satisfied by the synthetic measurement. Use permitted actual model,
+saved From/To and Project Details; claims about walls/openings require actual
+retained civil triangle capture. No real-data Apply and no browser permission bypass.
+
 Continue in `C:/Users/todor.chankov/source/WFC-pathfinder-local` from completed
 B7a product `d5cec2b00cb4815add3a9dd4ec8bffef26e13b24`. First inspect live branch/HEAD/status, active agents,
 applicable AGENTS, automation-progress, plan78, matrix79, reports86/87/88 and their
@@ -226,6 +232,16 @@ workload and cannot turn AC-03 into PASS. Only do that if the smaller workload
 identifies a useful open question and actual local resources/time permit it.
 
 ### 3. Actual civil/counterexample evidence gate
+
+Latest explicit user scope: the source groups `3D-Modell_BIS_20260304.rvm`
+and `DB2401_DESIGN_01-PIPE+GRID_20260304.rvm` contain the walls, ceilings,
+pipes, tanks and other physical objects that cables must not cross. Resolve
+their actual current identities and capture complete original descendant meshes.
+Names alone are not geometry or confirmation of a closed shell. Preserve holes
+and disconnected components; never substitute either parent group's AABB for
+its solids or infer a floor/wall from a screenshot. Fail closed on incomplete or
+over-limit captures. These sources are for the required final real Aalborg test,
+not an authorization for real-data Apply or a browser permission bypass.
 
 Current source-backed facts are bounded:
 
