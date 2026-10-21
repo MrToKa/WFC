@@ -214,6 +214,44 @@ function workflowFixture(status: 'complete' | 'running' = 'complete') {
   return { pf, proposal, live, parent, selection: live.row };
 }
 describe('selected current cable workflow result', () => {
+  it('reports a selected display-only comparison as loading while its exact live read is pending', async () => {
+    const f = workflowFixture(), update = vi.fn<(value: PathFinderWorkflowReview | null) => void>();
+    let finish!: (value: typeof f.live) => void;
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const popup = () => update.mock.calls.at(-1)?.[0];
+    const view = render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} workflowSelection={f.selection}
+      accountId={id(2)} options={null} readPreferences={{ secondaryDistanceMeters: 2, preferVerticalApproach: true }} onWorkflowReviewChange={update} />);
+    await waitFor(() => expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce());
+    expect(popup()?.comparisonLoading).toBe(true); expect(popup()?.comparison).toBeNull(); expect(popup()?.comparisonError).toBeNull();
+    expect(popup()?.canReview).toBe(false); expect(popup()?.canApply).toBe(false);
+    await act(async () => finish(f.live));
+    await waitFor(() => expect(popup()?.comparisonLoading).toBe(false));
+    expect(popup()?.comparison?.current.cable.routing).toBe('/LIVE-CURRENT');
+    // Even an optimistic display-only response cannot replace the missing
+    // protected calculation preferences as authority for a new write.
+    expect(f.live.row.calculation.reviewable).toBe(true);
+    expect(popup()?.canReview).toBe(false); expect(popup()?.canApply).toBe(false);
+    await act(async () => { popup()!.review(); popup()!.apply(); });
+    expect(f.pf.reviewProposal).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled(); view.unmount();
+  });
+  it('compares the exact selected proposal with live values while protected calculation preferences are unavailable', async () => {
+    const f = workflowFixture(), update = vi.fn<(value: PathFinderWorkflowReview | null) => void>();
+    const readPreferences = { secondaryDistanceMeters: 2, preferVerticalApproach: true };
+    const live = { ...f.live, row: { ...f.live.row, calculation: { ...f.live.row.calculation, currentness: 'unavailable' as const, reviewable: false } } };
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockResolvedValue(live);
+    const popup = () => update.mock.calls.at(-1)?.[0];
+    render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} workflowSelection={f.selection}
+      accountId={id(2)} options={null} readPreferences={readPreferences} onWorkflowReviewChange={update} />);
+    await waitFor(() => expect(popup()?.comparison?.current.cable.routing).toBe('/LIVE-CURRENT'));
+    expect(popup()?.comparison?.proposal).toMatchObject({ proposalId: f.proposal.id, routing: '/BC1', designLength: '7' });
+    expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledWith(id(1), 'current-private-token', id(4), readPreferences, expect.any(AbortSignal));
+    expect(popup()?.canReview).toBe(false); expect(popup()?.canApply).toBe(false);
+    await act(async () => { popup()!.review(); popup()!.apply(); });
+    expect(screen.getByRole('button', { name: 'Calculate non-MV cables' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Calculate selected cable' })).toBeDisabled();
+    expect(f.pf.calculate).not.toHaveBeenCalled(); expect(f.pf.reviewProposal).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
+    expect(f.pf.showPath).not.toHaveBeenCalled();
+  });
   it('requests one ordinary Cable projection read for a current sealed v8 item while unrelated siblings run without Review, Apply or Viewer changes', async () => {
     const f = workflowFixture('running'), changed = vi.fn(), claimViewer = vi.fn(() => () => true);
     const view = render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} workflowSelection={f.selection}
@@ -512,6 +550,28 @@ describe('exact pending Apply through result display resets', () => {
     view.rerender(<PathFinderResults pf={asPf({ ...pf, data: { ...pf.data, proposals: [...pf.data.proposals], registryRevision: '2' } })} selectedCableId={id(4)} accountId={id(2)} options={options} />);
     expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce(); expect(f.pf.action).not.toHaveBeenCalled();
   });
+  it('reads a historical comparison independently of missing calculation admission without authorizing a fresh write', async () => {
+    const f = recoveryFixture(), readPreferences = { secondaryDistanceMeters: 2, preferVerticalApproach: true };
+    render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} accountId={id(2)} options={null} readPreferences={readPreferences} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' }));
+    expect(await screen.findByRole('region', { name: 'Current cable values' })).toHaveTextContent('/LIVE-CURRENT');
+    expect(screen.getByRole('region', { name: 'Proposed cable values' })).toHaveTextContent('/BC1');
+    expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledWith(id(1), 'current-private-token', id(4), readPreferences, expect.any(AbortSignal));
+    expect(screen.getByRole('button', { name: 'Confirm proposal review' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Apply reviewed result' })).toBeDisabled();
+    expect(f.pf.reviewProposal).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled(); expect(f.pf.calculate).not.toHaveBeenCalled();
+  });
+  it.each([403, 409])('keeps a failed display-only comparison distinct from empty cable values (%s)', async status => {
+    const f = recoveryFixture(), readPreferences = { secondaryDistanceMeters: 2, preferVerticalApproach: true };
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockRejectedValueOnce(Object.assign(new Error('Private cable values'), { status }));
+    render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} accountId={id(2)} options={null} readPreferences={readPreferences} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' }));
+    expect(await screen.findByText(/Live cable comparison is unavailable/)).toBeVisible();
+    expect(screen.queryByRole('region', { name: 'Current cable values' })).toBeNull();
+    expect(screen.queryByText(/Both current fields are empty/)).toBeNull(); expect(screen.queryByText('Private cable values')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Confirm proposal review' })).toBeDisabled();
+    expect(f.pf.action).not.toHaveBeenCalled(); expect(f.pf.reviewProposal).not.toHaveBeenCalled();
+  });
   it('keeps preview and unrelated controls available while the independent live comparison is slow', async () => {
     const f = recoveryFixture(); vi.mocked(fetchPathFinderCableWorkflowDetail).mockImplementationOnce(() => new Promise(() => undefined));
     const view = render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} accountId={id(2)} options={options} />);
@@ -533,7 +593,7 @@ describe('exact pending Apply through result display resets', () => {
     expect(screen.queryByText('Private old cable names')).toBeNull(); expect(f.pf.clear).not.toHaveBeenCalled(); expect(f.pf.cancelOperation).not.toHaveBeenCalled(); expect(f.pf.refresh).not.toHaveBeenCalled();
     expect(f.pf.reviewProposal).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
   });
-  it.each(['account', 'model', 'options', 'cable', 'scope'] as const)('aborts and ignores late live comparison after a %s change', async change => {
+  it.each(['account', 'model', 'options', 'read preferences', 'cable', 'scope'] as const)('aborts and ignores late live comparison after a %s change', async change => {
     const f = recoveryFixture(); let finish!: (value: ReturnType<typeof liveCableDetail>) => void;
     vi.mocked(fetchPathFinderCableWorkflowDetail).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
     const view = render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} accountId={id(2)} options={options} />);
@@ -541,7 +601,8 @@ describe('exact pending Apply through result display resets', () => {
     const signal = vi.mocked(fetchPathFinderCableWorkflowDetail).mock.calls[0][4]!;
     if (change === 'scope') fireEvent.click(screen.getByRole('button', { name: 'Select another completed calculation' }));
     else view.rerender(<PathFinderResults pf={asPf(change === 'model' ? { ...f.pf, data: { ...f.pf.data, activeModel: { modelVersionId: id(20), selectionRevision: '2' } } } : f.pf)}
-      selectedCableId={change === 'cable' ? id(30) : id(4)} accountId={change === 'account' ? id(21) : id(2)} options={change === 'options' ? { ...options, secondaryDistanceMeters: 3 } : options} />);
+      selectedCableId={change === 'cable' ? id(30) : id(4)} accountId={change === 'account' ? id(21) : id(2)} options={change === 'options' ? { ...options, secondaryDistanceMeters: 3 } : options}
+      readPreferences={change === 'read preferences' ? { secondaryDistanceMeters: 3, preferVerticalApproach: true } : undefined} />);
     expect(signal.aborted).toBe(true);
     await act(async () => { finish(liveCableDetail()); });
     expect(screen.queryByText('/LIVE-CURRENT')).toBeNull(); expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce(); expect(f.pf.action).not.toHaveBeenCalled();

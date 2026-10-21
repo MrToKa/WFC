@@ -6,7 +6,7 @@ import type { ProjectPreparationViewer } from './usePathFinder';
 import type { BarrierRegistry, BarrierSnapshot } from '../../../../shared/pathfinderBarriers';
 import type { ViewerSelection } from '../../../../viewer-runtime/protocol.mjs';
 
-vi.mock('@/api/pathfinderBarriers', async original => ({ ...await original<typeof api>(), getBarrierRegistry: vi.fn(), getBarrierSnapshot: vi.fn(), beginBarrierCapture: vi.fn(), changeBarrierRegistry: vi.fn() }));
+vi.mock('@/api/pathfinderBarriers', async original => ({ ...await original<typeof api>(), getBarrierRegistry: vi.fn(), getBarrierSnapshot: vi.fn(), getLatestBarrierSnapshot: vi.fn(), beginBarrierCapture: vi.fn(), changeBarrierRegistry: vi.fn() }));
 const id = (n: number) => `b5000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const scope = { projectId: id(1), modelVersionId: id(2), contentFingerprint: 'a'.repeat(64), selectionRevision: '1', captureFrameId: id(3), captureFrameSha256: 'b'.repeat(64), coordinateFrame: 'canonical-world-metres' as const };
 const parent = (n: number): BarrierSelectedParent => ({ selectionId: id(n + 1000), kind: 'wall', objectId: `dbid:${n}`, dbId: n, externalId: null, name: `Selected parent ${n}`, identityBasis: 'version-local-only', inclusion: 'own-and-all-descendant-fragments' });
@@ -25,7 +25,7 @@ function manifest(value: BarrierRegistry, emptyReason = 'Reviewed empty scope'):
 function selection(...numbers: number[]): ViewerSelection {
   return { coordinateFrame: 'world-metres-z-up', metresPerDisplayUnit: 1, globalOffsetMetres: [0, 0, 0], objects: numbers.map(n => ({ objectId: n, parentId: n === 8 ? 7 : null, name: `Selected parent ${n}`, externalId: null, bounds: null, bottomCentre: null, derivation: 'display-aabb-bottom-centre', nativeVisibility: 'unknown', properties: [], propertiesTruncated: false })) };
 }
-function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; }
+function deferred<T>() { let resolve!: (value: T) => void, reject!: (error: unknown) => void; const promise = new Promise<T>((done, refuse) => { resolve = done; reject = refuse; }); return { promise, resolve, reject }; }
 type Options = Parameters<typeof usePathfinderBarriers>[0];
 function fixture(initial: number[] = []) {
   let current = registry(initial.map(parent)); let lastRequest: Parameters<ProjectPreparationViewer['captureBarriers']>[0] | null = null; let currentEmptyReason = '';
@@ -55,6 +55,7 @@ function fixture(initial: number[] = []) {
   const pf = { data: { activeModel: { modelVersionId: scope.modelVersionId, selectionRevision: '1', contentFingerprint: scope.contentFingerprint } }, viewerPhase: 'ready', preparationViewerGeneration: 1, busy: false, readSelection, runProjectPreparation, ...appearance } as unknown as Options['pf'];
   const options: Options = { projectId: scope.projectId, loadedProjectId: scope.projectId, token: 'synthetic-login', isAdmin: true, pf };
   vi.mocked(api.getBarrierRegistry).mockImplementation(async () => structuredClone(current));
+  vi.mocked(api.getLatestBarrierSnapshot).mockResolvedValue(null);
   vi.mocked(api.getBarrierSnapshot).mockImplementation(async () => manifest(current, currentEmptyReason));
   vi.mocked(api.beginBarrierCapture).mockImplementation(async (_project, _token, command) => ({ schemaVersion: 'wfc.pf.barrier-intent-receipt.v1', state: 'pending', duplicate: false,
     intent: { id: id(20), snapshotId: id(21), captureBlobId: id(22), manifestBlobId: id(23), command, createdBy: id(24), loginId: id(25) } }));
@@ -72,6 +73,121 @@ async function mounted(f: ReturnType<typeof fixture>) {
   await waitFor(() => expect(view.result.current.registry).not.toBeNull()); return view;
 }
 async function add(view: Awaited<ReturnType<typeof mounted>>) { await act(() => view.result.current.addSelection()); }
+const frameUnavailable = () => Object.assign(new Error('Prepare the current frame'), { code: 'BARRIER_CURRENT_FRAME_UNAVAILABLE', status: 409 });
+
+describe('saved barrier selection persistence and historical display', () => {
+  it('restores a published set on remount and Viewer generation change without any capture or write', async () => {
+    const f = fixture([7]), first = await mounted(f);
+    expect(first.result.current.saved).toMatchObject({ status: 'current', manifest: { selectedParents: [parent(7)] } });
+    first.unmount(); const second = await mounted(f);
+    expect(second.result.current.draftParents).toEqual([parent(7)]);
+    second.rerender({ ...f.options, pf: { ...f.pf, preparationViewerGeneration: 2 } });
+    await waitFor(() => expect(second.result.current.saved?.status).toBe('current'));
+    expect(second.result.current.saved?.manifest.selectedParents).toEqual([parent(7)]);
+    expect(api.beginBarrierCapture).not.toHaveBeenCalled(); expect(api.changeBarrierRegistry).not.toHaveBeenCalled(); expect(f.captureBarriers).not.toHaveBeenCalled();
+  });
+  it('keeps Add-only changes distinct from saved publication and does not pretend they survive remount', async () => {
+    const f = fixture(), first = await mounted(f); await add(first);
+    expect(first.result.current.dirty).toBe(true); expect(first.result.current.saved).toBeNull(); first.unmount();
+    const second = await mounted(f); expect(second.result.current.draftParents).toEqual([]); expect(second.result.current.saved).toBeNull();
+    expect(api.beginBarrierCapture).not.toHaveBeenCalled(); expect(api.changeBarrierRegistry).not.toHaveBeenCalled();
+  });
+  it('shows stale saved names separately and never seeds a current capture from their old object IDs', async () => {
+    const f = fixture([7]), published = manifest(f.getRegistry());
+    f.setRegistry({ ...f.getRegistry(), scope: { ...scope, captureFrameId: id(900) }, state: 'stale', reasonCodes: ['BARRIER_MODEL_SCOPE_CHANGED'] });
+    vi.mocked(api.getBarrierSnapshot).mockResolvedValue(published);
+    const view = await mounted(f);
+    expect(view.result.current.saved).toEqual({ manifest: published, status: 'recapture-required' });
+    expect(view.result.current.draftParents).toEqual([]); expect(view.result.current.dirty).toBe(false);
+    await act(() => view.result.current.save()); expect(api.changeBarrierRegistry).not.toHaveBeenCalled();
+    f.readSelection.mockResolvedValue(selection(8)); await add(view);
+    expect(view.result.current.draftParents.map(value => value.dbId)).toEqual([8]);
+    expect(view.result.current.saved?.manifest.selectedParents.map(value => value.dbId)).toEqual([7]);
+    expect(f.runProjectPreparation).toHaveBeenCalledWith(expect.objectContaining({ captureFrameId: id(900) }), expect.any(Function), expect.any(AbortSignal));
+    expect(api.beginBarrierCapture).not.toHaveBeenCalled();
+  });
+  it('withholds current ready admission during and after a failed refresh but retains last verified names', async () => {
+    const f = fixture([7]), view = await mounted(f), read = deferred<BarrierRegistry>();
+    vi.mocked(api.getBarrierRegistry).mockReturnValueOnce(read.promise);
+    let refreshing!: Promise<void>; act(() => { refreshing = view.result.current.refresh(); });
+    expect(view.result.current.registry).toBeNull(); expect(view.result.current.saved?.status).toBe('unavailable'); expect(view.result.current.canAuthor).toBe(false);
+    await act(async () => { read.reject(new Error('Temporary read failure')); await refreshing; });
+    expect(view.result.current.registry).toBeNull(); expect(view.result.current.manifest).toBeNull();
+    expect(view.result.current.saved?.manifest.selectedParents).toEqual([parent(7)]); expect(api.getLatestBarrierSnapshot).not.toHaveBeenCalled();
+    await act(() => view.result.current.save()); expect(api.beginBarrierCapture).not.toHaveBeenCalled();
+  });
+  it('uses one historical fallback for a cold missing frame, with saved names display-only and no current draft', async () => {
+    const f = fixture([7]), published = manifest(f.getRegistry());
+    vi.mocked(api.getBarrierRegistry).mockRejectedValueOnce(frameUnavailable()); vi.mocked(api.getLatestBarrierSnapshot).mockResolvedValueOnce(published);
+    const view = renderHook(() => usePathfinderBarriers(f.options));
+    await waitFor(() => expect(view.result.current.saved).toEqual({ manifest: published, status: 'unavailable' }));
+    expect(api.getLatestBarrierSnapshot).toHaveBeenCalledExactlyOnceWith(id(1), 'synthetic-login', expect.any(AbortSignal));
+    expect(view.result.current.registry).toBeNull(); expect(view.result.current.draftParents).toEqual([]); expect(view.result.current.canAuthor).toBe(false);
+    await act(() => view.result.current.addSelection()); await act(() => view.result.current.save());
+    expect(f.runProjectPreparation).not.toHaveBeenCalled(); expect(api.beginBarrierCapture).not.toHaveBeenCalled(); expect(api.changeBarrierRegistry).not.toHaveBeenCalled();
+  });
+  it('reports empty saved history without creating an empty declaration', async () => {
+    const f = fixture(); vi.mocked(api.getBarrierRegistry).mockRejectedValueOnce(frameUnavailable());
+    const view = renderHook(() => usePathfinderBarriers(f.options));
+    await waitFor(() => expect(api.getLatestBarrierSnapshot).toHaveBeenCalledOnce());
+    await waitFor(() => expect(view.result.current.busy).toBe(false));
+    expect(view.result.current.saved).toBeNull(); expect(view.result.current.message).toContain('No saved barrier snapshot was found');
+    expect(api.changeBarrierRegistry).not.toHaveBeenCalled(); expect(view.result.current.registry).toBeNull();
+  });
+  it('shows the latest explicit-empty history instead of retaining a previous nonempty set', async () => {
+    const f = fixture([7]), view = await mounted(f), empty = registry([], '2');
+    empty.state = 'ready'; empty.reasonCodes = []; empty.snapshot = { snapshotId: id(30), scope, registryRevision: '2', contentSha256: 'e'.repeat(64), mode: 'explicit-empty' };
+    const publishedEmpty = manifest(empty, 'Saved reviewed empty scope');
+    vi.mocked(api.getBarrierRegistry).mockRejectedValueOnce(frameUnavailable()); vi.mocked(api.getLatestBarrierSnapshot).mockResolvedValueOnce(publishedEmpty);
+    await act(() => view.result.current.refresh());
+    expect(view.result.current.saved?.manifest.selectedParents).toEqual([]);
+    expect(view.result.current.saved?.manifest.geometry).toMatchObject({ mode: 'explicit-empty', reason: 'Saved reviewed empty scope' });
+    expect(view.result.current.registry).toBeNull(); expect(api.changeBarrierRegistry).not.toHaveBeenCalled();
+  });
+  it.each([401, 403])('clears saved values on HTTP %s and never attempts historical fallback', async status => {
+    const f = fixture([7]), view = await mounted(f);
+    vi.mocked(api.getBarrierRegistry).mockRejectedValueOnce(Object.assign(new Error('Access unavailable'), { status }));
+    await act(() => view.result.current.refresh());
+    expect(view.result.current.saved).toBeNull(); expect(view.result.current.draftParents).toEqual([]); expect(view.result.current.registry).toBeNull();
+    expect(api.getLatestBarrierSnapshot).not.toHaveBeenCalled(); expect(view.result.current.canAuthor).toBe(false);
+  });
+  it('clears retained saved names if historical fallback itself denies access', async () => {
+    const f = fixture([7]), view = await mounted(f);
+    vi.mocked(api.getBarrierRegistry).mockRejectedValueOnce(frameUnavailable());
+    vi.mocked(api.getLatestBarrierSnapshot).mockRejectedValueOnce(Object.assign(new Error('Access unavailable'), { status: 403 }));
+    await act(() => view.result.current.refresh()); expect(view.result.current.saved).toBeNull(); expect(view.result.current.registry).toBeNull();
+    expect(view.result.current.canRetry).toBe(false); expect(api.getLatestBarrierSnapshot).toHaveBeenCalledOnce();
+  });
+  it.each(['token', 'project', 'model', 'role'] as const)('fences late historical names after %s ownership changes', async kind => {
+    const f = fixture([7]), published = manifest(f.getRegistry()), history = deferred<BarrierSnapshot | null>();
+    vi.mocked(api.getBarrierRegistry).mockRejectedValueOnce(frameUnavailable()).mockImplementation(() => new Promise(() => {}));
+    vi.mocked(api.getLatestBarrierSnapshot).mockReturnValueOnce(history.promise);
+    const view = renderHook((options: Options) => usePathfinderBarriers(options), { initialProps: f.options });
+    await waitFor(() => expect(api.getLatestBarrierSnapshot).toHaveBeenCalledOnce());
+    const next = kind === 'token' ? { ...f.options, token: 'new-login' } : kind === 'project' ? { ...f.options, projectId: id(999), loadedProjectId: id(999) }
+      : kind === 'role' ? { ...f.options, isAdmin: false } : { ...f.options, pf: { ...f.pf, data: { ...f.pf.data!, activeModel: { ...f.pf.data!.activeModel, modelVersionId: id(999) } } } };
+    view.rerender(next); await act(async () => history.resolve(published));
+    expect(view.result.current.saved).toBeNull(); expect(view.result.current.registry).toBeNull(); expect(api.beginBarrierCapture).not.toHaveBeenCalled();
+  });
+  it('retains a dirty draft base through failed reads and refuses to rebase its IDs into a changed frame', async () => {
+    const f = fixture([7]), view = await mounted(f); f.readSelection.mockResolvedValue(selection(8)); await add(view);
+    vi.mocked(api.getBarrierRegistry).mockRejectedValueOnce(new Error('Temporary read failure')); await act(() => view.result.current.refresh());
+    const changed = registry([parent(7)]); changed.scope.captureFrameId = id(900); changed.snapshot!.scope.captureFrameId = id(900); f.setRegistry(changed);
+    await act(() => view.result.current.refresh()); expect(view.result.current.phase).toBe('stale');
+    expect(view.result.current.draftParents.map(value => value.dbId)).toEqual([7, 8]);
+    await act(() => view.result.current.save()); expect(api.beginBarrierCapture).not.toHaveBeenCalled();
+  });
+  it('keeps an uncertain command and exact retry key unsettled through historical fallback', async () => {
+    const f = fixture([7]), view = await mounted(f); f.readSelection.mockResolvedValue(selection(8)); await add(view);
+    vi.mocked(api.beginBarrierCapture).mockRejectedValueOnce(new TypeError('Lost acknowledgement')); await act(() => view.result.current.save());
+    const command = vi.mocked(api.beginBarrierCapture).mock.calls[0][2], published = manifest(f.getRegistry());
+    vi.mocked(api.getBarrierRegistry).mockRejectedValueOnce(frameUnavailable()); vi.mocked(api.getLatestBarrierSnapshot).mockResolvedValueOnce(published);
+    await act(() => view.result.current.refresh());
+    expect(view.result.current.phase).toBe('unknown'); expect(view.result.current.pending).toBe(true); expect(view.result.current.canRetry).toBe(true);
+    expect(view.result.current.registry).toBeNull(); expect(api.beginBarrierCapture).toHaveBeenCalledOnce();
+    await act(() => view.result.current.retry()); expect(vi.mocked(api.beginBarrierCapture).mock.calls[1][2]).toBe(command);
+  });
+});
 
 describe('administrator barrier authoring lifecycle', () => {
   it('does not read or write when administrator access is absent', async () => {
@@ -135,7 +251,7 @@ describe('administrator barrier authoring lifecycle', () => {
     await act(() => view.result.current.refresh());
     expect(view.result.current.phase).toBe('unknown'); expect(view.result.current.pending).toBe(true);
     if (kind === 'read403') { expect(view.result.current.registry).toBeNull(); expect(view.result.current.draftParents).toHaveLength(0); expect(view.result.current.canAuthor).toBe(false); }
-    else expect(view.result.current.registry!.snapshot).toEqual(old);
+    else { expect(view.result.current.registry).toBeNull(); expect(view.result.current.saved?.manifest.snapshotId).toBe(old!.snapshotId); expect(view.result.current.canRetry).toBe(true); }
     await act(() => view.result.current.discardPending()); await act(() => view.result.current.save());
     expect(view.result.current.phase).toBe('unknown'); expect(view.result.current.pending).toBe(true);
     expect(api.beginBarrierCapture).toHaveBeenCalledTimes(stage === 'empty' ? 0 : 1); expect(api.changeBarrierRegistry).toHaveBeenCalledTimes(stage === 'empty' ? 1 : 0);

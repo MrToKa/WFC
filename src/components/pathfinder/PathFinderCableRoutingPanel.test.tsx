@@ -60,6 +60,50 @@ function reviewController(p: PathFinderCableRoutingPanelProps): PathFinderWorkfl
 beforeEach(() => { assignment = pair(); vi.mocked(useCableEndpointPairSelection).mockReset().mockImplementation(() => assignment); vi.mocked(useCableEndpointSelection).mockReset(); });
 
 describe('persistent nonmodal cable routing panel with atomic drafts', () => {
+  it('keeps Calculate actionable for configuration while preserving endpoint Save and approval guards', () => {
+    const p = props(), configure = vi.fn(), calculate = vi.fn(() => configure());
+    p.access = { ...p.access, calculation: null, initialFill: undefined };
+    p.cable!.cable.routing = '/STORED'; p.cable!.cable.designLength = '30';
+    p.cable!.calculation.reasonCodes = ['BARRIER_WRITE_PROOF_REQUIRED'];
+    const review = { ...reviewController(p), canReview: false, canApply: false };
+    render(<PathFinderCableRoutingPanel {...p} review={review} onCalculate={calculate} onConfigureCalculation={configure}
+      calculationBlockedReason="Configure the current barriers before calculating or saving changed From/To." />);
+    expect(screen.getByRole('button', { name: 'Calculate routing' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Calculate routing' })); expect(calculate).toHaveBeenCalledOnce(); expect(configure).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('button', { name: 'Configure routing' })); expect(configure).toHaveBeenCalledTimes(2);
+    expect(screen.getByText(/earlier route has no verified barrier checks/)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Review proposed routing' })).toBeDisabled(); expect(screen.getByRole('button', { name: 'Apply reviewed routing' })).toBeDisabled();
+    const comparison = within(screen.getByRole('region', { name: 'Current and proposed cable values' }));
+    expect(comparison.getByText('Design length: 30 m')).toBeVisible(); expect(comparison.getByText('/STORED')).toBeVisible();
+    expect(comparison.getByText('/NEW/SECONDARY')).toBeVisible();
+    expect(assignment.save).not.toHaveBeenCalled(); expect(review.review).not.toHaveBeenCalled(); expect(review.apply).not.toHaveBeenCalled();
+  });
+  it('shows stored values and the actual no-endpoint-change Save meaning without a fictitious comparison failure', () => {
+    const p = props(); p.cable!.cable.routing = '/STORED'; p.cable!.cable.designLength = '30';
+    render(<PathFinderCableRoutingPanel {...p} calculationBlockedReason="Configure the current barriers." />);
+    const stored = within(screen.getByRole('region', { name: 'Stored cable values' }));
+    expect(stored.getByText('Design length: 30 m')).toBeVisible(); expect(stored.getByText('/STORED')).toBeVisible();
+    expect(screen.getByText(/No From\/To changes to save/)).toBeVisible();
+    expect(screen.queryByText(/Current cable values or their exact proposal references are unavailable/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled(); expect(assignment.save).not.toHaveBeenCalled();
+  });
+  it('explains unsaved endpoint changes under missing admission without enabling Save or a calculation', () => {
+    assignment.from.context = context('from');
+    render(<PathFinderCableRoutingPanel {...props()} calculationBlockedReason="Configure the current barriers." />);
+    expect(screen.getByText(/Your From\/To changes are not saved/)).toBeVisible();
+    expect(screen.queryByText(/No From\/To changes to save/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled(); expect(screen.getByRole('button', { name: 'Calculate routing' })).toBeDisabled();
+    expect(assignment.save).not.toHaveBeenCalled();
+  });
+  it('does not use configuration-directed Calculate while exact Apply recovery is pending', () => {
+    const p = props(), review = { ...reviewController(p), pending: true, canRecover: true, canReview: false, canApply: false };
+    render(<PathFinderCableRoutingPanel {...p} review={review} calculationBlockedReason="Configure the current barriers." />);
+    expect(screen.getByRole('button', { name: 'Calculate routing' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Retry pending routing Apply' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry pending routing Apply' })); expect(review.retry).toHaveBeenCalledOnce();
+    expect(p.onCalculate).not.toHaveBeenCalled(); expect(assignment.save).not.toHaveBeenCalled();
+  });
   it('shows the separately read Auto projection without replacing Design or creating an approval', () => {
     const p = props(), refreshAutoLength = vi.fn(), review = { ...reviewController(p), autoLength: { autoCalculatedLength: 54,
       autoLengthStatus: 'calculated' as const, autoLengthCalculatedAt: '2026-10-21T12:00:00Z',

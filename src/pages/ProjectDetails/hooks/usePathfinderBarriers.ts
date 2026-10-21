@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { beginBarrierCapture, changeBarrierRegistry, getBarrierRegistry, getBarrierSnapshot } from '@/api/pathfinderBarriers';
+import { beginBarrierCapture, changeBarrierRegistry, getBarrierRegistry, getBarrierSnapshot, getLatestBarrierSnapshot } from '@/api/pathfinderBarriers';
 import { BARRIER_LIMITS, barrierCanonicalJson, barrierCaptureCommandSchema, barrierCaptureSchema, barrierRegistryCommandSchema,
   barrierSelectedParentSchema, type BarrierCapture, type BarrierRegistry, type BarrierSnapshot } from '../../../../shared/pathfinderBarriers';
 import type { usePathFinder, ProjectPreparationViewer } from './usePathFinder';
@@ -17,10 +17,12 @@ type Intent = Awaited<ReturnType<typeof beginBarrierCapture>>['intent'];
 type Observation = Awaited<ReturnType<ProjectPreparationViewer['captureBarriers']>>;
 type Pending = { type: 'capture'; command: CaptureCommand; intent?: Intent; observation?: Observation; writeStarted: boolean }
   | { type: 'empty'; command: EmptyCommand; writeStarted: boolean };
+export type SavedBarrierSelection = { manifest: BarrierSnapshot; status: 'current' | 'recapture-required' | 'unavailable' };
 type View = { key: string; registry: BarrierRegistry | null; manifest: BarrierSnapshot | null; draftParents: BarrierSelectedParent[];
+  saved: SavedBarrierSelection | null; draftBase: Pick<BarrierRegistry, 'scope' | 'registryRevision'> | null;
   phase: BarrierAuthoringPhase; message: string | null; error: string | null; busy: boolean; pending: boolean; changed: boolean };
 type Context = { key: string; abort: AbortController; closed: boolean };
-const initial = (key: string): View => ({ key, registry: null, manifest: null, draftParents: [], phase: 'idle', message: null, error: null, busy: false, pending: false, changed: false });
+const initial = (key: string): View => ({ key, registry: null, manifest: null, saved: null, draftBase: null, draftParents: [], phase: 'idle', message: null, error: null, busy: false, pending: false, changed: false });
 const same = (a: unknown, b: unknown) => barrierCanonicalJson(a) === barrierCanonicalJson(b);
 const failure = (message: string, code: string) => Object.assign(new Error(message), { code });
 function freeze<T>(value: T): T {
@@ -104,19 +106,40 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
     if (!enabled || !run || locked.current || denied.current) return;
     const controller = new AbortController(); operation.current = controller; locked.current = true;
     const signal = AbortSignal.any([run.abort.signal, controller.signal]);
-    update(run, { busy: true, phase: 'loading', error: null });
+    const previous = viewRef.current;
+    // Last verified names are display history. Withhold current admission until
+    // the entire registry/manifest read succeeds, including on a failed refresh.
+    update(run, { busy: true, phase: 'loading', error: null, registry: null, manifest: null,
+      saved: previous.saved ? { ...previous.saved, status: 'unavailable' } : null });
     try {
       const found = await read(run, signal); current(run);
-      const previous = viewRef.current, keepDraft = previous.key === run.key && (previous.changed || pending.current !== null);
-      const changedScope = keepDraft && previous.registry && (!same(previous.registry.scope, found.registry.scope)
-        || previous.registry.registryRevision !== found.registry.registryRevision);
+      const keepDraft = previous.key === run.key && (previous.changed || pending.current !== null);
+      const changedScope = keepDraft && previous.draftBase && (!same(previous.draftBase.scope, found.registry.scope)
+        || previous.draftBase.registryRevision !== found.registry.registryRevision);
       const oldFrame = found.registry.state === 'stale';
-      update(run, { ...found, ...(!keepDraft ? { draftParents: oldFrame ? [] : found.registry.selectedParents, changed: oldFrame } : {}),
+      update(run, { ...found, saved: found.manifest ? { manifest: found.manifest, status: oldFrame ? 'recapture-required' : 'current' } : null,
+        ...(!keepDraft ? { draftParents: oldFrame ? [] : found.registry.selectedParents, changed: false,
+          draftBase: { scope: found.registry.scope, registryRevision: found.registry.registryRevision } } : {}),
         phase: pending.current ? pending.current.writeStarted ? 'unknown' : previous.phase === 'partial' ? 'partial' : 'refused'
           : changedScope ? 'stale' : found.registry.state === 'ready' ? 'ready' : found.registry.state === 'partial' ? 'partial' : 'idle',
         message: pending.current ? 'A saved command still needs reconciliation. Refresh does not submit or replace it.'
           : oldFrame ? 'The published set belongs to another model frame. Select current-model objects and save a new set; old object identifiers cannot be reused automatically.' : null, error: null });
-    } catch (error) { report(run, error, pending.current); }
+    } catch (error) {
+      report(run, error, pending.current);
+      // History cannot restore current admission or settle an uncertain write.
+      // Access denials never trigger another read or expose retained selections.
+      if (errorStatus(error) !== 401 && errorStatus(error) !== 403 && errorCode(error) === 'BARRIER_CURRENT_FRAME_UNAVAILABLE') {
+        try {
+          current(run); signal.throwIfAborted();
+          const access = latest.current.options;
+          const savedManifest = await getLatestBarrierSnapshot(access.projectId!, access.token!, signal);
+          signal.throwIfAborted(); current(run);
+          update(run, { saved: savedManifest ? { manifest: savedManifest, status: 'unavailable' } : null,
+            message: savedManifest ? 'Saved obstacles were restored for reference. Prepare the current model before checking or recapturing this set.'
+              : 'No saved barrier snapshot was found. Current barrier readiness is unavailable.' });
+        } catch (historyError) { report(run, historyError, pending.current); }
+      }
+    }
     finally { if (context.current === run) { locked.current = false; operation.current = null; update(run, { busy: false }); } }
   }, [current, enabled, read, report, update]);
   useEffect(() => {
@@ -236,7 +259,8 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
         || saved.type === 'empty' && (found.manifest.geometry.mode !== 'explicit-empty' || found.manifest.geometry.reason !== saved.command.reason))
         throw failure('The saved publication is no longer the current barrier set. Refresh and inspect it before changing the set.', 'BARRIER_CONTEXT_CHANGED');
       pending.current = null; setEmptyReason('');
-      update(run, { ...found, draftParents: found.registry.selectedParents, changed: false, pending: false, phase: 'ready',
+      update(run, { ...found, saved: { manifest: found.manifest, status: 'current' }, draftParents: found.registry.selectedParents,
+        draftBase: { scope: found.registry.scope, registryRevision: found.registry.registryRevision }, changed: false, pending: false, phase: 'ready',
         message: 'Barrier set published. Its coverage is limited to the registered objects. Calculation integration is not enabled by this authoring step.', error: null });
     } catch (error) { report(run, error, saved, definitiveWriteRefusal); }
     finally { if (context.current === run) { locked.current = false; operation.current = null; update(run, { busy: false }); } }
@@ -269,10 +293,12 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
     const run = context.current, base = viewRef.current;
     if (!run || locked.current || base.key !== key || base.phase === 'unknown' || pending.current?.writeStarted) return;
     pending.current = null;
-    update(run, { pending: false, changed: false, draftParents: base.registry?.selectedParents ?? [], phase: 'idle', error: null, message: null });
+    update(run, { pending: false, changed: false, draftParents: base.registry?.state === 'ready' ? base.registry.selectedParents : [],
+      draftBase: base.registry ? { scope: base.registry.scope, registryRevision: base.registry.registryRevision } : null, phase: 'idle', error: null, message: null });
     void refresh();
   }, [key, refresh, update]);
   const canAuthor = enabled && !denied.current && !!currentView.registry && currentView.phase !== 'stale';
-  return { ...currentView, kind, setKind, emptyReason, setEmptyReason, dirty: currentView.changed, canAuthor,
+  const canRetry = enabled && !denied.current && currentView.pending && !currentView.busy && !options.pf.busy;
+  return { ...currentView, kind, setKind, emptyReason, setEmptyReason, dirty: currentView.changed, canAuthor, canRetry,
     addSelection, removeParent, save, retry, cancel, refresh, discardPending };
 }

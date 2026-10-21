@@ -54,6 +54,14 @@ export function PathFinderTab(props: Props) {
 function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accountId }: Props) {
   const styles = useRoutingsViewerStyles(), extra = useStyles();
   const anchor = useRef<HTMLElement>(null), container = useRef<HTMLDivElement>(null), fileInput = useRef<HTMLInputElement>(null);
+  const barrierConfiguration = useRef<HTMLDivElement>(null);
+  const configureCalculation = useCallback(() => {
+    const target = barrierConfiguration.current;
+    if (!target) return;
+    try { target.ownerDocument.defaultView?.focus(); } catch { /* Focus can be restricted by the browser. */ }
+    target.scrollIntoView?.({ block: 'start' });
+    target.focus({ preventScroll: true });
+  }, []);
   const height = useRoutingsViewerHeight(anchor);
   const [batchBusy, setBatchBusy] = useState(false);
   const controller = usePathFinder({ projectId, loadedProjectId, token, isAdmin, container, automaticStatePolling: false });
@@ -187,7 +195,9 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
           <Button disabled={pf.viewerPhase !== 'ready'} onClick={pf.zoom}>Zoom to path</Button>
           <Button disabled={pf.viewerPhase !== 'ready'} onClick={restoreView}>Restore view</Button>
         </div>
-        <PathFinderBarriersPanel projectId={projectId} loadedProjectId={loadedProjectId} token={token} isAdmin={isAdmin} pf={pf} onStateChange={barrierStateChanged} />
+        <div ref={barrierConfiguration} tabIndex={-1} role="region" aria-label="Routing barrier configuration">
+          <PathFinderBarriersPanel projectId={projectId} loadedProjectId={loadedProjectId} token={token} isAdmin={isAdmin} pf={pf} onStateChange={barrierStateChanged} />
+        </div>
         <Checkbox label="Drill through the walls" checked={drillThroughWalls} disabled={pf.busy || barrierAuthoring.pending || !currentBarrierRegistry}
           onChange={(_, value) => setDrillDraft({ owner: barrierOwner, checked: value.checked === true })} />
         <Caption1>For this calculation only, ignore all registered obstacles, including walls, partitions, floors, ceilings, pipes and tanks. Existing results keep their original setting.</Caption1>
@@ -228,7 +238,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
         {!validSecondary ? <Body1 role="alert">Enter a SECONDARY trigger distance from 0 to 1,000,000 metres.</Body1> : null}
         <label><input type="checkbox" checked={preferVertical} onChange={event => { restoreView(); setPreferVertical(event.target.checked); }} />Prefer vertical approach</label>
         <PathFinderCableWorkspace projectId={projectId} loadedProjectId={loadedProjectId} accountId={accountId ?? null} token={token} isAdmin={isAdmin}
-          pf={pf} active={mode === 'path' && !routeRulesDirty} selectedCableId={selectedCableId} refreshKey={cableWriteRefresh} preferences={preferences} readPreferences={preferences ?? readPreferences}
+          pf={pf} active={mode === 'path' && !routeRulesDirty} selectedCableId={selectedCableId} refreshKey={cableWriteRefresh} preferences={preferences} readPreferences={preferences ?? readPreferences} onConfigureCalculation={configureCalculation}
           display={workflowDisplay} review={popupReview} onCalculationStart={workflowCalculationStarted} onTogglePath={cableId => setWorkflowDisplayRequest(previous => ({ cableId, requestId: (previous?.requestId ?? 0) + 1,
             action: workflowDisplay.cableId === cableId && workflowDisplay.visible ? 'hide' : 'show' }))}
           onSelect={row => { setSelectedCableId(row.cable.id); setWorkflowSelection(row); }} />
@@ -275,7 +285,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
           />
         </div>
         </details>
-        <PathFinderResults pf={pf} accountId={accountId} selectedCableId={selectedCableId} workflowSelection={workflowSelection} onCableValuesChanged={cableValuesChanged} active={mode === 'path' && !routeRulesDirty} displayOwned={mode === 'path' && displayOwner === 'proposal'} claimViewer={() => claimViewer('proposal', false)} options={routeRulesDirty ? null : preferences} backgroundOptions={routeRulesDirty ? null : backgroundPreferences} onBatchBusyChange={setBatchBusy}
+        <PathFinderResults pf={pf} accountId={accountId} selectedCableId={selectedCableId} workflowSelection={workflowSelection} onCableValuesChanged={cableValuesChanged} active={mode === 'path' && !routeRulesDirty} displayOwned={mode === 'path' && displayOwner === 'proposal'} claimViewer={() => claimViewer('proposal', false)} options={routeRulesDirty ? null : preferences} backgroundOptions={routeRulesDirty ? null : backgroundPreferences} readPreferences={preferences ?? readPreferences} onBatchBusyChange={setBatchBusy}
           workflowDisplayRequest={workflowDisplayRequest} onWorkflowDisplayChange={workflowDisplayChanged} onWorkflowReviewChange={workflowReviewChanged}
           onCalculationCommitted={calculationCommitted} />
         </div>

@@ -17,6 +17,7 @@ export type PathFinderCableRoutingPanelProps = {
   onCalculate?: () => void | Promise<void>; onTogglePath?: () => void;
   pathVisible?: boolean; actionsBusy?: boolean; calculatedRouting?: string | null; calculatedDesignLength?: string | null;
   review?: PathFinderWorkflowReview | null; calculationPending?: boolean;
+  calculationBlockedReason?: string | null; onConfigureCalculation?: () => void;
 };
 type Endpoint = ReturnType<typeof useCableEndpointPairSelection>['from'];
 /** Persistent nonmodal portal; only its own bounds intercept pointer input. */
@@ -33,7 +34,8 @@ function FloatingRoutingPanel(props: PathFinderCableRoutingPanelProps & { cable:
   return <OwnedCableRoutingPanel key={props.cable.cable.id} {...props} floating={floating} />;
 }
 function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalculate, onTogglePath, pathVisible = false,
-  actionsBusy = false, calculatedRouting, calculatedDesignLength, review, calculationPending = false, floating }: PathFinderCableRoutingPanelProps & { cable: CableWorkflowRow; floating: ReturnType<typeof useFloatingCablePanel> }) {
+  actionsBusy = false, calculatedRouting, calculatedDesignLength, review, calculationPending = false, calculationBlockedReason = null,
+  onConfigureCalculation, floating }: PathFinderCableRoutingPanelProps & { cable: CableWorkflowRow; floating: ReturnType<typeof useFloatingCablePanel> }) {
   const title = useId(), panel = floating.panelRef;
   const [collapsed, setCollapsed] = useState(false), previousOpen = useRef(false), focusReturn = useRef<HTMLElement | null>(null);
   const active = access.active && open && !collapsed;
@@ -41,7 +43,8 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
   const { from, to, pending, legacyRecovery } = assignment, busy = assignment.busy || actionsBusy;
   const unsaved = Boolean(from.draft || to.draft || from.context?.automaticSelection || to.context?.automaticSelection);
   const currentReview = review?.cableId === cable.cable.id ? review : null;
-  const reviewBlocked = busy || Boolean(pending) || unsaved || calculationPending || Boolean(currentReview?.pending);
+  const reviewBlocked = busy || Boolean(pending) || unsaved || calculationPending || Boolean(currentReview?.pending) || Boolean(calculationBlockedReason);
+  const oldBarrierProof = cable.calculation.reasonCodes.includes('BARRIER_WRITE_PROOF_REQUIRED');
   const close = () => { onClose(); const target = anchor?.isConnected ? anchor : focusReturn.current; if (target?.isConnected) target.focus({ preventScroll: true }); };
   const callbacks = useRef(close); callbacks.current = close;
   useLayoutEffect(() => {
@@ -107,11 +110,15 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
         <textarea aria-label="Cable routing" className={styles.value} readOnly value={(calculatedRouting === undefined ? cable.cable.routing : calculatedRouting) ?? ''} placeholder="No routing calculated" rows={3} />
         {calculatedDesignLength !== undefined ? <p className={styles.note}>Calculated design length: {calculatedDesignLength ?? 'Not available'} m</p> : null}
         <div className={styles.actions}>
-          <Button disabled={busy || Boolean(pending) || unsaved || calculationPending || !onCalculate} onClick={() => void onCalculate?.()}>Calculate routing</Button>
+          <Button disabled={busy || Boolean(pending) || Boolean(legacyRecovery) || Boolean(currentReview?.pending) || unsaved || calculationPending || !onCalculate} onClick={() => void onCalculate?.()}>Calculate routing</Button>
           <Button disabled={busy || !onTogglePath || !pathVisible && (!cable.calculation.proposalId || unsaved)} aria-pressed={pathVisible} onClick={onTogglePath}>{pathVisible ? 'Hide' : 'Show'}</Button>
           <Button appearance="primary" disabled={busy || Boolean(pending) || !assignment.canSave} onClick={() => void assignment.save('Confirm cable From/To model assignments.')}>Save</Button>
         </div>
-        {unsaved ? <p className={styles.note}>Save the assigned endpoints before calculating routing.</p> : null}
+        {calculationBlockedReason ? <p role="status" className={styles.note}>{calculationBlockedReason}</p> : null}
+        {calculationBlockedReason && onConfigureCalculation ? <Button disabled={busy} onClick={onConfigureCalculation}>Configure routing</Button> : null}
+        {oldBarrierProof ? <p role="status" className={styles.note}>This earlier route has no verified barrier checks. Configure the current barriers and calculate routing again before Review and Apply.</p> : null}
+        {unsaved ? <p className={styles.note}>{calculationBlockedReason ? 'Your From/To changes are not saved. Configure routing before saving them.' : 'Save the assigned endpoints before calculating routing.'}</p> : null}
+        {!unsaved && !busy && !pending && !legacyRecovery && !assignment.error ? <p className={styles.note}>No From/To changes to save. Save confirms endpoint assignments; Review and Apply update routing and design length.</p> : null}
         {assignment.busy ? <Spinner size="tiny" label="Checking or saving endpoints…" /> : null}
         {assignment.error ? <p role="alert" className={styles.note}>{assignment.error}</p> : null}
         {assignment.notice ? <p role="status" className={styles.note}>{assignment.notice}</p> : null}
@@ -129,7 +136,13 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
         <p className={styles.note}>Keep the existing Cable list values. Compare them with the calculated proposal, inspect its path with Show, then explicitly review and Apply it.</p>
         {calculationPending ? <p role="status" className={styles.note}>Waiting for this cable’s new calculation. Earlier proposals cannot be approved here.</p>
           : currentReview?.comparisonLoading ? <Spinner size="tiny" label="Reading current and proposed cable values…" />
-            : <PathFinderCableComparison input={currentReview?.comparison ?? null} />}
+            : currentReview?.comparison ? <PathFinderCableComparison input={currentReview.comparison} />
+              : <section aria-label="Stored cable values"><h4 className={styles.heading}>Stored cable values</h4>
+                <Caption1>Last read from Cable list. These values do not approve a calculated proposal.</Caption1>
+                <p className={styles.note}>Design length: {cable.cable.designLength === null ? 'Not set' : cable.cable.designLength === '' ? 'Empty stored value' : `${cable.cable.designLength} m`}</p>
+                <pre className={styles.note} style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{cable.cable.routing ?? 'No routing stored'}</pre>
+                <p role="status" className={styles.note}>An exact current proposal comparison is not available yet. Refresh this cable or configure routing and calculate a new result before Review and Apply.</p>
+              </section>}
         {currentReview?.comparisonError ? <p role="alert" className={styles.note}>{currentReview.comparisonError}</p> : null}
         {currentReview?.message ? <p role="status" className={styles.note}>{currentReview.message}</p> : null}
         {currentReview?.reviewed ? <p role="status" className={styles.note}>Review confirmed for this exact proposal. Apply updates routing and design length together.</p> : null}

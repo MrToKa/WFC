@@ -185,6 +185,37 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
       expect(workspace.readPreferences).toEqual(workspace.preferences);
     });
   });
+  it('returns a detached cable action to the parent barrier configuration without changing the drilling choice or starting work', async () => {
+    barrierComposition.mode = 'missing';
+    const current = proposalModel(); vi.mocked(usePathFinder).mockReturnValue(current);
+    const focusWindow = vi.spyOn(window, 'focus').mockImplementation(() => undefined);
+    render(<PathFinderTab projectId={projectId} loadedProjectId={projectId} token="isolated-test-token" accountId={accountId} isAdmin />);
+    const configuration = screen.getByRole('region', { name: 'Routing barrier configuration' });
+    const scroll = vi.fn(); Object.defineProperty(configuration, 'scrollIntoView', { configurable: true, value: scroll });
+    await waitFor(() => expect((workspaceCapture.render.mock.calls.at(-1)?.[0] as PathFinderCableWorkspaceProps).preferences).toBeNull());
+    const workspace = workspaceCapture.render.mock.calls.at(-1)?.[0] as PathFinderCableWorkspaceProps;
+    expect(workspace.onConfigureCalculation).toBeTypeOf('function');
+    act(() => workspace.onConfigureCalculation?.());
+    expect(focusWindow).toHaveBeenCalledOnce(); expect(scroll).toHaveBeenCalledWith({ block: 'start' }); expect(configuration).toHaveFocus();
+    expect(screen.getByRole('checkbox', { name: 'Drill through the walls' })).not.toBeChecked();
+    expect(current.calculate).not.toHaveBeenCalled(); expect(current.action).not.toHaveBeenCalled(); expect(current.reviewProposal).not.toHaveBeenCalled();
+    focusWindow.mockRestore();
+  });
+  it('passes display-only preferences to the actual result comparison when no current barrier registry is available', async () => {
+    barrierComposition.mode = 'missing';
+    const detail = proposal(true), current = { ...proposalModel(), data: { ...pf.data, proposals: [detail] },
+      readProposal: vi.fn(async () => detail), showPath: vi.fn(async () => 'displayed') };
+    vi.mocked(usePathFinder).mockReturnValue(current); mount();
+    fireEvent.click(screen.getByRole('button', { name: /=CABLE-1From:/ }));
+    fireEvent.click(screen.getByRole('button', { name: /=CABLE-1 — Ready for review/ }));
+    expect(await screen.findByRole('region', { name: 'Current cable values' })).toHaveTextContent('Installed length: 123 m');
+    expect(screen.getByRole('region', { name: 'Proposed cable values' })).toHaveTextContent('/BC1');
+    expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledWith(projectId, 'isolated-test-token', detail.cableId,
+      { secondaryDistanceMeters: 2, preferVerticalApproach: true }, expect.any(AbortSignal));
+    expect(screen.getByRole('button', { name: 'Confirm proposal review' })).toBeDisabled();
+    expect(screen.getByRole('checkbox', { name: 'Drill through the walls' })).not.toBeChecked();
+    expect(current.calculate).not.toHaveBeenCalled(); expect(current.reviewProposal).not.toHaveBeenCalled(); expect(current.action).not.toHaveBeenCalled();
+  });
   it('forwards the exact successful selected item to the separate ordinary Auto read without approving or refreshing the model', async () => {
     const detail = proposal(true), current = { ...proposalModel(), data: { ...pf.data, proposals: [detail] },
       readProposal: vi.fn(async () => detail), showPath: vi.fn(async () => 'displayed') };

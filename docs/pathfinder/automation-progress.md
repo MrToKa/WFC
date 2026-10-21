@@ -1,6 +1,27 @@
 # PathFinder local implementation progress
 
-## Current: PF-B10 cable workspace repair technically delivered; PF-B11 next
+## Current: PF-B11 saved obstacle persistence ACTIVE; PF-B10 delivered
+
+Branch pf-b11-saved-obstacles-local-20261022 inherits e171c6a. Executing committed
+handoff PF-B11-saved-obstacle-persistence.md immediately. C owns barrier API/hook/
+panel and their tests (six files); root docs/actual tests/runtime; A independent
+source review. Separate saved display from current draft and current calculation
+admission; bounded authorized history fallback for unavailable current frame.
+Do not promote stale IDs/geometry, silently declare empty or settle uncertain
+commands by GET. Root runtime diagnostic/build/install checks pending. Preparer
+remains queued; its supervisor independent source review proceeds in parallel.
+Latest user steering: popup cannot Save/Recalculate. A owns Results/Tab4 files,
+B Workspace/RoutingPanel4, C barrier API/hook/panel6. Repair comparison reads and
+popup reasons/configuration navigation without bypassing exact barrier/write
+proof. New tests/build/delivery pending; user cable actions take priority.
+Frozen source root checks nowPASS:110barrier/API/list +68Workspace/popup +13targeted
+Results/Tab (166unselected; earlier6overlap),16webplanner; fulltypecheck+targeted
+productionlint0warnings+diffcheckPASS. Independent source reviewCLEAR. Root
+read-only actualAalborg headabsent/parents0; both illustratedcable jobscomplete,
+existingRouting/Design present, historicalv7/no barrierproof. No valuewipe or
+automaticDrill/empty. Next productcommit/web-only build/install; keepAPIsame.
+
+## Previous: PF-B10 cable workspace repair technically delivered
 
 Branch pf-b10-cable-workspace-availability-local-20261022 inherits b3f941b.
 User priority: restore cable search, compact tag list and click-open native popup

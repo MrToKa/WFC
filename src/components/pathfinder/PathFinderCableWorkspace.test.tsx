@@ -13,6 +13,7 @@ import type { CableEndpointReceipt } from '@/api/pathfinderCableEndpoints';
 import { emptyInitialFillCounters, type InitialFillProgress } from '../../../shared/pathfinderInitialFillProgress';
 import type { BarrierAdmissionIntent } from '../../../shared/pathfinderBarrierAdmission';
 import type { PathFinderWorkflowReview } from '@/pages/ProjectDetails/PathFinderResults';
+import { cableComparisonInputSchema } from '../../../shared/pathfinderCableComparison';
 vi.mock('@/api/pathfinderCableWorkflow', () => ({ fetchPathFinderCableWorkflowDetail: vi.fn() }));
 vi.mock('@/api/pathfinderLocationImpacts', () => ({ fetchLocationImpacts: vi.fn() }));
 vi.mock('@/hooks/usePathfinderLocationImpactProgress', () => ({ usePathfinderLocationImpactProgress: vi.fn() }));
@@ -54,14 +55,18 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 describe('owned cable routing workspace composition (mocked reads and child UI)', () => {
   it('keeps search inputs, popup and exact selected detail reads available without calculation preferences', async () => {
-    const p = props(), readPreferences = { secondaryDistanceMeters: 2, preferVerticalApproach: true };
-    render(<PathFinderCableWorkspace {...p} preferences={null} readPreferences={readPreferences} />);
+    const p = props(), readPreferences = { secondaryDistanceMeters: 2, preferVerticalApproach: true }, configure = vi.fn();
+    render(<PathFinderCableWorkspace {...p} preferences={null} readPreferences={readPreferences} onConfigureCalculation={configure} />);
     expect(listProps.active).toBe(true); expect(listProps.preferences).toEqual(readPreferences);
     fireEvent.click(screen.getByRole('button', { name: 'Needs routing cable' }));
     expect(screen.getByRole('dialog')).toBeVisible(); expect(window.open).toHaveBeenCalledOnce();
     expect(panelProps.access.active).toBe(true); expect(panelProps.access.calculation).toBeNull();
-    expect(panelProps.access.initialFill).toBeUndefined(); expect(panelProps.onCalculate).toBeUndefined();
-    expect(screen.getByText(/Calculation and endpoint Save are unavailable/)).toBeVisible();
+    expect(panelProps.access.initialFill).toBeUndefined(); expect(panelProps.onCalculate).toBeTypeOf('function');
+    expect(panelProps.calculationBlockedReason).toMatch(/Configure the current route settings and barriers/);
+    expect(panelProps.onConfigureCalculation).toBe(configure);
+    await act(async () => { await panelProps.onCalculate?.(); });
+    expect(configure).toHaveBeenCalledOnce(); expect(p.pf.calculate).not.toHaveBeenCalled();
+    expect(screen.getByText(/No calculation was submitted/)).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Refresh selected cable' }));
     await waitFor(() => expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledExactlyOnceWith(id(1), 'fixture-token', id(3), readPreferences, expect.any(AbortSignal)));
     expect(p.pf.calculate).not.toHaveBeenCalled(); expect(fetchLocationImpacts).not.toHaveBeenCalled();
@@ -78,6 +83,23 @@ describe('owned cable routing workspace composition (mocked reads and child UI)'
     expect(panelProps.review).toBe(recovery); expect(panelProps.onCalculate).toBeUndefined();
     expect(review.review).not.toHaveBeenCalled(); expect(review.apply).not.toHaveBeenCalled();
     expect(p.pf.calculate).not.toHaveBeenCalled();
+  });
+  it('retains the exact same-cable comparison without granting Review or Apply when admission is unavailable', () => {
+    listRow = cableWorkflowRowSchema.parse({ ...row(), cable: { ...row().cable, routing: '/STORED', designLength: '30' },
+      calculation: { ...row().calculation, jobId: id(70), jobStatus: 'complete', proposalId: id(80), proposalHash: 'f'.repeat(64) } });
+    const p = props(), review = { ...reviewController(id(3), id(80)), canApply: true, comparison: cableComparisonInputSchema.parse({
+      projectId: id(1), cableId: id(3), current: { source: 'live-cable-read', contextSha256: 'a'.repeat(64), mto: listRow.mto, cable: listRow.cable },
+      proposal: { projectId: id(1), cableId: id(3), proposalId: id(80), proposalHash: 'f'.repeat(64), revisionResultHash: 'b'.repeat(64),
+        cableWriteRevision: '4', routing: '/PROPOSED', designLength: '32' },
+    }) }, readPreferences = { secondaryDistanceMeters: 2, preferVerticalApproach: true };
+    const view = render(<PathFinderCableWorkspace {...p} preferences={null} readPreferences={readPreferences} review={review} />);
+    fireEvent.click(screen.getByText('Needs routing cable'));
+    expect(panelProps.review?.comparison).toBe(review.comparison); expect(panelProps.review?.canReview).toBe(false); expect(panelProps.review?.canApply).toBe(false);
+    expect(review.canReview).toBe(true); expect(review.canApply).toBe(true); expect(panelProps.access.initialFill).toBeUndefined();
+    view.rerender(<PathFinderCableWorkspace {...p} preferences={null} readPreferences={readPreferences} review={{ ...review, proposalId: id(99) }} />);
+    expect(panelProps.review).toBeNull();
+    view.rerender(<PathFinderCableWorkspace {...p} preferences={null} readPreferences={readPreferences} review={{ ...review, cableId: id(99) }} />);
+    expect(panelProps.review).toBeNull(); expect(review.review).not.toHaveBeenCalled(); expect(review.apply).not.toHaveBeenCalled(); expect(p.pf.calculate).not.toHaveBeenCalled();
   });
   it('keeps current administrator and ready-model fences for read-only popup access', () => {
     const p = props(), readPreferences = { secondaryDistanceMeters: 2, preferVerticalApproach: true };
@@ -263,7 +285,7 @@ describe('Path Finder cable popup and read-only hover', () => {
     expect(p.onSelect).not.toHaveBeenCalled(); expect(window.open).not.toHaveBeenCalled();
     fireEvent.click(screen.getByText('Open cable in separate window'));
     expect(screen.getByRole('dialog')).toBeVisible(); expect(window.open).toHaveBeenCalledOnce();
-    expect(panelProps.onCalculate).toBeUndefined(); expect(panelProps.access.initialFill).toBeUndefined();
+    expect(panelProps.onCalculate).toBeTypeOf('function'); expect(panelProps.access.initialFill).toBeUndefined();
     expect(p.pf.calculate).not.toHaveBeenCalled();
   });
   it('preopens a separate window synchronously from click, reuses it and closes it on owner loss', () => {

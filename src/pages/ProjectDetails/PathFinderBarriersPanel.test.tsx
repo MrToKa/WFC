@@ -3,13 +3,13 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PathFinderBarriersPanel, type PathFinderBarriersPanelProps } from './PathFinderBarriersPanel';
 import { usePathfinderBarriers } from './hooks/usePathfinderBarriers';
-import type { BarrierRegistry } from '../../../shared/pathfinderBarriers';
+import type { BarrierRegistry, BarrierSnapshot } from '../../../shared/pathfinderBarriers';
 
 vi.mock('./hooks/usePathfinderBarriers', () => ({ usePathfinderBarriers: vi.fn() }));
 const id = (n: number) => `b5000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 function fixture() {
   const registry: BarrierRegistry = { schemaVersion: 'wfc.pf.barrier-registry.v1', scope: { projectId: id(1), modelVersionId: id(2), contentFingerprint: 'a'.repeat(64), selectionRevision: '1', captureFrameId: id(3), captureFrameSha256: 'b'.repeat(64), coordinateFrame: 'canonical-world-metres' }, registryRevision: '1', state: 'unconfigured', selectedParents: [], snapshot: null, reasonCodes: ['NO_BARRIER_SCOPE_CONFIGURED'] };
-  const state = { registry, manifest: null, draftParents: [] as BarrierRegistry['selectedParents'], kind: 'wall' as const, setKind: vi.fn(), emptyReason: '', setEmptyReason: vi.fn(), phase: 'idle', message: null, error: null, busy: false, dirty: false, pending: false, canAuthor: true,
+  const state = { registry: registry as BarrierRegistry | null, manifest: null, saved: null as ReturnType<typeof usePathfinderBarriers>['saved'], draftParents: [] as BarrierRegistry['selectedParents'], kind: 'wall' as const, setKind: vi.fn(), emptyReason: '', setEmptyReason: vi.fn(), phase: 'idle', message: null, error: null, busy: false, dirty: false, pending: false, canAuthor: true, canRetry: true,
     refresh: vi.fn(), addSelection: vi.fn(), removeParent: vi.fn(), save: vi.fn(), retry: vi.fn(), cancel: vi.fn(), discardPending: vi.fn() };
   const props: PathFinderBarriersPanelProps = { projectId: id(1), loadedProjectId: id(1), token: 'synthetic-login', isAdmin: true, pf: { busy: false } as PathFinderBarriersPanelProps['pf'], onStateChange: vi.fn() };
   const install = () => vi.mocked(usePathfinderBarriers).mockReturnValue(state as unknown as ReturnType<typeof usePathfinderBarriers>); install();
@@ -17,7 +17,63 @@ function fixture() {
 }
 beforeEach(() => vi.clearAllMocks());
 
+function savedManifest(): BarrierSnapshot {
+  const scope = { projectId: id(1), modelVersionId: id(2), contentFingerprint: 'a'.repeat(64), selectionRevision: '1', captureFrameId: id(3), captureFrameSha256: 'b'.repeat(64), coordinateFrame: 'canonical-world-metres' as const };
+  const parent = { selectionId: id(8), kind: 'obstacle' as const, objectId: 'dbid:18', dbId: 18, name: 'Saved civil source group', externalId: null,
+    inclusion: 'own-and-all-descendant-fragments' as const, identityBasis: 'version-local-only' as const };
+  return { schemaVersion: 'wfc.pf.barrier-snapshot.v1', snapshotId: id(10), scope, registryRevision: '1', contentSha256: 'c'.repeat(64), selectedParents: [parent],
+    capture: { captureId: id(11), payloadSha256: 'd'.repeat(64) }, geometry: { mode: 'mesh-set', fragments: [{ source: { fragmentId: 0, ownerObjectId: 'dbid:18', parentSelectionIds: [id(8)],
+      sourceUnits: 'm', metresPerSourceUnit: 1, sourceToWorldMetres: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], transformSha256: 'e'.repeat(64) },
+      bounds: { minimum: [0, 0, 0], maximum: [1, 1, 1] }, mesh: { blobId: id(12), sha256: 'f'.repeat(64), bytes: 256 }, vertices: 8, triangles: 12 }],
+      verification: { producerVersion: 'wfc.pf.barrier-verifier.v1', selectionClosure: 'complete-selected-scope', topology: 'qualified-closed-consistent-two-manifold',
+        selfIntersection: 'bounded-verification-passed', computationalMeshes: 1, verifiedCaptureSha256: 'd'.repeat(64), verificationSha256: 'a'.repeat(64) } },
+    coverage: 'registered-selected-objects-only', engineeringAccepted: false };
+}
+
 describe('administrator barrier authoring panel', () => {
+  it('keeps stale saved obstacles visible separately from an empty current draft', () => {
+    const f = fixture(); f.state.saved = { manifest: savedManifest(), status: 'recapture-required' }; f.install();
+    render(<PathFinderBarriersPanel {...f.props} />);
+    const saved = within(screen.getByRole('region', { name: 'Saved obstacles' }));
+    expect(saved.getByRole('list', { name: 'Saved barrier parents' })).toHaveTextContent('Saved civil source group');
+    expect(saved.getByText(/old geometry is not ready for calculation/)).toBeVisible();
+    expect(saved.queryByRole('button', { name: /Remove/ })).toBeNull();
+    expect(screen.queryByRole('list', { name: 'Selected barrier parents' })).toBeNull();
+    expect(screen.getByRole('status')).toHaveTextContent('Saved obstacles need recapture');
+    expect(f.state.addSelection).not.toHaveBeenCalled(); expect(f.state.save).not.toHaveBeenCalled();
+  });
+  it('retains unavailable saved names while current authoring is disabled and exposes their original scope', () => {
+    const f = fixture(); f.state.registry = null; f.state.canAuthor = false; f.state.saved = { manifest: savedManifest(), status: 'unavailable' }; f.install();
+    render(<PathFinderBarriersPanel {...f.props} />);
+    const saved = within(screen.getByRole('region', { name: 'Saved obstacles' }));
+    expect(saved.getByText('Saved civil source group')).toBeVisible(); expect(saved.getByText(/Current readiness is unavailable/)).toBeVisible();
+    expect(saved.getByText(/Snapshot/)).toHaveTextContent(`Model ${id(2)}. Frame ${id(3)}`);
+    expect(screen.getByRole('button', { name: 'Add selected objects' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Declare no barriers' })).toBeDisabled();
+  });
+  it('labels Add as unsaved and keeps a changed draft distinct from the saved obstacle list', () => {
+    const f = fixture(); f.state.saved = { manifest: savedManifest(), status: 'current' };
+    f.state.draftParents = [{ ...f.state.saved.manifest.selectedParents[0], selectionId: id(20), objectId: 'dbid:20', dbId: 20, name: 'New unsaved object' }]; f.state.dirty = true; f.install();
+    render(<PathFinderBarriersPanel {...f.props} />);
+    expect(screen.getByText(/Add selected objects creates an unsaved draft/)).toHaveTextContent('unsaved additions do not survive a browser refresh');
+    expect(screen.getByRole('list', { name: 'Saved barrier parents' })).toHaveTextContent('Saved civil source group');
+    expect(screen.getByRole('list', { name: 'Selected barrier parents' })).toHaveTextContent('New unsaved object');
+    expect(screen.getByText(/Unsaved changes/)).toBeVisible(); expect(f.state.save).not.toHaveBeenCalled();
+  });
+  it('shows a saved empty declaration without resurrecting a nonempty list', () => {
+    const f = fixture(), manifest = savedManifest(); manifest.selectedParents = []; manifest.capture = null;
+    manifest.geometry = { mode: 'explicit-empty', declarationId: id(30), declaration: 'administrator-declared-no-selected-barriers', reason: 'Saved reviewed empty scope' };
+    f.state.saved = { manifest, status: 'unavailable' }; f.install(); render(<PathFinderBarriersPanel {...f.props} />);
+    expect(screen.getByRole('region', { name: 'Saved obstacles' })).toHaveTextContent('Published empty declaration: Saved reviewed empty scope');
+    expect(screen.queryByRole('list', { name: 'Saved barrier parents' })).toBeNull(); expect(f.state.save).not.toHaveBeenCalled();
+  });
+  it('keeps exact pending retry available after current readiness is withheld', () => {
+    const f = fixture(); f.state.registry = null; f.state.canAuthor = false; f.state.pending = true; f.state.phase = 'unknown'; f.state.canRetry = true; f.install();
+    render(<PathFinderBarriersPanel {...f.props} />);
+    expect(screen.getByRole('button', { name: 'Add selected objects' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry saved command' })); expect(f.state.retry).toHaveBeenCalledOnce();
+    expect(f.state.save).not.toHaveBeenCalled(); expect(screen.queryByRole('button', { name: 'Discard saved command' })).toBeNull();
+  });
   it('keeps its authoring hook entirely unmounted for a non-administrator', () => {
     const f = fixture(); render(<PathFinderBarriersPanel {...f.props} isAdmin={false} />);
     expect(usePathfinderBarriers).not.toHaveBeenCalled(); expect(screen.queryByRole('region', { name: 'Barriers' })).toBeNull();

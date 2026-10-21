@@ -22,7 +22,7 @@ export type PathFinderCableWorkspaceProps = Access & { pf: ReturnType<typeof use
   preferences: PathFinderPreferences | null; selectedCableId?: string | null; refreshKey?: number; onSelect: (row: CableWorkflowRow) => void;
   readPreferences?: CableWorkflowDetailQuery | null;
   display?: PathFinderWorkflowDisplay; onTogglePath?: (cableId: string) => void; review?: PathFinderWorkflowReview | null;
-  onCalculationStart?: (cableId: string) => void };
+  onCalculationStart?: (cableId: string) => void; onConfigureCalculation?: () => void };
 type Impact = { id: string; current: EndpointCurrentScope; calculation: LocationImpactCalculation | null; originCableId: string | null };
 const workflowReadPreferences = (props: PathFinderCableWorkspaceProps) => props.readPreferences === undefined ? props.preferences : props.readPreferences;
 
@@ -70,6 +70,8 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   const barrierPreferenceKey = JSON.stringify(preferences?.barrierRouting);
   const enabled = props.active && props.pf.viewerPhase === 'ready' && Boolean(readPreferences && model?.modelVersionId);
   const calculationEnabled = enabled && Boolean(preferences);
+  const calculationBlockedReason = enabled && !calculationEnabled
+    ? 'Configure the current route settings and barriers before calculating routing or saving changed From/To locations. Your existing routing is retained.' : null;
   const calculation = calculationEnabled && preferences ? { preferences, timeoutMilliseconds: 120000 } : null;
   const authorityLost = useCallback(() => callbacks.current.pf.refresh(), []);
   const refreshSelected = useCallback(async () => {
@@ -187,7 +189,12 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
     preferences?.secondaryDistanceMeters, preferences?.preferVerticalApproach, authorityLost]);
   const calculateSelected = async () => {
     const row = selectedRef.current, current = callbacks.current;
-    if (!alive.current || !calculationEnabled || calculating || submittedRef.current || !row || !current.preferences || row.calculation.jobStatus === 'queued' || row.calculation.jobStatus === 'running') return;
+    if (!alive.current || !enabled || !current.active || calculating || submittedRef.current || !row || row.calculation.jobStatus === 'queued' || row.calculation.jobStatus === 'running') return;
+    if (!current.preferences) {
+      setNotice('Configure the current route settings and barriers before calculating. No calculation was submitted and the existing cable values are retained.');
+      current.onConfigureCalculation?.();
+      return;
+    }
     const submitted = { cableId: row.cable.id, jobId: null as string | null, previousJobId: row.calculation.jobId, previousProposalId: row.calculation.proposalId };
     submittedRef.current = submitted;
     setSubmittedCalculation(submitted); setCalculating(true); setNotice(null); current.onCalculationStart?.(row.cable.id);
@@ -199,13 +206,15 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
     catch { if (alive.current && selectedRef.current?.cable.id === row.cable.id) setNotice('Routing could not be calculated. Refresh this cable and try again.'); }
     finally { if (alive.current) setCalculating(false); }
   };
-  const popupReview = props.review && selected && props.review.cableId === selected.cable.id
-    && (props.review.pending || calculationEnabled && !submittedCalculation && props.review.proposalId === selected.calculation.proposalId) ? props.review : null;
+  const matchedReview = props.review && selected && props.review.cableId === selected.cable.id
+    && (props.review.pending || !submittedCalculation && props.review.proposalId !== null && props.review.proposalId === selected.calculation.proposalId) ? props.review : null;
+  const popupReview = matchedReview && !matchedReview.pending && !calculationEnabled
+    ? { ...matchedReview, canReview: false, canApply: false } : matchedReview;
   return <section aria-label="Cable routing workspace">
     <PathFinderNeedsRoutingList {...props} active={enabled} modelScopeKey={JSON.stringify([props.owner, revision])}
       preferences={readPreferences ?? { secondaryDistanceMeters: 2, preferVerticalApproach: true }} selectedCableId={selected?.cable.id ?? null}
       onAuthorityLost={authorityLost} onSelect={openCable} onPreview={previewCable} onPreviewLeave={leavePreview} />
-    {enabled && !calculationEnabled ? <p role="status">Calculation and endpoint Save are unavailable until the current route settings and barrier configuration are ready. You can still search cables and open their windows.</p> : null}
+    {calculationBlockedReason ? <p role="status">{calculationBlockedReason} Choose Calculate routing to open the configuration. You can still search cables and open their windows.</p> : null}
     {preview && !open && props.active ? <CableHoverPreview row={preview.row} anchor={preview.anchor} onEnter={keepPreview} onLeave={leavePreview}
       onClose={dismissPreview} onOpen={() => openCable(preview.row)} /> : null}
     {notice ? <p role="status">{notice}</p> : null}
@@ -233,7 +242,8 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
       // New endpoint Save requires the explicit calculation and fill policy.
       // Omission blocks new writes without hiding retained recovery controls.
       calculation, initialFill: calculationEnabled ? { mode: 'when-both-empty' } : undefined, readSelection: props.pf.readSelection, onSaved: saved, onAuthorityLost: authorityLost,
-    }} onCalculate={calculationEnabled && !submittedCalculation && selected?.calculation.jobStatus !== 'queued' && selected?.calculation.jobStatus !== 'running' ? calculateSelected : undefined}
+    }} onCalculate={enabled && !submittedCalculation && !popupReview?.pending && selected?.calculation.jobStatus !== 'queued' && selected?.calculation.jobStatus !== 'running' ? calculateSelected : undefined}
+      calculationBlockedReason={calculationBlockedReason} onConfigureCalculation={props.onConfigureCalculation}
       onTogglePath={selected && props.onTogglePath ? () => props.onTogglePath?.(selected.cable.id) : undefined}
       pathVisible={props.display?.cableId === selected?.cable.id && props.display?.visible}
       calculatedRouting={props.display?.cableId === selected?.cable.id ? props.display?.routing : undefined}

@@ -11,7 +11,7 @@ import { usePathfinderBatchReview } from './hooks/usePathfinderBatchReview';
 import { PathFinderBatchReview } from './PathFinderBatchReview';
 import { computedPathObjectIds, proposalEndpointObjectIds } from './pathFinderEndpointVisibility';
 import { sealedCableItemApplicabilitySchema } from '../../../shared/pathfinderItemApplicability';
-import { fetchPathFinderCableWorkflowDetail } from '@/api/pathfinderCableWorkflow';
+import { fetchPathFinderCableWorkflowDetail, type CableWorkflowDetailQuery } from '@/api/pathfinderCableWorkflow';
 import { PathFinderCableComparison } from '@/components/pathfinder/PathFinderCableComparison';
 import { cableComparisonInputSchema, type CableComparisonInput } from '../../../shared/pathfinderCableComparison';
 import { cableWorkflowRowSchema, type CableWorkflowRow } from '../../../shared/pathfinderCableWorkflow';
@@ -35,7 +35,8 @@ export type PathFinderWorkflowReview = {
   review: () => void; apply: () => void; retry: () => void; closePending: () => void;
 };
 type Props = { pf: ReturnType<typeof usePathFinder>; selectedCableId: string | null; workflowSelection?: CableWorkflowRow | null; accountId?: string | null; active?: boolean; displayOwned?: boolean; claimViewer?: () => () => boolean; options?: PathFinderPreferences | null; onBatchBusyChange?: (busy: boolean) => void; onCableValuesChanged?: () => void;
-  backgroundOptions?: PathFinderPreferences | null; workflowDisplayRequest?: PathFinderWorkflowDisplayRequest | null; onWorkflowDisplayChange?: (value: PathFinderWorkflowDisplay) => void;
+  backgroundOptions?: PathFinderPreferences | null; readPreferences?: CableWorkflowDetailQuery | null;
+  workflowDisplayRequest?: PathFinderWorkflowDisplayRequest | null; onWorkflowDisplayChange?: (value: PathFinderWorkflowDisplay) => void;
   onWorkflowReviewChange?: (value: PathFinderWorkflowReview | null) => void;
   onCalculationCommitted?: (value: PathFinderCalculatedItemIdentity) => void };
 const resultLabel = (status: string) => ({ calculated: 'Ready for review', model_needs_review: 'Model review required', no_path: 'No connected path', settings_required: 'Project values required', category_required: 'Cable category required', locations_required: 'Resolve locations', stale: 'Outdated', deadline_exceeded: 'Calculation timed out', resource_limit: 'Calculation limit reached', invalid_request: 'Review the input' }[status] ?? 'Review required');
@@ -48,7 +49,7 @@ function hasExactItemApplicability(proposal: PathFinderProposal | null, projectI
     && proposal.projectId === projectId && proof.data.projectId === projectId && proof.data.jobId === proposal.jobId
     && proof.data.cableId === proposal.cableId && proof.data.proposalId === proposal.id && proof.data.dependencyHash === proposal.provenance.dependencyHash);
 }
-export function PathFinderResults({ pf, selectedCableId, workflowSelection = null, accountId, active = true, displayOwned = true, claimViewer, options, backgroundOptions, onBatchBusyChange, onCableValuesChanged,
+export function PathFinderResults({ pf, selectedCableId, workflowSelection = null, accountId, active = true, displayOwned = true, claimViewer, options, backgroundOptions, readPreferences, onBatchBusyChange, onCableValuesChanged,
   workflowDisplayRequest, onWorkflowDisplayChange, onWorkflowReviewChange, onCalculationCommitted }: Props) {
   const styles = useRoutingsViewerStyles();
   const [proposal, setProposal] = useState<PathFinderProposal | null>(null), [job, setJob] = useState<PathFinderJob | null>(null);
@@ -110,6 +111,10 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
   useEffect(() => { endpointRead.current?.abort(); operation.current++; setReviewId(null); setPathDisplayed(false); setApplied(false); setPreviewLoading(false); setNotice(null); return () => { endpointRead.current?.abort(); operation.current++; }; }, [active]);
   useEffect(() => { if (!displayOwned) { endpointRead.current?.abort(); operation.current++; setReviewId(null); setPathDisplayed(false); setApplied(false); setPreviewLoading(false); setNotice(null); } }, [displayOwned]);
   const optionsKey = JSON.stringify(options);
+  // Reading stored cable values does not require permission for a new
+  // calculation. Keep these transport preferences out of every write gate.
+  const comparisonPreferences = readPreferences === undefined ? options : readPreferences;
+  const readPreferencesKey = JSON.stringify(comparisonPreferences);
   useEffect(() => { endpointRead.current?.abort(); operation.current++; setReviewId(null); setPathDisplayed(false); setApplied(false); setNotice(null); }, [optionsKey]);
   const selectedRevision = data?.cables.find(cable => cable.id === proposal?.cableId)?.cableWriteRevision;
   const settingsKey = JSON.stringify(data?.settings);
@@ -125,7 +130,7 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
   // Claiming the viewer changes displayOwned after the proposal read starts.
   // That is a presentation transition, not a change to the live cable identity;
   // retain its owned comparison while the separate display/write gates update.
-  const comparisonOwner = JSON.stringify([ownershipKey, active, selectedCableId, data?.activeModel, settingsKey, optionsKey, scopeReadiness.admissionId, scopeReadiness.jobId]);
+  const comparisonOwner = JSON.stringify([ownershipKey, active, selectedCableId, data?.activeModel, settingsKey, optionsKey, readPreferencesKey, scopeReadiness.admissionId, scopeReadiness.jobId]);
   const comparisonLatest = useRef({ owner: comparisonOwner, cables: data?.cables }); comparisonLatest.current = { owner: comparisonOwner, cables: data?.cables };
   const comparisonRead = useRef<{ controller: AbortController; cableId: string; observedRevision: string | undefined } | null>(null);
   const [comparison, setComparison] = useState<{ owner: string; proposalId: string; proposalHash: string; revisionResultHash: string | null;
@@ -139,7 +144,7 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
     }
   }, [data?.cables]);
   const readComparison = async (detail: PathFinderProposal, atOperation: number) => {
-    const access = pf.preparationAccess, preferences = options === undefined ? detail.routingPreferences : options;
+    const access = pf.preparationAccess, preferences = comparisonPreferences === undefined ? detail.routingPreferences : comparisonPreferences;
     const owner = comparisonOwner, controller = new AbortController(), observedRevision = data?.cables.find(value => value.id === detail.cableId)?.cableWriteRevision;
     comparisonRead.current?.controller.abort(); comparisonRead.current = { controller, cableId: detail.cableId, observedRevision };
     const state = { owner, proposalId: detail.id, proposalHash: detail.proposalHash, revisionResultHash: detail.revisionResultHash ?? null, observedRevision };
@@ -204,7 +209,7 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
   // Selecting a cable reads its result without changing model appearance. Only
   // an explicit Show may claim the viewer; a new context starts hidden.
   // Progress or a saved location must not reopen a deliberately hidden path.
-  const workflowDisplayContext = JSON.stringify([ownershipKey, active, selectedCableId, data?.activeModel, settingsKey, optionsKey]);
+  const workflowDisplayContext = JSON.stringify([ownershipKey, active, selectedCableId, data?.activeModel, settingsKey, optionsKey, readPreferencesKey]);
   const workflowProposalKey = workflowTarget ? JSON.stringify([workflowTarget.calculation.jobId, workflowTarget.calculation.proposalId,
     workflowTarget.calculation.proposalHash, workflowTarget.cable.cableWriteRevision]) : null;
   const workflowHidden = useRef<{ context: string; hidden: boolean; proposalKey: string | null }>({ context: workflowDisplayContext, hidden: true, proposalKey: null });
@@ -212,15 +217,15 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
   const handledDisplayRequest = useRef(-1);
   // The hint identifies one selected result. Replacing list rows or updating
   // their progress must never silently retarget the selected proposal.
-  const selectedWorkflowIdentity = workflowTarget ? JSON.stringify([ownershipKey, active, selectedCableId, data?.activeModel, settingsKey, optionsKey, workflowAttempt,
+  const selectedWorkflowIdentity = workflowTarget ? JSON.stringify([ownershipKey, active, selectedCableId, data?.activeModel, settingsKey, optionsKey, readPreferencesKey, workflowAttempt,
     workflowTarget.calculation.jobId, workflowTarget.calculation.proposalId, workflowTarget.calculation.proposalHash, workflowTarget.cable.cableWriteRevision]) : null;
   workflowIdentity.current = selectedWorkflowIdentity;
   const workflowKey = workflowTarget ? JSON.stringify([selectedWorkflowIdentity, workflowTarget.calculation.jobStatus, workflowTarget.calculation.itemState,
     workflowTarget.calculation.currentness, workflowTarget.calculation.reviewable, workflowTarget.calculation.itemApplicability ?? null]) : null;
-  const workflowLatest = useRef({ key: workflowKey, proposalKey: workflowProposalKey, target: workflowTarget, pf, options, claimViewer,
-    comparisonBase: [ownershipKey, active, selectedCableId, data?.activeModel, settingsKey, optionsKey] });
-  workflowLatest.current = { key: workflowKey, proposalKey: workflowProposalKey, target: workflowTarget, pf, options, claimViewer,
-    comparisonBase: [ownershipKey, active, selectedCableId, data?.activeModel, settingsKey, optionsKey] };
+  const workflowLatest = useRef({ key: workflowKey, proposalKey: workflowProposalKey, target: workflowTarget, pf, readPreferences: comparisonPreferences, claimViewer,
+    comparisonBase: [ownershipKey, active, selectedCableId, data?.activeModel, settingsKey, optionsKey, readPreferencesKey] });
+  workflowLatest.current = { key: workflowKey, proposalKey: workflowProposalKey, target: workflowTarget, pf, readPreferences: comparisonPreferences, claimViewer,
+    comparisonBase: [ownershipKey, active, selectedCableId, data?.activeModel, settingsKey, optionsKey, readPreferencesKey] };
   useEffect(() => {
     const latest = displayRequestLatest.current;
     if (!workflowDisplayRequest || !latest.active || workflowDisplayRequest.cableId !== latest.selectedCableId
@@ -264,7 +269,7 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
         if (detail.revisionResult && (!envelope || envelope.projectId !== detail.projectId || envelope.cableId !== detail.cableId || envelope.jobId !== detail.jobId
           || envelope.proposalId !== detail.id || envelope.proposalHash !== detail.proposalHash || envelope.revisionResultSha256 !== detail.revisionResultHash
           || envelope.baselineHash !== detail.revisionBaselineHash || envelope.dependencyHash !== detail.provenance?.dependencyHash)) throw new Error('WORKFLOW_RESULT_SCOPE_CHANGED');
-        const preferences = initial.options === undefined ? detail.routingPreferences : initial.options;
+        const preferences = initial.readPreferences === undefined ? detail.routingPreferences : initial.readPreferences;
         const [parentRead, cableRead] = await Promise.allSettled([
           initial.pf.readJob(detail.jobId),
           preferences ? fetchPathFinderCableWorkflowDetail(projectId, token, detail.cableId, preferences, controller.signal) : Promise.resolve(null),
@@ -410,7 +415,7 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
         : stale ? 'This result is outdated. Calculate routing again.'
           : proposalJobIssue ?? (!pathDisplayed ? 'Use Show to inspect the exact path before confirming review.' : notice);
   const popupComparison = selectedProposal ? ownedComparison?.input ?? null : null;
-  const popupComparisonLoading = Boolean(selectedProposal && ownedComparison?.loading);
+  const popupComparisonLoading = Boolean(previewLoading && !selectedProposal || selectedProposal && ownedComparison?.loading);
   const popupComparisonError = selectedProposal ? ownedComparison?.error ?? null : null;
   const pendingForCable = Boolean(selectedCableId && pendingApply.pending?.cableId === selectedCableId);
   const workflowReview = useMemo<PathFinderWorkflowReview | null>(() => selectedCableId ? {

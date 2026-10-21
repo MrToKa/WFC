@@ -24,18 +24,38 @@ function AdminBarriersPanel(props: PathFinderBarriersPanelProps) {
   const frozen = state.busy || props.pf.busy || state.pending;
   const disabled = !state.canAuthor || frozen;
   const geometry = state.manifest?.geometry;
+  const saved = state.saved;
   const status = state.phase === 'unknown' ? 'Unknown command outcome — reconciliation required'
     : state.phase === 'partial' ? 'Capture incomplete — published set kept'
       : state.phase === 'refused' ? 'Operation refused — published set kept'
         : state.phase === 'stale' ? 'Scope changed — refresh required'
-          : state.dirty ? 'Unpublished draft' : state.registry ? `Registry: ${state.registry.state}` : 'No current barrier registry loaded';
+          : saved?.status === 'recapture-required' ? 'Saved obstacles need recapture'
+            : state.dirty ? 'Unpublished draft' : state.registry ? `Registry: ${state.registry.state}` : 'No current barrier registry loaded';
   return <section className={styles.panel} aria-label="Barriers">
     <h3 className={styles.heading}>Barriers</h3>
     <Caption1>Register walls, partitions, floors, ceilings and other obstacles. Choose Obstacle for pipes, tanks or mixed model groups.</Caption1>
     <Caption1>Existing openings are respected when present in qualified captured triangle geometry. A bounding box is not treated as a solid obstacle.</Caption1>
     <Caption1>Select an object in Model Browser to inspect it and add it. The selected parent and all its descendant fragments are captured together.</Caption1>
+    <Caption1>Add selected objects creates an unsaved draft. Use Save barrier set to publish it; unsaved additions do not survive a browser refresh.</Caption1>
     <div role="status">{status}</div>
-    {state.dirty ? <Caption1>The published barrier set remains unchanged until this entire draft is captured and published successfully.</Caption1> : null}
+    <section aria-label="Saved obstacles">
+      <h4 className={styles.heading}>Saved obstacles</h4>
+      {saved ? <>
+        <Caption1>{saved.status === 'current' ? 'The published selection matches the current model and frame.'
+          : saved.status === 'recapture-required' ? 'This saved selection belongs to another model or frame. Select current objects and save a new capture; the old geometry is not ready for calculation.'
+            : 'Last saved selection for reference. Current readiness is unavailable; prepare or refresh the model before changing this set.'}</Caption1>
+        {saved.manifest.selectedParents.length ? <ul className={styles.list} aria-label="Saved barrier parents">{saved.manifest.selectedParents.map(parent => <li className={styles.item} key={parent.selectionId}>
+          <div>{parent.name}</div><Caption1>{kindLabel(parent.kind)}</Caption1>
+        </li>)}</ul> : saved.manifest.geometry.mode === 'explicit-empty' ? <Caption1>Published empty declaration: {saved.manifest.geometry.reason}</Caption1> : null}
+        <details><summary>Saved selection scope</summary>
+          <p>Snapshot {saved.manifest.snapshotId}. Model {saved.manifest.scope.modelVersionId}. Frame {saved.manifest.scope.captureFrameId}.</p>
+        </details>
+      </> : <Caption1>{state.phase === 'loading' ? 'Reading the saved barrier selection…'
+        : state.error ? 'The saved barrier selection could not be verified. Refresh barriers to try again.'
+          : 'No saved barrier set. Add selected objects and use Save barrier set to publish them.'}</Caption1>}
+    </section>
+    <h4 className={styles.heading}>Current selection draft</h4>
+    {state.dirty ? <Caption1>Unsaved changes. The published barrier set remains unchanged until this entire draft is captured and published successfully.</Caption1> : null}
     <Field label="Barrier type"><Select aria-label="Barrier type" value={state.kind} disabled={disabled} onChange={(_, data) => state.setKind(data.value as BarrierSelectedParent['kind'])}>
       {kinds.map(kind => <option key={kind} value={kind}>{kindLabel(kind)}</option>)}
     </Select></Field>
@@ -45,7 +65,6 @@ function AdminBarriersPanel(props: PathFinderBarriersPanelProps) {
       <div>{parent.name}</div><Caption1>{kindLabel(parent.kind)}</Caption1>
       <Button size="small" aria-label={`Remove ${parent.name}`} disabled={disabled} onClick={() => state.removeParent(parent.selectionId)}>Remove</Button>
     </li>)}</ul> : <Caption1>No barrier parents selected. This does not declare that the model has no barriers.</Caption1>}
-    {geometry?.mode === 'explicit-empty' ? <Caption1>Published empty declaration: {geometry.reason}</Caption1> : null}
     {state.draftParents.length ? <Button appearance="primary" disabled={disabled} onClick={() => void state.save()}>Save barrier set</Button> : <>
       <Field label="Explicit empty reason"><Textarea aria-label="Explicit empty reason" value={state.emptyReason} maxLength={2048} disabled={disabled} onChange={(_, data) => state.setEmptyReason(data.value)} /></Field>
       <Button appearance="primary" disabled={disabled || !state.emptyReason.trim()} onClick={() => void state.save()}>Declare no barriers</Button>
@@ -54,7 +73,7 @@ function AdminBarriersPanel(props: PathFinderBarriersPanelProps) {
     <div className={styles.row}>
       <Button disabled={state.busy || props.pf.busy} onClick={() => void state.refresh()}>Refresh barriers</Button>
       {state.busy ? <Button onClick={state.cancel}>Cancel</Button> : null}
-      {state.pending ? <Button disabled={state.busy || props.pf.busy || !state.canAuthor} onClick={() => void state.retry()}>Retry saved command</Button> : null}
+      {state.pending ? <Button disabled={!state.canRetry} onClick={() => void state.retry()}>Retry saved command</Button> : null}
       {(state.pending || state.dirty) && state.phase !== 'unknown' ? <Button disabled={state.busy || props.pf.busy} onClick={state.discardPending}>{state.pending ? 'Discard saved command' : 'Discard draft and refresh'}</Button> : null}
     </div>
     {state.busy ? <Spinner size="tiny" label={state.phase === 'capturing' ? 'Capturing selected barrier geometry…' : state.phase === 'publishing' ? 'Publishing barrier set…' : 'Reading barriers…'} /> : null}
@@ -64,7 +83,7 @@ function AdminBarriersPanel(props: PathFinderBarriersPanelProps) {
       <p>Revision {state.registry.registryRevision}. Active model {state.registry.scope.modelVersionId}. Frame {state.registry.scope.captureFrameId}.</p>
       {state.registry.snapshot ? <p>Published snapshot {state.registry.snapshot.snapshotId}.</p> : null}
       {geometry?.mode === 'mesh-set' ? <p>Published manifest: {geometry.fragments.length} fragments, {geometry.fragments.reduce((sum, fragment) => sum + fragment.vertices, 0)} vertices, {geometry.fragments.reduce((sum, fragment) => sum + fragment.triangles, 0)} triangles. Registered objects only.</p> : null}
-      {state.draftParents.length ? <ul aria-label="Barrier object identities">{state.draftParents.map(parent => <li key={parent.selectionId}>{parent.name}: {parent.objectId}; current model identity.</li>)}</ul> : null}
+      {state.draftParents.length ? <ul aria-label="Barrier object identities">{state.draftParents.map(parent => <li key={parent.selectionId}>{parent.name}: {parent.objectId}; draft identity to check against the current model before saving.</li>)}</ul> : null}
       {state.registry.reasonCodes.length ? <ul aria-label="Barrier registry reasons">{state.registry.reasonCodes.map(reason => <li key={reason}>{reason.toLowerCase().replaceAll('_', ' ')}</li>)}</ul> : null}
     </details> : null}
     <Caption1>Check the barrier status recorded with each calculation. Registering a set does not check previously calculated routes.</Caption1>
