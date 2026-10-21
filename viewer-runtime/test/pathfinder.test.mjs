@@ -329,6 +329,66 @@ test('explicit percentages change original background materials, protect route c
   assert.equal(f.viewer.impl.fadeMaterial.opacity, 0.15); assert.equal(f.viewer.impl.fadeMaterial.variants[0].opacity, 0.3); f.controller.dispose();
 });
 
+test('successive tray and endpoint parent unions retain every descendant colour and restore exact appearance on Clear', async () => {
+  const f = fixture(), roots = new Map([[20, [0, 1]], [30, [2, 3]], [40, [4, 5]], [50, [6]]]);
+  const colours = [0xc93636, 0x2867c8, 0x91489d, 0x30a85a, 0x8d9aab];
+  const materials = colours.map(color => new f.originalMaterial.constructor({ ...f.originalMaterial, color }));
+  const originalByFragment = [materials[0], materials[0], materials[1], materials[1], materials[2], materials[2], materials[3], materials[4]];
+  f.fragmentMaterials.clear(); originalByFragment.forEach((item, id) => f.fragmentMaterials.set(id, item));
+  f.fragments.getCount = () => originalByFragment.length;
+  const recursiveReads = [];
+  f.tree.enumNodeFragments = (id, visit, recursive) => {
+    recursiveReads.push([id, recursive]);
+    if (recursive) for (const fragmentId of roots.get(id) ?? []) visit(fragmentId);
+  };
+  const baseline = { defaultVisible: f.model.visibilityManager.defaultVisible, states: f.model.visibilityManager.getVisibility() };
+  const firstIds = [20, 30, 40], firstPoints = [[0, 0, 0], [1, 2, 3]];
+  f.controller.showPath({ points: firstPoints, objectIds: firstIds });
+  assert.deepEqual(firstIds, [20, 30, 40]); assert.deepEqual(firstPoints, [[0, 0, 0], [1, 2, 3]]);
+  assert.deepEqual(f.viewer.isolated, [20, 30, 40]); assert.equal(f.viewer.impl.showGhosting, true);
+  await f.controller.setTransparency(75);
+  assert.deepEqual(recursiveReads, [[20, true], [30, true], [40, true]]);
+  assert.deepEqual(f.viewer.shown, [20, 30, 40]); assert.equal(f.registered.size, 3);
+  for (let id = 0; id < originalByFragment.length; id++) {
+    const shown = f.fragmentMaterials.get(id), original = originalByFragment[id];
+    assert.equal(shown.color, original.color);
+    if (id < 6) {
+      assert.notEqual(shown, original); assert.equal(shown.opacity, 1); assert.equal(shown.transparent, false); assert.equal(shown.depthWrite, true);
+    } else {
+      assert.equal(shown, original); assert.equal(shown.opacity, 0.25); assert.equal(shown.transparent, true);
+    }
+  }
+  const firstClones = [...f.clones], firstOverlay = f.meshes[0];
+  f.controller.showPath({ points: [[3, 2, 1], [0, 0, 0]], objectIds: [20, 30, 50] });
+  assert.deepEqual(f.viewer.isolated, [20, 30, 50]); assert.equal(f.viewer.impl.showGhosting, true);
+  assert.ok(firstClones.every(item => item.disposeCount === 1)); assert.equal(f.registered.size, 0);
+  assert.equal(firstOverlay.geometry.disposed, true); assert.equal(firstOverlay.material.disposed, true);
+  for (let id = 0; id < originalByFragment.length; id++) assert.equal(f.fragmentMaterials.get(id), originalByFragment[id]);
+  assert.ok(materials.every(item => item.opacity === 0.8 && item.transparent === true && item.depthWrite === false));
+  recursiveReads.length = 0;
+  await f.controller.setTransparency(40);
+  assert.deepEqual(recursiveReads, [[20, true], [30, true], [50, true]]); assert.deepEqual(f.viewer.shown, [20, 30, 50]);
+  const secondForeground = new Set([0, 1, 2, 3, 6]);
+  for (let id = 0; id < originalByFragment.length; id++) {
+    const shown = f.fragmentMaterials.get(id), original = originalByFragment[id];
+    assert.equal(shown.color, original.color);
+    if (secondForeground.has(id)) {
+      assert.notEqual(shown, original); assert.equal(shown.opacity, 1); assert.equal(shown.transparent, false); assert.equal(shown.depthWrite, true);
+    } else {
+      assert.equal(shown, original); assert.equal(shown.opacity, 0.6); assert.equal(shown.transparent, true);
+    }
+  }
+  assert.equal(f.meshes.length, 1); assert.equal(f.meshes[0].material.color, 0xffe600);
+  f.controller.clear();
+  for (let id = 0; id < originalByFragment.length; id++) assert.equal(f.fragmentMaterials.get(id), originalByFragment[id]);
+  assert.deepEqual(materials.map(item => item.color), colours);
+  assert.ok(materials.every(item => item.opacity === 0.8 && item.transparent === true && item.depthWrite === false));
+  assert.deepEqual({ defaultVisible: f.model.visibilityManager.defaultVisible, states: f.model.visibilityManager.getVisibility() }, baseline);
+  assert.ok(f.clones.every(item => item.disposeCount === 1)); assert.equal(f.registered.size, 0); assert.equal(f.meshes.length, 0);
+  assert.equal(f.viewer.impl.fadeMaterial.opacity, 0.15); assert.equal(f.viewer.impl.fadeMaterial.variants[0].opacity, 0.3);
+  assert.equal(f.viewer.impl.showGhosting, false); f.controller.dispose();
+});
+
 test('appearance preflight refuses foreign shared materials, unsupported APIs and all three budgets before touching the view', async () => {
   for (const configure of [
     f => { f.originalMaterial._sharedBy = [7, 8]; },

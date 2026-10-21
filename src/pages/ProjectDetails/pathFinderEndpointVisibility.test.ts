@@ -94,7 +94,7 @@ describe('Path Finder endpoint foreground evidence', () => {
     expect(await proposalEndpointObjectIds(proposal, f.state, f.access)).toEqual(['dbid:74', 'dbid:75']);
     expect(fetchEndpointBinding).not.toHaveBeenCalled(); expect(fetchGeometryObjectRevision).not.toHaveBeenCalled();
   });
-  it.each(['project', 'selection', 'model', 'fingerprint', 'artifact', 'projection', 'stale'])(
+  it.each(['project', 'selection', 'model', 'fingerprint', 'artifact', 'projection'])(
     'omits all display references when the proposal %s differs from the active model', async field => {
       const f = fixture(), proposal = parsePathFinderProposal(f.raw);
       if (field === 'project') f.access.projectId = key(99);
@@ -103,7 +103,6 @@ describe('Path Finder endpoint foreground evidence', () => {
       if (field === 'fingerprint') f.state.activeModel.contentFingerprint = 'f'.repeat(64);
       if (field === 'artifact') f.state.artifacts[0].id = key(99);
       if (field === 'projection') f.state.artifacts[0].snapshotSha256 = 'f'.repeat(64);
-      if (field === 'stale') proposal.stale = true;
       expect(await proposalEndpointObjectIds(proposal, f.state, f.access)).toEqual([]);
       expect(fetchEndpointBinding).not.toHaveBeenCalled(); expect(fetchGeometryObjectRevision).not.toHaveBeenCalled();
     });
@@ -116,9 +115,10 @@ describe('Path Finder endpoint foreground evidence', () => {
     expect(proposal).toEqual(before);
   });
   it('never guesses equipment for fixed-world manual coordinates', async () => {
-    const f = fixture(), proposal = parsePathFinderProposal({ ...f.raw, dependencies: { ...f.raw.dependencies,
-      to: { ...f.bound, mode: 'fixed-world', sourceObjectRevisionId: null } } });
-    expect(await proposalEndpointObjectIds(proposal, f.state, f.access)).toEqual(['dbid:74']);
+    const f = fixedDisplayFixture(); f.context.confirmedDisplaySelection = null;
+    vi.mocked(fetchCableEndpointContext).mockResolvedValue(f.context);
+    expect(await proposalEndpointObjectIds(f.proposal, f.state, f.access)).toEqual(['dbid:74']);
+    expect(fetchCableEndpointContext).toHaveBeenCalledOnce();
     expect(fetchEndpointBinding).not.toHaveBeenCalled(); expect(fetchGeometryObjectRevision).not.toHaveBeenCalled();
   });
   it('keeps the explicitly assigned parent object visible using display-only evidence from the exact saved endpoint', async () => {
@@ -129,6 +129,43 @@ describe('Path Finder endpoint foreground evidence', () => {
     expect(fetchEndpointBinding).not.toHaveBeenCalled(); expect(fetchGeometryObjectRevision).not.toHaveBeenCalled();
     expect(f.proposal).toEqual(before); expect(f.context.head?.sourceObject).toBe(null); expect(f.context.head?.attachment).toBe(null);
   });
+  it('retains a saved fixed-world parent after a cable-list fill stales only the proposal write revision', async () => {
+    const f = fixedDisplayFixture(); f.proposal.stale = true; f.proposal.canApply = false;
+    f.context.cableWriteRevision = '2';
+    vi.mocked(fetchCableEndpointContext).mockResolvedValue(f.context);
+    const before = structuredClone(f.proposal), contextBefore = structuredClone(f.context);
+    expect(await proposalEndpointObjectIds(f.proposal, f.state, f.access)).toEqual(['dbid:74', 'dbid:901']);
+    expect(fetchCableEndpointContext).toHaveBeenCalledExactlyOnceWith(ids.project, f.access.token, f.proposal.cableId, 'to', expect.any(AbortSignal));
+    expect(f.proposal).toEqual(before); expect(f.context).toEqual(contextBefore);
+    expect(f.proposal.stale).toBe(true); expect(f.proposal.canApply).toBe(false);
+  });
+  it('retains exact current object-derived equipment for an already-written historical proposal', async () => {
+    const f = fixture(), proposal = parsePathFinderProposal({ ...f.raw, stale: true, canApply: false });
+    vi.mocked(fetchEndpointBinding).mockResolvedValue(f.context); vi.mocked(fetchGeometryObjectRevision).mockResolvedValue(f.record);
+    const before = structuredClone(proposal);
+    expect(await proposalEndpointObjectIds(proposal, f.state, f.access)).toEqual(['dbid:74', 'dbid:73']);
+    expect(proposal).toEqual(before); expect(proposal.stale).toBe(true); expect(proposal.canApply).toBe(false);
+  });
+  it.each(['head', 'point', 'model'])(
+    'still omits a stale proposal fixed-world endpoint when its current %s changed', async field => {
+      const f = fixedDisplayFixture(); f.proposal.stale = true; f.proposal.canApply = false;
+      if (field === 'head') f.context.head!.id = key(99);
+      if (field === 'point') f.context.head!.pointProjectMetres = [999, 2, 3];
+      if (field === 'model') f.context.current!.modelVersionId = key(99);
+      vi.mocked(fetchCableEndpointContext).mockResolvedValue(f.context);
+      expect(await proposalEndpointObjectIds(f.proposal, f.state, f.access)).toEqual(['dbid:74']);
+      expect(fetchGeometryObjectRevision).not.toHaveBeenCalled(); expect(f.proposal.canApply).toBe(false);
+    });
+  it.each(['head', 'point', 'model'])(
+    'still omits a stale proposal object-derived endpoint when its current %s changed', async field => {
+      const f = fixture(), proposal = parsePathFinderProposal({ ...f.raw, stale: true, canApply: false });
+      if (field === 'head') f.context.head!.id = key(99);
+      if (field === 'point') f.context.head!.pointProjectMetres = [999, 2, 3];
+      if (field === 'model') f.context.current!.modelVersionId = key(99);
+      vi.mocked(fetchEndpointBinding).mockResolvedValue(f.context); vi.mocked(fetchGeometryObjectRevision).mockResolvedValue(f.record);
+      expect(await proposalEndpointObjectIds(proposal, f.state, f.access)).toEqual(['dbid:74']);
+      expect(fetchGeometryObjectRevision).not.toHaveBeenCalled(); expect(proposal.canApply).toBe(false);
+    });
   it.each(['missing', 'unavailable', 'cable', 'end', 'location', 'location-revision', 'head', 'hash', 'point', 'unconfirmed', 'model', 'selection', 'fingerprint', 'artifact', 'aggregate', 'frame', 'projection', 'display-head', 'display-hash', 'display-point', 'display-model', 'attachment'])(
     'omits stale or invalid fixed-world %s display evidence without changing the route', async field => {
       const f = fixedDisplayFixture();
@@ -162,13 +199,26 @@ describe('Path Finder endpoint foreground evidence', () => {
     vi.mocked(fetchCableEndpointContext).mockRejectedValue(error);
     await expect(proposalEndpointObjectIds(f.proposal, f.state, f.access)).rejects.toBe(error);
   });
+  it.each([404, 409, 503])('does not silently drop a saved parent after an endpoint display read fails with %i', async status => {
+    const f = fixedDisplayFixture(), error = new CableEndpointApiError('UNAVAILABLE', status, 'Endpoint display lookup is unavailable.');
+    vi.mocked(fetchCableEndpointContext).mockRejectedValue(error);
+    const before = structuredClone(f.proposal);
+    await expect(proposalEndpointObjectIds(f.proposal, f.state, f.access)).rejects.toBe(error);
+    expect(f.proposal).toEqual(before); expect(fetchEndpointBinding).not.toHaveBeenCalled(); expect(fetchGeometryObjectRevision).not.toHaveBeenCalled();
+  });
+  it('propagates a transport failure instead of presenting a successful route-only foreground', async () => {
+    const f = fixture(), error = new TypeError('Network request failed.');
+    vi.mocked(fetchEndpointBinding).mockRejectedValue(error);
+    await expect(proposalEndpointObjectIds(parsePathFinderProposal(f.raw), f.state, f.access)).rejects.toBe(error);
+    expect(fetchGeometryObjectRevision).not.toHaveBeenCalled();
+  });
   it('bounds fixed-world display to the existing total deadline and honors explicit cancellation', async () => {
     vi.useFakeTimers(); const f = fixedDisplayFixture();
     vi.mocked(fetchCableEndpointContext).mockImplementation((_project, _token, _cable, _end, signal) => new Promise((_resolve, reject) => {
       signal!.addEventListener('abort', () => reject(signal!.reason), { once: true });
     }));
-    const pending = proposalEndpointObjectIds(f.proposal, f.state, f.access); await vi.advanceTimersByTimeAsync(ENDPOINT_VISIBILITY_DEADLINE_MS);
-    expect(await pending).toEqual(['dbid:74']);
+    const pending = expect(proposalEndpointObjectIds(f.proposal, f.state, f.access)).rejects.toMatchObject({ name: 'TimeoutError' });
+    await vi.advanceTimersByTimeAsync(ENDPOINT_VISIBILITY_DEADLINE_MS); await pending;
     const stop = new AbortController(), cancelled = proposalEndpointObjectIds(f.proposal, f.state, f.access, stop.signal);
     stop.abort(); await expect(cancelled).rejects.toMatchObject({ name: 'AbortError' });
   });
@@ -194,10 +244,10 @@ describe('Path Finder endpoint foreground evidence', () => {
     await expect(proposalEndpointObjectIds(parsePathFinderProposal(f.raw), f.state, f.access)).rejects.toBe(error);
     expect(fetchGeometryObjectRevision).not.toHaveBeenCalled(); expect(error.message).not.toContain(f.access.token);
   });
-  it('omits a missing object but never swallows its protected API authority error', async () => {
+  it('never treats an unreadable object as verified absent or swallows its protected API authority error', async () => {
     const f = fixture(); vi.mocked(fetchEndpointBinding).mockResolvedValue(f.context);
-    vi.mocked(fetchGeometryObjectRevision).mockRejectedValueOnce(new GeometryTraceApiError('NOT_FOUND', 404, 'Unavailable.'));
-    expect(await proposalEndpointObjectIds(parsePathFinderProposal(f.raw), f.state, f.access)).toEqual(['dbid:74']);
+    const missing = new GeometryTraceApiError('NOT_FOUND', 404, 'Unavailable.'); vi.mocked(fetchGeometryObjectRevision).mockRejectedValueOnce(missing);
+    await expect(proposalEndpointObjectIds(parsePathFinderProposal(f.raw), f.state, f.access)).rejects.toBe(missing);
     const denied = new GeometryTraceApiError('ADMIN_REQUIRED', 403, 'Current access was refused.'); vi.mocked(fetchGeometryObjectRevision).mockRejectedValueOnce(denied);
     await expect(proposalEndpointObjectIds(parsePathFinderProposal(f.raw), f.state, f.access)).rejects.toBe(denied);
   });
@@ -212,9 +262,8 @@ describe('Path Finder endpoint foreground evidence', () => {
     vi.mocked(fetchEndpointBinding).mockImplementation((_project, _token, _location, signal) => new Promise((_resolve, reject) => {
       signal!.addEventListener('abort', () => reject(signal!.reason), { once: true });
     }));
-    const proposal = parsePathFinderProposal(f.raw), pending = proposalEndpointObjectIds(proposal, f.state, f.access);
-    await vi.advanceTimersByTimeAsync(ENDPOINT_VISIBILITY_DEADLINE_MS);
-    expect(await pending).toEqual(['dbid:74']); expect(fetchGeometryObjectRevision).not.toHaveBeenCalled();
+    const proposal = parsePathFinderProposal(f.raw), pending = expect(proposalEndpointObjectIds(proposal, f.state, f.access)).rejects.toMatchObject({ name: 'TimeoutError' });
+    await vi.advanceTimersByTimeAsync(ENDPOINT_VISIBILITY_DEADLINE_MS); await pending; expect(fetchGeometryObjectRevision).not.toHaveBeenCalled();
     const controller = new AbortController(), cancelled = proposalEndpointObjectIds(proposal, f.state, f.access, controller.signal);
     controller.abort(); await expect(cancelled).rejects.toMatchObject({ name: 'AbortError' });
   });
@@ -226,6 +275,22 @@ describe('Path Finder endpoint foreground evidence', () => {
     expect(await proposalEndpointObjectIds(proposal, f.state, f.access)).toEqual(['dbid:73']);
     f.state.locations[0].binding!.status = 'stale'; expect(await proposalEndpointObjectIds(proposal, f.state, f.access)).toEqual([]);
     expect(fetchEndpointBinding).not.toHaveBeenCalled(); expect(fetchGeometryObjectRevision).not.toHaveBeenCalled();
+  });
+  it('retains a stale legacy proposal display only while its current confirmed binding still matches exactly', async () => {
+    const f = fixture(), legacy = { locationId: ids.location, bindingRevision: '1', point: [1.25, 2, 3] };
+    f.state.locations = [{ id: ids.location, name: 'Synthetic saved location', aliases: [], revision: '2',
+      binding: { modelVersionId: ids.model, revision: '1', point: [1.25, 2, 3], objectId: 'dbid:73', externalId: null, source: 'manual', status: 'confirmed' } }];
+    const proposal = parsePathFinderProposal({ ...f.raw, stale: true, canApply: false,
+      dependencies: { ...f.raw.dependencies, schemaVersion: 'pathfinder.dependencies.v2', from: legacy, to: legacy } });
+    const before = structuredClone(proposal);
+    expect(await proposalEndpointObjectIds(proposal, f.state, f.access)).toEqual(['dbid:73']);
+    f.state.locations[0].binding!.revision = '2'; expect(await proposalEndpointObjectIds(proposal, f.state, f.access)).toEqual([]);
+    f.state.locations[0].binding!.revision = '1'; f.state.locations[0].binding!.point = [9, 2, 3];
+    expect(await proposalEndpointObjectIds(proposal, f.state, f.access)).toEqual([]);
+    f.state.locations[0].binding!.point = [...legacy.point] as [number, number, number]; f.state.locations[0].binding!.modelVersionId = key(99);
+    expect(await proposalEndpointObjectIds(proposal, f.state, f.access)).toEqual([]);
+    expect(proposal).toEqual(before); expect(proposal.canApply).toBe(false);
+    expect(fetchCableEndpointContext).not.toHaveBeenCalled(); expect(fetchEndpointBinding).not.toHaveBeenCalled(); expect(fetchGeometryObjectRevision).not.toHaveBeenCalled();
   });
   it('uses preview object references without inferring an object from manual point/name and rejects stale model scope', () => {
     const f = fixture(); expect(previewEndpointObjectIds(f.preview, f.state)).toEqual(['dbid:74']);

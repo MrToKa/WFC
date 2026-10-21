@@ -1,7 +1,7 @@
 import type { PathFinderPreview, PathFinderProposal, PathFinderState } from '@/api/pathfinder';
-import { EndpointBindingApiError, fetchEndpointBinding } from '@/api/pathfinderEndpointBindings';
-import { GeometryTraceApiError, fetchGeometryObjectRevision } from '@/api/pathfinderGeometryTrace';
-import { CableEndpointApiError, fetchCableEndpointContext } from '@/api/pathfinderCableEndpoints';
+import { fetchEndpointBinding } from '@/api/pathfinderEndpointBindings';
+import { fetchGeometryObjectRevision } from '@/api/pathfinderGeometryTrace';
+import { fetchCableEndpointContext } from '@/api/pathfinderCableEndpoints';
 import { canonicalPurposeJson } from '../../../shared/pathfinderPurposePolicy';
 import { cableEndpointConfirmedDisplaySelectionSchema } from '../../../shared/pathfinderCableEndpoints';
 
@@ -41,15 +41,16 @@ async function digest(value: unknown): Promise<string> {
   return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalPurposeJson(value))))]
     .map(byte => byte.toString(16).padStart(2, '0')).join('');
 }
-const authFailure = (error: unknown) => (error instanceof EndpointBindingApiError || error instanceof GeometryTraceApiError || error instanceof CableEndpointApiError)
-  && [401, 403].includes(error.status ?? 0);
 
 /** Resolve display foreground only. This never changes endpoints, calculations or approval. */
 export async function proposalEndpointObjectIds(proposal: PathFinderProposal, state: PathFinderState,
   access: { projectId: string; token: string }, signal?: AbortSignal): Promise<string[]> {
   signal?.throwIfAborted();
   const evidence = proposal.dependencies, active = state.activeModel, artifact = state.artifacts[0];
-  if (!evidence || !access.token || proposal.stale || proposal.projectId !== state.projectId || access.projectId !== state.projectId
+  // Cable-list writes can stale a proposal while its version-local endpoint
+  // objects remain unchanged. Display uses the exact model/binding evidence
+  // below; proposal staleness still controls Review/Apply separately.
+  if (!evidence || !access.token || proposal.projectId !== state.projectId || access.projectId !== state.projectId
     || evidence.projectId !== state.projectId || !active.modelVersionId || evidence.model.id !== active.modelVersionId
     || evidence.model.selectionRevision !== active.selectionRevision || evidence.model.contentFingerprint !== active.contentFingerprint
     || !artifact || artifact.id !== evidence.artifact.id || artifact.modelVersionId !== active.modelVersionId
@@ -65,7 +66,7 @@ export async function proposalEndpointObjectIds(proposal: PathFinderProposal, st
   const results: string[] = [];
   try {
     for (const [end, endpoint] of [['from', evidence.from], ['to', evidence.to]] as const) {
-      signal?.throwIfAborted();
+      signal?.throwIfAborted(); controller.signal.throwIfAborted();
       if (endpoint.aggregateId !== preparation.aggregateId || endpoint.captureFrameId !== preparation.captureFrameId
         || endpoint.projectionSha256 !== preparation.projectionSha256) continue;
       if ('kind' in endpoint) {
@@ -98,7 +99,12 @@ export async function proposalEndpointObjectIds(proposal: PathFinderProposal, st
             || canonicalPurposeJson(display.data.current) !== canonicalPurposeJson(current)
             || !samePoint(display.data.pointProjectMetres, endpoint.point)) continue;
           results.push(`dbid:${display.data.sdkObjectId}`);
-        } catch (error) { if (authFailure(error)) throw error; signal?.throwIfAborted(); }
+        } catch (error) {
+          signal?.throwIfAborted();
+          // An unavailable read is not evidence that this endpoint has no
+          // object. Let Show retain the existing view and offer a retry.
+          throw error;
+        }
         continue;
       }
       // Manual coordinates alone never imply an equipment identity.
@@ -131,10 +137,10 @@ export async function proposalEndpointObjectIds(proposal: PathFinderProposal, st
         const id = dbId(object.identity.objectId);
         if (id !== null && (object.identity.dbId === null || object.identity.dbId === id)) results.push(object.identity.objectId);
       } catch (error) {
-        if (authFailure(error)) throw error;
-        signal?.throwIfAborted(); // Missing or timed-out visual evidence does not invalidate the calculation.
+        signal?.throwIfAborted();
+        throw error;
       }
     }
-    signal?.throwIfAborted(); return uniqueIds(results);
+    signal?.throwIfAborted(); controller.signal.throwIfAborted(); return uniqueIds(results);
   } finally { clearTimeout(deadline); signal?.removeEventListener('abort', stop); }
 }

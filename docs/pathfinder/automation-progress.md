@@ -1,5 +1,20 @@
 # PathFinder local implementation progress
 
+## In progress — From/To display after cable-list updates
+
+Branch `pf-endpoint-show-consistency-local-20261021` inherits06c7259. Real selected
+cable read-only diagnostic confirms cableWriteRevision changed after fill while
+both fixed-world heads/points/model selection and saved named object hints match.
+Blanket proposal.stale display rejection explains the omitted foreground IDs.
+Resolver now validates model/binding display evidence independently from write
+staleness; Review/Apply remains unchanged. Lookup errors/timeouts propagate to
+existing retry notice instead of silently showing an incomplete foreground.
+Agents own resolver/tests and separate runtime union regression; root alone runs
+runtime/SQL/tests. PASS49 runtime tests; client checks/regression in progress.
+No real Save/calculation/Review/Apply. Exact5191-only static delivery planned with
+fresh web rollback archive, API/PG/MinIO unchanged. Real browser gate remains
+unchanged saved origin refusal, no retry/bypass. Preparer stays queued.
+
 ## Delivered — direct cable text search
 
 Branch `pf-direct-cable-search-local-20261021`, product

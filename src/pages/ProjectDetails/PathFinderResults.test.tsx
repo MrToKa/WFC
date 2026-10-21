@@ -160,6 +160,26 @@ describe('selected current cable workflow result', () => {
     await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledTimes(2));
     expect(f.pf.action).not.toHaveBeenCalled(); expect(f.pf.reviewProposal).not.toHaveBeenCalled(); expect(f.pf.calculate).not.toHaveBeenCalled();
   });
+  it('retains the current model when popup Show cannot read its From/To objects and permits an explicit retry', async () => {
+    const f = workflowFixture(), changed = vi.fn();
+    vi.mocked(proposalEndpointObjectIds).mockRejectedValueOnce(new DOMException('Endpoint display lookup timed out.', 'TimeoutError'));
+    const request = { cableId: id(4), requestId: 0, action: 'show' as const };
+    const view = render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} workflowSelection={f.selection}
+      accountId={id(2)} options={options} onWorkflowDisplayChange={changed} workflowDisplayRequest={request} />);
+    expect(await screen.findByText('The selected cable calculation changed or could not be verified. Refresh the cable list and open the result again.')).toBeVisible();
+    expect(proposalEndpointObjectIds).toHaveBeenCalledOnce();
+    expect(f.pf.showPath).not.toHaveBeenCalled(); expect(f.pf.clear).not.toHaveBeenCalled();
+    expect(f.pf.reviewProposal).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled(); expect(f.pf.calculate).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Confirm proposal review' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Apply reviewed result' })).toBeDisabled();
+    expect(changed).toHaveBeenLastCalledWith({ cableId: id(4), visible: false, routing: '/BC1', designLength: '7' });
+    expect(screen.queryByText('Loading the exact computed path…')).toBeNull();
+    view.rerender(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} workflowSelection={f.selection}
+      accountId={id(2)} options={options} onWorkflowDisplayChange={changed} workflowDisplayRequest={{ ...request, requestId: 1 }} />);
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: [[1, 2, 3]], objectIds: [23] }));
+    expect(proposalEndpointObjectIds).toHaveBeenCalledTimes(2); expect(f.pf.clear).not.toHaveBeenCalled();
+    expect(f.pf.reviewProposal).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled(); expect(f.pf.calculate).not.toHaveBeenCalled();
+  });
   it('keeps a late pending preview hidden after the popup Hide request', async () => {
     const f = workflowFixture(); let resolve: (proposal: PathFinderProposal) => void = () => undefined;
     f.pf.readProposal.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
@@ -583,6 +603,19 @@ describe('exact pending Apply through result display resets', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' }));
     await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledWith({ pathId: id(3), points: f.pf.data.proposals[0].route.points, objectIds: [23, 44, 45] }));
     expect(f.pf.calculate).not.toHaveBeenCalled(); expect(f.pf.reviewProposal).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
+  });
+  it('offers a retry when an exact historical Show cannot check From/To instead of showing a route-only foreground', async () => {
+    const f = recoveryFixture(); vi.mocked(proposalEndpointObjectIds).mockRejectedValueOnce(new TypeError('Network request failed.'));
+    render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} accountId={id(2)} options={options} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' }));
+    expect(await screen.findByText('The From/To objects could not be checked. Open the path again.')).toBeVisible();
+    expect(proposalEndpointObjectIds).toHaveBeenCalledOnce();
+    expect(f.pf.showPath).not.toHaveBeenCalled(); expect(f.pf.clear).not.toHaveBeenCalled();
+    expect(f.pf.reviewProposal).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled(); expect(f.pf.calculate).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Confirm proposal review' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Apply reviewed result' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Open path again' })).toBeEnabled();
+    expect(screen.queryByText('Loading the exact computed path…')).toBeNull();
   });
   it('aborts endpoint reads and ignores their late objects when the selected cable changes', async () => {
     const f = recoveryFixture(); let finish!: (value: string[]) => void;
