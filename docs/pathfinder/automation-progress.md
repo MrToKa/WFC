@@ -1,5 +1,64 @@
 # PathFinder local implementation progress
 
+## PF-B7a technically checked — preparing and executing PF-B8
+
+Product d5cec2b00cb4815add3a9dd4ec8bffef26e13b24, branch
+pf-b7a-auto-length-local-20261021;37source/test files. Report88 and public
+evidence/barriers/b7a-auto-length.json +source-files capture19scoped checks.
+Root actual core154, SQL/worker/store94(includes18actualSQL), HTTP12,
+downstream126+route12, personalpreferences28PASS (groups overlap). UI Results105/
+Panel30/helper11/hook5PASS; affected3files22PASS then2correctedfocusedPASS;
+newTabseam1PASS/60skipped, priorB7full60PASSreused. Finalclient/servertypes,
+changedlint/finaltests lint, serverbuild+isolatedproductionwebbuild/whitespacePASS.
+Initial failures retained precisely in report/logs; no unrelated acceptance claim.
+
+Actual owned dump/restore17tables/3Auto tables/value/sequence28→29/revokedloginPASS.
+This is not fullruntimeinstallation/grant/JWT/modelrecovery. OnlynewPG55442 fixture
+retired with fullID/owner/stage/image/loopback-port/tmpfs-only checks; archive,
+privateconfigs and evidence retained. No root active checks/builds/SQL/HTTP now.
+Auto stores exact checked per-item PF output, readonly; Design manually editable,
+existing/partial pair waitsReview/Apply; both-blank Save initialfill preserved.
+Conservative last-success display is not live physical freshness or writeauthority.
+Latest/failed request watermark/replays/historicalv8skip protect outputs; normal
+authorized readers gain no PF/model access. No5191/original deployment/realApply.
+
+Next: apply prepare-stage-handoff for B8 against actual product, then immediately
+create inheriting branch and run independent C#/contracts/bridge/security/parity
+qualification and bounded productionv2 synthetic session workload. Actualcivil/
+Aalborg/2140capacity/browser remain NOT_RUN; saved5191refusal neverretry/bypass.
+Do not equate synthetic/runtime checks with actual model or native/useracceptance.
+B9 delivery/recovery gated; SimplifiedPreparer queued. AutomationACTIVE.
+OriginalWFCcleanmain96e63f13, liveGitHubmain same17:16:23UTC; stagePR0/CI NOT_RUN.
+All denied paths/parents and foreign .pf0-work/.pf2-work preserved.
+
+## Historical PF-B7a running checkpoint — superseded above
+
+Branch pf-b7a-auto-length-local-20261021 inherits B7docs d1310b8 and product
+34c603c709742e94788077efef54fab7ca37e824. Handoff executed immediately.
+Root scratch pathfinder-engine/.scratch/barrier-auto-length-20261021-2c5ad8a7-04c2-477d-a186-575c6f5d8899,
+owner2c5ad8a7; NEW owned SQL container wfc-pf-b7a-sql-2c5ad8a7 on55442,
+exact ID/image in sql-owner.json, private config outside Git; not5191/original.
+Root sole actual tests/build/SQL/HTTP; agents source ownership store/shared + CableAPI
++ UI, frozen except own HTTP test being prepared. Source implemented:3derived tables,
+global admission order/current targets, exact sealed per-item output, normal
+authorized compact reads, readonly Auto UI/column/export; Design editable,
+no fake/backfill from trays/Design. Generic mapper preserves drawing v1 hash.
+Worker retains exact immutable result on replay, refuses crossed dependencies,
+checks final physical scope/owner lease/authority. Historical unregistered v8 job
+finishes without new Auto/backfill. Source/output does not grant Review/Apply.
+
+Root core-check2 PASS154 (groups overlap); SQL+worker+store check3 PASS94,
+actual PG synthetic geometry/adapters explicitly scoped, source/sealer/transactions
+are real. First core-check1 retained67FAIL due repository mock newboundary, missing
+API middleware test stub and accidental scratch draft test discovery; corrected
+with explicit mocks and excluding .scratch tests (no production guard weakened).
+Servertypes1PASS. Clienttypes2FAIL3 nullable provenance, repaired pendingrerun.
+UIcheck2 RUNNING(session51344); several old CableList preference cases hit5s timeout,
+await exact result/triage, not PASS. No actual browser/civil/Aalborg proof yet.
+Next: finish UI/types/HTTP ordinary RBAC, actual dump/restore + identity sequence,
+relevant regression/build/lint; report88/public evidence/localcommit/handoff B8,
+execute immediately. Then B9 and queued Simplified Preparer; automation ACTIVE.
+
 ## PF-B7 technically checked — proceeding to PF-B7a
 
 B7 product34c603c709742e94788077efef54fab7ca37e824 on
