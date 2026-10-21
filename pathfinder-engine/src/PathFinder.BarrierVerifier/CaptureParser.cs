@@ -39,7 +39,7 @@ internal static class CaptureParser
             budget.Spend(); if (parent is null) Fail("Selected parent cannot be null.");
             Id(parent!.SelectionId); Object(parent.ObjectId); Text(parent.Name, 2048); if (parent.ExternalId is not null) Text(parent.ExternalId, 2048);
             if (!parents.Add(parent.SelectionId) || !objects.Add(parent.ObjectId) || parent.DbId < 0 || parent.ObjectId != "dbid:" + parent.DbId
-                || parent.Kind is not ("wall" or "partition" or "floor" or "ceiling") || parent.IdentityBasis != "version-local-only"
+                || parent.Kind is not ("wall" or "partition" or "floor" or "ceiling" or "obstacle") || parent.IdentityBasis != "version-local-only"
                 || parent.Inclusion != "own-and-all-descendant-fragments") Fail("Selected parent identities or membership are inconsistent.");
         }
         if (capture.Fragments is null || capture.Fragments.Length > limits.MaximumFragments) Fail("Fragment count is outside its limit.");

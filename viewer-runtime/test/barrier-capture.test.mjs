@@ -65,6 +65,23 @@ test('selected parent retains its own and all descendant original triangle fragm
   assert.equal(result.capture.observation.state, 'reported-complete'); assert.equal(result.capture.observation.verification, 'unverified');
   assert.equal(result.frameObservation.contentFingerprint, request().scope.contentFingerprint); assert.equal(result.frameObservation.loadId, loadId);
 });
+
+test('an explicit generic obstacle parent retains all original descendant geometry and its classification', async () => {
+  const f = fixture(); f.names.set(2, 'Mixed obstacle group');
+  const input = request([{ ...selected(2, 5, 'Mixed obstacle group'), kind: 'obstacle' }]);
+  const result = await collect(f, input);
+  assert.deepEqual(result.capture.selectedParents, input.selectedParents);
+  assert.deepEqual(result.capture.fragments.map(item => item.source.fragmentId), [0, 1]);
+  for (const fragment of result.capture.fragments) assert.deepEqual(fragment.triangleIndices, [0, 1, 2]);
+  assert.equal(result.capture.observation.verification, 'unverified');
+});
+
+test('existing structural kinds remain supported while undeclared obstacle kinds are refused', () => {
+  for (const kind of ['wall', 'partition', 'floor', 'ceiling'])
+    assert.equal(validateBarrierCaptureRequest(request([{ ...selected(), kind }])), true);
+  for (const kind of ['pipe', 'tank', 'mixed', 'Obstacle', '', 'unknown'])
+    assert.equal(validateBarrierCaptureRequest(request([{ ...selected(), kind }])), false);
+});
 test('overlapping parent selections deduplicate physical meshes and retain every selection membership', async () => {
   const input = request([selected(), selected(3, 7, 'Nested frame')]), result = await collect(fixture(), input);
   assert.equal(result.capture.fragments.length, 2); assert.deepEqual(result.capture.fragments[1].source.parentSelectionIds, [id(5), id(7)]);

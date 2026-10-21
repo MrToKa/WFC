@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PathFinderBarriersPanel, type PathFinderBarriersPanelProps } from './PathFinderBarriersPanel';
@@ -33,6 +33,26 @@ describe('administrator barrier authoring panel', () => {
     const f = fixture(); const user = userEvent.setup(); render(<PathFinderBarriersPanel {...f.props} />);
     await user.selectOptions(screen.getByRole('combobox', { name: 'Barrier type' }), 'floor'); expect(f.state.setKind).toHaveBeenCalledWith('floor');
     screen.getByRole('button', { name: 'Add selected objects' }).focus(); await user.keyboard('{Enter}'); expect(f.state.addSelection).toHaveBeenCalledTimes(1);
+  });
+  it('offers an explicit Obstacle type for pipes, tanks and mixed groups without selecting or saving objects automatically', async () => {
+    const f = fixture(); const user = userEvent.setup(); render(<PathFinderBarriersPanel {...f.props} />);
+    const select = screen.getByRole('combobox', { name: 'Barrier type' });
+    expect(select).toHaveValue('wall');
+    expect(screen.getByRole('option', { name: 'Obstacle' })).toHaveValue('obstacle');
+    expect(screen.getByText(/Choose Obstacle for pipes, tanks or mixed model groups/)).toBeVisible();
+    expect(screen.getByText(/qualified captured triangle geometry/)).toHaveTextContent('A bounding box is not treated as a solid obstacle');
+    await user.selectOptions(select, 'obstacle');
+    expect(f.state.setKind).toHaveBeenCalledWith('obstacle');
+    expect(f.state.addSelection).not.toHaveBeenCalled(); expect(f.state.save).not.toHaveBeenCalled();
+  });
+  it('shows a registered mixed-group parent as an Obstacle and saves only after explicit activation', () => {
+    const f = fixture(); f.state.draftParents = [{ selectionId: id(8), kind: 'obstacle', objectId: 'dbid:18', dbId: 18,
+      name: 'Selected mixed source group', externalId: null, inclusion: 'own-and-all-descendant-fragments', identityBasis: 'version-local-only' }];
+    f.state.dirty = true; f.install(); render(<PathFinderBarriersPanel {...f.props} />);
+    const list = within(screen.getByRole('list', { name: 'Selected barrier parents' }));
+    expect(list.getByText('Selected mixed source group')).toBeVisible(); expect(list.getByText('Obstacle')).toBeVisible();
+    expect(f.state.save).not.toHaveBeenCalled(); fireEvent.click(screen.getByRole('button', { name: 'Save barrier set' }));
+    expect(f.state.save).toHaveBeenCalledTimes(1);
   });
   it('shows exact selected parent names and removes only the requested draft identity', () => {
     const f = fixture(); f.state.draftParents = [{ selectionId: id(7), kind: 'partition', objectId: 'dbid:12', dbId: 12, name: 'Named civil partition', externalId: null, inclusion: 'own-and-all-descendant-fragments', identityBasis: 'version-local-only' }]; f.state.dirty = true; f.install();

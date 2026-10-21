@@ -10,7 +10,7 @@ const useStyles = makeStyles({
   list: { margin: 0, paddingLeft: '1.25rem', maxHeight: '18rem', overflowY: 'auto' },
   item: { marginBottom: '0.5rem' },
 });
-const kinds: BarrierSelectedParent['kind'][] = ['wall', 'partition', 'floor', 'ceiling'];
+const kinds: BarrierSelectedParent['kind'][] = ['wall', 'partition', 'floor', 'ceiling', 'obstacle'];
 const kindLabel = (kind: string) => kind.charAt(0).toUpperCase() + kind.slice(1);
 
 /** Unmount the authoring hook entirely when administrator access is lost. */
@@ -31,7 +31,8 @@ function AdminBarriersPanel(props: PathFinderBarriersPanelProps) {
           : state.dirty ? 'Unpublished draft' : state.registry ? `Registry: ${state.registry.state}` : 'No current barrier registry loaded';
   return <section className={styles.panel} aria-label="Barriers">
     <h3 className={styles.heading}>Barriers</h3>
-    <Caption1>Register walls, partitions, floors and ceilings. Actual triangle geometry retains existing openings; a bounding box is not treated as a solid wall.</Caption1>
+    <Caption1>Register walls, partitions, floors, ceilings and other obstacles. Choose Obstacle for pipes, tanks or mixed model groups.</Caption1>
+    <Caption1>Existing openings are respected when present in qualified captured triangle geometry. A bounding box is not treated as a solid obstacle.</Caption1>
     <Caption1>Select an object in Model Browser to inspect it and add it. The selected parent and all its descendant fragments are captured together.</Caption1>
     <div role="status">{status}</div>
     {state.dirty ? <Caption1>The published barrier set remains unchanged until this entire draft is captured and published successfully.</Caption1> : null}
@@ -48,7 +49,7 @@ function AdminBarriersPanel(props: PathFinderBarriersPanelProps) {
     {state.draftParents.length ? <Button appearance="primary" disabled={disabled} onClick={() => void state.save()}>Save barrier set</Button> : <>
       <Field label="Explicit empty reason"><Textarea aria-label="Explicit empty reason" value={state.emptyReason} maxLength={2048} disabled={disabled} onChange={(_, data) => state.setEmptyReason(data.value)} /></Field>
       <Button appearance="primary" disabled={disabled || !state.emptyReason.trim()} onClick={() => void state.save()}>Declare no barriers</Button>
-      <Caption1>This explicitly registers an empty selected scope. It does not certify that the model contains no walls.</Caption1>
+      <Caption1>This explicitly registers an empty selected scope. It does not certify that the model contains no walls or other obstacles.</Caption1>
     </>}
     <div className={styles.row}>
       <Button disabled={state.busy || props.pf.busy} onClick={() => void state.refresh()}>Refresh barriers</Button>

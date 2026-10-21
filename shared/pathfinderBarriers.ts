@@ -37,7 +37,7 @@ export const barrierModelScopeSchema = z.object({
   captureFrameId: uuid, captureFrameSha256: hash, coordinateFrame: z.literal('canonical-world-metres'),
 }).strict();
 export const barrierSelectedParentSchema = z.object({
-  selectionId: uuid, kind: z.enum(['wall', 'partition', 'floor', 'ceiling']),
+  selectionId: uuid, kind: z.enum(['wall', 'partition', 'floor', 'ceiling', 'obstacle']),
   objectId, dbId: nonnegativeCount(2147483647), externalId: text.nullable(), name: text,
   identityBasis: z.literal('version-local-only'), inclusion: z.literal('own-and-all-descendant-fragments'),
 }).strict().refine(value => value.objectId === `dbid:${value.dbId}`, 'Selected parent identity differs from its dbId.');

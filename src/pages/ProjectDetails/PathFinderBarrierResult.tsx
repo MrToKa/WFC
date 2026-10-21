@@ -18,8 +18,8 @@ const explanation = (value: BarrierExecution) => {
   switch (value.diagnostics.status) {
     case 'clear': return value.proof?.routePointCount === 1 ? 'The final point was checked for occupancy against the registered selected objects.'
       : 'Every final route segment was checked against the registered selected objects.';
-    case 'bypassed': return 'Drill through the walls was enabled for this calculation. This result does not certify a collision-free route.';
-    case 'no-barriers-declared': return 'The administrator declared an empty registered scope. This does not certify that the model has no walls, floors or ceilings.';
+    case 'bypassed': return 'Drill through the walls was enabled for this calculation. Checks against all registered obstacles were bypassed, including pipes and tanks. This result does not certify a collision-free route.';
+    case 'no-barriers-declared': return 'The administrator declared an empty registered scope. This does not certify that the model has no walls, floors, ceilings or other obstacles.';
     case 'blocked': return value.proof?.status === 'blocked'
       ? 'The recorded shell check found contact or containment. It does not identify an exact surface point or hit triangle.'
       : 'A verified route was not found in the checked candidate domain. Search diagnostics do not identify a hit on a final route.';

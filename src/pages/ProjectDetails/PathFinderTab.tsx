@@ -189,7 +189,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
         <PathFinderBarriersPanel projectId={projectId} loadedProjectId={loadedProjectId} token={token} isAdmin={isAdmin} pf={pf} onStateChange={barrierStateChanged} />
         <Checkbox label="Drill through the walls" checked={drillThroughWalls} disabled={pf.busy || barrierAuthoring.pending || !currentBarrierRegistry}
           onChange={(_, value) => setDrillDraft({ owner: barrierOwner, checked: value.checked === true })} />
-        <Caption1>For this calculation, allow crossing registered walls, partitions, floors and ceilings. Existing results keep their original setting.</Caption1>
+        <Caption1>For this calculation only, ignore all registered obstacles, including walls, partitions, floors, ceilings, pipes and tanks. Existing results keep their original setting.</Caption1>
         {!barrierRouting ? <Caption1>Configure the registered barriers before calculating, or explicitly enable drilling for this calculation.</Caption1> : null}
         <details><summary>Background model recalculation</summary><PathFinderCalculationGrantPanel
           projectId={projectId} loadedProjectId={loadedProjectId} token={token} accountId={accountId ?? null} isAdmin={isAdmin}

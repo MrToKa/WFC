@@ -49,6 +49,7 @@ describe('recorded barrier calculation explanation', () => {
     render(<PathFinderBarrierResult execution={execution('bypassed')} />);
     expect(screen.getByRole('heading', { name: 'Barrier checks bypassed for drilling' })).toBeVisible();
     expect(screen.getByText(/Drill through the walls was enabled/)).toHaveTextContent('does not certify a collision-free route');
+    expect(screen.getByText(/Drill through the walls was enabled/)).toHaveTextContent('for this calculation. Checks against all registered obstacles were bypassed, including pipes and tanks');
     expect(screen.getByText(/Calculation policy:/)).toHaveTextContent('enabled');
     expect(screen.queryByRole('heading', { name: 'Clear against registered barriers' })).not.toBeInTheDocument();
   });

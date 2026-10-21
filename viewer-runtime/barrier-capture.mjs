@@ -27,7 +27,7 @@ const scope = value => exact(value, scopeFields) && uuid(value.projectId) && uui
   && typeof value.selectionRevision === 'string' && /^(?:0|[1-9][0-9]{0,18})$/u.test(value.selectionRevision) && BigInt(value.selectionRevision) <= 9223372036854775807n
   && uuid(value.captureFrameId) && hash(value.captureFrameSha256) && value.coordinateFrame === 'canonical-world-metres';
 const parentFields = ['selectionId', 'kind', 'objectId', 'dbId', 'externalId', 'name', 'identityBasis', 'inclusion'];
-const parent = value => exact(value, parentFields) && uuid(value.selectionId) && ['wall', 'partition', 'floor', 'ceiling'].includes(value.kind)
+const parent = value => exact(value, parentFields) && uuid(value.selectionId) && ['wall', 'partition', 'floor', 'ceiling', 'obstacle'].includes(value.kind)
   && integer(value.dbId) && value.objectId === 'dbid:' + value.dbId && (value.externalId === null || validText(value.externalId))
   && validText(value.name) && value.identityBasis === 'version-local-only' && value.inclusion === 'own-and-all-descendant-fragments';
 const parents = value => Array.isArray(value) && value.length > 0 && value.length <= L.selectedParents && value.every(parent)

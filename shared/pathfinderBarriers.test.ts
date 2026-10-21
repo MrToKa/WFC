@@ -56,6 +56,22 @@ const proof = (): BarrierCheckProof => ({ schemaVersion: 'wfc.pf.barrier-check-p
   coverage: 'registered-selected-objects-only', engineeringAccepted: false });
 
 describe('separate barrier model/parent and capture contracts', () => {
+  it('retains a mixed obstacle classification through capture and immutable publication', () => {
+    const observed = capture(); observed.selectedParents[0].kind = 'obstacle';
+    expect(barrierCaptureSchema.parse(observed).selectedParents[0]).toEqual({ ...parent(), kind: 'obstacle' });
+    const published = snapshot(); published.selectedParents[0].kind = 'obstacle';
+    published.contentSha256 = digest(barrierCanonicalJson(barrierSnapshotHashInput(published)));
+    expect(barrierSnapshotSchema.parse(published).selectedParents[0].kind).toBe('obstacle');
+    expect(verifyBarrierSnapshot(published, digest)).toBe(true);
+    published.selectedParents[0].kind = 'wall';
+    expect(verifyBarrierSnapshot(published, digest)).toBe(false);
+  });
+  it('preserves existing structural classifications and refuses undeclared obstacle kinds', () => {
+    for (const kind of ['wall', 'partition', 'floor', 'ceiling'])
+      expect(barrierSelectedParentSchema.parse({ ...parent(), kind }).kind).toBe(kind);
+    for (const kind of ['pipe', 'tank', 'mixed', 'Obstacle', '', 'unknown'])
+      expect(barrierSelectedParentSchema.safeParse({ ...parent(), kind }).success).toBe(false);
+  });
   it('retains the selected parent separately from its descendant fragments and deduplicates overlapping selections', () => {
     const value = capture(); value.selectedParents.push(parent(8)); value.fragments[0].source.parentSelectionIds.push(id(8));
     const parsed = barrierCaptureSchema.parse(value);
