@@ -1,186 +1,196 @@
-# PF-B9 — owned delivery and conservation qualification (ACTIVE)
+# PF-B9 — owned delivery and conservation qualification
 
-Branch `pf-b9-barrier-delivery-local-20261021`, inherited
-`b4c1f56b49a09e3a2be79ba14d3d50c851bc98af` / B8b product985afcd9.
-This is an implementation/checkpoint report, not completed delivery or engineering
-acceptance. Root performs all actual tests, SQL, Docker, build and HTTP work.
+Branch `pf-b9-barrier-delivery-local-20261021`; current source product
+`3d86cb2b34baa0dbc7ada8fc93f7979eb4aa34ed`, inheriting B8b product985afcd9 and
+documentation `b4c1f56b49a09e3a2be79ba14d3d50c851bc98af`.
+Root performs all actual tests, SQL, Docker, builds and HTTP checks. Independent
+agents reviewed source and retained proof files without executing runtime work.
 
-## Implemented controls and actual checks
+## Current delivery result
 
-- New v3 operator has immutable parent/child attempts, sticky uncertain outcomes,
-  fresh owned5192 quarantine/pristine migration, exact candidate image reuse,
-  bounded runtime windows and late cold source-drift refusal. No v2 acceptance
-  gate is disabled. A owns four new operator/test files; B owns the two new
-  qualifier/test files; root owns shared image-install/global-SQL foundations.
-  C independently reviewed source, without executing tests or runtime actions.
-- Root final combined controls3: **99 PASS**, no fail/cancel/skip. This includes
-  actual private synthetic file readers and journal tests, generated-body syntax,
-  lexical bigint keys, canonical DDL/sequence/view/security comparisons,
-  restricted runtime controls and backup/runtime mode separation.
-  Earlier foundations168PASS overlap these counts. They are not additive coverage.
-- Actual read-only PostgreSQL18 catalog diagnostic5 **PASS**:442relations,
-  59routines,2sequences,1extension,1view,0unsupported objects; owned source
-  resources unchanged. This proves SQL syntax/projection against the active
-  source, not cold backup, migration, runtime conservation or browser behavior.
-  `standard_material_catalog` is preserved explicitly with ordered columns,
-  definition, owner and object ACLs. Role memberships/attributes are not claimed.
-- Image installation is restricted to the exact source5191 and operation-linked
-  candidate5192, with both state/env CAS pins, stopped source API/web, actual
-  candidate image labels, unchanged credentials/producer/capacity settings and
-  final pair/read-settings verification. Each file is fsynced before its rename;
-  the two renames are **not an atomic or directory-fsynced pair**. Any partial or
-  uncertain outcome requires inspecting the immutable BEGIN; no automatic retry.
+Fresh operation `1335da29-4a1d-4e2f-9084-8feae288d992` has **PASS** receipts for
+all nine phases: init, backup, restore-quarantine, candidate-build,
+target-migration, target-runtime, update-source, source-runtime and retire-target.
+Source qualification passed at2026-10-21T22:30:57.643Z; the operator resumed the
+exact new source images and passed health/conservation checks. Only the exact
+fresh target was retired at22:34:59.327Z, with containers, volumes and networks
+positively absent. Source5191 is preserved and running the qualified candidate.
+Local operational delivery does not close civil geometry or browser acceptance.
 
-Failures retained privately: initial operator48PASS/4FAIL (mounted module seed and
-Windows short temp-path fixture); migration36/2 then38/2FAIL (canonical temp path,
-then synthetic key fixture not matching PostgreSQL text-cast key arrays). Production
-path/precision guards were preserved. Catalog import attempt1 did not execute SQL;
-attempt2 returned an invalid helper response; instrumented3 identified SQL42725
-(`unknown || char`), fixed with explicit casts;4 identified the existing view;
-5 passed with explicit view coverage. No failed receipt is relabelled PASS.
+The source is port5191, owner `8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46`, compose
+project `wfc-pathfinder-local-0cba87606e9b`, runtime
+`.scratch/batched-capture-runtime-20261018-1600`. Its active candidate is:
 
-## Fresh operation and live startup gate
+- API `sha256:ac0d16ab1b0f4c92922c20d1a13a5ea142d4c6e92558de1870daf4db7fd60fcf`.
+- Web `sha256:aeca927bc32b4588bbf00c3d67a8519271548c2c189608dc661304a8003385b8`.
+- Engine identity `cb8e6a08e33869203b84ead898b3f0b47985082be4c178235a598e0c4102a6c8`.
+- Runner `2ba050c323db52636ae6650942ce69ba3226aaba708cbce7d88c69cee838e24c`.
 
-Planned fresh operation:
-`.scratch/barrier-delivery-55c9f2e7-c53d-4ef1-ad92-26f14ed2aa3e`.
-No operation is inferred from the separate diagnostic scratch
-`.scratch/barrier-delivery-20261021-9f5058f3-8408-4a36-8592-dd46d90e6742`.
+The retired target was owner `701a1cec-bbc4-44bd-8688-fab39c5f0d66`, compose
+project `wfc-pathfinder-local-2f9974cf3486`, operation child `restore-5192`, port5192.
+The same candidate image IDs were used for pristine schema, target qualification
+and source installation. Independent metadata review found all40 prerequisite
+file pins,23 frozen source-closure pins and19 additional source-delivery pins
+exact. Installed source state/env match the installation receipt. Relative to the
+original private pair, only state images/envSha256 and environment
+PF_API_IMAGE/PF_WEB_IMAGE changed; credentials and other configuration are retained.
 
-Actual read-only quiescence: no queued/running jobs, imports/orphan imports,
-location/initial-fill dispatches, active recalculation or current execution lease.
-Eight historical human preparation rows are planned4/collecting4, all past the
-production30-minute hard deadline and with no active validation. They are passive
-HTTP workflow records, not a startup queue, and remain byte-for-byte retained.
+Final public health/assets qualification at22:35:42.451Z passed three HTTP200
+checks: /health, / and /assets/index-FplEqPki.js. Exact ID-only linux/amd64 offline
+image archives were verified and retained: API185748480bytes,
+SHA60c17802a18ff5bc21225ca6bb7e7df1f36a46a8ecabbf8ec6f1c4d8e392972d;
+web55346688bytes, SHA5b80bd656c227968eca7be1daf7adcd599175ad048acd1e36905d95de0e56a60.
+Archive proof identifies the exact images without a tag-reuse inference.
 
-At the superseded55c9f2e7 checkpoint, one **valid enabled persistent calculation grant** remained. Its then-current issuer was
-still admin at the matching admin revision; it has no expiry. Producer settings,
-old login timestamps or completed generations cannot make it harmless. Original
-strict quiescence refusal is retained. The independently reviewed closed
-`cold-backup` mode permits retaining this grant only while owned API/web are cold
-and the inventory proves no other DB client; it cannot authorize source update
-or either runtime-start gate. Actual backup-mode diagnostic2 PASS records
-`sourceUpgradeAuthorized:false`. No grant/schedule row was changed or renewed.
+### Backup, restore and migration
 
-Operation55c9f2e7 checkpoint: init, fresh backup, restore-quarantine, candidate
-build and target-migration **PASS**. Backup has134tables/80846rows and278067273raw
-SQL bytes, all model/staging/PF files and four exact images. Before-fence data and
-globals are exact; only the declared restore fences differ afterward. Source5191
-resumed and healthpassed. Fresh target owner89567827-65e0-4def-9e26-d4f80fe48e8f,
-composewfc-pathfinder-local-833787c05627, port5192. Full schema-only migration and
-second idempotent pass preserve every old row/key/sequence; canonical new seven
-tables remain empty and the new ordinal uncalled. Runtime/source delivery was
-not attempted in this operation.
+Fresh backup `9ed58095-55a6-4336-acb2-fd6ecae850ef` includes134tables,80850rows
+and278070855raw SQL bytes. It retains database dump, MinIO/models, staging,
+Path Finder artifacts, four exact images, configuration and separate private
+companion. Model audit:5versions,1541resources,1930801055bytes; model selection and
+immutable ready metadata unchanged. PF artifact inventory:736625033bytes. Dump
+TOC verification, complete marker and the pinned companion passed.
 
-The user explicitly disabled the persistent setting in old synthetic project
-PF-R3-UI-56eadef6-8382-49f8-a652-c8f12026602e. Root read-only protected-runtime
-preflight confirms0current enabled grants and0runnable work/leases; the eight
-passive rows remain. The agent did not change grant/schedule rows. This change
-occurred **after** the first backup. Operation55c9f2e7 is therefore superseded,
-not failed/retried or relabelled completed. Its backup/evidence remain. Root
-separately retired only its verified new5192 fixture, positively checked resource
-absence and source health/conservation. No controller prerequisite was forged.
+Fresh restore was exact before approved fencing; only declared restore fences
+differed afterward. Full schema-only migration preserved134legacy tables,
+80850rows, keys, sequences and unmanaged schema. The canonical seven new tables
+are the four barrier tables and three Auto length tables; all remained empty and
+the new admission ordinal was uncalled. Comparison uses the same candidate's
+fresh pristine schema. A second initializer pass was exact and idempotent.
 
-Continue with fresh operationcabe7f1a-568b-43a7-b034-ffcca45b5e39 under the SAME
-source controls, from a fresh backup that includes the user's setting. Its init,
-backup, restore-quarantine, candidate-build, target-migration and target-runtime
-are now **PASS**. Backup134tables/80850rows/278070855rawSQLbytes. Fresh target
-ownerf9bed82e-b294-41c8-a450-4067466c27e8, composewfc-pathfinder-local-4f107ee7fae2,
-port5192. Migration preserves134oldtables/80850rows/keys/sequences; canonical
-seven new tables empty, ordinal uncalled and second initializer exact. Runtime
-comparison covers141tables and permits only5engine-observer events in5projects;
-no other row changes. TargetAPI/web are stopped after its bounded qualification.
-Final source migration/runtime and normal HTTP qualification remain NOT_RUN.
+Target runtime qualification covered141tables in18.151seconds, allowing exactly
+five engine-observer events in five projects. All other rows, keys, DDL, globals
+and sequences were retained. Its API/web were then stopped.
 
-### Subsequent normal HTTP checks and source-delivery refusal
+### Normal HTTP and exact fixture delta
 
-Normal5192 operational qualification **PASS_WITH_LIMITATIONS**,29requests: exact
-fresh admin and basic identities; ordinary assigned model access but PF403;
-immediate assignment revocation using the same bearer/cookie; protected997B
-resource exact SHA; explicit close followed by410SESSION_REVOKED. An actual retained
-unexpired bearer has a verified signature under the unchanged source key and is
-rejected401 by restored5192. Old expired cookie replay is **NOT_RUN**, never expiry
-as fencing proof. Existing full raw restore-fence evidence remains separate.
-Only new owned auth fixtures were written; sourceHTTPrequests/authwrites0, source
-configuration/resource bookends exact, targetAPI/web stopped. Root captured all141
-tables afterward for a separate exact owned-row delta qualification.
+The current target's normal HTTP qualification is **PASS_WITH_LIMITATIONS**,
+29requests. Fresh admin and basic identities, assigned ordinary model access,
+PF403 for basic access, immediate assignment revocation with the same bearer and
+cookie, exact protected997B resource SHA, and explicit viewer close followed by
+410SESSION_REVOKED passed. A retained unexpired bearer, privately verified under
+the unchanged source key, was rejected401 by restored5192. Old expired-cookie
+replay is **NOT_RUN**; expiry is not fencing proof.
 
-The source-update attempt then **FAILED B9_DATA_RESOURCES_CHANGED** at
-2026-10-21T21:44:10Z, with no image-install BEGIN. Its sticky failure/lock and all
-earlier receipts remain; it must not be rerun or called a completed delivery.
-Old5191state/env/images remain, with oldAPI/web running. A subsequent explicit
-owned-source cold metadata diagnostic records only dynamic Docker network IPAM
-usage changes: frontIPsInUse4→3/DynamicIPsAvailable65532→65533, backend7→5/
-65529→65531. All identity/configuration/IDs/images/data resources are retained;
-the same old containers resumed and health200. This proves the counter-comparison
-defect, not permission to waive immutable configuration checks. Add narrowly
-validated allocation observation handling, independent review/regressions, local
-commit and a **fresh** source-pinned operation. Retain this target/archives/evidence
-until exact scoped retirement; no failed operation receipt or source pin is edited.
+The exact post-auth comparator passed141tables:138whole tables unchanged; every
+existing row/key unchanged in the other three; all DDL/globals/sequences exact.
+Only one owned basic user, two login bindings and two closed viewer sessions were
+added. Project access returned to its prior state. Password, cookie/JWT identity
+and source-derived time attribution were checked privately. Source HTTP/auth
+writes were zero; no new calculation, Review, Apply or producer activation ran.
+These fixtures remained on the owned target only and were removed with it.
 
-Root's operational auth delta comparator subsequently **PASS** across141tables:
-138whole-table contents exact; every existing row/key exact in the other three;
-all DDL/globals/sequences exact. Only the expected one basic user, two login
-bindings and two closed viewer sessions were added; project access returns to its
-prior state. Exact password/cookie/JWT identity and source-derived time rules were
-checked privately. The first forward-slash CLI launch refused setup before any
-capture/result; native exact canonical-path launch passed. Both logs remain.
+### Source installation and qualification
 
-The diagnosed network fix excludes only the two strictly validated bounded integer
-usage observations per exactly configured subnet. All other network identity,
-configuration, ownership and security fields remain in equality; unknown status
-shapes fail. Raw allocation observations remain separately retained, and record
-sorting is canonical. Root combined **138PASS**,0fail/cancel/skip, overlaps the
-earlier99. Independent C source review is clear. No calculation/engineering guard
-is weakened and no DLL/source arithmetic changed.
+Before installation, a fresh cold source capture passed exact no-drift comparison
+against the backup, including raw SQL/globals and artifacts. Protected-runtime
+quiescence found zero enabled current grants and zero runnable jobs, imports,
+dispatches, active recalculation or leases. Eight expired human preparation rows
+(planned4/collecting4, past the production30-minute deadline, no active validation)
+were retained as passive records.
 
-Only the exact cabe7f1a5192 fixture has now been retired after this proof, with
-positive resource absence and unchanged healthy old5191. Its failed controller,
-backup, private companion, inputs and all evidence remain. Next is a new operation
-1335da29-4a1d-4e2f-9084-8feae288d992 after the local fix commit; previous PASS or
-FAIL records are not rewritten or replayed as a new source-delivery success.
+Update-source passed at2026-10-21T22:28:09.810Z. Its bounded18.259second startup
+window was followed by a cold capture. A second cold capture was exact before
+source qualification. The source-runtime receipt binds backup9ed58095, the same
+pristine schema, candidate images and engine identity. It verifies134legacy
+tables becoming141 under the reviewed migration, with only five engine events
+in five projects and no other legacy-row/key or sequence changes. Artifact audit
+remained exact. The pinned qualification file SHA is
+`e05889e96ecc5a2907481a39e0b25b1cc32c237664b460c2ad244a2589360318`.
+Only after this PASS did the operator resume source API/web and confirm health.
 
-Current frozen candidateAPI297940057e6a047b1e05786df5e291285ee5e508bebca96e6b2f94616d55c3ca,
-webd95000381daabe12f7ef264c97652ede08d198441c14750d0eea181e118fb535.
-Root independently inspected all16installed engine files: closureSHA0294e63ea309917eeda81faaac79b54bfb0ce47b602f31517ceb65e1fc1f57c7,
-engineidentitycb8e6a08 and runner2ba050c3 exactly match the separately actual-qualified
-first candidate below. Image IDs differ; binary qualification is reused only for
-the proven identical complete engine closure, not inferred from branch/source.
+## Implemented controls and actual regression checks
 
-## Fresh built-image actual planning replay
+Root's final combined controls: **138PASS**,0fail/cancel/skip. These overlap the
+earlier99-case controls and168foundation checks; the counts are not additive.
+Coverage includes immutable parent/child attempts and sticky uncertain outcomes,
+generated helper syntax, lossless bigint keys, canonical DDL/sequence/view/security
+comparison, closed backup/runtime policy modes, exact image installation and the
+network observation correction. Independent C source review found no blocker.
 
-First candidate API6d087cc0e3e894d840d93584e44c72ecfef3e6d3678ffce361ad2a5066039767,
-web82a69effc3f780bdb50ad128d9c7b96795602b2f38b604df839aa4e31b8fb27c;
-engineidentitycb8e6a08e33869203b84ead898b3f0b47985082be4c178235a598e0c4102a6c8.
-Its installed runner209920bytes SHA2ba050c323db52636ae6650942ce69ba3226aaba708cbce7d88c69cee838e24c
-differs from B8b's checked artifact, so root qualified the actual image's own DLLs
-and compiled server adapters, with no old assembly/dist overlays.
+Candidate builds occur only on fresh fenced5192. Before source mutation, the
+operator revalidates target qualifications and checks fresh cold source drift.
+Installation verifies source/candidate state and env CAS pins, stopped source
+API/web, candidate labels and final settings. Individual files are fsynced before
+rename; the pair is **not atomic or directory-fsynced**. Partial/unknown outcomes
+remain sticky and cannot be retried automatically.
 
-Fresh owned replay7eee550c-75b9-4625-b174-ca367b500b04 **PASS all five modes**:
-cold16.931s/disk13.591s/sessiondisk13.634s/warm1.233s/0.940s. Full DTOs equal B8b
-final7, normalizing ONLY requestId and prepared.loadedFromDisk. The exact actual
-snapshot/request/driver and source scope/endpoints/cable bookends are unchanged.
-Engine512MiB sampled guard remains; maxsampleone-shot441749504/session451059712,
-Node80891904bytes,100ms sampling,0unavailable; no exact-peak claim. Exit0/noOOM/
-timeout. Bounded network-none/readonly/init fixture retired through tracked own
-cleanup; private inputs/cache/receipts retained. This is single actual cable
-legacy planning equivalence, not protected civil/native/Auto/Apply acceptance.
+Network identity comparison excludes only the two validated nonnegative bounded
+integer usage counters per exactly configured subnet: IPsInUse and
+DynamicIPsAvailable. Exact subnet binding and all other network identity,
+configuration, ownership and security fields remain. Unknown status shapes fail;
+raw usage observations are retained separately. Record sorting is canonical.
 
-## Protected scope and remaining acceptance
+Actual PostgreSQL18 catalog diagnostic5 passed442relations,59routines,2sequences,
+1extension,1view and0unsupported objects. The existing standard_material_catalog
+view is preserved with ordered columns, definition, owner and object ACLs. Role
+memberships/attributes are not claimed.
 
-Source5191 owner8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46, compose
-wfc-pathfinder-local-0cba87606e9b, runtime
-`.scratch/batched-capture-runtime-20261018-1600`; preserve source independently of
-the fact it is itself an old restore. Only fresh exact5192 may be retired.
-No original5180/5190 mutation, real cable Apply, model import or denied cleanup.
+## Preserved earlier operations and failures
 
-Actual civil capture/openings remains **BLOCKED**: user-selected groups are
+- Initial operator48PASS/4FAIL concerned the mounted module seed and Windows
+  short temp-path fixture. Migration36/2 then38/2FAIL exposed canonical-path and
+  synthetic key-array fixtures; production guards were preserved. Catalog
+  attempts1–4 retained import/helper, SQL42725 cast and existing-view failures;
+  attempt5 passed. No failed receipt was relabelled PASS.
+- Operation55c9f2e7-c53d-4ef1-ad92-26f14ed2aa3e reached target migration after a
+  134table/80846row backup. One valid persistent calculation grant prevented
+  runtime qualification. Grants have no expiry; login age or producer settings
+  cannot neutralize them. Closed cold-backup mode could retain it without granting
+  source-update authority. The user later disabled that setting in the old
+  synthetic PF-R3-UI project. Agents did not alter grants/schedules. Because the
+  backup preceded that user change, a new operation was required. Only its owned
+  target was retired; backup and proof remain.
+- Operationcabe7f1a-568b-43a7-b034-ffcca45b5e39 passed its six prerequisites and
+  limited29-request HTTP/auth-delta checks, using historical API29794005/webd9500038
+  on target ownerf9bed82e/project4f107ee7. Its update-source phase failed
+  B9_DATA_RESOURCES_CHANGED at2026-10-21T21:44:10Z, before an image-install BEGIN.
+  Old source images resumed; the failed operation is sticky. A later explicit
+  cold diagnostic proved only Docker allocation counter changes: front4→3 and
+  65532→65533, backend7→5 and65529→65531. Identity/configuration/data resources
+  were retained. No sorting cause was inferred. The narrow reviewed fix was
+  committed before fresh operation1335da29. Only the exact old target was retired
+  after exact owned-auth delta proof. Its archives, companion and failed evidence
+  remain; none became prerequisites for the new operation.
+
+## Installed engine closure and actual planning replay
+
+The current candidate's complete16-file installed engine closure is exactly equal
+to the separately qualified first candidate API6d087cc0e3e894d840d93584e44c72ecfef3e6d3678ffce361ad2a5066039767
+(historical web82a69eff). Closure SHA:
+`0294e63ea309917eeda81faaac79b54bfb0ce47b602f31517ceb65e1fc1f57c7`.
+Every file name/size/SHA and engine identity matched, rather than inferring binary
+equivalence from a branch or source commit. The runner is209920bytes. Its DLL
+differs from B8b's original checked artifact, so root qualified the first image's
+own DLLs and compiled adapters without old assembly/dist overlays.
+
+Owned replay7eee550c-75b9-4625-b174-ca367b500b04 passed all five actual planning
+modes: cold16.931s, disk13.591s, sessiondisk13.634s, warm1.233s/0.940s. Full DTOs
+equal B8b final7, normalizing only requestId and prepared.loadedFromDisk. Exact
+snapshot/request/driver and source scope/endpoint/cable bookends were retained.
+The512MiB sampled guard remained; maxima were441749504bytes one-shot,
+451059712session and80891904Node,100ms sampling,0unavailable; no exact-peak claim.
+Exit0/noOOM/timeout. The network-none/read-only/init fixture was retired, with
+private inputs/cache/receipts retained. This proves single-cable legacy planning
+equivalence; it does not qualify civil geometry, Auto publication or Apply.
+
+## Remaining acceptance and boundaries
+
+Source5191 is preserved even though it is itself an older restore. Only fresh
+operation-owned5192 was retired. No original5180/5190 update, real cable Apply,
+model import or denied cleanup was performed in B9. Simplified Preparer for main
+5180 remains queued after permitted Path Finder work, with its own backup and
+qualification requirements.
+
+Actual civil capture/openings remains **BLOCKED**. The user-selected groups are
 `3D-Modell_BIS_20260304.rvm` and `DB2401_DESIGN_01-PIPE+GRID_20260304.rvm`.
-Their complete descendant triangles/topology/openings/capacity need legitimate
-protected capture. No bbox solid, explicit-empty or synthetic substitute, native
-oracle claim, saved browser-refusal retry or alternate-origin/native/CDP bypass.
-Final real Aalborg routing checks remain separate from B8b's actual planning replay.
+Their complete descendant triangles/topology/openings/capacity require legitimate
+protected capture. No bounding-box solid, explicit-empty or synthetic substitute
+qualifies them. Actual SDK/browser and final real Aalborg engineering acceptance
+remain **BLOCKED/NOT_RUN**; no saved origin-refusal retry or alternate-origin,
+native or CDP bypass was attempted. Operational delivery and planning replay do
+not close these acceptance gates.
 
-Read-only refresh2026-10-21T20:34Z: original cleanmain/liveoriginmain96e63f13,
-canonicalPF clean45c24bf5. Local B9 base163left/3right versus availableoriginmain.
-No PR returned for B9 head, no combined statuses or PR-triggered first-page runs
-returned for main; no CI/review approval inferred. No remote mutation.
+Read-only remote refresh around2026-10-21T22:35Z recorded live main96e63f13;
+local166left/3right against available originmain. The B9 PR connector returned[];
+no remote mutation or CI/review approval is inferred.

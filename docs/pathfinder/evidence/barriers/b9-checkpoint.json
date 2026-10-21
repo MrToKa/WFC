@@ -1,8 +1,8 @@
 {
   "schemaVersion": "wfc.pf.b9.checkpoint.v1",
-  "status": "ACTIVE",
-  "at": "2026-10-21T21:55:50.553Z",
-  "productCommit": "959dfd975948b795fa5e661b3be63e3c72c4e91f",
+  "status": "PASS_TECHNICAL_DELIVERY_WITH_EXTERNAL_ACCEPTANCE_BLOCKED",
+  "at": "2026-10-21T22:36:50.482Z",
+  "productCommit": "3d86cb2b34baa0dbc7ada8fc93f7979eb4aa34ed",
   "controls": {
     "finalCombined": 138,
     "status": "PASS",
@@ -97,6 +97,76 @@
   },
   "nextOperation": {
     "id": "1335da29-4a1d-4e2f-9084-8feae288d992",
-    "status": "PLANNED_AFTER_FIX_COMMIT"
+    "status": "PASS",
+    "passed": [
+      "init",
+      "backup",
+      "restore-quarantine",
+      "candidate-build",
+      "target-migration",
+      "target-runtime",
+      "update-source",
+      "source-runtime",
+      "retire-target"
+    ],
+    "backupId": "9ed58095-55a6-4336-acb2-fd6ecae850ef",
+    "backupTables": 134,
+    "backupRows": "80850",
+    "backupRawSqlBytes": "278070855",
+    "sourcePort": 5191,
+    "sourceDataConservation": "PASS",
+    "sourceNewImagesHealthy": true,
+    "targetRetirement": "PASS_ONLY_OWNED5192",
+    "candidate": {
+      "api": "sha256:ac0d16ab1b0f4c92922c20d1a13a5ea142d4c6e92558de1870daf4db7fd60fcf",
+      "web": "sha256:aeca927bc32b4588bbf00c3d67a8519271548c2c189608dc661304a8003385b8"
+    },
+    "normalHTTP": {
+      "status": "PASS_WITH_LIMITATIONS",
+      "requests": 29,
+      "expiredCookieReplay": "NOT_RUN",
+      "civilSDKCapture": "BLOCKED"
+    },
+    "authDelta": {
+      "status": "PASS",
+      "tables": 141,
+      "unchangedWholeTables": 138,
+      "allExistingRowsKeysDDLGlobalsSequencesExact": true,
+      "addedBasicUsers": 1,
+      "addedLogins": 2,
+      "addedClosedSessions": 2
+    },
+    "sourceRuntime": {
+      "status": "PASS",
+      "legacyTables": 134,
+      "finalTables": 141,
+      "eventsAdded": 5,
+      "projectsChanged": 5,
+      "windowMs": 18259
+    }
+  },
+  "finalOperational": {
+    "status": "PASS",
+    "publicRequests": 3,
+    "offlineImages": [
+      {
+        "role": "api",
+        "id": "sha256:ac0d16ab1b0f4c92922c20d1a13a5ea142d4c6e92558de1870daf4db7fd60fcf",
+        "bytes": 185748480,
+        "sha256": "60c17802a18ff5bc21225ca6bb7e7df1f36a46a8ecabbf8ec6f1c4d8e392972d"
+      },
+      {
+        "role": "web",
+        "id": "sha256:aeca927bc32b4588bbf00c3d67a8519271548c2c189608dc661304a8003385b8",
+        "bytes": 55346688,
+        "sha256": "5b80bd656c227968eca7be1daf7adcd599175ad048acd1e36905d95de0e56a60"
+      }
+    ]
+  },
+  "remaining": {
+    "actualCivilOpenings": "BLOCKED_PROTECTED_BROWSER_CAPTURE",
+    "nativeOracle": "NOT_RUN_USER_REPLACED_WITH_CONVERTED_AND_MANUAL_REVIEW",
+    "engineeringAcceptance": "NOT_RUN",
+    "nextIndependentStage": "Simplified Preparer SP-0"
   }
 }

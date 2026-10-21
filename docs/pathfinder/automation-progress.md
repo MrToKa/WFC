@@ -1,6 +1,29 @@
 # PathFinder local implementation progress
 
-## Current: PF-B9 ACTIVE — reviewed network fix, fresh operation next
+## Current: PF-B9 technical delivery PASS; civil acceptance BLOCKED
+
+Product 3d86cb2b34baa0dbc7ada8fc93f7979eb4aa34ed, branch pf-b9-barrier-delivery-local-20261021.
+Operation 1335da29-4a1d-4e2f-9084-8feae288d992 completed all nine phases PASS.
+5191 is healthy on exact new API ac0d16ab / web aeca927b. Backup 9ed58095:
+134 tables / 80850 rows / 278070855 raw SQL bytes, verified models/PF files and old images.
+Source migration/runtime: 134 legacy tables preserved, canonical seven added,
+only five bounded engine events in five projects; source model/PF bytes unchanged.
+Normal 5192 HTTP: 29 requests PASS_WITH_LIMITATIONS; exact 141-table auth delta
+PASS (138 whole tables exact; all old rows/keys/DDL/globals/sequences exact; only
+one owned basic user, two logins and two closed sessions). Old expired cookie NOT_RUN.
+Exact fresh target 701a1cec / wfc-pathfinder-local-2f9974cf3486 / 5192 retired;
+source 5191, archives/private companion/evidence retained. Public health/page/asset
+3 checks PASS; both exact new image archives independently verified and retained.
+Controls 138 PASS (overlap earlier counts), five-mode actual legacy replay PASS.
+Actual civil triangles/openings and browser/SDK/manual engineering acceptance remain
+BLOCKED/NOT_RUN. No real-data Apply, native parity or walls acceptance claimed.
+Root only executor; agents frozen after independent source reviews. Foreign and
+denied scratch untouched. Original 5180/5190 not modified by PF work. Report 92 and
+evidence/barriers/b9-checkpoint.json hold exact scope. Next: finalize and execute
+Simplified Preparer SP-0 handoff in its separate worktree; human PF capture is not
+a reason to stop independent work. No actual runtime process remains in this stage.
+
+## Previous checkpoint — reviewed network fix
 
 Branch pf-b9-barrier-delivery-local-20261021. Product959dfd975948b795fa5e661b3be63e3c72c4e91f;
 baseb4c1f56. Report92 ACTIVE. Root sole actual builds/tests/Docker/SQL/HTTPexecutor.
