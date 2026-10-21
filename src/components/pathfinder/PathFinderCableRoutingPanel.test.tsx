@@ -56,7 +56,7 @@ describe('persistent nonmodal cable routing panel with atomic drafts', () => {
     const frame = screen.getByTitle('Model Browser'); act(() => frame.focus()); fireEvent.blur(dialog, { relatedTarget: frame }); fireEvent.pointerLeave(dialog);
     fireEvent.click(screen.getByRole('button', { name: 'Outside control' })); expect(dialog).toBeInTheDocument(); expect(p.onClose).not.toHaveBeenCalled();
     expect(assignment.save).not.toHaveBeenCalled(); expect(useCableEndpointSelection).not.toHaveBeenCalled();
-    expect(Number.parseFloat(dialog.style.left)).toBeGreaterThan(8); expect(Number.parseFloat(dialog.style.width)).toBeLessThanOrEqual(416);
+    expect(dialog.style.position).toBe('fixed'); expect(dialog.style.right).toBe('16px'); expect(dialog.style.maxHeight).toContain('100vh');
   });
   it('Assign reads selected objects independently without saving or applying', () => {
     const p = props(); render(<PathFinderCableRoutingPanel {...p} />);
@@ -193,5 +193,34 @@ describe('selected bounding-box point presentation', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled(); expect(assignment.save).not.toHaveBeenCalled();
     expect(screen.getByText(/connection starts at the centre of its bottom face/)).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Save' })); expect(assignment.save).toHaveBeenCalledOnce();
+  });
+});
+describe('Path Finder detached window integration', () => {
+  it('adopts the clicked window, uses the current selection callbacks and retains draft presentation on return', () => {
+    const p = props(), frame = document.createElement('iframe'); document.body.appendChild(frame); const popup = frame.contentWindow!;
+    Object.defineProperty(popup, 'closed', { configurable: true, value: false }); popup.focus = vi.fn(); popup.close = vi.fn();
+    assignment.from.draft = { mode: 'fixed-world', point: [7, 8, 9], derivation: 'manual-world-point', displaySdkObjectId: 55 };
+    assignment.from.draftSource = 'selected'; assignment.from.displaySelection = { sdkObjectId: 55, name: 'Parent equipment', point: [7, 8, 9] }; assignment.canSave = true;
+    const view = render(<PathFinderCableRoutingPanel {...p} requestedPopup={{ window: popup, blocked: false, id: 'clicked' }} />);
+    const child = within(popup.document.body); expect(child.getByRole('dialog', { name: 'Cable <literal>' })).toBeInTheDocument();
+    fireEvent.click(child.getByRole('button', { name: 'Assign To' })); expect(assignment.to.selectObject).toHaveBeenCalledOnce(); expect(assignment.save).not.toHaveBeenCalled();
+    fireEvent.click(child.getByRole('button', { name: 'Return to page' })); expect(popup.close).toHaveBeenCalled();
+    expect(screen.getByRole('textbox', { name: 'From assigned model object' })).toHaveValue('Parent equipment\nX: 7 m; Y: 8 m; Z: 9 m');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled(); expect(p.onCalculate).not.toHaveBeenCalled(); expect(p.onTogglePath).not.toHaveBeenCalled();
+    view.unmount(); frame.remove();
+  });
+  it('keeps the separate window across cable switches and closes it on role revocation', () => {
+    const p = props(), frame = document.createElement('iframe'); document.body.appendChild(frame); const popup = frame.contentWindow!;
+    Object.defineProperty(popup, 'closed', { configurable: true, value: false }); popup.focus = vi.fn(); popup.close = vi.fn();
+    const request = { window: popup, blocked: false, id: 'clicked' }, view = render(<PathFinderCableRoutingPanel {...p} requestedPopup={request} />);
+    view.rerender(<PathFinderCableRoutingPanel {...p} requestedPopup={request} cable={{ ...p.cable!, cable: { ...p.cable!.cable, id: id(98), tag: 'Another cable' } }} />);
+    expect(within(popup.document.body).getByRole('dialog', { name: 'Another cable' })).toBeInTheDocument(); expect(popup.close).not.toHaveBeenCalled();
+    view.rerender(<PathFinderCableRoutingPanel {...p} requestedPopup={request} access={{ ...p.access, isAdmin: false }} />);
+    expect(popup.close).toHaveBeenCalledOnce(); expect(popup.document.querySelector('[role=dialog]')).toBeNull(); frame.remove();
+  });
+  it('offers an inline fallback when the browser blocks the requested window', () => {
+    render(<PathFinderCableRoutingPanel {...props()} requestedPopup={{ window: null, blocked: true, id: 'blocked' }} />);
+    expect(screen.getByRole('dialog')).toBeVisible(); expect(screen.getByText(/browser blocked the separate window/)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Open in separate window' })).toBeEnabled();
   });
 });

@@ -84,13 +84,14 @@ export function RoutingsViewerTab({ projectId, loadedProjectId, token }: Props) 
           </div>
           {cableReadScope && cables.hasSnapshot ? <Caption1>{cables.omittedCount} {cables.omittedCount === 1 ? 'cable without a tag is' : 'cables without a tag are'} not shown.</Caption1> : null}
           {!viewer.canShow && cableReadScope ? <Body1>Wait until the model is ready before selecting a cable route.</Body1> : null}
-          {cableReadScope && cables.hasSnapshot ? <Caption1>Hover over a tag or press Alt+Enter for cable information.</Caption1> : null}
+          {cableReadScope && cables.hasSnapshot ? <Caption1>Click a cable to keep its window open. Hover over a tag or press Alt+Enter for cable information.</Caption1> : null}
           <ul className={styles.cableList} aria-label="Project cables">
             {(cableReadScope ? cables.rows : []).map(cable => <li key={cable.id}>
               <Button className={styles.cableRow} appearance={cables.selectedCableId === cable.id ? 'secondary' : 'subtle'}
                 aria-pressed={cables.selectedCableId === cable.id} data-cable-id={cable.id}
                 {...information.getRowProps(cable.id)} aria-disabled={!viewer.canShow || !cables.canActivate}
-                onClick={() => { if (!viewer.canShow || !cables.canActivate) return; information.beforeRoute(cable.id);
+                onClick={event => { information.openPinned(cable.id, event.currentTarget);
+                  if (!viewer.canShow || !cables.canActivate) return; information.beforeRoute(cable.id);
                   const selected = cables.select(cable.id); if (selected) void viewer.showCable(selected); }}>{cable.tag}</Button>
             </li>)}
           </ul>

@@ -8,6 +8,7 @@ import type { CalculationAvailability } from '../../../shared/pathfinderCalculat
 type Filter = CableWorkflowQuery['filter'];
 export type PathFinderNeedsRoutingListProps = Omit<PathFinderCableWorkflowAccess, 'query'> & {
   preferences: Pick<CableWorkflowQuery, 'secondaryDistanceMeters' | 'preferVerticalApproach'>;
+  onPreview?: (row: CableWorkflowRow, anchor: HTMLElement) => void; onPreviewLeave?: () => void;
   onSelect: (row: CableWorkflowRow) => void; selectedCableId?: string | null; className?: string;
 };
 const labels = { 'needs-routing': 'Needs routing', calculating: 'Calculating', 'ready-for-review': 'Ready for review',
@@ -100,7 +101,11 @@ function OwnedCableWorkflowList(props: PathFinderNeedsRoutingListProps) {
         const decision = classifyCableWorkflow(row);
         return <li className={styles.row} key={row.cable.id}>
           <Button className={styles.tag} appearance={props.selectedCableId === row.cable.id ? 'primary' : 'subtle'}
-            aria-pressed={props.selectedCableId === row.cable.id} disabled={workflow.busy || !workflow.enabled} onClick={() => props.onSelect(row)}>
+            aria-pressed={props.selectedCableId === row.cable.id} aria-haspopup="dialog" aria-keyshortcuts="Alt+Enter"
+            disabled={workflow.busy || !workflow.enabled} onClick={() => props.onSelect(row)}
+            onPointerEnter={event => props.onPreview?.(row, event.currentTarget)} onPointerLeave={props.onPreviewLeave}
+            onFocus={event => props.onPreview?.(row, event.currentTarget)} onBlur={props.onPreviewLeave}
+            onKeyDown={event => { if (event.altKey && event.key === 'Enter') { event.preventDefault(); props.onSelect(row); } }}>
             {row.cable.tag ?? 'Untagged cable'}
           </Button>
           <p>From: {row.cable.fromLocation ?? 'No location name'}<br />To: {row.cable.toLocation ?? 'No location name'}</p>

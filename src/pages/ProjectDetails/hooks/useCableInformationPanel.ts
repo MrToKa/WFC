@@ -1,4 +1,5 @@
 import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState, type FocusEventHandler, type KeyboardEventHandler, type PointerEventHandler, type RefObject } from 'react';
+import { requestFloatingCableWindow, type FloatingCableWindowRequest } from '@/hooks/useFloatingCablePanel';
 
 export type CableInformationRecord = Readonly<{
   id: string; projectId: string; tag: string | null; fromLocation: string | null; toLocation: string | null; routing: string | null;
@@ -18,11 +19,13 @@ export type CableInformationRowProps = {
 };
 export type CableInformationPanelProps = {
   id: string; cable: CableInformationRecord; pinned: boolean; readStatus: CableInformationReadStatus;
+  scopeKey: object;
+  requestedPopup: FloatingCableWindowRequest | null;
   anchor: HTMLButtonElement | null; anchorRect: CableInformationAnchor; focusOnOpen: boolean;
   notice: string | null; feedback: string | null; fallbackField: CableInformationField | null; copyAttempt: number; allText: string;
   onPointerEnter: PointerEventHandler<HTMLDivElement>; onPointerLeave: PointerEventHandler<HTMLDivElement>;
   onFocus: FocusEventHandler<HTMLDivElement>; onBlur: FocusEventHandler<HTMLDivElement>; onKeyDown: KeyboardEventHandler<HTMLDivElement>;
-  onClose(): void; onTogglePin(): void; onCopy(field: CableInformationField): void;
+  onClose(): void; onTogglePin(): void; onPin(): void; onCopy(field: CableInformationField): void;
 };
 
 type Context = { scope: object | null; lifecycle: string | null; active: boolean };
@@ -31,6 +34,7 @@ type OpenPanel = {
   context: Context; serial: number; cable: CableInformationRecord; generation: number; anchor: HTMLButtonElement;
   anchorRect: CableInformationAnchor; pinned: boolean; focusOnOpen: boolean; notice: string | null;
   feedback: string | null; fallbackField: CableInformationField | null; copyAttempt: number;
+  requestedPopup: FloatingCableWindowRequest | null;
 };
 const tagged = (cable: CableInformationRecord | undefined): cable is CableInformationRecord => Boolean(cable?.tag?.trim());
 const sameData = (a: CableInformationRecord, b: CableInformationRecord) => a.id === b.id && a.projectId === b.projectId && a.tag === b.tag
@@ -39,6 +43,9 @@ const rectOf = (node: HTMLElement): CableInformationAnchor => {
   const { left, right, top, bottom } = node.getBoundingClientRect(); return { left, right, top, bottom };
 };
 export const cableInformationText = (cable: CableInformationRecord) => `From: ${cable.fromLocation ?? ''}\nTo: ${cable.toLocation ?? ''}\nRouting: ${cable.routing ?? ''}`;
+const closeRequestedPopup = (request: FloatingCableWindowRequest | null | undefined) => {
+  try { if (request?.window && !request.window.closed) request.window.close(); } catch { /* A disposed browser window needs no further work. */ }
+};
 
 /** One timer pair and one panel identity, independent of cable selection and routing. */
 export function useCableInformationPanel(options: UseCableInformationPanelOptions) {
@@ -63,7 +70,7 @@ export function useCableInformationPanel(options: UseCableInformationPanelOption
   const close = (restoreFocus: boolean, preserveOtherDwell = false) => {
     const previous = openRef.current;
     if (!preserveOtherDwell || dwellCandidate.current === previous?.cable.id) stopDwell();
-    stopGrace(); ++copySerial.current; publish(null); panelPointer.current = false; panelFocus.current = false;
+    stopGrace(); ++copySerial.current; closeRequestedPopup(previous?.requestedPopup); publish(null); panelPointer.current = false; panelFocus.current = false;
     if (!restoreFocus || !previous || !eligible(previous.context)) return;
     const exact = anchors.current.get(previous.cable.id);
     const target = exact?.context === previous.context && exact.node.isConnected ? exact.node : latest.current.options.searchRef.current;
@@ -80,20 +87,23 @@ export function useCableInformationPanel(options: UseCableInformationPanelOption
       close(false, true);
     }, 150);
   };
-  const openFor = (captured: Context, generation: number, cableId: string, node: HTMLButtonElement, keyboard: boolean) => {
+  const openFor = (captured: Context, generation: number, cableId: string, node: HTMLButtonElement, keyboard: boolean, pin = false) => {
     const current = latest.current.options, anchor = anchors.current.get(cableId);
     if (!eligible(captured) || current.readStatus !== 'confirmed' || generation !== current.snapshotGeneration || !node.isConnected
       || anchor?.node !== node || anchor.context !== captured || anchor.generation !== generation) return;
     const cable = current.rows.find(row => row.id === cableId);
     if (!tagged(cable)) return;
     const previous = openRef.current;
-    if (previous?.context === captured && previous.pinned && previous.cable.id !== cableId) return;
-    if (previous?.context === captured && panelFocus.current && previous.cable.id !== cableId && !keyboard) return;
+    if (previous?.context === captured && previous.pinned && previous.cable.id !== cableId && !pin) return;
+    if (previous?.context === captured && panelFocus.current && previous.cable.id !== cableId && !keyboard && !pin) return;
     stopDwell(); stopGrace(); ++copySerial.current;
     panelPointer.current = false; panelFocus.current = false;
+    const requestedPopup = pin ? requestFloatingCableWindow({ title: `Cable: ${cable.tag}`, width: 520, height: 760 }, previous?.requestedPopup)
+      : previous?.context === captured && previous.cable.id === cableId ? previous.requestedPopup : null;
+    if (previous?.requestedPopup !== requestedPopup) closeRequestedPopup(previous?.requestedPopup);
     publish({ context: captured, serial: ++serial.current, cable: { ...cable }, generation, anchor: node, anchorRect: rectOf(node),
-      pinned: previous?.context === captured && previous.cable.id === cableId ? previous.pinned : false,
-      focusOnOpen: keyboard, notice: null, feedback: null, fallbackField: null, copyAttempt: 0 });
+      pinned: pin || (previous?.context === captured && previous.cable.id === cableId ? previous.pinned : false),
+      focusOnOpen: keyboard, notice: null, feedback: null, fallbackField: null, copyAttempt: 0, requestedPopup });
   };
   const startDwell = (captured: Context, generation: number, cableId: string, node: HTMLButtonElement) => {
     stopDwell();
@@ -111,10 +121,10 @@ export function useCableInformationPanel(options: UseCableInformationPanelOption
   useLayoutEffect(() => {
     alive.current = true; stopDwell(); stopGrace(); ++copySerial.current;
     pointerRow.current = null; focusRow.current = null; panelPointer.current = false; panelFocus.current = false; suppressedFocus.current = null;
-    publish(null);
+    closeRequestedPopup(openRef.current?.requestedPopup); publish(null);
     for (const [key, anchor] of anchors.current) if (anchor.context !== context) anchors.current.delete(key);
     for (const [key, anchor] of anchorCallbacks.current) if (anchor.context !== context) anchorCallbacks.current.delete(key);
-    return () => { alive.current = false; stopDwell(); stopGrace(); ++copySerial.current; };
+    return () => { alive.current = false; stopDwell(); stopGrace(); ++copySerial.current; closeRequestedPopup(openRef.current?.requestedPopup); };
   }, [context]);
   useLayoutEffect(() => {
     const value = openRef.current;
@@ -190,6 +200,9 @@ export function useCableInformationPanel(options: UseCableInformationPanelOption
     if (!eligible(context)) return; stopDwell();
     if (openRef.current?.context === context && openRef.current.cable.id !== cableId) close(false);
   }, [context]);
+  const openPinned = useCallback((cableId: string, node: HTMLButtonElement) => {
+    openFor(context, options.snapshotGeneration, cableId, node, false, true);
+  }, [context, options.snapshotGeneration]);
 
   let visible = open?.context === context && eligible(context) ? open : null;
   if (visible && options.readStatus === 'confirmed' && visible.generation !== options.snapshotGeneration) {
@@ -200,18 +213,22 @@ export function useCableInformationPanel(options: UseCableInformationPanelOption
   const currentPanel = (value: OpenPanel) => eligible(value.context) && openRef.current?.context === value.context
     && openRef.current.serial === value.serial && openRef.current.generation === value.generation && latest.current.options.snapshotGeneration === value.generation;
   const panelProps: CableInformationPanelProps | null = visible ? {
-    id, cable: visible.cable, pinned: visible.pinned, readStatus: options.readStatus, anchor: visible.anchor.isConnected ? visible.anchor : null,
+    id, scopeKey: context, requestedPopup: visible.requestedPopup, cable: visible.cable, pinned: visible.pinned, readStatus: options.readStatus, anchor: visible.anchor.isConnected ? visible.anchor : null,
     anchorRect: visible.anchorRect, focusOnOpen: visible.focusOnOpen, notice: visible.notice, feedback: visible.feedback,
     fallbackField: visible.fallbackField, copyAttempt: visible.copyAttempt, allText: cableInformationText(visible.cable),
     onPointerEnter: () => { if (!currentPanel(visible!)) return; panelPointer.current = true; stopGrace(); },
     onPointerLeave: () => { if (!currentPanel(visible!)) return; panelPointer.current = false; scheduleClose(); },
     onFocus: () => { if (!currentPanel(visible!)) return; panelFocus.current = true; stopGrace(); },
-    onBlur: event => { if (!currentPanel(visible!) || event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return; panelFocus.current = false; scheduleClose(); },
+    onBlur: event => { if (!currentPanel(visible!) || event.relatedTarget instanceof (event.currentTarget.ownerDocument.defaultView?.Node ?? Node) && event.currentTarget.contains(event.relatedTarget as Node)) return; panelFocus.current = false; scheduleClose(); },
     onKeyDown: event => { if (event.key === 'Escape' && currentPanel(visible!)) { event.preventDefault(); event.stopPropagation(); close(true); } },
     onClose: () => { if (currentPanel(visible!)) close(true); },
     onTogglePin: () => {
       if (!currentPanel(visible!)) return; const value = openRef.current!; stopGrace(); publish({ ...value, pinned: !value.pinned });
       if (value.pinned) scheduleClose();
+    },
+    onPin: () => {
+      if (!currentPanel(visible!)) return; stopGrace(); stopDwell();
+      const value = openRef.current!; if (!value.pinned) publish({ ...value, pinned: true });
     },
     onCopy: field => {
       const captured = visible!; if (!currentPanel(captured)) return;
@@ -226,5 +243,5 @@ export function useCableInformationPanel(options: UseCableInformationPanelOption
       })();
     },
   } : null;
-  return { getRowProps, beforeRoute, panelProps };
+  return { getRowProps, beforeRoute, openPinned, panelProps };
 }

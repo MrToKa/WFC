@@ -1,4 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useFloatingCablePanel, type FloatingCableWindowRequest } from '@/hooks/useFloatingCablePanel';
 import { Button, Caption1, Portal, Spinner } from '@fluentui/react-components';
 import type { CableEndpointSelectionAccess } from '@/hooks/useCableEndpointSelection';
 import { useCableEndpointPairSelection } from '@/hooks/useCableEndpointPairSelection';
@@ -7,6 +9,7 @@ import { useCableInformationPanelStyles } from '@/pages/ProjectDetails/CableInfo
 
 export type PathFinderCableRoutingPanelProps = {
   access: Omit<CableEndpointSelectionAccess, 'end' | 'cableId'>;
+  requestedPopup?: FloatingCableWindowRequest | null;
   cable: CableWorkflowRow | null; open: boolean; onClose: () => void; anchor?: HTMLElement | null;
   onCalculate?: () => void | Promise<void>; onTogglePath?: () => void;
   pathVisible?: boolean; actionsBusy?: boolean; calculatedRouting?: string | null; calculatedDesignLength?: string | null;
@@ -17,14 +20,18 @@ export function PathFinderCableRoutingPanel(props: PathFinderCableRoutingPanelPr
   const { access, cable } = props;
   if (!access.isAdmin || !access.accountId || !access.token || !access.projectId || access.projectId !== access.loadedProjectId
     || !cable || cable.projectId !== access.projectId || !['LV', 'Control', 'Instrumentation'].includes(cable.mto ?? '')) return null;
-  const owner = JSON.stringify([access.accountId, access.projectId, access.token, cable.cable.id]);
-  return <OwnedCableRoutingPanel key={owner} {...props} cable={cable} />;
+  const owner = JSON.stringify([access.accountId, access.projectId, access.token, access.model]);
+  return <FloatingRoutingPanel key={owner} {...props} cable={cable} owner={owner} />;
+}
+function FloatingRoutingPanel(props: PathFinderCableRoutingPanelProps & { cable: CableWorkflowRow; owner: string }) {
+  const floating = useFloatingCablePanel({ open: props.open && props.access.active, title: props.cable.cable.tag || 'Cable routing',
+    scopeKey: props.owner, width: 416, preferredTop: 80, requestedPopup: props.requestedPopup });
+  return <OwnedCableRoutingPanel key={props.cable.cable.id} {...props} floating={floating} />;
 }
 function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalculate, onTogglePath, pathVisible = false,
-  actionsBusy = false, calculatedRouting, calculatedDesignLength }: PathFinderCableRoutingPanelProps & { cable: CableWorkflowRow }) {
-  const styles = useCableInformationPanelStyles(), title = useId(), panel = useRef<HTMLDivElement>(null);
+  actionsBusy = false, calculatedRouting, calculatedDesignLength, floating }: PathFinderCableRoutingPanelProps & { cable: CableWorkflowRow; floating: ReturnType<typeof useFloatingCablePanel> }) {
+  const styles = useCableInformationPanelStyles(), title = useId(), panel = floating.panelRef;
   const [collapsed, setCollapsed] = useState(false), previousOpen = useRef(false), focusReturn = useRef<HTMLElement | null>(null);
-  const [position, setPosition] = useState({ left: 8, top: 80, width: 416, maxHeight: 600 });
   const active = access.active && open && !collapsed;
   const assignment = useCableEndpointPairSelection({ ...access, cableId: cable.cable.id, active });
   const { from, to, pending, legacyRecovery } = assignment, busy = assignment.busy || actionsBusy;
@@ -38,22 +45,12 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
     }
     previousOpen.current = open;
   }, [open, anchor]);
-  useLayoutEffect(() => {
-    if (!open) return;
-    const measure = () => {
-      const viewport = window.visualViewport, width = Math.max(1, Math.min(416, (viewport?.width ?? window.innerWidth) - 16));
-      const height = viewport?.height ?? window.innerHeight, top = Math.min(80, Math.max(8, height - 8));
-      setPosition({ width, left: (viewport?.offsetLeft ?? 0) + Math.max(8, (viewport?.width ?? window.innerWidth) - width - 8),
-        top: (viewport?.offsetTop ?? 0) + top, maxHeight: Math.max(1, height - top - 8) });
-    };
-    measure(); window.addEventListener('resize', measure); window.visualViewport?.addEventListener('resize', measure); window.visualViewport?.addEventListener('scroll', measure);
-    return () => { window.removeEventListener('resize', measure); window.visualViewport?.removeEventListener('resize', measure); window.visualViewport?.removeEventListener('scroll', measure); };
-  }, [open]);
   useEffect(() => {
     if (!open) return;
+    const ownerDocument = floating.portalTarget?.ownerDocument ?? document;
     const escape = (event: KeyboardEvent) => { if (event.key === 'Escape' && !event.defaultPrevented && !event.isComposing) { event.preventDefault(); event.stopPropagation(); callbacks.current(); } };
-    document.addEventListener('keydown', escape); return () => document.removeEventListener('keydown', escape);
-  }, [open]);
+    ownerDocument.addEventListener('keydown', escape); return () => ownerDocument.removeEventListener('keydown', escape);
+  }, [open, floating.portalTarget]);
   if (!open || !access.active) return null;
   const endpoint = (end: 'from' | 'to', state: Endpoint) => {
     const side = end === 'from' ? 'From' : 'To', name = end === 'from' ? cable.cable.fromLocation : cable.cable.toLocation;
@@ -77,9 +74,12 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
       {state.notice ? <p role="status" className={styles.note}>{state.notice}</p> : null}
     </section>;
   };
-  return <Portal><div ref={panel} className={styles.panel} style={position} role="dialog" aria-modal="false" aria-labelledby={title}
+  const content = <div ref={panel} className={styles.panel} style={floating.panelStyle} role="dialog" aria-modal="false" aria-labelledby={title}
     tabIndex={-1} data-cable-id={cable.cable.id} data-collapsed={String(collapsed)} onClick={event => event.stopPropagation()}>
-    <h3 id={title} className={styles.heading}>{cable.cable.tag?.trim() ? cable.cable.tag : 'Cable routing'}</h3>
+    <div {...floating.dragHandleProps}><h3 id={title} className={styles.heading}>{cable.cable.tag?.trim() ? cable.cable.tag : 'Cable routing'}</h3></div>
+    <div className={styles.actions}><Button onClick={floating.isPoppedOut ? floating.returnToPage : floating.openInWindow}>{floating.isPoppedOut ? 'Return to page' : 'Open in separate window'}</Button>
+      {!floating.isPoppedOut ? <Button onClick={floating.resetPosition}>Reset position</Button> : null}</div>
+    {floating.notice ? <p role="status" className={styles.note}>{floating.notice}</p> : null}
     <div className={styles.actions}><Button aria-expanded={!collapsed} onClick={() => setCollapsed(value => !value)}>{collapsed ? 'Expand' : 'Collapse'}</Button><Button onClick={close}>Close</Button></div>
     {collapsed ? <p className={styles.note}>Cable routing is collapsed. The model remains available; any pending save is retained.</p> : <>
       <p className={styles.note}>Assign the selected Model Browser object to From or To. The connection starts at the centre of its bottom face. Save to confirm and reuse this location for other cables with the same location name.</p>
@@ -113,5 +113,6 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
         <Button disabled={busy || Boolean(pending) || !assignment.enabled} onClick={() => void assignment.refresh()}>Refresh endpoint contexts</Button>
       </details>
     </>}
-  </div></Portal>;
+  </div>;
+  return floating.portalTarget ? createPortal(content, floating.portalTarget) : <Portal>{content}</Portal>;
 }

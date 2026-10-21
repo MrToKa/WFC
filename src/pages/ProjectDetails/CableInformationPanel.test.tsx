@@ -16,12 +16,12 @@ function Harness({ changes = {}, dark = false, routeReady = true }: { changes?: 
   return <FluentProvider theme={dark ? webDarkTheme : webLightTheme}>
     <input aria-label="Search cable tags" ref={searchRef} />
     {options.rows.map(cable => <button key={cable.id} {...information.getRowProps(cable.id)} aria-disabled={!routeReady}
-      onClick={() => { if (!routeReady) return; information.beforeRoute(cable.id); route(cable.id); }}>{cable.tag}</button>)}
+      onClick={event => { information.openPinned(cable.id, event.currentTarget); if (!routeReady) return; information.beforeRoute(cable.id); route(cable.id); }}>{cable.tag}</button>)}
     {information.panelProps ? <CableInformationPanel {...information.panelProps} /> : null}
   </FluentProvider>;
 }
 const open = () => { const row = screen.getByRole('button', { name: 'Ａ <Cable>' }); fireEvent.pointerEnter(row); act(() => vi.advanceTimersByTime(1000)); return row; };
-beforeEach(() => { vi.useFakeTimers(); route.mockReset(); });
+beforeEach(() => { vi.useFakeTimers(); route.mockReset(); vi.spyOn(window, 'open').mockReturnValue(null); });
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe('interactive nonmodal cable information portal', () => {
@@ -29,12 +29,14 @@ describe('interactive nonmodal cable information portal', () => {
     render(<Harness />); const search = screen.getByRole('textbox', { name: 'Search cable tags' }); search.focus(); open();
     const dialog = screen.getByRole('dialog', { name: 'Ａ <Cable>' });
     expect(dialog).toHaveAttribute('aria-modal', 'false'); expect(dialog).toHaveAttribute('data-cable-id', a); expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    expect(within(dialog).getByRole('heading', { name: 'Ａ <Cable>', level: 3 })).toBeInTheDocument();
     expect(within(dialog).getByRole('textbox', { name: 'From' })).toHaveValue(original.fromLocation);
     expect(within(dialog).getByRole('textbox', { name: 'To' })).toHaveValue('');
     expect(within(dialog).getByRole('textbox', { name: 'Routing' })).toHaveValue(original.routing);
     for (const field of ['From', 'To', 'Routing']) expect(within(dialog).getByRole('textbox', { name: field })).toHaveAttribute('readonly');
     expect(dialog.querySelector('script')).toBeNull(); expect(search).toHaveFocus(); expect(route).not.toHaveBeenCalled();
     expect(dialog.closest('[data-portal-node]')).not.toBeNull();
+    expect(window.open).not.toHaveBeenCalled();
   });
   it('provides the keyboard information path even while route activation is unavailable', () => {
     render(<Harness routeReady={false} />); const row = screen.getByRole('button', { name: 'Ａ <Cable>' });
@@ -63,9 +65,25 @@ describe('interactive nonmodal cable information portal', () => {
     fireEvent.keyDown(search, { key: 'Escape' }); expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); expect(row).toHaveFocus();
     act(() => vi.advanceTimersByTime(1000)); expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); expect(route).not.toHaveBeenCalled();
   });
-  it('allows a new explicit cable route once and closes the previous cable information first', () => {
+  it('allows a new explicit cable route once and replaces the previous information with a pinned cable window', () => {
     render(<Harness />); open(); fireEvent.click(screen.getByRole('button', { name: 'B' }));
-    expect(route).toHaveBeenCalledExactlyOnceWith(b); expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(route).toHaveBeenCalledExactlyOnceWith(b); expect(screen.getByRole('dialog', { name: 'B' })).toHaveAttribute('data-pinned', 'true');
+    expect(window.open).toHaveBeenCalledOnce();
+    act(() => vi.advanceTimersByTime(2000)); expect(screen.getByRole('dialog', { name: 'B' })).toBeInTheDocument();
+  });
+  it('pins an immediate cable click and offers native-window movement controls while popup blocking keeps an inline fallback', () => {
+    render(<Harness />); const row = screen.getByRole('button', { name: 'Ａ <Cable>' }); fireEvent.click(row);
+    const dialog = screen.getByRole('dialog'); expect(dialog).toHaveAttribute('data-pinned', 'true');
+    expect(within(dialog).getByRole('button', { name: 'Open in new window' })).toBeEnabled();
+    expect(within(dialog).getByRole('button', { name: 'Reset position' })).toBeEnabled();
+    expect(within(dialog).getByRole('group', { name: /move/i })).toHaveAttribute('tabindex', '0');
+    fireEvent.pointerLeave(row); act(() => vi.advanceTimersByTime(2000)); expect(dialog).toBeInTheDocument();
+  });
+  it('pins a hover preview when its move handle is used and keeps copy actions separate from routing', () => {
+    render(<Harness />); const row = open(); const dialog = screen.getByRole('dialog');
+    fireEvent.keyDown(within(dialog).getByRole('group', { name: /move/i }), { key: 'ArrowLeft' });
+    expect(dialog).toHaveAttribute('data-pinned', 'true'); fireEvent.pointerLeave(row); act(() => vi.advanceTimersByTime(2000));
+    expect(dialog).toBeInTheDocument(); expect(route).not.toHaveBeenCalled();
   });
   it.each(['unavailable', 'denied'] as const)('provides selected exact Copy all plaintext fallback after clipboard %s without false success', async failure => {
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: failure === 'unavailable' ? undefined : { writeText: vi.fn(async () => { throw new DOMException('Not allowed', 'NotAllowedError'); }) } });
@@ -104,8 +122,8 @@ describe('interactive nonmodal cable information portal', () => {
   });
   it('uses the themed portal and bounds long readonly values to the viewport without growing the grid', () => {
     render(<Harness dark changes={{ rows: [{ ...original, routing: '/LONG'.repeat(2000) }] }} />); open();
-    const dialog = screen.getByRole('dialog'); expect(dialog).toHaveStyle({ position: 'fixed', left: '8px' });
-    expect(parseFloat(dialog.style.width)).toBeLessThanOrEqual(window.innerWidth - 16); expect(parseFloat(dialog.style.maxHeight)).toBeLessThanOrEqual(window.innerHeight - 16);
+    const dialog = screen.getByRole('dialog'); expect(dialog).toHaveStyle({ position: 'fixed' });
+    expect(dialog).toHaveStyle({ width: '416px', maxWidth: 'calc(100vw - 16px)' }); expect(dialog.style.maxHeight).toContain('100vh - 16px');
     expect(dialog.closest('[data-portal-node]')?.className).toContain('fui-FluentProvider');
     expect(within(dialog).getByRole('textbox', { name: 'Routing' })).toHaveValue('/LONG'.repeat(2000));
   });

@@ -85,3 +85,12 @@ describe('read-only Needs routing list', () => {
     expect(cableWorkflowReason(blocked)).toContain('From point was not found'); expect(cableWorkflowReason(blocked)).not.toContain('being calculated');
   });
 });
+
+it('reports hover/focus and leave independently of explicit click, while Alt+Enter opens the selected cable', () => {
+  const options = { ...props(), onPreview: vi.fn(), onPreviewLeave: vi.fn() }; mount(options);
+  const tag = screen.getByRole('button', { name: '<b>C-001</b>' }); fireEvent.pointerEnter(tag);
+  expect(options.onPreview).toHaveBeenCalledWith(page().rows[0], tag); expect(options.onSelect).not.toHaveBeenCalled();
+  fireEvent.pointerLeave(tag); expect(options.onPreviewLeave).toHaveBeenCalledOnce();
+  fireEvent.focus(tag); expect(options.onPreview).toHaveBeenCalledTimes(2); fireEvent.keyDown(tag, { key: 'Enter', altKey: true });
+  expect(options.onSelect).toHaveBeenCalledExactlyOnceWith(page().rows[0]);
+});

@@ -20,14 +20,53 @@ const start = (overrides: Partial<UseCableInformationPanelOptions> = {}) => {
   const leave = (id = a) => act(() => h.result.current.getRowProps(id).onPointerLeave({} as PointerEvent<HTMLButtonElement>));
   const keyboard = (id = a) => { const value = bind(id); const event = { key: 'Enter', altKey: true, currentTarget: value.node, preventDefault: vi.fn(), stopPropagation: vi.fn() };
     act(() => value.props.onKeyDown(event as unknown as KeyboardEvent<HTMLButtonElement>)); return event; };
+  const click = (id = a) => { const value = bind(id); act(() => h.result.current.openPinned(id, value.node)); return value; };
   const rerender = (changes: Partial<UseCableInformationPanelOptions>) => { options = { ...options, ...changes }; h.rerender(options); };
-  return { ...h, search, bind, enter, leave, keyboard, rerender, get options() { return options; } };
+  return { ...h, search, bind, enter, leave, keyboard, click, rerender, get options() { return options; } };
 };
 const tick = (ms: number) => act(() => vi.advanceTimersByTime(ms));
-beforeEach(() => { vi.useFakeTimers(); });
+beforeEach(() => { vi.useFakeTimers(); vi.spyOn(window, 'open').mockReturnValue(null); });
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); document.body.replaceChildren(); });
 
 describe('one scope-bound cable information panel', () => {
+  it('opens and pins on explicit click immediately, retaining the cable after pointer leave', () => {
+    const h = start(); h.click();
+    expect(h.result.current.panelProps?.cable.id).toBe(a); expect(h.result.current.panelProps?.pinned).toBe(true);
+    expect(h.result.current.panelProps?.requestedPopup?.blocked).toBe(true); expect(window.open).toHaveBeenCalledOnce();
+    h.leave(); tick(2000); expect(h.result.current.panelProps?.cable.id).toBe(a);
+  });
+  it('lets another explicit click replace a pinned cable while hover cannot replace it', () => {
+    const h = start(); h.click(); h.enter(b); tick(1000); expect(h.result.current.panelProps?.cable.id).toBe(a);
+    h.click(b); expect(h.result.current.panelProps?.cable.id).toBe(b); expect(h.result.current.panelProps?.pinned).toBe(true);
+  });
+  it('pins an existing hover panel on drag or detach interaction without toggling an already pinned panel', () => {
+    const h = start(); h.enter(); tick(1000); expect(h.result.current.panelProps?.pinned).toBe(false);
+    act(() => h.result.current.panelProps!.onPin()); expect(h.result.current.panelProps?.pinned).toBe(true);
+    act(() => h.result.current.panelProps!.onPin()); expect(h.result.current.panelProps?.pinned).toBe(true);
+    h.leave(); tick(2000); expect(h.result.current.panelProps?.cable.id).toBe(a);
+  });
+  it('refuses stale click requests before opening a browser window', () => {
+    const h = start({ readStatus: 'stale' }); h.click(); expect(h.result.current.panelProps).toBeNull(); expect(window.open).not.toHaveBeenCalled();
+    h.rerender({ readStatus: 'confirmed' }); const staleClick = h.result.current.openPinned, { node } = h.bind();
+    h.rerender({ snapshotGeneration: 2 }); act(() => staleClick(a, node)); expect(h.result.current.panelProps).toBeNull(); expect(window.open).not.toHaveBeenCalled();
+  });
+  it.each(['close', 'scope', 'inactive', 'unmount'] as const)('closes a synchronously requested window on %s even before a portal adopts it', change => {
+    const popup = { closed: false, document: document.implementation.createHTMLDocument(), focus: vi.fn(), close: vi.fn(() => { popup.closed = true; }) };
+    vi.mocked(window.open).mockReturnValue(popup as unknown as Window);
+    const h = start(); h.click(); expect(h.result.current.panelProps?.requestedPopup?.window).toBe(popup);
+    if (change === 'close') act(() => h.result.current.panelProps!.onClose());
+    else if (change === 'scope') h.rerender({ scopeIdentity: {} });
+    else if (change === 'inactive') h.rerender({ active: false });
+    else h.unmount();
+    expect(popup.close).toHaveBeenCalledOnce(); expect(popup.closed).toBe(true);
+  });
+  it('reuses one live browser window when an explicit click selects another cable', () => {
+    const popup = { closed: false, document: document.implementation.createHTMLDocument(), focus: vi.fn(), close: vi.fn() };
+    vi.mocked(window.open).mockReturnValue(popup as unknown as Window);
+    const h = start(); h.click(); const request = h.result.current.panelProps?.requestedPopup;
+    h.click(b); expect(h.result.current.panelProps?.cable.id).toBe(b); expect(h.result.current.panelProps?.requestedPopup).toBe(request);
+    expect(window.open).toHaveBeenCalledOnce(); expect(popup.focus).toHaveBeenCalledOnce(); expect(popup.close).not.toHaveBeenCalled();
+  });
   it('has no dialog at999ms and opens the exact unselected UUID at1000ms without focus theft', () => {
     const h = start(); const { node } = h.enter(b); h.search.focus(); tick(999); expect(h.result.current.panelProps).toBeNull();
     tick(1); expect(h.result.current.panelProps?.cable.id).toBe(b); expect(h.result.current.panelProps?.focusOnOpen).toBe(false);

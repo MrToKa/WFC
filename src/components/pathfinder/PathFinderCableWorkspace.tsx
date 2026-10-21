@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button } from '@fluentui/react-components';
+import { Button, Portal } from '@fluentui/react-components';
+import { requestFloatingCableWindow, type FloatingCableWindowRequest } from '@/hooks/useFloatingCablePanel';
+import { useCableInformationPanelStyles } from '@/pages/ProjectDetails/CableInformationPanel.styles';
 import type { PathFinderPreferences } from '@/api/pathfinder';
 import { fetchPathFinderCableWorkflowDetail, type CableWorkflowRow } from '@/api/pathfinderCableWorkflow';
 import { fetchLocationImpacts } from '@/api/pathfinderLocationImpacts';
@@ -11,7 +13,7 @@ import type { LocationImpactCalculation } from '../../../shared/pathfinderLocati
 import { classifyCableWorkflow } from '../../../shared/pathfinderCableWorkflow';
 import type { usePathFinder } from '@/pages/ProjectDetails/hooks/usePathFinder';
 import type { PathFinderWorkflowDisplay } from '@/pages/ProjectDetails/PathFinderResults';
-import { PathFinderNeedsRoutingList } from './PathFinderNeedsRoutingList';
+import { cableWorkflowReason, PathFinderNeedsRoutingList } from './PathFinderNeedsRoutingList';
 import { PathFinderCableRoutingPanel } from './PathFinderCableRoutingPanel';
 
 type Access = { projectId: string | null; loadedProjectId: string | null; accountId: string | null; token: string | null; isAdmin: boolean };
@@ -32,6 +34,25 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   const [selected, setSelected] = useState<CableWorkflowRow | null>(null), [open, setOpen] = useState(false);
   const [impact, setImpact] = useState<Impact | null>(null), [revision, setRevision] = useState(0), [notice, setNotice] = useState<string | null>(null);
   const [calculating, setCalculating] = useState(false);
+  const [popup, setPopup] = useState<FloatingCableWindowRequest | null>(null), popupRef = useRef<FloatingCableWindowRequest | null>(null);
+  const [preview, setPreview] = useState<{ row: CableWorkflowRow; anchor: HTMLElement } | null>(null);
+  const dwell = useRef<ReturnType<typeof setTimeout> | null>(null), leave = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stopTimers = useCallback(() => { if (dwell.current) clearTimeout(dwell.current); if (leave.current) clearTimeout(leave.current); dwell.current = null; leave.current = null; }, []);
+  const dismissPreview = useCallback(() => { stopTimers(); setPreview(null); }, [stopTimers]);
+  const leavePreview = useCallback(() => { if (dwell.current) clearTimeout(dwell.current); dwell.current = null; if (leave.current) clearTimeout(leave.current);
+    leave.current = setTimeout(() => { setPreview(null); leave.current = null; }, 150); }, []);
+  const keepPreview = useCallback(() => { if (leave.current) clearTimeout(leave.current); leave.current = null; }, []);
+  const previewCable = (row: CableWorkflowRow, anchor: HTMLElement) => {
+    stopTimers(); if (open || !enabled) return;
+    dwell.current = setTimeout(() => { dwell.current = null; if (callbacks.current.active && anchor.isConnected) setPreview({ row, anchor }); }, 1000);
+  };
+  const openCable = (row: CableWorkflowRow) => {
+    if (!enabled || row.projectId !== props.projectId || !['LV', 'Control', 'Instrumentation'].includes(row.mto ?? '')) return;
+    // User activation belongs to this click, before the editor is mounted.
+    const request = requestFloatingCableWindow({ title: row.cable.tag || 'Cable routing' }, popupRef.current);
+    popupRef.current = request; setPopup(request); dismissPreview();
+    read.current?.abort(); setSelected(row); selectedRef.current = row; setOpen(true); setNotice(null); props.onSelect(row);
+  };
   const selectedRef = useRef(selected); selectedRef.current = selected;
   const callbacks = useRef(props); callbacks.current = props;
   const alive = useRef(false), read = useRef<AbortController | null>(null), historyRead = useRef<AbortController | null>(null);
@@ -54,7 +75,9 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
     finally { if (read.current === ticket) read.current = null; }
   }, []);
   const refreshDiagnostics = useCallback(() => { if (alive.current) { setRevision(value => value + 1); void refreshSelected(); } }, [refreshSelected]);
-  useEffect(() => { alive.current = true; return () => { alive.current = false; read.current?.abort(); historyRead.current?.abort(); }; }, []);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; read.current?.abort(); historyRead.current?.abort(); stopTimers();
+    if (popupRef.current?.window && !popupRef.current.window.closed) popupRef.current.window.close(); }; }, [stopTimers]);
+  useEffect(() => { if (!props.active) { dismissPreview(); if (popupRef.current?.window && !popupRef.current.window.closed) popupRef.current.window.close(); } }, [props.active, dismissPreview]);
   useEffect(() => {
     if (lastExternalRefresh.current === props.refreshKey) return;
     if (!props.active) return;
@@ -116,11 +139,13 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   return <section aria-label="Cable routing workspace">
     <PathFinderNeedsRoutingList {...props} active={enabled} modelScopeKey={JSON.stringify([props.owner, revision])}
       preferences={preferences ?? { secondaryDistanceMeters: 2, preferVerticalApproach: true }} selectedCableId={selected?.cable.id ?? null}
-      onAuthorityLost={authorityLost} onSelect={row => { read.current?.abort(); setSelected(row); selectedRef.current = row; setOpen(true); setNotice(null); props.onSelect(row); }} />
+      onAuthorityLost={authorityLost} onSelect={openCable} onPreview={previewCable} onPreviewLeave={leavePreview} />
+    {preview && !open && props.active ? <CableHoverPreview row={preview.row} anchor={preview.anchor} onEnter={keepPreview} onLeave={leavePreview}
+      onClose={dismissPreview} onOpen={() => openCable(preview.row)} /> : null}
     {notice ? <p role="status">{notice}</p> : null}
     {selected ? <p role="status">Selected cable: {selected.cable.tag ?? 'Untagged cable'} — {selectedStatus?.status === 'up-to-date' ? 'Updated in Cable list'
       : selectedStatus?.status === 'ready-for-review' ? 'Ready for review; existing values remain until Apply' : selectedStatus?.status === 'calculating' ? 'Recalculating' : 'Needs routing or attention'}.</p> : null}
-    {selected && !open ? <Button onClick={() => setOpen(true)}>Open selected cable</Button> : null}
+    {selected && !open ? <Button onClick={() => openCable(selected)}>Open selected cable</Button> : null}
     {selected ? <Button disabled={!enabled} onClick={() => { refreshDiagnostics(); void progress.refresh(); void writes.refresh(); }}>Refresh selected cable</Button> : null}
     {impact ? <section aria-label="Affected cable progress">
       <h4>Shared location progress</h4>
@@ -135,7 +160,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
         {progress.impact?.reasonCodes.map(code => <p key={code}>{code}</p>)}
       </details>
     </section> : null}
-    <PathFinderCableRoutingPanel cable={selected} open={open && props.active} onClose={() => setOpen(false)} access={{ ...props,
+    <PathFinderCableRoutingPanel requestedPopup={popup} cable={selected} open={open && props.active} onClose={() => setOpen(false)} access={{ ...props,
       active: enabled, model: model?.modelVersionId && model.contentFingerprint ? { modelVersionId: model.modelVersionId,
         selectionRevision: model.selectionRevision, contentFingerprint: model.contentFingerprint } : null,
       preparationKey: JSON.stringify([props.pf.preparationViewerGeneration, props.pf.data?.artifacts.map(item => [item.id, item.snapshotSha256])]),
@@ -147,4 +172,21 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
       calculatedDesignLength={props.display?.cableId === selected?.cable.id ? props.display?.designLength : undefined}
       actionsBusy={calculating || props.pf.busy} />
   </section>;
+}
+
+/** Hover is a read-only preview. It never reads selection, changes the route or replaces an editor draft. */
+function CableHoverPreview({ row, anchor, onEnter, onLeave, onClose, onOpen }: { row: CableWorkflowRow; anchor: HTMLElement;
+  onEnter: () => void; onLeave: () => void; onClose: () => void; onOpen: () => void }) {
+  const styles = useCableInformationPanelStyles(), rect = anchor.getBoundingClientRect();
+  const left = Math.max(8, Math.min(rect.right + 12, window.innerWidth - 436)), top = Math.max(8, Math.min(rect.top, window.innerHeight - 300));
+  useEffect(() => { const escape = (event: KeyboardEvent) => { if (event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); onClose(); } };
+    document.addEventListener('keydown', escape); return () => document.removeEventListener('keydown', escape); }, [onClose]);
+  return <Portal><div role="dialog" aria-modal="false" aria-label={row.cable.tag || 'Cable preview'} className={styles.panel}
+    style={{ left, top, width: 'min(420px, calc(100vw - 16px))', maxHeight: 'calc(100vh - 16px)' }}
+    onPointerEnter={onEnter} onPointerLeave={onLeave} onFocus={onEnter} onBlur={onLeave} data-cable-preview="true">
+    <h3 className={styles.heading}>{row.cable.tag || 'Cable preview'}</h3>
+    <p>From: {row.cable.fromLocation || 'No location name'}<br />To: {row.cable.toLocation || 'No location name'}</p>
+    <p>{cableWorkflowReason(row)}</p><p>Routing: {row.cable.routing || 'Not set'}<br />Design length: {row.cable.designLength ?? 'Not set'} m</p>
+    <div className={styles.actions}><Button onClick={onOpen}>Open cable in separate window</Button><Button onClick={onClose}>Close preview</Button></div>
+  </div></Portal>;
 }

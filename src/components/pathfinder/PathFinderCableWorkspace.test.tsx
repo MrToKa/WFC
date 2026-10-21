@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PathFinderCableWorkspace, type PathFinderCableWorkspaceProps } from './PathFinderCableWorkspace';
 import type { PathFinderNeedsRoutingListProps } from './PathFinderNeedsRoutingList';
 import type { PathFinderCableRoutingPanelProps } from './PathFinderCableRoutingPanel';
@@ -16,7 +16,7 @@ vi.mock('@/api/pathfinderLocationImpacts', () => ({ fetchLocationImpacts: vi.fn(
 vi.mock('@/hooks/usePathfinderLocationImpactProgress', () => ({ usePathfinderLocationImpactProgress: vi.fn() }));
 vi.mock('@/hooks/usePathfinderInitialFillProgress', () => ({ usePathfinderInitialFillProgress: vi.fn() }));
 let listProps: PathFinderNeedsRoutingListProps, panelProps: PathFinderCableRoutingPanelProps, listRow: CableWorkflowRow;
-vi.mock('./PathFinderNeedsRoutingList', () => ({ PathFinderNeedsRoutingList: (props: PathFinderNeedsRoutingListProps) => {
+vi.mock('./PathFinderNeedsRoutingList', () => ({ cableWorkflowReason: () => 'Resolve the missing From/To points.', PathFinderNeedsRoutingList: (props: PathFinderNeedsRoutingListProps) => {
   listProps = props; return <button disabled={!props.active} onClick={() => props.onSelect(listRow)}>Needs routing cable</button>;
 } }));
 vi.mock('./PathFinderCableRoutingPanel', () => ({ PathFinderCableRoutingPanel: (props: PathFinderCableRoutingPanelProps) => {
@@ -39,11 +39,12 @@ function writeProgress(): InitialFillProgress { return { schemaVersion: 'wfc.pf.
   mandate: { id: id(9), impactId: id(8), contentSha256: 'a'.repeat(64), mode: 'when-both-empty' }, authorized: true, currentAuthority: true, eligibleCables: 1,
   counters: { ...emptyInitialFillCounters(), written: 1 }, retryableUnknown: 0, outstanding: 0, selected: null }; }
 beforeEach(() => {
-  vi.resetAllMocks(); listRow = row(); vi.mocked(fetchLocationImpacts).mockResolvedValue({ impacts: [] } as never);
+  vi.resetAllMocks(); vi.spyOn(window, 'open').mockReturnValue(null); listRow = row(); vi.mocked(fetchLocationImpacts).mockResolvedValue({ impacts: [] } as never);
   vi.mocked(fetchPathFinderCableWorkflowDetail).mockResolvedValue({ projectId: id(1), cableId: id(3), row: row() } as never);
   vi.mocked(usePathfinderLocationImpactProgress).mockReturnValue({ impact: null, error: null, refresh: vi.fn() } as never);
   vi.mocked(usePathfinderInitialFillProgress).mockReturnValue({ progress: null, error: null, refresh: vi.fn() } as never);
 });
+afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 describe('owned cable routing workspace composition (mocked reads and child UI)', () => {
   it('opens the selected bounded row without global refresh and deliberately supplies both-empty v3 policy', () => {
     const p = props(); render(<PathFinderCableWorkspace {...p} />); fireEvent.click(screen.getByRole('button', { name: 'Needs routing cable' }));
@@ -159,5 +160,39 @@ describe('owned cable routing workspace composition (mocked reads and child UI)'
     expect(panelProps.pathVisible).toBe(false); expect(panelProps.calculatedRouting).toBeUndefined(); expect(panelProps.calculatedDesignLength).toBeUndefined();
     view.rerender(<PathFinderCableWorkspace {...p} onTogglePath={toggle} display={{ ...display, routing: null, designLength: null, visible: false }} />);
     expect(panelProps.calculatedRouting).toBeNull(); expect(panelProps.calculatedDesignLength).toBeNull();
+  });
+});
+
+describe('Path Finder cable popup and read-only hover', () => {
+  it('preopens a separate window synchronously from click, reuses it and closes it on owner loss', () => {
+    const close = vi.fn(), focus = vi.fn();
+    const popup = { closed: false, close, focus, document: { title: '' } } as unknown as Window;
+    vi.mocked(window.open).mockReturnValue(popup);
+    const p = props(), view = render(<PathFinderCableWorkspace {...p} />);
+    fireEvent.click(screen.getByText('Needs routing cable'));
+    expect(window.open).toHaveBeenCalledExactlyOnceWith('about:blank', '_blank', expect.stringContaining('popup=yes'));
+    expect(panelProps.requestedPopup?.window).toBe(popup);
+    fireEvent.click(screen.getByText('Needs routing cable')); expect(window.open).toHaveBeenCalledOnce(); expect(focus).toHaveBeenCalled();
+    view.rerender(<PathFinderCableWorkspace {...p} accountId={id(90)} />); expect(close).toHaveBeenCalled();
+    expect(p.pf.calculate).not.toHaveBeenCalled();
+  });
+  it('shows a delayed hover without selection, reads, focus theft or a native window; click opens an editor', () => {
+    vi.useFakeTimers(); const p = props(); render(<PathFinderCableWorkspace {...p} />);
+    const anchor = screen.getByText('Needs routing cable'); anchor.focus();
+    act(() => listProps.onPreview?.(listRow, anchor)); act(() => vi.advanceTimersByTime(999)); expect(screen.queryByRole('dialog')).toBeNull();
+    act(() => vi.advanceTimersByTime(1)); const preview = screen.getByRole('dialog', { name: 'C-001' });
+    expect(preview).toHaveAttribute('data-cable-preview', 'true'); expect(anchor).toHaveFocus();
+    expect(p.onSelect).not.toHaveBeenCalled(); expect(fetchPathFinderCableWorkflowDetail).not.toHaveBeenCalled(); expect(window.open).not.toHaveBeenCalled();
+    act(() => listProps.onPreviewLeave?.()); fireEvent.pointerEnter(preview); act(() => vi.advanceTimersByTime(150)); expect(preview).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Open cable in separate window')); expect(p.onSelect).toHaveBeenCalledOnce(); expect(window.open).toHaveBeenCalledOnce();
+    expect(document.querySelector('[data-cable-preview]')).toBeNull();
+  });
+  it('retires hover on leave and never replaces an open editing draft', () => {
+    vi.useFakeTimers(); const p = props(); render(<PathFinderCableWorkspace {...p} />); const anchor = screen.getByText('Needs routing cable');
+    act(() => listProps.onPreview?.(listRow, anchor)); act(() => vi.advanceTimersByTime(1000)); expect(document.querySelector('[data-cable-preview]')).not.toBeNull();
+    act(() => listProps.onPreviewLeave?.()); act(() => vi.advanceTimersByTime(150)); expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.click(anchor); act(() => listProps.onPreview?.({ ...listRow, cable: { ...listRow.cable, id: id(88) } }, anchor));
+    act(() => vi.advanceTimersByTime(1100)); expect(document.querySelector('[data-cable-preview]')).toBeNull(); expect(panelProps.cable?.cable.id).toBe(id(3));
+    expect(p.onSelect).toHaveBeenCalledOnce();
   });
 });

@@ -178,12 +178,14 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
   const workflowTarget = workflowRow.success && workflowRow.data.projectId === pf.preparationAccess?.projectId && workflowRow.data.cable.id === selectedCableId
     && workflowRow.data.calculation.outcome === 'calculated' && workflowRow.data.calculation.proposalId && workflowRow.data.calculation.proposalHash && workflowRow.data.calculation.jobId
     ? workflowRow.data : null;
-  // Hide belongs to the selected cable context, not a particular proposal. A
-  // later completed job or cable write must not reopen a deliberately hidden
-  // path. Selecting another cable/model/settings context starts a fresh intent.
+  // Selecting a cable reads its result without changing model appearance. Only
+  // an explicit Show may claim the viewer; a new context starts hidden.
+  // Progress or a saved location must not reopen a deliberately hidden path.
   const workflowDisplayContext = JSON.stringify([ownershipKey, active, selectedCableId, data?.activeModel, settingsKey, optionsKey]);
-  const workflowHidden = useRef({ context: workflowDisplayContext, hidden: false });
-  if (workflowHidden.current.context !== workflowDisplayContext) workflowHidden.current = { context: workflowDisplayContext, hidden: false };
+  const workflowProposalKey = workflowTarget ? JSON.stringify([workflowTarget.calculation.jobId, workflowTarget.calculation.proposalId,
+    workflowTarget.calculation.proposalHash, workflowTarget.cable.cableWriteRevision]) : null;
+  const workflowHidden = useRef<{ context: string; hidden: boolean; proposalKey: string | null }>({ context: workflowDisplayContext, hidden: true, proposalKey: null });
+  if (workflowHidden.current.context !== workflowDisplayContext) workflowHidden.current = { context: workflowDisplayContext, hidden: true, proposalKey: null };
   const handledDisplayRequest = useRef(-1);
   // The hint identifies one selected result. Replacing list rows or updating
   // their progress must never silently retarget the selected proposal.
@@ -192,16 +194,23 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
   workflowIdentity.current = selectedWorkflowIdentity;
   const workflowKey = workflowTarget ? JSON.stringify([selectedWorkflowIdentity, workflowTarget.calculation.jobStatus, workflowTarget.calculation.itemState,
     workflowTarget.calculation.currentness, workflowTarget.calculation.reviewable, workflowTarget.calculation.itemApplicability ?? null]) : null;
-  const workflowLatest = useRef({ key: workflowKey, target: workflowTarget, pf, options, claimViewer,
+  const workflowLatest = useRef({ key: workflowKey, proposalKey: workflowProposalKey, target: workflowTarget, pf, options, claimViewer,
     comparisonBase: [ownershipKey, active, displayOwned, selectedCableId, data?.activeModel, settingsKey, optionsKey] });
-  workflowLatest.current = { key: workflowKey, target: workflowTarget, pf, options, claimViewer,
+  workflowLatest.current = { key: workflowKey, proposalKey: workflowProposalKey, target: workflowTarget, pf, options, claimViewer,
     comparisonBase: [ownershipKey, active, displayOwned, selectedCableId, data?.activeModel, settingsKey, optionsKey] };
   useEffect(() => {
     const latest = displayRequestLatest.current;
     if (!workflowDisplayRequest || !latest.active || workflowDisplayRequest.cableId !== latest.selectedCableId
       || !Number.isSafeInteger(workflowDisplayRequest.requestId) || workflowDisplayRequest.requestId <= handledDisplayRequest.current) return;
     handledDisplayRequest.current = workflowDisplayRequest.requestId;
-    if (workflowDisplayRequest.action === 'show') { workflowHidden.current.hidden = false; suppressedWorkflow.current = null; setWorkflowAttempt(value => value + 1); return; }
+    if (workflowDisplayRequest.action === 'show') {
+      // History selection clears workflowScope but retains suppression. A new
+      // Show must schedule a read even when the selected result is unchanged.
+      const retrySelected = workflowScope.current !== null || suppressedWorkflow.current !== null;
+      workflowHidden.current.hidden = false; workflowHidden.current.proposalKey = workflowLatest.current.proposalKey; suppressedWorkflow.current = null;
+      if (retrySelected) setWorkflowAttempt(value => value + 1);
+      return;
+    }
     workflowHidden.current.hidden = true;
     endpointRead.current?.abort(); operation.current++; suppressedWorkflow.current = workflowIdentity.current;
     if (latest.displayOwned) latest.pf.clear();
@@ -209,7 +218,8 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
   }, [workflowDisplayRequest]);
   useEffect(() => {
     const initial = workflowLatest.current, access = initial.pf.preparationAccess, target = initial.target;
-    if (workflowHidden.current.context === workflowDisplayContext && workflowHidden.current.hidden) return;
+    const displayRequested = workflowHidden.current.context === workflowDisplayContext && !workflowHidden.current.hidden
+      && initial.proposalKey !== null && workflowHidden.current.proposalKey === initial.proposalKey;
     if (workflowIdentity.current !== null && suppressedWorkflow.current === workflowIdentity.current) return;
     if (!workflowKey || !target || !active || !accountId || !initial.pf.data || !access?.isAdmin || !access.projectId || access.projectId !== access.loadedProjectId || !access.token) {
       if (workflowScope.current) selectHistory(); return;
@@ -217,7 +227,7 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
     const projectId = access.projectId, token = access.token;
     workflowScope.current = workflowKey; setWorkflowScopeOwner(workflowKey);
     adoptScope({ admissionId: null, jobId: target.calculation.jobId, ready: false, message: 'Checking the selected cable calculation…' }, true);
-    const atOperation = ++operation.current, currentDisplay = initial.claimViewer?.() ?? (() => true), controller = new AbortController();
+    const atOperation = ++operation.current, currentDisplay = displayRequested ? initial.claimViewer?.() ?? (() => true) : () => true, controller = new AbortController();
     endpointRead.current = controller; setPreviewLoading(true);
     const current = () => !controller.signal.aborted && operation.current === atOperation && workflowScope.current === workflowKey
       && workflowLatest.current.key === workflowKey && currentDisplay();
@@ -266,6 +276,9 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
             routing: detail.route?.routeText ?? null, designLength: detail.design?.designLengthMeters ?? null } }) : null;
         setComparison({ owner: comparisonOwner, proposalId: detail.id, proposalHash: detail.proposalHash, revisionResultHash: detail.revisionResultHash ?? null,
           observedRevision, loading: false, input: input?.success ? input.data : null, error: input?.success ? null : 'Live cable comparison is unavailable. Reopen this selected result to check again.' });
+        // Endpoint assignment and diagnostic refreshes must not isolate the
+        // model or change Ghost. Metadata remains available without a preview.
+        if (!displayRequested) return;
         if (!detail.route?.success || !detail.route.points.length) { initial.pf.clear(); setNotice('This proposal has no drawable path. Its diagnostic is shown below.'); return; }
         if (detail.route.points.length > MAX_PATH_POINTS) { setNotice('This exact path exceeds the viewer point budget. The result is retained without truncation.'); return; }
         const endpointIds = latest.pf.data ? await proposalEndpointObjectIds(detail, latest.pf.data, { projectId, token }, controller.signal) : [];
@@ -350,7 +363,9 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
       contextKey={JSON.stringify([data?.activeModel, data?.registryRevision, settingsKey, optionsKey])}
       onAuthorityLost={pf.cancelOperation} onOpenProposal={openProposal} batch={batch} cables={data?.cables ?? []} jobs={data?.jobs ?? []}
       readJob={pf.readJob} onScopeReadinessChange={receiveScope} onHistorySelection={selectHistory} /> : null}
-    {workflowTarget ? <Button disabled={!active || previewLoading || pf.busy || batch.busy} onClick={() => setWorkflowAttempt(value => value + 1)}>Reopen selected cable result</Button> : null}
+    {workflowTarget ? <Button disabled={!active || previewLoading || pf.busy || batch.busy} onClick={() => {
+      workflowHidden.current.hidden = false; workflowHidden.current.proposalKey = workflowProposalKey; suppressedWorkflow.current = null; setWorkflowAttempt(value => value + 1);
+    }}>Reopen selected cable result</Button> : null}
     <Caption1>Calculations use the active model, shared locations, connection gap and allowances from Project Details. Instrumentation follows Control.</Caption1>
     <div className={styles.actions}>
       <Button disabled={options === null || !data?.artifacts.length || pf.busy || !nonMvCableIds.length || nonMvCableIds.length > 10000} onClick={() => void (options ? pf.calculate(nonMvCableIds, true, options) : pf.calculate(nonMvCableIds, true))}>Calculate non-MV cables</Button>
