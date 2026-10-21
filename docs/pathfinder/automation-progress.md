@@ -1,19 +1,41 @@
 # PathFinder local implementation progress
 
-## In progress — From/To display after cable-list updates
+## Delivered — From/To display after cable-list updates
 
-Branch `pf-endpoint-show-consistency-local-20261021` inherits06c7259. Real selected
-cable read-only diagnostic confirms cableWriteRevision changed after fill while
-both fixed-world heads/points/model selection and saved named object hints match.
-Blanket proposal.stale display rejection explains the omitted foreground IDs.
-Resolver now validates model/binding display evidence independently from write
-staleness; Review/Apply remains unchanged. Lookup errors/timeouts propagate to
-existing retry notice instead of silently showing an incomplete foreground.
-Agents own resolver/tests and separate runtime union regression; root alone runs
-runtime/SQL/tests. PASS49 runtime tests; client checks/regression in progress.
-No real Save/calculation/Review/Apply. Exact5191-only static delivery planned with
-fresh web rollback archive, API/PG/MinIO unchanged. Real browser gate remains
-unchanged saved origin refusal, no retry/bypass. Preparer stays queued.
+Branch `pf-endpoint-show-consistency-local-20261021`, product
+`1e844ed57926acc92f19e67a23dc78e134e55cea`, inherits06c7259. Report77 and public
+evidence/cable-workflow/endpoint-show-consistency-actual.json. Real selected cable
+read-only diagnostic confirms changed cableWriteRevision after fill while both
+fixed-world heads/points/model selection and saved named hints match. Blanket
+proposal.stale foreground rejection was the cause. Display now retains exact
+current evidence independently from write staleness. Review/Apply gates unchanged;
+lookup failures/timeouts now reach existing retry notice before any display change.
+Changed resolver + tests, result UI tests and runtime test only; math/runtime
+implementation/model/bindings/initial-fill policy unchanged.
+
+PASS255 regression tests/5 files,49 runtime tests, client types/3-file strict lint/
+diff/independent review and production web build. Initial JSON-only test process
+cancelled for visible reporting; final verbose run PASS. Diagnostic first read
+rolled back on wrong alias column; corrected to actual display_alias and passed.
+Root sole runtime/SQL/test executor. No actual Save/calculation/grant/Review/Apply.
+
+Only5191 web recreated2026-10-21T09:46:54.522Z, image
+4fd5982ca8c68fe40c358d16925f1f3eab1e46faf92b09a3d365e9f9da165732. HTTP200/healthy;
+API c5f12fb2/PG/MinIO identities/config/start times preserved. Fresh static web
+rollback55313920B SHA dc8a4645a5f23e467368427a3b2f696b9d5eec044006250158cc607a281e76a2
+and private runtime metadata in engine scratch/endpoint-show-consistency-20261021/deploy.
+Prior complete cold archivec388f3f6 retained, not rerun/restored this static change.
+Forced actual engine read ebb19973d052848e544e5d75e382f599498453375a6478ef84000c306836021d
+and served runtimebf4c8f76/adapter21469bc0 unchanged. Original backend start changed
+externally with same image/identity/config; no management of it. Original5180/5190/
+sources untouched by task. No new test server/container, no active helper/test.
+Needed rollback/evidence/foreign and denied paths retained; no prune/push/PR/merge.
+Original cleanmain96e63f13; last live remote same09:18:55.180Z, no new feature PR.
+Cached3behind/138ahead at product is not remote parity, unpublished CI NOT_RUN.
+NEXT PF-U7-endpoint-show-browser-check.md: legitimate real browser access change
+required; current saved refusal unchanged, no retry/bypass. User should close old
+popups and Ctrl+F5 opener. Required actual PF checks still precede queued Preparer
+on main5180. Automation last PAUSED; no false resume or workaround.
 
 ## Delivered — direct cable text search
 
