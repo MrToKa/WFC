@@ -47,6 +47,12 @@ PASS. Expected outcomes are design requirements, not generated current results.
 | WR-03 | Both cable fields empty with exact current proof/mandate | guarded initial fill; installLength unchanged | B7 |
 | WR-04 | One/both cable fields populated | compare old/new routing/length; human approval required | B7 |
 | WR-05 | Role loss/import/manual intervening edit | refuse writes, preserve exact idempotent receipts | B7 |
+| WR-06 | Recalculate an already populated cable in its detached popup | exact old/new routing and length comparison plus explicit Review/Apply replaces both fields; no manual clearing; installLength preserved | B7 |
+| WR-07 | Popup switches cable or waits for selected calculation | old proposal cannot be reviewed/applied as the new cable/result; bounded observation, no automatic resubmit or Apply | B7 |
+| AL-01 | Exact successful current PF calculation before Apply | Auto calculated length receives exact PF length immediately; existing Design stays unchanged | B7a |
+| AL-02 | Manual Design edit / API or import Auto injection | Design remains editable; Auto is server-owned and cannot be edited or copied from manual Design | B7a |
+| AL-03 | Failed/cancelled/stale/older calculation | no false fresh Auto value or older-job overwrite; prior successful value has honest source/currentness | B7a |
+| AL-04 | Both Routing and Design blank after location Save | preserve authorized automatic fill, exact PF value and installLength | B7a |
 | AC-01 | Actual photographed civil partitions and openings | real retained triangle/transform evidence; no synthetic substitute | B8 |
 | AC-02 | =H1=KF1=TAC1=WGA1 with drilling off/on | physically valid or blocked / explicitly bypassed | B8 |
 | AC-03 | Representative real geometry +2140 cables | measured bounded capacity, no extrapolated PASS | B8 |

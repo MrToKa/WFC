@@ -1,6 +1,89 @@
 # PathFinder local implementation progress
 
-## PF-B6 technically checked — PF-B7 next, automatic execution ACTIVE
+## PF-B7 technically checked — proceeding to PF-B7a
+
+B7 product34c603c709742e94788077efef54fab7ca37e824 on
+pf-b7-protected-writes-local-20261021. Full final Tab60/60PASS1331.56s;
+Results103PASS; actual owned SQL19+16PASS; types/build/lint/whitespacePASS.
+Report87 and evidence/barriers/b7-writes.json +source-files record overlapping
+scopes, initial failures, synthetic adapters, exact revisions and limitations.
+No root active tests/builds. Own PG55441 retired by verified exactownership.
+No5191/original update or realApply. Actual civil/Aalborg/browser/capacity NOT_RUN;
+protected browser refusal and all denied paths/parents preserved.
+
+Latest user reconfirmed automatic initial fill only when Routing AND Design are
+both blank after Save. Existing/partial values require Review/Apply; Design stays
+manually editable. Auto calculated length must update immediately from exact
+checked PF per-item output, remain readonly, and retain a prior success honestly
+through newer failed/pending requests. No tray-estimate/Design fallback/backfill.
+PF-B7a-auto-length handoff prepared with prepare-stage-handoff and starts immediately
+on new inheriting branch. Shared/store/API/UI drafts only in ignored B7scratch until
+promotion. Root sole actual test/build/SQL/HTTP executor. Agents have nonoverlapping
+store/shared; ordinary Cable API; readonly UI ownership and preserve parallel edits.
+Then B8/B9 and queued Simplified Preparer; automation ACTIVE. No routine pause.
+
+
+## Historical PF-B7 running checkpoint — superseded by completion above
+
+Current checkpoint: source frozen after independent audit and viewer-claim
+comparison ownership fix. Results final check16 103PASS, popup/workspace check14
+160PASS before that narrow fix, recovery/batch/revision112PASS; types/lint final17
+PASS, server-build15PASS. Full final Tab60-case check17 is still RUNNING (session
+61857), verbose log in B7scratch; first12 cases progressing with PASS but slow
+Fluent/jsdom queries. It is not a stage/release PASS yet. Root has no other active
+tests/builds; agents source-frozen. Earlier fullTab13 had48PASS12FAIL; after ownership
+fix affected16 had2PASS10FAIL solely repeated Design-text assertions, now scoped.
+Own PG55441 retired with checked fullID/owner/stage/image/ports/tmpfs-only mounts;
+SQL19+16PASS logs retained. B7a draft handoff is only in B7scratch, not yet executed:
+PF-B7a-auto-length.draft.md. Next: finish finalTab, record B7product/report87/evidence,
+prepare executable B7a handoff, create inheriting B7a branch and execute immediately.
+
+Latest user clarification: add B7a before B8. Auto calculated length must show
+the exact checked PF length immediately after successful calculation, read-only.
+Design remains manually editable and existing/partial values wait for Review/Apply.
+User explicitly reconfirmed the both-blank Save-triggered automatic fill exception.
+Current Auto display is only a client tray-list estimate, not a persisted PF field;
+no legacy-formula fallback/backfill may be represented as PF output. B7a mapping
+is read-only so far; implement after current B7 source/check/report/local commit
+and self-contained prepare-stage-handoff, then execute immediately. Preparer queued.
+
+Branch pf-b7-protected-writes-local-20261021 inherits B6docs040e1e2b5e6bc04f59e6f7661903174995e7650f
+and product2ccec7524d3e793fb5fdb01844a70b45fc90e979. B7handoff prepared through skill,
+executing immediately. Root owns new strict shared/barrier evidence +pure/liveguard,
+jobs/review/Apply/tests/docs and SOLE execution. b6_runtime_review owns initialFill
+Attempts/Writer/Progress+tests; b7_write_map owns sharedInitialFill versionunion,
+ReceiptProof/workflow accepted/baseline projection+tests; b6_ui_tests owns pending/
+batch/results/revision UI+tests. Sharedinterfaces agreed before edits. Preserve
+parallel changes, historical receipts/unknownCOMMIT and all nonempty/install values.
+New evidence ref wfc.pf.barrier-write-evidence.v1 contract,
+new receipt versions apply.v3/initial-fill.v2, freshdepsv8/responsev3 only; no new
+authority for legacy proposals. Next rootcreateownscratch+meaningfulproof/livefence
+tests then realownedSQL, exact checks/report87/commit/handoffB8. No5191/originalwrites,
+no realApply/push/PR/merge/deploy. Rootactual checks: protected/unit group387PASS,
+history/recovery group158PASS (overlapping groups, not a unique sum), servertypesPASS.
+First guardtest failed on cloning a fixture helper function, corrected; typedfailure
+repository fixtures corrected without weakening production. U5realSQL6PASS; U4first
+13FAIL due missing automatic-candidate fixture subsystem, selected-object-only
+matching adapter explicit; rerun U4/U5 actualSQL19PASS. New humanReview/Apply actual
+SQL16PASS (own rows, synthetic geometry/identity/seal/collector boundaries), positive
+manualbaseline+32tampercases added and Repository68PASS. Rootevidence statuses27PASS.
+UIrecovery hooks/batch/revision112PASS; first combinedUIcheck10 interrupted after
+busyworker/no completion (notPASS). Isolatedverbose check12 completed67s,157PASS3FAIL;
+failurefixtures/effectassertions fixed, check14 running. FullTabcheck13 completed309s,
+48PASS12FAIL (comparisonmock readiness/duplicate popuptext), agentC repairing; no
+synchronous render loop proven. Clienttypescheck12PASS, latest UI repairs pending.
+Clienttypescheck10FAIL2 (nullable review /testliteralwidening), lintchangedsourcePASS;
+servertypescheck9PASS. UIagent fixes synchronous Calculate latch/pendingrecovery edge
+and reportedtypes before focusedrerun. Independent audit fixed singleReviewlatch.
+New own PG fixture
+owner03002531/container wfc-pf-b7-sql-03002531 on55441 with private contexts, no5191
+writes. Latest user popupcomparison/existingpairreplace requirement added toplan/
+matrix/handoff; UIagent owns sharedcontroller/popup and bounded selectedjob observer.
+ServerhumanApply now checks exact preserved postwrite fields and historyrowcount.
+AutomationACTIVE, deniedpaths intact, actualbrowser
+andAalborgB8 remainunverified. Preparer stillqueued.
+
+## PF-B6 technically checked — automatic execution ACTIVE
 
 B6 product2ccec7524d3e793fb5fdb01844a70b45fc90e979 on
 pf-b6-barrier-runtime-local-20261021;92source/testfiles committed. Report86,

@@ -209,9 +209,38 @@ cache/restart/cancellation, design reuse refusal and per-item v8 equivalence tes
    changes after review refuse stale writes; idempotent receipt replay remains exact.
 3. Recalculate affected existing cables as proposals and show old/new routing and
    length delta. Preserve installLength and the user's existing nonempty values.
+4. User clarification, 21 October: the detached cable window itself must expose
+   the exact old/new Routing and Design length comparison, Confirm review and
+   Apply after selected-cable recalculation. Apply replaces both existing values
+   atomically; clearing Cable list first is never required. Save continues to
+   confirm shared From/To selections. Only both-blank fields may fill automatically.
+   The popup delegates to the existing exact-proposal/pending-command controller;
+   changing cable, calculation, inputs or policy cannot apply a previous result.
 
 Accept: intervening barrier add/remove/model/drill changes, role loss, manual/import
 revision changes and partial batch recovery refuse unsafe writes; exact receipts pass.
+From the same cable popup, recalculate an already populated cable, inspect both
+routes/lengths, confirm review and replace the pair with installLength unchanged.
+
+### B7a — Server-owned Path Finder automatic length (21 October clarification)
+
+1. Replace the cable's client-derived tray-list estimate under **Auto calculated
+   length [m]** with the exact checked Path Finder design length. Update Auto as
+   soon as a successful current calculation is persisted, independently of human
+   Apply. Auto is read-only in forms, inline editing, API and imports; never copy a
+   manually edited Design length or the old tray formula into it as PF evidence.
+2. Keep **Design length [m]** manually editable. Existing or partially populated
+   Routing/Design values require Review/Apply; preserve the separately reconfirmed
+   both-blank Save-triggered automatic fill. Explicit Apply still writes the exact
+   reviewed Routing/Design pair with installLength unchanged.
+3. Use a bounded server read model tied to the exact verified result/seal, with
+   source/currentness metadata and no viewer/model access for ordinary authorized
+   cable readers. A failed, cancelled, old-policy or stale result cannot become a
+   fresh Auto value; an older job must not overwrite a newer calculation choice.
+   Preserve readable prior successful values honestly if a later attempt fails.
+4. Test immediate Auto update before Apply, retained manual Design override,
+   read-only enforcement, ordering/currentness/ownership and both-blank behavior.
+   Do not run the legacy tray estimate as a fallback for missing PF evidence.
 
 ### B8 — Full qualification and actual Aalborg counterexample
 

@@ -46,6 +46,13 @@ Simplified Preparer is queued after this PF implementation/checks, not a replace
   old/new comparison and human Review→Apply. Never invent a review/engineering decision.
   Preserve installLength and all unrelated fields; server-owned cableWriteRevision
   guards intervening manual/import edits. No agent real-data Apply.
+- User clarification, 21 October: expose old/new Routing and Design length,
+  Confirm review and Apply directly inside the detached cable popup after its
+  recalculation. Existing values are deliberately replaceable as one exact pair;
+  the user must not clear Cable list first. Endpoint Save remains a separate
+  confirmation, both-empty auto-fill remains conditional, and the popup delegates
+  to the same durable exact-proposal Apply controller. Selection/policy/job changes
+  must never apply another cable or an older result.
 - Preserve English/admin-only UI and live server role/login/grant fencing, shared
   endpoint reuse, three tools, selected endpoints/yellow route/filled Ghost/Clear and
   no-Ghost-on-Assign. No Viewer bridge bypass or direct NOP_VIEWER product API.
@@ -126,6 +133,9 @@ Build .NET with --artifacts-path into a NEW owned scratch; preserve frozen expec
 Deliver report87 and exact public no-secret evidence/product revision/file list/check
 scope/PASS/FAIL/BLOCKED/NOT_RUN. Separate technical checks from human acceptance and
 actual model qualification. Update automation-progress, local commit, use
-C:/Users/todor.chankov/.agents/skills/prepare-stage-handoff/SKILL.md to create B8 prompt
-and execute immediately. Stop dependent actual checks only on their real external
+C:/Users/todor.chankov/.agents/skills/prepare-stage-handoff/SKILL.md to create B7a
+Auto-length prompt (new 21 October user clarification in plan78), then B8, and
+execute immediately. Auto is immediate/read-only, Design remains editable;
+the user explicitly reconfirmed the both-blank initial-fill exception. Stop
+dependent actual checks only on their real external
 blocker; continue useful authorized independent work. Do not declare the full task done.
