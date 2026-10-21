@@ -1,4 +1,4 @@
-# PF-B10 — restore cable search and floating editor (ACTIVE)
+# PF-B10 — restore cable search and floating editor (TECHNICALLY DELIVERED)
 
 The user reported missing search, a verbose fallback cable list and no click
 popup on5191 / Path Finder. They explicitly prioritized this repair before saved
@@ -56,7 +56,13 @@ read-only preparation. First preparation refused old Docker API network metadata
 before any source/evidence mutation; the same validated CLI projection passed.
 The installer uses immutable BEGIN/pair intent, exact late CAS, only web service
 replacement and nonweb ID/config/start/resource bookends. Half pairs remain
-uncertain; no blind retry or rollback. Actual build/install remains NOT_RUN here.
+uncertain; no blind retry or rollback. Product d4bec199deb18b430dc4b885f72255840c2d71e1 built and installed PASS.
+New web sha256:e40d07e7c7a5f9ef5e88c0765d9ec198d9ec96a8a262e03f9dd2bda2b6ad976c.
+Health/page/asset200 and exact nonweb resource conservation PASS; API remains in
+the same running container. First build wrapper refused invalid bounds before any
+Docker action; corrected wrapper used existing BOUNDS and second build PASS. New
+image exported/verified and private receipt retained. Public delivery receipt:
+docs/pathfinder/evidence/cable-workspace/b10-delivery.json.
 
 Saved obstacle disappearance is the next separate task. Source review shows the
 server retains saved parent selections, while a stale-frame UI branch clears the

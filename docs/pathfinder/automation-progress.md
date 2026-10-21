@@ -1,6 +1,6 @@
 # PathFinder local implementation progress
 
-## Current: PF-B10 cable workspace repair; delivery ACTIVE
+## Current: PF-B10 cable workspace repair technically delivered; PF-B11 next
 
 Branch pf-b10-cable-workspace-availability-local-20261022 inherits b3f941b.
 User priority: restore cable search, compact tag list and click-open native popup
@@ -13,8 +13,11 @@ unselected);16 web-only planner cases PASS; full typecheck PASS, final frontend
 typecheck after compact-list edits PASS. Initial1024MiB typecheck OOM and interrupted
 broad UI run retained as FAIL/INCOMPLETE, not counted as successful suites.
 Operation9bd528af-e78b-4c1e-a58b-5c99af915751 read-only prepare PASS; old web archive
-and state/env/resource pins verified. Next: local commit, web-runtime-only build,
-exact5191 web replacement, normal public health/page/asset checks. Keep same running
+and state/env/resource pins verified. Product d4bec199deb18b430dc4b885f72255840c2d71e1 built and installed PASS. Newweb
+e40d07e7; health/page/asset200 and exact resource conservation PASS. API retained in
+the SAME running container. First build driver refused invalid bounds before any
+Docker action; corrected to existing BOUNDS and second build PASS. Next: self-contained
+PF-B11 saved obstacle persistence handoff, then execute; Preparer stays queued. Keep same running
 API ac0d16ab; no SQL/migration/model/cable writes. Actual browser/civil/manual review
 BLOCKED/NOT_RUN. No forbidden browser retry or denied scratch cleanup.
 Agents source-only and frozen; root sole actual executor. Report93 holds scope.
