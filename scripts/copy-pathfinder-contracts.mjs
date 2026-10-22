@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { createHash, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import { assertCanonicalPath } from './operations/archives.mjs';
+import { SERVER_RUNTIME_FILES, validateRuntimeModuleClosure } from './viewer-runtime/module-closure.mjs';
 
 // tsc consumes .d.mts declarations but does not emit the accompanying runtime.
 const directory = fileURLToPath(new URL('../server/dist/viewer-runtime/', import.meta.url));
@@ -11,7 +12,8 @@ await assertCanonicalPath(path.dirname(directory), { directory: true });
 await fs.mkdir(directory, { recursive: true });
 await assertCanonicalPath(directory, { directory: true });
 const copied = [];
-for (const name of ['equipment-names.mjs', 'display-visibility.mjs', 'routing-bindings.mjs', 'preparation-input.mjs', 'capture-evidence.mjs','capture-input.mjs','pathfinder.mjs','model-capture.mjs', 'barrier-capture.mjs','protocol.mjs']) {
+await validateRuntimeModuleClosure(SERVER_RUNTIME_FILES, name => fs.readFile(new URL('../viewer-runtime/' + name, import.meta.url), 'utf8'));
+for (const name of SERVER_RUNTIME_FILES) {
 const source = fileURLToPath(new URL('../viewer-runtime/' + name, import.meta.url));
 const destination = path.join(directory, name);
 await assertCanonicalPath(source);

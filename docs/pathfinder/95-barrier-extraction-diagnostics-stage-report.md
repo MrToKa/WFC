@@ -66,7 +66,8 @@ At the working source inheriting e42ccd6:
 | Independent integrated source reviews | CLEAR; separate reviewers for extractor, error plumbing and root Controller/import closure |
 | Full frontend/server typecheck | PASS after adding the exact new module declaration; initial missing-declaration typecheck FAIL retained, no type settings loosened |
 | Scoped production lint and diff whitespace | PASS, zero warnings |
-| Candidate build/install | Pending root execution/result below |
+| Initial candidate build | FAIL: actual server:build import reported missing new barrier-capture-errors.mjs in server/dist; BuildKit terminal Error retained. No install was attempted. Explicit server-copy closure now includes and validates the dependency; four closure regressions PASS. A corrected fresh build is required. |
+| Corrected candidate build/install | Pending root execution/result below |
 | Actual5191 metadata diagnostic and rollback archive prepare | PASS, read-only; same current model fingerprint, original published head absent |
 | Actual browser/SDK capture and real cable reroute | BLOCKED by retained browser refusal; no alternate browser/native/CDP/origin bypass attempted |
 | Complete broad-group capture, civil holes and engineering acceptance | NOT_RUN/UNRESOLVED; metadata proves existing v1 limits insufficient |

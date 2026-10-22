@@ -16,6 +16,9 @@ diffcheckPASS. Useraccepted ownendpoint-only initialexit/finalentry beforefirst
 externalsurface; reentry/otherobstacles notexempt. Plan96 recordsacceptedrule.
 Currentweb75187b0a/APIac0d16ab; read-onlyprepare/rollbackarchivePASS.
 Newwebbuild/install pending. Freshoperation4fcfd5a0-6906-413d-91be-8a36084e1898.
+FirstcandidatebuildFAIL(servercopynewhelpermissing; BuildKitterminalError), noinstall.
+RootfixedseparateSERVER_RUNTIME_FILES+actualclosurevalidation;4closuretestsPASS.
+Freshcorrectedbuildrequired, failedvalidation/sourcepinsnotreusedoroverwritten.
 No SQLwrites/APIrestart/realApply/browserbypass. B writesplan96; nextversioned
 multipartcatalog/qualification stage after diagnosticdelivery, executeautonomously.
 Preparer source/harness frozen in separateworktree; no activeactualPreparerprocess.

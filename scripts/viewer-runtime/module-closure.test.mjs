@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
-import { RUNTIME_FILES, validateRuntimeModuleClosure } from './module-closure.mjs';
+import { RUNTIME_FILES, SERVER_RUNTIME_FILES, validateRuntimeModuleClosure } from './module-closure.mjs';
 
 test('the actual deployed first-party graph includes every transitive module', async () => {
   const source = new URL('../../viewer-runtime/', import.meta.url);
@@ -14,6 +14,13 @@ test('the actual deployed first-party graph includes every transitive module', a
   await assert.rejects(validateRuntimeModuleClosure(RUNTIME_FILES.filter(name => name !== 'preparation-input.mjs'), name => fs.readFile(new URL(name, source), 'utf8')), /VIEWER_RUNTIME_MODULE_MISSING/);
   await assert.rejects(validateRuntimeModuleClosure(RUNTIME_FILES.filter(name => name !== 'display-visibility.mjs'), name => fs.readFile(new URL(name, source), 'utf8')), /VIEWER_RUNTIME_MODULE_MISSING/);
   await assert.rejects(validateRuntimeModuleClosure(RUNTIME_FILES.filter(name => name !== 'barrier-capture-errors.mjs'), name => fs.readFile(new URL(name, source), 'utf8')), /VIEWER_RUNTIME_MODULE_MISSING/);
+});
+
+test('the separately copied server contract graph includes the barrier error dependency', async () => {
+  const source = new URL('../../viewer-runtime/', import.meta.url), read = name => fs.readFile(new URL(name, source), 'utf8');
+  const result = await validateRuntimeModuleClosure(SERVER_RUNTIME_FILES, read);
+  assert.equal(result.moduleCount, SERVER_RUNTIME_FILES.length);
+  await assert.rejects(validateRuntimeModuleClosure(SERVER_RUNTIME_FILES.filter(name => name !== 'barrier-capture-errors.mjs'), read), /VIEWER_RUNTIME_MODULE_MISSING/);
 });
 
 test('AST closure follows static imports, re-exports and literal dynamic imports without reading comments or strings as code', async () => {
