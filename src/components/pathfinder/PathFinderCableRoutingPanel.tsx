@@ -1,7 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useFloatingCablePanel, type FloatingCableWindowRequest } from '@/hooks/useFloatingCablePanel';
-import { Button, Caption1, Portal, Spinner } from '@fluentui/react-components';
+import { Button, Caption1, Checkbox, Portal, Spinner } from '@fluentui/react-components';
 import type { CableEndpointSelectionAccess } from '@/hooks/useCableEndpointSelection';
 import { useCableEndpointPairSelection } from '@/hooks/useCableEndpointPairSelection';
 import type { CableWorkflowRow } from '../../../shared/pathfinderCableWorkflow';
@@ -18,6 +18,9 @@ export type PathFinderCableRoutingPanelProps = {
   pathVisible?: boolean; actionsBusy?: boolean; calculatedRouting?: string | null; calculatedDesignLength?: string | null;
   review?: PathFinderWorkflowReview | null; calculationPending?: boolean;
   calculationBlockedReason?: string | null; onConfigureCalculation?: () => void;
+  drillThroughWalls?: boolean; onDrillThroughWallsChange?: (checked: boolean) => void;
+  submittedDrillThroughWalls?: boolean | null;
+  calculationFeedback?: { message: string; working: boolean } | null;
 };
 type Endpoint = ReturnType<typeof useCableEndpointPairSelection>['from'];
 /** Persistent nonmodal portal; only its own bounds intercept pointer input. */
@@ -35,7 +38,8 @@ function FloatingRoutingPanel(props: PathFinderCableRoutingPanelProps & { cable:
 }
 function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalculate, onTogglePath, pathVisible = false,
   actionsBusy = false, calculatedRouting, calculatedDesignLength, review, calculationPending = false, calculationBlockedReason = null,
-  onConfigureCalculation, floating }: PathFinderCableRoutingPanelProps & { cable: CableWorkflowRow; floating: ReturnType<typeof useFloatingCablePanel> }) {
+  onConfigureCalculation, drillThroughWalls = false, onDrillThroughWallsChange, submittedDrillThroughWalls, calculationFeedback,
+  floating }: PathFinderCableRoutingPanelProps & { cable: CableWorkflowRow; floating: ReturnType<typeof useFloatingCablePanel> }) {
   const title = useId(), panel = floating.panelRef;
   const [collapsed, setCollapsed] = useState(false), previousOpen = useRef(false), focusReturn = useRef<HTMLElement | null>(null);
   const active = access.active && open && !collapsed;
@@ -110,6 +114,16 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
         <h4 className={styles.heading}>{calculatedRouting !== undefined ? 'Calculated routing' : 'Cable list routing'}</h4>
         <textarea aria-label="Cable routing" className={styles.value} readOnly value={(calculatedRouting === undefined ? cable.cable.routing : calculatedRouting) ?? ''} placeholder="No routing calculated" rows={3} />
         {calculatedDesignLength !== undefined ? <p className={styles.note}>Calculated design length: {calculatedDesignLength ?? 'Not available'} m</p> : null}
+        {onDrillThroughWallsChange ? <>
+          <Checkbox label="Drill through the walls" checked={drillThroughWalls}
+            disabled={busy || Boolean(pending) || Boolean(legacyRecovery) || calculationPending || Boolean(currentReview?.pending)}
+            onChange={(_, value) => onDrillThroughWallsChange(value.checked === true)} />
+          <Caption1>For the next calculation of this cable only. Ignore all registered barrier types. New shared-location Saves keep drilling disabled. Existing results and pending commands retain their original setting.</Caption1>
+        </> : null}
+        {submittedDrillThroughWalls !== null && submittedDrillThroughWalls !== undefined ? <p className={styles.note}>Submitted calculation: Drill through the walls {submittedDrillThroughWalls ? 'enabled' : 'disabled'}. The next-calculation checkbox does not change this request.</p> : null}
+        {calculationFeedback ? calculationFeedback.working
+          ? <Spinner size="tiny" label={calculationFeedback.message} />
+          : <p role="status" className={styles.note}>{calculationFeedback.message}</p> : null}
         <div className={styles.actions}>
           <Button disabled={busy || Boolean(pending) || Boolean(legacyRecovery) || Boolean(currentReview?.pending) || unsaved || calculationPending || !onCalculate} onClick={() => void onCalculate?.()}>Calculate routing</Button>
           <Button disabled={busy || !onTogglePath || !pathVisible && (!cable.calculation.proposalId || unsaved)} aria-pressed={pathVisible} onClick={onTogglePath}>{pathVisible ? 'Hide' : 'Show'}</Button>
@@ -131,6 +145,7 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
       </section>
       <section className={styles.field} aria-label="Review and Apply cable routing">
         <h4 className={styles.heading}>Review and Apply</h4>
+        {currentReview?.recordedDrillThroughWalls !== null && currentReview?.recordedDrillThroughWalls !== undefined ? <p className={styles.note}>Recorded result: Drill through the walls {currentReview.recordedDrillThroughWalls ? 'enabled' : 'disabled'}. This setting belongs to the exact calculated proposal.</p> : null}
         {currentReview?.autoLength || currentReview?.autoLengthLoading || currentReview?.autoLengthError ? <section aria-label="Automatic length from Cable list">
           <h4 className={styles.heading}>Auto calculated length [m]</h4>
           {currentReview.autoLengthLoading ? <Spinner size="tiny" label="Reading automatic cable length…" /> : null}

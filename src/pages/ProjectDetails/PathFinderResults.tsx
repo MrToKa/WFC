@@ -24,18 +24,23 @@ import type { PathFinderCalculatedItemIdentity } from './hooks/usePathfinderAuto
 
 export type PathFinderWorkflowDisplayRequest = { cableId: string; requestId: number; action: 'show' | 'hide' };
 export type PathFinderWorkflowDisplay = { cableId: string | null; visible: boolean; routing: string | null; designLength: string | null };
+/** Only a positively acknowledged selected-cable job owns this snapshot. */
+export type PathFinderWorkflowCalculationPreferences = { cableId: string; jobId: string; preferences: PathFinderPreferences };
 /** One display-only bridge to the existing owned review/recovery controller.
  * The popup never implements a second writer or creates a replacement command. */
 export type PathFinderWorkflowReview = {
   cableId: string; proposalId: string | null; comparison: CableComparisonInput | null;
   comparisonLoading: boolean; comparisonError: string | null; message: string | null;
   reviewed: boolean; applied: boolean; canReview: boolean; canApply: boolean; busy: boolean;
+  recordedDrillThroughWalls?: boolean | null;
   pending: boolean; canRecover: boolean; recoveryMessage: string | null; recoveryError: string | null;
   autoLength?: AutoLengthView | null; autoLengthLoading?: boolean; autoLengthError?: string | null; refreshAutoLength?: () => void;
   review: () => void; apply: () => void; retry: () => void; closePending: () => void;
 };
 type Props = { pf: ReturnType<typeof usePathFinder>; selectedCableId: string | null; workflowSelection?: CableWorkflowRow | null; accountId?: string | null; active?: boolean; displayOwned?: boolean; claimViewer?: () => () => boolean; options?: PathFinderPreferences | null; onBatchBusyChange?: (busy: boolean) => void; onCableValuesChanged?: () => void;
   backgroundOptions?: PathFinderPreferences | null; readPreferences?: CableWorkflowDetailQuery | null;
+  workflowCalculationPreferences?: PathFinderWorkflowCalculationPreferences | null;
+  workflowConfigurationReady?: boolean;
   workflowDisplayRequest?: PathFinderWorkflowDisplayRequest | null; onWorkflowDisplayChange?: (value: PathFinderWorkflowDisplay) => void;
   onWorkflowReviewChange?: (value: PathFinderWorkflowReview | null) => void;
   onCalculationCommitted?: (value: PathFinderCalculatedItemIdentity) => void };
@@ -49,7 +54,7 @@ function hasExactItemApplicability(proposal: PathFinderProposal | null, projectI
     && proposal.projectId === projectId && proof.data.projectId === projectId && proof.data.jobId === proposal.jobId
     && proof.data.cableId === proposal.cableId && proof.data.proposalId === proposal.id && proof.data.dependencyHash === proposal.provenance.dependencyHash);
 }
-export function PathFinderResults({ pf, selectedCableId, workflowSelection = null, accountId, active = true, displayOwned = true, claimViewer, options, backgroundOptions, readPreferences, onBatchBusyChange, onCableValuesChanged,
+export function PathFinderResults({ pf, selectedCableId, workflowSelection = null, workflowCalculationPreferences = null, workflowConfigurationReady, accountId, active = true, displayOwned = true, claimViewer, options, backgroundOptions, readPreferences, onBatchBusyChange, onCableValuesChanged,
   workflowDisplayRequest, onWorkflowDisplayChange, onWorkflowReviewChange, onCalculationCommitted }: Props) {
   const styles = useRoutingsViewerStyles();
   const [proposal, setProposal] = useState<PathFinderProposal | null>(null), [job, setJob] = useState<PathFinderJob | null>(null);
@@ -206,6 +211,12 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
   const workflowTarget = workflowRow.success && workflowRow.data.projectId === pf.preparationAccess?.projectId && workflowRow.data.cable.id === selectedCableId
     && workflowRow.data.calculation.outcome === 'calculated' && workflowRow.data.calculation.proposalId && workflowRow.data.calculation.proposalHash && workflowRow.data.calculation.jobId
     ? workflowRow.data : null;
+  const workflowExpectedPreferences = workflowCalculationPreferences?.cableId === workflowTarget?.cable.id
+    && workflowCalculationPreferences?.jobId === workflowTarget?.calculation.jobId ? workflowCalculationPreferences?.preferences : undefined;
+  // An acknowledged immutable request identifies a policy; it does not make a
+  // dirty, pending or unavailable current barrier configuration ready.
+  const workflowConfigurationAvailable = workflowConfigurationReady ?? (options !== null);
+  const workflowPreferencesKey = JSON.stringify([workflowExpectedPreferences, workflowConfigurationAvailable]);
   // Selecting a cable reads its result without changing model appearance. Only
   // an explicit Show may claim the viewer; a new context starts hidden.
   // Progress or a saved location must not reopen a deliberately hidden path.
@@ -217,14 +228,16 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
   const handledDisplayRequest = useRef(-1);
   // The hint identifies one selected result. Replacing list rows or updating
   // their progress must never silently retarget the selected proposal.
-  const selectedWorkflowIdentity = workflowTarget ? JSON.stringify([ownershipKey, active, selectedCableId, data?.activeModel, settingsKey, optionsKey, readPreferencesKey, workflowAttempt,
+  const selectedWorkflowIdentity = workflowTarget ? JSON.stringify([ownershipKey, active, selectedCableId, data?.activeModel, settingsKey, optionsKey, readPreferencesKey, workflowPreferencesKey, workflowAttempt,
     workflowTarget.calculation.jobId, workflowTarget.calculation.proposalId, workflowTarget.calculation.proposalHash, workflowTarget.cable.cableWriteRevision]) : null;
   workflowIdentity.current = selectedWorkflowIdentity;
   const workflowKey = workflowTarget ? JSON.stringify([selectedWorkflowIdentity, workflowTarget.calculation.jobStatus, workflowTarget.calculation.itemState,
     workflowTarget.calculation.currentness, workflowTarget.calculation.reviewable, workflowTarget.calculation.itemApplicability ?? null]) : null;
-  const workflowLatest = useRef({ key: workflowKey, proposalKey: workflowProposalKey, target: workflowTarget, pf, readPreferences: comparisonPreferences, claimViewer,
+  const workflowLatest = useRef({ key: workflowKey, proposalKey: workflowProposalKey, target: workflowTarget, pf, readPreferences: comparisonPreferences, expectedPreferences: workflowExpectedPreferences,
+    useRecordedPreferences: workflowConfigurationAvailable && (options !== null || Boolean(workflowExpectedPreferences)), claimViewer,
     comparisonBase: [ownershipKey, active, selectedCableId, data?.activeModel, settingsKey, optionsKey, readPreferencesKey] });
-  workflowLatest.current = { key: workflowKey, proposalKey: workflowProposalKey, target: workflowTarget, pf, readPreferences: comparisonPreferences, claimViewer,
+  workflowLatest.current = { key: workflowKey, proposalKey: workflowProposalKey, target: workflowTarget, pf, readPreferences: comparisonPreferences, expectedPreferences: workflowExpectedPreferences,
+    useRecordedPreferences: workflowConfigurationAvailable && (options !== null || Boolean(workflowExpectedPreferences)), claimViewer,
     comparisonBase: [ownershipKey, active, selectedCableId, data?.activeModel, settingsKey, optionsKey, readPreferencesKey] };
   useEffect(() => {
     const latest = displayRequestLatest.current;
@@ -269,7 +282,13 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
         if (detail.revisionResult && (!envelope || envelope.projectId !== detail.projectId || envelope.cableId !== detail.cableId || envelope.jobId !== detail.jobId
           || envelope.proposalId !== detail.id || envelope.proposalHash !== detail.proposalHash || envelope.revisionResultSha256 !== detail.revisionResultHash
           || envelope.baselineHash !== detail.revisionBaselineHash || envelope.dependencyHash !== detail.provenance?.dependencyHash)) throw new Error('WORKFLOW_RESULT_SCOPE_CHANGED');
-        const preferences = initial.readPreferences === undefined ? detail.routingPreferences : initial.readPreferences;
+        const expectedPreferences = initial.expectedPreferences;
+        if (expectedPreferences && (!detail.routingPreferences || expectedPreferences.secondaryDistanceMeters !== detail.routingPreferences.secondaryDistanceMeters
+          || expectedPreferences.preferVerticalApproach !== detail.routingPreferences.preferVerticalApproach
+          || !sameBarrierAdmissionIntent(expectedPreferences.barrierRouting, detail.routingPreferences.barrierRouting))) throw new Error('WORKFLOW_CALCULATION_PREFERENCES_CHANGED');
+        // Read this exact proposal under its original submitted policy. The
+        // popup's next-calculation checkbox is never an approval policy change.
+        const preferences = initial.useRecordedPreferences ? detail.routingPreferences ?? initial.readPreferences : initial.readPreferences;
         const [parentRead, cableRead] = await Promise.allSettled([
           initial.pf.readJob(detail.jobId),
           preferences ? fetchPathFinderCableWorkflowDetail(projectId, token, detail.cableId, preferences, controller.signal) : Promise.resolve(null),
@@ -346,8 +365,13 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
     if (confirmed) { if (operation.current === current) setApplied(true); confirmedCableWrite(); }
   };
   const summary = data?.proposals.find(value => value.id === proposal?.id), stale = proposal?.stale || summary?.stale || false;
-  const preferencesMatch = options === undefined || Boolean(options && proposal?.routingPreferences && options.secondaryDistanceMeters === proposal.routingPreferences.secondaryDistanceMeters && options.preferVerticalApproach === proposal.routingPreferences.preferVerticalApproach
-    && sameBarrierAdmissionIntent(options.barrierRouting, proposal.routingPreferences.barrierRouting));
+  const acknowledgedWorkflow = Boolean(workflowScopeOwner && proposal && workflowCalculationPreferences?.cableId === proposal.cableId
+    && workflowCalculationPreferences.jobId === proposal.jobId);
+  const resultPreferences = workflowScopeOwner && proposal
+    ? workflowConfigurationAvailable && (options !== null || acknowledgedWorkflow) ? proposal.routingPreferences : null
+    : options;
+  const preferencesMatch = resultPreferences === undefined || Boolean(resultPreferences && proposal?.routingPreferences && resultPreferences.secondaryDistanceMeters === proposal.routingPreferences.secondaryDistanceMeters && resultPreferences.preferVerticalApproach === proposal.routingPreferences.preferVerticalApproach
+    && sameBarrierAdmissionIntent(resultPreferences.barrierRouting, proposal.routingPreferences.barrierRouting));
   const proposalJob = data?.jobs.find(value => value.id === proposal?.jobId);
   const checkedJobStatus = workflowScopeOwner ? scopeReadiness.jobStatus : proposalJob?.status ?? scopeReadiness.jobStatus;
   const calculationCancelled = Boolean(proposalJob?.cancelRequested || scopeReadiness.cancelRequested || checkedJobStatus === 'cancelled' || scopeReadiness.jobStatus === 'cancelled');
@@ -422,6 +446,7 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
     cableId: selectedCableId, proposalId: selectedProposal?.id ?? null, comparison: popupComparison,
     comparisonLoading: popupComparisonLoading, comparisonError: popupComparisonError, message: popupMessage,
     reviewed: Boolean(selectedProposal && reviewId), applied: Boolean(selectedProposal && applied),
+    recordedDrillThroughWalls: selectedProposal?.routingPreferences?.barrierRouting?.drillThroughWalls ?? null,
     canReview: Boolean(selectedProposal && canConfirmReview), canApply: Boolean(selectedProposal && canApplyReviewed),
     busy: Boolean(reviewBusy || pf.busy || batch.busy || previewLoading || pendingApply.busy), pending: pendingForCable,
     canRecover: Boolean(pendingForCable && active && !pf.busy && pendingApply.canRetry),
@@ -430,7 +455,7 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
       if (reviewActions.current.owner === reviewOwner) void reviewActions.current[action]();
     }])) as Pick<PathFinderWorkflowReview, 'review' | 'apply' | 'retry' | 'closePending'>,
   } : null, [selectedCableId, selectedProposal?.id, popupComparison, popupComparisonLoading, popupComparisonError, popupMessage,
-    reviewId, applied, canConfirmReview, canApplyReviewed, pf.busy, batch.busy, previewLoading, pendingApply.busy, pendingForCable,
+    reviewId, applied, selectedProposal?.routingPreferences?.barrierRouting?.drillThroughWalls, canConfirmReview, canApplyReviewed, pf.busy, batch.busy, previewLoading, pendingApply.busy, pendingForCable,
     active, pendingApply.canRetry, pendingApply.message, pendingApply.error, reviewOwner, reviewBusy]);
   useEffect(() => { onWorkflowReviewChange?.(workflowReview); }, [onWorkflowReviewChange, workflowReview]);
   useEffect(() => () => { onWorkflowReviewChange?.(null); }, [onWorkflowReviewChange]);
@@ -513,7 +538,7 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
       {proposal.route ? <><Body1>Geometric length: {proposal.route.lengthMeters} m</Body1><Caption1>From approach: {proposal.route.fromDistanceMeters} m{proposal.route.fromRequiresSecondary ? ' (SECONDARY)' : ''}; To approach: {proposal.route.toDistanceMeters} m{proposal.route.toRequiresSecondary ? ' (SECONDARY)' : ''}</Caption1><Caption1>Connection gaps: {proposal.route.connectionGapCount}; total gap length: {proposal.route.connectionGapLengthMeters} m</Caption1><details><summary>Exact route text</summary><p style={{ overflowWrap: 'anywhere' }}>{proposal.route.routeText}</p></details></> : null}
       {proposal.design ? <><Body1>Before percentage: {proposal.design.lengthBeforePercentageMeters} m</Body1><Caption1>Before rounding: {proposal.design.unroundedLengthMeters} m</Caption1><Body1>Design length: {proposal.design.designLengthMeters} m</Body1></> : null}
       <PathFinderDirectSecondary decision={proposal.directSecondary} />
-      <PathFinderBarrierResult execution={proposal.barriers} stale={stale} currentIntent={options?.barrierRouting} />
+      <PathFinderBarrierResult execution={proposal.barriers} stale={stale} currentIntent={resultPreferences?.barrierRouting} />
       {proposal.lengthLedger ? <details><summary>Exact length components</summary>
         <p>Raw geometry: {proposal.lengthLedger.rawLengthDecimalMeters} m. Connection gaps are already included.</p>
         <p>Removed From approach: {proposal.lengthLedger.from.removedApproachMeters} m; removed To approach: {proposal.lengthLedger.to.removedApproachMeters} m.</p>

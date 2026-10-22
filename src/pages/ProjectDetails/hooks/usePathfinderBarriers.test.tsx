@@ -48,10 +48,14 @@ function fixture(initial: number[] = []) {
     current.snapshot!.snapshotId = id(21);
     return { schemaVersion: 'wfc.pf.barrier-publication-receipt.v1' as const, snapshot: current.snapshot!, duplicate: false };
   });
+  const publicationPreflight = vi.fn(async () => {});
   const appearance = { clear: vi.fn(), showPath: vi.fn(), showRoute: vi.fn(), applyTransparency: vi.fn(), restore: vi.fn() };
   const runProjectPreparation = vi.fn(async (_expected: unknown, operation: (viewer: ProjectPreparationViewer) => Promise<unknown>, signal?: AbortSignal) => {
     const assertCurrent = () => { if (signal?.aborted) throw new DOMException('Scope changed', 'AbortError'); };
-    assertCurrent(); const result = await operation({ assertCurrent, readSelection, captureBarriers, publishBarriers, ...appearance } as unknown as ProjectPreparationViewer); assertCurrent(); return result;
+    const publish: ProjectPreparationViewer['publishBarriers'] = async (intentId, value, onWriteStarted) => {
+      await publicationPreflight(); assertCurrent(); onWriteStarted?.(); return publishBarriers(intentId, value);
+    };
+    assertCurrent(); const result = await operation({ assertCurrent, readSelection, captureBarriers, publishBarriers: publish, ...appearance } as unknown as ProjectPreparationViewer); assertCurrent(); return result;
   });
   const pf = { data: { activeModel: { modelVersionId: scope.modelVersionId, selectionRevision: '1', contentFingerprint: scope.contentFingerprint } }, viewerPhase: 'ready', preparationViewerGeneration: 1, busy: false, readSelection, runProjectPreparation, ...appearance } as unknown as Options['pf'];
   const options: Options = { projectId: scope.projectId, loadedProjectId: scope.projectId, token: 'synthetic-login', isAdmin: true, pf };
@@ -66,7 +70,7 @@ function fixture(initial: number[] = []) {
     current = { ...current, registryRevision: snapshot.registryRevision, state: 'ready', selectedParents: [], snapshot, reasonCodes: [] };
     return { schemaVersion: 'wfc.pf.barrier-publication-receipt.v1', snapshot, duplicate: false };
   });
-  return { options, pf, readSelection, runProjectPreparation, captureBarriers, publishBarriers, appearance, observation, makeObservation, getRegistry: () => current, setRegistry: (value: BarrierRegistry) => { current = value; } };
+  return { options, pf, readSelection, runProjectPreparation, captureBarriers, publishBarriers, publicationPreflight, appearance, observation, makeObservation, getRegistry: () => current, setRegistry: (value: BarrierRegistry) => { current = value; } };
 }
 beforeEach(() => vi.clearAllMocks());
 async function mounted(f: ReturnType<typeof fixture>) {
@@ -264,6 +268,45 @@ describe('administrator barrier authoring lifecycle', () => {
     f.publishBarriers.mockRejectedValueOnce(new TypeError('Lost publication acknowledgement')); await act(() => view.result.current.save());
     expect(view.result.current.phase).toBe('unknown'); expect(view.result.current.pending).toBe(true); expect(view.result.current.registry!.snapshot).toEqual(old);
     const first = f.publishBarriers.mock.calls[0]; await act(() => view.result.current.retry()); expect(f.captureBarriers).toHaveBeenCalledTimes(1); expect(f.publishBarriers.mock.calls[1]).toEqual(first);
+  });
+  it('reports a known publication preflight refusal without claiming an unknown PUT outcome', async () => {
+    const f = fixture([7]), view = await mounted(f); f.readSelection.mockResolvedValue(selection(8)); await add(view);
+    const old = view.result.current.registry!.snapshot;
+    f.publicationPreflight.mockRejectedValueOnce(Object.assign(new Error('private SDK details'), { code: 'BARRIER_CAPTURE_GEOMETRY_NOT_READY', status: 409 }));
+    await act(() => view.result.current.save());
+    expect(f.publishBarriers).not.toHaveBeenCalled(); expect(f.captureBarriers).toHaveBeenCalledOnce();
+    expect(view.result.current.phase).toBe('refused'); expect(view.result.current.pending).toBe(true); expect(view.result.current.canRetry).toBe(true);
+    expect(view.result.current.error).toBe(BARRIER_CAPTURE_ERROR_MESSAGES.BARRIER_CAPTURE_GEOMETRY_NOT_READY);
+    expect(view.result.current.error).not.toContain('private SDK'); expect(view.result.current.registry!.snapshot).toEqual(old);
+    const command = vi.mocked(api.beginBarrierCapture).mock.calls[0][2];
+    await act(() => view.result.current.retry());
+    expect(api.beginBarrierCapture).toHaveBeenCalledOnce(); expect(vi.mocked(api.beginBarrierCapture).mock.calls[0][2]).toBe(command);
+    expect(f.captureBarriers).toHaveBeenCalledOnce(); expect(f.publishBarriers).toHaveBeenCalledExactlyOnceWith(id(20), f.observation);
+    expect(view.result.current.phase).toBe('ready'); expect(view.result.current.pending).toBe(false);
+  });
+  it.each([409, 403])('retains an earlier uncertain PUT when replay preflight returns %s before another PUT', async status => {
+    const f = fixture([7]), view = await mounted(f); f.readSelection.mockResolvedValue(selection(8)); await add(view);
+    f.publishBarriers.mockRejectedValueOnce(new TypeError('Lost publication acknowledgement'));
+    await act(() => view.result.current.save());
+    expect(view.result.current.phase).toBe('unknown');
+    const command = vi.mocked(api.beginBarrierCapture).mock.calls[0][2], original = f.publishBarriers.mock.calls[0];
+    f.publicationPreflight.mockRejectedValueOnce(Object.assign(new Error('Preflight refused'), { status, code: status === 403 ? 'ADMIN_REQUIRED' : 'BARRIER_CONTEXT_CHANGED' }));
+    await act(() => view.result.current.retry());
+    expect(view.result.current.phase).toBe('unknown'); expect(view.result.current.pending).toBe(true);
+    expect(f.publishBarriers).toHaveBeenCalledOnce(); expect(f.publishBarriers.mock.calls[0]).toEqual(original);
+    expect(f.captureBarriers).toHaveBeenCalledOnce(); expect(api.beginBarrierCapture).toHaveBeenCalledOnce();
+    expect(vi.mocked(api.beginBarrierCapture).mock.calls[0][2]).toBe(command);
+    await act(() => view.result.current.discardPending()); await act(() => view.result.current.save());
+    expect(view.result.current.pending).toBe(true); expect(view.result.current.phase).toBe('unknown'); expect(f.publishBarriers).toHaveBeenCalledOnce();
+  });
+  it('retains a dispatched publication refusal as unknown without a validated exact success receipt', async () => {
+    const f = fixture([7]), view = await mounted(f); f.readSelection.mockResolvedValue(selection(8)); await add(view);
+    f.publishBarriers.mockRejectedValueOnce(Object.assign(new Error('Publication refused'), { status: 409, code: 'BARRIER_CAPTURE_SCOPE' }));
+    await act(() => view.result.current.save());
+    expect(f.publishBarriers).toHaveBeenCalledOnce(); expect(view.result.current.phase).toBe('unknown'); expect(view.result.current.pending).toBe(true);
+    await act(() => view.result.current.retry());
+    expect(f.captureBarriers).toHaveBeenCalledOnce(); expect(api.beginBarrierCapture).toHaveBeenCalledOnce();
+    expect(f.publishBarriers.mock.calls[1]).toEqual(f.publishBarriers.mock.calls[0]); expect(view.result.current.phase).toBe('ready');
   });
   it('keeps the old good head when protected geometry capture refuses', async () => {
     const f = fixture([7]); const view = await mounted(f); const old = view.result.current.registry!.snapshot; f.readSelection.mockResolvedValue(selection(8)); await add(view);

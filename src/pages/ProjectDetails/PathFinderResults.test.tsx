@@ -214,6 +214,49 @@ function workflowFixture(status: 'complete' | 'running' = 'complete') {
   return { pf, proposal, live, parent, selection: live.row };
 }
 describe('selected current cable workflow result', () => {
+  it('reads and reviews the acknowledged selected proposal with its immutable drilling policy while global manual preferences stay off', async () => {
+    const f = workflowFixture(), recorded = barrierFixtureFacts(true), manual = barrierFixtureFacts(false).preferences;
+    f.proposal.routingPreferences = recorded.preferences; f.proposal.barriers = recorded.barriers; f.proposal.provenance!.engineIdentity = recorded.engineIdentity;
+    const update = vi.fn<(value: PathFinderWorkflowReview | null) => void>();
+    render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} workflowSelection={f.selection} accountId={id(2)} options={manual}
+      workflowCalculationPreferences={{ cableId: id(4), jobId: id(7), preferences: recorded.preferences }} onWorkflowReviewChange={update}
+      workflowDisplayRequest={{ cableId: id(4), requestId: 0, action: 'show' }} />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm proposal review' })).toBeEnabled());
+    expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledWith(id(1), 'current-private-token', id(4), recorded.preferences, expect.any(AbortSignal));
+    expect(screen.getByText(/Calculation policy: Drill through the walls enabled/)).toBeInTheDocument();
+    expect(f.proposal.routingPreferences.barrierRouting?.drillThroughWalls).toBe(true); expect(manual.barrierRouting?.drillThroughWalls).toBe(false);
+    expect(update.mock.calls.at(-1)?.[0]).toMatchObject({ canReview: true, recordedDrillThroughWalls: true });
+    expect(f.pf.calculate).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
+  });
+  it('requires a currently available popup configuration before an acknowledged policy can replace null manual options', async () => {
+    const f = workflowFixture(), recorded = barrierFixtureFacts(true), update = vi.fn<(value: PathFinderWorkflowReview | null) => void>(), committed = vi.fn();
+    f.proposal.routingPreferences = recorded.preferences; f.proposal.barriers = recorded.barriers; f.proposal.provenance!.engineIdentity = recorded.engineIdentity;
+    const props = { pf: asPf(f.pf), selectedCableId: id(4), workflowSelection: f.selection, accountId: id(2), options: null,
+      readPreferences: { secondaryDistanceMeters: 2, preferVerticalApproach: true },
+      workflowCalculationPreferences: { cableId: id(4), jobId: id(7), preferences: recorded.preferences },
+      onWorkflowReviewChange: update, onCalculationCommitted: committed,
+      workflowDisplayRequest: { cableId: id(4), requestId: 0, action: 'show' as const } };
+    const view = render(<PathFinderResults {...props} workflowConfigurationReady={false} />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm proposal review' })).toBeDisabled());
+    expect(committed).not.toHaveBeenCalled();
+    view.rerender(<PathFinderResults {...props} workflowConfigurationReady />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm proposal review' })).toBeEnabled());
+    const staleReview = update.mock.calls.at(-1)?.[0]?.review;
+    view.rerender(<PathFinderResults {...props} workflowConfigurationReady={false} />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm proposal review' })).toBeDisabled());
+    act(() => staleReview?.());
+    expect(update.mock.calls.at(-1)?.[0]?.canReview).toBe(false); expect(update.mock.calls.at(-1)?.[0]?.canApply).toBe(false);
+    expect(f.pf.reviewProposal).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled(); expect(f.pf.calculate).not.toHaveBeenCalled();
+  });
+  it('refuses a selected job whose recorded policy differs from the positively acknowledged request snapshot', async () => {
+    const f = workflowFixture(), recorded = barrierFixtureFacts(true), manual = barrierFixtureFacts(false).preferences;
+    f.proposal.routingPreferences = recorded.preferences; f.proposal.barriers = recorded.barriers;
+    render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} workflowSelection={f.selection} accountId={id(2)} options={manual}
+      workflowCalculationPreferences={{ cableId: id(4), jobId: id(7), preferences: manual }}
+      workflowDisplayRequest={{ cableId: id(4), requestId: 0, action: 'show' }} />);
+    await waitFor(() => expect(screen.getByText(/calculation changed or could not be verified/)).toBeVisible());
+    expect(f.pf.showPath).not.toHaveBeenCalled(); expect(fetchPathFinderCableWorkflowDetail).not.toHaveBeenCalled(); expect(f.pf.reviewProposal).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
+  });
   it('reports a selected display-only comparison as loading while its exact live read is pending', async () => {
     const f = workflowFixture(), update = vi.fn<(value: PathFinderWorkflowReview | null) => void>();
     let finish!: (value: typeof f.live) => void;

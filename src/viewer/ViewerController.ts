@@ -538,7 +538,7 @@ export class ViewerController {
 
   /** The upload stays on the same-origin session cookie path. It cannot borrow a
    * different login/model/load, and an uncertain response is never retried here. */
-  async publishBarriers(intentId: string, observation: Awaited<ReturnType<ViewerController['captureBarriers']>>, signal?: AbortSignal) {
+  async publishBarriers(intentId: string, observation: Awaited<ReturnType<ViewerController['captureBarriers']>>, signal?: AbortSignal, onWriteStarted?: () => void) {
     if (!UUID.test(intentId) || this.disposed || !this.loaded || !this.session || !await this.checkSelection()) throw new Error('Barrier publication is unavailable');
     const session = this.session, capture = barrierCaptureSchema.parse(observation.capture), frame = JSON.parse(JSON.stringify(observation.frameObservation)) as typeof observation.frameObservation;
     const publicationGeneration = this.generation;
@@ -565,6 +565,11 @@ export class ViewerController {
     const abort = () => controller.abort(); signal?.addEventListener('abort', abort, { once: true }); if (signal?.aborted) abort();
     const timer = window.setTimeout(abort, 180_000);
     try {
+      controller.signal.throwIfAborted();
+      if (!sameSession() || String(this.selectionRevision) !== capture.scope.selectionRevision) throw new Error('Barrier publication context changed before upload');
+      // Only this protected transport boundary can distinguish a local
+      // preflight refusal from a PUT whose acknowledgement may be lost.
+      onWriteStarted?.();
       const upload = viewerRequest<{ schemaVersion: string; snapshot: unknown; duplicate: unknown }>(
         sessionBase(session.projectId, session.modelVersionId, session.sessionId) + 'barriers/captures/' + intentId,
         this.options.token, { method: 'PUT', body: { capture, frameObservation: frame }, signal: controller.signal });

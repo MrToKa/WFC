@@ -747,6 +747,23 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
     await user.click(screen.getByRole('button', { name: 'Calculate non-MV cables' }));
     expect((pf.calculate.mock.calls as unknown[][]).at(-1)?.[2]).toMatchObject({ barrierRouting: { drillThroughWalls: false } });
   });
+  it('keeps popup calculations and shared-location Save independent of the global manual drilling choice', async () => {
+    const user = userEvent.setup(); mount();
+    await waitFor(() => expect(workspaceCapture.render.mock.calls.at(-1)?.[0].preferences?.barrierRouting?.drillThroughWalls).toBe(false));
+    await user.click(screen.getByRole('checkbox', { name: 'Drill through the walls' }));
+    const popup = workspaceCapture.render.mock.calls.at(-1)?.[0] as PathFinderCableWorkspaceProps;
+    expect(popup.preferences?.barrierRouting?.drillThroughWalls).toBe(false); expect(popup.readPreferences?.barrierRouting?.drillThroughWalls).toBe(false);
+    expect(popup.getCalculationPreferences?.(false)?.barrierRouting?.drillThroughWalls).toBe(false);
+    expect(popup.getCalculationPreferences?.(true)?.barrierRouting?.drillThroughWalls).toBe(true);
+    expect(pf.calculate).not.toHaveBeenCalled();
+  });
+  it.each(['missing', 'dirty', 'pending'] as const)('keeps an unavailable %s barrier configuration blocked for either popup drilling choice', async mode => {
+    barrierComposition.mode = mode; mount();
+    await waitFor(() => expect(workspaceCapture.render).toHaveBeenCalled());
+    const popup = workspaceCapture.render.mock.calls.at(-1)?.[0] as PathFinderCableWorkspaceProps;
+    expect(popup.getCalculationPreferences?.(true)).toBeNull(); expect(popup.getCalculationPreferences?.(false)).toBeNull(); expect(popup.preferences).toBeNull();
+    expect(pf.calculate).not.toHaveBeenCalled();
+  });
   it('starts a changed model selection with drilling off instead of inheriting the previous choice', async () => {
     const user = userEvent.setup(), view = mount();
     await user.click(screen.getByRole('checkbox', { name: 'Drill through the walls' }));

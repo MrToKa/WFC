@@ -1,5 +1,22 @@
 # PathFinder local implementation progress
 
+## Current: PF-B18 popup source checked; owned frontend delivery next
+
+Report108/publicB18receipt:473 uniqueVitest checksPASS (Workspace39/Panel35/
+Results114/Tab72/publicationboundary149/facade64), pureinstaller16, fulltypes,
+scopedlint/frontend+serverbuildsPASS, independentreviewCLEAR. Per-cableOFFdrill,
+exactpositiveACKpolicy andvisibleCalculatefeedback implemented; sharedendpoint
+Save keepsstrictbackgroundpolicy. Currentconfigurationfence retained forreview/
+Apply/autolength. Pre-PUTfailure nofalseUnknown; genuinepriorPUT remainsuncertain.
+FullTab72 finished1216s withactwarnings; twointerruptedruns/fixedtype/assertion
+retained13328c95. Latest28actualretainedselections alltriangles4790vertices/
+3789triangles,3localboundaryfragments; nolines, noSDK/world/globalqualification.
+Operationee326dc1 retainsguardeddiagnosis+preparedexactownedwebdelivery. Runtime
+stillB15weba0e6972c/sameAPIac0d16ab; nextcheckedwebbuild/installwithrollback/CAS.
+Then durableterminalbarrierrefusal/historicalreconciliation+retention, bounded
+surfacequeries/occupancy/ownterminals/runtimeintegration+actualAalborg. NoSQL,
+model/cable/Apply/originalwrites; browserrefusalnotretried. PreparerafterPF.
+
 ## Current: PF-B17 structural catalog checked; popup and known-write outcomes next
 
 Report107/publicB17receipt: root surfaceWindows/Linux27PASS each (6visitor+

@@ -246,9 +246,10 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
             saved.observation = observation;
           }
           update(run, { phase: 'publishing' });
-          // The facade can fail in protected-session preflight as well as upload;
-          // a bare status code is therefore not an exact publication refusal.
-          const result = await send(() => viewer.publishBarriers(saved.intent!.id, saved.observation!), false); current(run); viewer.assertCurrent();
+          // Preflight cannot submit this publication. Once a PUT has started,
+          // neither a later preflight failure nor a bare HTTP status can settle
+          // its outcome; retain the exact intent and observation until receipt.
+          const result = await viewer.publishBarriers(saved.intent!.id, saved.observation!, () => { saved.writeStarted = true; }); current(run); viewer.assertCurrent();
           if (result.snapshot.snapshotId !== saved.intent.snapshotId || result.snapshot.mode !== 'mesh-set'
             || !same(result.snapshot.scope, saved.command.scope)) throw new Error('Barrier publication receipt differs from the saved intent.');
           confirmedReference = result.snapshot; saved.writeStarted = false;

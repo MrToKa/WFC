@@ -60,6 +60,20 @@ function reviewController(p: PathFinderCableRoutingPanelProps): PathFinderWorkfl
 beforeEach(() => { assignment = pair(); vi.mocked(useCableEndpointPairSelection).mockReset().mockImplementation(() => assignment); vi.mocked(useCableEndpointSelection).mockReset(); });
 
 describe('persistent nonmodal cable routing panel with atomic drafts', () => {
+  it('offers a default-off next-calculation drilling choice without changing endpoint Save or recorded proposal controls', () => {
+    const p = props(), change = vi.fn(), review = { ...reviewController(p), recordedDrillThroughWalls: true },
+      view = render(<PathFinderCableRoutingPanel {...p} review={review} submittedDrillThroughWalls onDrillThroughWallsChange={change} />);
+    const checkbox = screen.getByRole('checkbox', { name: 'Drill through the walls' }); expect(checkbox).not.toBeChecked(); fireEvent.click(checkbox);
+    expect(screen.getByText(/Submitted calculation: Drill through the walls enabled/)).toBeVisible();
+    expect(screen.getByText(/Recorded result: Drill through the walls enabled/)).toBeVisible();
+    expect(change).toHaveBeenCalledWith(true); expect(assignment.save).not.toHaveBeenCalled(); expect(p.onCalculate).not.toHaveBeenCalled();
+    view.rerender(<PathFinderCableRoutingPanel {...p} review={review} drillThroughWalls onDrillThroughWallsChange={change} />);
+    expect(checkbox).toBeChecked(); expect(vi.mocked(useCableEndpointPairSelection).mock.calls.at(-1)?.[0].calculation).toEqual(p.access.calculation);
+    view.rerender(<PathFinderCableRoutingPanel {...p} review={review} drillThroughWalls onDrillThroughWallsChange={change} calculationPending
+      calculationFeedback={{ message: 'The calculation submission is unconfirmed. Refresh this cable.', working: false }} />);
+    expect(checkbox).toBeDisabled(); expect(screen.getByText(/submission is unconfirmed/)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Calculate routing' })).toBeDisabled(); expect(review.review).not.toHaveBeenCalled(); expect(review.apply).not.toHaveBeenCalled();
+  });
   it('keeps Calculate actionable for configuration while preserving endpoint Save and approval guards', () => {
     const p = props(), configure = vi.fn(), calculate = vi.fn(() => configure());
     p.access = { ...p.access, calculation: null, initialFill: null };

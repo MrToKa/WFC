@@ -14,6 +14,7 @@ import { emptyInitialFillCounters, type InitialFillProgress } from '../../../sha
 import type { BarrierAdmissionIntent } from '../../../shared/pathfinderBarrierAdmission';
 import type { PathFinderWorkflowReview } from '@/pages/ProjectDetails/PathFinderResults';
 import { cableComparisonInputSchema } from '../../../shared/pathfinderCableComparison';
+import { barrierCalculationFixture } from '@/test/pathfinderBarrierFixtures';
 vi.mock('@/api/pathfinderCableWorkflow', () => ({ fetchPathFinderCableWorkflowDetail: vi.fn() }));
 vi.mock('@/api/pathfinderLocationImpacts', () => ({ fetchLocationImpacts: vi.fn() }));
 vi.mock('@/hooks/usePathfinderLocationImpactProgress', () => ({ usePathfinderLocationImpactProgress: vi.fn() }));
@@ -54,6 +55,54 @@ beforeEach(() => {
 });
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 describe('owned cable routing workspace composition (mocked reads and child UI)', () => {
+  it('defaults each cable drilling draft off and keeps shared-location Save drilling off', () => {
+    const p = props(), strict = barrierCalculationFixture(id, false).preferences;
+    render(<PathFinderCableWorkspace {...p} preferences={strict} getCalculationPreferences={drill => ({ ...strict, barrierRouting: { ...strict.barrierRouting!, drillThroughWalls: drill } })} />);
+    fireEvent.click(screen.getByText('Needs routing cable')); expect(panelProps.drillThroughWalls).toBe(false);
+    act(() => panelProps.onDrillThroughWallsChange?.(true)); expect(panelProps.drillThroughWalls).toBe(true);
+    expect(panelProps.access.calculation?.preferences.barrierRouting?.drillThroughWalls).toBe(false);
+    expect(panelProps.access.initialFill).toEqual({ mode: 'when-both-empty' });
+    listRow = { ...row(), cable: { ...row().cable, id: id(44) } }; fireEvent.click(screen.getByText('Needs routing cable'));
+    expect(panelProps.drillThroughWalls).toBe(false); expect(panelProps.cable?.cable.id).toBe(id(44)); expect(p.pf.calculate).not.toHaveBeenCalled();
+  });
+  it('freezes explicit selected-job drilling preferences for submission and polling without changing shared Save or another cable', async () => {
+    const p = props(), strict = barrierCalculationFixture(id, false).preferences, draft = { ...strict, barrierRouting: { ...strict.barrierRouting!, drillThroughWalls: true } };
+    const acknowledged = vi.fn(); vi.mocked(p.pf.calculate).mockResolvedValueOnce({ jobId: id(71) });
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockResolvedValue({ projectId: id(1), cableId: id(3), row: { ...row(), calculation: { ...row().calculation, jobId: id(71), jobStatus: 'running' } } } as never);
+    render(<PathFinderCableWorkspace {...p} preferences={strict} getCalculationPreferences={drill => drill ? draft : strict} onCalculationPreferences={acknowledged} />);
+    fireEvent.click(screen.getByText('Needs routing cable')); act(() => panelProps.onDrillThroughWallsChange?.(true));
+    await act(async () => { await panelProps.onCalculate?.(); });
+    await waitFor(() => expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce());
+    draft.barrierRouting.drillThroughWalls = false; act(() => panelProps.onDrillThroughWallsChange?.(false));
+    expect(p.pf.calculate).toHaveBeenCalledExactlyOnceWith([id(3)], true, expect.objectContaining({ barrierRouting: expect.objectContaining({ drillThroughWalls: true }) }));
+    expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledWith(id(1), 'fixture-token', id(3), expect.objectContaining({ barrierRouting: expect.objectContaining({ drillThroughWalls: true }) }), expect.any(AbortSignal));
+    expect(acknowledged).toHaveBeenCalledWith(expect.objectContaining({ cableId: id(3), jobId: id(71), preferences: expect.objectContaining({ barrierRouting: expect.objectContaining({ drillThroughWalls: true }) }) }));
+    expect(panelProps.access.calculation?.preferences.barrierRouting?.drillThroughWalls).toBe(false);
+    expect(panelProps.calculationFeedback).toMatchObject({ working: true, message: 'Calculating this cable’s routing…' });
+    expect(panelProps.submittedDrillThroughWalls).toBe(true);
+    act(() => panelProps.onClose()); fireEvent.click(screen.getByText('Needs routing cable'));
+    expect(panelProps.drillThroughWalls).toBe(false); expect(panelProps.submittedDrillThroughWalls).toBe(true);
+    expect(p.pf.calculate).toHaveBeenCalledOnce();
+  });
+  it('keeps an unacknowledged submission unknown without polling or borrowing a different independently observed job', async () => {
+    const p = props(), acknowledged = vi.fn(); render(<PathFinderCableWorkspace {...p} onCalculationPreferences={acknowledged} />);
+    fireEvent.click(screen.getByText('Needs routing cable')); const calculate = panelProps.onCalculate!;
+    await act(async () => { await calculate(); });
+    expect(panelProps.calculationFeedback).toMatchObject({ working: false, message: expect.stringContaining('submission is unconfirmed') });
+    expect(panelProps.calculationPending).toBe(true); expect(fetchPathFinderCableWorkflowDetail).not.toHaveBeenCalled(); expect(acknowledged).not.toHaveBeenCalled();
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockResolvedValueOnce({ projectId: id(1), cableId: id(3), row: { ...row(), calculation: { ...row().calculation, jobId: id(99), jobStatus: 'complete' } } } as never);
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh selected cable' })); await waitFor(() => expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce());
+    expect(panelProps.calculationPending).toBe(true); expect(acknowledged).not.toHaveBeenCalled();
+    await act(async () => { await calculate(); }); expect(p.pf.calculate).toHaveBeenCalledOnce();
+  });
+  it('shows a stopped exact job in popup feedback without claiming it has an applicable result', async () => {
+    const p = props(); vi.mocked(p.pf.calculate).mockResolvedValueOnce({ jobId: id(71) });
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockResolvedValueOnce({ projectId: id(1), cableId: id(3), row: { ...row(), calculation: { ...row().calculation, jobId: id(71), jobStatus: 'failed', outcome: 'failed' } } } as never);
+    render(<PathFinderCableWorkspace {...p} />); fireEvent.click(screen.getByText('Needs routing cable')); await act(async () => { await panelProps.onCalculate?.(); });
+    await waitFor(() => expect(panelProps.calculationPending).toBe(false));
+    expect(panelProps.calculationFeedback).toMatchObject({ working: false, message: expect.stringContaining('stopped without an applicable route') });
+    expect(panelProps.review).toBeNull();
+  });
   it('keeps search inputs, popup and exact selected detail reads available without calculation preferences', async () => {
     const p = props(), readPreferences = { secondaryDistanceMeters: 2, preferVerticalApproach: true }, configure = vi.fn();
     render(<PathFinderCableWorkspace {...p} preferences={null} readPreferences={readPreferences} onConfigureCalculation={configure} />);
@@ -259,7 +308,8 @@ describe('owned cable routing workspace composition (mocked reads and child UI)'
     fireEvent.click(screen.getByText('Needs routing cable')); expect(p.pf.calculate).not.toHaveBeenCalled();
     await act(async () => { await panelProps.onCalculate?.(); });
     expect(p.pf.calculate).toHaveBeenCalledExactlyOnceWith([id(3)], true, p.preferences);
-    expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledExactlyOnceWith(id(1), 'fixture-token', id(3), p.preferences, expect.any(AbortSignal));
+    expect(fetchPathFinderCableWorkflowDetail).not.toHaveBeenCalled();
+    expect(panelProps.calculationFeedback?.message).toContain('submission is unconfirmed');
     expect(p.pf.refresh).not.toHaveBeenCalled();
   });
   it.each(['queued', 'running'] as const)('removes Calculate while the selected cable already belongs to a %s job', status => {

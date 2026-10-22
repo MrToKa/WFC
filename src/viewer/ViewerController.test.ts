@@ -208,11 +208,12 @@ describe('PathFinder protected Viewer capabilities', () => {
   });
   it('publishes barriers only through the exact current session cookie path with its own bearer and bounded signal', async () => {
     const s = await loaded(), input = barrierRequest(), observation = barrierObservation(input, s.identity.loadId), receipt = barrierPublicationReceipt(input);
-    const baseline = vi.mocked(globalThis.fetch).getMockImplementation()!, uploads: Array<{ url: RequestInfo | URL; options?: RequestInit }> = [];
+    const baseline = vi.mocked(globalThis.fetch).getMockImplementation()!, uploads: Array<{ url: RequestInfo | URL; options?: RequestInit }> = [], started = vi.fn();
     vi.mocked(globalThis.fetch).mockImplementation(async (url, options) => {
-      if (options?.method !== 'PUT') return baseline(url, options); uploads.push({ url, options }); return Response.json(receipt);
+      if (options?.method !== 'PUT') { if (!options?.method) expect(started).not.toHaveBeenCalled(); return baseline(url, options); }
+      expect(started).toHaveBeenCalledOnce(); uploads.push({ url, options }); return Response.json(receipt);
     });
-    await expect(s.c.publishBarriers(input.captureId, observation)).resolves.toEqual(receipt);
+    await expect(s.c.publishBarriers(input.captureId, observation, undefined, started)).resolves.toEqual(receipt);
     expect(uploads).toHaveLength(1); const upload = uploads[0], session = s.send.mock.calls.find(call => call[0].type === 'LOAD_MODEL')![0].payload.sessionId;
     expect(upload.url).toBe(`/api/projects/${projectId}/model-versions/${versionId}/viewer-sessions/${session}/barriers/captures/${input.captureId}`);
     expect(upload.options).toMatchObject({ method: 'PUT', credentials: 'same-origin', cache: 'no-store', mode: 'same-origin', redirect: 'error' });
@@ -244,7 +245,7 @@ describe('PathFinder protected Viewer capabilities', () => {
     expect(vi.mocked(globalThis.fetch).mock.calls.filter(call => call[1]?.method === 'PUT')).toHaveLength(1);
   });
   it.each(['capture project', 'capture model', 'capture UUID', 'capture revision', 'frame load', 'frame project', 'frame model', 'frame fingerprint', 'frame extra', 'frame digest'])('refuses foreign or invalid barrier %s before starting an upload', async kind => {
-    const s = await loaded(), input = barrierRequest(), observation = barrierObservation(input, s.identity.loadId);
+    const s = await loaded(), input = barrierRequest(), observation = barrierObservation(input, s.identity.loadId), started = vi.fn();
     if (kind === 'capture project') observation.capture.scope.projectId = crypto.randomUUID();
     if (kind === 'capture model') observation.capture.scope.modelVersionId = crypto.randomUUID();
     if (kind === 'capture UUID') observation.capture.captureId = crypto.randomUUID();
@@ -255,8 +256,22 @@ describe('PathFinder protected Viewer capabilities', () => {
     if (kind === 'frame fingerprint') observation.frameObservation.contentFingerprint = 'f'.repeat(64);
     if (kind === 'frame extra') (observation.frameObservation as unknown as Record<string, unknown>).verified = true;
     if (kind === 'frame digest') observation.frameObservation.contentSha256 = 'f'.repeat(64);
-    await expect(s.c.publishBarriers(input.captureId, observation)).rejects.toBeDefined();
+    await expect(s.c.publishBarriers(input.captureId, observation, undefined, started)).rejects.toBeDefined();
+    expect(started).not.toHaveBeenCalled();
     expect(vi.mocked(globalThis.fetch).mock.calls.filter(call => call[1]?.method === 'PUT')).toHaveLength(0);
+  });
+  it('does not announce or dispatch a barrier PUT when its caller was already cancelled', async () => {
+    const s = await loaded(), input = barrierRequest(), observation = barrierObservation(input, s.identity.loadId), started = vi.fn(), caller = new AbortController();
+    caller.abort();
+    await expect(s.c.publishBarriers(input.captureId, observation, caller.signal, started)).rejects.toMatchObject({ name: 'AbortError' });
+    expect(started).not.toHaveBeenCalled(); expect(vi.mocked(globalThis.fetch).mock.calls.filter(call => call[1]?.method === 'PUT')).toHaveLength(0);
+  });
+  it('does not announce a barrier PUT when protected selection preflight is denied', async () => {
+    const s = await loaded(), input = barrierRequest(), observation = barrierObservation(input, s.identity.loadId), started = vi.fn();
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(Response.json({ code: 'ACCESS_REVOKED' }, { status: 403 }));
+    await expect(s.c.publishBarriers(input.captureId, observation, undefined, started)).rejects.toThrow('Barrier publication is unavailable');
+    expect(s.events.some(event => event.type === 'ERROR' && event.payload.code === 'ACCESS_REVOKED')).toBe(true);
+    expect(started).not.toHaveBeenCalled(); expect(vi.mocked(globalThis.fetch).mock.calls.filter(call => call[1]?.method === 'PUT')).toHaveLength(0);
   });
   it.each(['receipt extra', 'snapshot extra', 'project', 'model', 'fingerprint', 'selection revision', 'frame ID', 'frame hash', 'duplicate type', 'schema', 'explicit empty'])('refuses a barrier publication receipt with changed %s', async kind => {
     const s = await loaded(), input = barrierRequest(), observation = barrierObservation(input, s.identity.loadId), receipt = barrierPublicationReceipt(input);
