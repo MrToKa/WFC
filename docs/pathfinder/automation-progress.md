@@ -1,5 +1,20 @@
 # PathFinder local implementation progress
 
+## Current: B20/B21 paired delivery complete; B22 popup corrections in progress
+
+Report113/publicB21delivery receipt records installed source67a71dc5 on5191:
+operation311088ee initialization+eightphases PASS, exact V5 one-table/two-index
+conservation PASS and temporary target positively retired. APIa43cac0d/web
+e3426832, health/index/one exact served static asset PASS. The packaged Linux
+verifier accepts the same retained28-fragment Aalborg capture (4790vertices/
+3789triangles;3surfaces/25solids), with full Windows receipt parity, source/input/
+artifact bookends and helper removal PASS. This is offline original geometry;
+live SDK/current-frame/publication and real-cable acceptance remain unverified.
+B22 refresh-before-submit, exact submission outcomes and review/next-drill
+separation are being checked separately and are not installed by this delivery.
+Own-terminal exit/entry, full multipart/catalog capacity, final live Aalborg test
+and then Simplified Preparer remain. History below is retained.
+
 ## Current: B21 exact recovery and real28 geometry checked; paired delivery next
 
 Report112/publicB21receipt:717 latest-file selected Vitest assertions PASS,
