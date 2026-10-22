@@ -8,6 +8,7 @@ import { lengthLedgerSchema } from '../../shared/pathfinderLengthLedger';
 import { directSecondaryDecisionSchema, directSecondaryRouteIssue, type DirectSecondaryDecision } from '../../shared/pathfinderDirectSecondary';
 import { revisionResultEnvelopeSchema } from '../../shared/pathfinderRevisionResults';
 import { calculationAvailabilitySchema } from '../../shared/pathfinderCalculationAvailability';
+import { calculationSubmissionRefusalSchema } from '../../shared/pathfinderCalculationSubmission';
 import { sealedCableItemApplicabilitySchema } from '../../shared/pathfinderItemApplicability';
 import { supportedBarrierAdmissionIntentSchema as barrierAdmissionIntentSchema, type AnyBarrierAdmissionIntent as BarrierAdmissionIntent,
   supportedBarrierExecutionSchema as barrierExecutionSchema, supportedBarrierEngineIdentitySchema as barrierEngineIdentitySchema } from '../../shared/pathfinderBarrierSupported';
@@ -189,6 +190,9 @@ export async function submitPathFinderCalculation(projectId: string, token: stri
       const acknowledgement = popupCalculationAcknowledgementSchema.safeParse(value);
       return acknowledgement.success ? { kind: 'acknowledged', ...acknowledgement.data } : { kind: 'unknown', code: 'INVALID_CALCULATION_ACKNOWLEDGEMENT' };
     }
+    const confirmedRefusal = calculationSubmissionRefusalSchema.safeParse(value);
+    if (response.status === 409 && confirmedRefusal.success)
+      return { kind: 'rejected', status: 409, code: confirmedRefusal.data.code };
     const refused = popupCalculationRefusalSchema.safeParse(value);
     // These branches precede job insertion/COMMIT in the current /jobs route
     // and jobs.create. COMMIT uncertainty is a distinct 503, never rejection.

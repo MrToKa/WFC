@@ -21,6 +21,7 @@ export type PathFinderCableRoutingPanelProps = {
   drillThroughWalls?: boolean; onDrillThroughWallsChange?: (checked: boolean) => void;
   submittedDrillThroughWalls?: boolean | null;
   calculationFeedback?: { message: string; working: boolean } | null;
+  onRefresh?: () => void | Promise<void>; refreshing?: boolean; refreshError?: string | null;
 };
 type Endpoint = ReturnType<typeof useCableEndpointPairSelection>['from'];
 /** Persistent nonmodal portal; only its own bounds intercept pointer input. */
@@ -39,16 +40,31 @@ function FloatingRoutingPanel(props: PathFinderCableRoutingPanelProps & { cable:
 function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalculate, onTogglePath, pathVisible = false,
   actionsBusy = false, calculatedRouting, calculatedDesignLength, review, calculationPending = false, calculationBlockedReason = null,
   onConfigureCalculation, drillThroughWalls = false, onDrillThroughWallsChange, submittedDrillThroughWalls, calculationFeedback,
+  onRefresh, refreshing = false, refreshError = null,
   floating }: PathFinderCableRoutingPanelProps & { cable: CableWorkflowRow; floating: ReturnType<typeof useFloatingCablePanel> }) {
   const title = useId(), panel = floating.panelRef;
   const [collapsed, setCollapsed] = useState(false), previousOpen = useRef(false), focusReturn = useRef<HTMLElement | null>(null);
   const active = access.active && open && !collapsed;
   const assignment = useCableEndpointPairSelection({ ...access, cableId: cable.cable.id, active });
   const { from, to, pending, legacyRecovery } = assignment, busy = assignment.busy || actionsBusy;
+  // Retained contexts are presentation only. The pair hook remains the sole
+  // source of live Save/selection authority after a failed or retired read.
+  // A cable-value write can advance its revision without moving either logical
+  // endpoint. Keep that old display; it never supplies Save or review authority.
+  const displayScope = JSON.stringify([access.accountId, access.projectId, access.token, access.model, access.preparationKey,
+    cable.cable.id, cable.cable.fromLocation, cable.cable.toLocation]);
+  const retained = useRef<{ scope: string; from: Endpoint['context']; to: Endpoint['context'] }>({ scope: displayScope, from: null, to: null });
+  if (retained.current.scope !== displayScope || !assignment.enabled) retained.current = { scope: displayScope, from: null, to: null };
+  for (const [end, state] of [['from', from], ['to', to]] as const) {
+    if (assignment.enabled && state.context) retained.current[end] = structuredClone(state.context);
+  }
+  const endpointReadUnavailable = Boolean(assignment.retired || assignment.error || from.error || to.error
+    || !from.context && retained.current.from || !to.context && retained.current.to);
   const endpointOnlySave = access.calculation === null && access.initialFill === null;
   const unsaved = Boolean(from.draft || to.draft || from.context?.automaticSelection || to.context?.automaticSelection);
   const currentReview = review?.cableId === cable.cable.id ? review : null;
-  const reviewBlocked = busy || Boolean(pending) || unsaved || calculationPending || Boolean(currentReview?.pending);
+  const reviewBlocked = busy || Boolean(pending) || unsaved || calculationPending || refreshing || Boolean(refreshError)
+    || endpointReadUnavailable || Boolean(currentReview?.pending);
   const oldBarrierProof = cable.calculation.reasonCodes.includes('BARRIER_WRITE_PROOF_REQUIRED');
   const close = () => { onClose(); const target = anchor?.isConnected ? anchor : focusReturn.current; if (target?.isConnected) target.focus({ preventScroll: true }); };
   const callbacks = useRef(close); callbacks.current = close;
@@ -68,20 +84,22 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
   if (!open || !access.active) return null;
   const endpoint = (end: 'from' | 'to', state: Endpoint, styles: CablePopupSurfaceStyles) => {
     const side = end === 'from' ? 'From' : 'To', name = end === 'from' ? cable.cable.fromLocation : cable.cable.toLocation;
-    const automatic = state.context?.automaticSelection, confirmed = state.context?.confirmedSelection,
-      savedDisplay = state.context?.confirmedDisplaySelection;
-    const point = state.draft?.point ?? automatic?.pointProjectMetres ?? confirmed?.pointProjectMetres ?? savedDisplay?.pointProjectMetres ?? state.context?.head?.pointProjectMetres;
+    const displayContext = state.context ?? retained.current[end], lastRead = !state.context && Boolean(displayContext);
+    const automatic = displayContext?.automaticSelection, confirmed = displayContext?.confirmedSelection,
+      savedDisplay = displayContext?.confirmedDisplaySelection;
+    const point = state.draft?.point ?? automatic?.pointProjectMetres ?? confirmed?.pointProjectMetres ?? savedDisplay?.pointProjectMetres ?? displayContext?.head?.pointProjectMetres;
     const selectedDraft = state.draftSource === 'selected';
     const objectName = selectedDraft ? state.displaySelection?.name || (state.draft?.mode === 'fixed-world' ? 'Fixed point' : 'Selected model object')
       : automatic?.name ?? confirmed?.name ?? savedDisplay?.name ?? (savedDisplay ? `Saved model object (ID ${savedDisplay.sdkObjectId})`
-        : state.context?.head ? `Saved point for ${name ?? 'this location'}` : 'No model object assigned');
+        : displayContext?.head ? `Saved point for ${name ?? 'this location'}` : state.error || assignment.error || assignment.retired
+          ? 'Location could not be read. Refresh From/To.' : 'No model object assigned');
     const value = [objectName, point ? `X: ${point[0]} m; Y: ${point[1]} m; Z: ${point[2]} m` : ''].filter(Boolean).join('\n');
     return <section aria-label={`${side} endpoint`} className={styles.field}>
       <h4 className={styles.heading}>{side}: {name?.trim() ? name : 'Location name is missing.'}</h4>
       {!name?.trim() ? <a href={`/projects/${access.projectId}/cables/${cable.cable.id}`}>Set the {side} location name in Cable list</a> : null}
       <textarea aria-label={`${side} assigned model object`} className={styles.value} readOnly value={value} rows={3} />
-      <Caption1>{selectedDraft ? 'Selected — not saved.' : automatic ? 'Automatically matched — confirm with Save.'
-        : state.context?.head ? 'Saved shared location.' : 'Choose one object in the Model Browser.'}</Caption1>
+      <Caption1>{lastRead ? 'Last read location — refresh From/To before using it.' : selectedDraft ? 'Selected — not saved.' : automatic ? 'Automatically matched — confirm with Save.'
+        : displayContext?.head ? 'Saved shared location.' : 'Choose one object in the Model Browser.'}</Caption1>
       <Button disabled={busy || Boolean(pending) || !name?.trim() || !state.canSelect}
         onClick={() => void state.selectObject()}>Assign {side}</Button>
       {!busy && !pending && name?.trim() && !state.canSelect && !state.error ? <p className={styles.note} role="status">Prepare the current model and refresh this endpoint before assigning an object.</p> : null}
@@ -98,6 +116,13 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
     {floating.notice ? <p role="status" className={styles.note}>{floating.notice}</p> : null}
     <div className={styles.actions}><Button aria-expanded={!collapsed} onClick={() => setCollapsed(value => !value)}>{collapsed ? 'Expand' : 'Collapse'}</Button><Button onClick={close}>Close</Button></div>
     {collapsed ? <p className={styles.note}>Cable routing is collapsed. The model remains available; any pending save is retained.</p> : <>
+      <div className={styles.actions}>
+        {onRefresh ? <Button disabled={refreshing} onClick={() => void onRefresh()}>Refresh cable status</Button> : null}
+        <Button disabled={assignment.busy || !assignment.enabled} onClick={() => void assignment.refresh()}>Refresh From/To</Button>
+      </div>
+      {refreshing ? <Spinner size="tiny" label="Refreshing this cable…" /> : null}
+      {refreshError ? <p role="alert" className={styles.note}>{refreshError}</p> : null}
+      {endpointReadUnavailable ? <p role="status" className={styles.note}>From/To could not be confirmed. Last read locations remain visible. Use Refresh From/To to check them; pending commands are retained.</p> : null}
       <p className={styles.note}>Assign the selected Model Browser object to From or To. The connection starts at the centre of its bottom face. Save to confirm and reuse this location for other cables with the same location name.</p>
       {pending ? <section aria-label="Pending endpoint assignment"><h4>Pending endpoint assignment</h4>
         <p className={styles.note}>An exact Save is retained for this project. Reconcile its original cable and endpoint assignments before making another assignment.</p>
@@ -125,7 +150,7 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
           ? <Spinner size="tiny" label={calculationFeedback.message} />
           : <p role="status" className={styles.note}>{calculationFeedback.message}</p> : null}
         <div className={styles.actions}>
-          <Button disabled={busy || Boolean(pending) || Boolean(legacyRecovery) || Boolean(currentReview?.pending) || unsaved || calculationPending || !onCalculate} onClick={() => void onCalculate?.()}>Calculate routing</Button>
+          <Button disabled={busy || Boolean(pending) || Boolean(legacyRecovery) || Boolean(currentReview?.pending) || unsaved || endpointReadUnavailable || calculationPending || !onCalculate} onClick={() => void onCalculate?.()}>Calculate routing</Button>
           <Button disabled={busy || !onTogglePath || !pathVisible && (!cable.calculation.proposalId || unsaved)} aria-pressed={pathVisible} onClick={onTogglePath}>{pathVisible ? 'Hide' : 'Show'}</Button>
           <Button appearance="primary" disabled={busy || Boolean(pending) || !assignment.canSave} onClick={() => void assignment.save('Confirm cable From/To model assignments.')}>Save</Button>
         </div>
@@ -180,7 +205,6 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
         {currentReview?.recoveryMessage ? <p role="status" className={styles.note}>{currentReview.recoveryMessage}</p> : null}
       </section>
       <details><summary>Endpoint details</summary><p className={styles.note}>The connection point is the bounding-box bottom centre in project metres. Manually assigned points must be checked again after a model revision.</p>
-        <Button disabled={busy || Boolean(pending) || !assignment.enabled} onClick={() => void assignment.refresh()}>Refresh endpoint contexts</Button>
       </details>
     </>}
   </div>}</CablePopupSurface>;

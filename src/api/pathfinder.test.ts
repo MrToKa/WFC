@@ -57,6 +57,22 @@ describe('popup calculation transport phase evidence', () => {
     const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({ code, error: 'Synthetic server response.' }, { status }));
     expect(await submitPathFinderCalculation(projectId, 'token', popupCalculationBody())).toMatchObject({ kind: 'unknown' }); expect(fetch).toHaveBeenCalledOnce();
   });
+  it.each(['ENDPOINT_PREPARATION_REQUIRED', 'BARRIER_CALCULATION_SCOPE_CHANGED', 'NO_CABLES'])('settles an explicitly uncommitted409/%s without an automatic retry', async code => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({
+      schemaVersion: 'wfc.pf.calculation-submission-refusal.v1', calculationSubmitted: false, code, error: 'This invocation did not commit a calculation job.',
+    }, { status: 409 }));
+    expect(await submitPathFinderCalculation(projectId, 'token', popupCalculationBody())).toEqual({ kind: 'rejected', status: 409, code });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+  it.each(['wrong-status', 'wrong-version', 'submitted', 'extra-field', 'duplicate-member'] as const)('keeps a malformed %s refusal marker unknown', async kind => {
+    const body = { schemaVersion: kind === 'wrong-version' ? 'wfc.pf.calculation-submission-refusal.v2' : 'wfc.pf.calculation-submission-refusal.v1',
+      calculationSubmitted: kind === 'submitted', code: 'ENDPOINT_PREPARATION_REQUIRED', error: 'Synthetic refusal.', ...(kind === 'extra-field' ? { unexpected: true } : {}) };
+    const response = kind === 'duplicate-member' ? new Response('{"calculationSubmitted":true,' + JSON.stringify(body).slice(1), { status: 409 })
+      : Response.json(body, { status: kind === 'wrong-status' ? 503 : 409 });
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(response);
+    expect(await submitPathFinderCalculation(projectId, 'token', popupCalculationBody())).toMatchObject({ kind: 'unknown' });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
   it.each(['missing-job', 'wrong-job', 'extra-field', 'duplicate-member', 'wrong-status'] as const)('keeps malformed %s acknowledgement unknown', async kind => {
     const accepted = { jobId: modelId, registryRevision: '10', duplicate: false };
     const body = kind === 'missing-job' ? { registryRevision: '10', duplicate: false } : kind === 'wrong-job' ? { ...accepted, jobId: 'invalid' }

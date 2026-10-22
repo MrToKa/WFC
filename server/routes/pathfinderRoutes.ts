@@ -6,7 +6,8 @@ import { artifactSchema, bindLocationSchema, createLocationSchema, revision, uui
 import { PathFinderError } from '../pathfinder/errors.js';
 import { createPathFinderRepository } from '../pathfinder/repository.js';
 import { getPathFinderRuntime } from '../pathfinder/runtime.js';
-import { applySchema, createJobSchema, lookupSchema, lookupPlanSchema, reviewSchema } from '../pathfinder/jobContracts.js';
+import { applySchema, lookupSchema, lookupPlanSchema, reviewSchema } from '../pathfinder/jobContracts.js';
+import { createJobSubmissionHandler } from '../pathfinder/jobSubmissionRoutes.js';
 import { principalTransaction, requestPrincipal as principal } from '../pathfinder/auth.js';
 import { previewSchema } from '../pathfinder/previews.js';
 import { createRevisionResults } from '../pathfinder/revisionResultRepository.js';
@@ -70,9 +71,7 @@ const matchSchema = z.object({expectedRegistryRevision:revision}).strict();
 pathfinderRouter.post('/match',async (req,res) => {
   try {const {projectId} = identity(req); res.json(await repository.match(projectId,principal(req),matchSchema.parse(req.body).expectedRegistryRevision));} catch(error){failure(res,error);}
 });
-pathfinderRouter.post('/jobs',async (req,res) => {
-  try {const {projectId} = identity(req); res.status(202).json(await getPathFinderRuntime().jobs.create(projectId,principal(req),createJobSchema.parse(req.body)));} catch(error){failure(res,error);}
-});
+pathfinderRouter.post('/jobs',createJobSubmissionHandler((projectId, who, input) => getPathFinderRuntime().jobs.create(projectId,who,input)));
 pathfinderRouter.get('/jobs/:jobId',async (req,res) => {
   try {const {projectId} = identity(req); res.json(await getPathFinderRuntime().jobs.get(projectId,principal(req),uuid.parse(req.params.jobId)));} catch(error){failure(res,error);}
 });

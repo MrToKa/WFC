@@ -60,6 +60,51 @@ function reviewController(p: PathFinderCableRoutingPanelProps): PathFinderWorkfl
 beforeEach(() => { assignment = pair(); vi.mocked(useCableEndpointPairSelection).mockReset().mockImplementation(() => assignment); vi.mocked(useCableEndpointSelection).mockReset(); });
 
 describe('persistent nonmodal cable routing panel with atomic drafts', () => {
+  it('retains last read endpoint display after failed refresh and offers GET-only refresh while commands are pending', () => {
+    assignment.from.context = context('from', 'confirmed'); assignment.to.context = context('to', 'confirmed');
+    const p = props(), refresh = vi.fn(), review = { ...reviewController(p), canApply: true }, view = render(<PathFinderCableRoutingPanel {...p} onRefresh={refresh} review={review} />);
+    assignment.from.context = null; assignment.to.context = null; assignment.retired = true; assignment.error = 'Endpoint GET failed.';
+    assignment.pending = { cableId: id(3) } as Assignment['pending'];
+    view.rerender(<PathFinderCableRoutingPanel {...p} onRefresh={refresh} review={review} calculationPending actionsBusy />);
+    expect(screen.getByRole('textbox', { name: 'From assigned model object' })).toHaveValue('Panel object 001\nX: 1 m; Y: 2 m; Z: 3 m');
+    expect(screen.getByRole('textbox', { name: 'To assigned model object' })).toHaveValue('Motor object 002\nX: 2 m; Y: 2 m; Z: 3 m');
+    expect(screen.getAllByText('Last read location — refresh From/To before using it.')).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Refresh cable status' })).toBeEnabled(); expect(screen.getByRole('button', { name: 'Refresh From/To' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh cable status' })); fireEvent.click(screen.getByRole('button', { name: 'Refresh From/To' }));
+    expect(refresh).toHaveBeenCalledOnce(); expect(assignment.refresh).toHaveBeenCalledOnce(); expect(assignment.retry).not.toHaveBeenCalled(); expect(assignment.save).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Calculate routing' })).toBeDisabled(); expect(screen.getByRole('button', { name: 'Review proposed routing' })).toBeDisabled(); expect(screen.getByRole('button', { name: 'Apply reviewed routing' })).toBeDisabled();
+    assignment.from.context = context('from', 'confirmed'); assignment.to.context = context('to', 'confirmed'); assignment.retired = false; assignment.error = null; assignment.pending = null;
+    view.rerender(<PathFinderCableRoutingPanel {...p} onRefresh={refresh} review={review} />);
+    expect(screen.queryByText('Last read location — refresh From/To before using it.')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Calculate routing' })).toBeEnabled(); expect(screen.getByRole('button', { name: 'Review proposed routing' })).toBeEnabled(); expect(screen.getByRole('button', { name: 'Apply reviewed routing' })).toBeEnabled();
+    expect(p.onCalculate).not.toHaveBeenCalled(); expect(review.apply).not.toHaveBeenCalled();
+  });
+  it.each(['preparation', 'model', 'cable', 'location', 'denied'] as const)('does not carry retained endpoint display across changed %s ownership', kind => {
+    assignment.from.context = context('from', 'confirmed'); assignment.to.context = context('to', 'confirmed');
+    const p = props(), view = render(<PathFinderCableRoutingPanel {...p} />);
+    assignment.from.context = null; assignment.to.context = null; assignment.retired = true; assignment.error = 'Read unavailable.';
+    const next = kind === 'preparation' ? { ...p, access: { ...p.access, preparationKey: 'new-preparation' } }
+      : kind === 'model' ? { ...p, access: { ...p.access, model: { ...p.access.model!, selectionRevision: '2' } } }
+        : kind === 'cable' ? { ...p, cable: { ...p.cable!, cable: { ...p.cable!.cable, id: id(99) } } }
+          : kind === 'location' ? { ...p, cable: { ...p.cable!, cable: { ...p.cable!.cable, fromLocation: 'Changed location' } } } : p;
+    if (kind === 'denied') assignment.enabled = false;
+    view.rerender(<PathFinderCableRoutingPanel {...next} />);
+    expect((screen.getByRole('textbox', { name: 'From assigned model object' }) as HTMLTextAreaElement).value).not.toContain('Panel object 001');
+    expect((screen.getByRole('textbox', { name: 'To assigned model object' }) as HTMLTextAreaElement).value).not.toContain('Motor object 002');
+    expect(assignment.save).not.toHaveBeenCalled(); expect(p.onCalculate).not.toHaveBeenCalled();
+  });
+  it('keeps display-only locations after a same-name cable revision advances and its endpoint read fails', () => {
+    assignment.from.context = context('from', 'confirmed'); assignment.to.context = context('to', 'confirmed');
+    const p = props(), review = { ...reviewController(p), canApply: true }, view = render(<PathFinderCableRoutingPanel {...p} review={review} />);
+    assignment.from.context = null; assignment.to.context = null; assignment.retired = true; assignment.error = 'Endpoint GET failed.';
+    const revised = { ...p.cable!, cable: { ...p.cable!.cable, cableWriteRevision: '5', routing: '/NEW', designLength: '30' } };
+    view.rerender(<PathFinderCableRoutingPanel {...p} cable={revised} review={review} />);
+    expect(screen.getByRole('textbox', { name: 'From assigned model object' })).toHaveValue('Panel object 001\nX: 1 m; Y: 2 m; Z: 3 m');
+    expect(screen.getByRole('textbox', { name: 'To assigned model object' })).toHaveValue('Motor object 002\nX: 2 m; Y: 2 m; Z: 3 m');
+    expect(screen.getAllByText('Last read location — refresh From/To before using it.')).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled(); expect(screen.getByRole('button', { name: 'Review proposed routing' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Apply reviewed routing' })).toBeDisabled(); expect(assignment.save).not.toHaveBeenCalled(); expect(review.apply).not.toHaveBeenCalled();
+  });
   it('offers a default-off next-calculation drilling choice without changing endpoint Save or recorded proposal controls', () => {
     const p = props(), change = vi.fn(), review = { ...reviewController(p), recordedDrillThroughWalls: true },
       view = render(<PathFinderCableRoutingPanel {...p} review={review} submittedDrillThroughWalls onDrillThroughWallsChange={change} />);

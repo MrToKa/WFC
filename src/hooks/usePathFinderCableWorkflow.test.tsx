@@ -90,6 +90,34 @@ describe('direct text search across bounded workflow portions', () => {
 });
 
 describe('owned cable workflow reads', () => {
+  it('retains last owned page and detail during a transient refresh failure, then replaces them on a successful read', async () => {
+    const base = page(), detail = { schemaVersion: 'wfc.pf.cable-workflow-detail.v1' as const, projectId: project, cableId: cable,
+      querySha256: hash, contextSha256: hash, row: base.rows[0] };
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockResolvedValueOnce(detail);
+    const view = renderHook(() => usePathFinderCableWorkflow(access())); await waitFor(() => expect(view.result.current.page).not.toBeNull());
+    await act(async () => { await view.result.current.readDetail(cable); });
+    let fail!: (error: Error) => void;
+    vi.mocked(fetchPathFinderCableWorkflowPage).mockImplementationOnce(() => new Promise((_, reject) => { fail = reject; }));
+    act(() => view.result.current.refresh()); expect(view.result.current.loading).toBe(true);
+    expect(view.result.current.page).toEqual(base); expect(view.result.current.detail).toEqual(detail);
+    await act(async () => fail(new Error('Temporary GET failure')));
+    expect(view.result.current.error).toContain('could not be read'); expect(view.result.current.page).toEqual(base); expect(view.result.current.detail).toEqual(detail);
+    const replacement = { ...base, rows: [] }; vi.mocked(fetchPathFinderCableWorkflowPage).mockResolvedValueOnce(replacement);
+    act(() => view.result.current.refresh()); await waitFor(() => expect(view.result.current.page?.rows).toHaveLength(0));
+    expect(view.result.current.error).toBeNull(); expect(view.result.current.detail).toBeNull();
+  });
+  it('retains last same-cable detail through a transient detail GET failure without retaining it after a currentness refusal', async () => {
+    const base = page(), detail = { schemaVersion: 'wfc.pf.cable-workflow-detail.v1' as const, projectId: project, cableId: cable,
+      querySha256: hash, contextSha256: hash, row: base.rows[0] };
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockResolvedValueOnce(detail).mockRejectedValueOnce(new Error('Temporary detail failure'))
+      .mockRejectedValueOnce(new PathFinderCableWorkflowApiError('WORKFLOW_CONTEXT_CHANGED', 409, 'The project changed.'));
+    const view = renderHook(() => usePathFinderCableWorkflow(access())); await waitFor(() => expect(view.result.current.page).not.toBeNull());
+    await act(async () => { await view.result.current.readDetail(cable); });
+    await act(async () => { expect(await view.result.current.readDetail(cable)).toBeNull(); });
+    expect(view.result.current.detail).toEqual(detail); expect(view.result.current.page).toEqual(base); expect(view.result.current.error).not.toBeNull();
+    await act(async () => { expect(await view.result.current.readDetail(cable)).toBeNull(); });
+    expect(view.result.current.detail).toBeNull(); expect(view.result.current.page).toBeNull(); expect(view.result.current.error).toContain('project changed');
+  });
   it('does not read or expose rows for an inactive/nonadmin/unowned account or project', async () => {
     const props = access(), view = renderHook(value => usePathFinderCableWorkflow(value), { initialProps: { ...props, active: false } });
     expect(fetchPathFinderCableWorkflowPage).not.toHaveBeenCalled();

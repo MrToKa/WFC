@@ -51,7 +51,9 @@ export function usePathFinderCableWorkflow(access: PathFinderCableWorkflowAccess
     const before = selection.current;
     const deadline = pathFinderRequestDeadline(abort.signal, CABLE_WORKFLOW_SEARCH_MILLISECONDS, () =>
       new PathFinderCableWorkflowApiError('REQUEST_TIMEOUT', null, 'The cable search timed out. Use a more specific tag, From or To and try again.'));
-    setState(value => ({ ...value, page: null, detail: null, loading: true, detailLoading: false, error: null, hasPrevious: history.length > 0 }));
+    // These are display-only reads. Keep the last owned values visible until a
+    // replacement arrives; an authority/context refusal still clears them.
+    setState(value => ({ ...value, loading: true, detailLoading: false, error: null }));
     try {
       const query: CableWorkflowQuery = JSON.parse(queryKey);
       let next = cursor, previousPage = before.page, context = reset ? null : before.context, queryHash = reset ? null : before.queryHash;
@@ -92,7 +94,7 @@ export function usePathFinderCableWorkflow(access: PathFinderCableWorkflowAccess
     const page = selection.current.page, row = page?.rows.find(value => value.cable.id === cableId);
     if (!page || !row) return null;
     const abort = new AbortController(); inFlight.current = abort;
-    setState(value => ({ ...value, detail: null, detailLoading: true, error: null }));
+    setState(value => ({ ...value, detail: value.detail?.cableId === cableId ? value.detail : null, detailLoading: true, error: null }));
     try {
       const query: CableWorkflowQuery = JSON.parse(queryKey);
       const detail = await fetchPathFinderCableWorkflowDetail(access.projectId!, access.token!, cableId,

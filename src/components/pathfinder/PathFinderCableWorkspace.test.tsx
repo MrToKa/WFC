@@ -101,9 +101,17 @@ describe('owned cable routing workspace composition (mocked reads and child UI)'
     render(<PathFinderCableWorkspace {...p} />); fireEvent.click(screen.getByText('Needs routing cable'));
     await act(async () => { await panelProps.onCalculate?.(); });
     expect(panelProps.calculationPending).toBe(false); expect(panelProps.onCalculate).toBeTypeOf('function'); expect(p.pf.submitCalculation).toHaveBeenCalledOnce();
-    expect(panelProps.calculationFeedback).toMatchObject({ working: false, message: expect.stringContaining(kind === 'not-submitted' ? 'No calculation was submitted' : 'refused before a job was created') });
+    expect(panelProps.calculationFeedback).toMatchObject({ working: false, message: expect.stringContaining(kind === 'not-submitted' ? 'No calculation was submitted' : 'No calculation job was created') });
     await act(async () => { await panelProps.onCalculate?.(); });
     expect(p.pf.submitCalculation).toHaveBeenCalledTimes(2); expect(panelProps.calculationPending).toBe(true); expect(p.pf.calculate).not.toHaveBeenCalled();
+  });
+  it('explains a confirmed obstacle refusal and permits another explicit calculation without borrowing the old route', async () => {
+    const p = props(); vi.mocked(p.pf.submitCalculation).mockResolvedValueOnce({ kind: 'rejected', status: 409, code: 'BARRIER_CALCULATION_SCOPE_CHANGED' });
+    render(<PathFinderCableWorkspace {...p} />); fireEvent.click(screen.getByText('Needs routing cable'));
+    await act(async () => { await panelProps.onCalculate?.(); });
+    expect(panelProps.calculationPending).toBe(false); expect(panelProps.onCalculate).toBeTypeOf('function');
+    expect(panelProps.calculationFeedback?.message).toContain('Refresh barriers');
+    expect(p.pf.submitCalculation).toHaveBeenCalledOnce();
   });
   it('retains an unknown A attempt through A→B→A without borrowing another observed job or sending again', async () => {
     const p = props(), acknowledged = vi.fn(); render(<PathFinderCableWorkspace {...p} onCalculationPreferences={acknowledged} />);
@@ -282,11 +290,64 @@ describe('owned cable routing workspace composition (mocked reads and child UI)'
     expect(screen.queryByRole('dialog')).toBeNull(); expect(screen.getByText(/Selected cable: C-001/)).toBeVisible();
     fireEvent.click(screen.getByText('Open selected cable')); expect(screen.getByRole('dialog')).toBeVisible();
   });
-  it.each(['account', 'model', 'preferences'] as const)('clears old popup ownership on %s change', kind => {
+  it.each(['account', 'model'] as const)('clears old popup ownership on %s change', kind => {
     const p = props(), view = render(<PathFinderCableWorkspace {...p} />); fireEvent.click(screen.getByText('Needs routing cable'));
-    const next = kind === 'account' ? { ...p, accountId: id(22) } : kind === 'preferences' ? { ...p, preferences: { ...p.preferences!, secondaryDistanceMeters: 3 } }
+    const next = kind === 'account' ? { ...p, accountId: id(22) }
       : { ...p, pf: { ...p.pf, data: { ...p.pf.data!, activeModel: { ...p.pf.data!.activeModel, selectionRevision: '77' } } } };
     view.rerender(<PathFinderCableWorkspace {...next} />); expect(screen.queryByRole('dialog')).toBeNull(); expect(screen.queryByText(/Selected cable:/)).toBeNull();
+  });
+  it('retains the selected popup and original unknown submission across route settings and filtered selection removal', async () => {
+    const p = props(), view = render(<PathFinderCableWorkspace {...p} selectedCableId={id(3)} />);
+    fireEvent.click(screen.getByText('Needs routing cable')); await act(async () => { await panelProps.onCalculate?.(); });
+    view.rerender(<PathFinderCableWorkspace {...p} preferences={null} readPreferences={null} selectedCableId={null} />);
+    expect(screen.getByRole('dialog')).toBeVisible(); expect(panelProps.access.active).toBe(true);
+    expect(panelProps.cable?.cable.id).toBe(id(3)); expect(panelProps.calculationPending).toBe(true); expect(panelProps.onCalculate).toBeUndefined();
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockResolvedValueOnce({ projectId: id(1), cableId: id(3), row: row() } as never);
+    await act(async () => { await panelProps.onRefresh?.(); });
+    expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledExactlyOnceWith(id(1), 'fixture-token', id(3), p.preferences, expect.any(AbortSignal));
+    view.rerender(<PathFinderCableWorkspace {...p} preferences={{ ...p.preferences!, secondaryDistanceMeters: 3 }} selectedCableId={null} />);
+    expect(screen.getByRole('dialog')).toBeVisible(); expect(panelProps.calculationPending).toBe(true); expect(panelProps.onCalculate).toBeUndefined();
+    expect(p.pf.submitCalculation).toHaveBeenCalledOnce(); expect(p.onCalculationPreferences).toBeUndefined();
+  });
+  it('keeps last selected values on a failed GET, fences approval, and restores it only after a successful current read', async () => {
+    const p = props(), review = { ...reviewController(id(3), id(80)), canApply: true };
+    listRow = { ...row(), cable: { ...row().cable, routing: '/STORED', designLength: '39' }, calculation: { ...row().calculation, proposalId: id(80) } };
+    const original = listRow;
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockRejectedValueOnce(new Error('transient GET failure'));
+    render(<PathFinderCableWorkspace {...p} review={review} />); fireEvent.click(screen.getByText('Needs routing cable'));
+    expect(panelProps.review).toBe(review);
+    await act(async () => { await panelProps.onRefresh?.(); });
+    expect(panelProps.cable).toEqual(original); expect(panelProps.refreshError).toContain('Last read values are retained'); expect(panelProps.review).toBeNull();
+    expect(panelProps.refreshing).toBe(false); expect(panelProps.onRefresh).toBeTypeOf('function');
+    act(() => panelProps.onClose()); fireEvent.click(screen.getByText('Open selected cable'));
+    expect(panelProps.review).toBeNull(); expect(panelProps.refreshError).toContain('Last read values are retained');
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockResolvedValueOnce({ projectId: id(1), cableId: id(3), row: { ...original, cable: { ...original.cable, designLength: '40' } } } as never);
+    await act(async () => { await panelProps.onRefresh?.(); });
+    expect(panelProps.cable?.cable.designLength).toBe('40'); expect(panelProps.refreshError).toBeNull(); expect(panelProps.review).toBe(review);
+    expect(p.pf.submitCalculation).not.toHaveBeenCalled(); expect(review.apply).not.toHaveBeenCalled();
+  });
+  it('preserves a confirmed endpoint Save disposition through failed and successful cable GET refreshes', async () => {
+    const p = props(); render(<PathFinderCableWorkspace {...p} />); fireEvent.click(screen.getByText('Needs routing cable'));
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockRejectedValueOnce(new Error('transient GET failure'));
+    await act(async () => { await panelProps.access.onSaved?.({ cableId: id(3) } as CableEndpointReceipt, endpointBindingFixture().context.current!, null); });
+    expect(screen.getByText(/This Save did not request recalculation or automatic Cable list updates/)).toBeVisible();
+    expect(panelProps.refreshError).toContain('Last read values are retained');
+    await act(async () => { await panelProps.onRefresh?.(); });
+    expect(panelProps.refreshError).toBeNull();
+    expect(screen.getByText(/This Save did not request recalculation or automatic Cable list updates/)).toBeVisible();
+    expect(p.pf.submitCalculation).not.toHaveBeenCalled();
+  });
+  it('settles an acknowledged stopped job by visible GET refresh after its first poll failed, without submitting again', async () => {
+    const p = props(); vi.mocked(p.pf.submitCalculation).mockResolvedValueOnce({ kind: 'acknowledged', jobId: id(71), registryRevision: '5', duplicate: false });
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockRejectedValueOnce(new Error('temporary poll failure'));
+    render(<PathFinderCableWorkspace {...p} />); fireEvent.click(screen.getByText('Needs routing cable'));
+    await act(async () => { await panelProps.onCalculate?.(); });
+    await waitFor(() => expect(panelProps.calculationFeedback?.message).toContain('could not be checked'));
+    expect(panelProps.calculationPending).toBe(true); expect(panelProps.onCalculate).toBeUndefined();
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockResolvedValueOnce({ projectId: id(1), cableId: id(3), row: { ...row(), calculation: { ...row().calculation, jobId: id(71), jobStatus: 'failed', outcome: 'failed' } } } as never);
+    await act(async () => { await panelProps.onRefresh?.(); });
+    expect(panelProps.calculationPending).toBe(false); expect(panelProps.onCalculate).toBeTypeOf('function');
+    expect(panelProps.calculationFeedback?.message).toContain('stopped without an applicable route'); expect(p.pf.submitCalculation).toHaveBeenCalledOnce();
   });
   it('saves exact impact scope then refreshes only bounded diagnostics and the selected cable', async () => {
     const p = props(); render(<PathFinderCableWorkspace {...p} />); fireEvent.click(screen.getByText('Needs routing cable'));
