@@ -3,6 +3,7 @@ import { BARRIER_MULTIPART_PLANNER_PROFILE as P, barrierPlanCanonical, barrierPl
   planBarrierFragmentSplitHints, planBarrierMultipart } from './barrier-plan.mjs';
 import { barrierCanonicalJson, validateBarrierFrameObservation } from './barrier-capture.mjs';
 import { BARRIER_MULTIPART_PRODUCER_PROFILE } from './barrier-multipart-protocol.mjs';
+import { encodeBarrierPackedPart } from './barrier-packed-geometry.mjs';
 
 export const BARRIER_MULTIPART_PRODUCER_LIMITS = Object.freeze({ lookupBytes: 20 * 1024 ** 2,
   metadataBytes: 5 * 1024 ** 2, ancestry: 512, chunkBytes: 256 * 1024, milliseconds: 3600000 });
@@ -90,9 +91,11 @@ async function chain(ctx, domain, manifest, segments) {
   const prefix = { schemaVersion: 'sha256-bounded-chunk-chain-v1', domain, manifest };
   let previous = await ctx.digest(encoder.encode(barrierCanonicalJson(prefix))), totalBytes = 0, chunks = 0, segmentCount = 0;
   for await (const segment of segments) {
-    ctx.check(); need(segment instanceof Uint8Array); const segmentOrdinal = segmentCount++;
+    ctx.check(); need(segment instanceof Uint8Array || exact(segment, ['byteLength', 'read']) && integer(segment.byteLength, Number.MAX_SAFE_INTEGER) && typeof segment.read === 'function'); const segmentOrdinal = segmentCount++;
     for (let offset = 0; offset < segment.byteLength; offset += L.chunkBytes) {
-      const raw = segment.subarray(offset, Math.min(offset + L.chunkBytes, segment.byteLength));
+      const length = Math.min(L.chunkBytes, segment.byteLength - offset);
+      const raw = segment instanceof Uint8Array ? segment.subarray(offset, offset + length) : segment.read(offset, length);
+      need(raw instanceof Uint8Array && raw.byteLength === length, 'BARRIER_MULTIPART_CHUNK_LIMIT');
       const sha256 = await ctx.digest(raw); totalBytes += raw.byteLength;
       need(Number.isSafeInteger(totalBytes)); previous = await ctx.digest(encoder.encode(barrierCanonicalJson({
         schemaVersion: prefix.schemaVersion, domain, previous, segmentOrdinal, offset, bytes: raw.byteLength, sha256, chunkOrdinal: chunks++ })));
@@ -135,7 +138,9 @@ async function indexScene(ctx, scope) {
     && tree.nodeAccess.nodes instanceof Int32Array && tree.nodeAccess.nodes.length >= count * 6
     && ['getRootId', 'getNodeIndex', 'getNodeParentId', 'enumNodeChildren', 'enumNodeFragments'].every(key => typeof tree[key] === 'function')
     && ['getGeometry', 'getOriginalWorldMatrix', 'getWorldMatrix'].every(key => typeof list[key] === 'function'), 'BARRIER_MULTIPART_SDK_UNSUPPORTED');
-  need(count * 20 <= L.lookupBytes && fragments * 4 + count <= L.metadataBytes, 'BARRIER_MULTIPART_METADATA_LIMIT');
+  // Reserve the final fragment witness before any scene allocation. Owners are
+  // identities, so high-bit marking would corrupt valid maximum dbIds.
+  need(count * 20 <= L.lookupBytes && fragments * 4 + count + Math.ceil(fragments / 8) <= L.metadataBytes, 'BARRIER_MULTIPART_METADATA_LIMIT');
   const queue = new Uint32Array(count), masks = new Uint32Array(count * 4), owners = new Uint32Array(fragments).fill(absent), witness = new Uint8Array(count);
   const root = tree.getRootId(); need(integer(root, 2147483647)); let length = 0, physicalCount = 0;
   const sdkIndex = id => { const n = tree.getNodeIndex(id); need(integer(n, count - 1) && tree.nodeAccess.nodes[n * 6] === id, 'BARRIER_MULTIPART_HIERARCHY_INVALID'); return n; };
@@ -168,7 +173,7 @@ async function indexScene(ctx, scope) {
     if (at % 512 === 0) await pause();
   }
   return { tree, list, ids, masks, owners, physicalCount, count, fragments,
-    lookupBytes: queue.byteLength + masks.byteLength, metadataBytes: owners.byteLength + witness.byteLength };
+    lookupBytes: queue.byteLength + masks.byteLength, metadataBytes: owners.byteLength + witness.byteLength + Math.ceil(fragments / 8) };
 }
 function geometryDescription(ctx, scene, fragmentId) {
   ctx.check(); const geometry = scene.list.getGeometry(fragmentId);
@@ -265,8 +270,107 @@ async function rangeHash(ctx, domain, data) {
   async function* chunks() { for (let first = 0; first < data.length; first += L.chunkBytes / 4) yield uint32Bytes(data.subarray(first, Math.min(first + L.chunkBytes / 4, data.length))); }
   return chain(ctx, domain, { encoding: 'uint32-little-endian', values: data.length }, chunks());
 }
+// Packed payload hashing reacquires current SDK buffers for each bounded chunk.
+// Only scalars/owned bytes survive a digest await; no full raw mesh is copied.
+function packedGeometryMetadata(g) {
+  need(g.primitive === 'triangles', 'BARRIER_MULTIPART_GEOMETRY_CHANGED');
+  return { sourceBytes: g.source.byteLength, indexBytes: g.indices?.byteLength ?? null,
+    manifest: { triangleOrder: BARRIER_MULTIPART_PRODUCER_PROFILE.triangleOrder, sourceVertexCount: g.vertices, sourceTriangleCount: g.triangles,
+      sourceType: g.sourceType, indexType: g.indexType, layout: g.layout, stride: g.stride, groupCount: g.groupCount,
+      byteOrder: new Uint8Array(new Uint32Array([1]).buffer)[0] === 1 ? 'little-endian' : 'big-endian' } };
+}
+function packedGeometrySnapshot(ctx, scene, fragmentId) {
+  const geometry = geometryDescription(ctx, scene, fragmentId);
+  // A single weak identity witness per current range, never a second model index.
+  return { metadata: packedGeometryMetadata(geometry), identity: new WeakSet([geometry.geometry]) };
+}
+function packedGeometryChunk(ctx, scene, fragmentId, snapshot, section, start, length, groupFirst = 0, groupCount = 0) {
+  const g = geometryDescription(ctx, scene, fragmentId);
+  need(snapshot.identity.has(g.geometry) && barrierCanonicalJson(packedGeometryMetadata(g)) === barrierCanonicalJson(snapshot.metadata), 'BARRIER_MULTIPART_GEOMETRY_CHANGED');
+  if (section !== 'groups') return byteView(section === 'source' ? g.source : g.indices).slice(start, start + length);
+  const values = new Uint32Array(groupCount * 3);
+  for (let i = 0; i < groupCount; i++) { const group = g.group(groupFirst + i); values[i * 3] = group.start; values[i * 3 + 1] = group.count; values[i * 3 + 2] = group.index; }
+  return uint32Bytes(values).slice(start, start + length);
+}
+async function packedGeometryIdentity(ctx, scene, fragmentId, snapshot) {
+  function* segments() {
+    yield { byteLength: snapshot.metadata.sourceBytes, read: (start, count) => packedGeometryChunk(ctx, scene, fragmentId, snapshot, 'source', start, count) };
+    if (snapshot.metadata.indexBytes !== null) yield { byteLength: snapshot.metadata.indexBytes, read: (start, count) => packedGeometryChunk(ctx, scene, fragmentId, snapshot, 'indices', start, count) };
+    const perChunk = Math.floor(L.chunkBytes / 12);
+    for (let first = 0; first < snapshot.metadata.manifest.groupCount; first += perChunk) { const count = Math.min(perChunk, snapshot.metadata.manifest.groupCount - first);
+      yield { byteLength: count * 12, read: (start, size) => packedGeometryChunk(ctx, scene, fragmentId, snapshot, 'groups', start, size, first, count) }; }
+  }
+  return chain(ctx, 'sdk7130-original-geometry-v1', snapshot.metadata.manifest, segments());
+}
+function copyOriginalRange(ctx, scene, fragment, range, cursor, snapshot, observation) {
+  const geometry = geometryDescription(ctx, scene, fragment.fragmentId), transform = physicalTransform(ctx, scene, fragment.fragmentId, observation);
+  need(snapshot.identity.has(geometry.geometry) && barrierCanonicalJson(packedGeometryMetadata(geometry)) === barrierCanonicalJson(snapshot.metadata), 'BARRIER_MULTIPART_GEOMETRY_CHANGED');
+  need(cursor.triangleStart === range.triangleStart && range.triangleCount <= P.part.triangles, 'BARRIER_MULTIPART_RANGE_COVERAGE');
+  const indices = new Uint32Array(range.triangleCount * 3);
+  for (let i = 0; i < indices.length; i += 3) {
+    ctx.check(); const group = geometry.group(cursor.groupOrdinal), offset = group.start + cursor.withinGroup;
+    for (let j = 0; j < 3; j++) { const original = geometry.indices ? group.index + geometry.indices[offset + j] : offset + j;
+      need(integer(original, geometry.vertices - 1), 'BARRIER_MULTIPART_INDEX_INVALID'); indices[i + j] = original; }
+    need(indices[i] !== indices[i + 1] && indices[i] !== indices[i + 2] && indices[i + 1] !== indices[i + 2], 'BARRIER_MULTIPART_INDEX_INVALID');
+    cursor.withinGroup += 3; if (cursor.withinGroup === group.count) { cursor.withinGroup = 0; cursor.groupOrdinal++; }
+  }
+  cursor.triangleStart += range.triangleCount;
+  const sorted = indices.slice(); sorted.sort(); let unique = 0; for (const value of sorted) if (!unique || value !== sorted[unique - 1]) sorted[unique++] = value;
+  need(unique === range.referencedVertexCount && unique <= P.part.vertices, 'BARRIER_MULTIPART_RANGE_COVERAGE');
+  const ids = sorted.slice(0, unique), localVertices = new Float64Array(unique * 3), point = { x: 0, y: 0, z: 0 };
+  for (let i = 0; i < unique; i++) { ctx.check(); geometry.read(ids[i], point); localVertices[i * 3] = point.x; localVertices[i * 3 + 1] = point.y; localVertices[i * 3 + 2] = point.z; }
+  return { sourceVertexIds: ids, localVertices, originalIndices: indices, originalTransform: transform.original.slice(), worldTransform: transform.world.slice(), canonicalTransform: transform.canonical.slice() };
+}
+async function readOriginalRange(ctx, scene, fragment, range, cursor, observation, scopeSha256) {
+  ctx.check(); const ownerOrdinal = search(scene.ids, fragment.ownerDbId);
+  need(integer(fragment.fragmentId, scene.fragments - 1) && scene.owners[fragment.fragmentId] === fragment.ownerDbId && ownerOrdinal === fragment.ownerNodeOrdinal
+    && maskAt(scene.masks, ownerOrdinal) === fragment.membershipMask, 'BARRIER_MULTIPART_FRAGMENT_OWNER_INVALID');
+  const snapshot = packedGeometrySnapshot(ctx, scene, fragment.fragmentId);
+  need(snapshot.metadata.manifest.sourceVertexCount === fragment.sourceVertexCount && snapshot.metadata.manifest.sourceTriangleCount === fragment.sourceTriangleCount
+    && await packedGeometryIdentity(ctx, scene, fragment.fragmentId, snapshot) === fragment.sourceGeometrySha256, 'BARRIER_MULTIPART_GEOMETRY_CHANGED');
+  const beforeTransform = physicalTransform(ctx, scene, fragment.fragmentId, observation);
+  need(await transformIdentity(ctx, beforeTransform, observation, scopeSha256) === fragment.transformSha256, 'BARRIER_MULTIPART_TRANSFORM_CHANGED');
+  const arrays = copyOriginalRange(ctx, scene, fragment, range, cursor, snapshot, observation);
+  need(await rangeHash(ctx, 'sdk7130-ordered-original-vertex-ids-v1', arrays.sourceVertexIds) === range.sourceVertexIdsSha256
+    && await rangeHash(ctx, 'sdk7130-rendered-original-indices-v1', arrays.originalIndices) === range.sourceIndicesSha256, 'BARRIER_MULTIPART_GEOMETRY_CHANGED');
+  need(await packedGeometryIdentity(ctx, scene, fragment.fragmentId, snapshot) === fragment.sourceGeometrySha256, 'BARRIER_MULTIPART_GEOMETRY_CHANGED');
+  need(await transformIdentity(ctx, physicalTransform(ctx, scene, fragment.fragmentId, observation), observation, scopeSha256) === fragment.transformSha256, 'BARRIER_MULTIPART_TRANSFORM_CHANGED');
+  need(barrierCanonicalJson(await frame(ctx, observation)) === barrierCanonicalJson(observation), 'BARRIER_MULTIPART_FRAME_CHANGED'); ctx.check(); return arrays;
+}
+async function* packedParts(ctx, scene, scope, observation, scopeSha256, profileSha256, seals, packedContext, readPages, onProgress) {
+  need(seals.plan?.totals?.parts > 0); const plans = replayRows(ctx, readPages, 'plan', seals.plan), ranges = replayRows(ctx, readPages, 'geometry-ranges', seals['geometry-ranges']), fragments = replayRows(ctx, readPages, 'fragments', seals.fragments);
+  let next = await plans.next(), expectedOrdinal = 0, fragmentOrdinal = -1, fragment = null, cursor = null, parts = 0;
+  try {
+    while (!next.done) {
+      ctx.check(); const partIndex = next.value.partIndex; need(partIndex === parts, 'BARRIER_MULTIPART_RANGE_COVERAGE'); const expected = [];
+      while (!next.done && next.value.partIndex === partIndex) {
+        const placement = detached(next.value), rangeItem = await ranges.next(); need(!rangeItem.done && placement.rangeOrdinal === expectedOrdinal++, 'BARRIER_MULTIPART_RANGE_COVERAGE'); const range = detached(rangeItem.value);
+        while (fragmentOrdinal < range.fragmentOrdinal) { const item = await fragments.next(); need(!item.done, 'BARRIER_MULTIPART_RANGE_COVERAGE'); fragment = detached(item.value); fragmentOrdinal++; }
+        need(fragmentOrdinal === range.fragmentOrdinal && fragment && expected.length < 8192, 'BARRIER_MULTIPART_RANGE_COVERAGE');
+        expected.push({ placement, range, fragment }); next = await plans.next();
+      }
+      const descriptor = { schemaVersion: 'wfc.pf.barrier-packed-part.v1', codecVersion: 'wfc.pf.barrier-packed-mesh.v1', ...packedContext,
+        scopeSha256, profileSha256, frameSha256: observation.contentSha256, producerProfile: BARRIER_MULTIPART_PRODUCER_PROFILE,
+        roots: Object.fromEntries(['nodes', 'fragments', 'geometry-ranges', 'plan'].map(kind => [kind, seals[kind].sealSha256])), partIndex,
+        sourceGeometryProvenance: 'protected-producer-reported', sdkSourceBytesVerified: false,
+        ranges: expected.map(({ placement, range }) => ({ ...range, rangeOrdinal: placement.rangeOrdinal, rangeSha256: placement.rangeSha256 })) };
+      const bytes = await encodeBarrierPackedPart({ descriptor, expectedRanges: expected, frameObservation: observation, signal: ctx.signal, sha256: ctx.sha256,
+        readRange: async (range, _placement, currentFragment) => {
+          if (!cursor || cursor.fragmentOrdinal !== range.fragmentOrdinal) { if (cursor) need(cursor.triangleStart === cursor.sourceTriangles, 'BARRIER_MULTIPART_RANGE_COVERAGE');
+            cursor = { fragmentOrdinal: range.fragmentOrdinal, triangleStart: 0, groupOrdinal: 0, withinGroup: 0, sourceTriangles: currentFragment.sourceTriangleCount }; }
+          return readOriginalRange(ctx, scene, currentFragment, range, cursor, observation, scopeSha256);
+        } });
+      await finalHierarchy(ctx, scene, scope); need(barrierCanonicalJson(await frame(ctx, scope.modelScope)) === barrierCanonicalJson(observation), 'BARRIER_MULTIPART_FRAME_CHANGED');
+      ctx.check(); yield { kind: 'part', partIndex, planSealSha256: seals.plan.sealSha256, bytes }; parts++; onProgress({ phase: 'parts', loaded: parts, total: seals.plan.totals.parts });
+    }
+    need((await ranges.next()).done && (await fragments.next()).done && cursor?.triangleStart === cursor?.sourceTriangles
+      && parts === seals.plan.totals.parts && expectedOrdinal === seals.plan.recordCount, 'BARRIER_MULTIPART_RANGE_COVERAGE');
+    await finalHierarchy(ctx, scene, scope); need(barrierCanonicalJson(await frame(ctx, scope.modelScope)) === barrierCanonicalJson(observation), 'BARRIER_MULTIPART_FRAME_CHANGED'); ctx.check();
+  } finally { try { await plans.return?.(); } finally { try { await ranges.return?.(); } finally { await fragments.return?.(); } } }
+}
 async function finalHierarchy(ctx, scene, scope) {
-  const seen = new Uint8Array(scene.count), parentBits = new Map(scope.selectedParents.map((parent, index) => [parent.dbId, 1n << BigInt(index)])); let physical = 0;
+  need(scene.owners.byteLength + scene.count + Math.ceil(scene.fragments / 8) <= L.metadataBytes, 'BARRIER_MULTIPART_METADATA_LIMIT');
+  const seen = new Uint8Array(scene.count), seenFragments = new Uint8Array(Math.ceil(scene.fragments / 8)), parentBits = new Map(scope.selectedParents.map((parent, index) => [parent.dbId, 1n << BigInt(index)])); let physical = 0;
   for (let ordinal = 0; ordinal < scene.ids.length; ordinal++) {
     ctx.check(); const id = scene.ids[ordinal]; let current = id, mask = 0n;
     for (let depth = 0;; depth++) { ctx.check(); need(depth < L.ancestry, 'BARRIER_MULTIPART_HIERARCHY_INVALID');
@@ -274,7 +378,8 @@ async function finalHierarchy(ctx, scene, scope) {
       if (current === scene.tree.getRootId()) break; current = scene.tree.getNodeParentId(current); need(integer(current, 2147483647), 'BARRIER_MULTIPART_HIERARCHY_CHANGED'); }
     need(mask.toString(16).padStart(32, '0') === maskAt(scene.masks, ordinal), 'BARRIER_MULTIPART_HIERARCHY_CHANGED');
     scene.tree.enumNodeFragments(id, fragmentId => { need(integer(fragmentId, scene.fragments - 1) && scene.owners[fragmentId] === id, 'BARRIER_MULTIPART_HIERARCHY_CHANGED');
-      scene.owners[fragmentId] = id | 0x80000000; physical++; }, false);
+      const at = fragmentId >>> 3, bit = 1 << (fragmentId & 7); need(!(seenFragments[at] & bit), 'BARRIER_MULTIPART_HIERARCHY_CHANGED');
+      seenFragments[at] |= bit; physical++; }, false);
     scene.tree.enumNodeChildren(id, child => { const index = scene.tree.getNodeIndex(child);
       need(integer(index, scene.count - 1) && scene.tree.nodeAccess.nodes[index * 6] === child && search(scene.ids, child) >= 0
         && scene.tree.getNodeParentId(child) === id && !seen[index], 'BARRIER_MULTIPART_HIERARCHY_CHANGED'); seen[index] = 1; return false; }, false);
@@ -290,11 +395,17 @@ async function finalHierarchy(ctx, scene, scope) {
 }
 /** Emits only bounded control evidence. The later codec/geometry qualification
  * stage owns mesh payloads; this producer never publishes a barrier head. */
-export async function* createBarrierMultipartProducer(viewer, options) {
+export function createBarrierMultipartProducer(viewer, options) { return produce(viewer, options, false); }
+/** Adds only original-mesh part payloads. The scene and immutable admitted
+ * deadline continue across the acknowledged plan seal; no ready head exists. */
+export function createBarrierPackedProducer(viewer, options) { return produce(viewer, options, true); }
+async function* produce(viewer, options, packed) {
   const scope = detached(options?.scope), profile = detached(options?.profile), producerProfile = detached(options?.producerProfile ?? BARRIER_MULTIPART_PRODUCER_PROFILE);
   scopeCheck(scope); need(barrierPlanCanonical(profile) === barrierPlanCanonical(P)
     && barrierPlanCanonical(producerProfile) === barrierPlanCanonical(BARRIER_MULTIPART_PRODUCER_PROFILE) && typeof options.readPages === 'function');
   const readPages = options.readPages, onProgress = options.onProgress ?? (() => {});
+  const packedContext = packed ? detached(options.packedContext) : null;
+  if (packed) need(exact(packedContext, ['intentId', 'contextSha256']) && uuid(packedContext.intentId) && hash(packedContext.contextSha256));
   need(typeof onProgress === 'function'); const ctx = execution(viewer, options); ctx.sha256 = options.sha256;
   need(scope.modelLoadId === ctx.loadId); const observation = JSON.parse(barrierCanonicalJson(options.frameObservation));
   need(validateBarrierFrameObservation(observation) && observation.loadId === ctx.loadId && observation.projectId === scope.modelScope.projectId
@@ -370,6 +481,11 @@ export async function* createBarrierMultipartProducer(viewer, options) {
     nodePages: readPages('nodes'), fragmentPages: readPages('fragments'), geometryRangePages: readPages('geometry-ranges'), sha256: ctx.sha256, signal: ctx.signal })) {
     ctx.check(); if (event.kind === 'plan-page') yield { kind: 'page', page: event.page };
     else { await finalHierarchy(ctx, scene, scope); need(barrierCanonicalJson(await frame(ctx, scope.modelScope)) === barrierCanonicalJson(observation), 'BARRIER_MULTIPART_FRAME_CHANGED');
-      ctx.check(); yield { kind: 'seal', seal: event.seal }; }
+      seals.plan = event.seal; ctx.check(); yield { kind: 'seal', seal: event.seal }; }
+  }
+  if (packed) {
+    // Returning from yield means the surrounding transport acknowledged that
+    // exact seal. No part or second scene is prefetched while it is pending.
+    ctx.check(); yield* packedParts(ctx, scene, scope, observation, scopeSha256, profileSha256, seals, packedContext, readPages, onProgress);
   }
 }

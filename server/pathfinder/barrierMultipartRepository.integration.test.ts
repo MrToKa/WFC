@@ -186,6 +186,17 @@ describe.skipIf(!fixtureFile).sequential('owned Linux PostgreSQL multipart stagi
     expect(receipt).toMatchObject({ kind: 'part', qualification: 'NOT_MEASURED', geometryValidation: 'NOT_VALIDATED', authority: 'none' });
     const saved = await repository.get(projectId, who, session.id); expect(saved.counts).toEqual({ pages: 4, seals: 4, parts: 1 });
     expect(saved.reservation.chargedFiles).toBe(18); expect(saved.state).toBe('staging'); expect((await connected.query('SELECT * FROM pf_barrier_heads')).rows).toEqual([]);
+    expect(await repository.readPart(projectId, who, session.id, 0)).toEqual(bytes);
+    expect(await repository.get(projectId, who, session.id)).toEqual(saved);
+    await expect(repository.readPart(projectId, who, session.id, -1)).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_PART_QUERY' });
+    await expect(repository.readPart(projectId, who, session.id, 1)).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_PART_NOT_FOUND' });
+    await expect(repository.readPart(projectId, { ...who, loginId: id() }, session.id, 0)).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_OWNER_CHANGED' });
+    const load = currentScope.modelLoadId; currentScope.modelLoadId = id();
+    try { await expect(repository.readPart(projectId, who, session.id, 0)).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_SCOPE_CHANGED' }); }
+    finally { currentScope.modelLoadId = load; }
+    await repository.cancel(projectId, who, { schemaVersion: 'wfc.pf.barrier-multipart-cancel.v2', intentId: session.id, expectedSessionRevision: saved.sessionRevision,
+      idempotencyKey: id(), scopeSha256: saved.scopeSha256, profileSha256: saved.profileSha256, reason: 'Synthetic stored-part read cancellation' });
+    await expect(repository.readPart(projectId, who, session.id, 0)).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_CANCELLED' });
   });
   it('refuses node/fragment seals which omit a selected parent rather than silently shrinking selection', async () => {
     const original = structuredClone(currentScope); currentScope.selectedParents.push({ selectionId: id(), dbId: 4, kind: 'partition' });

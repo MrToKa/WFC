@@ -8,7 +8,7 @@ export type BarrierMultipartFrameOptions = { loadId:string;isCurrent:()=>boolean
 export function observeMultipartFrame(viewer:unknown, descriptor:{projectId:string;modelVersionId:string;contentFingerprint:string},
   options:BarrierMultipartFrameOptions):Promise<BarrierFrameObservation>;
 export type BarrierMultipartProducerProgress = {phase:'index';nodes:number;fragments:number;lookupBytes:number;metadataBytes:number}
-  | {phase:'fragments';loaded:number;total:number} | {phase:'geometry-ranges';loaded:number;fragments:number};
+  | {phase:'fragments';loaded:number;total:number} | {phase:'geometry-ranges';loaded:number;fragments:number} | {phase:'parts';loaded:number;total:number};
 export type BarrierMultipartProducerOptions = BarrierMultipartFrameOptions & {
   scope:BarrierMultipartScope;profile:BarrierMultipartProfile;frameObservation:BarrierFrameObservation;
   producerProfile?:BarrierMultipartProducerProfile;
@@ -19,3 +19,10 @@ export type BarrierMultipartProducerEvent = {kind:'page';page:BarrierMultipartPa
 /** One bounded control event per pull. No geometry codec, collision proof,
  * publication, measured capacity or cable-write authority is produced. */
 export function createBarrierMultipartProducer(viewer:unknown, options:BarrierMultipartProducerOptions):AsyncGenerator<BarrierMultipartProducerEvent,void>;
+export type BarrierPackedProducerOptions = Omit<BarrierMultipartProducerOptions,'readPages'> & {
+  packedContext:{intentId:string;contextSha256:string};
+  readPages:(kind:'nodes'|'fragments'|'geometry-ranges'|'plan')=>AsyncIterable<BarrierMultipartPage>|Iterable<BarrierMultipartPage>;
+};
+export type BarrierPackedProducerEvent = BarrierMultipartProducerEvent | {kind:'part';partIndex:number;planSealSha256:string;bytes:Uint8Array};
+/** Same-scene bounded original-range payloads; all results remain unqualified. */
+export function createBarrierPackedProducer(viewer:unknown,options:BarrierPackedProducerOptions):AsyncGenerator<BarrierPackedProducerEvent,void>;

@@ -1,4 +1,4 @@
-import { observeMultipartFrame, createBarrierMultipartProducer } from './barrier-producer.mjs';
+import { observeMultipartFrame, createBarrierPackedProducer } from './barrier-producer.mjs';
 import { BARRIER_MULTIPART_PRODUCER_PROFILE, barrierMultipartTransportCanonical as canonical,
   validateBarrierMultipartFrameRequest, validateBarrierMultipartStart, validateBarrierMultipartIntentControl } from './barrier-multipart-protocol.mjs';
 
@@ -10,7 +10,7 @@ const same = (a, b) => canonical(a) === canonical(b);
  * producer, and structural completion never becomes collision/write authority.
  * The transport and dependencies are trusted bridge/adapter arguments only. */
 export function createBarrierMultipartRuntime(viewer, { descriptor, isCurrent, signal,
-  observe = observeMultipartFrame, produce = createBarrierMultipartProducer } = {}) {
+  observe = observeMultipartFrame, produce = createBarrierPackedProducer } = {}) {
   let job, opening = false, disposed = false;
   const current = operationSignal => {
     if (disposed || signal?.aborted || operationSignal?.aborted || isCurrent() !== true) throw interrupted();
@@ -62,10 +62,24 @@ export function createBarrierMultipartRuntime(viewer, { descriptor, isCurrent, s
           current(combined);
           const events = produce(viewer, { scope, profile: session.command.profile, frameObservation: context.context.frameObservation,
             producerProfile: context.context.producerProfile, loadId: descriptor.loadId, isCurrent: live, signal: combined, startedAt,
+            packedContext: { intentId: session.id, contextSha256: context.context.contextSha256 },
             readPages: kind => writer.readPages(kind, { signal: combined }) });
-          for await (const event of events) { current(combined); await writer.stage(event, { signal: combined }); current(combined); }
+          let expectedParts = null, receivedParts = 0;
+          for await (const event of events) {
+            current(combined);
+            if (event.kind === 'seal' && event.seal.kind === 'plan') {
+              if (expectedParts !== null || !Number.isSafeInteger(event.seal.totals?.parts)
+                || event.seal.totals.parts < 1 || event.seal.totals.parts > 1048576) throw failure();
+              expectedParts = event.seal.totals.parts;
+            }
+            if (event.kind === 'part' && (expectedParts === null || event.partIndex !== receivedParts || receivedParts >= expectedParts)) throw failure();
+            await writer.stage(event, { signal: combined }); current(combined);
+            if (event.kind === 'part') receivedParts++;
+          }
+          current(combined);
           const status = writer.snapshot();
-          if (status.counts.seals !== 4 || Object.values(status.roots).some(root => root === null)) throw failure();
+          if (status.counts.seals !== 4 || Object.values(status.roots).some(root => root === null)
+            || expectedParts === null || receivedParts !== expectedParts || status.counts.parts !== expectedParts) throw failure();
         } catch (error) { state.error = ['BARRIER_MULTIPART_MODEL_CHANGED', 'BARRIER_MULTIPART_FRAME_CHANGED'].includes(error?.code)
           ? failure('MODEL_SELECTION_CHANGED') : error; }
         finally { state.done = true; clearTimeout(state.timer); }

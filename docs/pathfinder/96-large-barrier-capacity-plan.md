@@ -205,6 +205,14 @@ Maintain project/model/load/frame/selection/Viewer-session binding throughout.
 Before sealing, repeat complete hierarchy and transform identity bookends and
 bind their ordered digest to the same inventory. A changed or unavailable model
 cannot produce the complete seal. Do not infer completeness from counts alone.
+The four inventory/plan seals precede packed payload production. Even all exact
+part receipts do not prove that the producer's final, after-last-upload hierarchy
+and frame bookends succeeded. Before any future publication, require a separate
+protected server-owned producer completion receipt after those final bookends.
+Bind it to the immutable context, four roots, exact ordered part receipts,
+current session revision, original deadline and current owner/login/model/frame.
+A browser-local completed flag or resumed staging counts cannot substitute for
+this durable receipt. B13d adds no publisher and grants no authority without it.
 Resumption uses exact immutable part receipts and current authority; a refreshed
 session must not silently take over an old capture or extend expired authority.
 

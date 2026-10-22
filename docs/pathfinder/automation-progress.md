@@ -1,6 +1,28 @@
 # PathFinder local implementation progress
 
-## Current: PF-B13c source verified; preparing PF-B13d
+## Current: PF-B13d source verified; durable completion next
+
+Branch `pf-b13d-packed-geometry-local-20261022`, checked parent
+`b896cef828d8bf6c8b79abe5ee9a2e2c7cef381c`. Report101 and sanitized B13d receipt
+pin 21 implementation/contract/plan files. Native52/zero skips, shared11,
+fresh Linux/PostgreSQL stored-read14 PASS. C#31 local cases plus26 independent
+JS→C# goldens PASS on Windows and Linux; exact source/build/artifact/golden
+bookends PASS. Linux .NET9.0.21 helper hard limit512MiB, no measured peak claim.
+Types/scoped lint/server/frontend builds PASS; independent reviews CLEAR.
+First restore-assets build FAIL and Linux sort-comparison fixture FAIL retained;
+corrected fresh runs PASS. All own helpers joined and removed; no active process.
+Root was sole executor; three agents finished source-only authoring/review.
+No5191 installation, schema/init, publication or cable writes. Both whole RVM
+groups remain unqualified. Saved browser refusal blocks actual SDK/Aalborg;
+no retry/bypass. Source geometry remains producer-reported, not independently
+SDK-byte verified. A final post-upload bookend failure can coexist with all part
+receipts: next implement a separate durable protected completion witness before
+any publisher. Global catalog/collision/own endpoint/Apply/UI gates still remain.
+Next: local commit, prepare-stage-handoff, inherited B13e branch and immediate
+execution. Runtime web814475f9/APIac0d16ab unchanged; original services untouched.
+Preparer clean checkpointa3461c69 retained, backup/restore/update/APS NOT_RUN.
+
+## Previous: PF-B13c source verified
 
 Branchpf-b13c-protected-multipart-producer-local-20261022, checkedphysicalsource
 pins atparent6e35605468a4af40631e16b17d2f74389350431b inreport99/publicb13creceipt.

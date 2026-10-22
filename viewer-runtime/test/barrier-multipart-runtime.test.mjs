@@ -10,7 +10,7 @@ function setup(produce = async function* () {}) {
   const status = { intentId: f.session.id, state: 'admitted', sessionRevision: '0', counts: { pages: 0, seals: 0, parts: 0 },
     roots: { nodes: null, fragments: null, 'geometry-ranges': null, plan: null }, authority: 'none', qualification: 'NOT_MEASURED', geometryValidation: 'NOT_VALIDATED' };
   const writer = { context: f.context, snapshot: () => structuredClone(status), pending: () => facts.pending,
-    async stage(value) { writes.push(value); if (value.kind === 'seal') { status.counts.seals++; status.roots[value.seal.kind] = 'b'.repeat(64); } else status.counts.pages++; status.state = 'staging'; status.sessionRevision = String(Number(status.sessionRevision) + 1); },
+    async stage(value) { writes.push(value); if (value.kind === 'seal') { status.counts.seals++; status.roots[value.seal.kind] = 'b'.repeat(64); } else if (value.kind === 'part') status.counts.parts++; else status.counts.pages++; status.state = 'staging'; status.sessionRevision = String(Number(status.sessionRevision) + 1); },
     async *readPages(kind) { read.push(kind); yield { synthetic: kind }; },
     async cancel() { status.state = 'cancelled'; } };
   const transport = { async open() { facts.opened++; return writer; } };
@@ -19,7 +19,10 @@ function setup(produce = async function* () {}) {
     async observe() { facts.observed++; return f.frame; } });
   return { ...f, runtime, transport, writer, status, writes, read, facts, control, descriptor };
 }
-const seals = async function* () { for (const kind of ['nodes', 'fragments', 'geometry-ranges', 'plan']) yield { kind: 'seal', seal: { kind } }; };
+const seals = async function* () {
+  for (const kind of ['nodes', 'fragments', 'geometry-ranges', 'plan']) yield { kind: 'seal', seal: { kind, ...(kind === 'plan' ? { totals: { parts: 1 } } : {}) } };
+  yield { kind: 'part', partIndex: 0, planSealSha256: 'b'.repeat(64), bytes: new Uint8Array([1]) };
+};
 
 test('frame observation uses only the exact loaded tuple and never starts a producer', async () => {
   const f = setup(seals);
@@ -42,9 +45,34 @@ test('start ACK does not wait for the long producer, one writer provides backpre
     await assert.rejects(f.runtime.start({ ...f.start, intentId: id(999) }, f.transport), { code: 'BARRIER_MULTIPART_BUSY' });
     gate.resolve(); await turn();
     assert.equal(f.runtime.status({ intentId: f.session.id }).counts.seals, 4);
+    assert.equal(f.runtime.status({ intentId: f.session.id }).counts.parts, 1);
     assert.equal(f.runtime.status({ intentId: f.session.id }).geometryValidation, 'NOT_VALIDATED');
     await f.runtime.start(f.start, f.transport); assert.equal(f.facts.opened, 1);
   } finally { gate.resolve(); f.runtime.dispose(); }
+});
+test('four seals without all planned exact part receipts cannot complete the packed producer', async () => {
+  for (const wrong of [false, true]) {
+    const f = setup(async function* () { for await (const event of seals()) {
+      if (event.kind !== 'part') yield event;
+      else if (wrong) yield { ...event, partIndex: 1 };
+    } });
+    try { await f.runtime.start(f.start, f.transport); await turn();
+      assert.throws(() => f.runtime.status({ intentId: f.session.id }), { code: 'BARRIER_MULTIPART_FAILED' });
+      assert.equal(f.status.counts.seals, 4); assert.equal(f.status.counts.parts, 0);
+    } finally { f.runtime.dispose(); }
+  }
+});
+
+test('currentness is checked again when the producer resolves after its last acknowledged part', async () => {
+  const f = setup(async function* () { yield* seals(); f.facts.current = false; });
+  try {
+    await f.runtime.start(f.start, f.transport); await turn();
+    // Re-enable the synthetic status probe so it observes the retained job error.
+    f.facts.current = true;
+    assert.equal(f.status.counts.parts, 1);
+    assert.throws(() => f.runtime.status({ intentId: f.session.id }), { code: 'BARRIER_MULTIPART_FAILED' });
+    assert.equal(f.status.authority, 'none');
+  } finally { f.runtime.dispose(); }
 });
 test('cancel aborts and joins the exact producer before acknowledging cancellation', async () => {
   let stopped = false;

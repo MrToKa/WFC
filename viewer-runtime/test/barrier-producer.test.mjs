@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { BARRIER_MULTIPART_PLANNER_PROFILE as profile } from '../barrier-plan.mjs';
 import { barrierCanonicalJson, validateBarrierFrameObservation } from '../barrier-capture.mjs';
 import { BARRIER_MULTIPART_PRODUCER_PROFILE } from '../barrier-multipart-protocol.mjs';
-import { createBarrierMultipartProducer, observeMultipartFrame, BARRIER_MULTIPART_PRODUCER_LIMITS as L } from '../barrier-producer.mjs';
+import { createBarrierMultipartProducer, createBarrierPackedProducer, observeMultipartFrame, BARRIER_MULTIPART_PRODUCER_LIMITS as L } from '../barrier-producer.mjs';
 
 const id = n => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const sha256 = async value => createHash('sha256').update(value).digest('hex');
@@ -14,7 +14,8 @@ class Matrix {
   makeScale(x, y, z) { this.identity(); this.elements[0] = x; this.elements[5] = y; this.elements[10] = z; return this; }
   copy(other) { this.elements.set(other.elements); return this; }
   multiply(other) { const a = this.elements, b = other.elements, result = new Float64Array(16);
-    for (let col = 0; col < 4; col++) for (let row = 0; row < 4; row++) for (let k = 0; k < 4; k++) result[col * 4 + row] += a[k * 4 + row] * b[col * 4 + k];
+    for (let col = 0; col < 4; col++) for (let row = 0; row < 4; row++) result[col * 4 + row] = a[row] * b[col * 4] + a[4 + row] * b[col * 4 + 1]
+      + a[8 + row] * b[col * 4 + 2] + a[12 + row] * b[col * 4 + 3];
     this.elements.set(result); return this; }
 }
 const geometry = () => ({ attributes: { position: { array: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0]), itemSize: 3, normalized: false } }, ib: new Uint16Array([0, 1, 2, 1, 3, 2]) });
@@ -53,7 +54,10 @@ function fixture({ selected = [3, 10], mesh = geometry(), oneFragment = false } 
   async function consume(extra = {}, after) { const result = createBarrierMultipartProducer(viewer, await options(extra));
     for await (const event of result) { events.push(event); if (event.kind === 'page') { if (!stored.has(event.page.kind)) stored.set(event.page.kind, []); stored.get(event.page.kind).push(structuredClone(event.page)); }
       if (after) await after(event); } return events; }
-  return { viewer, model, tree, list, children, parents, own, mesh, worlds, scope, stored, events, progress, options, consume, setCurrent: value => { current = value; } };
+  async function consumePacked(extra = {}, after) { const result = createBarrierPackedProducer(viewer, await options({ packedContext: { intentId: id(100), contextSha256: 'c'.repeat(64) }, ...extra }));
+    for await (const event of result) { events.push(event); if (event.kind === 'page') { if (!stored.has(event.page.kind)) stored.set(event.page.kind, []); stored.get(event.page.kind).push(structuredClone(event.page)); }
+      if (after) await after(event); } return events; }
+  return { viewer, model, tree, list, children, parents, own, mesh, worlds, scope, stored, events, progress, options, consume, consumePacked, setCurrent: value => { current = value; } };
 }
 const records = (fixture, kind) => (fixture.stored.get(kind) ?? []).flatMap(page => page.records);
 const planSeal = fixture => fixture.events.find(event => event.kind === 'seal' && event.seal.kind === 'plan')?.seal;
@@ -176,4 +180,81 @@ test('foreign or tampered stored-page replay is refused and the admitted job dea
   const f = fixture(); await assert.rejects(f.consume({ readPages: async function* (kind) { for (const page of f.stored.get(kind) ?? []) yield { ...page, scopeSha256: 'f'.repeat(64) }; } }), { code: 'BARRIER_MULTIPART_REPLAY_CHANGED' });
   const expired = fixture(), opts = await expired.options(); opts.startedAt = Date.now() - L.milliseconds;
   await assert.rejects(async () => { for await (const _event of createBarrierMultipartProducer(expired.viewer, opts)) assert.fail(); }, { code: 'BARRIER_MULTIPART_PRODUCER_DEADLINE' });
+});
+
+const unpack = part => { const view = new DataView(part.bytes.buffer, part.bytes.byteOffset, part.bytes.byteLength), descriptorBytes = view.getUint32(12, true);
+  return { descriptor: JSON.parse(new TextDecoder().decode(part.bytes.subarray(32, 32 + descriptorBytes))), view, offset: 32 + descriptorBytes }; };
+test('packed wrapper continues the same scene after plan acknowledgement and preserves physical instances', async () => {
+  const f = fixture(); let trees = 0; const original = f.model.getObjectTree; f.model.getObjectTree = callback => { trees++; return original(callback); };
+  await f.consumePacked(); const parts = f.events.filter(event => event.kind === 'part'); assert.equal(trees, 1); assert.equal(parts.length, planSeal(f).totals.parts);
+  const decoded = unpack(parts[0]); assert.equal(decoded.descriptor.roots.plan, planSeal(f).sealSha256); assert.equal(decoded.descriptor.ranges.length, 2);
+  assert.equal(decoded.descriptor.sdkSourceBytesVerified, false); assert.equal(decoded.descriptor.contextSha256, 'c'.repeat(64));
+  assert.equal(f.events.findIndex(e => e.kind === 'part') > f.events.findIndex(e => e.kind === 'seal' && e.seal.kind === 'plan'), true);
+  const first = decoded.offset, second = first + 384 + 28 * 4 + 12 * 2;
+  assert.equal(decoded.view.getFloat64(first + 12 * 8, true), 0); assert.equal(decoded.view.getFloat64(second + 12 * 8, true), 10);
+  assert.equal(f.progress.at(-1).phase, 'parts'); assert.equal(f.progress.at(-1).loaded, parts.length);
+});
+test('packed original mapping retains rendered group order, baseVertex gaps and local signed zero', async () => {
+  const mesh = geometry(); mesh.attributes.position.array = new Float32Array(21); mesh.attributes.position.array[0] = -0;
+  for (let i = 1; i < 7; i++) mesh.attributes.position.array[i * 3] = i;
+  mesh.ib = new Uint16Array([0, 1, 2, 4, 5, 6, 0, 1, 2]); mesh.groups = [{ start: 6, count: 3, index: 3 }, { start: 0, count: 3, index: 0 }];
+  const f = fixture({ selected: [3], oneFragment: true, mesh }); await f.consumePacked(); const part = f.events.find(e => e.kind === 'part'), decoded = unpack(part);
+  const offset = decoded.offset + 384, ids = Array.from({ length: 6 }, (_, i) => decoded.view.getUint32(offset + i * 4, true)); assert.deepEqual(ids, [0, 1, 2, 3, 4, 5]);
+  assert.equal(Object.is(decoded.view.getFloat64(offset + 24, true), -0), true);
+  assert.deepEqual(Array.from({ length: 6 }, (_, i) => decoded.view.getUint32(part.bytes.length - 24 + i * 4, true)), [3, 4, 5, 0, 1, 2]);
+});
+test('multiple packed bookends preserve maximum owner dbId and reject duplicated final fragments', async () => {
+  const f = fixture({ selected: [3], oneFragment: true }), ids = [1, 3, 2147483647]; f.children.clear(); f.parents.clear(); f.own.clear();
+  f.children.set(1, [3]); f.children.set(3, [2147483647]); f.children.set(2147483647, []); f.parents.set(1, 1); f.parents.set(3, 1); f.parents.set(2147483647, 3); f.own.set(2147483647, [0]);
+  f.tree.nodeAccess.nodes = new Int32Array(ids.length * 6); ids.forEach((id, i) => { f.tree.nodeAccess.nodes[i * 6] = id; });
+  f.tree.nodeAccess.getNumNodes = () => ids.length; f.tree.getNodeIndex = value => ids.indexOf(value);
+  await f.consumePacked(); assert.equal(records(f, 'fragments')[0].ownerDbId, 2147483647); assert.equal(f.events.filter(e => e.kind === 'part').length, 1);
+  const duplicate = fixture(); await assert.rejects(duplicate.consumePacked({}, event => { if (event.kind === 'seal' && event.seal.kind === 'plan') duplicate.own.set(4, [0, 0]); }), { code: 'BARRIER_MULTIPART_HIERARCHY_CHANGED' });
+  assert.equal(duplicate.events.some(e => e.kind === 'part'), false);
+});
+test('combined owner and final witness budget refuses before scene lookup allocations', async () => {
+  const f = fixture(), count = 1048576; f.tree.nodeAccess.getNumNodes = () => count; f.tree.nodeAccess.nodes = new Int32Array(count * 6); f.list.getCount = () => count;
+  await assert.rejects(f.consumePacked(), { code: 'BARRIER_MULTIPART_METADATA_LIMIT' }); assert.equal(f.progress.length, 0);
+});
+test('plan-seal backpressure performs no payload reads and known source/frame mutations refuse', async () => {
+  const f = fixture(), iterator = createBarrierPackedProducer(f.viewer, await f.options({ packedContext: { intentId: id(100), contextSha256: 'c'.repeat(64) } }));
+  for (;;) { const { value, done } = await iterator.next(); assert.equal(done, false);
+    if (value.kind === 'page') { if (!f.stored.has(value.page.kind)) f.stored.set(value.page.kind, []); f.stored.get(value.page.kind).push(structuredClone(value.page)); }
+    if (value.kind === 'seal' && value.seal.kind === 'plan') break; }
+  f.mesh.attributes.position.array[0] = 4; await assert.rejects(iterator.next(), { code: 'BARRIER_MULTIPART_GEOMETRY_CHANGED' });
+  const changed = fixture(); await assert.rejects(changed.consumePacked({}, event => { if (event.kind === 'seal' && event.seal.kind === 'plan') changed.model.getGlobalOffset = () => ({ x: 1, y: 0, z: 0 }); }), { code: 'BARRIER_MULTIPART_FRAME_CHANGED' });
+  assert.equal(changed.events.some(e => e.kind === 'part'), false);
+});
+test('packed range source and transform bookends reject mutation while raw hashing is awaiting', async () => {
+  const f = fixture({ selected: [3], oneFragment: true }); let afterPlan = false, mutated = false;
+  await assert.rejects(f.consumePacked({ sha256: async value => { if (afterPlan && !mutated && value.byteLength === f.mesh.attributes.position.array.byteLength) { mutated = true; f.mesh.attributes.position.array[0] = 8; } return sha256(value); } },
+    event => { if (event.kind === 'seal' && event.seal.kind === 'plan') afterPlan = true; }), { code: 'BARRIER_MULTIPART_GEOMETRY_CHANGED' });
+  assert.equal(mutated, true); assert.equal(f.events.some(e => e.kind === 'part'), false);
+});
+test('after the last acknowledged part, final frame or hierarchy failure still refuses completion', async () => {
+  for (const stage of ['frame', 'hierarchy']) {
+    const f = fixture({ selected: [3], oneFragment: true });
+    await assert.rejects(f.consumePacked({}, event => {
+      if (event.kind !== 'part') return;
+      if (stage === 'frame') f.model.getGlobalOffset = () => ({ x: 1, y: 0, z: 0 });
+      else f.own.set(4, [0, 0]);
+    }), { code: stage === 'frame' ? 'BARRIER_MULTIPART_FRAME_CHANGED' : 'BARRIER_MULTIPART_HIERARCHY_CHANGED' });
+    assert.equal(f.events.filter(event => event.kind === 'part').length, planSeal(f).totals.parts);
+    // A transport may already hold every part. Those receipts cannot prove
+    // that these final producer bookends succeeded or authorize publication.
+  }
+});
+test('packed cancellation after plan cannot reset deadline or emit a late part', async () => {
+  const f = fixture(), abort = new AbortController(); await assert.rejects(f.consumePacked({ signal: abort.signal }, event => { if (event.kind === 'seal' && event.seal.kind === 'plan') abort.abort(); }), { name: 'AbortError' });
+  assert.equal(f.events.some(e => e.kind === 'part'), false);
+});
+test('one large nonindexed source continues its exact rendered cursor across acknowledged packed parts', { timeout: 120000 }, async () => {
+  const vertices = 240003, mesh = { attributes: { position: { array: new Float32Array(vertices * 3), itemSize: 3 } } };
+  const f = fixture({ selected: [3], oneFragment: true, mesh }); await f.consumePacked(); const parts = f.events.filter(e => e.kind === 'part');
+  assert.ok(parts.length > 1); assert.equal(parts.length, planSeal(f).totals.parts); let triangles = 0, rangeOrdinal = 0;
+  for (const part of parts) { const { descriptor, view, offset } = unpack(part); assert.equal(descriptor.partIndex, part.partIndex); let at = offset;
+    for (const range of descriptor.ranges) { assert.equal(range.rangeOrdinal, rangeOrdinal++); assert.equal(range.triangleStart, triangles);
+      assert.equal(view.getUint32(at + 384, true), triangles * 3); triangles += range.triangleCount; at += 384 + 28 * range.referencedVertexCount + 12 * range.triangleCount; }
+    assert.equal(at, part.bytes.length); }
+  assert.equal(triangles, vertices / 3); assert.equal(f.progress.at(-1).loaded, parts.length);
 });

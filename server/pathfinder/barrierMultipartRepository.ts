@@ -426,7 +426,25 @@ export function createBarrierMultipartRepository(pool: Pool, adapters: BarrierMu
       await current(client, projectId, session, who); deadlines(row); jobDeadline = new Date(row.job_deadline).getTime(); return command.page;
     }, signal, () => { if (jobDeadline !== null && jobDeadline <= Date.now()) fail('BARRIER_MULTIPART_JOB_EXPIRED'); });
   }
-  return { admit, begin: admit, get, list, receipts, reconcile, cancel, readPage,
+  /** Internal bounded opaque-byte read only. It proves storage/currentness,
+   * never codec validity, collision qualification or publication authority. */
+  async function readPart(projectId: string, who: JobPrincipal, intentId: string, index: number, signal?: AbortSignal): Promise<Buffer> {
+    if (!Number.isSafeInteger(index) || index < 0 || index >= BARRIER_MULTIPART_PROFILE.limits.parts) fail('BARRIER_MULTIPART_PART_QUERY', 400);
+    let jobDeadline: number | null = null;
+    return tx(projectId, who, async client => {
+      const row = await sessionRow(client, projectId, intentId), session = checked(row, projectId, who); deadlines(row);
+      const allocation = (await client.query<AllocationRow>(allocationSelect + " WHERE project_id=$1 AND session_id=$2 AND item_kind='part' AND item_index=$3 AND state='stored' FOR SHARE", [projectId, session.id, index])).rows[0];
+      if (!allocation) fail('BARRIER_MULTIPART_PART_NOT_FOUND', 404);
+      const command = barrierMultipartStagePartCommandSchema.parse(allocation.command);
+      if (command.intentId !== session.id || command.partIndex !== index || command.planSealSha256 !== session.roots.plan
+        || command.scopeSha256 !== session.scopeSha256 || command.profileSha256 !== session.profileSha256
+        || allocation.ticket.sha256 !== command.payload.sha256 || allocation.ticket.bytes !== command.payload.bytes) fail('BARRIER_MULTIPART_PART_INTEGRITY');
+      const bytes = await adapters.storage.read(allocation.ticket, (ticket, entry) => assertReservation(client, projectId, who, ticket, signal, entry, 'stored'), { signal });
+      if (bytes.length !== command.payload.bytes || createHash('sha256').update(bytes).digest('hex') !== command.payload.sha256) fail('BARRIER_MULTIPART_PART_INTEGRITY');
+      await current(client, projectId, session, who); deadlines(row); jobDeadline = new Date(row.job_deadline).getTime(); return bytes;
+    }, signal, () => { if (jobDeadline !== null && jobDeadline <= Date.now()) fail('BARRIER_MULTIPART_JOB_EXPIRED'); });
+  }
+  return { admit, begin: admit, get, list, receipts, reconcile, cancel, readPage, readPart,
     stagePage: (projectId: string, who: JobPrincipal, raw: unknown, signal?: AbortSignal) => stage(projectId, who, barrierMultipartStagePageCommandSchema.parse(raw), undefined, signal),
     stageSeal: (projectId: string, who: JobPrincipal, raw: unknown, signal?: AbortSignal) => stage(projectId, who, barrierMultipartStageSealCommandSchema.parse(raw), undefined, signal),
     stagePart: (projectId: string, who: JobPrincipal, raw: unknown, bytes: Buffer, signal?: AbortSignal) => stage(projectId, who, barrierMultipartStagePartCommandSchema.parse(raw), bytes, signal) };
