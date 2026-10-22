@@ -1,5 +1,16 @@
 # PathFinder local implementation progress
 
+## Current: B19 delivery complete; B20 mixed original geometry in progress
+
+Report110 records actual owned backup/restore/build/qualification/install/retire
+PASS for operation43304542.5191 now serves the B19 pair; the packaged Linux
+verifier actually starts. Original5180/5190 data was untouched. B20 source
+integration and independent Windows/Linux synthetic checks are underway. Actual
+retained Aalborg floor decoding passed1056vertices/928triangles; its first mixed
+test exposed two nonzero thin facets rejected by the conditioning guard. The
+bounded additive fix and repeat actual-floor test remain required. No actual SDK
+or protected real-model route acceptance is claimed.
+
 ## Current: PF-B19 exact outcomes checked; mixed wall/floor integration next
 
 Report109: durable exact geometry refusal, historical authenticated reconciliation,
