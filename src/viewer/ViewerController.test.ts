@@ -7,6 +7,7 @@ import * as captureInputRuntime from '../../viewer-runtime/capture-input.mjs';
 import { PREPARATION_MATCHING_POLICY } from '../../viewer-runtime/preparation-input.mjs';
 import { barrierCanonicalJson, validateBarrierFrameObservation, type BarrierCaptureRequest } from '../../viewer-runtime/barrier-capture.mjs';
 import { barrierCaptureSchema } from '../../shared/pathfinderBarriers';
+import { BARRIER_MULTIPART_PRODUCER_PROFILE } from '../../viewer-runtime/barrier-multipart-protocol.mjs';
 
 const projectId = '11111111-1111-4111-8111-111111111111';
 const versionId = '22222222-2222-4222-8222-222222222222';
@@ -86,6 +87,38 @@ describe('PathFinder protected Viewer capabilities', () => {
     s.message('MODEL_LOADED', { sdkVersion: '7.130.0', format: 'svf', nodeIndexReady: true }, command.requestId, identity);
     return { ...s, identity };
   }
+  it('small multipart controls retain exact intent identity and leave model appearance alone', async () => {
+    const s = await loaded(), intentId = crypto.randomUUID();
+    const start = { intentId, expectedSessionRevision: '0', scopeSha256: 'a'.repeat(64), profileSha256: 'b'.repeat(64), producerProfile: BARRIER_MULTIPART_PRODUCER_PROFILE };
+    const status = { intentId, sessionRevision: '0', state: 'admitted', counts: { pages: 0, seals: 0, parts: 0 }, roots: { nodes: null, fragments: null, 'geometry-ranges': null, plan: null }, qualification: 'NOT_MEASURED', geometryValidation: 'NOT_VALIDATED', authority: 'none' };
+    s.send.mockImplementation(value => { if (value.type.includes('BARRIER_MULTIPART')) void Promise.resolve().then(() => s.message('BARRIER_MULTIPART_STATUS', status, value.requestId, s.identity)); });
+    await expect(s.c.startBarrierMultipart(start)).resolves.toMatchObject({ intentId, authority: 'none' });
+    await expect(s.c.barrierMultipartStatus(intentId)).resolves.toMatchObject({ intentId });
+    await expect(s.c.reconcileBarrierMultipart(intentId)).resolves.toMatchObject({ intentId });
+    await expect(s.c.barrierMultipartStatus(intentId, true)).resolves.toMatchObject({ intentId });
+    expect(s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE')).toHaveLength(0);
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+  });
+  it('multipart replies cannot switch intent or observed model fingerprint', async () => {
+    const s = await loaded(), intentId = crypto.randomUUID(), input = barrierRequest(), observation = barrierObservation(input, s.identity.loadId);
+    const status = { intentId: crypto.randomUUID(), sessionRevision: '0', state: 'admitted', counts: { pages: 0, seals: 0, parts: 0 }, roots: { nodes: null, fragments: null, 'geometry-ranges': null, plan: null }, qualification: 'NOT_MEASURED', geometryValidation: 'NOT_VALIDATED', authority: 'none' };
+    s.send.mockImplementation(value => {
+      const frame = value.type === 'READ_BARRIER_MULTIPART_FRAME';
+      if (value.type.includes('BARRIER_MULTIPART')) void Promise.resolve().then(() => s.message(frame ? 'BARRIER_MULTIPART_FRAME' : 'BARRIER_MULTIPART_STATUS',
+        frame ? { frameObservation: observation.frameObservation, producerProfile: BARRIER_MULTIPART_PRODUCER_PROFILE } : status, value.requestId, s.identity));
+    });
+    await expect(s.c.barrierMultipartStatus(intentId)).rejects.toThrow('response changed');
+    await expect(s.c.readBarrierMultipartFrame('c'.repeat(64))).rejects.toThrow('frame changed');
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+  });
+  it('a multipart control timeout retains the loaded model and requests explicit reconciliation', async () => {
+    const s = await loaded(), intentId = crypto.randomUUID();
+    const outcome = s.c.barrierMultipartStatus(intentId).catch(error => error);
+    await vi.advanceTimersByTimeAsync(195_001);
+    expect(await outcome).toBeInstanceOf(Error); expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+    expect(s.events.some(event => event.type === 'ERROR' && event.payload.code === 'BARRIER_MULTIPART_RECONCILE_REQUIRED')).toBe(true);
+    expect(s.send.mock.calls.some(call => call[0].type === 'CANCEL_REQUEST')).toBe(true);
+  });
   it('assembles a request-bound barrier capture with a separate observed frame and final model check', async () => {
     const s = await loaded(), input = barrierRequest(), events = barrierStream(input, s.identity.loadId);
     s.send.mockImplementation(value => {

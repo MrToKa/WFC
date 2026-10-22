@@ -9,6 +9,10 @@ test('the actual deployed first-party graph includes every transitive module', a
   assert.ok(RUNTIME_FILES.includes('preparation-input.mjs'));
   assert.ok(RUNTIME_FILES.includes('display-visibility.mjs'));
   assert.ok(RUNTIME_FILES.includes('barrier-capture-errors.mjs'));
+  for (const name of ['barrier-plan.mjs', 'barrier-multipart-protocol.mjs', 'barrier-multipart-transport.mjs', 'barrier-producer.mjs', 'barrier-multipart-runtime.mjs']) {
+    assert.ok(RUNTIME_FILES.includes(name));
+    await assert.rejects(validateRuntimeModuleClosure(RUNTIME_FILES.filter(item => item !== name), module => fs.readFile(new URL(module, source), 'utf8')), /VIEWER_RUNTIME_MODULE_MISSING/);
+  }
   assert.equal(result.moduleCount, RUNTIME_FILES.filter(name => name.endsWith('.mjs')).length);
   assert.ok(result.localImportCount > 10);
   await assert.rejects(validateRuntimeModuleClosure(RUNTIME_FILES.filter(name => name !== 'preparation-input.mjs'), name => fs.readFile(new URL(name, source), 'utf8')), /VIEWER_RUNTIME_MODULE_MISSING/);
@@ -20,6 +24,10 @@ test('the separately copied server contract graph includes the barrier error dep
   const source = new URL('../../viewer-runtime/', import.meta.url), read = name => fs.readFile(new URL(name, source), 'utf8');
   const result = await validateRuntimeModuleClosure(SERVER_RUNTIME_FILES, read);
   assert.equal(result.moduleCount, SERVER_RUNTIME_FILES.length);
+  for (const name of ['barrier-plan.mjs', 'barrier-multipart-protocol.mjs']) {
+    assert.ok(SERVER_RUNTIME_FILES.includes(name));
+    await assert.rejects(validateRuntimeModuleClosure(SERVER_RUNTIME_FILES.filter(item => item !== name), read), /VIEWER_RUNTIME_MODULE_MISSING/);
+  }
   await assert.rejects(validateRuntimeModuleClosure(SERVER_RUNTIME_FILES.filter(name => name !== 'barrier-capture-errors.mjs'), read), /VIEWER_RUNTIME_MODULE_MISSING/);
 });
 

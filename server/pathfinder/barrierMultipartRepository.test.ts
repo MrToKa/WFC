@@ -22,7 +22,7 @@ function fixture() {
   selectedParents: [{ selectionId: randomUUID(), dbId: 3, kind: 'wall' }], geometryPolicy: 'original-triangles-structural-only.v2' };
   const currentScope = vi.fn(async () => scope), storage = { store: vi.fn(), read: vi.fn() };
   const repository = createBarrierMultipartRepository(pool, { currentScope, storage });
-  return { projectId, who, controls, query, connect, release, scope, currentScope, storage, repository };
+  return { projectId, who, controls, query, connect, release, pool, scope, currentScope, storage, repository };
 }
 describe('multipart admission uses authoritative existing principal transaction', () => {
   it('rejects cancellation and expired identity before acquiring a connection or touching storage', async () => {
@@ -52,9 +52,20 @@ describe('multipart admission uses authoritative existing principal transaction'
       expect(copy.mock.calls.some(args => args[0] === payload)).toBe(false); expect(f.connect).not.toHaveBeenCalled(); expect(f.storage.store).not.toHaveBeenCalled();
     } finally { copy.mockRestore(); }
   });
+  it.each(['reconcile', 'cancel'] as const)('rechecks the protected Viewer before %s metadata or duplicate recovery', async method => {
+    const f = fixture(), authorizeContext = vi.fn(async () => { throw Object.assign(new Error('protected Viewer revoked'), { code: 'BARRIER_MULTIPART_VIEWER_CHANGED' }); });
+    const protectedRepository = createBarrierMultipartRepository(f.pool, { currentScope: f.currentScope, storage: f.storage, authorizeContext });
+    const common = { intentId: randomUUID(), idempotencyKey: randomUUID() };
+    const command = method === 'reconcile' ? { schemaVersion: 'wfc.pf.barrier-multipart-reconcile.v2', ...common, commandSha256: 'a'.repeat(64) }
+      : { schemaVersion: 'wfc.pf.barrier-multipart-cancel.v2', ...common, expectedSessionRevision: '0', scopeSha256: 'a'.repeat(64), profileSha256: 'b'.repeat(64) };
+    await expect(protectedRepository[method](f.projectId, f.who, command)).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_VIEWER_CHANGED' });
+    expect(authorizeContext).toHaveBeenCalledExactlyOnceWith(expect.anything(), f.projectId, f.who);
+    expect(f.query.mock.calls.some(([sql]) => sql.includes('pf_barrier_multipart'))).toBe(false); expect(f.query.mock.calls.some(([sql]) => sql === 'ROLLBACK')).toBe(true);
+    expect(f.storage.read).not.toHaveBeenCalled(); expect(f.storage.store).not.toHaveBeenCalled();
+  });
   it('defines only additive unqualified evidence tables and immutable retention guards', () => {
     expect([...BARRIER_MULTIPART_SCHEMA_SQL.matchAll(/CREATE TABLE IF NOT EXISTS (\w+)/g)].map(match => match[1])).toEqual([
-      'pf_barrier_multipart_sessions', 'pf_barrier_multipart_allocations', 'pf_barrier_multipart_receipts']);
+      'pf_barrier_multipart_sessions', 'pf_barrier_multipart_allocations', 'pf_barrier_multipart_receipts', 'pf_barrier_multipart_viewer_contexts']);
     expect(BARRIER_MULTIPART_SCHEMA_SQL).not.toMatch(/(?:INSERT INTO|UPDATE|DELETE FROM)\s+(?:pf_barrier_heads|pf_barrier_snapshots|cables)\b/i);
     expect(BARRIER_MULTIPART_SCHEMA_SQL).not.toMatch(/'ready'|'published'|'qualified'/);
     expect(BARRIER_MULTIPART_SCHEMA_SQL).toContain("OLD.state='cancelled'");

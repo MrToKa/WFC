@@ -4,6 +4,7 @@ import { createRuntimeBridge } from '../bridge.mjs';
 import { CHANNEL, parseRouting } from '../protocol.mjs';
 import { planModelCaptureInput } from '../capture-input.mjs';
 import { BARRIER_CAPTURE_ERROR_CODES, BARRIER_CAPTURE_ERROR_MESSAGES } from '../barrier-capture-errors.mjs';
+import { BARRIER_MULTIPART_PRODUCER_PROFILE } from '../barrier-multipart-protocol.mjs';
 
 const uuid = index => `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`;
 const turn = async () => { await new Promise(resolve => setImmediate(resolve)); await new Promise(resolve => setImmediate(resolve)); };
@@ -61,6 +62,53 @@ const barrierRequest = () => ({ captureId: uuid(9100), scope: { projectId: uuid(
   selectionId: uuid(9102), kind: 'wall', objectId: 'dbid:23', dbId: 23, externalId: null, name: 'Selected wall', identityBasis: 'version-local-only', inclusion: 'own-and-all-descendant-fragments' }] });
 const descriptorResponse = () => Response.json({ projectId: uuid(2), modelVersionId: uuid(3), loadId: uuid(4), contentFingerprint: 'b'.repeat(64),
   supportProfile: 'svf-local-7.130.0-v1', format: 'svf', sdkVersion: '7.130.0', entrypoint: 'resources/output/0/0.svf', resourceCount: 1, totalBytes: 1 });
+
+const multipartStatus = () => ({ intentId: uuid(9201), sessionRevision: '0', state: 'admitted', counts: { pages: 0, seals: 0, parts: 0 },
+  roots: { nodes: null, fragments: null, 'geometry-ranges': null, plan: null }, qualification: 'NOT_MEASURED', geometryValidation: 'NOT_VALIDATED', authority: 'none' });
+const multipartStart = () => ({ intentId: uuid(9201), expectedSessionRevision: '0', scopeSha256: 'a'.repeat(64), profileSha256: 'b'.repeat(64), producerProfile: BARRIER_MULTIPART_PRODUCER_PROFILE });
+
+test('multipart start/status/cancel/reconcile are small protected controls and do not change route appearance', async () => {
+  const f = fixture(); await f.loaded(); const seen = [];
+  for (const method of ['startBarrierMultipart', 'statusBarrierMultipart', 'cancelBarrierMultipart', 'reconcileBarrierMultipart']) f.handle[method] = async (...args) => { seen.push([method, args]); return multipartStatus(); };
+  f.send('START_BARRIER_MULTIPART', multipartStart()); await turn();
+  for (const type of ['STATUS_BARRIER_MULTIPART', 'CANCEL_BARRIER_MULTIPART', 'RECONCILE_BARRIER_MULTIPART']) { f.send(type, { intentId: uuid(9201) }); await turn(); }
+  assert.equal(f.messages('BARRIER_MULTIPART_STATUS').length, 4); assert.equal(seen.length, 4);
+  assert.equal(typeof seen[0][1][1].open, 'function'); assert.equal(f.facts.clears, 0);
+  assert.equal(f.fetches.filter(x => x.url.endsWith('/pathfinder-authorization')).length, 8);
+  assert.ok(f.messages('BARRIER_MULTIPART_STATUS').every(x => x.payload.authority === 'none')); f.bridge.dispose();
+});
+test('multipart initial authorization refusal prevents every producer operation', async () => {
+  const f = fixture({ fetchImpl: async url => url.endsWith('/pathfinder-authorization') ? new Response(null, { status: 403 }) : descriptorResponse() }); await f.loaded();
+  let calls = 0; f.handle.startBarrierMultipart = async () => { calls++; return multipartStatus(); };
+  f.send('START_BARRIER_MULTIPART', multipartStart()); await turn();
+  assert.equal(calls, 0); assert.equal(f.messages('ERROR').at(-1).payload.code, 'ACCESS_REVOKED'); f.bridge.dispose();
+});
+test('multipart background failure stays recoverable but model change stays terminal', async () => {
+  for (const code of ['BARRIER_MULTIPART_RECONCILE_REQUIRED', 'BARRIER_MULTIPART_GEOMETRY_UNAVAILABLE', 'MODEL_SELECTION_CHANGED']) {
+    const f = fixture(); await f.loaded(); f.handle.statusBarrierMultipart = async () => { throw Object.assign(Error('private geometry'), { code }); };
+    f.send('STATUS_BARRIER_MULTIPART', { intentId: uuid(9201) }); await turn();
+    assert.equal(f.states.at(-1).phase, code === 'MODEL_SELECTION_CHANGED' ? 'error' : 'loaded');
+    assert.equal(JSON.stringify(f.sent).includes('private geometry'), false); assert.equal(f.facts.finishes, 0); f.bridge.dispose();
+  }
+});
+test('calculation-only producer iframe cannot acquire manual barrier authoring controls', async () => {
+  const f = fixture({ resourceMode: 'producer' }); await f.loaded(); let calls = 0;
+  f.handle.startBarrierMultipart = async () => { calls++; return multipartStatus(); };
+  f.send('START_BARRIER_MULTIPART', multipartStart()); await turn();
+  assert.equal(calls, 0); assert.equal(f.messages('BARRIER_MULTIPART_STATUS').length, 0); f.bridge.dispose();
+});
+test('multipart polling reserves the unchanged replay tail for cancellation and exact reconciliation', async () => {
+  const f = fixture(); await f.loaded();
+  f.handle.statusBarrierMultipart = f.handle.cancelBarrierMultipart = f.handle.reconcileBarrierMultipart = async () => multipartStatus();
+  while (f.bridge.getState().requests < 4000) { f.send('STATUS_BARRIER_MULTIPART', { intentId: uuid(9201) }); await turn(); }
+  for (let i = 0; i < 150; i++) f.send('STATUS_BARRIER_MULTIPART', { intentId: uuid(9201) });
+  await turn(); assert.equal(f.bridge.getState().requests, 4000);
+  assert.equal(f.messages('ERROR').at(-1).payload.code, 'BARRIER_MULTIPART_CONTROL_LIMIT');
+  const before = f.messages('BARRIER_MULTIPART_STATUS').length;
+  f.send('CANCEL_BARRIER_MULTIPART', { intentId: uuid(9201) }); await turn();
+  f.send('RECONCILE_BARRIER_MULTIPART', { intentId: uuid(9201) }); await turn();
+  assert.equal(f.messages('BARRIER_MULTIPART_STATUS').length, before + 2); assert.ok(f.bridge.getState().requests < 4096); f.bridge.dispose();
+});
 
 test('barrier capture authorizes every extracted part before and after its SDK wait', async () => {
   const f = fixture(); await f.loaded(); const input = barrierRequest();

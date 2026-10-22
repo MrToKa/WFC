@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CHANNEL, MAX_MESSAGE_BYTES, validateEnvelope, validateBootstrap, validateDescriptor, parseRouting, normalizeRoutingKey } from '../protocol.mjs';
+import { BARRIER_MULTIPART_PRODUCER_PROFILE } from '../barrier-multipart-protocol.mjs';
 
 const uuid = index => `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`;
 const identity = { instanceId: uuid(1), projectId: uuid(2), modelVersionId: uuid(3), loadId: uuid(4), requestId: uuid(5) };
@@ -8,6 +9,20 @@ const envelope = (type, payload, overrides = {}) => ({ channel: CHANNEL, protoco
 const route = (rawRouting = '/BC1/SECONDARY/BC1') => ({ rawRouting, source: 'manual', cableId: null,
   segments: parseRouting(rawRouting).segments.map(entry => ({ ...entry, model: { state: 'found', matchCount: 1, drawable: true } })),
   ignored: parseRouting(rawRouting).ignored, drawableCount: parseRouting(rawRouting).segments.length, lineCount: 1, warnings: [] });
+
+test('multipart control preserves old ceilings and accepts no geometry, credentials, URLs or authority', () => {
+  const start = { intentId: uuid(71), expectedSessionRevision: '0', scopeSha256: 'a'.repeat(64), profileSha256: 'b'.repeat(64), producerProfile: BARRIER_MULTIPART_PRODUCER_PROFILE };
+  assert.ok(validateEnvelope(envelope('START_BARRIER_MULTIPART', start)));
+  for (const type of ['STATUS_BARRIER_MULTIPART', 'CANCEL_BARRIER_MULTIPART', 'RECONCILE_BARRIER_MULTIPART']) {
+    assert.ok(validateEnvelope(envelope(type, { intentId: uuid(71) })));
+    assert.equal(validateEnvelope(envelope(type, { intentId: uuid(71), url: '/elsewhere' })), null);
+    assert.equal(validateEnvelope(envelope(type, { intentId: uuid(71) }, { modelVersionId: null, loadId: null })), null);
+  }
+  for (const extra of [{ vertices: [] }, { token: 'secret' }, { url: '/elsewhere' }, { authority: 'ready' }]) assert.equal(validateEnvelope(envelope('START_BARRIER_MULTIPART', { ...start, ...extra })), null);
+  assert.equal(MAX_MESSAGE_BYTES, 65536);
+  assert.equal(validateEnvelope(envelope('BARRIER_CAPTURE_EVENT', { captureId: uuid(71), index: 0, done: false, eventJson: 'x'.repeat(24577) })), null);
+  assert.equal(validateEnvelope(envelope('READ_BARRIER_CAPTURE', { captureId: uuid(71), index: 3000 })), null);
+});
 
 test('independent lookup capture is a closed bounded third union without planning rules or equipment', () => {
   const payload = { captureId: uuid(17), lookupRouteCodes: ['/BC001', '/BC002'], equipmentNames: [] };

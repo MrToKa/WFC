@@ -2,8 +2,16 @@ import { CHANNEL, PROTOCOL_VERSION, SDK_VERSION, validateEnvelope, validateDescr
 import { isStagedModelCaptureStart, isModelCaptureInputAppend, CAPTURE_INPUT_LIMITS } from './capture-input.mjs';
 import { parseRoutingBindings, ROUTING_BINDINGS_LIMITS } from './routing-bindings.mjs';
 import { BARRIER_CAPTURE_ERROR_MESSAGES, barrierCaptureErrorMessage } from './barrier-capture-errors.mjs';
+import { createBarrierMultipartTransport } from './barrier-multipart-transport.mjs';
 
 const messages = {
+  BARRIER_MULTIPART_FAILED: 'Barrier observation stopped before completing. Retain its capture and refresh its status.',
+  BARRIER_MULTIPART_RECONCILE_REQUIRED: 'A barrier upload outcome is uncertain. Reconcile its saved command before starting again.',
+  BARRIER_MULTIPART_CONTEXT_CHANGED: 'The barrier capture context changed. Retain the capture and refresh its context.',
+  BARRIER_MULTIPART_BUSY: 'Another barrier observation is still active.',
+  BARRIER_MULTIPART_DEADLINE: 'The admitted barrier observation deadline has expired.',
+  BARRIER_MULTIPART_JOIN_REQUIRED: 'The previous barrier producer has not confirmed it stopped.',
+  BARRIER_MULTIPART_CONTROL_LIMIT: 'This Viewer has reached its observation control budget. Cancel or reconcile the retained capture before reloading.',
   ...BARRIER_CAPTURE_ERROR_MESSAGES,
   INVALID_STATE: 'The viewer is not ready for this operation.', ROUTE_INVALID: 'The route contains invalid identifiers.',
   NO_DRAWABLE_ROUTE: 'There is no drawable route to zoom to.', SDK_UNSUPPORTED: 'The local Viewer version is not supported.',
@@ -45,9 +53,11 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
   }
   function finish(command) { const entry = requests.get(command.requestId); if (entry?.status === 'pending') entry.status = 'finished'; }
   function error(command, cause) {
-    const code = Object.hasOwn(messages, cause?.code) ? cause.code : 'RESOURCE_FAILED';
-    const recoverableCapture = ['START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE'].includes(command.type)
-      && code !== 'BARRIER_CAPTURE_MODEL_CHANGED' && (barrierCaptureErrorMessage(code) !== null || code === 'EXTRACTION_FAILED');
+    const code = ['BARRIER_MULTIPART_MODEL_CHANGED', 'BARRIER_MULTIPART_FRAME_CHANGED'].includes(cause?.code) ? 'MODEL_SELECTION_CHANGED' : Object.hasOwn(messages, cause?.code) ? cause.code
+      : command.type.includes('BARRIER_MULTIPART') && cause?.code?.startsWith('BARRIER_MULTIPART_') ? 'BARRIER_MULTIPART_FAILED' : 'RESOURCE_FAILED';
+    const recoverableCapture = (['START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE'].includes(command.type)
+      && code !== 'BARRIER_CAPTURE_MODEL_CHANGED' && (barrierCaptureErrorMessage(code) !== null || code === 'EXTRACTION_FAILED'))
+      || command.type.includes('BARRIER_MULTIPART') && code.startsWith('BARRIER_MULTIPART_');
     emit(command, 'ERROR', { code, message: messages[code], retryable: recoverableCapture || ['RESOURCE_FAILED', 'SESSION_EXPIRED', 'APPEARANCE_RESTORE_FAILED'].includes(code), operation: command.type });
     finish(command);
     onState({ phase: recoverableCapture ? phase : 'error', code });
@@ -191,6 +201,23 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
         const terminal = barrierCapture ? 'BARRIER_CAPTURE_EVENT' : isStagedModelCaptureStart(command.payload) || command.type === 'READ_MODEL_CAPTURE' && isModelCaptureInputAppend(command.payload) ? 'MODEL_CAPTURE_INPUT_ACK' : 'MODEL_CAPTURE_EVENT';
         if (!emit(command, terminal, result)) throw failure('EXTRACTION_FAILED');
         if (['MODEL_CAPTURE_EVENT', 'BARRIER_CAPTURE_EVENT'].includes(terminal) && result.done) releaseCapture(ownedCapture);
+      } else if (command.type.includes('BARRIER_MULTIPART')) {
+        const loaded = current, context = loadedDescriptor;
+        const stillLoaded = () => !disposed && !loadController.signal.aborted && current === loaded && loadedDescriptor === context && phase === 'loaded';
+        if (command.type === 'READ_BARRIER_MULTIPART_FRAME' && command.payload.contentFingerprint !== context.contentFingerprint) throw failure('MODEL_SELECTION_CHANGED');
+        let result;
+        if (command.type === 'READ_BARRIER_MULTIPART_FRAME') result = await handle.readBarrierMultipartFrame(command.payload, signal);
+        else if (command.type === 'START_BARRIER_MULTIPART') {
+          const transport = createBarrierMultipartTransport({ origin, projectId: bootstrap.projectId, modelVersionId: command.modelVersionId,
+            sessionId: loaded.payload.sessionId, loadId: command.loadId, isCurrent: stillLoaded, fetchImpl,
+            randomUUID: () => window.crypto.randomUUID(), signal: AbortSignal.any([lifetime.signal, loadController.signal]) });
+          result = await handle.startBarrierMultipart(command.payload, transport, signal);
+        } else if (command.type === 'STATUS_BARRIER_MULTIPART') result = await handle.statusBarrierMultipart(command.payload, signal);
+        else if (command.type === 'RECONCILE_BARRIER_MULTIPART') result = await handle.reconcileBarrierMultipart(command.payload, signal);
+        else result = await handle.cancelBarrierMultipart(command.payload, signal);
+        await requirePathFinder(command, signal);
+        if (!live() || !stillLoaded()) return;
+        if (!emit(command, command.type === 'READ_BARRIER_MULTIPART_FRAME' ? 'BARRIER_MULTIPART_FRAME' : 'BARRIER_MULTIPART_STATUS', result)) throw failure('BARRIER_MULTIPART_FAILED');
       } else if (command.type === 'BEGIN_COMPUTED_PATH') {
         stopRoute(command.requestId); computed = { pathId: command.payload.pathId, pointCount: command.payload.pointCount, objectIds: command.payload.objectIds, points: [] };
         emit(command, 'COMPUTED_PATH_UPDATED', { pathId: computed.pathId, phase: 'begun', received: 0 });
@@ -322,6 +349,10 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     if (resourceMode === 'producer' && !producerCommands.has(command.type)) return;
     if (command.type !== 'LOAD_MODEL' && !identityMatches(command)) return;
     if (command.type === 'LOAD_MODEL' && usedLoads.has(command.loadId)) return;
+    // Refused polls consume no replay slot; preserve the finite cleanup tail.
+    // They can only receive the same refusal, never start SDK/HTTP work.
+    if (command.type.includes('BARRIER_MULTIPART') && !['CANCEL_BARRIER_MULTIPART', 'RECONCILE_BARRIER_MULTIPART'].includes(command.type)
+      && requests.size >= 4000) { error(command, failure('BARRIER_MULTIPART_CONTROL_LIMIT')); return; }
     if (requests.size >= 4096) {
       // Saturation must not prevent resource release. Cleanup replay tracking has
       // its own bounded budget; terminal DISPOSE never needs another record.
@@ -330,6 +361,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     } else requests.set(command.requestId, { command, status: 'pending' });
     try { switch (command.type) {
       case 'BEGIN_COMPUTED_PATH': case 'APPEND_COMPUTED_PATH': case 'COMMIT_COMPUTED_PATH': case 'PICK_POINT': case 'READ_MODEL_OBJECTS': case 'READ_PREPARATION_OBJECTS': case 'READ_SELECTION': case 'SET_PATH_TRANSPARENCY': case 'START_MODEL_CAPTURE': case 'READ_MODEL_CAPTURE': case 'START_BARRIER_CAPTURE': case 'READ_BARRIER_CAPTURE':
+      case 'READ_BARRIER_MULTIPART_FRAME': case 'START_BARRIER_MULTIPART': case 'STATUS_BARRIER_MULTIPART': case 'CANCEL_BARRIER_MULTIPART': case 'RECONCILE_BARRIER_MULTIPART':
         if (phase !== 'loaded' || !handle) { error(command, failure('INVALID_STATE')); return; }
         void pathFinder(command); break;
       case 'INIT':

@@ -32,6 +32,12 @@ export type BarrierMultipartRepositoryAdapters = {
    * exact selection and frame. Never a callback or default from an HTTP body. */
   currentScope: (client: PoolClient, projectId: string) => Promise<BarrierMultipartScope>;
   storage: Storage; assertBeforeCommit?: () => void;
+  /** Trusted server-only atomic protected-Viewer binding. Public route factories
+   * must supply it; historical generic storage fixtures may omit it. */
+  onAdmission?: (client: PoolClient, session: BarrierMultipartSession, duplicate: boolean) => Promise<void>;
+  /** Protected transport only: hold the exact Viewer/context locks through each
+   * transaction, including metadata reconciliation and duplicate cancellation. */
+  authorizeContext?: (client: PoolClient, projectId: string, who: JobPrincipal) => Promise<void>;
 };
 type SessionRow = { id: string; project_id: string; actor_id: string; login_id: string; idempotency_key: string;
   request_sha256: string; command: unknown; frozen: unknown; state: BarrierMultipartSession['state']; session_revision: string;
@@ -65,7 +71,9 @@ export function createBarrierMultipartRepository(pool: Pool, adapters: BarrierMu
   if (typeof adapters.currentScope !== 'function' || typeof adapters.storage?.store !== 'function' || typeof adapters.storage?.read !== 'function')
     throw new TypeError('Trusted multipart scope and storage adapters are required.');
   const tx = <T>(projectId: string, who: JobPrincipal, operation: (client: PoolClient) => Promise<T>, signal?: AbortSignal, final?: () => void) =>
-    barrierRegistryTransaction(pool, projectId, who, operation, signal, () => { adapters.assertBeforeCommit?.(); final?.(); });
+    barrierRegistryTransaction(pool, projectId, who, async client => {
+      await adapters.authorizeContext?.(client, projectId, who); return operation(client);
+    }, signal, () => { adapters.assertBeforeCommit?.(); final?.(); });
   function deadlines(row: SessionRow, lease?: Date): void {
     if (new Date(row.job_deadline).getTime() <= Date.now()) fail('BARRIER_MULTIPART_JOB_EXPIRED');
     if (lease && new Date(lease).getTime() <= Date.now()) fail('BARRIER_MULTIPART_LEASE_EXPIRED');
@@ -113,16 +121,20 @@ export function createBarrierMultipartRepository(pool: Pool, adapters: BarrierMu
     return row.receipt;
   }
   async function assertReservation(client: PoolClient, projectId: string, who: JobPrincipal, ticket: BarrierMultipartStorageTicket,
-    signal?: AbortSignal, entry?: BarrierMultipartScannedEntry) {
+    signal?: AbortSignal, entry?: BarrierMultipartScannedEntry, mode: 'pending' | 'stored' = 'pending') {
     signal?.throwIfAborted(); const row = await sessionRow(client, projectId, ticket.sessionId), session = checked(row, projectId, who);
     const allocation = (await client.query<AllocationRow>(allocationSelect + ' WHERE project_id=$1 AND session_id=$2 AND id=$3 FOR UPDATE', [projectId, row.id, ticket.allocationId])).rows[0];
     if (!allocation || !equal(allocation.ticket, ticket) || allocation.request_sha256 !== ticket.requestSha256
       || allocation.actor_id !== who.userId || allocation.login_id !== who.loginId || allocation.content_sha256 !== ticket.sha256
       || allocation.request_sha256 !== commandHash(allocation.command)) fail('BARRIER_MULTIPART_RESERVATION_CHANGED');
-    if (row.state === 'cancelled' || row.pending_allocation !== allocation.id || row.lease_token !== allocation.lease_token
+    if (row.state === 'cancelled') fail('BARRIER_MULTIPART_CANCELLED');
+    if (mode === 'pending' && (row.pending_allocation !== allocation.id || row.lease_token !== allocation.lease_token
         || allocation.state !== 'pending' || iso(row.lease_expires_at!) !== iso(allocation.lease_expires_at)
-        || String(row.session_revision) !== allocation.expected_revision) fail('BARRIER_MULTIPART_RESERVATION_CHANGED');
-    deadlines(row, allocation.lease_expires_at); await current(client, projectId, session, who); deadlines(row, allocation.lease_expires_at);
+        || String(row.session_revision) !== allocation.expected_revision)) fail('BARRIER_MULTIPART_RESERVATION_CHANGED');
+    if (mode === 'stored' && (allocation.state !== 'stored' || (await client.query('SELECT 1 FROM pf_barrier_multipart_receipts WHERE project_id=$1 AND session_id=$2 AND allocation_id=$3 AND actor_id=$4 AND login_id=$5 AND request_sha256=$6',
+      [projectId, row.id, allocation.id, who.userId, who.loginId, allocation.request_sha256])).rows.length !== 1)) fail('BARRIER_MULTIPART_STORED_RECEIPT_REQUIRED');
+    const lease = mode === 'pending' ? allocation.lease_expires_at : undefined;
+    deadlines(row, lease); await current(client, projectId, session, who); deadlines(row, lease);
     if (entry) {
       const retained = (await client.query<AllocationRow>(allocationSelect + " WHERE ticket->>'blobId'=$1 AND ticket->>'kind'=$2", [entry.blobId, entry.kind])).rows[0];
       if (!retained || retained.ticket.blobId !== entry.blobId || retained.ticket.kind !== entry.kind
@@ -141,7 +153,8 @@ export function createBarrierMultipartRepository(pool: Pool, adapters: BarrierMu
       const old = (await client.query<SessionRow>(sessionSelect + ' WHERE project_id=$1 AND actor_id=$2 AND idempotency_key=$3 FOR UPDATE', [projectId, who.userId, command.idempotencyKey])).rows[0];
       if (old) {
         if (old.request_sha256 !== commandHash(command) || !equal(old.command, command)) fail('BARRIER_MULTIPART_IDEMPOTENCY_CONFLICT');
-        return barrierMultipartAdmitReceiptSchema.parse({ schemaVersion: 'wfc.pf.barrier-multipart-admit-receipt.v2', session: checked(old, projectId, who), duplicate: true });
+        const session = checked(old, projectId, who); await adapters.onAdmission?.(client, session, true);
+        return barrierMultipartAdmitReceiptSchema.parse({ schemaVersion: 'wfc.pf.barrier-multipart-admit-receipt.v2', session, duplicate: true });
       }
       if ((await client.query('SELECT 1 FROM pf_barrier_multipart_allocations WHERE project_id=$1 AND actor_id=$2 AND idempotency_key=$3 UNION ALL SELECT 1 FROM pf_barrier_multipart_receipts WHERE project_id=$1 AND actor_id=$2 AND idempotency_key=$3', [projectId, who.userId, command.idempotencyKey])).rows.length)
         fail('BARRIER_MULTIPART_IDEMPOTENCY_CONFLICT');
@@ -160,6 +173,7 @@ export function createBarrierMultipartRepository(pool: Pool, adapters: BarrierMu
       [session.id, projectId, who.userId, who.loginId, command.idempotencyKey, session.requestSha256, JSON.stringify(command), JSON.stringify(session),
         command.reservation.bytes, command.reservation.files, new Date(jobDeadline), JSON.stringify(session.counts), JSON.stringify(session.roots), new Date(created)])).rows[0];
       if (!inserted || !equal(checked(inserted, projectId, who), session)) fail('BARRIER_MULTIPART_INTEGRITY');
+      await adapters.onAdmission?.(client, session, false);
       await current(client, projectId, session, who); deadline = jobDeadline;
       return barrierMultipartAdmitReceiptSchema.parse({ schemaVersion: 'wfc.pf.barrier-multipart-admit-receipt.v2', session, duplicate: false });
     }, signal, () => { if (deadline !== null && deadline <= Date.now()) fail('BARRIER_MULTIPART_JOB_EXPIRED'); });
@@ -397,7 +411,22 @@ export function createBarrierMultipartRepository(pool: Pool, adapters: BarrierMu
     if (!saved || !equal(saved.receipt, receipt)) fail('BARRIER_MULTIPART_RECEIPT_INTEGRITY');
     await current(client, projectId, session, who); return receipt;
   }, signal);
-  return { admit, begin: admit, get, list, receipts, reconcile, cancel,
+  async function readPage(projectId: string, who: JobPrincipal, intentId: string, kind: BarrierMultipartPage['kind'], index: number, signal?: AbortSignal): Promise<BarrierMultipartPage> {
+    if (!['nodes', 'fragments', 'geometry-ranges', 'plan'].includes(kind) || !Number.isSafeInteger(index) || index < 0 || index >= BARRIER_MULTIPART_PROFILE.limits.pages) fail('BARRIER_MULTIPART_PAGE_QUERY', 400);
+    let jobDeadline: number | null = null;
+    return tx(projectId, who, async client => {
+      const row = await sessionRow(client, projectId, intentId), session = checked(row, projectId, who); deadlines(row);
+      const allocation = (await client.query<AllocationRow>(allocationSelect + " WHERE project_id=$1 AND session_id=$2 AND item_kind='page' AND stream_kind=$3 AND item_index=$4 AND state='stored' FOR SHARE", [projectId, session.id, kind, index])).rows[0];
+      if (!allocation) fail('BARRIER_MULTIPART_PAGE_NOT_FOUND', 404);
+      const command = barrierMultipartStagePageCommandSchema.parse(allocation.command);
+      if (command.intentId !== session.id || command.page.kind !== kind || command.page.index !== index
+        || command.scopeSha256 !== session.scopeSha256 || command.profileSha256 !== session.profileSha256) fail('BARRIER_MULTIPART_PAGE_INTEGRITY');
+      const bytes = await adapters.storage.read(allocation.ticket, (ticket, entry) => assertReservation(client, projectId, who, ticket, signal, entry, 'stored'), { signal });
+      if (!bytes.equals(encodeBarrierMultipartControl(command.page))) fail('BARRIER_MULTIPART_PAGE_INTEGRITY');
+      await current(client, projectId, session, who); deadlines(row); jobDeadline = new Date(row.job_deadline).getTime(); return command.page;
+    }, signal, () => { if (jobDeadline !== null && jobDeadline <= Date.now()) fail('BARRIER_MULTIPART_JOB_EXPIRED'); });
+  }
+  return { admit, begin: admit, get, list, receipts, reconcile, cancel, readPage,
     stagePage: (projectId: string, who: JobPrincipal, raw: unknown, signal?: AbortSignal) => stage(projectId, who, barrierMultipartStagePageCommandSchema.parse(raw), undefined, signal),
     stageSeal: (projectId: string, who: JobPrincipal, raw: unknown, signal?: AbortSignal) => stage(projectId, who, barrierMultipartStageSealCommandSchema.parse(raw), undefined, signal),
     stagePart: (projectId: string, who: JobPrincipal, raw: unknown, bytes: Buffer, signal?: AbortSignal) => stage(projectId, who, barrierMultipartStagePartCommandSchema.parse(raw), bytes, signal) };

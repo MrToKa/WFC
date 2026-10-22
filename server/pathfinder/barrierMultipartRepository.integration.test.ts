@@ -99,6 +99,38 @@ describe.skipIf(!fixtureFile).sequential('owned Linux PostgreSQL multipart stagi
     expect((await connected.query('SELECT * FROM pf_barrier_heads')).rows).toEqual([]);
     expect((await repository.get(projectId, who, session.id)).reservation.chargedBytes).toBe(0);
   });
+  it('runs the protected binding hook atomically for new and duplicate admission, rolling back a failed binding', async () => {
+    const request = command(), before = (await connected.query('SELECT count(*)::int AS count,COALESCE(sum(reserved_bytes),0)::text AS bytes FROM pf_barrier_multipart_sessions')).rows[0];
+    let reject = true; const calls: boolean[] = [];
+    const protectedRepository = createBarrierMultipartRepository(pool, { ...adapters, onAdmission: async (client, session, duplicate) => {
+      calls.push(duplicate);
+      if (!duplicate) await client.query(`INSERT INTO pf_barrier_multipart_viewer_contexts(intent_id,project_id,viewer_session_id,actor_id,login_id,model_version_id,model_load_id,
+        scope_sha256,command_sha256,frame_sha256,frame_observation,producer_profile,context_sha256,effective_deadline)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'{}'::jsonb,'{}'::jsonb,$11,$12)`, [session.id, projectId, id(), who.userId, who.loginId,
+        currentScope.modelScope.modelVersionId, currentScope.modelLoadId, session.scopeSha256, session.requestSha256, 'a'.repeat(64), 'b'.repeat(64), new Date(session.jobDeadline)]);
+      if (reject) throw Error('synthetic context binding failure');
+    } });
+    await expect(protectedRepository.admit(projectId, who, request)).rejects.toThrow('synthetic context binding failure');
+    expect((await connected.query('SELECT count(*)::int AS count,COALESCE(sum(reserved_bytes),0)::text AS bytes FROM pf_barrier_multipart_sessions')).rows[0]).toEqual(before);
+    expect((await connected.query('SELECT * FROM pf_barrier_multipart_viewer_contexts')).rows).toEqual([]);
+    reject = false; const saved = await protectedRepository.admit(projectId, who, request); expect((await protectedRepository.admit(projectId, who, request)).duplicate).toBe(true);
+    expect(calls).toEqual([false, false, true]);
+    expect((await connected.query('SELECT intent_id FROM pf_barrier_multipart_viewer_contexts WHERE intent_id=$1', [saved.session.id])).rows).toHaveLength(1);
+    expect((await connected.query('SELECT * FROM pf_barrier_heads')).rows).toEqual([]);
+  });
+  it('replays exact stored page bytes without renewing any lease, revision or reservation and refuses a changed scope', async () => {
+    const { session } = await admit(), request = pageCommand(session); await repository.stagePage(projectId, who, request);
+    const before = await repository.get(projectId, who, session.id), bytes = await repository.readPage(projectId, who, session.id, 'nodes', 0);
+    expect(bytes).toEqual(request.page); expect(await repository.get(projectId, who, session.id)).toEqual(before);
+    expect(before.leaseDeadline).toBeNull(); expect(before.reservation.chargedFiles).toBe(2);
+    const load = currentScope.modelLoadId; currentScope.modelLoadId = id();
+    try { await expect(repository.readPage(projectId, who, session.id, 'nodes', 0)).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_SCOPE_CHANGED' }); }
+    finally { currentScope.modelLoadId = load; }
+    const foreign = { ...who, loginId: id() }; await expect(repository.readPage(projectId, foreign, session.id, 'nodes', 0)).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_OWNER_CHANGED' });
+    await repository.cancel(projectId, who, { schemaVersion: 'wfc.pf.barrier-multipart-cancel.v2', intentId: session.id, expectedSessionRevision: before.sessionRevision,
+      idempotencyKey: id(), scopeSha256: session.scopeSha256, profileSha256: session.profileSha256, reason: 'Synthetic stored-page cancellation' });
+    await expect(repository.readPage(projectId, who, session.id, 'nodes', 0)).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_CANCELLED' });
+  });
   it('stores original bounded pages durably, replays exact receipts, and refuses changed same-key data', async () => {
     const { session } = await admit(), request = pageCommand(session), first = await repository.stagePage(projectId, who, request);
     expect(first).toMatchObject({ kind: 'page', authority: 'none', qualification: 'NOT_MEASURED', geometryValidation: 'NOT_VALIDATED' });

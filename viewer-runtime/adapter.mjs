@@ -2,6 +2,7 @@ import { createRouteController } from './routes.mjs';
 import { createPathFinderController } from './pathfinder.mjs';
 import { captureSelectedModel } from './model-capture.mjs';
 import { captureSelectedBarriers } from './barrier-capture.mjs';
+import { createBarrierMultipartRuntime } from './barrier-multipart-runtime.mjs';
 import { barrierCaptureErrorMessage } from './barrier-capture-errors.mjs';
 import { createModelCaptureInputStage, isStagedModelCaptureStart, isModelCaptureInputAppend, CAPTURE_INPUT_LIMITS } from './capture-input.mjs';
 import { SDK_VERSION } from './protocol.mjs';
@@ -128,7 +129,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
       },
     });
     let finished = false, routes, pathfinder, observer, geometryLoaded = false, nodeIndexReady = false, nodeCount = 0;
-    let capture;
+    let capture, multipart;
     const cancelCapture = () => { if (!capture) return; const old = capture; capture = undefined; clearTimeout(old.deadline); old.controller.abort(); if (old.iterator) void old.iterator.return().catch(() => {}); };
     const runtimeError = () => { if (!finished) onRuntimeError(safeError()); };
     const finish = () => {
@@ -136,6 +137,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
       finished = true;
       signal?.removeEventListener('abort', finish);
       cancelCapture();
+      multipart?.dispose();
       observer?.disconnect();
       if (viewing.ERROR_EVENT) viewer.removeEventListener(viewing.ERROR_EVENT, runtimeError);
       routes?.dispose();
@@ -183,6 +185,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
       if (viewing.ERROR_EVENT) viewer.addEventListener(viewing.ERROR_EVENT, runtimeError);
       routes = createRouteController(viewer, { signal });
       pathfinder = createPathFinderController(viewer, { window, signal });
+      multipart = createBarrierMultipartRuntime(viewer, { descriptor, signal, isCurrent: () => !finished && viewer.model != null });
       let computedPath = false, legacyPath = false;
       async function captureEvent(captureId, index, operationSignal, onProgress) {
         if (!capture || capture.id !== captureId || capture.index !== index || capture.reading) throw safeError('EXTRACTION_FAILED');
@@ -238,6 +241,11 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
       }
       const handle = {
         finish,
+        readBarrierMultipartFrame: (request, operationSignal) => multipart.readFrame(request, operationSignal),
+        startBarrierMultipart: (request, transport, operationSignal) => multipart.start(request, transport, operationSignal),
+        statusBarrierMultipart: request => multipart.status(request),
+        cancelBarrierMultipart: (request, operationSignal) => multipart.cancel(request, operationSignal),
+        reconcileBarrierMultipart: (request, operationSignal) => multipart.reconcile(request, operationSignal),
         async prepareIndex() {
           await routes.prepareIndex(progress => { nodeCount = progress.total ?? nodeCount; onProgress({ phase: 'index', ...progress }); });
           active(signal);

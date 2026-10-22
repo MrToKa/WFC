@@ -66,6 +66,16 @@ DROP TRIGGER IF EXISTS pf_barrier_multipart_allocation_delete ON pf_barrier_mult
 CREATE TRIGGER pf_barrier_multipart_allocation_delete BEFORE DELETE ON pf_barrier_multipart_allocations FOR EACH ROW EXECUTE FUNCTION pf_barrier_multipart_immutable();
 DROP TRIGGER IF EXISTS pf_barrier_multipart_receipt_update ON pf_barrier_multipart_receipts;
 CREATE TRIGGER pf_barrier_multipart_receipt_update BEFORE UPDATE OR DELETE ON pf_barrier_multipart_receipts FOR EACH ROW EXECUTE FUNCTION pf_barrier_multipart_immutable();
+CREATE TABLE IF NOT EXISTS pf_barrier_multipart_viewer_contexts (
+ intent_id uuid PRIMARY KEY, project_id uuid NOT NULL, viewer_session_id uuid NOT NULL, actor_id uuid NOT NULL, login_id uuid NOT NULL,
+ model_version_id uuid NOT NULL, model_load_id uuid NOT NULL, scope_sha256 text NOT NULL CHECK(scope_sha256 ~ '^[a-f0-9]{64}$'),
+ command_sha256 text NOT NULL CHECK(command_sha256 ~ '^[a-f0-9]{64}$'), frame_sha256 text NOT NULL CHECK(frame_sha256 ~ '^[a-f0-9]{64}$'),
+ frame_observation jsonb NOT NULL, producer_profile jsonb NOT NULL, context_sha256 text NOT NULL CHECK(context_sha256 ~ '^[a-f0-9]{64}$'),
+ effective_deadline timestamptz NOT NULL, created_at timestamptz NOT NULL DEFAULT now(),
+ FOREIGN KEY(project_id,intent_id) REFERENCES pf_barrier_multipart_sessions(project_id,id)
+);
+DROP TRIGGER IF EXISTS pf_barrier_multipart_viewer_context_update ON pf_barrier_multipart_viewer_contexts;
+CREATE TRIGGER pf_barrier_multipart_viewer_context_update BEFORE UPDATE OR DELETE ON pf_barrier_multipart_viewer_contexts FOR EACH ROW EXECUTE FUNCTION pf_barrier_multipart_immutable();
 `;
 export async function initializeBarrierMultipartSchema(pool: Pool): Promise<void> {
   await pool.query(BARRIER_MULTIPART_SCHEMA_SQL);

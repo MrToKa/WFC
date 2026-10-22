@@ -1,6 +1,9 @@
 import { FRAME_PATH, MAX_PATH_POINTS, MAX_PATH_CHUNK_POINTS, isCanonicalPoint, validateEnvelope, type BridgeEnvelope, type ComputedPath, type PickedPoint, type ViewerModelObjectsPage, type ViewerSelection, type ModelCaptureRequest, type ModelCaptureProgress } from '../../viewer-runtime/protocol.mjs';
 import { createModelCaptureAssembler } from '../../viewer-runtime/model-capture.mjs';
 import { createBarrierCaptureAssembler, validateBarrierCaptureRequest, validateBarrierFrameObservation, barrierFrameObservationHashInput, type BarrierCaptureRequest } from '../../viewer-runtime/barrier-capture.mjs';
+import { validateBarrierMultipartFrameRequest, validateBarrierMultipartStart, validateBarrierMultipartIntentControl,
+  type BarrierMultipartStart, type BarrierMultipartStatus, type BarrierMultipartProducerProfile } from '../../viewer-runtime/barrier-multipart-protocol.mjs';
+import type { BarrierFrameObservation } from '../../viewer-runtime/barrier-capture.mjs';
 import { BARRIER_LIMITS, barrierCanonicalJson, barrierCaptureSchema, barrierSnapshotReferenceSchema } from '../../shared/pathfinderBarriers';
 import { bindCompletedCaptureEvidence,verifyCompletedCaptureEvidence,type CompletedModelCaptureSummary } from '../../viewer-runtime/capture-evidence.mjs';
 import { CAPTURE_INPUT_LIMITS, planModelCaptureInput, validateModelCaptureInputAck, validateModelCaptureInputScope, type ModelCaptureInputDescriptor } from '../../viewer-runtime/capture-input.mjs';
@@ -103,10 +106,15 @@ export class ViewerController {
     pending.timer = window.setTimeout(() => {
       if (!this.pending.delete(pending.envelope.requestId)) return;
       pending.reject?.(new Error('Viewer request timed out'));
+      if (pending.envelope.type.includes('BARRIER_MULTIPART')) {
+        this.cancel(pending.envelope.requestId);
+        this.emit('ERROR', { code: 'BARRIER_MULTIPART_RECONCILE_REQUIRED', message: 'Barrier control timed out. Check the retained capture status before trying another command.', retryable: true, operation: pending.envelope.type });
+        return;
+      }
       this.fail(pending.envelope.type === 'LOAD_MODEL' ? 'MODEL_TIMEOUT' : 'REQUEST_TIMEOUT');
     // A discovery page may build the bounded model-wide property index (300s
     // inside the frame). Allow its terminal reply to arrive before failing load.
-    }, pending.envelope.type === 'READ_PREPARATION_OBJECTS' ? 310_000 : ['START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE'].includes(pending.envelope.type) ? 125_000 : ['CLEAR_ROUTE', 'COMMIT_COMPUTED_PATH', 'SET_PATH_TRANSPARENCY'].includes(pending.envelope.type) ? MODEL_APPEARANCE_TIMEOUT_MILLISECONDS : ['LOAD_MODEL', 'READ_MODEL_OBJECTS', 'READ_SELECTION'].includes(pending.envelope.type) ? 60_000 : pending.envelope.type === 'PICK_POINT' ? 125_000 : 10_000);
+    }, pending.envelope.type.includes('BARRIER_MULTIPART') ? 195_000 : pending.envelope.type === 'READ_PREPARATION_OBJECTS' ? 310_000 : ['START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE'].includes(pending.envelope.type) ? 125_000 : ['CLEAR_ROUTE', 'COMMIT_COMPUTED_PATH', 'SET_PATH_TRANSPARENCY'].includes(pending.envelope.type) ? MODEL_APPEARANCE_TIMEOUT_MILLISECONDS : ['LOAD_MODEL', 'READ_MODEL_OBJECTS', 'READ_SELECTION'].includes(pending.envelope.type) ? 60_000 : pending.envelope.type === 'PICK_POINT' ? 125_000 : 10_000);
   }
 
   private send(type: string, payload: Record<string, unknown>, terminal: string, callbacks: Pick<Pending, 'resolve' | 'reject'> = {}): string {
@@ -431,6 +439,51 @@ export class ViewerController {
 
   cancelPicking(): void {
     for (const pending of [...this.pending.values()]) if (pending.envelope.type === 'PICK_POINT') this.cancel(pending.envelope.requestId);
+  }
+
+  /** Small controls only. Geometry pages stay inside the protected cookie path;
+   * a structural staging status never authorizes publication or cable writes. */
+  private async barrierMultipartControl(type: string, payload: Record<string, unknown>, terminal: string): Promise<ViewerEvent> {
+    if (this.disposed || !this.loaded || !this.loadId || !this.modelVersionId) throw new Error('Barrier observation is unavailable');
+    const { instanceId, loadId, modelVersionId, selectionRevision } = this;
+    const current = () => !this.disposed && this.loaded && this.instanceId === instanceId && this.loadId === loadId
+      && this.modelVersionId === modelVersionId && this.selectionRevision === selectionRevision;
+    if (!await this.checkSelection() || !current()) throw new Error('Barrier observation context changed');
+    const result = await this.sendAsync(type, payload, terminal);
+    if (!current() || !await this.checkSelection() || !current()) throw new Error('Barrier observation context changed');
+    return result;
+  }
+
+  async readBarrierMultipartFrame(contentFingerprint: string): Promise<{ frameObservation: BarrierFrameObservation; producerProfile: BarrierMultipartProducerProfile }> {
+    const request = { projectId: this.options.projectId, modelVersionId: this.modelVersionId, contentFingerprint };
+    if (!validateBarrierMultipartFrameRequest(request)) throw new Error('Invalid barrier frame request');
+    const result = await this.barrierMultipartControl('READ_BARRIER_MULTIPART_FRAME', request, 'BARRIER_MULTIPART_FRAME');
+    if ((result.payload.frameObservation as BarrierFrameObservation).contentFingerprint !== contentFingerprint) throw new Error('Barrier observation frame changed');
+    return result.payload as unknown as { frameObservation: BarrierFrameObservation; producerProfile: BarrierMultipartProducerProfile };
+  }
+
+  async startBarrierMultipart(request: BarrierMultipartStart): Promise<BarrierMultipartStatus> {
+    if (!validateBarrierMultipartStart(request)) throw new Error('Invalid barrier observation request');
+    const input = JSON.parse(JSON.stringify(request)) as BarrierMultipartStart;
+    const result = await this.barrierMultipartControl('START_BARRIER_MULTIPART', input, 'BARRIER_MULTIPART_STATUS');
+    if (result.payload.intentId !== input.intentId) throw new Error('Barrier observation response changed');
+    return result.payload as unknown as BarrierMultipartStatus;
+  }
+
+  async barrierMultipartStatus(intentId: string, cancel = false): Promise<BarrierMultipartStatus> {
+    const request = { intentId };
+    if (!validateBarrierMultipartIntentControl(request)) throw new Error('Invalid barrier observation identity');
+    const result = await this.barrierMultipartControl(cancel ? 'CANCEL_BARRIER_MULTIPART' : 'STATUS_BARRIER_MULTIPART', request, 'BARRIER_MULTIPART_STATUS');
+    if (result.payload.intentId !== intentId) throw new Error('Barrier observation response changed');
+    return result.payload as unknown as BarrierMultipartStatus;
+  }
+
+  async reconcileBarrierMultipart(intentId: string): Promise<BarrierMultipartStatus> {
+    const request = { intentId };
+    if (!validateBarrierMultipartIntentControl(request)) throw new Error('Invalid barrier observation identity');
+    const result = await this.barrierMultipartControl('RECONCILE_BARRIER_MULTIPART', request, 'BARRIER_MULTIPART_STATUS');
+    if (result.payload.intentId !== intentId) throw new Error('Barrier observation response changed');
+    return result.payload as unknown as BarrierMultipartStatus;
   }
 
   /** Selected barrier geometry is a separate observation, never a ready certificate. */

@@ -1,8 +1,9 @@
 # PF-B13 — whole-parent barrier capacity plan
 
 Status: **IN PROGRESS**. B13a pure planning and B13b unqualified server staging
-are technically verified (reports97/98); protected producer and all geometry/
-publication/actual-model gates remain unfinished. This document is not a geometry,
+are technically verified (reports97/98); protected inventory/control producer
+foundation is verified at B13c/report99. Encoded geometry, global qualification,
+publication and actual-model gates remain unfinished. This document is not a geometry,
 capacity, publication, routing or engineering acceptance receipt. Root executes
 all builds, tests, SQL, HTTP, Viewer and runtime qualification. No current limit
 is raised by this plan.
@@ -184,7 +185,10 @@ Tests must assert that pure planning never yields publication/runtime authority.
 
 ## Stage 2 — protected paged inventory and bounded capture
 
-Status: **PLANNED**.
+Status: **INVENTORY/CONTROL FOUNDATION VERIFIED**, B13c/report99. Protected
+pages/seals, immutable cookie context and background lifecycle are implemented
+and independently checked with synthetic SDK and actual isolated HTTP/SQL.
+Encoded mesh parts, actual SDK capture and full-model qualification remain planned.
 
 Owning files: new multipart Viewer module alongside
 `viewer-runtime/barrier-capture.mjs`, its protocol/types, `src/viewer/ViewerController.ts`,
@@ -374,6 +378,14 @@ through that lane or old limits raised. Implement Stage3's server admission/
 staging prerequisite next (PF-B13b), then Stage2's protected paged producer against
 that exact API (PF-B13c), before Stages4–7. This changes implementation dependency
 order, not required outputs, v1 guarantees or whole-parent/real-cable acceptance.
+
+B13c source review established a codec prerequisite before global qualification:
+the full SDK source digest cannot be independently reconstructed from remapped
+range coordinates alone. B13d implements versioned packed bytes and independent
+local range/transform validation with explicit producer-reported source provenance.
+It cannot claim source-byte verification, global geometry readiness or collision
+clearance. Subsequent global coverage/catalog and paged query stages still have
+every Stage4–7 gate above; no scope is removed by this execution split.
 
 After Stage 1 contracts freeze, independent writers can own: (A) pure planner
 and coverage tests; (B) protected Viewer paging/capture; (C) server storage/session

@@ -1,6 +1,32 @@
 # PathFinder local implementation progress
 
-## Current: PF-B13b foundation verified; PF-B13c producer handoff next
+## Current: PF-B13c source verified; preparing PF-B13d
+
+Branchpf-b13c-protected-multipart-producer-local-20261022, checkedphysicalsource
+pins atparent6e35605468a4af40631e16b17d2f74389350431b inreport99/publicb13creceipt.
+Native127PASS/0skip; server51+Controller94PASS; freshactualLinuxSQL14+cookieHTTP7
+PASS over syntheticpreparedmetadata/noauthmocks. Types/scopedlint/server+frontend
+buildPASS; independentreviewCLEAR. Allnewhelpers/listeners/pools/networkjoinedand
+removed; rootsoleexecutor. Fixture1FAIL20/21(testmissingcookie400vs401) retained,
+fixture2PASS/source53bookends. Firstunitfixture/typefailuresretainedandcorrected.
+No activebuild/helper/job. Threeagents completedB13c, read-onlynextcodec maps only.
+No app/initializer/schema/5191installation. Runtimeweb814475f9/APIac0d16abunchanged.
+Stagingauthoritynone/geometryNOT_VALIDATED; no encodedmesh/globalqualification/
+collisionready/publication/cablewrite. ActualSDK/AalborgBLOCKEDsavedbrowserrefusal,
+no retry/bypass. BothcompleteRVMgroupsstillunqualified; no falseEXTRACTIONfixclaim.
+NEXT: localcommitreport99/source, prepare-stage-handoff B13d packedgeometry/local
+validation prerequisite, immediatelynewinheritedbranch. SourceGeometryfullSDKroot
+cannotbereconstructedfromremappedrangebytes: explicitlyproducerreportedprovenance;
+localpayload/range/transformvalidationseparate. Allglobalcatalog/query/writeproof/
+realmodelgatesremain. Ownendpointonlyinitialexit/finalentryaccepted; noRVMexemption.
+Preparercheckpointa3461c69 records source0083207 Windows281PASS+5LinuxSKIP(strict
+summaryFAILretained), separateexactLinux5PASS; guard18/package174PASS/joins/pins.
+FullLinuxmatrixNOT_RUN; main5180backup/restore/update/APSNOT_RUN. Source-onlyagents
+done; no actualPreparerprocess. Separateprogress/report04retainqualifiedscope.
+Schedulerstatusnotcurrentlyverified: viewreturnedgenericcardandconfignotfound;
+historicalACTIVEbelowisnotfreshproof. Activechatcontinuesauthorizedstages.
+
+## Previous: PF-B13b foundation verified
 
 Source8newfiles rootchecksPASS: shared12/repo7/Windowsstorage6 (+21Linuxconditional
 SKIP); freshLinuxstorage26 (+1WindowsconditionalSKIP) andrealPG12, complete tiny
