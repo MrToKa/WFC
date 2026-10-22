@@ -96,6 +96,17 @@ describe('explicit additive inter-tray maneuver profile', () => {
     expect(Object.isFrozen(current.interTrayManeuvers)).toBe(true); expect(Object.isFrozen(current.interTrayManeuvers.radiiMetres)).toBe(true);
     expect(mixed.MIXED_BARRIER_RUNTIME_PROFILE).toEqual(old);
   });
+  it('refuses the earlier v3 graph-first selection even with its exact recomputed profile hash', () => {
+    const current = openingContext();
+    const earlierProfile = { ...current.profile, interTrayManeuvers: {
+      ...mixed.INTER_TRAY_MANEUVERS_PROFILE, selection: 'legacy-clear-graph-first-lazy-selected-path.v1' } };
+    expect(mixed.INTER_TRAY_MANEUVERS_PROFILE.selection).toBe('legacy-clear-upper-bound-lazy-selected-path.v1');
+    expect(digest(earlierProfile)).not.toBe(current.profileSha256);
+    expect(mixed.mixedBarrierOpeningRuntimeProfileSchema.safeParse(earlierProfile).success).toBe(false);
+    expect(mixed.mixedBarrierSupportedRuntimeProfileSchema.safeParse(earlierProfile).success).toBe(false);
+    expect(mixed.verifyMixedBarrierRuntimeContext({ ...current, profile: earlierProfile,
+      profileSha256: digest(earlierProfile) }, hash)).toBe(false);
+  });
   it.each([
     { maximumOffsetMetres: 0.1000000001 }, { radiiMetres: [0.1, 0.05] }, { radiiMetres: [0.05, 0.1, 0.15] },
     { maximumEdgeAttempts: 65 }, { candidateCount: 53 }, { directionVersion: 'caller-supplied' },

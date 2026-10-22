@@ -14,8 +14,8 @@ namespace AddinRibbon.Routing
         }
 
         /// <summary>The explicit bounded opening-maneuver strategy. Existing clear
-        /// graphs are preferred unchanged; only blocked cross-tray chords in a
-        /// disconnected graph may use the fixed original-geometry checked domain.</summary>
+        /// graph is a strict-cost upper bound; only blocked cross-tray chords may
+        /// use the fixed original-geometry checked improvement domain.</summary>
         public LocalApproachRouteEvaluation CalculateConstrainedWithLocalApproachesAndInterTrayManeuvers(IEnumerable<TraySegment> trays, RoutePoint from, RoutePoint to,
             CableCategory category, RouteCollisionQuery collision, RoutingOptions options = null, ConstrainedRoutingLimits limits = null,
             LocalConnectorOptions localOptions = null, bool drillThroughWalls = false, CancellationToken cancellationToken = default(CancellationToken))

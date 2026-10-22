@@ -102,7 +102,8 @@ namespace AddinRibbon.Routing
             Route = route; Status = status;
             Reason = status == ConstrainedRouteStatus.Clear && budget.RouteUsedInterTrayManeuver
                 ? reason + "_INTER_TRAY_OPENING_MANEUVER_V1" : reason;
-            SearchComplete = complete;
+            if (status == ConstrainedRouteStatus.Clear && budget.RouteInterTrayImprovementLimited) Reason += "_INTER_TRAY_IMPROVEMENT_LIMIT";
+            SearchComplete = complete && !budget.RouteInterTrayImprovementLimited;
             CandidatesTruncated = budget.CandidatesTruncated; CollisionQueries = budget.Queries;
             Work = budget.Work; PairAttempts = budget.Pairs;
             Blocking = status == ConstrainedRouteStatus.Clear || status == ConstrainedRouteStatus.Bypassed ? null : budget.FirstBlocking;
@@ -154,6 +155,7 @@ namespace AddinRibbon.Routing
         internal RouteCollisionObservation FirstBlocking;
         internal readonly InterTrayOpeningContext InterTray;
         internal bool RouteUsedInterTrayManeuver;
+        internal bool RouteInterTrayImprovementLimited;
         internal readonly List<FinalRouteCollisionObservation> FinalChecks = new List<FinalRouteCollisionObservation>();
         internal RouteCollisionObservation FinalQuery(RouteCollisionQuery oracle, RoutePoint from, RoutePoint to)
         {

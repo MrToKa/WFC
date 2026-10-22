@@ -16,7 +16,7 @@ namespace AddinRibbon.Routing
         public const int CandidateCount = 52;
         public const string DirectionVersion = "normalized-lexicographic-26.v1";
         public const string Domain = "blocked-inter-tray-chords-only";
-        public const string Selection = "legacy-clear-graph-first-lazy-selected-path.v1";
+        public const string Selection = "legacy-clear-upper-bound-lazy-selected-path.v1";
     }
 
     internal sealed class InterTrayOpeningPlan
@@ -39,9 +39,10 @@ namespace AddinRibbon.Routing
         internal int Attempts { get; private set; }
         internal InterTrayOpeningContext(ConstrainedBudget budget) { this.budget = budget; }
 
-        internal InterTrayOpeningPlan Find(RouteCollisionQuery query, RoutePoint from, RoutePoint to)
+        internal InterTrayOpeningPlan Find(RouteCollisionQuery query, RoutePoint from, RoutePoint to, double minimumLength)
         {
             budget.Charge(1);
+            if (!RoutePoint.IsFinite(minimumLength) || minimumLength < 0) throw new ConstrainedLimitException("INTER_TRAY_NONFINITE_LENGTH");
             if (!hasOracle) { oracle = query; hasOracle = true; }
             else if (!ReferenceEquals(oracle, query))
             {
@@ -50,7 +51,7 @@ namespace AddinRibbon.Routing
                 // reused, including after an A -> B -> A delegate transition.
                 throw new ConstrainedLimitException("INTER_TRAY_ORACLE_CONTEXT_CHANGED");
             }
-            var key = new OpeningKey(from, to); InterTrayOpeningPlan cached;
+            var key = new OpeningKey(from, to, minimumLength); InterTrayOpeningPlan cached;
             if (plans.TryGetValue(key, out cached)) { budget.Check(); return cached; }
             if (Attempts >= InterTrayOpeningManeuverPolicy.MaximumEdgeAttempts)
                 throw new ConstrainedLimitException("INTER_TRAY_MANEUVER_ATTEMPT_LIMIT");
@@ -74,7 +75,10 @@ namespace AddinRibbon.Routing
                     if (!WithinOffset(from, a) || !WithinOffset(to, b)) continue;
                     double first = from.DistanceTo(a), middle = a.DistanceTo(b), last = b.DistanceTo(to);
                     double length = first + middle + last;
-                    if (!RoutePoint.IsFinite(length) || first == 0 || last == 0) continue;
+                    // The stored original chord is the optimistic graph cost.
+                    // Do not let binary64 summation create a lower replacement
+                    // cost, even when exact geometric triangle inequality holds.
+                    if (!RoutePoint.IsFinite(length) || length < minimumLength || first == 0 || last == 0) continue;
                     var one = budget.Query(query, from, a);
                     if (one.Status != RouteCollisionStatus.Clear) { uncertain |= one.Status == RouteCollisionStatus.Indeterminate; continue; }
                     var two = budget.Query(query, a, b);
@@ -119,15 +123,16 @@ namespace AddinRibbon.Routing
 
         private readonly struct OpeningKey : IEquatable<OpeningKey>
         {
-            private readonly long ax, ay, az, bx, by, bz;
-            internal OpeningKey(RoutePoint a, RoutePoint b)
+            private readonly long ax, ay, az, bx, by, bz, minimumLength;
+            internal OpeningKey(RoutePoint a, RoutePoint b, double minimumLength)
             { ax = BitConverter.DoubleToInt64Bits(a.X); ay = BitConverter.DoubleToInt64Bits(a.Y); az = BitConverter.DoubleToInt64Bits(a.Z);
-                bx = BitConverter.DoubleToInt64Bits(b.X); by = BitConverter.DoubleToInt64Bits(b.Y); bz = BitConverter.DoubleToInt64Bits(b.Z); }
-            public bool Equals(OpeningKey b) { return ax == b.ax && ay == b.ay && az == b.az && bx == b.bx && by == b.by && bz == b.bz; }
+                bx = BitConverter.DoubleToInt64Bits(b.X); by = BitConverter.DoubleToInt64Bits(b.Y); bz = BitConverter.DoubleToInt64Bits(b.Z);
+                this.minimumLength = BitConverter.DoubleToInt64Bits(minimumLength); }
+            public bool Equals(OpeningKey b) { return ax == b.ax && ay == b.ay && az == b.az && bx == b.bx && by == b.by && bz == b.bz && minimumLength == b.minimumLength; }
             public override bool Equals(object b) { return b is OpeningKey && Equals((OpeningKey)b); }
             public override int GetHashCode()
             { unchecked { int h = 17; h = h * 31 + ax.GetHashCode(); h = h * 31 + ay.GetHashCode(); h = h * 31 + az.GetHashCode();
-                h = h * 31 + bx.GetHashCode(); h = h * 31 + by.GetHashCode(); return h * 31 + bz.GetHashCode(); } }
+                h = h * 31 + bx.GetHashCode(); h = h * 31 + by.GetHashCode(); h = h * 31 + bz.GetHashCode(); return h * 31 + minimumLength.GetHashCode(); } }
         }
     }
 
@@ -144,7 +149,8 @@ namespace AddinRibbon.Routing
 
         private static List<int> OpeningFallback(List<Node> nodes, int first, int last,
             Dictionary<int, List<BlockedInterTrayEdge>> blocked, RouteCollisionQuery collision, ConstrainedBudget budget,
-            long directedEdges, out PathCost cost, out Dictionary<long, InterTrayOpeningPlan> repairs)
+            long directedEdges, List<int> incumbent, PathCost incumbentCost,
+            out PathCost cost, out Dictionary<long, InterTrayOpeningPlan> repairs)
         {
             repairs = new Dictionary<long, InterTrayOpeningPlan>(); var pending = new HashSet<long>();
             // Merge backwards in place. RetainedBefore refers to the unchanged
@@ -166,7 +172,13 @@ namespace AddinRibbon.Routing
             while (true)
             {
                 budget.Charge(nodes.Count + directedEdges);
-                var path = ShortestPath(nodes, first, last, budget.Token, out cost); budget.Check(); if (path == null) return null;
+                var path = ShortestPath(nodes, first, last, budget.Token, out cost); budget.Check();
+                // Only a strictly cheaper verified candidate may displace the
+                // original clear graph. Equal costs retain its exact path and
+                // adjacency tie choice; unknown chords are lower bounds only.
+                if (incumbent != null && (path == null || cost.CompareTo(incumbentCost) >= 0))
+                { cost = incumbentCost; return incumbent; }
+                if (path == null) return null;
                 bool changed = false;
                 for (int i = 1; i < path.Count; i++)
                 {
@@ -175,7 +187,15 @@ namespace AddinRibbon.Routing
                     var edges = nodes[from].Edges; int position = -1;
                     for (int j = 0; j < edges.Count; j++) { budget.Charge(1); if (edges[j].Node == to) { position = j; break; } }
                     if (position < 0) throw new InvalidOperationException("Selected opening edge is missing.");
-                    var original = edges[position]; var plan = budget.InterTray.Find(collision, nodes[from].Point, nodes[to].Point);
+                    var original = edges[position]; InterTrayOpeningPlan plan;
+                    try { plan = budget.InterTray.Find(collision, nodes[from].Point, nodes[to].Point, original.Length); }
+                    catch (ConstrainedLimitException error) when (incumbent != null && error.Reason == "INTER_TRAY_MANEUVER_ATTEMPT_LIMIT")
+                    {
+                        // This is only the local optional improvement ceiling.
+                        // Global work/query/deadline limits still propagate, and
+                        // the caller must freshly recheck every incumbent leg.
+                        budget.Check(); budget.RouteInterTrayImprovementLimited = true; cost = incumbentCost; return incumbent;
+                    }
                     if (plan == null) edges.RemoveAt(position);
                     else
                     {

@@ -1,5 +1,20 @@
 # PathFinder local implementation progress
 
+## Current: B25 shorter checked opening route verified; delivery pending
+
+Report119/source and native receipts record 308 Core/transport and 282 selected
+TypeScript checks PASS, full types/scoped lint/both builds/native publish PASS.
+The legacy clear route is now an upper bound: only a strictly better checked
+candidate replaces it; equal-cost legacy ties remain unchanged. Nine actual
+Linux runs joined/cleaned with source/input/artifact bookends. Independent checks
+cover 874 final segments: new H1 Off 241 clear, isolated C002/C107-1 opening 3 clear.
+That diagnostic is now 0.947439458m directly via the two trays, replacing B24's
+BC158 2.951497m route. Both H1 On variants retain 4 contacts and bypass status.
+Geometry, collision tolerance and resource ceilings are unchanged; no hole proxy.
+Real H1 From 81.68/design 91m remains; user reference From 51.26 needs clarification.
+Not installed: 5191 B21 API/B22 web. No live SDK/current-frame, Apply, full-reference,
+own-terminal/full-capacity or Simplified Preparer completion is inferred.
+
 ## Current: B24 checked opening maneuvers; real H1 Off now calculates
 
 Report118/source receipt: isolated151files,298Core/transport +281uniqueTS checks

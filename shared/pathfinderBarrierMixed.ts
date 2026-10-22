@@ -187,7 +187,7 @@ export const INTER_TRAY_MANEUVERS_PROFILE = Object.freeze({
   policyVersion: INTER_TRAY_OPENING_MANEUVER_POLICY,
   maximumOffsetMetres: 0.1, radiiMetres: Object.freeze([0.05, 0.1] as const),
   directionVersion: 'normalized-lexicographic-26.v1', maximumEdgeAttempts: 64, candidateCount: 52,
-  domain: 'blocked-inter-tray-chords-only', selection: 'legacy-clear-graph-first-lazy-selected-path.v1',
+  domain: 'blocked-inter-tray-chords-only', selection: 'legacy-clear-upper-bound-lazy-selected-path.v1',
 } as const);
 export const MIXED_BARRIER_OPENING_RUNTIME_PROFILE = Object.freeze({ ...MIXED_BARRIER_RUNTIME_PROFILE,
   schemaVersion: 'wfc.pf.barrier-runtime-profile.v3', interTrayManeuvers: INTER_TRAY_MANEUVERS_PROFILE } as const);

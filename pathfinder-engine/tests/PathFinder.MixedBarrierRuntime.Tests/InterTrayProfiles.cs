@@ -10,7 +10,7 @@ internal static partial class Program
         var context = original.DeepClone().AsObject();
         context["profile"]!["schemaVersion"] = "wfc.pf.barrier-runtime-profile.v3";
         context["profile"]!["interTrayManeuvers"] = JsonNode.Parse("""
-        {"policyVersion":"wfc.pf.inter-tray-opening-maneuvers.v1","maximumOffsetMetres":0.1,"radiiMetres":[0.05,0.1],"directionVersion":"normalized-lexicographic-26.v1","maximumEdgeAttempts":64,"candidateCount":52,"domain":"blocked-inter-tray-chords-only","selection":"legacy-clear-graph-first-lazy-selected-path.v1"}
+        {"policyVersion":"wfc.pf.inter-tray-opening-maneuvers.v1","maximumOffsetMetres":0.1,"radiiMetres":[0.05,0.1],"directionVersion":"normalized-lexicographic-26.v1","maximumEdgeAttempts":64,"candidateCount":52,"domain":"blocked-inter-tray-chords-only","selection":"legacy-clear-upper-bound-lazy-selected-path.v1"}
         """);
         ProfileHash(context); return context;
     }

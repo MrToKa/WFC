@@ -5,7 +5,7 @@ using AddinRibbon.Routing;
 internal static partial class Program
 {
     private const string InterTrayManeuversJson = """
-    {"policyVersion":"wfc.pf.inter-tray-opening-maneuvers.v1","maximumOffsetMetres":0.1,"radiiMetres":[0.05,0.1],"directionVersion":"normalized-lexicographic-26.v1","maximumEdgeAttempts":64,"candidateCount":52,"domain":"blocked-inter-tray-chords-only","selection":"legacy-clear-graph-first-lazy-selected-path.v1"}
+    {"policyVersion":"wfc.pf.inter-tray-opening-maneuvers.v1","maximumOffsetMetres":0.1,"radiiMetres":[0.05,0.1],"directionVersion":"normalized-lexicographic-26.v1","maximumEdgeAttempts":64,"candidateCount":52,"domain":"blocked-inter-tray-chords-only","selection":"legacy-clear-upper-bound-lazy-selected-path.v1"}
     """;
     private static readonly JsonElement MixedOpeningProfile = CreateMixedOpeningProfile();
     private static JsonElement CreateMixedOpeningProfile()
@@ -25,7 +25,7 @@ internal static partial class Program
             || InterTrayOpeningManeuverPolicy.SecondRadiusMetres != .1
             || InterTrayOpeningManeuverPolicy.DirectionVersion != "normalized-lexicographic-26.v1"
             || InterTrayOpeningManeuverPolicy.Domain != "blocked-inter-tray-chords-only"
-            || InterTrayOpeningManeuverPolicy.Selection != "legacy-clear-graph-first-lazy-selected-path.v1")
+            || InterTrayOpeningManeuverPolicy.Selection != "legacy-clear-upper-bound-lazy-selected-path.v1")
             throw new ArgumentException("Inter-tray maneuver defaults differ from the exact runtime profile.");
     }
 }

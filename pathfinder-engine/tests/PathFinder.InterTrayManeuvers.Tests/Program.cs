@@ -150,7 +150,8 @@ internal static class Program
             Budget = Activator.CreateInstance(BudgetType, Private, null, [limits ?? new(), token, true], null)!;
             Context = BudgetType.GetField("InterTray", Private)!.GetValue(Budget)!;
         }
-        internal object? Find(RouteCollisionQuery query, RoutePoint a, RoutePoint b) => Invoke(OpeningType.GetMethod("Find", Private)!, Context, [query, a, b]);
+        internal object? Find(RouteCollisionQuery query, RoutePoint a, RoutePoint b, double? minimumLength = null) =>
+            Invoke(OpeningType.GetMethod("Find", Private)!, Context, [query, a, b, minimumLength ?? a.DistanceTo(b)]);
         internal int Attempts => (int)OpeningType.GetProperty("Attempts", Private)!.GetValue(Context)!;
         internal int Queries => (int)BudgetType.GetProperty("Queries", Private)!.GetValue(Budget)!;
         internal long Work => (long)BudgetType.GetProperty("Work", Private)!.GetValue(Budget)!;
@@ -212,6 +213,20 @@ internal static class Program
             var calls = 0; RouteCollisionQuery query = (_, _, _) => { calls++; return Observation(RouteCollisionStatus.Clear); };
             using (var a = new Probe()) Need(a.Find(query, P(0), P(1)) is not null);
             Equal(3, calls); using (var b = new Probe()) Need(b.Find(query, P(0), P(1)) is not null); Equal(6, calls);
+        });
+        Run("cache minimum length bits cannot reuse a plan below another stored edge lower bound", () =>
+        {
+            using var probe = new Probe(); var calls = 0;
+            RouteCollisionQuery query = (_, _, _) => { calls++; return Observation(RouteCollisionStatus.Clear); };
+            Need(probe.Find(query, P(0), P(1), 1) is not null); var first = calls;
+            Need(probe.Find(query, P(0), P(1), 2) is null); Equal(first, calls); Equal(2, probe.Attempts);
+            Need(probe.Find(query, P(0), P(1), 1) is not null); Equal(first, calls);
+        });
+        Run("minimum length signed-zero bits remain distinct cache identities", () =>
+        {
+            using var probe = new Probe(); RouteCollisionQuery query = (_, _, _) => Observation(RouteCollisionStatus.Clear);
+            Need(probe.Find(query, P(0), P(1), 0) is not null);
+            Need(probe.Find(query, P(0), P(1), BitConverter.Int64BitsToDouble(long.MinValue)) is not null); Equal(2, probe.Attempts);
         });
     }
 
@@ -292,15 +307,119 @@ internal static class Program
             var blocked = (IDictionary)Activator.CreateInstance(dictionaryType)!; var list = (IList)Activator.CreateInstance(lists)!;
             list.Add(Activator.CreateInstance(blockedType, Private, null, [Edge(1, .4), 0], null)); blocked.Add(0, list);
             RouteCollisionQuery query = (_, _, _) => Observation(RouteCollisionStatus.Clear, 0);
-            object?[] args = [nodes, 0, 1, blocked, query, probe.Budget, 3L, null, null];
+            var costType = typeof(RouteCalculator).GetNestedType("PathCost", BindingFlags.NonPublic)!;
+            var emptyCost = Activator.CreateInstance(costType, Private, null, [0, 0d, 0d], null)!;
+            object?[] args = [nodes, 0, 1, blocked, query, probe.Budget, 3L, null, emptyCost, null, null];
             var path = (IList)Invoke(typeof(RouteCalculator).GetMethod("OpeningFallback", Static)!, null, args)!;
             Equal(3, path.Count); Equal(0, (int)path[0]!); Equal(2, (int)path[1]!); Equal(1, (int)path[2]!);
-            var cost = args[7]!; var costType = cost.GetType(); Equal(2 * side, (double)costType.GetField("PhysicalLength", Private)!.GetValue(cost)!);
+            var cost = args[9]!; Equal(2 * side, (double)costType.GetField("PhysicalLength", Private)!.GetValue(cost)!);
             Equal(0, (int)costType.GetField("GapCount", Private)!.GetValue(cost)!);
             Equal(0d, (double)costType.GetField("GapLength", Private)!.GetValue(cost)!);
             // The repaired direct chord remains in the graph with its actual
             // increased length but is not allowed to retain stale shortest cost.
             var changed = Edges(0)[0]!; Need((double)edgeType.GetField("Length", Private)!.GetValue(changed)! > .4);
         });
+        Run("verified shorter opening maneuver replaces an already clear longer graph incumbent", () =>
+        {
+            using var probe = new Probe(); var graph = new IncumbentGraph(.5);
+            RouteCollisionQuery query = (_, _, _) => Observation(RouteCollisionStatus.Clear, 0);
+            var answer = graph.Search(probe, query); Need(answer.Path.Cast<int>().SequenceEqual([0, 1]));
+            Need(answer.PhysicalLength < graph.IncumbentLength); Equal(1, probe.Attempts); Equal(1, answer.Repairs.Count);
+        });
+        Run("equal optimistic cost retains the exact incumbent without speculative oracle calls", () =>
+        {
+            using var probe = new Probe(); var graph = new IncumbentGraph(0);
+            RouteCollisionQuery query = (_, _, _) => throw new InvalidOperationException("Equal incumbent cost should not be explored.");
+            var answer = graph.Search(probe, query); Need(ReferenceEquals(graph.Incumbent, answer.Path));
+            Equal(graph.IncumbentLength, answer.PhysicalLength); Equal(0, probe.Attempts); Equal(0, probe.Queries);
+        });
+        Run("repair cost inflation retains exact cheaper incumbent and never returns the stale optimistic path", () =>
+        {
+            using var probe = new Probe(); var graph = new IncumbentGraph(.04);
+            RouteCollisionQuery query = (_, _, _) => Observation(RouteCollisionStatus.Clear, 0);
+            var answer = graph.Search(probe, query); Need(ReferenceEquals(graph.Incumbent, answer.Path));
+            Equal(graph.IncumbentLength, answer.PhysicalLength); Equal(1, probe.Attempts); Need(probe.Queries > 0);
+        });
+        Run("local64 improvement ceiling retains incumbent only with incomplete diagnostic and fresh final checks", () =>
+        {
+            using var probe = new Probe(); bool clear = false; var calls = 0;
+            RouteCollisionQuery query = (_, _, _) => { calls++; return Observation(clear ? RouteCollisionStatus.Clear : RouteCollisionStatus.Blocked, 0); };
+            for (int i = 0; i < 64; i++) Need(probe.Find(query, P(100 + i * 3), P(101 + i * 3)) is null);
+            var graph = new IncumbentGraph(.5); var before = calls; clear = true;
+            var answer = graph.Search(probe, query); Need(ReferenceEquals(graph.Incumbent, answer.Path)); Equal(before, calls);
+            var route = graph.Route(); Need(FinalClear(route, query, probe)); Equal(before + 2, calls);
+            var evaluation = (ConstrainedRouteEvaluation)Activator.CreateInstance(typeof(ConstrainedRouteEvaluation), Private, null,
+                [route, ConstrainedRouteStatus.Clear, "SYNTHETIC_INCUMBENT", true, probe.Budget], null)!;
+            Need(!evaluation.SearchComplete); Need(!evaluation.CandidatesTruncated);
+            Need(evaluation.Reason.EndsWith("_INTER_TRAY_IMPROVEMENT_LIMIT", StringComparison.Ordinal)); Equal(2, evaluation.FinalChecks.Count);
+        });
+        Run("incumbent fallback cannot reuse an earlier proof when the late actual verdict changes", () =>
+        {
+            using var probe = new Probe(); bool clear = false;
+            RouteCollisionQuery query = (_, _, _) => Observation(clear ? RouteCollisionStatus.Clear : RouteCollisionStatus.Blocked, 0);
+            for (int i = 0; i < 64; i++) Need(probe.Find(query, P(100 + i * 3), P(101 + i * 3)) is null);
+            var graph = new IncumbentGraph(.5); clear = true; Need(FinalClear(graph.Route(), query, probe));
+            var answer = graph.Search(probe, query); Need(ReferenceEquals(graph.Incumbent, answer.Path));
+            clear = false; Need(!FinalClear(graph.Route(), query, probe));
+        });
+        Run("local64 ceiling without a clear incumbent remains a refusal", () =>
+        {
+            using var probe = new Probe(); RouteCollisionQuery query = (_, _, _) => Observation(RouteCollisionStatus.Blocked, 0);
+            for (int i = 0; i < 64; i++) Need(probe.Find(query, P(100 + i * 3), P(101 + i * 3)) is null);
+            var graph = new IncumbentGraph(.5); Refusal("INTER_TRAY_MANEUVER_ATTEMPT_LIMIT", () => graph.Search(probe, query, false));
+        });
+        Run("global physical query exhaustion is never converted into unchecked incumbent clearance", () =>
+        {
+            using var probe = new Probe(new() { MaxCollisionQueries = 1 }); var graph = new IncumbentGraph(.5);
+            RouteCollisionQuery query = (_, _, _) => Observation(RouteCollisionStatus.Clear, 0);
+            Refusal("COLLISION_QUERY_LIMIT", () => graph.Search(probe, query)); Equal(1, probe.Queries);
+        });
+        Run("global work exhaustion is never converted into unchecked incumbent clearance", () =>
+        {
+            using var probe = new Probe(new() { MaxWork = 10 }); var graph = new IncumbentGraph(.5);
+            RouteCollisionQuery query = (_, _, _) => Observation(RouteCollisionStatus.Clear, 0);
+            Refusal("SEARCH_WORK_LIMIT", () => graph.Search(probe, query));
+        });
+    }
+
+    private static bool FinalClear(RouteResult route, RouteCollisionQuery query, Probe probe) =>
+        (bool)Invoke(typeof(RouteCalculator).GetMethod("ConstrainedFinalClear", Static)!, null, [route, query, probe.Budget])!;
+
+    private sealed class IncumbentGraph
+    {
+        private static readonly Type NodeType = typeof(RouteCalculator).GetNestedType("Node", BindingFlags.NonPublic)!;
+        private static readonly Type EdgeType = typeof(RouteCalculator).GetNestedType("Edge", BindingFlags.NonPublic)!;
+        private static readonly Type BlockedType = typeof(RouteCalculator).GetNestedType("BlockedInterTrayEdge", BindingFlags.NonPublic)!;
+        private static readonly Type CostType = typeof(RouteCalculator).GetNestedType("PathCost", BindingFlags.NonPublic)!;
+        private readonly IList nodes;
+        private readonly IDictionary blocked;
+        private readonly RoutePoint[] positions;
+        private readonly object incumbentCost;
+        internal readonly List<int> Incumbent = [0, 2, 1];
+        internal readonly double IncumbentLength;
+        internal IncumbentGraph(double height)
+        {
+            nodes = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(NodeType))!;
+            positions = [P(-.2), P(.2), P(0, height)];
+            for (int i = 0; i < positions.Length; i++) nodes.Add(Activator.CreateInstance(NodeType, Private, null, [positions[i], i, 0d], null));
+            var side = positions[0].DistanceTo(positions[2]); IncumbentLength = side + side;
+            IList Edges(int node) => (IList)NodeType.GetField("Edges", Private)!.GetValue(nodes[node])!;
+            object Edge(int node, double length) => Activator.CreateInstance(EdgeType, Private, null, [node, length, 0, 0d], null)!;
+            Edges(0).Add(Edge(2, side)); Edges(2).Add(Edge(1, side));
+            var lists = typeof(List<>).MakeGenericType(BlockedType);
+            blocked = (IDictionary)Activator.CreateInstance(typeof(Dictionary<,>).MakeGenericType(typeof(int), lists))!;
+            var list = (IList)Activator.CreateInstance(lists)!;
+            list.Add(Activator.CreateInstance(BlockedType, Private, null, [Edge(1, .4), 0], null)); blocked.Add(0, list);
+            incumbentCost = Activator.CreateInstance(CostType, Private, null, [0, 0d, IncumbentLength], null)!;
+        }
+        internal (IList Path, double PhysicalLength, IDictionary Repairs) Search(Probe probe, RouteCollisionQuery query, bool withIncumbent = true)
+        {
+            object?[] args = [nodes, 0, 1, blocked, query, probe.Budget, 3L, withIncumbent ? Incumbent : null, incumbentCost, null, null];
+            var path = (IList)Invoke(typeof(RouteCalculator).GetMethod("OpeningFallback", Static)!, null, args)!;
+            return (path, (double)CostType.GetField("PhysicalLength", Private)!.GetValue(args[9])!, (IDictionary)args[10]!);
+        }
+        internal RouteResult Route() => (RouteResult)Activator.CreateInstance(typeof(RouteResult), Private, null,
+            [true, "Synthetic incumbent", new[] { "/incumbent" }, new[] { "incumbent" }, new[] { positions[0], positions[2], positions[1] },
+                IncumbentLength, 0d, 0d, false, false, 0, 0d], null)!;
     }
 }

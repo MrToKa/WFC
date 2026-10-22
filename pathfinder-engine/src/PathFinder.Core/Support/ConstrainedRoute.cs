@@ -282,8 +282,9 @@ namespace AddinRibbon.Routing
             budget.Charge(nodes.Count + directedEdges); PathCost graphCost;
             var path = ShortestPath(nodes, firstNode, lastNode, budget.Token, out graphCost); budget.Check();
             Dictionary<long, InterTrayOpeningPlan> repairs = null;
-            if (path == null && blocked != null && blocked.Count != 0)
-                path = OpeningFallback(nodes, firstNode, lastNode, blocked, collision, budget, directedEdges, out graphCost, out repairs);
+            budget.RouteInterTrayImprovementLimited = false;
+            if (blocked != null && blocked.Count != 0)
+                path = OpeningFallback(nodes, firstNode, lastNode, blocked, collision, budget, directedEdges, path, graphCost, out graphCost, out repairs);
             if (path == null) return null;
             budget.RouteUsedInterTrayManeuver = false;
             var codes = new List<string>(); var segmentIds = new List<string>(); var points = new List<RoutePoint> { from };
