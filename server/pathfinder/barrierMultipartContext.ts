@@ -172,6 +172,22 @@ export async function createProtectedBarrierMultipartRepository(pool: Pool, inpu
       || new Date(binding.effective_deadline).getTime() > new Date(frozen.jobDeadline).getTime()) fail('BARRIER_MULTIPART_CONTEXT_CHANGED');
   }
   const repository = createBarrierMultipartRepository(pool, { storage: input.storage, currentScope, onAdmission,
+    async completionContext(client, projectId, principal, session) {
+      if (!binding || projectId !== identity.projectId || principal.userId !== who.userId || principal.loginId !== who.loginId
+        || principal.loginExpiresAt !== who.loginExpiresAt || binding.intent_id !== session.id || binding.project_id !== projectId
+        || binding.actor_id !== principal.userId || binding.login_id !== principal.loginId
+        || session.principal.actorId !== principal.userId || session.principal.loginId !== principal.loginId
+        || !equal(session.command, expected) || binding.scope_sha256 !== session.scopeSha256
+        || binding.command_sha256 !== session.requestSha256 || binding.frame_sha256 !== frame.contentSha256
+        || session.profileSha256 !== hash(barrierMultipartHashInput('profile', expected.profile))) return fail('BARRIER_MULTIPART_CONTEXT_CHANGED');
+      const admittedBinding = binding;
+      await currentScope(client, projectId);
+      const payload = { viewerSessionId: identity.viewerSessionId, frameObservation: frame, producerProfile: profile,
+        effectiveDeadline: new Date(admittedBinding.effective_deadline).toISOString() };
+      if (admittedBinding.context_sha256 !== hash(barrierMultipartContextHashInput(session, payload))) fail('BARRIER_MULTIPART_CONTEXT_CHANGED');
+      return Object.freeze({ contextSha256: admittedBinding.context_sha256, frameSha256: admittedBinding.frame_sha256,
+        effectiveDeadline: payload.effectiveDeadline });
+    },
     async authorizeContext(client, projectId, principal) {
       if (projectId !== identity.projectId || principal.userId !== who.userId || principal.loginId !== who.loginId || principal.loginExpiresAt !== who.loginExpiresAt)
         fail('BARRIER_MULTIPART_CONTEXT_CHANGED');

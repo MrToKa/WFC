@@ -12,6 +12,11 @@ import {
   barrierMultipartReadSessionQuerySchema, barrierMultipartListQuerySchema,
   barrierMultipartReceiptQuerySchema, barrierMultipartReceiptPageSchema,
   barrierMultipartReconcileCommandSchema, barrierMultipartSessionCommandHashInput,
+  BARRIER_MULTIPART_PRODUCER_BOOKEND_PROFILE, barrierMultipartProducerCompletionContextSchema,
+  barrierMultipartCompleteProducerCommandSchema, barrierMultipartProducerCompletionReceiptSchema,
+  barrierMultipartReadCompletionResponseSchema, barrierMultipartMutationCommandSchema, barrierMultipartStageCommandSchema,
+  barrierMultipartProducerPartChainSeedHashInput, barrierMultipartProducerPartChainStepHashInput,
+  barrierMultipartProducerPartChainFinalHashInput,
 } from './pathfinderBarrierMultipartSessions.js';
 
 const id = (n: number) => `00000000-0000-4000-8000-${n.toString(16).padStart(12, '0')}`;
@@ -57,6 +62,20 @@ function receipt() {
     qualification: 'NOT_MEASURED', geometryValidation: 'NOT_VALIDATED', authority: 'none',
     kind: 'part', partIndex: 0, planSealSha256: h('f') };
 }
+const completionRoots = () => ({ nodes: h('1'), fragments: h('2'), 'geometry-ranges': h('3'), plan: h('f') });
+const completionContext = () => ({ intentId: id(11), scopeSha256: h('c'), profileSha256: h('d'), contextSha256: h('8'),
+  frameSha256: h('9'), roots: completionRoots() });
+function completionCommand() {
+  return { ...context(), schemaVersion: 'wfc.pf.barrier-multipart-complete-producer.v2', contextSha256: h('8'), frameSha256: h('9'),
+    roots: completionRoots(), partCount: 1, partsSha256: h('7'), bookendProfile: BARRIER_MULTIPART_PRODUCER_BOOKEND_PROFILE };
+}
+function completionReceipt() {
+  return { ...completionContext(), schemaVersion: 'wfc.pf.barrier-multipart-producer-completion-receipt.v2', sessionRevision: '11',
+    commandSha256: h('6'), partCount: 1, partsSha256: h('7'), bookendProfile: BARRIER_MULTIPART_PRODUCER_BOOKEND_PROFILE,
+    recordedAt: '2026-10-22T12:01:00.000Z', duplicate: false, completionProvenance: 'protected-producer-reported', sdkSourceBytesVerified: false,
+    qualification: 'NOT_MEASURED', geometryValidation: 'NOT_VALIDATED', authority: 'none' };
+}
+const hashBytes = (value: unknown) => barrierMultipartCanonicalBytes(value);
 
 describe('isolated multipart staging commands', () => {
   it('keeps unmeasured permanent storage budgets separate from unchanged v1 per-file ceilings', () => {
@@ -159,5 +178,105 @@ describe('server-owned staging views and receipts', () => {
     expect(barrierMultipartReceiptPageSchema.safeParse(value).success).toBe(true);
     expect(barrierMultipartReceiptPageSchema.safeParse({ ...value, receipts: [{ ...receipt(), intentId: id(99) }] }).success).toBe(false);
     expect(barrierMultipartStageReceiptSchema.safeParse({ ...receipt(), geometryValidation: 'QUALIFIED', authority: 'apply' }).success).toBe(false);
+  });
+});
+
+describe('protected producer completion prerequisite', () => {
+  it('adds the exact completion command without changing stage commands or the session/status shape', () => {
+    const value = completionCommand();
+    expect(barrierMultipartCompleteProducerCommandSchema.safeParse(value).success).toBe(true);
+    expect(barrierMultipartMutationCommandSchema.safeParse(value).success).toBe(true);
+    expect(barrierMultipartStageCommandSchema.safeParse(value).success).toBe(false);
+    expect(barrierMultipartSessionCommandHashInput(value)).toEqual({ domain: 'wfc.pf.barrier-multipart-session.v2/command', value });
+    expect(barrierMultipartSessionSchema.safeParse(session()).success).toBe(true);
+    expect(barrierMultipartSessionSchema.safeParse({ ...session(), state: 'completed' }).success).toBe(false);
+    expect(barrierMultipartSessionSchema.safeParse({ ...session(), producerCompletion: completionReceipt() }).success).toBe(false);
+  });
+  it('requires four non-null roots, exact full frame/context identities, and finite positive part counts', () => {
+    const value = completionCommand();
+    for (const change of [{ roots: { ...completionRoots(), plan: null } }, { frameSha256: h('9') + '\n' }, { contextSha256: 'A'.repeat(64) },
+      { intentId: id(11) + '\n' }, { expectedSessionRevision: '01' }, { expectedSessionRevision: '9223372036854775808' },
+      { partCount: 0 }, { partCount: -0 }, { partCount: 1.5 }, { partCount: Number.NaN }, { partCount: Number.POSITIVE_INFINITY },
+      { partCount: BARRIER_MULTIPART_PROFILE.limits.parts + 1 }, { partsSha256: 'g'.repeat(64) }, { bookendProfile: 'counter-only' }])
+      expect(barrierMultipartCompleteProducerCommandSchema.safeParse({ ...value, ...change }).success).toBe(false);
+    expect(barrierMultipartCompleteProducerCommandSchema.safeParse({ ...value, partCount: BARRIER_MULTIPART_PROFILE.limits.parts }).success).toBe(true);
+    const { frameSha256: _fullFrame, ...missingFrame } = completionContext();
+    expect(barrierMultipartProducerCompletionContextSchema.safeParse(missingFrame).success).toBe(false);
+  });
+  it('refuses privilege, fresh deadline, authority and source-proof fields in the public completion command', () => {
+    for (const extra of [{ actorId: id(20) }, { loginId: id(21) }, { deadline: '2099-01-01T00:00:00Z' }, { ready: true },
+      { authority: 'publish' }, { sdkSourceBytesVerified: true }, { completionProvenance: 'independently-verified' }, { stored: stored() }])
+      expect(barrierMultipartCompleteProducerCommandSchema.safeParse({ ...completionCommand(), ...extra }).success).toBe(false);
+  });
+  it('refuses accessors, hidden/symbol fields, arrays, cycles and oversized data before reading a getter', () => {
+    let accessed = 0;
+    const getter = { ...completionCommand() }; Object.defineProperty(getter, 'roots', { enumerable: true, get() { accessed++; return completionRoots(); } });
+    const hidden = { ...completionCommand() }; Object.defineProperty(hidden, 'foreign', { value: true });
+    const symbol = { ...completionCommand(), [Symbol('foreign')]: true };
+    const cyclic: Record<string, unknown> = { ...completionCommand() }; cyclic.foreign = cyclic;
+    for (const value of [getter, hidden, symbol, cyclic, [completionCommand()], { ...completionCommand(), foreign: 'x'.repeat(65537) }])
+      expect(barrierMultipartCompleteProducerCommandSchema.safeParse(value).success).toBe(false);
+    expect(accessed).toBe(0);
+  });
+  it('retains only reported completion with unvalidated staging and explicit absent readback', () => {
+    const value = completionReceipt();
+    expect(barrierMultipartProducerCompletionReceiptSchema.parse(value)).toEqual(value);
+    expect(barrierMultipartReadCompletionResponseSchema.parse(null)).toBeNull();
+    expect(barrierMultipartReadCompletionResponseSchema.parse(value)).toEqual(value);
+    expect(barrierMultipartReadCompletionResponseSchema.safeParse(undefined).success).toBe(false);
+    for (const change of [{ completionProvenance: 'server-sdk-verified' }, { sdkSourceBytesVerified: true }, { geometryValidation: 'STRUCTURAL_ONLY' },
+      { qualification: 'MEASURED' }, { authority: 'apply' }, { state: 'ready' }, { recordedAt: 'not-a-datetime' }, { partCount: 0 }])
+      expect(barrierMultipartProducerCompletionReceiptSchema.safeParse({ ...value, ...change }).success).toBe(false);
+    expect(barrierMultipartProducerCompletionReceiptSchema.parse({ ...value, duplicate: true }).sessionRevision).toBe('11');
+  });
+  it('freezes exact seed domain, sorted canonical bytes and independent full frame root', () => {
+    const input = barrierMultipartProducerPartChainSeedHashInput(completionContext());
+    const expected = '{"domain":"wfc.pf.barrier-multipart-producer-completion.v2/parts-seed","value":{'
+      + '"contextSha256":"' + h('8') + '","frameSha256":"' + h('9') + '","intentId":"' + id(11)
+      + '","profileSha256":"' + h('d') + '","roots":{"fragments":"' + h('2') + '","geometry-ranges":"' + h('3')
+      + '","nodes":"' + h('1') + '","plan":"' + h('f') + '"},"scopeSha256":"' + h('c') + '"}}';
+    expect(new TextDecoder().decode(hashBytes(input))).toBe(expected);
+    for (const change of [{ frameSha256: h('5') }, { contextSha256: h('5') }, { intentId: id(99) }, { scopeSha256: h('5') },
+      { profileSha256: h('5') }, { roots: { ...completionRoots(), plan: h('5') } }])
+      expect(hashBytes(barrierMultipartProducerPartChainSeedHashInput({ ...completionContext(), ...change }))).not.toEqual(hashBytes(input));
+  });
+  it('projects original part receipt identity while duplicate replay leaves the chain unchanged', () => {
+    const value = receipt(), input = barrierMultipartProducerPartChainStepHashInput(h('0'), value);
+    expect(input).toEqual({ domain: 'wfc.pf.barrier-multipart-producer-completion.v2/parts-step', value: { previous: h('0'), part: {
+      intentId: id(11), scopeSha256: h('c'), profileSha256: h('d'), partIndex: 0, planSealSha256: h('f'), commandSha256: h(),
+      sessionRevision: '1', stored: { blobId: id(30), sha256: h('e'), bytes: 128 },
+    } } });
+    expect(hashBytes(barrierMultipartProducerPartChainStepHashInput(h('0'), { ...value, duplicate: true }))).toEqual(hashBytes(input));
+    for (const change of [{ partIndex: 1 }, { planSealSha256: h('5') }, { commandSha256: h('5') }, { sessionRevision: '2' }, { intentId: id(99) },
+      { scopeSha256: h('5') }, { profileSha256: h('5') }, { stored: { ...stored(), blobId: id(31) } },
+      { stored: { ...stored(), sha256: h('5') } }, { stored: { ...stored(), bytes: 129 } }])
+      expect(hashBytes(barrierMultipartProducerPartChainStepHashInput(h('0'), { ...value, ...change }))).not.toEqual(hashBytes(input));
+    expect(hashBytes(barrierMultipartProducerPartChainStepHashInput(h('1'), value))).not.toEqual(hashBytes(input));
+  });
+  it('refuses malformed part-receipt inputs without normalizing away metadata or inventing sequence proof', () => {
+    for (const change of [{ kind: 'seal' }, { planSealSha256: h('f') + '\n' }, { sessionRevision: '1\n' }, { foreign: true },
+      { stored: { ...stored(), durability: 'file-only' } }, { authority: 'publish' }])
+      expect(() => barrierMultipartProducerPartChainStepHashInput(h('0'), { ...receipt(), ...change })).toThrow();
+    expect(() => barrierMultipartProducerPartChainStepHashInput(h('0') + '\n', receipt())).toThrow();
+    expect(() => barrierMultipartProducerPartChainSeedHashInput({ ...completionContext(), roots: { ...completionRoots(), nodes: null } })).toThrow();
+    // A local helper cannot infer previous ordinals from an opaque digest; the
+    // surrounding writer/repository separately proves complete contiguous order.
+    expect(barrierMultipartProducerPartChainStepHashInput(h('0'), { ...receipt(), partIndex: 7 }).value.part.partIndex).toBe(7);
+  });
+  it('binds exact final count under a distinct domain and refuses unbounded or ambiguous count encodings', () => {
+    expect(barrierMultipartProducerPartChainFinalHashInput(h('0'), 2)).toEqual({
+      domain: 'wfc.pf.barrier-multipart-producer-completion.v2/parts-final', value: { previous: h('0'), partCount: 2 },
+    });
+    expect(hashBytes(barrierMultipartProducerPartChainFinalHashInput(h('0'), 1))).not.toEqual(hashBytes(barrierMultipartProducerPartChainFinalHashInput(h('0'), 2)));
+    for (const value of [0, -0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1, '2', BARRIER_MULTIPART_PROFILE.limits.parts + 1])
+      expect(() => barrierMultipartProducerPartChainFinalHashInput(h('0'), value)).toThrow();
+    expect(() => barrierMultipartProducerPartChainFinalHashInput(h('0') + '\n', 2)).toThrow();
+  });
+  it('returns detached inputs so later caller mutation cannot change the already constructed chain identity', () => {
+    const seed = completionContext(), part = receipt();
+    const seedInput = barrierMultipartProducerPartChainSeedHashInput(seed), stepInput = barrierMultipartProducerPartChainStepHashInput(h('0'), part);
+    const seedBytes = hashBytes(seedInput), stepBytes = hashBytes(stepInput);
+    seed.roots.plan = h('4'); seed.frameSha256 = h('4'); part.stored.sha256 = h('4'); part.sessionRevision = '99';
+    expect(hashBytes(seedInput)).toEqual(seedBytes); expect(hashBytes(stepInput)).toEqual(stepBytes);
   });
 });

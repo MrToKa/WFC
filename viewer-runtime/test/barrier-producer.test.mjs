@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { BARRIER_MULTIPART_PLANNER_PROFILE as profile } from '../barrier-plan.mjs';
 import { barrierCanonicalJson, validateBarrierFrameObservation } from '../barrier-capture.mjs';
-import { BARRIER_MULTIPART_PRODUCER_PROFILE } from '../barrier-multipart-protocol.mjs';
+import { BARRIER_MULTIPART_PRODUCER_PROFILE, BARRIER_MULTIPART_PRODUCER_BOOKEND_PROFILE } from '../barrier-multipart-protocol.mjs';
 import { createBarrierMultipartProducer, createBarrierPackedProducer, observeMultipartFrame, BARRIER_MULTIPART_PRODUCER_LIMITS as L } from '../barrier-producer.mjs';
 
 const id = n => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -193,6 +193,9 @@ test('packed wrapper continues the same scene after plan acknowledgement and pre
   const first = decoded.offset, second = first + 384 + 28 * 4 + 12 * 2;
   assert.equal(decoded.view.getFloat64(first + 12 * 8, true), 0); assert.equal(decoded.view.getFloat64(second + 12 * 8, true), 10);
   assert.equal(f.progress.at(-1).phase, 'parts'); assert.equal(f.progress.at(-1).loaded, parts.length);
+  assert.equal(f.events.at(-1).kind, 'producer-complete'); assert.equal(f.events.at(-1).evidence.partCount, parts.length);
+  assert.equal(f.events.at(-1).evidence.bookendProfile, BARRIER_MULTIPART_PRODUCER_BOOKEND_PROFILE);
+  assert.deepEqual(f.events.at(-1).evidence.roots, Object.fromEntries(f.events.filter(e => e.kind === 'seal').map(e => [e.seal.kind, e.seal.sealSha256])));
 });
 test('packed original mapping retains rendered group order, baseVertex gaps and local signed zero', async () => {
   const mesh = geometry(); mesh.attributes.position.array = new Float32Array(21); mesh.attributes.position.array[0] = -0;
@@ -240,9 +243,20 @@ test('after the last acknowledged part, final frame or hierarchy failure still r
       else f.own.set(4, [0, 0]);
     }), { code: stage === 'frame' ? 'BARRIER_MULTIPART_FRAME_CHANGED' : 'BARRIER_MULTIPART_HIERARCHY_CHANGED' });
     assert.equal(f.events.filter(event => event.kind === 'part').length, planSeal(f).totals.parts);
+    assert.equal(f.events.some(event => event.kind === 'producer-complete'), false);
     // A transport may already hold every part. Those receipts cannot prove
     // that these final producer bookends succeeded or authorize publication.
   }
+});
+test('inventory-only producer never emits a terminal witness and cursor cleanup failure cannot emit one', async () => {
+  const inventory = fixture(); await inventory.consume(); assert.equal(inventory.events.some(event => event.kind === 'producer-complete'), false);
+  const f = fixture({ selected: [3], oneFragment: true }); let packed = false;
+  const readPages = kind => ({ async *[Symbol.asyncIterator]() {
+    try { for (const page of f.stored.get(kind) ?? []) yield structuredClone(page); }
+    finally { if (packed && kind === 'plan') throw Object.assign(Error('cleanup refused'), { code: 'TEST_CURSOR_CLEANUP' }); }
+  } });
+  await assert.rejects(f.consumePacked({ readPages }, event => { if (event.kind === 'seal' && event.seal.kind === 'plan') packed = true; }), { code: 'TEST_CURSOR_CLEANUP' });
+  assert.equal(f.events.some(event => event.kind === 'producer-complete'), false);
 });
 test('packed cancellation after plan cannot reset deadline or emit a late part', async () => {
   const f = fixture(), abort = new AbortController(); await assert.rejects(f.consumePacked({ signal: abort.signal }, event => { if (event.kind === 'seal' && event.seal.kind === 'plan') abort.abort(); }), { name: 'AbortError' });

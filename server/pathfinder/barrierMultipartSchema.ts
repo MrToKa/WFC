@@ -76,6 +76,16 @@ CREATE TABLE IF NOT EXISTS pf_barrier_multipart_viewer_contexts (
 );
 DROP TRIGGER IF EXISTS pf_barrier_multipart_viewer_context_update ON pf_barrier_multipart_viewer_contexts;
 CREATE TRIGGER pf_barrier_multipart_viewer_context_update BEFORE UPDATE OR DELETE ON pf_barrier_multipart_viewer_contexts FOR EACH ROW EXECUTE FUNCTION pf_barrier_multipart_immutable();
+CREATE TABLE IF NOT EXISTS pf_barrier_multipart_producer_completions (
+ project_id uuid NOT NULL, session_id uuid NOT NULL, actor_id uuid NOT NULL, login_id uuid NOT NULL,
+ idempotency_key uuid NOT NULL, request_sha256 text NOT NULL CHECK(request_sha256 ~ '^[a-f0-9]{64}$'),
+ command jsonb NOT NULL, receipt jsonb NOT NULL, created_at timestamptz NOT NULL,
+ PRIMARY KEY(project_id,session_id), UNIQUE(project_id,actor_id,idempotency_key),
+ FOREIGN KEY(project_id,session_id) REFERENCES pf_barrier_multipart_sessions(project_id,id),
+ FOREIGN KEY(project_id,actor_id,idempotency_key) REFERENCES pf_barrier_multipart_receipts(project_id,actor_id,idempotency_key)
+);
+DROP TRIGGER IF EXISTS pf_barrier_multipart_producer_completion_update ON pf_barrier_multipart_producer_completions;
+CREATE TRIGGER pf_barrier_multipart_producer_completion_update BEFORE UPDATE OR DELETE ON pf_barrier_multipart_producer_completions FOR EACH ROW EXECUTE FUNCTION pf_barrier_multipart_immutable();
 `;
 export async function initializeBarrierMultipartSchema(pool: Pool): Promise<void> {
   await pool.query(BARRIER_MULTIPART_SCHEMA_SQL);

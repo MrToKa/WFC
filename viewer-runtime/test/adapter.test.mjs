@@ -7,6 +7,8 @@ import { planModelCaptureInput } from '../capture-input.mjs';
 import { BARRIER_CAPTURE_ERROR_CODES, BARRIER_CAPTURE_ERROR_MESSAGES } from '../barrier-capture-errors.mjs';
 
 const turn = () => new Promise(resolve => setImmediate(resolve));
+const loadedDescriptor = () => ({ projectId: '11111111-1111-4111-8111-111111111111', modelVersionId: '22222222-2222-4222-8222-222222222222',
+  loadId: '33333333-3333-4333-8333-333333333333', contentFingerprint: 'a'.repeat(64) });
 
 function sdkFixture(options = {}) {
   const assets = [], viewers = [], evidence = [];
@@ -79,7 +81,7 @@ test('adapter config makes ordinary Model Browser clicks selectOnly and retains 
   const f = sdkFixture(), previous = globalThis.window; globalThis.window = f.window;
   t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
   await f.adapter.initialize();
-  await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf' });
+  await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
   assert.deepEqual(f.viewers[0].config.docStructureConfig, {
     click: { onObject: ['selectOnly'] },
     clickShift: { onObject: ['toggleMultipleOverlayedSelection'] },
@@ -127,7 +129,7 @@ test('pinned SDK selectOnly keeps a clicked parent and reads its descendant bott
     getExternalIdMapping: success => success({ parent: 2, front: 4, rear: 5 }),
     getFragmentList: () => ({ getCount: () => 2, getWorldBounds(id, box) { Object.assign(box.min, fragmentBounds[id].min); Object.assign(box.max, fragmentBounds[id].max); } }),
   });
-  await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf' });
+  await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
   const viewer = f.viewers[0]; let selection = [4], fits = 0;
   const manualVisibility = { hiddenIds: [17], isolatedIds: [] }, ghost = { ...viewer.impl.fadeMaterial };
   viewer.getSelection = () => [...selection]; viewer.getAggregateSelection = () => [{ model: f.model, selection: [...selection] }];
@@ -174,7 +176,14 @@ test('capture adapter preserves only the typed empty lookup scope error and keep
 test('barrier adapter preserves only the closed diagnostic codes and discards raw SDK text', async t => {
   const previous = { window: globalThis.window, Autodesk: globalThis.Autodesk, THREE: globalThis.THREE, LMV_VIEWER_VERSION: globalThis.LMV_VIEWER_VERSION };
   t.after(() => Object.assign(globalThis, previous));
-  assert.equal(BARRIER_CAPTURE_ERROR_CODES.length, 11); assert.equal(Object.isFrozen(BARRIER_CAPTURE_ERROR_MESSAGES), true);
+  assert.deepEqual([...BARRIER_CAPTURE_ERROR_CODES].sort(), [
+    'BARRIER_CAPTURE_HIERARCHY_LIMIT', 'BARRIER_CAPTURE_FRAGMENT_LIMIT', 'BARRIER_CAPTURE_VERTEX_LIMIT', 'BARRIER_CAPTURE_TRIANGLE_LIMIT',
+    'BARRIER_CAPTURE_PAYLOAD_LIMIT', 'BARRIER_CAPTURE_GEOMETRY_NOT_READY', 'BARRIER_CAPTURE_TREE_UNAVAILABLE', 'BARRIER_CAPTURE_IDENTITY_UNAVAILABLE',
+    'BARRIER_CAPTURE_EMPTY_SELECTION', 'BARRIER_CAPTURE_GEOMETRY_NOT_RESIDENT', 'BARRIER_CAPTURE_GEOMETRY_BECAME_UNAVAILABLE',
+    'BARRIER_CAPTURE_UNSUPPORTED_PRIMITIVE', 'BARRIER_CAPTURE_FRAME_UNSUPPORTED', 'BARRIER_CAPTURE_MODEL_CHANGED', 'BARRIER_CAPTURE_INVALID', 'BARRIER_CAPTURE_DEADLINE',
+  ].sort());
+  assert.deepEqual([...BARRIER_CAPTURE_ERROR_CODES].sort(), Object.keys(BARRIER_CAPTURE_ERROR_MESSAGES).sort());
+  assert.equal(Object.isFrozen(BARRIER_CAPTURE_ERROR_MESSAGES), true);
   for (const code of [...BARRIER_CAPTURE_ERROR_CODES, 'PRIVATE_SDK_FAILURE', 'LOOKUP_GEOMETRY_NOT_FOUND']) {
     const f = sdkFixture();
     globalThis.window = f.window;
@@ -268,7 +277,7 @@ test('aborted SDK assets detach listeners and pending initialization cannot star
 test('geometry/index/property worker callbacks gate evidence, original lighting is preserved and dispose releases all state', async t => {
   const f = sdkFixture(); const oldWindow = globalThis.window; globalThis.window = f.window; t.after(() => { globalThis.window = oldWindow; });
   await f.adapter.initialize();
-  const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/private/resources/output/0/0.svf' });
+  const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/private/resources/output/0/0.svf', descriptor: loadedDescriptor() });
   assert.equal(f.evidence.length, 0); await handle.prepareIndex();
   assert.equal(f.facts.propertyReads, 1);
   assert.deepEqual(f.evidence[0], { sdkVersion: '7.130.0', geometryLoaded: true, nodeIndexReady: true, nodeCount: 3, fragmentCount: 12, propertiesLoaded: true, propertiesCount: 2 });
@@ -288,7 +297,7 @@ test('property read error prevents ready evidence and caller abort releases a st
     const f = sdkFixture({ getProperties: (id, success, failure) => { callbacks = { success, failure }; callbackReady(); } });
     const previous = globalThis.window; globalThis.window = f.window; t.after(() => { globalThis.window = previous; });
     await f.adapter.initialize(); const controller = new AbortController();
-    const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', signal: controller.signal });
+    const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor(), signal: controller.signal });
     const pending = handle.prepareIndex();
     const rejected = assert.rejects(pending, abort ? { name: 'AbortError' } : { code: 'RESOURCE_FAILED' });
     await ready;

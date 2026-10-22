@@ -31,22 +31,35 @@ export function fixture() {
   context.context.contextSha256 = h(barrierMultipartContextHashInput(context));
   const start = { intentId: session.id, expectedSessionRevision: '0', scopeSha256: session.scopeSha256, profileSha256: session.profileSha256, producerProfile: structuredClone(producerProfile) };
   const base = `http://127.0.0.1:5192/api/projects/${id(1)}/model-versions/${id(2)}/viewer-sessions/${id(10)}/barrier-multipart/`;
-  const calls = [], receipts = new Map(), pages = new Map(), controls = { current: true, responder: null, afterStage: null, hold: null, entered: null }; let keys = 100;
+  const calls = [], receipts = new Map(), pages = new Map(), controls = { current: true, responder: null, afterStage: null, afterCompletion: null, hold: null, entered: null }; let keys = 100, completion = null;
   const fetchImpl = async (url, options) => {
     calls.push({ url, options }); if (controls.responder) return controls.responder(url, options);
     const suffix = url.slice(base.length);
     if (url !== base + suffix) throw Error('outside fixture');
     if (options.method === 'GET' && suffix === session.id + '/context') return reply(context);
+    if (options.method === 'GET' && suffix === session.id + '/producer-completion') return session.state === 'cancelled' ? reply({ code: 'BARRIER_MULTIPART_CANCELLED' }, 409) : reply(completion);
     if (options.method === 'GET' && suffix.startsWith(session.id + '/pages/')) {
       const p = suffix.split('/'); return pages.has(p[2] + '/' + p[3]) ? reply(pages.get(p[2] + '/' + p[3])) : reply({ code: 'NOT_FOUND' }, 404);
     }
     if (suffix === 'sessions') return reply({ schemaVersion: 'wfc.pf.barrier-multipart-admit-receipt.v2', session, duplicate: false });
     const c = options.headers['x-wfc-barrier-command'] ? JSON.parse(options.headers['x-wfc-barrier-command']) : JSON.parse(options.body);
-    if (suffix === session.id + '/reconcile') return receipts.has(c.idempotencyKey) ? reply({ ...receipts.get(c.idempotencyKey), duplicate: true }) : reply({ code: 'BARRIER_MULTIPART_COMMAND_UNCERTAIN' }, 503);
+    if (suffix === session.id + '/reconcile') {
+      if (c.schemaVersion !== 'wfc.pf.barrier-multipart-reconcile.v2' || Object.keys(c).sort().join(',') !== 'commandSha256,idempotencyKey,intentId,schemaVersion') return reply({ code: 'HEADER_INVALID' }, 400);
+      return receipts.has(c.idempotencyKey) ? reply({ ...receipts.get(c.idempotencyKey), duplicate: true }) : reply({ code: 'BARRIER_MULTIPART_COMMAND_UNCERTAIN' }, 503);
+    }
     if (suffix === session.id + '/cancel') {
       session.state = 'cancelled'; session.sessionRevision = (BigInt(c.expectedSessionRevision) + 1n).toString(); session.updatedAt = new Date().toISOString();
       const result = { schemaVersion: 'wfc.pf.barrier-multipart-cancel-receipt.v2', session: structuredClone(session), commandSha256: commandHash(c), duplicate: false };
       receipts.set(c.idempotencyKey, result); return reply(result);
+    }
+    if (suffix === session.id + '/producer-completion') {
+      session.sessionRevision = (BigInt(c.expectedSessionRevision) + 1n).toString(); session.updatedAt = new Date().toISOString();
+      const { schemaVersion: _schema, expectedSessionRevision: _revision, idempotencyKey: _key, ...evidence } = c;
+      completion = { schemaVersion: 'wfc.pf.barrier-multipart-producer-completion-receipt.v2', ...evidence, sessionRevision: session.sessionRevision,
+        commandSha256: commandHash(c), recordedAt: session.updatedAt, duplicate: false, completionProvenance: 'protected-producer-reported', sdkSourceBytesVerified: false,
+        qualification: 'NOT_MEASURED', geometryValidation: 'NOT_VALIDATED', authority: 'none' };
+      receipts.set(c.idempotencyKey, structuredClone(completion));
+      if (controls.afterCompletion) return controls.afterCompletion(structuredClone(completion), c); return reply(completion);
     }
     const page = c.page, seal = c.seal, raw = page || seal ? new TextEncoder().encode(canonical(page ?? seal)) : options.body;
     const kind = page ? 'page' : seal ? 'seal' : 'part';

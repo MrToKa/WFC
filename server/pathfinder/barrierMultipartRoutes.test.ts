@@ -17,6 +17,9 @@ const sha = (text: string) => createHash('sha256').update(text).digest('hex');
 const prefix = `/api/projects/${id(1)}/model-versions/${id(2)}/viewer-sessions/${id(3)}/barrier-multipart`;
 const mutation = () => ({ intentId: id(10), expectedSessionRevision: '0', idempotencyKey: id(11), scopeSha256: 'a'.repeat(64), profileSha256: 'b'.repeat(64) });
 const part = () => ({ schemaVersion: 'wfc.pf.barrier-multipart-stage-part.v2', ...mutation(), partIndex: 0, planSealSha256: 'c'.repeat(64), payload: { bytes: 3, sha256: sha('raw') } });
+const completion = () => ({ schemaVersion: 'wfc.pf.barrier-multipart-complete-producer.v2', ...mutation(), contextSha256: 'c'.repeat(64), frameSha256: 'd'.repeat(64),
+  roots: { nodes: '1'.repeat(64), fragments: '2'.repeat(64), 'geometry-ranges': '3'.repeat(64), plan: '4'.repeat(64) }, partCount: 1,
+  partsSha256: 'e'.repeat(64), bookendProfile: 'sdk7130-after-final-part-ack-hierarchy-frame-v1' });
 const page = () => ({ schemaVersion: 'wfc.pf.barrier-multipart-page.v2', kind: 'nodes', scopeSha256: 'a'.repeat(64), profileSha256: 'b'.repeat(64), index: 0,
   firstOrdinal: 0, previousPageSha256: null, records: [{ dbId: 3, membershipMask: '0'.repeat(31) + '1' }], pageSha256: 'c'.repeat(64) });
 function admission() {
@@ -32,6 +35,7 @@ function admission() {
 function fixture() {
   const who = { userId: id(4), loginId: id(5), loginExpiresAt: Date.now() + 3600000 }, result = { authority: 'none', synthetic: true };
   const repository = { admit: vi.fn(async () => result), stagePage: vi.fn(async () => result), stageSeal: vi.fn(async () => result), stagePart: vi.fn(async () => result),
+    completeProducer: vi.fn(async () => result), readCompletion: vi.fn(async (): Promise<unknown> => null),
     cancel: vi.fn(async () => result), reconcile: vi.fn(async () => result), readPage: vi.fn(async () => page()) };
   const context = vi.fn(async () => ({ schemaVersion: 'wfc.pf.barrier-multipart-context.v2', session: result, context: { synthetic: true } }));
   const principal = vi.fn<typeof resolveBarrierMultipartViewerPrincipal>(async () => who);
@@ -102,6 +106,32 @@ describe('cookie-only multipart transport through in-memory Express, no listener
   it('accepts raw opaque bytes only with one canonical ASCII metadata header', async () => {
     const f = fixture(), command = part(), r = request(f, { method: 'PUT', path: `/${id(10)}/parts`, type: 'application/octet-stream', length: '3', body: Buffer.from('raw'), extra: ['x-wfc-barrier-command', barrierMultipartCanonicalJson(command)] }); await r.run();
     expect(f.repository.stagePart).toHaveBeenCalledWith(id(1), f.who, command, Buffer.from('raw'), expect.any(AbortSignal)); await f.router.close();
+  });
+  it('forwards one exact completion command and reads absence without synthesizing completion from status', async () => {
+    const f = fixture(), command = completion();
+    const absent = request(f, { path: `/${id(10)}/producer-completion` }); await absent.run();
+    expect(absent.res.json).toHaveBeenCalledWith(null);
+    expect(f.repository.readCompletion).toHaveBeenCalledWith(id(1), f.who, id(10), expect.any(AbortSignal));
+    const good = request(f, { method: 'POST', path: `/${id(10)}/producer-completion`, body: JSON.stringify(command) }); await good.run();
+    expect(good.res.statusCode).toBe(200); expect(f.repository.completeProducer).toHaveBeenCalledWith(id(1), f.who, command, expect.any(AbortSignal));
+    expect(f.repository.stagePart).not.toHaveBeenCalled(); await f.router.close();
+  });
+  it('refuses foreign completion identity, unrecognized authority and ambiguous route aliases', async () => {
+    const f = fixture(), command = completion();
+    const foreign = request(f, { method: 'POST', path: `/${id(99)}/producer-completion`, body: JSON.stringify(command) }); await foreign.run();
+    expect(foreign.res.statusCode).toBe(409);
+    const added = request(f, { method: 'POST', path: `/${id(10)}/producer-completion`, body: JSON.stringify({ ...command, authority: 'ready' }) }); await added.run();
+    expect(added.res.statusCode).toBe(400);
+    const alias = request(f, { path: `/${id(10)}/producer-completion/nodes/0` }); await alias.run(); expect(alias.res.statusCode).toBe(405);
+    const query = request(f, { path: `/${id(10)}/producer-completion`, original: prefix + `/${id(10)}/producer-completion?ready=true` }); await query.run();
+    expect(query.res.statusCode).toBe(400); expect(f.repository.completeProducer).not.toHaveBeenCalled(); expect(f.repository.readCompletion).not.toHaveBeenCalled(); await f.router.close();
+  });
+  it('fences completion authority before body buffering and applies the existing control byte bound', async () => {
+    const f = fixture(); f.principal.mockRejectedValueOnce(new PathFinderError('ADMIN_REQUIRED', 403));
+    const denied = request(f, { method: 'POST', path: `/${id(10)}/producer-completion`, body: 'unread' }); await denied.run();
+    expect(denied.res.statusCode).toBe(403); expect(denied.iterator).not.toHaveBeenCalled();
+    const huge = request(f, { method: 'POST', path: `/${id(10)}/producer-completion`, length: '65537', body: '{}' }); await huge.run();
+    expect(huge.res.statusCode).toBe(413); expect(huge.iterator).not.toHaveBeenCalled(); expect(f.repository.completeProducer).not.toHaveBeenCalled(); await f.router.close();
   });
   it.each(['duplicate', 'whitespace', 'non-ascii', 'oversize', 'duplicate-json'] as const)('refuses %s command headers before reading opaque bytes', async kind => {
     const f = fixture(), canonical = barrierMultipartCanonicalJson(part()); let header = canonical, extra: string[] = [];

@@ -63,12 +63,30 @@ describe('multipart admission uses authoritative existing principal transaction'
     expect(f.query.mock.calls.some(([sql]) => sql.includes('pf_barrier_multipart'))).toBe(false); expect(f.query.mock.calls.some(([sql]) => sql === 'ROLLBACK')).toBe(true);
     expect(f.storage.read).not.toHaveBeenCalled(); expect(f.storage.store).not.toHaveBeenCalled();
   });
+  it('requires the protected completion adapter even for an absent historical completion', async () => {
+    const f = fixture();
+    await expect(f.repository.readCompletion(f.projectId, f.who, randomUUID())).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_COMPLETION_CONTEXT_REQUIRED' });
+    await expect(f.repository.completeProducer(f.projectId, f.who, { schemaVersion: 'wfc.pf.barrier-multipart-complete-producer.v2', intentId: randomUUID(),
+      expectedSessionRevision: '0', idempotencyKey: randomUUID(), scopeSha256: 'a'.repeat(64), profileSha256: 'b'.repeat(64), contextSha256: 'c'.repeat(64), frameSha256: 'd'.repeat(64),
+      roots: { nodes: '1'.repeat(64), fragments: '2'.repeat(64), 'geometry-ranges': '3'.repeat(64), plan: '4'.repeat(64) }, partCount: 1, partsSha256: 'e'.repeat(64),
+      bookendProfile: 'sdk7130-after-final-part-ack-hierarchy-frame-v1' })).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_COMPLETION_CONTEXT_REQUIRED' });
+    expect(f.connect).not.toHaveBeenCalled(); expect(f.storage.store).not.toHaveBeenCalled(); expect(f.storage.read).not.toHaveBeenCalled();
+  });
+  it('checks protected currentness before completion readback touches any session metadata', async () => {
+    const f = fixture(), authorizeContext = vi.fn(async () => { throw Object.assign(new Error('Viewer changed'), { code: 'BARRIER_MULTIPART_VIEWER_CHANGED' }); });
+    const protectedRepository = createBarrierMultipartRepository(f.pool, { currentScope: f.currentScope, storage: f.storage, authorizeContext,
+      completionContext: async () => ({ contextSha256: 'a'.repeat(64), frameSha256: 'b'.repeat(64), effectiveDeadline: new Date(Date.now() + 1000).toISOString() }) });
+    await expect(protectedRepository.readCompletion(f.projectId, f.who, randomUUID())).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_VIEWER_CHANGED' });
+    expect(f.query.mock.calls.some(([sql]) => sql.includes('pf_barrier_multipart'))).toBe(false); expect(f.release).toHaveBeenCalledOnce();
+  });
   it('defines only additive unqualified evidence tables and immutable retention guards', () => {
     expect([...BARRIER_MULTIPART_SCHEMA_SQL.matchAll(/CREATE TABLE IF NOT EXISTS (\w+)/g)].map(match => match[1])).toEqual([
-      'pf_barrier_multipart_sessions', 'pf_barrier_multipart_allocations', 'pf_barrier_multipart_receipts', 'pf_barrier_multipart_viewer_contexts']);
+      'pf_barrier_multipart_sessions', 'pf_barrier_multipart_allocations', 'pf_barrier_multipart_receipts', 'pf_barrier_multipart_viewer_contexts', 'pf_barrier_multipart_producer_completions']);
     expect(BARRIER_MULTIPART_SCHEMA_SQL).not.toMatch(/(?:INSERT INTO|UPDATE|DELETE FROM)\s+(?:pf_barrier_heads|pf_barrier_snapshots|cables)\b/i);
     expect(BARRIER_MULTIPART_SCHEMA_SQL).not.toMatch(/'ready'|'published'|'qualified'/);
     expect(BARRIER_MULTIPART_SCHEMA_SQL).toContain("OLD.state='cancelled'");
     expect(BARRIER_MULTIPART_SCHEMA_SQL).toContain("NEW.charged_bytes<OLD.charged_bytes");
+    expect(BARRIER_MULTIPART_SCHEMA_SQL).toContain('PRIMARY KEY(project_id,session_id)');
+    expect(BARRIER_MULTIPART_SCHEMA_SQL).toContain('BEFORE UPDATE OR DELETE ON pf_barrier_multipart_producer_completions');
   });
 });

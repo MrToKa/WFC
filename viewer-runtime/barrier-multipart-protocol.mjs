@@ -7,26 +7,27 @@ export const BARRIER_MULTIPART_PRODUCER_PROFILE = Object.freeze({
   triangleOrder: 'sdk7130-rendered-triangle-order-v1', geometryDigest: 'sha256-bounded-chunk-chain-v1',
   visibility: 'selected-scope-includes-hidden-geometry-v1',
 });
+export const BARRIER_MULTIPART_PRODUCER_BOOKEND_PROFILE = 'sdk7130-after-final-part-ack-hierarchy-frame-v1';
 export const BARRIER_MULTIPART_TRANSPORT_LIMITS = Object.freeze({ controlBytes: 65536, pageBytes: 262144,
   commandBytes: 327680, responseBytes: 262144, partBytes: 33554432, partHeaderBytes: 4096,
   requestMilliseconds: 180000, jobMilliseconds: 3600000, pendingCommands: 2 });
 const L = BARRIER_MULTIPART_TRANSPORT_LIMITS, E = new TextEncoder();
 const own = v => v !== null && typeof v === 'object' && !Array.isArray(v) && [Object.prototype, null].includes(Object.getPrototypeOf(v));
 const exact = (v, keys) => own(v) && Reflect.ownKeys(v).length === keys.length && keys.every(k => {
-  const d = Object.getOwnPropertyDescriptor(v, k); return d && 'value' in d;
+  const d = Object.getOwnPropertyDescriptor(v, k); return d?.enumerable === true && 'value' in d;
 });
 const array = (v, max) => Array.isArray(v) && Object.getPrototypeOf(v) === Array.prototype && v.length <= max
   && Reflect.ownKeys(v).length === v.length + 1 && Array.from({ length: v.length }, (_, i) => Object.getOwnPropertyDescriptor(v, String(i))).every(d => d && 'value' in d);
 const uint = (v, max = Number.MAX_SAFE_INTEGER) => Number.isSafeInteger(v) && v >= 0 && !Object.is(v, -0) && v <= max;
 const pos = (v, max) => uint(v, max) && v > 0;
-const uuid = v => typeof v === 'string' && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/u.test(v);
-const hash = v => typeof v === 'string' && /^[a-f0-9]{64}$/u.test(v);
-const revision = v => typeof v === 'string' && /^(?:0|[1-9][0-9]{0,18})$/u.test(v) && BigInt(v) <= 9223372036854775807n;
+const uuid = v => typeof v === 'string' && v.length === 36 && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/u.test(v);
+const hash = v => typeof v === 'string' && v.length === 64 && /^[a-f0-9]{64}$/u.test(v);
+const revision = v => typeof v === 'string' && /^(?:0|[1-9][0-9]{0,18})$(?![\s\S])/u.test(v) && BigInt(v) <= 9223372036854775807n;
 const text = (v, max) => typeof v === 'string' && v.length > 0 && v.length <= max && !/[\u0000-\u001f\u007f-\u009f]/u.test(v)
   && [...v].every(c => c.length !== 1 || c.charCodeAt(0) < 0xd800 || c.charCodeAt(0) > 0xdfff);
-const date = v => typeof v === 'string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z$/u.test(v) && Number.isFinite(Date.parse(v));
+const date = v => typeof v === 'string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z$(?![\s\S])/u.test(v) && Number.isFinite(Date.parse(v));
 const kinds = ['nodes', 'fragments', 'geometry-ranges', 'plan'];
-const mask = v => typeof v === 'string' && /^[a-f0-9]{32}$/u.test(v) && BigInt('0x' + v) > 0n;
+const mask = v => typeof v === 'string' && v.length === 32 && /^[a-f0-9]{32}$/u.test(v) && BigInt('0x' + v) > 0n;
 const noAuthority = v => v.qualification === 'NOT_MEASURED' && v.geometryValidation === 'NOT_VALIDATED' && v.authority === 'none';
 const same = (a, b) => barrierMultipartTransportCanonical(a) === barrierMultipartTransportCanonical(b);
 const safe = fn => value => { try { return fn(value) === true; } catch { return false; } };
@@ -150,3 +151,39 @@ export const validateBarrierMultipartFramePayload = safe(v => exact(v, ['frameOb
   && validateBarrierFrameObservation(v.frameObservation) && validateBarrierMultipartProducerProfile(v.producerProfile) && bounded(v, L.controlBytes));
 export const validateBarrierMultipartFrameRequest = safe(v => exact(v, ['projectId', 'modelVersionId', 'contentFingerprint'])
   && uuid(v.projectId) && uuid(v.modelVersionId) && hash(v.contentFingerprint));
+
+const completeRoots = v => exact(v, kinds) && kinds.every(k => hash(v[k]));
+const evidenceKeys = ['contextSha256', 'frameSha256', 'roots', 'partCount', 'bookendProfile'];
+const evidence = v => [v.contextSha256, v.frameSha256].every(hash) && completeRoots(v.roots)
+  && pos(v.partCount, P.limits.parts) && v.bookendProfile === BARRIER_MULTIPART_PRODUCER_BOOKEND_PROFILE;
+const chainContextKeys = ['intentId', 'contextSha256', 'scopeSha256', 'profileSha256', 'frameSha256', 'roots'];
+const chainContext = v => exact(v, chainContextKeys) && uuid(v.intentId)
+  && ['contextSha256', 'scopeSha256', 'profileSha256', 'frameSha256'].every(k => hash(v[k])) && completeRoots(v.roots);
+export const validateBarrierMultipartProducerCompletionEvidence = safe(v => exact(v, evidenceKeys) && evidence(v) && bounded(v, L.controlBytes));
+export const validateBarrierMultipartCompleteProducerCommand = safe(v => exact(v, ['schemaVersion', 'intentId', 'expectedSessionRevision', 'idempotencyKey', 'scopeSha256', 'profileSha256', ...evidenceKeys, 'partsSha256'])
+  && v.schemaVersion === 'wfc.pf.barrier-multipart-complete-producer.v2' && uuid(v.intentId) && revision(v.expectedSessionRevision) && uuid(v.idempotencyKey)
+  && [v.scopeSha256, v.profileSha256, v.partsSha256].every(hash) && evidence(v) && bounded(v, L.controlBytes));
+export const validateBarrierMultipartProducerCompletionReceipt = safe(v => exact(v, ['schemaVersion', 'intentId', 'sessionRevision', 'commandSha256', 'scopeSha256', 'profileSha256', ...evidenceKeys, 'partsSha256', 'recordedAt', 'duplicate',
+  'completionProvenance', 'sdkSourceBytesVerified', 'qualification', 'geometryValidation', 'authority'])
+  && v.schemaVersion === 'wfc.pf.barrier-multipart-producer-completion-receipt.v2' && uuid(v.intentId) && revision(v.sessionRevision)
+  && [v.commandSha256, v.scopeSha256, v.profileSha256, v.partsSha256].every(hash) && evidence(v) && date(v.recordedAt) && typeof v.duplicate === 'boolean'
+  && v.completionProvenance === 'protected-producer-reported' && v.sdkSourceBytesVerified === false && noAuthority(v) && bounded(v, L.controlBytes));
+const partReceipt = v => exact(v, ['schemaVersion', 'intentId', 'sessionRevision', 'commandSha256', 'scopeSha256', 'profileSha256', 'stored', 'duplicate', 'qualification', 'geometryValidation', 'authority', 'kind', 'partIndex', 'planSealSha256'])
+  && v.schemaVersion === 'wfc.pf.barrier-multipart-stage-receipt.v2' && v.kind === 'part' && uuid(v.intentId) && revision(v.sessionRevision)
+  && [v.commandSha256, v.scopeSha256, v.profileSha256, v.planSealSha256].every(hash) && uint(v.partIndex, P.limits.parts - 1) && typeof v.duplicate === 'boolean' && noAuthority(v)
+  && exact(v.stored, ['blobId', 'sha256', 'bytes', 'durability']) && uuid(v.stored.blobId) && hash(v.stored.sha256) && pos(v.stored.bytes, L.partBytes) && v.stored.durability === 'file-and-directory-fsynced';
+const completionDomain = 'wfc.pf.barrier-multipart-producer-completion.v2';
+function completionHashInput(kind, value) { return { domain: completionDomain + '/' + kind, value: JSON.parse(barrierMultipartTransportCanonical(value, L.controlBytes)) }; }
+export function barrierMultipartProducerPartChainSeedHashInput(context) {
+  if (!chainContext(context)) throw Error('BARRIER_MULTIPART_COMPLETION_CHAIN');
+  return completionHashInput('parts-seed', context);
+}
+export function barrierMultipartProducerPartChainStepHashInput(previous, receipt) {
+  if (!hash(previous) || !partReceipt(receipt)) throw Error('BARRIER_MULTIPART_COMPLETION_CHAIN');
+  const { intentId, scopeSha256, profileSha256, partIndex, planSealSha256, commandSha256, sessionRevision, stored: { blobId, sha256, bytes } } = receipt;
+  return completionHashInput('parts-step', { previous, part: { intentId, scopeSha256, profileSha256, partIndex, planSealSha256, commandSha256, sessionRevision, stored: { blobId, sha256, bytes } } });
+}
+export function barrierMultipartProducerPartChainFinalHashInput(previous, partCount) {
+  if (!hash(previous) || !pos(partCount, P.limits.parts)) throw Error('BARRIER_MULTIPART_COMPLETION_CHAIN');
+  return completionHashInput('parts-final', { previous, partCount });
+}

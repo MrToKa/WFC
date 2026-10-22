@@ -13,9 +13,12 @@ import {
   barrierMultipartSessionCommandHashInput, barrierMultipartSessionListSchema, barrierMultipartSessionSchema,
   barrierMultipartStageCommandSchema, barrierMultipartStagePageCommandSchema, barrierMultipartStagePartCommandSchema,
   barrierMultipartStageReceiptSchema, barrierMultipartStageSealCommandSchema,
-  type BarrierMultipartSession, type BarrierMultipartStageReceipt,
+  barrierMultipartCompleteProducerCommandSchema, barrierMultipartProducerCompletionReceiptSchema,
+  barrierMultipartProducerPartChainSeedHashInput, barrierMultipartProducerPartChainStepHashInput,
+  barrierMultipartProducerPartChainFinalHashInput,
+  type BarrierMultipartSession, type BarrierMultipartStageReceipt, type BarrierMultipartProducerCompletionReceipt,
 } from '../../shared/pathfinderBarrierMultipartSessions.js';
-import { policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
+import { policyHashSchema, policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { assertLoginNotExpired, requireCurrentLogin } from './auth.js';
 import { barrierRegistryTransaction } from './barrierRegistryRepository.js';
 import { PathFinderError } from './errors.js';
@@ -38,6 +41,10 @@ export type BarrierMultipartRepositoryAdapters = {
   /** Protected transport only: hold the exact Viewer/context locks through each
    * transaction, including metadata reconciliation and duplicate cancellation. */
   authorizeContext?: (client: PoolClient, projectId: string, who: JobPrincipal) => Promise<void>;
+  /** Required only for producer completion/readback. The protected factory holds
+   * current Viewer/frame/head locks and returns its immutable admitted binding. */
+  completionContext?: (client: PoolClient, projectId: string, who: JobPrincipal, session: BarrierMultipartSession,
+    signal?: AbortSignal) => Promise<Readonly<{ contextSha256: string; frameSha256: string; effectiveDeadline: string }>>;
 };
 type SessionRow = { id: string; project_id: string; actor_id: string; login_id: string; idempotency_key: string;
   request_sha256: string; command: unknown; frozen: unknown; state: BarrierMultipartSession['state']; session_revision: string;
@@ -48,7 +55,13 @@ type AllocationRow = { id: string; project_id: string; session_id: string; actor
   request_sha256: string; command: unknown; ticket: BarrierMultipartStorageTicket; summary: Summary; item_kind: 'page' | 'seal' | 'part';
   stream_kind: BarrierMultipartPage['kind'] | null; item_index: number; first_ordinal: string | null; record_count: number | null;
   content_sha256: string; lease_token: string; lease_expires_at: Date; expected_revision: string; state: 'pending' | 'stored' };
-type ReceiptRow = { session_id: string; actor_id: string; login_id: string; allocation_id: string | null; request_sha256: string; command: unknown; receipt: unknown };
+type ReceiptRow = { session_id: string; actor_id: string; login_id: string; idempotency_key: string;
+  allocation_id: string | null; request_sha256: string; command: unknown; receipt: unknown };
+type CompletionRow = { project_id: string; session_id: string; actor_id: string; login_id: string;
+  idempotency_key: string; request_sha256: string; command: unknown; receipt: unknown; created_at: Date };
+type StoredItemRow = AllocationRow & { receipt_session_id: string | null; receipt_actor_id: string | null;
+  receipt_login_id: string | null; receipt_key: string | null; receipt_allocation_id: string | null;
+  receipt_request_sha256: string | null; receipt_command: unknown; stage_receipt: unknown };
 type Summary = { sourceVertices: number; sourceTriangles: number; unavailable: number; nonTriangle: number;
   referencedVertices: number; triangles: number; plannedBytes: number; partsStarted: number;
   lastPart: null | { index: number; vertices: number; triangles: number; bytes: number; refs: number; fragmentOrdinal: number } };
@@ -119,6 +132,81 @@ export function createBarrierMultipartRepository(pool: Pool, adapters: BarrierMu
     if (row.login_id !== who.loginId) fail('BARRIER_MULTIPART_OWNER_CHANGED', 403);
     if (row.request_sha256 !== commandHash(raw) || !equal(row.command, raw)) fail('BARRIER_MULTIPART_IDEMPOTENCY_CONFLICT');
     return row.receipt;
+  }
+  async function completionRow(client: PoolClient, projectId: string, intentId: string): Promise<CompletionRow | null> {
+    return (await client.query<CompletionRow>('SELECT * FROM pf_barrier_multipart_producer_completions WHERE project_id=$1 AND session_id=$2', [projectId, intentId])).rows[0] ?? null;
+  }
+  async function completionBinding(client: PoolClient, projectId: string, who: JobPrincipal, session: BarrierMultipartSession, signal?: AbortSignal) {
+    if (typeof adapters.completionContext !== 'function') fail('BARRIER_MULTIPART_COMPLETION_CONTEXT_REQUIRED');
+    await current(client, projectId, session, who);
+    const value = await adapters.completionContext!(client, projectId, who, session, signal);
+    policyHashSchema.parse(value.contextSha256); policyHashSchema.parse(value.frameSha256);
+    const deadline = Date.parse(value.effectiveDeadline);
+    if (!Number.isFinite(deadline) || iso(new Date(deadline)) !== value.effectiveDeadline || deadline <= Date.parse(session.createdAt)
+      || deadline > Date.parse(session.jobDeadline) || deadline <= Date.now()) fail('BARRIER_MULTIPART_COMPLETION_EXPIRED');
+    await current(client, projectId, session, who);
+    signal?.throwIfAborted(); return { contextSha256: value.contextSha256, frameSha256: value.frameSha256, effectiveDeadline: value.effectiveDeadline };
+  }
+  function checkedCompletion(row: CompletionRow, session: BarrierMultipartSession, who: JobPrincipal,
+    binding: { contextSha256: string; frameSha256: string; effectiveDeadline: string }, historical = false): BarrierMultipartProducerCompletionReceipt {
+    const command = barrierMultipartCompleteProducerCommandSchema.parse(row.command), receipt = barrierMultipartProducerCompletionReceiptSchema.parse(row.receipt);
+    if (row.project_id !== session.projectId || row.session_id !== session.id || row.actor_id !== who.userId || row.login_id !== who.loginId
+      || command.intentId !== session.id || command.idempotencyKey !== row.idempotency_key || row.request_sha256 !== commandHash(command)
+      || receipt.intentId !== session.id || receipt.commandSha256 !== row.request_sha256 || receipt.duplicate !== false
+      || receipt.sessionRevision !== nextRevision(command.expectedSessionRevision)
+      || (historical ? BigInt(receipt.sessionRevision) > BigInt(session.sessionRevision) : receipt.sessionRevision !== session.sessionRevision)
+      || receipt.scopeSha256 !== session.scopeSha256 || receipt.profileSha256 !== session.profileSha256
+      || command.scopeSha256 !== session.scopeSha256 || command.profileSha256 !== session.profileSha256
+      || receipt.contextSha256 !== binding.contextSha256 || command.contextSha256 !== binding.contextSha256
+      || receipt.frameSha256 !== binding.frameSha256 || command.frameSha256 !== binding.frameSha256
+      || !equal(command.roots, session.roots) || !equal(receipt.roots, command.roots)
+      || receipt.partCount !== command.partCount || receipt.partCount !== session.counts.parts || receipt.partsSha256 !== command.partsSha256
+      || receipt.bookendProfile !== command.bookendProfile || receipt.recordedAt !== iso(row.created_at)
+      || Date.parse(receipt.recordedAt) < Date.parse(session.createdAt) || Date.parse(receipt.recordedAt) >= Date.parse(binding.effectiveDeadline))
+      fail('BARRIER_MULTIPART_COMPLETION_INTEGRITY');
+    return receipt;
+  }
+  async function completionRecord(client: PoolClient, row: CompletionRow, session: BarrierMultipartSession, who: JobPrincipal,
+    binding: { contextSha256: string; frameSha256: string; effectiveDeadline: string }, historical = false) {
+    const receipt = checkedCompletion(row, session, who, binding, historical);
+    const linked = (await client.query<ReceiptRow>('SELECT * FROM pf_barrier_multipart_receipts WHERE project_id=$1 AND session_id=$2 AND actor_id=$3 AND login_id=$4 AND idempotency_key=$5',
+      [session.projectId, session.id, who.userId, who.loginId, row.idempotency_key])).rows[0];
+    if (!linked || linked.allocation_id !== null || linked.request_sha256 !== row.request_sha256 || !equal(linked.command, row.command) || !equal(linked.receipt, receipt))
+      fail('BARRIER_MULTIPART_COMPLETION_INTEGRITY');
+    return receipt;
+  }
+  const storedItems = `SELECT a.*,r.session_id AS receipt_session_id,r.actor_id AS receipt_actor_id,r.login_id AS receipt_login_id,
+    r.idempotency_key AS receipt_key,r.allocation_id AS receipt_allocation_id,r.request_sha256 AS receipt_request_sha256,
+    r.command AS receipt_command,r.receipt AS stage_receipt FROM pf_barrier_multipart_allocations a
+    LEFT JOIN pf_barrier_multipart_receipts r ON r.project_id=a.project_id AND r.allocation_id=a.id`;
+  function checkedStoredItem(row: StoredItemRow, session: BarrierMultipartSession, who: JobPrincipal): BarrierMultipartStageReceipt {
+    const command = barrierMultipartStageCommandSchema.parse(row.command), receipt = barrierMultipartStageReceiptSchema.parse(row.stage_receipt), ticket = row.ticket;
+    if (row.project_id !== session.projectId || row.session_id !== session.id || row.actor_id !== who.userId || row.login_id !== who.loginId || row.state !== 'stored'
+      || row.receipt_session_id !== session.id || row.receipt_actor_id !== who.userId || row.receipt_login_id !== who.loginId
+      || row.receipt_key !== row.idempotency_key || row.receipt_allocation_id !== row.id || row.receipt_request_sha256 !== row.request_sha256
+      || !equal(row.receipt_command, command) || row.request_sha256 !== commandHash(command) || row.content_sha256 !== ticket.sha256
+      || ticket.projectId !== session.projectId || ticket.sessionId !== session.id || ticket.allocationId !== row.id
+      || ticket.requestSha256 !== row.request_sha256 || ticket.reservedBytes !== 2 * ticket.bytes || ticket.reservedFiles !== 2
+      || command.intentId !== session.id || command.idempotencyKey !== row.idempotency_key || command.expectedSessionRevision !== String(row.expected_revision)
+      || command.scopeSha256 !== session.scopeSha256 || command.profileSha256 !== session.profileSha256
+      || receipt.intentId !== session.id || receipt.commandSha256 !== row.request_sha256 || receipt.scopeSha256 !== session.scopeSha256
+      || receipt.profileSha256 !== session.profileSha256 || receipt.sessionRevision !== nextRevision(String(row.expected_revision)) || receipt.duplicate
+      || !equal(receipt.stored, { blobId: ticket.blobId, sha256: ticket.sha256, bytes: ticket.bytes, durability: 'file-and-directory-fsynced' }))
+      fail('BARRIER_MULTIPART_COMPLETION_STORED_INTEGRITY');
+    if ('payload' in command) {
+      if (row.item_kind !== 'part' || row.stream_kind !== null || row.item_index !== command.partIndex || ticket.kind !== 'part'
+        || command.payload.bytes !== ticket.bytes || command.payload.sha256 !== ticket.sha256 || command.planSealSha256 !== session.roots.plan
+        || receipt.kind !== 'part' || receipt.partIndex !== command.partIndex || receipt.planSealSha256 !== command.planSealSha256)
+        fail('BARRIER_MULTIPART_COMPLETION_STORED_INTEGRITY');
+    } else if ('seal' in command) {
+      if (row.item_kind !== 'seal' || row.stream_kind !== command.seal.kind || row.item_index !== 0 || ticket.kind !== 'control'
+        || ticket.sha256 !== hashBytes(encodeBarrierMultipartControl(command.seal)) || ticket.bytes !== encodeBarrierMultipartControl(command.seal).length
+        || command.seal.sealSha256 !== session.roots[command.seal.kind] || receipt.kind !== 'seal'
+        || receipt.sealKind !== command.seal.kind || receipt.sealSha256 !== command.seal.sealSha256
+        || receipt.pageCount !== command.seal.pageCount || receipt.recordCount !== command.seal.recordCount || receipt.tailPageSha256 !== command.seal.tailPageSha256)
+        fail('BARRIER_MULTIPART_COMPLETION_STORED_INTEGRITY');
+    } else fail('BARRIER_MULTIPART_COMPLETION_STORED_INTEGRITY');
+    return receipt;
   }
   async function assertReservation(client: PoolClient, projectId: string, who: JobPrincipal, ticket: BarrierMultipartStorageTicket,
     signal?: AbortSignal, entry?: BarrierMultipartScannedEntry, mode: 'pending' | 'stored' = 'pending') {
@@ -315,6 +403,7 @@ export function createBarrierMultipartRepository(pool: Pool, adapters: BarrierMu
         fail('BARRIER_MULTIPART_COMMAND_UNCERTAIN', 503);
       }
       if ((await client.query(sessionSelect + ' WHERE project_id=$1 AND actor_id=$2 AND idempotency_key=$3', [projectId, who.userId, command.idempotencyKey])).rows.length) fail('BARRIER_MULTIPART_IDEMPOTENCY_CONFLICT');
+      if (await completionRow(client, projectId, session.id)) fail('BARRIER_MULTIPART_PRODUCER_COMPLETED');
       if (row.state === 'cancelled') fail('BARRIER_MULTIPART_CANCELLED');
       if (row.pending_allocation !== null) fail('BARRIER_MULTIPART_COMMAND_UNCERTAIN', 503);
       if (String(row.session_revision) !== command.expectedSessionRevision || session.scopeSha256 !== command.scopeSha256 || session.profileSha256 !== command.profileSha256) fail('BARRIER_MULTIPART_SESSION_CHANGED');
@@ -390,13 +479,104 @@ export function createBarrierMultipartRepository(pool: Pool, adapters: BarrierMu
     const rows = (await client.query<{ receipt: unknown }>("SELECT receipt FROM pf_barrier_multipart_receipts WHERE project_id=$1 AND session_id=$2 AND actor_id=$3 AND login_id=$4 AND allocation_id IS NOT NULL ORDER BY created_at,idempotency_key LIMIT $5 OFFSET $6", [projectId, query.intentId, who.userId, who.loginId, query.limit + 1, query.cursor])).rows;
     return barrierMultipartReceiptPageSchema.parse({ schemaVersion: 'wfc.pf.barrier-multipart-receipt-page.v2', intentId: query.intentId, receipts: rows.slice(0, query.limit).map(row => barrierMultipartStageReceiptSchema.parse(row.receipt)), nextCursor: rows.length > query.limit ? query.cursor + query.limit : null });
   }, signal);
-  const reconcile = (projectId: string, who: JobPrincipal, raw: unknown, signal?: AbortSignal) => tx(projectId, who, async client => {
-    const query = barrierMultipartReconcileCommandSchema.parse(raw); checked(await sessionRow(client, projectId, query.intentId), projectId, who);
+  async function completeProducer(projectId: string, who: JobPrincipal, raw: unknown, signal?: AbortSignal): Promise<BarrierMultipartProducerCompletionReceipt> {
+    const command = barrierMultipartCompleteProducerCommandSchema.parse(raw);
+    if (typeof adapters.completionContext !== 'function') fail('BARRIER_MULTIPART_COMPLETION_CONTEXT_REQUIRED');
+    let finalDeadline: number | null = null;
+    return tx(projectId, who, async client => {
+      const row = await sessionRow(client, projectId, command.intentId), session = checked(row, projectId, who);
+      if (session.state === 'cancelled') fail('BARRIER_MULTIPART_CANCELLED'); deadlines(row);
+      const binding = await completionBinding(client, projectId, who, session, signal); finalDeadline = Date.parse(binding.effectiveDeadline);
+      const replay = await prior(client, projectId, who, command.idempotencyKey, command), existing = await completionRow(client, projectId, session.id);
+      if (replay) {
+        if (!existing || existing.idempotency_key !== command.idempotencyKey) return fail('BARRIER_MULTIPART_COMPLETION_INTEGRITY');
+        const receipt = await completionRecord(client, existing, session, who, binding);
+        if (!equal(replay, receipt)) fail('BARRIER_MULTIPART_COMPLETION_INTEGRITY');
+        return barrierMultipartProducerCompletionReceiptSchema.parse({ ...receipt, duplicate: true });
+      }
+      if (existing) fail('BARRIER_MULTIPART_PRODUCER_COMPLETED');
+      if ((await client.query('SELECT 1 FROM pf_barrier_multipart_allocations WHERE project_id=$1 AND actor_id=$2 AND idempotency_key=$3 UNION ALL SELECT 1 FROM pf_barrier_multipart_sessions WHERE project_id=$1 AND actor_id=$2 AND idempotency_key=$3',
+        [projectId, who.userId, command.idempotencyKey])).rows.length) fail('BARRIER_MULTIPART_IDEMPOTENCY_CONFLICT');
+      if (session.state !== 'staging' || row.pending_allocation !== null || row.lease_token !== null || row.lease_expires_at !== null)
+        fail('BARRIER_MULTIPART_COMMAND_UNCERTAIN', 503);
+      if (session.sessionRevision !== command.expectedSessionRevision || session.scopeSha256 !== command.scopeSha256 || session.profileSha256 !== command.profileSha256
+        || command.contextSha256 !== binding.contextSha256 || command.frameSha256 !== binding.frameSha256 || !equal(command.roots, session.roots)
+        || session.counts.seals !== 4 || session.counts.parts !== command.partCount) fail('BARRIER_MULTIPART_COMPLETION_CONTEXT_CHANGED');
+      const sealRows = (await client.query<StoredItemRow>(storedItems + " WHERE a.project_id=$1 AND a.session_id=$2 AND a.item_kind='seal' ORDER BY a.stream_kind LIMIT 5", [projectId, session.id])).rows;
+      if (sealRows.length !== 4) fail('BARRIER_MULTIPART_COMPLETION_SEALS');
+      const kinds = new Set<string>(); let planRevision: string | null = null, plannedParts: number | null = null;
+      for (const sealRow of sealRows) {
+        signal?.throwIfAborted(); const receipt = checkedStoredItem(sealRow, session, who), input = barrierMultipartStageSealCommandSchema.parse(sealRow.command);
+        if (receipt.kind !== 'seal' || kinds.has(receipt.sealKind)) return fail('BARRIER_MULTIPART_COMPLETION_SEALS'); kinds.add(receipt.sealKind);
+        if (input.seal.kind === 'plan') { planRevision = receipt.sessionRevision; plannedParts = input.seal.totals.parts; }
+      }
+      if (plannedParts !== command.partCount || planRevision === null) return fail('BARRIER_MULTIPART_COMPLETION_PARTS');
+      let previous = hashValue(barrierMultipartProducerPartChainSeedHashInput({ intentId: session.id, contextSha256: binding.contextSha256,
+        scopeSha256: session.scopeSha256, profileSha256: session.profileSha256, frameSha256: binding.frameSha256, roots: command.roots }));
+      let partIndex = 0, partRevision: string = planRevision;
+      for (;;) {
+        signal?.throwIfAborted(); deadlines(row);
+        // A keyset cursor retains at most one bounded page of metadata. Include
+        // pending rows so neither an orphan nor a missing receipt is hidden.
+        const rows = (await client.query<StoredItemRow>(storedItems + " WHERE a.project_id=$1 AND a.session_id=$2 AND a.item_kind='part' AND a.item_index>$3 ORDER BY a.item_index LIMIT $4",
+          [projectId, session.id, partIndex - 1, L.receiptPageSize])).rows;
+        if (rows.length === 0) break;
+        for (const item of rows) {
+          signal?.throwIfAborted(); if (partIndex >= command.partCount || item.item_index !== partIndex) fail('BARRIER_MULTIPART_COMPLETION_PARTS');
+          const receipt = checkedStoredItem(item, session, who);
+          if (receipt.kind !== 'part' || receipt.partIndex !== partIndex || receipt.sessionRevision !== nextRevision(partRevision)) fail('BARRIER_MULTIPART_COMPLETION_PARTS');
+          previous = hashValue(barrierMultipartProducerPartChainStepHashInput(previous, receipt)); partRevision = receipt.sessionRevision; partIndex++;
+        }
+      }
+      if (partIndex !== command.partCount || partRevision !== session.sessionRevision
+        || hashValue(barrierMultipartProducerPartChainFinalHashInput(previous, partIndex)) !== command.partsSha256) fail('BARRIER_MULTIPART_COMPLETION_PARTS');
+      const recordedAt = new Date().toISOString(), sessionRevision = nextRevision(session.sessionRevision), requestSha256 = commandHash(command);
+      const receipt = barrierMultipartProducerCompletionReceiptSchema.parse({ schemaVersion: 'wfc.pf.barrier-multipart-producer-completion-receipt.v2',
+        intentId: session.id, sessionRevision, commandSha256: requestSha256, scopeSha256: session.scopeSha256, profileSha256: session.profileSha256,
+        contextSha256: binding.contextSha256, frameSha256: binding.frameSha256, roots: command.roots, partCount: command.partCount, partsSha256: command.partsSha256,
+        bookendProfile: command.bookendProfile, recordedAt, duplicate: false, completionProvenance: 'protected-producer-reported', sdkSourceBytesVerified: false, ...noAuthority });
+      const changed = (await client.query<SessionRow>('UPDATE pf_barrier_multipart_sessions SET session_revision=$3,updated_at=$4 WHERE project_id=$1 AND id=$2 AND session_revision=$5 AND pending_allocation IS NULL RETURNING *',
+        [projectId, session.id, sessionRevision, new Date(recordedAt), session.sessionRevision])).rows[0];
+      if (!changed || !equal(checked(changed, projectId, who), { ...session, sessionRevision, updatedAt: recordedAt })) fail('BARRIER_MULTIPART_SESSION_CHANGED');
+      const saved = (await client.query<{ receipt: unknown }>('INSERT INTO pf_barrier_multipart_receipts(project_id,session_id,actor_id,login_id,idempotency_key,allocation_id,request_sha256,command,receipt) VALUES($1,$2,$3,$4,$5,NULL,$6,$7::jsonb,$8::jsonb) RETURNING receipt',
+        [projectId, session.id, who.userId, who.loginId, command.idempotencyKey, requestSha256, JSON.stringify(command), JSON.stringify(receipt)])).rows[0];
+      if (!saved || !equal(saved.receipt, receipt)) fail('BARRIER_MULTIPART_COMPLETION_INTEGRITY');
+      const stored = (await client.query<CompletionRow>('INSERT INTO pf_barrier_multipart_producer_completions(project_id,session_id,actor_id,login_id,idempotency_key,request_sha256,command,receipt,created_at) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9) RETURNING *',
+        [projectId, session.id, who.userId, who.loginId, command.idempotencyKey, requestSha256, JSON.stringify(command), JSON.stringify(receipt), new Date(recordedAt)])).rows[0];
+      if (!stored || !equal(checkedCompletion(stored, checked(changed, projectId, who), who, binding), receipt)) fail('BARRIER_MULTIPART_COMPLETION_INTEGRITY');
+      if (!equal(await completionBinding(client, projectId, who, checked(changed, projectId, who), signal), binding)) fail('BARRIER_MULTIPART_COMPLETION_CONTEXT_CHANGED');
+      deadlines(row); return receipt;
+    }, signal, () => { if (finalDeadline !== null && finalDeadline <= Date.now()) fail('BARRIER_MULTIPART_COMPLETION_EXPIRED'); });
+  }
+  async function readCompletion(projectId: string, who: JobPrincipal, intentId: string, signal?: AbortSignal): Promise<BarrierMultipartProducerCompletionReceipt | null> {
+    if (typeof adapters.completionContext !== 'function') fail('BARRIER_MULTIPART_COMPLETION_CONTEXT_REQUIRED');
+    let finalDeadline: number | null = null;
+    return tx(projectId, who, async client => {
+      const row = await sessionRow(client, projectId, intentId), session = checked(row, projectId, who);
+      if (session.state === 'cancelled') fail('BARRIER_MULTIPART_CANCELLED'); deadlines(row);
+      const binding = await completionBinding(client, projectId, who, session, signal); finalDeadline = Date.parse(binding.effectiveDeadline);
+      const stored = await completionRow(client, projectId, session.id), receipt = stored ? await completionRecord(client, stored, session, who, binding) : null;
+      if (!equal(await completionBinding(client, projectId, who, session, signal), binding)) fail('BARRIER_MULTIPART_COMPLETION_CONTEXT_CHANGED'); deadlines(row); return receipt;
+    }, signal, () => { if (finalDeadline !== null && finalDeadline <= Date.now()) fail('BARRIER_MULTIPART_COMPLETION_EXPIRED'); });
+  }
+  async function reconcile(projectId: string, who: JobPrincipal, raw: unknown, signal?: AbortSignal) {
+    let completionDeadline: number | null = null;
+    return tx(projectId, who, async client => {
+    const query = barrierMultipartReconcileCommandSchema.parse(raw), session = checked(await sessionRow(client, projectId, query.intentId), projectId, who);
     const row = (await client.query<ReceiptRow>('SELECT * FROM pf_barrier_multipart_receipts WHERE project_id=$1 AND session_id=$2 AND actor_id=$3 AND login_id=$4 AND idempotency_key=$5', [projectId, query.intentId, who.userId, who.loginId, query.idempotencyKey])).rows[0];
     if (!row) fail('BARRIER_MULTIPART_COMMAND_UNCERTAIN', 503);
     if (row.request_sha256 !== query.commandSha256 || row.request_sha256 !== commandHash(row.command)) fail('BARRIER_MULTIPART_IDEMPOTENCY_CONFLICT');
+    if (barrierMultipartCompleteProducerCommandSchema.safeParse(row.command).success) {
+      const binding = await completionBinding(client, projectId, who, session, signal), stored = await completionRow(client, projectId, session.id);
+      completionDeadline = Date.parse(binding.effectiveDeadline);
+      if (!stored || stored.idempotency_key !== query.idempotencyKey) return fail('BARRIER_MULTIPART_COMPLETION_INTEGRITY');
+      const receipt = await completionRecord(client, stored, session, who, binding, true);
+      if (!equal(await completionBinding(client, projectId, who, session, signal), binding)) fail('BARRIER_MULTIPART_COMPLETION_CONTEXT_CHANGED');
+      return barrierMultipartProducerCompletionReceiptSchema.parse({ ...receipt, duplicate: true });
+    }
     return row.allocation_id === null ? barrierMultipartCancelReceiptSchema.parse({ ...(row.receipt as object), duplicate: true }) : barrierMultipartStageReceiptSchema.parse({ ...(row.receipt as object), duplicate: true });
-  }, signal);
+    }, signal, () => { if (completionDeadline !== null && completionDeadline <= Date.now()) fail('BARRIER_MULTIPART_COMPLETION_EXPIRED'); });
+  }
   const cancel = (projectId: string, who: JobPrincipal, raw: unknown, signal?: AbortSignal) => tx(projectId, who, async client => {
     const command = barrierMultipartCancelCommandSchema.parse(raw), row = await sessionRow(client, projectId, command.intentId), session = checked(row, projectId, who);
     const replay = await prior(client, projectId, who, command.idempotencyKey, command); if (replay) return barrierMultipartCancelReceiptSchema.parse({ ...(replay as object), duplicate: true });
@@ -444,7 +624,7 @@ export function createBarrierMultipartRepository(pool: Pool, adapters: BarrierMu
       await current(client, projectId, session, who); deadlines(row); jobDeadline = new Date(row.job_deadline).getTime(); return bytes;
     }, signal, () => { if (jobDeadline !== null && jobDeadline <= Date.now()) fail('BARRIER_MULTIPART_JOB_EXPIRED'); });
   }
-  return { admit, begin: admit, get, list, receipts, reconcile, cancel, readPage, readPart,
+  return { admit, begin: admit, get, list, receipts, reconcile, cancel, readPage, readPart, completeProducer, readCompletion,
     stagePage: (projectId: string, who: JobPrincipal, raw: unknown, signal?: AbortSignal) => stage(projectId, who, barrierMultipartStagePageCommandSchema.parse(raw), undefined, signal),
     stageSeal: (projectId: string, who: JobPrincipal, raw: unknown, signal?: AbortSignal) => stage(projectId, who, barrierMultipartStageSealCommandSchema.parse(raw), undefined, signal),
     stagePart: (projectId: string, who: JobPrincipal, raw: unknown, bytes: Buffer, signal?: AbortSignal) => stage(projectId, who, barrierMultipartStagePartCommandSchema.parse(raw), bytes, signal) };

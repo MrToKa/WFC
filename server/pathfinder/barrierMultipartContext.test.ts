@@ -99,6 +99,32 @@ describe('immutable protected multipart context, synthetic database seams only',
     await f.adapters().onAdmission!(f.client, f.session, false); await f.adapters().onAdmission!(f.client, f.session, true);
     f.state.binding!.viewer_session_id = id(99); await expect(f.adapters().onAdmission!(f.client, f.session, true)).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_CONTEXT_CHANGED' });
   });
+  it('withholds completion context until immutable admission, then returns the full frame hash and original deadline', async () => {
+    const f = fixture(); await f.create();
+    await expect(f.adapters().completionContext!(f.client, id(1), f.who, f.session)).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_CONTEXT_CHANGED' });
+    await f.adapters().onAdmission!(f.client, f.session, false);
+    const binding = await f.adapters().completionContext!(f.client, id(1), f.who, f.session);
+    expect(binding).toEqual({ contextSha256: f.state.binding!.context_sha256, frameSha256: f.frame.contentSha256,
+      effectiveDeadline: f.state.viewer.absolute_expires_at.toISOString() });
+    expect(binding.frameSha256).not.toBe(f.scope.modelScope.captureFrameSha256);
+    expect(Object.isFrozen(binding)).toBe(true); expect(f.storage.read).not.toHaveBeenCalled();
+  });
+  it.each(['intent', 'scope', 'command', 'profile', 'principal'] as const)('refuses a foreign %s at the trusted completion adapter', async kind => {
+    const f = fixture(); await f.create(); await f.adapters().onAdmission!(f.client, f.session, false);
+    const session = structuredClone(f.session), who = { ...f.who };
+    if (kind === 'intent') session.id = id(99); if (kind === 'scope') session.scopeSha256 = 'f'.repeat(64);
+    if (kind === 'command') session.requestSha256 = 'f'.repeat(64); if (kind === 'profile') session.profileSha256 = 'f'.repeat(64);
+    if (kind === 'principal') who.loginId = id(99);
+    await expect(f.adapters().completionContext!(f.client, id(1), who, session)).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_CONTEXT_CHANGED' });
+    expect(f.storage.read).not.toHaveBeenCalled();
+  });
+  it('does not extend the immutable completion deadline when Viewer lifetime grows', async () => {
+    const f = fixture(); await f.create(); await f.adapters().onAdmission!(f.client, f.session, false);
+    const original = f.state.viewer.absolute_expires_at.toISOString(); f.state.viewer.absolute_expires_at = new Date(Date.now() + 7200000);
+    expect((await f.adapters().completionContext!(f.client, id(1), f.who, f.session)).effectiveDeadline).toBe(original);
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse(original));
+    await expect(f.adapters().completionContext!(f.client, id(1), f.who, f.session)).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_VIEWER_EXPIRED' });
+  });
   it.each(['load', 'selection', 'revoked', 'idle', 'absolute', 'login'] as const)('refuses changed %s context before admission SQL', async kind => {
     const f = fixture(); await f.create();
     if (kind === 'load') f.state.viewer.load_id = id(99); if (kind === 'selection') f.state.viewer.current_selection_revision = '2';

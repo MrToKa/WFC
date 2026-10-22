@@ -1,10 +1,14 @@
 import { observeMultipartFrame, createBarrierPackedProducer } from './barrier-producer.mjs';
 import { BARRIER_MULTIPART_PRODUCER_PROFILE, barrierMultipartTransportCanonical as canonical,
   validateBarrierMultipartFrameRequest, validateBarrierMultipartStart, validateBarrierMultipartIntentControl } from './barrier-multipart-protocol.mjs';
+import { validateBarrierMultipartProducerCompletionEvidence, validateBarrierMultipartProducerCompletionReceipt } from './barrier-multipart-protocol.mjs';
 
 const failure = (code = 'BARRIER_MULTIPART_FAILED') => Object.assign(new Error(code), { code });
 const interrupted = () => new DOMException('Barrier observation stopped.', 'AbortError');
 const same = (a, b) => canonical(a) === canonical(b);
+const terminal = event => event && Object.getPrototypeOf(event) === Object.prototype && Reflect.ownKeys(event).length === 2
+  && ['kind', 'evidence'].every(key => { const d = Object.getOwnPropertyDescriptor(event, key); return d?.enumerable === true && 'value' in d; })
+  && event.kind === 'producer-complete' && validateBarrierMultipartProducerCompletionEvidence(event.evidence);
 
 /** Per-loaded-model lifecycle. Small control ACKs never wait for the complete
  * producer, and structural completion never becomes collision/write authority.
@@ -52,7 +56,15 @@ export function createBarrierMultipartRuntime(viewer, { descriptor, isCurrent, s
       const remaining = Date.parse(context.context.effectiveDeadline) - Date.now(), startedAt = Date.parse(session.createdAt);
       if (!Number.isFinite(remaining) || remaining <= 0 || remaining > 3600000 || !Number.isFinite(startedAt) || startedAt > Date.now()) throw failure('BARRIER_MULTIPART_DEADLINE');
       const controller = new AbortController(), state = { intentId: request.intentId, start: JSON.parse(canonical(request)), writer,
-        controller, done: false, error: null, promise: null, timer: null };
+        controller, done: false, error: null, promise: null, timer: null, producerFinished: false, completion: null, terminal: null };
+      const checkedCompletion = receipt => {
+        const evidence = state.terminal;
+        if (!evidence || !validateBarrierMultipartProducerCompletionReceipt(receipt) || receipt.intentId !== state.intentId
+          || receipt.scopeSha256 !== session.scopeSha256 || receipt.profileSha256 !== session.profileSha256
+          || ['contextSha256', 'frameSha256', 'partCount', 'bookendProfile'].some(key => receipt[key] !== evidence[key]) || !same(receipt.roots, evidence.roots)) throw failure();
+        return receipt;
+      };
+      state.acceptCompletion = checkedCompletion;
       const combined = AbortSignal.any([controller.signal, signal].filter(Boolean));
       const live = () => !disposed && job === state && !combined.aborted && isCurrent() === true;
       job = state;
@@ -67,6 +79,14 @@ export function createBarrierMultipartRuntime(viewer, { descriptor, isCurrent, s
           let expectedParts = null, receivedParts = 0;
           for await (const event of events) {
             current(combined);
+            if (state.terminal !== null) throw failure('BARRIER_MULTIPART_COMPLETION_ORDER');
+            if (event.kind === 'producer-complete') {
+              const status = writer.snapshot();
+              if (!terminal(event) || expectedParts === null || receivedParts !== expectedParts || status.counts.parts !== expectedParts || status.counts.seals !== 4
+                || event.evidence.contextSha256 !== context.context.contextSha256 || event.evidence.frameSha256 !== context.context.frameObservation.contentSha256
+                || event.evidence.partCount !== expectedParts || !same(event.evidence.roots, status.roots)) throw failure('BARRIER_MULTIPART_COMPLETION_ORDER');
+              state.terminal = JSON.parse(canonical(event.evidence)); continue;
+            }
             if (event.kind === 'seal' && event.seal.kind === 'plan') {
               if (expectedParts !== null || !Number.isSafeInteger(event.seal.totals?.parts)
                 || event.seal.totals.parts < 1 || event.seal.totals.parts > 1048576) throw failure();
@@ -79,7 +99,11 @@ export function createBarrierMultipartRuntime(viewer, { descriptor, isCurrent, s
           current(combined);
           const status = writer.snapshot();
           if (status.counts.seals !== 4 || Object.values(status.roots).some(root => root === null)
-            || expectedParts === null || receivedParts !== expectedParts || status.counts.parts !== expectedParts) throw failure();
+            || expectedParts === null || receivedParts !== expectedParts || status.counts.parts !== expectedParts || state.terminal === null) throw failure();
+          // A terminal event alone is insufficient: consume EOF first so late
+          // producer failure, duplicate or trailing data cannot be completed.
+          state.producerFinished = true;
+          state.completion = checkedCompletion(await writer.completeProducer(state.terminal, { signal: combined })); current(combined);
         } catch (error) { state.error = ['BARRIER_MULTIPART_MODEL_CHANGED', 'BARRIER_MULTIPART_FRAME_CHANGED'].includes(error?.code)
           ? failure('MODEL_SELECTION_CHANGED') : error; }
         finally { state.done = true; clearTimeout(state.timer); }
@@ -111,7 +135,11 @@ export function createBarrierMultipartRuntime(viewer, { descriptor, isCurrent, s
     // Explicit readback of the exact retained command(s), never a stage retry.
     // A failed producer still needs cancellation/new admission after readback.
     for (const pending of state.writer.pending()) {
-      current(operationSignal); await state.writer.reconcile(pending.command.idempotencyKey, { signal: operationSignal }); current(operationSignal);
+      current(operationSignal); const receipt = await state.writer.reconcile(pending.command.idempotencyKey, { signal: operationSignal }); current(operationSignal);
+      if (pending.command.schemaVersion === 'wfc.pf.barrier-multipart-complete-producer.v2') {
+        if (!state.producerFinished) throw failure('BARRIER_MULTIPART_COMPLETION_ORDER');
+        state.completion = state.acceptCompletion(receipt); state.error = null;
+      }
     }
     return state.writer.snapshot();
   }

@@ -1,9 +1,13 @@
-import type { BarrierMultipartAdmitCommand, BarrierMultipartSession } from '../shared/pathfinderBarrierMultipartSessions.js';
+import type { BarrierMultipartAdmitCommand, BarrierMultipartSession, BarrierMultipartCompleteProducerCommand,
+  BarrierMultipartProducerCompletionReceipt, BarrierMultipartStageReceipt } from '../shared/pathfinderBarrierMultipartSessions.js';
 import type { BarrierMultipartScope, BarrierMultipartPage, BarrierMultipartSeal } from '../shared/pathfinderBarrierMultipart.js';
 import type { BarrierFrameObservation } from './barrier-capture.mjs';
 export const BARRIER_MULTIPART_PRODUCER_PROFILE: Readonly<{ schemaVersion:'wfc.pf.barrier-multipart-producer.v2'; sdkVersion:'7.130.0';
   triangleOrder:'sdk7130-rendered-triangle-order-v1'; geometryDigest:'sha256-bounded-chunk-chain-v1'; visibility:'selected-scope-includes-hidden-geometry-v1' }>;
 export type BarrierMultipartProducerProfile = typeof BARRIER_MULTIPART_PRODUCER_PROFILE;
+export const BARRIER_MULTIPART_PRODUCER_BOOKEND_PROFILE: 'sdk7130-after-final-part-ack-hierarchy-frame-v1';
+export type BarrierMultipartProducerCompletionEvidence = Pick<BarrierMultipartCompleteProducerCommand,'contextSha256'|'frameSha256'|'roots'|'partCount'|'bookendProfile'>;
+export type BarrierMultipartProducerPartChainContext = Pick<BarrierMultipartCompleteProducerCommand,'intentId'|'contextSha256'|'scopeSha256'|'profileSha256'|'frameSha256'|'roots'>;
 export const BARRIER_MULTIPART_TRANSPORT_LIMITS: Readonly<{controlBytes:65536;pageBytes:262144;commandBytes:327680;responseBytes:262144;partBytes:33554432;partHeaderBytes:4096;requestMilliseconds:180000;jobMilliseconds:3600000;pendingCommands:2}>;
 export type BarrierMultipartStart = {intentId:string;expectedSessionRevision:string;scopeSha256:string;profileSha256:string;producerProfile:BarrierMultipartProducerProfile};
 export type BarrierMultipartContext = {schemaVersion:'wfc.pf.barrier-multipart-context.v2';session:BarrierMultipartSession;context:{viewerSessionId:string;
@@ -23,3 +27,9 @@ export function validateBarrierMultipartIntentControl(value:unknown):value is {i
 export function validateBarrierMultipartStatus(value:unknown):value is BarrierMultipartStatus;
 export function validateBarrierMultipartFramePayload(value:unknown):value is {frameObservation:BarrierFrameObservation;producerProfile:BarrierMultipartProducerProfile};
 export function validateBarrierMultipartFrameRequest(value:unknown):value is {projectId:string;modelVersionId:string;contentFingerprint:string};
+export function validateBarrierMultipartProducerCompletionEvidence(value:unknown):value is BarrierMultipartProducerCompletionEvidence;
+export function validateBarrierMultipartCompleteProducerCommand(value:unknown):value is BarrierMultipartCompleteProducerCommand;
+export function validateBarrierMultipartProducerCompletionReceipt(value:unknown):value is BarrierMultipartProducerCompletionReceipt;
+export function barrierMultipartProducerPartChainSeedHashInput(context:BarrierMultipartProducerPartChainContext):unknown;
+export function barrierMultipartProducerPartChainStepHashInput(previous:string,receipt:Extract<BarrierMultipartStageReceipt,{kind:'part'}>):unknown;
+export function barrierMultipartProducerPartChainFinalHashInput(previous:string,partCount:number):unknown;

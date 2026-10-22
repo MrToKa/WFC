@@ -3,7 +3,27 @@ import assert from 'node:assert/strict';
 import { fixture, id, H, reply, h, hash, commandHash } from './barrier-multipart-fixture.mjs';
 import { createBarrierMultipartTransport } from '../barrier-multipart-transport.mjs';
 import { BARRIER_MULTIPART_PRODUCER_PROFILE as profile, barrierMultipartContextHashInput,
-  barrierMultipartTransportCanonical, validateBarrierMultipartAdmitCommand } from '../barrier-multipart-protocol.mjs';
+  barrierMultipartTransportCanonical, validateBarrierMultipartAdmitCommand, BARRIER_MULTIPART_PRODUCER_BOOKEND_PROFILE } from '../barrier-multipart-protocol.mjs';
+
+// Transport-only scripted HTTP fixture; actual SQL/current-cookie guards are
+// independently exercised by root's isolated server integration suite.
+async function prepareCompletion(f, partCount = 2) {
+  const writer = await f.transport().open(f.start);
+  for (const kind of ['nodes', 'fragments', 'geometry-ranges', 'plan']) {
+    const roots = writer.snapshot().roots, totals = kind === 'nodes' ? { nodes: 1 }
+      : kind === 'fragments' ? { fragments: 1, sourceVertices: 3, sourceTriangles: partCount, unavailable: 0, nonTriangle: 0 }
+        : kind === 'geometry-ranges' ? { ranges: partCount, referencedVertices: 3 * partCount, triangles: partCount }
+          : { parts: partCount, ranges: partCount, referencedVertices: 3 * partCount, triangles: partCount, plannedEncodedBytesUpperBound: 65536,
+            nodeSealSha256: roots.nodes, fragmentSealSha256: roots.fragments, rangeSealSha256: roots['geometry-ranges'] };
+    const body = { schemaVersion: 'wfc.pf.barrier-multipart-seal.v2', kind, scopeSha256: f.session.scopeSha256, profileSha256: f.session.profileSha256,
+      pageCount: 1, recordCount: ['nodes', 'fragments'].includes(kind) ? 1 : partCount, tailPageSha256: H, totals,
+      ...(kind === 'plan' ? { qualification: 'NOT_MEASURED', authority: 'none' } : {}) };
+    await writer.stage({ kind: 'seal', seal: { ...body, sealSha256: h({ domain: 'wfc.pf.barrier-multipart.v2/seal', value: body }) } });
+  }
+  return { writer, evidence: { contextSha256: f.context.context.contextSha256, frameSha256: f.frame.contentSha256, roots: writer.snapshot().roots,
+    partCount, bookendProfile: BARRIER_MULTIPART_PRODUCER_BOOKEND_PROFILE },
+  stagePart: index => writer.stage({ kind: 'part', partIndex: index, planSealSha256: writer.snapshot().roots.plan, bytes: new Uint8Array([index + 1, 2, 3]) }) };
+}
 
 test('direct frame admission uses exact Viewer cookie URL and never copies bearer credentials', async () => {
   const f = fixture(), transport = f.transport(); const admitted = await transport.admit(f.command, f.frame);
@@ -141,4 +161,71 @@ test('already aborted upload and expired immutable deadline do not renew or fetc
   const old = fixture(); old.session.createdAt = '2000-01-01T00:00:00.000Z'; old.session.updatedAt = old.session.createdAt; old.session.jobDeadline = '2000-01-01T00:01:00.000Z';
   old.context.context.effectiveDeadline = old.session.jobDeadline; old.context.context.contextSha256 = h(barrierMultipartContextHashInput(old.context));
   await assert.rejects(old.transport().open(old.start), { code: 'BARRIER_MULTIPART_DEADLINE' }); assert.equal(old.calls.length, 1);
+});
+test('terminal producer completion binds the independently derived ordered exact ACK receipt chain', async () => {
+  const f = fixture(), p = await prepareCompletion(f); const receipts = [await p.stagePart(0), await p.stagePart(1)];
+  const before = p.writer.snapshot(), D = 'wfc.pf.barrier-multipart-producer-completion.v2';
+  let previous = h({ domain: D + '/parts-seed', value: { intentId: f.session.id, contextSha256: f.context.context.contextSha256, scopeSha256: f.session.scopeSha256,
+    profileSha256: f.session.profileSha256, frameSha256: f.frame.contentSha256, roots: before.roots } });
+  for (const receipt of receipts) { const { intentId, scopeSha256, profileSha256, partIndex, planSealSha256, commandSha256, sessionRevision, stored: { blobId, sha256, bytes } } = receipt;
+    previous = h({ domain: D + '/parts-step', value: { previous, part: { intentId, scopeSha256, profileSha256, partIndex, planSealSha256, commandSha256, sessionRevision, stored: { blobId, sha256, bytes } } } }); }
+  const partsSha256 = h({ domain: D + '/parts-final', value: { previous, partCount: 2 } }), receipt = await p.writer.completeProducer(p.evidence);
+  assert.equal(receipt.partsSha256, partsSha256); assert.equal(receipt.sdkSourceBytesVerified, false); assert.equal(receipt.authority, 'none');
+  const call = f.calls.at(-1), command = JSON.parse(call.options.body); assert.equal(call.url, f.base + f.session.id + '/producer-completion'); assert.equal(call.options.method, 'POST');
+  assert.equal(command.partsSha256, partsSha256); assert.equal(receipt.commandSha256, commandHash(command)); assert.equal(p.writer.snapshot().sessionRevision, String(Number(before.sessionRevision) + 1));
+  assert.deepEqual(p.writer.snapshot().counts, before.counts); assert.deepEqual(p.writer.completion(), receipt);
+  await assert.rejects(p.writer.stage({ kind: 'page', page: f.page() }), { code: 'BARRIER_MULTIPART_PENDING_REQUIRED' });
+  assert.equal((await p.writer.readCompletion()).commandSha256, receipt.commandSha256);
+  const reopened = await f.transport().open({ ...f.start, expectedSessionRevision: f.session.sessionRevision });
+  assert.equal((await reopened.readCompletion()).partsSha256, partsSha256); assert.equal(reopened.snapshot().authority, 'none');
+});
+test('old sessions have no completion and an opened historical writer cannot invent its part receipt chain', async () => {
+  const f = fixture(), empty = await f.transport().open(f.start); assert.equal(await empty.readCompletion(), null); assert.equal(empty.completion(), null);
+  const p = await prepareCompletion(f, 1); await p.stagePart(0);
+  const reopened = await f.transport().open({ ...f.start, expectedSessionRevision: f.session.sessionRevision });
+  await assert.rejects(reopened.completeProducer(p.evidence), { code: 'BARRIER_MULTIPART_COMPLETION' });
+  assert.equal(f.calls.some(call => call.url.endsWith('/producer-completion') && call.options.method === 'POST'), false);
+});
+test('missing, extra, reordered parts or foreign terminal evidence refuse before a completion write', async () => {
+  const f = fixture(), p = await prepareCompletion(f); await assert.rejects(p.stagePart(1), { code: 'BARRIER_MULTIPART_PART' });
+  await p.stagePart(0); await assert.rejects(p.writer.completeProducer(p.evidence), { code: 'BARRIER_MULTIPART_COMPLETION' }); await p.stagePart(1);
+  for (const change of [v => { v.contextSha256 = H; }, v => { v.frameSha256 = H; }, v => { v.partCount = 1; }, v => { v.roots.nodes = H; }, v => { v.sdkSourceBytesVerified = true; }]) {
+    const evidence = structuredClone(p.evidence); change(evidence); await assert.rejects(p.writer.completeProducer(evidence));
+  }
+  await assert.rejects(p.stagePart(0), { code: 'BARRIER_MULTIPART_PART' });
+  assert.equal(f.calls.some(call => call.url.endsWith('/producer-completion') && call.options.method === 'POST'), false);
+});
+test('unknown final part ACK does not advance the chain; exact reconciliation permits one later explicit completion', async () => {
+  const f = fixture(), p = await prepareCompletion(f); await p.stagePart(0);
+  f.controls.afterStage = () => { throw Error('lost final part ACK'); }; await assert.rejects(p.stagePart(1), /lost final part ACK/u);
+  await assert.rejects(p.writer.completeProducer(p.evidence), { code: 'BARRIER_MULTIPART_COMPLETION' });
+  const [pending] = p.writer.pending(); await p.writer.reconcile(pending.command.idempotencyKey);
+  const reconcile = JSON.parse(f.calls.at(-1).options.body); assert.equal(reconcile.schemaVersion, 'wfc.pf.barrier-multipart-reconcile.v2');
+  const partsWrites = f.calls.filter(call => call.url.endsWith('/parts')).length;
+  await p.writer.completeProducer(p.evidence); assert.equal(f.calls.filter(call => call.url.endsWith('/parts')).length, partsWrites);
+});
+test('unknown completion retains its exact immutable command for explicit reconciliation without mutation replay', async () => {
+  const f = fixture(), p = await prepareCompletion(f, 1); await p.stagePart(0);
+  f.controls.afterCompletion = () => { throw Error('lost completion ACK'); };
+  await assert.rejects(p.writer.completeProducer(p.evidence), /lost completion ACK/u); assert.equal(p.writer.completion(), null);
+  const [pending] = p.writer.pending(); assert.equal(pending.command.schemaVersion, 'wfc.pf.barrier-multipart-complete-producer.v2');
+  await assert.rejects(p.writer.completeProducer(p.evidence)); assert.equal(f.calls.filter(call => call.url.endsWith('/producer-completion') && call.options.method === 'POST').length, 1);
+  const receipt = await p.writer.reconcile(pending.command.idempotencyKey); assert.equal(receipt.duplicate, true); assert.equal(p.writer.pending().length, 0);
+  assert.equal(p.writer.completion().commandSha256, pending.commandSha256);
+});
+test('tampered completion receipt remains uncertain and never grants local acknowledgement', async () => {
+  for (const change of [v => { v.partsSha256 = H; }, v => { v.frameSha256 = H; }, v => { v.partCount++; }, v => { v.commandSha256 = H; },
+    v => { v.sessionRevision = '20'; }, v => { v.roots.plan = H; }, v => { v.sdkSourceBytesVerified = true; }, v => { v.recordedAt = '2099-01-01T00:00:00.000Z'; }]) {
+    const f = fixture(), p = await prepareCompletion(f, 1); await p.stagePart(0);
+    f.controls.afterCompletion = receipt => { change(receipt); return reply(receipt); };
+    await assert.rejects(p.writer.completeProducer(p.evidence), { code: 'BARRIER_MULTIPART_COMPLETION_RECEIPT' }); assert.equal(p.writer.completion(), null); assert.equal(p.writer.pending().length, 1);
+    const receipt = await p.writer.reconcile(p.writer.pending()[0].command.idempotencyKey); assert.equal(receipt.duplicate, true);
+  }
+});
+test('cancellation invalidates completion while preserving historical unknown command reconciliation', async () => {
+  const f = fixture(), p = await prepareCompletion(f, 1); await p.stagePart(0); f.controls.afterCompletion = () => { throw Error('lost ACK'); };
+  await assert.rejects(p.writer.completeProducer(p.evidence)); const key = p.writer.pending()[0].command.idempotencyKey;
+  await p.writer.cancel(); const revision = p.writer.snapshot().sessionRevision; const receipt = await p.writer.reconcile(key);
+  assert.equal(receipt.duplicate, true); assert.equal(p.writer.snapshot().state, 'cancelled'); assert.equal(p.writer.snapshot().sessionRevision, revision); assert.equal(p.writer.completion(), null);
+  await assert.rejects(p.writer.readCompletion(), { code: 'BARRIER_MULTIPART_CANCELLED' });
 });

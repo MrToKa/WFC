@@ -2,12 +2,14 @@
 import { BARRIER_MULTIPART_PRODUCER_PROFILE as PROFILE, BARRIER_MULTIPART_TRANSPORT_LIMITS as L,
   barrierMultipartTransportCanonical as canonical, barrierMultipartContextHashInput,
   validateBarrierMultipartStart, validateBarrierMultipartContext, validateBarrierMultipartSession,
-  validateBarrierMultipartAdmitCommand, validateBarrierMultipartPage, validateBarrierMultipartSeal } from './barrier-multipart-protocol.mjs';
+  validateBarrierMultipartAdmitCommand, validateBarrierMultipartPage, validateBarrierMultipartSeal,
+  validateBarrierMultipartProducerCompletionEvidence, validateBarrierMultipartCompleteProducerCommand, validateBarrierMultipartProducerCompletionReceipt,
+  barrierMultipartProducerPartChainSeedHashInput, barrierMultipartProducerPartChainStepHashInput, barrierMultipartProducerPartChainFinalHashInput } from './barrier-multipart-protocol.mjs';
 import { barrierCanonicalJson, barrierFrameObservationHashInput, validateBarrierFrameObservation } from './barrier-capture.mjs';
 
 const E = new TextEncoder(), kinds = ['nodes', 'fragments', 'geometry-ranges', 'plan'];
-const uuid = v => typeof v === 'string' && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/u.test(v);
-const hash = v => typeof v === 'string' && /^[a-f0-9]{64}$/u.test(v);
+const uuid = v => typeof v === 'string' && v.length === 36 && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/u.test(v);
+const hash = v => typeof v === 'string' && v.length === 64 && /^[a-f0-9]{64}$/u.test(v);
 const exact = (v, keys) => v && typeof v === 'object' && !Array.isArray(v) && [Object.prototype, null].includes(Object.getPrototypeOf(v))
   && Reflect.ownKeys(v).length === keys.length && keys.every(k => { const d = Object.getOwnPropertyDescriptor(v, k); return d && 'value' in d; });
 const copy = v => JSON.parse(canonical(v));
@@ -116,7 +118,8 @@ export function createBarrierMultipartTransport({ origin, projectId, modelVersio
     let context = await checkedContext(await request(start.intentId + '/context', { signal }), start, signal);
     need(context.session.sessionRevision === start.expectedSessionRevision, 'BARRIER_MULTIPART_SESSION_CHANGED');
     const original = frozen(copy(context)), deadline = Date.parse(original.context.effectiveDeadline), pending = new Map(), seals = new Map();
-    let session = copy(context.session), busy = false, uploading = false;
+    let session = copy(context.session), busy = false, uploading = false, completion = null;
+    let acknowledgedParts = 0, partChainPrevious = null, lastPartReceipt = null, partChainEligible = session.counts.parts === 0;
     context = undefined;
     const active = () => { current(); need(Date.now() < deadline, 'BARRIER_MULTIPART_DEADLINE'); };
     const exclusive = async work => { active(); need(!busy, 'BARRIER_MULTIPART_BACKPRESSURE'); busy = true; try { return await work(); } finally { busy = false; } };
@@ -130,7 +133,7 @@ export function createBarrierMultipartTransport({ origin, projectId, modelVersio
         && BigInt(value.session.sessionRevision) >= BigInt(session.sessionRevision), 'BARRIER_MULTIPART_CONTEXT_CHANGED');
       session = copy(value.session); return snapshot();
     }
-    function stageReceipt(value, item) {
+    async function stageReceipt(value, item, operationSignal) {
       const c = item.command, isPage = 'page' in c, isSeal = 'seal' in c;
       const extra = isPage ? ['pageKind', 'index', 'firstOrdinal', 'recordCount', 'previousPageSha256', 'pageSha256'] : isSeal ? ['sealKind', 'sealSha256', 'pageCount', 'recordCount', 'tailPageSha256'] : ['partIndex', 'planSealSha256'];
       need(exact(value, ['schemaVersion', 'intentId', 'sessionRevision', 'commandSha256', 'scopeSha256', 'profileSha256', 'stored', 'duplicate', 'qualification', 'geometryValidation', 'authority', 'kind', ...extra])
@@ -144,6 +147,21 @@ export function createBarrierMultipartTransport({ origin, projectId, modelVersio
       else if (isSeal) need(value.kind === 'seal' && value.sealKind === c.seal.kind && value.sealSha256 === c.seal.sealSha256 && value.pageCount === c.seal.pageCount
         && value.recordCount === c.seal.recordCount && value.tailPageSha256 === c.seal.tailPageSha256, 'BARRIER_MULTIPART_RECEIPT');
       else need(value.kind === 'part' && value.partIndex === c.partIndex && value.planSealSha256 === c.planSealSha256, 'BARRIER_MULTIPART_RECEIPT');
+      // Only exact acknowledged parts enter this constant-space chain, once.
+      // Opening an old writer cannot synthesize historical receipt evidence.
+      let nextPartChain = null, repeatedPart = false;
+      if (!isPage && !isSeal) {
+        repeatedPart = value.partIndex === acknowledgedParts - 1 && lastPartReceipt !== null
+          && same(without(value, 'duplicate'), without(lastPartReceipt, 'duplicate'));
+        need(repeatedPart || value.partIndex === acknowledgedParts, 'BARRIER_MULTIPART_PART_ORDER');
+        if (!repeatedPart && lastPartReceipt) need(BigInt(value.sessionRevision) > BigInt(lastPartReceipt.sessionRevision), 'BARRIER_MULTIPART_PART_ORDER');
+        if (!repeatedPart && partChainEligible && kinds.every(k => hash(session.roots[k]))) {
+          const seed = partChainPrevious ?? await digest(barrierMultipartProducerPartChainSeedHashInput({ intentId: session.id,
+            contextSha256: original.context.contextSha256, scopeSha256: session.scopeSha256, profileSha256: session.profileSha256,
+            frameSha256: original.context.frameObservation.contentSha256, roots: session.roots }), operationSignal, deadline);
+          nextPartChain = await digest(barrierMultipartProducerPartChainStepHashInput(seed, value), operationSignal, deadline);
+        }
+      }
       if (BigInt(value.sessionRevision) > BigInt(session.sessionRevision)) {
         need(session.sessionRevision === c.expectedSessionRevision && session.state !== 'cancelled', 'BARRIER_MULTIPART_SESSION_CHANGED');
         const next = copy(session); next.sessionRevision = value.sessionRevision; next.state = 'staging'; next.counts[isPage ? 'pages' : isSeal ? 'seals' : 'parts']++;
@@ -153,7 +171,25 @@ export function createBarrierMultipartTransport({ origin, projectId, modelVersio
         session = next;
       }
       if (isSeal) seals.set(c.seal.kind, copy(c.seal));
+      if (!isPage && !isSeal && !repeatedPart) { acknowledgedParts++; partChainPrevious = nextPartChain; lastPartReceipt = frozen(copy(value)); if (nextPartChain === null) partChainEligible = false; }
       return copy(value);
+    }
+    function completionReceipt(value, item) {
+      const c = item?.command;
+      need(validateBarrierMultipartProducerCompletionReceipt(value) && value.intentId === session.id && value.scopeSha256 === session.scopeSha256
+        && value.profileSha256 === session.profileSha256 && value.contextSha256 === original.context.contextSha256
+        && value.frameSha256 === original.context.frameObservation.contentSha256 && (session.state !== 'cancelled' || item !== undefined)
+        && same(value.roots, session.roots) && value.partCount === session.counts.parts && session.counts.seals === 4
+        && Date.parse(value.recordedAt) >= Date.parse(original.session.createdAt) && Date.parse(value.recordedAt) < deadline, 'BARRIER_MULTIPART_COMPLETION_RECEIPT');
+      if (item) {
+        need(value.commandSha256 === item.commandSha256 && value.sessionRevision === (BigInt(c.expectedSessionRevision) + 1n).toString()
+          && ['contextSha256', 'frameSha256', 'partCount', 'partsSha256', 'bookendProfile'].every(k => value[k] === c[k]) && same(value.roots, c.roots)
+          && (session.sessionRevision === c.expectedSessionRevision || session.sessionRevision === value.sessionRevision
+            || session.state === 'cancelled' && BigInt(session.sessionRevision) > BigInt(value.sessionRevision)), 'BARRIER_MULTIPART_COMPLETION_RECEIPT');
+        if (BigInt(value.sessionRevision) > BigInt(session.sessionRevision)) session.sessionRevision = value.sessionRevision;
+      } else need(BigInt(value.sessionRevision) <= BigInt(session.sessionRevision), 'BARRIER_MULTIPART_COMPLETION_RECEIPT');
+      if (completion) need(same(without(value, 'duplicate'), without(completion, 'duplicate')), 'BARRIER_MULTIPART_COMPLETION_RECEIPT');
+      completion = frozen(copy(value)); return copy(value);
     }
     function cancelReceipt(value, item) {
       need(exact(value, ['schemaVersion', 'session', 'commandSha256', 'duplicate']) && value.schemaVersion === 'wfc.pf.barrier-multipart-cancel-receipt.v2'
@@ -172,13 +208,14 @@ export function createBarrierMultipartTransport({ origin, projectId, modelVersio
       const commandSha256 = await commandHash(command, operationSignal, deadline), item = frozen({ command: copy(command), commandSha256, rawBytes, rawSha256 });
       need(!pending.has(command.idempotencyKey), 'BARRIER_MULTIPART_COMMAND_KEY'); pending.set(command.idempotencyKey, item);
       try { const result = await request(session.id + '/' + wire.suffix, { ...wire, signal: operationSignal }, deadline);
-        active(); const receipt = command.schemaVersion === 'wfc.pf.barrier-multipart-cancel.v2' ? cancelReceipt(result, item) : stageReceipt(result, item);
-        pending.delete(command.idempotencyKey); return receipt;
+        active(); const receipt = command.schemaVersion === 'wfc.pf.barrier-multipart-cancel.v2' ? cancelReceipt(result, item)
+          : command.schemaVersion === 'wfc.pf.barrier-multipart-complete-producer.v2' ? completionReceipt(result, item) : await stageReceipt(result, item, operationSignal);
+        active(); pending.delete(command.idempotencyKey); return receipt;
       } catch (error) { try { error.uncertain = true; error.commandSha256 = commandSha256; } catch { /* frozen external errors */ } throw error; }
     }
     async function stage(event, { signal: operationSignal } = {}) {
       return exclusive(async () => {
-        need(session.state !== 'cancelled' && pending.size === 0, 'BARRIER_MULTIPART_PENDING_REQUIRED');
+        need(session.state !== 'cancelled' && pending.size === 0 && completion === null, 'BARRIER_MULTIPART_PENDING_REQUIRED');
         let c, body, header, raw, suffix;
         if (exact(event, ['kind', 'page']) && event.kind === 'page') {
           need(validateBarrierMultipartPage(event.page), 'BARRIER_MULTIPART_PAGE'); const page = copy(event.page);
@@ -191,6 +228,7 @@ export function createBarrierMultipartTransport({ origin, projectId, modelVersio
         } else {
           need(exact(event, ['kind', 'partIndex', 'planSealSha256', 'bytes']) && event.kind === 'part' && Number.isSafeInteger(event.partIndex) && !Object.is(event.partIndex, -0)
             && event.partIndex >= 0 && event.partIndex < 1048576 && hash(event.planSealSha256) && event.planSealSha256 === session.roots.plan
+            && event.partIndex === acknowledgedParts && session.counts.parts === acknowledgedParts
             && event.bytes instanceof Uint8Array && event.bytes.byteLength > 0 && event.bytes.byteLength <= L.partBytes, 'BARRIER_MULTIPART_PART');
           const partIndex = event.partIndex, planSealSha256 = event.planSealSha256;
           raw = new Uint8Array(event.bytes); const sha = await digest(raw, operationSignal, deadline, true);
@@ -199,6 +237,28 @@ export function createBarrierMultipartTransport({ origin, projectId, modelVersio
         }
         const rawSha256 = await digest(raw, operationSignal, deadline, true);
         return sendWrite(c, { suffix, method: suffix === 'parts' ? 'PUT' : 'POST', ...(body ? { json: body } : { bytes: raw, header }) }, operationSignal, raw.byteLength, rawSha256);
+      });
+    }
+    async function completeProducer(input, { signal: operationSignal } = {}) {
+      // Detach before any chain digest can yield to a mutating caller.
+      need(validateBarrierMultipartProducerCompletionEvidence(input), 'BARRIER_MULTIPART_COMPLETION'); const evidence = copy(input);
+      return exclusive(async () => {
+        need(pending.size === 0 && completion === null && session.state === 'staging' && session.counts.seals === 4
+          && evidence.contextSha256 === original.context.contextSha256 && evidence.frameSha256 === original.context.frameObservation.contentSha256
+          && same(evidence.roots, session.roots) && evidence.partCount === session.counts.parts && acknowledgedParts === evidence.partCount
+          && partChainEligible && hash(partChainPrevious) && seals.get('plan')?.totals.parts === evidence.partCount, 'BARRIER_MULTIPART_COMPLETION');
+        const partsSha256 = await digest(barrierMultipartProducerPartChainFinalHashInput(partChainPrevious, acknowledgedParts), operationSignal, deadline);
+        const command = { ...baseCommand(session.sessionRevision), schemaVersion: 'wfc.pf.barrier-multipart-complete-producer.v2', ...evidence, partsSha256 };
+        need(validateBarrierMultipartCompleteProducerCommand(command), 'BARRIER_MULTIPART_COMPLETION');
+        return sendWrite(command, { suffix: 'producer-completion', method: 'POST', json: command }, operationSignal, 0, null);
+      });
+    }
+    async function readCompletion({ signal: operationSignal } = {}) {
+      return exclusive(async () => {
+        await refresh(operationSignal); need(session.state !== 'cancelled', 'BARRIER_MULTIPART_CANCELLED');
+        const value = await request(session.id + '/producer-completion', { signal: operationSignal }, deadline);
+        if (value === null) { need(completion === null, 'BARRIER_MULTIPART_COMPLETION_RECEIPT'); return null; }
+        return completionReceipt(value);
       });
     }
     async function* readPages(kind, { signal: operationSignal } = {}) {
@@ -224,8 +284,9 @@ export function createBarrierMultipartTransport({ origin, projectId, modelVersio
       return exclusive(async () => {
         need(uuid(idempotencyKey) && pending.has(idempotencyKey), 'BARRIER_MULTIPART_PENDING_REQUIRED'); const item = pending.get(idempotencyKey);
         const result = await request(session.id + '/reconcile', { method: 'POST', signal: operationSignal,
-          json: { intentId: session.id, idempotencyKey, commandSha256: item.commandSha256 } }, deadline);
-        const receipt = item.command.schemaVersion === 'wfc.pf.barrier-multipart-cancel.v2' ? cancelReceipt(result, item) : stageReceipt(result, item);
+          json: { schemaVersion: 'wfc.pf.barrier-multipart-reconcile.v2', intentId: session.id, idempotencyKey, commandSha256: item.commandSha256 } }, deadline);
+        const receipt = item.command.schemaVersion === 'wfc.pf.barrier-multipart-cancel.v2' ? cancelReceipt(result, item)
+          : item.command.schemaVersion === 'wfc.pf.barrier-multipart-complete-producer.v2' ? completionReceipt(result, item) : await stageReceipt(result, item, operationSignal);
         pending.delete(idempotencyKey); return receipt;
       });
     }
@@ -237,7 +298,8 @@ export function createBarrierMultipartTransport({ origin, projectId, modelVersio
       } return snapshot(); }
       finally { uploading = false; if (!finished && typeof iterator.return === 'function') { try { void Promise.resolve(iterator.return()).catch(() => {}); } catch { /* original refusal retained */ } } }
     }
-    return Object.freeze({ context: original, snapshot, stage, readPages, cancel, reconcile, upload,
+    return Object.freeze({ context: original, snapshot, stage, readPages, completeProducer, readCompletion, cancel, reconcile, upload,
+      completion: () => session.state === 'cancelled' ? null : completion && copy(completion),
       pending: () => [...pending.values()].map(copy), refresh: options => exclusive(() => refresh(options?.signal)) });
   }
   return Object.freeze({ admit, open });

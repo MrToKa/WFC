@@ -7,7 +7,9 @@ import { BARRIER_MULTIPART_PROFILE, barrierMultipartCanonicalBytes,
   barrierMultipartPageHashInput, barrierMultipartSealHashInput, type BarrierMultipartPage, type BarrierMultipartScope,
   barrierMultipartRangeHashInput, barrierMultipartRangeBytes, barrierMultipartSealSchema, type BarrierMultipartGeometryRange,
   type BarrierMultipartSeal } from '../../shared/pathfinderBarrierMultipart.js';
-import type { BarrierMultipartAdmitCommand, BarrierMultipartSession } from '../../shared/pathfinderBarrierMultipartSessions.js';
+import { barrierMultipartCompleteProducerCommandSchema, barrierMultipartProducerPartChainSeedHashInput,
+  barrierMultipartProducerPartChainStepHashInput, barrierMultipartProducerPartChainFinalHashInput,
+  type BarrierMultipartAdmitCommand, type BarrierMultipartSession, type BarrierMultipartStageReceipt } from '../../shared/pathfinderBarrierMultipartSessions.js';
 import type { JobPrincipal } from './jobContracts.js';
 import { createBarrierMultipartRepository, type BarrierMultipartRepositoryAdapters } from './barrierMultipartRepository.js';
 import { initializeBarrierMultipartSchema } from './barrierMultipartSchema.js';
@@ -90,6 +92,91 @@ describe.skipIf(!fixtureFile).sequential('owned Linux PostgreSQL multipart stagi
     await repository.stageSeal(projectId, who, { schemaVersion: 'wfc.pf.barrier-multipart-stage-seal.v2', intentId: next.id, expectedSessionRevision: next.sessionRevision,
       idempotencyKey: id(), scopeSha256: next.scopeSha256, profileSha256: next.profileSha256, seal });
     return repository.get(projectId, who, next.id);
+  }
+  // This repository lane uses synthetic protected-context metadata. The actual
+  // Viewer-cookie/current-scope integration is a separate root-owned HTTP lane.
+  const completionBinding = (session: BarrierMultipartSession) => ({ contextSha256: '9'.repeat(64), frameSha256: '8'.repeat(64), effectiveDeadline: session.jobDeadline });
+  const completing = (overrides: Partial<BarrierMultipartRepositoryAdapters> = {}) => createBarrierMultipartRepository(pool,
+    { ...adapters, completionContext: async (_client, _project, _principal, session) => completionBinding(session), ...overrides });
+  function completeCommand(session: BarrierMultipartSession, receipts: BarrierMultipartStageReceipt[], partCount = receipts.length) {
+    const binding = completionBinding(session); let previous = h(barrierMultipartProducerPartChainSeedHashInput({ intentId: session.id,
+      contextSha256: binding.contextSha256, frameSha256: binding.frameSha256, scopeSha256: session.scopeSha256, profileSha256: session.profileSha256, roots: session.roots }));
+    for (const receipt of receipts) previous = h(barrierMultipartProducerPartChainStepHashInput(previous, receipt));
+    return barrierMultipartCompleteProducerCommandSchema.parse({ schemaVersion: 'wfc.pf.barrier-multipart-complete-producer.v2', intentId: session.id,
+      expectedSessionRevision: session.sessionRevision, idempotencyKey: id(), scopeSha256: session.scopeSha256, profileSha256: session.profileSha256,
+      contextSha256: binding.contextSha256, frameSha256: binding.frameSha256, roots: session.roots, partCount,
+      partsSha256: h(barrierMultipartProducerPartChainFinalHashInput(previous, partCount)), bookendProfile: 'sdk7130-after-final-part-ack-hierarchy-frame-v1' });
+  }
+  async function preparedParts(partCount = 1, uploadOrder = Array.from({ length: partCount }, (_, index) => index)) {
+    const request = command(); request.reservation.files = 2 * (partCount + 8) + 4;
+    let session = (await repository.admit(projectId, who, request)).session; const mask = '0'.repeat(31) + '1';
+    session = await stream(session, 'nodes', [{ dbId: 3, membershipMask: mask }], { nodes: 1 });
+    const fragment = { fragmentId: 7, ownerNodeOrdinal: 0, ownerDbId: 3, membershipMask: mask, primitive: 'triangles' as const,
+      sourceGeometrySha256: 'c'.repeat(64), transformSha256: 'd'.repeat(64), sourceVertexCount: 3, sourceTriangleCount: partCount };
+    session = await stream(session, 'fragments', [fragment], { fragments: 1, sourceVertices: 3, sourceTriangles: partCount, unavailable: 0, nonTriangle: 0 });
+    const ranges: BarrierMultipartGeometryRange[] = Array.from({ length: partCount }, (_, index) => ({ fragmentOrdinal: 0, triangleStart: index, triangleCount: 1, referencedVertexCount: 3,
+      sourceVertexIdsSha256: 'e'.repeat(64), sourceIndicesSha256: 'f'.repeat(64), sourceGeometrySha256: fragment.sourceGeometrySha256, transformSha256: fragment.transformSha256, membershipMask: mask }));
+    session = await stream(session, 'geometry-ranges', ranges, { ranges: partCount, referencedVertices: 3 * partCount, triangles: partCount });
+    const placements = ranges.map((range, index) => ({ partIndex: index, rangeOrdinal: index, fragmentOrdinal: 0, triangleStart: index, triangleCount: 1,
+      referencedVertexCount: 3, rangeSha256: h(barrierMultipartRangeHashInput(range)), plannedEncodedBytesUpperBound: barrierMultipartRangeBytes(3, 1) }));
+    session = await stream(session, 'plan', placements, { parts: partCount, ranges: partCount, referencedVertices: partCount * 3, triangles: partCount,
+      plannedEncodedBytesUpperBound: partCount * (8192 + barrierMultipartRangeBytes(3, 1)), nodeSealSha256: session.roots.nodes,
+      fragmentSealSha256: session.roots.fragments, rangeSealSha256: session.roots['geometry-ranges'] });
+    const receipts: BarrierMultipartStageReceipt[] = [];
+    for (const partIndex of uploadOrder) {
+      const bytes = Buffer.from('opaque synthetic part ' + partIndex), receipt = await repository.stagePart(projectId, who,
+        { schemaVersion: 'wfc.pf.barrier-multipart-stage-part.v2', intentId: session.id, expectedSessionRevision: session.sessionRevision, idempotencyKey: id(),
+          scopeSha256: session.scopeSha256, profileSha256: session.profileSha256, partIndex, planSealSha256: session.roots.plan,
+          payload: { sha256: createHash('sha256').update(bytes).digest('hex'), bytes: bytes.length } }, bytes);
+      receipts.push(receipt); session = await repository.get(projectId, who, session.id);
+    }
+    return { session, receipts };
+  }
+  async function seedSyntheticPartReceiptMetadata(session: BarrierMultipartSession) {
+    // Exactly 101 metadata rows exercise the production keyset boundary. These
+    // deliberately synthetic stored-receipt claims have NO corresponding part
+    // files, uploads or fsync evidence and prove no upload/storage capacity.
+    // Other cases above/below use actual guarded physical part staging.
+    const count = 101, until = Date.now() + 25000, client = await connected.connect(), receipts: BarrierMultipartStageReceipt[] = [];
+    const check = () => { if (Date.now() >= until) throw Error('SYNTHETIC_METADATA_SEED_DEADLINE'); };
+    const summary = { sourceVertices: 0, sourceTriangles: 0, unavailable: 0, nonTriangle: 0, referencedVertices: 0, triangles: 0,
+      plannedBytes: 0, partsStarted: 0, lastPart: null };
+    let committed = false;
+    try {
+      await client.query('BEGIN'); await client.query("SET LOCAL lock_timeout='3000ms';SET LOCAL statement_timeout='5000ms'"); check();
+      const original = (await client.query<{ session_revision: string; pending_allocation: string | null; state: string; counts: { parts: number } }>(
+        'SELECT session_revision::text,pending_allocation,state,counts FROM pf_barrier_multipart_sessions WHERE project_id=$1 AND id=$2 FOR UPDATE', [projectId, session.id])).rows[0];
+      if (!original || original.session_revision !== session.sessionRevision || original.pending_allocation !== null || original.state !== 'staging'
+        || original.counts.parts !== 0 || session.counts.seals !== 4 || Object.values(session.roots).some(root => root === null)) throw Error('SYNTHETIC_METADATA_SEED_SCOPE');
+      const planSealSha256 = session.roots.plan; if (planSealSha256 === null) throw Error('SYNTHETIC_METADATA_SEED_SCOPE');
+      for (let partIndex = 0; partIndex < count; partIndex++) {
+        check(); const allocationId = id(), blobId = id(), key = id(), lease = id(), bytes = Buffer.from('metadata-only synthetic part ' + partIndex),
+          payloadSha256 = createHash('sha256').update(bytes).digest('hex'), previousRevision = (BigInt(session.sessionRevision) + BigInt(partIndex)).toString(),
+          revision = (BigInt(previousRevision) + 1n).toString();
+        const input = { schemaVersion: 'wfc.pf.barrier-multipart-stage-part.v2', intentId: session.id, expectedSessionRevision: previousRevision, idempotencyKey: key,
+          scopeSha256: session.scopeSha256, profileSha256: session.profileSha256, partIndex, planSealSha256, payload: { sha256: payloadSha256, bytes: bytes.length } };
+        const requestSha256 = h({ domain: 'wfc.pf.barrier-multipart-session.v2/command', value: input }), ticket = { projectId, sessionId: session.id,
+          allocationId, blobId, requestSha256, sha256: payloadSha256, bytes: bytes.length, kind: 'part', reservedBytes: 2 * bytes.length, reservedFiles: 2 };
+        const receipt = { schemaVersion: 'wfc.pf.barrier-multipart-stage-receipt.v2' as const, intentId: session.id, sessionRevision: revision, commandSha256: requestSha256,
+          scopeSha256: session.scopeSha256, profileSha256: session.profileSha256,
+          stored: { blobId, sha256: payloadSha256, bytes: bytes.length, durability: 'file-and-directory-fsynced' as const }, duplicate: false,
+          qualification: 'NOT_MEASURED' as const, geometryValidation: 'NOT_VALIDATED' as const, authority: 'none' as const, kind: 'part' as const,
+          partIndex, planSealSha256 };
+        await client.query(`INSERT INTO pf_barrier_multipart_allocations(id,project_id,session_id,actor_id,login_id,idempotency_key,request_sha256,command,ticket,summary,
+          item_kind,stream_kind,item_index,first_ordinal,record_count,content_sha256,lease_token,lease_expires_at,expected_revision,state)
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb,'part',NULL,$11,NULL,NULL,$12,$13,$14,$15,'stored')`,
+        [allocationId, projectId, session.id, who.userId, who.loginId, key, requestSha256, JSON.stringify(input), JSON.stringify(ticket), JSON.stringify(summary),
+          partIndex, payloadSha256, lease, new Date(Math.min(Date.now() + 180000, Date.parse(session.jobDeadline))), previousRevision]);
+        check(); await client.query(`INSERT INTO pf_barrier_multipart_receipts(project_id,session_id,actor_id,login_id,idempotency_key,allocation_id,request_sha256,command,receipt)
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb)`, [projectId, session.id, who.userId, who.loginId, key, allocationId, requestSha256, JSON.stringify(input), JSON.stringify(receipt)]);
+        check(); const updated = (await client.query(`UPDATE pf_barrier_multipart_sessions SET session_revision=$3,charged_bytes=charged_bytes+$4,charged_files=charged_files+2,
+          counts=jsonb_set(counts,'{parts}',to_jsonb($5::integer)),updated_at=$6 WHERE project_id=$1 AND id=$2 AND session_revision=$7 AND pending_allocation IS NULL RETURNING id`,
+        [projectId, session.id, revision, ticket.reservedBytes, partIndex + 1, new Date(), previousRevision])).rows;
+        if (updated.length !== 1) throw Error('SYNTHETIC_METADATA_SEED_REVISION'); receipts.push(receipt);
+      }
+      check(); await client.query('COMMIT'); committed = true;
+    } finally { try { if (!committed) await client.query('ROLLBACK'); } finally { client.release(); } }
+    return { session: await repository.get(projectId, who, session.id), receipts };
   }
   it('admits only an exact own-login scope and holds reservations without creating a head', async () => {
     const { request, session } = await admit(); expect(session.state).toBe('admitted'); expect(session.authority).toBe('none');
@@ -249,6 +336,97 @@ describe.skipIf(!fixtureFile).sequential('owned Linux PostgreSQL multipart stagi
     await expect(repository.stagePage(projectId, who, pageCommand(result.session))).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_CANCELLED' });
     await expect(connected.query("UPDATE pf_barrier_multipart_sessions SET state='staging' WHERE id=$1", [session.id])).rejects.toThrow('Immutable multipart session identity');
   });
+  it('does not synthesize a completion for old admitted or fully staged sessions', async () => {
+    const old = await admit(), protectedRepository = completing();
+    expect(await protectedRepository.readCompletion(projectId, who, old.session.id)).toBeNull();
+    const prepared = await preparedParts(); expect(await protectedRepository.readCompletion(projectId, who, prepared.session.id)).toBeNull();
+    expect(await repository.get(projectId, who, prepared.session.id)).toEqual(prepared.session);
+    await expect(repository.completeProducer(projectId, who, completeCommand(prepared.session, prepared.receipts))).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_COMPLETION_CONTEXT_REQUIRED' });
+  });
+  it('records exactly one immutable producer completion and refreshes it without quota, lease or authority changes', async () => {
+    const prepared = await preparedParts(2), protectedRepository = completing(), request = completeCommand(prepared.session, prepared.receipts), stores = controls.stores;
+    const first = await protectedRepository.completeProducer(projectId, who, request), saved = await repository.get(projectId, who, prepared.session.id);
+    expect(first).toMatchObject({ sessionRevision: (BigInt(prepared.session.sessionRevision) + 1n).toString(), partsSha256: request.partsSha256,
+      completionProvenance: 'protected-producer-reported', sdkSourceBytesVerified: false, geometryValidation: 'NOT_VALIDATED', qualification: 'NOT_MEASURED', authority: 'none', duplicate: false });
+    expect(saved).toEqual({ ...prepared.session, sessionRevision: first.sessionRevision, updatedAt: first.recordedAt });
+    expect(saved.state).toBe('staging'); expect(saved.leaseDeadline).toBeNull(); expect(saved.reservation).toEqual(prepared.session.reservation);
+    expect(await completing().readCompletion(projectId, who, saved.id)).toEqual(first);
+    expect(await protectedRepository.completeProducer(projectId, who, request)).toEqual({ ...first, duplicate: true });
+    expect(await repository.get(projectId, who, saved.id)).toEqual(saved); expect(controls.stores).toBe(stores);
+    await expect(protectedRepository.completeProducer(projectId, who, { ...request, partsSha256: 'f'.repeat(64) })).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_IDEMPOTENCY_CONFLICT' });
+    await expect(protectedRepository.completeProducer(projectId, who, { ...request, idempotencyKey: id(), expectedSessionRevision: saved.sessionRevision })).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_PRODUCER_COMPLETED' });
+    await expect(repository.stagePage(projectId, who, pageCommand(saved))).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_PRODUCER_COMPLETED' });
+    await expect(connected.query("UPDATE pf_barrier_multipart_producer_completions SET receipt='{}'::jsonb WHERE session_id=$1", [saved.id])).rejects.toThrow('Immutable multipart evidence');
+    await expect(connected.query('DELETE FROM pf_barrier_multipart_producer_completions WHERE session_id=$1', [saved.id])).rejects.toThrow('Immutable multipart evidence');
+    expect((await connected.query('SELECT * FROM pf_barrier_heads')).rows).toEqual([]);
+  });
+  it('refuses wrong completion context, roots, part count or chain without recording a witness', async () => {
+    const prepared = await preparedParts(), protectedRepository = completing(), request = completeCommand(prepared.session, prepared.receipts);
+    for (const changed of [{ ...request, contextSha256: 'f'.repeat(64) }, { ...request, frameSha256: 'f'.repeat(64) }, { ...request, roots: { ...request.roots, nodes: 'f'.repeat(64) } },
+      { ...request, partCount: 2 }, { ...request, partsSha256: 'f'.repeat(64) }, { ...request, expectedSessionRevision: '0' }])
+      await expect(protectedRepository.completeProducer(projectId, who, changed)).rejects.toBeDefined();
+    expect(await protectedRepository.readCompletion(projectId, who, prepared.session.id)).toBeNull(); expect(await repository.get(projectId, who, prepared.session.id)).toEqual(prepared.session);
+  });
+  it('refuses a missing part and out-of-order original part acknowledgements', async () => {
+    const missing = await preparedParts(2, [0]), protectedRepository = completing();
+    await expect(protectedRepository.completeProducer(projectId, who, completeCommand(missing.session, missing.receipts, 2))).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_COMPLETION_CONTEXT_CHANGED' });
+    const unordered = await preparedParts(2, [1, 0]), sorted = unordered.receipts.slice().sort((a, b) => (a.kind === 'part' ? a.partIndex : -1) - (b.kind === 'part' ? b.partIndex : -1));
+    await expect(protectedRepository.completeProducer(projectId, who, completeCommand(unordered.session, sorted))).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_COMPLETION_PARTS' });
+    expect(await protectedRepository.readCompletion(projectId, who, unordered.session.id)).toBeNull();
+  });
+  it('reconciles an exact lost completion COMMIT acknowledgement through the completion discriminator', async () => {
+    const prepared = await preparedParts(), protectedRepository = completing(), request = completeCommand(prepared.session, prepared.receipts), stores = controls.stores;
+    controls.commitUnknown = true;
+    await expect(protectedRepository.completeProducer(projectId, who, request)).rejects.toMatchObject({ code: 'BARRIER_COMMIT_OUTCOME_UNKNOWN' });
+    const before = await repository.get(projectId, who, prepared.session.id), receipt = await protectedRepository.reconcile(projectId, who,
+      { schemaVersion: 'wfc.pf.barrier-multipart-reconcile.v2', intentId: before.id, idempotencyKey: request.idempotencyKey,
+        commandSha256: h({ domain: 'wfc.pf.barrier-multipart-session.v2/command', value: request }) });
+    expect(receipt).toMatchObject({ schemaVersion: 'wfc.pf.barrier-multipart-producer-completion-receipt.v2', duplicate: true, sessionRevision: before.sessionRevision });
+    expect(await repository.get(projectId, who, before.id)).toEqual(before); expect(controls.stores).toBe(stores);
+  });
+  it('cancels a completed producer while retaining historical exact reconciliation', async () => {
+    const prepared = await preparedParts(), protectedRepository = completing(), request = completeCommand(prepared.session, prepared.receipts);
+    const completed = await protectedRepository.completeProducer(projectId, who, request), session = await repository.get(projectId, who, prepared.session.id);
+    const cancelled = await repository.cancel(projectId, who, { schemaVersion: 'wfc.pf.barrier-multipart-cancel.v2', intentId: session.id,
+      expectedSessionRevision: session.sessionRevision, idempotencyKey: id(), scopeSha256: session.scopeSha256, profileSha256: session.profileSha256, reason: 'Synthetic completion cancellation' });
+    expect(cancelled.session.state).toBe('cancelled');
+    await expect(protectedRepository.readCompletion(projectId, who, session.id)).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_CANCELLED' });
+    await expect(protectedRepository.completeProducer(projectId, who, request)).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_CANCELLED' });
+    expect(await protectedRepository.reconcile(projectId, who, { schemaVersion: 'wfc.pf.barrier-multipart-reconcile.v2', intentId: session.id,
+      idempotencyKey: request.idempotencyKey, commandSha256: completed.commandSha256 })).toEqual({ ...completed, duplicate: true });
+  });
+  it('rolls back a completion when protected context changes on the final fence', async () => {
+    const prepared = await preparedParts(), request = completeCommand(prepared.session, prepared.receipts), originalLoad = currentScope.modelLoadId; let calls = 0;
+    const protectedRepository = completing({ completionContext: async (_client, _project, _who, session) => {
+      if (++calls === 2) currentScope.modelLoadId = id(); return completionBinding(session);
+    } });
+    try { await expect(protectedRepository.completeProducer(projectId, who, request)).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_SCOPE_CHANGED' }); }
+    finally { currentScope.modelLoadId = originalLoad; }
+    expect(await completing().readCompletion(projectId, who, prepared.session.id)).toBeNull(); expect(await repository.get(projectId, who, prepared.session.id)).toEqual(prepared.session);
+    expect((await connected.query('SELECT 1 FROM pf_barrier_multipart_receipts WHERE session_id=$1 AND idempotency_key=$2', [prepared.session.id, request.idempotencyKey])).rows).toEqual([]);
+  });
+  it('refuses expired protected completion deadlines without extending the admitted session', async () => {
+    const prepared = await preparedParts(), request = completeCommand(prepared.session, prepared.receipts), protectedRepository = completing({ completionContext:
+      async (_client, _project, _who, session) => ({ ...completionBinding(session), effectiveDeadline: new Date(Date.now() - 1).toISOString() }) });
+    await expect(protectedRepository.completeProducer(projectId, who, request)).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_COMPLETION_EXPIRED' });
+    expect(await completing().readCompletion(projectId, who, prepared.session.id)).toBeNull(); expect(await repository.get(projectId, who, prepared.session.id)).toEqual(prepared.session);
+  });
+  it('serializes a competing cancellation and completion without recording two successful commands', async () => {
+    const prepared = await preparedParts(), protectedRepository = completing(), request = completeCommand(prepared.session, prepared.receipts);
+    const results = await Promise.allSettled([protectedRepository.completeProducer(projectId, who, request), repository.cancel(projectId, who,
+      { schemaVersion: 'wfc.pf.barrier-multipart-cancel.v2', intentId: prepared.session.id, expectedSessionRevision: prepared.session.sessionRevision,
+        idempotencyKey: id(), scopeSha256: prepared.session.scopeSha256, profileSha256: prepared.session.profileSha256, reason: 'Synthetic competing cancellation' })]);
+    expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1); expect(results.filter(result => result.status === 'rejected')).toHaveLength(1);
+    expect((await connected.query('SELECT 1 FROM pf_barrier_multipart_producer_completions WHERE session_id=$1', [prepared.session.id])).rows.length).toBeLessThanOrEqual(1);
+    expect((await repository.get(projectId, who, prepared.session.id)).reservation).toEqual(prepared.session.reservation);
+  });
+  it('checks the completion keyset boundary using 101 synthetic metadata rows, without a 101-upload claim', async () => {
+    const stagedControls = await preparedParts(101, []), stores = controls.stores, prepared = await seedSyntheticPartReceiptMetadata(stagedControls.session),
+      protectedRepository = completing(), request = completeCommand(prepared.session, prepared.receipts);
+    expect(controls.stores).toBe(stores);
+    const receipt = await protectedRepository.completeProducer(projectId, who, request); expect(receipt.partCount).toBe(101); expect(receipt.partsSha256).toBe(request.partsSha256);
+    expect((await repository.get(projectId, who, prepared.session.id)).counts.parts).toBe(101); expect(await protectedRepository.readCompletion(projectId, who, prepared.session.id)).toEqual(receipt);
+  }, 60000);
   it('serializes competing global admission reservations across projects', async () => {
     const first = command(), second = command(), secondProject = id(); await connected.query('INSERT INTO projects VALUES($1)', [secondProject]);
     second.scope.modelScope.projectId = secondProject;

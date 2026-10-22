@@ -1,6 +1,31 @@
 # PathFinder local implementation progress
 
-## Current: PF-B13d source verified; durable completion next
+## Current: PF-B13e source verified; identity repair delivery first
+
+Branch `pf-b13e-producer-completion-local-20261022`, HEAD
+`9685d2e99d0b4f76241c8d0d53da66d30af9b811`, B13d product
+`1e933725b7a8b64d78e3d063fa5b1a5fe7a06386`. Self-contained B13e handoff
+committed and executed. Report103/public B13e receipt pin30 checked files.
+Actual shared22/server63/native212/UI143/installer16 PASS; corrected isolated
+SQL34 (24repo+10real-cookie HTTP),53source bookends/positive own helper/network
+cleanup PASS. Types/lint/server/frontend builds PASS; independent reviews CLEAR.
+First native4missing-test-descriptor failures,8type diagnostics and SQL101-upload
+fixture timeout retained. Corrected101-row case is explicit synthetic metadata
+pagination proof, not101-upload capacity. No active process/helper.
+SDK identity bug also fixed: getBulkProperties2 with explicit externalId filter;
+five separate unavailable-geometry reasons replace misleading wait-for-loading.
+Specific browser failure remains unattributed; no actual SDK/browser acceptance.
+User priority: FIRST deliver identity/diagnostic repair to5191, THEN repair cable
+popup endpoint Save/recalculation flow. Endpoint-only Save UI erroneously passes
+undefined initialFill; server supports explicit null/null. Source map ready,
+popup implementation NOT_RUN until first delivery. Global catalogs/geometry/
+publication/whole-RVM qualification remain required, not replaced by this hotfix.
+Completion remains producer-reported, unqualified and no source-byte authority.
+No schema/router mount,5191 change or real cable write. Next local source commit,
+prepare-stage-handoff B14 and immediately owned frontend-only delivery; preserve
+APIac0d16ab/currentweb814475f9 and archives until exact installation checks pass.
+
+## Previous: PF-B13d source verified
 
 Branch `pf-b13d-packed-geometry-local-20261022`, checked parent
 `b896cef828d8bf6c8b79abe5ee9a2e2c7cef381c`. Report101 and sanitized B13d receipt

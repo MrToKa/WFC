@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import type { Pool } from 'pg';
 import { z } from 'zod';
 import { barrierMultipartCanonicalJson } from '../../shared/pathfinderBarrierMultipart.js';
-import { BARRIER_MULTIPART_SESSION_LIMITS as L, barrierMultipartCancelCommandSchema, barrierMultipartReconcileCommandSchema,
+import { BARRIER_MULTIPART_SESSION_LIMITS as L, barrierMultipartCancelCommandSchema, barrierMultipartReconcileCommandSchema, barrierMultipartCompleteProducerCommandSchema,
   barrierMultipartStagePageCommandSchema, barrierMultipartStagePartCommandSchema, barrierMultipartStageSealCommandSchema } from '../../shared/pathfinderBarrierMultipartSessions.js';
 import { policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { requireViewerOrigin, viewerCookieSecret, viewerHttpPolicy, type ViewerHttpPolicy } from '../viewerSessions/http.js';
@@ -87,7 +87,7 @@ export function createBarrierMultipartRouter(pool: Pool, options: Options): Rout
           const context = await factory(pool, { identity, who, storage: options.storage, admission: input, signal });
           res.json(await context.repository.admit(identity.projectId, who, input.command, signal)); return;
         }
-        const match = /^\/([a-f0-9-]{36})(?:\/(context|pages|seals|parts|reconcile|cancel)(?:\/(nodes|fragments|geometry-ranges|plan)\/(0|[1-9][0-9]{0,4}))?)?\/?$/u.exec(req.path);
+        const match = /^\/([a-f0-9-]{36})(?:\/(context|pages|seals|parts|reconcile|cancel|producer-completion)(?:\/(nodes|fragments|geometry-ranges|plan)\/(0|[1-9][0-9]{0,4}))?)?\/?$/u.exec(req.path);
         if (!match) return fail('BARRIER_MULTIPART_METHOD_UNSUPPORTED', 405);
         const intentId = policyUuidSchema.parse(match[1]), action = match[2], context = await factory(pool, { identity, who, storage: options.storage, intentId, signal });
         if (req.method === 'GET' && (!action || action === 'context') && !match[3]) {
@@ -97,20 +97,27 @@ export function createBarrierMultipartRouter(pool: Pool, options: Options): Rout
         if (req.method === 'GET' && action === 'pages' && match[3] && match[4]) {
           res.json(await context.repository.readPage(identity.projectId, who, intentId, match[3] as 'nodes' | 'fragments' | 'geometry-ranges' | 'plan', Number(match[4]), signal)); return;
         }
+        if (req.method === 'GET' && action === 'producer-completion' && !match[3]) {
+          const value = await context.repository.readCompletion(identity.projectId, who, intentId, signal);
+          if (Buffer.byteLength(JSON.stringify(value)) > L.controlBytes) fail('BARRIER_MULTIPART_RESPONSE_LIMIT', 413);
+          res.json(value); return;
+        }
         if (req.method === 'PUT' && action === 'parts' && !match[3]) {
           const command = parseBarrierMultipartCommandHeader(req); if (command.intentId !== intentId) fail('BARRIER_MULTIPART_CONTEXT_CHANGED', 409);
           content(req, 'part', L.partBytes, command.payload.bytes);
           res.json(await context.repository.stagePart(identity.projectId, who, command, await readBody(req, L.partBytes, signal, command.payload.bytes), signal)); return;
         }
-        if (req.method === 'POST' && !match[3] && action !== undefined && ['pages', 'seals', 'reconcile', 'cancel'].includes(action)) {
+        if (req.method === 'POST' && !match[3] && action !== undefined && ['pages', 'seals', 'reconcile', 'cancel', 'producer-completion'].includes(action)) {
           const maximum = action === 'pages' ? L.pageBytes + L.controlBytes : L.controlBytes; content(req, 'json', maximum);
           const input = parsePolicyJson(await readBody(req, maximum, signal), { maxBytes: maximum });
           const command = action === 'pages' ? barrierMultipartStagePageCommandSchema.parse(input) : action === 'seals' ? barrierMultipartStageSealCommandSchema.parse(input)
-            : action === 'cancel' ? barrierMultipartCancelCommandSchema.parse(input) : barrierMultipartReconcileCommandSchema.parse(input);
+            : action === 'cancel' ? barrierMultipartCancelCommandSchema.parse(input)
+              : action === 'producer-completion' ? barrierMultipartCompleteProducerCommandSchema.parse(input) : barrierMultipartReconcileCommandSchema.parse(input);
           if (command.intentId !== intentId) fail('BARRIER_MULTIPART_CONTEXT_CHANGED', 409);
           const value = action === 'pages' ? await context.repository.stagePage(identity.projectId, who, command, signal)
             : action === 'seals' ? await context.repository.stageSeal(identity.projectId, who, command, signal)
               : action === 'cancel' ? await context.repository.cancel(identity.projectId, who, command, signal)
+                : action === 'producer-completion' ? await context.repository.completeProducer(identity.projectId, who, command, signal)
                 : await context.repository.reconcile(identity.projectId, who, command, signal);
           res.json(value); return;
         }

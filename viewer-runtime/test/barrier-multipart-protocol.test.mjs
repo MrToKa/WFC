@@ -1,10 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { fixture, id, H } from './barrier-multipart-fixture.mjs';
+import { fixture, id, H, h } from './barrier-multipart-fixture.mjs';
 import { BARRIER_MULTIPART_PRODUCER_PROFILE as profile, barrierMultipartTransportCanonical,
   validateBarrierMultipartProducerProfile, validateBarrierMultipartFrameRequest, validateBarrierMultipartFramePayload,
   validateBarrierMultipartStart, validateBarrierMultipartIntentControl, validateBarrierMultipartStatus,
-  validateBarrierMultipartSession, validateBarrierMultipartContext, validateBarrierMultipartPage, validateBarrierMultipartSeal } from '../barrier-multipart-protocol.mjs';
+  validateBarrierMultipartSession, validateBarrierMultipartContext, validateBarrierMultipartPage, validateBarrierMultipartSeal,
+  BARRIER_MULTIPART_PRODUCER_BOOKEND_PROFILE, validateBarrierMultipartProducerCompletionEvidence, validateBarrierMultipartCompleteProducerCommand,
+  validateBarrierMultipartProducerCompletionReceipt, barrierMultipartProducerPartChainSeedHashInput, barrierMultipartProducerPartChainStepHashInput,
+  barrierMultipartProducerPartChainFinalHashInput } from '../barrier-multipart-protocol.mjs';
 
 test('closed versioned producer semantics include manually selected hidden geometry and no geometry authority', () => {
   assert.equal(Object.isFrozen(profile), true); assert.equal(validateBarrierMultipartProducerProfile(profile), true);
@@ -52,4 +55,67 @@ test('small status is always unqualified and cannot carry a capture catalog', ()
     qualification: 'NOT_MEASURED', geometryValidation: 'NOT_VALIDATED', authority: 'none' };
   assert.equal(validateBarrierMultipartStatus(s), true); assert.equal(validateBarrierMultipartStatus({ ...s, geometryValidation: 'VALIDATED' }), false);
   assert.equal(validateBarrierMultipartStatus({ ...s, records: [] }), false);
+});
+const roots = () => Object.fromEntries(['nodes', 'fragments', 'geometry-ranges', 'plan'].map(k => [k, H]));
+function completionFixture() {
+  const evidence = { contextSha256: H, frameSha256: H, roots: roots(), partCount: 1, bookendProfile: BARRIER_MULTIPART_PRODUCER_BOOKEND_PROFILE };
+  const command = { schemaVersion: 'wfc.pf.barrier-multipart-complete-producer.v2', intentId: id(7), expectedSessionRevision: '9', idempotencyKey: id(40), scopeSha256: H, profileSha256: H, ...evidence, partsSha256: H };
+  const receipt = { schemaVersion: 'wfc.pf.barrier-multipart-producer-completion-receipt.v2', intentId: id(7), sessionRevision: '10', commandSha256: H, scopeSha256: H, profileSha256: H,
+    ...evidence, partsSha256: H, recordedAt: '2026-10-22T08:00:00.000Z', duplicate: false, completionProvenance: 'protected-producer-reported', sdkSourceBytesVerified: false,
+    qualification: 'NOT_MEASURED', geometryValidation: 'NOT_VALIDATED', authority: 'none' };
+  const part = { schemaVersion: 'wfc.pf.barrier-multipart-stage-receipt.v2', intentId: id(7), sessionRevision: '9', commandSha256: H, scopeSha256: H, profileSha256: H,
+    kind: 'part', partIndex: 0, planSealSha256: H, stored: { blobId: id(50), sha256: H, bytes: 25, durability: 'file-and-directory-fsynced' }, duplicate: false,
+    qualification: 'NOT_MEASURED', geometryValidation: 'NOT_VALIDATED', authority: 'none' };
+  return { evidence, command, receipt, part };
+}
+test('completion command and receipt remain additive strict producer-reported metadata', () => {
+  const f = completionFixture(); assert.equal(validateBarrierMultipartProducerCompletionEvidence(f.evidence), true);
+  assert.equal(validateBarrierMultipartCompleteProducerCommand(f.command), true); assert.equal(validateBarrierMultipartProducerCompletionReceipt(f.receipt), true);
+  for (const change of [v => { v.roots.plan = null; }, v => { v.partCount = -0; }, v => { v.partCount = 1048577; }, v => { v.contextSha256 += '\n'; },
+    v => { v.bookendProfile = 'arbitrary'; }, v => { v.actorId = id(8); }, v => { v.roots[Symbol('hidden')] = H; }]) {
+    const e = structuredClone(f.evidence); change(e); assert.equal(validateBarrierMultipartProducerCompletionEvidence(e), false);
+  }
+  assert.equal(validateBarrierMultipartCompleteProducerCommand({ ...f.command, expectedSessionRevision: '9\n' }), false);
+  for (const extra of [{ sdkSourceBytesVerified: true }, { authority: 'routing' }, { geometryValidation: 'VALIDATED' }, { completionProvenance: 'independent' }]) {
+    assert.equal(validateBarrierMultipartProducerCompletionReceipt({ ...f.receipt, ...extra }), false);
+  }
+  let reads = 0; Object.defineProperty(f.evidence, 'partCount', { enumerable: true, get() { reads++; return 1; } });
+  assert.equal(validateBarrierMultipartProducerCompletionEvidence(f.evidence), false); assert.equal(reads, 0);
+});
+test('constant-space chain matches exact frozen domains and receipt projection while ignoring duplicate replay', () => {
+  const f = completionFixture(), context = { intentId: f.command.intentId, contextSha256: H, scopeSha256: H, profileSha256: H, frameSha256: H, roots: roots() };
+  const D = 'wfc.pf.barrier-multipart-producer-completion.v2', seed = barrierMultipartProducerPartChainSeedHashInput(context);
+  assert.deepEqual(seed, { domain: D + '/parts-seed', value: context }); const previous = h(seed);
+  const projected = { intentId: f.part.intentId, scopeSha256: H, profileSha256: H, partIndex: 0, planSealSha256: H, commandSha256: H, sessionRevision: '9', stored: { blobId: id(50), sha256: H, bytes: 25 } };
+  const step = barrierMultipartProducerPartChainStepHashInput(previous, f.part); assert.deepEqual(step, { domain: D + '/parts-step', value: { previous, part: projected } });
+  assert.deepEqual(barrierMultipartProducerPartChainStepHashInput(previous, { ...f.part, duplicate: true }), step);
+  assert.deepEqual(barrierMultipartProducerPartChainFinalHashInput(h(step), 1), { domain: D + '/parts-final', value: { previous: h(step), partCount: 1 } });
+  for (const field of ['partIndex', 'sessionRevision', 'commandSha256', 'planSealSha256']) {
+    const part = structuredClone(f.part); part[field] = field === 'partIndex' ? 1 : field === 'sessionRevision' ? '10' : 'b'.repeat(64);
+    assert.notEqual(h(barrierMultipartProducerPartChainStepHashInput(previous, part)), h(step));
+  }
+  for (const change of [p => { p.stored.durability = 'memory'; }, p => { p.stored.blobId += '\n'; }, p => { p.ready = true; }, p => { p.partIndex = -0; }]) {
+    const part = structuredClone(f.part); change(part); assert.throws(() => barrierMultipartProducerPartChainStepHashInput(previous, part));
+  }
+  const detached = barrierMultipartProducerPartChainSeedHashInput(context); context.roots.plan = 'b'.repeat(64); assert.equal(detached.value.roots.plan, H);
+  assert.throws(() => barrierMultipartProducerPartChainFinalHashInput(previous, 0));
+});
+test('completion controls and hash inputs reject nonenumerable required fields before canonical JSON can omit them', () => {
+  const hidden = (value, field) => { Object.defineProperty(value, field, { ...Object.getOwnPropertyDescriptor(value, field), enumerable: false }); return value; };
+  for (const field of ['contextSha256', 'frameSha256', 'roots', 'partCount', 'bookendProfile']) {
+    const f = completionFixture(); assert.equal(validateBarrierMultipartProducerCompletionEvidence(hidden(f.evidence, field)), false);
+  }
+  const f = completionFixture(), context = { intentId: f.command.intentId, contextSha256: H, scopeSha256: H, profileSha256: H, frameSha256: H, roots: roots() };
+  assert.throws(() => barrierMultipartProducerPartChainSeedHashInput(hidden(context, 'frameSha256')));
+  for (const field of ['intentId', 'expectedSessionRevision', 'contextSha256', 'partsSha256']) {
+    assert.equal(validateBarrierMultipartCompleteProducerCommand(hidden(completionFixture().command, field)), false);
+  }
+  for (const field of ['sessionRevision', 'commandSha256', 'recordedAt', 'completionProvenance', 'sdkSourceBytesVerified']) {
+    assert.equal(validateBarrierMultipartProducerCompletionReceipt(hidden(completionFixture().receipt, field)), false);
+  }
+  for (const target of ['root', 'part', 'stored']) {
+    const f = completionFixture();
+    if (target === 'root') { hidden(f.evidence.roots, 'plan'); assert.equal(validateBarrierMultipartProducerCompletionEvidence(f.evidence), false); }
+    else { hidden(target === 'part' ? f.part : f.part.stored, target === 'part' ? 'sessionRevision' : 'blobId'); assert.throws(() => barrierMultipartProducerPartChainStepHashInput(H, f.part)); }
+  }
 });

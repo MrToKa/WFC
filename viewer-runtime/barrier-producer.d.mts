@@ -1,7 +1,7 @@
 import type { BarrierMultipartScope, BarrierMultipartProfile, BarrierMultipartPage, BarrierMultipartSeal,
   BarrierMultipartSha256 } from '../shared/pathfinderBarrierMultipart.js';
 import type { BarrierFrameObservation } from './barrier-capture.mjs';
-import type { BarrierMultipartProducerProfile } from './barrier-multipart-protocol.mjs';
+import type { BarrierMultipartProducerProfile, BarrierMultipartProducerCompletionEvidence } from './barrier-multipart-protocol.mjs';
 
 export const BARRIER_MULTIPART_PRODUCER_LIMITS: Readonly<{ lookupBytes:20971520;metadataBytes:5242880;ancestry:512;chunkBytes:262144;milliseconds:3600000 }>;
 export type BarrierMultipartFrameOptions = { loadId:string;isCurrent:()=>boolean;signal?:AbortSignal;startedAt?:number;sha256?:BarrierMultipartSha256 };
@@ -23,6 +23,7 @@ export type BarrierPackedProducerOptions = Omit<BarrierMultipartProducerOptions,
   packedContext:{intentId:string;contextSha256:string};
   readPages:(kind:'nodes'|'fragments'|'geometry-ranges'|'plan')=>AsyncIterable<BarrierMultipartPage>|Iterable<BarrierMultipartPage>;
 };
-export type BarrierPackedProducerEvent = BarrierMultipartProducerEvent | {kind:'part';partIndex:number;planSealSha256:string;bytes:Uint8Array};
+export type BarrierPackedProducerEvent = BarrierMultipartProducerEvent | {kind:'part';partIndex:number;planSealSha256:string;bytes:Uint8Array}
+  | {kind:'producer-complete';evidence:BarrierMultipartProducerCompletionEvidence};
 /** Same-scene bounded original-range payloads; all results remain unqualified. */
 export function createBarrierPackedProducer(viewer:unknown,options:BarrierPackedProducerOptions):AsyncGenerator<BarrierPackedProducerEvent,void>;

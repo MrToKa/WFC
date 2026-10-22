@@ -14,6 +14,8 @@ export const BARRIER_MULTIPART_SESSION_LIMITS = Object.freeze({
   listPageSize: 20, receiptPageSize: 100, qualification: 'NOT_MEASURED',
 } as const);
 const L = BARRIER_MULTIPART_SESSION_LIMITS;
+/** A protected producer's report, not independent evidence of SDK execution. */
+export const BARRIER_MULTIPART_PRODUCER_BOOKEND_PROFILE = 'sdk7130-after-final-part-ack-hierarchy-frame-v1' as const;
 const uuid = policyUuidSchema, hash = policyHashSchema, revision = policyRevisionSchema;
 const count = (maximum = Number.MAX_SAFE_INTEGER) => z.number().int().min(0).max(maximum)
   .refine(value => !Object.is(value, -0), 'Control integers cannot be signed zero.');
@@ -34,6 +36,43 @@ function bounded(value: unknown, maximum: number, context: z.RefinementCtx): voi
 }
 const reservationRequest = z.object({ bytes: positive(L.totalBytes), files: positive(L.totalFiles) }).strict();
 const labelSchema = z.object({ selectionId: uuid, name: text(512) }).strict();
+
+// Completion controls have no arrays or free text. Check own data properties
+// before Zod reads them, and before canonicalization can build a large string.
+// This also prevents symbols/nonenumerable fields/accessors being normalized
+// away before a pure hash helper validates its input.
+function completionControl<T extends z.ZodTypeAny>(schema: T) {
+  return z.preprocess((input, context) => {
+    let visited = 0;
+    const inspect = (value: unknown, depth: number): void => {
+      if (++visited > 256 || depth > 8) throw new Error('COMPLETION_CONTROL_BOUND');
+      if (typeof value === 'string') { if (value.length > 256) throw new Error('COMPLETION_CONTROL_BOUND'); return; }
+      if (typeof value === 'number') { if (!Number.isSafeInteger(value) || Object.is(value, -0) || value < 0) throw new Error('COMPLETION_CONTROL_INTEGER'); return; }
+      if (value === null || typeof value === 'boolean') return;
+      if (!value || typeof value !== 'object' || Array.isArray(value)
+        || ![Object.prototype, null].includes(Object.getPrototypeOf(value))) throw new Error('COMPLETION_CONTROL_OBJECT');
+      const keys = Reflect.ownKeys(value);
+      if (keys.length > 32) throw new Error('COMPLETION_CONTROL_BOUND');
+      for (const key of keys) {
+        const descriptor = Object.getOwnPropertyDescriptor(value, key);
+        if (typeof key !== 'string' || key.length > 64 || !descriptor?.enumerable || !Object.hasOwn(descriptor, 'value'))
+          throw new Error('COMPLETION_CONTROL_PROPERTY');
+        inspect(descriptor.value, depth + 1);
+      }
+    };
+    try { inspect(input, 0); } catch {
+      context.addIssue({ code: 'custom', message: 'Completion controls require bounded own data properties.' }); return z.NEVER;
+    }
+    return input;
+  }, schema);
+}
+export const barrierMultipartProducerCompletionRootsSchema = z.object({
+  nodes: hash, fragments: hash, 'geometry-ranges': hash, plan: hash,
+}).strict();
+export const barrierMultipartProducerCompletionContextSchema = completionControl(z.object({
+  intentId: uuid, contextSha256: hash, scopeSha256: hash, profileSha256: hash, frameSha256: hash,
+  roots: barrierMultipartProducerCompletionRootsSchema,
+}).strict());
 
 /** Public input never selects an actor, login, filesystem path or server blob ID.
  * Labels are display metadata. Only the B13a scope carries parent identity. */
@@ -76,12 +115,18 @@ export const barrierMultipartStagePartCommandSchema = stageBase.extend({
 export const barrierMultipartCancelCommandSchema = stageBase.extend({
   schemaVersion: z.literal('wfc.pf.barrier-multipart-cancel.v2'), reason: text(512),
 }).strict().superRefine((value, context) => bounded(value, L.controlBytes, context));
+export const barrierMultipartCompleteProducerCommandSchema = completionControl(stageBase.extend({
+  schemaVersion: z.literal('wfc.pf.barrier-multipart-complete-producer.v2'), contextSha256: hash, frameSha256: hash,
+  roots: barrierMultipartProducerCompletionRootsSchema, partCount: positive(BARRIER_MULTIPART_PROFILE.limits.parts), partsSha256: hash,
+  bookendProfile: z.literal(BARRIER_MULTIPART_PRODUCER_BOOKEND_PROFILE),
+}).strict().superRefine((value, context) => bounded(value, L.controlBytes, context)));
 export const barrierMultipartStageCommandSchema = z.union([
   barrierMultipartStagePageCommandSchema, barrierMultipartStageSealCommandSchema, barrierMultipartStagePartCommandSchema,
 ]);
 export const barrierMultipartMutationCommandSchema = z.union([
   barrierMultipartAdmitCommandSchema, barrierMultipartStagePageCommandSchema,
   barrierMultipartStageSealCommandSchema, barrierMultipartStagePartCommandSchema, barrierMultipartCancelCommandSchema,
+  barrierMultipartCompleteProducerCommandSchema,
 ]);
 
 /** Server response only. A parsed reference is not evidence that storage I/O or
@@ -144,6 +189,7 @@ export const barrierMultipartSealReceiptSchema = receiptBase.extend({
 export const barrierMultipartPartReceiptSchema = receiptBase.extend({
   kind: z.literal('part'), partIndex: count(BARRIER_MULTIPART_PROFILE.limits.parts - 1), planSealSha256: hash,
 }).strict();
+const producerPartReceiptForChainSchema = completionControl(barrierMultipartPartReceiptSchema);
 export const barrierMultipartStageReceiptSchema = z.union([
   barrierMultipartPageReceiptSchema, barrierMultipartSealReceiptSchema, barrierMultipartPartReceiptSchema,
 ]);
@@ -151,6 +197,16 @@ export const barrierMultipartCancelReceiptSchema = z.object({
   schemaVersion: z.literal('wfc.pf.barrier-multipart-cancel-receipt.v2'), session: barrierMultipartSessionSchema,
   commandSha256: hash, duplicate: z.boolean(),
 }).strict().refine(value => value.session.state === 'cancelled', 'A cancellation receipt retains the cancelled session and its charges.');
+/** This row records a protected-producer-reported final bookend. It never
+ * changes the existing session shape/state or proves geometry qualification. */
+export const barrierMultipartProducerCompletionReceiptSchema = completionControl(z.object({
+  schemaVersion: z.literal('wfc.pf.barrier-multipart-producer-completion-receipt.v2'), intentId: uuid,
+  sessionRevision: revision, commandSha256: hash, scopeSha256: hash, profileSha256: hash, contextSha256: hash, frameSha256: hash,
+  roots: barrierMultipartProducerCompletionRootsSchema, partCount: positive(BARRIER_MULTIPART_PROFILE.limits.parts), partsSha256: hash,
+  bookendProfile: z.literal(BARRIER_MULTIPART_PRODUCER_BOOKEND_PROFILE), recordedAt: timestamp, duplicate: z.boolean(),
+  completionProvenance: z.literal('protected-producer-reported'), sdkSourceBytesVerified: z.literal(false), ...unqualified,
+}).strict().superRefine((value, context) => bounded(value, L.controlBytes, context)));
+export const barrierMultipartReadCompletionResponseSchema = barrierMultipartProducerCompletionReceiptSchema.nullable();
 
 /** Only the repository's current principal supplies ownership. Cursor input
  * cannot choose another actor/login or change the retained scope. */
@@ -178,16 +234,38 @@ export function barrierMultipartSessionCommandHashInput(value: unknown): unknown
   return { domain: 'wfc.pf.barrier-multipart-session.v2/command', value: barrierMultipartMutationCommandSchema.parse(value) };
 }
 
+const producerCompletionDomain = 'wfc.pf.barrier-multipart-producer-completion.v2';
+/** Pure hash-input construction only. The caller must prove ordered complete
+ * receipts, protected context/currentness and final native bookends separately. */
+export function barrierMultipartProducerPartChainSeedHashInput(context: unknown) {
+  return { domain: producerCompletionDomain + '/parts-seed', value: barrierMultipartProducerCompletionContextSchema.parse(context) };
+}
+export function barrierMultipartProducerPartChainStepHashInput(previous: unknown, partReceipt: unknown) {
+  const receipt = producerPartReceiptForChainSchema.parse(partReceipt);
+  return { domain: producerCompletionDomain + '/parts-step', value: { previous: hash.parse(previous), part: {
+    intentId: receipt.intentId, scopeSha256: receipt.scopeSha256, profileSha256: receipt.profileSha256,
+    partIndex: receipt.partIndex, planSealSha256: receipt.planSealSha256, commandSha256: receipt.commandSha256,
+    sessionRevision: receipt.sessionRevision, stored: { blobId: receipt.stored.blobId, sha256: receipt.stored.sha256, bytes: receipt.stored.bytes },
+  } } };
+}
+export function barrierMultipartProducerPartChainFinalHashInput(previous: unknown, partCount: unknown) {
+  return { domain: producerCompletionDomain + '/parts-final', value: { previous: hash.parse(previous),
+    partCount: positive(BARRIER_MULTIPART_PROFILE.limits.parts).parse(partCount) } };
+}
+
 export type BarrierMultipartAdmitCommand = z.infer<typeof barrierMultipartAdmitCommandSchema>;
 export type BarrierMultipartStagePageCommand = z.infer<typeof barrierMultipartStagePageCommandSchema>;
 export type BarrierMultipartStageSealCommand = z.infer<typeof barrierMultipartStageSealCommandSchema>;
 export type BarrierMultipartStagePartCommand = z.infer<typeof barrierMultipartStagePartCommandSchema>;
 export type BarrierMultipartStageCommand = z.infer<typeof barrierMultipartStageCommandSchema>;
 export type BarrierMultipartCancelCommand = z.infer<typeof barrierMultipartCancelCommandSchema>;
+export type BarrierMultipartProducerCompletionContext = z.infer<typeof barrierMultipartProducerCompletionContextSchema>;
+export type BarrierMultipartCompleteProducerCommand = z.infer<typeof barrierMultipartCompleteProducerCommandSchema>;
 export type BarrierMultipartStoredBlob = z.infer<typeof barrierMultipartStoredBlobSchema>;
 export type BarrierMultipartSession = z.infer<typeof barrierMultipartSessionSchema>;
 export type BarrierMultipartAdmitReceipt = z.infer<typeof barrierMultipartAdmitReceiptSchema>;
 export type BarrierMultipartStageReceipt = z.infer<typeof barrierMultipartStageReceiptSchema>;
 export type BarrierMultipartCancelReceipt = z.infer<typeof barrierMultipartCancelReceiptSchema>;
+export type BarrierMultipartProducerCompletionReceipt = z.infer<typeof barrierMultipartProducerCompletionReceiptSchema>;
 export type BarrierMultipartSessionList = z.infer<typeof barrierMultipartSessionListSchema>;
 export type BarrierMultipartReceiptPage = z.infer<typeof barrierMultipartReceiptPageSchema>;

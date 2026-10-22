@@ -6,9 +6,13 @@ import { createServer, type Server } from 'node:http';
 import express from 'express';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { BARRIER_MULTIPART_PROFILE, barrierMultipartCanonicalBytes, barrierMultipartCanonicalJson,
+import { BARRIER_MULTIPART_PROFILE, barrierMultipartCanonicalBytes, barrierMultipartCanonicalJson, barrierMultipartSealSchema,
+  barrierMultipartRangeHashInput, barrierMultipartRangeBytes, barrierMultipartSealHashInput,
   barrierMultipartPageHashInput, type BarrierMultipartPage, type BarrierMultipartScope } from '../../shared/pathfinderBarrierMultipart.js';
-import { barrierMultipartAdmitReceiptSchema, barrierMultipartStageReceiptSchema, type BarrierMultipartSession } from '../../shared/pathfinderBarrierMultipartSessions.js';
+import { barrierMultipartAdmitReceiptSchema, barrierMultipartStageReceiptSchema, barrierMultipartSessionSchema,
+  barrierMultipartCompleteProducerCommandSchema, barrierMultipartProducerCompletionReceiptSchema, barrierMultipartProducerCompletionContextSchema,
+  barrierMultipartProducerPartChainSeedHashInput, barrierMultipartProducerPartChainStepHashInput, barrierMultipartProducerPartChainFinalHashInput,
+  BARRIER_MULTIPART_PRODUCER_BOOKEND_PROFILE, type BarrierMultipartSession } from '../../shared/pathfinderBarrierMultipartSessions.js';
 import { barrierCanonicalJson } from '../../shared/pathfinderBarriers.js';
 import { BARRIER_MULTIPART_PRODUCER_PROFILE, validateBarrierMultipartContext } from '../../viewer-runtime/barrier-multipart-protocol.mjs';
 import { createBarrierMultipartRouter } from './barrierMultipartRoutes.js';
@@ -72,6 +76,52 @@ describe.skipIf(!fixtureFile).sequential('actual protected multipart cookie HTTP
     page.pageSha256 = hash(barrierMultipartPageHashInput(page));
     return { schemaVersion: 'wfc.pf.barrier-multipart-stage-page.v2', intentId: session.id, expectedSessionRevision: session.sessionRevision,
       idempotencyKey: id(), scopeSha256: session.scopeSha256, profileSha256: session.profileSha256, page };
+  }
+  async function completionCandidate(viewer = main) {
+    let { receipt: { session } } = await admit(viewer);
+    const refresh = async () => {
+      const response = await http(viewer, '/' + session.id + '/context'); expect(response.status).toBe(200);
+      session = barrierMultipartSessionSchema.parse(response.body.session); return response.body;
+    };
+    const base = () => ({ intentId: session.id, expectedSessionRevision: session.sessionRevision, idempotencyKey: id(), scopeSha256: session.scopeSha256, profileSha256: session.profileSha256 });
+    async function stream(kind: BarrierMultipartPage['kind'], records: BarrierMultipartPage['records'], totals: unknown) {
+      const page = { ...pageCommand(session).page, kind, records } as BarrierMultipartPage;
+      page.pageSha256 = hash(barrierMultipartPageHashInput(page));
+      expect((await http(viewer, '/' + session.id + '/pages', { method: 'POST', body: { ...base(), schemaVersion: 'wfc.pf.barrier-multipart-stage-page.v2', page } })).status).toBe(200);
+      await refresh();
+      const seal = barrierMultipartSealSchema.parse({ schemaVersion: 'wfc.pf.barrier-multipart-seal.v2', kind, scopeSha256: session.scopeSha256, profileSha256: session.profileSha256,
+        pageCount: 1, recordCount: records.length, tailPageSha256: page.pageSha256, totals, sealSha256: '0'.repeat(64),
+        ...(kind === 'plan' ? { qualification: 'NOT_MEASURED', authority: 'none' } : {}) });
+      seal.sealSha256 = hash(barrierMultipartSealHashInput(seal));
+      expect((await http(viewer, '/' + session.id + '/seals', { method: 'POST', body: { ...base(), schemaVersion: 'wfc.pf.barrier-multipart-stage-seal.v2', seal } })).status).toBe(200);
+      await refresh();
+    }
+    const mask = '0'.repeat(31) + '1';
+    await stream('nodes', [{ dbId: 9, membershipMask: mask }], { nodes: 1 });
+    const fragment = { fragmentId: 7, ownerNodeOrdinal: 0, ownerDbId: 9, membershipMask: mask, primitive: 'triangles' as const,
+      sourceGeometrySha256: 'c'.repeat(64), transformSha256: 'd'.repeat(64), sourceVertexCount: 3, sourceTriangleCount: 1 };
+    await stream('fragments', [fragment], { fragments: 1, sourceVertices: 3, sourceTriangles: 1, unavailable: 0, nonTriangle: 0 });
+    const range = { fragmentOrdinal: 0, triangleStart: 0, triangleCount: 1, referencedVertexCount: 3, sourceVertexIdsSha256: 'e'.repeat(64),
+      sourceIndicesSha256: 'f'.repeat(64), sourceGeometrySha256: fragment.sourceGeometrySha256, transformSha256: fragment.transformSha256, membershipMask: mask };
+    await stream('geometry-ranges', [range], { ranges: 1, referencedVertices: 3, triangles: 1 });
+    const placement = { partIndex: 0, rangeOrdinal: 0, fragmentOrdinal: 0, triangleStart: 0, triangleCount: 1, referencedVertexCount: 3,
+      rangeSha256: hash(barrierMultipartRangeHashInput(range)), plannedEncodedBytesUpperBound: barrierMultipartRangeBytes(3, 1) };
+    await stream('plan', [placement], { parts: 1, ranges: 1, referencedVertices: 3, triangles: 1, plannedEncodedBytesUpperBound: 8192 + placement.plannedEncodedBytesUpperBound,
+      nodeSealSha256: session.roots.nodes, fragmentSealSha256: session.roots.fragments, rangeSealSha256: session.roots['geometry-ranges'] });
+    const bytes = Buffer.from('Synthetic opaque part: completion is not geometry validation.'), partCommand = { ...base(),
+      schemaVersion: 'wfc.pf.barrier-multipart-stage-part.v2', partIndex: 0, planSealSha256: session.roots.plan,
+      payload: { bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') } };
+    const raw = await fetch(origin + prefix(viewer) + '/' + session.id + '/parts', { method: 'PUT', redirect: 'error', signal: AbortSignal.timeout(15000),
+      headers: { Origin: origin, Cookie: 'wfc_viewer_session=' + viewer.cookie, 'Content-Type': 'application/octet-stream',
+        'x-wfc-barrier-command': barrierMultipartCanonicalJson(partCommand) }, body: bytes });
+    expect(raw.status).toBe(200); const partReceipt = barrierMultipartStageReceiptSchema.parse(await raw.json());
+    const current = await refresh(), binding = current.context as { contextSha256: string; frameObservation: { contentSha256: string } };
+    const chainContext = barrierMultipartProducerCompletionContextSchema.parse({ intentId: session.id, contextSha256: binding.contextSha256,
+      frameSha256: binding.frameObservation.contentSha256, scopeSha256: session.scopeSha256, profileSha256: session.profileSha256, roots: session.roots });
+    const previous = hash(barrierMultipartProducerPartChainStepHashInput(hash(barrierMultipartProducerPartChainSeedHashInput(chainContext)), partReceipt));
+    const command = barrierMultipartCompleteProducerCommandSchema.parse({ ...base(), ...chainContext, schemaVersion: 'wfc.pf.barrier-multipart-complete-producer.v2',
+      partCount: 1, partsSha256: hash(barrierMultipartProducerPartChainFinalHashInput(previous, 1)), bookendProfile: BARRIER_MULTIPART_PRODUCER_BOOKEND_PROFILE });
+    return { session, command, viewer };
   }
   const rowCounts = async () => (await db().query(`SELECT
     (SELECT count(*)::int FROM pf_barrier_multipart_sessions) AS sessions,
@@ -213,5 +263,39 @@ describe.skipIf(!fixtureFile).sequential('actual protected multipart cookie HTTP
     controls.afterStore = async () => { await db().query('UPDATE viewer_resource_sessions SET revoked_at=now() WHERE id=$1', [other.sessionId]); };
     const response = await http(other, '/' + receipt.session.id + '/pages', { method: 'POST', body: command }); expect(response.status).toBe(409); expect(response.body.code).toBe('BARRIER_MULTIPART_VIEWER_CHANGED');
     expect((await rowCounts()).receipts).toBe(before.receipts); expect((await rowCounts()).heads).toBe(0);
+  });
+  it('persists a distinct completion witness after exact stored parts and rereads it through a new protected request', async () => {
+    const candidate = await completionCandidate(), suffix = '/' + candidate.session.id + '/producer-completion';
+    const absent = await http(main, suffix); expect(absent.status).toBe(200); expect(absent.body).toBeNull();
+    const before = await rowCounts(), value = await http(main, suffix, { method: 'POST', body: candidate.command }); expect(value.status).toBe(200);
+    const receipt = barrierMultipartProducerCompletionReceiptSchema.parse(value.body);
+    expect(receipt).toMatchObject({ intentId: candidate.session.id, completionProvenance: 'protected-producer-reported', sdkSourceBytesVerified: false,
+      geometryValidation: 'NOT_VALIDATED', authority: 'none', partsSha256: candidate.command.partsSha256 });
+    expect((await http(main, suffix)).body).toEqual(receipt);
+    const replay = await http(main, suffix, { method: 'POST', body: candidate.command }); expect(replay.status).toBe(200); expect(replay.body).toEqual({ ...receipt, duplicate: true });
+    const readback = await http(main, '/' + candidate.session.id + '/reconcile', { method: 'POST', body: { schemaVersion: 'wfc.pf.barrier-multipart-reconcile.v2', intentId: candidate.session.id,
+      idempotencyKey: candidate.command.idempotencyKey, commandSha256: hash({ domain: 'wfc.pf.barrier-multipart-session.v2/command', value: candidate.command }) } });
+    expect(readback.status).toBe(200); expect(readback.body).toEqual({ ...receipt, duplicate: true });
+    const after = await rowCounts(); expect(after.allocations).toBe(before.allocations); expect(after.receipts).toBe(before.receipts + 1); expect(after.heads).toBe(0);
+    const current = await http(main, '/' + candidate.session.id + '/context');
+    expect(current.body.session).toMatchObject({ state: 'staging', authority: 'none', counts: candidate.session.counts, reservation: candidate.session.reservation });
+  });
+  it('refuses wrong completion roots or receipt chain without creating a witness', async () => {
+    const candidate = await completionCandidate(), suffix = '/' + candidate.session.id + '/producer-completion', before = await rowCounts();
+    for (const command of [{ ...candidate.command, contextSha256: '1'.repeat(64) }, { ...candidate.command, partsSha256: '2'.repeat(64) },
+      { ...candidate.command, partCount: 2 }, { ...candidate.command, roots: { ...candidate.command.roots, plan: '3'.repeat(64) } }]) {
+      const result = await http(main, suffix, { method: 'POST', body: { ...command, idempotencyKey: id() } }); expect(result.status).toBe(409);
+    }
+    expect((await http(main, suffix)).body).toBeNull(); expect(await rowCounts()).toEqual(before);
+  });
+  it('requires current administrator and live Viewer/login authority for completion POST and GET', async () => {
+    const viewer = await createViewer(), candidate = await completionCandidate(viewer), suffix = '/' + candidate.session.id + '/producer-completion', before = await rowCounts();
+    await db().query('UPDATE users SET is_admin=false WHERE id=$1', [actorId]);
+    try {
+      expect((await http(viewer, suffix, { method: 'POST', body: candidate.command })).status).toBe(403);
+      expect((await http(viewer, suffix)).status).toBe(403); expect(await rowCounts()).toEqual(before);
+    } finally { await db().query('UPDATE users SET is_admin=true WHERE id=$1', [actorId]); }
+    await db().query('UPDATE viewer_login_bindings SET revoked_at=now() WHERE login_id=$1', [viewer.loginId]);
+    expect((await http(viewer, suffix, { method: 'POST', body: candidate.command })).status).toBe(401); expect(await rowCounts()).toEqual(before);
   });
 });

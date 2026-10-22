@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { captureSelectedBarriers, createBarrierCaptureAssembler, validateBarrierCaptureRequest,
   validateBarrierCaptureEvent, validateBarrierFrameObservation, barrierCanonicalJson, BARRIER_CAPTURE_VIEWER_LIMITS } from '../barrier-capture.mjs';
+import { BARRIER_CAPTURE_ERROR_MESSAGES, barrierCaptureErrorMessage } from '../barrier-capture-errors.mjs';
 
 const id = number => `${String(number).padStart(8, '0')}-1111-4111-8111-111111111111`;
 const loadId = id(4), sha = value => createHash('sha256').update(barrierCanonicalJson(value)).digest('hex');
@@ -39,7 +41,9 @@ function fixture(options = {}) {
   const model = { getObjectTree: success => options.hangTree ? undefined : success(tree), getFragmentList: () => fragments, getUnitScale: () => scale,
     getUnitString: () => 'mm', getUpVector: () => up, getGlobalOffset: () => offset,
     getModelTransform: () => options.modelTransform ?? null, getPlacementTransform: () => options.placementTransform ?? null,
-    getBulkProperties: (ids, properties, success) => { assert.equal(properties.ignoreHidden, false); assert.equal(properties.needsExternalId, true); success(ids.map(dbId => ({ dbId, externalId: 'external-' + dbId, properties: [] }))); } };
+    getBulkProperties() { throw Error('The legacy API cannot preserve explicit external-ID loading.'); },
+    getBulkProperties2: (ids, properties, success) => { assert.deepEqual(properties, { propFilter: ['externalId'], ignoreHidden: false, needsExternalId: true });
+      success(ids.map(dbId => ({ dbId, externalId: 'external-' + dbId }))); } };
   const viewer = { model, isolate() { throw new Error('Capture must not isolate.'); }, clearSelection() { throw new Error('Capture must not change selection.'); } };
   globalThis.Autodesk = { Viewing: { Private: { LmvMatrix4: options.Matrix ?? Matrix,
     enumMeshVertices(geometry, visit) { geometry.vertices.forEach((point, index) => visit({ x: point[0], y: point[1], z: point[2] }, null, null, index)); options.afterVertices?.({ geometry, children, own, world }); },
@@ -144,8 +148,8 @@ test('connected frame opening retains all original triangles and does not fabric
   assert.equal(result.capture.fragments[0].verticesMetres.length, 16); assert.deepEqual(result.capture.fragments[0].triangleIndices, indices);
   assert.equal(indices.length / 3, 32); assert.equal(result.capture.fragments.length, 1);
 });
-test('empty selected parent cannot produce an empty complete barrier scope', async () => { const f = fixture(); f.own.set(2, []); f.own.set(3, []); await rejectCapture(f, request(), {}, { code: 'BARRIER_CAPTURE_GEOMETRY_NOT_READY' }); });
-test('nonresident selected mesh refuses instead of declaring a partial scope complete', async () => { const f = fixture(); f.geometries.delete(1); await rejectCapture(f, request(), {}, { code: 'BARRIER_CAPTURE_GEOMETRY_NOT_READY' }); });
+test('empty selected parent cannot produce an empty complete barrier scope', async () => { const f = fixture(); f.own.set(2, []); f.own.set(3, []); await rejectCapture(f, request(), {}, { code: 'BARRIER_CAPTURE_EMPTY_SELECTION' }); });
+test('nonresident selected mesh refuses instead of declaring a partial scope complete', async () => { const f = fixture(); f.geometries.delete(1); await rejectCapture(f, request(), {}, { code: 'BARRIER_CAPTURE_GEOMETRY_NOT_RESIDENT' }); });
 test('nontriangle fragments refuse rather than silently disappearing', async () => { const f = fixture(); f.geometries.get(1).isLines = true; await rejectCapture(f, request(), {}, { code: 'BARRIER_CAPTURE_UNSUPPORTED_PRIMITIVE' }); });
 test('invalid original triangle index refuses', async () => { const f = fixture(); f.geometries.get(1).indices = [0, 1, 99]; await rejectCapture(f); });
 test('repeated triangle index refuses', async () => { const f = fixture(); f.geometries.get(1).indices = [0, 1, 1]; await rejectCapture(f); });
@@ -165,7 +169,57 @@ test('cross-tree selected parent and stale selected name refuse', async () => {
 test('provided external identity is checked against bounded actual SDK properties', async () => {
   const input = request(); input.selectedParents[0].externalId = 'external-2'; assert.equal((await collect(fixture(), input)).capture.selectedParents[0].externalId, 'external-2');
   input.selectedParents[0].externalId = 'different'; await rejectCapture(fixture(), input);
-  const f = fixture(); f.model.getBulkProperties = (_ids, _properties, success) => success([]); await rejectCapture(f, input);
+  const f = fixture(); f.model.getBulkProperties2 = (_ids, _properties, success) => success([]); await rejectCapture(f, input);
+});
+test('pinned SDK source requires the v2 API and an explicit externalId-only filter for selected-parent identity', () => {
+  // Exact local pinned source, not a browser/model execution or SDK acceptance.
+  const sdkBytes = readFileSync(new URL('../sdk/7.130.0/viewer3D.min.js', import.meta.url));
+  const workerBytes = readFileSync(new URL('../sdk/7.130.0/lmvworker.min.js', import.meta.url));
+  assert.equal(createHash('sha256').update(sdkBytes).digest('hex'), '2833d5c53d250f56a59b86f22491a972486b30fd90a103bce8310dcaa970fa5b');
+  assert.equal(createHash('sha256').update(workerBytes).digest('hex'), '9637ed11308c549b6dbd290d6270e53587122ebb5ffd7f87987ea9a8f897f46a');
+  const sdk = sdkBytes.toString('utf8'), worker = workerBytes.toString('utf8');
+  assert.ok(sdk.includes('getBulkProperties(e,t,i,r){Array.isArray(t)&&(t={propFilter:t});var n=(t=t||{}).propFilter||null,s=t.ignoreHidden||!1,o=this.getPropertyDb();o?o.getBulkProperties(e,n,i,r,s):r&&r()}'));
+  assert.ok(sdk.includes('getBulkProperties2(e,t,i,r){var n=this.getPropertyDb();n?n.getBulkProperties2(e,t,i,r):r&&r()}'));
+  assert.ok(sdk.includes('needsExternalId:!t||t.includes("externalId")'));
+  assert.ok(sdk.includes('t&&t.needsExternalId?this.loadExternalIds().then(n).catch(r):n()'));
+  assert.ok(worker.includes('u=e&&-1!==e.indexOf("externalId"),l=this.externalIdsLoaded()'));
+  assert.ok(worker.includes('var c=l&&(!e||u);if(c&&(o.externalId=this.getIdAt(t),e&&1===e.length))return o'));
+});
+test('external identity capture never falls back to the legacy API when v2 is missing', async () => {
+  const f = fixture(), input = request(); input.selectedParents[0].externalId = 'external-2'; let legacyCalls = 0;
+  delete f.model.getBulkProperties2;
+  f.model.getBulkProperties = (_ids, _options, success) => { legacyCalls++; success([{ dbId: 2, externalId: 'external-2' }]); };
+  await rejectCapture(f, input, {}, { code: 'BARRIER_CAPTURE_IDENTITY_UNAVAILABLE' }); assert.equal(legacyCalls, 0);
+});
+test('unavailable model tree has a distinct closed reason without assuming loading or exposing SDK text', async () => {
+  for (const getTree of [(_yes, no) => no(Error('PRIVATE-TREE-DETAILS')), () => { throw Error('PRIVATE-TREE-DETAILS'); }, yes => yes(null), undefined]) {
+    const f = fixture(); f.model.getObjectTree = getTree;
+    await rejectCapture(f, request(), {}, error => error.code === 'BARRIER_CAPTURE_TREE_UNAVAILABLE'
+      && error.message === BARRIER_CAPTURE_ERROR_MESSAGES.BARRIER_CAPTURE_TREE_UNAVAILABLE && !error.message.includes('PRIVATE-TREE-DETAILS'));
+  }
+});
+test('unavailable external identity evidence remains distinct from a verified identity change', async () => {
+  const input = request(); input.selectedParents[0].externalId = 'external-2';
+  for (const readProperties of [undefined, (_ids, _options, _yes, no) => no(Error('PRIVATE-PROPERTY-DETAILS')),
+    () => { throw Error('PRIVATE-PROPERTY-DETAILS'); }, (_ids, _options, yes) => yes([]),
+    (_ids, _options, yes) => yes([{ dbId: 2 }]), (_ids, _options, yes) => yes([{ dbId: 4, externalId: 'external-4' }])]) {
+    const f = fixture(); f.model.getBulkProperties2 = readProperties;
+    await rejectCapture(f, input, {}, error => error.code === 'BARRIER_CAPTURE_IDENTITY_UNAVAILABLE'
+      && error.message === BARRIER_CAPTURE_ERROR_MESSAGES.BARRIER_CAPTURE_IDENTITY_UNAVAILABLE && !error.message.includes('PRIVATE-PROPERTY-DETAILS'));
+  }
+  const f = fixture(); f.model.getBulkProperties2 = (_ids, _options, yes) => yes([{ dbId: 2, externalId: 'different' }]);
+  await rejectCapture(f, input, {}, { code: 'BARRIER_CAPTURE_MODEL_CHANGED' });
+});
+test('an empty parent among populated selections cannot silently disappear from the obstacle set', async () => {
+  const f = fixture(); f.own.set(4, []);
+  await rejectCapture(f, request([selected(), selected(4, 7, 'Unselected equipment')]), {}, { code: 'BARRIER_CAPTURE_EMPTY_SELECTION' });
+});
+test('geometry lost after the first read refuses at the final check without a completed capture', async () => {
+  const f = fixture({ onGeometry({ id, geometryCalls, geometries }) { if (geometryCalls === 3) geometries.delete(id); } }), events = [];
+  await assert.rejects(async () => {
+    for await (const event of captureSelectedBarriers(f.viewer, request(), { loadId })) events.push(event.type);
+  }, { code: 'BARRIER_CAPTURE_GEOMETRY_BECAME_UNAVAILABLE', message: BARRIER_CAPTURE_ERROR_MESSAGES.BARRIER_CAPTURE_GEOMETRY_BECAME_UNAVAILABLE });
+  assert.deepEqual(events, ['metadata']);
 });
 test('cyclic or repeated children refuse', async () => { for (const values of [[2], [3, 3]]) { const f = fixture(); f.children.set(2, values); await rejectCapture(f); } });
 test('conflicting fragment owners refuse while overlapping selected roots are allowed', async () => { const f = fixture(); f.own.set(3, [0]); await rejectCapture(f); });
@@ -210,7 +264,22 @@ test('capture refusals carry a safe fixed reason without parent names or raw SDK
   const f = fixture(); f.names.set(2, 'PRIVATE-MODEL-NAME');
   await assert.rejects(async () => { for await (const _event of captureSelectedBarriers(f.viewer, request(), { loadId })) { /* no publication */ } }, error => error.code === 'BARRIER_CAPTURE_MODEL_CHANGED' && !error.message.includes('PRIVATE-MODEL-NAME'));
   const next = fixture(); next.model.getObjectTree = () => { throw Error('PRIVATE-SDK-FAILURE'); };
-  await assert.rejects(async () => { for await (const _event of captureSelectedBarriers(next.viewer, request(), { loadId })) { /* no publication */ } }, error => error.code === 'BARRIER_CAPTURE_GEOMETRY_NOT_READY' && !error.message.includes('PRIVATE-SDK-FAILURE'));
+  await assert.rejects(async () => { for await (const _event of captureSelectedBarriers(next.viewer, request(), { loadId })) { /* no publication */ } }, error => error.code === 'BARRIER_CAPTURE_TREE_UNAVAILABLE' && !error.message.includes('PRIVATE-SDK-FAILURE'));
+});
+test('even a known SDK error code cannot export its private error message through a callback failure', async () => {
+  for (const code of ['BARRIER_CAPTURE_MODEL_CHANGED', 'BARRIER_CAPTURE_TREE_UNAVAILABLE']) {
+    const f = fixture(); f.model.getObjectTree = () => { throw Object.assign(Error('PRIVATE-KNOWN-SDK-DETAILS'), { code }); };
+    await rejectCapture(f, request(), {}, error => error.code === code && error.message === BARRIER_CAPTURE_ERROR_MESSAGES[code]);
+  }
+});
+test('legacy unavailable text and new diagnostic reasons do not claim a loaded model must still be loading', () => {
+  const codes = ['BARRIER_CAPTURE_GEOMETRY_NOT_READY', 'BARRIER_CAPTURE_TREE_UNAVAILABLE', 'BARRIER_CAPTURE_IDENTITY_UNAVAILABLE',
+    'BARRIER_CAPTURE_EMPTY_SELECTION', 'BARRIER_CAPTURE_GEOMETRY_NOT_RESIDENT', 'BARRIER_CAPTURE_GEOMETRY_BECAME_UNAVAILABLE'];
+  for (const code of codes) {
+    const message = barrierCaptureErrorMessage(code); assert.equal(message, BARRIER_CAPTURE_ERROR_MESSAGES[code]);
+    assert.equal(/wait|finish loading|retry the saved command/i.test(message), false);
+  }
+  assert.equal(barrierCaptureErrorMessage('PRIVATE-SDK-DETAILS'), null);
 });
 test('input identities are strict and accessor claims are rejected', () => {
   const input = request(); assert.equal(validateBarrierCaptureRequest(input), true);

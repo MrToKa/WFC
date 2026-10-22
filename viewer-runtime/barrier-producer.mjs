@@ -2,7 +2,7 @@
 import { BARRIER_MULTIPART_PLANNER_PROFILE as P, barrierPlanCanonical, barrierPlanHash,
   planBarrierFragmentSplitHints, planBarrierMultipart } from './barrier-plan.mjs';
 import { barrierCanonicalJson, validateBarrierFrameObservation } from './barrier-capture.mjs';
-import { BARRIER_MULTIPART_PRODUCER_PROFILE } from './barrier-multipart-protocol.mjs';
+import { BARRIER_MULTIPART_PRODUCER_PROFILE, BARRIER_MULTIPART_PRODUCER_BOOKEND_PROFILE } from './barrier-multipart-protocol.mjs';
 import { encodeBarrierPackedPart } from './barrier-packed-geometry.mjs';
 
 export const BARRIER_MULTIPART_PRODUCER_LIMITS = Object.freeze({ lookupBytes: 20 * 1024 ** 2,
@@ -487,5 +487,11 @@ async function* produce(viewer, options, packed) {
     // Returning from yield means the surrounding transport acknowledged that
     // exact seal. No part or second scene is prefetched while it is pending.
     ctx.check(); yield* packedParts(ctx, scene, scope, observation, scopeSha256, profileSha256, seals, packedContext, readPages, onProgress);
+    // packedParts has returned only after the final after-ACK hierarchy/frame
+    // checks and awaited cursor cleanup. The transport independently binds its
+    // acknowledged receipt chain; this small event is producer-reported only.
+    ctx.check(); yield { kind: 'producer-complete', evidence: { contextSha256: packedContext.contextSha256, frameSha256: observation.contentSha256,
+      roots: Object.fromEntries(['nodes', 'fragments', 'geometry-ranges', 'plan'].map(kind => [kind, seals[kind].sealSha256])),
+      partCount: seals.plan.totals.parts, bookendProfile: BARRIER_MULTIPART_PRODUCER_BOOKEND_PROFILE } };
   }
 }

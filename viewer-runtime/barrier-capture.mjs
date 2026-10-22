@@ -141,17 +141,20 @@ export async function* captureSelectedBarriers(viewer, input, { loadId, signal, 
   requireThat(String(globalThis.LMV_VIEWER_VERSION ?? '') === '7.130.0' && typeof sdk?.LmvMatrix4 === 'function'
     && typeof sdk.enumMeshVertices === 'function' && typeof sdk.enumMeshTriangles === 'function', 'The pinned binary64 triangle capture SDK is required.', 'BARRIER_CAPTURE_FRAME_UNSUPPORTED');
   const newMatrix = () => { const result = new sdk.LmvMatrix4(true); requireThat(result.elements instanceof Float64Array && result.elements.length === 16, 'Binary64 matrices are required.', 'BARRIER_CAPTURE_FRAME_UNSUPPORTED'); return result; };
-  async function callback(invoke) {
+  async function callback(invoke, unavailableCode) {
     active(); return await new Promise((resolve, reject) => {
       let settled = false;
       const finish = (error, value) => { if (settled) return; settled = true; clearTimeout(timer); signal?.removeEventListener('abort', abort); error ? reject(error) : resolve(value); };
       const abort = () => finish(new DOMException('Barrier capture cancelled.', 'AbortError'));
       const timer = setTimeout(() => finish(captureError('BARRIER_CAPTURE_DEADLINE')), Math.min(L.callbackMilliseconds, Math.max(1, L.milliseconds - (Date.now() - startedAt))));
       signal?.addEventListener('abort', abort, { once: true });
-      try { invoke(value => { try { active(); finish(null, value); } catch (error) { finish(error); } }, () => finish(captureError('BARRIER_CAPTURE_GEOMETRY_NOT_READY'))); } catch (error) { finish(error?.name === 'AbortError' || BARRIER_CAPTURE_ERROR_CODES.includes(error?.code) ? error : captureError('BARRIER_CAPTURE_GEOMETRY_NOT_READY')); }
+      try { invoke(value => { try { active(); finish(null, value); } catch (error) { finish(error); } }, () => finish(captureError(unavailableCode))); }
+      catch (error) { finish(error?.name === 'AbortError' ? new DOMException('Barrier capture cancelled.', 'AbortError')
+        : captureError(BARRIER_CAPTURE_ERROR_CODES.includes(error?.code) ? error.code : unavailableCode)); }
     });
   }
-  const tree = await callback((yes, no) => model.getObjectTree(yes, no));
+  const tree = await callback((yes, no) => model.getObjectTree(yes, no), 'BARRIER_CAPTURE_TREE_UNAVAILABLE');
+  requireThat(tree, 'The current model tree is unavailable.', 'BARRIER_CAPTURE_TREE_UNAVAILABLE');
   const list = model.getFragmentList?.(), fragmentCount = list?.getCount?.();
   requireThat(tree && typeof tree.getRootId === 'function' && typeof tree.getNodeParentId === 'function' && typeof tree.getNodeName === 'function'
     && typeof tree.enumNodeChildren === 'function' && typeof tree.enumNodeFragments === 'function' && integer(fragmentCount, 1000000)
@@ -159,13 +162,18 @@ export async function* captureSelectedBarriers(viewer, input, { loadId, signal, 
   const rootId = tree.getRootId(); requireThat(integer(rootId), 'Invalid current model root.');
   const externalParents = request.selectedParents.filter(parent => parent.externalId !== null);
   if (externalParents.length) {
-    requireThat(typeof model.getBulkProperties === 'function', 'Selected external identities require bounded current property evidence.', 'BARRIER_CAPTURE_GEOMETRY_NOT_READY');
-    const rows = await callback((yes, no) => model.getBulkProperties(externalParents.map(parent => parent.dbId),
-      { propFilter: [], ignoreHidden: false, needsExternalId: true }, yes, no));
-    requireThat(Array.isArray(rows) && rows.length === externalParents.length, 'Selected external identity evidence is incomplete.', 'BARRIER_CAPTURE_GEOMETRY_NOT_READY');
+    // Pinned SDK7.130 Model.getBulkProperties discards needsExternalId, while
+    // an empty propFilter excludes externalId even after its table is loaded.
+    // The v2 API preserves the explicit load option and requests only identity.
+    requireThat(typeof model.getBulkProperties2 === 'function', 'Selected external identities require bounded current property evidence.', 'BARRIER_CAPTURE_IDENTITY_UNAVAILABLE');
+    const rows = await callback((yes, no) => model.getBulkProperties2(externalParents.map(parent => parent.dbId),
+      { propFilter: ['externalId'], ignoreHidden: false, needsExternalId: true }, yes, no), 'BARRIER_CAPTURE_IDENTITY_UNAVAILABLE');
+    requireThat(Array.isArray(rows) && rows.length === externalParents.length, 'Selected external identity evidence is incomplete.', 'BARRIER_CAPTURE_IDENTITY_UNAVAILABLE');
     const seen = new Set();
     for (const row of rows) { active(); const expected = externalParents.find(parent => parent.dbId === row?.dbId);
-      requireThat(expected && !seen.has(row.dbId) && row.externalId === expected.externalId, 'Selected external identity changed or is unavailable.', 'BARRIER_CAPTURE_MODEL_CHANGED'); seen.add(row.dbId); }
+      requireThat(expected && !seen.has(row.dbId) && typeof row.externalId === 'string' && row.externalId.length > 0,
+        'Selected external identity evidence is missing or inconsistent.', 'BARRIER_CAPTURE_IDENTITY_UNAVAILABLE');
+      requireThat(row.externalId === expected.externalId, 'Selected external identity changed.', 'BARRIER_CAPTURE_MODEL_CHANGED'); seen.add(row.dbId); }
   }
   async function observeFrame() {
     active(); const scale = model.getUnitScale?.(), sourceUnits = model.getUnitString?.();
@@ -232,11 +240,11 @@ export async function* captureSelectedBarriers(viewer, input, { loadId, signal, 
       if (work - yieldedWork >= 1024) { yieldedWork = work; onProgress({ phase: 'index', loaded: known.size, total: known.size }); await pause(); }
     }
   }
-  requireThat(membership.size > 0 && request.selectedParents.every(parent => [...membership.values()].some(ids => ids.has(parent.selectionId))), 'Every selected barrier parent requires physical triangle geometry.', 'BARRIER_CAPTURE_GEOMETRY_NOT_READY');
+  requireThat(membership.size > 0 && request.selectedParents.every(parent => [...membership.values()].some(ids => ids.has(parent.selectionId))), 'Every selected barrier parent requires physical triangle geometry.', 'BARRIER_CAPTURE_EMPTY_SELECTION');
   const display = newMatrix(); display.elements.set(frameObservation.displayToWorldMetres);
   const fragments = [], matrixByFragment = new Map(), geometryByFragment = new Map(); let verticesTotal = 0, trianglesTotal = 0;
   for (const fragmentId of [...membership.keys()].sort((a, b) => a - b)) {
-    active(); const geometry = list.getGeometry(fragmentId); requireThat(geometry, 'Every selected barrier fragment must have resident geometry.', 'BARRIER_CAPTURE_GEOMETRY_NOT_READY');
+    active(); const geometry = list.getGeometry(fragmentId); requireThat(geometry, 'Every selected barrier fragment must have resident geometry.', 'BARRIER_CAPTURE_GEOMETRY_NOT_RESIDENT');
     requireThat(!geometry.isLines && !geometry.isPoints && !geometry.is2d, 'Every selected barrier fragment must be a triangle mesh.', 'BARRIER_CAPTURE_UNSUPPORTED_PRIMITIVE');
     geometryByFragment.set(fragmentId, geometry);
     const world = physicalWorld(fragmentId);
@@ -272,7 +280,7 @@ export async function* captureSelectedBarriers(viewer, input, { loadId, signal, 
     if (work - yieldedWork >= 1024) { yieldedWork = work; await pause(); }
   }
   for (const [fragmentId, expected] of matrixByFragment) { active(); const world = physicalWorld(fragmentId);
-    const geometry = list.getGeometry(fragmentId); requireThat(geometry, 'Selected barrier geometry became unavailable during capture.', 'BARRIER_CAPTURE_GEOMETRY_NOT_READY');
+    const geometry = list.getGeometry(fragmentId); requireThat(geometry, 'Selected barrier geometry became unavailable during capture.', 'BARRIER_CAPTURE_GEOMETRY_BECAME_UNAVAILABLE');
     requireThat(geometry === geometryByFragment.get(fragmentId), 'Selected barrier geometry changed during capture.', 'BARRIER_CAPTURE_MODEL_CHANGED');
     const observed = Array.from(newMatrix().copy(display).multiply(world).elements); requireThat(barrierCanonicalJson(observed) === barrierCanonicalJson(expected), 'A selected fragment moved during capture.', 'BARRIER_CAPTURE_MODEL_CHANGED'); }
   requireThat(barrierCanonicalJson(await observeFrame()) === barrierCanonicalJson(frameObservation), 'The SDK frame changed during final barrier verification.', 'BARRIER_CAPTURE_MODEL_CHANGED');
