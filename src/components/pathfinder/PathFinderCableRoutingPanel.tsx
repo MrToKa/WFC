@@ -41,6 +41,7 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
   const active = access.active && open && !collapsed;
   const assignment = useCableEndpointPairSelection({ ...access, cableId: cable.cable.id, active });
   const { from, to, pending, legacyRecovery } = assignment, busy = assignment.busy || actionsBusy;
+  const endpointOnlySave = access.calculation === null && access.initialFill === null;
   const unsaved = Boolean(from.draft || to.draft || from.context?.automaticSelection || to.context?.automaticSelection);
   const currentReview = review?.cableId === cable.cable.id ? review : null;
   const reviewBlocked = busy || Boolean(pending) || unsaved || calculationPending || Boolean(currentReview?.pending) || Boolean(calculationBlockedReason);
@@ -117,12 +118,16 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
         {calculationBlockedReason ? <p role="status" className={styles.note}>{calculationBlockedReason}</p> : null}
         {calculationBlockedReason && onConfigureCalculation ? <Button disabled={busy} onClick={onConfigureCalculation}>Configure routing</Button> : null}
         {oldBarrierProof ? <p role="status" className={styles.note}>This earlier route has no verified barrier checks. Configure the current barriers and calculate routing again before Review and Apply.</p> : null}
-        {unsaved ? <p className={styles.note}>{calculationBlockedReason ? 'Your From/To changes are not saved. Configure routing before saving them.' : 'Save the assigned endpoints before calculating routing.'}</p> : null}
+        {unsaved ? <p className={styles.note}>{endpointOnlySave
+          ? 'Save the assigned From/To locations now. Configure the current route settings and barriers before calculating routing.'
+          : 'Save the assigned endpoints before calculating routing.'}</p> : null}
         {!unsaved && !busy && !pending && !legacyRecovery && !assignment.error ? <p className={styles.note}>No From/To changes to save. Save confirms endpoint assignments; Review and Apply update routing and design length.</p> : null}
         {assignment.busy ? <Spinner size="tiny" label="Checking or saving endpoints…" /> : null}
         {assignment.error ? <p role="alert" className={styles.note}>{assignment.error}</p> : null}
         {assignment.notice ? <p role="status" className={styles.note}>{assignment.notice}</p> : null}
-        <p className={styles.note}>Save recalculates affected cables. Routing and design length fill automatically only when both are empty. Existing values require Review and Apply.</p>
+        <p className={styles.note}>{endpointOnlySave
+          ? 'Save confirms the shared locations. It does not calculate routing or update Cable list values. After configuring the current barriers, submit a new calculation.'
+          : 'Save recalculates affected cables. Routing and design length fill automatically only when both are empty. Existing values require Review and Apply.'}</p>
       </section>
       <section className={styles.field} aria-label="Review and Apply cable routing">
         <h4 className={styles.heading}>Review and Apply</h4>

@@ -71,7 +71,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   const enabled = props.active && props.pf.viewerPhase === 'ready' && Boolean(readPreferences && model?.modelVersionId);
   const calculationEnabled = enabled && Boolean(preferences);
   const calculationBlockedReason = enabled && !calculationEnabled
-    ? 'Configure the current route settings and barriers before calculating routing or saving changed From/To locations. Your existing routing is retained.' : null;
+    ? 'You can save From/To assignments now. Configure the current route settings and barriers before calculating routing. Existing Cable list values are retained.' : null;
   const calculation = calculationEnabled && preferences ? { preferences, timeoutMilliseconds: 120000 } : null;
   const authorityLost = useCallback(() => callbacks.current.pf.refresh(), []);
   const refreshSelected = useCallback(async () => {
@@ -143,7 +143,9 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   useEffect(() => { if (writes.progress) writeChanged(writes.progress); }, [writes.progress, writeChanged]);
   const saved = useCallback((receipt: CableEndpointReceipt, current?: EndpointCurrentScope, originalCalculation?: LocationImpactCalculation | null) => {
     if (!alive.current) return;
-    setNotice('Shared location saved. Only affected non-MV cables will be recalculated. Existing cable values require review.');
+    setNotice(originalCalculation
+      ? 'Shared location saved. Affected non-MV cables are queued for recalculation. Existing cable values require review.'
+      : 'Shared location saved. Configure the current route settings and barriers, then calculate routing. This Save did not request recalculation or automatic Cable list updates.');
     if (receipt.locationImpact && current) { lastCalculation.current = ''; lastWrite.current = ''; setImpact({ id: receipt.locationImpact.id, current, calculation: originalCalculation ?? null, originCableId: receipt.cableId }); }
     refreshDiagnostics();
   }, [refreshDiagnostics]);
@@ -239,9 +241,9 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
       active: enabled, model: model?.modelVersionId && model.contentFingerprint ? { modelVersionId: model.modelVersionId,
         selectionRevision: model.selectionRevision, contentFingerprint: model.contentFingerprint } : null,
       preparationKey: JSON.stringify([props.pf.preparationViewerGeneration, props.pf.data?.artifacts.map(item => [item.id, item.snapshotSha256])]),
-      // New endpoint Save requires the explicit calculation and fill policy.
-      // Omission blocks new writes without hiding retained recovery controls.
-      calculation, initialFill: calculationEnabled ? { mode: 'when-both-empty' } : undefined, readSelection: props.pf.readSelection, onSaved: saved, onAuthorityLost: authorityLost,
+      // Endpoint-only Save explicitly requests neither calculation nor initial
+      // fill. Ready calculation settings keep the existing both-empty policy.
+      calculation, initialFill: calculationEnabled ? { mode: 'when-both-empty' } : null, readSelection: props.pf.readSelection, onSaved: saved, onAuthorityLost: authorityLost,
     }} onCalculate={enabled && !submittedCalculation && !popupReview?.pending && selected?.calculation.jobStatus !== 'queued' && selected?.calculation.jobStatus !== 'running' ? calculateSelected : undefined}
       calculationBlockedReason={calculationBlockedReason} onConfigureCalculation={props.onConfigureCalculation}
       onTogglePath={selected && props.onTogglePath ? () => props.onTogglePath?.(selected.cable.id) : undefined}

@@ -62,12 +62,12 @@ beforeEach(() => { assignment = pair(); vi.mocked(useCableEndpointPairSelection)
 describe('persistent nonmodal cable routing panel with atomic drafts', () => {
   it('keeps Calculate actionable for configuration while preserving endpoint Save and approval guards', () => {
     const p = props(), configure = vi.fn(), calculate = vi.fn(() => configure());
-    p.access = { ...p.access, calculation: null, initialFill: undefined };
+    p.access = { ...p.access, calculation: null, initialFill: null };
     p.cable!.cable.routing = '/STORED'; p.cable!.cable.designLength = '30';
     p.cable!.calculation.reasonCodes = ['BARRIER_WRITE_PROOF_REQUIRED'];
     const review = { ...reviewController(p), canReview: false, canApply: false };
     render(<PathFinderCableRoutingPanel {...p} review={review} onCalculate={calculate} onConfigureCalculation={configure}
-      calculationBlockedReason="Configure the current barriers before calculating or saving changed From/To." />);
+      calculationBlockedReason="Save From/To now. Configure the current barriers before calculating." />);
     expect(screen.getByRole('button', { name: 'Calculate routing' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: 'Calculate routing' })); expect(calculate).toHaveBeenCalledOnce(); expect(configure).toHaveBeenCalledOnce();
     fireEvent.click(screen.getByRole('button', { name: 'Configure routing' })); expect(configure).toHaveBeenCalledTimes(2);
@@ -88,13 +88,36 @@ describe('persistent nonmodal cable routing panel with atomic drafts', () => {
     expect(screen.queryByText(/Current cable values or their exact proposal references are unavailable/)).toBeNull();
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled(); expect(assignment.save).not.toHaveBeenCalled();
   });
-  it('explains unsaved endpoint changes under missing admission without enabling Save or a calculation', () => {
-    assignment.from.context = context('from');
-    render(<PathFinderCableRoutingPanel {...props()} calculationBlockedReason="Configure the current barriers." />);
-    expect(screen.getByText(/Your From\/To changes are not saved/)).toBeVisible();
-    expect(screen.queryByText(/No From\/To changes to save/)).toBeNull();
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled(); expect(screen.getByRole('button', { name: 'Calculate routing' })).toBeDisabled();
-    expect(assignment.save).not.toHaveBeenCalled();
+  it('saves a changed From with its saved To before offering configuration-directed Calculate', async () => {
+    const p = props(), configure = vi.fn(); p.access = { ...p.access, calculation: null, initialFill: null };
+    p.cable!.cable.routing = '/STORED'; p.cable!.cable.designLength = '30'; p.onCalculate = configure;
+    assignment.from.context = context('from', 'confirmed'); assignment.to.context = context('to', 'confirmed');
+    assignment.from.draft = { mode: 'fixed-world', point: [7, 8, 9], derivation: 'manual-world-point', displaySdkObjectId: 55 };
+    assignment.from.effectiveDraft = assignment.from.draft; assignment.from.draftSource = 'selected';
+    assignment.from.displaySelection = { sdkObjectId: 55, name: 'Selected From equipment', point: [7, 8, 9] }; assignment.canSave = true;
+    const review = reviewController(p), view = render(<PathFinderCableRoutingPanel {...p} review={review} calculationBlockedReason="Configure the current barriers." />);
+    expect(screen.getByText(/Save the assigned From\/To locations now/)).toBeVisible(); expect(screen.queryByText(/Configure routing before saving/)).toBeNull();
+    expect(screen.getByText(/It does not calculate routing or update Cable list values/)).toBeVisible(); expect(screen.queryByText(/Save recalculates affected cables/)).toBeNull();
+    expect(screen.getByRole('textbox', { name: 'From assigned model object' })).toHaveValue('Selected From equipment\nX: 7 m; Y: 8 m; Z: 9 m');
+    expect(screen.getByText('Selected — not saved.')).toBeVisible(); expect(screen.getAllByText('Saved shared location.')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled(); expect(screen.getByRole('button', { name: 'Calculate routing' })).toBeDisabled();
+    expect(useCableEndpointPairSelection).toHaveBeenLastCalledWith(expect.objectContaining({ calculation: null, initialFill: null }));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save' })); });
+    expect(assignment.save).toHaveBeenCalledExactlyOnceWith('Confirm cable From/To model assignments.'); expect(configure).not.toHaveBeenCalled();
+    const savedFrom = context('from', 'confirmed'), savedHead = { ...savedFrom.head!, mode: 'fixed-world' as const, derivation: 'manual-world-point' as const,
+      sourceObject: null, attachment: null, pointProjectMetres: [7, 8, 9] as [number, number, number] };
+    assignment.from.context = cableEndpointContextSchema.parse({ ...savedFrom, head: savedHead, confirmedSelection: null, confirmedDisplaySelection: {
+      source: 'confirmed-display-only', mode: 'fixed-world', sdkObjectId: 55, name: 'Selected From equipment', pointProjectMetres: savedHead.pointProjectMetres,
+      current: savedFrom.current!, bindingId: savedHead.id, bindingContentSha256: savedHead.contentSha256, commandSha256: 'e'.repeat(64),
+    } });
+    assignment.from.draft = null; assignment.from.effectiveDraft = null; assignment.from.draftSource = null; assignment.canSave = false;
+    view.rerender(<PathFinderCableRoutingPanel {...p} review={review} calculationBlockedReason="Configure the current barriers." />);
+    expect(screen.getByRole('textbox', { name: 'From assigned model object' })).toHaveValue('Selected From equipment\nX: 7 m; Y: 8 m; Z: 9 m');
+    expect(screen.getAllByText('Saved shared location.')).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Calculate routing' })).toBeEnabled(); expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Calculate routing' })); expect(configure).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button', { name: 'Review proposed routing' })).toBeDisabled(); expect(screen.getByRole('button', { name: 'Apply reviewed routing' })).toBeDisabled();
+    expect(p.cable!.cable).toMatchObject({ routing: '/STORED', designLength: '30' }); expect(review.review).not.toHaveBeenCalled(); expect(review.apply).not.toHaveBeenCalled();
   });
   it('does not use configuration-directed Calculate while exact Apply recovery is pending', () => {
     const p = props(), review = { ...reviewController(p), pending: true, canRecover: true, canReview: false, canApply: false };

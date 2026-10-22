@@ -119,8 +119,11 @@ export function useCableEndpointPairSelection(access: CableEndpointPairSelection
         : await saveCableEndpointPair(access.projectId!, access.token!, verified.cableId, verified.command, access.accountId!, abort.signal);
       if (!live()) return false;
       await clearPendingCableEndpointPair(owner(), verified); if (!live()) return true;
+      const savedCalculation = verified.command.endpoints[0].command.calculation;
       update({ pending: null, receipt, retired: true, refreshPhase: 'requested', error: null, notice: receipt
-        ? 'From/To Save is confirmed. Shared locations are reused and affected cable calculations are queued under the selected policy.'
+        ? savedCalculation === null
+          ? 'From/To Save is confirmed. Shared locations are reused. No routing calculation was queued. Configure routing and calculate again.'
+          : 'From/To Save is confirmed. Shared locations are reused. Affected cable recalculation was requested using the saved routing settings.'
         : 'The pending From/To command was closed without saving. Its original key cannot save later.' });
       const reported = new Set<string>();
       for (const childReceipt of receipt?.receipts ?? []) {

@@ -61,7 +61,7 @@ describe('owned cable routing workspace composition (mocked reads and child UI)'
     fireEvent.click(screen.getByRole('button', { name: 'Needs routing cable' }));
     expect(screen.getByRole('dialog')).toBeVisible(); expect(window.open).toHaveBeenCalledOnce();
     expect(panelProps.access.active).toBe(true); expect(panelProps.access.calculation).toBeNull();
-    expect(panelProps.access.initialFill).toBeUndefined(); expect(panelProps.onCalculate).toBeTypeOf('function');
+    expect(panelProps.access.initialFill).toBeNull(); expect(panelProps.onCalculate).toBeTypeOf('function');
     expect(panelProps.calculationBlockedReason).toMatch(/Configure the current route settings and barriers/);
     expect(panelProps.onConfigureCalculation).toBe(configure);
     await act(async () => { await panelProps.onCalculate?.(); });
@@ -95,7 +95,7 @@ describe('owned cable routing workspace composition (mocked reads and child UI)'
     const view = render(<PathFinderCableWorkspace {...p} preferences={null} readPreferences={readPreferences} review={review} />);
     fireEvent.click(screen.getByText('Needs routing cable'));
     expect(panelProps.review?.comparison).toBe(review.comparison); expect(panelProps.review?.canReview).toBe(false); expect(panelProps.review?.canApply).toBe(false);
-    expect(review.canReview).toBe(true); expect(review.canApply).toBe(true); expect(panelProps.access.initialFill).toBeUndefined();
+    expect(review.canReview).toBe(true); expect(review.canApply).toBe(true); expect(panelProps.access.initialFill).toBeNull();
     view.rerender(<PathFinderCableWorkspace {...p} preferences={null} readPreferences={readPreferences} review={{ ...review, proposalId: id(99) }} />);
     expect(panelProps.review).toBeNull();
     view.rerender(<PathFinderCableWorkspace {...p} preferences={null} readPreferences={readPreferences} review={{ ...review, cableId: id(99) }} />);
@@ -144,6 +144,24 @@ describe('owned cable routing workspace composition (mocked reads and child UI)'
     expect(screen.getByRole('dialog')).toBeVisible(); expect(p.onSelect).toHaveBeenCalledWith(row()); expect(p.pf.refresh).not.toHaveBeenCalled();
     expect(panelProps.access).toMatchObject({ calculation: { preferences: p.preferences, timeoutMilliseconds: 120000 }, initialFill: { mode: 'when-both-empty' }, readSelection: p.pf.readSelection });
     expect(listProps.active).toBe(true);
+  });
+  it('saves endpoints without a calculation mandate and leaves an explicit configuration-directed Calculate reachable', async () => {
+    listRow = cableWorkflowRowSchema.parse({ ...row(), cable: { ...row().cable, routing: '/STORED', designLength: '30' } });
+    const p = props(), configure = vi.fn(), readPreferences = { secondaryDistanceMeters: 2, preferVerticalApproach: true };
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockResolvedValue({ projectId: id(1), cableId: id(3), row: listRow } as never);
+    render(<PathFinderCableWorkspace {...p} preferences={null} readPreferences={readPreferences} onConfigureCalculation={configure} />);
+    fireEvent.click(screen.getByText('Needs routing cable'));
+    expect(panelProps.access).toMatchObject({ active: true, calculation: null, initialFill: null });
+    const original = panelProps.cable!.cable, scope = endpointBindingFixture().context.current!;
+    await act(async () => { await panelProps.access.onSaved?.({ cableId: id(3), locationImpact: { id: id(8), status: 'blocked' } } as CableEndpointReceipt, scope, null); });
+    expect(screen.getByText(/This Save did not request recalculation or automatic Cable list updates/)).toBeVisible();
+    expect(screen.queryByText(/queued for recalculation/)).toBeNull(); expect(p.pf.calculate).not.toHaveBeenCalled();
+    expect(panelProps.cable!.cable).toEqual(original); expect(panelProps.onCalculate).toBeTypeOf('function');
+    expect(vi.mocked(usePathfinderLocationImpactProgress).mock.calls.at(-1)?.[0].active).toBe(false);
+    expect(vi.mocked(usePathfinderInitialFillProgress).mock.calls.at(-1)?.[0].active).toBe(false);
+    await act(async () => { await panelProps.onCalculate?.(); });
+    expect(configure).toHaveBeenCalledOnce(); expect(p.pf.calculate).not.toHaveBeenCalled(); expect(p.pf.refresh).not.toHaveBeenCalled();
+    expect(panelProps.cable!.cable).toMatchObject({ routing: '/STORED', designLength: '30' });
   });
   it('keeps selected cable across popup close and opens it again', () => {
     render(<PathFinderCableWorkspace {...props()} />); fireEvent.click(screen.getByText('Needs routing cable')); fireEvent.click(screen.getByText('Close routing popup'));
@@ -199,6 +217,7 @@ describe('owned cable routing workspace composition (mocked reads and child UI)'
     const original = { preferences: { secondaryDistanceMeters: 9, preferVerticalApproach: false }, timeoutMilliseconds: 7000 };
     await act(async () => { await panelProps.access.onSaved?.({ cableId: id(3), locationImpact: { id: id(8) } } as CableEndpointReceipt, endpointBindingFixture().context.current!, original); });
     expect(vi.mocked(usePathfinderLocationImpactProgress).mock.calls.at(-1)?.[0].calculation).toEqual(original);
+    expect(screen.getByText(/Affected non-MV cables are queued for recalculation/)).toBeVisible();
   });
   it.each(['same', 'drilling changed', 'snapshot changed', 'legacy'] as const)('resumes only matching barrier-owned history: %s', async kind => {
     const p = props(), current = endpointBindingFixture().context.current!;
@@ -285,7 +304,7 @@ describe('Path Finder cable popup and read-only hover', () => {
     expect(p.onSelect).not.toHaveBeenCalled(); expect(window.open).not.toHaveBeenCalled();
     fireEvent.click(screen.getByText('Open cable in separate window'));
     expect(screen.getByRole('dialog')).toBeVisible(); expect(window.open).toHaveBeenCalledOnce();
-    expect(panelProps.onCalculate).toBeTypeOf('function'); expect(panelProps.access.initialFill).toBeUndefined();
+    expect(panelProps.onCalculate).toBeTypeOf('function'); expect(panelProps.access.initialFill).toBeNull();
     expect(p.pf.calculate).not.toHaveBeenCalled();
   });
   it('preopens a separate window synchronously from click, reuses it and closes it on owner loss', () => {

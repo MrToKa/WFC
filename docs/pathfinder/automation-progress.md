@@ -1,5 +1,17 @@
 # PathFinder local implementation progress
 
+## Current: PF-B15 cable popup source checked; owned delivery next
+
+Inherited pf-b15-cable-popup-save-local-20261022 from handoff8d980e6. Report105:
+explicit null/null endpoint-only Save now allows changed From/saved To; exact
+pair/CAS/recovery preserved, no unchecked calculation or initial-fill authority.
+Original retained command controls recovery wording. Ready both-empty flow
+unchanged. Root uniqueVitest429/12suites +installer16, types/scopedlint/bothbuilds
+PASS; independentreview CLEAR. Operationc120e085 retains logs/pins. Next clean
+commit and build/install owned5191 web only; currentweb7841f910/APIac0d16ab same
+container preserved. Actual browser/SDK/Aalborg blocked by saved refusal. Global
+whole-parent geometry, publication/query/writeproof and Preparer remain pending.
+
 ## Current: PF-B14 identity repair delivered; popup Save next
 
 Branch `pf-b14-identity-repair-delivery-local-20261022`, source HEAD

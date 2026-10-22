@@ -10,7 +10,7 @@ export const WEB_INSTALL_BASELINE = Object.freeze({
   project: 'wfc-pathfinder-local-0cba87606e9b',
   port: 5191,
   api: 'sha256:ac0d16ab1b0f4c92922c20d1a13a5ea142d4c6e92558de1870daf4db7fd60fcf',
-  web: 'sha256:814475f9fe327887e0444fcd4e7e73411bc2f341d59b0748cac1f3b62578acee',
+  web: 'sha256:7841f9104bb63acf395840a4375499f5d4e4155eca749858b8776b56a2d9981f',
 });
 
 const need = (value, code) => {

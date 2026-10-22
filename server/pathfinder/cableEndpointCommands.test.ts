@@ -295,6 +295,33 @@ async function pairFixture(ends: ('from' | 'to')[] = ['from', 'to']) {
     closePair: (input: CableEndpointPairCommand = command) => f.repo.closePair(f.projectId, f.who, f.cableId, input) };
 }
 describe('atomic cable endpoint pair saves using synthetic SQL', () => {
+  it('saves only changed From with a saved To under explicit null policies, with blocked impact and no calculation or fill authority', async () => {
+    const f = await pairFixture(['from']), toBefore = await f.read(f.cableId, 'to'), savedTo = await f.save(f.command(toBefore), f.cableId, 'to');
+    const originals = { from: await f.read(f.cableId, 'from'), to: await f.read(f.cableId, 'to') };
+    f.pair.expectedContexts = { from: originals.from.contextSha256, to: originals.to.contextSha256 };
+    f.pair.endpoints[0].command = { ...f.command(originals.from), schemaVersion: 'wfc.pf.cable-endpoint-command.v3', calculation: null, initialFill: null };
+    f.queries.length = 0; mocks.barriers.mockRejectedValue(Error('Endpoint-only Save must not calculate or require routing barriers'));
+    mocks.mandate.mockRejectedValue(Error('Endpoint-only Save must not create initial-fill authority'));
+    const result = await f.savePair();
+    expect(result.expectedContexts).toEqual(f.pair.expectedContexts); expect(result.receipts).toHaveLength(1); expect(result.receipts[0].end).toBe('from');
+    expect(result.receipts[0].expectedContextSha256).toBe(originals.from.contextSha256);
+    expect(result.receipts[0].expectedCableWriteRevision).toBe(originals.from.cableWriteRevision);
+    expect(result.receipts[0].locationImpact?.status).toBe('blocked'); expect(result.receipts[0].initialFillMandate).toBeUndefined();
+    expect(mocks.append).toHaveBeenCalledExactlyOnceWith(expect.any(Object), expect.objectContaining({ calculation: null,
+      commandSha256: endpointBindingHash(f.pair.endpoints[0].command) }), expect.any(Function));
+    expect(mocks.barriers).not.toHaveBeenCalled(); expect(mocks.mandate).not.toHaveBeenCalled();
+    expect(f.state.bindings.size).toBe(2); expect(f.queries.filter(sql => sql === 'BEGIN')).toHaveLength(1); expect(f.queries.filter(sql => sql === 'COMMIT')).toHaveLength(1);
+    expect(f.queries.join('\n')).not.toMatch(/UPDATE cables|INSERT INTO pf_jobs|INSERT INTO pf_reviews|pf_initial_fill_mandates|pf_recalculation_dirty/);
+    expect((await f.read(f.cableId, 'to')).head?.id).toBe(savedTo.binding.binding.id);
+    expect((await f.savePair()).duplicate).toBe(true); expect(mocks.append).toHaveBeenCalledOnce(); expect(mocks.mandate).not.toHaveBeenCalled();
+  });
+  it('retains untouched To CAS checks for a null/null changed-From Save before any binding or impact write', async () => {
+    const f = await pairFixture(['from']); f.pair.endpoints[0].command.calculation = null; f.pair.endpoints[0].command.initialFill = null;
+    f.state.cables[0].to_location = 'Changed outside the endpoint-only editor';
+    await expect(f.savePair()).rejects.toMatchObject({ code: 'CABLE_ENDPOINT_CONTEXT_CHANGED' });
+    expect(f.state.bindings.size).toBe(0); expect(f.state.locations.size).toBe(0); expect(f.state.commands.size).toBe(0);
+    expect(mocks.append).not.toHaveBeenCalled(); expect(mocks.mandate).not.toHaveBeenCalled(); expect(mocks.barriers).not.toHaveBeenCalled();
+  });
   it('checks the identical pair barrier intent once before either binding write',async()=>{
     const f=await pairFixture();mocks.barriers.mockImplementation(async()=>{expect(f.state.bindings.size).toBe(0);expect(f.state.locations.size).toBe(0);return{};});
     await f.savePair();expect(mocks.barriers).toHaveBeenCalledOnce();expect(f.state.bindings.size).toBe(2);

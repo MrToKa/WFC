@@ -23,6 +23,15 @@ function context(selected = cable, end: 'from' | 'to' = 'from'): CableEndpointCo
     canBind: true, reasonCodes: [], registryRevision: saved ? '6' : '5', location: null, head: null, current: { ...scope }, contextSha256: (end === 'from' ? saved ? 'e' : 'a' : saved ? 'f' : 'b').repeat(64),
     automaticSelection: automatic && !saved ? { source: 'automatic-unconfirmed', sdkObjectId, name: 'Automatic ' + sdkObjectId, object: object(sdkObjectId), pointProjectMetres: [sdkObjectId, 2, 3], approximate: true, confirmed: false } : null };
 }
+function savedToContext(value: CableEndpointContext): CableEndpointContext {
+  return { ...value, location: { id: id(81), name: 'LP-002', revision: '2', aliases: [] }, automaticSelection: null,
+    head: { schemaVersion: 'wfc.pf.endpoint-binding.v1', id: id(82), projectId: project, locationId: id(81), locationRevision: '2', bindingRevision: '3',
+      locationRegistryRevision: value.registryRevision, modelVersionId: scope.modelVersionId, aggregateId: scope.aggregateId, artifactId: scope.artifactId,
+      projectionSha256: scope.projectionSha256, captureFrameId: scope.captureFrameId, qualifiedProjectFrameId: null, status: 'confirmed', mode: 'fixed-world',
+      pointProjectMetres: [21, 2, 3], derivation: 'manual-world-point', sourceObject: null, attachment: null, sourceDecisionId: null, supersedesBindingId: null,
+      legacyObservationId: null, priorPointProjectMetres: null, priorCaptureFrameId: null, displacementBasis: 'none', displacementVectorMetres: null,
+      displacementMetres: null, confirmedBy: actor, confirmedAt: '2026-10-20T00:00:00Z', reason: 'Existing saved To location', contentSha256: 'd'.repeat(64) } };
+}
 function selection(sdkObjectId = 55): ViewerSelection { return { coordinateFrame: 'world-metres-z-up', metresPerDisplayUnit: 1, globalOffsetMetres: [0, 0, 0], objects: [{ objectId: sdkObjectId,
   parentId: null, name: 'Selected equipment ' + sdkObjectId, externalId: null, bounds: { minimum: [0, 1, 3], maximum: [2, 3, 5] }, bottomCentre: [1, 2, 3], derivation: 'display-aabb-bottom-centre', nativeVisibility: 'unknown', properties: [], propertiesTruncated: false }] }; }
 function receipt(command: CableEndpointPairCommand, deduplicate = false): CableEndpointPairReceipt {
@@ -31,7 +40,7 @@ function receipt(command: CableEndpointPairCommand, deduplicate = false): CableE
   return { schemaVersion: 'wfc.pf.cable-endpoint-pair-receipt.v1', projectId: project, actorId: actor, cableId: cable,
     idempotencyKey: command.idempotencyKey, commandSha256: 'c'.repeat(64), expectedCableWriteRevision: '4', expectedContexts: command.expectedContexts, finalRegistryRevision: '6', duplicate: false,
     receipts: command.endpoints.map((item, index) => ({ end: item.end, projectId: project, cableId: cable, actorId: actor,
-      locationId: id(deduplicate ? 70 : 70 + index), locationImpact: { id: id(deduplicate ? 80 : 80 + index) }, idempotencyKey: item.command.idempotencyKey })) } as unknown as CableEndpointPairReceipt;
+      locationId: id(deduplicate ? 70 : 70 + index), locationImpact: { id: id(deduplicate ? 80 : 80 + index), status: item.command.calculation === null ? 'blocked' : 'pending' }, idempotencyKey: item.command.idempotencyKey })) } as unknown as CableEndpointPairReceipt;
 }
 const access = (): CableEndpointPairSelectionAccess => ({ projectId: project, loadedProjectId: project, accountId: actor, token: 'current-private-token', isAdmin: true, active: true,
   cableId: cable, model: { modelVersionId: scope.modelVersionId, selectionRevision: scope.selectionRevision, contentFingerprint: scope.contentFingerprint }, preparationKey: 'current-preparation',
@@ -58,6 +67,43 @@ afterEach(() => { vi.restoreAllMocks(); localStorage.clear(); if (originalLocks)
 async function ready(view: { result: { current: ReturnType<typeof useCableEndpointPairSelection> } }) { await waitFor(() => expect(view.result.current.from.context && view.result.current.to.context && view.result.current.storageReady && !view.result.current.busy).toBeTruthy()); }
 
 describe('one explicit From/To Save', () => {
+  it('saves changed From with an untouched saved To and explicit null routing policy in one exact pair command', async () => {
+    const originalTo = savedToContext(context(cable, 'to'));
+    vi.mocked(fetchCableEndpointContext).mockImplementation(async (_project, _token, selected, end) => end === 'to' ? savedToContext(context(selected, end)) : context(selected, end));
+    const props = { ...access(), calculation: null, initialFill: null }, view = renderHook(() => useCableEndpointPairSelection(props)); await ready(view);
+    expect(view.result.current.to.context?.head?.id).toBe(originalTo.head!.id); expect(view.result.current.to.draft).toBeNull();
+    await act(async () => { await view.result.current.from.selectObject(); }); expect(view.result.current.canSave).toBe(true);
+    await act(async () => { expect(await view.result.current.save('Save the changed From location before routing')).toBe(true); });
+    expect(saveCableEndpointPair).toHaveBeenCalledOnce(); expect(saveCableEndpoint).not.toHaveBeenCalled();
+    const command = vi.mocked(saveCableEndpointPair).mock.calls[0][3];
+    expect(command.expectedContexts).toEqual({ from: 'a'.repeat(64), to: 'b'.repeat(64) }); expect(command.endpoints).toHaveLength(1);
+    expect(command.endpoints[0]).toMatchObject({ end: 'from', command: { calculation: null, initialFill: null, expectedContextSha256: 'a'.repeat(64),
+      expectedLogicalName: 'LP-001', expectedCableWriteRevision: '4', expectedRegistryRevision: '5', selection: { mode: 'object-derived', sdkObjectId: 55 } } });
+    expect(view.result.current.receipt?.receipts[0].locationImpact?.status).toBe('blocked');
+    expect(props.onSaved).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ end: 'from' }), scope, null);
+    expect(view.result.current.notice).toContain('No routing calculation was queued'); expect(view.result.current.notice).toContain('Configure routing and calculate again');
+    expect(view.result.current.notice).not.toContain('calculations are queued'); expect(readPendingCableEndpointPair(owner)).toBeNull();
+    await waitFor(() => expect(view.result.current.retired).toBe(false)); expect(view.result.current.to.context?.head?.id).toBe(originalTo.head!.id);
+    expect(view.result.current.to.context?.head?.pointProjectMetres).toEqual(originalTo.head!.pointProjectMetres);
+  });
+  it.each([true, false])('recovery reports its original endpoint-only=%s command after live routing preferences change', async endpointOnly => {
+    automatic = true; vi.mocked(saveCableEndpointPair).mockRejectedValueOnce(new CableEndpointApiError('REQUEST_TIMEOUT', null, 'Unknown original Save'));
+    const props: CableEndpointPairSelectionAccess = { ...access(), ...(endpointOnly ? { calculation: null, initialFill: null } : {}) };
+    const view = renderHook(value => useCableEndpointPairSelection(value), { initialProps: props }); await ready(view);
+    await act(async () => { expect(await view.result.current.save('Retain the original explicit policy')).toBe(false); });
+    const pending = readPendingCableEndpointPair(owner)!; expect(pending.command.endpoints[0].command.calculation).toEqual(endpointOnly ? null : calculation);
+    view.rerender({ ...props, calculation: endpointOnly ? calculation : null, initialFill: endpointOnly ? { mode: 'when-both-empty' } : null });
+    await ready(view); await waitFor(() => expect(view.result.current.canRetry).toBe(true));
+    await act(async () => { expect(await view.result.current.retry()).toBe(true); });
+    expect(vi.mocked(saveCableEndpointPair).mock.calls[1][3]).toEqual(pending.command);
+    expect(props.onSaved).toHaveBeenCalledWith(expect.anything(), scope, endpointOnly ? null : calculation);
+    if (endpointOnly) {
+      expect(view.result.current.notice).toContain('No routing calculation was queued'); expect(view.result.current.notice).not.toContain('recalculation was requested');
+    } else {
+      expect(view.result.current.notice).toContain('recalculation was requested using the saved routing settings'); expect(view.result.current.notice).not.toContain('No routing calculation was queued');
+    }
+    expect(readPendingCableEndpointPair(owner)).toBeNull(); expect(saveCableEndpoint).not.toHaveBeenCalled();
+  });
   it('Assign only reads selections; one Save retains both original contexts and drafts before its single PUT', async () => {
     const props = access(), view = renderHook(() => useCableEndpointPairSelection(props)); await ready(view);
     await act(async () => { await view.result.current.from.selectObject(); await view.result.current.to.selectObject(); });
