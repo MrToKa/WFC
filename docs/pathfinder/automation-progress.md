@@ -1,5 +1,20 @@
 # PathFinder local implementation progress
 
+## Current: B25 checked opening routing installed on 5191
+
+Report120/public owned-delivery receipt records source 743d73af installed by
+operation 0ba258ed: initialization+eight phases PASS, V5 conservation PASS for 142
+tables/81,168 migration rows with no new tables or managed schema changes. Exact
+pair/state/environment binding, source resources and positive target retirement
+passed. API 68938938/web 06f072c8/engine b3157008 are installed. Health and seven
+candidate-image/served-static byte comparisons PASS; the never-started image
+reader was removed and resources were unchanged across the static checks.
+Source 308 Core/transport+282 TS and offline 9 native/874 segment checks remain
+separate evidence. H1 From 81.68/design 91m versus reference From 51.26 still needs
+clarification. No browser/SDK/current-frame, real Apply or full-reference
+engineering acceptance is inferred. Own-terminal/full capacity and Simplified
+Preparer remain unfinished. Earlier reports below are preserved.
+
 ## Current: B25 shorter checked opening route verified; delivery pending
 
 Report119/source and native receipts record 308 Core/transport and 282 selected
