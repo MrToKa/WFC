@@ -1,5 +1,20 @@
 # PathFinder local implementation progress
 
+## Current: actual Aalborg tests expose repeated constrained graph checks
+
+Report116/public real-cable receipt: actual installedAPIa43 supervisor executes
+four unchanged retained-input cases, all positively joined/cleaned. L2Off/On
+calculate30m; Off checks39/39segments. H1Off refuses at100000collisionqueries;
+On calculates90m and independent geometry checks find two genuine wall crossings.
+Independent11analyticchecks and all315 successful finaledges completed, floor
+solid/registered-gap probes distinguish contact from no contact. Eight coordinate
+witness bounds fit the user accepted<=0.1m, max8.0983e-7m; collision tolerance stays
+1e-7m. Source/input/artifact bookends pass. New per-budget exact directed segment
+reuse is being implemented to remove repeated graph oracle calls while preserving
+fresh physical final checks and all caps. No new H1Off success, live SDK/frame,
+publication or realApply acceptance is claimed. Own-terminal/fullcapacity and
+Simplified Preparer remain. Runtime still B21API/B22web; history retained below.
+
 ## Current: B22 popup correction installed; real Aalborg cable checks in progress
 
 Report115/publicB22 delivery receipt records source89503dce installed on5191:
