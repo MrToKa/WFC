@@ -1,6 +1,8 @@
 # PF-B13 — whole-parent barrier capacity plan
 
-Status: **PLANNED**. This document is an implementation plan, not a geometry,
+Status: **IN PROGRESS**. B13a pure planning and B13b unqualified server staging
+are technically verified (reports97/98); protected producer and all geometry/
+publication/actual-model gates remain unfinished. This document is not a geometry,
 capacity, publication, routing or engineering acceptance receipt. Root executes
 all builds, tests, SQL, HTTP, Viewer and runtime qualification. No current limit
 is raised by this plan.
@@ -138,7 +140,7 @@ neither supplies runtime admission or a geometry-qualified/clear claim.
 
 ## Stage 1 — versioned contracts and pure multipart planner
 
-Status: **PLANNED**. One designated contract writer first freezes interfaces;
+Status: **TECHNICAL SOURCE PASS** at product410f2da/report97. One designated contract writer first freezes interfaces;
 other writers consume them only after agreement.
 
 New suggested files:
@@ -213,7 +215,10 @@ bounded events, message bytes, callbacks, per-part memory and finite duration.
 
 ## Stage 3 — packed server storage and atomic publication
 
-Status: **PLANNED**.
+Status: **FOUNDATION VERIFIED, PUBLICATION PLANNED**. Product18b8d01/report98
+implements strict server-owned sessions, packed immutable storage and permanent
+reservations, tested with actual isolated Linux/PostgreSQL fixtures. No production
+wiring, encoded geometry validation, global qualification or publication exists.
 
 Suggested new files: `server/pathfinder/barrierMultipartSessions.ts`,
 `barrierMultipartStorage.ts`, additive schema and routes with focused unit/SQL

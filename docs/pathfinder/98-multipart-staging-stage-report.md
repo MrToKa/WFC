@@ -49,7 +49,7 @@ owner proof. Both helpers positively stopped/removed and its network was removed
 all36 copied dependency files matched source/copy bookends.
 
 Attempts1/2 failed before tests with remote-exec/cleanup uncertainty during test
-database startup. Their helpers were removed; two empty diagnostic networks are
+database startup. No owned helper remains in the current inventory; two empty diagnostic networks are
 retained pending explicit reconciliation. Attempts3–5 positively cleaned up after
 startup failure; logs identified a Unix socket directory on the read-only root
 and the official initialization script's fixed socket lookup. A fresh private
