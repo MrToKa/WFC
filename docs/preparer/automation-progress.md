@@ -2,6 +2,24 @@
 
 ## SP-0 ACTIVE
 
+Qualified platform coverage recorded at clean source00832078098f21d5e6e2b780c4c0d03bc3506086.
+Fresh Windows full run d61022c2-9471-40b8-a2ba-ed25a95aa4c4 finished
+2026-10-22T01:51:45.003Z: guard18/package174 PASS; Preparer286/281 PASS/0 FAIL/
+5 Linux SKIP/0 cancelled/0 todo. All parents, workers and children joined, ports
+closed, no killed worker, source/copy bookends unchanged. Strict full summary
+and Preparer suite remain FAIL because terminalPass still requires zero skips
+and tests===pass. No gate or timeout changed.
+Separate Linux operation eab7c528-2c6b-43ee-93de-042050041e07 attempt2 passed
+exactly the five store-linux lease checks under Node24.22.0, no skips, joined,
+owned helper removed, source/copy pins PASS and matching Windows source hashes.
+Its first default-reporter attempt remains FAIL for missing terminal TAP proof;
+attempt2 explicitly selected TAP. This is Windows281 plus exact Linux5 qualified
+coverage, not a full Linux package/Preparer run or a rewritten full-run PASS.
+Report04 and new evidence/sp0-platform-matrix.json preserve the distinction.
+SP-0 remains INCOMPLETE under the strict full gate pending an explicit scoped
+stage decision; actual main5180 offline backup/restore/update and APS remain NOT_RUN.
+The paragraphs below are retained historical progress, including earlier failures.
+
 TargetedOSpinrepairafterfb9failure verifiedroot: guarda40f2200 PASS18/48expected
 denials; ops47b1dd39 SUBSET_PASS14/guard18PASS/0skip. Allworker+childjoins,ports,
 source+copypinsPASS; no killedworker. ExactSystem32PSpinnedpositiveoriginalnlink/
