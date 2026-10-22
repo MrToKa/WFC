@@ -67,7 +67,7 @@ At the working source inheriting e42ccd6:
 | Full frontend/server typecheck | PASS after adding the exact new module declaration; initial missing-declaration typecheck FAIL retained, no type settings loosened |
 | Scoped production lint and diff whitespace | PASS, zero warnings |
 | Initial candidate build | FAIL: actual server:build import reported missing new barrier-capture-errors.mjs in server/dist; BuildKit terminal Error retained. No install was attempted. Explicit server-copy closure now includes and validates the dependency; four closure regressions PASS. A corrected fresh build is required. |
-| Corrected candidate build/install | Pending root execution/result below |
+| Corrected candidate build/install | PASS at22114f4dd05c0f310d8e1cbd908d36332cc42346; web814475f9, APIac0d16ab remains SAME running container; health/index/asset200, exact new static diagnostic module bytes200, nonweb resource conservation PASS |
 | Actual5191 metadata diagnostic and rollback archive prepare | PASS, read-only; same current model fingerprint, original published head absent |
 | Actual browser/SDK capture and real cable reroute | BLOCKED by retained browser refusal; no alternate browser/native/CDP/origin bypass attempted |
 | Complete broad-group capture, civil holes and engineering acceptance | NOT_RUN/UNRESOLVED; metadata proves existing v1 limits insufficient |
@@ -76,6 +76,16 @@ Runtime delivery must be web-only with a fresh exact-source operation and retain
 B11 rollback archive. Keep APIac0d16ab in the same running container, original
 5180/5190, databases, model storage and outside resources unchanged. Source and
 private receipts remain separate; no business rows/secrets in Git.
+
+Delivery completed in operation4fcfd5a0. Corrected image archive55345152 bytes,
+SHA2564fd98d01f894edf7247595d5b6eb7792b6735ef8ff6c8c27b63a5da6adb9d3a7;
+B11 rollback archive and private state/env remain retained. Public receipt:
+`evidence/barriers/b12-diagnostics-delivery.json`. The first failed build's bounded
+operator cleanup-unconfirmed code remains recorded; read-only BuildKit history
+showed its terminal Error caused by the missing server-copy module. No install
+was attempted from that failed build; corrected source/build/install are separate.
+Initial Node122 includes three closure tests; after the server-copy repair the
+four-test closure suite passed (119 runtime tests +4 closure cases in final scope).
 
 ## Continuation
 
