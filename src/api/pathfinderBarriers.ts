@@ -5,6 +5,7 @@ import { BARRIER_LIMITS, barrierCaptureCommandSchema, barrierRegistryCommandSche
   type BarrierRegistry, type BarrierSnapshot } from '../../shared/pathfinderBarriers';
 import { parsePurposeJson } from '../../shared/pathfinderPurposePolicy';
 import { discardPathFinderBody, pathFinderRequestDeadline, releasePathFinderReader } from './pathfinderRequestDeadline';
+import { barrierCaptureOutcomeQuerySchema, barrierCaptureOutcomeSchema, type BarrierCaptureOutcomeQuery } from '../../shared/pathfinderBarrierOutcomes';
 
 const publication = z.object({ schemaVersion: z.literal('wfc.pf.barrier-publication-receipt.v1'), snapshot: barrierSnapshotReferenceSchema, duplicate: z.boolean() }).strict();
 const intent = z.object({ id: z.string().uuid(), snapshotId: z.string().uuid(), captureBlobId: z.string().uuid(), manifestBlobId: z.string().uuid(),
@@ -86,4 +87,12 @@ export async function beginBarrierCapture(projectId: string, token: string, comm
 }
 export async function changeBarrierRegistry(projectId: string, token: string, command: z.input<typeof barrierRegistryCommandSchema>, signal?: AbortSignal) {
   return publication.parse(await request(projectId, token, '/commands', barrierRegistryCommandSchema.parse(command), signal));
+}
+/** Exact historical settlement only. No current Viewer/model or publication
+ * endpoint is used, and null never means that a command was refused. */
+export async function getBarrierCaptureOutcome(projectId: string, token: string, intentId: string, expected: BarrierCaptureOutcomeQuery, signal?: AbortSignal) {
+  z.string().uuid().parse(intentId);
+  const query = barrierCaptureOutcomeQuerySchema.parse(expected);
+  const search = new URLSearchParams(query).toString();
+  return barrierCaptureOutcomeSchema.parse(await request(projectId, token, `/intents/${intentId}/outcome?${search}`, undefined, signal));
 }

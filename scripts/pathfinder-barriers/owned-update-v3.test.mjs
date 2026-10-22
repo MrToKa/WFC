@@ -4,7 +4,7 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import { ROOT } from '../pathfinder-local/runtime-lib.mjs';
-import { SOURCE, PHASES, assertSource, assertTarget, assertOperation, assertCandidate, assertTransition, main, executePhase, pin, claimBuildChild } from './owned-update-v3.mjs';
+import { SOURCE, PHASES, assertSource, assertTarget, assertOperation, assertCandidate, assertTransition, main, executePhase, pin, claimBuildChild, assertConservationPolicy, assertPhasePolicyBinding } from './owned-update-v3.mjs';
 const id = '93000000-0000-4000-8000-000000000009', owner = '93000000-0000-4000-8000-000000000010';
 const candidate = { api: 'sha256:' + 'a'.repeat(64), web: 'sha256:' + 'b'.repeat(64) };
 function config() { const directory = path.join(ROOT, 'pathfinder-engine/.scratch/barrier-delivery-' + id); return {
@@ -42,6 +42,56 @@ test('implicit/default CLI and unknown flags refuse before runtime adapter creat
   let calls = 0; const runtime = { initialize() { calls++; } };
   for (const args of [['backup'], ['backup', '--operation', 'relative'], ['init', '--operation'], ['backup', '--secret', 'x']]) await assert.rejects(main(args, runtime));
   assert.equal(calls, 0);
+});
+
+function policyConfig() {
+  const value = config(), record = filename => ({ path: path.join(ROOT, 'scripts/pathfinder-barriers', filename), bytes: 123, sha256: 'c'.repeat(64) });
+  value.qualificationPolicy = { schemaVersion: 'wfc.pf.owned-update-policy-binding.v1',
+    selection: { schemaVersion: 'wfc.pf.delivery-policy-selection.v1', profile: 'post-b9-no-ddl-conservation-v4' },
+    selector: record('delivery-policy-selector-v4.mjs'), qualifier: record('migration-conservation-v4.mjs') };
+  value.sourceClosure = [value.qualificationPolicy.selector, value.qualificationPolicy.qualifier];
+  return value;
+}
+test('old B9 config and receipt remain unchanged when no policy is selected', () => {
+  const value = config(); assert.equal(assertConservationPolicy(value), null);
+  assertPhasePolicyBinding(value, { status: 'PASS' }); assertOperation(value, value.directory);
+  assert.throws(() => assertPhasePolicyBinding(value, { status: 'PASS', qualificationPolicy: policyConfig().qualificationPolicy }), /B9_PHASE_POLICY_BINDING_CHANGED/);
+});
+test('explicit v4 config binds exact selector and qualifier members of the source closure', () => {
+  const value = policyConfig(); assert.equal(assertConservationPolicy(value), value.qualificationPolicy); assertOperation(value, value.directory);
+  assertPhasePolicyBinding(value, { status: 'PASS', qualificationPolicy: structuredClone(value.qualificationPolicy) });
+});
+test('a present invalid policy never falls back to B9', () => {
+  for (const binding of [undefined, null, {}, { ...policyConfig().qualificationPolicy, extra: true },
+    { ...policyConfig().qualificationPolicy, selection: { schemaVersion: 'wfc.pf.delivery-policy-selection.v1', profile: 'b9' } }]) {
+    const value = config(); value.qualificationPolicy = binding; assert.throws(() => assertConservationPolicy(value), /B9_CONSERVATION_POLICY_INVALID/);
+  }
+});
+test('missing, duplicated, changed or foreign selector pins are refused', () => {
+  for (const mutate of [v => { v.sourceClosure.pop(); }, v => { v.sourceClosure.push(v.qualificationPolicy.selector); },
+    v => { v.sourceClosure = v.sourceClosure.map((row, i) => i ? row : { ...row, sha256: 'd'.repeat(64) }); },
+    v => { v.qualificationPolicy.selector = { ...v.qualificationPolicy.selector, path: SOURCE.runtime + '/foreign.mjs' }; }]) {
+    const value = policyConfig(); mutate(value); assert.throws(() => assertConservationPolicy(value), /B9_CONSERVATION_POLICY_CLOSURE_REQUIRED/);
+  }
+});
+test('policy receipts cannot omit or exchange the immutable selected policy', () => {
+  const value = policyConfig();
+  for (const result of [{ status: 'PASS' }, { status: 'PASS', qualificationPolicy: null },
+    { status: 'PASS', qualificationPolicy: { ...value.qualificationPolicy, qualifier: { ...value.qualificationPolicy.qualifier, sha256: 'd'.repeat(64) } } }])
+    assert.throws(() => assertPhasePolicyBinding(value, result), /B9_PHASE_POLICY_BINDING_CHANGED/);
+});
+test('explicit v4 cannot relabel an old dated operation directory', () => {
+  const value = policyConfig(); value.directory = value.directory.replace('barrier-delivery-', 'barrier-delivery-20261021-');
+  assert.throws(() => assertConservationPolicy(value), /B9_CONSERVATION_POLICY_OPERATION_REQUIRED/);
+});
+test('CLI preserves the old init arguments and forwards v4 only when explicitly selected', async () => {
+  const calls = [], adapter = { initialize(...args) { calls.push(args); return { status: 'SYNTHETIC' }; } };
+  const args = ['init', '--operation', config().directory, '--qualified-inventory', path.join(ROOT, 'inventory.mjs'), '--inventory-sha', 'a'.repeat(64)];
+  await main(args, adapter); assert.equal(calls[0].length, 3);
+  await main([...args, '--conservation-policy', 'post-b9-no-ddl-conservation-v4'], adapter); assert.equal(calls[1].length, 4); assert.equal(calls[1][3], 'post-b9-no-ddl-conservation-v4');
+  await assert.rejects(main([...args, '--conservation-policy', 'unknown'], adapter), /B9_CONSERVATION_POLICY_INVALID/);
+  await assert.rejects(main(['backup', '--operation', config().directory, '--conservation-policy', 'post-b9-no-ddl-conservation-v4'], adapter), /B9_ARGUMENTS/);
+  assert.equal(calls.length, 2);
 });
 async function withJournal(run) {
   // This injected orchestration fixture has no concrete Docker/SQL adapter.

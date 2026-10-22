@@ -259,7 +259,14 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
       if (capturing) {
         const owned = captureScope === ownedCapture;
         releaseCapture(ownedCapture, true);
-        if (owned) { try { handle?.clearRoute(); } catch (cleanup) { cause = cleanup; } }
+        if (owned) {
+          try { handle?.clearRoute(); }
+          catch {
+            // Preserve the request's extraction/authority failure. Restoration
+            // is secondary and must not disguise it as a broken model load.
+            try { window.console?.warn?.('WFC capture cleanup failed', { code: 'APPEARANCE_RESTORE_FAILED' }); } catch { /* Diagnostics cannot change the primary outcome. */ }
+          }
+        }
       } else if (['BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH'].includes(command.type)) {
         computed = undefined; routeHasLine = false;
         try { handle?.clearRoute(); } catch (cleanup) { cause = cleanup; }

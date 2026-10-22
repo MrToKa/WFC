@@ -1,12 +1,27 @@
 import { createHash, webcrypto } from 'node:crypto';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { beginBarrierCapture, changeBarrierRegistry, getBarrierRegistry, getLatestBarrierSnapshot, BARRIER_READ_MILLISECONDS } from './pathfinderBarriers';
+import { beginBarrierCapture, changeBarrierRegistry, getBarrierRegistry, getLatestBarrierSnapshot, getBarrierCaptureOutcome, BARRIER_READ_MILLISECONDS } from './pathfinderBarriers';
 import { BARRIER_LIMITS, barrierCanonicalJson, barrierSnapshotHashInput, barrierSnapshotSchema, type BarrierSnapshot } from '../../shared/pathfinderBarriers';
 const id = (n: number) => `b2000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const scope = { projectId: id(1), modelVersionId: id(2), contentFingerprint: 'a'.repeat(64), selectionRevision: '1',
   captureFrameId: id(3), captureFrameSha256: 'b'.repeat(64), coordinateFrame: 'canonical-world-metres' as const };
 const registry = { schemaVersion: 'wfc.pf.barrier-registry.v1', scope, registryRevision: '0', state: 'unconfigured',
   selectedParents: [], snapshot: null, reasonCodes: ['NO_BARRIER_SCOPE_CONFIGURED'] };
+it('reads exact historical capture outcome through authenticated GET without Viewer readiness or resubmission', async () => {
+  const query = { commandSha256: 'a'.repeat(64), captureSha256: 'b'.repeat(64), frameSha256: 'c'.repeat(64) };
+  const refusal = { schemaVersion: 'wfc.pf.barrier-publication-refusal.v1', outcome: 'not-published', intentId: id(7), ...query,
+    implementationSha256: 'd'.repeat(64), reasonCode: 'BARRIER_GEOMETRY_REFUSED', duplicate: true };
+  const fetcher = vi.fn<typeof fetch>(async () => Response.json(refusal)); vi.stubGlobal('fetch', fetcher);
+  expect(await getBarrierCaptureOutcome(id(1), 'current-auth', id(7), query)).toEqual(refusal);
+  expect(fetcher).toHaveBeenCalledOnce(); expect(String(fetcher.mock.calls[0]?.[0])).toContain(`/barriers/intents/${id(7)}/outcome?commandSha256=`);
+  expect(fetcher.mock.calls[0]?.[1]).toMatchObject({ method: 'GET', credentials: 'same-origin', cache: 'no-store', redirect: 'error', headers: { Authorization: 'Bearer current-auth' } });
+});
+it('keeps an unsettled null outcome distinct from publication or refusal and rejects invented terminal authority', async () => {
+  const query = { commandSha256: 'a'.repeat(64), captureSha256: 'b'.repeat(64), frameSha256: 'c'.repeat(64) };
+  const fetcher = vi.fn().mockResolvedValueOnce(Response.json(null)).mockResolvedValueOnce(Response.json({ outcome: 'not-published', ready: true })); vi.stubGlobal('fetch', fetcher);
+  expect(await getBarrierCaptureOutcome(id(1), 'current-auth', id(7), query)).toBeNull();
+  await expect(getBarrierCaptureOutcome(id(1), 'current-auth', id(7), query)).rejects.toThrow(); expect(fetcher).toHaveBeenCalledTimes(2);
+});
 beforeEach(() => { vi.stubGlobal('crypto', webcrypto); });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 it('reads the exact API route with login and detached strict registry shape', async () => {

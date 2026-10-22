@@ -4,10 +4,10 @@ import { barrierCanonicalJson, type BarrierModelScope } from '../../shared/pathf
 import { barrierEnumerationHashInput, barrierFrameObservationHashInput, validateBarrierFrameObservation,
   type BarrierFrameObservation } from '../../viewer-runtime/barrier-capture.mjs';
 import { barrierFrameProjectionHash, currentBarrierScope } from './barrierScope.js';
-import type { BarrierRegistryAdapters } from './barrierRegistryRepository.js';
+import { BarrierCaptureQualificationRefusal, type BarrierRegistryAdapters } from './barrierRegistryRepository.js';
 import type { JobPrincipal } from './jobContracts.js';
 import { PathFinderError } from './errors.js';
-import { runBarrierVerifier } from './barrierVerifier.js';
+import { BarrierGeometryRefusal, runBarrierVerifier } from './barrierVerifier.js';
 
 const hash = (value: unknown) => createHash('sha256').update(barrierCanonicalJson(value)).digest('hex');
 const fail = (code: string): never => { throw new PathFinderError(code, 409, 'The protected barrier capture or its current model frame could not be confirmed.'); };
@@ -41,6 +41,11 @@ export function barrierCaptureAdapters(context?: BarrierViewerContext,
   const frozen = context ? { ...context, who: { ...context.who }, frame: JSON.parse(JSON.stringify(context.frame)) as BarrierFrameObservation } : undefined;
   let viewerDeadline = 0;
   return {
+    publicationFrameSha256() {
+      if (!frozen || !validateBarrierFrameObservation(frozen.frame)
+        || hash(barrierFrameObservationHashInput(frozen.frame)) !== frozen.frame.contentSha256) return fail('BARRIER_PROTECTED_CAPTURE_REQUIRED');
+      return frozen.frame.contentSha256;
+    },
     assertBeforeCommit() { if (frozen && (!Number.isFinite(viewerDeadline) || Date.now() >= viewerDeadline)) fail('BARRIER_CAPTURE_VIEWER_EXPIRED'); },
     async currentScope(client, projectId) {
       const scope = await currentBarrierScope(client, projectId);
@@ -56,7 +61,15 @@ export function barrierCaptureAdapters(context?: BarrierViewerContext,
         || hash(barrierEnumerationHashInput(capture)) !== capture.observation.enumerationSha256
         || capture.fragments.some(fragment => hash(fragment.source.sourceToWorldMetres) !== fragment.source.transformSha256))
         return fail('BARRIER_CAPTURE_CLOSURE_INVALID');
-      const { result, implementationSha256 } = await execute(input.captureBytes, signal); signal.throwIfAborted();
+      let executed: Awaited<ReturnType<typeof execute>>;
+      try { executed = await execute(input.captureBytes, signal); }
+      catch (error) {
+        signal.throwIfAborted();
+        if (error instanceof BarrierGeometryRefusal && error.captureSha256 === input.captureSha256)
+          throw new BarrierCaptureQualificationRefusal(error.captureSha256, hash(barrierFrameObservationHashInput(frozen.frame)), error.implementationSha256);
+        throw error;
+      }
+      signal.throwIfAborted(); const { result, implementationSha256 } = executed;
       const evidence = result.evidence;
       if (result.status !== 'geometry-qualified' || result.captureSha256 !== input.captureSha256 || !evidence
         || evidence.captureId !== capture.captureId || barrierCanonicalJson(evidence.scope) !== barrierCanonicalJson(capture.scope)

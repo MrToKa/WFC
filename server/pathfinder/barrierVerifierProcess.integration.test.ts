@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { BARRIER_CAPTURE_VERSION, barrierCanonicalJson, type BarrierCapture } from '../../shared/pathfinderBarriers.js';
 import { barrierEnumerationHashInput } from '../../viewer-runtime/barrier-capture.mjs';
-import { barrierVerifierResultSchema, runBarrierVerifier } from './barrierVerifier.js';
+import { BarrierGeometryRefusal, barrierVerifierResultSchema, runBarrierVerifier } from './barrierVerifier.js';
 
 /** Actual Node -> bounded stdin -> .NET9 -> strict receipt process tests.
  * Run this file with one test worker in the root-owned Linux fixture only.
@@ -85,6 +85,16 @@ describe.runIf(Boolean(testDll) && process.platform === 'linux')('PF-B2 actual L
     const next = await runBarrierVerifier(bytes, new AbortController().signal);
     expect(next.implementationSha256).toBe(accepted.value.implementationSha256);
     expect(next.result).toEqual(accepted.value.result);
+  }, 30000);
+  it('distinguishes a fully hashed logical open-shell refusal from verifier availability or process failure', async () => {
+    const open = cubeCapture(); open.fragments[0].triangleIndices.splice(-3);
+    const openBytes = Buffer.from(barrierCanonicalJson(open));
+    const rejected = runBarrierVerifier(openBytes, new AbortController().signal);
+    await expect(rejected).rejects.toBeInstanceOf(BarrierGeometryRefusal);
+    await expect(rejected).rejects.toMatchObject({ code: 'BARRIER_GEOMETRY_REFUSED', captureSha256: sha256(openBytes),
+      implementationSha256: expect.stringMatching(/^[a-f0-9]{64}$/) });
+    // A joined logical refusal releases the bounded lane for another invocation.
+    expect((await runBarrierVerifier(bytes, new AbortController().signal)).result.status).toBe('geometry-qualified');
   }, 30000);
 
   it('refuses missing deployment configuration without starting the verifier lane', async () => {

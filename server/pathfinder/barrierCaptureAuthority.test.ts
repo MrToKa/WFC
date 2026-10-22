@@ -6,8 +6,8 @@ import { GEOMETRY_TRACE_LIMITS } from '../../shared/pathfinderGeometryTrace.js';
 import { barrierEnumerationHashInput, barrierFrameObservationHashInput, type BarrierFrameObservation } from '../../viewer-runtime/barrier-capture.mjs';
 import { barrierCaptureAdapters, type BarrierViewerContext } from './barrierCaptureAuthority.js';
 import { barrierFrameProjectionHash, currentBarrierScope } from './barrierScope.js';
-import { barrierVerifierResultSchema, type runBarrierVerifier } from './barrierVerifier.js';
-import { barrierRegistryTransaction, type BarrierCaptureIntent } from './barrierRegistryRepository.js';
+import { BarrierGeometryRefusal, barrierVerifierResultSchema, type runBarrierVerifier } from './barrierVerifier.js';
+import { BarrierCaptureQualificationRefusal, barrierRegistryTransaction, type BarrierCaptureIntent } from './barrierRegistryRepository.js';
 import { geometryTraceFixture } from './geometryTraceFixtures.js';
 import { buildGeometryTrace } from './geometryTraceBuilder.js';
 
@@ -185,6 +185,25 @@ describe('protected human viewer observation and final expiry fencing', () => {
 });
 
 describe('geometry qualification receipt and runtime-observed provenance', () => {
+  it('binds only a trusted logical verifier refusal to the exact protected full-frame digest', async () => {
+    const f = fixture(); await f.adapters.currentScope(f.client, f.scope.projectId);
+    const logical = new BarrierGeometryRefusal(f.input.captureSha256, f.state.implementationSha256);
+    f.execute.mockRejectedValueOnce(logical);
+    expect(f.adapters.publicationFrameSha256!()).toBe(f.frame.contentSha256);
+    const rejected = f.adapters.qualifyCapture(f.input, new AbortController().signal);
+    await expect(rejected).rejects.toBeInstanceOf(BarrierCaptureQualificationRefusal);
+    await expect(rejected).rejects.toMatchObject({ captureSha256: f.input.captureSha256, frameSha256: f.frame.contentSha256,
+      implementationSha256: f.state.implementationSha256 });
+  });
+  it('does not mint protected refusal evidence from a status code or another capture digest', async () => {
+    const f = fixture(); await f.adapters.currentScope(f.client, f.scope.projectId);
+    const operational = Object.assign(Error('Operational failure'), { code: 'BARRIER_GEOMETRY_REFUSED', status: 503 });
+    f.execute.mockRejectedValueOnce(operational);
+    await expect(f.adapters.qualifyCapture(f.input, new AbortController().signal)).rejects.toBe(operational);
+    const foreign = new BarrierGeometryRefusal('f'.repeat(64), f.state.implementationSha256);
+    f.execute.mockRejectedValueOnce(foreign);
+    await expect(f.adapters.qualifyCapture(f.input, new AbortController().signal)).rejects.toBe(foreign);
+  });
   it('combines the exact geometry receipt, implementation and protected observation without claiming independent SDK enumeration', async () => {
     const f = fixture(); await f.adapters.currentScope(f.client, f.scope.projectId);
     const value = await f.adapters.qualifyCapture(f.input, new AbortController().signal);

@@ -18,6 +18,33 @@ export const canonical = value => value === null || typeof value !== 'object' ? 
   ? '[' + value.map(canonical).join(',') + ']' : '{' + Object.keys(value).sort().map(key => JSON.stringify(key) + ':' + canonical(value[key])).join(',') + '}';
 export const same = (left, right) => canonical(left) === canonical(right);
 export const digest = value => createHash('sha256').update(value).digest('hex');
+/** Additive optional policy binding. An absent field is the unchanged B9 mode;
+ * a present malformed/unknown binding never falls back to that mode. */
+export function assertConservationPolicy(config) {
+  if (!Object.hasOwn(config, 'qualificationPolicy')) return null;
+  const binding = config.qualificationPolicy;
+  const exact = (value, keys) => value && typeof value === 'object' && !Array.isArray(value)
+    && Object.getPrototypeOf(value) === Object.prototype && Reflect.ownKeys(value).length === keys.length
+    && keys.every(key => { const descriptor = Object.getOwnPropertyDescriptor(value, key); return descriptor?.enumerable === true && Object.hasOwn(descriptor, 'value'); });
+  need(exact(binding, ['schemaVersion', 'selection', 'selector', 'qualifier'])
+    && binding.schemaVersion === 'wfc.pf.owned-update-policy-binding.v1'
+    && exact(binding.selection, ['schemaVersion', 'profile']) && binding.selection.schemaVersion === 'wfc.pf.delivery-policy-selection.v1'
+    && binding.selection.profile === 'post-b9-no-ddl-conservation-v4', 'B9_CONSERVATION_POLICY_INVALID');
+  need(config.directory === path.join(SCRATCH, 'barrier-delivery-' + config.operationId), 'B9_CONSERVATION_POLICY_OPERATION_REQUIRED');
+  for (const [key, filename] of [['selector', 'delivery-policy-selector-v4.mjs'], ['qualifier', 'migration-conservation-v4.mjs']]) {
+    const record = binding[key];
+    need(exact(record, ['path', 'bytes', 'sha256']) && record.path === path.join(ROOT, 'scripts/pathfinder-barriers', filename)
+      && Number.isSafeInteger(record.bytes) && record.bytes > 0 && record.bytes <= 4 * 1024 ** 2 && SHA.test(record.sha256 ?? '')
+      && Array.isArray(config.sourceClosure) && config.sourceClosure.filter(row => row.path === record.path).length === 1
+      && same(config.sourceClosure.find(row => row.path === record.path), record), 'B9_CONSERVATION_POLICY_CLOSURE_REQUIRED');
+  }
+  return binding;
+}
+export function assertPhasePolicyBinding(config, result) {
+  const binding = assertConservationPolicy(config);
+  need(binding ? Object.hasOwn(result, 'qualificationPolicy') && same(result.qualificationPolicy, binding)
+    : !Object.hasOwn(result, 'qualificationPolicy'), 'B9_PHASE_POLICY_BINDING_CHANGED');
+}
 export function assertSource(state) {
   need(state?.owner === SOURCE.owner && state.project === SOURCE.project && state.runtime === SOURCE.runtime && state.port === 5191, 'B9_EXACT_SOURCE_REQUIRED');
   return validateState(state, SOURCE.runtime);
@@ -29,7 +56,7 @@ export function assertOperation(config, directory) {
     && config.targetRuntime === path.join(config.directory, 'restore-5192') && config.backup === path.join(config.directory, 'backup')
     && config.companion === path.join(config.directory, 'backup-companion.private.json')
     && SHA.test(config.operatorSha256 ?? '') && Array.isArray(config.sourceClosure) && config.sourceClosure.length > 0, 'B9_OPERATION_INVALID');
-  return config;
+  assertConservationPolicy(config); return config;
 }
 export function assertTarget(config, state) {
   assertOperation(config, config.directory);
@@ -79,6 +106,7 @@ async function readPasses(config) {
     const value = await readJson(filename);
     need(value.schemaVersion === 'wfc.pf.owned-update-phase.v3' && value.operationId === config.operationId
       && value.phase === phase && value.status === 'PASS' && value.result?.status === 'PASS', 'B9_PASS_SCOPE_INVALID');
+    assertPhasePolicyBinding(config, value.result);
     await verifyPins(value.prerequisites); await verifyPins(value.result.evidence ?? []); result[phase] = value;
   }
   return result;
@@ -110,7 +138,9 @@ export async function executePhase(config, phase, runtime) {
   await writePrivateJson(path.join(config.directory, 'phase.lock'), lock);
   await writePrivateJson(begin, { ...lock, status: 'BEGIN', prerequisites, at: new Date().toISOString() });
   try {
-    const result = await runtime.execute(phase, config, passes);
+    const supplied = await runtime.execute(phase, config, passes), binding = assertConservationPolicy(config);
+    need(!Object.hasOwn(supplied ?? {}, 'qualificationPolicy'), 'B9_ADAPTER_POLICY_OVERRIDE_REFUSED');
+    const result = binding ? { ...supplied, qualificationPolicy: binding } : supplied;
     need(result?.status === 'PASS' && Array.isArray(result.evidence), 'B9_PHASE_RESULT_INVALID');
     await verifyPins(prerequisites); await verifyPins(config.sourceClosure); await verifyPins(result.evidence);
     if (phase === 'candidate-build') assertCandidate(result.candidate);
@@ -131,14 +161,16 @@ export async function main(argv, suppliedRuntime) {
   const [phase, ...args] = argv, options = {};
   need(args.length % 2 === 0, 'B9_ARGUMENTS');
   for (let index = 0; index < args.length; index += 2) {
-    need(['--operation', '--qualified-inventory', '--inventory-sha'].includes(args[index]) && !Object.hasOwn(options, args[index]), 'B9_ARGUMENTS');
+    need(['--operation', '--qualified-inventory', '--inventory-sha', '--conservation-policy'].includes(args[index]) && !Object.hasOwn(options, args[index]), 'B9_ARGUMENTS');
     options[args[index]] = args[index + 1];
   }
   need(typeof options['--operation'] === 'string' && path.isAbsolute(options['--operation']), 'B9_EXPLICIT_OPERATION_REQUIRED');
   const directory = path.resolve(options['--operation']);
   if (phase !== 'init') need(Object.keys(options).length === 1, 'B9_ARGUMENTS');
+  if (Object.hasOwn(options, '--conservation-policy')) need(options['--conservation-policy'] === 'post-b9-no-ddl-conservation-v4', 'B9_CONSERVATION_POLICY_INVALID');
   const runtime = suppliedRuntime ?? (await import('./owned-update-v3-runtime.mjs')).createConcreteRuntime();
-  if (phase === 'init') return await runtime.initialize(directory, options['--qualified-inventory'], options['--inventory-sha']);
+  if (phase === 'init') return await runtime.initialize(directory, options['--qualified-inventory'], options['--inventory-sha'],
+    ...(Object.hasOwn(options, '--conservation-policy') ? [options['--conservation-policy']] : []));
   const config = await load(directory);
   if (phase === '__candidate-build') return await runtime.buildChild(config);
   if (phase === 'status') { const passes = await readPasses(config); return { status: 'READ_ONLY', operationId: config.operationId,

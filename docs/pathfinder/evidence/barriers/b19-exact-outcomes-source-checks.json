@@ -1,0 +1,263 @@
+{
+  "schemaVersion": "wfc.pf.b19-exact-outcomes-source-checks.v1",
+  "status": "PASS",
+  "at": "2026-10-22T11:14:57.024Z",
+  "checkedParent": "d767e109f875758281b89c0914754507654b338d",
+  "pins": [
+    {
+      "path": "docker/pathfinder.Dockerfile",
+      "bytes": 2427,
+      "sha256": "373a98b46690e8b8f9ad41ac20a3e4d950a5be072ee3fbed15eb93c17c259482"
+    },
+    {
+      "path": "docs/pathfinder/109-exact-barrier-command-outcomes-report.md",
+      "bytes": 4044,
+      "sha256": "68f747fa8fefed3da526099eb9e10e88300e37af6abf3161efbaaf01159b3d96"
+    },
+    {
+      "path": "docs/pathfinder/automation-progress.md",
+      "bytes": 142070,
+      "sha256": "bdab12990fe4f3a2e40434a321dee164adbbd2d18dde3a72ba8a8eb9cfcf0bec"
+    },
+    {
+      "path": "scripts/pathfinder-barriers/delivery-policy-selector-v4.mjs",
+      "bytes": 1439,
+      "sha256": "2f7454fab1c87f9cc3da6eea5c60c93306e5a1b931769a89a22f7f37db718e09"
+    },
+    {
+      "path": "scripts/pathfinder-barriers/delivery-policy-selector-v4.test.mjs",
+      "bytes": 1836,
+      "sha256": "dfcb7e2d287b2bdab1df4279d961c2b873a62ff12a08a0aa9fdf5960fd9f1313"
+    },
+    {
+      "path": "scripts/pathfinder-barriers/migration-conservation-v4.mjs",
+      "bytes": 40337,
+      "sha256": "513ef3d472152de5c166db137b5f2357e1356f775adfa8c70c6e329319bafa15"
+    },
+    {
+      "path": "scripts/pathfinder-barriers/migration-conservation-v4.test.mjs",
+      "bytes": 28111,
+      "sha256": "a268f3b6d123bc1f0f1980d3ff52ad59aacc921ffad0fd9151bef021b305ebc2"
+    },
+    {
+      "path": "scripts/pathfinder-barriers/owned-update-v3-runtime.mjs",
+      "bytes": 52214,
+      "sha256": "af49b5a7604505d27d5650776f399704758c9a17ebb92266094c63548e440ccf"
+    },
+    {
+      "path": "scripts/pathfinder-barriers/owned-update-v3-runtime.test.mjs",
+      "bytes": 8260,
+      "sha256": "1ebbb81f8dfa7d9d91cf2af5cd755b9e7522b83d22cd1f6bcb628251dd8b7690"
+    },
+    {
+      "path": "scripts/pathfinder-barriers/owned-update-v3.mjs",
+      "bytes": 14621,
+      "sha256": "086fc6c24abfd5039f7c3aa75c5e3204a741c01182d341f758e8388f6ab70213"
+    },
+    {
+      "path": "scripts/pathfinder-barriers/owned-update-v3.test.mjs",
+      "bytes": 13571,
+      "sha256": "5e7703e3ce3b0715b5a9985331ba0902808137ddddacce29217bbb687fce2b44"
+    },
+    {
+      "path": "server/pathfinder/barrierCaptureAuthority.test.ts",
+      "bytes": 22650,
+      "sha256": "f1f9e58d2e2188f1f0a36a4060833fc7a60b9910648d69e949bd72858bad7138"
+    },
+    {
+      "path": "server/pathfinder/barrierCaptureAuthority.ts",
+      "bytes": 6826,
+      "sha256": "bc0d172e72d46806aadc0260c571feceec1181b04ae34c4fc3679658b1e58d94"
+    },
+    {
+      "path": "server/pathfinder/barrierRegistryRepository.test.ts",
+      "bytes": 35354,
+      "sha256": "c499bead5b70325c1140d5413fdb698364fba6cbdcce6a21045b393e50ce1fef"
+    },
+    {
+      "path": "server/pathfinder/barrierRegistryRepository.ts",
+      "bytes": 35313,
+      "sha256": "2b7e70509d7217d8045183529c5e5193c68c354e73623073dd99e6ca48b6e671"
+    },
+    {
+      "path": "server/pathfinder/barrierRegistrySql.integration.test.ts",
+      "bytes": 25299,
+      "sha256": "d00d77a851a74727847fb9b6bcf2b9acaa5a222257810acf0ac73952b8b3f196"
+    },
+    {
+      "path": "server/pathfinder/barrierRoutes.test.ts",
+      "bytes": 19196,
+      "sha256": "4b5d0c4bce84845ee8c6a872f4d6e7c3f0f22eb85b5b3b9640bb57a77be7bb0b"
+    },
+    {
+      "path": "server/pathfinder/barrierRoutes.ts",
+      "bytes": 8086,
+      "sha256": "b0c8f8c9058696a9eea418f27e211fd0b8675a24435315a1c25c384c97bba506"
+    },
+    {
+      "path": "server/pathfinder/barrierVerifier.ts",
+      "bytes": 9446,
+      "sha256": "1cebafe8901afe6bb8e4cd180b5b5b2f6fe660a6a17605ec923a52ff30eb2644"
+    },
+    {
+      "path": "server/pathfinder/barrierVerifierProcess.integration.test.ts",
+      "bytes": 8502,
+      "sha256": "6d21a1c9d7087447da8ed34c75b375dec59c93c7817f5ce847d19e0133d22fc2"
+    },
+    {
+      "path": "server/pathfinder/barrierVerifierStatus.test.ts",
+      "bytes": 1222,
+      "sha256": "1ed96a6585f44a76d2bfb3cff62de28988768633586ca218bf9aba3f4f23d0e8"
+    },
+    {
+      "path": "shared/pathfinderBarrierOutcomes.ts",
+      "bytes": 2769,
+      "sha256": "99fcceff7366f7d4c6fb813ea0fa141e008fe78989e4a8354cdf5c7791a2aabe"
+    },
+    {
+      "path": "src/api/pathfinderBarriers.test.ts",
+      "bytes": 12690,
+      "sha256": "97b38bb5e1ce23858f95c72a5a22ecaa1193799d0b343a44ec05dbf2e2c555a6"
+    },
+    {
+      "path": "src/api/pathfinderBarriers.ts",
+      "bytes": 7856,
+      "sha256": "507277cc1712330cac9d012413297a5fbc71bbffa83a7e2f26e67652805ea11a"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/barrierPendingPublication.test.ts",
+      "bytes": 5757,
+      "sha256": "a1bbf910203fc3145644290c159c168939b9d52328e936731cf20ce11d28b696"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/barrierPendingPublication.ts",
+      "bytes": 7557,
+      "sha256": "f58e69a8a90ec946f3b22ad6760edb84345dea5d880480dd598df81389f8754e"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/usePathfinderBarriers.test.tsx",
+      "bytes": 56221,
+      "sha256": "9336bbeddf71a97e97ac3a752e0bf5428621804e111fcc0d33774cba0fd878dd"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/usePathfinderBarriers.ts",
+      "bytes": 34219,
+      "sha256": "60200e2c328096136706885d1aa4d3c5368c1eef5371c2d258ba74fe042b3a03"
+    },
+    {
+      "path": "src/viewer/ViewerController.test.ts",
+      "bytes": 93807,
+      "sha256": "93c51cd562755fda0dd2f19bc904caf58e0a56d8836c7fa2886b1ee2f6e5fc5b"
+    },
+    {
+      "path": "src/viewer/ViewerController.ts",
+      "bytes": 59441,
+      "sha256": "82986ac051d0fdd0d2ddcf2994a310f3e0435aafe22435cdeb99efaa5284f11f"
+    },
+    {
+      "path": "viewer-runtime/bridge.mjs",
+      "bytes": 34453,
+      "sha256": "288325b506230e70c960188b23de1ae412b392d8eaec8bbcfa54af12e70b99d1"
+    },
+    {
+      "path": "viewer-runtime/test/bridge.test.mjs",
+      "bytes": 65783,
+      "sha256": "9484b64967ace7c22d89d155fc7614d6420651151b0a4390c0ea027f4db06659"
+    }
+  ],
+  "checks": [
+    {
+      "name": "backend-units-final.log",
+      "bytes": 476,
+      "sha256": "2d8e303182477e6345478bfe0c38dec42d2750a99005c38cebb2643dfad890c5"
+    },
+    {
+      "name": "client-corrected.log",
+      "bytes": 408,
+      "sha256": "a00ec0b4c43112640e019b508c600bb9edf65a375c15723b2874d5be725f40c9"
+    },
+    {
+      "name": "client-units-first.log",
+      "bytes": 11333,
+      "sha256": "3569a8d28408e7979541cf7374f2df0fdad1d357048a831eacda2b5b862b0086"
+    },
+    {
+      "name": "verifier-status-first.log",
+      "bytes": 283,
+      "sha256": "9c6529596dec3616346f6dbcd2d4bf6985395ffd9a01c67871a5abb02fd209dd"
+    },
+    {
+      "name": "bridge-primary-final.log",
+      "bytes": 6696,
+      "sha256": "131a3a2a1c1ddb21d4dadcbe47acdfb1757ff7d9ae9091ef4a7505a47a9beac2"
+    },
+    {
+      "name": "delivery-policy-first.log",
+      "bytes": 10588,
+      "sha256": "6e0814e27e03a7cb50fcbc8608ca4759b852cf5f147b66177db0932d2f122fd8"
+    },
+    {
+      "name": "types-monitor-final.log",
+      "bytes": 93,
+      "sha256": "b8eb3154847ce13af5e3a7672a976c5437a052bfd30d24dd327a019180231d04"
+    },
+    {
+      "name": "lint-monitor-final.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "lint-first.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "frontend-build-first.log",
+      "bytes": 7604,
+      "sha256": "608674145785fa62c597d040fc819522e7a15c31c7a82418996b6a10901935fe"
+    },
+    {
+      "name": "server-build-monitor-final.log",
+      "bytes": 1799,
+      "sha256": "e9f1842c678fae76ad91e1a0236ea2dbbbecb68a9601ea2e1dc84b9f17e20dc9"
+    },
+    {
+      "name": "fixture-eighth.log",
+      "bytes": 111,
+      "sha256": "59cd0a78684e7364afa10908a71a4fdcf15e20c620b6217e1571ca205ee54609"
+    },
+    {
+      "name": "surface-query-linux-final.log",
+      "bytes": 112,
+      "sha256": "2818fca72d9f5833d42885ed2df21f33cd555920f6d6e8cdf67dd5159bf22303"
+    }
+  ],
+  "tests": {
+    "uniqueVitest": 389,
+    "serverUnits": 165,
+    "clientUnits": 192,
+    "processStatus": 11,
+    "isolatedSqlHttpVerifier": 21,
+    "nativeBridge": 63,
+    "deliveryComparators": 132
+  },
+  "isolated": {
+    "freshSyntheticOnly": true,
+    "sourceBookends": "PASS",
+    "artifactBookends": "PASS",
+    "helpersRemoved": true,
+    "networkRemoved": true
+  },
+  "privateSurfaceQuery": {
+    "linux": 25,
+    "integrated": false,
+    "currentWindows": "NOT_RUN"
+  },
+  "deployment": {
+    "status": "NOT_RUN",
+    "currentWeb": "sha256:58745a011bffe5cc65676f15ceb275e7b70061e2972db5944165a1f74cc2b9ee",
+    "currentApi": "sha256:ac0d16ab1b0f4c92922c20d1a13a5ea142d4c6e92558de1870daf4db7fd60fcf"
+  },
+  "realAalborg": "NOT_RUN",
+  "engineeringAccepted": false
+}

@@ -18,9 +18,10 @@ vi.mock('./barrierStorage.js', async importOriginal => {
     }),
   };
 });
-import { barrierValueHash } from './barrierStorage.js';
+import { barrierBytesHash, barrierValueHash } from './barrierStorage.js';
+import { barrierPublicationReceiptSchema } from '../../shared/pathfinderBarrierOutcomes.js';
 import { BARRIER_REGISTRY_SQL, initializeBarrierRegistrySchema } from './barrierRegistrySchema.js';
-import { BARRIER_REGISTRY_SQL_BOUNDS, barrierRegistryTransaction, createBarrierRegistryRepository, type BarrierCaptureCommand, type BarrierCaptureIntent, type BarrierRegistryAdapters } from './barrierRegistryRepository.js';
+import { BarrierCaptureQualificationRefusal, BARRIER_REGISTRY_SQL_BOUNDS, barrierRegistryTransaction, createBarrierRegistryRepository, type BarrierCaptureCommand, type BarrierCaptureIntent, type BarrierRegistryAdapters } from './barrierRegistryRepository.js';
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const scope = (): BarrierModelScope => ({ projectId: id(1), modelVersionId: id(2), contentFingerprint: 'a'.repeat(64), selectionRevision: '1', captureFrameId: id(3), captureFrameSha256: 'b'.repeat(64), coordinateFrame: 'canonical-world-metres' });
 type Row = Record<string, unknown>;
@@ -30,7 +31,8 @@ function fixture() {
   const who: JobPrincipal = { userId: id(4), loginId: id(5), loginExpiresAt: Date.now() + 3600000 };
   const controls = { scope: scope(), admin: true, revoked: false, qualifyError: null as Error | null, commitUnknown: false,
     finalAuthorityError: null as Error | null,
-    duringQualify: (() => undefined) as () => void, duringHead: (() => undefined) as () => void };
+    duringQualify: (() => undefined) as () => void, duringHead: (() => undefined) as () => void,
+    duringReceipt: (() => undefined) as () => void, clearLeaseRows: true };
   const calls: string[] = [], release = vi.fn();
   const query = vi.fn(async (sql: string, values: unknown[] = []) => {
     calls.push(sql);
@@ -55,8 +57,13 @@ function fixture() {
       Object.assign(durable.intents.get(String(values[1]))!, { capture_sha256: values[2], allocation: JSON.parse(values[3]), lease_token: values[4], lease_expires_at: values[5] }); return { rows: [] };
     }
     if (sql.startsWith("UPDATE pf_barrier_capture_intents SET state='complete'")) { durable.intents.get(String(values[1]))!.state = 'complete'; return { rows: [] }; }
+    if (sql.startsWith('UPDATE pf_barrier_capture_intents SET lease_token=NULL')) {
+      const row = durable.intents.get(String(values[1]));
+      if (!controls.clearLeaseRows || !row || row.project_id !== values[0] || row.lease_token !== values[2]) return { rows: [] };
+      row.lease_token = null; row.lease_expires_at = null; return { rows: [{ id: row.id }] };
+    }
     if (sql.startsWith('SELECT request_sha256')) return { rows: [durable.receipts.get(`${values[0]}/${values[1]}/${values[2]}`)].filter(Boolean) };
-    if (sql.startsWith('INSERT INTO pf_barrier_receipts')) { durable.receipts.set(`${values[0]}/${values[1]}/${values[2]}`, { request_sha256: values[3], request: values[4], receipt: values[5] }); return { rows: [] }; }
+    if (sql.startsWith('INSERT INTO pf_barrier_receipts')) { durable.receipts.set(`${values[0]}/${values[1]}/${values[2]}`, { request_sha256: values[3], request: values[4], receipt: values[5] }); controls.duringReceipt(); return { rows: [] }; }
     if (sql.startsWith('INSERT INTO pf_barrier_snapshots')) {
       durable.snapshots.set(String(values[0]), { id: values[0], project_id: values[1], model_version_id: values[2], registry_revision: values[3], storage_intent_id: values[4], manifest_blob: values[5], manifest: values[6] }); return { rows: [] };
     }
@@ -68,7 +75,7 @@ function fixture() {
     throw Error(`Unexpected SQL: ${sql}`);
   });
   const client = { query, release }, pool = { connect: async () => client } as unknown as Pool;
-  const adapters = { currentScope: vi.fn<BarrierRegistryAdapters['currentScope']>(async () => controls.scope), assertBeforeCommit: vi.fn(() => { if (controls.finalAuthorityError) throw controls.finalAuthorityError; }), qualifyCapture: vi.fn<BarrierRegistryAdapters['qualifyCapture']>(async () => {
+  const adapters = { currentScope: vi.fn<BarrierRegistryAdapters['currentScope']>(async () => controls.scope), publicationFrameSha256: vi.fn(() => 'f'.repeat(64)), assertBeforeCommit: vi.fn(() => { if (controls.finalAuthorityError) throw controls.finalAuthorityError; }), qualifyCapture: vi.fn<BarrierRegistryAdapters['qualifyCapture']>(async () => {
     controls.duringQualify(); if (controls.qualifyError) throw controls.qualifyError;
     return { producerVersion: 'wfc.pf.barrier-verifier.v1' as const, computationalMeshes: 1, verificationSha256: 'c'.repeat(64) };
   }) };
@@ -80,8 +87,10 @@ function fixture() {
     bounds: { minimum: [0, 0, 0], maximum: [1, 1, 1] }, verticesMetres: [[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]], triangleIndices: [0, 2, 1, 0, 1, 3, 0, 3, 2, 1, 2, 3] }],
     observation: { state: 'reported-complete', verification: 'unverified', enumeratedFragmentIds: [15], unavailableFragmentIds: [], enumerationSha256: 'e'.repeat(64) } });
   const bytes = (intent: BarrierCaptureIntent) => Buffer.from(barrierCanonicalJson(capture(intent)));
+  const outcomeQuery = (intent: BarrierCaptureIntent) => ({ commandSha256: barrierValueHash(intent.command), captureSha256: barrierBytesHash(bytes(intent)), frameSha256: 'f'.repeat(64) });
+  const refusal = (intent: BarrierCaptureIntent) => new BarrierCaptureQualificationRefusal(barrierBytesHash(bytes(intent)), 'f'.repeat(64), '9'.repeat(64));
   const empty = (revision = '0', key = id(20)) => ({ schemaVersion: 'wfc.pf.barrier-registry-command.v1', action: 'declare-empty', scope: scope(), expectedRegistryRevision: revision, idempotencyKey: key, reason: 'Administrator explicitly selected no physical barriers.' });
-  return { pool, repository, adapters, controls, who, command, capture, bytes, empty, calls, query, release, get durable() { return durable; } };
+  return { pool, repository, adapters, controls, who, command, capture, bytes, refusal, outcomeQuery, empty, calls, query, release, get durable() { return durable; } };
 }
 beforeEach(() => { storage.blobs.clear(); storage.fail = false; });
 
@@ -92,7 +101,7 @@ describe('barrier immutable registry and trusted qualification boundary', () => 
     expect(f.durable.head).toBeNull(); expect(f.adapters.qualifyCapture).not.toHaveBeenCalled(); expect(f.durable.snapshots.size).toBe(0);
   });
   it('publishes exact capture and original fragment bytes only after trusted qualification, atomically', async () => {
-    const f = fixture(), { intent } = await f.repository.begin(id(1), f.who, f.command), raw = f.bytes(intent), receipt = await f.repository.publish(id(1), f.who, intent.id, raw);
+    const f = fixture(), { intent } = await f.repository.begin(id(1), f.who, f.command), raw = f.bytes(intent), receipt = barrierPublicationReceiptSchema.parse(await f.repository.publish(id(1), f.who, intent.id, raw));
     expect(receipt.duplicate).toBe(false); expect(receipt.snapshot.mode).toBe('mesh-set'); expect(receipt.snapshot.registryRevision).toBe('1');
     expect(f.adapters.qualifyCapture).toHaveBeenCalledOnce(); expect(f.adapters.qualifyCapture.mock.calls[0][0]).toMatchObject({ intent, captureSha256: barrierValueHash(f.capture(intent)) });
     expect([...storage.blobs.values()].some(value => value.equals(raw))).toBe(true);
@@ -123,7 +132,7 @@ describe('barrier immutable registry and trusted qualification boundary', () => 
   });
   it('refreshes current viewer/frame authority on completed publish replay and refuses stale replay scope', async () => {
     const f = fixture(), { intent } = await f.repository.begin(id(1), f.who, f.command);
-    const first = await f.repository.publish(id(1), f.who, intent.id, f.bytes(intent));
+    const first = barrierPublicationReceiptSchema.parse(await f.repository.publish(id(1), f.who, intent.id, f.bytes(intent)));
     f.adapters.currentScope.mockClear(); expect((await f.repository.publish(id(1), f.who, intent.id, f.bytes(intent))).duplicate).toBe(true);
     expect(f.adapters.currentScope).toHaveBeenCalledOnce();
     f.controls.scope = { ...scope(), selectionRevision: '2' };
@@ -158,6 +167,98 @@ describe('barrier immutable registry and trusted qualification boundary', () => 
     f.controls.qualifyError = Error('OPEN_SURFACE'); await expect(f.repository.publish(id(1), f.who, intent.id, f.bytes(intent))).rejects.toThrow('OPEN_SURFACE');
     expect(f.durable.head?.snapshot_id).toBe(old.snapshot.snapshotId); expect(f.durable.snapshots.size).toBe(1); expect(f.durable.receipts.size).toBe(1);
     expect((await f.repository.get(id(1), f.who)).state).toBe('ready');
+  });
+  it('durably refuses one exact protected capture, fences its lease and replays without qualification or publication', async () => {
+    const f = fixture(), { intent } = await f.repository.begin(id(1), f.who, f.command);
+    f.controls.qualifyError = f.refusal(intent);
+    const first = await f.repository.publish(id(1), f.who, intent.id, f.bytes(intent));
+    expect(first).toEqual({ schemaVersion: 'wfc.pf.barrier-publication-refusal.v1', outcome: 'not-published', intentId: intent.id,
+      ...f.outcomeQuery(intent), implementationSha256: '9'.repeat(64), reasonCode: 'BARRIER_GEOMETRY_REFUSED', duplicate: false });
+    expect(f.durable.head).toBeNull(); expect(f.durable.snapshots.size).toBe(0); expect(f.durable.receipts.size).toBe(1);
+    expect(f.durable.intents.get(intent.id)).toMatchObject({ state: 'pending', lease_token: null, lease_expires_at: null });
+    expect(await f.repository.publish(id(1), f.who, intent.id, f.bytes(intent))).toEqual({ ...first, duplicate: true });
+    expect(f.adapters.qualifyCapture).toHaveBeenCalledOnce();
+    f.controls.scope = { ...scope(), selectionRevision: '2' }; f.adapters.currentScope.mockClear(); f.adapters.assertBeforeCommit.mockClear();
+    expect(await f.repository.readCaptureOutcome(id(1), f.who, intent.id, f.outcomeQuery(intent))).toEqual({ ...first, duplicate: true });
+    expect(f.adapters.currentScope).not.toHaveBeenCalled(); expect(f.adapters.assertBeforeCommit).not.toHaveBeenCalled();
+  });
+  it('reconciles a lost refusal COMMIT acknowledgement by the exact immutable outcome without another qualifier', async () => {
+    const f = fixture(), { intent } = await f.repository.begin(id(1), f.who, f.command); f.controls.qualifyError = f.refusal(intent);
+    f.controls.duringReceipt = () => { f.controls.commitUnknown = true; };
+    await expect(f.repository.publish(id(1), f.who, intent.id, f.bytes(intent))).rejects.toMatchObject({ code: 'BARRIER_COMMIT_OUTCOME_UNKNOWN' });
+    expect(f.release).toHaveBeenCalledWith(true); f.controls.duringReceipt = () => undefined;
+    expect(await f.repository.readCaptureOutcome(id(1), f.who, intent.id, f.outcomeQuery(intent))).toMatchObject({ outcome: 'not-published', duplicate: true });
+    expect(f.adapters.qualifyCapture).toHaveBeenCalledOnce(); expect(f.durable.snapshots.size).toBe(0);
+  });
+  it.each(['token', 'deadline', 'clear-result'] as const)('does not mint refusal proof when its owned lease %s fails', async kind => {
+    const f = fixture(), { intent } = await f.repository.begin(id(1), f.who, f.command); f.controls.qualifyError = f.refusal(intent);
+    f.controls.duringQualify = () => {
+      if (kind === 'token') f.durable.intents.get(intent.id)!.lease_token = id(90);
+      if (kind === 'deadline') f.durable.intents.get(intent.id)!.lease_expires_at = new Date(Date.now() - 1);
+      if (kind === 'clear-result') f.controls.clearLeaseRows = false;
+    };
+    await expect(f.repository.publish(id(1), f.who, intent.id, f.bytes(intent))).rejects.toMatchObject({ code: 'BARRIER_CAPTURE_LEASE_CHANGED' });
+    expect(f.durable.receipts.size).toBe(0); expect(f.durable.snapshots.size).toBe(0);
+    expect(await f.repository.readCaptureOutcome(id(1), f.who, intent.id, f.outcomeQuery(intent))).toBeNull();
+  });
+  it('does not turn an operational exception with the same public code into durable logical-refusal proof', async () => {
+    const f = fixture(), { intent } = await f.repository.begin(id(1), f.who, f.command);
+    f.controls.qualifyError = Object.assign(Error('Operational transport failure'), { code: 'BARRIER_GEOMETRY_REFUSED', status: 503 });
+    await expect(f.repository.publish(id(1), f.who, intent.id, f.bytes(intent))).rejects.toThrow('Operational transport failure');
+    expect(f.durable.receipts.size).toBe(0); expect(f.durable.intents.get(intent.id)!.lease_token).not.toBeNull();
+  });
+  it.each(['commandSha256', 'captureSha256', 'frameSha256'] as const)('refuses historical refusal proof for a changed %s', async field => {
+    const f = fixture(), { intent } = await f.repository.begin(id(1), f.who, f.command); f.controls.qualifyError = f.refusal(intent);
+    await f.repository.publish(id(1), f.who, intent.id, f.bytes(intent));
+    await expect(f.repository.readCaptureOutcome(id(1), f.who, intent.id, { ...f.outcomeQuery(intent), [field]: '8'.repeat(64) }))
+      .rejects.toMatchObject({ code: 'BARRIER_CAPTURE_CHANGED' });
+    await expect(f.repository.readCaptureOutcome(id(1), { ...f.who, loginId: id(98) }, intent.id, f.outcomeQuery(intent)))
+      .rejects.toMatchObject({ code: 'BARRIER_INTENT_AUTHORITY_CHANGED' });
+  });
+  it('reads an exact old success after model change without fabricating a missing full-frame binding', async () => {
+    const f = fixture(), { intent } = await f.repository.begin(id(1), f.who, f.command);
+    const publication = await f.repository.publish(id(1), f.who, intent.id, f.bytes(intent));
+    f.controls.scope = { ...scope(), selectionRevision: '2' }; f.adapters.currentScope.mockClear();
+    expect(await f.repository.readCaptureOutcome(id(1), f.who, intent.id, f.outcomeQuery(intent))).toEqual({ schemaVersion: 'wfc.pf.barrier-capture-outcome.v1',
+      outcome: 'published', intentId: intent.id, commandSha256: barrierValueHash(intent.command), captureSha256: barrierBytesHash(f.bytes(intent)),
+      frameBinding: 'not-recorded', frameSha256: null, publication: { ...publication, duplicate: true } });
+    expect(f.adapters.currentScope).not.toHaveBeenCalled(); expect(f.adapters.qualifyCapture).toHaveBeenCalledOnce();
+  });
+  it.each(['missing', 'string', 'number'] as const)('does not repair a stored successful receipt with %s duplicate during historical read or replay', async kind => {
+    const f = fixture(), { intent } = await f.repository.begin(id(1), f.who, f.command);
+    await f.repository.publish(id(1), f.who, intent.id, f.bytes(intent));
+    const stored = [...f.durable.receipts.values()][0].receipt as Record<string, unknown>;
+    if (kind === 'missing') delete stored.duplicate;
+    if (kind === 'string') stored.duplicate = 'true';
+    if (kind === 'number') stored.duplicate = 1;
+    await expect(f.repository.readCaptureOutcome(id(1), f.who, intent.id, f.outcomeQuery(intent))).rejects.toBeDefined();
+    await expect(f.repository.publish(id(1), f.who, intent.id, f.bytes(intent))).rejects.toBeDefined();
+    expect(f.adapters.qualifyCapture).toHaveBeenCalledOnce(); expect(f.durable.snapshots.size).toBe(1); expect(f.durable.receipts.size).toBe(1);
+  });
+  it('lets a concurrent completed success win over a stale worker logical refusal', async () => {
+    const f = fixture(), { intent } = await f.repository.begin(id(1), f.who, f.command);
+    f.adapters.qualifyCapture.mockImplementationOnce(async () => {
+      f.durable.intents.get(intent.id)!.lease_expires_at = new Date(Date.now() - 1);
+      await f.repository.publish(id(1), f.who, intent.id, f.bytes(intent)); throw f.refusal(intent);
+    });
+    expect(await f.repository.publish(id(1), f.who, intent.id, f.bytes(intent))).toMatchObject({ schemaVersion: 'wfc.pf.barrier-publication-receipt.v1', duplicate: true });
+    expect(f.durable.snapshots.size).toBe(1); expect(f.durable.receipts.size).toBe(1); expect(f.adapters.qualifyCapture).toHaveBeenCalledTimes(2);
+  });
+  it('prevents a stale successful worker from publishing after a replacement lease recorded terminal refusal', async () => {
+    const f = fixture(), { intent } = await f.repository.begin(id(1), f.who, f.command);
+    f.adapters.qualifyCapture.mockImplementationOnce(async () => {
+      f.durable.intents.get(intent.id)!.lease_expires_at = new Date(Date.now() - 1); f.controls.qualifyError = f.refusal(intent);
+      await f.repository.publish(id(1), f.who, intent.id, f.bytes(intent)); f.controls.qualifyError = null;
+      return { producerVersion: 'wfc.pf.barrier-verifier.v1', computationalMeshes: 1, verificationSha256: 'c'.repeat(64) };
+    });
+    expect(await f.repository.publish(id(1), f.who, intent.id, f.bytes(intent))).toMatchObject({ outcome: 'not-published', duplicate: true });
+    expect(f.durable.snapshots.size).toBe(0); expect(f.durable.head).toBeNull(); expect(f.durable.receipts.size).toBe(1);
+  });
+  it('rolls back refusal evidence and lease clearing when authority expires at the final commit fence', async () => {
+    const f = fixture(), { intent } = await f.repository.begin(id(1), f.who, f.command); f.controls.qualifyError = f.refusal(intent);
+    f.controls.duringReceipt = () => { f.controls.finalAuthorityError = Error('Expired protected Viewer'); };
+    await expect(f.repository.publish(id(1), f.who, intent.id, f.bytes(intent))).rejects.toThrow('Expired protected Viewer');
+    expect(f.durable.receipts.size).toBe(0); expect(f.durable.intents.get(intent.id)!.lease_token).not.toBeNull(); expect(f.durable.head).toBeNull();
   });
   it('retains the prior head when any blob write fails; no partial ready manifest exists', async () => {
     const f = fixture(), old = await f.repository.command(id(1), f.who, f.empty());

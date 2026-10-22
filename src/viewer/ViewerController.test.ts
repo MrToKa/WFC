@@ -223,6 +223,26 @@ describe('PathFinder protected Viewer capabilities', () => {
     expect(JSON.parse(String(upload.options?.body))).toEqual(observation);
     expect(JSON.stringify(upload.options?.body)).not.toContain('login-a');
   });
+  it('does not start a PUT when durable recovery retention throws at the write boundary', async () => {
+    const s = await loaded(), input = barrierRequest(), observation = barrierObservation(input, s.identity.loadId);
+    const started = vi.fn(() => { throw Error('Recovery storage unavailable'); });
+    await expect(s.c.publishBarriers(input.captureId, observation, undefined, started)).rejects.toThrow('Recovery storage unavailable');
+    expect(started).toHaveBeenCalledOnce(); expect(vi.mocked(globalThis.fetch).mock.calls.filter(call => call[1]?.method === 'PUT')).toHaveLength(0);
+  });
+  it.each(['exact', 'intent', 'capture', 'frame', 'extra'] as const)('accepts only a strict exact durable geometry refusal: %s', async field => {
+    const s = await loaded(), input = barrierRequest(), observation = barrierObservation(input, s.identity.loadId), baseline = vi.mocked(globalThis.fetch).getMockImplementation()!;
+    const refusal = { schemaVersion: 'wfc.pf.barrier-publication-refusal.v1', outcome: 'not-published', intentId: input.captureId,
+      commandSha256: 'a'.repeat(64), captureSha256: createHash('sha256').update(barrierCanonicalJson(observation.capture)).digest('hex'),
+      frameSha256: observation.frameObservation.contentSha256, implementationSha256: 'c'.repeat(64), reasonCode: 'BARRIER_GEOMETRY_REFUSED', duplicate: false };
+    if (field === 'intent') refusal.intentId = crypto.randomUUID();
+    if (field === 'capture') refusal.captureSha256 = 'e'.repeat(64);
+    if (field === 'frame') refusal.frameSha256 = 'e'.repeat(64);
+    const result = field === 'extra' ? { ...refusal, ready: true } : refusal;
+    vi.mocked(globalThis.fetch).mockImplementation(async (url, options) => options?.method === 'PUT' ? Response.json(result) : baseline(url, options));
+    if (field === 'exact') await expect(s.c.publishBarriers(input.captureId, observation)).resolves.toEqual(refusal);
+    else await expect(s.c.publishBarriers(input.captureId, observation)).rejects.toBeDefined();
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true); expect(vi.mocked(globalThis.fetch).mock.calls.filter(call => call[1]?.method === 'PUT')).toHaveLength(1);
+  });
   it('accepts an in-flight barrier publication across an ordinary renewal of the same Viewer session', async () => {
     const s = await loaded(), input = barrierRequest(), observation = barrierObservation(input, s.identity.loadId), receipt = barrierPublicationReceipt(input);
     // Start the write just before the real scheduled renewal, leaving its own

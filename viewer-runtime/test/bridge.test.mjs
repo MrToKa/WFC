@@ -139,6 +139,30 @@ test('model, authority and resource failures during barrier capture retain their
     assert.equal(f.messages('BARRIER_CAPTURE_EVENT').length, 0); assert.equal(JSON.stringify(f.sent).includes('private reason'), false); f.bridge.dispose();
   }
 });
+
+test('capture cleanup failure cannot replace the original geometry or authority refusal', async () => {
+  for (const code of ['BARRIER_CAPTURE_GEOMETRY_NOT_RESIDENT', 'BARRIER_CAPTURE_TRIANGLE_LIMIT', 'ACCESS_REVOKED', 'RESOURCE_FAILED']) {
+    let extractionStarted = false;
+    const warnings = [];
+    const f = fixture({ startBarrierCapture: async () => {
+      extractionStarted = true; throw Object.assign(Error('private://original-geometry'), { code });
+    }, clearRoute: () => {
+      if (extractionStarted) throw Object.assign(Error('private://cleanup-material'), { code: 'APPEARANCE_RESTORE_FAILED' });
+    } });
+    f.window.console = { warn: (...args) => warnings.push(args) };
+    await f.loaded(); f.send('START_BARRIER_CAPTURE', barrierRequest()); await turn();
+    assert.equal(f.messages('ERROR').length, 1);
+    assert.equal(f.messages('ERROR')[0].payload.code, code);
+    assert.equal(f.messages('BARRIER_CAPTURE_EVENT').length, 0);
+    assert.equal(f.states.at(-1).phase, code.startsWith('BARRIER_CAPTURE_') ? 'loaded' : 'error');
+    assert.deepEqual(warnings, [['WFC capture cleanup failed', { code: 'APPEARANCE_RESTORE_FAILED' }]]);
+    assert.equal(JSON.stringify([f.sent, warnings]).includes('private://'), false);
+    extractionStarted = false;
+    f.send('CLEAR_ROUTE', { reason: 'user' }); await turn();
+    assert.equal(f.messages('ROUTE_CLEARED').length, 1);
+    f.bridge.dispose();
+  }
+});
 test('barrier capture initial admin refusal prevents all SDK work', async () => {
   const f = fixture({ fetchImpl: async url => url.endsWith('/pathfinder-authorization') ? new Response(null, { status: 403 }) : descriptorResponse() });
   await f.loaded(); f.send('START_BARRIER_CAPTURE', barrierRequest()); await turn();

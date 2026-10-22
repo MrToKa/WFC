@@ -1,5 +1,23 @@
 # PathFinder local implementation progress
 
+## Current: PF-B19 exact outcomes checked; mixed wall/floor integration next
+
+Report109: durable exact geometry refusal, historical authenticated reconciliation,
+hash-only write-ahead retention, primary capture error preservation and narrow
+exited-task RSS sampling implemented.389 uniqueVitest/native63/delivery132,
+types/scopedlint/bothbuilds PASS; isolated SQL/cookieHTTP/freshnet9 verifier21,
+source/artifactbookends andpositivehelper/networkcleanup PASS. Failedattempts and
+unproven earlierintermittent causes retained inoperation35eb62bb. ActualcurrentAPI
+has no configuredverifier; Dockerfile sourcefix adds publish/copy/env. NOTinstalled.
+Separatelyversioned explicitpost-B9no-DDL qualifier conservesnonemptyhistory and
+calledsequences, oldB9/resource/restore/CASguards retained. Paireddeliverypending.
+Private surfacequeryLinux25PASS after realbufferedrangecachefix; notpublication/
+occupancy/terminalauthority. Retainedfloor928triangles/40boundaryedges remains
+unsupportedbyclosedv1. Nextadditivemixedsurface/solid contracts+oracle, publication/
+runner/writeproofintegration, exactownterminals, multipartcapacity andactualAalborg.
+Runtime remainsB18web58745a01/APIac0d16ab. Nodata/originalwrites/browserretry.
+PreparerafterPF. Do notcallthecurrentfloor saved orroutingissuecomplete.
+
 ## Current: PF-B18 popup delivered; exact wall-command outcomes next
 
 Report108/publicB18receipt:473 uniqueVitest checksPASS (Workspace39/Panel35/

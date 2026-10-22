@@ -9,7 +9,8 @@ import { assertCanonicalPath, hashFile } from '../operations/archives.mjs';
 import { withBoundedDockerExecution } from '../operations/docker-bounds.mjs';
 import { compareCurrentInventories } from '../pathfinder-copied-recovery/current-inventory-lib.mjs';
 import { createRawInventoryProvider } from '../pathfinder-cable-workflow/raw-inventory-provider.mjs';
-import { SOURCE, need, same, digest, pin, assertSource, assertTarget, assertOperation, claimBuildChild } from './owned-update-v3.mjs';
+import { SOURCE, need, same, digest, pin, assertSource, assertTarget, assertOperation, claimBuildChild, assertConservationPolicy } from './owned-update-v3.mjs';
+import { selectDeliveryPolicy } from './delivery-policy-selector-v4.mjs';
 import { outsideIdentity } from '../pathfinder-cable-workflow/owned-update-v2.mjs';
 import { projectNetworkResource, sortCanonicalRecords } from './network-resource-identity.mjs';
 
@@ -233,8 +234,18 @@ async function createPristine(config, state) {
     "CREATE SCHEMA pfb9_owner;CREATE TABLE pfb9_owner.owner(operation_id uuid PRIMARY KEY,owner_id uuid NOT NULL);INSERT INTO pfb9_owner.owner VALUES('" + config.operationId + "','" + state.owner + "')"]);
   return database;
 }
+/** This same choice is used for first qualification and every later recheck.
+ * Absence alone selects unchanged B9; a present invalid v4 binding is fatal. */
+export async function qualificationModule(config) {
+  const binding = assertConservationPolicy(config);
+  if (!binding) return { module: await import('./migration-qualification.mjs'), qualifierSha256: (await pin(moduleFile('migration-qualification.mjs'))).sha256 };
+  const selected = selectDeliveryPolicy(binding.selection);
+  need(selected.qualifierFilename === path.basename(binding.qualifier.path)
+    && same(await pin(binding.selector.path), binding.selector) && same(await pin(binding.qualifier.path), binding.qualifier), 'B9_CONSERVATION_POLICY_SOURCE_CHANGED');
+  return { module: selected.qualifier, qualifierSha256: binding.qualifier.sha256 };
+}
 async function qualify(config, input, runtimeGate) {
-  const module = await import('./migration-qualification.mjs'), qualifierSha256 = (await pin(moduleFile('migration-qualification.mjs'))).sha256;
+  const { module, qualifierSha256 } = await qualificationModule(config);
   const request = { ...input, qualifierSha256, operationDirectory: config.directory };
   const result = await (runtimeGate ? module.qualifyRuntimeInventories(request) : module.qualifyMigrationInventories(request));
   await module.assertQualificationReceipt(result, request);
@@ -243,9 +254,9 @@ async function qualify(config, input, runtimeGate) {
   return pin(filename);
 }
 async function requalify(config, phase) {
-  const module = await import('./migration-qualification.mjs'), input = await read(ownedFile(config, phase + '.qualification-input.private.json'));
+  const { module, qualifierSha256 } = await qualificationModule(config), input = await read(ownedFile(config, phase + '.qualification-input.private.json'));
   need(input.operationDirectory === config.directory && input.context.operationId === config.operationId
-    && input.context.phase === phase && input.qualifierSha256 === (await pin(moduleFile('migration-qualification.mjs'))).sha256, 'B9_QUALIFIER_SCOPE_CHANGED');
+    && input.context.phase === phase && input.qualifierSha256 === qualifierSha256, 'B9_QUALIFIER_SCOPE_CHANGED');
   const recorded = await read(ownedFile(config, phase + '.qualification.private.json'));
   module.assertQualificationReceipt(recorded, input);
   const actual = await (phase === 'target-migration' ? module.qualifyMigrationInventories(input) : module.qualifyRuntimeInventories(input));
@@ -321,15 +332,18 @@ export async function collectSourceClosure(seeds) {
   }
   return [...result.values()].sort((a, b) => a.path.localeCompare(b.path));
 }
-async function initialize(directory, inventoryPath, expectedSha) {
+async function initialize(directory, inventoryPath, expectedSha, conservationProfile) {
+  const selected = conservationProfile === undefined ? null : selectDeliveryPolicy({ schemaVersion: 'wfc.pf.delivery-policy-selection.v1', profile: conservationProfile });
   const operationId = path.basename(directory).slice(-36);
   need(UUID.test(operationId) && path.dirname(directory) === SCRATCH && ['barrier-delivery-' + operationId, 'barrier-delivery-20261021-' + operationId].includes(path.basename(directory))
     && SHA.test(expectedSha ?? '') && path.isAbsolute(inventoryPath ?? '') && !await exists(directory), 'B9_FRESH_OPERATION_REQUIRED');
+  if (selected) need(path.basename(directory) === 'barrier-delivery-' + operationId, 'B9_CONSERVATION_POLICY_OPERATION_REQUIRED');
   await assertCanonicalPath(SCRATCH, { directory: true }); await assertCanonicalPath(inventoryPath);
   const inventory = await pin(inventoryPath), raw = await fs.readFile(inventoryPath);
   need(inventory.sha256 === expectedSha && (await fs.stat(inventoryPath)).mtimeMs >= (await fs.stat(path.join(ROOT, 'server/operations/losslessInventory.ts'))).mtimeMs
     && !/\bfrom\s*['"](?!node:)/.test(raw.toString('utf8')), 'B9_FRESH_STANDALONE_INVENTORY_REQUIRED');
-  await privateDirectory(directory); await writePrivateJson(path.join(directory, 'init.begin.private.json'), { operationId, phase: 'init', status: 'BEGIN', at: new Date().toISOString() });
+  await privateDirectory(directory); await writePrivateJson(path.join(directory, 'init.begin.private.json'), { operationId, phase: 'init', status: 'BEGIN', at: new Date().toISOString(),
+    ...(selected ? { qualificationSelection: { schemaVersion: selected.schemaVersion, profile: selected.profile } } : {}) });
   const state = assertSource(await runtime.load(SOURCE.runtime)), settings = await runtime.readSettings(state), baseline = await snapshot(state);
   need(baseline.owned.containers.length === 5 && baseline.owned.volumes.length === 4 && baseline.owned.networks.length === 2, 'B9_SOURCE_INCOMPLETE');
   const shell = { directory }, originalState = await pin(path.join(state.runtime, 'runtime-state.json')), originalEnv = await pin(path.join(state.runtime, 'runtime.env'));
@@ -341,13 +355,18 @@ async function initialize(directory, inventoryPath, expectedSha) {
     'scripts/pathfinder-copied-recovery/current-inventory-lib.mjs', 'scripts/operations/docker.mjs', 'scripts/operations/docker-bounds.mjs',
     'scripts/operations/archives.mjs', 'scripts/operations/restore-fencing.mjs', 'server/operations/losslessInventory.ts',
     'docker/pathfinder.compose.yml', 'docker/pathfinder.Dockerfile', 'docker/pathfinder.Dockerfile.dockerignore', 'docker/pathfinder.nginx.conf'].map(name => path.join(ROOT, name)));
+  const qualificationPolicy = selected ? { schemaVersion: 'wfc.pf.owned-update-policy-binding.v1',
+    selection: { schemaVersion: selected.schemaVersion, profile: selected.profile },
+    selector: await pin(moduleFile('delivery-policy-selector-v4.mjs')), qualifier: await pin(moduleFile(selected.qualifierFilename)) } : null;
   const config = { schemaVersion: 'wfc.pf.owned-update.v3', operationId, directory, source: SOURCE, baseline, settings, originalState, originalEnv,
     operatorSha256: (await pin(moduleFile('owned-update-v3.mjs'))).sha256, sourceClosure, buildContext: await buildContext(), inventory,
-    backup: path.join(directory, 'backup'), companion: path.join(directory, 'backup-companion.private.json'), targetRuntime: path.join(directory, 'restore-5192') };
+    backup: path.join(directory, 'backup'), companion: path.join(directory, 'backup-companion.private.json'), targetRuntime: path.join(directory, 'restore-5192'),
+    ...(qualificationPolicy ? { qualificationPolicy } : {}) };
   assertOperation(config, directory); await writePrivateJson(path.join(directory, 'operation.private.json'), config);
   await fs.writeFile(path.join(directory, 'operation.sha256'), (await pin(path.join(directory, 'operation.private.json'))).sha256 + '\n', { flag: 'wx', mode: 0o600 });
   await writePrivateJson(path.join(directory, 'init.pass.private.json'), { schemaVersion: 'wfc.pf.owned-update-phase.v3', operationId, phase: 'init', status: 'PASS', prerequisites: [],
-    result: { status: 'PASS', evidence: [await pin(path.join(directory, 'original.runtime-state.private.json')), await pin(path.join(directory, 'original.runtime.env'))] } });
+    result: { status: 'PASS', evidence: [await pin(path.join(directory, 'original.runtime-state.private.json')), await pin(path.join(directory, 'original.runtime.env'))],
+      ...(qualificationPolicy ? { qualificationPolicy } : {}) } });
   return { status: 'PASS', operationId, phase: 'init', next: 'backup' };
 }
 async function buildChild(config) {

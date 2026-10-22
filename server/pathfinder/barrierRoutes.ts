@@ -9,6 +9,7 @@ import { requireViewerOrigin, viewerHttpPolicy, viewerCookieSecret } from '../vi
 import { ViewerSessionError } from '../viewerSessions/errors.js';
 import { barrierCaptureAdapters } from './barrierCaptureAuthority.js';
 import { createBarrierRegistryRepository } from './barrierRegistryRepository.js';
+import { barrierCaptureOutcomeQuerySchema } from '../../shared/pathfinderBarrierOutcomes.js';
 import { requestPrincipal } from './auth.js';
 import { parsePolicyJson } from './policyJson.js';
 import { PathFinderError } from './errors.js';
@@ -59,6 +60,9 @@ export function createBarrierRouter(pool: Pool, mode: 'admin' | 'viewer' = 'admi
     return parsePolicyJson(req.body, { maxBytes: maximum });
   };
   if (mode === 'admin') {
+    router.get('/barriers/intents/:intentId/outcome', async (req, res) => { try {
+      res.json(await repository().readCaptureOutcome(project(req), requestPrincipal(req), policyUuidSchema.parse(req.params.intentId), barrierCaptureOutcomeQuerySchema.parse(req.query)));
+    } catch (error) { errorResponse(res, error); } });
     router.get('/barriers', async (req, res) => { try { query(req); res.json(await repository().get(project(req), requestPrincipal(req))); } catch (error) { errorResponse(res, error); } });
     router.get('/barriers/snapshots', async (req, res) => { try {
       const options = z.object({ offset: z.string().regex(/^(?:0|[1-9][0-9]{0,6})$(?![\s\S])/).transform(Number).refine(value => value <= 1_000_000).optional(),

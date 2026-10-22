@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Pool } from 'pg';
 import { BARRIER_LIMITS, barrierCanonicalJson, barrierCaptureCommandSchema, barrierRegistryCommandSchema, type BarrierCapture } from '../../shared/pathfinderBarriers.js';
 import { PathFinderError } from './errors.js';
-const mocks = vi.hoisted(() => ({ verify: vi.fn(), authorize: vi.fn(), get: vi.fn(), list: vi.fn(), getSnapshot: vi.fn(), begin: vi.fn(), publish: vi.fn(), command: vi.fn(), adapters: vi.fn(), repository: vi.fn() }));
+const mocks = vi.hoisted(() => ({ verify: vi.fn(), authorize: vi.fn(), get: vi.fn(), list: vi.fn(), getSnapshot: vi.fn(), readCaptureOutcome: vi.fn(), begin: vi.fn(), publish: vi.fn(), command: vi.fn(), adapters: vi.fn(), repository: vi.fn() }));
 vi.mock('../auth.js', () => ({ verifyAccessToken: mocks.verify }));
 vi.mock('./barrierCaptureAuthority.js', () => ({ barrierCaptureAdapters: mocks.adapters }));
 vi.mock('./barrierRegistryRepository.js', () => ({ createBarrierRegistryRepository: mocks.repository }));
@@ -28,6 +28,7 @@ beforeEach(() => {
   vi.resetAllMocks(); mocks.verify.mockReturnValue({ sub: id(4), jti: id(5), exp: Math.floor(Date.now() / 1000) + 3600 });
   mocks.repository.mockReturnValue(mocks); mocks.adapters.mockImplementation(context => ({ syntheticContext: context }));
   for (const name of ['authorize', 'get', 'list', 'getSnapshot', 'publish'] as const) mocks[name].mockResolvedValue({ synthetic: name });
+  mocks.readCaptureOutcome.mockResolvedValue(null);
   // These mirror the mandatory production repository parsing. Route tests do not
   // pretend that a deliberately permissive mock proves repository validation.
   mocks.begin.mockImplementation(async (_project, _who, value) => ({ command: barrierCaptureCommandSchema.parse(value) }));
@@ -53,6 +54,34 @@ function request({ url = '/barriers', mode = 'admin', method = 'GET', token = 'B
 }
 
 describe('barrier HTTP admission through in-memory Express router, no listener', () => {
+  it('reads only an exact historical outcome with current admin login and no Viewer cookie/current-frame adapter', async () => {
+    const hashes = { commandSha256: 'a'.repeat(64), captureSha256: 'b'.repeat(64), frameSha256: 'c'.repeat(64) };
+    const r = request({ url: `/barriers/intents/${id(9)}/outcome`, query: hashes, params: { intentId: id(9) }, cookie: null, origin: null });
+    await r.run(); expect(r.res.statusCode).toBe(200); expect(r.res.json).toHaveBeenCalledWith(null);
+    expect(mocks.readCaptureOutcome).toHaveBeenCalledExactlyOnceWith(id(1), expect.objectContaining({ userId: id(4), loginId: id(5) }), id(9), hashes);
+    expect(mocks.adapters.mock.calls.every(call => call[0] === undefined)).toBe(true); expect(mocks.publish).not.toHaveBeenCalled();
+  });
+  it.each(['extra', 'missing', 'array', 'uppercase'] as const)('refuses %s exact-outcome query without invoking historical read', async kind => {
+    const hashes: Record<string, unknown> = { commandSha256: 'a'.repeat(64), captureSha256: 'b'.repeat(64), frameSha256: 'c'.repeat(64) };
+    if (kind === 'extra') hashes.ready = true; if (kind === 'missing') delete hashes.frameSha256;
+    if (kind === 'array') hashes.captureSha256 = [hashes.captureSha256]; if (kind === 'uppercase') hashes.commandSha256 = 'A'.repeat(64);
+    const r = request({ url: `/barriers/intents/${id(9)}/outcome`, query: hashes, params: { intentId: id(9) } });
+    await r.run(); expect(r.res.statusCode).toBe(400); expect(mocks.readCaptureOutcome).not.toHaveBeenCalled();
+  });
+  it('returns a terminal refusal as an exact successful outcome body rather than disguising it as operational503', async () => {
+    const value = upload(), refusal = { schemaVersion: 'wfc.pf.barrier-publication-refusal.v1', outcome: 'not-published', intentId: id(9),
+      commandSha256: '1'.repeat(64), captureSha256: '2'.repeat(64), frameSha256: '3'.repeat(64), implementationSha256: '4'.repeat(64),
+      reasonCode: 'BARRIER_GEOMETRY_REFUSED', duplicate: false };
+    mocks.publish.mockResolvedValueOnce(refusal);
+    const r = request({ mode: 'viewer', url: `/captures/${id(9)}`, method: 'PUT', body: JSON.stringify(value) });
+    await r.run(); expect(r.res.statusCode).toBe(200); expect(r.res.json).toHaveBeenCalledExactlyOnceWith(refusal);
+  });
+  it('keeps an operational verifier failure as an uncertain error without fabricating a terminal receipt', async () => {
+    mocks.publish.mockRejectedValueOnce(new PathFinderError('BARRIER_VERIFIER_TIMEOUT', 503));
+    const r = request({ mode: 'viewer', url: `/captures/${id(9)}`, method: 'PUT', body: JSON.stringify(upload()) });
+    await r.run(); expect(r.res.statusCode).toBe(503); expect(r.res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'BARRIER_VERIFIER_TIMEOUT' }));
+    expect(r.res.json.mock.calls[0][0]).not.toHaveProperty('outcome');
+  });
   it('requires current database authority and sends private no-store registry reads', async () => {
     const r = request(); await r.run(); expect(mocks.authorize).toHaveBeenCalledExactlyOnceWith(id(1), expect.objectContaining({ userId: id(4), loginId: id(5) }));
     expect(mocks.get).toHaveBeenCalledWith(id(1), expect.any(Object)); expect(r.res.setHeader).toHaveBeenCalledWith('Cache-Control', 'private, no-store'); expect(r.res.setHeader).toHaveBeenCalledWith('X-Content-Type-Options', 'nosniff');

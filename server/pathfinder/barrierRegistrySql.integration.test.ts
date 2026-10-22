@@ -6,8 +6,9 @@ import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { BARRIER_CAPTURE_VERSION, barrierCanonicalJson, type BarrierCapture, type BarrierModelScope } from '../../shared/pathfinderBarriers.js';
 import { barrierEnumerationHashInput } from '../../viewer-runtime/barrier-capture.mjs';
+import { barrierPublicationReceiptSchema } from '../../shared/pathfinderBarrierOutcomes.js';
 import { initializeBarrierRegistrySchema } from './barrierRegistrySchema.js';
-import { barrierRegistryTransaction, createBarrierRegistryRepository, type BarrierCaptureCommand, type BarrierCaptureIntent,
+import { BarrierCaptureQualificationRefusal, barrierRegistryTransaction, createBarrierRegistryRepository, type BarrierCaptureCommand, type BarrierCaptureIntent,
   type BarrierRegistryAdapters } from './barrierRegistryRepository.js';
 import { barrierBytesHash, barrierValueHash, encodeBarrierJson, readBarrierBytes } from './barrierStorage.js';
 import type { JobPrincipal } from './jobContracts.js';
@@ -39,7 +40,7 @@ const qualification = () => ({ producerVersion: 'wfc.pf.barrier-verifier.v1' as 
   computationalMeshes: 1, verificationSha256: 'c'.repeat(64) });
 function repository(qualifyCapture: BarrierRegistryAdapters['qualifyCapture'] = async () => qualification()) {
   if (!pool) throw Error('Disposable SQL fixture is not initialized.');
-  return createBarrierRegistryRepository(pool, { currentScope, qualifyCapture });
+  return createBarrierRegistryRepository(pool, { currentScope, publicationFrameSha256: () => 'f'.repeat(64), qualifyCapture });
 }
 async function captureCommand(actor = who): Promise<BarrierCaptureCommand> {
   const current = await repository().get(projectId, actor);
@@ -59,6 +60,8 @@ function capture(intent: BarrierCaptureIntent): BarrierCapture {
   value.observation.enumerationSha256 = barrierValueHash(barrierEnumerationHashInput(value)); return value;
 }
 const captureBytes = (intent: BarrierCaptureIntent) => Buffer.from(barrierCanonicalJson(capture(intent)));
+const outcomeQuery = (intent: BarrierCaptureIntent) => ({ commandSha256: barrierValueHash(intent.command), captureSha256: barrierBytesHash(captureBytes(intent)), frameSha256: 'f'.repeat(64) });
+const logicalRefusal = (input: { captureSha256: string }) => new BarrierCaptureQualificationRefusal(input.captureSha256, 'f'.repeat(64), '9'.repeat(64));
 async function stateCounts() {
   const result = await pool!.query<{ heads: string; snapshots: string; receipts: string }>(`SELECT
     (SELECT count(*)::text FROM pf_barrier_heads WHERE project_id=$1) AS heads,
@@ -148,7 +151,7 @@ describe.runIf(Boolean(sqlUrl))('PF-B2 actual SQL and storage in fresh explicit 
   it('atomically publishes exact capture/fragment provenance with the trusted SQL-only qualifier stub', async () => {
     const qualify = vi.fn<BarrierRegistryAdapters['qualifyCapture']>(async () => qualification()), repo = repository(qualify);
     const { intent } = await repo.begin(projectId, who, await captureCommand()), raw = captureBytes(intent);
-    const first = await repo.publish(projectId, who, intent.id, raw), counts = await stateCounts();
+    const first = barrierPublicationReceiptSchema.parse(await repo.publish(projectId, who, intent.id, raw)), counts = await stateCounts();
     const again = await repo.publish(projectId, who, intent.id, raw);
     expect(again).toEqual({ ...first, duplicate: true }); expect(await stateCounts()).toEqual(counts); expect(qualify).toHaveBeenCalledOnce();
     expect(qualify.mock.calls[0][0].captureSha256).toBe(barrierBytesHash(raw));
@@ -185,6 +188,72 @@ describe.runIf(Boolean(sqlUrl))('PF-B2 actual SQL and storage in fresh explicit 
     expect(await stateCounts()).toEqual(before);
     expect((await repository().get(projectId, who)).state).toBe('ready');
   });
+  it('persists one exact terminal refusal in real PostgreSQL and fences a concurrent replay without changing the head', async () => {
+    const before = await stateCounts(); let entered!: () => void, release!: () => void;
+    const started = new Promise<void>(resolve => { entered = resolve; }), wait = new Promise<void>(resolve => { release = resolve; });
+    const qualify = vi.fn<BarrierRegistryAdapters['qualifyCapture']>(async input => { entered(); await wait; throw logicalRefusal(input); });
+    const repo = repository(qualify), { intent } = await repo.begin(projectId, who, await captureCommand());
+    const first = repo.publish(projectId, who, intent.id, captureBytes(intent));
+    let refusal: Awaited<ReturnType<typeof repo.publish>> | undefined;
+    try {
+      await Promise.race([started, first.then(() => { throw Error('Publication ended before the controlled qualifier boundary'); })]);
+      await expect(repo.publish(projectId, who, intent.id, captureBytes(intent))).rejects.toMatchObject({ code: 'BARRIER_CAPTURE_IN_PROGRESS' });
+    } finally { release(); refusal = await first; }
+    expect(refusal).toMatchObject({ outcome: 'not-published', intentId: intent.id, ...outcomeQuery(intent), duplicate: false });
+    expect(await repo.publish(projectId, who, intent.id, captureBytes(intent))).toEqual({ ...refusal, duplicate: true });
+    expect(await repo.readCaptureOutcome(projectId, who, intent.id, outcomeQuery(intent))).toEqual({ ...refusal, duplicate: true });
+    const after = await stateCounts(); expect(after.head).toEqual(before.head); expect(after.snapshots).toBe(before.snapshots);
+    expect(Number(after.receipts)).toBe(Number(before.receipts) + 1); expect(qualify).toHaveBeenCalledOnce();
+    expect((await pool!.query('SELECT state,lease_token,lease_expires_at FROM pf_barrier_capture_intents WHERE id=$1', [intent.id])).rows)
+      .toEqual([{ state: 'pending', lease_token: null, lease_expires_at: null }]);
+  }, 20000);
+  it('prevents a real expired successful worker from publishing after a replacement worker persisted refusal', async () => {
+    const before = await stateCounts(); let entered!: () => void, release!: () => void, calls = 0;
+    const started = new Promise<void>(resolve => { entered = resolve; }), wait = new Promise<void>(resolve => { release = resolve; });
+    const repo = repository(async input => { if (++calls === 1) { entered(); await wait; return qualification(); } throw logicalRefusal(input); });
+    const { intent } = await repo.begin(projectId, who, await captureCommand()), old = repo.publish(projectId, who, intent.id, captureBytes(intent));
+    let refusal: Awaited<ReturnType<typeof repo.publish>>, oldOutcome: Awaited<ReturnType<typeof repo.publish>> | undefined;
+    try {
+      await Promise.race([started, old.then(() => { throw Error('Publication ended before the controlled qualifier boundary'); })]);
+      await pool!.query("UPDATE pf_barrier_capture_intents SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE id=$1", [intent.id]);
+      refusal = await repo.publish(projectId, who, intent.id, captureBytes(intent));
+    } finally { release(); oldOutcome = await old; }
+    expect(oldOutcome).toEqual({ ...refusal!, duplicate: true });
+    const after = await stateCounts(); expect(after.head).toEqual(before.head); expect(after.snapshots).toBe(before.snapshots);
+    expect(Number(after.receipts)).toBe(Number(before.receipts) + 1); expect(calls).toBe(2);
+  }, 20000);
+  it('lets real committed success win when an expired worker later returns logical refusal', async () => {
+    let entered!: () => void, release!: () => void, calls = 0;
+    const started = new Promise<void>(resolve => { entered = resolve; }), wait = new Promise<void>(resolve => { release = resolve; });
+    const repo = repository(async input => { if (++calls === 1) { entered(); await wait; throw logicalRefusal(input); } return qualification(); });
+    const { intent } = await repo.begin(projectId, who, await captureCommand()), old = repo.publish(projectId, who, intent.id, captureBytes(intent));
+    let publication: Awaited<ReturnType<typeof repo.publish>>, oldOutcome: Awaited<ReturnType<typeof repo.publish>> | undefined;
+    try {
+      await Promise.race([started, old.then(() => { throw Error('Publication ended before the controlled qualifier boundary'); })]);
+      await pool!.query("UPDATE pf_barrier_capture_intents SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE id=$1", [intent.id]);
+      publication = await repo.publish(projectId, who, intent.id, captureBytes(intent));
+    } finally { release(); oldOutcome = await old; }
+    expect(oldOutcome).toEqual({ ...publication!, duplicate: true }); expect(publication!).toHaveProperty('snapshot');
+    expect((await pool!.query('SELECT id FROM pf_barrier_snapshots WHERE storage_intent_id=$1', [intent.id])).rows).toHaveLength(1);
+  }, 20000);
+  it('reconciles an actually committed refusal after a synthetic lost COMMIT acknowledgement', async () => {
+    let failCommit = false;
+    const wrappedPool = { connect: async () => {
+      const client = await pool!.connect();
+      return { release: (error?: boolean) => client.release(error), query: async (sql: string, values?: unknown[]) => {
+        const result = await client.query(sql, values);
+        if (sql.startsWith('INSERT INTO pf_barrier_receipts')) failCommit = true;
+        if (sql === 'COMMIT' && failCommit) { failCommit = false; throw Error('Synthetic lost acknowledgement after actual COMMIT'); }
+        return result;
+      } };
+    } } as unknown as Pool;
+    const qualify = vi.fn<BarrierRegistryAdapters['qualifyCapture']>(async input => { throw logicalRefusal(input); });
+    const repo = createBarrierRegistryRepository(wrappedPool, { currentScope, publicationFrameSha256: () => 'f'.repeat(64), qualifyCapture: qualify });
+    const { intent } = await repo.begin(projectId, who, await captureCommand());
+    await expect(repo.publish(projectId, who, intent.id, captureBytes(intent))).rejects.toMatchObject({ code: 'BARRIER_COMMIT_OUTCOME_UNKNOWN' });
+    expect(await repository().readCaptureOutcome(projectId, who, intent.id, outcomeQuery(intent))).toMatchObject({ outcome: 'not-published', duplicate: true });
+    expect(qualify).toHaveBeenCalledOnce();
+  }, 20000);
 
   it('enforces tenant composite foreign keys for model and published head identities', async () => {
     const existing = (await pool!.query('SELECT id FROM pf_barrier_snapshots WHERE project_id=$1 LIMIT 1', [projectId])).rows[0].id;

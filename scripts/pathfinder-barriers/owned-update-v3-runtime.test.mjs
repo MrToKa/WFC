@@ -3,8 +3,10 @@ import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 import path from 'node:path';
 import {ROOT} from '../pathfinder-local/runtime-lib.mjs';
-import {SOURCE} from './owned-update-v3.mjs';
-import {BOUNDS, pristineDatabase, collectSourceClosure, classifyQuiescence, assertQuiescenceScope, SCHEMA_HELPER, CAPTURE_HELPER, QUIESCENCE_HELPER} from './owned-update-v3-runtime.mjs';
+import {SOURCE, pin} from './owned-update-v3.mjs';
+import {BOUNDS, pristineDatabase, collectSourceClosure, classifyQuiescence, assertQuiescenceScope, SCHEMA_HELPER, CAPTURE_HELPER, QUIESCENCE_HELPER, qualificationModule} from './owned-update-v3-runtime.mjs';
+import * as legacyQualifier from './migration-qualification.mjs';
+import {selectDeliveryPolicy} from './delivery-policy-selector-v4.mjs';
 
 for (const [name, body] of Object.entries({SCHEMA_HELPER, CAPTURE_HELPER, QUIESCENCE_HELPER}))
   test(name + ' generated standalone module parses without runtime execution', () => {
@@ -22,10 +24,43 @@ test('frozen operator import closure includes late-install foundation and invent
     path.join(ROOT, 'scripts/pathfinder-barriers/global-sql-v2.mjs')]);
   const names = closure.map(row => path.relative(ROOT, row.path).replaceAll('\\', '/'));
   for (const required of ['scripts/pathfinder-local/runtime-image-install.mjs', 'scripts/pathfinder-copied-recovery/current-inventory-lib.mjs',
-    'scripts/pathfinder-barriers/migration-qualification.mjs', 'scripts/pathfinder-barriers/global-sql-v2.mjs']) assert.ok(names.includes(required), required);
+    'scripts/pathfinder-barriers/migration-qualification.mjs', 'scripts/pathfinder-barriers/global-sql-v2.mjs',
+    'scripts/pathfinder-barriers/delivery-policy-selector-v4.mjs', 'scripts/pathfinder-barriers/migration-conservation-v4.mjs']) assert.ok(names.includes(required), required);
   assert.equal(new Set(closure.map(row => row.path)).size, closure.length);
   assert.ok(closure.every(row => row.bytes > 0 && /^[a-f0-9]{64}$/.test(row.sha256)));
   await assert.rejects(collectSourceClosure([path.join(ROOT, '..', 'outside.mjs')]), /B9_SOURCE_IMPORT_BOUNDARY/);
+});
+
+async function selectedConfig() {
+  const operationId = '93000000-0000-4000-8000-000000000009';
+  const selector = await pin(path.join(ROOT, 'scripts/pathfinder-barriers/delivery-policy-selector-v4.mjs'));
+  const qualifier = await pin(path.join(ROOT, 'scripts/pathfinder-barriers/migration-conservation-v4.mjs'));
+  return { operationId, directory: path.join(ROOT, 'pathfinder-engine/.scratch/barrier-delivery-' + operationId), sourceClosure: [selector, qualifier],
+    qualificationPolicy: { schemaVersion: 'wfc.pf.owned-update-policy-binding.v1',
+      selection: { schemaVersion: 'wfc.pf.delivery-policy-selection.v1', profile: 'post-b9-no-ddl-conservation-v4' }, selector, qualifier } };
+}
+test('default qualification retains the original B9 module and exact current source hash', async () => {
+  const selected = await qualificationModule({});
+  assert.equal(selected.module, legacyQualifier);
+  assert.equal(selected.qualifierSha256, (await pin(path.join(ROOT, 'scripts/pathfinder-barriers/migration-qualification.mjs'))).sha256);
+});
+test('explicit v4 uses exactly the selected bound qualifier for first and later qualification', async () => {
+  const config = await selectedConfig(), first = await qualificationModule(config), later = await qualificationModule(config);
+  const selected = selectDeliveryPolicy(config.qualificationPolicy.selection);
+  assert.equal(first.module, selected.qualifier); assert.equal(later.module, selected.qualifier);
+  assert.equal(first.qualifierSha256, config.qualificationPolicy.qualifier.sha256);
+  assert.deepEqual(later, first);
+});
+test('a changed selected source pin is refused without importing a fallback qualifier', async () => {
+  for (const key of ['selector', 'qualifier']) {
+    const config = await selectedConfig();
+    config.qualificationPolicy[key] = { ...config.qualificationPolicy[key], sha256: 'f'.repeat(64) };
+    config.sourceClosure = [config.qualificationPolicy.selector, config.qualificationPolicy.qualifier];
+    await assert.rejects(qualificationModule(config), /B9_CONSERVATION_POLICY_SOURCE_CHANGED/);
+  }
+});
+test('present empty or unknown mode cannot inherit B9 qualification', async () => {
+  for (const binding of [null, undefined, {}]) await assert.rejects(qualificationModule({ qualificationPolicy: binding }), /B9_CONSERVATION_POLICY_INVALID/);
 });
 test('bounded helpers have finite CPU, PID, memory, command and archive ceilings', () => {
   assert.equal(BOUNDS.helperMemoryBytes, 1024 ** 3); assert.equal(BOUNDS.pidsLimit, 128); assert.equal(BOUNDS.nanoCpus, 2000000000);

@@ -23,7 +23,29 @@ export const barrierVerifierResultSchema = z.object({
 }).strict();
 export type BarrierVerifierResult = z.infer<typeof barrierVerifierResultSchema>;
 const refuse = (code: string): never => { throw new PathFinderError(code, 503, 'Barrier geometry could not be qualified within its bounded verifier.'); };
+/** Logical refusal of one fully hashed input by the unchanged, joined verifier.
+ * Operational failures never construct this server-internal evidence type. */
+export class BarrierGeometryRefusal extends PathFinderError {
+  readonly captureSha256: string;
+  readonly implementationSha256: string;
+  constructor(captureSha256: string, implementationSha256: string) {
+    super('BARRIER_GEOMETRY_REFUSED', 503, 'The selected geometry did not qualify as supported closed obstacles.');
+    this.captureSha256 = policyHashSchema.parse(captureSha256);
+    this.implementationSha256 = policyHashSchema.parse(implementationSha256);
+  }
+}
 const digest = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
+
+/** An exited Linux task can remain in /proc until its child close is delivered.
+ * It has no resident address space, but this observation never confirms reaping. */
+export function verifierResidentObservation(status: string): { state: 'resident'; bytes: number } | { state: 'exited' } | { state: 'unavailable' } {
+  const resident = /^VmRSS:\s*(\d+)\s+kB\s*$/m.exec(status);
+  if (resident) {
+    const bytes = Number(resident[1]) * 1024;
+    return Number.isSafeInteger(bytes) && bytes >= 0 ? { state: 'resident', bytes } : { state: 'unavailable' };
+  }
+  return /^State:\s+[ZX]\s*(?:\([^\r\n]*\))?\s*$/m.test(status) ? { state: 'exited' } : { state: 'unavailable' };
+}
 
 /** Hash the deployed executable closure before/after invocation. No request paths or shell. */
 async function implementation(dll: string): Promise<string> {
@@ -80,8 +102,10 @@ export async function runBarrierVerifier(bytes: Buffer, signal: AbortSignal): Pr
       const timer = setTimeout(() => finish(failure('BARRIER_VERIFIER_TIMEOUT')), 65_000);
       const monitor = setInterval(() => { if (settled || sampling || !child.pid) return; sampling = true;
         void fs.readFile('/proc/' + child.pid + '/status', 'utf8').then(status => {
-          const match = /^VmRSS:\s*(\d+)\s+kB\s*$/m.exec(status);
-          if (!match || Number(match[1]) * 1024 > 512 * 1024 ** 2) finish(failure('BARRIER_VERIFIER_RSS_LIMIT'));
+          const observation = verifierResidentObservation(status);
+          // An exited sample still waits for close/reap, output and all hashes.
+          if (observation.state === 'unavailable') finish(failure('BARRIER_VERIFIER_RSS_UNAVAILABLE'));
+          else if (observation.state === 'resident' && observation.bytes > 512 * 1024 ** 2) finish(failure('BARRIER_VERIFIER_RSS_LIMIT'));
         }).catch(cause => { if (!settled && (cause as NodeJS.ErrnoException).code !== 'ENOENT') finish(failure('BARRIER_VERIFIER_RSS_UNAVAILABLE')); })
           .finally(() => { sampling = false; }); }, 100);
       signal.addEventListener('abort', abort, { once: true }); if (signal.aborted) abort();
@@ -96,7 +120,8 @@ export async function runBarrierVerifier(bytes: Buffer, signal: AbortSignal): Pr
     signal.throwIfAborted();
     const result = barrierVerifierResultSchema.parse(parsePolicyJson(resultBytes, { maxBytes: 65536 }));
     if (await implementation(dll) !== before || result.captureSha256 !== digest(bytes)) return refuse('BARRIER_VERIFIER_CHANGED');
-    if (result.status !== 'geometry-qualified' || !result.evidence) return refuse('BARRIER_GEOMETRY_REFUSED');
+    if (result.status === 'refused' && result.evidence === null) throw new BarrierGeometryRefusal(digest(bytes), before);
+    if (result.status !== 'geometry-qualified' || !result.evidence) return refuse('BARRIER_VERIFIER_RESULT_INVALID');
     return { result, implementationSha256: before };
   } finally { if (processJoined) running = false; }
 }

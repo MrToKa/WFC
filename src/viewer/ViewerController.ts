@@ -9,6 +9,7 @@ import { bindCompletedCaptureEvidence,verifyCompletedCaptureEvidence,type Comple
 import { CAPTURE_INPUT_LIMITS, planModelCaptureInput, validateModelCaptureInputAck, validateModelCaptureInputScope, type ModelCaptureInputDescriptor } from '../../viewer-runtime/capture-input.mjs';
 import { validatePreparationDiscoveryRequest, validatePreparationDiscoveryPage, type PreparationDiscoveryRequest, type PreparationDiscoveryPage } from '../../viewer-runtime/preparation-input.mjs';
 import { watchViewerLogin } from './loginLifecycle';
+import { barrierPublicationOutcomeSchema } from '../../shared/pathfinderBarrierOutcomes';
 import { sessionBase, viewerRequest, ViewerAccessError, type ViewerSession, type ModelSelection } from './sessionApi';
 
 type Pending = { envelope: BridgeEnvelope; terminal: string; timer: number; resolve?: (event: ViewerEvent) => void; reject?: (error: Error) => void };
@@ -570,17 +571,23 @@ export class ViewerController {
       // Only this protected transport boundary can distinguish a local
       // preflight refusal from a PUT whose acknowledgement may be lost.
       onWriteStarted?.();
-      const upload = viewerRequest<{ schemaVersion: string; snapshot: unknown; duplicate: unknown }>(
+      const upload = viewerRequest<unknown>(
         sessionBase(session.projectId, session.modelVersionId, session.sessionId) + 'barriers/captures/' + intentId,
         this.options.token, { method: 'PUT', body: { capture, frameObservation: frame }, signal: controller.signal });
       const result = await Promise.race([upload, cancelled]);
       if (controller.signal.aborted || !sameSession()
         || String(this.selectionRevision) !== capture.scope.selectionRevision) throw new Error('Barrier publication response arrived after its context changed');
-      if (result.schemaVersion !== 'wfc.pf.barrier-publication-receipt.v1' || typeof result.duplicate !== 'boolean'
-        || Object.keys(result).length !== 3) throw new Error('Barrier publication receipt is invalid');
-      const snapshot = barrierSnapshotReferenceSchema.parse(result.snapshot);
+      const outcome = barrierPublicationOutcomeSchema.parse(result);
+      if (outcome.schemaVersion === 'wfc.pf.barrier-publication-refusal.v1') {
+        const captureDigest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(barrierCanonicalJson(capture))))]
+          .map(value => value.toString(16).padStart(2, '0')).join('');
+        if (controller.signal.aborted || !sameSession() || outcome.intentId !== intentId || outcome.captureSha256 !== captureDigest || outcome.frameSha256 !== frameDigest)
+          throw new Error('Barrier refusal receipt scope changed');
+        return outcome;
+      }
+      const snapshot = barrierSnapshotReferenceSchema.parse(outcome.snapshot);
       if (snapshot.mode !== 'mesh-set' || barrierCanonicalJson(snapshot.scope) !== barrierCanonicalJson(capture.scope)) throw new Error('Barrier publication receipt scope changed');
-      return { schemaVersion: 'wfc.pf.barrier-publication-receipt.v1' as const, snapshot, duplicate: result.duplicate };
+      return { schemaVersion: 'wfc.pf.barrier-publication-receipt.v1' as const, snapshot, duplicate: outcome.duplicate };
     } finally { window.clearTimeout(timer); signal?.removeEventListener('abort', abort); controller.signal.removeEventListener('abort', onCancelled); this.requests.delete(controller); }
   }
 
