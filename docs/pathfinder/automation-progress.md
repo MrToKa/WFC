@@ -1,5 +1,18 @@
 # PathFinder local implementation progress
 
+## Current: B22 popup correction installed; real Aalborg cable checks in progress
+
+Report115/publicB22 delivery receipt records source89503dce installed on5191:
+prepare/build/install/static PASS, rollback export verified, exact source/operator
+pins conserved, API remains the same running container, non-web resources conserved.
+Web0e666274/APIa43cac0d; health/index/four exact served static assets PASS. Source
+checks remain197 selected Vitest/40 Node with71 historical Tab cases deselected.
+The user now accepts <=0.1m coordinate comparison differences, without changing
+collision checks or original geometry. Exact-bit differences remain recorded;
+bounded comparison and actual two-cable offline wall/floor checks are underway.
+Live SDK/current-frame and real-cable Apply are not inferred. Own-terminal/full
+capacity and then Simplified Preparer remain unfinished. History below retained.
+
 ## Current: B22 popup calculation source checked; web-only delivery pending
 
 Report114/publicB22 source receipt records 197 selected Vitest checks and 40 Node
