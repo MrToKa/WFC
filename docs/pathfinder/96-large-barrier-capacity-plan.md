@@ -363,6 +363,13 @@ Status: **PLANNED**.
 
 ## Execution split and completion rule
 
+Dependency update afterPF-B13a: existing v1 event bodies are24KiB, capture streams
+3000 events and replay registry4096 commands. New256KiB pages must not be forced
+through that lane or old limits raised. Implement Stage3's server admission/
+staging prerequisite next (PF-B13b), then Stage2's protected paged producer against
+that exact API (PF-B13c), before Stages4–7. This changes implementation dependency
+order, not required outputs, v1 guarantees or whole-parent/real-cable acceptance.
+
 After Stage 1 contracts freeze, independent writers can own: (A) pure planner
 and coverage tests; (B) protected Viewer paging/capture; (C) server storage/session
 state and publication; (D) engine codec/qualification/paged queries. Root owns

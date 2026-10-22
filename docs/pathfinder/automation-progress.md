@@ -1,6 +1,37 @@
 # PathFinder local implementation progress
 
-## Current: PF-B12 diagnostic delivery complete; PF-B13a planning starts next
+## Current: PF-B13a pure planning checks PASS; PF-B13b staging next
+
+Native16PASS inclsynthetic620831occurrences/382523nodes,84parts/1213pages,
+7650460Blookup,max512rows/inputpage,twooriginalinputpages;sampledRSS276537344B,
+7562samples,384MiBheap,63046.8mstest/53607msplanning. Shared45PASS/fulltypesPASS/
+sharedprod+testlint0warnings/independentreviewCLEAR. Structural-only authoritynone/
+qualificationNOT_MEASURED; actualSDK/triangles/holes/routingNOT_RUN. No v1/runtime/
+API/DB/cable changes. Report97/publicb13areceipt retainexactscope. Nextserver-owned
+admission/packedstaging prerequisite beforeproducer: v1event24KiB/3000events/replay
+4096 cannotcarry256KiBpagesunchanged. Plan96 order1→3foundation→2producer→4→5→6→7.
+Preparer sidecarguard17PASS; workspace998abcb5 SUBSET_PASS5/5,66.4s, normalworker/
+childjoins/ports/source+copypinsPASS; notfullbaseline. FreshFULLbaselinefb9ede8f-
+8517-4406-a5f1-c9a4535ae52d runningrootexec40269, sourcesfrozen.
+
+## Previous: PF-B13a multipart planning implementation
+
+Branchpf-b13a-multipart-planning-local-20261022 inherits deliveryrecordda86493;
+B12product22114f4. Executing committedPF-B13a-multipart-planning.md stage1plan96.
+Asharedcontract/tests, Cnativeplanner/declaration/tests, Bread-onlyreview; root
+soleactualexecutor/docs. Exactpagedroots/compact20Bnode lookup/lockstep occurrence
+rangecoverage/unchangedperpartcaps; no ready/qualified/publication/Apply authority.
+Sharedschema45PASS/lint0warnings; nativeplannerchecksNOT_RUN untilsourcefreeze.
+Current5191web814475f9/APIsameac0d16ab unchanged.
+Privatepurecontroloperation320c423c-84f6-4fac-86a1-ac30e1cf8a33, no runtime mutation.
+RootindependentPreparer19fakeDockerunitPASS/guard15PASS; currentcopiedworkspace
+diagnostics858859f1-d0f9-4d60-a8a0-26a851354567 finishedFAIL339984ms:3pass/2cancelled,
+workerexitreportmissing; parentjoined/portsclosed/source+copyunchangedreported.
+Aowns5harnessfiles forobservation-onlysidecar(no terminalproofrelaxation), no
+actualPreparerprocess. No originalWFC/5191/APS interaction.
+FreshoriginalWFCclean/liveoriginmain96e63f13 read-only atthishandoff, noCIclaim.
+
+## Previous: PF-B12 diagnostic delivery complete
 
 Corrected product22114f4dd05c0f310d8e1cbd908d36332cc42346 built/installedPASS in
 freshoperation4fcfd5a0. Newweb814475f9/APIac0d16ab SAMErunningcontainer. Public
