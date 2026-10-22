@@ -93,6 +93,30 @@ describe('persistent nonmodal cable routing panel with atomic drafts', () => {
     expect(comparison.getByText('/NEW/SECONDARY')).toBeVisible();
     expect(assignment.save).not.toHaveBeenCalled(); expect(review.review).not.toHaveBeenCalled(); expect(review.apply).not.toHaveBeenCalled();
   });
+  it('reviews the exact recorded bypass while next-drill OFF requires configuration for a new calculation', () => {
+    const p = props(); p.access = { ...p.access, calculation: null, initialFill: null };
+    const changeDrilling = vi.fn();
+    const review = { ...reviewController(p), recordedDrillThroughWalls: true };
+    const view = render(<PathFinderCableRoutingPanel {...p} review={review} drillThroughWalls={false} onDrillThroughWallsChange={changeDrilling}
+      calculationBlockedReason="Configure barriers before calculating with drilling disabled." />);
+    expect(screen.getByRole('checkbox', { name: 'Drill through the walls' })).not.toBeChecked();
+    expect(screen.getByText(/Recorded result: Drill through the walls enabled/)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Review proposed routing' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Review proposed routing' })); expect(review.review).toHaveBeenCalledOnce();
+    view.rerender(<PathFinderCableRoutingPanel {...p} review={{ ...review, reviewed: true, canReview: false, canApply: true }} drillThroughWalls={false} onDrillThroughWallsChange={changeDrilling}
+      calculationBlockedReason="Configure barriers before calculating with drilling disabled." />);
+    expect(screen.getByRole('button', { name: 'Apply reviewed routing' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Apply reviewed routing' })); expect(review.apply).toHaveBeenCalledOnce();
+    expect(changeDrilling).not.toHaveBeenCalled();
+    expect(p.onCalculate).not.toHaveBeenCalled(); expect(assignment.save).not.toHaveBeenCalled();
+    expect(vi.mocked(useCableEndpointPairSelection).mock.calls.at(-1)?.[0]).toMatchObject({ calculation: null, initialFill: null });
+  });
+  it.each(['dirty-barriers', 'pending-barriers', 'stale-result'] as const)('keeps the Results owner %s refusal without deriving approval from the drill draft', reason => {
+    const p = props(), review = { ...reviewController(p), canReview: false, canApply: false, message: reason, recordedDrillThroughWalls: true };
+    render(<PathFinderCableRoutingPanel {...p} review={review} drillThroughWalls calculationBlockedReason="Current route configuration is unavailable." />);
+    expect(screen.getByRole('button', { name: 'Review proposed routing' })).toBeDisabled(); expect(screen.getByRole('button', { name: 'Apply reviewed routing' })).toBeDisabled();
+    expect(review.review).not.toHaveBeenCalled(); expect(review.apply).not.toHaveBeenCalled();
+  });
   it('shows stored values and the actual no-endpoint-change Save meaning without a fictitious comparison failure', () => {
     const p = props(); p.cable!.cable.routing = '/STORED'; p.cable!.cable.designLength = '30';
     render(<PathFinderCableRoutingPanel {...p} calculationBlockedReason="Configure the current barriers." />);
@@ -109,7 +133,9 @@ describe('persistent nonmodal cable routing panel with atomic drafts', () => {
     assignment.from.draft = { mode: 'fixed-world', point: [7, 8, 9], derivation: 'manual-world-point', displaySdkObjectId: 55 };
     assignment.from.effectiveDraft = assignment.from.draft; assignment.from.draftSource = 'selected';
     assignment.from.displaySelection = { sdkObjectId: 55, name: 'Selected From equipment', point: [7, 8, 9] }; assignment.canSave = true;
-    const review = reviewController(p), view = render(<PathFinderCableRoutingPanel {...p} review={review} calculationBlockedReason="Configure the current barriers." />);
+    // Changing a saved endpoint makes the old proposal unreviewable at the
+    // Results owner; next-calculation settings are a separate concern.
+    const review = { ...reviewController(p), canReview: false, canApply: false }, view = render(<PathFinderCableRoutingPanel {...p} review={review} calculationBlockedReason="Configure the current barriers." />);
     expect(screen.getByText(/Save the assigned From\/To locations now/)).toBeVisible(); expect(screen.queryByText(/Configure routing before saving/)).toBeNull();
     expect(screen.getByText(/It does not calculate routing or update Cable list values/)).toBeVisible(); expect(screen.queryByText(/Save recalculates affected cables/)).toBeNull();
     expect(screen.getByRole('textbox', { name: 'From assigned model object' })).toHaveValue('Selected From equipment\nX: 7 m; Y: 8 m; Z: 9 m');

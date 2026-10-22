@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchPathFinderState, fetchPathFinderProposal, fetchPathFinderLookup, fetchPathFinderLookupPlan, fetchPathFinderPreview, pathFinderRequest, parsePathFinderProposal } from './pathfinder';
+import { fetchPathFinderState, fetchPathFinderProposal, fetchPathFinderLookup, fetchPathFinderLookupPlan, fetchPathFinderPreview, pathFinderRequest, parsePathFinderProposal, submitPathFinderCalculation } from './pathfinder';
 import { createHash } from 'node:crypto';
 import { ENGINE_IDENTITY_POLICY_VERSIONS, ENGINE_IDENTITY_VERSION, engineIdentityCanonicalBody } from '../../shared/pathfinderEngineIdentity';
 import { notEvaluatedCalculationAvailability } from '../../shared/pathfinderCalculationAvailability';
@@ -25,6 +25,58 @@ function recordedProposal(dependencyVersion: string) {
         ? { ...body, contentSha256: createHash('sha256').update(engineIdentityCanonicalBody(body)).digest('hex') } : null,
       ...(dependencyVersion==='pathfinder.dependencies.v6'?{endpointSources:{from:'automatic-model-candidate',to:'confirmed-shared-location'}}:{}) } };
 }
+function popupCalculationBody() {
+  return { cableIds: [cableId], expectedRegistryRevision: '9', force: true, options: { connectionToleranceMeters: 0.25, sampleSpacingMeters: 0.125,
+    maxGraphNodes: 200_000, maxGraphConnections: 1_000_000, secondaryDistanceMeters: 2, preferVerticalApproach: true,
+    barrierRouting: { schemaVersion: 'wfc.pf.barrier-admission-intent.v1', scope: { projectId, modelVersionId: modelId, contentFingerprint: 'a'.repeat(64),
+      selectionRevision: '2', captureFrameId: modelId, captureFrameSha256: 'b'.repeat(64), coordinateFrame: 'canonical-world-metres' },
+    expectedRegistryRevision: '0', expectedSnapshot: null, drillThroughWalls: true } } };
+}
+describe('popup calculation transport phase evidence', () => {
+  it('acknowledges only the exact202 body after one authenticated single POST', async () => {
+    const body = popupCalculationBody(), accepted = { jobId: modelId, registryRevision: '10', duplicate: false };
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json(accepted, { status: 202 }));
+    expect(await submitPathFinderCalculation(projectId, 'token', body)).toEqual({ kind: 'acknowledged', ...accepted });
+    expect(fetch).toHaveBeenCalledExactlyOnceWith(expect.stringContaining(`/api/projects/${projectId}/pathfinder/jobs`), expect.objectContaining({
+      method: 'POST', body: JSON.stringify(body), cache: 'no-store', redirect: 'error', credentials: 'same-origin', headers: { Authorization: 'Bearer token', 'Content-Type': 'application/json' },
+    }));
+  });
+  it.each(['invalid-body', 'aborted', 'changed-owner', 'throwing-owner'] as const)('proves %s did not start fetch', async kind => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('This preflight test must not use transport.')), controller = new AbortController();
+    if (kind === 'aborted') controller.abort();
+    const value = await submitPathFinderCalculation(projectId, 'token', kind === 'invalid-body' ? { ...popupCalculationBody(), force: false } : popupCalculationBody(),
+      { signal: controller.signal, isCurrent: () => { if (kind === 'throwing-owner') throw Error('Synthetic stale owner'); return kind !== 'changed-owner'; } });
+    expect(value.kind).toBe('not-submitted'); expect(fetch).not.toHaveBeenCalled();
+  });
+  it.each([[400, 'INVALID_PATHFINDER_REQUEST'], [409, 'REGISTRY_CONFLICT'], [409, 'BARRIER_ROUTING_INTENT_REQUIRED']] as const)('settles audited HTTP%s/%s as rejected without retry', async (status, code) => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({ code, error: 'Synthetic pre-insert refusal.' }, { status }));
+    expect(await submitPathFinderCalculation(projectId, 'token', popupCalculationBody())).toEqual({ kind: 'rejected', status, code });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+  it.each([[503, 'PATHFINDER_COMMIT_OUTCOME_UNKNOWN'], [503, 'REGISTRY_CONFLICT'], [409, 'UNRECOGNIZED_REFUSAL'], [400, 'PATHFINDER_FAILURE'], [401, 'LOGIN_REVOKED']] as const)('retains unaudited HTTP%s/%s as unknown', async (status, code) => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({ code, error: 'Synthetic server response.' }, { status }));
+    expect(await submitPathFinderCalculation(projectId, 'token', popupCalculationBody())).toMatchObject({ kind: 'unknown' }); expect(fetch).toHaveBeenCalledOnce();
+  });
+  it.each(['missing-job', 'wrong-job', 'extra-field', 'duplicate-member', 'wrong-status'] as const)('keeps malformed %s acknowledgement unknown', async kind => {
+    const accepted = { jobId: modelId, registryRevision: '10', duplicate: false };
+    const body = kind === 'missing-job' ? { registryRevision: '10', duplicate: false } : kind === 'wrong-job' ? { ...accepted, jobId: 'invalid' }
+      : kind === 'extra-field' ? { ...accepted, ready: true } : accepted;
+    const response = kind === 'duplicate-member' ? new Response('{"jobId":"' + cableId + '",' + JSON.stringify(accepted).slice(1), { status: 202 })
+      : Response.json(body, { status: kind === 'wrong-status' ? 200 : 202 });
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(response);
+    expect(await submitPathFinderCalculation(projectId, 'token', popupCalculationBody())).toMatchObject({ kind: 'unknown' }); expect(fetch).toHaveBeenCalledOnce();
+  });
+  it('does not turn a local RESPONSE_LIMIT413 on actual202 into a definitive refusal', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(' '.repeat(8193), { status: 202 }));
+    expect(await submitPathFinderCalculation(projectId, 'token', popupCalculationBody())).toEqual({ kind: 'unknown', code: 'CALCULATION_SUBMISSION_UNKNOWN' });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+  it('retains lost transport acknowledgement without another POST', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new TypeError('Synthetic connection lost after send.'));
+    expect(await submitPathFinderCalculation(projectId, 'token', popupCalculationBody())).toEqual({ kind: 'unknown', code: 'CALCULATION_SUBMISSION_UNKNOWN' });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+});
 describe('PathFinder API contract', () => {
   it('retains explicit direct decisions and length v2 without reinterpreting historical SECONDARY routes', () => {
     const directSecondary = { schemaVersion: 'wfc.pf.direct-secondary.v1', policyVersion: DIRECT_SECONDARY_POLICY, coordinateFrame: 'canonical-world-metres',

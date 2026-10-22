@@ -48,7 +48,7 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
   const endpointOnlySave = access.calculation === null && access.initialFill === null;
   const unsaved = Boolean(from.draft || to.draft || from.context?.automaticSelection || to.context?.automaticSelection);
   const currentReview = review?.cableId === cable.cable.id ? review : null;
-  const reviewBlocked = busy || Boolean(pending) || unsaved || calculationPending || Boolean(currentReview?.pending) || Boolean(calculationBlockedReason);
+  const reviewBlocked = busy || Boolean(pending) || unsaved || calculationPending || Boolean(currentReview?.pending);
   const oldBarrierProof = cable.calculation.reasonCodes.includes('BARRIER_WRITE_PROOF_REQUIRED');
   const close = () => { onClose(); const target = anchor?.isConnected ? anchor : focusReturn.current; if (target?.isConnected) target.focus({ preventScroll: true }); };
   const callbacks = useRef(close); callbacks.current = close;

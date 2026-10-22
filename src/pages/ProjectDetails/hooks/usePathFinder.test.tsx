@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { usePathFinder } from './usePathFinder';
-import { fetchPathFinderState, fetchPathFinderLookupPlan, fetchPathFinderProposal, fetchPathFinderJob, pathFinderRequest, PathFinderApiError, type PathFinderState, type PathFinderProposal } from '@/api/pathfinder';
+import { fetchPathFinderState, fetchPathFinderLookupPlan, fetchPathFinderProposal, fetchPathFinderJob, pathFinderRequest, submitPathFinderCalculation, PathFinderApiError, type PathFinderState, type PathFinderProposal, type PathFinderPreferences } from '@/api/pathfinder';
 import { fetchProjectModels } from '@/api/projectModels';
 import { ViewerAccessError } from '@/viewer/sessionApi';
 import type { ViewerController } from '@/viewer/ViewerController';
@@ -10,7 +10,7 @@ import { BARRIER_CAPTURE_ERROR_CODES, BARRIER_CAPTURE_ERROR_MESSAGES, barrierCap
 const facts = vi.hoisted(() => ({ disposed: vi.fn(), load: vi.fn(), capture: vi.fn(), barrierCapture: vi.fn(), barrierPublish: vi.fn(), readSelection: vi.fn(), transparency: vi.fn(), clear: vi.fn(), cancelPicking: vi.fn(), instances: 0, events: [] as ((event: { type: string; payload: Record<string, unknown> }) => void)[] }));
 vi.mock('@/api/pathfinder', async importOriginal => {
   const original = await importOriginal<typeof import('@/api/pathfinder')>();
-  return { ...original, fetchPathFinderState: vi.fn(), fetchPathFinderLookupPlan: vi.fn(), fetchPathFinderProposal: vi.fn(), fetchPathFinderJob: vi.fn(), pathFinderRequest: vi.fn() };
+  return { ...original, fetchPathFinderState: vi.fn(), fetchPathFinderLookupPlan: vi.fn(), fetchPathFinderProposal: vi.fn(), fetchPathFinderJob: vi.fn(), pathFinderRequest: vi.fn(), submitPathFinderCalculation: vi.fn() };
 });
 vi.mock('@/api/projectModels', () => ({ fetchProjectModels: vi.fn() }));
 vi.mock('@/viewer/ViewerController', () => ({ ViewerController: class {
@@ -33,6 +33,7 @@ let container: { current: HTMLDivElement };
 beforeEach(() => {
   vi.clearAllMocks(); facts.instances = 0; facts.events.length = 0; container = { current: document.createElement('div') }; document.body.append(container.current);
   vi.mocked(fetchPathFinderState).mockResolvedValue(state()); vi.mocked(pathFinderRequest).mockResolvedValue({ locationId });
+  vi.mocked(submitPathFinderCalculation).mockReset().mockResolvedValue({ kind: 'acknowledged', jobId: locationId, registryRevision: '8', duplicate: false });
   vi.mocked(fetchPathFinderProposal).mockReset(); vi.mocked(fetchPathFinderJob).mockReset();
   vi.mocked(fetchPathFinderLookupPlan).mockReset().mockResolvedValue({ routeCodes: ['/BC1', '/BC2'], selectionRevision: '2', connectionGap: '0.250' });
   facts.capture.mockReset().mockResolvedValue({ snapshot: { lookup: 'owned-protected-capture' }, summary: {} });
@@ -41,6 +42,74 @@ beforeEach(() => {
   vi.mocked(fetchProjectModels).mockResolvedValue({ selection: { projectId, activeModelVersionId: modelId, selectionRevision: 2, updatedAt: '2026-10-18T00:00:00Z' }, versions: [{ id: modelId, projectId, label: 'Model', source: { name: 'test.nwd', bytes: 1, sha256: 'a'.repeat(64), identityBasis: 'observed-local-file' }, preparedAt: '2026-10-18T00:00:00Z', importedAt: null, state: 'ready', health: 'healthy' }] });
 });
 
+describe('fresh popup calculation submission without Viewer appearance changes', () => {
+  const mount = () => renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container, automaticStatePolling: false }));
+  const preferences = (): PathFinderPreferences => ({ secondaryDistanceMeters: 2, preferVerticalApproach: true,
+    barrierRouting: { schemaVersion: 'wfc.pf.barrier-admission-intent.v1', scope: barrierRequest().scope,
+      expectedRegistryRevision: '0', expectedSnapshot: null, drillThroughWalls: true } });
+  it('refreshes a changed endpoint registry once before the sole POST and keeps the same Viewer', async () => {
+    const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
+    vi.mocked(fetchPathFinderState).mockResolvedValueOnce({ ...state(), registryRevision: '8', settings: { ...state().settings, revision: '2', connectionGap: '0.250' } });
+    let result: Awaited<ReturnType<typeof view.result.current.submitCalculation>> | undefined;
+    await act(async () => { result = await view.result.current.submitCalculation([locationId], preferences()); });
+    expect(result).toEqual({ kind: 'acknowledged', jobId: locationId, registryRevision: '8', duplicate: false });
+    expect(fetchPathFinderState).toHaveBeenCalledTimes(2);
+    expect(submitPathFinderCalculation).toHaveBeenCalledExactlyOnceWith(projectId, 'token', expect.objectContaining({ cableIds: [locationId], expectedRegistryRevision: '8', force: true,
+      options: expect.objectContaining({ connectionToleranceMeters: 0.25, secondaryDistanceMeters: 2 }) }), expect.objectContaining({ signal: expect.any(AbortSignal), isCurrent: expect.any(Function) }));
+    expect(vi.mocked(fetchPathFinderState).mock.invocationCallOrder[1]).toBeLessThan(vi.mocked(submitPathFinderCalculation).mock.invocationCallOrder[0]);
+    expect(pathFinderRequest).not.toHaveBeenCalled(); expect(facts.instances).toBe(1); expect(facts.disposed).not.toHaveBeenCalled(); expect(facts.clear).not.toHaveBeenCalled(); expect(facts.transparency).not.toHaveBeenCalled();
+    view.unmount();
+  });
+  it('reports a failed preflight read as positively not submitted', async () => {
+    const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
+    vi.mocked(fetchPathFinderState).mockRejectedValueOnce(new PathFinderApiError('TEMPORARY_READ_FAILURE', 503));
+    await act(async () => { expect(await view.result.current.submitCalculation([locationId], preferences())).toEqual({ kind: 'not-submitted', code: 'CALCULATION_PREFLIGHT_FAILED' }); });
+    expect(submitPathFinderCalculation).not.toHaveBeenCalled(); expect(view.result.current.busy).toBe(false); view.unmount();
+  });
+  it.each(['model', 'selection', 'fingerprint'] as const)('does not POST across a %s change discovered by the fresh read', async field => {
+    const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
+    const next = state(); if (field === 'model') next.activeModel.modelVersionId = locationId;
+    if (field === 'selection') next.activeModel.selectionRevision = '77'; if (field === 'fingerprint') next.activeModel.contentFingerprint = 'f'.repeat(64);
+    vi.mocked(fetchPathFinderState).mockResolvedValueOnce(next);
+    await act(async () => { expect((await view.result.current.submitCalculation([locationId], preferences())).kind).toBe('not-submitted'); });
+    expect(submitPathFinderCalculation).not.toHaveBeenCalled(); view.unmount();
+  });
+  it('freezes cable IDs and preferences before waiting for current state', async () => {
+    const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
+    let finish!: (value: PathFinderState) => void; vi.mocked(fetchPathFinderState).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const ids = [locationId], draft = preferences(); let pending!: ReturnType<typeof view.result.current.submitCalculation>;
+    act(() => { pending = view.result.current.submitCalculation(ids, draft); });
+    ids[0] = modelId; draft.secondaryDistanceMeters = 99; draft.barrierRouting!.drillThroughWalls = false;
+    await act(async () => { finish({ ...state(), registryRevision: '8' }); await pending; });
+    expect(submitPathFinderCalculation).toHaveBeenCalledWith(projectId, 'token', expect.objectContaining({ cableIds: [locationId],
+      options: expect.objectContaining({ secondaryDistanceMeters: 2, barrierRouting: expect.objectContaining({ drillThroughWalls: true }) }) }), expect.any(Object));
+    view.unmount();
+  });
+  it('does not borrow a fresh response from an earlier authenticated owner', async () => {
+    const view = renderHook(({ token }) => usePathFinder({ projectId, loadedProjectId: projectId, token, isAdmin: true, container, automaticStatePolling: false }), { initialProps: { token: 'old-token' } });
+    await waitFor(() => expect(facts.instances).toBe(1)); let finish!: (value: PathFinderState) => void;
+    vi.mocked(fetchPathFinderState).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    let pending!: ReturnType<typeof view.result.current.submitCalculation>; act(() => { pending = view.result.current.submitCalculation([locationId], preferences()); });
+    view.rerender({ token: 'new-token' }); await act(async () => { finish(state()); expect((await pending).kind).toBe('not-submitted'); });
+    expect(submitPathFinderCalculation).not.toHaveBeenCalled(); view.unmount();
+  });
+  it('retains a positive ACK independently of a later failing state refresh', async () => {
+    const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
+    vi.mocked(fetchPathFinderState).mockResolvedValueOnce({ ...state(), registryRevision: '8' }).mockRejectedValueOnce(new PathFinderApiError('READ_FAILED', 503));
+    let result: Awaited<ReturnType<typeof view.result.current.submitCalculation>> | undefined;
+    await act(async () => { result = await view.result.current.submitCalculation([locationId], preferences()); });
+    expect(result?.kind).toBe('acknowledged'); expect(fetchPathFinderState).toHaveBeenCalledTimes(2);
+    await act(async () => { view.result.current.refresh(); });
+    expect(result?.kind).toBe('acknowledged'); expect(submitPathFinderCalculation).toHaveBeenCalledOnce(); view.unmount();
+  });
+  it.each(['not-submitted', 'rejected', 'unknown'] as const)('preserves typed %s evidence without generic perform swallowing it', async kind => {
+    const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
+    const outcome = kind === 'rejected' ? { kind, status: 409 as const, code: 'REGISTRY_CONFLICT' } : { kind, code: 'SYNTHETIC_PHASE_EVIDENCE' };
+    vi.mocked(submitPathFinderCalculation).mockResolvedValueOnce(outcome);
+    await act(async () => { expect(await view.result.current.submitCalculation([locationId], preferences())).toEqual(outcome); });
+    expect(submitPathFinderCalculation).toHaveBeenCalledOnce(); expect(pathFinderRequest).not.toHaveBeenCalled(); view.unmount();
+  });
+});
 describe('bounded detail inspection and state polling', () => {
   const mount = (automaticStatePolling?: boolean) => renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container, automaticStatePolling }));
   const detail = (): PathFinderProposal => ({ id: locationId, projectId, cableId: modelId, jobId: projectId, status: 'calculated',

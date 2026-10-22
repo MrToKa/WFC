@@ -1,5 +1,19 @@
 # PathFinder local implementation progress
 
+## Current: B22 popup calculation source checked; web-only delivery pending
+
+Report114/publicB22 source receipt records 197 selected Vitest checks and 40 Node
+installer checks PASS, full types, scoped lint and frontend build PASS. The 71
+historical Tab cases were deselected. Fresh state before popup submission fixes
+the stale registry after endpoint Save; phase-aware outcomes unlock confirmed
+unsent/refused work while retaining unknown requests per cable in this workspace.
+Exact-result review is independent of the next drilling draft. Explicit v2 web
+planner pins the installed B21 pair and preserves v1. Guarded delivery remains
+pending. Actual two-cable Aalborg retained inputs and the unchanged planning
+snapshot have been extracted with whole-archive/hash/bookend checks; coordinate
+corroboration and route tests are in progress. No live SDK/current-frame or real
+cable Apply acceptance is inferred. Own-terminal/full capacity and Preparer remain.
+
 ## Current: B20/B21 paired delivery complete; B22 popup corrections in progress
 
 Report113/publicB21delivery receipt records installed source67a71dc5 on5191:

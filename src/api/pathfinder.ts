@@ -3,7 +3,7 @@ import { getApiBaseUrl } from './http';
 import type { CanonicalPoint } from '../../viewer-runtime/protocol.mjs';
 import { validateModelCaptureInputScope, type ModelCaptureInputScope } from '../../viewer-runtime/capture-input.mjs';
 import { engineIdentitySchema } from '../../shared/pathfinderEngineIdentity';
-import { policyHashSchema, policyRevisionSchema } from '../../shared/pathfinderPurposePolicy';
+import { parsePurposeJson, policyHashSchema, policyRevisionSchema } from '../../shared/pathfinderPurposePolicy';
 import { lengthLedgerSchema } from '../../shared/pathfinderLengthLedger';
 import { directSecondaryDecisionSchema, directSecondaryRouteIssue, type DirectSecondaryDecision } from '../../shared/pathfinderDirectSecondary';
 import { revisionResultEnvelopeSchema } from '../../shared/pathfinderRevisionResults';
@@ -126,6 +126,17 @@ export type PathFinderLookup = z.infer<typeof lookupSchema>;
 export type PathFinderLookupPlan = z.infer<typeof lookupPlanSchema>;
 export type PathFinderPreview = z.infer<typeof previewSchema>;
 export type PathFinderPreferences = { secondaryDistanceMeters: number; preferVerticalApproach: boolean; barrierRouting?: BarrierAdmissionIntent };
+export type PathFinderCalculationSubmission =
+  | { kind: 'not-submitted'; code: string }
+  | { kind: 'rejected'; status: 400 | 409; code: string }
+  | { kind: 'acknowledged'; jobId: string; registryRevision: string; duplicate: boolean }
+  | { kind: 'unknown'; code: string };
+const popupCalculationRequestSchema = z.object({ cableIds: z.array(uuid).min(1).max(10_000), expectedRegistryRevision: revision, force: z.literal(true),
+  options: z.object({ connectionToleranceMeters: z.number().finite().positive().max(100), sampleSpacingMeters: z.literal(0.125),
+    maxGraphNodes: z.literal(200_000), maxGraphConnections: z.literal(1_000_000), secondaryDistanceMeters: z.number().finite().min(0).max(1_000_000),
+    preferVerticalApproach: z.boolean(), barrierRouting: barrierAdmissionIntentSchema }).strict() }).strict();
+const popupCalculationAcknowledgementSchema = z.object({ jobId: uuid, registryRevision: revision, duplicate: z.boolean() }).strict();
+const popupCalculationRefusalSchema = z.object({ code: z.string().regex(/^[A-Z][A-Z0-9_]{0,95}$/), error: z.string().max(4096) }).strict();
 export type PathFinderPreviewInput = Omit<z.infer<typeof previewInputSchema>, 'artifactId' | 'expectedSelectionRevision' | 'expectedSettingsRevision' | 'expectedRegistryRevision'>;
 export class PathFinderApiError extends Error {
   constructor(public readonly code: string, public readonly status: number) {
@@ -139,13 +150,13 @@ export class PathFinderApiError extends Error {
           : 'Path Finder could not complete the operation. Review the input and try again.');
   }
 }
-async function read(response: Response): Promise<unknown> {
+async function read(response: Response, maximumBytes = 32 * 1024 * 1024, strict = false): Promise<unknown> {
   const reader = response.body?.getReader(); if (!reader) throw new PathFinderApiError('INVALID_RESPONSE', 502);
   let size = 0; const chunks: Uint8Array[] = [];
-  try { for (;;) { const chunk = await reader.read(); if (chunk.done) break; size += chunk.value.byteLength; if (size > 32 * 1024 * 1024) throw new PathFinderApiError('RESPONSE_LIMIT', 413); chunks.push(chunk.value); } }
+  try { for (;;) { const chunk = await reader.read(); if (chunk.done) break; size += chunk.value.byteLength; if (size > maximumBytes) throw new PathFinderApiError('RESPONSE_LIMIT', 413); chunks.push(chunk.value); } }
   finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
   const bytes = new Uint8Array(size); let offset = 0; for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
-  try { return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); } catch { throw new PathFinderApiError('INVALID_RESPONSE', 502); }
+  try { const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); return strict ? parsePurposeJson(text, { maximumBytes }) : JSON.parse(text); } catch { throw new PathFinderApiError('INVALID_RESPONSE', 502); }
 }
 export async function pathFinderRequest(projectId: string, token: string, path: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE', body?: unknown, signal?: AbortSignal): Promise<Record<string, unknown>> {
   if (!uuid.safeParse(projectId).success || !token || !/^\/(?:state|locations(?:\/[0-9a-f-]{36}(?:\/binding)?)?|artifacts|match|jobs(?:\/[0-9a-f-]{36})?|lookups(?:\/(?:plan|[0-9a-f-]{36}))?|previews(?:\/[0-9a-f-]{36})?|proposals(?:\/[0-9a-f-]{36}(?:\/(?:apply|review|reverse|close-pending-apply))?)?)$/.test(path)) throw new PathFinderApiError('INVALID_REQUEST', 400);
@@ -155,6 +166,37 @@ export async function pathFinderRequest(projectId: string, token: string, path: 
   if (!response.ok) throw new PathFinderApiError(value && typeof value === 'object' && 'code' in value && typeof value.code === 'string' ? value.code : 'REQUEST_FAILED', response.status);
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new PathFinderApiError('INVALID_RESPONSE', 502);
   return value as Record<string, unknown>;
+}
+/** One popup submission. Only the actual HTTP status and an audited server
+ * refusal can prove rejection after fetch starts; local body/parse errors do
+ * not prove that the job failed to commit. This function never retries. */
+export async function submitPathFinderCalculation(projectId: string, token: string, body: unknown,
+  options: { signal?: AbortSignal; isCurrent?: () => boolean } = {}): Promise<PathFinderCalculationSubmission> {
+  let encoded: string;
+  try {
+    if (!uuid.safeParse(projectId).success || !token) return { kind: 'not-submitted', code: 'INVALID_REQUEST' };
+    const parsed = popupCalculationRequestSchema.safeParse(body);
+    if (!parsed.success || parsed.data.options.barrierRouting.scope.projectId !== projectId) return { kind: 'not-submitted', code: 'INVALID_REQUEST' };
+    encoded = JSON.stringify(parsed.data);
+    if (options.signal?.aborted) return { kind: 'not-submitted', code: 'CALCULATION_CANCELLED' };
+    if (options.isCurrent && !options.isCurrent()) return { kind: 'not-submitted', code: 'CALCULATION_CONTEXT_CHANGED' };
+  } catch { return { kind: 'not-submitted', code: 'INVALID_REQUEST' }; }
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/api/projects/${projectId}/pathfinder/jobs`, { method: 'POST', signal: options.signal,
+      cache: 'no-store', credentials: 'same-origin', redirect: 'error', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: encoded });
+    const value = await read(response, 8192, true);
+    if (response.status === 202) {
+      const acknowledgement = popupCalculationAcknowledgementSchema.safeParse(value);
+      return acknowledgement.success ? { kind: 'acknowledged', ...acknowledgement.data } : { kind: 'unknown', code: 'INVALID_CALCULATION_ACKNOWLEDGEMENT' };
+    }
+    const refused = popupCalculationRefusalSchema.safeParse(value);
+    // These branches precede job insertion/COMMIT in the current /jobs route
+    // and jobs.create. COMMIT uncertainty is a distinct 503, never rejection.
+    if (refused.success && (response.status === 400 && refused.data.code === 'INVALID_PATHFINDER_REQUEST'
+      || response.status === 409 && ['REGISTRY_CONFLICT', 'BARRIER_ROUTING_INTENT_REQUIRED'].includes(refused.data.code)))
+      return { kind: 'rejected', status: response.status as 400 | 409, code: refused.data.code };
+    return { kind: 'unknown', code: refused.success ? refused.data.code : 'CALCULATION_SUBMISSION_UNKNOWN' };
+  } catch { return { kind: 'unknown', code: 'CALCULATION_SUBMISSION_UNKNOWN' }; }
 }
 export async function fetchPathFinderState(projectId: string, token: string, signal?: AbortSignal): Promise<PathFinderState> {
   const value = stateSchema.safeParse(await pathFinderRequest(projectId, token, '/state', 'GET', undefined, signal));

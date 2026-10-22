@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { fetchPathFinderState, fetchPathFinderProposal, fetchPathFinderJob, fetchPathFinderLookup, fetchPathFinderLookupPlan, fetchPathFinderPreview, parsePathFinderProposal, pathFinderRequest, PathFinderApiError, type PathFinderState, type PathFinderProposal, type PathFinderPreferences, type PathFinderPreviewInput } from '@/api/pathfinder';
+import { fetchPathFinderState, fetchPathFinderProposal, fetchPathFinderJob, fetchPathFinderLookup, fetchPathFinderLookupPlan, fetchPathFinderPreview, parsePathFinderProposal, pathFinderRequest, submitPathFinderCalculation, PathFinderApiError, type PathFinderCalculationSubmission, type PathFinderState, type PathFinderProposal, type PathFinderPreferences, type PathFinderPreviewInput } from '@/api/pathfinder';
 import { fetchProjectModels } from '@/api/projectModels';
 import { ViewerController, type ViewerEvent } from '@/viewer/ViewerController';
 import { ViewerAccessError } from '@/viewer/sessionApi';
@@ -38,6 +38,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
   const planningCapture = useRef<AbortController | null>(null);
   const projectPreparationCapture = useRef<AbortController | null>(null);
   const entityReads = useRef<{ proposal: AbortController | null; job: AbortController | null }>({ proposal: null, job: null });
+  const popupSubmission = useRef<object | null>(null);
   const [revision, setRevision] = useState(0), [view, setView] = useState<View>(initial);
   const live = useCallback((run: Run) => !run.closed && runRef.current === run && latest.current === scope, [scope]);
   const update = useCallback((run: Run, patch: Partial<View>) => { if (live(run)) setView(previous => ({ ...previous, ...patch })); }, [live]);
@@ -146,6 +147,43 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
     ...(cableIds ? { cableIds } : {}), expectedRegistryRevision: data.registryRevision, force,
     ...(preferences ? { options: { connectionToleranceMeters: Number(data.settings.connectionGap), sampleSpacingMeters: 0.125, maxGraphNodes: 200_000, maxGraphConnections: 1_000_000, ...preferences } } : {}),
   }, run.abort.signal)), [perform, projectId, token]);
+  /** The popup gets phase-aware evidence; generic calculate remains compatible.
+   * One fresh state read prevents a just-saved endpoint revision from being
+   * replaced with the stale state that was read when the model was opened. */
+  const submitCalculation = useCallback(async (cableIds: string[], preferences: PathFinderPreferences): Promise<PathFinderCalculationSubmission> => {
+    const run = runRef.current, before = dataRef.current;
+    if (!run || !before || !before.activeModel.modelVersionId || !live(run) || !isAdmin || !projectId || !token || projectPreparationCapture.current || popupSubmission.current)
+      return { kind: 'not-submitted', code: 'CALCULATION_NOT_READY' };
+    const ticket = {}; popupSubmission.current = ticket;
+    const model = { ...before.activeModel }, matchesModel = (data: PathFinderState) => data.projectId === projectId
+      && data.activeModel.modelVersionId === model.modelVersionId && data.activeModel.selectionRevision === model.selectionRevision
+      && data.activeModel.contentFingerprint === model.contentFingerprint;
+    update(run, { busy: true, error: null });
+    try {
+      let frozenPreferences: PathFinderPreferences, frozenCableIds: string[];
+      try { frozenPreferences = structuredClone(preferences); frozenCableIds = [...cableIds]; }
+      catch { return { kind: 'not-submitted', code: 'INVALID_REQUEST' }; }
+      const data = await refresh(run, true);
+      if (!data) return { kind: 'not-submitted', code: 'CALCULATION_PREFLIGHT_FAILED' };
+      const barrierScope = frozenPreferences.barrierRouting?.scope;
+      if (!live(run) || !matchesModel(data) || projectPreparationCapture.current || !barrierScope || barrierScope.projectId !== projectId
+        || barrierScope.modelVersionId !== data.activeModel.modelVersionId || barrierScope.selectionRevision !== data.activeModel.selectionRevision
+        || barrierScope.contentFingerprint !== data.activeModel.contentFingerprint)
+        return { kind: 'not-submitted', code: 'CALCULATION_CONTEXT_CHANGED' };
+      const result = await submitPathFinderCalculation(projectId, token, { cableIds: frozenCableIds, expectedRegistryRevision: data.registryRevision, force: true,
+        options: { connectionToleranceMeters: Number(data.settings.connectionGap), sampleSpacingMeters: 0.125,
+          maxGraphNodes: 200_000, maxGraphConnections: 1_000_000, ...frozenPreferences } }, { signal: run.abort.signal,
+        isCurrent: () => live(run) && popupSubmission.current === ticket && !projectPreparationCapture.current
+          && dataRef.current !== null && matchesModel(dataRef.current) });
+      // The acknowledged job owns its ACK even when a later state read fails.
+      // Its caller follows that exact job through bounded selected-cable reads.
+      if (live(run) && result.kind === 'rejected') update(run, { error: message(new PathFinderApiError(result.code, result.status)) });
+      return result;
+    } finally {
+      if (popupSubmission.current === ticket) popupSubmission.current = null;
+      update(run, { busy: false });
+    }
+  }, [isAdmin, live, projectId, token, refresh, update]);
   // Inspection already checks current server authority. It must not wait for a
   // second, project-wide state read or block every mutation while loading one row.
   const readEntity = useCallback(async <T,>(kind: 'proposal' | 'job', read: (signal: AbortSignal) => Promise<T>): Promise<T | null> => {
@@ -289,7 +327,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
   }, [captureProgress, isAdmin, live, update]);
   const visible = renderedScope.current === scope ? view : initial;
   const clear = useCallback(() => { try { runRef.current?.viewer?.clear(); } catch { /* A terminal viewer is already closed. */ } }, []);
-  return { ...visible, preparationAccess: scope, preparationViewerGeneration: visible.viewerPhase === 'ready' ? runRef.current?.generation ?? -1 : -1, runProjectPreparation, refresh: () => { if (visible.viewerPhase === 'error') setRevision(value => value + 1); else void refresh(runRef.current, true); }, reloadViewer: () => setRevision(value => value + 1), action, actionWithoutRefresh, matchAll, saveLocation, uploadSnapshot, calculate, readProposal, readJob, reviewProposal, prepareModel, startLookup, readLookup, startPreview, readPreview,
+  return { ...visible, preparationAccess: scope, preparationViewerGeneration: visible.viewerPhase === 'ready' ? runRef.current?.generation ?? -1 : -1, runProjectPreparation, refresh: () => { if (visible.viewerPhase === 'error') setRevision(value => value + 1); else void refresh(runRef.current, true); }, reloadViewer: () => setRevision(value => value + 1), action, actionWithoutRefresh, matchAll, saveLocation, uploadSnapshot, calculate, submitCalculation, readProposal, readJob, reviewProposal, prepareModel, startLookup, readLookup, startPreview, readPreview,
     pickPoint: (): Promise<PickedPoint | null> => viewerAction(viewer => viewer.pickPoint()), cancelPicking: () => runRef.current?.viewer?.cancelPicking(),
     readObjects: (query: string, cursor = 0): Promise<ViewerModelObjectsPage | null> => viewerAction(viewer => viewer.readModelObjects(cursor, query)),
     readSelection: () => viewerAction(viewer => viewer.readSelection()),
