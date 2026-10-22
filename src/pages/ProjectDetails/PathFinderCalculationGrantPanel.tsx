@@ -4,7 +4,7 @@ import { usePathfinderCalculationGrants, type CalculationGrantAccess } from './h
 import type { CalculationGrantCommand } from '@/api/pathfinderCalculationGrants';
 import { recalculationPreferencesSchema, recalculationTimeoutSchema } from '../../../shared/pathfinderRecalculation';
 import type { PathFinderPreferences } from '@/api/pathfinder';
-import { sameBarrierAdmissionIntent } from '../../../shared/pathfinderBarrierAdmission';
+import { sameSupportedBarrierAdmissionIntent as sameBarrierAdmissionIntent } from '../../../shared/pathfinderBarrierSupported';
 
 export type CalculationGrantPanelProps = CalculationGrantAccess & {
   preferences: PathFinderPreferences | null | undefined; className?: string;

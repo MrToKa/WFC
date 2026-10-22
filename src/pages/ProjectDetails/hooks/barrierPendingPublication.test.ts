@@ -2,13 +2,18 @@ import { webcrypto } from 'node:crypto';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { BARRIER_PENDING_STORAGE_KEY, barrierPendingHash, clearPendingBarrierCommand, createBarrierCommandSentinel,
   matchBarrierCaptureOutcome, readPendingBarrierCommand, retainPendingBarrierCommand, sealPendingBarrierCommand } from './barrierPendingPublication';
+import { MIXED_BARRIER_POLICY } from '../../../../shared/pathfinderBarrierMixed';
 const id = (n: number) => `b5210000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const scope = { projectId: id(1), modelVersionId: id(2), selectionRevision: '1', contentFingerprint: 'a'.repeat(64),
   captureFrameId: id(3), captureFrameSha256: 'b'.repeat(64), coordinateFrame: 'canonical-world-metres' as const };
 beforeEach(() => { vi.stubGlobal('crypto', webcrypto); sessionStorage.clear(); });
 afterEach(() => vi.unstubAllGlobals());
-async function publication(projectId = id(1)) {
-  const sentinel = await createBarrierCommandSentinel('capture-intent', { businessName: 'Private equipment', idempotencyKey: id(4) }, { ...scope, projectId }, 'private-raw-token');
+async function publication(projectId = id(1), mixed = false) {
+  const command = { schemaVersion: mixed ? 'wfc.pf.barrier-capture-command.v2' : 'wfc.pf.barrier-capture-command.v1',
+    ...(mixed ? { geometryPolicy: MIXED_BARRIER_POLICY } : {}), scope: { ...scope, projectId }, expectedRegistryRevision: '1', idempotencyKey: id(4),
+    selectedParents: [{ selectionId: id(10), kind: 'floor', objectId: 'dbid:7', dbId: 7, externalId: null, name: 'Private equipment',
+      identityBasis: 'version-local-only', inclusion: 'own-and-all-descendant-fragments' }] };
+  const sentinel = await createBarrierCommandSentinel('capture-intent', command, { ...scope, projectId }, 'private-raw-token');
   const value = await sealPendingBarrierCommand({ ...sentinel, kind: 'publication', actorId: id(5), loginId: id(6),
     intentId: id(7), snapshotId: id(8), captureSha256: 'c'.repeat(64), frameSha256: 'd'.repeat(64), loadId: id(9) });
   if (value.kind !== 'publication') throw Error('Invalid fixture'); return value;
@@ -59,4 +64,34 @@ it('matches only exact terminal refusal or historically published command/captur
   expect(matchBarrierCaptureOutcome(value, published)).toEqual(published);
   expect(() => matchBarrierCaptureOutcome(value, { ...published, frameBinding: 'verified' })).toThrow();
   expect(await barrierPendingHash({ example: true })).toMatch(/^[a-f0-9]{64}$/);
+});
+it('retains a mixed command through refresh and accepts only its exact mixed historical terminal lane', async () => {
+  const value = await publication(id(1), true); retainPendingBarrierCommand(sessionStorage, value, null);
+  expect(value.schemaVersion).toBe('wfc.pf.barrier-pending-command.v2');
+  expect(await readPendingBarrierCommand(sessionStorage, id(1))).toEqual(value);
+  const reference = { schemaVersion: 'wfc.pf.barrier-snapshot-reference.v2', geometryPolicy: MIXED_BARRIER_POLICY,
+    snapshotId: value.snapshotId, scope, registryRevision: '2', contentSha256: 'e'.repeat(64), mode: 'mixed-mesh-set' };
+  const terminal = { schemaVersion: 'wfc.pf.barrier-capture-outcome.v2', outcome: 'published', intentId: value.intentId,
+    commandSha256: value.commandSha256, captureSha256: value.captureSha256, frameBinding: 'not-recorded', frameSha256: null,
+    publication: { schemaVersion: 'wfc.pf.barrier-publication-receipt.v2', snapshot: reference, duplicate: true } };
+  expect(matchBarrierCaptureOutcome(value, terminal)).toEqual(terminal);
+  const { schemaVersion: _tag, geometryPolicy: _policy, ...legacyReference } = reference;
+  const legacy = { ...terminal, schemaVersion: 'wfc.pf.barrier-capture-outcome.v1',
+    publication: { schemaVersion: 'wfc.pf.barrier-publication-receipt.v1', snapshot: { ...legacyReference, mode: 'mesh-set' }, duplicate: true } };
+  expect(() => matchBarrierCaptureOutcome(value, legacy)).toThrow('BARRIER_OUTCOME_SNAPSHOT_CHANGED');
+  expect(() => matchBarrierCaptureOutcome(legacyRecord(value), terminal)).toThrow('BARRIER_OUTCOME_SNAPSHOT_CHANGED');
+  expect(() => matchBarrierCaptureOutcome(value, { ...terminal, frameBinding: 'verified', frameSha256: value.frameSha256 })).toThrow('BARRIER_OUTCOME_INVALID');
+  expect(sessionStorage.getItem(BARRIER_PENDING_STORAGE_KEY)).not.toBeNull();
+});
+function legacyRecord(value: Awaited<ReturnType<typeof publication>>) {
+  const { schemaVersion: _tag, ...body } = value;
+  if (!('geometryPolicy' in body)) throw Error('fixture');
+  const { geometryPolicy: _policy, ...legacy } = body;
+  return { ...legacy, schemaVersion: 'wfc.pf.barrier-pending-command.v1' as const };
+}
+it('never upgrades a retained legacy command to a different policy on replacement', async () => {
+  const old = await publication(); retainPendingBarrierCommand(sessionStorage, old, null);
+  const changed = await sealPendingBarrierCommand({ ...old, schemaVersion: 'wfc.pf.barrier-pending-command.v2', geometryPolicy: MIXED_BARRIER_POLICY });
+  expect(() => retainPendingBarrierCommand(sessionStorage, changed, old)).toThrow('BARRIER_PENDING_COMMAND_CHANGED');
+  expect(await readPendingBarrierCommand(sessionStorage, id(1))).toEqual(old);
 });

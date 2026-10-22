@@ -5,10 +5,12 @@ import { createCableWorkflowRepository } from './cableWorkflowRepository.js';
 import { classifyCableWorkflow } from '../../shared/pathfinderCableWorkflow.js';
 import { defaultOptions } from './jobContracts.js';
 import { endpointBindingFixture } from '../../shared/pathfinderEndpointFixtures.js';
+import { MIXED_BARRIER_POLICY } from '../../shared/pathfinderBarrierMixed.js';
+import { supportedBarrierAdmissionIntentSchema } from '../../shared/pathfinderBarrierSupported.js';
 
-const mocks = vi.hoisted(() => ({ tx: vi.fn(), common: vi.fn(), heads: vi.fn(), automatic: vi.fn(), verified: vi.fn(), reviewable: vi.fn(), accepted: vi.fn() }));
+const mocks = vi.hoisted(() => ({ tx: vi.fn(), common: vi.fn(), barrierCommon: vi.fn(), heads: vi.fn(), automatic: vi.fn(), verified: vi.fn(), reviewable: vi.fn(), accepted: vi.fn() }));
 vi.mock('./cableWorkflowRead.js', () => ({ cableWorkflowReadTransaction: mocks.tx }));
-vi.mock('./dependencies.js', async original => ({ ...await original<typeof import('./dependencies.js')>(), collectCommonCalculationInputs: mocks.common,
+vi.mock('./dependencies.js', async original => ({ ...await original<typeof import('./dependencies.js')>(), collectCommonCalculationInputs: mocks.common, collectBarrierCommonCalculationInputs: mocks.barrierCommon,
   freezeCableDependencies: (common: object, cable: Record<string, unknown>) => ({ cable, status: 'ready', message: '', dependencies: { ...common, cableId: cable.id, cableWriteRevision: cable.cable_write_revision } }),
   freezeCableDependenciesForVersion: (common: object, cable: Record<string, unknown>) => ({ cable, status: 'ready', message: '', dependencies: { ...common, cableId: cable.id, cableWriteRevision: cable.cable_write_revision } }) }));
 vi.mock('./endpointBindingRepository.js', () => ({ readCurrentEndpointBindingContext: vi.fn(async () => null), readNeededEndpointBindingHeads: mocks.heads }));
@@ -47,6 +49,7 @@ function fixture(count = 1) {
   const client = { query } as unknown as PoolClient;
   mocks.tx.mockImplementation(async (_pool, _project, _who, operation) => operation(client, () => undefined));
   mocks.common.mockImplementation(async () => state.common);
+  mocks.barrierCommon.mockImplementation(async () => state.common);
   mocks.heads.mockImplementation(async () => new Map([20, 21].map(n => { const binding = { ...endpointBindingFixture(), projectId, locationId: id(n) }; return [id(n), { binding, ready: true }]; })));
   mocks.automatic.mockResolvedValue(new Map());
   mocks.verified.mockImplementation(async () => ({ dependencies: { options: state.common.inputs?.options ?? defaultOptions } }));
@@ -58,6 +61,36 @@ function fixture(count = 1) {
 beforeEach(() => vi.clearAllMocks());
 
 describe('bounded cable diagnostics, mocked SQL protocol and explicit proof/auth seams', () => {
+  function mixedIntent(){
+    const scope={projectId,modelVersionId:id(5),selectionRevision:'1',contentFingerprint:'a'.repeat(64),
+      captureFrameId:id(8),captureFrameSha256:'b'.repeat(64),coordinateFrame:'canonical-world-metres' as const};
+    return supportedBarrierAdmissionIntentSchema.parse({schemaVersion:'wfc.pf.barrier-admission-intent.v2',geometryPolicy:MIXED_BARRIER_POLICY,scope,
+      expectedRegistryRevision:'3',expectedSnapshot:{schemaVersion:'wfc.pf.barrier-snapshot-reference.v2',geometryPolicy:MIXED_BARRIER_POLICY,
+        snapshotId:id(50),scope:structuredClone(scope),registryRevision:'3',contentSha256:'d'.repeat(64),mode:'explicit-empty'},drillThroughWalls:false});
+  }
+  it('recognizes exact mixed current preferences through the existing proof/readiness seam',async()=>{
+    const f=fixture(),intent=mixedIntent(),options={...f.state.common.inputs.options,barrierRouting:intent};
+    f.state.metadata.set(id(1000),meta(0,{job_status:'complete',item_state:'complete',proposal_status:'calculated',proposal_id:id(30),proposal_hash:'f'.repeat(64)}));
+    mocks.barrierCommon.mockResolvedValue({...f.state.common,inputs:{...f.state.common.inputs,options}});
+    mocks.verified.mockResolvedValue({dependencies:{schemaVersion:'pathfinder.dependencies.v8',options}});
+    const value=await f.repo.detail(projectId,who,id(1000),{barrierRouting:structuredClone(intent)});
+    expect(value.row.calculation).toMatchObject({currentness:'current',reviewable:true});
+    expect(mocks.reviewable.mock.calls[0][3]).toMatchObject({options});expect(mocks.barrierCommon).toHaveBeenCalledOnce();expect(mocks.common).not.toHaveBeenCalled();
+  });
+  it.each(['legacy-lane','registry-generation','frame','drilling'] as const)('does not mark mixed preferences current after an exchanged %s',async field=>{
+    const f=fixture(),intent=mixedIntent(),recorded=structuredClone(intent);
+    let saved=recorded;
+    if(field==='legacy-lane')saved=supportedBarrierAdmissionIntentSchema.parse({schemaVersion:'wfc.pf.barrier-admission-intent.v1',scope:recorded.scope,
+      expectedRegistryRevision:recorded.expectedRegistryRevision,expectedSnapshot:recorded.expectedSnapshot?{snapshotId:recorded.expectedSnapshot.snapshotId,
+        scope:recorded.expectedSnapshot.scope,registryRevision:recorded.expectedSnapshot.registryRevision,contentSha256:recorded.expectedSnapshot.contentSha256,mode:'explicit-empty'}:null,drillThroughWalls:false});
+    if(field==='registry-generation'){recorded.expectedRegistryRevision='4';recorded.expectedSnapshot!.registryRevision='4';}
+    if(field==='frame'){recorded.scope.captureFrameSha256='f'.repeat(64);recorded.expectedSnapshot!.scope.captureFrameSha256='f'.repeat(64);}
+    if(field==='drilling')recorded.drillThroughWalls=true;
+    f.state.metadata.set(id(1000),meta(0,{job_status:'complete',item_state:'complete',proposal_status:'calculated',proposal_id:id(30),proposal_hash:'f'.repeat(64)}));
+    mocks.verified.mockResolvedValue({dependencies:{schemaVersion:'pathfinder.dependencies.v8',options:{...defaultOptions,barrierRouting:saved}}});
+    const value=await f.repo.detail(projectId,who,id(1000),{barrierRouting:intent});
+    expect(value.row.calculation).toMatchObject({currentness:'changed',reviewable:false});expect(mocks.reviewable.mock.calls[0][3]).toBeNull();
+  });
   it('continues beyond200 checked nonmatches and finds the actual active cable on the next page', async () => {
     const f = fixture(201); for (let n = 0; n < 200; n++) f.state.metadata.set(id(1000 + n), meta(n, { item_state: 'blocked', item_status: 'locations_required' }));
     f.state.metadata.set(id(1200), meta(200));

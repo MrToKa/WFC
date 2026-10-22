@@ -4,12 +4,13 @@ import { createBarrierCaptureAssembler, validateBarrierCaptureRequest, validateB
 import { validateBarrierMultipartFrameRequest, validateBarrierMultipartStart, validateBarrierMultipartIntentControl,
   type BarrierMultipartStart, type BarrierMultipartStatus, type BarrierMultipartProducerProfile } from '../../viewer-runtime/barrier-multipart-protocol.mjs';
 import type { BarrierFrameObservation } from '../../viewer-runtime/barrier-capture.mjs';
-import { BARRIER_LIMITS, barrierCanonicalJson, barrierCaptureSchema, barrierSnapshotReferenceSchema } from '../../shared/pathfinderBarriers';
+import { BARRIER_LIMITS, barrierCanonicalJson, barrierCaptureSchema } from '../../shared/pathfinderBarriers';
 import { bindCompletedCaptureEvidence,verifyCompletedCaptureEvidence,type CompletedModelCaptureSummary } from '../../viewer-runtime/capture-evidence.mjs';
 import { CAPTURE_INPUT_LIMITS, planModelCaptureInput, validateModelCaptureInputAck, validateModelCaptureInputScope, type ModelCaptureInputDescriptor } from '../../viewer-runtime/capture-input.mjs';
 import { validatePreparationDiscoveryRequest, validatePreparationDiscoveryPage, type PreparationDiscoveryRequest, type PreparationDiscoveryPage } from '../../viewer-runtime/preparation-input.mjs';
 import { watchViewerLogin } from './loginLifecycle';
-import { barrierPublicationOutcomeSchema } from '../../shared/pathfinderBarrierOutcomes';
+import { supportedBarrierCaptureCommandSchema, supportedBarrierPublicationOutcomeSchema as barrierPublicationOutcomeSchema,
+  supportedBarrierSnapshotReferenceSchema as barrierSnapshotReferenceSchema, type AnyBarrierCaptureCommand } from '../../shared/pathfinderBarrierSupported';
 import { sessionBase, viewerRequest, ViewerAccessError, type ViewerSession, type ModelSelection } from './sessionApi';
 
 type Pending = { envelope: BridgeEnvelope; terminal: string; timer: number; resolve?: (event: ViewerEvent) => void; reject?: (error: Error) => void };
@@ -539,9 +540,13 @@ export class ViewerController {
 
   /** The upload stays on the same-origin session cookie path. It cannot borrow a
    * different login/model/load, and an uncertain response is never retried here. */
-  async publishBarriers(intentId: string, observation: Awaited<ReturnType<ViewerController['captureBarriers']>>, signal?: AbortSignal, onWriteStarted?: () => void) {
+  async publishBarriers(intentId: string, observation: Awaited<ReturnType<ViewerController['captureBarriers']>>, signal?: AbortSignal, onWriteStarted?: () => void, expectedCommand?: AnyBarrierCaptureCommand) {
     if (!UUID.test(intentId) || this.disposed || !this.loaded || !this.session || !await this.checkSelection()) throw new Error('Barrier publication is unavailable');
     const session = this.session, capture = barrierCaptureSchema.parse(observation.capture), frame = JSON.parse(JSON.stringify(observation.frameObservation)) as typeof observation.frameObservation;
+    const command = expectedCommand === undefined ? null : supportedBarrierCaptureCommandSchema.parse(expectedCommand);
+    const mixed = command?.schemaVersion === 'wfc.pf.barrier-capture-command.v2';
+    if (command && (barrierCanonicalJson(command.scope) !== barrierCanonicalJson(capture.scope)
+      || barrierCanonicalJson(command.selectedParents) !== barrierCanonicalJson(capture.selectedParents))) throw new Error('Barrier publication original command changed');
     const publicationGeneration = this.generation;
     const sameSession = () => {
       const live = this.session;
@@ -581,13 +586,22 @@ export class ViewerController {
       if (outcome.schemaVersion === 'wfc.pf.barrier-publication-refusal.v1') {
         const captureDigest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(barrierCanonicalJson(capture))))]
           .map(value => value.toString(16).padStart(2, '0')).join('');
-        if (controller.signal.aborted || !sameSession() || outcome.intentId !== intentId || outcome.captureSha256 !== captureDigest || outcome.frameSha256 !== frameDigest)
+        if (controller.signal.aborted || !sameSession() || String(this.selectionRevision) !== capture.scope.selectionRevision
+          || outcome.intentId !== intentId || outcome.captureSha256 !== captureDigest || outcome.frameSha256 !== frameDigest)
           throw new Error('Barrier refusal receipt scope changed');
+        if (command) {
+          const commandDigest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(barrierCanonicalJson(command))))]
+            .map(value => value.toString(16).padStart(2, '0')).join('');
+          if (controller.signal.aborted || !sameSession() || String(this.selectionRevision) !== capture.scope.selectionRevision
+            || outcome.commandSha256 !== commandDigest) throw new Error('Barrier refusal original command changed');
+        }
         return outcome;
       }
       const snapshot = barrierSnapshotReferenceSchema.parse(outcome.snapshot);
-      if (snapshot.mode !== 'mesh-set' || barrierCanonicalJson(snapshot.scope) !== barrierCanonicalJson(capture.scope)) throw new Error('Barrier publication receipt scope changed');
-      return { schemaVersion: 'wfc.pf.barrier-publication-receipt.v1' as const, snapshot, duplicate: outcome.duplicate };
+      if ((outcome.schemaVersion === 'wfc.pf.barrier-publication-receipt.v2') !== mixed
+        || snapshot.mode !== (mixed ? 'mixed-mesh-set' : 'mesh-set')
+        || barrierCanonicalJson(snapshot.scope) !== barrierCanonicalJson(capture.scope)) throw new Error('Barrier publication receipt scope changed');
+      return outcome;
     } finally { window.clearTimeout(timer); signal?.removeEventListener('abort', abort); controller.signal.removeEventListener('abort', onCancelled); this.requests.delete(controller); }
   }
 

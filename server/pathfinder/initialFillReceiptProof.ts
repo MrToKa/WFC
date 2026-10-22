@@ -15,7 +15,7 @@ import { requireVersionedCalculationScope } from './routingScope.js';
 import { readInitialFillMandate } from './initialFillMandates.js';
 import { initialFillIdempotencyKey } from './initialFillIdentity.js';
 import { PathFinderError } from './errors.js';
-import { sameBarrierAdmissionIntent } from '../../shared/pathfinderBarrierAdmission.js';
+import { sameSupportedBarrierAdmissionIntent as sameBarrierAdmissionIntent } from '../../shared/pathfinderBarrierSupported.js';
 import { readBarrierWriteEvidence } from './barrierWrites.js';
 
 type Row = Record<string, any>;

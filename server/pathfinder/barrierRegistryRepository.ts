@@ -3,38 +3,43 @@ import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import {
   BARRIER_LIMITS, BARRIER_SNAPSHOT_VERSION, barrierCanonicalJson, barrierCaptureCommandSchema, barrierCaptureSchema,
-  barrierModelScopeSchema, barrierRegistryCommandSchema, barrierRegistrySchema,
-  barrierSnapshotReferenceSchema, barrierSnapshotSchema, verifyBarrierSnapshot,
-  type BarrierCapture, type BarrierModelScope, type BarrierRegistry, type BarrierSnapshot,
+  barrierModelScopeSchema, type BarrierCapture, type BarrierModelScope,
 } from '../../shared/pathfinderBarriers.js';
+import { MIXED_BARRIER_POLICY, MIXED_BARRIER_VERIFIER_VERSION, mixedBarrierCaptureCommandSchema,
+  mixedBarrierComponentMembershipSchema } from '../../shared/pathfinderBarrierMixed.js';
+import { supportedBarrierCaptureCommandSchema, supportedBarrierRegistryCommandSchema, supportedBarrierRegistrySchema,
+  supportedBarrierSnapshotSchema, supportedBarrierSnapshotReference, verifySupportedBarrierSnapshot,
+  supportedBarrierPublicationReceiptSchema, supportedBarrierPublicationOutcomeSchema, mixedBarrierPublishedOutcomeSchema,
+  type AnyBarrierRegistry as BarrierRegistry, type AnyBarrierSnapshot as BarrierSnapshot,
+  type AnyBarrierPublicationOutcome as BarrierPublicationOutcome, type AnyBarrierCaptureOutcome as BarrierCaptureOutcome,
+} from '../../shared/pathfinderBarrierSupported.js';
 import { policyHashSchema, policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { assertLoginNotExpired, requireCurrentLogin } from './auth.js';
 import type { JobPrincipal } from './jobContracts.js';
 import { PathFinderError } from './errors.js';
 import { parsePolicyJson } from './policyJson.js';
 import { barrierBytesHash, barrierValueHash, encodeBarrierJson, readBarrierBytes, storeBarrierBytes, type BarrierBlob } from './barrierStorage.js';
-import { barrierPublicationReceiptSchema, barrierPublicationRefusalReceiptSchema, barrierPublicationOutcomeSchema,
+import { barrierPublicationRefusalReceiptSchema,
   barrierCaptureOutcomeQuerySchema, barrierPublishedOutcomeSchema,
-  type BarrierPublicationOutcome, type BarrierCaptureOutcome } from '../../shared/pathfinderBarrierOutcomes.js';
+} from '../../shared/pathfinderBarrierOutcomes.js';
 export { barrierPublicationReceiptSchema, barrierPublicationRefusalReceiptSchema, barrierPublicationOutcomeSchema,
   barrierCaptureOutcomeQuerySchema, barrierPublishedOutcomeSchema, barrierCaptureOutcomeSchema } from '../../shared/pathfinderBarrierOutcomes.js';
-export type { BarrierPublicationRefusalReceipt, BarrierPublicationOutcome, BarrierCaptureOutcome } from '../../shared/pathfinderBarrierOutcomes.js';
+export type { BarrierPublicationRefusalReceipt } from '../../shared/pathfinderBarrierOutcomes.js';
+export type { AnyBarrierPublicationOutcome as BarrierPublicationOutcome, AnyBarrierCaptureOutcome as BarrierCaptureOutcome } from '../../shared/pathfinderBarrierSupported.js';
 
-export type BarrierCaptureCommand = z.infer<typeof barrierCaptureCommandSchema>;
+export type BarrierCaptureCommand = z.infer<typeof supportedBarrierCaptureCommandSchema>;
 export type BarrierCaptureIntent = {
   id: string; snapshotId: string; captureBlobId: string; manifestBlobId: string;
   command: BarrierCaptureCommand; createdBy: string; loginId: string;
 };
-export type BarrierQualification = {
-  producerVersion: 'wfc.pf.barrier-verifier.v1'; computationalMeshes: number; verificationSha256: string;
-};
+export type BarrierQualification = z.infer<typeof qualificationSchema>;
 /** Constructed only by the trusted protected-frame qualification adapter. */
 export class BarrierCaptureQualificationRefusal extends Error {
   readonly captureSha256: string;
   readonly frameSha256: string;
   readonly implementationSha256: string;
   constructor(captureSha256: string, frameSha256: string, implementationSha256: string) {
-    super('The exact protected barrier capture did not qualify as supported closed geometry.');
+    super('The exact protected barrier capture did not qualify as supported barrier geometry.');
     this.captureSha256 = policyHashSchema.parse(captureSha256); this.frameSha256 = policyHashSchema.parse(frameSha256);
     this.implementationSha256 = policyHashSchema.parse(implementationSha256);
   }
@@ -54,17 +59,33 @@ export const BARRIER_REGISTRY_SQL_BOUNDS = Object.freeze({ acquisitionMillisecon
 const fail = (code: string, status = 409): never => { throw new PathFinderError(code, status, 'Barrier data is unavailable or changed. Retain the exact command to reconcile an uncertain operation.'); };
 const equal = (a: unknown, b: unknown): boolean => barrierCanonicalJson(a) === barrierCanonicalJson(b);
 const blobSchema = z.object({ blobId: policyUuidSchema, sha256: policyHashSchema, bytes: z.number().int().positive().max(BARRIER_LIMITS.captureBytes) }).strict();
-const intentSchema = z.object({ id: policyUuidSchema, snapshotId: policyUuidSchema, captureBlobId: policyUuidSchema, manifestBlobId: policyUuidSchema,
-  command: barrierCaptureCommandSchema, createdBy: policyUuidSchema, loginId: policyUuidSchema }).strict();
+const intentIdentity = { id: policyUuidSchema, snapshotId: policyUuidSchema, captureBlobId: policyUuidSchema, manifestBlobId: policyUuidSchema,
+  createdBy: policyUuidSchema, loginId: policyUuidSchema };
+// Keep the server's original strict identity syntax independently of client parsers.
+const legacyIntentSchema = z.object({ ...intentIdentity, command: barrierCaptureCommandSchema }).strict();
+const mixedIntentSchema = z.object({ ...intentIdentity, command: mixedBarrierCaptureCommandSchema }).strict();
+const intentSchema = z.union([legacyIntentSchema, mixedIntentSchema]);
 const allocationSchema = z.array(z.object({ fragmentId: z.number().int().nonnegative().max(2147483647), blobId: policyUuidSchema }).strict()).max(BARRIER_LIMITS.fragments)
   .refine(values => new Set(values.map(value => value.fragmentId)).size === values.length && new Set(values.map(value => value.blobId)).size === values.length);
-const qualificationSchema = z.object({ producerVersion: z.literal('wfc.pf.barrier-verifier.v1'), computationalMeshes: z.number().int().positive().max(BARRIER_LIMITS.computationalMeshes), verificationSha256: policyHashSchema }).strict();
-export const barrierIntentReceiptSchema = z.object({ schemaVersion: z.literal('wfc.pf.barrier-intent-receipt.v1'), intent: intentSchema, state: z.enum(['pending', 'complete']), duplicate: z.boolean() }).strict();
+const legacyQualificationSchema = z.object({ producerVersion: z.literal('wfc.pf.barrier-verifier.v1'), computationalMeshes: z.number().int().positive().max(BARRIER_LIMITS.computationalMeshes), verificationSha256: policyHashSchema }).strict();
+const mixedQualificationSchema = z.object({ producerVersion: z.literal(MIXED_BARRIER_VERIFIER_VERSION), geometryPolicy: z.literal(MIXED_BARRIER_POLICY),
+  originalGeometrySha256: policyHashSchema, verificationSha256: policyHashSchema,
+  componentMemberships: z.array(mixedBarrierComponentMembershipSchema).min(1).max(BARRIER_LIMITS.computationalMeshes),
+  engineeringAccepted: z.literal(false), ownTerminalExemptionsSupported: z.literal(false), authority: z.literal('none') }).strict();
+const qualificationSchema = z.union([legacyQualificationSchema, mixedQualificationSchema]);
+const intentReceiptState = { state: z.enum(['pending', 'complete']), duplicate: z.boolean() };
+export const barrierIntentReceiptSchema = z.union([
+  z.object({ schemaVersion: z.literal('wfc.pf.barrier-intent-receipt.v1'), intent: legacyIntentSchema, ...intentReceiptState }).strict(),
+  z.object({ schemaVersion: z.literal('wfc.pf.barrier-intent-receipt.v2'), intent: mixedIntentSchema, ...intentReceiptState }).strict(),
+]);
 type IntentRow = { id: string; actor_id: string; login_id: string; request_sha256: string; request: unknown; frozen: unknown; state: 'pending' | 'complete'; capture_sha256: string | null; allocation: unknown; lease_token: string | null; lease_expires_at: Date | null };
 type SnapshotRow = { id: string; storage_intent_id: string; manifest_blob: unknown; manifest: unknown };
-type Receipt = z.infer<typeof barrierPublicationReceiptSchema>;
-const reference = (manifest: BarrierSnapshot) => barrierSnapshotReferenceSchema.parse({ snapshotId: manifest.snapshotId, scope: manifest.scope,
-  registryRevision: manifest.registryRevision, contentSha256: manifest.contentSha256, mode: manifest.geometry.mode });
+type Receipt = z.infer<typeof supportedBarrierPublicationReceiptSchema>;
+const reference = supportedBarrierSnapshotReference;
+const intentReceipt = (intent: BarrierCaptureIntent, state: 'pending' | 'complete', duplicate: boolean) => barrierIntentReceiptSchema.parse({
+  schemaVersion: intent.command.schemaVersion === 'wfc.pf.barrier-capture-command.v2' ? 'wfc.pf.barrier-intent-receipt.v2' : 'wfc.pf.barrier-intent-receipt.v1', intent, state, duplicate });
+const publicationReceipt = (manifest: BarrierSnapshot): Receipt => supportedBarrierPublicationReceiptSchema.parse({
+  schemaVersion: manifest.schemaVersion === 'wfc.pf.barrier-snapshot.v2' ? 'wfc.pf.barrier-publication-receipt.v2' : 'wfc.pf.barrier-publication-receipt.v1', snapshot: reference(manifest), duplicate: false });
 
 async function connectBounded(pool: Pool): Promise<PoolClient> {
   let expired = false, timer: ReturnType<typeof setTimeout> | undefined;
@@ -108,14 +129,16 @@ async function prior(client: PoolClient, projectId: string, who: JobPrincipal, k
   if (!row) return null;
   if (row.request_sha256 !== barrierValueHash(request) || !equal(row.request, request)) return fail('BARRIER_IDEMPOTENCY_CONFLICT');
   if ((row.receipt as { schemaVersion?: unknown } | null)?.schemaVersion === 'wfc.pf.barrier-publication-refusal.v1') {
-    const receipt = barrierPublicationRefusalReceiptSchema.parse(row.receipt), command = barrierCaptureCommandSchema.parse(request);
+    const receipt = barrierPublicationRefusalReceiptSchema.parse(row.receipt), command = supportedBarrierCaptureCommandSchema.parse(request);
     const intentRow = await readIntent(client, projectId, receipt.intentId), intent = checkedIntent(intentRow, projectId, who);
     if (!equal(intent.command, command) || receipt.commandSha256 !== row.request_sha256 || intentRow.capture_sha256 !== receipt.captureSha256
       || intentRow.state !== 'pending' || intentRow.lease_token !== null || intentRow.lease_expires_at !== null) return fail('BARRIER_RECEIPT_INTEGRITY');
     return { ...receipt, duplicate: true };
   }
-  const storedReceipt = barrierPublicationReceiptSchema.parse(row.receipt);
+  const storedReceipt = supportedBarrierPublicationReceiptSchema.parse(row.receipt);
   const receipt = { ...storedReceipt, duplicate: true };
+  const requestVersion = (request as { schemaVersion?: unknown } | null)?.schemaVersion;
+  if ((receipt.schemaVersion === 'wfc.pf.barrier-publication-receipt.v2') !== (requestVersion === 'wfc.pf.barrier-capture-command.v2' || requestVersion === 'wfc.pf.barrier-registry-command.v2')) return fail('BARRIER_RECEIPT_INTEGRITY');
   if (receipt.snapshot.scope.projectId !== projectId) return fail('BARRIER_RECEIPT_INTEGRITY');
   const manifest = await checkedSnapshot(projectId, await snapshotRow(client, projectId, receipt.snapshot.snapshotId));
   if (!equal(reference(manifest), receipt.snapshot)) return fail('BARRIER_RECEIPT_INTEGRITY'); return receipt;
@@ -132,8 +155,8 @@ async function snapshotRow(client: PoolClient, projectId: string, id: string): P
   if (!row) return fail('BARRIER_SNAPSHOT_NOT_FOUND', 404); return row;
 }
 async function checkedSnapshot(projectId: string, row: SnapshotRow): Promise<BarrierSnapshot> {
-  const value = barrierSnapshotSchema.parse(row.manifest), blob = blobSchema.parse(row.manifest_blob);
-  if (value.snapshotId !== row.id || value.scope.projectId !== projectId || !verifyBarrierSnapshot(value, text => barrierBytesHash(Buffer.from(text)))) return fail('BARRIER_SNAPSHOT_INTEGRITY');
+  const value = supportedBarrierSnapshotSchema.parse(row.manifest), blob = blobSchema.parse(row.manifest_blob);
+  if (value.snapshotId !== row.id || value.scope.projectId !== projectId || !verifySupportedBarrierSnapshot(value, text => barrierBytesHash(Buffer.from(text)))) return fail('BARRIER_SNAPSHOT_INTEGRITY');
   const bytes = await readBarrierBytes(projectId, row.storage_intent_id, blob, BARRIER_LIMITS.manifestBytes);
   if (!bytes.equals(encodeBarrierJson(value, BARRIER_LIMITS.manifestBytes))) return fail('BARRIER_SNAPSHOT_INTEGRITY'); return value;
 }
@@ -152,9 +175,9 @@ export function createBarrierRegistryRepository(pool: Pool, adapters: BarrierReg
   }
   const get = (projectId: string, who: JobPrincipal) => tx(projectId, who, async client => {
     const scope = await current(client, projectId), state = await head(client, projectId);
-    if (!state.snapshot_id) return barrierRegistrySchema.parse({ schemaVersion: 'wfc.pf.barrier-registry.v1', scope, registryRevision: state.revision, state: 'unconfigured', selectedParents: [], snapshot: null, reasonCodes: ['NO_BARRIER_SCOPE_CONFIGURED'] });
+    if (!state.snapshot_id) return supportedBarrierRegistrySchema.parse({ schemaVersion: 'wfc.pf.barrier-registry.v1', scope, registryRevision: state.revision, state: 'unconfigured', selectedParents: [], snapshot: null, reasonCodes: ['NO_BARRIER_SCOPE_CONFIGURED'] });
     const manifest = await checkedSnapshot(projectId, await snapshotRow(client, projectId, state.snapshot_id)), matches = equal(scope, manifest.scope) && manifest.registryRevision === state.revision;
-    return barrierRegistrySchema.parse({ schemaVersion: 'wfc.pf.barrier-registry.v1', scope, registryRevision: state.revision, state: matches ? 'ready' : 'stale',
+    return supportedBarrierRegistrySchema.parse({ ...(manifest.schemaVersion === 'wfc.pf.barrier-snapshot.v2' ? { schemaVersion: 'wfc.pf.barrier-registry.v2', geometryPolicy: MIXED_BARRIER_POLICY } : { schemaVersion: 'wfc.pf.barrier-registry.v1' }), scope, registryRevision: state.revision, state: matches ? 'ready' : 'stale',
       selectedParents: manifest.selectedParents, snapshot: reference(manifest), reasonCodes: matches ? [] : ['BARRIER_MODEL_SCOPE_CHANGED'] });
   });
   const getSnapshot = (projectId: string, who: JobPrincipal, snapshotId: string) => tx(projectId, who, async client => checkedSnapshot(projectId, await snapshotRow(client, projectId, snapshotId)));
@@ -176,8 +199,11 @@ export function createBarrierRegistryRepository(pool: Pool, adapters: BarrierReg
       if (row.state !== 'complete' || outcome.snapshot.snapshotId !== intent.snapshotId || !equal(manifest.scope, intent.command.scope)
         || !equal(manifest.selectedParents, intent.command.selectedParents) || manifest.capture?.captureId !== intent.id
         || manifest.capture.payloadSha256 !== expected.captureSha256 || row.capture_sha256 !== expected.captureSha256) return fail('BARRIER_RECEIPT_INTEGRITY');
-      return barrierPublishedOutcomeSchema.parse({ schemaVersion: 'wfc.pf.barrier-capture-outcome.v1', outcome: 'published', intentId: intent.id,
-        commandSha256: expected.commandSha256, captureSha256: expected.captureSha256, frameBinding: 'not-recorded', frameSha256: null, publication: outcome });
+      const body = { outcome: 'published', intentId: intent.id,
+        commandSha256: expected.commandSha256, captureSha256: expected.captureSha256, frameBinding: 'not-recorded', frameSha256: null, publication: outcome };
+      return outcome.schemaVersion === 'wfc.pf.barrier-publication-receipt.v2'
+        ? mixedBarrierPublishedOutcomeSchema.parse({ ...body, schemaVersion: 'wfc.pf.barrier-capture-outcome.v2' })
+        : barrierPublishedOutcomeSchema.parse({ ...body, schemaVersion: 'wfc.pf.barrier-capture-outcome.v1' });
     }, signal);
   }
   const list = (projectId: string, who: JobPrincipal, options: { offset?: number; limit?: number } = {}) => tx(projectId, who, async client => {
@@ -188,19 +214,19 @@ export function createBarrierRegistryRepository(pool: Pool, adapters: BarrierReg
     return { schemaVersion: 'wfc.pf.barrier-snapshot-list.v1' as const, projectId, offset, nextOffset: rows.length > limit ? offset + limit : null, snapshots };
   });
   async function begin(projectId: string, who: JobPrincipal, raw: unknown, signal?: AbortSignal) {
-    const command = barrierCaptureCommandSchema.parse(raw);
+    const command = supportedBarrierCaptureCommandSchema.parse(raw);
     return tx(projectId, who, async client => {
       await current(client, projectId, command.scope);
       const previous = (await client.query<IntentRow>('SELECT id,actor_id,login_id,request_sha256,request,frozen,state,capture_sha256,allocation,lease_token,lease_expires_at FROM pf_barrier_capture_intents WHERE project_id=$1 AND actor_id=$2 AND idempotency_key=$3 FOR UPDATE', [projectId, who.userId, command.idempotencyKey])).rows[0];
       if (previous) {
         if (previous.request_sha256 !== barrierValueHash(command) || !equal(previous.request, command)) return fail('BARRIER_IDEMPOTENCY_CONFLICT');
-        return barrierIntentReceiptSchema.parse({ schemaVersion: 'wfc.pf.barrier-intent-receipt.v1', intent: checkedIntent(previous, projectId, who), state: previous.state, duplicate: true });
+        return intentReceipt(checkedIntent(previous, projectId, who), previous.state, true);
       }
       if (await prior(client, projectId, who, command.idempotencyKey, command)) return fail('BARRIER_IDEMPOTENCY_CONFLICT');
       if ((await head(client, projectId)).revision !== command.expectedRegistryRevision) return fail('BARRIER_REGISTRY_REVISION_CHANGED');
       const intent: BarrierCaptureIntent = { id: randomUUID(), snapshotId: randomUUID(), captureBlobId: randomUUID(), manifestBlobId: randomUUID(), command, createdBy: who.userId, loginId: who.loginId };
       await client.query("INSERT INTO pf_barrier_capture_intents(id,project_id,actor_id,login_id,idempotency_key,request_sha256,request,frozen,state) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'pending')", [intent.id, projectId, who.userId, who.loginId, command.idempotencyKey, barrierValueHash(command), command, intent]);
-      return barrierIntentReceiptSchema.parse({ schemaVersion: 'wfc.pf.barrier-intent-receipt.v1', intent, state: 'pending', duplicate: false });
+      return intentReceipt(intent, 'pending', false);
     }, signal);
   }
   async function publish(projectId: string, who: JobPrincipal, intentId: string, rawBytes: Buffer, signal?: AbortSignal): Promise<BarrierPublicationOutcome> {
@@ -233,7 +259,7 @@ export function createBarrierRegistryRepository(pool: Pool, adapters: BarrierReg
       await client.query('UPDATE pf_barrier_capture_intents SET capture_sha256=$3,allocation=$4::jsonb,lease_token=$5,lease_expires_at=$6 WHERE project_id=$1 AND id=$2', [projectId, intentId, captureSha256, JSON.stringify(allocation), token, new Date(Date.now() + BARRIER_REGISTRY_SQL_BOUNDS.leaseMilliseconds)]);
       return { intent, allocation, token, frameSha256 };
     }, signal);
-    if ('replay' in admitted) return barrierPublicationOutcomeSchema.parse(admitted.replay);
+    if ('replay' in admitted) return supportedBarrierPublicationOutcomeSchema.parse(admitted.replay);
     const { intent, allocation, token, frameSha256 } = admitted, controller = new AbortController(), abort = () => controller.abort();
     signal?.addEventListener('abort', abort, { once: true }); if (signal?.aborted) abort();
     const timer = setTimeout(abort, BARRIER_REGISTRY_SQL_BOUNDS.leaseMilliseconds - 10000);
@@ -273,6 +299,8 @@ export function createBarrierRegistryRepository(pool: Pool, adapters: BarrierReg
           return refusal;
         }, controller.signal, () => { if (refusalLeaseDeadline !== null && refusalLeaseDeadline <= Date.now()) return fail('BARRIER_CAPTURE_LEASE_CHANGED'); });
       }
+      const mixed = intent.command.schemaVersion === 'wfc.pf.barrier-capture-command.v2';
+      if (mixed !== (qualification.producerVersion === MIXED_BARRIER_VERIFIER_VERSION)) return fail('BARRIER_VERIFIER_CAPTURE_MISMATCH');
       // Copy original geometry from the parsed observation. A verifier never substitutes or repairs triangles here.
       const fragments: Extract<BarrierSnapshot['geometry'], { mode: 'mesh-set' }>['fragments'] = [];
       for (let index = 0; index < capture.fragments.length; index++) {
@@ -280,11 +308,16 @@ export function createBarrierRegistryRepository(pool: Pool, adapters: BarrierReg
         const mesh = await storeBarrierBytes(projectId, intent.id, allocation[index].blobId, encodeBarrierJson({ verticesMetres: fragment.verticesMetres, triangleIndices: fragment.triangleIndices }));
         fragments.push({ source: fragment.source, bounds: fragment.bounds, mesh, vertices: fragment.verticesMetres.length, triangles: fragment.triangleIndices.length / 3 });
       }
-      const body = { schemaVersion: BARRIER_SNAPSHOT_VERSION, snapshotId: intent.snapshotId, scope: capture.scope, registryRevision: nextRevision(intent.command.expectedRegistryRevision), selectedParents: capture.selectedParents,
+      const common = { snapshotId: intent.snapshotId, scope: capture.scope, registryRevision: nextRevision(intent.command.expectedRegistryRevision), selectedParents: capture.selectedParents,
+        capture: { captureId: capture.captureId, payloadSha256: captureSha256 }, coverage: 'registered-selected-objects-only', engineeringAccepted: false };
+      const body = mixed ? { ...common, schemaVersion: 'wfc.pf.barrier-snapshot.v2', geometryPolicy: MIXED_BARRIER_POLICY,
+        ownTerminalExemptionsSupported: false, authority: 'none', geometry: { mode: 'mixed-mesh-set', fragments,
+          verification: { ...mixedQualificationSchema.parse(qualification), selectionClosure: 'complete-selected-scope', verifiedCaptureSha256: captureSha256 } } }
+        : { schemaVersion: BARRIER_SNAPSHOT_VERSION, snapshotId: intent.snapshotId, scope: capture.scope, registryRevision: nextRevision(intent.command.expectedRegistryRevision), selectedParents: capture.selectedParents,
         capture: { captureId: capture.captureId, payloadSha256: captureSha256 }, geometry: { mode: 'mesh-set' as const, fragments,
-          verification: { ...qualification, selectionClosure: 'complete-selected-scope', topology: 'qualified-closed-consistent-two-manifold', selfIntersection: 'bounded-verification-passed', verifiedCaptureSha256: captureSha256 } },
+          verification: { ...legacyQualificationSchema.parse(qualification), selectionClosure: 'complete-selected-scope', topology: 'qualified-closed-consistent-two-manifold', selfIntersection: 'bounded-verification-passed', verifiedCaptureSha256: captureSha256 } },
         coverage: 'registered-selected-objects-only', engineeringAccepted: false };
-      const manifest = barrierSnapshotSchema.parse({ ...body, contentSha256: barrierValueHash(body) });
+      const manifest = supportedBarrierSnapshotSchema.parse({ ...body, contentSha256: barrierValueHash(body) });
       const manifestBlob = await storeBarrierBytes(projectId, intent.id, intent.manifestBlobId, encodeBarrierJson(manifest, BARRIER_LIMITS.manifestBytes), BARRIER_LIMITS.manifestBytes);
       let finalLeaseDeadline: number | null = null;
       return await tx(projectId, who, async client => {
@@ -306,7 +339,7 @@ export function createBarrierRegistryRepository(pool: Pool, adapters: BarrierReg
         finalLeaseDeadline = leaseDeadline;
         await publishManifest(client, projectId, who, intent.id, manifest, manifestBlob);
         await client.query("UPDATE pf_barrier_capture_intents SET state='complete' WHERE project_id=$1 AND id=$2 AND lease_token=$3", [projectId, intentId, token]);
-        const receipt: Receipt = { schemaVersion: 'wfc.pf.barrier-publication-receipt.v1', snapshot: reference(manifest), duplicate: false };
+        const receipt = publicationReceipt(manifest);
         await saveReceipt(client, projectId, who, intent.command, receipt); return receipt;
       }, controller.signal, () => { if (finalLeaseDeadline !== null && finalLeaseDeadline <= Date.now()) return fail('BARRIER_CAPTURE_LEASE_CHANGED'); });
     } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
@@ -316,7 +349,7 @@ export function createBarrierRegistryRepository(pool: Pool, adapters: BarrierReg
     await client.query('INSERT INTO pf_barrier_heads(project_id,revision,snapshot_id) VALUES($1,$2,$3) ON CONFLICT(project_id) DO UPDATE SET revision=EXCLUDED.revision,snapshot_id=EXCLUDED.snapshot_id,updated_at=now()', [projectId, manifest.registryRevision, manifest.snapshotId]);
   }
   async function command(projectId: string, who: JobPrincipal, raw: unknown, signal?: AbortSignal): Promise<Receipt> {
-    const request = barrierRegistryCommandSchema.parse(raw);
+    const request = supportedBarrierRegistryCommandSchema.parse(raw);
     return tx(projectId, who, async client => {
       const replay = await prior(client, projectId, who, request.idempotencyKey, request); if (replay) {
         if ('outcome' in replay) return fail('BARRIER_IDEMPOTENCY_CONFLICT'); return replay;
@@ -328,14 +361,17 @@ export function createBarrierRegistryRepository(pool: Pool, adapters: BarrierReg
       // Mesh-set manifests contain exact parent memberships. Removing one needs a new protected capture and qualification.
       if (request.action === 'remove') return fail('BARRIER_RECAPTURE_REQUIRED');
       const storageIntentId = randomUUID(), manifestId = randomUUID(), manifestBlobId = randomUUID();
-      const body = { schemaVersion: BARRIER_SNAPSHOT_VERSION, snapshotId: manifestId, scope: request.scope, registryRevision: nextRevision(request.expectedRegistryRevision), selectedParents: [], capture: null,
+      const common = { snapshotId: manifestId, scope: request.scope, registryRevision: nextRevision(request.expectedRegistryRevision), selectedParents: [], capture: null,
         geometry: { mode: 'explicit-empty', declarationId: randomUUID(), declaration: 'administrator-declared-no-selected-barriers', reason: request.reason }, coverage: 'registered-selected-objects-only', engineeringAccepted: false };
-      const manifest = barrierSnapshotSchema.parse({ ...body, contentSha256: barrierValueHash(body) });
+      const body = request.schemaVersion === 'wfc.pf.barrier-registry-command.v2'
+        ? { ...common, schemaVersion: 'wfc.pf.barrier-snapshot.v2', geometryPolicy: MIXED_BARRIER_POLICY, ownTerminalExemptionsSupported: false, authority: 'none' }
+        : { ...common, schemaVersion: BARRIER_SNAPSHOT_VERSION };
+      const manifest = supportedBarrierSnapshotSchema.parse({ ...body, contentSha256: barrierValueHash(body) });
       const blob = await storeBarrierBytes(projectId, storageIntentId, manifestBlobId, encodeBarrierJson(manifest, BARRIER_LIMITS.manifestBytes), BARRIER_LIMITS.manifestBytes);
       // The async write has not released the row/authority locks. Recheck the authoritative model/frame before publication.
       await current(client, projectId, request.scope); signal?.throwIfAborted(); assertLoginNotExpired(who);
       await publishManifest(client, projectId, who, storageIntentId, manifest, blob);
-      const receipt: Receipt = { schemaVersion: 'wfc.pf.barrier-publication-receipt.v1', snapshot: reference(manifest), duplicate: false };
+      const receipt = publicationReceipt(manifest);
       await saveReceipt(client, projectId, who, request, receipt); return receipt;
     }, signal);
   }

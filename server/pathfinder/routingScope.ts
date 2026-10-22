@@ -6,9 +6,11 @@ import { readRoutingPolicyScope } from './purposePolicy.js';
 import { hasCurrentEndpointCalculationProvenance } from './endpointCalculationProvenance.js';
 import { hasCurrentComparisonCalculationProvenance } from './comparisonCalculationProvenance.js';
 import { createHash } from 'node:crypto';
-import { verifyEngineIdentity, verifyBarrierEngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
-import { verifyBarrierRuntimeContext } from '../../shared/pathfinderBarrierRuntime.js';
-import { sameBarrierAdmissionIntent } from '../../shared/pathfinderBarrierAdmission.js';
+import { verifyEngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
+import { verifySupportedBarrierEngineIdentity as verifyBarrierEngineIdentity,
+  verifySupportedBarrierRuntimeContext as verifyBarrierRuntimeContext, sameSupportedBarrierAdmissionIntent as sameBarrierAdmissionIntent } from '../../shared/pathfinderBarrierSupported.js';
+import { MIXED_BARRIER_POLICY, mixedBarrierVerifierEvidenceSchema } from '../../shared/pathfinderBarrierMixed.js';
+import { barrierCanonicalJson } from '../../shared/pathfinderBarriers.js';
 
 /** This projection deliberately cannot carry drawing or private full-source facts. */
 export const routingScopeSchema = z.object({
@@ -64,14 +66,27 @@ export function requireVersionedCalculationScope(value: unknown): void {
     throw new PathFinderError('COMPARISON_UPGRADE_REQUIRED', 409, 'This proposal predates revision comparison provenance. Calculate and review a fresh proposal against the current prepared model and comparison decisions.');
   const digest=(text:string)=>createHash('sha256').update(text).digest('hex');
   if(input.schemaVersion==='pathfinder.dependencies.v8'){
-    const data=value as {engineIdentity?:unknown;barriers?:unknown;projectId?:unknown;model?:{id?:unknown;selectionRevision?:unknown;contentFingerprint?:unknown};preparation?:{captureFrameId?:unknown};options?:{barrierRouting?:unknown}};
+    const data=value as {engineIdentity?:unknown;barriers?:unknown;barrierQualification?:unknown;projectId?:unknown;model?:{id?:unknown;selectionRevision?:unknown;contentFingerprint?:unknown};preparation?:{captureFrameId?:unknown};options?:{barrierRouting?:unknown}};
     if(!verifyBarrierEngineIdentity(data.engineIdentity,digest)||!verifyBarrierRuntimeContext(data.barriers,digest))
       throw new PathFinderError('BARRIER_IDENTITY_UPGRADE_REQUIRED',409,'Calculate a fresh route using current barrier evidence and implementation.');
     const {binding}=data.barriers;
-    if(binding.scope.projectId!==data.projectId||binding.scope.modelVersionId!==data.model?.id
+    const mixed=data.barriers.schemaVersion==='wfc.pf.barrier-runtime.v2';
+    if(mixed){
+      const requiresGeometry=!binding.policy.drillThroughWalls&&binding.snapshot?.mode==='mixed-mesh-set';
+      const qualification=mixedBarrierVerifierEvidenceSchema.safeParse(data.barrierQualification);
+      if(!Object.hasOwn(data,'barrierQualification') || (requiresGeometry
+        ? !qualification.success || qualification.data.captureId!==data.barriers.storage?.intentId
+          || barrierCanonicalJson(qualification.data.scope)!==barrierCanonicalJson(binding.scope)
+        : data.barrierQualification!==null))
+        throw new PathFinderError('BARRIER_QUALIFICATION_REQUIRED',409,'Calculate a fresh route with the exact independently retained original-geometry qualification.');
+    }else if(Object.hasOwn(data,'barrierQualification'))
+      throw new PathFinderError('BARRIER_CONTEXT_CHANGED',409,'A historical barrier scope cannot acquire mixed geometry evidence.');
+    if((data.engineIdentity.schemaVersion==='wfc.pf.engine-identity.v3')!==mixed
+      ||binding.scope.projectId!==data.projectId||binding.scope.modelVersionId!==data.model?.id
       ||binding.scope.selectionRevision!==data.model?.selectionRevision||binding.scope.contentFingerprint!==data.model?.contentFingerprint
       ||binding.scope.captureFrameId!==data.preparation?.captureFrameId||!sameBarrierAdmissionIntent(data.options?.barrierRouting,
-        {schemaVersion:'wfc.pf.barrier-admission-intent.v1',scope:binding.scope,expectedRegistryRevision:binding.registryRevision,
+        {schemaVersion:mixed?'wfc.pf.barrier-admission-intent.v2':'wfc.pf.barrier-admission-intent.v1',
+          ...(mixed?{geometryPolicy:MIXED_BARRIER_POLICY}:{}),scope:binding.scope,expectedRegistryRevision:binding.registryRevision,
           expectedSnapshot:binding.snapshot,drillThroughWalls:binding.policy.drillThroughWalls}))
       throw new PathFinderError('BARRIER_CONTEXT_CHANGED',409,'The frozen barrier scope does not match this exact calculation.');
     return;

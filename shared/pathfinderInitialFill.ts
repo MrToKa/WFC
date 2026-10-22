@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { policyHashSchema as hash, policyRevisionSchema as revision, policyUuidSchema as uuid } from './pathfinderPurposePolicy.js';
 import { endpointCurrentScopeSchema } from './pathfinderEndpointBindings.js';
-import { barrierWriteEvidenceSchema } from './pathfinderBarrierWrites.js';
+import { supportedBarrierWriteEvidenceSchema as barrierWriteEvidenceSchema } from './pathfinderBarrierSupported.js';
 
 export const INITIAL_FILL_LIMITS = Object.freeze({ cables: 10000, recordBytes: 1024 * 1024, authorityMilliseconds: 1800000 });
 /** The exact ECMAScript String.trim whitespace set; a server-owned SQL btrim parameter, never caller input. */

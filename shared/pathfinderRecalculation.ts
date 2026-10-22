@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { canonicalPurposeJson, policyRevisionSchema, policyUuidSchema } from './pathfinderPurposePolicy.js';
-import { barrierAdmissionIntentSchema } from './pathfinderBarrierAdmission.js';
+import { supportedBarrierAdmissionIntentSchema as barrierAdmissionIntentSchema } from './pathfinderBarrierSupported.js';
 
 /** New refusal bounds, not a claim that full-scale runtime capacity is proven. */
 export const RECALCULATION_LIMITS = Object.freeze({

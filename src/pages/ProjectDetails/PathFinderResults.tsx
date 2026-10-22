@@ -18,7 +18,7 @@ import { cableWorkflowRowSchema, type CableWorkflowRow } from '../../../shared/p
 import { revisionResultEnvelopeSchema } from '../../../shared/pathfinderRevisionResults';
 import { PathFinderDirectSecondary } from './PathFinderDirectSecondary';
 import { PathFinderBarrierResult } from './PathFinderBarrierResult';
-import { sameBarrierAdmissionIntent } from '../../../shared/pathfinderBarrierAdmission';
+import { sameSupportedBarrierAdmissionIntent as sameBarrierAdmissionIntent } from '../../../shared/pathfinderBarrierSupported';
 import type { AutoLengthView } from '../../../shared/pathfinderAutoLength';
 import type { PathFinderCalculatedItemIdentity } from './hooks/usePathfinderAutoLengthRead';
 
@@ -385,7 +385,10 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
   const ownedComparison = comparisonMatchesProposal && comparison?.observedRevision === selectedRevision ? comparison : null;
   const comparisonReady = Boolean(ownedComparison?.input && !ownedComparison.loading && !ownedComparison.error);
   const protectedResult = Boolean(proposal?.provenance?.dependencyVersion === 'pathfinder.dependencies.v8'
-    && proposal.barriers?.schemaVersion === 'wfc.pf.barrier-execution.v1'
+    && (proposal.barriers?.schemaVersion === 'wfc.pf.barrier-execution.v1'
+      || proposal.barriers?.schemaVersion === 'wfc.pf.barrier-execution.v2'
+      && proposal.provenance.engineIdentity?.schemaVersion === 'wfc.pf.engine-identity.v3'
+      && proposal.routingPreferences?.barrierRouting?.schemaVersion === 'wfc.pf.barrier-admission-intent.v2')
     && ['clear', 'bypassed', 'no-barriers-declared'].includes(proposal.barriers.diagnostics.status));
   const effectiveCanApply = Boolean(comparisonReady && protectedResult && proposal && proposal.status === 'calculated' && scopeReadiness.admissionId && proposal.jobId === scopeReadiness.jobId && !calculationCancelled
     && (!workflowScopeOwner || scopeReadiness.ready)
@@ -394,7 +397,8 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
   const projectionCallback = useRef(onCalculationCommitted); projectionCallback.current = onCalculationCommitted;
   const lastProjection = useRef('');
   const completedSelectedItem = Boolean(active && accountId && selectedCableId && proposal?.cableId === selectedCableId && protectedResult
-    && proposal?.provenance?.engineIdentity?.schemaVersion === 'wfc.pf.engine-identity.v2'
+    && (proposal?.provenance?.engineIdentity?.schemaVersion === 'wfc.pf.engine-identity.v2' && proposal.barriers?.schemaVersion === 'wfc.pf.barrier-execution.v1'
+      || proposal?.provenance?.engineIdentity?.schemaVersion === 'wfc.pf.engine-identity.v3' && proposal.barriers?.schemaVersion === 'wfc.pf.barrier-execution.v2')
     && proposal.status === 'calculated' && proposal.route?.success && proposal.design && proposal.revisionResultHash
     && scopeReadiness.admissionId && proposal.jobId === scopeReadiness.jobId && (!workflowScopeOwner || scopeReadiness.ready) && !calculationCancelled && !calculationFailed
     && !stale && !proposal.compatibilityIssue && preferencesMatch && (wholeJobReady && (!checkedJobStatus || checkedJobStatus === 'complete') || sealedItemReady));

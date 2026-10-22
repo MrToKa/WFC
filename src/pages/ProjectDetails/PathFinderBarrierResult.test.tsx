@@ -5,6 +5,8 @@ import { PathFinderBarrierResult } from './PathFinderBarrierResult';
 import { BARRIER_RUNTIME_PROFILE, barrierRouteHashInput, createBarrierRuntimePolicy, type BarrierExecution } from '../../../shared/pathfinderBarrierRuntime';
 import type { BarrierAdmissionIntent } from '../../../shared/pathfinderBarrierAdmission';
 import { canonicalPurposeJson } from '../../../shared/pathfinderPurposePolicy';
+import { MIXED_BARRIER_POLICY, MIXED_BARRIER_QUERY_DOMAIN, MIXED_BARRIER_RUNTIME_PROFILE, createMixedBarrierRuntimePolicy,
+  type MixedBarrierExecution } from '../../../shared/pathfinderBarrierMixed';
 
 const id = (n: number) => `bc600000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const hash = (value: unknown) => createHash('sha256').update(canonicalPurposeJson(value)).digest('hex');
@@ -29,9 +31,43 @@ function execution(status: BarrierExecution['diagnostics']['status'] = 'clear'):
 }
 const intent = (value: BarrierExecution): BarrierAdmissionIntent => ({ schemaVersion: 'wfc.pf.barrier-admission-intent.v1', scope: value.context.binding.scope,
   expectedRegistryRevision: value.context.binding.registryRevision, expectedSnapshot: value.context.binding.snapshot, drillThroughWalls: value.context.binding.policy.drillThroughWalls });
+function mixedExecution(blocked = false): MixedBarrierExecution {
+  const old = execution(blocked ? 'blocked' : 'clear'), policy = createMixedBarrierRuntimePolicy(false), scope = old.context.binding.scope;
+  if (!old.context.binding.snapshot || !old.proof) throw Error('fixture');
+  const binding = { ...old.context.binding, schemaVersion: 'wfc.pf.barrier-calculation-binding.v2' as const, policy, policySha256: hash(policy),
+    snapshot: { ...old.context.binding.snapshot, schemaVersion: 'wfc.pf.barrier-snapshot-reference.v2' as const, geometryPolicy: MIXED_BARRIER_POLICY, mode: 'mixed-mesh-set' as const } };
+  const context = { ...old.context, schemaVersion: 'wfc.pf.barrier-runtime.v2' as const, binding, profile: structuredClone(MIXED_BARRIER_RUNTIME_PROFILE), profileSha256: hash(MIXED_BARRIER_RUNTIME_PROFILE) };
+  const membership = { componentId: 'component:000000', kind: 'original-surface' as const, parentSelectionIds: [id(8)], fragmentIds: [11, 12], triangleCount: 2, sourceMembershipSha256: 'f'.repeat(64) };
+  const flags = { ownTerminalExemptionsSupported: false as const, engineeringAccepted: false as const, authority: 'none' as const };
+  return { ...old, schemaVersion: 'wfc.pf.barrier-execution.v2', context, directSecondary: null, ...flags,
+    proof: { ...old.proof, schemaVersion: 'wfc.pf.barrier-mixed-check-proof.v2', binding, domain: MIXED_BARRIER_QUERY_DOMAIN,
+      globalModelCoverageVerified: false, physicalCableRadiusChecked: false, ...flags,
+      blocking: blocked ? { ...membership, segmentIndex: 0, reason: 'original-surface-contact', surfaceWitness: null } : null },
+    qualification: { captureSha256: 'e'.repeat(64), evidence: { captureId: id(5), scope, originalSurfaceComponents: 1, qualifiedClosedSolidComponents: 0,
+      fragmentCount: 2, vertexCount: 6, triangleCount: 2, originalGeometrySha256: 'e'.repeat(64), verificationSha256: 'd'.repeat(64), numericToleranceMetres: 1e-7,
+      componentMemberships: [membership], inputSchemaVersion: 'wfc.pf.barrier-capture.v1', policyVersion: MIXED_BARRIER_POLICY,
+      coverage: 'provided-fragments-only', geometryProvenance: 'capture-bound-provided-original-triangles', sdkCoverageVerified: false, sdkSourceBytesVerified: false,
+      currentFrameVerified: false, ...flags } } };
+}
 afterEach(cleanup);
 
 describe('recorded barrier calculation explanation', () => {
+  it('shows mixed original-surface/closed-solid coverage without treating a v1 intent as its current policy', () => {
+    const value = mixedExecution(), binding = value.context.binding;
+    const currentIntent = { schemaVersion: 'wfc.pf.barrier-admission-intent.v2' as const, geometryPolicy: MIXED_BARRIER_POLICY, scope: binding.scope,
+      expectedRegistryRevision: binding.registryRevision, expectedSnapshot: binding.snapshot, drillThroughWalls: false };
+    const view = render(<PathFinderBarrierResult execution={value} currentIntent={currentIntent} />);
+    expect(screen.getByRole('heading', { name: 'Clear against registered barriers' })).toBeVisible();
+    expect(screen.getByText(/Every final route segment/)).toHaveTextContent('all provided original surfaces and independently qualified closed-solid occupancy');
+    view.rerender(<PathFinderBarrierResult execution={value} currentIntent={intent(execution())} />);
+    expect(screen.getByRole('heading', { name: 'Recorded barrier check is outdated' })).toBeVisible();
+  });
+  it('names an original mixed blocking component without inventing a contact point or shell', () => {
+    render(<PathFinderBarrierResult execution={mixedExecution(true)} />);
+    expect(screen.getByText(/Blocking original component:/)).toHaveTextContent('component:000000 (original-surface)');
+    expect(screen.getByText(/recorded mixed check/)).toHaveTextContent('does not identify an exact contact point');
+    expect(screen.queryByText(/Blocking computational shell:/)).not.toBeInTheDocument();
+  });
   it('labels absent historical evidence unchecked and offers no write or viewer actions', () => {
     render(<PathFinderBarrierResult />);
     expect(screen.getByRole('heading', { name: 'Barrier check not recorded' })).toBeVisible();

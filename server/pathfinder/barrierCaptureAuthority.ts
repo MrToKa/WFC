@@ -1,13 +1,14 @@
 import { createHash } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { barrierCanonicalJson, type BarrierModelScope } from '../../shared/pathfinderBarriers.js';
+import { MIXED_BARRIER_POLICY, MIXED_BARRIER_VERIFIER_VERSION, mixedBarrierVerifierReceiptSchema } from '../../shared/pathfinderBarrierMixed.js';
 import { barrierEnumerationHashInput, barrierFrameObservationHashInput, validateBarrierFrameObservation,
   type BarrierFrameObservation } from '../../viewer-runtime/barrier-capture.mjs';
 import { barrierFrameProjectionHash, currentBarrierScope } from './barrierScope.js';
 import { BarrierCaptureQualificationRefusal, type BarrierRegistryAdapters } from './barrierRegistryRepository.js';
 import type { JobPrincipal } from './jobContracts.js';
 import { PathFinderError } from './errors.js';
-import { BarrierGeometryRefusal, runBarrierVerifier } from './barrierVerifier.js';
+import { BarrierGeometryRefusal, runBarrierVerifier, runMixedBarrierVerifier } from './barrierVerifier.js';
 
 const hash = (value: unknown) => createHash('sha256').update(barrierCanonicalJson(value)).digest('hex');
 const fail = (code: string): never => { throw new PathFinderError(code, 409, 'The protected barrier capture or its current model frame could not be confirmed.'); };
@@ -35,7 +36,8 @@ async function lockViewer(client: PoolClient, projectId: string, scope: BarrierM
 }
 
 export function barrierCaptureAdapters(context?: BarrierViewerContext,
-  execute: typeof runBarrierVerifier = runBarrierVerifier): BarrierRegistryAdapters {
+  execute: typeof runBarrierVerifier = runBarrierVerifier,
+  executeMixed: typeof runMixedBarrierVerifier = runMixedBarrierVerifier): BarrierRegistryAdapters {
   // Detach the bounded observation before the first await; caller mutation cannot
   // change the frame against which a later publication transaction is fenced.
   const frozen = context ? { ...context, who: { ...context.who }, frame: JSON.parse(JSON.stringify(context.frame)) as BarrierFrameObservation } : undefined;
@@ -61,8 +63,9 @@ export function barrierCaptureAdapters(context?: BarrierViewerContext,
         || hash(barrierEnumerationHashInput(capture)) !== capture.observation.enumerationSha256
         || capture.fragments.some(fragment => hash(fragment.source.sourceToWorldMetres) !== fragment.source.transformSha256))
         return fail('BARRIER_CAPTURE_CLOSURE_INVALID');
-      let executed: Awaited<ReturnType<typeof execute>>;
-      try { executed = await execute(input.captureBytes, signal); }
+      const mixed = input.intent.command.schemaVersion === 'wfc.pf.barrier-capture-command.v2';
+      let executed: Awaited<ReturnType<typeof execute>> | Awaited<ReturnType<typeof executeMixed>>;
+      try { executed = mixed ? await executeMixed(input.captureBytes, signal) : await execute(input.captureBytes, signal); }
       catch (error) {
         signal.throwIfAborted();
         if (error instanceof BarrierGeometryRefusal && error.captureSha256 === input.captureSha256)
@@ -76,8 +79,24 @@ export function barrierCaptureAdapters(context?: BarrierViewerContext,
         || evidence.fragmentCount !== capture.fragments.length || evidence.vertexCount !== capture.fragments.reduce((sum, item) => sum + item.verticesMetres.length, 0)
         || evidence.triangleCount !== capture.fragments.reduce((sum, item) => sum + item.triangleIndices.length / 3, 0)
         || evidence.sdkCoverageVerified !== false) return fail('BARRIER_VERIFIER_CAPTURE_MISMATCH');
-      return { producerVersion: 'wfc.pf.barrier-verifier.v1', computationalMeshes: evidence.computationalMeshes,
-        verificationSha256: hash({ geometryVerificationSha256: evidence.verificationSha256, implementationSha256,
+      if (mixed) {
+        const verified = mixedBarrierVerifierReceiptSchema.parse(result), current = verified.evidence;
+        if (!current) return fail('BARRIER_VERIFIER_CAPTURE_MISMATCH');
+        const fragments = new Map(capture.fragments.map(fragment => [fragment.source.fragmentId, fragment]));
+        if (current.componentMemberships.some(component => component.fragmentIds.some(id => !fragments.has(id))
+          || barrierCanonicalJson([...new Set(component.fragmentIds.flatMap(id => fragments.get(id)!.source.parentSelectionIds))].sort()) !== barrierCanonicalJson(component.parentSelectionIds))
+          || capture.fragments.some(fragment => !current.componentMemberships.some(component => component.fragmentIds.includes(fragment.source.fragmentId))))
+          return fail('BARRIER_VERIFIER_CAPTURE_MISMATCH');
+        return { producerVersion: MIXED_BARRIER_VERIFIER_VERSION, geometryPolicy: MIXED_BARRIER_POLICY,
+          originalGeometrySha256: current.originalGeometrySha256, componentMemberships: current.componentMemberships,
+          engineeringAccepted: false, ownTerminalExemptionsSupported: false, authority: 'none',
+          verificationSha256: hash({ geometryPolicy: MIXED_BARRIER_POLICY, geometryVerificationSha256: current.verificationSha256,
+            implementationSha256, frameObservation: frozen.frame, captureSha256: input.captureSha256,
+            enumerationSha256: capture.observation.enumerationSha256, authority: 'current-admin-protected-runtime-observation', independentSdkReenumeration: false }) };
+      }
+      if (result.schemaVersion !== 'wfc.pf.barrier-verification-result.v1' || !result.evidence) return fail('BARRIER_VERIFIER_CAPTURE_MISMATCH');
+      return { producerVersion: 'wfc.pf.barrier-verifier.v1', computationalMeshes: result.evidence.computationalMeshes,
+        verificationSha256: hash({ geometryVerificationSha256: result.evidence.verificationSha256, implementationSha256,
           frameObservation: frozen.frame, captureSha256: input.captureSha256, enumerationSha256: capture.observation.enumerationSha256,
           authority: 'current-admin-protected-runtime-observation', independentSdkReenumeration: false }) };
     },

@@ -4,7 +4,9 @@ import { createHash, webcrypto } from 'node:crypto';
 import * as api from '@/api/pathfinderBarriers';
 import { usePathfinderBarriers, type BarrierSelectedParent } from './usePathfinderBarriers';
 import type { ProjectPreparationViewer } from './usePathFinder';
-import type { BarrierRegistry, BarrierSnapshot } from '../../../../shared/pathfinderBarriers';
+import type { AnyBarrierRegistry as BarrierRegistry, AnyBarrierSnapshot as BarrierSnapshot } from '../../../../shared/pathfinderBarrierSupported';
+import { MIXED_BARRIER_POLICY } from '../../../../shared/pathfinderBarrierMixed';
+import { supportedBarrierCaptureOutcomeSchema } from '../../../../shared/pathfinderBarrierSupported';
 import type { ViewerSelection } from '../../../../viewer-runtime/protocol.mjs';
 import { BARRIER_CAPTURE_ERROR_MESSAGES } from '../../../../viewer-runtime/barrier-capture-errors.mjs';
 import { barrierCanonicalJson } from '../../../../shared/pathfinderBarriers';
@@ -18,7 +20,24 @@ function registry(parents: BarrierSelectedParent[] = [], revision = '1'): Barrie
   return { schemaVersion: 'wfc.pf.barrier-registry.v1', scope: structuredClone(scope), registryRevision: revision, state: parents.length ? 'ready' : 'unconfigured', selectedParents: structuredClone(parents),
     snapshot: parents.length ? { snapshotId: id(10), scope: structuredClone(scope), registryRevision: revision, contentSha256: 'c'.repeat(64), mode: 'mesh-set' } : null, reasonCodes: parents.length ? [] : ['NO_BARRIER_SCOPE_CONFIGURED'] };
 }
+function mixedRegistry(parents: BarrierSelectedParent[], revision: string): BarrierRegistry {
+  const value = registry(parents, revision);
+  return { ...value, schemaVersion: 'wfc.pf.barrier-registry.v2', geometryPolicy: MIXED_BARRIER_POLICY,
+    snapshot: value.snapshot ? { ...value.snapshot, schemaVersion: 'wfc.pf.barrier-snapshot-reference.v2', geometryPolicy: MIXED_BARRIER_POLICY, mode: 'mixed-mesh-set' } : null };
+}
 function manifest(value: BarrierRegistry, emptyReason = 'Reviewed empty scope'): BarrierSnapshot {
+  if (value.schemaVersion === 'wfc.pf.barrier-registry.v2') {
+    const ref = value.snapshot!;
+    const legacy = manifest({ schemaVersion: 'wfc.pf.barrier-registry.v1', scope: value.scope, registryRevision: value.registryRevision,
+      state: value.state, selectedParents: value.selectedParents, reasonCodes: value.reasonCodes,
+      snapshot: { snapshotId: ref.snapshotId, scope: ref.scope, registryRevision: ref.registryRevision, contentSha256: ref.contentSha256, mode: ref.mode === 'mixed-mesh-set' ? 'mesh-set' : 'explicit-empty' } }, emptyReason);
+    return { ...legacy, schemaVersion: 'wfc.pf.barrier-snapshot.v2', geometryPolicy: MIXED_BARRIER_POLICY, authority: 'none', ownTerminalExemptionsSupported: false,
+      geometry: legacy.geometry.mode === 'explicit-empty' ? legacy.geometry : { mode: 'mixed-mesh-set', fragments: legacy.geometry.fragments,
+        verification: { producerVersion: 'wfc.pf.barrier-mixed-verifier.v2', geometryPolicy: MIXED_BARRIER_POLICY, selectionClosure: 'complete-selected-scope',
+          verifiedCaptureSha256: 'd'.repeat(64), originalGeometrySha256: 'e'.repeat(64), verificationSha256: 'a'.repeat(64), authority: 'none', engineeringAccepted: false,
+          ownTerminalExemptionsSupported: false, componentMemberships: value.selectedParents.map((p, index) => ({ componentId: 'component:' + index,
+            kind: 'original-surface', fragmentIds: [index], parentSelectionIds: [p.selectionId], triangleCount: 12, sourceMembershipSha256: 'f'.repeat(64) })) } } };
+  }
   const matrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
   if (value.snapshot!.mode === 'explicit-empty') return { schemaVersion: 'wfc.pf.barrier-snapshot.v1', snapshotId: value.snapshot!.snapshotId, scope: value.scope, registryRevision: value.registryRevision, contentSha256: value.snapshot!.contentSha256, selectedParents: [], capture: null,
     geometry: { mode: 'explicit-empty', declarationId: id(31), declaration: 'administrator-declared-no-selected-barriers', reason: emptyReason }, coverage: 'registered-selected-objects-only', engineeringAccepted: false };
@@ -54,16 +73,17 @@ function fixture(initial: number[] = []) {
   const publishBarriers = vi.fn<ProjectPreparationViewer['publishBarriers']>(async (intentId, publishedObservation) => {
     if (intentId !== id(20) || publishedObservation !== observation) throw new Error('Publisher received a different protected observation');
     if (!lastRequest) throw new Error('No protected capture was requested');
-    current = registry(lastRequest.selectedParents, String(Number(current.registryRevision) + 1));
+    current = mixedRegistry(lastRequest.selectedParents, String(Number(current.registryRevision) + 1));
     current.snapshot!.snapshotId = id(21);
-    return { schemaVersion: 'wfc.pf.barrier-publication-receipt.v1' as const, snapshot: current.snapshot!, duplicate: false };
+    if (current.schemaVersion !== 'wfc.pf.barrier-registry.v2') throw Error('fixture');
+    return { schemaVersion: 'wfc.pf.barrier-publication-receipt.v2' as const, snapshot: current.snapshot!, duplicate: false };
   });
   const publicationPreflight = vi.fn(async () => {});
   const appearance = { clear: vi.fn(), showPath: vi.fn(), showRoute: vi.fn(), applyTransparency: vi.fn(), restore: vi.fn() };
   const runProjectPreparation = vi.fn(async (_expected: unknown, operation: (viewer: ProjectPreparationViewer) => Promise<unknown>, signal?: AbortSignal) => {
     const assertCurrent = () => { if (signal?.aborted) throw new DOMException('Scope changed', 'AbortError'); };
-    const publish: ProjectPreparationViewer['publishBarriers'] = async (intentId, value, onWriteStarted) => {
-      await publicationPreflight(); assertCurrent(); onWriteStarted?.(); return publishBarriers(intentId, value);
+    const publish: ProjectPreparationViewer['publishBarriers'] = async (intentId, value, onWriteStarted, expectedCommand) => {
+      await publicationPreflight(); assertCurrent(); onWriteStarted?.(); return publishBarriers(intentId, value, undefined, expectedCommand);
     };
     assertCurrent(); const result = await operation({ assertCurrent, readSelection, captureBarriers, publishBarriers: publish, ...appearance } as unknown as ProjectPreparationViewer); assertCurrent(); return result;
   });
@@ -72,13 +92,16 @@ function fixture(initial: number[] = []) {
   vi.mocked(api.getBarrierRegistry).mockImplementation(async () => structuredClone(current));
   vi.mocked(api.getLatestBarrierSnapshot).mockResolvedValue(null);
   vi.mocked(api.getBarrierSnapshot).mockImplementation(async () => manifest(current, currentEmptyReason));
-  vi.mocked(api.beginBarrierCapture).mockImplementation(async (_project, _token, command) => ({ schemaVersion: 'wfc.pf.barrier-intent-receipt.v1', state: 'pending', duplicate: false,
-    intent: { id: id(20), snapshotId: id(21), captureBlobId: id(22), manifestBlobId: id(23), command, createdBy: id(24), loginId: id(25) } }));
+  vi.mocked(api.beginBarrierCapture).mockImplementation(async (_project, _token, command) => {
+    if (command.schemaVersion !== 'wfc.pf.barrier-capture-command.v2') throw Error('Expected a fresh mixed command');
+    return { schemaVersion: 'wfc.pf.barrier-intent-receipt.v2', state: 'pending', duplicate: false,
+      intent: { id: id(20), snapshotId: id(21), captureBlobId: id(22), manifestBlobId: id(23), command, createdBy: id(24), loginId: id(25) } };
+  });
   vi.mocked(api.changeBarrierRegistry).mockImplementation(async (_project, _token, command) => {
     if (command.action === 'declare-empty') currentEmptyReason = command.reason;
-    const snapshot = { snapshotId: id(30), scope: command.scope, registryRevision: String(Number(current.registryRevision) + 1), contentSha256: 'e'.repeat(64), mode: 'explicit-empty' as const };
-    current = { ...current, registryRevision: snapshot.registryRevision, state: 'ready', selectedParents: [], snapshot, reasonCodes: [] };
-    return { schemaVersion: 'wfc.pf.barrier-publication-receipt.v1', snapshot, duplicate: false };
+    const snapshot = { schemaVersion: 'wfc.pf.barrier-snapshot-reference.v2' as const, geometryPolicy: MIXED_BARRIER_POLICY, snapshotId: id(30), scope: command.scope, registryRevision: String(Number(current.registryRevision) + 1), contentSha256: 'e'.repeat(64), mode: 'explicit-empty' as const };
+    current = { ...current, schemaVersion: 'wfc.pf.barrier-registry.v2', geometryPolicy: MIXED_BARRIER_POLICY, registryRevision: snapshot.registryRevision, state: 'ready', selectedParents: [], snapshot, reasonCodes: [] };
+    return { schemaVersion: 'wfc.pf.barrier-publication-receipt.v2', snapshot, duplicate: false };
   });
   return { options, pf, readSelection, runProjectPreparation, captureBarriers, publishBarriers, publicationPreflight, appearance, observation, makeObservation, getRegistry: () => current, setRegistry: (value: BarrierRegistry) => { current = value; } };
 }
@@ -95,6 +118,31 @@ const refusal = (value: BarrierPendingPublication) => ({ schemaVersion: 'wfc.pf.
   implementationSha256: 'e'.repeat(64), reasonCode: 'BARRIER_GEOMETRY_REFUSED' as const, duplicate: false });
 
 describe('durable exact barrier publication outcomes', () => {
+  it('rejects a legacy success for a fresh mixed command and retains its exact policy through refresh recovery', async () => {
+    const f = fixture([8]), view = await mounted(f); await add(view);
+    const legacy = registry(view.result.current.draftParents, '2'); legacy.snapshot!.snapshotId = id(21);
+    if (legacy.schemaVersion !== 'wfc.pf.barrier-registry.v1') throw Error('fixture');
+    f.publishBarriers.mockResolvedValueOnce({ schemaVersion: 'wfc.pf.barrier-publication-receipt.v1', snapshot: legacy.snapshot!, duplicate: false });
+    await act(() => view.result.current.save());
+    expect(view.result.current.phase).toBe('unknown');
+    const retained = await readPendingBarrierCommand(sessionStorage, scope.projectId);
+    if (retained?.kind !== 'publication') throw Error('No retained publication');
+    expect(retained.schemaVersion).toBe('wfc.pf.barrier-pending-command.v2');
+    const command = vi.mocked(api.beginBarrierCapture).mock.calls[0]?.[2];
+    expect(command).toMatchObject({ schemaVersion: 'wfc.pf.barrier-capture-command.v2', geometryPolicy: MIXED_BARRIER_POLICY });
+    view.unmount();
+    const restored = await mounted(f);
+    const terminal = supportedBarrierCaptureOutcomeSchema.parse({ schemaVersion: 'wfc.pf.barrier-capture-outcome.v2', outcome: 'published',
+      intentId: retained.intentId, commandSha256: retained.commandSha256, captureSha256: retained.captureSha256, frameBinding: 'not-recorded', frameSha256: null,
+      publication: { schemaVersion: 'wfc.pf.barrier-publication-receipt.v2', duplicate: true,
+        snapshot: { schemaVersion: 'wfc.pf.barrier-snapshot-reference.v2', geometryPolicy: MIXED_BARRIER_POLICY, snapshotId: retained.snapshotId,
+          scope: retained.scope, registryRevision: '2', contentSha256: 'c'.repeat(64), mode: 'mixed-mesh-set' } } });
+    vi.mocked(api.getBarrierCaptureOutcome).mockResolvedValueOnce(terminal);
+    await act(() => restored.result.current.retry());
+    expect(restored.result.current.pending).toBe(false); expect(await readPendingBarrierCommand(sessionStorage, scope.projectId)).toBeNull();
+    expect(api.beginBarrierCapture).toHaveBeenCalledOnce(); expect(f.publishBarriers).toHaveBeenCalledOnce();
+    expect(restored.result.current.message).toContain('does not establish the current Viewer frame');
+  });
   it('prevents the PUT when its boundary cannot durably retain and read back the exact publication binding', async () => {
     const f = fixture(), view = await mounted(f); await add(view);
     const original = Storage.prototype.setItem;
@@ -183,7 +231,8 @@ describe('durable exact barrier publication outcomes', () => {
   it('ignores an obsolete POST refusal before touching either project retained command or the new project auth latch', async () => {
     const f = fixture(), view = await mounted(f); await add(view);
     const otherProject = id(901), otherScope = { ...scope, projectId: otherProject };
-    const sentinel = await createBarrierCommandSentinel('capture-intent', { syntheticCommand: true }, otherScope, 'other-token');
+    const sentinel = await createBarrierCommandSentinel('capture-intent', { schemaVersion: 'wfc.pf.barrier-capture-command.v1',
+      scope: otherScope, expectedRegistryRevision: '1', idempotencyKey: id(907), selectedParents: [parent(7)] }, otherScope, 'other-token');
     const other = await sealPendingBarrierCommand({ ...sentinel, kind: 'publication', actorId: id(902), loginId: id(903), intentId: id(904), snapshotId: id(905),
       captureSha256: 'a'.repeat(64), frameSha256: 'b'.repeat(64), loadId: id(906) });
     retainPendingBarrierCommand(sessionStorage, other, null);
@@ -357,7 +406,7 @@ describe('administrator barrier authoring lifecycle', () => {
     const f = fixture(); const view = await mounted(f); await add(view); const parents = structuredClone(view.result.current.draftParents); await act(() => view.result.current.save());
     const command = vi.mocked(api.beginBarrierCapture).mock.calls[0][2]; expect(command).toMatchObject({ scope, expectedRegistryRevision: '1', selectedParents: parents }); expect(command.idempotencyKey).toMatch(/^[0-9a-f-]{36}$/);
     expect(f.captureBarriers).toHaveBeenCalledWith(expect.objectContaining({ captureId: id(20), scope, selectedParents: parents }));
-    expect(f.publishBarriers).toHaveBeenCalledWith(id(20), f.observation); expect(view.result.current.pending).toBe(false); expect(view.result.current.dirty).toBe(false);
+    expect(f.publishBarriers).toHaveBeenCalledWith(id(20), f.observation, undefined, expect.objectContaining({ schemaVersion: 'wfc.pf.barrier-capture-command.v2', geometryPolicy: MIXED_BARRIER_POLICY })); expect(view.result.current.pending).toBe(false); expect(view.result.current.dirty).toBe(false);
   });
   it('does not clear, Ghost, hide or redraw the model when reading or assigning selected barriers', async () => {
     const f = fixture(); const view = await mounted(f); await add(view); expect(f.readSelection).toHaveBeenCalled(); for (const operation of Object.values(f.appearance)) expect(operation).not.toHaveBeenCalled();
@@ -414,7 +463,8 @@ describe('administrator barrier authoring lifecycle', () => {
     const command = vi.mocked(api.beginBarrierCapture).mock.calls[0][2];
     await act(() => view.result.current.retry());
     expect(api.beginBarrierCapture).toHaveBeenCalledOnce(); expect(vi.mocked(api.beginBarrierCapture).mock.calls[0][2]).toBe(command);
-    expect(f.captureBarriers).toHaveBeenCalledOnce(); expect(f.publishBarriers).toHaveBeenCalledExactlyOnceWith(id(20), f.observation);
+    expect(f.captureBarriers).toHaveBeenCalledOnce();
+    expect(f.publishBarriers).toHaveBeenCalledExactlyOnceWith(id(20), f.observation, undefined, command);
     expect(view.result.current.phase).toBe('ready'); expect(view.result.current.pending).toBe(false);
   });
   it.each([409, 403])('retains an earlier uncertain PUT when replay preflight returns %s before another PUT', async status => {
@@ -503,7 +553,9 @@ describe('administrator barrier authoring lifecycle', () => {
     const f = fixture(); const view = await mounted(f); await add(view); const late = deferred<Awaited<ReturnType<typeof f.publishBarriers>>>(); f.publishBarriers.mockReturnValueOnce(late.promise);
     let saving!: Promise<unknown>; act(() => { saving = view.result.current.save(); }); await waitFor(() => expect(f.publishBarriers).toHaveBeenCalled());
     const renewed = { ...f.options, pf: { ...f.pf, data: structuredClone(f.pf.data) } }; view.rerender(renewed);
-    const next = registry(view.result.current.draftParents, '2'); next.snapshot!.snapshotId = id(21); f.setRegistry(next); await act(async () => { late.resolve({ schemaVersion: 'wfc.pf.barrier-publication-receipt.v1', snapshot: next.snapshot!, duplicate: false }); await saving; });
+    const next = mixedRegistry(view.result.current.draftParents, '2'); next.snapshot!.snapshotId = id(21); f.setRegistry(next);
+    if (next.schemaVersion !== 'wfc.pf.barrier-registry.v2') throw Error('fixture');
+    await act(async () => { late.resolve({ schemaVersion: 'wfc.pf.barrier-publication-receipt.v2', snapshot: next.snapshot!, duplicate: false }); await saving; });
     expect(view.result.current.pending).toBe(false); expect(view.result.current.registry!.snapshot).toEqual(next.snapshot);
   });
   it('retains a dirty draft but refuses to save against a newly observed prepared frame', async () => {

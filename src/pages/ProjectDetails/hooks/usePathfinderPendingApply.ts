@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 import { parsePurposeJson } from '../../../../shared/pathfinderPurposePolicy';
-import { barrierWriteEvidenceSchema } from '../../../../shared/pathfinderBarrierWrites';
+import { supportedBarrierWriteEvidenceSchema as barrierWriteEvidenceSchema } from '../../../../shared/pathfinderBarrierSupported';
 
 export const PENDING_APPLY_STORAGE_KEY = 'wfc.pathfinder.pending-apply.v1';
 const MAX_BYTES = 16_384, MAX_INTENTS = 8;
@@ -47,7 +47,7 @@ const receiptSchema = z.object({ duplicate: z.boolean(), receipt: z.object({
     z.object({ schemaVersion: z.literal('pathfinder.apply.v2'), ...receiptProvenanceFields }).passthrough(),
     z.object({ schemaVersion: z.literal('pathfinder.apply.v3'), ...receiptProvenanceFields,
       dependencies: z.object({ schemaVersion: z.literal('pathfinder.dependencies.v8'), projectId: uuid, cableId: uuid,
-        engineIdentity: z.object({ schemaVersion: z.literal('wfc.pf.engine-identity.v2'), contentSha256: hash }).passthrough() }).passthrough(),
+        engineIdentity: z.object({ schemaVersion: z.enum(['wfc.pf.engine-identity.v2', 'wfc.pf.engine-identity.v3']), contentSha256: hash }).passthrough() }).passthrough(),
       review: receiptProvenanceFields.review.extend({ dependencyHash: hash, revisionResultSha256: hash }),
       revisionResult: receiptProvenanceFields.revisionResult.extend({ dependencyHash: hash, engineResultSha256: hash }),
       barrierEvidence: barrierWriteEvidenceSchema }).passthrough(),
@@ -64,7 +64,8 @@ function matchingReceipt(value: unknown, intent: PendingApplyIntent, allowHistor
   if (receipt.provenance.schemaVersion === 'pathfinder.apply.v2' && !allowHistorical) return false;
   if (receipt.provenance.schemaVersion === 'pathfinder.apply.v3') {
     const { barrierEvidence: evidence, dependencies, revisionResult: result, review } = receipt.provenance;
-    if (evidence.projectId !== intent.projectId || evidence.cableId !== intent.cableId
+    if ((evidence.schemaVersion === 'wfc.pf.barrier-write-evidence.v2') !== (dependencies.engineIdentity.schemaVersion === 'wfc.pf.engine-identity.v3')
+      || evidence.projectId !== intent.projectId || evidence.cableId !== intent.cableId
       || dependencies.projectId !== intent.projectId || dependencies.cableId !== intent.cableId
       || dependencies.engineIdentity.contentSha256 !== evidence.engineIdentitySha256
       || result.dependencyHash !== evidence.dependencySha256 || result.engineResultSha256 !== evidence.engineResultSha256

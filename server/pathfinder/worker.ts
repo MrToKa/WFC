@@ -16,7 +16,8 @@ import { engineProjectSettings } from './settings.js';
 import { collectPreviewDependencies, previewEngineRequest, type PreviewDependencies } from './previews.js';
 import { requireVersionedCalculationScope } from './routingScope.js';
 import { readRecalculationJobAuthority, requireEnrollmentAuthority } from './recalculationRepository.js';
-import { calculationEngineIdentity, barrierCalculationEngineIdentity } from './calculationEngineIdentity.js';
+import { calculationEngineIdentity, barrierCalculationEngineIdentity, mixedBarrierCalculationEngineIdentity } from './calculationEngineIdentity.js';
+import { supportedBarrierExecutionSchema, type AnyBarrierRuntimeContext } from '../../shared/pathfinderBarrierSupported.js';
 import { claimCalculationSlice, finishCalculationSlice } from './workerScheduling.js';
 import { createPreparationEngineLane } from './preparationEngineLane.js';
 import type { EngineInvocation } from './engineSession.js';
@@ -47,9 +48,22 @@ export function cableDirectSecondaryPolicy(dependencies:DependencySnapshot):type
 /** A legacy failure may occur before geometry exists; successful opt-in may never silently become legacy. */
 export function requireCableEngineStrategy(response:EngineResponse,dependencies:DependencySnapshot):void {
   if(dependencies.schemaVersion==='pathfinder.dependencies.v8')return requireBarrierEngineStrategy(response,{context:dependencies.barriers,
+    ...(dependencies.barriers.schemaVersion==='wfc.pf.barrier-runtime.v2'?{qualification:dependencies.barrierQualification}:{}),
     category:dependencies.cableInputs.mto,fromPoint:dependencies.from.point,toPoint:dependencies.to.point});
   requireDirectSecondaryStrategy(response,{category:dependencies.cableInputs.mto,fromPoint:dependencies.from.point,toPoint:dependencies.to.point,
     engineIdentity:'engineIdentity' in dependencies?dependencies.engineIdentity:null});
+}
+/** A changed admission is an explicit worker refusal with no computed route or
+ * geometric proof. Both exact lanes must remain valid on this error path. */
+export function unavailableBarrierEngineResponse(requestId:string,context:AnyBarrierRuntimeContext,reasonCode:string):EngineResponse {
+  const mixed=context.schemaVersion==='wfc.pf.barrier-runtime.v2';
+  return {schemaVersion:'pathfinder.model.response.v3',requestId,status:'invalid_request',engineeringAccepted:false,
+    message:'The admitted barrier scope changed or became unavailable before dispatch. No route was calculated. Refresh barriers and calculate again.',
+    barriers:supportedBarrierExecutionSchema.parse({schemaVersion:mixed?'wfc.pf.barrier-execution.v2':'wfc.pf.barrier-execution.v1',
+      ...(mixed?{engineeringAccepted:false,ownTerminalExemptionsSupported:false,authority:'none'}:{}),
+      context,proof:null,directSecondary:null,diagnostics:{status:'unavailable',reasonCode,searchComplete:false,candidatesTruncated:false,
+        pairAttempts:0,collisionQueries:0,work:'0',plannerAttempts:0,straightPairAttempts:0,localEdgeChecks:0,localPhaseUsed:false,straightPhaseTruncated:false},
+      connectors:{from:null,to:null},qualification:null})};
 }
 function retainedStrategyCompatible(response:EngineResponse,dependencies:DependencySnapshot):boolean {
   try {requireCableEngineStrategy(response,dependencies);return response.status==='calculated'&&response.route?.success===true;}
@@ -178,6 +192,7 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
       await readSnapshot(dependencies.artifactId,dependencies.snapshotSha256);
       const response=await engine.execute(previewEngineRequest(dependencies,randomUUID(),job.timeout_ms),signal);
       if(dependencies.schemaVersion==='pathfinder.preview.dependencies.v6') requireBarrierEngineStrategy(response,{context:dependencies.barriers,
+        ...(dependencies.barriers.schemaVersion==='wfc.pf.barrier-runtime.v2'?{qualification:dependencies.barrierQualification}:{}),
         category:dependencies.input.category,fromPoint:dependencies.from.point,toPoint:dependencies.to.point,reverse:dependencies.input.reverse});
       else requireDirectSecondaryStrategy(response,{category:dependencies.input.category,fromPoint:dependencies.from.point,toPoint:dependencies.to.point,
         engineIdentity:dependencies.engineIdentity,reverse:dependencies.input.reverse});
@@ -206,7 +221,9 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
       const requestId = randomUUID();
       try {
         requireVersionedCalculationScope(dependencies);
-        const identity=dependencies.schemaVersion==='pathfinder.dependencies.v8'?await barrierCalculationEngineIdentity({force:true}):await calculationEngineIdentity({force:true});
+        const identity=dependencies.schemaVersion==='pathfinder.dependencies.v8'
+          ?await(dependencies.barriers.schemaVersion==='wfc.pf.barrier-runtime.v2'?mixedBarrierCalculationEngineIdentity({force:true}):barrierCalculationEngineIdentity({force:true}))
+          :await calculationEngineIdentity({force:true});
         let supersededBeforeDispatch=false;
         await authorized(async client => {
           await fencedJob(client,job);
@@ -235,16 +252,13 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
           barrierUnavailableBeforeDispatch=true;
           // This is an honest worker admission refusal, not a C# route or a
           // legacy fallback. Retain the admitted context without any proof.
-          response={schemaVersion:'pathfinder.model.response.v3',requestId,status:'invalid_request',engineeringAccepted:false,
-            message:'The admitted barrier scope changed or became unavailable before dispatch. No route was calculated. Refresh barriers and calculate again.',
-            barriers:{schemaVersion:'wfc.pf.barrier-execution.v1',context:dependencies.barriers,proof:null,directSecondary:null,
-              diagnostics:{status:'unavailable',reasonCode:error.code,searchComplete:false,candidatesTruncated:false,pairAttempts:0,
-                collisionQueries:0,work:'0',plannerAttempts:0,straightPairAttempts:0,localEdgeChecks:0,localPhaseUsed:false,straightPhaseTruncated:false},
-              connectors:{from:null,to:null},qualification:null}};
+          response=unavailableBarrierEngineResponse(requestId,dependencies.barriers,error.code);
         }else response = {schemaVersion:'pathfinder.model.response.v1',requestId,status:error instanceof PathFinderError && error.code === 'ENGINE_DEADLINE' ? 'deadline_exceeded' : 'invalid_request',message:safe,engineeringAccepted:false};
       }
       signal.throwIfAborted();
-      const finalIdentity=dependencies.schemaVersion==='pathfinder.dependencies.v8'?await barrierCalculationEngineIdentity({force:true}):await calculationEngineIdentity({force:true});
+      const finalIdentity=dependencies.schemaVersion==='pathfinder.dependencies.v8'
+        ?await(dependencies.barriers.schemaVersion==='wfc.pf.barrier-runtime.v2'?mixedBarrierCalculationEngineIdentity({force:true}):barrierCalculationEngineIdentity({force:true}))
+        :await calculationEngineIdentity({force:true});
       await authorized(async client => {
         await fencedJob(client,job);
         if(['pathfinder.dependencies.v7','pathfinder.dependencies.v8'].includes(dependencies.schemaVersion)&&await retireSupersededCableItem(client,job,item.cable_id))return;

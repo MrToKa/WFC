@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { canonicalPurposeJson, policyHashSchema } from './pathfinderPurposePolicy.js';
 import { DIRECT_SECONDARY_POLICY } from './pathfinderDirectSecondary.js';
+import type { MixedBarrierEngineIdentity } from './pathfinderBarrierMixed.js';
 
 /** Existing Core source label; actual module digests are required independently. */
 export const ENGINE_IDENTITY_VERSION = '45c24bf5f433f13e102600b36f20327c77961d0a' as const;
@@ -62,7 +63,7 @@ export const barrierEngineIdentityBodySchema = engineIdentityBodySchema.omit({ s
 export const barrierEngineIdentitySchema = barrierEngineIdentityBodySchema.extend({ contentSha256: policyHashSchema }).strict();
 export type BarrierEngineIdentityBody = z.infer<typeof barrierEngineIdentityBodySchema>;
 export type BarrierEngineIdentity = z.infer<typeof barrierEngineIdentitySchema>;
-export type CalculationEngineIdentity = EngineIdentity | BarrierEngineIdentity;
+export type CalculationEngineIdentity = EngineIdentity | BarrierEngineIdentity | MixedBarrierEngineIdentity;
 
 export function barrierEngineIdentityCanonicalBody(identity: BarrierEngineIdentity | BarrierEngineIdentityBody): string {
   if (Object.prototype.hasOwnProperty.call(identity, 'contentSha256')) {

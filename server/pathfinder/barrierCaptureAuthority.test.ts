@@ -2,11 +2,12 @@ import { createHash } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { barrierCanonicalJson, barrierCaptureSchema, type BarrierModelScope } from '../../shared/pathfinderBarriers.js';
+import { MIXED_BARRIER_POLICY, mixedBarrierVerifierReceiptSchema } from '../../shared/pathfinderBarrierMixed.js';
 import { GEOMETRY_TRACE_LIMITS } from '../../shared/pathfinderGeometryTrace.js';
 import { barrierEnumerationHashInput, barrierFrameObservationHashInput, type BarrierFrameObservation } from '../../viewer-runtime/barrier-capture.mjs';
 import { barrierCaptureAdapters, type BarrierViewerContext } from './barrierCaptureAuthority.js';
 import { barrierFrameProjectionHash, currentBarrierScope } from './barrierScope.js';
-import { BarrierGeometryRefusal, barrierVerifierResultSchema, type runBarrierVerifier } from './barrierVerifier.js';
+import { BarrierGeometryRefusal, barrierVerifierResultSchema, type runBarrierVerifier, type runMixedBarrierVerifier } from './barrierVerifier.js';
 import { BarrierCaptureQualificationRefusal, barrierRegistryTransaction, type BarrierCaptureIntent } from './barrierRegistryRepository.js';
 import { geometryTraceFixture } from './geometryTraceFixtures.js';
 import { buildGeometryTrace } from './geometryTraceBuilder.js';
@@ -71,6 +72,44 @@ function fixture() {
   return { sample, built, scope, row, who, frame, context, intent, capture, input, state, query, client, execute, adapters };
 }
 afterEach(() => { vi.restoreAllMocks(); });
+
+function mixedFixture() {
+  const f = fixture(); f.intent.command = { ...f.intent.command, schemaVersion: 'wfc.pf.barrier-capture-command.v2', geometryPolicy: MIXED_BARRIER_POLICY };
+  const result = mixedBarrierVerifierReceiptSchema.parse({ schemaVersion: 'wfc.pf.barrier-mixed-verification-result.v2', producerVersion: 'wfc.pf.barrier-mixed-verifier.v2',
+    status: 'geometry-qualified', captureSha256: f.input.captureSha256, diagnostics: [], evidence: {
+      captureId: f.capture.captureId, scope: f.scope, originalSurfaceComponents: 1, qualifiedClosedSolidComponents: 0,
+      fragmentCount: 1, vertexCount: 3, triangleCount: 1, originalGeometrySha256: '8'.repeat(64), verificationSha256: '9'.repeat(64), numericToleranceMetres: 1e-7,
+      componentMemberships: [{ componentId: 'synthetic-open-wall', kind: 'original-surface', fragmentIds: [1], parentSelectionIds: [f.capture.selectedParents[0].selectionId], triangleCount: 1, sourceMembershipSha256: '7'.repeat(64) }],
+      inputSchemaVersion: 'wfc.pf.barrier-capture.v1', policyVersion: MIXED_BARRIER_POLICY, coverage: 'provided-fragments-only', geometryProvenance: 'capture-bound-provided-original-triangles',
+      sdkCoverageVerified: false, sdkSourceBytesVerified: false, currentFrameVerified: false, engineeringAccepted: false, ownTerminalExemptionsSupported: false, authority: 'none' } });
+  const executeMixed = vi.fn<typeof runMixedBarrierVerifier>(async () => ({ result: structuredClone(result), implementationSha256: f.state.implementationSha256 }));
+  const adapters = barrierCaptureAdapters(f.context, f.execute, executeMixed); return { ...f, result, executeMixed, adapters };
+}
+
+describe('explicit original-surface policy qualification dispatch', () => {
+  it('runs the mixed executor only for the frozen v2 command and retains its exact bounded component evidence', async () => {
+    const f = mixedFixture(); await f.adapters.currentScope(f.client, f.scope.projectId);
+    expect(await f.adapters.qualifyCapture(f.input, new AbortController().signal)).toMatchObject({ producerVersion: 'wfc.pf.barrier-mixed-verifier.v2',
+      geometryPolicy: MIXED_BARRIER_POLICY, originalGeometrySha256: f.result.evidence!.originalGeometrySha256,
+      componentMemberships: f.result.evidence!.componentMemberships, engineeringAccepted: false, ownTerminalExemptionsSupported: false, authority: 'none' });
+    expect(f.executeMixed).toHaveBeenCalledWith(f.input.captureBytes, expect.any(AbortSignal)); expect(f.execute).not.toHaveBeenCalled();
+  });
+  it('keeps an original v1 command on the original executor despite the new mixed executor being available', async () => {
+    const f = mixedFixture(); f.intent.command = { schemaVersion: 'wfc.pf.barrier-capture-command.v1', scope: f.scope, expectedRegistryRevision: '0', idempotencyKey: id(10), selectedParents: f.capture.selectedParents };
+    await f.adapters.currentScope(f.client, f.scope.projectId); expect(await f.adapters.qualifyCapture(f.input, new AbortController().signal)).toMatchObject({ producerVersion: 'wfc.pf.barrier-verifier.v1' });
+    expect(f.execute).toHaveBeenCalledOnce(); expect(f.executeMixed).not.toHaveBeenCalled();
+  });
+  it('rejects a mixed result whose otherwise valid component membership names a foreign captured fragment', async () => {
+    const f = mixedFixture(); f.result.evidence!.componentMemberships[0].fragmentIds = [99]; await f.adapters.currentScope(f.client, f.scope.projectId);
+    await expect(f.adapters.qualifyCapture(f.input, new AbortController().signal)).rejects.toMatchObject({ code: 'BARRIER_VERIFIER_CAPTURE_MISMATCH' });
+  });
+  it('binds a mixed logical refusal to the exact same protected capture and full frame without converting operational errors', async () => {
+    const f = mixedFixture(); f.executeMixed.mockRejectedValueOnce(new BarrierGeometryRefusal(f.input.captureSha256, f.state.implementationSha256));
+    await f.adapters.currentScope(f.client, f.scope.projectId);
+    await expect(f.adapters.qualifyCapture(f.input, new AbortController().signal)).rejects.toMatchObject({ captureSha256: f.input.captureSha256, frameSha256: f.frame.contentSha256 });
+    expect(f.execute).not.toHaveBeenCalled();
+  });
+});
 
 describe('current server model and common barrier frame authority', () => {
   it('uses locked current model/aggregate/trace/artifact and exactly one common frame', async () => {

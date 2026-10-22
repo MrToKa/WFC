@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { CABLE_WORKFLOW_LIMITS, cableWorkflowRowSchema } from './pathfinderCableWorkflow.js';
 import { parsePurposeJson, policyHashSchema, policyUuidSchema } from './pathfinderPurposePolicy.js';
-import { barrierAdmissionIntentSchema } from './pathfinderBarrierAdmission.js';
+import { supportedBarrierAdmissionIntentSchema as barrierAdmissionIntentSchema } from './pathfinderBarrierSupported.js';
 import { recalculationReasonSchema } from './pathfinderRecalculation.js';
 
 export const CABLE_WORKFLOW_READ_LIMITS = Object.freeze({ responseBytes: 8 * 1024 ** 2, searchCharacters: 256, deadlineMilliseconds: 15_000 });

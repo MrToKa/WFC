@@ -16,13 +16,14 @@ import { endpointCalculationPoint, type EndpointCalculationPoint, type EndpointC
 import type { EndpointCurrentScope } from '../../shared/pathfinderEndpointBindings.js';
 import { readComparisonDependency } from './revisionComparisonRepository.js';
 import type { ComparisonCalculationScope } from './comparisonCalculationProvenance.js';
-import { calculationEngineIdentity, barrierCalculationEngineIdentity } from './calculationEngineIdentity.js';
-import type { EngineIdentity, BarrierEngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
+import { calculationEngineIdentity, barrierCalculationEngineIdentity, mixedBarrierCalculationEngineIdentity } from './calculationEngineIdentity.js';
+import type { EngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
 import { directSecondaryPolicyForScope, requireDirectSecondaryStrategy } from './directSecondaryStrategy.js';
 import { readAutomaticNamedEndpointCandidate } from './automaticEndpointCandidates.js';
-import { barrierAdmissionIntentSchema } from '../../shared/pathfinderBarrierAdmission.js';
-import type { BarrierRuntimeContext } from '../../shared/pathfinderBarrierRuntime.js';
-import { collectBarrierCalculationScope } from './barrierCalculationScope.js';
+import { supportedBarrierAdmissionIntentSchema as barrierAdmissionIntentSchema,
+  type AnyBarrierEngineIdentity as BarrierEngineIdentity, type AnyBarrierRuntimeContext as BarrierRuntimeContext } from '../../shared/pathfinderBarrierSupported.js';
+import type { MixedBarrierVerifierEvidence } from '../../shared/pathfinderBarrierMixed.js';
+import { collectBarrierCalculationScope, collectBarrierCalculationState } from './barrierCalculationScope.js';
 import { requireBarrierEngineStrategy } from './barrierStrategy.js';
 import { DIRECT_SECONDARY_POLICY } from '../../shared/pathfinderDirectSecondary.js';
 
@@ -43,6 +44,7 @@ export type HistoricalPreviewDependencies = {
 };
 export type BarrierPreviewDependencies = Omit<HistoricalPreviewDependencies,'schemaVersion'|'engineIdentity'> & {
   schemaVersion:'pathfinder.preview.dependencies.v6';engineIdentity:BarrierEngineIdentity;barriers:BarrierRuntimeContext;
+  barrierQualification?:MixedBarrierVerifierEvidence|null;
 };
 export type PreviewDependencies = HistoricalPreviewDependencies | BarrierPreviewDependencies;
 type Row=Record<string,any>;
@@ -96,11 +98,15 @@ export async function collectPreviewDependencies(client:PoolClient,projectId:str
     contentFingerprint:model.contentFingerprint,artifactId:model.artifactId,snapshotSha256:model.snapshotSha256,registryRevision:registry.registry_revision,
     settings:current.settings,options:current.options,input,from,to,engineVersion:'pathfinder-45c24bf5-pf1-modelrunner-v1' as const};
   if(input.barrierRouting){
-    const barriers=await collectBarrierCalculationScope(client,projectId,input.barrierRouting);
+    const mixed=input.barrierRouting.schemaVersion==='wfc.pf.barrier-admission-intent.v2';
+    const {context:barriers,qualification}=mixed?await collectBarrierCalculationState(client,projectId,input.barrierRouting)
+      :{context:await collectBarrierCalculationScope(client,projectId,input.barrierRouting),qualification:null};
     if(barriers.binding.scope.modelVersionId!==common.modelVersionId||barriers.binding.scope.selectionRevision!==common.selectionRevision
       ||barriers.binding.scope.contentFingerprint!==common.contentFingerprint||barriers.binding.scope.captureFrameId!==common.preparation.captureFrameId)
       throw new PathFinderError('BARRIER_CONTEXT_CHANGED',409);
-    return {...common,schemaVersion:'pathfinder.preview.dependencies.v6',engineIdentity:await barrierCalculationEngineIdentity(),barriers};
+    return {...common,schemaVersion:'pathfinder.preview.dependencies.v6',
+      engineIdentity:await(mixed?mixedBarrierCalculationEngineIdentity():barrierCalculationEngineIdentity()),barriers,
+      ...(mixed?{barrierQualification:qualification}:{})};
   }
   return {...common,schemaVersion:'pathfinder.preview.dependencies.v5',engineIdentity:await calculationEngineIdentity()};
 }
@@ -124,6 +130,7 @@ export function previewResultDto(response:EngineResponse,dependencies:PreviewDep
   let decision;
   if(dependencies.schemaVersion==='pathfinder.preview.dependencies.v6') {
     requireBarrierEngineStrategy(response,{context:dependencies.barriers,
+      ...(dependencies.barriers.schemaVersion==='wfc.pf.barrier-runtime.v2'?{qualification:dependencies.barrierQualification}:{}),
       category:dependencies.input.category,fromPoint:dependencies.from.point,toPoint:dependencies.to.point,reverse:dependencies.input.reverse});
     if(response.schemaVersion==='pathfinder.model.response.v3'&&response.barriers.directSecondary?.mode==='direct-secondary')
       decision=response.barriers.directSecondary.distanceDecision;

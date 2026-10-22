@@ -9,20 +9,22 @@ internal sealed class SessionExecutionContext
     private string? sourceIdentity;
     private string? barrierIdentity;
     internal PreparedBarriers? BarrierCache { get; private set; }
+    internal PreparedMixedBarriers? MixedBarrierCache { get; private set; }
     internal void SelectBarrierKey(string next)
     {
         // At most one qualified kernel is retained; discard a superseded scope
         // before reading/allocating its replacement. File hashes are rechecked
         // by the caller even when this immutable qualification can be reused.
-        if (barrierIdentity != next) { BarrierCache = null; barrierIdentity = next; }
+        if (barrierIdentity != next) { BarrierCache = null; MixedBarrierCache = null; barrierIdentity = next; }
     }
-    internal void StoreBarriers(PreparedBarriers value) => BarrierCache = value;
+    internal void StoreBarriers(PreparedBarriers value) { MixedBarrierCache = null; BarrierCache = value; }
+    internal void StoreMixedBarriers(PreparedMixedBarriers value) { BarrierCache = null; MixedBarrierCache = value; }
     internal string Reuse { get; private set; } = "none";
     internal void BeginRequest() => Reuse = "none";
     internal void Discard()
     {
         cache = null; previous = null; identity = null; sourceIdentity = null;
-        BarrierCache = null; barrierIdentity = null; Reuse = "none";
+        BarrierCache = null; MixedBarrierCache = null; barrierIdentity = null; Reuse = "none";
     }
     private static string BoundIdentity(string root, string sha256, string rulesSha256) => root + "\n" + sha256 + "\n" + rulesSha256;
     private static string Identity(string root, string sha256, ModelBuildRules? rules) => BoundIdentity(root, sha256,

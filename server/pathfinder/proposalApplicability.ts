@@ -75,7 +75,8 @@ async function readBarrierProposalApplicability(client: PoolClient, input: Propo
     if (calculationMode !== 'calculate') return no;
     const response = engineResponseSchema.parse(body);
     if (response.status !== 'calculated' || !response.route?.success || !response.design) return no;
-    requireBarrierEngineStrategy(response, { context: dependencies.barriers, category: dependencies.cableInputs.mto,
+    requireBarrierEngineStrategy(response, { context: dependencies.barriers,
+      ...(dependencies.barriers.schemaVersion==='wfc.pf.barrier-runtime.v2'?{qualification:dependencies.barrierQualification}:{}), category: dependencies.cableInputs.mto,
       fromPoint: dependencies.from.point, toPoint: dependencies.to.point });
   } catch { return no; }
   const scoped = await readLocationImpactJobAuthority(client, { projectId: input.projectId, jobId: input.jobId, cableId: input.cableId, lock: true });

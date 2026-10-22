@@ -9,6 +9,10 @@ import {
   BARRIER_ENGINE_IDENTITY_POLICY_VERSIONS, barrierEngineIdentityBodySchema, barrierEngineIdentitySchema,
   barrierEngineIdentityCanonicalBody, type BarrierEngineIdentity, type CalculationEngineIdentity,
 } from '../../shared/pathfinderEngineIdentity.js';
+import { mixedBarrierEngineIdentityBodySchema, mixedBarrierEngineIdentitySchema, MIXED_BARRIER_COLLISION_VERSION,
+  MIXED_BARRIER_POLICY, MIXED_BARRIER_VERIFIER_VERSION, MIXED_BARRIER_RUNTIME_PROFILE,
+  type MixedBarrierEngineIdentity } from '../../shared/pathfinderBarrierMixed.js';
+import { barrierCanonicalJson } from '../../shared/pathfinderBarriers.js';
 import { PathFinderError } from './errors.js';
 
 const MODULES = ['PathFinder.ModelRunner.dll', 'PathFinder.Model.dll', 'PathFinder.Core.dll', 'PathFinder.Adapter.dll'] as const;
@@ -44,18 +48,22 @@ type IdentityReaderConfig = {
 };
 type IdentityReader<T> = { read(options?: { force?: boolean }): Promise<T> };
 export function createCalculationEngineIdentityReader(config: IdentityReaderConfig & { barriers: true }): IdentityReader<BarrierEngineIdentity>;
+// eslint-disable-next-line no-redeclare -- Each lane has an explicit identity contract.
+export function createCalculationEngineIdentityReader(config: IdentityReaderConfig & { mixed: true }): IdentityReader<MixedBarrierEngineIdentity>;
 // eslint-disable-next-line no-redeclare -- TypeScript overloads retain each identity version's exact return type.
 export function createCalculationEngineIdentityReader(config: IdentityReaderConfig & { barriers?: false }): IdentityReader<EngineIdentity>;
 // eslint-disable-next-line no-redeclare -- Implementation of the two typed overloads above.
-export function createCalculationEngineIdentityReader(config: IdentityReaderConfig & { barriers?: boolean }): IdentityReader<CalculationEngineIdentity> {
-  const modules = config.barriers ? BARRIER_MODULES : MODULES;
+export function createCalculationEngineIdentityReader(config: IdentityReaderConfig & { barriers?: boolean; mixed?: boolean }): IdentityReader<CalculationEngineIdentity> {
+  if (config.barriers && config.mixed) throw new Error('Select one explicit calculation identity lane.');
+  const protectedLane = config.barriers || config.mixed;
+  const modules = protectedLane ? BARRIER_MODULES : MODULES;
   let cached: { signature: string; value: CalculationEngineIdentity } | undefined;
   let pending: Promise<CalculationEngineIdentity> | undefined;
   async function read(force: boolean): Promise<CalculationEngineIdentity> {
     const dll = config.dllPath();
     if (!dll || !path.isAbsolute(dll) || path.basename(dll) !== MODULES[0]) return fail();
     const projection = config.projectionFiles();
-    if (!projection.length || projection.length > (config.barriers ? BARRIER_IDENTITY_PROJECTION_LIMIT : 32) || new Set(projection.map(x => x.name)).size !== projection.length
+    if (!projection.length || projection.length > (protectedLane ? BARRIER_IDENTITY_PROJECTION_LIMIT : 32) || new Set(projection.map(x => x.name)).size !== projection.length
       || projection.some(x => /^[A-Za-z0-9_./-]{1,200}$/.exec(x.name)?.[0] !== x.name)) return fail('CALCULATION_ENGINE_PROJECTION');
     const files = [
       ...modules.map(name => ({ name, filename: path.join(path.dirname(dll), name), maximum: maximumModuleBytes })),
@@ -77,7 +85,13 @@ export function createCalculationEngineIdentityReader(config: IdentityReaderConf
     const common = { version: ENGINE_IDENTITY_VERSION,
       runnerSha256: hashes[0], modelModuleSha256: hashes[1], coreModuleSha256: hashes[2], adapterModuleSha256: hashes[3],
       derivationSha256: derivation.digest('hex') };
-    const value = config.barriers ? (() => {
+    const value = config.mixed ? (() => {
+      const body = mixedBarrierEngineIdentityBodySchema.parse({ ...common, schemaVersion: 'wfc.pf.engine-identity.v3',
+        barriersModuleSha256: hashes[4], barrierVerifierModuleSha256: hashes[5], policyVersions: { ...BARRIER_ENGINE_IDENTITY_POLICY_VERSIONS,
+          projection: 'wfc.pf.model-runner-v3-mixed-barrier-projection.v1', barriers: MIXED_BARRIER_COLLISION_VERSION,
+          qualification: MIXED_BARRIER_VERIFIER_VERSION, runtimeProfile: MIXED_BARRIER_RUNTIME_PROFILE.schemaVersion, geometryPolicy: MIXED_BARRIER_POLICY } });
+      return mixedBarrierEngineIdentitySchema.parse({ ...body, contentSha256: hash(barrierCanonicalJson(body)) });
+    })() : config.barriers ? (() => {
       const body = barrierEngineIdentityBodySchema.parse({ ...common, schemaVersion: 'wfc.pf.engine-identity.v2',
         barriersModuleSha256: hashes[4], barrierVerifierModuleSha256: hashes[5], policyVersions: BARRIER_ENGINE_IDENTITY_POLICY_VERSIONS });
       return barrierEngineIdentitySchema.parse({ ...body, contentSha256: hash(barrierEngineIdentityCanonicalBody(body)) });
@@ -127,11 +141,14 @@ export const calculationEngineIdentity = (options?: { force?: boolean }) => conf
 export function barrierCalculationProjectionFiles(): ProjectionFile[] {
   const extension = import.meta.url.endsWith('.ts') ? '.ts' : '.js';
   return [...calculationProjectionFiles(),
-    ...['barrierCalculationScope', 'barrierScope', 'barrierStorage', 'barrierStrategy', 'barrierCurrentness'].map(name => ({ name: './' + name + '.js', filename: fileURLToPath(new URL('./' + name + extension, import.meta.url)) })),
-    ...['pathfinderBarriers', 'pathfinderBarrierAdmission', 'pathfinderBarrierDecisions', 'pathfinderBarrierRuntime'].map(name => ({
+    ...['barrierCalculationScope', 'barrierScope', 'barrierStorage', 'barrierStrategy', 'barrierCurrentness', 'barrierQualification'].map(name => ({ name: './' + name + '.js', filename: fileURLToPath(new URL('./' + name + extension, import.meta.url)) })),
+    ...['pathfinderBarriers', 'pathfinderBarrierAdmission', 'pathfinderBarrierDecisions', 'pathfinderBarrierRuntime', 'pathfinderBarrierMixed', 'pathfinderBarrierSupported'].map(name => ({
       name: '../../shared/' + name + '.js', filename: fileURLToPath(new URL('../../shared/' + name + extension, import.meta.url)) })),
   ];
 }
 const barrierConfigured = createCalculationEngineIdentityReader({ barriers: true,
   dllPath: () => process.env.PF_ENGINE_DLL ?? process.env.PF_MODEL_RUNNER_DLL, projectionFiles: barrierCalculationProjectionFiles });
 export const barrierCalculationEngineIdentity = (options?: { force?: boolean }) => barrierConfigured.read(options);
+const mixedBarrierConfigured = createCalculationEngineIdentityReader({ mixed: true,
+  dllPath: () => process.env.PF_ENGINE_DLL ?? process.env.PF_MODEL_RUNNER_DLL, projectionFiles: barrierCalculationProjectionFiles });
+export const mixedBarrierCalculationEngineIdentity = (options?: { force?: boolean }) => mixedBarrierConfigured.read(options);

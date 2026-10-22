@@ -75,7 +75,7 @@ describe('additive v8 barrier dependency projection',()=>{
  });
  it('binds runtime scope changes to geometry and refuses design-only v8 reuse even for allowance-only changes',async()=>{
   retainOptions();const previous=(await collectDependenciesForVersion(database().client,pid,id(8),barrierOptions(),'pathfinder.dependencies.v8')).dependencies!;
-  if(previous.schemaVersion!=='pathfinder.dependencies.v8')throw Error('Wrong dependency fixture');
+  if(previous.schemaVersion!=='pathfinder.dependencies.v8'||previous.barriers.schemaVersion!=='wfc.pf.barrier-runtime.v1')throw Error('Wrong dependency fixture');
   const allowance={...previous,settings:{...previous.settings,revision:'2',endConnectionLength:'6'}};
   expect(geometryHash(allowance)).toBe(geometryHash(previous));expect(verifiedDesignOnlyChange(allowance,previous)).toBe(false);
   const changed={...previous,barriers:{...previous.barriers,profileSha256:'f'.repeat(64)}};

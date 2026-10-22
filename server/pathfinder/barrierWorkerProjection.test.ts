@@ -2,7 +2,8 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { barrierCanonicalJson } from '../../shared/pathfinderBarriers.js';
-import { barrierRouteHashInput, createBarrierRuntimePolicy, type BarrierRuntimeContext } from '../../shared/pathfinderBarrierRuntime.js';
+import { barrierRouteHashInput, createBarrierRuntimePolicy, type BarrierRuntimeContext, type BarrierExecution } from '../../shared/pathfinderBarrierRuntime.js';
+import { createMixedBarrierRuntimePolicy, MIXED_BARRIER_RUNTIME_PROFILE, mixedBarrierRuntimeContextSchema } from '../../shared/pathfinderBarrierMixed.js';
 import type { BarrierCheckProofV2 } from '../../shared/pathfinderBarrierDecisions.js';
 import type { BarrierAdmissionIntent } from '../../shared/pathfinderBarrierAdmission.js';
 import { DIRECT_SECONDARY_POLICY } from '../../shared/pathfinderDirectSecondary.js';
@@ -10,10 +11,10 @@ import { syntheticBarrierEngineIdentity, syntheticDrillingRuntime, syntheticEngi
 import { defaultOptions, engineResponseSchema, type BarrierDependencySnapshot, type CurrentDependencySnapshot,
   type EngineResponse, type ScopedDependencySnapshot } from './jobContracts.js';
 import { previewEngineRequest, previewResultDto, type BarrierPreviewDependencies, type HistoricalPreviewDependencies } from './previews.js';
-import { buildCableEngineRequest, cableDirectSecondaryPolicy, requireCableEngineStrategy } from './worker.js';
+import { buildCableEngineRequest, cableDirectSecondaryPolicy, requireCableEngineStrategy, unavailableBarrierEngineResponse } from './worker.js';
 
 type Point = [number, number, number];
-type ProtectedResponse = Extract<EngineResponse, { schemaVersion: 'pathfinder.model.response.v3' }>;
+type ProtectedResponse = Extract<EngineResponse, { schemaVersion: 'pathfinder.model.response.v3' }> & {barriers:BarrierExecution};
 const id = (n: number) => `b6310000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const digest = (value: unknown) => createHash('sha256').update(barrierCanonicalJson(value)).digest('hex');
 const routeHash = (points: Point[]) => digest(barrierRouteHashInput(points));
@@ -46,12 +47,12 @@ function scoped(): ScopedDependencySnapshot {
   return { ...body, schemaVersion: 'pathfinder.dependencies.v7', endpointResolution: { schemaVersion: 'pathfinder.endpoint-resolution.v1',
     matchingPolicy: 'nfc-trim-uppercase-v1', from: { logicalKey: 'FROM', locationId: id(6) }, to: { logicalKey: 'TO', locationId: id(7) } } };
 }
-function protectedDependencies(context = syntheticDrillingRuntime(scope())): BarrierDependencySnapshot {
+function protectedDependencies(context = syntheticDrillingRuntime(scope())): BarrierDependencySnapshot & {barriers:BarrierRuntimeContext} {
   const { schemaVersion: _version, engineIdentity: _identity, ...body } = scoped();
   return { ...body, schemaVersion: 'pathfinder.dependencies.v8', engineIdentity: syntheticBarrierEngineIdentity(), barriers: context,
     options: { ...body.options, barrierRouting: intent(context) } };
 }
-function preview(dependencies = protectedDependencies(), reverse = false): BarrierPreviewDependencies {
+function preview(dependencies = protectedDependencies(), reverse = false): BarrierPreviewDependencies & {barriers:BarrierRuntimeContext} {
   const from = { name: 'From', point: dependencies.from.point, source: 'manual-world-point' as const,
     objectId: null, locationId: null, bindingRevision: null, binding: null };
   const to = { ...from, name: 'To', point: dependencies.to.point };
@@ -66,8 +67,8 @@ function preview(dependencies = protectedDependencies(), reverse = false): Barri
 }
 function parsed(response: ProtectedResponse): ProtectedResponse {
   const value = engineResponseSchema.parse(response);
-  if (value.schemaVersion !== 'pathfinder.model.response.v3') throw new Error('Protected fixture version changed.');
-  return value;
+  if (value.schemaVersion !== 'pathfinder.model.response.v3' || value.barriers.schemaVersion!=='wfc.pf.barrier-execution.v1') throw new Error('Protected fixture version changed.');
+  return {...value,barriers:value.barriers};
 }
 function unavailable(context: BarrierRuntimeContext): ProtectedResponse {
   return parsed({ schemaVersion: 'pathfinder.model.response.v3', requestId: id(50), status: 'no_path',
@@ -167,6 +168,29 @@ describe('immutable protected worker request projection', () => {
     expect(() => requireCableEngineStrategy(response, dependencies))
       .toThrowError(expect.objectContaining({ code: 'ENGINE_BARRIER_STRATEGY_INVALID' }));
     expect(response.schemaVersion).toBe('pathfinder.model.response.v1'); expect(response).not.toHaveProperty('barriers');
+  });
+});
+
+describe('barrier admission failure before engine dispatch',()=>{
+  it('retains a valid mixed failure with no route, qualification or geometric authority',()=>{
+    const policy=createMixedBarrierRuntimePolicy(true);
+    const context=mixedBarrierRuntimeContextSchema.parse({schemaVersion:'wfc.pf.barrier-runtime.v2',
+      binding:{schemaVersion:'wfc.pf.barrier-calculation-binding.v2',scope:scope(),registryRevision:'0',snapshot:null,policy,policySha256:digest(policy)},
+      profile:MIXED_BARRIER_RUNTIME_PROFILE,profileSha256:digest(MIXED_BARRIER_RUNTIME_PROFILE),storage:null});
+    const response=unavailableBarrierEngineResponse(id(81),context,'BARRIER_CALCULATION_SCOPE_CHANGED');
+    expect(engineResponseSchema.parse(response)).toEqual(response);
+    expect(response).toMatchObject({status:'invalid_request',engineeringAccepted:false,barriers:{schemaVersion:'wfc.pf.barrier-execution.v2',
+      context,proof:null,qualification:null,engineeringAccepted:false,ownTerminalExemptionsSupported:false,authority:'none',
+      diagnostics:{status:'unavailable',collisionQueries:0,work:'0'}}});
+    expect(response).not.toHaveProperty('route');expect(response).not.toHaveProperty('design');
+  });
+  it('preserves the strict legacy failure without mixed authority fields',()=>{
+    const response=unavailableBarrierEngineResponse(id(82),syntheticDrillingRuntime(scope()),'BARRIER_CALCULATION_SCOPE_CHANGED');
+    expect(engineResponseSchema.parse(response)).toEqual(response);
+    if(response.schemaVersion!=='pathfinder.model.response.v3')throw Error('fixture');
+    expect(response.barriers.schemaVersion).toBe('wfc.pf.barrier-execution.v1');
+    expect(response.barriers).not.toHaveProperty('authority');expect(response.barriers).not.toHaveProperty('ownTerminalExemptionsSupported');
+    expect(response).not.toHaveProperty('route');
   });
 });
 

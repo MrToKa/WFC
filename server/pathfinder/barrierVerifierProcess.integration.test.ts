@@ -4,8 +4,9 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { BARRIER_CAPTURE_VERSION, barrierCanonicalJson, type BarrierCapture } from '../../shared/pathfinderBarriers.js';
+import { MIXED_BARRIER_POLICY, mixedBarrierVerifierReceiptSchema } from '../../shared/pathfinderBarrierMixed.js';
 import { barrierEnumerationHashInput } from '../../viewer-runtime/barrier-capture.mjs';
-import { BarrierGeometryRefusal, barrierVerifierResultSchema, runBarrierVerifier } from './barrierVerifier.js';
+import { BarrierGeometryRefusal, barrierVerifierResultSchema, runBarrierVerifier, runMixedBarrierVerifier } from './barrierVerifier.js';
 
 /** Actual Node -> bounded stdin -> .NET9 -> strict receipt process tests.
  * Run this file with one test worker in the root-owned Linux fixture only.
@@ -85,6 +86,22 @@ describe.runIf(Boolean(testDll) && process.platform === 'linux')('PF-B2 actual L
     const next = await runBarrierVerifier(bytes, new AbortController().signal);
     expect(next.implementationSha256).toBe(accepted.value.implementationSha256);
     expect(next.result).toEqual(accepted.value.result);
+  }, 30000);
+  it('qualifies an original open surface only through the explicit mixed CLI and binds a distinct policy implementation hash', async () => {
+    const open = cubeCapture(); open.fragments[0].triangleIndices.splice(-3); const openBytes = Buffer.from(barrierCanonicalJson(open));
+    const actual = await runMixedBarrierVerifier(openBytes, new AbortController().signal), result = mixedBarrierVerifierReceiptSchema.parse(actual.result);
+    expect(result).toMatchObject({ status: 'geometry-qualified', captureSha256: sha256(openBytes), evidence: { policyVersion: MIXED_BARRIER_POLICY,
+      fragmentCount: 1, vertexCount: 8, triangleCount: 11, originalSurfaceComponents: 1, qualifiedClosedSolidComponents: 0,
+      sdkCoverageVerified: false, currentFrameVerified: false, ownTerminalExemptionsSupported: false, authority: 'none' } });
+    expect(result.evidence!.componentMemberships).toHaveLength(1); expect(result.evidence!.componentMemberships[0]).toMatchObject({ fragmentIds: [1], parentSelectionIds: [id(5)], triangleCount: 11 });
+    const legacy = await runBarrierVerifier(bytes, new AbortController().signal); expect(actual.implementationSha256).not.toBe(legacy.implementationSha256);
+    await expect(runBarrierVerifier(openBytes, new AbortController().signal)).rejects.toBeInstanceOf(BarrierGeometryRefusal);
+  }, 30000);
+  it('serializes legacy and mixed process modes through the same lane', async () => {
+    const first = runMixedBarrierVerifier(bytes, new AbortController().signal), second = runBarrierVerifier(bytes, new AbortController().signal);
+    const [accepted, blocked] = await Promise.allSettled([first, second]); expect(accepted.status).toBe('fulfilled'); expect(blocked).toMatchObject({ status: 'rejected', reason: { code: 'BARRIER_VERIFIER_BUSY' } });
+    if (accepted.status !== 'fulfilled') throw accepted.reason; expect(accepted.value.result.evidence?.qualifiedClosedSolidComponents).toBe(1);
+    expect((await runBarrierVerifier(bytes, new AbortController().signal)).result.status).toBe('geometry-qualified');
   }, 30000);
   it('distinguishes a fully hashed logical open-shell refusal from verifier availability or process failure', async () => {
     const open = cubeCapture(); open.fragments[0].triangleIndices.splice(-3);

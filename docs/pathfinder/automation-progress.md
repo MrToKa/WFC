@@ -1,5 +1,20 @@
 # PathFinder local implementation progress
 
+## Current: B20 bounded mixed source verified; exact pending recovery next
+
+Report111 and the B20 source receipt record1298 affected assertions with no skips,
+Linux admission38, SQL/cookieHTTP/process26, current mixed math/floor/runner81,
+legacy runtime39/direct63/constrained54/local40/session433, full types/scoped
+lint/both builds PASS. The actual retained Aalborg floor1056vertices/928triangles
+passes on Windows/Linux with identical exact receipt hash; original thin facets
+are retained through bounded mixed-only exact arithmetic. Scope is the bounded
+manual lane and explicit offline model frame, not live SDK acceptance. B20 is
+not yet installed.5191 still serves checked B19. B21 must safely settle old
+hash-only unknown commands through exact historical lookup and a durable close
+fence; no absence/timeout may unlock or erase a pending write. Own-terminal,
+multipart capacity, final checked delivery/live Aalborg verification and then
+Simplified Preparer remain required.
+
 ## Current: B19 delivery complete; B20 mixed original geometry in progress
 
 Report110 records actual owned backup/restore/build/qualification/install/retire

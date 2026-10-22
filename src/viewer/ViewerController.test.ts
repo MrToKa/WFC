@@ -6,6 +6,7 @@ import * as captureRuntime from '../../viewer-runtime/model-capture.mjs';
 import * as captureInputRuntime from '../../viewer-runtime/capture-input.mjs';
 import { PREPARATION_MATCHING_POLICY } from '../../viewer-runtime/preparation-input.mjs';
 import { barrierCanonicalJson, validateBarrierFrameObservation, type BarrierCaptureRequest } from '../../viewer-runtime/barrier-capture.mjs';
+import { MIXED_BARRIER_POLICY, mixedBarrierCaptureCommandSchema } from '../../shared/pathfinderBarrierMixed';
 import { barrierCaptureSchema } from '../../shared/pathfinderBarriers';
 import { BARRIER_MULTIPART_PRODUCER_PROFILE } from '../../viewer-runtime/barrier-multipart-protocol.mjs';
 
@@ -222,6 +223,33 @@ describe('PathFinder protected Viewer capabilities', () => {
     expect(upload.options?.signal).toBeInstanceOf(AbortSignal); expect(upload.options?.signal?.aborted).toBe(false);
     expect(JSON.parse(String(upload.options?.body))).toEqual(observation);
     expect(JSON.stringify(upload.options?.body)).not.toContain('login-a');
+  });
+  it.each(['exact', 'legacy-response', 'omitted-command', 'foreign-command'] as const)('binds a mixed publication to the exact explicit original command: %s', async variant => {
+    const s = await loaded(), input = barrierRequest(), observation = barrierObservation(input, s.identity.loadId);
+    const command = mixedBarrierCaptureCommandSchema.parse({ schemaVersion: 'wfc.pf.barrier-capture-command.v2', geometryPolicy: MIXED_BARRIER_POLICY,
+      scope: input.scope, selectedParents: input.selectedParents, expectedRegistryRevision: '0', idempotencyKey: input.captureId });
+    const old = barrierPublicationReceipt(input), receipt = { ...old, schemaVersion: 'wfc.pf.barrier-publication-receipt.v2',
+      snapshot: { ...old.snapshot, schemaVersion: 'wfc.pf.barrier-snapshot-reference.v2', geometryPolicy: MIXED_BARRIER_POLICY, mode: 'mixed-mesh-set' } };
+    if (variant === 'foreign-command') command.scope.captureFrameId = crypto.randomUUID();
+    const baseline = vi.mocked(globalThis.fetch).getMockImplementation()!, started = vi.fn();
+    vi.mocked(globalThis.fetch).mockImplementation(async (url, options) => options?.method === 'PUT' ? Response.json(variant === 'legacy-response' ? old : receipt) : baseline(url, options));
+    const result = s.c.publishBarriers(input.captureId, observation, undefined, started, variant === 'omitted-command' ? undefined : command);
+    if (variant === 'exact') await expect(result).resolves.toEqual(receipt); else await expect(result).rejects.toBeDefined();
+    expect(vi.mocked(globalThis.fetch).mock.calls.filter(call => call[1]?.method === 'PUT')).toHaveLength(variant === 'foreign-command' ? 0 : 1);
+    expect(started).toHaveBeenCalledTimes(variant === 'foreign-command' ? 0 : 1);
+  });
+  it.each([false, true])('requires the original mixed command hash on a durable refusal: altered=%s', async altered => {
+    const s = await loaded(), input = barrierRequest(), observation = barrierObservation(input, s.identity.loadId);
+    const command = mixedBarrierCaptureCommandSchema.parse({ schemaVersion: 'wfc.pf.barrier-capture-command.v2', geometryPolicy: MIXED_BARRIER_POLICY,
+      scope: input.scope, selectedParents: input.selectedParents, expectedRegistryRevision: '0', idempotencyKey: input.captureId });
+    const receipt = { schemaVersion: 'wfc.pf.barrier-publication-refusal.v1', outcome: 'not-published', intentId: input.captureId,
+      commandSha256: altered ? 'a'.repeat(64) : createHash('sha256').update(barrierCanonicalJson(command)).digest('hex'),
+      captureSha256: createHash('sha256').update(barrierCanonicalJson(observation.capture)).digest('hex'), frameSha256: observation.frameObservation.contentSha256,
+      implementationSha256: 'c'.repeat(64), reasonCode: 'BARRIER_GEOMETRY_REFUSED', duplicate: false };
+    const baseline = vi.mocked(globalThis.fetch).getMockImplementation()!;
+    vi.mocked(globalThis.fetch).mockImplementation(async (url, options) => options?.method === 'PUT' ? Response.json(receipt) : baseline(url, options));
+    const result = s.c.publishBarriers(input.captureId, observation, undefined, undefined, command);
+    if (altered) await expect(result).rejects.toThrow('original command changed'); else await expect(result).resolves.toEqual(receipt);
   });
   it('does not start a PUT when durable recovery retention throws at the write boundary', async () => {
     const s = await loaded(), input = barrierRequest(), observation = barrierObservation(input, s.identity.loadId);

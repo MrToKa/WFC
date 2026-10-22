@@ -10,10 +10,12 @@ import { readCurrentEndpointBindingContext, readEndpointBindingScope } from './e
 import { endpointCalculationPoint, isAutomaticEndpointCalculationPoint, scopedEndpointResolutionSchema, type CurrentEndpointCalculationPoint } from './endpointCalculationProvenance.js';
 import { readAutomaticEndpointCandidates } from './automaticEndpointCandidates.js';
 import { readComparisonDependency } from './revisionComparisonRepository.js';
-import { calculationEngineIdentity, barrierCalculationEngineIdentity } from './calculationEngineIdentity.js';
-import { verifyBarrierEngineIdentity, type BarrierEngineIdentity, type CalculationEngineIdentity, type EngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
-import type { BarrierRuntimeContext } from '../../shared/pathfinderBarrierRuntime.js';
-import { collectBarrierCalculationScope } from './barrierCalculationScope.js';
+import { calculationEngineIdentity, barrierCalculationEngineIdentity, mixedBarrierCalculationEngineIdentity } from './calculationEngineIdentity.js';
+import { type CalculationEngineIdentity, type EngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
+import { verifySupportedBarrierEngineIdentity as verifyBarrierEngineIdentity,
+  type AnyBarrierEngineIdentity as BarrierEngineIdentity, type AnyBarrierRuntimeContext as BarrierRuntimeContext } from '../../shared/pathfinderBarrierSupported.js';
+import { collectBarrierCalculationState, collectBarrierCalculationScope } from './barrierCalculationScope.js';
+import type { MixedBarrierVerifierEvidence } from '../../shared/pathfinderBarrierMixed.js';
 import type { EndpointCurrentScope } from '../../shared/pathfinderEndpointBindings.js';
 export {requireCurrentLogin} from './auth.js';
 
@@ -33,7 +35,8 @@ export function geometryHash(dependencies: DependencySnapshot): string {
     ...(['pathfinder.dependencies.v4','pathfinder.dependencies.v5','pathfinder.dependencies.v6','pathfinder.dependencies.v7','pathfinder.dependencies.v8'].includes(dependencies.schemaVersion) ? {comparison: (dependencies as CurrentDependencySnapshot).comparison} : {}),
     ...(['pathfinder.dependencies.v5','pathfinder.dependencies.v6','pathfinder.dependencies.v7','pathfinder.dependencies.v8'].includes(dependencies.schemaVersion) ? {engineIdentity: (dependencies as CurrentDependencySnapshot).engineIdentity} : {}),
     ...(dependencies.schemaVersion === 'pathfinder.dependencies.v7' || dependencies.schemaVersion === 'pathfinder.dependencies.v8' ? {endpointResolution: dependencies.endpointResolution} : {}),
-    ...(dependencies.schemaVersion === 'pathfinder.dependencies.v8' ? {barriers: dependencies.barriers} : {}),
+    ...(dependencies.schemaVersion === 'pathfinder.dependencies.v8' ? {barriers: dependencies.barriers,
+      ...(Object.hasOwn(dependencies,'barrierQualification')?{barrierQualification:dependencies.barrierQualification}:{})} : {}),
     routing:routing && {catalogRevision:routing.catalogRevision,routingContentSha256:routing.routingContentSha256,
       routingPolicyRevision:routing.routingPolicyRevision,routingPolicySha256:routing.routingPolicySha256}});
 }
@@ -44,7 +47,8 @@ type CommonInputsWithIdentity<I extends CalculationEngineIdentity> = Omit<Common
 type CommonCollectionWithIdentity<I extends CalculationEngineIdentity> = {status:'ready';inputs:CommonInputsWithIdentity<I>;bindingContext:EndpointCurrentScope}
   | {status:string;inputs:null;message:string;bindingContext:null};
 export type CommonCalculationCollection = CommonCollectionWithIdentity<EngineIdentity>;
-export type BarrierCommonCalculationInputs = CommonInputsWithIdentity<BarrierEngineIdentity> & { barriers: BarrierRuntimeContext };
+export type BarrierCommonCalculationInputs = CommonInputsWithIdentity<BarrierEngineIdentity> & {
+  barriers: BarrierRuntimeContext; barrierQualification?:MixedBarrierVerifierEvidence|null };
 export type BarrierCommonCalculationCollection = {status:'ready';inputs:BarrierCommonCalculationInputs;bindingContext:EndpointCurrentScope}
   | {status:string;inputs:null;message:string;bindingContext:null};
 const barrierAdmissionFailure = (): never => { throw new PathFinderError('BARRIER_ADMISSION_REQUIRED', 409, 'A fresh calculation requires its exact registered barrier scope and explicit drilling choice.'); };
@@ -107,20 +111,23 @@ export async function collectBarrierCommonCalculationInputs(client: PoolClient, 
   identity?: BarrierEngineIdentity, bounds: {signal?:AbortSignal;deadline?:number} = {}): Promise<BarrierCommonCalculationCollection> {
   const options = optionsSchema.parse(requested);
   if (!options.barrierRouting) return barrierAdmissionFailure();
+  const mixed = options.barrierRouting.schemaVersion === 'wfc.pf.barrier-admission-intent.v2';
   bounds.signal?.throwIfAborted();
   const common = await collectCommonInputs(client, projectId, options, lockInputs, async () => {
-    const value = identity ?? await barrierCalculationEngineIdentity();
-    if (!verifyBarrierEngineIdentity(value, text => createHash('sha256').update(text).digest('hex')))
+    const value = identity ?? await (mixed ? mixedBarrierCalculationEngineIdentity() : barrierCalculationEngineIdentity());
+    if ((value.schemaVersion === 'wfc.pf.engine-identity.v3') !== mixed
+      || !verifyBarrierEngineIdentity(value, text => createHash('sha256').update(text).digest('hex')))
       throw new PathFinderError('BARRIER_ENGINE_IDENTITY_REQUIRED', 503, 'The barrier-aware calculation implementation is unavailable.');
     return value;
   });
   if (common.inputs === null) return common;
-  const barriers = await collectBarrierCalculationScope(client, projectId, options.barrierRouting, bounds);
+  const { context: barriers, qualification } = mixed ? await collectBarrierCalculationState(client, projectId, options.barrierRouting, bounds)
+    : { context: await collectBarrierCalculationScope(client, projectId, options.barrierRouting, bounds), qualification: null };
   const scope = barriers.binding.scope;
   if (scope.modelVersionId !== common.inputs.model.id || scope.contentFingerprint !== common.inputs.model.contentFingerprint
     || scope.selectionRevision !== common.inputs.model.selectionRevision || scope.captureFrameId !== common.inputs.preparation.captureFrameId)
     throw new PathFinderError('BARRIER_CALCULATION_SCOPE_CHANGED', 409, 'The barrier scope and prepared routing frame differ. Prepare and calculate again.');
-  return { ...common, inputs: { ...common.inputs, barriers } };
+  return { ...common, inputs: { ...common.inputs, barriers, ...(mixed ? { barrierQualification: qualification } : {}) } };
 }
 
 export function freezeCableDependencies(common:CommonCalculationInputs,cable:Row,
@@ -160,7 +167,9 @@ export function freezeBarrierCableDependencies(common:BarrierCommonCalculationIn
     from:{logicalKey:typeof cable.from_location==='string'?normalizeLocation(cable.from_location):'',locationId:from.locationId},
     to:{logicalKey:typeof cable.to_location==='string'?normalizeLocation(cable.to_location):'',locationId:to.locationId}});
   if (!endpointResolution.success) return blocked('locations_required','Resolve exact logical From and To names before calculating.');
-  if (!common.options.barrierRouting || common.engineIdentity.schemaVersion !== 'wfc.pf.engine-identity.v2') return barrierAdmissionFailure();
+  const mixed = common.barriers.schemaVersion === 'wfc.pf.barrier-runtime.v2';
+  if (!common.options.barrierRouting || (common.options.barrierRouting.schemaVersion === 'wfc.pf.barrier-admission-intent.v2') !== mixed
+    || common.engineIdentity.schemaVersion !== (mixed ? 'wfc.pf.engine-identity.v3' : 'wfc.pf.engine-identity.v2')) return barrierAdmissionFailure();
   const {registryRevision:_audit,...body} = common;
   const dependencies:BarrierDependencySnapshot = {...body,schemaVersion:'pathfinder.dependencies.v8',cableId:cable.id,cableWriteRevision:cable.cable_write_revision,
     cableInputs:{fromLocation:cable.from_location,toLocation:cable.to_location,mto:cable.mto,cableTypeId:cable.cable_type_id},
@@ -186,7 +195,8 @@ async function collectWithProjection(client: PoolClient, projectId: string, cabl
   const cable = (await client.query<Row>(`SELECT id,from_location,to_location,mto,cable_type_id,cable_write_revision::text,routing,design_length,install_length
     FROM cables WHERE project_id=$1 AND id=$2 ${lockCable ? 'FOR UPDATE' : ''}`,[projectId,cableId])).rows[0];
   if(!cable)throw new PathFinderError('CABLE_NOT_FOUND',404);
-  if (retainedVersion === 'pathfinder.dependencies.v8' ? identity && identity.schemaVersion !== 'wfc.pf.engine-identity.v2' : identity && identity.schemaVersion !== 'wfc.pf.engine-identity.v1')
+  const protectedIdentity = options.barrierRouting?.schemaVersion === 'wfc.pf.barrier-admission-intent.v2' ? 'wfc.pf.engine-identity.v3' : 'wfc.pf.engine-identity.v2';
+  if (retainedVersion === 'pathfinder.dependencies.v8' ? identity && identity.schemaVersion !== protectedIdentity : identity && identity.schemaVersion !== 'wfc.pf.engine-identity.v1')
     return barrierAdmissionFailure();
   const common=retainedVersion==='pathfinder.dependencies.v8'
     ?await collectBarrierCommonCalculationInputs(client,projectId,options,lockCable,identity as BarrierEngineIdentity|undefined)

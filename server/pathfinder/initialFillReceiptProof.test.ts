@@ -12,6 +12,9 @@ import { endpointBindingHash as digest, readCurrentEndpointBindingContext } from
 import { defaultOptions, type BarrierDependencySnapshot, type ScopedDependencySnapshot, type EngineResponse } from './jobContracts.js';
 import { syntheticBarrierEngineIdentity, syntheticEngineIdentity } from './calculationFixtures.js';
 import { BARRIER_RUNTIME_PROFILE, barrierRouteHashInput, createBarrierRuntimePolicy, type BarrierRuntimeContext } from '../../shared/pathfinderBarrierRuntime.js';
+import { MIXED_BARRIER_POLICY,MIXED_BARRIER_COLLISION_VERSION,MIXED_BARRIER_VERIFIER_VERSION,MIXED_BARRIER_QUERY_DOMAIN,MIXED_BARRIER_RUNTIME_PROFILE,
+  createMixedBarrierRuntimePolicy,mixedBarrierRuntimeContextSchema,mixedBarrierExecutionSchema,mixedBarrierEngineIdentityBodySchema,mixedBarrierEngineIdentitySchema } from '../../shared/pathfinderBarrierMixed.js';
+import { supportedBarrierAdmissionIntentSchema } from '../../shared/pathfinderBarrierSupported.js';
 import { readBarrierWriteEvidence } from './barrierWrites.js';
 import { hash } from './dependencies.js';
 import { initialFillIdempotencyKey } from './initialFillIdentity.js';
@@ -23,17 +26,29 @@ const now = Date.parse('2026-10-20T12:00:00.000Z');
 const signed = <T extends { contentSha256: string }>(value: T): T => {
   const { contentSha256: _hash, ...body } = value; return { ...value, contentSha256: digest(body) };
 };
-async function fixture(protectedCalculation = false) {
+function mixedIdentity(){
+  const {contentSha256:_legacyHash,...old}=syntheticBarrierEngineIdentity();
+  const body=mixedBarrierEngineIdentityBodySchema.parse({...old,schemaVersion:'wfc.pf.engine-identity.v3',policyVersions:{...old.policyVersions,
+    projection:'wfc.pf.model-runner-v3-mixed-barrier-projection.v1',barriers:MIXED_BARRIER_COLLISION_VERSION,qualification:MIXED_BARRIER_VERIFIER_VERSION,
+    runtimeProfile:MIXED_BARRIER_RUNTIME_PROFILE.schemaVersion,geometryPolicy:MIXED_BARRIER_POLICY}});
+  return mixedBarrierEngineIdentitySchema.parse({...body,contentSha256:hash(body)});
+}
+async function fixture(protectedCalculation: boolean|'mixed' = false) {
   const f = endpointBindingFixture(), originalBinding = f.command(), projectId = f.f.aggregate.projectId, cableId = id(10), proposalId = id(200), jobId = id(201);
   const binding = await f.repo.confirm(projectId, f.who, f.locationId, originalBinding), current = (await readCurrentEndpointBindingContext(f.client as never, projectId))!;
   const scope = { projectId, modelVersionId: current.modelVersionId, selectionRevision: current.selectionRevision, contentFingerprint: current.contentFingerprint,
     captureFrameId: current.captureFrameId, captureFrameSha256: 'b'.repeat(64), coordinateFrame: 'canonical-world-metres' as const }, policy = createBarrierRuntimePolicy(false);
-  const barriers: BarrierRuntimeContext = { schemaVersion: 'wfc.pf.barrier-runtime.v1', binding: { scope, registryRevision: '3',
+  const legacyBarriers: BarrierRuntimeContext = { schemaVersion: 'wfc.pf.barrier-runtime.v1', binding: { scope, registryRevision: '3',
     snapshot: { snapshotId: id(220), scope, registryRevision: '3', contentSha256: 'c'.repeat(64), mode: 'explicit-empty' }, policy, policySha256: hash(policy) },
     profile: structuredClone(BARRIER_RUNTIME_PROFILE), profileSha256: hash(BARRIER_RUNTIME_PROFILE),
     storage: { intentId: id(221), manifest: { blobId: id(222), sha256: 'd'.repeat(64), bytes: 1000 }, capture: null } };
-  const barrierRouting = { schemaVersion: 'wfc.pf.barrier-admission-intent.v1' as const, scope, expectedRegistryRevision: '3',
-    expectedSnapshot: barriers.binding.snapshot, drillThroughWalls: false };
+  const mixed=protectedCalculation==='mixed',mixedPolicy=createMixedBarrierRuntimePolicy(false);
+  const barriers=mixed?mixedBarrierRuntimeContextSchema.parse({...legacyBarriers,schemaVersion:'wfc.pf.barrier-runtime.v2',
+    binding:{...legacyBarriers.binding,schemaVersion:'wfc.pf.barrier-calculation-binding.v2',policy:mixedPolicy,policySha256:hash(mixedPolicy),
+      snapshot:{...legacyBarriers.binding.snapshot,schemaVersion:'wfc.pf.barrier-snapshot-reference.v2',geometryPolicy:MIXED_BARRIER_POLICY}},
+    profile:structuredClone(MIXED_BARRIER_RUNTIME_PROFILE),profileSha256:hash(MIXED_BARRIER_RUNTIME_PROFILE)}):legacyBarriers;
+  const barrierRouting = supportedBarrierAdmissionIntentSchema.parse({schemaVersion:mixed?'wfc.pf.barrier-admission-intent.v2':'wfc.pf.barrier-admission-intent.v1',
+    ...(mixed?{geometryPolicy:MIXED_BARRIER_POLICY}:{}),scope,expectedRegistryRevision:'3',expectedSnapshot:barriers.binding.snapshot,drillThroughWalls:false});
   const command = cableEndpointCommandSchema.parse({ schemaVersion: 'wfc.pf.cable-endpoint-command.v3', idempotencyKey: id(202),
     expectedContextSha256: 'e'.repeat(64), expectedCableWriteRevision: '7', expectedLogicalName: 'EQUIPMENT', expectedRegistryRevision: '4',
     expectedLocationId: null, expectedLocationRevision: null, expectedHeadId: null, expectedCurrent: current,
@@ -66,7 +81,7 @@ async function fixture(protectedCalculation = false) {
       from: { logicalKey: 'EQUIPMENT', locationId: binding.locationId }, to: { logicalKey: 'TO', locationId: id(207) } },
     comparison: null, engineVersion: 'pathfinder-45c24bf5-pf1-modelrunner-v1', engineIdentity: syntheticEngineIdentity() };
   const dependencies: ScopedDependencySnapshot | BarrierDependencySnapshot = protectedCalculation ? { ...legacyDependencies,
-    schemaVersion: 'pathfinder.dependencies.v8', barriers, engineIdentity: syntheticBarrierEngineIdentity(),
+    schemaVersion: 'pathfinder.dependencies.v8', barriers, engineIdentity: mixed?mixedIdentity():syntheticBarrierEngineIdentity(),...(mixed?{barrierQualification:null}:{}),
     from: { ...legacyDependencies.from, point: [0, 0, 0] }, to: { ...legacyDependencies.to, point: [5, 0, 0] },
     options: { ...legacyDependencies.options, barrierRouting } } : legacyDependencies;
   const ledger = { schemaVersion: 'wfc.pf.length-components.v1' as const, formulaVersion: 'pathfinder-45c24bf5' as const, settingsRevision: '2',
@@ -82,15 +97,24 @@ async function fixture(protectedCalculation = false) {
     design: { lengthBeforePercentageMeters: '6', unroundedLengthMeters: '6.6', designLengthMeters: '7' }, lengthLedger: ledger };
   const routeHash = hash(barrierRouteHashInput([[0, 0, 0], [5, 0, 0]]));
   const result: EngineResponse = protectedCalculation ? { ...legacyResult, schemaVersion: 'pathfinder.model.response.v3', status: 'calculated', effectiveCategory: 'LV',
-    barriers: { schemaVersion: 'wfc.pf.barrier-execution.v1', context: barriers,
-      proof: { schemaVersion: 'wfc.pf.barrier-check-proof.v2', binding: barriers.binding, routeSha256: routeHash, status: 'no-barriers-declared', routePointCount: 2,
+    barriers: { schemaVersion: 'wfc.pf.barrier-execution.v1', context: legacyBarriers,
+      proof: { schemaVersion: 'wfc.pf.barrier-check-proof.v2', binding: legacyBarriers.binding, routeSha256: routeHash, status: 'no-barriers-declared', routePointCount: 2,
         totalSegments: 1, checkedSegments: 0, blocking: null, failedSegmentIndex: null, reasonCode: 'EXPLICIT_EMPTY_SCOPE', coverage: 'registered-selected-objects-only', engineeringAccepted: false },
-      directSecondary: { schemaVersion: 'wfc.pf.constrained-direct-secondary.v2', policyVersion: 'nearest-eligible-tray-or-registered-barriers.v2', binding: barriers.binding,
+      directSecondary: { schemaVersion: 'wfc.pf.constrained-direct-secondary.v2', policyVersion: 'nearest-eligible-tray-or-registered-barriers.v2', binding: legacyBarriers.binding,
         directRouteSha256: routeHash, mode: 'tray-network', directCheck: null, reasonCode: 'DISTANCE_NOT_QUALIFIED',
         distanceDecision: { schemaVersion: 'wfc.pf.direct-secondary.v1', policyVersion: 'nearest-eligible-tray-or.v1', coordinateFrame: 'canonical-world-metres', mode: 'tray-network',
           fromPoint: [0, 0, 0], toPoint: [5, 0, 0], distanceMeters: 5, nearestFromMeters: 1, nearestToMeters: 1, eligibleTrays: 1, comparison: null } },
       diagnostics: { status: 'no-barriers-declared', reasonCode: 'EXPLICIT_EMPTY_SCOPE', searchComplete: true, candidatesTruncated: false, pairAttempts: 0, collisionQueries: 0,
         work: '1', plannerAttempts: 0, straightPairAttempts: 0, localEdgeChecks: 0, localPhaseUsed: false, straightPhaseTruncated: false }, connectors: { from: null, to: null }, qualification: null } } : legacyResult;
+  if(mixed){
+    if(result.schemaVersion!=='pathfinder.model.response.v3'||result.barriers.schemaVersion!=='wfc.pf.barrier-execution.v1'||!result.barriers.proof||!result.barriers.directSecondary)throw Error('fixture');
+    const old=result.barriers,{schemaVersion:_tag,policyVersion:_policy,...direct}=result.barriers.directSecondary;
+    result.barriers=mixedBarrierExecutionSchema.parse({...old,schemaVersion:'wfc.pf.barrier-execution.v2',context:barriers,
+      proof:{...old.proof,schemaVersion:'wfc.pf.barrier-mixed-check-proof.v2',binding:barriers.binding,domain:MIXED_BARRIER_QUERY_DOMAIN,
+        globalModelCoverageVerified:false,physicalCableRadiusChecked:false,ownTerminalExemptionsSupported:false,authority:'none'},
+      directSecondary:{...direct,schemaVersion:'wfc.pf.mixed-constrained-direct-secondary.v2',binding:barriers.binding},
+      engineeringAccepted:false,ownTerminalExemptionsSupported:false,authority:'none'});
+  }
   if (protectedCalculation) Object.assign(result, { calculationMode: 'calculate' });
   const baselineHash = 'c'.repeat(64), proposalHash = hash({ dependencies, result, baselineHash });
   const seal = revisionResultEnvelopeSchema.parse({ schemaVersion: 'wfc.pf.cable-revision-result.v1', id: id(209), projectId, admissionId: id(210),
@@ -140,6 +164,33 @@ beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(now); });
 afterEach(() => { vi.useRealTimers(); });
 
 describe('historical conditional initial-fill receipt chain with synthetic SQL and a caller-verified seal', () => {
+  it('recognizes exact mixed initial-fill evidence after the original login expires without live geometry/currentness access',async()=>{
+    const f=await fixture('mixed');vi.setSystemTime(now+86400000);
+    expect(f.provenance.schemaVersion).toBe('pathfinder.initial-fill.v2');
+    if(f.provenance.schemaVersion!=='pathfinder.initial-fill.v2')throw Error('fixture');
+    expect(f.provenance.barrierEvidence.schemaVersion).toBe('wfc.pf.barrier-write-evidence.v2');expect(await f.run()).toBe(true);
+    expect(f.query).toHaveBeenCalledTimes(4);expect(f.query.mock.calls.map(([sql])=>sql).join('\n')).not.toMatch(/barrier:calculation|FROM users|viewer_login_bindings|INSERT|UPDATE|DELETE/);
+  });
+  it('refuses a rehashed historical legacy command lane attached to an otherwise exact mixed receipt',async()=>{
+    const f=await fixture('mixed');
+    if(f.command.schemaVersion!=='wfc.pf.cable-endpoint-command.v3'||!f.command.calculation?.preferences.barrierRouting)throw Error('fixture');
+    const source=f.command.calculation.preferences.barrierRouting,snapshot=source.expectedSnapshot;
+    f.command.calculation.preferences.barrierRouting=supportedBarrierAdmissionIntentSchema.parse({schemaVersion:'wfc.pf.barrier-admission-intent.v1',
+      scope:source.scope,expectedRegistryRevision:source.expectedRegistryRevision,expectedSnapshot:snapshot?{snapshotId:snapshot.snapshotId,scope:snapshot.scope,
+        registryRevision:snapshot.registryRevision,contentSha256:snapshot.contentSha256,mode:'explicit-empty'}:null,drillThroughWalls:false});
+    f.impact.calculation=structuredClone(f.command.calculation);f.impact.commandSha256=digest(f.command);f.impact.contentSha256=signed(f.impact).contentSha256;
+    f.rows.impact.command_sha256=f.impact.commandSha256;f.rows.impact.record_sha256=f.impact.contentSha256;
+    f.mandate.commandSha256=f.impact.commandSha256;f.mandate.impactContentSha256=f.impact.contentSha256;
+    f.mandate.contentSha256=digest(initialFillMandateContentHashInput(f.mandate));f.rows.mandate.command_sha256=f.mandate.commandSha256;f.rows.mandate.record_sha256=f.mandate.contentSha256;
+    f.provenance.mandate.contentSha256=f.mandate.contentSha256;f.rows.command.request_sha256=digest(f.owner);
+    f.saved.commandSha256=f.mandate.commandSha256;f.saved.initialFillMandate=initialFillMandateReference(f.mandate);
+    expect(await f.run()).toBe(false);
+  });
+  it('retains the exact original target generation fence for mixed receipt reconciliation',async()=>{
+    const f=await fixture('mixed');f.item.generation='3';f.rows.item.generation='3';
+    f.item.contentSha256=signed(f.item).contentSha256;f.rows.item.record_sha256=f.item.contentSha256;
+    expect(await f.run()).toBe(false);
+  });
   it('recognizes protected v2 receipt evidence after the original authority expired without live recollection', async () => {
     const f = await fixture(true); vi.setSystemTime(now + 86400000);
     expect(f.provenance.schemaVersion).toBe('pathfinder.initial-fill.v2'); expect(await f.run()).toBe(true);

@@ -16,8 +16,7 @@ import { PathFinderCableWorkspace } from '@/components/pathfinder/PathFinderCabl
 import type { CableWorkflowRow } from '@/api/pathfinderCableWorkflow';
 import type { PathFinderWorkflowDisplay, PathFinderWorkflowDisplayRequest, PathFinderWorkflowReview, PathFinderWorkflowCalculationPreferences } from './PathFinderResults';
 import { PathFinderBarriersPanel } from './PathFinderBarriersPanel';
-import { createBarrierAdmissionIntent } from '../../../shared/pathfinderBarrierAdmission';
-import type { BarrierRegistry } from '../../../shared/pathfinderBarriers';
+import { createSupportedBarrierAdmissionIntent as createBarrierAdmissionIntent, type AnyBarrierRegistry as BarrierRegistry } from '../../../shared/pathfinderBarrierSupported';
 import { usePathfinderAutoLengthRead, type PathFinderCalculatedItemIdentity } from './hooks/usePathfinderAutoLengthRead';
 
 const useStyles = makeStyles({

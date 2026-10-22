@@ -2,10 +2,14 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { PoolClient } from 'pg';
 import { z } from 'zod';
-import { barrierAdmissionIntentSchema, type BarrierAdmissionIntent } from '../../shared/pathfinderBarrierAdmission.js';
-import { BARRIER_LIMITS, barrierCanonicalJson, barrierCaptureCommandSchema, barrierCaptureSchema, barrierSnapshotSchema,
-  barrierSnapshotHashInput } from '../../shared/pathfinderBarriers.js';
-import { BARRIER_RUNTIME_PROFILE, barrierRuntimeContextSchema, createBarrierRuntimePolicy, type BarrierRuntimeContext } from '../../shared/pathfinderBarrierRuntime.js';
+import { BARRIER_LIMITS, barrierCanonicalJson, barrierCaptureSchema, type BarrierCapture } from '../../shared/pathfinderBarriers.js';
+import { BARRIER_RUNTIME_PROFILE, createBarrierRuntimePolicy } from '../../shared/pathfinderBarrierRuntime.js';
+import { MIXED_BARRIER_POLICY, MIXED_BARRIER_RUNTIME_PROFILE, createMixedBarrierRuntimePolicy, type MixedBarrierVerifierEvidence } from '../../shared/pathfinderBarrierMixed.js';
+import { deriveMixedBarrierQualification } from './barrierQualification.js';
+import { supportedBarrierAdmissionIntentSchema as barrierAdmissionIntentSchema, supportedBarrierCaptureCommandSchema as barrierCaptureCommandSchema,
+  supportedBarrierSnapshotSchema as barrierSnapshotSchema, supportedBarrierRuntimeContextSchema as barrierRuntimeContextSchema,
+  supportedBarrierSnapshotHashInput as barrierSnapshotHashInput, supportedBarrierSnapshotReference,
+  type AnyBarrierAdmissionIntent as BarrierAdmissionIntent, type AnyBarrierRuntimeContext as BarrierRuntimeContext } from '../../shared/pathfinderBarrierSupported.js';
 import { policyHashSchema, policyRevisionSchema, policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { currentBarrierScope } from './barrierScope.js';
 import { barrierBytesHash, barrierValueHash, encodeBarrierJson, readBarrierBytes } from './barrierStorage.js';
@@ -34,8 +38,9 @@ type IntentRow = { id: string; state: string; actor_id: string; login_id: string
 /** Caller owns the current administrator/grant and project transaction, including
  * the project-row lock that fences an absent head. This reader starts no nested
  * transaction, mutates no SQL rows and performs no topology/SDK certification. */
-export async function collectBarrierCalculationScope(client: PoolClient, projectId: string, rawIntent: BarrierAdmissionIntent,
-  options: { signal?: AbortSignal; deadline?: number } = {}): Promise<BarrierRuntimeContext> {
+export type BarrierCalculationState = { context: BarrierRuntimeContext; qualification: MixedBarrierVerifierEvidence | null };
+export async function collectBarrierCalculationState(client: PoolClient, projectId: string, rawIntent: BarrierAdmissionIntent,
+  options: { signal?: AbortSignal; deadline?: number } = {}): Promise<BarrierCalculationState> {
   policyUuidSchema.parse(projectId);
   const intent = barrierAdmissionIntentSchema.parse(rawIntent);
   if (intent.scope.projectId !== projectId) return fail();
@@ -50,13 +55,16 @@ export async function collectBarrierCalculationScope(client: PoolClient, project
   const head = heads[0] ?? { revision: '0', snapshot_id: null };
   policyRevisionSchema.parse(head.revision);
   if (head.revision !== intent.expectedRegistryRevision || head.snapshot_id !== (intent.expectedSnapshot?.snapshotId ?? null)) return fail();
-  const policy = createBarrierRuntimePolicy(intent.drillThroughWalls);
-  const common = { schemaVersion: 'wfc.pf.barrier-runtime.v1' as const,
-    binding: { scope, registryRevision: head.revision, snapshot: intent.expectedSnapshot, policy, policySha256: barrierValueHash(policy) },
-    profile: BARRIER_RUNTIME_PROFILE, profileSha256: barrierValueHash(BARRIER_RUNTIME_PROFILE) };
+  const mixed = intent.schemaVersion === 'wfc.pf.barrier-admission-intent.v2';
+  const policy = mixed ? createMixedBarrierRuntimePolicy(intent.drillThroughWalls) : createBarrierRuntimePolicy(intent.drillThroughWalls);
+  const profile = mixed ? MIXED_BARRIER_RUNTIME_PROFILE : BARRIER_RUNTIME_PROFILE;
+  const common = { schemaVersion: mixed ? 'wfc.pf.barrier-runtime.v2' : 'wfc.pf.barrier-runtime.v1',
+    binding: { ...(mixed ? { schemaVersion: 'wfc.pf.barrier-calculation-binding.v2' } : {}),
+      scope, registryRevision: head.revision, snapshot: intent.expectedSnapshot, policy, policySha256: barrierValueHash(policy) },
+    profile, profileSha256: barrierValueHash(profile) };
   if (!head.snapshot_id) {
     if (head.revision !== '0' || intent.expectedSnapshot !== null || !intent.drillThroughWalls) return fail();
-    return barrierRuntimeContextSchema.parse({ ...common, storage: null });
+    return { context: barrierRuntimeContextSchema.parse({ ...common, storage: null }), qualification: null };
   }
   const snapshots = (await client.query<SnapshotRow>(`/* barrier:calculation-snapshot */
     SELECT id,model_version_id,registry_revision::text,storage_intent_id,manifest_blob,
@@ -67,15 +75,16 @@ export async function collectBarrierCalculationScope(client: PoolClient, project
   if (!parsed.success || !blob.success || blob.data.bytes > BARRIER_LIMITS.manifestBytes) return fail('BARRIER_CALCULATION_STORAGE_INVALID');
   const manifest = parsed.data;
   policyUuidSchema.parse(row.storage_intent_id);
-  const reference = { snapshotId: manifest.snapshotId, scope: manifest.scope, registryRevision: manifest.registryRevision,
-    contentSha256: manifest.contentSha256, mode: manifest.geometry.mode };
-  if (row.id !== manifest.snapshotId || row.model_version_id !== scope.modelVersionId || row.registry_revision !== head.revision
+  const reference = supportedBarrierSnapshotReference(manifest);
+  if ((manifest.schemaVersion === 'wfc.pf.barrier-snapshot.v2') !== mixed
+    || row.id !== manifest.snapshotId || row.model_version_id !== scope.modelVersionId || row.registry_revision !== head.revision
     || manifest.registryRevision !== head.revision || !same(manifest.scope, scope) || !same(reference, intent.expectedSnapshot)
     || barrierValueHash(barrierSnapshotHashInput(manifest)) !== manifest.contentSha256) return fail('BARRIER_CALCULATION_STORAGE_INVALID');
   const storedManifest = await readCalculationBytes(projectId, row.storage_intent_id, blob.data, BARRIER_LIMITS.manifestBytes); check();
   if (!storedManifest.equals(encodeBarrierJson(manifest, BARRIER_LIMITS.manifestBytes))) return fail('BARRIER_CALCULATION_STORAGE_INVALID');
   let captureBlob: z.infer<typeof blobSchema> | null = null;
-  if (manifest.geometry.mode === 'mesh-set') {
+  let originalCapture: BarrierCapture | null = null;
+  if (manifest.geometry.mode !== 'explicit-empty') {
     if (!manifest.capture || manifest.capture.captureId !== row.storage_intent_id) return fail('BARRIER_CALCULATION_STORAGE_INVALID');
     const intents = (await client.query<IntentRow>(`/* barrier:calculation-intent */ SELECT id,state,actor_id,login_id,request_sha256,capture_sha256,allocation,
       CASE WHEN octet_length(request::text)<=$3 THEN request ELSE NULL END AS request,
@@ -86,6 +95,7 @@ export async function collectBarrierCalculationScope(client: PoolClient, project
     if (!frozen.success || !allocation.success || captureIntent.state !== 'complete' || captureIntent.id !== frozen.data.id
       || captureIntent.actor_id !== frozen.data.createdBy || captureIntent.login_id !== frozen.data.loginId
       || frozen.data.id !== row.storage_intent_id || frozen.data.snapshotId !== row.id || frozen.data.manifestBlobId !== blob.data.blobId
+      || (frozen.data.command.schemaVersion === 'wfc.pf.barrier-capture-command.v2') !== mixed
       || !same(captureIntent.request, frozen.data.command) || captureIntent.request_sha256 !== barrierValueHash(frozen.data.command)
       || !same(frozen.data.command.scope, scope) || !same(frozen.data.command.selectedParents, manifest.selectedParents)
       || BigInt(frozen.data.command.expectedRegistryRevision) + 1n !== BigInt(head.revision)
@@ -104,6 +114,7 @@ export async function collectBarrierCalculationScope(client: PoolClient, project
       || !same(captured.data.selectedParents, manifest.selectedParents) || captured.data.observation.state !== 'reported-complete'
       || captured.data.fragments.length !== manifest.geometry.fragments.length || allocation.data.length !== captured.data.fragments.length)
       return fail('BARRIER_CALCULATION_STORAGE_INVALID');
+    originalCapture = captured.data;
     const allocationById = new Map(allocation.data.map(value => [value.fragmentId, value.blobId]));
     const fragments = new Map(captured.data.fragments.map(value => [value.source.fragmentId, value]));
     for (const fragment of manifest.geometry.fragments) {
@@ -120,7 +131,16 @@ export async function collectBarrierCalculationScope(client: PoolClient, project
   // Model/frame rows and the exact head remain locked by this transaction. A
   // final reread also refuses a broken caller fixture or changed frame source.
   if (!same(await currentBarrierScope(client, projectId), scope)) return fail(); check();
-  return barrierRuntimeContextSchema.parse({ ...common, storage: { intentId: row.storage_intent_id, manifest: blob.data, capture: captureBlob } });
+  return { context: barrierRuntimeContextSchema.parse({ ...common, storage: { intentId: row.storage_intent_id, manifest: blob.data, capture: captureBlob } }),
+    qualification: manifest.schemaVersion === 'wfc.pf.barrier-snapshot.v2'
+      ? deriveMixedBarrierQualification(manifest, originalCapture, intent.drillThroughWalls) : null };
+}
+
+/** Existing context-only callers retain the same return contract. The state
+ * reader additionally exposes independently derived mixed execution evidence. */
+export async function collectBarrierCalculationScope(client: PoolClient, projectId: string, rawIntent: BarrierAdmissionIntent,
+  options: { signal?: AbortSignal; deadline?: number } = {}): Promise<BarrierRuntimeContext> {
+  return (await collectBarrierCalculationState(client, projectId, rawIntent, options)).context;
 }
 
 /** A browser-closed producer obtains a fresh published choice from locked server
@@ -146,9 +166,10 @@ export async function readCurrentBarrierAdmissionIntent(client: PoolClient, proj
   const parsed = barrierSnapshotSchema.safeParse(rows[0].manifest);
   if (!parsed.success) return fail('BARRIER_CALCULATION_STORAGE_INVALID');
   const manifest = parsed.data;
-  const parsedIntent = barrierAdmissionIntentSchema.safeParse({ schemaVersion: 'wfc.pf.barrier-admission-intent.v1', scope,
-    expectedRegistryRevision: head.revision, expectedSnapshot: { snapshotId: manifest.snapshotId, scope: manifest.scope,
-      registryRevision: manifest.registryRevision, contentSha256: manifest.contentSha256, mode: manifest.geometry.mode }, drillThroughWalls: false });
+  const mixed = manifest.schemaVersion === 'wfc.pf.barrier-snapshot.v2';
+  const parsedIntent = barrierAdmissionIntentSchema.safeParse({ schemaVersion: mixed ? 'wfc.pf.barrier-admission-intent.v2' : 'wfc.pf.barrier-admission-intent.v1',
+    ...(mixed ? { geometryPolicy: MIXED_BARRIER_POLICY } : {}), scope,
+    expectedRegistryRevision: head.revision, expectedSnapshot: supportedBarrierSnapshotReference(manifest), drillThroughWalls: false });
   if (!parsedIntent.success) return fail();
   const intent = parsedIntent.data;
   await collectBarrierCalculationScope(client, projectId, intent, { ...options, deadline }); check();

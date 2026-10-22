@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { beginBarrierCapture, changeBarrierRegistry, getBarrierRegistry, getBarrierSnapshot, getLatestBarrierSnapshot, getBarrierCaptureOutcome } from '@/api/pathfinderBarriers';
-import { BARRIER_LIMITS, barrierCanonicalJson, barrierCaptureCommandSchema, barrierCaptureSchema, barrierRegistryCommandSchema,
-  barrierSelectedParentSchema, type BarrierCapture, type BarrierRegistry, type BarrierSnapshot } from '../../../../shared/pathfinderBarriers';
+import { BARRIER_LIMITS, barrierCanonicalJson, barrierCaptureSchema, barrierSelectedParentSchema, type BarrierCapture } from '../../../../shared/pathfinderBarriers';
+import { MIXED_BARRIER_POLICY, mixedBarrierCaptureCommandSchema as barrierCaptureCommandSchema,
+  mixedBarrierRegistryCommandSchema as barrierRegistryCommandSchema } from '../../../../shared/pathfinderBarrierMixed';
+import { supportedBarrierSnapshotReference, type AnyBarrierRegistry as BarrierRegistry, type AnyBarrierSnapshot as BarrierSnapshot } from '../../../../shared/pathfinderBarrierSupported';
 import type { usePathFinder, ProjectPreparationViewer } from './usePathFinder';
 import { barrierCaptureErrorMessage } from '../../../../viewer-runtime/barrier-capture-errors.mjs';
 import { barrierFrameObservationHashInput, validateBarrierFrameObservation } from '../../../../viewer-runtime/barrier-capture.mjs';
@@ -43,8 +45,7 @@ function errorCode(error: unknown): string | null {
 }
 function manifestMatches(registry: BarrierRegistry, manifest: BarrierSnapshot) {
   const ref = registry.snapshot;
-  return !!ref && ref.snapshotId === manifest.snapshotId && ref.contentSha256 === manifest.contentSha256
-    && ref.registryRevision === manifest.registryRevision && ref.mode === manifest.geometry.mode && same(ref.scope, manifest.scope)
+  return !!ref && same(ref, supportedBarrierSnapshotReference(manifest))
     && same(registry.selectedParents, manifest.selectedParents);
 }
 
@@ -272,7 +273,8 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
         if (saved.type === 'empty') {
           update(run, { phase: 'publishing' });
           const result = await send(() => changeBarrierRegistry(access.projectId!, access.token!, saved.command, signal), true); current(run); viewer.assertCurrent();
-          if (!same(result.snapshot.scope, saved.command.scope) || result.snapshot.mode !== 'explicit-empty') throw new Error('Barrier empty receipt differs from the saved command.');
+          if (!same(result.snapshot.scope, saved.command.scope) || result.snapshot.mode !== 'explicit-empty'
+            || (saved.command.schemaVersion === 'wfc.pf.barrier-registry-command.v2') !== (result.schemaVersion === 'wfc.pf.barrier-publication-receipt.v2')) throw new Error('Barrier empty receipt differs from the saved command.');
           confirmedReference = result.snapshot; saved.writeStarted = false;
         } else {
           if (!saved.intent) {
@@ -285,10 +287,10 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
             saved.retention = acknowledged; saved.intent = result.intent; saved.writeStarted = false;
             if (result.state === 'complete') {
               const manifest = await getBarrierSnapshot(access.projectId!, access.token!, result.intent.snapshotId, signal); current(run); viewer.assertCurrent();
-              if (manifest.capture?.captureId !== result.intent.id || !same(manifest.scope, saved.command.scope)
+              if ((saved.command.schemaVersion === 'wfc.pf.barrier-capture-command.v2') !== (manifest.schemaVersion === 'wfc.pf.barrier-snapshot.v2')
+                || manifest.capture?.captureId !== result.intent.id || !same(manifest.scope, saved.command.scope)
                 || !same(manifest.selectedParents, saved.command.selectedParents)) throw new Error('Completed capture receipt differs from the saved command.');
-              confirmedReference = { snapshotId: manifest.snapshotId, scope: manifest.scope, registryRevision: manifest.registryRevision,
-                contentSha256: manifest.contentSha256, mode: manifest.geometry.mode };
+              confirmedReference = supportedBarrierSnapshotReference(manifest);
               return;
             }
           }
@@ -316,13 +318,15 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
           const result = await viewer.publishBarriers(saved.intent!.id, saved.observation!, () => {
             retainPendingBarrierCommand(sessionStorage, retained, saved.retention ?? null);
             saved.retention = retained; saved.writeStarted = true;
-          }); current(run); viewer.assertCurrent();
+          }, saved.command); current(run); viewer.assertCurrent();
           if (result.schemaVersion === 'wfc.pf.barrier-publication-refusal.v1') {
             if (!matchBarrierCaptureOutcome(retained, result)) throw new Error('Barrier refusal is not terminal.');
             clearPendingBarrierCommand(sessionStorage, retained); saved.retention = undefined; saved.writeStarted = false; pending.current = null;
             terminalRefused = true; return;
           }
-          if (result.snapshot.snapshotId !== saved.intent.snapshotId || result.snapshot.mode !== 'mesh-set'
+          if ((saved.command.schemaVersion === 'wfc.pf.barrier-capture-command.v2') !== (result.schemaVersion === 'wfc.pf.barrier-publication-receipt.v2')
+            || result.snapshot.snapshotId !== saved.intent.snapshotId
+            || result.snapshot.mode !== (saved.command.schemaVersion === 'wfc.pf.barrier-capture-command.v2' ? 'mixed-mesh-set' : 'mesh-set')
             || !same(result.snapshot.scope, saved.command.scope)) throw new Error('Barrier publication receipt differs from the saved intent.');
           confirmedReference = result.snapshot; saved.writeStarted = false;
           clearPendingBarrierCommand(sessionStorage, retained); saved.retention = undefined; pending.current = null;
@@ -361,13 +365,13 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
       requireScope(base.registry);
       let saved: Pending;
       if (base.draftParents.length) {
-        const command = barrierCaptureCommandSchema.parse({ schemaVersion: 'wfc.pf.barrier-capture-command.v1', scope: base.registry.scope,
+        const command = barrierCaptureCommandSchema.parse({ schemaVersion: 'wfc.pf.barrier-capture-command.v2', geometryPolicy: MIXED_BARRIER_POLICY, scope: base.registry.scope,
           expectedRegistryRevision: base.registry.registryRevision, idempotencyKey: crypto.randomUUID(), selectedParents: base.draftParents });
         saved = { type: 'capture', command: freeze(command), writeStarted: false };
       } else {
         const reason = emptyReason.trim();
         if (!reason) throw new Error('A reason is required to explicitly declare no barriers.');
-        const command = barrierRegistryCommandSchema.parse({ schemaVersion: 'wfc.pf.barrier-registry-command.v1', action: 'declare-empty', scope: base.registry.scope,
+        const command = barrierRegistryCommandSchema.parse({ schemaVersion: 'wfc.pf.barrier-registry-command.v2', geometryPolicy: MIXED_BARRIER_POLICY, action: 'declare-empty', scope: base.registry.scope,
           expectedRegistryRevision: base.registry.registryRevision, idempotencyKey: crypto.randomUUID(), reason });
         if (command.action !== 'declare-empty') return;
         saved = { type: 'empty', command: freeze(command), writeStarted: false };

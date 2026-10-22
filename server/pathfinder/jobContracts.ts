@@ -3,11 +3,13 @@ import { revision, uuid, snapshotSchema } from './contracts.js';
 import type { RoutingScope } from './routingScope.js';
 import type { EndpointCalculationPoint, EndpointCalculationPreparation, CurrentEndpointCalculationPoint, ScopedEndpointResolution } from './endpointCalculationProvenance.js';
 import type { ComparisonCalculationScope } from './comparisonCalculationProvenance.js';
-import type { EngineIdentity, BarrierEngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
-import { barrierAdmissionIntentSchema, type BarrierAdmissionIntent } from '../../shared/pathfinderBarrierAdmission.js';
-import { barrierExecutionSchema, type BarrierRuntimeContext } from '../../shared/pathfinderBarrierRuntime.js';
+import type { EngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
+import { supportedBarrierAdmissionIntentSchema as barrierAdmissionIntentSchema, supportedBarrierExecutionSchema as barrierExecutionSchema,
+  type AnyBarrierAdmissionIntent as BarrierAdmissionIntent, type AnyBarrierRuntimeContext as BarrierRuntimeContext,
+  type AnyBarrierEngineIdentity as BarrierEngineIdentity } from '../../shared/pathfinderBarrierSupported.js';
 import { lengthLedgerSchema, legacyLengthLedgerSchema } from '../../shared/pathfinderLengthLedger.js';
 import { directSecondaryDecisionSchema, directSecondaryRouteIssue } from '../../shared/pathfinderDirectSecondary.js';
+import type { MixedBarrierVerifierEvidence } from '../../shared/pathfinderBarrierMixed.js';
 
 export const optionsSchema = z.object({
   connectionToleranceMeters:z.number().finite().positive().max(100),sampleSpacingMeters:z.number().finite().positive().max(100),
@@ -58,6 +60,7 @@ export type ScopedDependencySnapshot = Omit<CurrentDependencySnapshot, 'schemaVe
 };
 export type BarrierDependencySnapshot = Omit<ScopedDependencySnapshot,'schemaVersion'|'engineIdentity'> & {
   schemaVersion:'pathfinder.dependencies.v8'; engineIdentity:BarrierEngineIdentity; barriers:BarrierRuntimeContext;
+  barrierQualification?:MixedBarrierVerifierEvidence|null;
 };
 export type CurrentCalculationDependencySnapshot = CurrentDependencySnapshot | AutomaticDependencySnapshot | ScopedDependencySnapshot | BarrierDependencySnapshot;
 /** v2/v3/v4 remain historical; current dispatch/Review/Apply require actual implementation provenance. */

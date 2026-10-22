@@ -14,7 +14,8 @@ export type ProjectPreparationViewer = {
   discover: (request: PreparationDiscoveryRequest) => Promise<PreparationDiscoveryPage>;
   capture: (request: ModelCaptureRequest) => ReturnType<ViewerController['captureModel']>;
   captureBarriers: (request: Parameters<ViewerController['captureBarriers']>[0]) => ReturnType<ViewerController['captureBarriers']>;
-  publishBarriers: (intentId: string, observation: Parameters<ViewerController['publishBarriers']>[1], onWriteStarted?: () => void) => ReturnType<ViewerController['publishBarriers']>;
+  publishBarriers: (intentId: string, observation: Parameters<ViewerController['publishBarriers']>[1], onWriteStarted?: () => void,
+    expectedCommand?: Parameters<ViewerController['publishBarriers']>[4]) => ReturnType<ViewerController['publishBarriers']>;
   assertCurrent: () => void;
 };
 
@@ -276,7 +277,9 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
         discover: async request => { current(); const page = await run.viewer!.discoverPreparationObjects(request, { signal: combined, isCurrent: () => { try { current(); return true; } catch { return false; } } }); current(); return page; },
         capture: async request => { current(); const capture = await run.viewer!.captureModel(request, progress => captureProgress(run, () => `Collecting project geometry: ${progress.index + 1} data batches…`), { signal: combined, isCurrent: () => { try { current(); return true; } catch { return false; } } }); current(); return capture; },
         captureBarriers: async request => { current(); update(run, { viewerMessage: 'Reading selected barrier geometry…' }); const capture = await run.viewer!.captureBarriers(request, { signal: combined, isCurrent: () => { try { current(); return true; } catch { return false; } } }); current(); return capture; },
-        publishBarriers: async (intentId, observation, onWriteStarted) => { current(); const receipt = await (onWriteStarted ? run.viewer!.publishBarriers(intentId, observation, combined, onWriteStarted) : run.viewer!.publishBarriers(intentId, observation, combined)); current(); return receipt; },
+        publishBarriers: async (intentId, observation, onWriteStarted, expectedCommand) => { current(); const receipt = await (expectedCommand !== undefined
+          ? run.viewer!.publishBarriers(intentId, observation, combined, onWriteStarted, expectedCommand)
+          : onWriteStarted ? run.viewer!.publishBarriers(intentId, observation, combined, onWriteStarted) : run.viewer!.publishBarriers(intentId, observation, combined)); current(); return receipt; },
       });
       current(); return value;
     } finally {

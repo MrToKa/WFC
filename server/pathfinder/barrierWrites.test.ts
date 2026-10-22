@@ -1,17 +1,103 @@
 // @vitest-environment node
 import { beforeEach,describe,expect,it,vi } from 'vitest';
 import type { PoolClient } from 'pg';
-const seams=vi.hoisted(()=>({identity:vi.fn(),scope:vi.fn()}));
-vi.mock('./calculationEngineIdentity.js',()=>({barrierCalculationEngineIdentity:seams.identity}));
-vi.mock('./barrierCalculationScope.js',()=>({collectBarrierCalculationScope:seams.scope}));
+const seams=vi.hoisted(()=>({identity:vi.fn(),mixedIdentity:vi.fn(),scope:vi.fn(),state:vi.fn()}));
+vi.mock('./calculationEngineIdentity.js',()=>({barrierCalculationEngineIdentity:seams.identity,mixedBarrierCalculationEngineIdentity:seams.mixedIdentity}));
+vi.mock('./barrierCalculationScope.js',()=>({collectBarrierCalculationScope:seams.scope,collectBarrierCalculationState:seams.state}));
 import { readBarrierWriteEvidence,requireBarrierWriteEvidence,requireCurrentBarrierWriteScope } from './barrierWrites.js';
 import { syntheticBarrierWriteInputs } from './barrierWriteFixtures.js';
 import { hash } from './dependencies.js';
 import { barrierWriteEvidenceSchema } from '../../shared/pathfinderBarrierWrites.js';
 import { createBarrierRuntimePolicy } from '../../shared/pathfinderBarrierRuntime.js';
+import { MIXED_BARRIER_POLICY,MIXED_BARRIER_COLLISION_VERSION,MIXED_BARRIER_VERIFIER_VERSION,MIXED_BARRIER_RUNTIME_PROFILE,
+  createMixedBarrierRuntimePolicy,mixedBarrierEngineIdentitySchema,mixedBarrierExecutionSchema,type MixedBarrierVerifierEvidence } from '../../shared/pathfinderBarrierMixed.js';
+import { supportedBarrierWriteEvidenceSchema } from '../../shared/pathfinderBarrierSupported.js';
+import { engineResponseSchema,type BarrierDependencySnapshot } from './jobContracts.js';
+
+function mixedEmptyInputs(){
+  const f=syntheticBarrierWriteInputs();
+  if(f.result.schemaVersion!=='pathfinder.model.response.v3'||f.result.barriers.schemaVersion!=='wfc.pf.barrier-execution.v1')throw Error('fixture');
+  const old=f.result.barriers,policy=createMixedBarrierRuntimePolicy(false),oldContext=old.context;
+  if(!oldContext.binding.snapshot||!old.proof||!old.directSecondary)throw Error('fixture');
+  const context={...oldContext,schemaVersion:'wfc.pf.barrier-runtime.v2' as const,binding:{...oldContext.binding,schemaVersion:'wfc.pf.barrier-calculation-binding.v2' as const,
+    policy,policySha256:hash(policy),snapshot:{...oldContext.binding.snapshot,schemaVersion:'wfc.pf.barrier-snapshot-reference.v2' as const,geometryPolicy:MIXED_BARRIER_POLICY,mode:'explicit-empty' as const}},
+    profile:structuredClone(MIXED_BARRIER_RUNTIME_PROFILE),profileSha256:hash(MIXED_BARRIER_RUNTIME_PROFILE)};
+  const {schemaVersion:_directTag,policyVersion:_directPolicy,...direct}=old.directSecondary;
+  const execution=mixedBarrierExecutionSchema.parse({...old,schemaVersion:'wfc.pf.barrier-execution.v2',context,
+    proof:{...old.proof,schemaVersion:'wfc.pf.barrier-mixed-check-proof.v2',binding:context.binding,domain:'provided-original-triangle-surface-contact-and-independently-qualified-closed-solid-occupancy',
+      globalModelCoverageVerified:false,physicalCableRadiusChecked:false,ownTerminalExemptionsSupported:false,authority:'none'},
+    directSecondary:{...direct,schemaVersion:'wfc.pf.mixed-constrained-direct-secondary.v2',binding:context.binding},
+    qualification:null,ownTerminalExemptionsSupported:false,engineeringAccepted:false,authority:'none'});
+  const {contentSha256:_oldHash,...oldIdentity}=f.dependencies.engineIdentity;
+  const identity=mixedBarrierEngineIdentitySchema.parse({...oldIdentity,schemaVersion:'wfc.pf.engine-identity.v3',contentSha256:'0'.repeat(64),
+    policyVersions:{...oldIdentity.policyVersions,projection:'wfc.pf.model-runner-v3-mixed-barrier-projection.v1',barriers:MIXED_BARRIER_COLLISION_VERSION,
+      qualification:MIXED_BARRIER_VERIFIER_VERSION,runtimeProfile:MIXED_BARRIER_RUNTIME_PROFILE.schemaVersion,geometryPolicy:MIXED_BARRIER_POLICY}});
+  const {contentSha256:_placeholder,...body}=identity;identity.contentSha256=hash(body);
+  const dependencies:BarrierDependencySnapshot={...f.dependencies,engineIdentity:identity,barriers:context,barrierQualification:null,
+    options:{...f.dependencies.options,barrierRouting:{schemaVersion:'wfc.pf.barrier-admission-intent.v2',geometryPolicy:MIXED_BARRIER_POLICY,scope:context.binding.scope,
+      expectedRegistryRevision:context.binding.registryRevision,expectedSnapshot:context.binding.snapshot,drillThroughWalls:false}}};
+  const {calculationMode:_mode,...responseBody}=f.result;
+  const result={...engineResponseSchema.parse({...responseBody,barriers:execution}),calculationMode:'calculate' as const};
+  return{...f,dependencies,result};
+}
+
+function mixedPhysicalInputs(){
+  const f=mixedEmptyInputs(),context=f.dependencies.barriers;
+  if(context.schemaVersion!=='wfc.pf.barrier-runtime.v2'||!context.binding.snapshot||!context.storage
+    ||f.result.schemaVersion!=='pathfinder.model.response.v3'||f.result.barriers.schemaVersion!=='wfc.pf.barrier-execution.v2')throw Error('fixture');
+  context.binding.snapshot.mode='mixed-mesh-set';context.storage.capture={blobId:f.id(80),sha256:'a'.repeat(64),bytes:1024};
+  const qualification:MixedBarrierVerifierEvidence={captureId:context.storage.intentId,scope:context.binding.scope,
+    originalSurfaceComponents:1,qualifiedClosedSolidComponents:0,fragmentCount:1,vertexCount:3,triangleCount:1,
+    originalGeometrySha256:'3'.repeat(64),verificationSha256:'4'.repeat(64),numericToleranceMetres:1e-7,
+    componentMemberships:[{componentId:'component:000000',kind:'original-surface',fragmentIds:[11],parentSelectionIds:[f.id(81)],triangleCount:1,sourceMembershipSha256:'2'.repeat(64)}],
+    inputSchemaVersion:'wfc.pf.barrier-capture.v1',policyVersion:MIXED_BARRIER_POLICY,coverage:'provided-fragments-only',
+    geometryProvenance:'capture-bound-provided-original-triangles',sdkCoverageVerified:false,sdkSourceBytesVerified:false,currentFrameVerified:false,
+    engineeringAccepted:false,ownTerminalExemptionsSupported:false,authority:'none'};
+  // Independently retained expectation and the synthetic response are detached.
+  // A production expectation is derived only after protected storage validation.
+  f.dependencies.barrierQualification=structuredClone(qualification);
+  f.dependencies.options.barrierRouting!.expectedSnapshot=structuredClone(context.binding.snapshot);
+  f.result.barriers.context=structuredClone(context);f.result.barriers.proof!.binding=structuredClone(context.binding);
+  f.result.barriers.proof!.status='clear-selected-scope';f.result.barriers.proof!.checkedSegments=1;f.result.barriers.proof!.reasonCode='REGISTERED_SCOPE_CLEAR';
+  f.result.barriers.directSecondary!.binding=structuredClone(context.binding);f.result.barriers.diagnostics.status='clear';
+  f.result.barriers.qualification={captureSha256:context.storage.capture.sha256,evidence:structuredClone(qualification)};
+  return f;
+}
 
 beforeEach(()=>vi.resetAllMocks());
 describe('pure exact protected write evidence',()=>{
+  it('retains exact independently expected original-surface qualification for a successful physical write proof',()=>{
+    const f=mixedPhysicalInputs(),before=structuredClone({dependencies:f.dependencies,result:f.result});
+    expect(requireBarrierWriteEvidence(f.dependencies,f.result)).toMatchObject({schemaVersion:'wfc.pf.barrier-write-evidence.v2',status:'clear',geometryPolicy:MIXED_BARRIER_POLICY});
+    expect({dependencies:f.dependencies,result:f.result}).toEqual(before);expect(seams.state).not.toHaveBeenCalled();
+  });
+  it.each(['response-member','response-capture','response-pure-hash','proof-route','missing-qualifier'] as const)
+    ('rejects a physical mixed %s alteration without borrowing response authority',field=>{
+      const f=mixedPhysicalInputs();
+      if(f.result.schemaVersion!=='pathfinder.model.response.v3'||f.result.barriers.schemaVersion!=='wfc.pf.barrier-execution.v2')throw Error('fixture');
+      if(field==='response-member')f.result.barriers.qualification!.evidence.componentMemberships[0].sourceMembershipSha256='8'.repeat(64);
+      if(field==='response-capture')f.result.barriers.qualification!.captureSha256='8'.repeat(64);
+      if(field==='response-pure-hash')f.result.barriers.qualification!.evidence.verificationSha256='8'.repeat(64);
+      if(field==='proof-route')f.result.barriers.proof!.routeSha256='8'.repeat(64);
+      if(field==='missing-qualifier')f.dependencies.barrierQualification=null;
+      expect(readBarrierWriteEvidence(f.dependencies,f.result)).toBeNull();
+    });
+  it('recognizes mixed evidence through a separate frozen adjunct without filesystem or current-role access',()=>{
+    const f=mixedEmptyInputs(),before=structuredClone({dependencies:f.dependencies,result:f.result});
+    const evidence=requireBarrierWriteEvidence(f.dependencies,f.result);
+    expect(evidence).toMatchObject({schemaVersion:'wfc.pf.barrier-write-evidence.v2',geometryPolicy:MIXED_BARRIER_POLICY,ownTerminalExemptionsSupported:false,status:'no-barriers-declared'});
+    expect(supportedBarrierWriteEvidenceSchema.safeParse(evidence).success).toBe(true);expect(barrierWriteEvidenceSchema.safeParse(evidence).success).toBe(false);
+    expect({dependencies:f.dependencies,result:f.result}).toEqual(before);expect(seams.scope).not.toHaveBeenCalled();expect(seams.state).not.toHaveBeenCalled();
+  });
+  it.each(['missing-adjunct','invalid-adjunct','wrong-identity','wrong-context','old-gains-adjunct'] as const)('refuses mixed/legacy %s without inferring new proof',field=>{
+    const f=mixedEmptyInputs();let dependencies:unknown=f.dependencies;
+    if(field==='missing-adjunct'){const {barrierQualification:_missing,...body}=f.dependencies;dependencies=body;}
+    if(field==='invalid-adjunct')dependencies={...f.dependencies,barrierQualification:{fromResponse:true}};
+    if(field==='wrong-identity')dependencies={...f.dependencies,engineIdentity:syntheticBarrierWriteInputs().dependencies.engineIdentity};
+    if(field==='wrong-context')dependencies={...f.dependencies,barriers:syntheticBarrierWriteInputs().dependencies.barriers};
+    if(field==='old-gains-adjunct'){const old=syntheticBarrierWriteInputs();expect(readBarrierWriteEvidence({...old.dependencies,barrierQualification:null},old.result)).toBeNull();return;}
+    expect(readBarrierWriteEvidence(dependencies,f.result)).toBeNull();
+  });
   it.each(['clear','bypassed'] as const)('retains the distinct successful %s scope instead of relabeling it',status=>{
     const f=syntheticBarrierWriteInputs();if(f.result.schemaVersion!=='pathfinder.model.response.v3')throw Error('Protected fixture required.');
     const context=f.dependencies.barriers;
@@ -68,6 +154,16 @@ describe('pure exact protected write evidence',()=>{
 });
 describe('transaction-scoped live protected write fence',()=>{
   const client={} as PoolClient;
+  it('recollects mixed state and its independent qualifier while keeping the old scope/identity lane untouched',async()=>{
+    const f=mixedEmptyInputs();seams.mixedIdentity.mockResolvedValue(f.dependencies.engineIdentity);seams.state.mockResolvedValue({context:f.dependencies.barriers,qualification:null});
+    await expect(requireCurrentBarrierWriteScope(client,f.dependencies)).resolves.toEqual(f.dependencies.engineIdentity);
+    expect(seams.mixedIdentity).toHaveBeenCalledWith({force:true});expect(seams.state).toHaveBeenCalledOnce();expect(seams.identity).not.toHaveBeenCalled();expect(seams.scope).not.toHaveBeenCalled();
+  });
+  it('refuses a changed independently recollected mixed qualifier without weakening the context hash fence',async()=>{
+    const f=mixedEmptyInputs();seams.mixedIdentity.mockResolvedValue(f.dependencies.engineIdentity);
+    seams.state.mockResolvedValue({context:f.dependencies.barriers,qualification:{different:true}});
+    await expect(requireCurrentBarrierWriteScope(client,f.dependencies)).rejects.toMatchObject({code:'PROPOSAL_STALE',status:409});
+  });
   it('forces exact v2 identity and current retained barrier bytes on every boundary',async()=>{
     const f=syntheticBarrierWriteInputs();seams.identity.mockResolvedValue(f.dependencies.engineIdentity);seams.scope.mockResolvedValue(f.dependencies.barriers);
     const signal=new AbortController().signal,options={signal,deadline:Date.now()+1000};

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Pool } from 'pg';
 import { BARRIER_CAPTURE_VERSION, barrierCanonicalJson, type BarrierCapture, type BarrierModelScope } from '../../shared/pathfinderBarriers.js';
+import { MIXED_BARRIER_POLICY } from '../../shared/pathfinderBarrierMixed.js';
 import type { JobPrincipal } from './jobContracts.js';
 const storage = vi.hoisted(() => ({ blobs: new Map<string, Buffer>(), fail: false }));
 vi.mock('./barrierStorage.js', async importOriginal => {
@@ -93,6 +94,63 @@ function fixture() {
   return { pool, repository, adapters, controls, who, command, capture, bytes, refusal, outcomeQuery, empty, calls, query, release, get durable() { return durable; } };
 }
 beforeEach(() => { storage.blobs.clear(); storage.fail = false; });
+
+function mixedCommand(f: ReturnType<typeof fixture>) { return { ...f.command, schemaVersion: 'wfc.pf.barrier-capture-command.v2' as const, geometryPolicy: MIXED_BARRIER_POLICY }; }
+function installMixedQualification(f: ReturnType<typeof fixture>) {
+  // This is a transaction/storage test double, not geometric qualification.
+  f.adapters.qualifyCapture.mockImplementation(async ({ capture }) => ({ producerVersion: 'wfc.pf.barrier-mixed-verifier.v2', geometryPolicy: MIXED_BARRIER_POLICY,
+    originalGeometrySha256: '8'.repeat(64), verificationSha256: '9'.repeat(64), componentMemberships: [{ componentId: 'synthetic-component', kind: 'original-surface',
+      fragmentIds: capture.fragments.map(row => row.source.fragmentId).sort((a, b) => a - b), parentSelectionIds: capture.selectedParents.map(row => row.selectionId).sort(),
+      triangleCount: capture.fragments.reduce((sum, row) => sum + row.triangleIndices.length / 3, 0), sourceMembershipSha256: '7'.repeat(64) }],
+    engineeringAccepted: false, ownTerminalExemptionsSupported: false, authority: 'none' }));
+}
+
+describe('versioned mixed publication without reinterpretation of legacy commands', () => {
+  it('publishes a strict v2 snapshot/receipt with original bytes and exact full component membership, then reads historical outcome without a fabricated frame', async () => {
+    const f = fixture(); installMixedQualification(f); const admitted = await f.repository.begin(id(1), f.who, mixedCommand(f));
+    expect(admitted.schemaVersion).toBe('wfc.pf.barrier-intent-receipt.v2');
+    const raw = f.bytes(admitted.intent), receipt = await f.repository.publish(id(1), f.who, admitted.intent.id, raw);
+    expect(receipt).toMatchObject({ schemaVersion: 'wfc.pf.barrier-publication-receipt.v2', snapshot: { geometryPolicy: MIXED_BARRIER_POLICY, mode: 'mixed-mesh-set', registryRevision: '1' } });
+    if ('outcome' in receipt) throw Error('Expected publication');
+    const manifest = await f.repository.getSnapshot(id(1), f.who, receipt.snapshot.snapshotId);
+    expect(manifest).toMatchObject({ schemaVersion: 'wfc.pf.barrier-snapshot.v2', geometryPolicy: MIXED_BARRIER_POLICY, engineeringAccepted: false, ownTerminalExemptionsSupported: false, authority: 'none' });
+    if (manifest.geometry.mode !== 'mixed-mesh-set') throw Error('Expected mixed geometry');
+    expect(manifest.geometry.verification.componentMemberships[0]).toMatchObject({ fragmentIds: [15], parentSelectionIds: [id(7)], triangleCount: 4 });
+    const fragment = manifest.geometry.fragments[0]; expect(fragment.source).toEqual(f.capture(admitted.intent).fragments[0].source);
+    expect(JSON.parse(storage.blobs.get(`${id(1)}/${admitted.intent.id}/${fragment.mesh.blobId}`)!.toString())).toEqual({ verticesMetres: f.capture(admitted.intent).fragments[0].verticesMetres, triangleIndices: f.capture(admitted.intent).fragments[0].triangleIndices });
+    expect((await f.repository.get(id(1), f.who)).schemaVersion).toBe('wfc.pf.barrier-registry.v2');
+    f.controls.scope = { ...scope(), selectionRevision: '2' }; f.adapters.currentScope.mockClear();
+    expect(await f.repository.readCaptureOutcome(id(1), f.who, admitted.intent.id, f.outcomeQuery(admitted.intent))).toEqual({ schemaVersion: 'wfc.pf.barrier-capture-outcome.v2', outcome: 'published', intentId: admitted.intent.id,
+      commandSha256: barrierValueHash(admitted.intent.command), captureSha256: barrierBytesHash(raw), frameBinding: 'not-recorded', frameSha256: null, publication: { ...receipt, duplicate: true } });
+    expect(f.adapters.currentScope).not.toHaveBeenCalled();
+  });
+  it('never promotes a saved v1 same-key command into v2, and never accepts qualification from the other lane', async () => {
+    const f = fixture(); await f.repository.begin(id(1), f.who, f.command);
+    await expect(f.repository.begin(id(1), f.who, mixedCommand(f))).rejects.toMatchObject({ code: 'BARRIER_IDEMPOTENCY_CONFLICT' });
+    const other = fixture(), { intent } = await other.repository.begin(id(1), other.who, mixedCommand(other));
+    await expect(other.repository.publish(id(1), other.who, intent.id, other.bytes(intent))).rejects.toMatchObject({ code: 'BARRIER_VERIFIER_CAPTURE_MISMATCH' });
+    expect(other.durable.head).toBeNull(); expect(other.durable.receipts.size).toBe(0);
+  });
+  it('retains strict exact-command terminal refusal v1 for a failed explicit v2 capture', async () => {
+    const f = fixture(), { intent } = await f.repository.begin(id(1), f.who, mixedCommand(f)); f.controls.qualifyError = f.refusal(intent);
+    expect(await f.repository.publish(id(1), f.who, intent.id, f.bytes(intent))).toMatchObject({ schemaVersion: 'wfc.pf.barrier-publication-refusal.v1', outcome: 'not-published', commandSha256: barrierValueHash(intent.command) });
+    expect(await f.repository.readCaptureOutcome(id(1), f.who, intent.id, f.outcomeQuery(intent))).toMatchObject({ duplicate: true, frameSha256: 'f'.repeat(64) });
+    expect(f.durable.head).toBeNull(); expect(f.durable.snapshots.size).toBe(0);
+  });
+  it('does not repair malformed duplicate metadata on a stored mixed success', async () => {
+    const f = fixture(); installMixedQualification(f); const { intent } = await f.repository.begin(id(1), f.who, mixedCommand(f));
+    await f.repository.publish(id(1), f.who, intent.id, f.bytes(intent)); delete ([...f.durable.receipts.values()][0].receipt as Record<string, unknown>).duplicate;
+    await expect(f.repository.readCaptureOutcome(id(1), f.who, intent.id, f.outcomeQuery(intent))).rejects.toBeDefined();
+  });
+  it('keeps strict canonical server intent identities when reading a frozen v2 artifact', async () => {
+    const f = fixture(), { intent } = await f.repository.begin(id(1), f.who, mixedCommand(f));
+    const row = f.durable.intents.get(intent.id)!;
+    // Use an alphabetic UUID nibble so this remains a meaningful malformed case.
+    (row.frozen as BarrierCaptureIntent).captureBlobId = 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA';
+    await expect(f.repository.publish(id(1), f.who, intent.id, f.bytes(intent))).rejects.toBeDefined();
+    expect(f.adapters.qualifyCapture).not.toHaveBeenCalled();
+  });
+});
 
 describe('barrier immutable registry and trusted qualification boundary', () => {
   it('has no ready scope before an explicit publication; begin keeps the prior head unchanged', async () => {

@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PENDING_APPLY_STORAGE_KEY, usePathfinderPendingApply, type PendingApplyAccess, type PendingApplyInput } from './usePathfinderPendingApply';
 import { barrierWriteEvidenceSchema } from '../../../../shared/pathfinderBarrierWrites';
+import { MIXED_BARRIER_POLICY, mixedBarrierWriteEvidenceSchema } from '../../../../shared/pathfinderBarrierMixed';
 
 const id = (value: number) => `40000000-0000-4000-8000-${String(value).padStart(12, '0')}`;
 const input: PendingApplyInput = { proposalId: id(3), proposalHash: 'a'.repeat(64), cableId: id(4), reviewId: id(5),
@@ -40,6 +41,20 @@ beforeEach(() => { sessionStorage.clear(); });
 afterEach(() => { vi.restoreAllMocks(); sessionStorage.clear(); });
 
 describe('durable human Apply recovery', () => {
+  it.each(['exact', 'old-identity', 'old-evidence'] as const)('settles mixed Apply only through matching new evidence and identity: %s', async variant => {
+    const props = access(), old = receipt();
+    const mixed = mixedBarrierWriteEvidenceSchema.parse({ ...old.receipt.provenance.barrierEvidence,
+      schemaVersion: 'wfc.pf.barrier-write-evidence.v2', geometryPolicy: MIXED_BARRIER_POLICY, ownTerminalExemptionsSupported: false });
+    const provenance = { ...old.receipt.provenance,
+      dependencies: { ...old.receipt.provenance.dependencies, engineIdentity: { ...old.receipt.provenance.dependencies.engineIdentity,
+        schemaVersion: variant === 'old-identity' ? 'wfc.pf.engine-identity.v2' : 'wfc.pf.engine-identity.v3' } },
+      barrierEvidence: variant === 'old-evidence' ? old.receipt.provenance.barrierEvidence : mixed };
+    vi.mocked(props.action).mockResolvedValueOnce({ ...old, receipt: { ...old.receipt, provenance } });
+    const view = renderHook(() => usePathfinderPendingApply(props)); await waitFor(() => expect(view.result.current.canStart).toBe(true));
+    await act(async () => { expect(await view.result.current.start(input)).toBe(variant === 'exact'); });
+    if (variant === 'exact') expect(view.result.current.pending).toBeNull(); else expect(view.result.current.pending).toMatchObject(input);
+    expect(props.action).toHaveBeenCalledOnce();
+  });
   it('acknowledges a fresh protected v3 receipt only after an explicit Apply', async () => {
     const props = access(); vi.mocked(props.action).mockResolvedValueOnce(receipt());
     const view = renderHook(() => usePathfinderPendingApply(props));

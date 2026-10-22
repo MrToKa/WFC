@@ -3,8 +3,9 @@ import { RECALCULATION_LIMITS } from '../../shared/pathfinderRecalculation.js';
 import { policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { optionsSchema, type EngineOptions } from './jobContracts.js';
 import { collectCommonCalculationInputs, collectBarrierCommonCalculationInputs, freezeCableDependenciesForVersion, canonicalJson, type CollectedDependencies } from './dependencies.js';
-import { calculationEngineIdentity, barrierCalculationEngineIdentity } from './calculationEngineIdentity.js';
-import type { BarrierEngineIdentity, CalculationEngineIdentity, EngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
+import { calculationEngineIdentity, barrierCalculationEngineIdentity, mixedBarrierCalculationEngineIdentity } from './calculationEngineIdentity.js';
+import type { CalculationEngineIdentity, EngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
+import type { AnyBarrierEngineIdentity as BarrierEngineIdentity } from '../../shared/pathfinderBarrierSupported.js';
 import { readNeededEndpointBindingHeads } from './endpointBindingRepository.js';
 import { endpointCalculationPoint, type CurrentEndpointCalculationPoint } from './endpointCalculationProvenance.js';
 import { readAutomaticEndpointCandidates } from './automaticEndpointCandidates.js';
@@ -52,8 +53,10 @@ export async function collectDependencyBatchInTransaction(client:PoolClient,inpu
   }
   check();
   // One actual implementation read per whole batch; no DLL hashing in its cable loop.
-  const identity=input.engineIdentity??(barrierVersion?await barrierCalculationEngineIdentity({force:true}):await calculationEngineIdentity({force:true}));
-  if (identity.schemaVersion !== (barrierVersion?'wfc.pf.engine-identity.v2':'wfc.pf.engine-identity.v1'))
+  const mixed = options.barrierRouting?.schemaVersion === 'wfc.pf.barrier-admission-intent.v2';
+  const identity=input.engineIdentity??(barrierVersion
+    ?await (mixed?mixedBarrierCalculationEngineIdentity({force:true}):barrierCalculationEngineIdentity({force:true})) :await calculationEngineIdentity({force:true}));
+  if (identity.schemaVersion !== (barrierVersion?(mixed?'wfc.pf.engine-identity.v3':'wfc.pf.engine-identity.v2'):'wfc.pf.engine-identity.v1'))
     throw new PathFinderError('BARRIER_ENGINE_IDENTITY_REQUIRED',503,'The calculation version and actual engine identity differ.');
   const common=barrierVersion?await collectBarrierCommonCalculationInputs(client,projectId,options,true,identity as BarrierEngineIdentity,{signal:input.signal,deadline})
     :await collectCommonCalculationInputs(client,projectId,options,true,identity as EngineIdentity);

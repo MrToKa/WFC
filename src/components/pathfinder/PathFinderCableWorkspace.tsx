@@ -3,7 +3,7 @@ import { Button, Portal } from '@fluentui/react-components';
 import { requestFloatingCableWindow, type FloatingCableWindowRequest } from '@/hooks/useFloatingCablePanel';
 import { useCableInformationPanelStyles } from '@/pages/ProjectDetails/CableInformationPanel.styles';
 import type { PathFinderPreferences } from '@/api/pathfinder';
-import { sameBarrierAdmissionIntent } from '../../../shared/pathfinderBarrierAdmission';
+import { sameSupportedBarrierAdmissionIntent as sameBarrierAdmissionIntent } from '../../../shared/pathfinderBarrierSupported';
 import { fetchPathFinderCableWorkflowDetail, type CableWorkflowDetailQuery, type CableWorkflowRow } from '@/api/pathfinderCableWorkflow';
 import { fetchLocationImpacts } from '@/api/pathfinderLocationImpacts';
 import type { CableEndpointReceipt } from '@/api/pathfinderCableEndpoints';

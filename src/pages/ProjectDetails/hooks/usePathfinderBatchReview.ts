@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 import type { PathFinderPreferences, PathFinderProposal } from '@/api/pathfinder';
 import type { PendingApplyInput } from './usePathfinderPendingApply';
-import { sameBarrierAdmissionIntent } from '../../../../shared/pathfinderBarrierAdmission';
+import { sameSupportedBarrierAdmissionIntent as sameBarrierAdmissionIntent } from '../../../../shared/pathfinderBarrierSupported';
 
 export const MAX_BATCH_REVIEW_SELECTION = 1000;
 const uuid = z.string().uuid(), hash = z.string().regex(/^[a-f0-9]{64}$/);
@@ -40,7 +40,10 @@ function matchesProposal(candidate: BatchReviewCandidate, proposal: PathFinderPr
     && (proposal.revisionResultHash ?? null) === candidate.revisionResultHash
     && proposal.status === 'calculated' && !proposal.stale && proposal.canApply && !proposal.compatibilityIssue
     && proposal.provenance?.dependencyVersion === 'pathfinder.dependencies.v8'
-    && proposal.barriers?.schemaVersion === 'wfc.pf.barrier-execution.v1'
+    && (proposal.barriers?.schemaVersion === 'wfc.pf.barrier-execution.v1'
+      || proposal.barriers?.schemaVersion === 'wfc.pf.barrier-execution.v2'
+      && proposal.provenance.engineIdentity?.schemaVersion === 'wfc.pf.engine-identity.v3'
+      && proposal.routingPreferences?.barrierRouting?.schemaVersion === 'wfc.pf.barrier-admission-intent.v2')
     && ['clear', 'bypassed', 'no-barriers-declared'].includes(proposal.barriers.diagnostics.status)
     && proposal.route?.success && proposal.route.routeText === candidate.routeText
     && proposal.design?.designLengthMeters === candidate.designLength

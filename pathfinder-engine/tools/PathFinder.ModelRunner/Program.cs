@@ -140,7 +140,7 @@ internal static partial class Program
         }
 
         var root = OwnedRoot();
-        if (request.SchemaVersion == "pathfinder.model.runner.v2") session?.SelectBarrierKey(BarrierHash(BarrierContext(request).Value));
+        if (request.SchemaVersion == "pathfinder.model.runner.v2") session?.SelectBarrierKey(BarrierHash(SupportedBarrierValue(request)));
         var snapshots = SafeChild(root, "snapshots", create: false);
         var input = SafeChild(snapshots, request.SnapshotId + ".json", create: false);
         var cacheRoot = SafeChild(root, "cache", create: true);
@@ -195,7 +195,7 @@ internal static partial class Program
         };
         PreparationMemoryTrace.Observe(PreparationMemoryPhase.BeforeQuery);
         if (request.SchemaVersion == "pathfinder.model.runner.v2")
-            return ExecuteBarrierRoute(request, root, model, prepared, summary, routeOptions, token, session);
+            return UsesMixedBarrierRuntime(request) ? ExecuteMixedBarrierRoute(request, root, model, prepared, summary, routeOptions, token, session) : ExecuteBarrierRoute(request, root, model, prepared, summary, routeOptions, token, session);
         DirectSecondaryDecision? directSecondary = null;
         RouteResult routeResult;
         if (request.Operation == "calculate" && request.DirectSecondaryPolicy is not null)
@@ -324,7 +324,7 @@ internal static partial class Program
             if (r.Operation != "calculate" || r.Category is not ("LV" or "Control" or "Instrumentation") || r.ProjectSettings is null
                 || r.Options is null || r.Route is not null || r.FittedTraceExport is not null)
                 throw new ArgumentException("Protected runtime v2 accepts only a fresh supported non-MV calculation; design-only reuse is unavailable.");
-            _ = Point(r.From); _ = Point(r.To); _ = BarrierContext(r);
+            _ = Point(r.From); _ = Point(r.To); _ = SupportedBarrierValue(r);
         }
         else if (r.Barriers is not null) throw new ArgumentException("Barrier contexts require protected runtime v2; legacy fallback is prohibited.");
         if (r.IncludeLengthLedger && r.Operation is not ("calculate" or "design"))
@@ -394,7 +394,7 @@ internal static partial class Program
     {
         if (r?.SchemaVersion == "pathfinder.model.runner.v2")
         {
-            try { return BarrierFailure(r, BarrierContext(r), status, status switch { "deadline_exceeded" => "RUNTIME_DEADLINE_EXCEEDED",
+            try { return SupportedBarrierFailure(r, status, status switch { "deadline_exceeded" => "RUNTIME_DEADLINE_EXCEEDED",
                 "resource_limit" => "RUNTIME_RESOURCE_LIMIT", _ => "RUNTIME_CONTEXT_UNAVAILABLE" }, message); }
             catch (Exception error) when (error is ArgumentException or JsonException or IOException or InvalidDataException or InvalidOperationException or KeyNotFoundException or FormatException) { }
         }

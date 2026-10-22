@@ -4,6 +4,8 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { BARRIER_LIMITS, BARRIER_COLLISION_VERSION, barrierModelScopeSchema } from '../../shared/pathfinderBarriers.js';
+import { MIXED_BARRIER_COLLISION_VERSION, mixedBarrierVerifierReceiptSchema,
+  type MixedBarrierVerifierReceipt } from '../../shared/pathfinderBarrierMixed.js';
 import { policyHashSchema, policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { parsePolicyJson } from './policyJson.js';
 import { PathFinderError } from './errors.js';
@@ -28,8 +30,9 @@ const refuse = (code: string): never => { throw new PathFinderError(code, 503, '
 export class BarrierGeometryRefusal extends PathFinderError {
   readonly captureSha256: string;
   readonly implementationSha256: string;
-  constructor(captureSha256: string, implementationSha256: string) {
-    super('BARRIER_GEOMETRY_REFUSED', 503, 'The selected geometry did not qualify as supported closed obstacles.');
+  constructor(captureSha256: string, implementationSha256: string, mode: 'closed-v1' | 'mixed-v2' = 'closed-v1') {
+    super('BARRIER_GEOMETRY_REFUSED', 503, mode === 'closed-v1' ? 'The selected geometry did not qualify as supported closed obstacles.'
+      : 'The selected geometry did not qualify as supported original surfaces and closed obstacles.');
     this.captureSha256 = policyHashSchema.parse(captureSha256);
     this.implementationSha256 = policyHashSchema.parse(implementationSha256);
   }
@@ -48,7 +51,7 @@ export function verifierResidentObservation(status: string): { state: 'resident'
 }
 
 /** Hash the deployed executable closure before/after invocation. No request paths or shell. */
-async function implementation(dll: string): Promise<string> {
+async function implementation(dll: string, mode: 'closed-v1' | 'mixed-v2'): Promise<string> {
   if (!path.isAbsolute(dll) || path.basename(dll) !== 'PathFinder.BarrierVerifier.dll') return refuse('BARRIER_VERIFIER_NOT_CONFIGURED');
   const directory = path.dirname(dll), sum = createHash('sha256');
   for (let current = directory; ; current = path.dirname(current)) {
@@ -62,14 +65,14 @@ async function implementation(dll: string): Promise<string> {
     const bytes = await fs.readFile(filename); if (bytes.length !== stat.size) return refuse('BARRIER_VERIFIER_CHANGED');
     sum.update(name + '\n' + bytes.length + '\n').update(bytes).update('\n');
   }
-  return sum.update(BARRIER_COLLISION_VERSION).digest('hex');
+  return sum.update(mode === 'closed-v1' ? BARRIER_COLLISION_VERSION : MIXED_BARRIER_COLLISION_VERSION).digest('hex');
 }
 
 /** The deployed verifier is Linux-only until another RSS monitor is qualified.
  * Separate lane is globally serialized; it must not overlap the PF engine lane
  * in a combined resource claim. This function claims only its own process bound. */
 let running = false;
-export async function runBarrierVerifier(bytes: Buffer, signal: AbortSignal): Promise<{ result: BarrierVerifierResult; implementationSha256: string }> {
+async function runVerifierMode(bytes: Buffer, signal: AbortSignal, mode: 'closed-v1' | 'mixed-v2'): Promise<{ result: BarrierVerifierResult | MixedBarrierVerifierReceipt; implementationSha256: string }> {
   signal.throwIfAborted();
   if (bytes.length < 1 || bytes.length > BARRIER_LIMITS.captureBytes) return refuse('BARRIER_VERIFIER_INPUT_LIMIT');
   const dll = process.env.PF_BARRIER_VERIFIER_DLL;
@@ -78,8 +81,8 @@ export async function runBarrierVerifier(bytes: Buffer, signal: AbortSignal): Pr
   running = true;
   let processJoined = true;
   try {
-    const before = await implementation(dll); signal.throwIfAborted();
-    const child = spawn('dotnet', [dll], { shell: false, detached: true, windowsHide: true,
+    const before = await implementation(dll, mode); signal.throwIfAborted();
+    const child = spawn('dotnet', mode === 'closed-v1' ? [dll] : [dll, '--mixed-v2'], { shell: false, detached: true, windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, DOTNET_GCHeapHardLimit: '10000000', DOTNET_EnableDiagnostics: '0' } });
     processJoined = false;
     const resultBytes = await new Promise<Buffer>((resolve, reject) => {
@@ -118,10 +121,21 @@ export async function runBarrierVerifier(bytes: Buffer, signal: AbortSignal): Pr
       if (!settled) child.stdin.end(bytes);
     });
     signal.throwIfAborted();
-    const result = barrierVerifierResultSchema.parse(parsePolicyJson(resultBytes, { maxBytes: 65536 }));
-    if (await implementation(dll) !== before || result.captureSha256 !== digest(bytes)) return refuse('BARRIER_VERIFIER_CHANGED');
-    if (result.status === 'refused' && result.evidence === null) throw new BarrierGeometryRefusal(digest(bytes), before);
+    const result = (mode === 'closed-v1' ? barrierVerifierResultSchema : mixedBarrierVerifierReceiptSchema).parse(parsePolicyJson(resultBytes, { maxBytes: 65536 }));
+    if (await implementation(dll, mode) !== before || result.captureSha256 !== digest(bytes)) return refuse('BARRIER_VERIFIER_CHANGED');
+    if (result.status === 'refused' && result.evidence === null) throw new BarrierGeometryRefusal(digest(bytes), before, mode);
     if (result.status !== 'geometry-qualified' || !result.evidence) return refuse('BARRIER_VERIFIER_RESULT_INVALID');
     return { result, implementationSha256: before };
   } finally { if (processJoined) running = false; }
+}
+
+/** Existing callers and injected v1 executors retain their original result type. */
+export async function runBarrierVerifier(bytes: Buffer, signal: AbortSignal): Promise<{ result: BarrierVerifierResult; implementationSha256: string }> {
+  const executed = await runVerifierMode(bytes, signal, 'closed-v1');
+  return { ...executed, result: barrierVerifierResultSchema.parse(executed.result) };
+}
+/** This mode is selected only from the server's frozen explicit v2 intent. */
+export async function runMixedBarrierVerifier(bytes: Buffer, signal: AbortSignal): Promise<{ result: MixedBarrierVerifierReceipt; implementationSha256: string }> {
+  const executed = await runVerifierMode(bytes, signal, 'mixed-v2');
+  return { ...executed, result: mixedBarrierVerifierReceiptSchema.parse(executed.result) };
 }

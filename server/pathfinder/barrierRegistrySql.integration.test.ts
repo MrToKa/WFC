@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { BARRIER_CAPTURE_VERSION, barrierCanonicalJson, type BarrierCapture, type BarrierModelScope } from '../../shared/pathfinderBarriers.js';
+import { MIXED_BARRIER_POLICY } from '../../shared/pathfinderBarrierMixed.js';
 import { barrierEnumerationHashInput } from '../../viewer-runtime/barrier-capture.mjs';
 import { barrierPublicationReceiptSchema } from '../../shared/pathfinderBarrierOutcomes.js';
 import { initializeBarrierRegistrySchema } from './barrierRegistrySchema.js';
@@ -284,5 +285,23 @@ describe.runIf(Boolean(sqlUrl))('PF-B2 actual SQL and storage in fresh explicit 
       await client.query('INSERT INTO pf_barrier_heads(project_id,revision) VALUES($1,0)', [otherProjectId]); return 'uncommitted';
     }, undefined, () => { throw Error('Synthetic final authority expiry'); })).rejects.toThrow('Synthetic final authority expiry');
     expect((await pool!.query('SELECT project_id FROM pf_barrier_heads WHERE project_id=$1', [otherProjectId])).rows).toEqual([]);
+  });
+
+  it('atomically stores exact mixed-v2 publication and historical success without reinterpreting its command or inventing frame evidence', async () => {
+    const qualifier = vi.fn<BarrierRegistryAdapters['qualifyCapture']>(async input => ({ producerVersion: 'wfc.pf.barrier-mixed-verifier.v2', geometryPolicy: MIXED_BARRIER_POLICY,
+      originalGeometrySha256: '8'.repeat(64), verificationSha256: '9'.repeat(64), componentMemberships: [{ componentId: 'synthetic-sql-component', kind: 'original-surface',
+        fragmentIds: [15], parentSelectionIds: [input.capture.selectedParents[0].selectionId], triangleCount: 4, sourceMembershipSha256: '7'.repeat(64) }],
+      engineeringAccepted: false, ownTerminalExemptionsSupported: false, authority: 'none' }));
+    const repo = repository(qualifier), legacy = await captureCommand(), command = { ...legacy, schemaVersion: 'wfc.pf.barrier-capture-command.v2' as const, geometryPolicy: MIXED_BARRIER_POLICY };
+    const admitted = await repo.begin(projectId, who, command); expect(admitted.schemaVersion).toBe('wfc.pf.barrier-intent-receipt.v2');
+    const outcome = await repo.publish(projectId, who, admitted.intent.id, captureBytes(admitted.intent));
+    expect(outcome).toMatchObject({ schemaVersion: 'wfc.pf.barrier-publication-receipt.v2', snapshot: { mode: 'mixed-mesh-set', geometryPolicy: MIXED_BARRIER_POLICY } });
+    if ('outcome' in outcome) throw Error('Expected mixed publication');
+    const frozen = (await pool!.query('SELECT frozen FROM pf_barrier_capture_intents WHERE project_id=$1 AND id=$2', [projectId, admitted.intent.id])).rows[0].frozen;
+    expect(frozen.command).toEqual(command); expect((await repo.getSnapshot(projectId, who, outcome.snapshot.snapshotId)).schemaVersion).toBe('wfc.pf.barrier-snapshot.v2');
+    expect(await repo.readCaptureOutcome(projectId, who, admitted.intent.id, outcomeQuery(admitted.intent))).toMatchObject({ schemaVersion: 'wfc.pf.barrier-capture-outcome.v2', outcome: 'published',
+      frameBinding: 'not-recorded', frameSha256: null, publication: { ...outcome, duplicate: true } });
+    await expect(repo.begin(projectId, who, { ...legacy, idempotencyKey: command.idempotencyKey })).rejects.toMatchObject({ code: 'BARRIER_IDEMPOTENCY_CONFLICT' });
+    expect(qualifier).toHaveBeenCalledOnce();
   });
 });

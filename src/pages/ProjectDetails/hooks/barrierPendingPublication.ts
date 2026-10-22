@@ -2,7 +2,9 @@ import { z } from 'zod';
 import { barrierCanonicalJson, barrierModelScopeSchema, type BarrierModelScope } from '../../../../shared/pathfinderBarriers';
 import { policyHashSchema, policyUuidSchema } from '../../../../shared/pathfinderPurposePolicy';
 import { parsePurposeJson } from '../../../../shared/pathfinderPurposePolicy';
-import { barrierCaptureOutcomeSchema, type BarrierCaptureOutcome } from '../../../../shared/pathfinderBarrierOutcomes';
+import { MIXED_BARRIER_POLICY } from '../../../../shared/pathfinderBarrierMixed';
+import { supportedBarrierCaptureCommandSchema, supportedBarrierRegistryCommandSchema,
+  supportedBarrierCaptureOutcomeSchema as barrierCaptureOutcomeSchema, type AnyBarrierCaptureOutcome as BarrierCaptureOutcome } from '../../../../shared/pathfinderBarrierSupported';
 
 export const BARRIER_PENDING_STORAGE_KEY = 'wfc.pathfinder.barrier-publication-pending.v1';
 const MAX_BYTES = 32_768, MAX_COMMANDS = 8;
@@ -20,12 +22,21 @@ const publication = z.object({ ...common, kind: z.literal('publication'), actorI
   intentId: policyUuidSchema, snapshotId: policyUuidSchema, captureSha256: policyHashSchema,
   frameSha256: policyHashSchema, loadId: policyUuidSchema,
 }).strict();
-export const barrierPendingCommandSchema = z.union([sentinel, publication]).refine(value => value.projectId === value.scope.projectId);
+const mixedCommon = { ...common, schemaVersion: z.literal('wfc.pf.barrier-pending-command.v2'), geometryPolicy: z.literal(MIXED_BARRIER_POLICY) };
+const mixedSentinel = z.object({ ...mixedCommon, kind: z.enum(['capture-intent', 'empty']),
+  actorId: policyUuidSchema.nullable(), loginId: policyUuidSchema.nullable(), intentId: policyUuidSchema.nullable(), snapshotId: policyUuidSchema.nullable(),
+}).strict().refine(value => [value.actorId, value.loginId, value.intentId, value.snapshotId].every(item => item === null)
+  || value.kind === 'capture-intent' && [value.actorId, value.loginId, value.intentId, value.snapshotId].every(item => item !== null));
+const mixedPublication = z.object({ ...mixedCommon, kind: z.literal('publication'), actorId: policyUuidSchema, loginId: policyUuidSchema,
+  intentId: policyUuidSchema, snapshotId: policyUuidSchema, captureSha256: policyHashSchema, frameSha256: policyHashSchema, loadId: policyUuidSchema }).strict();
+export const barrierPendingCommandSchema = z.union([sentinel, publication, mixedSentinel, mixedPublication]).refine(value => value.projectId === value.scope.projectId);
 export type BarrierPendingCommand = z.infer<typeof barrierPendingCommandSchema>;
 export type BarrierPendingPublication = Extract<BarrierPendingCommand, { kind: 'publication' }>;
 const storeSchema = z.object({ version: z.literal(1), commands: z.array(barrierPendingCommandSchema).max(MAX_COMMANDS) }).strict()
   .refine(value => new Set(value.commands.map(item => item.projectId)).size === value.commands.length);
 const same = (a: unknown, b: unknown) => barrierCanonicalJson(a) === barrierCanonicalJson(b);
+const recordDomain = (value: BarrierPendingCommand) => value.schemaVersion === 'wfc.pf.barrier-pending-command.v2'
+  ? 'wfc.pf.barrier-pending-record.v2' : 'wfc.pf.barrier-pending-record.v1';
 export async function barrierPendingHash(value: unknown): Promise<string> {
   const bytes = new TextEncoder().encode(barrierCanonicalJson(value));
   return [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(value => value.toString(16).padStart(2, '0')).join('');
@@ -49,14 +60,14 @@ function writeStore(storage: Storage, value: z.infer<typeof storeSchema>) {
 export async function sealPendingBarrierCommand(input: unknown): Promise<BarrierPendingCommand> {
   const parsed = barrierPendingCommandSchema.parse({ ...(input as object), recordSha256: '0'.repeat(64) });
   const { recordSha256: _ignored, ...body } = parsed;
-  return barrierPendingCommandSchema.parse({ ...body, recordSha256: await barrierPendingHash({ domain: 'wfc.pf.barrier-pending-record.v1', body }) });
+  return barrierPendingCommandSchema.parse({ ...body, recordSha256: await barrierPendingHash({ domain: recordDomain(parsed), body }) });
 }
 export async function readPendingBarrierCommand(storage: Storage, projectId: string): Promise<BarrierPendingCommand | null> {
   policyUuidSchema.parse(projectId);
   const store = readStore(storage);
   for (const value of store.commands) {
     const { recordSha256, ...body } = value;
-    if (recordSha256 !== await barrierPendingHash({ domain: 'wfc.pf.barrier-pending-record.v1', body })) throw new Error('BARRIER_PENDING_STORAGE_CHANGED');
+    if (recordSha256 !== await barrierPendingHash({ domain: recordDomain(value), body })) throw new Error('BARRIER_PENDING_STORAGE_CHANGED');
   }
   return store.commands.find(value => value.projectId === projectId) ?? null;
 }
@@ -65,7 +76,7 @@ export async function readPendingBarrierCommand(storage: Storage, projectId: str
 export function retainPendingBarrierCommand(storage: Storage, value: BarrierPendingCommand, expected: BarrierPendingCommand | null): void {
   const next = barrierPendingCommandSchema.parse(value), store = readStore(storage);
   const old = store.commands.find(item => item.projectId === next.projectId) ?? null;
-  if (!same(old, expected) || expected && (expected.commandSha256 !== next.commandSha256 || !same(expected.scope, next.scope)
+  if (!same(old, expected) || expected && (expected.schemaVersion !== next.schemaVersion || expected.commandSha256 !== next.commandSha256 || !same(expected.scope, next.scope)
     || expected.tokenSha256 !== next.tokenSha256 || expected.createdAt !== next.createdAt)) throw new Error('BARRIER_PENDING_COMMAND_CHANGED');
   if (!old && store.commands.length >= MAX_COMMANDS) throw new Error('BARRIER_PENDING_STORAGE_FULL');
   writeStore(storage, { version: 1, commands: [...store.commands.filter(item => item.projectId !== next.projectId), next] });
@@ -77,8 +88,12 @@ export function clearPendingBarrierCommand(storage: Storage, expected: BarrierPe
 }
 export async function createBarrierCommandSentinel(kind: 'capture-intent' | 'empty', command: unknown,
   scope: BarrierModelScope, token: string): Promise<BarrierPendingCommand> {
-  return sealPendingBarrierCommand({ schemaVersion: 'wfc.pf.barrier-pending-command.v1', kind,
-    projectId: scope.projectId, scope, commandSha256: await barrierPendingHash(command), tokenSha256: await barrierPendingTokenHash(token),
+  const original = kind === 'capture-intent' ? supportedBarrierCaptureCommandSchema.parse(command) : supportedBarrierRegistryCommandSchema.parse(command);
+  if (!same(original.scope, scope) || kind === 'empty' && (!('action' in original) || original.action !== 'declare-empty')) throw new Error('BARRIER_PENDING_COMMAND_CHANGED');
+  const mixed = original.schemaVersion === 'wfc.pf.barrier-capture-command.v2' || original.schemaVersion === 'wfc.pf.barrier-registry-command.v2';
+  return sealPendingBarrierCommand({ schemaVersion: mixed ? 'wfc.pf.barrier-pending-command.v2' : 'wfc.pf.barrier-pending-command.v1',
+    ...(mixed ? { geometryPolicy: MIXED_BARRIER_POLICY } : {}), kind,
+    projectId: scope.projectId, scope, commandSha256: await barrierPendingHash(original), tokenSha256: await barrierPendingTokenHash(token),
     actorId: null, loginId: null, intentId: null, snapshotId: null, createdAt: new Date().toISOString() });
 }
 /** A terminal fact settles the original command only. In particular, the
@@ -92,7 +107,9 @@ export function matchBarrierCaptureOutcome(expected: BarrierPendingPublication, 
     throw new Error('BARRIER_OUTCOME_CHANGED');
   if (value.outcome === 'not-published') {
     if (value.frameSha256 !== expected.frameSha256) throw new Error('BARRIER_OUTCOME_FRAME_CHANGED');
-  } else if (value.publication.snapshot.snapshotId !== expected.snapshotId || value.publication.snapshot.mode !== 'mesh-set'
+  } else if ((value.schemaVersion === 'wfc.pf.barrier-capture-outcome.v2') !== (expected.schemaVersion === 'wfc.pf.barrier-pending-command.v2')
+    || value.publication.snapshot.snapshotId !== expected.snapshotId
+    || value.publication.snapshot.mode !== (expected.schemaVersion === 'wfc.pf.barrier-pending-command.v2' ? 'mixed-mesh-set' : 'mesh-set')
     || !same(value.publication.snapshot.scope, expected.scope)) throw new Error('BARRIER_OUTCOME_SNAPSHOT_CHANGED');
   return value;
 }

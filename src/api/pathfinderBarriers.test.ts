@@ -2,6 +2,8 @@ import { createHash, webcrypto } from 'node:crypto';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { beginBarrierCapture, changeBarrierRegistry, getBarrierRegistry, getLatestBarrierSnapshot, getBarrierCaptureOutcome, BARRIER_READ_MILLISECONDS } from './pathfinderBarriers';
 import { BARRIER_LIMITS, barrierCanonicalJson, barrierSnapshotHashInput, barrierSnapshotSchema, type BarrierSnapshot } from '../../shared/pathfinderBarriers';
+import { MIXED_BARRIER_POLICY, mixedBarrierCaptureCommandSchema, mixedBarrierSnapshotSchema } from '../../shared/pathfinderBarrierMixed';
+import { supportedBarrierSnapshotReference, supportedBarrierSnapshotHashInput } from '../../shared/pathfinderBarrierSupported';
 const id = (n: number) => `b2000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const scope = { projectId: id(1), modelVersionId: id(2), contentFingerprint: 'a'.repeat(64), selectionRevision: '1',
   captureFrameId: id(3), captureFrameSha256: 'b'.repeat(64), coordinateFrame: 'canonical-world-metres' as const };
@@ -69,6 +71,29 @@ function history(snapshot: BarrierSnapshot) {
   return { schemaVersion: 'wfc.pf.barrier-snapshot-list.v1', projectId: id(1), offset: 0, nextOffset: 1,
     snapshots: [{ snapshotId: snapshot.snapshotId, scope: snapshot.scope, registryRevision: snapshot.registryRevision, contentSha256: snapshot.contentSha256, mode: snapshot.geometry.mode }] };
 }
+it('reads an exact mixed newest manifest and refuses a legacy reference with the same empty mode', async () => {
+  const old = savedSnapshot(true), value = mixedBarrierSnapshotSchema.parse({ ...old, schemaVersion: 'wfc.pf.barrier-snapshot.v2',
+    geometryPolicy: MIXED_BARRIER_POLICY, ownTerminalExemptionsSupported: false, authority: 'none' });
+  value.contentSha256 = createHash('sha256').update(barrierCanonicalJson(supportedBarrierSnapshotHashInput(value))).digest('hex');
+  const page = { schemaVersion: 'wfc.pf.barrier-snapshot-list.v1', projectId: id(1), offset: 0, nextOffset: null, snapshots: [supportedBarrierSnapshotReference(value)] };
+  const fetcher = vi.fn().mockResolvedValueOnce(Response.json(page)).mockResolvedValueOnce(Response.json(value)); vi.stubGlobal('fetch', fetcher);
+  expect(await getLatestBarrierSnapshot(id(1), 'synthetic-token')).toEqual(value);
+  const wrongPage = { ...page, snapshots: [{ snapshotId: value.snapshotId, scope: value.scope, registryRevision: value.registryRevision, contentSha256: value.contentSha256, mode: 'explicit-empty' }] };
+  fetcher.mockResolvedValueOnce(Response.json(wrongPage)).mockResolvedValueOnce(Response.json(value));
+  await expect(getLatestBarrierSnapshot(id(1), 'synthetic-token')).rejects.toMatchObject({ code: 'BARRIER_HISTORY_REFERENCE_CHANGED' });
+});
+it('requires a new exact mixed intent receipt while leaving the original submitted command unchanged', async () => {
+  const command = mixedBarrierCaptureCommandSchema.parse({ schemaVersion: 'wfc.pf.barrier-capture-command.v2', geometryPolicy: MIXED_BARRIER_POLICY,
+    scope, expectedRegistryRevision: '0', idempotencyKey: id(20), selectedParents: [{ selectionId: id(21), kind: 'floor', objectId: 'dbid:7', dbId: 7,
+      externalId: null, name: 'Synthetic selected floor', identityBasis: 'version-local-only', inclusion: 'own-and-all-descendant-fragments' }] });
+  const receipt = { schemaVersion: 'wfc.pf.barrier-intent-receipt.v2', state: 'pending', duplicate: false,
+    intent: { id: id(22), snapshotId: id(23), captureBlobId: id(24), manifestBlobId: id(25), createdBy: id(26), loginId: id(27), command } };
+  const fetcher = vi.fn().mockResolvedValueOnce(Response.json(receipt)).mockResolvedValueOnce(Response.json({ ...receipt, schemaVersion: 'wfc.pf.barrier-intent-receipt.v1' }));
+  vi.stubGlobal('fetch', fetcher); const before = structuredClone(command);
+  expect(await beginBarrierCapture(id(1), 'synthetic-token', command)).toEqual(receipt); expect(command).toEqual(before);
+  expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toEqual(command);
+  await expect(beginBarrierCapture(id(1), 'synthetic-token', command)).rejects.toThrow();
+});
 it('reads one newest saved reference and its hash-verified manifest without scanning older snapshots or writing', async () => {
   const snapshot = savedSnapshot(), page = history(snapshot), fetcher = vi.fn().mockResolvedValueOnce(Response.json(page)).mockResolvedValueOnce(Response.json(snapshot));
   vi.stubGlobal('fetch', fetcher); expect(await getLatestBarrierSnapshot(id(1), 'synthetic-token')).toEqual(snapshot);

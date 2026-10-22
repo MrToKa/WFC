@@ -1,16 +1,14 @@
 import { z } from 'zod';
 import { getApiBaseUrl } from './http';
-import { BARRIER_LIMITS, barrierCaptureCommandSchema, barrierRegistryCommandSchema, barrierRegistrySchema,
-  barrierSnapshotReferenceSchema, barrierSnapshotSchema, barrierSnapshotHashInput, barrierCanonicalJson,
-  type BarrierRegistry, type BarrierSnapshot } from '../../shared/pathfinderBarriers';
+import { BARRIER_LIMITS, barrierCanonicalJson } from '../../shared/pathfinderBarriers';
+import { supportedBarrierCaptureCommandSchema as barrierCaptureCommandSchema, supportedBarrierRegistryCommandSchema as barrierRegistryCommandSchema,
+  supportedBarrierRegistrySchema as barrierRegistrySchema, supportedBarrierSnapshotReferenceSchema as barrierSnapshotReferenceSchema,
+  supportedBarrierSnapshotSchema as barrierSnapshotSchema, supportedBarrierSnapshotHashInput as barrierSnapshotHashInput,
+  supportedBarrierSnapshotReference, supportedBarrierPublicationReceiptSchema as publication, supportedBarrierIntentReceiptSchema as intentReceipt,
+  supportedBarrierCaptureOutcomeSchema as barrierCaptureOutcomeSchema, type AnyBarrierRegistry as BarrierRegistry, type AnyBarrierSnapshot as BarrierSnapshot } from '../../shared/pathfinderBarrierSupported';
 import { parsePurposeJson } from '../../shared/pathfinderPurposePolicy';
 import { discardPathFinderBody, pathFinderRequestDeadline, releasePathFinderReader } from './pathfinderRequestDeadline';
-import { barrierCaptureOutcomeQuerySchema, barrierCaptureOutcomeSchema, type BarrierCaptureOutcomeQuery } from '../../shared/pathfinderBarrierOutcomes';
-
-const publication = z.object({ schemaVersion: z.literal('wfc.pf.barrier-publication-receipt.v1'), snapshot: barrierSnapshotReferenceSchema, duplicate: z.boolean() }).strict();
-const intent = z.object({ id: z.string().uuid(), snapshotId: z.string().uuid(), captureBlobId: z.string().uuid(), manifestBlobId: z.string().uuid(),
-  command: barrierCaptureCommandSchema, createdBy: z.string().uuid(), loginId: z.string().uuid() }).strict();
-const intentReceipt = z.object({ schemaVersion: z.literal('wfc.pf.barrier-intent-receipt.v1'), intent, state: z.enum(['pending', 'complete']), duplicate: z.boolean() }).strict();
+import { barrierCaptureOutcomeQuerySchema, type BarrierCaptureOutcomeQuery } from '../../shared/pathfinderBarrierOutcomes';
 export const BARRIER_READ_MILLISECONDS = 30_000;
 const requestError = (code: string, status?: number) => Object.assign(new Error(code), { code, ...(status === undefined ? {} : { status }) });
 async function request(projectId: string, token: string, suffix: string, body?: unknown, signal?: AbortSignal): Promise<unknown> {
@@ -76,17 +74,24 @@ export async function getLatestBarrierSnapshot(projectId: string, token: string,
     if (page.projectId !== projectId || page.snapshots.some(ref => ref.scope.projectId !== projectId)) throw requestError('BARRIER_HISTORY_SCOPE_CHANGED');
     const ref = page.snapshots[0]; if (!ref) return null;
     const snapshot = await deadline.wait(() => getBarrierSnapshot(projectId, token, ref.snapshotId, deadline.signal));
-    if (snapshot.registryRevision !== ref.registryRevision || snapshot.contentSha256 !== ref.contentSha256
-      || snapshot.geometry.mode !== ref.mode || barrierCanonicalJson(snapshot.scope) !== barrierCanonicalJson(ref.scope))
+    if (barrierCanonicalJson(supportedBarrierSnapshotReference(snapshot)) !== barrierCanonicalJson(ref))
       throw requestError('BARRIER_HISTORY_REFERENCE_CHANGED');
     deadline.check(); return snapshot;
   } finally { deadline.dispose(); }
 }
 export async function beginBarrierCapture(projectId: string, token: string, command: z.input<typeof barrierCaptureCommandSchema>, signal?: AbortSignal) {
-  return intentReceipt.parse(await request(projectId, token, '/intents', barrierCaptureCommandSchema.parse(command), signal));
+  const original = barrierCaptureCommandSchema.parse(command);
+  const receipt = intentReceipt.parse(await request(projectId, token, '/intents', original, signal));
+  if (barrierCanonicalJson(receipt.intent.command) !== barrierCanonicalJson(original)) throw requestError('BARRIER_INTENT_COMMAND_CHANGED');
+  return receipt;
 }
 export async function changeBarrierRegistry(projectId: string, token: string, command: z.input<typeof barrierRegistryCommandSchema>, signal?: AbortSignal) {
-  return publication.parse(await request(projectId, token, '/commands', barrierRegistryCommandSchema.parse(command), signal));
+  const original = barrierRegistryCommandSchema.parse(command);
+  const receipt = publication.parse(await request(projectId, token, '/commands', original, signal));
+  if ((original.schemaVersion === 'wfc.pf.barrier-registry-command.v2') !== (receipt.schemaVersion === 'wfc.pf.barrier-publication-receipt.v2')
+    || barrierCanonicalJson(receipt.snapshot.scope) !== barrierCanonicalJson(original.scope)
+    || original.action === 'declare-empty' && receipt.snapshot.mode !== 'explicit-empty') throw requestError('BARRIER_PUBLICATION_COMMAND_CHANGED');
+  return receipt;
 }
 /** Exact historical settlement only. No current Viewer/model or publication
  * endpoint is used, and null never means that a command was refused. */

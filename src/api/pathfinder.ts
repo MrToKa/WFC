@@ -2,15 +2,15 @@ import { z } from 'zod';
 import { getApiBaseUrl } from './http';
 import type { CanonicalPoint } from '../../viewer-runtime/protocol.mjs';
 import { validateModelCaptureInputScope, type ModelCaptureInputScope } from '../../viewer-runtime/capture-input.mjs';
-import { engineIdentitySchema, barrierEngineIdentitySchema } from '../../shared/pathfinderEngineIdentity';
+import { engineIdentitySchema } from '../../shared/pathfinderEngineIdentity';
 import { policyHashSchema, policyRevisionSchema } from '../../shared/pathfinderPurposePolicy';
 import { lengthLedgerSchema } from '../../shared/pathfinderLengthLedger';
 import { directSecondaryDecisionSchema, directSecondaryRouteIssue, type DirectSecondaryDecision } from '../../shared/pathfinderDirectSecondary';
 import { revisionResultEnvelopeSchema } from '../../shared/pathfinderRevisionResults';
 import { calculationAvailabilitySchema } from '../../shared/pathfinderCalculationAvailability';
 import { sealedCableItemApplicabilitySchema } from '../../shared/pathfinderItemApplicability';
-import { barrierAdmissionIntentSchema, type BarrierAdmissionIntent } from '../../shared/pathfinderBarrierAdmission';
-import { barrierExecutionSchema } from '../../shared/pathfinderBarrierRuntime';
+import { supportedBarrierAdmissionIntentSchema as barrierAdmissionIntentSchema, type AnyBarrierAdmissionIntent as BarrierAdmissionIntent,
+  supportedBarrierExecutionSchema as barrierExecutionSchema, supportedBarrierEngineIdentitySchema as barrierEngineIdentitySchema } from '../../shared/pathfinderBarrierSupported';
 
 const uuid = z.string().uuid(), revision = z.string().regex(/^(0|[1-9][0-9]{0,18})$/);
 const point = z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]);
@@ -33,7 +33,7 @@ const proposalProvenanceSchema = z.object({
   endpointSources: z.object({from:z.enum(['automatic-model-candidate','confirmed-shared-location']),to:z.enum(['automatic-model-candidate','confirmed-shared-location'])}).strict().optional(),
 }).strict().superRefine((value, context) => {
   if (['pathfinder.dependencies.v5','pathfinder.dependencies.v6','pathfinder.dependencies.v7','pathfinder.dependencies.v8'].includes(value.dependencyVersion) !== (value.engineIdentity !== null)
-    || value.engineIdentity && (value.dependencyVersion==='pathfinder.dependencies.v8') !== (value.engineIdentity.schemaVersion==='wfc.pf.engine-identity.v2')) context.addIssue({ code: 'custom', message: 'Engine implementation identity must agree with the dependency version.' });
+    || value.engineIdentity && (value.dependencyVersion==='pathfinder.dependencies.v8') !== (value.engineIdentity.schemaVersion==='wfc.pf.engine-identity.v2' || value.engineIdentity.schemaVersion==='wfc.pf.engine-identity.v3')) context.addIssue({ code: 'custom', message: 'Engine implementation identity must agree with the dependency version.' });
   if (value.dependencyVersion==='pathfinder.dependencies.v6'
     ? !value.endpointSources || !Object.values(value.endpointSources).includes('automatic-model-candidate')
     : ['pathfinder.dependencies.v7','pathfinder.dependencies.v8'].includes(value.dependencyVersion)?!value.endpointSources:value.endpointSources!==undefined) context.addIssue({code:'custom',message:'Automatic endpoint provenance must agree with the dependency version.'});
@@ -48,6 +48,9 @@ const validateProposalItem=(value:z.infer<typeof proposalSummaryObjectSchema>,co
       context.addIssue({code:'custom',message:'Protected calculated results require exact barrier execution evidence.'});
     if(value.barriers&&value.provenance?.dependencyVersion!=='pathfinder.dependencies.v8')
       context.addIssue({code:'custom',message:'Historical results cannot acquire obstacle verification.'});
+    if(value.barriers && ((value.barriers.schemaVersion==='wfc.pf.barrier-execution.v2') !== (value.provenance?.engineIdentity?.schemaVersion==='wfc.pf.engine-identity.v3')
+      || (value.barriers.schemaVersion==='wfc.pf.barrier-execution.v2') !== (value.routingPreferences?.barrierRouting?.schemaVersion==='wfc.pf.barrier-admission-intent.v2')))
+      context.addIssue({code:'custom',message:'Mixed execution, exact submitted admission and engine identity must retain the same explicit lane.'});
     const proof=value.itemApplicability;
     if(proof&&(proof.projectId!==value.projectId||proof.jobId!==value.jobId||proof.cableId!==value.cableId||proof.proposalId!==value.id
       ||proof.dependencyHash!==value.provenance?.dependencyHash||proof.dependencyVersion!==value.provenance?.dependencyVersion))context.addIssue({code:'custom',message:'Sealed item applicability must belong to the exact proposal.'});

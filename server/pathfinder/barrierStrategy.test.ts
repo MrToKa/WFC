@@ -6,10 +6,12 @@ import { BARRIER_RUNTIME_PROFILE, barrierRouteHashInput, createBarrierRuntimePol
   type BarrierExecution, type BarrierRuntimeContext } from '../../shared/pathfinderBarrierRuntime.js';
 import type { BarrierCheckProofV2 } from '../../shared/pathfinderBarrierDecisions.js';
 import { DIRECT_SECONDARY_POLICY } from '../../shared/pathfinderDirectSecondary.js';
+import { MIXED_BARRIER_POLICY, MIXED_BARRIER_QUERY_DOMAIN, MIXED_BARRIER_RUNTIME_PROFILE, createMixedBarrierRuntimePolicy,
+  mixedBarrierExecutionSchema, type MixedBarrierRuntimeContext, type MixedBarrierVerifierEvidence, type MixedBarrierCheckProof } from '../../shared/pathfinderBarrierMixed.js';
 import { requireBarrierEngineStrategy } from './barrierStrategy.js';
 import { engineResponseSchema, type EngineResponse, type EngineRoute } from './jobContracts.js';
 
-type ProtectedResponse = Extract<EngineResponse, { schemaVersion: 'pathfinder.model.response.v3' }>;
+type ProtectedResponse = Omit<Extract<EngineResponse, { schemaVersion: 'pathfinder.model.response.v3' }>,'barriers'> & {barriers:BarrierExecution};
 type Input = Parameters<typeof requireBarrierEngineStrategy>[1];
 type Point = [number, number, number];
 const id = (n: number) => `b6300000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -84,8 +86,8 @@ function result(kind: Kind = 'network'): { response: ProtectedResponse; input: I
 }
 function parsed(response: ProtectedResponse): ProtectedResponse {
   const value = engineResponseSchema.parse(response);
-  if (value.schemaVersion !== 'pathfinder.model.response.v3') throw new Error('Protected fixture version changed.');
-  return value;
+  if (value.schemaVersion !== 'pathfinder.model.response.v3' || value.barriers.schemaVersion !== 'wfc.pf.barrier-execution.v1') throw new Error('Protected fixture version changed.');
+  return {...value,barriers:value.barriers};
 }
 function rejected(response: EngineResponse, input: Input) {
   expect(() => requireBarrierEngineStrategy(response, input)).toThrowError(expect.objectContaining({ code: 'ENGINE_BARRIER_STRATEGY_INVALID', status: 502 }));
@@ -103,8 +105,61 @@ function failure(status: ProtectedResponse['status'] = 'no_path'): { response: P
     straightPairAttempts: 0, localEdgeChecks: 0, localPhaseUsed: false, straightPhaseTruncated: false };
   return value;
 }
+function mixedResult(kind:Kind='network') {
+  const base=result(kind),old=base.response.barriers,policy=createMixedBarrierRuntimePolicy(kind==='bypassed');
+  const context:MixedBarrierRuntimeContext={schemaVersion:'wfc.pf.barrier-runtime.v2',binding:{...old.context.binding,schemaVersion:'wfc.pf.barrier-calculation-binding.v2',
+    policy,policySha256:hash(barrierCanonicalJson(policy)),snapshot:old.context.binding.snapshot?{...old.context.binding.snapshot,
+      schemaVersion:'wfc.pf.barrier-snapshot-reference.v2',geometryPolicy:MIXED_BARRIER_POLICY,mode:kind==='empty'?'explicit-empty':'mixed-mesh-set'}:null},
+    profile:structuredClone(MIXED_BARRIER_RUNTIME_PROFILE),profileSha256:hash(barrierCanonicalJson(MIXED_BARRIER_RUNTIME_PROFILE)),storage:old.context.storage};
+  const member={componentId:'component:000000',kind:'original-surface' as const,parentSelectionIds:[id(20)],fragmentIds:[11],triangleCount:1,sourceMembershipSha256:'2'.repeat(64)};
+  // Independent trusted expectation fixture; never read members back from the response.
+  const expected:MixedBarrierVerifierEvidence|null=['bypassed','empty'].includes(kind)?null:{captureId:id(5),scope:context.binding.scope,
+    originalSurfaceComponents:1,qualifiedClosedSolidComponents:0,fragmentCount:1,vertexCount:3,triangleCount:1,originalGeometrySha256:'3'.repeat(64),verificationSha256:'4'.repeat(64),
+    numericToleranceMetres:1e-7,componentMemberships:[member],inputSchemaVersion:'wfc.pf.barrier-capture.v1',policyVersion:MIXED_BARRIER_POLICY,
+    coverage:'provided-fragments-only',geometryProvenance:'capture-bound-provided-original-triangles',sdkCoverageVerified:false,sdkSourceBytesVerified:false,currentFrameVerified:false,
+    engineeringAccepted:false,ownTerminalExemptionsSupported:false,authority:'none'};
+  const check=(value:BarrierCheckProofV2):MixedBarrierCheckProof=>({...value,schemaVersion:'wfc.pf.barrier-mixed-check-proof.v2',binding:context.binding,
+    blocking:value.blocking?{...member,segmentIndex:value.blocking.segmentIndex,reason:'original-surface-contact',surfaceWitness:null}:null,
+    domain:MIXED_BARRIER_QUERY_DOMAIN,globalModelCoverageVerified:false,physicalCableRadiusChecked:false,ownTerminalExemptionsSupported:false,authority:'none'});
+  if(!old.proof||!old.directSecondary)throw Error('fixture');
+  const {schemaVersion:_tag,policyVersion:_policy,...direct}=old.directSecondary;
+  const execution=mixedBarrierExecutionSchema.parse({...old,schemaVersion:'wfc.pf.barrier-execution.v2',context,proof:check(old.proof),
+    directSecondary:{...direct,schemaVersion:'wfc.pf.mixed-constrained-direct-secondary.v2',binding:context.binding,directCheck:direct.directCheck?check(direct.directCheck):null},
+    qualification:expected?{captureSha256:context.storage!.capture!.sha256,evidence:structuredClone(expected)}:null,
+    engineeringAccepted:false,ownTerminalExemptionsSupported:false,authority:'none'});
+  const response=engineResponseSchema.parse({...base.response,barriers:execution});
+  const input:Input={...base.input,context,qualification:structuredClone(expected)};
+  return {response,input};
+}
 
 describe('barrier engine strategy admission after strict transport parsing', () => {
+  it.each(['network','blocked-direct','direct','bypassed','empty'] as const)('validates exact mixed %s against a separate trusted qualifier',kind=>{
+    const f=mixedResult(kind);expect(()=>requireBarrierEngineStrategy(f.response,f.input)).not.toThrow();
+  });
+  it.each(['missing-expectation','null-expectation','response-self-members','response-capture','response-pure-hash','wrong-lane'] as const)
+    ('refuses mixed %s without trusting response-supplied membership',field=>{
+      const f=mixedResult();
+      if(field==='missing-expectation')delete f.input.qualification;
+      if(field==='null-expectation')f.input.qualification=null;
+      if(f.response.schemaVersion!=='pathfinder.model.response.v3'||f.response.barriers.schemaVersion!=='wfc.pf.barrier-execution.v2')throw Error('fixture');
+      if(field==='response-self-members')f.response.barriers.qualification!.evidence.componentMemberships[0].sourceMembershipSha256='8'.repeat(64);
+      if(field==='response-capture')f.response.barriers.qualification!.captureSha256='8'.repeat(64);
+      if(field==='response-pure-hash')f.response.barriers.qualification!.evidence.verificationSha256='8'.repeat(64);
+      if(field==='wrong-lane')f.input.context=context();
+      rejected(f.response,f.input);
+    });
+  it('does not attach a mixed qualifier to legacy Strategy inputs',()=>{
+    const legacy=result();rejected(legacy.response,{...legacy.input,qualification:null});
+  });
+  it('preserves a typed mixed pre-computation refusal without claiming a physical check',()=>{
+    const f=mixedResult();
+    if(f.response.schemaVersion!=='pathfinder.model.response.v3'||f.response.barriers.schemaVersion!=='wfc.pf.barrier-execution.v2')throw Error('fixture');
+    f.response.status='no_path';delete f.response.route;delete f.response.effectiveCategory;
+    f.response.barriers.qualification=null;f.response.barriers.proof=null;f.response.barriers.directSecondary=null;
+    f.response.barriers.diagnostics={...f.response.barriers.diagnostics,status:'unavailable',reasonCode:'BARRIER_QUALIFICATION_REFUSED',searchComplete:false};
+    expect(()=>requireBarrierEngineStrategy(f.response,f.input)).not.toThrow();
+    const crossed=structuredClone(f.input);crossed.context.storage!.manifest.sha256='8'.repeat(64);rejected(f.response,crossed);
+  });
   it.each(['network', 'blocked-direct', 'direct', 'bypassed', 'empty', 'reverse-singleton'] as const)('accepts the exact retained %s computation without changing it', kind => {
     const { response, input } = result(kind), before = structuredClone(response);
     expect(() => requireBarrierEngineStrategy(parsed(response), input)).not.toThrow(); expect(response).toEqual(before);

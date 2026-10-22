@@ -10,7 +10,7 @@ import { calculationAvailabilitySchema, notEvaluatedCalculationAvailability, typ
 import { canonicalPurposeJson, policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { defaultOptions, optionsSchema, type JobPrincipal, type DependencySnapshot } from './jobContracts.js';
 import { collectCommonCalculationInputs, collectBarrierCommonCalculationInputs, freezeCableDependenciesForVersion, hash, type CommonCalculationCollection, type BarrierCommonCalculationCollection } from './dependencies.js';
-import { sameBarrierAdmissionIntent } from '../../shared/pathfinderBarrierAdmission.js';
+import { sameSupportedBarrierAdmissionIntent as sameBarrierAdmissionIntent } from '../../shared/pathfinderBarrierSupported.js';
 import { readCurrentEndpointBindingContext, readNeededEndpointBindingHeads } from './endpointBindingRepository.js';
 import type { EndpointBindingContext } from '../../shared/pathfinderEndpointBindings.js';
 import { readAutomaticEndpointCandidates } from './automaticEndpointCandidates.js';

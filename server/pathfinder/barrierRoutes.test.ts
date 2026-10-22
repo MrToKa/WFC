@@ -3,7 +3,9 @@ import { EventEmitter } from 'node:events';
 import { Readable } from 'node:stream';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Pool } from 'pg';
-import { BARRIER_LIMITS, barrierCanonicalJson, barrierCaptureCommandSchema, barrierRegistryCommandSchema, type BarrierCapture } from '../../shared/pathfinderBarriers.js';
+import { BARRIER_LIMITS, barrierCanonicalJson, type BarrierCapture } from '../../shared/pathfinderBarriers.js';
+import { MIXED_BARRIER_POLICY } from '../../shared/pathfinderBarrierMixed.js';
+import { supportedBarrierCaptureCommandSchema, supportedBarrierRegistryCommandSchema } from '../../shared/pathfinderBarrierSupported.js';
 import { PathFinderError } from './errors.js';
 const mocks = vi.hoisted(() => ({ verify: vi.fn(), authorize: vi.fn(), get: vi.fn(), list: vi.fn(), getSnapshot: vi.fn(), readCaptureOutcome: vi.fn(), begin: vi.fn(), publish: vi.fn(), command: vi.fn(), adapters: vi.fn(), repository: vi.fn() }));
 vi.mock('../auth.js', () => ({ verifyAccessToken: mocks.verify }));
@@ -31,8 +33,8 @@ beforeEach(() => {
   mocks.readCaptureOutcome.mockResolvedValue(null);
   // These mirror the mandatory production repository parsing. Route tests do not
   // pretend that a deliberately permissive mock proves repository validation.
-  mocks.begin.mockImplementation(async (_project, _who, value) => ({ command: barrierCaptureCommandSchema.parse(value) }));
-  mocks.command.mockImplementation(async (_project, _who, value) => ({ command: barrierRegistryCommandSchema.parse(value) }));
+  mocks.begin.mockImplementation(async (_project, _who, value) => ({ command: supportedBarrierCaptureCommandSchema.parse(value) }));
+  mocks.command.mockImplementation(async (_project, _who, value) => ({ command: supportedBarrierRegistryCommandSchema.parse(value) }));
 });
 type Options = { url?: string; mode?: 'admin' | 'viewer'; method?: string; token?: string | null; length?: string; type?: string; encoding?: string; body?: string; bytes?: Buffer; query?: Record<string, unknown>; origin?: string | null; cookie?: string | null; site?: string; params?: Record<string, string> };
 function request({ url = '/barriers', mode = 'admin', method = 'GET', token = 'Bearer synthetic', length, type = 'application/json', encoding, body, bytes, query = {}, origin = 'http://127.0.0.1:5191', cookie = 'wfc_viewer_session=' + 's'.repeat(43), site, params = {} }: Options = {}) {
@@ -110,6 +112,14 @@ describe('barrier HTTP admission through in-memory Express router, no listener',
   it('passes a strict capture admission command with only authenticated actor identity', async () => {
     const input = command(), r = request({ url: '/barriers/intents', method: 'POST', body: JSON.stringify(input) }); await r.run();
     expect(r.res.statusCode).toBe(200); expect(mocks.begin).toHaveBeenCalledWith(id(1), expect.objectContaining({ userId: id(4), loginId: id(5) }), input);
+  });
+  it('passes an explicit mixed policy only in a new v2 command without changing an old command', async () => {
+    const input = { ...command(), schemaVersion: 'wfc.pf.barrier-capture-command.v2', geometryPolicy: MIXED_BARRIER_POLICY };
+    const r = request({ url: '/barriers/intents', method: 'POST', body: JSON.stringify(input) }); await r.run();
+    expect(r.res.statusCode).toBe(200); expect(mocks.begin).toHaveBeenCalledWith(id(1), expect.any(Object), input);
+    mocks.begin.mockClear();
+    const legacy = request({ url: '/barriers/intents', method: 'POST', body: JSON.stringify({ ...command(), geometryPolicy: MIXED_BARRIER_POLICY }) }); await legacy.run();
+    expect(legacy.res.statusCode).toBe(400); expect(mocks.begin).not.toHaveBeenCalled();
   });
   it.each(['actorId', 'path', 'ready', 'producerVersion'] as const)('rejects caller %s claims with the strict repository boundary', async field => {
     const r = request({ url: '/barriers/intents', method: 'POST', body: JSON.stringify({ ...command(), [field]: 'caller-value' }) }); await r.run(); expect(r.res.statusCode).toBe(400);

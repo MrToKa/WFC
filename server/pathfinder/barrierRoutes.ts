@@ -2,7 +2,8 @@ import express, { Router, type Request, type Response, type NextFunction } from 
 import type { Pool } from 'pg';
 import { z } from 'zod';
 import { verifyAccessToken } from '../auth.js';
-import { BARRIER_LIMITS, barrierCanonicalJson, barrierCaptureSchema, barrierCaptureCommandSchema, barrierRegistryCommandSchema } from '../../shared/pathfinderBarriers.js';
+import { BARRIER_LIMITS, barrierCanonicalJson, barrierCaptureSchema } from '../../shared/pathfinderBarriers.js';
+import { supportedBarrierCaptureCommandSchema, supportedBarrierRegistryCommandSchema } from '../../shared/pathfinderBarrierSupported.js';
 import { policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { validateBarrierFrameObservation } from '../../viewer-runtime/barrier-capture.mjs';
 import { requireViewerOrigin, viewerHttpPolicy, viewerCookieSecret } from '../viewerSessions/http.js';
@@ -70,8 +71,8 @@ export function createBarrierRouter(pool: Pool, mode: 'admin' | 'viewer' = 'admi
       res.json(await repository().list(project(req), requestPrincipal(req), options));
     } catch (error) { errorResponse(res, error); } });
     router.get('/barriers/snapshots/:snapshotId', async (req, res) => { try { query(req); res.json(await repository().getSnapshot(project(req), requestPrincipal(req), policyUuidSchema.parse(req.params.snapshotId))); } catch (error) { errorResponse(res, error); } });
-    router.post('/barriers/intents', raw(BARRIER_LIMITS.controlBytes), async (req, res) => { try { query(req); res.json(await repository().begin(project(req), requestPrincipal(req), barrierCaptureCommandSchema.parse(body(req, BARRIER_LIMITS.controlBytes)))); } catch (error) { errorResponse(res, error); } });
-    router.post('/barriers/commands', raw(BARRIER_LIMITS.controlBytes), async (req, res) => { try { query(req); res.json(await repository().command(project(req), requestPrincipal(req), barrierRegistryCommandSchema.parse(body(req, BARRIER_LIMITS.controlBytes)))); } catch (error) { errorResponse(res, error); } });
+    router.post('/barriers/intents', raw(BARRIER_LIMITS.controlBytes), async (req, res) => { try { query(req); res.json(await repository().begin(project(req), requestPrincipal(req), supportedBarrierCaptureCommandSchema.parse(body(req, BARRIER_LIMITS.controlBytes)))); } catch (error) { errorResponse(res, error); } });
+    router.post('/barriers/commands', raw(BARRIER_LIMITS.controlBytes), async (req, res) => { try { query(req); res.json(await repository().command(project(req), requestPrincipal(req), supportedBarrierRegistryCommandSchema.parse(body(req, BARRIER_LIMITS.controlBytes)))); } catch (error) { errorResponse(res, error); } });
   } else {
     router.put('/captures/:intentId', raw(UPLOAD_BYTES), async (req, res) => {
       const controller = new AbortController(), closed = () => { if (!res.writableEnded) controller.abort(); };
