@@ -1,6 +1,19 @@
 # PathFinder local implementation progress
 
-## Current: PF-B13e source verified; identity repair delivery first
+## Current: PF-B14 identity repair delivered; popup Save next
+
+Branch `pf-b14-identity-repair-delivery-local-20261022`, source HEAD
+`31d6237445d2bd4e8a926146b5e52ebc38060b10`, B13e product92c839c. Report104:
+actual owned frontend build/install PASS, newweb7841f910, exact same running
+APIac0d16ab/nonweb resources conserved. State/env/rollback+new image archives
+retained in operation819dd15f-3872-4d1f-8c96-024287d132e2. Health/index/assets and
+three exact served module hashes PASS; identity API/filter fix served, old wait
+promise absent. No SQL/API restart/model/cable/original actions. No active build.
+Actual SDK/browser remains blocked; whole-RVM capacity/global geometry unfinished.
+User notified Ctrl+F5. Next commit delivery record, prepare-stage-handoff B15 and
+immediately fix endpoint-only Save in popup without unverified route/Apply bypass.
+
+## Previous: PF-B13e source verified
 
 Branch `pf-b13e-producer-completion-local-20261022`, HEAD
 `9685d2e99d0b4f76241c8d0d53da66d30af9b811`, B13d product

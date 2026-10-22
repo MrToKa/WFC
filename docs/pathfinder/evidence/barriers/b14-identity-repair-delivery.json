@@ -1,0 +1,75 @@
+{
+  "schemaVersion": "wfc.pf.b14-identity-repair-delivery.v1",
+  "at": "2026-10-22T07:16:11.689Z",
+  "status": "FRONTEND_DELIVERY_PASS",
+  "branch": "pf-b14-identity-repair-delivery-local-20261022",
+  "revision": "31d6237445d2bd4e8a926146b5e52ebc38060b10",
+  "checkedProduct": "92c839c6542b85df91a50e602d0c20fc92c6d89d",
+  "image": "sha256:7841f9104bb63acf395840a4375499f5d4e4155eca749858b8776b56a2d9981f",
+  "previousImage": "sha256:814475f9fe327887e0444fcd4e7e73411bc2f341d59b0748cac1f3b62578acee",
+  "apiImage": "sha256:ac0d16ab1b0f4c92922c20d1a13a5ea142d4c6e92558de1870daf4db7fd60fcf",
+  "apiSameRunningContainer": true,
+  "nonwebConservation": "PASS",
+  "health": "PASS",
+  "indexAsset": "PASS",
+  "servedFiles": [
+    {
+      "path": "/viewer-runtime/7.130.0/barrier-capture.mjs",
+      "bytes": 36436,
+      "sha256": "e4327539ac1f3afc1e98624ed7e3fa10aa7ff53aaae8c2e3d0e22eda2c6e9bf0"
+    },
+    {
+      "path": "/viewer-runtime/7.130.0/barrier-capture-errors.mjs",
+      "bytes": 2956,
+      "sha256": "bef60c5884d24d7475d0e914489a92a38b67ae3e68bc9f0346303019c707a1a0"
+    },
+    {
+      "path": "/viewer-runtime/7.130.0/barrier-multipart-runtime.mjs",
+      "bytes": 10778,
+      "sha256": "b9738f549eccb9dc65244a2c4f013caa9dc9e36dc86442c5f58cffa270352cd5"
+    }
+  ],
+  "imageArchive": {
+    "bytes": 52922368,
+    "sha256": "44a2aba82e7f166e6f3f8434df5a2fb06b9310ccf408540f86daec307b410f8d"
+  },
+  "privateOperation": "819dd15f-3872-4d1f-8c96-024287d132e2",
+  "evidence": [
+    {
+      "name": "prepare.pass.private.json",
+      "bytes": 17814,
+      "sha256": "733deb3af0f273324543cc7c5f975071a35083c913cb81f698909b061507a72e"
+    },
+    {
+      "name": "validation.pass.private.json",
+      "bytes": 7231,
+      "sha256": "d3acd66933a4386a2979e8ab881843af46795a28be3e153a4fc56ecd07af4d8b"
+    },
+    {
+      "name": "build.private.log",
+      "bytes": 155,
+      "sha256": "2785a10fb51a9983e410b1449424d132ee32d78d86fff6928a9f8dbe2ed0fa5f"
+    },
+    {
+      "name": "install.pass.private.json",
+      "bytes": 35937,
+      "sha256": "6a5ad211d4748d16c622afaf64b80695a8d94c7ff15cd1c214a5bb83fc00148d"
+    },
+    {
+      "name": "static.pass.private.json",
+      "bytes": 970,
+      "sha256": "bc4f7fc59d9484413f0eaefc109178cf79554358b54d035d13cd8d03efaf697a"
+    }
+  ],
+  "limits": {
+    "browser": "BLOCKED_SAVED_REFUSAL",
+    "actualSdk": "NOT_RUN",
+    "actualAalborg": "NOT_RUN",
+    "wholeParentCapacity": "NOT_MEASURED",
+    "globalCollision": "NOT_IMPLEMENTED",
+    "newServerMount": false,
+    "realCableWrites": false,
+    "originalServicesChanged": false,
+    "scope": "Owned frontend identity/diagnostic repair only. No geometry or engineering acceptance."
+  }
+}
