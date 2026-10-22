@@ -177,7 +177,10 @@ async function indexScene(ctx, scope) {
 }
 function geometryDescription(ctx, scene, fragmentId) {
   ctx.check(); const geometry = scene.list.getGeometry(fragmentId);
-  const primitive = !geometry ? 'unavailable' : geometry.isLines ? 'lines' : geometry.isPoints ? 'points' : geometry.is2d ? 'unknown' : 'triangles';
+  // Wide-line expansion may clear isLines while retaining renderer triangles.
+  // Follow SDK GeometryType precedence (lines, points, wide lines); wide-line
+  // display triangles must never become a physical barrier mesh.
+  const primitive = !geometry ? 'unavailable' : geometry.isLines ? 'lines' : geometry.isPoints ? 'points' : geometry.isWideLines ? 'lines' : geometry.is2d ? 'unknown' : 'triangles';
   if (primitive !== 'triangles') return { primitive };
   const vertices = ctx.sdk.getVertexCount(geometry), indices = geometry.ib ?? geometry.indices ?? geometry.index?.array ?? null;
   const position = geometry.vblayout?.position ?? geometry.attributes?.position, source = geometry.vb ?? position?.array;

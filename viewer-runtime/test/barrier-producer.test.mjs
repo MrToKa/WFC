@@ -133,6 +133,27 @@ test('unknown or nontriangle physical occurrences are explicit and cannot seal a
     assert.equal(records(f, 'fragments')[0].primitive, primitive); assert.equal(f.events.some(event => event.kind === 'seal' && event.seal.kind === 'fragments'), false);
   }
 });
+test('expanded wide lines follow SDK primitive precedence and never borrow triangle buffers or a plan seal', async () => {
+  for (const [flags, primitive] of [[{ isWideLines: true, isLines: false }, 'lines'], [{ isWideLines: true, isLines: true, isPoints: true }, 'lines'],
+    [{ isWideLines: true, isLines: false, isPoints: true, is2d: true }, 'points'], [{ isWideLines: true, isLines: false, is2d: true }, 'lines']]) {
+    for (const hasTriangleBuffers of [true, false]) {
+      const mesh = hasTriangleBuffers ? geometry() : {}; Object.assign(mesh, flags);
+      const f = fixture({ selected: [3], oneFragment: true, mesh }); let triangleReads = 0;
+      globalThis.Autodesk.Viewing.Private.getVertexCount = () => { triangleReads++; throw Error('Wide lines are not triangle input.'); };
+      globalThis.Autodesk.Viewing.Private.getIndicesCount = () => { triangleReads++; throw Error('Wide lines are not triangle input.'); };
+      globalThis.Autodesk.Viewing.Private.makeReadPositionFunc = () => { triangleReads++; throw Error('Wide lines are not triangle input.'); };
+      await assert.rejects(f.consume(), { code: 'BARRIER_MULTIPART_PRIMITIVE_' + primitive.toUpperCase() });
+      assert.equal(records(f, 'fragments')[0].primitive, primitive); assert.equal(triangleReads, 0);
+      assert.equal(f.events.some(event => event.kind === 'seal' && event.seal.kind === 'fragments'), false);
+      assert.equal(planSeal(f), undefined);
+    }
+  }
+});
+test('explicit false renderer primitive flags retain a complete triangle inventory', async () => {
+  const mesh = geometry(); Object.assign(mesh, { isLines: false, isWideLines: false, isPoints: false, is2d: false });
+  const f = fixture({ selected: [3], oneFragment: true, mesh }); await f.consume();
+  assert.equal(records(f, 'fragments')[0].primitive, 'triangles'); assert.equal(planSeal(f).totals.triangles, 2);
+});
 test('invalid indices, nonfinite vertices and animation are refused without a final plan seal', async () => {
   const invalid = fixture({ selected: [3], oneFragment: true }); invalid.mesh.ib[0] = 99; await assert.rejects(invalid.consume(), { code: 'BARRIER_MULTIPART_INDEX_INVALID' });
   const finite = fixture({ selected: [3], oneFragment: true }); finite.mesh.attributes.position.array[0] = Infinity; await assert.rejects(finite.consume(), { code: 'BARRIER_MULTIPART_VERTEX_INVALID' });

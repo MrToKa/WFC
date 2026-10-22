@@ -1,5 +1,20 @@
 # PathFinder local implementation progress
 
+## Current: PF-B16 actual wall diagnosis checked; surface-domain catalog next
+
+Root uniquely matched30 supplied objects in exact retained fingerprint.29RAW
+triangle fragments/5558vertices/4421triangles +one10vertexline; grid explains
+unsupportedprimitive. Five local boundary fragments; odd4421cannot satisfy
+closed triangular two-manifold parity, so grid removal alone does not solve v1
+closed-shell mismatch. Actual metadata/RAW local diagnostics/sourcepins PASS,
+not SDK/world/aggregate/publication or clearance. Narrow wide-line classification
+fix source checked83native+4closure/frontendbuild; reviews CLEAR. Report106,
+operation44c38196 retain evidence/first diagnostic failures. Runtime stillweb
+a0e6972c/APIac0d16ab, no writes/install. Latest user order geometryFIRST thenpopup;
+per-cable off-default Drillcheckbox required there. Next commit/prep-stage-handoff
+and immediately global coverage/canonical catalog, then surfacequery/occupancy/
+ownendpoint/publication/proofs/UI/actualAalborg. Preparer remains afterward.
+
 ## Current: PF-B15 cable popup delivered; concrete wall diagnosis next
 
 Inherited pf-b15-cable-popup-save-local-20261022 from handoff8d980e6. Report105:

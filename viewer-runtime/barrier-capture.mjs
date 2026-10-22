@@ -245,7 +245,9 @@ export async function* captureSelectedBarriers(viewer, input, { loadId, signal, 
   const fragments = [], matrixByFragment = new Map(), geometryByFragment = new Map(); let verticesTotal = 0, trianglesTotal = 0;
   for (const fragmentId of [...membership.keys()].sort((a, b) => a - b)) {
     active(); const geometry = list.getGeometry(fragmentId); requireThat(geometry, 'Every selected barrier fragment must have resident geometry.', 'BARRIER_CAPTURE_GEOMETRY_NOT_RESIDENT');
-    requireThat(!geometry.isLines && !geometry.isPoints && !geometry.is2d, 'Every selected barrier fragment must be a triangle mesh.', 'BARRIER_CAPTURE_UNSUPPORTED_PRIMITIVE');
+    // SDK 7.130.0 wide-line meshes can clear isLines after expansion; their
+    // rendering triangles still cannot describe a physical barrier surface.
+    requireThat(!geometry.isLines && !geometry.isWideLines && !geometry.isPoints && !geometry.is2d, 'Every selected barrier fragment must be a triangle mesh.', 'BARRIER_CAPTURE_UNSUPPORTED_PRIMITIVE');
     geometryByFragment.set(fragmentId, geometry);
     const world = physicalWorld(fragmentId);
     const canonical = newMatrix().copy(display).multiply(world), canonicalValues = Array.from(canonical.elements);

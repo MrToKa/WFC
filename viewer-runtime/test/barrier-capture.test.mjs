@@ -150,7 +150,22 @@ test('connected frame opening retains all original triangles and does not fabric
 });
 test('empty selected parent cannot produce an empty complete barrier scope', async () => { const f = fixture(); f.own.set(2, []); f.own.set(3, []); await rejectCapture(f, request(), {}, { code: 'BARRIER_CAPTURE_EMPTY_SELECTION' }); });
 test('nonresident selected mesh refuses instead of declaring a partial scope complete', async () => { const f = fixture(); f.geometries.delete(1); await rejectCapture(f, request(), {}, { code: 'BARRIER_CAPTURE_GEOMETRY_NOT_RESIDENT' }); });
-test('nontriangle fragments refuse rather than silently disappearing', async () => { const f = fixture(); f.geometries.get(1).isLines = true; await rejectCapture(f, request(), {}, { code: 'BARRIER_CAPTURE_UNSUPPORTED_PRIMITIVE' }); });
+test('line, point, 2D and expanded wide-line fragments refuse before triangle enumeration', async () => {
+  for (const flags of [{ isLines: true }, { isPoints: true }, { is2d: true }, { isWideLines: true, isLines: false },
+    { isWideLines: true, isLines: false, isPoints: true, is2d: true }]) {
+    const f = fixture(); Object.assign(f.geometries.get(0), flags);
+    let verticesRead = 0, trianglesRead = 0;
+    globalThis.Autodesk.Viewing.Private.enumMeshVertices = () => { verticesRead++; };
+    globalThis.Autodesk.Viewing.Private.enumMeshTriangles = () => { trianglesRead++; };
+    await rejectCapture(f, request(), {}, { code: 'BARRIER_CAPTURE_UNSUPPORTED_PRIMITIVE' });
+    assert.equal(verticesRead, 0); assert.equal(trianglesRead, 0);
+  }
+});
+test('explicit false renderer primitive flags retain original triangle geometry', async () => {
+  const f = fixture(); Object.assign(f.geometries.get(0), { isLines: false, isWideLines: false, isPoints: false, is2d: false });
+  const result = await collect(f); assert.deepEqual(result.capture.fragments[0].triangleIndices, [0, 1, 2]);
+  assert.equal(result.capture.fragments.length, 2);
+});
 test('invalid original triangle index refuses', async () => { const f = fixture(); f.geometries.get(1).indices = [0, 1, 99]; await rejectCapture(f); });
 test('repeated triangle index refuses', async () => { const f = fixture(); f.geometries.get(1).indices = [0, 1, 1]; await rejectCapture(f); });
 test('nonfinite original vertex refuses', async () => { const f = fixture(); f.geometries.get(1).vertices[0][0] = NaN; await rejectCapture(f); });
