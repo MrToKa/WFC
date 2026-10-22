@@ -2,6 +2,38 @@
 
 ## SP-0 ACTIVE
 
+TargetedOSpinrepairafterfb9failure verifiedroot: guarda40f2200 PASS18/48expected
+denials; ops47b1dd39 SUBSET_PASS14/guard18PASS/0skip. Allworker+childjoins,ports,
+source+copypinsPASS; no killedworker. ExactSystem32PSpinnedpositiveoriginalnlink/
+dev/inode/size/hash; genericprivateinputnlink1 andfixed4ACLargs/stdin unchanged.
+IndependentreviewCLEAR. Report04/publicos-pinreceipt recordpartialscope; full
+correctedWindows/LinuxmatrixNOT_RUN, SP0stillINCOMPLETE/main5180 untouched.
+
+FreshFULLsidecarbaselinefb9ede8f-8517-4406-a5f1-c9a4535ae52d finishedFAIL at
+2026-10-22T00:57:18.977Z, noactualprocessremains. Guard17/package174PASS; Preparer
+286tests/280PASS/1FAIL/5LinuxplatformSKIP/0cancelled,359920ms. WindowsACLtest185
+refusedBASELINE_CONTROL_PATH beforelaunch; parentjoined/portsclosed/source+copy
+unchangedtrue, butworkersJoinedfalse. Fullbaseline remainsINCOMPLETE, notSP0PASS.
+Sidecardiagnosticsavailable fornextfocuseddiagnosis; no unchangedblindretry or
+testtimeoutincrease. Earlierworkspace998abcb5 SUBSET_PASS5/5/66.4s retained,
+normalworker+childjoins/ports/pinsPASS; observationonly doesnotproveproductfix.
+Offline-seedfinalizationunits19PASS are fakeDockercontrolsonly, noactualbackup.
+PF-B13aserverplanning410f2da complete; PF-B13bstagingfoundation nowactivepriority.
+No originalmain5180/PG/APS mutation or backup yet.
+
+PFuserpriorityresumed for actualbarrierextractionfailure; PF-B12diagnosticweb
+delivery22114f4/web814475f9 complete, PF-B13a puremultipartplanning underway.
+Preparer independent rootcontrols:19offline-seedunitPASS(injectedfakeDockeronly),
+freshguard67f21571 PASS15/expected48denials/worker+childjoins/portsclosed/hashesexact.
+Freshworkspace858859f1-d0f9-4d60-a8a0-26a851354567 diagnosticFAIL at339984ms,
+5tests/3pass/2cancelled120s; test4PASS90s. Parentjoined,portsclosed/source+copy
+unchangedreported; workerexitreportmissing/childrenJoinedfalse. Reported0denials
+is incompleteworkerobservability, not proofofzero workerdenials. No actualprocess
+stillrunning inrootexec. EarlierfullbaselineFAIL remains. Publicdiagnosticreceipt
+sp0-workspace-diagnostic-858859f1.json. Aowns5harnessfiles forboundedobservation-only
+sidecars; terminalworker/joins/ports/PASS requirements remainstrict. Rootsoleactual
+executor; no source/main5180/PF5191/APS runtime mutation. No unchangedblindretry.
+
 Resumed from PF-B11 delivery77bbcf8/web75187b0a (recorda85b051). Source checkpoint
 31d8ce702d4d1d4d07a218f253e161d2abeb2716 explicitly preserves INCOMPLETE baseline/
 backup source. Executing PFhandoff SP-0-baseline-diagnostics.md. C owns five

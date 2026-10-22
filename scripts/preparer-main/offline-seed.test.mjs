@@ -129,8 +129,65 @@ test('cold seed captures all three stores, no PG start, exact prior active state
     for(const mount of options.mounts.filter(item=>item.Target==='/source'))assert.equal(mount.ReadOnly,true);}
   const complete=JSON.parse(await fs.readFile(path.join(f.operationDirectory,'complete.private.json'),'utf8'));
   assert.equal(complete.productionSeed,false);assert.equal(complete.qualification,'NOT_RUN');assert.ok(complete.seed.sha256);
-  assert.equal(complete.sourceLockReleased,true);
+  assert.equal(complete.schemaVersion,'wfc.preparer.offline-seed-complete.v2');assert.equal(complete.sourceLockReleased,false);
+  assert.equal(complete.sourceLockRelease.state,'pending');assert.equal(result.sourceLockReleased,true);
+  assert.equal(result.sourceLockRelease.state,'confirmed');
+  assert.equal(result.sourceLockRelease.terminal.sha256,hash(await fs.readFile(path.join(f.operationDirectory,'complete.private.json'))));
+  assert.equal(result.sourceLockRelease.archivedLock.path,complete.sourceLockRelease.archivedPath);
+  assert.equal(result.sourceLockRelease.archivedLock.sha256,complete.sourceLockRelease.source.sha256);
+  const archived=JSON.parse(await fs.readFile(complete.sourceLockRelease.archivedPath,'utf8'));
+  assert.equal(archived.operationId,f.intent.operationId);assert.equal(archived.schemaVersion,'wfc.preparer.offline-seed-source-lock.v1');
   await assert.rejects(fs.stat(path.join(ROOT,'.preparer-work/main5180-offline-seed.lock')),{code:'ENOENT'});
+});
+
+test('a terminal marker write failure retains the exact source lock and never releases an unmarked seed',async t=>{
+  const f=await fixture(t),phases=[];
+  const options={...f.options,testFinalizationObserver:async phase=>{phases.push(phase);
+    if(phase==='before-complete')await fs.mkdir(path.join(f.operationDirectory,'complete.private.json'));}};
+  await assert.rejects(captureOfflineSeed(f.args,options),{code:'EEXIST'});
+  assert.deepEqual(phases,['before-complete']);assert.deepEqual(f.all.map(running),[true,true,false,true]);
+  assert.equal((await fs.stat(path.join(f.operationDirectory,'complete.private.json'))).isDirectory(),true);
+  const lock=JSON.parse(await fs.readFile(path.join(ROOT,'.preparer-work/main5180-offline-seed.lock'),'utf8'));
+  assert.equal(lock.operationId,f.intent.operationId);
+  await assert.rejects(fs.stat(path.join(f.operationDirectory,'source-lock-released.private.json')),{code:'ENOENT'});
+  const failure=JSON.parse(await fs.readFile(path.join(f.operationDirectory,'finalization-failure.private.json'),'utf8'));
+  assert.equal(failure.sourceLockState,'retained');assert.equal(failure.terminal,null);
+  const seed=JSON.parse(await fs.readFile(path.join(f.operationDirectory,'seed.private.json'),'utf8'));
+  assert.equal(seed.finalizationMode,'injected-test-only');assert.equal(seed.productionSeed,false);
+  const count=f.events.length;await assert.rejects(captureOfflineSeed(f.args,options),{code:'EEXIST'});assert.equal(f.events.length,count);
+});
+
+test('a failed atomic lock rename keeps durable pending completion and the exact source lock without replaying source actions',async t=>{
+  const f=await fixture(t),rename=fs.rename,sourceLock=path.join(ROOT,'.preparer-work/main5180-offline-seed.lock');let sourceActions;
+  const options={...f.options,testFinalizationObserver:phase=>{if(phase==='before-lock-release')sourceActions=f.events.length;}};
+  fs.rename=async(from,to)=>{if(path.resolve(from)===path.resolve(sourceLock))throw Object.assign(Error('Injected rename failure'),{code:'TEST_RENAME_FAILURE'});return rename(from,to);};
+  try {await assert.rejects(captureOfflineSeed(f.args,options),{code:'SP1_SOURCE_LOCK_RELEASE_UNCONFIRMED'});}
+  finally {fs.rename=rename;}
+  assert.equal(f.events.length,sourceActions);assert.deepEqual(f.all.map(running),[true,true,false,true]);
+  const complete=JSON.parse(await fs.readFile(path.join(f.operationDirectory,'complete.private.json'),'utf8'));
+  assert.equal(complete.sourceLockReleased,false);assert.equal(complete.sourceLockRelease.state,'pending');
+  assert.equal(hash(await fs.readFile(sourceLock)),complete.sourceLockRelease.source.sha256);
+  await assert.rejects(fs.stat(complete.sourceLockRelease.archivedPath),{code:'ENOENT'});
+  const failure=JSON.parse(await fs.readFile(path.join(f.operationDirectory,'finalization-failure.private.json'),'utf8'));
+  assert.equal(failure.code,'SP1_SOURCE_LOCK_RELEASE_UNCONFIRMED');assert.equal(failure.causeCode,'TEST_RENAME_FAILURE');assert.equal(failure.sourceLockState,'unconfirmed');
+  const count=f.events.length;await assert.rejects(captureOfflineSeed(f.args,options),{code:'EEXIST'});assert.equal(f.events.length,count);
+});
+
+test('a fault after rename leaves durable completion and its exact archived lock but never claims release confirmation',async t=>{
+  const f=await fixture(t);let sourceActions;
+  const options={...f.options,testFinalizationObserver:phase=>{if(phase==='after-lock-release'){
+    sourceActions=f.events.length;throw Object.assign(Error('Injected lost release acknowledgement'),{code:'TEST_RELEASE_ACK'});}}};
+  await assert.rejects(captureOfflineSeed(f.args,options),{code:'SP1_SOURCE_LOCK_RELEASE_UNCONFIRMED'});
+  assert.equal(f.events.length,sourceActions);assert.deepEqual(f.all.map(running),[true,true,false,true]);
+  const complete=JSON.parse(await fs.readFile(path.join(f.operationDirectory,'complete.private.json'),'utf8'));
+  assert.equal(complete.sourceLockReleased,false);assert.equal(complete.sourceLockRelease.state,'pending');
+  const archived=await fs.readFile(complete.sourceLockRelease.archivedPath);
+  assert.equal(hash(archived),complete.sourceLockRelease.source.sha256);assert.equal(JSON.parse(archived).operationId,f.intent.operationId);
+  await assert.rejects(fs.stat(path.join(ROOT,'.preparer-work/main5180-offline-seed.lock')),{code:'ENOENT'});
+  const failure=JSON.parse(await fs.readFile(path.join(f.operationDirectory,'finalization-failure.private.json'),'utf8'));
+  assert.equal(failure.code,'SP1_SOURCE_LOCK_RELEASE_UNCONFIRMED');assert.equal(failure.sourceLockState,'unconfirmed');
+  assert.equal(failure.terminal.sha256,hash(await fs.readFile(path.join(f.operationDirectory,'complete.private.json'))));
+  const count=f.events.length;await assert.rejects(captureOfflineSeed(f.args,options),{code:'EEXIST'});assert.equal(f.events.length,count);
 });
 test('partial capture restores source, retains sticky failure and refuses same-attempt retry',async t=>{
   const f=await fixture(t,{failCapture:true});await assert.rejects(captureOfflineSeed(f.args,f.options),{code:'TEST_CAPTURE_FAILURE'});

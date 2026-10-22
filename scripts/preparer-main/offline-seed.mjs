@@ -182,7 +182,7 @@ function assertDestinations(intent, operationDirectory, source) {
 }
 
 /** Captures a physical cold seed only. It never starts PostgreSQL or an application helper. */
-export async function captureOfflineSeed({ intentPath, intentSha256, operationDirectory }, { docker: supplied, signal, imageArchiveVerifier } = {}) {
+export async function captureOfflineSeed({ intentPath, intentSha256, operationDirectory }, { docker: supplied, signal, imageArchiveVerifier, testFinalizationObserver } = {}) {
   need(SHA.test(intentSha256 ?? '') && typeof intentPath === 'string' && path.isAbsolute(intentPath)
     && typeof operationDirectory === 'string' && path.isAbsolute(operationDirectory), 'SP1_ARGUMENT_INVALID');
   const intent = await readIntent(intentPath, intentSha256), parent = await assertCanonicalPath(path.join(ROOT, '.preparer-work'), { directory: true });
@@ -192,6 +192,8 @@ export async function captureOfflineSeed({ intentPath, intentSha256, operationDi
   need(!overlap(operationDirectory, intent.privateCompanion), 'SP1_PRIVATE_COMPANION_LOCATION');
   const verifier = imageArchiveVerifier ?? verifyImageArchive, verifierMode = imageArchiveVerifier === undefined ? 'production-default' : 'injected-test-only';
   need(typeof verifier === 'function', 'SP1_VERIFIER_INVALID');
+  need(testFinalizationObserver === undefined || typeof testFinalizationObserver === 'function', 'SP1_FINALIZATION_OBSERVER_INVALID');
+  const finalizationMode = testFinalizationObserver === undefined ? 'production-default' : 'injected-test-only';
   const sourceClosure = [];
   for (const name of ['offline-seed.mjs', 'foundation/docker.mjs', 'foundation/docker-bounds.mjs', 'foundation/archives.mjs', 'foundation/manifest.mjs', 'foundation/provenance.json']) sourceClosure.push(await pin(path.join(path.dirname(fileURLToPath(import.meta.url)), name)));
   // mkdir without recursive is the immutable attempt latch; any retained directory refuses retry.
@@ -206,7 +208,7 @@ export async function captureOfflineSeed({ intentPath, intentSha256, operationDi
   const evidence = [];
   const proof = async (name, value) => { await writeJsonNew(file(name), value); const ref = await pin(file(name)); evidence.push(ref); return ref; };
   await proof('begin.private.json', { schemaVersion: 'wfc.preparer.offline-seed-attempt.v1', operationId: intent.operationId,
-    intent: await pin(intentPath), startedAt, verifierMode, sourceClosure, sourceLockScope: 'main5180', qualification: 'NOT_RUN' });
+    intent: await pin(intentPath), startedAt, verifierMode, finalizationMode, sourceClosure, sourceLockScope: 'main5180', qualification: 'NOT_RUN' });
   let docker, original, resourceBaseline, outsideBaseline, primary, captured, resume, companionPin;
   const check = () => { signal?.throwIfAborted(); };
   const witness = async () => { check(); await readIntent(intentPath, intentSha256); return sourceWitness(intent, await docker.containers()); };
@@ -304,18 +306,60 @@ export async function captureOfflineSeed({ intentPath, intentSha256, operationDi
   need(companionPin && same(await pin(intent.privateCompanion), companionPin), 'SP1_PRIVATE_COMPANION_CHANGED');
   for (const item of [...captured.archives, ...captured.images]) need(same(await pin(item.file.path), item.file), 'SP1_CAPTURE_FILE_CHANGED');
   const result = { schemaVersion: 'wfc.preparer.offline-seed.v1', status: 'PASS', operationId: intent.operationId, sourcePort: 5180,
-    qualification: 'NOT_RUN', releasableBackup: false, verifierMode, productionSeed: verifierMode === 'production-default',
+    qualification: 'NOT_RUN', releasableBackup: false, verifierMode, finalizationMode,
+    productionSeed: verifierMode === 'production-default' && finalizationMode === 'production-default',
     intent: await pin(intentPath), privateCompanion: companionPin, sourceClosure, evidence,
     ...captured, sourceResume: await pin(file('resume.private.json')), completedAt: new Date().toISOString() };
   await writeJsonNew(file('seed.private.json'), result);
-  const currentLock = await fs.lstat(sourceLockPath);
-  need(!currentLock.isSymbolicLink() && currentLock.dev === sourceLockStat.dev && currentLock.ino === sourceLockStat.ino
-    && same(await pin(sourceLockPath), sourceLock), 'SP1_SOURCE_LOCK_CHANGED');
-  await fs.unlink(sourceLockPath);
-  // Last marker is written only after captures, exact images and restoration bookends have passed.
-  await writeJsonNew(file('complete.private.json'), { schemaVersion: 'wfc.preparer.offline-seed-complete.v1', operationId: intent.operationId,
-    seed: await pin(file('seed.private.json')), productionSeed: result.productionSeed, sourceLockReleased: true, qualification: 'NOT_RUN' });
-  return result;
+  const releasedLockPath = file('source-lock-released.private.json');
+  let terminal, releaseAttempted = false;
+  const assertLock = async () => {
+    const currentLock = await fs.lstat(sourceLockPath);
+    need(!currentLock.isSymbolicLink() && currentLock.dev === sourceLockStat.dev && currentLock.ino === sourceLockStat.ino
+      && same(await pin(sourceLockPath), sourceLock), 'SP1_SOURCE_LOCK_CHANGED');
+  };
+  try {
+    await assertLock();
+    // Only fixed phase names reach this programmatic fault seam. It has no
+    // CLI/environment entry and injected results cannot be production seeds.
+    await testFinalizationObserver?.('before-complete');
+    const complete = { schemaVersion: 'wfc.preparer.offline-seed-complete.v2', operationId: intent.operationId,
+      seed: await pin(file('seed.private.json')), productionSeed: result.productionSeed, sourceLockReleased: false,
+      sourceLockRelease: { state: 'pending', source: sourceLock, archivedPath: releasedLockPath }, qualification: 'NOT_RUN' };
+    // A terminal capture/restoration proof is durable before the source-wide
+    // name can disappear. This marker records pending release, never success.
+    await writeJsonNew(file('complete.private.json'), complete);
+    need(same(JSON.parse(await fs.readFile(file('complete.private.json'), 'utf8')), complete), 'SP1_COMPLETE_READBACK_MISMATCH');
+    terminal = await pin(file('complete.private.json'));
+    await testFinalizationObserver?.('before-lock-release');
+    await assertLock();
+    need(same(await pin(terminal.path), terminal), 'SP1_COMPLETE_READBACK_MISMATCH');
+    try { await fs.lstat(releasedLockPath); need(false, 'SP1_SOURCE_LOCK_RELEASE_DESTINATION_EXISTS'); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+    releaseAttempted = true;
+    // Both paths are on the same owned filesystem. Rename archives the exact
+    // immutable lock atomically; there is no unlink-then-marker-write gap.
+    await fs.rename(sourceLockPath, releasedLockPath);
+    await testFinalizationObserver?.('after-lock-release');
+    const released = await fs.lstat(releasedLockPath), archivedLock = await pin(releasedLockPath);
+    need(!released.isSymbolicLink() && released.dev === sourceLockStat.dev && released.ino === sourceLockStat.ino
+      && same(archivedLock, { ...sourceLock, path: releasedLockPath }), 'SP1_SOURCE_LOCK_RELEASE_UNCONFIRMED');
+    try { await fs.lstat(sourceLockPath); need(false, 'SP1_SOURCE_LOCK_RELEASE_UNCONFIRMED'); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+    need(same(await pin(terminal.path), terminal), 'SP1_COMPLETE_READBACK_MISMATCH');
+    return { ...result, sourceLockReleased: true, sourceLockRelease: { state: 'confirmed', terminal, archivedLock } };
+  } catch (error) {
+    // Never reacquire/delete another lock or replay source actions on an
+    // uncertain rename. Completion + the bound archived lock permit inspection.
+    const failure = releaseAttempted ? Object.assign(Error('SP1_SOURCE_LOCK_RELEASE_UNCONFIRMED'), {
+      code: 'SP1_SOURCE_LOCK_RELEASE_UNCONFIRMED', cause: error }) : error;
+    try { await writeJsonNew(file('finalization-failure.private.json'), {
+      schemaVersion: 'wfc.preparer.offline-seed-finalization-failure.v1', operationId: intent.operationId,
+      status: 'FAIL', code: safeCode(failure), causeCode: safeCode(error), terminal: terminal ?? null,
+      sourceLockState: releaseAttempted ? 'unconfirmed' : 'retained', archivedLockPath: releasedLockPath, at: new Date().toISOString() }); }
+    catch { /* An unavailable evidence filesystem cannot justify release or retry. */ }
+    throw failure;
+  }
 }
 
 export async function main(args) {

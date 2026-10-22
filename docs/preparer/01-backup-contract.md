@@ -14,7 +14,17 @@ computed from exported networkAttachmentIdentity: attachment names/NetworkID and
 configuration are pinned, excluding only endpoint allocation observations. A
 source-wide main5180-offline-seed.lock serializes distinct operation UUIDs; failed
 or uncertain attempts retain it for explicit reconciliation. Successful source
-restoration and proof checks precede lock release and the final complete marker.
+restoration and proof checks precede a durable complete marker that records lock
+release as pending. Only then is the exact source lock atomically renamed into
+the operation as `source-lock-released.private.json`; the marker binds its hash
+and destination. The marker never claims release succeeded before that rename.
+The caller reports confirmed release only after both files and source-name
+absence are verified. A rename/postcheck failure is explicitly unconfirmed, with
+no source replay, automatic retry or lock reacquisition. Before-rename failure
+retains the source-wide lock; after-rename interruption leaves the durable
+completion and exact archived lock available for explicit reconciliation. A
+programmatic fixed-phase fault observer is test-only, has no CLI/environment
+entry and makes `productionSeed` false when injected.
 Final source fixes/tests remain **NOT_RUN**, pending root review/execution. Main
 5180 has not been changed by this implementation. The user's reported5191 cable
 workflow regression takes priority before any SP-1 runtime work.
