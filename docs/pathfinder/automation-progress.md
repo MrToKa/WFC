@@ -1,6 +1,38 @@
 # PathFinder local implementation progress
 
-## Current: PF-B13a pure planning checks PASS; PF-B13b staging next
+## Current: PF-B13b foundation verified; PF-B13c producer handoff next
+
+Source8newfiles rootchecksPASS: shared12/repo7/Windowsstorage6 (+21Linuxconditional
+SKIP); freshLinuxstorage26 (+1WindowsconditionalSKIP) andrealPG12, complete tiny
+fourstream/fourseal/opaquepartsequence. Fulltypes/scopedlint0warningsPASS,
+independentreviewCLEAR. Initial4mechanicaltypeerrorsfixed; finaltypesPASS.
+Ownoperation6cda1a92, attempt6PASS/source36bookends/positivehelper+networkcleanup;
+attempts1/2remoteexecuncertainty and3–5PGstartupfail retained, notPASS. Twoempty
+earlydiagnosticnetworksretainedpendingreconciliation; no livehelper remains.
+Stagingunqualified/authoritynone, no initializer/routes/5191schema/runtime writes.
+Report98/publicreceipt retainexactpins. Nextprotectedpagedproducer; allactual
+Aalborggeometry/holes/fullcapacity andwriteproofintegrationremainunfinished.
+Preparercheckpoint0083207 preservesOSpinrepair/sourceprogress; guard18PASS,
+opsSUBSET14PASS/0skip/positivejoins+ports+pins, fullplatformmatrixNOT_RUN.
+
+## Previous: PF-B13b server-owned multipart staging implementation
+
+Branchpf-b13b-multipart-staging-local-20261022, HEAD5c3a5087d15a12ae624c44d1ec300adda2fb36ef,
+inherits B13aproduct410f2da. Bnewsharedsessions/contracts; Anewschema/repository;
+Cnewpackedstorage; rootdocs/actualchecks. No routes/initializer/5191schema/runtime
+wiring inthisfoundation. Frozen scope/profile, exactactor+login/currentmodelLoadId,
+180swritelease/immutable60minjobdeadline; streamrootsbindonceafterpages. Global
+andpersessionphysicalreservations≤8GiB/50000entries NOT_MEASURED, chargedtemp/final/
+orphans/fixednamespace, norelease. Linuxfile+directoryfsyncrequired; Windowscannot
+claimdurability. FreshownedSQL/Linuxfilesystemfixtures pending; no other executor.
+Userconfirms onlyownendpointfirstexit/finalentry exception; allotherobstacles and
+laterreentrychecked. Plan96 retainsgeometrypolicy/futurequalification scope.
+PreparerFULLfb9ede8f finishedFAIL00:57:18Z: guard17/package174PASS; Preparer286tests,
+280PASS/1FAIL(BASELINE_CONTROL_PATHWindowsACLtest)/5LinuxSKIP, no cancellations,
+359920ms, parentjoined/portsclosed/pinsunchangedtrue but workersJoinedfalse.
+No timeoutincrease/rerun/acceptance inferred. Sourcesunfrozen; focuseddiagnosis next.
+
+## Previous: PF-B13a pure planning checks PASS
 
 Native16PASS inclsynthetic620831occurrences/382523nodes,84parts/1213pages,
 7650460Blookup,max512rows/inputpage,twooriginalinputpages;sampledRSS276537344B,
@@ -12,7 +44,7 @@ admission/packedstaging prerequisite beforeproducer: v1event24KiB/3000events/rep
 4096 cannotcarry256KiBpagesunchanged. Plan96 order1→3foundation→2producer→4→5→6→7.
 Preparer sidecarguard17PASS; workspace998abcb5 SUBSET_PASS5/5,66.4s, normalworker/
 childjoins/ports/source+copypinsPASS; notfullbaseline. FreshFULLbaselinefb9ede8f-
-8517-4406-a5f1-c9a4535ae52d runningrootexec40269, sourcesfrozen.
+8517-4406-a5f1-c9a4535ae52d subsequentlyfinishedFAIL; seecurrentrecord.
 
 ## Previous: PF-B13a multipart planning implementation
 
