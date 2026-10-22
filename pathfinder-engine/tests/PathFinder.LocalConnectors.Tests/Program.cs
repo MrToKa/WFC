@@ -105,6 +105,25 @@ internal static class Program
 
     private static void Standalone()
     {
+        Run("standalone straight connector physically rechecks after a cached clear search result", () =>
+        {
+            var from = P(-.75, 1); var to = P(.75, 1); var chordCalls = 0; var calls = 0;
+            RouteCollisionObservation Changing(RoutePoint a, RoutePoint b, CancellationToken token)
+            {
+                calls++; if (Same(a, b)) return new(RouteCollisionStatus.Clear, null, "Endpoint occupancy.", 0);
+                Need(Same(a, from) && Same(b, to), "Unexpected standalone chord orientation.");
+                chordCalls++; return new(chordCalls == 1 ? RouteCollisionStatus.Clear : RouteCollisionStatus.Blocked, "shell:changed", "Actual connector verdict.", 1);
+            }
+            var plan = Plan(from, to, Changing);
+            Equal(LocalConnectorStatus.Indeterminate, plan.Status); Equal("FINAL_CONNECTOR_RECHECK_FAILED", plan.Reason);
+            Equal(2, chordCalls); Equal(4, calls); Equal(calls, plan.Queries); Equal(4, plan.EdgeChecks); Equal(0, plan.Points.Count);
+        });
+        Run("standalone final connector recheck retains the same physical query ceiling", () =>
+        {
+            var calls = 0; RouteCollisionQuery oracle = (a, b, token) => { calls++; return new(RouteCollisionStatus.Clear, null, "Clear actual connector.", 0); };
+            var plan = Plan(P(-.75, 1), P(.75, 1), oracle, limits: new() { MaxCollisionQueries = 3 });
+            Incomplete(plan); Equal("COLLISION_QUERY_LIMIT", plan.Reason); Equal(3, calls); Equal(3, plan.Queries); Equal(0, plan.Points.Count);
+        });
         Run("offset wall opening requires turns and every accepted segment clears the actual tunnel", () =>
         {
             var kernel = Kernel(Opening()); var from = P(-.75, 1); var to = P(.75, 1);

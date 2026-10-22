@@ -137,6 +137,11 @@ namespace AddinRibbon.Routing
         internal readonly CancellationToken UserToken;
         private readonly CancellationTokenSource linked;
         private readonly Stopwatch elapsed = Stopwatch.StartNew();
+        private Dictionary<SegmentKey, RouteCollisionStatus> searchSegments;
+        private RouteCollisionQuery searchOracle;
+        private bool hasOracle, searchReuseDisabled;
+        private static readonly RouteCollisionObservation reusedClear = new RouteCollisionObservation(RouteCollisionStatus.Clear, null, "SEARCH_SEGMENT_REUSED", 0);
+        private static readonly RouteCollisionObservation reusedBlocked = new RouteCollisionObservation(RouteCollisionStatus.Blocked, null, "SEARCH_SEGMENT_REUSED", 0);
         internal CancellationToken Token { get { return linked.Token; } }
         internal long Work { get; private set; }
         internal int Queries { get; private set; }
@@ -147,7 +152,7 @@ namespace AddinRibbon.Routing
         internal readonly List<FinalRouteCollisionObservation> FinalChecks = new List<FinalRouteCollisionObservation>();
         internal RouteCollisionObservation FinalQuery(RouteCollisionQuery oracle, RoutePoint from, RoutePoint to)
         {
-            var result = Query(oracle, from, to);
+            var result = FreshQuery(oracle, from, to);
             FinalChecks.Add(new FinalRouteCollisionObservation(from, to, result)); return result;
         }
         internal ConstrainedBudget(ConstrainedRoutingLimits limits, CancellationToken token)
@@ -170,7 +175,42 @@ namespace AddinRibbon.Routing
         { Charge(1); if (Pairs >= Limits.MaxPairs) throw new ConstrainedLimitException("CANDIDATE_PAIR_LIMIT"); Pairs++; }
         internal RouteCollisionObservation Query(RouteCollisionQuery oracle, RoutePoint from, RoutePoint to)
         {
-            Charge(1); if (Queries >= Limits.MaxCollisionQueries) throw new ConstrainedLimitException("COLLISION_QUERY_LIMIT");
+            Charge(1); ObserveOracle(oracle);
+            if (searchReuseDisabled) return InvokeOracle(oracle, from, to);
+            var key = new SegmentKey(from, to); RouteCollisionStatus status;
+            if (searchSegments != null && searchSegments.TryGetValue(key, out status))
+            {
+                Check();
+                // Search reuse carries no original kernel witness or performed work.
+                // Final route and standalone connector checks always use FreshQuery.
+                return status == RouteCollisionStatus.Clear ? reusedClear : reusedBlocked;
+            }
+            var result = InvokeOracle(oracle, from, to);
+            if ((result.Status == RouteCollisionStatus.Clear || result.Status == RouteCollisionStatus.Blocked)
+                && (searchSegments == null || searchSegments.Count < Math.Min(Limits.MaxCollisionQueries, 100000)))
+            {
+                if (searchSegments == null) searchSegments = new Dictionary<SegmentKey, RouteCollisionStatus>();
+                searchSegments.Add(key, result.Status);
+            }
+            return result;
+        }
+        internal RouteCollisionObservation FreshQuery(RouteCollisionQuery oracle, RoutePoint from, RoutePoint to)
+        {
+            Charge(1); ObserveOracle(oracle); return InvokeOracle(oracle, from, to);
+        }
+        private void ObserveOracle(RouteCollisionQuery oracle)
+        {
+            if (!hasOracle) { hasOracle = true; searchOracle = oracle; }
+            else if (!ReferenceEquals(searchOracle, oracle))
+            {
+                // One budget can only reuse one exact immutable-oracle context.
+                // A -> B -> A cannot resurrect observations made before the change.
+                searchReuseDisabled = true; searchSegments = null; searchOracle = null;
+            }
+        }
+        private RouteCollisionObservation InvokeOracle(RouteCollisionQuery oracle, RoutePoint from, RoutePoint to)
+        {
+            if (Queries >= Limits.MaxCollisionQueries) throw new ConstrainedLimitException("COLLISION_QUERY_LIMIT");
             Queries++; RouteCollisionObservation observation;
             try { observation = oracle(from, to, Token); }
             catch (OperationCanceledException) { UserToken.ThrowIfCancellationRequested(); Check(); SawIndeterminate = true;
@@ -190,6 +230,26 @@ namespace AddinRibbon.Routing
             if (Work > Limits.MaxWork) throw new ConstrainedLimitException("SEARCH_WORK_LIMIT");
             Check();
             return observation;
+        }
+        private readonly struct SegmentKey : IEquatable<SegmentKey>
+        {
+            private readonly long ax, ay, az, bx, by, bz;
+            internal SegmentKey(RoutePoint from, RoutePoint to)
+            {
+                ax = BitConverter.DoubleToInt64Bits(from.X); ay = BitConverter.DoubleToInt64Bits(from.Y); az = BitConverter.DoubleToInt64Bits(from.Z);
+                bx = BitConverter.DoubleToInt64Bits(to.X); by = BitConverter.DoubleToInt64Bits(to.Y); bz = BitConverter.DoubleToInt64Bits(to.Z);
+            }
+            public bool Equals(SegmentKey other)
+            { return ax == other.ax && ay == other.ay && az == other.az && bx == other.bx && by == other.by && bz == other.bz; }
+            public override bool Equals(object other) { return other is SegmentKey && Equals((SegmentKey)other); }
+            public override int GetHashCode()
+            {
+                unchecked
+                {
+                    int hash = 17; hash = hash * 31 + ax.GetHashCode(); hash = hash * 31 + ay.GetHashCode(); hash = hash * 31 + az.GetHashCode();
+                    hash = hash * 31 + bx.GetHashCode(); hash = hash * 31 + by.GetHashCode(); return hash * 31 + bz.GetHashCode();
+                }
+            }
         }
         internal ConstrainedRouteEvaluation Failure(string reason)
         { return new ConstrainedRouteEvaluation(RouteResult.Failure("Constrained route search is incomplete: " + reason + "."),

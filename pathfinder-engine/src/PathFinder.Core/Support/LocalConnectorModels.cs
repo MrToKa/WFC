@@ -128,5 +128,10 @@ namespace AddinRibbon.Routing
             Budget.Check(); if (EdgeChecks >= Options.MaxEdgeChecks) { Limited = true; throw new LocalConnectorLimitException("LOCAL_EDGE_CHECK_LIMIT"); }
             EdgeChecks++; return Budget.Query(collision, from, to);
         }
+        internal RouteCollisionObservation FreshQuery(RouteCollisionQuery collision, RoutePoint from, RoutePoint to)
+        {
+            Budget.Check(); if (EdgeChecks >= Options.MaxEdgeChecks) { Limited = true; throw new LocalConnectorLimitException("LOCAL_EDGE_CHECK_LIMIT"); }
+            EdgeChecks++; return Budget.FreshQuery(collision, from, to);
+        }
     }
 }

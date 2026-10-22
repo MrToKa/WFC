@@ -1,5 +1,20 @@
 # PathFinder local implementation progress
 
+## Current: B23 search reuse checked; actual wall581 transition is clear
+
+Report117/publicB23receipt: five frozen Core/test files, isolated146sourcepins,
+265actualchecks PASS (66/42/20/39/63/35),14newregressions, portablepublishPASS.
+FouractualLinuxcandidate cases positivelyjoined/cleaned/source-artifactbookends.
+H1Off improves100000queries/21pairs→7608queries/64pairs butstillCANDIDATE_PAIR_LIMIT;
+no route success or installation inferred. All physical finalchecks remainfresh,
+all caps/geometry/tolerance unchanged. Installed5191 staysB21API/B22web.
+User fullreference and BC175→BC030-1 native lookups bothcalculate. Independent87/8
+edgechecks confirm wall581existingtransition0contacts(all28clear forpair), but
+fullreference segment18 crosseswall2112fragment851. HiddenEquipment23islocatoronly
+and exactnameabsentretainedpackage; nofuzzy/proxy/ignore used. Nativeall-segment/
+category extraction will inspect actualconnections and remainingcrossing.
+LiveSDK/frame/ownterminal/fullcapacity/Preparer stillunfinished; history retained.
+
 ## Current: actual Aalborg tests expose repeated constrained graph checks
 
 Report116/public real-cable receipt: actual installedAPIa43 supervisor executes

@@ -107,7 +107,7 @@ namespace AddinRibbon.Routing
             for (int i = 0; i < Math.Max(1, points.Count - 1); i++)
             {
                 context.Budget.Charge(1); var a = points[i]; var b = points[Math.Min(i + 1, points.Count - 1)];
-                if (context.Query(collision, a, b).Status != RouteCollisionStatus.Clear)
+                if (context.FreshQuery(collision, a, b).Status != RouteCollisionStatus.Clear)
                     return result(LocalConnectorStatus.Indeterminate, "FINAL_CONNECTOR_RECHECK_FAILED", null, 0);
                 length += a.DistanceTo(b);
             }

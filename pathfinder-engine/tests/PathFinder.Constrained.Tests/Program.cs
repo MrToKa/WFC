@@ -1,3 +1,5 @@
+using System.Reflection;
+using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using AddinRibbon.Routing;
 using PathFinder.Barriers;
@@ -12,7 +14,7 @@ internal static class Program
     private static int Main(string[] args)
     {
         if (args.Length != 0) return 2;
-        LegacyParity(); PhysicalRoutes(); ConnectorGeometry(); DirectStrategy(); RefusalAndBudgets();
+        LegacyParity(); PhysicalRoutes(); ConnectorGeometry(); DirectStrategy(); RefusalAndBudgets(); SearchReuse();
         Console.WriteLine(JsonSerializer.Serialize(new
         {
             schemaVersion = "wfc.pf.constrained-routing-checks.v1", status = failures == 0 ? "PASS" : "FAIL",
@@ -102,6 +104,195 @@ internal static class Program
     }
     private static TraySegment Port(string id, RoutePoint[] points, params RouteConnectionPort[] ports) =>
         new(id, "/" + id, CableCategory.Control, points, true, ports);
+
+    // Direct internal-ledger tests avoid graph interpolation normalizing the bit
+    // patterns under test. Public route tests below independently cover integration.
+    private sealed class BudgetProbe : IDisposable
+    {
+        private static readonly Type BudgetType = typeof(RouteCalculator).Assembly.GetType("AddinRibbon.Routing.ConstrainedBudget", true)!;
+        private const BindingFlags Members = BindingFlags.Instance | BindingFlags.NonPublic;
+        private readonly object value;
+        internal BudgetProbe(ConstrainedRoutingLimits? limits = null, CancellationToken token = default)
+        { value = Activator.CreateInstance(BudgetType, Members, null, [limits ?? new(), token], null)!; }
+        internal RouteCollisionObservation Query(RouteCollisionQuery oracle, RoutePoint from, RoutePoint to) =>
+            (RouteCollisionObservation)Call("Query", oracle, from, to)!;
+        internal RouteCollisionObservation FinalQuery(RouteCollisionQuery oracle, RoutePoint from, RoutePoint to) =>
+            (RouteCollisionObservation)Call("FinalQuery", oracle, from, to)!;
+        internal int Queries => (int)BudgetType.GetProperty("Queries", Members)!.GetValue(value)!;
+        internal long Work => (long)BudgetType.GetProperty("Work", Members)!.GetValue(value)!;
+        internal RouteCollisionObservation? Blocking => (RouteCollisionObservation?)BudgetType.GetField("FirstBlocking", Members)!.GetValue(value);
+        internal int MemoCount => (BudgetType.GetField("searchSegments", Members)!.GetValue(value) as System.Collections.IDictionary)?.Count ?? 0;
+        internal void CancelDeadline() => ((CancellationTokenSource)BudgetType.GetField("linked", Members)!.GetValue(value)!).Cancel();
+        private object? Call(string method, params object[] args)
+        {
+            try { return BudgetType.GetMethod(method, Members)!.Invoke(value, args); }
+            catch (TargetInvocationException error) when (error.InnerException is not null)
+            { ExceptionDispatchInfo.Capture(error.InnerException).Throw(); throw; }
+        }
+        public void Dispose() => ((IDisposable)value).Dispose();
+    }
+    private static void LimitReason(string reason, Action body)
+    {
+        try { body(); }
+        catch (Exception error) when (error.GetType().Name == "ConstrainedLimitException") { Equal(reason, error.Message); return; }
+        throw new InvalidOperationException("Expected constrained refusal " + reason + ".");
+    }
+    private static void SearchReuse()
+    {
+        Run("repeated pair graphs reuse common search edges within the unchanged physical query ceiling", () =>
+        {
+            var calls = 0; var commonCalls = 0; var kernel = Kernel(Box("remote-reuse", x0: 100, x1: 101)); var real = Query(kernel);
+            RouteCollisionObservation Count(RoutePoint a, RoutePoint b, CancellationToken token)
+            {
+                calls++;
+                if (Same(a, P(0, 5)) && Same(b, P(10, 5))) commonCalls++;
+                return real(a, b, token);
+            }
+            var networks = new[] { Tray("A-start", P(-1), P(1)), Tray("B-end", P(9), P(11)), Tray("C-connected", P(0, 5), P(10, 5)) };
+            var result = Route(networks, P(0), P(10), Count, limits: new() { MaxCollisionQueries = 20 });
+            Clear(result, kernel); Need(result.PairAttempts > 1); Equal(1, commonCalls);
+            Equal(calls, result.CollisionQueries); Need(calls <= 20);
+            Need(result.FinalChecks.Count == result.Route.PathPoints.Count - 1);
+            Need(result.FinalChecks.All(check => check.Observation.Reason != "SEARCH_SEGMENT_REUSED"), "Search reuse escaped into final proof.");
+        });
+        Run("cached search clearance cannot mask a changed actual final route verdict", () =>
+        {
+            var chordCalls = 0; var calls = 0;
+            RouteCollisionObservation Changing(RoutePoint a, RoutePoint b, CancellationToken token)
+            {
+                calls++; if (Same(a, b)) return new(RouteCollisionStatus.Clear, null, "Occupancy.", 0);
+                chordCalls++; return new(chordCalls == 1 ? RouteCollisionStatus.Clear : RouteCollisionStatus.Blocked, "shell:changed", "Actual changing chord.", 1);
+            }
+            var value = Route([Tray("A", P(0), P(10))], P(0), P(10), Changing);
+            NotSuccess(value); Need(chordCalls >= 2); Equal(calls, value.CollisionQueries); Equal(0, value.FinalChecks.Count);
+        });
+        Run("search hits retain no kernel witness or performed primitive work and final queries stay physical", () =>
+        {
+            using var budget = new BudgetProbe(); var calls = 0;
+            RouteCollisionObservation Oracle(RoutePoint a, RoutePoint b, CancellationToken token) { calls++; return new(RouteCollisionStatus.Clear, "shell:actual", "Actual result.", 7); }
+            RouteCollisionQuery oracle = Oracle;
+            var first = budget.Query(oracle, P(0), P(1)); var reused = budget.Query(oracle, P(0), P(1));
+            Equal(1, calls); Equal(1, budget.Queries); Equal(9L, budget.Work); Equal(1, budget.MemoCount);
+            Equal(RouteCollisionStatus.Clear, reused.Status); Equal(0L, reused.Work); Need(reused.ShellId is null); Equal("SEARCH_SEGMENT_REUSED", reused.Reason);
+            var final = budget.FinalQuery(oracle, P(0), P(1)); Equal(2, calls); Equal(2, budget.Queries); Equal(17L, budget.Work);
+            Equal("Actual result.", final.Reason); Equal(7L, final.Work); Need(!ReferenceEquals(first, reused));
+        });
+        Run("blocked search reuse preserves the original actual blocking observation", () =>
+        {
+            using var budget = new BudgetProbe(); var calls = 0;
+            RouteCollisionQuery oracle = (a, b, token) => { calls++; return new(RouteCollisionStatus.Blocked, "shell:original", "Original blocking reason.", 3); };
+            var first = budget.Query(oracle, P(0), P(1)); var reused = budget.Query(oracle, P(0), P(1));
+            Equal(1, calls); Need(ReferenceEquals(first, budget.Blocking)); Equal("shell:original", budget.Blocking!.ShellId);
+            Equal(RouteCollisionStatus.Blocked, reused.Status); Equal(0L, reused.Work); Need(reused.ShellId is null); Equal(1, budget.MemoCount);
+        });
+        Run("all six coordinate bit fields orientation and signed zero remain distinct search keys", () =>
+        {
+            using var budget = new BudgetProbe(); var calls = 0;
+            RouteCollisionQuery oracle = (a, b, token) => { calls++; return new(RouteCollisionStatus.Clear, null, "Distinct.", 0); };
+            var pairs = new List<(RoutePoint From, RoutePoint To)> { (P(0), P(1, 1, 1)), (P(1, 1, 1), P(0)) };
+            for (var axis = 0; axis < 6; axis++)
+            {
+                var values = new[] { 0d, 0d, 0d, 1d, 1d, 1d }; values[axis] = Math.BitIncrement(values[axis]);
+                pairs.Add((P(values[0], values[1], values[2]), P(values[3], values[4], values[5])));
+            }
+            pairs.Add((P(0), P(0)));
+            for (var axis = 0; axis < 6; axis++)
+            {
+                var values = new double[6]; values[axis] = BitConverter.Int64BitsToDouble(long.MinValue);
+                pairs.Add((P(values[0], values[1], values[2]), P(values[3], values[4], values[5])));
+            }
+            foreach (var pair in pairs) budget.Query(oracle, pair.From, pair.To);
+            Equal(pairs.Count, calls); Equal(pairs.Count, budget.MemoCount);
+            foreach (var pair in pairs) Equal("SEARCH_SEGMENT_REUSED", budget.Query(oracle, pair.From, pair.To).Reason);
+            Equal(pairs.Count, calls);
+        });
+        Run("equal but nonidentical delegates permanently invalidate reuse including A to B to A", () =>
+        {
+            using var budget = new BudgetProbe(); var calls = 0;
+            RouteCollisionObservation Oracle(RoutePoint a, RoutePoint b, CancellationToken token) { calls++; return new(RouteCollisionStatus.Clear, null, "Actual identity.", 0); }
+            var first = new RouteCollisionQuery(Oracle); var second = new RouteCollisionQuery(Oracle);
+            Need(first.Equals(second) && !ReferenceEquals(first, second));
+            budget.Query(first, P(0), P(1)); budget.Query(first, P(0), P(1)); Equal(1, calls);
+            budget.Query(second, P(0), P(1)); budget.Query(first, P(0), P(1)); budget.Query(first, P(0), P(1));
+            Equal(4, calls); Equal(0, budget.MemoCount); Equal(4, budget.Queries);
+        });
+        Run("indeterminate unavailable and throwing oracle results are never cached", () =>
+        {
+            foreach (var mode in new[] { "indeterminate", "null", "throw" })
+            {
+                using var budget = new BudgetProbe(); var calls = 0;
+                RouteCollisionQuery oracle = (a, b, token) =>
+                {
+                    calls++; if (calls == 1)
+                    {
+                        if (mode == "throw") throw new InvalidOperationException("Synthetic uncertain query.");
+                        if (mode == "null") return null!;
+                        return new(RouteCollisionStatus.Indeterminate, null, "Not conclusive.", 0);
+                    }
+                    return new(RouteCollisionStatus.Clear, null, "Now conclusive.", 0);
+                };
+                Equal(RouteCollisionStatus.Indeterminate, budget.Query(oracle, P(0), P(1)).Status); Equal(0, budget.MemoCount);
+                Equal(RouteCollisionStatus.Clear, budget.Query(oracle, P(0), P(1)).Status); Equal(1, budget.MemoCount);
+                Equal("SEARCH_SEGMENT_REUSED", budget.Query(oracle, P(0), P(1)).Reason); Equal(2, calls);
+            }
+        });
+        Run("actual query ceiling bounds cache entries and still refuses a new or final physical query", () =>
+        {
+            using var budget = new BudgetProbe(new() { MaxCollisionQueries = 2 }); var calls = 0;
+            RouteCollisionQuery oracle = (a, b, token) => { calls++; return new(RouteCollisionStatus.Clear, null, "Bounded actual.", 0); };
+            budget.Query(oracle, P(0), P(1)); budget.Query(oracle, P(1), P(2));
+            Equal("SEARCH_SEGMENT_REUSED", budget.Query(oracle, P(0), P(1)).Reason); Equal(2, budget.MemoCount);
+            LimitReason("COLLISION_QUERY_LIMIT", () => budget.Query(oracle, P(2), P(3)));
+            LimitReason("COLLISION_QUERY_LIMIT", () => budget.FinalQuery(oracle, P(0), P(1)));
+            Equal(2, calls); Equal(2, budget.Queries); Equal(2, budget.MemoCount);
+        });
+        Run("cache hits still consume guarded work and cannot evade the original work refusal", () =>
+        {
+            using var budget = new BudgetProbe(new() { MaxWork = 4 }); var calls = 0;
+            RouteCollisionQuery oracle = (a, b, token) => { calls++; return new(RouteCollisionStatus.Clear, null, "Budgeted actual.", 1); };
+            budget.Query(oracle, P(0), P(1)); budget.Query(oracle, P(0), P(1)); budget.Query(oracle, P(0), P(1));
+            Equal(4L, budget.Work); LimitReason("SEARCH_WORK_LIMIT", () => budget.Query(oracle, P(0), P(1))); Equal(1, calls);
+        });
+        Run("over-budget overflowing expired and cancelled actual results never become reusable", () =>
+        {
+            using (var budget = new BudgetProbe(new() { MaxWork = 10 }))
+            {
+                RouteCollisionQuery oracle = (a, b, token) => new(RouteCollisionStatus.Clear, null, "Over budget.", 20);
+                LimitReason("SEARCH_WORK_LIMIT", () => budget.Query(oracle, P(0), P(1))); Equal(0, budget.MemoCount); Equal(21L, budget.Work);
+            }
+            using (var overflow = new BudgetProbe(new() { MaxWork = 100 }))
+            {
+                RouteCollisionQuery oracle = (a, b, token) => new(RouteCollisionStatus.Clear, null, "Overflowed accounting.", long.MaxValue);
+                LimitReason("ORACLE_WORK_ACCOUNTING_OVERFLOW", () => overflow.Query(oracle, P(0), P(1))); Equal(0, overflow.MemoCount); Equal(long.MaxValue, overflow.Work);
+            }
+            using (var expired = new BudgetProbe())
+            {
+                RouteCollisionQuery oracle = (a, b, token) => { expired.CancelDeadline(); return new(RouteCollisionStatus.Clear, null, "Expired actual result.", 7); };
+                LimitReason("SEARCH_DEADLINE_EXCEEDED", () => expired.Query(oracle, P(0), P(1))); Equal(0, expired.MemoCount); Equal(8L, expired.Work);
+            }
+            using var cancellation = new CancellationTokenSource(); using var cancelled = new BudgetProbe(token: cancellation.Token);
+            RouteCollisionQuery cancelledOracle = (a, b, token) => { cancellation.Cancel(); return new(RouteCollisionStatus.Clear, null, "Cancelled result.", 0); };
+            Reject<OperationCanceledException>(() => cancelled.Query(cancelledOracle, P(0), P(1))); Equal(0, cancelled.MemoCount);
+        });
+        Run("caller cancellation and linked deadline cancellation win over an available search hit", () =>
+        {
+            RouteCollisionQuery oracle = (a, b, token) => new(RouteCollisionStatus.Clear, null, "Admitted before cancellation.", 0);
+            using (var cancellation = new CancellationTokenSource())
+            using (var budget = new BudgetProbe(token: cancellation.Token))
+            {
+                budget.Query(oracle, P(0), P(1)); cancellation.Cancel();
+                Reject<OperationCanceledException>(() => budget.Query(oracle, P(0), P(1))); Equal(1, budget.Queries);
+            }
+            using var expired = new BudgetProbe(); expired.Query(oracle, P(0), P(1)); expired.CancelDeadline();
+            LimitReason("SEARCH_DEADLINE_EXCEEDED", () => expired.Query(oracle, P(0), P(1))); Equal(1, expired.Queries);
+        });
+        Run("search observations do not survive into a later route with different barrier geometry", () =>
+        {
+            var trays = new[] { Tray("A", P(-1), P(1)) }; var remote = Kernel(Box("remote", x0: 100, x1: 101)); var wall = Kernel(Box());
+            Clear(Route(trays, P(-1), P(1), Query(remote)), remote);
+            var blocked = Route(trays, P(-1), P(1), Query(wall)); NotSuccess(blocked); Need(blocked.CollisionQueries > 0);
+        });
+    }
 
     private static void LegacyParity()
     {
