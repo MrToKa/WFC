@@ -99,7 +99,10 @@ namespace AddinRibbon.Routing
         public IReadOnlyList<FinalRouteCollisionObservation> FinalChecks { get; private set; }
         internal ConstrainedRouteEvaluation(RouteResult route, ConstrainedRouteStatus status, string reason, bool complete, ConstrainedBudget budget)
         {
-            Route = route; Status = status; Reason = reason; SearchComplete = complete;
+            Route = route; Status = status;
+            Reason = status == ConstrainedRouteStatus.Clear && budget.RouteUsedInterTrayManeuver
+                ? reason + "_INTER_TRAY_OPENING_MANEUVER_V1" : reason;
+            SearchComplete = complete;
             CandidatesTruncated = budget.CandidatesTruncated; CollisionQueries = budget.Queries;
             Work = budget.Work; PairAttempts = budget.Pairs;
             Blocking = status == ConstrainedRouteStatus.Clear || status == ConstrainedRouteStatus.Bypassed ? null : budget.FirstBlocking;
@@ -149,6 +152,8 @@ namespace AddinRibbon.Routing
         internal bool CandidatesTruncated;
         internal bool SawIndeterminate;
         internal RouteCollisionObservation FirstBlocking;
+        internal readonly InterTrayOpeningContext InterTray;
+        internal bool RouteUsedInterTrayManeuver;
         internal readonly List<FinalRouteCollisionObservation> FinalChecks = new List<FinalRouteCollisionObservation>();
         internal RouteCollisionObservation FinalQuery(RouteCollisionQuery oracle, RoutePoint from, RoutePoint to)
         {
@@ -156,9 +161,12 @@ namespace AddinRibbon.Routing
             FinalChecks.Add(new FinalRouteCollisionObservation(from, to, result)); return result;
         }
         internal ConstrainedBudget(ConstrainedRoutingLimits limits, CancellationToken token)
+            : this(limits, token, false) { }
+        internal ConstrainedBudget(ConstrainedRoutingLimits limits, CancellationToken token, bool interTrayManeuvers)
         {
             UserToken = token; UserToken.ThrowIfCancellationRequested(); Limits = limits;
             linked = CancellationTokenSource.CreateLinkedTokenSource(token); linked.CancelAfter(limits.TimeoutMilliseconds);
+            if (interTrayManeuvers) InterTray = new InterTrayOpeningContext(this);
         }
         internal void Check()
         {

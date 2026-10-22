@@ -1,5 +1,20 @@
 # PathFinder local implementation progress
 
+## Current: B24 checked opening maneuvers; real H1 Off now calculates
+
+Report118/source receipt: isolated151files,298Core/transport +281uniqueTS checks
+PASS, finaltypes/scopedlint/bothbuilds/nativepublishPASS. Explicitmixedv3profile
+enables bounded<=0.1m checked inter-tray maneuvers; oldv2/withintray/drill unchanged.
+Actualnativefit confirmsC002→C1071 chord clips wall2112opening sill15mm. Independent
+original28probe finds17clear3legcandidates. Actual9Linuxruns joined/cleaned/bookends:
+newH1Off firstpair5119queries/242points241freshclearchecks/design91, retainedFrom81.68.
+Old4regressions unchanged. Independent877finalsegments checked; newH1Off241clear,
+drillOncontacts preserved, L2ONbits/lengthsame. Publicnative receipt0119b2ac.
+IsolatedP/Q
+usesclearBC1582.95mroute; shortercheckedopeningcompetition stillneedsrefinement.
+UserFrom51.26vsretained81.68 clarification pending; no endpointsubstitution.
+Notinstalled;5191B21API/B22web. NoApply/SDK/currentframe/capacity/Preparer completion.
+
 ## Current: B23 search reuse checked; actual wall581 transition is clear
 
 Report117/publicB23receipt: five frozen Core/test files, isolated146sourcepins,

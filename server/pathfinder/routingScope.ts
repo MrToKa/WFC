@@ -82,6 +82,7 @@ export function requireVersionedCalculationScope(value: unknown): void {
     }else if(Object.hasOwn(data,'barrierQualification'))
       throw new PathFinderError('BARRIER_CONTEXT_CHANGED',409,'A historical barrier scope cannot acquire mixed geometry evidence.');
     if((data.engineIdentity.schemaVersion==='wfc.pf.engine-identity.v3')!==mixed
+      ||data.engineIdentity.policyVersions.runtimeProfile!==data.barriers.profile.schemaVersion
       ||binding.scope.projectId!==data.projectId||binding.scope.modelVersionId!==data.model?.id
       ||binding.scope.selectionRevision!==data.model?.selectionRevision||binding.scope.contentFingerprint!==data.model?.contentFingerprint
       ||binding.scope.captureFrameId!==data.preparation?.captureFrameId||!sameBarrierAdmissionIntent(data.options?.barrierRouting,

@@ -6,8 +6,8 @@ import { BARRIER_RUNTIME_PROFILE, barrierRouteHashInput, createBarrierRuntimePol
   type BarrierExecution, type BarrierRuntimeContext } from '../../shared/pathfinderBarrierRuntime.js';
 import type { BarrierCheckProofV2 } from '../../shared/pathfinderBarrierDecisions.js';
 import { DIRECT_SECONDARY_POLICY } from '../../shared/pathfinderDirectSecondary.js';
-import { MIXED_BARRIER_POLICY, MIXED_BARRIER_QUERY_DOMAIN, MIXED_BARRIER_RUNTIME_PROFILE, createMixedBarrierRuntimePolicy,
-  mixedBarrierExecutionSchema, type MixedBarrierRuntimeContext, type MixedBarrierVerifierEvidence, type MixedBarrierCheckProof } from '../../shared/pathfinderBarrierMixed.js';
+import { MIXED_BARRIER_POLICY, MIXED_BARRIER_QUERY_DOMAIN, MIXED_BARRIER_RUNTIME_PROFILE, MIXED_BARRIER_OPENING_RUNTIME_PROFILE, createMixedBarrierRuntimePolicy,
+  mixedBarrierExecutionSchema, mixedBarrierOpeningRuntimeProfileSchema, type MixedBarrierRuntimeContext, type MixedBarrierVerifierEvidence, type MixedBarrierCheckProof } from '../../shared/pathfinderBarrierMixed.js';
 import { requireBarrierEngineStrategy } from './barrierStrategy.js';
 import { engineResponseSchema, type EngineResponse, type EngineRoute } from './jobContracts.js';
 
@@ -133,6 +133,24 @@ function mixedResult(kind:Kind='network') {
 }
 
 describe('barrier engine strategy admission after strict transport parsing', () => {
+  it.each(['network','direct'] as const)('retains a fresh final proof under the explicit opening profile for %s',kind=>{
+    const f=mixedResult(kind);
+    if(f.input.context.schemaVersion!=='wfc.pf.barrier-runtime.v2'||f.response.schemaVersion!=='pathfinder.model.response.v3'
+      ||f.response.barriers.schemaVersion!=='wfc.pf.barrier-execution.v2')throw Error('fixture');
+    f.input.context.profile=mixedBarrierOpeningRuntimeProfileSchema.parse(MIXED_BARRIER_OPENING_RUNTIME_PROFILE);
+    f.input.context.profileSha256=hash(barrierCanonicalJson(f.input.context.profile));
+    f.response.barriers.context=structuredClone(f.input.context);
+    expect(()=>requireBarrierEngineStrategy(f.response,f.input)).not.toThrow();
+  });
+  it.each(['response','admission'] as const)('refuses a historical/fresh profile swap on the %s side despite the same collision binding',side=>{
+    const f=mixedResult();
+    if(f.input.context.schemaVersion!=='wfc.pf.barrier-runtime.v2'||f.response.schemaVersion!=='pathfinder.model.response.v3'
+      ||f.response.barriers.schemaVersion!=='wfc.pf.barrier-execution.v2')throw Error('fixture');
+    const current={...f.input.context,profile:mixedBarrierOpeningRuntimeProfileSchema.parse(MIXED_BARRIER_OPENING_RUNTIME_PROFILE),
+      profileSha256:hash(barrierCanonicalJson(MIXED_BARRIER_OPENING_RUNTIME_PROFILE))};
+    if(side==='response')f.response.barriers.context=current;else f.input.context=current;
+    rejected(f.response,f.input);
+  });
   it.each(['network','blocked-direct','direct','bypassed','empty'] as const)('validates exact mixed %s against a separate trusted qualifier',kind=>{
     const f=mixedResult(kind);expect(()=>requireBarrierEngineStrategy(f.response,f.input)).not.toThrow();
   });

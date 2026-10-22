@@ -6,13 +6,14 @@ import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { calculationProjectionFiles, barrierCalculationProjectionFiles, BARRIER_IDENTITY_PROJECTION_LIMIT, createCalculationEngineIdentityReader } from './calculationEngineIdentity.js';
 import { verifyEngineIdentity, verifyBarrierEngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
+import { MIXED_BARRIER_OPENING_RUNTIME_PROFILE, INTER_TRAY_OPENING_MANEUVER_POLICY, verifyMixedBarrierEngineIdentity } from '../../shared/pathfinderBarrierMixed.js';
 
 vi.mock('node:fs/promises', () => ({ default: { lstat: vi.fn(), realpath: vi.fn(), readFile: vi.fn() } }));
 const sha = (value: Buffer | string) => createHash('sha256').update(value).digest('hex');
 type Entry = { bytes: Buffer; size: bigint; ino: bigint; mtimeNs: bigint; ctimeNs: bigint; nlink: bigint; symlink: boolean };
 
 /** All filesystem facts are mocked. No directory/file is created, followed or removed. */
-function fixture(barriers = false) {
+function fixture(barriers = false, mixed = false) {
   vi.clearAllMocks();
   const root = path.resolve('pathfinder-engine/.scratch/mock-only-r7-engine-identity');
   const files = new Map<string, Entry>(), directories = new Set<string>(), linkedDirectories = new Set<string>();
@@ -33,12 +34,22 @@ function fixture(barriers = false) {
   let dll = path.join(root, names[0]);
   let projections = [{ name: './projection.js', filename: path.join(root, 'projection.js') }];
   const config = { dllPath: () => dll, projectionFiles: () => projections };
-  const reader = barriers ? createCalculationEngineIdentityReader({...config,barriers:true}) : createCalculationEngineIdentityReader(config);
+  const reader = mixed ? createCalculationEngineIdentityReader({...config,mixed:true})
+    : barriers ? createCalculationEngineIdentityReader({...config,barriers:true}) : createCalculationEngineIdentityReader(config);
   return { root, files, names, reader, linkedDirectories, setDll: (value: string) => { dll = value; }, setProjections: (value: typeof projections) => { projections = value; }, onRead: (value: typeof onRead) => { onRead = value; } };
 }
 afterEach(() => vi.clearAllMocks());
 
 describe('separate v8 barrier calculation implementation identity',()=>{
+  it('pins the fresh mixed runtime profile and maneuver policy as an inseparable identity pair',async()=>{
+    const f=fixture(true,true),value=await f.reader.read();
+    if(value.schemaVersion!=='wfc.pf.engine-identity.v3')throw Error('Expected mixed identity');
+    expect(value.policyVersions).toMatchObject({runtimeProfile:MIXED_BARRIER_OPENING_RUNTIME_PROFILE.schemaVersion,
+      interTrayManeuvers:INTER_TRAY_OPENING_MANEUVER_POLICY});
+    expect(verifyMixedBarrierEngineIdentity(value,sha)).toBe(true);expect(verifyBarrierEngineIdentity(value,sha)).toBe(false);
+    expect(value.barriersModuleSha256).toBe(sha(f.files.get(path.join(f.root,'PathFinder.Barriers.dll'))!.bytes));
+    expect(fs.readFile).toHaveBeenCalledTimes(7);
+  });
   it('qualifies exactly six real module names and a deliberately expanded bounded projection closure',async()=>{
     const f=fixture(true),value=await f.reader.read();
     expect(value.schemaVersion).toBe('wfc.pf.engine-identity.v2');expect(verifyBarrierEngineIdentity(value,sha)).toBe(true);

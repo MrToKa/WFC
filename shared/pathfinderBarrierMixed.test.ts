@@ -76,6 +76,58 @@ function writeEvidence() { return { schemaVersion: 'wfc.pf.barrier-write-evidenc
   routeSha256: proof().routeSha256, policySha256: context().binding.policySha256, profileSha256: context().profileSha256, registryRevision: '5', snapshotId: id(10), snapshotSha256: reference().contentSha256,
   drillThroughWalls: false, status: 'clear', geometryPolicy: mixed.MIXED_BARRIER_POLICY, ownTerminalExemptionsSupported: false }; }
 
+describe('explicit additive inter-tray maneuver profile', () => {
+  const openingContext = () => mixed.mixedBarrierRuntimeContextSchema.parse({ ...context(),
+    profile: structuredClone(mixed.MIXED_BARRIER_OPENING_RUNTIME_PROFILE), profileSha256: digest(mixed.MIXED_BARRIER_OPENING_RUNTIME_PROFILE) });
+  const openingIdentity = () => {
+    const { contentSha256: _old, ...old } = identity();
+    const body = { ...old, policyVersions: { ...old.policyVersions,
+      runtimeProfile: mixed.MIXED_BARRIER_OPENING_RUNTIME_PROFILE.schemaVersion, interTrayManeuvers: mixed.INTER_TRAY_OPENING_MANEUVER_POLICY } };
+    return { ...body, contentSha256: digest(body) };
+  };
+  it('retains old profile bytes and requires the exact independently versioned opt-in object', () => {
+    const old = structuredClone(mixed.MIXED_BARRIER_RUNTIME_PROFILE), current = mixed.MIXED_BARRIER_OPENING_RUNTIME_PROFILE;
+    expect(mixed.mixedBarrierRuntimeProfileSchema.parse(old)).toEqual(old);
+    expect(mixed.mixedBarrierRuntimeProfileSchema.safeParse(current).success).toBe(false);
+    expect(mixed.mixedBarrierOpeningRuntimeProfileSchema.safeParse(old).success).toBe(false);
+    expect(mixed.mixedBarrierOpeningRuntimeProfileSchema.parse(current)).toEqual(current);
+    expect(current.qualification).toEqual(old.qualification); expect(current.kernel).toEqual(old.kernel);
+    expect(current.routing).toEqual(old.routing); expect(current.localConnectors).toEqual(old.localConnectors);
+    expect(Object.isFrozen(current.interTrayManeuvers)).toBe(true); expect(Object.isFrozen(current.interTrayManeuvers.radiiMetres)).toBe(true);
+    expect(mixed.MIXED_BARRIER_RUNTIME_PROFILE).toEqual(old);
+  });
+  it.each([
+    { maximumOffsetMetres: 0.1000000001 }, { radiiMetres: [0.1, 0.05] }, { radiiMetres: [0.05, 0.1, 0.15] },
+    { maximumEdgeAttempts: 65 }, { candidateCount: 53 }, { directionVersion: 'caller-supplied' },
+    { domain: 'all-tray-edges' }, { selection: 'force-reference-route' }, { policyVersion: 'unreviewed.v9' }, { ignoreBarrier: true },
+  ])('rejects changed fixed maneuver policy even with a freshly recomputed context digest: %j', changed => {
+    const value = openingContext();
+    const profile = { ...value.profile, interTrayManeuvers: { ...mixed.INTER_TRAY_MANEUVERS_PROFILE, ...changed } };
+    expect(mixed.verifyMixedBarrierRuntimeContext({ ...value, profile, profileSha256: digest(profile) }, hash)).toBe(false);
+  });
+  it('retains profile hash/current execution equality rather than upgrading a historical result', () => {
+    const current = openingContext(), result = { ...execution(), context: current };
+    expect(mixed.verifyMixedBarrierRuntimeContext(current, hash)).toBe(true);
+    expect(mixed.verifyMixedBarrierRuntimeContext({ ...current, profileSha256: context().profileSha256 }, hash)).toBe(false);
+    expect(mixed.verifyMixedBarrierExecutionRoute(result, { context: current, points,
+      componentMemberships: evidence().componentMemberships, qualificationEvidence: evidence() }, hash)).toBe(true);
+    expect(mixed.verifyMixedBarrierExecutionRoute(execution(), { context: current, points,
+      componentMemberships: evidence().componentMemberships, qualificationEvidence: evidence() }, hash)).toBe(false);
+  });
+  it('requires the exact runtime-version and maneuver-policy identity pair while preserving the old pair', () => {
+    expect(mixed.verifyMixedBarrierEngineIdentity(identity(), hash)).toBe(true);
+    const current = openingIdentity(); expect(mixed.verifyMixedBarrierEngineIdentity(current, hash)).toBe(true);
+    const missing = structuredClone(current); delete (missing.policyVersions as Record<string, unknown>).interTrayManeuvers;
+    expect(mixed.mixedBarrierEngineIdentitySchema.safeParse(missing).success).toBe(false);
+    expect(mixed.mixedBarrierEngineIdentitySchema.safeParse({ ...identity(), policyVersions: current.policyVersions }).success).toBe(true);
+    expect(mixed.mixedBarrierEngineIdentitySchema.safeParse({ ...current, policyVersions: {
+      ...current.policyVersions, runtimeProfile: mixed.MIXED_BARRIER_RUNTIME_PROFILE.schemaVersion } }).success).toBe(false);
+    expect(mixed.mixedBarrierEngineIdentitySchema.safeParse({ ...current, policyVersions: {
+      ...current.policyVersions, interTrayManeuvers: 'unreviewed.v9' } }).success).toBe(false);
+    expect(mixed.verifyMixedBarrierEngineIdentity({ ...current, contentSha256: identity().contentSha256 }, hash)).toBe(false);
+  });
+});
+
 describe('additive mixed lane cannot reinterpret legacy retained contracts', () => {
   const command = () => ({ schemaVersion: 'wfc.pf.barrier-capture-command.v2', geometryPolicy: mixed.MIXED_BARRIER_POLICY, scope: scope(), expectedRegistryRevision: '5', idempotencyKey: id(15), selectedParents: [parent()] });
   const registry = () => ({ schemaVersion: 'wfc.pf.barrier-registry.v2', geometryPolicy: mixed.MIXED_BARRIER_POLICY, scope: scope(), registryRevision: '5', state: 'ready', selectedParents: [parent()], snapshot: reference(), reasonCodes: [] });

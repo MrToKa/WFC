@@ -4,7 +4,7 @@ import type { PoolClient } from 'pg';
 import { z } from 'zod';
 import { BARRIER_LIMITS, barrierCanonicalJson, barrierCaptureSchema, type BarrierCapture } from '../../shared/pathfinderBarriers.js';
 import { BARRIER_RUNTIME_PROFILE, createBarrierRuntimePolicy } from '../../shared/pathfinderBarrierRuntime.js';
-import { MIXED_BARRIER_POLICY, MIXED_BARRIER_RUNTIME_PROFILE, createMixedBarrierRuntimePolicy, type MixedBarrierVerifierEvidence } from '../../shared/pathfinderBarrierMixed.js';
+import { MIXED_BARRIER_POLICY, MIXED_BARRIER_OPENING_RUNTIME_PROFILE, createMixedBarrierRuntimePolicy, type MixedBarrierVerifierEvidence } from '../../shared/pathfinderBarrierMixed.js';
 import { deriveMixedBarrierQualification } from './barrierQualification.js';
 import { supportedBarrierAdmissionIntentSchema as barrierAdmissionIntentSchema, supportedBarrierCaptureCommandSchema as barrierCaptureCommandSchema,
   supportedBarrierSnapshotSchema as barrierSnapshotSchema, supportedBarrierRuntimeContextSchema as barrierRuntimeContextSchema,
@@ -57,7 +57,7 @@ export async function collectBarrierCalculationState(client: PoolClient, project
   if (head.revision !== intent.expectedRegistryRevision || head.snapshot_id !== (intent.expectedSnapshot?.snapshotId ?? null)) return fail();
   const mixed = intent.schemaVersion === 'wfc.pf.barrier-admission-intent.v2';
   const policy = mixed ? createMixedBarrierRuntimePolicy(intent.drillThroughWalls) : createBarrierRuntimePolicy(intent.drillThroughWalls);
-  const profile = mixed ? MIXED_BARRIER_RUNTIME_PROFILE : BARRIER_RUNTIME_PROFILE;
+  const profile = mixed ? MIXED_BARRIER_OPENING_RUNTIME_PROFILE : BARRIER_RUNTIME_PROFILE;
   const common = { schemaVersion: mixed ? 'wfc.pf.barrier-runtime.v2' : 'wfc.pf.barrier-runtime.v1',
     binding: { ...(mixed ? { schemaVersion: 'wfc.pf.barrier-calculation-binding.v2' } : {}),
       scope, registryRevision: head.revision, snapshot: intent.expectedSnapshot, policy, policySha256: barrierValueHash(policy) },

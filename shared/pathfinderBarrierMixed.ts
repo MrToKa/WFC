@@ -179,9 +179,30 @@ export const mixedBarrierRuntimeProfileSchema = z.object({ schemaVersion: z.lite
   routeHashVersion: z.literal(MIXED_BARRIER_RUNTIME_PROFILE.routeHashVersion), qualification: literalObject(MIXED_BARRIER_RUNTIME_PROFILE.qualification),
   kernel: literalObject(MIXED_BARRIER_RUNTIME_PROFILE.kernel), routing: literalObject(MIXED_BARRIER_RUNTIME_PROFILE.routing),
   localConnectors: literalObject(MIXED_BARRIER_RUNTIME_PROFILE.localConnectors) }).strict();
+
+/** Explicit additive search profile. Historical v2 contexts retain their exact
+ * profile and default-off algorithm; no collision or qualification limit changes. */
+export const INTER_TRAY_OPENING_MANEUVER_POLICY = 'wfc.pf.inter-tray-opening-maneuvers.v1' as const;
+export const INTER_TRAY_MANEUVERS_PROFILE = Object.freeze({
+  policyVersion: INTER_TRAY_OPENING_MANEUVER_POLICY,
+  maximumOffsetMetres: 0.1, radiiMetres: Object.freeze([0.05, 0.1] as const),
+  directionVersion: 'normalized-lexicographic-26.v1', maximumEdgeAttempts: 64, candidateCount: 52,
+  domain: 'blocked-inter-tray-chords-only', selection: 'legacy-clear-graph-first-lazy-selected-path.v1',
+} as const);
+export const MIXED_BARRIER_OPENING_RUNTIME_PROFILE = Object.freeze({ ...MIXED_BARRIER_RUNTIME_PROFILE,
+  schemaVersion: 'wfc.pf.barrier-runtime-profile.v3', interTrayManeuvers: INTER_TRAY_MANEUVERS_PROFILE } as const);
+export const mixedBarrierOpeningRuntimeProfileSchema = mixedBarrierRuntimeProfileSchema.extend({
+  schemaVersion: z.literal(MIXED_BARRIER_OPENING_RUNTIME_PROFILE.schemaVersion),
+  interTrayManeuvers: z.object({ policyVersion: z.literal(INTER_TRAY_OPENING_MANEUVER_POLICY),
+    maximumOffsetMetres: z.literal(0.1), radiiMetres: z.tuple([z.literal(0.05), z.literal(0.1)]),
+    directionVersion: z.literal(INTER_TRAY_MANEUVERS_PROFILE.directionVersion), maximumEdgeAttempts: z.literal(64), candidateCount: z.literal(52),
+    domain: z.literal(INTER_TRAY_MANEUVERS_PROFILE.domain), selection: z.literal(INTER_TRAY_MANEUVERS_PROFILE.selection),
+  }).strict(),
+}).strict();
+export const mixedBarrierSupportedRuntimeProfileSchema = z.union([mixedBarrierRuntimeProfileSchema, mixedBarrierOpeningRuntimeProfileSchema]);
 const blob = z.object({ blobId: uuid, sha256: hash, bytes: positive(BARRIER_LIMITS.captureBytes) }).strict();
 export const mixedBarrierRuntimeContextSchema = z.object({ schemaVersion: z.literal('wfc.pf.barrier-runtime.v2'), binding: mixedBarrierCalculationBindingSchema,
-  profile: mixedBarrierRuntimeProfileSchema, profileSha256: hash,
+  profile: mixedBarrierSupportedRuntimeProfileSchema, profileSha256: hash,
   storage: z.object({ intentId: uuid, manifest: blob, capture: blob.nullable() }).strict().nullable() }).strict().superRefine((value, context) => {
   const snapshot = value.binding.snapshot;
   if (!snapshot ? !value.binding.policy.drillThroughWalls || value.storage !== null
@@ -265,11 +286,14 @@ export const mixedBarrierWriteEvidenceSchema = z.object({ schemaVersion: z.liter
 }).strict().superRefine((value, context) => {
   if ((value.snapshotId === null) !== (value.snapshotSha256 === null) || (value.status === 'bypassed') !== value.drillThroughWalls || value.status !== 'bypassed' && value.snapshotId === null) issue(context, 'Writes retain an exact publication or explicit drilling bypass; these hashes confer no geometric authority.');
 });
-const mixedIdentityBody = barrierEngineIdentityBodySchema.omit({ schemaVersion: true, policyVersions: true }).extend({ schemaVersion: z.literal('wfc.pf.engine-identity.v3'),
-  policyVersions: barrierEngineIdentityBodySchema.shape.policyVersions.omit({ projection: true, barriers: true, qualification: true, runtimeProfile: true }).extend({
+const mixedIdentityPolicies = barrierEngineIdentityBodySchema.shape.policyVersions.omit({ projection: true, barriers: true, qualification: true, runtimeProfile: true }).extend({
     projection: z.literal('wfc.pf.model-runner-v3-mixed-barrier-projection.v1'), barriers: z.literal(MIXED_BARRIER_COLLISION_VERSION),
     qualification: z.literal(MIXED_BARRIER_VERIFIER_VERSION), runtimeProfile: z.literal(MIXED_BARRIER_RUNTIME_PROFILE.schemaVersion), geometryPolicy: z.literal(MIXED_BARRIER_POLICY),
-  }).strict() }).strict();
+  }).strict();
+const mixedOpeningIdentityPolicies = mixedIdentityPolicies.extend({ runtimeProfile: z.literal(MIXED_BARRIER_OPENING_RUNTIME_PROFILE.schemaVersion),
+  interTrayManeuvers: z.literal(INTER_TRAY_OPENING_MANEUVER_POLICY) }).strict();
+const mixedIdentityBody = barrierEngineIdentityBodySchema.omit({ schemaVersion: true, policyVersions: true }).extend({ schemaVersion: z.literal('wfc.pf.engine-identity.v3'),
+  policyVersions: z.union([mixedIdentityPolicies, mixedOpeningIdentityPolicies]) }).strict();
 export const mixedBarrierEngineIdentityBodySchema = mixedIdentityBody;
 export const mixedBarrierEngineIdentitySchema = mixedIdentityBody.extend({ contentSha256: hash }).strict();
 export type MixedBarrierCaptureCommand = z.infer<typeof mixedBarrierCaptureCommandSchema>;
@@ -278,6 +302,8 @@ export type MixedBarrierRegistry = z.infer<typeof mixedBarrierRegistrySchema>;
 export type MixedBarrierAdmissionIntent = z.infer<typeof mixedBarrierAdmissionIntentSchema>;
 export type MixedBarrierRoutingPolicy = z.infer<typeof mixedBarrierRoutingPolicySchema>;
 export type MixedBarrierRuntimeProfile = z.infer<typeof mixedBarrierRuntimeProfileSchema>;
+export type MixedBarrierOpeningRuntimeProfile = z.infer<typeof mixedBarrierOpeningRuntimeProfileSchema>;
+export type MixedBarrierSupportedRuntimeProfile = z.infer<typeof mixedBarrierSupportedRuntimeProfileSchema>;
 export type MixedBarrierVerifierEvidence = z.infer<typeof mixedBarrierVerifierEvidenceSchema>;
 export type MixedBarrierWriteEvidence = z.infer<typeof mixedBarrierWriteEvidenceSchema>;
 export type MixedBarrierEngineIdentityBody = z.infer<typeof mixedBarrierEngineIdentityBodySchema>;

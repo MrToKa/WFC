@@ -10,9 +10,26 @@ namespace AddinRibbon.Routing
             CableCategory category, RouteCollisionQuery collision, RoutingOptions options = null, ConstrainedRoutingLimits limits = null,
             LocalConnectorOptions localOptions = null, bool drillThroughWalls = false, CancellationToken cancellationToken = default(CancellationToken))
         {
+            return CalculateLocalEntry(trays, from, to, category, collision, options, limits, localOptions, drillThroughWalls, cancellationToken, false);
+        }
+
+        /// <summary>The explicit bounded opening-maneuver strategy. Existing clear
+        /// graphs are preferred unchanged; only blocked cross-tray chords in a
+        /// disconnected graph may use the fixed original-geometry checked domain.</summary>
+        public LocalApproachRouteEvaluation CalculateConstrainedWithLocalApproachesAndInterTrayManeuvers(IEnumerable<TraySegment> trays, RoutePoint from, RoutePoint to,
+            CableCategory category, RouteCollisionQuery collision, RoutingOptions options = null, ConstrainedRoutingLimits limits = null,
+            LocalConnectorOptions localOptions = null, bool drillThroughWalls = false, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            return CalculateLocalEntry(trays, from, to, category, collision, options, limits, localOptions, drillThroughWalls, cancellationToken, true);
+        }
+
+        private LocalApproachRouteEvaluation CalculateLocalEntry(IEnumerable<TraySegment> trays, RoutePoint from, RoutePoint to,
+            CableCategory category, RouteCollisionQuery collision, RoutingOptions options, ConstrainedRoutingLimits limits,
+            LocalConnectorOptions localOptions, bool drillThroughWalls, CancellationToken cancellationToken, bool interTrayManeuvers)
+        {
             if (!drillThroughWalls && collision == null) throw new ArgumentNullException("collision");
             var frozen = ConstrainedOptions(options); var profile = (localOptions ?? new LocalConnectorOptions()).Snapshot();
-            using (var budget = new ConstrainedBudget((limits ?? new ConstrainedRoutingLimits()).Snapshot(), cancellationToken))
+            using (var budget = new ConstrainedBudget((limits ?? new ConstrainedRoutingLimits()).Snapshot(), cancellationToken, interTrayManeuvers && !drillThroughWalls))
             {
                 var context = new LocalConnectorContext(profile, budget);
                 try
@@ -110,9 +127,24 @@ namespace AddinRibbon.Routing
             LocalConnectorOptions localOptions = null, bool drillThroughWalls = false, CancellationToken cancellationToken = default(CancellationToken),
             bool finalReverse = false)
         {
+            return CalculateLocalEntry(trays, from, to, category, collision, options, limits, localOptions, drillThroughWalls, cancellationToken, finalReverse, false);
+        }
+
+        public static LocalSecondaryEvaluation CalculateWithLocalApproachesAndInterTrayManeuvers(IEnumerable<TraySegment> trays, RoutePoint from, RoutePoint to,
+            CableCategory category, RouteCollisionQuery collision, RoutingOptions options = null, ConstrainedRoutingLimits limits = null,
+            LocalConnectorOptions localOptions = null, bool drillThroughWalls = false, CancellationToken cancellationToken = default(CancellationToken),
+            bool finalReverse = false)
+        {
+            return CalculateLocalEntry(trays, from, to, category, collision, options, limits, localOptions, drillThroughWalls, cancellationToken, finalReverse, true);
+        }
+
+        private static LocalSecondaryEvaluation CalculateLocalEntry(IEnumerable<TraySegment> trays, RoutePoint from, RoutePoint to,
+            CableCategory category, RouteCollisionQuery collision, RoutingOptions options, ConstrainedRoutingLimits limits,
+            LocalConnectorOptions localOptions, bool drillThroughWalls, CancellationToken cancellationToken, bool finalReverse, bool interTrayManeuvers)
+        {
             if (!drillThroughWalls && collision == null) throw new ArgumentNullException("collision");
             var frozen = RouteCalculator.ConstrainedOptions(options); var profile = (localOptions ?? new LocalConnectorOptions()).Snapshot();
-            using (var budget = new ConstrainedBudget((limits ?? new ConstrainedRoutingLimits()).Snapshot(), cancellationToken))
+            using (var budget = new ConstrainedBudget((limits ?? new ConstrainedRoutingLimits()).Snapshot(), cancellationToken, interTrayManeuvers && !drillThroughWalls))
             {
                 var context = new LocalConnectorContext(profile, budget);
                 DirectSecondaryEvaluation distance = null; RouteCollisionObservation direct = null; string disposition = "unavailable";

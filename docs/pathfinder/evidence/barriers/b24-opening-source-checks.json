@@ -1,0 +1,197 @@
+{
+  "schemaVersion": "wfc.pf.b24-opening-source-checks.v1",
+  "status": "SOURCE_CHECKS_PASS_NATIVE_ACCEPTANCE_PENDING",
+  "operationId": "865cab06-54c7-496b-99ef-a367d9ed7fd4",
+  "baseCommit": "69c6ea0e1a3f69a46b3a6e1464f709c40c3d69f0",
+  "sourceReceipt": {
+    "name": "pathfinder-engine/.scratch/b24-865cab06-54c7-496b-99ef-a367d9ed7fd4/source.private.json",
+    "bytes": 31312,
+    "sha256": "503e4e1bdf0e8c9778fd3dec694026c3582ea55a6d28c5dda1034789b2944a27"
+  },
+  "sourceFiles": 151,
+  "sourceBytes": 1705449,
+  "sourceAndBuildCopyBookends": "PASS",
+  "coreAndTransportChecks": [
+    {
+      "suite": "inter-tray-first",
+      "passed": 22,
+      "failed": 0,
+      "log": {
+        "name": "pathfinder-engine/.scratch/b24-865cab06-54c7-496b-99ef-a367d9ed7fd4/inter-tray-first.log",
+        "bytes": 3295,
+        "sha256": "7e2d3305ae453b9e004b061ed56f48ff7837a8f9d730b51dd618e3d4b2b29da5"
+      }
+    },
+    {
+      "suite": "constrained-first",
+      "passed": 66,
+      "failed": 0,
+      "log": {
+        "name": "pathfinder-engine/.scratch/b24-865cab06-54c7-496b-99ef-a367d9ed7fd4/constrained-first.log",
+        "bytes": 7806,
+        "sha256": "de941f58de7e03ec3ad2afd829baecb558b28512f5a4ea821f091f303c8696f7"
+      }
+    },
+    {
+      "suite": "local-first",
+      "passed": 42,
+      "failed": 0,
+      "log": {
+        "name": "pathfinder-engine/.scratch/b24-865cab06-54c7-496b-99ef-a367d9ed7fd4/local-first.log",
+        "bytes": 5135,
+        "sha256": "bae7683b0efa670a26d1a042a9c1c55049eeae07f8cb1ab2fd1cce76736a07ad"
+      }
+    },
+    {
+      "suite": "mixed-first",
+      "passed": 31,
+      "failed": 0,
+      "log": {
+        "name": "pathfinder-engine/.scratch/b24-865cab06-54c7-496b-99ef-a367d9ed7fd4/mixed-first.log",
+        "bytes": 3395,
+        "sha256": "e50dfcee165be6606e947bad8d2921d6ac541d0bc4bc5f541d8378f10881f661"
+      }
+    },
+    {
+      "suite": "legacy-first",
+      "passed": 39,
+      "failed": 0,
+      "log": {
+        "name": "pathfinder-engine/.scratch/b24-865cab06-54c7-496b-99ef-a367d9ed7fd4/legacy-first.log",
+        "bytes": 5988,
+        "sha256": "9230dc422dc1fa3f86ffe039cdea945a829b07b46b3aaecd431213cd79e631da"
+      }
+    },
+    {
+      "suite": "direct-final",
+      "passed": 63,
+      "failed": 0,
+      "log": {
+        "name": "pathfinder-engine/.scratch/b24-865cab06-54c7-496b-99ef-a367d9ed7fd4/direct-final.log",
+        "bytes": 6031,
+        "sha256": "a5ef7f35302da9bbb3a3566b5d3510af7b524bdd6e7b426d76ebbbc70b0dfb51"
+      }
+    },
+    {
+      "suite": "ledger-first",
+      "passed": 35,
+      "failed": 0,
+      "log": {
+        "name": "pathfinder-engine/.scratch/b24-865cab06-54c7-496b-99ef-a367d9ed7fd4/ledger-first.log",
+        "bytes": 3413,
+        "sha256": "20f1c3a3d1bd9c692797c90bc4f4429fe0700bab6a6ea30faa046850b23be2ab"
+      }
+    }
+  ],
+  "uniqueCoreAndTransportChecks": 298,
+  "newCoreChecks": 22,
+  "newMixedTransportChecks": 11,
+  "typescript": {
+    "uniqueSelectedChecks": 281,
+    "failed": 0,
+    "pending": 0,
+    "selectedReport": {
+      "name": "pathfinder-engine/.scratch/b24-865cab06-54c7-496b-99ef-a367d9ed7fd4/ts-selected-first.json",
+      "bytes": 113511,
+      "sha256": "bf022b0e21d6149a22a93b2be0bb89b1470530c85b900c4485c6410e0eae93fb"
+    },
+    "repeatedAffectedReport": {
+      "name": "pathfinder-engine/.scratch/b24-865cab06-54c7-496b-99ef-a367d9ed7fd4/ts-two-final.json",
+      "bytes": 45342,
+      "sha256": "2fc4abcb13e6e76199c8dc8e1fc1801384644c062f4b1c19db9a89180796a306"
+    }
+  },
+  "emptyChecks": [
+    {
+      "check": "frontend-types-first.log",
+      "status": "PASS",
+      "output": {
+        "name": "pathfinder-engine/.scratch/b24-865cab06-54c7-496b-99ef-a367d9ed7fd4/frontend-types-first.log",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "check": "server-types-final.log",
+      "status": "PASS",
+      "output": {
+        "name": "pathfinder-engine/.scratch/b24-865cab06-54c7-496b-99ef-a367d9ed7fd4/server-types-final.log",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "check": "ts-lint-first.log",
+      "status": "PASS",
+      "output": {
+        "name": "pathfinder-engine/.scratch/b24-865cab06-54c7-496b-99ef-a367d9ed7fd4/ts-lint-first.log",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "check": "ts-two-lint-final.log",
+      "status": "PASS",
+      "output": {
+        "name": "pathfinder-engine/.scratch/b24-865cab06-54c7-496b-99ef-a367d9ed7fd4/ts-two-lint-final.log",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  ],
+  "builds": [
+    {
+      "check": "frontend-build-first.log",
+      "status": "PASS",
+      "positiveExitObservedByRoot": true,
+      "output": {
+        "name": "pathfinder-engine/.scratch/b24-865cab06-54c7-496b-99ef-a367d9ed7fd4/frontend-build-first.log",
+        "bytes": 7604,
+        "sha256": "e458669615a91f341f5403ccb3af4f7abee599161bbb7192ee5801f118538dbf"
+      }
+    },
+    {
+      "check": "server-build-first.log",
+      "status": "PASS",
+      "positiveExitObservedByRoot": true,
+      "output": {
+        "name": "pathfinder-engine/.scratch/b24-865cab06-54c7-496b-99ef-a367d9ed7fd4/server-build-first.log",
+        "bytes": 1799,
+        "sha256": "e9f1842c678fae76ad91e1a0236ea2dbbbecb68a9601ea2e1dc84b9f17e20dc9"
+      }
+    },
+    {
+      "check": "engine-publish-first.log",
+      "status": "PASS",
+      "positiveExitObservedByRoot": true,
+      "output": {
+        "name": "pathfinder-engine/.scratch/b24-865cab06-54c7-496b-99ef-a367d9ed7fd4/engine-publish-first.log",
+        "bytes": 1668,
+        "sha256": "ad97ac60c2483c0c39e54d03face8fce0a95ce069ee50d007c3668a9213ea8c3"
+      }
+    }
+  ],
+  "retainedInitialFailures": [
+    {
+      "name": "direct-first.log",
+      "exitCode": 2,
+      "assertionsExecuted": 0,
+      "reason": "Missing required runner/work-root arguments; corrected invocation passed63."
+    },
+    {
+      "name": "server-types-first.log",
+      "exitCode": 2,
+      "reason": "Readonly tuple in two new test fixtures; validated parsing fixed the tests and final server typecheck passed."
+    },
+    {
+      "name": "prepare-real-cases.mjs",
+      "exitCode": 1,
+      "reason": "Receipt extension gate omitted13 hashed reference files; no output directory/native run; additive v2 producer passed."
+    }
+  ],
+  "installed": false,
+  "realCableApply": false,
+  "sdkExecuted": false,
+  "engineeringAccepted": false,
+  "scope": "Executed source/synthetic protocol checks and portable publish only. Native real-model geometry, current frame, capacity and business acceptance are separate."
+}

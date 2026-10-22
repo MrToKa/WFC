@@ -33,9 +33,12 @@ internal static partial class Program
             throw new ArgumentException("Mixed defaults no longer match the frozen explicit profile.");
         var value = request.Barriers ?? throw new ArgumentException("Mixed runtime is required.");
         BarrierFields(value, "schemaVersion", "binding", "profile", "profileSha256", "storage");
+        var profile = value.GetProperty("profile");
+        bool interTrayManeuvers = BarrierEqual(profile, MixedOpeningProfile);
         if (BarrierString(value, "schemaVersion") != "wfc.pf.barrier-runtime.v2" || BarrierCanonical(value).Length > 65536
-            || !BarrierEqual(value.GetProperty("profile"), MixedProfile) || BarrierDigest(value, "profileSha256") != BarrierHash(MixedProfile))
+            || !(interTrayManeuvers || BarrierEqual(profile, MixedProfile)) || BarrierDigest(value, "profileSha256") != BarrierHash(profile))
             throw new ArgumentException("Mixed runtime profile or digest mismatch.");
+        if (interTrayManeuvers) ValidateInterTrayManeuverDefaults();
         var binding = value.GetProperty("binding"); BarrierFields(binding, "schemaVersion", "scope", "registryRevision", "snapshot", "policy", "policySha256");
         if (BarrierString(binding, "schemaVersion") != "wfc.pf.barrier-calculation-binding.v2") throw new ArgumentException("Mixed binding version mismatch.");
         var scope = binding.GetProperty("scope"); BarrierScope(scope, request); string revision = BarrierRevision(binding, "registryRevision");
@@ -63,7 +66,7 @@ internal static partial class Program
             if (BarrierString(snapshot, "mode") == "mixed-mesh-set") BarrierBlob.Validate(storage.GetProperty("capture"), 33554432);
             else if (storage.GetProperty("capture").ValueKind != JsonValueKind.Null) throw new ArgumentException("Explicit-empty mixed scope cannot carry a capture.");
         }
-        return new(value.Clone(), binding.Clone(), scope.Clone(), snapshot.Clone(), storage.Clone(), drill);
+        return new(value.Clone(), binding.Clone(), scope.Clone(), snapshot.Clone(), storage.Clone(), drill, interTrayManeuvers);
     }
     private static object MixedBarrierFailure(Request request, MixedBarrierRuntimeContext context, string status, string reason, string message) => new
     {
@@ -75,7 +78,7 @@ internal static partial class Program
             engineeringAccepted = false, ownTerminalExemptionsSupported = false, authority = "none" }
     };
 }
-internal sealed record MixedBarrierRuntimeContext(JsonElement Value, JsonElement Binding, JsonElement Scope, JsonElement Snapshot, JsonElement Storage, bool Drill)
+internal sealed record MixedBarrierRuntimeContext(JsonElement Value, JsonElement Binding, JsonElement Scope, JsonElement Snapshot, JsonElement Storage, bool Drill, bool InterTrayManeuvers)
 {
     internal string? Mode => Snapshot.ValueKind == JsonValueKind.Null ? null : Snapshot.GetProperty("mode").GetString();
 }

@@ -10,7 +10,8 @@ import { hash } from './dependencies.js';
 import { barrierWriteEvidenceSchema } from '../../shared/pathfinderBarrierWrites.js';
 import { createBarrierRuntimePolicy } from '../../shared/pathfinderBarrierRuntime.js';
 import { MIXED_BARRIER_POLICY,MIXED_BARRIER_COLLISION_VERSION,MIXED_BARRIER_VERIFIER_VERSION,MIXED_BARRIER_RUNTIME_PROFILE,
-  createMixedBarrierRuntimePolicy,mixedBarrierEngineIdentitySchema,mixedBarrierExecutionSchema,type MixedBarrierVerifierEvidence } from '../../shared/pathfinderBarrierMixed.js';
+  MIXED_BARRIER_OPENING_RUNTIME_PROFILE,INTER_TRAY_OPENING_MANEUVER_POLICY,
+  createMixedBarrierRuntimePolicy,mixedBarrierEngineIdentitySchema,mixedBarrierExecutionSchema,mixedBarrierOpeningRuntimeProfileSchema,type MixedBarrierVerifierEvidence } from '../../shared/pathfinderBarrierMixed.js';
 import { supportedBarrierWriteEvidenceSchema } from '../../shared/pathfinderBarrierSupported.js';
 import { engineResponseSchema,type BarrierDependencySnapshot } from './jobContracts.js';
 
@@ -64,8 +65,48 @@ function mixedPhysicalInputs(){
   return f;
 }
 
+function openingProfileInputs(){
+  const f=mixedPhysicalInputs(),context=f.dependencies.barriers;
+  if(context.schemaVersion!=='wfc.pf.barrier-runtime.v2'||f.dependencies.engineIdentity.schemaVersion!=='wfc.pf.engine-identity.v3'
+    ||f.result.schemaVersion!=='pathfinder.model.response.v3'||f.result.barriers.schemaVersion!=='wfc.pf.barrier-execution.v2')throw Error('fixture');
+  context.profile=mixedBarrierOpeningRuntimeProfileSchema.parse(MIXED_BARRIER_OPENING_RUNTIME_PROFILE);context.profileSha256=hash(context.profile);
+  const identity=mixedBarrierEngineIdentitySchema.parse({...f.dependencies.engineIdentity,policyVersions:{...f.dependencies.engineIdentity.policyVersions,
+    runtimeProfile:MIXED_BARRIER_OPENING_RUNTIME_PROFILE.schemaVersion,interTrayManeuvers:INTER_TRAY_OPENING_MANEUVER_POLICY}});
+  const {contentSha256:_old,...body}=identity;identity.contentSha256=hash(body);f.dependencies.engineIdentity=identity;
+  f.result.barriers.context=structuredClone(context);return f;
+}
+
 beforeEach(()=>vi.resetAllMocks());
 describe('pure exact protected write evidence',()=>{
+  it('recognizes the explicit new profile through complete unchanged final geometry and length proof gates',()=>{
+    const f=openingProfileInputs(),before=structuredClone({dependencies:f.dependencies,result:f.result});
+    expect(requireBarrierWriteEvidence(f.dependencies,f.result)).toMatchObject({schemaVersion:'wfc.pf.barrier-write-evidence.v2',
+      status:'clear',profileSha256:hash(MIXED_BARRIER_OPENING_RUNTIME_PROFILE),contextSha256:hash(f.dependencies.barriers)});
+    expect({dependencies:f.dependencies,result:f.result}).toEqual(before);
+  });
+  it.each(['context','identity'] as const)('rejects a valid but mismatched old/new %s without borrowing the other profile authority',side=>{
+    const f=openingProfileInputs(),context=f.dependencies.barriers,identity=f.dependencies.engineIdentity;
+    if(context.schemaVersion!=='wfc.pf.barrier-runtime.v2'||identity.schemaVersion!=='wfc.pf.engine-identity.v3'
+      ||!('interTrayManeuvers' in identity.policyVersions)||f.result.schemaVersion!=='pathfinder.model.response.v3'
+      ||f.result.barriers.schemaVersion!=='wfc.pf.barrier-execution.v2')throw Error('fixture');
+    if(side==='context'){
+      context.profile=structuredClone(MIXED_BARRIER_RUNTIME_PROFILE);context.profileSha256=hash(context.profile);
+      f.result.barriers.context=structuredClone(context);
+    }else{
+      const {interTrayManeuvers:_newPolicy,...oldPolicies}=identity.policyVersions;
+      const old=mixedBarrierEngineIdentitySchema.parse({...identity,policyVersions:{...oldPolicies,runtimeProfile:MIXED_BARRIER_RUNTIME_PROFILE.schemaVersion}});
+      const {contentSha256:_oldHash,...body}=old;old.contentSha256=hash(body);f.dependencies.engineIdentity=old;
+    }
+    expect(readBarrierWriteEvidence(f.dependencies,f.result)).toBeNull();
+  });
+  it('rejects self-rehashed enlarged maneuver bounds at the actual immutable write-proof reader',()=>{
+    const f=openingProfileInputs();
+    if(f.dependencies.barriers.schemaVersion!=='wfc.pf.barrier-runtime.v2'||f.result.schemaVersion!=='pathfinder.model.response.v3'
+      ||f.result.barriers.schemaVersion!=='wfc.pf.barrier-execution.v2')throw Error('fixture');
+    const profile={...MIXED_BARRIER_OPENING_RUNTIME_PROFILE,interTrayManeuvers:{...MIXED_BARRIER_OPENING_RUNTIME_PROFILE.interTrayManeuvers,maximumOffsetMetres:0.2}};
+    const context={...f.dependencies.barriers,profile,profileSha256:hash(profile)};
+    expect(readBarrierWriteEvidence({...f.dependencies,barriers:context},{...f.result,barriers:{...f.result.barriers,context}})).toBeNull();
+  });
   it('retains exact independently expected original-surface qualification for a successful physical write proof',()=>{
     const f=mixedPhysicalInputs(),before=structuredClone({dependencies:f.dependencies,result:f.result});
     expect(requireBarrierWriteEvidence(f.dependencies,f.result)).toMatchObject({schemaVersion:'wfc.pf.barrier-write-evidence.v2',status:'clear',geometryPolicy:MIXED_BARRIER_POLICY});

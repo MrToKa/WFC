@@ -7,6 +7,7 @@ import { type BarrierAdmissionIntent } from '../../shared/pathfinderBarrierAdmis
 import { createHash } from 'node:crypto';
 import { barrierBytesHash, barrierValueHash, encodeBarrierJson } from './barrierStorage.js';
 import { collectBarrierCalculationScope, readCurrentBarrierAdmissionIntent } from './barrierCalculationScope.js';
+import { MIXED_BARRIER_POLICY, MIXED_BARRIER_OPENING_RUNTIME_PROFILE, verifyMixedBarrierRuntimeContext } from '../../shared/pathfinderBarrierMixed.js';
 
 const mocks = vi.hoisted(() => ({ scope: vi.fn(), read: vi.fn(), stat: vi.fn() }));
 vi.mock('./barrierScope.js', () => ({ currentBarrierScope: mocks.scope }));
@@ -79,6 +80,16 @@ function fixture(empty = false) {
 beforeEach(() => vi.clearAllMocks());
 
 describe('transaction-owned barrier calculation input reader', () => {
+  it('builds the exact new mixed profile only for a new mixed admission without mutating the old intent', async () => {
+    const f = fixture(); f.state.head = { revision: '0', snapshot_id: null };
+    const intent = { ...structuredClone(f.intent), schemaVersion: 'wfc.pf.barrier-admission-intent.v2' as const,
+      geometryPolicy: MIXED_BARRIER_POLICY, expectedRegistryRevision: '0', expectedSnapshot: null, drillThroughWalls: true };
+    const before = structuredClone(intent), value = await collectBarrierCalculationScope(f.client, id(1), intent);
+    expect(value.profile).toEqual(MIXED_BARRIER_OPENING_RUNTIME_PROFILE);
+    expect(value.profileSha256).toBe(barrierValueHash(MIXED_BARRIER_OPENING_RUNTIME_PROFILE));
+    expect(verifyMixedBarrierRuntimeContext(value, text => createHash('sha256').update(text).digest('hex'))).toBe(true);
+    expect(intent).toEqual(before); expect(mocks.read).not.toHaveBeenCalled();
+  });
   it.each([false, true])('derives a fresh no-drilling producer intent from a verified current publication (empty=%s)', async empty => {
     const f = fixture(empty), value = await readCurrentBarrierAdmissionIntent(f.client, id(1), false);
     expect(value).toEqual(f.intent); expect(value.drillThroughWalls).toBe(false);

@@ -252,35 +252,53 @@ namespace AddinRibbon.Routing
                 fromPlan = fromPlanner(nodes[firstNode].Point); toPlan = toPlanner(nodes[lastNode].Point);
                 if (fromPlan.Status != LocalConnectorStatus.Clear || toPlan.Status != LocalConnectorStatus.Clear) return null;
             }
-            var checkedEdges = new Dictionary<long, bool>(); long directedEdges = 0;
+            var checkedEdges = new Dictionary<long, RouteCollisionStatus>(); long directedEdges = 0, blockedCount = 0;
+            var blocked = budget.InterTray == null ? null : new Dictionary<int, List<BlockedInterTrayEdge>>();
             for (int index = 0; index < nodes.Count; index++)
             {
                 var edges = nodes[index].Edges; int retained = 0;
                 for (int read = 0; read < edges.Count; read++)
                 {
                     budget.Charge(1); var edge = edges[read]; directedEdges++;
-                    long key = ((long)Math.Min(index, edge.Node) << 32) | (uint)Math.Max(index, edge.Node); bool clear;
-                    if (!checkedEdges.TryGetValue(key, out clear))
+                    long key = ((long)Math.Min(index, edge.Node) << 32) | (uint)Math.Max(index, edge.Node); RouteCollisionStatus status;
+                    if (!checkedEdges.TryGetValue(key, out status))
                     {
-                        clear = budget.Query(collision, nodes[index].Point, nodes[edge.Node].Point).Status == RouteCollisionStatus.Clear;
-                        checkedEdges.Add(key, clear);
+                        status = budget.Query(collision, nodes[index].Point, nodes[edge.Node].Point).Status;
+                        checkedEdges.Add(key, status);
                     }
                     // Retain the existing Edge struct verbatim, including its
                     // Length, GapDistance, integer GapRank and adjacency ordering.
-                    if (clear) edges[retained++] = edge;
+                    if (status == RouteCollisionStatus.Clear) edges[retained++] = edge;
+                    else if (blocked != null && status == RouteCollisionStatus.Blocked && nodes[index].Segment != nodes[edge.Node].Segment)
+                    {
+                        if (++blockedCount > 2L * maxConnections) throw new ConstrainedLimitException("INTER_TRAY_DESCRIPTOR_LIMIT");
+                        List<BlockedInterTrayEdge> list;
+                        if (!blocked.TryGetValue(index, out list)) { list = new List<BlockedInterTrayEdge>(); blocked.Add(index, list); }
+                        list.Add(new BlockedInterTrayEdge(edge, retained));
+                    }
                 }
                 if (retained < edges.Count) edges.RemoveRange(retained, edges.Count - retained);
             }
             budget.Charge(nodes.Count + directedEdges); PathCost graphCost;
-            var path = ShortestPath(nodes, firstNode, lastNode, budget.Token, out graphCost); budget.Check(); if (path == null) return null;
+            var path = ShortestPath(nodes, firstNode, lastNode, budget.Token, out graphCost); budget.Check();
+            Dictionary<long, InterTrayOpeningPlan> repairs = null;
+            if (path == null && blocked != null && blocked.Count != 0)
+                path = OpeningFallback(nodes, firstNode, lastNode, blocked, collision, budget, directedEdges, out graphCost, out repairs);
+            if (path == null) return null;
+            budget.RouteUsedInterTrayManeuver = false;
             var codes = new List<string>(); var segmentIds = new List<string>(); var points = new List<RoutePoint> { from };
             double fromDistance = fromPlan == null ? first.Distance : fromPlan.LengthMeters;
             double toDistance = toPlan == null ? last.Distance : toPlan.LengthMeters;
             bool fromSecondary = fromDistance > options.SecondaryDistanceMeters, toSecondary = toDistance > options.SecondaryDistanceMeters;
             if (fromPlan != null) foreach (var point in fromPlan.Points) AppendPoint(points, point);
             if (fromSecondary) codes.Add("/SECONDARY");
-            foreach (int index in path)
+            for (int pathIndex = 0; pathIndex < path.Count; pathIndex++)
             {
+                int index = path[pathIndex]; InterTrayOpeningPlan maneuver;
+                if (pathIndex > 0 && repairs != null && repairs.TryGetValue(DirectedOpeningKey(path[pathIndex - 1], index), out maneuver))
+                {
+                    AppendPoint(points, maneuver.First); AppendPoint(points, maneuver.Last); budget.RouteUsedInterTrayManeuver = true;
+                }
                 budget.Charge(1); var node = nodes[index]; var segment = eligible[node.Segment];
                 AppendTransition(codes, segment.RouteCode); AppendTransition(segmentIds, segment.Id); AppendPoint(points, node.Point);
             }

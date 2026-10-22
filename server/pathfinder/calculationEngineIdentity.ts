@@ -10,7 +10,7 @@ import {
   barrierEngineIdentityCanonicalBody, type BarrierEngineIdentity, type CalculationEngineIdentity,
 } from '../../shared/pathfinderEngineIdentity.js';
 import { mixedBarrierEngineIdentityBodySchema, mixedBarrierEngineIdentitySchema, MIXED_BARRIER_COLLISION_VERSION,
-  MIXED_BARRIER_POLICY, MIXED_BARRIER_VERIFIER_VERSION, MIXED_BARRIER_RUNTIME_PROFILE,
+  MIXED_BARRIER_POLICY, MIXED_BARRIER_VERIFIER_VERSION, MIXED_BARRIER_OPENING_RUNTIME_PROFILE, INTER_TRAY_OPENING_MANEUVER_POLICY,
   type MixedBarrierEngineIdentity } from '../../shared/pathfinderBarrierMixed.js';
 import { barrierCanonicalJson } from '../../shared/pathfinderBarriers.js';
 import { PathFinderError } from './errors.js';
@@ -89,7 +89,8 @@ export function createCalculationEngineIdentityReader(config: IdentityReaderConf
       const body = mixedBarrierEngineIdentityBodySchema.parse({ ...common, schemaVersion: 'wfc.pf.engine-identity.v3',
         barriersModuleSha256: hashes[4], barrierVerifierModuleSha256: hashes[5], policyVersions: { ...BARRIER_ENGINE_IDENTITY_POLICY_VERSIONS,
           projection: 'wfc.pf.model-runner-v3-mixed-barrier-projection.v1', barriers: MIXED_BARRIER_COLLISION_VERSION,
-          qualification: MIXED_BARRIER_VERIFIER_VERSION, runtimeProfile: MIXED_BARRIER_RUNTIME_PROFILE.schemaVersion, geometryPolicy: MIXED_BARRIER_POLICY } });
+          qualification: MIXED_BARRIER_VERIFIER_VERSION, runtimeProfile: MIXED_BARRIER_OPENING_RUNTIME_PROFILE.schemaVersion,
+          geometryPolicy: MIXED_BARRIER_POLICY, interTrayManeuvers: INTER_TRAY_OPENING_MANEUVER_POLICY } });
       return mixedBarrierEngineIdentitySchema.parse({ ...body, contentSha256: hash(barrierCanonicalJson(body)) });
     })() : config.barriers ? (() => {
       const body = barrierEngineIdentityBodySchema.parse({ ...common, schemaVersion: 'wfc.pf.engine-identity.v2',

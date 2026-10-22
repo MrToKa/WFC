@@ -161,5 +161,6 @@ internal static partial class Program
             finally { File.WriteAllBytes(stored.CapturePath, saved); }
             Successful(await session.Query(Protected(baseline, stored.Context)), stored.Context, stored); await session.Finish();
         });
+        await InterTrayProfileTransport(runner, root);
     }
 }

@@ -28,12 +28,18 @@ internal static partial class Program
         ConstrainedSecondaryEvaluation? secondary = null; LocalApproachRouteEvaluation local;
         if (request.DirectSecondaryPolicy is not null)
         {
-            var calculated = ConstrainedSecondaryRoute.CalculateWithLocalApproaches(prepared.Segments, Point(request.From), Point(request.To), category,
-                oracle, options, drillThroughWalls: bypass, cancellationToken: token, finalReverse: request.Reverse);
+            var calculated = context.InterTrayManeuvers
+                ? ConstrainedSecondaryRoute.CalculateWithLocalApproachesAndInterTrayManeuvers(prepared.Segments, Point(request.From), Point(request.To), category,
+                    oracle, options, drillThroughWalls: bypass, cancellationToken: token, finalReverse: request.Reverse)
+                : ConstrainedSecondaryRoute.CalculateWithLocalApproaches(prepared.Segments, Point(request.From), Point(request.To), category,
+                    oracle, options, drillThroughWalls: bypass, cancellationToken: token, finalReverse: request.Reverse);
             secondary = calculated.SecondaryEvaluation; local = calculated.LocalApproaches;
         }
-        else local = new RouteCalculator().CalculateConstrainedWithLocalApproaches(prepared.Segments, Point(request.From), Point(request.To), category,
-            oracle, options, drillThroughWalls: bypass, cancellationToken: token);
+        else local = context.InterTrayManeuvers
+            ? new RouteCalculator().CalculateConstrainedWithLocalApproachesAndInterTrayManeuvers(prepared.Segments, Point(request.From), Point(request.To), category,
+                oracle, options, drillThroughWalls: bypass, cancellationToken: token)
+            : new RouteCalculator().CalculateConstrainedWithLocalApproaches(prepared.Segments, Point(request.From), Point(request.To), category,
+                oracle, options, drillThroughWalls: bypass, cancellationToken: token);
         token.ThrowIfCancellationRequested(); var evaluated = local.RouteEvaluation;
         var route = evaluated.Route;
         var distance = secondary?.DistanceDecision is { } raw ? DirectSecondaryDecision.Capture(raw) : null;
