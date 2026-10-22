@@ -79,6 +79,21 @@ describe('multipart admission uses authoritative existing principal transaction'
     await expect(protectedRepository.readCompletion(f.projectId, f.who, randomUUID())).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_VIEWER_CHANGED' });
     expect(f.query.mock.calls.some(([sql]) => sql.includes('pf_barrier_multipart'))).toBe(false); expect(f.release).toHaveBeenCalledOnce();
   });
+  it('rejects invalid internal seal and part-evidence selectors before database or storage access', async () => {
+    const f = fixture();
+    await expect(f.repository.readSeal(f.projectId, f.who, randomUUID(), 'foreign' as 'nodes')).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_SEAL_QUERY' });
+    for (const index of [-1, .5, BARRIER_MULTIPART_PROFILE.limits.parts])
+      await expect(f.repository.readPartEvidence(f.projectId, f.who, randomUUID(), index)).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_PART_QUERY' });
+    expect(f.connect).not.toHaveBeenCalled(); expect(f.storage.read).not.toHaveBeenCalled();
+  });
+  it.each(['seal', 'part'] as const)('checks protected Viewer access before internal %s export metadata', async kind => {
+    const f = fixture(), authorizeContext = vi.fn(async () => { throw Object.assign(new Error('Viewer changed'), { code: 'BARRIER_MULTIPART_VIEWER_CHANGED' }); });
+    const protectedRepository = createBarrierMultipartRepository(f.pool, { currentScope: f.currentScope, storage: f.storage, authorizeContext });
+    const result = kind === 'seal' ? protectedRepository.readSeal(f.projectId, f.who, randomUUID(), 'nodes') : protectedRepository.readPartEvidence(f.projectId, f.who, randomUUID(), 0);
+    await expect(result).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_VIEWER_CHANGED' });
+    expect(f.query.mock.calls.some(([sql]) => sql.includes('pf_barrier_multipart'))).toBe(false);
+    expect(f.storage.read).not.toHaveBeenCalled(); expect(f.release).toHaveBeenCalledOnce();
+  });
   it('defines only additive unqualified evidence tables and immutable retention guards', () => {
     expect([...BARRIER_MULTIPART_SCHEMA_SQL.matchAll(/CREATE TABLE IF NOT EXISTS (\w+)/g)].map(match => match[1])).toEqual([
       'pf_barrier_multipart_sessions', 'pf_barrier_multipart_allocations', 'pf_barrier_multipart_receipts', 'pf_barrier_multipart_viewer_contexts', 'pf_barrier_multipart_producer_completions']);

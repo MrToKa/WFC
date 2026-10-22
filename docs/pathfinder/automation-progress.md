@@ -1,5 +1,23 @@
 # PathFinder local implementation progress
 
+## Current: PF-B17 structural catalog checked; popup and known-write outcomes next
+
+Report107/publicB17receipt: root surfaceWindows/Linux27PASS each (6visitor+
+21independentfixtures), oldpacked31local+26goldensPASS both; correctedserver
+units25 and isolatedLinuxSQL/cookieHTTP37PASS, ownhelpers/networkcleanup and
+build/source/artifact/fixturebookendsPASS. Source-only catalog/globalcoverage/
+coldreader+protectedoriginalevidenceexport implemented, no mountedrunner/query/
+occupancy/publicationauthority. Rootfilesystem-headroom check does not establish
+nestedLinuxmountheadroom; actualcapacity/peakRSSnotmeasured. Initialtype/profile
+false-refusal failures corrected and retained in ownoperation13328c95.
+Runtime remains B15weba0e6972c/APIac0d16ab, no model/cable/Apply/originalwrites.
+Latestuserpriority now finishpopupTHENwalls: per-cableoffdefaultDrill,
+exactACKpolicy/visibleCalculatefeedback; falsepre-PUTUnknownclassificationfix
+inparallel. Popupfirst4suite run incomplete/oneResultsfailure retained; noUI
+passclaim. Publicationboundary149testsPASS sourceonly. Furtherdurableterminal
+geometryrefusal/reconciliation, surfacequeries/ownterminals/authoring/actual
+Aalborg stillrequired; browserrefusalnotretried. Preparer remains afterward.
+
 ## Current: PF-B16 actual wall diagnosis checked; surface-domain catalog next
 
 Root uniquely matched30 supplied objects in exact retained fingerprint.29RAW

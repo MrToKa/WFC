@@ -19,6 +19,45 @@ public static class PackedPartReader
 
     public static PackedPartValidationReport ValidatePart(ReadOnlyMemory<byte> bytes, PackedPartExpectedDescriptor expectedDescriptor,
         PackedPartLimits? limits = null, CancellationToken token = default)
+        => Validate(bytes, expectedDescriptor, limits, token).Report;
+
+    /// <summary>No callback occurs until every byte, tuple, cursor EOF and cursor
+    /// disposal has passed. Callbacks receive values, never the owned mesh buffer.</summary>
+    public static PackedPartValidationReport VisitValidatedPart(ReadOnlyMemory<byte> bytes, PackedPartExpectedDescriptor expectedDescriptor,
+        Action<PackedValidatedRange> rangeVisitor, Action<PackedValidatedTriangle> triangleVisitor,
+        PackedPartLimits? limits = null, CancellationToken token = default)
+    {
+        ArgumentNullException.ThrowIfNull(rangeVisitor); ArgumentNullException.ThrowIfNull(triangleVisitor);
+        var validated = Validate(bytes, expectedDescriptor, limits, token);
+        foreach (var slice in validated.Ranges)
+        {
+            validated.Budget.Check(); var item = slice.Expected;
+            rangeVisitor(new(item, validated.Report, validated.Bytes.AsMemory(slice.Offset, 384).ToArray()));
+            validated.Budget.Check(); var raw = validated.Bytes.AsSpan(slice.Offset, slice.Bytes);
+            var matrix = new double[16]; for (int at = 0; at < 16; at++) matrix[at] = F64(raw, 256 + at * 8);
+            int count = checked((int)item.Range.ReferencedVertexCount), coordinatesAt = checked(384 + count * 4), indicesAt = checked(coordinatesAt + count * 24);
+            for (uint triangle = 0; triangle < item.Range.TriangleCount; triangle++)
+            {
+                validated.Budget.Spend(); int at = checked(indicesAt + (int)triangle * 12);
+                uint a = U32(raw, at), b = U32(raw, at + 4), c = U32(raw, at + 8);
+                triangleVisitor(new(item.Placement.RangeOrdinal, item.Range.FragmentOrdinal, checked(item.Range.TriangleStart + triangle),
+                    U32(raw, checked(384 + (int)a * 4)), U32(raw, checked(384 + (int)b * 4)), U32(raw, checked(384 + (int)c * 4)),
+                    Point(raw, coordinatesAt, a, matrix), Point(raw, coordinatesAt, b, matrix), Point(raw, coordinatesAt, c, matrix)));
+                validated.Budget.Check();
+            }
+        }
+        validated.Budget.Check(); return validated.Report;
+    }
+    private static PackedCanonicalPoint Point(ReadOnlySpan<byte> bytes, int coordinatesAt, uint index, double[] matrix)
+    {
+        int at = checked(coordinatesAt + (int)index * 24); double x = F64(bytes, at), y = F64(bytes, at + 8), z = F64(bytes, at + 16);
+        double Axis(int axis) => Add(Add(Add(Product(matrix[axis], x), Product(matrix[4 + axis], y)), Product(matrix[8 + axis], z)), matrix[12 + axis]);
+        return new(Axis(0), Axis(1), Axis(2));
+    }
+    private sealed record RangeSlice(int Offset, int Bytes, PackedExpectedRange Expected);
+    private sealed record ValidatedPart(byte[] Bytes, PackedPartValidationReport Report, List<RangeSlice> Ranges, Budget Budget);
+    private static ValidatedPart Validate(ReadOnlyMemory<byte> bytes, PackedPartExpectedDescriptor expectedDescriptor,
+        PackedPartLimits? limits, CancellationToken token)
     {
         token.ThrowIfCancellationRequested(); limits ??= new(); CheckLimits(limits);
         var budget = new Budget(limits.MaximumWork, limits.MaximumMilliseconds, token);
@@ -52,7 +91,7 @@ public static class PackedPartReader
         Match(descriptor.Span, ref descriptorAt, prefix);
         long planned = 8192; int vertices = 0, triangles = 0;
         var fragments = new HashSet<uint>(); var physical = new HashSet<uint>();
-        PackedExpectedRange? previous = null;
+        PackedExpectedRange? previous = null; var slices = new List<RangeSlice>();
         using var cursor = expectedDescriptor.Ranges.GetEnumerator();
         try
         {
@@ -76,6 +115,7 @@ public static class PackedPartReader
                 long rangeBytes = checked(384L + 28L * range.ReferencedVertexCount + 12L * range.TriangleCount);
                 if (rangeBytes > owned.Length - dataOffset) Fail("RANGE_BINARY_BYTES");
                 ReadRange(raw.Slice(dataOffset, (int)rangeBytes), item, frame, expected.Context, budget);
+                slices.Add(new(dataOffset, (int)rangeBytes, item));
                 dataOffset = checked(dataOffset + (int)rangeBytes); previous = item;
             }
             budget.Check(); if (cursor.MoveNext()) Fail("EXPECTED_RANGE_EXTRA"); budget.Check();
@@ -90,8 +130,8 @@ public static class PackedPartReader
             digest.AppendData(descriptor.Span); digest.AppendData("}"u8);
             descriptorHash = Convert.ToHexString(digest.GetHashAndReset()).ToLowerInvariant();
         }
-        budget.Check(); return new(expected.Context, descriptorHash, payloadHash,
-            new((int)expected.RangeCount, fragments.Count, vertices, triangles, owned.Length));
+        budget.Check(); return new(owned, new(expected.Context, descriptorHash, payloadHash,
+            new((int)expected.RangeCount, fragments.Count, vertices, triangles, owned.Length)), slices, budget);
     }
 
     private static PackedPartContext CheckedContext(PackedPartContext? value)

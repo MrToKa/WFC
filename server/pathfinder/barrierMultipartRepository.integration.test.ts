@@ -343,6 +343,57 @@ describe.skipIf(!fixtureFile).sequential('owned Linux PostgreSQL multipart stagi
     expect(await repository.get(projectId, who, prepared.session.id)).toEqual(prepared.session);
     await expect(repository.completeProducer(projectId, who, completeCommand(prepared.session, prepared.receipts))).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_COMPLETION_CONTEXT_REQUIRED' });
   });
+  it('exports all four exact retained seals and atomic original part receipts without renewing or changing evidence', async () => {
+    const prepared = await preparedParts(2), protectedRepository = completing();
+    const completed = await protectedRepository.completeProducer(projectId, who, completeCommand(prepared.session, prepared.receipts));
+    const before = await repository.get(projectId, who, prepared.session.id), stores = controls.stores;
+    for (const kind of ['nodes', 'fragments', 'geometry-ranges', 'plan'] as const) {
+      const seal = await protectedRepository.readSeal(projectId, who, before.id, kind);
+      expect(seal.kind).toBe(kind); expect(seal.sealSha256).toBe(completed.roots[kind]); expect(h(barrierMultipartSealHashInput(seal))).toBe(seal.sealSha256);
+    }
+    for (let index = 0; index < 2; index++) {
+      const evidence = await protectedRepository.readPartEvidence(projectId, who, before.id, index);
+      expect(evidence.bytes).toEqual(Buffer.from('opaque synthetic part ' + index)); expect(evidence.receipt).toEqual(prepared.receipts[index]);
+      expect(evidence.receipt.duplicate).toBe(false); expect(evidence.receipt.stored.sha256).toBe(createHash('sha256').update(evidence.bytes).digest('hex'));
+    }
+    expect(await repository.get(projectId, who, before.id)).toEqual(before); expect(controls.stores).toBe(stores);
+    expect(await protectedRepository.readCompletion(projectId, who, before.id)).toEqual(completed); expect(before.leaseDeadline).toBeNull();
+    await expect(protectedRepository.readSeal(projectId, { ...who, loginId: id() }, before.id, 'nodes')).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_OWNER_CHANGED' });
+    await expect(protectedRepository.readPartEvidence(projectId, { ...who, loginId: id() }, before.id, 0)).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_OWNER_CHANGED' });
+    const load = currentScope.modelLoadId; currentScope.modelLoadId = id();
+    try {
+      await expect(protectedRepository.readSeal(projectId, who, before.id, 'nodes')).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_SCOPE_CHANGED' });
+      await expect(protectedRepository.readPartEvidence(projectId, who, before.id, 0)).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_SCOPE_CHANGED' });
+    } finally { currentScope.modelLoadId = load; }
+    await repository.cancel(projectId, who, { schemaVersion: 'wfc.pf.barrier-multipart-cancel.v2', intentId: before.id, expectedSessionRevision: before.sessionRevision,
+      idempotencyKey: id(), scopeSha256: before.scopeSha256, profileSha256: before.profileSha256, reason: 'Synthetic internal export cancellation' });
+    await expect(protectedRepository.readSeal(projectId, who, before.id, 'nodes')).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_CANCELLED' });
+    await expect(protectedRepository.readPartEvidence(projectId, who, before.id, 0)).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_CANCELLED' });
+  });
+  it('refuses absent or altered seal and part payloads before returning any trusted export evidence', async () => {
+    const admitted = await admit(); await expect(repository.readSeal(projectId, who, admitted.session.id, 'nodes')).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_SEAL_NOT_FOUND' });
+    await expect(repository.readPartEvidence(projectId, who, admitted.session.id, 0)).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_PART_NOT_FOUND' });
+    const prepared = await preparedParts();
+    const damaged = createBarrierMultipartRepository(pool, { ...adapters, storage: { ...adapters.storage, read: async (...args) => {
+      const original = await adapters.storage.read(...args), changed = Buffer.from(original); changed[0] ^= 1; return changed;
+    } } });
+    await expect(damaged.readSeal(projectId, who, prepared.session.id, 'nodes')).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_SEAL_INTEGRITY' });
+    await expect(damaged.readPartEvidence(projectId, who, prepared.session.id, 0)).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_PART_INTEGRITY' });
+    expect(await repository.get(projectId, who, prepared.session.id)).toEqual(prepared.session);
+  });
+  it('requires the exact original immutable receipt for seal and part export', async () => {
+    const prepared = await preparedParts();
+    const alteredPool = { connect: async () => {
+      const client = await pool.connect(); return { release: () => client.release(), query: async (sql: string, values?: unknown[]) => {
+        const result = await client.query(sql, values);
+        if (sql.startsWith('SELECT a.*,r.session_id AS receipt_session_id')) return { ...result, rows: result.rows.map(row => ({ ...row, stage_receipt: { ...row.stage_receipt, duplicate: true } })) };
+        return result;
+      } };
+    } } as unknown as Pool;
+    const changed = createBarrierMultipartRepository(alteredPool, adapters);
+    await expect(changed.readSeal(projectId, who, prepared.session.id, 'nodes')).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_COMPLETION_STORED_INTEGRITY' });
+    await expect(changed.readPartEvidence(projectId, who, prepared.session.id, 0)).rejects.toMatchObject({ code: 'BARRIER_MULTIPART_COMPLETION_STORED_INTEGRITY' });
+  });
   it('records exactly one immutable producer completion and refreshes it without quota, lease or authority changes', async () => {
     const prepared = await preparedParts(2), protectedRepository = completing(), request = completeCommand(prepared.session, prepared.receipts), stores = controls.stores;
     const first = await protectedRepository.completeProducer(projectId, who, request), saved = await repository.get(projectId, who, prepared.session.id);

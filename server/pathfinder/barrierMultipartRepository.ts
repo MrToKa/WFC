@@ -606,6 +606,42 @@ export function createBarrierMultipartRepository(pool: Pool, adapters: BarrierMu
       await current(client, projectId, session, who); deadlines(row); jobDeadline = new Date(row.job_deadline).getTime(); return command.page;
     }, signal, () => { if (jobDeadline !== null && jobDeadline <= Date.now()) fail('BARRIER_MULTIPART_JOB_EXPIRED'); });
   }
+  /** Internal immutable seal read. A retained structural seal is not a geometry
+   * certificate, completed producer or publication authority. */
+  async function readSeal(projectId: string, who: JobPrincipal, intentId: string, kind: BarrierMultipartSeal['kind'], signal?: AbortSignal): Promise<BarrierMultipartSeal> {
+    if (!['nodes', 'fragments', 'geometry-ranges', 'plan'].includes(kind)) fail('BARRIER_MULTIPART_SEAL_QUERY', 400);
+    let jobDeadline: number | null = null;
+    return tx(projectId, who, async client => {
+      const row = await sessionRow(client, projectId, intentId), session = checked(row, projectId, who);
+      if (session.state === 'cancelled') fail('BARRIER_MULTIPART_CANCELLED'); deadlines(row); await current(client, projectId, session, who);
+      const allocation = (await client.query<StoredItemRow>(storedItems + " WHERE a.project_id=$1 AND a.session_id=$2 AND a.item_kind='seal' AND a.stream_kind=$3 AND a.item_index=0 AND a.state='stored' FOR SHARE OF a", [projectId, session.id, kind])).rows[0];
+      if (!allocation) fail('BARRIER_MULTIPART_SEAL_NOT_FOUND', 404);
+      const receipt = checkedStoredItem(allocation, session, who), command = barrierMultipartStageSealCommandSchema.parse(allocation.command);
+      if (receipt.kind !== 'seal' || command.seal.kind !== kind || command.seal.sealSha256 !== hashValue(barrierMultipartSealHashInput(command.seal)))
+        fail('BARRIER_MULTIPART_SEAL_INTEGRITY');
+      const bytes = await adapters.storage.read(allocation.ticket, (ticket, entry) => assertReservation(client, projectId, who, ticket, signal, entry, 'stored'), { signal });
+      if (!bytes.equals(encodeBarrierMultipartControl(command.seal))) fail('BARRIER_MULTIPART_SEAL_INTEGRITY');
+      await current(client, projectId, session, who); deadlines(row); jobDeadline = new Date(row.job_deadline).getTime(); return command.seal;
+    }, signal, () => { if (jobDeadline !== null && jobDeadline <= Date.now()) fail('BARRIER_MULTIPART_JOB_EXPIRED'); });
+  }
+  /** Exact original stored receipt and its one bounded opaque-byte snapshot.
+   * The caller still validates codec, global coverage and final completion. */
+  async function readPartEvidence(projectId: string, who: JobPrincipal, intentId: string, index: number, signal?: AbortSignal): Promise<{ bytes: Buffer; receipt: Extract<BarrierMultipartStageReceipt, { kind: 'part' }> }> {
+    if (!Number.isSafeInteger(index) || index < 0 || index >= BARRIER_MULTIPART_PROFILE.limits.parts) fail('BARRIER_MULTIPART_PART_QUERY', 400);
+    let jobDeadline: number | null = null;
+    return tx(projectId, who, async client => {
+      const row = await sessionRow(client, projectId, intentId), session = checked(row, projectId, who);
+      if (session.state === 'cancelled') fail('BARRIER_MULTIPART_CANCELLED'); deadlines(row); await current(client, projectId, session, who);
+      const allocation = (await client.query<StoredItemRow>(storedItems + " WHERE a.project_id=$1 AND a.session_id=$2 AND a.item_kind='part' AND a.item_index=$3 AND a.state='stored' FOR SHARE OF a", [projectId, session.id, index])).rows[0];
+      if (!allocation) fail('BARRIER_MULTIPART_PART_NOT_FOUND', 404);
+      const receipt = checkedStoredItem(allocation, session, who), command = barrierMultipartStagePartCommandSchema.parse(allocation.command);
+      if (receipt.kind !== 'part') return fail('BARRIER_MULTIPART_PART_INTEGRITY');
+      if (receipt.partIndex !== index || command.partIndex !== index) fail('BARRIER_MULTIPART_PART_INTEGRITY');
+      const bytes = await adapters.storage.read(allocation.ticket, (ticket, entry) => assertReservation(client, projectId, who, ticket, signal, entry, 'stored'), { signal });
+      if (bytes.length !== command.payload.bytes || hashBytes(bytes) !== command.payload.sha256) fail('BARRIER_MULTIPART_PART_INTEGRITY');
+      await current(client, projectId, session, who); deadlines(row); jobDeadline = new Date(row.job_deadline).getTime(); return { bytes, receipt };
+    }, signal, () => { if (jobDeadline !== null && jobDeadline <= Date.now()) fail('BARRIER_MULTIPART_JOB_EXPIRED'); });
+  }
   /** Internal bounded opaque-byte read only. It proves storage/currentness,
    * never codec validity, collision qualification or publication authority. */
   async function readPart(projectId: string, who: JobPrincipal, intentId: string, index: number, signal?: AbortSignal): Promise<Buffer> {
@@ -624,7 +660,7 @@ export function createBarrierMultipartRepository(pool: Pool, adapters: BarrierMu
       await current(client, projectId, session, who); deadlines(row); jobDeadline = new Date(row.job_deadline).getTime(); return bytes;
     }, signal, () => { if (jobDeadline !== null && jobDeadline <= Date.now()) fail('BARRIER_MULTIPART_JOB_EXPIRED'); });
   }
-  return { admit, begin: admit, get, list, receipts, reconcile, cancel, readPage, readPart, completeProducer, readCompletion,
+  return { admit, begin: admit, get, list, receipts, reconcile, cancel, readPage, readSeal, readPart, readPartEvidence, completeProducer, readCompletion,
     stagePage: (projectId: string, who: JobPrincipal, raw: unknown, signal?: AbortSignal) => stage(projectId, who, barrierMultipartStagePageCommandSchema.parse(raw), undefined, signal),
     stageSeal: (projectId: string, who: JobPrincipal, raw: unknown, signal?: AbortSignal) => stage(projectId, who, barrierMultipartStageSealCommandSchema.parse(raw), undefined, signal),
     stagePart: (projectId: string, who: JobPrincipal, raw: unknown, bytes: Buffer, signal?: AbortSignal) => stage(projectId, who, barrierMultipartStagePartCommandSchema.parse(raw), bytes, signal) };

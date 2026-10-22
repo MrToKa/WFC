@@ -116,6 +116,12 @@ public sealed record PackedPartValidationReport(PackedPartContext Context, strin
     public string SourceGeometryProvenance => "protected-producer-reported";
     public bool SdkSourceBytesVerified => false;
 }
+public readonly record struct PackedCanonicalPoint(double X, double Y, double Z);
+public sealed record PackedValidatedRange(PackedExpectedRange Expected, PackedPartValidationReport Part,
+    ReadOnlyMemory<byte> TransformBytes);
+public readonly record struct PackedValidatedTriangle(uint RangeOrdinal, uint FragmentOrdinal, uint SourceTriangleIndex,
+    uint OriginalVertexA, uint OriginalVertexB, uint OriginalVertexC,
+    PackedCanonicalPoint A, PackedCanonicalPoint B, PackedCanonicalPoint C);
 public sealed class PackedPartRefusalException(string code) : ArgumentException("Packed structural validation refused: " + code)
 {
     public string Code { get; } = code;
