@@ -10,7 +10,8 @@ import { withBoundedDockerExecution } from '../operations/docker-bounds.mjs';
 import { compareCurrentInventories } from '../pathfinder-copied-recovery/current-inventory-lib.mjs';
 import { createRawInventoryProvider } from '../pathfinder-cable-workflow/raw-inventory-provider.mjs';
 import { SOURCE, need, same, digest, pin, assertSource, assertTarget, assertOperation, claimBuildChild, assertConservationPolicy } from './owned-update-v3.mjs';
-import { selectDeliveryPolicy } from './delivery-policy-selector-v4.mjs';
+import { selectDeliveryPolicy as selectV4DeliveryPolicy } from './delivery-policy-selector-v4.mjs';
+import { selectDeliveryPolicy as selectV5DeliveryPolicy } from './delivery-policy-selector-v5.mjs';
 import { outsideIdentity } from '../pathfinder-cable-workflow/owned-update-v2.mjs';
 import { projectNetworkResource, sortCanonicalRecords } from './network-resource-identity.mjs';
 
@@ -234,6 +235,10 @@ async function createPristine(config, state) {
     "CREATE SCHEMA pfb9_owner;CREATE TABLE pfb9_owner.owner(operation_id uuid PRIMARY KEY,owner_id uuid NOT NULL);INSERT INTO pfb9_owner.owner VALUES('" + config.operationId + "','" + state.owner + "')"]);
   return database;
 }
+function selectDeliveryPolicy(value) {
+  const profile = value && typeof value === 'object' ? Object.getOwnPropertyDescriptor(value, 'profile')?.value : undefined;
+  return profile === 'post-b20-terminal-closure-additive-v5' ? selectV5DeliveryPolicy(value) : selectV4DeliveryPolicy(value);
+}
 /** This same choice is used for first qualification and every later recheck.
  * Absence alone selects unchanged B9; a present invalid v4 binding is fatal. */
 export async function qualificationModule(config) {
@@ -357,7 +362,7 @@ async function initialize(directory, inventoryPath, expectedSha, conservationPro
     'docker/pathfinder.compose.yml', 'docker/pathfinder.Dockerfile', 'docker/pathfinder.Dockerfile.dockerignore', 'docker/pathfinder.nginx.conf'].map(name => path.join(ROOT, name)));
   const qualificationPolicy = selected ? { schemaVersion: 'wfc.pf.owned-update-policy-binding.v1',
     selection: { schemaVersion: selected.schemaVersion, profile: selected.profile },
-    selector: await pin(moduleFile('delivery-policy-selector-v4.mjs')), qualifier: await pin(moduleFile(selected.qualifierFilename)) } : null;
+    selector: await pin(moduleFile(selected.profile === 'post-b20-terminal-closure-additive-v5' ? 'delivery-policy-selector-v5.mjs' : 'delivery-policy-selector-v4.mjs')), qualifier: await pin(moduleFile(selected.qualifierFilename)) } : null;
   const config = { schemaVersion: 'wfc.pf.owned-update.v3', operationId, directory, source: SOURCE, baseline, settings, originalState, originalEnv,
     operatorSha256: (await pin(moduleFile('owned-update-v3.mjs'))).sha256, sourceClosure, buildContext: await buildContext(), inventory,
     backup: path.join(directory, 'backup'), companion: path.join(directory, 'backup-companion.private.json'), targetRuntime: path.join(directory, 'restore-5192'),

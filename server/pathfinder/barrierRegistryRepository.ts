@@ -14,6 +14,11 @@ import { supportedBarrierCaptureCommandSchema, supportedBarrierRegistryCommandSc
   type AnyBarrierPublicationOutcome as BarrierPublicationOutcome, type AnyBarrierCaptureOutcome as BarrierCaptureOutcome,
 } from '../../shared/pathfinderBarrierSupported.js';
 import { policyHashSchema, policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
+import { BARRIER_RECOVERY_LIMITS, barrierCommandRecoveryTargetSchema, barrierCommandCloseSchema,
+  barrierCommandClosureSchema, barrierCommandClosureHashInput, verifyBarrierCommandClosure,
+  barrierRecordedCommandSchema, barrierCommandRecoveryResponseSchema, barrierCommandRecoveryTargetHashInput,
+  matchBarrierCommandRecovery, type BarrierCommandRecoveryTarget, type BarrierCommandRecoveryResponse,
+  type BarrierCommandClosure, type BarrierRecordedCommand } from '../../shared/pathfinderBarrierRecovery.js';
 import { assertLoginNotExpired, requireCurrentLogin } from './auth.js';
 import type { JobPrincipal } from './jobContracts.js';
 import { PathFinderError } from './errors.js';
@@ -116,13 +121,45 @@ async function readIntent(client: PoolClient, projectId: string, id: string): Pr
   const row = (await client.query<IntentRow>('SELECT id,actor_id,login_id,request_sha256,request,frozen,state,capture_sha256,allocation,lease_token,lease_expires_at FROM pf_barrier_capture_intents WHERE project_id=$1 AND id=$2 FOR UPDATE', [projectId, policyUuidSchema.parse(id)])).rows[0];
   if (!row) return fail('BARRIER_INTENT_NOT_FOUND', 404); return row;
 }
-function checkedIntent(row: IntentRow, projectId: string, who: JobPrincipal): BarrierCaptureIntent {
+function retainedIntent(row: IntentRow, projectId: string): BarrierCaptureIntent {
   const intent = intentSchema.parse(row.frozen);
   if (intent.id !== row.id || intent.command.scope.projectId !== projectId || intent.createdBy !== row.actor_id || intent.loginId !== row.login_id
     || !equal(row.request, intent.command) || row.request_sha256 !== barrierValueHash(intent.command)) return fail('BARRIER_INTENT_INTEGRITY');
+  return intent;
+}
+function checkedIntent(row: IntentRow, projectId: string, who: JobPrincipal): BarrierCaptureIntent {
+  const intent = retainedIntent(row, projectId);
   // A later login cannot take over an admitted SDK capture session.
   if (intent.createdBy !== who.userId || intent.loginId !== who.loginId) return fail('BARRIER_INTENT_AUTHORITY_CHANGED', 403);
   return intent;
+}
+type ClosureRow = { project_id: string; command_sha256: string; id: string; record_sha256: string; record: unknown;
+  closed_by: string; login_id: string; closed_at: Date };
+function checkedClosure(row: ClosureRow, projectId: string, commandSha256: string): BarrierCommandClosure {
+  const parsed = barrierCommandClosureSchema.safeParse(row.record); if (!parsed.success) return fail('BARRIER_RECOVERY_INTEGRITY');
+  const value = parsed.data;
+  if (!verifyBarrierCommandClosure(value, text => barrierBytesHash(Buffer.from(text))) || row.project_id !== projectId
+    || row.command_sha256 !== commandSha256 || value.projectId !== projectId || value.commandSha256 !== commandSha256
+    || row.id !== value.closureId || row.record_sha256 !== value.contentSha256 || row.closed_by !== value.closedBy.actorId
+    || row.login_id !== value.closedBy.loginId || !Number.isFinite(new Date(row.closed_at).getTime())
+    || new Date(row.closed_at).toISOString() !== value.closedAt) return fail('BARRIER_RECOVERY_INTEGRITY');
+  return value;
+}
+function requireRecoveryMatch(target: BarrierCommandRecoveryTarget, response: BarrierCommandRecoveryResponse): void {
+  try { matchBarrierCommandRecovery(target, response, text => barrierBytesHash(Buffer.from(text))); }
+  catch { return fail('BARRIER_RECOVERY_TARGET_CHANGED'); }
+}
+async function readClosure(client: PoolClient, projectId: string, commandSha256: string): Promise<BarrierCommandClosure | null> {
+  const rows = (await client.query<ClosureRow>(`/* barrier:command-fence */ SELECT project_id,command_sha256,id,record_sha256,closed_by,login_id,closed_at,
+    CASE WHEN octet_length(record::text)<=$3 THEN record ELSE NULL END AS record
+    FROM pf_barrier_command_closures WHERE project_id=$1 AND command_sha256=$2 LIMIT 2`, [projectId, commandSha256, BARRIER_RECOVERY_LIMITS.responseBytes])).rows;
+  if (rows.length > 1) return fail('BARRIER_RECOVERY_INTEGRITY');
+  return rows.length ? checkedClosure(rows[0], projectId, commandSha256) : null;
+}
+/** Denial deliberately ignores lane/kind/owner metadata. A stale worker cannot
+ * evade the project+actual-command hash fence by taking a different branch. */
+async function requireOpenCommand(client: PoolClient, projectId: string, command: unknown): Promise<void> {
+  if (await readClosure(client, projectId, barrierValueHash(command))) return fail('BARRIER_COMMAND_CLOSED');
 }
 async function prior(client: PoolClient, projectId: string, who: JobPrincipal, key: string, request: unknown): Promise<BarrierPublicationOutcome | null> {
   const row = (await client.query<{ request_sha256: string; request: unknown; receipt: unknown }>('SELECT request_sha256,request,receipt FROM pf_barrier_receipts WHERE project_id=$1 AND actor_id=$2 AND idempotency_key=$3', [projectId, who.userId, key])).rows[0];
@@ -181,6 +218,134 @@ export function createBarrierRegistryRepository(pool: Pool, adapters: BarrierReg
       selectedParents: manifest.selectedParents, snapshot: reference(manifest), reasonCodes: matches ? [] : ['BARRIER_MODEL_SCOPE_CHANGED'] });
   });
   const getSnapshot = (projectId: string, who: JobPrincipal, snapshotId: string) => tx(projectId, who, async client => checkedSnapshot(projectId, await snapshotRow(client, projectId, snapshotId)));
+  type RecoveryIntentRow = IntentRow & { idempotency_key: string; allocation_is_null: boolean };
+  type RecoveryReceiptRow = { actor_id: string; idempotency_key: string; request_sha256: string; request: unknown; receipt: unknown };
+  async function recoveryFacts(client: PoolClient, projectId: string, target: BarrierCommandRecoveryTarget): Promise<{
+    original: BarrierRecordedCommand | null; terminal: BarrierCommandRecoveryResponse | null; intentRow: RecoveryIntentRow | null }> {
+    const digest = target.commandSha256;
+    const receipts = (await client.query<RecoveryReceiptRow>(`/* barrier:recovery-receipts */ SELECT actor_id,idempotency_key,request_sha256,
+      CASE WHEN octet_length(request::text)<=$3 THEN request ELSE NULL END AS request,
+      CASE WHEN octet_length(receipt::text)<=$3 THEN receipt ELSE NULL END AS receipt
+      FROM pf_barrier_receipts WHERE project_id=$1 AND request_sha256=$2 ORDER BY actor_id,idempotency_key LIMIT 2`, [projectId, digest, BARRIER_LIMITS.controlBytes])).rows;
+    const intents = (await client.query<RecoveryIntentRow>(`/* barrier:recovery-intents */ SELECT id,actor_id,login_id,idempotency_key,request_sha256,state,capture_sha256,lease_token,lease_expires_at,
+      allocation IS NULL AS allocation_is_null,
+      CASE WHEN octet_length(allocation::text)<=$4 THEN allocation ELSE NULL END AS allocation,
+      CASE WHEN octet_length(request::text)<=$3 THEN request ELSE NULL END AS request,
+      CASE WHEN octet_length(frozen::text)<=$3+1024 THEN frozen ELSE NULL END AS frozen
+      FROM pf_barrier_capture_intents WHERE project_id=$1 AND request_sha256=$2 ORDER BY id LIMIT 2`, [projectId, digest, BARRIER_LIMITS.controlBytes, BARRIER_LIMITS.fragments * 128])).rows;
+    if (receipts.length > 1 || intents.length > 1) return fail('BARRIER_RECOVERY_AMBIGUOUS');
+    const closure = await readClosure(client, projectId, digest);
+    const common = { schemaVersion: 'wfc.pf.barrier-command-recovery.v1', pendingRecordSha256: target.pendingRecordSha256,
+      targetSha256: barrierValueHash(barrierCommandRecoveryTargetHashInput(target)) } as const;
+    let original: BarrierRecordedCommand | null = null, storedIntent: BarrierCaptureIntent | null = null;
+    const intentRow = intents[0] ?? null, receiptRow = receipts[0] ?? null;
+    if (intentRow) {
+      storedIntent = retainedIntent(intentRow, projectId);
+      if (intentRow.request_sha256 !== digest || intentRow.idempotency_key !== storedIntent.command.idempotencyKey
+        || !['pending', 'complete'].includes(intentRow.state) || typeof intentRow.allocation_is_null !== 'boolean'
+        || intentRow.allocation_is_null !== (intentRow.allocation === null) || (intentRow.capture_sha256 === null) !== (intentRow.allocation === null)
+        || (intentRow.lease_token === null) !== (intentRow.lease_expires_at === null)) return fail('BARRIER_RECOVERY_INTEGRITY');
+      if (intentRow.capture_sha256 !== null) { policyHashSchema.parse(intentRow.capture_sha256); if (!allocationSchema.parse(intentRow.allocation).length) return fail('BARRIER_RECOVERY_INTEGRITY'); }
+      if (intentRow.lease_token !== null) { policyUuidSchema.parse(intentRow.lease_token); if (!Number.isFinite(new Date(intentRow.lease_expires_at!).getTime())) return fail('BARRIER_RECOVERY_INTEGRITY'); }
+      original = barrierRecordedCommandSchema.parse({ commandSha256: digest, scope: storedIntent.command.scope, actorId: storedIntent.createdBy,
+        loginId: storedIntent.loginId, expectedRegistryRevision: storedIntent.command.expectedRegistryRevision, kind: 'capture',
+        intentId: storedIntent.id, snapshotId: storedIntent.snapshotId, captureSha256: intentRow.capture_sha256,
+        commandSchemaVersion: storedIntent.command.schemaVersion,
+        ...(storedIntent.command.schemaVersion === 'wfc.pf.barrier-capture-command.v2' ? { geometryPolicy: MIXED_BARRIER_POLICY } : {}) });
+    }
+    let terminal: BarrierCommandRecoveryResponse | null = null;
+    if (receiptRow) {
+      policyUuidSchema.parse(receiptRow.actor_id); policyUuidSchema.parse(receiptRow.idempotency_key);
+      const request = z.union([supportedBarrierCaptureCommandSchema, supportedBarrierRegistryCommandSchema]).parse(receiptRow.request);
+      if (receiptRow.request_sha256 !== digest || barrierValueHash(request) !== digest || request.scope.projectId !== projectId
+        || request.idempotencyKey !== receiptRow.idempotency_key) return fail('BARRIER_RECOVERY_INTEGRITY');
+      const outcome = supportedBarrierPublicationOutcomeSchema.parse(receiptRow.receipt);
+      const captureRequest = request.schemaVersion === 'wfc.pf.barrier-capture-command.v1' || request.schemaVersion === 'wfc.pf.barrier-capture-command.v2';
+      if (captureRequest) {
+        if (!intentRow || !storedIntent || !original || !equal(request, storedIntent.command) || receiptRow.actor_id !== original.actorId)
+          return fail('BARRIER_RECOVERY_INTEGRITY');
+        if ('outcome' in outcome) {
+          if (outcome.commandSha256 !== digest || outcome.intentId !== storedIntent.id || outcome.captureSha256 !== intentRow.capture_sha256
+            || intentRow.state !== 'pending' || intentRow.lease_token !== null || intentRow.lease_expires_at !== null) return fail('BARRIER_RECOVERY_INTEGRITY');
+          terminal = barrierCommandRecoveryResponseSchema.parse({ ...common, outcome: 'geometry-refused', original, refusal: { ...outcome, duplicate: true } });
+        } else {
+          const snapshot = (await client.query<SnapshotRow & { created_by: string; login_id: string }>(`/* barrier:recovery-snapshot */
+            SELECT id,storage_intent_id,manifest_blob,created_by,login_id,
+            CASE WHEN octet_length(manifest::text)<=$3 THEN manifest ELSE NULL END AS manifest
+            FROM pf_barrier_snapshots WHERE project_id=$1 AND id=$2 LIMIT 2`, [projectId, outcome.snapshot.snapshotId, BARRIER_LIMITS.manifestBytes])).rows;
+          if (snapshot.length !== 1) return fail('BARRIER_RECOVERY_INTEGRITY');
+          const row = snapshot[0], manifest = await checkedSnapshot(projectId, row);
+          if (intentRow.state !== 'complete' || row.created_by !== storedIntent.createdBy || row.login_id !== storedIntent.loginId
+            || row.storage_intent_id !== storedIntent.id || manifest.snapshotId !== storedIntent.snapshotId
+            || !equal(manifest.scope, request.scope) || !equal(manifest.selectedParents, request.selectedParents)
+            || manifest.capture?.captureId !== storedIntent.id || manifest.capture.payloadSha256 !== intentRow.capture_sha256
+            || !equal(reference(manifest), outcome.snapshot)) return fail('BARRIER_RECOVERY_INTEGRITY');
+          terminal = barrierCommandRecoveryResponseSchema.parse({ ...common, outcome: 'published', original,
+            publication: { ...outcome, duplicate: true }, frameBinding: 'not-recorded', frameSha256: null });
+        }
+      } else {
+        if (request.action !== 'declare-empty' || intentRow || 'outcome' in outcome) return fail('BARRIER_RECOVERY_INTEGRITY');
+        const snapshots = (await client.query<SnapshotRow & { created_by: string; login_id: string }>(`/* barrier:recovery-snapshot */
+          SELECT id,storage_intent_id,manifest_blob,created_by,login_id,
+          CASE WHEN octet_length(manifest::text)<=$3 THEN manifest ELSE NULL END AS manifest
+          FROM pf_barrier_snapshots WHERE project_id=$1 AND id=$2 LIMIT 2`, [projectId, outcome.snapshot.snapshotId, BARRIER_LIMITS.manifestBytes])).rows;
+        if (snapshots.length !== 1) return fail('BARRIER_RECOVERY_INTEGRITY');
+        const row = snapshots[0], manifest = await checkedSnapshot(projectId, row); policyUuidSchema.parse(row.created_by); policyUuidSchema.parse(row.login_id);
+        if (row.created_by !== receiptRow.actor_id || !equal(reference(manifest), outcome.snapshot) || !equal(manifest.scope, request.scope)
+          || manifest.geometry.mode !== 'explicit-empty' || manifest.geometry.reason !== request.reason) return fail('BARRIER_RECOVERY_INTEGRITY');
+        original = barrierRecordedCommandSchema.parse({ commandSha256: digest, scope: request.scope, actorId: row.created_by, loginId: row.login_id,
+          expectedRegistryRevision: request.expectedRegistryRevision, kind: 'declare-empty', snapshotId: manifest.snapshotId,
+          commandSchemaVersion: request.schemaVersion, ...(request.schemaVersion === 'wfc.pf.barrier-registry-command.v2' ? { geometryPolicy: MIXED_BARRIER_POLICY } : {}) });
+        terminal = barrierCommandRecoveryResponseSchema.parse({ ...common, outcome: 'published', original,
+          publication: { ...outcome, duplicate: true }, frameBinding: 'not-recorded', frameSha256: null });
+      }
+    } else if (intentRow?.state === 'complete') return fail('BARRIER_RECOVERY_INTEGRITY');
+    if (closure) {
+      if (terminal || (closure.original.state === 'recorded' ? !original || !equal(closure.original.command, original) : original !== null))
+        return fail('BARRIER_RECOVERY_CONFLICT');
+      terminal = barrierCommandRecoveryResponseSchema.parse({ ...common, outcome: 'closed', closure });
+    }
+    const response = terminal ?? barrierCommandRecoveryResponseSchema.parse(original ? { ...common, outcome: 'pending', original } : { ...common, outcome: 'not-recorded' });
+    // Known owner/intent/capture and original lane constraints are immutable;
+    // a current administrator can close, never take over their continuation.
+    requireRecoveryMatch(target, response);
+    return { original, terminal, intentRow };
+  }
+  async function readCommandRecovery(projectId: string, who: JobPrincipal, raw: unknown, signal?: AbortSignal): Promise<BarrierCommandRecoveryResponse> {
+    const target = barrierCommandRecoveryTargetSchema.parse(raw); if (target.projectId !== projectId) return fail('BARRIER_RECOVERY_PROJECT_CHANGED');
+    return barrierRegistryTransaction(pool, projectId, who, async client => {
+      const facts = await recoveryFacts(client, projectId, target);
+      return facts.terminal ?? barrierCommandRecoveryResponseSchema.parse({ schemaVersion: 'wfc.pf.barrier-command-recovery.v1',
+        pendingRecordSha256: target.pendingRecordSha256, targetSha256: barrierValueHash(barrierCommandRecoveryTargetHashInput(target)),
+        ...(facts.original ? { outcome: 'pending', original: facts.original } : { outcome: 'not-recorded' }) });
+    }, signal);
+  }
+  async function closeCommand(projectId: string, who: JobPrincipal, raw: unknown, signal?: AbortSignal): Promise<BarrierCommandRecoveryResponse> {
+    const { target } = barrierCommandCloseSchema.parse(raw); if (target.projectId !== projectId) return fail('BARRIER_RECOVERY_PROJECT_CHANGED');
+    return barrierRegistryTransaction(pool, projectId, who, async client => {
+      const facts = await recoveryFacts(client, projectId, target); if (facts.terminal) return facts.terminal;
+      if (!facts.original && target.kind !== 'empty' && target.knownIntent !== null) return fail('BARRIER_RECOVERY_ORIGINAL_UNAVAILABLE');
+      const body = { schemaVersion: 'wfc.pf.barrier-command-closure.v1', closureId: randomUUID(), projectId, commandSha256: target.commandSha256,
+        requestedCommand: { lane: target.pendingRecordVersion === 'wfc.pf.barrier-pending-command.v2' ? 'mixed-v2' : 'legacy-v1',
+          kind: target.kind === 'empty' ? 'declare-empty' : 'capture', scope: target.scope },
+        original: facts.original ? { state: 'recorded', command: facts.original } : { state: 'not-recorded' }, outcome: 'closed-not-published',
+        fence: 'all-command-kinds-and-policy-lanes-by-project-and-command-sha256',
+        closedBy: { authority: 'current-project-administrator-close-only', actorId: who.userId, loginId: who.loginId },
+        closedAt: new Date().toISOString(), mayResumeCapture: false, mayPublish: false, establishesCurrentFrame: false, grantsCalculation: false };
+      const provisional = barrierCommandClosureSchema.parse({ ...body, contentSha256: '0'.repeat(64) });
+      const closure = barrierCommandClosureSchema.parse({ ...body, contentSha256: barrierValueHash(barrierCommandClosureHashInput(provisional)) });
+      if (facts.intentRow) {
+        const cleared = await client.query(`/* barrier:recovery-clear-lease */ UPDATE pf_barrier_capture_intents SET lease_token=NULL,lease_expires_at=NULL
+          WHERE project_id=$1 AND id=$2 AND state='pending' RETURNING id`, [projectId, facts.intentRow.id]);
+        if (cleared.rows.length !== 1 || cleared.rows[0].id !== facts.intentRow.id) return fail('BARRIER_RECOVERY_INTEGRITY');
+      }
+      await client.query(`INSERT INTO pf_barrier_command_closures(project_id,command_sha256,id,record_sha256,record,closed_by,login_id,closed_at)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, [projectId, target.commandSha256, closure.closureId, closure.contentSha256, closure, who.userId, who.loginId, closure.closedAt]);
+      const response = barrierCommandRecoveryResponseSchema.parse({ schemaVersion: 'wfc.pf.barrier-command-recovery.v1',
+        pendingRecordSha256: target.pendingRecordSha256, targetSha256: barrierValueHash(barrierCommandRecoveryTargetHashInput(target)), outcome: 'closed', closure });
+      requireRecoveryMatch(target, response); return response;
+    }, signal);
+  }
   /** Historical exact-command read only. It neither admits capture work nor
    * requires a live Viewer/current model frame. Null cannot settle a lost ACK. */
   async function readCaptureOutcome(projectId: string, who: JobPrincipal, intentId: string, rawQuery: unknown, signal?: AbortSignal): Promise<BarrierCaptureOutcome | null> {
@@ -216,6 +381,7 @@ export function createBarrierRegistryRepository(pool: Pool, adapters: BarrierReg
   async function begin(projectId: string, who: JobPrincipal, raw: unknown, signal?: AbortSignal) {
     const command = supportedBarrierCaptureCommandSchema.parse(raw);
     return tx(projectId, who, async client => {
+      await requireOpenCommand(client, projectId, command);
       await current(client, projectId, command.scope);
       const previous = (await client.query<IntentRow>('SELECT id,actor_id,login_id,request_sha256,request,frozen,state,capture_sha256,allocation,lease_token,lease_expires_at FROM pf_barrier_capture_intents WHERE project_id=$1 AND actor_id=$2 AND idempotency_key=$3 FOR UPDATE', [projectId, who.userId, command.idempotencyKey])).rows[0];
       if (previous) {
@@ -236,6 +402,7 @@ export function createBarrierRegistryRepository(pool: Pool, adapters: BarrierReg
     if (capture.observation.state !== 'reported-complete') return fail('BARRIER_CAPTURE_INCOMPLETE');
     const admitted = await tx(projectId, who, async client => {
       const row = await readIntent(client, projectId, intentId), intent = checkedIntent(row, projectId, who), command = intent.command;
+      await requireOpenCommand(client, projectId, command);
       // A viewer-bound replay must refresh its current session/frame deadline too.
       // Historical inspection uses getSnapshot/list; publish never revives a stale capture scope.
       await current(client, projectId, command.scope);
@@ -274,6 +441,7 @@ export function createBarrierRegistryRepository(pool: Pool, adapters: BarrierReg
         let refusalLeaseDeadline: number | null = null;
         return await tx(projectId, who, async client => {
           const row = await readIntent(client, projectId, intentId); checkedIntent(row, projectId, who);
+          await requireOpenCommand(client, projectId, intent.command);
           // A previously committed publication always wins, even if its COMMIT
           // acknowledgement was lost or this worker's lease later expired.
           const replay = await prior(client, projectId, who, intent.command.idempotencyKey, intent.command);
@@ -322,6 +490,7 @@ export function createBarrierRegistryRepository(pool: Pool, adapters: BarrierReg
       let finalLeaseDeadline: number | null = null;
       return await tx(projectId, who, async client => {
         const row = await readIntent(client, projectId, intentId); checkedIntent(row, projectId, who);
+        await requireOpenCommand(client, projectId, intent.command);
         await current(client, projectId, intent.command.scope);
         const replay = await prior(client, projectId, who, intent.command.idempotencyKey, intent.command); if (replay) {
           if ('outcome' in replay && (replay.captureSha256 !== captureSha256 || replay.frameSha256 !== frameSha256)) return fail('BARRIER_CAPTURE_CHANGED');
@@ -351,6 +520,7 @@ export function createBarrierRegistryRepository(pool: Pool, adapters: BarrierReg
   async function command(projectId: string, who: JobPrincipal, raw: unknown, signal?: AbortSignal): Promise<Receipt> {
     const request = supportedBarrierRegistryCommandSchema.parse(raw);
     return tx(projectId, who, async client => {
+      await requireOpenCommand(client, projectId, request);
       const replay = await prior(client, projectId, who, request.idempotencyKey, request); if (replay) {
         if ('outcome' in replay) return fail('BARRIER_IDEMPOTENCY_CONFLICT'); return replay;
       }
@@ -370,12 +540,13 @@ export function createBarrierRegistryRepository(pool: Pool, adapters: BarrierReg
       const blob = await storeBarrierBytes(projectId, storageIntentId, manifestBlobId, encodeBarrierJson(manifest, BARRIER_LIMITS.manifestBytes), BARRIER_LIMITS.manifestBytes);
       // The async write has not released the row/authority locks. Recheck the authoritative model/frame before publication.
       await current(client, projectId, request.scope); signal?.throwIfAborted(); assertLoginNotExpired(who);
+      await requireOpenCommand(client, projectId, request);
       await publishManifest(client, projectId, who, storageIntentId, manifest, blob);
       const receipt = publicationReceipt(manifest);
       await saveReceipt(client, projectId, who, request, receipt); return receipt;
     }, signal);
   }
-  return { authorize, get, list, getSnapshot, readCaptureOutcome, begin, publish, command };
+  return { authorize, get, list, getSnapshot, readCaptureOutcome, readCommandRecovery, closeCommand, begin, publish, command };
 }
 export type BarrierRegistryRepository = ReturnType<typeof createBarrierRegistryRepository>;
 export type { BarrierRegistry };

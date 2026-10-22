@@ -9,8 +9,8 @@ vi.mock('./hooks/usePathfinderBarriers', () => ({ usePathfinderBarriers: vi.fn()
 const id = (n: number) => `b5000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 function fixture() {
   const registry: BarrierRegistry = { schemaVersion: 'wfc.pf.barrier-registry.v1', scope: { projectId: id(1), modelVersionId: id(2), contentFingerprint: 'a'.repeat(64), selectionRevision: '1', captureFrameId: id(3), captureFrameSha256: 'b'.repeat(64), coordinateFrame: 'canonical-world-metres' }, registryRevision: '1', state: 'unconfigured', selectedParents: [], snapshot: null, reasonCodes: ['NO_BARRIER_SCOPE_CONFIGURED'] };
-  const state = { registry: registry as BarrierRegistry | null, manifest: null, saved: null as ReturnType<typeof usePathfinderBarriers>['saved'], draftParents: [] as BarrierRegistry['selectedParents'], kind: 'wall' as const, setKind: vi.fn(), emptyReason: '', setEmptyReason: vi.fn(), phase: 'idle', message: null, error: null, busy: false, dirty: false, pending: false, canAuthor: true, canRetry: true,
-    refresh: vi.fn(), addSelection: vi.fn(), removeParent: vi.fn(), save: vi.fn(), retry: vi.fn(), cancel: vi.fn(), discardPending: vi.fn() };
+  const state = { registry: registry as BarrierRegistry | null, manifest: null, saved: null as ReturnType<typeof usePathfinderBarriers>['saved'], draftParents: [] as BarrierRegistry['selectedParents'], kind: 'wall' as const, setKind: vi.fn(), emptyReason: '', setEmptyReason: vi.fn(), phase: 'idle', message: null, error: null, busy: false, dirty: false, pending: false, canAuthor: true, canRetry: true, canInspect: true, canClose: true, canDiscard: true,
+    refresh: vi.fn(), addSelection: vi.fn(), removeParent: vi.fn(), save: vi.fn(), retry: vi.fn(), inspect: vi.fn(), close: vi.fn(), cancel: vi.fn(), discardPending: vi.fn() };
   const props: PathFinderBarriersPanelProps = { projectId: id(1), loadedProjectId: id(1), token: 'synthetic-login', isAdmin: true, pf: { busy: false } as PathFinderBarriersPanelProps['pf'], onStateChange: vi.fn() };
   const install = () => vi.mocked(usePathfinderBarriers).mockReturnValue(state as unknown as ReturnType<typeof usePathfinderBarriers>); install();
   return { state, props, install };
@@ -128,6 +128,30 @@ describe('administrator barrier authoring panel', () => {
     const f = fixture(); f.state.phase = 'unknown'; f.state.pending = true; f.install(); render(<PathFinderBarriersPanel {...f.props} />);
     expect(screen.getByRole('status')).toHaveTextContent('Unknown command outcome'); expect(screen.getByRole('button', { name: 'Add selected objects' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Discard saved command' })).toBeNull(); fireEvent.click(screen.getByRole('button', { name: 'Retry saved command' })); expect(f.state.retry).toHaveBeenCalledTimes(1);
+  });
+  it('offers explicit inspect and exact-command close while the Viewer and current registry are unavailable', () => {
+    const f = fixture(); f.state.phase = 'unknown'; f.state.pending = true; f.state.canAuthor = false; f.state.registry = null;
+    f.props.pf = { ...f.props.pf, viewerPhase: 'error' }; f.install(); render(<PathFinderBarriersPanel {...f.props} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect saved outcome' })); expect(f.state.inspect).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('button', { name: 'Close this exact command' })); expect(f.state.close).toHaveBeenCalledOnce();
+    expect(screen.getByText(/Close stops only this exact command/)).toHaveTextContent('keeps the published barriers');
+    expect(f.state.retry).not.toHaveBeenCalled(); expect(f.state.save).not.toHaveBeenCalled(); expect(f.state.addSelection).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Discard saved command' })).toBeNull();
+  });
+  it('keeps both recovery actions disabled when their hook authority or operation guard is unavailable', () => {
+    const f = fixture(); f.state.pending = true; f.state.canInspect = false; f.state.canClose = false; f.install();
+    const view = render(<PathFinderBarriersPanel {...f.props} />);
+    expect(screen.getByRole('button', { name: 'Inspect saved outcome' })).toBeDisabled(); expect(screen.getByRole('button', { name: 'Close this exact command' })).toBeDisabled();
+    view.rerender(<PathFinderBarriersPanel {...f.props} isAdmin={false} />);
+    expect(screen.queryByRole('button', { name: 'Close this exact command' })).toBeNull();
+  });
+  it('disables saved-command discard while exact terminal recovery still needs refresh, and keeps legal draft discard active', () => {
+    const f = fixture(); f.state.pending = true; f.state.phase = 'refused'; f.state.canDiscard = false; f.install();
+    const view = render(<PathFinderBarriersPanel {...f.props} />);
+    expect(screen.getByRole('button', { name: 'Discard saved command' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Discard saved command' })); expect(f.state.discardPending).not.toHaveBeenCalled();
+    f.state.pending = false; f.state.dirty = true; f.state.canDiscard = true; f.install(); view.rerender(<PathFinderBarriersPanel {...f.props} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Discard draft and refresh' })); expect(f.state.discardPending).toHaveBeenCalledOnce();
   });
   it('shows cancellation during capture while preventing conflicting authoring changes', () => {
     const f = fixture(); f.state.busy = true; f.state.phase = 'capturing'; f.install(); render(<PathFinderBarriersPanel {...f.props} />);

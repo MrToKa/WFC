@@ -74,8 +74,11 @@ function AdminBarriersPanel(props: PathFinderBarriersPanelProps) {
       <Button disabled={state.busy || props.pf.busy} onClick={() => void state.refresh()}>Refresh barriers</Button>
       {state.busy ? <Button onClick={state.cancel}>Cancel</Button> : null}
       {state.pending ? <Button disabled={!state.canRetry} onClick={() => void state.retry()}>Retry saved command</Button> : null}
-      {(state.pending || state.dirty) && state.phase !== 'unknown' ? <Button disabled={state.busy || props.pf.busy} onClick={state.discardPending}>{state.pending ? 'Discard saved command' : 'Discard draft and refresh'}</Button> : null}
+      {state.pending ? <Button disabled={!state.canInspect} onClick={() => void state.inspect()}>Inspect saved outcome</Button> : null}
+      {state.pending ? <Button disabled={!state.canClose} onClick={() => void state.close()}>Close this exact command</Button> : null}
+      {(state.pending || state.dirty) && state.phase !== 'unknown' ? <Button disabled={!state.canDiscard} onClick={state.discardPending}>{state.pending ? 'Discard saved command' : 'Discard draft and refresh'}</Button> : null}
     </div>
+    {state.pending ? <Caption1>Inspect checks the saved command without resubmitting it. Close stops only this exact command and keeps the published barriers. A new selection can be saved after its outcome and the current barrier set are confirmed.</Caption1> : null}
     {state.busy ? <Spinner size="tiny" label={state.phase === 'capturing' ? 'Capturing selected barrier geometry…' : state.phase === 'publishing' ? 'Publishing barrier set…' : 'Reading barriers…'} /> : null}
     {state.message ? <Caption1>{state.message}</Caption1> : null}
     {state.error ? <p role="alert">{state.error}</p> : null}

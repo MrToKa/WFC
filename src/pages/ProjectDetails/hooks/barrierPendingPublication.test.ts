@@ -1,8 +1,11 @@
 import { webcrypto } from 'node:crypto';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { BARRIER_PENDING_STORAGE_KEY, barrierPendingHash, clearPendingBarrierCommand, createBarrierCommandSentinel,
-  matchBarrierCaptureOutcome, readPendingBarrierCommand, retainPendingBarrierCommand, sealPendingBarrierCommand } from './barrierPendingPublication';
+  createPendingBarrierRecoveryTarget, matchPendingBarrierCommandRecovery, matchBarrierCaptureOutcome,
+  readPendingBarrierCommand, retainPendingBarrierCommand, sealPendingBarrierCommand, type BarrierPendingCommand } from './barrierPendingPublication';
 import { MIXED_BARRIER_POLICY } from '../../../../shared/pathfinderBarrierMixed';
+import { BARRIER_COMMAND_HASH_FENCE, barrierCommandClosureHashInput, barrierCommandClosureSchema,
+  barrierCommandRecoveryTargetHashInput } from '../../../../shared/pathfinderBarrierRecovery';
 const id = (n: number) => `b5210000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const scope = { projectId: id(1), modelVersionId: id(2), selectionRevision: '1', contentFingerprint: 'a'.repeat(64),
   captureFrameId: id(3), captureFrameSha256: 'b'.repeat(64), coordinateFrame: 'canonical-world-metres' as const };
@@ -94,4 +97,58 @@ it('never upgrades a retained legacy command to a different policy on replacemen
   const changed = await sealPendingBarrierCommand({ ...old, schemaVersion: 'wfc.pf.barrier-pending-command.v2', geometryPolicy: MIXED_BARRIER_POLICY });
   expect(() => retainPendingBarrierCommand(sessionStorage, changed, old)).toThrow('BARRIER_PENDING_COMMAND_CHANGED');
   expect(await readPendingBarrierCommand(sessionStorage, id(1))).toEqual(old);
+});
+
+async function recoveryClosure(value: BarrierPendingCommand) {
+  const target = await createPendingBarrierRecoveryTarget(value), mixed = value.schemaVersion === 'wfc.pf.barrier-pending-command.v2';
+  const command = { commandSchemaVersion: mixed ? 'wfc.pf.barrier-capture-command.v2' : 'wfc.pf.barrier-capture-command.v1',
+    ...(mixed ? { geometryPolicy: MIXED_BARRIER_POLICY } : {}), kind: 'capture', commandSha256: value.commandSha256, scope: value.scope,
+    actorId: value.actorId, loginId: value.loginId, intentId: value.intentId, snapshotId: value.snapshotId, expectedRegistryRevision: '1',
+    captureSha256: value.kind === 'publication' ? value.captureSha256 : null };
+  const closure = barrierCommandClosureSchema.parse({ schemaVersion: 'wfc.pf.barrier-command-closure.v1', closureId: id(81), projectId: value.projectId,
+    commandSha256: value.commandSha256, requestedCommand: { lane: mixed ? 'mixed-v2' : 'legacy-v1', kind: value.kind === 'empty' ? 'declare-empty' : 'capture', scope: value.scope },
+    original: value.kind !== 'empty' && value.actorId !== null ? { state: 'recorded', command } : { state: 'not-recorded' },
+    outcome: 'closed-not-published', fence: BARRIER_COMMAND_HASH_FENCE, closedBy: { authority: 'current-project-administrator-close-only', actorId: id(82), loginId: id(83) },
+    closedAt: '2026-10-22T10:00:00.000Z', mayResumeCapture: false, mayPublish: false, establishesCurrentFrame: false, grantsCalculation: false, contentSha256: '0'.repeat(64) });
+  closure.contentSha256 = await barrierPendingHash(barrierCommandClosureHashInput(closure));
+  return { schemaVersion: 'wfc.pf.barrier-command-recovery.v1', outcome: 'closed', closure,
+    pendingRecordSha256: value.recordSha256, targetSha256: await barrierPendingHash(barrierCommandRecoveryTargetHashInput(target)) };
+}
+it.each([false, true])('projects all retained kinds from the exact hash-verified original source policy; mixed=%s', async mixed => {
+  const value = await publication(id(1), mixed);
+  const { captureSha256: _capture, frameSha256: _frame, loadId: _load, recordSha256: _record, ...source } = value;
+  const capture = await sealPendingBarrierCommand({ ...source, kind: 'capture-intent', actorId: null, loginId: null, intentId: null, snapshotId: null });
+  const empty = await sealPendingBarrierCommand({ ...source, kind: 'empty', actorId: null, loginId: null, intentId: null, snapshotId: null });
+  for (const original of [value, capture, empty]) {
+    const target = await createPendingBarrierRecoveryTarget(original);
+    expect(target).toMatchObject({ pendingRecordVersion: original.schemaVersion, pendingRecordSha256: original.recordSha256,
+      commandSha256: original.commandSha256, scope: original.scope, kind: original.kind });
+    expect('geometryPolicy' in target).toBe(mixed); expect(JSON.stringify(target)).not.toContain(original.tokenSha256);
+    expect(JSON.stringify(target)).not.toContain('private-raw-token'); expect(JSON.stringify(target)).not.toContain('Private equipment');
+    expect(await matchPendingBarrierCommandRecovery(original, await recoveryClosure(original))).toMatchObject({ outcome: 'closed' });
+  }
+});
+it('refuses a tampered full retained record before deriving its recovery target', async () => {
+  const value = await publication();
+  await expect(createPendingBarrierRecoveryTarget({ ...value, tokenSha256: 'f'.repeat(64) })).rejects.toThrow('BARRIER_PENDING_STORAGE_CHANGED');
+  await expect(createPendingBarrierRecoveryTarget({ ...value, commandSha256: 'f'.repeat(64) })).rejects.toThrow('BARRIER_PENDING_STORAGE_CHANGED');
+});
+it('requires exact original record, target, closure digest and acknowledged owner before terminal matching', async () => {
+  const value = await publication(id(1), true), terminal = await recoveryClosure(value); retainPendingBarrierCommand(sessionStorage, value, null);
+  await expect(matchPendingBarrierCommandRecovery(value, { ...terminal, pendingRecordSha256: '0'.repeat(64) })).rejects.toThrow();
+  await expect(matchPendingBarrierCommandRecovery(value, { ...terminal, targetSha256: '0'.repeat(64) })).rejects.toThrow();
+  await expect(matchPendingBarrierCommandRecovery(value, { ...terminal, closure: { ...terminal.closure, contentSha256: '0'.repeat(64) } })).rejects.toThrow();
+  const wrong = structuredClone(terminal);
+  if (wrong.closure.original.state !== 'recorded') throw Error('fixture');
+  wrong.closure.original.command.actorId = id(99);
+  wrong.closure.contentSha256 = await barrierPendingHash(barrierCommandClosureHashInput(wrong.closure));
+  await expect(matchPendingBarrierCommandRecovery(value, wrong)).rejects.toThrow();
+  expect(await readPendingBarrierCommand(sessionStorage, id(1))).toEqual(value);
+});
+it('treats null and exact not-recorded responses as nonterminal without removing storage', async () => {
+  const value = await publication(), target = await createPendingBarrierRecoveryTarget(value); retainPendingBarrierCommand(sessionStorage, value, null);
+  expect(await matchPendingBarrierCommandRecovery(value, null)).toBeNull();
+  expect(await matchPendingBarrierCommandRecovery(value, { schemaVersion: 'wfc.pf.barrier-command-recovery.v1', outcome: 'not-recorded',
+    pendingRecordSha256: value.recordSha256, targetSha256: await barrierPendingHash(barrierCommandRecoveryTargetHashInput(target)) })).toBeNull();
+  expect(await readPendingBarrierCommand(sessionStorage, id(1))).toEqual(value);
 });

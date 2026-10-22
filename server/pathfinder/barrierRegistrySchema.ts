@@ -28,6 +28,18 @@ CREATE TABLE IF NOT EXISTS pf_barrier_receipts (
  request_sha256 text NOT NULL CHECK(request_sha256~'^[a-f0-9]{64}$'),request jsonb NOT NULL,receipt jsonb NOT NULL,
  PRIMARY KEY(project_id,actor_id,idempotency_key)
 );
+CREATE TABLE IF NOT EXISTS pf_barrier_command_closures (
+ project_id uuid NOT NULL,command_sha256 text NOT NULL,id uuid NOT NULL,
+ record_sha256 text NOT NULL,record jsonb NOT NULL,closed_by uuid NOT NULL,login_id uuid NOT NULL,closed_at timestamptz NOT NULL,
+ CONSTRAINT pf_barrier_command_closures_pkey PRIMARY KEY(project_id,command_sha256),
+ CONSTRAINT pf_barrier_closure_tenant_id UNIQUE(project_id,id),
+ CONSTRAINT pf_barrier_closure_project_fk FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE,
+ CONSTRAINT pf_barrier_closure_command_hash CHECK(command_sha256~'^[a-f0-9]{64}$'),
+ CONSTRAINT pf_barrier_closure_record_hash CHECK(record_sha256~'^[a-f0-9]{64}$'),
+ CONSTRAINT pf_barrier_closure_record_bytes CHECK(octet_length(record::text)<=16384)
+);
+CREATE INDEX IF NOT EXISTS pf_barrier_capture_intents_command_sha256_lookup ON pf_barrier_capture_intents(project_id,request_sha256);
+CREATE INDEX IF NOT EXISTS pf_barrier_receipts_command_sha256_lookup ON pf_barrier_receipts(project_id,request_sha256);
 DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='pf_barrier_heads'::regclass AND conname='pf_barrier_head_tenant_snapshot') THEN
   ALTER TABLE pf_barrier_heads ADD CONSTRAINT pf_barrier_head_tenant_snapshot FOREIGN KEY(project_id,snapshot_id) REFERENCES pf_barrier_snapshots(project_id,id);
@@ -47,6 +59,8 @@ DROP TRIGGER IF EXISTS pf_barrier_intent_immutable ON pf_barrier_capture_intents
 CREATE TRIGGER pf_barrier_intent_immutable BEFORE UPDATE ON pf_barrier_capture_intents FOR EACH ROW EXECUTE FUNCTION pf_barrier_intent_immutable();
 DROP TRIGGER IF EXISTS pf_barrier_intent_delete ON pf_barrier_capture_intents;
 CREATE TRIGGER pf_barrier_intent_delete BEFORE DELETE ON pf_barrier_capture_intents FOR EACH ROW EXECUTE FUNCTION pf_barrier_immutable();
+DROP TRIGGER IF EXISTS pf_barrier_command_closure_immutable ON pf_barrier_command_closures;
+CREATE TRIGGER pf_barrier_command_closure_immutable BEFORE UPDATE OR DELETE ON pf_barrier_command_closures FOR EACH ROW EXECUTE FUNCTION pf_barrier_immutable();
 `;
 
 /** Caller runs this additive initializer only against the explicitly owned installation. */

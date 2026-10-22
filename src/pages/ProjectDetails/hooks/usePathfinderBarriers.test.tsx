@@ -10,9 +10,11 @@ import { supportedBarrierCaptureOutcomeSchema } from '../../../../shared/pathfin
 import type { ViewerSelection } from '../../../../viewer-runtime/protocol.mjs';
 import { BARRIER_CAPTURE_ERROR_MESSAGES } from '../../../../viewer-runtime/barrier-capture-errors.mjs';
 import { barrierCanonicalJson } from '../../../../shared/pathfinderBarriers';
-import { BARRIER_PENDING_STORAGE_KEY, createBarrierCommandSentinel, readPendingBarrierCommand, retainPendingBarrierCommand, sealPendingBarrierCommand, type BarrierPendingPublication } from './barrierPendingPublication';
+import { BARRIER_PENDING_STORAGE_KEY, barrierPendingHash, createBarrierCommandSentinel, createPendingBarrierRecoveryTarget, readPendingBarrierCommand, retainPendingBarrierCommand, sealPendingBarrierCommand, type BarrierPendingCommand, type BarrierPendingPublication } from './barrierPendingPublication';
+import { BARRIER_COMMAND_HASH_FENCE, barrierCommandClosureHashInput, barrierCommandClosureSchema,
+  barrierCommandRecoveryResponseSchema, barrierCommandRecoveryTargetHashInput, type BarrierCommandRecoveryResponse } from '../../../../shared/pathfinderBarrierRecovery';
 
-vi.mock('@/api/pathfinderBarriers', async original => ({ ...await original<typeof api>(), getBarrierRegistry: vi.fn(), getBarrierSnapshot: vi.fn(), getLatestBarrierSnapshot: vi.fn(), beginBarrierCapture: vi.fn(), changeBarrierRegistry: vi.fn(), getBarrierCaptureOutcome: vi.fn() }));
+vi.mock('@/api/pathfinderBarriers', async original => ({ ...await original<typeof api>(), getBarrierRegistry: vi.fn(), getBarrierSnapshot: vi.fn(), getLatestBarrierSnapshot: vi.fn(), beginBarrierCapture: vi.fn(), changeBarrierRegistry: vi.fn(), getBarrierCaptureOutcome: vi.fn(), getBarrierCommandRecovery: vi.fn(), closeBarrierCommand: vi.fn() }));
 const id = (n: number) => `b5000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const scope = { projectId: id(1), modelVersionId: id(2), contentFingerprint: 'a'.repeat(64), selectionRevision: '1', captureFrameId: id(3), captureFrameSha256: 'b'.repeat(64), coordinateFrame: 'canonical-world-metres' as const };
 const parent = (n: number): BarrierSelectedParent => ({ selectionId: id(n + 1000), kind: 'wall', objectId: `dbid:${n}`, dbId: n, externalId: null, name: `Selected parent ${n}`, identityBasis: 'version-local-only', inclusion: 'own-and-all-descendant-fragments' });
@@ -91,6 +93,8 @@ function fixture(initial: number[] = []) {
   const options: Options = { projectId: scope.projectId, loadedProjectId: scope.projectId, token: 'synthetic-login', isAdmin: true, pf };
   vi.mocked(api.getBarrierRegistry).mockImplementation(async () => structuredClone(current));
   vi.mocked(api.getLatestBarrierSnapshot).mockResolvedValue(null);
+  vi.mocked(api.getBarrierCommandRecovery).mockResolvedValue(null);
+  vi.mocked(api.closeBarrierCommand).mockRejectedValue(Error('No synthetic close response configured'));
   vi.mocked(api.getBarrierSnapshot).mockImplementation(async () => manifest(current, currentEmptyReason));
   vi.mocked(api.beginBarrierCapture).mockImplementation(async (_project, _token, command) => {
     if (command.schemaVersion !== 'wfc.pf.barrier-capture-command.v2') throw Error('Expected a fresh mixed command');
@@ -117,6 +121,34 @@ const refusal = (value: BarrierPendingPublication) => ({ schemaVersion: 'wfc.pf.
   intentId: value.intentId, commandSha256: value.commandSha256, captureSha256: value.captureSha256, frameSha256: value.frameSha256,
   implementationSha256: 'e'.repeat(64), reasonCode: 'BARRIER_GEOMETRY_REFUSED' as const, duplicate: false });
 
+/** Synthetic protected API metadata only: these fixtures do not prove SQL,
+ * authentication, geometry qualification or current calculation admission. */
+async function recoveryResponse(value: BarrierPendingCommand, outcome: 'closed' | 'pending' | 'not-recorded' | 'geometry-refused' | 'published', publication?: unknown): Promise<BarrierCommandRecoveryResponse> {
+  const target = await createPendingBarrierRecoveryTarget(value), mixed = value.schemaVersion === 'wfc.pf.barrier-pending-command.v2';
+  const common = { schemaVersion: 'wfc.pf.barrier-command-recovery.v1', pendingRecordSha256: value.recordSha256,
+    targetSha256: await barrierPendingHash(barrierCommandRecoveryTargetHashInput(target)) };
+  const original = { commandSchemaVersion: mixed ? 'wfc.pf.barrier-capture-command.v2' : 'wfc.pf.barrier-capture-command.v1',
+    ...(mixed ? { geometryPolicy: MIXED_BARRIER_POLICY } : {}), kind: 'capture', commandSha256: value.commandSha256, scope: value.scope,
+    actorId: value.actorId ?? id(24), loginId: value.loginId ?? id(25), intentId: value.intentId ?? id(20), snapshotId: value.snapshotId ?? id(21),
+    expectedRegistryRevision: '1', captureSha256: value.kind === 'publication' ? value.captureSha256 : null };
+  if (outcome === 'not-recorded') return barrierCommandRecoveryResponseSchema.parse({ ...common, outcome });
+  if (outcome === 'pending') return barrierCommandRecoveryResponseSchema.parse({ ...common, outcome, original });
+  if (outcome === 'geometry-refused') {
+    if (value.kind !== 'publication') throw Error('Refusal fixture requires publication');
+    return barrierCommandRecoveryResponseSchema.parse({ ...common, outcome, original, refusal: refusal(value) });
+  }
+  if (outcome === 'published') return barrierCommandRecoveryResponseSchema.parse({ ...common, outcome, original, publication,
+    frameBinding: 'not-recorded', frameSha256: null });
+  const closure = barrierCommandClosureSchema.parse({ schemaVersion: 'wfc.pf.barrier-command-closure.v1', closureId: id(1500),
+    projectId: value.projectId, commandSha256: value.commandSha256, requestedCommand: { lane: mixed ? 'mixed-v2' : 'legacy-v1',
+      kind: value.kind === 'empty' ? 'declare-empty' : 'capture', scope: value.scope },
+    original: value.kind !== 'empty' && value.actorId !== null ? { state: 'recorded', command: original } : { state: 'not-recorded' },
+    outcome: 'closed-not-published', fence: BARRIER_COMMAND_HASH_FENCE, closedBy: { authority: 'current-project-administrator-close-only', actorId: id(1501), loginId: id(1502) },
+    closedAt: '2026-10-22T10:00:00.000Z', mayResumeCapture: false, mayPublish: false, establishesCurrentFrame: false, grantsCalculation: false, contentSha256: '0'.repeat(64) });
+  closure.contentSha256 = await barrierPendingHash(barrierCommandClosureHashInput(closure));
+  return barrierCommandRecoveryResponseSchema.parse({ ...common, outcome, closure });
+}
+
 describe('durable exact barrier publication outcomes', () => {
   it('rejects a legacy success for a fresh mixed command and retains its exact policy through refresh recovery', async () => {
     const f = fixture([8]), view = await mounted(f); await add(view);
@@ -137,11 +169,12 @@ describe('durable exact barrier publication outcomes', () => {
       publication: { schemaVersion: 'wfc.pf.barrier-publication-receipt.v2', duplicate: true,
         snapshot: { schemaVersion: 'wfc.pf.barrier-snapshot-reference.v2', geometryPolicy: MIXED_BARRIER_POLICY, snapshotId: retained.snapshotId,
           scope: retained.scope, registryRevision: '2', contentSha256: 'c'.repeat(64), mode: 'mixed-mesh-set' } } });
-    vi.mocked(api.getBarrierCaptureOutcome).mockResolvedValueOnce(terminal);
+    if (!terminal || terminal.outcome !== 'published') throw Error('Published recovery fixture');
+    vi.mocked(api.getBarrierCommandRecovery).mockResolvedValueOnce(await recoveryResponse(retained, 'published', terminal.publication));
     await act(() => restored.result.current.retry());
     expect(restored.result.current.pending).toBe(false); expect(await readPendingBarrierCommand(sessionStorage, scope.projectId)).toBeNull();
     expect(api.beginBarrierCapture).toHaveBeenCalledOnce(); expect(f.publishBarriers).toHaveBeenCalledOnce();
-    expect(restored.result.current.message).toContain('does not establish the current Viewer frame');
+    expect(restored.result.current.message).toContain('actual published barrier set was refreshed');
   });
   it('prevents the PUT when its boundary cannot durably retain and read back the exact publication binding', async () => {
     const f = fixture(), view = await mounted(f); await add(view);
@@ -182,10 +215,10 @@ describe('durable exact barrier publication outcomes', () => {
     if (retained?.kind !== 'publication') throw Error('Missing retained fixture'); first.unmount();
     const changed = { ...f.options, pf: { ...f.pf, preparationViewerGeneration: 2, viewerPhase: 'loading' as const } };
     const second = renderHook(() => usePathfinderBarriers(changed)); await waitFor(() => expect(second.result.current.canRetry).toBe(true));
-    vi.mocked(api.getBarrierCaptureOutcome).mockResolvedValueOnce(null);
+    vi.mocked(api.getBarrierCommandRecovery).mockResolvedValueOnce(null);
     await act(() => second.result.current.retry()); expect(second.result.current.phase).toBe('unknown'); expect(second.result.current.pending).toBe(true);
-    vi.mocked(api.getBarrierCaptureOutcome).mockResolvedValueOnce(refusal(retained));
-    await act(() => second.result.current.retry()); expect(second.result.current.pending).toBe(false); expect(second.result.current.registry).toBeNull();
+    vi.mocked(api.getBarrierCommandRecovery).mockResolvedValueOnce(await recoveryResponse(retained, 'geometry-refused'));
+    await act(() => second.result.current.retry()); expect(second.result.current.pending).toBe(false); expect(second.result.current.registry).toEqual(f.getRegistry());
     expect(await readPendingBarrierCommand(sessionStorage, scope.projectId)).toBeNull(); expect(f.publishBarriers).toHaveBeenCalledOnce(); expect(api.beginBarrierCapture).toHaveBeenCalledOnce();
   });
   it('retains a restored original command when current authentication cannot read its exact outcome', async () => {
@@ -193,10 +226,10 @@ describe('durable exact barrier publication outcomes', () => {
     await act(() => first.result.current.save()); first.unmount(); const stored = sessionStorage.getItem(BARRIER_PENDING_STORAGE_KEY);
     const changed = { ...f.options, token: 'different-current-token', pf: { ...f.pf, preparationViewerGeneration: 2, viewerPhase: 'error' as const } };
     const second = renderHook(() => usePathfinderBarriers(changed)); await waitFor(() => expect(second.result.current.canRetry).toBe(true));
-    vi.mocked(api.getBarrierCaptureOutcome).mockRejectedValueOnce(Object.assign(Error('Original login required'), { status: 403, code: 'BARRIER_INTENT_AUTHORITY_CHANGED' }));
+    vi.mocked(api.getBarrierCommandRecovery).mockRejectedValueOnce(Object.assign(Error('Current administrator required'), { status: 403, code: 'ADMIN_REQUIRED' }));
     await act(() => second.result.current.retry()); expect(second.result.current.pending).toBe(true); expect(second.result.current.canRetry).toBe(false);
     expect(sessionStorage.getItem(BARRIER_PENDING_STORAGE_KEY)).toBe(stored); expect(f.publishBarriers).toHaveBeenCalledOnce(); expect(api.beginBarrierCapture).toHaveBeenCalledOnce();
-    expect(vi.mocked(api.getBarrierCaptureOutcome).mock.calls[0]?.[1]).toBe('different-current-token');
+    expect(vi.mocked(api.getBarrierCommandRecovery).mock.calls[0]?.[1]).toBe('different-current-token');
   });
   it('does not let a late outcome read from an earlier Viewer generation clear a retained command', async () => {
     const f = fixture(), first = await mounted(f); await add(first); f.publishBarriers.mockRejectedValueOnce(Error('lost acknowledgement'));
@@ -205,11 +238,12 @@ describe('durable exact barrier publication outcomes', () => {
     const changed: Options = { ...f.options, pf: { ...f.pf, preparationViewerGeneration: 2, viewerPhase: 'loading' } };
     const second = renderHook((options: Options) => usePathfinderBarriers(options), { initialProps: changed });
     await waitFor(() => expect(second.result.current.canRetry).toBe(true));
-    const read = deferred<Awaited<ReturnType<typeof api.getBarrierCaptureOutcome>>>(); vi.mocked(api.getBarrierCaptureOutcome).mockReturnValueOnce(read.promise);
+    const read = deferred<Awaited<ReturnType<typeof api.getBarrierCommandRecovery>>>(); vi.mocked(api.getBarrierCommandRecovery).mockReturnValueOnce(read.promise);
     let checking!: Promise<void>; act(() => { checking = second.result.current.retry(); });
-    await waitFor(() => expect(api.getBarrierCaptureOutcome).toHaveBeenCalledOnce());
+    await waitFor(() => expect(api.getBarrierCommandRecovery).toHaveBeenCalledOnce());
     second.rerender({ ...changed, pf: { ...changed.pf, preparationViewerGeneration: 3 } });
-    await act(async () => { read.resolve(refusal(retained)); await checking; });
+    const terminal = await recoveryResponse(retained, 'geometry-refused');
+    await act(async () => { read.resolve(terminal); await checking; });
     expect(await readPendingBarrierCommand(sessionStorage, scope.projectId)).toEqual(retained);
     expect(second.result.current.pending).toBe(true); expect(f.publishBarriers).toHaveBeenCalledOnce();
   });
@@ -219,9 +253,9 @@ describe('durable exact barrier publication outcomes', () => {
     const changed: Options = { ...f.options, pf: { ...f.pf, preparationViewerGeneration: 2, viewerPhase: 'loading' } };
     const second = renderHook((options: Options) => usePathfinderBarriers(options), { initialProps: changed });
     await waitFor(() => expect(second.result.current.canRetry).toBe(true));
-    const read = deferred<Awaited<ReturnType<typeof api.getBarrierCaptureOutcome>>>(); vi.mocked(api.getBarrierCaptureOutcome).mockReturnValueOnce(read.promise);
+    const read = deferred<Awaited<ReturnType<typeof api.getBarrierCommandRecovery>>>(); vi.mocked(api.getBarrierCommandRecovery).mockReturnValueOnce(read.promise);
     let checking!: Promise<void>; act(() => { checking = second.result.current.retry(); });
-    await waitFor(() => expect(api.getBarrierCaptureOutcome).toHaveBeenCalledOnce());
+    await waitFor(() => expect(api.getBarrierCommandRecovery).toHaveBeenCalledOnce());
     second.rerender({ ...changed, pf: { ...changed.pf, preparationViewerGeneration: 3 } });
     await waitFor(() => expect(second.result.current.canRetry).toBe(true));
     await act(async () => { read.reject(Object.assign(Error('Old auth denial'), { status: 403 })); await checking; });
@@ -246,7 +280,7 @@ describe('durable exact barrier publication outcomes', () => {
     expect(sessionStorage.getItem(BARRIER_PENDING_STORAGE_KEY)).toBe(stored);
     expect(await readPendingBarrierCommand(sessionStorage, otherProject)).toEqual(other);
   });
-  it.each(['capture-intent', 'empty'] as const)('keeps an unresolved %s sentinel locked across reload without inventing a recovery operation', async kind => {
+  it.each(['capture-intent', 'empty'] as const)('inspects an unresolved %s sentinel across reload without replay and keeps null nonterminal', async kind => {
     const f = fixture(), first = await mounted(f);
     if (kind === 'capture-intent') { await add(first); vi.mocked(api.beginBarrierCapture).mockRejectedValueOnce(Error('lost intent acknowledgement')); }
     else { act(() => first.result.current.setEmptyReason('Reviewed synthetic empty scope')); vi.mocked(api.changeBarrierRegistry).mockRejectedValueOnce(Error('lost empty acknowledgement')); }
@@ -254,11 +288,149 @@ describe('durable exact barrier publication outcomes', () => {
     expect(retained?.kind).toBe(kind); first.unmount();
     const second = renderHook(() => usePathfinderBarriers({ ...f.options, pf: { ...f.pf, preparationViewerGeneration: 2, viewerPhase: 'loading' } }));
     await waitFor(() => expect(second.result.current.phase).toBe('unknown'));
-    expect(second.result.current.pending).toBe(true); expect(second.result.current.canRetry).toBe(false);
+    expect(second.result.current.pending).toBe(true); expect(second.result.current.canRetry).toBe(true); expect(second.result.current.canInspect).toBe(true);
     await act(() => second.result.current.retry()); await act(() => second.result.current.save());
-    expect(api.getBarrierCaptureOutcome).not.toHaveBeenCalled(); expect(await readPendingBarrierCommand(sessionStorage, scope.projectId)).toEqual(retained);
+    expect(api.getBarrierCommandRecovery).toHaveBeenCalledOnce(); expect(api.getBarrierCaptureOutcome).not.toHaveBeenCalled(); expect(await readPendingBarrierCommand(sessionStorage, scope.projectId)).toEqual(retained);
     expect(api.beginBarrierCapture).toHaveBeenCalledTimes(kind === 'capture-intent' ? 1 : 0);
     expect(api.changeBarrierRegistry).toHaveBeenCalledTimes(kind === 'empty' ? 1 : 0);
+  });
+  it('closes an acknowledged failed capture, preserves its changed selection, then saves a fresh command and reports actual ready state', async () => {
+    const f = fixture([8]), view = await mounted(f); await add(view); const originalPublished = f.getRegistry().snapshot;
+    f.captureBarriers.mockRejectedValueOnce(Object.assign(Error('Capture failed'), { code: 'EXTRACTION_FAILED' }));
+    await act(() => view.result.current.save());
+    const retained = await readPendingBarrierCommand(sessionStorage, scope.projectId);
+    if (retained?.kind !== 'capture-intent' || retained.intentId === null) throw Error('Expected acknowledged capture fixture');
+    const draft = structuredClone(view.result.current.draftParents), firstCommand = vi.mocked(api.beginBarrierCapture).mock.calls[0][2];
+    expect(view.result.current.phase).toBe('refused'); expect(view.result.current.canClose).toBe(true);
+    const terminal = await recoveryResponse(retained, 'closed');
+    vi.mocked(api.closeBarrierCommand).mockImplementationOnce(async () => {
+      expect(await readPendingBarrierCommand(sessionStorage, scope.projectId)).toEqual(retained); return terminal;
+    });
+    await act(() => view.result.current.close());
+    expect(view.result.current.pending).toBe(false); expect(view.result.current.registry?.snapshot).toEqual(originalPublished);
+    expect(view.result.current.draftParents).toEqual(draft); expect(view.result.current.dirty).toBe(true); expect(view.result.current.canAuthor).toBe(true); expect(view.result.current.canDiscard).toBe(true);
+    expect(f.publishBarriers).not.toHaveBeenCalled(); expect(api.changeBarrierRegistry).not.toHaveBeenCalled();
+    act(() => { for (const value of draft) view.result.current.removeParent(value.selectionId); view.result.current.setKind('floor'); });
+    f.readSelection.mockResolvedValueOnce(selection(174115)); await add(view);
+    await act(() => view.result.current.save());
+    const nextCommand = vi.mocked(api.beginBarrierCapture).mock.calls[1][2];
+    expect(nextCommand.idempotencyKey).not.toBe(firstCommand.idempotencyKey);
+    expect(nextCommand.selectedParents).toMatchObject([{ kind: 'floor', dbId: 174115 }]);
+    expect(view.result.current.registry?.state).toBe('ready'); expect(view.result.current.pending).toBe(false); expect(view.result.current.dirty).toBe(false);
+    expect(await readPendingBarrierCommand(sessionStorage, scope.projectId)).toBeNull(); expect(f.publishBarriers).toHaveBeenCalledOnce();
+    // Common calculation controls receive this actual registry/dirty/pending
+    // state. This hook fixture does not execute the calculation engine itself.
+  });
+  it.each(['capture-intent', 'empty'] as const)('lets a different current admin close an unknown %s after reload without rebinding the original token or replaying', async kind => {
+    const f = fixture(), first = await mounted(f);
+    if (kind === 'capture-intent') { await add(first); vi.mocked(api.beginBarrierCapture).mockRejectedValueOnce(Error('lost begin ACK')); }
+    else { act(() => first.result.current.setEmptyReason('Synthetic reviewed scope')); vi.mocked(api.changeBarrierRegistry).mockRejectedValueOnce(Error('lost empty ACK')); }
+    await act(() => first.result.current.save()); const retained = await readPendingBarrierCommand(sessionStorage, scope.projectId);
+    if (!retained) throw Error('Missing saved command'); first.unmount();
+    const terminal = await recoveryResponse(retained, 'closed');
+    const second = renderHook(() => usePathfinderBarriers({ ...f.options, token: 'different-current-admin', pf: { ...f.pf, preparationViewerGeneration: 2, viewerPhase: 'error' } }));
+    await waitFor(() => expect(second.result.current.canClose).toBe(true));
+    const beforeNative = f.runProjectPreparation.mock.calls.length;
+    vi.mocked(api.closeBarrierCommand).mockImplementationOnce(async (project, token, target) => {
+      expect(project).toBe(scope.projectId); expect(token).toBe('different-current-admin');
+      expect(target).toEqual(await createPendingBarrierRecoveryTarget(retained));
+      expect(await readPendingBarrierCommand(sessionStorage, scope.projectId)).toEqual(retained); return terminal;
+    });
+    await act(() => second.result.current.close());
+    expect(second.result.current.pending).toBe(false); expect(second.result.current.registry).toEqual(f.getRegistry());
+    expect(second.result.current.canAuthor).toBe(false); // A broken Viewer does not gain authoring authority.
+    expect(await readPendingBarrierCommand(sessionStorage, scope.projectId)).toBeNull();
+    expect(f.runProjectPreparation).toHaveBeenCalledTimes(beforeNative); expect(f.captureBarriers).not.toHaveBeenCalled(); expect(f.publishBarriers).not.toHaveBeenCalled();
+    expect(api.beginBarrierCapture).toHaveBeenCalledTimes(kind === 'capture-intent' ? 1 : 0); expect(api.changeBarrierRegistry).toHaveBeenCalledTimes(kind === 'empty' ? 1 : 0);
+  });
+  it('retains a lost in-memory Close acknowledgement and Retry uses exact GET without repeating Close or the original POST/PUT', async () => {
+    const f = fixture([8]), view = await mounted(f); await add(view); f.publishBarriers.mockRejectedValueOnce(Error('lost PUT ACK'));
+    await act(() => view.result.current.save()); const retained = await readPendingBarrierCommand(sessionStorage, scope.projectId);
+    if (!retained) throw Error('Missing saved command');
+    vi.mocked(api.closeBarrierCommand).mockRejectedValueOnce(Error('lost Close ACK'));
+    await act(() => view.result.current.close());
+    expect(view.result.current.phase).toBe('unknown'); expect(await readPendingBarrierCommand(sessionStorage, scope.projectId)).toEqual(retained);
+    vi.mocked(api.getBarrierCommandRecovery).mockResolvedValueOnce(await recoveryResponse(retained, 'closed'));
+    await act(() => view.result.current.retry());
+    expect(view.result.current.pending).toBe(false); expect(view.result.current.registry?.state).toBe('ready');
+    expect(api.closeBarrierCommand).toHaveBeenCalledOnce(); expect(api.getBarrierCommandRecovery).toHaveBeenCalledOnce();
+    expect(api.beginBarrierCapture).toHaveBeenCalledOnce(); expect(f.captureBarriers).toHaveBeenCalledOnce(); expect(f.publishBarriers).toHaveBeenCalledOnce();
+  });
+  it('holds the exact record and current admission until the terminal outcome is followed by a complete real registry/manifest refresh', async () => {
+    const f = fixture([8]), view = await mounted(f); await add(view); f.publishBarriers.mockRejectedValueOnce(Error('lost PUT ACK'));
+    await act(() => view.result.current.save()); const retained = await readPendingBarrierCommand(sessionStorage, scope.projectId);
+    if (!retained) throw Error('Missing saved command');
+    vi.mocked(api.getBarrierCommandRecovery).mockResolvedValueOnce(await recoveryResponse(retained, 'closed'));
+    const registryRead = deferred<BarrierRegistry>(); vi.mocked(api.getBarrierRegistry).mockReturnValueOnce(registryRead.promise);
+    let checking!: Promise<void>; act(() => { checking = view.result.current.inspect(); });
+    await waitFor(() => expect(view.result.current.message).toContain('Refreshing the actual published barrier set'));
+    expect(view.result.current.registry).toBeNull(); expect(view.result.current.manifest).toBeNull(); expect(view.result.current.pending).toBe(true);
+    expect(await readPendingBarrierCommand(sessionStorage, scope.projectId)).toEqual(retained);
+    await act(async () => { registryRead.resolve(structuredClone(f.getRegistry())); await checking; });
+    expect(view.result.current.pending).toBe(false); expect(view.result.current.registry).toEqual(f.getRegistry());
+    expect(view.result.current.saved?.status).toBe('current'); expect(await readPendingBarrierCommand(sessionStorage, scope.projectId)).toBeNull();
+  });
+  it('keeps an in-memory confirmed terminal locked after refresh failure and Retry performs GET-only until a successful refresh', async () => {
+    const f = fixture([8]), view = await mounted(f); await add(view);
+    // This known local capture failed before PUT: only the later exact terminal
+    // makes it recovery-only; ordinary preflight/capture retry is unchanged.
+    f.captureBarriers.mockRejectedValueOnce(Object.assign(Error('Capture failed'), { code: 'EXTRACTION_FAILED' }));
+    await act(() => view.result.current.save()); const retained = await readPendingBarrierCommand(sessionStorage, scope.projectId);
+    if (!retained) throw Error('Missing saved command');
+    const terminal = await recoveryResponse(retained, 'closed'); vi.mocked(api.getBarrierCommandRecovery).mockResolvedValue(terminal);
+    vi.mocked(api.getBarrierRegistry).mockRejectedValueOnce(Error('Refresh unavailable'));
+    await act(() => view.result.current.inspect());
+    expect(view.result.current.pending).toBe(true); expect(view.result.current.registry).toBeNull(); expect(view.result.current.canAuthor).toBe(false);
+    expect(view.result.current.canDiscard).toBe(false);
+    expect(view.result.current.message).toContain('saved recovery record remains locked'); expect(await readPendingBarrierCommand(sessionStorage, scope.projectId)).toEqual(retained);
+    act(() => view.result.current.discardPending());
+    expect(view.result.current.pending).toBe(true); expect(await readPendingBarrierCommand(sessionStorage, scope.projectId)).toEqual(retained);
+    await act(() => view.result.current.retry()); expect(view.result.current.pending).toBe(false);
+    expect(view.result.current.registry).toEqual(f.getRegistry()); expect(api.closeBarrierCommand).not.toHaveBeenCalled();
+    expect(api.getBarrierCommandRecovery).toHaveBeenCalledTimes(2); expect(api.beginBarrierCapture).toHaveBeenCalledOnce();
+    expect(f.captureBarriers).toHaveBeenCalledOnce(); expect(f.publishBarriers).not.toHaveBeenCalled();
+  });
+  it.each(['not-recorded', 'pending', 'missing'] as const)('keeps %s inspection nonterminal and never turns it into a new declaration', async outcome => {
+    const f = fixture(), view = await mounted(f); await add(view); vi.mocked(api.beginBarrierCapture).mockRejectedValueOnce(Error('lost begin ACK'));
+    await act(() => view.result.current.save()); const retained = await readPendingBarrierCommand(sessionStorage, scope.projectId);
+    if (!retained) throw Error('Missing saved command');
+    if (outcome === 'missing') vi.mocked(api.getBarrierCommandRecovery).mockRejectedValueOnce(Object.assign(Error('Missing'), { status: 404 }));
+    else vi.mocked(api.getBarrierCommandRecovery).mockResolvedValueOnce(await recoveryResponse(retained, outcome));
+    await act(() => view.result.current.inspect());
+    expect(view.result.current.pending).toBe(true); expect(await readPendingBarrierCommand(sessionStorage, scope.projectId)).toEqual(retained);
+    expect(api.beginBarrierCapture).toHaveBeenCalledOnce(); expect(api.changeBarrierRegistry).not.toHaveBeenCalled(); expect(api.closeBarrierCommand).not.toHaveBeenCalled();
+  });
+  it('prevents Close dispatch if write-ahead storage cannot confirm the same original record', async () => {
+    const f = fixture(), view = await mounted(f); await add(view); vi.mocked(api.beginBarrierCapture).mockRejectedValueOnce(Error('lost begin ACK'));
+    await act(() => view.result.current.save()); const stored = sessionStorage.getItem(BARRIER_PENDING_STORAGE_KEY);
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw Error('quota'); });
+    await act(() => view.result.current.close()); expect(api.closeBarrierCommand).not.toHaveBeenCalled();
+    expect(view.result.current.pending).toBe(true); expect(sessionStorage.getItem(BARRIER_PENDING_STORAGE_KEY)).toBe(stored);
+  });
+  it('does not delete a changed persisted record after an otherwise valid terminal response', async () => {
+    const f = fixture(), view = await mounted(f); await add(view); vi.mocked(api.beginBarrierCapture).mockRejectedValueOnce(Error('lost begin ACK'));
+    await act(() => view.result.current.save()); const retained = await readPendingBarrierCommand(sessionStorage, scope.projectId);
+    if (!retained) throw Error('Missing saved command');
+    const changed = await sealPendingBarrierCommand({ ...retained, createdAt: '2026-10-22T11:00:00.000Z' });
+    const read = deferred<Awaited<ReturnType<typeof api.getBarrierCommandRecovery>>>(); vi.mocked(api.getBarrierCommandRecovery).mockReturnValueOnce(read.promise);
+    let checking!: Promise<void>; act(() => { checking = view.result.current.inspect(); });
+    await waitFor(() => expect(api.getBarrierCommandRecovery).toHaveBeenCalledOnce());
+    sessionStorage.setItem(BARRIER_PENDING_STORAGE_KEY, JSON.stringify({ version: 1, commands: [changed] }));
+    const terminal = await recoveryResponse(retained, 'closed'); await act(async () => { read.resolve(terminal); await checking; });
+    expect(view.result.current.pending).toBe(true); expect(await readPendingBarrierCommand(sessionStorage, scope.projectId)).toEqual(changed);
+  });
+  it('ignores a late Close terminal after an auth epoch change and preserves the new context saved record', async () => {
+    const f = fixture(), view = await mounted(f); await add(view); vi.mocked(api.beginBarrierCapture).mockRejectedValueOnce(Error('lost begin ACK'));
+    await act(() => view.result.current.save()); const retained = await readPendingBarrierCommand(sessionStorage, scope.projectId);
+    if (!retained) throw Error('Missing saved command');
+    const write = deferred<Awaited<ReturnType<typeof api.closeBarrierCommand>>>(); vi.mocked(api.closeBarrierCommand).mockReturnValueOnce(write.promise);
+    let closing!: Promise<void>; act(() => { closing = view.result.current.close(); });
+    await waitFor(() => expect(api.closeBarrierCommand).toHaveBeenCalledOnce());
+    view.rerender({ ...f.options, token: 'new-current-admin', pf: { ...f.pf, viewerPhase: 'error', preparationViewerGeneration: 2 } });
+    await waitFor(() => expect(view.result.current.canInspect).toBe(true)); const terminal = await recoveryResponse(retained, 'closed');
+    await act(async () => { write.resolve(terminal); await closing; });
+    expect(view.result.current.pending).toBe(true); expect(view.result.current.canInspect).toBe(true);
+    expect(await readPendingBarrierCommand(sessionStorage, scope.projectId)).toEqual(retained);
   });
 });
 

@@ -1,5 +1,20 @@
 # PathFinder local implementation progress
 
+## Current: B21 exact recovery and real28 geometry checked; paired delivery next
+
+Report112/publicB21receipt:717 latest-file selected Vitest assertions PASS,
+actual SQL/cookieHTTP/process45, actual lossless/global migration6, delivery160,
+full types/scopedlint/bothbuilds PASS. Windows21 POSIX cases unrun; targetedTab1
+selects the new actual Calculate transition and deselects72 historical cases.
+All applicable isolated source/artifact/copy/generated bookends and positive
+helper/networkcleanup PASS. Exact28 requested Aalborg names match:28fragments,
+4790originalvertices/3789triangles; actual mixed verifier accepts3surfaces/25solids
+in the explicit offline frame. No live SDK/publication/routing authority inferred.
+Old command Inspect/Close, all-lane immutable hash fence, GET-only recovery and
+fresh registry-before-CAS are implemented. Source5191 remains B19; fresh V5 paired
+delivery is next. Own-terminal, full multipart capacity, live Aalborg acceptance
+and then Simplified Preparer remain. Browser refusal not retried/bypassed.
+
 ## Current: B20 bounded mixed source verified; exact pending recovery next
 
 Report111 and the B20 source receipt record1298 affected assertions with no skips,

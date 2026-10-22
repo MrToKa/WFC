@@ -44,11 +44,11 @@ test('implicit/default CLI and unknown flags refuse before runtime adapter creat
   assert.equal(calls, 0);
 });
 
-function policyConfig() {
+function policyConfig(version='v4') {
   const value = config(), record = filename => ({ path: path.join(ROOT, 'scripts/pathfinder-barriers', filename), bytes: 123, sha256: 'c'.repeat(64) });
   value.qualificationPolicy = { schemaVersion: 'wfc.pf.owned-update-policy-binding.v1',
-    selection: { schemaVersion: 'wfc.pf.delivery-policy-selection.v1', profile: 'post-b9-no-ddl-conservation-v4' },
-    selector: record('delivery-policy-selector-v4.mjs'), qualifier: record('migration-conservation-v4.mjs') };
+    selection: { schemaVersion: 'wfc.pf.delivery-policy-selection.v1', profile: version==='v5'?'post-b20-terminal-closure-additive-v5':'post-b9-no-ddl-conservation-v4' },
+    selector: record('delivery-policy-selector-'+version+'.mjs'), qualifier: record('migration-conservation-'+version+'.mjs') };
   value.sourceClosure = [value.qualificationPolicy.selector, value.qualificationPolicy.qualifier];
   return value;
 }
@@ -60,6 +60,22 @@ test('old B9 config and receipt remain unchanged when no policy is selected', ()
 test('explicit v4 config binds exact selector and qualifier members of the source closure', () => {
   const value = policyConfig(); assert.equal(assertConservationPolicy(value), value.qualificationPolicy); assertOperation(value, value.directory);
   assertPhasePolicyBinding(value, { status: 'PASS', qualificationPolicy: structuredClone(value.qualificationPolicy) });
+});
+test('explicit v5 binds its own fixed selector/qualifier and every later phase receipt',()=>{
+ const value=policyConfig('v5');assert.equal(assertConservationPolicy(value),value.qualificationPolicy);assertOperation(value,value.directory);
+ assertPhasePolicyBinding(value,{status:'PASS',qualificationPolicy:structuredClone(value.qualificationPolicy)});
+ for(const wrong of [undefined,policyConfig().qualificationPolicy])assert.throws(()=>assertPhasePolicyBinding(value,{status:'PASS',qualificationPolicy:wrong}),/B9_PHASE_POLICY_BINDING_CHANGED/);
+});
+test('v5 cannot reuse v4 source pins, change profile after init, or omit its protected closure member',()=>{
+ for(const mutate of [value=>{value.qualificationPolicy.selection.profile='post-b9-no-ddl-conservation-v4';},value=>{value.qualificationPolicy.selector=policyConfig().qualificationPolicy.selector;value.sourceClosure=[value.qualificationPolicy.selector,value.qualificationPolicy.qualifier];},value=>{value.sourceClosure.pop();}]){
+  const value=policyConfig('v5');mutate(value);assert.throws(()=>assertConservationPolicy(value),/B9_CONSERVATION_POLICY_CLOSURE_REQUIRED/);
+ }
+});
+test('v5 is forwarded only as an explicit init option',async()=>{
+ const calls=[],adapter={initialize(...args){calls.push(args);return{status:'SYNTHETIC'};}};
+ const args=['init','--operation',config().directory,'--qualified-inventory',path.join(ROOT,'inventory.mjs'),'--inventory-sha','a'.repeat(64),'--conservation-policy','post-b20-terminal-closure-additive-v5'];
+ await main(args,adapter);assert.equal(calls.length,1);assert.equal(calls[0][3],'post-b20-terminal-closure-additive-v5');
+ await assert.rejects(main(['backup','--operation',config().directory,'--conservation-policy','post-b20-terminal-closure-additive-v5'],adapter),/B9_ARGUMENTS/);assert.equal(calls.length,1);
 });
 test('a present invalid policy never falls back to B9', () => {
   for (const binding of [undefined, null, {}, { ...policyConfig().qualificationPolicy, extra: true },

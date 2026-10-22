@@ -9,9 +9,11 @@ import { supportedBarrierCaptureCommandSchema as barrierCaptureCommandSchema, su
 import { parsePurposeJson } from '../../shared/pathfinderPurposePolicy';
 import { discardPathFinderBody, pathFinderRequestDeadline, releasePathFinderReader } from './pathfinderRequestDeadline';
 import { barrierCaptureOutcomeQuerySchema, type BarrierCaptureOutcomeQuery } from '../../shared/pathfinderBarrierOutcomes';
+import { barrierCommandCloseSchema, barrierCommandRecoveryResponseSchema, barrierCommandRecoveryTargetSchema,
+  BARRIER_RECOVERY_LIMITS, type BarrierCommandRecoveryTarget } from '../../shared/pathfinderBarrierRecovery';
 export const BARRIER_READ_MILLISECONDS = 30_000;
 const requestError = (code: string, status?: number) => Object.assign(new Error(code), { code, ...(status === undefined ? {} : { status }) });
-async function request(projectId: string, token: string, suffix: string, body?: unknown, signal?: AbortSignal): Promise<unknown> {
+async function request(projectId: string, token: string, suffix: string, body?: unknown, signal?: AbortSignal, maximumBytes = BARRIER_LIMITS.manifestBytes): Promise<unknown> {
   z.string().uuid().parse(projectId);
   const deadline = pathFinderRequestDeadline(signal, BARRIER_READ_MILLISECONDS, () => requestError('BARRIER_REQUEST_TIMEOUT'));
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
@@ -32,13 +34,13 @@ async function request(projectId: string, token: string, suffix: string, body?: 
   for (;;) {
     const next = await deadline.wait(() => reader!.read()); if (next.done) break;
     total += next.value.byteLength;
-    if (total > BARRIER_LIMITS.manifestBytes) throw requestError('BARRIER_RESPONSE_LIMIT', response.ok ? undefined : response.status);
+    if (total > maximumBytes) throw requestError('BARRIER_RESPONSE_LIMIT', response.ok ? undefined : response.status);
     chunks.push(next.value);
   }
   const bytes = new Uint8Array(total); let offset = 0;
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
   let value: unknown;
-  try { value = parsePurposeJson(new TextDecoder('utf-8', { fatal: true }).decode(bytes), { maximumBytes: BARRIER_LIMITS.manifestBytes }); }
+  try { value = parsePurposeJson(new TextDecoder('utf-8', { fatal: true }).decode(bytes), { maximumBytes }); }
   catch { throw requestError('BARRIER_RESPONSE_INVALID', response.ok ? undefined : response.status); }
   if (!response.ok) {
     const code = value && typeof value === 'object' && 'code' in value && typeof value.code === 'string' && /^[A-Z][A-Z0-9_]{0,95}$/.test(value.code)
@@ -100,4 +102,25 @@ export async function getBarrierCaptureOutcome(projectId: string, token: string,
   const query = barrierCaptureOutcomeQuerySchema.parse(expected);
   const search = new URLSearchParams(query).toString();
   return barrierCaptureOutcomeSchema.parse(await request(projectId, token, `/intents/${intentId}/outcome?${search}`, undefined, signal));
+}
+
+function recoveryTarget(projectId: string, value: BarrierCommandRecoveryTarget) {
+  const target = barrierCommandRecoveryTargetSchema.parse(value);
+  if (target.projectId !== projectId) throw requestError('BARRIER_RECOVERY_PROJECT_CHANGED');
+  return target;
+}
+/** Historical inspection is authorized by the current project administrator.
+ * It never prepares a Viewer, resumes a capture or submits an empty set. */
+export async function getBarrierCommandRecovery(projectId: string, token: string, value: BarrierCommandRecoveryTarget, signal?: AbortSignal) {
+  const target = recoveryTarget(projectId, value);
+  const search = new URLSearchParams({ target: barrierCanonicalJson(target) }).toString();
+  // A null transport result is conservative and cannot settle a saved command.
+  return barrierCommandRecoveryResponseSchema.nullable().parse(await request(projectId, token, `/recovery/outcome?${search}`, undefined, signal, BARRIER_RECOVERY_LIMITS.responseBytes));
+}
+/** Close only the exact original command hash. The caller durably retains its
+ * original record before this POST and reconciles a lost ACK by inspection. */
+export async function closeBarrierCommand(projectId: string, token: string, value: BarrierCommandRecoveryTarget, signal?: AbortSignal) {
+  const target = recoveryTarget(projectId, value);
+  const command = barrierCommandCloseSchema.parse({ schemaVersion: 'wfc.pf.barrier-command-close.v1', target });
+  return barrierCommandRecoveryResponseSchema.parse(await request(projectId, token, '/recovery/close', command, signal, BARRIER_RECOVERY_LIMITS.responseBytes));
 }

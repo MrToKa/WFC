@@ -121,9 +121,32 @@ describe.runIf(Boolean(sqlUrl))('PF-B2 actual SQL and storage in fresh explicit 
 
   it('initializes the real schema twice and starts unconfigured without fabricating a barrier scope', async () => {
     const tables = (await pool!.query("SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename LIKE 'pf_barrier_%' ORDER BY tablename")).rows;
-    expect(tables.map(row => row.tablename)).toEqual(['pf_barrier_capture_intents', 'pf_barrier_heads', 'pf_barrier_receipts', 'pf_barrier_snapshots']);
-    const triggers = (await pool!.query("SELECT tgname FROM pg_trigger WHERE NOT tgisinternal AND tgname LIKE 'pf_barrier_%'")).rows;
-    expect(triggers).toHaveLength(4);
+    expect(tables.map(row => row.tablename)).toEqual(['pf_barrier_capture_intents', 'pf_barrier_command_closures', 'pf_barrier_heads', 'pf_barrier_receipts', 'pf_barrier_snapshots']);
+    const triggers = (await pool!.query("SELECT t.tgname FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND NOT t.tgisinternal AND t.tgname LIKE 'pf_barrier_%'")).rows;
+    expect(triggers.map(row => row.tgname).sort()).toEqual(['pf_barrier_command_closure_immutable', 'pf_barrier_immutable', 'pf_barrier_immutable', 'pf_barrier_intent_delete', 'pf_barrier_intent_immutable']);
+    const version = Number((await pool!.query("SELECT current_setting('server_version_num') AS version")).rows[0].version);
+    expect(Number.isSafeInteger(version) && version > 0).toBe(true);
+    const constraints = (await pool!.query("SELECT c.conname,c.contype,c.convalidated,pg_get_constraintdef(c.oid,true) AS definition FROM pg_constraint c WHERE c.conrelid='public.pf_barrier_command_closures'::regclass ORDER BY c.conname")).rows;
+    expect(constraints.filter(row => row.contype !== 'n')).toEqual([
+      { conname: 'pf_barrier_closure_command_hash', contype: 'c', convalidated: true, definition: "CHECK (command_sha256 ~ '^[a-f0-9]{64}$'::text)" },
+      { conname: 'pf_barrier_closure_project_fk', contype: 'f', convalidated: true, definition: 'FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE' },
+      { conname: 'pf_barrier_closure_record_bytes', contype: 'c', convalidated: true, definition: 'CHECK (octet_length(record::text) <= 16384)' },
+      { conname: 'pf_barrier_closure_record_hash', contype: 'c', convalidated: true, definition: "CHECK (record_sha256 ~ '^[a-f0-9]{64}$'::text)" },
+      { conname: 'pf_barrier_closure_tenant_id', contype: 'u', convalidated: true, definition: 'UNIQUE (project_id, id)' },
+      { conname: 'pf_barrier_command_closures_pkey', contype: 'p', convalidated: true, definition: 'PRIMARY KEY (project_id, command_sha256)' },
+    ]);
+    const columns = ['project_id', 'command_sha256', 'id', 'record_sha256', 'record', 'closed_by', 'login_id', 'closed_at'];
+    const attributes = (await pool!.query("SELECT attname,attnotnull FROM pg_attribute WHERE attrelid='public.pf_barrier_command_closures'::regclass AND attnum>0 AND NOT attisdropped ORDER BY attnum")).rows;
+    expect(attributes).toEqual(columns.map(attname => ({ attname, attnotnull: true })));
+    // PostgreSQL 18 exposes each NOT NULL in pg_constraint as well as
+    // pg_attribute. Earlier catalogs keep the same eight attnotnull facts.
+    expect(constraints.filter(row => row.contype === 'n')).toEqual(version >= 180000 ? [...columns].sort().map(column => ({
+      conname: 'pf_barrier_command_closures_' + column + '_not_null', contype: 'n', convalidated: true, definition: 'NOT NULL ' + column,
+    })) : []);
+    const indexes = (await pool!.query("SELECT indexname,indexdef FROM pg_indexes WHERE schemaname='public' AND indexname IN('pf_barrier_capture_intents_command_sha256_lookup','pf_barrier_receipts_command_sha256_lookup') ORDER BY indexname")).rows;
+    expect(indexes).toHaveLength(2);
+    expect(indexes.map(row => row.indexname)).toEqual(['pf_barrier_capture_intents_command_sha256_lookup', 'pf_barrier_receipts_command_sha256_lookup']);
+    for (const row of indexes) { expect(row.indexdef).toContain('USING btree (project_id, request_sha256)'); expect(row.indexdef).not.toContain('UNIQUE'); }
     expect(await repository().get(projectId, who)).toMatchObject({ state: 'unconfigured', registryRevision: '0', snapshot: null });
   });
 

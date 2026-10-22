@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Pool } from 'pg';
-import { BARRIER_CAPTURE_VERSION, barrierCanonicalJson, type BarrierCapture, type BarrierModelScope } from '../../shared/pathfinderBarriers.js';
+import { BARRIER_CAPTURE_VERSION, BARRIER_LIMITS, barrierCanonicalJson, type BarrierCapture, type BarrierModelScope } from '../../shared/pathfinderBarriers.js';
 import { MIXED_BARRIER_POLICY } from '../../shared/pathfinderBarrierMixed.js';
+import { barrierCommandRecoveryTargetSchema, matchBarrierCommandRecovery } from '../../shared/pathfinderBarrierRecovery.js';
 import type { JobPrincipal } from './jobContracts.js';
 const storage = vi.hoisted(() => ({ blobs: new Map<string, Buffer>(), fail: false }));
 vi.mock('./barrierStorage.js', async importOriginal => {
@@ -27,7 +28,7 @@ const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, '0')
 const scope = (): BarrierModelScope => ({ projectId: id(1), modelVersionId: id(2), contentFingerprint: 'a'.repeat(64), selectionRevision: '1', captureFrameId: id(3), captureFrameSha256: 'b'.repeat(64), coordinateFrame: 'canonical-world-metres' });
 type Row = Record<string, unknown>;
 function fixture() {
-  let durable = { head: null as { revision: string; snapshot_id: string } | null, intents: new Map<string, Row>(), snapshots: new Map<string, Row>(), receipts: new Map<string, Row>() };
+  let durable = { head: null as { revision: string; snapshot_id: string } | null, intents: new Map<string, Row>(), snapshots: new Map<string, Row>(), receipts: new Map<string, Row>(), closures: new Map<string, Row>() };
   let checkpoint: typeof durable | null = null;
   const who: JobPrincipal = { userId: id(4), loginId: id(5), loginExpiresAt: Date.now() + 3600000 };
   const controls = { scope: scope(), admin: true, revoked: false, qualifyError: null as Error | null, commitUnknown: false,
@@ -41,6 +42,13 @@ function fixture() {
     if (sql === 'ROLLBACK') { if (checkpoint) durable = checkpoint; checkpoint = null; return { rows: [] }; }
     if (sql === 'COMMIT') { checkpoint = null; if (controls.commitUnknown) { controls.commitUnknown = false; throw Error('lost acknowledgement'); } return { rows: [] }; }
     if (sql.startsWith('SET LOCAL') || sql.startsWith('INSERT INTO viewer_login_bindings')) return { rows: [] };
+    if (sql.includes('barrier:command-fence')) return { rows: [durable.closures.get(`${values[0]}/${values[1]}`)].filter(Boolean) };
+    if (sql.includes('barrier:recovery-receipts')) return { rows: [...durable.receipts.values()].filter(row => row.project_id === values[0] && row.request_sha256 === values[1]).slice(0, 2) };
+    if (sql.includes('barrier:recovery-intents')) return { rows: [...durable.intents.values()].filter(row => row.project_id === values[0] && row.request_sha256 === values[1]).slice(0, 2).map(row => ({ ...row, allocation_is_null: row.allocation === null,
+      allocation: row.allocation === null || Buffer.byteLength(JSON.stringify(row.allocation)) > Number(values[3]) ? null : row.allocation })) };
+    if (sql.includes('barrier:recovery-snapshot')) return { rows: [...durable.snapshots.values()].filter(row => row.project_id === values[0] && row.id === values[1]).slice(0, 2) };
+    if (sql.includes('barrier:recovery-clear-lease')) { const row = durable.intents.get(String(values[1])); if (!row || row.project_id !== values[0] || row.state !== 'pending') return { rows: [] }; row.lease_token = null; row.lease_expires_at = null; return { rows: [{ id: row.id }] }; }
+    if (sql.startsWith('INSERT INTO pf_barrier_command_closures')) { const key = `${values[0]}/${values[1]}`; if (durable.closures.has(key)) throw Error('immutable closure conflict'); durable.closures.set(key, { project_id: values[0], command_sha256: values[1], id: values[2], record_sha256: values[3], record: values[4], closed_by: values[5], login_id: values[6], closed_at: new Date(String(values[7])) }); return { rows: [] }; }
     if (sql.startsWith('SELECT id FROM projects')) return { rows: [{ id: id(1) }] };
     if (sql.startsWith('SELECT is_admin')) return { rows: [{ is_admin: controls.admin }] };
     if (sql.startsWith('SELECT user_id,expires_at,revoked_at')) return { rows: [{ user_id: who.userId, expires_at: new Date(who.loginExpiresAt), revoked_at: controls.revoked ? new Date() : null }] };
@@ -64,9 +72,9 @@ function fixture() {
       row.lease_token = null; row.lease_expires_at = null; return { rows: [{ id: row.id }] };
     }
     if (sql.startsWith('SELECT request_sha256')) return { rows: [durable.receipts.get(`${values[0]}/${values[1]}/${values[2]}`)].filter(Boolean) };
-    if (sql.startsWith('INSERT INTO pf_barrier_receipts')) { durable.receipts.set(`${values[0]}/${values[1]}/${values[2]}`, { request_sha256: values[3], request: values[4], receipt: values[5] }); controls.duringReceipt(); return { rows: [] }; }
+    if (sql.startsWith('INSERT INTO pf_barrier_receipts')) { durable.receipts.set(`${values[0]}/${values[1]}/${values[2]}`, { project_id: values[0], actor_id: values[1], idempotency_key: values[2], request_sha256: values[3], request: values[4], receipt: values[5] }); controls.duringReceipt(); return { rows: [] }; }
     if (sql.startsWith('INSERT INTO pf_barrier_snapshots')) {
-      durable.snapshots.set(String(values[0]), { id: values[0], project_id: values[1], model_version_id: values[2], registry_revision: values[3], storage_intent_id: values[4], manifest_blob: values[5], manifest: values[6] }); return { rows: [] };
+      durable.snapshots.set(String(values[0]), { id: values[0], project_id: values[1], model_version_id: values[2], registry_revision: values[3], storage_intent_id: values[4], manifest_blob: values[5], manifest: values[6], created_by: values[7], login_id: values[8] }); return { rows: [] };
     }
     if (sql.startsWith('INSERT INTO pf_barrier_heads')) { durable.head = { revision: String(values[1]), snapshot_id: String(values[2]) }; controls.duringHead(); return { rows: [] }; }
     if (sql.startsWith('SELECT id,storage_intent_id')) {
@@ -94,6 +102,117 @@ function fixture() {
   return { pool, repository, adapters, controls, who, command, capture, bytes, refusal, outcomeQuery, empty, calls, query, release, get durable() { return durable; } };
 }
 beforeEach(() => { storage.blobs.clear(); storage.fail = false; });
+
+function recoveryTarget(f: ReturnType<typeof fixture>, command: unknown, options: { mixed?: boolean; empty?: boolean; intent?: BarrierCaptureIntent; publication?: boolean } = {}) {
+  const knownIntent = options.intent ? { actorId: options.intent.createdBy, loginId: options.intent.loginId,
+    intentId: options.intent.id, snapshotId: options.intent.snapshotId } : null;
+  return barrierCommandRecoveryTargetSchema.parse({ schemaVersion: 'wfc.pf.barrier-command-recovery-target.v1', projectId: id(1),
+    commandSha256: barrierValueHash(command), scope: scope(), pendingRecordSha256: '6'.repeat(64),
+    pendingRecordVersion: options.mixed ? 'wfc.pf.barrier-pending-command.v2' : 'wfc.pf.barrier-pending-command.v1',
+    ...(options.mixed ? { geometryPolicy: MIXED_BARRIER_POLICY } : {}),
+    ...(options.empty ? { kind: 'empty' } : options.publication ? { kind: 'publication', knownIntent,
+      captureSha256: barrierBytesHash(f.bytes(options.intent!)), frameSha256: 'f'.repeat(64), loadId: id(99) } : { kind: 'capture-intent', knownIntent }) });
+}
+describe('exact hash recovery with synthetic transaction/storage boundary', () => {
+  it('keeps absent inspection nonterminal and does not call Viewer/current-scope qualification', async () => {
+    const f = fixture(), target = recoveryTarget(f, f.command), before = structuredClone(f.durable);
+    const value = await f.repository.readCommandRecovery(id(1), f.who, target);
+    expect(value.outcome).toBe('not-recorded'); expect(matchBarrierCommandRecovery(target, value, text => barrierBytesHash(Buffer.from(text)))).toBeNull();
+    expect(f.durable).toEqual(before); expect(f.adapters.currentScope).not.toHaveBeenCalled(); expect(f.adapters.qualifyCapture).not.toHaveBeenCalled();
+  });
+  it.each([['legacy', 'capture'], ['mixed', 'capture'], ['legacy', 'empty'], ['mixed', 'empty']] as const)('closes absent %s %s and refuses its delayed original mutation', async (lane, kind) => {
+    const f = fixture(), mixed = lane === 'mixed', request = kind === 'capture' ? mixed ? mixedCommand(f) : f.command
+      : { ...f.empty(), ...(mixed ? { schemaVersion: 'wfc.pf.barrier-registry-command.v2', geometryPolicy: MIXED_BARRIER_POLICY } : {}) };
+    const target = recoveryTarget(f, request, { mixed, empty: kind === 'empty' }), close = { schemaVersion: 'wfc.pf.barrier-command-close.v1', target };
+    const value = await f.repository.closeCommand(id(1), f.who, close); expect(value.outcome).toBe('closed');
+    if (value.outcome !== 'closed') throw Error('closure fixture');
+    expect(value.closure.original).toEqual({ state: 'not-recorded' }); expect(f.durable.head).toBeNull(); expect(f.durable.snapshots.size).toBe(0);
+    expect(await f.repository.closeCommand(id(1), f.who, close)).toEqual(value);
+    expect(await f.repository.readCommandRecovery(id(1), f.who, target)).toEqual(value);
+    await expect(kind === 'capture' ? f.repository.begin(id(1), f.who, request) : f.repository.command(id(1), f.who, request)).rejects.toMatchObject({ code: 'BARRIER_COMMAND_CLOSED' });
+    expect(f.durable.intents.size).toBe(0); expect(f.durable.receipts.size).toBe(0); expect(f.durable.closures.size).toBe(1);
+  });
+  it('closes an admitted pending capture under new administrator authority without resuming original login', async () => {
+    const f = fixture(), intent = (await f.repository.begin(id(1), f.who, f.command)).intent, oldOwner = { actorId: f.who.userId, loginId: f.who.loginId };
+    const target = recoveryTarget(f, f.command, { intent }), row = f.durable.intents.get(intent.id)!;
+    row.capture_sha256 = barrierBytesHash(f.bytes(intent)); row.allocation = [{ fragmentId: 15, blobId: id(80) }]; row.lease_token = id(81); row.lease_expires_at = new Date(Date.now() + 60000);
+    const oldIdentity = structuredClone(row.frozen); Object.assign(f.who, { userId: id(90), loginId: id(91) });
+    f.adapters.currentScope.mockClear();
+    const result = await f.repository.closeCommand(id(1), f.who, { schemaVersion: 'wfc.pf.barrier-command-close.v1', target });
+    expect(result).toMatchObject({ outcome: 'closed', closure: { original: { state: 'recorded', command: oldOwner },
+      closedBy: { actorId: id(90), loginId: id(91), authority: 'current-project-administrator-close-only' }, mayResumeCapture: false, mayPublish: false, grantsCalculation: false } });
+    expect(f.durable.intents.get(intent.id)).toMatchObject({ frozen: oldIdentity, capture_sha256: row.capture_sha256, allocation: row.allocation, lease_token: null, lease_expires_at: null });
+    expect(f.adapters.currentScope).not.toHaveBeenCalled();
+  });
+  it('never closes a target claiming acknowledged IDs when the original row is absent', async () => {
+    const f = fixture(), intent = { id: id(70), snapshotId: id(71), captureBlobId: id(72), manifestBlobId: id(73), command: f.command, createdBy: f.who.userId, loginId: f.who.loginId };
+    await expect(f.repository.closeCommand(id(1), f.who, { schemaVersion: 'wfc.pf.barrier-command-close.v1', target: recoveryTarget(f, f.command, { intent }) })).rejects.toMatchObject({ code: 'BARRIER_RECOVERY_ORIGINAL_UNAVAILABLE' });
+    expect(f.durable.closures.size).toBe(0);
+  });
+  it('lets an exact committed capture success win instead of writing a closure', async () => {
+    const f = fixture(), intent = (await f.repository.begin(id(1), f.who, f.command)).intent; await f.repository.publish(id(1), f.who, intent.id, f.bytes(intent));
+    const before = structuredClone(f.durable), target = recoveryTarget(f, f.command, { intent, publication: true });
+    const result = await f.repository.closeCommand(id(1), f.who, { schemaVersion: 'wfc.pf.barrier-command-close.v1', target });
+    expect(result).toMatchObject({ outcome: 'published', original: { actorId: intent.createdBy, loginId: intent.loginId }, frameBinding: 'not-recorded', frameSha256: null });
+    expect(f.durable).toEqual(before);
+  });
+  it('lets an exact empty publication win and derives original owner from the stored snapshot', async () => {
+    const f = fixture(), request = f.empty(); await f.repository.command(id(1), f.who, request);
+    const target = recoveryTarget(f, request, { empty: true }), previous = { actorId: f.who.userId, loginId: f.who.loginId };
+    Object.assign(f.who, { userId: id(90), loginId: id(91) });
+    expect(await f.repository.closeCommand(id(1), f.who, { schemaVersion: 'wfc.pf.barrier-command-close.v1', target })).toMatchObject({ outcome: 'published', original: { ...previous, kind: 'declare-empty' } });
+    expect(f.durable.closures.size).toBe(0);
+  });
+  it('lets exact logical refusal win and preserves actual full-frame binding', async () => {
+    const f = fixture(), intent = (await f.repository.begin(id(1), f.who, f.command)).intent; f.controls.qualifyError = f.refusal(intent);
+    await f.repository.publish(id(1), f.who, intent.id, f.bytes(intent));
+    const before = structuredClone(f.durable), target = recoveryTarget(f, f.command, { intent, publication: true });
+    expect(await f.repository.closeCommand(id(1), f.who, { schemaVersion: 'wfc.pf.barrier-command-close.v1', target })).toMatchObject({ outcome: 'geometry-refused', refusal: { frameSha256: 'f'.repeat(64) } });
+    expect(f.durable).toEqual(before);
+  });
+  it('reconciles a closure whose COMMIT acknowledgement was lost using its exact original target', async () => {
+    const f = fixture(), target = recoveryTarget(f, f.command); f.controls.commitUnknown = true;
+    await expect(f.repository.closeCommand(id(1), f.who, { schemaVersion: 'wfc.pf.barrier-command-close.v1', target })).rejects.toMatchObject({ code: 'BARRIER_COMMIT_OUTCOME_UNKNOWN' });
+    expect(f.durable.closures.size).toBe(1);
+    expect((await f.repository.readCommandRecovery(id(1), f.who, target)).outcome).toBe('closed'); expect(f.release).toHaveBeenCalledWith(true);
+  });
+  it.each(['lane', 'scope', 'known-owner'] as const)('refuses a foreign %s recovery constraint without inserting a fence', async field => {
+    const f = fixture(), intent = (await f.repository.begin(id(1), f.who, f.command)).intent;
+    let target = recoveryTarget(f, f.command, { intent });
+    if (field === 'lane') target = recoveryTarget(f, f.command, { intent, mixed: true });
+    if (field === 'scope') target.scope.captureFrameSha256 = '9'.repeat(64);
+    if (field === 'known-owner' && target.kind !== 'empty') target.knownIntent!.actorId = id(90);
+    await expect(f.repository.closeCommand(id(1), f.who, { schemaVersion: 'wfc.pf.barrier-command-close.v1', target })).rejects.toMatchObject({ code: 'BARRIER_RECOVERY_TARGET_CHANGED' });
+    expect(f.durable.closures.size).toBe(0);
+  });
+  it('refuses bounded ambiguous indexed original matches rather than selecting an owner', async () => {
+    const f = fixture(), intent = (await f.repository.begin(id(1), f.who, f.command)).intent;
+    f.durable.intents.set(id(90), { ...structuredClone(f.durable.intents.get(intent.id)!), id: id(90) });
+    await expect(f.repository.readCommandRecovery(id(1), f.who, recoveryTarget(f, f.command))).rejects.toMatchObject({ code: 'BARRIER_RECOVERY_AMBIGUOUS' });
+    expect(f.durable.closures.size).toBe(0);
+  });
+  it.each([false, true])('bounds retained allocation JSON and refuses oversized original coupling (capture hash present=%s)', async captureHashPresent => {
+    const f = fixture(), intent = (await f.repository.begin(id(1), f.who, f.command)).intent;
+    const row = f.durable.intents.get(intent.id)!;
+    row.capture_sha256 = captureHashPresent ? barrierBytesHash(f.bytes(intent)) : null;
+    row.allocation = { oversized: 'x'.repeat(BARRIER_LIMITS.fragments * 128) };
+    const before = structuredClone(f.durable), target = recoveryTarget(f, f.command, { intent });
+    await expect(f.repository.readCommandRecovery(id(1), f.who, target)).rejects.toMatchObject({ code: 'BARRIER_RECOVERY_INTEGRITY' });
+    await expect(f.repository.closeCommand(id(1), f.who, { schemaVersion: 'wfc.pf.barrier-command-close.v1', target })).rejects.toMatchObject({ code: 'BARRIER_RECOVERY_INTEGRITY' });
+    const query = f.query.mock.calls.find(([sql]) => sql.includes('barrier:recovery-intents'))!;
+    expect(query[0]).toContain('CASE WHEN octet_length(allocation::text)<=$4 THEN allocation ELSE NULL END AS allocation');
+    expect(query[0]).toContain('allocation IS NULL AS allocation_is_null');
+    expect(query[1]?.[3]).toBe(BARRIER_LIMITS.fragments * 128);
+    expect(f.durable).toEqual(before); expect(f.durable.closures.size).toBe(0);
+  });
+  it('retains auth/role/cancellation refusals without a close record', async () => {
+    const f = fixture(), input = { schemaVersion: 'wfc.pf.barrier-command-close.v1', target: recoveryTarget(f, f.command) };
+    f.controls.admin = false; await expect(f.repository.closeCommand(id(1), f.who, input)).rejects.toMatchObject({ code: 'ADMIN_REQUIRED' });
+    f.controls.admin = true; f.controls.revoked = true; await expect(f.repository.closeCommand(id(1), f.who, input)).rejects.toMatchObject({ code: 'LOGIN_REVOKED' });
+    f.controls.revoked = false; const stopped = new AbortController(); stopped.abort(); await expect(f.repository.closeCommand(id(1), f.who, input, stopped.signal)).rejects.toThrow();
+    expect(f.durable.closures.size).toBe(0);
+  });
+});
 
 function mixedCommand(f: ReturnType<typeof fixture>) { return { ...f.command, schemaVersion: 'wfc.pf.barrier-capture-command.v2' as const, geometryPolicy: MIXED_BARRIER_POLICY }; }
 function installMixedQualification(f: ReturnType<typeof fixture>) {

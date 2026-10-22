@@ -185,6 +185,32 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
       expect(workspace.readPreferences).toEqual(workspace.preferences);
     });
   });
+  it('restores Calculate after an unknown barrier command settles and the verified registry arrives', async () => {
+    barrierComposition.mode = 'pending';
+    const current = { ...proposalModel(), data: { ...pf.data, artifacts: [artifact()],
+      cables: [{ ...pf.data.cables[0], toMatch: pf.data.cables[0].fromMatch }] } };
+    vi.mocked(usePathFinder).mockReturnValue(current);
+    const props = { projectId, loadedProjectId: projectId, token: 'isolated-test-token', accountId, isAdmin: true };
+    const view = render(<PathFinderTab {...props} />);
+    await waitFor(() => expect((workspaceCapture.render.mock.calls.at(-1)?.[0] as PathFinderCableWorkspaceProps).preferences).toBeNull());
+    const calculate = screen.getByRole('button', { name: 'Calculate non-MV cables' });
+    expect(calculate).toBeDisabled();
+    expect(current.calculate).not.toHaveBeenCalled();
+    // The real authoring lifecycle independently proves terminal recovery and
+    // registry refresh. This composition seam only receives that verified state.
+    barrierComposition.mode = 'ready';
+    view.rerender(<PathFinderTab {...props} />);
+    await waitFor(() => expect(calculate).toBeEnabled());
+    const workspace = workspaceCapture.render.mock.calls.at(-1)?.[0] as PathFinderCableWorkspaceProps;
+    expect(workspace.preferences?.barrierRouting).toMatchObject({ drillThroughWalls: false, expectedRegistryRevision: '1' });
+    fireEvent.click(calculate);
+    expect(current.calculate).toHaveBeenCalledOnce();
+    expect(current.calculate).toHaveBeenCalledWith(current.data.cables.map(cable => cable.id), true,
+      expect.objectContaining({ barrierRouting: expect.objectContaining({ drillThroughWalls: false, expectedRegistryRevision: '1' }) }));
+    expect(current.action).not.toHaveBeenCalled();
+    expect(current.reviewProposal).not.toHaveBeenCalled();
+    expect(saveEndpointBinding).not.toHaveBeenCalled();
+  });
   it('returns a detached cable action to the parent barrier configuration without changing the drilling choice or starting work', async () => {
     barrierComposition.mode = 'missing';
     const current = proposalModel(); vi.mocked(usePathFinder).mockReturnValue(current);

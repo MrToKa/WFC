@@ -11,6 +11,7 @@ import { ViewerSessionError } from '../viewerSessions/errors.js';
 import { barrierCaptureAdapters } from './barrierCaptureAuthority.js';
 import { createBarrierRegistryRepository } from './barrierRegistryRepository.js';
 import { barrierCaptureOutcomeQuerySchema } from '../../shared/pathfinderBarrierOutcomes.js';
+import { parseBarrierCommandRecoveryQuery, barrierCommandCloseSchema } from '../../shared/pathfinderBarrierRecovery.js';
 import { requestPrincipal } from './auth.js';
 import { parsePolicyJson } from './policyJson.js';
 import { PathFinderError } from './errors.js';
@@ -61,6 +62,14 @@ export function createBarrierRouter(pool: Pool, mode: 'admin' | 'viewer' = 'admi
     return parsePolicyJson(req.body, { maxBytes: maximum });
   };
   if (mode === 'admin') {
+    router.get('/barriers/recovery/outcome', async (req, res) => { try {
+      let target: ReturnType<typeof parseBarrierCommandRecoveryQuery>;
+      try { target = parseBarrierCommandRecoveryQuery(req.query); } catch { throw new PathFinderError('INVALID_BARRIER_REQUEST', 400); }
+      res.json(await repository().readCommandRecovery(project(req), requestPrincipal(req), target));
+    } catch (error) { errorResponse(res, error); } });
+    router.post('/barriers/recovery/close', raw(BARRIER_LIMITS.controlBytes), async (req, res) => { try {
+      query(req); res.json(await repository().closeCommand(project(req), requestPrincipal(req), barrierCommandCloseSchema.parse(body(req, BARRIER_LIMITS.controlBytes))));
+    } catch (error) { errorResponse(res, error); } });
     router.get('/barriers/intents/:intentId/outcome', async (req, res) => { try {
       res.json(await repository().readCaptureOutcome(project(req), requestPrincipal(req), policyUuidSchema.parse(req.params.intentId), barrierCaptureOutcomeQuerySchema.parse(req.query)));
     } catch (error) { errorResponse(res, error); } });

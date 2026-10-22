@@ -5,6 +5,8 @@ import { parsePurposeJson } from '../../../../shared/pathfinderPurposePolicy';
 import { MIXED_BARRIER_POLICY } from '../../../../shared/pathfinderBarrierMixed';
 import { supportedBarrierCaptureCommandSchema, supportedBarrierRegistryCommandSchema,
   supportedBarrierCaptureOutcomeSchema as barrierCaptureOutcomeSchema, type AnyBarrierCaptureOutcome as BarrierCaptureOutcome } from '../../../../shared/pathfinderBarrierSupported';
+import { barrierCommandClosureHashInput, barrierCommandRecoveryResponseSchema, barrierCommandRecoveryTargetHashInput,
+  barrierCommandRecoveryTargetSchema, matchBarrierCommandRecovery, type BarrierCommandRecoveryTarget } from '../../../../shared/pathfinderBarrierRecovery';
 
 export const BARRIER_PENDING_STORAGE_KEY = 'wfc.pathfinder.barrier-publication-pending.v1';
 const MAX_BYTES = 32_768, MAX_COMMANDS = 8;
@@ -112,4 +114,33 @@ export function matchBarrierCaptureOutcome(expected: BarrierPendingPublication, 
     || value.publication.snapshot.mode !== (expected.schemaVersion === 'wfc.pf.barrier-pending-command.v2' ? 'mixed-mesh-set' : 'mesh-set')
     || !same(value.publication.snapshot.scope, expected.scope)) throw new Error('BARRIER_OUTCOME_SNAPSHOT_CHANGED');
   return value;
+}
+
+/** Project the exact hash-verified persisted source lane. A legacy record is
+ * never upgraded to the current policy, and credentials never enter the URL. */
+export async function createPendingBarrierRecoveryTarget(value: BarrierPendingCommand): Promise<BarrierCommandRecoveryTarget> {
+  const parsed = barrierPendingCommandSchema.parse(value), { recordSha256, ...body } = parsed;
+  if (recordSha256 !== await barrierPendingHash({ domain: recordDomain(parsed), body })) throw Error('BARRIER_PENDING_STORAGE_CHANGED');
+  const base = { schemaVersion: 'wfc.pf.barrier-command-recovery-target.v1', projectId: parsed.projectId,
+    commandSha256: parsed.commandSha256, scope: parsed.scope, pendingRecordSha256: recordSha256,
+    pendingRecordVersion: parsed.schemaVersion,
+    ...(parsed.schemaVersion === 'wfc.pf.barrier-pending-command.v2' ? { geometryPolicy: parsed.geometryPolicy } : {}) };
+  const knownIntent = parsed.actorId === null ? null : { actorId: parsed.actorId, loginId: parsed.loginId, intentId: parsed.intentId, snapshotId: parsed.snapshotId };
+  if (parsed.kind === 'publication') return barrierCommandRecoveryTargetSchema.parse({ ...base, kind: parsed.kind,
+    knownIntent, captureSha256: parsed.captureSha256, frameSha256: parsed.frameSha256, loadId: parsed.loadId });
+  return barrierCommandRecoveryTargetSchema.parse(parsed.kind === 'empty' ? { ...base, kind: 'empty' } : { ...base, kind: parsed.kind, knownIntent });
+}
+/** Browser SHA-256 is asynchronous; precompute only the two closed canonical
+ * hash inputs used by the shared synchronous matcher, with no digest fallback. */
+export async function matchPendingBarrierCommandRecovery(expected: BarrierPendingCommand, raw: unknown) {
+  const target = await createPendingBarrierRecoveryTarget(expected);
+  if (raw === null) return null;
+  const response = barrierCommandRecoveryResponseSchema.parse(raw);
+  const inputs = [barrierCommandRecoveryTargetHashInput(target),
+    ...(response.outcome === 'closed' ? [barrierCommandClosureHashInput(response.closure)] : [])];
+  const hashes = new Map<string, string>();
+  for (const input of inputs) hashes.set(barrierCanonicalJson(input), await barrierPendingHash(input));
+  return matchBarrierCommandRecovery(target, response, input => {
+    const digest = hashes.get(input); if (!digest) throw Error('BARRIER_RECOVERY_HASH_INPUT_CHANGED'); return digest;
+  });
 }

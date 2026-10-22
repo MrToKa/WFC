@@ -6,8 +6,9 @@ import type { Pool } from 'pg';
 import { BARRIER_LIMITS, barrierCanonicalJson, type BarrierCapture } from '../../shared/pathfinderBarriers.js';
 import { MIXED_BARRIER_POLICY } from '../../shared/pathfinderBarrierMixed.js';
 import { supportedBarrierCaptureCommandSchema, supportedBarrierRegistryCommandSchema } from '../../shared/pathfinderBarrierSupported.js';
+import { barrierCommandRecoveryTargetSchema } from '../../shared/pathfinderBarrierRecovery.js';
 import { PathFinderError } from './errors.js';
-const mocks = vi.hoisted(() => ({ verify: vi.fn(), authorize: vi.fn(), get: vi.fn(), list: vi.fn(), getSnapshot: vi.fn(), readCaptureOutcome: vi.fn(), begin: vi.fn(), publish: vi.fn(), command: vi.fn(), adapters: vi.fn(), repository: vi.fn() }));
+const mocks = vi.hoisted(() => ({ verify: vi.fn(), authorize: vi.fn(), get: vi.fn(), list: vi.fn(), getSnapshot: vi.fn(), readCaptureOutcome: vi.fn(), readCommandRecovery: vi.fn(), closeCommand: vi.fn(), begin: vi.fn(), publish: vi.fn(), command: vi.fn(), adapters: vi.fn(), repository: vi.fn() }));
 vi.mock('../auth.js', () => ({ verifyAccessToken: mocks.verify }));
 vi.mock('./barrierCaptureAuthority.js', () => ({ barrierCaptureAdapters: mocks.adapters }));
 vi.mock('./barrierRegistryRepository.js', () => ({ createBarrierRegistryRepository: mocks.repository }));
@@ -18,6 +19,8 @@ const identity = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 const scope = () => ({ projectId: id(1), modelVersionId: id(2), contentFingerprint: 'a'.repeat(64), selectionRevision: '1', captureFrameId: id(3), captureFrameSha256: 'b'.repeat(64), coordinateFrame: 'canonical-world-metres' as const });
 const parents = () => [{ selectionId: id(7), kind: 'wall' as const, objectId: 'dbid:10', dbId: 10, externalId: null, name: 'Selected parent', identityBasis: 'version-local-only' as const, inclusion: 'own-and-all-descendant-fragments' as const }];
 const command = () => ({ schemaVersion: 'wfc.pf.barrier-capture-command.v1', scope: scope(), expectedRegistryRevision: '0', idempotencyKey: id(6), selectedParents: parents() });
+const recoveryTarget = () => barrierCommandRecoveryTargetSchema.parse({ schemaVersion: 'wfc.pf.barrier-command-recovery-target.v1', projectId: id(1), scope: scope(),
+  commandSha256: '1'.repeat(64), pendingRecordSha256: '2'.repeat(64), pendingRecordVersion: 'wfc.pf.barrier-pending-command.v1', kind: 'capture-intent', knownIntent: null });
 function upload() {
   const capture: BarrierCapture = { schemaVersion: 'wfc.pf.barrier-capture.v1', captureId: id(9), scope: scope(), selectedParents: parents(), fragments: [{
     source: { fragmentId: 15, ownerObjectId: 'dbid:11', parentSelectionIds: [id(7)], sourceUnits: 'm', metresPerSourceUnit: 1, sourceToWorldMetres: identity, transformSha256: 'c'.repeat(64) },
@@ -56,6 +59,39 @@ function request({ url = '/barriers', mode = 'admin', method = 'GET', token = 'B
 }
 
 describe('barrier HTTP admission through in-memory Express router, no listener', () => {
+  it('passes exact recovery to the historical current-admin reader without a Viewer cookie or origin preflight', async () => {
+    const target = recoveryTarget(), outcome = { synthetic: 'historical recovery outcome' }; mocks.readCommandRecovery.mockResolvedValueOnce(outcome);
+    const r = request({ url: '/barriers/recovery/outcome', query: { target: barrierCanonicalJson(target) }, cookie: null, origin: null });
+    await r.run(); expect(r.res.statusCode).toBe(200); expect(r.res.json).toHaveBeenCalledExactlyOnceWith(outcome);
+    expect(mocks.authorize).toHaveBeenCalledExactlyOnceWith(id(1), expect.objectContaining({ userId: id(4), loginId: id(5) }));
+    expect(mocks.readCommandRecovery).toHaveBeenCalledExactlyOnceWith(id(1), expect.objectContaining({ userId: id(4), loginId: id(5) }), target);
+    expect(mocks.adapters.mock.calls.every(call => call[0] === undefined)).toBe(true); expect(mocks.publish).not.toHaveBeenCalled(); expect(mocks.closeCommand).not.toHaveBeenCalled();
+  });
+  it('passes only the strict explicit close body under current administrator authority', async () => {
+    const input = { schemaVersion: 'wfc.pf.barrier-command-close.v1', target: recoveryTarget() }, outcome = { synthetic: 'immutable command closure' };
+    mocks.closeCommand.mockResolvedValueOnce(outcome);
+    const r = request({ url: '/barriers/recovery/close', method: 'POST', body: barrierCanonicalJson(input), cookie: null, origin: null });
+    await r.run(); expect(r.res.statusCode).toBe(200); expect(r.res.json).toHaveBeenCalledExactlyOnceWith(outcome);
+    expect(mocks.closeCommand).toHaveBeenCalledExactlyOnceWith(id(1), expect.objectContaining({ userId: id(4), loginId: id(5) }), input);
+    expect(mocks.begin).not.toHaveBeenCalled(); expect(mocks.command).not.toHaveBeenCalled(); expect(mocks.publish).not.toHaveBeenCalled();
+  });
+  it.each(['extra-query', 'array-query', 'duplicate-json-key', 'extra-target-field'] as const)('refuses %s recovery input before historical read or close', async kind => {
+    const target = recoveryTarget(), query: Record<string, unknown> = { target: barrierCanonicalJson(target) };
+    if (kind === 'extra-query') query.command = 'untrusted';
+    if (kind === 'array-query') query.target = [query.target];
+    if (kind === 'duplicate-json-key') query.target = '{"kind":"empty",' + barrierCanonicalJson(target).slice(1);
+    if (kind === 'extra-target-field') query.target = barrierCanonicalJson({ ...target, grantsCalculation: true });
+    const r = request({ url: '/barriers/recovery/outcome', query }); await r.run();
+    expect(r.res.statusCode).toBe(400); expect(mocks.readCommandRecovery).not.toHaveBeenCalled(); expect(mocks.closeCommand).not.toHaveBeenCalled();
+  });
+  it('refuses close body extra fields before creating an immutable fence', async () => {
+    const r = request({ url: '/barriers/recovery/close', method: 'POST', body: barrierCanonicalJson({ schemaVersion: 'wfc.pf.barrier-command-close.v1', target: recoveryTarget(), resume: true }) });
+    await r.run(); expect(r.res.statusCode).toBe(400); expect(mocks.closeCommand).not.toHaveBeenCalled();
+  });
+  it('does not mount administrator recovery at the protected Viewer capture path', async () => {
+    const r = request({ mode: 'viewer', url: '/barriers/recovery/outcome', query: { target: barrierCanonicalJson(recoveryTarget()) } });
+    await r.run(); expect(r.res.statusCode).toBe(405); expect(mocks.readCommandRecovery).not.toHaveBeenCalled(); expect(mocks.closeCommand).not.toHaveBeenCalled();
+  });
   it('reads only an exact historical outcome with current admin login and no Viewer cookie/current-frame adapter', async () => {
     const hashes = { commandSha256: 'a'.repeat(64), captureSha256: 'b'.repeat(64), frameSha256: 'c'.repeat(64) };
     const r = request({ url: `/barriers/intents/${id(9)}/outcome`, query: hashes, params: { intentId: id(9) }, cookie: null, origin: null });

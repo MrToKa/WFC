@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { beginBarrierCapture, changeBarrierRegistry, getBarrierRegistry, getBarrierSnapshot, getLatestBarrierSnapshot, getBarrierCaptureOutcome } from '@/api/pathfinderBarriers';
+import { beginBarrierCapture, changeBarrierRegistry, getBarrierRegistry, getBarrierSnapshot, getLatestBarrierSnapshot,
+  getBarrierCommandRecovery, closeBarrierCommand } from '@/api/pathfinderBarriers';
 import { BARRIER_LIMITS, barrierCanonicalJson, barrierCaptureSchema, barrierSelectedParentSchema, type BarrierCapture } from '../../../../shared/pathfinderBarriers';
 import { MIXED_BARRIER_POLICY, mixedBarrierCaptureCommandSchema as barrierCaptureCommandSchema,
   mixedBarrierRegistryCommandSchema as barrierRegistryCommandSchema } from '../../../../shared/pathfinderBarrierMixed';
@@ -8,6 +9,7 @@ import type { usePathFinder, ProjectPreparationViewer } from './usePathFinder';
 import { barrierCaptureErrorMessage } from '../../../../viewer-runtime/barrier-capture-errors.mjs';
 import { barrierFrameObservationHashInput, validateBarrierFrameObservation } from '../../../../viewer-runtime/barrier-capture.mjs';
 import { barrierPendingHash, clearPendingBarrierCommand, createBarrierCommandSentinel, matchBarrierCaptureOutcome,
+  createPendingBarrierRecoveryTarget, matchPendingBarrierCommandRecovery,
   readPendingBarrierCommand, retainPendingBarrierCommand, sealPendingBarrierCommand, type BarrierPendingCommand } from './barrierPendingPublication';
 
 export type BarrierSelectedParent = BarrierCapture['selectedParents'][number];
@@ -21,10 +23,10 @@ type CaptureCommand = Parameters<typeof beginBarrierCapture>[2];
 type EmptyCommand = Extract<Parameters<typeof changeBarrierRegistry>[2], { action: 'declare-empty' }>;
 type Intent = Awaited<ReturnType<typeof beginBarrierCapture>>['intent'];
 type Observation = Awaited<ReturnType<ProjectPreparationViewer['captureBarriers']>>;
-type Pending = ({ type: 'capture'; command: CaptureCommand; intent?: Intent; observation?: Observation; writeStarted: boolean }
+type Pending = (({ type: 'capture'; command: CaptureCommand; intent?: Intent; observation?: Observation; writeStarted: boolean }
   | { type: 'empty'; command: EmptyCommand; writeStarted: boolean }) & { retention?: BarrierPendingCommand }
   | { type: 'restored'; retention: BarrierPendingCommand; writeStarted: boolean }
-  | { type: 'storage-blocked'; writeStarted: boolean };
+  | { type: 'storage-blocked'; writeStarted: boolean }) & { recoveryOnly?: boolean };
 export type SavedBarrierSelection = { manifest: BarrierSnapshot; status: 'current' | 'recapture-required' | 'unavailable' };
 type View = { key: string; registry: BarrierRegistry | null; manifest: BarrierSnapshot | null; draftParents: BarrierSelectedParent[];
   saved: SavedBarrierSelection | null; draftBase: Pick<BarrierRegistry, 'scope' | 'registryRevision'> | null;
@@ -75,16 +77,16 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
       viewRef.current = next; setView(next);
     } catch { /* Never expose an old scope. */ }
   }, [current]);
-  const requireScope = useCallback((registry: BarrierRegistry) => {
+  const requireScope = useCallback((registry: BarrierRegistry, requireViewer = true) => {
     const access = latest.current.options, active = access.pf.data?.activeModel;
-    if (!access.isAdmin || !access.token || access.projectId !== access.loadedProjectId || access.pf.viewerPhase !== 'ready'
+    if (!access.isAdmin || !access.token || access.projectId !== access.loadedProjectId || requireViewer && access.pf.viewerPhase !== 'ready'
       || registry.scope.projectId !== access.projectId || registry.scope.modelVersionId !== active?.modelVersionId
       || registry.scope.selectionRevision !== active.selectionRevision || registry.scope.contentFingerprint !== active.contentFingerprint)
       throw failure('The barrier registry no longer describes the current model. Refresh barriers.', 'BARRIER_CONTEXT_CHANGED');
   }, []);
-  const read = useCallback(async (run: Context, signal: AbortSignal) => {
+  const read = useCallback(async (run: Context, signal: AbortSignal, requireViewer = true) => {
     const access = latest.current.options;
-    const registry = await getBarrierRegistry(access.projectId!, access.token!, signal); signal.throwIfAborted(); current(run); requireScope(registry);
+    const registry = await getBarrierRegistry(access.projectId!, access.token!, signal); signal.throwIfAborted(); current(run); requireScope(registry, requireViewer);
     const manifest = registry.snapshot ? await getBarrierSnapshot(access.projectId!, access.token!, registry.snapshot.snapshotId, signal) : null;
     signal.throwIfAborted(); current(run);
     if (manifest && !manifestMatches(registry, manifest)) throw failure('The published barrier manifest changed. Refresh barriers.', 'BARRIER_CONTEXT_CHANGED');
@@ -165,38 +167,77 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
         current(run);
         pending.current = retained ? { type: 'restored', retention: retained, writeStarted: true } : null;
         update(run, { busy: false, pending: Boolean(retained), phase: retained ? 'unknown' : 'idle',
-          message: retained ? retained.kind === 'publication'
-            ? 'A retained publication needs an exact authenticated outcome check. Reloading the Viewer does not resubmit its geometry.'
-            : 'An earlier intent or empty-declaration outcome is unresolved. This stage cannot reconcile that command; no replacement will be submitted.' : null });
+          message: retained ? 'A saved command needs an exact outcome check. Inspect it or explicitly close this command before starting a replacement. Reloading the Viewer does not resubmit it.' : null });
         if (enabled) void refresh();
       } catch { update(run, { busy: false, pending: true, phase: 'unknown', error: 'Barrier recovery storage is unavailable or changed. No new barrier command will be sent. Preserve this browser session for reconciliation.' }); }
     })();
     return () => { run.closed = true; run.abort.abort(); operation.current?.abort(); };
   }, [key, enabled, refresh, current, update, options.projectId]);
 
-  const reconcile = useCallback(async (saved: Pending) => {
+  const recoverCommand = useCallback(async (saved: Pending, close: boolean) => {
     const run = context.current, retained = 'retention' in saved ? saved.retention : undefined;
-    if (!recoveryEnabled || !run || locked.current || latest.current.options.pf.busy || pending.current !== saved || retained?.kind !== 'publication') return;
+    if (!recoveryEnabled || !run || locked.current || denied.current || latest.current.options.pf.busy || pending.current !== saved || !retained) return;
     locked.current = true; const controller = new AbortController(); operation.current = controller;
-    const signal = AbortSignal.any([run.abort.signal, controller.signal]); update(run, { busy: true, error: null, phase: 'loading' });
+    const signal = AbortSignal.any([run.abort.signal, controller.signal]); update(run, { busy: true, error: null, message: null, phase: 'loading' });
+    let terminalConfirmed = false;
     try {
       const access = latest.current.options;
-      // The server independently authorizes the original actor and login. A
-      // token digest or a new Viewer generation never grants that authority.
-      const raw = await getBarrierCaptureOutcome(retained.projectId, access.token!, retained.intentId,
-        { commandSha256: retained.commandSha256, captureSha256: retained.captureSha256, frameSha256: retained.frameSha256 }, signal);
+      const assertRetained = async () => {
+        const actual = await readPendingBarrierCommand(sessionStorage, retained.projectId);
+        signal.throwIfAborted(); current(run);
+        if (pending.current !== saved || !same(actual, retained)) throw failure('The saved recovery record changed. It was retained and no replacement was submitted.', 'BARRIER_PENDING_COMMAND_CHANGED');
+      };
+      await assertRetained();
+      const target = await createPendingBarrierRecoveryTarget(retained); signal.throwIfAborted(); current(run);
+      // Current project-admin authority is checked independently by the server.
+      // The original token hash remains unchanged and grants no continuation.
+      if (close) {
+        await assertRetained();
+        // Write/readback precedes the close POST as well. A lost close ACK keeps
+        // this same original record; inspect performs no replay or new capture.
+        retainPendingBarrierCommand(sessionStorage, retained, retained);
+        saved.writeStarted = true; saved.recoveryOnly = true;
+      }
+      const raw = close ? await closeBarrierCommand(retained.projectId, access.token!, target, signal)
+        : await getBarrierCommandRecovery(retained.projectId, access.token!, target, signal);
       signal.throwIfAborted(); current(run);
-      const outcome = matchBarrierCaptureOutcome(retained, raw);
-      if (!outcome) { update(run, { phase: 'unknown', pending: true, message: 'No terminal outcome is recorded for this exact publication. The command remains locked; no replay or replacement was sent.' }); return; }
-      clearPendingBarrierCommand(sessionStorage, retained); pending.current = null;
-      update(run, { registry: null, manifest: null, pending: false, changed: false, draftParents: [], draftBase: null,
-        phase: outcome.outcome === 'published' ? 'idle' : 'refused', error: null,
-        message: outcome.outcome === 'published'
-          ? 'The exact original publication is confirmed. Its historical receipt does not establish the current Viewer frame. Refresh barriers before editing or calculating.'
-          : 'The exact original publication was refused by geometry verification. The previously published set was kept. Refresh barriers before editing the selection.' });
-    } catch (error) { report(run, error, saved); }
+      const outcome = await matchPendingBarrierCommandRecovery(retained, raw); signal.throwIfAborted(); current(run); await assertRetained();
+      if (!outcome) { update(run, { phase: 'unknown', pending: true, message: 'No terminal outcome is recorded for this exact command. It remains locked. Inspect again or explicitly close this command; no replay or replacement was sent.' }); return; }
+      terminalConfirmed = true;
+      // Once Close may have committed, or an exact terminal is known, a live
+      // original command must follow the same GET-only path as a restored one.
+      // This flag grants no authority and never alters the persisted source.
+      saved.recoveryOnly = true;
+      const previous = viewRef.current;
+      update(run, { registry: null, manifest: null, pending: true,
+        saved: previous.saved ? { ...previous.saved, status: 'unavailable' } : null,
+        message: 'The exact saved command outcome is confirmed. Refreshing the actual published barrier set before releasing this command…' });
+      // Historical settlement never supplies current readiness. Read the real
+      // registry and hash-verified manifest, without requiring a running Viewer.
+      const found = await read(run, signal, false); signal.throwIfAborted(); current(run); await assertRetained();
+      const draftBase = previous.draftBase, keepDraft = previous.changed && draftBase !== null;
+      const changedScope = Boolean(previous.changed && draftBase && (!same(draftBase.scope, found.registry.scope)
+        || draftBase.registryRevision !== found.registry.registryRevision));
+      const oldFrame = found.registry.state === 'stale';
+      clearPendingBarrierCommand(sessionStorage, retained); pending.current = null; saved.writeStarted = false;
+      update(run, { ...found, pending: false, error: null,
+        saved: found.manifest ? { manifest: found.manifest, status: oldFrame ? 'recapture-required' : 'current' } : null,
+        ...(!keepDraft ? { draftParents: oldFrame ? [] : found.registry.selectedParents, changed: false,
+          draftBase: { scope: found.registry.scope, registryRevision: found.registry.registryRevision } } : {}),
+        phase: changedScope ? 'stale' : found.registry.state === 'ready' ? 'ready' : found.registry.state === 'partial' ? 'partial' : 'idle',
+        message: outcome.outcome === 'closed'
+          ? 'This exact command was closed. The actual published barrier set was refreshed and kept. You may edit the selection and save a new command.'
+          : outcome.outcome === 'geometry-refused'
+            ? 'The exact capture was refused. The actual published barrier set was refreshed and kept. You may change the selection and save a new command.'
+            : 'The exact publication is confirmed and the actual published barrier set was refreshed. Current calculation readiness is checked separately.' });
+    } catch (error) {
+      report(run, error, saved);
+      if (terminalConfirmed) update(run, { message: 'The exact command outcome was confirmed, but the current barrier set could not be refreshed. The saved recovery record remains locked. Inspect again after resolving the refresh error.' });
+    }
     finally { if (context.current === run) { locked.current = false; operation.current = null; update(run, { busy: false }); } }
-  }, [current, recoveryEnabled, report, update]);
+  }, [current, read, recoveryEnabled, report, update]);
+  const inspect = useCallback(async () => { if (pending.current) await recoverCommand(pending.current, false); }, [recoverCommand]);
+  const close = useCallback(async () => { if (pending.current) await recoverCommand(pending.current, true); }, [recoverCommand]);
 
   const addSelection = useCallback(async () => {
     const run = context.current, base = viewRef.current;
@@ -239,7 +280,7 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
   }, [enabled, key, update]);
 
   const execute = useCallback(async (saved: Pending) => {
-    if (saved.type === 'restored') { await reconcile(saved); return; }
+    if (saved.type === 'restored' || saved.recoveryOnly) { await recoverCommand(saved, false); return; }
     if (saved.type === 'storage-blocked') return;
     const run = context.current;
     if (!enabled || !run || latest.current.options.pf.busy || locked.current || denied.current || pending.current !== saved) return;
@@ -357,7 +398,7 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
       report(run, error, pending.current, definitiveWriteRefusal);
     }
     finally { if (context.current === run) { locked.current = false; operation.current = null; update(run, { busy: false }); } }
-  }, [current, enabled, read, reconcile, report, requireScope, update]);
+  }, [current, enabled, read, recoverCommand, report, requireScope, update]);
   const save = useCallback(async () => {
     const run = context.current, base = viewRef.current;
     if (!enabled || !run || latest.current.options.pf.busy || locked.current || denied.current || pending.current || base.key !== key || !base.registry || base.phase === 'stale') return;
@@ -384,7 +425,7 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
   const cancel = useCallback(() => { operation.current?.abort(); }, []);
   const discardPending = useCallback(() => {
     const run = context.current, base = viewRef.current;
-    if (!run || locked.current || base.key !== key || base.phase === 'unknown' || pending.current?.writeStarted) return;
+    if (!run || locked.current || base.key !== key || base.phase === 'unknown' || pending.current?.writeStarted || pending.current?.recoveryOnly) return;
     try {
       const retained = pending.current && 'retention' in pending.current ? pending.current.retention : undefined;
       if (retained) clearPendingBarrierCommand(sessionStorage, retained);
@@ -396,9 +437,13 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
   }, [key, refresh, update]);
   const canAuthor = enabled && !denied.current && !!currentView.registry && currentView.phase !== 'stale';
   const saved = pending.current;
-  const canRetry = !denied.current && !currentView.busy && !options.pf.busy && currentView.pending && (saved?.type === 'restored'
-    ? recoveryEnabled && saved.retention.kind === 'publication'
+  const canRetry = !denied.current && !currentView.busy && !options.pf.busy && currentView.pending && (saved?.type === 'restored' || saved?.recoveryOnly
+    ? recoveryEnabled
     : saved?.type !== 'storage-blocked' && enabled && !denied.current);
-  return { ...currentView, kind, setKind, emptyReason, setEmptyReason, dirty: currentView.changed, canAuthor, canRetry,
-    addSelection, removeParent, save, retry, cancel, refresh, discardPending };
+  const canInspect = recoveryEnabled && !denied.current && !currentView.busy && !options.pf.busy && currentView.pending
+    && !!saved && 'retention' in saved && !!saved.retention;
+  const canDiscard = !currentView.busy && !options.pf.busy && !locked.current && currentView.phase !== 'unknown'
+    && !saved?.writeStarted && !saved?.recoveryOnly && (currentView.pending || currentView.changed);
+  return { ...currentView, kind, setKind, emptyReason, setEmptyReason, dirty: currentView.changed, canAuthor, canRetry, canInspect, canClose: canInspect, canDiscard,
+    addSelection, removeParent, save, retry, inspect, close, cancel, refresh, discardPending };
 }
