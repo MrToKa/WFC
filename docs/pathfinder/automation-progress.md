@@ -1,6 +1,6 @@
 # PathFinder local implementation progress
 
-## Current: PF-B18 popup source checked; owned frontend delivery next
+## Current: PF-B18 popup delivered; exact wall-command outcomes next
 
 Report108/publicB18receipt:473 uniqueVitest checksPASS (Workspace39/Panel35/
 Results114/Tab72/publicationboundary149/facade64), pureinstaller16, fulltypes,
@@ -11,9 +11,12 @@ Apply/autolength. Pre-PUTfailure nofalseUnknown; genuinepriorPUT remainsuncertai
 FullTab72 finished1216s withactwarnings; twointerruptedruns/fixedtype/assertion
 retained13328c95. Latest28actualretainedselections alltriangles4790vertices/
 3789triangles,3localboundaryfragments; nolines, noSDK/world/globalqualification.
-Operationee326dc1 retainsguardeddiagnosis+preparedexactownedwebdelivery. Runtime
-stillB15weba0e6972c/sameAPIac0d16ab; nextcheckedwebbuild/installwithrollback/CAS.
-Then durableterminalbarrierrefusal/historicalreconciliation+retention, bounded
+Operationee326dc1 retainsguardeddiagnosis+completedexactownedwebdelivery. Clean
+product2741f817/66pins builtandinstalledweb58745a01; sameAPIac0d16ab/nonweb
+conserved,rollback/state-envCAS/health/index/4staticchecksPASS. Newarchive
+52923392B/SHA306d5efb retained. Existingopenpage isnotactualbrowseracceptance;
+don'tblindlydiscardgenuinelyuncertaincommand. Next durableterminalbarrierrefusal/
+historicalreconciliation+retention, bounded
 surfacequeries/occupancy/ownterminals/runtimeintegration+actualAalborg. NoSQL,
 model/cable/Apply/originalwrites; browserrefusalnotretried. PreparerafterPF.
 

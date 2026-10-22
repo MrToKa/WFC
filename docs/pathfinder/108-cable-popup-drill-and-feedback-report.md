@@ -1,6 +1,6 @@
 # PF-B18 — cable popup calculation policy and feedback
 
-Status: **SOURCE CHECKS PASS; NOT YET DELIVERED**.
+Status: **SOURCE CHECKS AND OWNED FRONTEND DELIVERY PASS; WALL WORK UNFINISHED**.
 Baseline4fc1bec on pf-b18-cable-popup-drill-local-20261022. The latest user
 priority is to finish the popup, then resolve barrier publication and routing.
 
@@ -75,7 +75,17 @@ results were retained from the second interrupted multi-file run; no passing
 count is inferred from its interrupted Tab worker.
 
 Private operationee326dc1 retains the checked latest-wall diagnostic, process
-memory/deadline guard and prepared owned-web delivery. Runtime5191 currently
-remains B15weba0e6972c/APIac0d16ab. No API restart, database/model/cable writes,
-original services, protected browser refusal or real Apply were changed. Actual
-Aalborg acceptance and Simplified Preparer remain outstanding.
+memory/deadline guard and completed owned-web delivery. Clean product2741f817
+was pinned with66 source files and built as web58745a01. The previous web image
+archive was verified before activation; state/env compare-and-swap and nonweb
+resource conservation passed. The same API container/imageac0d16ab kept running.
+Health/index/entry asset and four served first-party files passed fixed public
+static checks, including the new popup strings and the B16 primitive repair.
+The new image archive52923392B/SHA306d5efb is retained. Public delivery receipt
+records full hashes and served modules.
+
+No API restart, database/model/cable writes, original services, protected browser
+refusal or real Apply were changed. An already-open page still runs its loaded
+scripts; an existing genuinely uncertain command must not be discarded blindly.
+Actual browser/Aalborg acceptance, durable wall recovery, surface routing and
+Simplified Preparer remain outstanding.
