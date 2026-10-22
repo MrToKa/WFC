@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { createViewerAdapter } from '../adapter.mjs';
 import { createRouteController } from '../routes.mjs';
 import { planModelCaptureInput } from '../capture-input.mjs';
+import { BARRIER_CAPTURE_ERROR_CODES, BARRIER_CAPTURE_ERROR_MESSAGES } from '../barrier-capture-errors.mjs';
 
 const turn = () => new Promise(resolve => setImmediate(resolve));
 
@@ -168,6 +169,30 @@ test('capture adapter preserves only the typed empty lookup scope error and keep
     if (fail) f.tree.getNodeName = () => { throw new Error('private SDK field'); };
     await assert.rejects(handle.readModelCapture({ captureId, index: 1 }), { code: fail ? 'EXTRACTION_FAILED' : 'LOOKUP_GEOMETRY_NOT_FOUND', message: 'The local model or one of its resources could not be read.' });
     f.adapter.dispose();
+  }
+});
+test('barrier adapter preserves only the closed diagnostic codes and discards raw SDK text', async t => {
+  const previous = { window: globalThis.window, Autodesk: globalThis.Autodesk, THREE: globalThis.THREE, LMV_VIEWER_VERSION: globalThis.LMV_VIEWER_VERSION };
+  t.after(() => Object.assign(globalThis, previous));
+  assert.equal(BARRIER_CAPTURE_ERROR_CODES.length, 11); assert.equal(Object.isFrozen(BARRIER_CAPTURE_ERROR_MESSAGES), true);
+  for (const code of [...BARRIER_CAPTURE_ERROR_CODES, 'PRIVATE_SDK_FAILURE', 'LOOKUP_GEOMETRY_NOT_FOUND']) {
+    const f = sdkFixture();
+    globalThis.window = f.window;
+    Object.assign(globalThis, { Autodesk: f.window.Autodesk, THREE: {}, LMV_VIEWER_VERSION: '7.130.0' });
+    await f.adapter.initialize();
+    const descriptor = { projectId: '11111111-1111-4111-8111-111111111111', modelVersionId: '22222222-2222-4222-8222-222222222222',
+      loadId: '33333333-3333-4333-8333-333333333333', contentFingerprint: 'a'.repeat(64) };
+    const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor });
+    Object.defineProperty(f.window.Autodesk.Viewing, 'Private', { configurable: true,
+      get() { throw Object.assign(Error('private object and SDK details'), { code }); } });
+    const input = { captureId: '44444444-4444-4444-8444-444444444444', scope: { projectId: descriptor.projectId, modelVersionId: descriptor.modelVersionId,
+      contentFingerprint: descriptor.contentFingerprint, selectionRevision: '1', captureFrameId: '55555555-5555-4555-8555-555555555555',
+      captureFrameSha256: 'b'.repeat(64), coordinateFrame: 'canonical-world-metres' }, selectedParents: [{ selectionId: '66666666-6666-4666-8666-666666666666',
+      kind: 'wall', objectId: 'dbid:2', dbId: 2, externalId: null, name: 'Selected parent', identityBasis: 'version-local-only', inclusion: 'own-and-all-descendant-fragments' }] };
+    const known = BARRIER_CAPTURE_ERROR_CODES.includes(code);
+    await assert.rejects(handle.startBarrierCapture(input), { code: known ? code : 'EXTRACTION_FAILED',
+      message: known ? BARRIER_CAPTURE_ERROR_MESSAGES[code] : 'The local model or one of its resources could not be read.' });
+    assert.equal(f.facts.finishes, 0); f.adapter.dispose();
   }
 });
 test('staged adapter acknowledges all input before one SDK read, admits committed index0 and clears private input', async t => {

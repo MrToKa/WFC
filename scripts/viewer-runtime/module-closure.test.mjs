@@ -8,10 +8,12 @@ test('the actual deployed first-party graph includes every transitive module', a
   const result = await validateRuntimeModuleClosure(RUNTIME_FILES, name => fs.readFile(new URL(name, source), 'utf8'));
   assert.ok(RUNTIME_FILES.includes('preparation-input.mjs'));
   assert.ok(RUNTIME_FILES.includes('display-visibility.mjs'));
+  assert.ok(RUNTIME_FILES.includes('barrier-capture-errors.mjs'));
   assert.equal(result.moduleCount, RUNTIME_FILES.filter(name => name.endsWith('.mjs')).length);
   assert.ok(result.localImportCount > 10);
   await assert.rejects(validateRuntimeModuleClosure(RUNTIME_FILES.filter(name => name !== 'preparation-input.mjs'), name => fs.readFile(new URL(name, source), 'utf8')), /VIEWER_RUNTIME_MODULE_MISSING/);
   await assert.rejects(validateRuntimeModuleClosure(RUNTIME_FILES.filter(name => name !== 'display-visibility.mjs'), name => fs.readFile(new URL(name, source), 'utf8')), /VIEWER_RUNTIME_MODULE_MISSING/);
+  await assert.rejects(validateRuntimeModuleClosure(RUNTIME_FILES.filter(name => name !== 'barrier-capture-errors.mjs'), name => fs.readFile(new URL(name, source), 'utf8')), /VIEWER_RUNTIME_MODULE_MISSING/);
 });
 
 test('AST closure follows static imports, re-exports and literal dynamic imports without reading comments or strings as code', async () => {

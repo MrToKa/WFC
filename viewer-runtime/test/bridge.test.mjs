@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createRuntimeBridge } from '../bridge.mjs';
 import { CHANNEL, parseRouting } from '../protocol.mjs';
 import { planModelCaptureInput } from '../capture-input.mjs';
+import { BARRIER_CAPTURE_ERROR_CODES, BARRIER_CAPTURE_ERROR_MESSAGES } from '../barrier-capture-errors.mjs';
 
 const uuid = index => `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`;
 const turn = async () => { await new Promise(resolve => setImmediate(resolve)); await new Promise(resolve => setImmediate(resolve)); };
@@ -68,6 +69,27 @@ test('barrier capture authorizes every extracted part before and after its SDK w
   const authorizations = f.fetches.filter(value => value.url.endsWith('/pathfinder-authorization')); assert.equal(authorizations.length, 4);
   assert.ok(authorizations.every(value => value.init.credentials === 'same-origin' && value.init.cache === 'no-store' && value.init.redirect === 'error'));
   f.bridge.dispose();
+});
+
+test('recoverable barrier diagnostics retain the loaded footer and session without transporting raw errors', async () => {
+  for (const code of BARRIER_CAPTURE_ERROR_CODES.filter(value => value !== 'BARRIER_CAPTURE_MODEL_CHANGED')) {
+    const f = fixture({ startBarrierCapture: async () => { throw Object.assign(Error('private model geometry'), { code }); } });
+    await f.loaded(); f.send('START_BARRIER_CAPTURE', barrierRequest()); await turn();
+    assert.equal(f.messages('ERROR').at(-1).payload.code, code);
+    assert.equal(f.messages('ERROR').at(-1).payload.message, BARRIER_CAPTURE_ERROR_MESSAGES[code]);
+    assert.equal(f.states.at(-1).phase, 'loaded'); assert.equal(f.bridge.getState().phase, 'loaded');
+    assert.equal(f.facts.finishes, 0); assert.equal(f.facts.disposed, 0); assert.equal(f.messages('BARRIER_CAPTURE_EVENT').length, 0);
+    assert.equal(JSON.stringify(f.sent).includes('private model geometry'), false);
+    f.send('READ_SELECTION', {}); await turn(); assert.equal(f.messages('MODEL_SELECTION').length, 1); f.bridge.dispose();
+  }
+});
+test('model, authority and resource failures during barrier capture retain their terminal footer classification', async () => {
+  for (const code of ['BARRIER_CAPTURE_MODEL_CHANGED', 'MODEL_SELECTION_CHANGED', 'ACCESS_REVOKED', 'RESOURCE_FAILED']) {
+    const f = fixture({ startBarrierCapture: async () => { throw Object.assign(Error('private reason'), { code }); } });
+    await f.loaded(); f.send('START_BARRIER_CAPTURE', barrierRequest()); await turn();
+    assert.equal(f.messages('ERROR').at(-1).payload.code, code); assert.equal(f.states.at(-1).phase, 'error');
+    assert.equal(f.messages('BARRIER_CAPTURE_EVENT').length, 0); assert.equal(JSON.stringify(f.sent).includes('private reason'), false); f.bridge.dispose();
+  }
 });
 test('barrier capture initial admin refusal prevents all SDK work', async () => {
   const f = fixture({ fetchImpl: async url => url.endsWith('/pathfinder-authorization') ? new Response(null, { status: 403 }) : descriptorResponse() });

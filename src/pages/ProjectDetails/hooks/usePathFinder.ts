@@ -7,6 +7,7 @@ import type { CanonicalPoint, ComputedPath, PickedPoint, ViewerModelObjectsPage,
 import type { PreparationDiscoveryRequest, PreparationDiscoveryPage } from '../../../../viewer-runtime/preparation-input.mjs';
 import type { PreparationScope } from '../../../../shared/pathfinderPreparation';
 import { pathFinderRequestDeadline } from '@/api/pathfinderRequestDeadline';
+import { barrierCaptureErrorMessage } from '../../../../viewer-runtime/barrier-capture-errors.mjs';
 
 export type ProjectPreparationViewer = {
   readSelection: ViewerController['readSelection'];
@@ -25,7 +26,7 @@ type Run = { closed: boolean; abort: AbortController; viewer: ViewerController |
 const CAPTURE_PROGRESS_INTERVAL_MILLISECONDS = 1000;
 const ENTITY_READ_TIMEOUT_MILLISECONDS = 30_000;
 const initial: View = { data: null, loading: true, busy: false, error: null, viewerPhase: 'loading', viewerMessage: 'Checking the active model…' };
-const message = (error: unknown) => error instanceof PathFinderApiError ? error.message : error instanceof ViewerAccessError && error.code === 'APPEARANCE_RESTORE_FAILED' ? new PathFinderApiError(error.code, 0).message : error instanceof ViewerAccessError && error.code === 'LOOKUP_GEOMETRY_NOT_FOUND' ? 'No display-visible route geometry matches the lookup. Check the route names and model visibility.' : error instanceof ViewerAccessError && error.code === 'CAPTURE_RELOAD_REQUIRED' ? 'Reload the model before preparing another snapshot; the bounded command budget has been reached.' : error instanceof ViewerAccessError && error.code === 'EXTRACTION_FAILED' ? 'The selected model capture could not be completed within its limits. Reduce the network or equipment scope and try again.' : error instanceof DOMException && error.name === 'AbortError' ? 'The operation was cancelled.' : 'The operation could not be completed. Refresh Path Finder and try again.';
+const message = (error: unknown) => error instanceof PathFinderApiError ? error.message : error instanceof ViewerAccessError && barrierCaptureErrorMessage(error.code) ? barrierCaptureErrorMessage(error.code)! : error instanceof ViewerAccessError && error.code === 'APPEARANCE_RESTORE_FAILED' ? new PathFinderApiError(error.code, 0).message : error instanceof ViewerAccessError && error.code === 'LOOKUP_GEOMETRY_NOT_FOUND' ? 'No display-visible route geometry matches the lookup. Check the route names and model visibility.' : error instanceof ViewerAccessError && error.code === 'CAPTURE_RELOAD_REQUIRED' ? 'Reload the model before preparing another snapshot; the bounded command budget has been reached.' : error instanceof ViewerAccessError && error.code === 'EXTRACTION_FAILED' ? 'The selected model capture could not be completed within its limits. Reduce the network or equipment scope and try again.' : error instanceof DOMException && error.name === 'AbortError' ? 'The operation was cancelled.' : 'The operation could not be completed. Refresh Path Finder and try again.';
 
 export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, container, automaticStatePolling = true }: Options) {
   const scope = useMemo(() => ({ projectId, loadedProjectId, token, isAdmin }), [projectId, loadedProjectId, token, isAdmin]);
@@ -96,8 +97,9 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
           if (event.type === 'MODEL_LOADED') update(run, { viewerPhase: 'ready', viewerMessage: 'The active model is ready.' });
           if (event.type === 'ROUTE_CLEARED') update(run, { error: null });
           if (event.type === 'MODEL_CAPTURE_PROGRESS') captureProgress(run, () => `Preparing ${event.payload.phase === 'properties' ? 'equipment candidates' : event.payload.phase === 'geometry' ? 'routing geometry' : 'model identifiers'}: ${Number(event.payload.loaded).toLocaleString()} / ${Number(event.payload.total).toLocaleString()}…`);
+          if (event.type === 'BARRIER_CAPTURE_PROGRESS') captureProgress(run, () => `Reading ${event.payload.phase === 'geometry' ? 'barrier geometry' : 'barrier object hierarchy'}: ${Number(event.payload.loaded).toLocaleString()} / ${Number(event.payload.total).toLocaleString()}…`);
           if (event.type === 'ERROR') {
-            const code = String(event.payload.code), terminal = event.payload.operation === 'viewer' || ['SESSION_EXPIRED', 'ACCESS_REVOKED', 'MODEL_SELECTION_CHANGED', 'MODEL_UNAVAILABLE', 'RESOURCE_FAILED'].includes(code);
+            const code = String(event.payload.code), terminal = event.payload.operation === 'viewer' || ['SESSION_EXPIRED', 'ACCESS_REVOKED', 'MODEL_SELECTION_CHANGED', 'MODEL_UNAVAILABLE', 'RESOURCE_FAILED', 'BARRIER_CAPTURE_MODEL_CHANGED'].includes(code);
             update(run, terminal ? { viewerPhase: 'error', viewerMessage: 'Model access ended or the model changed. Refresh Path Finder to reload.', error: 'The protected viewer operation could not be completed.' }
               : { viewerMessage: 'The active model is ready.', error: message(new ViewerAccessError(code, 0)) });
           }

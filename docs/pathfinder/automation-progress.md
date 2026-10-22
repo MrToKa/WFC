@@ -1,6 +1,26 @@
 # PathFinder local implementation progress
 
-## Current: PF-B11 cable actions/obstacle display technically delivered
+## Current: PF-B12 actual barrier extraction failure repair
+
+Branchpf-b12-barrier-extraction-repair-local-20261022 inherits e42ccd6. User's
+EXTRACTION_FAILED reprioritized ahead of Preparer. Root actual read-only5191 check
+PASS: expected active model/fingerprintb5bb4fbe,7pendingintents/0snapshots/nohead,
+latest2parents/captureAllocatedfalse. Retained same-fingerprint metadata proves
+requestedBIS382095 +PIPE238736 =620831fragments vs v1cap8192; BIS321834nodes vs65536.
+No actualcivilgeometry/holes/nativeproof. Error labels do not solve broad scope.
+C extractor2files/Aerrorplumbing9files/rootController+moduleclosure/planner/docs;
+all source frozen/reviewedCLEAR. Root checks122runtimePASS+108hooksPASS+91Controller
+PASS+16plannerPASS; initial Controller test expectation1FAIL retained/corrected.
+FulltypesPASS after exactmoduledeclaration (firsttypesFAILretained); lint0warnings/
+diffcheckPASS. Useraccepted ownendpoint-only initialexit/finalentry beforefirst
+externalsurface; reentry/otherobstacles notexempt. Plan96 recordsacceptedrule.
+Currentweb75187b0a/APIac0d16ab; read-onlyprepare/rollbackarchivePASS.
+Newwebbuild/install pending. Freshoperation4fcfd5a0-6906-413d-91be-8a36084e1898.
+No SQLwrites/APIrestart/realApply/browserbypass. B writesplan96; nextversioned
+multipartcatalog/qualification stage after diagnosticdelivery, executeautonomously.
+Preparer source/harness frozen in separateworktree; no activeactualPreparerprocess.
+
+## Previous: PF-B11 cable actions/obstacle display technically delivered
 
 Delivery recorda85b051 committed. Next prompt SP-0-baseline-diagnostics.md is now
 executing in separate WFC-preparer-local-20261020, source checkpoint31d8ce7 marked

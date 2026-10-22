@@ -5,6 +5,7 @@ import { fetchPathFinderState, fetchPathFinderLookupPlan, fetchPathFinderProposa
 import { fetchProjectModels } from '@/api/projectModels';
 import { ViewerAccessError } from '@/viewer/sessionApi';
 import type { ViewerController } from '@/viewer/ViewerController';
+import { BARRIER_CAPTURE_ERROR_CODES, BARRIER_CAPTURE_ERROR_MESSAGES, barrierCaptureErrorMessage } from '../../../../viewer-runtime/barrier-capture-errors.mjs';
 
 const facts = vi.hoisted(() => ({ disposed: vi.fn(), load: vi.fn(), capture: vi.fn(), barrierCapture: vi.fn(), barrierPublish: vi.fn(), readSelection: vi.fn(), transparency: vi.fn(), clear: vi.fn(), cancelPicking: vi.fn(), instances: 0, events: [] as ((event: { type: string; payload: Record<string, unknown> }) => void)[] }));
 vi.mock('@/api/pathfinder', async importOriginal => {
@@ -362,6 +363,23 @@ describe('PathFinder scope and shared-location orchestration', () => {
     act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
     act(() => facts.events[0]({ type: 'ERROR', payload: { code: 'EXTRACTION_FAILED', operation: 'READ_MODEL_CAPTURE' } }));
     expect(result.current.viewerPhase).toBe('ready'); expect(result.current.error).toContain('Reduce the network or equipment scope'); expect(facts.disposed).not.toHaveBeenCalled();
+  });
+  it.each(BARRIER_CAPTURE_ERROR_CODES.filter(code => code !== 'BARRIER_CAPTURE_MODEL_CHANGED'))('shows the safe %s reason while keeping the live model available', async code => {
+    const { result } = renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container }));
+    await waitFor(() => expect(facts.events.length).toBe(1));
+    act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+    act(() => facts.events[0]({ type: 'ERROR', payload: { code, message: 'private SDK object details', operation: 'START_BARRIER_CAPTURE' } }));
+    expect(result.current.viewerPhase).toBe('ready'); expect(result.current.error).toBe(barrierCaptureErrorMessage(code));
+    expect(result.current.error).not.toContain('private SDK'); expect(facts.disposed).not.toHaveBeenCalled();
+  });
+  it.each(['index', 'geometry'] as const)('renders barrier %s counts and immediately replaces progress with a specific refusal', async phase => {
+    const { result } = renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container }));
+    await waitFor(() => expect(facts.events.length).toBe(1)); act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+    act(() => facts.events[0]({ type: 'BARRIER_CAPTURE_PROGRESS', payload: { captureId: locationId, phase, loaded: 123, total: 456 } }));
+    expect(result.current.viewerMessage).toBe(`Reading ${phase === 'geometry' ? 'barrier geometry' : 'barrier object hierarchy'}: 123 / 456…`);
+    act(() => facts.events[0]({ type: 'ERROR', payload: { code: 'BARRIER_CAPTURE_FRAGMENT_LIMIT', operation: 'READ_BARRIER_CAPTURE' } }));
+    expect(result.current.viewerMessage).toBe('The active model is ready.'); expect(result.current.error).toBe(BARRIER_CAPTURE_ERROR_MESSAGES.BARRIER_CAPTURE_FRAGMENT_LIMIT);
+    expect(result.current.viewerPhase).toBe('ready'); expect(facts.disposed).not.toHaveBeenCalled();
   });
   it('retains the model after a partial appearance restore, offers Clear retry and clears the error after acknowledgement', async () => {
     const { result } = renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container }));

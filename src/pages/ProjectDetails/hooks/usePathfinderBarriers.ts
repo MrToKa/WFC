@@ -3,6 +3,7 @@ import { beginBarrierCapture, changeBarrierRegistry, getBarrierRegistry, getBarr
 import { BARRIER_LIMITS, barrierCanonicalJson, barrierCaptureCommandSchema, barrierCaptureSchema, barrierRegistryCommandSchema,
   barrierSelectedParentSchema, type BarrierCapture, type BarrierRegistry, type BarrierSnapshot } from '../../../../shared/pathfinderBarriers';
 import type { usePathFinder, ProjectPreparationViewer } from './usePathFinder';
+import { barrierCaptureErrorMessage } from '../../../../viewer-runtime/barrier-capture-errors.mjs';
 
 export type BarrierSelectedParent = BarrierCapture['selectedParents'][number];
 export type BarrierAuthoringPhase = 'idle' | 'loading' | 'capturing' | 'publishing' | 'ready' | 'partial' | 'refused' | 'unknown' | 'stale';
@@ -99,7 +100,9 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
     }
     update(run, { busy: false, pending: !!saved, phase: unknown ? 'unknown' : code === 'BARRIER_CAPTURE_PARTIAL' ? 'partial' : code === 'BARRIER_CONTEXT_CHANGED' ? 'stale' : 'refused',
       error: unknown ? 'The command outcome is unknown. Keep this page open and retry the same saved command before changing this set.'
-        : error instanceof Error ? error.message : 'Barrier authoring could not be completed.' });
+        : barrierCaptureErrorMessage(code) ?? (code === 'EXTRACTION_FAILED' || code?.startsWith('BARRIER_CAPTURE_')
+          ? 'The selected barrier geometry could not be read completely. Check the selected objects or reduce the capture scope before starting a new command.'
+          : error instanceof Error ? error.message : 'Barrier authoring could not be completed.') });
   }, [update]);
   const refresh = useCallback(async () => {
     const run = context.current;

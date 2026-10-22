@@ -165,7 +165,7 @@ export class ViewerController {
     this.pending.delete(message.requestId);
     if (message.type === 'ERROR') {
       pending.reject?.(new ViewerAccessError(String(message.payload.code), 0));
-      if (pending.envelope.type === 'LOAD_MODEL' || ['SESSION_EXPIRED', 'ACCESS_REVOKED', 'MODEL_SELECTION_CHANGED', 'MODEL_UNAVAILABLE', 'RESOURCE_FAILED'].includes(String(message.payload.code))) {
+      if (pending.envelope.type === 'LOAD_MODEL' || ['SESSION_EXPIRED', 'ACCESS_REVOKED', 'MODEL_SELECTION_CHANGED', 'BARRIER_CAPTURE_MODEL_CHANGED', 'MODEL_UNAVAILABLE', 'RESOURCE_FAILED'].includes(String(message.payload.code))) {
         this.fail(String(message.payload.code));
       } else this.emit('ERROR', message.payload, message.requestId, identity);
       return;

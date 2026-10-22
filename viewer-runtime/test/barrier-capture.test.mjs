@@ -56,6 +56,12 @@ async function collect(f = fixture(), input = request(), options = {}) {
 const rejectCapture = async (f, input = request(), options = {}, pattern) => assert.rejects(async () => {
   for await (const _event of captureSelectedBarriers(f.viewer, input, { loadId, ...options })) { /* Consume without publishing. */ }
 }, pattern);
+function wideFixture(childCount) {
+  const f = fixture(), ids = Array.from({ length: childCount }, (_, index) => index + 10);
+  f.children.set(2, ids); f.own.set(3, []);
+  for (const id of ids) { f.parents.set(id, 2); f.names.set(id, 'Physical hierarchy'); f.children.set(id, []); f.own.set(id, []); }
+  return f;
+}
 
 test('selected parent retains its own and all descendant original triangle fragments', async () => {
   const result = await collect(); assert.deepEqual(result.capture.fragments.map(item => item.source.fragmentId), [0, 1]);
@@ -64,6 +70,21 @@ test('selected parent retains its own and all descendant original triangle fragm
   for (const item of result.capture.fragments) assert.deepEqual(item.triangleIndices, [0, 1, 2]);
   assert.equal(result.capture.observation.state, 'reported-complete'); assert.equal(result.capture.observation.verification, 'unverified');
   assert.equal(result.frameObservation.contentFingerprint, request().scope.contentFingerprint); assert.equal(result.frameObservation.loadId, loadId);
+});
+test('a wide parent below the unchanged closure ceiling counts pending siblings once', async () => {
+  const childCount = Math.floor(BARRIER_CAPTURE_VIEWER_LIMITS.closureObjects / 2) + 1, f = wideFixture(childCount);
+  let childReads = 0; const readChildren = f.tree.enumNodeChildren;
+  f.tree.enumNodeChildren = (id, visit, recursive) => { if (id >= 10) childReads++; return readChildren(id, visit, recursive); };
+  const result = await collect(f);
+  assert.equal(result.capture.fragments.length, 1); assert.equal(result.capture.fragments[0].source.ownerObjectId, 'dbid:2');
+  assert.deepEqual(result.capture.fragments[0].triangleIndices, [0, 1, 2]);
+  assert.equal(result.capture.observation.state, 'reported-complete'); assert.equal(childReads, childCount * 2, 'Every child is enumerated and checked again before completion');
+  assert.ok(childCount + 1 < BARRIER_CAPTURE_VIEWER_LIMITS.closureObjects);
+});
+test('a genuinely oversized pending hierarchy still refuses before a complete capture', async () => {
+  const f = wideFixture(BARRIER_CAPTURE_VIEWER_LIMITS.closureObjects + 1), events = [];
+  await assert.rejects(async () => { for await (const event of captureSelectedBarriers(f.viewer, request(), { loadId })) events.push(event.type); }, { code: 'BARRIER_CAPTURE_HIERARCHY_LIMIT' });
+  assert.deepEqual(events, ['metadata']);
 });
 
 test('an explicit generic obstacle parent retains all original descendant geometry and its classification', async () => {
@@ -104,7 +125,7 @@ test('root/model placement is observed but never multiplied for a second time', 
   assert.equal(second.frameObservation.modelTransform[12], 75); assert.equal(second.frameObservation.placementTransform[12], 75);
 });
 test('animated or exploded fragment transforms refuse instead of moving physical barriers', async () => {
-  const f = fixture(); f.world.get(0).elements[12] += 10; await rejectCapture(f, request(), {}, /Animated or exploded/);
+  const f = fixture(); f.world.get(0).elements[12] += 10; await rejectCapture(f, request(), {}, { code: 'BARRIER_CAPTURE_FRAME_UNSUPPORTED' });
 });
 test('missing original physical fragment matrix API refuses', async () => {
   const f = fixture(); delete f.fragments.getOriginalWorldMatrix; await rejectCapture(f);
@@ -123,9 +144,9 @@ test('connected frame opening retains all original triangles and does not fabric
   assert.equal(result.capture.fragments[0].verticesMetres.length, 16); assert.deepEqual(result.capture.fragments[0].triangleIndices, indices);
   assert.equal(indices.length / 3, 32); assert.equal(result.capture.fragments.length, 1);
 });
-test('empty selected parent cannot produce an empty complete barrier scope', async () => { const f = fixture(); f.own.set(2, []); f.own.set(3, []); await rejectCapture(f); });
-test('nonresident selected mesh refuses instead of declaring a partial scope complete', async () => { const f = fixture(); f.geometries.delete(1); await rejectCapture(f); });
-test('nontriangle fragments refuse rather than silently disappearing', async () => { const f = fixture(); f.geometries.get(1).isLines = true; await rejectCapture(f); });
+test('empty selected parent cannot produce an empty complete barrier scope', async () => { const f = fixture(); f.own.set(2, []); f.own.set(3, []); await rejectCapture(f, request(), {}, { code: 'BARRIER_CAPTURE_GEOMETRY_NOT_READY' }); });
+test('nonresident selected mesh refuses instead of declaring a partial scope complete', async () => { const f = fixture(); f.geometries.delete(1); await rejectCapture(f, request(), {}, { code: 'BARRIER_CAPTURE_GEOMETRY_NOT_READY' }); });
+test('nontriangle fragments refuse rather than silently disappearing', async () => { const f = fixture(); f.geometries.get(1).isLines = true; await rejectCapture(f, request(), {}, { code: 'BARRIER_CAPTURE_UNSUPPORTED_PRIMITIVE' }); });
 test('invalid original triangle index refuses', async () => { const f = fixture(); f.geometries.get(1).indices = [0, 1, 99]; await rejectCapture(f); });
 test('repeated triangle index refuses', async () => { const f = fixture(); f.geometries.get(1).indices = [0, 1, 1]; await rejectCapture(f); });
 test('nonfinite original vertex refuses', async () => { const f = fixture(); f.geometries.get(1).vertices[0][0] = NaN; await rejectCapture(f); });
@@ -156,7 +177,7 @@ test('selected hierarchy mutation before completion refuses', async () => {
 });
 test('model replacement invalidates capture even before the next SDK read', async () => {
   const f = fixture(), iterator = captureSelectedBarriers(f.viewer, request(), { loadId }); assert.equal((await iterator.next()).value.type, 'metadata'); f.viewer.model = {};
-  await assert.rejects(iterator.next());
+  await assert.rejects(iterator.next(), { code: 'BARRIER_CAPTURE_MODEL_CHANGED' });
 });
 test('already cancelled and callback-wait cancellation never complete', async () => {
   const cancelled = new AbortController(); cancelled.abort(); await rejectCapture(fixture(), request(), { signal: cancelled.signal });
@@ -164,9 +185,13 @@ test('already cancelled and callback-wait cancellation never complete', async ()
   const pending = iterator.next(); controller.abort(); await assert.rejects(pending, { name: 'AbortError' });
 });
 test('expired capture and bounded event count refuse without a terminal complete event', async () => {
-  await rejectCapture(fixture(), request(), { startedAt: Date.now() - BARRIER_CAPTURE_VIEWER_LIMITS.milliseconds });
+  await rejectCapture(fixture(), request(), { startedAt: Date.now() - BARRIER_CAPTURE_VIEWER_LIMITS.milliseconds }, { code: 'BARRIER_CAPTURE_DEADLINE' });
   const f = fixture(); f.geometries.get(0).vertices = Array.from({ length: 3000 }, (_, index) => [index, index / 7, index / 3]);
-  await rejectCapture(f, request(), { eventLimit: 3 });
+  await rejectCapture(f, request(), { eventLimit: 3 }, { code: 'BARRIER_CAPTURE_PAYLOAD_LIMIT' });
+});
+test('an excessive vertex index has a bounded vertex-limit reason without changing the ceiling', async () => {
+  const f = fixture(); globalThis.Autodesk.Viewing.Private.enumMeshVertices = (_geometry, visit) => visit({ x: 0, y: 0, z: 0 }, null, null, BARRIER_CAPTURE_VIEWER_LIMITS.vertices);
+  await rejectCapture(f, request(), {}, { code: 'BARRIER_CAPTURE_VERTEX_LIMIT' });
 });
 test('sparse SDK vertex callback indices refuse', async () => {
   const f = fixture(); globalThis.Autodesk.Viewing.Private.enumMeshVertices = (_geometry, visit) => { visit({ x: 0, y: 0, z: 0 }, null, null, 0); visit({ x: 1, y: 1, z: 0 }, null, null, 2); }; await rejectCapture(f);
@@ -174,12 +199,18 @@ test('sparse SDK vertex callback indices refuse', async () => {
 test('aggregate selected fragment count refuses before retaining a partial mesh set', async () => {
   const f = fixture(); f.fragments.getCount = () => BARRIER_CAPTURE_VIEWER_LIMITS.fragments + 1;
   f.own.set(2, Array.from({ length: BARRIER_CAPTURE_VIEWER_LIMITS.fragments + 1 }, (_, index) => index));
-  await rejectCapture(f);
+  await rejectCapture(f, request(), {}, { code: 'BARRIER_CAPTURE_FRAGMENT_LIMIT' });
 });
 test('aggregate original triangle count refuses without truncating original indices', async () => {
   const f = fixture(); globalThis.Autodesk.Viewing.Private.enumMeshTriangles = (_geometry, visit) => {
     for (let index = 0; index <= BARRIER_CAPTURE_VIEWER_LIMITS.triangles; index++) visit(null, null, null, 0, 1, 2);
-  }; await rejectCapture(f);
+  }; await rejectCapture(f, request(), {}, { code: 'BARRIER_CAPTURE_TRIANGLE_LIMIT' });
+});
+test('capture refusals carry a safe fixed reason without parent names or raw SDK errors', async () => {
+  const f = fixture(); f.names.set(2, 'PRIVATE-MODEL-NAME');
+  await assert.rejects(async () => { for await (const _event of captureSelectedBarriers(f.viewer, request(), { loadId })) { /* no publication */ } }, error => error.code === 'BARRIER_CAPTURE_MODEL_CHANGED' && !error.message.includes('PRIVATE-MODEL-NAME'));
+  const next = fixture(); next.model.getObjectTree = () => { throw Error('PRIVATE-SDK-FAILURE'); };
+  await assert.rejects(async () => { for await (const _event of captureSelectedBarriers(next.viewer, request(), { loadId })) { /* no publication */ } }, error => error.code === 'BARRIER_CAPTURE_GEOMETRY_NOT_READY' && !error.message.includes('PRIVATE-SDK-FAILURE'));
 });
 test('input identities are strict and accessor claims are rejected', () => {
   const input = request(); assert.equal(validateBarrierCaptureRequest(input), true);

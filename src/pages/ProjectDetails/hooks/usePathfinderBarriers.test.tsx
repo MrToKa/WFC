@@ -5,6 +5,7 @@ import { usePathfinderBarriers, type BarrierSelectedParent } from './usePathfind
 import type { ProjectPreparationViewer } from './usePathFinder';
 import type { BarrierRegistry, BarrierSnapshot } from '../../../../shared/pathfinderBarriers';
 import type { ViewerSelection } from '../../../../viewer-runtime/protocol.mjs';
+import { BARRIER_CAPTURE_ERROR_MESSAGES } from '../../../../viewer-runtime/barrier-capture-errors.mjs';
 
 vi.mock('@/api/pathfinderBarriers', async original => ({ ...await original<typeof api>(), getBarrierRegistry: vi.fn(), getBarrierSnapshot: vi.fn(), getLatestBarrierSnapshot: vi.fn(), beginBarrierCapture: vi.fn(), changeBarrierRegistry: vi.fn() }));
 const id = (n: number) => `b5000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -268,6 +269,26 @@ describe('administrator barrier authoring lifecycle', () => {
     const f = fixture([7]); const view = await mounted(f); const old = view.result.current.registry!.snapshot; f.readSelection.mockResolvedValue(selection(8)); await add(view);
     f.captureBarriers.mockRejectedValueOnce(new Error('Selected parent has unavailable geometry')); await act(() => view.result.current.save());
     expect(f.publishBarriers).not.toHaveBeenCalled(); expect(view.result.current.registry!.snapshot).toEqual(old); expect(view.result.current.dirty).toBe(true); expect(view.result.current.error).toBeTruthy();
+  });
+  it.each(['BARRIER_CAPTURE_HIERARCHY_LIMIT', 'BARRIER_CAPTURE_FRAGMENT_LIMIT'] as const)('presents %s safely and retains the exact saved intent and old publication', async code => {
+    const f = fixture([7]), view = await mounted(f); f.readSelection.mockResolvedValue(selection(8)); await add(view);
+    const old = view.result.current.registry!.snapshot;
+    f.captureBarriers.mockRejectedValueOnce(Object.assign(Error('private RVM object details'), { code }));
+    await act(() => view.result.current.save());
+    expect(view.result.current.error).toBe(BARRIER_CAPTURE_ERROR_MESSAGES[code]); expect(view.result.current.error).not.toContain('private RVM');
+    expect(view.result.current.registry?.snapshot).toEqual(old); expect(view.result.current.pending).toBe(true);
+    expect(view.result.current.canRetry).toBe(true); expect(view.result.current.phase).toBe('refused'); expect(f.publishBarriers).not.toHaveBeenCalled();
+    const command = vi.mocked(api.beginBarrierCapture).mock.calls[0][2], captured = f.captureBarriers.mock.calls[0][0];
+    await act(() => view.result.current.retry());
+    expect(api.beginBarrierCapture).toHaveBeenCalledOnce(); expect(f.captureBarriers.mock.calls[1][0]).toEqual(captured);
+    expect(f.captureBarriers.mock.calls[1][0].scope).toEqual(command.scope); expect(api.changeBarrierRegistry).not.toHaveBeenCalled();
+  });
+  it('does not expose an unknown barrier-capture code or its raw SDK text', async () => {
+    const f = fixture(), view = await mounted(f); await add(view);
+    f.captureBarriers.mockRejectedValueOnce(Object.assign(Error('private SDK path'), { code: 'BARRIER_CAPTURE_PRIVATE_DETAIL' }));
+    await act(() => view.result.current.save());
+    expect(view.result.current.error).toContain('could not be read completely'); expect(view.result.current.error).not.toContain('private SDK');
+    expect(f.publishBarriers).not.toHaveBeenCalled(); expect(view.result.current.pending).toBe(true);
   });
   it('retains a valid old head and the exact saved command after a structurally valid partial capture', async () => {
     const f = fixture([7]); const view = await mounted(f); const old = view.result.current.registry!.snapshot; f.readSelection.mockResolvedValue(selection(8)); await add(view);

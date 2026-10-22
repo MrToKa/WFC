@@ -1,8 +1,10 @@
 import { CHANNEL, PROTOCOL_VERSION, SDK_VERSION, validateEnvelope, validateDescriptor, parseRouting } from './protocol.mjs';
 import { isStagedModelCaptureStart, isModelCaptureInputAppend, CAPTURE_INPUT_LIMITS } from './capture-input.mjs';
 import { parseRoutingBindings, ROUTING_BINDINGS_LIMITS } from './routing-bindings.mjs';
+import { BARRIER_CAPTURE_ERROR_MESSAGES, barrierCaptureErrorMessage } from './barrier-capture-errors.mjs';
 
 const messages = {
+  ...BARRIER_CAPTURE_ERROR_MESSAGES,
   INVALID_STATE: 'The viewer is not ready for this operation.', ROUTE_INVALID: 'The route contains invalid identifiers.',
   NO_DRAWABLE_ROUTE: 'There is no drawable route to zoom to.', SDK_UNSUPPORTED: 'The local Viewer version is not supported.',
   RESOURCE_FAILED: 'The model or a local resource could not be loaded.', MODEL_UNAVAILABLE: 'The selected model is unavailable.',
@@ -44,9 +46,11 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
   function finish(command) { const entry = requests.get(command.requestId); if (entry?.status === 'pending') entry.status = 'finished'; }
   function error(command, cause) {
     const code = Object.hasOwn(messages, cause?.code) ? cause.code : 'RESOURCE_FAILED';
-    emit(command, 'ERROR', { code, message: messages[code], retryable: ['RESOURCE_FAILED', 'SESSION_EXPIRED', 'APPEARANCE_RESTORE_FAILED'].includes(code), operation: command.type });
+    const recoverableCapture = ['START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE'].includes(command.type)
+      && code !== 'BARRIER_CAPTURE_MODEL_CHANGED' && (barrierCaptureErrorMessage(code) !== null || code === 'EXTRACTION_FAILED');
+    emit(command, 'ERROR', { code, message: messages[code], retryable: recoverableCapture || ['RESOURCE_FAILED', 'SESSION_EXPIRED', 'APPEARANCE_RESTORE_FAILED'].includes(code), operation: command.type });
     finish(command);
-    onState({ phase: 'error', code });
+    onState({ phase: recoverableCapture ? phase : 'error', code });
   }
   function releaseCapture(scope, abort = false) {
     if (!scope) return;
@@ -72,18 +76,19 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     finally { timing[phase + 'Milliseconds'] = Math.min(3_600_000, timing[phase + 'Milliseconds'] + elapsed(started)); timing[pending]--; }
   }
   function beginCapture(command) {
-    const scope = { captureId: command.payload.captureId, startedAt: Date.now(), controller: new AbortController(), installed: false, closed: false, timer: null,
+    const scope = { captureId: command.payload.captureId, kind: command.type === 'START_BARRIER_CAPTURE' ? 'barrier' : 'model', startedAt: Date.now(), controller: new AbortController(), installed: false, closed: false, timer: null,
       timing: { commandCount: 0, authorizationCalls: 0, authorizationMilliseconds: 0, adapterCalls: 0, adapterMilliseconds: 0, pendingAuthorizationCalls: 0, pendingAdapterCalls: 0 } };
     scope.timer = setTimeout(() => {
       const owned = captureScope === scope;
-      for (const entry of requests.values()) if (entry.captureScope === scope && entry.status === 'pending') error(entry.command, failure('EXTRACTION_FAILED'));
+      for (const entry of requests.values()) if (entry.captureScope === scope && entry.status === 'pending') error(entry.command, failure(scope.kind === 'barrier' ? 'BARRIER_CAPTURE_DEADLINE' : 'EXTRACTION_FAILED'));
       releaseCapture(scope, true);
       if (owned) { try { handle?.clearRoute(); } catch { /* Deadline remains terminal; cleanup details are not transported. */ } }
     }, CAPTURE_INPUT_LIMITS.milliseconds);
     return scope;
   }
   function checkCapture(scope) {
-    if (!scope || scope.closed || Date.now() - scope.startedAt > CAPTURE_INPUT_LIMITS.milliseconds || scope.installed && captureScope !== scope) throw failure('EXTRACTION_FAILED');
+    if (scope && Date.now() - scope.startedAt > CAPTURE_INPUT_LIMITS.milliseconds) throw failure(scope.kind === 'barrier' ? 'BARRIER_CAPTURE_DEADLINE' : 'EXTRACTION_FAILED');
+    if (!scope || scope.closed || scope.installed && captureScope !== scope) throw failure('EXTRACTION_FAILED');
   }
   const liveLoad = command => !disposed && current === command && !loadController?.signal.aborted;
   async function responseJson(response, maximum = 32768) {

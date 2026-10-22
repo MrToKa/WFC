@@ -97,6 +97,16 @@ describe('PathFinder protected Viewer capabilities', () => {
     await expect(s.c.captureBarriers(input)).resolves.toMatchObject({ capture: { captureId: input.captureId, observation: { verification: 'unverified' } }, frameObservation: { loadId: s.identity.loadId } });
     expect(s.send.mock.calls.filter(call => call[0].type === 'READ_BARRIER_CAPTURE')).toHaveLength(2);
   });
+  it.each(['BARRIER_CAPTURE_FRAGMENT_LIMIT', 'BARRIER_CAPTURE_GEOMETRY_NOT_READY', 'BARRIER_CAPTURE_MODEL_CHANGED'])('preserves the exact barrier failure and only unloads a changed model: %s', async code => {
+    const s = await loaded(), input = barrierRequest();
+    s.send.mockImplementation(value => {
+      if (value.type !== 'START_BARRIER_CAPTURE') return;
+      void Promise.resolve().then(() => s.message('ERROR', { code, message: 'Barrier capture failed.', retryable: false, operation: value.type }, value.requestId, s.identity));
+    });
+    await expect(s.c.captureBarriers(input)).rejects.toMatchObject({ code });
+    if (code === 'BARRIER_CAPTURE_MODEL_CHANGED') expect(s.c.getLoadSnapshot()).toBeNull();
+    else expect(s.c.getLoadSnapshot()).toMatchObject({ ready: true, modelVersionId: versionId, loadId: s.identity.loadId });
+  });
   it('superseded barrier cleanup cannot cancel a newer capture even when the caller reuses its capture UUID', async () => {
     const s = await loaded(), input = barrierRequest(), events = barrierStream(input, s.identity.loadId);
     let finishOld!: (response: Response) => void;
