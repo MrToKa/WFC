@@ -29,7 +29,7 @@ function original(role, digit, port) {
 }
 function fakeDocker(originals) {
   const containers = new Map(Object.values(originals).map(item => [item.Id, clone(item)])), volumes = new Map(), calls = [];
-  const images = new Map(Object.entries(DEPLOYMENT_IMAGES).map(([role, id]) => [id, { Id: id, Os: 'linux', Architecture: 'amd64', Config: { Labels: { 'org.opencontainers.image.revision': PRODUCT, 'wfc.preparer.delivery.role': role, 'com.docker.compose.project': 'image-must-not-replace-operational' }, Env: ['PATH=/usr/local/bin', 'NODE_VERSION=24.22.0'], WorkingDir: '/opt/preparer', Entrypoint: ['docker-entrypoint.sh'] } }]));
+  const images = new Map(Object.entries(DEPLOYMENT_IMAGES).map(([role, id]) => [id, { Id: id, Os: 'linux', Architecture: 'amd64', Config: { Labels: { 'org.opencontainers.image.revision': PRODUCT, 'wfc.preparer.delivery.role': role, 'com.docker.compose.project': 'image-must-not-replace-operational' }, Env: ['PATH=/usr/local/bin', 'NODE_VERSION=24.22.0'], WorkingDir: '/opt/preparer', Entrypoint: ['docker-entrypoint.sh'], ...(role === 'preparer' ? { ExposedPorts: { '4000/tcp': {}, '8080/tcp': {} } } : {}) } }]));
   let sequence = 1000;
   const docker = { containers, volumes, images, calls, hook: null,
     async request(method, route, body) {
@@ -46,6 +46,7 @@ function fakeDocker(originals) {
       if (method === 'POST' && url.pathname === '/containers/create') {
         const name = url.searchParams.get('name'); if ([...containers.values()].some(item => item.Name === '/' + name)) throw fault('DOCKER_REQUEST_FAILED');
         const id = (++sequence).toString(16).padStart(64, '0'), config = clone(body); delete config.HostConfig; delete config.NetworkingConfig;
+        if (images.get(body.Image)?.Config.ExposedPorts || config.ExposedPorts) config.ExposedPorts = { ...clone(images.get(body.Image)?.Config.ExposedPorts ?? {}), ...config.ExposedPorts };
         const mounts = (body.HostConfig.Mounts ?? []).map(item => ({ Type: item.Type, Name: item.Source, Source: '/var/lib/docker/volumes/' + item.Source + '/_data', Destination: item.Target, Driver: 'local', Mode: '', RW: !item.ReadOnly, Propagation: '' }));
         const network = clone(body.NetworkingConfig.EndpointsConfig[NETWORK]), item = { Id: id, Name: '/' + name, Image: body.Image, Config: config, HostConfig: clone(body.HostConfig), Mounts: mounts, NetworkSettings: { Networks: { [NETWORK]: { IPAMConfig: null, Links: null, DriverOpts: null, GwPriority: 0, ...network, NetworkID: NETWORK_ID } } }, State: { Status: 'created', Running: false, Restarting: false, Pid: 0, StartedAt: '0001-01-01T00:00:00Z' } };
         // Match native Engine inspection rather than echoing JSON requests.
@@ -97,10 +98,11 @@ test('primary configurations preserve auth, ports, mounts and operational labels
 });
 
 test('Preparer has three owned persistent mounts, nonroot user and only direct fixed 5193 publication', () => {
-  const operationId = randomUUID(), names = deploymentNames(operationId, { api: original('api', '1'), web: original('web', '2') }), image = { Env: ['PATH=/usr/local/bin', 'NODE_VERSION=24.22.0'], WorkingDir: '/opt/preparer', Entrypoint: ['docker-entrypoint.sh'], Labels: {} };
+  const operationId = randomUUID(), names = deploymentNames(operationId, { api: original('api', '1'), web: original('web', '2') }), image = { Env: ['PATH=/usr/local/bin', 'NODE_VERSION=24.22.0'], WorkingDir: '/opt/preparer', Entrypoint: ['docker-entrypoint.sh'], Labels: {}, ExposedPorts: { '4000/tcp': {}, '8080/tcp': {} } };
   const actual = preparerConfiguration(image, operationId, names, NETWORK_ID); assert.equal(actual.User, 'node'); assert.equal(actual.HostConfig.ReadonlyRootfs, true); assert.deepEqual(actual.HostConfig.CapDrop, ['ALL']);
-  assert.equal(actual.HostConfig.Mounts.length, 3); assert.deepEqual(actual.HostConfig.PortBindings, { '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '5193' }] }); assert(actual.Env.includes('PREPARER_WFC_ORIGIN=http://api:4000')); assert(actual.Env.includes('PREPARER_PUBLIC_ORIGIN=http://127.0.0.1:5193')); assert(!actual.Env.some(item => /^(APS_|AUTODESK_)/.test(item)));
+  assert.equal(actual.HostConfig.Mounts.length, 3); assert.deepEqual(actual.ExposedPorts, image.ExposedPorts); assert.deepEqual(actual.HostConfig.PortBindings, { '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '5193' }] }); assert.equal(actual.HostConfig.PublishAllPorts, false); assert(actual.Env.includes('PREPARER_WFC_ORIGIN=http://api:4000')); assert(actual.Env.includes('PREPARER_PUBLIC_ORIGIN=http://127.0.0.1:5193')); assert(!actual.Env.some(item => /^(APS_|AUTODESK_)/.test(item)));
   assert.throws(() => preparerConfiguration({ ...image, Env: ['APS_CLIENT_SECRET=never-product-env'] }, operationId, names, NETWORK_ID), { code: 'DEPLOY_PREPARER_IMAGE_ENVIRONMENT' });
+  for (const ExposedPorts of [{ '4000/tcp': {} }, { '8080/tcp': {}, '9999/tcp': {} }, { '8080/tcp': { unexpected: true } }]) assert.throws(() => preparerConfiguration({ ...image, ExposedPorts }, operationId, names, NETWORK_ID), { code: 'DEPLOY_PREPARER_IMAGE_PORT_PROFILE' });
 });
 
 test('intent rejects alternate ports/images, incomplete pins and non-v4 identities', async t => {
@@ -205,6 +207,12 @@ test('native omitted writable ReadOnly is accepted; null, string and true cannot
     f.docker.hook = ({ method, route }, docker) => { if (method === 'GET' && route.startsWith('/containers/') && route.endsWith('/json')) { const value = docker.containers.get(route.split('/')[2]); if (value?.Config.Labels?.['wfc.preparer.deployment.purpose'] === 'preparer') value.HostConfig.Mounts[0].ReadOnly = invalid; } };
     await assert.rejects(deployMainDeployment(args, f.options), error => error.code === 'DEPLOY_RECONCILIATION_REQUIRED' && error.rollback.status === 'UNCONFIRMED'); assert(!mutations(f.docker).some(call => call.method === 'DELETE')); await absent(path.join(item.operationDirectory, 'complete.private.json')); await fs.stat(path.join(f.root, '.preparer-work', 'main5180-deploy.lock'));
   });
+});
+
+test('inherited image exposure is retained without accepting an additional host binding', async t => {
+  const f = await fixture(t), { args, item } = await f.plan(); let altered = false;
+  f.docker.hook = ({ method, route }, docker) => { if (method === 'GET' && route.startsWith('/containers/') && route.endsWith('/json')) { const value = docker.containers.get(route.split('/')[2]); if (value?.Config.Labels?.['wfc.preparer.deployment.purpose'] === 'preparer') { assert.deepEqual(value.Config.ExposedPorts, { '4000/tcp': {}, '8080/tcp': {} }); assert.equal(value.HostConfig.PublishAllPorts, false); value.HostConfig.PortBindings['4000/tcp'] = [{ HostIp: '0.0.0.0', HostPort: '4000' }]; altered = true; } } };
+  await assert.rejects(deployMainDeployment(args, f.options), error => error.code === 'DEPLOY_RECONCILIATION_REQUIRED' && error.rollback.status === 'UNCONFIRMED'); assert(altered); assert(!mutations(f.docker).some(call => call.method === 'DELETE')); await absent(path.join(item.operationDirectory, 'complete.private.json')); await fs.stat(path.join(f.root, '.preparer-work', 'main5180-deploy.lock'));
 });
 
 test('a data-role restart during delivery blocks all further mutations without attempting to restart it', async t => {
