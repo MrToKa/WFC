@@ -39,15 +39,25 @@
       "name": "docker-bounds.mjs",
       "reason": "Dedicated immutable GNUtouch/Node24.22 helper with separate closed PG-root script; generic link rejection retained",
       "sha256": "30dc48ca59bfb03a85f1d02c7fc39897b083c359848fe5a03d8fcec35df2e64f"
+    },
+    {
+      "name": "docker-bounds.mjs",
+      "reason": "Pin verified PG18 exact sticky-root archive implementation; no additional capabilities",
+      "sha256": "667347ca64524bf1f164bfe64bc1e999e743cf948d7afdd506cbac1b7f957b68"
+    },
+    {
+      "name": "docker-bounds.mjs",
+      "reason": "Owned clone storage restoration also permits exact MinIO/staging generic archives into volumes only; no host writes",
+      "sha256": "af957fd31923572a92ffc3b6ab7032dc3b152b6c6eacf17147df9feb5eefc262"
     }
   ],
   "preparerArchiveHelper": {
-    "image": "sha256:522b9e8c8fd4c7f40c5eecf564676d35ef8b43e43510dfa9ef0072565948e02b",
+    "image": "sha256:a0eca379f4467ffa6567b1ef4a829e0c18b006fd73faaf3472beecfb8d8879f5",
     "baseImage": "sha256:481326351dbfa8acc86afe4d2543a1b96a05d523dd95a4715928f7f25418854f",
     "node": "24.22.0",
     "gnuTouch": true,
     "archiveSha256": "2f0f89696c13a66eaab0bc4006b57240944fac5be01cf6d88518b4674c5f5066",
-    "pgRootArchiveSha256": "25201153cf03befab3c47f7fe1aed7db4e9cf600b2c9e70b4acd77793ec566f1",
+    "pgRootArchiveSha256": "6546427df8e28d9ff062671c4e70638d3b24d3ca2f58c4e8a388f5cb8f2cd945",
     "reason": "Separate closed PostgreSQL18 root format; generic archive remains unchanged."
   }
 }

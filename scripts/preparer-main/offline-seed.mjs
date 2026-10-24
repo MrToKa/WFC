@@ -10,7 +10,7 @@ import { writeJsonNew, verifyImageArchive } from './foundation/manifest.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const UUID = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
 const ID = /^[a-f0-9]{64}$/, SHA = /^[a-f0-9]{64}$/, IMAGE = /^sha256:[a-f0-9]{64}$/;
-const HELPER = 'sha256:522b9e8c8fd4c7f40c5eecf564676d35ef8b43e43510dfa9ef0072565948e02b';
+const HELPER = 'sha256:a0eca379f4467ffa6567b1ef4a829e0c18b006fd73faaf3472beecfb8d8879f5';
 const ROLES = ['api', 'web', 'postgres', 'minio'];
 const pack = role => ['node', role === 'postgres' ? 'scripts/operations/pg-root-archives.mjs' : 'scripts/operations/archives.mjs'];
 export const OFFLINE_SEED_BOUNDS = Object.freeze({ operationTimeoutMs: 7_200_000, commandTimeoutMs: 3_600_000,

@@ -233,7 +233,7 @@ async function rawRequest(socketPath, method, route, body, { timeoutMs, signal, 
 export function preparerSeedArchiveCapabilities(config) {
   const refuse=()=>{throw error('DOCKER_ARCHIVE_CAPABILITY_SCOPE');};
   const cmd=config?.Cmd,h=config?.HostConfig,labels=config?.Labels;
-  if(config?.Image!=='sha256:522b9e8c8fd4c7f40c5eecf564676d35ef8b43e43510dfa9ef0072565948e02b'
+  if(config?.Image!=='sha256:a0eca379f4467ffa6567b1ef4a829e0c18b006fd73faaf3472beecfb8d8879f5'
     || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(labels?.['wfc.preparer.sp1.operation']??'')
     || labels?.['wfc.preparer.sp1.purpose']!=='offline-seed-archive' || !Array.isArray(config.Env) || config.Env.length
     || !['0','0:0'].includes(config.User) || config.Entrypoint!==undefined&&(!Array.isArray(config.Entrypoint)||config.Entrypoint.length)
@@ -245,7 +245,7 @@ export function preparerSeedArchiveCapabilities(config) {
   if(cmd[2]==='capture'&&cmd.length===5&&cmd[3]==='/source'&&roleFile(cmd[4])&&match([['/source',['bind','volume'],true],['/backup',['bind'],false]]))return ['DAC_OVERRIDE'];
   if(cmd[2]==='measure'&&cmd.length===4&&cmd[3]==='/source'&&match([['/source',['bind','volume'],true]]))return ['DAC_OVERRIDE'];
   if(cmd[2]==='verify'&&cmd.length===5&&roleFile(cmd[3])&&/^[a-f0-9]{64}$(?![\s\S])/.test(cmd[4])&&match([['/backup',['bind'],true]]))return [];
-  if(pgRoot&&cmd[2]==='restore'&&cmd.length===6&&roleFile(cmd[3])&&cmd[4]==='/target'&&/^[a-f0-9]{64}$(?![\s\S])/.test(cmd[5])&&match([['/backup',['bind'],true],['/target',['volume'],false]]))return ['CHOWN','FOWNER','DAC_OVERRIDE'];
+  if(cmd[2]==='restore'&&cmd.length===6&&roleFile(cmd[3])&&cmd[4]==='/target'&&/^[a-f0-9]{64}$(?![\s\S])/.test(cmd[5])&&match([['/backup',['bind'],true],['/target',['volume'],false]]))return ['CHOWN','FOWNER','DAC_OVERRIDE'];
   return refuse();
 }
 function archiveCapabilities(state, config) {

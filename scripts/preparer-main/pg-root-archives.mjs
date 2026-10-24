@@ -28,6 +28,9 @@ const abort = signal => { if (signal?.aborted) fail('ARCHIVE_INTERRUPTED'); };
 const canonical = value => Buffer.from(JSON.stringify(value));
 const stamp = stat => [stat.dev,stat.ino,stat.size,stat.nlink,stat.mode,stat.uid,stat.gid,stat.mtimeNs,stat.ctimeNs].join(':');
 const samePath = (a,b) => process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
+// The audited PostgreSQL volume root alone uses sticky 01777. All descendants
+// retain the generic no-special-bits rule; setuid/setgid are never accepted.
+const permittedMode = (name,type,mode) => Number.isInteger(mode) && mode>=0 && (mode<=0o777 || name==='' && type==='directory' && mode===0o1777);
 function limitsFor(input = {}) {
   const result = { ...DEFAULT_ARCHIVE_LIMITS, ...input };
   for (const [key,value] of Object.entries(result)) if (!(key in DEFAULT_ARCHIVE_LIMITS) || !Number.isSafeInteger(value) || value < 1) fail('ARCHIVE_LIMIT_INVALID');
@@ -70,7 +73,7 @@ async function aliasStat(filename) {
   await assertCanonicalPath(path.dirname(filename), { directory: true });
   const stat = await fs.lstat(filename, { bigint: true });
   if (!stat.isSymbolicLink()) fail('ARCHIVE_PG_ALIAS_INVALID');
-  closedAlias({ path: 'data', type: 'symlink', target: await fs.readlink(filename), nlink: Number(stat.nlink), mode: Number(stat.mode) & 0o777, uid: Number(stat.uid), gid: Number(stat.gid) });
+  closedAlias({ path: 'data', type: 'symlink', target: await fs.readlink(filename), nlink: Number(stat.nlink), mode: Number(stat.mode) & 0o7777, uid: Number(stat.uid), gid: Number(stat.gid) });
   if (stamp(stat) !== stamp(await fs.lstat(filename, { bigint: true }))) fail('ARCHIVE_SOURCE_CHANGED');
   return stat;
 }
@@ -141,8 +144,8 @@ export async function measureDirectory(source,{signal}={}){
     const stat=await fs.lstat(absolute,{bigint:true});
     if(stat.isSymbolicLink()){if(name!=='data')fail('ARCHIVE_TYPE_REJECTED');register(name,'symlink');await aliasStat(absolute);return;}
     if(!stat.isDirectory()&&!stat.isFile()||stat.isFile()&&stat.nlink!==1n)fail('ARCHIVE_TYPE_REJECTED');
-    if((Number(stat.mode)&0o7000)!==0)fail('ARCHIVE_MODE_REJECTED');
-    register(name,stat.isDirectory()?'directory':'file');
+    const type=stat.isDirectory()?'directory':'file';if(!permittedMode(name,type,Number(stat.mode)&0o7777))fail('ARCHIVE_MODE_REJECTED');
+    register(name,type);
     if(stat.isFile()){const size=Number(stat.size);files++;totalBytes+=size;if(!Number.isSafeInteger(size)||!Number.isSafeInteger(totalBytes)||size>DEFAULT_ARCHIVE_LIMITS.maxFileBytes||totalBytes>DEFAULT_ARCHIVE_LIMITS.maxTotalBytes)fail('ARCHIVE_LIMIT_EXCEEDED');}
     else for(const child of await fs.readdir(absolute))await visit(path.join(absolute,child),name?name+'/'+child:child,depth+1);
   };
@@ -162,9 +165,9 @@ export async function captureArchive(source,filename,{ limits: input,signal } = 
       validateMemberPath(name,{ root:entries.length===0 });
       const stat = await fs.lstat(absolute,{ bigint:true });
       if (stat.isSymbolicLink() ? name !== 'data' : !stat.isFile() && !stat.isDirectory() || stat.isFile() && stat.nlink !== 1n) fail('ARCHIVE_TYPE_REJECTED');
-      if ((Number(stat.mode)&0o7000) !== 0) fail('ARCHIVE_MODE_REJECTED');
-      const type = stat.isSymbolicLink() ? 'symlink' : stat.isDirectory() ? 'directory' : 'file'; register(name,type);
-      const common = { path:name,type,mode:Number(stat.mode)&0o777,uid:Number(stat.uid),gid:Number(stat.gid),mtimeNs:String(stat.mtimeNs) };
+      const type = stat.isSymbolicLink() ? 'symlink' : stat.isDirectory() ? 'directory' : 'file',mode=Number(stat.mode)&0o7777;
+      if (!permittedMode(name,type,mode)) fail('ARCHIVE_MODE_REJECTED'); register(name,type);
+      const common = { path:name,type,mode,uid:Number(stat.uid),gid:Number(stat.gid),mtimeNs:String(stat.mtimeNs) };
       if (type === 'symlink') {
         const header = { ...common,target:await fs.readlink(absolute),nlink:Number(stat.nlink) }; closedAlias(header);
         if (stamp(stat) !== stamp(await fs.lstat(absolute,{bigint:true}))) fail('ARCHIVE_SOURCE_CHANGED');
@@ -201,7 +204,7 @@ function validateHeader(value,index,limits) {
   const keys = ['path','type','mode','uid','gid','mtimeNs',...(value.type==='file'?['bytes','sha256']:value.type==='symlink'?['target','nlink']:[])];
   if (Object.keys(value).join('|') !== keys.join('|')) fail('ARCHIVE_HEADER_INVALID');
   validateMemberPath(value.path,{ root:index===0 });
-  if (!Number.isInteger(value.mode) || value.mode<0 || value.mode>0o777 || !Number.isInteger(value.uid) || value.uid<0 || value.uid>0xfffffffe ||
+  if (!permittedMode(value.path,value.type,value.mode) || !Number.isInteger(value.uid) || value.uid<0 || value.uid>0xfffffffe ||
       !Number.isInteger(value.gid) || value.gid<0 || value.gid>0xfffffffe || typeof value.mtimeNs !== 'string' || !/^-?[0-9]{1,22}$/.test(value.mtimeNs) || value.path.split('/').length>limits.maxDepth) fail('ARCHIVE_HEADER_INVALID');
   if (value.type==='file' && (!Number.isSafeInteger(value.bytes) || value.bytes<0 || value.bytes>limits.maxFileBytes || !/^[a-f0-9]{64}$/.test(value.sha256))) fail('ARCHIVE_HEADER_INVALID');
   if (value.type==='symlink') closedAlias(value);
@@ -254,7 +257,7 @@ async function metadata(filename,entry) {
     await fs.lutimes(filename,Number(ns)/1e9,Number(ns)/1e9);
     await execute('touch',['--no-dereference','--no-create','-m','--date=@'+(ns<0n?'-':'')+seconds+'.'+String(remainder).padStart(9,'0'),filename],{windowsHide:true});
     const after=await aliasStat(filename);
-    if(after.dev!==before.dev||after.ino!==before.ino||after.mtimeNs!==ns||(Number(after.mode)&0o777)!==entry.mode||Number(after.uid)!==entry.uid||Number(after.gid)!==entry.gid)fail('ARCHIVE_METADATA_MISMATCH');
+    if(after.dev!==before.dev||after.ino!==before.ino||after.mtimeNs!==ns||(Number(after.mode)&0o7777)!==entry.mode||Number(after.uid)!==entry.uid||Number(after.gid)!==entry.gid)fail('ARCHIVE_METADATA_MISMATCH');
     return;
   }
   if(process.platform==='linux')await fs.chown(filename,entry.uid,entry.gid);
@@ -263,7 +266,8 @@ async function metadata(filename,entry) {
   if(process.platform==='linux'){
     // Debian operations image supplies coreutils; unlike floating-point utimes this retains nanoseconds.
     await execute('touch',['--no-dereference','--no-create','-m','--date=@'+(ns<0n?'-':'')+seconds+'.'+String(remainder).padStart(9,'0'),filename],{windowsHide:true});
-    const after=await fs.stat(filename,{bigint:true});if(after.mtimeNs!==ns)fail('ARCHIVE_METADATA_MISMATCH');
+    const after=await fs.lstat(filename,{bigint:true});
+    if(after.mtimeNs!==ns||(Number(after.mode)&0o7777)!==entry.mode||Number(after.uid)!==entry.uid||Number(after.gid)!==entry.gid||(entry.type==='directory'?!after.isDirectory():!after.isFile()))fail('ARCHIVE_METADATA_MISMATCH');
   }else await fs.utimes(filename,Number(ns)/1e9,Number(ns)/1e9);
 }
 export async function restoreArchive(filename,target,{ limits:input,signal,expectedSha256 }={}) {

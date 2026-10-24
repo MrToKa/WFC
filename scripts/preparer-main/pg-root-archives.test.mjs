@@ -45,7 +45,7 @@ async function snapshot(root) {
   const visit = async name => {
     const filename = name ? path.join(root, ...name.split('/')) : root, stat = await fs.lstat(filename, { bigint: true });
     const type = stat.isSymbolicLink() ? 'symlink' : stat.isDirectory() ? 'directory' : 'file';
-    const entry = { path: name, type, mode: Number(stat.mode) & 0o777, uid: Number(stat.uid), gid: Number(stat.gid), mtimeNs: String(stat.mtimeNs) };
+    const entry = { path: name, type, mode: Number(stat.mode) & 0o7777, uid: Number(stat.uid), gid: Number(stat.gid), mtimeNs: String(stat.mtimeNs) };
     if (type === 'symlink') { entry.target = await fs.readlink(filename); entry.nlink = Number(stat.nlink); }
     else if (type === 'file') { entry.bytes = Number(stat.size); entry.sha256 = sha(await fs.readFile(filename)); }
     result.push(entry);
@@ -143,6 +143,47 @@ test('restore preserves all file/directory metadata and alias nanoseconds withou
   assert.equal((await fs.lstat(path.join(target, 'data'), { bigint: true })).mtimeNs, MTIME + 123n);
   assert.equal((await fs.lstat(target, { bigint: true })).mtimeNs, MTIME + 5n, 'Link metadata restoration must not change the root target mtime');
   const recaptured = await captureArchive(target, path.join(root, 'restored.pg')); assert.equal(recaptured.sha256, cold.sha256); assert.equal(recaptured.bytes, cold.bytes);
+});
+
+test('only the real volume-root directory can preserve audited sticky 01777 with uid/gid 999', linux, async t => {
+  const root = await fixture(t), source = await pgSource(root), archive = path.join(root, 'sticky-root.pg'), target = path.join(root, 'restored');
+  await fs.chown(source, 999, 999); await fs.chmod(source, 0o1777); await touch(source, MTIME + 321n); await fs.mkdir(target);
+  const before = await snapshot(source), measured = await measureDirectory(source), cold = await captureArchive(source, archive), verified = await verifyArchive(archive, { expectedSha256: cold.sha256 });
+  assert.equal(measured.members, cold.members); assert.equal(verified.entries[0].mode, 0o1777); assert.equal(verified.entries[0].uid, 999); assert.equal(verified.entries[0].gid, 999);
+  await restoreArchive(archive, target, { expectedSha256: cold.sha256 }); assert.deepEqual(await snapshot(target), before);
+  const after = await fs.lstat(target, { bigint: true }); assert.equal(Number(after.mode) & 0o7777, 0o1777); assert.equal(Number(after.uid), 999); assert.equal(Number(after.gid), 999); assert.equal(after.mtimeNs, MTIME + 321n);
+  const recaptured = await captureArchive(target, path.join(root, 'sticky-recaptured.pg')); assert.equal(recaptured.sha256, cold.sha256); assert.equal(recaptured.bytes, cold.bytes);
+});
+
+test('capture and measure reject sticky descendants and setuid/setgid anywhere', linux, async t => {
+  const root = await fixture(t), source = await pgSource(root), child = path.join(source, '18', 'docker', 'base');
+  // chmod silently drops setgid when the caller does not belong to the inode's
+  // group and lacks CAP_FSETID. Keep these negative fixtures in the test user's
+  // primary group; the production archive helper needs no additional capability.
+  const fixtureGid = process.getgid(); await fs.chown(child, process.getuid(), fixtureGid); await fs.chown(source, process.getuid(), fixtureGid);
+  for (const mode of [0o1777, 0o4755, 0o2755]) {
+    await fs.chmod(child, mode);
+    assert.equal(Number((await fs.lstat(child, { bigint: true })).mode) & 0o7777, mode, `The negative descendant fixture must retain mode ${mode.toString(8)} before testing archive rejection`);
+    await assert.rejects(measureDirectory(source), { code: 'ARCHIVE_MODE_REJECTED' });
+    await assert.rejects(captureArchive(source, path.join(root, mode.toString(8) + '.pg')), { code: 'ARCHIVE_MODE_REJECTED' });
+  }
+  await fs.chmod(child, 0o700);
+  for (const mode of [0o1755, 0o4755, 0o2755, 0o7777]) {
+    await fs.chmod(source, mode);
+    assert.equal(Number((await fs.lstat(source, { bigint: true })).mode) & 0o7777, mode, `The negative root fixture must retain mode ${mode.toString(8)} before testing archive rejection`);
+    await assert.rejects(measureDirectory(source), { code: 'ARCHIVE_MODE_REJECTED' });
+    await assert.rejects(captureArchive(source, path.join(root, 'root-' + mode.toString(8) + '.pg')), { code: 'ARCHIVE_MODE_REJECTED' });
+  }
+});
+
+test('archive headers permit exactly 01777 on root and reject special descendant modes', async t => {
+  const root = await fixture(t), accepted = syntheticEntries(); accepted[0].mode = 0o1777;
+  const valid = path.join(root, 'root-sticky.pg'); await fs.writeFile(valid, archiveBytes(accepted)); assert.equal((await verifyArchive(valid)).entries[0].mode, 0o1777);
+  for (const [index, mode] of [[1, 0o1777], [2, 0o4755], [3, 0o2755], [0, 0o1755], [0, 0o4755], [0, 0o2755]]) {
+    const entries = syntheticEntries(); (entries[index].header || entries[index]).mode = mode;
+    const filename = path.join(root, index + '-' + mode.toString(8) + '.pg'); await fs.writeFile(filename, archiveBytes(entries));
+    await assert.rejects(verifyArchive(filename), { code: 'ARCHIVE_HEADER_INVALID' });
+  }
 });
 
 test('capture and measure reject every additional nested symlink', linux, async t => {
