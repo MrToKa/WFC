@@ -1,6 +1,13 @@
 # Simplified Preparer implementation progress
 
-## Current — SP-1 verified; SP-2 continuation, 24 October 2026
+## Current — SP-1–SP-4 verified scopes; SP-5 integration, 24 October 2026
+
+SP2–SP4 source verification closed sequentially on inherited branches2670147 /
+d3a7332 and SP4 report commit. Exact116 source/TAP bookends PASS; no unrelated
+full reruns. Reports07/08/09 and handoffs SP2–SP5 retain current scope and limits.
+SP5 actual fixture start waits for source-only create/inspect ledger fix plus
+root tests. SP6 source-only upgrade-preflight proceeds independently against the
+retained cold archive. Main5180 remains healthy; no candidate update yet.
 
 SP-1 scope PASS at source29664ee plus this report: cold seed ea23121d and
 audited recovery acac2c9c PASS; all-public rows/catalog/global metadata and
