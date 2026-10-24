@@ -125,10 +125,11 @@ companion. Restore to NEW owned loopback test resources with rotated/fenced auth
 prove exact before-fence, declared fencing and only canonical migration deltas.
 Never confuse main5180 with PF5191/default5190 or operate original PF resources.
 
-SP-2 — Fresh administrator authorization and per-user encrypted credential store.
+SP-2 — Fresh administrator authorization and transient page credential leases.
 Own workspace-security.mjs/tests. Current /api/users/me reads current WFC role;
-require admin on admission/every protected use and bind settings to trusted WFC
-userId/configuration revision. Preserve legacy encrypted/global settings UNCLAIMED,
+require admin on admission/every protected use and bind page-memory credentials to
+trusted WFC userId/login/page/revision/epoch. Encrypt only WFC login authority.
+Preserve legacy encrypted/global settings UNCLAIMED,
 never assign to the first admin. WFC passwords only transient login exchange;
 tokens/APS secrets never URL/browser storage/log/Git. Support the existing WFC
 login flow through a bounded freshly verified same-origin session handoff where

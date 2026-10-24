@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "wfc.preparer.stage-source-bookend.v1",
+  "status": "PASS",
+  "at": "2026-10-24T05:21:49.151Z",
+  "productRevision": "543ae7a889fbf1abbf4937f5f83b2c6ee1b91ff4",
+  "sourceFiles": 116,
+  "sourceInputsAndTapUnchanged": true,
+  "inputManifestSha256": "4dc1ec8c72960ec03414a607dd51ebf2f8405c0f16605f33501e80da20efa9a2",
+  "preparerTests": 329,
+  "packageTests": 174,
+  "wfcFocusedTests": 54,
+  "wfcTypecheck": "PASS",
+  "scope": [
+    "SP-2 transient current-admin security",
+    "SP-3 owner-bound lifecycle",
+    "SP-4 WFC gateway,archive and English page"
+  ],
+  "limits": [
+    "Real browser NOT_RUN",
+    "Production deployment NOT_RUN",
+    "No real new model conversion by explicit human requirement"
+  ]
+}
