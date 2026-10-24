@@ -2,6 +2,19 @@
 
 ## Current — SP-1–SP-4 verified scopes; SP-5 integration, 24 October 2026
 
+SP5 COMPLETE/PASS: three-store snapshot/restore0cca87ba, old-cookie fenced/fresh
+admin/history/ZIP proof PASS,0APS.14 store controls PASS. Restoredclone+3volumes
+and originalfixturec40+7volumes/2networks fully removed, archives/evidence kept.
+Qualification publicevidence/sp5-integration-qualification-20261024.json; private
+gate underc40. SP6 handoff prepared. Failed553411f6 upgrade cleaned/reconciled,
+expectedTEMP aliasfix15controls+retainedrawreplayPASS; freshfullclone pending.
+Deployment39controlsPASS, no actualmaincandidateupdate. See report10 forlimits.
+
+Clone-only old-data compatibility/rollback prerequisite ACTIVE under root exec17927,
+new operation path in .preparer-work/sp6-current-upgrade.private.json.14 upgrade
+controls PASS; frozen operator4cfbc75/source13e5029c. No source runtime connection
+or production deployment. Do not duplicate the active clone operation/tests.
+
 SP5 fixturec40c725a ACTIVE/healthy, root sole executor. Actual IAB browser PASS:
 WFC login→separate Preparer tab→empty keys→synthetic check→existing tiny converted
 fixture packaging→WFC model listed→ZIP download. HTTP proof PASS: browser/Preparer/

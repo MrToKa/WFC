@@ -33,6 +33,21 @@ explicit readiness, auth/history/ZIP/zero-APS proof PASS. Failure not reclassifi
 
 Evidence screenshots under evidence/sp5-*.png; complete private HTTP/browser/
 restart/role/persistence receipts remain in the owned operation directory.
-Three-store snapshot/fresh restore and final owned fixture retirement remain
-pending; SP-5 is not complete until those gates pass. SP6 upgrade/rollback source
-preparation proceeds independently. Production Preparer deployment NOT_RUN.
+Three-store snapshot0cca87ba and fresh restore PASS: data/work/output archives
+recaptured byte-exact before startup; only restored auth filename fenced with
+parent metadata preserved. Original valid cookie rejected by clone, fresh current
+admin login/history/identical ZIP PASS; zero startup or ZIP APS requests. Original
+Preparer independently resumed.14 recovery controls PASS, including native omitted
+ReadOnly=false fields. Restored clone+three volumes then full fixture+seven volumes
+and two networks removed; exact post-cleanup absence verified. Private required
+archives/companion/evidence retained. SP-5 scope COMPLETE/PASS; public receipt
+evidence/sp5-integration-qualification-20261024.json. Production delivery NOT_RUN.
+
+Independent candidate old-data prerequisite553411f6 reached healthy candidate but
+strict expected metadata failed on PostgreSQL's pg_temp alias in predicted TEMP
+index definitions. All eight owned resources removed, failure/lock reconciled
+explicitly. Narrow expected-only normalization plus15 controls and retained raw
+evidence replay PASS; fresh full clone/old-image rollback still required. Candidate
+data and old-table/global comparisons were not relaxed. Deployment controls first
+failed35 cases during noncanonical Windows temp fixture setup (2 passed), then
+canonical fixture correction produced39/39 PASS. Original failures retained.
