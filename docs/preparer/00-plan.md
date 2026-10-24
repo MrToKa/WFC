@@ -1,4 +1,41 @@
-# SP-0 — Simplified Preparer baseline and staged implementation
+# Simplified Preparer — staged implementation
+
+## Accepted changes, 24 October 2026
+
+This section supersedes older persistent-Autodesk-settings wording below and in
+02-owner-security-contract.md. Access remains current WFC administrators only.
+The two Client ID / Client Secret fields start empty on every page opening.
+Credentials live only in that page and bounded process memory; no product .env
+fallback, persisted APS credentials, browser storage, URL or log disclosure.
+Page closure/logout/key changes revoke the page lease best-effort; a 120-second
+server expiry bounds missed close notifications. Renewal is tied to the same
+owner, current login, page and credential revision. No promise of instantaneous
+server knowledge of browser closure is made.
+
+The user permits .env credentials for tests only and explicitly prohibits any
+new model conversion. No real APS upload, translation submission, automatic
+startup/restart/resume submission is authorized. Use fake APS transports or
+existing completed packages for Generate tests; label real conversion NOT_RUN.
+Read-only Autodesk credential checks may use the authorized test configuration.
+
+Automatic stage continuation is authorized. This chat implements Preparer only;
+PF5191 remains separate and untouched. The user has not merged PF into WFC yet.
+Recheck main before a delivery build and integrate its actual approved baseline
+without performing the user's merge. No push/PR/merge is authorized here.
+
+SP-0 scoped engineering decision: accept QUALIFIED_PLATFORM_COVERAGE as the
+baseline for continuing source work and SP-1. This does not change the retained
+strict FAIL (five platform skips) into PASS. Fresh complete candidate Linux
+package/Preparer verification is required before delivery. SP-2 now implements
+transient page leases, not an encrypted APS settings store. SP-3 partitions
+owner/application durable work and keeps lease credentials/provider authority
+in memory. SP-4 provides the English two-field page and admin-only WFC entry.
+SP-5 verifies restart denial and safe recovery with newly entered keys; completed
+ZIP download and import retry must not require cloud authority.
+
+After each stage, remove only unnecessary resources with positive ownership and
+joined-process proof. Retain rollback backups, evidence, required demos and all
+historically refused paths. No blanket Docker prune or parent deletion.
 
 Prepared with prepare-stage-handoff at 2026-10-21T22:38:44.869Z.
 PF-B9 technical delivery is committed locally in a3892cc (product3d86cb2b34baa0dbc7ada8fc93f7979eb4aa34ed).

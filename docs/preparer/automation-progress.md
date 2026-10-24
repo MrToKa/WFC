@@ -1,6 +1,31 @@
 # Simplified Preparer implementation progress
 
-## SP-0 ACTIVE
+## SP-1 ACTIVE — 24 October 2026
+
+Source branch sp-1-main-backup-local-20261024 inherits a3461c69ca85b8e8f0a9ed9d1cb142d4b17b2a75.
+SP-0 scoped decision accepts the retained QUALIFIED_PLATFORM_COVERAGE for
+continuation; strict full summary remains FAIL, never relabelled. Current
+candidate full Linux checks remain NOT_RUN. Main5180 repair/backup/update NOT_RUN.
+Main PG is stopped, API restarting on refused5434 and web unhealthy. Original
+PG must remain stopped until its cold physical seed is captured and recovered
+in new owned clones. PF5191 and original main source remain unchanged.
+
+Latest human requirements supersede old persistent APS settings: current admins
+only; two empty per-page key fields, memory-only lease, no product .env fallback;
+.env permitted for tests; NO NEW MODEL CONVERSION, including startup/recovery.
+Automatic sequential execution is active through the dedicated Preparer heartbeat.
+Main PF merge is still pending; recheck actual main before final delivery build.
+
+Root owns docs/backup/runtime/all actual tests. Source-only parallel ownership:
+security agent workspace-security/page-credentials and tests; service agent
+workspace-service/aps-provider and tests; UI agent workspace files and VM tests.
+All agents preserve concurrent edits; none executes runtime/cloud/tests.
+Independent source preparation does not waive SP-1's recoverable-backup gate.
+Next: cold seed using fresh exact identities, clone recovery/logical restore,
+then main health repair and staged security/integration verification. No new
+conversion or APS submit is authorized. Historical progress below is retained.
+
+## SP-0 retained baseline evidence
 
 Qualified platform coverage recorded at clean source00832078098f21d5e6e2b780c4c0d03bc3506086.
 Fresh Windows full run d61022c2-9471-40b8-a2ba-ed25a95aa4c4 finished
