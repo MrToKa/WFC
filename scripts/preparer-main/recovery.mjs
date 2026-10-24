@@ -116,6 +116,10 @@ export function assertRecoveryMinio(value, { id, image, volume, networkId, opera
   return value;
 }
 export function validateModelAuditSummary(value) {
+  // The fixed auditor emits a bounded code-only failure DTO. Preserve that
+  // concrete outcome after its stdout is retained privately by the caller.
+  if (record(value) && Object.keys(value).sort().join(',') === 'code,status' && value.status === 'FAIL'
+    && typeof value.code === 'string' && /^[A-Z][A-Z0-9_]{2,79}$/.test(value.code)) need(false, value.code);
   const fields = ['archivesSchema', 'counts', 'readOnly', 'reportBytes', 'reportSha256', 'status'];
   const counts = ['models', 'resources', 'resourceBytes', 'archives', 'archiveBytes', 'legacyArchiveAbsent', 'retainedIndependentArchives', 'unavailableDeclarations'];
   need(record(value) && Object.keys(value).sort().join(',') === fields.sort().join(',') && value.status === 'PASS' && value.readOnly === true
@@ -124,6 +128,14 @@ export function validateModelAuditSummary(value) {
     && record(value.counts) && Object.keys(value.counts).sort().join(',') === counts.sort().join(',')
     && Object.values(value.counts).every(count => Number.isSafeInteger(count) && count >= 0), 'SP1_RECOVERY_MODEL_AUDIT_INVALID');
   return value;
+}
+/** Match createModelStorage's source-API configuration. Generic project-file
+ * storage is a separate bucket and cannot supply model-resource authority. */
+export function recoveryModelBucket(sourceApiEnvironment) {
+  need(sourceApiEnvironment instanceof Map, 'SP1_RECOVERY_MODEL_BUCKET_INVALID');
+  const bucket = sourceApiEnvironment.get('WFC_MODEL_BUCKET') ?? 'wfc-models';
+  need(typeof bucket === 'string' && /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(bucket), 'SP1_RECOVERY_MODEL_BUCKET_INVALID');
+  return bucket;
 }
 async function pinPackageClosure(directory) {
   const files = []; let bytes = 0;
@@ -241,7 +253,7 @@ export async function qualifyRecoveredSeed(argumentsValue, { docker: supplied, s
       if (modelAudit) {
         const minioSource = verified.companion.roles.minio.config, minioEnv = environment({ Config: minioSource });
         const rootUser = minioEnv.get('MINIO_ROOT_USER') || minioEnv.get('MINIO_ACCESS_KEY'), rootPassword = minioEnv.get('MINIO_ROOT_PASSWORD') || minioEnv.get('MINIO_SECRET_KEY');
-        const accessKey = apiEnv.get('MINIO_ACCESS_KEY'), secretKey = apiEnv.get('MINIO_SECRET_KEY'), bucket = apiEnv.get('MINIO_BUCKET_PROJECTS') || 'wfc-project-files';
+        const accessKey = apiEnv.get('MINIO_ACCESS_KEY'), secretKey = apiEnv.get('MINIO_SECRET_KEY'), bucket = recoveryModelBucket(apiEnv);
         need([rootUser, rootPassword, accessKey, secretKey].every(value => typeof value === 'string' && value.length > 0 && value.length <= 16384 && !/[\x00-\x1f\x7f]/.test(value))
           && /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(bucket), 'SP1_RECOVERY_STORAGE_CREDENTIALS_REQUIRED');
         const minioImage = await docker.inspectImage(verified.intent.source.roles.minio.image);
@@ -364,10 +376,12 @@ export async function qualifyRecoveredSeed(argumentsValue, { docker: supplied, s
         const connectionPath = file('model-audit-connection.private.json'); await writePrivateJson(connectionPath, {
           database: { host: names.logical, port: 5432, user: pgIdentity.username, password: pgIdentity.password, database: pgIdentity.database },
           storage: { host: names.minio, port: 9000, useSSL: false, accessKey: minioIdentity.accessKey, secretKey: minioIdentity.secretKey, bucket: minioIdentity.bucket }, ownerId: args.operationId });
-        const observed = validateModelAuditSummary(await docker.run(args.captureImage, { network: network.Id,
+        const auditorStdout = await docker.run(args.captureImage, { network: network.Id,
           mounts: [mount(HERE, '/operator'), mount(packageDirectory, '/package'), mount(args.operationDirectory, '/proof', false)], labels: labels('model-audit'),
           cmd: ['node', '/operator/model-audit.mjs', '--connection', '/proof/model-audit-connection.private.json', '--directory', '/proof/model-audit', '--package-module', '/package/index.mjs',
-            '--postgres-host', names.logical, '--minio-host', names.minio, '--owner', args.operationId] }));
+            '--postgres-host', names.logical, '--minio-host', names.minio, '--owner', args.operationId] });
+        await proof('model-audit-stdout.private.json', auditorStdout);
+        const observed = validateModelAuditSummary(auditorStdout);
         await witness(); await assertMinio(); await assertIsolatedNetwork(); await assertClone(logicalId, 'logical');
         const privateReport = await pin(file('model-audit/model-audit.private.json'));
         need(privateReport.sha256 === observed.reportSha256 && privateReport.bytes === observed.reportBytes, 'SP1_RECOVERY_MODEL_REPORT_CHANGED');

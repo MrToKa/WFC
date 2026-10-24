@@ -15,6 +15,17 @@ const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const plain = value => value && Object.getPrototypeOf(value) === Object.prototype;
 export const MODEL_AUDIT_LIMITS = Object.freeze({ maxModels: 1000, maxArchives: 10000, maxResources: 1000000, maxFilesPerModel: 100000, maxFileBytes: 2 * 1024 ** 3, maxModelBytes: 8 * 1024 ** 3, maxArchiveBytes: 2 * 1024 ** 3, maxTotalBytes: 64 * 1024 ** 3, maxTempBytes: 2 * 1024 ** 3, maxManifestBytes: 32 * 1024 ** 2, maxMetadataBytes: 256 * 1024 ** 2, maxMs: 1800000, maxObjectMs: 600000 });
 export class ModelAuditError extends Error { constructor(code) { super(code); this.name = 'ModelAuditError'; this.code = code; } }
+const privateDiagnostics = new WeakMap();
+const storageErrorCodes = new Set(['NoSuchBucket', 'NoSuchKey', 'NoSuchObject', 'NoSuchVersion', 'NotFound', 'AccessDenied', 'InvalidAccessKeyId', 'SignatureDoesNotMatch', 'InvalidBucketName', 'InvalidObjectName', 'InvalidArgument', 'InvalidRequest', 'AuthorizationHeaderMalformed', 'ExpiredToken', 'InvalidToken', 'RequestTimeTooSkewed', 'RequestTimeout', 'SlowDown', 'InternalError', 'ServiceUnavailable', 'ECONNREFUSED', 'ENOTFOUND', 'ETIMEDOUT', 'ECONNRESET', 'EAI_AGAIN', 'ECONNABORTED', 'EPIPE', 'EHOSTUNREACH', 'ENETUNREACH', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_SOCKET']);
+function storageReadFailure(error) {
+  const safe = new ModelAuditError('MODEL_STORAGE_READ_FAILED'), details = {};
+  // Only finite protocol labels and an HTTP error status may enter the private
+  // evidence. Never serialize the exception, message, stack, headers or request.
+  try { const code = error?.code; if (typeof code === 'string' && storageErrorCodes.has(code)) details.upstreamCode = code; } catch {}
+  try { const statusCode = error?.statusCode; if (Number.isInteger(statusCode) && statusCode >= 400 && statusCode <= 599) details.statusCode = statusCode; } catch {}
+  if (Object.keys(details).length) privateDiagnostics.set(safe, Object.freeze(details));
+  return safe;
+}
 const fail = code => { throw new ModelAuditError(code); };
 function checkedLimits(input = {}) {
   if (!plain(input)) fail('MODEL_AUDIT_LIMIT_INVALID');
@@ -116,7 +127,7 @@ export async function auditRecoveredModels({ pool, storage, verifyPackage, priva
       for await (const raw of stream) { interrupted(objectSignal); if (!(raw instanceof Uint8Array)) fail('MODEL_STORAGE_STREAM_INVALID'); const chunk = Buffer.isBuffer(raw) ? raw : Buffer.from(raw.buffer, raw.byteOffset, raw.byteLength); bytes += chunk.length; totalRead += chunk.length; if (!Number.isSafeInteger(bytes) || bytes > expected.bytes || totalRead > limits.maxTotalBytes) fail('MODEL_RESOURCE_SIZE_MISMATCH'); digest.update(chunk); if (output) await output.writeFile(chunk); }
       if (bytes !== expected.bytes) fail('MODEL_RESOURCE_SIZE_MISMATCH'); if (digest.digest('hex') !== expected.sha256) fail('MODEL_RESOURCE_HASH_MISMATCH');
       return bytes;
-    } catch (error) { interrupted(objectSignal); if (error instanceof ModelAuditError) throw error; fail('MODEL_STORAGE_READ_FAILED'); }
+    } catch (error) { interrupted(objectSignal); if (error instanceof ModelAuditError) throw error; throw storageReadFailure(error); }
     finally { if (abortListener) objectSignal.removeEventListener('abort', abortListener); stream?.destroy?.(); }
   };
   try {
@@ -176,6 +187,7 @@ export async function auditRecoveredModels({ pool, storage, verifyPackage, priva
     return { status: 'PASS', readOnly: true, counts, archivesSchema: report.archivesSchema, ...evidence, privateReportPath: reportPath };
   } catch (error) {
     report.status = 'FAIL'; report.failure = { code: error instanceof ModelAuditError ? error.code : 'MODEL_AUDIT_FAILED', context };
+    const details = error && typeof error === 'object' ? privateDiagnostics.get(error) : null; if (details) report.failure.details = details;
     if (client && transaction && !committed) { try { await withSignal(client.query('ROLLBACK'), AbortSignal.timeout(1000)); } catch {} }
     try { await writeReport(); } catch {}
     const safe = new ModelAuditError(report.failure.code); safe.privateReportPath = reportPath; throw safe;

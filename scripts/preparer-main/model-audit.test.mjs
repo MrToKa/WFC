@@ -91,6 +91,43 @@ test('a published ZIP record whose object is missing fails and closes every earl
   assert.equal(f.queries.at(-1).text, 'ROLLBACK'); const report = JSON.parse(await fs.readFile(path.join(f.directory, 'model-audit.private.json'))); assert.equal(report.status, 'FAIL'); assert.equal(report.failure.context.stage, 'archive'); assert.deepEqual(await fs.readdir(f.directory), ['model-audit.private.json']);
 });
 
+test('private storage diagnostics distinguish safe upstream codes without exposing transport secrets publicly', async t => {
+  for (const code of ['NoSuchBucket', 'NoSuchKey', 'AccessDenied', 'InvalidAccessKeyId', 'SignatureDoesNotMatch', 'ECONNREFUSED', 'ENOTFOUND', 'ETIMEDOUT', 'ECONNRESET', 'EAI_AGAIN']) {
+    const f = await fixture(t, { withArchive: false });
+    f.control.getObject = () => { const error = Object.assign(new Error('PRIVATE_MESSAGE_SECRET credential=value https://private.example.invalid'), { code, statusCode: 404, headers: { authorization: 'PRIVATE_HEADER_SECRET' }, credentials: 'PRIVATE_CREDENTIAL_SECRET' }); error.stack = 'PRIVATE_STACK_SECRET'; throw error; };
+    let failure; await assert.rejects(f.run(), error => { failure = error; return errorCode('MODEL_STORAGE_READ_FAILED')(error); });
+    const report = JSON.parse(await fs.readFile(path.join(f.directory, 'model-audit.private.json')));
+    assert.deepEqual(report.failure.details, { upstreamCode: code, statusCode: 404 });
+    assert.doesNotMatch(JSON.stringify(report), /PRIVATE_|credential=value|private\.example/);
+    assert.equal(Object.hasOwn(failure, 'details'), false); assert.equal(Object.hasOwn(failure, 'upstreamCode'), false); assert.equal(Object.hasOwn(failure, 'statusCode'), false);
+    assert.doesNotMatch(JSON.stringify({ status: 'FAIL', code: failure.code }), /NoSuch|AccessDenied|Signature|ECONN|ENOTFOUND|ETIMEDOUT|EAI_AGAIN|PRIVATE_/);
+  }
+});
+
+test('unknown upstream codes/messages/headers are redacted and only integer HTTP error statuses are private evidence', async t => {
+  for (const statusCode of [undefined, 200, 399, 600, '404', NaN, Infinity, 403, 599]) {
+    const f = await fixture(t, { withArchive: false });
+    f.control.getObject = () => { throw Object.assign(new Error('SECRET_MESSAGE_ACCESS_KEY'), { code: 'SECRET_UNKNOWN_ERROR_CODE', statusCode, headers: { authorization: 'SECRET_AUTHORIZATION' }, stack: 'SECRET_STACK', request: { password: 'SECRET_PASSWORD' } }); };
+    await assert.rejects(f.run(), errorCode('MODEL_STORAGE_READ_FAILED'));
+    const report = JSON.parse(await fs.readFile(path.join(f.directory, 'model-audit.private.json')));
+    assert.doesNotMatch(JSON.stringify(report), /SECRET_/);
+    assert.deepEqual(report.failure.details, statusCode === 403 || statusCode === 599 ? { statusCode } : undefined);
+  }
+});
+
+test('diagnostic getters are read once and message/stack/headers are never inspected', async t => {
+  const f = await fixture(t, { withArchive: false }); let codeReads = 0, statusReads = 0;
+  f.control.getObject = () => { const error = {}; Object.defineProperties(error, {
+    code: { get() { return ++codeReads === 1 ? 'NoSuchKey' : 'SECRET_CODE_AFTER_VALIDATION'; } },
+    statusCode: { get() { return ++statusReads === 1 ? 404 : 'SECRET_STATUS_AFTER_VALIDATION'; } },
+    message: { get() { assert.fail('The raw message must not be read'); } },
+    stack: { get() { assert.fail('The raw stack must not be read'); } },
+    headers: { get() { assert.fail('Raw headers must not be read'); } },
+  }); throw error; };
+  await assert.rejects(f.run(), errorCode('MODEL_STORAGE_READ_FAILED')); const report = JSON.parse(await fs.readFile(path.join(f.directory, 'model-audit.private.json')));
+  assert.deepEqual(report.failure.details, { upstreamCode: 'NoSuchKey', statusCode: 404 }); assert.equal(codeReads, 1); assert.equal(statusReads, 1); assert.doesNotMatch(JSON.stringify(report), /SECRET_/);
+});
+
 test('resource short/long bytes, hash mismatch and missing objects fail independently and always destroy streams', async t => {
   for (const mode of ['short', 'long', 'hash', 'missing']) {
     const f = await fixture(t, { withArchive: false }), key = f.rows[0].storage_prefix + f.rows[0].manifest.resources[0].path, original = f.objects.get(key);

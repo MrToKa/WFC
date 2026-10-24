@@ -7,7 +7,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { validateRecoveryArguments, recoveryResourceNames, assertOwnedRecoveryResource, assertStoppedRecoveryClone, recoveryCloneWitness, assertRecoveryPostgres, verifiedPostgresDataIdentity, assertRecoveryMinio, validateModelAuditSummary, waitRecoveryMinio, verifyColdSeed, qualifyRecoveredSeed, captureCloneDatabase } from './recovery.mjs';
+import { validateRecoveryArguments, recoveryResourceNames, assertOwnedRecoveryResource, assertStoppedRecoveryClone, recoveryCloneWitness, assertRecoveryPostgres, verifiedPostgresDataIdentity, assertRecoveryMinio, validateModelAuditSummary, recoveryModelBucket, waitRecoveryMinio, verifyColdSeed, qualifyRecoveredSeed, captureCloneDatabase } from './recovery.mjs';
 import { canonicalSha256 } from './offline-seed.mjs';
 import { hashFile } from './foundation/archives.mjs';
 
@@ -84,6 +84,20 @@ test('audit receipt requires complete read-only PASS facts without private conne
   for (const mutate of [v => v.status = 'FAIL', v => v.readOnly = false, v => v.reportSha256 = 'unverified', v => v.counts.models = -1,
     v => delete v.counts.archives, v => v.privateReportPath = 'private', v => v.password = 'secret']) {
     const changed = structuredClone(value); mutate(changed); assert.throws(() => validateModelAuditSummary(changed), { code: 'SP1_RECOVERY_MODEL_AUDIT_INVALID' });
+  }
+});
+test('recovery model bucket follows source WFC_MODEL_BUCKET and never the generic project-file bucket', () => {
+  assert.equal(recoveryModelBucket(new Map([['WFC_MODEL_BUCKET', 'private-model-fixture'], ['MINIO_BUCKET_PROJECTS', 'different-project-fixture']])), 'private-model-fixture');
+  assert.equal(recoveryModelBucket(new Map([['MINIO_BUCKET_PROJECTS', 'different-project-fixture']])), 'wfc-models');
+  assert.equal(recoveryModelBucket(new Map()), 'wfc-models');
+  for (const bucket of ['', ' ', 'UPPERCASE', '../models', 'ab', 123]) {
+    assert.throws(() => recoveryModelBucket(new Map([['WFC_MODEL_BUCKET', bucket], ['MINIO_BUCKET_PROJECTS', 'valid-project-fixture']])), { code: 'SP1_RECOVERY_MODEL_BUCKET_INVALID' });
+  }
+});
+test('the fixed auditor failure DTO retains its concrete safe code and cannot become a PASS', () => {
+  assert.throws(() => validateModelAuditSummary({ status: 'FAIL', code: 'MODEL_STORAGE_READ_FAILED' }), { code: 'MODEL_STORAGE_READ_FAILED' });
+  for (const value of [{ status: 'FAIL', code: 'foreign failure text' }, { status: 'FAIL', code: 'MODEL_STORAGE_READ_FAILED', secret: 'private' }]) {
+    assert.throws(() => validateModelAuditSummary(value), { code: 'SP1_RECOVERY_MODEL_AUDIT_INVALID' });
   }
 });
 test('MinIO readiness cannot contact source/foreign hosts and uses only the owned fixed health endpoint', async () => {
