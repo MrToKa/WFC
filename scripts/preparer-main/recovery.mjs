@@ -58,6 +58,31 @@ export function assertOwnedRecoveryResource(value, { operationId, seedSha256, pu
     && labels?.['wfc.preparer.sp1.seed'] === seedSha256 && labels?.['wfc.preparer.sp1.purpose'] === purpose, 'SP1_RECOVERY_OWNERSHIP_LOST');
   return value;
 }
+export function assertStoppedRecoveryClone(value, { id, image, volume, destination, networkId, operationId, seedSha256, purpose, name }) {
+  assertOwnedRecoveryResource(value, { operationId, seedSha256, purpose, name });
+  const planned = value.HostConfig?.Mounts, effective = value.Mounts;
+  // Docker Engine omits the false default from HostConfig.Mounts.ReadOnly.
+  // Admit exactly absence or boolean false, then check the effective RW mount.
+  need(value.Id === id && SHA.test(id ?? '') && value.Image === image && !active(value) && value.HostConfig?.NetworkMode === networkId
+    && Object.keys(value.HostConfig.PortBindings ?? {}).length === 0 && value.HostConfig.PublishAllPorts !== true
+    && planned?.length === 1 && record(planned[0]) && planned[0].Type === 'volume' && planned[0].Source === volume && planned[0].Target === destination
+    && (!Object.hasOwn(planned[0], 'ReadOnly') || planned[0].ReadOnly === false)
+    && effective?.length === 1 && effective[0].Type === 'volume' && effective[0].Name === volume && effective[0].Destination === destination && effective[0].RW === true,
+  purpose === 'minio' ? 'SP1_RECOVERY_MINIO_CHANGED' : 'SP1_RECOVERY_CLONE_CHANGED');
+  return value;
+}
+/** Private diagnostics deliberately exclude Env, command arguments, foreign
+ * labels and arbitrary Docker error text. Keep omitted fields distinguishable. */
+export function recoveryCloneWitness(value) {
+  const select = (input, keys) => Object.fromEntries(keys.filter(key => input && Object.hasOwn(input, key)).map(key => [key, input[key]]));
+  const host = select(value?.HostConfig, ['NetworkMode', 'PublishAllPorts', 'PortBindings', 'RestartPolicy', 'ReadonlyRootfs', 'CapAdd', 'CapDrop', 'SecurityOpt', 'Privileged', 'Memory', 'MemorySwap', 'NanoCpus', 'PidsLimit', 'Tmpfs']);
+  if (Array.isArray(value?.HostConfig?.Mounts)) host.Mounts = value.HostConfig.Mounts.map(item => ({ ...select(item, ['Type', 'Source', 'Target', 'ReadOnly']), readOnlyPresent: Boolean(item && Object.hasOwn(item, 'ReadOnly')) }));
+  return { ...select(value, ['Id', 'Name', 'Image']),
+    Config: { ...select(value?.Config, ['User', 'Entrypoint']), Labels: select(value?.Config?.Labels, ['wfc.preparer.sp1.operation', 'wfc.preparer.sp1.seed', 'wfc.preparer.sp1.purpose']) },
+    HostConfig: host, Mounts: Array.isArray(value?.Mounts) ? value.Mounts.map(item => select(item, ['Type', 'Name', 'Source', 'Destination', 'RW', 'Propagation'])) : null,
+    Networks: Object.fromEntries(Object.entries(value?.NetworkSettings?.Networks ?? {}).map(([name, network]) => [name, select(network, ['NetworkID', 'EndpointID', 'Aliases'])])),
+    State: select(value?.State, ['Status', 'Running', 'Restarting', 'Pid', 'ExitCode', 'OOMKilled', 'StartedAt', 'FinishedAt']) };
+}
 export function assertRecoveryPostgres(value, { image, volume, networkId, operationId, seedSha256, purpose, name }) {
   assertOwnedRecoveryResource(value, { operationId, seedSha256, purpose, name });
   need(value.Image === image && SHA.test(value.Id ?? '') && value.HostConfig?.PublishAllPorts !== true
@@ -185,6 +210,9 @@ export async function qualifyRecoveredSeed(argumentsValue, { docker: supplied, s
   need(leafProvenance.mode === 'exact-byte-copy' && leafProvenance.files?.length === LEAVES.length, 'SP1_RECOVERY_LEAF_PROVENANCE');
   for (const leaf of leafProvenance.files) need(LEAVES.includes(leaf.path) && same(await hashFile(path.join(HERE, 'recovery-leaves', leaf.path)), { bytes: leaf.bytes, sha256: leaf.sha256 }), 'SP1_RECOVERY_LEAF_CHANGED');
   const evidence = [], proof = async (name, value) => { await writeJsonNew(file(name), value); const result = await pin(file(name)); evidence.push(result); return result; };
+  let cloneGuardSequence = 0;
+  const recordCloneGuard = (purpose, phase, actual, expected) => proof('clone-guard-' + String(++cloneGuardSequence).padStart(3, '0') + '-' + purpose + '-' + phase + '.private.json', {
+    schemaVersion: 'wfc.preparer.clone-guard-witness.v1', purpose, phase, expected, actual: recoveryCloneWitness(actual) });
   await proof('begin.private.json', { schemaVersion: 'wfc.preparer.recovery-attempt.v1', operationId: args.operationId, seed: await pin(args.seedPath), captureImage: args.captureImage, sourceClosure, production, startedAt: new Date().toISOString() });
   const lockPath = path.join(parent, 'main5180-recovery.lock');
   await writeJsonNew(lockPath, { schemaVersion: 'wfc.preparer.recovery-lock.v1', operationId: args.operationId, seedSha256: args.seedSha256, operationDirectory: args.operationDirectory });
@@ -259,15 +287,16 @@ export async function qualifyRecoveredSeed(argumentsValue, { docker: supplied, s
       await witness(); cleanupSafe = true;
     });
     const runtimeResult = await withBoundedDockerExecution(RECOVERED_SEED_BOUNDS, async () => {
-      const assertClone = async (id, purpose) => assertRecoveryPostgres(await docker.inspect(id), { image: postgresImage, volume: names[purpose], networkId: network.Id, ...volumeSpec(purpose) });
+      const assertClone = async (id, purpose) => {
+        const actual = await docker.inspect(id), expected = { id, image: postgresImage, volume: names[purpose], networkId: network.Id, ...volumeSpec(purpose) };
+        await recordCloneGuard(purpose, 'running', actual, expected);
+        need(actual.Id === id, 'SP1_RECOVERY_CLONE_CHANGED'); return assertRecoveryPostgres(actual, expected);
+      };
       const clone = async purpose => {
         await witness(); const created = await docker.create(names[purpose], { Image: postgresImage, User: pgIdentity.user, Env: ['PGDATA=' + pgIdentity.pgdata], Entrypoint: [], Cmd: ['postgres', '-D', pgIdentity.pgdata, '-c', 'listen_addresses=*', '-c', 'unix_socket_directories=/tmp'], Labels: labels(purpose), HostConfig: { NetworkMode: network.Id, Mounts: [mount(names[purpose], '/var/lib/postgresql', false, 'volume')], PortBindings: {}, PublishAllPorts: false, RestartPolicy: { Name: 'no' } } });
         need(SHA.test(created?.Id ?? '') && created.Id !== verified.intent.source.roles.postgres.id, 'SP1_RECOVERY_CLONE_INVALID');
-        const stopped = await docker.inspect(created.Id); assertOwnedRecoveryResource(stopped, volumeSpec(purpose));
-        need(stopped.Id === created.Id && stopped.Image === postgresImage && !active(stopped) && stopped.HostConfig?.NetworkMode === network.Id
-          && Object.keys(stopped.HostConfig.PortBindings ?? {}).length === 0 && stopped.HostConfig.PublishAllPorts !== true
-          && stopped.HostConfig.Mounts?.length === 1 && stopped.HostConfig.Mounts[0].Type === 'volume' && stopped.HostConfig.Mounts[0].Source === names[purpose]
-          && stopped.HostConfig.Mounts[0].Target === '/var/lib/postgresql' && stopped.HostConfig.Mounts[0].ReadOnly === false, 'SP1_RECOVERY_CLONE_CHANGED');
+        const stopped = await docker.inspect(created.Id), expected = { id: created.Id, image: postgresImage, volume: names[purpose], destination: '/var/lib/postgresql', networkId: network.Id, ...volumeSpec(purpose) };
+        await recordCloneGuard(purpose, 'stopped', stopped, expected); assertStoppedRecoveryClone(stopped, expected);
         await docker.start(created.Id); await assertClone(created.Id, purpose);
         for (let attempts = 0;; attempts++) {
           check(); try { await docker.command(['exec', created.Id, 'pg_isready', '--host=/tmp', '--username=' + pgIdentity.username, '--dbname=' + pgIdentity.database], { maxBytes: 65536, signal }); break; }
@@ -277,8 +306,11 @@ export async function qualifyRecoveredSeed(argumentsValue, { docker: supplied, s
       };
       const physicalId = await clone('physical'), logicalId = await clone('logical');
       let minioId = null;
-      const assertMinio = async () => assertRecoveryMinio(await docker.inspect(minioId), { id: minioId, image: minioIdentity.image, user: minioIdentity.user,
-        volume: names.minio, networkId: network.Id, operationId: args.operationId, seedSha256: args.seedSha256, name: names.minio });
+      const assertMinio = async () => {
+        const actual = await docker.inspect(minioId), expected = { id: minioId, image: minioIdentity.image, user: minioIdentity.user,
+          volume: names.minio, networkId: network.Id, operationId: args.operationId, seedSha256: args.seedSha256, name: names.minio };
+        await recordCloneGuard('minio', 'running', actual, expected); return assertRecoveryMinio(actual, expected);
+      };
       const assertIsolatedNetwork = async () => {
         const current = await docker.request('GET', '/networks/' + network.Id);
         assertOwnedRecoveryResource(current, { operationId: args.operationId, seedSha256: args.seedSha256, purpose: 'network', name: names.network });
@@ -322,12 +354,8 @@ export async function qualifyRecoveredSeed(argumentsValue, { docker: supplied, s
           HostConfig: { NetworkMode: network.Id, Mounts: [mount(names.minio, '/data', false, 'volume')], PortBindings: {}, PublishAllPorts: false, RestartPolicy: { Name: 'no' } } });
         need(SHA.test(created?.Id ?? '') && created.Id !== verified.intent.source.roles.minio.id, 'SP1_RECOVERY_MINIO_INVALID');
         minioId = created.Id;
-        const stopped = await docker.inspect(minioId); assertOwnedRecoveryResource(stopped, volumeSpec('minio'));
-        need(stopped.Id === minioId && stopped.Image === minioIdentity.image && !active(stopped) && stopped.HostConfig?.NetworkMode === network.Id
-          && Object.keys(stopped.HostConfig?.PortBindings ?? {}).length === 0 && stopped.HostConfig.PublishAllPorts !== true
-          && stopped.HostConfig.Mounts?.length === 1 && stopped.HostConfig.Mounts[0].Type === 'volume'
-          && stopped.HostConfig.Mounts[0].Source === names.minio && stopped.HostConfig.Mounts[0].Target === '/data' && stopped.HostConfig.Mounts[0].ReadOnly === false,
-        'SP1_RECOVERY_MINIO_CHANGED');
+        const stopped = await docker.inspect(minioId), expected = { id: minioId, image: minioIdentity.image, volume: names.minio, destination: '/data', networkId: network.Id, ...volumeSpec('minio') };
+        await recordCloneGuard('minio', 'stopped', stopped, expected); assertStoppedRecoveryClone(stopped, expected);
         await docker.start(minioId); await assertMinio(); await assertIsolatedNetwork();
         const ready = await docker.run(args.captureImage, { network: network.Id, mounts: [mount(HERE, '/operator')], labels: labels('minio-ready'),
           cmd: ['node', '--experimental-strip-types', '/operator/recovery.mjs', 'wait-minio', '--host', names.minio, '--owner', args.operationId] });

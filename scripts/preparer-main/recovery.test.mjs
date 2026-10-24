@@ -7,7 +7,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { validateRecoveryArguments, recoveryResourceNames, assertOwnedRecoveryResource, assertRecoveryPostgres, verifiedPostgresDataIdentity, assertRecoveryMinio, validateModelAuditSummary, waitRecoveryMinio, verifyColdSeed, qualifyRecoveredSeed, captureCloneDatabase } from './recovery.mjs';
+import { validateRecoveryArguments, recoveryResourceNames, assertOwnedRecoveryResource, assertStoppedRecoveryClone, recoveryCloneWitness, assertRecoveryPostgres, verifiedPostgresDataIdentity, assertRecoveryMinio, validateModelAuditSummary, waitRecoveryMinio, verifyColdSeed, qualifyRecoveredSeed, captureCloneDatabase } from './recovery.mjs';
 import { canonicalSha256 } from './offline-seed.mjs';
 import { hashFile } from './foundation/archives.mjs';
 
@@ -107,6 +107,44 @@ test('PostgreSQL clone admits one exact image and volume, one isolated network a
   const { value, expected } = resourceFixture(); assert.equal(assertRecoveryPostgres(value, expected), value);
   const mutations = [v => v.Image = image(99), v => v.HostConfig.PublishAllPorts = true, v => v.HostConfig.PortBindings = { '5432/tcp': [{ HostPort: '5434' }] }, v => v.HostConfig.RestartPolicy.Name = 'always', v => v.Mounts[0].Name = 'original-main-volume', v => v.Mounts[0].RW = false, v => v.Mounts.push({ Type: 'bind', Source: '/source' }), v => v.NetworkSettings.Networks.extra = { NetworkID: id(99) }, v => Object.values(v.NetworkSettings.Networks)[0].NetworkID = id(99)];
   for (const mutate of mutations) { const changed = structuredClone(value); mutate(changed); assert.throws(() => assertRecoveryPostgres(changed, expected), { code: 'SP1_RECOVERY_CLONE_CHANGED' }); }
+});
+test('stopped PG and MinIO clones admit Engine-omitted ReadOnly or explicit false only with effective RW', () => {
+  for (const purpose of ['physical', 'minio']) {
+    const operationId = randomUUID(), names = recoveryResourceNames(operationId, { modelAudit: true }), name = names[purpose], destination = purpose === 'minio' ? '/data' : '/var/lib/postgresql';
+    const expected = { id: id(90), image: image(91), volume: name, destination, networkId: id(92), operationId, seedSha256: id(93), purpose, name };
+    const value = { Id: expected.id, Name: '/' + name, Image: expected.image,
+      Config: { User: '999:0', Entrypoint: [], Labels: { 'wfc.preparer.sp1.operation': operationId, 'wfc.preparer.sp1.seed': expected.seedSha256, 'wfc.preparer.sp1.purpose': purpose } },
+      State: { Status: 'created', Running: false, Restarting: false, Pid: 0 },
+      HostConfig: { NetworkMode: expected.networkId, PortBindings: {}, PublishAllPorts: false, RestartPolicy: { Name: 'no' }, Mounts: [{ Type: 'volume', Source: name, Target: destination }] },
+      Mounts: [{ Type: 'volume', Name: name, Destination: destination, RW: true }] };
+    assert.equal(Object.hasOwn(value.HostConfig.Mounts[0], 'ReadOnly'), false);
+    assert.equal(assertStoppedRecoveryClone(value, expected), value);
+    const explicit = structuredClone(value); explicit.HostConfig.Mounts[0].ReadOnly = false; assert.equal(assertStoppedRecoveryClone(explicit, expected), explicit);
+    const code = purpose === 'minio' ? 'SP1_RECOVERY_MINIO_CHANGED' : 'SP1_RECOVERY_CLONE_CHANGED';
+    for (const invalid of [true, null, 0, 'false', undefined]) {
+      const changed = structuredClone(value); changed.HostConfig.Mounts[0].ReadOnly = invalid;
+      assert.throws(() => assertStoppedRecoveryClone(changed, expected), { code });
+    }
+    for (const mutate of [v => v.Mounts[0].RW = false, v => v.Mounts[0].Name = 'source-data', v => v.HostConfig.NetworkMode = names.network,
+      v => v.HostConfig.Mounts[0].Source = 'source-data', v => v.HostConfig.PortBindings = { '5432/tcp': [{ HostPort: '5434' }] }, v => v.State.Running = true]) {
+      const changed = structuredClone(value); mutate(changed); assert.throws(() => assertStoppedRecoveryClone(changed, expected), { code });
+    }
+  }
+});
+test('private clone witnesses retain omission and identity facts while excluding Env, command and foreign secrets', () => {
+  const value = { Id: id(95), Name: '/owned-clone', Image: image(96),
+    Config: { User: '999:0', Entrypoint: [], Env: ['MINIO_ROOT_PASSWORD=PRIVATE_ENV_SECRET'], Cmd: ['PRIVATE_COMMAND_SECRET'], Labels: { secret: 'PRIVATE_LABEL_SECRET', 'wfc.preparer.sp1.purpose': 'physical' } },
+    HostConfig: { NetworkMode: id(97), Mounts: [{ Type: 'volume', Source: 'owned-volume', Target: '/var/lib/postgresql' }], LogConfig: { secret: 'PRIVATE_LOG_SECRET' } },
+    Mounts: [{ Type: 'volume', Name: 'owned-volume', Destination: '/var/lib/postgresql', RW: true }],
+    NetworkSettings: { Networks: { owned: { NetworkID: id(97), EndpointID: id(98) } } },
+    State: { Running: false, Pid: 0, ExitCode: 0, Error: 'PRIVATE_FOREIGN_ERROR' } };
+  const witness = recoveryCloneWitness(value);
+  assert.doesNotMatch(JSON.stringify(witness), /PRIVATE|Env|Cmd|LogConfig/);
+  assert.equal(witness.Config.User, '999:0'); assert.deepEqual(witness.Config.Entrypoint, []);
+  assert.equal(witness.HostConfig.Mounts[0].readOnlyPresent, false); assert.equal(Object.hasOwn(witness.HostConfig.Mounts[0], 'ReadOnly'), false);
+  assert.equal(witness.Mounts[0].RW, true); assert.equal(witness.Networks.owned.NetworkID, id(97)); assert.equal(witness.State.Pid, 0);
+  value.HostConfig.Mounts[0].ReadOnly = false;
+  assert.equal(recoveryCloneWitness(value).HostConfig.Mounts[0].readOnlyPresent, true);
 });
 
 async function seedFixture(t) {
