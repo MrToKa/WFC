@@ -1,6 +1,20 @@
 # Simplified Preparer implementation progress
 
-## Current — SP-6 delivered; SP-7 final acceptance, 24 October 2026
+## Current — SP-0–SP-7 technically delivered, 24 October 2026
+
+SP7 COMPLETE within accepted no-new-real-conversion scope. All5 live services
+running; API/web/Preparer healthy, primarygateway unauth401, PreparerSessionfalse,
+jobs401/wrongHost403. Exact primaryPreparer restart PASS: same image/stores,
+no admittedjobs,0APSenvkeys/0operator cloud/import. PG only restartpolicy no→
+unless-stopped changed afterward with samePID/start/config/mounts; no DB writes
+or process restart. Current private runtimecompanion retained. Fullhost/Docker
+restartNOT_RUN. Actual IAB primarysigninpagesPASS; user's own login remainshuman.
+
+Reports12daily-use/13operations/14acceptance finalized. Requiredbackup/rollback/
+candidateimages retained; all testfixtures removed,6,426,951,237 duplicatebytes
+freed. Main source remainsclean96e63f13; PF/remote unchanged. Product543ae7a,
+latestoperations+docs on inherited SP7branch. Dedicatedheartbeat is tobePAUSED
+at technicalend. No further autonomous real conversion or deployment work.
 
 Live product543ae7a delivered on5180/5193 in0f257b41. Primary/API/Preparer healthy;
 HTTPhealth200, unauthsessionfalse/jobs401/wrongHost403. Root independent qualified
