@@ -1,6 +1,38 @@
 # Simplified Preparer implementation progress
 
-## SP-1 ACTIVE — 24 October 2026
+## Current — SP-1 verified; SP-2 continuation, 24 October 2026
+
+SP-1 scope PASS at source29664ee plus this report: cold seed ea23121d and
+audited recovery acac2c9c PASS; all-public rows/catalog/global metadata and
+read-only model integrity verified in owned clones, cleanup PASS. Target DB
+logical restore retained original cluster role context; this is not a fresh
+initdb full-cluster logical recovery. Legacy model_package_archives is absent;
+no historical ZIP evidence is invented. Cold/recovery releasableBackup=false and
+applicationStartup=NOT_RUN remain unchanged; admission was scoped to health repair.
+
+Primary5180 health repair950fa345 PASS at2026-10-24T05:20:19Z: started unchanged
+original PG, then restarted unchanged frontend to clear a stale external API DNS
+resolution. API/web healthy; /health and / HTTP200. Config/images/mounts/network
+membership names unchanged; all non-target resource identities/states unchanged.
+The stopped PG's obsolete daemon bridge ID was rebound by Docker to the verified
+current default bridge. Initial wrong /api/health probe and strict-ID FAIL are
+retained with separate explicit reconciliation, not rewritten. PF5191 untouched.
+
+Current source product candidate543ae7a has Linux Preparer329/329 PASS, package
+174/174 PASS, WFC focused54/54 PASS and typecheck PASS. Candidate APIec6fc3cf,
+weba9226e28 and Preparer3e815754 images are built, NOT deployed. Isolated image
+smoke PASS: USERnode, healthy, correct Host/session rules, jobs401, wrongHost403,
+zero APS environment keys; all smoke resources removed. Duplicate failed restore
+archives retired only after equality/ownership/cleanup proof:4,432,123,658 bytes.
+
+Main source clean96e63f13; remote main same SHA freshly read2026-10-24T05:19Z.
+PF merge still pending. SP5 fixture14/14 pure controls PASS; actual fixture/browser
+and candidate old-data migration/image rollback gates NOT_RUN. Root owns runtime/
+tests; agentB owns NEW upgrade-preflight sources, agentC reviews SP5 sources only.
+No real new model conversion or APS upload/translation. Next execute SP-2–SP-4
+verification handoffs, then isolated synthetic browser and SP6 upgrade proof.
+
+## Historical SP-1 progress (superseded current state above)
 
 Cold seed ea23121d is PASS with confirmed source-lock release; full PG/MinIO/
 staging archives and five exact images verified, source API/web/MinIO resumed
