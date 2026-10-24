@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { captureOfflineSeed, canonicalSha256, networkAttachmentIdentity, sourceWitness, validateIntent } from './offline-seed.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const HELPER = 'sha256:72add26dc2796ebc6f38f38405a3fdee3748a7bbc13781c9d01abdb8c28b59b2';
+const HELPER = 'sha256:522b9e8c8fd4c7f40c5eecf564676d35ef8b43e43510dfa9ef0072565948e02b';
 const id = index => index.toString(16).padStart(64, '0');
 const hash = value => createHash('sha256').update(value).digest('hex');
 const clone = value => structuredClone(value);

@@ -233,18 +233,19 @@ async function rawRequest(socketPath, method, route, body, { timeoutMs, signal, 
 export function preparerSeedArchiveCapabilities(config) {
   const refuse=()=>{throw error('DOCKER_ARCHIVE_CAPABILITY_SCOPE');};
   const cmd=config?.Cmd,h=config?.HostConfig,labels=config?.Labels;
-  if(config?.Image!=='sha256:72add26dc2796ebc6f38f38405a3fdee3748a7bbc13781c9d01abdb8c28b59b2'
+  if(config?.Image!=='sha256:522b9e8c8fd4c7f40c5eecf564676d35ef8b43e43510dfa9ef0072565948e02b'
     || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(labels?.['wfc.preparer.sp1.operation']??'')
     || labels?.['wfc.preparer.sp1.purpose']!=='offline-seed-archive' || !Array.isArray(config.Env) || config.Env.length
     || !['0','0:0'].includes(config.User) || config.Entrypoint!==undefined&&(!Array.isArray(config.Entrypoint)||config.Entrypoint.length)
     || !h || h.NetworkMode!=='none' || h.Binds?.length || h.VolumesFrom?.length || h.Devices?.length || h.DeviceRequests?.length
-    || !Array.isArray(cmd)||cmd[0]!=='node'||cmd[1]!=='scripts/operations/archives.mjs')return refuse();
-  const mounts=h.Mounts,roleFile=v=>typeof v==='string'&&/^\/backup\/(?:postgres|minio|staging)\.wfcops$(?![\s\S])/.test(v);
+    || !Array.isArray(cmd)||cmd[0]!=='node'||!['scripts/operations/archives.mjs','scripts/operations/pg-root-archives.mjs'].includes(cmd[1]))return refuse();
+  const pgRoot=cmd[1]==='scripts/operations/pg-root-archives.mjs';
+  const mounts=h.Mounts,roleFile=v=>typeof v==='string'&&(pgRoot ? /^\/backup\/postgres\.wfcops$(?![\s\S])/ : /^\/backup\/(?:minio|staging)\.wfcops$(?![\s\S])/).test(v);
   const match=spec=>Array.isArray(mounts)&&mounts.length===spec.length&&spec.every(([target,types,readOnly])=>mounts.filter(m=>m.Target===target&&types.includes(m.Type)&&m.ReadOnly===readOnly&&typeof m.Source==='string'&&m.Source.length>0).length===1);
   if(cmd[2]==='capture'&&cmd.length===5&&cmd[3]==='/source'&&roleFile(cmd[4])&&match([['/source',['bind','volume'],true],['/backup',['bind'],false]]))return ['DAC_OVERRIDE'];
   if(cmd[2]==='measure'&&cmd.length===4&&cmd[3]==='/source'&&match([['/source',['bind','volume'],true]]))return ['DAC_OVERRIDE'];
   if(cmd[2]==='verify'&&cmd.length===5&&roleFile(cmd[3])&&/^[a-f0-9]{64}$(?![\s\S])/.test(cmd[4])&&match([['/backup',['bind'],true]]))return [];
-  if(cmd[2]==='restore'&&cmd.length===6&&roleFile(cmd[3])&&cmd[4]==='/target'&&/^[a-f0-9]{64}$(?![\s\S])/.test(cmd[5])&&match([['/backup',['bind'],true],['/target',['volume'],false]]))return ['CHOWN','FOWNER','DAC_OVERRIDE'];
+  if(pgRoot&&cmd[2]==='restore'&&cmd.length===6&&roleFile(cmd[3])&&cmd[4]==='/target'&&/^[a-f0-9]{64}$(?![\s\S])/.test(cmd[5])&&match([['/backup',['bind'],true],['/target',['volume'],false]]))return ['CHOWN','FOWNER','DAC_OVERRIDE'];
   return refuse();
 }
 function archiveCapabilities(state, config) {

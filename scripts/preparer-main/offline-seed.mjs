@@ -10,9 +10,9 @@ import { writeJsonNew, verifyImageArchive } from './foundation/manifest.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const UUID = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
 const ID = /^[a-f0-9]{64}$/, SHA = /^[a-f0-9]{64}$/, IMAGE = /^sha256:[a-f0-9]{64}$/;
-const HELPER = 'sha256:72add26dc2796ebc6f38f38405a3fdee3748a7bbc13781c9d01abdb8c28b59b2';
+const HELPER = 'sha256:522b9e8c8fd4c7f40c5eecf564676d35ef8b43e43510dfa9ef0072565948e02b';
 const ROLES = ['api', 'web', 'postgres', 'minio'];
-const PACK = ['node', 'scripts/operations/archives.mjs'];
+const pack = role => ['node', role === 'postgres' ? 'scripts/operations/pg-root-archives.mjs' : 'scripts/operations/archives.mjs'];
 export const OFFLINE_SEED_BOUNDS = Object.freeze({ operationTimeoutMs: 7_200_000, commandTimeoutMs: 3_600_000,
   requestTimeoutMs: 180_000, helperTimeoutMs: 3_600_000, helperMemoryBytes: 512 * 1024 ** 2,
   pidsLimit: 128, nanoCpus: 1_000_000_000, tmpBytes: 64 * 1024 ** 2,
@@ -211,7 +211,7 @@ export async function captureOfflineSeed({ intentPath, intentSha256, operationDi
   need(testFinalizationObserver === undefined || typeof testFinalizationObserver === 'function', 'SP1_FINALIZATION_OBSERVER_INVALID');
   const finalizationMode = testFinalizationObserver === undefined ? 'production-default' : 'injected-test-only';
   const sourceClosure = [];
-  for (const name of ['offline-seed.mjs', 'foundation/docker.mjs', 'foundation/docker-bounds.mjs', 'foundation/archives.mjs', 'foundation/manifest.mjs', 'foundation/provenance.json']) sourceClosure.push(await pin(path.join(path.dirname(fileURLToPath(import.meta.url)), name)));
+  for (const name of ['offline-seed.mjs', 'pg-root-archives.mjs', 'foundation/docker.mjs', 'foundation/docker-bounds.mjs', 'foundation/archives.mjs', 'foundation/manifest.mjs', 'foundation/provenance.json']) sourceClosure.push(await pin(path.join(path.dirname(fileURLToPath(import.meta.url)), name)));
   // mkdir without recursive is the immutable attempt latch; any retained directory refuses retry.
   await fs.mkdir(operationDirectory, { mode: 0o700 });
   const file = name => path.join(operationDirectory, name), startedAt = new Date().toISOString();
@@ -242,14 +242,15 @@ export async function captureOfflineSeed({ intentPath, intentSha256, operationDi
         roles: Object.fromEntries(ROLES.map(role => [role, { id: original[role].Id, image: original[role].Image, config: original[role].Config,
           hostConfig: original[role].HostConfig, mounts: original[role].Mounts, networks: original[role].NetworkSettings?.Networks ?? {} }])) });
       companionPin = await pin(intent.privateCompanion);
-      const helper = async (command, mounts) => {
-        check(); const result = await docker.run(intent.helperImage, { network: 'none', mounts, cmd: [...PACK, ...command],
+      const helper = async (command, mounts, role) => {
+        check(); const result = await docker.run(intent.helperImage, { network: 'none', mounts, cmd: [...pack(role), ...command],
           labels: { 'wfc.preparer.sp1.operation': intent.operationId, 'wfc.preparer.sp1.purpose': 'offline-seed-archive' } });
-        need(result?.status === 'PASS', 'SP1_ARCHIVE_HELPER_FAILED'); return result;
+        if (result?.status !== 'PASS') throw Object.assign(Error('SP1_ARCHIVE_HELPER_FAILED'), { code: 'SP1_ARCHIVE_HELPER_FAILED', helperCode: safeCode(result) });
+        return result;
       };
       const mounts = { postgres: dataMount(original.postgres, '/var/lib/postgresql'), minio: dataMount(original.minio, '/data'), staging: dataMount(original.api, intent.source.stagingDestination) };
       let sourceBytes = 0;
-      for (const mount of Object.values(mounts)) { const measured = await helper(['measure', '/source'], [mount]);
+      for (const [role, mount] of Object.entries(mounts)) { const measured = await helper(['measure', '/source'], [mount], role);
         need(Number.isSafeInteger(measured.totalBytes) && measured.totalBytes >= 0, 'SP1_MEASUREMENT_INVALID'); sourceBytes += measured.totalBytes; }
       const images = [];
       for (const role of [...ROLES, 'helper']) {
@@ -274,9 +275,9 @@ export async function captureOfflineSeed({ intentPath, intentSha256, operationDi
       const assertCold = async () => { const value = await witness(); need(ROLES.every(role => !active(value[role])), 'SP1_SOURCE_NOT_COLD'); return value; };
       for (const [role, mount] of Object.entries(mounts)) {
         await assertCold();
-        const name = role + '.wfcops', result = await helper(['capture', '/source', '/backup/' + name], [mount, privateMount(operationDirectory, '/backup', false)]);
+        const name = role + '.wfcops', result = await helper(['capture', '/source', '/backup/' + name], [mount, privateMount(operationDirectory, '/backup', false)], role);
         await assertCold();
-        const verified = await helper(['verify', '/backup/' + name, result.sha256], [privateMount(operationDirectory, '/backup')]);
+        const verified = await helper(['verify', '/backup/' + name, result.sha256], [privateMount(operationDirectory, '/backup')], role);
         await assertCold();
         const saved = await pin(file(name)); need(saved.sha256 === result.sha256 && verified.sha256 === saved.sha256 && saved.bytes === result.bytes, 'SP1_ARCHIVE_READBACK_MISMATCH');
         archiveRecords.push({ role, file: saved, members: result.members, files: result.files, totalBytes: result.totalBytes });
@@ -313,7 +314,7 @@ export async function captureOfflineSeed({ intentPath, intentSha256, operationDi
   if (primary) {
     await writeJsonNew(file('failure.private.json'), { schemaVersion: 'wfc.preparer.offline-seed-failure.v1', operationId: intent.operationId,
       status: 'FAIL', code: safeCode(primary), causes: (primary instanceof AggregateError ? primary.errors : [primary]).map(item => ({
-        code: safeCode(item), cleanup: getBoundedDockerCleanup(item), statusCode: Number.isInteger(item?.statusCode) ? item.statusCode : null })),
+        code: safeCode(item), helperCode: item.helperCode ?? null, cleanup: getBoundedDockerCleanup(item), statusCode: Number.isInteger(item?.statusCode) ? item.statusCode : null })),
       cleanup: getBoundedDockerCleanup(primary), sourceResume: resume?.status ?? 'UNCONFIRMED',
       sourceLockRetained: true, at: new Date().toISOString() });
     throw primary;

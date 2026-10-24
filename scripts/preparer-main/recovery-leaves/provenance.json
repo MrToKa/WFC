@@ -1,0 +1,27 @@
+{
+  "sourceHead": "9285632fe79d283460c4c9bff814d4045282bf0e",
+  "scope": "standalone read-only inventory/comparison/public-global SQL leaves only; no PF runtime",
+  "sourceRepository": "C:/Users/todor.chankov/source/WFC-pathfinder-local",
+  "files": [
+    {
+      "bytes": 27118,
+      "path": "losslessInventory.ts",
+      "source": "C:/Users/todor.chankov/source/WFC-pathfinder-local/server/operations/losslessInventory.ts",
+      "sha256": "44ceac7d9b792587573e12216d31107e5b80cd589d623a54bd104bd04389acf1"
+    },
+    {
+      "bytes": 22926,
+      "path": "current-inventory-lib.mjs",
+      "source": "C:/Users/todor.chankov/source/WFC-pathfinder-local/scripts/pathfinder-copied-recovery/current-inventory-lib.mjs",
+      "sha256": "c3583f5e302b8727617480f43a5744c3b3825c991adb813fdf2224a85f8a8963"
+    },
+    {
+      "bytes": 12178,
+      "path": "global-sql-v2.mjs",
+      "source": "C:/Users/todor.chankov/source/WFC-pathfinder-local/scripts/pathfinder-barriers/global-sql-v2.mjs",
+      "sha256": "1f3b7e66d4b00a5dd678919787a9d68f70db94db5acadb2f057b6a85591e7183"
+    }
+  ],
+  "mode": "exact-byte-copy",
+  "schemaVersion": "wfc.preparer.recovery-leaves.v1"
+}

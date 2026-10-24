@@ -1,8 +1,8 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {preparerSeedArchiveCapabilities as caps} from './foundation/docker-bounds.mjs';
-const hash='a'.repeat(64),image='sha256:72add26dc2796ebc6f38f38405a3fdee3748a7bbc13781c9d01abdb8c28b59b2';
+const hash='a'.repeat(64),image='sha256:522b9e8c8fd4c7f40c5eecf564676d35ef8b43e43510dfa9ef0072565948e02b';
 const mount=(Type,Target,ReadOnly)=>({Type,Source:'owned-fixture',Target,ReadOnly});
-const config=(args,mounts)=>({Image:image,User:'0',Env:[],Labels:{'wfc.preparer.sp1.operation':'12345678-1234-4234-8234-123456789abc','wfc.preparer.sp1.purpose':'offline-seed-archive'},Cmd:['node','scripts/operations/archives.mjs',...args],HostConfig:{NetworkMode:'none',Mounts:mounts}});
+const config=(args,mounts)=>({Image:image,User:'0',Env:[],Labels:{'wfc.preparer.sp1.operation':'12345678-1234-4234-8234-123456789abc','wfc.preparer.sp1.purpose':'offline-seed-archive'},Cmd:['node',args.includes('/backup/postgres.wfcops')?'scripts/operations/pg-root-archives.mjs':'scripts/operations/archives.mjs',...args],HostConfig:{NetworkMode:'none',Mounts:mounts}});
 for(const role of ['postgres','minio','staging'])for(const type of ['bind','volume'])test('cold '+role+' '+type+' capture grants only read DAC',()=>assert.deepEqual(caps(config(['capture','/source','/backup/'+role+'.wfcops'],[mount(type,'/source',true),mount('bind','/backup',false)])),['DAC_OVERRIDE']));
 test('restore grants metadata capabilities only into a volume',()=>assert.deepEqual(caps(config(['restore','/backup/postgres.wfcops','/target',hash],[mount('bind','/backup',true),mount('volume','/target',false)])),['CHOWN','FOWNER','DAC_OVERRIDE']));
 test('archive verify has zero added capability',()=>assert.deepEqual(caps(config(['verify','/backup/minio.wfcops',hash],[mount('bind','/backup',true)])),[]));

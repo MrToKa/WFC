@@ -34,13 +34,20 @@
       "name": "docker-bounds.mjs",
       "reason": "24 October dedicated Node24.19 archive-only helper replaces removed historical API image; capability scope unchanged",
       "sha256": "2c708c9d8d139dac772667abe9fc3b86b309e0c03472a3ab72cc33959c6ccb31"
+    },
+    {
+      "name": "docker-bounds.mjs",
+      "reason": "Dedicated immutable GNUtouch/Node24.22 helper with separate closed PG-root script; generic link rejection retained",
+      "sha256": "30dc48ca59bfb03a85f1d02c7fc39897b083c359848fe5a03d8fcec35df2e64f"
     }
   ],
   "preparerArchiveHelper": {
-    "image": "sha256:72add26dc2796ebc6f38f38405a3fdee3748a7bbc13781c9d01abdb8c28b59b2",
-    "baseImage": "sha256:244cc2b53f46f9e876304391d17682b0ddae9ac33491f4857e25e35a36ba7995",
-    "node": "24.19.0",
+    "image": "sha256:522b9e8c8fd4c7f40c5eecf564676d35ef8b43e43510dfa9ef0072565948e02b",
+    "baseImage": "sha256:481326351dbfa8acc86afe4d2543a1b96a05d523dd95a4715928f7f25418854f",
+    "node": "24.22.0",
+    "gnuTouch": true,
     "archiveSha256": "2f0f89696c13a66eaab0bc4006b57240944fac5be01cf6d88518b4674c5f5066",
-    "onlyCopiedFile": "scripts/operations/archives.mjs"
+    "pgRootArchiveSha256": "25201153cf03befab3c47f7fe1aed7db4e9cf600b2c9e70b4acd77793ec566f1",
+    "reason": "Separate closed PostgreSQL18 root format; generic archive remains unchanged."
   }
 }
