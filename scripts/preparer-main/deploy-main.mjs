@@ -53,6 +53,11 @@ const endpointEqual = (actual, expected) => same(Object.fromEntries(['IPAMConfig
 export function primaryConfiguration(original, image, imageConfig, operationId, role) {
   need(['api', 'web'].includes(role) && IMAGE.test(image), 'DEPLOY_CONFIGURATION_INVALID');
   const value = structuredClone(original.Config); value.Image = image; value.Labels = { ...imageConfig.Labels, ...value.Labels, ...ownerLabels(operationId, role) };
+  // Empty Docker User means implicit root, but an empty create value inherits
+  // the new image's User. Make the already-authorized root identity explicit
+  // and reject a candidate with an unexpected nonroot default instead of
+  // silently changing either the old privilege or candidate assumptions.
+  if (value.User === '') { need(['', 'root', '0', '0:0', 'root:root'].includes(imageConfig.User), 'DEPLOY_PRIMARY_USER_PROFILE'); value.User = 'root'; }
   // Operational Compose labels belong to the running installation. Image
   // provenance belongs to the candidate; never retain a stale delivery stamp.
   for (const key of Object.keys(value.Labels)) if (key === 'org.opencontainers.image.revision' || key.startsWith('wfc.preparer.delivery.')) delete value.Labels[key];

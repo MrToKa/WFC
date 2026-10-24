@@ -105,6 +105,13 @@ test('Preparer has three owned persistent mounts, nonroot user and only direct f
   for (const ExposedPorts of [{ '4000/tcp': {} }, { '8080/tcp': {}, '9999/tcp': {} }, { '8080/tcp': { unexpected: true } }]) assert.throws(() => preparerConfiguration({ ...image, ExposedPorts }, operationId, names, NETWORK_ID), { code: 'DEPLOY_PREPARER_IMAGE_PORT_PROFILE' });
 });
 
+test('implicit original root is explicit while nonroot identity is preserved without image inheritance', () => {
+  const operationId = randomUUID(), web = original('web', '2', 5180); web.Config.User = '';
+  const value = primaryConfiguration(web, DEPLOYMENT_IMAGES.web, { User: 'root', Labels: {} }, operationId, 'web'); assert.equal(value.User, 'root'); assert.equal(web.Config.User, ''); assert.deepEqual(value.HostConfig, web.HostConfig);
+  for (const User of ['node', '1000', 'root:unexpected-group']) assert.throws(() => primaryConfiguration(web, DEPLOYMENT_IMAGES.web, { User, Labels: {} }, operationId, 'web'), { code: 'DEPLOY_PRIMARY_USER_PROFILE' });
+  const api = original('api', '1'); assert.equal(primaryConfiguration(api, DEPLOYMENT_IMAGES.api, { User: 'root', Labels: {} }, operationId, 'api').User, 'node');
+});
+
 test('intent rejects alternate ports/images, incomplete pins and non-v4 identities', async t => {
   const f = await fixture(t); assert.equal(validateDeploymentIntent(f.intent), f.intent);
   for (const update of [item => item.images.api = f.originals.api.Image, item => item.gates.seed.bytes = 0, item => item.productRevision = '0'.repeat(40), item => item.operationId = 'aaaaaaaa-aaaa-1aaa-8aaa-aaaaaaaaaaaa', item => item.extra = 1]) { const invalid = clone(f.intent); update(invalid); assert.throws(() => validateDeploymentIntent(invalid)); }

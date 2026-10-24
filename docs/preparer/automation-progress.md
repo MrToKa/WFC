@@ -1,6 +1,20 @@
 # Simplified Preparer implementation progress
 
-## Current — SP-1–SP-4 verified scopes; SP-5 integration, 24 October 2026
+## Current — SP-6 delivered; SP-7 final acceptance, 24 October 2026
+
+Live product543ae7a delivered on5180/5193 in0f257b41. Primary/API/Preparer healthy;
+HTTPhealth200, unauthsessionfalse/jobs401/wrongHost403. Root independent qualified
+rollforward PASS after exact equivalent User=''→root normalization; automatic
+attempt FAIL retained. Originals stopped/renamed/disconnected as rollback; PG/
+MinIO unchanged at qualification, PF untouched. Report11 has native failures and
+honest scope. Updated future operator45controlsPASS. Current rootplan pointer
+.preparer-work/sp6-current-plan.private.json, no live execution cell remains.
+
+Fresh upgrade730f1a8f PASS exact olddata/schema/global/cluster, declared empty
+archive additions, oldimage rollback, all8resources removed+lockreleased. Exact
+candidate offlineimage exports3dd1681e PASS. All SP5/restore fixtures removed.
+Next SP7 dailyinstructions, startup-readiness policy check, final health/store/
+browser scope, local commit and disable dedicated heartbeat. No real conversion.
 
 SP5 COMPLETE/PASS: three-store snapshot/restore0cca87ba, old-cookie fenced/fresh
 admin/history/ZIP proof PASS,0APS.14 store controls PASS. Restoredclone+3volumes
