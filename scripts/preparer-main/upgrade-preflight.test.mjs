@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { validateUpgradeArguments, upgradeResourceNames, upgradeResourceIntents, validateUpgradeResourceCleanup, assertUpgradeResource, assertUpgradeContainer, rewriteUpgradeEnvironment, assertArchiveContractSource,
-  assertCandidateRevision, normalizeArchiveTempContract, validateArchiveAddition, projectOldTables, captureUpgradeClone, probeUpgrade, verifyUpgradeQualification } from './upgrade-preflight.mjs';
+  assertCandidateRevision, normalizeArchiveTempContract, normalizeArchiveTempDefinitions, validateArchiveAddition, projectOldTables, captureUpgradeClone, probeUpgrade, verifyUpgradeQualification } from './upgrade-preflight.mjs';
 import { hashFile } from './foundation/archives.mjs';
 import { currentInventoryCanonicalHash as digest, currentInventorySchemaMetadata, currentInventoryFrame, compareCurrentInventories } from './recovery-leaves/current-inventory-lib.mjs';
 
@@ -98,6 +98,28 @@ test('TEMP contract normalizes only its known schema qualifier and temporary per
   assert.match(actual.schema.definitions.indexes[0].definition, /ON public\.model_package_archives/); assert.ok(actual.relations.every(row => row.persistence === 'p'));
   assert.match(meta.definitions.indexes[0].definition, /pg_temp_7/, 'Original expected metadata remains unchanged');
   assert.throws(() => normalizeArchiveTempContract(meta, [{ name: 'foreign', persistence: 't' }], 'pg_temp_7'), { code: 'UPGRADE_ARCHIVE_CONTRACT_INVALID' });
+});
+test('PostgreSQL pg_temp alias deparser indexes project to the exact declared public contract', () => {
+  // Exact index deparser strings retained from the failed 553411f6 attempt.
+  const temporary = [
+    'CREATE UNIQUE INDEX model_package_archives_pkey ON pg_temp.model_package_archives USING btree (import_id)',
+    'CREATE UNIQUE INDEX model_package_archives_storage_prefix_key ON pg_temp.model_package_archives USING btree (storage_prefix)',
+    'CREATE INDEX model_package_archives_version ON pg_temp.model_package_archives USING btree (project_id, model_version_id, created_at, import_id) WHERE (published = true)',
+  ];
+  const expected = [
+    'CREATE UNIQUE INDEX model_package_archives_pkey ON public.model_package_archives USING btree (import_id)',
+    'CREATE UNIQUE INDEX model_package_archives_storage_prefix_key ON public.model_package_archives USING btree (storage_prefix)',
+    'CREATE INDEX model_package_archives_version ON public.model_package_archives USING btree (project_id, model_version_id, created_at, import_id) WHERE (published = true)',
+  ];
+  const source = { ...definitions(), indexes: temporary.map(definition => ({ definition, valid: true, ready: true })) }, original = structuredClone(source);
+  assert.deepEqual(normalizeArchiveTempDefinitions(source).indexes.map(row => row.definition), expected);
+  assert.deepEqual(normalizeArchiveTempDefinitions(source, 'pg_temp_7').indexes.map(row => row.definition), expected);
+  assert.deepEqual(source, original, 'Historical expected contract is retained unchanged');
+  const numbered = structuredClone(source); numbered.indexes[0].definition = temporary[0].replace('pg_temp.', 'pg_temp_7.');
+  assert.deepEqual(normalizeArchiveTempDefinitions(numbered, 'pg_temp_7').indexes.map(row => row.definition), expected);
+  const foreign = { ...definitions(), indexes: [{ definition: 'CREATE INDEX other ON pg_temp.foreign_table USING btree (id)' }, { definition: 'CREATE INDEX extra ON pg_temp.model_package_archives_extra USING btree (id)' }] };
+  assert.deepEqual(normalizeArchiveTempDefinitions(foreign), foreign);
+  assert.throws(() => normalizeArchiveTempDefinitions(source, 'public'), { code: 'UPGRADE_ARCHIVE_CONTRACT_INVALID' });
 });
 test('only the declared empty new table and exact relation additions may be projected', () => {
   const old = metadata('users'), added = { ...metadata('model_package_archives'), rows: '0', rawBytes: '0', file: { bytes: '0', sha256: hash('') } },

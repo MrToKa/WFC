@@ -173,11 +173,25 @@ function tempSchemaMetadataQuery(source) {
   const sql = match[0].slice('const TABLE_SCHEMA_SQL = `'.length, -2), marker = "n.nspname='public' AND c.relname=$1";
   need(sql.split(marker).length === 2, 'UPGRADE_SCHEMA_QUERY_SOURCE_CHANGED'); return sql.replace(marker, 'n.oid=pg_my_temp_schema() AND c.relname=$1');
 }
+/** Only the predefined TEMP contract uses this projection. PostgreSQL can
+ * deparse its known temporary schema as either pg_temp or pg_temp_N. This does
+ * not normalize candidate capture metadata or unrelated table qualifiers. */
+export function normalizeArchiveTempDefinitions(definitions, temporarySchema) {
+  need(record(definitions) && (temporarySchema === undefined || /^pg_temp_[0-9]+$/.test(temporarySchema)), 'UPGRADE_ARCHIVE_CONTRACT_INVALID');
+  const clone = structuredClone(definitions), prefixes = ['pg_temp.', ...(temporarySchema ? [temporarySchema + '.'] : [])];
+  for (const kind of ['constraints', 'indexes', 'triggers']) {
+    need(Array.isArray(clone[kind]), 'UPGRADE_ARCHIVE_CONTRACT_INVALID');
+    for (const row of clone[kind]) {
+      need(record(row) && typeof row.definition === 'string', 'UPGRADE_ARCHIVE_CONTRACT_INVALID');
+      for (const prefix of prefixes) row.definition = row.definition.replace(new RegExp('(?<![A-Za-z0-9_$])' + prefix.replaceAll('.', '\\.') + NEW_TABLE + '(?![A-Za-z0-9_$])', 'g'), 'public.' + NEW_TABLE);
+    }
+  }
+  return clone;
+}
 export function normalizeArchiveTempContract(metadata, relations, temporarySchema) {
   need(record(metadata) && /^pg_temp_[0-9]+$/.test(temporarySchema) && Array.isArray(relations)
     && same(relations.map(row => row.name).sort(), [...RELATIONS].sort()), 'UPGRADE_ARCHIVE_CONTRACT_INVALID');
-  const clone = structuredClone(metadata), prefix = temporarySchema + '.';
-  for (const kind of ['constraints', 'indexes', 'triggers']) for (const row of clone.definitions[kind]) row.definition = row.definition.split(prefix).join('public.');
+  const clone = structuredClone(metadata); clone.definitions = normalizeArchiveTempDefinitions(clone.definitions, temporarySchema);
   need(same(clone.primaryKey, ['import_id']) && clone.columns.length === 10, 'UPGRADE_ARCHIVE_CONTRACT_INVALID');
   return { schema: { table: NEW_TABLE, columns: clone.columns, primaryKey: clone.primaryKey, keyMode: 'primary-key', definitions: clone.definitions },
     relations: relations.map(row => { need(row.persistence === 't', 'UPGRADE_ARCHIVE_CONTRACT_INVALID'); return { ...row, persistence: 'p' }; }) };
