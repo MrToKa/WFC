@@ -2,6 +2,21 @@
 
 ## Current — SP-1–SP-4 verified scopes; SP-5 integration, 24 October 2026
 
+SP5 fixturec40c725a ACTIVE/healthy, root sole executor. Actual IAB browser PASS:
+WFC login→separate Preparer tab→empty keys→synthetic check→existing tiny converted
+fixture packaging→WFC model listed→ZIP download. HTTP proof PASS: browser/Preparer/
+WFC ZIPs identical2524bytes; same keys/two admins foreign ZIP+resume404, crossed
+lease401. Closure and actual same-container restart PASS: empty APS fields,
+completed ZIP/history retained, old lease401, zero startup APS requests. Second
+admin browser has empty keys and zero private history; all test tabs closed.
+No actual Autodesk request/new conversion; fake transport only, no network fallback.
+Fresh PG fixture attempts0660/c98 failed initialization socket setup, fully owned
+cleanup PASS; exact entrypoint read proved it clears PGHOST, so bounded writable
+default socket tmpfs fixed source. Current fixture controls18/18 PASS. Immediate
+postrestart probe without readiness failed; corrected ready-bound probe PASS,
+initial failure retained. Snapshot+fresh restored Preparer store proof is pending
+agent source; SP6 upgrade-preflight and deployment source remain independent.
+
 SP2–SP4 source verification closed sequentially on inherited branches2670147 /
 d3a7332 and SP4 report commit. Exact116 source/TAP bookends PASS; no unrelated
 full reruns. Reports07/08/09 and handoffs SP2–SP5 retain current scope and limits.
