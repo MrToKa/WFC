@@ -125,7 +125,11 @@ function assertCandidate(actual, configuration, operationId, role, name, before,
     else need(same(actual.HostConfig[key], value), 'DEPLOY_CANDIDATE_CONFIGURATION_CHANGED');
   }
   const network = actual.NetworkSettings?.Networks?.[APP_NETWORK];
-  need(Object.keys(actual.NetworkSettings?.Networks ?? {}).length === 1 && network?.NetworkID === networkId && endpointEqual(network, configuration.NetworkingConfig.EndpointsConfig[APP_NETWORK]), 'DEPLOY_CANDIDATE_NETWORK_CHANGED');
+  // Before its first start, Engine records the requested attachment but has
+  // not assigned its NetworkID. That is a distinct, fully checked created
+  // state; running or previously started containers must prove the real ID.
+  const neverStarted = actual.State?.Status === 'created' && actual.State.Running === false && actual.State.Restarting === false && actual.State.Pid === 0 && actual.State.StartedAt === '0001-01-01T00:00:00Z';
+  need(Object.keys(actual.NetworkSettings?.Networks ?? {}).length === 1 && network && (network.NetworkID === networkId || neverStarted && network.NetworkID === '') && endpointEqual(network, configuration.NetworkingConfig.EndpointsConfig[APP_NETWORK]), 'DEPLOY_CANDIDATE_NETWORK_CHANGED');
   if (role === 'preparer') need(actual.Mounts?.length === 3 && configuration.HostConfig.Mounts.every(item => actual.Mounts.some(value => value.Type === 'volume' && value.Name === item.Source && value.Destination === item.Target && value.RW === true)), 'DEPLOY_PREPARER_MOUNTS_CHANGED');
   else need(same(actual.Mounts, before.Mounts), 'DEPLOY_PRIMARY_MOUNTS_CHANGED');
 }

@@ -48,7 +48,7 @@ function fakeDocker(originals) {
         const id = (++sequence).toString(16).padStart(64, '0'), config = clone(body); delete config.HostConfig; delete config.NetworkingConfig;
         if (images.get(body.Image)?.Config.ExposedPorts || config.ExposedPorts) config.ExposedPorts = { ...clone(images.get(body.Image)?.Config.ExposedPorts ?? {}), ...config.ExposedPorts };
         const mounts = (body.HostConfig.Mounts ?? []).map(item => ({ Type: item.Type, Name: item.Source, Source: '/var/lib/docker/volumes/' + item.Source + '/_data', Destination: item.Target, Driver: 'local', Mode: '', RW: !item.ReadOnly, Propagation: '' }));
-        const network = clone(body.NetworkingConfig.EndpointsConfig[NETWORK]), item = { Id: id, Name: '/' + name, Image: body.Image, Config: config, HostConfig: clone(body.HostConfig), Mounts: mounts, NetworkSettings: { Networks: { [NETWORK]: { IPAMConfig: null, Links: null, DriverOpts: null, GwPriority: 0, ...network, NetworkID: NETWORK_ID } } }, State: { Status: 'created', Running: false, Restarting: false, Pid: 0, StartedAt: '0001-01-01T00:00:00Z' } };
+        const network = clone(body.NetworkingConfig.EndpointsConfig[NETWORK]), item = { Id: id, Name: '/' + name, Image: body.Image, Config: config, HostConfig: clone(body.HostConfig), Mounts: mounts, NetworkSettings: { Networks: { [NETWORK]: { IPAMConfig: null, Links: null, DriverOpts: null, GwPriority: 0, ...network, NetworkID: '' } } }, State: { Status: 'created', Running: false, Restarting: false, Pid: 0, StartedAt: '0001-01-01T00:00:00Z' } };
         // Match native Engine inspection rather than echoing JSON requests.
         for (const mount of item.HostConfig.Mounts ?? []) if (mount.ReadOnly === false) delete mount.ReadOnly;
         if (item.HostConfig.RestartPolicy) item.HostConfig.RestartPolicy.MaximumRetryCount ??= 0;
@@ -57,7 +57,7 @@ function fakeDocker(originals) {
       if (method === 'POST' && parts[0] === 'containers') {
         const item = containers.get(parts[1]); if (!item) throw fault('DOCKER_REQUEST_FAILED');
         if (parts[2] === 'stop') { item.State = { ...item.State, Status: 'exited', Running: false, Pid: 0 }; return null; }
-        if (parts[2] === 'start') { item.State = { Status: 'running', Running: true, Restarting: false, Pid: 900 + sequence, StartedAt: '2026-10-24T10:00:01Z' }; return null; }
+        if (parts[2] === 'start') { item.State = { Status: 'running', Running: true, Restarting: false, Pid: 900 + sequence, StartedAt: '2026-10-24T10:00:01Z' }; if (item.NetworkSettings.Networks[NETWORK]) item.NetworkSettings.Networks[NETWORK].NetworkID = NETWORK_ID; return null; }
         if (parts[2] === 'rename') { const name = '/' + url.searchParams.get('name'); if ([...containers.values()].some(other => other.Id !== item.Id && other.Name === name)) throw fault('DOCKER_REQUEST_FAILED'); item.Name = name; return null; }
       }
       if (method === 'DELETE' && parts[0] === 'containers') { const item = containers.get(parts[1]); if (!item || item.State.Running || url.searchParams.get('v') !== 'false') throw fault('DOCKER_REQUEST_FAILED'); containers.delete(item.Id); return null; }
@@ -213,6 +213,20 @@ test('inherited image exposure is retained without accepting an additional host 
   const f = await fixture(t), { args, item } = await f.plan(); let altered = false;
   f.docker.hook = ({ method, route }, docker) => { if (method === 'GET' && route.startsWith('/containers/') && route.endsWith('/json')) { const value = docker.containers.get(route.split('/')[2]); if (value?.Config.Labels?.['wfc.preparer.deployment.purpose'] === 'preparer') { assert.deepEqual(value.Config.ExposedPorts, { '4000/tcp': {}, '8080/tcp': {} }); assert.equal(value.HostConfig.PublishAllPorts, false); value.HostConfig.PortBindings['4000/tcp'] = [{ HostIp: '0.0.0.0', HostPort: '4000' }]; altered = true; } } };
   await assert.rejects(deployMainDeployment(args, f.options), error => error.code === 'DEPLOY_RECONCILIATION_REQUIRED' && error.rollback.status === 'UNCONFIRMED'); assert(altered); assert(!mutations(f.docker).some(call => call.method === 'DELETE')); await absent(path.join(item.operationDirectory, 'complete.private.json')); await fs.stat(path.join(f.root, '.preparer-work', 'main5180-deploy.lock'));
+});
+
+test('only never-started created candidates may have an unbound planned attachment', async t => {
+  for (const state of ['foreign-network-created', 'unbound-running', 'unbound-ever-started']) await t.test(state, async t => {
+    const f = await fixture(t), { args, item } = await f.plan(); let altered = false;
+    f.docker.hook = ({ method, route }, docker) => {
+      if (method !== 'GET' || !route.startsWith('/containers/') || !route.endsWith('/json')) return;
+      const value = docker.containers.get(route.split('/')[2]); if (value?.Config.Labels?.['wfc.preparer.deployment.purpose'] !== 'preparer') return;
+      if (state === 'foreign-network-created') { value.NetworkSettings.Networks[NETWORK].NetworkID = 'e'.repeat(64); altered = true; }
+      if (state === 'unbound-running' && value.State.Running) { value.NetworkSettings.Networks[NETWORK].NetworkID = ''; altered = true; }
+      if (state === 'unbound-ever-started') { value.State = { Status: 'exited', Running: false, Restarting: false, Pid: 0, StartedAt: '2026-10-24T10:00:01Z' }; value.NetworkSettings.Networks[NETWORK].NetworkID = ''; altered = true; }
+    };
+    await assert.rejects(deployMainDeployment(args, f.options), error => error.code === 'DEPLOY_RECONCILIATION_REQUIRED' && error.rollback.status === 'UNCONFIRMED'); assert(altered); assert(!mutations(f.docker).some(call => call.method === 'DELETE')); await absent(path.join(item.operationDirectory, 'complete.private.json')); await fs.stat(path.join(f.root, '.preparer-work', 'main5180-deploy.lock'));
+  });
 });
 
 test('a data-role restart during delivery blocks all further mutations without attempting to restart it', async t => {
