@@ -29,6 +29,18 @@
       "name": "docker-bounds.mjs",
       "reason": "Closed offline-seed ownership/capability profile; historical profile preserved",
       "sha256": "97c961574c35f1ca2b8024db2e887ff5aa871f5e665bc18257c1517012e1ec35"
+    },
+    {
+      "name": "docker-bounds.mjs",
+      "reason": "24 October dedicated Node24.19 archive-only helper replaces removed historical API image; capability scope unchanged",
+      "sha256": "2c708c9d8d139dac772667abe9fc3b86b309e0c03472a3ab72cc33959c6ccb31"
     }
-  ]
+  ],
+  "preparerArchiveHelper": {
+    "image": "sha256:72add26dc2796ebc6f38f38405a3fdee3748a7bbc13781c9d01abdb8c28b59b2",
+    "baseImage": "sha256:244cc2b53f46f9e876304391d17682b0ddae9ac33491f4857e25e35a36ba7995",
+    "node": "24.19.0",
+    "archiveSha256": "2f0f89696c13a66eaab0bc4006b57240944fac5be01cf6d88518b4674c5f5066",
+    "onlyCopiedFile": "scripts/operations/archives.mjs"
+  }
 }

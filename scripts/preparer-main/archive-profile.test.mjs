@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {preparerSeedArchiveCapabilities as caps} from './foundation/docker-bounds.mjs';
-const hash='a'.repeat(64),image='sha256:ac0d16ab1b0f4c92922c20d1a13a5ea142d4c6e92558de1870daf4db7fd60fcf';
+const hash='a'.repeat(64),image='sha256:72add26dc2796ebc6f38f38405a3fdee3748a7bbc13781c9d01abdb8c28b59b2';
 const mount=(Type,Target,ReadOnly)=>({Type,Source:'owned-fixture',Target,ReadOnly});
 const config=(args,mounts)=>({Image:image,User:'0',Env:[],Labels:{'wfc.preparer.sp1.operation':'12345678-1234-4234-8234-123456789abc','wfc.preparer.sp1.purpose':'offline-seed-archive'},Cmd:['node','scripts/operations/archives.mjs',...args],HostConfig:{NetworkMode:'none',Mounts:mounts}});
 for(const role of ['postgres','minio','staging'])for(const type of ['bind','volume'])test('cold '+role+' '+type+' capture grants only read DAC',()=>assert.deepEqual(caps(config(['capture','/source','/backup/'+role+'.wfcops'],[mount(type,'/source',true),mount('bind','/backup',false)])),['DAC_OVERRIDE']));

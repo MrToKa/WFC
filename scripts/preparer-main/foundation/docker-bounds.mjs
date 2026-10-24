@@ -233,7 +233,7 @@ async function rawRequest(socketPath, method, route, body, { timeoutMs, signal, 
 export function preparerSeedArchiveCapabilities(config) {
   const refuse=()=>{throw error('DOCKER_ARCHIVE_CAPABILITY_SCOPE');};
   const cmd=config?.Cmd,h=config?.HostConfig,labels=config?.Labels;
-  if(config?.Image!=='sha256:ac0d16ab1b0f4c92922c20d1a13a5ea142d4c6e92558de1870daf4db7fd60fcf'
+  if(config?.Image!=='sha256:72add26dc2796ebc6f38f38405a3fdee3748a7bbc13781c9d01abdb8c28b59b2'
     || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(labels?.['wfc.preparer.sp1.operation']??'')
     || labels?.['wfc.preparer.sp1.purpose']!=='offline-seed-archive' || !Array.isArray(config.Env) || config.Env.length
     || !['0','0:0'].includes(config.User) || config.Entrypoint!==undefined&&(!Array.isArray(config.Entrypoint)||config.Entrypoint.length)

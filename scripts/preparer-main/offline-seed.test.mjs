@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { captureOfflineSeed, canonicalSha256, networkAttachmentIdentity, sourceWitness, validateIntent } from './offline-seed.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const HELPER = 'sha256:ac0d16ab1b0f4c92922c20d1a13a5ea142d4c6e92558de1870daf4db7fd60fcf';
+const HELPER = 'sha256:72add26dc2796ebc6f38f38405a3fdee3748a7bbc13781c9d01abdb8c28b59b2';
 const id = index => index.toString(16).padStart(64, '0');
 const hash = value => createHash('sha256').update(value).digest('hex');
 const clone = value => structuredClone(value);
@@ -77,10 +77,13 @@ test('attachment CAS detects added, detached and changed network configuration, 
   }
 });
 
-async function fixture(t, { failCapture, failResume, changeOnExport, abortOnCapture, restartDuringFinalCapture, changeNetworkOnExport } = {}) {
+async function fixture(t, { failCapture, failResume, changeOnExport, abortOnCapture, restartDuringFinalCapture, changeNetworkOnExport, staleStoppedNetwork, staleActiveNetwork } = {}) {
   const parent=await fs.realpath(path.join(ROOT,'.preparer-work')),operationId=randomUUID();
   const inputs=path.join(parent,'sp1-seed-test-input-'+operationId);await fs.mkdir(inputs,{mode:0o700});
-  const operationDirectory=path.join(parent,'sp1-offline-seed-'+operationId),all=containers(),intent=intentFor(all,operationId,path.join(inputs,'companion.private.json'));
+  const operationDirectory=path.join(parent,'sp1-offline-seed-'+operationId),all=containers();
+  if(staleStoppedNetwork)all[2].NetworkSettings.Networks={bridge:{NetworkID:id(81)}};
+  if(staleActiveNetwork)all[0].NetworkSettings.Networks={bridge:{NetworkID:id(81)}};
+  const intent=intentFor(all,operationId,path.join(inputs,'companion.private.json'));
   const intentPath=path.join(inputs,'intent.private.json'),raw=JSON.stringify(intent);await fs.writeFile(intentPath,raw,{flag:'wx',mode:0o600});
   const events=[],controller=new AbortController();let captures=0,exports=0;
   const docker={
@@ -88,6 +91,8 @@ async function fixture(t, { failCapture, failResume, changeOnExport, abortOnCapt
     async inspect(identifier){return clone(all.find(item=>item.Id===identifier));},
     async inspectImage(image){return{Id:image,Os:'linux',Architecture:'amd64',Size:1024};},
     async request(method,url){assert.equal(method,'GET');if(url.startsWith('/volumes/'))return{Name:decodeURIComponent(url.slice(9)),Driver:'local',Labels:{},Options:{},Scope:'local'};
+      if(url==='/networks/'+id(81))throw Object.assign(Error('absent network'),{code:'TEST_ABSENT_NETWORK',statusCode:404,definitive:true});
+      if(url==='/networks/bridge')return{Id:id(82),Name:'bridge',Internal:false,Driver:'bridge',Labels:{},IPAM:{Config:[]},Containers:{}};
       if(url==='/networks/'+id(80))return{Id:id(80),Name:'application',Internal:false,Driver:'bridge',Labels:{},IPAM:{Config:[{Subnet:'172.20.0.0/16',Gateway:'172.20.0.1'}]},
         Status:{IPAM:{Subnets:{'172.20.0.0/16':{IPsInUse:all.filter(running).length,DynamicIPsAvailable:65535-all.filter(running).length}}}},Containers:{}};
       throw Error('Unexpected request');},
@@ -110,7 +115,7 @@ async function fixture(t, { failCapture, failResume, changeOnExport, abortOnCapt
         return{status:'PASS',sha256:hash(bytes),bytes:bytes.length,members:2,files:1,totalBytes:bytes.length};}
       assert.equal(verb,'verify');return{status:'PASS',sha256:hash(await fs.readFile(filename))};}
   };
-  t.after(async()=>{const lock=path.join(parent,'main5180-offline-seed.lock');try{const value=JSON.parse(await fs.readFile(lock,'utf8'));
+  t.after(async()=>{const lock=path.join(parent,'test-main5180-offline-seed.lock');try{const value=JSON.parse(await fs.readFile(lock,'utf8'));
       if(value.operationId===operationId)await fs.unlink(lock);}catch(error){if(error.code!=='ENOENT')throw error;}
     await fs.rm(operationDirectory,{recursive:true,force:true});await fs.rm(inputs,{recursive:true,force:true});});
   return{all,intent,events,docker,controller,operationDirectory,args:{intentPath,intentSha256:hash(raw),operationDirectory},
@@ -137,7 +142,7 @@ test('cold seed captures all three stores, no PG start, exact prior active state
   assert.equal(result.sourceLockRelease.archivedLock.sha256,complete.sourceLockRelease.source.sha256);
   const archived=JSON.parse(await fs.readFile(complete.sourceLockRelease.archivedPath,'utf8'));
   assert.equal(archived.operationId,f.intent.operationId);assert.equal(archived.schemaVersion,'wfc.preparer.offline-seed-source-lock.v1');
-  await assert.rejects(fs.stat(path.join(ROOT,'.preparer-work/main5180-offline-seed.lock')),{code:'ENOENT'});
+  await assert.rejects(fs.stat(path.join(ROOT,'.preparer-work/test-main5180-offline-seed.lock')),{code:'ENOENT'});
 });
 
 test('a terminal marker write failure retains the exact source lock and never releases an unmarked seed',async t=>{
@@ -147,7 +152,7 @@ test('a terminal marker write failure retains the exact source lock and never re
   await assert.rejects(captureOfflineSeed(f.args,options),{code:'EEXIST'});
   assert.deepEqual(phases,['before-complete']);assert.deepEqual(f.all.map(running),[true,true,false,true]);
   assert.equal((await fs.stat(path.join(f.operationDirectory,'complete.private.json'))).isDirectory(),true);
-  const lock=JSON.parse(await fs.readFile(path.join(ROOT,'.preparer-work/main5180-offline-seed.lock'),'utf8'));
+  const lock=JSON.parse(await fs.readFile(path.join(ROOT,'.preparer-work/test-main5180-offline-seed.lock'),'utf8'));
   assert.equal(lock.operationId,f.intent.operationId);
   await assert.rejects(fs.stat(path.join(f.operationDirectory,'source-lock-released.private.json')),{code:'ENOENT'});
   const failure=JSON.parse(await fs.readFile(path.join(f.operationDirectory,'finalization-failure.private.json'),'utf8'));
@@ -158,7 +163,7 @@ test('a terminal marker write failure retains the exact source lock and never re
 });
 
 test('a failed atomic lock rename keeps durable pending completion and the exact source lock without replaying source actions',async t=>{
-  const f=await fixture(t),rename=fs.rename,sourceLock=path.join(ROOT,'.preparer-work/main5180-offline-seed.lock');let sourceActions;
+  const f=await fixture(t),rename=fs.rename,sourceLock=path.join(ROOT,'.preparer-work/test-main5180-offline-seed.lock');let sourceActions;
   const options={...f.options,testFinalizationObserver:phase=>{if(phase==='before-lock-release')sourceActions=f.events.length;}};
   fs.rename=async(from,to)=>{if(path.resolve(from)===path.resolve(sourceLock))throw Object.assign(Error('Injected rename failure'),{code:'TEST_RENAME_FAILURE'});return rename(from,to);};
   try {await assert.rejects(captureOfflineSeed(f.args,options),{code:'SP1_SOURCE_LOCK_RELEASE_UNCONFIRMED'});}
@@ -183,7 +188,7 @@ test('a fault after rename leaves durable completion and its exact archived lock
   assert.equal(complete.sourceLockReleased,false);assert.equal(complete.sourceLockRelease.state,'pending');
   const archived=await fs.readFile(complete.sourceLockRelease.archivedPath);
   assert.equal(hash(archived),complete.sourceLockRelease.source.sha256);assert.equal(JSON.parse(archived).operationId,f.intent.operationId);
-  await assert.rejects(fs.stat(path.join(ROOT,'.preparer-work/main5180-offline-seed.lock')),{code:'ENOENT'});
+  await assert.rejects(fs.stat(path.join(ROOT,'.preparer-work/test-main5180-offline-seed.lock')),{code:'ENOENT'});
   const failure=JSON.parse(await fs.readFile(path.join(f.operationDirectory,'finalization-failure.private.json'),'utf8'));
   assert.equal(failure.code,'SP1_SOURCE_LOCK_RELEASE_UNCONFIRMED');assert.equal(failure.sourceLockState,'unconfirmed');
   assert.equal(failure.terminal.sha256,hash(await fs.readFile(path.join(f.operationDirectory,'complete.private.json'))));
@@ -229,7 +234,7 @@ test('a retained source-wide lock blocks a different operation before any Docker
   const first=await fixture(t,{failCapture:true});await assert.rejects(captureOfflineSeed(first.args,first.options));
   const second=await fixture(t);await assert.rejects(captureOfflineSeed(second.args,second.options),{code:'EEXIST'});
   assert.equal(second.events.length,0);
-  const lock=JSON.parse(await fs.readFile(path.join(ROOT,'.preparer-work/main5180-offline-seed.lock'),'utf8'));
+  const lock=JSON.parse(await fs.readFile(path.join(ROOT,'.preparer-work/test-main5180-offline-seed.lock'),'utf8'));
   assert.equal(lock.operationId,first.intent.operationId);
 });
 test('running source PG refuses capture with no stop, start, export or archive calls',async t=>{
@@ -237,4 +242,15 @@ test('running source PG refuses capture with no stop, start, export or archive c
   await assert.rejects(captureOfflineSeed(f.args,f.options),{code:'SP1_POSTGRES_MUST_REMAIN_STOPPED'});
   assert.ok(f.events.every(item=>item.kind==='inspect-all'));
   await assert.rejects(fs.stat(path.join(f.operationDirectory,'complete.private.json')),{code:'ENOENT'});
+});
+
+test('stopped daemon-era network attachment is retained separately from the freshly resolved named network',async t=>{
+  const f=await fixture(t,{staleStoppedNetwork:true});const result=await captureOfflineSeed(f.args,f.options);
+  assert.equal(result.status,'PASS');const before=JSON.parse(await fs.readFile(path.join(f.operationDirectory,'source-before.private.json')));
+  const resolved=before.resources.networks.find(item=>item.staleAttachment);
+  assert.equal(resolved.Id,id(82));assert.deepEqual(resolved.staleAttachment,{id:id(81),name:'bridge',roles:['postgres']});
+});
+test('missing active network attachment cannot be reinterpreted by name',async t=>{
+  const f=await fixture(t,{staleActiveNetwork:true});await assert.rejects(captureOfflineSeed(f.args,f.options));
+  assert.equal(f.events.some(item=>['stop','start','export','helper'].includes(item.kind)),false);
 });

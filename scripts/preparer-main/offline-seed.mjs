@@ -10,7 +10,7 @@ import { writeJsonNew, verifyImageArchive } from './foundation/manifest.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const UUID = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
 const ID = /^[a-f0-9]{64}$/, SHA = /^[a-f0-9]{64}$/, IMAGE = /^sha256:[a-f0-9]{64}$/;
-const HELPER = 'sha256:ac0d16ab1b0f4c92922c20d1a13a5ea142d4c6e92558de1870daf4db7fd60fcf';
+const HELPER = 'sha256:72add26dc2796ebc6f38f38405a3fdee3748a7bbc13781c9d01abdb8c28b59b2';
 const ROLES = ['api', 'web', 'postgres', 'minio'];
 const PACK = ['node', 'scripts/operations/archives.mjs'];
 export const OFFLINE_SEED_BOUNDS = Object.freeze({ operationTimeoutMs: 7_200_000, commandTimeoutMs: 3_600_000,
@@ -157,8 +157,24 @@ async function resources(docker, source, expected) {
     .map(item => item.NetworkID).filter(item => ID.test(item ?? ''))))].sort();
   const volumes = [], networks = [], allocation = [];
   for (const name of volumeNames) { const volume = await docker.request('GET', '/volumes/' + encodeURIComponent(name)); need(volume?.Name === name, 'SP1_VOLUME_IDENTITY'); volumes.push(volume); }
-  for (const id of networkIds) { const network = await docker.request('GET', '/networks/' + id); need(network?.Id === id, 'SP1_NETWORK_IDENTITY');
-    networks.push(networkIdentity(network)); allocation.push({ id, status: network.Status ?? null }); }
+  for (const id of networkIds) {
+    let network, staleAttachment = null;
+    try { network = await docker.request('GET', '/networks/' + id); need(network?.Id === id, 'SP1_NETWORK_IDENTITY'); }
+    catch (error) {
+      // A stopped container can retain a removed daemon-era bridge ID. Never
+      // reinterpret an active attachment or a transport failure as that case.
+      if (error.statusCode !== 404 || error.definitive !== true) throw error;
+      const references = ROLES.flatMap(role => Object.entries(source[role].NetworkSettings?.Networks ?? {})
+        .filter(([, item]) => item.NetworkID === id).map(([name]) => ({ role, name })));
+      need(references.length > 0 && references.every(item => !active(source[item.role]))
+        && new Set(references.map(item => item.name)).size === 1, 'SP1_STALE_NETWORK_ACTIVE_OR_AMBIGUOUS');
+      const name = references[0].name;
+      network = await docker.request('GET', '/networks/' + encodeURIComponent(name));
+      need(network?.Name === name && ID.test(network?.Id ?? ''), 'SP1_NETWORK_IDENTITY');
+      staleAttachment = { id, name, roles: references.map(item => item.role).sort() };
+    }
+    networks.push({ ...networkIdentity(network), staleAttachment }); allocation.push({ id, status: network.Status ?? null });
+  }
   return { identity: { volumeNames, networkIds, volumes, networks }, allocation };
 }
 
@@ -201,7 +217,8 @@ export async function captureOfflineSeed({ intentPath, intentSha256, operationDi
   const file = name => path.join(operationDirectory, name), startedAt = new Date().toISOString();
   // Different operation UUIDs still serialize the same main source. Failure
   // retains this lock for explicit reconciliation; only full success releases it.
-  const sourceLockPath = path.join(parent, 'main5180-offline-seed.lock');
+  // Injected Docker fixtures never share the production source's lock namespace.
+  const sourceLockPath = path.join(parent, supplied ? 'test-main5180-offline-seed.lock' : 'main5180-offline-seed.lock');
   await writeJsonNew(sourceLockPath, { schemaVersion: 'wfc.preparer.offline-seed-source-lock.v1', operationId: intent.operationId,
     intentSha256, operationDirectory, startedAt });
   const sourceLock = await pin(sourceLockPath), sourceLockStat = await fs.lstat(sourceLockPath);
@@ -295,7 +312,9 @@ export async function captureOfflineSeed({ intentPath, intentSha256, operationDi
   }
   if (primary) {
     await writeJsonNew(file('failure.private.json'), { schemaVersion: 'wfc.preparer.offline-seed-failure.v1', operationId: intent.operationId,
-      status: 'FAIL', code: safeCode(primary), cleanup: getBoundedDockerCleanup(primary), sourceResume: resume?.status ?? 'UNCONFIRMED',
+      status: 'FAIL', code: safeCode(primary), causes: (primary instanceof AggregateError ? primary.errors : [primary]).map(item => ({
+        code: safeCode(item), cleanup: getBoundedDockerCleanup(item), statusCode: Number.isInteger(item?.statusCode) ? item.statusCode : null })),
+      cleanup: getBoundedDockerCleanup(primary), sourceResume: resume?.status ?? 'UNCONFIRMED',
       sourceLockRetained: true, at: new Date().toISOString() });
     throw primary;
   }
@@ -307,7 +326,7 @@ export async function captureOfflineSeed({ intentPath, intentSha256, operationDi
   for (const item of [...captured.archives, ...captured.images]) need(same(await pin(item.file.path), item.file), 'SP1_CAPTURE_FILE_CHANGED');
   const result = { schemaVersion: 'wfc.preparer.offline-seed.v1', status: 'PASS', operationId: intent.operationId, sourcePort: 5180,
     qualification: 'NOT_RUN', releasableBackup: false, verifierMode, finalizationMode,
-    productionSeed: verifierMode === 'production-default' && finalizationMode === 'production-default',
+    productionSeed: supplied === undefined && verifierMode === 'production-default' && finalizationMode === 'production-default',
     intent: await pin(intentPath), privateCompanion: companionPin, sourceClosure, evidence,
     ...captured, sourceResume: await pin(file('resume.private.json')), completedAt: new Date().toISOString() };
   await writeJsonNew(file('seed.private.json'), result);
