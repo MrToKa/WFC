@@ -5,7 +5,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { validateRecoveryArguments, recoveryResourceNames, assertOwnedRecoveryResource, assertRecoveryPostgres, verifyColdSeed, qualifyRecoveredSeed, captureCloneDatabase } from './recovery.mjs';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
+import { validateRecoveryArguments, recoveryResourceNames, assertOwnedRecoveryResource, assertRecoveryPostgres, verifiedPostgresDataIdentity, assertRecoveryMinio, validateModelAuditSummary, waitRecoveryMinio, verifyColdSeed, qualifyRecoveredSeed, captureCloneDatabase } from './recovery.mjs';
 import { canonicalSha256 } from './offline-seed.mjs';
 import { hashFile } from './foundation/archives.mjs';
 
@@ -26,10 +28,75 @@ test('recovery requires exact immutable pins and a new operation namespace', () 
   const args = argumentFixture(); assert.equal(validateRecoveryArguments(args).captureImage, args.captureImage);
   for (const mutate of [v => v.captureImage = 'postgres:latest', v => v.seedSha256 = 'unverified', v => v.operationDirectory = path.resolve('5191'), v => v.extra = true, v => v.seedPath = 'relative']) { const changed = { ...args }; mutate(changed); assert.throws(() => validateRecoveryArguments(changed)); }
 });
+test('verified PGDATA admits its exact non-root UID with primary GID zero, not parent ownership', () => {
+  const pgdata = '/var/lib/postgresql/18/docker', entries = [
+    { path: '', type: 'directory', uid: 999, gid: 999, mode: 0o1777 },
+    { path: '18', type: 'directory', uid: 0, gid: 0, mode: 0o755 },
+    { path: '18/docker', type: 'directory', uid: 999, gid: 0, mode: 0o700 },
+    { path: '18/docker/PG_VERSION', type: 'file', uid: 999, gid: 999, mode: 0o600 },
+  ];
+  assert.deepEqual(verifiedPostgresDataIdentity(pgdata, entries), { pgdata, uid: 999, gid: 0, user: '999:0' });
+  const ordinary = structuredClone(entries); ordinary[2].gid = 999;
+  assert.equal(verifiedPostgresDataIdentity(pgdata, ordinary).user, '999:999');
+});
+test('PGDATA identity rejects root UID, malformed IDs, aliases and missing exact version evidence', () => {
+  const pgdata = '/var/lib/postgresql/18/docker', base = [{ path: '18/docker', type: 'directory', uid: 999, gid: 0 }, { path: '18/docker/PG_VERSION', type: 'file' }];
+  for (const [field, values] of [['uid', [0, -1, 0.5, '999', undefined, 0xffffffff]], ['gid', [-1, -0, 0.5, '0', undefined, 0xffffffff]]]) {
+    for (const value of values) { const entries = structuredClone(base); entries[0][field] = value;
+      assert.throws(() => verifiedPostgresDataIdentity(pgdata, entries), { code: 'SP1_RECOVERY_PGDATA_UNVERIFIED' }); }
+  }
+  for (const mutate of [v => v[0].type = 'symlink', v => v[0].path = '18', v => v.pop(), v => v[1].type = 'directory']) {
+    const entries = structuredClone(base); mutate(entries); assert.throws(() => verifiedPostgresDataIdentity(pgdata, entries), { code: 'SP1_RECOVERY_PGDATA_UNVERIFIED' });
+  }
+});
 test('fresh names partition every operation without source or published-port names', () => {
   const a = recoveryResourceNames(randomUUID()), b = recoveryResourceNames(randomUUID()); assert.equal(new Set([...Object.values(a), ...Object.values(b)]).size, 6);
   assert.throws(() => recoveryResourceNames('wfc_app'));
   assert.ok(Object.values(a).every(value => value.startsWith('wfc-preparer-sp1-') && !value.includes('5191')));
+});
+test('model audit is explicitly optional and never adds default fields to historical arguments or names', () => {
+  const args = argumentFixture(), plain = validateRecoveryArguments(args);
+  assert.equal(Object.hasOwn(plain, 'modelAudit'), false); assert.equal(Object.hasOwn(recoveryResourceNames(plain.operationId), 'minio'), false);
+  const audited = validateRecoveryArguments({ ...args, modelAudit: true }); assert.equal(audited.modelAudit, true);
+  const names = recoveryResourceNames(audited.operationId, { modelAudit: true }); assert.equal(new Set(Object.values(names)).size, 4);
+  assert.match(names.minio, /^wfc-preparer-sp1-[a-f0-9-]{36}-minio$/);
+  for (const modelAudit of ['true', 1, null, {}]) assert.throws(() => validateRecoveryArguments({ ...args, modelAudit }), { code: 'SP1_RECOVERY_ARGUMENT_INVALID' });
+});
+test('MinIO audit clone requires exact identity, command, owner, user, volume, private network and no ports', () => {
+  const operationId = randomUUID(), names = recoveryResourceNames(operationId, { modelAudit: true });
+  const expected = { id: id(70), image: image(71), volume: names.minio, networkId: id(72), operationId, seedSha256: id(73), name: names.minio, user: '1000:1000' };
+  const value = { Id: expected.id, Name: '/' + names.minio, Image: expected.image,
+    Config: { User: expected.user, Cmd: ['minio', 'server', '/data', '--address', ':9000', '--console-address', ':9001'], Labels: { 'wfc.preparer.sp1.operation': operationId, 'wfc.preparer.sp1.seed': expected.seedSha256, 'wfc.preparer.sp1.purpose': 'minio' } },
+    HostConfig: { PublishAllPorts: false, PortBindings: {}, RestartPolicy: { Name: 'no' } }, Mounts: [{ Type: 'volume', Name: names.minio, Destination: '/data', RW: true }],
+    NetworkSettings: { Networks: { [names.network]: { NetworkID: expected.networkId } } } };
+  assert.equal(assertRecoveryMinio(value, expected), value);
+  for (const mutate of [v => v.Id = id(99), v => v.Image = image(99), v => v.Config.User = '0', v => v.Config.Cmd = ['server', '/data'],
+    v => v.HostConfig.PortBindings = { '9000/tcp': [{ HostPort: '9000' }] }, v => v.HostConfig.PublishAllPorts = true,
+    v => v.Mounts[0].Name = 'source-minio', v => v.Mounts[0].RW = false, v => v.Mounts.push({ Type: 'bind', Source: 'original' }),
+    v => v.NetworkSettings.Networks.extra = { NetworkID: id(99) }]) {
+    const changed = structuredClone(value); mutate(changed); assert.throws(() => assertRecoveryMinio(changed, expected), { code: 'SP1_RECOVERY_MINIO_CHANGED' });
+  }
+});
+test('audit receipt requires complete read-only PASS facts without private connection data', () => {
+  const value = { status: 'PASS', readOnly: true, archivesSchema: 'ABSENT_OLD_SCHEMA', reportBytes: 100, reportSha256: id(80),
+    counts: { models: 2, resources: 6, resourceBytes: 500, archives: 0, archiveBytes: 0, legacyArchiveAbsent: 2, retainedIndependentArchives: 0, unavailableDeclarations: 0 } };
+  assert.equal(validateModelAuditSummary(value), value);
+  for (const mutate of [v => v.status = 'FAIL', v => v.readOnly = false, v => v.reportSha256 = 'unverified', v => v.counts.models = -1,
+    v => delete v.counts.archives, v => v.privateReportPath = 'private', v => v.password = 'secret']) {
+    const changed = structuredClone(value); mutate(changed); assert.throws(() => validateModelAuditSummary(changed), { code: 'SP1_RECOVERY_MODEL_AUDIT_INVALID' });
+  }
+});
+test('MinIO readiness cannot contact source/foreign hosts and uses only the owned fixed health endpoint', async () => {
+  const ownerId = randomUUID(), host = recoveryResourceNames(ownerId, { modelAudit: true }).minio;
+  for (const denied of ['host.docker.internal', 'localhost', 'wfc-minio', recoveryResourceNames(randomUUID(), { modelAudit: true }).minio]) {
+    await assert.rejects(waitRecoveryMinio({ host: denied, ownerId }, { request() { throw Error('must not contact'); } }), { code: 'SP1_RECOVERY_MINIO_HOST_INVALID' });
+  }
+  let calls = 0;
+  const result = await waitRecoveryMinio({ host, ownerId }, { request(options, callback) {
+    calls++; assert.equal(options.hostname, host); assert.equal(options.port, 9000); assert.equal(options.path, '/minio/health/ready'); assert.equal(options.method, 'GET'); assert.equal(options.headers, undefined);
+    const req = new EventEmitter(); req.destroy = () => {}; req.end = () => { queueMicrotask(() => { const res = new PassThrough(); res.statusCode = 200; callback(res); res.end(); }); }; return req;
+  } });
+  assert.equal(result.status, 'PASS'); assert.equal(calls, 1);
 });
 test('full owned resource labels are mandatory for capture and deletion', () => {
   const { value, expected } = resourceFixture(); assert.equal(assertOwnedRecoveryResource(value, expected), value);

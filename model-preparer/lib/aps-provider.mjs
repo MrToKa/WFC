@@ -88,7 +88,7 @@ function destroy(response) { response?.body?.destroy?.(); }
  * testTransport is a trusted test injection, never an HTTP/UI configuration. */
 export function createAPSProvider({ clientId, clientSecret, region, bucket, namespace, packageApi,
   authorizeRead, clock = { now: () => Date.now() }, testTransport, reuseOnly = true,
-  objectKeysBySource = {}, allowLegacyExistingSVF = true } = {}) {
+  objectKeysBySource = {}, allowLegacyExistingSVF = true, preflight } = {}) {
   if (typeof clientId !== 'string' || !/^[A-Za-z0-9_-]{8,256}$/.test(clientId) || typeof clientSecret !== 'string' || !clientSecret || /[\x00-\x20\x7f]/.test(clientSecret)
     || !['US', 'EMEA'].includes(region) || typeof bucket !== 'string' || !/^[a-z0-9][a-z0-9._-]{2,127}$/.test(bucket)
     || typeof namespace?.account !== 'string' || !/^team-[0-9a-f]{16,64}$/.test(namespace.account)
@@ -96,6 +96,7 @@ export function createAPSProvider({ clientId, clientSecret, region, bucket, name
     || typeof packageApi?.inspectSvfEnvelope !== 'function' || typeof clock?.now !== 'function'
     || typeof reuseOnly !== 'boolean' || typeof allowLegacyExistingSVF !== 'boolean') fail('CONFIGURATION_INVALID');
   if (testTransport !== undefined && typeof testTransport?.request !== 'function') fail('CONFIGURATION_INVALID');
+  if (preflight !== undefined && typeof preflight !== 'function') fail('CONFIGURATION_INVALID');
   const alias = 'target-' + sha(bucket), ns = { account: namespace.account, application: namespace.application };
   const keyOverrides = new Map();
   if (!objectKeysBySource || Object.getPrototypeOf(objectKeysBySource) !== Object.prototype) fail('CONFIGURATION_INVALID');
@@ -121,7 +122,14 @@ export function createAPSProvider({ clientId, clientSecret, region, bucket, name
     if (input.method === 'GET') return 'rawResource';
     fail('PROVIDER_RESPONSE_INVALID');
   }
-  const request = async input => {
+  const request = async (input, mutateOptions) => {
+    // Page authority is refreshed for every actual network opening, including
+    // OAuth, signed downloads and upload parts. Keep the cost fence synchronous
+    // and last after that asynchronous refresh.
+    abortCheck(input.signal);
+    if (preflight && await preflight() === false) fail('CLOUD_CLOSED');
+    abortCheck(input.signal);
+    if (mutateOptions) mutationGuard(mutateOptions);
     const operation = operationName(input);
     const entry = { operation, method: input.method, startedAt: stamp(), finishedAt: null, status: null, outcome: 'pending',
       cloudDataMutation: ['createStorage', 'initiateUpload', 'uploadPart', 'completeUpload', 'submit'].includes(operation) };
@@ -195,9 +203,9 @@ export function createAPSProvider({ clientId, clientSecret, region, bucket, name
     const payload = body === undefined ? undefined : JSON.stringify(body);
     const headers = { Authorization: 'Bearer ' + bearer, region, 'Accept-Encoding': 'identity', ...extraHeaders };
     if (payload !== undefined) headers['Content-Type'] = 'application/json';
-    if (mutateOptions) mutationGuard(mutateOptions);
-    // Nothing is awaited between the final guard and opening the request.
-    return request({ url, method, headers, body: payload, signal, timeoutMs: TIMEOUT });
+    // request refreshes page authority, then applies the final synchronous cost
+    // fence immediately before opening the transport.
+    return request({ url, method, headers, body: payload, signal, timeoutMs: TIMEOUT }, mutateOptions);
   }
   async function apiJson(context, endpoint, options) { return jsonResponse(await apiResponse(context, endpoint, options), options?.signal); }
   async function hashSnapshot(context, signal) {
@@ -337,8 +345,8 @@ export function createAPSProvider({ clientId, clientSecret, region, bucket, name
         for await (const chunk of createReadStream(local.source, { start, end, signal: options.signal })) { abortCheck(options.signal); chunks.push(chunk); size += chunk.length; }
         if (size !== end - start + 1) fail('SNAPSHOT_CHANGED');
         const part = Buffer.concat(chunks, size); bytes += size; h1.update(part); h256.update(part);
-        const url = urls.shift(); mutationGuard(options);
-        const response = await request({ url, method: 'PUT', headers: { 'Content-Length': String(size), 'Content-Type': 'application/octet-stream', 'Accept-Encoding': 'identity' }, body: part, signal: options.signal, timeoutMs: TIMEOUT });
+        const url = urls.shift();
+        const response = await request({ url, method: 'PUT', headers: { 'Content-Length': String(size), 'Content-Type': 'application/octet-stream', 'Accept-Encoding': 'identity' }, body: part, signal: options.signal, timeoutMs: TIMEOUT }, options);
         if (!Number.isInteger(response?.statusCode) || response.statusCode < 200 || response.statusCode > 299) { destroy(response); throw privateError(response?.statusCode); }
         await bufferBody(response.body ?? Buffer.alloc(0), JSON_CAP, { signal: options.signal }); partNumber++;
       }

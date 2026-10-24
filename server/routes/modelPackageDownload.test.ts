@@ -39,7 +39,7 @@ afterAll(async () => {
   await fs.rm(root, { recursive: true, force: true });
 });
 beforeEach(() => {
-  vi.clearAllMocks(); closed.length = 0; role = 'engineer'; granted = true;
+  vi.clearAllMocks(); closed.length = 0; role = 'admin'; granted = true;
   mocks.verifyAccessToken.mockReturnValue({ sub: 'engineer-id', email: 'test@fixture.invalid', isAdmin: false });
   mocks.query.mockImplementation(async (sql: string) => {
     if (sql.includes('FROM users')) return { rows: [{ is_admin: role === 'admin', role }] };
@@ -56,8 +56,7 @@ const url = () => `${origin}/api/projects/${projectId}/model-versions/${versionI
 const headers = { Authorization: 'Bearer current-wfc-login' };
 
 describe('retained portable package download', () => {
-  it.each(['engineer', 'admin', 'technician'] as const)('allows a permitted %s and closes the pinned handle after a truthful ZIP response', async currentRole => {
-    role = currentRole;
+  it('allows a current administrator and closes the pinned handle after a truthful ZIP response', async () => {
     const response = await fetch(url(), { headers });
     expect(response.status).toBe(200);
     expect(Buffer.from(await response.arrayBuffer())).toEqual(raw);
@@ -79,22 +78,21 @@ describe('retained portable package download', () => {
     await vi.waitFor(() => expect(closed[0]).toHaveBeenCalledOnce());
   });
 
-  it('rechecks a grant revoked while the package is being verified before sending ZIP bytes', async () => {
-    role = 'technician';
+  it('rechecks admin rights revoked while the package is being verified before sending ZIP bytes', async () => {
     const read = mocks.getPackage.getMockImplementation()!;
-    mocks.getPackage.mockImplementation(async (...args) => { const archive = await read(...args); granted = false; return archive; });
+    mocks.getPackage.mockImplementation(async (...args) => { const archive = await read(...args); role = 'engineer'; return archive; });
     const response = await fetch(url(), { headers });
     expect(response.status).toBe(403);
     expect(response.headers.get('content-disposition')).toBeNull();
     await vi.waitFor(() => expect(closed[0]).toHaveBeenCalledOnce());
   });
 
-  it('denies unauthenticated/basic/unassigned technician access before reading any package', async () => {
+  it('denies unauthenticated and every non-admin role before reading any package', async () => {
     expect((await fetch(url())).status).toBe(401);
-    role = 'basic';
-    expect((await fetch(url(), { headers })).status).toBe(403);
-    role = 'technician'; granted = false;
-    expect((await fetch(url(), { headers })).status).toBe(403);
+    for (const denied of ['basic', 'technician', 'engineer'] as const) {
+      role = denied;
+      expect((await fetch(url(), { headers })).status).toBe(403);
+    }
     expect(mocks.getPackage).not.toHaveBeenCalled();
   });
 

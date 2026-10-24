@@ -18,6 +18,7 @@ import { templateFilesRouter } from './routes/templateFilesRoutes.js';
 import { userRouter } from './routes/userRoutes.js';
 import { authenticate, requireCatalogAccess } from './middleware.js';
 import { createViewerSessionRouter } from './routes/viewerSessionRoutes.js';
+import { createPreparerRouter } from './routes/preparerRoutes.js';
 
 export const createApp = (): Express => {
   const app = express();
@@ -42,6 +43,7 @@ export const createApp = (): Express => {
   });
 
   app.use('/api/auth', authRouter);
+  app.use('/api/preparer', createPreparerRouter());
   app.use('/api/users', userRouter);
   app.use('/api/admin', adminUsersRouter);
   app.use('/api/materials', authenticate, requireCatalogAccess, withMaterialAuditActor);

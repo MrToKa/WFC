@@ -69,15 +69,17 @@ test('real live composition automatically prepares, verifies and imports one exa
   let service = await createWorkspaceService({ config, wfcFetch, apsFetch, apsTestTransport: testTransport, operationPollMs: 200, derivativePollMs: 200, importPollMs: 100 });
   await service.listen();
   t.after(async () => { await service.close(); assert.equal(path.dirname(root), base); await fs.rm(root, { recursive: true, force: true }); });
-  let cookie = '', csrf = (await (await fetch(service.address + '/api/session')).json()).csrfToken;
+  let cookie = '', csrf = (await (await fetch(service.address + '/api/session')).json()).csrfToken, pageCredentials = null;
+  const pageId = randomUUID();
   const call = async (route, method = 'GET', input, requestId = randomUUID()) => {
-    const r = await fetch(service.address + route, { method, headers: { Cookie: cookie, ...(method !== 'GET' ? { Origin: service.address, 'X-Preparer-CSRF': csrf, 'X-Request-Id': requestId, 'Content-Type': 'application/json' } : {}) }, ...(input ? { body: JSON.stringify(input) } : {}) });
+    const r = await fetch(service.address + route, { method, headers: { Cookie: cookie, ...(pageCredentials ? { 'X-Preparer-Credentials': pageCredentials.leaseToken, 'X-Preparer-Page': pageId } : {}), ...(method !== 'GET' ? { Origin: service.address, 'X-Preparer-CSRF': csrf, 'X-Request-Id': requestId, 'Content-Type': 'application/json' } : {}) }, ...(input ? { body: JSON.stringify(input) } : {}) });
     if (r.headers.get('set-cookie')) cookie = r.headers.get('set-cookie').split(';')[0];
     const value = await r.json(); return { status: r.status, value };
   };
   assert.equal(calls.length, 0);
   assert.equal((await call('/api/session/login', 'POST', { email: user.email, password: 'synthetic-password' })).status, 200);
-  assert.equal((await call('/api/settings', 'PUT', { clientId, clientSecret, region: 'EMEA', bucket, enabled: true, freePlanConfirmed: true })).status, 200);
+  const opened = await call('/api/credential-sessions', 'POST', { clientId, clientSecret, pageId, region: 'EMEA', bucket, freePlanConfirmed: true });
+  assert.equal(opened.status, 200, JSON.stringify(opened.value)); pageCredentials = opened.value.credentials;
   const check = await call('/api/autodesk/check', 'POST', {}); assert.equal(check.value.access, true); assert.equal(check.value.quotaKnown, false);
   const sourceReply = await call('/api/sources'); assert.equal(sourceReply.status, 200, JSON.stringify(sourceReply));
   const inputs = sourceReply.value.inputs; assert.equal(inputs.length, 1); assert.equal(calls.length, 0, 'Local source chooser must not call Autodesk');
@@ -93,7 +95,7 @@ test('real live composition automatically prepares, verifies and imports one exa
   assert.equal(calls.filter(call => call.method === 'PUT').length, 1);
   assert.ok(calls.some(call => call.route.includes('/' + objectKey + '/details')), 'Content-addressed source target');
   assert.doesNotMatch(JSON.stringify(generation), /private-|CloudFront|urn:adsk|fixture-client-secret/);
-  await call('/api/settings', 'PUT', { enabled: false, freePlanConfirmed: false });
+  assert.equal((await call('/api/credential-sessions/current', 'DELETE', {})).status, 200); pageCredentials = null;
   const beforeRetry = calls.length;
   const zipResponse = await fetch(service.address + '/api/generations/' + generation.id + '/package', { headers: { Cookie: cookie } });
   assert.equal(zipResponse.status, 200); const zip = Buffer.from(await zipResponse.arrayBuffer());

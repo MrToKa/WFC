@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import http from 'node:http';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createDocker, environment, writePrivateJson } from './foundation/docker.mjs';
@@ -38,16 +39,18 @@ async function assertPin(value) {
 }
 const contained = (root, value) => path.dirname(path.resolve(value)) === path.resolve(root);
 export function validateRecoveryArguments(value) {
-  need(record(value) && Object.keys(value).sort().join(',') === 'captureImage,operationDirectory,seedPath,seedSha256'
+  need(record(value) && Object.keys(value).filter(key => key !== 'modelAudit').sort().join(',') === 'captureImage,operationDirectory,seedPath,seedSha256'
+    && (!Object.hasOwn(value, 'modelAudit') || typeof value.modelAudit === 'boolean')
     && [value.seedPath, value.operationDirectory].every(item => typeof item === 'string' && path.isAbsolute(item))
     && SHA.test(value.seedSha256 ?? '') && IMAGE.test(value.captureImage ?? ''), 'SP1_RECOVERY_ARGUMENT_INVALID');
   const name = path.basename(value.operationDirectory), operationId = name.slice('sp1-recovery-'.length);
   need(name === 'sp1-recovery-' + operationId && UUID.test(operationId), 'SP1_RECOVERY_OPERATION_INVALID');
   return Object.freeze({ ...value, operationId });
 }
-export function recoveryResourceNames(operationId) {
+export function recoveryResourceNames(operationId, { modelAudit = false } = {}) {
   need(UUID.test(operationId ?? ''), 'SP1_RECOVERY_OPERATION_INVALID'); const prefix = 'wfc-preparer-sp1-' + operationId;
-  return Object.freeze({ network: prefix, physical: prefix + '-physical', logical: prefix + '-logical' });
+  need(typeof modelAudit === 'boolean', 'SP1_RECOVERY_ARGUMENT_INVALID');
+  return Object.freeze({ network: prefix, physical: prefix + '-physical', logical: prefix + '-logical', ...(modelAudit ? { minio: prefix + '-minio' } : {}) });
 }
 export function assertOwnedRecoveryResource(value, { operationId, seedSha256, purpose, name }) {
   const labels = value?.Labels ?? value?.Config?.Labels;
@@ -64,6 +67,73 @@ export function assertRecoveryPostgres(value, { image, volume, networkId, operat
     && Object.keys(value.NetworkSettings?.Networks ?? {}).length === 1
     && Object.values(value.NetworkSettings.Networks)[0].NetworkID === networkId, 'SP1_RECOVERY_CLONE_CHANGED');
   return value;
+}
+/** Admit only the exact archived PGDATA directory, never a parent or alias.
+ * PostgreSQL must run with its verified non-root UID; primary GID zero is valid. */
+export function verifiedPostgresDataIdentity(pgdata, entries) {
+  need(typeof pgdata === 'string' && pgdata.startsWith('/var/lib/postgresql/') && !pgdata.split('/').includes('..') && !pgdata.includes('\0'), 'SP1_RECOVERY_PGDATA_INVALID');
+  need(Array.isArray(entries), 'SP1_RECOVERY_PGDATA_UNVERIFIED');
+  const relative = pgdata.slice('/var/lib/postgresql/'.length), directory = entries.find(item => item?.path === relative), version = entries.find(item => item?.path === relative + '/PG_VERSION');
+  need(directory?.type === 'directory' && Number.isSafeInteger(directory.uid) && directory.uid > 0 && directory.uid <= 0xfffffffe
+    && Number.isSafeInteger(directory.gid) && directory.gid >= 0 && directory.gid <= 0xfffffffe && !Object.is(directory.gid, -0)
+    && version?.type === 'file', 'SP1_RECOVERY_PGDATA_UNVERIFIED');
+  return Object.freeze({ pgdata, uid: directory.uid, gid: directory.gid, user: String(directory.uid) + ':' + String(directory.gid) });
+}
+export function assertRecoveryMinio(value, { id, image, volume, networkId, operationId, seedSha256, name, user }) {
+  assertOwnedRecoveryResource(value, { operationId, seedSha256, purpose: 'minio', name });
+  need(value.Id === id && SHA.test(id ?? '') && value.Image === image && value.Config?.User === user
+    && same(value.Config?.Cmd, ['minio', 'server', '/data', '--address', ':9000', '--console-address', ':9001'])
+    && value.HostConfig?.PublishAllPorts !== true && Object.keys(value.HostConfig?.PortBindings ?? {}).length === 0
+    && value.HostConfig?.RestartPolicy?.Name === 'no' && value.Mounts?.length === 1
+    && value.Mounts[0].Type === 'volume' && value.Mounts[0].Name === volume && value.Mounts[0].Destination === '/data' && value.Mounts[0].RW === true
+    && Object.keys(value.NetworkSettings?.Networks ?? {}).length === 1 && Object.values(value.NetworkSettings.Networks)[0].NetworkID === networkId,
+  'SP1_RECOVERY_MINIO_CHANGED');
+  return value;
+}
+export function validateModelAuditSummary(value) {
+  const fields = ['archivesSchema', 'counts', 'readOnly', 'reportBytes', 'reportSha256', 'status'];
+  const counts = ['models', 'resources', 'resourceBytes', 'archives', 'archiveBytes', 'legacyArchiveAbsent', 'retainedIndependentArchives', 'unavailableDeclarations'];
+  need(record(value) && Object.keys(value).sort().join(',') === fields.sort().join(',') && value.status === 'PASS' && value.readOnly === true
+    && ['PRESENT', 'ABSENT_OLD_SCHEMA'].includes(value.archivesSchema) && SHA.test(value.reportSha256 ?? '')
+    && Number.isSafeInteger(value.reportBytes) && value.reportBytes > 0 && value.reportBytes <= 256 * 1024 ** 2
+    && record(value.counts) && Object.keys(value.counts).sort().join(',') === counts.sort().join(',')
+    && Object.values(value.counts).every(count => Number.isSafeInteger(count) && count >= 0), 'SP1_RECOVERY_MODEL_AUDIT_INVALID');
+  return value;
+}
+async function pinPackageClosure(directory) {
+  const files = []; let bytes = 0;
+  const visit = async current => {
+    await assertCanonicalPath(current, { directory: true });
+    for (const name of (await fs.readdir(current)).sort()) {
+      const filename = path.join(current, name), stat = await fs.lstat(filename);
+      need(!stat.isSymbolicLink(), 'SP1_RECOVERY_PACKAGE_CLOSURE_INVALID');
+      if (stat.isDirectory()) await visit(filename);
+      else { need(stat.isFile() && stat.nlink === 1 && files.length < 256 && (bytes += stat.size) <= 32 * 1024 ** 2, 'SP1_RECOVERY_PACKAGE_CLOSURE_INVALID'); files.push(await pin(filename)); }
+    }
+  };
+  await visit(directory); need(files.some(file => file.path === path.join(directory, 'index.mjs')), 'SP1_RECOVERY_PACKAGE_CLOSURE_INVALID'); return files;
+}
+/** Fixed health probe accepts only this operation's private clone DNS name. */
+export async function waitRecoveryMinio({ host, ownerId }, { request = http.request, signal } = {}) {
+  need(UUID.test(ownerId ?? '') && host === recoveryResourceNames(ownerId, { modelAudit: true }).minio, 'SP1_RECOVERY_MINIO_HOST_INVALID');
+  const deadline = Date.now() + 30000;
+  while (Date.now() < deadline) {
+    signal?.throwIfAborted();
+    const ready = await new Promise(resolve => {
+      let done = false, timer; const finish = value => { if (!done) { done = true; clearTimeout(timer); resolve(value); } };
+      const req = request({ hostname: host, port: 9000, path: '/minio/health/ready', method: 'GET', signal,
+        timeout: Math.max(1, Math.min(2000, deadline - Date.now())) }, res => {
+        let bytes = 0; res.on('data', chunk => { bytes += chunk.length; if (bytes > 4096) req.destroy(); });
+        res.once('end', () => finish(res.statusCode === 200 && bytes <= 4096)); res.once('error', () => finish(false)); res.resume();
+      });
+      req.once('error', () => finish(false)); req.once('timeout', () => { req.destroy(); finish(false); });
+      if (!done) timer = setTimeout(() => { req.destroy(); finish(false); }, Math.max(1, Math.min(2000, deadline - Date.now())));
+      req.end();
+    });
+    if (ready) return { status: 'PASS', ownerId, publishedPorts: false };
+    await new Promise(resolve => setTimeout(resolve, Math.max(1, Math.min(250, deadline - Date.now()))));
+  }
+  need(false, 'SP1_RECOVERY_MINIO_NOT_READY');
 }
 
 /** Verifies the terminal cold receipt. No Docker mutation or original DB start. */
@@ -103,11 +173,14 @@ export async function qualifyRecoveredSeed(argumentsValue, { docker: supplied, s
   need(path.resolve(args.operationDirectory) === path.join(parent, 'sp1-recovery-' + args.operationId), 'SP1_RECOVERY_OPERATION_INVALID');
   need(injectedCapture === undefined || typeof injectedCapture === 'function', 'SP1_RECOVERY_ADAPTER_INVALID');
   need(injectedCompare === undefined || typeof injectedCompare === 'function', 'SP1_RECOVERY_ADAPTER_INVALID');
-  const production = injectedCapture === undefined && injectedCompare === undefined, names = recoveryResourceNames(args.operationId);
+  const production = supplied === undefined && injectedCapture === undefined && injectedCompare === undefined;
+  const modelAudit = args.modelAudit === true, names = recoveryResourceNames(args.operationId, { modelAudit });
+  const packageDirectory = path.join(ROOT, 'server', 'vendor', 'routings-model-package');
   await fs.mkdir(args.operationDirectory, { mode: 0o700 }); const file = name => path.join(args.operationDirectory, name);
   const labels = purpose => ({ 'wfc.preparer.sp1.operation': args.operationId, 'wfc.preparer.sp1.seed': args.seedSha256, 'wfc.preparer.sp1.purpose': purpose });
   const sourceClosure = [];
   for (const name of ['recovery.mjs', 'recovery.capture.Dockerfile', 'recovery-leaves/provenance.json', ...LEAVES.map(name => 'recovery-leaves/' + name)]) sourceClosure.push(await pin(path.join(HERE, name)));
+  if (modelAudit) { sourceClosure.push(await pin(path.join(HERE, 'model-audit.mjs'))); sourceClosure.push(...await pinPackageClosure(packageDirectory)); }
   const leafProvenance = await readJson(path.join(HERE, 'recovery-leaves/provenance.json'));
   need(leafProvenance.mode === 'exact-byte-copy' && leafProvenance.files?.length === LEAVES.length, 'SP1_RECOVERY_LEAF_PROVENANCE');
   for (const leaf of leafProvenance.files) need(LEAVES.includes(leaf.path) && same(await hashFile(path.join(HERE, 'recovery-leaves', leaf.path)), { bytes: leaf.bytes, sha256: leaf.sha256 }), 'SP1_RECOVERY_LEAF_CHANGED');
@@ -115,7 +188,7 @@ export async function qualifyRecoveredSeed(argumentsValue, { docker: supplied, s
   await proof('begin.private.json', { schemaVersion: 'wfc.preparer.recovery-attempt.v1', operationId: args.operationId, seed: await pin(args.seedPath), captureImage: args.captureImage, sourceClosure, production, startedAt: new Date().toISOString() });
   const lockPath = path.join(parent, 'main5180-recovery.lock');
   await writeJsonNew(lockPath, { schemaVersion: 'wfc.preparer.recovery-lock.v1', operationId: args.operationId, seedSha256: args.seedSha256, operationDirectory: args.operationDirectory });
-  const lockPin = await pin(lockPath); let docker, network, physical, logical, postgresImage, pgIdentity, baselineSource, cleanupSafe = false, primary, result;
+  const lockPin = await pin(lockPath); let docker, network, physical, logical, minioVolume, minioIdentity, postgresImage, pgIdentity, baselineSource, cleanupSafe = false, primary, result;
   const check = () => signal?.throwIfAborted();
   const witness = async () => { check(); return sourceWitness(verified.intent, await docker.containers()); };
   const volumeSpec = purpose => ({ operationId: args.operationId, seedSha256: args.seedSha256, purpose, name: names[purpose] });
@@ -132,18 +205,30 @@ export async function qualifyRecoveredSeed(argumentsValue, { docker: supplied, s
       const sourceEnv = environment({ Config: verified.companion.roles.postgres.config }), apiEnv = environment({ Config: verified.companion.roles.api.config });
       const pgdata = sourceEnv.get('PGDATA'); need(typeof pgdata === 'string' && pgdata.startsWith('/var/lib/postgresql/') && !pgdata.split('/').includes('..') && !pgdata.includes('\0'), 'SP1_RECOVERY_PGDATA_INVALID');
       const archive = verified.seed.archives.find(item => item.role === 'postgres'), scanned = await verifyPostgresArchive(archive.file.path, { expectedSha256: archive.file.sha256, signal });
-      const relative = pgdata.slice('/var/lib/postgresql/'.length), dataEntry = scanned.entries.find(item => item.path === relative), version = scanned.entries.find(item => item.path === relative + '/PG_VERSION');
-      need(dataEntry?.type === 'directory' && Number.isSafeInteger(dataEntry.uid) && dataEntry.uid > 0 && Number.isSafeInteger(dataEntry.gid) && dataEntry.gid > 0 && version?.type === 'file', 'SP1_RECOVERY_PGDATA_UNVERIFIED');
+      const verifiedIdentity = verifiedPostgresDataIdentity(pgdata, scanned.entries);
       let connection; try { connection = new URL(apiEnv.get('DATABASE_URL')); } catch { need(false, 'SP1_RECOVERY_CONNECTION_INVALID'); }
       const username = decodeURIComponent(connection.username), password = decodeURIComponent(connection.password);
       need(username && password && decodeURIComponent(connection.pathname) === '/wfc_app' && (sourceEnv.get('POSTGRES_USER') || 'postgres') === username, 'SP1_RECOVERY_PRIVILEGED_CONNECTION_REQUIRED');
-      pgIdentity = { pgdata, user: String(dataEntry.uid) + ':' + String(dataEntry.gid), username, password, database: 'wfc_app' };
-      const required = BigInt(Math.ceil(archive.totalBytes * 2.5 + 2 * 1024 ** 3)), available = await fs.statfs(args.operationDirectory, { bigint: true });
+      pgIdentity = { pgdata, user: verifiedIdentity.user, username, password, database: 'wfc_app' };
+      if (modelAudit) {
+        const minioSource = verified.companion.roles.minio.config, minioEnv = environment({ Config: minioSource });
+        const rootUser = minioEnv.get('MINIO_ROOT_USER') || minioEnv.get('MINIO_ACCESS_KEY'), rootPassword = minioEnv.get('MINIO_ROOT_PASSWORD') || minioEnv.get('MINIO_SECRET_KEY');
+        const accessKey = apiEnv.get('MINIO_ACCESS_KEY'), secretKey = apiEnv.get('MINIO_SECRET_KEY'), bucket = apiEnv.get('MINIO_BUCKET_PROJECTS') || 'wfc-project-files';
+        need([rootUser, rootPassword, accessKey, secretKey].every(value => typeof value === 'string' && value.length > 0 && value.length <= 16384 && !/[\x00-\x1f\x7f]/.test(value))
+          && /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(bucket), 'SP1_RECOVERY_STORAGE_CREDENTIALS_REQUIRED');
+        const minioImage = await docker.inspectImage(verified.intent.source.roles.minio.image);
+        need(minioImage.Id === verified.intent.source.roles.minio.image && minioImage.Os === 'linux' && minioImage.Architecture === 'amd64', 'SP1_RECOVERY_IMAGE_INVALID');
+        minioIdentity = { image: minioImage.Id, user: minioSource.User || minioImage.Config?.User || '', rootUser, rootPassword, accessKey, secretKey, bucket };
+      }
+      const minioArchive = modelAudit ? verified.seed.archives.find(item => item.role === 'minio') : null;
+      if (modelAudit) need(Number.isSafeInteger(minioArchive?.totalBytes) && minioArchive.totalBytes >= 0, 'SP1_RECOVERY_MINIO_SEED_INVALID');
+      const required = BigInt(Math.ceil(archive.totalBytes * 2.5 + (minioArchive ? minioArchive.totalBytes * 2.2 : 0) + 2 * 1024 ** 3)), available = await fs.statfs(args.operationDirectory, { bigint: true });
       need(required > 0n && available.bavail * available.bsize >= required, 'SP1_RECOVERY_SPACE_INSUFFICIENT');
       await proof('space.private.json', { requiredHostBytes: String(required), availableHostBytes: String(available.bavail * available.bsize), dockerVolumeCapacity: 'UNPROVEN; volume allocation failure remains fatal' });
       const networks = await docker.request('GET', '/networks'), volumes = await docker.request('GET', '/volumes');
-      need(Array.isArray(networks) && !networks.some(item => item.Name === names.network) && Array.isArray(volumes.Volumes) && !volumes.Volumes.some(item => [names.physical, names.logical].includes(item.Name)), 'SP1_RECOVERY_TARGET_EXISTS');
-      await proof('resource-intents.private.json', { network: names.network, volumes: [names.physical, names.logical], labels: labels('network') });
+      const volumeNames = [names.physical, names.logical, ...(modelAudit ? [names.minio] : [])];
+      need(Array.isArray(networks) && !networks.some(item => item.Name === names.network) && Array.isArray(volumes.Volumes) && !volumes.Volumes.some(item => volumeNames.includes(item.Name)), 'SP1_RECOVERY_TARGET_EXISTS');
+      await proof('resource-intents.private.json', { network: names.network, volumes: volumeNames, labels: labels('network') });
       const madeNetwork = await docker.request('POST', '/networks/create', { Name: names.network, Driver: 'bridge', Internal: true, Attachable: false, CheckDuplicate: true, Labels: labels('network') });
       need(SHA.test(madeNetwork?.Id ?? ''), 'SP1_RECOVERY_NETWORK_INVALID'); network = await docker.request('GET', '/networks/' + madeNetwork.Id);
       assertOwnedRecoveryResource(network, { operationId: args.operationId, seedSha256: args.seedSha256, purpose: 'network', name: names.network }); need(network.Internal === true && network.Driver === 'bridge' && Object.keys(network.Containers ?? {}).length === 0, 'SP1_RECOVERY_NETWORK_INVALID');
@@ -157,6 +242,19 @@ export async function qualifyRecoveredSeed(argumentsValue, { docker: supplied, s
         const recaptured = await docker.run(verified.intent.helperImage, { network: 'none', labels: { 'wfc.preparer.sp1.operation': args.operationId, 'wfc.preparer.sp1.purpose': 'offline-seed-archive' }, mounts: [mount(created.Name, '/source', true, 'volume'), mount(prestart, '/backup', false)], cmd: ['node', 'scripts/operations/pg-root-archives.mjs', 'capture', '/source', '/backup/postgres.wfcops'] });
         need(recaptured.status === 'PASS' && recaptured.sha256 === archive.file.sha256 && same(await hashFile(path.join(prestart, 'postgres.wfcops')), { bytes: archive.file.bytes, sha256: archive.file.sha256 }), 'SP1_RECOVERY_PRESTART_BYTES_CHANGED');
         await proof(purpose + '-seed-proof.private.json', { volume: created, seed: archive.file, recapture: await pin(path.join(prestart, 'postgres.wfcops')), exactBeforeStartup: true });
+      }
+      if (modelAudit) {
+        await witness(); minioVolume = await docker.request('POST', '/volumes/create', { Name: names.minio, Driver: 'local', Labels: labels('minio') });
+        assertOwnedRecoveryResource(minioVolume, volumeSpec('minio')); need(minioVolume.Driver === 'local' && Object.keys(minioVolume.Options ?? {}).length === 0, 'SP1_RECOVERY_VOLUME_INVALID');
+        const restored = await docker.run(verified.intent.helperImage, { network: 'none', labels: { 'wfc.preparer.sp1.operation': args.operationId, 'wfc.preparer.sp1.purpose': 'offline-seed-archive' },
+          mounts: [mount(verified.directory, '/backup'), mount(minioVolume.Name, '/target', false, 'volume')], cmd: ['node', 'scripts/operations/archives.mjs', 'restore', '/backup/minio.wfcops', '/target', minioArchive.file.sha256] });
+        need(restored.status === 'PASS' && restored.sha256 === minioArchive.file.sha256 && restored.targetFresh === true && restored.fullOuterHashVerifiedBeforeWrites === true, 'SP1_RECOVERY_MINIO_RESTORE_FAILED');
+        const prestart = file('minio-prestart'); await fs.mkdir(prestart, { mode: 0o700 });
+        const recaptured = await docker.run(verified.intent.helperImage, { network: 'none', labels: { 'wfc.preparer.sp1.operation': args.operationId, 'wfc.preparer.sp1.purpose': 'offline-seed-archive' },
+          mounts: [mount(minioVolume.Name, '/source', true, 'volume'), mount(prestart, '/backup', false)], cmd: ['node', 'scripts/operations/archives.mjs', 'capture', '/source', '/backup/minio.wfcops'] });
+        need(recaptured.status === 'PASS' && recaptured.sha256 === minioArchive.file.sha256
+          && same(await hashFile(path.join(prestart, 'minio.wfcops')), { bytes: minioArchive.file.bytes, sha256: minioArchive.file.sha256 }), 'SP1_RECOVERY_MINIO_PRESTART_BYTES_CHANGED');
+        await proof('minio-seed-proof.private.json', { volume: minioVolume, seed: minioArchive.file, recapture: await pin(path.join(prestart, 'minio.wfcops')), exactBeforeStartup: true });
       }
       await witness(); cleanupSafe = true;
     });
@@ -178,17 +276,20 @@ export async function qualifyRecoveredSeed(argumentsValue, { docker: supplied, s
         return created.Id;
       };
       const physicalId = await clone('physical'), logicalId = await clone('logical');
+      let minioId = null;
+      const assertMinio = async () => assertRecoveryMinio(await docker.inspect(minioId), { id: minioId, image: minioIdentity.image, user: minioIdentity.user,
+        volume: names.minio, networkId: network.Id, operationId: args.operationId, seedSha256: args.seedSha256, name: names.minio });
       const assertIsolatedNetwork = async () => {
         const current = await docker.request('GET', '/networks/' + network.Id);
         assertOwnedRecoveryResource(current, { operationId: args.operationId, seedSha256: args.seedSha256, purpose: 'network', name: names.network });
         need(current.Id === network.Id && current.Internal === true && current.Driver === 'bridge'
-          && same(Object.keys(current.Containers ?? {}).sort(), [physicalId, logicalId].sort()), 'SP1_RECOVERY_FOREIGN_NETWORK_CLIENT');
+          && same(Object.keys(current.Containers ?? {}).sort(), [physicalId, logicalId, ...(minioId ? [minioId] : [])].sort()), 'SP1_RECOVERY_FOREIGN_NETWORK_CLIENT');
       };
       await assertIsolatedNetwork();
       await proof('clones-started.private.json', { physical: await assertClone(physicalId, 'physical'), logical: await assertClone(logicalId, 'logical'), originalPostgresStarted: false });
-      const capture = async (purpose, id) => {
-        await witness(); await assertIsolatedNetwork(); await assertClone(id, purpose); const name = purpose === 'physical' ? 'recovered' : 'logical-restored';
-        const connectionPath = file(purpose + '-connection.private.json'); await writePrivateJson(connectionPath, { host: names[purpose], port: 5432, user: pgIdentity.username, password: pgIdentity.password, database: pgIdentity.database });
+      const capture = async (purpose, id, captureName) => {
+        await witness(); await assertIsolatedNetwork(); await assertClone(id, purpose); const name = captureName ?? (purpose === 'physical' ? 'recovered' : 'logical-restored');
+        const connectionPath = file((captureName ?? purpose) + '-connection.private.json'); await writePrivateJson(connectionPath, { host: names[purpose], port: 5432, user: pgIdentity.username, password: pgIdentity.password, database: pgIdentity.database });
         let observed;
         if (injectedCapture) observed = await injectedCapture({ directory: file(name), ownerId: args.operationId, connectionPath, purpose, id });
         else observed = await docker.run(args.captureImage, { network: network.Id, mounts: [mount(HERE, '/operator'), mount(args.operationDirectory, '/proof', false)], labels: labels('capture-' + purpose), cmd: ['node', '--experimental-strip-types', '/operator/recovery.mjs', 'capture', '--directory', '/proof/' + name, '--owner', args.operationId, '--connection', '/proof/' + path.basename(connectionPath)] });
@@ -212,17 +313,57 @@ export async function qualifyRecoveredSeed(argumentsValue, { docker: supplied, s
       const clusterBefore = await readJson(path.join(baseline.directory, 'cluster.private.json')), clusterAfter = await readJson(path.join(restored.directory, 'cluster.private.json'));
       need(same(clusterBefore, clusterAfter), 'SP1_RECOVERY_CLUSTER_CONTEXT_MISMATCH');
       await proof('comparison.private.json', { ...comparison, globalSql: 'PASS', globalSqlSha256: canonicalSha256(globalsBefore), clusterContext: 'PASS', clusterContextSha256: canonicalSha256(clusterBefore), rawRolePasswords: 'private evidence only' });
-      await witness(); return { baseline, restored, dump: await pin(dump), comparison: await pin(file('comparison.private.json')) };
+      let modelAuditProof;
+      if (modelAudit) {
+        await witness(); await assertIsolatedNetwork();
+        const created = await docker.create(names.minio, { Image: minioIdentity.image, User: minioIdentity.user, Entrypoint: [],
+          Cmd: ['minio', 'server', '/data', '--address', ':9000', '--console-address', ':9001'],
+          Env: ['HOME=/tmp', 'MINIO_ROOT_USER=' + minioIdentity.rootUser, 'MINIO_ROOT_PASSWORD=' + minioIdentity.rootPassword, 'MINIO_BROWSER=off', 'MINIO_UPDATE=off'], Labels: labels('minio'),
+          HostConfig: { NetworkMode: network.Id, Mounts: [mount(names.minio, '/data', false, 'volume')], PortBindings: {}, PublishAllPorts: false, RestartPolicy: { Name: 'no' } } });
+        need(SHA.test(created?.Id ?? '') && created.Id !== verified.intent.source.roles.minio.id, 'SP1_RECOVERY_MINIO_INVALID');
+        minioId = created.Id;
+        const stopped = await docker.inspect(minioId); assertOwnedRecoveryResource(stopped, volumeSpec('minio'));
+        need(stopped.Id === minioId && stopped.Image === minioIdentity.image && !active(stopped) && stopped.HostConfig?.NetworkMode === network.Id
+          && Object.keys(stopped.HostConfig?.PortBindings ?? {}).length === 0 && stopped.HostConfig.PublishAllPorts !== true
+          && stopped.HostConfig.Mounts?.length === 1 && stopped.HostConfig.Mounts[0].Type === 'volume'
+          && stopped.HostConfig.Mounts[0].Source === names.minio && stopped.HostConfig.Mounts[0].Target === '/data' && stopped.HostConfig.Mounts[0].ReadOnly === false,
+        'SP1_RECOVERY_MINIO_CHANGED');
+        await docker.start(minioId); await assertMinio(); await assertIsolatedNetwork();
+        const ready = await docker.run(args.captureImage, { network: network.Id, mounts: [mount(HERE, '/operator')], labels: labels('minio-ready'),
+          cmd: ['node', '--experimental-strip-types', '/operator/recovery.mjs', 'wait-minio', '--host', names.minio, '--owner', args.operationId] });
+        need(ready?.status === 'PASS', 'SP1_RECOVERY_MINIO_NOT_READY'); await assertMinio(); await assertIsolatedNetwork();
+        await proof('minio-started.private.json', { id: minioId, image: minioIdentity.image, volume: names.minio, networkId: network.Id, publishedPorts: false, readiness: 'PASS', sourceStorageWritten: false });
+        const connectionPath = file('model-audit-connection.private.json'); await writePrivateJson(connectionPath, {
+          database: { host: names.logical, port: 5432, user: pgIdentity.username, password: pgIdentity.password, database: pgIdentity.database },
+          storage: { host: names.minio, port: 9000, useSSL: false, accessKey: minioIdentity.accessKey, secretKey: minioIdentity.secretKey, bucket: minioIdentity.bucket }, ownerId: args.operationId });
+        const observed = validateModelAuditSummary(await docker.run(args.captureImage, { network: network.Id,
+          mounts: [mount(HERE, '/operator'), mount(packageDirectory, '/package'), mount(args.operationDirectory, '/proof', false)], labels: labels('model-audit'),
+          cmd: ['node', '/operator/model-audit.mjs', '--connection', '/proof/model-audit-connection.private.json', '--directory', '/proof/model-audit', '--package-module', '/package/index.mjs',
+            '--postgres-host', names.logical, '--minio-host', names.minio, '--owner', args.operationId] }));
+        await witness(); await assertMinio(); await assertIsolatedNetwork(); await assertClone(logicalId, 'logical');
+        const privateReport = await pin(file('model-audit/model-audit.private.json'));
+        need(privateReport.sha256 === observed.reportSha256 && privateReport.bytes === observed.reportBytes, 'SP1_RECOVERY_MODEL_REPORT_CHANGED');
+        evidence.push(privateReport);
+        const afterAudit = await capture('logical', logicalId, 'logical-after-model-audit');
+        const unchanged = await compare(path.join(restored.directory, 'raw'), path.join(afterAudit.directory, 'raw'), { comparison: 'exact', beforeOwnerId: args.operationId, afterOwnerId: args.operationId, signal });
+        need(unchanged.status === 'PASS'
+          && same(await readJson(path.join(afterAudit.directory, 'globals.private.json')), globalsAfter)
+          && same(await readJson(path.join(afterAudit.directory, 'cluster.private.json')), clusterAfter), 'SP1_RECOVERY_MODEL_AUDIT_MUTATED_DATABASE');
+        const immutable = await proof('model-audit-read-only.private.json', { ...unchanged, globalSql: 'PASS', clusterContext: 'PASS', modelAudit: observed, privateReport });
+        modelAuditProof = { ...observed, privateReport, readOnlyComparison: immutable, afterAudit };
+      }
+      await witness(); return { baseline, restored, dump: await pin(dump), comparison: await pin(file('comparison.private.json')), ...(modelAudit ? { modelAudit: modelAuditProof } : {}) };
     });
     cleanupSafe = true;
     for (const expected of sourceClosure) need(same(await pin(expected.path), expected), 'SP1_RECOVERY_SOURCE_CHANGED');
     for (const expected of evidence) await assertPin(expected);
     await verifyColdSeed(args.seedPath, args.seedSha256);
-    result = { schemaVersion: 'wfc.preparer.recovered-seed.v1', status: 'PASS', operationId: args.operationId, productionQualification: production,
+    result = { schemaVersion: modelAudit ? 'wfc.preparer.recovered-seed.v2' : 'wfc.preparer.recovered-seed.v1', status: 'PASS', operationId: args.operationId, productionQualification: production,
       scope: 'target-database logical recovery inside physically preserved cluster-role context', allClusterLogicalInitdbRecovery: 'NOT_RUN',
       seed: await pin(args.seedPath), captureImage: args.captureImage, sourceClosure, evidence, ...runtimeResult,
       rawPublicData: 'PASS', publicGlobalSql: 'PASS', clusterRoleContext: 'PASS', originalPostgresRemainsStopped: true,
-      modelAndOriginalZipAudit: 'NOT_RUN', applicationStartup: 'NOT_RUN', releasableBackup: false, completedAt: new Date().toISOString() };
+      ...(modelAudit ? { modelAuditScope: 'All ready declared model resources and all published original ZIP records; absent legacy ZIP declarations remain explicit in the audit.' } : {}),
+      modelAndOriginalZipAudit: modelAudit ? 'PASS' : 'NOT_RUN', applicationStartup: 'NOT_RUN', releasableBackup: false, completedAt: new Date().toISOString() };
   } catch (error) { primary = error; cleanupSafe = getBoundedDockerCleanup(error)?.status === 'PASS'; }
   // The bounds layer must have positively removed every clone/helper first.
   // Unknown outcomes retain volumes/network and the immutable operation for reconciliation.
@@ -230,14 +371,14 @@ export async function qualifyRecoveredSeed(argumentsValue, { docker: supplied, s
   if (docker && cleanupSafe) {
     try { cleanup = await withBoundedDockerExecution(SHORT_BOUNDS, async () => {
       await witness(); const all = await docker.containers();
-      need(!all.some(item => item.Mounts?.some(m => m.Type === 'volume' && [physical?.Name, logical?.Name].includes(m.Name))), 'SP1_RECOVERY_VOLUME_ATTACHED');
-      for (const purpose of ['logical', 'physical']) { const expected = purpose === 'physical' ? physical : logical; if (!expected) continue;
+      need(!all.some(item => item.Mounts?.some(m => m.Type === 'volume' && [physical?.Name, logical?.Name, minioVolume?.Name].filter(Boolean).includes(m.Name))), 'SP1_RECOVERY_VOLUME_ATTACHED');
+      for (const purpose of [...(modelAudit ? ['minio'] : []), 'logical', 'physical']) { const expected = purpose === 'physical' ? physical : purpose === 'logical' ? logical : minioVolume; if (!expected) continue;
         const current = await docker.request('GET', '/volumes/' + encodeURIComponent(expected.Name)); assertOwnedRecoveryResource(current, volumeSpec(purpose)); need(same(current, expected), 'SP1_RECOVERY_VOLUME_CHANGED');
         await docker.request('DELETE', '/volumes/' + encodeURIComponent(current.Name)); }
       if (network) { const current = await docker.request('GET', '/networks/' + network.Id); assertOwnedRecoveryResource(current, { operationId: args.operationId, seedSha256: args.seedSha256, purpose: 'network', name: names.network });
         need(current.Id === network.Id && current.Internal === true && Object.keys(current.Containers ?? {}).length === 0, 'SP1_RECOVERY_NETWORK_ATTACHED'); await docker.request('DELETE', '/networks/' + current.Id); }
       const remainingVolumes = await docker.request('GET', '/volumes'), remainingNetworks = await docker.request('GET', '/networks');
-      need(Array.isArray(remainingVolumes?.Volumes) && !remainingVolumes.Volumes.some(item => [names.physical, names.logical].includes(item.Name))
+      need(Array.isArray(remainingVolumes?.Volumes) && !remainingVolumes.Volumes.some(item => [names.physical, names.logical, ...(modelAudit ? [names.minio] : [])].includes(item.Name))
         && Array.isArray(remainingNetworks) && !remainingNetworks.some(item => item.Id === network?.Id || item.Name === names.network), 'SP1_RECOVERY_RESOURCE_REMOVAL_UNCONFIRMED');
       await witness(); return { status: 'PASS', resourcesRetained: false, originalPostgresRemainsStopped: true };
     }); } catch (error) { primary ??= error; cleanup = { status: 'UNCONFIRMED', resourcesRetained: true, code: codeFor(error) }; }
@@ -304,7 +445,9 @@ export async function captureCloneDatabase({ directory, ownerId, connectionPath 
 export async function main(args) {
   let result;
   if (args.length === 7 && args[0] === 'capture' && args[1] === '--directory' && args[3] === '--owner' && args[5] === '--connection') result = await captureCloneDatabase({ directory: args[2], ownerId: args[4], connectionPath: args[6] });
-  else if (args.length === 9 && args[0] === 'qualify' && args[1] === '--seed' && args[3] === '--seed-sha256' && args[5] === '--operation' && args[7] === '--capture-image') result = await qualifyRecoveredSeed({ seedPath: args[2], seedSha256: args[4], operationDirectory: args[6], captureImage: args[8] });
+  else if (args.length === 5 && args[0] === 'wait-minio' && args[1] === '--host' && args[3] === '--owner') result = await waitRecoveryMinio({ host: args[2], ownerId: args[4] });
+  else if ([9, 10].includes(args.length) && args[0] === 'qualify' && args[1] === '--seed' && args[3] === '--seed-sha256' && args[5] === '--operation' && args[7] === '--capture-image'
+    && (args.length === 9 || args[9] === '--audit-models')) result = await qualifyRecoveredSeed({ seedPath: args[2], seedSha256: args[4], operationDirectory: args[6], captureImage: args[8], ...(args.length === 10 ? { modelAudit: true } : {}) });
   else need(false, 'SP1_RECOVERY_ARGUMENT_INVALID');
   console.log(JSON.stringify({ status: result.status, operationId: result.operationId ?? null, releasableBackup: false, ...(result.rawContentSha256 ? { rawContentSha256: result.rawContentSha256, globalSqlSha256: result.globalSqlSha256, clusterContextSha256: result.clusterContextSha256 } : {}) }));
 }

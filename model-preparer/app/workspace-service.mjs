@@ -1,16 +1,14 @@
 import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { Readable } from 'node:stream';
-import { pipeline } from 'node:stream/promises';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { createAPSProvider, createEngineerCostProvider } from '../index.mjs';
 import { createPreparerService } from './service.mjs';
 import { createWorkspaceSecurity, WorkspaceSecurityError } from './workspace-security.mjs';
-import { readConfiguration, loadPrivateAPSConfiguration } from './config.mjs';
-import { createJournal, UUID, digest } from './io.mjs';
+import { readConfiguration } from './config.mjs';
+import { createJournal, UUID, digest, safePath } from './io.mjs';
 import { bad, safeError, ServiceError } from './errors.mjs';
 
 const WEB = fileURLToPath(new URL('../web/', import.meta.url));
@@ -18,13 +16,13 @@ const sha = value => createHash('sha256').update(value).digest('hex');
 const now = () => new Date().toISOString();
 const PROJECT = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MESSAGES = {
-  AUTODESK_SETTINGS_REQUIRED: 'Администратор трябва да запази Autodesk ключовете и да потвърди Free плана.',
-  AUTODESK_ACCESS_FAILED: 'Autodesk отказа достъп. Проверете ключовете, региона и правата на приложението.',
-  AUTODESK_RATE_LIMIT: 'Autodesk ограничи заявките. Изчакайте и опитайте проверката отново.',
-  AUTODESK_CHECK_REQUIRED: 'Първо проверете достъпа до Autodesk.',
-  CONFIGURATION_CHANGED: 'Настройките на Autodesk са променени. Проверете достъпа отново.',
-  WFC_IMPORT_FAILED: 'WFC не завърши записа. ZIP файлът е запазен; продължете, за да повторите само записа.',
-  GENERATION_TIMEOUT: 'Обработката още не е завършила. Може да продължите от същата заявка.',
+  AUTODESK_SETTINGS_REQUIRED: 'Enter your Autodesk credentials on this page and confirm the Free plan.',
+  AUTODESK_ACCESS_FAILED: 'Autodesk denied access. Check your credentials and application permissions.',
+  AUTODESK_RATE_LIMIT: 'Autodesk limited the requests. Wait and check access again.',
+  AUTODESK_CHECK_REQUIRED: 'Check Autodesk access on this page first.',
+  CONFIGURATION_CHANGED: 'Re-enter the same Autodesk application credentials to resume this job.',
+  WFC_IMPORT_FAILED: 'WFC could not save the model. The verified ZIP is retained; resume to retry saving it.',
+  GENERATION_TIMEOUT: 'Processing has not finished. Resume the saved request to continue.',
 };
 class WorkspaceError extends Error {
   constructor(code, status = 409) { super(MESSAGES[code]); this.code = code; this.status = status; }
@@ -61,131 +59,197 @@ export async function createWorkspaceService(options = {}) {
   let security;
   try {
     security = await createWorkspaceSecurity({ directory: path.join(config.dataDirectory, 'workspace-private'), wfcOrigin: config.wfcOrigin,
-      publicOrigin: config.publicOrigin, seedAPSConfiguration: options.seedAPSConfiguration || loadPrivateAPSConfiguration(options.env),
+      publicOrigin: config.publicOrigin,
       ...(options.wfcFetch ? { fetch: options.wfcFetch } : {}) });
   } catch (error) { await journal.close(); throw error; }
   const generations = new Map(), uploads = new Map(), requests = new Map();
   try {
     for (const row of await journal.list('operations')) {
       if (!UUID.test(row.id) || !PROJECT.test(row.ownerId) || !PROJECT.test(row.projectId) || !['running', 'needs-view', 'interrupted', 'failed', 'complete'].includes(row.status)) bad('STORE_CORRUPT', 500);
-      if (row.status === 'running') { row.status = 'interrupted'; row.error = { code: 'OPERATION_INTERRUPTED', message: 'Работата е прекъсната. Влезте и продължете от запазеното състояние.' }; await journal.write('operations', row.id, row); }
+      if (row.status === 'running') { row.status = 'interrupted'; row.error = { code: 'OPERATION_INTERRUPTED', message: 'Processing was interrupted. Sign in and resume the saved request.' }; await journal.write('operations', row.id, row); }
       generations.set(row.id, row);
     }
     for (const row of await journal.list('uploads')) uploads.set(row.uploadId, row);
     for (const row of await journal.list('requests')) requests.set(row.requestId, row);
   } catch (error) { await journal.close(); throw error; }
   const csrf = randomBytes(32).toString('base64url'), shutdown = new AbortController();
-  let origin = config.publicOrigin, inner = null, innerToken, innerRevision = null, innerOpening = null, active = null, closing = false;
-  let access = { state: 'blocked', access: false, quotaKnown: false, message: 'Проверете достъпа до Autodesk.' };
+  let origin = config.publicOrigin, active = null, closing = false;
+  const runtimes = new Map(), runtimeOpenings = new Map(), runtimeClosings = new Map(), runtimeSlots = new Map(), accessByLease = new Map();
+  const blockedAccess = () => ({ state: 'blocked', access: false, quotaKnown: false, message: 'Check Autodesk access on this page.' });
+  const packageApi = await import(pathToFileURL(config.packageModulePath).href);
   const apsFetch = options.apsFetch || globalThis.fetch;
-  function authorization() {
-    const settings = security.privateSettings();
-    if (!settings?.enabled || !settings.freePlanConfirmed || !access.access || access.configurationId !== settings.configurationId) return { enabled: false };
+  const scopeSignal = binding => AbortSignal.any([shutdown.signal, security.assertBinding(binding).signal]);
+  function authorization(binding) {
+    let settings; try { settings = security.privateSettings(binding); } catch { return { enabled: false }; }
+    const access = accessByLease.get(settings.leaseId);
+    if (!settings.enabled || !settings.freePlanConfirmed || !access?.access || access.configurationId !== settings.configurationId) return { enabled: false };
     return { enabled: true, configurationId: settings.configurationId, accountHash: sha('aps-account:' + settings.clientId),
       applicationHash: sha(settings.clientId), bucketHash: sha(settings.bucket), region: settings.region,
       freePlanConfirmedBy: settings.freePlanConfirmedBy, freePlanConfirmedAt: settings.freePlanConfirmedAt };
   }
-  function readySettings() {
-    const settings = security.privateSettings();
+  function readySettings(binding) {
+    const settings = security.privateSettings(binding);
     if (!settings?.enabled || !settings.freePlanConfirmed) throw new WorkspaceError('AUTODESK_SETTINGS_REQUIRED');
     return settings;
   }
-  async function checkAutodesk() {
-    const settings = readySettings();
+  async function checkAutodesk(binding) {
+    await security.refreshBinding(binding);
+    const settings = readySettings(binding), signal = scopeSignal(binding);
     // This verifies OAuth and the application's storage access. Autodesk does
     // not expose an exact monthly remaining-conversion balance here.
     let response;
     try {
       response = await apsFetch('https://developer.api.autodesk.com/authentication/v2/token', { method: 'POST', redirect: 'manual',
         headers: { Authorization: 'Basic ' + Buffer.from(settings.clientId + ':' + settings.clientSecret).toString('base64'), 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ grant_type: 'client_credentials', scope: 'data:read data:create data:write bucket:create bucket:read' }).toString(), signal: AbortSignal.timeout(20000) });
+        body: new URLSearchParams({ grant_type: 'client_credentials', scope: 'data:read data:create data:write bucket:create bucket:read' }).toString(), signal: AbortSignal.any([signal, AbortSignal.timeout(20000)]) });
       if (!response.ok) { await response.body?.cancel(); throw new WorkspaceError(response.status === 429 ? 'AUTODESK_RATE_LIMIT' : 'AUTODESK_ACCESS_FAILED'); }
       const token = await boundedJSON(response);
       if (typeof token.access_token !== 'string' || !token.access_token || !Number.isFinite(token.expires_in) || token.expires_in <= 0) throw new WorkspaceError('AUTODESK_ACCESS_FAILED');
+      await security.refreshBinding(binding);
       response = await apsFetch('https://developer.api.autodesk.com/oss/v2/buckets/' + encodeURIComponent(settings.bucket) + '/details', {
-        redirect: 'manual', headers: { Authorization: 'Bearer ' + token.access_token, 'x-ads-region': settings.region }, signal: AbortSignal.timeout(20000) });
+        redirect: 'manual', headers: { Authorization: 'Bearer ' + token.access_token, 'x-ads-region': settings.region }, signal: AbortSignal.any([signal, AbortSignal.timeout(20000)]) });
       // A missing bucket may be created by the guarded core at Generate time.
       if (![200, 404].includes(response.status)) { await response.body?.cancel(); throw new WorkspaceError(response.status === 429 ? 'AUTODESK_RATE_LIMIT' : 'AUTODESK_ACCESS_FAILED'); }
       const bucketExists = response.status === 200;
       const details = await boundedJSON(response);
       if (bucketExists && (details.bucketKey !== settings.bucket || details.bucketOwner !== settings.clientId)) throw new WorkspaceError('AUTODESK_ACCESS_FAILED');
-      if (security.privateSettings()?.configurationId !== settings.configurationId) throw new WorkspaceError('CONFIGURATION_CHANGED');
-      access = { state: 'ready', access: true, quotaKnown: false, configurationId: settings.configurationId, checkedAt: now(), bucketExists,
-        message: 'Достъпът до Autodesk работи. Точният оставащ месечен лимит не е достъпен чрез API; Autodesk решава дали да приеме конверсията.' };
+      await security.refreshBinding(binding);
+      const access = { state: 'ready', access: true, quotaKnown: false, configurationId: settings.configurationId, checkedAt: now(), bucketExists,
+        message: 'Autodesk access works. Its API does not provide an exact remaining monthly conversion allowance.' };
+      accessByLease.set(settings.leaseId, access);
       return access;
     } catch (error) {
-      const safe = error instanceof WorkspaceError ? error : new WorkspaceError('AUTODESK_ACCESS_FAILED');
-      access = { state: 'blocked', access: false, quotaKnown: false, checkedAt: now(), message: safe.message };
+      const safe = error instanceof WorkspaceError || error instanceof WorkspaceSecurityError ? error : new WorkspaceError('AUTODESK_ACCESS_FAILED');
+      accessByLease.delete(settings.leaseId);
       throw safe;
     }
   }
-  async function ensureInner({ localOnly = false } = {}) {
-    // Existing verified artifacts remain usable when cloud work is disabled.
-    // A private runtime with blocked cost authority performs no startup calls.
-    const settings = localOnly ? security.privateSettings() : readySettings();
-    if (!settings) throw new WorkspaceError('AUTODESK_SETTINGS_REQUIRED');
-    if (inner && innerRevision === settings.configurationId) return inner;
-    if (innerOpening) return innerOpening;
-    innerOpening = (async () => {
-      if (inner) await inner.close(); inner = null;
-      const configuration = { ...config, mode: 'live', port: 0, host: '127.0.0.1', publicOrigin: 'http://127.0.0.1:0', liveReuseOnly: false };
+  async function closeRuntime(leaseId) {
+    if (runtimeClosings.has(leaseId)) return runtimeClosings.get(leaseId).promise;
+    const runtime = runtimes.get(leaseId); runtimes.delete(leaseId); accessByLease.delete(leaseId);
+    if (!runtime) return;
+    runtime.controller.abort();
+    const promise = runtime.service.close().finally(() => runtimeClosings.delete(leaseId));
+    runtimeClosings.set(leaseId, { slot: runtime.slot, promise }); await promise;
+  }
+  const unsubscribeRevocations = security.onLeaseRevoked(({ leaseId }) => {
+    accessByLease.delete(leaseId);
+    const runtime = runtimes.get(leaseId); runtime?.controller.abort();
+    void closeRuntime(leaseId).catch(() => {});
+  });
+  function inRuntimeSlot(slot, action) {
+    const previous = runtimeSlots.get(slot) || Promise.resolve();
+    const pending = previous.catch(() => {}).then(action); runtimeSlots.set(slot, pending);
+    void pending.finally(() => { if (runtimeSlots.get(slot) === pending) runtimeSlots.delete(slot); }).catch(() => {});
+    return pending;
+  }
+  function borrowRuntime(runtime) {
+    if (runtime.borrowers++ === 0) runtime.idle = new Promise(resolve => { runtime.resolveIdle = resolve; });
+    return runtime;
+  }
+  function releaseRuntime(runtime) {
+    if (--runtime.borrowers === 0) { runtime.resolveIdle(); runtime.resolveIdle = null; }
+  }
+  async function ensureInner(binding, { borrow = false } = {}) {
+    await security.refreshBinding(binding);
+    const settings = readySettings(binding), meta = security.assertBinding(binding);
+    const slot = meta.ownerKey;
+    const opening = inRuntimeSlot(slot, async () => {
+      await security.refreshBinding(binding);
+      const existing = runtimes.get(meta.leaseId);
+      if (existing) return borrow ? borrowRuntime(existing) : existing;
+      for (const pending of runtimeClosings.values()) if (pending.slot === slot) await pending.promise;
+      // A new page gets a new provider/token closure. Durable files are reopened
+      // only after the previous runtime for this owner has joined. Application
+      // identity remains a full fingerprint on every durable upload and job.
+      for (const [leaseId, runtime] of runtimes) if (runtime.slot === slot) {
+        if (active?.leaseId === leaseId) bad('OPERATION_BUSY', 409);
+        // A local response must finish using its runtime before another page
+        // takes over the same durable store. Revocation still aborts promptly.
+        await runtime.idle;
+        await closeRuntime(leaseId);
+      }
+      security.assertBinding(binding);
+      const configuration = { ...config, mode: 'live', port: 0, host: '127.0.0.1', publicOrigin: 'http://127.0.0.1:0', liveReuseOnly: false,
+        dataDirectory: path.join(config.dataDirectory, 'owners', meta.ownerKey),
+        workDirectory: path.join(config.workDirectory, 'owners', meta.ownerKey),
+        outputDirectory: path.join(config.outputDirectory, 'owners', meta.ownerKey) };
+      const controller = new AbortController();
       const createLiveRuntime = async ({ store, packageApi }) => {
         const namespace = { account: 'team-' + sha('aps-account:' + settings.clientId), application: 'app-' + sha(settings.clientId) };
-        const costProvider = await createEngineerCostProvider({ store, signingKeyPath: path.join(config.dataDirectory, 'workspace-private', 'cost.key'), getAuthorization: authorization });
+        await safePath(path.join(config.dataDirectory, 'owners', meta.ownerKey), { directory: true, create: true });
+        const costProvider = await createEngineerCostProvider({ store, signingKeyPath: path.join(config.dataDirectory, 'owners', meta.ownerKey, 'cost.key'), getAuthorization: () => authorization(binding) });
         const provider = createAPSProvider({ ...settings, namespace, packageApi, authorizeRead: costProvider.reserveRead, reuseOnly: false,
+          preflight: async () => {
+            if (controller.signal.aborted) throw new WorkspaceError('AUTODESK_SETTINGS_REQUIRED');
+            // Upload/source browsing can open the runtime before a project is
+            // selected. Every later generation fetch uses its stronger project
+            // binding even if another local request arrives on the same page.
+            const current = active?.leaseId === meta.leaseId && active.binding ? active.binding : binding;
+            await security.refreshBinding(current); security.assertBinding(current);
+          },
           objectKeysBySource: { '11b2739d92020ee58a52a4e793cf8fd538fb30758eb42176aba93ac7319b048a': 'aalborg-11b2739d92020ee58a52a4e793cf8fd538fb30758eb42176aba93ac7319b048a.nwd' },
           ...(options.apsTestTransport ? { testTransport: options.apsTestTransport } : {}) });
         return { provider, costProvider, namespace, region: settings.region, logicalBucket: 'target-' + sha(settings.bucket) };
       };
       const service = await (options.createInnerService || createPreparerService)({ configuration, createLiveRuntime });
-      try { await service.listen(); innerToken = (await (await fetch(service.address + '/api/config')).json()).csrfToken; }
+      let token;
+      try { await service.listen(); token = (await (await fetch(service.address + '/api/config')).json()).csrfToken; security.assertBinding(binding); }
       catch (error) { await service.close(); throw error; }
-      inner = service; innerRevision = settings.configurationId; return inner;
-    })();
-    try { return await innerOpening; } finally { innerOpening = null; }
+      const runtime = { service, token, controller, slot, leaseId: meta.leaseId, borrowers: 0, idle: Promise.resolve(), resolveIdle: null };
+      runtimes.set(meta.leaseId, runtime); return borrow ? borrowRuntime(runtime) : runtime;
+    });
+    runtimeOpenings.set(meta.leaseId, opening);
+    try { return await opening; } finally { if (runtimeOpenings.get(meta.leaseId) === opening) runtimeOpenings.delete(meta.leaseId); }
   }
-  async function innerRequest(route, { method = 'GET', input, body, requestId = randomUUID(), headers = {} } = {}) {
-    const service = await ensureInner({ localOnly: method === 'GET' });
-    const response = await fetch(service.address + route, { method, redirect: 'manual', signal: shutdown.signal,
-      headers: { ...(method !== 'GET' ? { Origin: service.address, 'X-Preparer-Token': innerToken, 'X-Request-Id': requestId } : {}),
+  async function innerRequest(binding, route, { method = 'GET', input, body, requestId = randomUUID(), headers = {} } = {}) {
+    const runtime = await ensureInner(binding, { borrow: true }), service = runtime.service;
+    try {
+    const response = await fetch(service.address + route, { method, redirect: 'manual', signal: AbortSignal.any([scopeSignal(binding), runtime.controller.signal]),
+      headers: { ...(method !== 'GET' ? { Origin: service.address, 'X-Preparer-Token': runtime.token, 'X-Request-Id': requestId } : {}),
         ...(input ? { 'Content-Type': 'application/json' } : {}), ...headers },
       ...(input ? { body: JSON.stringify(input) } : body ? { body, duplex: 'half' } : {}) });
-    return response;
+    let released = false;
+    return { response, release() { if (!released) { released = true; releaseRuntime(runtime); } } };
+    } catch (error) { releaseRuntime(runtime); throw error; }
   }
-  async function innerJSON(route, options) {
-    const response = await innerRequest(route, options), value = await boundedJSON(response);
-    if (!response.ok) throw new ServiceError(value.error?.code || 'PROVIDER_FAILURE', response.status);
-    return value;
+  async function innerJSON(binding, route, options) {
+    const opened = await innerRequest(binding, route, options);
+    try {
+      const value = await boundedJSON(opened.response);
+      if (!opened.response.ok) throw new ServiceError(value.error?.code || 'PROVIDER_FAILURE', opened.response.status);
+      return value;
+    } finally { opened.release(); }
   }
   const dto = row => ({ id: row.id, label: row.label, projectId: row.projectId, status: row.status, stage: row.stage,
     error: row.error || null, job: row.job || null, wfcVersionId: row.wfcVersionId || null, updatedAt: row.updatedAt });
   async function save(row) { row.updatedAt = now(); await journal.write('operations', row.id, row); generations.set(row.id, row); }
   async function own(auth, row) {
-    if (!row || row.ownerId !== auth.user.id && !auth.user.isAdmin) bad('NOT_FOUND', 404);
+    if (!row || row.ownerId !== auth.user.id || row.ownerKey && row.ownerKey !== security.ownerKey(auth)) bad('NOT_FOUND', 404);
     await security.requireProject(auth, row.projectId); return row;
   }
-  async function updateJob(row) { row.job = (await innerJSON('/api/jobs/' + row.jobId)).job; await save(row); return row.job; }
-  async function perform(row, phase, route, input) {
+  async function updateJob(row, binding) { row.job = (await innerJSON(binding, '/api/jobs/' + row.jobId)).job; await save(row); return row.job; }
+  async function perform(row, binding, phase, route, input) {
     row.stage = phase;
     if (!row.steps[phase]) row.steps[phase] = { requestId: randomUUID() };
     await save(row);
     const step = row.steps[phase];
     let op;
-    if (step.operationId) op = (await innerJSON('/api/operations/' + step.operationId)).operation;
-    else { op = (await innerJSON(route, { method: 'POST', input, requestId: step.requestId })).operation; step.operationId = op.operationId; await save(row); }
+    if (step.operationId) op = (await innerJSON(binding, '/api/operations/' + step.operationId)).operation;
+    else { op = (await innerJSON(binding, route, { method: 'POST', input, requestId: step.requestId })).operation; step.operationId = op.operationId; await save(row); }
     while (['queued', 'running'].includes(op.status)) {
       if (Date.now() > row.deadline) throw new WorkspaceError('GENERATION_TIMEOUT');
-      await delay(options.operationPollMs || 500, undefined, { signal: shutdown.signal });
-      op = (await innerJSON('/api/operations/' + op.operationId)).operation;
-      if (op.jobId) { try { row.job = (await innerJSON('/api/jobs/' + op.jobId)).job; await save(row); } catch {} }
+      await delay(options.operationPollMs || 500, undefined, { signal: scopeSignal(binding) });
+      op = (await innerJSON(binding, '/api/operations/' + op.operationId)).operation;
+      if (op.jobId) { try { row.job = (await innerJSON(binding, '/api/jobs/' + op.jobId)).job; await save(row); } catch {} }
     }
     if (op.status === 'interrupted') {
       if (phase === 'capture' && op.jobId) {
-        try { row.job = (await innerJSON('/api/jobs/' + op.jobId)).job; row.jobId = op.jobId; step.done = true; await save(row); return op; }
+        try { row.job = (await innerJSON(binding, '/api/jobs/' + op.jobId)).job; row.jobId = op.jobId; step.done = true; await save(row); return op; }
         catch (error) { if (error.code !== 'JOB_MISSING' && error.code !== 'NOT_FOUND') throw error; }
       }
       delete row.steps[phase]; await save(row);
-      return perform(row, phase, route, input);
+      return perform(row, binding, phase, route, input);
     }
     if (op.status !== 'succeeded') {
       // Retrying creates a fresh local action identity; the core's immutable
@@ -195,36 +259,80 @@ export async function createWorkspaceService(options = {}) {
     }
     step.done = true; if (op.jobId) row.jobId = op.jobId; await save(row); return op;
   }
-  async function action(row, name, extra = {}, key = name) {
-    return perform(row, key, '/api/jobs/' + row.jobId + '/actions', { action: name, ...extra });
+  async function action(row, binding, name, extra = {}, key = name) {
+    return perform(row, binding, key, '/api/jobs/' + row.jobId + '/actions', { action: name, ...extra });
   }
-  async function approve(row) {
+  async function approve(row, binding) {
     // Renewal is automatic and local; this is not a new Autodesk permission.
     const key = 'approval-' + (row.approvals = (row.approvals || 0) + 1);
-    await action(row, 'approve-cost', {}, key);
+    await action(row, binding, 'approve-cost', {}, key);
   }
-  async function wfcImport(row, auth) {
+  function packageFilename(row) {
+    if (!/^[a-f0-9]{64}$/.test(row.ownerKey || '') || !UUID.test(row.id)) bad('ARTIFACT_INVALID', 409);
+    return path.join(config.outputDirectory, 'owners', row.ownerKey, 'packages', row.id + '.zip');
+  }
+  async function cachePackage(row, binding) {
+    if (row.localPackage) return;
+    const expected = row.job?.facts?.package;
+    if (!expected || !/^[a-f0-9]{64}$/.test(expected.sha256 || '') || !Number.isSafeInteger(expected.bytes) || expected.bytes <= 0) bad('ARTIFACT_INVALID', 409);
+    const filename = packageFilename(row); await safePath(path.dirname(filename), { directory: true, create: true });
+    const temp = filename + '.' + randomUUID() + '.tmp'; let handle, bytes = 0;
+    try {
+      const opened = await innerRequest(binding, '/api/artifacts/' + row.jobId + '/package'), response = opened.response;
+      try {
+      if (!response.ok || Number(response.headers.get('content-length')) !== expected.bytes) { await response.body?.cancel(); bad('ARTIFACT_INVALID', 409); }
+      handle = await fs.open(temp, 'wx', 0o600);
+      try {
+        for await (const part of response.body) { bytes += part.length; if (bytes > expected.bytes) bad('ARTIFACT_INVALID', 409); await handle.writeFile(part); }
+        await handle.sync();
+      } finally { await handle.close(); handle = null; }
+      } finally { opened.release(); }
+      const report = await packageApi.verifyPackage(temp);
+      if (report.status !== 'PASS' || report.package?.sha256 !== expected.sha256 || report.package?.bytes !== expected.bytes || bytes !== expected.bytes) bad('ARTIFACT_INVALID', 409);
+      // A completed local receipt contains only integrity facts and trusted owner
+      // scope. It carries no APS credentials, tokens, bucket or remote URL.
+      try { await fs.link(temp, filename); } catch (error) { if (error.code !== 'EEXIST') throw error; }
+      await fs.unlink(temp);
+      const current = await packageApi.verifyPackage(filename);
+      if (current.status !== 'PASS' || current.package?.sha256 !== expected.sha256 || current.package?.bytes !== expected.bytes) bad('ARTIFACT_INVALID', 409);
+      row.localPackage = { sha256: expected.sha256, bytes: expected.bytes }; await save(row);
+    } finally { await handle?.close().catch(() => {}); await fs.unlink(temp).catch(error => { if (error.code !== 'ENOENT') throw error; }); }
+  }
+  async function localArchive(row) {
+    const expected = row.localPackage;
+    if (!expected || expected.sha256 !== row.job?.facts?.package?.sha256 || expected.bytes !== row.job?.facts?.package?.bytes) bad('ARTIFACT_INVALID', 409);
+    const filename = packageFilename(row), before = (await safePath(filename)).stat, handle = await fs.open(filename, 'r');
+    try {
+      const opened = await handle.stat();
+      if (opened.ino !== before.ino || opened.dev !== before.dev || opened.size !== expected.bytes) bad('ARTIFACT_INVALID', 409);
+      const report = await packageApi.verifyPackage(filename), after = (await safePath(filename)).stat, final = await handle.stat();
+      if (report.status !== 'PASS' || report.package?.sha256 !== expected.sha256 || report.package?.bytes !== expected.bytes
+        || after.ino !== opened.ino || after.dev !== opened.dev || after.mtimeMs !== opened.mtimeMs || final.mtimeMs !== opened.mtimeMs || final.size !== opened.size) bad('ARTIFACT_INVALID', 409);
+      return { handle, bytes: expected.bytes, stream: handle.createReadStream({ autoClose: false }) };
+    } catch (error) { await handle.close(); throw error; }
+  }
+  async function wfcImport(row, auth, binding) {
+    const signal = binding ? scopeSignal(binding) : shutdown.signal;
     row.stage = 'saving-to-wfc'; await save(row);
     await own(auth, row);
     if (!row.importId) {
       const pkg = row.job?.facts?.package;
       if (!pkg || !/^[a-f0-9]{64}$/.test(pkg.sha256) || !Number.isSafeInteger(pkg.bytes)) bad('ARTIFACT_INVALID', 409);
       row.importKey ||= randomUUID(); await save(row);
-      const archive = await innerRequest('/api/artifacts/' + row.jobId + '/package');
-      if (!archive.ok || Number(archive.headers.get('content-length')) !== pkg.bytes) { await archive.body?.cancel(); bad('ARTIFACT_INVALID', 409); }
+      const archive = await localArchive(row);
       let response;
       try {
         response = await security.request(auth, '/api/projects/' + row.projectId + '/model-imports', { method: 'POST',
           headers: { 'Content-Type': 'application/zip', 'Content-Length': String(pkg.bytes), 'X-Package-SHA256': pkg.sha256, 'Idempotency-Key': row.importKey },
-          body: archive.body, signal: shutdown.signal, timeoutMs: 900000 });
+          body: archive.stream, signal, timeoutMs: 900000 });
         const value = await boundedJSON(response);
         if (!response.ok || !PROJECT.test(value.importId)) throw new WorkspaceError('WFC_IMPORT_FAILED');
         row.importId = value.importId; await save(row);
-      } finally { if (!archive.body?.locked) await archive.body?.cancel().catch(() => {}); }
+      } finally { archive.stream.destroy(); await archive.handle.close(); }
     }
     for (;;) {
       await own(auth, row);
-      const response = await security.request(auth, '/api/projects/' + row.projectId + '/model-imports/' + row.importId, { signal: shutdown.signal });
+      const response = await security.request(auth, '/api/projects/' + row.projectId + '/model-imports/' + row.importId, { signal });
       const value = await boundedJSON(response), job = value.job;
       if (job?.state === 'failed') {
         row.failedImportIds = [...(row.failedImportIds || []), row.importId];
@@ -237,53 +345,58 @@ export async function createWorkspaceService(options = {}) {
         row.wfcVersionId = job.modelVersionId; row.status = 'complete'; row.stage = 'complete'; row.error = null; await save(row); return;
       }
       if (Date.now() > row.deadline) throw new WorkspaceError('GENERATION_TIMEOUT');
-      await delay(options.importPollMs || 1500, undefined, { signal: shutdown.signal });
+      await delay(options.importPollMs || 1500, undefined, { signal });
     }
   }
-  async function generate(row, auth) {
+  async function generate(row, auth, binding) {
     try {
       await own(auth, row);
       // Import-only retry works even when Autodesk is unavailable.
       if (!row.job?.facts?.package) {
-        await checkAutodesk(); await ensureInner();
+        await checkAutodesk(binding); await ensureInner(binding);
         if (!row.jobId) {
-          await perform(row, 'capture', row.inputId ? '/api/jobs/capture-known' : '/api/jobs/capture', { label: row.label, ...(row.inputId ? { inputId: row.inputId } : { uploadId: row.uploadId }) });
+          await perform(row, binding, 'capture', row.inputId ? '/api/jobs/capture-known' : '/api/jobs/capture', { label: row.label, ...(row.inputId ? { inputId: row.inputId } : { uploadId: row.uploadId }) });
         }
-        let job = await updateJob(row);
+        let job = await updateJob(row, binding);
         if (!job.facts.package) {
-          await approve(row); job = await updateJob(row);
-          if (!job.facts.submission || job.facts.submission.phase === 'none') { await own(auth, row); await action(row, 'prepare'); job = await updateJob(row); }
+          await approve(row, binding); job = await updateJob(row, binding);
+          if (!job.facts.submission || job.facts.submission.phase === 'none') { await own(auth, row); await action(row, binding, 'prepare'); job = await updateJob(row, binding); }
           while (job.facts.submission?.phase !== 'complete') {
             if (job.facts.submission?.phase === 'failed') throw new ServiceError('DERIVATIVE_FAILED', 409);
             if (Date.now() > row.deadline) throw new WorkspaceError('GENERATION_TIMEOUT');
-            await own(auth, row); await approve(row);
-            await action(row, 'reconcile', {}, 'reconcile-' + (row.polls = (row.polls || 0) + 1)); job = await updateJob(row);
-            if (job.facts.submission?.phase !== 'complete') await delay(options.derivativePollMs || 15000, undefined, { signal: shutdown.signal });
+            await own(auth, row); await approve(row, binding);
+            await action(row, binding, 'reconcile', {}, 'reconcile-' + (row.polls = (row.polls || 0) + 1)); job = await updateJob(row, binding);
+            if (job.facts.submission?.phase !== 'complete') await delay(options.derivativePollMs || 15000, undefined, { signal: scopeSignal(binding) });
           }
           if (!row.rootId) {
             if (job.roots.length > 1) { row.status = 'needs-view'; row.stage = 'choose-view'; await save(row); return; }
             if (job.roots.length !== 1) throw new ServiceError('UNSUPPORTED_PROFILE', 409);
             row.rootId = job.roots[0].rootId; await save(row);
           }
-          await own(auth, row); await approve(row);
-          if (job.facts.download?.status !== 'downloaded') await action(row, 'download', { rootId: row.rootId }, 'download-' + row.rootId);
-          await updateJob(row);
-          await action(row, 'package'); await updateJob(row);
+          await own(auth, row); await approve(row, binding);
+          if (job.facts.download?.status !== 'downloaded') await action(row, binding, 'download', { rootId: row.rootId }, 'download-' + row.rootId);
+          await updateJob(row, binding);
+          await action(row, binding, 'package'); await updateJob(row, binding);
         }
       }
-      await wfcImport(row, auth);
+      if (!row.localPackage) await cachePackage(row, binding);
+      await wfcImport(row, auth, binding);
     } catch (error) {
       row.status = closing ? 'interrupted' : 'failed'; row.error = errorDTO(error);
       await save(row).catch(() => {});
     }
   }
-  function launch(row, auth) {
+  function launch(row, auth, binding) {
     if (active) bad('OPERATION_BUSY', 409);
-    const promise = generate(row, auth).finally(() => { if (active?.id === row.id) active = null; });
-    active = { id: row.id, promise };
+    const promise = generate(row, auth, binding).finally(() => { if (active?.id === row.id) active = null; });
+    active = { id: row.id, promise, binding, leaseId: binding ? security.assertBinding(binding).leaseId : null };
   }
   let mutations = Promise.resolve();
   function serialize(action) { const result = mutations.then(action); mutations = result.catch(() => {}); return result; }
+  function pageBinding(auth, req, projectId) {
+    if (typeof req.headers['x-preparer-credentials'] !== 'string' || typeof req.headers['x-preparer-page'] !== 'string') throw new WorkspaceSecurityError('CREDENTIAL_SESSION_REQUIRED', 401);
+    return security.credentialSession(auth, req.headers['x-preparer-credentials'], req.headers['x-preparer-page'], projectId ? { projectId } : {});
+  }
   async function route(req, res) {
     if (closing) bad('SHUTTING_DOWN', 503);
     if (req.headers.host !== new URL(origin).host) bad('HOST_DENIED', 403);
@@ -298,41 +411,54 @@ export async function createWorkspaceService(options = {}) {
       res.writeHead(200, { 'Content-Type': name.endsWith('.html') ? 'text/html; charset=utf-8' : name.endsWith('.mjs') ? 'text/javascript; charset=utf-8' : 'text/css; charset=utf-8', 'Content-Length': bytes.length, 'Cache-Control': 'no-store' }); res.end(bytes); return;
     }
     if (route === '/api/session/login' && req.method === 'POST') { const input = exact(await json(req), ['email', 'password']); send(res, 200, await security.login(req, res, input)); return; }
+    if (route === '/api/session/handoff' && req.method === 'POST') { const input = exact(await json(req), ['token']); send(res, 200, await security.adoptLogin(req, res, input.token)); return; }
     if (route === '/api/session' && req.method === 'GET') {
-      try { const auth = await security.authenticate(req); send(res, 200, { authenticated: true, user: auth.user, csrfToken: csrf, settings: await security.getSettings(auth), autodesk: access }); }
-      catch (error) { if (error.code !== 'AUTH_REQUIRED' && error.code !== 'ENGINEER_REQUIRED') throw error; send(res, 200, { authenticated: false, csrfToken: csrf }); }
+      try { const auth = await security.authenticate(req); send(res, 200, { authenticated: true, user: auth.user, csrfToken: csrf }); }
+      catch (error) { if (!['AUTH_REQUIRED', 'ADMIN_REQUIRED'].includes(error.code)) throw error; send(res, 200, { authenticated: false, csrfToken: csrf }); }
       return;
     }
+    // Signing out revokes this local login and its page leases even when WFC is
+    // unavailable. Request-origin protections above still apply.
+    if (route === '/api/session/logout' && req.method === 'POST') { exact(await json(req), []); await security.logout(req, res); send(res, 200, { ok: true }); return; }
     const auth = await security.authenticate(req);
-    if (route === '/api/session/logout' && req.method === 'POST') { await json(req); await security.logout(req, res); send(res, 200, { ok: true }); return; }
-    if (route === '/api/settings' && req.method === 'GET') { send(res, 200, await security.getSettings(auth)); return; }
-    if (route === '/api/settings' && req.method === 'PUT') {
-      const input = await json(req);
-      await serialize(async () => { if (active) bad('OPERATION_BUSY', 409); const result = await security.saveSettings(auth, input); access = { state: 'blocked', access: false, quotaKnown: false, message: 'Настройките са запазени. Проверете достъпа до Autodesk.' }; send(res, 200, result); }); return;
+    if (route === '/api/credential-sessions' && req.method === 'POST') {
+      const input = exact(await json(req), ['pageId', 'clientId', 'clientSecret', 'region', 'bucket', 'freePlanConfirmed']);
+      send(res, 200, { credentials: await security.openCredentialSession(auth, input) }); return;
+    }
+    if (route === '/api/credential-sessions/renew' && req.method === 'POST') {
+      exact(await json(req), []);
+      pageBinding(auth, req);
+      send(res, 200, { credentials: await security.renewCredentialSession(auth, req.headers['x-preparer-credentials'], req.headers['x-preparer-page']) }); return;
+    }
+    if (route === '/api/credential-sessions/current' && req.method === 'DELETE') {
+      exact(await json(req), []);
+      pageBinding(auth, req);
+      await security.revokeCredentialSession(auth, req.headers['x-preparer-credentials'], req.headers['x-preparer-page']); send(res, 200, { ok: true }); return;
     }
     if (route === '/api/projects' && req.method === 'GET') { send(res, 200, { projects: await security.listProjects(auth) }); return; }
-    if (route === '/api/autodesk/check' && req.method === 'POST') { await json(req); send(res, 200, await checkAutodesk()); return; }
+    if (route === '/api/autodesk/check' && req.method === 'POST') { exact(await json(req), []); send(res, 200, await checkAutodesk(pageBinding(auth, req))); return; }
     if (route === '/api/sources' && req.method === 'GET') {
-      const settings = security.privateSettings();
-      send(res, 200, settings?.enabled && settings.freePlanConfirmed ? await innerJSON('/api/source-inputs') : { inputs: [] }); return;
+      const binding = pageBinding(auth, req);
+      send(res, 200, await innerJSON(binding, '/api/source-inputs')); return;
     }
     if (route === '/api/uploads' && req.method === 'POST' && url.search === '?kind=nwd') {
+      const binding = pageBinding(auth, req); await security.refreshBinding(binding); const meta = security.assertBinding(binding);
       const requestId = req.headers['x-request-id']; if (!UUID.test(requestId || '')) bad('INVALID_REQUEST');
       await serialize(async () => {
         const previous = requests.get(requestId);
-        if (previous && (previous.type !== 'upload' || previous.ownerId !== auth.user.id)) bad('REQUEST_CONFLICT', 409);
+        if (previous && (previous.type !== 'upload' || previous.ownerId !== auth.user.id || previous.applicationFingerprint !== meta.applicationFingerprint)) bad('REQUEST_CONFLICT', 409);
         if (!previous) {
-          const reservation = { requestId, ownerId: auth.user.id, type: 'upload' };
+          const reservation = { requestId, ownerId: auth.user.id, applicationFingerprint: meta.applicationFingerprint, type: 'upload' };
           await journal.write('requests', requestId, reservation); requests.set(requestId, reservation);
         }
       });
-      const value = await innerJSON('/api/uploads?kind=nwd', { method: 'POST', body: req, requestId, headers: { 'Content-Type': 'application/octet-stream', 'X-File-Name': req.headers['x-file-name'] || '', ...(req.headers['content-length'] ? { 'Content-Length': req.headers['content-length'] } : {}) } });
-      const receipt = { uploadId: value.uploadId, ownerId: auth.user.id }; await journal.write('uploads', receipt.uploadId, receipt); uploads.set(receipt.uploadId, receipt);
+      const value = await innerJSON(binding, '/api/uploads?kind=nwd', { method: 'POST', body: req, requestId, headers: { 'Content-Type': 'application/octet-stream', 'X-File-Name': req.headers['x-file-name'] || '', ...(req.headers['content-length'] ? { 'Content-Length': req.headers['content-length'] } : {}) } });
+      const receipt = { uploadId: value.uploadId, ownerId: auth.user.id, ownerKey: meta.ownerKey, applicationFingerprint: meta.applicationFingerprint }; await journal.write('uploads', receipt.uploadId, receipt); uploads.set(receipt.uploadId, receipt);
       send(res, 200, value); return;
     }
     if (route === '/api/generations' && req.method === 'GET') {
       const rows = [];
-      for (const row of generations.values()) if (row.ownerId === auth.user.id || auth.user.isAdmin) { try { await security.requireProject(auth, row.projectId); rows.push(dto(row)); } catch (error) { if (error.code !== 'PROJECT_FORBIDDEN') throw error; } }
+      for (const row of generations.values()) if (row.ownerId === auth.user.id) { try { await own(auth, row); rows.push(dto(row)); } catch (error) { if (error.code !== 'PROJECT_FORBIDDEN') throw error; } }
       send(res, 200, { generations: rows.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)) }); return;
     }
     if (route === '/api/generations' && req.method === 'POST') {
@@ -344,14 +470,15 @@ export async function createWorkspaceService(options = {}) {
         if (previous) { if (previous.type !== 'generation' || previous.ownerId !== auth.user.id || previous.identity !== identity) bad('REQUEST_CONFLICT', 409); const row = await own(auth, generations.get(previous.id)); send(res, 202, { generation: dto(row) }); return; }
         if (active) bad('OPERATION_BUSY', 409);
         await security.requireProject(auth, input.projectId);
-        if (input.uploadId && uploads.get(input.uploadId)?.ownerId !== auth.user.id) bad('NOT_FOUND', 404);
-        if (!authorization().enabled) throw new WorkspaceError('AUTODESK_CHECK_REQUIRED');
-        const row = { id: randomUUID(), ownerId: auth.user.id, ...input, label: input.label.trim(), status: 'running', stage: 'starting', steps: {}, createdAt: now(), updatedAt: now(), deadline: Date.now() + 6 * 60 * 60 * 1000 };
+        const binding = pageBinding(auth, req, input.projectId); await security.refreshBinding(binding); const meta = security.assertBinding(binding);
+        if (input.uploadId && (uploads.get(input.uploadId)?.ownerId !== auth.user.id || uploads.get(input.uploadId)?.ownerKey !== meta.ownerKey || uploads.get(input.uploadId)?.applicationFingerprint !== meta.applicationFingerprint)) bad('NOT_FOUND', 404);
+        if (!authorization(binding).enabled) throw new WorkspaceError('AUTODESK_CHECK_REQUIRED');
+        const row = { id: randomUUID(), ownerId: auth.user.id, ownerKey: meta.ownerKey, applicationFingerprint: meta.applicationFingerprint, ...input, label: input.label.trim(), status: 'running', stage: 'starting', steps: {}, createdAt: now(), updatedAt: now(), deadline: Date.now() + 6 * 60 * 60 * 1000 };
         await save(row);
         const receipt = { requestId, ownerId: auth.user.id, type: 'generation', id: row.id, identity };
         try { await journal.write('requests', requestId, receipt); requests.set(requestId, receipt); }
         catch (error) { row.status = 'interrupted'; row.error = errorDTO(error); await save(row).catch(() => {}); throw error; }
-        launch(row, auth); send(res, 202, { generation: dto(row) });
+        launch(row, auth, binding); send(res, 202, { generation: dto(row) });
       }); return;
     }
     const match = /^\/api\/generations\/([0-9a-f-]+)\/(resume|package)$/.exec(route);
@@ -361,17 +488,30 @@ export async function createWorkspaceService(options = {}) {
         const input = exact(await json(req), ['rootId']);
         await serialize(async () => {
           if (active || row.status === 'running' || row.status === 'complete') bad('OPERATION_BUSY', 409);
+          let binding;
+          if (!row.localPackage) {
+            binding = pageBinding(auth, req, row.projectId); await security.refreshBinding(binding); const meta = security.assertBinding(binding);
+            if (row.ownerKey !== meta.ownerKey || row.applicationFingerprint !== meta.applicationFingerprint) throw new WorkspaceError('CONFIGURATION_CHANGED');
+            if (!authorization(binding).enabled) throw new WorkspaceError('AUTODESK_CHECK_REQUIRED');
+          }
           if (input.rootId !== undefined) { if (!row.job?.roots?.some(root => root.rootId === input.rootId)) bad('INVALID_REQUEST'); row.rootId = input.rootId; }
           if (row.status === 'needs-view' && !row.rootId) bad('INVALID_REQUEST');
-          row.status = 'running'; row.error = null; row.deadline = Date.now() + 6 * 60 * 60 * 1000; await save(row); launch(row, auth); send(res, 202, { generation: dto(row) });
+          row.status = 'running'; row.error = null; row.deadline = Date.now() + 6 * 60 * 60 * 1000; await save(row); launch(row, auth, binding); send(res, 202, { generation: dto(row) });
         }); return;
       }
       if (match[2] === 'package' && req.method === 'GET') {
         if (!row.job?.facts?.package) bad('NOT_FOUND', 404);
-        const response = await innerRequest('/api/artifacts/' + row.jobId + '/package');
-        if (!response.ok) { await response.body?.cancel(); bad('ARTIFACT_INVALID', 409); }
-        res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Length': response.headers.get('content-length'), 'Content-Disposition': `attachment; filename="model-${row.id}.zip"`, 'Cache-Control': 'no-store' });
-        await pipeline(Readable.fromWeb(response.body), res); return;
+        const archive = await localArchive(row);
+        try {
+          res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Length': String(archive.bytes), 'Content-Disposition': `attachment; filename="model-${row.id}.zip"`, 'Cache-Control': 'no-store' });
+          await new Promise((resolve, reject) => {
+            archive.stream.once('error', reject); res.once('error', reject);
+            res.once('close', () => { archive.stream.destroy(); resolve(); });
+            archive.stream.once('end', () => { archive.stream.destroy(); resolve(); });
+            archive.stream.pipe(res);
+          });
+        } finally { archive.stream.destroy(); await archive.handle.close(); }
+        return;
       }
     }
     bad('NOT_FOUND', 404);
@@ -383,7 +523,9 @@ export async function createWorkspaceService(options = {}) {
   return { server, mode: 'live', get address() { return origin; },
     async listen() { await new Promise((resolve, reject) => { server.once('error', reject); server.listen(config.port, config.host, resolve); }); if (config.port === 0) origin = 'http://127.0.0.1:' + server.address().port; return origin; },
     close() {
-      return closePromise ||= (async () => { closing = true; shutdown.abort(); if (innerOpening) await innerOpening.catch(() => {}); if (inner) await inner.close(); await active?.promise;
+      return closePromise ||= (async () => { closing = true; shutdown.abort(); unsubscribeRevocations(); await security.close();
+        await Promise.allSettled(runtimeOpenings.values()); await Promise.allSettled([...runtimes.keys()].map(closeRuntime));
+        await Promise.allSettled([...runtimeClosings.values()].map(value => value.promise)); await active?.promise;
         await new Promise(resolve => { server.close(resolve); server.closeIdleConnections(); for (const socket of sockets) socket.destroy(); }); await mutations; await journal.close(); })();
     },
   };

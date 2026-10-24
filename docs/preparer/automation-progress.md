@@ -2,6 +2,42 @@
 
 ## SP-1 ACTIVE — 24 October 2026
 
+Cold seed ea23121d is PASS with confirmed source-lock release; full PG/MinIO/
+staging archives and five exact images verified, source API/web/MinIO resumed
+to prior states, original PG remains stopped. This alone is not restore PASS.
+Owned audited recovery d1994f0a-8ae1-47a9-bcc8-153c1ff31ed3 is ACTIVE under
+root exec50938. Earlier289c462e refused before resource creation because the
+guard wrongly rejected verified PGDATA GID0; explicit reconciliation confirmed
+no resources/source change, exact archived lock retained, focused23controlsPASS.
+Do not duplicate runtime recovery or alter the frozen cold-source closure.
+
+Final candidate Preparer Linux329/329PASS,190225ms, no skips/cancellations;
+all116 source/runtime-package file hashes unchanged across the run. Evidence
+transient-full-linux-20261024.json. This includes logout-during-outage repair.
+WFC gateway/API/auth/UI54/54PASS; typechecksPASS; packageLinux174/174PASS.
+Pure audited-recovery+model-audit41PASS before the GID fix; model audit20PASS,
+recovery23PASS after it; delivery materializer18PASS. Real browser and new-model
+Generate are NOT_RUN (new conversion explicitly prohibited).
+Build preparation excludes all .preparer-work private data from Docker contexts
+and corrects Preparer healthchecks to use native HTTP with its exact public Host.
+No main repair/update yet. Next: finish clone proof, then repair5180 and execute
+the succeeding security/integration/delivery handoffs without routine approval.
+
+Latest checkpoint fb2653d; cold capture ea23121d-28b1-4ba8-812b-7b3c6fbbf871
+is active under root exec session53054. Do not duplicate backup/Docker/test work.
+Exact helper a0eca379 uses Node24.22/GNUtouch and dedicated PG18 root format.
+Earlier attempts3b030d74/8588a09f/cd5269fb failed before source stop/export;
+explicit private reconciliation proved source/outside identities+active states
+unchanged and archived exact locks. No automatic replay. Main PG still stopped.
+RootLinuxPreparer328/328PASS and current-package174/174PASS (no skip/cancel);
+WFC typecheckPASS. Focused Windows87/86PASS1Host-fixtureFAIL, corrected native
+Host test1PASS; WFC54/53PASS1ResizeObserverfixtureFAIL corrected page5PASS.
+See05-transient-credentials-progress.md for exact scope and retained failures.
+Current source-only pending: logout during WFC outage repair; clone model/ZIP
+read-only auditor and recovery integration; final candidate verification. No real
+conversion or main repair/deployment. No new Docker helper while source capture
+bookends are active. All prior synthetic test helpers exited/removed normally.
+
 Source branch sp-1-main-backup-local-20261024 inherits a3461c69ca85b8e8f0a9ed9d1cb142d4b17b2a75.
 SP-0 scoped decision accepts the retained QUALIFIED_PLATFORM_COVERAGE for
 continuation; strict full summary remains FAIL, never relabelled. Current

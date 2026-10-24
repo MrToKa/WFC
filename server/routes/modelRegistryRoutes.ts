@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { pipeline } from 'node:stream/promises';
 import { z } from 'zod';
-import { authenticate, requireProjectAccess, requireProjectEdit, requireProjectExport } from '../middleware.js';
+import { authenticate, requireAdmin, requireProjectAccess, requireProjectEdit } from '../middleware.js';
 import { pool } from '../db.js';
 import { ModelRegistryError } from '../modelRegistry/errors.js';
 import { getModelRegistry } from '../modelRegistry/runtime.js';
@@ -43,7 +43,7 @@ modelRegistryRouter.get('/model-versions', async (req, res) => {
   try { res.json(await getModelRegistry().listVersions(project(req))); }
   catch (error) { reportError(res, error); }
 });
-modelRegistryRouter.get('/model-versions/:versionId/package', requireProjectExport, async (req, res) => {
+modelRegistryRouter.get('/model-versions/:versionId/package', requireAdmin, async (req, res) => {
   res.setHeader('Cache-Control', 'private, no-store');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   const controller = new AbortController();
@@ -59,7 +59,7 @@ modelRegistryRouter.get('/model-versions/:versionId/package', requireProjectExpo
     authenticate(req, res, () => { allowed = true; });
     if (!allowed) return;
     allowed = false;
-    await requireProjectExport(req, res, () => { allowed = true; });
+    await requireAdmin(req, res, () => { allowed = true; });
     if (!allowed) return;
     allowed = false;
     await requireProjectAccess(req, res, () => { allowed = true; });
@@ -70,7 +70,7 @@ modelRegistryRouter.get('/model-versions/:versionId/package', requireProjectExpo
     res.setHeader('Content-Length', archive.bytes);
     res.setHeader('X-Package-SHA256', archive.sha256);
     if (req.method === 'HEAD') res.end();
-    else await pipeline(archive.handle.createReadStream({ autoClose: false, start: 0 }), res, { signal: controller.signal });
+    else await pipeline(archive.handle.createReadStream({ autoClose: true, start: 0 }), res, { signal: controller.signal });
   } catch (error) {
     if (res.headersSent || res.destroyed) { if (!res.destroyed) res.destroy(); }
     else reportError(res, error);

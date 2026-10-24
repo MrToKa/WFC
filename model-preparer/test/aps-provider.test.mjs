@@ -73,6 +73,42 @@ test('factory is distinctly APS branded and makes no startup requests', async t 
   assert.ok(!JSON.stringify(f.provider).includes(f.options.clientSecret));
   await rejects(f.provider.upload(f.context), 'CLOUD_CLOSED'); await rejects(f.provider.submit(f.context), 'CLOUD_CLOSED'); assert.equal(f.calls.length, 0);
 });
+
+test('workspace preflight refreshes authority before every OAuth, signed resource and upload transport', async t => {
+  let refreshed = 0;
+  const f = await fixture(t, { providerOptions: { reuseOnly: false, preflight: async () => { await Promise.resolve(); refreshed++; } },
+    reply: async (input, helpers) => { assert.equal(refreshed, f.calls.length); return helpers.defaultReply(input); } });
+  await f.provider.getStorage(f.context);
+  const plan = await f.provider.getDownloadPlan(f.context);
+  for (const resource of plan.resources) await readAll(f.provider, f.context, resource.resourceId);
+  await f.provider.upload(f.context, { retries: 0, assertMutationAllowed() {} });
+  await f.provider.submit(f.context, { attemptId: 'preflight-fixture', retries: 0, xAdsForce: false, assertMutationAllowed() {} });
+  assert.equal(refreshed, f.calls.length);
+  assert.ok(f.calls.some(call => new URL(call.url).pathname.endsWith('/token')));
+  assert.ok(f.calls.some(call => new URL(call.url).hostname === 'cdn.derivative.autodesk.com'));
+  assert.ok(f.calls.some(call => call.method === 'PUT'));
+});
+
+test('revocation refuses a cached OAuth token and an already signed resource before any further fetch', async t => {
+  let revoked = false;
+  const f = await fixture(t, { providerOptions: { preflight: async () => { if (revoked) throw new CoreError('CLOUD_CLOSED'); } } });
+  const plan = await f.provider.getDownloadPlan(f.context), before = f.calls.length;
+  revoked = true;
+  await rejects(f.provider.getStorage(f.context), 'CLOUD_CLOSED');
+  const resource = plan.resources.find(item => item.path.endsWith('/0.pf'));
+  await rejects(readAll(f.provider, f.context, resource.resourceId), 'CLOUD_CLOSED');
+  assert.equal(f.calls.length, before);
+  const g = await fixture(t, { providerOptions: { preflight: async () => false } });
+  await rejects(g.provider.getStorage(g.context), 'CLOUD_CLOSED'); assert.equal(g.calls.length, 0);
+});
+
+test('the final synchronous cost fence follows asynchronous workspace authorization', async t => {
+  let expired = false;
+  const f = await fixture(t, { providerOptions: { reuseOnly: false, preflight: async () => { await Promise.resolve(); if (f.calls.some(call => call.url.endsWith('/authentication/v2/token'))) expired = true; } } });
+  await rejects(f.provider.createStorage(f.context, { retries: 0, assertMutationAllowed() { if (expired) throw new CoreError('COST_EXPIRED'); } }), 'COST_EXPIRED');
+  assert.equal(f.calls.length, 1, 'Only OAuth opened; the storage POST was fenced after the await');
+  assert.throws(() => createAPSProvider({ ...f.options, preflight: true }), error => error.code === 'CONFIGURATION_INVALID');
+});
 test('owned storage and exact SHA1/source bytes are verified before alias receipts', async t => {
   const f = await fixture(t), storage = await f.provider.getStorage(f.context), receipt = await f.provider.getObject(f.context);
   assert.equal(storage.bucket, f.context.destination.bucket); assert.equal(receipt.objectId, f.context.objectId);
