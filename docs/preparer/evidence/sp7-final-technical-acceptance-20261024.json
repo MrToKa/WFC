@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "wfc.preparer.final-technical-acceptance.v1",
+  "status": "PASS",
+  "checkedAt": "2026-10-24T06:32:06.994Z",
+  "productRevision": "543ae7a889fbf1abbf4937f5f83b2c6ee1b91ff4",
+  "productSourceInputsUnchanged": 116,
+  "mainSource": "96e63f13fdc2b1d30b8f8ff658dd662f25fac104",
+  "deploymentOperation": "0f257b41-cebe-409f-a412-bedb56b8d3d0",
+  "deploymentAuthority": "root-qualified-delivery.private.json; automatic native-user attempt remains FAIL",
+  "checks": {
+    "preparerLinux": 329,
+    "packageLinux": 174,
+    "wfcFocused": 54,
+    "typecheck": "PASS",
+    "fixtureControls": 18,
+    "storeRecoveryControls": 14,
+    "upgradeControls": 15,
+    "latestDeploymentControls": 45,
+    "actualIsolatedBrowserTwoAdmins": "PASS",
+    "actualThreeStoreRestoreAndAuthorityFence": "PASS",
+    "actualOldDataUpgradeAndOldImageStartup": "PASS",
+    "livePrimaryHealthAndUnauthHostGuards": "PASS",
+    "actualPrimaryPreparerRestart": "PASS",
+    "allFiveRestartPoliciesConfigured": "PASS",
+    "testResourceCleanup": "PASS"
+  },
+  "limits": {
+    "newRealModelConversion": "NOT_RUN_BY_USER_REQUIREMENT",
+    "realPersonalAdminLogin": "NOT_RUN_USER_NORMAL_LOGIN_REQUIRED",
+    "fullHostDockerRestart": "NOT_RUN",
+    "livePrimaryRollback": "NOT_RUN",
+    "engineeringGeometryAcceptance": "NOT_RUN"
+  },
+  "cleanup": {
+    "ownedDuplicateBytesFreed": 6426951237,
+    "requiredBackupRollbackEvidenceRetained": true
+  },
+  "automationStatus": "PAUSED"
+}

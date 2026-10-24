@@ -1,6 +1,11 @@
 # Simplified Preparer implementation progress
 
-## Current — SP-0–SP-7 technically delivered, 24 October 2026
+## Current — SP-1–SP-7 delivered; SP-0 scoped baseline retained, 24 October 2026
+
+Dedicated heartbeat simplified-preparer-temporary-autodesk-keys is now PAUSED,
+confirmed via app tool and saved status. Final source116-input bookends PASS;
+evidence/sp7-final-technical-acceptance-20261024.json records exact scope and
+remaining NOT_RUN boundaries. No active root runtime/test process remains.
 
 SP7 COMPLETE within accepted no-new-real-conversion scope. All5 live services
 running; API/web/Preparer healthy, primarygateway unauth401, PreparerSessionfalse,
@@ -13,8 +18,8 @@ restartNOT_RUN. Actual IAB primarysigninpagesPASS; user's own login remainshuman
 Reports12daily-use/13operations/14acceptance finalized. Requiredbackup/rollback/
 candidateimages retained; all testfixtures removed,6,426,951,237 duplicatebytes
 freed. Main source remainsclean96e63f13; PF/remote unchanged. Product543ae7a,
-latestoperations+docs on inherited SP7branch. Dedicatedheartbeat is tobePAUSED
-at technicalend. No further autonomous real conversion or deployment work.
+latestoperations+docs on inherited SP7branch. Dedicatedheartbeat PAUSED at
+technicalend. No further autonomous real conversion or deployment work.
 
 Live product543ae7a delivered on5180/5193 in0f257b41. Primary/API/Preparer healthy;
 HTTPhealth200, unauthsessionfalse/jobs401/wrongHost403. Root independent qualified
