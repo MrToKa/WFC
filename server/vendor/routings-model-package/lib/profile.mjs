@@ -304,7 +304,8 @@ function validateSvfManifest(value, resources, archive) {
       continue;
     }
     if (/^[A-Za-z][A-Za-z0-9+.-]*:|^\/\//.test(asset.URI)) fail('EXTERNAL_REFERENCE', 'SVF loader URI must not contain a scheme or network destination.');
-    if (!/^[A-Za-z0-9._-]+$/.test(asset.URI) || asset.URI === '.' || asset.URI === '..') fail('UNSAFE_PATH', 'SVF loader URI must be a canonical sibling basename.');
+    if (asset.type !== PLATFORM + 'Image' && (!/^[A-Za-z0-9._-]+$/.test(asset.URI) || asset.URI === '.' || asset.URI === '..')) fail('UNSAFE_PATH', 'SVF loader URI must be a canonical sibling basename.');
+    if (asset.type === PLATFORM + 'Image' && asset.URI.split('/').length > 16) unsupported('Raster dependency path exceeds the supported depth.');
     const resolved = PREFIX + asset.URI;
     validateResourcePath(resolved);
     if (resolved === ENTRY || resolved === PROPERTY_DB || asset.type === PLATFORM + 'ViewingMetadata') unsupported('Unsupported external SVF asset target.', { path: resolved });
@@ -408,7 +409,9 @@ export async function validateProfile(provider, { limits = DEFAULT_LIMITS, signa
   let totalRaw = 0;
   for (const resource of provider.resources) {
     validateResourcePath(resource.path);
-    if (!resource.path.startsWith(PREFIX) || resource.path.slice(PREFIX.length).includes('/')) unsupported('Resources must be direct output/0 siblings.');
+    if (!resource.path.startsWith(PREFIX)) unsupported('Resources must remain below output/0.');
+    const relative = resource.path.slice(PREFIX.length);
+    if (relative.includes('/') && (!IMAGE_EXTENSION.test(relative) || relative.split('/').length > 16)) unsupported('Only raster images may use bounded output/0 subdirectories.');
     if (!size(resource.bytes) || resource.bytes > limits.maxFileBytes) fail('PACKAGE_LIMIT_EXCEEDED', 'Invalid or over-limit raw resource size.', { path: resource.path });
     totalRaw += resource.bytes;
     if (!Number.isSafeInteger(totalRaw) || totalRaw > limits.maxTotalResourceBytes) fail('PACKAGE_LIMIT_EXCEEDED', 'Raw resource aggregate exceeds its limit.');

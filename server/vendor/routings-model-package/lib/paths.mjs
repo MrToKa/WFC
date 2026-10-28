@@ -5,11 +5,16 @@ import { fail } from './errors.mjs';
 const reserved = /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)/i;
 
 export function validateArchivePath(value, { allowDirectory = false } = {}) {
-  if (typeof value !== 'string' || !value || value.length > 1024 || !/^[A-Za-z0-9._/-]+$/.test(value) || value.startsWith('/')) {
+  if (typeof value !== 'string' || !value || value.length > 1024 || !/^[A-Za-z0-9._/ -]+$/.test(value) || value.startsWith('/')) {
     fail('UNSAFE_PATH', 'Archive paths must be canonical relative ASCII paths.', { path: value });
   }
   const directory = value.endsWith('/');
   if (directory && !allowDirectory) fail('UNSAFE_PATH', 'A file path cannot end with a slash.', { path: value });
+  // Spaces are supported only for raster resource files and their directory records.
+  if (value.includes(' ') && !(value.startsWith('resources/output/0/') &&
+    (directory || /\.(?:png|jpe?g)$/i.test(value)))) {
+    fail('UNSAFE_PATH', 'Spaces are supported only in raster resource paths.', { path: value });
+  }
   const parts = (directory ? value.slice(0, -1) : value).split('/');
   for (const segment of parts) {
     if (!segment || segment === '.' || segment === '..' || segment.length > 255 || /[. ]$/.test(segment) || reserved.test(segment)) {

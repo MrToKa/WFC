@@ -79,3 +79,11 @@ describe('viewer origin, cookie and raw resource boundary',() => {
     expect(() => validateViewerQuery(`/descriptor?domain=${encodeURIComponent(origin)}`)).toThrow();
   });
 });
+
+it('preserves nested raster names with URI-encoded spaces for exact manifest lookup', () => {
+  expect(resourceManifestPath('output/0/Texture%20Folder/Fixture%20Logo.png')).toBe('resources/output/0/Texture Folder/Fixture Logo.png');
+  expect(resourceManifestPath('output/0/Texture Folder/Fixture Logo.jpg')).toBe('resources/output/0/Texture Folder/Fixture Logo.jpg');
+  for (const raw of ['output/0/Texture%2520Folder/a.png', 'output/0/Texture%20Folder%2Fa.png', 'output/0/Texture%20Folder/%2e%2e/a.png']) {
+    expect(() => resourceManifestPath(raw)).toThrow();
+  }
+});
