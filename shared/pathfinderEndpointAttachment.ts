@@ -99,6 +99,7 @@ export function evaluateEndpointMigration(raw: EndpointMigrationInput): Endpoint
     disposition, status: disposition === 'missing' ? 'missing' : ['ambiguous', 'split', 'merged'].includes(disposition) ? 'ambiguous' : ['carried-fixed', 'carried-rigid', 'rederived', 'suggested-review'].includes(disposition) ? 'suggested' : disposition === 'unsupported-transform' ? 'unsupported-attachment' : 'stale',
     reasonCodes, candidateObjectRevisionIds: candidates, evidenceIds: evidenceReferences.map(e => e.id), evidenceReferences, requiresConfirmation: true, attachmentPolicyVersion: ENDPOINT_ATTACHMENT_POLICY,
   });
+  if (source.derivation === 'matched-model-bottom-aabb.v1') return result('frame-unverified', ['MODEL_LOCATION_MATCH_RECHECK_REQUIRED']);
   if (source.status !== 'confirmed') return result('suggested-review', ['SOURCE_BINDING_NOT_CONFIRMED']);
   if (frame) addEvidence(frame.id, frame.contentSha256, 'frame-mapping');
   if (!frame || frame.qualification !== 'reviewed-rigid' || !frame.reviewedBy || !frame.reviewedAt || frame.projectId !== source.projectId || frame.sourceAggregateId !== source.aggregateId || frame.targetAggregateId !== target.aggregateId || frame.sourceCaptureFrameId !== source.captureFrameId || frame.targetCaptureFrameId !== target.captureFrameId || source.qualifiedProjectFrameId !== frame.qualifiedProjectFrameId) return result('frame-unverified', ['COMMON_FRAME_MAPPING_UNVERIFIED']);

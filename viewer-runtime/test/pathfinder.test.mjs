@@ -20,6 +20,7 @@ function fixture() {
   const THREE = { Vector3, Box3, BufferGeometry: Geometry, SphereGeometry, BufferAttribute: class { constructor(array, itemSize) { Object.assign(this, { array, itemSize }); } }, MeshBasicMaterial: Material, Mesh, DoubleSide: 2 };
   const canvas = new EventTarget(); canvas.getBoundingClientRect = () => ({ left: 10, top: 20 });
   const tree = { getRootId: () => 1, getNodeName: id => ({ 1: 'MODEL', 2: '=CAB-001', 3: '=CAB-002' })[id], getNodeParentId: id => id === 1 ? 0 : 1,
+    getNodeIndex: id => [1, 2, 3].includes(id) ? id - 1 : undefined,
     isNodeHidden: () => false, isNodeOff: () => false, getChildCount: id => id === 1 ? 2 : 0,
     enumNodeChildren(id, fn) { if (id === 1) for (const child of [2, 3]) if (fn(child)) break; }, enumNodeFragments(id, fn) { if (id !== 1) fn(id); } };
   const originalMaterial = new Material({ color: 0x32a852, opacity: 0.8, transparent: true, depthWrite: false, originModelId: 7, _sharedBy: [7] });
@@ -60,6 +61,15 @@ test('preparation discovery is exact case-sensitive NFC, returns all duplicate c
  for(const name of ['tray-001','TRAY-01','TRAY','RAY-001'])assert.equal((await f.controller.readPreparationObjects({...request,names:[name]})).objects.length,0);
  f.controller.dispose();
 });
+
+test('tray-name discovery normalizes an unmatched model name once per ID rather than once per requested name',async()=>{
+ const f=fixture(),original=String.prototype.normalize;let unmatchedNormalizations=0;
+ f.tree.getNodeName=id=>id===2?'MATCH':`UNMATCHED-${id}`;
+ String.prototype.normalize=function(...args){if(String(this).startsWith('UNMATCHED-'))unmatchedNormalizations++;return original.apply(this,args);};
+ try{const page=await f.controller.readPreparationObjects({schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'names',names:['MATCH',...Array.from({length:31},(_,at)=>`QUERY-${at}`)],rootObjectId:null,cursor:0,limit:128});
+  assert.deepEqual(page.objects.map(object=>object.objectId),[2]);assert.deepEqual(page.objects[0].matchedNames,['MATCH']);assert.equal(unmatchedNormalizations,2);
+ }finally{String.prototype.normalize=original;f.controller.dispose();}
+});
 test('preparation subtree and endpoint-ancestor modes preserve full hierarchy and distinguish physical leaves',async()=>{
  const f=fixture();f.tree.getChildCount=id=>id===1?2:0;f.tree.enumNodeChildren=(id,fn)=>{if(id===1){fn(2);fn(3);}};
  const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'subtree',names:[],rootObjectId:2,cursor:0,limit:128};
@@ -67,12 +77,73 @@ test('preparation subtree and endpoint-ancestor modes preserve full hierarchy an
  assert.deepEqual(subtree.objects.map(x=>x.objectId),[1,2]);assert.deepEqual(ancestors.objects,subtree.objects);assert.equal(subtree.objects[1].isPhysicalLeaf,true);assert.equal(subtree.objects[0].isPhysicalLeaf,false);
  f.controller.dispose();
 });
+
+test('batched subtree traversal unions multiple parents and overlapping roots in global order with complete bounded pagination',async()=>{
+ const f=fixture(),children=new Map([[1,[2,4]],[2,[3]],[4,[5]]]),parents=new Map([[1,0],[2,1],[3,2],[4,1],[5,4]]);
+ f.tree.getNodeName=id=>`Node${id}`;f.tree.getNodeParentId=id=>parents.get(id);f.tree.getChildCount=id=>(children.get(id)??[]).length;
+ f.tree.enumNodeChildren=(id,visit,recursive)=>{for(const child of children.get(id)??[]){if(visit(child))break;if(recursive)f.tree.enumNodeChildren(child,visit,true);}};
+ f.tree.enumNodeFragments=(id,visit)=>{if(id===3||id===5)visit(id);};f.fragments.getCount=()=>6;
+ let visibilityReads=0;f.fragments.isFragVisible=()=>{visibilityReads++;return true;};
+ const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'subtrees',names:[],rootObjectId:null,rootObjectIds:[4,2,3],cursor:0,limit:2},objects=[];let pages=0;
+ for(;;){const page=await f.controller.readPreparationObjects(request);pages++;assert.deepEqual(page.rootObjectIds,[4,2,3]);objects.push(...page.objects);
+  if(page.complete)break;assert.ok(page.nextCursor>request.cursor);request.cursor=page.nextCursor;request.visibilityScope=page.visibilityScope;}
+ assert.deepEqual(objects.map(object=>object.objectId),[1,2,3,4,5]);assert.equal(new Set(objects.map(object=>object.objectId)).size,5);
+ assert.deepEqual(objects.filter(object=>object.isPhysicalLeaf).map(object=>object.objectId),[3,5]);assert.equal(pages,3);
+ assert.equal(visibilityReads,6*2*pages);f.controller.dispose();
+});
+
+test('batched subtree traversal refuses missing or duplicated roots and a changed active model without partial results',async()=>{
+ const f=fixture(),request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'subtrees',names:[],rootObjectId:null,rootObjectIds:[2,3],cursor:0,limit:128};
+ await assert.rejects(()=>f.controller.readPreparationObjects({...request,rootObjectIds:[2,999]}),{code:'PREPARATION_SCOPE_INVALID'});
+ await assert.rejects(()=>f.controller.readPreparationObjects({...request,rootObjectIds:[2,2]}),{code:'PREPARATION_SCOPE_INVALID'});
+ f.viewer.model={...f.model};await assert.rejects(()=>f.controller.readPreparationObjects(request),{code:'MODEL_SELECTION_CHANGED'});f.controller.dispose();
+});
+
+test('batched subtree pages retain fresh before-and-after visibility checks and refuse cross-page changes',async()=>{
+ const f=fixture(),hidden=new Set(),request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'subtrees',names:[],rootObjectId:null,rootObjectIds:[2,3],cursor:0,limit:1};
+ f.tree.isNodeHidden=id=>hidden.has(id);const first=await f.controller.readPreparationObjects(request);hidden.add(3);
+ await assert.rejects(()=>f.controller.readPreparationObjects({...request,cursor:first.nextCursor,visibilityScope:first.visibilityScope}),{code:'PREPARATION_VISIBILITY_CHANGED'});
+ hidden.clear();const original=f.tree.enumNodeFragments;f.tree.enumNodeFragments=(id,visit,recursive)=>{if(id===2)hidden.add(3);original(id,visit,recursive);};
+ await assert.rejects(()=>f.controller.readPreparationObjects({...request,limit:128}),{code:'PREPARATION_VISIBILITY_CHANGED'});f.controller.dispose();
+});
+
+test('batched subtree pagination preserves the24KiB UTF8 ceiling without silently dropping shared ancestors or roots',async()=>{
+ const f=fixture(),children=Array.from({length:128},(_,at)=>at+2);f.tree.getNodeName=id=>id===1?'Plant':'界'.repeat(2048);
+ f.tree.getChildCount=id=>id===1?children.length:0;f.tree.enumNodeChildren=(id,visit)=>{if(id===1)children.forEach(visit);};
+ const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'subtrees',names:[],rootObjectId:null,rootObjectIds:[1,2],cursor:0,limit:128},seen=[];
+ for(let at=0;at<100;at++){const page=await f.controller.readPreparationObjects(request);assert.ok(Buffer.byteLength(JSON.stringify(page))<=24576);seen.push(...page.objects.map(object=>object.objectId));
+  if(page.complete)break;assert.ok(page.nextCursor>request.cursor);request.cursor=page.nextCursor;request.visibilityScope=page.visibilityScope;}
+ assert.deepEqual(seen,[1,...children]);assert.equal(new Set(seen).size,129);f.controller.dispose();
+});
 test('preparation property discovery retains every property-only candidate and explicit omitted-row evidence',async()=>{
  for(const omitted of [false,true]){
   const f=fixture();f.tree.getChildCount=id=>id===1?2:0;let calls=0;f.model.getBulkProperties=(ids,_options,success)=>{calls++;success(ids.filter(id=>!omitted||id!==3).map(dbId=>({dbId,properties:dbId===1?[]:[{displayName:'Equipment Tag',displayValue:'p-001'}]})));};
   const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['P-001'],rootObjectId:null,cursor:0,limit:1},first=await f.controller.readPreparationObjects(request),second=first.complete?null:await f.controller.readPreparationObjects({...request,cursor:first.nextCursor});
   assert.equal(calls,1);assert.equal(first.propertyScan.complete,!omitted);assert.equal(first.propertyScan.omittedObjectCount,omitted?1:0);assert.deepEqual([...first.objects,...(second?.objects??[])].map(x=>x.objectId),omitted?[2]:[2,3]);f.controller.dispose();
  }
+});
+test('explicit location discovery observes canonical bottom centres without selecting or reloading the model',async()=>{
+ const f=fixture();let calls=0;f.model.getBulkProperties=(ids,_options,yes)=>{calls++;yes(ids.map(dbId=>({dbId,properties:dbId===2?[{displayName:'Tag',displayValue:'/2149004__0e'}]:[]})));};
+ const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['/2149004__0e'],rootObjectId:null,cursor:0,limit:128,includeAnchors:true};
+ const page=await f.controller.readPreparationObjects(request);assert.equal(page.includeAnchors,true);assert.equal(page.propertyScan.complete,true);assert.equal(page.objects.length,1);
+ const bounds={minimum:[(1000000.123456+2)*.001,(-2000000.654321+2)*.001,(3000+3)*.001],maximum:[(1000000.123456+3)*.001,(-2000000.654321+4)*.001,(3000+5)*.001]};
+ assert.deepEqual(page.objects[0].bounds,bounds);assert.deepEqual(page.objects[0].bottomCentre,[(bounds.minimum[0]+bounds.maximum[0])/2,(bounds.minimum[1]+bounds.maximum[1])/2,bounds.minimum[2]]);
+ assert.equal(f.viewer.model,f.model);assert.equal(f.viewer.isolated,undefined);
+ const {includeAnchors:_include,...withoutAnchors}=request;const old=await f.controller.readPreparationObjects(withoutAnchors);
+ assert.equal(calls,1);assert.equal(Object.hasOwn(old,'includeAnchors'),false);assert.equal(Object.hasOwn(old.objects[0],'bounds'),false);f.controller.dispose();
+});
+test('unavailable bounds remain an explicit unavailable candidate rather than dropping an ambiguous object',async()=>{
+ const f=fixture();f.model.getBulkProperties=(ids,_options,yes)=>yes(ids.map(dbId=>({dbId,properties:dbId!==1?[{displayName:'Tag',displayValue:'P-001'}]:[]})));
+ f.fragments.getWorldBounds=(id,box)=>{if(id===3)throw new Error('Geometry unavailable');box.expandByPoint({x:1,y:2,z:3});box.expandByPoint({x:2,y:3,z:4});};
+ const page=await f.controller.readPreparationObjects({schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['P-001'],rootObjectId:null,cursor:0,limit:128,includeAnchors:true});
+ assert.deepEqual(page.objects.map(o=>o.objectId),[2,3]);assert.notEqual(page.objects[0].bounds,null);assert.equal(page.objects[1].bounds,null);assert.equal(page.objects[1].bottomCentre,null);assert.equal(page.propertyScan.complete,true);f.controller.dispose();
+});
+test('independent location report keeps hidden duplicate identities without qualifying their display points',async()=>{
+ const f=fixture();f.model.getBulkProperties=(ids,_options,yes)=>yes(ids.map(dbId=>({dbId,properties:dbId!==1?[{displayName:'Tag',displayValue:'P-001'}]:[]})));
+ f.tree.isNodeHidden=id=>id===3;
+ const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['P-001'],rootObjectId:null,cursor:0,limit:128};
+ const old=await f.controller.readPreparationObjects(request);assert.deepEqual(old.objects.map(o=>o.objectId),[2]);
+ const report=await f.controller.readPreparationObjects({...request,includeAnchors:true});assert.deepEqual(report.objects.map(o=>o.objectId),[2,3]);assert.notEqual(report.objects[0].bounds,null);assert.equal(report.objects[1].bounds,null);f.controller.dispose();
 });
 test('preparation equipment caches only one complete query scope and reuses identical query pages',async()=>{
  const f=fixture();f.tree.getChildCount=id=>id===1?2:0;let calls=0;
@@ -86,6 +157,20 @@ test('preparation equipment caches only one complete query scope and reuses iden
  assert.deepEqual(third.objects[0].matchedNames,['Caf\u00e9','p-001','P-001']);assert.deepEqual(second.propertyScan,first.propertyScan);assert.deepEqual(third.propertyScan,first.propertyScan);
  for(const name of ['P-01','P-001-extra','P-00'])assert.deepEqual((await f.controller.readPreparationObjects({...request,names:[name]})).objects,[]);
  assert.equal(calls,6);f.controller.dispose();
+});
+
+test('equipment name chunks share one complete bounded index universe without echoing unrelated query names',async()=>{
+ const f=fixture(),indexNames=['P-001','P-002','P-003','P-004'];let calls=0;
+ f.model.getBulkProperties=(ids,_options,success)=>{calls++;success(ids.map(dbId=>({dbId,properties:dbId===1?[]:[{displayName:'Tag',displayValue:dbId===2?'P-001':'P-003'}]})));};
+ const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['P-001'],indexNames,rootObjectId:null,cursor:0,limit:128};
+ for(const name of indexNames){const page=await f.controller.readPreparationObjects({...request,names:[name]});assert.deepEqual(page.names,[name]);assert.ok(!Object.hasOwn(page,'indexNames'));assert.deepEqual(page.objects.map(value=>value.objectId),name==='P-001'?[2]:name==='P-003'?[3]:[]);assert.equal(page.propertyScan.complete,true);}
+ assert.equal(calls,1);
+ f.tree.isNodeHidden=id=>id===3;
+ assert.deepEqual((await f.controller.readPreparationObjects({...request,names:['P-003']})).objects,[]);assert.equal(calls,1);
+ f.tree.isNodeHidden=()=>false;
+ assert.deepEqual((await f.controller.readPreparationObjects({...request,names:['P-003']})).objects.map(value=>value.objectId),[3]);assert.equal(calls,1);
+ await f.controller.readPreparationObjects({...request,indexNames:['P-001']});assert.equal(calls,2);
+ await assert.rejects(()=>f.controller.readPreparationObjects({...request,names:['FOREIGN']}),{code:'PREPARATION_SCOPE_INVALID'});assert.equal(calls,2);f.controller.dispose();
 });
 test('preparation cached equipment coverage retains omissions and never matches an omitted row by its node name',async()=>{
  const f=fixture();f.tree.getChildCount=id=>id===1?2:0;let calls=0;
@@ -113,9 +198,34 @@ test('preparation failed equipment builds are cleared rather than reused for ano
   const f=fixture();f.tree.getChildCount=id=>id===1?2:0;let calls=0;
   f.model.getBulkProperties=(ids,_options,success)=>{calls++;const rows=ids.map(dbId=>({dbId,properties:[{displayName:'Tag',displayValue:'P-001'}]}));if(calls===1){if(invalid==='duplicate')rows[1]=rows[0];else if(invalid==='oversized-value')rows[0].properties[0].displayValue=' '.repeat(65537)+'P-001';else rows[0].properties=Array(4097).fill({displayName:'Tag',displayValue:'P-001'});}success(rows);};
   const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['P-001'],rootObjectId:null,cursor:0,limit:128};
-  await assert.rejects(()=>f.controller.readPreparationObjects(request),{code:'EXTRACTION_FAILED'});
+  await assert.rejects(()=>f.controller.readPreparationObjects(request),{code:invalid==='duplicate'?'PREPARATION_EQUIPMENT_PROPERTIES_INVALID':'PREPARATION_EQUIPMENT_ROW_LIMIT'});
   const recovered=await f.controller.readPreparationObjects({...request,names:['p-001']});assert.equal(calls,2);assert.equal(recovered.objects.length,3);assert.equal(recovered.propertyScan.complete,true);f.controller.dispose();
  }
+});
+
+test('equipment SDK callback refusal and the whole-page deadline have distinct safe diagnostics',async()=>{
+ const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['P-001'],rootObjectId:null,cursor:0,limit:128};
+ const refused=fixture();refused.model.getBulkProperties=(_ids,_options,_yes,no)=>no(new Error('Private SDK details'));
+ await assert.rejects(()=>refused.controller.readPreparationObjects(request),{code:'PREPARATION_EQUIPMENT_PROPERTIES_FAILED'});refused.controller.dispose();
+ const expired=fixture(),originalNow=Date.now;let now=0;Date.now=()=>now;
+ try{expired.model.getBulkProperties=(ids,_options,yes)=>{now=300001;yes(ids.map(dbId=>({dbId,properties:[]})));};
+  await assert.rejects(()=>expired.controller.readPreparationObjects(request),{code:'PREPARATION_DISCOVERY_DEADLINE'});
+ }finally{Date.now=originalNow;expired.controller.dispose();}
+});
+
+test('equipment SDK callback retains its45second deadline and returns a specific timeout code',async t=>{
+ const f=fixture(),original=globalThis.setTimeout;let timeouts=0;
+ t.mock.method(globalThis,'setTimeout',(callback,milliseconds,...args)=>{if(milliseconds===45000){timeouts++;return original(callback,1,...args);}return original(callback,milliseconds,...args);});
+ f.model.getBulkProperties=()=>{};
+ await assert.rejects(()=>f.controller.readPreparationObjects({schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['P-001'],rootObjectId:null,cursor:0,limit:128}),{code:'PREPARATION_EQUIPMENT_PROPERTIES_TIMEOUT'});
+ assert.equal(timeouts,2);f.controller.dispose();
+});
+
+test('equipment raw-property scan retains the32million limit with a specific failure',async()=>{
+ const f=fixture(),properties=new Array(1000000);
+ f.tree.getNodeName=id=>'Object '+id;f.tree.enumNodeChildren=(id,visit)=>{if(id===1)for(let child=2;child<=33;child++)visit(child);};
+ f.tree.getNodeParentId=id=>id===1?0:1;f.model.getBulkProperties=(ids,_options,yes)=>yes(ids.map(dbId=>({dbId,properties})));
+ await assert.rejects(()=>f.controller.readPreparationObjects({schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['NONE'],rootObjectId:null,cursor:0,limit:128}),{code:'PREPARATION_EQUIPMENT_SCAN_LIMIT'});f.controller.dispose();
 });
 test('preparation equipment scans a real-shaped wide structural row without charging child links as endpoint keys',async()=>{
  const f=fixture();f.tree.getChildCount=id=>id===1?2:0;let calls=0;
@@ -260,6 +370,57 @@ test('current model selection returns exact canonical bottom centres without cha
   await assert.rejects(() => f.controller.readSelection(), { code: 'SELECTION_TOO_LARGE' });
   f.viewer.getAggregateSelection = () => [{ model: f.model, selection: [99] }];
   await assert.rejects(() => f.controller.readSelection(), { code: 'EXTRACTION_FAILED' }); f.controller.dispose();
+});
+
+test('tray-root selection reads current IDs without inventory, properties, external IDs or geometry', async () => {
+  const f = fixture(), calls = [];
+  f.viewer.getAggregateSelection = () => [{ model: f.model, selection: [2, 3] }];
+  f.model.getInstanceTree = () => f.tree;
+  for (const key of ['getObjectTree', 'getProperties', 'getExternalIdMapping', 'getFragmentList']) f.model[key] = () => { throw Error(`Forbidden rich read: ${key}`); };
+  for (const key of ['enumNodeChildren', 'enumNodeFragments', 'getNodeName']) f.tree[key] = () => { throw Error(`Forbidden inventory read: ${key}`); };
+  const selected = await f.controller.readTrayRootSelection(undefined, async () => calls.push('authorized-after'));
+  assert.deepEqual(selected, { objects: [{ objectId: 2 }, { objectId: 3 }] });
+  assert.deepEqual(calls, ['authorized-after']);
+  assert.ok(validateEnvelope(envelope('TRAY_ROOT_SELECTION', selected), 'frame-to-parent'));
+  f.viewer.getAggregateSelection = () => [{ model: f.model, selection: [] }];
+  f.model.getInstanceTree = () => { throw Error('Empty selection needs no tree.'); };
+  assert.deepEqual(await f.controller.readTrayRootSelection(), { objects: [] }); f.controller.dispose();
+});
+
+test('tray-root selection refuses duplicate, foreign, unknown and oversized IDs and accepts 512 roots', async () => {
+  const f = fixture(); f.model.getInstanceTree = () => f.tree;
+  f.tree.getNodeIndex = id => id >= 1 && id <= 512 ? id - 1 : undefined;
+  for (const selection of [[2, 2], [0], [513]]) {
+    f.viewer.getAggregateSelection = () => [{ model: f.model, selection }];
+    await assert.rejects(f.controller.readTrayRootSelection(), { code: 'TRAY_ROOT_SELECTION_UNAVAILABLE' });
+  }
+  f.viewer.getAggregateSelection = () => [{ model: {}, selection: [2] }];
+  await assert.rejects(f.controller.readTrayRootSelection(), { code: 'TRAY_ROOT_SELECTION_UNAVAILABLE' });
+  f.viewer.getAggregateSelection = () => [{ model: f.model, selection: Array.from({ length: 513 }, (_, at) => at + 1) }];
+  await assert.rejects(f.controller.readTrayRootSelection(), { code: 'TRAY_ROOT_SELECTION_TOO_LARGE' });
+  f.viewer.getAggregateSelection = () => [{ model: f.model, selection: Array.from({ length: 512 }, (_, at) => at + 1) }];
+  assert.equal((await f.controller.readTrayRootSelection()).objects.length, 512); f.controller.dispose();
+});
+
+test('tray-root selection retains large model-local IDs and keeps SDK membership failures recoverable', async () => {
+  const f = fixture(); f.model.getInstanceTree = () => f.tree;
+  f.viewer.getAggregateSelection = () => [{ model: f.model, selection: [426690] }];
+  f.tree.getNodeIndex = id => ({ 426690: 0, 426692: 1, 426693: 2, 426694: 3, 426696: 4, 426698: 5 })[id];
+  assert.deepEqual(await f.controller.readTrayRootSelection(), { objects: [{ objectId: 426690 }] });
+  f.tree.getNodeIndex = () => { throw Error('Private SDK membership failure.'); };
+  await assert.rejects(f.controller.readTrayRootSelection(), error => error.code === 'TRAY_ROOT_SELECTION_UNAVAILABLE' && !error.message.includes('Private'));
+  f.viewer.getAggregateSelection = () => { throw Error('Private SDK selection failure.'); };
+  await assert.rejects(f.controller.readTrayRootSelection(), { code: 'TRAY_ROOT_SELECTION_UNAVAILABLE' }); f.controller.dispose();
+});
+
+test('tray-root selection checks mutation, cancellation and model identity after authorization without committing IDs', async () => {
+  const f = fixture(); let selected = [2]; f.model.getInstanceTree = () => f.tree;
+  f.viewer.getAggregateSelection = () => [{ model: f.model, selection: selected }];
+  await assert.rejects(f.controller.readTrayRootSelection(undefined, async () => { selected = [3]; }), { code: 'TRAY_ROOT_SELECTION_CHANGED' });
+  const stop = new AbortController();
+  await assert.rejects(f.controller.readTrayRootSelection(stop.signal, async () => stop.abort()), { name: 'AbortError' });
+  await assert.rejects(f.controller.readTrayRootSelection(undefined, async () => { f.viewer.model = {}; }), { code: 'MODEL_SELECTION_CHANGED' });
+  f.controller.dispose();
 });
 
 test('Model Browser parent and child retain their exact recursive bounding boxes without substitution', async () => {

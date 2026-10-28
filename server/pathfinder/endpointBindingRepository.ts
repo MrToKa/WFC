@@ -143,6 +143,7 @@ function readiness(binding: EndpointBinding | null, current: EndpointBindingCont
   if (!binding) return { status: 'missing', calculationReady: false, reasonCodes: ['ENDPOINT_BINDING_REQUIRED'] };
   if (binding.locationRevision !== locationRevision) return { status: 'stale', calculationReady: false, reasonCodes: ['ENDPOINT_LOCATION_CHANGED'] };
   if (binding.modelVersionId !== current.modelVersionId || binding.aggregateId !== current.aggregateId || binding.artifactId !== current.artifactId || binding.projectionSha256 !== current.projectionSha256 || binding.captureFrameId !== current.captureFrameId) return { status: 'stale', calculationReady: false, reasonCodes: ['ENDPOINT_BINDING_STALE'] };
+  if (binding.derivation === 'matched-model-bottom-aabb.v1' && canonicalPurposeJson(binding.autoMatchEvidence?.current) !== canonicalPurposeJson(current)) return { status: 'stale', calculationReady: false, reasonCodes: ['MODEL_LOCATION_MATCH_RECHECK_REQUIRED'] };
   if (binding.mode === 'object-attached') return { status: 'unsupported-attachment', calculationReady: false, reasonCodes: ['ENDPOINT_ATTACHMENT_EVIDENCE_UNAVAILABLE'] };
   return binding.status === 'confirmed' ? { status: 'confirmed', calculationReady: true, reasonCodes: [] } : { status: binding.status, calculationReady: false, reasonCodes: ['ENDPOINT_BINDING_UNCONFIRMED'] };
 }
@@ -167,7 +168,7 @@ async function oldCommand(c: PoolClient, projectId: string, who: JobPrincipal, k
 }
 async function saveCommand(c: PoolClient, projectId: string, who: JobPrincipal, key: string, kind: string, command: unknown, receipt: unknown) { await c.query('INSERT INTO pf_endpoint_binding_commands(project_id,actor_id,idempotency_key,kind,request_sha256,request,receipt) VALUES($1,$2,$3,$4,$5,$6,$7)', [projectId, who.userId, key, kind, endpointBindingHash(command), command, budget(receipt)]); }
 
-type BindingProposal = Pick<EndpointBinding, 'mode' | 'pointProjectMetres' | 'derivation' | 'sourceObject' | 'attachment' | 'qualifiedProjectFrameId' | 'sourceDecisionId'>;
+type BindingProposal = Pick<EndpointBinding, 'mode' | 'pointProjectMetres' | 'derivation' | 'sourceObject' | 'attachment' | 'qualifiedProjectFrameId' | 'sourceDecisionId'> & Pick<EndpointBinding, 'autoMatchEvidence'>;
 async function checkLocation(c: PoolClient, pid: string, id: string, expectedLocationRevision: string | null, expectedHeadId: string | null) {
   const value = await location(c, pid, id), previous = value ? await head(c, pid, id) : null;
   if (expectedLocationRevision === null ? value !== null : !value || value.revision !== expectedLocationRevision) return fail('ENDPOINT_LOCATION_CONFLICT');
@@ -215,6 +216,34 @@ export async function confirmEndpointBindingChangeInTransaction(c: PoolClient, p
   if (input.mode === 'fixed-world') { if (input.provenanceObject) await objectEvidence(c, pid, current, input.provenanceObject); proposal = { mode: input.mode, pointProjectMetres: input.pointProjectMetres, derivation: input.derivation, sourceObject: input.provenanceObject, attachment: null, qualifiedProjectFrameId: null, sourceDecisionId: null }; }
   else { const object = await objectEvidence(c, pid, current, input.object); if (object.geometry.role !== 'object' || !object.geometry.equipmentAnchor) return fail('ENDPOINT_EQUIPMENT_ANCHOR_REQUIRED'); const point = deriveEquipmentBottomAnchor(object.geometry.bounds); if (canonicalPurposeJson(point) !== canonicalPurposeJson(object.geometry.equipmentAnchor.pointMetres)) return fail('ENDPOINT_OBJECT_ANCHOR_INTEGRITY'); proposal = { mode: input.mode, pointProjectMetres: point, derivation: ENDPOINT_ANCHOR_RULE, sourceObject: input.object, attachment: null, qualifiedProjectFrameId: null, sourceDecisionId: null }; }
   return commitBinding(c, pid, who, locationId, input.location, current, before, revision, input.reason, proposal, signal);
+}
+
+/** Dedicated user-requested batch match authority. Manual write schemas cannot
+ * introduce this derivation. Only this policy's stale observations can be refreshed. */
+export async function confirmMatchedEndpointInTransaction(c: PoolClient, pid: string, who: JobPrincipal, input: {
+  locationId: string; location: { name: string; aliases: string[] }; current: EndpointCurrentScope;
+  expectedRegistryRevision: string; expectedLocationRevision: string | null; expectedHeadId: string | null; reason: string;
+  evidence: NonNullable<EndpointBinding['autoMatchEvidence']>;
+}, signal?: AbortSignal) {
+  policyUuidSchema.parse(pid); policyUuidSchema.parse(input.locationId); assertLoginNotExpired(who); signal?.throwIfAborted();
+  // Parse through the binding evidence schema independently of any outer route.
+  const { endpointModelMatchEvidenceSchema, ENDPOINT_MODEL_MATCH_DERIVATION } = await import('../../shared/pathfinderEndpointBindings.js');
+  const evidence = endpointModelMatchEvidenceSchema.parse(input.evidence);
+  const revision = await registry(c, pid, input.expectedRegistryRevision);
+  const before = await checkLocation(c, pid, input.locationId, input.expectedLocationRevision, input.expectedHeadId);
+  const current = await readCurrentEndpointBindingContext(c, pid);
+  if (!current || canonicalPurposeJson(current) !== canonicalPurposeJson(input.current)
+    || canonicalPurposeJson(evidence.current) !== canonicalPurposeJson(current)
+    || ![input.location.name, ...input.location.aliases].map(normalizeLocation).includes(evidence.logicalKey))
+    return fail('MODEL_LOCATION_MATCH_CONTEXT_CHANGED');
+  if (before.previous && (before.previous.derivation !== ENDPOINT_MODEL_MATCH_DERIVATION
+    || before.previous.status === 'confirmed' && before.previous.locationRevision === before.value?.revision
+      && canonicalPurposeJson(before.previous.autoMatchEvidence?.current) === canonicalPurposeJson(current))
+    || await legacy(c, pid, input.locationId, current.modelVersionId)) return fail('MODEL_LOCATION_MATCH_EXISTING_BINDING');
+  return commitBinding(c, pid, who, input.locationId, input.location, current, before, revision, input.reason, {
+    mode: 'fixed-world', derivation: ENDPOINT_MODEL_MATCH_DERIVATION, pointProjectMetres: evidence.bottomCentre,
+    sourceObject: null, attachment: null, qualifiedProjectFrameId: null, sourceDecisionId: null, autoMatchEvidence: evidence,
+  }, signal);
 }
 
 export interface EndpointBindingAdapters {

@@ -192,6 +192,17 @@ export async function captureLosslessInventory(pool: Pick<Pool, 'connect'>, opti
       await verifyDirectory(); activeFile = await openBounded(path.join(options.directory, filename), 'wx');
       const rowHash = createHash('sha256').update('wfc.lossless.table-rows.v1\n'), keyHash = createHash('sha256').update('wfc.lossless.table-keys.v1\n'), protectedHash = createHash('sha256').update('wfc.lossless.table-protected.v1\n'), fileHash = createHash('sha256');
       let observedRows = 0, observedRawBytes = 0, outputBytes = 0, prior: string | undefined;
+      // Keep the exact NDJSON bytes while avoiding one host-filesystem request
+      // per row. Small rows retain at most 64 KiB; an already bounded large row
+      // is written directly without concatenating another copy of it.
+      const writeBufferBytes = 64 * 1024;
+      let pendingRows: Buffer[] = [], pendingBytes = 0;
+      const flushRows = async () => {
+        if (!pendingBytes) return;
+        const bytes = pendingRows.length === 1 ? pendingRows[0] : Buffer.concat(pendingRows, pendingBytes);
+        pendingRows = []; pendingBytes = 0;
+        check(); await bounded(activeFile!.writeFile(bytes));
+      };
       for (;;) {
         const rows = await query(`FETCH FORWARD ${limits.batchRows} FROM wfc_lossless_rows`);
         if (rows.length > limits.batchRows) return fail('LOSSLESS_INVENTORY_ROW_COUNT');
@@ -205,9 +216,13 @@ export async function captureLosslessInventory(pool: Pick<Pool, 'connect'>, opti
           if (row.protectedText !== undefined) { frame(protectedHash, row.key ?? ''); frame(protectedHash, row.protectedText); }
           const bytes = Buffer.from(JSON.stringify(row) + '\n'); outputBytes += bytes.length; totalOutputBytes += bytes.length;
           if (totalOutputBytes > limits.outputBytes) return fail('LOSSLESS_INVENTORY_LIMIT');
-          await bounded(activeFile.writeFile(bytes)); fileHash.update(bytes);
+          if (pendingBytes && pendingBytes + bytes.length > writeBufferBytes) await flushRows();
+          pendingRows.push(bytes); pendingBytes += bytes.length;
+          if (pendingBytes >= writeBufferBytes) await flushRows();
+          fileHash.update(bytes);
         }
       }
+      await flushRows();
       await query('CLOSE wfc_lossless_rows');
       if (observedRows !== expectedRows || observedRawBytes !== expectedBytes) return fail('LOSSLESS_INVENTORY_ROW_COUNT');
       await bounded(activeFile.sync()); await activeFile.close(); activeFile = undefined; await verifyDirectory();

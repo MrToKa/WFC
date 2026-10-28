@@ -3,6 +3,13 @@ import { fetchRoutingPurposePolicy, fetchRoutingPurposeHistory, saveRoutingPurpo
 const id = '11111111-1111-1111-1111-111111111111';
 afterEach(() => vi.unstubAllGlobals());
 describe('strict routing policy transport', () => {
+  it('reads the exact project Cable types purposes and independent Power and VFD permissions', async () => {
+    const policy = { schemaVersion: 'pathfinder.routing-purpose-policy.v1', projectId: id, catalogRevision: '1', routingPolicyRevision: '4',
+      cablePurposes: ['Control', 'Grounding', 'MV', 'Power', 'VFD'], cablePurposesSha256: 'a'.repeat(64),
+      rules: [{ purposeKey: 'VFD trays', allowedCategories: ['VFD'] }, { purposeKey: 'Power trays', allowedCategories: ['Power'] }] };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(policy))));
+    await expect(fetchRoutingPurposePolicy(id, 'login')).resolves.toEqual(policy);
+  });
   it('rejects noncanonical project ids and history revisions before fetching', async () => {
     const fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
     await expect(fetchRoutingPurposePolicy(id + '\n', 'login')).rejects.toThrow();

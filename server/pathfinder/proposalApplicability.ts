@@ -6,6 +6,8 @@ import { readRecalculationJobAuthority } from './recalculationRepository.js';
 import { requireBarrierEngineStrategy } from './barrierStrategy.js';
 import { requireVersionedCalculationScope } from './routingScope.js';
 import { engineResponseSchema, type BarrierDependencySnapshot } from './jobContracts.js';
+import type { AutomaticPairMandate } from '../../shared/pathfinderAutomaticPair.js';
+import { requireCurrentAutomaticPairMandate } from './automaticPairMandates.js';
 
 type Seal = { projectId: string; jobId: string; cableId: string; proposalId: string; dependencyHash: string;
   proposalHash?: string; engineResultSha256?: string; baselineHash?: string };
@@ -42,9 +44,22 @@ export async function readProposalApplicability(client: PoolClient, input: Propo
   }) };
 }
 
+/** Only the automatic writer may use an explicitly enrolled output mandate
+ * before its unrelated project siblings finish. Public Review/Apply keeps its
+ * existing whole-job semantics. The exact seal and current mandate are both
+ * checked here; a calculated status alone is never permission to write. */
+export async function readAutomaticPairProposalApplicability(client: PoolClient, input: ProposalApplicabilityInput,
+  mandate: AutomaticPairMandate): Promise<{ applicable: boolean; evidence: SealedCableItemApplicability | null }> {
+  if (input.cancelRequested || !['queued', 'running', 'complete'].includes(input.jobState)
+    || input.dependencyVersion !== 'pathfinder.dependencies.v8' || mandate.projectId !== input.projectId
+    || mandate.jobId !== input.jobId || mandate.cableId !== input.cableId || mandate.dependencyHash !== input.dependencyHash)
+    return { applicable: false, evidence: null };
+  return readBarrierProposalApplicability(client, input, mandate);
+}
+
 /** Readiness metadata does not authorize a write. Current dependencies and the
  * original authority are independently fenced again by Review/Apply. */
-async function readBarrierProposalApplicability(client: PoolClient, input: ProposalApplicabilityInput): Promise<{
+async function readBarrierProposalApplicability(client: PoolClient, input: ProposalApplicabilityInput, automaticMandate?: AutomaticPairMandate): Promise<{
   applicable: boolean; evidence: SealedCableItemApplicability | null;
 }> {
   const no = { applicable: false, evidence: null };
@@ -79,6 +94,12 @@ async function readBarrierProposalApplicability(client: PoolClient, input: Propo
       ...(dependencies.barriers.schemaVersion==='wfc.pf.barrier-runtime.v2'?{qualification:dependencies.barrierQualification}:{}), category: dependencies.cableInputs.mto,
       fromPoint: dependencies.from.point, toPoint: dependencies.to.point });
   } catch { return no; }
+  if (automaticMandate) {
+    // This re-reads the immutable output mandate and its original authority,
+    // current login/administrator, enrollment/generation and finite expiry.
+    await requireCurrentAutomaticPairMandate(client, automaticMandate);
+    return { applicable: true, evidence: null };
+  }
   const scoped = await readLocationImpactJobAuthority(client, { projectId: input.projectId, jobId: input.jobId, cableId: input.cableId, lock: true });
   if (scoped) {
     if (!scoped.enrolled || !scoped.valid) return no;

@@ -1,8 +1,8 @@
 // Protected selected-barrier observations. Importing this module does not read SDK globals.
 // Neither capture completeness nor its hashes establish producer/server authority.
 import { BARRIER_CAPTURE_ERROR_CODES, BARRIER_CAPTURE_ERROR_MESSAGES } from './barrier-capture-errors.mjs';
-export const BARRIER_CAPTURE_VIEWER_LIMITS = Object.freeze({ requestBytes: 48 * 1024, eventBytes: 24 * 1024,
-  totalBytes: 32 * 1024 ** 2, events: 3000, selectedParents: 128, fragments: 8192,
+export const BARRIER_CAPTURE_VIEWER_LIMITS = Object.freeze({ requestBytes: 4 * 1024 ** 2 - 1024, eventBytes: 24 * 1024,
+  totalBytes: 32 * 1024 ** 2, events: 3000, selectedParents: 2048, fragments: 8192,
   vertices: 500000, triangles: 250000, closureObjects: 65536, enumerationWork: 2000000,
   depth: 512, milliseconds: 300000, callbackMilliseconds: 45000 });
 const L = BARRIER_CAPTURE_VIEWER_LIMITS, encoder = new TextEncoder();

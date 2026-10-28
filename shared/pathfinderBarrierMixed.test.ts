@@ -76,6 +76,61 @@ function writeEvidence() { return { schemaVersion: 'wfc.pf.barrier-write-evidenc
   routeSha256: proof().routeSha256, policySha256: context().binding.policySha256, profileSha256: context().profileSha256, registryRevision: '5', snapshotId: id(10), snapshotSha256: reference().contentSha256,
   drillThroughWalls: false, status: 'clear', geometryPolicy: mixed.MIXED_BARRIER_POLICY, ownTerminalExemptionsSupported: false }; }
 
+describe('explicit additive 2048 obstacle selection profile', () => {
+  it('keeps historical profiles exact and selects larger capacity only through v4', () => {
+    for (const old of [mixed.MIXED_BARRIER_RUNTIME_PROFILE, mixed.MIXED_BARRIER_OPENING_RUNTIME_PROFILE]) {
+      expect(old.qualification.maximumParents).toBe(128); expect(old.qualification.maximumComponents).toBe(256);
+      expect(mixed.mixedBarrierSupportedRuntimeProfileSchema.parse(old)).toEqual(old);
+      expect(mixed.mixedBarrierSupportedRuntimeProfileSchema.safeParse({ ...old,
+        qualification: { ...old.qualification, maximumParents: 2048, maximumComponents: 2048 } }).success).toBe(false);
+    }
+    const current = mixed.MIXED_BARRIER_LARGE_SELECTION_RUNTIME_PROFILE;
+    expect(mixed.mixedBarrierLargeSelectionRuntimeProfileSchema.parse(current)).toEqual(current);
+    expect(current.qualification).toEqual({ ...mixed.MIXED_BARRIER_OPENING_RUNTIME_PROFILE.qualification,
+      maximumParents: 2048, maximumComponents: 2048 });
+    for (const key of ['kernel', 'routing', 'localConnectors', 'interTrayManeuvers'] as const)
+      expect(current[key]).toEqual(mixed.MIXED_BARRIER_OPENING_RUNTIME_PROFILE[key]);
+    expect(mixed.mixedBarrierOpeningRuntimeProfileSchema.safeParse(current).success).toBe(false);
+    expect(mixed.mixedBarrierLargeSelectionRuntimeProfileSchema.safeParse({ ...current,
+      qualification: { ...current.qualification, maximumParents: 2049 } }).success).toBe(false);
+  });
+  it('retains historical small manifest bounds while v4 permits bounded larger selections', () => {
+    const base = context(); base.storage!.manifest.bytes = 1024 * 1024;
+    expect(mixed.mixedBarrierRuntimeContextSchema.safeParse(base).success).toBe(false);
+    expect(mixed.mixedBarrierRuntimeContextSchema.safeParse({ ...base, profile: mixed.MIXED_BARRIER_OPENING_RUNTIME_PROFILE,
+      profileSha256: digest(mixed.MIXED_BARRIER_OPENING_RUNTIME_PROFILE) }).success).toBe(false);
+    const current = { ...base, profile: mixed.MIXED_BARRIER_LARGE_SELECTION_RUNTIME_PROFILE,
+      profileSha256: digest(mixed.MIXED_BARRIER_LARGE_SELECTION_RUNTIME_PROFILE) };
+    expect(mixed.verifyMixedBarrierRuntimeContext(current, hash)).toBe(true);
+    expect(mixed.mixedBarrierRuntimeContextSchema.safeParse({ ...current, storage: { ...current.storage,
+      manifest: { ...current.storage!.manifest, bytes: BARRIER_LIMITS.manifestBytes + 1 } } }).success).toBe(false);
+  });
+  it('requires the larger admitted profile for 2048 component evidence and rejects 2049', () => {
+    const members = Array.from({ length: 2048 }, (_, at) => ({ ...member(), componentId: `component-${at}`,
+      fragmentIds: [at], parentSelectionIds: [id(1000 + at)] }));
+    const qualified = { ...evidence(), originalSurfaceComponents: 2048, fragmentCount: 2048, vertexCount: 6144,
+      triangleCount: 2048, componentMemberships: members };
+    const current = execution(); current.qualification!.evidence = qualified;
+    expect(mixed.mixedBarrierExecutionSchema.safeParse(current).success).toBe(false);
+    current.context.profile = mixed.mixedBarrierLargeSelectionRuntimeProfileSchema.parse(mixed.MIXED_BARRIER_LARGE_SELECTION_RUNTIME_PROFILE);
+    current.context.profileSha256 = digest(current.context.profile);
+    expect(mixed.mixedBarrierExecutionSchema.safeParse(current).success).toBe(true);
+    const currentReceipt = { ...receipt(), evidence: qualified };
+    expect(new TextEncoder().encode(barrierCanonicalJson(currentReceipt)).byteLength).toBeGreaterThan(65536);
+    expect(mixed.mixedBarrierVerifierReceiptSchema.safeParse(currentReceipt).success).toBe(true);
+    qualified.componentMemberships.push({ ...member(), componentId: 'component-2049', fragmentIds: [2049], parentSelectionIds: [id(9000)] });
+    expect(mixed.mixedBarrierExecutionSchema.safeParse(current).success).toBe(false);
+  });
+  it('binds the new capacity profile in engine identity without rewriting historical identities', () => {
+    const { contentSha256: _old, ...old } = identity();
+    const body = { ...old, policyVersions: { ...old.policyVersions,
+      runtimeProfile: mixed.MIXED_BARRIER_LARGE_SELECTION_RUNTIME_PROFILE.schemaVersion,
+      interTrayManeuvers: mixed.INTER_TRAY_OPENING_MANEUVER_POLICY } };
+    expect(mixed.verifyMixedBarrierEngineIdentity({ ...body, contentSha256: digest(body) }, hash)).toBe(true);
+    expect(mixed.verifyMixedBarrierEngineIdentity(identity(), hash)).toBe(true);
+  });
+});
+
 describe('explicit additive inter-tray maneuver profile', () => {
   const openingContext = () => mixed.mixedBarrierRuntimeContextSchema.parse({ ...context(),
     profile: structuredClone(mixed.MIXED_BARRIER_OPENING_RUNTIME_PROFILE), profileSha256: digest(mixed.MIXED_BARRIER_OPENING_RUNTIME_PROFILE) });
@@ -136,6 +191,107 @@ describe('explicit additive inter-tray maneuver profile', () => {
     expect(mixed.mixedBarrierEngineIdentitySchema.safeParse({ ...current, policyVersions: {
       ...current.policyVersions, interTrayManeuvers: 'unreviewed.v9' } }).success).toBe(false);
     expect(mixed.verifyMixedBarrierEngineIdentity({ ...current, contentSha256: identity().contentSha256 }, hash)).toBe(false);
+  });
+});
+
+describe('explicit nearest-anchored local search profile', () => {
+  const currentContext = (): mixed.MixedBarrierRuntimeContext => ({ ...context(),
+    profile: mixed.mixedBarrierNearestAnchoredRuntimeProfileSchema.parse(mixed.MIXED_BARRIER_NEAREST_ANCHORED_RUNTIME_PROFILE),
+    profileSha256: digest(mixed.MIXED_BARRIER_NEAREST_ANCHORED_RUNTIME_PROFILE) });
+  const currentIdentity = () => {
+    const { contentSha256: _oldHash, ...previous } = identity();
+    const body = { ...previous, policyVersions: { ...previous.policyVersions,
+      runtimeProfile: mixed.MIXED_BARRIER_NEAREST_ANCHORED_RUNTIME_PROFILE.schemaVersion,
+      interTrayManeuvers: mixed.INTER_TRAY_OPENING_MANEUVER_POLICY, localSearch: mixed.NEAREST_ANCHORED_LOCAL_SEARCH_POLICY } };
+    return { ...body, contentSha256: digest(body) };
+  };
+  it('adds only the explicit local search bundle while retaining all v4 bounds and historical profiles', () => {
+    const { schemaVersion, localSearch, ...rest } = mixed.MIXED_BARRIER_NEAREST_ANCHORED_RUNTIME_PROFILE;
+    expect(schemaVersion).toBe('wfc.pf.barrier-runtime-profile.v5');
+    expect(localSearch).toEqual({ policyVersion: 'wfc.pf.nearest-anchored-local-search.v1',
+      pairOrder: 'nearest-anchored-axes-then-rank-sum.v1', exactStraightPreflight: true });
+    expect({ ...rest, schemaVersion: mixed.MIXED_BARRIER_LARGE_SELECTION_RUNTIME_PROFILE.schemaVersion }).toEqual(mixed.MIXED_BARRIER_LARGE_SELECTION_RUNTIME_PROFILE);
+    for (const old of [mixed.MIXED_BARRIER_RUNTIME_PROFILE, mixed.MIXED_BARRIER_OPENING_RUNTIME_PROFILE, mixed.MIXED_BARRIER_LARGE_SELECTION_RUNTIME_PROFILE]) {
+      expect(mixed.mixedBarrierSupportedRuntimeProfileSchema.parse(old)).toEqual(old);
+      expect(mixed.mixedBarrierSupportedRuntimeProfileSchema.safeParse({ ...old, localSearch }).success).toBe(false);
+    }
+    expect(Object.isFrozen(localSearch)).toBe(true);
+    expect(mixed.verifyMixedBarrierRuntimeContext(currentContext(), hash)).toBe(true);
+  });
+  it.each([{ pairOrder: 'rank-sum' }, { exactStraightPreflight: false }, { policyVersion: 'unreviewed.v2' }, { skipBarrierChecks: true }])(
+    'refuses changed local scheduling even with a recomputed profile hash: %j', change => {
+      const value = currentContext(), profile = { ...value.profile, localSearch: { ...mixed.NEAREST_ANCHORED_LOCAL_SEARCH_PROFILE, ...change } };
+      expect(mixed.verifyMixedBarrierRuntimeContext({ ...value, profile, profileSha256: digest(profile) }, hash)).toBe(false);
+    });
+  it('retains the large bounded manifest and requires the exact v5 hash and final original proof', () => {
+    const current = currentContext(); current.storage!.manifest.bytes = 1024 * 1024;
+    expect(mixed.verifyMixedBarrierRuntimeContext(current, hash)).toBe(true);
+    expect(mixed.verifyMixedBarrierRuntimeContext({ ...current, profileSha256: digest(mixed.MIXED_BARRIER_LARGE_SELECTION_RUNTIME_PROFILE) }, hash)).toBe(false);
+    const value = { ...execution(), context: current };
+    expect(mixed.verifyMixedBarrierExecutionRoute(value, { context: current, points,
+      componentMemberships: evidence().componentMemberships, qualificationEvidence: evidence() }, hash)).toBe(true);
+    expect(mixed.verifyMixedBarrierExecutionRoute(execution(), { context: current, points,
+      componentMemberships: evidence().componentMemberships, qualificationEvidence: evidence() }, hash)).toBe(false);
+    expect(mixed.mixedBarrierExecutionSchema.safeParse({ ...value, proof: null }).success).toBe(false);
+  });
+  it('binds the new scheduling policy to v5 engine identities without upgrading historical identities', () => {
+    const value = currentIdentity();
+    expect(mixed.verifyMixedBarrierEngineIdentity(value, hash)).toBe(true);
+    const policies = { ...value.policyVersions } as Record<string, unknown>; delete policies.localSearch;
+    expect(mixed.mixedBarrierEngineIdentitySchema.safeParse({ ...value, policyVersions: policies }).success).toBe(false);
+    expect(mixed.mixedBarrierEngineIdentitySchema.safeParse({ ...value, policyVersions: { ...value.policyVersions,
+      runtimeProfile: mixed.MIXED_BARRIER_LARGE_SELECTION_RUNTIME_PROFILE.schemaVersion } }).success).toBe(false);
+    expect(mixed.verifyMixedBarrierEngineIdentity({ ...value, contentSha256: identity().contentSha256 }, hash)).toBe(false);
+    expect(mixed.verifyMixedBarrierEngineIdentity(identity(), hash)).toBe(true);
+  });
+});
+
+describe('explicit measured bend fitting profile', () => {
+  const currentContext = (): mixed.MixedBarrierRuntimeContext => ({ ...context(),
+    profile: mixed.mixedBarrierMeasuredFitRuntimeProfileSchema.parse(mixed.MIXED_BARRIER_MEASURED_FIT_RUNTIME_PROFILE),
+    profileSha256: digest(mixed.MIXED_BARRIER_MEASURED_FIT_RUNTIME_PROFILE) });
+  it('retains every v5 search and collision budget and keeps the historical profiles exact', () => {
+    const { schemaVersion, geometryFitting, ...rest } = mixed.MIXED_BARRIER_MEASURED_FIT_RUNTIME_PROFILE;
+    expect(schemaVersion).toBe('wfc.pf.barrier-runtime-profile.v6');
+    expect(geometryFitting).toEqual({ policyVersion: 'wfc.pf.measured-bend-mesh-fitting.v2', modelBuildRules: 'pf2.rules.v2' });
+    expect({ ...rest, schemaVersion: mixed.MIXED_BARRIER_NEAREST_ANCHORED_RUNTIME_PROFILE.schemaVersion }).toEqual(mixed.MIXED_BARRIER_NEAREST_ANCHORED_RUNTIME_PROFILE);
+    for (const old of [mixed.MIXED_BARRIER_RUNTIME_PROFILE, mixed.MIXED_BARRIER_OPENING_RUNTIME_PROFILE,
+      mixed.MIXED_BARRIER_LARGE_SELECTION_RUNTIME_PROFILE, mixed.MIXED_BARRIER_NEAREST_ANCHORED_RUNTIME_PROFILE]) {
+      expect(mixed.mixedBarrierSupportedRuntimeProfileSchema.parse(old)).toEqual(old);
+      expect(mixed.mixedBarrierSupportedRuntimeProfileSchema.safeParse({ ...old, geometryFitting }).success).toBe(false);
+    }
+    const current = currentContext(); current.storage!.manifest.bytes = 1024 * 1024;
+    expect(mixed.verifyMixedBarrierRuntimeContext(current, hash)).toBe(true);
+    expect(Object.isFrozen(geometryFitting)).toBe(true);
+  });
+  it.each([{ policyVersion: 'unreviewed.v9' }, { modelBuildRules: 'pf2.rules.v1' }, { trustBounds: true }])(
+    'rejects changed fitting semantics even when the profile hash is recomputed: %j', change => {
+      const current = currentContext(), profile = { ...current.profile,
+        geometryFitting: { ...mixed.MEASURED_BEND_MESH_FITTING_PROFILE, ...change } };
+      expect(mixed.verifyMixedBarrierRuntimeContext({ ...current, profile, profileSha256: digest(profile) }, hash)).toBe(false);
+    });
+  it('requires the v6 identity to bind the fitting policy and retains the exact final collision proof', () => {
+    const { contentSha256: _oldHash, ...previous } = identity();
+    const body = { ...previous, policyVersions: { ...previous.policyVersions,
+      runtimeProfile: mixed.MIXED_BARRIER_MEASURED_FIT_RUNTIME_PROFILE.schemaVersion,
+      fitting: mixed.MEASURED_BEND_MESH_FITTING_PROFILE.modelBuildRules,
+      interTrayManeuvers: mixed.INTER_TRAY_OPENING_MANEUVER_POLICY,
+      localSearch: mixed.NEAREST_ANCHORED_LOCAL_SEARCH_POLICY, geometryFitting: mixed.MEASURED_BEND_MESH_FITTING_POLICY } };
+    const currentIdentity = { ...body, contentSha256: digest(body) };
+    expect(mixed.verifyMixedBarrierEngineIdentity(currentIdentity, hash)).toBe(true);
+    expect(mixed.mixedBarrierEngineIdentitySchema.safeParse({ ...currentIdentity,
+      policyVersions: { ...body.policyVersions, fitting: 'pf2.rules.v1' } }).success).toBe(false);
+    const policies = { ...body.policyVersions } as Record<string, unknown>; delete policies.geometryFitting;
+    expect(mixed.mixedBarrierEngineIdentitySchema.safeParse({ ...currentIdentity, policyVersions: policies }).success).toBe(false);
+    expect(mixed.mixedBarrierEngineIdentitySchema.safeParse({ ...currentIdentity, policyVersions: { ...body.policyVersions,
+      runtimeProfile: mixed.MIXED_BARRIER_NEAREST_ANCHORED_RUNTIME_PROFILE.schemaVersion } }).success).toBe(false);
+    const current = currentContext(), value = { ...execution(), context: current };
+    expect(mixed.verifyMixedBarrierExecutionRoute(value, { context: current, points,
+      componentMemberships: evidence().componentMemberships, qualificationEvidence: evidence() }, hash)).toBe(true);
+    expect(mixed.mixedBarrierExecutionSchema.safeParse({ ...value, proof: null }).success).toBe(false);
+    expect(mixed.verifyMixedBarrierExecutionRoute(execution(), { context: current, points,
+      componentMemberships: evidence().componentMemberships, qualificationEvidence: evidence() }, hash)).toBe(false);
+    expect(mixed.verifyMixedBarrierRuntimeContext({ ...current, profileSha256: digest(mixed.MIXED_BARRIER_NEAREST_ANCHORED_RUNTIME_PROFILE) }, hash)).toBe(false);
   });
 });
 
@@ -215,9 +371,10 @@ describe('exact original membership and bounded pure mixed receipt', () => {
     for (const patch of [{ originalSurfaceComponents: 0 }, { qualifiedClosedSolidComponents: 1 }, { triangleCount: 2 }, { fragmentCount: 2 }, { authority: 'ready' }])
       expect(mixed.mixedBarrierVerifierReceiptSchema.safeParse({ ...receipt(), evidence: { ...evidence(), ...patch } }).success).toBe(false);
   });
-  it('refuses an oversized original membership receipt without truncating or raising limits', () => {
-    const value = receipt(); value.evidence.componentMemberships = Array.from({ length: 20 }, (_, at) => ({ ...member(), componentId: 'component-' + at, parentSelectionIds: Array.from({ length: 128 }, (_, n) => id(100 + n)) }));
-    value.evidence.originalSurfaceComponents = 20; value.evidence.triangleCount = 20;
+  it('refuses an original membership receipt above the bounded 4 MiB capacity without truncating', () => {
+    const value = receipt(), base = member(), parents = Array.from({ length: 128 }, (_, n) => id(100 + n));
+    value.evidence.componentMemberships = Array.from({ length: 1024 }, (_, at) => ({ ...base, componentId: 'component-' + at, parentSelectionIds: parents }));
+    value.evidence.originalSurfaceComponents = 1024; value.evidence.triangleCount = 1024;
     expect(new TextEncoder().encode(barrierCanonicalJson(value)).length).toBeGreaterThan(BARRIER_LIMITS.controlBytes);
     expect(mixed.mixedBarrierVerifierReceiptSchema.safeParse(value).success).toBe(false);
     expect(mixed.mixedBarrierVerifierReceiptSchema.safeParse({ ...receipt(), status: 'refused', evidence: null }).success).toBe(true);

@@ -58,9 +58,43 @@ async function privateFile(filename, bytes) {
 }
 const stateFile = state => path.join(state.runtime, 'runtime-state.json');
 export async function save(state) { validateState(state, state.runtime); await fs.writeFile(stateFile(state), JSON.stringify(state, null, 2) + '\n', { mode: 0o600 }); }
+/** Optional local engine choices survive image installation and rollback. */
+export function calculationEngineEnvironment(settings) {
+  const values={};
+  if(settings.engineMode!==undefined){
+    if(!['oneshot','session'].includes(settings.engineMode))fail('PF_ENGINE_MODE_INVALID');
+    values.PF_ENGINE_MODE=settings.engineMode;
+  }
+  if(settings.engineSessionProfile!==undefined){
+    if(!['bounded','interactive'].includes(settings.engineSessionProfile))fail('PF_ENGINE_SESSION_PROFILE_INVALID');
+    values.PF_ENGINE_SESSION_PROFILE=settings.engineSessionProfile;
+  }
+  if(settings.graphPreparationCache!==undefined){
+    if(typeof settings.graphPreparationCache!=='boolean')fail('PF_GRAPH_CACHE_CONFIG_INVALID');
+    values.PF_ENGINE_GRAPH_CACHE=settings.graphPreparationCache?'1':'0';
+  }
+  return values;
+}
+export function calculationEngineSettings(env) {
+  const settings={};
+  if(Object.hasOwn(env,'PF_ENGINE_MODE'))settings.engineMode=env.PF_ENGINE_MODE;
+  if(Object.hasOwn(env,'PF_ENGINE_SESSION_PROFILE'))settings.engineSessionProfile=env.PF_ENGINE_SESSION_PROFILE;
+  if(Object.hasOwn(env,'PF_ENGINE_GRAPH_CACHE')){
+    if(!['0','1'].includes(env.PF_ENGINE_GRAPH_CACHE))fail('PF_GRAPH_CACHE_CONFIG_INVALID');
+    settings.graphPreparationCache=env.PF_ENGINE_GRAPH_CACHE==='1';
+  }
+  calculationEngineEnvironment(settings);return settings;
+}
+export function assertCalculationEngineEnvironment(env,settings){
+  calculationEngineEnvironment(settings);
+  if(env.PF_ENGINE_MODE!==(settings.engineMode??'oneshot')||env.PF_ENGINE_GRAPH_CACHE!==(settings.graphPreparationCache===true?'1':'0')
+    ||env.PF_ENGINE_SESSION_PROFILE!==(settings.engineSessionProfile??'bounded'))
+    fail('PF_ENGINE_ENVIRONMENT_CHANGED');
+}
 function envText(state, settings) {
   const values = { PF_PROJECT: state.project, PF_OWNER: state.owner, PF_HTTP_PORT: state.port, PF_API_IMAGE: settings.apiImage ?? state.tags.api, PF_WEB_IMAGE: settings.webImage ?? state.tags.web, PF_POSTGRES_IMAGE: settings.postgresImage ?? 'postgres:18@sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751', PF_MINIO_IMAGE: settings.minioImage ?? 'minio/minio:latest@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e', PF_DATABASE_PASSWORD: settings.databasePassword, PF_STORAGE_PASSWORD: settings.storagePassword, PF_JWT_SECRET: settings.jwtSecret };
   if(settings.capacityProfile!==undefined)values.PF_PREPARATION_CAPACITY_PROFILE=localCapacityProfile(settings.capacityProfile);
+  Object.assign(values,calculationEngineEnvironment(settings));
   if(settings.producer){
     const p=settings.producer;
     if(!SHA.test(p.key??'')||p.owner!==state.owner||p.project!==state.project||!/^sha256:[a-f0-9]{64}$/.test(p.image??'')||!SHA.test(p.runtimeInventorySha256??'')||p.expectedSha256!==undefined&&!SHA.test(p.expectedSha256)||p.qualifyProject!==undefined&&!UUID.test(p.qualifyProject))fail('PF_PRODUCER_CONFIG_INVALID');
@@ -82,6 +116,7 @@ export async function readSettings(state) {
   const env = Object.fromEntries(raw.trim().split('\n').map(line => { const at = line.indexOf('='); return [line.slice(0, at), line.slice(at + 1)]; }));
   const settings = { databasePassword: env.PF_DATABASE_PASSWORD, storagePassword: env.PF_STORAGE_PASSWORD, jwtSecret: env.PF_JWT_SECRET, apiImage: env.PF_API_IMAGE, webImage: env.PF_WEB_IMAGE, postgresImage: env.PF_POSTGRES_IMAGE, minioImage: env.PF_MINIO_IMAGE };
   if(Object.hasOwn(env,'PF_PREPARATION_CAPACITY_PROFILE'))settings.capacityProfile=localCapacityProfile(env.PF_PREPARATION_CAPACITY_PROFILE);
+  Object.assign(settings,calculationEngineSettings(env));
   if(env.PF_PRODUCER_CONTROL_KEY)settings.producer={key:env.PF_PRODUCER_CONTROL_KEY,owner:env.PF_PRODUCER_OWNER,project:env.PF_PRODUCER_PROJECT,image:env.PF_PRODUCER_IMAGE,runtimeInventorySha256:env.PF_PRODUCER_RUNTIME_SHA256,
     ...(env.PF_PRODUCER_QUALIFICATION_SHA256?{expectedSha256:env.PF_PRODUCER_QUALIFICATION_SHA256}:{}),...(env.PF_PRODUCER_QUALIFY_PROJECT?{qualifyProject:env.PF_PRODUCER_QUALIFY_PROJECT}:{})};
   if (envText(state, settings) !== raw) fail('PF_PRIVATE_ENV_INVALID'); return settings;
@@ -99,6 +134,16 @@ export async function configurePreparationCapacityProfile(state,profile){
   if(!transition.changed)return{profile:selected,owner:state.owner,project:state.project};
   await writeEnv(state,{...settings,capacityProfile:selected===LEGACY_CAPACITY_PROFILE?undefined:selected},{replace:true});await save(state);
   return{profile:selected,owner:state.owner,project:state.project};
+}
+/** Changes recorded configuration only; the caller owns the subsequent restart. */
+export async function configureCalculationEngine(state,choices){
+  if(!choices||typeof choices!=='object'||Array.isArray(choices)||Object.keys(choices).length===0
+    ||Object.keys(choices).some(key=>!['engineMode','engineSessionProfile','graphPreparationCache'].includes(key)))fail('PF_ENGINE_CONFIG_INVALID');
+  calculationEngineEnvironment(choices);validateState(state,state.runtime);await configuration(state);await ownership(state);
+  const settings=await readSettings(state);
+  await writeEnv(state,{...settings,...choices},{replace:true});await save(state);
+  return{mode:choices.engineMode??settings.engineMode??'oneshot',profile:choices.engineSessionProfile??settings.engineSessionProfile??'bounded',graphPreparationCache:choices.graphPreparationCache??settings.graphPreparationCache??false,
+    owner:state.owner,project:state.project};
 }
 export async function load(runtime = DEFAULT_RUNTIME) {
   const location = path.resolve(runtime); await assertCanonicalPath(location, { directory: true });
@@ -163,6 +208,7 @@ export async function configuration(state) {
   const env = value.services.api.environment;
   assertProducerEnvironment(env, settings.producer);
   assertCapacityEnvironment(env,settings.capacityProfile);
+  assertCalculationEngineEnvironment(env,settings);
   if (!/^postgresql:\/\/pf_local:[a-f0-9]{64}@postgres:5432\/wfc_pathfinder_local$/.test(env.DATABASE_URL ?? '') || env.MINIO_ENDPOINT !== 'minio' || env.PF_ROOT !== '/var/lib/wfc/pathfinder' || env.PF_ENGINE_DLL !== '/opt/pathfinder/PathFinder.ModelRunner.dll') fail('PF_COMPOSE_ENDPOINT_UNSAFE');
   if (Number(value.services.api.mem_limit) !== 4 * 1024 ** 3 || value.services.api.pids_limit !== 256 || env.NODE_OPTIONS !== '--max-old-space-size=1536' || Number(value.services.postgres.mem_limit) !== 1024 ** 3 || Number(value.services.minio.mem_limit) !== 1024 ** 3 || Number(value.services.web.mem_limit) !== 256 * 1024 ** 2) fail('PF_RESOURCE_CEILINGS_CHANGED');
   return { status: 'PASS', project: state.project, origin: `http://127.0.0.1:${state.port}`, services: ROLES, volumes: VOLUMES, privateBackend: true, publishedPorts: [state.port] };

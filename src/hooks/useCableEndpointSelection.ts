@@ -26,6 +26,9 @@ export type CableEndpointSelectionAccess = {
 type Draft = { mode: 'object-derived'; sdkObjectId: number; object: EndpointObjectRef; point: CanonicalPoint }
   | { mode: 'fixed-world'; point: CanonicalPoint; derivation: 'manual-world-point' | 'picked-surface-point'; displaySdkObjectId: number | null };
 type DisplaySelection = { sdkObjectId: number; name: string; point: CanonicalPoint };
+export type CableEndpointContextReadResult = { status: 'complete'; context: CableEndpointContext }
+  | { status: 'transient-failure' | 'refused' | 'cancelled' };
+type ReadOptions = { signal?: AbortSignal; timeoutMilliseconds?: number; onOutcome?: (status: CableEndpointContextReadResult['status']) => void };
 /** Preserve a selected label only alongside the same display object and anchor. */
 export function endpointDisplayNameHint(draft: Draft, display: DisplaySelection | null) {
   if (draft.mode !== 'fixed-world' || draft.displaySdkObjectId === null || !display
@@ -40,6 +43,25 @@ const storageNotice = 'Endpoint recovery storage is unavailable or invalid. No n
 const unknownNotice = 'The save outcome is unconfirmed. Its exact command is retained. Reconcile it before saving another endpoint.';
 const modelMatches = (scope: EndpointCurrentScope | null, expected: Model | null) => expected === null ? scope === null
   : scope !== null && scope.modelVersionId === expected.modelVersionId && scope.selectionRevision === expected.selectionRevision && scope.contentFingerprint === expected.contentFingerprint;
+const contextReadRetryDelays = [500, 1500] as const;
+function transientContextRead(error: unknown) {
+  if (error instanceof CableEndpointApiError)
+    return [408, 429, 500, 502, 503, 504].includes(error.status ?? 0) || error.status === null && error.code === 'REQUEST_TIMEOUT';
+  return error instanceof TypeError;
+}
+function waitForContextRetry(signal: AbortSignal, milliseconds: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const abort = () => { clearTimeout(timer); signal.removeEventListener('abort', abort); reject(new DOMException('Endpoint read cancelled.', 'AbortError')); };
+    const timer = setTimeout(() => { signal.removeEventListener('abort', abort); resolve(); }, milliseconds);
+    signal.addEventListener('abort', abort, { once: true });
+    if (signal.aborted) abort();
+  });
+}
+function canRetainContextDraft(previous: CableEndpointContext | null, next: CableEndpointContext) {
+  return Boolean(previous?.current && next.current && next.canBind && previous.projectId === next.projectId && previous.cableId === next.cableId
+    && previous.end === next.end && previous.logicalName === next.logicalName && previous.logicalKey === next.logicalKey
+    && canonicalPurposeJson(previous.current) === canonicalPurposeJson(next.current));
+}
 function selectedObject(value: ViewerSelection | null): DisplaySelection | null {
   if (!value || value.coordinateFrame !== 'world-metres-z-up' || !Number.isFinite(value.metresPerDisplayUnit) || value.metresPerDisplayUnit <= 0
     || !isCanonicalPoint(value.globalOffsetMetres) || !Array.isArray(value.objects) || value.objects.length !== 1) return null;
@@ -82,21 +104,44 @@ export function useCableEndpointSelection(access: CableEndpointSelectionAccess) 
       denied.current = account; update({ context: null, draft: null, displaySelection: null, pending, error: error.message }); callbacks.current.onAuthorityLost?.();
     } else update({ pending, error: pending ? unknownNotice : error instanceof CableEndpointApiError ? error.message : 'Endpoint selection could not be completed. Refresh its current context.' });
   }, [live, owner, update, account]);
-  const runRead = useCallback(async (work: (signal: AbortSignal) => Promise<void>) => {
-    if (!canAct()) return;
+  const runRead = useCallback(async (work: (signal: AbortSignal) => Promise<void>, options: ReadOptions = {}) => {
+    if (!canAct() || options.signal?.aborted) { options.onOutcome?.('cancelled'); return; }
     const abort = new AbortController(); request.current = abort; update({ busy: true, error: null });
-    const deadline = pathFinderRequestDeadline(abort.signal, 30_000, () => new CableEndpointApiError('REQUEST_TIMEOUT', null, 'Reading the selected endpoint timed out. Try selecting the current object again.'));
-    try { await deadline.wait(() => work(deadline.signal)); }
-    catch (error) { if (!abort.signal.aborted) failure(error); }
-    finally { deadline.dispose(); if (request.current === abort) { request.current = null; update({ busy: false }); } }
-  }, [canAct, update, failure]);
-  const loadContext = useCallback(() => runRead(async signal => {
-    if (!access.cableId) return;
-    const context = await fetchCableEndpointContext(access.projectId!, access.token!, access.cableId, access.end, signal);
-    if (!live() || signal.aborted) return;
-    if (!modelMatches(context.current, JSON.parse(modelKey))) throw new CableEndpointApiError('MODEL_CHANGED', 409, 'The prepared model changed. Refresh this cable before selecting an endpoint.', 'refused');
-    update({ context, draft: null, displaySelection: null, notice: data.current.receipt ? data.current.notice : null });
-  }), [runRead, access.cableId, access.projectId, access.token, access.end, modelKey, live, update]);
+    const cancel = () => abort.abort(options.signal?.reason);
+    options.signal?.addEventListener('abort', cancel, { once: true });
+    const deadline = pathFinderRequestDeadline(abort.signal, options.timeoutMilliseconds ?? 30_000, () => new CableEndpointApiError('REQUEST_TIMEOUT', null, 'Reading the selected endpoint timed out. Try selecting the current object again.'));
+    try { await deadline.wait(() => work(deadline.signal)); options.onOutcome?.(live() && latest.current.active ? 'complete' : 'cancelled'); }
+    catch (error) {
+      const cancelled = abort.signal.aborted || !live() || !latest.current.active;
+      options.onOutcome?.(cancelled ? 'cancelled' : transientContextRead(error) ? 'transient-failure' : 'refused');
+      if (!cancelled) failure(error);
+    }
+    finally { deadline.dispose(); options.signal?.removeEventListener('abort', cancel); if (request.current === abort) { request.current = null; update({ busy: false }); } }
+  }, [canAct, update, failure, live]);
+  const loadContext = useCallback(async (options: { preserveDraft?: boolean; signal?: AbortSignal; timeoutMilliseconds?: number } = {}): Promise<CableEndpointContextReadResult> => {
+    let read: CableEndpointContextReadResult = { status: 'cancelled' };
+    await runRead(async signal => {
+      if (!access.cableId) return;
+      let context: CableEndpointContext;
+      // Only this GET is retried. All attempts share runRead's original deadline;
+      // a failed or unknown Save is never replayed by context recovery.
+      for (let attempt = 0; ; attempt++) {
+        if (!live() || !latest.current.active || signal.aborted) return;
+        try { context = await fetchCableEndpointContext(access.projectId!, access.token!, access.cableId, access.end, signal); break; }
+        catch (error) {
+          if (!live() || !latest.current.active || signal.aborted || attempt >= contextReadRetryDelays.length || !transientContextRead(error)) throw error;
+          await waitForContextRetry(signal, contextReadRetryDelays[attempt]);
+        }
+      }
+      if (!live() || !latest.current.active || signal.aborted) return;
+      if (!modelMatches(context.current, JSON.parse(modelKey))) throw new CableEndpointApiError('MODEL_CHANGED', 409, 'The prepared model changed. Refresh this cable before selecting an endpoint.', 'refused');
+      const retain = options.preserveDraft === true && canRetainContextDraft(data.current.context, context);
+      update({ context, ...(retain ? {} : { draft: null, displaySelection: null }), notice: retain || data.current.receipt ? data.current.notice : null });
+      read = { status: 'complete', context };
+    }, { signal: options.signal, timeoutMilliseconds: options.timeoutMilliseconds,
+      onOutcome: status => { if (status !== 'complete') read = { status }; } });
+    return read;
+  }, [runRead, access.cableId, access.projectId, access.token, access.end, modelKey, live, update]);
   useEffect(() => {
     mounted.current = true; request.current?.abort(); request.current = null;
     setState(initial(identity));

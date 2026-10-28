@@ -13,6 +13,13 @@ internal static partial class TestProgram
     private static void Check(string label, bool pass, object? detail = null) { Checks.Add(new { label, status = pass ? "PASS" : "FAIL", detail }); if (!pass) failures++; }
     private static async Task<int> Main(string[] args)
     {
+        if (args is ["--graph-store-checks", var graphWork])
+        {
+            if (!Path.IsPathFullyQualified(graphWork) || Directory.Exists(graphWork)) return 2;
+            Directory.CreateDirectory(graphWork); GraphPreparationStoreChecks(graphWork);
+            Console.WriteLine(JsonSerializer.Serialize(new { status = failures == 0 ? "PASS" : "FAIL", passed = Checks.Count - failures, failed = failures, checks = Checks }));
+            return failures == 0 ? 0 : 1;
+        }
         if (args is ["--worker-memory-probe"])
         {
             Console.WriteLine(JsonSerializer.Serialize(new { schemaVersion = "wfc.pf.worker-memory-probe.v1",
@@ -31,6 +38,7 @@ internal static partial class TestProgram
         Directory.CreateDirectory(work); var manifest = Corpus.Emit(Path.Combine(work, "corpus"));
         try
         {
+            GraphPreparationStoreChecks(work);
             await Protocol();
             await WorkerMemoryPolicyChecks();
             using var doc = JsonDocument.Parse(File.ReadAllBytes(manifest));
@@ -69,6 +77,16 @@ internal static partial class TestProgram
     private static string Hash(byte[] bytes) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)).ToLowerInvariant();
     private static async Task Protocol()
     {
+        Check("bounded-default-session-idle", SessionProtocol.SessionIdleMilliseconds(null) == 30000
+            && SessionProtocol.SessionIdleMilliseconds("bounded") == 30000);
+        Check("interactive-session-idle-is-finite", SessionProtocol.SessionIdleMilliseconds("interactive") == 300000
+            && SessionProtocol.SessionIdleMilliseconds("interactive") < SessionProtocol.LifetimeMilliseconds);
+        try { _ = SessionProtocol.SessionIdleMilliseconds("unbounded"); Check("unknown-session-profile-refused", false); }
+        catch (InvalidOperationException) { Check("unknown-session-profile-refused", true); }
+        var readyProfile = JsonSerializer.SerializeToNode(SessionProtocol.Ready())!.AsObject();
+        readyProfile["idleMilliseconds"] = 1234;
+        try { SessionProtocol.ValidateReady(JsonSerializer.SerializeToUtf8Bytes(readyProfile)); Check("ready-idle-profile-mismatch-refused", false); }
+        catch (InvalidDataException) { Check("ready-idle-profile-mismatch-refused", true); }
         async Task Reject(string name, byte[] bytes, int maximum = 100)
         {
             try { _ = await SessionProtocol.ReadFrame(new MemoryStream(bytes), maximum, CancellationToken.None); Check(name, false); }

@@ -2,9 +2,10 @@ import { randomUUID } from 'node:crypto';
 import type { Client, Pool, PoolClient } from 'pg';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createConfiguredEngineExecutor, type EngineExecutor } from './engineSession.js';
+import { createCalculationPhaseTimings, type CalculationPhase } from './calculationPhaseTimings.js';
 import { collectDependenciesForVersion, geometryHash, hash, verifiedDesignOnlyChange } from './dependencies.js';
 import { readSnapshot } from './storage.js';
-import type { DependencySnapshot, EngineResponse } from './jobContracts.js';
+import { engineResponseSchema, type DependencySnapshot, type EngineResponse } from './jobContracts.js';
 import type { PathFinderJobs } from './jobs.js';
 import { PathFinderError } from './errors.js';
 import { operationTransaction, isGrantPrincipal } from './operationAuthority.js';
@@ -13,12 +14,12 @@ import { retainGrantWorkerRecovery } from './grantWorkerRecovery.js';
 import { requireCalculationGrant } from './calculationAuthority.js';
 import { collectLookupDependencies, type LookupDependencies } from './lookups.js';
 import { engineProjectSettings } from './settings.js';
-import { collectPreviewDependencies, previewEngineRequest, type PreviewDependencies } from './previews.js';
+import { collectPreviewDependencies, previewEngineRequest, requirePreviewEngineStrategy, type PreviewDependencies } from './previews.js';
 import { requireVersionedCalculationScope } from './routingScope.js';
 import { readRecalculationJobAuthority, requireEnrollmentAuthority } from './recalculationRepository.js';
 import { calculationEngineIdentity, barrierCalculationEngineIdentity, mixedBarrierCalculationEngineIdentity } from './calculationEngineIdentity.js';
 import { supportedBarrierExecutionSchema, type AnyBarrierRuntimeContext } from '../../shared/pathfinderBarrierSupported.js';
-import { claimCalculationSlice, finishCalculationSlice } from './workerScheduling.js';
+import { claimCalculationSlice, finishCalculationSlice, nextCalculationItem } from './workerScheduling.js';
 import { createPreparationEngineLane } from './preparationEngineLane.js';
 import type { EngineInvocation } from './engineSession.js';
 import type { CalculationEngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
@@ -30,6 +31,12 @@ import { requireBarrierEngineStrategy } from './barrierStrategy.js';
 import { isExpectedBarrierCurrentnessError } from './barrierCurrentness.js';
 import { publishAutoLength } from './autoLengthStore.js';
 import { requireCurrentBarrierWriteScope } from './barrierWrites.js';
+import { createVerifiedSameEndpointReuse, readVerifiedSameEndpointCurrent, type VerifiedSameEndpointReuse } from './verifiedSameEndpointReuse.js';
+import { readTrayCapacityRouting, type TrayCapacityRoutingContext } from './trayCapacityRouting.js';
+import { executeCapacityRouting, capacityExclusionHint, rememberCapacityExclusions, withNativeRoutingQuery } from './capacityRoutingExecution.js';
+import { sameEndpointComputationKey } from './sameEndpointCalculationReuse.js';
+import { isCapacityNoPathResult } from './capacityClearWrite.js';
+import { isPermittedCablePurposeRoute } from '../../shared/routingCablePurposes.js';
 export const nextAutomaticCursor = (rows:Array<{project_id:string}>):string|null => rows.length===5 ? rows.at(-1)!.project_id : null;
 
 type Row = Record<string,any>;
@@ -45,8 +52,15 @@ export function cableDirectSecondaryPolicy(dependencies:DependencySnapshot):type
   if(dependencies.schemaVersion==='pathfinder.dependencies.v8')return ['LV','Control','Instrumentation'].includes(dependencies.cableInputs.mto??'')?DIRECT_SECONDARY_POLICY:null;
   return directSecondaryPolicyForScope({category:dependencies.cableInputs.mto,engineIdentity:'engineIdentity' in dependencies?dependencies.engineIdentity:null});
 }
+function requireCablePurposeRoute(response:EngineResponse,dependencies:DependencySnapshot):void {
+  const permission='cablePurposeRouting' in dependencies?dependencies.cablePurposeRouting:undefined;
+  if(permission&&response.route&&(response.route.routeText!==response.route.routeCodes.join('')
+    ||!isPermittedCablePurposeRoute(response.route.routeCodes,permission.allowedRouteCodes)))
+    throw new PathFinderError('ENGINE_CABLE_PURPOSE_INVALID',502,'The calculated route contains a tray that is not permitted for this cable Purpose.');
+}
 /** A legacy failure may occur before geometry exists; successful opt-in may never silently become legacy. */
 export function requireCableEngineStrategy(response:EngineResponse,dependencies:DependencySnapshot):void {
+  requireCablePurposeRoute(response,dependencies);
   if(dependencies.schemaVersion==='pathfinder.dependencies.v8')return requireBarrierEngineStrategy(response,{context:dependencies.barriers,
     ...(dependencies.barriers.schemaVersion==='wfc.pf.barrier-runtime.v2'?{qualification:dependencies.barrierQualification}:{}),
     category:dependencies.cableInputs.mto,fromPoint:dependencies.from.point,toPoint:dependencies.to.point});
@@ -71,12 +85,14 @@ function retainedStrategyCompatible(response:EngineResponse,dependencies:Depende
 }
 /** Only C# calculates geometry/design; this projection retains the exact admitted strategy evidence. */
 export function buildCableEngineRequest(dependencies:DependencySnapshot,requestId:string,timeoutMilliseconds:number,retained?:EngineResponse):EngineInvocation {
+  const purposeRouting = 'cablePurposeRouting' in dependencies ? dependencies.cablePurposeRouting : undefined;
+  const purposePermissions = purposeRouting ? { allowedPurposeRouteCodes:purposeRouting.allowedRouteCodes } : {};
   if(dependencies.schemaVersion==='pathfinder.dependencies.v8'){
     if(retained)throw new PathFinderError('ENGINE_RETAINED_GEOMETRY_INVALID',502,'Protected routing requires a fresh complete route and barrier proof.');
     const {barrierRouting:_intent,...numericOptions}=dependencies.options;
     return {schemaVersion:'pathfinder.model.runner.v2',requestId,operation:'calculate',projectId:dependencies.projectId,
       modelVersionId:dependencies.model.id,snapshotId:dependencies.artifact.id,snapshotSha256:dependencies.artifact.sha256,
-      timeoutMilliseconds,includeLengthLedger:true,barriers:dependencies.barriers,
+      timeoutMilliseconds,includeLengthLedger:true,barriers:dependencies.barriers,...purposePermissions,
       ...(cableDirectSecondaryPolicy(dependencies)?{directSecondaryPolicy:DIRECT_SECONDARY_POLICY}:{}),
       category:dependencies.cableInputs.mto,from:{x:dependencies.from.point[0],y:dependencies.from.point[1],z:dependencies.from.point[2]},
       to:{x:dependencies.to.point[0],y:dependencies.to.point[1],z:dependencies.to.point[2]},options:numericOptions,
@@ -90,7 +106,7 @@ export function buildCableEngineRequest(dependencies:DependencySnapshot,requestI
     ...(route?{route:{success:true,lengthMeters:route.lengthMeters,fromDistanceMeters:route.fromDistanceMeters,toDistanceMeters:route.toDistanceMeters,
       fromRequiresSecondary:route.fromRequiresSecondary,toRequiresSecondary:route.toRequiresSecondary,
       ...(policy&&retained&&'directSecondary' in retained?{directSecondary:retained.directSecondary}:{})},...(policy?{category:dependencies.cableInputs.mto}:{})}
-      :{category:dependencies.cableInputs.mto,from:{x:dependencies.from.point[0],y:dependencies.from.point[1],z:dependencies.from.point[2]},
+      :{...purposePermissions,category:dependencies.cableInputs.mto,from:{x:dependencies.from.point[0],y:dependencies.from.point[1],z:dependencies.from.point[2]},
         to:{x:dependencies.to.point[0],y:dependencies.to.point[1],z:dependencies.to.point[2]},options:dependencies.options}),
     projectSettings:engineProjectSettings(dependencies.settings)};
 }
@@ -133,11 +149,15 @@ export async function retireSupersededCableItem(client:PoolClient,job:Row,cableI
   if(changed.rows.length)await client.query('UPDATE pf_jobs SET completed=completed+1,updated_at=NOW() WHERE id=$1 AND owner_token=$2',[job.id,job.owner_token]);
   return true;
 }
-async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineExecutor):Promise<void> {
+async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,ownedEngine:EngineExecutor,reuse:VerifiedSameEndpointReuse):Promise<void> {
+  const timing=createCalculationPhaseTimings(job.id);
+  const engine:EngineExecutor={execute:(request,signal)=>timing.measure('native',()=>ownedEngine.execute(request,signal)),close:()=>ownedEngine.close()};
+  const snapshot=(id:string,expectedHash:string)=>timing.measure('snapshot-read',()=>readSnapshot(id,expectedHash));
+  let timingOutcome:'completed'|'deferred'|'failed'='completed';
   const controller = new AbortController(),signal = AbortSignal.any([stopping,controller.signal]);
   let execution:GrantJobExecution;
   try {
-    execution=await acquireGrantJobExecution(pool,job as Parameters<typeof acquireGrantJobExecution>[1],signal);
+    execution=await timing.measure('authority',()=>acquireGrantJobExecution(pool,job as Parameters<typeof acquireGrantJobExecution>[1],signal));
   } catch(error) {
     if(error instanceof GrantJobClaimOutcomeUnknownError)await retainGrantWorkerRecovery(error.privateRecovery);
     const deferred=error instanceof PathFinderError&&['CALCULATION_GRANT_LEASE_BUSY','CALCULATION_GRANT_DATABASE_BUSY','SCHEDULER_DATABASE_BUSY','CALCULATION_GRANT_COMMIT_OUTCOME_UNKNOWN'].includes(error.code);
@@ -145,10 +165,11 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
       not_before=CASE WHEN $3 THEN clock_timestamp()+interval '5 seconds' ELSE NULL END,owner_token=NULL,lease_until=NULL,
       failure=$4,updated_at=clock_timestamp() WHERE id=$1 AND owner_token=$2 AND state='running'`,
       [job.id,job.owner_token,deferred,error instanceof PathFinderError?error.message:'Calculation authority could not be confirmed.']);
-    return;
+    timing.finish(deferred?'deferred':'failed');return;
   }
-  const authorized=<T>(work:(client:PoolClient)=>Promise<T>)=>operationTransaction(pool,job.project_id,execution.principal,'calculate',work,signal);
+  const authorized=<T>(work:(client:PoolClient)=>Promise<T>,phase:CalculationPhase='admission')=>timing.measure(phase,()=>operationTransaction(pool,job.project_id,execution.principal,'calculate',work,signal));
   let joinConfirmed=true,heartbeatBusy = false;
+  const finishExecution=async()=>{try{await execution.finish(joinConfirmed);}catch(error){timingOutcome='failed';throw error;}};
   const heartbeat = setInterval(() => {
     if (heartbeatBusy) return; heartbeatBusy = true;
     void pool.query(`UPDATE pf_jobs j SET lease_until=NOW()+INTERVAL '30 seconds',updated_at=NOW()
@@ -169,12 +190,12 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
         await fencedJob(client,job);
         if (hash(await collectLookupDependencies(client,job.project_id,dependencies))!==hash(dependencies)) throw new PathFinderError('LOOKUP_STALE',409,'The active model or artifact changed before lookup.');
       });
-      await readSnapshot(dependencies.artifactId,dependencies.snapshotSha256);
+      await snapshot(dependencies.artifactId,dependencies.snapshotSha256);
       const response=await engine.execute({schemaVersion:'pathfinder.model.runner.v1',requestId:randomUUID(),operation:'lookup',projectId:job.project_id,
         modelVersionId:dependencies.modelVersionId,snapshotId:dependencies.artifactId,snapshotSha256:dependencies.snapshotSha256,timeoutMilliseconds:job.timeout_ms,
         routeText:dependencies.routeText,reverse:dependencies.reverse,options:dependencies.options},signal);
       signal.throwIfAborted();
-      await readSnapshot(dependencies.artifactId,dependencies.snapshotSha256);
+      await snapshot(dependencies.artifactId,dependencies.snapshotSha256);
       await authorized(async client => {
         await fencedJob(client,job);let stale=false;
         try {stale=hash(await collectLookupDependencies(client,job.project_id,dependencies))!==hash(dependencies);} catch {stale=true;}
@@ -189,13 +210,9 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
         if (hash(await collectPreviewDependencies(client,job.project_id,dependencies.input))!==hash(dependencies))
           throw new PathFinderError('PREVIEW_STALE',409,'The model, locations or Project Details changed before this preview.');
       });
-      await readSnapshot(dependencies.artifactId,dependencies.snapshotSha256);
+      await snapshot(dependencies.artifactId,dependencies.snapshotSha256);
       const response=await engine.execute(previewEngineRequest(dependencies,randomUUID(),job.timeout_ms),signal);
-      if(dependencies.schemaVersion==='pathfinder.preview.dependencies.v6') requireBarrierEngineStrategy(response,{context:dependencies.barriers,
-        ...(dependencies.barriers.schemaVersion==='wfc.pf.barrier-runtime.v2'?{qualification:dependencies.barrierQualification}:{}),
-        category:dependencies.input.category,fromPoint:dependencies.from.point,toPoint:dependencies.to.point,reverse:dependencies.input.reverse});
-      else requireDirectSecondaryStrategy(response,{category:dependencies.input.category,fromPoint:dependencies.from.point,toPoint:dependencies.to.point,
-        engineIdentity:dependencies.engineIdentity,reverse:dependencies.input.reverse});
+      requirePreviewEngineStrategy(response,dependencies);
       signal.throwIfAborted();
       await authorized(async client=>{
         await fencedJob(client,job);let stale=false;
@@ -208,8 +225,8 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
       signal.throwIfAborted();
       const item = await authorized(async client => {
         await fencedJob(client,job);
-        const value = (await client.query<Row>("SELECT * FROM pf_job_items WHERE project_id=$1 AND job_id=$2 AND state='waiting' ORDER BY cable_id FOR UPDATE LIMIT 1",[job.project_id,job.id])).rows[0];
-        if(['pathfinder.dependencies.v7','pathfinder.dependencies.v8'].includes(value?.dependencies?.schemaVersion)&&await retireSupersededCableItem(client,job,value.cable_id))return {...value,superseded:true};
+        const value = await nextCalculationItem(client,{project_id:job.project_id,id:job.id});
+        if(value&&['pathfinder.dependencies.v7','pathfinder.dependencies.v8'].includes(value.dependencies?.schemaVersion)&&await retireSupersededCableItem(client,job,value.cable_id))return {...value,superseded:true};
         if (value) await client.query("UPDATE pf_job_items SET state='running',status='calculating',message='Calculating with the independent PathFinder core.' WHERE project_id=$1 AND job_id=$2 AND cable_id=$3",[job.project_id,job.id,value.cable_id]);
         return value;
       });
@@ -219,29 +236,119 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
       let response:EngineResponse,calculationMode = 'calculate',retained:Row|undefined,retainedResult:EngineResponse|undefined;
       let barrierUnavailableBeforeDispatch = false;
       const requestId = randomUUID();
+      let computedRequest:EngineInvocation|undefined, computedResponse:EngineResponse|undefined, sourceToken:object|null=null;
+      let sharedRequest:EngineInvocation|undefined, sharedResponse:EngineResponse|null=null;
+      let sharedCurrent:ReturnType<typeof readVerifiedSameEndpointCurrent>=null;
+      let capacity:TrayCapacityRoutingContext|null=null,capacityKey:string|null=null;
+      const capacityHintKey=(value:TrayCapacityRoutingContext)=>hash({projectId:job.project_id,group:value.groupCableIds,occupancy:value.occupancySha256,
+        policy:dependencies.settings.trayCapacity,balance:dependencies.settings.routingBalance,model:dependencies.model,artifact:dependencies.artifact,options:dependencies.options});
+      const weightedRequest=(request:EngineInvocation)=>capacity?.routeCostMultipliers?.length
+        ?{...request,routeCostMultipliers:capacity.routeCostMultipliers}:request;
       try {
         requireVersionedCalculationScope(dependencies);
-        const identity=dependencies.schemaVersion==='pathfinder.dependencies.v8'
+        if(dependencies.settings.trayCapacity||dependencies.settings.routingBalance){
+          capacity=await authorized(async client=>{await fencedJob(client,job);return readTrayCapacityRouting(client,{projectId:job.project_id,jobId:job.id,cableId:item.cable_id});});
+          if(capacity)capacityKey=capacityHintKey(capacity);
+        }
+        sharedRequest=dependencies.schemaVersion==='pathfinder.dependencies.v8'?weightedRequest(buildCableEngineRequest(dependencies,requestId,job.timeout_ms)):undefined;
+        let settledRequest=false,settledFailure:EngineResponse|undefined;
+        if(capacity?.settledSource&&sharedRequest){
+          const settled=capacity.settledSource,sourceDependencies=settled.dependencies as DependencySnapshot;
+          const {calculationMode,...rawSource}=settled.result as Record<string,unknown>;
+          const parsedSource=engineResponseSchema.safeParse(rawSource);
+          if(calculationMode==='calculate'&&parsedSource.success&&parsedSource.data.trayCapacity?.query&&capacity.groupCableIds.includes(settled.cableId)){
+            const query=parsedSource.data.trayCapacity.query;
+            const targetRequest=withNativeRoutingQuery(sharedRequest,query);
+            try{
+              requireVersionedCalculationScope(sourceDependencies);
+              const sourceRequest=withNativeRoutingQuery(buildCableEngineRequest(sourceDependencies,parsedSource.data.requestId,query.timeoutMilliseconds),query);
+              const key=sameEndpointComputationKey(dependencies,targetRequest);
+              if(key&&key===sameEndpointComputationKey(sourceDependencies,sourceRequest)){
+                const noCapacity=sourceDependencies.schemaVersion==='pathfinder.dependencies.v8'
+                  &&isCapacityNoPathResult(sourceDependencies,settled.result)
+                  &&hash(query.excludedRouteCodes)===hash(parsedSource.data.trayCapacity.excludedRouteCodes);
+                if(noCapacity){
+                  const verified=await authorized(async client=>{
+                    await fencedJob(client,job);
+                    const seal=await verifyRevisionResultForProposal(client,{projectId:job.project_id,proposalId:settled.id,
+                      dependencies:sourceDependencies,result:settled.result,proposalHash:settled.proposalHash});
+                    if(!seal||seal.jobId!==job.id||seal.cableId!==settled.cableId)return false;
+                    requireCableEngineStrategy(parsedSource.data,sourceDependencies);requireCalculationLengthLedger(parsedSource.data,sourceDependencies.settings);
+                    return true;
+                  });
+                  if(verified){sharedRequest=targetRequest;settledRequest=true;settledFailure=parsedSource.data;}
+                }else if(!reuse.find(dependencies,targetRequest)){
+                  const token=await authorized(async client=>{
+                    await fencedJob(client,job);
+                    const seal=await verifyRevisionResultForProposal(client,{projectId:job.project_id,proposalId:settled.id,
+                      dependencies:sourceDependencies,result:settled.result,proposalHash:settled.proposalHash});
+                    if(!seal||seal.jobId!==job.id||seal.cableId!==settled.cableId)return null;
+                    requireCableEngineStrategy(parsedSource.data,sourceDependencies);requireCalculationLengthLedger(parsedSource.data,sourceDependencies.settings);
+                    return reuse.prepareSource(client,sourceDependencies,sourceRequest,parsedSource.data,signal);
+                  });
+                  if(token)reuse.commitSource(token);
+                }
+                if(!noCapacity&&reuse.find(dependencies,targetRequest)){sharedRequest=targetRequest;settledRequest=true;}
+              }
+            }catch(error){
+              if(unconfirmedEngineJoin(error)||implementationRestartRequired(error))throw error;
+              signal.throwIfAborted();
+            }
+          }
+        }
+        const hint=!settledRequest&&capacityKey?capacityExclusionHint(capacityKey):null;
+        if(sharedRequest&&hint)sharedRequest={...sharedRequest,excludedRouteCodes:hint.codes,timeoutMilliseconds:hint.milliseconds};
+        sharedResponse=sharedRequest?reuse.find(dependencies,sharedRequest):null;
+        if(!sharedResponse&&sharedRequest&&hint)sharedRequest=weightedRequest(buildCableEngineRequest(dependencies,requestId,job.timeout_ms));
+        let identity=sharedResponse?undefined:dependencies.schemaVersion==='pathfinder.dependencies.v8'
           ?await(dependencies.barriers.schemaVersion==='wfc.pf.barrier-runtime.v2'?mixedBarrierCalculationEngineIdentity({force:true}):barrierCalculationEngineIdentity({force:true}))
           :await calculationEngineIdentity({force:true});
         let supersededBeforeDispatch=false;
         await authorized(async client => {
           await fencedJob(client,job);
           if(['pathfinder.dependencies.v7','pathfinder.dependencies.v8'].includes(dependencies.schemaVersion)&&await retireSupersededCableItem(client,job,item.cable_id)){supersededBeforeDispatch=true;return;}
-          const current=await collectDependenciesForVersion(client,job.project_id,item.cable_id,dependencies.options,dependencies.schemaVersion,true,identity);
+          if(sharedResponse&&sharedRequest)sharedCurrent=readVerifiedSameEndpointCurrent(await reuse.current(client,dependencies,sharedRequest,undefined,signal));
+          if(!sharedCurrent&&!identity)identity=dependencies.schemaVersion==='pathfinder.dependencies.v8'
+            ?await(dependencies.barriers.schemaVersion==='wfc.pf.barrier-runtime.v2'?mixedBarrierCalculationEngineIdentity({force:true}):barrierCalculationEngineIdentity({force:true}))
+            :await calculationEngineIdentity({force:true});
+          const current=sharedCurrent?.current??await collectDependenciesForVersion(client,job.project_id,item.cable_id,dependencies.options,dependencies.schemaVersion,true,identity);
           if (!current.dependencies || hash(current.dependencies)!==hash(dependencies))
             throw new PathFinderError('PROPOSAL_STALE',409,'The tray catalog, routing permissions or another calculation input changed. Calculate a fresh proposal.');
           await requireEnrollmentAuthority(client,{projectId:job.project_id,jobId:job.id,cableId:item.cable_id});
         });
         if(supersededBeforeDispatch)continue;
-        await readSnapshot(dependencies.artifact.id,dependencies.artifact.sha256);
-        retainedResult = await readRetainedDesignGeometry(pool,job.project_id,item.cable_id,dependencies);
-        retained = retainedResult?.route;
-        calculationMode = retained ? 'design' : 'calculate';
-        response = await engine.execute(buildCableEngineRequest(dependencies,requestId,job.timeout_ms,retainedResult),signal);
+        if(settledFailure){
+          // A bounded, sealed capacity refusal settles the entire exact pair for
+          // this job. Other groups cannot split it by changing selection costs.
+          response=settledFailure;
+        }else if(sharedCurrent&&sharedResponse){
+          response=sharedResponse;
+          if(capacity&&sharedRequest){
+            const searched=await executeCapacityRouting({request:sharedRequest,initialResponse:sharedResponse,context:capacity,signal,
+              execute:engine.execute.bind(engine),validate:value=>{requireCableEngineStrategy(value,dependencies);requireCalculationLengthLedger(value,dependencies.settings);}});
+            response=searched.response;
+            if(searched.request!==sharedRequest){computedRequest=searched.request;computedResponse=response;sharedCurrent=null;}
+          }
+        }
+        else{
+          await snapshot(dependencies.artifact.id,dependencies.artifact.sha256);
+          retainedResult = dependencies.settings.trayCapacity||dependencies.settings.routingBalance?undefined:await readRetainedDesignGeometry(pool,job.project_id,item.cable_id,dependencies);
+          retained = retainedResult?.route;
+          calculationMode = retained ? 'design' : 'calculate';
+          const request=settledRequest&&sharedRequest?{...sharedRequest,requestId}:weightedRequest(buildCableEngineRequest(dependencies,requestId,job.timeout_ms,retainedResult));
+          if(capacity){
+            const searched=await executeCapacityRouting({request,context:capacity,signal,execute:engine.execute.bind(engine),
+              validate:value=>{requireCableEngineStrategy(value,dependencies);requireCalculationLengthLedger(value,dependencies.settings);}});
+            response=searched.response;computedRequest=searched.request;
+          }else response = await engine.execute(request,signal);
+          requireCableEngineStrategy(response,dependencies);
+          if (retainedResult && retained) response = mergeRetainedGeometryResponse(response,retainedResult,dependencies.cableInputs.mto);
+          requireCalculationLengthLedger(response,dependencies.settings);
+          computedRequest??=request;computedResponse=response;
+        }
+        // A reusable response and a retained design merge cross the same output
+        // boundary as a fresh native calculation before they can be published.
         requireCableEngineStrategy(response,dependencies);
-        if (retainedResult && retained) response = mergeRetainedGeometryResponse(response,retainedResult,dependencies.cableInputs.mto);
-        requireCalculationLengthLedger(response,dependencies.settings);
       } catch(error) {
         // Preserve this failure even when cancellation already aborted the signal.
         // A cancelled signal cannot certify that the owned process group joined.
@@ -256,19 +363,43 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
         }else response = {schemaVersion:'pathfinder.model.response.v1',requestId,status:error instanceof PathFinderError && error.code === 'ENGINE_DEADLINE' ? 'deadline_exceeded' : 'invalid_request',message:safe,engineeringAccepted:false};
       }
       signal.throwIfAborted();
-      const finalIdentity=dependencies.schemaVersion==='pathfinder.dependencies.v8'
+      const finalIdentity=sharedCurrent?undefined:dependencies.schemaVersion==='pathfinder.dependencies.v8'
         ?await(dependencies.barriers.schemaVersion==='wfc.pf.barrier-runtime.v2'?mixedBarrierCalculationEngineIdentity({force:true}):barrierCalculationEngineIdentity({force:true}))
         :await calculationEngineIdentity({force:true});
       await authorized(async client => {
         await fencedJob(client,job);
         if(['pathfinder.dependencies.v7','pathfinder.dependencies.v8'].includes(dependencies.schemaVersion)&&await retireSupersededCableItem(client,job,item.cable_id))return;
         let current:Awaited<ReturnType<typeof collectDependenciesForVersion>>|null,barrierUnavailable=barrierUnavailableBeforeDispatch;
-        try{current=await collectDependenciesForVersion(client,job.project_id,item.cable_id,dependencies.options,dependencies.schemaVersion,true,finalIdentity);}
+        try{
+          if(sharedCurrent&&sharedRequest)sharedCurrent=readVerifiedSameEndpointCurrent(await reuse.current(client,dependencies,sharedRequest,undefined,signal));
+          current=sharedCurrent?.current??await collectDependenciesForVersion(client,job.project_id,item.cable_id,dependencies.options,dependencies.schemaVersion,true,finalIdentity);
+        }
         catch(error){
           if(dependencies.schemaVersion!=='pathfinder.dependencies.v8'||!isExpectedBarrierCurrentnessError(error))throw error;
           signal.throwIfAborted();current=null;barrierUnavailable=true;
         }
-        const stale = barrierUnavailable || !current?.dependencies || hash(current.dependencies) !== hash(dependencies);
+        const inputsStale=barrierUnavailable||!current?.dependencies||hash(current.dependencies)!==hash(dependencies);
+        let capacityChanged=false;
+        const noCapacity=dependencies.schemaVersion==='pathfinder.dependencies.v8'
+          &&isCapacityNoPathResult(dependencies,{...response,calculationMode});
+        if(!inputsStale&&(dependencies.settings.trayCapacity||dependencies.settings.routingBalance)&&response.trayCapacity
+          &&(response.status==='calculated'&&response.route?.success||noCapacity)){
+          const latestCapacity=await readTrayCapacityRouting(client,{projectId:job.project_id,jobId:job.id,cableId:item.cable_id});
+          if(!latestCapacity)capacityChanged=true;
+          else{
+            const checked=latestCapacity.evaluate(noCapacity?response.trayCapacity.excludedRouteCodes:response.route!.routeCodes);
+            capacityChanged=noCapacity?Boolean(checked.policyIssue||checked.unavailableRouteCodes.length
+              ||hash([...checked.blockedRouteCodes].sort())!==hash([...response.trayCapacity.excludedRouteCodes].sort())):checked.blockedRouteCodes.length>0;
+            if(!capacityChanged){
+              const observation={...response.trayCapacity,...checked,outcome:noCapacity?'no-capacity' as const:checked.unavailableRouteCodes.length||checked.policyIssue?'unavailable' as const
+                :!latestCapacity.policy.enabled?'balanced' as const:response.trayCapacity.excludedRouteCodes.length?'rerouted' as const:'fits' as const};
+              response=engineResponseSchema.parse({...response,trayCapacity:observation});
+              if(computedRequest)computedResponse=response;
+              capacityKey=capacityHintKey(latestCapacity);
+            }
+          }
+        }
+        const stale=inputsStale||capacityChanged;
         await requireEnrollmentAuthority(client,{projectId:job.project_id,jobId:job.id,cableId:item.cable_id});
         const status = stale ? 'stale' : response.status, result = {...response,calculationMode};
         const baseline=await readRevisionBaseline(client,{projectId:job.project_id,jobId:job.id,cableId:item.cable_id});
@@ -277,7 +408,8 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
         const inserted=await client.query<{id:string}>(`INSERT INTO pf_proposals(id,project_id,job_id,cable_id,status,dependencies,dependency_hash,geometry_hash,result,proposal_hash)
           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(project_id,job_id,cable_id) DO NOTHING RETURNING id`,[randomUUID(),job.project_id,job.id,item.cable_id,status,dependencies,hash(dependencies),geometryHash(dependencies),result,proposalHash]);
         let exact={id:inserted.rows[0]?.id,dependencies,result,status,
-          message:barrierUnavailable ? 'The registered barrier scope changed or became unavailable. This item is stale; refresh barriers and calculate again.'
+          message:capacityChanged?'Tray occupancy changed during calculation. No new route was assigned; recalculate this cable.'
+            :barrierUnavailable ? 'The registered barrier scope changed or became unavailable. This item is stale; refresh barriers and calculate again.'
             : stale ? 'Dependencies changed during calculation. Calculate a fresh proposal.' : response.message};
         let sealed;
         if(exact.id)sealed=await sealRevisionResult(client,{projectId:job.project_id,jobId:job.id,cableId:item.cable_id,proposalId:exact.id,dependencyHash:hash(dependencies),result,dependencies});
@@ -290,6 +422,7 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
           exact={id:existing.id,dependencies:existing.dependencies,result:existing.result,
             status:stale?'stale':existing.status,message:stale?exact.message:existing.result.message};
         }
+        requireCablePurposeRoute(exact.result,exact.dependencies);
         const completed = await client.query(`UPDATE pf_job_items SET state='complete',status=$4,message=$5 WHERE project_id=$1 AND job_id=$2 AND cable_id=$3 AND state='running' RETURNING cable_id`,
         [job.project_id,job.id,item.cable_id,exact.status,exact.message]);
         if (completed.rows.length) await client.query('UPDATE pf_jobs SET completed=completed+1,updated_at=NOW() WHERE id=$1 AND owner_token=$2',[job.id,job.owner_token]);
@@ -299,11 +432,19 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
             dependencies:exact.dependencies,result:exact.result,seal:sealed});
           // Derived output gains no business-write authority, but its successful
           // source still retains the final physical scope and cancel fences.
-          await requireCurrentBarrierWriteScope(client,exact.dependencies,{signal});
+          if(sharedCurrent){if(!await sharedCurrent.recheck(client,signal))throw new PathFinderError('PROPOSAL_STALE',409,'The shared calculation inputs changed before publication.');}
+          else await requireCurrentBarrierWriteScope(client,exact.dependencies,{signal});
           await fencedJob(client,job);
         }
         await requireEnrollmentAuthority(client,{projectId:job.project_id,jobId:job.id,cableId:item.cable_id});
-      });
+        if(inserted.rows[0]?.id&&!stale&&exact.status==='calculated'&&computedRequest&&computedResponse)
+          sourceToken=await reuse.prepareSource(client,dependencies,computedRequest,computedResponse,signal);
+      },'settlement');
+      // A lost COMMIT acknowledgement, cancellation, stale scope or failed
+      // completion must not seed reusable work from an unconfirmed source.
+      if(sourceToken&&!signal.aborted)reuse.commitSource(sourceToken);
+      if(sourceToken&&!signal.aborted&&capacityKey&&computedRequest&&Array.isArray(computedRequest.excludedRouteCodes))
+        rememberCapacityExclusions(capacityKey,computedRequest.excludedRouteCodes as string[],computedRequest.timeoutMilliseconds);
     }
     await authorized(async client => {
       await fencedJob(client,job);
@@ -312,6 +453,7 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
       await requireEnrollmentAuthority(client,{projectId:job.project_id,jobId:job.id});
     });
   } catch(error) {
+    timingOutcome='failed';
     // The executor wrapper has stopped the whole worker. Keep the owned job/lease
     // untouched until a later safe recovery; terminal state would claim a join.
     if(unconfirmedEngineJoin(error)){joinConfirmed=false;throw error;}
@@ -324,12 +466,13 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
       not_before=CASE WHEN $5 THEN clock_timestamp()+interval '5 seconds' ELSE NULL END,
       owner_token=NULL,lease_until=NULL,failure=CASE WHEN cancel_requested THEN 'Cancelled after the owned engine process stopped.' WHEN $3 AND NOT $5 THEN NULL ELSE $4 END,updated_at=NOW()
       WHERE id=$1 AND owner_token=$2 AND state='running'`,[job.id,job.owner_token,stopping.aborted||commitUnknown,error instanceof PathFinderError ? error.message : 'Calculation stopped or worker authority was revoked.',commitUnknown]).catch(() => undefined);
-  } finally {clearInterval(heartbeat);await execution.finish(joinConfirmed);}
+  } finally {clearInterval(heartbeat);try{await timing.measure('release',finishExecution);}finally{timing.finish(timingOutcome);}}
 }
 
 /** One DB advisory-lock owner serializes .NET/cache access across backend processes. */
 export function createPathFinderWorker(pool:Pool,_jobs:PathFinderJobs,engineFactory:()=>EngineExecutor=createConfiguredEngineExecutor,
-  identityReader:(options?:{force?:boolean})=>Promise<CalculationEngineIdentity>=barrierCalculationEngineIdentity) {
+  identityReader:(options?:{force?:boolean})=>Promise<CalculationEngineIdentity>=barrierCalculationEngineIdentity,
+  sharedReuse?:VerifiedSameEndpointReuse) {
   const controller = new AbortController(); let work:Promise<void>|undefined,fatalStop:unknown,unavailableCode:string|undefined;
   const preparation = createPreparationEngineLane();
   return {
@@ -377,6 +520,7 @@ export function createPathFinderWorker(pool:Pool,_jobs:PathFinderJobs,engineFact
             catch(error) {discardOwner=true;throw error;}
             if (!locked.rows[0]?.locked) {await release(); await delay(5000,undefined,{signal:controller.signal}); continue;}
             let engine:EngineExecutor|undefined;
+            const reuse=sharedReuse??createVerifiedSameEndpointReuse({request:buildCableEngineRequest});
             try {
               if (!controller.signal.aborted) {
                 const loadedIdentity:CalculationEngineIdentity=await identityReader({force:true});
@@ -404,10 +548,11 @@ export function createPathFinderWorker(pool:Pool,_jobs:PathFinderJobs,engineFact
                 if (!preparationLast && await preparation.runNext(engine!,controller.signal)) {preparationLast=true;continue;}
                 preparationLast=false;
                 const job = await claimCalculationSlice(pool);
-                if (job) await executeJob(pool,job,controller.signal,engine!);
+                if (job) await executeJob(pool,job,controller.signal,engine!,reuse);
                 else {await delay(1000,undefined,{signal:controller.signal});}
               }
             } finally {
+              reuse.clear();
               try {await engine?.close();}
               catch(error) {
                 // An unreaped lane must not start another owner or return its locked

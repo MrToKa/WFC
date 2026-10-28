@@ -8,7 +8,9 @@ internal static class Program
     {
         // Only this exact complete argument list selects the additive policy.
         // Unknown arguments keep the existing v1 refusal and never read stdin.
-        bool mixed = args.Length == 1 && args[0] == "--mixed-v2";
+        bool largeSelection = args.Length == 1 && args[0] == "--mixed-v2-2048";
+        bool mixed = largeSelection || args.Length == 1 && args[0] == "--mixed-v2";
+        int maximumReceiptBytes = largeSelection ? MixedBarrierCaptureVerifier.LargeSelectionMaximumReceiptBytes : MixedBarrierCaptureVerifier.MaximumReceiptBytes;
         BarrierVerifierReceipt? receipt = null;
         MixedBarrierVerifierReceipt? mixedReceipt = null;
         try
@@ -22,7 +24,9 @@ internal static class Program
                 if (memory.Length + read > 32 * 1024 * 1024) throw new VerifierRefusal("CAPTURE_BYTES_LIMIT", "Capture stdin exceeded32MiB; no complete input digest was computed.");
                 await memory.WriteAsync(buffer.AsMemory(0, read), deadline.Token);
             }
-            if (mixed) mixedReceipt = MixedBarrierCaptureVerifier.Verify(memory.ToArray(), cancellationToken: deadline.Token).Receipt;
+            if (mixed) mixedReceipt = MixedBarrierCaptureVerifier.Verify(memory.ToArray(), largeSelection
+                ? new BarrierVerifierLimits { MaximumParents = 2048, MaximumComputationalMeshes = 2048 } : null,
+                cancellationToken: deadline.Token, maximumReceiptBytes: maximumReceiptBytes).Receipt;
             else receipt = BarrierCaptureVerifier.Verify(memory.ToArray(), cancellationToken: deadline.Token).Receipt;
         }
         catch (Exception error) when (error is VerifierRefusal or OperationCanceledException or IOException or JsonException)
@@ -34,7 +38,7 @@ internal static class Program
             else receipt = new("refused", null, null, diagnostics);
         }
         var bytes = mixed
-            ? MixedBarrierCaptureVerifier.ReceiptBytes(mixedReceipt ?? throw new InvalidOperationException("Mixed receipt is unavailable."))
+            ? MixedBarrierCaptureVerifier.ReceiptBytes(mixedReceipt ?? throw new InvalidOperationException("Mixed receipt is unavailable."), maximumReceiptBytes)
             : BarrierCaptureVerifier.ReceiptBytes(receipt ?? throw new InvalidOperationException("Legacy receipt is unavailable."));
         await Console.OpenStandardOutput().WriteAsync(bytes); Console.WriteLine();
         return 0; // Logical success/refusal is the closed status field, not exit0.

@@ -82,6 +82,7 @@ internal static partial class Program
 
     private static object Execute(Request request, CancellationToken token, SessionExecutionContext? session = null)
     {
+        request = request with { Rules = EffectivePreparationRules(request) };
         var settings = request.ProjectSettings;
         if (request.Operation == "lookup-plan") return new
         {
@@ -144,8 +145,14 @@ internal static partial class Program
         var snapshots = SafeChild(root, "snapshots", create: false);
         var input = SafeChild(snapshots, request.SnapshotId + ".json", create: false);
         var cacheRoot = SafeChild(root, "cache", create: true);
+        var preparationClock = Stopwatch.StartNew();
         var execution = PrepareSnapshot(input, cacheRoot, request, token, session);
         var prepared = execution.Prepared; var model = execution.Model; var lookupScope = execution.LookupScope;
+        using var graphPreparation = request.Operation == "calculate"
+            ? session is null
+                ? new GraphPreparationRuntime().Begin(cacheRoot, prepared.Key, request.RequestId, preparationClock.Elapsed.TotalMilliseconds, token)
+                : session.BeginGraphPreparation(cacheRoot, prepared.Key, request.RequestId, preparationClock.Elapsed.TotalMilliseconds, token)
+            : null;
         var summary = new
         {
             prepared.Key, prepared.Readiness, prepared.Counts, prepared.CacheScope, prepared.LoadedFromDisk,
@@ -198,15 +205,19 @@ internal static partial class Program
             return UsesMixedBarrierRuntime(request) ? ExecuteMixedBarrierRoute(request, root, model, prepared, summary, routeOptions, token, session) : ExecuteBarrierRoute(request, root, model, prepared, summary, routeOptions, token, session);
         DirectSecondaryDecision? directSecondary = null;
         RouteResult routeResult;
+        var purposeTrays = PurposeRouting.Filter(prepared.Segments, request.AllowedPurposeRouteCodes, token);
         if (request.Operation == "calculate" && request.DirectSecondaryPolicy is not null)
         {
-            var evaluated = DirectSecondaryRoute.Evaluate(prepared.Segments, Point(request.From), Point(request.To), category, routeOptions, token);
+            var evaluated = DirectSecondaryRoute.Evaluate(purposeTrays, Point(request.From), Point(request.To), category, routeOptions, token);
             directSecondary = DirectSecondaryDecision.Capture(evaluated);
-            routeResult = evaluated.IsDirect ? evaluated.DirectRoute : new RouteCalculator().Calculate(prepared.Segments, Point(request.From), Point(request.To), category, routeOptions, token);
+            routeResult = evaluated.IsDirect ? evaluated.DirectRoute : new RouteCalculator().CalculateLoadBalanced(
+                CapacityRouting.Filter(purposeTrays, request.ExcludedRouteCodes, token), Point(request.From), Point(request.To), category,
+                request.RouteCostMultipliers, routeOptions, token);
         }
         else routeResult = request.Operation == "lookup"
             ? RouteLookupCalculator.Calculate(prepared.Segments, RouteLookupCalculator.Parse(request.RouteText), routeOptions, token)
-            : new RouteCalculator().Calculate(prepared.Segments, Point(request.From), Point(request.To), category, routeOptions, token);
+            : new RouteCalculator().CalculateLoadBalanced(CapacityRouting.Filter(purposeTrays, request.ExcludedRouteCodes, token),
+                Point(request.From), Point(request.To), category, request.RouteCostMultipliers, routeOptions, token);
         token.ThrowIfCancellationRequested();
         if (request.Reverse)
         {
@@ -327,8 +338,24 @@ internal static partial class Program
             _ = Point(r.From); _ = Point(r.To); _ = SupportedBarrierValue(r);
         }
         else if (r.Barriers is not null) throw new ArgumentException("Barrier contexts require protected runtime v2; legacy fallback is prohibited.");
+        _ = EffectivePreparationRules(r);
         if (r.IncludeLengthLedger && r.Operation is not ("calculate" or "design"))
             throw new ArgumentException("Length-component ledgers apply only to calculate and design operations.");
+        if (r.ExcludedRouteCodes is not null)
+        {
+            if (r.Operation != "calculate") throw new ArgumentException("Capacity route exclusions apply only to calculation.");
+            CapacityRouting.ValidateExcludedRouteCodes(r.ExcludedRouteCodes);
+        }
+        if (r.AllowedPurposeRouteCodes is not null)
+        {
+            if (r.Operation != "calculate") throw new ArgumentException("Cable Purpose route permissions apply only to calculation.");
+            PurposeRouting.Validate(r.AllowedPurposeRouteCodes);
+        }
+        if (r.RouteCostMultipliers is not null)
+        {
+            if (r.Operation != "calculate") throw new ArgumentException("Route cost multipliers apply only to calculation.");
+            LoadBalancedRouting.ValidateRouteCostMultipliers(r.RouteCostMultipliers);
+        }
         if (r.DirectSecondaryPolicy is not null && (r.DirectSecondaryPolicy != DirectSecondaryRoute.PolicyVersion || r.Operation is not ("calculate" or "design")
             || r.Category is not ("LV" or "Control" or "Instrumentation"))) throw new ArgumentException("Direct SECONDARY requires the explicit supported policy and a non-MV calculation category.");
         if (r.Route?.DirectSecondary is not null && (r.Operation != "design" || r.DirectSecondaryPolicy is null)) throw new ArgumentException("A retained direct decision requires its opted-in design operation.");
@@ -502,6 +529,12 @@ internal sealed record Request
     public EngineOptions? Options { get; init; }
     public ProjectSettingsSnapshot? ProjectSettings { get; init; }
     public ModelBuildRules? Rules { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string[]? ExcludedRouteCodes { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string[]? AllowedPurposeRouteCodes { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RouteCostMultiplier[]? RouteCostMultipliers { get; init; }
     public RetainedRoute? Route { get; init; }
     public string? RouteText { get; init; }
     public bool Reverse { get; init; }

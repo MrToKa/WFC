@@ -62,7 +62,7 @@ describe('atomic cable endpoint pair transport', () => {
     expect(vi.mocked(fetch).mock.calls[0][1]?.body).not.toContain('reviewId');
   });
   it('supports an explicit single-end draft while freezing both original endpoint contexts', async () => {
-    const input = command(); input.endpoints = [input.endpoints[1]]; const result = receipt(input);
+    const input = command(); input.endpoints.splice(0,1); const result = receipt(input);
     vi.mocked(fetch).mockResolvedValueOnce(response(result)); await expect(saveCableEndpointPair(project, 'token', cable, input, actor)).resolves.toEqual(result);
     expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body)).expectedContexts).toEqual(input.expectedContexts);
   });

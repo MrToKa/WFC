@@ -8,8 +8,8 @@ import {
 import { getApiBaseUrl } from './http';
 
 export type { CatalogEnvelope, RoutingPurposePolicy, RoutingPurposeWrite, PolicySaveReceipt, PolicyHistory };
-export type RoutingCategory = 'MV' | 'LV' | 'Control';
-export const ROUTING_CATEGORIES: readonly RoutingCategory[] = ['MV', 'LV', 'Control'];
+/** Exact Purpose values from the project's Cable types catalog. */
+export type RoutingCategory = string;
 const MAX_RESPONSE = 4 * 1024 * 1024;
 const MAX_CATALOG = 64 * 1024 * 1024;
 

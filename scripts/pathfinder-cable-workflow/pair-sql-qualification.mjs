@@ -293,6 +293,10 @@ export async function qualifyPairSql(filename) {
   } finally { clearTimeout(timer); controller.abort(); await activeSave?.catch(() => undefined); await Promise.allSettled([pool.end(), publicPool.end()]); await reservation.close(); }
 }
 
+// Reused by narrower owned-fixture SQL qualifications; the original validators
+// and duplicate-preserving public closure remain the single implementation.
+export { configuration as loadOwnedPairSqlFixture, closure as readOwnedSqlClosure };
+
 if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {
   need(process.argv.length === 4 && process.argv[2] === '--fixture', 'U7_PAIR_ARGUMENTS');
   await qualifyPairSql(path.resolve(process.argv[3])).catch(() => { process.exitCode = 1; });

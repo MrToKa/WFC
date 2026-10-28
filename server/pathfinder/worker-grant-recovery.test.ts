@@ -13,14 +13,14 @@ import { revisionBaselineSchema, revisionResultEnvelopeSchema } from '../../shar
 const seams = vi.hoisted(() => ({ claim: vi.fn(), acquire: vi.fn(), transaction: vi.fn(), collect: vi.fn(),
   enrollment: vi.fn(), readEnrollment: vi.fn(), identity: vi.fn(), retain: vi.fn(), requireGrant: vi.fn(), baseline: vi.fn(), seal: vi.fn() }));
 vi.mock('./workerScheduling.js', async original => ({ ...await original<typeof import('./workerScheduling.js')>(), claimCalculationSlice: seams.claim }));
-vi.mock('./dependencies.js', () => ({ collectDependencies: seams.collect, collectDependenciesForVersion: seams.collect, hash: () => 'e'.repeat(64),
+vi.mock('./dependencies.js', async original => ({...await original<typeof import('./dependencies.js')>(), collectDependencies: seams.collect, collectDependenciesForVersion: seams.collect, hash: () => 'e'.repeat(64),
   geometryHash: () => 'f'.repeat(64), verifiedDesignOnlyChange: () => false }));
 vi.mock('./operationAuthority.js', async original => ({ ...await original<typeof import('./operationAuthority.js')>(), operationTransaction: seams.transaction }));
 vi.mock('./grantWorkerAuthority.js', async original => ({ ...await original<typeof import('./grantWorkerAuthority.js')>(), acquireGrantJobExecution: seams.acquire }));
 vi.mock('./grantWorkerRecovery.js', () => ({ retainGrantWorkerRecovery: seams.retain,
   grantWorkerRecoveryAdapter: { read: vi.fn(), retain: seams.retain, retire: vi.fn() } }));
 vi.mock('./calculationAuthority.js', async original => ({ ...await original<typeof import('./calculationAuthority.js')>(), requireCalculationGrant: seams.requireGrant }));
-vi.mock('./calculationEngineIdentity.js', () => ({ calculationEngineIdentity: seams.identity }));
+vi.mock('./calculationEngineIdentity.js', () => ({ calculationEngineIdentity: seams.identity,barrierCalculationEngineIdentity:seams.identity,mixedBarrierCalculationEngineIdentity:seams.identity }));
 vi.mock('./recalculationRepository.js', () => ({ requireEnrollmentAuthority: seams.enrollment, readRecalculationJobAuthority: seams.readEnrollment }));
 vi.mock('./routingScope.js', () => ({ requireVersionedCalculationScope: () => undefined }));
 vi.mock('./storage.js', () => ({ readSnapshot: async () => undefined }));
@@ -64,6 +64,7 @@ function fixture(options: { kind?: 'current-login' | 'calculation-grant'; unknow
   let failUsed = false, claimsRemaining = 0;
   const query = vi.fn(async (raw: string, values: any[] = []) => {
     const sql = raw.replace(/\s+/g, ' ').trim(); calls.push({ sql, values });
+    if (sql.startsWith('SELECT impact_id FROM pf_location_impact_enrollments')) return { rows: [] };
     if (sql.startsWith('SELECT * FROM pf_jobs')) return { rows: [{ ...db.job }] };
     if (sql.startsWith('SELECT * FROM pf_job_items')) return { rows: db.item.state === 'waiting' ? [{ ...db.item }] : [] };
     if (sql.startsWith("UPDATE pf_job_items SET state='running'")) { db.item.state = 'running'; return { rows: [] }; }

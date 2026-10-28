@@ -59,6 +59,18 @@ function request({ url = '/barriers', mode = 'admin', method = 'GET', token = 'B
 }
 
 describe('barrier HTTP admission through in-memory Express router, no listener', () => {
+  it('admits 2048 bounded mixed parents through the actual raw-body parser and refuses 2049', async () => {
+    const selectedParents = Array.from({ length: 2048 }, (_, at) => ({ ...parents()[0], selectionId: id(1000 + at),
+      dbId: at + 1, objectId: 'dbid:' + (at + 1), name: 'Wall ' + at }));
+    const input = { ...command(), schemaVersion: 'wfc.pf.barrier-capture-command.v2', geometryPolicy: MIXED_BARRIER_POLICY, selectedParents };
+    const body = barrierCanonicalJson(input);
+    expect(Buffer.byteLength(body)).toBeGreaterThan(65536); expect(Buffer.byteLength(body)).toBeLessThan(BARRIER_LIMITS.controlBytes);
+    const accepted = request({ url: '/barriers/intents', method: 'POST', body }); await accepted.run();
+    expect(accepted.res.statusCode).toBe(200); expect(mocks.begin).toHaveBeenCalledExactlyOnceWith(id(1), expect.any(Object), input);
+    const refused = request({ url: '/barriers/intents', method: 'POST', body: barrierCanonicalJson({ ...input,
+      selectedParents: [...selectedParents, { ...selectedParents[0], selectionId: id(9000), dbId: 9000, objectId: 'dbid:9000' }] }) });
+    await refused.run(); expect(refused.res.statusCode).toBe(400); expect(mocks.begin).toHaveBeenCalledTimes(1);
+  });
   it('passes exact recovery to the historical current-admin reader without a Viewer cookie or origin preflight', async () => {
     const target = recoveryTarget(), outcome = { synthetic: 'historical recovery outcome' }; mocks.readCommandRecovery.mockResolvedValueOnce(outcome);
     const r = request({ url: '/barriers/recovery/outcome', query: { target: barrierCanonicalJson(target) }, cookie: null, origin: null });

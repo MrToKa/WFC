@@ -3,7 +3,8 @@ import { LEGACY_PREPARATION_CAPACITY_PROFILE, preparationCapacityProfileSchema }
 import { createPathFinderRepository } from './repository.js';
 import { createPathFinderJobs } from './jobs.js';
 import { createPathFinderApply } from './apply.js';
-import { createPathFinderWorker } from './worker.js';
+import { buildCableEngineRequest, createPathFinderWorker } from './worker.js';
+import { createVerifiedSameEndpointReuse } from './verifiedSameEndpointReuse.js';
 import { pathFinderRoot } from './storage.js';
 import { createPathFinderLookups } from './lookups.js';
 import { createPathFinderPreviews } from './previews.js';
@@ -12,6 +13,7 @@ import { createPreparationPublisher } from './preparationPublisher.js';
 import { createGeometryTraceRepository } from './geometryTraceRepository.js';
 import { createGeometryTraceEngine } from './geometryTraceEngine.js';
 import { createEndpointBindingRepository } from './endpointBindingRepository.js';
+import { createModelLocationMatchRepository } from './modelLocationMatch.js';
 import { createRevisionComparisonRepository } from './revisionComparisonRepository.js';
 import { createRevisionEndpointAdapters } from './revisionComparisonEndpointAdapter.js';
 import { createRecalculationRepository } from './recalculationRepository.js';
@@ -33,10 +35,14 @@ import {createInitialFillWriter} from './initialFillWriter.js';
 import {createInitialFillAttempts} from './initialFillAttempts.js';
 import {createInitialFillProducer} from './initialFillProducer.js';
 import {createInitialFillProgress} from './initialFillProgress.js';
+import {createAutomaticPairDispatch} from './automaticPairDispatch.js';
+import {createAutomaticPairWriter} from './automaticPairWriter.js';
+import {createAutomaticPairProducer} from './automaticPairProducer.js';
 
 let runtime:ReturnType<typeof createRuntime>|undefined;
 function createRuntime() {
-  const registry = createPathFinderRepository(pool),jobs = createPathFinderJobs(pool,registry),apply = createPathFinderApply(pool),worker = createPathFinderWorker(pool,jobs);
+  const sameEndpointReuse=createVerifiedSameEndpointReuse({request:buildCableEngineRequest});
+  const registry = createPathFinderRepository(pool),jobs = createPathFinderJobs(pool,registry),apply = createPathFinderApply(pool),worker = createPathFinderWorker(pool,jobs,undefined,undefined,sameEndpointReuse);
   const recalculations=createRecalculationRepository(pool,jobs);
   const producer=createRecalculationProducer(recalculations,{beforeTick:createCalculationEngineObserver(pool,()=>worker.failureCode)});
   const grantProducer=createGrantRecalculationProducer(pool,jobs);
@@ -44,6 +50,10 @@ function createRuntime() {
   const locationImpactProducer=createLocationImpactProducer(locationImpacts);
   const initialFillAttempts=createInitialFillAttempts(pool),initialFillWriter=createInitialFillWriter(pool);
   const initialFillProducer=createInitialFillProducer(initialFillAttempts,initialFillWriter),initialFillProgress=createInitialFillProgress(pool);
+  const automaticPairDispatch=createAutomaticPairDispatch(pool),automaticPairWriter=createAutomaticPairWriter(pool,{
+    verifiedCurrent:(client,dependencies,result,signal)=>sameEndpointReuse.current(client,dependencies,undefined,result,signal),
+  });
+  const automaticPairProducer=createAutomaticPairProducer(automaticPairDispatch,automaticPairWriter);
   const controlConfiguration=process.env.PF_PRODUCER_CONTROL_KEY?{
     key:process.env.PF_PRODUCER_CONTROL_KEY,owner:process.env.PF_PRODUCER_OWNER,project:process.env.PF_PRODUCER_PROJECT,
     image:process.env.PF_PRODUCER_IMAGE,runtimeInventorySha256:process.env.PF_PRODUCER_RUNTIME_SHA256,
@@ -66,19 +76,20 @@ function createRuntime() {
     qualification:producerQualification,onPrepared:async({candidate,result},signal)=>{
       await preparedMaintenance.onPrepared({candidate:{projectId:candidate.projectId,grant:candidate.grant,...candidate.model},result},signal);
     }});
-  return {registry,jobs,apply,worker,recalculations,producer,grantProducer,locationImpacts,locationImpactProducer,initialFillAttempts,initialFillWriter,initialFillProducer,initialFillProgress,managedControl,producerQualification,calculationGrants,producerResources,
+  return {registry,jobs,apply,worker,recalculations,producer,grantProducer,locationImpacts,locationImpactProducer,initialFillAttempts,initialFillWriter,initialFillProducer,initialFillProgress,automaticPairDispatch,automaticPairWriter,automaticPairProducer,managedControl,producerQualification,calculationGrants,producerResources,
     preparedMaintenance,managedPreparationProducer,lookups:createPathFinderLookups(pool),previews:createPathFinderPreviews(pool),
-    preparations,geometryTraces,revisionComparisons,endpointBindings:createEndpointBindingRepository(pool,createRevisionEndpointAdapters())};
+    preparations,geometryTraces,revisionComparisons,endpointBindings:createEndpointBindingRepository(pool,createRevisionEndpointAdapters()),modelLocationMatch:createModelLocationMatchRepository(pool)};
 }
 export function getPathFinderRuntime() {return runtime ??= createRuntime();}
 export async function initializePathFinderRuntime():Promise<void> {
   if (!process.env.PF_ROOT || !process.env.PF_ENGINE_DLL) return;
-  await pathFinderRoot();const active=getPathFinderRuntime();active.worker.start();active.producer.start();active.managedPreparationProducer.start();active.grantProducer.start();active.locationImpactProducer.start();active.initialFillProducer.start();
+  await pathFinderRoot();const active=getPathFinderRuntime();active.worker.start();active.producer.start();active.managedPreparationProducer.start();active.grantProducer.start();active.locationImpactProducer.start();active.initialFillProducer.start();active.automaticPairProducer.start();
 }
 export async function stopPathFinderRuntime():Promise<void> {
   await runtime?.managedPreparationProducer.stop();
   runtime?.managedControl.stop();runtime?.producerResources.service.close();
   await runtime?.locationImpactProducer.stop();
   await runtime?.initialFillProducer.stop();
+  await runtime?.automaticPairProducer.stop();
   await runtime?.producer.stop();await runtime?.grantProducer.stop();await runtime?.worker.stop();
 }

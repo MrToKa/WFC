@@ -5,6 +5,7 @@ export const ENDPOINT_BINDING_LIMITS = Object.freeze({ controlBytes: 65536, resp
 export const ENDPOINT_ATTACHMENT_POLICY = 'wfc.pf.endpoint-attachment-policy.v1' as const;
 export const ENDPOINT_MATCHING_POLICY = 'nfc-trim-uppercase-v1' as const;
 export const ENDPOINT_ANCHOR_RULE = 'equipment-bottom-aabb.v1' as const;
+export const ENDPOINT_MODEL_MATCH_DERIVATION = 'matched-model-bottom-aabb.v1' as const;
 const uuid = policyUuidSchema, revision = policyRevisionSchema, hash = policyHashSchema;
 const wellFormed = (value: string) => [...value].every(c => c.length !== 1 || c.charCodeAt(0) < 0xd800 || c.charCodeAt(0) > 0xdfff);
 const text = (maximum: number) => z.string().max(maximum).refine(v => wellFormed(v) && !/[\u0000-\u001f\u007f-\u009f]/u.test(v));
@@ -21,6 +22,22 @@ export const endpointModeSchema = z.enum(['fixed-world', 'object-derived', 'obje
 export const endpointStatusSchema = z.enum(['confirmed', 'suggested', 'missing', 'ambiguous', 'stale', 'unsupported-attachment']);
 export const endpointObjectRefSchema = z.object({ traceId: uuid, objectRevisionId: uuid, recordSha256: hash }).strict();
 export const endpointCurrentScopeSchema = z.object({ modelVersionId: uuid, selectionRevision: revision, contentFingerprint: hash, aggregateId: uuid, artifactId: uuid, projectionSha256: hash, captureFrameId: uuid, geometryRevision: revision, traceId: uuid.nullable() }).strict();
+export const endpointModelMatchBoundsSchema = z.object({ minimum: endpointPointSchema, maximum: endpointPointSchema }).strict()
+  .refine(v => v.minimum.every((n, i) => n <= v.maximum[i]) && v.minimum.some((n, i) => n < v.maximum[i]));
+/** An explicitly requested model-name batch observes approximate fixed points.
+ * It neither claims retained mesh evidence nor follows later model revisions. */
+export const endpointModelMatchEvidenceSchema = z.object({
+  schemaVersion: z.literal('wfc.pf.model-location-match-evidence.v1'),
+  operationId: uuid, commandSha256: hash, scanSha256: hash, namesSha256: hash,
+  current: endpointCurrentScopeSchema, logicalKey: endpointLocationNameSchema,
+  sdkObjectId: z.number().int().positive().max(2147483647), objectName: nonempty(2048),
+  bounds: endpointModelMatchBoundsSchema, bottomCentre: endpointPointSchema,
+  matchingPolicyVersion: z.literal('wfc.pf.project-exact-candidates.v3'), visibilityScopeSha256: hash,
+  approximate: z.literal(true), engineeringAccepted: z.literal(false),
+}).strict().refine(v => v.logicalKey === normalizeEndpointLocation(v.logicalKey)
+  && v.bottomCentre[0] === (v.bounds.minimum[0] + v.bounds.maximum[0]) / 2
+  && v.bottomCentre[1] === (v.bounds.minimum[1] + v.bounds.maximum[1]) / 2
+  && v.bottomCentre[2] === v.bounds.minimum[2]);
 export const endpointLocationSchema = z.object({ id: uuid, name: endpointLocationNameSchema, aliases, revision }).strict().refine(v => !v.aliases.some(a => normalizeEndpointLocation(a) === normalizeEndpointLocation(v.name)));
 export const endpointReadinessSchema = z.object({ status: endpointStatusSchema, calculationReady: z.boolean(), reasonCodes: codes }).strict().refine(v => !v.calculationReady || v.status === 'confirmed' && v.reasonCodes.length === 0);
 export const endpointUsageSchema = z.object({ fromOccurrences: z.number().int().nonnegative().max(10_000_000), toOccurrences: z.number().int().nonnegative().max(10_000_000), distinctCables: z.number().int().nonnegative().max(10_000_000) }).strict();
@@ -32,14 +49,23 @@ const bindingFields = {
   locationRevision: revision, bindingRevision: revision, locationRegistryRevision: revision,
   modelVersionId: uuid, aggregateId: uuid, artifactId: uuid, projectionSha256: hash, captureFrameId: uuid, qualifiedProjectFrameId: uuid.nullable(),
   status: endpointStatusSchema, mode: endpointModeSchema, pointProjectMetres: endpointPointSchema,
-  derivation: z.enum(['manual-world-point', 'picked-surface-point', ENDPOINT_ANCHOR_RULE, 'qualified-local-point.v1', 'durable-connector.v1']),
+  derivation: z.enum(['manual-world-point', 'picked-surface-point', ENDPOINT_ANCHOR_RULE, ENDPOINT_MODEL_MATCH_DERIVATION, 'qualified-local-point.v1', 'durable-connector.v1']),
+  autoMatchEvidence: endpointModelMatchEvidenceSchema.optional(),
   sourceObject: endpointObjectRefSchema.nullable(), attachment: attachment.nullable(), sourceDecisionId: uuid.nullable(), supersedesBindingId: uuid.nullable(), legacyObservationId: uuid.nullable(),
   priorPointProjectMetres: endpointPointSchema.nullable(), priorCaptureFrameId: uuid.nullable(), displacementBasis: z.enum(['none', 'same-capture-frame', 'unverified-frames']), displacementVectorMetres: endpointDisplacementVectorSchema.nullable(), displacementMetres: z.number().finite().nonnegative().nullable(),
   confirmedBy: uuid.nullable(), confirmedAt: timestamp.nullable(), reason: nonempty(ENDPOINT_BINDING_LIMITS.reason), contentSha256: hash,
 };
 export const endpointBindingSchema = z.object(bindingFields).strict().superRefine((v, ctx) => {
   if (v.status === 'confirmed' && (!v.confirmedBy || !v.confirmedAt)) ctx.addIssue({ code: 'custom', message: 'Confirmed bindings retain the confirming principal and time.' });
-  if (v.mode === 'fixed-world' && (v.attachment !== null || !['manual-world-point', 'picked-surface-point'].includes(v.derivation))) ctx.addIssue({ code: 'custom', message: 'Fixed points do not follow an object.' });
+  if (v.mode === 'fixed-world' && (v.attachment !== null || !['manual-world-point', 'picked-surface-point', ENDPOINT_MODEL_MATCH_DERIVATION].includes(v.derivation))) ctx.addIssue({ code: 'custom', message: 'Fixed points do not follow an object.' });
+  if (v.derivation === ENDPOINT_MODEL_MATCH_DERIVATION) {
+    const e = v.autoMatchEvidence, c = e?.current;
+    if (!e || !c || v.mode !== 'fixed-world' || v.sourceObject !== null || v.attachment !== null || v.sourceDecisionId !== null
+      || v.qualifiedProjectFrameId !== null || c.modelVersionId !== v.modelVersionId || c.aggregateId !== v.aggregateId
+      || c.artifactId !== v.artifactId || c.projectionSha256 !== v.projectionSha256 || c.captureFrameId !== v.captureFrameId
+      || canonicalPurposeJson(e.bottomCentre) !== canonicalPurposeJson(v.pointProjectMetres))
+      ctx.addIssue({ code: 'custom', message: 'A matched fixed point requires its own complete current model observation.' });
+  } else if (v.autoMatchEvidence !== undefined) ctx.addIssue({ code: 'custom', message: 'Only a matched fixed point carries model-match observation evidence.' });
   if (v.mode === 'object-derived' && (!v.sourceObject || v.attachment !== null || v.derivation !== ENDPOINT_ANCHOR_RULE)) ctx.addIssue({ code: 'custom', message: 'Derived anchors require exact immutable object evidence.' });
   if (v.mode === 'object-attached' && (!v.sourceObject || !v.attachment || !v.qualifiedProjectFrameId || !['qualified-local-point.v1', 'durable-connector.v1'].includes(v.derivation))) ctx.addIssue({ code: 'custom', message: 'Attachments require separately qualified frame and identity evidence.' });
   if (v.mode === 'object-attached' && v.attachment && (v.derivation === 'durable-connector.v1') !== (v.attachment.connectorId !== null)) ctx.addIssue({ code: 'custom', message: 'Connector derivation and durable connector evidence must agree.' });

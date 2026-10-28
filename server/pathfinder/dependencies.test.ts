@@ -8,6 +8,7 @@ import { BARRIER_ENGINE_IDENTITY_POLICY_VERSIONS, type BarrierEngineIdentity } f
 import { BARRIER_RUNTIME_PROFILE, createBarrierRuntimePolicy, type BarrierRuntimeContext } from '../../shared/pathfinderBarrierRuntime.js';
 vi.mock('./calculationEngineIdentity.js',()=>({calculationEngineIdentity:async()=>syntheticEngineIdentity(),barrierCalculationEngineIdentity:async()=>barrierIdentity()}));
 const mocked=vi.hoisted(()=>({context:vi.fn(),binding:vi.fn(),active:vi.fn(),artifact:vi.fn(),routing:vi.fn(),settings:vi.fn(),comparison:vi.fn(),automatic:vi.fn(),barriers:vi.fn()}));
+vi.mock('./catalog.js',()=>({readRoutingCatalog:async()=>({rows:[{projectTrayId:'tray',rawName:'/B001',purposeKey:'Mixed'}],diagnostics:[]})}));
 vi.mock('./barrierCalculationScope.js',()=>({collectBarrierCalculationScope:mocked.barriers}));
 vi.mock('./automaticEndpointCandidates.js',()=>({readAutomaticEndpointCandidates:mocked.automatic}));
 vi.mock('./repository.js',()=>({activeModel:mocked.active,latestArtifact:mocked.artifact}));
@@ -31,7 +32,10 @@ function barrierOptions(){const value=barrierRuntime();return{...defaultOptions,
 const binding=(locationId:string)=>({id:id(locationId===id(6)?16:17),locationId,artifactId,locationRevision:'2',bindingRevision:'3',pointProjectMetres:[1,2,3],contentSha256:'a'.repeat(64),mode:'fixed-world',captureFrameId:frameId,qualifiedProjectFrameId:null,aggregateId,projectionSha256:'d'.repeat(64),sourceObject:null,sourceDecisionId:null});
 function database(from='  =a-01 ',to='=B.02',shared=false,registry='9',mto='Instrumentation'){
  const query=vi.fn(async(sql:string,args:unknown[]=[])=>{
-  if(sql.includes('FROM cables WHERE'))return{rows:[{id:args[1],from_location:from,to_location:to,mto,cable_type_id:id(10),cable_write_revision:'4',routing:'/OLD',design_length:23,install_length:24}]};
+  if(sql.includes('FROM cables WHERE'))return{rows:[{id:args[1],from_location:from,to_location:to,mto,cable_type_id:id(10),cable_type_purpose:'Control',cable_write_revision:'4',routing:'/OLD',design_length:23,install_length:24}]};
+  if(sql.includes('cable-purpose:locked-scope-types'))return{rows:[{id:(args[1] as string[])[0],cable_type_id:id(10),cable_type_purpose:'Control',cable_write_revision:'4'}]};
+  if(sql.includes('FROM pf_routing_purpose_rules'))return{rows:[{purpose_key:'Mixed',allowed_categories:['Control']}]};
+  if(sql.startsWith('SELECT DISTINCT purpose'))return{rows:[{purpose:'Control'}]};
   if(sql.includes('FROM pf_project_state'))return{rows:[{registry_revision:registry}]};
   if(sql.includes('FROM pf_location_aliases'))return{rows:[{id:shared||args[1]==='=A-01'?id(6):id(7)}]};
   throw Error('Unexpected SQL in endpoint collection');

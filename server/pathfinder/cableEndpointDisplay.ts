@@ -5,6 +5,7 @@ import { cableEndpointCommandSchema, cableEndpointEndSchema, cableEndpointReceip
   cableEndpointConfirmedDisplaySelectionSchema, type CableEndpointContext } from '../../shared/pathfinderCableEndpoints.js';
 import { type EndpointBinding, type EndpointCurrentScope } from '../../shared/pathfinderEndpointBindings.js';
 import { endpointBindingHash } from './endpointBindingRepository.js';
+import { readMatchedLocationDisplay } from './modelLocationMatchDisplay.js';
 
 const ownerSchema = z.object({ schemaVersion: z.literal('wfc.pf.cable-endpoint-command-owner.v1'),
   cableId: policyUuidSchema, end: cableEndpointEndSchema, command: cableEndpointCommandSchema }).strict();
@@ -23,6 +24,7 @@ export async function readCableEndpointDisplay(client: PoolClient, input: { proj
     || head.captureFrameId !== current.captureFrameId || head.projectionSha256 !== current.projectionSha256
     || endpointBindingHash(headBody) !== contentSha256) return null;
   check();
+  if (head.derivation === 'matched-model-bottom-aabb.v1') return readMatchedLocationDisplay(client, input, check);
   // Select the last successful per-end command, including an explicit null hint.
   // Outer pair receipts and closure records never qualify. Transfer is byte bounded.
   const rows = (await client.query<Row>(`/* cable-endpoint:display-command */ SELECT actor_id,idempotency_key,kind,request_sha256,

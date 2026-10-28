@@ -8,10 +8,11 @@ import { createDocker, command, jsonCommand, writePrivateJson } from '../operati
 import { assertCanonicalPath, hashFile } from '../operations/archives.mjs';
 import { withBoundedDockerExecution } from '../operations/docker-bounds.mjs';
 import { compareCurrentInventories } from '../pathfinder-copied-recovery/current-inventory-lib.mjs';
-import { createRawInventoryProvider } from '../pathfinder-cable-workflow/raw-inventory-provider.mjs';
+import { createRawInventoryProvider, safeLosslessCaptureFailure } from '../pathfinder-cable-workflow/raw-inventory-provider.mjs';
 import { SOURCE, need, same, digest, pin, assertSource, assertTarget, assertOperation, claimBuildChild, assertConservationPolicy } from './owned-update-v3.mjs';
 import { selectDeliveryPolicy as selectV4DeliveryPolicy } from './delivery-policy-selector-v4.mjs';
 import { selectDeliveryPolicy as selectV5DeliveryPolicy } from './delivery-policy-selector-v5.mjs';
+import { selectDeliveryPolicy as selectV6DeliveryPolicy } from './delivery-policy-selector-v6.mjs';
 import { outsideIdentity } from '../pathfinder-cable-workflow/owned-update-v2.mjs';
 import { projectNetworkResource, sortCanonicalRecords } from './network-resource-identity.mjs';
 
@@ -30,6 +31,14 @@ export function classifyQuiescence(counts, mode) {
   return {schemaVersion: 'wfc.pf.b9.quiescence.v1', status: blocking.every(key => counts[key] === '0') ? 'PASS' : 'FAIL', mode, counts,
     retained: {expiredHumanPreparations: counts.passivePreparations, persistentGrants: mode === 'cold-backup' ? counts.grants : '0'},
     grantPolicy: mode === 'cold-backup' ? 'retained-in-cold-backup-no-runtime-permission' : 'enabled-current-grants-refused', sourceUpgradeAuthorized: false};
+}
+/** V6 extends the observation only. Existing B9/V4/V5 retain their ten-key contract. */
+export function classifyV6Quiescence(counts, mode) {
+  if (counts === null || typeof counts !== 'object' || Array.isArray(counts) || !Object.hasOwn(counts, 'automaticPair')
+    || typeof counts.automaticPair !== 'string' || !/^(0|[1-9][0-9]{0,6})$/.test(counts.automaticPair))
+    throw Object.assign(Error('V6_QUIESCENCE_RESPONSE'), {code: 'V6_QUIESCENCE_RESPONSE'});
+  const { automaticPair, ...legacyCounts } = counts, legacy = classifyQuiescence(legacyCounts, mode);
+  return {...legacy, schemaVersion:'wfc.pf.conservation-v6.quiescence.v1', status:legacy.status === 'PASS' && automaticPair === '0' ? 'PASS' : 'FAIL', counts};
 }
 export function assertQuiescenceScope(mode, label, state) {
   need(['cold-backup', 'protected-runtime'].includes(mode) && (mode !== 'cold-backup' || ['source-backup', 'source-backup-cold'].includes(label)
@@ -77,6 +86,7 @@ const require=createRequire('/app/node_modules/pg/lib/index.js'),{Pool}=require(
 for(const [filename,key] of [['/qualified/losslessInventory.mjs','INVENTORY_SHA'],['/qualified/global-sql-v2.mjs','GLOBALS_SHA']])if(createHash('sha256').update(await fs.readFile(filename)).digest('hex')!==process.env[key])throw Error('B9_CAPTURE_MODULE_HASH');
 const {captureLosslessInventory}=await import('/qualified/losslessInventory.mjs'),{capturePublicGlobals}=await import('/qualified/global-sql-v2.mjs');
 const pool=new Pool({connectionString:process.env.DATABASE_URL,max:1,connectionTimeoutMillis:5000,statement_timeout:15000,query_timeout:20000});
+const safeFailure=${safeLosslessCaptureFailure.toString()};
 try{
 const identity=await pool.query("SELECT current_database() name,(SELECT count(*)::text FROM pg_stat_activity WHERE datname=current_database() AND backend_type='client backend' AND pid<>pg_backend_pid()) others");
 if(identity.rows[0]?.name!==process.env.EXPECTED_DATABASE||identity.rows[0]?.others!=='0')throw Error('B9_CAPTURE_NOT_ISOLATED');
@@ -87,7 +97,7 @@ const finalIdentity=await pool.query("SELECT current_database() name,(SELECT cou
 if(finalIdentity.rows[0]?.name!==process.env.EXPECTED_DATABASE||finalIdentity.rows[0]?.others!=='0')throw Error('B9_CAPTURE_NOT_ISOLATED');
 const raw=JSON.stringify(globals)+'\\n';await fs.writeFile('/private/'+process.env.CAPTURE_NAME+'.globals.private.json',raw,{flag:'wx',mode:0o600});
 console.log(JSON.stringify({status:'PASS',contentSha256:manifest.contentSha256,tables:manifest.tables.length,globalSha256:createHash('sha256').update(raw).digest('hex')}));
-}catch{throw Error('B9_CAPTURE_FAILED');}finally{await pool.end();}
+}catch(error){console.log(JSON.stringify(safeFailure(error)));process.exitCode=1;}finally{await pool.end();}
 `;
 export const QUIESCENCE_HELPER = `
 import {createRequire} from 'node:module';const require=createRequire('/app/node_modules/pg/lib/index.js'),{Pool}=require('/app/node_modules/pg/lib/index.js');
@@ -109,6 +119,18 @@ const counts={};for(const [key,sql] of Object.entries(queries)){const r=await po
 console.log(JSON.stringify(classify(counts,process.env.QUIESCENCE_SCOPE)));
 }finally{await pool.end();}
 `;
+// Keep the legacy helper byte-for-byte stable. The V6-only extension observes
+// absence before first installation and never creates or initializes a table.
+export const V6_QUIESCENCE_HELPER = QUIESCENCE_HELPER
+  .replace('const classify=' + classifyQuiescence.toString() + ';',
+    'const classifyQuiescence=' + classifyQuiescence.toString() + ';const classify=' + classifyV6Quiescence.toString() + ';')
+  .replace('const counts={};for(const [key,sql] of Object.entries(queries))',
+    `const counts={};const pairTable=(await pool.query("SELECT to_regclass('public.pf_automatic_pair_dispatch')::text AS name")).rows;
+if(pairTable.length!==1)throw Error('V6_QUIESCENCE_RESPONSE');
+if(pairTable[0].name===null)counts.automaticPair='0';else{
+if(pairTable[0].name!=='pf_automatic_pair_dispatch'&&pairTable[0].name!=='public.pf_automatic_pair_dispatch')throw Error('V6_QUIESCENCE_RESPONSE');
+queries.automaticPair="SELECT count(*)::text n FROM public.pf_automatic_pair_dispatch WHERE status IN('pending','running','unknown') OR owner_token IS NOT NULL OR lease_until IS NOT NULL";
+}for(const [key,sql] of Object.entries(queries))`);
 async function privateDirectory(directory) {
   await fs.mkdir(directory, { mode: 0o700 });
   if (process.platform === 'win32') await new Promise((resolve, reject) => {
@@ -180,17 +202,18 @@ async function capture(config, state, label, image, database = 'wfc_pathfinder_l
     env: [...helperEnv(settings, database), 'EXPECTED_DATABASE=' + database, 'OWNER_ID=' + state.owner, 'CAPTURE_NAME=' + label,
       'INVENTORY_SHA=' + config.inventory.sha256, 'GLOBALS_SHA=' + globals.sha256,
       ...(database !== 'wfc_pathfinder_local' ? ['PRISTINE_OPERATION=' + config.operationId] : [])] });
-  need(result.status === 'PASS', 'B9_CAPTURE_FAILED');
+  need(result.status === 'PASS', safeLosslessCaptureFailure(result).code);
   const directory = path.join(output, label), manifest = await pin(path.join(directory, 'manifest.json'));
   const reference = { directory, ownerId: state.owner, manifest, globals: await pin(path.join(output, label + '.globals.private.json')), contentSha256: result.contentSha256 };
   need((await read(manifest.path)).contentSha256 === reference.contentSha256, 'B9_CAPTURE_HASH_CHANGED'); return reference;
 }
 async function quiescence(config, state, label, image, mode = 'protected-runtime') {
   assertQuiescenceScope(mode, label, state);
-  const result = await runtime.helper({ ...state, images: { ...state.images, api: image } }, ['node', '--input-type=module', '-e', QUIESCENCE_HELPER], {
+  const v6 = assertConservationPolicy(config)?.selection.profile === 'post-b27-automatic-pair-additive-v6';
+  const result = await runtime.helper({ ...state, images: { ...state.images, api: image } }, ['node', '--input-type=module', '-e', v6 ? V6_QUIESCENCE_HELPER : QUIESCENCE_HELPER], {
     network: state.project + '_backend', env: [...helperEnv(await runtime.readSettings(state)), 'QUIESCENCE_SCOPE=' + mode] });
   await writePrivateJson(ownedFile(config, label + '.quiescence.private.json'), result);
-  need(same(result, classifyQuiescence(result.counts, mode)) && result.status === 'PASS', 'B9_RUNNABLE_WORK_REFUSED'); return pin(ownedFile(config, label + '.quiescence.private.json'));
+  need(same(result, (v6 ? classifyV6Quiescence : classifyQuiescence)(result.counts, mode)) && result.status === 'PASS', 'B9_RUNNABLE_WORK_REFUSED'); return pin(ownedFile(config, label + '.quiescence.private.json'));
 }
 async function schemaOnly(config, state, label, image, database = 'wfc_pathfinder_local') {
   const result = await runtime.helper({ ...state, images: { ...state.images, api: image } }, ['node', '--input-type=module', '-e', SCHEMA_HELPER], {
@@ -237,7 +260,8 @@ async function createPristine(config, state) {
 }
 function selectDeliveryPolicy(value) {
   const profile = value && typeof value === 'object' ? Object.getOwnPropertyDescriptor(value, 'profile')?.value : undefined;
-  return profile === 'post-b20-terminal-closure-additive-v5' ? selectV5DeliveryPolicy(value) : selectV4DeliveryPolicy(value);
+  return profile === 'post-b27-automatic-pair-additive-v6' ? selectV6DeliveryPolicy(value)
+    : profile === 'post-b20-terminal-closure-additive-v5' ? selectV5DeliveryPolicy(value) : selectV4DeliveryPolicy(value);
 }
 /** This same choice is used for first qualification and every later recheck.
  * Absence alone selects unchanged B9; a present invalid v4 binding is fatal. */
@@ -247,6 +271,10 @@ export async function qualificationModule(config) {
   const selected = selectDeliveryPolicy(binding.selection);
   need(selected.qualifierFilename === path.basename(binding.qualifier.path)
     && same(await pin(binding.selector.path), binding.selector) && same(await pin(binding.qualifier.path), binding.qualifier), 'B9_CONSERVATION_POLICY_SOURCE_CHANGED');
+  if (selected.profile === 'post-b27-automatic-pair-additive-v6') {
+    const schema = config.sourceClosure.find(row => row.path === path.join(ROOT, 'server/pathfinder/automaticPairSchema.ts'));
+    need(same(await pin(schema.path), schema), 'V6_AUTOMATIC_PAIR_SCHEMA_SOURCE_CHANGED');
+  }
   return { module: selected.qualifier, qualifierSha256: binding.qualifier.sha256 };
 }
 async function qualify(config, input, runtimeGate) {
@@ -359,10 +387,12 @@ async function initialize(directory, inventoryPath, expectedSha, conservationPro
     'scripts/pathfinder-cable-workflow/owned-update-v2.mjs', 'scripts/pathfinder-cable-workflow/raw-inventory-provider.mjs',
     'scripts/pathfinder-copied-recovery/current-inventory-lib.mjs', 'scripts/operations/docker.mjs', 'scripts/operations/docker-bounds.mjs',
     'scripts/operations/archives.mjs', 'scripts/operations/restore-fencing.mjs', 'server/operations/losslessInventory.ts',
-    'docker/pathfinder.compose.yml', 'docker/pathfinder.Dockerfile', 'docker/pathfinder.Dockerfile.dockerignore', 'docker/pathfinder.nginx.conf'].map(name => path.join(ROOT, name)));
+    'docker/pathfinder.compose.yml', 'docker/pathfinder.Dockerfile', 'docker/pathfinder.Dockerfile.dockerignore', 'docker/pathfinder.nginx.conf',
+    ...(selected?.profile === 'post-b27-automatic-pair-additive-v6' ? ['server/pathfinder/automaticPairSchema.ts'] : [])].map(name => path.join(ROOT, name)));
   const qualificationPolicy = selected ? { schemaVersion: 'wfc.pf.owned-update-policy-binding.v1',
     selection: { schemaVersion: selected.schemaVersion, profile: selected.profile },
-    selector: await pin(moduleFile(selected.profile === 'post-b20-terminal-closure-additive-v5' ? 'delivery-policy-selector-v5.mjs' : 'delivery-policy-selector-v4.mjs')), qualifier: await pin(moduleFile(selected.qualifierFilename)) } : null;
+    selector: await pin(moduleFile(selected.profile === 'post-b27-automatic-pair-additive-v6' ? 'delivery-policy-selector-v6.mjs'
+      : selected.profile === 'post-b20-terminal-closure-additive-v5' ? 'delivery-policy-selector-v5.mjs' : 'delivery-policy-selector-v4.mjs')), qualifier: await pin(moduleFile(selected.qualifierFilename)) } : null;
   const config = { schemaVersion: 'wfc.pf.owned-update.v3', operationId, directory, source: SOURCE, baseline, settings, originalState, originalEnv,
     operatorSha256: (await pin(moduleFile('owned-update-v3.mjs'))).sha256, sourceClosure, buildContext: await buildContext(), inventory,
     backup: path.join(directory, 'backup'), companion: path.join(directory, 'backup-companion.private.json'), targetRuntime: path.join(directory, 'restore-5192'),

@@ -2,7 +2,7 @@ import type { PoolClient } from 'pg';
 import { RECALCULATION_LIMITS } from '../../shared/pathfinderRecalculation.js';
 import { policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { optionsSchema, type EngineOptions } from './jobContracts.js';
-import { collectCommonCalculationInputs, collectBarrierCommonCalculationInputs, freezeCableDependenciesForVersion, canonicalJson, type CollectedDependencies } from './dependencies.js';
+import { collectCommonCalculationInputs, collectBarrierCommonCalculationInputs, freezeCableDependenciesForVersion, createCablePurposeRoutingReader, readLinkedCableTypePurposes, canonicalJson, type CollectedDependencies } from './dependencies.js';
 import { calculationEngineIdentity, barrierCalculationEngineIdentity, mixedBarrierCalculationEngineIdentity } from './calculationEngineIdentity.js';
 import type { CalculationEngineIdentity, EngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
 import type { AnyBarrierEngineIdentity as BarrierEngineIdentity } from '../../shared/pathfinderBarrierSupported.js';
@@ -84,6 +84,14 @@ export async function collectDependencyBatchInTransaction(client:PoolClient,inpu
     if(!name)return null;const ids=aliases.get(normalizeLocation(name));if(ids?.length!==1)return null;
     const head=heads.get(ids[0]);return head ? head.ready?endpointCalculationPoint(head.binding):null : automatic.get(ids[0])?.point ?? null;
   };
-  for(const cable of cables){check();append(freezeCableDependenciesForVersion(common.inputs,cable,endpoint(cable.from_location),endpoint(cable.to_location),input.dependencyVersion??'pathfinder.dependencies.v5'));}
+  const purposeRouting = input.dependencyVersion ? await createCablePurposeRoutingReader(client,projectId) : null;
+  const purposes = purposeRouting ? await readLinkedCableTypePurposes(client,projectId,cables) : null;
+  for(const cable of cables){
+    check(); const frozen=freezeCableDependenciesForVersion(common.inputs,cable,endpoint(cable.from_location),endpoint(cable.to_location),input.dependencyVersion??'pathfinder.dependencies.v5');
+    if (!frozen.dependencies || !purposeRouting) { append(frozen); continue; }
+    const cablePurposeRouting=purposeRouting(purposes!.get(cable.id));
+    append(cablePurposeRouting ? {...frozen,dependencies:{...frozen.dependencies,cablePurposeRouting} as typeof frozen.dependencies}
+      : {cable,dependencies:null,status:'category_required',message:'Choose a Cable types Purpose and allow it on at least one valid project tray purpose before calculating.'});
+  }
   check();return{items,registryRevision:registry,options:common.inputs.options,bytes};
 }

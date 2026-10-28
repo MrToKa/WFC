@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Button, Caption1, Field, Select, Spinner, Textarea, makeStyles, tokens } from '@fluentui/react-components';
 import { usePathfinderBarriers, type BarrierAuthoringOptions, type BarrierAuthoringState, type BarrierSelectedParent } from './hooks/usePathfinderBarriers';
+import { BARRIER_LIMITS } from '../../../shared/pathfinderBarriers';
 
 export type PathFinderBarriersPanelProps = BarrierAuthoringOptions & { onStateChange?: (state: BarrierAuthoringState) => void };
 const useStyles = makeStyles({
@@ -25,12 +26,21 @@ function AdminBarriersPanel(props: PathFinderBarriersPanelProps) {
   const disabled = !state.canAuthor || frozen;
   const geometry = state.manifest?.geometry;
   const saved = state.saved;
+  const selectionSaved = saved?.status === 'current' && state.registry?.state === 'ready'
+    && state.registry.snapshot?.snapshotId === saved.manifest.snapshotId
+    && !state.dirty && !state.pending && !state.busy && !state.error
+    && (state.phase === 'ready' || state.phase === 'idle')
+    && (state.draftParents.length > 0 || !state.emptyReason.trim());
+  const saveLabel = state.phase === 'capturing' ? 'Capturing obstacles…'
+    : state.phase === 'publishing' ? 'Saving barrier set…'
+      : selectionSaved ? 'Barrier set saved' : 'Save barrier set';
   const status = state.phase === 'unknown' ? 'Unknown command outcome — reconciliation required'
     : state.phase === 'partial' ? 'Capture incomplete — published set kept'
       : state.phase === 'refused' ? 'Operation refused — published set kept'
         : state.phase === 'stale' ? 'Scope changed — refresh required'
           : saved?.status === 'recapture-required' ? 'Saved obstacles need recapture'
-            : state.dirty ? 'Unpublished draft' : state.registry ? `Registry: ${state.registry.state}` : 'No current barrier registry loaded';
+            : state.dirty ? 'Unpublished draft' : selectionSaved ? `Saved — ${state.draftParents.length} parent ${state.draftParents.length === 1 ? 'object' : 'objects'}, revision ${state.registry!.registryRevision}`
+              : state.registry ? `Registry: ${state.registry.state}` : 'No current barrier registry loaded';
   return <section className={styles.panel} aria-label="Barriers">
     <h3 className={styles.heading}>Barriers</h3>
     <Caption1>Register walls, partitions, floors, ceilings and other obstacles. Choose Obstacle for pipes, tanks or mixed model groups.</Caption1>
@@ -54,22 +64,23 @@ function AdminBarriersPanel(props: PathFinderBarriersPanelProps) {
         : state.error ? 'The saved barrier selection could not be verified. Refresh barriers to try again.'
           : 'No saved barrier set. Add selected objects and use Save barrier set to publish them.'}</Caption1>}
     </section>
-    <h4 className={styles.heading}>Current selection draft</h4>
+    <h4 className={styles.heading}>{selectionSaved ? 'Current saved selection' : 'Current selection draft'}</h4>
     {state.dirty ? <Caption1>Unsaved changes. The published barrier set remains unchanged until this entire draft is captured and published successfully.</Caption1> : null}
     <Field label="Barrier type"><Select aria-label="Barrier type" value={state.kind} disabled={disabled} onChange={(_, data) => state.setKind(data.value as BarrierSelectedParent['kind'])}>
       {kinds.map(kind => <option key={kind} value={kind}>{kindLabel(kind)}</option>)}
     </Select></Field>
     <Button disabled={disabled} onClick={() => void state.addSelection()}>Add selected objects</Button>
-    <Caption1>{state.draftParents.length} / 128 selected parent objects in this draft. Repeated objects are added once; overlapping parent geometry is qualified during publication.</Caption1>
+    <Caption1>{state.draftParents.length} / {BARRIER_LIMITS.selectedParents} selected parent objects{selectionSaved ? '' : ' in this draft'}. Repeated objects are added once; overlapping parent geometry is qualified during publication.</Caption1>
     {state.draftParents.length ? <ul className={styles.list} aria-label="Selected barrier parents">{state.draftParents.map(parent => <li className={styles.item} key={parent.selectionId}>
       <div>{parent.name}</div><Caption1>{kindLabel(parent.kind)}</Caption1>
       <Button size="small" aria-label={`Remove ${parent.name}`} disabled={disabled} onClick={() => state.removeParent(parent.selectionId)}>Remove</Button>
     </li>)}</ul> : <Caption1>No barrier parents selected. This does not declare that the model has no barriers.</Caption1>}
-    {state.draftParents.length ? <Button appearance="primary" disabled={disabled} onClick={() => void state.save()}>Save barrier set</Button> : <>
+    {state.draftParents.length ? <Button appearance={selectionSaved ? 'secondary' : 'primary'} disabled={disabled || selectionSaved} onClick={() => void state.save()}>{saveLabel}</Button> : <>
       <Field label="Explicit empty reason"><Textarea aria-label="Explicit empty reason" value={state.emptyReason} maxLength={2048} disabled={disabled} onChange={(_, data) => state.setEmptyReason(data.value)} /></Field>
-      <Button appearance="primary" disabled={disabled || !state.emptyReason.trim()} onClick={() => void state.save()}>Declare no barriers</Button>
+      <Button appearance={selectionSaved ? 'secondary' : 'primary'} disabled={disabled || selectionSaved || !state.emptyReason.trim()} onClick={() => void state.save()}>{selectionSaved ? 'Barrier set saved' : state.phase === 'publishing' ? 'Saving barrier set…' : 'Declare no barriers'}</Button>
       <Caption1>This explicitly registers an empty selected scope. It does not certify that the model contains no walls or other obstacles.</Caption1>
     </>}
+    {selectionSaved ? <Caption1 aria-live="polite">{state.draftParents.length ? `${state.draftParents.length} selected ${state.draftParents.length === 1 ? 'object is' : 'objects are'} saved. Add or remove objects to change this set.` : 'The empty barrier declaration is saved.'}</Caption1> : null}
     <div className={styles.row}>
       <Button disabled={state.busy || props.pf.busy} onClick={() => void state.refresh()}>Refresh barriers</Button>
       {state.busy ? <Button onClick={state.cancel}>Cancel</Button> : null}

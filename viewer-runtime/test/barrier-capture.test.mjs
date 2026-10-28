@@ -12,6 +12,15 @@ const selected = (dbId = 2, selection = 5, name = 'Wall parent') => ({ selection
   dbId, externalId: null, name, identityBasis: 'version-local-only', inclusion: 'own-and-all-descendant-fragments' });
 const request = (selectedParents = [selected()]) => ({ captureId: id(1), scope: { projectId: id(2), modelVersionId: id(3),
   contentFingerprint: 'a'.repeat(64), selectionRevision: '7', captureFrameId: id(6), captureFrameSha256: 'b'.repeat(64), coordinateFrame: 'canonical-world-metres' }, selectedParents });
+
+test('selection input accepts 2048 exact parents and refuses 2049 or the bounded byte ceiling', () => {
+  const parents = Array.from({ length: 2048 }, (_, at) => selected(at + 10, at + 100, 'Wall ' + at));
+  assert.equal(BARRIER_CAPTURE_VIEWER_LIMITS.selectedParents, 2048);
+  assert.equal(BARRIER_CAPTURE_VIEWER_LIMITS.totalBytes, 32 * 1024 ** 2);
+  assert.equal(validateBarrierCaptureRequest(request(parents)), true);
+  assert.equal(validateBarrierCaptureRequest(request([...parents, selected(9000, 9000)])), false);
+  assert.equal(validateBarrierCaptureRequest(request(parents.map(parent => ({ ...parent, name: '界'.repeat(2048) })))), false);
+});
 class Matrix {
   constructor(binary64) { this.elements = binary64 ? new Float64Array(16) : new Float32Array(16); this.makeScale(1, 1, 1); }
   makeScale(x, y, z) { this.elements.fill(0); this.elements[0] = x; this.elements[5] = y; this.elements[10] = z; this.elements[15] = 1; return this; }
@@ -74,6 +83,28 @@ test('selected parent retains its own and all descendant original triangle fragm
   for (const item of result.capture.fragments) assert.deepEqual(item.triangleIndices, [0, 1, 2]);
   assert.equal(result.capture.observation.state, 'reported-complete'); assert.equal(result.capture.observation.verification, 'unverified');
   assert.equal(result.frameObservation.contentFingerprint, request().scope.contentFingerprint); assert.equal(result.frameObservation.loadId, loadId);
+});
+
+test('2048 separately selected original walls retain all parents and fragments through the actual capture assembler', async () => {
+  const f = fixture(), count = 2048;
+  f.children.clear(); f.parents.clear(); f.own.clear(); f.geometries.clear(); f.world.clear(); f.originalWorld.clear();
+  f.children.set(1, Array.from({ length: count }, (_, at) => at + 10)); f.parents.set(1, 0); f.own.set(1, []);
+  const parents = Array.from({ length: count }, (_, at) => {
+    const dbId = at + 10, name = 'Wall ' + at;
+    f.names.set(dbId, name); f.parents.set(dbId, 1); f.children.set(dbId, []); f.own.set(dbId, [at]);
+    f.geometries.set(at, { vertices: [[0, 0, 0], [1000, 0, 0], [0, 1000, 0]], indices: [0, 1, 2] });
+    const matrix = new Matrix(true); matrix.elements[12] = at * 2000;
+    f.world.set(at, matrix); f.originalWorld.set(at, new Matrix(true).copy(matrix));
+    return selected(dbId, at + 100, name);
+  });
+  f.fragments.getCount = () => count;
+  const result = await collect(f, request(parents));
+  assert.equal(result.capture.selectedParents.length, 2048); assert.equal(result.capture.fragments.length, 2048);
+  assert.equal(result.capture.observation.state, 'reported-complete');
+  for (let at = 0; at < count; at++) {
+    assert.deepEqual(result.capture.fragments[at].source.parentSelectionIds, [parents[at].selectionId]);
+    assert.deepEqual(result.capture.fragments[at].triangleIndices, [0, 1, 2]);
+  }
 });
 test('a wide parent below the unchanged closure ceiling counts pending siblings once', async () => {
   const childCount = Math.floor(BARRIER_CAPTURE_VIEWER_LIMITS.closureObjects / 2) + 1, f = wideFixture(childCount);

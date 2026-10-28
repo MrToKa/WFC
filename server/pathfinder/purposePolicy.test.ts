@@ -17,6 +17,7 @@ function database(options: { admin?: boolean; missingUser?: boolean; revoked?: b
   const state = { catalog_revision: '2', routing_policy_revision: '0', drawing_policy_revision: '0', drawing_input_revision: '3' };
   const epochs = [{ purpose_key: 'Synthetic purpose', incarnation_id: incarnationId, row_count: '1', active: true }];
   const rules: Rule[] = [], events: any[] = [], receipts = new Map<string, any>();
+  const cablePurposes = ['Control', 'Grounding', 'Power', 'VFD'];
   const catalog: any = { schemaVersion: 'pathfinder.project-tray-catalog.v1', projectId, catalogRevision: '2', rows: [{ projectTrayId: trayId, rawName: '/Synthetic', nameKey: '/Synthetic', rawPurpose: 'Synthetic purpose', purposeKey: 'Synthetic purpose', dimensionsMm: { width: null, height: null, declaredLength: null } }], diagnostics: [] };
   let tail = Promise.resolve(), failCommit = options.commitLost === true;
   const pool = { connect: vi.fn(async () => {
@@ -39,6 +40,7 @@ function database(options: { admin?: boolean; missingUser?: boolean; revoked?: b
       if (sql.startsWith('INSERT INTO viewer_login_bindings')) return { rows: [] };
       if (sql.startsWith('SELECT user_id,expires_at')) return { rows: [{ user_id: userId, expires_at: new Date(principal.loginExpiresAt), revoked_at: options.revoked ? new Date() : null }] };
       if (sql.startsWith('SELECT catalog_revision::text')) return { rows: [{ ...state }] };
+      if (sql.startsWith('SELECT DISTINCT purpose')) return { rows: cablePurposes.map(purpose => ({purpose})) };
       if (sql.startsWith('SELECT purpose_key,incarnation_id::text')) return { rows: epochs.filter(e => e.active) };
       if (sql.startsWith('SELECT r.purpose_key')) return { rows: rules.filter(r => epochs.some(e => e.active && e.purpose_key === r.purpose_key && e.incarnation_id === r.purpose_incarnation_id)).sort((a, b) => a.purpose_key < b.purpose_key ? -1 : 1) };
       if (sql.startsWith('SELECT request_sha256')) return { rows: receipts.has(values.join(':')) ? [receipts.get(values.join(':'))] : [] };
@@ -58,11 +60,42 @@ function database(options: { admin?: boolean; missingUser?: boolean; revoked?: b
   vi.mocked(readCatalog).mockImplementation(async () => ({ ...catalog, catalogRevision: state.catalog_revision }));
   vi.mocked(readRoutingCatalogScope).mockImplementation(async () => ({ catalogRevision: state.catalog_revision, routingContentSha256: 'a'.repeat(64) }));
   const repository = createPurposePolicyRepository(pool);
-  return { options, principal, pool, calls, state, epochs, rules, events, receipts, catalog, repository, save: (input: unknown = command()) => repository.save(projectId, principal, input), get: () => repository.get(projectId, principal), scope: () => purposePolicyTransaction(pool, projectId, principal, c => readRoutingPolicyScope(c, projectId)) };
+  return { options, principal, pool, calls, state, epochs, rules, events, receipts, catalog, cablePurposes, repository, save: (input: unknown = command()) => repository.save(projectId, principal, input), get: () => repository.get(projectId, principal), scope: () => purposePolicyTransaction(pool, projectId, principal, c => readRoutingPolicyScope(c, projectId)) };
 }
 beforeEach(() => vi.clearAllMocks());
 
 describe('routing policy transaction and authority', () => {
+  it('diagnoses invalid legacy values without blocking valid purposes or changing their routing hash',async()=>{
+    const db=database(),before=await db.get(),scope=await db.scope();
+    db.cablePurposes.push('Power\nVFD','Bad\u0001Purpose','Power\nVFD');
+    const after=await db.get();
+    expect(after.cablePurposes).toEqual(before.cablePurposes);
+    expect(after.invalidCablePurposeCount).toBe(2);
+    expect(after.cablePurposesSha256).toBe(before.cablePurposesSha256);
+    expect(await db.scope()).toEqual(scope);
+    await db.save(command(id(10),{expectedCablePurposesSha256:after.cablePurposesSha256,changes:[{purposeKey:'Synthetic purpose',operation:'set',allowedCategories:['Power']}]}));
+    expect((await db.get()).rules[0].allowedCategories).toEqual(['Power']);
+  });
+  it('exposes current project cable purposes and saves independent Power and VFD permissions', async () => {
+    const db=database(), snapshot=await db.get();
+    expect(snapshot.cablePurposes).toEqual(['Control','Grounding','Power','VFD']);
+    await db.save(command(id(10), {expectedCablePurposesSha256:snapshot.cablePurposesSha256,changes:[{purposeKey:'Synthetic purpose',operation:'set',allowedCategories:['VFD']}]}));
+    expect((await db.get()).rules[0].allowedCategories).toEqual(['VFD']);
+    expect((await db.get()).rules[0].allowedCategories).not.toContain('Power');
+  });
+  it('refuses a changed cable-purpose catalog and values absent from the project', async () => {
+    const db=database(), snapshot=await db.get();
+    await expect(db.save(command(id(10),{expectedCablePurposesSha256:snapshot.cablePurposesSha256,changes:[{purposeKey:'Synthetic purpose',operation:'set',allowedCategories:['Unknown']}]}))).rejects.toMatchObject({code:'CABLE_PURPOSE_UNAVAILABLE'});
+    db.cablePurposes.push('Custom');
+    await expect(db.save(command(id(11),{expectedCablePurposesSha256:snapshot.cablePurposesSha256}))).rejects.toMatchObject({code:'CABLE_PURPOSES_CONFLICT'});
+    expect(db.events).toHaveLength(0);
+  });
+  it('changes routing scope when cable purposes change without expanding existing LV permissions', async () => {
+    const db=database(); await db.save(command(id(10),{changes:[{purposeKey:'Synthetic purpose',operation:'set',allowedCategories:['LV']}]}));
+    const before=await db.scope(); db.cablePurposes.push('New Purpose');
+    expect((await db.scope()).routingPolicySha256).not.toEqual(before.routingPolicySha256);
+    expect((await db.get()).rules[0].allowedCategories).toEqual(['LV']);
+  });
   it('saves strict categories, one revision and audit in one transaction', async () => {
     const db = database(), receipt = await db.save(); expect(receipt).toMatchObject({ revision: '1', previousRevision: '0', duplicate: false });
     expect(db.events).toHaveLength(1); expect(db.receipts.size).toBe(1); expect(db.events[0].actor_id).toBe(userId); expect(db.events[0].login_id).toBe(loginId);

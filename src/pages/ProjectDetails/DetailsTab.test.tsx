@@ -53,11 +53,13 @@ const fixture: Omit<DetailsProps, 'styles' | 'onTrayTemplateChange'> = {
     maxFreeSpaceError: null,
     saving: false,
     considerBundleSpacingAsFree: false,
+    autoRerouteForFreeSpace: false,
     onInputChange: vi.fn(),
     onMinFreeSpaceChange: vi.fn(),
     onMaxFreeSpaceChange: vi.fn(),
     onSave: vi.fn(async () => {}),
     onToggleConsiderBundleSpacingAsFree: vi.fn(async () => {}),
+    onToggleAutoRerouteForFreeSpace: vi.fn(async () => {}),
   },
   cableCategoryCards: [],
   customBundleRanges: {
@@ -130,6 +132,50 @@ const NumericDetails = ({ project = fixture.project, isAdmin = true, numericFiel
   const styles = useProjectDetailsStyles();
   return <FluentProvider theme={webLightTheme}><DetailsTab {...fixture} styles={styles} project={project} isAdmin={isAdmin} numericFields={numericFields} onTrayTemplateChange={vi.fn(async () => {})} /></FluentProvider>;
 };
+
+const CapacityDetails = ({ min = null, enabled = false, canEdit = true, saving = false, toggle }: {
+  min?: number | null; enabled?: boolean; canEdit?: boolean; saving?: boolean;
+  toggle: DetailsProps['cableSpacingField']['onToggleAutoRerouteForFreeSpace'];
+}) => {
+  const styles = useProjectDetailsStyles();
+  return <FluentProvider theme={webLightTheme}><DetailsTab {...fixture} styles={styles} isAdmin={canEdit}
+    cableSpacingField={{ ...fixture.cableSpacingField, minFreeSpaceCurrent: min, autoRerouteForFreeSpace: enabled, saving, onToggleAutoRerouteForFreeSpace: toggle }}
+    onTrayTemplateChange={vi.fn(async () => {})} /></FluentProvider>;
+};
+
+describe('DetailsTab automatic free-space rerouting', () => {
+  const label = 'Require minimum tray free space when routing';
+  it('starts disabled and requires a saved project minimum before enabling', () => {
+    const toggle = vi.fn(async () => {});
+    render(<CapacityDetails toggle={toggle} />);
+    const checkbox = screen.getByRole('checkbox', { name: label });
+    expect(checkbox).not.toBeChecked(); expect(checkbox).toBeDisabled();
+    expect(checkbox).toHaveAccessibleDescription(/balances tray loading even when this option is off/);
+    expect(checkbox).toHaveAccessibleDescription(/Set and save the minimum tray free space/);
+    expect(toggle).not.toHaveBeenCalled();
+  });
+  it('uses the actual project threshold and three percentage-point tolerance', () => {
+    const toggle = vi.fn(async () => {});
+    render(<CapacityDetails min={42} toggle={toggle} />);
+    const checkbox = screen.getByRole('checkbox', { name: label });
+    expect(checkbox).toBeEnabled();
+    expect(checkbox).toHaveAccessibleDescription(/When enabled, uses the project's minimum free space/);
+    expect(checkbox).toHaveAccessibleDescription(/minimum free space \(42%\).*3 percentage points \(39% accepted\)/);
+    expect(checkbox).toHaveAccessibleDescription(/the affected cable remains unrouted and other cables continue calculating/);
+    fireEvent.click(checkbox); expect(toggle).toHaveBeenCalledExactlyOnceWith(true);
+  });
+  it('allows an existing enabled setting to be turned off even if its minimum was removed', () => {
+    const toggle = vi.fn(async () => {});
+    render(<CapacityDetails enabled toggle={toggle} />);
+    const checkbox = screen.getByRole('checkbox', { name: label });
+    expect(checkbox).toBeChecked(); expect(checkbox).toBeEnabled();
+    fireEvent.click(checkbox); expect(toggle).toHaveBeenCalledExactlyOnceWith(false);
+  });
+  it.each([{ canEdit: false, saving: false }, { canEdit: true, saving: true }])('prevents edits with current permissions or while saving: %j', props => {
+    render(<CapacityDetails min={42} toggle={vi.fn(async () => {})} {...props} />);
+    expect(screen.getByRole('checkbox', { name: label })).toBeDisabled();
+  });
+});
 
 describe('DetailsTab tray report templates', () => {
   it('renders a separate metre gap card with three-decimal input and existing read-only behavior', () => {

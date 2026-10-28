@@ -154,6 +154,8 @@ namespace AddinRibbon.Routing
         internal bool SawIndeterminate;
         internal RouteCollisionObservation FirstBlocking;
         internal readonly InterTrayOpeningContext InterTray;
+        internal Dictionary<string, double> RouteCosts;
+        internal IReadOnlyList<TraySegment> RouteCostTrays;
         internal bool RouteUsedInterTrayManeuver;
         internal bool RouteInterTrayImprovementLimited;
         internal readonly List<FinalRouteCollisionObservation> FinalChecks = new List<FinalRouteCollisionObservation>();

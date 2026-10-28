@@ -23,6 +23,7 @@ import { initializeRevisionResultSchema } from './revisionResultSchema.js';
 import { initializeAutoLengthSchema } from './autoLengthSchema.js';
 import { initializeApplyRecoverySchema } from './applyRecoverySchema.js';
 import { initializeBarrierRegistrySchema } from './barrierRegistrySchema.js';
+import { initializeAutomaticPairSchema } from './automaticPairSchema.js';
 
 export async function initializePathFinder(pool: Pool): Promise<void> {
   const client = await pool.connect();
@@ -150,4 +151,5 @@ export async function initializePathFinder(pool: Pool): Promise<void> {
   await initializeInitialFillMandateSchema(pool);
   await initializeInitialFillAttemptSchema(pool);
   await initializeApplyRecoverySchema(pool);
+  await initializeAutomaticPairSchema(pool);
 }

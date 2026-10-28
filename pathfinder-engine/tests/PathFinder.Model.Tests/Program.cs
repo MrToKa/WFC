@@ -66,6 +66,7 @@ internal static class Program
             RouteBoundaryTests.Run(fixture, scratch, Check, (name, action) => Reject(name, action));
             QueuedCancellation(fixture, scratch);
             CacheFailures(fixture, scratch);
+            FitPolicyTests.Run(fixture, scratch, Check, (name, action) => Reject(name, action));
             FrozenGeometry(root, scratch);
             using var cancelled = new CancellationTokenSource(); cancelled.Cancel();
             Reject("cancel-before-read", () => SnapshotReader.Read(bytes, cancellation: cancelled.Token), typeof(OperationCanceledException));

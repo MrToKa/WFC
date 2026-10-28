@@ -49,7 +49,7 @@ namespace AddinRibbon.Routing
     /// surfaces; it never fills a rectangular section or an open tray channel.
     /// This measures surface clearance, not containment of closed solid volumes.
     /// </summary>
-    public sealed class TrayMeshClearance
+    public sealed partial class TrayMeshClearance
     {
         private const double ClipPadding = 0.00025;
         private const int MaximumTriangles = 200000;

@@ -8,13 +8,24 @@ internal static class SessionProtocol
 {
     internal const string Version = "pathfinder.engine.session.v1";
     internal const int MaximumInput = 1048576, MaximumOutput = 33554432, MaximumRequests = 64;
-    internal const int StartupMilliseconds = 5000, IdleMilliseconds = 30000, LifetimeMilliseconds = 600000;
+    internal const int StartupMilliseconds = 5000, LifetimeMilliseconds = 600000;
+    // The interactive profile retains the same bounded worker while a user
+    // selects another 3D location. It changes only idle retention, never the
+    // 10-minute lifetime, request count or independent memory ceilings.
+    internal static int IdleMilliseconds => SessionIdleMilliseconds(Environment.GetEnvironmentVariable("PF_ENGINE_SESSION_PROFILE"));
+    internal static int SessionIdleMilliseconds(string? profile) => profile switch
+    {
+        null or "bounded" => 30000,
+        "interactive" => 300000,
+        _ => throw new InvalidOperationException("Unknown bounded engine session profile.")
+    };
     internal const long MaximumResidentBytes = 512L * 1024 * 1024;
     private static readonly UTF8Encoding Utf8 = new(false, true);
 
     internal static string RunnerHash => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(typeof(SessionProtocol).Assembly.Location))).ToLowerInvariant();
     internal static object Ready() => new { schemaVersion = Version, type = "ready", runnerSha256 = RunnerHash,
-        engineVersion = FittedModelCache.EngineVersion, maxInputBytes = MaximumInput, maxOutputBytes = MaximumOutput };
+        engineVersion = FittedModelCache.EngineVersion, maxInputBytes = MaximumInput, maxOutputBytes = MaximumOutput,
+        idleMilliseconds = IdleMilliseconds };
 
     internal static async Task<byte[]?> ReadFrame(Stream stream, int maximum, CancellationToken token, Action? firstActivity = null)
     {
@@ -69,7 +80,16 @@ internal static class SessionProtocol
     internal static void ValidateReady(ReadOnlyMemory<byte> bytes)
     {
         using var doc = Parse(bytes); var value = doc.RootElement;
-        Fields(value, "schemaVersion", "type", "runnerSha256", "engineVersion", "maxInputBytes", "maxOutputBytes");
+        if (value.TryGetProperty("idleMilliseconds", out var retainedIdle))
+        {
+            Fields(value, "schemaVersion", "type", "runnerSha256", "engineVersion", "maxInputBytes", "maxOutputBytes", "idleMilliseconds");
+            if (retainedIdle.GetInt32() != IdleMilliseconds) throw new InvalidDataException("Session idle profile mismatch.");
+        }
+        else
+        {
+            Fields(value, "schemaVersion", "type", "runnerSha256", "engineVersion", "maxInputBytes", "maxOutputBytes");
+            if (IdleMilliseconds != 30000) throw new InvalidDataException("Interactive session requires its checked idle profile.");
+        }
         if (value.GetProperty("schemaVersion").GetString() != Version || value.GetProperty("type").GetString() != "ready"
             || value.GetProperty("runnerSha256").GetString() != RunnerHash || value.GetProperty("engineVersion").GetString() != FittedModelCache.EngineVersion
             || value.GetProperty("maxInputBytes").GetInt32() != MaximumInput || value.GetProperty("maxOutputBytes").GetInt32() != MaximumOutput)

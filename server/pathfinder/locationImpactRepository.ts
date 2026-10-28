@@ -12,6 +12,7 @@ import { cableWorkflowReadTransaction } from './cableWorkflowRead.js';
 import { schedulerTransaction } from './schedulerTransaction.js';
 import { normalizeLocation } from './matching.js';
 import { PathFinderError } from './errors.js';
+import { automaticPairPolicySchema, type AutomaticPairPolicy } from '../../shared/pathfinderAutomaticPair.js';
 
 type Row = Record<string, any>;
 const fail = (code: string, status = 409): never => { throw new PathFinderError(code, status, 'The affected cable calculation cannot proceed under its original current scope.'); };
@@ -30,15 +31,24 @@ const recordSql = `SELECT i.project_id,i.id,i.actor_id,i.login_id,i.idempotency_
 /** Append only inside the exact successful endpoint save transaction. It performs no engine work or cable writes. */
 export async function appendLocationImpactInTransaction(client: PoolClient, input: { projectId: string; principal: JobPrincipal;
   idempotencyKey: string; commandSha256: string; binding: EndpointBindingReceipt; current: EndpointCurrentScope;
-  affectedCableIds: string[]; calculation: LocationImpactCalculation | null }, check: () => void) {
+  affectedCableIds: string[]; originCableId?: string; calculation: LocationImpactCalculation | null;
+  automaticPairPolicy?: AutomaticPairPolicy | null }, check: () => void) {
   check(); const projectId = policyUuidSchema.parse(input.projectId), who = input.principal;
   policyUuidSchema.parse(input.idempotencyKey); policyHashSchema.parse(input.commandSha256); assertLoginNotExpired(who);
   const selected = [...new Set(input.affectedCableIds.map(value => policyUuidSchema.parse(value)))].sort();
+  const originCableId = input.originCableId === undefined ? undefined : policyUuidSchema.parse(input.originCableId);
+  const automaticPairPolicy = input.automaticPairPolicy === undefined || input.automaticPairPolicy === null
+    ? input.automaticPairPolicy : automaticPairPolicySchema.parse(input.automaticPairPolicy);
+  if (automaticPairPolicy !== undefined && originCableId === undefined) return fail('LOCATION_IMPACT_ORIGIN_SCOPE');
   if (selected.length !== input.affectedCableIds.length || selected.length > LOCATION_IMPACT_LIMITS.cables) return fail('LOCATION_IMPACT_CABLE_LIMIT', 413);
+  if (originCableId !== undefined && !selected.includes(originCableId)) return fail('LOCATION_IMPACT_ORIGIN_SCOPE');
   if (input.binding.projectId !== projectId || input.binding.binding.modelVersionId !== input.current.modelVersionId || input.binding.binding.aggregateId !== input.current.aggregateId) return fail('LOCATION_IMPACT_BINDING_SCOPE');
   const prior = (await client.query<Row>(recordSql + ' WHERE i.project_id=$1 AND i.actor_id=$2 AND i.idempotency_key=$3', [projectId, who.userId, input.idempotencyKey])).rows[0];
   if (prior) {
-    const record = verifiedRecord(prior); if (record.commandSha256 !== input.commandSha256) return fail('LOCATION_IMPACT_IDEMPOTENCY_CONFLICT');
+    const record = verifiedRecord(prior); if (record.commandSha256 !== input.commandSha256
+      || record.schemaVersion !== 'wfc.pf.location-impact-record.v1' && record.originCableId !== originCableId
+      || record.schemaVersion === 'wfc.pf.location-impact-record.v3' && (automaticPairPolicy === undefined || digest(record.automaticPairPolicy) !== digest(automaticPairPolicy))
+      || record.schemaVersion !== 'wfc.pf.location-impact-record.v3' && automaticPairPolicy !== undefined) return fail('LOCATION_IMPACT_IDEMPOTENCY_CONFLICT');
     return locationImpactReferenceSchema.parse({ id: record.id, status: record.calculation && record.eligibleCableIds.length ? 'pending' : 'blocked',
       eligibleCables: record.eligibleCableIds.length, excludedMvCables: record.excludedMvCableIds.length, blockedCategoryCables: record.blockedCategoryCableIds.length });
   }
@@ -60,7 +70,10 @@ export async function appendLocationImpactInTransaction(client: PoolClient, inpu
     for (const row of rows) { bytes += Buffer.byteLength(canonicalPurposeJson(row)); if (bytes > LOCATION_IMPACT_LIMITS.collectionBytes) return fail('LOCATION_IMPACT_INPUT_LIMIT', 413); cables.push(row); }
   }
   const eligible = cables.filter(row => ['LV', 'Control', 'Instrumentation'].includes(row.mto)), eligibleIds = new Set(eligible.map(row => row.id)), mv = cables.filter(row => row.mto === 'MV'), unknown = cables.filter(row => row.mto !== 'MV' && !eligibleIds.has(row.id));
-  const now = new Date(), id = randomUUID(), draft = locationImpactRecordSchema.parse({ schemaVersion: 'wfc.pf.location-impact-record.v1', id, projectId,
+  if (originCableId !== undefined && !eligibleIds.has(originCableId)) return fail('LOCATION_IMPACT_ORIGIN_SCOPE');
+  const now = new Date(), id = randomUUID(), draft = locationImpactRecordSchema.parse({
+    ...(automaticPairPolicy !== undefined ? {schemaVersion:'wfc.pf.location-impact-record.v3',originCableId,automaticPairPolicy}
+      : originCableId === undefined ? {schemaVersion:'wfc.pf.location-impact-record.v1'} : {schemaVersion:'wfc.pf.location-impact-record.v2',originCableId}), id, projectId,
     actorId: who.userId, actorAdminRevision: admin.revision, loginId: who.loginId, loginExpiresAt: new Date(who.loginExpiresAt).toISOString(),
     authorityExpiresAt: new Date(Math.min(who.loginExpiresAt, now.getTime() + LOCATION_IMPACT_LIMITS.authorityMilliseconds)).toISOString(), installationEpoch: installation.installation_epoch,
     idempotencyKey: input.idempotencyKey, commandSha256: input.commandSha256, locationId: input.binding.locationId, bindingId: input.binding.binding.id,
@@ -150,10 +163,45 @@ export async function cancelLocationImpactForJob(client: Pick<PoolClient, 'query
   return result.rows.length > 0;
 }
 
+/** Ordering only, called after the normal worker/project/authority fences.
+ * A paired save can supersede its origin into another impact while retaining
+ * current siblings here. Those siblings wait for that exact latest origin item.
+ * This reader grants no calculation or cable-write authority. */
+export async function readLocationImpactPriority(client: Pick<PoolClient, 'query'>, input: {projectId:string;jobId:string}): Promise<{originCableId:string;waitForOrigin:boolean}|null> {
+  const linked=(await client.query<{impact_id:string}>('SELECT impact_id FROM pf_location_impact_enrollments WHERE project_id=$1 AND job_id=$2',[input.projectId,input.jobId])).rows[0];
+  if(!linked)return null;
+  const raw=(await client.query<Row>(recordSql+' WHERE i.project_id=$1 AND i.id=$2',[input.projectId,linked.impact_id])).rows[0];
+  if(!raw)return fail('LOCATION_IMPACT_INTEGRITY');const record=verifiedRecord(raw);
+  if(record.projectId!==input.projectId||record.id!==linked.impact_id)return fail('LOCATION_IMPACT_INTEGRITY');
+  if(record.schemaVersion==='wfc.pf.location-impact-record.v1')return null;
+  const current=(await client.query<Row>(`/* location-impact:origin-progress */ SELECT c.mto,t.impact_id,d.status AS dispatch_status,
+    e.job_id,j.state AS job_state,j.cancel_requested,i.state AS item_state
+    FROM cables c LEFT JOIN pf_location_impact_targets t ON t.project_id=c.project_id AND t.cable_id=c.id
+    LEFT JOIN pf_location_impact_dispatch d ON d.project_id=t.project_id AND d.impact_id=t.impact_id
+    LEFT JOIN pf_location_impact_enrollments e ON e.project_id=t.project_id AND e.impact_id=t.impact_id
+    LEFT JOIN pf_jobs j ON j.project_id=e.project_id AND j.id=e.job_id
+    LEFT JOIN pf_job_items i ON i.project_id=j.project_id AND i.job_id=j.id AND i.cable_id=c.id
+    WHERE c.project_id=$1 AND c.id=$2`,[input.projectId,record.originCableId])).rows[0];
+  const priority={originCableId:record.originCableId,waitForOrigin:false};
+  // A deleted or newly ineligible origin has no remaining calculation to wait for.
+  if(!current||!['LV','Control','Instrumentation'].includes(current.mto))return priority;
+  if(!current.impact_id||!current.dispatch_status)return fail('LOCATION_IMPACT_ORIGIN_INTEGRITY');
+  if(current.item_state==='complete'||current.item_state==='blocked')return priority;
+  if(['failed','cancelled'].includes(current.job_state))return priority;
+  if(current.job_id){
+    // A cancellation request or revoked dispatch is not a joined terminal job.
+    // Keep siblings queued until the actual item/job has finished.
+    if(!['queued','running'].includes(current.job_state)||!['waiting','running'].includes(current.item_state))return fail('LOCATION_IMPACT_ORIGIN_INTEGRITY');
+  }else if(['blocked','superseded','cancelled','failed','awaiting-authority','restore-fenced'].includes(current.dispatch_status))return priority;
+  else if(!['pending','collecting'].includes(current.dispatch_status))return fail('LOCATION_IMPACT_ORIGIN_INTEGRITY');
+  return {...priority,waitForOrigin:true};
+}
+
 export type LocationImpactClaim = { projectId: string; impactId: string; ownerToken: string; leaseExpiresAt: string; principal: JobPrincipal };
 export type LocationImpactAdmission = { jobId: string | null; inputSha256: string; admissionId?: string | null; total: number; readyCables: number; blockedCables: number; reasonCodes?: string[] };
 export type LocationImpactAdmissionInput = { projectId: string; impactId: string; principal: JobPrincipal; cableIds: string[];
-  preferences: LocationImpactCalculation['preferences']; timeoutMilliseconds: number; signal: AbortSignal; beforeInsert(): Promise<void> };
+  preferences: LocationImpactCalculation['preferences']; timeoutMilliseconds: number; signal: AbortSignal; beforeInsert(): Promise<void>;
+  automaticPair?: { policy: AutomaticPairPolicy; createdAt: string; authorityExpiresAt: string } };
 export type LocationImpactAdapter = { admitInTransaction(client: PoolClient, input: LocationImpactAdmissionInput): Promise<LocationImpactAdmission> };
 
 export function createLocationImpactRepository(pool: Pool, adapter: LocationImpactAdapter) {
@@ -194,7 +242,9 @@ export function createLocationImpactRepository(pool: Pool, adapter: LocationImpa
       };
       if (!targets.length) { await beforeInsert(); await client.query("UPDATE pf_location_impact_dispatch SET status='superseded',reason_codes='[\"LOCATION_IMPACT_TARGET_SUPERSEDED\"]',owner_token=NULL,lease_until=NULL,due_at=NULL,updated_at=clock_timestamp() WHERE project_id=$1 AND impact_id=$2", [claim.projectId, claim.impactId]); return { status: 'superseded', jobId: null }; }
       const admission = await adapter.admitInTransaction(client, { projectId: claim.projectId, impactId: claim.impactId, principal: claim.principal, cableIds: targets,
-        preferences: record.calculation.preferences, timeoutMilliseconds: record.calculation.timeoutMilliseconds, signal, beforeInsert });
+        preferences: record.calculation.preferences, timeoutMilliseconds: record.calculation.timeoutMilliseconds, signal, beforeInsert,
+        ...(record.schemaVersion === 'wfc.pf.location-impact-record.v3' && record.automaticPairPolicy ? {automaticPair:{policy:record.automaticPairPolicy,
+          createdAt:record.createdAt,authorityExpiresAt:record.authorityExpiresAt}} : {}) });
       if (!guarded || admission.total !== targets.length || !Number.isSafeInteger(admission.readyCables) || !Number.isSafeInteger(admission.blockedCables)
         || admission.readyCables < 0 || admission.blockedCables < 0 || admission.readyCables + admission.blockedCables !== admission.total
         || admission.jobId === null && admission.total > 0) return fail('LOCATION_IMPACT_ADAPTER_INVALID', 500);

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CHANNEL, MAX_MESSAGE_BYTES, validateEnvelope, validateBootstrap, validateDescriptor, parseRouting, normalizeRoutingKey } from '../protocol.mjs';
+import { CHANNEL, MAX_MESSAGE_BYTES, MAX_BARRIER_SELECTION_MESSAGE_BYTES, validateEnvelope, validateBootstrap, validateDescriptor, parseRouting, normalizeRoutingKey } from '../protocol.mjs';
 import { BARRIER_MULTIPART_PRODUCER_PROFILE } from '../barrier-multipart-protocol.mjs';
 
 const uuid = index => `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`;
@@ -9,6 +9,50 @@ const envelope = (type, payload, overrides = {}) => ({ channel: CHANNEL, protoco
 const route = (rawRouting = '/BC1/SECONDARY/BC1') => ({ rawRouting, source: 'manual', cableId: null,
   segments: parseRouting(rawRouting).segments.map(entry => ({ ...entry, model: { state: 'found', matchCount: 1, drawable: true } })),
   ignored: parseRouting(rawRouting).ignored, drawableCount: parseRouting(rawRouting).segments.length, lineCount: 1, warnings: [] });
+
+test('tray-root selection transports only 512 unique current-load IDs within the ordinary byte ceiling', () => {
+  assert.ok(validateEnvelope(envelope('READ_TRAY_ROOT_SELECTION', {}), 'parent-to-frame'));
+  assert.equal(validateEnvelope(envelope('READ_TRAY_ROOT_SELECTION', { objects: [] })), null);
+  const objects = Array.from({ length: 512 }, (_, at) => ({ objectId: at + 1 }));
+  const maximum = envelope('TRAY_ROOT_SELECTION', { objects });
+  assert.ok(validateEnvelope(maximum, 'frame-to-parent'));
+  assert.ok(new TextEncoder().encode(JSON.stringify(maximum)).byteLength <= MAX_MESSAGE_BYTES);
+  assert.ok(validateEnvelope(envelope('TRAY_ROOT_SELECTION', { objects: [] }), 'frame-to-parent'));
+  for (const value of [objects.concat({ objectId: 513 }), [{ objectId: 1 }, { objectId: 1 }], [{ objectId: 0 }],
+    [{ objectId: 2147483648 }], [{ objectId: 1, name: 'Not a metadata page' }], [{ objectId: '1' }]])
+    assert.equal(validateEnvelope(envelope('TRAY_ROOT_SELECTION', { objects: value })), null);
+  for (const type of ['READ_TRAY_ROOT_SELECTION', 'TRAY_ROOT_SELECTION']) {
+    const value = type === 'READ_TRAY_ROOT_SELECTION' ? {} : { objects };
+    assert.equal(validateEnvelope(envelope(type, value, { modelVersionId: null, loadId: null })), null);
+    assert.equal(validateEnvelope(envelope(type, value), type === 'READ_TRAY_ROOT_SELECTION' ? 'frame-to-parent' : 'parent-to-frame'), null);
+  }
+});
+
+test('location display is a single current-load ID with an exact direction-bound acknowledgement', () => {
+  for (const [type, direction] of [['SHOW_LOCATION', 'parent-to-frame'], ['LOCATION_SHOWN', 'frame-to-parent']]) {
+    for (const sdkObjectId of [1, 2147483647]) assert.ok(validateEnvelope(envelope(type, { sdkObjectId }), direction));
+    for (const sdkObjectId of [0, -1, 1.5, 2147483648, '2', null, [2], NaN, Infinity]) assert.equal(validateEnvelope(envelope(type, { sdkObjectId })), null);
+    for (const payload of [{}, { objectId: 2 }, { sdkObjectId: 2, point: [1, 2, 3] }, { sdkObjectId: 2, token: 'secret' }, { sdkObjectId: 2, modelUrl: '/model' }])
+      assert.equal(validateEnvelope(envelope(type, payload)), null);
+    assert.equal(validateEnvelope(envelope(type, { sdkObjectId: 2 }, { modelVersionId: null, loadId: null })), null);
+    assert.equal(validateEnvelope(envelope(type, { sdkObjectId: 2 }), direction === 'parent-to-frame' ? 'frame-to-parent' : 'parent-to-frame'), null);
+  }
+});
+
+test('tray display carries one bounded unique root set with a detached exact current-load acknowledgement', () => {
+  const maximum = Array.from({ length: 512 }, (_, at) => at + 1);
+  for (const [type, direction] of [['SHOW_TRAY', 'parent-to-frame'], ['TRAY_SHOWN', 'frame-to-parent']]) {
+    for (const sdkObjectIds of [[1], [2147483647], [23, 24], maximum]) assert.ok(validateEnvelope(envelope(type, { sdkObjectIds }), direction));
+    for (const sdkObjectIds of [[], [0], [-1], [1.5], [2147483648], ['2'], [null], [NaN], [Infinity], [2, 2], Array(1), maximum.concat(513), null, 2])
+      assert.equal(validateEnvelope(envelope(type, { sdkObjectIds })), null);
+    for (const payload of [{}, { sdkObjectId: 2 }, { sdkObjectIds: [2], point: [1, 2, 3] }, { sdkObjectIds: [2], token: 'secret' }])
+      assert.equal(validateEnvelope(envelope(type, payload)), null);
+    assert.equal(validateEnvelope(envelope(type, { sdkObjectIds: [2] }, { modelVersionId: null, loadId: null })), null);
+    assert.equal(validateEnvelope(envelope(type, { sdkObjectIds: [2] }), direction === 'parent-to-frame' ? 'frame-to-parent' : 'parent-to-frame'), null);
+    const input = envelope(type, { sdkObjectIds: [23, 24] }), parsed = validateEnvelope(input, direction);
+    input.payload.sdkObjectIds[0] = 25; assert.deepEqual(parsed.payload.sdkObjectIds, [23, 24]);
+  }
+});
 
 test('multipart control preserves old ceilings and accepts no geometry, credentials, URLs or authority', () => {
   const start = { intentId: uuid(71), expectedSessionRevision: '0', scopeSha256: 'a'.repeat(64), profileSha256: 'b'.repeat(64), producerProfile: BARRIER_MULTIPART_PRODUCER_PROFILE };
@@ -22,6 +66,28 @@ test('multipart control preserves old ceilings and accepts no geometry, credenti
   assert.equal(MAX_MESSAGE_BYTES, 65536);
   assert.equal(validateEnvelope(envelope('BARRIER_CAPTURE_EVENT', { captureId: uuid(71), index: 0, done: false, eventJson: 'x'.repeat(24577) })), null);
   assert.equal(validateEnvelope(envelope('READ_BARRIER_CAPTURE', { captureId: uuid(71), index: 3000 })), null);
+});
+
+test('only an exact current-model barrier start may carry 2048 parents above the small envelope budget', () => {
+  const parents = Array.from({ length: 2048 }, (_, at) => ({ selectionId: uuid(100 + at), kind: 'wall', objectId: 'dbid:' + (at + 1),
+    dbId: at + 1, externalId: null, name: 'Original wall ' + at, identityBasis: 'version-local-only', inclusion: 'own-and-all-descendant-fragments' }));
+  const scope = { projectId: identity.projectId, modelVersionId: identity.modelVersionId, contentFingerprint: 'a'.repeat(64),
+    selectionRevision: '1', captureFrameId: uuid(8), captureFrameSha256: 'b'.repeat(64), coordinateFrame: 'canonical-world-metres' };
+  const start = envelope('START_BARRIER_CAPTURE', { captureId: uuid(9), scope, selectedParents: parents });
+  assert.equal(MAX_MESSAGE_BYTES, 65536); assert.equal(MAX_BARRIER_SELECTION_MESSAGE_BYTES, 4194304);
+  assert.ok(new TextEncoder().encode(JSON.stringify(start)).byteLength > MAX_MESSAGE_BYTES);
+  assert.deepEqual(validateEnvelope(start, 'parent-to-frame'), start);
+  assert.equal(validateEnvelope(start, 'frame-to-parent'), null);
+  for (const extra of [{ token: 'secret' }, { vertices: [] }, { url: '/elsewhere' }, { authority: 'ready' }])
+    assert.equal(validateEnvelope({ ...start, payload: { ...start.payload, ...extra } }), null);
+  assert.equal(validateEnvelope({ ...start, payload: { ...start.payload, scope: { ...scope, projectId: uuid(7777) } } }), null);
+  assert.equal(validateEnvelope({ ...start, payload: { ...start.payload, selectedParents: [...parents,
+    { ...parents[0], selectionId: uuid(9999), dbId: 9999, objectId: 'dbid:9999' }] } }), null);
+  assert.equal(validateEnvelope({ ...start, payload: { ...start.payload,
+    selectedParents: parents.map(parent => ({ ...parent, name: '界'.repeat(2048) })) } }), null);
+  assert.equal(validateEnvelope(envelope('SHOW_ROUTE', { rawRouting: '/BC1', source: 'manual', cableId: null,
+    unrelated: 'x'.repeat(65536) })), null);
+  assert.equal(validateEnvelope({ ...start, type: 'START_MODEL_CAPTURE' }), null);
 });
 
 test('independent lookup capture is a closed bounded third union without planning rules or equipment', () => {

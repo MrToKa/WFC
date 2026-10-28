@@ -40,6 +40,7 @@ export type ManagedPreparationCandidates = { candidates: ManagedPreparationCandi
  * original full plan/registry provenance remains immutable; binding-only registry
  * changes are irrelevant only when every actual capture input is still exact. */
 function completedCaptureInputsMatch(context: PreparationContext, aggregate: PreparationAggregate, plan: PreparationPlan): boolean {
+  if (plan.requestedScope.endpointScope?.mode === 'not-requested') return false;
   if (plan.projectId !== context.projectId || plan.id !== aggregate.sessionId || plan.coordinateFrameId !== aggregate.coordinateFrameId ||
     aggregate.coordinateFrameId !== preparationFrameId(context.projectId, context.scope.modelVersionId, context.scope.contentFingerprint) ||
     aggregate.engineVersion !== 'pathfinder-45c24bf5-pf1-modelrunner-v1' || aggregate.rulesVersion !== 'pf2.rules.v1/wfc-mto-v1' ||

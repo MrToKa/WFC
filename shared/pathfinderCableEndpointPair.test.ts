@@ -17,6 +17,34 @@ function fixture() {
       { end: 'to' as const, command: { ...structuredClone(common), idempotencyKey: id(12), expectedContextSha256: hash(5), expectedLogicalName: 'Shared B' } }] };
 }
 describe('versioned atomic cable endpoint pair contracts', () => {
+  const automaticFixture = () => {
+    const old = fixture();
+    return { ...old, schemaVersion: 'wfc.pf.cable-endpoint-pair-command.v2', endpoints: old.endpoints.map(entry => ({ ...entry,
+      command: { ...entry.command, schemaVersion: 'wfc.pf.cable-endpoint-command.v4', initialFill: null,
+        automaticPairPolicy: { schemaVersion: 'wfc.pf.automatic-pair-policy.v1', mode: 'when-both-empty-or-unchanged-automatic' } } })) };
+  };
+  it('retains new explicit automatic ownership policy without upgrading an old pending pair', () => {
+    const value = automaticFixture(); expect(cableEndpointPairCommandSchema.parse(value)).toEqual(value);
+    const old = fixture(); expect(cableEndpointPairCommandSchema.parse(old)).toEqual(old);
+    expect(JSON.stringify(cableEndpointPairCommandSchema.parse(old))).not.toContain('automaticPairPolicy');
+  });
+  it.each(['old-outer', 'old-child', 'mixed-child', 'different-policy', 'legacy-fill', 'no-calculation', 'extra-authority'])(
+    'refuses inconsistent automatic pair %s without broadening frozen pending authority', kind => {
+      const value = automaticFixture();
+      if (kind === 'old-outer') value.schemaVersion = 'wfc.pf.cable-endpoint-pair-command.v1';
+      if (kind === 'old-child') for (const entry of value.endpoints) entry.command.schemaVersion = 'wfc.pf.cable-endpoint-command.v3';
+      if (kind === 'mixed-child') value.endpoints[1].command.schemaVersion = 'wfc.pf.cable-endpoint-command.v3';
+      if (kind === 'different-policy') Object.assign(value.endpoints[1].command, { automaticPairPolicy: null });
+      if (kind === 'legacy-fill') Object.assign(value.endpoints[0].command, { initialFill: { mode: 'when-both-empty' } });
+      if (kind === 'no-calculation') Object.assign(value.endpoints[0].command, { calculation: null });
+      if (kind === 'extra-authority') Object.assign(value.endpoints[0].command.automaticPairPolicy, { overwriteManual: true });
+      expect(cableEndpointPairCommandSchema.safeParse(value).success).toBe(false);
+    });
+  it('permits explicit endpoint-only v4 without requesting routing or write authority', () => {
+    const value = automaticFixture();
+    for (const entry of value.endpoints) Object.assign(entry.command, { calculation: null, automaticPairPolicy: null });
+    expect(cableEndpointPairCommandSchema.parse(value)).toEqual(value);
+  });
   it('retains the exact explicit body and original two contexts without defaults or transforms', () => {
     const value = fixture(); expect(cableEndpointPairCommandSchema.parse(value)).toEqual(value); expect(cableEndpointPairCommandHashInput(value)).toEqual(value);
     value.endpoints.pop(); expect(cableEndpointPairCommandSchema.parse(value).expectedContexts.to).toBe(hash(5));

@@ -161,8 +161,9 @@ describe('separate barrier model/parent and capture contracts', () => {
     const command = { schemaVersion: 'wfc.pf.barrier-capture-command.v1', scope: scope(), expectedRegistryRevision: '0',
       idempotencyKey: id(30), selectedParents: [parent()] };
     expect(barrierCaptureCommandSchema.safeParse(command).success).toBe(true);
-    expect(barrierCaptureCommandSchema.safeParse({ ...command, selectedParents: Array.from({ length: 129 }, (_, number) => parent(number + 1)) }).success).toBe(false);
-    expect(barrierCaptureCommandSchema.safeParse({ ...command, selectedParents: Array.from({ length: 64 }, (_, number) => ({ ...parent(number + 1), name: 'a'.repeat(2048) })) }).success).toBe(false);
+    expect(barrierCaptureCommandSchema.safeParse({ ...command, selectedParents: Array.from({ length: 2048 }, (_, number) => parent(number + 1)) }).success).toBe(true);
+    expect(barrierCaptureCommandSchema.safeParse({ ...command, selectedParents: Array.from({ length: 2049 }, (_, number) => parent(number + 1)) }).success).toBe(false);
+    expect(barrierCaptureCommandSchema.safeParse({ ...command, selectedParents: Array.from({ length: 2048 }, (_, number) => ({ ...parent(number + 1), name: '界'.repeat(2048) })) }).success).toBe(false);
   });
 });
 

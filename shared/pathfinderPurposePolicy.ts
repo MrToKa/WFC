@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { cablePurposesSchema, policyCablePurposesSchema } from './routingCablePurposes.js';
 
 export const PURPOSE_POLICY_LIMITS = Object.freeze({writeBytes:1024*1024,responseBytes:64*1024*1024,catalogRows:100000,pageSize:1000,purposes:4096,historyRows:100,rawText:65536});
 const complete=(pattern:RegExp)=>(value:string)=>pattern.exec(value)?.[0]===value;
@@ -13,11 +14,11 @@ export const purposeKeySchema=z.string().min(1).max(500).refine(value=>wellForme
 export const routingCategorySchema=z.enum(['MV','LV','Control']);
 const categoryOrder=['MV','LV','Control'] as const;
 export const routingCategoriesSchema=z.array(routingCategorySchema).max(3).refine(values=>values.every((value,index)=>index===0||categoryOrder.indexOf(values[index-1])<categoryOrder.indexOf(value)),'Categories must be unique and in MV, LV, Control order.');
-export const routingRuleSchema=z.object({purposeKey:purposeKeySchema,allowedCategories:routingCategoriesSchema}).strict();
+export const routingRuleSchema=z.object({purposeKey:purposeKeySchema,allowedCategories:policyCablePurposesSchema}).strict();
 const uniquePurposes=(values:{purposeKey:string}[])=>new Set(values.map(value=>value.purposeKey)).size===values.length;
-export const routePurposePolicySchema=z.object({schemaVersion:z.literal('pathfinder.routing-purpose-policy.v1'),projectId:policyUuidSchema,catalogRevision:policyRevisionSchema,routingPolicyRevision:policyRevisionSchema,rules:z.array(routingRuleSchema).max(PURPOSE_POLICY_LIMITS.purposes).refine(uniquePurposes)}).strict();
-const changeSchema=z.discriminatedUnion('operation',[z.object({purposeKey:purposeKeySchema,operation:z.literal('set'),allowedCategories:routingCategoriesSchema}).strict(),z.object({purposeKey:purposeKeySchema,operation:z.literal('reset')}).strict()]);
-export const routePurposeWriteSchema=z.object({schemaVersion:z.literal('pathfinder.routing-purpose-policy.write.v1'),expectedCatalogRevision:policyRevisionSchema,expectedRevision:policyRevisionSchema,idempotencyKey:policyUuidSchema,changes:z.array(changeSchema).min(1).max(PURPOSE_POLICY_LIMITS.purposes).refine(uniquePurposes)}).strict();
+export const routePurposePolicySchema=z.object({schemaVersion:z.literal('pathfinder.routing-purpose-policy.v1'),projectId:policyUuidSchema,catalogRevision:policyRevisionSchema,routingPolicyRevision:policyRevisionSchema,rules:z.array(routingRuleSchema).max(PURPOSE_POLICY_LIMITS.purposes).refine(uniquePurposes),cablePurposes:cablePurposesSchema.optional(),cablePurposesSha256:policyHashSchema.optional(),invalidCablePurposeCount:z.number().int().min(0).optional()}).strict();
+const changeSchema=z.discriminatedUnion('operation',[z.object({purposeKey:purposeKeySchema,operation:z.literal('set'),allowedCategories:policyCablePurposesSchema}).strict(),z.object({purposeKey:purposeKeySchema,operation:z.literal('reset')}).strict()]);
+export const routePurposeWriteSchema=z.object({schemaVersion:z.literal('pathfinder.routing-purpose-policy.write.v1'),expectedCatalogRevision:policyRevisionSchema,expectedRevision:policyRevisionSchema,expectedCablePurposesSha256:policyHashSchema.optional(),idempotencyKey:policyUuidSchema,changes:z.array(changeSchema).min(1).max(PURPOSE_POLICY_LIMITS.purposes).refine(uniquePurposes)}).strict();
 export const policySaveSchema=z.object({schemaVersion:z.literal('pathfinder.policy-save.v1'),projectId:policyUuidSchema,domain:z.literal('routing'),catalogRevision:policyRevisionSchema,previousRevision:policyRevisionSchema,revision:policyRevisionSchema,auditId:policyUuidSchema,duplicate:z.boolean()}).strict();
 export const policyRevisionsSchema=z.object({catalogRevision:policyRevisionSchema,routingPolicyRevision:policyRevisionSchema,drawingPolicyRevision:policyRevisionSchema}).strict();
 export const policyErrorSchema=z.object({schemaVersion:z.literal('pathfinder.policy-error.v1'),code:z.string().refine(complete(/^[A-Z][A-Z0-9_]{0,95}$/)),message:z.string().max(2048),currentRevisions:policyRevisionsSchema.nullable()}).strict();

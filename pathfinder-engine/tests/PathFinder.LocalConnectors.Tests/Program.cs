@@ -14,7 +14,7 @@ internal static class Program
     {
         if (args.Length != 0) return 2;
         var elapsed = Stopwatch.StartNew();
-        Standalone(); Integrated(); LegacyAndSecondary(); BudgetsAndRefusals(); elapsed.Stop();
+        Standalone(); Integrated(); NearestAnchoredSearch(); LegacyAndSecondary(); BudgetsAndRefusals(); elapsed.Stop();
         Console.WriteLine(JsonSerializer.Serialize(new
         {
             schemaVersion = "wfc.pf.local-connectors-checks.v1", status = failures == 0 ? "PASS" : "FAIL",
@@ -210,6 +210,56 @@ internal static class Program
             Need(value.FromConnector is not null); ClearPlan(value.FromConnector!, from, P(.75, 1), kernel); Need(value.FromConnector!.IsDetour);
             Need(value.RouteEvaluation.Route.SegmentIds.SequenceEqual(new[] { "A" }));
         });
+        Run("an exact clear second connector does not consume an exhausted lattice-plan allowance", () =>
+        {
+            var kernel = Kernel(Opening()); var from = P(-.75, 1); var to = P(.75, 1.5);
+            var value = Route([Tray("A", P(.75, 1), to)], from, to, Query(kernel),
+                limits: new() { MaxPairs = 2 }, local: new() { MaxPlans = 1, MaxStraightPairs = 1, UseNearestAnchoredSearch = true });
+            ClearRoute(value, kernel); Equal(1, value.PlannerAttempts); Need(value.LocalPhaseUsed);
+            Need(value.FromConnector is not null && value.FromConnector.IsDetour);
+            Need(value.ToConnector is not null && !value.ToConnector.IsDetour);
+            Need(value.RouteEvaluation.PairAttempts <= 2 && value.LocalEdgeChecks <= 16384);
+        });
+        Run("an exact long clear approach needs no oversized lattice and standalone domain guards remain unchanged", () =>
+        {
+            var kernel = Kernel(Opening()); var from = P(-.75, 1); var station = P(.75, 1.5); var to = P(30, 1.5);
+            var value = Route([Tray("A", P(.75, 1), station)], from, to, Query(kernel),
+                limits: new() { MaxPairs = 2 }, local: new() { MaxPlans = 1, MaxStraightPairs = 1, UseNearestAnchoredSearch = true });
+            ClearRoute(value, kernel); Equal(1, value.PlannerAttempts);
+            Need(value.ToConnector is not null && !value.ToConnector.IsDetour);
+            ClearPlan(value.ToConnector!, to, station, kernel);
+            Need(value.ToConnector!.Domain.Maximum.X - value.ToConnector.Domain.Minimum.X > 20);
+            var standalone = Plan(to, station, Query(kernel), new(P(-.25, .5, -1), P(31, 2.5, 1), .25), new() { UseNearestAnchoredSearch = true });
+            Incomplete(standalone); Equal("LOCAL_DOMAIN_UNSUPPORTED", standalone.Reason); Equal(0, standalone.Queries);
+        });
+        Run("an unsupported integrated domain cannot spend the one lattice plan needed by a later candidate", () =>
+        {
+            var from = P(0); var to = P(17, 10); var near = P(19); var later = P(17, 9);
+            RouteCollisionQuery oracle = (a, b, token) => new(
+                Same(a, from) && (Same(b, near) || Same(b, later)) ? RouteCollisionStatus.Blocked : RouteCollisionStatus.Clear,
+                null, "Synthetic exact directed connector observation.", 0);
+            var routing = Options(); routing.PreferVerticalApproach = false;
+            var value = Route([Tray("A-unsupported", near, P(19, 1)), Tray("B-supported", later, to)], from, to, oracle, routing,
+                local: new() { MaxPlans = 1, PaddingMeters = 0, MaxAxisSpanMeters = 18, UseNearestAnchoredSearch = true });
+            Need(value.RouteEvaluation.Route.Success); Equal(ConstrainedRouteStatus.Clear, value.RouteEvaluation.Status);
+            Equal(1, value.PlannerAttempts); Need(value.LocalPhaseUsed && value.FromConnector is not null && value.FromConnector.IsDetour);
+            Need(value.RouteEvaluation.Route.SegmentIds.SequenceEqual(new[] { "B-supported" }));
+            var points = value.RouteEvaluation.Route.PathPoints;
+            for (int i = 1; i < points.Count; i++) Equal(RouteCollisionStatus.Clear, oracle(points[i - 1], points[i], default).Status);
+            Need(value.RouteEvaluation.PairAttempts <= 64 && value.LocalEdgeChecks <= 16384);
+        });
+        Run("integrated straight preflight cannot replace a fresh failed physical connector recheck", () =>
+        {
+            var kernel = Kernel(Opening()); var from = P(-.75, 1); var to = P(.75, 1.5); int targetChecks = 0;
+            var physical = Query(kernel);
+            RouteCollisionQuery oracle = (a, b, token) => Same(a, to) && Same(b, to) && ++targetChecks > 1
+                ? new(RouteCollisionStatus.Blocked, null, "Fresh exact target occupancy changed.", 0) : physical(a, b, token);
+            var value = Route([Tray("A", P(.75, 1), to)], from, to, oracle,
+                limits: new() { MaxPairs = 2 }, local: new() { MaxPlans = 1, MaxStraightPairs = 1, UseNearestAnchoredSearch = true });
+            Need(!value.RouteEvaluation.Route.Success); Need(targetChecks >= 2);
+            Need(value.RouteEvaluation.Status is not (ConstrainedRouteStatus.Clear or ConstrainedRouteStatus.Bypassed));
+            Need(value.PlannerAttempts <= 1 && value.LocalEdgeChecks <= 16384);
+        });
         Run("both endpoint detours preserve bottom anchors and exact measured approach lengths", () =>
         {
             var kernel = Kernel(Opening("west"), Transform(Opening("east"), point => B(point.X + 2, point.Y, point.Z)));
@@ -230,8 +280,12 @@ internal static class Program
         Run("one shared planner-attempt ceiling covers both cable ends", () =>
         {
             var kernel = Kernel(Opening("west"), Transform(Opening("east"), point => B(point.X + 2, point.Y, point.Z)));
-            var value = Route([Tray("A", P(.75, 1), P(1.25, 1))], P(-.75, 1), P(2.75, 1), Query(kernel), local: new() { MaxPlans = 1 });
-            Need(!value.RouteEvaluation.Route.Success); Equal(ConstrainedRouteStatus.SearchIncomplete, value.RouteEvaluation.Status); Need(value.PlannerAttempts <= 1);
+            foreach (bool current in new[] { false, true })
+            {
+                var value = Route([Tray("A", P(.75, 1), P(1.25, 1))], P(-.75, 1), P(2.75, 1), Query(kernel),
+                    local: new() { MaxPlans = 1, UseNearestAnchoredSearch = current });
+                Need(!value.RouteEvaluation.Route.Success); Equal(ConstrainedRouteStatus.SearchIncomplete, value.RouteEvaluation.Status); Need(value.PlannerAttempts <= 1);
+            }
         });
         Run("local search has reserved room after the bounded straight phase", () =>
         {
@@ -262,6 +316,70 @@ internal static class Program
         });
     }
 
+    private static List<(int First, int Last)> AnchoredRanks(int first, int last)
+    {
+        var method = typeof(RouteCalculator).GetMethod("NearestAnchoredPairRanks", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        var values = (IEnumerable<Tuple<int, int>>)method.Invoke(null, [first, last])!;
+        return values.Select(pair => (pair.Item1, pair.Item2)).ToList();
+    }
+    private static void NearestAnchoredSearch()
+    {
+        Run("nearest-anchored scheduling enumerates every retained pair exactly once for all bounded list sizes", () =>
+        {
+            for (int first = 0; first <= 16; first++) for (int last = 0; last <= 16; last++)
+            {
+                var pairs = AnchoredRanks(first, last); Equal(first * last, pairs.Count); Equal(pairs.Count, pairs.Distinct().Count());
+                Need(pairs.All(pair => pair.First >= 0 && pair.First < first && pair.Last >= 0 && pair.Last < last));
+                Need(pairs.SequenceEqual(AnchoredRanks(first, last)), "The same bounded candidate ranks changed their enumeration.");
+            }
+        });
+        Run("nearest-anchored scheduling covers both full retained axes within thirty-one local attempts", () =>
+        {
+            var pairs = AnchoredRanks(16, 16); Equal((0, 0), pairs[0]); Equal((0, 15), pairs[29]); Equal((15, 0), pairs[30]);
+            for (int rank = 0; rank < 16; rank++) Need(pairs.Take(31).Contains((0, rank)) && pairs.Take(31).Contains((rank, 0)));
+            Need(AnchoredRanks(1, 16).SequenceEqual(Enumerable.Range(0, 16).Select(rank => (0, rank))));
+            Need(AnchoredRanks(16, 1).SequenceEqual(Enumerable.Range(0, 16).Select(rank => (rank, 0))));
+        });
+        Run("nearest-anchored scheduling retains original rank-sum order for all interior pairs", () =>
+        {
+            var expected = new List<(int, int)>();
+            for (int sum = 0; sum <= 30; sum++) for (int first = 1; first < 16; first++)
+            { int last = sum - first; if (last > 0 && last < 16) expected.Add((first, last)); }
+            Need(AnchoredRanks(16, 16).Skip(31).SequenceEqual(expected));
+        });
+        Run("nearest-anchored opt-in reaches a retained farther connected tray while the historical bounded order stays incomplete", () =>
+        {
+            var kernel = Kernel(Box("near-From-only", x0: .5, x1: 1.5, y0: -.2, y1: .5, z0: -.2, z1: .2));
+            var trays = new List<TraySegment> { Tray("A-connected", P(0, 1), P(0, 2)) };
+            for (int rank = 0; rank < 15; rank++) trays.Add(Tray("B" + rank.ToString("D2"), P(100 + .01 * rank), P(100 + .01 * rank, .2)));
+            var from = P(0); var to = P(100); var routing = Options(); routing.PreferVerticalApproach = false;
+            var historical = Route(trays.ToArray(), from, to, Query(kernel), routing);
+            Need(!historical.RouteEvaluation.Route.Success); Equal("CANDIDATE_PAIR_LIMIT", historical.RouteEvaluation.Reason);
+            Equal(64, historical.RouteEvaluation.PairAttempts); Need(historical.PlannerAttempts <= 8);
+            var options = new LocalConnectorOptions { UseNearestAnchoredSearch = true };
+            var current = Route(trays.ToArray(), from, to, Query(kernel), routing, local: options);
+            ClearRoute(current, kernel); Need(current.RouteEvaluation.Route.SegmentIds.SequenceEqual(new[] { "A-connected" }));
+            Need(current.RouteEvaluation.Route.ToRequiresSecondary); Need(current.RouteEvaluation.PairAttempts <= 39);
+            Equal(0, current.PlannerAttempts); Need(current.LocalEdgeChecks <= 16384 && current.RouteEvaluation.CollisionQueries <= 100000);
+            Need(!current.RouteEvaluation.SearchComplete, "A verified found route must not relabel the truncated straight search as exhaustive.");
+            var permuted = Route(trays.AsEnumerable().Reverse().ToArray(), from, to, Query(kernel), routing, local: options);
+            ExactRoute(current.RouteEvaluation.Route, permuted.RouteEvaluation.Route);
+            Equal(current.RouteEvaluation.PairAttempts, permuted.RouteEvaluation.PairAttempts);
+            var limited = Route(trays.ToArray(), from, to, Query(kernel), routing, limits: new() { MaxPairs = 1 }, local: options);
+            Need(!limited.RouteEvaluation.Route.Success); Equal("CANDIDATE_PAIR_LIMIT", limited.RouteEvaluation.Reason); Equal(1, limited.RouteEvaluation.PairAttempts);
+        });
+        Run("nearest-anchored opt-in preserves the exact legacy clear first pair and unchanged published ceilings", () =>
+        {
+            var kernel = Kernel(Box("remote", x0: 100, x1: 101)); var from = P(2.123, .75); var to = P(8.987, -.3);
+            var trays = new[] { Tray("A", P(0), P(10)) };
+            var value = Route(trays, from, to, Query(kernel), local: new() { UseNearestAnchoredSearch = true });
+            ExactRoute(Calculator.Calculate(trays, from, to, CableCategory.Control, Options()), value.RouteEvaluation.Route);
+            Need(!value.LocalPhaseUsed); Equal(0, value.PlannerAttempts); Equal(1, value.RouteEvaluation.PairAttempts);
+            var options = new LocalConnectorOptions(); Need(!options.UseNearestAnchoredSearch);
+            Equal("wfc.pf.nearest-anchored-local-search.v1", LocalConnectorOptions.NearestAnchoredSearchPolicyVersion);
+            Equal(8, options.MaxPlans); Equal(8, options.MaxStraightPairs); Equal(16384, options.MaxEdgeChecks); Equal(4096, options.MaxNodes);
+        });
+    }
     private static void LegacyAndSecondary()
     {
         Run("unobstructed first pair remains bitwise and decimal-identical without local work", () =>

@@ -6,11 +6,37 @@ vi.mock('@/api/pathfinderPolicies', async () => ({ ...await vi.importActual<type
 const projectId = '11111111-1111-1111-1111-111111111111';
 const scope = { projectId, loadedProjectId: projectId, token: 'login-one', isAdmin: true };
 const catalog = { projectId, catalogRevision: '1', rowCount: 2, diagnostics: [], rows: [{ purposeKey: 'Custom Ω' }, { purposeKey: 'Custom Ω' }] } as unknown as api.CatalogEnvelope;
-const policy = { schemaVersion: 'pathfinder.routing-purpose-policy.v1', projectId, catalogRevision: '1', routingPolicyRevision: '0', rules: [] } as api.RoutingPurposePolicy;
+const policy = { schemaVersion: 'pathfinder.routing-purpose-policy.v1', projectId, catalogRevision: '1', routingPolicyRevision: '0', cablePurposes: ['Control', 'Grounding', 'LV', 'MV', 'Power', 'VFD'], cablePurposesSha256: 'a'.repeat(64), rules: [] } as api.RoutingPurposePolicy;
 const history = { schemaVersion: 'pathfinder.policy-history.v1', projectId, domain: 'routing', events: [], nextBeforeRevision: null } as api.PolicyHistory;
 beforeEach(() => { vi.resetAllMocks(); vi.mocked(api.fetchRoutingPurposeCatalog).mockResolvedValue(catalog); vi.mocked(api.fetchRoutingPurposePolicy).mockResolvedValue(policy); vi.mocked(api.fetchRoutingPurposeHistory).mockResolvedValue(history); });
 async function ready() { const hook = renderHook(() => useRoutingPurposePolicy(scope)); await waitFor(() => expect(hook.result.current.canEdit).toBe(true)); return hook; }
 describe('routing purpose policy lifecycle', () => {
+  it('uses project Cable types purposes independently and fences the exact purpose catalog on save', async () => {
+    const hook = await ready();
+    expect(hook.result.current.cablePurposes).toEqual(policy.cablePurposes);
+    act(() => { hook.result.current.toggle('Custom Ω', 'VFD', true); hook.result.current.toggle('Custom Ω', 'Power', true); hook.result.current.toggle('Custom Ω', 'Not in project', true); });
+    expect(hook.result.current.rows[0].categories).toEqual(['Power', 'VFD']);
+    act(() => hook.result.current.toggle('Custom Ω', 'VFD', false));
+    vi.mocked(api.saveRoutingPurposePolicy).mockResolvedValue({ duplicate: false } as api.PolicySaveReceipt);
+    await act(() => hook.result.current.save());
+    expect(vi.mocked(api.saveRoutingPurposePolicy).mock.calls[0][2]).toMatchObject({ expectedCablePurposesSha256: 'a'.repeat(64), changes: [{ purposeKey: 'Custom Ω', operation: 'set', allowedCategories: ['Power'] }] });
+  });
+  it('does not invent columns for an empty project or load a different project catalog after switching', async () => {
+    vi.mocked(api.fetchRoutingPurposePolicy).mockResolvedValue({ ...policy, cablePurposes: [] });
+    const hook = await ready();
+    expect(hook.result.current.cablePurposes).toEqual([]);
+    act(() => hook.result.current.toggle('Custom Ω', 'Control', true));
+    expect(hook.result.current.dirty).toBe(false);
+  });
+  it('exposes unmatched legacy categories without granting new purposes until the administrator selects them', async () => {
+    vi.mocked(api.fetchRoutingPurposePolicy).mockResolvedValue({ ...policy, cablePurposes: ['Power', 'VFD'], rules: [{ purposeKey: 'Custom Ω', allowedCategories: ['LV'] }] });
+    const hook = await ready();
+    expect(hook.result.current.dirty).toBe(false);
+    expect(hook.result.current.rows[0].categories).toEqual(['LV']);
+    act(() => hook.result.current.toggle('Custom Ω', 'VFD', true));
+    expect(hook.result.current.rows[0].categories).toEqual(['VFD']);
+    expect(hook.result.current.canSave).toBe(true);
+  });
   it('uses actual purposes and distinguishes absent, empty and reset without defaults', async () => {
     const hook = await ready();
     expect(hook.result.current.rows[0]).toMatchObject({ purposeKey: 'Custom Ω', trayCount: 2, configured: false, categories: [] });

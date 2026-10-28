@@ -52,6 +52,75 @@ function setup() {
 beforeEach(() => vi.clearAllMocks());
 
 describe('administrator cable revision inspection', () => {
+  it('reads the selected cached queued job and retains its newer completion over older props', async () => {
+    const { f } = setup(), row = f.page.rows[0], readJob = vi.fn().mockResolvedValue(completeJob());
+    const p = props(), queued = { ...completeJob(), status: 'queued' as const, updatedAt: '2026-10-19T12:00:00Z' };
+    const batch = { entries: [], busy: false, select: vi.fn(), clearSelection: vi.fn() } as unknown as NonNullable<PathFinderRevisionResultsProps['batch']>;
+    const cables = [{ id: row.cableId, mto: 'Control' }] as PathFinderRevisionResultsProps['cables'];
+    const view = render(<PathFinderRevisionResults {...p} jobs={[queued]} readJob={readJob} batch={batch} cables={cables} />);
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Select C-001 for review' })).toBeEnabled());
+    expect(readJob).toHaveBeenCalledOnce();
+    expect(screen.getByRole('status', { name: 'Selected calculation scope' })).toHaveTextContent('Status: complete');
+    expect(screen.getByRole('combobox', { name: 'Calculation scope' })).toHaveTextContent('complete');
+    view.rerender(<PathFinderRevisionResults {...p} jobs={[{ ...queued, updatedAt: '2026-10-19T12:00:30Z' }]} readJob={readJob} batch={batch} cables={cables} />);
+    expect(screen.getByRole('checkbox', { name: 'Select C-001 for review' })).toBeEnabled();
+    expect(readJob).toHaveBeenCalledOnce(); expect(batch.select).not.toHaveBeenCalled();
+  });
+  it('refreshes both the selected job and result page when cached progress has stopped', async () => {
+    const { f, state } = setup(), row = f.page.rows[0];
+    const queued = { ...completeJob(), status: 'queued' as const, updatedAt: '2026-10-19T12:00:00Z' };
+    const readJob = vi.fn().mockResolvedValueOnce(queued).mockResolvedValueOnce(completeJob());
+    const batch = { entries: [], busy: false, select: vi.fn(), clearSelection: vi.fn() } as unknown as NonNullable<PathFinderRevisionResultsProps['batch']>;
+    render(<PathFinderRevisionResults {...props()} jobs={[queued]} readJob={readJob} batch={batch}
+      cables={[{ id: row.cableId, mto: 'Control' }] as PathFinderRevisionResultsProps['cables']} />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh revision results' })).toBeEnabled());
+    expect(screen.getByRole('checkbox', { name: 'Select C-001 for review' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh revision results' }));
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Select C-001 for review' })).toBeEnabled());
+    expect(state.refresh).toHaveBeenCalledOnce(); expect(readJob).toHaveBeenCalledTimes(2);
+    expect(batch.select).not.toHaveBeenCalled();
+  });
+  it('retains a newer known cancellation over an older completed job read', async () => {
+    const { f } = setup(), row = f.page.rows[0], readJob = vi.fn().mockResolvedValue(completeJob()), p = props();
+    const batch = { entries: [], busy: false, select: vi.fn(), clearSelection: vi.fn() } as unknown as NonNullable<PathFinderRevisionResultsProps['batch']>;
+    const cables = [{ id: row.cableId, mto: 'Control' }] as PathFinderRevisionResultsProps['cables'];
+    const view = render(<PathFinderRevisionResults {...p} readJob={readJob} batch={batch} cables={cables} />);
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Select C-001 for review' })).toBeEnabled());
+    view.rerender(<PathFinderRevisionResults {...p} jobs={[{ ...completeJob(), status: 'cancelled', cancelRequested: true,
+      updatedAt: '2026-10-19T12:02:00Z' }]} readJob={readJob} batch={batch} cables={cables} />);
+    await waitFor(() => expect(readJob).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh revision results' })).toBeEnabled());
+    expect(screen.getByRole('checkbox', { name: 'Select C-001 for review' })).toBeDisabled();
+    expect(screen.getByText(/This calculation was cancelled/)).toBeVisible(); expect(batch.select).not.toHaveBeenCalled();
+  });
+  it('displays an exact already-saved result without offering a second review or apply', () => {
+    const { f, state } = setup(), original = f.page.rows[0];
+    const row = { ...original, currentness: { state: 'current' as const, reasonCodes: ['RESULT_ALREADY_SAVED'] } };
+    vi.mocked(usePathfinderRevisionResults).mockReturnValue({ ...state, page: { ...f.page, rows: [row] }, detail: { ...f.detail, row } });
+    const batch = { entries: [], busy: false, select: vi.fn(), clearSelection: vi.fn() } as unknown as NonNullable<PathFinderRevisionResultsProps['batch']>;
+    render(<PathFinderRevisionResults {...props()} jobs={[{ ...completeJob(), status: 'queued' }]} batch={batch}
+      cables={[{ id: row.cableId, mto: 'Control' }] as PathFinderRevisionResultsProps['cables']} />);
+    expect(screen.getByRole('table', { name: 'Cable revision result page' })).toHaveTextContent('Saved in Cable list');
+    expect(screen.getByRole('table', { name: 'Cable revision result page' })).toHaveTextContent('Design at calculation start: 12.00000000000000000001 m');
+    expect(screen.getByRole('table', { name: 'Cable revision result page' })).toHaveTextContent('Saved design: 13 m');
+    expect(screen.getByText('This result is already saved in Cable list. No Review or Apply is needed.')).toBeVisible();
+    expect(screen.queryByText(/Current design:/)).toBeNull(); expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole('checkbox', { name: 'Select C-001 for review' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Select ready cables on this page' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Inspect C-001' })).toBeEnabled(); expect(batch.select).not.toHaveBeenCalled();
+    expect(row.baseline).toEqual(original.baseline); expect(row.result).toEqual(original.result);
+  });
+  it('does not reinterpret a changed result as saved from a reason code alone', () => {
+    const { f, state } = setup();
+    const row = { ...f.page.rows[0], currentness: { state: 'changed' as const, reasonCodes: ['RESULT_ALREADY_SAVED'] } };
+    vi.mocked(usePathfinderRevisionResults).mockReturnValue({ ...state, page: { ...f.page, rows: [row] }, detail: { ...f.detail, row } });
+    const batch = { entries: [], busy: false, select: vi.fn(), clearSelection: vi.fn() } as unknown as NonNullable<PathFinderRevisionResultsProps['batch']>;
+    render(<PathFinderRevisionResults {...props()} batch={batch}
+      cables={[{ id: row.cableId, mto: 'Control' }] as PathFinderRevisionResultsProps['cables']} />);
+    expect(screen.queryByText('This result is already saved in Cable list. No Review or Apply is needed.')).toBeNull();
+    expect(screen.getByRole('checkbox', { name: 'Select C-001 for review' })).toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent('Currentness: changed');
+  });
   it('announces explicit history selection, inspection and opening without treating automatic history reads as a selection', async () => {
     const { state } = setup(), p = props(), chooseHistory = vi.fn();
     render(<PathFinderRevisionResults {...p} onHistorySelection={chooseHistory} />);

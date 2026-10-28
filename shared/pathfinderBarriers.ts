@@ -9,9 +9,9 @@ export const BARRIER_COLLISION_VERSION = 'wfc.pf.triangle-centreline-collision.v
 /** Declared refusal ceilings, NOT measured capacity. B1/B2 must qualify them under the 512 MiB session budget.
  * Mesh blobs are separate from the runner's 1 MiB control message. Numeric tolerance is not cable clearance. */
 export const BARRIER_LIMITS = Object.freeze({
-  selectedParents: 128, fragments: 8192, computationalMeshes: 256, vertices: 500_000, triangles: 250_000,
+  selectedParents: 2048, fragments: 8192, computationalMeshes: 2048, vertices: 500_000, triangles: 250_000,
   captureBytes: 32 * 1024 ** 2, meshBlobBytes: 32 * 1024 ** 2, snapshotBytes: 64 * 1024 ** 2,
-  manifestBytes: 256 * 1024, controlBytes: 64 * 1024, bvhNodes: 500_000,
+  manifestBytes: 4 * 1024 ** 2, controlBytes: 4 * 1024 ** 2, bvhNodes: 500_000,
   buildWork: 40_000_000, queryWork: 2_000_000, buildMilliseconds: 60_000, queryMilliseconds: 10_000,
   routeSegments: 200_000, diagnostics: 64, coordinateMagnitudeMetres: 1_000_000_000,
 } as const);

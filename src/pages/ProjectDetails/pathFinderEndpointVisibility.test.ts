@@ -9,7 +9,7 @@ import { endpointBindingFixture, endpointIds as ids } from '@/test/endpointBindi
 import { geometryTraceFixture } from '@/test/geometryTraceFixtures';
 import { canonicalPurposeJson } from '../../../shared/pathfinderPurposePolicy';
 import { endpointBindingContentHashInput } from '../../../shared/pathfinderEndpointBindings';
-import { computedPathObjectIds, previewEndpointObjectIds, proposalEndpointObjectIds, ENDPOINT_VISIBILITY_DEADLINE_MS } from './pathFinderEndpointVisibility';
+import { computedPathObjectIds, previewEndpointObjectIds, proposalEndpointObjectIds, proposalEndpointObjectIdsFromContexts, ENDPOINT_VISIBILITY_DEADLINE_MS } from './pathFinderEndpointVisibility';
 
 vi.mock('@/api/pathfinderEndpointBindings', async importOriginal => ({ ...await importOriginal<typeof import('@/api/pathfinderEndpointBindings')>(), fetchEndpointBinding: vi.fn() }));
 vi.mock('@/api/pathfinderGeometryTrace', async importOriginal => ({ ...await importOriginal<typeof import('@/api/pathfinderGeometryTrace')>(), fetchGeometryObjectRevision: vi.fn() }));
@@ -129,6 +129,36 @@ describe('Path Finder endpoint foreground evidence', () => {
     expect(fetchEndpointBinding).not.toHaveBeenCalled(); expect(fetchGeometryObjectRevision).not.toHaveBeenCalled();
     expect(f.proposal).toEqual(before); expect(f.context.head?.sourceObject).toBe(null); expect(f.context.head?.attachment).toBe(null);
   });
+  it('reuses the exact verified popup binding without another endpoint or geometry request', async () => {
+    const f = fixedDisplayFixture(), contexts = { from: f.context, to: f.context };
+    expect(proposalEndpointObjectIdsFromContexts(f.proposal, f.state, f.access, contexts)).toEqual(['dbid:901']);
+    expect(await proposalEndpointObjectIds(f.proposal, f.state, f.access, undefined, contexts)).toEqual(['dbid:74', 'dbid:901']);
+    expect(fetchCableEndpointContext).not.toHaveBeenCalled(); expect(fetchEndpointBinding).not.toHaveBeenCalled(); expect(fetchGeometryObjectRevision).not.toHaveBeenCalled();
+  });
+  it('starts both fixed-world endpoint reads before either one finishes and retains their independent exact evidence', async () => {
+    const f = fixedDisplayFixture(), finish = new Map<string, (context: CableEndpointContext) => void>();
+    const proposal = parsePathFinderProposal({ ...f.raw, dependencies: { ...f.raw.dependencies, from: f.proposal.dependencies!.to, to: f.proposal.dependencies!.to } });
+    vi.mocked(fetchCableEndpointContext).mockImplementation((_project, _token, _cable, end) => new Promise(resolve => { finish.set(end, resolve); }));
+    const pending = proposalEndpointObjectIds(proposal, f.state, f.access);
+    await Promise.resolve();
+    expect(fetchCableEndpointContext).toHaveBeenCalledTimes(2);
+    expect([...finish.keys()]).toEqual(['from', 'to']);
+    finish.get('to')!({ ...f.context, end: 'to' });
+    finish.get('from')!({ ...f.context, end: 'from' });
+    expect(await pending).toEqual(['dbid:901']);
+    expect(fetchEndpointBinding).not.toHaveBeenCalled(); expect(fetchGeometryObjectRevision).not.toHaveBeenCalled();
+  });
+  it('aborts and joins a concurrent endpoint peer while retaining the original authority refusal', async () => {
+    const f = fixedDisplayFixture(), refused = new CableEndpointApiError('ADMIN_REQUIRED', 403, 'Current access was refused.');
+    const proposal = parsePathFinderProposal({ ...f.raw, dependencies: { ...f.raw.dependencies, from: f.proposal.dependencies!.to, to: f.proposal.dependencies!.to } });
+    let peerAborted = false;
+    vi.mocked(fetchCableEndpointContext).mockImplementation((_project, _token, _cable, end, signal) => end === 'to'
+      ? Promise.reject(refused)
+      : new Promise((_resolve, reject) => { signal!.addEventListener('abort', () => { peerAborted = true; reject(new DOMException('Peer stopped.', 'AbortError')); }, { once: true }); }));
+    await expect(proposalEndpointObjectIds(proposal, f.state, f.access)).rejects.toBe(refused);
+    expect(peerAborted).toBe(true); expect(fetchCableEndpointContext).toHaveBeenCalledTimes(2);
+    expect(fetchEndpointBinding).not.toHaveBeenCalled(); expect(fetchGeometryObjectRevision).not.toHaveBeenCalled();
+  });
   it('retains a saved fixed-world parent after a cable-list fill stales only the proposal write revision', async () => {
     const f = fixedDisplayFixture(); f.proposal.stale = true; f.proposal.canApply = false;
     f.context.cableWriteRevision = '2';
@@ -191,6 +221,7 @@ describe('Path Finder endpoint foreground evidence', () => {
       if (field === 'display-point') f.context.confirmedDisplaySelection!.pointProjectMetres = [999, 2, 3];
       if (field === 'display-model') f.context.confirmedDisplaySelection!.current.modelVersionId = key(99);
       if (field === 'attachment') Object.assign(f.context.head!, { sourceObject: f.binding.sourceObject });
+      expect(proposalEndpointObjectIdsFromContexts(f.proposal, f.state, f.access, { from: f.context, to: f.context })).toEqual([]);
       vi.mocked(fetchCableEndpointContext).mockResolvedValue(f.context);
       expect(await proposalEndpointObjectIds(f.proposal, f.state, f.access)).toEqual(['dbid:74']); expect(fetchGeometryObjectRevision).not.toHaveBeenCalled();
     });

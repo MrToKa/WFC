@@ -3,8 +3,8 @@ import type { Pool, PoolClient } from 'pg';
 import { canonicalPurposeJson, normalizeCatalogKey, policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { DEFAULT_DRAWING_MODES } from '../../shared/pathfinderDrawingPolicy.js';
 import { drawingSettingsWriteSchema, drawingProjectSchema, trayDrawingDataSchema, trayDrawingOverrideSchema, trayDrawingResponseSchema, trayDrawingSnapshotSchema, drawingInputHashInput, drawingSettingsHashInput, drawingContentHashInput, type DrawingSettingsWrite, type TrayDrawingResponse, type TrayDrawingSnapshot } from '../../shared/trayDrawingSnapshot.js';
-import { drawingCategory, drawingRoutingContainsTray, makeTrayDrawingInput } from '../../shared/trayDrawingInputs.js';
-import { computeTrayDrawing, type TrayDrawingLayout } from '../../shared/trayDrawing/index.js';
+import { drawingRoutingContainsTray, makeTrayDrawingInput, trayDrawingDiagnostics as drawingDiagnostics } from '../../shared/trayDrawingInputs.js';
+import { computeTrayDrawing } from '../../shared/trayDrawing/index.js';
 import { ensureProjectExists } from '../services/projectService.js';
 import { mapProjectRow } from '../models/project.js';
 import { mapTrayRow, type TrayRow } from '../models/tray.js';
@@ -22,17 +22,7 @@ import { PathFinderError } from './errors.js';
 export const drawingDigest = (value: unknown): string => createHash('sha256').update(canonicalPurposeJson(value)).digest('hex');
 const fail = (code: string, status = 409, message = 'The tray drawing is unavailable. Refresh its inputs.') => { throw new PathFinderError(code, status, message); };
 const MAX_BYTES = 32 * 1024 * 1024;
-export function drawingDiagnostics(data: TrayDrawingResponse['data'], layout: TrayDrawingLayout) {
-  const diagnostics: TrayDrawingSnapshot['diagnostics'] = [...layout.diagnostics];
-  if (!data.tray.purpose?.trim()) diagnostics.push({ code: 'MISSING_TRAY_PURPOSE', cableIds: [], message: 'This tray uses the default layout because its purpose is missing.' });
-  const unknown = data.trayCables.filter(v => !drawingCategory(v.purpose)).map(v => v.id);
-  if (unknown.length) diagnostics.push({ code: 'UNKNOWN_DRAWING_CATEGORY', cableIds: unknown, message: 'Resolve the drawing purpose of these cables; they were not reclassified.' });
-  const invalidDiameter = data.trayCables.filter(v => v.diameterMm == null || v.diameterMm <= 0).map(v => v.id);
-  if (invalidDiameter.length) diagnostics.push({ code: 'MISSING_CABLE_DIAMETER', cableIds: invalidDiameter, message: 'Provide positive cable diameters before exporting this drawing.' });
-  const fatalCodes = new Set(['DIVIDER_GAP_UNAVAILABLE', 'DRAWING_OVERFLOW', 'DRAWING_OVERLAP', 'TRAY_OVERFLOW', 'SIDE_OVERLAP', 'DRAWING_CANVAS_LIMIT', 'DRAWING_COMMAND_LIMIT']);
-  const blocked = !layout.summary || unknown.length > 0 || invalidDiameter.length > 0 || diagnostics.some(d => fatalCodes.has(d.code) || /OVERLAP|OVERFLOW|INVALID|LIMIT/.test(d.code));
-  return { diagnostics, blocked };
-}
+export { drawingDiagnostics };
 export const DRAWING_SNAPSHOT_SQL = `
 ALTER TABLE pf_catalog_snapshots ADD COLUMN IF NOT EXISTS proof_projection_version text NOT NULL DEFAULT 'pathfinder.local-catalog-source.v1';
 CREATE TABLE IF NOT EXISTS pf_tray_drawing_settings(

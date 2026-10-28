@@ -17,6 +17,10 @@ import { verifySupportedBarrierEngineIdentity as verifyBarrierEngineIdentity,
 import { collectBarrierCalculationState, collectBarrierCalculationScope } from './barrierCalculationScope.js';
 import type { MixedBarrierVerifierEvidence } from '../../shared/pathfinderBarrierMixed.js';
 import type { EndpointCurrentScope } from '../../shared/pathfinderEndpointBindings.js';
+import { cablePurposeSchema, cablePurposeRoutingSchema, normalizeCablePurpose, type CablePurposeRouting } from '../../shared/routingCablePurposes.js';
+import { normalizeCatalogKey, routingCatalogDiagnostics, routingRuleSchema } from '../../shared/pathfinderPurposePolicy.js';
+import { readRoutingCatalog } from './catalog.js';
+import { readProjectCablePurposes } from './purposePolicy.js';
 export {requireCurrentLogin} from './auth.js';
 
 export function canonicalJson(value: unknown): string {
@@ -31,12 +35,15 @@ export function geometryHash(dependencies: DependencySnapshot): string {
   // evidence and drawing revisions must never become transitive PF dependencies.
   const {schemaVersion,projectId,cableId,cableInputs,model,artifact,options,from,to,engineVersion,routing} = dependencies;
   return hash({schemaVersion,projectId,cableId,cableInputs,model,artifact,options,from,to,engineVersion,
+    ...(dependencies.settings.trayCapacity?{trayCapacity:dependencies.settings.trayCapacity}:{}),
+    ...(dependencies.settings.routingBalance?{routingBalance:dependencies.settings.routingBalance}:{}),
     ...(dependencies.schemaVersion !== 'pathfinder.dependencies.v2' ? {preparation: dependencies.preparation} : {}),
     ...(['pathfinder.dependencies.v4','pathfinder.dependencies.v5','pathfinder.dependencies.v6','pathfinder.dependencies.v7','pathfinder.dependencies.v8'].includes(dependencies.schemaVersion) ? {comparison: (dependencies as CurrentDependencySnapshot).comparison} : {}),
     ...(['pathfinder.dependencies.v5','pathfinder.dependencies.v6','pathfinder.dependencies.v7','pathfinder.dependencies.v8'].includes(dependencies.schemaVersion) ? {engineIdentity: (dependencies as CurrentDependencySnapshot).engineIdentity} : {}),
     ...(dependencies.schemaVersion === 'pathfinder.dependencies.v7' || dependencies.schemaVersion === 'pathfinder.dependencies.v8' ? {endpointResolution: dependencies.endpointResolution} : {}),
     ...(dependencies.schemaVersion === 'pathfinder.dependencies.v8' ? {barriers: dependencies.barriers,
       ...(Object.hasOwn(dependencies,'barrierQualification')?{barrierQualification:dependencies.barrierQualification}:{})} : {}),
+    ...('cablePurposeRouting' in dependencies && dependencies.cablePurposeRouting ? {cablePurposeRouting:dependencies.cablePurposeRouting} : {}),
     routing:routing && {catalogRevision:routing.catalogRevision,routingContentSha256:routing.routingContentSha256,
       routingPolicyRevision:routing.routingPolicyRevision,routingPolicySha256:routing.routingPolicySha256}});
 }
@@ -130,6 +137,13 @@ export async function collectBarrierCommonCalculationInputs(client: PoolClient, 
   return { ...common, inputs: { ...common.inputs, barriers, ...(mixed ? { barrierQualification: qualification } : {}) } };
 }
 
+/** Database metadata only, for the private already-verified computation service.
+ * This grants no geometry/currentness authority without its service-owned token. */
+export async function collectBarrierCommonMetadata(client: PoolClient, projectId: string, options: EngineOptions,
+  identity: BarrierEngineIdentity): Promise<CommonCollectionWithIdentity<BarrierEngineIdentity>> {
+  return collectCommonInputs(client, projectId, options, true, async () => identity);
+}
+
 export function freezeCableDependencies(common:CommonCalculationInputs,cable:Row,
   from:CurrentEndpointCalculationPoint|null,to:CurrentEndpointCalculationPoint|null):CollectedDependencies {
   const blocked=(status:string,message:string):CollectedDependencies=>({dependencies:null,status,message,cable});
@@ -190,17 +204,87 @@ export function freezeCableDependenciesForVersion(common:CommonCalculationInputs
   return retainedVersion === 'pathfinder.dependencies.v7' ? freezeScopedCableDependencies(common,cable,from,to) : freezeCableDependencies(common,cable,from,to);
 }
 
+type ReadCommonCollection = CommonCalculationCollection | BarrierCommonCalculationCollection;
+type ReadCommon = (options: EngineOptions, retainedVersion: DependencySnapshot['schemaVersion']) => Promise<ReadCommonCollection>;
+const collectProjectionCommon = (client: PoolClient, projectId: string, options: EngineOptions, lockCable: boolean,
+  identity: CalculationEngineIdentity | undefined, retainedVersion: DependencySnapshot['schemaVersion']): Promise<ReadCommonCollection> =>
+  retainedVersion === 'pathfinder.dependencies.v8'
+    ? collectBarrierCommonCalculationInputs(client, projectId, options, lockCable, identity as BarrierEngineIdentity | undefined)
+    : collectCommonCalculationInputs(client, projectId, options, lockCable, identity as EngineIdentity | undefined);
+
+/** The cable's type Purpose is independent of its MTO engine class. */
+export async function readCablePurposeRouting(client: PoolClient, projectId: string, rawPurpose: unknown): Promise<CablePurposeRouting | null> {
+  if (typeof rawPurpose !== 'string') return null;
+  const purpose = normalizeCablePurpose(rawPurpose);
+  if (!cablePurposeSchema.safeParse(purpose).success) return null;
+  return (await createCablePurposeRoutingReader(client, projectId))(purpose);
+}
+
+/** Read after the common routing-state lock. Cable-type writers update that
+ * state in their AFTER trigger, so a pre-lock Purpose can already be obsolete.
+ * Do not row-lock cable_types here: its writers hold the type row first. */
+export async function readLinkedCableTypePurposes(client: PoolClient, projectId: string, cables: readonly Row[]): Promise<Map<string, unknown>> {
+  const purposes = new Map<string, unknown>();
+  for (let at = 0; at < cables.length; at += 250) {
+    const chunk = cables.slice(at, at + 250), expected = new Map(chunk.map(cable => [cable.id, cable]));
+    const rows = (await client.query<Row>(`/* cable-purpose:locked-scope-types */ SELECT c.id,c.cable_type_id,c.cable_write_revision::text,
+      CASE WHEN octet_length(ct.purpose)<=2000 THEN ct.purpose ELSE NULL END AS cable_type_purpose
+      FROM cables c LEFT JOIN cable_types ct ON ct.project_id=c.project_id AND ct.id=c.cable_type_id
+      WHERE c.project_id=$1 AND c.id=ANY($2::uuid[]) ORDER BY c.id`, [projectId, [...expected.keys()]])).rows;
+    if (rows.length !== expected.size) throw new PathFinderError('CABLE_INPUT_CONFLICT', 409, 'The cable inputs changed. Refresh before calculating.');
+    for (const row of rows) {
+      const cable = expected.get(row.id);
+      if (!cable || purposes.has(row.id) || cable.cable_type_id !== row.cable_type_id || cable.cable_write_revision !== row.cable_write_revision)
+        throw new PathFinderError('CABLE_INPUT_CONFLICT', 409, 'The cable inputs changed. Refresh before calculating.');
+      purposes.set(row.id, row.cable_type_purpose);
+    }
+  }
+  return purposes;
+}
+
+/** One catalog/policy observation serves the complete admitted cable batch. */
+export async function createCablePurposeRoutingReader(client: PoolClient, projectId: string): Promise<(rawPurpose:unknown)=>CablePurposeRouting|null> {
+  const catalog = await readRoutingCatalog(client, projectId);
+  const availablePurposes=new Set((await readProjectCablePurposes(client,projectId)).cablePurposes);
+  const rules = (await client.query<{purpose_key:string;allowed_categories:unknown}>(`SELECT r.purpose_key,r.allowed_categories FROM pf_routing_purpose_rules r
+    JOIN pf_catalog_purpose_incarnations i ON i.project_id=r.project_id AND i.purpose_key=r.purpose_key AND i.incarnation_id=r.purpose_incarnation_id
+    WHERE r.project_id=$1 AND i.active AND i.row_count>0 ORDER BY r.purpose_key COLLATE "C"`, [projectId])).rows
+    .map(row => routingRuleSchema.parse({purposeKey:row.purpose_key,allowedCategories:row.allowed_categories}));
+  const blocked = new Set(routingCatalogDiagnostics(catalog.diagnostics).flatMap(diagnostic => diagnostic.projectTrayIds));
+  const allowed = new Map<string,Set<string>>(), rulesByPurpose = new Map(rules.map(rule => [rule.purposeKey,rule.allowedCategories]));
+  const codeOwners = new Map<string,number>();
+  for (const tray of catalog.rows) {
+    const code = '/' + normalizeCatalogKey(tray.rawName).replace(/^\/+|\/+$/g, '').trim().toUpperCase();
+    codeOwners.set(code, (codeOwners.get(code) ?? 0) + 1);
+    if (blocked.has(tray.projectTrayId) || tray.purposeKey === null || tray.rawName.length > 256
+      || !/^\/[A-Z0-9][A-Z0-9_.-]*$/.test(code) || code === '/SECONDARY') continue;
+    for (const purpose of rulesByPurpose.get(tray.purposeKey) ?? []) {
+      const codes=allowed.get(purpose) ?? new Set<string>(); codes.add(code); allowed.set(purpose,codes);
+    }
+  }
+  const resolved = new Map([...allowed].map(([purpose,codes])=>[purpose,
+    [...codes].filter(code => codeOwners.get(code) === 1).sort()]));
+  const cache=new Map<string,CablePurposeRouting|null>();
+  return rawPurpose => {
+    if (typeof rawPurpose !== 'string') return null;
+    const purpose=normalizeCablePurpose(rawPurpose),allowedRouteCodes=resolved.get(purpose);
+    if(cache.has(purpose))return cache.get(purpose)!;
+    const value=availablePurposes.has(purpose) && cablePurposeSchema.safeParse(purpose).success && allowedRouteCodes?.length
+      ? cablePurposeRoutingSchema.parse({purpose,allowedRouteCodes}) : null;
+    cache.set(purpose,value);return value;
+  };
+}
+
 async function collectWithProjection(client: PoolClient, projectId: string, cableId: string, options: EngineOptions, lockCable: boolean,
-  identity:CalculationEngineIdentity|undefined,retainedVersion:DependencySnapshot['schemaVersion']): Promise<CollectedDependencies> {
+  identity:CalculationEngineIdentity|undefined,retainedVersion:DependencySnapshot['schemaVersion'], readCommon?: ReadCommon): Promise<CollectedDependencies> {
   const cable = (await client.query<Row>(`SELECT id,from_location,to_location,mto,cable_type_id,cable_write_revision::text,routing,design_length,install_length
     FROM cables WHERE project_id=$1 AND id=$2 ${lockCable ? 'FOR UPDATE' : ''}`,[projectId,cableId])).rows[0];
   if(!cable)throw new PathFinderError('CABLE_NOT_FOUND',404);
   const protectedIdentity = options.barrierRouting?.schemaVersion === 'wfc.pf.barrier-admission-intent.v2' ? 'wfc.pf.engine-identity.v3' : 'wfc.pf.engine-identity.v2';
   if (retainedVersion === 'pathfinder.dependencies.v8' ? identity && identity.schemaVersion !== protectedIdentity : identity && identity.schemaVersion !== 'wfc.pf.engine-identity.v1')
     return barrierAdmissionFailure();
-  const common=retainedVersion==='pathfinder.dependencies.v8'
-    ?await collectBarrierCommonCalculationInputs(client,projectId,options,lockCable,identity as BarrierEngineIdentity|undefined)
-    :await collectCommonCalculationInputs(client,projectId,options,lockCable,identity as EngineIdentity|undefined);
+  const common = await (readCommon ? readCommon(options, retainedVersion)
+    : collectProjectionCommon(client, projectId, options, lockCable, identity, retainedVersion));
   if(common.inputs===null)return {dependencies:null,status:common.status,message:common.message,cable};
   const {bindingContext}=common;
   const automatic = new Map<string, Promise<CurrentEndpointCalculationPoint|null>>();
@@ -222,7 +306,12 @@ async function collectWithProjection(client: PoolClient, projectId: string, cabl
     return automatic.get(value.id)!;
   };
   const from = await endpoint(cable.from_location),to = await endpoint(cable.to_location);
-  return freezeCableDependenciesForVersion(common.inputs,cable,from,to,retainedVersion);
+  const frozen = freezeCableDependenciesForVersion(common.inputs,cable,from,to,retainedVersion);
+  if (!frozen.dependencies || !['pathfinder.dependencies.v7','pathfinder.dependencies.v8'].includes(retainedVersion)) return frozen;
+  const purposes = await readLinkedCableTypePurposes(client, projectId, [cable]);
+  const cablePurposeRouting = await readCablePurposeRouting(client, projectId, purposes.get(cable.id));
+  if (!cablePurposeRouting) return {dependencies:null,status:'category_required',message:'Choose a Cable types Purpose and allow it on at least one valid project tray purpose before calculating.',cable};
+  return {...frozen,dependencies:{...frozen.dependencies,cablePurposeRouting} as ScopedDependencySnapshot | BarrierDependencySnapshot};
 }
 
 /** Existing admission/currentness callers remain byte-for-byte legacy by default. */
@@ -237,8 +326,34 @@ export async function collectDependenciesForVersion(client: PoolClient, projectI
   return collectWithProjection(client,projectId,cableId,options,lockCable,identity,retainedVersion);
 }
 
+/** Internal projection primitive. The verified-common service alone supplies
+ * the exact previously checked geometry; endpoints/cable rows are still live. */
+export async function collectDependenciesWithVerifiedCommon(client: PoolClient, projectId: string, cableId: string,
+  options: EngineOptions, common: BarrierCommonCalculationCollection, lockCable = true): Promise<CollectedDependencies> {
+  return collectWithProjection(client, projectId, cableId, options, lockCable,
+    common.inputs?.engineIdentity, 'pathfinder.dependencies.v8', async () => common);
+}
+
+export type TransactionDependencyReadCollector = (cableId: string, options: EngineOptions,
+  retainedVersion: DependencySnapshot['schemaVersion']) => Promise<CollectedDependencies>;
+
+/** Create only inside one read operation holding the project/authority locks.
+ * Reuse verified common geometry within that transaction; every cable and both
+ * endpoint bindings are still read independently. Never retain this closure
+ * across transactions or use it after a write. Refusals stay refusals. */
+export function createTransactionDependencyReadCollector(client: PoolClient, projectId: string): TransactionDependencyReadCollector {
+  const common = new Map<string, Promise<ReadCommonCollection>>();
+  const readCommon: ReadCommon = (options, retainedVersion) => {
+    const key = canonicalJson({ projectId, options, retainedVersion });
+    if (!common.has(key)) common.set(key, collectProjectionCommon(client, projectId, options, false, undefined, retainedVersion));
+    return common.get(key)!;
+  };
+  return (cableId, options, retainedVersion) => collectWithProjection(client, projectId, cableId, options, false, undefined, retainedVersion, readCommon);
+}
+
 /** Route reuse is narrower than matching geometry: only changed S/E/P with every other frozen authority equal. */
 export function verifiedDesignOnlyChange(current:DependencySnapshot,previous:DependencySnapshot):boolean {
+  if(current.settings.trayCapacity||previous.settings.trayCapacity||current.settings.routingBalance||previous.settings.routingBalance)return false;
   if (current.schemaVersion === 'pathfinder.dependencies.v8' || previous.schemaVersion === 'pathfinder.dependencies.v8') return false;
   if(!['pathfinder.dependencies.v5','pathfinder.dependencies.v6','pathfinder.dependencies.v7'].includes(current.schemaVersion)||current.schemaVersion!==previous.schemaVersion)return false;
   const {settings:a,...left}=current,{settings:b,...right}=previous;

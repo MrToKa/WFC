@@ -162,5 +162,9 @@ internal static partial class Program
             Successful(await session.Query(Protected(baseline, stored.Context)), stored.Context, stored); await session.Finish();
         });
         await InterTrayProfileTransport(runner, root);
+        await NearestAnchoredProfileTransport(runner, root);
+        await MeasuredFitProfileTransport(runner, root);
+        await LargeSelectionTransport(runner, root);
+        await CapacityTransport(runner, root);
     }
 }

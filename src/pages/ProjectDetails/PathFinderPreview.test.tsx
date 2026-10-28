@@ -18,7 +18,7 @@ function state(): PathFinderState {
 }
 function preview(id = jobId, input?: PathFinderPreviewInput, current = state()): Preview {
   return { id, projectId, kind: 'preview', status: 'complete', total: 1, completed: 1, cancelRequested: false, createdAt: '2026-10-20T00:00:00Z', updatedAt: '2026-10-20T00:00:01Z', failure: null,
-    input: { from: { name: 'FROM' }, to: { name: 'TO' }, category: 'LV', reverse: false, ...options, ...input, artifactId,
+    input: { from: { name: 'FROM' }, to: { name: 'TO' }, category: 'LV', cablePurpose: 'Power', reverse: false, ...options, ...input, artifactId,
       expectedSelectionRevision: current.activeModel.selectionRevision, expectedSettingsRevision: current.settings.revision, expectedRegistryRevision: current.registryRevision },
     result: { status: 'calculated', message: 'Standalone route found.', prepared: {}, engineeringAccepted: false, acceptanceScope: 'standalone-preview', canApply: false, stale: false,
       design: { lengthBeforePercentageMeters: '20', unroundedLengthMeters: '21', designLengthMeters: '21' }, settings: current.settings, effectiveCategory: 'LV',
@@ -38,20 +38,31 @@ function model() {
 }
 function mount(pf: ReturnType<typeof model>) {
   const callbacks = { claimViewer: vi.fn(() => () => true), onInputChange: vi.fn(), onEndpointNamesChange: vi.fn() };
-  const component = (active = true, displayOwned = true) => <PathFinderPreview pf={pf as unknown as ReturnType<typeof usePathFinder>} active={active} displayOwned={displayOwned} options={options} {...callbacks} />;
+  const component = (active = true, displayOwned = true) => <PathFinderPreview cablePurposes={['Control', 'Grounding', 'MV', 'Power', 'VFD']} pf={pf as unknown as ReturnType<typeof usePathFinder>} active={active} displayOwned={displayOwned} options={options} {...callbacks} />;
   const view = render(component()); return { ...view, ...callbacks, rerenderContext: (active = true, displayOwned = true) => view.rerender(component(active, displayOwned)) };
 }
 function enterNames() {
+  fireEvent.change(screen.getByLabelText('Path cable purpose'), { target: { value: 'Power' } });
   fireEvent.change(screen.getByLabelText('Path From location'), { target: { value: 'FROM' } });
   fireEvent.change(screen.getByLabelText('Path To location'), { target: { value: 'TO' } });
 }
 async function selectEndpoints(pf: ReturnType<typeof model>) {
+  fireEvent.change(screen.getByLabelText('Path cable purpose'), { target: { value: 'Power' } });
   pf.readSelection.mockResolvedValueOnce(selection(44, 'FROM', [2, 3, 4])).mockResolvedValueOnce(selection(55, 'TO', [5, 6, 7]));
   fireEvent.click(screen.getByRole('button', { name: 'Use selection as From' })); await waitFor(() => expect(screen.getByLabelText('Path From location')).toHaveValue('FROM'));
   fireEvent.click(screen.getByRole('button', { name: 'Use selection as To' })); await waitFor(() => expect(screen.getByLabelText('Path To location')).toHaveValue('TO'));
 }
 
 describe('standalone path endpoint foreground', () => {
+  it('requires an exact project Purpose and passes VFD independently of the LV calculation class', async () => {
+    const pf = model(); mount(pf);
+    fireEvent.change(screen.getByLabelText('Path From location'), { target: { value: 'FROM' } });
+    fireEvent.change(screen.getByLabelText('Path To location'), { target: { value: 'TO' } });
+    expect(screen.getByRole('button', { name: 'Calculate path' })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Path cable purpose'), { target: { value: 'VFD' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Calculate path' }));
+    await waitFor(() => expect(pf.startPreview).toHaveBeenCalledWith(expect.objectContaining({ category: 'LV', cablePurpose: 'VFD' })));
+  });
   it('offers only non-MV categories for a fresh standalone calculation and defaults to LV', () => {
     const pf = model(); mount(pf);
     const categories = screen.getByRole('combobox', { name: 'Path cable type' });
@@ -66,7 +77,7 @@ describe('standalone path endpoint foreground', () => {
     const pf = model(); mount(pf); enterNames();
     if (category !== 'LV') fireEvent.change(screen.getByRole('combobox', { name: 'Path cable type' }), { target: { value: category } });
     fireEvent.click(screen.getByRole('button', { name: 'Calculate path' }));
-    await waitFor(() => expect(pf.startPreview).toHaveBeenCalledExactlyOnceWith({ from: { name: 'FROM' }, to: { name: 'TO' }, category, reverse: false, ...options }));
+    await waitFor(() => expect(pf.startPreview).toHaveBeenCalledExactlyOnceWith({ from: { name: 'FROM' }, to: { name: 'TO' }, category, cablePurpose: 'Power', reverse: false, ...options }));
     expect(pf.action).not.toHaveBeenCalled();
   });
 
@@ -85,7 +96,7 @@ describe('standalone path endpoint foreground', () => {
     pf.readPreview.mockImplementation(async id => preview(id, pf.startPreview.mock.calls[id === jobId ? 0 : 1][0]));
     mount(pf); await selectEndpoints(pf); fireEvent.click(screen.getByRole('button', { name: 'Calculate path' }));
     await waitFor(() => expect(pf.showPath).toHaveBeenCalledTimes(1));
-    expect(pf.startPreview.mock.calls[0][0]).toEqual({ from: { name: 'FROM', point: [2, 3, 4] }, to: { name: 'TO', point: [5, 6, 7] }, category: 'LV', reverse: false, ...options });
+    expect(pf.startPreview.mock.calls[0][0]).toEqual({ from: { name: 'FROM', point: [2, 3, 4] }, to: { name: 'TO', point: [5, 6, 7] }, category: 'LV', cablePurpose: 'Power', reverse: false, ...options });
     expect(pf.showPath.mock.calls[0][0].objectIds).toEqual([23, 44, 55]);
     fireEvent.click(screen.getByRole('button', { name: 'Reverse path' })); await waitFor(() => expect(pf.showPath).toHaveBeenCalledTimes(2));
     expect(pf.showPath.mock.calls[1][0].objectIds).toEqual([23, 44, 55]);

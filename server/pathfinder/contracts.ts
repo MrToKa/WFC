@@ -108,5 +108,5 @@ export type LocationMatch = { status: 'matched' | 'missing' | 'ambiguous' | 'sta
 export type LocationDto = { id: string; name: string; aliases: string[]; revision: string; matching?: { status: 'missing' | 'ambiguous' | 'unverified'; candidateObjectIds: string[] }; binding: null | {
   modelVersionId: string; revision: string; point: [number, number, number]; objectId: string | null; externalId: string | null;
   source: 'manual' | 'automatic'; status: 'confirmed' | 'stale';
-  derivation?:'manual-world-point'|'picked-surface-point'|'equipment-bottom-aabb';coordinateFrame?:'canonical-world-metres';
+  derivation?:'manual-world-point'|'picked-surface-point'|'equipment-bottom-aabb'|'matched-model-bottom-aabb.v1';coordinateFrame?:'canonical-world-metres';
 } };

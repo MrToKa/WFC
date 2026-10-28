@@ -10,6 +10,18 @@ import { supportedBarrierAdmissionIntentSchema as barrierAdmissionIntentSchema, 
 import { lengthLedgerSchema, legacyLengthLedgerSchema } from '../../shared/pathfinderLengthLedger.js';
 import { directSecondaryDecisionSchema, directSecondaryRouteIssue } from '../../shared/pathfinderDirectSecondary.js';
 import type { MixedBarrierVerifierEvidence } from '../../shared/pathfinderBarrierMixed.js';
+import { automaticPairPolicySchema } from '../../shared/pathfinderAutomaticPair.js';
+import { trayCapacityDiagnosticsSchema } from '../../shared/pathfinderTrayCapacity.js';
+import type { CablePurposeRouting } from '../../shared/routingCablePurposes.js';
+
+export const trayCapacityResultSchema=trayCapacityDiagnosticsSchema.extend({
+  outcome:z.enum(['balanced','fits','rerouted','unavailable','no-capacity','no-path','search-limit']),
+  attempts:z.number().int().min(0).max(16),excludedRouteCodes:z.array(z.string().max(256)).max(4096),
+  query:z.object({timeoutMilliseconds:z.number().int().min(100).max(120000),
+    excludedRouteCodes:z.array(z.string().regex(/^\/[A-Z0-9][A-Z0-9_.-]*$/).max(256)).max(4096),
+    routeCostMultipliers:z.array(z.object({routeCode:z.string().regex(/^\/[A-Z0-9][A-Z0-9_.-]*$/).max(256),
+      multiplier:z.number().finite().min(1).max(1000)}).strict()).max(4096)}).strict().optional(),
+}).strict();
 
 export const optionsSchema = z.object({
   connectionToleranceMeters:z.number().finite().positive().max(100),sampleSpacingMeters:z.number().finite().positive().max(100),
@@ -28,9 +40,12 @@ export function proposalRoutingPreferences(options:unknown):{secondaryDistanceMe
     ? {secondaryDistanceMeters,preferVerticalApproach,...(barrier?.success ? {barrierRouting:barrier.data} : {})} : null;
 }
 export const createJobSchema = z.object({cableIds:z.array(uuid).min(1).max(10_000).optional(),expectedRegistryRevision:revision,
-  options:optionsSchema.optional(),timeoutMilliseconds:z.number().int().min(100).max(120_000).optional(),force:z.boolean().optional()}).strict();
+  options:optionsSchema.optional(),timeoutMilliseconds:z.number().int().min(100).max(120_000).optional(),force:z.boolean().optional(),
+  automaticPairPolicy:automaticPairPolicySchema.optional()}).strict();
 export type EngineOptions = z.infer<typeof optionsSchema>;
-export type ProjectSettings = {revision:string;connectionGap:string;secondaryTrayLength:string|null;endConnectionLength:string;additionalBendingPercent:string};
+export type ProjectSettings = {revision:string;connectionGap:string;secondaryTrayLength:string|null;endConnectionLength:string;additionalBendingPercent:string;
+  routingBalance?:{mode:'destination-groups-v1';layoutSha256:string};
+  trayCapacity?:{enabled:true;minimumFreeSpacePercent:number|null;tolerancePercentagePoints:3;layoutSha256:string}};
 export type HistoricalDependencySnapshot = {
   schemaVersion:'pathfinder.dependencies.v2';projectId:string;cableId:string;cableWriteRevision:string;
   routing:RoutingScope;
@@ -57,6 +72,7 @@ export type AutomaticDependencySnapshot = Omit<CurrentDependencySnapshot, 'schem
 export type ScopedDependencySnapshot = Omit<CurrentDependencySnapshot, 'schemaVersion' | 'registryRevision' | 'from' | 'to'> & {
   schemaVersion: 'pathfinder.dependencies.v7'; from: CurrentEndpointCalculationPoint; to: CurrentEndpointCalculationPoint;
   endpointResolution: ScopedEndpointResolution;
+  cablePurposeRouting?: CablePurposeRouting;
 };
 export type BarrierDependencySnapshot = Omit<ScopedDependencySnapshot,'schemaVersion'|'engineIdentity'> & {
   schemaVersion:'pathfinder.dependencies.v8'; engineIdentity:BarrierEngineIdentity; barriers:BarrierRuntimeContext;
@@ -77,6 +93,7 @@ export const designSchema = z.object({lengthBeforePercentageMeters:decimal,unrou
 const engineResponseObjectSchema = z.object({schemaVersion:z.literal('pathfinder.model.response.v1'),requestId:uuid,
   status:z.enum(['prepared','calculated','lookup_planned','no_path','settings_required','category_required','model_needs_review','invalid_request','deadline_exceeded','resource_limit']),
   message:z.string().max(32768),engineeringAccepted:z.literal(false),model:z.unknown().optional(),prepared:z.unknown().optional(),
+  trayCapacity:trayCapacityResultSchema.optional(),
   effectiveCategory:z.string().nullable().optional(),route:routeSchema.optional(),design:designSchema.nullable().optional(),lengthLedger:lengthLedgerSchema.optional(),projectSettings:z.unknown().optional(),
   routeCodes:z.array(z.string().max(256).regex(/^\/[A-Z0-9][A-Z0-9_.-]*$/)).min(1).max(100).optional(),usedConnectionGapMeters:z.number().finite().positive().max(100).nullable().optional(),
   lookupScope:z.object({requestedCodeCount:z.number().int().nonnegative(),uniqueCodeCount:z.number().int().nonnegative(),discoveredObjectCount:z.number().int().nonnegative(),resolvedOwnerCount:z.number().int().nonnegative(),resolvedLeafCount:z.number().int().nonnegative(),warnings:z.array(z.string().max(32768)).max(2048)}).strict().nullable().optional(),

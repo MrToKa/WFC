@@ -23,6 +23,14 @@ internal static class GeometryTests
         run("Circular mesh fitting preserves strict gaps and requires compatible neighboring arms", CircularMeshGapAndEvidence);
         run("Excessive repeated cap pairs cannot validate an incomplete straight candidate set", StraightCandidateLimit);
         run("Unproved centerlines can retain exact raw mesh clearance with a length diagnostic", RawSurfaceFallback);
+        run("Measured bend policy is explicit and legacy miter behavior is retained", MeasuredMiterPolicy);
+        run("Measured miter flanges survive rotation and input-output reversal", MeasuredMiterRotation);
+        run("Missing measured flange material and decorative planes cannot invent a miter", MeasuredMiterMissingSupport);
+        run("Competing supported miter chains and centreline material refuse fitting", MeasuredMiterAmbiguity);
+        run("Measured terminal caps preserve circular guards and real attachment gaps", MeasuredTerminalCaps);
+        run("Incomplete measured cap domains cannot be mistaken for a unique bend", MeasuredCapDomainLimit);
+        run("Repeated exact cap contexts reuse only complete proofs within the same work ceiling", MeasuredCapCacheEquivalence);
+        run("Exact direction selections preserve rotated circular caps and original triangle order", MeasuredDirectionIndexEquivalence);
     }
 
     private static void PlanesAndTurns()
@@ -421,6 +429,206 @@ internal static class GeometryTests
             fragments.Add(new TrayMeshFragment(vertices, triangles));
         }
         return new TrayMeshData(fragments);
+    }
+
+    private static Fixture MeasuredFixture(Func<TrayMeshGeometry.Vec, TrayMeshGeometry.Vec> transform = null,
+        Func<int, int, int, bool> include = null, bool secondChain = false, bool decorativeOnly = false)
+    {
+        transform = transform ?? (p => p);
+        var p0 = new TrayMeshGeometry.Vec(0, 0, 0); var p1 = new TrayMeshGeometry.Vec(.35, .35, 0);
+        var points = new[] { p0, new TrayMeshGeometry.Vec(.21, 0, 0), new TrayMeshGeometry.Vec(.35, .14, 0), p1 };
+        var mesh = MeasuredSweep(points, true, include, transform);
+        if (secondChain)
+        {
+            var alternate = MeasuredSweep(new[] { p0, new TrayMeshGeometry.Vec(.15, 0, 0), new TrayMeshGeometry.Vec(.35, .20, 0), p1 }, false,
+                decorativeOnly ? (Func<int, int, int, bool>)((rail, run, edge) => rail == -1 && run == 1) : null, transform);
+            mesh = new TrayMeshData(mesh.Fragments.Concat(alternate.Fragments));
+        }
+        var from = p0 - new TrayMeshGeometry.Vec(3, 0, 0); var to = p1 + new TrayMeshGeometry.Vec(0, .4, 0);
+        return new Fixture { Start = transform(p0).Point, End = transform(p1).Point, From = transform(from).Point, To = transform(to).Point,
+            Inputs = new[] { MeshInput("measured-bend", "/M2", "ELBOW", mesh),
+                MeshInput("measured-in", "/M1", "FTUBE", MeasuredSweep(new[] { from, p0 }, true, null, transform)),
+                MeshInput("measured-out", "/M3", "FTUBE", MeasuredSweep(new[] { p1, to }, true, null, transform)) } };
+    }
+
+    private static TrayMeshData MeasuredSweep(TrayMeshGeometry.Vec[] points, bool caps,
+        Func<int, int, int, bool> include, Func<TrayMeshGeometry.Vec, TrayMeshGeometry.Vec> transform)
+    {
+        var directions = points.Skip(1).Select((p, i) => (p - points[i]).Unit).ToArray();
+        var width = new TrayMeshGeometry.Vec(0, 0, 1);
+        var normals = directions.Select(d => TrayMeshGeometry.Vec.Cross(width, d).Unit).ToArray();
+        var frames = new TrayMeshGeometry.Vec[points.Length]; frames[0] = normals[0]; frames[frames.Length - 1] = normals[normals.Length - 1];
+        for (int i = 1; i < frames.Length - 1; i++) frames[i] = (normals[i - 1] + normals[i]) / (1 + TrayMeshGeometry.Vec.Dot(normals[i - 1], normals[i]));
+        var profile = new[] { new[] { -.011, -.045 }, new[] { -.006, -.05 }, new[] { .006, -.05 }, new[] { .011, -.045 },
+            new[] { .011, .045 }, new[] { .006, .05 }, new[] { -.006, .05 }, new[] { -.011, .045 } };
+        var fragments = new List<TrayMeshFragment>();
+        foreach (int rail in new[] { -1, 1 })
+        {
+            var vertices = new List<RoutePoint>(); var triangles = new List<int>();
+            for (int row = 0; row < points.Length; row++) foreach (var p in profile)
+                vertices.Add(transform(points[row] + width * (rail * .309 + p[0]) + frames[row] * p[1]).Point);
+            int last = (points.Length - 1) * 8;
+            if (caps) for (int i = 1; i < 7; i++) triangles.AddRange(new[] { 0, i, i + 1, last, last + i + 1, last + i });
+            for (int run = 0; run < points.Length - 1; run++) for (int edge = 0; edge < 8; edge++)
+            {
+                if (include != null && !include(rail, run, edge)) continue;
+                int a = run * 8 + edge, b = run * 8 + (edge + 1) % 8;
+                triangles.AddRange(new[] { a, b, b + 8, a, b + 8, a + 8 });
+            }
+            fragments.Add(new TrayMeshFragment(vertices, triangles));
+        }
+        return new TrayMeshData(fragments);
+    }
+
+    private static void MeasuredMiterPolicy()
+    {
+        var fixture = MeasuredFixture(); var legacy = TrayGeometryBuilder.Build(fixture.Inputs);
+        var explicitLegacy = TrayGeometryBuilder.Build(fixture.Inputs, TrayGeometryFitPolicy.LegacyV1);
+        Assert(legacy.ValidatedBends == 0 && explicitLegacy.ValidatedBends == 0, "The retained v1 proof must not fit a polygonal miter as a circle.");
+        Assert(legacy.Segments.SelectMany(s => s.Points).SequenceEqual(explicitLegacy.Segments.SelectMany(s => s.Points)), "Explicit v1 and the old overload must preserve every point.");
+        var measured = TrayGeometryBuilder.Build(fixture.Inputs, TrayGeometryFitPolicy.MeasuredBendV2);
+        Assert(measured.ValidatedBends == 1 && measured.ValidatedStraights == 2, "The actual miter must validate its caps and resolve the short physical outgoing spool: " + string.Join("; ", measured.Diagnostics));
+        Assert(measured.Segments[0].Points.Count == 4 && measured.Segments[0].VerifiedPorts.Count == 2, "A measured miter retains all three finite runs and only its two measured ports.");
+        Near(.6179898987322333, Length(measured.Segments[0].Points), .000001, "Measured miter length.");
+        bool rejected = false; try { TrayGeometryBuilder.Build(fixture.Inputs, (TrayGeometryFitPolicy)123); } catch (ArgumentOutOfRangeException) { rejected = true; }
+        Assert(rejected, "Unknown fitting policies must refuse.");
+    }
+    private static void MeasuredMiterRotation()
+    {
+        var axis = new TrayMeshGeometry.Vec(1, 2, 3).Unit;
+        Func<TrayMeshGeometry.Vec, TrayMeshGeometry.Vec> transform = p => p * Math.Cos(.93) + TrayMeshGeometry.Vec.Cross(axis, p) * Math.Sin(.93)
+            + axis * (TrayMeshGeometry.Vec.Dot(axis, p) * (1 - Math.Cos(.93))) + new TrayMeshGeometry.Vec(123, -51, 87);
+        var fixture = MeasuredFixture(transform); var built = TrayGeometryBuilder.Build(fixture.Inputs, TrayGeometryFitPolicy.MeasuredBendV2);
+        Assert(built.ValidatedBends == 1, "The fitting proof cannot depend on world axes: " + string.Join("; ", built.Diagnostics));
+        var forward = new RouteCalculator().Calculate(built.Segments, fixture.From, fixture.To, CableCategory.Control, new RoutingOptions { ConnectionToleranceMeters = .00001 });
+        var reverse = new RouteCalculator().Calculate(built.Segments, fixture.To, fixture.From, CableCategory.Control, new RoutingOptions { ConnectionToleranceMeters = .00001 });
+        Assert(forward.Success && reverse.Success, "Both physical directions must connect.");
+        Near(forward.LengthMeters, reverse.LengthMeters, .000001, "Reversal preserves physical miter length.");
+        using (var cancelled = new CancellationTokenSource()) { cancelled.Cancel(); bool stopped = false; try { TrayGeometryBuilder.Build(fixture.Inputs, TrayGeometryFitPolicy.MeasuredBendV2, cancelled.Token); } catch (OperationCanceledException) { stopped = true; } Assert(stopped, "Measured proof must honor cancellation."); }
+    }
+    private static void MeasuredMiterMissingSupport()
+    {
+        var missing = MeasuredFixture(null, (rail, run, edge) => !(rail == -1 && run == 1 && edge == 5));
+        Assert(TrayGeometryBuilder.Build(missing.Inputs, TrayGeometryFitPolicy.MeasuredBendV2).ValidatedBends == 0, "Complete cap profiles and infinite planes cannot replace a missing physical flange.");
+        var decorative = MeasuredFixture(null, null, true, true);
+        Assert(TrayGeometryBuilder.Build(decorative.Inputs, TrayGeometryFitPolicy.MeasuredBendV2).ValidatedBends == 1, "One-sided decorative faces cannot prove an alternate complete two-rail chain.");
+    }
+    private static void MeasuredMiterAmbiguity()
+    {
+        var ambiguous = MeasuredFixture(null, null, true);
+        Assert(TrayGeometryBuilder.Build(ambiguous.Inputs, TrayGeometryFitPolicy.MeasuredBendV2).ValidatedBends == 0, "Two complete supported chains remain ambiguous.");
+        var fixture = MeasuredFixture(); var original = fixture.Inputs[0];
+        foreach (int contact in new[] { 0, 1, 2 })
+        {
+            var vertices = contact == 1 ? new[] { new RoutePoint(.05, -.01, 0), new RoutePoint(.15, .01, 0), new RoutePoint(.15, -.01, 0) } : contact == 2 ?
+                new[] { new RoutePoint(.095, .0000005, -.0000005), new RoutePoint(.105, -.0000005, -.0000005), new RoutePoint(.1, 0, .0000005) } :
+                new[] { new RoutePoint(.1, -.02, -.02), new RoutePoint(.1, .02, -.02), new RoutePoint(.1, 0, .02) };
+            var mesh = new TrayMeshData(original.Mesh.Fragments.Concat(new[] { new TrayMeshFragment(vertices, new[] { 0, 1, 2 }) }));
+            fixture.Inputs[0] = MeshInput(original.Id, original.RouteName, original.ShapeName, mesh);
+            Assert(TrayGeometryBuilder.Build(fixture.Inputs, TrayGeometryFitPolicy.MeasuredBendV2).ValidatedBends == 0, "A supported centreline must not touch original body material, including coplanar contact.");
+        }
+    }
+    private static void MeasuredTerminalCaps()
+    {
+        var fixture = CircularMeshFixture(90, false, false);
+        var oneArm = new[] { fixture.Inputs[0], fixture.Inputs[1] };
+        Assert(TrayGeometryBuilder.Build(oneArm).ValidatedBends == 0, "The historical one-arm refusal stays exact.");
+        var measured = TrayGeometryBuilder.Build(oneArm, TrayGeometryFitPolicy.MeasuredBendV2);
+        Assert(measured.ValidatedBends == 1, "The new proof must measure the second congruent outward support cap: " + string.Join("; ", measured.Diagnostics));
+        Assert(measured.Segments[0].VerifiedPorts.Count == 2, "A terminal fit retains both actual material sections.");
+        Near(0, measured.Segments[0].Points.Min(p => p.DistanceTo(fixture.End)), .000001, "The terminal port cannot move to an interior join.");
+        var bend = fixture.Inputs[0]; var outDirection = (new TrayMeshGeometry.Vec(fixture.To) - new TrayMeshGeometry.Vec(fixture.End)).Unit;
+        var fitted = measured.Segments[0].Points; int middle = fitted.Count / 2;
+        var centre = new TrayMeshGeometry.Vec(fitted[middle]); var tangent = (new TrayMeshGeometry.Vec(fitted[middle + 1]) - new TrayMeshGeometry.Vec(fitted[middle - 1])).Unit;
+        var widthAxis = new TrayMeshGeometry.Vec(0, 0, 1); var across = TrayMeshGeometry.Vec.Cross(tangent, widthAxis).Unit;
+        var plate = new TrayMeshFragment(new[] { (centre - widthAxis * .02 - across * .02).Point, (centre + widthAxis * .02 - across * .02).Point, (centre + across * .02).Point }, new[] { 0, 1, 2 });
+        var obstructed = MeshInput(bend.Id, bend.RouteName, bend.ShapeName, new TrayMeshData(bend.Mesh.Fragments.Concat(new[] { plate })));
+        Assert(TrayGeometryBuilder.Build(new[] { obstructed, fixture.Inputs[1] }, TrayGeometryFitPolicy.MeasuredBendV2).ValidatedBends == 0,
+            "A new terminal-circle proof must refuse original cross-channel material away from its caps.");
+        var hardwarePoint = new TrayMeshGeometry.Vec(fixture.End) + outDirection * .15;
+        var hardware = new TrayMeshFragment(new[] { hardwarePoint.Point, (hardwarePoint + new TrayMeshGeometry.Vec(.002, 0, .001)).Point, (hardwarePoint + new TrayMeshGeometry.Vec(0, .002, .001)).Point }, new[] { 0, 1, 2 });
+        var withHardware = MeshInput(bend.Id, bend.RouteName, bend.ShapeName, new TrayMeshData(bend.Mesh.Fragments.Concat(new[] { hardware })));
+        Assert(TrayGeometryBuilder.Build(new[] { withHardware, fixture.Inputs[1] }, TrayGeometryFitPolicy.MeasuredBendV2).ValidatedBends == 0, "Unanchored hardware beyond a cap must refuse, not move or infer the terminal port.");
+        var fragments = new List<TrayMeshFragment>(); var interiorVertices = new List<RoutePoint>(); var interiorTriangles = new List<int>();
+        foreach (var fragment in bend.Mesh.Fragments)
+        {
+            var kept = new List<int>();
+            for (int offset = 0; offset < fragment.TriangleIndices.Count; offset += 3)
+            {
+                var indices = fragment.TriangleIndices.Skip(offset).Take(3).ToArray();
+                if (indices.All(i => Math.Abs(TrayMeshGeometry.Vec.Dot(new TrayMeshGeometry.Vec(fragment.Vertices[i]) - new TrayMeshGeometry.Vec(fixture.End), outDirection)) <= .00025))
+                {
+                    foreach (int i in indices) { interiorTriangles.Add(interiorVertices.Count); interiorVertices.Add((new TrayMeshGeometry.Vec(fragment.Vertices[i]) - outDirection * .08).Point); }
+                }
+                else kept.AddRange(indices);
+            }
+            fragments.Add(new TrayMeshFragment(fragment.Vertices, kept));
+        }
+        fragments.Add(new TrayMeshFragment(interiorVertices, interiorTriangles));
+        var internalOnly = MeshInput(bend.Id, bend.RouteName, bend.ShapeName, new TrayMeshData(fragments));
+        Assert(TrayGeometryBuilder.Build(new[] { internalOnly, fixture.Inputs[1] }, TrayGeometryFitPolicy.MeasuredBendV2).ValidatedBends == 0,
+            "A congruent internal material join cannot replace the missing outward terminal cap.");
+    }
+    private static void MeasuredCapDomainLimit()
+    {
+        var fixture = CircularMeshFixture(90, false, false); var original = fixture.Inputs[0];
+        var outward = (new TrayMeshGeometry.Vec(fixture.From) - new TrayMeshGeometry.Vec(fixture.Start)).Unit;
+        var u = TrayMeshGeometry.Vec.Perpendicular(outward); var v = TrayMeshGeometry.Vec.Cross(outward, u).Unit;
+        var fragments = original.Mesh.Fragments.ToList();
+        for (int i = 0; i < 65; i++)
+        {
+            var centre = new TrayMeshGeometry.Vec(fixture.Start) + outward * (-.0192 + i * .0006);
+            fragments.Add(new TrayMeshFragment(new[] { (centre - u * .001 - v * .001).Point, (centre + u * .001 - v * .001).Point, (centre + v * .001).Point }, new[] { 0, 1, 2 }));
+        }
+        fixture.Inputs[0] = MeshInput(original.Id, original.RouteName, original.ShapeName, new TrayMeshData(fragments));
+        var measured = TrayGeometryBuilder.Build(fixture.Inputs, TrayGeometryFitPolicy.MeasuredBendV2);
+        Assert(measured.ValidatedBends == 0 && measured.Diagnostics.Any(d => d.Contains("measured bend proof is incomplete") && d.Contains("cap plane domain")),
+            "Exceeding the complete cap plane domain must refuse rather than omit competing candidates.");
+        Assert(!TrayGeometryBuilder.Build(fixture.Inputs).Diagnostics.Any(d => d.Contains("measured bend proof is incomplete")), "Legacy cap limits keep their historical behavior.");
+    }
+    private static void MeasuredCapCacheEquivalence()
+    {
+        var fixture = CircularMeshFixture(90, false, false); var bend = fixture.Inputs[0];
+        var noise = new TrayMeshFragment(new[] { new RoutePoint(.001, .001, .04), new RoutePoint(.0011, .001, .04), new RoutePoint(.001, .0011, .04) },
+            Enumerable.Range(0, 10000).SelectMany(_ => new[] { 0, 1, 2 }));
+        var augmented = MeshInput(bend.Id, bend.RouteName, bend.ShapeName, new TrayMeshData(bend.Mesh.Fragments.Concat(new[] { noise })));
+        var inputs = new List<TrayGeometryInput> { augmented, fixture.Inputs[1], fixture.Inputs[2] };
+        var arm = fixture.Inputs[1];
+        for (int i = 0; i < 48; i++) inputs.Add(new TrayGeometryInput("repeated-arm-" + i, arm.RouteName, arm.Categories, arm.ShapeName, arm.Minimum, arm.Maximum, null, arm.Mesh));
+        var legacy = TrayGeometryBuilder.Build(inputs); var measured = TrayGeometryBuilder.Build(inputs, TrayGeometryFitPolicy.MeasuredBendV2);
+        Assert(legacy.ValidatedBends == 1 && measured.ValidatedBends == 1,
+            "Repeated complete cap contexts must not exhaust proof work or omit independent neighbor checks: " + string.Join("; ", measured.Diagnostics));
+        var a = legacy.Segments[0]; var b = measured.Segments[0];
+        Assert(a.Points.Count == b.Points.Count && a.Points.Zip(b.Points, (x, y) => x.DistanceTo(y)).All(d => d < .000001), "Caching must preserve every retained circular point.");
+        Assert(a.VerifiedPorts.Count == b.VerifiedPorts.Count, "The cache cannot synthesize or omit port evidence.");
+        var miter = MeasuredFixture(); var incoming = miter.Inputs[1];
+        var warm = MeshInput("warm-outside-distance", incoming.RouteName, incoming.ShapeName,
+            TransformMesh(incoming.Mesh, p => p + new TrayMeshGeometry.Vec(0, 0, .025)));
+        var wrongSection = MeshInput("wrong-section-same-plane", incoming.RouteName, incoming.ShapeName,
+            TransformMesh(incoming.Mesh, p => new TrayMeshGeometry.Vec(p.X, p.Y, p.Z * .5)));
+        Assert(TrayGeometryBuilder.Build(new[] { miter.Inputs[0], warm, wrongSection, miter.Inputs[2] }, TrayGeometryFitPolicy.MeasuredBendV2).ValidatedBends == 0,
+            "A complete cached cap measurement cannot bypass each neighbor's independent distance and section compatibility.");
+    }
+    private static void MeasuredDirectionIndexEquivalence()
+    {
+        foreach (double angle in new[] { 0.0, .23, .93 }) foreach (bool reverseTriangles in new[] { false, true })
+        {
+            var fixture = CircularMeshFixture(90, false, false); var axis = new TrayMeshGeometry.Vec(1, -2, 3).Unit;
+            Func<TrayMeshGeometry.Vec, TrayMeshGeometry.Vec> rotate = p => p * Math.Cos(angle) + TrayMeshGeometry.Vec.Cross(axis, p) * Math.Sin(angle)
+                + axis * (TrayMeshGeometry.Vec.Dot(axis, p) * (1 - Math.Cos(angle))) + new TrayMeshGeometry.Vec(21, -13, 7);
+            var inputs = fixture.Inputs.Select(input =>
+            {
+                var mesh = TransformMesh(input.Mesh, rotate);
+                if (reverseTriangles) mesh = new TrayMeshData(mesh.Fragments.Reverse().Select(fragment => new TrayMeshFragment(fragment.Vertices,
+                    Enumerable.Range(0, fragment.TriangleIndices.Count / 3).Reverse().SelectMany(i => fragment.TriangleIndices.Skip(i * 3).Take(3)))));
+                return MeshInput(input.Id, input.RouteName, input.ShapeName, mesh);
+            }).ToArray();
+            var legacy = TrayGeometryBuilder.Build(inputs); var measured = TrayGeometryBuilder.Build(inputs, TrayGeometryFitPolicy.MeasuredBendV2);
+            Assert(legacy.ValidatedBends == 1 && measured.ValidatedBends == 1, "Exact normal selection cannot lose a proven rotated circle: " + string.Join("; ", measured.Diagnostics));
+            var a = legacy.Segments[0]; var b = measured.Segments[0];
+            Assert(a.Points.Count == b.Points.Count && a.Points.Zip(b.Points, (x, y) => x.DistanceTo(y)).All(d => d < .000001),
+                "Candidate filtering must preserve the original selected triangle traversal and circular result.");
+        }
     }
 
     private sealed class Fixture

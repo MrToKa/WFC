@@ -1,8 +1,19 @@
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { schedulerTransaction as transaction } from './schedulerTransaction.js';
+import { readLocationImpactPriority } from './locationImpactRepository.js';
 
 type Row=Record<string,any>;
+/** The caller owns its job lease and the normal project/authority transaction.
+ * Priority changes item order only; it never cancels or takes an active lease. */
+export async function nextCalculationItem(c:PoolClient,job:{project_id:string;id:string}):Promise<Row|undefined>{
+  const priority=await readLocationImpactPriority(c,{projectId:job.project_id,jobId:job.id});
+  if(!priority)return (await c.query<Row>("SELECT * FROM pf_job_items WHERE project_id=$1 AND job_id=$2 AND state='waiting' ORDER BY cable_id FOR UPDATE LIMIT 1",[job.project_id,job.id])).rows[0];
+  return (await c.query<Row>(`SELECT * FROM pf_job_items WHERE project_id=$1 AND job_id=$2 AND state='waiting'
+    AND ($4::boolean=false OR cable_id=$3::uuid)
+    ORDER BY CASE WHEN cable_id=$3::uuid THEN 0 ELSE 1 END,cable_id FOR UPDATE LIMIT 1`,
+    [job.project_id,job.id,priority.originCableId,priority.waitForOrigin])).rows[0];
+}
 /** Service is project-scoped: creating many jobs cannot buy more engine turns. */
 export async function initializeWorkerScheduling(pool:Pool):Promise<void>{
   await transaction(pool,async c=>{
@@ -24,8 +35,26 @@ export async function claimCalculationSlice(pool:Pool):Promise<Row|null>{
       WHERE EXISTS(SELECT 1 FROM pf_jobs j WHERE j.project_id=s.project_id AND (j.state='queued' OR j.state='running' AND j.lease_until<now()) AND (j.not_before IS NULL OR j.not_before<=now()))
       ORDER BY s.last_served_at ASC NULLS FIRST,s.project_id FOR UPDATE OF s SKIP LOCKED LIMIT 1`)).rows[0];
     if(!project)return null;
+    // At the next safe item boundary, serve the waiting popup origin before
+    // this project's background work. Durable enrollment/current generation is
+    // an ordering hint only; execution still owns all normal authority fences.
+    // An already running engine call is never cancelled or borrowed here.
     const row=(await c.query<Row>(`SELECT * FROM pf_jobs WHERE project_id=$1 AND (state='queued' OR state='running' AND lease_until<now()) AND (not_before IS NULL OR not_before<=now())
-      ORDER BY last_served_at ASC NULLS FIRST,created_at,id FOR UPDATE SKIP LOCKED LIMIT 1`,[project.project_id])).rows[0];
+      ORDER BY CASE WHEN kind='calculate' AND NOT cancel_requested AND EXISTS(
+        SELECT 1 FROM pf_location_impact_enrollments e
+        JOIN pf_location_impacts impact ON impact.project_id=e.project_id AND impact.id=e.impact_id
+        JOIN pf_job_items origin ON origin.project_id=e.project_id AND origin.job_id=e.job_id
+          AND origin.cable_id=CASE WHEN impact.record->>'originCableId'~'^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$'
+            THEN (impact.record->>'originCableId')::uuid ELSE NULL END
+        JOIN pf_location_impact_items effect ON effect.project_id=e.project_id AND effect.impact_id=e.impact_id
+          AND effect.cable_id=origin.cable_id AND effect.eligible
+        JOIN pf_location_impact_targets target ON target.project_id=effect.project_id AND target.cable_id=effect.cable_id
+          AND target.impact_id=effect.impact_id AND target.generation=effect.generation
+        WHERE e.project_id=pf_jobs.project_id AND e.job_id=pf_jobs.id AND origin.state='waiting'
+          AND impact.record->>'schemaVersion' IN('wfc.pf.location-impact-record.v2','wfc.pf.location-impact-record.v3')
+          AND impact.record->>'projectId'=e.project_id::text AND impact.record->>'id'=impact.id::text
+          AND impact.record->>'contentSha256'=impact.record_sha256
+      ) THEN 0 ELSE 1 END,last_served_at ASC NULLS FIRST,created_at,id FOR UPDATE SKIP LOCKED LIMIT 1`,[project.project_id])).rows[0];
     await c.query('UPDATE pf_engine_project_service SET last_served_at=clock_timestamp() WHERE project_id=$1',[project.project_id]);
     if(!row)return null;
     // A clean quantum yield is not a failed recovery attempt.

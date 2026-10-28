@@ -22,6 +22,7 @@ const labels: Record<string, string> = {
   considerBundleSpacingAsFree: 'Consider space between bundles as free',
   minFreeSpacePercent: 'Minimum free space (%)',
   maxFreeSpacePercent: 'Maximum free space (%)',
+  autoRerouteForFreeSpace: 'Automatically reroute for minimum free space',
   mv: 'MV',
   power: 'Power',
   vfd: 'VFD',

@@ -118,11 +118,18 @@ describe('strict frozen runtime context and original-capture pairing', () => {
     }
   });
   it('enforces the smaller manifest ceiling separately from the original capture ceiling', () => {
-    const value = context(); value.storage!.manifest.bytes = BARRIER_LIMITS.manifestBytes;
+    const value = context(); value.storage!.manifest.bytes = 256 * 1024;
     value.storage!.capture!.bytes = BARRIER_LIMITS.captureBytes;
     expect(barrierRuntimeContextSchema.safeParse(value).success).toBe(true);
     value.storage!.manifest.bytes++;
     expect(barrierRuntimeContextSchema.safeParse(value).success).toBe(false);
+  });
+  it('retains historical runtime parent and component limits despite the larger mixed selection lane', () => {
+    const value = execution(), base = value.qualification!.computationalMemberships[0];
+    value.qualification!.computationalMemberships = Array.from({ length: 257 }, (_, at) => ({ ...base, computationalMeshId: `mesh-${at}` }));
+    expect(barrierExecutionSchema.safeParse(value).success).toBe(false);
+    value.qualification!.computationalMemberships = [{ ...base, parentSelectionIds: Array.from({ length: 129 }, (_, at) => id(1000 + at)) }];
+    expect(barrierExecutionSchema.safeParse(value).success).toBe(false);
   });
   it('hash verification is independent of object insertion order and leaves input objects untouched', () => {
     const value = context(), before = structuredClone(value);

@@ -1,4 +1,5 @@
 import { ChangeLogTable } from '@/components/ChangeLogTable';
+import { useId } from 'react';
 import {
   Accordion,
   AccordionHeader,
@@ -133,6 +134,7 @@ export const DetailsTab = ({
   const supportsErrorMessage =
     supportDistanceOverrides.find((override) => override.supportsError)?.supportsError ?? null;
   const isSavingTrayTemplate = Object.values(trayTemplateSaving).some(Boolean);
+  const rerouteHelpId = useId();
 
   return (
     <div className={styles.tabPanel} role="tabpanel" aria-label="Details">
@@ -494,6 +496,26 @@ export const DetailsTab = ({
               }}
               disabled={!isAdmin || cableSpacingField.saving}
             />
+            <Checkbox
+              label="Require minimum tray free space when routing"
+              checked={cableSpacingField.autoRerouteForFreeSpace}
+              aria-describedby={rerouteHelpId}
+              onChange={(_, data) => {
+                if (typeof data.checked === 'boolean') {
+                  void cableSpacingField.onToggleAutoRerouteForFreeSpace(data.checked);
+                }
+              }}
+              disabled={!isAdmin || cableSpacingField.saving || (
+                cableSpacingField.minFreeSpaceCurrent === null && !cableSpacingField.autoRerouteForFreeSpace
+              )}
+            />
+            <Caption1 id={rerouteHelpId}>
+              Cable routing balances tray loading even when this option is off.{' '}
+              {cableSpacingField.minFreeSpaceCurrent === null
+                ? 'Set and save the minimum tray free space before enabling this restriction.'
+                : `When enabled, uses the project's minimum free space (${cableSpacingField.minFreeSpaceCurrent}%) with a tolerance of 3 percentage points (${Math.max(0, cableSpacingField.minFreeSpaceCurrent - 3)}% accepted).`}
+              {' '}With this restriction enabled, if no compliant route is available, the affected cable remains unrouted and other cables continue calculating.
+            </Caption1>
           </div>
           {cableCategoryCards.map((card) => {
             const currentMaxRows = card.displayMaxRows.toLocaleString();

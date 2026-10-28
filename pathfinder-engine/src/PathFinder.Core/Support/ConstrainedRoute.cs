@@ -66,7 +66,7 @@ namespace AddinRibbon.Routing
             if (drill)
             {
                 // Exact pinned strategy, with the same admitted category/options.
-                var old = Calculate(eligible, from, to, category, options, budget.Token); budget.Check();
+                var old = CalculateWithRouteCosts(eligible, from, to, category, budget.RouteCosts, options, budget.Token); budget.Check();
                 return new ConstrainedRouteEvaluation(old, ConstrainedRouteStatus.Bypassed,
                     old.Success ? "DRILLING_BYPASS" : "LEGACY_ROUTING_FAILED", old.Success, budget);
             }
@@ -202,6 +202,7 @@ namespace AddinRibbon.Routing
             fromPlan = null; toPlan = null;
             int maxNodes = Math.Min(options.MaxGraphNodes, budget.Limits.MaxGraphNodes);
             int maxConnections = Math.Min(options.MaxGraphConnections, budget.Limits.MaxGraphConnections);
+            long graphStarted = GraphPreparationRequest.StartGraphAssembly();
             var nodes = new List<Node>(); var pieces = new List<Piece>(); var segmentNodes = new List<List<int>>();
             int firstNode = -1, lastNode = -1;
             // Deliberately the pinned graph construction arithmetic/order. Each
@@ -241,7 +242,7 @@ namespace AddinRibbon.Routing
                 }
             }
             GraphLimit limit;
-            if (!AddNeighbourConnections(nodes, pieces, segmentNodes, options.ConnectionToleranceMeters, maxNodes, maxConnections, budget.Token, out limit))
+            if (!AddNeighbourConnections(nodes, pieces, segmentNodes, options.ConnectionToleranceMeters, maxNodes, maxConnections, budget.Token, out limit, graphStarted))
                 throw new ConstrainedLimitException(limit == GraphLimit.Connections ? "GRAPH_CONNECTION_LIMIT" : limit == GraphLimit.Candidates ? "GRAPH_CANDIDATE_LIMIT" : "GRAPH_NODE_LIMIT");
             budget.Check();
             if (fromPlanner != null && toPlanner != null)
@@ -280,11 +281,14 @@ namespace AddinRibbon.Routing
                 if (retained < edges.Count) edges.RemoveRange(retained, edges.Count - retained);
             }
             budget.Charge(nodes.Count + directedEdges); PathCost graphCost;
-            var path = ShortestPath(nodes, firstNode, lastNode, budget.Token, out graphCost); budget.Check();
+            var path = SelectPath(nodes, firstNode, lastNode, budget.Token, eligible, budget.RouteCosts, out graphCost); budget.Check();
             Dictionary<long, InterTrayOpeningPlan> repairs = null;
             budget.RouteInterTrayImprovementLimited = false;
             if (blocked != null && blocked.Count != 0)
+            {
+                budget.RouteCostTrays = eligible;
                 path = OpeningFallback(nodes, firstNode, lastNode, blocked, collision, budget, directedEdges, path, graphCost, out graphCost, out repairs);
+            }
             if (path == null) return null;
             budget.RouteUsedInterTrayManeuver = false;
             var codes = new List<string>(); var segmentIds = new List<string>(); var points = new List<RoutePoint> { from };

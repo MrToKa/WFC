@@ -188,6 +188,7 @@ type CableLayoutInput =
       considerBundleSpacingAsFree?: boolean | null;
       minFreeSpacePercent?: number | null;
       maxFreeSpacePercent?: number | null;
+      autoRerouteForFreeSpace?: boolean;
       mv?: CableCategorySettingsInput;
       power?: CableCategorySettingsInput;
       vfd?: CableCategorySettingsInput;
@@ -382,6 +383,10 @@ const normalizeCableLayout = (layout: CableLayoutInput): Record<string, unknown>
   }
 
   const normalized: Record<string, unknown> = {};
+
+  if ('autoRerouteForFreeSpace' in layout) {
+    normalized.autoRerouteForFreeSpace = layout.autoRerouteForFreeSpace === true;
+  }
 
   if ('cableSpacing' in layout) {
     const value = layout.cableSpacing;

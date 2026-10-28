@@ -8,9 +8,12 @@ export const CHANNEL = 'wfc-routings-viewer';
 export const PROTOCOL_VERSION = 1;
 export const SDK_VERSION = '7.130.0';
 export const MAX_MESSAGE_BYTES = 65536;
+// Only an exact validated barrier selection may carry the bounded larger input.
+// Geometry still arrives through the existing small capture events.
+export const MAX_BARRIER_SELECTION_MESSAGE_BYTES = 4 * 1024 ** 2;
 export const FRAME_PATH = '/viewer-runtime/7.130.0/index.html';
-export const PARENT_TYPES = Object.freeze(['INIT', 'LOAD_MODEL', 'SHOW_ROUTE', 'CLEAR_ROUTE', 'ZOOM_ROUTE', 'CANCEL_REQUEST', 'DISPOSE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'READ_MODEL_OBJECTS', 'READ_PREPARATION_OBJECTS', 'READ_SELECTION', 'SET_PATH_TRANSPARENCY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE', 'READ_BARRIER_MULTIPART_FRAME', 'START_BARRIER_MULTIPART', 'STATUS_BARRIER_MULTIPART', 'CANCEL_BARRIER_MULTIPART', 'RECONCILE_BARRIER_MULTIPART']);
-export const FRAME_TYPES = Object.freeze(['HELLO', 'RUNTIME_READY', 'MODEL_PROGRESS', 'MODEL_LOADED', 'ROUTE_RESULT', 'ROUTE_CLEARED', 'ROUTE_ZOOMED', 'REQUEST_CANCELLED', 'DISPOSED', 'WARNING', 'ERROR', 'COMPUTED_PATH_UPDATED', 'POINT_PICKED', 'MODEL_OBJECTS', 'PREPARATION_OBJECTS', 'MODEL_SELECTION', 'PATH_TRANSPARENCY_UPDATED', 'MODEL_CAPTURE_EVENT', 'MODEL_CAPTURE_PROGRESS', 'MODEL_CAPTURE_INPUT_ACK', 'BARRIER_CAPTURE_EVENT', 'BARRIER_CAPTURE_PROGRESS', 'BARRIER_MULTIPART_FRAME', 'BARRIER_MULTIPART_STATUS']);
+export const PARENT_TYPES = Object.freeze(['INIT', 'LOAD_MODEL', 'SHOW_ROUTE', 'CLEAR_ROUTE', 'ZOOM_ROUTE', 'CANCEL_REQUEST', 'DISPOSE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'READ_MODEL_OBJECTS', 'READ_PREPARATION_OBJECTS', 'READ_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'SHOW_LOCATION', 'SHOW_TRAY', 'SET_PATH_TRANSPARENCY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE', 'READ_BARRIER_MULTIPART_FRAME', 'START_BARRIER_MULTIPART', 'STATUS_BARRIER_MULTIPART', 'CANCEL_BARRIER_MULTIPART', 'RECONCILE_BARRIER_MULTIPART']);
+export const FRAME_TYPES = Object.freeze(['HELLO', 'RUNTIME_READY', 'MODEL_PROGRESS', 'MODEL_LOADED', 'ROUTE_RESULT', 'ROUTE_CLEARED', 'ROUTE_ZOOMED', 'REQUEST_CANCELLED', 'DISPOSED', 'WARNING', 'ERROR', 'COMPUTED_PATH_UPDATED', 'POINT_PICKED', 'MODEL_OBJECTS', 'PREPARATION_OBJECTS', 'MODEL_SELECTION', 'TRAY_ROOT_SELECTION', 'LOCATION_SHOWN', 'TRAY_SHOWN', 'PATH_TRANSPARENCY_UPDATED', 'MODEL_CAPTURE_EVENT', 'MODEL_CAPTURE_PROGRESS', 'MODEL_CAPTURE_INPUT_ACK', 'BARRIER_CAPTURE_EVENT', 'BARRIER_CAPTURE_PROGRESS', 'BARRIER_MULTIPART_FRAME', 'BARRIER_MULTIPART_STATUS']);
 export const MAX_PATH_POINTS = 20000;
 export const MAX_PATH_CHUNK_POINTS = 128;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -116,6 +119,12 @@ function payload(type, value) {
     case 'START_BARRIER_CAPTURE': return validateBarrierCaptureRequest(value);
     case 'READ_BARRIER_CAPTURE': return exact(value, ['captureId', 'index']) && isUuid(value.captureId) && integer(value.index) && value.index < 3000;
     case 'READ_SELECTION': return exact(value, []);
+    case 'READ_TRAY_ROOT_SELECTION': return exact(value, []);
+    case 'TRAY_ROOT_SELECTION': return exact(value, ['objects']) && Array.isArray(value.objects) && value.objects.length <= 512
+      && value.objects.every(object => exact(object, ['objectId']) && positiveId(object.objectId))
+      && new Set(value.objects.map(object => object.objectId)).size === value.objects.length;
+    case 'SHOW_LOCATION': case 'LOCATION_SHOWN': return exact(value, ['sdkObjectId']) && positiveId(value.sdkObjectId);
+    case 'SHOW_TRAY': case 'TRAY_SHOWN': return exact(value, ['sdkObjectIds']) && Array.isArray(value.sdkObjectIds) && value.sdkObjectIds.length > 0 && value.sdkObjectIds.length <= 512 && boundedIds([...value.sdkObjectIds]);
     case 'MODEL_SELECTION': return exact(value, ['coordinateFrame', 'metresPerDisplayUnit', 'globalOffsetMetres', 'objects']) && payload('MODEL_OBJECTS', { cursor: 0, nextCursor: null, complete: true, query: '', ...value }) && new Set(value.objects.map(object => object.objectId)).size === value.objects.length;
     case 'SET_PATH_TRANSPARENCY': case 'PATH_TRANSPARENCY_UPDATED': return exact(value, ['routeRequestId', 'percent']) && isUuid(value.routeRequestId) && integer(value.percent) && value.percent <= 100;
     case 'READ_MODEL_CAPTURE': return isModelCaptureInputAppend(value) || exact(value, ['captureId', 'index']) && isUuid(value.captureId) && integer(value.index) && value.index < 3000;
@@ -164,9 +173,10 @@ export function validateEnvelope(value, direction) {
       || value.type === 'BARRIER_MULTIPART_FRAME' && (value.payload.frameObservation.projectId !== value.projectId
         || value.payload.frameObservation.modelVersionId !== value.modelVersionId || value.payload.frameObservation.loadId !== value.loadId))) return null;
     const handshake = ['HELLO', 'INIT', 'RUNTIME_READY'].includes(value.type);
-    if (handshake ? value.modelVersionId !== null : ['LOAD_MODEL', 'MODEL_PROGRESS', 'MODEL_LOADED', 'SHOW_ROUTE', 'ROUTE_RESULT', 'ZOOM_ROUTE', 'ROUTE_ZOOMED', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'COMPUTED_PATH_UPDATED', 'PICK_POINT', 'POINT_PICKED', 'READ_MODEL_OBJECTS', 'MODEL_OBJECTS', 'READ_PREPARATION_OBJECTS', 'PREPARATION_OBJECTS', 'READ_SELECTION', 'MODEL_SELECTION', 'SET_PATH_TRANSPARENCY', 'PATH_TRANSPARENCY_UPDATED', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'MODEL_CAPTURE_EVENT', 'MODEL_CAPTURE_PROGRESS', 'MODEL_CAPTURE_INPUT_ACK'].includes(value.type) && value.modelVersionId === null) return null;
+    if (handshake ? value.modelVersionId !== null : ['LOAD_MODEL', 'MODEL_PROGRESS', 'MODEL_LOADED', 'SHOW_ROUTE', 'ROUTE_RESULT', 'ZOOM_ROUTE', 'ROUTE_ZOOMED', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'COMPUTED_PATH_UPDATED', 'PICK_POINT', 'POINT_PICKED', 'READ_MODEL_OBJECTS', 'MODEL_OBJECTS', 'READ_PREPARATION_OBJECTS', 'PREPARATION_OBJECTS', 'READ_SELECTION', 'MODEL_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'TRAY_ROOT_SELECTION', 'SHOW_LOCATION', 'LOCATION_SHOWN', 'SHOW_TRAY', 'TRAY_SHOWN', 'SET_PATH_TRANSPARENCY', 'PATH_TRANSPARENCY_UPDATED', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'MODEL_CAPTURE_EVENT', 'MODEL_CAPTURE_PROGRESS', 'MODEL_CAPTURE_INPUT_ACK'].includes(value.type) && value.modelVersionId === null) return null;
     const serialized = JSON.stringify(value);
-    if (new TextEncoder().encode(serialized).byteLength > MAX_MESSAGE_BYTES) return null;
+    const maximumBytes = value.type === 'START_BARRIER_CAPTURE' ? MAX_BARRIER_SELECTION_MESSAGE_BYTES : MAX_MESSAGE_BYTES;
+    if (new TextEncoder().encode(serialized).byteLength > maximumBytes) return null;
     return JSON.parse(serialized);
   } catch { return null; }
 }

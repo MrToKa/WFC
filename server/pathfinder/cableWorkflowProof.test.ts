@@ -5,17 +5,20 @@ import type { CableWorkflowRow } from '../../shared/pathfinderCableWorkflow.js';
 import type { BarrierDependencySnapshot, DependencySnapshot, EngineResponse } from './jobContracts.js';
 import { defaultOptions } from './jobContracts.js';
 import { hash } from './dependencies.js';
-import { createCableWorkflowProofReader, readWorkflowVerifiedProposal, WORKFLOW_PROOF_BYTES } from './cableWorkflowProof.js';
+import { createCableWorkflowProofReader, readWorkflowVerifiedProposal, WORKFLOW_PROOF_BYTES, normalizeSavedDisplayComparison } from './cableWorkflowProof.js';
 import { BARRIER_RUNTIME_PROFILE, barrierRouteHashInput, createBarrierRuntimePolicy, type BarrierRuntimeContext } from '../../shared/pathfinderBarrierRuntime.js';
 import { syntheticBarrierEngineIdentity } from './calculationFixtures.js';
 import { readBarrierWriteEvidence } from './barrierWrites.js';
+import { mixedBarrierEngineIdentityBodySchema, MIXED_BARRIER_OPENING_RUNTIME_PROFILE, MIXED_BARRIER_LARGE_SELECTION_RUNTIME_PROFILE,
+  MIXED_BARRIER_POLICY, MIXED_BARRIER_COLLISION_VERSION, MIXED_BARRIER_VERIFIER_VERSION, INTER_TRAY_OPENING_MANEUVER_POLICY } from '../../shared/pathfinderBarrierMixed.js';
 
-const proof = vi.hoisted(() => ({ seal: vi.fn(), enrollment: vi.fn(), scope: vi.fn(),scoped:vi.fn(), initialFill: vi.fn() }));
+const proof = vi.hoisted(() => ({ seal: vi.fn(), enrollment: vi.fn(), scope: vi.fn(),scoped:vi.fn(), initialFill: vi.fn(),automaticPair:vi.fn() }));
 vi.mock('./revisionResultRepository.js', () => ({ verifyRevisionResultForProposal: proof.seal }));
 vi.mock('./recalculationRepository.js', () => ({ readRecalculationJobAuthority: proof.enrollment }));
 vi.mock('./routingScope.js', () => ({ requireVersionedCalculationScope: proof.scope }));
 vi.mock('./locationImpactRepository.js',()=>({readLocationImpactJobAuthority:proof.scoped}));
 vi.mock('./initialFillReceiptProof.js', () => ({ createInitialFillReceiptProofReader: () => proof.initialFill }));
+vi.mock('./automaticPairReceiptProof.js', () => ({createAutomaticPairReceiptProofReader:()=>proof.automaticPair}));
 
 type Data = Record<string, any>;
 const id = (n: number) => 'ce000000-0000-4000-8000-' + n.toString(16).padStart(12, '0');
@@ -38,7 +41,8 @@ function fixture() {
       fromRequiresSecondary: false, toRequiresSecondary: false, connectionGapCount: 0, connectionGapLengthMeters: 0 },
     design: { lengthBeforePercentageMeters: '6', unroundedLengthMeters: '6.6', designLengthMeters: '7' }, lengthLedger: ledger } as EngineResponse;
   const raw: Data = { id: proposalId, project_id: projectId, cable_id: cableId, job_id: jobId, status: 'calculated',
-    proposal_hash: hash({ fixture: 'proposal' }), dependency_hash: hash(dependencies), dependencies, result, job_state: 'complete', cancel_requested: false };
+    proposal_hash: hash({ fixture: 'proposal' }), dependency_hash: hash(dependencies), dependencies, result, job_state: 'complete', cancel_requested: false,
+    item_state: 'complete', item_status: 'calculated' };
   const seal = { projectId, cableId, jobId, revisionResultSha256: 'b'.repeat(64), ledgerHash: hash(ledger), baselineHash: 'c'.repeat(64) };
   proof.seal.mockResolvedValue(seal);
   const before = { id: cableId, project_id: projectId, routing: '/OLD', design_length: '3.0000', install_length: '2.0000',
@@ -97,16 +101,140 @@ function barrierFixture() {
   reseal();
   return {...f,dependencies,result,reseal};
 }
-function protectedAcceptedFixture() {
-  const f = barrierFixture(), evidence = readBarrierWriteEvidence(f.dependencies, f.result);
+function protectedAcceptedFixture(priorRevision = beforeRevision, writtenRevision = afterRevision) {
+  const f = barrierFixture(); f.dependencies.cableWriteRevision = priorRevision; f.before.cable_write_revision = priorRevision;
+  f.after.cable_write_revision = writtenRevision; f.cable.cableWriteRevision = writtenRevision; f.reseal();
+  const evidence = readBarrierWriteEvidence(f.dependencies, f.result);
   if (!evidence) throw Error('Expected complete synthetic protected receipt evidence.');
   f.receipt.provenance = { ...f.provenance, schemaVersion: 'pathfinder.apply.v3', proposalHash: f.raw.proposal_hash,
     dependencies: f.dependencies, barrierEvidence: evidence,
     review: { ...f.provenance.review, dependencyHash: f.raw.dependency_hash, validationMethod: 'manual-review' },
     revisionResult: { ...f.provenance.revisionResult, dependencyHash: f.raw.dependency_hash, engineResultSha256: hash(f.result) } };
   f.receipt.review_proposal_hash = f.raw.proposal_hash; f.receipt.review_dependency_sha256 = f.raw.dependency_hash;
+  f.receipt.payload_hash = hash({proposalId,idempotencyKey:f.receipt.idempotency_key,reviewId:f.receipt.review_id,expectedCableWriteRevision:priorRevision});
   return f;
 }
+
+function savedDisplayFixture() {
+  const f = protectedAcceptedFixture('18', '19'); f.receipt.provenance.schemaVersion = 'pathfinder.automatic-pair.v1';
+  proof.automaticPair.mockResolvedValue({before:f.receipt.before_snapshot,after:f.receipt.after_snapshot});
+  const current = structuredClone({...f.dependencies,cableWriteRevision:'19'});
+  current.engineIdentity.coreModuleSha256 = '9'.repeat(64);
+  const {contentSha256:_prior,...body}=current.engineIdentity;current.engineIdentity.contentSha256=hash(body);
+  const expected={jobId,proposalId,proposalHash:f.raw.proposal_hash},fresh=vi.fn(async()=>current);
+  return {...f,current,expected,fresh};
+}
+
+describe('read-only saved exact path after an implementation-only engine update',()=>{
+  it('retains the proven18→19 saved geometry without granting current review or acceptance',async()=>{
+    const f=savedDisplayFixture(),before=structuredClone(f.current),dependencyHash=f.raw.dependency_hash;
+    expect(await f.reader.savedExactDisplay(f.cable,f.fresh,f.expected)).toBe(true);
+    expect(await f.reader.accepted(f.cable,f.fresh,f.expected)).toBe(false);
+    expect(await f.reader.reviewable(cableId,jobId,proposalId,f.current)).toMatchObject({currentness:'changed',reviewable:false,reasonCodes:['PROPOSAL_DEPENDENCIES_CHANGED']});
+    expect(f.current).toEqual(before);expect(f.dependencies.cableWriteRevision).toBe('18');expect(f.cable.cableWriteRevision).toBe('19');expect(f.raw.dependency_hash).toBe(dependencyHash);
+    expect(f.query.mock.calls.every(([sql])=>!/^\s*(?:INSERT|UPDATE|DELETE)/.test(sql))).toBe(true);
+  });
+  it.each(['model','from','to','settings','options','barriers','cableInputs','preparation'] as const)('rejects a concurrent %s engineering change',async field=>{
+    const f=savedDisplayFixture(),current=f.current as unknown as Data;
+    if(field==='model')current.model={...current.model,id:id(99)};
+    else if(field==='from'||field==='to')current[field]={...current[field],point:[99,0,0]};
+    else if(field==='settings')current.settings={...current.settings,revision:'99'};
+    else if(field==='options')current.options={...current.options,secondaryDistanceMeters:99};
+    else if(field==='barriers')current.barriers={...current.barriers,binding:{...current.barriers.binding,registryRevision:'99'}};
+    else if(field==='cableInputs')current.cableInputs={...current.cableInputs,fromLocation:'OTHER'};
+    else current.preparation={aggregateId:id(99)};
+    expect(await f.reader.savedExactDisplay(f.cable,f.fresh,f.expected)).toBe(false);
+  });
+  it.each(['same-engine','policy','upstream','schema','digest'] as const)('rejects %s engine evidence',async kind=>{
+    const f=savedDisplayFixture(),engine=f.current.engineIdentity as unknown as Data;
+    if(kind==='same-engine')f.current.engineIdentity=structuredClone(f.dependencies.engineIdentity);
+    else if(kind==='policy')engine.policyVersions={...engine.policyVersions,routing:'different-policy'};
+    else if(kind==='upstream')engine.version='different-upstream';
+    else if(kind==='schema')engine.schemaVersion='wfc.pf.engine-identity.v1';
+    else engine.contentSha256='0'.repeat(64);
+    expect(await f.reader.savedExactDisplay(f.cable,f.fresh,f.expected)).toBe(false);
+  });
+  it.each(['jobId','proposalId','proposalHash'] as const)('rejects an exchanged exact %s',async field=>{
+    const f=savedDisplayFixture();f.expected[field]=field==='proposalHash'?'0'.repeat(64):id(99);
+    expect(await f.reader.savedExactDisplay(f.cable,f.fresh,f.expected)).toBe(false);
+  });
+  it.each(['job-queued','job-running','job-cancelled','job-failed','cancel-requested','item-running','item-failed'] as const)('rejects %s execution state',async kind=>{
+    const f=savedDisplayFixture();if(kind.startsWith('job-'))f.raw.job_state=kind.slice(4);
+    else if(kind==='cancel-requested')f.raw.cancel_requested=true;
+    else if(kind==='item-running')f.raw.item_state='running';else f.raw.item_status='failed';
+    expect(await f.reader.savedExactDisplay(f.cable,f.fresh,f.expected)).toBe(false);
+  });
+  it.each(['receipt','receipt-tuple','manual-revision','routing','length','install','geometry','seal'] as const)('rejects unproved/tampered %s',async kind=>{
+    const f=savedDisplayFixture();
+    if(kind==='receipt')proof.automaticPair.mockResolvedValue(null);
+    else if(kind==='receipt-tuple')f.receipt.proposal_id=id(99);
+    else if(kind==='manual-revision')f.cable.cableWriteRevision='20';
+    else if(kind==='routing')f.cable.routing='/OTHER';
+    else if(kind==='length')f.cable.designLength='99';
+    else if(kind==='install')f.cable.installLength='99';
+    else if(kind==='geometry')f.result.route.pathPoints[0].x=99;
+    else proof.seal.mockResolvedValue(null);
+    expect(await f.reader.savedExactDisplay(f.cable,f.fresh,f.expected)).toBe(false);
+  });
+  it('keeps legacy proofs outside the saved exact display exception',async()=>{
+    const f=fixture();expect(await f.reader.savedExactDisplay(f.cable,async()=>f.current,{jobId,proposalId,proposalHash:f.raw.proposal_hash})).toBe(false);
+  });
+});
+
+describe('bounded saved-display metadata comparison (not independent authority)',()=>{
+  function metadataFixture(){
+    const source=barrierFixture(),frozen=structuredClone({...source.dependencies,cableWriteRevision:'18'}) as unknown as Data;
+    const identity=(profile:string)=>{const {schemaVersion:_version,contentSha256:_sha,...body}=syntheticBarrierEngineIdentity();
+      const mixed=mixedBarrierEngineIdentityBodySchema.parse({...body,schemaVersion:'wfc.pf.engine-identity.v3',policyVersions:{...body.policyVersions,
+        projection:'wfc.pf.model-runner-v3-mixed-barrier-projection.v1',barriers:MIXED_BARRIER_COLLISION_VERSION,qualification:MIXED_BARRIER_VERIFIER_VERSION,
+        runtimeProfile:profile,geometryPolicy:MIXED_BARRIER_POLICY,interTrayManeuvers:INTER_TRAY_OPENING_MANEUVER_POLICY}});
+      return{...mixed,contentSha256:hash(mixed)};};
+    frozen.barriers.schemaVersion='wfc.pf.barrier-runtime.v2';frozen.barriers.profile=structuredClone(MIXED_BARRIER_OPENING_RUNTIME_PROFILE);frozen.barriers.profileSha256=hash(frozen.barriers.profile);
+    frozen.engineIdentity=identity(frozen.barriers.profile.schemaVersion);
+    const current:Data=structuredClone({...frozen,cableWriteRevision:'19'});
+    current.settings.routingBalance={mode:'destination-groups-v1',layoutSha256:'9'.repeat(64)};
+    current.barriers.profile=structuredClone(MIXED_BARRIER_LARGE_SELECTION_RUNTIME_PROFILE);current.barriers.profileSha256=hash(current.barriers.profile);
+    current.engineIdentity=identity(current.barriers.profile.schemaVersion);
+    const normalize=()=>normalizeSavedDisplayComparison(current as DependencySnapshot,frozen as DependencySnapshot);
+    const equal=()=>{const value=normalize();return value!==null&&hash({...value,cableWriteRevision:'18'})===hash(frozen);};
+    return{frozen,current,normalize,equal};
+  }
+  it('compares exactly the live128/256→2048/2048 profile upgrade and absent→derived balance without changing its inputs',()=>{
+    const f=metadataFixture(),before=structuredClone(f.current);expect(f.equal()).toBe(true);expect(f.current).toEqual(before);
+    expect(f.normalize()).toMatchObject({engineIdentity:f.frozen.engineIdentity,barriers:{profile:f.frozen.barriers.profile,profileSha256:f.frozen.barriers.profileSha256}});
+    expect(f.normalize()!.settings).not.toHaveProperty('routingBalance');
+  });
+  it('keeps same-engine background occupancy changes display-only and still checks all settings',()=>{
+    const f=metadataFixture();f.frozen.settings.routingBalance={mode:'destination-groups-v1',layoutSha256:'8'.repeat(64)};
+    f.current.barriers=structuredClone(f.frozen.barriers);f.current.engineIdentity=structuredClone(f.frozen.engineIdentity);
+    expect(f.equal()).toBe(true);expect(f.normalize()).toMatchObject({engineIdentity:f.frozen.engineIdentity});
+    f.current.settings.endConnectionLength='99';expect(f.equal()).toBe(false);
+  });
+  it.each(['parents','components','prior-limit','other-profile','current-profile-sha','prior-profile-sha','engine-policy','snapshot','model','from','to','settings-revision','math-setting','balance-mode','balance-sha','balance-extra','prior-balance-invalid','balance-removal'] as const)('refuses a %s difference rather than generalizing the metadata upgrade',kind=>{
+    const f=metadataFixture();
+    if(kind==='parents')f.current.barriers.profile.qualification.maximumParents=4096;
+    if(kind==='components')f.current.barriers.profile.qualification.maximumComponents=4096;
+    if(kind==='prior-limit')f.frozen.barriers.profile.qualification.maximumComponents=128;
+    if(kind==='other-profile')f.current.barriers.profile.qualification.maximumTriangles=999;
+    if(['parents','components','other-profile'].includes(kind))f.current.barriers.profileSha256=hash(f.current.barriers.profile);
+    if(kind==='prior-limit')f.frozen.barriers.profileSha256=hash(f.frozen.barriers.profile);
+    if(kind==='current-profile-sha')f.current.barriers.profileSha256='0'.repeat(64);
+    if(kind==='prior-profile-sha')f.frozen.barriers.profileSha256='0'.repeat(64);
+    if(kind==='engine-policy'){f.current.engineIdentity=structuredClone(f.frozen.engineIdentity);}
+    if(kind==='snapshot')f.current.barriers.binding.snapshot.snapshotId=id(99);
+    if(kind==='model')f.current.model.id=id(99);
+    if(kind==='from')f.current.from.point=[99,0,0];
+    if(kind==='to')f.current.to.point=[99,0,0];
+    if(kind==='settings-revision')f.current.settings.revision='99';
+    if(kind==='math-setting')f.current.settings.endConnectionLength='99';
+    if(kind==='balance-mode')f.current.settings.routingBalance.mode='other';
+    if(kind==='balance-sha')f.current.settings.routingBalance.layoutSha256='bad';
+    if(kind==='balance-extra')f.current.settings.routingBalance.authority=true;
+    if(kind==='prior-balance-invalid')f.frozen.settings.routingBalance={mode:'other',layoutSha256:'8'.repeat(64)};
+    if(kind==='balance-removal'){f.frozen.settings.routingBalance={mode:'destination-groups-v1',layoutSha256:'8'.repeat(64)};delete f.current.settings.routingBalance;}
+    expect(f.equal()).toBe(false);
+  });
+});
 
 describe('cable workflow positive result evidence (synthetic boundaries)', () => {
   it.each(['queued','running','complete'])('uses current sealed v8 readiness with %s siblings after validating its retained physical strategy',async state=>{
@@ -210,6 +338,23 @@ describe('cable workflow positive result evidence (synthetic boundaries)', () =>
 });
 
 describe('receipt-backed current accepted cable display', () => {
+  it('binds protected own-write evidence to the exact displayed job/proposal/hash tuple',async()=>{
+    const f=protectedAcceptedFixture(),currentForOptions=vi.fn(async()=>({...f.dependencies,cableWriteRevision:afterRevision}));
+    expect(await f.reader.accepted(f.cable,currentForOptions,{jobId,proposalId,proposalHash:f.raw.proposal_hash})).toBe(true);
+    expect(currentForOptions).toHaveBeenCalledOnce();
+  });
+  it.each(['job','proposal','hash','malformed'] as const)('does not use an older valid accepted result for an exchanged %s tuple',async kind=>{
+    const f=protectedAcceptedFixture(),currentForOptions=vi.fn(async()=>({...f.dependencies,cableWriteRevision:afterRevision}));
+    const expected={jobId,proposalId,proposalHash:f.raw.proposal_hash};
+    if(kind==='job')expected.jobId=id(99);if(kind==='proposal')expected.proposalId=id(99);if(kind==='hash')expected.proposalHash='f'.repeat(64);if(kind==='malformed')expected.jobId='not-a-job-id';
+    expect(await f.reader.accepted(f.cable,currentForOptions,expected)).toBe(false);expect(currentForOptions).not.toHaveBeenCalled();
+    if(kind==='proposal'||kind==='malformed')expect(f.query.mock.calls.some(([sql])=>sql.includes('proposal-proof'))).toBe(false);
+  });
+  it('retains exact tuple protection for separately proven automatic initial-fill receipts',async()=>{
+    const f=protectedAcceptedFixture();f.receipt.provenance.schemaVersion='pathfinder.initial-fill.v2';proof.initialFill.mockResolvedValue(true);
+    expect(await f.reader.accepted(f.cable,async()=>({...f.dependencies,cableWriteRevision:afterRevision}),{jobId,proposalId,proposalHash:f.raw.proposal_hash})).toBe(true);
+    expect(await f.reader.accepted(f.cable,async()=>({...f.dependencies,cableWriteRevision:afterRevision}),{jobId:id(99),proposalId,proposalHash:f.raw.proposal_hash})).toBe(false);
+  });
   it('recognizes exact apply.v3 protected evidence with its immutable human review and own-write transition', async () => {
     const f = protectedAcceptedFixture(), currentForOptions = vi.fn(async () => ({ ...f.dependencies, cableWriteRevision: afterRevision }));
     expect(await f.reader.accepted(f.cable, currentForOptions)).toBe(true);
@@ -232,6 +377,18 @@ describe('receipt-backed current accepted cable display', () => {
     const f = protectedAcceptedFixture(); f.receipt.provenance.schemaVersion = 'pathfinder.initial-fill.v2'; proof.initialFill.mockResolvedValue(true);
     expect(await f.reader.accepted(f.cable, async () => ({ ...f.dependencies, cableWriteRevision: afterRevision }))).toBe(true);
     expect(proof.initialFill).toHaveBeenCalledWith(expect.objectContaining({ dependencies: f.dependencies, result: f.result, provenance: f.receipt.provenance }));
+  });
+  it('recognizes automatic pair own writes only through exact historical proof and current tuple',async()=>{
+    const f=protectedAcceptedFixture(); f.receipt.provenance.schemaVersion='pathfinder.automatic-pair.v1';
+    proof.automaticPair.mockResolvedValue({before:f.receipt.before_snapshot,after:f.receipt.after_snapshot});
+    expect(await f.reader.accepted(f.cable,async()=>({...f.dependencies,cableWriteRevision:afterRevision}),{jobId,proposalId,proposalHash:f.raw.proposal_hash})).toBe(true);
+    expect(proof.automaticPair).toHaveBeenCalledWith({projectId,cableId,receiptId:f.receipt.id});
+    expect(await f.reader.accepted(f.cable,async()=>({...f.dependencies,cableWriteRevision:afterRevision}),{jobId:id(99),proposalId,proposalHash:f.raw.proposal_hash})).toBe(false);
+  });
+  it.each(['unproved','different-transition'])('refuses automatic pair own-write exception with %s receipt',async kind=>{
+    const f=protectedAcceptedFixture(); f.receipt.provenance.schemaVersion='pathfinder.automatic-pair.v1';
+    proof.automaticPair.mockResolvedValue(kind==='unproved'?null:{before:f.receipt.before_snapshot,after:{...f.receipt.after_snapshot,routing:'/OTHER'}});
+    const fresh=vi.fn(); expect(await f.reader.accepted(f.cable,fresh)).toBe(false); expect(fresh).not.toHaveBeenCalled();
   });
   it('does not let protected own-write proof excuse a subsequent barrier policy change', async () => {
     const f = protectedAcceptedFixture(), current = { ...f.dependencies, cableWriteRevision: afterRevision,

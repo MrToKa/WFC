@@ -12,13 +12,14 @@ public static class MixedBarrierCaptureVerifier
 {
     public const string ProducerVersion = "wfc.pf.barrier-mixed-verifier.v2";
     public const int MaximumReceiptBytes = 64 * 1024;
+    public const int LargeSelectionMaximumReceiptBytes = 4 * 1024 * 1024;
     public static MixedBarrierVerificationResult Verify(ReadOnlyMemory<byte> captureUtf8, BarrierVerifierLimits? limits = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, int maximumReceiptBytes = MaximumReceiptBytes)
     {
         cancellationToken.ThrowIfCancellationRequested(); limits ??= new(); var budget = new VerifierBudget(limits.MaximumWork, limits.MaximumMilliseconds, cancellationToken); string? captureHash = null;
         try
         {
-            ValidateLimits(limits);
+            ValidateLimits(limits, maximumReceiptBytes);
             if (captureUtf8.Length is < 1 || captureUtf8.Length > limits.MaximumBytes) throw new VerifierRefusal("CAPTURE_BYTES_LIMIT", "Capture bytes exceed the declared bound; no input digest was computed.");
             captureUtf8 = captureUtf8.ToArray(); captureHash = BarrierCaptureVerifier.Hash(captureUtf8.Span);
             var parsed = CaptureParser.Parse(captureUtf8, limits, budget); var capture = parsed.Value;
@@ -48,16 +49,18 @@ public static class MixedBarrierCaptureVerifier
             var evidence = new MixedBarrierVerifierEvidence(capture.CaptureId, capture.Scope, summary.OriginalSurfaceComponents, summary.QualifiedClosedSolidComponents,
                 summary.FragmentCount, summary.VertexCount, summary.TriangleCount, summary.OriginalGeometrySha256, verificationHash, summary.NumericToleranceMetres, memberships.AsReadOnly());
             var receipt = new MixedBarrierVerifierReceipt("geometry-qualified", captureHash, evidence, Array.Empty<BarrierVerifierDiagnostic>());
-            _ = ReceiptBytes(receipt); budget.Checkpoint(); return new(receipt, new(built.Kernel, built.Kernel.Components));
+            _ = ReceiptBytes(receipt, maximumReceiptBytes); budget.Checkpoint(); return new(receipt, new(built.Kernel, built.Kernel.Components));
         }
         catch (VerifierRefusal error) { return Refused(captureHash, error.Code, error.Message); }
         catch (Exception error) when (error is JsonException or DecoderFallbackException or OverflowException or ArgumentException)
         { return Refused(captureHash, "INVALID_CAPTURE", "Capture parsing/geometry bounds refused: " + error.GetType().Name + "."); }
     }
-    public static byte[] ReceiptBytes(MixedBarrierVerifierReceipt receipt)
+    public static byte[] ReceiptBytes(MixedBarrierVerifierReceipt receipt, int maximumBytes = MaximumReceiptBytes)
     {
+        if (maximumBytes is not (MaximumReceiptBytes or LargeSelectionMaximumReceiptBytes))
+            throw new VerifierRefusal("INVALID_LIMITS", "An explicit supported receipt byte limit is required.");
         byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(receipt, CaptureParser.Json);
-        if (bytes.Length > MaximumReceiptBytes) throw new VerifierRefusal("RECEIPT_BYTES_LIMIT", "Mixed component evidence exceeds the fixed 64 KiB receipt bound; nothing was truncated."); return bytes;
+        if (bytes.Length > maximumBytes) throw new VerifierRefusal("RECEIPT_BYTES_LIMIT", "Mixed component evidence exceeds its explicit receipt byte bound; nothing was truncated."); return bytes;
     }
     private static MixedBarrierComponentMembership ComponentMembership(string captureHash, MixedBarrierComponent component, VerifierBudget budget)
     {
@@ -90,10 +93,12 @@ public static class MixedBarrierCaptureVerifier
     }
     private static MixedBarrierVerificationResult Refused(string? hash, string code, string message) => new(new("refused", hash, null,
         new ReadOnlyCollection<BarrierVerifierDiagnostic>([new(code, message.Length > 2048 ? message[..2048] : message)])), null);
-    private static void ValidateLimits(BarrierVerifierLimits limits)
+    private static void ValidateLimits(BarrierVerifierLimits limits, int maximumReceiptBytes)
     {
-        if (limits.MaximumBytes is < 1 or > 33_554_432 || limits.MaximumFragments is < 1 or > 8192 || limits.MaximumParents is < 1 or > 128
-            || limits.MaximumComputationalMeshes is < 1 or > 256 || limits.MaximumVertices is < 4 or > 500_000 || limits.MaximumTriangles is < 4 or > 250_000
+        bool largeSelection = maximumReceiptBytes == LargeSelectionMaximumReceiptBytes;
+        if (maximumReceiptBytes is not (MaximumReceiptBytes or LargeSelectionMaximumReceiptBytes)
+            || limits.MaximumBytes is < 1 or > 33_554_432 || limits.MaximumFragments is < 1 or > 8192 || limits.MaximumParents < 1 || limits.MaximumParents > (largeSelection ? 2048 : 128)
+            || limits.MaximumComputationalMeshes < 1 || limits.MaximumComputationalMeshes > (largeSelection ? 2048 : 256) || limits.MaximumVertices is < 4 or > 500_000 || limits.MaximumTriangles is < 4 or > 250_000
             || limits.MaximumWork is < 1 or > 40_000_000 || limits.MaximumMilliseconds is < 1 or > 60_000 || !double.IsFinite(limits.NumericToleranceMetres)
             || limits.NumericToleranceMetres is < 1e-9 or > .001) throw new VerifierRefusal("INVALID_LIMITS", "Supported finite bounded verifier limits are required.");
     }

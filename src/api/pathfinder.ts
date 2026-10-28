@@ -9,6 +9,8 @@ import { directSecondaryDecisionSchema, directSecondaryRouteIssue, type DirectSe
 import { revisionResultEnvelopeSchema } from '../../shared/pathfinderRevisionResults';
 import { calculationAvailabilitySchema } from '../../shared/pathfinderCalculationAvailability';
 import { calculationSubmissionRefusalSchema } from '../../shared/pathfinderCalculationSubmission';
+import { automaticPairPolicySchema, automaticPairStatuses } from '../../shared/pathfinderAutomaticPair';
+import { recalculationReasonSchema } from '../../shared/pathfinderRecalculation';
 import { sealedCableItemApplicabilitySchema } from '../../shared/pathfinderItemApplicability';
 import { supportedBarrierAdmissionIntentSchema as barrierAdmissionIntentSchema, type AnyBarrierAdmissionIntent as BarrierAdmissionIntent,
   supportedBarrierExecutionSchema as barrierExecutionSchema, supportedBarrierEngineIdentitySchema as barrierEngineIdentitySchema } from '../../shared/pathfinderBarrierSupported';
@@ -20,9 +22,12 @@ const match = z.object({ status: z.enum(['matched', 'missing', 'ambiguous', 'sta
 const location = z.object({ id: uuid, name: z.string(), aliases: z.array(z.string()), revision,
   calculationAvailability: calculationAvailabilitySchema.optional(),
   matching: z.object({ status: z.enum(['missing', 'ambiguous', 'unverified']), candidateObjectIds: z.array(z.string()) }).optional(),
-  binding: z.object({ modelVersionId: uuid, revision, point, objectId: z.string().nullable(), externalId: z.string().nullable(), source: z.enum(['manual', 'automatic']), status: z.enum(['confirmed', 'stale']), derivation: z.enum(['manual-world-point', 'picked-surface-point', 'equipment-bottom-aabb']).optional(), coordinateFrame: z.literal('canonical-world-metres').optional() }).nullable() });
+  binding: z.object({ modelVersionId: uuid, revision, point, objectId: z.string().nullable(), externalId: z.string().nullable(), source: z.enum(['manual', 'automatic']), status: z.enum(['confirmed', 'stale']), derivation: z.enum(['manual-world-point', 'picked-surface-point', 'equipment-bottom-aabb', 'matched-model-bottom-aabb.v1']).optional(), coordinateFrame: z.literal('canonical-world-metres').optional() }).nullable() });
 const numeric = z.union([z.string(), z.number().finite()]).nullable();
 const jobSchema = z.object({ id: uuid, projectId: uuid, kind: z.enum(['calculate', 'lookup', 'preview']).optional(), status: z.enum(['queued', 'running', 'complete', 'cancelled', 'failed']), total: z.number().int().nonnegative(), completed: z.number().int().nonnegative(), cancelRequested: z.boolean(), failure: z.string().nullable(), attempts: z.number().int().nonnegative(), createdAt: z.string(), updatedAt: z.string() });
+const jobAutomaticUpdateSchema = z.object({ status: z.enum(automaticPairStatuses), receiptId: uuid.nullable(), reasonCode: recalculationReasonSchema.nullable() }).strict()
+  .refine(value => ['written', 'already-written'].includes(value.status) === (value.receiptId !== null));
+const jobItemSchema = z.object({ cableId: uuid, status: z.string(), state: z.string(), message: z.string().nullable(), automaticUpdate: jobAutomaticUpdateSchema.optional() });
 const connectionGapSchema = z.string().max(64).regex(/^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/).refine(value => Number.isFinite(Number(value)) && Number(value) > 0 && Number(value) <= 100);
 const projectSettingsSchema = z.object({ revision, connectionGap: connectionGapSchema, secondaryTrayLength: z.string().nullable(), endConnectionLength: z.string().nullable(), additionalBendingPercent: z.string().nullable() });
 const designSchema = z.object({ lengthBeforePercentageMeters: z.string(), unroundedLengthMeters: z.string(), designLengthMeters: z.string() });
@@ -103,7 +108,7 @@ const lookupSchema = z.object({ id: uuid, projectId: uuid, kind: z.literal('look
 const endpointSchema = z.object({ name: z.string().max(500), point: point.optional() });
 const categorySchema = z.enum(['MV', 'LV', 'Control', 'Instrumentation']);
 const preferences = { secondaryDistanceMeters: z.number().finite().min(0).max(1_000_000).optional(), preferVerticalApproach: z.boolean().optional(), barrierRouting: barrierAdmissionIntentSchema.optional() };
-const previewInputSchema = z.object({ from: endpointSchema, to: endpointSchema, category: categorySchema, reverse: z.boolean(), ...preferences,
+const previewInputSchema = z.object({ from: endpointSchema, to: endpointSchema, category: categorySchema, cablePurpose: z.string().min(1).max(500).optional(), reverse: z.boolean(), ...preferences,
   artifactId: uuid, expectedSelectionRevision: revision, expectedSettingsRevision: revision, expectedRegistryRevision: revision });
 const resolvedEndpointSchema = z.object({ name: z.string(), point, source: z.enum(['manual-world-point', 'shared-location', 'equipment-bottom-aabb']), objectId: z.string().nullable(), locationId: uuid.nullable(), bindingRevision: revision.nullable() });
 const previewSchema = z.object({ id: uuid, projectId: uuid, kind: z.literal('preview'), status: z.enum(['queued', 'running', 'complete', 'cancelled', 'failed']), total: z.literal(1), completed: z.number().int().min(0).max(1), cancelRequested: z.boolean(), createdAt: z.string(), updatedAt: z.string(), failure: z.string().nullable(),
@@ -122,7 +127,7 @@ export type PathFinderState = z.infer<typeof stateSchema>;
 export type PathFinderLocation = z.infer<typeof location>;
 export type PathFinderCable = z.infer<typeof cable>;
 export type PathFinderProposal = z.infer<typeof proposalSchema>;
-export type PathFinderJob = z.infer<typeof jobSchema> & { items?: { cableId: string; status: string; state: string; message: string | null }[] };
+export type PathFinderJob = z.infer<typeof jobSchema> & { items?: z.infer<typeof jobItemSchema>[] };
 export type PathFinderLookup = z.infer<typeof lookupSchema>;
 export type PathFinderLookupPlan = z.infer<typeof lookupPlanSchema>;
 export type PathFinderPreview = z.infer<typeof previewSchema>;
@@ -133,6 +138,7 @@ export type PathFinderCalculationSubmission =
   | { kind: 'acknowledged'; jobId: string; registryRevision: string; duplicate: boolean }
   | { kind: 'unknown'; code: string };
 const popupCalculationRequestSchema = z.object({ cableIds: z.array(uuid).min(1).max(10_000), expectedRegistryRevision: revision, force: z.literal(true),
+  automaticPairPolicy: automaticPairPolicySchema.optional(),
   options: z.object({ connectionToleranceMeters: z.number().finite().positive().max(100), sampleSpacingMeters: z.literal(0.125),
     maxGraphNodes: z.literal(200_000), maxGraphConnections: z.literal(1_000_000), secondaryDistanceMeters: z.number().finite().min(0).max(1_000_000),
     preferVerticalApproach: z.boolean(), barrierRouting: barrierAdmissionIntentSchema }).strict() }).strict();
@@ -215,7 +221,7 @@ export async function fetchPathFinderProposal(projectId: string, token: string, 
   if (value.projectId !== projectId || value.id !== proposalId) throw new PathFinderApiError('INVALID_RESPONSE', 502); return value;
 }
 export async function fetchPathFinderJob(projectId: string, token: string, jobId: string, signal?: AbortSignal): Promise<PathFinderJob> {
-  const parsed = jobSchema.extend({ items: z.array(z.object({ cableId: uuid, status: z.string(), state: z.string(), message: z.string().nullable() })) }).safeParse(await pathFinderRequest(projectId, token, `/jobs/${jobId}`, 'GET', undefined, signal));
+  const parsed = jobSchema.extend({ items: z.array(jobItemSchema) }).safeParse(await pathFinderRequest(projectId, token, `/jobs/${jobId}`, 'GET', undefined, signal));
   if (!parsed.success || parsed.data.projectId !== projectId || parsed.data.id !== jobId) throw new PathFinderApiError('INVALID_RESPONSE', 502); return parsed.data;
 }
 export async function fetchPathFinderLookup(projectId: string, token: string, jobId: string, signal?: AbortSignal): Promise<PathFinderLookup> {

@@ -7,6 +7,8 @@ using System.Threading;
 
 namespace AddinRibbon.Routing
 {
+    public enum TrayGeometryFitPolicy { LegacyV1, MeasuredBendV2 }
+
     public enum TrayBoxFace { MinX, MaxX, MinY, MaxY, MinZ, MaxZ }
 
     /// <summary>Bounds of actual mesh vertices at one world-box face, in metres.</summary>
@@ -91,6 +93,7 @@ namespace AddinRibbon.Routing
     /// </summary>
     public static class TrayGeometryBuilder
     {
+        public const string MeasuredBendFittingPolicyVersion = "wfc.pf.measured-bend-mesh-fitting.v2";
         public const double PortToleranceMeters = 0.02;
         private const double FaceBandMeters = 0.003;
         private const double RadiusToleranceMeters = 0.002;
@@ -102,7 +105,13 @@ namespace AddinRibbon.Routing
 
         public static TrayGeometryBuildResult Build(IEnumerable<TrayGeometryInput> inputs,
             CancellationToken cancellationToken = default(CancellationToken))
+        { return Build(inputs, TrayGeometryFitPolicy.LegacyV1, cancellationToken); }
+
+        public static TrayGeometryBuildResult Build(IEnumerable<TrayGeometryInput> inputs,
+            TrayGeometryFitPolicy fitPolicy, CancellationToken cancellationToken = default(CancellationToken))
         {
+            if (fitPolicy != TrayGeometryFitPolicy.LegacyV1 && fitPolicy != TrayGeometryFitPolicy.MeasuredBendV2)
+                throw new ArgumentOutOfRangeException("fitPolicy");
             if (inputs == null) throw new ArgumentNullException("inputs");
             var values = inputs.ToArray();
             if (values.Any(v => v == null)) throw new ArgumentException("Geometry inputs cannot be null.", "inputs");
@@ -131,7 +140,9 @@ namespace AddinRibbon.Routing
                 TrayMeshGeometry.MeshBend bend;
                 string reason;
                 if (adjacent.Length > 128) reason = "too many neighboring mesh port candidates for a unique bend";
-                else if (TrayBendMeshGeometry.TryFit(input, adjacent, cancellationToken, out bend, out reason))
+                else if (fitPolicy == TrayGeometryFitPolicy.MeasuredBendV2 ?
+                    TrayBendMeshGeometry.TryFitMeasured(input, adjacent, cancellationToken, out bend, out reason) :
+                    TrayBendMeshGeometry.TryFit(input, adjacent, cancellationToken, out bend, out reason))
                     meshBends.Add(input.Id, bend);
                 bendReasons.Add(input.Id, reason);
             }
@@ -167,7 +178,7 @@ namespace AddinRibbon.Routing
                 RouteConnectionPort[] verifiedPorts = null;
                 if (IsBendOrElbow(input.ShapeName))
                 {
-                    string reason;
+                    string reason = null;
                     RoutePoint[] arc;
                     TrayMeshGeometry.MeshBend meshBend;
                     if (meshBends.TryGetValue(input.Id, out meshBend))
@@ -175,7 +186,8 @@ namespace AddinRibbon.Routing
                         points = meshBend.Points; validated++; validatedBend = true;
                         verifiedPorts = new[] { ConnectionPort(meshBend.Start), ConnectionPort(meshBend.End) };
                     }
-                    else if (TryBend(input, ends, cancellationToken, out arc, out reason))
+                    else if ((fitPolicy == TrayGeometryFitPolicy.LegacyV1 || input.Mesh == null) &&
+                        TryBend(input, ends, cancellationToken, out arc, out reason))
                     {
                         points = arc; validated++; validatedBend = true;
                         if (input.Mesh != null && bendReasons.ContainsKey(input.Id))

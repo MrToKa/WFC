@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { canonicalPurposeJson, normalizeCatalogKey, routingCatalogDiagnostics } from '../../shared/pathfinderPurposePolicy.js';
-import { PREPARATION_LIMITS, preparationContextSchema, preparationPlanSchema, preparationPlanHashInput, preparationPartScopeHashInput, type PreparationContext, type PreparationCreate, type PreparationPlan, preparationAggregateSchema, type PreparationScope } from '../../shared/pathfinderPreparation.js';
+import { PREPARATION_LIMITS, preparationContextSchema, preparationPlanSchema, preparationPlanHashInput, preparationPartScopeHashInput, preparationResolutionMatchesScope, type PreparationContext, type PreparationCreate, type PreparationPlan, preparationAggregateSchema, type PreparationScope } from '../../shared/pathfinderPreparation.js';
 import { readRoutingCatalog } from './catalog.js';
 import { readRoutingPolicyScope } from './purposePolicy.js';
 import { PathFinderError } from './errors.js';
@@ -41,7 +41,10 @@ export async function readPreparationContext(c: PoolClient, projectId: string): 
     if (row.rawName.length > 256 || !/^\/[A-Z0-9][A-Z0-9_.-]*$/.exec(routeName)?.[0] || /^\/[A-Z0-9][A-Z0-9_.-]*$/.exec(routeName)?.[0] !== routeName || routeName === '/SECONDARY') codes.push('UNSUPPORTED_ROUTE_CODE');
     codeNames.set(routeName, [...(codeNames.get(routeName) ?? []), row.projectTrayId]);
     const rule = rules.find(r => r.purpose_key === row.purposeKey);
-    const allowedCategories = rule?.allowed_categories as Array<'MV' | 'LV' | 'Control'> | undefined;
+    // Purpose permissions are enforced per calculation. Capture each usable tray
+    // once with engine classes; one shared network serves independent purposes.
+    const allowedCategories: Array<'MV' | 'LV' | 'Control'> | undefined = rule
+      ? Array.isArray(rule.allowed_categories) && rule.allowed_categories.length ? ['MV', 'LV', 'Control'] : [] : undefined;
     return { projectTrayId: row.projectTrayId, rawName: row.rawName, purposeKey: row.purposeKey, routeName, allowedCategories: allowedCategories ?? [], policyState: codes.length ? 'invalid' as const : !rule ? 'unconfigured' as const : allowedCategories?.length ? 'configured' as const : 'excluded' as const, diagnosticCodes: codes };
   });
   for (const ids of codeNames.values()) if (ids.length > 1) for (const tray of trays) if (ids.includes(tray.projectTrayId)) { tray.diagnosticCodes.push('ROUTE_CODE_COLLISION'); tray.policyState = 'invalid'; }
@@ -61,6 +64,8 @@ export function buildPreparationPlan(context: PreparationContext, input: Prepara
   const budget = () => { if (++work > PREPARATION_LIMITS.planWork || performance.now() - started > PREPARATION_LIMITS.planMilliseconds) return fail('PREPARATION_PLAN_WORK_LIMIT', 413); };
   if (!equalPreparationScope(context.scope, input.expected)) return fail('PREPARATION_SCOPE_STALE');
   const discovery = input.discovery;
+  const endpointsRequested = discovery.endpointScope?.mode !== 'not-requested';
+  if (!endpointsRequested && (discovery.propertyScan !== null || discovery.endpointCandidates.length !== 0)) return fail('PREPARATION_DISCOVERY_ENDPOINT_SCOPE');
   if (discovery.modelVersionId !== context.scope.modelVersionId || discovery.contentFingerprint !== context.scope.contentFingerprint || discovery.selectionRevision !== context.scope.selectionRevision) return fail('PREPARATION_DISCOVERY_SCOPE');
   if (!discovery.complete) return fail('PREPARATION_DISCOVERY_INCOMPLETE');
   const objects = new Map(discovery.objects.map(o => [o.objectId, o]));
@@ -73,17 +78,22 @@ export function buildPreparationPlan(context: PreparationContext, input: Prepara
   for (const object of discovery.objects) parentChain(object.objectId);
   const trayIds = new Set(context.trays.map(t => t.projectTrayId));
   if (discovery.trays.length !== context.trays.length || discovery.trays.some(t => !trayIds.has(t.projectTrayId))) return fail('PREPARATION_DISCOVERY_TRAYS');
-  const excluded: string[] = [], trays: PreparationPlan['requestedScope']['trays'] = [], leafOwners = new Map<string, { trayId: string; root: string }>();
+  const excluded: string[] = [], skipped: NonNullable<PreparationPlan['requestedScope']['skippedTrays']> = [], trays: PreparationPlan['requestedScope']['trays'] = [], leafOwners = new Map<string, { trayId: string; root: string }>();
   const sliceObjects: Array<PreparationPlan['partPlan'][number]['objects'][number]> = [];
   for (const tray of context.trays) {
     budget();
-    const resolution = context.resolutions.find(r => r.projectTrayId === tray.projectTrayId && equalPreparationScope(r.scope, context.scope, { ignoreResolution: true }));
+    const resolution = context.resolutions.find(r => r.projectTrayId === tray.projectTrayId && preparationResolutionMatchesScope(r.scope, context.scope));
     if (resolution?.mode === 'exclude' || tray.policyState === 'excluded') { excluded.push(tray.projectTrayId); continue; }
     if (tray.policyState !== 'configured' || !tray.purposeKey) { add(tray.policyState === 'unconfigured' ? 'PURPOSE_UNCONFIGURED' : 'TRAY_POLICY_INVALID', [tray.projectTrayId]); continue; }
     const candidates = discovery.trays.find(t => t.projectTrayId === tray.projectTrayId)!.candidateRootObjectIds;
     if (candidates.some(root => { const candidate = objects.get(root); if (!candidate) return true; const exact = normalizeCatalogKey(candidate.name); return exact !== normalizeCatalogKey(tray.rawName) && exact !== normalizeCatalogKey(tray.routeName); })) return fail('PREPARATION_EXACT_CANDIDATE_INVALID');
     const roots = resolution?.mode === 'roots' ? resolution.rootObjectIds : candidates.length === 1 ? candidates : [];
-    if (!roots.length) { add(candidates.length ? 'TRAY_ROOT_AMBIGUOUS' : 'TRAY_ROOT_MISSING', [tray.projectTrayId], candidates); continue; }
+    if (!roots.length) {
+      const reason = candidates.length ? 'TRAY_ROOT_AMBIGUOUS' as const : 'TRAY_ROOT_MISSING' as const;
+      if (input.unresolvedTrayPolicy === 'skip') { excluded.push(tray.projectTrayId); skipped.push({ projectTrayId: tray.projectTrayId, reason }); }
+      else add(reason, [tray.projectTrayId], candidates);
+      continue;
+    }
     if (roots.some(root => !objects.has(root))) return fail('PREPARATION_RESOLUTION_OBJECT_MISSING');
     trays.push({ projectTrayId: tray.projectTrayId, rawName: tray.rawName, purposeKey: tray.purposeKey, routeName: tray.routeName, allowedCategories: tray.allowedCategories, ownershipDecisionId: resolution?.id ?? null, orderedRootObjectIds: roots });
     let leaves = 0;
@@ -108,8 +118,8 @@ export function buildPreparationPlan(context: PreparationContext, input: Prepara
   const ordered = [...discovery.objects].sort((a, b) => a.orderIndex - b.orderIndex || toDbId(a.objectId) - toDbId(b.objectId));
   const order = new Map(ordered.map((o, i) => [o.objectId, i])); sliceObjects.sort((a, b) => order.get('dbid:' + a.objectId)! - order.get('dbid:' + b.objectId)!);
   const equipment = new Set<string>(), endpointNamesByObject = new Map<string, string[]>();
-  if (context.endpointNames.length && (!discovery.propertyScan?.complete || discovery.endpointCandidates.length !== context.endpointNames.length || discovery.endpointCandidates.some(v => !context.endpointNames.includes(v.name)))) add('ENDPOINT_DISCOVERY_INCOMPLETE');
-  for (const endpoint of context.endpointNames) {
+  if (endpointsRequested && context.endpointNames.length && (!discovery.propertyScan?.complete || discovery.endpointCandidates.length !== context.endpointNames.length || discovery.endpointCandidates.some(v => !context.endpointNames.includes(v.name)))) add('ENDPOINT_DISCOVERY_INCOMPLETE');
+  for (const endpoint of endpointsRequested ? context.endpointNames : []) {
     const candidate = discovery.endpointCandidates.find(e => e.name === endpoint);
     for (const objectId of candidate?.objectIds ?? []) { if (!objects.has(objectId)) return fail('PREPARATION_ENDPOINT_OBJECT_MISSING'); if (leafOwners.has(objectId)) return fail('PREPARATION_ENDPOINT_ROUTE_CONFLICT'); equipment.add(objectId); endpointNamesByObject.set(objectId, [...(endpointNamesByObject.get(objectId) ?? []), endpoint]); }
     // Missing/ambiguous locations are captured as explicit endpoint status; they do not invent bindings.
@@ -136,9 +146,10 @@ export function buildPreparationPlan(context: PreparationContext, input: Prepara
     part.scopeSha256 = preparationDigest(preparationPartScopeHashInput(part)); partPlan.push(part);
     if (partPlan.length > PREPARATION_LIMITS.parts) return fail('PREPARATION_PART_COUNT_LIMIT', 413);
   }
-  if (!physicalLeaves.length) add('NO_AUTHORIZED_ROUTING_GEOMETRY');
-  const endpointEvidence = context.endpointNames.map(name => { const candidateObjectIds = [...(discovery.endpointCandidates.find(e => e.name === name)?.objectIds ?? [])].sort((a, b) => order.get(a)! - order.get(b)!); return { name, candidateObjectIds, status: candidateObjectIds.length === 0 ? 'missing' as const : candidateObjectIds.length === 1 ? 'unique_candidate' as const : 'ambiguous' as const }; });
-  const requestedScope = { scopeKind: 'server-requested-project-routing-and-endpoints' as const, wholePlantGeometry: false as const, ...(discovery.visibilityScope ? { endpointVisibility: discovery.visibilityScope } : {}), trays, endpointNames: context.endpointNames, endpointEvidence, excludedProjectTrayIds: excluded, orderedPhysicalLeafIds: physicalLeaves, orderedEquipmentObjectIds: equipmentIds, scopeSha256: '0'.repeat(64) };
+  if (!physicalLeaves.length) diagnostics.push({ code: 'NO_AUTHORIZED_ROUTING_GEOMETRY', projectTrayIds: [], objectIds: [], message: 'No usable tray geometry was found. Assign model objects to at least one configured tray, then check the trays again.' });
+  const endpointEvidence = (endpointsRequested ? context.endpointNames : []).map(name => { const candidateObjectIds = [...(discovery.endpointCandidates.find(e => e.name === name)?.objectIds ?? [])].sort((a, b) => order.get(a)! - order.get(b)!); return { name, candidateObjectIds, status: candidateObjectIds.length === 0 ? 'missing' as const : candidateObjectIds.length === 1 ? 'unique_candidate' as const : 'ambiguous' as const }; });
+  // Keep the current names as scope dependencies without inventing search evidence.
+  const requestedScope = { scopeKind: endpointsRequested ? 'server-requested-project-routing-and-endpoints' as const : 'server-requested-project-routing-only' as const, wholePlantGeometry: false as const, ...(input.unresolvedTrayPolicy === 'skip' ? { unresolvedTrayPolicy: 'skip' as const, skippedTrays: skipped } : {}), ...(discovery.visibilityScope ? { endpointVisibility: discovery.visibilityScope } : {}), ...(discovery.endpointScope ? { endpointScope: discovery.endpointScope } : {}), trays, endpointNames: context.endpointNames, endpointEvidence, excludedProjectTrayIds: excluded, orderedPhysicalLeafIds: physicalLeaves, orderedEquipmentObjectIds: equipmentIds, scopeSha256: '0'.repeat(64) };
   const { scopeSha256: _scopeHash, ...scopeInput } = requestedScope;
   requestedScope.scopeSha256 = preparationDigest(scopeInput);
   const partial = { schemaVersion: 'wfc.pf.preparation-plan.v1' as const, id, projectId: context.projectId, ...context.scope, coordinateFrameId: preparationFrameId(context.projectId, context.scope.modelVersionId, context.scope.contentFingerprint), matchingPolicyVersion: discovery.matchingPolicyVersion, partitionAlgorithmVersion: 'wfc.pf.ordered-partition.v1' as const, limitsProfile, requestedScope, partPlan, objectManifest: ordered, objectOrder: ordered.map(o => toDbId(o.objectId)), diagnostics, orderedPlanSha256: '0'.repeat(64) };

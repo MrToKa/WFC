@@ -292,6 +292,33 @@ internal static class Program
 
     private static void SelectedGraph()
     {
+        Run("weighted opening candidate may replace a physically shorter but more loaded clear incumbent", () =>
+        {
+            using var probe = new Probe();
+            var nodeType = typeof(RouteCalculator).GetNestedType("Node", BindingFlags.NonPublic)!;
+            var edgeType = typeof(RouteCalculator).GetNestedType("Edge", BindingFlags.NonPublic)!;
+            var blockedType = typeof(RouteCalculator).GetNestedType("BlockedInterTrayEdge", BindingFlags.NonPublic)!;
+            var costType = typeof(RouteCalculator).GetNestedType("PathCost", BindingFlags.NonPublic)!;
+            var positions = new[] { P(-.2), P(.2), P(-.01), P(.01) }; var segments = new[] { 0, 1, 0, 1 };
+            var nodes = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(nodeType))!;
+            for (int i = 0; i < positions.Length; i++) nodes.Add(Activator.CreateInstance(nodeType, Private, null, [positions[i],segments[i],0d], null));
+            IList Edges(int node) => (IList)nodeType.GetField("Edges", Private)!.GetValue(nodes[node])!;
+            object Edge(int node, double length) => Activator.CreateInstance(edgeType, Private, null, [node,length,0,0d], null)!;
+            Edges(0).Add(Edge(2,.19)); Edges(2).Add(Edge(3,.02)); Edges(3).Add(Edge(1,.19));
+            var listType = typeof(List<>).MakeGenericType(blockedType);
+            var blocked = (IDictionary)Activator.CreateInstance(typeof(Dictionary<,>).MakeGenericType(typeof(int),listType))!;
+            var pending = (IList)Activator.CreateInstance(listType)!;
+            pending.Add(Activator.CreateInstance(blockedType, Private, null, [Edge(1,.4),0],null)); blocked.Add(0,pending);
+            BudgetType.GetField("RouteCosts",Private)!.SetValue(probe.Budget,new Dictionary<string,double> { ["/A"]=10,["/B"]=10 });
+            BudgetType.GetField("RouteCostTrays",Private)!.SetValue(probe.Budget,new[] { Port("A",positions[0],positions[2]),Port("B",positions[3],positions[1]) });
+            var incumbentCost = Activator.CreateInstance(costType,Private,null,[0,0d,.4],null)!;
+            RouteCollisionQuery query = (_,_,_) => Observation(RouteCollisionStatus.Clear,0);
+            object?[] args = [nodes,0,1,blocked,query,probe.Budget,4L,new List<int>{0,2,3,1},incumbentCost,null,null];
+            var path = (IList)Invoke(typeof(RouteCalculator).GetMethod("OpeningFallback",Static)!,null,args)!;
+            Need(path.Cast<int>().SequenceEqual([0,1]));
+            Need((double)costType.GetField("PhysicalLength",Private)!.GetValue(args[9])! > .4);
+            Equal(1,((IDictionary)args[10]!).Count); Equal(1,probe.Attempts);
+        });
         Run("lazy selected edge cost increase reruns Dijkstra and preserves measured gap semantics", () =>
         {
             using var probe = new Probe(); var nodeType = typeof(RouteCalculator).GetNestedType("Node", BindingFlags.NonPublic)!;

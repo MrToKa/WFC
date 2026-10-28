@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { CABLE_LIST_COLUMN_IDS } from './models/cableListColumns.js';
 import { CABLE_MTO_VALUES } from './models/cable.js';
+import { cablePurposeInputSchema } from '../shared/routingCablePurposes.js';
 import { CHANGE_ORDER_SOURCE_CATALOGS } from './models/changeOrder.js';
 import {
   STANDARD_MATERIAL_UNITS,
@@ -124,6 +125,7 @@ const cableLayoutSchema = z
     considerBundleSpacingAsFree: z.boolean().nullable().optional(),
     minFreeSpacePercent: z.number().int().min(1).max(100).nullable().optional(),
     maxFreeSpacePercent: z.number().int().min(1).max(100).nullable().optional(),
+    autoRerouteForFreeSpace: z.boolean().optional(),
     mv: cableCategorySettingsSchema.optional(),
     power: cableCategorySettingsSchema.optional(),
     vfd: cableCategorySettingsSchema.optional(),
@@ -211,7 +213,7 @@ export const clearProjectDataSchema = z
 
 const cableTypeNumericField = z.number().min(0).max(1_000_000).nullable().optional();
 
-const cableTypeStringField = z.string().trim().max(500).optional();
+const cableTypePurposeField = cablePurposeInputSchema.optional();
 
 const materialCableTypeStringField = z.string().trim().max(2000).nullable().optional();
 const minimumOrderQuantityField = z
@@ -250,7 +252,7 @@ export const createCableTypeSchema = z
   .object({
     name: z.string().trim().min(1).max(200),
     sourceMaterialCableTypeId: z.string().uuid().optional(),
-    purpose: cableTypeStringField,
+    purpose: cableTypePurposeField,
     diameterMm: cableTypeNumericField,
     weightKgPerM: cableTypeNumericField,
   })
@@ -260,7 +262,7 @@ export const updateCableTypeSchema = z
   .object({
     name: z.string().trim().min(1).max(200).optional(),
     sourceMaterialCableTypeId: z.string().uuid().optional(),
-    purpose: cableTypeStringField,
+    purpose: cableTypePurposeField,
     diameterMm: cableTypeNumericField,
     weightKgPerM: cableTypeNumericField,
   })
@@ -278,7 +280,7 @@ export const updateCableTypeSchema = z
 export const createMaterialCableTypeSchema = z
   .object({
     name: z.string().trim().min(1).max(200),
-    purpose: cableTypeStringField,
+    purpose: cableTypePurposeField,
     material: materialCableTypeStringField,
     description: materialCableTypeStringField,
     manufacturer: materialCableTypeStringField,
@@ -297,7 +299,7 @@ export const createMaterialCableTypeSchema = z
 export const updateMaterialCableTypeSchema = z
   .object({
     name: z.string().trim().min(1).max(200).optional(),
-    purpose: cableTypeStringField,
+    purpose: cableTypePurposeField,
     material: materialCableTypeStringField,
     description: materialCableTypeStringField,
     manufacturer: materialCableTypeStringField,

@@ -13,6 +13,8 @@ public sealed class FittedModelCache
     // Pinned native RoutingSession.FindShapeName; the selected root bounds its search.
     private static readonly Regex SelectedShapeName = new(@"(?<![A-Za-z0-9])(?:BEND|ELBOW|FTUBE|TUBE|STRAIGHT)(?![A-Za-z0-9])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     public const string EngineVersion = "45c24bf5f433f13e102600b36f20327c77961d0a";
+    public const string MeasuredBendRulesVersion = "pf2.rules.v2";
+    public const string MeasuredBendPolicyVersion = "wfc.pf.measured-bend-mesh-fitting.v2";
     private readonly string root;
     private readonly ModelLimits limits;
     private readonly Action<PreparationMemoryPhase>? observer;
@@ -103,7 +105,7 @@ public sealed class FittedModelCache
         var normalized = NormalizeRules(source, rules, cancellation, out var rulesContextSha256);
         var snapshot = source.Snapshot;
         ValidateExecutionScope(snapshot, normalized, cancellation);
-        var identity = CacheIdentity(source.Sha256, normalized);
+        var identity = CacheIdentity(source.Sha256, normalized, cancellation);
         while (!Monitor.TryEnter(gate, 50)) cancellation.ThrowIfCancellationRequested();
         try
         {
@@ -145,7 +147,7 @@ public sealed class FittedModelCache
         if (rules.ExcludedObjectIds is null || rules.ExcludedObjectIds.Length > limits.MaximumObjects)
             throw new ArgumentException("Unknown rules or invalid exclusion identities.");
         var captured = rules with { ExcludedObjectIds = rules.ExcludedObjectIds.ToArray() };
-        if (captured.Version != "pf2.rules.v1" || captured.CategoryMappingVersion != "wfc-mto-v1"
+        if (captured.Version is not ("pf2.rules.v1" or MeasuredBendRulesVersion) || captured.CategoryMappingVersion != "wfc-mto-v1"
             || captured.ExcludedObjectIds.Any(string.IsNullOrWhiteSpace) || captured.ExcludedObjectIds.Length > limits.MaximumObjects
             || captured.ExcludedObjectIds.Distinct(StringComparer.Ordinal).Count() != captured.ExcludedObjectIds.Length)
             throw new ArgumentException("Unknown rules or invalid exclusion identities.");
@@ -173,20 +175,57 @@ public sealed class FittedModelCache
         ModelBuildRules rules, string rulesContextSha256, CancellationToken cancellation)
     {
         var snapshotHash = source.Sha256;
-        var identity = CacheIdentity(snapshotHash, rules);
+        var identity = CacheIdentity(snapshotHash, rules, cancellation);
         Observe(PreparationMemoryPhase.BeforePrepareInputs);
         var state = PrepareInputs(snapshot, rules, cancellation);
         Observe(PreparationMemoryPhase.AfterPrepareInputs);
         cancellation.ThrowIfCancellationRequested();
         return new(snapshot.Model, snapshotHash, source.SourceSha256, limits, source.IndependentLookup, source.Scope,
-            identity.Key, identity.RulesHash, rulesContextSha256, state.Inputs, state.Objects, state.Diagnostics, state.NeedsReview, state.RequiresCategoryAssignment);
+            identity.Key, identity.RulesHash, rulesContextSha256, state.Inputs, state.Objects, state.Diagnostics, state.NeedsReview, state.RequiresCategoryAssignment,
+            rules.Version == MeasuredBendRulesVersion ? TrayGeometryFitPolicy.MeasuredBendV2 : TrayGeometryFitPolicy.LegacyV1, identity.ImplementationSha256);
     }
 
-    private (string Key, string RulesHash) CacheIdentity(string snapshotHash, ModelBuildRules rules)
+    private (string Key, string RulesHash, string? ImplementationSha256) CacheIdentity(string snapshotHash, ModelBuildRules rules, CancellationToken cancellation)
     {
         var rulesHash = SnapshotReader.Sha256(JsonSerializer.SerializeToUtf8Bytes(new { rules, limits }, SnapshotReader.JsonOptions));
+        if (rules.Version == MeasuredBendRulesVersion)
+        {
+            var implementation = FittingImplementationSha256(cancellation);
+            return (SnapshotReader.Sha256(Encoding.UTF8.GetBytes("pf2.fitted-cache.v2\n" + EngineVersion + "\n" + snapshotHash + "\n" + rulesHash
+                + "\n" + MeasuredBendPolicyVersion + "\n" + implementation)), rulesHash, implementation);
+        }
         var key = SnapshotReader.Sha256(Encoding.UTF8.GetBytes("pf2.fitted-cache.v1\n" + EngineVersion + "\n" + snapshotHash + "\n" + rulesHash));
-        return (key, rulesHash);
+        return (key, rulesHash, null);
+    }
+
+    // Only the new policy binds executable fitting bytes. Historical cache keys
+    // remain byte-for-byte unchanged, including their rules/limits serialization.
+    private static string FittingImplementationSha256(CancellationToken cancellation)
+    {
+        string Module(string filename)
+        {
+            var before = new FileInfo(filename); before.Refresh();
+            if (!before.Exists || (before.Attributes & (FileAttributes.Directory | FileAttributes.ReparsePoint)) != 0
+                || before.Length < 1 || before.Length > 64 * 1024 * 1024) throw new InvalidDataException("Fitting implementation module is unavailable.");
+            var length = before.Length; var written = before.LastWriteTimeUtc;
+            using var input = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.SequentialScan);
+            using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            var buffer = new byte[65536]; long read = 0;
+            while (true)
+            {
+                cancellation.ThrowIfCancellationRequested(); int count = input.Read(buffer);
+                if (count == 0) break; read += count;
+                if (read > length) throw new InvalidDataException("Fitting implementation module changed.");
+                hash.AppendData(buffer, 0, count);
+            }
+            var after = new FileInfo(filename); after.Refresh(); cancellation.ThrowIfCancellationRequested();
+            if (read != length || !after.Exists || after.Length != length || after.LastWriteTimeUtc != written
+                || (after.Attributes & (FileAttributes.Directory | FileAttributes.ReparsePoint)) != 0)
+                throw new InvalidDataException("Fitting implementation module changed.");
+            return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
+        }
+        return SnapshotReader.Sha256(Encoding.UTF8.GetBytes(Module(typeof(TrayGeometryBuilder).Assembly.Location) + "\n"
+            + Module(typeof(FittedModelCache).Assembly.Location)));
     }
 
     private PreparedModel GetOrBuildChecked(CheckedModelSnapshot source, ModelBuildRules? rules, CancellationToken cancellation) =>
@@ -203,6 +242,9 @@ public sealed class FittedModelCache
 
     private PreparedModel GetOrBuildPrepared(PreparedExecutionInput source, CancellationToken cancellation)
     {
+        if (source.FitPolicy == TrayGeometryFitPolicy.MeasuredBendV2
+            && source.FittingImplementationSha256 != FittingImplementationSha256(cancellation))
+            throw new InvalidDataException("Fitting implementation changed after the checked input was transferred.");
         var key = source.Key; var snapshotHash = source.Sha256; var rulesHash = source.RulesHash;
         while (!Monitor.TryEnter(gate, 50)) cancellation.ThrowIfCancellationRequested();
         try
@@ -231,7 +273,8 @@ public sealed class FittedModelCache
             else
             {
                 Observe(PreparationMemoryPhase.BeforeCoreFit);
-                var built = TrayGeometryBuilder.Build(source.Inputs, cancellation);
+                var built = source.FitPolicy == TrayGeometryFitPolicy.LegacyV1 ? TrayGeometryBuilder.Build(source.Inputs, cancellation)
+                    : TrayGeometryBuilder.Build(source.Inputs, source.FitPolicy, cancellation);
                 Observe(PreparationMemoryPhase.AfterCoreFit);
                 var counts = new GeometryCounts(built.ValidatedBends, built.FallbackBends, built.ValidatedStraights, built.FallbackStraights, built.FallbackClearances);
                 var payload = new FitPayload(built.Segments.Select(Save).ToArray(), counts, built.Diagnostics.ToArray());

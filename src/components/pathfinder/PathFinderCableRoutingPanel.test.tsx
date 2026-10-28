@@ -59,7 +59,206 @@ function reviewController(p: PathFinderCableRoutingPanelProps): PathFinderWorkfl
 }
 beforeEach(() => { assignment = pair(); vi.mocked(useCableEndpointPairSelection).mockReset().mockImplementation(() => assignment); vi.mocked(useCableEndpointSelection).mockReset(); });
 
+describe('verified live popup endpoint foreground publisher', () => {
+  it('publishes one matching live pair and retracts it when retired or unmounted', () => {
+    assignment.from.context = context('from', 'confirmed'); assignment.to.context = context('to', 'confirmed');
+    const p = props(), changed = vi.fn(), view = render(<PathFinderCableRoutingPanel {...p} onEndpointForegroundContexts={changed} />);
+    expect(changed).toHaveBeenLastCalledWith(expect.objectContaining({ projectId: id(1), accountId: id(2), cableId: id(3),
+      modelVersionId: id(4), preparationKey: 'prepared', from: assignment.from.context, to: assignment.to.context }));
+    assignment.retired = true; view.rerender(<PathFinderCableRoutingPanel {...p} onEndpointForegroundContexts={changed} />);
+    expect(changed).toHaveBeenLastCalledWith(null); view.unmount(); expect(changed).toHaveBeenLastCalledWith(null);
+  });
+  it.each(['pending', 'draft', 'retired', 'busy', 'error', 'disabled child', 'registry', 'cable revision', 'current model', 'inactive'])(
+    'never publishes retained or ineligible %s contexts', blocked => {
+      assignment.from.context = context('from', 'confirmed'); assignment.to.context = context('to', 'confirmed');
+      const p = props(), changed = vi.fn();
+      if (blocked === 'pending') assignment.pending = {} as never;
+      if (blocked === 'draft') assignment.from.draft = { mode: 'fixed-world', point: [1, 2, 3], derivation: 'manual-world-point', displaySdkObjectId: null };
+      if (blocked === 'retired') assignment.retired = true;
+      if (blocked === 'busy') assignment.busy = true;
+      if (blocked === 'error') assignment.from.error = 'Read unavailable';
+      if (blocked === 'disabled child') assignment.to.enabled = false;
+      if (blocked === 'registry') assignment.to.context.registryRevision = '999';
+      if (blocked === 'cable revision') assignment.to.context.cableWriteRevision = '999';
+      if (blocked === 'current model') assignment.to.context.current!.modelVersionId = id(99);
+      if (blocked === 'inactive') p.open = false;
+      render(<PathFinderCableRoutingPanel {...p} onEndpointForegroundContexts={changed} />);
+      expect(changed.mock.calls.every(([value]) => value === null)).toBe(true);
+    });
+});
+
+describe('exact selected-cable calculation failure diagnostics', () => {
+  it('shows the actual failed item next to Calculate and keeps the previous route separate', () => {
+    const p = props();
+    p.cable = { ...p.cable!, cable: { ...p.cable!.cable, routing: '/PREVIOUS', designLength: '58' }, calculation: { ...p.cable!.calculation,
+      jobId: id(71), jobStatus: 'complete', itemState: 'blocked', outcome: 'no-path', reasonCodes: ['NO_PATH'] } };
+    p.calculationFeedback = { working: false, message: 'The recalculation stopped without a current route. Check its diagnostics before calculating again.' };
+    p.calculationDiagnostics = { cableId: id(3), jobId: id(71), jobStatus: 'complete', itemStatus: 'no_path', itemState: 'blocked',
+      itemMessage: 'The From point cannot reach any permitted tray.', jobFailure: null, readError: null };
+    render(<FluentProvider theme={webDarkTheme}><PathFinderCableRoutingPanel {...p} /></FluentProvider>);
+    expect(screen.getByText('Calculation stopped: The From point cannot reach any permitted tray.')).toBeVisible();
+    fireEvent.click(screen.getByText('Calculation diagnostics'));
+    expect(screen.getByText('Cable diagnostic: The From point cannot reach any permitted tray.')).toBeVisible();
+    expect(screen.getByText(/Latest calculation outcome: no-path/)).toHaveTextContent(id(71));
+    expect(screen.getByLabelText('Cable routing')).toHaveValue('/PREVIOUS');
+    expect(screen.getByRole('button', { name: /^Show$/ })).toBeDisabled();
+    expect(p.onCalculate).not.toHaveBeenCalled(); expect(assignment.save).not.toHaveBeenCalled();
+  });
+  it.each([false, true])('presents a refreshed network without repeating its historical preparation refusal (feedback=%s)', feedback => {
+    const p = props(); p.onCalculate = undefined;
+    p.cable = { ...p.cable!, calculation: { ...p.cable!.calculation, jobId: id(71), jobStatus: 'complete', itemState: 'blocked',
+      outcome: 'stale', currentness: 'changed', reasonCodes: ['ROUTING_PREPARATION_REQUIRED', 'ROUTING_PREPARATION_UPDATED'],
+      errorCode: 'ROUTING_PREPARATION_REQUIRED' } };
+    if (feedback) p.calculationFeedback = { working: false, message: 'The recalculation stopped without a current route.' };
+    p.calculationDiagnostics = { cableId: id(3), jobId: id(71), jobStatus: 'complete', itemStatus: 'routing_preparation_required', itemState: 'blocked',
+      itemMessage: 'Prepare the project network against the current tray catalog and routing permissions before calculating.', jobFailure: null, readError: null };
+    render(<FluentProvider theme={webDarkTheme}><PathFinderCableRoutingPanel {...p} /></FluentProvider>);
+    expect(screen.getByText('Network ready. Calculate routing to create a current route.')).toBeVisible();
+    expect(screen.queryByText(/^Calculation stopped:/)).toBeNull(); expect(screen.queryByText('Calculation diagnostics')).toBeNull();
+    const details = screen.getByText('Previous calculation diagnostics').closest('details')!;
+    expect(details).not.toHaveAttribute('open');
+    expect(within(details).getByText(/^Previous cable diagnostic:/)).not.toBeVisible();
+    expect(within(details).getByText(/Previous calculation job:/)).toHaveTextContent(id(71));
+    expect(within(details).getByText(/Recorded refusal and update codes:/)).toHaveTextContent('ROUTING_PREPARATION_REQUIRED');
+    expect(screen.getByRole('button', { name: 'Calculate routing' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^Show$/ })).toBeDisabled();
+    fireEvent.click(screen.getByText('Previous calculation diagnostics'));
+    expect(within(details).getByText(/^Previous cable diagnostic:/)).toBeVisible();
+    expect(within(details).getByText(/Previous calculation error code:/)).toHaveTextContent('ROUTING_PREPARATION_REQUIRED');
+    expect(assignment.save).not.toHaveBeenCalled();
+  });
+  it('does not hide a genuine current failure merely because the update marker is present', () => {
+    const p = props(); p.cable = { ...p.cable!, calculation: { ...p.cable!.calculation, jobId: id(72), jobStatus: 'complete',
+      itemState: 'blocked', outcome: 'no-path', currentness: 'current', reasonCodes: ['NO_PATH', 'ROUTING_PREPARATION_UPDATED'] } };
+    p.calculationDiagnostics = { cableId: id(3), jobId: id(72), jobStatus: 'complete', itemStatus: 'no_path', itemState: 'blocked',
+      itemMessage: 'The From point cannot reach any permitted tray.', jobFailure: null, readError: null };
+    render(<FluentProvider theme={webDarkTheme}><PathFinderCableRoutingPanel {...p} /></FluentProvider>);
+    expect(screen.getByText('Calculation stopped: The From point cannot reach any permitted tray.')).toBeVisible();
+    expect(screen.queryByText('Network ready. Calculate routing to create a current route.')).toBeNull();
+    expect(screen.getByText('Calculation diagnostics')).toBeVisible();
+  });
+  it.each(['Configure the current route settings and barriers. No calculation was submitted.',
+    'No calculation job was created. Refresh barriers and calculate again.'])('shows a fresh attempt refusal over a historical preparation update: %s', message => {
+    const p = props(); p.cable = { ...p.cable!, calculation: { ...p.cable!.calculation, jobId: id(71), jobStatus: 'complete', itemState: 'blocked',
+      outcome: 'stale', currentness: 'changed', reasonCodes: ['ROUTING_PREPARATION_REQUIRED', 'ROUTING_PREPARATION_UPDATED'] } };
+    p.calculationFeedback = { working: false, message, currentAttempt: true };
+    p.calculationDiagnostics = { cableId: id(3), jobId: id(71), jobStatus: 'complete', itemStatus: 'routing_preparation_required', itemState: 'blocked',
+      itemMessage: 'Prepare the previous routing network.', jobFailure: null, readError: null };
+    const view = render(<FluentProvider theme={webDarkTheme}><PathFinderCableRoutingPanel {...p} /></FluentProvider>);
+    expect(screen.getByText(message)).toBeVisible(); expect(screen.queryByText('Network ready. Calculate routing to create a current route.')).toBeNull();
+    expect(screen.queryByText(/^Calculation stopped:/)).toBeNull(); expect(screen.getByText('Previous calculation diagnostics')).toBeVisible();
+    view.rerender(<FluentProvider theme={webDarkTheme}><PathFinderCableRoutingPanel {...p} calculationFeedback={{ working: false, message, currentAttempt: false }} /></FluentProvider>);
+    expect(screen.getByText('Network ready. Calculate routing to create a current route.')).toBeVisible(); expect(screen.queryByText(message)).toBeNull();
+  });
+  it.each(['another cable', 'earlier job'])('does not expose a diagnostic from %s', mismatch => {
+    const p = props(); p.cable = { ...p.cable!, calculation: { ...p.cable!.calculation,
+      jobId: id(71), jobStatus: 'failed', itemState: 'blocked', outcome: 'failed' } };
+    p.calculationDiagnostics = { cableId: mismatch === 'another cable' ? id(44) : id(3), jobId: mismatch === 'earlier job' ? id(70) : id(71),
+      jobStatus: 'failed', itemStatus: 'failed', itemState: 'blocked', itemMessage: 'Unrelated failure.', jobFailure: null, readError: null };
+    render(<FluentProvider theme={webDarkTheme}><PathFinderCableRoutingPanel {...p} /></FluentProvider>);
+    expect(screen.queryByText(/Unrelated failure/)).toBeNull();
+    expect(screen.getByRole('button', { name: /^Show$/ })).toBeDisabled();
+  });
+});
+
+describe('showing the popup From/To locations without changing them', () => {
+  it('places Show location beside each Assign button and shows each saved object independently', async () => {
+    assignment.from.context = context('from', 'confirmed'); assignment.to.context = context('to', 'confirmed');
+    const show = vi.fn(async () => true), p = props(); render(<PathFinderCableRoutingPanel {...p} onShowLocation={show} />);
+    for (const [side, objectId] of [['From', 123], ['To', 124]] as const) {
+      const button = screen.getByRole('button', { name: `Show ${side} location` });
+      expect(button.parentElement).toBe(screen.getByRole('button', { name: `Assign ${side}` }).parentElement);
+      await act(async () => { fireEvent.click(button); }); expect(show).toHaveBeenLastCalledWith(objectId);
+    }
+    expect(assignment.from.selectObject).not.toHaveBeenCalled(); expect(assignment.to.selectObject).not.toHaveBeenCalled();
+    expect(assignment.save).not.toHaveBeenCalled(); expect(p.onCalculate).not.toHaveBeenCalled(); expect(p.onTogglePath).not.toHaveBeenCalled();
+  });
+  it.each(['object-derived', 'fixed-world'] as const)('shows an unsaved %s assignment ahead of the previous saved object', async mode => {
+    assignment.from.context = context('from', 'confirmed'); assignment.from.draftSource = 'selected';
+    assignment.from.draft = mode === 'object-derived'
+      ? { mode, sdkObjectId: 55, point: [7, 8, 9], object: context('from', 'confirmed').confirmedSelection!.object }
+      : { mode, displaySdkObjectId: 55, point: [7, 8, 9], derivation: 'picked-surface-point' };
+    assignment.from.displaySelection = { sdkObjectId: 55, name: 'New selected object', point: [7, 8, 9] };
+    const show = vi.fn(async () => true); render(<PathFinderCableRoutingPanel {...props()} onShowLocation={show} />);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Show From location' })); });
+    expect(show).toHaveBeenCalledExactlyOnceWith(55); expect(assignment.save).not.toHaveBeenCalled();
+    expect((screen.getByRole('textbox', { name: 'From assigned model object' }) as HTMLTextAreaElement).value).toContain('New selected object');
+  });
+  it('can show an automatic candidate and a confirmed display-only fixed-world object', async () => {
+    assignment.from.context = context('from');
+    const saved = context('to', 'confirmed');
+    assignment.to.context = { ...saved, confirmedSelection: null, confirmedDisplaySelection: { source: 'confirmed-display-only', mode: 'fixed-world',
+      sdkObjectId: 444, pointProjectMetres: [2, 2, 3], current: saved.current!, bindingId: saved.head!.id,
+      bindingContentSha256: saved.head!.contentSha256, commandSha256: 'e'.repeat(64) } };
+    const show = vi.fn(async () => true); render(<PathFinderCableRoutingPanel {...props()} onShowLocation={show} />);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Show From location' })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Show To location' })); });
+    expect(show.mock.calls).toEqual([[123], [444]]);
+  });
+  it('does not substitute an older object for a manually entered point', () => {
+    assignment.from.context = context('from', 'confirmed'); assignment.from.draftSource = 'selected';
+    assignment.from.draft = { mode: 'fixed-world', point: [7, 8, 9], derivation: 'manual-world-point', displaySdkObjectId: null };
+    render(<PathFinderCableRoutingPanel {...props()} onShowLocation={vi.fn(async () => true)} />);
+    expect(screen.getByRole('button', { name: 'Show From location' })).toBeDisabled();
+    expect(screen.getByText('This location has no current model object to show. Assign an object or refresh From/To.')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Show To location' })).toBeDisabled();
+  });
+  it('never uses retained labels or a different model revision to show a location', () => {
+    assignment.from.context = context('from', 'confirmed'); const p = props(), show = vi.fn(async () => true);
+    const view = render(<PathFinderCableRoutingPanel {...p} onShowLocation={show} />);
+    expect(screen.getByRole('button', { name: 'Show From location' })).toBeEnabled();
+    assignment.from.context = null; view.rerender(<PathFinderCableRoutingPanel {...p} onShowLocation={show} />);
+    expect(screen.getByRole('button', { name: 'Show From location' })).toBeDisabled();
+    assignment.from.context = context('from', 'confirmed'); assignment.from.context.current!.selectionRevision = '99';
+    view.rerender(<PathFinderCableRoutingPanel {...p} onShowLocation={show} />);
+    expect(screen.getByRole('button', { name: 'Show From location' })).toBeDisabled(); expect(show).not.toHaveBeenCalled();
+  });
+  it('reports a display failure, allows retry, and drops late feedback after switching cables', async () => {
+    assignment.from.context = context('from', 'confirmed'); let finish!: (value: boolean) => void;
+    const show = vi.fn<NonNullable<PathFinderCableRoutingPanelProps['onShowLocation']>>().mockResolvedValueOnce(false)
+      .mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const p = props(), view = render(<PathFinderCableRoutingPanel {...p} onShowLocation={show} />);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Show From location' })); });
+    expect(screen.getByRole('alert')).toHaveTextContent('This location could not be shown.');
+    fireEvent.click(screen.getByRole('button', { name: 'Show From location' }));
+    expect(screen.getByRole('button', { name: 'Show From location' })).toBeDisabled();
+    view.rerender(<PathFinderCableRoutingPanel {...p} cable={{ ...p.cable!, cable: { ...p.cable!.cable, id: id(99) } }} onShowLocation={show} />);
+    await act(async () => { finish(false); }); expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
 describe('persistent nonmodal cable routing panel with atomic drafts', () => {
+  it('requires no Review or Apply when exact current cable values are already confirmed', () => {
+    const p=props(); p.cable!.cable.routing='/SAVED'; p.cable!.cable.designLength='58';
+    p.cable!.calculation.acceptedMatchesCurrent=true; p.cable!.calculation.currentness='current';
+    render(<PathFinderCableRoutingPanel {...p} />);
+    expect(screen.getByText('Routing and length saved')).toBeVisible();
+    expect(screen.queryByRole('button',{name:'Review proposed routing'})).toBeNull();
+    expect(screen.queryByRole('button',{name:'Apply reviewed routing'})).toBeNull();
+  });
+  it('shows automatic pair write progress without offering Review or Apply during that write', () => {
+    const p=props(); p.cable!.calculation.automaticUpdate={status:'running',receiptId:null,reasonCode:null};
+    render(<PathFinderCableRoutingPanel {...p} calculationPending />);
+    expect(screen.getByText('Updating cable values')).toBeVisible();
+    expect(screen.queryByRole('button',{name:'Review proposed routing'})).toBeNull();
+    expect(screen.getByText(/Waiting for the automatic Routing and Design length update/)).toBeVisible();
+  });
+  it('makes exhausted automatic write recovery explicit without permitting another write',()=>{
+    const p=props();p.cable!.calculation.automaticUpdate={status:'unknown',receiptId:null,reasonCode:'AUTOMATIC_PAIR_RECOVERY_LIMIT'};
+    render(<PathFinderCableRoutingPanel {...p} calculationPending />);
+    expect(screen.getByText('Cable update needs confirmation')).toBeVisible();
+    expect(screen.getByText(/Use Refresh cable status to check the exact saved receipt/)).toBeVisible();
+    expect(screen.queryByRole('button',{name:'Apply reviewed routing'})).toBeNull();
+  });
+  it.each(['refused', 'stale', 'authority-expired'] as const)('shows the actual %s output refusal without inventing a manual edit', status => {
+    const p = props(); p.cable!.calculation.automaticUpdate = { status, receiptId: null, reasonCode: 'PROPOSAL_NOT_APPLICABLE' };
+    render(<PathFinderCableRoutingPanel {...p} />);
+    expect(screen.getByText('Cable list update not saved')).toBeVisible();
+    expect(screen.getByText(/automatic Routing and Design length update was not saved/)).toBeVisible();
+    expect(screen.getByRole('alert')).toHaveTextContent('Update reason: proposal not applicable.');
+    expect(screen.queryByText(/Manually changed Cable list values are retained/)).not.toBeInTheDocument();
+    expect(p.onCalculate).not.toHaveBeenCalled(); expect(assignment.save).not.toHaveBeenCalled();
+  });
   it('retains last read endpoint display after failed refresh and offers GET-only refresh while commands are pending', () => {
     assignment.from.context = context('from', 'confirmed'); assignment.to.context = context('to', 'confirmed');
     const p = props(), refresh = vi.fn(), review = { ...reviewController(p), canApply: true }, view = render(<PathFinderCableRoutingPanel {...p} onRefresh={refresh} review={review} />);
@@ -71,7 +270,7 @@ describe('persistent nonmodal cable routing panel with atomic drafts', () => {
     expect(screen.getAllByText('Last read location — refresh From/To before using it.')).toHaveLength(2);
     expect(screen.getByRole('button', { name: 'Refresh cable status' })).toBeEnabled(); expect(screen.getByRole('button', { name: 'Refresh From/To' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: 'Refresh cable status' })); fireEvent.click(screen.getByRole('button', { name: 'Refresh From/To' }));
-    expect(refresh).toHaveBeenCalledOnce(); expect(assignment.refresh).toHaveBeenCalledOnce(); expect(assignment.retry).not.toHaveBeenCalled(); expect(assignment.save).not.toHaveBeenCalled();
+    expect(refresh).toHaveBeenCalledTimes(2); expect(assignment.refresh).toHaveBeenCalledOnce(); expect(assignment.retry).not.toHaveBeenCalled(); expect(assignment.save).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Calculate routing' })).toBeDisabled(); expect(screen.getByRole('button', { name: 'Review proposed routing' })).toBeDisabled(); expect(screen.getByRole('button', { name: 'Apply reviewed routing' })).toBeDisabled();
     assignment.from.context = context('from', 'confirmed'); assignment.to.context = context('to', 'confirmed'); assignment.retired = false; assignment.error = null; assignment.pending = null;
     view.rerender(<PathFinderCableRoutingPanel {...p} onRefresh={refresh} review={review} />);
@@ -353,23 +552,145 @@ describe('persistent nonmodal cable routing panel with atomic drafts', () => {
     render(<PathFinderCableRoutingPanel {...p} />); expect(screen.getByRole('button', { name: 'Calculate routing' })).toBeDisabled(); expect(p.onCalculate).not.toHaveBeenCalled();
   });
   it('uses the protected Show/Hide callback and still allows Hide while a new draft is unsaved', () => {
-    const p = props(); p.cable = cableWorkflowRowSchema.parse({ ...p.cable, calculation: { ...p.cable!.calculation,
+    const p = { ...props(), pathReady: true }; p.cable = cableWorkflowRowSchema.parse({ ...p.cable, calculation: { ...p.cable!.calculation,
       jobId: id(81), jobStatus: 'complete', itemState: 'complete', outcome: 'calculated', currentness: 'current', proposalId: id(80), proposalHash: 'f'.repeat(64) } });
     const view = render(<PathFinderCableRoutingPanel {...p} />); fireEvent.click(screen.getByRole('button', { name: 'Show' })); expect(p.onTogglePath).toHaveBeenCalledOnce();
     assignment.from.context = context('from'); view.rerender(<PathFinderCableRoutingPanel {...p} />); expect(screen.getByRole('button', { name: 'Show' })).toBeDisabled();
     view.rerender(<PathFinderCableRoutingPanel {...p} pathVisible />); expect(screen.getByRole('button', { name: 'Hide' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: 'Hide' })); expect(p.onTogglePath).toHaveBeenCalledTimes(2); expect(assignment.save).not.toHaveBeenCalled();
   });
-  it('keeps stored Cable list values distinct from the displayed calculated proposal', () => {
+  it.each(['pending', 'refreshing', 'read failed', 'endpoint retired', 'result not ready'] as const)('keeps Show unavailable while %s and never draws the old route', state => {
+    const p = props(); assignment.from.context = context('from', 'confirmed'); assignment.to.context = context('to', 'confirmed');
+    if (state === 'endpoint retired') assignment.retired = true;
+    render(<PathFinderCableRoutingPanel {...p} pathReady={state !== 'result not ready'} calculationPending={state === 'pending'}
+      refreshing={state === 'refreshing'} refreshError={state === 'read failed' ? 'GET unavailable' : null} />);
+    expect(screen.getByRole('button', { name: 'Show' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Show' })); expect(p.onTogglePath).not.toHaveBeenCalled();
+  });
+  it('refreshes From/To once after a replacement result and waits for an existing draft before doing so', () => {
+    const p = props(), view = render(<PathFinderCableRoutingPanel {...p} endpointRefreshKey={0} />);
+    expect(assignment.refresh).not.toHaveBeenCalled();
+    assignment.from.context = context('from'); view.rerender(<PathFinderCableRoutingPanel {...p} endpointRefreshKey={1} />);
+    expect(assignment.refresh).not.toHaveBeenCalled();
+    assignment.from.context = context('from', 'confirmed'); view.rerender(<PathFinderCableRoutingPanel {...p} endpointRefreshKey={1} />);
+    expect(assignment.refresh).toHaveBeenCalledOnce();
+    view.rerender(<PathFinderCableRoutingPanel {...p} endpointRefreshKey={1} />); expect(assignment.refresh).toHaveBeenCalledOnce();
+    expect(assignment.save).not.toHaveBeenCalled(); expect(p.onCalculate).not.toHaveBeenCalled();
+  });
+  it('refreshes converged Save contexts once when the selected automatic cable write advances its revision while siblings run', () => {
+    assignment.from.context = context('from', 'confirmed'); assignment.to.context = context('to', 'confirmed');
+    const p = props(); p.cable!.cable.cableWriteRevision = '5';
+    p.cable!.calculation = { ...p.cable!.calculation, jobStatus: 'running', itemState: 'complete', currentness: 'current', outcome: 'calculated' };
+    const view = render(<PathFinderCableRoutingPanel {...p} pathReady />);
+    expect(assignment.refresh).toHaveBeenCalledOnce();
+    assignment.from.context = { ...assignment.from.context!, cableWriteRevision: '5' };
+    assignment.to.context = { ...assignment.to.context!, cableWriteRevision: '5' };
+    view.rerender(<PathFinderCableRoutingPanel {...p} pathReady />);
+    expect(assignment.refresh).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button', { name: 'Assign From' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Assign To' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Calculate routing' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Show' })).toBeEnabled();
+    expect(assignment.save).not.toHaveBeenCalled(); expect(p.onCalculate).not.toHaveBeenCalled();
+  });
+  it('does not replace newer endpoint contexts with an older cable list observation', () => {
+    assignment.from.context = { ...context('from', 'confirmed'), cableWriteRevision: '6' };
+    assignment.to.context = { ...context('to', 'confirmed'), cableWriteRevision: '6' };
+    const p = props(); p.cable!.cable.cableWriteRevision = '5';
+    render(<PathFinderCableRoutingPanel {...p} pathReady />);
+    expect(assignment.refresh).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Assign From' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Calculate routing' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Show' })).toBeEnabled();
+  });
+  it('defers selected-revision convergence while a Save command is unconfirmed', () => {
+    assignment.from.context = context('from', 'confirmed'); assignment.to.context = context('to', 'confirmed');
+    assignment.pending = { cableId: id(3) } as Assignment['pending'];
+    const p = props(); p.cable!.cable.cableWriteRevision = '5';
+    const view = render(<PathFinderCableRoutingPanel {...p} />);
+    expect(assignment.refresh).not.toHaveBeenCalled(); expect(assignment.save).not.toHaveBeenCalled();
+    assignment.pending = null; view.rerender(<PathFinderCableRoutingPanel {...p} />);
+    expect(assignment.refresh).toHaveBeenCalledOnce();
+    expect(assignment.retry).not.toHaveBeenCalled(); expect(assignment.closePending).not.toHaveBeenCalled();
+  });
+  it('loads stored routing and length on first open without submitting a calculation or granting Show or review', () => {
+    const p = props(); p.cable!.cable.routing = '/STORED/CABLE/LIST'; p.cable!.cable.designLength = '153';
+    render(<PathFinderCableRoutingPanel {...p} />);
+    expect(screen.getByRole('heading', { name: 'Cable list routing' })).toBeVisible();
+    expect(screen.getByRole('textbox', { name: 'Cable routing' })).toHaveValue('/STORED/CABLE/LIST');
+    expect(screen.getByText('Cable list design length: 153 m')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Show' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Review proposed routing' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Apply reviewed routing' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Calculate routing' })).toBeEnabled();
+    expect(p.onCalculate).not.toHaveBeenCalled(); expect(p.onTogglePath).not.toHaveBeenCalled(); expect(assignment.save).not.toHaveBeenCalled();
+  });
+  it('retains the saved route after obstacle changes with an actionable Show message instead of an indefinite loading claim', () => {
+    const p = props(); p.cable!.cable.routing = '/SAVED'; p.cable!.cable.designLength = '58';
+    p.cable!.calculation.outcome = 'calculated'; p.cable!.calculation.currentness = 'changed';
+    render(<PathFinderCableRoutingPanel {...p} />);
+    expect(screen.getByRole('textbox', { name: 'Cable routing' })).toHaveValue('/SAVED');
+    expect(screen.getByText('Show needs a current path for the active model, locations and obstacles. Calculate routing to update it.')).toBeVisible();
+    expect(screen.queryByText(/not finished verification/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Show' })).toBeDisabled(); expect(p.onCalculate).not.toHaveBeenCalled();
+  });
+  it('shows the separately qualified saved exact path without granting Review or Apply', () => {
+    const p = props(); p.cable!.cable.routing = '/SAVED'; p.cable!.cable.designLength = '58';
+    p.cable!.calculation.currentness = 'changed'; const review = reviewController(p); review.canApply = true;
+    render(<PathFinderCableRoutingPanel {...p} pathSource="saved-exact" pathReady calculatedRouting="/SAVED" calculatedDesignLength="58" review={review} />);
+    expect(screen.getByRole('heading', { name: 'Cable list routing' })).toBeVisible();
+    expect(screen.getByText('Cable list design length: 58 m')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Show' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Review proposed routing' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Apply reviewed routing' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Show' })); expect(p.onTogglePath).toHaveBeenCalledOnce();
+    expect(p.onCalculate).not.toHaveBeenCalled(); expect(assignment.save).not.toHaveBeenCalled(); expect(review.review).not.toHaveBeenCalled(); expect(review.apply).not.toHaveBeenCalled();
+  });
+  it.each(['save', 'legacy', 'review'] as const)('blocks a retained saved exact Show during pending %s while permitting Hide', kind => {
+    const p = props(), review = reviewController(p);
+    if (kind === 'save') assignment.pending = { cableId: id(3) } as Assignment['pending'];
+    if (kind === 'legacy') assignment.legacyRecovery = { canRetry: false, retry: vi.fn(), close: vi.fn() } as unknown as Assignment['legacyRecovery'];
+    if (kind === 'review') review.pending = true;
+    const view = render(<PathFinderCableRoutingPanel {...p} pathSource="saved-exact" pathReady calculatedRouting="/SAVED" calculatedDesignLength="58" review={review} />);
+    expect(screen.getByRole('button', { name: 'Show' })).toBeDisabled();
+    view.rerender(<PathFinderCableRoutingPanel {...p} pathSource="saved-exact" pathReady pathVisible calculatedRouting="/SAVED" calculatedDesignLength="58" review={review} />);
+    expect(screen.getByRole('button', { name: 'Hide' })).toBeEnabled(); expect(p.onCalculate).not.toHaveBeenCalled(); expect(assignment.save).not.toHaveBeenCalled();
+  });
+  it('labels retained Cable list text as previous while a new result is pending or unconfirmed', () => {
+    const p = props(); p.cable!.cable.routing = '/SAVED'; p.cable!.cable.designLength = '58';
+    const view = render(<PathFinderCableRoutingPanel {...p} calculationPending />);
+    expect(screen.getByRole('heading', { name: 'Previous Cable list routing' })).toBeVisible();
+    expect(screen.getByRole('textbox', { name: 'Cable routing' })).toHaveValue('/SAVED');
+    expect(screen.getByText('Previous Cable list design length: 58 m')).toBeVisible();
+    expect(screen.getByText(/The new calculated route will appear here/)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Show' })).toBeDisabled();
+    view.rerender(<PathFinderCableRoutingPanel {...p} calculationFeedback={{ working: false, message: 'The new calculation could not be checked.' }} />);
+    expect(screen.getByRole('heading', { name: 'Previous Cable list routing' })).toBeVisible();
+    expect(screen.getByText('Previously saved route. Refresh cable status or calculate routing to check the current result.')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Show' })).toBeDisabled(); expect(p.onCalculate).not.toHaveBeenCalled();
+  });
+  it('shows new proposal text before Show is ready without changing manual Cable list values or blocking Assign and Calculate', () => {
     const p = props(); p.cable!.cable.routing = '/OLD/SECONDARY'; p.cable!.cable.designLength = '150';
+    assignment.from.context = context('from', 'confirmed'); assignment.to.context = context('to', 'confirmed');
     const view = render(<PathFinderCableRoutingPanel {...p} />); expect(screen.getByRole('heading', { name: 'Cable list routing' })).toBeVisible();
     expect(screen.getByRole('textbox', { name: 'Cable routing' })).toHaveValue('/OLD/SECONDARY');
+    expect(within(screen.getByRole('region', { name: 'Stored cable values' })).getByText('/OLD/SECONDARY')).toBeVisible();
     view.rerender(<PathFinderCableRoutingPanel {...p} calculatedRouting="/NEW/SECONDARY" calculatedDesignLength="180" />);
     expect(screen.getByRole('heading', { name: 'Calculated routing' })).toBeVisible(); expect(screen.getByRole('textbox', { name: 'Cable routing' })).toHaveValue('/NEW/SECONDARY');
     expect(screen.getByText('Calculated design length: 180 m')).toBeVisible(); expect(p.cable!.cable.designLength).toBe('150');
+    expect(screen.getByRole('button', { name: 'Show' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Assign From' })).toBeEnabled(); expect(screen.getByRole('button', { name: 'Assign To' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Calculate routing' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Show' })); expect(p.onTogglePath).not.toHaveBeenCalled();
+    view.rerender(<PathFinderCableRoutingPanel {...p} calculatedRouting="/NEW/SECONDARY" calculatedDesignLength="180" pathReady />);
+    expect(screen.getByRole('button', { name: 'Show' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Show' })); expect(p.onTogglePath).toHaveBeenCalledOnce();
     view.rerender(<PathFinderCableRoutingPanel {...p} calculatedRouting={null} calculatedDesignLength={null} />);
-    expect(screen.getByRole('textbox', { name: 'Cable routing' })).toHaveValue(''); expect(screen.getByText('Calculated design length: Not available m')).toBeVisible();
-    expect(screen.queryByRole('button', { name: /copy/i })).toBeNull(); expect(assignment.save).not.toHaveBeenCalled();
+    expect(screen.getByRole('textbox', { name: 'Cable routing' })).toHaveValue('/OLD/SECONDARY');
+    expect(screen.getByRole('heading', { name: 'Previous Cable list routing' })).toBeVisible();
+    expect(screen.getByText('Previous Cable list design length: 150 m')).toBeVisible();
+    expect(screen.queryByRole('button', { name: /copy/i })).toBeNull(); expect(assignment.save).not.toHaveBeenCalled(); expect(p.onCalculate).not.toHaveBeenCalled();
+    expect(p.cable!.cable).toMatchObject({ routing: '/OLD/SECONDARY', designLength: '150' });
   });
   it('lets the user Hide an already visible path even when its refreshed row no longer offers a proposal', () => {
     const p = props(); render(<PathFinderCableRoutingPanel {...p} pathVisible />);
@@ -413,6 +734,17 @@ describe('selected bounding-box point presentation', () => {
   });
 });
 describe('Path Finder detached window integration', () => {
+  it('shows the assigned location from the separate window', async () => {
+    const p = props(), frame = document.createElement('iframe'); document.body.appendChild(frame); const popup = frame.contentWindow!;
+    Object.defineProperty(popup, 'closed', { configurable: true, value: false }); popup.focus = vi.fn(); popup.close = vi.fn();
+    assignment.from.context = context('from', 'confirmed'); const show = vi.fn(async () => true);
+    const view = render(<FluentProvider theme={webDarkTheme}><PathFinderCableRoutingPanel {...p} onShowLocation={show}
+      requestedPopup={{ window: popup, blocked: false, id: 'show-location-window' }} /></FluentProvider>);
+    await act(async () => { fireEvent.click(within(popup.document.body).getByRole('button', { name: 'Show From location' })); });
+    expect(show).toHaveBeenCalledExactlyOnceWith(123); expect(assignment.from.selectObject).not.toHaveBeenCalled();
+    expect(assignment.save).not.toHaveBeenCalled(); expect(p.onCalculate).not.toHaveBeenCalled(); expect(p.onTogglePath).not.toHaveBeenCalled();
+    view.unmount(); frame.remove();
+  });
   it('adopts the clicked window, uses the current selection callbacks and retains draft presentation on return', () => {
     const p = props(), frame = document.createElement('iframe'); document.body.appendChild(frame); const popup = frame.contentWindow!;
     Object.defineProperty(popup, 'closed', { configurable: true, value: false }); popup.focus = vi.fn(); popup.close = vi.fn();

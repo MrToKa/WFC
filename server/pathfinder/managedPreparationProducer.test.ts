@@ -8,9 +8,9 @@ import { managedPreparationOwnerSchema, type ManagedPreparationOwner } from './m
 import { createManagedPreparationProducer, readManagedPreparationCandidates, type ManagedPreparationCandidate, type ManagedPreparationProducerOptions } from './managedPreparationProducer.js';
 import type { ManagedPreparationWorkflowOptions, ManagedPreparationWorkflowResult } from './managedPreparationWorkflow.js';
 import { geometryTraceFixture } from './geometryTraceFixtures.js';
-import { preparationAggregateSchema, preparationContextSchema, preparationPublicationSchema, type PreparationContext } from '../../shared/pathfinderPreparation.js';
+import { preparationAggregateSchema, preparationContextSchema, preparationPublicationSchema, preparationPlanSchema, preparationPlanHashInput, preparationPartScopeHashInput, type PreparationContext } from '../../shared/pathfinderPreparation.js';
 import { schedulerTransaction } from './schedulerTransaction.js';
-import { equalPreparationScope, readPreparationContext } from './preparationPlans.js';
+import { equalPreparationScope, readPreparationContext, preparationDigest } from './preparationPlans.js';
 import { buildGeometryTrace, geometryTraceHash } from './geometryTraceBuilder.js';
 import { geometryTraceContentHashInput, type GeometryTraceManifest } from '../../shared/pathfinderGeometryTrace.js';
 import { geometryTraceRuntimeFingerprint } from './geometryTraceEngine.js';
@@ -303,6 +303,25 @@ describe('already published preparation reuse after binding-only registry change
     expect(f.trace.qualifiedProjectFrame).toBeNull();
     // New capture/publication admission continues to use the shared strict scope comparison.
     expect(equalPreparationScope(f.plan, f.context.scope)).toBe(false);
+  });
+  it('never reuses an explicit tray-only preparation as complete full managed endpoint coverage', async () => {
+    const f = publishedFixture(), plan = structuredClone(f.plan);
+    plan.requestedScope = { ...plan.requestedScope, scopeKind: 'server-requested-project-routing-only',
+      endpointScope: { schemaVersion: 'wfc.pf.endpoint-discovery-scope.v1', mode: 'not-requested' },
+      endpointEvidence: [], orderedEquipmentObjectIds: [] };
+    const { scopeSha256: _scopeHash, ...scopeInput } = plan.requestedScope;
+    plan.requestedScope.scopeSha256 = preparationDigest(scopeInput);
+    plan.partPlan = plan.partPlan.map(part => {
+      const next = { ...part, equipmentObjectIds: [], equipmentNames: [] };
+      next.scopeSha256 = preparationDigest(preparationPartScopeHashInput(next)); return next;
+    });
+    plan.orderedPlanSha256 = preparationDigest(preparationPlanHashInput(plan));
+    expect(preparationPlanSchema.parse(plan)).toEqual(plan);
+    f.state.plan = plan; f.aggregate.orderedPlanSha256 = plan.orderedPlanSha256; f.aggregate.orderedScopeSha256 = plan.requestedScope.scopeSha256;
+    f.context.currentAggregate = f.aggregate;
+    expect((await f.read())[0].alreadyComplete).toBe(false);
+    expect(geometryTraceRuntimeFingerprint).not.toHaveBeenCalled();
+    expect(f.control.register).not.toHaveBeenCalled(); expect(f.resources.create).not.toHaveBeenCalled();
   });
   it('never claims another prepare lease or launches a browser for a completed binding-only update', async () => {
     const f = publishedFixture(), producer = f.create({ readCandidates: readManagedPreparationCandidates });

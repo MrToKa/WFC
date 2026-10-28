@@ -11,6 +11,46 @@ import { parseRoutingBindings } from './routing-bindings.mjs';
 const interrupted = () => new DOMException('Operation cancelled.', 'AbortError');
 const active = signal => { if (signal?.aborted) throw interrupted(); };
 const safeError = (code = 'RESOURCE_FAILED') => Object.assign(new Error(barrierCaptureErrorMessage(code) ?? 'The local model or one of its resources could not be read.'), { code });
+const positiveObjectId = id => Number.isSafeInteger(id) && id > 0 && id <= 2147483647;
+
+async function locationTree(model, signal) {
+  active(signal);
+  try {
+    const tree = model.getInstanceTree?.();
+    if (tree) return tree;
+  } catch { throw safeError('LOCATION_UNAVAILABLE'); }
+  if (typeof model.getObjectTree !== 'function') throw safeError('LOCATION_UNAVAILABLE');
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (error, tree) => {
+      if (settled) return;
+      settled = true; clearTimeout(timer); signal?.removeEventListener('abort', abort);
+      error ? reject(error) : resolve(tree);
+    };
+    const abort = () => finish(interrupted());
+    const timer = setTimeout(() => finish(safeError('LOCATION_UNAVAILABLE')), 45000);
+    signal?.addEventListener('abort', abort, { once: true });
+    try { model.getObjectTree(tree => finish(tree ? null : safeError('LOCATION_UNAVAILABLE'), tree), () => finish(safeError('LOCATION_UNAVAILABLE'))); }
+    catch { finish(safeError('LOCATION_UNAVAILABLE')); }
+  });
+}
+
+function containsLocation(tree, id) {
+  try {
+    const root = tree.getRootId(), seen = new Set();
+    if (!Number.isSafeInteger(root) || root < 0 || root > 2147483647) return false;
+    for (let depth = 0; depth < 256; depth++) {
+      if (id === root) return true;
+      if (!positiveObjectId(id) || seen.has(id)) return false;
+      // The pinned public tree API reads its immutable dbId index. Checking it
+      // avoids treating a missing ID's parent fallback as a real root-zero node.
+      const index = tree.getNodeIndex(id);
+      if (!Number.isSafeInteger(index) || index < 0) return false;
+      seen.add(id); id = tree.getNodeParentId(id);
+    }
+  } catch { /* Missing/invalid IDs must not reach SDK visibility calls. */ }
+  return false;
+}
 
 // Exercise the property worker through its public callback API, without exporting
 // the SDK object or property contents to the host. The bounded sample is evidence,
@@ -185,6 +225,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
       if (viewing.ERROR_EVENT) viewer.addEventListener(viewing.ERROR_EVENT, runtimeError);
       routes = createRouteController(viewer, { signal });
       pathfinder = createPathFinderController(viewer, { window, signal });
+      const loadedModel = viewer.model;
       multipart = createBarrierMultipartRuntime(viewer, { descriptor, signal, isCurrent: () => !finished && viewer.model != null });
       let computedPath = false, legacyPath = false;
       async function captureEvent(captureId, index, operationSignal, onProgress) {
@@ -275,6 +316,52 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
           return pathfinder.readPreparationObjects(request, operationSignal);
         },
         readSelection: pathfinder.readSelection,
+        readTrayRootSelection: pathfinder.readTrayRootSelection,
+        async showLocation(sdkObjectId, operationSignal, beforeCommit = async () => {}) {
+          if (!positiveObjectId(sdkObjectId)) throw safeError('LOCATION_UNAVAILABLE');
+          const displaySignal = AbortSignal.any([signal, operationSignal].filter(Boolean));
+          const currentModel = () => {
+            active(displaySignal);
+            if (finished || !loadedModel || viewer.model !== loadedModel) throw safeError('MODEL_SELECTION_CHANGED');
+          };
+          currentModel();
+          const tree = await locationTree(loadedModel, displaySignal);
+          currentModel();
+          if (!containsLocation(tree, sdkObjectId) || typeof viewer.show !== 'function' || typeof viewer.fitToView !== 'function') throw safeError('LOCATION_UNAVAILABLE');
+          await beforeCommit();
+          currentModel();
+          try {
+            // The pinned SDK show() changes only this node's visibility. It
+            // reveals it normally under route Ghost without changing selection,
+            // global Ghost, route overlays or their saved appearance baseline.
+            viewer.show([sdkObjectId], loadedModel);
+            viewer.fitToView([sdkObjectId], loadedModel);
+          } catch { throw safeError('LOCATION_UNAVAILABLE'); }
+        },
+        async showTray(sdkObjectIds, operationSignal, beforeCommit = async () => {}) {
+          if (!Array.isArray(sdkObjectIds) || sdkObjectIds.length === 0 || sdkObjectIds.length > 512) throw safeError('TRAY_UNAVAILABLE');
+          const ids = [...sdkObjectIds];
+          if (!ids.every(positiveObjectId) || new Set(ids).size !== ids.length) throw safeError('TRAY_UNAVAILABLE');
+          const displaySignal = AbortSignal.any([signal, operationSignal].filter(Boolean));
+          const currentModel = () => {
+            active(displaySignal);
+            if (finished || !loadedModel || viewer.model !== loadedModel) throw safeError('MODEL_SELECTION_CHANGED');
+          };
+          currentModel();
+          let tree;
+          try { tree = await locationTree(loadedModel, displaySignal); }
+          catch (error) { if (error?.code === 'LOCATION_UNAVAILABLE') throw safeError('TRAY_UNAVAILABLE'); throw error; }
+          currentModel();
+          if (!ids.every(id => containsLocation(tree, id)) || typeof viewer.show !== 'function' || typeof viewer.fitToView !== 'function') throw safeError('TRAY_UNAVAILABLE');
+          await beforeCommit();
+          currentModel();
+          try {
+            // Reveal all resolved roots together, preserving the user's current
+            // selection and any route overlays, Ghost or appearance baseline.
+            viewer.show(ids, loadedModel);
+            viewer.fitToView(ids, loadedModel);
+          } catch { throw safeError('TRAY_UNAVAILABLE'); }
+        },
         setPathTransparency: pathfinder.setTransparency,
         pickPoint: pathfinder.pickPoint,
         async startModelCapture(request, operationSignal, onProgress, { startedAt = Date.now() } = {}) {

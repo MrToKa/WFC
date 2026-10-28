@@ -30,7 +30,62 @@ function savedManifest(): BarrierSnapshot {
     coverage: 'registered-selected-objects-only', engineeringAccepted: false };
 }
 
+function installSavedSelection(f: ReturnType<typeof fixture>, manifest = savedManifest()) {
+  f.state.saved = { manifest, status: 'current' };
+  f.state.registry = { ...f.state.registry!, state: 'ready', registryRevision: manifest.registryRevision, selectedParents: manifest.selectedParents,
+    snapshot: { snapshotId: manifest.snapshotId, scope: manifest.scope, registryRevision: manifest.registryRevision,
+      contentSha256: manifest.contentSha256, mode: manifest.geometry.mode }, reasonCodes: [] };
+  f.state.draftParents = manifest.selectedParents; f.state.phase = 'ready'; f.install();
+}
+
 describe('administrator barrier authoring panel', () => {
+  it('confirms a verified saved selection next to its disabled Save action and enables it again after a change', () => {
+    const f = fixture(); installSavedSelection(f);
+    const view = render(<PathFinderBarriersPanel {...f.props} />);
+    expect(screen.getByRole('status')).toHaveTextContent('Saved — 1 parent object, revision 1');
+    expect(screen.getByRole('heading', { name: 'Current saved selection' })).toBeVisible();
+    expect(screen.getByText('1 selected object is saved. Add or remove objects to change this set.')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Barrier set saved' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Barrier set saved' })); expect(f.state.save).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Add selected objects' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Remove Saved civil source group' })).toBeEnabled();
+    f.state.dirty = true; f.install(); view.rerender(<PathFinderBarriersPanel {...f.props} />);
+    expect(screen.getByRole('status')).toHaveTextContent('Unpublished draft');
+    expect(screen.getByRole('heading', { name: 'Current selection draft' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Save barrier set' })).toBeEnabled();
+    expect(screen.queryByText(/1 selected object is saved/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Save barrier set' })); expect(f.state.save).toHaveBeenCalledOnce();
+  });
+  it.each(['unknown', 'stale', 'refused', 'partial'])('does not claim a new save succeeded in the %s phase', phase => {
+    const f = fixture(); installSavedSelection(f); f.state.phase = phase;
+    f.state.pending = phase === 'unknown'; f.install(); render(<PathFinderBarriersPanel {...f.props} />);
+    expect(screen.queryByRole('button', { name: 'Barrier set saved' })).toBeNull();
+    expect(screen.queryByText(/1 selected object is saved/)).toBeNull();
+    expect(screen.getByRole('status')).not.toHaveTextContent('Saved —');
+  });
+  it('does not claim a clean draft is saved when the saved snapshot differs from the current registry', () => {
+    const f = fixture(); installSavedSelection(f); f.state.registry!.snapshot!.snapshotId = id(99); f.install();
+    render(<PathFinderBarriersPanel {...f.props} />);
+    expect(screen.queryByRole('button', { name: 'Barrier set saved' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Save barrier set' })).toBeEnabled();
+    expect(screen.getByRole('status')).not.toHaveTextContent('Saved —');
+  });
+  it.each(['capturing', 'publishing'])('labels the disabled Save action while %s', phase => {
+    const f = fixture(); installSavedSelection(f); f.state.phase = phase; f.state.busy = true; f.state.pending = true;
+    f.install(); render(<PathFinderBarriersPanel {...f.props} />);
+    expect(screen.getByRole('button', { name: phase === 'capturing' ? 'Capturing obstacles…' : 'Saving barrier set…' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Barrier set saved' })).toBeNull();
+  });
+  it('keeps the saved empty declaration disabled until a replacement reason is entered', () => {
+    const f = fixture(), manifest = savedManifest(); manifest.selectedParents = []; manifest.capture = null;
+    manifest.geometry = { mode: 'explicit-empty', declarationId: id(30), declaration: 'administrator-declared-no-selected-barriers', reason: 'Reviewed empty scope' };
+    installSavedSelection(f, manifest); const view = render(<PathFinderBarriersPanel {...f.props} />);
+    expect(screen.getByRole('button', { name: 'Barrier set saved' })).toBeDisabled();
+    expect(screen.getByText('The empty barrier declaration is saved.')).toBeVisible();
+    f.state.emptyReason = 'Replacement reviewed reason'; f.install(); view.rerender(<PathFinderBarriersPanel {...f.props} />);
+    expect(screen.getByRole('button', { name: 'Declare no barriers' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Barrier set saved' })).toBeNull();
+  });
   it('keeps stale saved obstacles visible separately from an empty current draft', () => {
     const f = fixture(); f.state.saved = { manifest: savedManifest(), status: 'recapture-required' }; f.install();
     render(<PathFinderBarriersPanel {...f.props} />);

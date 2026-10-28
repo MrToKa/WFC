@@ -28,6 +28,36 @@ async function fixture() {
   return { f, state, query, input, append };
 }
 describe('same-transaction impact append protocol with synthetic SQL, not actual PostgreSQL', () => {
+  it.each([null,{schemaVersion:'wfc.pf.automatic-pair-policy.v1' as const,mode:'when-both-empty-or-unchanged-automatic' as const}])('seals v3 Save write policy %j with exact origin and bounded original authority, without upgrading its replay',async automaticPairPolicy=>{
+    const f=await fixture(),input={...f.input,originCableId:id(11),automaticPairPolicy},ref=await f.append(input);
+    const record=f.state.records.get(ref.id)!.record as LocationImpactRecord;
+    expect(record).toMatchObject({schemaVersion:'wfc.pf.location-impact-record.v3',originCableId:id(11),automaticPairPolicy,eligibleCableIds:f.input.affectedCableIds});
+    const {contentSha256,...body}=record;expect(contentSha256).toBe(endpointBindingHash(body));
+    expect(Date.parse(record.authorityExpiresAt)).toBeLessThanOrEqual(f.f.who.loginExpiresAt);
+    expect(await f.append(input)).toEqual(ref);expect(f.state.records.size).toBe(1);expect(f.state.targets.get(id(11))?.generation).toBe('1');
+    expect((f.state.records.get(ref.id)!.record as LocationImpactRecord).authorityExpiresAt).toBe(record.authorityExpiresAt);
+    await expect(f.append({...input,automaticPairPolicy:undefined})).rejects.toMatchObject({code:'LOCATION_IMPACT_IDEMPOTENCY_CONFLICT'});
+    await expect(f.append({...input,automaticPairPolicy:automaticPairPolicy===null?{schemaVersion:'wfc.pf.automatic-pair-policy.v1',mode:'when-both-empty-or-unchanged-automatic'}:null})).rejects.toMatchObject({code:'LOCATION_IMPACT_IDEMPOTENCY_CONFLICT'});
+  });
+  it('refuses to add new automatic pair authority to a historical sealed v2 impact',async()=>{
+    const f=await fixture();await f.append({...f.input,originCableId:id(11)});
+    await expect(f.append({...f.input,originCableId:id(11),automaticPairPolicy:null})).rejects.toMatchObject({code:'LOCATION_IMPACT_IDEMPOTENCY_CONFLICT'});
+    expect(f.state.records.size).toBe(1);expect(f.state.targets.get(id(11))?.generation).toBe('1');
+  });
+  it('seals the verified popup origin without dropping other shared-name cables or changing legacy records',async()=>{
+    const f=await fixture(),ref=await f.append({...f.input,originCableId:id(11)}),record=f.state.records.get(ref.id)!.record as LocationImpactRecord;
+    expect(record).toMatchObject({schemaVersion:'wfc.pf.location-impact-record.v2',originCableId:id(11),eligibleCableIds:f.input.affectedCableIds});
+    const {contentSha256,...body}=record;expect(contentSha256).toBe(endpointBindingHash(body));
+    expect(f.state.items.map(item=>item.cable_id)).toEqual(f.input.affectedCableIds);expect(f.state.targets.size).toBe(3);
+    expect(await f.append({...f.input,originCableId:id(11)})).toEqual(ref);expect(f.state.records.size).toBe(1);expect(f.state.targets.get(id(11))?.generation).toBe('1');
+    await expect(f.append({...f.input,originCableId:id(10)})).rejects.toMatchObject({code:'LOCATION_IMPACT_IDEMPOTENCY_CONFLICT'});
+    const legacy=await fixture(),old=await legacy.append();expect((legacy.state.records.get(old.id)!.record as LocationImpactRecord).schemaVersion).toBe('wfc.pf.location-impact-record.v1');
+  });
+  it.each(['foreign','excluded'] as const)('refuses a %s origin before recording any intent or targets',async kind=>{
+    const f=await fixture();if(kind==='excluded')f.state.categories.set(id(11),'MV');
+    await expect(f.append({...f.input,originCableId:kind==='foreign'?id(999):id(11)})).rejects.toMatchObject({code:'LOCATION_IMPACT_ORIGIN_SCOPE'});
+    expect(f.state.records.size).toBe(0);expect(f.state.targets.size).toBe(0);expect(f.state.dispatch).toHaveLength(0);
+  });
   it('records all20 eligible shared occurrences once, with normalized From/To identity and no engine/cable writes', async () => {
     const f = await fixture(); f.f.state.cables = Array.from({ length: 20 }, (_, index) => ({ id: id(index + 1000), from_location: index % 2 ? 'Alias' : 'EQUIPMENT', to_location: index % 2 ? 'equipment' : 'Alias' }));
     f.input.affectedCableIds = f.f.state.cables.map(row => row.id); for (const row of f.f.state.cables) f.state.categories.set(row.id, 'LV');

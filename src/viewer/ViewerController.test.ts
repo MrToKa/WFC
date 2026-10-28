@@ -88,6 +88,222 @@ describe('PathFinder protected Viewer capabilities', () => {
     s.message('MODEL_LOADED', { sdkVersion: '7.130.0', format: 'svf', nodeIndexReady: true }, command.requestId, identity);
     return { ...s, identity };
   }
+  it('reads tray-root IDs with exact load identity and checks selection before and after without requesting rich endpoint metadata', async () => {
+    const s = await loaded(), reads = vi.mocked(fetch).mock.calls.length;
+    s.send.mockImplementation(value => {
+      if (value.type === 'READ_TRAY_ROOT_SELECTION') s.message('TRAY_ROOT_SELECTION', { objects: [{ objectId: 23 }] }, value.requestId, s.identity);
+    });
+    expect(await s.c.readTrayRootSelection()).toEqual({ objects: [{ objectId: 23 }] });
+    expect(vi.mocked(fetch).mock.calls.length - reads).toBe(2);
+    expect(s.send.mock.calls.some(call => call[0].type === 'READ_SELECTION')).toBe(false);
+    expect(s.send.mock.calls.some(call => call[0].type === 'CLEAR_ROUTE')).toBe(false);
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+  });
+  it('keeps only passive selection refusals quiet while simultaneous manual reads still report their error', async () => {
+    const s = await loaded();
+    const passive = s.c.readTrayRootSelection({ quiet: true }), manual = s.c.readTrayRootSelection();
+    const passiveRejected = expect(passive).rejects.toMatchObject({ code: 'TRAY_ROOT_SELECTION_UNAVAILABLE' });
+    const manualRejected = expect(manual).rejects.toMatchObject({ code: 'TRAY_ROOT_SELECTION_UNAVAILABLE' });
+    await vi.waitFor(() => expect(s.send.mock.calls.filter(call => call[0].type === 'READ_TRAY_ROOT_SELECTION')).toHaveLength(2));
+    const commands = s.send.mock.calls.filter(call => call[0].type === 'READ_TRAY_ROOT_SELECTION').map(call => call[0]);
+    for (const command of commands) s.message('ERROR', { code: 'TRAY_ROOT_SELECTION_UNAVAILABLE', message: 'Retry selection.', retryable: true,
+      operation: 'READ_TRAY_ROOT_SELECTION' }, command.requestId, s.identity);
+    await passiveRejected; await manualRejected;
+    const errors = s.events.filter(event => event.type === 'ERROR');
+    expect(errors).toHaveLength(1); expect(errors[0].requestId).toBe(commands[1].requestId);
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+  });
+  it('keeps a passive tray-selection timeout local without losing model readiness', async () => {
+    const s = await loaded(), reading = s.c.readTrayRootSelection({ quiet: true });
+    const rejected = expect(reading).rejects.toMatchObject({ code: 'TRAY_ROOT_SELECTION_UNAVAILABLE' });
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'READ_TRAY_ROOT_SELECTION')).toBe(true));
+    await vi.advanceTimersByTimeAsync(15000); await rejected;
+    expect(s.events.filter(event => event.type === 'ERROR')).toEqual([]);
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+  });
+  it('still ends model access when a passive selection receives a terminal refusal', async () => {
+    const s = await loaded(), reading = s.c.readTrayRootSelection({ quiet: true });
+    const rejected = expect(reading).rejects.toMatchObject({ code: 'ACCESS_REVOKED' });
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'READ_TRAY_ROOT_SELECTION')).toBe(true));
+    const command = s.send.mock.calls.find(call => call[0].type === 'READ_TRAY_ROOT_SELECTION')![0];
+    s.message('ERROR', { code: 'ACCESS_REVOKED', message: 'Access ended.', retryable: false, operation: 'READ_TRAY_ROOT_SELECTION' }, command.requestId, s.identity);
+    await rejected;
+    expect(s.c.getLoadSnapshot()).toBeNull();
+    expect(s.events).toContainEqual(expect.objectContaining({ type: 'ERROR', payload: expect.objectContaining({ code: 'ACCESS_REVOKED', operation: 'viewer' }) }));
+  });
+  it('times out only the tray-root request, ignores its late ACK and permits retry without unloading or waiting for cleanup', async () => {
+    const s = await loaded();
+    const reading = s.c.readTrayRootSelection(), rejected = expect(reading).rejects.toMatchObject({ code: 'TRAY_ROOT_SELECTION_UNAVAILABLE' });
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'READ_TRAY_ROOT_SELECTION')).toBe(true));
+    const first = s.send.mock.calls.find(call => call[0].type === 'READ_TRAY_ROOT_SELECTION')![0];
+    await vi.advanceTimersByTimeAsync(15_000); await rejected;
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+    expect(s.send.mock.calls.some(call => call[0].type === 'CANCEL_REQUEST' && call[0].payload.targetRequestId === first.requestId)).toBe(true);
+    s.message('TRAY_ROOT_SELECTION', { objects: [{ objectId: 99 }] }, first.requestId, s.identity);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+    expect(s.events.some(event => event.type === 'ERROR' && event.payload.operation === 'viewer')).toBe(false);
+    s.send.mockImplementation(value => {
+      if (value.type === 'READ_TRAY_ROOT_SELECTION') s.message('TRAY_ROOT_SELECTION', { objects: [{ objectId: 24 }] }, value.requestId, s.identity);
+    });
+    expect(await s.c.readTrayRootSelection()).toEqual({ objects: [{ objectId: 24 }] });
+  });
+  it('refuses tray-root selection after real access revocation and after a changed model is observed at the final check', async () => {
+    const denied = await loaded(); vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 403 }));
+    await expect(denied.c.readTrayRootSelection()).rejects.toThrow('Model is not ready');
+    expect(denied.c.getLoadSnapshot()).toBeNull();
+    expect(denied.send.mock.calls.some(call => call[0].type === 'READ_TRAY_ROOT_SELECTION')).toBe(false);
+    const changed = await loaded(); changed.send.mockImplementation(value => {
+      if (value.type === 'READ_TRAY_ROOT_SELECTION') {
+        vi.mocked(fetch).mockResolvedValueOnce(Response.json({ selection: { activeModelVersionId: versionId, selectionRevision: 2 } }));
+        changed.message('TRAY_ROOT_SELECTION', { objects: [{ objectId: 23 }] }, value.requestId, changed.identity);
+      }
+    });
+    await expect(changed.c.readTrayRootSelection()).rejects.toThrow('Model is not ready');
+    expect(changed.c.getLoadSnapshot()).toBeNull();
+  });
+  it('cancels an in-flight tray-root read on Clear and ignores acknowledgements from another load', async () => {
+    const s = await loaded(), reading = s.c.readTrayRootSelection(), rejected = expect(reading).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'READ_TRAY_ROOT_SELECTION')).toBe(true));
+    const command = s.send.mock.calls.find(call => call[0].type === 'READ_TRAY_ROOT_SELECTION')![0];
+    s.message('TRAY_ROOT_SELECTION', { objects: [{ objectId: 23 }] }, command.requestId, { ...s.identity, loadId: crypto.randomUUID() });
+    s.send.mockImplementation(value => { if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity); });
+    s.c.clear(); await rejected;
+    s.message('TRAY_ROOT_SELECTION', { objects: [{ objectId: 23 }] }, command.requestId, s.identity);
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+  });
+  it('location display waits for the exact acknowledgement and preserves committed route ownership', async () => {
+    const s = await loaded(); let received = 0;
+    s.send.mockImplementation(value => {
+      if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
+      const phase = value.type === 'BEGIN_COMPUTED_PATH' ? 'begun' : value.type === 'APPEND_COMPUTED_PATH' ? 'appended' : value.type === 'COMMIT_COMPUTED_PATH' ? 'displayed' : null;
+      if (phase === 'appended') received += value.payload.points.length;
+      if (phase) s.message('COMPUTED_PATH_UPDATED', { pathId: value.payload.pathId, phase, received }, value.requestId, s.identity);
+    });
+    const routeRequestId = await s.c.showComputedPath({ pathId: crypto.randomUUID(), points: [[0, 0, 0]], objectIds: [23] });
+    const clearCount = s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE').length;
+    let shown = false; const showing = s.c.showLocation(23).then(() => { shown = true; });
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'SHOW_LOCATION')).toBe(true));
+    const command = s.send.mock.calls.find(call => call[0].type === 'SHOW_LOCATION')![0];
+    expect(shown).toBe(false);
+    s.message('LOCATION_SHOWN', { sdkObjectId: 23 }, command.requestId, { ...s.identity, loadId: crypto.randomUUID() });
+    await Promise.resolve(); expect(shown).toBe(false);
+    s.message('LOCATION_SHOWN', { sdkObjectId: 23 }, command.requestId, s.identity);
+    await showing; expect(shown).toBe(true);
+    expect(s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE')).toHaveLength(clearCount);
+    s.c.zoom(); expect(s.send.mock.calls.at(-1)?.[0]).toMatchObject({ type: 'ZOOM_ROUTE', payload: { routeRequestId } });
+  });
+  it('location display rejects invalid IDs before access checks or SDK commands', async () => {
+    const s = await loaded(), fetchCount = vi.mocked(fetch).mock.calls.length, sends = s.send.mock.calls.length;
+    for (const id of [0, -1, 1.5, 2147483648, NaN, Infinity]) await expect(s.c.showLocation(id)).rejects.toThrow('Invalid location object');
+    expect(vi.mocked(fetch).mock.calls).toHaveLength(fetchCount); expect(s.send.mock.calls).toHaveLength(sends);
+  });
+  it('location display refuses a stale model selection before sending a command', async () => {
+    const s = await loaded(); vi.mocked(fetch).mockResolvedValueOnce(Response.json({ selection: { activeModelVersionId: crypto.randomUUID(), selectionRevision: 2 } }));
+    await expect(s.c.showLocation(23)).rejects.toThrow('Model is not ready');
+    expect(s.send.mock.calls.some(call => call[0].type === 'SHOW_LOCATION')).toBe(false);
+    expect(s.c.getLoadSnapshot()).toBeNull();
+  });
+  it('location acknowledgement mismatch rejects without unloading the ready model', async () => {
+    const s = await loaded(); s.send.mockImplementation(value => {
+      if (value.type === 'SHOW_LOCATION') s.message('LOCATION_SHOWN', { sdkObjectId: 24 }, value.requestId, s.identity);
+    });
+    await expect(s.c.showLocation(23)).rejects.toThrow('Location acknowledgement mismatch');
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+  });
+  it('a recoverable location refusal does not unload the ready model', async () => {
+    const s = await loaded(); s.send.mockImplementation(value => {
+      if (value.type === 'SHOW_LOCATION') s.message('ERROR', { code: 'LOCATION_UNAVAILABLE', message: 'Location unavailable', retryable: true, operation: 'SHOW_LOCATION' }, value.requestId, s.identity);
+    });
+    await expect(s.c.showLocation(23)).rejects.toMatchObject({ code: 'LOCATION_UNAVAILABLE' });
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+  });
+  it('a bounded location timeout cancels only the display and keeps the model even if cleanup ACK is lost', async () => {
+    const s = await loaded(600_000), showing = s.c.showLocation(23).catch(error => error);
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'SHOW_LOCATION')).toBe(true));
+    const command = s.send.mock.calls.find(call => call[0].type === 'SHOW_LOCATION')![0];
+    await vi.advanceTimersByTimeAsync(60_001);
+    expect(await showing).toBeInstanceOf(Error); expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+    expect(s.send.mock.calls.some(call => call[0].type === 'CANCEL_REQUEST' && call[0].payload.targetRequestId === command.requestId)).toBe(true);
+    await vi.advanceTimersByTimeAsync(10_001); expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+    expect(s.events.some(event => event.type === 'ERROR' && event.payload.code === 'LOCATION_UNAVAILABLE')).toBe(true);
+  });
+  it('a route clear cancels pending location display and its late acknowledgement cannot become success', async () => {
+    const s = await loaded(), showing = s.c.showLocation(23), rejected = expect(showing).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'SHOW_LOCATION')).toBe(true));
+    const command = s.send.mock.calls.find(call => call[0].type === 'SHOW_LOCATION')![0];
+    const cleared = s.c.clear(); await rejected;
+    s.message('ROUTE_CLEARED', {}, cleared, s.identity);
+    s.message('LOCATION_SHOWN', { sdkObjectId: 23 }, command.requestId, s.identity);
+    expect(s.events.some(event => event.type === 'LOCATION_SHOWN')).toBe(false); expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+  });
+  it('tray display freezes all roots, awaits its exact current-load acknowledgement and preserves the committed route', async () => {
+    const s = await loaded(); let received = 0;
+    s.send.mockImplementation(value => {
+      if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
+      const phase = value.type === 'BEGIN_COMPUTED_PATH' ? 'begun' : value.type === 'APPEND_COMPUTED_PATH' ? 'appended' : value.type === 'COMMIT_COMPUTED_PATH' ? 'displayed' : null;
+      if (phase === 'appended') received += value.payload.points.length;
+      if (phase) s.message('COMPUTED_PATH_UPDATED', { pathId: value.payload.pathId, phase, received }, value.requestId, s.identity);
+    });
+    const routeRequestId = await s.c.showComputedPath({ pathId: crypto.randomUUID(), points: [[0, 0, 0]], objectIds: [23] });
+    const clearCount = s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE').length;
+    const ids = [23, 24]; let shown = false; const showing = s.c.showTray(ids).then(() => { shown = true; }); ids[0] = 25;
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'SHOW_TRAY')).toBe(true));
+    const command = s.send.mock.calls.find(call => call[0].type === 'SHOW_TRAY')![0];
+    expect(command.payload.sdkObjectIds).toEqual([23, 24]); expect(shown).toBe(false);
+    s.message('TRAY_SHOWN', { sdkObjectIds: [23, 24] }, command.requestId, { ...s.identity, loadId: crypto.randomUUID() });
+    await Promise.resolve(); expect(shown).toBe(false);
+    s.message('TRAY_SHOWN', { sdkObjectIds: [23, 24] }, command.requestId, s.identity);
+    await showing; expect(shown).toBe(true);
+    expect(s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE')).toHaveLength(clearCount);
+    s.c.zoom(); expect(s.send.mock.calls.at(-1)?.[0]).toMatchObject({ type: 'ZOOM_ROUTE', payload: { routeRequestId } });
+  });
+  it('tray display rejects empty, invalid, duplicated and oversized root sets before checking access or sending commands', async () => {
+    const s = await loaded(), fetchCount = vi.mocked(fetch).mock.calls.length, sends = s.send.mock.calls.length;
+    for (const ids of [[], [0], [-1], [1.5], [2147483648], [NaN], [Infinity], [23, 23], Array<number>(1), Array.from({ length: 513 }, (_, at) => at + 1)])
+      await expect(s.c.showTray(ids)).rejects.toThrow('Invalid tray objects');
+    expect(vi.mocked(fetch).mock.calls).toHaveLength(fetchCount); expect(s.send.mock.calls).toHaveLength(sends);
+  });
+  it('tray display refuses a stale active model before sending any object IDs', async () => {
+    const s = await loaded(); vi.mocked(fetch).mockResolvedValueOnce(Response.json({ selection: { activeModelVersionId: crypto.randomUUID(), selectionRevision: 2 } }));
+    await expect(s.c.showTray([23, 24])).rejects.toThrow('Model is not ready');
+    expect(s.send.mock.calls.some(call => call[0].type === 'SHOW_TRAY')).toBe(false); expect(s.c.getLoadSnapshot()).toBeNull();
+  });
+  it('tray acknowledgement must echo every root in order and a mismatch leaves the model loaded', async () => {
+    const s = await loaded(); s.send.mockImplementation(value => {
+      if (value.type === 'SHOW_TRAY') s.message('TRAY_SHOWN', { sdkObjectIds: [24, 23] }, value.requestId, s.identity);
+    });
+    await expect(s.c.showTray([23, 24])).rejects.toThrow('Tray acknowledgement mismatch');
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true); expect(s.events.some(event => event.type === 'TRAY_SHOWN')).toBe(false);
+  });
+  it('tray refusal stays recoverable while terminal authorization failures retire the loaded model', async () => {
+    for (const code of ['TRAY_UNAVAILABLE', 'ACCESS_REVOKED']) {
+      const s = await loaded(); s.send.mockImplementation(value => {
+        if (value.type === 'SHOW_TRAY') s.message('ERROR', { code, message: 'Tray unavailable', retryable: code === 'TRAY_UNAVAILABLE', operation: 'SHOW_TRAY' }, value.requestId, s.identity);
+      });
+      await expect(s.c.showTray([23, 24])).rejects.toMatchObject({ code });
+      if (code === 'TRAY_UNAVAILABLE') expect(s.c.getLoadSnapshot()?.ready).toBe(true); else expect(s.c.getLoadSnapshot()).toBeNull();
+    }
+  });
+  it('tray timeout cancels only its display and a lost cleanup acknowledgement does not unload the model', async () => {
+    const s = await loaded(600_000), showing = s.c.showTray([23, 24]).catch(error => error);
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'SHOW_TRAY')).toBe(true));
+    const command = s.send.mock.calls.find(call => call[0].type === 'SHOW_TRAY')![0];
+    await vi.advanceTimersByTimeAsync(60_001);
+    expect(await showing).toBeInstanceOf(Error); expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+    expect(s.send.mock.calls.some(call => call[0].type === 'CANCEL_REQUEST' && call[0].payload.targetRequestId === command.requestId)).toBe(true);
+    await vi.advanceTimersByTimeAsync(10_001); expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+    expect(s.events.some(event => event.type === 'ERROR' && event.payload.code === 'TRAY_UNAVAILABLE')).toBe(true);
+  });
+  it('a route clear retires pending tray display and ignores its late success', async () => {
+    const s = await loaded(), showing = s.c.showTray([23, 24]), rejected = expect(showing).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'SHOW_TRAY')).toBe(true));
+    const command = s.send.mock.calls.find(call => call[0].type === 'SHOW_TRAY')![0];
+    const cleared = s.c.clear(); await rejected;
+    s.message('ROUTE_CLEARED', {}, cleared, s.identity);
+    s.message('TRAY_SHOWN', { sdkObjectIds: [23, 24] }, command.requestId, s.identity);
+    expect(s.events.some(event => event.type === 'TRAY_SHOWN')).toBe(false); expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+  });
   it('small multipart controls retain exact intent identity and leave model appearance alone', async () => {
     const s = await loaded(), intentId = crypto.randomUUID();
     const start = { intentId, expectedSessionRevision: '0', scopeSha256: 'a'.repeat(64), profileSha256: 'b'.repeat(64), producerProfile: BARRIER_MULTIPART_PRODUCER_PROFILE };
@@ -153,9 +369,11 @@ describe('PathFinder protected Viewer capabilities', () => {
     const old = s.c.captureBarriers(input), oldRejected = expect(old).rejects.toMatchObject({ name: 'AbortError' });
     await vi.waitFor(() => expect(finishOld).toBeTypeOf('function'));
     const next = s.c.captureBarriers(input), nextResult = expect(next).resolves.toMatchObject({ capture: { captureId: input.captureId } });
+    // The newer capture shares the still-current selection read. Resolve that
+    // gate before it can start, then verify older cleanup cannot cancel it.
+    finishOld(Response.json({ selection: { activeModelVersionId: versionId, selectionRevision: 1 } })); await oldRejected;
     await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'START_BARRIER_CAPTURE')).toBe(true));
     const command = s.send.mock.calls.find(call => call[0].type === 'START_BARRIER_CAPTURE')![0];
-    finishOld(Response.json({ selection: { activeModelVersionId: versionId, selectionRevision: 1 } })); await oldRejected;
     expect(s.send.mock.calls.some(call => call[0].type === 'CANCEL_REQUEST' && call[0].payload.targetRequestId === command.requestId)).toBe(false);
     s.message('BARRIER_CAPTURE_EVENT', { captureId: input.captureId, index: 0, done: false, eventJson: JSON.stringify(events[0]) }, command.requestId, s.identity);
     await nextResult;
@@ -392,6 +610,21 @@ describe('PathFinder protected Viewer capabilities', () => {
     const reading=s.c.discoverPreparationObjects(request);request.names[0]='CHANGED';expect((await reading).names).toEqual(['TRAY-001']);
     s.send.mockImplementation(value=>{if(value.type==='READ_PREPARATION_OBJECTS')s.message('PREPARATION_OBJECTS',{schemaVersion:request.schemaVersion,mode:'names',names:['WRONG'],rootObjectId:null,cursor:0,matchingPolicyVersion:PREPARATION_MATCHING_POLICY,visibilityScope:discoveryVisibility,indexedObjectCount:1,propertyScan:null,objects:[],nextCursor:null,complete:true},value.requestId,s.identity);});
     await expect(s.c.discoverPreparationObjects(request)).rejects.toThrow('acknowledgement mismatch');
+  });
+  it('batched subtree discovery freezes root IDs and rejects reordered root echoes or a foreign load',async()=>{
+    const s=await loaded(),request={schemaVersion:'wfc.pf.viewer-discovery.v1' as const,mode:'subtrees' as const,names:[],rootObjectId:null,rootObjectIds:[2,3],cursor:0,limit:128};
+    s.send.mockImplementation(()=>{});
+    const reading=s.c.discoverPreparationObjects(request);request.rootObjectIds[0]=99;
+    await vi.waitFor(()=>expect(s.send.mock.calls.some(([value])=>value.type==='READ_PREPARATION_OBJECTS')).toBe(true));
+    const command=s.send.mock.calls.find(([value])=>value.type==='READ_PREPARATION_OBJECTS')![0];
+    expect(command.payload.rootObjectIds).toEqual([2,3]);
+    const page={schemaVersion:request.schemaVersion,mode:'subtrees',names:[],rootObjectId:null,rootObjectIds:[2,3],cursor:0,
+      matchingPolicyVersion:PREPARATION_MATCHING_POLICY,visibilityScope:discoveryVisibility,indexedObjectCount:3,propertyScan:null,objects:[],nextCursor:null,complete:true};
+    s.message('PREPARATION_OBJECTS',page,command.requestId,{...s.identity,loadId:crypto.randomUUID()});
+    expect(s.events.some(event=>event.type==='PREPARATION_OBJECTS')).toBe(false);
+    s.message('PREPARATION_OBJECTS',page,command.requestId,s.identity);expect((await reading).rootObjectIds).toEqual([2,3]);
+    s.send.mockImplementation(value=>{if(value.type==='READ_PREPARATION_OBJECTS')s.message('PREPARATION_OBJECTS',{...page,rootObjectIds:[3,2]},value.requestId,s.identity);});
+    await expect(s.c.discoverPreparationObjects({...request,rootObjectIds:[2,3]})).rejects.toThrow('acknowledgement mismatch');
   });
   it('rejects changed discovery visibility evidence while retaining the exact detached expected scope',async()=>{
     const s=await loaded(),request={schemaVersion:'wfc.pf.viewer-discovery.v1' as const,mode:'equipment' as const,names:['EQ1'],rootObjectId:null,cursor:0,limit:128,visibilityScope:{...discoveryVisibility}};
@@ -922,7 +1155,7 @@ describe('Viewer parent identity and lifecycle', () => {
     vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
     window.dispatchEvent(new Event('focus'));
     document.dispatchEvent(new Event('visibilitychange'));
-    expect(responses).toHaveLength(2);
+    expect(responses).toHaveLength(1);
     for (const finish of responses) finish(new Response(JSON.stringify({ selection: { activeModelVersionId: versionId, selectionRevision: 1 } })));
     await vi.advanceTimersByTimeAsync(1);
     expect(vi.getTimerCount()).toBe(2);

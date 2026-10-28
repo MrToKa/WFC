@@ -1,12 +1,16 @@
 // @vitest-environment node
 import {beforeEach,describe,expect,it,vi} from 'vitest';
 import type {PoolClient} from 'pg';
-const seams=vi.hoisted(()=>({collect:vi.fn(),insert:vi.fn(),barriers:vi.fn()}));
+const seams=vi.hoisted(()=>({collect:vi.fn(),insert:vi.fn(),barriers:vi.fn(),automatic:vi.fn()}));
 vi.mock('./dependencyBatch.js',()=>({collectDependencyBatchInTransaction:seams.collect}));
 vi.mock('./jobs.js',()=>({insertCalculationBatch:seams.insert}));
 vi.mock('./barrierCalculationScope.js',()=>({collectBarrierCalculationScope:seams.barriers}));
+vi.mock('./automaticPairMandates.js',()=>({appendAutomaticPairMandatesInTransaction:seams.automatic}));
 import {locationImpactAdmission} from './locationImpactAdmission.js';
+import {hash} from './dependencies.js';
 const id=(n:number)=>`da300000-0000-4000-8000-${String(n).padStart(12,'0')}`;
+const policy={schemaVersion:'wfc.pf.automatic-pair-policy.v1' as const,mode:'when-both-empty-or-unchanged-automatic' as const};
+const automaticPair={policy,createdAt:'2026-10-20T12:00:00.000Z',authorityExpiresAt:'2026-10-20T12:30:00.000Z'};
 const barrierIntent=(drillThroughWalls=false)=>{const scope={projectId:id(1),modelVersionId:id(10),contentFingerprint:'a'.repeat(64),selectionRevision:'3',captureFrameId:id(11),captureFrameSha256:'b'.repeat(64),coordinateFrame:'canonical-world-metres' as const};return{schemaVersion:'wfc.pf.barrier-admission-intent.v1' as const,scope,expectedRegistryRevision:'4',expectedSnapshot:{snapshotId:id(12),scope,registryRevision:'4',contentSha256:'c'.repeat(64),mode:'explicit-empty' as const},drillThroughWalls};};
 function fixture(blocked=false){
   const barrierRouting=barrierIntent(),barriers={binding:{scope:barrierRouting.scope,snapshot:barrierRouting.expectedSnapshot},profileSha256:'d'.repeat(64)};
@@ -20,6 +24,32 @@ function fixture(blocked=false){
 }
 beforeEach(()=>vi.clearAllMocks());
 describe('targeted location impact admission (real adapter, mocked batch/insertion)',()=>{
+  it('preserves the original admission hash and never upgrades a legacy impact to automatic writes',async()=>{
+    const f=fixture(),result=await locationImpactAdmission(f.client,f.input);
+    expect(result.inputSha256).toBe(hash({schemaVersion:'wfc.pf.location-impact-admission.v1',impactId:f.input.impactId,
+      timeoutMilliseconds:f.input.timeoutMilliseconds,items:f.batch.items.map(item=>({id:item.id,dependencies:item.dependencies,status:item.status,cableWriteRevision:item.cable.cable_write_revision}))}));
+    expect(seams.automatic).not.toHaveBeenCalled();
+  });
+  it('binds ready-item mandates to the immutable Save policy and original finite authority after admission',async()=>{
+    const f=fixture(),blocked={...f.batch.items[0],id:id(4),dependencies:null,status:'locations_required'};
+    seams.collect.mockResolvedValue({...f.batch,items:[blocked,f.batch.items[0]]});
+    const result=await locationImpactAdmission(f.client,{...f.input,cableIds:[id(3),id(4)],automaticPair});
+    expect(seams.automatic).toHaveBeenCalledExactlyOnceWith(f.client,{projectId:f.input.projectId,jobId:id(5),principal:f.input.principal,
+      policy,requestSha256:result.inputSha256,source:{kind:'location-impact',impactId:f.input.impactId,createdAt:automaticPair.createdAt,
+        authorityExpiresAt:automaticPair.authorityExpiresAt},items:[{cableId:id(3),cableWriteRevision:'7',dependencyHash:hash(f.batch.items[0].dependencies)}]},expect.any(Function));
+    expect(seams.automatic.mock.invocationCallOrder[0]).toBeGreaterThan(seams.insert.mock.invocationCallOrder[0]);
+    expect(result).toMatchObject({readyCables:1,blockedCables:1,total:2});
+    expect(seams.collect.mock.calls[0][1].options).not.toHaveProperty('automaticPairPolicy');
+  });
+  it('does not create an empty automatic mandate when every exact target is blocked',async()=>{
+    const f=fixture(true);expect(await locationImpactAdmission(f.client,{...f.input,automaticPair})).toMatchObject({readyCables:0,blockedCables:1});
+    expect(seams.insert).toHaveBeenCalledOnce();expect(seams.automatic).not.toHaveBeenCalled();
+  });
+  it('does not append write authority without the exact immutable admission',async()=>{
+    const f=fixture();f.query.mockResolvedValue({rows:[]});
+    await expect(locationImpactAdmission(f.client,{...f.input,automaticPair})).rejects.toMatchObject({code:'REVISION_ADMISSION_REQUIRED'});
+    expect(seams.automatic).not.toHaveBeenCalled();
+  });
   it.each([false,true])('admits explicit scoped intent as v8 and rereads barriers before the final claim latch (drill=%s)',async drillThroughWalls=>{
     const f=fixture(),barrierRouting=barrierIntent(drillThroughWalls),barriers={binding:{scope:barrierRouting.scope,snapshot:barrierRouting.expectedSnapshot},profileSha256:'d'.repeat(64)};
     // The batch and retained-byte reader are boundary mocks; this test makes no

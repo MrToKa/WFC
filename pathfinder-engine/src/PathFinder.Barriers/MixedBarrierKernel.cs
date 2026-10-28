@@ -74,7 +74,8 @@ public sealed class MixedBarrierKernel
         try
         {
             ValidateLimits(limits); if (input is null) Refuse("INVALID_FRAGMENTS", "A bounded explicit fragment set is required.");
-            var fragments = new List<MixedFragmentInput>(); var ids = new HashSet<int>(); var allParents = new HashSet<string>(StringComparer.Ordinal); int vertexCount = 0, triangleCount = 0; double magnitude = 1;
+            var fragments = new List<MixedFragmentInput>(); var ids = new HashSet<int>(); var allParents = new HashSet<string>(StringComparer.Ordinal); int vertexCount = 0, triangleCount = 0; long parentMemberships = 0; double magnitude = 1;
+            bool largeSelection = limits.MaximumParents > 128 || geometry.MaximumMeshes > 256;
             foreach (var fragment in input!)
             {
                 budget.Spend();
@@ -86,7 +87,9 @@ public sealed class MixedBarrierKernel
                     || !double.IsFinite(source.MetresPerSourceUnit) || source.MetresPerSourceUnit is <= 0 or > 1_000_000
                     || source.ParentSelectionIds is null || source.ParentSelectionIds.Count is < 1 || source.ParentSelectionIds.Count > limits.MaximumParents
                     || source.SourceToWorldBits is null || source.SourceToWorldBits.Count != 16) Refuse("INVALID_PROVENANCE", "Fragment provenance is invalid or exceeds its bound.");
-                var parents = new string[source.ParentSelectionIds!.Count]; var parentSet = new HashSet<string>(StringComparer.Ordinal);
+                parentMemberships = checked(parentMemberships + source.ParentSelectionIds!.Count);
+                if (largeSelection) Estimate(vertexCount, triangleCount, fragments.Count + 1, geometry, true, parentMemberships, allParents.Count);
+                var parents = new string[source.ParentSelectionIds.Count]; var parentSet = new HashSet<string>(StringComparer.Ordinal);
                 for (int at = 0; at < parents.Length; at++) { budget.Spend(); string parent = source.ParentSelectionIds[at]; if (!Uuid(parent) || !parentSet.Add(parent)) Refuse("INVALID_PROVENANCE", "Parent identities must be unique UUIDs."); allParents.Add(parent); if (allParents.Count > limits.MaximumParents) Refuse("PARENT_LIMIT", "The union of all fragment parent identities exceeds its bound."); parents[at] = parent; }
                 Array.Sort(parents, StringComparer.Ordinal);
                 var matrix = new long[16]; for (int at = 0; at < 16; at++) { budget.Spend(); matrix[at] = source.SourceToWorldBits![at]; if (!double.IsFinite(BitConverter.Int64BitsToDouble(matrix[at]))) Refuse("INVALID_PROVENANCE", "Matrix provenance must be finite."); }
@@ -95,7 +98,7 @@ public sealed class MixedBarrierKernel
                 int vertices = fragment.Vertices!.Count, indices = fragment.TriangleIndices!.Count;
                 if (vertices < 3 || indices < 3 || indices % 3 != 0 || vertices > geometry.MaximumVertices - vertexCount || indices / 3 > geometry.MaximumTriangles - triangleCount)
                     Refuse("GEOMETRY_COUNT_LIMIT", "Original vertices or triangle counts exceed the supported bound.");
-                vertexCount += vertices; triangleCount += indices / 3; Estimate(vertexCount, triangleCount, fragments.Count + 1, geometry);
+                vertexCount += vertices; triangleCount += indices / 3; Estimate(vertexCount, triangleCount, fragments.Count + 1, geometry, largeSelection, parentMemberships, allParents.Count);
                 var ownedVertices = new BarrierPoint[vertices]; var ownedIndices = new int[indices];
                 for (int at = 0; at < vertices; at++)
                 {
@@ -131,9 +134,21 @@ public sealed class MixedBarrierKernel
             }
             var adjacency = new List<int>[triangles.Count]; for (int at = 0; at < adjacency.Length; at++) adjacency[at] = new();
             foreach (var edge in edges.Values) { budget.Spend(); if (edge.Second >= 0) { adjacency[edge.First].Add(edge.Second); adjacency[edge.Second].Add(edge.First); } }
-            // Boundary surfaces may have a face fan that is a path rather than
-            // a closed cycle. Disconnected fans at an exactly welded vertex are
-            // still nonmanifold and cannot silently become an accepted surface.
+            var seen = new bool[triangles.Count]; var componentOf = new int[triangles.Count]; var componentIds = new List<List<int>>();
+            for (int at = 0; at < triangles.Count; at++)
+            {
+                budget.Spend(); if (seen[at]) continue;
+                if (componentIds.Count >= geometry.MaximumMeshes) Refuse("COMPONENT_LIMIT", "The connected component bound was exhausted.");
+                var local = new List<int>(); var queue = new Queue<int>(); queue.Enqueue(at); seen[at] = true;
+                while (queue.Count > 0) { budget.Spend(); int next = queue.Dequeue(); local.Add(next); componentOf[next] = componentIds.Count; foreach (int neighbour in adjacency[next]) if (!seen[neighbour]) { seen[neighbour] = true; queue.Enqueue(neighbour); } }
+                local.Sort((a, b) => { budget.Spend(); return a.CompareTo(b); }); componentIds.Add(local);
+            }
+            var boundary = new bool[componentIds.Count]; foreach (var edge in edges.Values) { budget.Spend(); if (edge.Second < 0) boundary[componentOf[edge.First]] = true; }
+            // Original surfaces may contain separate face fans that touch only
+            // at an original point, including fans reconnected elsewhere in the
+            // same edge component. Preserve their triangles and exact contacts;
+            // they never acquire solid occupancy. Any implicated closed component
+            // still requires one connected fan and the unchanged solid verifier.
             var incident = new List<int>[points.Count]; for (int at = 0; at < incident.Length; at++) incident[at] = new();
             for (int at = 0; at < triangles.Count; at++) { budget.Spend(); var t = triangles[at]; incident[t.A].Add(at); incident[t.B].Add(at); incident[t.C].Add(at); }
             var marks = new int[triangles.Count]; int stamp = 0; var fanQueue = new Queue<int>();
@@ -146,27 +161,28 @@ public sealed class MixedBarrierKernel
                     budget.Spend(); int current = fanQueue.Dequeue(); fan++;
                     foreach (int next in adjacency[current]) { budget.Spend(); var t = triangles[next]; if (marks[next] == stamp || t.A != vertex && t.B != vertex && t.C != vertex) continue; marks[next] = stamp; fanQueue.Enqueue(next); }
                 }
-                if (fan != faces.Count) Refuse("NONMANIFOLD_VERTEX", "An exactly welded vertex has disconnected original face fans.");
+                if (fan != faces.Count) foreach (int face in faces)
+                {
+                    budget.Spend();
+                    if (!boundary[componentOf[face]]) Refuse("NONMANIFOLD_VERTEX", "An exactly welded vertex involving a closed component has disconnected original face fans.");
+                }
             }
-            var seen = new bool[triangles.Count]; var componentOf = new int[triangles.Count]; var componentIds = new List<List<int>>();
-            for (int at = 0; at < triangles.Count; at++)
-            {
-                budget.Spend(); if (seen[at]) continue;
-                if (componentIds.Count >= geometry.MaximumMeshes) Refuse("COMPONENT_LIMIT", "The connected component bound was exhausted.");
-                var local = new List<int>(); var queue = new Queue<int>(); queue.Enqueue(at); seen[at] = true;
-                while (queue.Count > 0) { budget.Spend(); int next = queue.Dequeue(); local.Add(next); componentOf[next] = componentIds.Count; foreach (int neighbour in adjacency[next]) if (!seen[neighbour]) { seen[neighbour] = true; queue.Enqueue(neighbour); } }
-                local.Sort((a, b) => { budget.Spend(); return a.CompareTo(b); }); componentIds.Add(local);
-            }
-            var boundary = new bool[componentIds.Count]; foreach (var edge in edges.Values) { budget.Spend(); if (edge.Second < 0) boundary[componentOf[edge.First]] = true; }
-            var components = new List<Component>(); var closed = new List<BarrierMeshInput>(); int surfaceCount = 0;
+            var components = new List<Component>(); var closed = new List<BarrierMeshInput>(); int surfaceCount = 0; long componentParentMemberships = 0;
             for (int ordinal = 0; ordinal < componentIds.Count; ordinal++)
             {
                 budget.Spend(); string id = "component:" + ordinal.ToString("D6", System.Globalization.CultureInfo.InvariantCulture); var original = new List<MixedOriginalTriangle>();
                 var meshVertices = new List<BarrierPoint>(); var meshIndices = new List<int>(); var remap = new Dictionary<int, int>();
+                var componentParents = largeSelection ? new HashSet<string>(StringComparer.Ordinal) : null;
                 foreach (int index in componentIds[ordinal])
                 {
                     budget.Spend(); var triangle = triangles[index]; original.Add(triangle.Value);
+                    if (componentParents is not null) foreach (string parent in triangle.Value.Source.ParentSelectionIds) { budget.Spend(); componentParents.Add(parent); }
                     foreach (int old in new[] { triangle.A, triangle.B, triangle.C }) { budget.Spend(); if (!remap.TryGetValue(old, out int current)) { current = meshVertices.Count; meshVertices.Add(points[old]); remap.Add(old, current); } meshIndices.Add(current); }
+                }
+                if (componentParents is not null)
+                {
+                    componentParentMemberships = checked(componentParentMemberships + componentParents.Count);
+                    Estimate(vertexCount, triangleCount, fragments.Count, geometry, true, parentMemberships + componentParentMemberships, allParents.Count, ordinal + 1);
                 }
                 var kind = boundary[ordinal] ? MixedBarrierComponentKind.OriginalSurface : MixedBarrierComponentKind.QualifiedClosedSolid;
                 if (boundary[ordinal])
@@ -201,7 +217,7 @@ public sealed class MixedBarrierKernel
             }
             string sourceHash = SourceHash(components, fragments, budget);
             var summary = new MixedBarrierSummary(components.Count, surfaceCount, closed.Count, fragments.Count, vertexCount, triangleCount, sourceHash,
-                Estimate(vertexCount, triangleCount, fragments.Count, geometry), effectiveTolerance);
+                Estimate(vertexCount, triangleCount, fragments.Count, geometry, largeSelection, parentMemberships + componentParentMemberships, allParents.Count, components.Count), effectiveTolerance);
             budget.Check(); return new(BarrierBuildStatus.Ready, new(components.ToArray(), summary, geometry), Array.Empty<BarrierDiagnostic>(), budget.Work);
             void AddEdge(int a, int b, int index)
             {
@@ -281,12 +297,21 @@ public sealed class MixedBarrierKernel
     private static bool Digest(string value) => value is not null && value.Length == 64 && value.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f');
     private static bool Uuid(string value) => value is not null && value.Length == 36 && Guid.TryParseExact(value, "D", out _) && value == value.ToLowerInvariant();
     private static int ParseOwner(string value) { if (value is null || !value.StartsWith("dbid:", StringComparison.Ordinal) || !int.TryParse(value.AsSpan(5), out int id) || id < 0) Refuse("INVALID_PROVENANCE", "A version-local owner dbId is required."); return int.Parse(value.AsSpan(5), System.Globalization.CultureInfo.InvariantCulture); }
-    private static long Estimate(int vertices, int triangles, int fragments, BarrierLimits limits)
-    { long estimate = checked(4096L + vertices * 256L + triangles * 512L + fragments * 2048L); if (estimate > limits.MaximumEstimatedBytes) Refuse("ESTIMATED_MEMORY_LIMIT", "Conservative temporary/copy/topology memory exceeds the bound."); return estimate; }
+    private static long Estimate(int vertices, int triangles, int fragments, BarrierLimits limits, bool largeSelection = false,
+        long parentMemberships = 0, int parents = 0, int components = 0)
+    {
+        // Historical 128-parent profiles retain their exact estimate. The new
+        // explicit capacity also budgets copied membership sets and components;
+        // many overlapping parents cannot bypass the unchanged 128 MiB ceiling.
+        long estimate = checked(4096L + vertices * 256L + triangles * 512L + fragments * 2048L
+            + (largeSelection ? parentMemberships * 128L + parents * 96L + components * 1024L : 0));
+        if (estimate > limits.MaximumEstimatedBytes) Refuse("ESTIMATED_MEMORY_LIMIT", largeSelection
+            ? "Conservative temporary/copy/topology/membership memory exceeds the bound." : "Conservative temporary/copy/topology memory exceeds the bound."); return estimate;
+    }
     private static void ValidateLimits(MixedBarrierBuildLimits limits)
     {
-        var g = limits.Geometry; if (g is null || limits.MaximumFragments is < 1 or > 8192 || limits.MaximumParents is < 1 or > 128
-            || g.MaximumMeshes is < 1 or > 256 || g.MaximumVertices is < 4 or > 500_000 || g.MaximumTriangles is < 4 or > 250_000
+        var g = limits.Geometry; if (g is null || limits.MaximumFragments is < 1 or > 8192 || limits.MaximumParents is < 1 or > 2048
+            || g.MaximumMeshes is < 1 or > 2048 || g.MaximumVertices is < 4 or > 500_000 || g.MaximumTriangles is < 4 or > 250_000
             || g.MaximumBuildWork is < 1 or > 40_000_000 || g.MaximumBuildMilliseconds is < 1 or > 60_000 || g.MaximumQueryWork is < 1 or > 2_000_000
             || g.MaximumQueryMilliseconds is < 1 or > 10_000 || g.MaximumEstimatedBytes is < 1 or > 134_217_728 || g.MaximumBvhNodes is < 1 or > 500_000
             || g.BvhLeafSize is < 1 or > 64 || !double.IsFinite(g.NumericToleranceMeters) || g.NumericToleranceMeters is < 1e-9 or > .001

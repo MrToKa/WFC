@@ -30,7 +30,10 @@ export function createManagedCaptureDriver(options:{identity:Identity;selectionR
   return Object.freeze({identity,assertCurrent:current,
     async discover(request:PreparationDiscoveryRequest){
       if(!validatePreparationDiscoveryRequest(request))fail('MANAGED_DISCOVERY_REQUEST_INVALID');
-      const reply=await round('READ_PREPARATION_OBJECTS',{...request},'PREPARATION_OBJECTS');
+      // The pinned producer's v1 request schema is not capability-negotiated.
+      // Keep its query-only fallback; the current human runtime can use indexNames.
+      const {indexNames:_indexNames,...producerRequest}=request;
+      const reply=await round('READ_PREPARATION_OBJECTS',producerRequest,'PREPARATION_OBJECTS');
       if(!validatePreparationDiscoveryPage(reply.payload))return fail('MANAGED_DISCOVERY_RESPONSE_INVALID');return reply.payload;
     },
     async capture(request:ModelCaptureRequest){

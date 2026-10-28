@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { Pool } from 'pg';
-import { captureLosslessInventory, losslessMetadataHash, type LosslessColumn, type LosslessInventoryOptions, type LosslessInventoryRow, type LosslessTableMetadata } from './losslessInventory.js';
+import { captureLosslessInventory, losslessMetadataHash, LOSSLESS_INVENTORY_LIMITS, type LosslessColumn, type LosslessInventoryOptions, type LosslessInventoryRow, type LosslessTableMetadata } from './losslessInventory.js';
 
 const ownerId = '64d07773-3220-49b4-93fc-98f8c61b5f9c', inventoryId = 'fa19b473-f810-4f54-ad68-b7b1d1d60109';
 type RawMetadata = Omit<LosslessTableMetadata, 'table' | 'keyMode'>;
@@ -57,6 +57,43 @@ async function rows(options: LosslessInventoryOptions, name = 'table-0000.ndjson
 const noPass = async (options: LosslessInventoryOptions) => expect(fs.stat(path.join(options.directory, 'manifest.json'))).rejects.toMatchObject({ code: 'ENOENT' });
 
 describe('dynamic lossless inventory', () => {
+  it('batches small row writes while preserving every original byte, framed hash and standalone large row', async () => {
+    const options = await destination(), input = Array.from({ length: 1000 }, (_, index) => ({
+      key: JSON.stringify([String(index).padStart(6, '0')]), rowText: '{"amount": 1.00000000000000001, "text": ' + JSON.stringify('aЖ\\\"'.repeat(80)) + '}' }));
+    input.push({ key: '["999999"]', rowText: JSON.stringify({ text: 'x'.repeat(80 * 1024) }) });
+    const writes: number[] = [], originalOpen = fs.open.bind(fs);
+    const spy = vi.spyOn(fs, 'open').mockImplementation(async (filename, flags, mode) => {
+      const handle = await originalOpen(filename, flags, mode);
+      if (String(filename).endsWith('table-0000.ndjson') && flags === 'wx') {
+        const write = handle.writeFile.bind(handle);
+        handle.writeFile = async (value, settings) => { if (Buffer.isBuffer(value)) writes.push(value.length); return write(value, settings); };
+      }
+      return handle;
+    });
+    try {
+      const result = await captureLosslessInventory(database({ rows: table(input) }).pool, options);
+      const expected = Buffer.from(input.map(row => JSON.stringify(row) + '\n').join(''));
+      expect(await fs.readFile(path.join(options.directory, 'table-0000.ndjson'))).toEqual(expected);
+      expect(result.tables[0].file.sha256).toBe(createHash('sha256').update(expected).digest('hex'));
+      const framed = createHash('sha256').update('wfc.lossless.table-rows.v1\n');
+      for (const row of input) for (const value of [row.key, row.rowText]) { const bytes = Buffer.from(value), prefix = Buffer.alloc(4); prefix.writeUInt32BE(bytes.length); framed.update(prefix).update(bytes); }
+      expect(result.tables[0].rowSha256).toBe(framed.digest('hex'));
+      expect(writes.length).toBeLessThan(input.length / 4);
+      expect(writes.filter(bytes => bytes > 64 * 1024)).toHaveLength(1);
+      expect(writes.at(-1)).toBe(Buffer.byteLength(JSON.stringify(input.at(-1)) + '\n'));
+      expect(LOSSLESS_INVENTORY_LIMITS).toMatchObject({ milliseconds: 120000, rowBytes: 32 * 1024 ** 2,
+        tableRawBytes: 256 * 1024 ** 2, totalRawBytes: 512 * 1024 ** 2, outputBytes: 1024 * 1024 ** 2 });
+    } finally { spy.mockRestore(); }
+  });
+  it('cancels a partially buffered table without a manifest or a committed database read', async () => {
+    const options = await destination(), controller = new AbortController(), reason = new Error('synthetic cancellation with pending rows');
+    options.signal = controller.signal; let fetches = 0;
+    const db = database({ rows: table(Array.from({ length: 4 }, (_, i) => ({ key: JSON.stringify([String(i)]), rowText: JSON.stringify({ text: 'x'.repeat(8 * 1024) }) }))) },
+      { onQuery: async sql => { if (sql.startsWith('FETCH') && ++fetches === 2) controller.abort(reason); } });
+    await expect(captureLosslessInventory(db.pool, options)).rejects.toBe(reason);
+    await noPass(options); expect(db.release).toHaveBeenCalledExactlyOnceWith(true);
+    expect(db.query.mock.calls.some(([sql]) => sql === 'COMMIT')).toBe(false);
+  });
   it('closes nested catalog JSON constructors before naming the CTE projection', async () => {
     const db = database({ probe: table([]) });
     await captureLosslessInventory(db.pool, await destination());

@@ -1,5 +1,4 @@
 import { Button, Checkbox, Spinner, tokens } from '@fluentui/react-components';
-import { ROUTING_CATEGORIES } from '@/api/pathfinderPolicies';
 import { useRoutingPurposePolicy } from '@/pages/ProjectDetails/hooks/useRoutingPurposePolicy';
 
 type Props = { projectId: string | null; loadedProjectId: string | null; token: string | null; isAdmin: boolean; className?: string };
@@ -33,7 +32,7 @@ export function RoutingPurposePolicyCard({ projectId, loadedProjectId, token, is
       <h2 style={{ fontSize: tokens.fontSizeBase400, margin: 0 }}>Path Finder routing permissions</h2>
       <Button onClick={() => void state.refresh()} disabled={state.busy || state.uncertain}>Refresh permissions</Button>
     </div>
-    <p>Choose which cable categories may use each purpose in the project tray catalog. Instrumentation uses Control.</p>
+    <p>Choose which cable purposes may use each purpose in the project tray catalog. Columns come from Purpose in the project Cable types.</p>
     <p style={{ color: tokens.colorNeutralForeground3 }}>Unconfigured purposes allow no routing. Excluded purposes deliberately allow none. Reset returns a purpose to Unconfigured.</p>
     {state.loading ? <Spinner size="tiny" label="Loading routing permissions..." /> : null}
     {state.refreshing ? <p role="status">Refreshing current routing permissions...</p> : null}
@@ -49,28 +48,34 @@ export function RoutingPurposePolicyCard({ projectId, loadedProjectId, token, is
     </div> : null}
     {state.snapshot ? <>
       <p>{state.snapshot.catalog.rowCount} trays · {state.rows.filter(row => row.purposeKey !== null).length} purposes · Policy revision {state.snapshot.policy.routingPolicyRevision}</p>
+      {state.invalidCablePurposeCount > 0 ? <p role="alert">{state.invalidCablePurposeCount} invalid Purpose {state.invalidCablePurposeCount === 1 ? 'value is' : 'values are'} unavailable for routing. Correct the Purpose in Cable types, then refresh permissions.</p> : null}
+      {!state.cablePurposes.length ? <p>No cable purposes are available. Add a Purpose to the project Cable types, then refresh permissions.</p> : null}
       {state.snapshot.catalog.diagnostics.length ? <div role="alert">
         <p>Tray catalog diagnostics are shown below. Routing identity issues block the affected purposes; drawing dimension issues do not block routing permissions.</p>
         <ul>{state.snapshot.catalog.diagnostics.map((diagnostic, index) => <li key={index}>{diagnostic.message}</li>)}</ul>
       </div> : null}
       {state.rows.length ? <div style={{ overflowX: 'auto', maxHeight: 480 }}>
-        <table style={{ borderCollapse: 'collapse', width: '100%' }} aria-label="Routing categories by tray purpose">
+        <table style={{ borderCollapse: 'collapse', width: '100%' }} aria-label="Cable purposes by tray purpose">
           <thead><tr><th scope="col" style={{ textAlign: 'left' }}>Tray purpose</th><th scope="col">Trays</th>
-            {ROUTING_CATEGORIES.map(category => <th key={category} scope="col">{category}</th>)}<th scope="col">State</th><th scope="col">Actions</th></tr></thead>
+            {state.cablePurposes.map(category => <th key={category} scope="col" style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>{category}</th>)}<th scope="col">State</th><th scope="col">Actions</th></tr></thead>
           <tbody>{state.rows.map(row => {
             const label = row.purposeKey ?? 'Missing purpose';
             const display = row.purposeKey === null ? undefined : displayLabels.get(row.purposeKey);
             const accessibleLabel = display?.label ?? label;
+            const unavailable = row.categories.filter(category => !state.cablePurposes.includes(category));
+            const activeCategories = row.categories.filter(category => state.cablePurposes.includes(category));
             return <tr key={row.purposeKey ?? 'missing-purpose'} style={{ borderTop: `1px solid ${tokens.colorNeutralStroke2}` }}>
               <th scope="row" style={{ textAlign: 'left', fontWeight: tokens.fontWeightRegular, padding: '8px 4px', overflowWrap: 'anywhere' }}>
                 <span style={{ whiteSpace: 'pre-wrap' }}>{label}</span>
                 {display ? <div style={{ fontSize: tokens.fontSizeBase200 }}>{display.variant} · Spaces shown as dots: <span style={{ whiteSpace: 'pre-wrap' }}>{display.exactSpacing}</span></div> : null}
               </th>
               <td style={{ textAlign: 'center' }}>{row.trayCount}</td>
-              {ROUTING_CATEGORIES.map(category => <td key={category} style={{ textAlign: 'center' }}><Checkbox
+              {state.cablePurposes.map(category => <td key={category} style={{ textAlign: 'center' }}><Checkbox
                 aria-label={`${category} for ${accessibleLabel}`} checked={row.categories.includes(category)} disabled={!state.canEdit || row.blocked}
                 onChange={(_, data) => { if (row.purposeKey !== null) state.toggle(row.purposeKey, category, data.checked === true); }} /></td>)}
-              <td>{row.configured ? row.categories.length ? 'Configured' : 'Excluded' : 'Unconfigured'}{row.blocked ? ' · Routing identity issue' : ''}{row.dirty ? ' · Unsaved' : ''}</td>
+              <td>{row.configured ? activeCategories.length ? 'Configured' : unavailable.length ? 'Needs configuration' : 'Excluded' : 'Unconfigured'}{row.blocked ? ' · Routing identity issue' : ''}{row.dirty ? ' · Unsaved' : ''}
+                {unavailable.length ? <div style={{ fontSize: tokens.fontSizeBase200 }}>No matching Cable types Purpose: {unavailable.join(', ')}. Select current purposes or reset this row.</div> : null}
+              </td>
               <td><div style={{ display: 'flex', gap: 4 }}><Button size="small" aria-label={`Exclude ${accessibleLabel}`} disabled={!state.canEdit || row.blocked || row.configured && !row.categories.length}
                 onClick={() => { if (row.purposeKey !== null) state.exclude(row.purposeKey); }}>Exclude</Button>
                 <Button size="small" aria-label={`Reset ${accessibleLabel}`} disabled={!state.canEdit || row.blocked || !row.configured}

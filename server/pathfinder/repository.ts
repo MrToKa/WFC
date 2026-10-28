@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import type { z } from 'zod';
 import type { artifactSchema, bindLocationSchema, createLocationSchema, LocationDto } from './contracts.js';
+import { uuid } from './contracts.js';
 import { PathFinderError } from './errors.js';
 import { normalizeLocation, objectMatchNames, validateSnapshotStructure } from './matching.js';
 import { storeSnapshot } from './storage.js';
@@ -9,7 +10,7 @@ import type { JobPrincipal } from './jobContracts.js';
 import { principalTransaction } from './auth.js';
 export { transaction } from './transactions.js';
 import { bindingAuditState, locationAuditState, recordLocationEvent } from './audit.js';
-import { readCurrentEndpointBindingContext, readEndpointBindingHeads } from './endpointBindingRepository.js';
+import { readCurrentEndpointBindingContext, readEndpointBindingHeads, readNeededEndpointBindingHeads } from './endpointBindingRepository.js';
 import {createDisplayLocationMatchIndex} from './displayLocationMatchIndex.js';
 import {readDisplayEndpointAvailability} from './displayEndpointAvailability.js';
 import {RECALCULATION_LIMITS} from '../../shared/pathfinderRecalculation.js';
@@ -64,9 +65,10 @@ export async function latestArtifact(client: PoolClient, projectId: string, mode
   }
   return (await client.query<Row>("SELECT * FROM pf_artifacts WHERE project_id=$1 AND model_version_id=$2 AND purpose='planning' ORDER BY created_at DESC,id DESC LIMIT 1",[projectId,modelVersionId])).rows[0] ?? null;
 }
-async function locations(client: PoolClient, projectId: string, modelId: string | null, artifactId: string | null) {
+async function locations(client: PoolClient, projectId: string, modelId: string | null, artifactId: string | null, locationIds?: string[]) {
   const context = await readCurrentEndpointBindingContext(client, projectId);
-  const heads = await readEndpointBindingHeads(client, projectId, context);
+  const heads = locationIds ? await readNeededEndpointBindingHeads(client, { projectId, current: context, locationIds,
+    deadline: Date.now() + RECALCULATION_LIMITS.collectionMilliseconds }) : await readEndpointBindingHeads(client, projectId, context);
   const rows = await client.query<Row>(`SELECT l.id,l.name,l.revision::text,
     COALESCE((SELECT jsonb_agg(a.display_alias ORDER BY a.normalized_alias) FROM pf_location_aliases a WHERE a.project_id=l.project_id AND a.location_id=l.id),'[]'::jsonb) AS aliases,
     b.model_version_id,b.revision::text AS binding_revision,b.point,b.object_id,b.external_id,b.source,b.artifact_id,b.derivation,b.coordinate_frame,
@@ -74,13 +76,13 @@ async function locations(client: PoolClient, projectId: string, modelId: string 
     FROM pf_locations l LEFT JOIN LATERAL(SELECT * FROM pf_location_bindings b WHERE b.project_id=l.project_id AND b.location_id=l.id
       ORDER BY (b.model_version_id=$2) DESC,b.confirmed_at DESC LIMIT 1) b ON TRUE
     LEFT JOIN pf_location_matches m ON m.project_id=l.project_id AND m.location_id=l.id AND m.model_version_id=$2
-    WHERE l.project_id=$1 ORDER BY l.name,l.id`,[projectId,modelId]);
+    WHERE l.project_id=$1 ${locationIds ? 'AND l.id=ANY($3::uuid[])' : ''} ORDER BY l.name,l.id`,locationIds ? [projectId,modelId,locationIds] : [projectId,modelId]);
   const list:LocationDto[]=rows.rows.map(row => {
     const head = heads.get(row.id);
     const binding: LocationDto['binding'] = head ? {
       modelVersionId: head.binding.modelVersionId, revision: head.binding.bindingRevision,
-      point: head.binding.pointProjectMetres, objectId: null, externalId: null, source: 'manual',
-      derivation: head.binding.mode === 'object-derived' ? 'equipment-bottom-aabb' : head.binding.derivation === 'picked-surface-point' ? 'picked-surface-point' : 'manual-world-point',
+      point: head.binding.pointProjectMetres, objectId: null, externalId: null, source: head.binding.derivation === 'matched-model-bottom-aabb.v1' ? 'automatic' : 'manual',
+      derivation: head.binding.mode === 'object-derived' ? 'equipment-bottom-aabb' : head.binding.derivation === 'matched-model-bottom-aabb.v1' ? 'matched-model-bottom-aabb.v1' : head.binding.derivation === 'picked-surface-point' ? 'picked-surface-point' : 'manual-world-point',
       coordinateFrame: 'canonical-world-metres', status: head.ready ? 'confirmed' : 'stale',
     } : row.model_version_id ? {
       modelVersionId:row.model_version_id,revision:row.binding_revision,point:row.point,objectId:row.object_id,externalId:row.external_id,source:row.source,derivation:row.derivation,coordinateFrame:row.coordinate_frame,
@@ -199,17 +201,29 @@ export function createPathFinderRepository(pool: Pool) {
         return {artifactId:id,snapshotSha256:saved.sha256,engineeringAccepted:false,registryRevision:await bumpRegistry(client,projectId)};
       });
     },
-    async match(projectId: string, who: JobPrincipal, expectedRegistryRevision: string) {
+    async match(projectId: string, who: JobPrincipal, expectedRegistryRevision: string, cableIds?: string[]) {
       const actorId = who.userId;
       return registryTransaction(pool,projectId,who,async client => {
         await stateRevision(client,projectId,expectedRegistryRevision);
+        if (cableIds && cableIds.length > RECALCULATION_LIMITS.cables) throw new PathFinderError('JOB_CABLE_BUDGET',413);
+        const requested = cableIds ? [...new Set(cableIds.map(value => uuid.parse(value)))].sort() : undefined;
+        if (requested && !requested.length) throw new PathFinderError('NO_CABLES',409,'There are no cables in this calculation scope.');
+        const selectedCables = requested ? (await client.query<{id:string;from_location:string|null;to_location:string|null}>(
+          'SELECT id,from_location,to_location FROM cables WHERE project_id=$1 AND id=ANY($2::uuid[]) ORDER BY id FOR SHARE', [projectId,requested])).rows : null;
+        if (requested && (selectedCables!.length !== requested.length || selectedCables!.some((cable,index) => cable.id !== requested[index])))
+          throw new PathFinderError('CABLE_NOT_FOUND',404);
         const model = await activeModel(client,projectId), artifact = await latestArtifact(client,projectId,model.active_model_version_id);
         const projectPreparation = (await client.query<Row>('SELECT current_aggregate_id FROM pf_project_preparations WHERE project_id=$1 FOR SHARE', [projectId])).rows[0];
         const suggestionsOnly = Boolean(projectPreparation?.current_aggregate_id);
-        const endpoints = (await client.query<{name:string}>(`SELECT DISTINCT value AS name FROM cables c CROSS JOIN LATERAL (VALUES(c.from_location),(c.to_location)) e(value)
+        // A cable popup must not require automatic preparation for unrelated
+        // project locations. Project-wide Match keeps its original full scope.
+        const endpoints = selectedCables ? [...new Set(selectedCables.flatMap(cable => [cable.from_location,cable.to_location]))]
+          .filter((name):name is string => typeof name === 'string' && name.trim() !== '').map(name => ({name}))
+          : (await client.query<{name:string}>(`SELECT DISTINCT value AS name FROM cables c CROSS JOIN LATERAL (VALUES(c.from_location),(c.to_location)) e(value)
           WHERE c.project_id=$1 AND value IS NOT NULL AND btrim(value)<>'' LIMIT 100001`,[projectId])).rows;
         if (endpoints.length > 100000) throw new PathFinderError('PROJECT_CABLE_BUDGET',413);
         let created = 0, bound = 0;
+        const neededLocations = new Set<string>();
         for (const endpoint of endpoints) {
           const normalized = normalizeLocation(endpoint.name); if (!normalized) continue;
           let locationId = (await client.query<Row>('SELECT location_id FROM pf_location_aliases WHERE project_id=$1 AND normalized_alias=$2',[projectId,normalized])).rows[0]?.location_id;
@@ -219,9 +233,10 @@ export function createPathFinderRepository(pool: Pool) {
             await client.query('INSERT INTO pf_location_aliases(project_id,normalized_alias,display_alias,location_id) VALUES($1,$2,$3,$4)',[projectId,normalized,endpoint.name.normalize('NFC').trim(),locationId]);
             await recordLocationEvent(client,{projectId,locationId,actorId,kind:'auto_create',before:null,after:await locationAuditState(client,projectId,locationId)});
           }
+          neededLocations.add(locationId);
         }
         if (artifact) {
-          const {list} = await locations(client,projectId,model.active_model_version_id,artifact.id);
+          const {list} = await locations(client,projectId,model.active_model_version_id,artifact.id,requested ? [...neededLocations].sort() : undefined);
           const unresolved=list.filter(location=>!(location.binding&&(location.binding.modelVersionId===model.active_model_version_id&&location.binding.source==='manual'||location.binding.status==='confirmed')));
           let verifiedCandidates:Map<string,AutomaticEndpointCandidateResult>|null=null;
           if(suggestionsOnly&&unresolved.length){

@@ -23,7 +23,7 @@ namespace AddinRibbon.Routing
         }
 
         internal static RouteConnectorPlan PlanPrepared(RoutePoint from, RoutePoint to, RouteCollisionQuery collision,
-            LocalConnectorDomain domain, LocalConnectorContext context)
+            LocalConnectorDomain domain, LocalConnectorContext context, bool exactStraightPreflight = false)
         {
             int oldChecks = context.EdgeChecks, oldQueries = context.Budget.Queries; long oldWork = context.Budget.Work;
             double direct = from.DistanceTo(to);
@@ -31,9 +31,23 @@ namespace AddinRibbon.Routing
             Func<LocalConnectorStatus, string, IEnumerable<RoutePoint>, double, RouteConnectorPlan> result = (status, reason, points, length) =>
                 new RouteConnectorPlan(status, reason, points, length, direct, domain, context.EdgeChecks - oldChecks,
                     context.Budget.Queries - oldQueries, context.Budget.Work - oldWork);
-            if (context.Plans >= context.Options.MaxPlans) { context.Limited = true; return result(LocalConnectorStatus.SearchIncomplete, "LOCAL_PLAN_LIMIT", null, 0); }
-            context.Plans++; context.Budget.Charge(1);
-            if (!SupportedDomain(domain, from, to, context.Options)) return result(LocalConnectorStatus.SearchIncomplete, "LOCAL_DOMAIN_UNSUPPORTED", null, 0);
+            if (!exactStraightPreflight)
+            {
+                // Preserve the standalone planner's published attempt/domain semantics.
+                if (context.Plans >= context.Options.MaxPlans) { context.Limited = true; return result(LocalConnectorStatus.SearchIncomplete, "LOCAL_PLAN_LIMIT", null, 0); }
+                context.Plans++; context.Budget.Charge(1);
+                if (!SupportedDomain(domain, from, to, context.Options)) return result(LocalConnectorStatus.SearchIncomplete, "LOCAL_DOMAIN_UNSUPPORTED", null, 0);
+            }
+            else
+            {
+                context.Budget.Charge(1);
+                // Integrated routing supplies the exact stored graph station.
+                // A clear chord needs no lattice, even if that lattice's span or
+                // remaining attempt budget could not support a detour. The same
+                // directed oracle ledger and fresh final checks still apply.
+                if (!SupportedStraightDomain(domain, from, to, context.Options))
+                    return result(LocalConnectorStatus.SearchIncomplete, "LOCAL_DOMAIN_UNSUPPORTED", null, 0);
+            }
             try
             {
                 var first = context.Query(collision, from, from);
@@ -51,8 +65,18 @@ namespace AddinRibbon.Routing
                     var points = Same(from, to) ? new[] { from } : new[] { from, to };
                     return Finalize(points, collision, context, result, "STRAIGHT_CONNECTOR_CLEAR");
                 }
+                if (exactStraightPreflight && !SupportedDomain(domain, from, to, context.Options))
+                    return result(LocalConnectorStatus.SearchIncomplete, "LOCAL_DOMAIN_UNSUPPORTED", null, 0);
                 var grid = Grid.Create(domain, context.Options.MaxNodes);
                 if (grid == null) return result(LocalConnectorStatus.SearchIncomplete, "LOCAL_GRID_NODE_LIMIT", null, 0);
+                if (exactStraightPreflight)
+                {
+                    // Only an admitted non-straight lattice search consumes a
+                    // local plan. Unsupported preflights cannot starve later
+                    // candidates; no additional detour attempts are admitted.
+                    if (context.Plans >= context.Options.MaxPlans) { context.Limited = true; return result(LocalConnectorStatus.SearchIncomplete, "LOCAL_PLAN_LIMIT", null, 0); }
+                    context.Plans++; context.Budget.Charge(1);
+                }
                 var costs = new double[grid.Count + 2]; var previous = new int[costs.Length]; var settled = new bool[costs.Length];
                 for (int i = 0; i < costs.Length; i++) { costs[i] = double.PositiveInfinity; previous[i] = -1; }
                 var queue = new Heap(); var checkedEdges = new Dictionary<long, RouteCollisionStatus>();
@@ -118,10 +142,15 @@ namespace AddinRibbon.Routing
         private static bool SupportedDomain(LocalConnectorDomain domain, RoutePoint from, RoutePoint to, LocalConnectorOptions options)
         {
             var min = domain.Minimum; var max = domain.Maximum;
+            return SupportedStraightDomain(domain, from, to, options)
+                && max.X - min.X <= options.MaxAxisSpanMeters && max.Y - min.Y <= options.MaxAxisSpanMeters && max.Z - min.Z <= options.MaxAxisSpanMeters;
+        }
+        private static bool SupportedStraightDomain(LocalConnectorDomain domain, RoutePoint from, RoutePoint to, LocalConnectorOptions options)
+        {
+            var min = domain.Minimum; var max = domain.Maximum;
             return domain.Contains(from) && domain.Contains(to) && domain.StepMeters <= options.StepMeters
                 && Math.Abs(min.X) <= 1e9 && Math.Abs(min.Y) <= 1e9 && Math.Abs(min.Z) <= 1e9
-                && Math.Abs(max.X) <= 1e9 && Math.Abs(max.Y) <= 1e9 && Math.Abs(max.Z) <= 1e9
-                && max.X - min.X <= options.MaxAxisSpanMeters && max.Y - min.Y <= options.MaxAxisSpanMeters && max.Z - min.Z <= options.MaxAxisSpanMeters;
+                && Math.Abs(max.X) <= 1e9 && Math.Abs(max.Y) <= 1e9 && Math.Abs(max.Z) <= 1e9;
         }
 
         /// <summary>Index-only lazy lattice. Check finite dimensions/product before

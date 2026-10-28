@@ -63,6 +63,7 @@ namespace AddinRibbon.Routing
                 first = FindVerticalApproach(eligible, from, first, tolerance, cancellationToken);
                 last = FindVerticalApproach(eligible, to, last, tolerance, cancellationToken);
             }
+            long graphStarted = GraphPreparationRequest.StartGraphAssembly();
             var nodes = new List<Node>();
             var pieces = new List<Piece>();
             var segmentNodes = new List<List<int>>();
@@ -122,7 +123,7 @@ namespace AddinRibbon.Routing
 
             GraphLimit limit;
             if (!AddNeighbourConnections(nodes, pieces, segmentNodes, tolerance, maxNodes,
-                maxConnections, cancellationToken, out limit))
+                maxConnections, cancellationToken, out limit, graphStarted))
                 return limit == GraphLimit.Connections ? ConnectionLimitFailure(maxConnections) :
                     limit == GraphLimit.Candidates ? CandidateLimitFailure(maxConnections) : NodeLimitFailure(maxNodes);
             PathCost graphCost;
@@ -273,15 +274,18 @@ namespace AddinRibbon.Routing
             nodes[last].Edges.Add(new Edge(first, length, gapCount, gapCount == 0 ? 0 : gapDistance));
         }
 
-        private static bool AddNeighbourConnections(List<Node> nodes, List<Piece> pieces,
+        private static bool AddNeighbourConnectionsOriginal(List<Node> nodes, List<Piece> pieces,
             List<List<int>> segmentNodes, double tolerance, int maxNodes, int maxConnections,
-            CancellationToken token, out GraphLimit limit)
+            CancellationToken token, out GraphLimit limit, GraphPreparationState preparation)
         {
-            var graph = new ContactGraph(nodes, segmentNodes, maxNodes, maxConnections, token);
+            var graph = new ContactGraph(nodes, segmentNodes, maxNodes, maxConnections, token, preparation);
             if (graph.Limit != GraphLimit.None) { limit = graph.Limit; return false; }
             var indices = Enumerable.Range(0, pieces.Count)
                 .Where(i => !pieces[i].EndsOnly || pieces[i].HasStartPort || pieces[i].HasEndPort).ToArray();
+            long treeStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             var tree = BuildAabbTree(pieces, indices, 0, indices.Length, token);
+            var request = GraphPreparationRequest.Current;
+            if (request != null) Interlocked.Add(ref request.Diagnostics.treeTicks, System.Diagnostics.Stopwatch.GetTimestamp() - treeStarted);
             long candidates = 0;
             int treeVisits = 0;
             for (int index = 0; index < pieces.Count; index++)
@@ -289,13 +293,14 @@ namespace AddinRibbon.Routing
                 if ((index & 127) == 0) token.ThrowIfCancellationRequested();
                 if (pieces[index].EndsOnly && !pieces[index].HasStartPort && !pieces[index].HasEndPort) continue;
                 if (!VisitCandidates(tree, indices, pieces, index, tolerance, graph,
-                    token, ref candidates, CandidateLimit(maxConnections), ref treeVisits))
+                    token, ref candidates, CandidateLimit(maxConnections), ref treeVisits, preparation))
                 {
                     limit = graph.Limit == GraphLimit.None ? GraphLimit.Candidates : graph.Limit;
                     return false;
                 }
             }
             graph.BuildEdges(token);
+            if (preparation != null) preparation.Publish(token);
             limit = GraphLimit.None;
             return true;
         }
@@ -330,16 +335,16 @@ namespace AddinRibbon.Routing
 
         private static bool VisitCandidates(AabbNode node, int[] indices, List<Piece> pieces,
             int firstIndex, double tolerance, ContactGraph graph, CancellationToken token,
-            ref long candidates, long maxCandidates, ref int treeVisits)
+            ref long candidates, long maxCandidates, ref int treeVisits, GraphPreparationState preparation)
         {
             if ((++treeVisits & 255) == 0) token.ThrowIfCancellationRequested();
             var first = pieces[firstIndex];
             if (!Bounds.WithinTolerance(first.Bounds, node.Bounds, tolerance)) return true;
             if (node.Left != null)
                 return VisitCandidates(node.Left, indices, pieces, firstIndex, tolerance,
-                    graph, token, ref candidates, maxCandidates, ref treeVisits) &&
+                    graph, token, ref candidates, maxCandidates, ref treeVisits, preparation) &&
                     VisitCandidates(node.Right, indices, pieces, firstIndex, tolerance,
-                    graph, token, ref candidates, maxCandidates, ref treeVisits);
+                    graph, token, ref candidates, maxCandidates, ref treeVisits, preparation);
             for (int offset = 0; offset < node.Count; offset++)
             {
                 int lastIndex = indices[node.Start + offset];
@@ -351,6 +356,8 @@ namespace AddinRibbon.Routing
                 if ((candidates & 255) == 0) token.ThrowIfCancellationRequested();
                 if (first.EndsOnly || last.EndsOnly)
                 {
+                    if (preparation != null) preparation.Capture(new GraphContactPair(firstIndex, lastIndex, true, false, 0, 0, 0, 0));
+                    else RecordUnpreparedCandidate();
                     if (!AddPortContacts(first, last, graph, tolerance)) return false;
                     continue;
                 }
@@ -358,6 +365,8 @@ namespace AddinRibbon.Routing
                 bool overlap = ParallelContactRange(first, last,
                     out firstFraction, out lastFraction, out highFirst, out highLast);
                 if (!overlap) ClosestPoints(first, last, out firstFraction, out lastFraction);
+                if (preparation != null) preparation.Capture(new GraphContactPair(firstIndex, lastIndex, false, overlap, firstFraction, lastFraction, overlap ? highFirst : 0, overlap ? highLast : 0));
+                else RecordUnpreparedCandidate();
                 if (!graph.AddContact(first, last, firstFraction, lastFraction, tolerance)) return false;
                 // Keep both overlap boundaries and equipment attachment stations:
                 // an interior endpoint must not travel to a tray end to cross.
@@ -622,17 +631,19 @@ namespace AddinRibbon.Routing
             private readonly HashSet<long> connectedNodes = new HashSet<long>();
             private int connections;
             private readonly CancellationToken token;
+            private readonly GraphPreparationState preparation;
             private readonly Dictionary<Tuple<TrayMeshClearance, TrayMeshClearance>, TrayMeshClearanceResult> queriedSurfaces
                 = new Dictionary<Tuple<TrayMeshClearance, TrayMeshClearance>, TrayMeshClearanceResult>();
             internal GraphLimit Limit { get; private set; }
 
             internal ContactGraph(List<Node> nodes, List<List<int>> segmentNodes, int maxNodes, int maxConnections,
-                CancellationToken token)
+                CancellationToken token, GraphPreparationState preparation = null)
             {
                 this.nodes = nodes; this.segmentNodes = segmentNodes;
                 initialNodes = segmentNodes.Select(ordered => ordered.ToArray()).ToArray();
                 this.maxNodes = maxNodes; this.maxConnections = maxConnections;
                 this.token = token;
+                this.preparation = preparation;
                 foreach (var ordered in segmentNodes) connections += ordered.Count - 1;
                 if (connections > maxConnections) Limit = GraphLimit.Connections;
             }
@@ -653,7 +664,17 @@ namespace AddinRibbon.Routing
                     bool alreadyQueried = queriedSurfaces.TryGetValue(surfaceKey, out clearance);
                     if (!alreadyQueried)
                     {
-                        firstSurface.TryDistanceTo(lastSurface, tolerance, token, out clearance);
+                        if (preparation != null) clearance = preparation.Measure(firstSurface, lastSurface, tolerance, token);
+                        else
+                        {
+                            long started = System.Diagnostics.Stopwatch.GetTimestamp(); var request = GraphPreparationRequest.Current;
+                            try
+                            {
+                                if (request != null) Interlocked.Increment(ref request.Diagnostics.surfaceQueries);
+                                firstSurface.TryDistanceTo(lastSurface, tolerance, token, out clearance);
+                            }
+                            finally { if (request != null) Interlocked.Add(ref request.Diagnostics.surfaceTicks, System.Diagnostics.Stopwatch.GetTimestamp() - started); }
+                        }
                         queriedSurfaces.Add(surfaceKey, clearance);
                     }
                     if (clearance == null) return true;

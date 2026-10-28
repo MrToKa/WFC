@@ -7,7 +7,7 @@ vi.mock('@fluentui/react-components', () => ({
   Checkbox: ({ onChange, checked, ...props }: Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'> & { onChange: (event: React.ChangeEvent<HTMLInputElement>, data: { checked: boolean }) => void }) =>
     <input {...props} type="checkbox" checked={checked} onChange={event => onChange(event, { checked: event.target.checked })} />,
 }));
-const state = vi.hoisted(() => ({ toggle: vi.fn(), exclude: vi.fn(), reset: vi.fn() }));
+const state = vi.hoisted(() => ({ toggle: vi.fn(), exclude: vi.fn(), reset: vi.fn(), cablePurposes: ['Control', 'Grounding', 'Power', 'VFD'], invalidCablePurposeCount: 2 }));
 vi.mock('@/pages/ProjectDetails/hooks/useRoutingPurposePolicy', () => ({ useRoutingPurposePolicy: () => ({
   ...state, rows: ['Synthetic and  Control', 'Synthetic and Control'].map(purposeKey => ({ purposeKey, trayCount: 1, categories: ['LV'], configured: true, blocked: false, dirty: false })),
   snapshot: { catalog: { rowCount: 2, diagnostics: [] }, policy: { routingPolicyRevision: '0' } }, canEdit: true, canSave: false,
@@ -26,9 +26,16 @@ describe('routing purpose spacing variants', () => {
     const original = screen.getByText('Synthetic and Control', { exact: true, normalizer: value => value });
     expect(original).toHaveStyle({ whiteSpace: 'pre-wrap' });
     expect(screen.getByText('Synthetic·and··Control')).toBeVisible();
-    const checkbox = screen.getByRole('checkbox', { name: 'MV for Synthetic and Control (Spacing variant 2 of 2)' });
+    expect(screen.getByRole('columnheader', { name: 'Grounding' })).toBeVisible();
+    expect(screen.getByRole('columnheader', { name: 'Power' })).toBeVisible();
+    expect(screen.getByRole('columnheader', { name: 'VFD' })).toBeVisible();
+    expect(screen.getByRole('alert')).toHaveTextContent('2 invalid Purpose values are unavailable for routing');
+    expect(screen.queryByRole('columnheader', { name: 'MV' })).toBeNull();
+    expect(screen.queryByRole('columnheader', { name: 'LV' })).toBeNull();
+    expect(screen.getAllByText(/No matching Cable types Purpose: LV/)).toHaveLength(2);
+    const checkbox = screen.getByRole('checkbox', { name: 'VFD for Synthetic and Control (Spacing variant 2 of 2)' });
     fireEvent.click(checkbox);
-    expect(state.toggle).toHaveBeenCalledWith('Synthetic and Control', 'MV', true);
+    expect(state.toggle).toHaveBeenCalledWith('Synthetic and Control', 'VFD', true);
     fireEvent.click(screen.getByRole('button', { name: /Exclude .*Spacing variant 1 of 2/ }));
     expect(state.exclude).toHaveBeenCalledWith('Synthetic and  Control');
     fireEvent.click(screen.getByRole('button', { name: 'Reset Synthetic and Control (Spacing variant 2 of 2)' }));

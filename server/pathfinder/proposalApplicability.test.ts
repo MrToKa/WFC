@@ -2,7 +2,8 @@
 import type { PoolClient } from 'pg';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { sealedCableItemApplicabilitySchema } from '../../shared/pathfinderItemApplicability.js';
-import { readProposalApplicability, type ProposalApplicabilityInput } from './proposalApplicability.js';
+import { readProposalApplicability, readAutomaticPairProposalApplicability, type ProposalApplicabilityInput } from './proposalApplicability.js';
+import type { AutomaticPairMandate } from '../../shared/pathfinderAutomaticPair.js';
 import { freezeScopedCableDependencies, hash, type CommonCalculationInputs } from './dependencies.js';
 import { syntheticEngineIdentity, syntheticBarrierEngineIdentity } from './calculationFixtures.js';
 import type { EndpointCalculationPoint } from './endpointCalculationProvenance.js';
@@ -11,8 +12,10 @@ import type { BarrierDependencySnapshot } from './jobContracts.js';
 
 const authority = vi.hoisted(() => vi.fn());
 const wholeAuthority = vi.hoisted(() => vi.fn());
+const outputAuthority = vi.hoisted(() => vi.fn());
 vi.mock('./locationImpactRepository.js', () => ({ readLocationImpactJobAuthority: authority }));
 vi.mock('./recalculationRepository.js', () => ({ readRecalculationJobAuthority: wholeAuthority }));
+vi.mock('./automaticPairMandates.js', () => ({ requireCurrentAutomaticPairMandate: outputAuthority }));
 const id = (n: number) => `ad300000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const projectId = id(1), cableId = id(2), jobId = id(3), proposalId = id(4);
 function fixture(jobState = 'running') {
@@ -35,7 +38,7 @@ function fixture(jobState = 'running') {
   const client = { query } as unknown as PoolClient;
   return { input, row, state, dependencies, client, query, run: () => readProposalApplicability(client, input) };
 }
-beforeEach(() => { vi.clearAllMocks(); wholeAuthority.mockResolvedValue({enrolled:false}); authority.mockResolvedValue({ scope: 'location-impact', enrolled: true, valid: true,
+beforeEach(() => { vi.clearAllMocks(); outputAuthority.mockImplementation(async (_client, mandate) => mandate); wholeAuthority.mockResolvedValue({enrolled:false}); authority.mockResolvedValue({ scope: 'location-impact', enrolled: true, valid: true,
   generation: '9', authorityEpoch: '1', impactId: id(50), code: 'LOCATION_IMPACT_AUTHORITY_CURRENT' }); });
 
 /** Synthetic retained integrity fixture only. No real storage/collision or
@@ -72,6 +75,37 @@ function barrierFixture(jobState = 'running') {
 }
 
 describe('version-specific sealed cable applicability with mocked SQL and scoped authority', () => {
+  it.each(['explicit-job','automatic-generation','location-impact'] as const)('admits one exact sealed item only through the current %s output mandate while siblings run',async kind=>{
+    const f=barrierFixture('running');authority.mockResolvedValue(null);
+    const mandate={projectId,jobId,cableId,dependencyHash:f.input.dependencyHash,source:{kind}} as AutomaticPairMandate;
+    expect(await readAutomaticPairProposalApplicability(f.client,f.input,mandate)).toEqual({applicable:true,evidence:null});
+    expect(outputAuthority).toHaveBeenCalledExactlyOnceWith(f.client,mandate);
+    expect(authority).not.toHaveBeenCalled();expect(wholeAuthority).not.toHaveBeenCalled();
+    // The public reader still refuses this same whole-project result.
+    expect(await f.run()).toEqual({applicable:false,evidence:null});
+  });
+  it.each(['projectId','jobId','cableId','dependencyHash'] as const)('never borrows another output mandate %s',async key=>{
+    const f=barrierFixture(),mandate={projectId,jobId,cableId,dependencyHash:f.input.dependencyHash,source:{kind:'explicit-job'}} as AutomaticPairMandate;
+    const other={...mandate,[key]:key==='dependencyHash'?'0'.repeat(64):id(99)};
+    expect(await readAutomaticPairProposalApplicability(f.client,f.input,other)).toEqual({applicable:false,evidence:null});
+    expect(f.query).not.toHaveBeenCalled();expect(outputAuthority).not.toHaveBeenCalled();
+  });
+  it.each(['no-seal','tampered-route','cancelled','incomplete-item','legacy-dependencies'] as const)('keeps exact retained proof checks for output mandates: %s',async kind=>{
+    const f=barrierFixture(),mandate={projectId,jobId,cableId,dependencyHash:f.input.dependencyHash,source:{kind:'explicit-job'}} as AutomaticPairMandate;
+    if(kind==='no-seal')f.input.seal=null;
+    if(kind==='tampered-route'){f.result.barriers.proof.routeSha256='0'.repeat(64);f.reseal();}
+    if(kind==='cancelled')f.input.cancelRequested=true;
+    if(kind==='incomplete-item')f.row.state='running';
+    if(kind==='legacy-dependencies')f.input.dependencyVersion='pathfinder.dependencies.v7';
+    expect(await readAutomaticPairProposalApplicability(f.client,f.input,mandate)).toEqual({applicable:false,evidence:null});
+    expect(outputAuthority).not.toHaveBeenCalled();
+  });
+  it.each(['AUTOMATIC_GENERATION_SUPERSEDED','AUTOMATIC_PAIR_AUTHORITY_EXPIRED','AUTOMATIC_PAIR_MANDATE_CHANGED','AUTOMATIC_PAIR_JOB_AUTHORITY_REQUIRED'])('does not promote output readiness after %s',async code=>{
+    const f=barrierFixture(),mandate={projectId,jobId,cableId,dependencyHash:f.input.dependencyHash,source:{kind:'explicit-job'}} as AutomaticPairMandate;
+    outputAuthority.mockRejectedValue(Object.assign(new Error(code),{code}));
+    await expect(readAutomaticPairProposalApplicability(f.client,f.input,mandate)).rejects.toMatchObject({code});
+    expect(authority).not.toHaveBeenCalled();expect(wholeAuthority).not.toHaveBeenCalled();
+  });
   it.each(['queued','running','complete'])('permits independently ready v8 only with exact retained physical strategy and current scoped authority (%s)',async parent=>{
     const f=barrierFixture(parent),value=await f.run();
     expect(value).toEqual({applicable:true,evidence:{schemaVersion:'wfc.pf.sealed-cable-applicability.v2',dependencyVersion:'pathfinder.dependencies.v8',

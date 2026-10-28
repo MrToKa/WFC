@@ -6,7 +6,7 @@ import path from 'node:path';
 import vm from 'node:vm';
 import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { buildRawInventorySummary, createRawInventoryProvider, RAW_INVENTORY_HELPER } from './raw-inventory-provider.mjs';
+import { buildRawInventorySummary, createRawInventoryProvider, RAW_INVENTORY_HELPER, safeLosslessCaptureFailure } from './raw-inventory-provider.mjs';
 import { validateInventoryEnvelope, validateRestoredInventory } from '../operations/restore-fencing.mjs';
 import { compareCurrentInventories, currentInventoryCanonicalHash as hash, currentInventoryFrame as frame, currentInventorySchemaMetadata, losslessTopLevelFields } from '../pathfinder-copied-recovery/current-inventory-lib.mjs';
 
@@ -74,7 +74,7 @@ function observation(phase='backup-before-audit'){const restore=phase.startsWith
  * replaced. No production capture, network, credential file or Docker path runs. */
 function harness(options={}){const calls=[],receipts=[],c=config(),out=summary();let expected=observation(options.phase);const state={owner:expected.owner,project:expected.project,port:expected.port,runtime:expected.runtime,images:{api:expected.apiImage}};Object.assign(state,options.state);
   const fakeRuntime={load:async value=>{calls.push(['load',value]);return state;},configuration:async()=>{calls.push(['configuration']);},ownership:async()=>{calls.push(['ownership']);return{containers:options.containers??[{role:'postgres',running:true},{role:'api',running:false},{role:'web',running:false}]};},readSettings:async()=>{calls.push(['settings']);return{databasePassword:'synthetic-test-only'};},helper:async(_state,args,settings)=>{calls.push(['helper',args,settings]);return options.result??{status:'PASS',inventory:out,rawManifestSha256:manifestSha,rawContentSha256:'e'.repeat(64)};}};
-  const factory=new vm.Script('('+createRawInventoryProvider.toString()+')').runInNewContext({path,randomUUID:()=>backupId,runtime:fakeRuntime,RAW_INVENTORY_HELPER,assertCanonicalPath:async value=>{calls.push(['canonical',value]);},hashFile:async value=>({sha256:value===c.modulePath?(options.moduleSha??moduleSha):(options.manifestSha??manifestSha)}),writePrivateJson:async(file,value)=>{receipts.push({file,value});}});
+  const factory=new vm.Script('('+createRawInventoryProvider.toString()+')').runInNewContext({path,randomUUID:()=>backupId,runtime:fakeRuntime,RAW_INVENTORY_HELPER,safeLosslessCaptureFailure,assertCanonicalPath:async value=>{calls.push(['canonical',value]);},hashFile:async value=>({sha256:value===c.modulePath?(options.moduleSha??moduleSha):(options.manifestSha??manifestSha)}),writePrivateJson:async(file,value)=>{receipts.push({file,value});}});
   return{provider:factory({...c,...options.config}),calls,receipts,expected,state,out};
 }
 test('constructor rejects invalid source port, paths and image/hash pins before capture',()=>{for(const change of[{source:{...config().source,port:5190}},{source:{...config().source,owner:'wrong'}},{source:{...config().source,runtime:'relative'}},{targetRuntime:'relative'},{outputRoot:'relative'},{modulePath:'relative'},{sha256:moduleSha+'\n'},{apiImage:oldImage+'\n'},{postUpdateApiImage:newImage+'\n'}])assert.throws(()=>createRawInventoryProvider({...config(),...change}),{code:'RAW_PROVIDER_CONFIG'});});
@@ -85,3 +85,20 @@ test('restore captures require a distinct owned5192 target, never source5191',as
 test('post-update captures require new source image and cannot use old image or target runtime',async()=>{for(const change of[{apiImage:oldImage},{runtime:config().targetRuntime},{owner:targetOwner},{port:5192}]){const h=harness({phase:'post-update-before-audit'});await assert.rejects(()=>h.provider.capture({...h.expected,...change}));assert.deepEqual(h.calls,[]);}const h=harness({phase:'post-update-after-audit',config:{postUpdateApiImage:undefined}});await assert.rejects(()=>h.provider.capture(h.expected),{code:'RAW_OBSERVATION'});assert.deepEqual(h.calls,[]);});
 test('changed module or runtime identity and noncold resources prevent helper dispatch',async()=>{for(const options of[{moduleSha:'f'.repeat(64)},{state:{owner:targetOwner}},{state:{project:'other'}},{state:{port:5190}},{state:{images:{api:newImage}}},{containers:[{role:'postgres',running:false}]},{containers:[{role:'postgres',running:true},{role:'api',running:true}]},{containers:[{role:'postgres',running:true},{role:'web',running:true}]}]){const h=harness(options);await assert.rejects(()=>h.provider.capture(h.expected));assert.equal(h.calls.some(([kind])=>kind==='helper'),false);assert.equal(h.receipts.length,0);}});
 test('failed or wrong-provider capture and changed manifest never produce a success receipt',async()=>{for(const options of[{result:{status:'FAIL'}},{result:{status:'PASS',inventory:{schemaVersion:1,moduleSha256:moduleSha}}},{result:{status:'PASS',inventory:{schemaVersion:2,moduleSha256:'f'.repeat(64)}}},{manifestSha:'f'.repeat(64)}]){const h=harness(options);await assert.rejects(()=>h.provider.capture(h.expected));assert.equal(h.receipts.length,0);}});
+
+test('capture failures expose only fixed safe diagnostic codes and no private error text',()=>{
+ for(const code of ['LOSSLESS_INVENTORY_DEADLINE','LOSSLESS_INVENTORY_LIMIT','LOSSLESS_DESTINATION_CHANGED'])
+  assert.deepEqual(safeLosslessCaptureFailure({code,message:'postgresql://secret@private/database',stack:'private stack'}),{status:'FAIL',code});
+ assert.deepEqual(safeLosslessCaptureFailure({name:'TimeoutError',message:'private'}),{status:'FAIL',code:'LOSSLESS_INVENTORY_DEADLINE'});
+ for(const value of [undefined,null,{},'private',{code:'private connection string'},{code:'LOSSLESS_INVENTORY_DEADLINE\n'},{get code(){throw Error('private');}}]){
+  assert.deepEqual(safeLosslessCaptureFailure(value),{status:'FAIL',code:'B9_CAPTURE_FAILED'});
+  assert.deepEqual(safeLosslessCaptureFailure(value,'RAW_INVENTORY_CAPTURE_FAILED'),{status:'FAIL',code:'RAW_INVENTORY_CAPTURE_FAILED'});
+ }
+ assert.deepEqual(safeLosslessCaptureFailure({},'private fallback'),{status:'FAIL',code:'B9_CAPTURE_FAILED'});
+});
+test('provider preserves a safe deadline diagnosis while refusing a failed inventory without a receipt',async()=>{
+ const h=harness({result:{status:'FAIL',code:'LOSSLESS_INVENTORY_DEADLINE',message:'private'}});
+ await assert.rejects(()=>h.provider.capture(h.expected),{code:'LOSSLESS_INVENTORY_DEADLINE'});assert.equal(h.receipts.length,0);
+ const other=harness({result:{status:'FAIL',code:'private error'}});
+ await assert.rejects(()=>other.provider.capture(other.expected),{code:'RAW_INVENTORY_CAPTURE_FAILED'});assert.equal(other.receipts.length,0);
+});

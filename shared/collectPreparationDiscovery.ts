@@ -4,6 +4,7 @@ import {
 } from './pathfinderPurposePolicy.js';
 import {
   PREPARATION_LIMITS,
+  preparationResolutionMatchesScope,
   type PreparationContext,
   type PreparationDiscovery,
 } from './pathfinderPreparation.js';
@@ -15,6 +16,47 @@ import type {
 } from '../viewer-runtime/preparation-input.mjs';
 import { PREPARATION_MATCHING_POLICY, PREPARATION_VIEWER_LIMITS, validatePreparationDiscoveryPage, validatePreparationDiscoveryRequest } from '../viewer-runtime/preparation-input.mjs';
 export type PreparationDiscoveryReader = { discover(request: PreparationDiscoveryRequest): Promise<PreparationDiscoveryPage>; assertCurrent(): void };
+export type PreparationDiscoveryFailureStage = {
+  stage: 'tray-name-search' | 'tray-root-coverage' | 'endpoint-property-search' | 'endpoint-ancestor-coverage';
+  mode: PreparationDiscoveryRequest['mode']; rootObjectId: number | null; rootObjectIds?: number[]; cursor: number;
+  queryNameCount: number; completedUnits: number; totalUnits: number; trayNames: string[];
+};
+/** Host diagnostics only; discovery pages and their exact coverage proof are unchanged. */
+export class PreparationDiscoveryError extends Error {
+  readonly causeCode: string | null;
+  constructor(readonly discoveryStage: PreparationDiscoveryFailureStage, cause: unknown) {
+    const code = cause && typeof cause === 'object' && 'code' in cause && typeof cause.code === 'string' ? cause.code.slice(0, 96) : null;
+    const { mode, rootObjectId, rootObjectIds, cursor, completedUnits, totalUnits, trayNames } = discoveryStage;
+    const labels = trayNames.slice(0, 4).join(', ') + (trayNames.length > 4 ? ` and ${trayNames.length - 4} more project trays` : '');
+    const step = mode === 'names' ? `Tray-name discovery stopped after checking ${completedUnits} of ${totalUnits} name variants${labels ? ` (${labels})` : ''}`
+      : mode === 'subtree' ? `Tray-root discovery stopped at dbid:${rootObjectId}${labels ? ` (${labels})` : ''}; ${completedUnits} of ${totalUnits} roots completed`
+        : mode === 'subtrees' ? `Tray-root discovery stopped for ${(rootObjectIds ?? []).slice(0, 4).map(id => `dbid:${id}`).join(', ')}${(rootObjectIds?.length ?? 0) > 4 ? ` and ${rootObjectIds!.length - 4} more roots` : ''}${labels ? ` (${labels})` : ''}; ${completedUnits} of ${totalUnits} roots completed`
+        : mode === 'equipment' ? `From/To property discovery stopped after checking ${completedUnits} of ${totalUnits} project endpoint names`
+          : `From/To hierarchy discovery stopped at dbid:${rootObjectId}; ${completedUnits} of ${totalUnits} endpoint hierarchies completed`;
+    const reasons: Record<string, string> = {
+      PREPARATION_EQUIPMENT_PROPERTIES_TIMEOUT: 'Reading the model endpoint properties timed out.',
+      PREPARATION_EQUIPMENT_PROPERTIES_FAILED: 'The viewer could not read the model endpoint properties.',
+      PREPARATION_DISCOVERY_DEADLINE: 'The protected discovery request reached its time limit.',
+      PREPARATION_EQUIPMENT_SCAN_LIMIT: 'The endpoint property scan reached its supported total property limit.',
+      PREPARATION_EQUIPMENT_ROW_LIMIT: 'A model endpoint property row exceeded its supported size.',
+      PREPARATION_EQUIPMENT_INDEX_LIMIT: 'The matching endpoint index reached its supported size limit.',
+      PREPARATION_EQUIPMENT_PROPERTIES_INVALID: 'The model returned invalid endpoint property data.',
+      PREPARATION_DISCOVERY_RESULT_INVALID: 'The viewer returned invalid discovery evidence.',
+      EXTRACTION_FAILED: 'The viewer did not report a more specific cause.',
+    };
+    const detail = code ? `${reasons[code] ?? 'The viewer reported a discovery failure.'} Viewer code: ${code}.`
+      : cause instanceof Error ? cause.message.slice(0, 500) : 'The viewer did not provide a specific reason.';
+    super(`${step} (page cursor ${cursor}). ${detail}`, { cause });
+    this.name = 'PreparationDiscoveryError'; this.causeCode = code;
+  }
+}
+function preserveDiscoveryFailure(error: unknown): boolean {
+  const code = error && typeof error === 'object' && 'code' in error ? error.code : null;
+  const status = error && typeof error === 'object' && 'status' in error ? error.status : null;
+  return Boolean(error && typeof error === 'object' && 'name' in error && error.name === 'AbortError') || status === 401 || status === 403
+    || ['CAPTURE_RELOAD_REQUIRED', 'ACCESS_REVOKED', 'SESSION_EXPIRED', 'MODEL_SELECTION_CHANGED', 'MODEL_UNAVAILABLE',
+      'RESOURCE_FAILED', 'BARRIER_CAPTURE_MODEL_CHANGED', 'AUTHENTICATION_REQUIRED', 'LOGIN_REVOKED'].includes(String(code));
+}
 
 /** Bound both echoed request names and one fully matching object inside 24KiB.
  * Keep query-scoped exact names; never retain the model's unrelated properties.
@@ -39,7 +81,11 @@ export async function collectPreparationDiscovery<T extends PreparationDiscovery
   context: PreparationContext,
   viewer: T,
   progress: (message: string) => void = () => {},
+  options: { skipEquipment?: boolean } = {},
 ): Promise<PreparationDiscovery> {
+  let stage: PreparationDiscoveryFailureStage = { stage: 'tray-name-search', mode: 'names', rootObjectId: null,
+    cursor: 0, queryNameCount: 0, completedUnits: 0, totalUnits: 0, trayNames: [] };
+  try {
   const objects = new Map<number, PreparationDiscoveryObject>();
   const order = new Map<number, number>();
   const trayMatches = new Map<string, number[]>(),
@@ -47,6 +93,15 @@ export async function collectPreparationDiscovery<T extends PreparationDiscovery
   let inventoryCount: number | null = null,
     equipmentProof: PreparationDiscovery['propertyScan'] = null;
   let visibilityScope:PreparationEndpointVisibility|null=null;
+  // The query batch still fits its existing 8KiB/24KiB request-response scope.
+  // A bounded shared name universe lets the viewer index project properties
+  // once across those batches; larger universes retain the existing fallback.
+  const equipmentIndexNames = context.endpointNames.length > 0
+    && context.endpointNames.length <= PREPARATION_VIEWER_LIMITS.equipmentNames
+    && new TextEncoder().encode(JSON.stringify(context.endpointNames)).length <= PREPARATION_VIEWER_LIMITS.equipmentIndexNameBytes
+    && validatePreparationDiscoveryRequest({ schemaVersion: 'wfc.pf.viewer-discovery.v1', mode: 'equipment',
+      names: [context.endpointNames[0]], indexNames: context.endpointNames, rootObjectId: null, cursor: 0, limit: 1 })
+    ? context.endpointNames : undefined;
   const add = (object: PreparationDiscoveryObject) => {
     const prior = objects.get(object.objectId);
     const { matchedNames: _matched, ...identity } = object;
@@ -73,10 +128,12 @@ export async function collectPreparationDiscovery<T extends PreparationDiscovery
     names: string[],
     rootObjectId: number | null,
     consume: (page: PreparationDiscoveryPage) => void,
+    rootObjectIds?: number[],
   ) => {
     let cursor = 0;
     let pages = 0;
     for (;;) {
+      stage = { ...stage, mode, rootObjectId, rootObjectIds: rootObjectIds ? [...rootObjectIds] : undefined, cursor, queryNameCount: names.length };
       viewer.assertCurrent();
       if (++pages > PREPARATION_LIMITS.objects)
         throw new Error('Model discovery exceeded its bounded pagination.');
@@ -85,14 +142,17 @@ export async function collectPreparationDiscovery<T extends PreparationDiscovery
         mode,
         names,
         rootObjectId,
+        ...(rootObjectIds ? { rootObjectIds } : {}),
         cursor,
         limit: 128,
+        ...(mode === 'equipment' && equipmentIndexNames ? { indexNames: equipmentIndexNames } : {}),
         ...(visibilityScope?{visibilityScope}:{}),
       });
       viewer.assertCurrent();
       if (
         !validatePreparationDiscoveryPage(page) || page.mode !== mode ||
         page.rootObjectId !== rootObjectId ||
+        JSON.stringify(page.rootObjectIds) !== JSON.stringify(rootObjectIds) ||
         page.cursor !== cursor ||
         JSON.stringify(page.names) !== JSON.stringify(names) ||
         page.matchingPolicyVersion !== PREPARATION_MATCHING_POLICY ||
@@ -121,10 +181,16 @@ export async function collectPreparationDiscovery<T extends PreparationDiscovery
     ]),
   );
   const names = [...new Set([...trayNames.values()].flat())];
+  const labelsByName = new Map<string, Set<string>>();
+  for (const tray of context.trays) for (const name of trayNames.get(tray.projectTrayId) ?? []) {
+    const labels = labelsByName.get(name) ?? new Set<string>(); labels.add(tray.rawName); labelsByName.set(name, labels);
+  }
+  stage = { ...stage, totalUnits: names.length };
   for (let offset = 0; offset < names.length; offset += 32) {
     const batch = names.slice(offset, offset + 32);
+    stage = { ...stage, completedUnits: offset, trayNames: [...new Set(batch.flatMap(name => [...(labelsByName.get(name) ?? [])]))] };
     progress(
-      `Finding exact tray names: ${Math.min(offset + batch.length, names.length)} of ${names.length}.`,
+      `Searching ${context.trays.length} project trays: ${offset} of ${names.length} name variants checked; starting the next ${batch.length}.`,
     );
     for (const name of batch) trayMatches.set(name, []);
     await pages('names', batch, null, (page) => {
@@ -135,35 +201,48 @@ export async function collectPreparationDiscovery<T extends PreparationDiscovery
           trayMatches.get(name)!.push(object.objectId);
         }
     });
+    progress(`Searching ${context.trays.length} project trays: ${offset + batch.length} of ${names.length} name variants checked.`);
   }
+  const currentResolutions = context.resolutions.filter(item => item.mode === 'roots' && preparationResolutionMatchesScope(item.scope, context.scope));
   const roots = [
     ...new Set(
       [...trayMatches.values()]
         .flat()
         .concat(
-          context.resolutions
-            .filter(
-              (item) =>
-                item.mode === 'roots' &&
-                Object.entries(context.scope).every(
-                  ([key, value]) =>
-                    key === 'resolutionRevision' ||
-                    item.scope[key as keyof typeof item.scope] === value,
-                ),
-            )
+          currentResolutions
             .flatMap((item) => item.rootObjectIds.map((id) => Number(id.slice(5)))),
         ),
     ),
   ];
-  for (let index = 0; index < roots.length; index++) {
-    progress(`Reading candidate coverage: ${index + 1} of ${roots.length} roots.`);
-    await pages('subtree', [], roots[index], () => {});
+  const labelsByRoot = new Map<number, Set<string>>(), trayLabels = new Map(context.trays.map(tray => [tray.projectTrayId, tray.rawName]));
+  const addRootLabel = (root: number, label: string) => {
+    const labels = labelsByRoot.get(root) ?? new Set<string>(); labels.add(label); labelsByRoot.set(root, labels);
+  };
+  for (const [name, ids] of trayMatches) for (const root of ids) for (const label of labelsByName.get(name) ?? []) addRootLabel(root, label);
+  for (const resolution of currentResolutions) {
+    const label = trayLabels.get(resolution.projectTrayId);
+    if (label) for (const id of resolution.rootObjectIds) addRootLabel(Number(id.slice(5)), label);
+  }
+  for (let index = 0; index < roots.length; index += PREPARATION_VIEWER_LIMITS.subtreeRoots) {
+    const batch = roots.slice(index, index + PREPARATION_VIEWER_LIMITS.subtreeRoots);
+    const mode = batch.length === 1 ? 'subtree' : 'subtrees', rootObjectId = batch.length === 1 ? batch[0] : null;
+    stage = { stage: 'tray-root-coverage', mode, rootObjectId, ...(batch.length > 1 ? { rootObjectIds: [...batch] } : {}), cursor: 0, queryNameCount: 0,
+      completedUnits: index, totalUnits: roots.length, trayNames: [...new Set(batch.flatMap(root => [...(labelsByRoot.get(root) ?? [])]))] };
+    progress(`Reading tray-root coverage: ${index} of ${roots.length} distinct roots completed for ${context.trays.length} project trays; starting ${batch.length === 1 ? `dbid:${rootObjectId}` : `the next ${batch.length} roots`}.`);
+    const covered = new Set<number>();
+    await pages(mode, [], rootObjectId, page => {
+      for (const object of page.objects) if (batch.includes(object.objectId)) covered.add(object.objectId);
+    }, batch.length > 1 ? batch : undefined);
+    if (batch.length > 1 && batch.some(root => !covered.has(root))) throw new Error('The model did not return every requested tray root. Check the model and discover again.');
+    progress(`Reading tray-root coverage: ${index + batch.length} of ${roots.length} distinct roots completed for ${context.trays.length} project trays.`);
   }
   let endpointOffset=0;
-  for (const batch of preparationEquipmentNameBatches(context.endpointNames)) {
-    endpointOffset+=batch.length;
+  stage = { stage: 'endpoint-property-search', mode: 'equipment', rootObjectId: null, cursor: 0, queryNameCount: 0,
+    completedUnits: 0, totalUnits: context.endpointNames.length, trayNames: [] };
+  for (const batch of preparationEquipmentNameBatches(options.skipEquipment ? [] : context.endpointNames)) {
+    stage = { ...stage, completedUnits: endpointOffset };
     progress(
-      `Finding project endpoints: ${endpointOffset} of ${context.endpointNames.length}.`,
+      `Searching From/To properties: ${endpointOffset} of ${context.endpointNames.length} project endpoint names checked; starting the next ${batch.length}.`,
     );
     for (const name of batch) endpointMatches.set(name, []);
     await pages('equipment', batch, null, (page) => {
@@ -182,8 +261,13 @@ export async function collectPreparationDiscovery<T extends PreparationDiscovery
           endpointMatches.get(name)!.push(object.objectId);
         }
     });
+    endpointOffset+=batch.length;
+    progress(`Searching From/To properties: ${endpointOffset} of ${context.endpointNames.length} project endpoint names checked.`);
   }
-  for (const endpoint of new Set([...endpointMatches.values()].flat())) {
+  const endpoints = [...new Set([...endpointMatches.values()].flat())];
+  for (const [index, endpoint] of endpoints.entries()) {
+    stage = { stage: 'endpoint-ancestor-coverage', mode: 'ancestors', rootObjectId: endpoint, cursor: 0,
+      queryNameCount: 0, completedUnits: index, totalUnits: endpoints.length, trayNames: [] };
     let parent = objects.get(endpoint)?.parentId ?? null;
     const seen = new Set<number>();
     let missing = false;
@@ -197,7 +281,10 @@ export async function collectPreparationDiscovery<T extends PreparationDiscovery
       }
       parent = object.parentId;
     }
-    if (missing) await pages('ancestors', [], endpoint, () => {});
+    if (missing) {
+      progress(`Reading From/To hierarchy: ${index} of ${endpoints.length} endpoint hierarchies completed; starting dbid:${endpoint}.`);
+      await pages('ancestors', [], endpoint, () => {});
+    }
   }
   const ordered = [...objects.values()].sort((left, right) => left.orderIndex - right.orderIndex);
   const idList = (values: number[]) =>
@@ -213,6 +300,7 @@ export async function collectPreparationDiscovery<T extends PreparationDiscovery
     selectionRevision: context.scope.selectionRevision,
     matchingPolicyVersion: PREPARATION_MATCHING_POLICY,
     visibilityScope,
+    ...(options.skipEquipment ? { endpointScope: { schemaVersion: 'wfc.pf.endpoint-discovery-scope.v1' as const, mode: 'not-requested' as const } } : {}),
     complete: proof === null || proof.complete,
     propertyScan: proof,
     objects: ordered.map(({ matchedNames: _names, ...object }) => ({
@@ -226,9 +314,13 @@ export async function collectPreparationDiscovery<T extends PreparationDiscovery
         (trayNames.get(tray.projectTrayId) ?? []).flatMap((name) => trayMatches.get(name) ?? []),
       ),
     })),
-    endpointCandidates: context.endpointNames.map((name) => ({
+    endpointCandidates: (options.skipEquipment ? [] : context.endpointNames).map((name) => ({
       name,
       objectIds: idList(endpointMatches.get(name) ?? []),
     })),
   };
+  } catch (error) {
+    if (preserveDiscoveryFailure(error) || error instanceof PreparationDiscoveryError) throw error;
+    throw new PreparationDiscoveryError(stage, error);
+  }
 }

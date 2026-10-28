@@ -178,6 +178,12 @@ describe('same-transaction Auto publication', () => {
 });
 
 describe('bounded ordinary cable display projection', () => {
+  it('withholds the old successful length after a new capacity no-path while preserving its history',()=>{
+    const f=fixture(),row={...f.read,latest_ordinal:'2',latest_item_status:'no_path',latest_capacity_outcome:'no-capacity'};
+    const source=structuredClone(f.read.source),view=projectAutoLengthView(row,f.input.projectId,f.input.cableId);
+    expect(view).toEqual({...emptyAutoLengthView(),autoLengthStatus:'blocked'});expect(f.read.source).toEqual(source);
+    expect(projectAutoLengthView({...row,latest_capacity_outcome:undefined},f.input.projectId,f.input.cableId).autoCalculatedLength).toBe(7);
+  });
   it('returns an exact value with no authority or geometry fields', () => {
     const f = fixture(), view = projectAutoLengthView(f.read, f.input.projectId, f.input.cableId);
     expect(view).toEqual({ autoCalculatedLength: 7, autoLengthStatus: 'last-successful', autoLengthCalculatedAt: '2026-10-21T16:00:00.000Z',

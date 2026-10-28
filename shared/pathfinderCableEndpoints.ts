@@ -6,6 +6,7 @@ import { geometryObjectSummarySchema } from './pathfinderGeometryTrace.js';
 import { recalculationReasonSchema } from './pathfinderRecalculation.js';
 import { locationImpactCalculationSchema, locationImpactReferenceSchema } from './pathfinderLocationImpacts.js';
 import { initialFillPolicySchema, initialFillMandateReferenceSchema } from './pathfinderInitialFill.js';
+import { automaticPairPolicySchema } from './pathfinderAutomaticPair.js';
 
 export const CABLE_ENDPOINT_LIMITS = Object.freeze({ controlBytes: 65536, responseBytes: 1024 * 1024, projectCables: 10000, impactTextBytes: 8 * 1024 * 1024, reasonCodes: 64 });
 export const cableEndpointEndSchema = z.enum(['from', 'to']);
@@ -96,8 +97,12 @@ const impactCommand = z.object({ ...common, schemaVersion: z.literal('wfc.pf.cab
   calculation: locationImpactCalculationSchema.nullable() }).strict().refine(locationExpectation);
 const initialFillCommand = z.object({ ...common, schemaVersion: z.literal('wfc.pf.cable-endpoint-command.v3'), selection,
   calculation: locationImpactCalculationSchema.nullable(), initialFill: initialFillPolicySchema.nullable() }).strict().refine(locationExpectation);
+const automaticPairCommand = z.object({ ...common, schemaVersion: z.literal('wfc.pf.cable-endpoint-command.v4'), selection,
+  calculation: locationImpactCalculationSchema.nullable(), initialFill: z.null(), automaticPairPolicy: automaticPairPolicySchema.nullable(),
+}).strict().refine(locationExpectation).refine(value => value.automaticPairPolicy === null || value.calculation !== null,
+  'Automatic cable updates require an explicit calculation policy.');
 /** Legacy pending bodies retain their exact v1 shape, without inserted defaults or new authority. */
-export const cableEndpointCommandSchema = z.union([legacyCommand, impactCommand, initialFillCommand]);
+export const cableEndpointCommandSchema = z.union([legacyCommand, impactCommand, initialFillCommand, automaticPairCommand]);
 export type CableEndpointCommand = z.infer<typeof cableEndpointCommandSchema>;
 /** The exact strict command, including its idempotency key, is the pending-command hash input. */
 export function cableEndpointCommandHashInput(value: CableEndpointCommand) { return cableEndpointCommandSchema.parse(value); }

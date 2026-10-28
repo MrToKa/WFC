@@ -90,6 +90,21 @@ describe('direct text search across bounded workflow portions', () => {
 });
 
 describe('owned cable workflow reads', () => {
+  it.each([false, true])('keeps the exact barrier scope and drilling choice in cable detail reads: drilling %s', async drillThroughWalls => {
+    const scope = { projectId: project, modelVersionId: id(3), contentFingerprint: 'b'.repeat(64), selectionRevision: '4',
+      captureFrameId: id(4), captureFrameSha256: 'c'.repeat(64), coordinateFrame: 'canonical-world-metres' as const };
+    const barrierRouting = { schemaVersion: 'wfc.pf.barrier-admission-intent.v1' as const, scope, expectedRegistryRevision: '7',
+      expectedSnapshot: { snapshotId: id(5), scope, registryRevision: '7', contentSha256: 'd'.repeat(64), mode: 'mesh-set' as const }, drillThroughWalls };
+    const base = page(), detail = { schemaVersion: 'wfc.pf.cable-workflow-detail.v1' as const, projectId: project, cableId: cable,
+      querySha256: hash, contextSha256: hash, row: base.rows[0] };
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockResolvedValueOnce(detail);
+    const preferences = { secondaryDistanceMeters: 3, preferVerticalApproach: false, barrierRouting };
+    const view = renderHook(() => usePathFinderCableWorkflow({ ...access(), query: { ...preferences, search: 'Cable A', filter: 'all', limit: 20 } }));
+    await waitFor(() => expect(view.result.current.page).not.toBeNull());
+    await act(async () => { expect(await view.result.current.readDetail(cable)).toEqual(detail); });
+    expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledExactlyOnceWith(project, 'token', cable, preferences, expect.any(AbortSignal));
+    expect(view.result.current.detail).toEqual(detail); expect(view.result.current.error).toBeNull();
+  });
   it('retains last owned page and detail during a transient refresh failure, then replaces them on a successful read', async () => {
     const base = page(), detail = { schemaVersion: 'wfc.pf.cable-workflow-detail.v1' as const, projectId: project, cableId: cable,
       querySha256: hash, contextSha256: hash, row: base.rows[0] };

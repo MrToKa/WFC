@@ -11,6 +11,28 @@ const item = () => ({ schemaVersion: 'wfc.pf.location-impact-item.v1', projectId
   fromLogicalKey: 'EQUIPMENT', toLogicalKey: 'OTHER', category: 'LV', eligible: true, contentSha256: 'f'.repeat(64) });
 const barrierIntent=(drillThroughWalls=false)=>{const scope={projectId:id(1),modelVersionId:current.modelVersionId,contentFingerprint:current.contentFingerprint,selectionRevision:current.selectionRevision,captureFrameId:current.captureFrameId,captureFrameSha256:'b'.repeat(64),coordinateFrame:'canonical-world-metres' as const};return{schemaVersion:'wfc.pf.barrier-admission-intent.v1' as const,scope,expectedRegistryRevision:'4',expectedSnapshot:{snapshotId:id(14),scope,registryRevision:'4',contentSha256:'c'.repeat(64),mode:'explicit-empty' as const},drillThroughWalls};};
 describe('scoped impact contracts', () => {
+  it('keeps v1/v2 historical authority unchanged and requires exact explicit v3 automatic policy or null',()=>{
+    const legacy=record(),policy={schemaVersion:'wfc.pf.automatic-pair-policy.v1',mode:'when-both-empty-or-unchanged-automatic'};
+    const v2={...legacy,schemaVersion:'wfc.pf.location-impact-record.v2',originCableId:id(21)},v3={...v2,schemaVersion:'wfc.pf.location-impact-record.v3',automaticPairPolicy:policy};
+    expect(locationImpactRecordSchema.parse(v3)).toEqual(v3);
+    expect(locationImpactRecordSchema.parse({...v3,automaticPairPolicy:null})).toEqual({...v3,automaticPairPolicy:null});
+    for(const old of [legacy,v2]){
+      expect(locationImpactRecordSchema.parse(old)).toEqual(old);
+      expect(locationImpactRecordSchema.safeParse({...old,automaticPairPolicy:policy}).success).toBe(false);
+    }
+    for(const automaticPairPolicy of [undefined,{}, {...policy,extra:true}, {...policy,mode:'always'}])
+      expect(locationImpactRecordSchema.safeParse({...v3,automaticPairPolicy}).success).toBe(false);
+    expect(locationImpactRecordSchema.safeParse({...v3,originCableId:id(22)}).success).toBe(false);
+  });
+  it('keeps v1 bytes unchanged and binds a v2 priority origin to the exact eligible shared scope',()=>{
+    const legacy=record(),priority={...legacy,schemaVersion:'wfc.pf.location-impact-record.v2',originCableId:id(21)};
+    expect(locationImpactRecordSchema.parse(legacy)).toEqual(legacy);
+    expect(locationImpactRecordSchema.parse(priority)).toEqual(priority);
+    expect(locationImpactRecordSchema.safeParse({...legacy,originCableId:id(21)}).success).toBe(false);
+    expect(locationImpactRecordSchema.safeParse({...priority,originCableId:id(22)}).success).toBe(false);
+    expect(locationImpactRecordSchema.safeParse({...priority,originCableId:id(99)}).success).toBe(false);
+    const {originCableId:_origin,...missing}=priority;expect(locationImpactRecordSchema.safeParse(missing).success).toBe(false);
+  });
   it.each([false,true])('retains exact scoped preferences and explicit drilling choice without changing historical absence (drill=%s)',drillThroughWalls=>{
     const legacy=record(),barrierRouting=barrierIntent(drillThroughWalls),calculation={...legacy.calculation,preferences:{...legacy.calculation.preferences,barrierRouting}};
     expect(locationImpactCalculationSchema.parse(legacy.calculation).preferences).not.toHaveProperty('barrierRouting');

@@ -8,7 +8,7 @@ import { collectLookupDependencies } from './lookups.js';
 import { normalizeLocation } from './matching.js';
 import { defaultOptions, type EngineOptions, type EngineResponse, type JobPrincipal, type ProjectSettings } from './jobContracts.js';
 import { engineProjectSettings, projectRoutingSettings } from './settings.js';
-import { hash } from './dependencies.js';
+import { hash, readCablePurposeRouting } from './dependencies.js';
 import { jobDto } from './jobs.js';
 import { requirePreparedRoutingScope, type RoutingScope } from './routingScope.js';
 import { readCurrentEndpointBindingContext, readEndpointBindingScope } from './endpointBindingRepository.js';
@@ -26,6 +26,7 @@ import type { MixedBarrierVerifierEvidence } from '../../shared/pathfinderBarrie
 import { collectBarrierCalculationScope, collectBarrierCalculationState } from './barrierCalculationScope.js';
 import { requireBarrierEngineStrategy } from './barrierStrategy.js';
 import { DIRECT_SECONDARY_POLICY } from '../../shared/pathfinderDirectSecondary.js';
+import { cablePurposeSchema, isPermittedCablePurposeRoute, type CablePurposeRouting } from '../../shared/routingCablePurposes.js';
 
 const name = z.string().trim().max(500).regex(/^[^\u0000-\u001f\u007f-\u009f]*$/u);
 export const previewEndpointSchema = z.object({ name, point: point.optional() }).strict().refine(value=>Boolean(value.name || value.point),'Enter an endpoint name or choose an explicit point.');
@@ -34,6 +35,7 @@ export const previewSchema = z.object({
   artifactId: uuid, expectedSelectionRevision: revision, expectedSettingsRevision: revision, expectedRegistryRevision: revision,
   secondaryDistanceMeters: z.number().finite().min(0).max(1_000_000).optional(), preferVerticalApproach: z.boolean().optional(),
   barrierRouting: barrierAdmissionIntentSchema.optional(),
+  cablePurpose: cablePurposeSchema.optional(),
 }).strict();
 export type PreviewInput = z.infer<typeof previewSchema>;
 type Endpoint = {name:string;point:[number,number,number];source:'manual-world-point'|'shared-location'|'equipment-bottom-aabb';objectId:string|null;locationId:string|null;bindingRevision:string|null; binding: EndpointCalculationPoint | null};
@@ -41,6 +43,7 @@ export type HistoricalPreviewDependencies = {
   schemaVersion:'pathfinder.preview.dependencies.v5';engineIdentity:EngineIdentity;comparison:ComparisonCalculationScope;preparation:EndpointCalculationPreparation;routing:RoutingScope;projectId:string;modelVersionId:string;selectionRevision:string;contentFingerprint:string;
   artifactId:string;snapshotSha256:string;registryRevision:string;settings:ProjectSettings;options:EngineOptions;
   input:PreviewInput;from:Endpoint;to:Endpoint;engineVersion:'pathfinder-45c24bf5-pf1-modelrunner-v1';
+  cablePurposeRouting?:CablePurposeRouting;
 };
 export type BarrierPreviewDependencies = Omit<HistoricalPreviewDependencies,'schemaVersion'|'engineIdentity'> & {
   schemaVersion:'pathfinder.preview.dependencies.v6';engineIdentity:BarrierEngineIdentity;barriers:BarrierRuntimeContext;
@@ -76,6 +79,11 @@ async function resolveEndpoint(client:PoolClient,projectId:string,current:Endpoi
 
 /** The same project lock as normal PF work protects authority and all mutable dependencies until commit. */
 export async function collectPreviewDependencies(client:PoolClient,projectId:string,input:PreviewInput):Promise<PreviewDependencies> {
+  if (!cablePurposeSchema.safeParse(input.cablePurpose).success)
+    throw new PathFinderError('PREVIEW_CABLE_PURPOSE_REQUIRED',409,'Choose a Purpose from the project Cable types before calculating a preview.');
+  const cablePurposeRouting = await readCablePurposeRouting(client,projectId,input.cablePurpose);
+  if (!cablePurposeRouting)
+    throw new PathFinderError('PREVIEW_CABLE_PURPOSE_UNAVAILABLE',409,'This Cable types Purpose has no permitted project tray route. Configure its routing permissions before calculating a preview.');
   const requested={...defaultOptions,secondaryDistanceMeters:input.secondaryDistanceMeters ?? defaultOptions.secondaryDistanceMeters,
     preferVerticalApproach:input.preferVerticalApproach ?? defaultOptions.preferVerticalApproach,
     ...(input.barrierRouting?{barrierRouting:input.barrierRouting}:{})};
@@ -93,7 +101,7 @@ export async function collectPreviewDependencies(client:PoolClient,projectId:str
   if (current.settings.revision!==input.expectedSettingsRevision) throw new PathFinderError('PROJECT_SETTINGS_CONFLICT',409,'Project Details changed. Refresh before calculating.');
   const from=await resolveEndpoint(client,projectId,bindingContext,input.from);
   const to=await resolveEndpoint(client,projectId,bindingContext,input.to);
-  const common={comparison:comparison.scope,preparation:{aggregateId:bindingContext.aggregateId,geometryRevision:bindingContext.geometryRevision,
+  const common={cablePurposeRouting,comparison:comparison.scope,preparation:{aggregateId:bindingContext.aggregateId,geometryRevision:bindingContext.geometryRevision,
     captureFrameId:bindingContext.captureFrameId,projectionSha256:bindingContext.projectionSha256},routing,projectId,modelVersionId:model.modelVersionId,selectionRevision:model.selectionRevision,
     contentFingerprint:model.contentFingerprint,artifactId:model.artifactId,snapshotSha256:model.snapshotSha256,registryRevision:registry.registry_revision,
     settings:current.settings,options:current.options,input,from,to,engineVersion:'pathfinder-45c24bf5-pf1-modelrunner-v1' as const};
@@ -121,12 +129,18 @@ export function previewEngineRequest(dependencies:PreviewDependencies,requestId:
     ...(dependencies.schemaVersion==='pathfinder.preview.dependencies.v6'?{barriers:dependencies.barriers}:{}),
     modelVersionId:dependencies.modelVersionId,snapshotId:dependencies.artifactId,snapshotSha256:dependencies.snapshotSha256,timeoutMilliseconds,
     ...(policy?{directSecondaryPolicy:policy}:{}),
+    ...(dependencies.cablePurposeRouting?{allowedPurposeRouteCodes:dependencies.cablePurposeRouting.allowedRouteCodes}:{}),
     category:dependencies.input.category,from:{x:dependencies.from.point[0],y:dependencies.from.point[1],z:dependencies.from.point[2]},
     to:{x:dependencies.to.point[0],y:dependencies.to.point[1],z:dependencies.to.point[2]},reverse:dependencies.input.reverse,
     options:numericOptions,projectSettings:engineProjectSettings(dependencies.settings)};
 }
 
-export function previewResultDto(response:EngineResponse,dependencies:PreviewDependencies,stale:boolean) {
+/** Admission permissions bind both fresh native output and any stored current result. */
+export function requirePreviewEngineStrategy(response:EngineResponse,dependencies:PreviewDependencies) {
+  if(dependencies.cablePurposeRouting&&response.route
+    &&(response.route.routeText!==response.route.routeCodes.join('')
+      ||!isPermittedCablePurposeRoute(response.route.routeCodes,dependencies.cablePurposeRouting.allowedRouteCodes)))
+    throw new PathFinderError('ENGINE_CABLE_PURPOSE_INVALID',502,'The calculated route contains a tray that is not permitted for this cable Purpose.');
   let decision;
   if(dependencies.schemaVersion==='pathfinder.preview.dependencies.v6') {
     requireBarrierEngineStrategy(response,{context:dependencies.barriers,
@@ -137,6 +151,11 @@ export function previewResultDto(response:EngineResponse,dependencies:PreviewDep
   }
   else decision=requireDirectSecondaryStrategy(response,{category:dependencies.input.category,fromPoint:dependencies.from.point,toPoint:dependencies.to.point,
     engineIdentity:dependencies.engineIdentity,reverse:dependencies.input.reverse});
+  return decision;
+}
+
+export function previewResultDto(response:EngineResponse,dependencies:PreviewDependencies,stale:boolean) {
+  const decision=requirePreviewEngineStrategy(response,dependencies);
   const route=response.route;
   return {status:response.status,message:response.message,prepared:response.prepared ?? null,effectiveCategory:response.effectiveCategory ?? null,
     engineeringAccepted:false,acceptanceScope:'standalone-preview',canApply:false,stale,settings:dependencies.settings,

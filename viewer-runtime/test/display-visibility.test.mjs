@@ -14,6 +14,22 @@ test('display scope and all recursive fragments provide exact versioned visibili
   assert.deepEqual(observed.equipmentEligibility(2), { schemaVersion: 'wfc.pf.equipment-eligibility.v1', matchingPolicyVersion: 'wfc.pf.project-exact-candidates.v3', visibilityScopeSha256: observed.scope.contentSha256, visibility: 'visible', checkedAncestorCount: 2, fragmentStatus: 'all-visible', fragmentCount: 1 });
   assert.equal(sameDisplayVisibility(observed.scope, (await f.observe()).scope), true);
 });
+test('pinned SDK recursive enumeration includes its source node without making every endpoint a cycle', async () => {
+  const f=fixture(),children={1:[2,4],2:[3],3:[],4:[]},calls=[];
+  // viewer3D 7.130.0: enumNodeChildren(id,visit,true) calls visit(id)
+  // before descendants; nonrecursive enumeration visits direct children only.
+  f.tree.enumNodeChildren=(id,visit,recursive)=>{
+    calls.push({id,recursive});
+    if(recursive&&visit(id))return id;
+    const descend=parent=>{for(const child of children[parent]){if(visit(child,parent))return child;if(recursive){const stop=descend(child);if(stop)return stop;}}};
+    return descend(id);
+  };
+  const observed=await f.observe();
+  assert.equal(observed.equipmentEligibility(2).fragmentCount,1);
+  assert.equal(observed.equipmentEligibility(1).fragmentCount,2);
+  assert.ok(calls.every(call=>call.recursive===false));
+  f.hidden.add(3);assert.equal((await f.observe()).equipmentEligibility(2),null);
+});
 for (const [name, change] of [['own hidden', f => f.hidden.add(2)], ['hidden ancestor', f => f.hidden.add(1)], ['own off', f => f.off.add(2)], ['hidden descendant', f => f.hidden.add(3)], ['all hidden fragment', f => f.hiddenFragments.add(0)]]) test('automatic endpoint excludes ' + name, async () => {
   const f = fixture(), before = await f.observe(); change(f); const after = await f.observe(); assert.equal(after.equipmentEligibility(2), null); assert.equal(sameDisplayVisibility(before.scope, after.scope), false);
 });

@@ -36,15 +36,26 @@ const VERSION = 'pathfinder.engine.session.v1',
 const INPUT = 1024 * 1024,
   OUTPUT = 32 * 1024 * 1024,
   STDERR = 65536;
+/** Interactive local work may keep its prepared model for five idle minutes;
+ * request count, total lifetime, cancellation and memory ceilings remain fixed. */
+export function engineSessionIdleMilliseconds(profile: unknown = process.env.PF_ENGINE_SESSION_PROFILE): 30000 | 300000 {
+  if (profile === undefined || profile === 'bounded') return 30000;
+  if (profile === 'interactive') return 300000;
+  throw new PathFinderError('PATHFINDER_ENGINE_SESSION_PROFILE_INVALID', 503);
+}
 export const engineSessionPolicy = Object.freeze({
   requests: 64,
-  idleMilliseconds: 30000,
+  idleMilliseconds: engineSessionIdleMilliseconds(),
   lifetimeMilliseconds: 600000,
   startupMilliseconds: 5000,
   rssBytes: 512 * 1024 * 1024,
   rssIntervalMilliseconds: 100,
   joinMilliseconds: 10000,
 });
+export function assertEngineSessionIdleMilliseconds(actual: unknown, expected: number = engineSessionPolicy.idleMilliseconds): void {
+  if (![30000, 300000].includes(actual === undefined ? 30000 : actual as number) || (actual ?? 30000) !== expected)
+    throw new PathFinderError('ENGINE_SESSION_PROFILE_MISMATCH', 502);
+}
 const readySchema = z
   .object({
     schemaVersion: z.literal(VERSION),
@@ -53,6 +64,7 @@ const readySchema = z
     engineVersion: z.literal(ENGINE),
     maxInputBytes: z.literal(INPUT),
     maxOutputBytes: z.literal(OUTPUT),
+    idleMilliseconds: z.union([z.literal(30000), z.literal(300000)]).optional(),
   })
   .strict();
 const resultSchema = z
@@ -396,6 +408,7 @@ export function createSessionEngineExecutor(
         if (current.ordinal === 0) {
           const ready = readySchema.parse(decoded);
           if (ready.runnerSha256 !== current.hash) throw error('ENGINE_SESSION_IDENTITY');
+          assertEngineSessionIdleMilliseconds(ready.idleMilliseconds);
           clearTimeout(current.startup);
           current.ready.resolve();
           current.ordinal = -1;

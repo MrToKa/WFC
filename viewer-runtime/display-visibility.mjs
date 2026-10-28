@@ -45,7 +45,17 @@ export async function captureDisplayVisibility(viewer, tree, ids, { check = () =
       check(); if (!byId.has(child)) fail(); if (nodes[byId.get(child)]) allowed = false;
       tree.enumNodeFragments(child, fragment => { check(); if (!integer(fragment) || fragment >= count) fail(); found.add(fragment); if (!visibleFragments[fragment]) allowed = false; if (found.size > maximum) fail(); }, false);
     };
-    inspect(id); tree.enumNodeChildren(id, child => { check(); if (!byId.has(child) || descendants.has(child)) fail(); descendants.add(child); if (descendants.size > maximum) fail(); inspect(child); return false; }, true);
+    // The pinned SDK's recursive=true enumeration visits the starting node
+    // itself. Walk direct edges explicitly so it is inspected exactly once;
+    // genuine duplicate descendants/cycles still refuse qualification.
+    const pending = [id];
+    for (let index = 0; index < pending.length; index++) {
+      const parent = pending[index]; inspect(parent);
+      tree.enumNodeChildren(parent, child => {
+        check(); if (!byId.has(child) || descendants.has(child) || tree.getNodeParentId(child) !== parent) fail();
+        descendants.add(child); if (descendants.size > maximum) fail(); pending.push(child); return false;
+      }, false);
+    }
     if (!allowed) return null;
     if (!found.size) {
       if (typeof tree.getNodeBox !== 'function') return null;

@@ -211,10 +211,12 @@ public sealed class PreparedExecutionInput
 {
     internal PreparedExecutionInput(ModelIdentity model, string sha256, string sourceSha256, ModelLimits limits,
         bool independentLookup, LookupScopeSummary? scope, string key, string rulesHash, string rulesContextSha256, TrayGeometryInput[] inputs,
-        PreparedObject[] objects, string[] diagnostics, bool needsReview, bool requiresCategoryAssignment)
+        PreparedObject[] objects, string[] diagnostics, bool needsReview, bool requiresCategoryAssignment,
+        TrayGeometryFitPolicy fitPolicy, string? fittingImplementationSha256)
     { Model = model; Sha256 = sha256; SourceSha256 = sourceSha256; Limits = limits; IndependentLookup = independentLookup;
         Scope = scope; Key = key; RulesHash = rulesHash; RulesContextSha256 = rulesContextSha256; Inputs = inputs; Objects = objects; Diagnostics = diagnostics;
-        NeedsReview = needsReview; RequiresCategoryAssignment = requiresCategoryAssignment; }
+        NeedsReview = needsReview; RequiresCategoryAssignment = requiresCategoryAssignment;
+        FitPolicy = fitPolicy; FittingImplementationSha256 = fittingImplementationSha256; }
     public ModelIdentity Model { get; }
     public string Sha256 { get; }
     public string SourceSha256 { get; }
@@ -229,6 +231,8 @@ public sealed class PreparedExecutionInput
     internal string[] Diagnostics { get; }
     internal bool NeedsReview { get; }
     internal bool RequiresCategoryAssignment { get; }
+    internal TrayGeometryFitPolicy FitPolicy { get; }
+    internal string? FittingImplementationSha256 { get; }
 }
 
 /// <summary>Small trusted source guards plus exact fitted geometry. No raw

@@ -7,12 +7,20 @@ const contexts = z.object({ from: policyHashSchema, to: policyHashSchema }).stri
 const command = cableEndpointCommandSchema.refine((value): value is Extract<CableEndpointCommand, { schemaVersion: 'wfc.pf.cable-endpoint-command.v3' }> =>
   value.schemaVersion === 'wfc.pf.cable-endpoint-command.v3', 'A new pair save requires the explicit current policy contract.');
 const entry = z.object({ end: z.enum(['from', 'to']), command }).strict();
+const automaticCommand = cableEndpointCommandSchema.refine((value): value is Extract<CableEndpointCommand, { schemaVersion: 'wfc.pf.cable-endpoint-command.v4' }> =>
+  value.schemaVersion === 'wfc.pf.cable-endpoint-command.v4', 'A new automatic pair save requires the explicit v4 policy contract.');
+const automaticEntry = z.object({ end: z.enum(['from', 'to']), command: automaticCommand }).strict();
 /** Both original contexts are frozen even when only one endpoint has a draft. */
-export const cableEndpointPairCommandSchema = z.object({ schemaVersion: z.literal('wfc.pf.cable-endpoint-pair-command.v1'),
+const legacyPairCommand = z.object({ schemaVersion: z.literal('wfc.pf.cable-endpoint-pair-command.v1'),
   idempotencyKey: policyUuidSchema, expectedContexts: contexts, endpoints: z.array(entry).min(1).max(2),
-}).strict().superRefine((value, ctx) => {
+}).strict();
+const automaticPairCommand = z.object({ schemaVersion: z.literal('wfc.pf.cable-endpoint-pair-command.v2'),
+  idempotencyKey: policyUuidSchema, expectedContexts: contexts, endpoints: z.array(automaticEntry).min(1).max(2),
+}).strict();
+export const cableEndpointPairCommandSchema = z.union([legacyPairCommand, automaticPairCommand]).superRefine((value, ctx) => {
   // Zod also runs outer refinements for dirty (already refused) child values.
-  if (!value.endpoints.length || value.endpoints.some(item => item.command.schemaVersion !== 'wfc.pf.cable-endpoint-command.v3')) return;
+  const expected = value.schemaVersion === 'wfc.pf.cable-endpoint-pair-command.v1' ? 'wfc.pf.cable-endpoint-command.v3' : 'wfc.pf.cable-endpoint-command.v4';
+  if (!value.endpoints.length || value.endpoints.some(item => item.command.schemaVersion !== expected)) return;
   const keys = [value.idempotencyKey, ...value.endpoints.map(item => item.command.idempotencyKey)];
   if (new Set(keys).size !== keys.length || value.endpoints.length === 2 && (value.endpoints[0].end !== 'from' || value.endpoints[1].end !== 'to'))
     ctx.addIssue({ code: 'custom', message: 'The pair retains distinct keys and unique endpoints in From/To order.' });
@@ -23,7 +31,9 @@ export const cableEndpointPairCommandSchema = z.object({ schemaVersion: z.litera
       || selected.expectedCableWriteRevision !== first.expectedCableWriteRevision || selected.expectedRegistryRevision !== first.expectedRegistryRevision
       || canonicalPurposeJson(selected.expectedCurrent) !== canonicalPurposeJson(first.expectedCurrent)
       || canonicalPurposeJson(selected.calculation) !== canonicalPurposeJson(first.calculation)
-      || canonicalPurposeJson(selected.initialFill) !== canonicalPurposeJson(first.initialFill))
+      || canonicalPurposeJson(selected.initialFill) !== canonicalPurposeJson(first.initialFill)
+      || ('automaticPairPolicy' in selected && 'automaticPairPolicy' in first
+        && canonicalPurposeJson(selected.automaticPairPolicy) !== canonicalPurposeJson(first.automaticPairPolicy)))
       ctx.addIssue({ code: 'custom', message: 'All pair drafts retain the same original cable, registry, model and explicit policies.' });
   }
 });

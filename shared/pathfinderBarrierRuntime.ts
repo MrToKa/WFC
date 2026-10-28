@@ -45,12 +45,12 @@ export const barrierRuntimeContextSchema = z.object({
   const snapshot = value.binding.snapshot;
   if (!snapshot) {
     if (!value.binding.policy.drillThroughWalls || value.storage !== null) issue('An unpublished scope permits only explicit bypass with no fabricated stored geometry.');
-  } else if (!value.storage || value.storage.manifest.bytes > BARRIER_LIMITS.manifestBytes
+  } else if (!value.storage || value.storage.manifest.bytes > 256 * 1024
     || (snapshot.mode === 'mesh-set') !== (value.storage.capture !== null)) issue('Exact published manifests require the corresponding bounded original capture reference.');
   if (value.binding.policy.numericToleranceMetres !== value.profile.qualification.numericToleranceMetres)
     issue('The runtime profile and collision binding must use the same numerical contact policy.');
   try {
-    if (new TextEncoder().encode(barrierCanonicalJson(value)).byteLength > BARRIER_LIMITS.controlBytes) issue('The runtime context exceeds its small control-message budget.');
+    if (new TextEncoder().encode(barrierCanonicalJson(value)).byteLength > 64 * 1024) issue('The runtime context exceeds its small control-message budget.');
   } catch { issue('The runtime context must contain finite canonical values.'); }
 });
 export type BarrierRuntimeContext = z.infer<typeof barrierRuntimeContextSchema>;
@@ -86,6 +86,11 @@ export const barrierExecutionSchema = z.object({
     issue('Every check and direct decision must retain the exact admitted context.');
   if (value.qualification && value.qualification.captureSha256 !== value.context.storage?.capture?.sha256)
     issue('Qualification must describe the exact original stored capture.');
+  if (value.qualification) {
+    const members = value.qualification.computationalMemberships, limits = value.context.profile.qualification;
+    if (members.length > limits.maximumComputationalMeshes || new Set(members.flatMap(member => member.parentSelectionIds)).size > limits.maximumParents)
+      issue('Qualification exceeds the exact historical profile selection capacity.');
+  }
   const successful = ['clear', 'bypassed', 'no-barriers-declared'].includes(value.diagnostics.status);
   const expected = { clear: 'clear-selected-scope', bypassed: 'bypassed', 'no-barriers-declared': 'no-barriers-declared' } as const;
   if (successful && (!value.proof || value.proof.status !== expected[value.diagnostics.status as keyof typeof expected]

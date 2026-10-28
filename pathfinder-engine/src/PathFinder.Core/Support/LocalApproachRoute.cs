@@ -93,7 +93,8 @@ namespace AddinRibbon.Routing
             var toTargets = ConstrainedCandidates(eligible, to, collision, options, budget, toChecks, false);
             var fromPlans = new Dictionary<Tuple<int, double, double, double, double>, RouteConnectorPlan>();
             var toPlans = new Dictionary<Tuple<int, double, double, double, double>, RouteConnectorPlan>();
-            foreach (var pair in LocalPairs(fromTargets, toTargets))
+            var localPairs = context.Options.UseNearestAnchoredSearch ? NearestAnchoredPairs(fromTargets, toTargets) : LocalPairs(fromTargets, toTargets);
+            foreach (var pair in localPairs)
             {
                 budget.BeginPair(); var a = pair.Item1; var b = pair.Item2; RouteConnectorPlan usedFrom, usedTo;
                 route = ConstrainedPairGraph(eligible, from, to, a, b, collision, options, budget,
@@ -110,12 +111,38 @@ namespace AddinRibbon.Routing
             for (int sum = 0; sum <= first.Count + last.Count - 2; sum++)
                 for (int i = 0; i < first.Count; i++) { int j = sum - i; if (j >= 0 && j < last.Count) yield return Tuple.Create(first[i], last[j]); }
         }
+        private static IEnumerable<Tuple<Projection, Projection>> NearestAnchoredPairs(List<Projection> first, List<Projection> last)
+        {
+            foreach (var ranks in NearestAnchoredPairRanks(first.Count, last.Count))
+                yield return Tuple.Create(first[ranks.Item1], last[ranks.Item2]);
+        }
+        private static IEnumerable<Tuple<int, int>> NearestAnchoredPairRanks(int firstCount, int lastCount)
+        {
+            if (firstCount == 0 || lastCount == 0) yield break;
+            // Cover every retained alternative at either end against the other
+            // nearest candidate before interior rank-sum pairs can consume the
+            // shared pair budget. This changes order only, never graph topology
+            // or the retained candidate domain, and claims no global optimum.
+            yield return Tuple.Create(0, 0);
+            for (int rank = 1; rank < Math.Max(firstCount, lastCount); rank++)
+            {
+                if (rank < lastCount) yield return Tuple.Create(0, rank);
+                if (rank < firstCount) yield return Tuple.Create(rank, 0);
+            }
+            for (int sum = 2; sum <= firstCount + lastCount - 2; sum++)
+                for (int i = 1; i < firstCount; i++)
+                {
+                    int j = sum - i;
+                    if (j > 0 && j < lastCount) yield return Tuple.Create(i, j);
+                }
+        }
         private static RouteConnectorPlan LocalPlan(Dictionary<Tuple<int, double, double, double, double>, RouteConnectorPlan> cache,
             RoutePoint endpoint, Projection projection, RoutePoint actualStation, RouteCollisionQuery collision, LocalConnectorContext context)
         {
             var key = Tuple.Create(projection.Segment, projection.Along, actualStation.X, actualStation.Y, actualStation.Z); RouteConnectorPlan plan;
             if (!cache.TryGetValue(key, out plan))
-            { plan = LocalConnectorPlanner.PlanPrepared(endpoint, actualStation, collision, context.Options.Domain(endpoint, actualStation), context); cache.Add(key, plan); }
+            { plan = LocalConnectorPlanner.PlanPrepared(endpoint, actualStation, collision, context.Options.Domain(endpoint, actualStation), context,
+                context.Options.UseNearestAnchoredSearch); cache.Add(key, plan); }
             return plan;
         }
     }

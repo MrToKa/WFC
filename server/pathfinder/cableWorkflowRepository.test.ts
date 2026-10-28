@@ -8,17 +8,18 @@ import { endpointBindingFixture } from '../../shared/pathfinderEndpointFixtures.
 import { MIXED_BARRIER_POLICY } from '../../shared/pathfinderBarrierMixed.js';
 import { supportedBarrierAdmissionIntentSchema } from '../../shared/pathfinderBarrierSupported.js';
 
-const mocks = vi.hoisted(() => ({ tx: vi.fn(), common: vi.fn(), barrierCommon: vi.fn(), heads: vi.fn(), automatic: vi.fn(), verified: vi.fn(), reviewable: vi.fn(), accepted: vi.fn() }));
+const mocks = vi.hoisted(() => ({ tx: vi.fn(), common: vi.fn(), barrierCommon: vi.fn(), heads: vi.fn(), automatic: vi.fn(), verified: vi.fn(), reviewable: vi.fn(), accepted: vi.fn(), savedExactDisplay: vi.fn() }));
 vi.mock('./cableWorkflowRead.js', () => ({ cableWorkflowReadTransaction: mocks.tx }));
 vi.mock('./dependencies.js', async original => ({ ...await original<typeof import('./dependencies.js')>(), collectCommonCalculationInputs: mocks.common, collectBarrierCommonCalculationInputs: mocks.barrierCommon,
+  createCablePurposeRoutingReader:async()=>((purpose:unknown)=>purpose==='Control'?{purpose:'Control',allowedRouteCodes:['/B001']}:null),
   freezeCableDependencies: (common: object, cable: Record<string, unknown>) => ({ cable, status: 'ready', message: '', dependencies: { ...common, cableId: cable.id, cableWriteRevision: cable.cable_write_revision } }),
   freezeCableDependenciesForVersion: (common: object, cable: Record<string, unknown>) => ({ cable, status: 'ready', message: '', dependencies: { ...common, cableId: cable.id, cableWriteRevision: cable.cable_write_revision } }) }));
 vi.mock('./endpointBindingRepository.js', () => ({ readCurrentEndpointBindingContext: vi.fn(async () => null), readNeededEndpointBindingHeads: mocks.heads }));
 vi.mock('./automaticEndpointCandidates.js', () => ({ readAutomaticEndpointCandidates: mocks.automatic }));
-vi.mock('./cableWorkflowProof.js', () => ({ createCableWorkflowProofReader: () => ({ verified: mocks.verified, reviewable: mocks.reviewable, accepted: mocks.accepted }) }));
+vi.mock('./cableWorkflowProof.js', () => ({ createCableWorkflowProofReader: () => ({ verified: mocks.verified, reviewable: mocks.reviewable, accepted: mocks.accepted, savedExactDisplay: mocks.savedExactDisplay }) }));
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const projectId = id(1), who = { userId: id(2), loginId: id(3), loginExpiresAt: Date.now() + 1000_000 };
-function cable(n: number) { return { id: id(1000 + n), cable_type_id: id(4), mto: 'Control', cable_write_revision: '7', tag: `SYNTHETIC-${n}`,
+function cable(n: number) { return { id: id(1000 + n), cable_type_id: id(4), cable_type_purpose:'Control', mto: 'Control', cable_write_revision: '7', tag: `SYNTHETIC-${n}`,
   from_location: 'A', to_location: 'B', routing: null, design_length: null, install_length: '123', input_oversize: false }; }
 function meta(n: number, patch: Record<string, unknown> = {}) { return { cable_id: id(1000 + n), admission_id: id(10), job_id: id(11), job_status: 'running',
   cancel_requested: false, item_state: 'waiting', item_status: 'ready', baseline_status: 'ready', proposal_id: null, proposal_hash: null, proposal_status: null, ...patch }; }
@@ -32,6 +33,7 @@ function fixture(count = 1) {
   const query = vi.fn(async (sql: string, values: unknown[] = []) => {
     if (sql.includes('cable-workflow:context')) return { rows: [{ active_model_version_id: id(5), selection_revision: '1', admission_count: state.admissionCount,
       context: { generation: state.generation, latest: state.latest } }] };
+    if (sql.includes('cable-purpose:locked-scope-types')) {const ids=values[1] as string[];return{rows:state.cables.filter(c=>ids.includes(c.id)).map(c=>({...c}))};}
     if (sql.includes('cable-workflow:candidates')) {
       const after = values[1] as string | null, exact = values[2] as string | null, asciiNeedle = values[3] as string | null;
       // Simulate only the conservative candidate protocol; real PostgreSQL tests verify its SQL implementation.
@@ -55,12 +57,55 @@ function fixture(count = 1) {
   mocks.verified.mockImplementation(async () => ({ dependencies: { options: state.common.inputs?.options ?? defaultOptions } }));
   mocks.reviewable.mockImplementation(async (_cable, _job, _proposal, current) => ({ currentness: current ? 'current' : 'changed', reviewable: !!current && state.allowReview, reasonCodes: [] }));
   mocks.accepted.mockResolvedValue(false);
+  mocks.savedExactDisplay.mockResolvedValue(false);
   const repo = createCableWorkflowRepository({} as Pool, { cursorKey: Buffer.alloc(32, 42) });
   return { state, query, repo };
 }
 beforeEach(() => vi.clearAllMocks());
 
+describe('read-only saved geometry qualification in workflow projection',()=>{
+  function savedRow(){
+    const f=fixture();f.state.hasReceipt=true;f.state.cables[0].routing='/SAVED' as never;f.state.cables[0].design_length='58' as never;
+    f.state.metadata.set(id(1000),meta(0,{job_status:'complete',item_state:'complete',proposal_status:'calculated',proposal_id:id(30),proposal_hash:'f'.repeat(64)}));
+    mocks.reviewable.mockResolvedValue({currentness:'changed',reviewable:false,reasonCodes:['PROPOSAL_DEPENDENCIES_CHANGED']});mocks.savedExactDisplay.mockResolvedValue(true);
+    return f;
+  }
+  it('exposes only the qualified exact saved tuple and leaves write authority changed/false',async()=>{
+    const f=savedRow(),detail=await f.repo.detail(projectId,who,id(1000),{});
+    expect(detail.row.calculation).toMatchObject({savedExactDisplay:true,currentness:'changed',reviewable:false,acceptedMatchesCurrent:false,proposalId:id(30),proposalHash:'f'.repeat(64)});
+    expect(mocks.savedExactDisplay).toHaveBeenCalledWith(expect.objectContaining({id:id(1000),routing:'/SAVED',designLength:'58'}),expect.any(Function),{jobId:id(11),proposalId:id(30),proposalHash:'f'.repeat(64)});
+    expect(classifyCableWorkflow(detail.row).status).toBe('needs-routing');
+  });
+  it.each(['current','accepted','no-receipt','cancelled','failed','pending'] as const)('does not perform extra saved proof for %s evidence',async kind=>{
+    const f=savedRow();
+    if(kind==='current')mocks.reviewable.mockResolvedValue({currentness:'current',reviewable:true,reasonCodes:[]});
+    if(kind==='accepted')mocks.accepted.mockResolvedValue(true);
+    if(kind==='no-receipt')f.state.hasReceipt=false;
+    if(kind==='cancelled')f.state.metadata.get(id(1000))!.cancel_requested=true;
+    if(kind==='failed')f.state.metadata.get(id(1000))!.job_status='failed';
+    if(kind==='pending'){f.state.metadata.get(id(1000))!.job_status='running';f.state.metadata.get(id(1000))!.item_state='running';}
+    const detail=await f.repo.detail(projectId,who,id(1000),{});
+    expect(detail.row.calculation.savedExactDisplay).toBeUndefined();expect(mocks.savedExactDisplay).not.toHaveBeenCalled();
+  });
+  it('does not expose a failed saved proof',async()=>{
+    const f=savedRow();mocks.savedExactDisplay.mockResolvedValue(false);const detail=await f.repo.detail(projectId,who,id(1000),{});
+    expect(detail.row.calculation.savedExactDisplay).toBeUndefined();expect(detail.row.calculation).toMatchObject({currentness:'changed',reviewable:false,acceptedMatchesCurrent:false});
+  });
+});
+
 describe('bounded cable diagnostics, mocked SQL protocol and explicit proof/auth seams', () => {
+  it('checks the linked Purpose after common input locking rather than the earlier row projection',async()=>{
+    const f=fixture();
+    f.state.metadata.set(id(1000),meta(0,{job_status:'complete',item_state:'complete',proposal_status:'calculated',proposal_id:id(30),proposal_hash:'f'.repeat(64)}));
+    mocks.common.mockImplementationOnce(async()=>{
+      f.state.cables[0]={...f.state.cables[0],cable_type_purpose:'Unconfigured'};
+      return f.state.common;
+    });
+    mocks.verified.mockResolvedValue({dependencies:{schemaVersion:'pathfinder.dependencies.v7',options:defaultOptions}});
+    const value=await f.repo.detail(projectId,who,id(1000),{});
+    expect(value.row.calculation).toMatchObject({currentness:'changed',reviewable:false});
+    expect(mocks.reviewable.mock.calls[0][3]).toBeNull();
+  });
   function mixedIntent(){
     const scope={projectId,modelVersionId:id(5),selectionRevision:'1',contentFingerprint:'a'.repeat(64),
       captureFrameId:id(8),captureFrameSha256:'b'.repeat(64),coordinateFrame:'canonical-world-metres' as const};
@@ -155,6 +200,58 @@ describe('bounded cable diagnostics, mocked SQL protocol and explicit proof/auth
     expect(result.rows[0].calculation).toMatchObject({ itemState, outcome: 'not-evaluated', reasonCodes: ['SETTINGS_REQUIRED'] });
     expect(classifyCableWorkflow(result.rows[0]).status).toBe('calculating');
   });
+  it('marks a previous routing preparation blocker historical only after fresh authoritative admission succeeds', async () => {
+    const f = fixture(), previous = meta(0, { job_status: 'complete', item_state: 'blocked', item_status: 'routing_preparation_required' });
+    f.state.metadata.set(id(1000), previous);
+    const retained = structuredClone(previous);
+    const detail = await f.repo.detail(projectId, who, id(1000), {});
+    expect(detail.row.calculation).toMatchObject({ jobId: id(11), jobStatus: 'complete', itemState: 'blocked', outcome: 'stale',
+      currentness: 'changed', reasonCodes: ['ROUTING_PREPARATION_REQUIRED', 'ROUTING_PREPARATION_UPDATED'], errorCode: null,
+      proposalId: null, proposalHash: null, reviewable: false, acceptedMatchesCurrent: false });
+    expect(classifyCableWorkflow(detail.row).status).toBe('needs-routing');
+    const page = await f.repo.page(projectId, who, { filter: 'needs-routing' });
+    expect(page.rows).toHaveLength(1); expect(page.rows[0].calculation).toEqual(detail.row.calculation);
+    expect(mocks.common).toHaveBeenCalled();
+    expect(mocks.verified).not.toHaveBeenCalled(); expect(mocks.reviewable).not.toHaveBeenCalled(); expect(mocks.accepted).not.toHaveBeenCalled();
+    expect(f.state.metadata.get(id(1000))).toEqual(retained);
+    expect(f.query.mock.calls.every(([sql]) => !/^\s*(?:INSERT|UPDATE|DELETE)\b/i.test(sql))).toBe(true);
+  });
+  it.each(['routing_preparation_required', 'model_unavailable', 'settings_required'])(
+    'keeps the previous routing blocker unverified when fresh admission is %s', async currentStatus => {
+      const f = fixture();
+      f.state.metadata.set(id(1000), meta(0, { job_status: 'complete', item_state: 'blocked', item_status: 'routing_preparation_required' }));
+      f.state.common = { ...common(), inputs: null, bindingContext: null, status: currentStatus, message: '' } as unknown as ReturnType<typeof common>;
+      const detail = await f.repo.detail(projectId, who, id(1000), {});
+      expect(detail.row.calculation).toMatchObject({ outcome: 'model-required', currentness: 'unavailable', reviewable: false, acceptedMatchesCurrent: false });
+      expect(detail.row.calculation.reasonCodes).toContain(currentStatus.toUpperCase());
+      expect(detail.row.calculation.reasonCodes).not.toContain('ROUTING_PREPARATION_UPDATED');
+      expect(classifyCableWorkflow(detail.row).status).toBe('blocked');
+    },
+  );
+  it.each([
+    { job_status: 'queued', item_state: 'waiting' }, { job_status: 'running', item_state: 'running' },
+    { job_status: 'running', item_state: 'blocked' }, { job_status: 'failed', item_state: 'blocked' },
+    { job_status: 'cancelled', item_state: 'blocked' }, { job_status: 'complete', item_state: 'blocked', cancel_requested: true },
+    { job_status: 'complete', item_state: 'complete' },
+    { job_status: 'complete', item_state: 'blocked', proposal_id: id(30), proposal_hash: 'f'.repeat(64), proposal_status: 'failed' },
+  ])('does not reinterpret active, failed, cancelled or proposal-backed attempts (%j)', async patch => {
+    const f = fixture(); f.state.metadata.set(id(1000), meta(0, { item_status: 'routing_preparation_required', ...patch }));
+    const detail = await f.repo.detail(projectId, who, id(1000), {});
+    expect(detail.row.calculation.reasonCodes).not.toContain('ROUTING_PREPARATION_UPDATED');
+    expect(detail.row.calculation.currentness).toBe('unavailable');
+    expect(detail.row.calculation.outcome).not.toBe('stale');
+    expect(detail.row.calculation.reviewable).toBe(false); expect(detail.row.calculation.acceptedMatchesCurrent).toBe(false);
+  });
+  it.each(['settings_required', 'resource_limit', 'deadline_exceeded', 'no_path', 'failed', 'endpoint_preparation_required'])(
+    'keeps another completed blocker unchanged after the network is ready (%s)', async itemStatus => {
+      const f = fixture(); f.state.metadata.set(id(1000), meta(0, { job_status: 'complete', item_state: 'blocked', item_status: itemStatus }));
+      const detail = await f.repo.detail(projectId, who, id(1000), {});
+      expect(detail.row.calculation.reasonCodes).not.toContain('ROUTING_PREPARATION_UPDATED');
+      expect(detail.row.calculation.reasonCodes).toContain(itemStatus.toUpperCase());
+      expect(detail.row.calculation.currentness).toBe('unavailable');
+      expect(detail.row.calculation.outcome).not.toBe('stale');
+    },
+  );
   it('retains blocked settings and resource/deadline outcome reasons without inventing an error code from free text', async () => {
     const f = fixture(3);
     for (const [n, status] of ['settings_required', 'resource_limit', 'deadline_exceeded'].entries())
@@ -174,11 +271,31 @@ describe('bounded cable diagnostics, mocked SQL protocol and explicit proof/auth
     mocks.verified.mockResolvedValue({ dependencies: { options: { ...defaultOptions, secondaryDistanceMeters: 99 } } });
     const mismatch = await f.repo.detail(projectId, who, id(1000), {}); expect(mismatch.row.calculation.currentness).toBe('changed');
   });
-  it('only asks for receipt proof when an actual latest receipt identity exists', async () => {
+  it('only asks for receipt proof when the latest receipt and exact displayed proposal tuple exist', async () => {
     const f = fixture(); await f.repo.page(projectId, who, {}); expect(mocks.accepted).not.toHaveBeenCalled();
     f.state.hasReceipt = true; mocks.accepted.mockResolvedValue(true); f.state.cables[0].routing = '/SYNTHETIC' as never; f.state.cables[0].design_length = '12' as never;
+    f.state.metadata.set(id(1000),meta(0,{job_status:'complete',item_state:'complete',proposal_status:'calculated',proposal_id:id(30),proposal_hash:'f'.repeat(64)}));
     const result = await f.repo.page(projectId, who, { filter: 'up-to-date' });
     expect(mocks.accepted).toHaveBeenCalledTimes(1); expect(result.rows[0].calculation.acceptedMatchesCurrent).toBe(true);
+    expect(mocks.accepted).toHaveBeenCalledWith(expect.objectContaining({id:id(1000)}),expect.any(Function),{jobId:id(11),proposalId:id(30),proposalHash:'f'.repeat(64)});
+  });
+  it('reports automatic write progress from the exact latest admission without calling it an accepted result',async()=>{
+    const f=fixture();f.state.metadata.set(id(1000),meta(0,{job_status:'complete',item_state:'complete',proposal_status:'calculated',proposal_id:id(30),proposal_hash:'f'.repeat(64),
+      automatic_update_status:'pending',automatic_update_receipt:null,automatic_update_reason:null}));
+    const detail=await f.repo.detail(projectId,who,id(1000),{});
+    expect(detail.row.calculation.automaticUpdate).toEqual({status:'pending',receiptId:null,reasonCode:null});
+    expect(detail.row.calculation.acceptedMatchesCurrent).toBe(false);
+    expect(f.query.mock.calls.some(([sql])=>sql.includes('LEFT JOIN pf_automatic_pair_dispatch d ON d.project_id=a.project_id AND d.job_id=a.job_id AND d.cable_id=b.cable_id'))).toBe(true);
+  });
+  it.each(['missing-admission','waiting-without-proposal','missing-hash'] as const)('does not let an older receipt mark %s current',async kind=>{
+    const f=fixture();f.state.hasReceipt=true;mocks.accepted.mockResolvedValue(true);
+    if(kind!=='missing-admission')f.state.metadata.set(id(1000),meta(0,kind==='missing-hash'?{job_status:'complete',item_state:'complete',proposal_status:'calculated',proposal_id:id(30)}:{}));
+    if(kind==='missing-hash'){
+      await expect(f.repo.detail(projectId,who,id(1000),{})).rejects.toThrow('Job and proposal references must retain their exact identities.');
+      expect(mocks.accepted).not.toHaveBeenCalled();return;
+    }
+    const value=await f.repo.detail(projectId,who,id(1000),{});
+    expect(mocks.accepted).not.toHaveBeenCalled();expect(value.row.calculation.acceptedMatchesCurrent).toBe(false);
   });
   it('excludes MV, preserves unknown categories and refuses oversized fields before projection', async () => {
     const f = fixture(3); f.state.cables[0].mto = 'MV'; f.state.cables[1].mto = 'Unknown';

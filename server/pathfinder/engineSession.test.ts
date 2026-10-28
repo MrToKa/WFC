@@ -8,6 +8,8 @@ import {
   createConfiguredEngineExecutor,
   createSessionEngineExecutor,
   engineSessionPolicy,
+  engineSessionIdleMilliseconds,
+  assertEngineSessionIdleMilliseconds,
   type EngineSessionDependencies,
   type EngineSessionEvent,
 } from './engineSession.js';
@@ -128,6 +130,26 @@ afterEach(async () => {
   delete process.env.PF_ENGINE_DLL;
 });
 describe('private bounded session transport', () => {
+  it('selects only the bounded and interactive idle windows without changing other ceilings', () => {
+    expect(engineSessionIdleMilliseconds(undefined)).toBe(30000);
+    expect(engineSessionIdleMilliseconds('bounded')).toBe(30000);
+    expect(engineSessionIdleMilliseconds('interactive')).toBe(300000);
+    for (const value of ['', 'INTERACTIVE', 'unlimited', 300000, null])
+      expect(() => engineSessionIdleMilliseconds(value)).toThrow('PATHFINDER_ENGINE_SESSION_PROFILE_INVALID');
+    expect(engineSessionPolicy).toMatchObject({ requests: 64, lifetimeMilliseconds: 600000, rssBytes: 512 * 1024 * 1024 });
+  });
+  it('refuses a native profile mismatch and accepts legacy ready only for the bounded window', () => {
+    expect(() => assertEngineSessionIdleMilliseconds(undefined, 30000)).not.toThrow();
+    expect(() => assertEngineSessionIdleMilliseconds(300000, 300000)).not.toThrow();
+    for (const actual of [undefined, 30000]) expect(() => assertEngineSessionIdleMilliseconds(actual, 300000)).toThrow('ENGINE_SESSION_PROFILE_MISMATCH');
+    expect(() => assertEngineSessionIdleMilliseconds(300000, 30000)).toThrow('ENGINE_SESSION_PROFILE_MISMATCH');
+  });
+  it('rejects a child announcing the wrong idle profile before dispatch', async () => {
+    const { client, children } = setup({ ready: child => child.stdout.write(frame({ ...ready(), idleMilliseconds: 300000 })) });
+    await expect(client.execute(request(), new AbortController().signal)).rejects.toMatchObject({ code: 'ENGINE_SESSION_PROFILE_MISMATCH' });
+    expect(children[0].requests).toHaveLength(0);
+    expect(children[0].dead).toBe(true);
+  });
   it.each(['protected-response-to-legacy','legacy-response-to-protected'] as const)('rejects %s without relabeling or reusing its lane',async kind=>{
     const scope={projectId:randomUUID(),modelVersionId:randomUUID(),contentFingerprint:'c'.repeat(64),selectionRevision:'1',captureFrameId:randomUUID(),captureFrameSha256:'d'.repeat(64),coordinateFrame:'canonical-world-metres' as const};
     const context=syntheticDrillingRuntime(scope);

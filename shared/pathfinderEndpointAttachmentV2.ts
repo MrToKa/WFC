@@ -41,6 +41,7 @@ export function evaluateEndpointMigrationV2(raw: EndpointMigrationInputV2): Endp
     comparisonScope: scope, sourceBindingFrameQualification: qualification ? { id: qualification.id, sha256: qualification.contentSha256 } : null, requiresConfirmation: true, attachmentPolicyVersion: ENDPOINT_ATTACHMENT_POLICY_V2,
   });
   if (qualification) add(qualification.id, qualification.contentSha256, 'binding-frame-qualification');
+  if (source.derivation === 'matched-model-bottom-aabb.v1') return result('frame-unverified', ['MODEL_LOCATION_MATCH_RECHECK_REQUIRED']);
   if (source.status !== 'confirmed') return result('suggested-review', ['SOURCE_BINDING_NOT_CONFIRMED']);
   if (scope.sourceAggregateId !== source.aggregateId || scope.targetAggregateId !== target.aggregateId) return result('frame-unverified', ['COMPARISON_PAIR_MISMATCH']);
   if (frame) add(frame.id, frame.contentSha256, 'frame-mapping');

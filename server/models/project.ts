@@ -97,6 +97,7 @@ export type PublicCableLayout = {
   considerBundleSpacingAsFree: boolean | null;
   minFreeSpacePercent: number | null;
   maxFreeSpacePercent: number | null;
+  autoRerouteForFreeSpace?: boolean;
   mv: PublicCableCategorySettings | null;
   power: PublicCableCategorySettings | null;
   vfd: PublicCableCategorySettings | null;
@@ -390,6 +391,7 @@ const toCableLayoutSettings = (value: unknown): PublicCableLayout => {
       considerBundleSpacingAsFree: null,
       minFreeSpacePercent: null,
       maxFreeSpacePercent: null,
+      autoRerouteForFreeSpace: false,
       mv: null,
       power: null,
       vfd: null,
@@ -407,6 +409,7 @@ const toCableLayoutSettings = (value: unknown): PublicCableLayout => {
     ),
     minFreeSpacePercent: parseFreeSpacePercent(record.minFreeSpacePercent),
     maxFreeSpacePercent: parseFreeSpacePercent(record.maxFreeSpacePercent),
+    autoRerouteForFreeSpace: record.autoRerouteForFreeSpace === true,
     mv: parseCategorySettings(record.mv),
     power: parseCategorySettings(record.power),
     vfd: parseCategorySettings(record.vfd),

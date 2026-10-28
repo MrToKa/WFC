@@ -1,450 +1,302 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectPreparationPanel } from './ProjectPreparationPanel';
 import { useProjectPreparation } from './hooks/useProjectPreparation';
 import { preparationFixture } from '@/test/preparationFixtures';
 import type { usePathFinder } from './hooks/usePathFinder';
-import { ModelRevisionChangesPanel } from './ModelRevisionChangesPanel';
-import { LARGE_PREPARATION_CAPACITY_PROFILE, LEGACY_PREPARATION_CAPACITY_PROFILE } from '../../../shared/pathfinderCapacity';
-vi.mock('./ModelRevisionChangesPanel', () => ({
-  ModelRevisionChangesPanel: vi.fn((props: { isAdmin: boolean }) =>
-    props.isAdmin ? <section aria-label="Model revision changes integration" /> : null,
-  ),
-}));
+import { fetchRoutingPurposePolicy } from '@/api/pathfinderPolicies';
+
 vi.mock('./hooks/useProjectPreparation', () => ({ useProjectPreparation: vi.fn() }));
+vi.mock('@/api/pathfinderPolicies', () => ({ fetchRoutingPurposePolicy: vi.fn() }));
 const fixture = preparationFixture();
 function setup() {
-  const state = {
-    enabled: true,
-    canMutate: true,
-    busy: false,
-    loading: false,
-    unknown: false,
-    conflict: false,
-    error: null,
-    notice: null,
-    progress: null,
-    context: fixture.context,
-    index: null,
-    session: fixture.session,
-    discovery: null,
-    refresh: vi.fn(),
-    discover: vi.fn(),
-    freezePlan: vi.fn(),
-    resolve: vi.fn(),
-    loadSession: vi.fn(),
-    collect: vi.fn(),
-    publish: vi.fn(),
-    cancel: vi.fn(),
-    retry: vi.fn(),
-    pause: vi.fn(),
-  };
-  const pf = {
-    preparationAccess: { projectId: fixture.context.projectId },
-    viewerPhase: 'ready',
-    reloadViewer: vi.fn(),
-    readSelection: vi.fn(),
-  } as unknown as ReturnType<typeof usePathFinder>;
-  return { state, pf };
+  const state = { enabled: true, loading: false, busy: false, unknown: false, conflict: false, error: null, notice: null, progress: null,
+    context: structuredClone(fixture.context), session: structuredClone(fixture.session), discovery: null, networkReady: true, networkReadinessKey: 'verified-network-trace',
+    checkTrays: vi.fn(async () => {}), assignTray: vi.fn(async () => {}), freezePlan: vi.fn(), collect: vi.fn(), publish: vi.fn(), pause: vi.fn(), cancel: vi.fn() };
+  const read = vi.fn(async () => ({ objects: [] as Array<{objectId: number}> }));
+  const readMetadata = vi.fn<() => Promise<{ objects: Array<{objectId:number;parentId:number|null}> } | null>>(async () => {
+    const selected = await read.mock.results.at(-1)?.value;
+    return { objects: (selected?.objects ?? []).map((object: {objectId: number}) => ({ objectId: object.objectId, parentId: 20 })) };
+  });
+  const showTray = vi.fn(async () => true);
+  const pf = { preparationAccess: { projectId: state.context.projectId, token: 'test-token' }, data: { activeModel: { ...state.context.scope } }, preparationViewerGeneration: 1, viewerPhase: 'ready', busy: false,
+    showTray, runProjectPreparation: vi.fn(async (_scope, operation) => operation({ readTrayRootSelection: read, readSelection: readMetadata })) } as unknown as ReturnType<typeof usePathFinder>;
+  vi.mocked(useProjectPreparation).mockReturnValue(state as unknown as ReturnType<typeof useProjectPreparation>);
+  return { state, pf, read, readMetadata, showTray, tray: state.context.trays[0] };
 }
-beforeEach(() => vi.clearAllMocks());
-describe('project preparation review', () => {
-  it.each([
-    [LEGACY_PREPARATION_CAPACITY_PROFILE, 32],
-    [LARGE_PREPARATION_CAPACITY_PROFILE, 128],
-  ])('uses the current frozen %s profile for the displayed capture ceiling', (limitsProfile, ceilingMiB) => {
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(fetchRoutingPurposePolicy).mockResolvedValue({ schemaVersion: 'pathfinder.routing-purpose-policy.v1', projectId: fixture.context.projectId,
+    catalogRevision: fixture.context.scope.catalogRevision, routingPolicyRevision: fixture.context.scope.routingPolicyRevision,
+    rules: [{ purposeKey: fixture.context.trays[0].purposeKey!, allowedCategories: ['Power', 'VFD'] }] });
+});
+afterEach(async () => { await act(async () => {}); });
+
+describe('simple project tray preparation', () => {
+  it('has one network action plus show and immediate selection on each tray', () => {
+    const { state, pf, tray } = setup(); render(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getAllByRole('button')).toHaveLength(3);
+    expect(screen.getByText('Purpose and routing permission')).toBeVisible();
+    expect(screen.getByRole('button', { name: `Show tray ${tray.rawName}` })).toBeVisible();
+    expect(screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` })).toBeVisible();
+    for (const text of ['Model selection:', 'Traceability', 'Model revision changes', 'Saved preparation plan', 'Save preparation plan',
+      'Collect geometry', 'Save prepared network', 'Resolution reason', 'Exact candidates and coverage', 'Audited manual resolution'])
+      expect(screen.queryByText(text)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Discover project tray candidates' }));
+    expect(state.checkTrays).toHaveBeenCalledOnce();
+    expect(state.freezePlan).not.toHaveBeenCalled(); expect(state.collect).not.toHaveBeenCalled(); expect(state.publish).not.toHaveBeenCalled();
+  });
+  it('assigns the fresh model selection immediately with no separate save', async () => {
+    const { state, pf, tray, read } = setup(); read.mockResolvedValue({ objects: [{ objectId: 55 }, { objectId: 99 }] });
+    render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` }));
+    await waitFor(() => expect(state.assignTray).toHaveBeenCalledExactlyOnceWith(tray.projectTrayId, ['dbid:55', 'dbid:99']));
+    expect(pf.runProjectPreparation).toHaveBeenCalledWith(state.context.scope, expect.any(Function));
+    expect(screen.queryByText(/unsaved|Save confirmed/)).toBeNull();
+  });
+  it('shows project Cable types Purpose permissions instead of the engine capture mask', async () => {
+    const { pf } = setup(); render(<ProjectPreparationPanel pf={pf} active />);
+    expect(await screen.findByText(/Power, VFD/)).toBeVisible(); expect(screen.queryByText('MV, LV, Control')).toBeNull();
+  });
+  it('assigns a verified physical selection without requiring an initial tray check', async () => {
+    const { state, pf, tray, read, readMetadata } = setup(); read.mockResolvedValue({ objects: [{ objectId: 55 }] });
+    vi.mocked(useProjectPreparation).mockReturnValue({ ...state, session: null, discovery: null } as unknown as ReturnType<typeof useProjectPreparation>);
+    render(<ProjectPreparationPanel pf={pf} active />);
+    const choose = screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` });
+    expect(choose).toBeEnabled(); fireEvent.click(choose);
+    await waitFor(() => expect(state.assignTray).toHaveBeenCalledExactlyOnceWith(tray.projectTrayId, ['dbid:55']));
+    expect(readMetadata).toHaveBeenCalledOnce(); expect(state.checkTrays).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Discover project tray candidates' })).toBeEnabled();
+  });
+  it.each(['global-root', 'null', 'empty', 'mismatched'] as const)('refuses an unverified first assignment with %s metadata', async kind => {
+    const { state, pf, tray, read, readMetadata } = setup(); read.mockResolvedValue({ objects: [{ objectId: 55 }] });
+    readMetadata.mockResolvedValueOnce(kind === 'null' ? null : kind === 'empty' ? { objects: [] }
+      : { objects: [{ objectId: kind === 'mismatched' ? 66 : 55, parentId: kind === 'global-root' ? null : 20 }] });
+    vi.mocked(useProjectPreparation).mockReturnValue({ ...state, session: null, discovery: null } as unknown as ReturnType<typeof useProjectPreparation>);
+    render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(kind === 'global-root' ? 'physical tray'
+      : kind === 'null' ? 'could not be verified' : 'selection changed');
+    expect(state.assignTray).not.toHaveBeenCalled();
+  });
+  it('accepts a known same-model physical root without requiring a prior plan or new parent metadata', async () => {
+    const { state, pf, tray, read, readMetadata } = setup(); read.mockResolvedValue({ objects: [{ objectId: 55 }] }); readMetadata.mockResolvedValue(null);
+    state.context.resolutions = [{ id: 'known-root', projectTrayId: tray.projectTrayId, mode: 'roots', rootObjectIds: ['dbid:55'],
+      scope: { ...state.context.scope }, reason: 'Known physical tray', actorId: 'admin', createdAt: '2026-10-27T00:00:00Z' }];
+    vi.mocked(useProjectPreparation).mockReturnValue({ ...state, session: null, discovery: null } as unknown as ReturnType<typeof useProjectPreparation>);
+    render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` }));
+    await waitFor(() => expect(state.assignTray).toHaveBeenCalledExactlyOnceWith(tray.projectTrayId, ['dbid:55']));
+    expect(readMetadata).not.toHaveBeenCalled();
+  });
+  it('keeps the assignment busy until its network update finishes', async () => {
+    const { state, pf, tray, read } = setup(); read.mockResolvedValue({ objects: [{ objectId: 55 }] });
+    let finish!: () => void;
+    state.assignTray.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+    render(<ProjectPreparationPanel pf={pf} active />);
+    const choose = screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` });
+    fireEvent.click(choose); await waitFor(() => expect(state.assignTray).toHaveBeenCalledOnce());
+    expect(choose).toBeDisabled(); expect(screen.getByRole('button', { name: 'Discover project tray candidates' })).toBeDisabled();
+    await act(async () => finish()); expect(choose).toBeEnabled();
+  });
+  it('explains an empty selection without saving an empty assignment', async () => {
+    const { state, pf, tray } = setup(); render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Select the matching tray in the model first.');
+    expect(state.assignTray).not.toHaveBeenCalled();
+  });
+  it('rejects an explicitly known global model root without rejecting a known tray root', async () => {
+    const { state, pf, tray, read } = setup();
+    state.session.plan.objectManifest.push({ objectId: 'dbid:9', parentId: null, name: 'Whole model', hasGeometry: false, isPhysicalLeaf: false, orderIndex: 9 });
+    read.mockResolvedValueOnce({ objects: [{ objectId: 9 }] }).mockResolvedValueOnce({ objects: [{ objectId: 1 }] });
+    render(<ProjectPreparationPanel pf={pf} active />);
+    const choose = screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` });
+    fireEvent.click(choose); expect(await screen.findByRole('alert')).toHaveTextContent('physical tray');
+    expect(state.assignTray).not.toHaveBeenCalled();
+    fireEvent.click(choose); await waitFor(() => expect(state.assignTray).toHaveBeenCalledWith(tray.projectTrayId, ['dbid:1']));
+  });
+  it('reads real selected-node evidence after an all-missing check before assigning unknown roots', async () => {
+    const { state, pf, tray, read, readMetadata } = setup(); state.session.plan.objectManifest = [];
+    state.session.plan.requestedScope.trays = [];
+    read.mockResolvedValueOnce({ objects: [{ objectId: 9 }] }).mockResolvedValueOnce({ objects: [{ objectId: 55 }] });
+    readMetadata.mockResolvedValueOnce({ objects: [{ objectId: 9, parentId: null }] }).mockResolvedValueOnce({ objects: [{ objectId: 55, parentId: 20 }] });
+    render(<ProjectPreparationPanel pf={pf} active />);
+    const choose = screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` });
+    fireEvent.click(choose); expect(await screen.findByRole('alert')).toHaveTextContent('physical tray'); expect(state.assignTray).not.toHaveBeenCalled();
+    fireEvent.click(choose); await waitFor(() => expect(state.assignTray).toHaveBeenCalledWith(tray.projectTrayId, ['dbid:55']));
+    expect(readMetadata).toHaveBeenCalledTimes(2);
+  });
+  it('discards a pending selection when the model or scope changes', async () => {
+    const { state, pf, tray, read } = setup(); let finish!: (value: { objects: Array<{objectId:number}> }) => void;
+    read.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` }));
+    const changed = { ...state, context: { ...state.context, scope: { ...state.context.scope, contentFingerprint: 'd'.repeat(64) } } };
+    vi.mocked(useProjectPreparation).mockReturnValue(changed as unknown as ReturnType<typeof useProjectPreparation>);
+    view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    await act(async () => finish({ objects: [{ objectId: 55 }] })); expect(state.assignTray).not.toHaveBeenCalled();
+  });
+  it('shows a ready network even when some trays still need a selection', () => {
+    const { state, pf } = setup(), extra = { ...state.context.trays[0], projectTrayId: '85000000-0000-4000-8000-000000000001', rawName: 'A120' };
+    state.context.trays.push(extra);
+    state.context.currentAggregate = { ...state.context.scope, sessionId: state.session.id } as typeof state.context.currentAggregate;
+    render(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByRole('status')).toHaveTextContent('Network ready. 1 of 2 trays assigned; 1 still need a model selection.');
+    expect(screen.getByRole('button', { name: 'Discover project tray candidates' })).toBeEnabled();
+  });
+  it('waits for the verified frame proof before showing ready or refreshing obstacles', () => {
+    const { state, pf } = setup(), ready = vi.fn();
+    state.context.currentAggregate = { ...state.context.scope } as typeof state.context.currentAggregate;
+    state.networkReady = false;
+    const view = render(<ProjectPreparationPanel pf={pf} active onNetworkReady={ready} />);
+    expect(screen.queryByText(/Network ready/)).toBeNull(); expect(ready).not.toHaveBeenCalled();
+    state.networkReady = true;
+    view.rerender(<ProjectPreparationPanel pf={pf} active onNetworkReady={ready} />);
+    expect(screen.getByRole('status')).toHaveTextContent('Network ready.');
+    expect(ready).toHaveBeenCalledExactlyOnceWith('verified-network-trace');
+    view.rerender(<ProjectPreparationPanel pf={pf} active onNetworkReady={ready} />);
+    expect(ready).toHaveBeenCalledTimes(1);
+  });
+  it('does not show ready for an aggregate from a different model or mapping revision', () => {
     const { state, pf } = setup();
-    vi.mocked(useProjectPreparation).mockReturnValue({
-      ...state,
-      session: { ...state.session, plan: { ...state.session.plan, limitsProfile },
-        coverage: { ...state.session.coverage, committedParts: 3, expectedParts: 9 } },
-    } as unknown as ReturnType<typeof useProjectPreparation>);
-    render(<ProjectPreparationPanel pf={pf} active />);
-    const ceiling = screen.getByLabelText('Preparation capture ceiling');
-    expect(ceiling).toHaveTextContent(`Current frozen plan capture ceiling: complete staged captures are limited to ${ceilingMiB} MiB for validation.`);
-    expect(ceiling).toHaveTextContent('Committed parts remain available when collection is paused or refused.');
-    expect(ceiling).not.toHaveTextContent(/qualified|accepted|replacement plan/);
-    expect(screen.getByText(/3 of 9 parts committed/)).toBeVisible();
-    expect(screen.getByText(/partial captures never become the current network/)).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Validate and publish complete network' })).toBeDisabled();
-    expect(state.collect).not.toHaveBeenCalled(); expect(state.publish).not.toHaveBeenCalled();
+    state.context.currentAggregate = { ...state.context.scope, resolutionRevision: '99' } as typeof state.context.currentAggregate;
+    render(<ProjectPreparationPanel pf={pf} active />); expect(screen.queryByText(/Network ready/)).toBeNull();
   });
-  it('shows the legacy ceiling before any preparation plan is frozen', () => {
+  it('does not retain ready or assigned labels when the Viewer switches to another model', () => {
     const { state, pf } = setup();
-    vi.mocked(useProjectPreparation).mockReturnValue({
-      ...state, session: null,
-    } as unknown as ReturnType<typeof useProjectPreparation>);
-    render(<ProjectPreparationPanel pf={pf} active />);
-    const ceiling = screen.getByLabelText('Preparation capture ceiling');
-    expect(ceiling).toHaveTextContent('Legacy preparation capture ceiling: complete staged captures are limited to 32 MiB for validation.');
-    expect(ceiling).not.toHaveTextContent(/128 MiB|Current frozen|Saved frozen|qualified|accepted/);
-    expect(state.freezePlan).not.toHaveBeenCalled();
+    state.context.currentAggregate = { ...state.context.scope } as typeof state.context.currentAggregate;
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByRole('status')).toHaveTextContent('Network ready.');
+    const changed = { ...pf, data: { ...pf.data!, activeModel: { ...pf.data!.activeModel, contentFingerprint: 'e'.repeat(64) } } };
+    view.rerender(<ProjectPreparationPanel pf={changed} active />);
+    expect(screen.queryByText(/Network ready/)).toBeNull(); expect(screen.getByText('Not assigned')).toBeVisible();
   });
-  it.each([
-    [LEGACY_PREPARATION_CAPACITY_PROFILE, 32],
-    [LARGE_PREPARATION_CAPACITY_PROFILE, 128],
-  ])('labels a historical frozen %s ceiling without assigning it to a replacement plan', (limitsProfile, ceilingMiB) => {
+  it('searches all trays without requiring pagination controls', () => {
+    const { state, pf, tray } = setup();
+    state.context.trays = Array.from({ length: 55 }, (_, index) => ({ ...tray, projectTrayId: `tray-${index}`, rawName: index === 54 ? 'A105' : `BC${index}`, routeName: `/BC${index}` }));
+    render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.change(screen.getByLabelText('Search project trays'), { target: { value: '/a105' } });
+    expect(screen.getByRole('article', { name: 'Tray A105' })).toBeVisible();
+    expect(screen.getAllByRole('article')).toHaveLength(1); expect(screen.queryByRole('button', { name: /Next/ })).toBeNull();
+  });
+  it('uses the same check button to recover unknown work and leaves assignment disabled', () => {
+    const { state, pf, tray } = setup(); state.unknown = true;
+    render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: 'Discover project tray candidates' }));
+    expect(state.checkTrays).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` })).toBeDisabled();
+  });
+  it('keeps failed network creation visible instead of claiming ready', () => {
     const { state, pf } = setup();
-    vi.mocked(useProjectPreparation).mockReturnValue({
-      ...state,
-      context: { ...state.context, scope: { ...state.context.scope, catalogRevision: '2' } },
-      session: { ...state.session, plan: { ...state.session.plan, limitsProfile } },
-    } as unknown as ReturnType<typeof useProjectPreparation>);
+    vi.mocked(useProjectPreparation).mockReturnValue({ ...state, error: 'The model could not be read. Try checking the trays again.' } as unknown as ReturnType<typeof useProjectPreparation>);
     render(<ProjectPreparationPanel pf={pf} active />);
-    const ceiling = screen.getByLabelText('Preparation capture ceiling');
-    expect(ceiling).toHaveTextContent(`Saved frozen plan capture ceiling: complete staged captures are limited to ${ceilingMiB} MiB for validation.`);
-    expect(ceiling).toHaveTextContent('This saved limit belongs to its frozen plan and does not establish the limit of a replacement plan.');
-    expect(ceiling).not.toHaveTextContent(/Current frozen|qualified|accepted/);
-    expect(screen.getByText(/Historical frozen plan: 1 selected roots/)).toBeVisible();
-    expect(state.discover).not.toHaveBeenCalled(); expect(state.freezePlan).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent('model could not be read'); expect(screen.queryByText(/Network ready/)).toBeNull();
   });
-  it('places comparison beside traceability using strict admin access and current generation without a model-selection callback', () => {
-    const { state, pf } = setup();
-    pf.preparationAccess = {
-      projectId: fixture.context.projectId,
-      loadedProjectId: fixture.context.projectId,
-      token: 'token',
-      isAdmin: true,
-    };
-    vi.mocked(useProjectPreparation).mockReturnValue(
-      state as unknown as ReturnType<typeof useProjectPreparation>,
-    );
-    render(<ProjectPreparationPanel pf={pf} active />);
-    expect(
-      screen.getByRole('region', { name: 'Model revision changes integration' }),
-    ).toBeInTheDocument();
-    const props = vi.mocked(ModelRevisionChangesPanel).mock.calls[0][0];
-    expect(props).toMatchObject({
-      projectId: fixture.context.projectId,
-      loadedProjectId: fixture.context.projectId,
-      isAdmin: true,
-      active: true,
-    });
-    expect(props).not.toHaveProperty('setProjectActiveModel');
-    expect(props).not.toHaveProperty('showPath');
-  });
-  it('uses stacked coverage cards at narrow widths while retaining exact identities and resolution controls', () => {
-    const { state, pf } = setup(),
-      tray = {
-        ...state.context.trays[0],
-        rawName: 'Synthetic tray identifier with several words',
-        purposeKey: 'Purpose  spacing variant',
-      };
-    vi.mocked(useProjectPreparation).mockReturnValue({
-      ...state,
-      context: { ...state.context, trays: [tray] },
-      discovery: {
-        modelVersionId: state.context.scope.modelVersionId,
-        contentFingerprint: state.context.scope.contentFingerprint,
-        selectionRevision: state.context.scope.selectionRevision,
-        trays: [{ projectTrayId: tray.projectTrayId, candidateRootObjectIds: ['dbid:2'] }],
-        objects: [{ objectId: 'dbid:2', name: 'Synthetic physical root' }],
-        complete: true,
-        propertyScan: null,
-      },
-    } as unknown as ReturnType<typeof useProjectPreparation>);
-    render(
-      <div style={{ width: 300 }}>
-        <ProjectPreparationPanel pf={pf} active />
-      </div>,
-    );
-    const coverage = screen.getByRole('region', { name: 'Project tray candidate coverage' }),
-      card = within(coverage).getByRole('article');
-    expect(within(coverage).queryByRole('table')).toBeNull();
-    expect(card).toHaveStyle({ minWidth: '0', wordBreak: 'normal', overflowWrap: 'anywhere' });
-    expect(within(card).getByRole('heading').textContent).toBe(tray.rawName);
-    expect(within(card).getByText('Purpose spacing variant').textContent).toBe(tray.purposeKey);
-    expect(within(card).getByText('Purpose and routing permission').tagName).toBe('DT');
-    expect(within(card).getByText('Exact candidates and coverage').tagName).toBe('DT');
-    fireEvent.click(
-      within(card).getByRole('checkbox', {
-        name: `Confirm dbid:2 for ${tray.rawName} (${tray.projectTrayId})`,
-      }),
-    );
-    fireEvent.change(
-      within(card).getByRole('textbox', {
-        name: `Resolution reason for ${tray.rawName} (${tray.projectTrayId})`,
-      }),
-      { target: { value: 'Confirmed synthetic root' } },
-    );
-    const save = within(card).getByRole('button', { name: 'Save confirmed roots' });
-    expect(save).toBeEnabled();
-    expect(save).toHaveStyle({ whiteSpace: 'normal', maxWidth: '100%' });
-    fireEvent.click(save);
-    expect(state.resolve).toHaveBeenCalledWith(
-      tray.projectTrayId,
-      'roots',
-      ['dbid:2'],
-      'Confirmed synthetic root',
-    );
-  });
-  it('keeps server cancellation available while validation acknowledgement is pending', () => {
-    const { state, pf } = setup(),
-      cancelActive = vi.fn();
-    vi.mocked(useProjectPreparation).mockReturnValue({
-      ...state,
-      busy: true,
-      canMutate: false,
-      publishPending: true,
-      cancelBusy: false,
-      cancelActive,
-    } as unknown as ReturnType<typeof useProjectPreparation>);
-    render(<ProjectPreparationPanel pf={pf} active />);
-    fireEvent.change(screen.getByRole('textbox', { name: 'Preparation command reason' }), {
-      target: { value: 'Stop current validation' },
-    });
-    const cancel = screen.getByRole('button', { name: 'Cancel frozen preparation' });
-    expect(cancel).toBeEnabled();
-    fireEvent.click(cancel);
-    expect(cancelActive).toHaveBeenCalledWith('Stop current validation');
-  });
-  it('separates missing endpoint binding evidence from complete network collection', () => {
-    const { state, pf } = setup();
-    state.session = {
-      ...state.session,
-      plan: {
-        ...state.session.plan,
-        requestedScope: {
-          ...state.session.plan.requestedScope,
-          endpointEvidence: [
-            { name: 'Synthetic endpoint', candidateObjectIds: [], status: 'missing' },
-          ],
-        },
-      },
-    };
-    vi.mocked(useProjectPreparation).mockReturnValue(
-      state as unknown as ReturnType<typeof useProjectPreparation>,
-    );
-    render(<ProjectPreparationPanel pf={pf} active />);
-    expect(screen.getByText(/1 names need later resolution/)).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Resume collection' })).toBeEnabled();
-    expect(
-      screen.getByRole('button', { name: 'Validate and publish complete network' }),
-    ).toBeDisabled();
-    fireEvent.click(screen.getByRole('button', { name: 'Resume collection' }));
-    expect(state.collect).toHaveBeenCalledOnce();
-  });
-  it('freezes new commands while an acknowledgement is uncertain and exposes exact retry', () => {
-    const { state, pf } = setup();
-    state.unknown = true;
-    state.canMutate = false;
-    vi.mocked(useProjectPreparation).mockReturnValue(
-      state as unknown as ReturnType<typeof useProjectPreparation>,
-    );
-    render(<ProjectPreparationPanel pf={pf} active />);
+});
+
+describe('project tray inspection', () => {
+  it('waits for the display acknowledgement without changing assignments or creating global busy feedback', async () => {
+    const { state, pf, tray, showTray, read, readMetadata } = setup(), busy = vi.fn();
+    let finish!: (shown: boolean) => void; showTray.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    render(<ProjectPreparationPanel pf={pf} active onBusyChange={busy} />);
+    const show = screen.getByRole('button', { name: `Show tray ${tray.rawName}` });
+    fireEvent.click(show);
+    expect(showTray).toHaveBeenCalledExactlyOnceWith(state.context.scope, [1]);
+    expect(show).toHaveTextContent('Showing tray…'); expect(show).toBeDisabled();
+    expect(screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Discover project tray candidates' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Resume collection' })).toBeDisabled();
-    fireEvent.click(screen.getByRole('button', { name: 'Retry the same preparation command' }));
-    expect(state.retry).toHaveBeenCalledOnce();
+    expect(screen.queryByText('Tray shown in model.')).toBeNull();
+    expect(busy.mock.calls.every(([value]) => value === false)).toBe(true);
+    await act(async () => finish(true));
+    expect(screen.getByText('Tray shown in model.')).toBeVisible(); expect(show).toBeEnabled();
+    expect(screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` })).toBeEnabled();
+    expect(state.assignTray).not.toHaveBeenCalled(); expect(state.checkTrays).not.toHaveBeenCalled();
+    expect(read).not.toHaveBeenCalled(); expect(readMetadata).not.toHaveBeenCalled(); expect(pf.runProjectPreparation).not.toHaveBeenCalled();
   });
-  it('shows frozen selected roots after reload without inventing exact candidate counts', () => {
-    const { state, pf } = setup();
-    vi.mocked(useProjectPreparation).mockReturnValue(
-      state as unknown as ReturnType<typeof useProjectPreparation>,
-    );
+  it('shows every manually assigned root before frozen or automatic roots', async () => {
+    const { state, pf, tray, showTray } = setup();
+    state.context.resolutions = [{ id: 'manual', projectTrayId: tray.projectTrayId, mode: 'roots', rootObjectIds: ['dbid:99', 'dbid:55'],
+      scope: { ...state.context.scope }, reason: 'Assigned physical tray', actorId: 'admin', createdAt: '2026-10-27T00:00:00Z' }];
     render(<ProjectPreparationPanel pf={pf} active />);
-    const card = within(screen.getByRole('region', { name: 'Project tray candidate coverage' }))
-      .getByRole('article');
-    expect(within(card).getByText(/Discovery results are not loaded/)).toBeVisible();
-    expect(within(card).getByText(/Current frozen plan: 1 selected roots · dbid:1/)).toBeVisible();
-    expect(within(card).queryByText('Not yet discovered')).not.toBeInTheDocument();
-    expect(within(card).queryByText('One exact candidate')).not.toBeInTheDocument();
-    expect(within(card).queryByRole('checkbox')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: `Show tray ${tray.rawName}` }));
+    await waitFor(() => expect(screen.getByText('Tray shown in model.')).toBeVisible());
+    expect(showTray).toHaveBeenCalledExactlyOnceWith(state.context.scope, [99, 55]); expect(state.assignTray).not.toHaveBeenCalled();
   });
-  it.each(['dbid:1', 'dbid:427079'])('keeps saved roots %s current when only the resolution counter advanced', (rootId) => {
-    const { state, pf } = setup(), tray = state.context.trays[0];
-    vi.mocked(useProjectPreparation).mockReturnValue({
-      ...state,
-      session: null,
-      context: {
-        ...state.context,
-        scope: { ...state.context.scope, resolutionRevision: '2' },
-        resolutions: [{ id: 'resolution', projectTrayId: tray.projectTrayId, mode: 'roots',
-          rootObjectIds: [rootId], reason: 'Reviewed tray roots', actorId: 'admin',
-          createdAt: '2026-10-20T00:00:00Z', scope: { ...state.context.scope, resolutionRevision: '0' } }],
-      },
-    } as unknown as ReturnType<typeof useProjectPreparation>);
+  it('can inspect ambiguous candidates during a read-only status check without ready-network or mutation authority', async () => {
+    const { state, pf, tray, showTray } = setup(); state.busy = true; state.loading = true; state.unknown = true; state.conflict = true; state.networkReady = false;
+    state.context.trays[0].policyState = 'excluded'; state.session.plan.requestedScope.trays = [];
+    const discovery = { schemaVersion: 'wfc.pf.discovery-report.v1', modelVersionId: state.context.scope.modelVersionId,
+      contentFingerprint: state.context.scope.contentFingerprint, selectionRevision: state.context.scope.selectionRevision,
+      matchingPolicyVersion: 'wfc.pf.project-exact-candidates.v1', complete: true, propertyScan: null, objects: [],
+      trays: [{ projectTrayId: tray.projectTrayId, candidateRootObjectIds: ['dbid:72', 'dbid:73'] }], endpointCandidates: [] };
+    vi.mocked(useProjectPreparation).mockReturnValue({ ...state, discovery } as unknown as ReturnType<typeof useProjectPreparation>);
     render(<ProjectPreparationPanel pf={pf} active />);
-    expect(screen.getByText('Saved resolution matches the current project scope.')).toBeVisible();
-    expect(screen.getByText(/Saved 1 confirmed roots/)).toBeVisible();
-    expect(screen.queryByText(/Stale saved resolution:/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/global model root/)).not.toBeInTheDocument();
+    const show = screen.getByRole('button', { name: `Show tray ${tray.rawName}` }); expect(show).toBeEnabled(); fireEvent.click(show);
+    await waitFor(() => expect(showTray).toHaveBeenCalledExactlyOnceWith(state.context.scope, [72, 73]));
+    expect(state.assignTray).not.toHaveBeenCalled(); expect(state.checkTrays).not.toHaveBeenCalled();
   });
-  it.each(['modelVersionId', 'catalogRevision', 'routingPolicyRevision', 'locationRegistryRevision'] as const)(
-    'labels a saved resolution stale after %s changes', (key) => {
-      const { state, pf } = setup(), tray = state.context.trays[0];
-      vi.mocked(useProjectPreparation).mockReturnValue({
-        ...state,
-        session: null,
-        context: { ...state.context, resolutions: [{ id: 'resolution', projectTrayId: tray.projectTrayId,
-          mode: 'roots', rootObjectIds: ['dbid:427079'], reason: 'Previous scope', actorId: 'admin',
-          createdAt: '2026-10-20T00:00:00Z', scope: { ...state.context.scope, [key]: 'previous' } }] },
-      } as unknown as ReturnType<typeof useProjectPreparation>);
-      render(<ProjectPreparationPanel pf={pf} active />);
-      expect(screen.getByText(/Stale saved resolution:/)).toBeVisible();
-      expect(screen.queryByText('Saved resolution matches the current project scope.')).not.toBeInTheDocument();
-    },
-  );
-  it('labels old frozen coverage historical rather than treating it as current candidate discovery', () => {
-    const { state, pf } = setup();
-    vi.mocked(useProjectPreparation).mockReturnValue({
-      ...state,
-      context: { ...state.context, scope: { ...state.context.scope, catalogRevision: '2' } },
-    } as unknown as ReturnType<typeof useProjectPreparation>);
+  it('renders Show tray on missing cards with a visible explanation and does not display unrelated objects', () => {
+    const { state, pf, tray, showTray } = setup();
+    const missing = { ...tray, projectTrayId: '85000000-0000-4000-8000-000000000001', rawName: 'A120' }; state.context.trays.push(missing);
     render(<ProjectPreparationPanel pf={pf} active />);
-    expect(screen.getByText(/Historical frozen plan: 1 selected roots/)).toBeVisible();
-    expect(screen.queryByText(/Current frozen plan:/)).not.toBeInTheDocument();
-    expect(screen.queryByText('One exact candidate')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^Show tray / })).toHaveLength(2);
+    const card = screen.getByRole('article', { name: 'Tray A120' }), show = within(card).getByRole('button', { name: 'Show tray A120' });
+    expect(show).toBeDisabled(); expect(within(card).getByText(/No model objects for this tray/)).toBeVisible();
+    fireEvent.click(show); expect(showTray).not.toHaveBeenCalled(); expect(state.assignTray).not.toHaveBeenCalled();
   });
-  it('does not infer per-tray roots from an aggregate when its saved plan is unavailable', () => {
-    const { state, pf } = setup();
-    vi.mocked(useProjectPreparation).mockReturnValue({
-      ...state,
-      session: null,
-      context: { ...state.context, currentAggregate: { id: 'aggregate', sessionId: state.session.id,
-        geometryRevision: '1', orderedPlanSha256: state.session.plan.orderedPlanSha256 } },
-    } as unknown as ReturnType<typeof useProjectPreparation>);
+  it.each(['refused', 'error'] as const)('reports a %s display without claiming success or changing assignments', async outcome => {
+    const { state, pf, tray, showTray } = setup();
+    if (outcome === 'refused') showTray.mockResolvedValueOnce(false); else showTray.mockRejectedValueOnce(new Error('Viewer failure'));
     render(<ProjectPreparationPanel pf={pf} active />);
-    expect(screen.getByText(/A published network is retained, but its per-tray roots are not loaded/)).toBeVisible();
-    expect(screen.queryByText(/selected roots/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/global model root/)).not.toBeInTheDocument();
+    const show = screen.getByRole('button', { name: `Show tray ${tray.rawName}` }); fireEvent.click(show);
+    expect(await screen.findByRole('alert')).toHaveTextContent('The tray could not be shown.');
+    expect(screen.queryByText('Tray shown in model.')).toBeNull(); expect(show).toBeEnabled(); expect(state.assignTray).not.toHaveBeenCalled();
   });
-  it('identifies selected roots from the published saved plan without presenting a new candidate search', () => {
-    const { state, pf } = setup();
-    vi.mocked(useProjectPreparation).mockReturnValue({
-      ...state,
-      context: { ...state.context, currentAggregate: { id: 'aggregate', sessionId: state.session.id,
-        geometryRevision: '1', orderedPlanSha256: state.session.plan.orderedPlanSha256 },
-      scope: { ...state.context.scope, locationRegistryRevision: '2' } },
-    } as unknown as ReturnType<typeof useProjectPreparation>);
-    render(<ProjectPreparationPanel pf={pf} active />);
-    expect(screen.getByText(/Published saved plan: 1 selected roots · dbid:1/)).toBeVisible();
-    expect(screen.queryByText('One exact candidate')).not.toBeInTheDocument();
+  it.each(['generation', 'model', 'access', 'inactive', 'scope'] as const)('ignores a late display acknowledgement after a %s change', async change => {
+    const { state, pf, tray, showTray } = setup(); let finish!: (shown: boolean) => void;
+    showTray.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: `Show tray ${tray.rawName}` }));
+    const next = change === 'generation' ? { ...pf, preparationViewerGeneration: 2 }
+      : change === 'model' ? { ...pf, data: { ...pf.data!, activeModel: { ...pf.data!.activeModel, contentFingerprint: 'e'.repeat(64) } } }
+        : change === 'access' ? { ...pf, preparationAccess: { ...pf.preparationAccess, token: 'new-login' } } : pf;
+    if (change === 'scope') vi.mocked(useProjectPreparation).mockReturnValue({ ...state,
+      context: { ...state.context, scope: { ...state.context.scope, routingPolicyRevision: '9' } } } as unknown as ReturnType<typeof useProjectPreparation>);
+    view.rerender(<ProjectPreparationPanel pf={next} active={change !== 'inactive'} />);
+    await act(async () => finish(true));
+    expect(screen.queryByText('Tray shown in model.')).toBeNull(); expect(screen.queryByText(/The tray could not be shown/)).toBeNull();
+    expect(screen.getByRole('button', { name: `Show tray ${tray.rawName}` })).toHaveTextContent('Show tray');
+    if (change === 'scope') {
+      const show = screen.getByRole('button', { name: `Show tray ${tray.rawName}` }); expect(show).toBeEnabled(); fireEvent.click(show);
+      expect(await screen.findByText('Tray shown in model.')).toBeVisible(); expect(showTray).toHaveBeenCalledTimes(2);
+    }
   });
-  it('identifies the actual model root from evidence instead of assuming a dbId', () => {
-    const { state, pf } = setup(), tray = state.context.trays[0];
-    vi.mocked(useProjectPreparation).mockReturnValue({
-      ...state,
-      session: null,
-      discovery: { modelVersionId: state.context.scope.modelVersionId,
-        contentFingerprint: state.context.scope.contentFingerprint,
-        selectionRevision: state.context.scope.selectionRevision,
-        trays: [{ projectTrayId: tray.projectTrayId, candidateRootObjectIds: ['dbid:427079'] }],
-        objects: [{ objectId: 'dbid:427079', parentId: null, name: 'Actual root' }],
-        complete: true, propertyScan: null },
-    } as unknown as ReturnType<typeof useProjectPreparation>);
-    render(<ProjectPreparationPanel pf={pf} active />);
-    expect(screen.getByText(/Current model evidence identifies.*global model root/)).toBeVisible();
+});
+
+describe('project tray control readiness', () => {
+  it('exposes a transient Stop checking action that pauses locally without cancelling the saved server work', () => {
+    const { state, pf } = setup(); state.busy = true; state.unknown = true;
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: 'Stop checking' }));
+    expect(state.pause).toHaveBeenCalledOnce(); expect(state.cancel).not.toHaveBeenCalled(); expect(state.unknown).toBe(true);
+    state.busy = false; view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.queryByRole('button', { name: 'Stop checking' })).toBeNull();
+    expect(screen.getByText(/An earlier tray update needs checking/)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Discover project tray candidates' })).toBeEnabled();
   });
-  it('does not identify a root from evidence for a previous model', () => {
-    const { state, pf } = setup(), tray = state.context.trays[0];
-    vi.mocked(useProjectPreparation).mockReturnValue({
-      ...state,
-      session: null,
-      discovery: { modelVersionId: 'previous-model',
-        contentFingerprint: state.context.scope.contentFingerprint,
-        selectionRevision: state.context.scope.selectionRevision,
-        trays: [{ projectTrayId: tray.projectTrayId, candidateRootObjectIds: ['dbid:1'] }],
-        objects: [{ objectId: 'dbid:1', parentId: null, name: 'Old root' }], complete: true,
-        propertyScan: null },
-    } as unknown as ReturnType<typeof useProjectPreparation>);
-    render(<ProjectPreparationPanel pf={pf} active />);
-    expect(screen.queryByText(/global model root/)).not.toBeInTheDocument();
-    expect(screen.queryByText('One exact candidate')).not.toBeInTheDocument();
-    expect(screen.getByText(/Discovery results are not loaded/)).toBeVisible();
-  });
-  it('shows the named missing trays and why two unresolved roots block the whole plan', () => {
-    const { state, pf } = setup(), tray = state.context.trays[0];
-    const absent = ['A120', 'A105'].map((rawName, index) => ({ ...tray, rawName,
-      projectTrayId: `88888888-8888-4888-8888-${String(index + 1).padStart(12, '0')}` }));
-    vi.mocked(useProjectPreparation).mockReturnValue({
-      ...state,
-      context: { ...state.context, trays: [tray, ...absent] },
-      session: { ...state.session, plan: { ...state.session.plan,
-        diagnostics: absent.map((item) => ({ code: 'TRAY_ROOT_MISSING',
-          projectTrayIds: [item.projectTrayId], objectIds: [],
-          message: 'Resolve this requested preparation scope before capture and publication.' })) } },
-    } as unknown as ReturnType<typeof useProjectPreparation>);
-    render(<ProjectPreparationPanel pf={pf} active />);
-    const summary = screen.getByRole('region', { name: 'Preparation readiness summary' });
-    expect(within(summary).getByText(/1 of 3 project trays have selected roots; 0 explicitly excluded; 2 blocking diagnostics/)).toBeVisible();
-    const diagnostics = within(summary).getByRole('list', { name: 'Frozen plan diagnostics' });
-    expect(within(diagnostics).getAllByText('TRAY_ROOT_MISSING')).toHaveLength(2);
-    expect(within(diagnostics).getByText('Affected trays: A120.')).toBeVisible();
-    expect(within(diagnostics).getByText('Affected trays: A105.')).toBeVisible();
-    expect(within(diagnostics).getAllByText(/Verify the active model and revision, select and explicitly confirm the correct physical root, or explicitly exclude this tray/)).toHaveLength(2);
-    expect(within(summary).getByText(/Missing trays are not excluded automatically/)).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Resume collection' })).toBeDisabled();
-    expect(state.collect).not.toHaveBeenCalled();
-    expect(state.resolve).not.toHaveBeenCalled();
-  });
-  it('summarizes unique, missing and ambiguous endpoint evidence without treating it as confirmed locations', () => {
-    const { state, pf } = setup();
-    vi.mocked(useProjectPreparation).mockReturnValue({
-      ...state,
-      session: { ...state.session, plan: { ...state.session.plan, requestedScope: {
-        ...state.session.plan.requestedScope,
-        endpointNames: ['Unique', 'Missing', 'Ambiguous'],
-        endpointEvidence: [
-          { name: 'Unique', status: 'unique_candidate', candidateObjectIds: ['dbid:2'] },
-          { name: 'Missing', status: 'missing', candidateObjectIds: [] },
-          { name: 'Ambiguous', status: 'ambiguous', candidateObjectIds: ['dbid:3', 'dbid:4'] },
-        ],
-      } } },
-    } as unknown as ReturnType<typeof useProjectPreparation>);
-    render(<ProjectPreparationPanel pf={pf} active />);
-    const summary = screen.getByRole('region', { name: 'Preparation readiness summary' });
-    expect(within(summary).getByText(/Endpoint candidates: 1 unique; 1 missing; 1 ambiguous/)).toBeVisible();
-    expect(within(summary).getByText(/not confirmed shared locations or calculated cables/)).toBeVisible();
-  });
-  it('describes v2 model-only slash handling for equipment while retaining exact tray matching', () => {
-    const { state, pf } = setup();
-    vi.mocked(useProjectPreparation).mockReturnValue({
-      ...state,
-      session: { ...state.session, plan: { ...state.session.plan,
-        matchingPolicyVersion: 'wfc.pf.project-exact-candidates.v2' } },
-    } as unknown as ReturnType<typeof useProjectPreparation>);
-    render(<ProjectPreparationPanel pf={pf} active />);
-    expect(screen.getByText(/Matching policy v2: equipment identifiers allow one leading slash present only in the model\. Tray names retain exact matching/)).toBeVisible();
-    expect(screen.queryByText(/Historical matching policy v1:/)).not.toBeInTheDocument();
-  });
-  it('requires rediscovery to obtain new matching evidence for a historical v1 plan', () => {
-    const { state, pf } = setup();
-    vi.mocked(useProjectPreparation).mockReturnValue(
-      state as unknown as ReturnType<typeof useProjectPreparation>,
-    );
-    render(<ProjectPreparationPanel pf={pf} active />);
-    expect(screen.getByText(/Historical matching policy v1: discover again and freeze a new plan to use model-only leading-slash matching/)).toBeVisible();
-    expect(screen.getByText(/Opening this saved plan does not rerun discovery/)).toBeVisible();
-    expect(state.discover).not.toHaveBeenCalled();
-    expect(state.freezePlan).not.toHaveBeenCalled();
-  });
-  it('does not substitute the current catalog total into coverage of a different frozen catalog', () => {
-    const { state, pf } = setup();
-    vi.mocked(useProjectPreparation).mockReturnValue({
-      ...state,
-      context: { ...state.context, scope: { ...state.context.scope, catalogRevision: '2' } },
-    } as unknown as ReturnType<typeof useProjectPreparation>);
-    render(<ProjectPreparationPanel pf={pf} active />);
-    const summary = screen.getByRole('region', { name: 'Preparation readiness summary' });
-    expect(within(summary).getByText(/Tray network coverage: 1 project trays have selected roots/)).toBeVisible();
-    expect(within(summary).queryByText(/1 of 1 project trays/)).not.toBeInTheDocument();
-  });
-  it('shows ambiguity codes, exact model IDs and a manual resolution action', () => {
-    const { state, pf } = setup(), tray = state.context.trays[0];
-    vi.mocked(useProjectPreparation).mockReturnValue({
-      ...state,
-      session: { ...state.session, plan: { ...state.session.plan, diagnostics: [{
-        code: 'TRAY_ROOT_AMBIGUOUS', projectTrayIds: [tray.projectTrayId],
-        objectIds: ['dbid:426510', 'dbid:426511', 'dbid:426512'], message: 'Resolve scope.',
-      }] } },
-    } as unknown as ReturnType<typeof useProjectPreparation>);
-    render(<ProjectPreparationPanel pf={pf} active />);
-    const diagnostics = screen.getByRole('list', { name: 'Frozen plan diagnostics' });
-    expect(within(diagnostics).getByText('TRAY_ROOT_AMBIGUOUS')).toBeVisible();
-    expect(within(diagnostics).getByText('Affected trays: Tray 01.')).toBeVisible();
-    expect(within(diagnostics).getByText('Model objects: dbid:426510, dbid:426511, dbid:426512.')).toBeVisible();
-    expect(within(diagnostics).getByText(/Select and explicitly confirm the intended physical roots/)).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Resume collection' })).toBeDisabled();
+  it.each(['loading', 'no-model', 'error', 'viewer-busy', 'status-loading', 'unknown'] as const)('explains the %s gate and preserves read-only inspection when possible', gate => {
+    const { state, pf, tray } = setup();
+    if (gate === 'status-loading') state.loading = true;
+    if (gate === 'unknown') state.unknown = true;
+    const next = gate === 'viewer-busy' ? { ...pf, busy: true }
+      : ['loading', 'no-model', 'error'].includes(gate) ? { ...pf, viewerPhase: gate as 'loading' | 'no-model' | 'error' } : pf;
+    render(<ProjectPreparationPanel pf={next} active />);
+    const expected = gate === 'loading' ? 'The model is loading.' : gate === 'no-model' ? 'Load a model'
+      : gate === 'error' ? 'The model is not ready.' : gate === 'viewer-busy' ? 'The model is busy.'
+        : gate === 'status-loading' ? 'Reading the current tray status' : 'An earlier tray update needs checking';
+    expect(screen.getByText(new RegExp(expected))).toBeVisible();
+    const show = screen.getByRole('button', { name: `Show tray ${tray.rawName}` });
+    if (gate === 'status-loading' || gate === 'unknown') expect(show).toBeEnabled(); else expect(show).toBeDisabled();
+    expect(screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` })).toBeDisabled();
   });
 });

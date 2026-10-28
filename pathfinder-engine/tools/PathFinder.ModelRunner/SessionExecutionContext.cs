@@ -8,6 +8,10 @@ internal sealed class SessionExecutionContext
     private string? identity;
     private string? sourceIdentity;
     private string? barrierIdentity;
+    private GraphPreparationRuntime? graphPreparation;
+    internal GraphPreparationLease BeginGraphPreparation(string root, string key, string requestId,
+        double preparationMilliseconds, CancellationToken token) =>
+        (graphPreparation ??= new()).Begin(root, key, requestId, preparationMilliseconds, token);
     internal PreparedBarriers? BarrierCache { get; private set; }
     internal PreparedMixedBarriers? MixedBarrierCache { get; private set; }
     internal void SelectBarrierKey(string next)
@@ -24,6 +28,7 @@ internal sealed class SessionExecutionContext
     internal void Discard()
     {
         cache = null; previous = null; identity = null; sourceIdentity = null;
+        graphPreparation = null;
         BarrierCache = null; MixedBarrierCache = null; barrierIdentity = null; Reuse = "none";
     }
     private static string BoundIdentity(string root, string sha256, string rulesSha256) => root + "\n" + sha256 + "\n" + rulesSha256;
@@ -33,7 +38,7 @@ internal sealed class SessionExecutionContext
     {
         token.ThrowIfCancellationRequested();
         if (sourceIdentity != Identity(root, expectedSourceSha256, rules))
-        { cache = null; previous = null; identity = null; sourceIdentity = null; }
+        { cache = null; previous = null; identity = null; sourceIdentity = null; graphPreparation = null; }
     }
     internal bool TryReusePlanning(string root, string sourceSha256, string projectId, string modelVersionId,
         ModelBuildRules? rules, CancellationToken token, out PreparedExecution? execution)
@@ -54,7 +59,7 @@ internal sealed class SessionExecutionContext
         // Deliberately stricter than normalized exclusion ordering. The fitted
         // identity uses resolved lookup bytes; original file identity is separate.
         var next = Identity(root, source.Sha256, rules);
-        if (identity != next) { cache = new FittedModelCache(root, observer: PreparationMemoryTrace.Observer); previous = null; identity = next; }
+        if (identity != next) { graphPreparation = null; cache = new FittedModelCache(root, observer: PreparationMemoryTrace.Observer); previous = null; identity = next; }
         var result = cache!.GetOrBuildExecution(source, rules, token);
         Reuse = ReferenceEquals(previous?.Prepared, result.Prepared) ? "memory" : result.Prepared.LoadedFromDisk ? "disk" : "build";
         previous = result;
@@ -65,7 +70,7 @@ internal sealed class SessionExecutionContext
     {
         token.ThrowIfCancellationRequested();
         var next = BoundIdentity(root, source.Sha256, source.RulesContextSha256);
-        if (identity != next) { cache = new FittedModelCache(root, observer: PreparationMemoryTrace.Observer); previous = null; identity = next; }
+        if (identity != next) { graphPreparation = null; cache = new FittedModelCache(root, observer: PreparationMemoryTrace.Observer); previous = null; identity = next; }
         var result = cache!.GetOrBuildExecution(source, token);
         Reuse = ReferenceEquals(previous?.Prepared, result.Prepared) ? "memory" : result.Prepared.LoadedFromDisk ? "disk" : "build";
         previous = result;

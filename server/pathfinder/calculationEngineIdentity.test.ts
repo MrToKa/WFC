@@ -4,9 +4,9 @@ import path from 'node:path';
 import type { BigIntStats, Stats } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { calculationProjectionFiles, barrierCalculationProjectionFiles, BARRIER_IDENTITY_PROJECTION_LIMIT, createCalculationEngineIdentityReader } from './calculationEngineIdentity.js';
+import { calculationProjectionFiles, barrierCalculationProjectionFiles, BARRIER_IDENTITY_PROJECTION_LIMIT, CALCULATION_IDENTITY_PROJECTION_LIMIT, createCalculationEngineIdentityReader } from './calculationEngineIdentity.js';
 import { verifyEngineIdentity, verifyBarrierEngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
-import { MIXED_BARRIER_OPENING_RUNTIME_PROFILE, INTER_TRAY_OPENING_MANEUVER_POLICY, verifyMixedBarrierEngineIdentity } from '../../shared/pathfinderBarrierMixed.js';
+import { MIXED_BARRIER_MEASURED_FIT_RUNTIME_PROFILE, MEASURED_BEND_MESH_FITTING_POLICY, INTER_TRAY_OPENING_MANEUVER_POLICY, NEAREST_ANCHORED_LOCAL_SEARCH_POLICY, verifyMixedBarrierEngineIdentity } from '../../shared/pathfinderBarrierMixed.js';
 
 vi.mock('node:fs/promises', () => ({ default: { lstat: vi.fn(), realpath: vi.fn(), readFile: vi.fn() } }));
 const sha = (value: Buffer | string) => createHash('sha256').update(value).digest('hex');
@@ -44,8 +44,10 @@ describe('separate v8 barrier calculation implementation identity',()=>{
   it('pins the fresh mixed runtime profile and maneuver policy as an inseparable identity pair',async()=>{
     const f=fixture(true,true),value=await f.reader.read();
     if(value.schemaVersion!=='wfc.pf.engine-identity.v3')throw Error('Expected mixed identity');
-    expect(value.policyVersions).toMatchObject({runtimeProfile:MIXED_BARRIER_OPENING_RUNTIME_PROFILE.schemaVersion,
-      interTrayManeuvers:INTER_TRAY_OPENING_MANEUVER_POLICY});
+    expect(value.policyVersions).toMatchObject({runtimeProfile:MIXED_BARRIER_MEASURED_FIT_RUNTIME_PROFILE.schemaVersion,
+      interTrayManeuvers:INTER_TRAY_OPENING_MANEUVER_POLICY,localSearch:NEAREST_ANCHORED_LOCAL_SEARCH_POLICY,
+      fitting:'pf2.rules.v2',
+      geometryFitting:MEASURED_BEND_MESH_FITTING_POLICY});
     expect(verifyMixedBarrierEngineIdentity(value,sha)).toBe(true);expect(verifyBarrierEngineIdentity(value,sha)).toBe(false);
     expect(value.barriersModuleSha256).toBe(sha(f.files.get(path.join(f.root,'PathFinder.Barriers.dll'))!.bytes));
     expect(fs.readFile).toHaveBeenCalledTimes(7);
@@ -56,7 +58,9 @@ describe('separate v8 barrier calculation implementation identity',()=>{
     expect(verifyEngineIdentity(value,sha)).toBe(false);
     const closure=barrierCalculationProjectionFiles();expect(closure.length).toBeGreaterThan(32);expect(closure.length).toBeLessThanOrEqual(BARRIER_IDENTITY_PROJECTION_LIMIT);
     for(const name of ['./barrierCalculationScope.js','./barrierStrategy.js','../../shared/pathfinderBarrierRuntime.js'])expect(closure.map(x=>x.name)).toContain(name);
-    expect(calculationProjectionFiles()).toHaveLength(32);
+    expect(closure.slice(-4).map(file=>file.name)).toEqual(['./sameEndpointCalculationReuse.js','./verifiedSameEndpointReuse.js','./runtime.js','./automaticPairWriter.js']);
+    expect(closure).toHaveLength(calculationProjectionFiles().length+16);
+    expect(calculationProjectionFiles()).toHaveLength(35);
   });
   it.each(['PathFinder.Barriers.dll','PathFinder.BarrierVerifier.dll'])('invalidates exact identity when %s bytes change',async name=>{
     const f=fixture(true),first=await f.reader.read(),entry=f.files.get(path.join(f.root,name))!;
@@ -74,6 +78,10 @@ describe('separate v8 barrier calculation implementation identity',()=>{
 });
 
 describe('calculation engine identity against synthetic filesystem facts, not actual DLL execution', () => {
+  it('pins cable purpose authorization and exact project catalog projection',()=>{
+    expect(calculationProjectionFiles().map(file=>file.name)).toEqual(expect.arrayContaining([
+      './purposePolicy.js','./catalog.js','../../shared/routingCablePurposes.js']));
+  });
   it.each(['./lengthLedger.js','../../shared/pathfinderLengthLedger.js','./directSecondaryStrategy.js','../../shared/pathfinderDirectSecondary.js','./automaticEndpointCandidates.js','./matching.js','./policyJson.js','../../shared/pathfinderPurposePolicy.js','../../shared/pathfinderPreparation.js','../../shared/pathfinderCapacity.js','../../shared/pathfinderGeometryTrace.js','../../shared/pathfinderEndpointBindings.js','../../viewer-runtime/equipment-names.mjs','../../viewer-runtime/display-visibility.mjs','../../viewer-runtime/preparation-input.mjs','./contracts.js','./preparationUnionTask.js','../../shared/preparationMerge.js','../../viewer-runtime/pathfinder.mjs','../../viewer-runtime/model-capture.mjs'])('pins the actual %s validator and changes identity for its sole replacement', async name=>{
     expect(calculationProjectionFiles().map(file=>file.name)).toContain(name);
     const f=fixture(),filename=path.join(f.root,'ledger-validator.js');
@@ -95,7 +103,7 @@ describe('calculation engine identity against synthetic filesystem facts, not ac
     expect(value.derivationSha256).toBe(sha(Buffer.concat([Buffer.from('./projection.js\n' + projected.length + '\n'), projected, Buffer.from('\n')])));
     expect(verifyEngineIdentity(value, sha)).toBe(true);
     expect(value.policyVersions.directSecondary).toBe('nearest-eligible-tray-or.v1');
-    expect(calculationProjectionFiles().length).toBeLessThanOrEqual(32);
+    expect(calculationProjectionFiles().length).toBeLessThanOrEqual(CALCULATION_IDENTITY_PROJECTION_LIMIT);
     expect(fs.readFile).toHaveBeenCalledTimes(5);
   });
   it.each(['PathFinder.ModelRunner.dll', 'PathFinder.Model.dll', 'PathFinder.Core.dll', 'PathFinder.Adapter.dll', 'projection.js'])('changes the exact identity when %s bytes change under the same version label', async name => {

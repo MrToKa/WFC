@@ -59,9 +59,123 @@ beforeEach(() => {
   vi.mocked(fetchCableEndpointSelection).mockImplementation(async (_project, _token, current) => evidence(current));
   vi.mocked(saveCableEndpoint).mockImplementation(async (_project, _token, selectedCable, end, input) => receipt(input, selectedCable, end));
 });
-afterEach(() => { vi.restoreAllMocks(); localStorage.clear(); if (originalLocks) Object.defineProperty(navigator, 'locks', originalLocks); else Reflect.deleteProperty(navigator, 'locks'); });
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); localStorage.clear(); if (originalLocks) Object.defineProperty(navigator, 'locks', originalLocks); else Reflect.deleteProperty(navigator, 'locks'); });
 
 describe('persistent owned cable endpoint selection', () => {
+  it('returns the verified context from a read-only refresh and classifies a bounded timeout without saving', async () => {
+    const view = renderHook(() => useCableEndpointSelection(access()));
+    await waitFor(() => expect(view.result.current.canSelect).toBe(true));
+    await act(async () => { await view.result.current.assignObjectBottomCentre(); });
+    const draft = view.result.current.draft;
+    let read: Awaited<ReturnType<typeof view.result.current.refresh>> | undefined;
+    await act(async () => { read = await view.result.current.refresh({ preserveDraft: true }); });
+    expect(read).toEqual({ status: 'complete', context: context() });
+    vi.mocked(fetchCableEndpointContext).mockImplementationOnce(() => new Promise<CableEndpointContext>(() => undefined));
+    vi.useFakeTimers();
+    let refresh!: ReturnType<typeof view.result.current.refresh>;
+    act(() => { refresh = view.result.current.refresh({ preserveDraft: true, timeoutMilliseconds: 8_000 }); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(8_000); read = await refresh; });
+    expect(read).toEqual({ status: 'transient-failure' }); expect(view.result.current.busy).toBe(false);
+    expect(view.result.current.draft).toEqual(draft); expect(saveCableEndpoint).not.toHaveBeenCalled();
+  });
+  it.each([401, 409])('returns a refused read-only refresh for HTTP %s without retrying', async status => {
+    const view = renderHook(() => useCableEndpointSelection(access()));
+    await waitFor(() => expect(view.result.current.canSelect).toBe(true));
+    vi.mocked(fetchCableEndpointContext).mockRejectedValueOnce(new CableEndpointApiError('REFUSED', status, 'Current read refused', 'refused'));
+    await act(async () => { expect(await view.result.current.refresh()).toEqual({ status: 'refused' }); });
+    expect(fetchCableEndpointContext).toHaveBeenCalledTimes(2); expect(saveCableEndpoint).not.toHaveBeenCalled();
+  });
+  it('cancels a caller-owned read-only refresh and does not publish a late response', async () => {
+    const view = renderHook(() => useCableEndpointSelection(access()));
+    await waitFor(() => expect(view.result.current.canSelect).toBe(true));
+    let resolve!: (value: CableEndpointContext) => void;
+    vi.mocked(fetchCableEndpointContext).mockImplementationOnce(() => new Promise<CableEndpointContext>(done => { resolve = done; }));
+    const abort = new AbortController(); let refresh!: ReturnType<typeof view.result.current.refresh>;
+    act(() => { refresh = view.result.current.refresh({ signal: abort.signal }); });
+    await act(async () => { abort.abort(); expect(await refresh).toEqual({ status: 'cancelled' }); });
+    await act(async () => { resolve({ ...context(), cableWriteRevision: '999' }); });
+    expect(view.result.current.context?.cableWriteRevision).toBe('4'); expect(view.result.current.busy).toBe(false);
+    expect(saveCableEndpoint).not.toHaveBeenCalled();
+  });
+  it.each(['503', 'network'] as const)('automatically recovers the initial %s context GET within the same read', async kind => {
+    vi.mocked(fetchCableEndpointContext).mockRejectedValueOnce(kind === '503'
+      ? new CableEndpointApiError('UNAVAILABLE', 503, 'Temporary context failure') : new TypeError('Failed to fetch'));
+    vi.useFakeTimers();
+    const props = access(), view = renderHook(() => useCableEndpointSelection(props));
+    await act(async () => { await Promise.resolve(); });
+    expect(fetchCableEndpointContext).toHaveBeenCalledOnce(); expect(view.result.current.busy).toBe(true);
+    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+    expect(fetchCableEndpointContext).toHaveBeenCalledTimes(2); expect(view.result.current.canSelect).toBe(true); expect(view.result.current.error).toBeNull();
+    expect(saveCableEndpoint).not.toHaveBeenCalled(); expect(props.onAuthorityLost).not.toHaveBeenCalled();
+  });
+  it.each([401, 403, 409])('does not retry a context GET refused with HTTP %s', async status => {
+    vi.mocked(fetchCableEndpointContext).mockRejectedValueOnce(new CableEndpointApiError('REFUSED', status, 'Current scope refused', 'refused'));
+    vi.useFakeTimers();
+    const props = access(), view = renderHook(() => useCableEndpointSelection(props));
+    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+    expect(fetchCableEndpointContext).toHaveBeenCalledOnce(); expect(view.result.current.context).toBeNull(); expect(view.result.current.canSelect).toBe(false);
+    expect(props.onAuthorityLost).toHaveBeenCalledTimes(status === 409 ? 0 : 1); expect(saveCableEndpoint).not.toHaveBeenCalled();
+  });
+  it.each(['INVALID_RESPONSE', 'MODEL_CHANGED'])('does not retry context evidence failure %s', async code => {
+    vi.mocked(fetchCableEndpointContext).mockRejectedValueOnce(new CableEndpointApiError(code, null, 'Unverified current evidence'));
+    vi.useFakeTimers();
+    const view = renderHook(() => useCableEndpointSelection(access()));
+    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+    expect(fetchCableEndpointContext).toHaveBeenCalledOnce(); expect(view.result.current.context).toBeNull(); expect(view.result.current.canSelect).toBe(false);
+  });
+  it('cancels an initial retry on inactivity and starts a fresh read on reactivation', async () => {
+    vi.mocked(fetchCableEndpointContext).mockRejectedValueOnce(new CableEndpointApiError('UNAVAILABLE', 503, 'Temporary context failure'));
+    vi.useFakeTimers();
+    const props = access(), view = renderHook(value => useCableEndpointSelection(value), { initialProps: props });
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { view.rerender({ ...props, active: false }); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+    expect(fetchCableEndpointContext).toHaveBeenCalledOnce(); expect(view.result.current.busy).toBe(false);
+    await act(async () => { view.rerender(props); });
+    expect(fetchCableEndpointContext).toHaveBeenCalledTimes(2); expect(view.result.current.context?.cableId).toBe(cable); expect(view.result.current.canSelect).toBe(true);
+  });
+  it('keeps the original whole-read deadline when a retry stops responding', async () => {
+    vi.mocked(fetchCableEndpointContext).mockRejectedValueOnce(new CableEndpointApiError('UNAVAILABLE', 503, 'Temporary context failure'))
+      .mockImplementationOnce(() => new Promise<CableEndpointContext>(() => undefined));
+    vi.useFakeTimers();
+    const view = renderHook(() => useCableEndpointSelection(access()));
+    await act(async () => { await vi.advanceTimersByTimeAsync(29_999); });
+    expect(fetchCableEndpointContext).toHaveBeenCalledTimes(2); expect(view.result.current.busy).toBe(true);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(view.result.current.busy).toBe(false); expect(view.result.current.context).toBeNull(); expect(view.result.current.error).toContain('timed out');
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    expect(fetchCableEndpointContext).toHaveBeenCalledTimes(2); expect(saveCableEndpoint).not.toHaveBeenCalled();
+  });
+  it('ignores a late old-cable failure without scheduling a retry for the new cable', async () => {
+    let rejectOld!: (error: unknown) => void;
+    vi.mocked(fetchCableEndpointContext).mockImplementationOnce(() => new Promise<CableEndpointContext>((_resolve, reject) => { rejectOld = reject; }));
+    vi.useFakeTimers();
+    const props = access(), view = renderHook(value => useCableEndpointSelection(value), { initialProps: props });
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { view.rerender({ ...props, cableId: id(89) }); });
+    expect(view.result.current.context?.cableId).toBe(id(89));
+    await act(async () => { rejectOld(new CableEndpointApiError('UNAVAILABLE', 503, 'Late old-cable failure')); await vi.advanceTimersByTimeAsync(5_000); });
+    expect(fetchCableEndpointContext).toHaveBeenCalledTimes(2); expect(view.result.current.context?.cableId).toBe(id(89));
+    expect(view.result.current.error).toBeNull(); expect(props.onAuthorityLost).not.toHaveBeenCalled();
+  });
+  it('discards a retained draft when the refreshed prepared scope changes', async () => {
+    const props = access(), view = renderHook(() => useCableEndpointSelection(props));
+    await waitFor(() => expect(view.result.current.canSelect).toBe(true));
+    await act(async () => { await view.result.current.assignObjectBottomCentre(); });
+    expect(view.result.current.draft?.mode).toBe('object-derived');
+    vi.mocked(fetchCableEndpointContext).mockResolvedValueOnce({ ...context(), current: { ...scope, traceId: id(88) } });
+    await act(async () => { await view.result.current.refresh({ preserveDraft: true }); });
+    expect(view.result.current.context?.current?.traceId).toBe(id(88)); expect(view.result.current.draft).toBeNull(); expect(view.result.current.displaySelection).toBeNull();
+    expect(saveCableEndpoint).not.toHaveBeenCalled();
+  });
+  it('does not retry a response from another selected model revision', async () => {
+    vi.mocked(fetchCableEndpointContext).mockResolvedValueOnce({ ...context(), current: { ...scope, selectionRevision: '99' } });
+    vi.useFakeTimers();
+    const view = renderHook(() => useCableEndpointSelection(access()));
+    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+    expect(fetchCableEndpointContext).toHaveBeenCalledOnce(); expect(view.result.current.context).toBeNull(); expect(view.result.current.canSelect).toBe(false);
+    expect(view.result.current.error).toContain('prepared model changed');
+  });
   it('applies one protected selected object in a single owned operation using fresh context rather than React draft state', async () => {
     const fresh = { ...context(), cableWriteRevision: '55', registryRevision: '66', contextSha256: 'e'.repeat(64) };
     vi.mocked(fetchCableEndpointContext).mockResolvedValueOnce(context()).mockResolvedValue(fresh);

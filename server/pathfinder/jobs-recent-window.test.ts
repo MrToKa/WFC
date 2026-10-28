@@ -2,7 +2,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Pool, PoolClient } from 'pg';
 const seams = vi.hoisted(() => ({ collect: vi.fn(), synthetic: vi.fn(), seal: vi.fn(), scope: vi.fn(), engine: vi.fn() }));
-vi.mock('./dependencies.js', async original => ({ ...await original<typeof import('./dependencies.js')>(), collectDependencies: seams.collect, collectDependenciesForVersion: seams.collect, hasSyntheticProof: seams.synthetic }));
+vi.mock('./dependencies.js', async original => ({ ...await original<typeof import('./dependencies.js')>(), collectDependencies: seams.collect, collectDependenciesForVersion: seams.collect,
+  createTransactionDependencyReadCollector: (client: PoolClient, projectId: string) => (cableId: string, options: unknown, version: string) => seams.collect(client, projectId, cableId, options, version),
+  hasSyntheticProof: seams.synthetic }));
 vi.mock('./revisionResultRepository.js', () => ({ persistRevisionAdmission: vi.fn(), verifyRevisionResultForProposal: seams.seal }));
 vi.mock('./recalculationRepository.js', () => ({ readRecalculationJobAuthority: async () => ({ enrolled: false }), pauseRecalculationForJob: vi.fn(), requireEnrollmentAuthority: vi.fn() }));
 vi.mock('./routingScope.js', async original => ({ ...await original<typeof import('./routingScope.js')>(), requireVersionedCalculationScope: seams.scope }));

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { automaticPairStatuses } from './pathfinderAutomaticPair.js';
 import { calculationAvailabilitySchema, type CalculationAvailability } from './pathfinderCalculationAvailability.js';
 import { policyHashSchema, policyUuidSchema } from './pathfinderPurposePolicy.js';
 import { revisionCableSnapshotSchema } from './pathfinderRevisionResults.js';
@@ -74,6 +75,10 @@ export const cableWorkflowCalculationSchema = z.object({
   proposalHash: policyHashSchema.nullable(),
   reviewable: z.boolean(),
   acceptedMatchesCurrent: z.boolean(),
+  /** Read-only exact saved geometry; never currentness or Review/Apply authority. */
+  savedExactDisplay: z.boolean().optional(),
+  automaticUpdate: z.object({status:z.enum(automaticPairStatuses),receiptId:policyUuidSchema.nullable(),reasonCode:recalculationReasonSchema.nullable()}).strict()
+    .refine(value => ['written','already-written'].includes(value.status) === (value.receiptId !== null)).optional(),
   itemApplicability:sealedCableItemApplicabilitySchema.nullable().optional(),
 }).strict().superRefine((value, context) => {
   if ((value.jobId === null) !== (value.jobStatus === null)
@@ -94,6 +99,9 @@ export const cableWorkflowCalculationSchema = z.object({
     context.addIssue({code:'custom',message:'Sealed item evidence belongs to the exact job and proposal.'});
   if (value.acceptedMatchesCurrent && value.currentness !== 'current')
     context.addIssue({ code: 'custom', message: 'An up-to-date display requires current accepted-result evidence.' });
+  if (value.savedExactDisplay && (value.jobStatus !== 'complete' || value.itemState !== 'complete' || value.outcome !== 'calculated'
+    || value.currentness !== 'changed' || value.proposalId === null || value.reviewable || value.acceptedMatchesCurrent))
+    context.addIssue({ code: 'custom', message: 'Saved exact display is separate from current calculation and write authority.' });
 });
 export const cableWorkflowRowSchema = z.object({
   projectId: policyUuidSchema,
@@ -105,9 +113,9 @@ export const cableWorkflowRowSchema = z.object({
 }).strict().superRefine((value, context) => {
   if(value.calculation.itemApplicability && (value.calculation.itemApplicability.projectId!==value.projectId||value.calculation.itemApplicability.cableId!==value.cable.id))
     context.addIssue({code:'custom',message:'Sealed item evidence belongs to the exact project and cable.'});
-  if ((value.calculation.reviewable || value.calculation.acceptedMatchesCurrent) && (!value.from.pointAvailable || !value.to.pointAvailable))
+  if ((value.calculation.reviewable || value.calculation.acceptedMatchesCurrent || value.calculation.savedExactDisplay) && (!value.from.pointAvailable || !value.to.pointAvailable))
     context.addIssue({ code: 'custom', message: 'Current results require evaluated available endpoint evidence.' });
-  if (value.calculation.acceptedMatchesCurrent && (!value.cable.routing?.trim() || value.cable.designLength === null))
+  if ((value.calculation.acceptedMatchesCurrent || value.calculation.savedExactDisplay) && (!value.cable.routing?.trim() || value.cable.designLength === null))
     context.addIssue({ code: 'custom', message: 'Up-to-date evidence requires both current cable values to be present.' });
 });
 /**

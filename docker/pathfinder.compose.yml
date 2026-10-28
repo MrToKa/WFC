@@ -80,6 +80,8 @@ services:
       PF_ROOT: /var/lib/wfc/pathfinder
       PF_ENGINE_DLL: /opt/pathfinder/PathFinder.ModelRunner.dll
       PF_ENGINE_MODE: ${PF_ENGINE_MODE:-oneshot}
+      PF_ENGINE_SESSION_PROFILE: ${PF_ENGINE_SESSION_PROFILE:-bounded}
+      PF_ENGINE_GRAPH_CACHE: ${PF_ENGINE_GRAPH_CACHE:-0}
       PF_PREPARATION_CAPACITY_PROFILE: ${PF_PREPARATION_CAPACITY_PROFILE:-wfc.pf.current-bounded-capture-and-model.v1}
       PF_LOCAL_DEMO: "true"
       PF_PRODUCER_CONTROL_KEY: ${PF_PRODUCER_CONTROL_KEY:-}

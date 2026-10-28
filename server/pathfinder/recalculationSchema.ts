@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS pf_recalculation_state (
  CHECK((login_id IS NULL)=(authority_expires_at IS NULL)),CHECK(authority_expires_at IS NULL OR authority_expires_at<=login_expires_at)
 );
 ALTER TABLE pf_recalculation_state ADD COLUMN IF NOT EXISTS engine_unavailable_code text CHECK(engine_unavailable_code~'^[A-Z][A-Z0-9_]{0,95}$');
+ALTER TABLE pf_recalculation_state ADD COLUMN IF NOT EXISTS automatic_pair_authority jsonb CHECK(automatic_pair_authority IS NULL OR octet_length(automatic_pair_authority::text)<=8192);
 INSERT INTO pf_recalculation_state(project_id) SELECT id FROM projects ON CONFLICT DO NOTHING;
 CREATE TABLE IF NOT EXISTS pf_recalculation_claims (
  project_id uuid PRIMARY KEY REFERENCES pf_recalculation_state(project_id) ON DELETE CASCADE,
@@ -42,6 +43,7 @@ CREATE TABLE IF NOT EXISTS pf_recalculation_commands (
  receipt jsonb NOT NULL CHECK(octet_length(receipt::text)<=1048576),created_at timestamptz NOT NULL DEFAULT now(),
  PRIMARY KEY(project_id,actor_id,idempotency_key)
 );
+ALTER TABLE pf_recalculation_enrollments ADD COLUMN IF NOT EXISTS automatic_pair_authority jsonb CHECK(automatic_pair_authority IS NULL OR octet_length(automatic_pair_authority::text)<=8192);
 CREATE TABLE IF NOT EXISTS pf_recalculation_events (
  project_id uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,generation bigint NOT NULL,
  domain text NOT NULL CHECK(domain IN('model','geometry','routing','endpoints','settings','cables','engine','manual','preferences','barriers')),
@@ -94,6 +96,11 @@ CREATE OR REPLACE FUNCTION pf_recalculation_row_event() RETURNS trigger LANGUAGE
  WHEN 'model_versions' THEN kind='model';why='ACTIVE_MODEL_STATE_CHANGED';changed=(b->'state',b->'health',b->'content_fingerprint') IS DISTINCT FROM (a->'state',a->'health',a->'content_fingerprint') AND EXISTS(SELECT 1 FROM project_model_selections WHERE project_id=pid AND active_model_version_id=COALESCE(a->>'id',b->>'id')::uuid);
  WHEN 'pf_project_preparations' THEN kind='geometry';why='PREPARATION_CHANGED';changed=(b->'current_aggregate_id',b->'current_artifact_id',b->'geometry_revision') IS DISTINCT FROM (a->'current_aggregate_id',a->'current_artifact_id',a->'geometry_revision');
  WHEN 'pf_purpose_project_state' THEN kind='routing';why='ROUTING_SCOPE_CHANGED';changed=(b->'catalog_revision',b->'routing_policy_revision') IS DISTINCT FROM (a->'catalog_revision',a->'routing_policy_revision');
+ WHEN 'cable_types' THEN kind='cables';why='CABLE_TYPE_PURPOSE_CHANGED';
+ changed=(b->>'project_id',NULLIF(pf_catalog_key(b->>'purpose'),'')) IS DISTINCT FROM (a->>'project_id',NULLIF(pf_catalog_key(a->>'purpose'),''));
+ IF changed AND TG_OP='UPDATE' AND b->>'project_id' IS DISTINCT FROM a->>'project_id' THEN
+   PERFORM pf_recalculation_dirty((b->>'project_id')::uuid,kind,why,b->>'id');
+ END IF;
  WHEN 'pf_project_state' THEN kind='endpoints';why='LOCATION_REGISTRY_CHANGED';changed=b->'registry_revision' IS DISTINCT FROM a->'registry_revision';
  WHEN 'pf_endpoint_binding_heads' THEN kind='endpoints';why='ENDPOINT_BINDING_CHANGED';changed=(b->'binding_id',b->'binding_revision') IS DISTINCT FROM (a->'binding_id',a->'binding_revision');
  WHEN 'pf_barrier_heads' THEN kind='barriers';why='BARRIER_SCOPE_CHANGED';changed=(b->'revision',b->'snapshot_id') IS DISTINCT FROM (a->'revision',a->'snapshot_id') AND COALESCE(a->>'snapshot_id',b->>'snapshot_id') IS NOT NULL;
@@ -108,6 +115,7 @@ CREATE OR REPLACE FUNCTION pf_recalculation_row_event() RETURNS trigger LANGUAGE
  WHEN 'model_versions' THEN (COALESCE(a,b)->>'id')||':'||(COALESCE(a,b)->>'state')||':'||(COALESCE(a,b)->>'health')
  WHEN 'pf_project_preparations' THEN (COALESCE(a,b)->>'geometry_revision')||':'||COALESCE(COALESCE(a,b)->>'current_aggregate_id','none')
  WHEN 'pf_purpose_project_state' THEN (COALESCE(a,b)->>'catalog_revision')||':'||(COALESCE(a,b)->>'routing_policy_revision')
+ WHEN 'cable_types' THEN COALESCE(a,b)->>'id'
  WHEN 'pf_project_state' THEN COALESCE(a,b)->>'registry_revision'
  WHEN 'pf_endpoint_binding_heads' THEN (COALESCE(a,b)->>'binding_revision')||':'||(COALESCE(a,b)->>'binding_id')
  WHEN 'pf_barrier_heads' THEN (COALESCE(a,b)->>'revision')||':'||COALESCE(COALESCE(a,b)->>'snapshot_id','none')
@@ -133,12 +141,12 @@ DROP TRIGGER IF EXISTS pf_recalculation_cable_delete ON cables;
 CREATE TRIGGER pf_recalculation_cable_delete AFTER DELETE ON cables REFERENCING OLD TABLE AS pf_recalc_old FOR EACH STATEMENT EXECUTE FUNCTION pf_recalculation_cable_delete();
 `;
 
-const rowTables = ['projects','project_model_selections','model_versions','pf_project_preparations','pf_purpose_project_state','pf_project_state','pf_endpoint_binding_heads','pf_barrier_heads','pf_revision_comparison_targets','pf_revision_comparison_intents'] as const;
+const rowTables = ['projects','project_model_selections','model_versions','pf_project_preparations','pf_purpose_project_state','cable_types','pf_project_state','pf_endpoint_binding_heads','pf_barrier_heads','pf_revision_comparison_targets','pf_revision_comparison_intents'] as const;
 export async function initializeRecalculationSchema(pool: Pool): Promise<void> {
   const c = await pool.connect(); let discard = false, committing = false;
   try {
     await c.query('BEGIN'); await c.query("SELECT pg_advisory_xact_lock(hashtext('wfc-pathfinder-recalculation-schema-v1'))");
-    await c.query('LOCK TABLE projects,cables IN SHARE ROW EXCLUSIVE MODE');
+    await c.query('LOCK TABLE projects,cable_types,cables IN SHARE ROW EXCLUSIVE MODE');
     await c.query(RECALCULATION_SQL);
     for (const table of rowTables) {
       await c.query(`DROP TRIGGER IF EXISTS pf_recalculation_row_event ON ${table}`);

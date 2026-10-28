@@ -16,6 +16,7 @@ import { PathFinderError } from './errors.js';
 import { readProposalApplicability } from './proposalApplicability.js';
 import type { SealedCableItemApplicability } from '../../shared/pathfinderItemApplicability.js';
 import { createInitialFillReceiptProofReader } from './initialFillReceiptProof.js';
+import { createAutomaticPairReceiptProofReader } from './automaticPairReceiptProof.js';
 import { readBarrierWriteEvidence } from './barrierWrites.js';
 import { registerAutoLengthAdmission } from './autoLengthStore.js';
 
@@ -81,7 +82,7 @@ function protectedManualBaseline(row: Row, dependencies: DependencySnapshot, out
 }
 async function acceptedBaselines(client: PoolClient, projectId: string, ids: string[]): Promise<Map<string, RevisionBaseline['lastAcceptedApply']>> {
   const result = new Map<string, RevisionBaseline['lastAcceptedApply']>();
-  const retainedWriteBody = `r.provenance->>'schemaVersion' IN('pathfinder.initial-fill.v1','pathfinder.initial-fill.v2','pathfinder.apply.v3') AND
+  const retainedWriteBody = `r.provenance->>'schemaVersion' IN('pathfinder.initial-fill.v1','pathfinder.initial-fill.v2','pathfinder.apply.v3','pathfinder.automatic-pair.v1','pathfinder.automatic-pair-capacity-clear.v1') AND
     octet_length(r.before_snapshot::text)+octet_length(r.after_snapshot::text)+octet_length(r.provenance::text)
       +octet_length(p.dependencies::text)+octet_length(p.result::text)<=262144`;
   for (let at = 0; at < ids.length; at += REVISION_RESULTS_LIMITS.chunk) {
@@ -93,6 +94,7 @@ async function acceptedBaselines(client: PoolClient, projectId: string, ids: str
       p.result#>>'{design,designLengthMeters}' AS design_length,p.result#>>'{design,unroundedLengthMeters}' AS unrounded_length,
       s.record_sha256 AS sealed_hash,s.engine_result_sha256,s.ledger_sha256,
       coalesce(r.provenance->>'schemaVersion' LIKE 'pathfinder.initial-fill.%',false) AS initial_fill_kind,
+      coalesce(r.provenance->>'schemaVersion' IN('pathfinder.automatic-pair.v1','pathfinder.automatic-pair-capacity-clear.v1'),false) AS automatic_pair_kind,
       coalesce(r.provenance->>'schemaVersion' LIKE 'pathfinder.apply.%' AND (r.provenance->>'schemaVersion' NOT IN('pathfinder.apply.v1','pathfinder.apply.v2')
         OR p.dependencies->>'schemaVersion'='pathfinder.dependencies.v8' OR r.provenance ? 'barrierEvidence'),false) AS protected_apply_kind,
       r.actor_id AS receipt_actor_id,r.idempotency_key AS receipt_idempotency_key,r.payload_hash AS receipt_payload_hash,
@@ -111,7 +113,7 @@ async function acceptedBaselines(client: PoolClient, projectId: string, ids: str
       WHERE r.project_id=$1 AND r.cable_id=ANY($2::uuid[]) ORDER BY r.cable_id,r.applied_at DESC,r.id DESC`, [projectId, ids.slice(at, at + REVISION_RESULTS_LIMITS.chunk)])).rows;
     for (const row of values) {
       const cableId = policyUuidSchema.parse(row.cable_id); if (result.has(cableId) || !ids.includes(cableId)) return fail('REVISION_ACCEPTED_BASELINE_SCOPE', 500);
-      if (row.initial_fill_kind || row.protected_apply_kind) {
+      if (row.initial_fill_kind || row.protected_apply_kind || row.automatic_pair_kind) {
         // A new write kind is recognized only through its complete immutable
         // mandate/command/result chain. Never fall back to an older receipt.
         try {
@@ -127,6 +129,13 @@ async function acceptedBaselines(client: PoolClient, projectId: string, ids: str
             actorId: String(row.receipt_actor_id), idempotencyKey: String(row.receipt_idempotency_key), payloadHash: String(row.receipt_payload_hash),
             before: row.accepted_before, after: row.accepted_after, provenance: row.accepted_provenance, dependencies, result: output, seal })) continue;
           if (row.protected_apply_kind && !protectedManualBaseline(row, dependencies, output, seal, projectId, cableId)) continue;
+          if (row.automatic_pair_kind) {
+            // Each cable has its own immutable ownership chain and the same
+            // bounded proof budget. Unrelated cables must not consume it.
+            const automaticPairReceipt = createAutomaticPairReceiptProofReader(client);
+            const fact = await automaticPairReceipt({projectId,cableId,receiptId:String(row.receipt_id)});
+            if (!fact || !equal(fact.before,row.accepted_before) || !equal(fact.after,row.accepted_after)) continue;
+          }
         } catch (error) {
           if (error instanceof PathFinderError && /DEADLINE|READ_LIMIT|DATABASE_BUSY|ABORT/.test(error.code) || error instanceof Error && error.name === 'AbortError') throw error;
           continue;
@@ -291,6 +300,52 @@ const cablePageSql = `SELECT b.*,i.status AS item_status,i.message AS item_messa
  LEFT JOIN pf_job_items i ON i.project_id=b.project_id AND i.job_id=a.job_id AND i.cable_id=b.cable_id
  LEFT JOIN pf_revision_results s ON s.project_id=b.project_id AND s.admission_id=b.admission_id AND s.cable_id=b.cable_id
  LEFT JOIN pf_proposals p ON p.project_id=s.project_id AND p.id=s.proposal_id`;
+
+/** Read-only acknowledgement of this exact already-written result. A later
+ * receipt or arbitrary revision difference never acquires this exception. */
+async function alreadySavedResult(client: PoolClient, admission: Row, row: Row,
+  item: Awaited<ReturnType<typeof collectDependencyBatchInTransaction>>['items'][number], currentRevision: string): Promise<boolean> {
+  try {
+    const projectId = String(admission.project_id), cableId = String(row.cable_id), baseline = verifiedBaseline(row),
+      envelope = verifiedEnvelope({ ...row, ...object(row.sealed_row) }), current = item.dependencies, cable = item.cable;
+    if (!current || current.schemaVersion !== 'pathfinder.dependencies.v8' || !envelope.ledgerHash
+      || envelope.projectId !== projectId || envelope.admissionId !== admission.id || envelope.jobId !== admission.job_id
+      || envelope.cableId !== cableId || envelope.proposalId !== row.proposal_id || envelope.dependencyHash !== row.dependency_hash
+      || cable.id !== cableId || cable.cable_write_revision !== currentRevision || current.cableWriteRevision !== currentRevision)
+      return false;
+    const receipt = (await client.query<Row>(`/* revision-results:latest-own-write */ SELECT r.id AS receipt_id,r.project_id,r.cable_id,r.proposal_id,
+      p.job_id,p.proposal_hash,p.dependency_hash,p.status AS proposal_status,
+      CASE WHEN octet_length(r.provenance->>'schemaVersion')<=96 THEN r.provenance->>'schemaVersion' ELSE NULL END AS provenance_version
+      FROM pf_apply_receipts r LEFT JOIN pf_proposals p ON p.project_id=r.project_id AND p.id=r.proposal_id AND p.cable_id=r.cable_id
+      WHERE r.project_id=$1 AND r.cable_id=$2 ORDER BY r.applied_at DESC,r.id DESC LIMIT 1`, [projectId, cableId])).rows[0];
+    if (!receipt || receipt.project_id !== projectId || receipt.cable_id !== cableId || receipt.proposal_id !== envelope.proposalId
+      || receipt.job_id !== envelope.jobId || receipt.proposal_hash !== envelope.proposalHash || receipt.dependency_hash !== envelope.dependencyHash
+      || receipt.proposal_status !== 'calculated' || receipt.provenance_version !== 'pathfinder.automatic-pair.v1'
+      || !policyUuidSchema.safeParse(receipt.receipt_id).success) return false;
+    // Each cable retains the existing complete lineage/history/proof budget.
+    // This reader verifies historical authority; it never renews a write mandate.
+    const fact = await createAutomaticPairReceiptProofReader(client)({ projectId, cableId, receiptId: String(receipt.receipt_id) });
+    if (!fact || fact.clearedForCapacity || fact.receiptId !== receipt.receipt_id) return false;
+    const { before, after } = fact, old = baseline.currentCable;
+    if (before.id !== cableId || after.id !== cableId || before.project_id !== projectId || after.project_id !== projectId
+      || before.cable_write_revision !== old.cableWriteRevision || after.cable_write_revision !== currentRevision
+      || !policyRevisionSchema.safeParse(before.cable_write_revision).success || !policyRevisionSchema.safeParse(after.cable_write_revision).success
+      || BigInt(String(after.cable_write_revision)) !== BigInt(String(before.cable_write_revision)) + 1n
+      || before.tag !== old.tag || before.from_location !== old.fromLocation || before.to_location !== old.toLocation || before.routing !== old.routing
+      || !numericEqual(nullableString(before.design_length), old.designLength) || !numericEqual(nullableString(before.install_length), old.installLength)
+      || after.tag !== cable.tag || after.routing !== cable.routing || after.routing !== envelope.summary.routeText
+      || !numericEqual(nullableString(after.design_length), nullableString(cable.design_length))
+      || !numericEqual(nullableString(after.design_length), envelope.summary.designLengthMeters)
+      || !numericEqual(nullableString(after.install_length), nullableString(cable.install_length))) return false;
+    // Restore only the receipt-proven own revision, in this local comparison.
+    // All model, endpoint, purpose, engine, settings and barrier inputs stay exact.
+    return revisionResultHash({ ...current, cableWriteRevision: before.cable_write_revision }) === envelope.dependencyHash;
+  } catch (error) {
+    if (error instanceof PathFinderError && /DEADLINE|READ_LIMIT|LINEAGE_LIMIT|DATABASE_BUSY|ABORT/.test(error.code)
+      || error instanceof Error && error.name === 'AbortError') throw error;
+    return false;
+  }
+}
 export function createRevisionResults(pool: Pool, adapters: { collectCurrentPage?: typeof collectDependencyBatchInTransaction } = {}) {
   const collect = adapters.collectCurrentPage ?? collectDependencyBatchInTransaction;
   const tx = <T>(projectId: string, who: JobPrincipal, run: (client: PoolClient) => Promise<T>) => principalTransaction(pool, policyUuidSchema.parse(projectId), who, run);
@@ -319,7 +374,16 @@ export function createRevisionResults(pool: Pool, adapters: { collectCurrentPage
     for (const row of page) {
       const id = String(row.cable_id), baseline = verifiedBaseline(row), envelope = object(row.record), current = revisions.get(id);
       if (current === undefined) result.set(id, { state: 'missing', reasonCodes: ['CABLE_NOT_FOUND'] });
-      else if (current !== baseline.currentCable.cableWriteRevision) result.set(id, { state: 'changed', reasonCodes: ['CABLE_WRITE_REVISION_CHANGED'] });
+      else if (current !== baseline.currentCable.cableWriteRevision) {
+        const item = items.get(id), possibleSaved = version(row) === 'pathfinder.dependencies.v8' && envelope && row.proposal_status === 'calculated'
+          && item?.dependencies && !(authority?.enrolled && !authority.valid) && row.cancel_requested !== true
+          && ['queued', 'running', 'complete'].includes(String(row.job_state));
+        const perCable = possibleSaved && admission.job_id !== null ? await readRecalculationJobAuthority(client,
+          { projectId: String(admission.project_id), jobId: String(admission.job_id), cableId: id }) : null;
+        const saved = possibleSaved && !(perCable?.enrolled && !perCable.valid) && await alreadySavedResult(client, admission, row, item!, current);
+        result.set(id, saved ? { state: 'current', reasonCodes: ['RESULT_ALREADY_SAVED'] }
+          : { state: 'changed', reasonCodes: ['CABLE_WRITE_REVISION_CHANGED'] });
+      }
       else if (version(row) !== 'pathfinder.dependencies.v8') result.set(id, { state: 'unavailable', reasonCodes: ['BARRIER_WRITE_PROOF_REQUIRED'] });
       else if (authority?.enrolled && !authority.valid) result.set(id, { state: 'changed', reasonCodes: [authority.code ?? 'AUTOMATIC_AUTHORITY_CHANGED'] });
       else if (!envelope) result.set(id, { state: 'unavailable', reasonCodes: ['CALCULATION_OUTPUT_UNAVAILABLE'] });

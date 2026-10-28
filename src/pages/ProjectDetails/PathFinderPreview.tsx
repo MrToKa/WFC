@@ -13,7 +13,7 @@ type FreshPreviewCategory = Exclude<PathFinderPreviewInput['category'], 'MV'>;
 const freshPreviewCategories = ['LV', 'Control', 'Instrumentation'] as const satisfies readonly FreshPreviewCategory[];
 type EndpointSelection = { objectId: string; modelScope: string };
 type PreviewDisplayRun = { jobId: string; modelScope: string | null; endpointObjectIds: string[] };
-type Props = { pf: ReturnType<typeof usePathFinder>; active: boolean; displayOwned: boolean; claimViewer: () => () => boolean; options: PathFinderPreferences | null; onInputChange: () => void; onEndpointNamesChange: (names: string[]) => void };
+type Props = { pf: ReturnType<typeof usePathFinder>; active: boolean; displayOwned: boolean; claimViewer: () => () => boolean; options: PathFinderPreferences | null; onInputChange: () => void; onEndpointNamesChange: (names: string[]) => void; cablePurposes?: readonly string[]; invalidCablePurposeCount?: number; cablePurposesError?: string | null };
 const emptyEndpoint = (): Endpoint => ({ name: '', coordinates: ['', '', ''] });
 function modelScope(state: PathFinderState | null): string | null {
   if (!state) return null;
@@ -29,14 +29,15 @@ function endpointInput(value: Endpoint): { name: string; point?: CanonicalPoint 
 }
 
 /** Standalone native-style path calculation never writes cable endpoints or cable lengths. */
-export function PathFinderPreview({ pf, active, displayOwned, claimViewer, options, onInputChange, onEndpointNamesChange }: Props) {
+export function PathFinderPreview({ pf, active, displayOwned, claimViewer, options, onInputChange, onEndpointNamesChange, cablePurposes = [], invalidCablePurposeCount = 0, cablePurposesError }: Props) {
   const styles = useRoutingsViewerStyles(), latest = useRef(pf); latest.current = pf;
   const generation = useRef(0), displayGuard = useRef<() => boolean>(() => false);
   const endpointSelections = useRef<{ from: EndpointSelection | null; to: EndpointSelection | null }>({ from: null, to: null });
   const displayRun = useRef<PreviewDisplayRun | null>(null), activeModelScope = modelScope(pf.data);
   const [from, setFrom] = useState<Endpoint>(emptyEndpoint), [to, setTo] = useState<Endpoint>(emptyEndpoint), [category, setCategory] = useState<FreshPreviewCategory>('LV');
+  const [cablePurpose, setCablePurpose] = useState('');
   const [jobId, setJobId] = useState<string | null>(null), [preview, setPreview] = useState<Preview | null>(null), [working, setWorking] = useState(false), [cancelRequested, setCancelRequested] = useState(false), [notice, setNotice] = useState<string | null>(null);
-  const dependencyKey = JSON.stringify([pf.data?.activeModel, pf.data?.registryRevision, pf.data?.settings, pf.data?.artifacts.map(artifact => artifact.id), options]);
+  const dependencyKey = JSON.stringify([pf.data?.activeModel, pf.data?.registryRevision, pf.data?.settings, pf.data?.artifacts.map(artifact => artifact.id), options, cablePurposes]);
   useEffect(() => { onEndpointNamesChange([...new Set([from.name.trim(), to.name.trim()].filter(Boolean))]); }, [from.name, to.name, onEndpointNamesChange]);
   useEffect(() => { endpointSelections.current = { from: null, to: null }; displayRun.current = null; }, [activeModelScope]);
   useEffect(() => { generation.current++; displayRun.current = null; setJobId(null); setPreview(null); setWorking(false); setCancelRequested(false); setNotice(null); return () => { generation.current++; }; }, [active, dependencyKey]);
@@ -58,7 +59,8 @@ export function PathFinderPreview({ pf, active, displayOwned, claimViewer, optio
   const run = async (input?: PathFinderPreviewInput) => {
     if (!active || !options || pf.busy) return;
     const fromInput = endpointInput(from), toInput = endpointInput(to);
-    if (!input && (!fromInput || !toInput)) return;
+    if (!input && (!fromInput || !toInput || !cablePurposes.includes(cablePurpose))) return;
+    if (input && (!input.cablePurpose || !cablePurposes.includes(input.cablePurpose))) return;
     // Selected SDK IDs are display evidence only; the calculation still receives the exact point input.
     const previousRun = displayRun.current;
     const selectedIds = input
@@ -67,7 +69,7 @@ export function PathFinderPreview({ pf, active, displayOwned, claimViewer, optio
     const current = ++generation.current; displayGuard.current = claimViewer(); setPreview(null); setJobId(null); setWorking(true); setCancelRequested(false); setNotice(null);
     displayRun.current = null;
     try {
-      const id = await pf.startPreview(input ?? { from: fromInput!, to: toInput!, category, reverse: false, ...options });
+      const id = await pf.startPreview(input ?? { from: fromInput!, to: toInput!, category, cablePurpose, reverse: false, ...options });
       if (generation.current === current && displayGuard.current() && id && modelScope(latest.current.data) === activeModelScope) {
         displayRun.current = { jobId: id, modelScope: activeModelScope, endpointObjectIds: selectedIds }; setJobId(id);
       }
@@ -118,11 +120,16 @@ export function PathFinderPreview({ pf, active, displayOwned, claimViewer, optio
       </fieldset>;
     })}
     <Field label="Cable type"><select aria-label="Path cable type" value={category} disabled={working || pending || pf.busy} onChange={event => { onInputChange(); invalidate(); setCategory(event.target.value as FreshPreviewCategory); }}>
-      {freshPreviewCategories.map(value => <option key={value} value={value}>{value}{value === 'Instrumentation' ? ' (Control rules)' : ''}</option>)}
+      {freshPreviewCategories.map(value => <option key={value} value={value}>{value}</option>)}
     </select></Field>
+    <Field label="Cable purpose"><select aria-label="Path cable purpose" value={cablePurposes.includes(cablePurpose) ? cablePurpose : ''} disabled={working || pending || pf.busy} onChange={event => { onInputChange(); invalidate(); setCablePurpose(event.target.value); }}>
+      <option value="">Choose Purpose from Cable types</option>{cablePurposes.map(value => <option key={value} value={value}>{value}</option>)}
+    </select></Field>
+    {cablePurposesError ? <Body1 role="alert">{cablePurposesError}</Body1> : null}
+    {invalidCablePurposeCount > 0 ? <Body1 role="alert">Some Cable types have an invalid Purpose. Correct those values in Cable types to use them for routing.</Body1> : null}
     <Caption1>MV cables are excluded from path calculation.</Caption1>
     <div className={styles.actions}>
-      <Button appearance="primary" disabled={!active || !pf.data?.artifacts.length || !options || !endpointsValid || working || pending || pf.busy} onClick={() => void run()}>Calculate path</Button>
+      <Button appearance="primary" disabled={!active || !pf.data?.artifacts.length || !options || !endpointsValid || !cablePurposes.includes(cablePurpose) || working || pending || pf.busy} onClick={() => void run()}>Calculate path</Button>
       {preview?.result?.route?.success && !preview.result.stale ? <Button disabled={working || pending || pf.busy} onClick={() => void run({ ...preview.input, reverse: !preview.input.reverse })}>Reverse path</Button> : null}
       {pending ? <Button disabled={cancelRequested || pf.busy} onClick={() => { setCancelRequested(true); void pf.action(`/jobs/${jobId}`, undefined, 'DELETE'); }}>Cancel path calculation</Button> : null}
     </div>

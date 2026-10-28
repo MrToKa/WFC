@@ -24,13 +24,14 @@ export const barrierVerifierResultSchema = z.object({
   }).strict().nullable(), diagnostics: z.array(z.object({ code: z.string().min(1).max(96), message: z.string().max(2048) }).strict()).max(64),
 }).strict();
 export type BarrierVerifierResult = z.infer<typeof barrierVerifierResultSchema>;
+type VerifierMode = 'closed-v1' | 'mixed-v2' | 'mixed-v2-2048';
 const refuse = (code: string): never => { throw new PathFinderError(code, 503, 'Barrier geometry could not be qualified within its bounded verifier.'); };
 /** Logical refusal of one fully hashed input by the unchanged, joined verifier.
  * Operational failures never construct this server-internal evidence type. */
 export class BarrierGeometryRefusal extends PathFinderError {
   readonly captureSha256: string;
   readonly implementationSha256: string;
-  constructor(captureSha256: string, implementationSha256: string, mode: 'closed-v1' | 'mixed-v2' = 'closed-v1') {
+  constructor(captureSha256: string, implementationSha256: string, mode: VerifierMode = 'closed-v1') {
     super('BARRIER_GEOMETRY_REFUSED', 503, mode === 'closed-v1' ? 'The selected geometry did not qualify as supported closed obstacles.'
       : 'The selected geometry did not qualify as supported original surfaces and closed obstacles.');
     this.captureSha256 = policyHashSchema.parse(captureSha256);
@@ -51,7 +52,7 @@ export function verifierResidentObservation(status: string): { state: 'resident'
 }
 
 /** Hash the deployed executable closure before/after invocation. No request paths or shell. */
-async function implementation(dll: string, mode: 'closed-v1' | 'mixed-v2'): Promise<string> {
+async function implementation(dll: string, mode: VerifierMode): Promise<string> {
   if (!path.isAbsolute(dll) || path.basename(dll) !== 'PathFinder.BarrierVerifier.dll') return refuse('BARRIER_VERIFIER_NOT_CONFIGURED');
   const directory = path.dirname(dll), sum = createHash('sha256');
   for (let current = directory; ; current = path.dirname(current)) {
@@ -65,14 +66,16 @@ async function implementation(dll: string, mode: 'closed-v1' | 'mixed-v2'): Prom
     const bytes = await fs.readFile(filename); if (bytes.length !== stat.size) return refuse('BARRIER_VERIFIER_CHANGED');
     sum.update(name + '\n' + bytes.length + '\n').update(bytes).update('\n');
   }
-  return sum.update(mode === 'closed-v1' ? BARRIER_COLLISION_VERSION : MIXED_BARRIER_COLLISION_VERSION).digest('hex');
+  sum.update(mode === 'closed-v1' ? BARRIER_COLLISION_VERSION : MIXED_BARRIER_COLLISION_VERSION);
+  if (mode === 'mixed-v2-2048') sum.update('\nmaximumParents=2048;maximumComponents=2048;maximumReceiptBytes=4194304');
+  return sum.digest('hex');
 }
 
 /** The deployed verifier is Linux-only until another RSS monitor is qualified.
  * Separate lane is globally serialized; it must not overlap the PF engine lane
  * in a combined resource claim. This function claims only its own process bound. */
 let running = false;
-async function runVerifierMode(bytes: Buffer, signal: AbortSignal, mode: 'closed-v1' | 'mixed-v2'): Promise<{ result: BarrierVerifierResult | MixedBarrierVerifierReceipt; implementationSha256: string }> {
+async function runVerifierMode(bytes: Buffer, signal: AbortSignal, mode: VerifierMode): Promise<{ result: BarrierVerifierResult | MixedBarrierVerifierReceipt; implementationSha256: string }> {
   signal.throwIfAborted();
   if (bytes.length < 1 || bytes.length > BARRIER_LIMITS.captureBytes) return refuse('BARRIER_VERIFIER_INPUT_LIMIT');
   const dll = process.env.PF_BARRIER_VERIFIER_DLL;
@@ -82,7 +85,8 @@ async function runVerifierMode(bytes: Buffer, signal: AbortSignal, mode: 'closed
   let processJoined = true;
   try {
     const before = await implementation(dll, mode); signal.throwIfAborted();
-    const child = spawn('dotnet', mode === 'closed-v1' ? [dll] : [dll, '--mixed-v2'], { shell: false, detached: true, windowsHide: true,
+    const maximumReceiptBytes = mode === 'mixed-v2-2048' ? 4 * 1024 ** 2 : 65536;
+    const child = spawn('dotnet', mode === 'closed-v1' ? [dll] : [dll, mode === 'mixed-v2-2048' ? '--mixed-v2-2048' : '--mixed-v2'], { shell: false, detached: true, windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, DOTNET_GCHeapHardLimit: '10000000', DOTNET_EnableDiagnostics: '0' } });
     processJoined = false;
     const resultBytes = await new Promise<Buffer>((resolve, reject) => {
@@ -112,7 +116,7 @@ async function runVerifierMode(bytes: Buffer, signal: AbortSignal, mode: 'closed
         }).catch(cause => { if (!settled && (cause as NodeJS.ErrnoException).code !== 'ENOENT') finish(failure('BARRIER_VERIFIER_RSS_UNAVAILABLE')); })
           .finally(() => { sampling = false; }); }, 100);
       signal.addEventListener('abort', abort, { once: true }); if (signal.aborted) abort();
-      child.stdout.on('data', (chunk: Buffer) => { outputBytes += chunk.length; if (outputBytes > 65536) finish(failure('BARRIER_VERIFIER_OUTPUT_LIMIT')); else chunks.push(chunk); });
+      child.stdout.on('data', (chunk: Buffer) => { outputBytes += chunk.length; if (outputBytes > maximumReceiptBytes) finish(failure('BARRIER_VERIFIER_OUTPUT_LIMIT')); else chunks.push(chunk); });
       child.stderr.on('data', (chunk: Buffer) => { errorBytes += chunk.length; if (errorBytes > 65536) finish(failure('BARRIER_VERIFIER_STDERR_LIMIT')); });
       child.once('error', () => finish(failure('BARRIER_VERIFIER_START_FAILED')));
       child.stdin.on('error', () => finish(failure('BARRIER_VERIFIER_INPUT_FAILED')));
@@ -121,7 +125,7 @@ async function runVerifierMode(bytes: Buffer, signal: AbortSignal, mode: 'closed
       if (!settled) child.stdin.end(bytes);
     });
     signal.throwIfAborted();
-    const result = (mode === 'closed-v1' ? barrierVerifierResultSchema : mixedBarrierVerifierReceiptSchema).parse(parsePolicyJson(resultBytes, { maxBytes: 65536 }));
+    const result = (mode === 'closed-v1' ? barrierVerifierResultSchema : mixedBarrierVerifierReceiptSchema).parse(parsePolicyJson(resultBytes, { maxBytes: maximumReceiptBytes }));
     if (await implementation(dll, mode) !== before || result.captureSha256 !== digest(bytes)) return refuse('BARRIER_VERIFIER_CHANGED');
     if (result.status === 'refused' && result.evidence === null) throw new BarrierGeometryRefusal(digest(bytes), before, mode);
     if (result.status !== 'geometry-qualified' || !result.evidence) return refuse('BARRIER_VERIFIER_RESULT_INVALID');
@@ -134,8 +138,9 @@ export async function runBarrierVerifier(bytes: Buffer, signal: AbortSignal): Pr
   const executed = await runVerifierMode(bytes, signal, 'closed-v1');
   return { ...executed, result: barrierVerifierResultSchema.parse(executed.result) };
 }
-/** This mode is selected only from the server's frozen explicit v2 intent. */
+/** Fresh mixed publications use the bounded 2048 selection lane. Historical
+ * no-argument and --mixed-v2 native calls keep their original limits. */
 export async function runMixedBarrierVerifier(bytes: Buffer, signal: AbortSignal): Promise<{ result: MixedBarrierVerifierReceipt; implementationSha256: string }> {
-  const executed = await runVerifierMode(bytes, signal, 'mixed-v2');
+  const executed = await runVerifierMode(bytes, signal, 'mixed-v2-2048');
   return { ...executed, result: mixedBarrierVerifierReceiptSchema.parse(executed.result) };
 }

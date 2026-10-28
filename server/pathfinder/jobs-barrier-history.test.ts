@@ -2,7 +2,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Pool, PoolClient } from 'pg';
 const mocks=vi.hoisted(()=>({collect:vi.fn(),synthetic:vi.fn(),seal:vi.fn(),scope:vi.fn(),applicability:vi.fn(),identity:vi.fn()}));
-vi.mock('./dependencies.js',async original=>({...await original<typeof import('./dependencies.js')>(),collectDependenciesForVersion:mocks.collect,hasSyntheticProof:mocks.synthetic}));
+vi.mock('./dependencies.js',async original=>({...await original<typeof import('./dependencies.js')>(),collectDependenciesForVersion:mocks.collect,
+  createTransactionDependencyReadCollector:(client:PoolClient,projectId:string)=>(cableId:string,options:unknown,version:string)=>mocks.collect(client,projectId,cableId,options,version),hasSyntheticProof:mocks.synthetic}));
 vi.mock('./revisionResultRepository.js',()=>({persistRevisionAdmission:vi.fn(),verifyRevisionResultForProposal:mocks.seal}));
 vi.mock('./recalculationRepository.js',()=>({readRecalculationJobAuthority:async()=>({enrolled:false}),pauseRecalculationForJob:vi.fn(),requireEnrollmentAuthority:vi.fn()}));
 vi.mock('./routingScope.js',async original=>({...await original<typeof import('./routingScope.js')>(),requireVersionedCalculationScope:mocks.scope}));

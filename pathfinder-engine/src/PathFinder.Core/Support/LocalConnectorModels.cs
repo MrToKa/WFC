@@ -30,6 +30,7 @@ namespace AddinRibbon.Routing
     /// node ceiling and will refuse instead of silently coarsening the search.</summary>
     public sealed class LocalConnectorOptions
     {
+        public const string NearestAnchoredSearchPolicyVersion = "wfc.pf.nearest-anchored-local-search.v1";
         public double StepMeters { get; set; } = 0.25;
         public double PaddingMeters { get; set; } = 1;
         public double MaxAxisSpanMeters { get; set; } = 20;
@@ -38,6 +39,9 @@ namespace AddinRibbon.Routing
         public int MaxEdgeChecks { get; set; } = 16384;
         public int MaxPlans { get; set; } = 8;
         public int MaxStraightPairs { get; set; } = 8;
+        /// <summary>Explicit additive search strategy. Historical callers retain
+        /// rank-sum local pairs and the original planner-attempt semantics.</summary>
+        public bool UseNearestAnchoredSearch { get; set; }
         internal LocalConnectorOptions Snapshot()
         {
             if (!RoutePoint.IsFinite(StepMeters) || StepMeters <= 0 || StepMeters > .25
@@ -47,7 +51,8 @@ namespace AddinRibbon.Routing
                 || MaxPlans < 1 || MaxPlans > 8 || MaxStraightPairs < 1 || MaxStraightPairs > 8)
                 throw new ArgumentException("Local connector options may only tighten the bounded search profile.");
             return new LocalConnectorOptions { StepMeters = StepMeters, PaddingMeters = PaddingMeters, MaxAxisSpanMeters = MaxAxisSpanMeters,
-                MaxNodes = MaxNodes, MaxEdgeChecks = MaxEdgeChecks, MaxPlans = MaxPlans, MaxStraightPairs = MaxStraightPairs };
+                MaxNodes = MaxNodes, MaxEdgeChecks = MaxEdgeChecks, MaxPlans = MaxPlans, MaxStraightPairs = MaxStraightPairs,
+                UseNearestAnchoredSearch = UseNearestAnchoredSearch };
         }
         internal LocalConnectorDomain Domain(RoutePoint from, RoutePoint to)
         {

@@ -38,6 +38,16 @@ export function buildRawInventorySummary(manifest, legacyFenceRows, moduleSha256
     registrySha256:hash(tables.filter(table=>table.table.startsWith('model_')||table.table==='project_model_selections'))};
 }
 
+/** Only fixed diagnostic codes may cross a failed helper boundary. */
+export function safeLosslessCaptureFailure(value,fallback='B9_CAPTURE_FAILED'){
+  const allowed=new Set(['LOSSLESS_OWNER','LOSSLESS_INVENTORY_LIMIT','LOSSLESS_INVENTORY_SCHEMA','LOSSLESS_DESTINATION',
+    'LOSSLESS_DESTINATION_CHANGED','LOSSLESS_INVENTORY_ROW','LOSSLESS_INVENTORY_ABORTED','LOSSLESS_INVENTORY_DEADLINE',
+    'LOSSLESS_INVENTORY_ACQUIRE_TIMEOUT','LOSSLESS_DATABASE_IDENTITY','LOSSLESS_INVENTORY_TABLES','LOSSLESS_FENCE_SCHEMA',
+    'LOSSLESS_INVENTORY_ROW_COUNT','LOSSLESS_INVENTORY_ROW_ORDER']);
+  let code,name;try{code=value?.code;name=value?.name;}catch{/* Unreadable diagnostics are not authority. */}
+  return{status:'FAIL',code:allowed.has(code)?code:name==='TimeoutError'?'LOSSLESS_INVENTORY_DEADLINE'
+    :fallback==='RAW_INVENTORY_CAPTURE_FAILED'?fallback:'B9_CAPTURE_FAILED'};
+}
 export const RAW_INVENTORY_HELPER = `
 import fs from 'node:fs/promises';import path from 'node:path';import {createHash} from 'node:crypto';
 import {createReadStream} from 'node:fs';import {createInterface} from 'node:readline';import {createRequire} from 'node:module';
@@ -46,6 +56,7 @@ const modulePath='/qualified/losslessInventory.mjs';
 if(createHash('sha256').update(await fs.readFile(modulePath)).digest('hex')!==process.env.INVENTORY_SHA)throw Error('RAW_HELPER_HASH');
 const {captureLosslessInventory}=await import(modulePath),pool=new Pool({connectionString:process.env.DATABASE_URL,max:1,connectionTimeoutMillis:5000,statement_timeout:15000,query_timeout:20000});
 const buildSummary=${buildRawInventorySummary.toString()};
+const safeFailure=${safeLosslessCaptureFailure.toString()};
 const isolated=async()=>{const r=await pool.query("SELECT count(*)::text count FROM pg_stat_activity WHERE datname=current_database() AND backend_type='client backend' AND pid<>pg_backend_pid()");if(r.rows[0].count!=='0')throw Error('RAW_INVENTORY_EXTERNAL_CLIENT');};
 try{await isolated();const directory='/private/'+process.env.CAPTURE_NAME;
 const manifest=await captureLosslessInventory(pool,{allowedRoot:'/private',directory,ownerId:process.env.OWNER_ID,signal:AbortSignal.timeout(180000)});
@@ -59,7 +70,7 @@ for(const table of manifest.tables.filter(t=>['pf_installation_state','viewer_lo
 }
 await isolated();const inventory=buildSummary(manifest,legacy,process.env.INVENTORY_SHA);
 console.log(JSON.stringify({status:'PASS',inventory,rawManifestSha256:createHash('sha256').update(await fs.readFile(path.join(directory,'manifest.json'))).digest('hex'),rawContentSha256:manifest.contentSha256}));
-}finally{await pool.end();}
+}catch(error){console.log(JSON.stringify(safeFailure(error,'RAW_INVENTORY_CAPTURE_FAILED')));process.exitCode=1;}finally{await pool.end();}
 `;
 
 export function createRawInventoryProvider(config) {
@@ -89,6 +100,7 @@ export function createRawInventoryProvider(config) {
         {Type:'bind',Source:config.outputRoot,Target:'/private',ReadOnly:false}],
       env:['DATABASE_URL=postgresql://pf_local:'+settings.databasePassword+'@postgres:5432/wfc_pathfinder_local',
         'INVENTORY_SHA='+config.sha256,'CAPTURE_NAME='+captureName,'OWNER_ID='+state.owner]});
+    if(result.status==='FAIL')fail(safeLosslessCaptureFailure(result,'RAW_INVENTORY_CAPTURE_FAILED').code);
     if(result.status!=='PASS'||result.inventory?.schemaVersion!==2||result.inventory.moduleSha256!==config.sha256)fail('RAW_CAPTURE_FAILED');
     const manifestPath=path.join(config.outputRoot,captureName,'manifest.json');await assertCanonicalPath(manifestPath);
     if((await hashFile(manifestPath)).sha256!==result.rawManifestSha256)fail('RAW_MANIFEST_CHANGED');

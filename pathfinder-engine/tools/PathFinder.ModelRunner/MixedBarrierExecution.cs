@@ -34,11 +34,16 @@ internal static partial class Program
         var value = request.Barriers ?? throw new ArgumentException("Mixed runtime is required.");
         BarrierFields(value, "schemaVersion", "binding", "profile", "profileSha256", "storage");
         var profile = value.GetProperty("profile");
-        bool interTrayManeuvers = BarrierEqual(profile, MixedOpeningProfile);
+        bool measuredFit = BarrierEqual(profile, MixedMeasuredFitProfile);
+        bool nearestAnchoredSearch = measuredFit || BarrierEqual(profile, MixedNearestAnchoredProfile);
+        bool largeSelection = nearestAnchoredSearch || BarrierEqual(profile, MixedLargeSelectionProfile);
+        bool interTrayManeuvers = largeSelection || BarrierEqual(profile, MixedOpeningProfile);
         if (BarrierString(value, "schemaVersion") != "wfc.pf.barrier-runtime.v2" || BarrierCanonical(value).Length > 65536
             || !(interTrayManeuvers || BarrierEqual(profile, MixedProfile)) || BarrierDigest(value, "profileSha256") != BarrierHash(profile))
             throw new ArgumentException("Mixed runtime profile or digest mismatch.");
         if (interTrayManeuvers) ValidateInterTrayManeuverDefaults();
+        if (nearestAnchoredSearch) ValidateNearestAnchoredDefaults();
+        if (measuredFit) ValidateMeasuredFitDefaults();
         var binding = value.GetProperty("binding"); BarrierFields(binding, "schemaVersion", "scope", "registryRevision", "snapshot", "policy", "policySha256");
         if (BarrierString(binding, "schemaVersion") != "wfc.pf.barrier-calculation-binding.v2") throw new ArgumentException("Mixed binding version mismatch.");
         var scope = binding.GetProperty("scope"); BarrierScope(scope, request); string revision = BarrierRevision(binding, "registryRevision");
@@ -62,11 +67,11 @@ internal static partial class Program
                 || !BarrierEqual(scope, snapshot.GetProperty("scope")) || BarrierRevision(snapshot, "registryRevision") != revision
                 || BarrierString(snapshot, "mode") is not ("mixed-mesh-set" or "explicit-empty")) throw new ArgumentException("Mixed snapshot reference mismatch.");
             _ = BarrierUuid(snapshot, "snapshotId"); _ = BarrierDigest(snapshot, "contentSha256");
-            BarrierFields(storage, "intentId", "manifest", "capture"); _ = BarrierUuid(storage, "intentId"); BarrierBlob.Validate(storage.GetProperty("manifest"), 262144);
+            BarrierFields(storage, "intentId", "manifest", "capture"); _ = BarrierUuid(storage, "intentId"); BarrierBlob.Validate(storage.GetProperty("manifest"), largeSelection ? 4194304 : 262144);
             if (BarrierString(snapshot, "mode") == "mixed-mesh-set") BarrierBlob.Validate(storage.GetProperty("capture"), 33554432);
             else if (storage.GetProperty("capture").ValueKind != JsonValueKind.Null) throw new ArgumentException("Explicit-empty mixed scope cannot carry a capture.");
         }
-        return new(value.Clone(), binding.Clone(), scope.Clone(), snapshot.Clone(), storage.Clone(), drill, interTrayManeuvers);
+        return new(value.Clone(), binding.Clone(), scope.Clone(), snapshot.Clone(), storage.Clone(), drill, interTrayManeuvers, largeSelection, nearestAnchoredSearch);
     }
     private static object MixedBarrierFailure(Request request, MixedBarrierRuntimeContext context, string status, string reason, string message) => new
     {
@@ -78,7 +83,12 @@ internal static partial class Program
             engineeringAccepted = false, ownTerminalExemptionsSupported = false, authority = "none" }
     };
 }
-internal sealed record MixedBarrierRuntimeContext(JsonElement Value, JsonElement Binding, JsonElement Scope, JsonElement Snapshot, JsonElement Storage, bool Drill, bool InterTrayManeuvers)
+internal sealed record MixedBarrierRuntimeContext(JsonElement Value, JsonElement Binding, JsonElement Scope, JsonElement Snapshot, JsonElement Storage, bool Drill, bool InterTrayManeuvers, bool LargeSelection, bool NearestAnchoredSearch)
 {
     internal string? Mode => Snapshot.ValueKind == JsonValueKind.Null ? null : Snapshot.GetProperty("mode").GetString();
+    internal int MaximumParents => LargeSelection ? 2048 : 128;
+    internal int MaximumComponents => LargeSelection ? 2048 : 256;
+    internal int MaximumMembershipBytes => LargeSelection ? 4194304 : 65536;
+    internal int MaximumReceiptBytes => LargeSelection ? MixedBarrierCaptureVerifier.LargeSelectionMaximumReceiptBytes : MixedBarrierCaptureVerifier.MaximumReceiptBytes;
+    internal BarrierVerifierLimits VerifierLimits => new() { MaximumParents = MaximumParents, MaximumComputationalMeshes = MaximumComponents };
 }

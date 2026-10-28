@@ -5,7 +5,8 @@ import type { PathFinderRepository } from './repository.js';
 import type { BarrierAdmissionIntent } from '../../shared/pathfinderBarrierAdmission.js';
 import type { RecalculationPreferences } from '../../shared/pathfinderRecalculation.js';
 
-const seams = vi.hoisted(() => ({ collect: vi.fn(), current: vi.fn(), persist: vi.fn(), transaction: vi.fn() }));
+const seams = vi.hoisted(() => ({ collect: vi.fn(), current: vi.fn(), persist: vi.fn(), transaction: vi.fn(), mandates:vi.fn() }));
+vi.mock('./automaticPairMandates.js',async original=>({...await original<typeof import('./automaticPairMandates.js')>(),appendAutomaticPairMandatesInTransaction:seams.mandates}));
 vi.mock('./dependencyBatch.js', () => ({ collectDependencyBatchInTransaction: seams.collect }));
 vi.mock('./barrierCalculationScope.js', () => ({ readCurrentBarrierAdmissionIntent: seams.current, collectBarrierCalculationScope: vi.fn() }));
 vi.mock('./revisionResultRepository.js', () => ({ persistRevisionAdmission: seams.persist, verifyRevisionResultForProposal: vi.fn() }));
@@ -15,6 +16,7 @@ import { createPathFinderPreviews, previewSchema } from './previews.js';
 import { createJobSchema, defaultOptions } from './jobContracts.js';
 import { PathFinderError } from './errors.js';
 import { grantOperationPrincipal } from './operationAuthority.js';
+import { AUTOMATIC_PAIR_POLICY } from '../../shared/pathfinderAutomaticPair.js';
 
 const id = (number: number) => `b6fa0000-0000-4000-8000-${String(number).padStart(12, '0')}`;
 const projectId = id(1), modelId = id(2), who = { userId: id(3), loginId: id(4), loginExpiresAt: Date.parse('2099-01-01T00:00:00Z') };
@@ -27,6 +29,7 @@ function intent(revision = '4', drillThroughWalls = false, modelVersionId = mode
 function automatic(preferences: RecalculationPreferences = { secondaryDistanceMeters: 3, preferVerticalApproach: false }) {
   const query = vi.fn(async (sql: string, _parameters?: unknown[]) => {
     if (sql.startsWith('SELECT desired_generation')) return { rows: [{ generation: '9' }] };
+    if(sql.includes('automatic-generation:installation-lock'))return{rows:[{installation_epoch:id(31)}]};
     if (sql.includes('FROM project_model_selections s JOIN')) return { rows: [{ id: modelId, selectionRevision: '2', contentFingerprint: 'a'.repeat(64) }] };
     if (sql.startsWith('INSERT INTO pf_jobs') || sql.startsWith('INSERT INTO pf_job_items')) return { rows: [] };
     throw new Error('Unexpected SQL in synthetic fresh admission fixture: ' + sql.slice(0, 90));
@@ -46,10 +49,35 @@ function automatic(preferences: RecalculationPreferences = { secondaryDistanceMe
 beforeEach(() => {
   vi.clearAllMocks(); seams.collect.mockReset(); seams.current.mockReset(); seams.persist.mockReset(); seams.transaction.mockReset();
   seams.persist.mockResolvedValue(undefined);
+  seams.mandates.mockReset();seams.mandates.mockResolvedValue(1);
   seams.transaction.mockRejectedValue(new Error('The fresh missing-intent guard must run before any transaction.'));
 });
 
 describe('fresh barrier admission boundaries', () => {
+  function outputSource(){const now=Date.now();return{kind:'automatic-generation' as const,generation:'9',controlRevision:'7',authorityEpoch:'3',authorization:{
+    schemaVersion:'wfc.pf.automatic-generation-output-authority.v1' as const,projectId,actorId:who.userId,actorAdminRevision:'1',loginId:who.loginId,
+    loginExpiresAt:new Date(who.loginExpiresAt).toISOString(),installationEpoch:id(31),commandKey:id(32),commandSha256:'d'.repeat(64),controlRevision:'1',authorityEpoch:'1',
+    createdAt:new Date(now).toISOString(),authorityExpiresAt:new Date(now+600000).toISOString(),policy:AUTOMATIC_PAIR_POLICY}};}
+  it('enrolls only ready subset output mandates atomically after the scheduler latch, preserving unresolved items',async()=>{
+    const f=automatic();seams.current.mockResolvedValue(intent());f.input.automaticPairSource=outputSource();
+    seams.collect.mockImplementation(async(_client,command)=>({items:[{id:id(6),cable:{id:id(6),mto:'Control',cable_write_revision:'7'},dependencies:{schemaVersion:'pathfinder.dependencies.v8',projectId,cableId:id(6)},status:'ready',message:''},
+      {id:id(7),cable:{id:id(7),mto:'Control',cable_write_revision:'8'},dependencies:null,status:'locations_required',message:'Missing From'}],options:command.options,registryRevision:'8',bytes:100}));
+    const result=await createAutomaticJobInTransaction(f.client,f.input);
+    expect(result).toMatchObject({readyCables:1,blockedCables:1,total:2});
+    expect(seams.mandates).toHaveBeenCalledOnce();expect(seams.mandates.mock.calls[0][1]).toMatchObject({jobId:result.jobId,source:f.input.automaticPairSource,
+      policy:AUTOMATIC_PAIR_POLICY,items:[{cableId:id(6),cableWriteRevision:'7'}]});
+    const insertion=f.query.mock.calls.find(([sql])=>sql.startsWith('INSERT INTO pf_job_items'));
+    expect(JSON.parse(insertion![1]![2] as string).map((v:{state:string})=>v.state)).toEqual(['waiting','blocked']);
+    const locked=f.query.mock.calls.findIndex(([sql])=>sql.includes('automatic-generation:installation-lock'));
+    expect(f.query.mock.invocationCallOrder[locked]).toBeLessThan(vi.mocked(f.input.beforeInsert).mock.invocationCallOrder[0]);
+    expect(seams.mandates.mock.invocationCallOrder[0]).toBeGreaterThan(vi.mocked(f.input.beforeInsert).mock.invocationCallOrder[0]);
+  });
+  it('does not add output mandates to all-blocked, legacy or grant-only generations',async()=>{
+    const blocked=automatic();seams.current.mockResolvedValue(intent());blocked.input.automaticPairSource=outputSource();
+    seams.collect.mockImplementation(async(_client,command)=>({items:[{id:id(7),cable:{id:id(7),cable_write_revision:'8'},dependencies:null,status:'locations_required',message:'Missing From'}],options:command.options,registryRevision:'8',bytes:100}));
+    expect(await createAutomaticJobInTransaction(blocked.client,blocked.input)).toMatchObject({jobId:null,readyCables:0});expect(seams.mandates).not.toHaveBeenCalled();
+    const legacy=automatic();await createAutomaticJobInTransaction(legacy.client,legacy.input);expect(seams.mandates).not.toHaveBeenCalled();
+  });
   it.each([undefined, { ...defaultOptions }])('manual calculation rejects absent intent before registry matching or pool access (%s)', async options => {
     const connect = vi.fn(), match = vi.fn().mockResolvedValue({ registryRevision: '8' });
     const jobs = createPathFinderJobs({ connect } as unknown as Pool, { match } as unknown as PathFinderRepository);

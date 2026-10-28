@@ -5,9 +5,9 @@ using PathFinder.BarrierVerifier;
 
 internal static partial class Program
 {
-    private static MixedBarrierComponentMembership[] MixedMemberships(JsonElement value)
+    private static MixedBarrierComponentMembership[] MixedMemberships(JsonElement value, MixedBarrierRuntimeContext context)
     {
-        if (value.ValueKind != JsonValueKind.Array || value.GetArrayLength() is < 1 or > 256 || BarrierCanonical(value).Length > 65536)
+        if (value.ValueKind != JsonValueKind.Array || value.GetArrayLength() < 1 || value.GetArrayLength() > context.MaximumComponents || BarrierCanonical(value).Length > context.MaximumMembershipBytes)
             throw new ArgumentException("Mixed membership exceeds its complete bounded representation.");
         var result = new List<MixedBarrierComponentMembership>(); var seen = new HashSet<string>(StringComparer.Ordinal);
         var allParents = new HashSet<string>(StringComparer.Ordinal); var allFragments = new HashSet<int>(); int triangles = 0;
@@ -18,7 +18,7 @@ internal static partial class Program
             if (id.Length is < 1 or > 256 || id.Any(char.IsControl) || !seen.Add(id) || kind is not ("original-surface" or "qualified-closed-solid"))
                 throw new ArgumentException("Mixed component identity/kind is invalid.");
             var fs = row.GetProperty("fragmentIds"); var ps = row.GetProperty("parentSelectionIds");
-            if (fs.ValueKind != JsonValueKind.Array || fs.GetArrayLength() is < 1 or > 8192 || ps.ValueKind != JsonValueKind.Array || ps.GetArrayLength() is < 1 or > 128)
+            if (fs.ValueKind != JsonValueKind.Array || fs.GetArrayLength() is < 1 or > 8192 || ps.ValueKind != JsonValueKind.Array || ps.GetArrayLength() < 1 || ps.GetArrayLength() > context.MaximumParents)
                 throw new ArgumentException("Mixed component source membership is out of bounds.");
             var fragments = fs.EnumerateArray().Select(item => item.GetInt32()).ToArray();
             var parents = ps.EnumerateArray().Select(item => item.GetString() ?? throw new ArgumentException("Mixed parent UUID required.")).ToArray();
@@ -37,7 +37,7 @@ internal static partial class Program
             if (count is < 1 or > 250000) throw new ArgumentException("Mixed component triangle count is invalid."); triangles = checked(triangles + count);
             result.Add(new(id, kind, Array.AsReadOnly(fragments), Array.AsReadOnly(parents), count, BarrierDigest(row, "sourceMembershipSha256")));
         }
-        if (triangles > 250000 || allParents.Count > 128 || allFragments.Count > 8192) throw new ArgumentException("Mixed aggregate membership exceeds the original capture ceilings.");
+        if (triangles > 250000 || allParents.Count > context.MaximumParents || allFragments.Count > 8192) throw new ArgumentException("Mixed aggregate membership exceeds the explicit profile capture ceilings.");
         return result.ToArray();
     }
     private static PreparedMixedBarriers LoadMixedBarriers(string root, MixedBarrierRuntimeContext context, SessionExecutionContext? session, CancellationToken token)
@@ -78,16 +78,16 @@ internal static partial class Program
             || BarrierDigest(captureRef, "payloadSha256") != captureBlob.Sha256 || BarrierUuid(captureRef, "captureId") != intent)
             throw new ArgumentException("Mixed qualification manifest does not bind its exact stored capture.");
         _ = BarrierDigest(verification, "originalGeometrySha256"); _ = BarrierDigest(verification, "verificationSha256");
-        var memberships = MixedMemberships(verification.GetProperty("componentMemberships"));
+        var memberships = MixedMemberships(verification.GetProperty("componentMemberships"), context);
         var summaries = geometry.GetProperty("fragments");
-        if (selected.ValueKind != JsonValueKind.Array || selected.GetArrayLength() is < 1 or > 128
+        if (selected.ValueKind != JsonValueKind.Array || selected.GetArrayLength() < 1 || selected.GetArrayLength() > context.MaximumParents
             || summaries.ValueKind != JsonValueKind.Array || summaries.GetArrayLength() is < 1 or > 8192) throw new ArgumentException("Mixed selected fragment scope is invalid.");
         var captureBytes = ReadBarrierBlob(root, project, intent, captureBlob, token);
         // Same as v1: an explicit bypass authenticates immutable supplied blobs,
         // but does not assert that geometric qualification or collision ran.
         if (context.Drill) return new(null, null);
         if (session?.MixedBarrierCache is { } cached) return cached;
-        var result = MixedBarrierCaptureVerifier.Verify(captureBytes, cancellationToken: token);
+        var result = MixedBarrierCaptureVerifier.Verify(captureBytes, context.VerifierLimits, cancellationToken: token, maximumReceiptBytes: context.MaximumReceiptBytes);
         if (result.Qualified is null || result.Receipt.Evidence is not { } evidence || result.Receipt.CaptureSha256 != captureBlob.Sha256)
             throw new BarrierQualificationException(result.Receipt.Diagnostics.FirstOrDefault()?.Code ?? "MIXED_QUALIFICATION_UNAVAILABLE");
         if (evidence.CaptureId != intent || !BarrierEqual(JsonSerializer.SerializeToElement(evidence.Scope, Json), context.Scope)

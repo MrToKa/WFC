@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { canonicalPurposeJson, policyRevisionSchema, policyUuidSchema } from './pathfinderPurposePolicy.js';
 import { supportedBarrierAdmissionIntentSchema as barrierAdmissionIntentSchema } from './pathfinderBarrierSupported.js';
+import { automaticGenerationAuthorizationSchema, automaticPairPolicySchema } from './pathfinderAutomaticPair.js';
 
 /** New refusal bounds, not a claim that full-scale runtime capacity is proven. */
 export const RECALCULATION_LIMITS = Object.freeze({
@@ -49,6 +50,35 @@ export const recalculationAuthoritySchema = z.object({
   /** Identity comparison for this reader; never a substitute for server authorization. */
   currentLogin: z.boolean(),
 }).strict();
+/** Read-only accounting for one exact current project job. Eligibility, native
+ * outcomes and saved Cable list values are intentionally different counters. */
+export const recalculationProgressSchema = z.object({
+  schemaVersion: z.literal('wfc.pf.recalculation-progress.v1'),
+  jobId: policyUuidSchema,
+  generation: policyRevisionSchema,
+  total: count,
+  eligible: count,
+  blockedInputs: count,
+  waiting: count,
+  running: count,
+  processed: count,
+  calculated: count,
+  saved: count,
+  saving: count,
+  reviewRequired: count,
+  refused: count,
+  authorityExpired: count,
+  stale: count,
+  notScheduledForSave: count,
+  calculationFailed: count,
+}).strict().superRefine((value, context) => {
+  if (value.eligible + value.blockedInputs !== value.total
+    || value.waiting + value.running + value.processed !== value.eligible
+    || value.calculated + value.calculationFailed !== value.processed
+    || value.saved + value.saving + value.reviewRequired + value.refused + value.authorityExpired + value.stale + value.notScheduledForSave !== value.calculated)
+    context.addIssue({ code: 'custom', message: 'Calculation progress must retain its complete input, outcome and output partitions.' });
+});
+export type RecalculationProgress = z.infer<typeof recalculationProgressSchema>;
 export const recalculationContextSchema = z.object({
   schemaVersion: z.literal('wfc.pf.recalculation-context.v1'),
   projectId: policyUuidSchema,
@@ -68,12 +98,19 @@ export const recalculationContextSchema = z.object({
   updatedAt: timestamp,
   preferences: recalculationPreferencesSchema.nullable(),
   timeoutMilliseconds: recalculationTimeoutSchema.nullable(),
+  automaticPairPolicy: automaticPairPolicySchema.optional(),
+  progress: recalculationProgressSchema.optional(),
 }).strict().superRefine((value, context) => {
   if (value.completed > value.total || value.readyCables + value.blockedCables > value.total) context.addIssue({ code: 'custom', message: 'Progress cannot exceed the complete bounded cable scope.' });
   if (value.enrolledGeneration !== null && BigInt(value.enrolledGeneration) > BigInt(value.desiredGeneration)) context.addIssue({ code: 'custom', message: 'An enrolled generation cannot be newer than the desired generation.' });
   if ((value.preferences === null) !== (value.timeoutMilliseconds === null)) context.addIssue({ code: 'custom', message: 'Saved preferences and timeout are present together.' });
   if (value.enabled && value.preferences === null) context.addIssue({ code: 'custom', message: 'Enabled recalculation requires saved preferences.' });
   if (value.paused && !value.enabled || value.status === 'disabled' && value.enabled || value.status === 'paused' && !value.paused) context.addIssue({ code: 'custom', message: 'Durable enabled and paused state must agree with the status.' });
+  if (value.progress && (value.progress.jobId !== value.jobId || value.progress.generation !== value.desiredGeneration
+    || value.enrolledGeneration !== value.desiredGeneration || value.progress.total !== value.total
+    || value.progress.eligible !== value.readyCables || value.progress.blockedInputs !== value.blockedCables
+    || value.progress.processed + value.progress.blockedInputs !== value.completed))
+    context.addIssue({ code: 'custom', message: 'Progress belongs only to the exact current enrolled job and its coherent input and completion counts.' });
 });
 
 const commandBase = {
@@ -82,17 +119,25 @@ const commandBase = {
   idempotencyKey: policyUuidSchema,
   reason: reasonText,
 };
-export const recalculationCommandSchema = z.discriminatedUnion('action', [
+const historicalRecalculationCommandSchema = z.discriminatedUnion('action', [
   z.object({ ...commandBase, action: z.literal('enable'), preferences: backgroundRecalculationPreferencesSchema, timeoutMilliseconds: recalculationTimeoutSchema }).strict(),
   z.object({ ...commandBase, action: z.literal('pause') }).strict(),
   z.object({ ...commandBase, action: z.literal('resume') }).strict(),
   z.object({ ...commandBase, action: z.literal('retry') }).strict(),
   z.object({ ...commandBase, action: z.literal('disable') }).strict(),
 ]);
+export const automaticOutputEnableCommandSchema = z.object({ ...commandBase, schemaVersion: z.literal('wfc.pf.recalculation-command.v2'),
+  action: z.literal('enable'), preferences: backgroundRecalculationPreferencesSchema, timeoutMilliseconds: recalculationTimeoutSchema,
+  automaticPairPolicy: automaticPairPolicySchema }).strict();
+/** Continue a previously enabled output policy; this never creates or renews its authority. */
+export const automaticOutputContinuationCommandSchema = z.object({ ...commandBase, schemaVersion: z.literal('wfc.pf.recalculation-command.v2'),
+  action: z.enum(['resume', 'retry']), automaticPairPolicy: automaticPairPolicySchema }).strict();
+export const recalculationCommandSchema = z.union([historicalRecalculationCommandSchema, automaticOutputEnableCommandSchema, automaticOutputContinuationCommandSchema]);
 export const recalculationReceiptSchema = z.object({
   schemaVersion: z.literal('wfc.pf.recalculation-command-receipt.v1'),
   duplicate: z.boolean(),
   context: recalculationContextSchema,
+  automaticPairAuthorization: automaticGenerationAuthorizationSchema.optional(),
 }).strict();
 export const recalculationErrorSchema = z.object({
   schemaVersion: z.literal('wfc.pf.recalculation-error.v1'),

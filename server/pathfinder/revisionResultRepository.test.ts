@@ -7,6 +7,8 @@ import { BARRIER_RUNTIME_PROFILE, barrierRouteHashInput, createBarrierRuntimePol
 import { syntheticBarrierEngineIdentity } from './calculationFixtures.js';
 import { readBarrierWriteEvidence } from './barrierWrites.js';
 import { PathFinderError } from './errors.js';
+import { AUTOMATIC_PAIR_LIMITS, AUTOMATIC_PAIR_POLICY, automaticPairMandateHashInput, type AutomaticPairMandate,
+  type AutomaticPairOwnership } from '../../shared/pathfinderAutomaticPair.js';
 import type { collectDependencyBatchInTransaction } from './dependencyBatch.js';
 import { persistRevisionAdmission, readRevisionBaseline, revisionResultHash, sealRevisionResult, verifyRevisionResultForProposal, createRevisionResults,
   type RevisionAdmissionInput } from './revisionResultRepository.js';
@@ -16,11 +18,15 @@ vi.mock('./recalculationRepository.js', () => ({ readRecalculationJobAuthority: 
 vi.mock('./proposalApplicability.js', () => ({ readProposalApplicability: applicabilitySeams.applicable }));
 const initialFillProof = vi.hoisted(() => vi.fn());
 vi.mock('./initialFillReceiptProof.js', () => ({ createInitialFillReceiptProofReader: () => initialFillProof }));
+const automaticPairProof=vi.hoisted(()=>vi.fn());
+const automaticPairReader=vi.hoisted(()=>vi.fn());
+vi.mock('./automaticPairReceiptProof.js',()=>({createAutomaticPairReceiptProofReader:(...args:unknown[])=>automaticPairReader(...args)}));
 // Admission/seal integrity is the boundary of this suite. The actual ordered
 // registration SQL is covered by autoLengthStore and owned PostgreSQL tests.
 const autoAdmission = vi.hoisted(() => vi.fn());
 vi.mock('./autoLengthStore.js', () => ({ registerAutoLengthAdmission: autoAdmission }));
-beforeEach(() => { initialFillProof.mockReset(); initialFillProof.mockResolvedValue(false); applicabilitySeams.authority.mockReset();applicabilitySeams.authority.mockResolvedValue({enrolled:false});
+beforeEach(() => { initialFillProof.mockReset(); initialFillProof.mockResolvedValue(false); automaticPairProof.mockReset();automaticPairProof.mockResolvedValue(null);
+  automaticPairReader.mockReset(); automaticPairReader.mockImplementation(()=>automaticPairProof); applicabilitySeams.authority.mockReset();applicabilitySeams.authority.mockResolvedValue({enrolled:false});
   applicabilitySeams.applicable.mockReset();applicabilitySeams.applicable.mockResolvedValue({applicable:false,evidence:null});
   autoAdmission.mockReset(); autoAdmission.mockResolvedValue({admissionOrdinal:'1',duplicate:false}); });
 type Row = Record<string, unknown>;
@@ -80,10 +86,12 @@ function protectedCalculation() {
   return { deps, result: { ...parsed, calculationMode: 'calculate' } };
 }
 function fixture() {
-  const admissions: Row[] = [], baselines: Row[] = [], seals: Row[] = [], proposals: Row[] = [], accepted: Row[] = [], events: Row[] = [], calls: Array<{ sql: string; values: unknown[] }> = [];
+  const admissions: Row[] = [], baselines: Row[] = [], seals: Row[] = [], proposals: Row[] = [], accepted: Row[] = [], events: Row[] = [], ownWrites: Row[] = [], calls: Array<{ sql: string; values: unknown[] }> = [];
+  const currentRevisions = new Map<string, string>();
   let admin = true, failedWithoutOutput = false,jobState='queued',cancelRequested=false; const deletedCables = new Set<string>(),dependencyVersions=new Map<string,string>();
   const query = async (sql: string, values: unknown[] = []) => {
     calls.push({ sql, values });
+    if (sql.includes('revision-results:latest-own-write')) return { rows: ownWrites.filter(r => r.project_id === values[0] && r.cable_id === values[1]).slice(0, 1) };
     if (sql.startsWith('SELECT id FROM projects')) return { rows: [{ id: pid }] };
     if (sql.startsWith('SELECT is_admin FROM users')) return { rows: [{ is_admin: admin }] };
     if (sql.startsWith('SELECT user_id,expires_at,revoked_at FROM viewer_login_bindings')) return { rows: [{ user_id: who.userId, expires_at: new Date(who.loginExpiresAt), revoked_at: null }] };
@@ -108,10 +116,10 @@ function fixture() {
       let rows = baselines.filter(b => b.project_id === values[0] && b.admission_id === values[1]);
       rows = sql.includes('b.cable_id>$3') ? rows.filter(b => values[2] === null || String(b.cable_id) > String(values[2])).slice(0, Number(values[3])) : rows.filter(b => b.cable_id === values[2]);
       return { rows: rows.map(b => { const s = seals.find(s => s.admission_id === b.admission_id && s.cable_id === b.cable_id), p = proposals.find(p => p.id === s?.proposal_id); return { ...b, record: s?.record ?? null, sealed_row: s ?? null, proposal_status: p?.status,
-        dependency_version:dependencyVersions.get(String(b.cable_id))??(p?.dependencies as Row|undefined)?.schemaVersion,item_status: null, item_message: null,
+        dependency_version:dependencyVersions.get(String(b.cable_id))??(p?.dependencies as Row|undefined)?.schemaVersion,proposal_id:p?.id,dependency_hash:p?.dependency_hash,item_status: null, item_message: null,
         job_state: failedWithoutOutput ? 'failed' : jobState,cancel_requested:cancelRequested,job_failure: failedWithoutOutput ? 'Synthetic engine fault.' : null }; }) };
     }
-    if (sql.startsWith('SELECT id,cable_write_revision::text FROM cables')) return { rows: baselines.filter(b => (values[1] as string[]).includes(String(b.cable_id)) && !deletedCables.has(String(b.cable_id))).map(b => ({ id: b.cable_id, cable_write_revision: (b.baseline as { currentCable: { cableWriteRevision: string } }).currentCable.cableWriteRevision })) };
+    if (sql.startsWith('SELECT id,cable_write_revision::text FROM cables')) return { rows: baselines.filter(b => (values[1] as string[]).includes(String(b.cable_id)) && !deletedCables.has(String(b.cable_id))).map(b => ({ id: b.cable_id, cable_write_revision: currentRevisions.get(String(b.cable_id)) ?? (b.baseline as { currentCable: { cableWriteRevision: string } }).currentCable.cableWriteRevision })) };
     return { rows: [] };
   };
   const client = { query, release: vi.fn() } as unknown as PoolClient, pool = { connect: async () => client } as unknown as Pool;
@@ -122,7 +130,7 @@ function fixture() {
     proposals.push({ project_id: pid, id: proposalId, job_id: jid, cable_id: id(10), status: 'calculated', proposal_hash: revisionResultHash({ dependencies: deps, result, baselineHash: baseline.baselineHash }), dependency_hash: revisionResultHash(deps), dependencies: deps, result });
     return { admissionId, baseline, deps, proposalId, result };
   };
-  return { client, pool, admissions, baselines, seals, proposals, accepted, events, calls, input, prepare,dependencyVersions,
+  return { client, pool, admissions, baselines, seals, proposals, accepted, events, ownWrites, currentRevisions, calls, input, prepare,dependencyVersions,
     setJob:(state:string,cancel=false)=>{jobState=state;cancelRequested=cancel;},setAdmin: (value: boolean) => { admin = value; }, failJob: () => { failedWithoutOutput = true; }, deleteCable: (cableId: string) => { deletedCables.add(cableId); } };
 }
 async function protectedAcceptedBaselineFixture() {
@@ -160,7 +168,189 @@ async function protectedAcceptedBaselineFixture() {
   return { f, deps, result, seal, evidence, before, after, provenance, row, run };
 }
 
+/** Real immutable receipt proof with independently sealed synthetic chains.
+ * Only the seal lookup is adapted; every receipt/hash/history/lineage and read
+ * budget check runs in the production reader. No database is mutated. */
+async function automaticBaselineChains(cables: number, depth: number, displayScope = false) {
+  const f = fixture(), initial = f.input(cables);
+  if (displayScope) {
+    initial.options = protectedCalculation().deps.options;
+    for (const item of initial.items) item.cable = { ...item.cable, routing: null, design_length: null, install_length: '9' };
+  }
+  await persistRevisionAdmission(f.client, initial);
+  const proofModule = await vi.importActual<typeof import('./automaticPairReceiptProof.js')>('./automaticPairReceiptProof.js');
+  type ProofRow = Record<string, any>;
+  const receipts = new Map<string, ProofRow>(), mandates = new Map<string, ProofRow>(), histories = new Map<string, ProofRow>(), seals = new Map<string, any>();
+  const { deps: base, result } = protectedCalculation();
+  const hash = revisionResultHash;
+  let readBytes = 0;
+  for (let at = 0; at < cables; at++) {
+    const cableId = id(10 + at);
+    let before: ProofRow = { id: cableId, project_id: pid, cable_id: at + 1, cable_write_revision: '9007199254740993',
+      mto: 'LV', routing: null, design_length: null, install_length: '9', tag: 'Synthetic cable', revision: '1', cable_type_id: id(109),
+      from_location: 'From', to_location: 'To', delivery: null, pull_date: null, connected_from: null, connected_to: null, tested: null,
+      retained_metadata: 'x'.repeat(96 * 1024) };
+    let ownership: AutomaticPairOwnership = { kind: 'empty' };
+    for (let n = 0; n < depth; n++) {
+      const serial = 10000 + at * 10000 + n * 10, receiptId = id(serial), proposalId = id(serial + 1), jobId = n === depth - 1 ? jid : id(serial + 2);
+      const history = { id: id(serial + 3), version: String(n + 1) }, now = Date.now();
+      const after = { ...before, routing: '/A', design_length: '7', cable_write_revision: (BigInt(before.cable_write_revision) + 1n).toString() };
+      const deps = { ...base, cableId, cableWriteRevision: before.cable_write_revision };
+      let seal: any = { projectId: pid, cableId, jobId, proposalId, admissionId: id(serial + 4), baselineHash: 'a'.repeat(64),
+        revisionResultSha256: 'b'.repeat(64), engineResultSha256: hash(result), ledgerHash: hash(result.lengthLedger), dependencyHash: hash(deps) };
+      let proposalHash = hash({ dependencies: deps, result, baselineHash: seal.baselineHash });
+      if (n === depth - 1) {
+        const baseline = await readRevisionBaseline(f.client, { projectId: pid, jobId: jid, cableId });
+        proposalHash = hash({ dependencies: deps, result, baselineHash: baseline.baselineHash });
+        f.proposals.push({ project_id: pid, id: proposalId, job_id: jid, cable_id: cableId, status: 'calculated', proposal_hash: proposalHash,
+          dependency_hash: hash(deps), dependencies: deps, result });
+        seal = await sealRevisionResult(f.client, { projectId: pid, jobId: jid, cableId, proposalId, dependencyHash: hash(deps), result, dependencies: deps });
+      }
+      seals.set(proposalId, seal);
+      const draft: AutomaticPairMandate = { schemaVersion: 'wfc.pf.automatic-pair-mandate.v1', id: id(serial + 5), projectId: pid, jobId, cableId,
+        actorId: who.userId, actorAdminRevision: '2', loginId: who.loginId, loginExpiresAt: new Date(now + 60000).toISOString(),
+        authorityExpiresAt: new Date(now + 30000).toISOString(), createdAt: new Date(now - 1000).toISOString(), installationEpoch: id(700),
+        policy: AUTOMATIC_PAIR_POLICY, source: { kind: 'explicit-job' }, requestSha256: 'c'.repeat(64), dependencyHash: hash(deps),
+        baselineSha256: hash(before), cableWriteRevision: before.cable_write_revision, ownership, contentSha256: '0'.repeat(64) };
+      const mandate = { ...draft, contentSha256: hash(automaticPairMandateHashInput(draft)) };
+      const requestBody = { schemaVersion: 'wfc.pf.automatic-pair-write.v1' as const, mandateId: mandate.id, mandateSha256: mandate.contentSha256,
+        projectId: pid, jobId, cableId, proposalId, proposalHash, expectedCableWriteRevision: before.cable_write_revision };
+      const request = { ...requestBody, idempotencyKey: proofModule.automaticPairIdempotencyKey(requestBody) };
+      const provenance = { schemaVersion: 'pathfinder.automatic-pair.v1', validationMethod: 'automatic-owned-pair', engineeringAccepted: false,
+        nativeParity: 'not-performed', request, mandate, dependencies: deps, barrierEvidence: readBarrierWriteEvidence(deps, result),
+        revisionResult: { admissionId: seal.admissionId, revisionResultSha256: seal.revisionResultSha256, baselineHash: seal.baselineHash,
+          engineResultSha256: seal.engineResultSha256, ledgerHash: seal.ledgerHash, dependencyHash: seal.dependencyHash }, history, authorizedAt: new Date(now).toISOString() };
+      const row = { id: receiptId, project_id: pid, cable_id: cableId, actor_id: who.userId, idempotency_key: request.idempotencyKey,
+        payload_hash: hash(request), proposal_id: proposalId, before_snapshot: before, after_snapshot: after, provenance, dependencies: deps,
+        result, proposal_hash: proposalHash, dependency_hash: hash(deps), job_id: jobId, status: 'calculated', applied_at_exact: new Date(now).toISOString() };
+      // PostgreSQL's existing per-receipt body gate is respected by this fixture.
+      expect(Buffer.byteLength(JSON.stringify(before) + JSON.stringify(after) + JSON.stringify(provenance))).toBeLessThan(AUTOMATIC_PAIR_LIMITS.receiptBytes);
+      receipts.set(receiptId, row); mandates.set(mandate.id, { record: mandate, record_sha256: mandate.contentSha256 });
+      histories.set(history.id, { ...after, id: history.id, version: history.version, change_source: 'pathfinder', changed_by: who.userId, cable_number: at + 1 });
+      const receiptSha256 = hash({ id: row.id, projectId: pid, cableId, actorId: row.actor_id, idempotencyKey: row.idempotency_key,
+        payloadHash: row.payload_hash, proposalId, before, after, provenance });
+      ownership = { kind: 'automatic', originReceiptId: ownership.kind === 'empty' ? receiptId : ownership.originReceiptId,
+        previousReceiptId: receiptId, previousReceiptSha256: receiptSha256, afterCableWriteRevision: after.cable_write_revision, history };
+      before = after;
+      if (n === depth - 1) f.accepted.push({ receipt_id: receiptId, cable_id: cableId, proposal_id: proposalId, applied_at: row.applied_at_exact,
+        after_revision: after.cable_write_revision, after_routing: after.routing, after_design_length: after.design_length,
+        proposal_hash: proposalHash, dependency_hash: hash(deps), model_ref: model, route_text: '/A', raw_length: 5, design_length: '7', unrounded_length: '6.6',
+        sealed_hash: seal.revisionResultSha256, engine_result_sha256: seal.engineResultSha256, ledger_sha256: seal.ledgerHash, automatic_pair_kind: true,
+        accepted_before: row.before_snapshot, accepted_after: after, accepted_provenance: provenance, accepted_dependencies: deps, accepted_result: result });
+    }
+  }
+  const query = vi.fn(async (sql: string, values: any[] = []) => {
+    let rows: ProofRow[];
+    if (sql.includes('automatic-pair:receipt-proof')) {
+      const row = receipts.get(values[2]); rows = row && row.project_id === values[0] && row.cable_id === values[1] ? [row] : [];
+    } else if (sql.includes('automatic-pair:historical-mandate')) rows = mandates.has(values[3]) ? [mandates.get(values[3])!] : [];
+    else if (sql.includes('automatic-pair:recorded-history')) rows = histories.has(values[1]) ? [histories.get(values[1])!] : [];
+    else throw Error(sql);
+    readBytes += Buffer.byteLength(JSON.stringify(rows)); return { rows };
+  });
+  const proofClient = { query } as unknown as PoolClient;
+  automaticPairReader.mockClear();
+  automaticPairReader.mockImplementation(() => proofModule.createAutomaticPairReceiptProofReader(proofClient, undefined,
+    { seal: vi.fn(async (_client, input) => seals.get(input.proposalId)) as any }));
+  const input = f.input(cables); input.jobId = id(900);
+  return { f, input, receipts, mandates, histories, proofModule, query, readBytes: () => readBytes, run: () => persistRevisionAdmission(f.client, input) };
+}
+
+async function savedDisplayFixture(realProof = false) {
+  const chain = realProof ? await automaticBaselineChains(1, 1, true) : null, f = chain?.f ?? fixture();
+  const calculation = protectedCalculation(), prepared = chain ? null : await f.prepare(calculation.result, calculation.deps);
+  if (prepared) await sealRevisionResult(f.client, { projectId: pid, jobId: jid, cableId: id(10), proposalId: prepared.proposalId,
+    dependencyHash: revisionResultHash(prepared.deps), result: prepared.result, dependencies: prepared.deps });
+  const receipt = chain ? [...chain.receipts.values()][0] : null, seal = f.seals[0].record as import('../../shared/pathfinderRevisionResults.js').RevisionResultEnvelope;
+  const before: Row = receipt?.before_snapshot ?? { ...cable(), project_id: pid }, after: Row = receipt?.after_snapshot
+    ?? { ...before, routing: '/A', design_length: '7.000', cable_write_revision: (BigInt(String(before.cable_write_revision)) + 1n).toString() };
+  const fact = { receiptId: receipt?.id ?? id(888), before, after, history: { id: id(889), version: '1' } };
+  if (!chain) automaticPairProof.mockResolvedValue(fact);
+  const metadata: Row = { receipt_id: fact.receiptId, project_id: pid, cable_id: id(10), proposal_id: seal.proposalId, job_id: jid,
+    proposal_hash: seal.proposalHash, dependency_hash: seal.dependencyHash, proposal_status: 'calculated', provenance_version: 'pathfinder.automatic-pair.v1' };
+  f.ownWrites.push(metadata); f.currentRevisions.set(id(10), String(after.cable_write_revision)); f.setJob('complete');
+  const item = { id: id(10), cable: structuredClone(after), dependencies: structuredClone({ ...(receipt?.dependencies ?? calculation.deps),
+    cableWriteRevision: String(after.cable_write_revision) }) as DependencySnapshot | null, status: 'ready', message: '' };
+  const collect = vi.fn(async () => ({ items: [item], options: calculation.deps.options, registryRevision: '1', bytes: 1 }));
+  const run = () => createRevisionResults(f.pool, { collectCurrentPage: collect }).listPage(pid, who, seal.admissionId);
+  return { f, seal, metadata, before, after, fact, item, collect, chain, run };
+}
+
 describe('immutable admission snapshots and revision envelopes', () => {
+  it('acknowledges the exact automatic own write without changing the admission or granting item applicability', async () => {
+    const value = await savedDisplayFixture(), beforeRead = structuredClone({ baseline: value.f.baselines, seal: value.f.seals });
+    const callsAt = value.f.calls.length, page = await value.run();
+    expect(page.rows[0].currentness).toEqual({ state: 'current', reasonCodes: ['RESULT_ALREADY_SAVED'] });
+    expect(page.rows[0]).not.toHaveProperty('itemApplicability');
+    expect(page.rows[0].baseline.currentCable).toMatchObject({ routing: '/OLD', designLength: '4.0000', cableWriteRevision: '9007199254740993' });
+    expect(page.rows[0].result).toMatchObject({ routeText: '/A', designLengthMeters: '7', delta: { designLengthMeters: '3' } });
+    expect({ baseline: value.f.baselines, seal: value.f.seals }).toEqual(beforeRead);
+    expect(automaticPairProof).toHaveBeenCalledWith({ projectId: pid, cableId: id(10), receiptId: value.fact.receiptId });
+    // The unchanged outer auth wrapper registers/checks its login binding. The
+    // result acknowledgement itself adds only bounded SELECTs, never writes.
+    expect(value.f.calls.slice(callsAt).some(call => /^(INSERT|UPDATE|DELETE)/.test(call.sql)
+      && !call.sql.startsWith('INSERT INTO viewer_login_bindings'))).toBe(false);
+    expect(applicabilitySeams.applicable).not.toHaveBeenCalled();
+  });
+  it.each(['receipt', 'history', 'mandate'] as const)('requires the complete real automatic receipt proof, including unmodified %s', async kind => {
+    const value = await savedDisplayFixture(true), first = await value.run();
+    expect(first.rows[0].currentness.reasonCodes).toEqual(['RESULT_ALREADY_SAVED']);
+    if (kind === 'receipt') value.chain!.receipts.values().next().value!.payload_hash = 'f'.repeat(64);
+    if (kind === 'history') value.chain!.histories.values().next().value!.routing = '/FOREIGN';
+    if (kind === 'mandate') value.chain!.mandates.values().next().value!.record_sha256 = 'f'.repeat(64);
+    expect((await value.run()).rows[0].currentness).toEqual({ state: 'changed', reasonCodes: ['CABLE_WRITE_REVISION_CHANGED'] });
+  });
+  it.each(['missing', 'proposal', 'job', 'proposal-hash', 'dependency-hash', 'version', 'status'] as const)('does not borrow a latest %s receipt', async kind => {
+    const value = await savedDisplayFixture();
+    if (kind === 'missing') value.f.ownWrites.length = 0;
+    if (kind === 'proposal') value.metadata.proposal_id = id(777);
+    if (kind === 'job') value.metadata.job_id = id(777);
+    if (kind === 'proposal-hash') value.metadata.proposal_hash = 'f'.repeat(64);
+    if (kind === 'dependency-hash') value.metadata.dependency_hash = 'f'.repeat(64);
+    if (kind === 'version') value.metadata.provenance_version = 'pathfinder.apply.v3';
+    if (kind === 'status') value.metadata.proposal_status = 'stale';
+    expect((await value.run()).rows[0].currentness.state).toBe('changed'); expect(automaticPairProof).not.toHaveBeenCalled();
+  });
+  it.each(['proof-missing', 'receipt-id', 'before-revision', 'after-revision', 'current-revision', 'routing', 'length', 'install', 'tag', 'before-routing', 'before-length', 'before-install'] as const)('keeps unrelated or malformed %s changes blocked', async kind => {
+    const value = await savedDisplayFixture();
+    if (kind === 'proof-missing') automaticPairProof.mockResolvedValue(null);
+    if (kind === 'receipt-id') value.fact.receiptId = id(777);
+    if (kind === 'before-revision') value.before.cable_write_revision = '2';
+    if (kind === 'after-revision') value.after.cable_write_revision = '2';
+    if (kind === 'current-revision') { value.item.cable.cable_write_revision = '9007199254740995'; value.f.currentRevisions.set(id(10), '9007199254740995'); value.item.dependencies!.cableWriteRevision = '9007199254740995'; }
+    if (kind === 'routing') value.item.cable.routing = '/MANUAL';
+    if (kind === 'length') value.item.cable.design_length = '99';
+    if (kind === 'install') value.item.cable.install_length = '99';
+    if (kind === 'tag') value.item.cable.tag = 'Other cable';
+    if (kind === 'before-routing') value.before.routing = '/FOREIGN';
+    if (kind === 'before-length') value.before.design_length = '99';
+    if (kind === 'before-install') value.before.install_length = '99';
+    expect((await value.run()).rows[0].currentness).toEqual({ state: 'changed', reasonCodes: ['CABLE_WRITE_REVISION_CHANGED'] });
+  });
+  it.each(['model', 'endpoints', 'purpose', 'engine', 'profile', 'barrier', 'settings', 'missing'] as const)('does not normalize a changed %s dependency', async kind => {
+    const value = await savedDisplayFixture(), deps = value.item.dependencies as BarrierDependencySnapshot;
+    if (kind === 'model') deps.model.contentFingerprint = 'f'.repeat(64);
+    if (kind === 'endpoints') deps.from.point[0] = 99;
+    if (kind === 'purpose') deps.cablePurposeRouting = { purpose: 'Other', allowedRouteCodes: ['/A'] };
+    if (kind === 'engine') deps.engineIdentity.contentSha256 = 'f'.repeat(64);
+    if (kind === 'profile') deps.barriers.profileSha256 = 'f'.repeat(64);
+    if (kind === 'barrier') deps.barriers.binding.registryRevision = '99';
+    if (kind === 'settings') deps.settings.endConnectionLength = '99';
+    if (kind === 'missing') value.item.dependencies = null;
+    expect((await value.run()).rows[0].currentness.state).toBe('changed');
+  });
+  it.each(['global-authority', 'cable-authority', 'cancelled', 'failed'] as const)('preserves the %s refusal after an own write', async kind => {
+    const value = await savedDisplayFixture();
+    if (kind === 'global-authority') applicabilitySeams.authority.mockResolvedValue({ enrolled: true, valid: false, code: 'AUTHORITY_EXPIRED' });
+    if (kind === 'cable-authority') applicabilitySeams.authority.mockImplementation((_client, input) => input.cableId ? { enrolled: true, valid: false } : { enrolled: false });
+    if (kind === 'cancelled') value.f.setJob('cancelled', true);
+    if (kind === 'failed') value.f.setJob('failed');
+    expect((await value.run()).rows[0].currentness.state).toBe('changed'); expect(automaticPairProof).not.toHaveBeenCalled();
+  });
+  it('does not hide proof budget refusals as an already-written result', async () => {
+    const value = await savedDisplayFixture(); automaticPairProof.mockRejectedValue(new PathFinderError('AUTOMATIC_PAIR_PROOF_READ_LIMIT', 413));
+    await expect(value.run()).rejects.toMatchObject({ code: 'AUTOMATIC_PAIR_PROOF_READ_LIMIT' });
+  });
   it('registers each new complete admission once and does not retarget an exact replay', async () => {
     const f=fixture(), input=f.input(), admissionId=await persistRevisionAdmission(f.client,input);
     expect(autoAdmission).toHaveBeenCalledExactlyOnceWith(f.client, {projectId:pid,admissionId,jobId:jid,
@@ -327,7 +517,7 @@ describe('immutable admission snapshots and revision envelopes', () => {
       dependencies: p.deps, result: p.result });
     const sql = f.calls.find(call => call.sql.includes('SELECT DISTINCT ON'))!.sql;
     expect(sql).toContain('octet_length(p.dependencies::text)+octet_length(p.result::text)<=262144');
-    expect(sql).toContain("IN('pathfinder.initial-fill.v1','pathfinder.initial-fill.v2','pathfinder.apply.v3')");
+    expect(sql).toContain("IN('pathfinder.initial-fill.v1','pathfinder.initial-fill.v2','pathfinder.apply.v3','pathfinder.automatic-pair.v1','pathfinder.automatic-pair-capacity-clear.v1')");
   });
   it('delegates the newest protected initial-fill baseline to the complete historical receipt reader', async () => {
     // This suite mocks only the immutable receipt-reader boundary. Its separate
@@ -342,6 +532,61 @@ describe('immutable admission snapshots and revision envelopes', () => {
     const input = f.input(); input.jobId = id(99); const admissionId = await persistRevisionAdmission(f.client, input);
     expect((f.baselines.find(row => row.admission_id === admissionId)!.baseline as { lastAcceptedApply: unknown }).lastAcceptedApply).not.toBeNull();
     expect(initialFillProof).toHaveBeenCalledWith(expect.objectContaining({ provenance: { schemaVersion: 'pathfinder.initial-fill.v2' }, seal }));
+  });
+  it.each([true,false])('retains an automatic pair baseline only through its complete historical proof, verified=%s',async valid=>{
+    const f=fixture(),p=await f.prepare(),seal=await sealRevisionResult(f.client,{projectId:pid,jobId:jid,cableId:id(10),proposalId:p.proposalId,
+      dependencyHash:revisionResultHash(p.deps),result:p.result,dependencies:p.deps});
+    const before={original:'before'},after={original:'after'};
+    automaticPairProof.mockResolvedValue(valid?{before,after}:null);
+    f.accepted.push({receipt_id:id(30),cable_id:id(10),proposal_id:p.proposalId,applied_at:'2026-10-20T00:00:00Z',after_revision:'9007199254740993',
+      after_routing:'/OLD',after_design_length:'4.00',proposal_hash:f.proposals[0].proposal_hash,dependency_hash:seal.dependencyHash,model_ref:model,
+      route_text:'/A',raw_length:5,design_length:'7',unrounded_length:'6.6',sealed_hash:seal.revisionResultSha256,engine_result_sha256:seal.engineResultSha256,
+      ledger_sha256:seal.ledgerHash,automatic_pair_kind:true,accepted_before:before,accepted_after:after,
+      accepted_provenance:{schemaVersion:'pathfinder.automatic-pair.v1'},accepted_dependencies:p.deps,accepted_result:p.result});
+    const input=f.input();input.jobId=id(99);const admissionId=await persistRevisionAdmission(f.client,input);
+    const row=f.baselines.find(row=>row.admission_id===admissionId)!.baseline as {lastAcceptedApply:unknown};
+    expect(row.lastAcceptedApply!==null).toBe(valid);
+    expect(automaticPairProof).toHaveBeenCalledWith({projectId:pid,cableId:id(10),receiptId:id(30)});
+    expect(initialFillProof).not.toHaveBeenCalled();
+  });
+  it('gives independent valid cable chains their own unchanged proof budget when their aggregate exceeds 32 MiB', async () => {
+    const value = await automaticBaselineChains(7, 28), admissionId = await value.run();
+    const rows = value.f.baselines.filter(row => row.admission_id === admissionId);
+    expect(value.readBytes()).toBeGreaterThan(AUTOMATIC_PAIR_LIMITS.proofBytes);
+    expect(rows).toHaveLength(7);
+    expect(rows.every(row => (row.baseline as { lastAcceptedApply: unknown }).lastAcceptedApply !== null)).toBe(true);
+    expect(automaticPairReader).toHaveBeenCalledTimes(7);
+    expect(value.query.mock.calls.filter(([sql]) => sql.includes('receipt-proof'))).toHaveLength(7 * 28);
+  }, 20000);
+  it('still refuses a single cable chain exceeding the unchanged 32 MiB read budget before committing an admission', async () => {
+    const value = await automaticBaselineChains(1, 170);
+    await expect(value.run()).rejects.toMatchObject({ code: 'AUTOMATIC_PAIR_PROOF_READ_LIMIT' });
+    expect(AUTOMATIC_PAIR_LIMITS.proofBytes).toBe(32 * 1024 * 1024);
+    expect(AUTOMATIC_PAIR_LIMITS.lineage).toBe(512);
+    expect(value.f.admissions).toHaveLength(1);
+  }, 20000);
+  it.each(['foreign cable', 'changed hash', 'cycle'] as const)('does not borrow another cable proof or accept a %s chain', async kind => {
+    const value = await automaticBaselineChains(2, 2), second = value.f.accepted[1];
+    const row = value.receipts.get(String(second.receipt_id))!;
+    if (kind === 'foreign cable') row.before_snapshot = { ...row.before_snapshot, id: id(10) };
+    if (kind === 'changed hash') row.dependency_hash = 'f'.repeat(64);
+    if (kind === 'cycle') {
+      const mandate = row.provenance.mandate;
+      mandate.ownership.previousReceiptId = row.id;
+      // A cycle cannot establish a previous immutable receipt, including when
+      // its stored mandate and content hash agree about the cyclic pointer.
+      mandate.contentSha256 = revisionResultHash(automaticPairMandateHashInput(mandate));
+      row.provenance.request.mandateSha256 = mandate.contentSha256;
+      const { idempotencyKey: _key, ...body } = row.provenance.request;
+      row.provenance.request.idempotencyKey = value.proofModule.automaticPairIdempotencyKey(body);
+      row.idempotency_key = row.provenance.request.idempotencyKey;
+      row.payload_hash = revisionResultHash(row.provenance.request);
+      value.mandates.set(mandate.id, { record: mandate, record_sha256: mandate.contentSha256 });
+    }
+    const admissionId = await value.run(), rows = value.f.baselines.filter(value => value.admission_id === admissionId);
+    expect((rows[0].baseline as { lastAcceptedApply: unknown }).lastAcceptedApply).not.toBeNull();
+    expect((rows[1].baseline as { lastAcceptedApply: unknown }).lastAcceptedApply).toBeNull();
+    expect(automaticPairReader).toHaveBeenCalledTimes(2);
   });
   it.each(['pathfinder.apply.v3', 'pathfinder.apply.v999'])('refuses a newest %s baseline lacking complete protected receipt proof', async version => {
     const f = fixture(), p = await f.prepare(), seal = await sealRevisionResult(f.client, { projectId: pid, jobId: jid, cableId: id(10), proposalId: p.proposalId,

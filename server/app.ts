@@ -30,6 +30,7 @@ import { getPathFinderRuntime } from './pathfinder/runtime.js';
 import { createGeometryTraceRouter } from './pathfinder/geometryTraceRoutes.js';
 import { createBarrierRouter } from './pathfinder/barrierRoutes.js';
 import { createEndpointBindingRouter } from './pathfinder/endpointBindingRoutes.js';
+import { createModelLocationMatchRouter } from './pathfinder/modelLocationMatchRoutes.js';
 import { createCableEndpointRouter } from './pathfinder/cableEndpointRoutes.js';
 import { createRevisionComparisonRouter } from './pathfinder/revisionComparisonRoutes.js';
 import { createRecalculationRouter } from './pathfinder/recalculationRoutes.js';
@@ -81,6 +82,7 @@ export const createApp = (): Express => {
   app.use('/api/projects/:projectId/pathfinder', createGeometryTraceRouter(pool,getPathFinderRuntime().geometryTraces));
   app.use('/api/projects/:projectId/pathfinder', createBarrierRouter(pool));
   app.use('/api/projects/:projectId/pathfinder', createEndpointBindingRouter(pool,getPathFinderRuntime().endpointBindings));
+  app.use('/api/projects/:projectId/pathfinder', createModelLocationMatchRouter(getPathFinderRuntime().modelLocationMatch));
   app.use('/api/projects/:projectId/pathfinder', createCableEndpointRouter(pool));
   app.use('/api/projects/:projectId/pathfinder', createRevisionComparisonRouter(pool,getPathFinderRuntime().revisionComparisons));
   app.use('/api/projects/:projectId/pathfinder', createRecalculationRouter(pool,getPathFinderRuntime().recalculations));

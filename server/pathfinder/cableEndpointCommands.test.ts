@@ -65,6 +65,17 @@ function fixture() {
   return { ...f, settings, query, client, pool, repo, projectId, cableId, read, legacyCommand: f.command, command, save, close, object, ref };
 }
 describe('cable endpoint commands with synthetic SQL; selection reader independently tested', () => {
+  it.each([false,true])('v4 seals the exact new write policy in its impact while keeping ordinary initial-fill authority unchanged (enabled=%s)',async enabled=>{
+    const f=fixture(),context=await f.read(),automaticPairPolicy=enabled?{schemaVersion:'wfc.pf.automatic-pair-policy.v1' as const,mode:'when-both-empty-or-unchanged-automatic' as const}:null;
+    const command={...f.command(context),schemaVersion:'wfc.pf.cable-endpoint-command.v4' as const,
+      calculation:calculationFor(f.projectId,context.current!),initialFill:null,automaticPairPolicy};
+    mocks.append.mockResolvedValue({id:id(900),status:'pending',eligibleCables:2,excludedMvCables:0,blockedCategoryCables:0});
+    const receipt=await f.save(command);
+    expect(mocks.append).toHaveBeenCalledExactlyOnceWith(f.client,expect.objectContaining({originCableId:f.cableId,
+      affectedCableIds:[id(10),id(11)],calculation:command.calculation,automaticPairPolicy,commandSha256:endpointBindingHash(command)}),expect.any(Function));
+    expect(receipt.initialFillMandate).toBeUndefined();expect(mocks.mandate).not.toHaveBeenCalled();
+    expect((await f.save(command)).duplicate).toBe(true);await f.close(command);expect(mocks.append).toHaveBeenCalledOnce();
+  });
   it.each(['wfc.pf.cable-endpoint-command.v2','wfc.pf.cable-endpoint-command.v3'] as const)('refuses a fresh %s calculation without intent before any endpoint/outbox write',async schemaVersion=>{
     const f=fixture(),base=f.command(await f.read()),command={...base,schemaVersion,calculation:{preferences:{secondaryDistanceMeters:2,preferVerticalApproach:true},timeoutMilliseconds:60000},...(schemaVersion.endsWith('v3')?{initialFill:null}:{})};
     await expect(f.save(command as CableEndpointCommand)).rejects.toMatchObject({code:'BARRIER_ROUTING_INTENT_REQUIRED'});
@@ -247,7 +258,7 @@ describe('cable endpoint commands with synthetic SQL; selection reader independe
       command = { ...f.command(current), schemaVersion: 'wfc.pf.cable-endpoint-command.v2', calculation };
     const reference = { id: id(900), status: calculation ? 'pending' : 'blocked', eligibleCables: 2, excludedMvCables: 0, blockedCategoryCables: 0 }; mocks.append.mockResolvedValue(reference);
     const receipt = await f.save(command as CableEndpointCommand); expect(receipt.locationImpact).toEqual(reference);
-    expect(mocks.append).toHaveBeenCalledExactlyOnceWith(expect.any(Object), expect.objectContaining({ calculation, affectedCableIds: [id(10), id(11)], commandSha256: endpointBindingHash(command) }), expect.any(Function));
+    expect(mocks.append).toHaveBeenCalledExactlyOnceWith(expect.any(Object), expect.objectContaining({ calculation, affectedCableIds: [id(10), id(11)], originCableId:f.cableId, commandSha256: endpointBindingHash(command) }), expect.any(Function));
     expect(f.queries.indexOf("SET LOCAL wfc.pathfinder_location_impact='1'")).toBeLessThan(f.queries.findIndex(q => q.startsWith('INSERT INTO pf_locations')));
     expect((await f.save(command as CableEndpointCommand)).duplicate).toBe(true); await f.close(command as CableEndpointCommand); expect(mocks.append).toHaveBeenCalledTimes(1);
   });
@@ -295,6 +306,15 @@ async function pairFixture(ends: ('from' | 'to')[] = ['from', 'to']) {
     closePair: (input: CableEndpointPairCommand = command) => f.repo.closePair(f.projectId, f.who, f.cableId, input) };
 }
 describe('atomic cable endpoint pair saves using synthetic SQL', () => {
+  it('pair v2 propagates each verified v4 child policy and exact popup origin to all affected shared cables',async()=>{
+    const f=await pairFixture(),automaticPairPolicy={schemaVersion:'wfc.pf.automatic-pair-policy.v1',mode:'when-both-empty-or-unchanged-automatic'};
+    const command=cableEndpointPairCommandSchema.parse({...f.pair,schemaVersion:'wfc.pf.cable-endpoint-pair-command.v2',endpoints:f.pair.endpoints.map(endpoint=>({
+      ...endpoint,command:{...endpoint.command,schemaVersion:'wfc.pf.cable-endpoint-command.v4',initialFill:null,automaticPairPolicy}}))});
+    const result=await f.savePair(command);expect(result.receipts).toHaveLength(2);expect(mocks.append).toHaveBeenCalledTimes(2);
+    for(const [,input] of mocks.append.mock.calls){expect(input).toMatchObject({originCableId:f.cableId,automaticPairPolicy});expect(input.affectedCableIds).toContain(f.cableId);}
+    expect(mocks.mandate).not.toHaveBeenCalled();expect(result.receipts.every(value=>value.initialFillMandate===undefined)).toBe(true);
+    expect((await f.savePair(command)).duplicate).toBe(true);expect(mocks.append).toHaveBeenCalledTimes(2);
+  });
   it('saves only changed From with a saved To under explicit null policies, with blocked impact and no calculation or fill authority', async () => {
     const f = await pairFixture(['from']), toBefore = await f.read(f.cableId, 'to'), savedTo = await f.save(f.command(toBefore), f.cableId, 'to');
     const originals = { from: await f.read(f.cableId, 'from'), to: await f.read(f.cableId, 'to') };
@@ -344,6 +364,7 @@ describe('atomic cable endpoint pair saves using synthetic SQL', () => {
     expect(result.commandSha256).toBe(endpointBindingHash(f.pair)); expect(result.expectedContexts).toEqual(f.pair.expectedContexts);
     expect(f.queries.filter(sql => sql === 'BEGIN')).toHaveLength(1); expect(f.queries.filter(sql => sql === 'COMMIT')).toHaveLength(1);
     expect(f.state.bindings.size).toBe(2); expect(f.state.commands.size).toBe(3); expect(mocks.append).toHaveBeenCalledTimes(2); expect(mocks.mandate).toHaveBeenCalledTimes(2);
+    expect(mocks.append.mock.calls.map(call=>call[1].originCableId)).toEqual([f.cableId,f.cableId]);
     expect(f.queries.join('\n')).not.toMatch(/UPDATE cables|INSERT INTO pf_jobs/);
   });
   it('freezes the untouched opposite endpoint even when saving only From', async () => {

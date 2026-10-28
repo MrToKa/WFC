@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
-import type { z } from 'zod';
+import { z } from 'zod';
 import { PathFinderError } from './errors.js';
-import { collectDependenciesForVersion, hash, hasSyntheticProof } from './dependencies.js';
+import { collectDependenciesForVersion, createTransactionDependencyReadCollector, hash, hasSyntheticProof,
+  type TransactionDependencyReadCollector } from './dependencies.js';
 import type { PathFinderRepository } from './repository.js';
 import { defaultOptions, type createJobSchema, type BarrierDependencySnapshot, type DependencySnapshot, type JobPrincipal } from './jobContracts.js';
 import { designLengthCompatibilityIssue,routeCompatibilityIssue,proposalRoutingPreferences } from './jobContracts.js';
@@ -10,7 +11,7 @@ import { assertLoginNotExpired, principalTransaction } from './auth.js';
 import { isGrantPrincipal, grantProvenance, type OperationPrincipal } from './operationAuthority.js';
 import { requireVersionedCalculationScope } from './routingScope.js';
 import { collectDependencyBatchInTransaction, type DependencyBatch } from './dependencyBatch.js';
-import { RECALCULATION_LIMITS } from '../../shared/pathfinderRecalculation.js';
+import { RECALCULATION_LIMITS, recalculationReasonSchema } from '../../shared/pathfinderRecalculation.js';
 import { pauseRecalculationForJob, readRecalculationJobAuthority, requireEnrollmentAuthority, type RecalculationJobAdapter } from './recalculationRepository.js';
 import { BARRIER_WRITE_UNVERIFIED_MESSAGE, readBarrierWriteEvidence, requireBarrierWriteEvidence, requireCurrentBarrierWriteScope } from './barrierWrites.js';
 import { persistRevisionAdmission, verifyRevisionResultForProposal } from './revisionResultRepository.js';
@@ -19,21 +20,27 @@ import { readProposalApplicability } from './proposalApplicability.js';
 import { cancelLocationImpactForJob } from './locationImpactRepository.js';
 import { readCurrentBarrierAdmissionIntent } from './barrierCalculationScope.js';
 import { barrierHistoricalUnavailableMessage, isExpectedBarrierCurrentnessError } from './barrierCurrentness.js';
+import { appendAutomaticPairMandatesInTransaction } from './automaticPairMandates.js';
+import { automaticPairStatuses } from '../../shared/pathfinderAutomaticPair.js';
 
 type Row = Record<string,any>;
 // The full admission history is separately paginated by Cable revision results.
 // Keep the frequently refreshed state preview small: every returned proposal
 // still performs the complete live dependency and authority validation below.
 const RECENT_PROPOSAL_PREVIEW_LIMIT = 5;
+const jobAutomaticUpdateSchema = z.object({ status: z.enum(automaticPairStatuses), receiptId: z.string().uuid().nullable(),
+  reasonCode: recalculationReasonSchema.nullable() }).strict()
+  .refine(value => ['written', 'already-written'].includes(value.status) === (value.receiptId !== null));
 export function jobDto(row:Row) {
   return {id:row.id,projectId:row.project_id,kind:row.kind ?? 'calculate',status:row.state,total:row.total,completed:row.completed,
     cancelRequested:row.cancel_requested,failure:row.failure,attempts:row.attempts,createdAt:row.created_at,updatedAt:row.updated_at};
 }
-export async function proposalDto(client:PoolClient,row:Row,detail:boolean) {
+export async function proposalDto(client:PoolClient,row:Row,detail:boolean,readCurrent?:TransactionDependencyReadCollector) {
   const dependencies = row.dependencies as DependencySnapshot;
   let current:Awaited<ReturnType<typeof collectDependenciesForVersion>>|null;
   let unavailable: 'cable' | 'barriers' | null = null;
-  try {current=await collectDependenciesForVersion(client,row.project_id,row.cable_id,dependencies.options,dependencies.schemaVersion);}
+  try {current=await (readCurrent ? readCurrent(row.cable_id,dependencies.options,dependencies.schemaVersion)
+    : collectDependenciesForVersion(client,row.project_id,row.cable_id,dependencies.options,dependencies.schemaVersion));}
   catch(error){
     // Readability is independent from current applicability. Only explicit
     // missing-cable/barrier-currentness refusals become stale history here;
@@ -125,12 +132,26 @@ export const createAutomaticJobInTransaction:RecalculationJobAdapter['createInTr
   const reasonCodes=[...new Set(batch.items.filter(item=>!item.dependencies).map(item=>item.status.toUpperCase()))].sort();
   input.signal.throwIfAborted();
   if(Date.now()>deadline)throw new PathFinderError('RECALCULATION_COLLECTION_DEADLINE',503);
+  // Collection already owns all target cable FOR UPDATE locks and the caller
+  // owns project/user/login. Acquire the remaining global installation guard
+  // before the scheduler latch; mandate admission only reacquires these locks.
+  if(input.automaticPairSource){
+    if(isGrantPrincipal(input.principal))throw new PathFinderError('AUTOMATIC_PAIR_HUMAN_AUTHORITY_REQUIRED',403);
+    await client.query('/* automatic-generation:installation-lock */ SELECT installation_epoch FROM pf_installation_state WHERE singleton=true FOR SHARE');
+  }
   await input.beforeInsert();
   // beforeInsert has already validated this exact generation and owns the
   // scheduler latch. Every scope, including an all-blocked one, gets a baseline.
   const generation=(await client.query<{generation:string}>('SELECT desired_generation::text AS generation FROM pf_recalculation_state WHERE project_id=$1',[input.projectId])).rows[0]?.generation;
   if(generation===undefined)throw new PathFinderError('REVISION_GENERATION_REQUIRED',409);
   const jobId=readyCables?await insertCalculationBatch(client,input.projectId,input.principal,batch,input.timeoutMilliseconds,inputSha256,{signal:input.signal,deadline},{kind:'automatic',generation}):null;
+  if(jobId&&input.automaticPairSource){
+    if(isGrantPrincipal(input.principal)||input.automaticPairSource.generation!==generation)throw new PathFinderError('AUTOMATIC_OUTPUT_AUTHORITY_CHANGED',409);
+    await appendAutomaticPairMandatesInTransaction(client,{projectId:input.projectId,jobId,principal:input.principal,
+      policy:input.automaticPairSource.authorization.policy,requestSha256:inputSha256,source:input.automaticPairSource,
+      items:batch.items.flatMap(item=>item.dependencies?[{cableId:item.id,cableWriteRevision:item.cable.cable_write_revision,dependencyHash:hash(item.dependencies)}]:[])
+        .sort((a,b)=>a.cableId<b.cableId?-1:1)},()=>{input.signal.throwIfAborted();if(Date.now()>deadline)throw new PathFinderError('RECALCULATION_COLLECTION_DEADLINE',503);});
+  }
   if(!jobId)await persistRevisionAdmission(client,{projectId:input.projectId,jobId:null,generation,kind:'automatic',inputSha256,items:batch.items,options:batch.options,modelRef:await admissionModelRef(client,input.projectId)});
   return{jobId,inputSha256,duplicate:false,readyCables,blockedCables:batch.items.length-readyCables,total:batch.items.length,reasonCodes};
 };
@@ -140,7 +161,7 @@ export function createPathFinderJobs(pool:Pool,registry:PathFinderRepository) {
     async create(projectId:string,who:JobPrincipal,input:z.infer<typeof createJobSchema>) {
       if(!input.options?.barrierRouting)throw new PathFinderError('BARRIER_ROUTING_INTENT_REQUIRED',409,
         'Refresh Path Finder and configure the current barriers, or explicitly enable drilling for this calculation.');
-      const matched = await registry.match(projectId,who,input.expectedRegistryRevision);
+      const matched = await registry.match(projectId,who,input.expectedRegistryRevision,input.cableIds);
       return principalTransaction(pool,projectId,who,async client => {
         const revision = (await client.query<Row>('SELECT registry_revision::text FROM pf_project_state WHERE project_id=$1 FOR UPDATE',[projectId])).rows[0];
         if (revision.registry_revision !== matched.registryRevision) throw new PathFinderError('REGISTRY_CONFLICT',409);
@@ -148,7 +169,11 @@ export function createPathFinderJobs(pool:Pool,registry:PathFinderRepository) {
         const deadline=Date.now()+RECALCULATION_LIMITS.collectionMilliseconds;
         const batch=await collectDependencyBatchInTransaction(client,{projectId,options:input.options??{...defaultOptions},cableIds:input.cableIds,deadline,
           dependencyVersion:'pathfinder.dependencies.v8'});
-        const requestHash=batchHash(batch,input.timeoutMilliseconds??60000);
+        const calculationSha256=batchHash(batch,input.timeoutMilliseconds??60000);
+        // A write policy is exact request authority, never a mathematical input.
+        // Historical requests without it retain their original hash and meaning.
+        const requestHash=input.automaticPairPolicy ? hash({schemaVersion:'wfc.pf.automatic-pair-job-request.v1',
+          automaticPairPolicy:input.automaticPairPolicy,options:batch.options,calculationSha256}) : calculationSha256;
         if (!input.force) {
           const latest=(await client.query<Row>("SELECT id,state,cancel_requested,request_hash FROM pf_jobs WHERE project_id=$1 AND kind='calculate' ORDER BY created_at DESC,id DESC LIMIT 1",[projectId])).rows[0];
           if (latest && (latest.state==='cancelled' || latest.cancel_requested || latest.state==='failed' && latest.request_hash===requestHash))
@@ -159,6 +184,10 @@ export function createPathFinderJobs(pool:Pool,registry:PathFinderRepository) {
         if (existing && !input.force) return {jobId:existing.id,duplicate:true,registryRevision:matched.registryRevision};
         if(Date.now()>deadline)throw new PathFinderError('RECALCULATION_COLLECTION_DEADLINE',503);
         const jobId=await insertCalculationBatch(client,projectId,who,batch,input.timeoutMilliseconds??60000,requestHash,{deadline});
+        if(input.automaticPairPolicy&&batch.items.some(item=>item.dependencies))await appendAutomaticPairMandatesInTransaction(client,{projectId,jobId,principal:who,
+          policy:input.automaticPairPolicy,requestSha256:requestHash,source:{kind:'explicit-job'},
+          items:batch.items.flatMap(item=>item.dependencies?[{cableId:item.id,cableWriteRevision:item.cable.cable_write_revision,
+            dependencyHash:hash(item.dependencies)}]:[]).sort((a,b)=>a.cableId<b.cableId?-1:1)},()=>{if(Date.now()>deadline)throw new PathFinderError('RECALCULATION_COLLECTION_DEADLINE',503);});
         return {jobId,duplicate:false,registryRevision:matched.registryRevision};
       });
     },
@@ -167,7 +196,8 @@ export function createPathFinderJobs(pool:Pool,registry:PathFinderRepository) {
         const jobs = await client.query<Row>('SELECT * FROM pf_jobs WHERE project_id=$1 ORDER BY created_at DESC,id DESC LIMIT 100',[projectId]);
         const proposals = await client.query<Row>(`SELECT p.*,j.state AS job_state,j.cancel_requested FROM pf_proposals p JOIN pf_jobs j ON j.project_id=p.project_id AND j.id=p.job_id
           WHERE p.project_id=$1 ORDER BY p.created_at DESC,p.id DESC LIMIT ${RECENT_PROPOSAL_PREVIEW_LIMIT}`,[projectId]);
-        const values = []; for (const proposal of proposals.rows) values.push(await proposalDto(client,proposal,false));
+        const readCurrent = createTransactionDependencyReadCollector(client, projectId);
+        const values = []; for (const proposal of proposals.rows) values.push(await proposalDto(client,proposal,false,readCurrent));
         return {jobs:jobs.rows.map(jobDto),proposals:values};
       });
     },
@@ -175,8 +205,17 @@ export function createPathFinderJobs(pool:Pool,registry:PathFinderRepository) {
       return principalTransaction(pool,projectId,who,async client => {
         const row = (await client.query<Row>('SELECT * FROM pf_jobs WHERE project_id=$1 AND id=$2',[projectId,jobId])).rows[0];
         if (!row) throw new PathFinderError('JOB_NOT_FOUND',404);
-        const items = await client.query<Row>('SELECT cable_id,state,status,message FROM pf_job_items WHERE project_id=$1 AND job_id=$2 ORDER BY cable_id',[projectId,jobId]);
-        return {...jobDto(row),items:items.rows.map(item => ({cableId:item.cable_id,status:item.status,state:item.state,message:item.message}))};
+        const items = await client.query<Row>(`/* job-output-items */ SELECT i.cable_id,i.state,i.status,i.message,
+          d.status AS automatic_update_status,d.receipt_id AS automatic_update_receipt,d.reason_code AS automatic_update_reason
+          FROM pf_job_items i LEFT JOIN pf_automatic_pair_dispatch d ON d.project_id=i.project_id AND d.job_id=i.job_id AND d.cable_id=i.cable_id
+          WHERE i.project_id=$1 AND i.job_id=$2 ORDER BY i.cable_id`,[projectId,jobId]);
+        return {...jobDto(row),items:items.rows.map(item => {
+          const value = {cableId:item.cable_id,status:item.status,state:item.state,message:item.message};
+          if (item.automatic_update_status == null) return value;
+          const update = jobAutomaticUpdateSchema.safeParse({status:item.automatic_update_status,receiptId:item.automatic_update_receipt??null,reasonCode:item.automatic_update_reason??null});
+          if (!update.success) throw new PathFinderError('JOB_AUTOMATIC_UPDATE_INVALID',500);
+          return {...value,automaticUpdate:update.data};
+        })};
       });
     },
     async cancel(projectId:string,who:JobPrincipal,jobId:string) {

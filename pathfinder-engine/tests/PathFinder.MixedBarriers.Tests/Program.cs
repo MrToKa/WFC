@@ -98,9 +98,39 @@ Run("repeated triangles collapsed triangles and inconsistent original winding ar
     var collapsed = wall.Vertices.ToArray(); collapsed[1] = collapsed[0]; Refused(Capture(wall with { Vertices = collapsed }), code: "DEGENERATE_TRIANGLE");
     var indices = wall.Indices.ToArray(); (indices[4], indices[5]) = (indices[5], indices[4]); Refused(Capture(wall with { Indices = indices }), code: "INCONSISTENT_WINDING");
 });
-Run("nonmanifold edges and disconnected vertex fans are refused for surfaces too", () => {
+Run("nonmanifold edges remain refused for original surfaces", () => {
     var nonmanifold = new Mesh([P(0), P(0, 1), P(0, 0, 1), P(0, 0, -1), P(1)], [0, 1, 2, 1, 0, 3, 0, 1, 4]); Refused(Capture(nonmanifold), code: "NONMANIFOLD_EDGE");
-    var bowtie = new Mesh([P(0), P(0, 1), P(0, 0, 1), P(0, -1), P(0, 0, -1)], [0, 1, 2, 0, 3, 4]); Refused(Capture(bowtie), code: "NONMANIFOLD_VERTEX");
+});
+Run("point-contact original surfaces retain both fans and block either lobe and their shared point", () => {
+    var bowtie = new Mesh([P(0), P(0, 1), P(0, 0, 1), P(0, -1), P(0, 0, -1)], [0, 1, 2, 0, 3, 4]);
+    var result = Ready(Capture(bowtie)); Need(result.Receipt.Evidence!.OriginalSurfaceComponents == 2 && result.Receipt.Evidence.QualifiedClosedSolidComponents == 0);
+    Status(result.Qualified!.Kernel, P(-1, .2, .2), P(1, .2, .2), MixedBarrierSegmentStatus.Blocked);
+    Status(result.Qualified.Kernel, P(-1, -.2, -.2), P(1, -.2, -.2), MixedBarrierSegmentStatus.Blocked);
+    Status(result.Qualified.Kernel, P(-1), P(1), MixedBarrierSegmentStatus.Blocked);
+    Status(result.Qualified.Kernel, P(-1, .2, -.2), P(1, .2, -.2), MixedBarrierSegmentStatus.Clear);
+    OriginalMeshRetained(result.Qualified.Kernel, bowtie);
+});
+Run("closed shells sharing only a pinched vertex cannot become original surfaces", () => {
+    var first = Box(-1, 0, -1, 0, -1, 0); var second = Box(0, 1, 0, 1, 0, 1);
+    Refused(Capture(Merge(first, second)), code: "NONMANIFOLD_VERTEX");
+});
+Run("an original surface touching a closed shell cannot exempt its disconnected closed fan", () => {
+    var box = Box(-1, 0, -1, 0, -1, 0); var surface = new Mesh([P(0), P(1), P(0, 1)], [0, 1, 2]);
+    Refused(Capture(Merge(box, surface)), code: "NONMANIFOLD_VERTEX");
+});
+Run("actual Aalborg2772 retains every triangle and bit while both reconnecting open fans block", () => {
+    var mesh = OriginalPointContactFixture.Aalborg2772(); var result = Ready(Capture(mesh));
+    Need(mesh.Vertices.Length == 115 && mesh.Indices.Length == 216);
+    Need(result.Receipt.Evidence!.OriginalSurfaceComponents == 1 && result.Receipt.Evidence.QualifiedClosedSolidComponents == 0);
+    OriginalMeshRetained(result.Qualified!.Kernel, mesh);
+    foreach (int triangle in new[] { 50, 70, 71 }) {
+        var a = mesh.Vertices[mesh.Indices[3 * triangle]]; var b = mesh.Vertices[mesh.Indices[3 * triangle + 1]]; var c = mesh.Vertices[mesh.Indices[3 * triangle + 2]];
+        var centre = P((a.X + b.X + c.X) / 3, (a.Y + b.Y + c.Y) / 3, (a.Z + b.Z + c.Z) / 3);
+        Status(result.Qualified.Kernel, centre with { Z = centre.Z - .1 }, centre with { Z = centre.Z + .1 }, MixedBarrierSegmentStatus.Blocked);
+    }
+    var vertex = mesh.Vertices[92];
+    Status(result.Qualified.Kernel, vertex with { Z = vertex.Z - .1 }, vertex with { Z = vertex.Z + .1 }, MixedBarrierSegmentStatus.Blocked);
+    Need(BarrierCaptureVerifier.Verify(Bytes(Capture(mesh))).Receipt.Status == "refused");
 });
 Run("a self-intersecting closed candidate cannot downgrade into a surface", () => {
     var box = Box(); var vertices = box.Vertices.ToArray(); vertices[6] = P(.1, 0, -3); Refused(Capture(box with { Vertices = vertices }), code: "CLOSED_SOLID_QUALIFICATION_REFUSED");
@@ -208,6 +238,53 @@ Run("new result flags component union and serialized receipt identify only provi
     Need(!evidence.SdkCoverageVerified && !evidence.SdkSourceBytesVerified && !evidence.CurrentFrameVerified && !evidence.EngineeringAccepted && evidence.Authority == "none");
     Need(json.RootElement.GetProperty("evidence").GetProperty("componentMemberships").GetArrayLength() == 2); json.Dispose();
 });
+if (args.Length != 0)
+{
+    if (args.Length != 2 || args[0] != "--retained-capture" || !Path.IsPathFullyQualified(args[1])) throw new ArgumentException("Only the explicit pinned retained-capture fixture is supported.");
+    Run("exact retained27 capture qualifies with complete original ownership indices bits and component membership", () => {
+        var input = new FileInfo(args[1]); Need(input.Length == 355621, "Retained capture byte count changed.");
+        byte[] bytes = File.ReadAllBytes(args[1]); Need(BarrierCaptureVerifier.Hash(bytes) == OriginalPointContactFixture.CaptureSha256, "Retained capture hash changed.");
+        var result = MixedBarrierCaptureVerifier.Verify(bytes); Need(result.Receipt.Status == "geometry-qualified" && result.Qualified is not null, JsonSerializer.Serialize(result.Receipt));
+        var evidence = result.Receipt.Evidence!; Need(evidence.FragmentCount == 27 && evidence.VertexCount == 5031 && evidence.TriangleCount == 3971);
+        using var document = JsonDocument.Parse(bytes); var fragments = document.RootElement.GetProperty("fragments").EnumerateArray().ToDictionary(f => f.GetProperty("source").GetProperty("fragmentId").GetInt32());
+        var triangles = result.Qualified!.Components.SelectMany(c => c.Triangles).ToArray(); Need(triangles.Length == 3971);
+        Need(triangles.Select(t => (t.Source.FragmentId, t.LocalTriangleIndex)).Distinct().Count() == 3971);
+        foreach (var triangle in triangles) {
+            var fragment = fragments[triangle.Source.FragmentId]; var source = fragment.GetProperty("source"); var indices = fragment.GetProperty("triangleIndices"); var vertices = fragment.GetProperty("verticesMetres");
+            Need(triangle.Source.OwnerObjectId == source.GetProperty("ownerObjectId").GetString());
+            Need(triangle.Source.ParentSelectionIds.SequenceEqual(source.GetProperty("parentSelectionIds").EnumerateArray().Select(p => p.GetString()!).Order(StringComparer.Ordinal)));
+            int offset = triangle.LocalTriangleIndex * 3; int[] original = [triangle.OriginalVertexA, triangle.OriginalVertexB, triangle.OriginalVertexC];
+            BarrierPoint[] points = [triangle.A, triangle.B, triangle.C];
+            for (int at = 0; at < 3; at++) {
+                Need(original[at] == indices[offset + at].GetInt32()); var point = vertices[original[at]];
+                Need(SameBits(points[at], P(point[0].GetDouble(), point[1].GetDouble(), point[2].GetDouble())));
+            }
+        }
+        Need(evidence.ComponentMemberships.Sum(c => c.TriangleCount) == 3971 && evidence.ComponentMemberships.SelectMany(c => c.FragmentIds).Distinct().Count() == 27);
+        var parentIds = document.RootElement.GetProperty("selectedParents").EnumerateArray().Select(p => p.GetProperty("selectionId").GetString()!).Order(StringComparer.Ordinal);
+        Need(evidence.ComponentMemberships.SelectMany(c => c.ParentSelectionIds).Distinct().Order(StringComparer.Ordinal).SequenceEqual(parentIds));
+        var actual = OriginalPointContactFixture.Aalborg2772();
+        foreach (var triangle in triangles.Where(t => t.Source.FragmentId == 1095)) {
+            int offset = triangle.LocalTriangleIndex * 3; Need(triangle.OriginalVertexA == actual.Indices[offset] && triangle.OriginalVertexB == actual.Indices[offset + 1] && triangle.OriginalVertexC == actual.Indices[offset + 2]);
+            Need(SameBits(triangle.A, actual.Vertices[actual.Indices[offset]]) && SameBits(triangle.B, actual.Vertices[actual.Indices[offset + 1]]) && SameBits(triangle.C, actual.Vertices[actual.Indices[offset + 2]]));
+        }
+        Need(BarrierCaptureVerifier.Hash(File.ReadAllBytes(args[1])) == OriginalPointContactFixture.CaptureSha256);
+    });
+}
+
+bool SameBits(BarrierPoint a, BarrierPoint b) => BitConverter.DoubleToInt64Bits(a.X) == BitConverter.DoubleToInt64Bits(b.X)
+    && BitConverter.DoubleToInt64Bits(a.Y) == BitConverter.DoubleToInt64Bits(b.Y) && BitConverter.DoubleToInt64Bits(a.Z) == BitConverter.DoubleToInt64Bits(b.Z);
+void OriginalMeshRetained(MixedBarrierKernel kernel, Mesh mesh) {
+    var triangles = kernel.Components.SelectMany(c => c.Triangles).OrderBy(t => t.LocalTriangleIndex).ToArray(); Need(triangles.Length == mesh.Indices.Length / 3);
+    for (int at = 0; at < triangles.Length; at++) {
+        var triangle = triangles[at]; Need(triangle.LocalTriangleIndex == at);
+        Need(triangle.OriginalVertexA == mesh.Indices[at * 3] && triangle.OriginalVertexB == mesh.Indices[at * 3 + 1] && triangle.OriginalVertexC == mesh.Indices[at * 3 + 2]);
+        Need(SameBits(triangle.A, mesh.Vertices[triangle.OriginalVertexA]) && SameBits(triangle.B, mesh.Vertices[triangle.OriginalVertexB]) && SameBits(triangle.C, mesh.Vertices[triangle.OriginalVertexC]));
+    }
+}
+
+LargeSelectionFixture.Run(Run, Environment.GetEnvironmentVariable("PF_B34_SYNTHETIC_CAPTURE_OUTPUT"));
+
 Console.WriteLine(JsonSerializer.Serialize(new { status = failed == 0 ? "PASS" : "FAIL", passed = checks.Count - failed, failed,
     scope = "Private bounded manual mixed original-surface and independently qualified solid foundation; no SDK, protected publication, runner, terminal exemption or model integration", checks }));
 return failed == 0 ? 0 : 1;

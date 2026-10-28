@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   RECALCULATION_LIMITS, planRecalculationImpact, recalculationCommandCanonicalJson,
-  recalculationCommandSchema, recalculationContextSchema, recalculationErrorSchema,
+  recalculationCommandSchema, recalculationContextSchema, recalculationProgressSchema, recalculationErrorSchema,
   recalculationReceiptSchema, recalculationReasonSchema, type RecalculationCommand,
   recalculationPreferencesSchema, backgroundRecalculationPreferencesSchema, recalculationDomainSchema,
 } from './pathfinderRecalculation.js';
@@ -22,7 +22,39 @@ const barrierIntent = (drillThroughWalls = false) => {
     expectedSnapshot: { snapshotId: RECALCULATION_FIXTURE_KEY, scope, registryRevision: '4', contentSha256: 'c'.repeat(64), mode: 'explicit-empty' as const }, drillThroughWalls };
 };
 
+describe('exact current-job optional progress contracts', () => {
+  const progress = () => ({ schemaVersion: 'wfc.pf.recalculation-progress.v1', jobId: RECALCULATION_FIXTURE_KEY, generation: '2',
+    total: 2140, eligible: 360, blockedInputs: 1780, waiting: 56, running: 1, processed: 303, calculated: 303, saved: 303, saving: 0,
+    reviewRequired: 0, refused: 0, authorityExpired: 0, stale: 0, notScheduledForSave: 0, calculationFailed: 0 });
+  const context = () => ({ ...enabled(), desiredGeneration: '2', enrolledGeneration: '2', jobId: RECALCULATION_FIXTURE_KEY,
+    total: 2140, readyCables: 360, blockedCables: 1780, completed: 2083, progress: progress() });
+  it('retains historical contexts without inventing optional progress and accepts coherent partitions', () => {
+    expect(recalculationContextSchema.parse(enabled())).not.toHaveProperty('progress');
+    expect(recalculationProgressSchema.parse(progress())).toEqual(progress());
+    expect(recalculationContextSchema.parse(context()).progress).toEqual(progress());
+  });
+  it.each([{ total: 2141 }, { eligible: 359 }, { waiting: 57 }, { processed: 304 }, { calculated: 302 }, { saved: 302 },
+    { saving: 1 }, { reviewRequired: 1 }, { calculationFailed: 1 }, { saved: -1 }, { total: 10001 }, { unknown: true }])
+  ('rejects an incomplete, overlapping, invalid or oversized progress partition%j', change => {
+    expect(recalculationProgressSchema.safeParse({ ...progress(), ...change }).success).toBe(false);
+  });
+  it.each([{ jobId: RECALCULATION_FIXTURE_ACTOR }, { desiredGeneration: '3' }, { enrolledGeneration: '1' }, { total: 2141 },
+    { readyCables: 359 }, { blockedCables: 1779 }, { completed: 2082 }])('refuses progress attached to another or incoherent context%j', change => {
+    expect(recalculationContextSchema.safeParse({ ...context(), ...change }).success).toBe(false);
+  });
+});
+
 describe('R7 bounded current-login public contracts', () => {
+  it.each(['resume', 'retry'] as const)('requires explicit existing output policy for v2 %s without new enable preferences or authority', action => {
+    const command = { schemaVersion: 'wfc.pf.recalculation-command.v2', action, expectedControlRevision: '1',
+      idempotencyKey: RECALCULATION_FIXTURE_KEY, reason: 'Continue existing automatic output permission.',
+      automaticPairPolicy: { schemaVersion: 'wfc.pf.automatic-pair-policy.v1', mode: 'when-both-empty-or-unchanged-automatic' } };
+    expect(recalculationCommandSchema.parse(command)).toEqual(command);
+    const { automaticPairPolicy: _policy, ...missing } = command;
+    expect(recalculationCommandSchema.safeParse(missing).success).toBe(false);
+    for (const extra of [{ preferences: recalculationEnableFixture().preferences }, { timeoutMilliseconds: 60000 }, { authorityExpiresAt: '2099-01-01T00:00:00.000Z' }])
+      expect(recalculationCommandSchema.safeParse({ ...command, ...extra }).success).toBe(false);
+  });
   it('preserves historical preference bytes while binding a complete optional barrier choice', () => {
     const legacy = recalculationEnableFixture(), command = { ...legacy, preferences: { ...legacy.preferences, barrierRouting: barrierIntent() } };
     expect(recalculationPreferencesSchema.parse(legacy.preferences)).not.toHaveProperty('barrierRouting');
@@ -65,7 +97,7 @@ describe('R7 bounded current-login public contracts', () => {
     const { preferences: _prefs, timeoutMilliseconds: _timeout, ...missing } = input;
     expect(recalculationCommandSchema.safeParse(missing).success).toBe(false);
     for (const action of ['pause', 'resume', 'retry', 'disable'] as const) {
-      const command: RecalculationCommand = { schemaVersion: input.schemaVersion, action, expectedControlRevision: '1', idempotencyKey: input.idempotencyKey, reason: input.reason };
+      const command: RecalculationCommand = { schemaVersion: 'wfc.pf.recalculation-command.v1', action, expectedControlRevision: '1', idempotencyKey: input.idempotencyKey, reason: input.reason };
       expect(recalculationCommandSchema.parse(command)).toEqual(command);
       expect(recalculationCommandSchema.safeParse({ ...command, preferences: input.preferences }).success).toBe(false);
       expect(recalculationCommandSchema.safeParse({ ...command, timeoutMilliseconds: input.timeoutMilliseconds }).success).toBe(false);

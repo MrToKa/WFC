@@ -62,6 +62,24 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('project mutations', () => {
+  it.each([true, false])('persists automatic free-space rerouting=%s through a partial layout merge', async flag => {
+    const saved = { ...projectRow, cable_layout_settings: { autoRerouteForFreeSpace: flag, minFreeSpacePercent: 42, cableSpacing: 2 } };
+    client.query.mockResolvedValue({ rowCount: 1, rows: [saved] });
+    const response = responseStub();
+    await handlerFor('patch', '/:projectId')({ params: { projectId }, body: { cableLayout: { autoRerouteForFreeSpace: flag } } } as unknown as Request, response);
+    expect(response.status).not.toHaveBeenCalled();
+    expect(client.query).toHaveBeenCalledWith(expect.stringContaining("COALESCE(cable_layout_settings, '{}'::jsonb) ||"),
+      [{ autoRerouteForFreeSpace: flag }, projectId]);
+    expect(response.json).toHaveBeenCalledWith({ project: expect.objectContaining({ cableLayout: expect.objectContaining({
+      autoRerouteForFreeSpace: flag, minFreeSpacePercent: 42, cableSpacing: 2,
+    }) }) });
+  });
+  it('refuses string checkbox values before starting a project mutation', async () => {
+    const response = responseStub();
+    await handlerFor('patch', '/:projectId')({ params: { projectId }, body: { cableLayout: { autoRerouteForFreeSpace: 'true' } } } as unknown as Request, response);
+    expect(response.status).toHaveBeenCalledWith(400);
+    expect(database.connect).not.toHaveBeenCalled();
+  });
   it('persists a fractional connection gap and returns the authoritative value',async()=>{
     client.query.mockResolvedValue({rowCount:1,rows:[{...projectRow,connection_gap:'1.125'}]});
     const response=responseStub();

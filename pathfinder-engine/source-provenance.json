@@ -17,10 +17,11 @@
     {
       "sourcePath": "AddinRibbon/Routing/RouteCalculator.cs",
       "path": "src/PathFinder.Core/Routing/RouteCalculator.cs",
-      "bytes": 51930,
-      "sha256": "12e96c787902850bffad660d5d2a43333960d9920890cf8f547a730f67e0d0b8",
+      "bytes": 53842,
+      "sha256": "07f994daa20b93ed20758975fb4750d7c5b491bfdaba9ade855ff6a2f64f23e1",
       "frozenPf0Sha256": "12e96c787902850bffad660d5d2a43333960d9920890cf8f547a730f67e0d0b8",
-      "matchesFrozenSource": true
+      "matchesFrozenSource": false,
+      "derivation": "2026-10-25 authorized graph-preparation extension; original reference retained with frozenPf0Sha256"
     },
     {
       "sourcePath": "AddinRibbon/Routing/RouteCodeParser.cs",
@@ -73,10 +74,11 @@
     {
       "sourcePath": "AddinRibbon/Routing/TrayMeshClearance.cs",
       "path": "src/PathFinder.Core/Routing/TrayMeshClearance.cs",
-      "bytes": 43315,
-      "sha256": "75075cbf5b13d385f9932e1ad755815e39934e55bcbf123b657ae3b5363541e8",
+      "bytes": 43323,
+      "sha256": "92ad70500c4ec03b5d264be43274c074f848773c312ca004e0de5c00d2770fc3",
       "frozenPf0Sha256": "75075cbf5b13d385f9932e1ad755815e39934e55bcbf123b657ae3b5363541e8",
-      "matchesFrozenSource": true
+      "matchesFrozenSource": false,
+      "derivation": "2026-10-25 authorized graph-preparation extension; original reference retained with frozenPf0Sha256"
     },
     {
       "sourcePath": "AddinRibbon/Routing/TrayMeshData.cs",
@@ -158,5 +160,33 @@
     "Properties/AssemblyInfo.cs grants internals only to PathFinder.Regression and PathFinder.Parity",
     "Regression project replaces source inclusion with ProjectReference to PathFinder.Core and a separate audit entry point"
   ],
-  "unavailableOptionalData": "Private 327-name Excel fixture is not included; default harness has 105 checks."
+  "unavailableOptionalData": "Private 327-name Excel fixture is not included; default harness has 105 checks.",
+  "graphPreparationDerivation": {
+    "version": "wfc.pf.graph-contact-preparation.v1",
+    "authorizedDate": "2026-10-25",
+    "scope": "Bounded immutable contact preprocessing. Endpoint graph, search, opening maneuvers and engineering evidence remain request-local.",
+    "comparison": "Original no-cache construction retained; frozen original sources stored in reference/original-routing.",
+    "extensionFiles": [
+      {
+        "path": "src/PathFinder.Core/Support/GraphPreparation.cs",
+        "bytes": 10426,
+        "sha256": "3d62251ff88f759ff0cc508d0b5a714e0918fa227e51ddc448a6643941705de3"
+      },
+      {
+        "path": "src/PathFinder.Core/Support/GraphPreparationRouting.cs",
+        "bytes": 18303,
+        "sha256": "56c831b39c7257e28f335cb14404aa5853c61cb8dc6c8336afdd96fdedf71574"
+      },
+      {
+        "path": "src/PathFinder.Core/Support/GraphPreparationSerialization.cs",
+        "bytes": 9761,
+        "sha256": "1993887e01f5d8d428ec265cf1ce0ce374021cc26871ea0abbc801bc00340c5f"
+      },
+      {
+        "path": "src/PathFinder.Core/Support/GraphSurfaceFingerprint.cs",
+        "bytes": 1943,
+        "sha256": "130deb31ac03dde92fad8a95702be7870e1c227599e4e279a9db2b498c8617cc"
+      }
+    ]
+  }
 }

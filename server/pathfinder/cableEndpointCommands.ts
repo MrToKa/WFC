@@ -291,7 +291,8 @@ export function createCableEndpointCommands(pool: Pool) {
         : { ...common, mode: 'fixed-world', pointProjectMetres: command.selection.pointProjectMetres, derivation: command.selection.derivation, provenanceObject: null }, signal);
       const locationImpact = command.schemaVersion !== 'wfc.pf.cable-endpoint-command.v1' ? await appendLocationImpactInTransaction(client, {
         projectId, principal: who, idempotencyKey: command.idempotencyKey, commandSha256: endpointBindingHash(command), binding, current: value.current,
-        affectedCableIds: affected.cableIds, calculation: command.calculation }, check) : undefined;
+        affectedCableIds: affected.cableIds, originCableId: cableId, calculation: command.calculation,
+        ...(command.schemaVersion === 'wfc.pf.cable-endpoint-command.v4' ? {automaticPairPolicy:command.automaticPairPolicy} : {}) }, check) : undefined;
       const initialFillMandate = command.schemaVersion === 'wfc.pf.cable-endpoint-command.v3' && command.initialFill && locationImpact
         ? await appendInitialFillMandateInTransaction(client, { projectId, principal: who, impactId: locationImpact.id, commandSha256: endpointBindingHash(command),
           idempotencyKey: command.idempotencyKey, command }, check) : undefined;
@@ -369,7 +370,8 @@ export function createCableEndpointCommands(pool: Pool) {
       for (const entry of command.endpoints) {
         const value = originals[entry.end], input = entry.command, group = groups.get(bindingGroupKey(value))!, binding = group.binding!;
         const locationImpact = await appendLocationImpactInTransaction(client, { projectId, principal: who, idempotencyKey: input.idempotencyKey,
-          commandSha256: endpointBindingHash(input), binding, current: value.current!, affectedCableIds: group.affected.cableIds, calculation: input.calculation }, check);
+          commandSha256: endpointBindingHash(input), binding, current: value.current!, affectedCableIds: group.affected.cableIds, originCableId: cableId, calculation: input.calculation,
+          ...(input.schemaVersion === 'wfc.pf.cable-endpoint-command.v4' ? {automaticPairPolicy:input.automaticPairPolicy} : {}) }, check);
         const initialFillMandate = input.initialFill ? await appendInitialFillMandateInTransaction(client, { projectId, principal: who, impactId: locationImpact.id,
           commandSha256: endpointBindingHash(input), idempotencyKey: input.idempotencyKey, command: input }, check) : undefined;
         const receipt = cableEndpointReceiptSchema.parse({ schemaVersion: 'wfc.pf.cable-endpoint-receipt.v1', projectId, actorId: who.userId, cableId, end: entry.end,

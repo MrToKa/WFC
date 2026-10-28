@@ -15,6 +15,8 @@ const messages = {
   ...BARRIER_CAPTURE_ERROR_MESSAGES,
   INVALID_STATE: 'The viewer is not ready for this operation.', ROUTE_INVALID: 'The route contains invalid identifiers.',
   NO_DRAWABLE_ROUTE: 'There is no drawable route to zoom to.', SDK_UNSUPPORTED: 'The local Viewer version is not supported.',
+  LOCATION_UNAVAILABLE: 'The location object could not be shown in the current model. Try again.',
+  TRAY_UNAVAILABLE: 'The tray could not be shown in the current model. Check its model assignment and try again.',
   RESOURCE_FAILED: 'The model or a local resource could not be loaded.', MODEL_UNAVAILABLE: 'The selected model is unavailable.',
   SESSION_EXPIRED: 'The viewer session has expired.', ACCESS_REVOKED: 'Access to the model has been revoked.',
   MODEL_SELECTION_CHANGED: 'The selected model has changed.', INVALID_MESSAGE: 'The response does not match the requested model.',
@@ -24,7 +26,20 @@ const messages = {
   CAPTURE_RELOAD_REQUIRED: 'Reload the model before preparing another snapshot; this viewer has reached its bounded command budget.',
   PREPARATION_SCOPE_INVALID: 'The requested project preparation scope is invalid for this model.',
   PREPARATION_PAGE_TOO_LARGE: 'A model discovery record exceeds the bounded page size.',
+  PREPARATION_VISIBILITY_UNAVAILABLE: 'Complete model visibility could not be checked for From/To discovery. Check the model visibility and try discovery again. The model remains loaded.',
+  PREPARATION_VISIBILITY_CHANGED: 'Model visibility changed during discovery. Try discovery again with unchanged visibility. The model remains loaded.',
+  PREPARATION_EQUIPMENT_PROPERTIES_TIMEOUT: 'The model property service did not answer a From/To discovery batch within 45 seconds. Try discovery again.',
+  PREPARATION_EQUIPMENT_PROPERTIES_FAILED: 'The model property service could not read a From/To discovery batch. Try discovery again.',
+  PREPARATION_DISCOVERY_DEADLINE: 'This model discovery page exceeded its five-minute deadline. The published preparation was kept.',
+  PREPARATION_EQUIPMENT_SCAN_LIMIT: 'From/To discovery exceeded the bounded total property count. The published preparation was kept.',
+  PREPARATION_EQUIPMENT_ROW_LIMIT: 'A model property row exceeded the From/To discovery limits. The published preparation was kept.',
+  PREPARATION_EQUIPMENT_INDEX_LIMIT: 'The matching From/To property index exceeded its bounded size. The published preparation was kept.',
+  PREPARATION_EQUIPMENT_PROPERTIES_INVALID: 'The model property service returned unexpected or malformed From/To discovery rows. The published preparation was kept.',
+  PREPARATION_DISCOVERY_RESULT_INVALID: 'The model discovery page did not pass its format checks. The published preparation was kept.',
   SELECTION_TOO_LARGE: 'Select at most 16 model objects at a time, then add another route rule.',
+  TRAY_ROOT_SELECTION_TOO_LARGE: 'Select at most 512 model objects for one tray-root resolution.',
+  TRAY_ROOT_SELECTION_UNAVAILABLE: 'The selected tray roots could not be read. Select objects in the active model and try again.',
+  TRAY_ROOT_SELECTION_CHANGED: 'The model selection changed while it was being read. Keep the intended objects selected and try again.',
   APPEARANCE_RESTORE_FAILED: 'Some viewer appearance could not be restored. Press Clear again, or reload the model.',
   ROUTING_BINDINGS_INVALID: 'The published tray-root mapping is invalid for this loaded model. Refresh the model or preparation.',
 };
@@ -51,16 +66,35 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     if (value) window.parent.postMessage(value, origin);
     return Boolean(value);
   }
-  function finish(command) { const entry = requests.get(command.requestId); if (entry?.status === 'pending') entry.status = 'finished'; }
+  function compactBarrierReplayRecord(command) {
+    const entry = requests.get(command.requestId);
+    if (command.type === 'START_BARRIER_CAPTURE' && entry?.command === command && entry.status !== 'pending') {
+      // Replay/cancellation need only request identity and capture identity once
+      // terminal. Never alter the original command still owned by an SDK wait.
+      entry.command = { ...command, payload: { captureId: command.payload.captureId } };
+    }
+  }
+  function finish(command) {
+    const entry = requests.get(command.requestId); if (entry?.status === 'pending') entry.status = 'finished';
+    compactBarrierReplayRecord(command);
+  }
   function error(command, cause) {
     const code = ['BARRIER_MULTIPART_MODEL_CHANGED', 'BARRIER_MULTIPART_FRAME_CHANGED'].includes(cause?.code) ? 'MODEL_SELECTION_CHANGED' : Object.hasOwn(messages, cause?.code) ? cause.code
       : command.type.includes('BARRIER_MULTIPART') && cause?.code?.startsWith('BARRIER_MULTIPART_') ? 'BARRIER_MULTIPART_FAILED' : 'RESOURCE_FAILED';
     const recoverableCapture = (['START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE'].includes(command.type)
       && code !== 'BARRIER_CAPTURE_MODEL_CHANGED' && (barrierCaptureErrorMessage(code) !== null || code === 'EXTRACTION_FAILED'))
       || command.type.includes('BARRIER_MULTIPART') && code.startsWith('BARRIER_MULTIPART_');
-    emit(command, 'ERROR', { code, message: messages[code], retryable: recoverableCapture || ['RESOURCE_FAILED', 'SESSION_EXPIRED', 'APPEARANCE_RESTORE_FAILED'].includes(code), operation: command.type });
+    const recoverableLocation = command.type === 'SHOW_LOCATION' && code === 'LOCATION_UNAVAILABLE';
+    const recoverableTray = command.type === 'SHOW_TRAY' && code === 'TRAY_UNAVAILABLE';
+    const recoverableRootSelection = command.type === 'READ_TRAY_ROOT_SELECTION'
+      && ['TRAY_ROOT_SELECTION_UNAVAILABLE', 'TRAY_ROOT_SELECTION_TOO_LARGE', 'TRAY_ROOT_SELECTION_CHANGED'].includes(code);
+    // Discovery evidence may be incomplete while the rendered model is healthy.
+    // Only named, allowlisted refusals stay local to this metadata operation;
+    // a real SDK resource/access/model failure keeps its terminal identity.
+    const recoverableDiscovery = command.type === 'READ_PREPARATION_OBJECTS' && code.startsWith('PREPARATION_') && Object.hasOwn(messages, code);
+    emit(command, 'ERROR', { code, message: messages[code], retryable: recoverableCapture || recoverableLocation || recoverableTray || recoverableRootSelection || recoverableDiscovery || ['RESOURCE_FAILED', 'SESSION_EXPIRED', 'APPEARANCE_RESTORE_FAILED'].includes(code), operation: command.type });
     finish(command);
-    onState({ phase: recoverableCapture ? phase : 'error', code });
+    onState({ phase: recoverableCapture || recoverableLocation || recoverableTray || recoverableRootSelection || recoverableDiscovery ? phase : 'error', code, operation: command.type });
   }
   function releaseCapture(scope, abort = false) {
     if (!scope) return;
@@ -135,7 +169,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     computed = undefined;
     for (const [id, controller] of capabilities) {
       const entry = requests.get(id);
-      if (id !== exceptRequestId && (entry?.command.type.includes('COMPUTED_PATH') || entry?.command.type.includes('MODEL_CAPTURE') || entry?.command.type.includes('BARRIER_CAPTURE') || ['PICK_POINT', 'READ_SELECTION', 'SET_PATH_TRANSPARENCY'].includes(entry?.command.type))) {
+      if (id !== exceptRequestId && (entry?.command.type.includes('COMPUTED_PATH') || entry?.command.type.includes('MODEL_CAPTURE') || entry?.command.type.includes('BARRIER_CAPTURE') || ['PICK_POINT', 'READ_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'SET_PATH_TRANSPARENCY', 'SHOW_LOCATION', 'SHOW_TRAY'].includes(entry?.command.type))) {
         if (entry?.status === 'pending') entry.status = 'cancelled';
         if (['START_MODEL_CAPTURE', 'START_BARRIER_CAPTURE'].includes(entry?.command.type)) releaseCapture(entry.captureScope, true);
         controller.abort();
@@ -241,6 +275,29 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
         });
         if (!live()) return;
         emit(command, 'PATH_TRANSPARENCY_UPDATED', command.payload);
+      } else if (command.type === 'SHOW_LOCATION') {
+        await handle.showLocation(command.payload.sdkObjectId, signal, async () => {
+          // Preparing the object tree can yield. Recheck the protected load and
+          // authority immediately before reveal/focus, without changing a route.
+          await requirePathFinder(command, signal);
+          if (!live()) throw failure('INVALID_STATE');
+        });
+        if (!live()) return;
+        if (!emit(command, 'LOCATION_SHOWN', command.payload)) throw failure('INVALID_MESSAGE');
+      } else if (command.type === 'SHOW_TRAY') {
+        await handle.showTray(command.payload.sdkObjectIds, signal, async () => {
+          await requirePathFinder(command, signal);
+          if (!live()) throw failure('INVALID_STATE');
+        });
+        if (!live()) return;
+        if (!emit(command, 'TRAY_SHOWN', command.payload)) throw failure('INVALID_MESSAGE');
+      } else if (command.type === 'READ_TRAY_ROOT_SELECTION') {
+        const result = await handle.readTrayRootSelection(signal, async () => {
+          await requirePathFinder(command, signal);
+          if (!live()) throw failure('INVALID_STATE');
+        });
+        if (!live()) return;
+        if (!emit(command, 'TRAY_ROOT_SELECTION', result)) throw failure('TRAY_ROOT_SELECTION_UNAVAILABLE');
       } else if (command.type === 'READ_MODEL_OBJECTS' || command.type === 'READ_PREPARATION_OBJECTS' || command.type === 'READ_SELECTION') {
         const result = command.type === 'READ_SELECTION' ? await handle.readSelection(signal) : command.type === 'READ_PREPARATION_OBJECTS' ? await handle.readPreparationObjects(command.payload, signal) : await handle.readModelObjects(command.payload, signal);
         // Metadata and picks may outlive an ACL change while the SDK worker runs.
@@ -272,7 +329,10 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
         try { handle?.clearRoute(); } catch (cleanup) { cause = cleanup; }
       }
       error(command, cause);
-    } finally { capabilities.delete(command.requestId); if (captureStart && captureScope !== ownedCapture) releaseCapture(ownedCapture, true); }
+    } finally {
+      capabilities.delete(command.requestId); compactBarrierReplayRecord(command);
+      if (captureStart && captureScope !== ownedCapture) releaseCapture(ownedCapture, true);
+    }
   }
   async function load(command) {
     stopLoad();
@@ -367,7 +427,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
       else if (command.type !== 'DISPOSE') return;
     } else requests.set(command.requestId, { command, status: 'pending' });
     try { switch (command.type) {
-      case 'BEGIN_COMPUTED_PATH': case 'APPEND_COMPUTED_PATH': case 'COMMIT_COMPUTED_PATH': case 'PICK_POINT': case 'READ_MODEL_OBJECTS': case 'READ_PREPARATION_OBJECTS': case 'READ_SELECTION': case 'SET_PATH_TRANSPARENCY': case 'START_MODEL_CAPTURE': case 'READ_MODEL_CAPTURE': case 'START_BARRIER_CAPTURE': case 'READ_BARRIER_CAPTURE':
+      case 'BEGIN_COMPUTED_PATH': case 'APPEND_COMPUTED_PATH': case 'COMMIT_COMPUTED_PATH': case 'PICK_POINT': case 'READ_MODEL_OBJECTS': case 'READ_PREPARATION_OBJECTS': case 'READ_SELECTION': case 'READ_TRAY_ROOT_SELECTION': case 'SHOW_LOCATION': case 'SHOW_TRAY': case 'SET_PATH_TRANSPARENCY': case 'START_MODEL_CAPTURE': case 'READ_MODEL_CAPTURE': case 'START_BARRIER_CAPTURE': case 'READ_BARRIER_CAPTURE':
       case 'READ_BARRIER_MULTIPART_FRAME': case 'START_BARRIER_MULTIPART': case 'STATUS_BARRIER_MULTIPART': case 'CANCEL_BARRIER_MULTIPART': case 'RECONCILE_BARRIER_MULTIPART':
         if (phase !== 'loaded' || !handle) { error(command, failure('INVALID_STATE')); return; }
         void pathFinder(command); break;
@@ -412,5 +472,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
   }
   window.addEventListener('message', receive);
   emit(null, 'HELLO', { supportedProtocolVersions: [1], sdkVersion: SDK_VERSION });
-  return { dispose() { if (disposed) return; lifetime.abort(); stopLoad(); adapter.dispose(); disposed = true; phase = 'disposed'; window.removeEventListener('message', receive); }, getState: () => ({ phase, requests: requests.size }) };
+  return { dispose() { if (disposed) return; lifetime.abort(); stopLoad(); adapter.dispose(); disposed = true; phase = 'disposed'; window.removeEventListener('message', receive); },
+    getState: () => ({ phase, requests: requests.size,
+      retainedBarrierParents: [...requests.values()].reduce((total, entry) => total + (entry.command.type === 'START_BARRIER_CAPTURE' ? entry.command.payload.selectedParents?.length ?? 0 : 0), 0) }) };
 }

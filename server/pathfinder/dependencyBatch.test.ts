@@ -17,6 +17,8 @@ vi.mock('./routingScope.js', () => ({ requirePreparedRoutingScope: mocked.routin
 vi.mock('./revisionComparisonRepository.js', () => ({ readComparisonDependency: mocked.comparison }));
 vi.mock('./calculationEngineIdentity.js', () => ({ calculationEngineIdentity: mocked.identity,barrierCalculationEngineIdentity:mocked.barrierIdentity }));
 vi.mock('./barrierCalculationScope.js',()=>({collectBarrierCalculationScope:mocked.barriers}));
+vi.mock('./catalog.js',()=>({readRoutingCatalog:async()=>({rows:[{projectTrayId:'tray',rawName:'/B001',purposeKey:'Mixed'},
+  {projectTrayId:'drive',rawName:'/B002',purposeKey:'Drive'},{projectTrayId:'power',rawName:'/B003',purposeKey:'Power'}],diagnostics:[]})}));
 vi.mock('./endpointBindingRepository.js', async importOriginal => {
   const actual = await importOriginal<typeof import('./endpointBindingRepository.js')>();
   return { ...actual, readCurrentEndpointBindingContext: mocked.context, readNeededEndpointBindingHeads: mocked.needed };
@@ -25,7 +27,7 @@ vi.mock('./endpointBindingRepository.js', async importOriginal => {
 const id = (n: number) => `eb000000-0000-4000-a000-${String(n).padStart(12, '0')}`;
 const projectId = id(1), modelId = id(2), artifactId = id(3), aggregateId = id(4), frameId = id(5), locationA = id(6), locationB = id(7), actorId = id(8);
 const NOW = 1_800_000_000_000;
-type Cable = { id: string; from_location: string | null; to_location: string | null; mto: string | null; cable_type_id: string; cable_write_revision: string; input_oversize: boolean };
+type Cable = { id: string; from_location: string | null; to_location: string | null; mto: string | null; cable_type_id: string; cable_type_purpose:string; cable_write_revision: string; input_oversize: boolean };
 type Head = { location_id: string; location_revision: string; binding_id: string; binding_revision: string; record_sha256: string; record: EndpointBinding };
 
 function identity(): EngineIdentity {
@@ -55,7 +57,7 @@ function binding(locationId: string, n: number): EndpointBinding {
 }
 const context = () => ({ modelVersionId: modelId, selectionRevision: '1', contentFingerprint: 'c'.repeat(64), aggregateId, artifactId, projectionSha256: 'd'.repeat(64), captureFrameId: frameId, geometryRevision: '2', traceId: null });
 function fixture(count = 1) {
-  const cables: Cable[] = Array.from({ length: count }, (_, n) => ({ id: id(1000 + n), from_location: '  =a-01 ', to_location: '=B.02', mto: 'Instrumentation', cable_type_id: id(20), cable_write_revision: '4', input_oversize: false }));
+  const cables: Cable[] = Array.from({ length: count }, (_, n) => ({ id: id(1000 + n), from_location: '  =a-01 ', to_location: '=B.02', mto: 'Instrumentation', cable_type_id: id(20), cable_type_purpose:'Control', cable_write_revision: '4', input_oversize: false }));
   const aliasRows = [{ normalized_alias: '=A-01', location_id: locationA }, { normalized_alias: '=B.02', location_id: locationB }];
   const heads: Head[] = [binding(locationA, 16), binding(locationB, 17)].map(b => ({ location_id: b.locationId, location_revision: b.locationRevision, binding_id: b.id, binding_revision: b.bindingRevision, record_sha256: b.contentSha256, record: b }));
   const state = { cables, aliasRows, heads, registry: '9', inputChunk: 0, omitChunk: 0, extraAlias: false, onQuery: (_sql: string) => undefined as void };
@@ -64,11 +66,15 @@ function fixture(count = 1) {
     if (sql.startsWith('SELECT id FROM cables')) { const requested = args[1] as string[] | undefined; return { rows: state.cables.filter(c => !requested || requested.includes(c.id)).map(c => ({ id: c.id })).sort((a, b) => a.id.localeCompare(b.id)) }; }
     if (sql.includes('CASE WHEN octet_length(from_location)')) { state.inputChunk++; const selected = args[1] as string[]; const found = state.cables.filter(c => selected.includes(c.id)).sort((a, b) => a.id.localeCompare(b.id)); return { rows: state.omitChunk === state.inputChunk ? found.slice(0, -1) : found }; }
     if (sql.includes('routing,design_length,install_length')) { const cable = state.cables.find(c => c.id === args[1]); return { rows: cable ? [{ ...cable, routing: '/OLD', design_length: 23, install_length: 24 }] : [] }; }
+    if (sql.includes('cable-purpose:locked-scope-types')) { const ids=args[1] as string[]; return {rows:state.cables.filter(c=>ids.includes(c.id)).map(c=>({...c}))}; }
     if (sql.startsWith('SELECT active_model_version_id')) return { rows: [{ active_model_version_id: modelId, selection_revision: '1' }] };
     if (sql.startsWith('SELECT state,health,content_fingerprint')) return { rows: [{ state: 'ready', health: 'healthy', content_fingerprint: 'c'.repeat(64) }] };
     if (sql.startsWith('SELECT id FROM pf_artifacts')) return { rows: [{ id: artifactId }] };
     if (sql.startsWith('SELECT connection_gap::text')) return { rows: [{ connection_gap: '1', secondary_tray_length: '7', end_connection_length: '5', additional_bending_percent: '10', pf_settings_revision: '2' }] };
     if (sql.startsWith('SELECT registry_revision::text')) return { rows: [{ registry_revision: state.registry }] };
+    if (sql.includes('FROM pf_routing_purpose_rules')) return {rows:[{purpose_key:'Mixed',allowed_categories:['Control']},
+      {purpose_key:'Drive',allowed_categories:['VFD']},{purpose_key:'Power',allowed_categories:['Power']}]};
+    if (sql.startsWith('SELECT DISTINCT purpose')) return {rows:[{purpose:'Control'},{purpose:'Power'},{purpose:'VFD'}]};
     if (sql.startsWith('SELECT a.normalized_alias')) { const selected = args[1] as string[]; return { rows: state.aliasRows.filter(r => selected.includes(r.normalized_alias)).concat(state.extraAlias ? [{ normalized_alias: '=FOREIGN', location_id: id(99) }] : []) }; }
     if (sql.startsWith('SELECT l.id FROM pf_location_aliases')) return { rows: state.aliasRows.filter(r => r.normalized_alias === args[1]).map(r => ({ id: r.location_id })) };
     if (sql.startsWith('SELECT h.location_id')) { const selected = args[1] as string[]; return { rows: state.heads.filter(r => selected.includes(r.location_id)) }; }
@@ -94,6 +100,30 @@ beforeEach(async () => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('bulk dependency collection, mocked SQL protocol with real freeze/head/alias logic', () => {
+  it.each(['single','batch'] as const)('observes a committed type Purpose change before routing-state lock in %s collection',async mode=>{
+    const db=fixture();db.state.cables[0].cable_type_purpose='Power';
+    mocked.routing.mockImplementationOnce(async()=>{
+      db.state.cables[0]={...db.state.cables[0],cable_type_purpose:'VFD'};
+      return{catalogRevision:'1',routingContentSha256:'e'.repeat(64),routingPolicyRevision:'1',routingPolicySha256:'f'.repeat(64)};
+    });
+    const value=mode==='single'
+      ?(await collectDependenciesForVersion(db.client,projectId,db.state.cables[0].id,barrierOptions(),'pathfinder.dependencies.v8')).dependencies
+      :(await collectDependencyBatchInTransaction(db.client,{projectId,options:barrierOptions(),dependencyVersion:'pathfinder.dependencies.v8'})).items[0].dependencies;
+    expect(value).toHaveProperty('cablePurposeRouting',{purpose:'VFD',allowedRouteCodes:['/B002']});
+    const read=db.query.mock.calls.findIndex(([sql])=>sql.includes('cable-purpose:locked-scope-types'));
+    expect(read).toBeGreaterThan(db.query.mock.calls.findIndex(([sql])=>sql.includes('routing,design_length,install_length')||sql.includes('CASE WHEN octet_length(from_location)')));
+    expect(db.query.mock.calls[read][0]).not.toMatch(/FOR (?:UPDATE|SHARE)/);
+  });
+  it('freezes independent purposes within one MTO batch and blocks unknown Purpose without a partial permission fallback',async()=>{
+    const db=fixture(3);db.state.cables[0].cable_type_purpose='VFD';db.state.cables[1].cable_type_purpose='Power';db.state.cables[2].cable_type_purpose='Unknown';
+    const batch=await collectDependencyBatchInTransaction(db.client,{projectId,options:barrierOptions(),dependencyVersion:'pathfinder.dependencies.v8'});
+    expect(batch.items.map(item=>item.dependencies&&'cablePurposeRouting' in item.dependencies?item.dependencies.cablePurposeRouting:null)).toEqual([
+      {purpose:'VFD',allowedRouteCodes:['/B002']},{purpose:'Power',allowedRouteCodes:['/B003']},null]);
+    expect(batch.items[2].status).toBe('category_required');
+    expect(db.query.mock.calls.filter(([sql])=>sql.includes('FROM pf_routing_purpose_rules'))).toHaveLength(1);
+    const single=await collectDependenciesForVersion(db.client,projectId,db.state.cables[0].id,barrierOptions(),'pathfinder.dependencies.v8');
+    expect(batch.items[0].dependencies).toEqual(single.dependencies);
+  });
   it('collects v8 runtime once for a whole batch and equals the exact single-cable body',async()=>{
     const db=fixture(20),options=barrierOptions();
     const batch=await collectDependencyBatchInTransaction(db.client,{projectId,options,dependencyVersion:'pathfinder.dependencies.v8'});

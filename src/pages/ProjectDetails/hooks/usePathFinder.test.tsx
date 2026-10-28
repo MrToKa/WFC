@@ -7,7 +7,7 @@ import { ViewerAccessError } from '@/viewer/sessionApi';
 import type { ViewerController } from '@/viewer/ViewerController';
 import { BARRIER_CAPTURE_ERROR_CODES, BARRIER_CAPTURE_ERROR_MESSAGES, barrierCaptureErrorMessage } from '../../../../viewer-runtime/barrier-capture-errors.mjs';
 
-const facts = vi.hoisted(() => ({ disposed: vi.fn(), load: vi.fn(), capture: vi.fn(), barrierCapture: vi.fn(), barrierPublish: vi.fn(), readSelection: vi.fn(), transparency: vi.fn(), clear: vi.fn(), cancelPicking: vi.fn(), instances: 0, events: [] as ((event: { type: string; payload: Record<string, unknown> }) => void)[] }));
+const facts = vi.hoisted(() => ({ disposed: vi.fn(), load: vi.fn(), capture: vi.fn(), barrierCapture: vi.fn(), barrierPublish: vi.fn(), readSelection: vi.fn(), readTrayRootSelection: vi.fn(), ready: true, showLocation: vi.fn(), showTray: vi.fn(), transparency: vi.fn(), clear: vi.fn(), cancelPicking: vi.fn(), instances: 0, events: [] as ((event: { type: string; payload: Record<string, unknown> }) => void)[] }));
 vi.mock('@/api/pathfinder', async importOriginal => {
   const original = await importOriginal<typeof import('@/api/pathfinder')>();
   return { ...original, fetchPathFinderState: vi.fn(), fetchPathFinderLookupPlan: vi.fn(), fetchPathFinderProposal: vi.fn(), fetchPathFinderJob: vi.fn(), pathFinderRequest: vi.fn(), submitPathFinderCalculation: vi.fn() };
@@ -15,11 +15,12 @@ vi.mock('@/api/pathfinder', async importOriginal => {
 vi.mock('@/api/projectModels', () => ({ fetchProjectModels: vi.fn() }));
 vi.mock('@/viewer/ViewerController', () => ({ ViewerController: class {
   constructor(options: { onEvent: (event: { type: string; payload: Record<string, unknown> }) => void }) { facts.instances++; facts.events.push(options.onEvent); } dispose = facts.disposed; load = facts.load;
-  readSelection = facts.readSelection; setPathTransparency = facts.transparency; clear = facts.clear; cancelPicking = facts.cancelPicking;
-  captureModel = facts.capture; getLoadSnapshot = () => ({ ready: true });
+  readSelection = facts.readSelection; readTrayRootSelection = facts.readTrayRootSelection; showLocation = facts.showLocation; showTray = facts.showTray; setPathTransparency = facts.transparency; clear = facts.clear; cancelPicking = facts.cancelPicking;
+  captureModel = facts.capture; getLoadSnapshot = () => ({ ready: facts.ready });
   captureBarriers = facts.barrierCapture; publishBarriers = facts.barrierPublish;
 } }));
 const projectId = '11111111-1111-4111-8111-111111111111', modelId = '22222222-2222-4222-8222-222222222222', locationId = '33333333-3333-4333-8333-333333333333';
+const preparationModelScope = { modelVersionId: modelId, selectionRevision: '2', contentFingerprint: 'a'.repeat(64) };
 function barrierRequest(): Parameters<ViewerController['captureBarriers']>[0] { return {
   captureId: locationId, scope: { projectId, modelVersionId: modelId, selectionRevision: '2', contentFingerprint: 'a'.repeat(64),
     captureFrameId: '44444444-4444-4444-8444-444444444444', captureFrameSha256: 'b'.repeat(64), coordinateFrame: 'canonical-world-metres' },
@@ -31,7 +32,7 @@ function state(): PathFinderState { return { schemaVersion: 1, projectId, regist
   locations: [{ id: locationId, name: 'EQ-001', aliases: ['Equipment A'], revision: '1', binding: null }] }; }
 let container: { current: HTMLDivElement };
 beforeEach(() => {
-  vi.clearAllMocks(); facts.instances = 0; facts.events.length = 0; container = { current: document.createElement('div') }; document.body.append(container.current);
+  vi.clearAllMocks(); facts.instances = 0; facts.events.length = 0; facts.ready = true; facts.readTrayRootSelection.mockReset(); facts.showTray.mockReset().mockResolvedValue(undefined); container = { current: document.createElement('div') }; document.body.append(container.current);
   vi.mocked(fetchPathFinderState).mockResolvedValue(state()); vi.mocked(pathFinderRequest).mockResolvedValue({ locationId });
   vi.mocked(submitPathFinderCalculation).mockReset().mockResolvedValue({ kind: 'acknowledged', jobId: locationId, registryRevision: '8', duplicate: false });
   vi.mocked(fetchPathFinderProposal).mockReset(); vi.mocked(fetchPathFinderJob).mockReset();
@@ -44,6 +45,72 @@ beforeEach(() => {
 
 describe('fresh popup calculation submission without Viewer appearance changes', () => {
   const mount = () => renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container, automaticStatePolling: false }));
+  it.each([
+    ['ACCESS_CHECK_FAILED', 'could not confirm model access'],
+    ['SESSION_RENEW_FAILED', 'could not renew the model session'],
+    ['ACCESS_REVOKED', 'Access to the model was revoked'],
+    ['RESOURCE_FAILED', 'model or one of its resources failed'],
+  ])('explains terminal %s without claiming a changed model or losing saved state', async (code, explanation) => {
+    const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
+    act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+    act(() => facts.events[0]({ type: 'ERROR', payload: { code, operation: 'viewer' } }));
+    expect(view.result.current.viewerPhase).toBe('error');
+    expect(view.result.current.viewerMessage).toContain(explanation);
+    expect(view.result.current.error).toBe(view.result.current.viewerMessage);
+    expect(view.result.current.data?.projectId).toBe(projectId);
+    expect(pathFinderRequest).not.toHaveBeenCalled();
+    view.unmount();
+  });
+  it('shows a location only after the current model is ready and waits for its display acknowledgement', async () => {
+    const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
+    await act(async () => { expect(await view.result.current.showLocation(55)).toBe(false); }); expect(facts.showLocation).not.toHaveBeenCalled();
+    act(() => { facts.events[0]({ type: 'MODEL_LOADED', payload: {} }); });
+    let finish!: () => void; facts.showLocation.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+    let shown: boolean | undefined, pending!: Promise<void>;
+    act(() => { pending = view.result.current.showLocation(55).then(value => { shown = value; }); });
+    expect(shown).toBeUndefined();
+    await act(async () => { finish(); await pending; }); expect(shown).toBe(true);
+    expect(facts.showLocation).toHaveBeenCalledExactlyOnceWith(55); expect(facts.clear).not.toHaveBeenCalled(); expect(facts.transparency).not.toHaveBeenCalled();
+    expect(facts.readSelection).not.toHaveBeenCalled(); expect(pathFinderRequest).not.toHaveBeenCalled(); view.unmount();
+  });
+  it('reports a failed location display without claiming success', async () => {
+    const view = mount(); await waitFor(() => expect(facts.instances).toBe(1)); act(() => { facts.events[0]({ type: 'MODEL_LOADED', payload: {} }); });
+    facts.showLocation.mockRejectedValueOnce(new Error('Display unavailable'));
+    await act(async () => { expect(await view.result.current.showLocation(55)).toBe(false); });
+    expect(facts.clear).not.toHaveBeenCalled(); expect(facts.transparency).not.toHaveBeenCalled(); view.unmount();
+  });
+  it('shows all tray roots together only in their ready model and waits for acknowledgement', async () => {
+    const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
+    await act(async () => { expect(await view.result.current.showTray(preparationModelScope, [55, 66])).toBe(false); });
+    expect(facts.showTray).not.toHaveBeenCalled();
+    act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+    await act(async () => { expect(await view.result.current.showTray({ ...preparationModelScope, contentFingerprint: 'b'.repeat(64) }, [55])).toBe(false); });
+    expect(facts.showTray).not.toHaveBeenCalled();
+    let finish!: () => void;
+    facts.showTray.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+    let shown: boolean | undefined, pending!: Promise<void>;
+    const ids = [55, 66];
+    act(() => { pending = view.result.current.showTray(preparationModelScope, ids).then(value => { shown = value; }); });
+    ids.push(77);
+    expect(shown).toBeUndefined();
+    await act(async () => { finish(); await pending; });
+    expect(shown).toBe(true); expect(facts.showTray).toHaveBeenCalledExactlyOnceWith([55, 66]);
+    expect(facts.clear).not.toHaveBeenCalled(); expect(facts.readSelection).not.toHaveBeenCalled(); expect(pathFinderRequest).not.toHaveBeenCalled();
+    view.unmount();
+  });
+  it('does not claim that a tray was shown after a viewer reload or failed display', async () => {
+    const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
+    act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+    facts.showTray.mockRejectedValueOnce(new ViewerAccessError('TRAY_UNAVAILABLE', 0));
+    await act(async () => { expect(await view.result.current.showTray(preparationModelScope, [55])).toBe(false); });
+    expect(view.result.current.error).toContain('tray objects could not be shown');
+    let finish!: () => void, pending!: Promise<boolean>;
+    facts.showTray.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+    act(() => { pending = view.result.current.showTray(preparationModelScope, [55]); });
+    act(() => view.result.current.reloadViewer());
+    await act(async () => { finish(); expect(await pending).toBe(false); });
+    expect(facts.clear).not.toHaveBeenCalled(); view.unmount();
+  });
   const preferences = (): PathFinderPreferences => ({ secondaryDistanceMeters: 2, preferVerticalApproach: true,
     barrierRouting: { schemaVersion: 'wfc.pf.barrier-admission-intent.v1', scope: barrierRequest().scope,
       expectedRegistryRevision: '0', expectedSnapshot: null, drillThroughWalls: true } });
@@ -55,6 +122,7 @@ describe('fresh popup calculation submission without Viewer appearance changes',
     expect(result).toEqual({ kind: 'acknowledged', jobId: locationId, registryRevision: '8', duplicate: false });
     expect(fetchPathFinderState).toHaveBeenCalledTimes(2);
     expect(submitPathFinderCalculation).toHaveBeenCalledExactlyOnceWith(projectId, 'token', expect.objectContaining({ cableIds: [locationId], expectedRegistryRevision: '8', force: true,
+      automaticPairPolicy: { schemaVersion: 'wfc.pf.automatic-pair-policy.v1', mode: 'when-both-empty-or-unchanged-automatic' },
       options: expect.objectContaining({ connectionToleranceMeters: 0.25, secondaryDistanceMeters: 2 }) }), expect.objectContaining({ signal: expect.any(AbortSignal), isCurrent: expect.any(Function) }));
     expect(vi.mocked(fetchPathFinderState).mock.invocationCallOrder[1]).toBeLessThan(vi.mocked(submitPathFinderCalculation).mock.invocationCallOrder[0]);
     expect(pathFinderRequest).not.toHaveBeenCalled(); expect(facts.instances).toBe(1); expect(facts.disposed).not.toHaveBeenCalled(); expect(facts.clear).not.toHaveBeenCalled(); expect(facts.transparency).not.toHaveBeenCalled();
@@ -117,6 +185,37 @@ describe('bounded detail inspection and state polling', () => {
     acceptanceScope: 'manual-review', canApply: true, compatibilityIssue: null, message: 'Review required.', engineeringMessage: 'Manual review required.',
     design: { lengthBeforePercentageMeters: '10', unroundedLengthMeters: '11', designLengthMeters: '11' }, route: null,
     routingPreferences: { secondaryDistanceMeters: 2, preferVerticalApproach: true }, createdAt: '2026-10-20T00:00:00Z' });
+  it('releases a hanging state read at its deadline and lets an already waiting refresh recover', async () => {
+    const view = mount(false); await waitFor(() => expect(facts.instances).toBe(1)); vi.useFakeTimers();
+    let finish!: (value: PathFinderState) => void;
+    vi.mocked(fetchPathFinderState).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }))
+      .mockResolvedValueOnce({ ...state(), registryRevision: '8' });
+    let first!: ReturnType<typeof view.result.current.refreshState>, next!: ReturnType<typeof view.result.current.refreshState>;
+    try {
+      act(() => { first = view.result.current.refreshState(); next = view.result.current.refreshState(); });
+      expect(fetchPathFinderState).toHaveBeenCalledTimes(2); const signal = vi.mocked(fetchPathFinderState).mock.calls[1][2]!;
+      await act(async () => { await vi.advanceTimersByTimeAsync(30_000); expect(await first).toBeNull(); expect((await next)?.registryRevision).toBe('8'); });
+      expect(signal.aborted).toBe(true); expect(fetchPathFinderState).toHaveBeenCalledTimes(3);
+      expect(view.result.current.data?.registryRevision).toBe('8'); expect(view.result.current.error).toBeNull();
+      await act(async () => { finish({ ...state(), registryRevision: '77' }); });
+      expect(view.result.current.data?.registryRevision).toBe('8'); expect(facts.disposed).not.toHaveBeenCalled(); expect(pathFinderRequest).not.toHaveBeenCalled();
+    } finally { view.unmount(); vi.useRealTimers(); }
+  });
+  it('bounds a state response whose body never finishes and allows a later healthy refresh', async () => {
+    const view = mount(false); await waitFor(() => expect(facts.instances).toBe(1)); vi.useFakeTimers();
+    const original = await vi.importActual<typeof import('@/api/pathfinder')>('@/api/pathfinder');
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(new ReadableStream<Uint8Array>({ start() {} })));
+    vi.mocked(fetchPathFinderState).mockImplementationOnce(original.fetchPathFinderState);
+    let pending!: ReturnType<typeof view.result.current.refreshState>;
+    try {
+      act(() => { pending = view.result.current.refreshState(); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(30_000); expect(await pending).toBeNull(); });
+      expect(view.result.current.data).toEqual(state()); expect(view.result.current.busy).toBe(false); expect(facts.disposed).not.toHaveBeenCalled();
+      vi.mocked(fetchPathFinderState).mockResolvedValueOnce({ ...state(), registryRevision: '8' });
+      await act(async () => { expect((await view.result.current.refreshState())?.registryRevision).toBe('8'); });
+      expect(view.result.current.error).toBeNull(); expect(pathFinderRequest).not.toHaveBeenCalled();
+    } finally { view.unmount(); vi.useRealTimers(); }
+  });
   it.each(['proposal', 'job'] as const)('returns a %s GET without another full state read or global busy lock', async kind => {
     const view = mount(); await waitFor(() => expect(view.result.current.data).not.toBeNull());
     const reads = vi.mocked(fetchPathFinderState).mock.calls.length;
@@ -160,6 +259,102 @@ describe('bounded detail inspection and state polling', () => {
     expect(oldSignal.aborted).toBe(true);
     await act(async () => finish({ ...detail(), id: modelId }));
     expect(view.result.current.error).toBeNull(); expect(facts.instances).toBe(1); expect(facts.disposed).not.toHaveBeenCalled(); view.unmount();
+  });
+  it.each(['proposal', 'job'] as const)('isolates a caller-owned %s read from default history reads in both directions', async kind => {
+    const view = mount(); await waitFor(() => expect(view.result.current.data).not.toBeNull());
+    const read = () => kind === 'proposal' ? view.result.current.readProposal : view.result.current.readJob;
+    const api = vi.mocked(kind === 'proposal' ? fetchPathFinderProposal : fetchPathFinderJob);
+    const value = kind === 'proposal' ? detail() : { id: locationId };
+    let finishHistory!: (value: never) => void, finishDisplay!: (value: never) => void;
+    api.mockImplementationOnce(() => new Promise(resolve => { finishHistory = resolve; }) as never)
+      .mockImplementationOnce(() => new Promise(resolve => { finishDisplay = resolve; }) as never).mockResolvedValueOnce(value as never);
+    const display = new AbortController();
+    let history!: Promise<unknown>, exact!: Promise<unknown>;
+    act(() => { history = read()(modelId); exact = read()(locationId, display.signal); });
+    const historySignal = api.mock.calls[0][3]!, displaySignal = api.mock.calls[1][3]!;
+    expect(historySignal.aborted).toBe(false); expect(displaySignal.aborted).toBe(false);
+    await act(async () => { expect(await read()(locationId)).toEqual(value); expect(await history).toBeNull(); });
+    expect(historySignal.aborted).toBe(true); expect(displaySignal.aborted).toBe(false);
+    await act(async () => { finishDisplay(value as never); expect(await exact).toEqual(value); finishHistory(value as never); });
+    expect(display.signal.aborted).toBe(false); expect(view.result.current.error).toBeNull(); expect(facts.disposed).not.toHaveBeenCalled(); view.unmount();
+  });
+  it('reads caller-owned metadata during preparation without ending its SDK lock or enabling default reads', async () => {
+    const view = mount(); await waitFor(() => expect(view.result.current.data).not.toBeNull());
+    let finish!: () => void, preparing!: Promise<boolean>;
+    act(() => { preparing = view.result.current.runProjectPreparation({ modelVersionId: modelId, selectionRevision: '2', contentFingerprint: 'a'.repeat(64) },
+      async () => { await new Promise<void>(resolve => { finish = resolve; }); return true; }); });
+    expect(view.result.current.busy).toBe(true);
+    vi.mocked(fetchPathFinderProposal).mockResolvedValueOnce(detail());
+    vi.mocked(fetchPathFinderJob).mockResolvedValueOnce({ id: locationId } as never);
+    const caller = new AbortController();
+    await act(async () => {
+      expect(await view.result.current.readProposal(locationId)).toBeNull(); expect(await view.result.current.readJob(locationId)).toBeNull();
+      expect(await view.result.current.readProposal(locationId, caller.signal)).toEqual(detail());
+      expect(await view.result.current.readJob(locationId, caller.signal)).toEqual({ id: locationId });
+    });
+    expect(fetchPathFinderProposal).toHaveBeenCalledOnce(); expect(fetchPathFinderJob).toHaveBeenCalledOnce();
+    expect(view.result.current.busy).toBe(true);
+    await act(async () => { finish(); expect(await preparing).toBe(true); });
+    expect(view.result.current.busy).toBe(false); expect(facts.disposed).not.toHaveBeenCalled(); view.unmount();
+  });
+  it.each(['caller', 'operation', 'model', 'login', 'unmount'] as const)('withdraws an isolated read on %s cancellation and ignores a late response', async reason => {
+    const view = renderHook(({ token }) => usePathFinder({ projectId, loadedProjectId: projectId, token, isAdmin: true, container, automaticStatePolling: false }), { initialProps: { token: 'token' } });
+    await waitFor(() => expect(view.result.current.data).not.toBeNull());
+    let finish!: (value: PathFinderProposal) => void;
+    vi.mocked(fetchPathFinderProposal).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const caller = new AbortController(); let pending!: Promise<unknown>;
+    act(() => { pending = view.result.current.readProposal(locationId, caller.signal); });
+    const signal = vi.mocked(fetchPathFinderProposal).mock.calls.at(-1)![3]!;
+    await act(async () => {
+      if (reason === 'caller') caller.abort();
+      else if (reason === 'operation') view.result.current.cancelOperation();
+      else if (reason === 'model') view.result.current.reloadViewer();
+      else if (reason === 'login') view.rerender({ token: 'new-token' });
+      else view.unmount();
+    });
+    await act(async () => { expect(await pending).toBeNull(); finish(detail()); });
+    expect(signal.aborted).toBe(true); expect(view.result.current.error).toBeNull(); if (reason !== 'unmount') view.unmount();
+  });
+  it.each([401, 403])('retains authority failures for isolated metadata reads (%s)', async status => {
+    const view = mount(); await waitFor(() => expect(view.result.current.data).not.toBeNull());
+    vi.mocked(fetchPathFinderProposal).mockRejectedValueOnce(new PathFinderApiError('ADMIN_REQUIRED', status));
+    await act(async () => { expect(await view.result.current.readProposal(locationId, new AbortController().signal)).toBeNull(); });
+    expect(view.result.current.data).toBeNull(); expect(view.result.current.viewerPhase).toBe('error'); expect(facts.disposed).toHaveBeenCalledWith('reload'); view.unmount();
+  });
+  it('bounds an isolated metadata read and refuses an already aborted caller before a request', async () => {
+    const view = mount(); await waitFor(() => expect(view.result.current.data).not.toBeNull());
+    const stopped = new AbortController(); stopped.abort();
+    await act(async () => { expect(await view.result.current.readProposal(locationId, stopped.signal)).toBeNull(); });
+    expect(fetchPathFinderProposal).not.toHaveBeenCalled(); vi.useFakeTimers();
+    vi.mocked(fetchPathFinderProposal).mockImplementationOnce(() => new Promise(() => {}));
+    let pending!: Promise<unknown>;
+    try {
+      act(() => { pending = view.result.current.readProposal(locationId, new AbortController().signal); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(30_001); expect(await pending).toBeNull(); });
+      expect(view.result.current.error).toBeNull(); expect(facts.disposed).not.toHaveBeenCalled();
+    } finally { view.unmount(); vi.useRealTimers(); }
+  });
+  it('does not clear or replace unrelated global feedback during isolated inspection', async () => {
+    const view = mount(); await waitFor(() => expect(view.result.current.data).not.toBeNull());
+    vi.mocked(fetchPathFinderProposal).mockRejectedValueOnce(new PathFinderApiError('PROPOSAL_NOT_FOUND', 404));
+    await act(async () => { await view.result.current.readProposal(locationId); });
+    const previous = view.result.current.error; expect(previous).toContain('no longer available');
+    vi.mocked(fetchPathFinderProposal).mockResolvedValueOnce(detail()).mockRejectedValueOnce(new Error('Isolated transport unavailable'));
+    const caller = new AbortController();
+    await act(async () => { expect(await view.result.current.readProposal(locationId, caller.signal)).toEqual(detail()); });
+    expect(view.result.current.error).toBe(previous);
+    await act(async () => { expect(await view.result.current.readProposal(locationId, caller.signal)).toBeNull(); });
+    expect(view.result.current.error).toBe(previous); expect(facts.disposed).not.toHaveBeenCalled(); view.unmount();
+  });
+  it('keeps an isolated read bound to a detached model identity even if its state object is mutated in place', async () => {
+    const mutable = state(); vi.mocked(fetchPathFinderState).mockResolvedValueOnce(mutable);
+    const view = mount(); await waitFor(() => expect(view.result.current.data).toBe(mutable));
+    let finish!: (value: PathFinderProposal) => void, pending!: Promise<unknown>;
+    vi.mocked(fetchPathFinderProposal).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    act(() => { pending = view.result.current.readProposal(locationId, new AbortController().signal); });
+    mutable.activeModel.selectionRevision = '3';
+    await act(async () => { finish(detail()); expect(await pending).toBeNull(); });
+    expect(view.result.current.error).toBeNull(); view.unmount();
   });
   it('releases an unresponsive detail read at its deadline and ignores the late rejection', async () => {
     const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
@@ -359,6 +554,113 @@ describe('PathFinder scope and shared-location orchestration', () => {
     expect(operation).not.toHaveBeenCalled();expect(facts.capture).not.toHaveBeenCalled();expect(facts.readSelection).not.toHaveBeenCalled();
     await act(async()=>{await expect(result.current.runProjectPreparation(expected,operation)).resolves.toBe(true);});
   });
+  it('reads only tray root identities during manual project mapping', async () => {
+    const selected = { objects: [{ objectId: 426690 }] };
+    facts.readTrayRootSelection.mockResolvedValueOnce(selected);
+    const view = renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container }));
+    await waitFor(() => expect(view.result.current.data).not.toBeNull());
+    await act(async () => {
+      expect(await view.result.current.runProjectPreparation(preparationModelScope, viewer => viewer.readTrayRootSelection())).toEqual(selected);
+    });
+    expect(facts.readTrayRootSelection).toHaveBeenCalledOnce();
+    expect(facts.readSelection).not.toHaveBeenCalled(); expect(facts.capture).not.toHaveBeenCalled();
+    expect(facts.disposed).not.toHaveBeenCalled(); expect(view.result.current.busy).toBe(false);
+    view.unmount();
+  });
+  it('reads passive tray selection without occupying capture or changing busy and error state', async () => {
+    let finish!: (value: { objects: { objectId: number }[] }) => void;
+    facts.readTrayRootSelection.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const view = renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container, automaticStatePolling: false }));
+    await waitFor(() => expect(view.result.current.data).not.toBeNull());
+    act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+    const read = view.result.current.readTrayRootSelection;
+    let pending!: ReturnType<typeof read>; act(() => { pending = read(); });
+    expect(view.result.current.busy).toBe(false); expect(view.result.current.error).toBeNull();
+    expect(facts.readTrayRootSelection).toHaveBeenCalledWith({ quiet: true });
+    await act(async () => { finish({ objects: [{ objectId: 55 }] }); expect(await pending).toEqual({ objects: [{ objectId: 55 }] }); });
+    expect(view.result.current.readTrayRootSelection).toBe(read);
+    expect(view.result.current.busy).toBe(false); expect(view.result.current.error).toBeNull();
+    expect(facts.capture).not.toHaveBeenCalled(); expect(facts.readSelection).not.toHaveBeenCalled();
+    view.unmount();
+  });
+  it('keeps passive reader failures local and refuses reads while a preparation owns the viewer', async () => {
+    const view = renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container, automaticStatePolling: false }));
+    await waitFor(() => expect(view.result.current.data).not.toBeNull());
+    act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+    facts.readTrayRootSelection.mockRejectedValueOnce(new ViewerAccessError('TRAY_ROOT_SELECTION_UNAVAILABLE', 0));
+    await act(async () => { await expect(view.result.current.readTrayRootSelection()).rejects.toMatchObject({ code: 'TRAY_ROOT_SELECTION_UNAVAILABLE' }); });
+    expect(view.result.current.error).toBeNull(); expect(view.result.current.busy).toBe(false);
+    let finish!: () => void, preparing!: Promise<void>;
+    act(() => { preparing = view.result.current.runProjectPreparation(preparationModelScope, async () => new Promise<void>(resolve => { finish = resolve; })); });
+    expect(view.result.current.busy).toBe(true);
+    await act(async () => { expect(await view.result.current.readTrayRootSelection()).toBeNull(); });
+    expect(facts.readTrayRootSelection).toHaveBeenCalledTimes(1);
+    await act(async () => { finish(); await preparing; });
+    view.unmount();
+  });
+  it('ignores a passive selection completion after the authenticated owner changes', async () => {
+    let finish!: (value: { objects: { objectId: number }[] }) => void;
+    facts.readTrayRootSelection.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const view = renderHook(({ token }) => usePathFinder({ projectId, loadedProjectId: projectId, token, isAdmin: true, container, automaticStatePolling: false }), { initialProps: { token: 'old' } });
+    await waitFor(() => expect(view.result.current.data).not.toBeNull());
+    act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+    let pending!: ReturnType<typeof view.result.current.readTrayRootSelection>; act(() => { pending = view.result.current.readTrayRootSelection(); });
+    view.rerender({ token: 'new' }); await waitFor(() => expect(facts.events).toHaveLength(2));
+    act(() => facts.events[1]({ type: 'MODEL_LOADED', payload: {} }));
+    await act(async () => { finish({ objects: [{ objectId: 55 }] }); expect(await pending).toBeNull(); });
+    expect(view.result.current.error).toBeNull(); expect(view.result.current.busy).toBe(false);
+    view.unmount();
+  });
+  it('keeps the model available after a recoverable tray-selection refusal and accepts a retry', async () => {
+    const selected = { objects: [{ objectId: 426690 }] };
+    const view = renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container }));
+    await waitFor(() => expect(view.result.current.data).not.toBeNull());
+    act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+    facts.readTrayRootSelection.mockImplementationOnce(async () => {
+      facts.events[0]({ type: 'ERROR', payload: { code: 'TRAY_ROOT_SELECTION_UNAVAILABLE', operation: 'READ_TRAY_ROOT_SELECTION' } });
+      throw new ViewerAccessError('TRAY_ROOT_SELECTION_UNAVAILABLE', 0);
+    }).mockResolvedValueOnce(selected);
+    await act(async () => {
+      await expect(view.result.current.runProjectPreparation(preparationModelScope, viewer => viewer.readTrayRootSelection())).rejects.toMatchObject({ code: 'TRAY_ROOT_SELECTION_UNAVAILABLE' });
+    });
+    expect(view.result.current.viewerPhase).toBe('ready'); expect(view.result.current.error).toContain('model remains loaded');
+    expect(facts.disposed).not.toHaveBeenCalled(); expect(view.result.current.busy).toBe(false);
+    await act(async () => {
+      expect(await view.result.current.runProjectPreparation(preparationModelScope, viewer => viewer.readTrayRootSelection())).toEqual(selected);
+    });
+    expect(view.result.current.error).toBeNull(); expect(facts.readSelection).not.toHaveBeenCalled(); view.unmount();
+  });
+  it('preserves the terminal model explanation after a pending manual selection loses readiness', async () => {
+    let finish!: (value: { objects: { objectId: number }[] }) => void;
+    facts.readTrayRootSelection.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const view = renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container }));
+    await waitFor(() => expect(view.result.current.data).not.toBeNull());
+    let pending!: Promise<unknown>;
+    act(() => { pending = view.result.current.runProjectPreparation(preparationModelScope, viewer => viewer.readTrayRootSelection()).catch(error => error); });
+    await waitFor(() => expect(facts.readTrayRootSelection).toHaveBeenCalledOnce());
+    facts.ready = false;
+    act(() => facts.events[0]({ type: 'ERROR', payload: { code: 'SESSION_EXPIRED', operation: 'viewer' } }));
+    const terminalMessage = view.result.current.viewerMessage;
+    expect(terminalMessage).not.toBe('The active model is ready.');
+    await act(async () => { finish({ objects: [{ objectId: 426690 }] }); expect(await pending).toBeInstanceOf(DOMException); });
+    expect(view.result.current.viewerPhase).toBe('error'); expect(view.result.current.viewerMessage).toBe(terminalMessage);
+    expect(view.result.current.viewerMessage).not.toBe('Reload the active model to continue preparation.');
+    expect(view.result.current.busy).toBe(false); view.unmount();
+  });
+  it('does not let an old tray selection completion overwrite a new login viewer', async () => {
+    let finish!: (value: { objects: { objectId: number }[] }) => void;
+    facts.readTrayRootSelection.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const view = renderHook(({ token }) => usePathFinder({ projectId, loadedProjectId: projectId, token, isAdmin: true, container }), { initialProps: { token: 'old' } });
+    await waitFor(() => expect(view.result.current.data).not.toBeNull());
+    let pending!: Promise<unknown>;
+    act(() => { pending = view.result.current.runProjectPreparation(preparationModelScope, viewer => viewer.readTrayRootSelection()).catch(error => error); });
+    await waitFor(() => expect(facts.readTrayRootSelection).toHaveBeenCalledOnce());
+    view.rerender({ token: 'new' }); await waitFor(() => expect(facts.events).toHaveLength(2));
+    act(() => facts.events[1]({ type: 'MODEL_LOADED', payload: {} }));
+    await act(async () => { finish({ objects: [{ objectId: 426690 }] }); expect(await pending).toBeInstanceOf(DOMException); });
+    expect(view.result.current.viewerPhase).toBe('ready'); expect(view.result.current.viewerMessage).toBe('The active model is ready.');
+    expect(view.result.current.error).toBeNull(); expect(view.result.current.busy).toBe(false); view.unmount();
+  });
   it('cancels a late planning capture before it can upload', async () => {
     let finish!: (value: { snapshot: unknown; summary: Record<string, unknown> }) => void;
     facts.capture.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
@@ -539,7 +841,7 @@ describe('PathFinder scope and shared-location orchestration', () => {
     await act(async () => {
       await result.current.runProjectPreparation(request.scope, async viewer => {
         const observed = await viewer.captureBarriers(request);
-        expect(Object.keys(viewer).sort()).toEqual(['assertCurrent', 'capture', 'captureBarriers', 'discover', 'publishBarriers', 'readSelection']);
+        expect(Object.keys(viewer).sort()).toEqual(['assertCurrent', 'capture', 'captureBarriers', 'discover', 'publishBarriers', 'readSelection', 'readTrayRootSelection']);
         return viewer.publishBarriers(locationId, observed);
       });
     });

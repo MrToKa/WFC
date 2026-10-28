@@ -1,654 +1,201 @@
 import { useEffect, useRef, useState } from 'react';
-import { Body1, Button, Caption1, Field, Spinner, Textarea } from '@fluentui/react-components';
+import { Body1, Button, Field, Input, Spinner, tokens } from '@fluentui/react-components';
 import type { usePathFinder } from './hooks/usePathFinder';
 import { useProjectPreparation } from './hooks/useProjectPreparation';
-import { routingPurposeDisplayLabels } from '@/components/RoutingPurposePolicyCard';
 import type { PreparationScope } from '../../../shared/pathfinderPreparation';
-import { LEGACY_PREPARATION_CAPACITY_PROFILE, preparationCapacity } from '../../../shared/pathfinderCapacity';
-import {GeometryTracePanel} from './GeometryTracePanel';
-import { ModelRevisionChangesPanel } from './ModelRevisionChangesPanel';
+import { fetchRoutingPurposePolicy, type RoutingPurposePolicy } from '@/api/pathfinderPolicies';
+import { trayDisplayTarget } from './trayDisplayTarget';
 
-type Props = {
-  pf: ReturnType<typeof usePathFinder>;
-  active: boolean;
-  onBusyChange?: (busy: boolean) => void;
-};
-const sameScope = (left: PreparationScope, right: PreparationScope, ignoreResolution = false) =>
-  (Object.keys(right) as Array<keyof PreparationScope>).every(
-    (key) => (ignoreResolution && key === 'resolutionRevision') || left[key] === right[key],
-  );
-const diagnosticAction = (code: string) => {
-  switch (code) {
-    case 'TRAY_ROOT_MISSING':
-      return 'No exact tray root was found in this model. Verify the active model and revision, select and explicitly confirm the correct physical root, or explicitly exclude this tray from this preparation scope. Then discover again and freeze a replacement plan.';
-    case 'TRAY_ROOT_AMBIGUOUS':
-      return 'Multiple model roots match this tray. Select and explicitly confirm the intended physical roots, then discover again and freeze a replacement plan.';
-    case 'TRAY_GEOMETRY_MISSING':
-      return 'The selected roots contain no supported physical routing leaves. Inspect the model hierarchy and choose the correct physical roots or model revision before preparing again.';
-    case 'NON_LEAF_ROUTING_GEOMETRY':
-      return 'Routing geometry is attached above the physical leaves. Inspect its hierarchy and resolve physical ownership before preparing again.';
-    case 'PURPOSE_UNCONFIGURED':
-      return 'Save the routing permissions for this tray purpose in Project Details, then discover again and freeze a replacement plan.';
-    case 'TRAY_POLICY_INVALID':
-      return 'Resolve the tray catalog or routing permission diagnostics in Project Details before preparing this tray.';
-    case 'ENDPOINT_DISCOVERY_INCOMPLETE':
-      return 'The endpoint property search was incomplete. Reload the protected model and discover again; missing or unique matches cannot be inferred from incomplete coverage.';
-    case 'NO_AUTHORIZED_ROUTING_GEOMETRY':
-      return 'No physical tray geometry is permitted by this plan. Review the project routing permissions and tray root selections before preparing again.';
-    default:
-      return 'Resolve this preparation issue, then discover again and freeze a replacement plan. This diagnostic blocks collection.';
-  }
-};
-export function ProjectPreparationPanel({ pf, active, onBusyChange }: Props) {
+type Props = { pf: ReturnType<typeof usePathFinder>; active: boolean; onBusyChange?: (busy: boolean) => void; onNetworkReady?: (key: string) => void };
+const searchText = (text: string) => text.normalize('NFC').trim().replace(/\s+/gu, ' ').toLowerCase().replace(/^\/+/, '');
+const sameModel = (left: { modelVersionId: string | null; contentFingerprint: string | null; selectionRevision: string | null }, right: PreparationScope) =>
+  left.modelVersionId === right.modelVersionId && left.contentFingerprint === right.contentFingerprint && left.selectionRevision === right.selectionRevision;
+
+export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkReady }: Props) {
   const state = useProjectPreparation(pf, active);
-  const [chosen, setChosen] = useState<Record<string, string[]>>({}),
-    [reasons, setReasons] = useState<Record<string, string>>({}),
-    [commandReason, setCommandReason] = useState('');
-  const [selectionNotice, setSelectionNotice] = useState<string | null>(null),
-    [page, setPage] = useState(0);
-  const [comparisonPending, setComparisonPending] = useState(false);
-  const scopeKey = JSON.stringify([pf.preparationAccess, state.context?.scope]);
-  const latestScope = useRef(scopeKey);
-  latestScope.current = scopeKey;
+  const [query, setQuery] = useState('');
+  const [reading, setReading] = useState<string | null>(null);
+  const [display, setDisplay] = useState<{ owner: string; scope: string; trayId: string; status: 'showing' | 'shown' | 'failed' } | null>(null);
+  const [selectionError, setSelectionError] = useState<{ trayId: string; message: string } | null>(null);
+  const [permissions, setPermissions] = useState<{ owner: string; value: RoutingPurposePolicy } | null>(null);
+  const pending = useRef<object | null>(null);
+  const pendingDisplay = useRef<object | null>(null);
+  const owner = JSON.stringify([pf.preparationAccess, state.context?.scope.modelVersionId,
+    state.context?.scope.contentFingerprint, state.context?.scope.selectionRevision, pf.data?.activeModel, pf.preparationViewerGeneration, active]);
+  const permissionOwner = JSON.stringify([pf.preparationAccess, state.context?.projectId,
+    state.context?.scope.catalogRevision, state.context?.scope.routingPolicyRevision]);
+  const context = state.context;
+  const displayScope = JSON.stringify(context?.scope);
+  const currentDisplay = display?.owner === owner && display.scope === displayScope ? display : null;
+  const showPending = display?.owner === owner && display.status === 'showing';
+  const modelCurrent = Boolean(context && pf.data?.activeModel && context.projectId === pf.preparationAccess?.projectId && sameModel(pf.data.activeModel, context.scope));
+  const readyNotificationKey = active && state.networkReady && modelCurrent && context?.currentAggregate && pf.viewerPhase === 'ready'
+    ? state.networkReadinessKey : null;
+  useEffect(() => { if (readyNotificationKey) onNetworkReady?.(readyNotificationKey); }, [readyNotificationKey, onNetworkReady]);
+  const latestOwner = useRef(owner), latestScope = useRef(state.context?.scope);
+  latestOwner.current = owner; latestScope.current = state.context?.scope;
   useEffect(() => {
-    setChosen({});
-    setReasons({});
-    setSelectionNotice(null);
-    setPage(0);
-  }, [scopeKey]);
+    pending.current = null; pendingDisplay.current = null; setReading(null); setDisplay(null); setSelectionError(null); setQuery('');
+    return () => { pending.current = null; pendingDisplay.current = null; };
+  }, [owner]);
+  const working = state.busy || Boolean(reading);
   useEffect(() => {
-    onBusyChange?.(state.busy || comparisonPending);
+    onBusyChange?.(working);
     return () => onBusyChange?.(false);
-  }, [state.busy, comparisonPending, onBusyChange]);
-  if (!state.enabled)
-    return <Body1>Current administrator project access is required for project preparation.</Body1>;
-  const context = state.context,
-    session = state.session,
-    canChange = state.canMutate && active;
-  const variants = routingPurposeDisplayLabels(context?.trays.map((tray) => tray.purposeKey) ?? []);
-  const discovery = context && state.discovery &&
-    state.discovery.modelVersionId === context.scope.modelVersionId &&
-    state.discovery.contentFingerprint === context.scope.contentFingerprint &&
-    state.discovery.selectionRevision === context.scope.selectionRevision
-    ? state.discovery : null;
-  const plan = session?.plan;
-  const planForCurrentModel = context && plan &&
-    plan.projectId === context.projectId &&
-    plan.modelVersionId === context.scope.modelVersionId &&
-    plan.contentFingerprint === context.scope.contentFingerprint &&
-    plan.selectionRevision === context.scope.selectionRevision
-    ? plan : null;
-  const currentPlanScope = Boolean(context && planForCurrentModel && sameScope(planForCurrentModel, context.scope));
-  const captureCeilingMiB = preparationCapacity(plan?.limitsProfile ?? LEGACY_PREPARATION_CAPACITY_PROFILE)
-    .validationInputBytes / 1024 / 1024;
-  const captureCeilingLabel = !plan ? 'Legacy preparation capture ceiling'
-    : currentPlanScope ? 'Current frozen plan capture ceiling' : 'Saved frozen plan capture ceiling';
-  const publishedPlan = Boolean(context?.currentAggregate && planForCurrentModel &&
-    context.currentAggregate.sessionId === session?.id &&
-    context.currentAggregate.orderedPlanSha256 === planForCurrentModel.orderedPlanSha256);
-  const trayTotal = context && plan && plan.projectId === context.projectId &&
-    plan.catalogRevision === context.scope.catalogRevision &&
-    plan.routingContentSha256 === context.scope.routingContentSha256
-    ? context.trays.length : null;
-  const endpointCounts = plan?.requestedScope.endpointEvidence.reduce(
-    (counts, item) => ({ ...counts, [item.status]: counts[item.status] + 1 }),
-    { unique_candidate: 0, missing: 0, ambiguous: 0 },
-  );
-  // Only an explicit parentless node in current-model evidence identifies the
-  // model root. A low dbId or a tray-like name does not establish that identity.
-  const modelRootIds = new Set((discovery?.objects ?? planForCurrentModel?.objectManifest ?? [])
-    .filter((object) => object.parentId === null).map((object) => object.objectId));
-  const partsReady = Boolean(
-    session &&
-      session.coverage.requestedScopeComplete &&
-      session.coverage.committedParts === session.coverage.expectedParts &&
-      session.coverage.expectedParts > 0,
-  );
-  const copySelection = async (trayId: string) => {
-    const captured = latestScope.current;
-    if (!context) return;
-    const selected = await pf
-      .runProjectPreparation(context.scope, (viewer) => viewer.readSelection())
-      .catch(() => null);
-    if (captured !== latestScope.current) return;
-    if (!selected?.objects.length) {
-      setSelectionNotice('Select the intended model objects, then read the current selection.');
-      return;
+  }, [working, onBusyChange]);
+  useEffect(() => {
+    const abort = new AbortController(), context = state.context, access = pf.preparationAccess;
+    if (permissions?.owner === permissionOwner) return () => abort.abort();
+    if (state.enabled && active && context && access?.token && context.projectId === access.projectId) {
+      void fetchRoutingPurposePolicy(context.projectId, access.token, abort.signal).then(value => {
+        if (!abort.signal.aborted && value.projectId === context.projectId && value.catalogRevision === context.scope.catalogRevision
+          && value.routingPolicyRevision === context.scope.routingPolicyRevision) setPermissions({ owner: permissionOwner, value });
+      }, () => {});
     }
-    setChosen((value) => ({
-      ...value,
-      [trayId]: selected.objects.map((item) => `dbid:${item.objectId}`),
-    }));
-    setSelectionNotice(
-      'Selection copied into the resolution draft. Confirm its physical ownership and give a reason before saving.',
-    );
+    return () => abort.abort();
+  }, [permissionOwner, state.enabled, active, state.context, pf.preparationAccess, permissions]);
+  if (!state.enabled) return <Body1>Current administrator project access is required.</Body1>;
+  const discovery = context && state.discovery && sameModel(state.discovery, context.scope) ? state.discovery : null;
+  const plan = context && state.session?.plan.projectId === context.projectId && sameModel(state.session.plan, context.scope) ? state.session.plan : null;
+  const saved = Boolean(state.networkReady && modelCurrent && pf.viewerPhase === 'ready' && context?.currentAggregate && sameModel(context.currentAggregate, context.scope)
+    && context.currentAggregate.catalogRevision === context.scope.catalogRevision
+    && context.currentAggregate.routingContentSha256 === context.scope.routingContentSha256
+    && context.currentAggregate.routingPolicyRevision === context.scope.routingPolicyRevision
+    && context.currentAggregate.routingPolicySha256 === context.scope.routingPolicySha256
+    && context.currentAggregate.resolutionRevision === context.scope.resolutionRevision);
+  const assigned = (trayId: string) => {
+    if (!context || !modelCurrent) return false;
+    const resolution = context.resolutions.find(item => item.projectTrayId === trayId && sameModel(item.scope, context.scope));
+    if (resolution) return resolution.mode === 'roots' && resolution.rootObjectIds.length > 0;
+    const matches = discovery?.trays.find(item => item.projectTrayId === trayId)?.candidateRootObjectIds;
+    if (matches) return matches.length === 1;
+    return Boolean(plan?.requestedScope.trays.some(item => item.projectTrayId === trayId && item.orderedRootObjectIds.length));
   };
-  return (
-    <section aria-label="Project tray purposes preparation">
-      <h3>Project tray purposes</h3>
-      <p aria-label="Preparation capture ceiling">
-        {captureCeilingLabel}: complete staged captures are limited to{' '}
-        {captureCeilingMiB} MiB for validation.
-        {plan && !currentPlanScope
-          ? ' This saved limit belongs to its frozen plan and does not establish the limit of a replacement plan.'
-          : null}
-        {' '}Committed parts remain available when collection is paused or refused.
-      </p>
-      <Body1>
-        Discover exact model candidates for the project tray catalog. Routing categories come from
-        the saved administrator permissions in Details.
-      </Body1>
-      <Caption1>
-        From/To matching searches Model tree names and readable property values. Hidden objects
-        and objects below a hidden parent are excluded. Discovery restores the model appearance
-        before Path Finder highlighting; changing visibility requires a fresh preparation.
-      </Caption1>
-      <Caption1>
-        Manual resolutions confirm physical ownership. They do not grant routing permissions.
-        Published preparation covers the requested project scope; it does not claim whole-plant or
-        native engineering acceptance.
-      </Caption1>
-      {plan ? (
-        <section aria-label="Preparation readiness summary" style={{ marginTop: 12 }}>
-          <h4 style={{ margin: '0 0 8px' }}>
-            {publishedPlan ? 'Published plan coverage' : currentPlanScope ? 'Current frozen plan coverage' : 'Saved plan coverage'}
-          </h4>
-          <p>
-            Tray network coverage: {plan.requestedScope.trays.length}
-            {trayTotal === null ? ' project trays' : ` of ${trayTotal} project trays`} have selected roots;{' '}
-            {plan.requestedScope.excludedProjectTrayIds.length} explicitly excluded;{' '}
-            {plan.diagnostics.length} blocking diagnostics.
-          </p>
-          <p>
-            Endpoint candidates: {endpointCounts!.unique_candidate} unique;{' '}
-            {endpointCounts!.missing} missing; {endpointCounts!.ambiguous} ambiguous.
-            {' '}These are saved candidate counts, not confirmed shared locations or calculated cables.
-          </p>
-          <p>
-            {plan.matchingPolicyVersion === 'wfc.pf.project-exact-candidates.v3'
-              ? 'Matching policy v3: Model tree names and readable properties, with recorded visible-object checks. One model-only leading slash is allowed; other identifier characters remain significant.'
-              : plan.matchingPolicyVersion === 'wfc.pf.project-exact-candidates.v2'
-              ? 'Matching policy v2: equipment identifiers allow one leading slash present only in the model. Tray names retain exact matching; all other equipment identifier characters remain significant.'
-              : 'Historical matching policy v1: discover again and freeze a new plan to use model-only leading-slash matching. Opening this saved plan does not rerun discovery.'}
-          </p>
-          {plan.diagnostics.length ? (
-            <div role="alert">
-              <p>
-                Collection is blocked by {plan.diagnostics.length} preparation diagnostics.
-                Missing trays are not excluded automatically. Resolve the issues below before collecting the complete network.
-              </p>
-              <ul aria-label="Frozen plan diagnostics">
-                {plan.diagnostics.map((item, index) => {
-                  const trayNames = item.projectTrayIds.map((id) =>
-                    context?.trays.find((tray) => tray.projectTrayId === id)?.rawName ??
-                    plan.requestedScope.trays.find((tray) => tray.projectTrayId === id)?.rawName ?? id,
-                  );
-                  return <li key={index}>
-                    <strong>{item.code}</strong>
-                    {trayNames.length ? <p>Affected trays: {trayNames.join(', ')}.</p> : null}
-                    {item.objectIds.length ? <p>Model objects: {item.objectIds.join(', ')}.</p> : null}
-                    <p>{diagnosticAction(item.code)}</p>
-                    <Caption1>{item.message}</Caption1>
-                  </li>;
-                })}
-              </ul>
-            </div>
-          ) : null}
-        </section>
-      ) : null}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
-        <Button disabled={state.busy} onClick={() => void state.refresh()}>
-          Refresh preparation status
-        </Button>
-        <Button
-          appearance="primary"
-          disabled={!canChange || pf.viewerPhase !== 'ready'}
-          onClick={() => void state.discover()}
-        >
-          Discover project tray candidates
-        </Button>
-        <Button
-          disabled={!canChange || !state.discovery?.complete}
-          onClick={() => void state.freezePlan()}
-        >
-          Freeze reviewed preparation plan
-        </Button>
-        <Button disabled={state.busy || pf.viewerPhase === 'loading'} onClick={pf.reloadViewer}>
-          Reload protected model
-        </Button>
-      </div>
-      {state.loading ? <Spinner size="tiny" label="Loading current preparation..." /> : null}
-      {state.busy ? (
-        <Spinner size="tiny" label={state.progress ?? 'Working on project preparation...'} />
-      ) : null}
-      {state.notice ? <p role="status">{state.notice}</p> : null}
-      {state.error ? <p role="alert">{state.error}</p> : null}
-      {state.conflict ? (
-        <p role="alert">
-          Refresh and review the current project state before submitting a new command.
-        </p>
-      ) : null}
-      {state.unknown ? (
-        <div role="alert">
-          <p>
-            The exact pending command is retained. New changes are frozen until its outcome is
-            reconciled.
-          </p>
-          <Button
-            disabled={state.cancelBusy || (state.busy && !state.cancellationPending)}
-            onClick={() => void state.retry()}
-          >
-            Retry the same preparation command
-          </Button>
-        </div>
-      ) : null}
-      {state.busy ? <Button onClick={state.pause}>Pause local collection</Button> : null}
-      {selectionNotice ? <p role="status">{selectionNotice}</p> : null}
-      <details><summary>Traceability</summary><GeometryTracePanel pf={pf} active={active} aggregate={context?.currentAggregate??null}/></details>
-      <details><summary>Model revision changes</summary><ModelRevisionChangesPanel
-        projectId={pf.preparationAccess?.projectId ?? null} loadedProjectId={pf.preparationAccess?.loadedProjectId ?? null}
-        token={pf.preparationAccess?.token ?? null} isAdmin={Boolean(pf.preparationAccess?.isAdmin)} active={active}
-        contextKey={JSON.stringify([pf.data?.activeModel, context?.currentAggregate?.id, pf.preparationViewerGeneration])}
-        onDecisionSaved={() => pf.refresh()} onAuthorityLost={() => { pf.cancelOperation(); pf.refresh(); }}
-        onRecoveryPendingChange={setComparisonPending}
-      /></details>
-      {context ? (
-        <>
-          <p>
-            {context.trays.length} project trays · {context.endpointNames.length} project endpoint
-            names · Routing policy revision {context.scope.routingPolicyRevision}
-          </p>
-          {context.currentAggregate ? (
-            <p>
-              Current published network: geometry revision{' '}
-              {context.currentAggregate.geometryRevision}. Its complete previous aggregate is
-              retained until a replacement is published.
-            </p>
-          ) : (
-            <p>No project-prepared network has been published.</p>
-          )}
-          {context.diagnostics.length ? (
-            <ul aria-label="Project routing diagnostics">
-              {context.diagnostics.map((item, index) => (
-                <li key={index}>{item.message}</li>
-              ))}
-            </ul>
-          ) : null}
-          {state.discovery ? (
-            <p role="status">
-              {discovery ? 'Discovery' : 'Historical discovery for a previous model selection'}:{' '}
-              {state.discovery.objects.length} inventory records. Candidate pagination{' '}
-              {state.discovery.complete ? 'complete' : 'incomplete'}.{' '}
-              {state.discovery.propertyScan
-                ? `Endpoint properties: ${state.discovery.propertyScan.returnedObjectCount} of ${state.discovery.propertyScan.attemptedObjectCount} returned; ${state.discovery.propertyScan.omittedObjectCount} unavailable.`
-                : 'No endpoint property search was requested.'}
-            </p>
-          ) : null}
-          <section
-            aria-label="Project tray candidate coverage"
-            style={{ display: 'grid', gap: 12, minWidth: 0 }}
-          >
-            {context.trays.slice(page * 25, (page + 1) * 25).map((tray) => {
-              const matches = discovery?.trays.find(
-                (value) => value.projectTrayId === tray.projectTrayId,
-              )?.candidateRootObjectIds;
-              const resolution = context.resolutions.find(
-                (value) => value.projectTrayId === tray.projectTrayId,
-              );
-              const currentResolution = Boolean(resolution && sameScope(resolution.scope, context.scope, true));
-              const frozenTray = plan?.requestedScope.trays.find(
-                (value) => value.projectTrayId === tray.projectTrayId,
-              );
-              const frozenExcluded = plan?.requestedScope.excludedProjectTrayIds.includes(tray.projectTrayId);
-              const knownModelRoot = [...(matches ?? []), ...(resolution?.rootObjectIds ?? []),
-                ...(planForCurrentModel ? frozenTray?.orderedRootObjectIds ?? [] : []),
-                ...(chosen[tray.projectTrayId] ?? [])].some((id) => modelRootIds.has(id));
-              const selected = chosen[tray.projectTrayId] ?? [];
-              const reason = reasons[tray.projectTrayId] ?? '';
-              const purpose = tray.purposeKey ?? 'Missing purpose',
-                variant = tray.purposeKey ? variants.get(tray.purposeKey) : undefined;
-              const label = `${tray.rawName} (${tray.projectTrayId})`;
-              return (
-                <article
-                  key={tray.projectTrayId}
-                  aria-label={`Tray coverage for ${label}`}
-                  style={{
-                    border: '1px solid #ccc',
-                    borderRadius: 6,
-                    padding: 12,
-                    minWidth: 0,
-                    overflowWrap: 'anywhere',
-                    wordBreak: 'normal',
-                  }}
-                >
-                  <h4
-                    style={{ margin: '0 0 12px', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
-                  >
-                    {tray.rawName}
-                  </h4>
-                  <dl style={{ margin: 0, display: 'grid', gap: 16, minWidth: 0 }}>
-                    <div style={{ minWidth: 0 }}>
-                      <dt style={{ fontWeight: 600, marginBottom: 6 }}>
-                        Purpose and routing permission
-                      </dt>
-                      <dd style={{ margin: 0, minWidth: 0, display: 'grid', gap: 8 }}>
-                        <span style={{ whiteSpace: 'pre-wrap' }}>{purpose}</span>
-                        {variant ? (
-                          <div>
-                            {variant.variant} · Spaces shown as dots: {variant.exactSpacing}
-                          </div>
-                        ) : null}
-                        <div>
-                          {tray.policyState === 'configured'
-                            ? tray.allowedCategories.join(', ')
-                            : tray.policyState === 'excluded'
-                              ? 'Excluded'
-                              : tray.policyState === 'unconfigured'
-                                ? 'Unconfigured'
-                                : 'Invalid purpose'}
-                        </div>
-                        {tray.diagnosticCodes.map((code) => (
-                          <div key={code}>{code.replaceAll('_', ' ').toLowerCase()}</div>
-                        ))}
-                      </dd>
-                    </div>
-                    <div style={{ minWidth: 0 }}>
-                      <dt style={{ fontWeight: 600, marginBottom: 6 }}>
-                        Exact candidates and coverage
-                      </dt>
-                      <dd style={{ margin: 0, minWidth: 0, display: 'grid', gap: 8 }}>
-                        {matches === undefined
-                          ? 'Discovery results are not loaded. Discover project tray candidates to verify exact matches.'
-                          : matches.length === 0
-                            ? 'Missing exact candidate'
-                            : matches.length === 1
-                              ? 'One exact candidate'
-                              : 'Multiple physical roots require explicit confirmation'}
-                        <ul>
-                          {matches?.map((id) => (
-                            <li key={id}>
-                              <label>
-                                <input
-                                  type="checkbox"
-                                  aria-label={`Confirm ${id} for ${label}`}
-                                  checked={selected.includes(id)}
-                                  disabled={!canChange}
-                                  onChange={(event) =>
-                                    setChosen((value) => ({
-                                      ...value,
-                                      [tray.projectTrayId]: event.target.checked
-                                        ? [...selected, id]
-                                        : selected.filter((item) => item !== id),
-                                    }))
-                                  }
-                                />
-                                {discovery?.objects.find((value) => value.objectId === id)
-                                  ?.name ?? 'Model object'}{' '}
-                                · {id}
-                              </label>
-                            </li>
-                          ))}
-                        </ul>
-                        {frozenTray || frozenExcluded ? (
-                          <div>
-                            {publishedPlan ? 'Published saved plan' : currentPlanScope ? 'Current frozen plan' : 'Historical frozen plan'}:{' '}
-                            {frozenExcluded ? 'tray excluded from that scope' : `${frozenTray!.orderedRootObjectIds.length} selected roots`}
-                            {frozenTray ? ` · ${frozenTray.orderedRootObjectIds.join(', ')}` : ''}.
-                            {' '}Selected roots are saved coverage evidence, not a new exact-candidate search.
-                          </div>
-                        ) : !discovery && context.currentAggregate ? (
-                          <div>
-                            A published network is retained, but its per-tray roots are not loaded.
-                            Open its saved preparation or discover again to verify this tray.
-                          </div>
-                        ) : null}
-                        {knownModelRoot ? (
-                          <p role="alert">
-                            Current model evidence identifies a selected or candidate object as the global model root.
-                            Review its physical ownership before using it as a tray root.
-                          </p>
-                        ) : null}
-                        {resolution ? (
-                          <div>
-                            <p>
-                              {currentResolution
-                                ? 'Saved resolution matches the current project scope.'
-                                : 'Stale saved resolution: its model, catalog, routing permissions or location registry no longer matches. Reconfirm or reset it before preparing the current scope.'}
-                            </p>
-                            Saved{' '}
-                            {resolution.mode === 'exclude'
-                              ? 'exclusion'
-                              : `${resolution.rootObjectIds.length} confirmed roots`}
-                            : {resolution.reason}
-                            {resolution.mode === 'roots' ? ` · ${resolution.rootObjectIds.join(', ')}` : ''}
-                            <br />
-                            Saved {resolution.createdAt} by administrator {resolution.actorId}
-                          </div>
-                        ) : null}
-                      </dd>
-                    </div>
-                    <div style={{ minWidth: 0 }}>
-                      <dt style={{ fontWeight: 600, marginBottom: 6 }}>
-                        Audited manual resolution
-                      </dt>
-                      <dd style={{ margin: 0, minWidth: 0, display: 'grid', gap: 8 }}>
-                        <Button
-                          size="small"
-                          style={{
-                            width: '100%',
-                            maxWidth: '100%',
-                            minWidth: 0,
-                            whiteSpace: 'normal',
-                            textAlign: 'left',
-                            justifyContent: 'flex-start',
-                          }}
-                          disabled={!canChange || pf.viewerPhase !== 'ready'}
-                          onClick={() => void copySelection(tray.projectTrayId)}
-                        >
-                          Use current model selection
-                        </Button>
-                        <p>
-                          {selected.length} roots in this draft
-                          {selected.length ? `: ${selected.join(', ')}` : ''}
-                        </p>
-                        <Field label={`Resolution reason for ${tray.rawName}`}>
-                          <Textarea
-                            aria-label={`Resolution reason for ${label}`}
-                            maxLength={2048}
-                            value={reason}
-                            disabled={!canChange}
-                            onChange={(_, data) =>
-                              setReasons((value) => ({
-                                ...value,
-                                [tray.projectTrayId]: data.value,
-                              }))
-                            }
-                          />
-                        </Field>
-                        <Button
-                          size="small"
-                          style={{
-                            width: '100%',
-                            maxWidth: '100%',
-                            minWidth: 0,
-                            whiteSpace: 'normal',
-                            textAlign: 'left',
-                            justifyContent: 'flex-start',
-                          }}
-                          disabled={!canChange || !selected.length || !reason.trim()}
-                          onClick={() =>
-                            void state.resolve(tray.projectTrayId, 'roots', selected, reason.trim())
-                          }
-                        >
-                          Save confirmed roots
-                        </Button>
-                        <Button
-                          size="small"
-                          style={{
-                            width: '100%',
-                            maxWidth: '100%',
-                            minWidth: 0,
-                            whiteSpace: 'normal',
-                            textAlign: 'left',
-                            justifyContent: 'flex-start',
-                          }}
-                          disabled={!canChange || !reason.trim()}
-                          onClick={() =>
-                            void state.resolve(tray.projectTrayId, 'exclude', [], reason.trim())
-                          }
-                        >
-                          Exclude from this preparation scope
-                        </Button>
-                        <Button
-                          size="small"
-                          style={{
-                            width: '100%',
-                            maxWidth: '100%',
-                            minWidth: 0,
-                            whiteSpace: 'normal',
-                            textAlign: 'left',
-                            justifyContent: 'flex-start',
-                          }}
-                          disabled={!canChange || !resolution || !reason.trim()}
-                          onClick={() =>
-                            void state.resolve(tray.projectTrayId, 'reset', [], reason.trim())
-                          }
-                        >
-                          Reset saved resolution
-                        </Button>
-                      </dd>
-                    </div>
-                  </dl>
-                </article>
-              );
-            })}
-          </section>
-          {context.trays.length > 25 ? (
-            <div>
-              <Button disabled={page === 0} onClick={() => setPage((value) => value - 1)}>
-                Previous tray coverage
-              </Button>
-              <span>
-                {' '}
-                Page {page + 1} of {Math.ceil(context.trays.length / 25)}{' '}
-              </span>
-              <Button
-                disabled={(page + 1) * 25 >= context.trays.length}
-                onClick={() => setPage((value) => value + 1)}
-              >
-                Next tray coverage
-              </Button>
-            </div>
-          ) : null}
-        </>
-      ) : null}
-      {state.index?.sessions.length ? (
-        <details>
-          <summary>Saved preparations</summary>
-          <ul>
-            {state.index.sessions.map((item) => (
-              <li key={item.id}>
-                {item.createdAt} · {item.state}{' '}
-                <Button
-                  size="small"
-                  disabled={!canChange}
-                  onClick={() => void state.loadSession(item.id)}
-                >
-                  Open preparation {item.id.slice(0, 8)}
-                </Button>
-              </li>
-            ))}
-          </ul>
-        </details>
-      ) : null}
-      {session ? (
-        <div aria-label="Frozen preparation plan">
-          <h4>Frozen preparation</h4>
-          <p>
-            {session.state} · Revision {session.sessionRevision} · Plan{' '}
-            <span title={session.plan.orderedPlanSha256}>
-              {session.plan.orderedPlanSha256.slice(0, 16)}
-            </span>
-          </p>
-          <p>
-            {session.coverage.committedParts} of {session.coverage.expectedParts} parts committed ·{' '}
-            {session.plan.requestedScope.orderedPhysicalLeafIds.length} physical leaves ·{' '}
-            {session.plan.requestedScope.endpointNames.length} endpoint names
-          </p>
-          <p>
-            Endpoint binding readiness:{' '}
-            {
-              session.plan.requestedScope.endpointEvidence.filter(
-                (item) => item.status !== 'unique_candidate',
-              ).length
-            }{' '}
-            names need later resolution. Complete geometry capture does not confirm equipment
-            bindings.
-          </p>
-          <ul aria-label="Endpoint candidate evidence">
-            {session.plan.requestedScope.endpointEvidence.map((item) => (
-              <li key={item.name}>
-                {item.name}: {item.status.replaceAll('_', ' ')} ({item.candidateObjectIds.length}{' '}
-                candidates)
-              </li>
-            ))}
-          </ul>
-          <Caption1>
-            Arrival order does not change the frozen part order. Resume reuses committed parts;
-            partial captures never become the current network.
-          </Caption1>
-          {session.failure ? <p role="alert">{session.failure.message}</p> : null}
-          <Field label="Preparation command reason">
-            <Textarea
-              aria-label="Preparation command reason"
-              maxLength={2048}
-              value={commandReason}
-              disabled={!canChange && !state.publishPending && session.state !== 'validating'}
-              onChange={(_, value) => setCommandReason(value.value)}
-            />
-          </Field>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <Button
-              disabled={
-                !canChange ||
-                pf.viewerPhase !== 'ready' ||
-                !['planned', 'collecting'].includes(session.state) ||
-                session.plan.diagnostics.length > 0
-              }
-              onClick={() => void state.collect()}
-            >
-              Resume collection
-            </Button>
-            <Button
-              appearance="primary"
-              disabled={
-                !canChange ||
-                !partsReady ||
-                !['collecting', 'planned'].includes(session.state) ||
-                !commandReason.trim()
-              }
-              onClick={() => void state.publish(commandReason.trim())}
-            >
-              Validate and publish complete network
-            </Button>
-            <Button
-              disabled={
-                state.cancelBusy ||
-                (!canChange && !state.publishPending && session.state !== 'validating') ||
-                !['planned', 'collecting', 'validating'].includes(session.state) ||
-                !commandReason.trim()
-              }
-              onClick={() =>
-                void (state.publishPending || session.state === 'validating'
-                  ? state.cancelActive(commandReason.trim())
-                  : state.cancel(commandReason.trim()))
-              }
-            >
-              Cancel frozen preparation
-            </Button>
+  const found = context?.trays.filter(tray => assigned(tray.projectTrayId)).length ?? 0;
+  const filtered = context?.trays.filter(tray => !query.trim() || [tray.rawName, tray.routeName, tray.purposeKey ?? '']
+    .some(value => searchText(value).includes(searchText(query)))) ?? [];
+  const disabled = !active || pf.busy || pf.viewerPhase !== 'ready';
+  const writeDisabled = disabled || working || showPending || state.loading;
+  const disabledReason = !active ? 'Open Routes to use these controls.'
+    : pf.viewerPhase === 'loading' ? 'The model is loading. Wait for it to finish.'
+      : pf.viewerPhase === 'no-model' ? 'Load a model to use these controls.'
+        : pf.viewerPhase !== 'ready' ? 'The model is not ready. Reload it to continue.'
+          : pf.busy ? 'The model is busy. Wait for the current operation to finish.'
+            : state.loading ? 'Reading the current tray status…'
+              : state.busy ? 'Checking project trays. You can stop this check.'
+                : reading ? 'Saving the selected tray and updating the network…'
+                  : showPending ? 'Showing the tray in the model…'
+                    : state.unknown ? 'An earlier tray update needs checking. Use Discover project tray candidates to continue.' : null;
+  const show = async (trayId: string) => {
+    if (!context || disabled || reading || !modelCurrent || pending.current || pendingDisplay.current) return;
+    const target = trayDisplayTarget({ trayId, context, plan, discovery });
+    if (!target.objectIds.length) return;
+    const currentOwner = latestOwner.current, scope = { ...context.scope }, scopeKey = JSON.stringify(scope), ticket = {};
+    const current = () => pendingDisplay.current === ticket && latestOwner.current === currentOwner
+      && JSON.stringify(latestScope.current) === scopeKey;
+    pendingDisplay.current = ticket; setDisplay({ owner: currentOwner, scope: scopeKey, trayId, status: 'showing' });
+    try {
+      const shown = await pf.showTray(scope, [...target.objectIds]);
+      if (current()) setDisplay({ owner: currentOwner, scope: scopeKey, trayId, status: shown ? 'shown' : 'failed' });
+    } catch {
+      if (current()) setDisplay({ owner: currentOwner, scope: scopeKey, trayId, status: 'failed' });
+    } finally {
+      if (pendingDisplay.current === ticket) {
+        const completedInScope = current(); pendingDisplay.current = null;
+        if (!completedInScope && latestOwner.current === currentOwner) setDisplay(null);
+      }
+    }
+  };
+  const assign = async (trayId: string) => {
+    if (!context || writeDisabled || !modelCurrent || state.unknown || pending.current || pendingDisplay.current) return;
+    const currentOwner = latestOwner.current, scope = { ...context.scope }, ticket = {};
+    const current = () => pending.current === ticket && latestOwner.current === currentOwner;
+    const evidence = discovery?.objects ?? plan?.objectManifest ?? [];
+    const knownRoots = new Set([...(discovery?.trays.flatMap(item => item.candidateRootObjectIds) ?? []),
+      ...(plan?.requestedScope.trays.flatMap(item => item.orderedRootObjectIds) ?? []),
+      ...context.resolutions.filter(item => item.mode === 'roots' && sameModel(item.scope, context.scope)).flatMap(item => item.rootObjectIds)]);
+    pending.current = ticket; setReading(trayId); setSelectionError(null);
+    try {
+      const selected = await pf.runProjectPreparation(scope, async viewer => {
+        const roots = await viewer.readTrayRootSelection();
+        // A first assignment can precede discovery. Unknown selected roots need
+        // exact current-node evidence; another tray's ancestry is insufficient.
+        const requireMetadata = roots.objects.some(object => !knownRoots.has(`dbid:${object.objectId}`)
+          && !evidence.some(saved => saved.objectId === `dbid:${object.objectId}` && saved.parentId !== null));
+        const metadata = requireMetadata ? await viewer.readSelection() : null;
+        if (requireMetadata && !metadata) throw new Error('The selected model objects could not be verified. Select the physical tray again.');
+        return { ...roots, metadata };
+      });
+      if (!current()) return;
+      if (JSON.stringify(latestScope.current) !== JSON.stringify(scope)) throw new Error('The project changed. Check the trays again, then select this tray.');
+      if (!selected.objects.length) throw new Error('Select the matching tray in the model first.');
+      const globalRoots = new Set(evidence
+        .filter(object => object.parentId === null && !knownRoots.has(object.objectId)).map(object => object.objectId));
+      const roots = selected.objects.map(object => `dbid:${object.objectId}`);
+      if (selected.metadata) {
+        const selectedIds = new Set(selected.objects.map(object => object.objectId));
+        if (selected.metadata.objects.length !== selectedIds.size || selected.metadata.objects.some(object => !selectedIds.has(object.objectId)))
+          throw new Error('The model selection changed. Select the matching tray again.');
+        for (const object of selected.metadata.objects) if (object.parentId === null && !knownRoots.has(`dbid:${object.objectId}`)) globalRoots.add(`dbid:${object.objectId}`);
+      }
+      if (roots.some(id => globalRoots.has(id))) throw new Error('Select the physical tray instead of the whole model.');
+      await state.assignTray(trayId, roots);
+    } catch (error) {
+      if (current()) setSelectionError({ trayId, message: error instanceof Error ? error.message : 'The model selection could not be assigned. Try again.' });
+    } finally {
+      if (current()) { pending.current = null; setReading(null); }
+    }
+  };
+  return <section aria-label="Project tray preparation">
+    <Button appearance="primary" disabled={writeDisabled} onClick={() => void state.checkTrays()}>
+      Discover project tray candidates
+    </Button>
+    {state.busy ? <Button onClick={state.pause} style={{ marginLeft: 8 }}>Stop checking</Button> : null}
+    {disabledReason ? <p>{disabledReason}</p> : null}
+    {working ? <Spinner size="tiny" label={state.progress ?? 'Checking trays and preparing the network…'} style={{ marginBlock: 12 }} />
+      : saved ? <p role="status">Network ready. {found} of {context!.trays.length} trays assigned{found < context!.trays.length ? `; ${context!.trays.length - found} still need a model selection` : ''}.</p>
+        : <p>Check the trays to prepare the routing network automatically.</p>}
+    {state.error ? <p role="alert">{state.error}</p> : null}
+    {state.notice && !state.error && !working && !saved ? <p role="status">{state.notice}</p> : null}
+    {context ? <>
+      <Field label="Search project trays" style={{ marginBlock: 12 }}>
+        <Input type="search" aria-label="Search project trays" placeholder="Tray name or purpose" value={query}
+          onChange={(_, data) => setQuery(data.value)} />
+      </Field>
+      {!filtered.length ? <p>No project trays match this search.</p> : null}
+      <div aria-label="Project trays" style={{ display: 'grid', gap: 12 }}>
+        {filtered.map(tray => {
+          const target = trayDisplayTarget({ trayId: tray.projectTrayId, context, plan, discovery });
+          const unavailable = !modelCurrent ? 'Load the matching model before showing this tray.' : target.message;
+          const showing = currentDisplay?.trayId === tray.projectTrayId && currentDisplay.status === 'showing';
+          return <article key={tray.projectTrayId} aria-label={`Tray ${tray.rawName}`}
+          style={{ border: `1px solid ${tokens.colorNeutralStroke2}`, borderRadius: 6, padding: 12, minWidth: 0, overflowWrap: 'anywhere' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
+            <h4 style={{ margin: '0 0 8px' }}>{tray.rawName}</h4>
+            <span>{assigned(tray.projectTrayId) ? 'Assigned' : 'Not assigned'}</span>
           </div>
-        </div>
-      ) : null}
-    </section>
-  );
+          <strong>Purpose and routing permission</strong>
+          <p style={{ marginBlock: 8 }}>{tray.purposeKey ?? 'Missing purpose'}<br />
+            {tray.policyState === 'configured' ? permissions?.owner === permissionOwner
+              ? permissions.value.rules.find(rule => rule.purposeKey === tray.purposeKey)?.allowedCategories.join(', ') || 'Routing permitted'
+              : 'Routing permitted' : tray.policyState === 'excluded' ? 'Excluded from routing' : 'Set routing permissions in Project Details'}
+          </p>
+          <Button disabled={disabled || Boolean(reading) || showPending || !modelCurrent || !target.objectIds.length}
+            aria-label={`Show tray ${tray.rawName}`} onClick={() => void show(tray.projectTrayId)}
+            style={{ width: '100%', whiteSpace: 'normal', marginBottom: 8 }}>
+            {showing ? 'Showing tray…' : 'Show tray'}
+          </Button>
+          {unavailable ? <p style={{ marginBlock: 8 }}>{unavailable}</p> : null}
+          {currentDisplay?.trayId === tray.projectTrayId && currentDisplay.status === 'shown' ? <p role="status">Tray shown in model.</p> : null}
+          {currentDisplay?.trayId === tray.projectTrayId && currentDisplay.status === 'failed' ? <p role="alert">The tray could not be shown. Check the model and try again.</p> : null}
+          <Button disabled={writeDisabled || !modelCurrent || state.unknown} aria-label={`Use current model selection for ${tray.rawName}`}
+            onClick={() => void assign(tray.projectTrayId)} style={{ width: '100%', whiteSpace: 'normal' }}>
+            {reading === tray.projectTrayId ? 'Assigning tray…' : 'Use current model selection'}
+          </Button>
+          {selectionError?.trayId === tray.projectTrayId ? <p role="alert">{selectionError.message}</p> : null}
+        </article>;
+        })}
+      </div>
+    </> : null}
+  </section>;
 }

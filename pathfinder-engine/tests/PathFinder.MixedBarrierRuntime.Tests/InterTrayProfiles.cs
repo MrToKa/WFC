@@ -15,6 +15,50 @@ internal static partial class Program
         ProfileHash(context); return context;
     }
     private static void ProfileHash(JsonObject context) => context["profileSha256"] = Fixtures.Hash(Fixtures.Canonical(context["profile"]));
+    private static JsonObject NearestAnchoredContext(JsonObject original)
+    {
+        var context = LargeSelectionContext(original); context["profile"]!["schemaVersion"] = "wfc.pf.barrier-runtime-profile.v5";
+        context["profile"]!["localSearch"] = JsonNode.Parse("""
+        {"policyVersion":"wfc.pf.nearest-anchored-local-search.v1","pairOrder":"nearest-anchored-axes-then-rank-sum.v1","exactStraightPreflight":true}
+        """);
+        ProfileHash(context); return context;
+    }
+    private static async Task NearestAnchoredProfileTransport(string runner, string root)
+    {
+        var request = Fixtures.Request(root, [(-3, 3, 0, .1)]);
+        request["from"] = Fixtures.Point(-2); request["to"] = Fixtures.Point(2);
+        var opening = Store(root, Ring()); var current = NearestAnchoredContext(opening.Context);
+        await Check("v5 exact local search profile authenticates original geometry and unchanged clear routes", async () => {
+            var old = await OneShot(runner, root, Protected(request, LargeSelectionContext(opening.Context)));
+            var next = await OneShot(runner, root, Protected(request, current));
+            Successful(old, LargeSelectionContext(opening.Context), opening); Successful(next, current, opening);
+            Equal(RouteHash(Points(old)), RouteHash(Points(next)));
+            Equal(old.GetProperty("route").GetProperty("lengthMeters").GetDouble(), next.GetProperty("route").GetProperty("lengthMeters").GetDouble());
+        });
+        await Check("v5 retains original material refusal without drilling", async () => {
+            var wall = Store(root, Wall()); Refused(await OneShot(runner, root, Protected(request, NearestAnchoredContext(wall.Context))));
+        });
+        foreach (var corruption in new[] { "order", "preflight", "policy", "extra", "missing" })
+            await Check("rehashed v5 rejects local search profile corruption: " + corruption, async () => {
+                var changed = current.DeepClone().AsObject(); var search = changed["profile"]!["localSearch"]!.AsObject();
+                if (corruption == "order") search["pairOrder"] = "rank-sum";
+                else if (corruption == "preflight") search["exactStraightPreflight"] = false;
+                else if (corruption == "policy") search["policyVersion"] = "unreviewed.v2";
+                else if (corruption == "extra") search["skipBarrierChecks"] = true;
+                else changed["profile"]!.AsObject().Remove("localSearch");
+                ProfileHash(changed); Refused(await OneShot(runner, root, Protected(request, changed)), false);
+            });
+        await Check("v5 cannot borrow a historical profile digest", async () => {
+            var changed = current.DeepClone().AsObject(); changed["profileSha256"] = LargeSelectionContext(opening.Context)["profileSha256"]!.DeepClone();
+            Refused(await OneShot(runner, root, Protected(request, changed)), false);
+        });
+        await Check("warm session keeps v2 through v5 explicit dispatch isolated", async () => {
+            using var session = await Session.Start(runner, root);
+            foreach (var context in new[] { opening.Context, OpeningContext(opening.Context), LargeSelectionContext(opening.Context), current, LargeSelectionContext(opening.Context), opening.Context })
+                Successful(await session.Query(Protected(request, context)), context, opening);
+            await session.Finish();
+        });
+    }
     private static async Task InterTrayProfileTransport(string runner, string root)
     {
         var request = Fixtures.Request(root, [(-3, 3, 0, .1)]);

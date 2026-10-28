@@ -98,7 +98,8 @@ export function usePathFinderCableWorkflow(access: PathFinderCableWorkflowAccess
     try {
       const query: CableWorkflowQuery = JSON.parse(queryKey);
       const detail = await fetchPathFinderCableWorkflowDetail(access.projectId!, access.token!, cableId,
-        { secondaryDistanceMeters: query.secondaryDistanceMeters, preferVerticalApproach: query.preferVerticalApproach }, abort.signal);
+        { secondaryDistanceMeters: query.secondaryDistanceMeters, preferVerticalApproach: query.preferVerticalApproach,
+          ...(query.barrierRouting ? { barrierRouting: query.barrierRouting } : {}) }, abort.signal);
       if (latest.current !== identity || abort.signal.aborted) return null;
       if (detail.contextSha256 !== page.contextSha256 || JSON.stringify(detail.row.cable) !== JSON.stringify(row.cable) || detail.row.mto !== row.mto) throw changed();
       setState(value => ({ ...value, detail, detailLoading: false })); return detail;

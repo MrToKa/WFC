@@ -6,12 +6,20 @@ import { isModelCaptureInputAppend, isStagedModelCaptureStart } from '../../view
 import type { ModelCaptureStagedStart } from '../../viewer-runtime/capture-input.mjs';
 import type { BridgeEnvelope, ModelCaptureRequest } from '../../viewer-runtime/protocol.mjs';
 import type { PreparationDiscoveryRequest, PreparationSlice } from '../../viewer-runtime/preparation-input.mjs';
+import { PREPARATION_MATCHING_POLICY, validatePreparationDiscoveryRequest } from '../../viewer-runtime/preparation-input.mjs';
 import { createManagedCaptureDriver } from './managedCaptureDriver.js';
 
 const id = (n: number) => `ed800000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const matrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 const observation = <T>(status: 'observed' | 'derived', value: T): CaptureObservation<T> => ({ status, value, api: 'synthetic-driver-fixture', reason: null });
 const discovery: PreparationDiscoveryRequest = { schemaVersion: 'wfc.pf.viewer-discovery.v1', mode: 'names', names: ['/B001'], rootObjectId: null, cursor: 0, limit: 128 };
+const visibilityScope = { schemaVersion: 'wfc.pf.sdk-display-visibility.v1' as const, basis: 'sdk-display-before-pf-appearance' as const, contentSha256: 'e'.repeat(64) };
+// The pinned producer's v1 schema accepts only the original request fields and
+// optional visibility scope; it has no capability negotiation for indexNames.
+function legacyProducerAccepts(request: Record<string, unknown>) {
+  const fields = ['schemaVersion', 'mode', 'names', 'rootObjectId', 'cursor', 'limit', ...(Object.hasOwn(request, 'visibilityScope') ? ['visibilityScope'] : [])];
+  return Object.keys(request).length === fields.length && fields.every(key => Object.hasOwn(request, key)) && validatePreparationDiscoveryRequest(request);
+}
 function fixture() {
   const identity = { instanceId: id(1), projectId: id(2), modelVersionId: id(3), loadId: id(4), sessionId: id(5) }, controller = new AbortController();
   const request: ModelCaptureRequest = { equipmentNames: ['EQ01'], preparationSlice: { schemaVersion: 'wfc.pf.viewer-slice.v1', sessionId: id(20), partId: id(21), planSha256: 'b'.repeat(64), coordinateFrameId: id(22),
@@ -48,7 +56,7 @@ function fixture() {
   };
   const exchange = vi.fn(async (envelope: BridgeEnvelope) => {
     if (envelope.type === 'READ_PREPARATION_OBJECTS') return reply(envelope, 'PREPARATION_OBJECTS', { schemaVersion: envelope.payload.schemaVersion, mode: envelope.payload.mode, names: envelope.payload.names,
-      rootObjectId: envelope.payload.rootObjectId, cursor: envelope.payload.cursor, matchingPolicyVersion: 'wfc.pf.project-exact-candidates.v2', indexedObjectCount: 1, propertyScan: null, objects: [], nextCursor: null, complete: true });
+      rootObjectId: envelope.payload.rootObjectId, cursor: envelope.payload.cursor, matchingPolicyVersion: PREPARATION_MATCHING_POLICY, indexedObjectCount: 1, propertyScan: null, objects: [], nextCursor: null, complete: true, visibilityScope });
     if (envelope.type === 'START_MODEL_CAPTURE') {
       if (!isStagedModelCaptureStart(envelope.payload) || !('preparationSlice' in envelope.payload)) throw new Error('Synthetic preparation fixture requires a valid staged preparation start');
       start = envelope.payload; names = [];
@@ -77,6 +85,36 @@ describe('protected managed capture driver scope and completion', () => {
   it('uses the existing protected discovery page contract', async () => {
     const f = fixture(); await expect(f.driver.discover(discovery)).resolves.toMatchObject({ mode: 'names', names: ['/B001'], complete: true });
     expect(f.exchange.mock.calls[0][0].type).toBe('READ_PREPARATION_OBJECTS');
+  });
+  it('keeps equipment discovery compatible with a closed pinned producer schema while preserving pagination and visibility', async () => {
+    const f = fixture(), sdkReads = vi.fn();
+    const request: PreparationDiscoveryRequest = { ...discovery, mode: 'equipment', names: ['EQ01'], indexNames: ['EQ01', 'EQ02'], limit: 1, visibilityScope };
+    expect(legacyProducerAccepts({ ...request })).toBe(false);
+    f.exchange.mockImplementation(async envelope => {
+      if (!legacyProducerAccepts(envelope.payload)) throw Object.assign(new Error('Synthetic legacy producer rejected the envelope before SDK access'), { code: 'PRODUCER_COMMAND_REFUSED' });
+      sdkReads();
+      const complete = envelope.payload.cursor === 1;
+      return { ...envelope, type: 'PREPARATION_OBJECTS', payload: { schemaVersion: envelope.payload.schemaVersion, mode: envelope.payload.mode, names: envelope.payload.names,
+        rootObjectId: envelope.payload.rootObjectId, cursor: envelope.payload.cursor, matchingPolicyVersion: PREPARATION_MATCHING_POLICY, indexedObjectCount: 2,
+        propertyScan: { attemptedObjectCount: 2, returnedObjectCount: 2, omittedObjectCount: 0, complete: true }, objects: [], nextCursor: complete ? null : 1, complete, visibilityScope } };
+    });
+    await expect(f.driver.discover(request)).resolves.toMatchObject({ cursor: 0, nextCursor: 1, complete: false, visibilityScope });
+    await expect(f.driver.discover({ ...request, cursor: 1 })).resolves.toMatchObject({ cursor: 1, nextCursor: null, complete: true, visibilityScope });
+    const { indexNames: _indexNames, ...legacyRequest } = request;
+    expect(f.exchange.mock.calls.map(([envelope]) => envelope.payload)).toEqual([legacyRequest, { ...legacyRequest, cursor: 1 }]);
+    expect(sdkReads).toHaveBeenCalledTimes(2);
+    expect(request.indexNames).toEqual(['EQ01', 'EQ02']);
+  });
+  it('validates the full index query scope before the managed compatibility boundary', async () => {
+    const f = fixture();
+    await expect(f.driver.discover({ ...discovery, mode: 'equipment', names: ['EQ01'], indexNames: ['EQ02'] })).rejects.toMatchObject({ code: 'MANAGED_DISCOVERY_REQUEST_INVALID' });
+    expect(f.exchange).not.toHaveBeenCalled();
+  });
+  it('does not retry a managed discovery transport failure', async () => {
+    const f = fixture(), error = Object.assign(new Error('Synthetic producer failure'), { code: 'PRODUCER_COMMAND_REFUSED' });
+    f.exchange.mockRejectedValueOnce(error);
+    await expect(f.driver.discover({ ...discovery, mode: 'equipment', names: ['EQ01'], indexNames: ['EQ01'] })).rejects.toBe(error);
+    expect(f.exchange).toHaveBeenCalledOnce();
   });
   it('uses the four-field bridge identity, staged input and actual assembler/evidence validators', async () => {
     const f = fixture(), result = await f.driver.capture(f.request);

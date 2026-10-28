@@ -2,6 +2,7 @@ export const CHANNEL: 'wfc-routings-viewer';
 export const PROTOCOL_VERSION: 1;
 export const SDK_VERSION: '7.130.0';
 export const MAX_MESSAGE_BYTES: 65536;
+export const MAX_BARRIER_SELECTION_MESSAGE_BYTES: 4194304;
 export const MAX_PATH_POINTS: 20000;
 export const MAX_PATH_CHUNK_POINTS: 128;
 export const FRAME_PATH: '/viewer-runtime/7.130.0/index.html';
@@ -32,6 +33,8 @@ export interface ViewerDescriptor {
 }
 export type CanonicalPoint = [number, number, number];
 export interface ComputedPath { pathId: string; points: CanonicalPoint[]; objectIds: number[] }
+/** Display-only target in the current protected model load. */
+export interface ViewerLocationTarget { sdkObjectId: number }
 export type RoutingCategory = 'MV' | 'LV' | 'Control';
 export interface ModelRouteRule { id: string; objectIds: number[]; allowedCategories: RoutingCategory[] }
 export type ModelCaptureRequest = { equipmentNames: string[] } & (
@@ -57,6 +60,10 @@ export interface ViewerSelection {
   coordinateFrame: 'world-metres-z-up'; metresPerDisplayUnit: number; globalOffsetMetres: CanonicalPoint;
   objects: ViewerModelObject[];
 }
+/** IDs only, for explicit tray-root resolution in the current protected load. */
+export interface ViewerTrayRootSelection { objects: Array<{ objectId: number }> }
+/** One current-model tray display, containing all of its resolved roots. */
+export interface ViewerTrayDisplay { sdkObjectIds: number[] }
 export function isCanonicalPoint(value: unknown): value is CanonicalPoint;
 export function isUuid(value: unknown): value is string;
 export function parseRouting(rawRouting: string): ParsedRouting;

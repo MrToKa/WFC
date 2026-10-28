@@ -196,6 +196,11 @@ export function projectAutoLengthView(row: Row, projectId: string, cableId: stri
       autoLengthCalculatedAt: source?.calculatedAt ?? null, autoLengthBarrierStatus: source?.barrierStatus ?? null,
       autoLengthMatchesLatestRequest: matches, autoLengthStatus: 'unavailable' };
     const job = row.latest_job_state, item = row.latest_item_state, status = row.latest_item_status ?? row.latest_baseline_status;
+    // A known capacity refusal has no current route or length. Historical
+    // successful values remain retained, but must not look like its output.
+    if(row.latest_cancel_requested!==true&&['queued','running','complete'].includes(String(job))&&item==='complete'
+      &&status==='no_path'&&row.latest_capacity_outcome==='no-capacity')
+      return {...emptyAutoLengthView(),autoLengthStatus:'blocked'};
     if (row.latest_cancel_requested === true || job === 'cancelled') base.autoLengthStatus = matches ? 'last-successful' : 'cancelled';
     else if (job === 'failed') base.autoLengthStatus = matches ? 'last-successful' : 'failed';
     else if (status === 'stale' || status === 'superseded') base.autoLengthStatus = 'stale';
@@ -214,6 +219,7 @@ export function projectAutoLengthView(row: Row, projectId: string, cableId: stri
 const readSql = `/* auto-length:read */ SELECT r.cable_id,
  t.admission_ordinal::text AS latest_ordinal,a.job_id AS latest_job_id,j.state AS latest_job_state,j.cancel_requested AS latest_cancel_requested,
  i.state AS latest_item_state,i.status AS latest_item_status,b.status AS latest_baseline_status,
+ latest.result#>>'{trayCapacity,outcome}' AS latest_capacity_outcome,
  v.admission_ordinal::text AS source_ordinal,v.proposal_id AS source_proposal_id,v.length_text,v.source,v.source_sha256,
  s.admission_id AS source_admission_id,s.job_id AS source_job_id,sa.admission_id AS source_order_admission_id,sa.job_id AS source_order_job_id,
  p.proposal_hash AS source_proposal_hash,p.dependency_hash AS source_dependency_hash,p.status AS source_proposal_status,
@@ -226,6 +232,7 @@ const readSql = `/* auto-length:read */ SELECT r.cable_id,
  LEFT JOIN pf_revision_baselines b ON b.project_id=a.project_id AND b.admission_id=a.admission_id AND b.cable_id=r.cable_id
  LEFT JOIN pf_jobs j ON j.project_id=a.project_id AND j.id=a.job_id
  LEFT JOIN pf_job_items i ON i.project_id=a.project_id AND i.job_id=a.job_id AND i.cable_id=r.cable_id
+ LEFT JOIN pf_proposals latest ON latest.project_id=i.project_id AND latest.job_id=i.job_id AND latest.cable_id=i.cable_id AND latest.status=i.status
  LEFT JOIN pf_auto_lengths v ON v.project_id=$1 AND v.cable_id=r.cable_id
  LEFT JOIN pf_auto_length_admissions sa ON sa.project_id=v.project_id AND sa.ordinal=v.admission_ordinal
  LEFT JOIN pf_revision_results s ON s.project_id=v.project_id AND s.proposal_id=v.proposal_id AND s.cable_id=v.cable_id

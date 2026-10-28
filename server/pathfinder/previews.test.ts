@@ -17,6 +17,11 @@ function historicalEngineIdentity(){
 }
 vi.mock('./calculationEngineIdentity.js',()=>({calculationEngineIdentity:vi.fn(async()=>historicalEngineIdentity()),barrierCalculationEngineIdentity:vi.fn(async()=>syntheticBarrierEngineIdentity())}));
 vi.mock('./barrierCalculationScope.js',()=>({collectBarrierCalculationScope:vi.fn(async(_client:unknown,_projectId:string,intent:NonNullable<PreviewInput['barrierRouting']>)=>syntheticDrillingRuntime(intent.scope))}));
+vi.mock('./dependencies.js',async original=>({...await original<typeof import('./dependencies.js')>(),
+  readCablePurposeRouting:vi.fn(async(_client:PoolClient,_projectId:string,purpose:unknown)=>{
+    const allowed = new Map([['Control',['/BC1']],['Power',['/POWER']],['VFD',['/VFD']]]);
+    return typeof purpose==='string'&&allowed.has(purpose)?{purpose,allowedRouteCodes:allowed.get(purpose)!}:null;
+  })}));
 
 // Preview's former behaviour is retained only behind an explicitly scoped
 // producer. Actual missing/mismatched producer controls live in routingScope.test.
@@ -43,7 +48,7 @@ const projectId='11111111-1111-4111-8111-111111111111',modelId='22222222-2222-42
 const who:JobPrincipal={userId:'44444444-4444-4444-8444-444444444444',loginId:'55555555-5555-4555-8555-555555555555',loginExpiresAt:Date.now()+3_600_000};
 const settings={connection_gap:'1',secondary_tray_length:'5',end_connection_length:'6',additional_bending_percent:'10',pf_settings_revision:'7'};
 const input=():PreviewInput=>({from:{name:'From',point:[0,0,.5]},to:{name:'To',point:[10,0,.5]},category:'Instrumentation',reverse:false,
-  artifactId,expectedSelectionRevision:'3',expectedSettingsRevision:'7',expectedRegistryRevision:'4',secondaryDistanceMeters:2,preferVerticalApproach:true});
+  cablePurpose:'Control',artifactId,expectedSelectionRevision:'3',expectedSettingsRevision:'7',expectedRegistryRevision:'4',secondaryDistanceMeters:2,preferVerticalApproach:true});
 const protectedInput=():PreviewInput=>({...input(),barrierRouting:{schemaVersion:'wfc.pf.barrier-admission-intent.v1',expectedRegistryRevision:'1',expectedSnapshot:null,drillThroughWalls:true,
   scope:{projectId,modelVersionId:modelId,selectionRevision:'3',contentFingerprint:'a'.repeat(64),captureFrameId:who.loginId,captureFrameSha256:'f'.repeat(64),coordinateFrame:'canonical-world-metres'}}});
 function database(options:{admin?:boolean;settings?:typeof settings;registry?:string;artifact?:string;modelState?:string;health?:string;aliases?:Array<Record<string,unknown>>;objects?:Array<Record<string,unknown>>;candidateStatus?:AutomaticNamedEndpointCandidate['status'];duplicate?:string;job?:Record<string,unknown>;stored?:Record<string,unknown>;proposal?:Record<string,unknown>;review?:Record<string,unknown>}={}) {
@@ -70,10 +75,49 @@ function database(options:{admin?:boolean;settings?:typeof settings;registry?:st
   const client={query,release:vi.fn(),endpointAliases:options.aliases??[],endpointObjects:options.objects??[],endpointCandidateStatus:options.candidateStatus};return {query,client:client as unknown as PoolClient,pool:{connect:vi.fn(async()=>client)} as unknown as Pool};
 }
 const response:EngineResponse={schemaVersion:'pathfinder.model.response.v1',requestId:projectId,status:'calculated',message:'Path found.',engineeringAccepted:false,effectiveCategory:'Control',
-  design:{lengthBeforePercentageMeters:'16',unroundedLengthMeters:'17.6',designLengthMeters:'18'},route:{success:true,message:'Path found.',routeText:'/BC1',routeCodes:['BC1'],segmentIds:['dbid:12','dbid:12'],
+  design:{lengthBeforePercentageMeters:'16',unroundedLengthMeters:'17.6',designLengthMeters:'18'},route:{success:true,message:'Path found.',routeText:'/BC1',routeCodes:['/BC1'],segmentIds:['dbid:12','dbid:12'],
     pathPoints:[{x:0,y:0,z:.5},{x:10,y:0,z:.5}],lengthMeters:10,fromDistanceMeters:0,toDistanceMeters:0,fromRequiresSecondary:false,toRequiresSecondary:false,connectionGapCount:0,connectionGapLengthMeters:0}};
 
 describe('standalone Path preview contract and dependency boundary',()=>{
+  it('rejects forbidden native route codes and mismatched route text before displaying a Purpose-bound result',async()=>{
+    const dependencies=await collectPreviewDependencies(database().client,projectId,input());
+    expect(previewResultDto(response,dependencies,false).route?.routeText).toBe('/BC1');
+    for(const route of [{...response.route!,routeCodes:['/VFD'],routeText:'/VFD'},
+      {...response.route!,routeText:'/VFD'}, {...response.route!,routeCodes:['BC1']}])
+      expect(()=>previewResultDto({...response,route},dependencies,false)).toThrowError(expect.objectContaining({code:'ENGINE_CABLE_PURPOSE_INVALID'}));
+    delete dependencies.cablePurposeRouting;
+    expect(previewResultDto({...response,route:{...response.route!,routeText:'/HISTORIC'}},dependencies,true).stale).toBe(true);
+  });
+  it('requires a project cable Purpose before reading geometry or dispatching a preview',async()=>{
+    for(const cablePurpose of [undefined,'','   ']){
+      const db=database();
+      await expect(collectPreviewDependencies(db.client,projectId,{...input(),cablePurpose})).rejects.toMatchObject({code:'PREVIEW_CABLE_PURPOSE_REQUIRED'});
+      expect(db.query).not.toHaveBeenCalled();
+    }
+    for(const cablePurpose of ['Unknown','Grounding']){
+      const db=database();
+      await expect(collectPreviewDependencies(db.client,projectId,{...input(),cablePurpose})).rejects.toMatchObject({code:'PREVIEW_CABLE_PURPOSE_UNAVAILABLE'});
+      expect(db.query).not.toHaveBeenCalled();
+    }
+  });
+  it('freezes independent Power and VFD permissions for previews of the same LV engine category',async()=>{
+    const power=await collectPreviewDependencies(database().client,projectId,{...input(),category:'LV',cablePurpose:'Power'});
+    const vfd=await collectPreviewDependencies(database().client,projectId,{...input(),category:'LV',cablePurpose:'VFD'});
+    expect(power.cablePurposeRouting).toEqual({purpose:'Power',allowedRouteCodes:['/POWER']});
+    expect(vfd.cablePurposeRouting).toEqual({purpose:'VFD',allowedRouteCodes:['/VFD']});
+    expect(previewEngineRequest(power,modelId,60000).allowedPurposeRouteCodes).toEqual(['/POWER']);
+    expect(previewEngineRequest(vfd,modelId,60000).allowedPurposeRouteCodes).toEqual(['/VFD']);
+    expect(hash(power)).not.toBe(hash(vfd));
+  });
+  it('keeps historical previews readable and marks their absent Purpose dependency stale',async()=>{
+    const base=await collectPreviewDependencies(database().client,projectId,input());
+    delete base.input.cablePurpose;delete base.cablePurposeRouting;
+    const db=database({job:{id:artifactId,project_id:projectId,state:'complete',kind:'preview',diagnostic_input:base},
+      stored:{result:response,dependencies:base,stale_at_completion:false}});
+    const result=await createPathFinderPreviews(db.pool).get(projectId,who,artifactId);
+    expect(result.result).toMatchObject({stale:true,canApply:false,acceptanceScope:'standalone-preview'});
+    expect(result.result?.route?.lengthMeters).toBe(10);
+  });
   it.each(['LV','Control','Instrumentation','MV'] as const)('opts new %s previews in only according to their frozen identity and category',async category=>{
     const dependencies=await collectPreviewDependencies(database().client,projectId,{...input(),category});
     expect(previewEngineRequest(dependencies,modelId,60000)).not.toHaveProperty('directSecondaryPolicy');
@@ -127,7 +171,8 @@ describe('standalone Path preview contract and dependency boundary',()=>{
   });
   it('uses server Details gap and exact three allowances without persisting manual endpoints or touching cables',async()=>{
     const db=database(),dependencies=await collectPreviewDependencies(db.client,projectId,input());
-    expect(dependencies.options.connectionToleranceMeters).toBe(1);expect(dependencies.settings).toEqual({revision:'7',connectionGap:'1',secondaryTrayLength:'5',endConnectionLength:'6',additionalBendingPercent:'10'});
+    expect(dependencies.options.connectionToleranceMeters).toBe(1);expect(dependencies.settings).toEqual({revision:'7',connectionGap:'1',secondaryTrayLength:'5',endConnectionLength:'6',additionalBendingPercent:'10',
+      routingBalance:{mode:'destination-groups-v1',layoutSha256:hash(null)}});
     expect(dependencies.from.source).toBe('manual-world-point');expect(dependencies.from.point).toEqual([0,0,.5]);
     expect(db.query.mock.calls.every(([sql])=>!/^\s*(INSERT|UPDATE|DELETE)/i.test(sql))).toBe(true);
   });

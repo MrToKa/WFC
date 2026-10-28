@@ -63,10 +63,241 @@ beforeEach(() => {
       status: 'available', reasonCodes: [], object: object(sdk), pointProjectMetres: [sdk, 2, 3], bounds: { minimum: [sdk - 1, 1, 3], maximum: [sdk + 1, 3, 5] }, approximate: true, derivation: 'equipment-bottom-aabb.v1' } }));
   vi.mocked(saveCableEndpointPair).mockImplementation(async (_project, _token, _cable, command) => { saved = true; return receipt(command); });
 });
-afterEach(() => { vi.restoreAllMocks(); localStorage.clear(); if (originalLocks) Object.defineProperty(navigator, 'locks', originalLocks); else Reflect.deleteProperty(navigator, 'locks'); });
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); localStorage.clear(); if (originalLocks) Object.defineProperty(navigator, 'locks', originalLocks); else Reflect.deleteProperty(navigator, 'locks'); });
 async function ready(view: { result: { current: ReturnType<typeof useCableEndpointPairSelection> } }) { await waitFor(() => expect(view.result.current.from.context && view.result.current.to.context && view.result.current.storageReady && !view.result.current.busy).toBeTruthy()); }
 
 describe('one explicit From/To Save', () => {
+  it.each(['cableWriteRevision', 'registryRevision'] as const)('converges fresh %s values after Save without a manual Refresh or another Save', async revision => {
+    automatic = true;
+    const props = access(), view = renderHook(() => useCableEndpointPairSelection(props)); await ready(view);
+    let reads = 0;
+    vi.mocked(fetchCableEndpointContext).mockImplementation(async (_project, _token, selected, end) => ({
+      ...context(selected, end), [revision]: ++reads === 1 ? '5' : '6',
+    }));
+    vi.useFakeTimers();
+    await act(async () => { expect(await view.result.current.save('Confirm and follow the automatic cable update')).toBe(true); });
+    expect(view.result.current.retired).toBe(true); expect(view.result.current.from.canSelect).toBe(false);
+    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+    expect(reads).toBe(4); expect(view.result.current.retired).toBe(false); expect(view.result.current.error).toBeNull();
+    expect(view.result.current.from.context?.[revision]).toBe('6'); expect(view.result.current.to.context?.[revision]).toBe('6');
+    expect(view.result.current.from.canSelect).toBe(true); expect(view.result.current.to.canSelect).toBe(true);
+    expect(saveCableEndpointPair).toHaveBeenCalledOnce(); expect(saveCableEndpoint).not.toHaveBeenCalled();
+    expect(props.onSaved).toHaveBeenCalledTimes(2); expect(readPendingCableEndpointPair(owner)).toBeNull();
+  });
+  it('converges contexts read across an automatic writer on initial popup opening', async () => {
+    let reads = 0;
+    vi.mocked(fetchCableEndpointContext).mockImplementation(async (_project, _token, selected, end) => ({
+      ...context(selected, end), cableWriteRevision: ++reads === 1 ? '5' : '6',
+    }));
+    const view = renderHook(() => useCableEndpointPairSelection(access())); await ready(view);
+    expect(reads).toBe(4); expect(view.result.current.retired).toBe(false);
+    expect(view.result.current.from.context?.cableWriteRevision).toBe('6'); expect(view.result.current.to.context?.cableWriteRevision).toBe('6');
+    expect(view.result.current.from.canSelect).toBe(true); expect(view.result.current.to.canSelect).toBe(true); expect(saveCableEndpointPair).not.toHaveBeenCalled();
+  });
+  it('recovers a stalled post-Save context round within the whole pair budget and ignores late old reads', async () => {
+    automatic = true;
+    const props = access(), view = renderHook(() => useCableEndpointPairSelection(props)); await ready(view);
+    const late: Array<{ end: 'from' | 'to'; resolve: (value: CableEndpointContext) => void }> = [];
+    vi.mocked(fetchCableEndpointContext).mockImplementation(async (_project, _token, selected, end) => late.length < 2
+      ? new Promise<CableEndpointContext>(resolve => { late.push({ end, resolve }); })
+      : { ...context(selected, end), cableWriteRevision: '6' });
+    vi.useFakeTimers();
+    await act(async () => { expect(await view.result.current.save('Confirm before one stalled GET round')).toBe(true); });
+    expect(late).toHaveLength(2); expect(view.result.current.retired).toBe(true);
+    await act(async () => { await vi.advanceTimersByTimeAsync(8_500); });
+    expect(view.result.current.retired).toBe(false); expect(view.result.current.from.canSelect).toBe(true); expect(view.result.current.to.canSelect).toBe(true);
+    await act(async () => { for (const item of late) item.resolve({ ...context(cable, item.end), cableWriteRevision: '5' }); });
+    expect(view.result.current.from.context?.cableWriteRevision).toBe('6'); expect(view.result.current.to.context?.cableWriteRevision).toBe('6');
+    expect(saveCableEndpointPair).toHaveBeenCalledOnce(); expect(saveCableEndpoint).not.toHaveBeenCalled();
+  });
+  it('bounds all stalled post-Save pair rounds together and leaves no background retry after the budget', async () => {
+    automatic = true;
+    const props = access(), view = renderHook(() => useCableEndpointPairSelection(props)); await ready(view);
+    vi.mocked(fetchCableEndpointContext).mockImplementation(() => new Promise<CableEndpointContext>(() => undefined));
+    vi.useFakeTimers();
+    await act(async () => { expect(await view.result.current.save('Confirm before all context GETs stall')).toBe(true); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(26_000); });
+    expect(view.result.current.retired).toBe(true); expect(view.result.current.busy).toBe(false);
+    expect(view.result.current.error).toContain('bounded check'); expect(fetchCableEndpointContext).toHaveBeenCalledTimes(8);
+    await act(async () => { await vi.advanceTimersByTimeAsync(120_000); });
+    expect(fetchCableEndpointContext).toHaveBeenCalledTimes(8); expect(saveCableEndpointPair).toHaveBeenCalledOnce(); expect(props.onSaved).toHaveBeenCalledTimes(2);
+  });
+  it('retains a selected draft and exact unknown Save while converging read-only revision drift', async () => {
+    automatic = true;
+    vi.mocked(saveCableEndpointPair).mockRejectedValueOnce(new CableEndpointApiError('REQUEST_TIMEOUT', null, 'Unknown Save outcome'));
+    const props = access(), view = renderHook(() => useCableEndpointPairSelection(props)); await ready(view);
+    await act(async () => { await view.result.current.from.selectObject(); });
+    const draft = view.result.current.from.draft;
+    await act(async () => { expect(await view.result.current.save('Retain the original unknown command')).toBe(false); });
+    const pending = readPendingCableEndpointPair(owner);
+    let reads = 0;
+    vi.mocked(fetchCableEndpointContext).mockImplementation(async (_project, _token, selected, end) => ({
+      ...context(selected, end), cableWriteRevision: ++reads === 1 ? '5' : '6',
+    }));
+    vi.useFakeTimers();
+    await act(async () => { view.result.current.refresh(); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+    expect(view.result.current.retired).toBe(false); expect(view.result.current.from.draft).toEqual(draft);
+    expect(readPendingCableEndpointPair(owner)).toEqual(pending); expect(view.result.current.canRetry).toBe(true); expect(view.result.current.canSave).toBe(false);
+    expect(saveCableEndpointPair).toHaveBeenCalledOnce(); expect(closePendingCableEndpointPair).not.toHaveBeenCalled(); expect(props.onSaved).not.toHaveBeenCalled();
+  });
+  it.each(['model', 'preparation', 'evidence'] as const)('stops pair convergence for a changed or unverified %s', async kind => {
+    automatic = true;
+    const props = access(), view = renderHook(() => useCableEndpointPairSelection(props)); await ready(view);
+    let reads = 0;
+    vi.mocked(fetchCableEndpointContext).mockImplementation(async (_project, _token, selected, end) => {
+      reads++;
+      if (kind === 'evidence') throw new CableEndpointApiError('INVALID_RESPONSE', null, 'Unverified evidence');
+      return { ...context(selected, end), current: { ...scope, ...(kind === 'model' ? { selectionRevision: '99' } : { traceId: end === 'from' ? id(900) : scope.traceId }) } };
+    });
+    vi.useFakeTimers();
+    await act(async () => { expect(await view.result.current.save('Confirm before reading the changed scope')).toBe(true); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+    expect(reads).toBe(2); expect(view.result.current.retired).toBe(true);
+    expect(view.result.current.from.canSelect).toBe(false); expect(view.result.current.to.canSelect).toBe(false); expect(view.result.current.canSave).toBe(false);
+    expect(saveCableEndpointPair).toHaveBeenCalledOnce(); expect(props.onAuthorityLost).not.toHaveBeenCalled();
+  });
+  it.each(['503', 'network'] as const)('automatically recovers a transient %s context read after Save without replaying the Save', async kind => {
+    automatic = true;
+    const props = access(), view = renderHook(() => useCableEndpointPairSelection(props)); await ready(view);
+    const failed = new Set<string>();
+    vi.mocked(fetchCableEndpointContext).mockImplementation(async (_project, _token, selected, end) => {
+      if (!failed.has(end)) { failed.add(end); throw kind === '503' ? new CableEndpointApiError('UNAVAILABLE', 503, 'Temporary context failure') : new TypeError('Failed to fetch'); }
+      return context(selected, end);
+    });
+    vi.useFakeTimers();
+    await act(async () => { expect(await view.result.current.save('Confirm and read the new saved endpoints')).toBe(true); });
+    expect(view.result.current.retired).toBe(true); expect(view.result.current.from.context).toBeNull();
+    expect(fetchCableEndpointContext).toHaveBeenCalledTimes(4);
+    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+    expect(view.result.current.retired).toBe(false); expect(view.result.current.error).toBeNull();
+    expect(view.result.current.from.context?.registryRevision).toBe('6'); expect(view.result.current.to.context?.registryRevision).toBe('6');
+    expect(view.result.current.from.draft).toBeNull(); expect(view.result.current.to.draft).toBeNull();
+    expect(saveCableEndpointPair).toHaveBeenCalledOnce(); expect(saveCableEndpoint).not.toHaveBeenCalled();
+    expect(props.onSaved).toHaveBeenCalledTimes(2); expect(readPendingCableEndpointPair(owner)).toBeNull();
+  });
+  it('keeps object and fixed-world drafts through a transient read-only pair refresh', async () => {
+    const props = access(), view = renderHook(() => useCableEndpointPairSelection(props)); await ready(view);
+    await act(async () => { await view.result.current.from.selectObject(); });
+    vi.mocked(fetchCableEndpointSelection).mockImplementationOnce(async (_project, _token, current, sdk) => ({
+      schemaVersion: 'wfc.pf.cable-endpoint-selection-response.v1', projectId: project, cableId: current.cableId, end: current.end,
+      contextSha256: current.contextSha256, selection: { schemaVersion: 'wfc.pf.cable-endpoint-selection.v1', projectId: project,
+        current: current.current!, sdkObjectId: sdk, status: 'unavailable', reasonCodes: ['SDK_OBJECT_NOT_RETAINED'], object: null,
+        pointProjectMetres: null, bounds: null, approximate: true, derivation: null } }));
+    await act(async () => { await view.result.current.to.selectObject(); });
+    const before = { from: view.result.current.from.draft, to: view.result.current.to.draft, display: view.result.current.to.displaySelection };
+    expect(before.from?.mode).toBe('object-derived'); expect(before.to?.mode).toBe('fixed-world');
+    const failed = new Set<string>();
+    vi.mocked(fetchCableEndpointContext).mockImplementation(async (_project, _token, selected, end) => {
+      if (!failed.has(end)) { failed.add(end); throw new CableEndpointApiError('UNAVAILABLE', 503, 'Temporary context failure'); }
+      return { ...context(selected, end), registryRevision: '7' };
+    });
+    vi.useFakeTimers();
+    await act(async () => { view.result.current.refresh(); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+    expect(view.result.current.retired).toBe(false); expect(view.result.current.from.draft).toEqual(before.from);
+    expect(view.result.current.to.draft).toEqual(before.to); expect(view.result.current.to.displaySelection).toEqual(before.display);
+    expect(view.result.current.canSave).toBe(true); expect(saveCableEndpointPair).not.toHaveBeenCalled(); expect(saveCableEndpoint).not.toHaveBeenCalled();
+  });
+  it.each([401, 403, 409])('does not retry post-Save endpoint reads after HTTP %s', async status => {
+    automatic = true;
+    const props = access(), view = renderHook(() => useCableEndpointPairSelection(props)); await ready(view);
+    vi.mocked(fetchCableEndpointContext).mockRejectedValue(new CableEndpointApiError('REFUSED', status, 'Current scope is unavailable', 'refused'));
+    vi.useFakeTimers();
+    await act(async () => { expect(await view.result.current.save('Confirm before the current read is refused')).toBe(true); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+    expect(fetchCableEndpointContext).toHaveBeenCalledTimes(4); expect(view.result.current.from.context).toBeNull(); expect(view.result.current.to.context).toBeNull();
+    expect(view.result.current.canSave).toBe(false); expect(saveCableEndpointPair).toHaveBeenCalledOnce(); expect(readPendingCableEndpointPair(owner)).toBeNull();
+    expect(props.onAuthorityLost).toHaveBeenCalledTimes(status === 409 ? 0 : 1);
+  });
+  it('stops both context readers when one side loses authority while the other has a transient failure', async () => {
+    vi.mocked(fetchCableEndpointContext).mockImplementation(async (_project, _token, _selected, end) => {
+      throw new CableEndpointApiError(end === 'from' ? 'DENIED' : 'UNAVAILABLE', end === 'from' ? 403 : 503, 'Context unavailable');
+    });
+    vi.useFakeTimers();
+    const props = access(), view = renderHook(() => useCableEndpointPairSelection(props));
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+    expect(fetchCableEndpointContext).toHaveBeenCalledTimes(2); expect(props.onAuthorityLost).toHaveBeenCalledOnce();
+    expect(view.result.current.from.context).toBeNull(); expect(view.result.current.to.context).toBeNull(); expect(view.result.current.canSave).toBe(false);
+    expect(saveCableEndpointPair).not.toHaveBeenCalled();
+  });
+  it('cancels scheduled old-cable context retries before reading the newly selected cable', async () => {
+    automatic = true;
+    const props = access(), view = renderHook(value => useCableEndpointPairSelection(value), { initialProps: props }); await ready(view);
+    vi.mocked(fetchCableEndpointContext).mockImplementation(async (_project, _token, selected, end) => {
+      if (selected === cable) throw new CableEndpointApiError('UNAVAILABLE', 503, 'Temporary context failure');
+      return context(selected, end);
+    });
+    vi.useFakeTimers();
+    await act(async () => { expect(await view.result.current.save('Confirm the old cable endpoints')).toBe(true); });
+    await act(async () => { view.rerender({ ...props, cableId: id(501) }); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+    expect(vi.mocked(fetchCableEndpointContext).mock.calls.filter(call => call[2] === cable)).toHaveLength(4);
+    expect(view.result.current.from.context?.cableId).toBe(id(501)); expect(view.result.current.to.context?.cableId).toBe(id(501));
+    expect(view.result.current.retired).toBe(false); expect(saveCableEndpointPair).toHaveBeenCalledOnce();
+  });
+  it('recovers only context GETs while retaining an unknown Save and its selected draft exactly', async () => {
+    automatic = true;
+    vi.mocked(saveCableEndpointPair).mockRejectedValueOnce(new CableEndpointApiError('REQUEST_TIMEOUT', null, 'Unknown Save outcome'));
+    const props = access(), view = renderHook(() => useCableEndpointPairSelection(props)); await ready(view);
+    await act(async () => { await view.result.current.from.selectObject(); });
+    const draft = view.result.current.from.draft;
+    await act(async () => { expect(await view.result.current.save('Retain this exact unknown pair')).toBe(false); });
+    const pending = readPendingCableEndpointPair(owner);
+    const failed = new Set<string>();
+    vi.mocked(fetchCableEndpointContext).mockImplementation(async (_project, _token, selected, end) => {
+      if (!failed.has(end)) { failed.add(end); throw new TypeError('Failed to fetch'); }
+      return context(selected, end);
+    });
+    vi.useFakeTimers();
+    await act(async () => { view.result.current.refresh(); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+    expect(view.result.current.retired).toBe(false); expect(view.result.current.from.draft).toEqual(draft);
+    expect(readPendingCableEndpointPair(owner)).toEqual(pending); expect(view.result.current.canRetry).toBe(true); expect(view.result.current.canSave).toBe(false);
+    expect(saveCableEndpointPair).toHaveBeenCalledOnce(); expect(closePendingCableEndpointPair).not.toHaveBeenCalled(); expect(props.onSaved).not.toHaveBeenCalled();
+  });
+  it('pauses a post-Save retry and resumes fresh GETs without a second Save', async () => {
+    automatic = true;
+    const props = access(), view = renderHook(value => useCableEndpointPairSelection(value), { initialProps: props }); await ready(view);
+    vi.mocked(fetchCableEndpointContext).mockRejectedValue(new CableEndpointApiError('UNAVAILABLE', 503, 'Temporary context failure'));
+    vi.useFakeTimers();
+    await act(async () => { expect(await view.result.current.save('Confirm before pausing the context read')).toBe(true); });
+    await act(async () => { view.rerender({ ...props, active: false }); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+    expect(fetchCableEndpointContext).toHaveBeenCalledTimes(4); expect(view.result.current.retired).toBe(true);
+    vi.mocked(fetchCableEndpointContext).mockImplementation(async (_project, _token, selected, end) => context(selected, end));
+    await act(async () => { view.rerender(props); });
+    expect(view.result.current.retired).toBe(false); expect(view.result.current.from.context?.registryRevision).toBe('6');
+    expect(saveCableEndpointPair).toHaveBeenCalledOnce(); expect(readPendingCableEndpointPair(owner)).toBeNull();
+  });
+  it('retains v4 automatic policy in the exact saved pair while legacy callers remain v3', async () => {
+    automatic = true;
+    const automaticPairPolicy = { schemaVersion: 'wfc.pf.automatic-pair-policy.v1', mode: 'when-both-empty-or-unchanged-automatic' } as const;
+    const props = { ...access(), initialFill: null, automaticPairPolicy }, view = renderHook(() => useCableEndpointPairSelection(props)); await ready(view);
+    expect(view.result.current.canSave).toBe(true);
+    await act(async () => { expect(await view.result.current.save('Confirm shared locations and automatic ownership policy')).toBe(true); });
+    const command = vi.mocked(saveCableEndpointPair).mock.calls[0][3];
+    expect(command.schemaVersion).toBe('wfc.pf.cable-endpoint-pair-command.v2');
+    expect(command.endpoints).toHaveLength(2);
+    for (const entry of command.endpoints) expect(entry.command).toMatchObject({ schemaVersion: 'wfc.pf.cable-endpoint-command.v4', initialFill: null, automaticPairPolicy });
+    expect(props.onSaved).toHaveBeenCalledTimes(2);
+  });
+  it('replays retained v4 policy exactly after live automatic policy is disabled', async () => {
+    automatic = true;
+    vi.mocked(saveCableEndpointPair).mockRejectedValueOnce(new CableEndpointApiError('REQUEST_TIMEOUT', null, 'Unknown automatic Save'));
+    const automaticPairPolicy = { schemaVersion: 'wfc.pf.automatic-pair-policy.v1', mode: 'when-both-empty-or-unchanged-automatic' } as const;
+    const original = { ...access(), initialFill: null, automaticPairPolicy }, view = renderHook(props => useCableEndpointPairSelection(props),
+      { initialProps: original as CableEndpointPairSelectionAccess }); await ready(view);
+    await act(async () => { expect(await view.result.current.save('Retain exact automatic policy')).toBe(false); });
+    const first = structuredClone(vi.mocked(saveCableEndpointPair).mock.calls[0][3]);
+    view.rerender({ ...original, calculation: null, automaticPairPolicy: null });
+    await waitFor(() => expect(view.result.current.canRetry).toBe(true));
+    await act(async () => { expect(await view.result.current.retry()).toBe(true); });
+    expect(vi.mocked(saveCableEndpointPair).mock.calls[1][3]).toEqual(first);
+    expect(saveCableEndpointPair).toHaveBeenCalledTimes(2);
+    expect(readPendingCableEndpointPair(owner)).toBeNull();
+  });
   it('saves changed From with an untouched saved To and explicit null routing policy in one exact pair command', async () => {
     const originalTo = savedToContext(context(cable, 'to'));
     vi.mocked(fetchCableEndpointContext).mockImplementation(async (_project, _token, selected, end) => end === 'to' ? savedToContext(context(selected, end)) : context(selected, end));
@@ -237,16 +468,20 @@ describe('one explicit From/To Save', () => {
     await waitFor(() => expect(view.result.current.retired).toBe(false));
     expect(view.result.current.from.context?.registryRevision).toBe('6'); expect(saveCableEndpointPair).toHaveBeenCalledOnce();
   });
-  it('keeps contexts retired after a failed post-Save read until an explicit successful refresh', async () => {
+  it('keeps contexts retired after bounded post-Save read retries are exhausted until an explicit successful refresh', async () => {
     automatic = true;
     const props = access(), view = renderHook(() => useCableEndpointPairSelection(props)); await ready(view);
     vi.mocked(fetchCableEndpointContext).mockRejectedValue(new CableEndpointApiError('REQUEST_TIMEOUT', null, 'Read unavailable'));
+    vi.useFakeTimers();
     await act(async () => { expect(await view.result.current.save('Preserve confirmed disposition')).toBe(true); });
-    await waitFor(() => expect(view.result.current.error).toContain('Refresh both endpoint contexts'));
+    await act(async () => { await vi.advanceTimersByTimeAsync(8_000); });
+    expect(view.result.current.error).toContain('Refresh both endpoint contexts'); expect(fetchCableEndpointContext).toHaveBeenCalledTimes(20);
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    expect(fetchCableEndpointContext).toHaveBeenCalledTimes(20);
     expect(view.result.current.retired).toBe(true); expect(view.result.current.canSave).toBe(false); expect(readPendingCableEndpointPair(owner)).toBeNull();
     vi.mocked(fetchCableEndpointContext).mockImplementation(async (_project, _token, selected, end) => context(selected, end));
-    act(() => { view.result.current.refresh(); });
-    await waitFor(() => expect(view.result.current.retired).toBe(false)); expect(props.onSaved).toHaveBeenCalledTimes(2);
+    await act(async () => { view.result.current.refresh(); });
+    expect(view.result.current.retired).toBe(false); expect(props.onSaved).toHaveBeenCalledTimes(2);
   });
   it('reports simultaneous current-role denials only once and never exposes either old context', async () => {
     vi.mocked(fetchCableEndpointContext).mockRejectedValue(new CableEndpointApiError('DENIED', 403, 'Denied'));

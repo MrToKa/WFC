@@ -199,17 +199,57 @@ export const mixedBarrierOpeningRuntimeProfileSchema = mixedBarrierRuntimeProfil
     domain: z.literal(INTER_TRAY_MANEUVERS_PROFILE.domain), selection: z.literal(INTER_TRAY_MANEUVERS_PROFILE.selection),
   }).strict(),
 }).strict();
-export const mixedBarrierSupportedRuntimeProfileSchema = z.union([mixedBarrierRuntimeProfileSchema, mixedBarrierOpeningRuntimeProfileSchema]);
+/** Additive selection capacity only. Historical profiles retain their exact
+ * 128-parent/256-component values and unchanged hashes. Geometry/work budgets
+ * and the opening search algorithm remain identical to v3. */
+export const MIXED_BARRIER_LARGE_SELECTION_RUNTIME_PROFILE = Object.freeze({ ...MIXED_BARRIER_OPENING_RUNTIME_PROFILE,
+  schemaVersion: 'wfc.pf.barrier-runtime-profile.v4',
+  qualification: Object.freeze({ ...MIXED_BARRIER_OPENING_RUNTIME_PROFILE.qualification, maximumParents: 2048, maximumComponents: 2048 }),
+} as const);
+export const mixedBarrierLargeSelectionRuntimeProfileSchema = mixedBarrierOpeningRuntimeProfileSchema.extend({
+  schemaVersion: z.literal(MIXED_BARRIER_LARGE_SELECTION_RUNTIME_PROFILE.schemaVersion),
+  qualification: literalObject(MIXED_BARRIER_LARGE_SELECTION_RUNTIME_PROFILE.qualification),
+}).strict();
+/** Additive bounded local search. Historical profiles retain their original
+ * rank-sum scheduling and planner attempt accounting. */
+export const NEAREST_ANCHORED_LOCAL_SEARCH_POLICY = 'wfc.pf.nearest-anchored-local-search.v1' as const;
+export const NEAREST_ANCHORED_LOCAL_SEARCH_PROFILE = Object.freeze({
+  policyVersion: NEAREST_ANCHORED_LOCAL_SEARCH_POLICY,
+  pairOrder: 'nearest-anchored-axes-then-rank-sum.v1', exactStraightPreflight: true,
+} as const);
+export const MIXED_BARRIER_NEAREST_ANCHORED_RUNTIME_PROFILE = Object.freeze({ ...MIXED_BARRIER_LARGE_SELECTION_RUNTIME_PROFILE,
+  schemaVersion: 'wfc.pf.barrier-runtime-profile.v5', localSearch: NEAREST_ANCHORED_LOCAL_SEARCH_PROFILE,
+} as const);
+export const mixedBarrierNearestAnchoredRuntimeProfileSchema = mixedBarrierLargeSelectionRuntimeProfileSchema.extend({
+  schemaVersion: z.literal(MIXED_BARRIER_NEAREST_ANCHORED_RUNTIME_PROFILE.schemaVersion),
+  localSearch: literalObject(NEAREST_ANCHORED_LOCAL_SEARCH_PROFILE),
+}).strict();
+/** Explicit measured geometry lane. Search and collision budgets remain v5;
+ * historical profiles continue to derive their original fitted geometry. */
+export const MEASURED_BEND_MESH_FITTING_POLICY = 'wfc.pf.measured-bend-mesh-fitting.v2' as const;
+export const MEASURED_BEND_MESH_FITTING_PROFILE = Object.freeze({
+  policyVersion: MEASURED_BEND_MESH_FITTING_POLICY, modelBuildRules: 'pf2.rules.v2',
+} as const);
+export const MIXED_BARRIER_MEASURED_FIT_RUNTIME_PROFILE = Object.freeze({ ...MIXED_BARRIER_NEAREST_ANCHORED_RUNTIME_PROFILE,
+  schemaVersion: 'wfc.pf.barrier-runtime-profile.v6', geometryFitting: MEASURED_BEND_MESH_FITTING_PROFILE,
+} as const);
+export const mixedBarrierMeasuredFitRuntimeProfileSchema = mixedBarrierNearestAnchoredRuntimeProfileSchema.extend({
+  schemaVersion: z.literal(MIXED_BARRIER_MEASURED_FIT_RUNTIME_PROFILE.schemaVersion),
+  geometryFitting: literalObject(MEASURED_BEND_MESH_FITTING_PROFILE),
+}).strict();
+export const mixedBarrierSupportedRuntimeProfileSchema = z.union([mixedBarrierRuntimeProfileSchema, mixedBarrierOpeningRuntimeProfileSchema,
+  mixedBarrierLargeSelectionRuntimeProfileSchema, mixedBarrierNearestAnchoredRuntimeProfileSchema, mixedBarrierMeasuredFitRuntimeProfileSchema]);
 const blob = z.object({ blobId: uuid, sha256: hash, bytes: positive(BARRIER_LIMITS.captureBytes) }).strict();
 export const mixedBarrierRuntimeContextSchema = z.object({ schemaVersion: z.literal('wfc.pf.barrier-runtime.v2'), binding: mixedBarrierCalculationBindingSchema,
   profile: mixedBarrierSupportedRuntimeProfileSchema, profileSha256: hash,
   storage: z.object({ intentId: uuid, manifest: blob, capture: blob.nullable() }).strict().nullable() }).strict().superRefine((value, context) => {
   const snapshot = value.binding.snapshot;
+  const maximumManifestBytes = ['wfc.pf.barrier-runtime-profile.v4', 'wfc.pf.barrier-runtime-profile.v5', 'wfc.pf.barrier-runtime-profile.v6'].includes(value.profile.schemaVersion) ? BARRIER_LIMITS.manifestBytes : 256 * 1024;
   if (!snapshot ? !value.binding.policy.drillThroughWalls || value.storage !== null
-    : !value.storage || value.storage.manifest.bytes > BARRIER_LIMITS.manifestBytes || (snapshot.mode === 'mixed-mesh-set') !== (value.storage.capture !== null))
+    : !value.storage || value.storage.manifest.bytes > maximumManifestBytes || (snapshot.mode === 'mixed-mesh-set') !== (value.storage.capture !== null))
     issue(context, 'Mixed runtime must retain bounded exact stored originals, or an explicit unpublished drilling bypass.');
   if (value.binding.policy.numericToleranceMetres !== value.profile.qualification.numericToleranceMetres) issue(context, 'Base numeric policy must match the frozen profile.');
-  if (size(value) > BARRIER_LIMITS.controlBytes) issue(context, 'Mixed runtime exceeds its fixed control-message budget.');
+  if (size(value) > 64 * 1024) issue(context, 'Mixed runtime exceeds its fixed control-message budget.');
 });
 export type MixedBarrierRuntimeContext = z.infer<typeof mixedBarrierRuntimeContextSchema>;
 
@@ -268,6 +308,11 @@ export const mixedBarrierExecutionSchema = z.object({ schemaVersion: z.literal('
   if (value.proof && !same(value.proof.binding, value.context.binding) || value.directSecondary && !same(value.directSecondary.binding, value.context.binding)) issue(context, 'Every result retains its exact admitted mixed binding.');
   if (value.qualification && (value.qualification.captureSha256 !== value.context.storage?.capture?.sha256 || value.qualification.evidence.captureId !== value.context.storage?.intentId
     || !same(value.qualification.evidence.scope, value.context.binding.scope))) issue(context, 'Qualification retains the exact stored capture and model/frame scope.');
+  if (value.qualification) {
+    const members = value.qualification.evidence.componentMemberships, limits = value.context.profile.qualification;
+    if (members.length > limits.maximumComponents || new Set(members.flatMap(member => member.parentSelectionIds)).size > limits.maximumParents)
+      issue(context, 'Qualification exceeds the exact admitted profile selection capacity.');
+  }
   const outcomes = { 'clear-selected-scope': 'clear', blocked: 'blocked', indeterminate: 'indeterminate', bypassed: 'bypassed', unavailable: 'unavailable', 'no-barriers-declared': 'no-barriers-declared' } as const;
   if (value.proof && outcomes[value.proof.status] !== value.diagnostics.status) issue(context, 'Final proof and diagnostics must agree.');
   if (['clear', 'bypassed', 'no-barriers-declared'].includes(value.diagnostics.status) && (!value.proof || !canonicalWork(value.diagnostics.work)
@@ -292,8 +337,20 @@ const mixedIdentityPolicies = barrierEngineIdentityBodySchema.shape.policyVersio
   }).strict();
 const mixedOpeningIdentityPolicies = mixedIdentityPolicies.extend({ runtimeProfile: z.literal(MIXED_BARRIER_OPENING_RUNTIME_PROFILE.schemaVersion),
   interTrayManeuvers: z.literal(INTER_TRAY_OPENING_MANEUVER_POLICY) }).strict();
+const mixedLargeSelectionIdentityPolicies = mixedOpeningIdentityPolicies.extend({
+  runtimeProfile: z.literal(MIXED_BARRIER_LARGE_SELECTION_RUNTIME_PROFILE.schemaVersion),
+}).strict();
+const mixedNearestAnchoredIdentityPolicies = mixedLargeSelectionIdentityPolicies.extend({
+  runtimeProfile: z.literal(MIXED_BARRIER_NEAREST_ANCHORED_RUNTIME_PROFILE.schemaVersion),
+  localSearch: z.literal(NEAREST_ANCHORED_LOCAL_SEARCH_POLICY),
+}).strict();
+const mixedMeasuredFitIdentityPolicies = mixedNearestAnchoredIdentityPolicies.extend({
+  runtimeProfile: z.literal(MIXED_BARRIER_MEASURED_FIT_RUNTIME_PROFILE.schemaVersion),
+  fitting: z.literal(MEASURED_BEND_MESH_FITTING_PROFILE.modelBuildRules),
+  geometryFitting: z.literal(MEASURED_BEND_MESH_FITTING_POLICY),
+}).strict();
 const mixedIdentityBody = barrierEngineIdentityBodySchema.omit({ schemaVersion: true, policyVersions: true }).extend({ schemaVersion: z.literal('wfc.pf.engine-identity.v3'),
-  policyVersions: z.union([mixedIdentityPolicies, mixedOpeningIdentityPolicies]) }).strict();
+  policyVersions: z.union([mixedIdentityPolicies, mixedOpeningIdentityPolicies, mixedLargeSelectionIdentityPolicies, mixedNearestAnchoredIdentityPolicies, mixedMeasuredFitIdentityPolicies]) }).strict();
 export const mixedBarrierEngineIdentityBodySchema = mixedIdentityBody;
 export const mixedBarrierEngineIdentitySchema = mixedIdentityBody.extend({ contentSha256: hash }).strict();
 export type MixedBarrierCaptureCommand = z.infer<typeof mixedBarrierCaptureCommandSchema>;
@@ -303,6 +360,8 @@ export type MixedBarrierAdmissionIntent = z.infer<typeof mixedBarrierAdmissionIn
 export type MixedBarrierRoutingPolicy = z.infer<typeof mixedBarrierRoutingPolicySchema>;
 export type MixedBarrierRuntimeProfile = z.infer<typeof mixedBarrierRuntimeProfileSchema>;
 export type MixedBarrierOpeningRuntimeProfile = z.infer<typeof mixedBarrierOpeningRuntimeProfileSchema>;
+export type MixedBarrierLargeSelectionRuntimeProfile = z.infer<typeof mixedBarrierLargeSelectionRuntimeProfileSchema>;
+export type MixedBarrierNearestAnchoredRuntimeProfile = z.infer<typeof mixedBarrierNearestAnchoredRuntimeProfileSchema>;
 export type MixedBarrierSupportedRuntimeProfile = z.infer<typeof mixedBarrierSupportedRuntimeProfileSchema>;
 export type MixedBarrierVerifierEvidence = z.infer<typeof mixedBarrierVerifierEvidenceSchema>;
 export type MixedBarrierWriteEvidence = z.infer<typeof mixedBarrierWriteEvidenceSchema>;

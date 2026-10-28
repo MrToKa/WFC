@@ -63,6 +63,153 @@ namespace AddinRibbon.Routing
             bend = fits[0]; reason = null; return true;
         }
 
+        // Separate entry point: retained v1 never observes the additional cap or
+        // polygonal proof domain. Circular Fit/Covers predicates below are shared
+        // unchanged, including their radius and tangent refusal conditions.
+        internal static bool TryFitMeasured(TrayGeometryInput input, IEnumerable<MeshStraight> candidateStraights,
+            CancellationToken token, out MeshBend bend, out string reason)
+        {
+            bend = null; reason = "measured bend mesh evidence is unavailable";
+            if (input.Mesh == null || input.Mesh.TriangleCount == 0) return false;
+            try
+            {
+                var analysis = new TrayMeshGeometry.Analysis(input, token);
+                var triangles = Triangles(input, analysis.Origin, token);
+                var straights = candidateStraights.ToArray(); var fits = new List<MeshBend>();
+                var domain = new TrayMeasuredBendMeshGeometry.Domain(input, analysis, token);
+                var capCache = new CompleteCapCache(analysis, triangles, token, domain);
+                foreach (var normal in Planes(analysis, token))
+                {
+                    domain.Charge();
+                    var ports = MeasuredAnchoredPorts(input, analysis, triangles, normal, straights, token, domain, capCache);
+                    int anchoredCount = ports.Count;
+                    if (anchoredCount == 0) continue;
+                    var u = Vec.Perpendicular(normal); var v = Vec.Cross(normal, u).Unit;
+                    var faces = Faces(triangles, normal, token);
+                    if (faces == null) throw new TrayMeasuredBendMeshGeometry.Limit("circular face domain exceeded");
+                    var circles = faces.Count < 6 ? new List<Circle>() : Circles(faces, u, v, token);
+                    // A terminal cap only extends a circular proof in this
+                    // bounded policy. Do not scan a broad cap domain when the
+                    // unchanged circle extractor has no supporting candidate.
+                    if (anchoredCount == 1 && circles.Count == 0) continue;
+                    // A terminal proof extends exactly one independently measured
+                    // neighboring cap; two unsupported ends cannot prove each other.
+                    if (anchoredCount == 1)
+                        foreach (var cap in TrayMeasuredBendMeshGeometry.TerminalCaps(domain, ports[0].Port, normal))
+                        {
+                            if (ports.Count == 16) throw new TrayMeasuredBendMeshGeometry.Limit("measured cap pair domain exceeded");
+                            ports.Add(new PortEvidence(cap));
+                        }
+                    if (ports.Count < 2) continue;
+                    for (int first = 0; first < ports.Count; first++) for (int last = first + 1; last < ports.Count; last++)
+                    {
+                        domain.Charge(); bool bothAnchored = first < anchoredCount && last < anchoredCount;
+                        if (bothAnchored && !ports[first].Neighbours.Any(a => ports[last].Neighbours.Any(b => a != b))) continue;
+                        if (!bothAnchored && !(first < anchoredCount || last < anchoredCount)) continue;
+                        foreach (var circle in circles)
+                        {
+                            MeshBend fit;
+                            if (Fit(input, analysis.Origin, normal, u, v, circle, ports[first].Port, ports[last].Port, token, out fit) &&
+                                TrayMeasuredBendMeshGeometry.Clear(domain, fit) && !fits.Any(existing => Same(existing, fit))) fits.Add(fit);
+                        }
+                        if (bothAnchored)
+                            foreach (var fit in TrayMeasuredBendMeshGeometry.Miters(domain, ports[first].Port, ports[last].Port))
+                                if (!fits.Any(existing => Same(existing, fit))) fits.Add(fit);
+                        if (fits.Count > 1) { reason = "measured mesh admits more than one complete physical bend and cap pair"; return false; }
+                    }
+                }
+                if (fits.Count != 1) { reason = "no unique complete measured circular or polygonal bend is proven"; return false; }
+                bend = fits[0]; reason = null; return true;
+            }
+            catch (TrayMeasuredBendMeshGeometry.Limit limit)
+            { reason = "measured bend proof is incomplete: " + limit.Message; return false; }
+        }
+
+        private static List<PortEvidence> MeasuredAnchoredPorts(TrayGeometryInput input, TrayMeshGeometry.Analysis analysis,
+            List<Triangle> triangles, Vec normal, MeshStraight[] candidates, CancellationToken token, TrayMeasuredBendMeshGeometry.Domain domain, CompleteCapCache capCache)
+        {
+            var ports = new List<PortEvidence>();
+            foreach (var straight in candidates)
+            {
+                domain.Charge();
+                if (straight.Input.Id == input.Id || (straight.Input.Categories & input.Categories) == CableCategory.None) continue;
+                foreach (var neighbor in new[] { straight.Start, straight.End })
+                {
+                    if (!NearBounds(input, neighbor.Center, TrayGeometryBuilder.PortToleranceMeters)) continue;
+                    var outward = -neighbor.Outward; if (Math.Abs(Vec.Dot(outward, normal)) > .002) continue;
+                    outward = (outward - normal * Vec.Dot(outward, normal)).Unit;
+                    foreach (var port in capCache.Get(normal, outward, neighbor))
+                    {
+                        domain.Charge();
+                        if ((port.Center - neighbor.Center).Length > TrayGeometryBuilder.PortToleranceMeters ||
+                            Vec.Dot(port.Outward, neighbor.Outward) > -1 + .00002 || !Compatible(port, neighbor)) continue;
+                        var evidence = ports.FirstOrDefault(p => (p.Port.Center - port.Center).Length <= GeometryTolerance && Vec.Dot(p.Port.Outward, port.Outward) > 1 - .00001);
+                        if (evidence == null)
+                        {
+                            if (ports.Count == 16) throw new TrayMeasuredBendMeshGeometry.Limit("anchored cap domain exceeded");
+                            ports.Add(evidence = new PortEvidence(port));
+                        }
+                        evidence.Neighbours.Add(straight.Input.Id);
+                    }
+                }
+            }
+            return ports;
+        }
+
+        private sealed class CompleteCapCache
+        {
+            // One input, one immutable triangle set and one proof domain. Only
+            // the exact arguments actually used by MeasuredCaps form the key;
+            // each neighbor's section/ownership/distance checks remain outside.
+            private readonly TrayMeshGeometry.Analysis analysis;
+            private readonly List<Triangle> triangles;
+            private readonly CancellationToken token;
+            private readonly TrayMeasuredBendMeshGeometry.Domain domain;
+            private readonly Dictionary<Tuple<long, long, long, long, long, long, long>, MeshPort[]> complete =
+                new Dictionary<Tuple<long, long, long, long, long, long, long>, MeshPort[]>();
+            private readonly Dictionary<Tuple<long, long, long>, List<Triangle>> normalCandidates =
+                new Dictionary<Tuple<long, long, long>, List<Triangle>>();
+            private int normalReferences;
+            internal CompleteCapCache(TrayMeshGeometry.Analysis analysis, List<Triangle> triangles, CancellationToken token, TrayMeasuredBendMeshGeometry.Domain domain)
+            { this.analysis = analysis; this.triangles = triangles; this.token = token; this.domain = domain; }
+            internal IReadOnlyList<MeshPort> Get(Vec normal, Vec outward, MeshPort neighbor)
+            {
+                domain.Charge(); double target = Vec.Dot(neighbor.Center - analysis.Origin, outward);
+                var key = Tuple.Create(BitConverter.DoubleToInt64Bits(normal.X), BitConverter.DoubleToInt64Bits(normal.Y), BitConverter.DoubleToInt64Bits(normal.Z),
+                    BitConverter.DoubleToInt64Bits(outward.X), BitConverter.DoubleToInt64Bits(outward.Y), BitConverter.DoubleToInt64Bits(outward.Z), BitConverter.DoubleToInt64Bits(target));
+                MeshPort[] ports;
+                if (complete.TryGetValue(key, out ports)) return ports;
+                // A thrown limit/cancellation never reaches insertion. Empty
+                // complete measurements are reusable; storage fullness merely
+                // computes uncached and cannot omit a proof or reject a model.
+                var measured = MeasuredCaps(analysis, NormalCandidates(outward), normal, outward, neighbor, token, domain);
+                domain.Charge(measured.Count); ports = measured.ToArray();
+                if (complete.Count < 128) complete.Add(key, ports);
+                return ports;
+            }
+            private List<Triangle> NormalCandidates(Vec outward)
+            {
+                domain.Charge();
+                var key = Tuple.Create(BitConverter.DoubleToInt64Bits(outward.X), BitConverter.DoubleToInt64Bits(outward.Y), BitConverter.DoubleToInt64Bits(outward.Z));
+                List<Triangle> candidates;
+                if (normalCandidates.TryGetValue(key, out candidates)) return candidates;
+                candidates = new List<Triangle>();
+                foreach (var triangle in triangles)
+                {
+                    domain.Charge();
+                    // Exact original predicate and original traversal order.
+                    // There is no angle bin, approximate normal or plane bound.
+                    if (Math.Abs(Vec.Dot(triangle.Normal, outward)) < 1 - .00002) continue;
+                    candidates.Add(triangle);
+                }
+                // Only complete selections are stored. These are storage caps,
+                // so a full index continues with this uncached complete list.
+                if (normalCandidates.Count < 128 && normalReferences <= 200000 - candidates.Count)
+                { normalCandidates.Add(key, candidates); normalReferences += candidates.Count; }
+                return candidates;
+            }
+        }
+
         private static List<Vec> Planes(TrayMeshGeometry.Analysis analysis, CancellationToken token)
         {
             var candidates = new List<Vec>();
@@ -260,6 +407,10 @@ namespace AddinRibbon.Routing
 
         private static List<MeshPort> MeasuredCaps(TrayMeshGeometry.Analysis analysis, List<Triangle> triangles,
             Vec bendNormal, Vec outward, MeshPort neighbor, CancellationToken token)
+        { return MeasuredCaps(analysis, triangles, bendNormal, outward, neighbor, token, null); }
+
+        private static List<MeshPort> MeasuredCaps(TrayMeshGeometry.Analysis analysis, List<Triangle> triangles,
+            Vec bendNormal, Vec outward, MeshPort neighbor, CancellationToken token, TrayMeasuredBendMeshGeometry.Domain domain)
         {
             // A fitting or support can extend beyond the tray's physical cap.
             // The neighbour only selects nearby measured triangle planes; every
@@ -268,6 +419,7 @@ namespace AddinRibbon.Routing
             var groups = new List<CapPlane>(); int work = 0;
             foreach (var triangle in triangles)
             {
+                if (domain != null) domain.Charge();
                 if ((++work & 255) == 0) token.ThrowIfCancellationRequested();
                 if (Math.Abs(Vec.Dot(triangle.Normal, outward)) < 1 - 0.00002) continue;
                 double plane = Vec.Dot(triangle.Center, outward);
@@ -275,10 +427,14 @@ namespace AddinRibbon.Routing
                     || Math.Abs(Vec.Dot(triangle.A, outward) - plane) > PortBand
                     || Math.Abs(Vec.Dot(triangle.B, outward) - plane) > PortBand
                     || Math.Abs(Vec.Dot(triangle.C, outward) - plane) > PortBand) continue;
-                var group = groups.FirstOrDefault(g => Math.Abs(g.Plane - plane) <= PortBand);
+                var group = groups.FirstOrDefault(g => { if (domain != null) domain.Charge(); return Math.Abs(g.Plane - plane) <= PortBand; });
                 if (group == null)
                 {
-                    if (groups.Count >= 64) return new List<MeshPort>();
+                    if (groups.Count >= 64)
+                    {
+                        if (domain != null) throw new TrayMeasuredBendMeshGeometry.Limit("anchored triangle cap plane domain exceeded");
+                        return new List<MeshPort>();
+                    }
                     group = new CapPlane(plane); groups.Add(group);
                 }
                 group.Triangles.Add(triangle);
@@ -286,10 +442,12 @@ namespace AddinRibbon.Routing
             var ports = new List<MeshPort>();
             foreach (var group in groups)
             {
+                if (domain != null) domain.Charge();
                 token.ThrowIfCancellationRequested();
                 var caps = group.Triangles; Vec normalSum = new Vec(); double area = 0;
                 foreach (var triangle in caps)
                 {
+                    if (domain != null) domain.Charge();
                     area += triangle.Area;
                     normalSum += triangle.Normal * (Vec.Dot(triangle.Normal, outward) < 0 ? -triangle.Area : triangle.Area);
                 }
@@ -297,13 +455,14 @@ namespace AddinRibbon.Routing
                 var measuredOutward = (normalSum - bendNormal * Vec.Dot(normalSum, bendNormal)).Unit;
                 var widthAxis = Vec.Cross(bendNormal, measuredOutward).Unit;
                 var heightAxis = Vec.Cross(measuredOutward, widthAxis).Unit;
-                double plane = caps.Sum(t => t.Area * Vec.Dot(t.Center, measuredOutward)) / area;
+                double plane = caps.Sum(t => { if (domain != null) domain.Charge(); return t.Area * Vec.Dot(t.Center, measuredOutward); }) / area;
                 double minU = double.PositiveInfinity, maxU = double.NegativeInfinity;
                 double minV = double.PositiveInfinity, maxV = double.NegativeInfinity;
                 bool planar = true;
                 foreach (var triangle in caps)
                     foreach (var point in new[] { triangle.A, triangle.B, triangle.C })
                     {
+                        if (domain != null) domain.Charge();
                         if (Math.Abs(Vec.Dot(point, measuredOutward) - plane) > PortBand) planar = false;
                         double pu = Vec.Dot(point, widthAxis), pv = Vec.Dot(point, heightAxis);
                         minU = Math.Min(minU, pu); maxU = Math.Max(maxU, pu);

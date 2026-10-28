@@ -10,7 +10,7 @@ import {
   barrierEngineIdentityCanonicalBody, type BarrierEngineIdentity, type CalculationEngineIdentity,
 } from '../../shared/pathfinderEngineIdentity.js';
 import { mixedBarrierEngineIdentityBodySchema, mixedBarrierEngineIdentitySchema, MIXED_BARRIER_COLLISION_VERSION,
-  MIXED_BARRIER_POLICY, MIXED_BARRIER_VERIFIER_VERSION, MIXED_BARRIER_OPENING_RUNTIME_PROFILE, INTER_TRAY_OPENING_MANEUVER_POLICY,
+  MIXED_BARRIER_POLICY, MIXED_BARRIER_VERIFIER_VERSION, MIXED_BARRIER_MEASURED_FIT_RUNTIME_PROFILE, INTER_TRAY_OPENING_MANEUVER_POLICY, NEAREST_ANCHORED_LOCAL_SEARCH_POLICY, MEASURED_BEND_MESH_FITTING_POLICY, MEASURED_BEND_MESH_FITTING_PROFILE,
   type MixedBarrierEngineIdentity } from '../../shared/pathfinderBarrierMixed.js';
 import { barrierCanonicalJson } from '../../shared/pathfinderBarriers.js';
 import { PathFinderError } from './errors.js';
@@ -18,6 +18,7 @@ import { PathFinderError } from './errors.js';
 const MODULES = ['PathFinder.ModelRunner.dll', 'PathFinder.Model.dll', 'PathFinder.Core.dll', 'PathFinder.Adapter.dll'] as const;
 const BARRIER_MODULES = [...MODULES, 'PathFinder.Barriers.dll', 'PathFinder.BarrierVerifier.dll'] as const;
 export const BARRIER_IDENTITY_PROJECTION_LIMIT = 64;
+export const CALCULATION_IDENTITY_PROJECTION_LIMIT = 40;
 const maximumModuleBytes = 64 * 1024 ** 2, maximumProjectionBytes = 4 * 1024 ** 2;
 type ProjectionFile = { name: string; filename: string };
 type FileIdentity = { filename: string; signature: string; bytes: number };
@@ -63,7 +64,7 @@ export function createCalculationEngineIdentityReader(config: IdentityReaderConf
     const dll = config.dllPath();
     if (!dll || !path.isAbsolute(dll) || path.basename(dll) !== MODULES[0]) return fail();
     const projection = config.projectionFiles();
-    if (!projection.length || projection.length > (protectedLane ? BARRIER_IDENTITY_PROJECTION_LIMIT : 32) || new Set(projection.map(x => x.name)).size !== projection.length
+    if (!projection.length || projection.length > (protectedLane ? BARRIER_IDENTITY_PROJECTION_LIMIT : CALCULATION_IDENTITY_PROJECTION_LIMIT) || new Set(projection.map(x => x.name)).size !== projection.length
       || projection.some(x => /^[A-Za-z0-9_./-]{1,200}$/.exec(x.name)?.[0] !== x.name)) return fail('CALCULATION_ENGINE_PROJECTION');
     const files = [
       ...modules.map(name => ({ name, filename: path.join(path.dirname(dll), name), maximum: maximumModuleBytes })),
@@ -89,8 +90,10 @@ export function createCalculationEngineIdentityReader(config: IdentityReaderConf
       const body = mixedBarrierEngineIdentityBodySchema.parse({ ...common, schemaVersion: 'wfc.pf.engine-identity.v3',
         barriersModuleSha256: hashes[4], barrierVerifierModuleSha256: hashes[5], policyVersions: { ...BARRIER_ENGINE_IDENTITY_POLICY_VERSIONS,
           projection: 'wfc.pf.model-runner-v3-mixed-barrier-projection.v1', barriers: MIXED_BARRIER_COLLISION_VERSION,
-          qualification: MIXED_BARRIER_VERIFIER_VERSION, runtimeProfile: MIXED_BARRIER_OPENING_RUNTIME_PROFILE.schemaVersion,
-          geometryPolicy: MIXED_BARRIER_POLICY, interTrayManeuvers: INTER_TRAY_OPENING_MANEUVER_POLICY } });
+          qualification: MIXED_BARRIER_VERIFIER_VERSION, runtimeProfile: MIXED_BARRIER_MEASURED_FIT_RUNTIME_PROFILE.schemaVersion,
+          geometryPolicy: MIXED_BARRIER_POLICY, interTrayManeuvers: INTER_TRAY_OPENING_MANEUVER_POLICY, localSearch: NEAREST_ANCHORED_LOCAL_SEARCH_POLICY,
+          fitting: MEASURED_BEND_MESH_FITTING_PROFILE.modelBuildRules,
+          geometryFitting: MEASURED_BEND_MESH_FITTING_POLICY } });
       return mixedBarrierEngineIdentitySchema.parse({ ...body, contentSha256: hash(barrierCanonicalJson(body)) });
     })() : config.barriers ? (() => {
       const body = barrierEngineIdentityBodySchema.parse({ ...common, schemaVersion: 'wfc.pf.engine-identity.v2',
@@ -119,13 +122,13 @@ export function calculationProjectionFiles(): ProjectionFile[] {
   const extension = import.meta.url.endsWith('.ts') ? '.ts' : '.js';
   const names = ['calculationEngineIdentity', 'dependencies', 'dependencyBatch', 'settings', 'jobContracts',
     'endpointCalculationProvenance', 'comparisonCalculationProvenance', 'routingScope', 'worker', 'previews', 'engineSession', 'lengthLedger',
-    'automaticEndpointCandidates', 'matching', 'policyJson', 'directSecondaryStrategy', 'contracts', 'preparationUnionTask'];
+    'automaticEndpointCandidates', 'matching', 'policyJson', 'directSecondaryStrategy', 'contracts', 'preparationUnionTask', 'purposePolicy', 'catalog'];
   return [
     ...names.map(name => ({ name: './' + name + '.js', filename: fileURLToPath(new URL('./' + name + extension, import.meta.url)) })),
     { name: '../../shared/pathfinderEngineIdentity.js', filename: fileURLToPath(new URL('../../shared/pathfinderEngineIdentity' + extension, import.meta.url)) },
     { name: '../../shared/pathfinderLengthLedger.js', filename: fileURLToPath(new URL('../../shared/pathfinderLengthLedger' + extension, import.meta.url)) },
     { name: '../../shared/pathfinderDirectSecondary.js', filename: fileURLToPath(new URL('../../shared/pathfinderDirectSecondary' + extension, import.meta.url)) },
-    ...['pathfinderPurposePolicy','pathfinderPreparation','pathfinderCapacity','pathfinderGeometryTrace','pathfinderEndpointBindings','preparationMerge'].map(name=>({name:'../../shared/'+name+'.js',filename:fileURLToPath(new URL('../../shared/'+name+extension,import.meta.url))})),
+    ...['pathfinderPurposePolicy','pathfinderPreparation','pathfinderCapacity','pathfinderGeometryTrace','pathfinderEndpointBindings','preparationMerge','routingCablePurposes'].map(name=>({name:'../../shared/'+name+'.js',filename:fileURLToPath(new URL('../../shared/'+name+extension,import.meta.url))})),
     ...['equipment-names.mjs','display-visibility.mjs','preparation-input.mjs','pathfinder.mjs','model-capture.mjs'].map(name=>({name:'../../viewer-runtime/'+name,filename:fileURLToPath(new URL('../../viewer-runtime/'+name,import.meta.url))})),
   ];
 }
@@ -145,6 +148,8 @@ export function barrierCalculationProjectionFiles(): ProjectionFile[] {
     ...['barrierCalculationScope', 'barrierScope', 'barrierStorage', 'barrierStrategy', 'barrierCurrentness', 'barrierQualification'].map(name => ({ name: './' + name + '.js', filename: fileURLToPath(new URL('./' + name + extension, import.meta.url)) })),
     ...['pathfinderBarriers', 'pathfinderBarrierAdmission', 'pathfinderBarrierDecisions', 'pathfinderBarrierRuntime', 'pathfinderBarrierMixed', 'pathfinderBarrierSupported'].map(name => ({
       name: '../../shared/' + name + '.js', filename: fileURLToPath(new URL('../../shared/' + name + extension, import.meta.url)) })),
+    { name: './sameEndpointCalculationReuse.js', filename: fileURLToPath(new URL('./sameEndpointCalculationReuse' + extension, import.meta.url)) },
+    ...['verifiedSameEndpointReuse','runtime','automaticPairWriter'].map(name=>({name:'./'+name+'.js',filename:fileURLToPath(new URL('./'+name+extension,import.meta.url))})),
   ];
 }
 const barrierConfigured = createCalculationEngineIdentityReader({ barriers: true,

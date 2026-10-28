@@ -9,7 +9,7 @@ import { cableWorkflowQuerySchema, cableWorkflowDetailQuerySchema, cableWorkflow
 import { calculationAvailabilitySchema, notEvaluatedCalculationAvailability, type CalculationAvailability } from '../../shared/pathfinderCalculationAvailability.js';
 import { canonicalPurposeJson, policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { defaultOptions, optionsSchema, type JobPrincipal, type DependencySnapshot } from './jobContracts.js';
-import { collectCommonCalculationInputs, collectBarrierCommonCalculationInputs, freezeCableDependenciesForVersion, hash, type CommonCalculationCollection, type BarrierCommonCalculationCollection } from './dependencies.js';
+import { collectCommonCalculationInputs, collectBarrierCommonCalculationInputs, freezeCableDependenciesForVersion, createCablePurposeRoutingReader, readLinkedCableTypePurposes, hash, type CommonCalculationCollection, type BarrierCommonCalculationCollection } from './dependencies.js';
 import { sameSupportedBarrierAdmissionIntent as sameBarrierAdmissionIntent } from '../../shared/pathfinderBarrierSupported.js';
 import { readCurrentEndpointBindingContext, readNeededEndpointBindingHeads } from './endpointBindingRepository.js';
 import type { EndpointBindingContext } from '../../shared/pathfinderEndpointBindings.js';
@@ -91,10 +91,12 @@ const candidatesSql = `/* cable-workflow:candidates */ SELECT c.id,c.cable_type_
 async function metadata(client: PoolClient, projectId: string, ids: string[]): Promise<Map<string, Data>> {
   if (!ids.length) return new Map();
   const rows = (await client.query<Data>(`/* cable-workflow:latest-admissions */ SELECT DISTINCT ON(b.cable_id) b.cable_id,b.status AS baseline_status,a.id AS admission_id,a.job_id,
-    j.state AS job_status,j.cancel_requested,i.state AS item_state,i.status AS item_status,p.id AS proposal_id,p.proposal_hash,p.status AS proposal_status
+    j.state AS job_status,j.cancel_requested,i.state AS item_state,i.status AS item_status,p.id AS proposal_id,p.proposal_hash,p.status AS proposal_status,
+    d.status AS automatic_update_status,d.receipt_id AS automatic_update_receipt,d.reason_code AS automatic_update_reason
     FROM pf_revision_baselines b JOIN pf_revision_admissions a ON a.project_id=b.project_id AND a.id=b.admission_id
     LEFT JOIN pf_jobs j ON j.project_id=a.project_id AND j.id=a.job_id LEFT JOIN pf_job_items i ON i.project_id=a.project_id AND i.job_id=a.job_id AND i.cable_id=b.cable_id
     LEFT JOIN pf_proposals p ON p.project_id=a.project_id AND p.job_id=a.job_id AND p.cable_id=b.cable_id
+    LEFT JOIN pf_automatic_pair_dispatch d ON d.project_id=a.project_id AND d.job_id=a.job_id AND d.cable_id=b.cable_id
     WHERE b.project_id=$1 AND b.cable_id=ANY($2::uuid[]) ORDER BY b.cable_id,a.created_at DESC,a.id DESC`, [projectId, ids])).rows;
   const result = new Map<string, Data>();
   for (const row of rows) { if (!ids.includes(row.cable_id) || result.has(row.cable_id)) return fail('WORKFLOW_ADMISSION_INTEGRITY'); result.set(row.cable_id, row); }
@@ -102,7 +104,7 @@ async function metadata(client: PoolClient, projectId: string, ids: string[]): P
 }
 
 async function readRows(client: PoolClient, projectId: string, candidates: Data[], preferences: CableWorkflowDetailQuery, check: () => void,
-  readContext: Awaited<ReturnType<typeof context>>, shared: { commonCache: Map<string, Promise<WorkflowCommon>>; current?: EndpointBindingContext['current'] }) {
+  readContext: Awaited<ReturnType<typeof context>>, shared: { commonCache: Map<string, Promise<WorkflowCommon>>; current?: EndpointBindingContext['current']; purposeRouting?:ReturnType<typeof createCablePurposeRoutingReader> }) {
   const requested = { ...defaultOptions, secondaryDistanceMeters: preferences.secondaryDistanceMeters,
     preferVerticalApproach: preferences.preferVerticalApproach,...(preferences.barrierRouting?{barrierRouting:preferences.barrierRouting}:{}) }, { commonCache } = shared;
   const getCommon = (raw: unknown) => {
@@ -120,6 +122,7 @@ async function readRows(client: PoolClient, projectId: string, candidates: Data[
   }
   check(); if (!common) return fail('WORKFLOW_CONTEXT_UNAVAILABLE');
   if (common.inputs) commonCache.set(canonicalPurposeJson(common.inputs.options), Promise.resolve(common));
+  const purposes = common.inputs ? await readLinkedCableTypePurposes(client, projectId, candidates) : new Map();
   let current = shared.current === undefined ? common.bindingContext ?? await readCurrentEndpointBindingContext(client, projectId) : shared.current;
   if (current && (current.modelVersionId !== readContext.active_model_version_id || current.selectionRevision !== readContext.selection_revision)) current = null;
   shared.current = current;
@@ -164,7 +167,12 @@ async function readRows(client: PoolClient, projectId: string, candidates: Data[
       if (options.data.secondaryDistanceMeters !== preferences.secondaryDistanceMeters || options.data.preferVerticalApproach !== preferences.preferVerticalApproach
         || !sameBarrierAdmissionIntent(options.data.barrierRouting,preferences.barrierRouting)) return null;
       const coherent = await getCommon(options.data); check();
-      return coherent?.inputs ? freezeCableDependenciesForVersion(coherent.inputs, cable, from.point, to.point,version).dependencies : null;
+      if (!coherent?.inputs) return null;
+      const frozen=freezeCableDependenciesForVersion(coherent.inputs, cable, from.point, to.point,version).dependencies;
+      if (!frozen || !['pathfinder.dependencies.v7','pathfinder.dependencies.v8'].includes(version)) return frozen;
+      shared.purposeRouting ??= createCablePurposeRoutingReader(client,projectId);
+      const cablePurposeRouting=(await shared.purposeRouting)(purposes.get(cable.id));
+      return cablePurposeRouting ? {...frozen,cablePurposeRouting} as DependencySnapshot : null;
     };
     const rawState = meta?.item_state, itemState = ['waiting', 'running', 'complete', 'blocked'].includes(rawState) ? rawState as CableWorkflowCalculation['itemState'] : null;
     const jobStatus = ['queued', 'running', 'complete', 'cancelled', 'failed'].includes(meta?.job_status) ? meta!.job_status as CableWorkflowCalculation['jobStatus'] : null;
@@ -177,7 +185,14 @@ async function readRows(client: PoolClient, projectId: string, candidates: Data[
     if (recordedStatus && status !== 'calculated' && status !== 'not-evaluated') reasons.push(recordedStatus);
     if (meta?.cancel_requested) reasons.push('CALCULATION_CANCEL_REQUESTED');
     if (jobStatus === 'failed') reasons.push('CALCULATION_FAILED');
-    let currentness: CableWorkflowCalculation['currentness'] = meta ? 'unavailable' : 'not-evaluated', reviewable = false;
+    // A completed attempt keeps its original diagnostic, but cannot describe the
+    // current network after this coherent read passes the real preparation gate.
+    // This is presentation only: a fresh calculation still needs all admissions.
+    const routingPreparationUpdated = Boolean(common.inputs && jobStatus === 'complete' && itemState === 'blocked'
+      && meta?.item_status === 'routing_preparation_required' && meta.cancel_requested === false
+      && meta.proposal_id === null && meta.proposal_hash === null);
+    if (routingPreparationUpdated) { status = 'stale'; reasons.push('ROUTING_PREPARATION_UPDATED'); }
+    let currentness: CableWorkflowCalculation['currentness'] = routingPreparationUpdated ? 'changed' : meta ? 'unavailable' : 'not-evaluated', reviewable = false;
     let itemApplicability:CableWorkflowCalculation['itemApplicability']=null;
     if (meta?.proposal_id && status === 'calculated') {
       // Read exact retained options only inside bounded proof; the fresh collector is cached per option set.
@@ -186,13 +201,20 @@ async function readRows(client: PoolClient, projectId: string, candidates: Data[
       currentness = result.currentness; reviewable = result.reviewable; reasons.push(...result.reasonCodes);
       itemApplicability='itemApplicability' in result?result.itemApplicability:null;
     }
-    const cableSnapshot = snapshot(cable), accepted = acceptedIds.has(cable.id) && await proof.accepted(cableSnapshot, fresh); check();
+    const cableSnapshot = snapshot(cable), accepted = Boolean(acceptedIds.has(cable.id) && meta?.job_id && meta.proposal_id && meta.proposal_hash
+      && await proof.accepted(cableSnapshot, fresh, {jobId:meta.job_id,proposalId:meta.proposal_id,proposalHash:meta.proposal_hash})); check();
     if (accepted) currentness = 'current';
+    const savedExactDisplay = Boolean(!accepted && currentness === 'changed' && acceptedIds.has(cable.id)
+      && jobStatus === 'complete' && itemState === 'complete' && status === 'calculated' && meta?.cancel_requested === false
+      && meta.job_id && meta.proposal_id && meta.proposal_hash
+      && await proof.savedExactDisplay(cableSnapshot, fresh, { jobId: meta.job_id, proposalId: meta.proposal_id, proposalHash: meta.proposal_hash })); check();
     return cableWorkflowRowSchema.parse({ projectId, cable: cableSnapshot, mto: cable.mto, from: from.availability, to: to.availability,
       calculation: { jobId: jobStatus && meta ? meta.job_id : null, jobStatus, itemState: jobStatus ? itemState : null, outcome: status,
         // Historical item/job tables retain status and free-form text, not a structured error code. Never parse private messages into codes.
         reasonCodes: [...new Set(reasons)].slice(0, CABLE_WORKFLOW_LIMITS.reasonCodes), errorCode: null, currentness,
-        proposalId: meta?.proposal_id ?? null, proposalHash: meta?.proposal_hash ?? null, reviewable, acceptedMatchesCurrent: accepted,itemApplicability } });
+        proposalId: meta?.proposal_id ?? null, proposalHash: meta?.proposal_hash ?? null, reviewable, acceptedMatchesCurrent: accepted,itemApplicability,
+        ...(savedExactDisplay ? {savedExactDisplay:true} : {}),
+        ...(meta?.automatic_update_status ? {automaticUpdate:{status:meta.automatic_update_status,receiptId:meta.automatic_update_receipt??null,reasonCode:meta.automatic_update_reason??null}}:{}) } });
   } };
 }
 

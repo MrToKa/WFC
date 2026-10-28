@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { purposeKeySchema, routingCatalogDiagnostics } from '../../../../shared/pathfinderPurposePolicy';
 import {
   fetchRoutingPurposeCatalog, fetchRoutingPurposePolicy, fetchRoutingPurposeHistory, saveRoutingPurposePolicy,
-  PathFinderPolicyApiError, ROUTING_CATEGORIES,
+  PathFinderPolicyApiError,
   type CatalogEnvelope, type RoutingPurposePolicy, type RoutingPurposeWrite, type PolicyHistory, type RoutingCategory,
 } from '@/api/pathfinderPolicies';
 
@@ -37,7 +37,8 @@ const authorable = (snapshot: Snapshot, key: string): boolean => {
 };
 const changedKeys = (state: State): string[] => state.snapshot ? [...new Set([...state.draft.keys(), ...state.snapshot.policy.rules.map(rule => rule.purposeKey)])]
   .filter(key => !same(state.draft.get(key), state.snapshot!.policy.rules.find(rule => rule.purposeKey === key)?.allowedCategories)) : [];
-const validChanges = (state: State): boolean => Boolean(state.snapshot && changedKeys(state).every(key => authorable(state.snapshot!, key)));
+const validChanges = (state: State): boolean => Boolean(state.snapshot?.policy.cablePurposesSha256 && changedKeys(state).every(key => authorable(state.snapshot!, key)
+  && (state.draft.get(key) ?? []).every(category => state.snapshot!.policy.cablePurposes?.includes(category))));
 const dirty = (state: State) => changedKeys(state).length > 0;
 const message = (error: unknown) => error instanceof PathFinderPolicyApiError ? error.message : 'Routing permissions could not be loaded. Try again.';
 const denied = (error: unknown) => error instanceof PathFinderPolicyApiError && [401, 403].includes(error.status ?? 0);
@@ -120,11 +121,15 @@ export function useRoutingPurposePolicy({ projectId, loadedProjectId, token, isA
     const run = runRef.current, previous = stateRef.current;
     if (!run || !current(run) || run.mutation || run.pending || previous.scope !== run.scope || previous.stale || previous.loading || previous.refreshing || previous.conflict || !previous.snapshot) return;
     if (!authorable(previous.snapshot, purposeKey)) return;
-    update(run, value => { const draft = new Map(value.draft); if (categories === undefined) draft.delete(purposeKey); else draft.set(purposeKey, ROUTING_CATEGORIES.filter(category => categories.includes(category))); return { ...value, draft, notice: null, error: null }; });
+    const available = previous.snapshot.policy.cablePurposes ?? [];
+    if (categories?.some(category => !available.includes(category))) return;
+    update(run, value => { const draft = new Map(value.draft); if (categories === undefined) draft.delete(purposeKey); else draft.set(purposeKey, available.filter(category => categories.includes(category))); return { ...value, draft, notice: null, error: null }; });
   }, [current, update]);
   const toggle = useCallback((purposeKey: string, category: RoutingCategory, checked: boolean) => {
+    if (!stateRef.current.snapshot?.policy.cablePurposes?.includes(category)) return;
     const selected = stateRef.current.draft.get(purposeKey) ?? [];
-    change(purposeKey, checked ? [...selected, category] : selected.filter(item => item !== category));
+    const available = stateRef.current.snapshot.policy.cablePurposes;
+    change(purposeKey, (checked ? [...selected, category] : selected.filter(item => item !== category)).filter(item => available.includes(item)));
   }, [change]);
 
   const send = useCallback(async (run: Run, body: RoutingPurposeWrite): Promise<void> => {
@@ -161,6 +166,7 @@ export function useRoutingPurposePolicy({ projectId, loadedProjectId, token, isA
       return selected === undefined ? [{ purposeKey, operation: 'reset' as const }] : [{ purposeKey, operation: 'set' as const, allowedCategories: [...selected] }];
     });
     await send(run, { schemaVersion: 'pathfinder.routing-purpose-policy.write.v1', expectedCatalogRevision: previous.snapshot.catalog.catalogRevision,
+      expectedCablePurposesSha256: previous.snapshot.policy.cablePurposesSha256,
       expectedRevision: previous.snapshot.policy.routingPolicyRevision, idempotencyKey: crypto.randomUUID(), changes });
   }, [current, send]);
   const retrySave = useCallback(async (): Promise<void> => { const run = runRef.current; if (run && current(run) && run.pending && !run.mutation) await send(run, run.pending); }, [current, send]);
@@ -178,7 +184,9 @@ export function useRoutingPurposePolicy({ projectId, loadedProjectId, token, isA
     }));
   }, [view]);
   const isDirty = dirty(view), busy = view.loading || view.refreshing || view.saving;
-  return { ...view, rows, dirty: isDirty, busy, canEdit: enabled(scope) && Boolean(view.snapshot) && !busy && !view.stale && !view.conflict && !view.uncertain,
+  const cablePurposes = view.snapshot?.policy.cablePurposes ?? [];
+  const invalidCablePurposeCount = view.snapshot?.policy.invalidCablePurposeCount ?? 0;
+  return { ...view, rows, cablePurposes, invalidCablePurposeCount, dirty: isDirty, busy, canEdit: enabled(scope) && Boolean(view.snapshot?.policy.cablePurposesSha256) && !busy && !view.stale && !view.conflict && !view.uncertain,
     canSave: enabled(scope) && Boolean(view.snapshot) && isDirty && !busy && !view.stale && !view.conflict && !view.uncertain && validChanges(view),
     canRetrySave: enabled(scope) && view.uncertain && !view.saving, refresh, cancelRefresh, toggle, reset: (key: string) => change(key, undefined), exclude: (key: string) => change(key, []), save, retrySave, refreshHistory, moreHistory };
 }

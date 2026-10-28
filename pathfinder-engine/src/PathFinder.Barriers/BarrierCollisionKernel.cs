@@ -223,7 +223,7 @@ public sealed class BarrierCollisionKernel
 
     private static void ValidateLimits(BarrierLimits value)
     {
-        if (value.MaximumMeshes is < 1 or > 256 || value.MaximumVertices is < 4 or > 500_000
+        if (value.MaximumMeshes is < 1 or > 2048 || value.MaximumVertices is < 4 or > 500_000
             || value.MaximumTriangles is < 4 or > 250_000 || value.MaximumBvhNodes is < 1 or > 500_000
             || value.MaximumBuildWork is < 1 or > 40_000_000 || value.MaximumQueryWork is < 1 or > 2_000_000
             || value.MaximumEstimatedBytes is < 1 or > 134_217_728

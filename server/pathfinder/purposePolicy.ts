@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
-import { routePurposePolicySchema, routePurposeWriteSchema, routingRuleSchema, policySaveSchema, policyHistorySchema, policyUuidSchema, policyRevisionSchema, routingCatalogDiagnostics } from '../../shared/pathfinderPurposePolicy.js';
+import { routePurposePolicySchema, routePurposeWriteSchema, routingRuleSchema, routingCategoriesSchema, policySaveSchema, policyHistorySchema, policyUuidSchema, policyRevisionSchema, routingCatalogDiagnostics } from '../../shared/pathfinderPurposePolicy.js';
+import { projectCablePurposeCatalog } from '../../shared/routingCablePurposes.js';
 import { PathFinderError } from './errors.js';
 import { assertLoginNotExpired, requireCurrentLogin } from './auth.js';
 import type { JobPrincipal } from './jobContracts.js';
@@ -106,20 +107,28 @@ async function activeRules(client: PoolClient, projectId: string): Promise<(Rule
 }
 const publicRules = (rules: (Rule & { incarnationId: string })[]): Rule[] => rules.map(({ purposeKey, allowedCategories }) => ({ purposeKey, allowedCategories }));
 
+/** Cable type names and physical properties are outside routing permission identity. */
+export async function readProjectCablePurposes(client: PoolClient, projectId: string): Promise<{cablePurposes:string[];cablePurposesSha256:string;invalidCablePurposeCount:number}> {
+  const rows = (await client.query<{purpose:string|null}>('SELECT DISTINCT purpose COLLATE "C" AS purpose FROM cable_types WHERE project_id=$1 ORDER BY purpose COLLATE "C" LIMIT 4097', [projectId])).rows;
+  if (rows.length > 4096) throw new PurposePolicyError('CABLE_PURPOSE_LIMIT', 413, 'The project has too many distinct cable purposes.');
+  const {cablePurposes,invalidCablePurposeCount} = projectCablePurposeCatalog(rows.map(row => row.purpose));
+  return { cablePurposes, invalidCablePurposeCount, cablePurposesSha256: digest({schemaVersion:'pathfinder.cable-purpose-catalog.v1',projectId,cablePurposes}) };
+}
+
 /** Caller holds its project mutex; the catalog state lock fences direct SQL changes until commit. */
 export async function readRoutingPolicyScope(client: PoolClient, projectId: string): Promise<RoutingPolicyScope> {
   const state = await readPurposePolicyState(client, projectId, { lock: true });
-  const catalog = await readRoutingCatalogScope(client, projectId), rules = await activeRules(client, projectId);
+  const catalog = await readRoutingCatalogScope(client, projectId), rules = await activeRules(client, projectId), purposes = await readProjectCablePurposes(client, projectId);
   if (state.catalogRevision !== catalog.catalogRevision) throw new PurposePolicyError('CATALOG_REVISION_CONFLICT', 409, 'The tray catalog changed. Refresh and prepare it again.', revisions(state));
   return { catalogRevision: state.catalogRevision, routingContentSha256: catalog.routingContentSha256, routingPolicyRevision: state.routingPolicyRevision,
-    routingPolicySha256: digest({ schemaVersion: 'pathfinder.routing-purpose-policy-content.v1', projectId, rules }) };
+    routingPolicySha256: digest({ schemaVersion: 'pathfinder.routing-purpose-policy-content.v2', projectId, rules, cablePurposes:purposes.cablePurposes }) };
 }
 
 export function createPurposePolicyRepository(pool: Pool) {
   const authorize = (projectId: string, who: JobPrincipal) => purposePolicyTransaction(pool, projectId, who, async client => revisions(await readPurposePolicyState(client, projectId, { lock: true })));
   const get = (projectId: string, who: JobPrincipal) => purposePolicyTransaction(pool, projectId, who, async client => {
     const state = await readPurposePolicyState(client, projectId, { lock: true });
-    return routePurposePolicySchema.parse({ schemaVersion: 'pathfinder.routing-purpose-policy.v1', projectId, catalogRevision: state.catalogRevision, routingPolicyRevision: state.routingPolicyRevision, rules: publicRules(await activeRules(client, projectId)) });
+    return routePurposePolicySchema.parse({ schemaVersion: 'pathfinder.routing-purpose-policy.v1', projectId, catalogRevision: state.catalogRevision, routingPolicyRevision: state.routingPolicyRevision, rules: publicRules(await activeRules(client, projectId)), ...await readProjectCablePurposes(client, projectId) });
   });
   const save = (projectId: string, who: JobPrincipal, input: unknown) => purposePolicyTransaction(pool, projectId, who, async client => {
     if (input && typeof input === 'object' && (input as Record<string, unknown>).schemaVersion !== 'pathfinder.routing-purpose-policy.write.v1') throw new PurposePolicyError('UNSUPPORTED_CONTRACT_VERSION', 400, 'The routing permission contract version is unsupported.');
@@ -132,6 +141,15 @@ export function createPurposePolicyRepository(pool: Pool) {
     }
     if (command.expectedCatalogRevision !== state.catalogRevision) throw new PurposePolicyError('CATALOG_REVISION_CONFLICT', 409, 'The tray catalog changed. Refresh before saving.', current);
     if (command.expectedRevision !== state.routingPolicyRevision) throw new PurposePolicyError('POLICY_REVISION_CONFLICT', 409, 'Routing permissions changed. Refresh before saving.', current);
+    if (command.expectedCablePurposesSha256 !== undefined) {
+      const purposes = await readProjectCablePurposes(client, projectId);
+      if (command.expectedCablePurposesSha256 !== purposes.cablePurposesSha256) throw new PurposePolicyError('CABLE_PURPOSES_CONFLICT', 409, 'The project cable purposes changed. Refresh before saving.', current);
+      if (command.changes.some(change => change.operation === 'set' && change.allowedCategories.some(value => !purposes.cablePurposes.includes(value))))
+        throw new PurposePolicyError('CABLE_PURPOSE_UNAVAILABLE', 409, 'A selected cable purpose is no longer in the project. Refresh before saving.', current);
+    } else {
+      // Old clients retain their original fixed-category write contract.
+      for (const change of command.changes) if (change.operation === 'set') routingCategoriesSchema.parse(change.allowedCategories);
+    }
     if (BigInt(state.routingPolicyRevision) === MAX_REVISION) throw new PurposePolicyError('POLICY_REVISION_EXHAUSTED', 409, 'Routing permission revision capacity is exhausted.', current);
     const catalog = await readCatalog(client, projectId), incarnations = await readActivePurposeIncarnations(client, projectId);
     if (catalog.catalogRevision !== state.catalogRevision) throw new PurposePolicyError('CATALOG_REVISION_CONFLICT', 409, 'The tray catalog changed.', current);

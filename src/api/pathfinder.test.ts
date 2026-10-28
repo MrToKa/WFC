@@ -33,6 +33,23 @@ function popupCalculationBody() {
     expectedRegistryRevision: '0', expectedSnapshot: null, drillThroughWalls: true } } };
 }
 describe('popup calculation transport phase evidence', () => {
+  it('carries explicit automatic-pair policy outside mathematical options without upgrading an omitted legacy body', async () => {
+    const automaticPairPolicy = { schemaVersion: 'wfc.pf.automatic-pair-policy.v1', mode: 'when-both-empty-or-unchanged-automatic' };
+    const body = { ...popupCalculationBody(), automaticPairPolicy }, accepted = { jobId: modelId, registryRevision: '10', duplicate: false };
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json(accepted, { status: 202 }));
+    expect((await submitPathFinderCalculation(projectId, 'token', body)).kind).toBe('acknowledged');
+    expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toEqual(body);
+    const legacy = popupCalculationBody();
+    fetch.mockResolvedValueOnce(Response.json(accepted, { status: 202 }));
+    expect((await submitPathFinderCalculation(projectId, 'token', legacy)).kind).toBe('acknowledged');
+    expect(JSON.parse(String(fetch.mock.calls[1][1]?.body))).toEqual(legacy);
+  });
+  it('rejects invented automatic overwrite authority before submitting a calculation', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch');
+    expect(await submitPathFinderCalculation(projectId, 'token', { ...popupCalculationBody(),
+      automaticPairPolicy: { schemaVersion: 'wfc.pf.automatic-pair-policy.v1', mode: 'always-overwrite-manual' } })).toEqual({kind:'not-submitted',code:'INVALID_REQUEST'});
+    expect(fetch).not.toHaveBeenCalled();
+  });
   it('acknowledges only the exact202 body after one authenticated single POST', async () => {
     const body = popupCalculationBody(), accepted = { jobId: modelId, registryRevision: '10', duplicate: false };
     const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json(accepted, { status: 202 }));

@@ -25,6 +25,23 @@ const row = (patch: Partial<CableWorkflowRow> = {}): CableWorkflowRow => ({
 const ready = (): CableWorkflowCalculation => calculation({ jobId: id(20), jobStatus: 'complete', itemState: 'complete', outcome: 'calculated',
   currentness: 'current', proposalId: id(21), proposalHash: 'a'.repeat(64), reviewable: true });
 
+describe('separate exact saved display capability',()=>{
+  const saved=():CableWorkflowRow=>row({cable:{...row().cable,routing:'/SAVED',designLength:'58'},calculation:{...ready(),currentness:'changed',reviewable:false,savedExactDisplay:true}});
+  it('keeps absence backward compatible and does not promote display-only evidence to authority',()=>{
+    expect(cableWorkflowCalculationSchema.parse(calculation()).savedExactDisplay).toBeUndefined();
+    const value=cableWorkflowRowSchema.parse(saved());expect(value.calculation).toMatchObject({savedExactDisplay:true,currentness:'changed',reviewable:false,acceptedMatchesCurrent:false});
+    expect(classifyCableWorkflow(value).status).toBe('needs-routing');
+  });
+  it.each([{jobStatus:'running'},{jobStatus:'cancelled'},{jobStatus:'failed'},{itemState:'running'},{outcome:'failed'},
+    {currentness:'current'},{reviewable:true},{acceptedMatchesCurrent:true},{proposalId:null,proposalHash:null}] as const)('rejects incoherent saved authority/progress %j',patch=>{
+      const value=saved();expect(cableWorkflowRowSchema.safeParse({...value,calculation:{...value.calculation,...patch}}).success).toBe(false);
+  });
+  it('requires existing cable values and evaluated endpoint evidence for a saved display',()=>{
+    const value=saved();for(const patch of [{routing:null},{routing:' '},{designLength:null}])expect(cableWorkflowRowSchema.safeParse({...value,cable:{...value.cable,...patch}}).success).toBe(false);
+    expect(cableWorkflowRowSchema.safeParse({...value,from:unavailable('missing')}).success).toBe(false);
+  });
+});
+
 describe('explicit sealed v7 item display evidence',()=>{
   const proof=()=>({schemaVersion:'wfc.pf.sealed-cable-applicability.v1' as const,dependencyVersion:'pathfinder.dependencies.v7' as const,
     projectId:id(1),jobId:id(20),cableId:id(10),proposalId:id(21),dependencyHash:'b'.repeat(64),scope:'sealed-cable-item' as const});

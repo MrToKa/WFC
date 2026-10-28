@@ -159,6 +159,18 @@ describe('finite scoped location impact authority, synthetic SQL protocol only',
 });
 
 describe('location impact claim, admission and bounded failure recovery with synthetic SQL', () => {
+  it('passes v3 automatic pair policy with original Save expiry and never renews it during enrollment replay',async()=>{
+    const f=fixture(),policy={schemaVersion:'wfc.pf.automatic-pair-policy.v1' as const,mode:'when-both-empty-or-unchanged-automatic' as const};
+    f.state.record=sealed(locationImpactRecordSchema.parse({...f.record,schemaVersion:'wfc.pf.location-impact-record.v3',originCableId:id(21),automaticPairPolicy:policy}));
+    vi.setSystemTime(now+15000);
+    await f.repo.enrollClaim(f.claim);
+    expect(f.admit.mock.calls[0][1].automaticPair).toEqual({policy,createdAt:f.record.createdAt,authorityExpiresAt:f.record.authorityExpiresAt});
+    expect(f.admit.mock.calls[0][1].cableIds).toEqual(f.record.eligibleCableIds);
+    f.state.existingEnrollment=true;
+    expect(await f.repo.enrollClaim(f.claim)).toEqual({status:'duplicate',jobId:f.jobId});
+    expect(f.admit).toHaveBeenCalledOnce();expect(f.state.enrollmentWrites).toHaveLength(1);
+    expect(f.state.record.authorityExpiresAt).toBe(f.record.authorityExpiresAt);
+  });
   it('claims due work with SKIP LOCKED and a fresh exact60second owner lease', async () => {
     const f = fixture(); f.state.dispatch.status = 'pending'; f.state.dispatch.lease_until = null; f.state.dispatch.owner_token = null;
     const claim = await f.repo.claimNext(); expect(claim).toMatchObject({ projectId: f.record.projectId, impactId: f.record.id, principal: f.principal,

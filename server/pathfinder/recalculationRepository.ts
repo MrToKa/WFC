@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
-import { RECALCULATION_LIMITS, recalculationCommandSchema, recalculationContextSchema, recalculationReceiptSchema, recalculationPreferencesSchema, recalculationReasonSchema, type RecalculationCommand, type RecalculationContext, type RecalculationReceipt, type RecalculationPreferences } from '../../shared/pathfinderRecalculation.js';
+import { RECALCULATION_LIMITS, automaticOutputEnableCommandSchema, recalculationCommandSchema, recalculationContextSchema, recalculationProgressSchema, recalculationReceiptSchema, recalculationPreferencesSchema, recalculationReasonSchema, type RecalculationCommand, type RecalculationContext, type RecalculationReceipt, type RecalculationPreferences, type RecalculationProgress } from '../../shared/pathfinderRecalculation.js';
 import { canonicalPurposeJson, policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { assertLoginNotExpired, requireCurrentLogin } from './auth.js';
 import type { JobPrincipal } from './jobContracts.js';
@@ -9,10 +9,33 @@ import { readGrantJobAuthority } from './grantJobAuthority.js';
 import { PathFinderError } from './errors.js';
 import { markRecalculationDirty } from './recalculationSchema.js';
 import { readLocationImpactJobAuthority } from './locationImpactRepository.js';
+import { automaticGenerationAuthorizationSchema, type AutomaticGenerationAuthorization, type AutomaticPairPolicy, type AutomaticPairSource } from '../../shared/pathfinderAutomaticPair.js';
+import { activeAutomaticGenerationAuthorization } from './automaticGenerationOutput.js';
+import { authorizePathFinderPreflight } from './projectPreflightAuthorization.js';
 
 type Row = Record<string, any>;
 const hash = (value: unknown): string => createHash('sha256').update(canonicalPurposeJson(value)).digest('hex');
 const fail = (code: string, status = 409): never => { throw new PathFinderError(code,status,'The recalculation request is unavailable or changed. Retain an uncertain command and refresh its context.'); };
+const outputEnableRequired = (): never => { throw new PathFinderError('AUTOMATIC_OUTPUT_ENABLE_REQUIRED',409,
+  'Automatic Cable list updates have expired or changed. Choose Enable for 30 minutes again. Existing values are retained.'); };
+async function requireContinuationOutput(c: PoolClient, s: Row, who: JobPrincipal, policy: AutomaticPairPolicy, principal: Row | undefined): Promise<AutomaticGenerationAuthorization> {
+  const a = activeAutomaticGenerationAuthorization(s);
+  if (!a || a.actorId !== who.userId || a.loginId !== who.loginId || Date.parse(a.loginExpiresAt) !== who.loginExpiresAt
+    || !principal?.is_admin || principal.admin_revision !== a.actorAdminRevision || principal.installation_epoch !== a.installationEpoch
+    || hash(a.policy) !== hash(policy)) return outputEnableRequired();
+  const stored = (await c.query<Row>(`/* automatic-generation:continuation-enable-command */ SELECT request_sha256,
+    CASE WHEN octet_length(request::text)<=65536 THEN request ELSE NULL END AS request,
+    CASE WHEN octet_length(receipt::text)<=1048576 THEN receipt ELSE NULL END AS receipt
+    FROM pf_recalculation_commands WHERE project_id=$1 AND actor_id=$2 AND idempotency_key=$3 FOR SHARE`, [s.project_id,a.actorId,a.commandKey])).rows[0];
+  const command = automaticOutputEnableCommandSchema.safeParse(stored?.request), receipt = recalculationReceiptSchema.safeParse(stored?.receipt);
+  if (!command.success || !receipt.success || stored?.request_sha256 !== a.commandSha256 || hash(command.data) !== a.commandSha256
+    || command.data.idempotencyKey !== a.commandKey || BigInt(command.data.expectedControlRevision)+1n !== BigInt(a.controlRevision)
+    || hash(command.data.automaticPairPolicy) !== hash(policy) || hash(receipt.data.automaticPairAuthorization ?? null) !== hash(a)
+    || receipt.data.context.projectId !== s.project_id || receipt.data.context.controlRevision !== a.controlRevision
+    || receipt.data.context.authority?.actorId !== a.actorId || receipt.data.context.authority.expiresAt !== a.authorityExpiresAt
+    || hash(receipt.data.context.automaticPairPolicy ?? null) !== hash(policy) || Date.now() >= Date.parse(a.authorityExpiresAt)) return outputEnableRequired();
+  return a;
+}
 const iso = (value: string | Date): string => new Date(value).toISOString();
 const revision = (value: unknown): string => {
   if (typeof value !== 'string' || /^(?:0|[1-9][0-9]{0,18})$/.exec(value)?.[0] !== value || BigInt(value)>9223372036854775807n) return fail('RECALCULATION_STORAGE_INVALID',500);
@@ -55,28 +78,83 @@ async function storedAuthority(c:PoolClient,s:Row):Promise<boolean>{
   const row=(await c.query<{is_admin:boolean;user_id:string;revoked_at:Date|null;expires_at:Date}>(`SELECT u.is_admin,l.user_id,l.revoked_at,l.expires_at FROM users u JOIN viewer_login_bindings l ON l.login_id=$2 WHERE u.id=$1`,[s.actor_id,s.login_id])).rows[0];
   return !!row&&row.is_admin&&row.user_id===s.actor_id&&!row.revoked_at&&new Date(row.expires_at).getTime()===new Date(s.login_expires_at).getTime()&&new Date(row.expires_at).getTime()>Date.now();
 }
+/** One bounded metadata aggregate. This reports committed work; it grants no
+ * result currentness, geometry, Review/Apply or automatic-write authority. */
+export async function readRecalculationProgress(c:Pick<PoolClient,'query'>,input:{projectId:string;jobId:string;generation:string}):Promise<RecalculationProgress|null>{
+  policyUuidSchema.parse(input.projectId);policyUuidSchema.parse(input.jobId);revision(input.generation);
+  const row=(await c.query<Row>(`/* recalculation:progress */ WITH current_job AS (
+    SELECT j.id,j.total AS job_total,e.total AS enrolled_total,e.ready_cables,e.blocked_cables
+    FROM pf_recalculation_state s JOIN pf_recalculation_enrollments e
+      ON e.project_id=s.project_id AND e.job_id=s.current_job_id AND e.generation=s.enrolled_generation
+    JOIN pf_jobs j ON j.project_id=e.project_id AND j.id=e.job_id
+    WHERE s.project_id=$1 AND s.current_job_id=$2 AND s.desired_generation=$3::bigint AND s.enrolled_generation=$3::bigint
+  ), scoped AS (
+    SELECT i.cable_id,i.eligible,i.state,i.status,d.status AS output_status,d.receipt_id
+    FROM current_job j JOIN LATERAL (
+      SELECT i.cable_id,i.dependencies IS NOT NULL AS eligible,i.state,i.status FROM pf_job_items i
+      WHERE i.project_id=$1 AND i.job_id=j.id ORDER BY i.cable_id LIMIT 10001
+    ) i ON true LEFT JOIN pf_automatic_pair_dispatch d ON d.project_id=$1 AND d.job_id=j.id AND d.cable_id=i.cable_id
+  ), classified AS (
+    SELECT *,CASE WHEN eligible AND state='complete' AND status='calculated' THEN CASE
+      WHEN output_status IN('written','already-written') AND receipt_id IS NOT NULL THEN 'saved'
+      WHEN output_status IN('pending','running','unknown') THEN 'saving'
+      WHEN output_status='review-required' THEN 'reviewRequired' WHEN output_status='refused' THEN 'refused'
+      WHEN output_status='authority-expired' THEN 'authorityExpired' WHEN output_status='stale' THEN 'stale'
+      ELSE 'notScheduledForSave' END ELSE NULL END AS output_bucket FROM scoped
+  ) SELECT j.id AS job_id,j.job_total,j.enrolled_total,j.ready_cables,j.blocked_cables,
+    count(i.cable_id)::int AS total,count(*) FILTER(WHERE i.eligible)::int AS eligible,
+    count(*) FILTER(WHERE i.eligible=false)::int AS blocked_inputs,
+    count(*) FILTER(WHERE i.eligible AND i.state='waiting')::int AS waiting,
+    count(*) FILTER(WHERE i.eligible AND i.state='running')::int AS running,
+    count(*) FILTER(WHERE i.eligible AND i.state IN('complete','blocked'))::int AS processed,
+    count(*) FILTER(WHERE i.output_bucket IS NOT NULL)::int AS calculated,
+    count(*) FILTER(WHERE i.output_bucket='saved')::int AS saved,
+    count(*) FILTER(WHERE i.output_bucket='saving')::int AS saving,
+    count(*) FILTER(WHERE i.output_bucket='reviewRequired')::int AS review_required,
+    count(*) FILTER(WHERE i.output_bucket='refused')::int AS refused,
+    count(*) FILTER(WHERE i.output_bucket='authorityExpired')::int AS authority_expired,
+    count(*) FILTER(WHERE i.output_bucket='stale')::int AS stale,
+    count(*) FILTER(WHERE i.output_bucket='notScheduledForSave')::int AS not_scheduled_for_save
+    FROM current_job j LEFT JOIN classified i ON true GROUP BY j.id,j.job_total,j.enrolled_total,j.ready_cables,j.blocked_cables`,[input.projectId,input.jobId,input.generation])).rows[0];
+  if(!row)return null;
+  const parsed=recalculationProgressSchema.safeParse({schemaVersion:'wfc.pf.recalculation-progress.v1',jobId:row.job_id,generation:input.generation,
+    total:row.total,eligible:row.eligible,blockedInputs:row.blocked_inputs,waiting:row.waiting,running:row.running,processed:row.processed,
+    calculated:row.calculated,saved:row.saved,saving:row.saving,reviewRequired:row.review_required,refused:row.refused,authorityExpired:row.authority_expired,
+    stale:row.stale,notScheduledForSave:row.not_scheduled_for_save,calculationFailed:row.processed-row.calculated});
+  if(!parsed.success||row.job_id!==input.jobId||row.job_total!==row.total||row.enrolled_total!==row.total
+    ||row.ready_cables!==row.eligible||row.blocked_cables!==row.blocked_inputs)return fail('RECALCULATION_PROGRESS_UNAVAILABLE',503);
+  return parsed.data;
+}
 async function context(c:PoolClient,projectId:string,who:JobPrincipal,s?:Row):Promise<RecalculationContext>{
   s??=await state(c,projectId);const live=await storedAuthority(c,s);
   const currentGeneration=s.enrolled_generation!==null&&s.enrolled_generation===s.desired_generation;
   let status=s.status,reasonCodes=reasons(s.reason_codes),completed=currentGeneration?s.completed:0,total=currentGeneration?s.total:0;
   if(!s.enabled)status='disabled';else if(s.paused)status='paused';else if(!live){status='awaiting_authority';reasonCodes=[...new Set(['ADMINISTRATOR_ENROLLMENT_REQUIRED',...reasonCodes])].slice(0,64);}
   else if(s.engine_unavailable_code){status='blocked';reasonCodes=[...new Set([recalculationReasonSchema.parse(s.engine_unavailable_code),...reasonCodes])].slice(0,64);}
+  let progress:RecalculationProgress|null=null;
   if(s.current_job_id&&currentGeneration){
     const job=(await c.query<Row>('SELECT state,cancel_requested,completed,total FROM pf_jobs WHERE project_id=$1 AND id=$2',[projectId,s.current_job_id])).rows[0];
     if(job){
       completed=job.completed;total=job.total;
       if(live&&!s.paused&&s.enabled&&!s.engine_unavailable_code)status=job.cancel_requested||job.state==='cancelled'?'failed':job.state==='running'?'calculating':job.state==='queued'?'queued':job.state==='failed'?'failed':'complete';
+      progress=await readRecalculationProgress(c,{projectId,jobId:s.current_job_id,generation:s.desired_generation});
+      // Use one aggregate snapshot for the complete progress partition. A
+      // preceding lightweight job read must not make later counts incoherent.
+      if(progress){completed=progress.processed+progress.blockedInputs;total=progress.total;}
     }
   }
+  const output=activeAutomaticGenerationAuthorization(s);
   const value=recalculationContextSchema.parse({schemaVersion:'wfc.pf.recalculation-context.v1',projectId,controlRevision:revision(s.control_revision),desiredGeneration:revision(s.desired_generation),enrolledGeneration:s.enrolled_generation===null?null:revision(s.enrolled_generation),status,enabled:s.enabled,paused:s.paused,
     authority:s.actor_id?{kind:'current-login',actorId:s.actor_id,expiresAt:iso(s.authority_expires_at),currentLogin:s.actor_id===who.userId&&s.login_id===who.loginId}:null,
+    ...(output ? {automaticPairPolicy:output.policy} : {}),
+    ...(progress ? {progress} : {}),
     reasonCodes,jobId:s.current_job_id,completed,total,readyCables:currentGeneration?s.ready_cables:0,blockedCables:currentGeneration?s.blocked_cables:0,updatedAt:iso(s.updated_at),preferences:s.preferences===null?null:recalculationPreferencesSchema.parse(s.preferences),timeoutMilliseconds:s.timeout_ms});
   if(Buffer.byteLength(canonicalPurposeJson(value))>RECALCULATION_LIMITS.responseBytes)return fail('RECALCULATION_RESPONSE_LIMIT',413);return value;
 }
 
-export type RecalculationClaim={projectId:string;generation:string;controlRevision:string;authorityEpoch:string;claimId:string;ownerToken:string;leaseExpiresAt:string;principal:JobPrincipal;preferences:RecalculationPreferences;timeoutMilliseconds:number};
+export type RecalculationClaim={projectId:string;generation:string;controlRevision:string;authorityEpoch:string;claimId:string;ownerToken:string;leaseExpiresAt:string;principal:JobPrincipal;preferences:RecalculationPreferences;timeoutMilliseconds:number;automaticPairAuthorization?:AutomaticGenerationAuthorization};
 export type RecalculationJobAdmission={jobId:string|null;inputSha256:string;duplicate:boolean;readyCables:number;blockedCables:number;total:number;reasonCodes:string[]};
-export type RecalculationJobAdapter={createInTransaction(client:PoolClient,input:{projectId:string;principal:OperationPrincipal;scope:'project';preferences:RecalculationPreferences;timeoutMilliseconds:number;signal:AbortSignal;beforeInsert():Promise<void>}):Promise<RecalculationJobAdmission>};
+export type RecalculationJobAdapter={createInTransaction(client:PoolClient,input:{projectId:string;principal:OperationPrincipal;scope:'project';preferences:RecalculationPreferences;timeoutMilliseconds:number;signal:AbortSignal;beforeInsert():Promise<void>;automaticPairSource?:Extract<AutomaticPairSource,{kind:'automatic-generation'}>}):Promise<RecalculationJobAdmission>};
 export type RecalculationEnrollmentResult={status:'enrolled'|'blocked'|'duplicate'|'superseded';generation:string;jobId:string|null};
 
 export type RecalculationJobAuthority={enrolled:false}|{enrolled:true;valid:boolean;code:string;generation:string;authorityEpoch:string};
@@ -120,11 +198,14 @@ export async function pauseRecalculationForJob(c:PoolClient,input:{projectId:str
 
 export function createRecalculationRepository(pool:Pool,adapter:RecalculationJobAdapter){
   const repository={
-    async authorize(projectId:string,who:JobPrincipal){return recalculationTransaction(pool,projectId,who,async()=>undefined);},
+    async authorize(projectId:string,who:JobPrincipal,signal?:AbortSignal){return authorizePathFinderPreflight(pool,projectId,who,signal);},
     async context(projectId:string,who:JobPrincipal){return recalculationTransaction(pool,projectId,who,c=>context(c,projectId,who));},
     async command(projectId:string,who:JobPrincipal,raw:RecalculationCommand,signal?:AbortSignal):Promise<RecalculationReceipt>{
       const command=recalculationCommandSchema.parse(raw),requestSha256=hash(command);
       return recalculationTransaction(pool,projectId,who,async c=>{
+        // Match admission lock order: installation before the scheduler state latch.
+        const outputPrincipal=command.schemaVersion==='wfc.pf.recalculation-command.v2'
+          ?(await c.query<Row>('/* automatic-generation:enable-principal */ SELECT u.is_admin,u.pf_admin_revision::text AS admin_revision,i.installation_epoch FROM users u CROSS JOIN pf_installation_state i WHERE u.id=$1 AND i.singleton=true FOR SHARE OF u,i',[who.userId])).rows[0]:undefined;
         const s=await state(c,projectId,true);
         const prior=(await c.query<Row>('SELECT request_sha256,receipt FROM pf_recalculation_commands WHERE project_id=$1 AND actor_id=$2 AND idempotency_key=$3',[projectId,who.userId,command.idempotencyKey])).rows[0];
         if(prior){if(prior.request_sha256!==requestSha256)return fail('RECALCULATION_IDEMPOTENCY_CONFLICT');return recalculationReceiptSchema.parse({...prior.receipt,duplicate:true});}
@@ -132,21 +213,41 @@ export function createRecalculationRepository(pool:Pool,adapter:RecalculationJob
         if(s.control_revision!==command.expectedControlRevision)return fail('RECALCULATION_CONTROL_CONFLICT');
         const count=(await c.query<{count:string}>('SELECT count(*)::text AS count FROM pf_recalculation_commands WHERE project_id=$1',[projectId])).rows[0];if(BigInt(count.count)>=4096n)return fail('RECALCULATION_COMMAND_RETENTION_LIMIT',413);
         const live=await storedAuthority(c,s);
-        const sameEnable=command.action==='enable'&&s.enabled&&!s.paused&&live&&hash(s.preferences)===hash(command.preferences)&&s.timeout_ms===command.timeoutMilliseconds;
+        const requestedPolicy=command.action==='enable'&&command.schemaVersion==='wfc.pf.recalculation-command.v2'?command.automaticPairPolicy:null;
+        const existingOutput=activeAutomaticGenerationAuthorization(s);
+        const continuationPolicy=command.schemaVersion==='wfc.pf.recalculation-command.v2'&&command.action!=='enable'?command.automaticPairPolicy:null;
+        if(continuationPolicy)await requireContinuationOutput(c,s,who,continuationPolicy,outputPrincipal);
+        const sameEnable=command.action==='enable'&&command.schemaVersion==='wfc.pf.recalculation-command.v1'&&s.enabled&&!s.paused&&live&&hash(s.preferences)===hash(command.preferences)&&s.timeout_ms===command.timeoutMilliseconds
+          &&hash(requestedPolicy)===hash(existingOutput?.policy??null);
         if(!sameEnable){
           if(command.action==='resume'||command.action==='retry'){if(!s.enabled||!s.preferences||!s.timeout_ms)return fail('RECALCULATION_ENABLE_REQUIRED');}
           const renew=['enable','resume','retry'].includes(command.action),enabled=command.action==='disable'?false:command.action==='enable'?true:s.enabled,paused=command.action==='disable'?false:command.action==='pause'?true:renew?false:s.paused;
           if(command.action==='pause'&&!s.enabled)return fail('RECALCULATION_ENABLE_REQUIRED');
           const expiry=new Date(Math.min(who.loginExpiresAt,Date.now()+RECALCULATION_LIMITS.authorityMilliseconds));
+          let output:AutomaticGenerationAuthorization|null=null;
+          if(requestedPolicy){
+            const principal=outputPrincipal;
+            if(!principal?.is_admin)return fail('ADMIN_REQUIRED',403);
+            output=automaticGenerationAuthorizationSchema.parse({schemaVersion:'wfc.pf.automatic-generation-output-authority.v1',projectId,actorId:who.userId,
+              actorAdminRevision:principal.admin_revision,loginId:who.loginId,loginExpiresAt:new Date(who.loginExpiresAt).toISOString(),installationEpoch:principal.installation_epoch,
+              commandKey:command.idempotencyKey,commandSha256:requestSha256,controlRevision:(BigInt(s.control_revision)+1n).toString(),authorityEpoch:(BigInt(s.authority_epoch)+1n).toString(),
+              createdAt:new Date().toISOString(),authorityExpiresAt:expiry.toISOString(),policy:requestedPolicy});
+          }else if(command.action!=='enable'&&command.action!=='disable'&&existingOutput&&existingOutput.actorId===who.userId&&existingOutput.loginId===who.loginId)output=existingOutput;
           await c.query(`UPDATE pf_recalculation_state SET control_revision=control_revision+1,authority_epoch=authority_epoch+1,enabled=$2,paused=$3,
             actor_id=CASE WHEN $4 THEN $5 ELSE actor_id END,login_id=CASE WHEN $4 THEN $6 ELSE login_id END,login_expires_at=CASE WHEN $4 THEN $7 ELSE login_expires_at END,authority_expires_at=CASE WHEN $4 THEN $8 ELSE authority_expires_at END,
-            preferences=$9,timeout_ms=$10,status=$11,reason_codes=$12,updated_at=clock_timestamp() WHERE project_id=$1`,
-          [projectId,enabled,paused,renew,who.userId,who.loginId,new Date(who.loginExpiresAt),expiry,command.action==='enable'?command.preferences:s.preferences,command.action==='enable'?command.timeoutMilliseconds:s.timeout_ms,!enabled?'disabled':paused?'paused':'debouncing',JSON.stringify(!enabled?['AUTOMATIC_DISABLED']:paused?['AUTOMATIC_PAUSED']:['AUTOMATIC_REQUESTED'])]);
+            preferences=$9,timeout_ms=$10,status=$11,reason_codes=$12,automatic_pair_authority=$13,updated_at=clock_timestamp() WHERE project_id=$1`,
+          [projectId,enabled,paused,renew,who.userId,who.loginId,new Date(who.loginExpiresAt),expiry,command.action==='enable'?command.preferences:s.preferences,command.action==='enable'?command.timeoutMilliseconds:s.timeout_ms,!enabled?'disabled':paused?'paused':'debouncing',JSON.stringify(!enabled?['AUTOMATIC_DISABLED']:paused?['AUTOMATIC_PAUSED']:['AUTOMATIC_REQUESTED']),output]);
           if(renew)await markRecalculationDirty(c,{projectId,domain:command.action==='enable'?'preferences':'manual',reason:command.action==='retry'?'EXPLICIT_RETRY':command.action==='resume'?'EXPLICIT_RESUME':'AUTOMATIC_ENABLED'});
           if(!renew)await c.query('UPDATE pf_jobs SET cancel_requested=true,updated_at=now() WHERE project_id=$1 AND id IN(SELECT job_id FROM pf_recalculation_enrollments WHERE project_id=$1) AND state IN(\'queued\',\'running\')',[projectId]);
         }
-        const receipt=recalculationReceiptSchema.parse({schemaVersion:'wfc.pf.recalculation-command-receipt.v1',duplicate:false,context:await context(c,projectId,who)});
-        await c.query('INSERT INTO pf_recalculation_commands(project_id,actor_id,idempotency_key,request_sha256,request,receipt) VALUES($1,$2,$3,$4,$5,$6)',[projectId,who.userId,command.idempotencyKey,requestSha256,command,receipt]);return receipt;
+        const after=await state(c,projectId),output=activeAutomaticGenerationAuthorization(after);
+        const receipt=recalculationReceiptSchema.parse({schemaVersion:'wfc.pf.recalculation-command-receipt.v1',duplicate:false,context:await context(c,projectId,who,after),
+          ...(output?{automaticPairAuthorization:output}:{})});
+        const continued=continuationPolicy?await requireContinuationOutput(c,after,who,continuationPolicy,outputPrincipal):null;
+        if(continuationPolicy&&hash(receipt.context.automaticPairPolicy??null)!==hash(continuationPolicy))return outputEnableRequired();
+        await c.query('INSERT INTO pf_recalculation_commands(project_id,actor_id,idempotency_key,request_sha256,request,receipt) VALUES($1,$2,$3,$4,$5,$6)',[projectId,who.userId,command.idempotencyKey,requestSha256,command,receipt]);
+        if(continued&&Date.now()>=Date.parse(continued.authorityExpiresAt))return outputEnableRequired();
+        return receipt;
       },signal);
     },
     /** Only scheduler rows are held. No project/user/cable lock is acquired by a claim. */
@@ -171,7 +272,8 @@ export function createRecalculationRepository(pool:Pool,adapter:RecalculationJob
         await c.query(`INSERT INTO pf_recalculation_claims(project_id,generation,control_revision,authority_epoch,claim_id,owner_token,lease_until) VALUES($1,$2,$3,$4,$5,$6,$7)
           ON CONFLICT(project_id) DO UPDATE SET generation=EXCLUDED.generation,control_revision=EXCLUDED.control_revision,authority_epoch=EXCLUDED.authority_epoch,claim_id=EXCLUDED.claim_id,owner_token=EXCLUDED.owner_token,lease_until=EXCLUDED.lease_until,created_at=now()`,[s.project_id,s.desired_generation,s.control_revision,s.authority_epoch,claimId,ownerToken,lease]);
         await c.query("UPDATE pf_recalculation_state SET status='collecting',attempts=CASE WHEN attempt_generation=desired_generation THEN attempts+1 ELSE 1 END,attempt_generation=desired_generation,updated_at=clock_timestamp() WHERE project_id=$1",[s.project_id]);
-        signal?.throwIfAborted();committing=true;await c.query('COMMIT');return {projectId:s.project_id,generation:revision(s.desired_generation),controlRevision:revision(s.control_revision),authorityEpoch:revision(s.authority_epoch),claimId,ownerToken,leaseExpiresAt:lease.toISOString(),principal:{userId:s.actor_id,loginId:s.login_id,loginExpiresAt:new Date(s.login_expires_at).getTime()},preferences:recalculationPreferencesSchema.parse(s.preferences),timeoutMilliseconds:s.timeout_ms};
+        signal?.throwIfAborted();committing=true;await c.query('COMMIT');return {projectId:s.project_id,generation:revision(s.desired_generation),controlRevision:revision(s.control_revision),authorityEpoch:revision(s.authority_epoch),claimId,ownerToken,leaseExpiresAt:lease.toISOString(),principal:{userId:s.actor_id,loginId:s.login_id,loginExpiresAt:new Date(s.login_expires_at).getTime()},preferences:recalculationPreferencesSchema.parse(s.preferences),timeoutMilliseconds:s.timeout_ms,
+          ...(activeAutomaticGenerationAuthorization(s)?{automaticPairAuthorization:activeAutomaticGenerationAuthorization(s)!}:{})};
       }catch(error){discard=committing;try{await c.query('ROLLBACK');}catch{discard=true;}throw error;}finally{c.release(discard?true:undefined);}
     },
     async enrollClaim(claim:RecalculationClaim,externalSignal?:AbortSignal):Promise<RecalculationEnrollmentResult>{
@@ -189,13 +291,15 @@ export function createRecalculationRepository(pool:Pool,adapter:RecalculationJob
           if(!s.enabled||s.paused||s.actor_id!==claim.principal.userId||s.login_id!==claim.principal.loginId||new Date(s.authority_expires_at).getTime()<=Date.now())return fail('AUTOMATIC_ENROLLMENT_REVOKED');
           if(s.engine_unavailable_code)return fail('ENGINE_IDENTITY_UNAVAILABLE');
           if(hash(s.preferences)!==hash(recalculationPreferencesSchema.parse(claim.preferences))||s.timeout_ms!==claim.timeoutMilliseconds||cl.control_revision!==claim.controlRevision)return fail('RECALCULATION_CLAIM_INPUT_MISMATCH');
+          if(hash(activeAutomaticGenerationAuthorization(s))!==hash(claim.automaticPairAuthorization??null))return fail('AUTOMATIC_OUTPUT_AUTHORITY_CHANGED');
           guarded=true;guardState=s;
         };
-        const admission=await adapter.createInTransaction(c,{projectId:claim.projectId,principal:claim.principal,scope:'project',preferences:claim.preferences,timeoutMilliseconds:claim.timeoutMilliseconds,signal,beforeInsert});
+        const admission=await adapter.createInTransaction(c,{projectId:claim.projectId,principal:claim.principal,scope:'project',preferences:claim.preferences,timeoutMilliseconds:claim.timeoutMilliseconds,signal,beforeInsert,
+          ...(claim.automaticPairAuthorization?{automaticPairSource:{kind:'automatic-generation' as const,generation:claim.generation,controlRevision:claim.controlRevision,authorityEpoch:claim.authorityEpoch,authorization:claim.automaticPairAuthorization}}:{})});
         if(!guarded||!guardState)return fail('RECALCULATION_ADAPTER_GUARD_MISSING',500);signal.throwIfAborted();
         if(!/^[a-f0-9]{64}$(?![\s\S])/.test(admission.inputSha256)||!Number.isSafeInteger(admission.total)||admission.total<0||admission.total>10000||!Number.isSafeInteger(admission.readyCables)||!Number.isSafeInteger(admission.blockedCables)||admission.readyCables<0||admission.blockedCables<0||admission.readyCables+admission.blockedCables!==admission.total||(admission.jobId===null)!==(admission.readyCables===0))return fail('RECALCULATION_ADAPTER_RESULT_INVALID',500);
         if(admission.jobId)policyUuidSchema.parse(admission.jobId);const codes=reasons(admission.reasonCodes);
-        await c.query(`INSERT INTO pf_recalculation_enrollments(project_id,generation,control_revision,authority_epoch,actor_id,login_id,authority_expires_at,job_id,input_sha256,total,ready_cables,blocked_cables,reason_codes) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,[claim.projectId,claim.generation,claim.controlRevision,claim.authorityEpoch,claim.principal.userId,claim.principal.loginId,guardState.authority_expires_at,admission.jobId,admission.inputSha256,admission.total,admission.readyCables,admission.blockedCables,JSON.stringify(codes)]);
+        await c.query(`INSERT INTO pf_recalculation_enrollments(project_id,generation,control_revision,authority_epoch,actor_id,login_id,authority_expires_at,job_id,input_sha256,total,ready_cables,blocked_cables,reason_codes,automatic_pair_authority) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,[claim.projectId,claim.generation,claim.controlRevision,claim.authorityEpoch,claim.principal.userId,claim.principal.loginId,guardState.authority_expires_at,admission.jobId,admission.inputSha256,admission.total,admission.readyCables,admission.blockedCables,JSON.stringify(codes),claim.automaticPairAuthorization??null]);
         await c.query(`UPDATE pf_recalculation_state SET enrolled_generation=$2,current_job_id=$3,status=$4,reason_codes=$5,total=$6,completed=$7,ready_cables=$8,blocked_cables=$9,first_dirty_at=NULL,due_at=NULL,updated_at=clock_timestamp() WHERE project_id=$1`,[claim.projectId,claim.generation,admission.jobId,admission.jobId?'queued':'blocked',JSON.stringify(codes),admission.total,admission.blockedCables,admission.readyCables,admission.blockedCables]);
         signal.throwIfAborted();if(new Date(guardState.authority_expires_at).getTime()<=Date.now())return fail('AUTOMATIC_AUTHORITY_EXPIRED');
         return {status:admission.jobId?'enrolled' as const:'blocked' as const,generation:claim.generation,jobId:admission.jobId};

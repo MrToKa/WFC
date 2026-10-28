@@ -29,15 +29,21 @@ export function assertConservationPolicy(config) {
   need(exact(binding, ['schemaVersion', 'selection', 'selector', 'qualifier'])
     && binding.schemaVersion === 'wfc.pf.owned-update-policy-binding.v1'
     && exact(binding.selection, ['schemaVersion', 'profile']) && binding.selection.schemaVersion === 'wfc.pf.delivery-policy-selection.v1'
-    && ['post-b9-no-ddl-conservation-v4','post-b20-terminal-closure-additive-v5'].includes(binding.selection.profile), 'B9_CONSERVATION_POLICY_INVALID');
+    && ['post-b9-no-ddl-conservation-v4','post-b20-terminal-closure-additive-v5','post-b27-automatic-pair-additive-v6'].includes(binding.selection.profile), 'B9_CONSERVATION_POLICY_INVALID');
   need(config.directory === path.join(SCRATCH, 'barrier-delivery-' + config.operationId), 'B9_CONSERVATION_POLICY_OPERATION_REQUIRED');
-  const version = binding.selection.profile === 'post-b20-terminal-closure-additive-v5' ? 'v5' : 'v4';
+  const version = binding.selection.profile === 'post-b27-automatic-pair-additive-v6' ? 'v6' : binding.selection.profile === 'post-b20-terminal-closure-additive-v5' ? 'v5' : 'v4';
   for (const [key, filename] of [['selector', 'delivery-policy-selector-' + version + '.mjs'], ['qualifier', 'migration-conservation-' + version + '.mjs']]) {
     const record = binding[key];
     need(exact(record, ['path', 'bytes', 'sha256']) && record.path === path.join(ROOT, 'scripts/pathfinder-barriers', filename)
       && Number.isSafeInteger(record.bytes) && record.bytes > 0 && record.bytes <= 4 * 1024 ** 2 && SHA.test(record.sha256 ?? '')
       && Array.isArray(config.sourceClosure) && config.sourceClosure.filter(row => row.path === record.path).length === 1
       && same(config.sourceClosure.find(row => row.path === record.path), record), 'B9_CONSERVATION_POLICY_CLOSURE_REQUIRED');
+  }
+  if (version === 'v6') {
+    const schema = path.join(ROOT, 'server/pathfinder/automaticPairSchema.ts');
+    const entries = config.sourceClosure.filter(row => row.path === schema);
+    need(entries.length === 1 && exact(entries[0], ['path','bytes','sha256']) && Number.isSafeInteger(entries[0].bytes)
+      && entries[0].bytes > 0 && entries[0].bytes <= 4 * 1024 ** 2 && SHA.test(entries[0].sha256 ?? ''), 'V6_AUTOMATIC_PAIR_SCHEMA_CLOSURE_REQUIRED');
   }
   return binding;
 }
@@ -168,7 +174,7 @@ export async function main(argv, suppliedRuntime) {
   need(typeof options['--operation'] === 'string' && path.isAbsolute(options['--operation']), 'B9_EXPLICIT_OPERATION_REQUIRED');
   const directory = path.resolve(options['--operation']);
   if (phase !== 'init') need(Object.keys(options).length === 1, 'B9_ARGUMENTS');
-  if (Object.hasOwn(options, '--conservation-policy')) need(['post-b9-no-ddl-conservation-v4','post-b20-terminal-closure-additive-v5'].includes(options['--conservation-policy']), 'B9_CONSERVATION_POLICY_INVALID');
+  if (Object.hasOwn(options, '--conservation-policy')) need(['post-b9-no-ddl-conservation-v4','post-b20-terminal-closure-additive-v5','post-b27-automatic-pair-additive-v6'].includes(options['--conservation-policy']), 'B9_CONSERVATION_POLICY_INVALID');
   const runtime = suppliedRuntime ?? (await import('./owned-update-v3-runtime.mjs')).createConcreteRuntime();
   if (phase === 'init') return await runtime.initialize(directory, options['--qualified-inventory'], options['--inventory-sha'],
     ...(Object.hasOwn(options, '--conservation-policy') ? [options['--conservation-policy']] : []));

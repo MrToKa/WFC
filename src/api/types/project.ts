@@ -81,6 +81,7 @@ export type ProjectCableLayout = {
   considerBundleSpacingAsFree: boolean | null;
   minFreeSpacePercent: number | null;
   maxFreeSpacePercent: number | null;
+  autoRerouteForFreeSpace?: boolean;
   mv: ProjectCableCategorySettings | null;
   power: ProjectCableCategorySettings | null;
   vfd: ProjectCableCategorySettings | null;
@@ -99,6 +100,7 @@ export type ProjectCableLayoutInput = {
   considerBundleSpacingAsFree?: boolean | null;
   minFreeSpacePercent?: number | null;
   maxFreeSpacePercent?: number | null;
+  autoRerouteForFreeSpace?: boolean;
   mv?: ProjectCableCategorySettingsInput;
   power?: ProjectCableCategorySettingsInput;
   vfd?: ProjectCableCategorySettingsInput;

@@ -31,5 +31,9 @@ export async function fetchRecalculationContext(projectId: string, token: string
 }
 export async function sendRecalculationCommand(projectId: string, token: string, body: RecalculationCommand, signal?: AbortSignal): Promise<RecalculationReceipt> {
   const parsed = recalculationReceiptSchema.safeParse(await request(projectId, token, body, signal));
-  return parsed.success && parsed.data.context.projectId === projectId ? parsed.data : invalid();
+  if (!parsed.success || parsed.data.context.projectId !== projectId) return invalid();
+  if (body.schemaVersion === 'wfc.pf.recalculation-command.v2'
+    && (parsed.data.context.automaticPairPolicy?.schemaVersion !== body.automaticPairPolicy.schemaVersion
+      || parsed.data.context.automaticPairPolicy?.mode !== body.automaticPairPolicy.mode)) return invalid();
+  return parsed.data;
 }

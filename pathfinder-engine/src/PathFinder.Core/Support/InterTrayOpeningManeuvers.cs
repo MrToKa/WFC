@@ -172,11 +172,14 @@ namespace AddinRibbon.Routing
             while (true)
             {
                 budget.Charge(nodes.Count + directedEdges);
-                var path = ShortestPath(nodes, first, last, budget.Token, out cost); budget.Check();
+                var path = SelectPath(nodes, first, last, budget.Token, budget.RouteCostTrays, budget.RouteCosts, out cost); budget.Check();
+                if (budget.RouteCosts != null && path != null && incumbent != null)
+                    budget.Charge(2L * nodes.Count + 2L * directedEdges);
                 // Only a strictly cheaper verified candidate may displace the
                 // original clear graph. Equal costs retain its exact path and
                 // adjacency tie choice; unknown chords are lower bounds only.
-                if (incumbent != null && (path == null || cost.CompareTo(incumbentCost) >= 0))
+                if (incumbent != null && (path == null || CompareSelectedPaths(nodes, path, cost, incumbent, incumbentCost,
+                    budget.RouteCostTrays, budget.RouteCosts, budget.Token) >= 0))
                 { cost = incumbentCost; return incumbent; }
                 if (path == null) return null;
                 bool changed = false;

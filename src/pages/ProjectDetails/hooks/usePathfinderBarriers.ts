@@ -17,6 +17,7 @@ export type BarrierAuthoringPhase = 'idle' | 'loading' | 'capturing' | 'publishi
 export type BarrierAuthoringState = { registry: BarrierRegistry | null; dirty: boolean; pending: boolean };
 export type BarrierAuthoringOptions = {
   projectId: string | null; loadedProjectId: string | null; token: string | null; isAdmin: boolean;
+  refreshKey?: string | null;
   pf: Pick<ReturnType<typeof usePathFinder>, 'data' | 'viewerPhase' | 'preparationViewerGeneration' | 'readSelection' | 'runProjectPreparation' | 'busy'>;
 };
 type CaptureCommand = Parameters<typeof beginBarrierCapture>[2];
@@ -28,11 +29,11 @@ type Pending = (({ type: 'capture'; command: CaptureCommand; intent?: Intent; ob
   | { type: 'restored'; retention: BarrierPendingCommand; writeStarted: boolean }
   | { type: 'storage-blocked'; writeStarted: boolean }) & { recoveryOnly?: boolean };
 export type SavedBarrierSelection = { manifest: BarrierSnapshot; status: 'current' | 'recapture-required' | 'unavailable' };
-type View = { key: string; registry: BarrierRegistry | null; manifest: BarrierSnapshot | null; draftParents: BarrierSelectedParent[];
+type View = { key: string; readKey: string | null; registry: BarrierRegistry | null; manifest: BarrierSnapshot | null; draftParents: BarrierSelectedParent[];
   saved: SavedBarrierSelection | null; draftBase: Pick<BarrierRegistry, 'scope' | 'registryRevision'> | null;
   phase: BarrierAuthoringPhase; message: string | null; error: string | null; busy: boolean; pending: boolean; changed: boolean };
-type Context = { key: string; abort: AbortController; closed: boolean };
-const initial = (key: string): View => ({ key, registry: null, manifest: null, saved: null, draftBase: null, draftParents: [], phase: 'idle', message: null, error: null, busy: false, pending: false, changed: false });
+type Context = { key: string; requestedReadKey: string | null; abort: AbortController; closed: boolean };
+const initial = (key: string): View => ({ key, readKey: null, registry: null, manifest: null, saved: null, draftBase: null, draftParents: [], phase: 'idle', message: null, error: null, busy: false, pending: false, changed: false });
 const same = (a: unknown, b: unknown) => barrierCanonicalJson(a) === barrierCanonicalJson(b);
 const failure = (message: string, code: string) => Object.assign(new Error(message), { code });
 function freeze<T>(value: T): T {
@@ -56,7 +57,11 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
   const model = options.pf.data?.activeModel;
   const key = JSON.stringify([options.projectId, options.loadedProjectId, options.token, options.isAdmin,
     model?.modelVersionId, model?.selectionRevision, model?.contentFingerprint, options.pf.preparationViewerGeneration]);
-  const latest = useRef({ options, key }); latest.current = { options, key };
+  const preparedArtifactKey = JSON.stringify((options.pf.data?.artifacts ?? [])
+    .filter(artifact => artifact.modelVersionId === model?.modelVersionId)
+    .map(artifact => [artifact.id, artifact.snapshotSha256, artifact.readiness]).sort((a, b) => a[0].localeCompare(b[0])));
+  const readKey = JSON.stringify([preparedArtifactKey, options.refreshKey ?? null]);
+  const latest = useRef({ options, key, readKey }); latest.current = { options, key, readKey };
   const context = useRef<Context | null>(null), operation = useRef<AbortController | null>(null), locked = useRef(false);
   const pending = useRef<Pending | null>(null), denied = useRef(false);
   const [view, setView] = useState<View>(() => initial(key));
@@ -65,11 +70,20 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
   const enabled = Boolean(options.isAdmin && options.token && options.projectId && options.projectId === options.loadedProjectId
     && model?.modelVersionId && model.contentFingerprint && options.pf.viewerPhase === 'ready' && options.pf.preparationViewerGeneration >= 0);
   const recoveryEnabled = Boolean(options.isAdmin && options.token && options.projectId && options.projectId === options.loadedProjectId);
-  const currentView = view.key === key ? view : initial(key);
+  const scopedView = view.key === key ? view : initial(key);
+  // A new preparation invalidates admission at render time, before the effect
+  // can queue its GET. Authority, drafts and saved-command recovery stay intact.
+  const currentView = scopedView.readKey === readKey ? scopedView : { ...scopedView, registry: null, manifest: null,
+    saved: scopedView.saved ? { ...scopedView.saved, status: 'unavailable' as const } : null };
   const current = useCallback((run: Context) => {
     if (run.closed || run.abort.signal.aborted || context.current !== run || latest.current.key !== run.key)
       throw new DOMException('Barrier authoring context changed.', 'AbortError');
   }, []);
+  const currentRead = useCallback((run: Context, expected: string) => {
+    current(run);
+    if (latest.current.readKey !== expected)
+      throw failure('A newer project preparation requires a fresh barrier read.', 'BARRIER_READ_REPLACED');
+  }, [current]);
   const update = useCallback((run: Context, patch: Partial<View>) => {
     try {
       current(run);
@@ -85,18 +99,25 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
       throw failure('The barrier registry no longer describes the current model. Refresh barriers.', 'BARRIER_CONTEXT_CHANGED');
   }, []);
   const read = useCallback(async (run: Context, signal: AbortSignal, requireViewer = true) => {
-    const access = latest.current.options;
-    const registry = await getBarrierRegistry(access.projectId!, access.token!, signal); signal.throwIfAborted(); current(run); requireScope(registry, requireViewer);
-    const manifest = registry.snapshot ? await getBarrierSnapshot(access.projectId!, access.token!, registry.snapshot.snapshotId, signal) : null;
-    signal.throwIfAborted(); current(run);
-    if (manifest && !manifestMatches(registry, manifest)) throw failure('The published barrier manifest changed. Refresh barriers.', 'BARRIER_CONTEXT_CHANGED');
-    return { registry, manifest };
-  }, [current, requireScope]);
+    const { options: access, readKey: expected } = latest.current;
+    run.requestedReadKey = expected;
+    try {
+      const registry = await getBarrierRegistry(access.projectId!, access.token!, signal); signal.throwIfAborted(); currentRead(run, expected); requireScope(registry, requireViewer);
+      const manifest = registry.snapshot ? await getBarrierSnapshot(access.projectId!, access.token!, registry.snapshot.snapshotId, signal) : null;
+      signal.throwIfAborted(); currentRead(run, expected);
+      if (manifest && !manifestMatches(registry, manifest)) throw failure('The published barrier manifest changed. Refresh barriers.', 'BARRIER_CONTEXT_CHANGED');
+      return { registry, manifest, readKey: expected };
+    } catch (error) {
+      if (errorStatus(error) !== 401 && errorStatus(error) !== 403) currentRead(run, expected);
+      throw error;
+    }
+  }, [currentRead, requireScope]);
   const report = useCallback((run: Context, error: unknown, saved: Pending | null, definitiveWriteRefusal = false) => {
     // Old transport failures cannot mutate the new context's command or auth
     // latch merely because rendering that failure would already be ignored.
     try { current(run); } catch { return; }
     const status = errorStatus(error), code = errorCode(error);
+    if (code === 'BARRIER_READ_REPLACED') return;
     // A status/manifest GET or local context check cannot settle an earlier write.
     // Only a response from that first command attempt may prove its refusal;
     // an already uncertain attempt needs its exact same-key success receipt.
@@ -121,6 +142,7 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
     if (!enabled || !run || locked.current || denied.current) return;
     const controller = new AbortController(); operation.current = controller; locked.current = true;
     const signal = AbortSignal.any([run.abort.signal, controller.signal]);
+    const expected = latest.current.readKey;
     const previous = viewRef.current;
     // Last verified names are display history. Withhold current admission until
     // the entire registry/manifest read succeeds, including on a failed refresh.
@@ -140,6 +162,7 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
         message: pending.current ? 'A saved command still needs reconciliation. Refresh does not submit or replace it.'
           : oldFrame ? 'The published set belongs to another model frame. Select current-model objects and save a new set; old object identifiers cannot be reused automatically.' : null, error: null });
     } catch (error) {
+      if (latest.current.readKey !== expected && errorStatus(error) !== 401 && errorStatus(error) !== 403) return;
       report(run, error, pending.current);
       // History cannot restore current admission or settle an uncertain write.
       // Access denials never trigger another read or expose retained selections.
@@ -148,17 +171,20 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
           current(run); signal.throwIfAborted();
           const access = latest.current.options;
           const savedManifest = await getLatestBarrierSnapshot(access.projectId!, access.token!, signal);
-          signal.throwIfAborted(); current(run);
+          signal.throwIfAborted(); currentRead(run, expected);
           update(run, { saved: savedManifest ? { manifest: savedManifest, status: 'unavailable' } : null,
             message: savedManifest ? 'Saved obstacles were restored for reference. Prepare the current model before checking or recapturing this set.'
               : 'No saved barrier snapshot was found. Current barrier readiness is unavailable.' });
-        } catch (historyError) { report(run, historyError, pending.current); }
+        } catch (historyError) {
+          if (latest.current.readKey === expected || errorStatus(historyError) === 401 || errorStatus(historyError) === 403)
+            report(run, historyError, pending.current);
+        }
       }
     }
     finally { if (context.current === run) { locked.current = false; operation.current = null; update(run, { busy: false }); } }
-  }, [current, enabled, read, report, update]);
+  }, [current, currentRead, enabled, read, report, update]);
   useEffect(() => {
-    const run: Context = { key, abort: new AbortController(), closed: false };
+    const run: Context = { key, requestedReadKey: null, abort: new AbortController(), closed: false };
     context.current = run; pending.current = { type: 'storage-blocked', writeStarted: true }; denied.current = false; locked.current = false; operation.current?.abort(); operation.current = null;
     const blank = { ...initial(key), busy: true, pending: true }; viewRef.current = blank; setView(blank); setEmptyReason(''); setKind('wall');
     void (async () => {
@@ -173,6 +199,13 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
     })();
     return () => { run.closed = true; run.abort.abort(); operation.current?.abort(); };
   }, [key, enabled, refresh, current, update, options.projectId]);
+  useEffect(() => {
+    const run = context.current;
+    // Busy operations own the lock. Their final state update queues one read
+    // for the latest signature; intermediate publications are coalesced.
+    if (enabled && run && !run.closed && !locked.current && !viewRef.current.busy
+      && run.requestedReadKey !== readKey) void refresh();
+  }, [enabled, key, readKey, view, refresh]);
 
   const recoverCommand = useCallback(async (saved: Pending, close: boolean) => {
     const run = context.current, retained = 'retention' in saved ? saved.retention : undefined;
@@ -214,7 +247,7 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
         message: 'The exact saved command outcome is confirmed. Refreshing the actual published barrier set before releasing this command…' });
       // Historical settlement never supplies current readiness. Read the real
       // registry and hash-verified manifest, without requiring a running Viewer.
-      const found = await read(run, signal, false); signal.throwIfAborted(); current(run); await assertRetained();
+      const found = await read(run, signal, false); signal.throwIfAborted(); current(run); await assertRetained(); currentRead(run, found.readKey);
       const draftBase = previous.draftBase, keepDraft = previous.changed && draftBase !== null;
       const changedScope = Boolean(previous.changed && draftBase && (!same(draftBase.scope, found.registry.scope)
         || draftBase.registryRevision !== found.registry.registryRevision));
@@ -235,13 +268,13 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
       if (terminalConfirmed) update(run, { message: 'The exact command outcome was confirmed, but the current barrier set could not be refreshed. The saved recovery record remains locked. Inspect again after resolving the refresh error.' });
     }
     finally { if (context.current === run) { locked.current = false; operation.current = null; update(run, { busy: false }); } }
-  }, [current, read, recoveryEnabled, report, update]);
+  }, [current, currentRead, read, recoveryEnabled, report, update]);
   const inspect = useCallback(async () => { if (pending.current) await recoverCommand(pending.current, false); }, [recoverCommand]);
   const close = useCallback(async () => { if (pending.current) await recoverCommand(pending.current, true); }, [recoverCommand]);
 
   const addSelection = useCallback(async () => {
     const run = context.current, base = viewRef.current;
-    if (!enabled || !run || latest.current.options.pf.busy || locked.current || denied.current || pending.current || !base.registry || base.key !== key || base.phase === 'stale') return;
+    if (!enabled || !run || latest.current.options.pf.busy || locked.current || denied.current || pending.current || !base.registry || base.key !== key || base.readKey !== latest.current.readKey || base.phase === 'stale') return;
     locked.current = true; const controller = new AbortController(); operation.current = controller;
     const signal = AbortSignal.any([run.abort.signal, controller.signal]); update(run, { busy: true, error: null });
     try {
@@ -272,7 +305,7 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
   }, [current, enabled, key, kind, report, requireScope, update]);
   const removeParent = useCallback((selectionId: string) => {
     const run = context.current, base = viewRef.current;
-    if (!enabled || !run || locked.current || denied.current || pending.current || base.key !== key || !base.registry || base.phase === 'stale') return;
+    if (!enabled || !run || locked.current || denied.current || pending.current || base.key !== key || base.readKey !== latest.current.readKey || !base.registry || base.phase === 'stale') return;
     const draft = base.draftParents.filter(parent => parent.selectionId !== selectionId);
     update(run, { draftParents: draft, changed: !same(draft, base.registry.selectedParents), error: null,
       message: draft.length ? 'Removal is a draft. Saving recaptures every remaining parent; the published set stays unchanged until success.'
@@ -388,7 +421,8 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
       pending.current = null; setEmptyReason('');
       update(run, { ...found, saved: { manifest: found.manifest, status: 'current' }, draftParents: found.registry.selectedParents,
         draftBase: { scope: found.registry.scope, registryRevision: found.registry.registryRevision }, changed: false, pending: false, phase: 'ready',
-        message: 'Barrier set published. Its coverage is limited to the registered objects. Calculation integration is not enabled by this authoring step.', error: null });
+        message: saved.type === 'capture' ? `Barrier set saved. ${found.registry.selectedParents.length} selected ${found.registry.selectedParents.length === 1 ? 'object was' : 'objects were'} captured and the published set was verified.`
+          : 'Empty barrier declaration saved and verified.', error: null });
     } catch (error) {
       try { current(run); } catch { return; }
       if (definitiveWriteRefusal && saved.retention) {
@@ -401,7 +435,7 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
   }, [current, enabled, read, recoverCommand, report, requireScope, update]);
   const save = useCallback(async () => {
     const run = context.current, base = viewRef.current;
-    if (!enabled || !run || latest.current.options.pf.busy || locked.current || denied.current || pending.current || base.key !== key || !base.registry || base.phase === 'stale') return;
+    if (!enabled || !run || latest.current.options.pf.busy || locked.current || denied.current || pending.current || base.key !== key || base.readKey !== latest.current.readKey || !base.registry || base.phase === 'stale') return;
     try {
       requireScope(base.registry);
       let saved: Pending;

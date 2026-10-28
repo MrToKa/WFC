@@ -70,7 +70,8 @@ describe('R7 engine project scheduling (mocked SQL contract and decisions)',()=>
     expect(db.calls.indexOf(projectQuery)).toBeLessThan(db.calls.indexOf(jobQuery));
     expect(jobQuery.values).toEqual([project]);
     expect(jobQuery.sql).toContain("WHERE project_id=$1 AND (state='queued' OR state='running' AND lease_until<now())");
-    expect(jobQuery.sql).toContain('ORDER BY last_served_at ASC NULLS FIRST,created_at,id FOR UPDATE SKIP LOCKED LIMIT 1');
+    expect(jobQuery.sql).toContain("ORDER BY CASE WHEN kind='calculate' AND NOT cancel_requested AND EXISTS(");
+    expect(jobQuery.sql).toContain('THEN 0 ELSE 1 END,last_served_at ASC NULLS FIRST,created_at,id FOR UPDATE SKIP LOCKED LIMIT 1');
     expect(claimed).toMatchObject({id:jobId,project_id:project,state:'running',attempts:1});
     const service=db.calls.find(c=>c.sql.startsWith('UPDATE pf_engine_project_service'))!;
     expect(service.values).toEqual([project]);expect(service.sql).toContain('last_served_at=clock_timestamp()');

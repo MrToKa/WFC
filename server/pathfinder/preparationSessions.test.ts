@@ -116,6 +116,29 @@ describe('bounded preparation SQL with real authority transaction and mocked pg 
   });
 });
 describe('durable whole-network preparation lifecycle with mocked transactions and storage', () => {
+  it('publishes an explicit tray-only session with nonempty endpoint dependencies without claiming endpoint capture', async () => {
+    fake.context.endpointNames = ['=H1=KF1=TAC1', '=L1=LC1+3'];
+    input.discovery.endpointScope = { schemaVersion: 'wfc.pf.endpoint-discovery-scope.v1', mode: 'not-requested' };
+    const { s, session } = await collected();
+    expect(session.plan.diagnostics).toEqual([]);
+    expect(session.plan.requestedScope).toMatchObject({ scopeKind: 'server-requested-project-routing-only', endpointNames: fake.context.endpointNames, endpointEvidence: [], orderedEquipmentObjectIds: [] });
+    expect(session.plan.partPlan.every(part => part.equipmentObjectIds.length === 0 && part.equipmentNames.length === 0)).toBe(true);
+    const result = await s.publish(id(1), who, session.id, command(session.sessionRevision));
+    expect(result.aggregate.orderedScopeSha256).toBe(session.plan.requestedScope.scopeSha256);
+    expect(result.aggregate.requestedScopeComplete).toBe(true);
+    expect(fake.rows.get(session.id).state).toBe('published');
+    expect(adapters.publish).toHaveBeenCalledTimes(1);
+  });
+  it('retains endpoint-name freshness checks for an explicit tray-only session', async () => {
+    fake.context.endpointNames = ['=H1=KF1=TAC1'];
+    input.discovery.endpointScope = { schemaVersion: 'wfc.pf.endpoint-discovery-scope.v1', mode: 'not-requested' };
+    const { s, session } = await collected();
+    fake.context.endpointNames.push('=L1=LC1+3');
+    await expect(s.publish(id(1), who, session.id, command(session.sessionRevision))).rejects.toMatchObject({ code: 'PREPARATION_SCOPE_STALE' });
+    expect(fake.rows.get(session.id).state).toBe('stale');
+    expect(adapters.validateUnion).not.toHaveBeenCalled();
+    expect(adapters.publish).not.toHaveBeenCalled();
+  });
   it('selects capacity only from validated service construction and rejects caller profile injection', async () => {
     const legacy = await service().create(id(1), who, input);
     expect(legacy.plan.limitsProfile).toBe(LEGACY_PREPARATION_CAPACITY_PROFILE);
@@ -182,6 +205,39 @@ describe('durable whole-network preparation lifecycle with mocked transactions a
     expect(adapters.publish).not.toHaveBeenCalled(); expect(fake.aggregates).toHaveLength(0); expect(fake.rows.get(session.id).state).toBe('failed');
   });
   it('creates once on exact replay and refuses a different request under the same key', async () => { const s = service(), first = await s.create(id(1), who, input); expect((await s.create(id(1), who, input)).id).toBe(first.id); expect(fake.rows.size).toBe(1); await expect(s.create(id(1), who, { ...input, discovery: { ...input.discovery, complete: false } })).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' }); });
+  it.each(['TRAY_ROOT_MISSING', 'TRAY_ROOT_AMBIGUOUS'] as const)('publishes complete included geometry while recording %s as a temporary scope omission', async reason => {
+    fake.context.trays.push({ ...fake.context.trays[0], projectTrayId: id(30), rawName: '/B002', routeName: '/B002' });
+    input.discovery.objects.push(
+      { objectId: 'dbid:4', parentId: null, name: '/B002', hasGeometry: true, isPhysicalLeaf: true, orderIndex: 1 },
+      { objectId: 'dbid:5', parentId: null, name: '/B002', hasGeometry: true, isPhysicalLeaf: true, orderIndex: 2 },
+    );
+    input.discovery.trays.push({ projectTrayId: id(30), candidateRootObjectIds: reason === 'TRAY_ROOT_MISSING' ? [] : ['dbid:4', 'dbid:5'] });
+    input.unresolvedTrayPolicy = 'skip';
+    const { s, session, part } = await collected();
+    expect(session.plan.requestedScope).toMatchObject({ unresolvedTrayPolicy: 'skip', skippedTrays: [{ projectTrayId: id(30), reason }], excludedProjectTrayIds: [id(30)], orderedPhysicalLeafIds: ['dbid:3'] });
+    expect(session.plan.diagnostics).toEqual([]);
+    expect(session.coverage).toMatchObject({ expectedParts: 1, committedParts: 1, requestedScopeComplete: true });
+    const publication = await s.publish(id(1), who, session.id, command(session.sessionRevision));
+    expect(publication.aggregate.requestedScopeComplete).toBe(true);
+    expect(publication.aggregate.wholePlantGeometry).toBe(false);
+    expect(publication.aggregate.orderedScopeSha256).toBe(session.plan.requestedScope.scopeSha256);
+    expect(publication.aggregate.partReferences.map(value => value.partId)).toEqual([part.partId]);
+    expect((await s.create(id(1), who, input)).id).toBe(session.id);
+    expect(adapters.publish).toHaveBeenCalledOnce();
+    expect(fake.context.resolutions).toEqual([]);
+    expect(fake.calls.some(sql => sql.includes('INSERT INTO pf_preparation_resolutions') || sql.includes('INSERT INTO pf_preparation_resolution_events'))).toBe(false);
+  });
+  it('does not reinterpret an old strict command or publish a zero-geometry skipped plan', async () => {
+    const s = service(), strict = await s.create(id(1), who, input);
+    await expect(s.create(id(1), who, { ...input, unresolvedTrayPolicy: 'skip' })).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
+    input = { ...input, idempotencyKey: id(31), unresolvedTrayPolicy: 'skip', discovery: { ...input.discovery, trays: [{ projectTrayId: id(10), candidateRootObjectIds: [] }] } };
+    const empty = await s.create(id(1), who, input);
+    expect(empty.id).not.toBe(strict.id);
+    expect(empty.plan.diagnostics.map(value => value.code)).toEqual(['NO_AUTHORIZED_ROUTING_GEOMETRY']);
+    expect(empty.coverage.requestedScopeComplete).toBe(false);
+    await expect(s.publish(id(1), who, empty.id, command(empty.sessionRevision))).rejects.toMatchObject({ code: 'PREPARATION_PARTS_INCOMPLETE' });
+    expect(adapters.validateUnion).not.toHaveBeenCalled(); expect(adapters.publish).not.toHaveBeenCalled();
+  });
   it('fsync-backed committed part replay cannot advance revision or publish a partial artifact', async () => { const { s, session, part } = await collected(); const result = await s.upload(id(1), who, session.id, part.partId, session.plan.orderedPlanSha256, payload(id(1))); expect(result.duplicate).toBe(true); expect(result.sessionRevision).toBe(session.sessionRevision); expect(fake.aggregates).toHaveLength(0); expect(adapters.publish).not.toHaveBeenCalled(); });
   it('historical part replay survives own publication and later scope changes under fresh authority', async () => { const { s, session, part } = await collected(); await s.publish(id(1), who, session.id, command(session.sessionRevision)); fake.context.scope.locationRegistryRevision = '5'; fake.context.scope.catalogRevision = '9'; const result = await s.upload(id(1), who, session.id, part.partId, session.plan.orderedPlanSha256, payload(id(1))); expect(result.duplicate).toBe(true); expect(fake.rows.get(session.id).state).toBe('published'); expect(fake.parts.size).toBe(1); fake.authorized = false; await expect(s.upload(id(1), who, session.id, part.partId, session.plan.orderedPlanSha256, payload(id(1)))).rejects.toMatchObject({ code: 'ADMIN_REQUIRED' }); });
   it('a conflicting historical part cannot replace its existing bytes even after scope changes', async () => { const { s, session, part } = await collected(); fake.context.scope.catalogRevision = '9'; const changed = payload(id(1)); changed.objects[0].bounds.maximum[0] = 2; await expect(s.upload(id(1), who, session.id, part.partId, session.plan.orderedPlanSha256, changed)).rejects.toMatchObject({ code: 'PART_IDENTITY_CONFLICT' }); expect(fake.parts.size).toBe(1); });

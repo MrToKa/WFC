@@ -6,6 +6,23 @@ import { parsePurposeJson, policyUuidSchema } from '../../../../shared/pathfinde
 
 const STORAGE_KEY = 'wfc.pathfinder.recalculation.pending.v1';
 const MAX_INTENT_BYTES = 65536, MAX_INTENT_AGE = 24 * 60 * 60 * 1000;
+export const RECALCULATION_BUSY_RECOVERY = Object.freeze({ deadlineMilliseconds: 30000, delaysMilliseconds: [500, 1500] as const });
+const recoverableBusy = (error: unknown) => error instanceof RecalculationsApiError && error.status === 503 && error.outcome === 'unknown'
+  && ['PREFLIGHT_DATABASE_BUSY', 'RECALCULATION_DATABASE_BUSY'].includes(error.code);
+function abortable<T>(pending: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(signal.reason);
+  let abort!: () => void;
+  const stopped = new Promise<never>((_resolve, reject) => { abort = () => reject(signal.reason); signal.addEventListener('abort', abort, { once: true }); });
+  return Promise.race([pending, stopped]).finally(() => signal.removeEventListener('abort', abort));
+}
+function recoveryDelay(milliseconds: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) { reject(signal.reason); return; }
+    const abort = () => { clearTimeout(timer); signal.removeEventListener('abort', abort); reject(signal.reason); };
+    const timer = setTimeout(() => { signal.removeEventListener('abort', abort); resolve(); }, milliseconds);
+    signal.addEventListener('abort', abort, { once: true });
+  });
+}
 const storedIntentSchema = z.object({ version: z.literal(1), projectId: policyUuidSchema, accountId: policyUuidSchema,
   tokenEpoch: z.string().regex(/^[a-f0-9]{64}(?![\s\S])/), savedAt: z.number().int().nonnegative(), command: recalculationCommandSchema }).strict();
 const removeIntent = () => { try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* Recovery remains in memory when browser storage is unavailable. */ } };
@@ -13,7 +30,10 @@ async function tokenEpoch(token: string): Promise<string> {
   return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token)))].map(v => v.toString(16).padStart(2, '0')).join('');
 }
 function freezeCommand(body: RecalculationCommand): RecalculationCommand {
-  const copy = structuredClone(body); if ('preferences' in copy) Object.freeze(copy.preferences); return Object.freeze(copy);
+  const copy = structuredClone(body);
+  if ('preferences' in copy) Object.freeze(copy.preferences);
+  if ('automaticPairPolicy' in copy) Object.freeze(copy.automaticPairPolicy);
+  return Object.freeze(copy);
 }
 
 export type RecalculationAccess = {
@@ -34,6 +54,7 @@ export function usePathfinderRecalculations(access: RecalculationAccess) {
   const latestAccount = useRef(account); latestAccount.current = account;
   const callbacks = useRef(access); callbacks.current = access;
   const operation = useRef<AbortController | null>(null), busy = useRef(false), previous = useRef<string | null>(null);
+  const executionOwner = useRef<object | null>(null);
   const deniedAccount = useRef<string | null>(null);
   const mountedGeneration = useRef(0);
   const current = state.identity === identity ? state : { identity, context: null, busy: false, error: null, conflict: false };
@@ -66,45 +87,66 @@ export function usePathfinderRecalculations(access: RecalculationAccess) {
           }
         } catch { if (latest.current === started && !abort.signal.aborted) { removeIntent(); setStorageWarning('Saved command recovery is unavailable. Current server status has been refreshed.'); } }
       }
-      const key = JSON.stringify([context.controlRevision, context.desiredGeneration, context.enrolledGeneration, context.status, context.jobId, context.completed, context.total, context.readyCables, context.blockedCables, context.reasonCodes]);
+      const key = JSON.stringify([context.controlRevision, context.desiredGeneration, context.enrolledGeneration, context.status, context.jobId, context.completed, context.total, context.readyCables, context.blockedCables, context.reasonCodes, context.automaticPairPolicy, context.progress]);
       const changed = previous.current !== null && previous.current !== key; previous.current = key;
-      setState(s => ({ ...s, identity: started, context, error: null }));
+      setState(s => ({ ...s, identity: started, context, error: pending.current?.account === account ? s.error : null }));
       if (changed) callbacks.current.onChanged?.();
     } catch (error) {
       if (latest.current !== started || abort.signal.aborted) return;
-      if (!authorityFailure(error)) setState(s => ({ ...s, identity: started, context: null, error: error instanceof Error ? error.message : 'Recalculation status could not be read.' }));
+      if (!authorityFailure(error)) setState(s => ({ ...s, identity: started,
+        context: pending.current?.account === account ? s.context : null,
+        error: pending.current?.account === account && s.error ? s.error : error instanceof Error ? error.message : 'Recalculation status could not be read.' }));
     }
   }, [enabled, access.active, access.projectId, access.token, access.accountId, identity, account, authorityFailure]);
   useEffect(() => {
     mountedGeneration.current++;
-    operation.current?.abort(); busy.current = false; previous.current = null;
+    executionOwner.current = null; operation.current?.abort(); busy.current = false; previous.current = null;
     if (priorAccount.current !== account || !enabled || !access.accountId) { removeIntent(); setStorageWarning(null); }
     priorAccount.current = account;
     if (pending.current?.account !== account) { pending.current = null; bumpPending(v => v + 1); }
-    setState({ identity, context: null, busy: false, error: null, conflict: false });
+    setState(s => ({ identity, context: null, busy: false, error: pending.current?.account === account ? s.error : null, conflict: false }));
     void refresh();
     const timer = enabled && access.active ? setInterval(() => void refresh(), 10000) : null;
-    return () => { mountedGeneration.current++; operation.current?.abort(); if (timer !== null) clearInterval(timer); };
+    return () => { mountedGeneration.current++; executionOwner.current = null; operation.current?.abort(); if (timer !== null) clearInterval(timer); };
   }, [identity, account, enabled, access.active, refresh]);
   const execute = useCallback(async (body: RecalculationCommand) => {
     if (!enabled || !access.active || busy.current || deniedAccount.current === account) return;
     const started = identity, generation = mountedGeneration.current, abort = new AbortController(); operation.current?.abort(); operation.current = abort; busy.current = true;
+    const owner = {}; executionOwner.current = owner;
+    let recoveryExpired = false;
+    const recoveryTimer = setTimeout(() => { recoveryExpired = true; abort.abort(new Error('The saved command could not be confirmed within 30 seconds. Retry the same saved command.')); }, RECALCULATION_BUSY_RECOVERY.deadlineMilliseconds);
     setState(s => ({ ...s, busy: true, error: null, conflict: false }));
     try {
-      await sendRecalculationCommand(access.projectId!, access.token!, body, abort.signal);
-      if (mountedGeneration.current !== generation) return;
+      for (let attempt = 0; ; attempt++) {
+        try { await abortable(sendRecalculationCommand(access.projectId!, access.token!, body, abort.signal), abort.signal); break; }
+        catch (error) {
+          if (!recoverableBusy(error) || attempt >= RECALCULATION_BUSY_RECOVERY.delaysMilliseconds.length || abort.signal.aborted
+            || latest.current !== started || mountedGeneration.current !== generation) throw error;
+          setState(s => ({ ...s, error: 'The service is busy. Retrying the same saved command; no replacement is submitted.' }));
+          await recoveryDelay(RECALCULATION_BUSY_RECOVERY.delaysMilliseconds[attempt], abort.signal);
+        }
+      }
+      clearTimeout(recoveryTimer);
+      if (mountedGeneration.current !== generation || executionOwner.current !== owner) return;
       // A receipt confirms the command, even when refreshing current status later fails.
       if (pending.current?.body === body) { pending.current = null; removeIntent(); bumpPending(v => v + 1); }
       if (latest.current !== started || abort.signal.aborted) return;
       busy.current = false; setState(s => ({ ...s, busy: false }));
       previous.current = null; callbacks.current.onChanged?.(); await refresh();
     } catch (error) {
-      if (latest.current !== started || abort.signal.aborted) return;
+      if (latest.current !== started || executionOwner.current !== owner || abort.signal.aborted && !recoveryExpired) return;
       if (authorityFailure(error)) return;
       const refused = error instanceof RecalculationsApiError && error.outcome === 'refused';
       if (refused) { pending.current = null; removeIntent(); bumpPending(v => v + 1); }
-      setState(s => ({ ...s, error: error instanceof Error ? error.message : 'The command outcome is unknown. Retry the same command.', conflict: refused }));
-    } finally { if (latest.current === started && mountedGeneration.current === generation) { busy.current = false; setState(s => ({ ...s, busy: false })); } }
+      setState(s => ({ ...s, error: recoveryExpired ? 'The saved command could not be confirmed within 30 seconds. Retry the same saved command.'
+        : error instanceof Error ? error.message : 'The command outcome is unknown. Retry the same command.', conflict: refused && !(error instanceof RecalculationsApiError && error.code === 'AUTOMATIC_OUTPUT_ENABLE_REQUIRED') }));
+      if (refused && error instanceof RecalculationsApiError && error.code === 'AUTOMATIC_OUTPUT_ENABLE_REQUIRED') {
+        busy.current = false; setState(s => ({ ...s, busy: false })); await refresh();
+        if (latest.current === started && executionOwner.current === owner) setState(s => ({ ...s, error: error.message }));
+      }
+    } finally { clearTimeout(recoveryTimer); if (latest.current === started && mountedGeneration.current === generation && executionOwner.current === owner) {
+      executionOwner.current = null; busy.current = false; setState(s => ({ ...s, busy: false }));
+    } }
   }, [enabled, access.active, access.projectId, access.token, identity, account, authorityFailure, refresh]);
   const persistAndExecute = useCallback(async (body: RecalculationCommand) => {
     const started = identity, generation = mountedGeneration.current;

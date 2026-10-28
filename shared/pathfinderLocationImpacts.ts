@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { policyHashSchema as hash, policyRevisionSchema as revision, policyUuidSchema as uuid } from './pathfinderPurposePolicy.js';
 import { endpointCurrentScopeSchema } from './pathfinderEndpointBindings.js';
 import { recalculationPreferencesSchema, recalculationReasonSchema, recalculationTimeoutSchema } from './pathfinderRecalculation.js';
+import { automaticPairPolicySchema } from './pathfinderAutomaticPair.js';
 
 export const LOCATION_IMPACT_LIMITS = Object.freeze({ cables: 10000, chunk: 250, recordBytes: 1024 * 1024, itemBytes: 32768,
   collectionBytes: 32 * 1024 * 1024, history: 10000, pageSize: 100, attempts: 3, authorityMilliseconds: 1800000, leaseMilliseconds: 60000 });
@@ -19,15 +20,23 @@ const sameBarrierScope = (projectId: string, current: z.infer<typeof endpointCur
 };
 export const locationImpactReferenceSchema = z.object({ id: uuid, status: z.enum(['pending', 'blocked']), eligibleCables: count,
   excludedMvCables: count, blockedCategoryCables: count }).strict();
-export const locationImpactRecordSchema = z.object({ schemaVersion: z.literal('wfc.pf.location-impact-record.v1'), id: uuid, projectId: uuid,
+const locationImpactRecordBody = z.object({ id: uuid, projectId: uuid,
   actorId: uuid, actorAdminRevision: revision, loginId: uuid, loginExpiresAt: timestamp, authorityExpiresAt: timestamp, installationEpoch: uuid,
   idempotencyKey: uuid, commandSha256: hash, locationId: uuid, bindingId: uuid, bindingContentSha256: hash, observedRegistryRevision: revision,
   current: endpointCurrentScopeSchema, calculation: locationImpactCalculationSchema.nullable(),
-  eligibleCableIds: ids, excludedMvCableIds: ids, blockedCategoryCableIds: ids, createdAt: timestamp, contentSha256: hash }).strict().superRefine((value, context) => {
+  eligibleCableIds: ids, excludedMvCableIds: ids, blockedCategoryCableIds: ids, createdAt: timestamp, contentSha256: hash }).strict();
+export const locationImpactRecordSchema = z.discriminatedUnion('schemaVersion',[
+  locationImpactRecordBody.extend({schemaVersion:z.literal('wfc.pf.location-impact-record.v1')}),
+  locationImpactRecordBody.extend({schemaVersion:z.literal('wfc.pf.location-impact-record.v2'),originCableId:uuid}),
+  locationImpactRecordBody.extend({schemaVersion:z.literal('wfc.pf.location-impact-record.v3'),originCableId:uuid,
+    automaticPairPolicy:automaticPairPolicySchema.nullable()}),
+]).superRefine((value, context) => {
   const all = [...value.eligibleCableIds, ...value.excludedMvCableIds, ...value.blockedCategoryCableIds];
   if (all.length > LOCATION_IMPACT_LIMITS.cables || new Set(all).size !== all.length || Date.parse(value.authorityExpiresAt) > Date.parse(value.loginExpiresAt)
     || Date.parse(value.authorityExpiresAt) - Date.parse(value.createdAt) > LOCATION_IMPACT_LIMITS.authorityMilliseconds
-    || !sameBarrierScope(value.projectId, value.current, value.calculation))
+    || !sameBarrierScope(value.projectId, value.current, value.calculation)
+    || value.schemaVersion === 'wfc.pf.location-impact-record.v3' && value.automaticPairPolicy !== null && value.calculation === null
+    || value.schemaVersion !== 'wfc.pf.location-impact-record.v1' && !value.eligibleCableIds.includes(value.originCableId))
     context.addIssue({ code: 'custom', message: 'A bounded impact retains a disjoint complete scope and finite original-login authority.' });
 });
 export type LocationImpactRecord = z.infer<typeof locationImpactRecordSchema>;

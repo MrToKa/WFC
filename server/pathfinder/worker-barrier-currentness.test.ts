@@ -71,6 +71,7 @@ function fixture(options:{before?:unknown;during?:unknown;authorityAtCompletion?
   const calls:Array<{sql:string;values:any[]}>=[];
   const query=vi.fn(async(raw:string,values:any[]=[])=>{
     const sql=raw.replace(/\s+/g,' ').trim();calls.push({sql,values});
+    if(sql.startsWith('SELECT impact_id FROM pf_location_impact_enrollments'))return {rows:[]};
     if(sql.startsWith('SELECT * FROM pf_jobs'))return {rows:[{...db.job}]};
     if(sql.startsWith('SELECT * FROM pf_job_items'))return {rows:db.items.filter(item=>item.state==='waiting').slice(0,1).map(item=>({...item}))};
     if(sql.startsWith("UPDATE pf_job_items SET state='running'")){db.items.find(item=>item.cable_id===values[2])!.state='running';return {rows:[]};}

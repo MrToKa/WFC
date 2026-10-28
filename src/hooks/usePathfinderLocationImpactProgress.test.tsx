@@ -128,11 +128,70 @@ describe('owned lightweight location-impact progress', () => {
     expect(props.onChanged).not.toHaveBeenCalled(); await act(async () => { await vi.advanceTimersByTimeAsync(LOCATION_IMPACT_POLL_MILLISECONDS); }); expect(props.onChanged).toHaveBeenCalledOnce();
     expect(view.result.current.impact?.admissionElapsedMilliseconds).toBe(200); expect(view.result.current.readMilliseconds).toBeGreaterThanOrEqual(0); expect(view.result.current).not.toHaveProperty('eta'); view.unmount();
   });
-  it('stops repeated network failures and recovers only by explicit refresh or resumption', async () => {
-    vi.useFakeTimers(); vi.mocked(fetchLocationImpactProgress).mockResolvedValueOnce(progress()).mockRejectedValueOnce(new Error('Network'));
-    const view = renderHook(() => usePathfinderLocationImpactProgress(access())); await act(async () => { await view.result.current.refresh(); await vi.advanceTimersByTimeAsync(10_000); });
-    expect(fetchLocationImpactProgress).toHaveBeenCalledTimes(2); expect(view.result.current.error).toContain('could not be read');
-    await act(async () => { await view.result.current.refresh(); }); expect(fetchLocationImpactProgress).toHaveBeenCalledTimes(3); expect(view.result.current.impact?.id).toBe(impactId); view.unmount();
+  it('retains the last verified job during a transient failure and automatically recovers the same exact impact', async () => {
+    vi.useFakeTimers(); const props = access();
+    vi.mocked(fetchLocationImpactProgress).mockResolvedValueOnce(progress()).mockRejectedValueOnce(new LocationImpactApiError('UNAVAILABLE', 503, 'Temporarily unavailable.'))
+      .mockResolvedValueOnce(progress({ ...impact(), completed: 2 }));
+    const view = renderHook(() => usePathfinderLocationImpactProgress(props));
+    await act(async () => { await view.result.current.refresh(); await vi.advanceTimersByTimeAsync(2000); });
+    expect(view.result.current.impact?.jobId).toBe(id(8)); expect(view.result.current.error).toContain('checking again automatically');
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(fetchLocationImpactProgress).toHaveBeenCalledTimes(3); expect(view.result.current.impact?.completed).toBe(2);
+    expect(props.onAuthorityLost).not.toHaveBeenCalled(); view.unmount();
+  });
+  it('bounds repeated network failures while retaining verified progress and leaves another burst to explicit refresh', async () => {
+    vi.useFakeTimers(); vi.mocked(fetchLocationImpactProgress).mockResolvedValueOnce(progress()).mockRejectedValue(new TypeError('Network'));
+    const view = renderHook(() => usePathfinderLocationImpactProgress(access()));
+    await act(async () => { await view.result.current.refresh(); await vi.advanceTimersByTimeAsync(30_000); });
+    expect(fetchLocationImpactProgress).toHaveBeenCalledTimes(5); expect(view.result.current.impact?.jobId).toBe(id(8));
+    expect(view.result.current.error).toContain('bounded retries');
+    await act(async () => { await vi.advanceTimersByTimeAsync(20_000); }); expect(fetchLocationImpactProgress).toHaveBeenCalledTimes(5);
+    vi.mocked(fetchLocationImpactProgress).mockResolvedValue(progress(impact(30, 'complete')));
+    await act(async () => { await view.result.current.refresh(); }); expect(fetchLocationImpactProgress).toHaveBeenCalledTimes(6);
+    expect(view.result.current.impact?.status).toBe('complete'); view.unmount();
+  });
+  it('reads for a visible owned Save popup while the main document and unrelated progress remain hidden', async () => {
+    vi.useFakeTimers(); visibility = 'hidden';
+    const frame = document.createElement('iframe'); document.body.appendChild(frame); const popup = frame.contentWindow!;
+    Object.defineProperty(popup, 'closed', { configurable: true, value: false });
+    vi.spyOn(popup.document, 'visibilityState', 'get').mockReturnValue('visible');
+    vi.mocked(fetchLocationImpactProgress).mockRejectedValueOnce(new LocationImpactApiError('UNAVAILABLE', 503, 'Temporarily unavailable.'))
+      .mockResolvedValueOnce(progress(impact(30, 'complete')));
+    const props = access(), owned = renderHook(() => usePathfinderLocationImpactProgress({ ...props, foregroundWindow: popup }));
+    const unrelated = renderHook(() => usePathfinderLocationImpactProgress({ ...props, impactId: id(99) }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(fetchLocationImpactProgress).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(fetchLocationImpactProgress).mock.calls.every(call => call[3] === impactId)).toBe(true);
+    expect(owned.result.current.impact?.jobId).toBe(id(8)); expect(owned.result.current.paused).toBe(false);
+    expect(unrelated.result.current.paused).toBe(true); expect(unrelated.result.current.impact).toBeNull();
+    owned.unmount(); unrelated.unmount(); frame.remove();
+  });
+  it('suspends a hard scope refusal through visibility resumption until explicit refresh', async () => {
+    vi.useFakeTimers(); const props = access();
+    vi.mocked(fetchLocationImpactProgress).mockResolvedValueOnce(progress()).mockRejectedValueOnce(new LocationImpactApiError('IMPACT_SCOPE_CHANGED', 409, 'Scope changed.'));
+    const view = renderHook(() => usePathfinderLocationImpactProgress(props));
+    await act(async () => { await view.result.current.refresh(); await vi.advanceTimersByTimeAsync(2000); });
+    expect(view.result.current.impact).toBeNull(); hide('hidden'); hide('visible');
+    await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+    expect(fetchLocationImpactProgress).toHaveBeenCalledTimes(2); expect(props.onAuthorityLost).not.toHaveBeenCalled();
+    vi.mocked(fetchLocationImpactProgress).mockResolvedValue(progress(impact(30, 'complete')));
+    await act(async () => { await view.result.current.refresh(); }); expect(fetchLocationImpactProgress).toHaveBeenCalledTimes(3);
+    expect(view.result.current.impact?.status).toBe('complete'); view.unmount();
+  });
+  it('resumes exact progress on returning to the main tab after popup pagehide precedes its closed flag', async () => {
+    vi.useFakeTimers(); visibility = 'hidden';
+    const frame = document.createElement('iframe'); document.body.appendChild(frame); const popup = frame.contentWindow!;
+    let closed = false; Object.defineProperty(popup, 'closed', { configurable: true, get: () => closed });
+    vi.spyOn(popup.document, 'visibilityState', 'get').mockReturnValue('visible');
+    const view = renderHook(() => usePathfinderLocationImpactProgress({ ...access(), foregroundWindow: popup }));
+    await act(async () => { await view.result.current.refresh(); }); expect(fetchLocationImpactProgress).toHaveBeenCalledOnce();
+    act(() => { popup.dispatchEvent(new Event('pagehide')); });
+    expect(view.result.current.paused).toBe(true); closed = true;
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); }); expect(fetchLocationImpactProgress).toHaveBeenCalledOnce();
+    vi.mocked(fetchLocationImpactProgress).mockResolvedValueOnce(progress(impact(30, 'complete')));
+    hide('visible'); await act(async () => { await Promise.resolve(); });
+    expect(fetchLocationImpactProgress).toHaveBeenCalledTimes(2); expect(view.result.current.impact?.status).toBe('complete');
+    expect(view.result.current.paused).toBe(false); view.unmount(); frame.remove();
   });
   it('keeps verified progress when a consuming display callback fails', async () => {
     const props = { ...access(), onChanged: vi.fn(() => { throw new Error('Display callback unavailable'); }) };

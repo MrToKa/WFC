@@ -15,6 +15,7 @@ function sdkFixture(options = {}) {
   const facts = { observerDisconnects: 0, finishes: 0, replacements: 0, propertyReads: 0, isolated: [], initializeOptions: null,
     featureFlagWrites: [], webgpuEnabled: true, webgpuAtInitialization: null };
   const tree = { getRootId: () => 1, getNodeParentId: id => id === 1 ? 0 : 1, getChildCount: id => id === 1 ? 2 : 0,
+    getNodeIndex: id => [1, 2, 3].includes(id) ? id : undefined,
     enumNodeChildren(id, callback) { if (id === 1) for (const child of [2, 3]) { if (callback(child)) break; } },
     getNodeName: id => ({ 1: 'Model', 2: 'BC1', 3: options.ambiguous ? 'ＢＣ１' : 'BC2' })[id],
     enumNodeFragments() {} };
@@ -87,6 +88,140 @@ test('adapter config makes ordinary Model Browser clicks selectOnly and retains 
     clickShift: { onObject: ['toggleMultipleOverlayedSelection'] },
     clickCtrl: { onObject: ['toggleVisibility'] },
   });
+});
+
+test('location display reveals and fits just the target while preserving selection, route appearance and global Ghost', async t => {
+  const f = sdkFixture(), previous = globalThis.window; globalThis.window = f.window;
+  t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
+  await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
+  const viewer = f.viewers[0], calls = [], selection = [3], background = { opacity: viewer.impl.fadeMaterial.opacity, ghost: viewer.impl.showGhosting };
+  viewer.show = (ids, model) => { calls.push(['show', ids, model]); };
+  viewer.fitToView = (ids, model) => { calls.push(['fit', ids, model]); };
+  for (const method of ['clearSelection', 'select', 'isolate', 'setGhosting']) viewer[method] = () => { throw Error('Display must not call ' + method); };
+  let authorized = 0;
+  await handle.showLocation(2, undefined, async () => { assert.equal(calls.length, 0); authorized++; });
+  assert.equal(authorized, 1); assert.deepEqual(calls, [['show', [2], f.model], ['fit', [2], f.model]]);
+  assert.deepEqual(selection, [3]); assert.deepEqual({ opacity: viewer.impl.fadeMaterial.opacity, ghost: viewer.impl.showGhosting }, background);
+  assert.deepEqual(f.facts.isolated, []);
+});
+
+test('location membership accepts a root-zero tree and refuses missing IDs, cycles and invalid targets', async t => {
+  const f = sdkFixture(), previous = globalThis.window; globalThis.window = f.window;
+  t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
+  await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
+  let displayed = 0; f.viewers[0].show = () => { displayed++; };
+  f.tree.getRootId = () => 0; f.tree.getNodeParentId = () => 0;
+  await handle.showLocation(2); assert.equal(displayed, 1);
+  for (const invalid of [0, -1, 1.5, 2147483648, '2', 999]) await assert.rejects(handle.showLocation(invalid), { code: 'LOCATION_UNAVAILABLE' });
+  f.tree.getNodeParentId = id => id === 2 ? 3 : 2;
+  await assert.rejects(handle.showLocation(2), { code: 'LOCATION_UNAVAILABLE' }); assert.equal(displayed, 1);
+});
+
+test('location display waits for its tree and final authority; changed model or denied authority prevents SDK changes', async t => {
+  for (const action of ['model', 'denied']) {
+    let treeReady; const f = sdkFixture({ lazyTree: true, getObjectTree: callback => { treeReady = callback; } }), previous = globalThis.window; globalThis.window = f.window;
+    t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
+    await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
+    const viewer = f.viewers[0]; let displayed = 0, checks = 0; viewer.show = () => { displayed++; };
+    const showing = handle.showLocation(2, undefined, async () => { checks++; if (action === 'denied') throw Object.assign(Error('No access'), { code: 'ACCESS_REVOKED' }); });
+    const rejected = assert.rejects(showing, { code: action === 'model' ? 'MODEL_SELECTION_CHANGED' : 'ACCESS_REVOKED' });
+    assert.equal(displayed, 0); if (action === 'model') viewer.model = {};
+    treeReady(f.tree); await rejected; assert.equal(displayed, 0); assert.equal(checks, action === 'model' ? 0 : 1);
+  }
+});
+
+test('location preparation is abortable and ignores a late tree callback', async t => {
+  let treeReady; const f = sdkFixture({ lazyTree: true, getObjectTree: callback => { treeReady = callback; } }), previous = globalThis.window; globalThis.window = f.window;
+  t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
+  await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
+  let displayed = 0; f.viewers[0].show = () => { displayed++; };
+  const controller = new AbortController(), showing = handle.showLocation(2, controller.signal), rejected = assert.rejects(showing, { name: 'AbortError' });
+  controller.abort(); await rejected; treeReady(f.tree); await turn(); assert.equal(displayed, 0);
+});
+
+test('location SDK failure stays recoverable and a finished model cannot be displayed', async t => {
+  const f = sdkFixture(), previous = globalThis.window; globalThis.window = f.window;
+  t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
+  await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
+  f.viewers[0].show = () => { throw Error('private SDK detail'); };
+  await assert.rejects(handle.showLocation(2), error => error.code === 'LOCATION_UNAVAILABLE' && !error.message.includes('private'));
+  handle.finish(); await assert.rejects(handle.showLocation(2), { code: 'MODEL_SELECTION_CHANGED' });
+});
+
+test('tray display reveals and focuses every root together without changing selection, route appearance or Ghost', async t => {
+  const f = sdkFixture(), previous = globalThis.window; globalThis.window = f.window;
+  t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
+  await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
+  const viewer = f.viewers[0], calls = [], background = { opacity: viewer.impl.fadeMaterial.opacity, ghost: viewer.impl.showGhosting };
+  viewer.show = (ids, model) => { calls.push(['show', [...ids], model]); };
+  viewer.fitToView = (ids, model) => { calls.push(['fit', [...ids], model]); };
+  for (const method of ['clearSelection', 'select', 'isolate', 'setGhosting']) viewer[method] = () => { throw Error('Display must not call ' + method); };
+  const ids = [2, 3]; let authorized = 0;
+  await handle.showTray(ids, undefined, async () => { assert.equal(calls.length, 0); ids[0] = 999; authorized++; });
+  assert.equal(authorized, 1); assert.deepEqual(calls, [['show', [2, 3], f.model], ['fit', [2, 3], f.model]]);
+  assert.deepEqual({ opacity: viewer.impl.fadeMaterial.opacity, ghost: viewer.impl.showGhosting }, background);
+  assert.deepEqual(f.facts.isolated, []);
+});
+
+test('tray display validates the whole root set before any SDK mutation', async t => {
+  const f = sdkFixture(), previous = globalThis.window; globalThis.window = f.window;
+  t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
+  await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
+  let displayed = 0, authorized = 0; f.viewers[0].show = () => { displayed++; };
+  for (const ids of [[], [2, 999], [0], [-1], [1.5], [2147483648], ['2'], [2, 2], Array(1), Array.from({ length: 513 }, (_, at) => at + 1), null, 2])
+    await assert.rejects(handle.showTray(ids, undefined, async () => { authorized++; }), { code: 'TRAY_UNAVAILABLE' });
+  assert.equal(displayed, 0); assert.equal(authorized, 0);
+  await handle.showTray([2]); assert.equal(displayed, 1);
+});
+
+test('delayed tray display refuses changed model, denied authority and cancellation before revealing any root', async t => {
+  for (const action of ['model', 'denied', 'cancel']) {
+    let treeReady; const f = sdkFixture({ lazyTree: true, getObjectTree: callback => { treeReady = callback; } }), previous = globalThis.window;
+    globalThis.window = f.window; t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
+    await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
+    let displayed = 0; f.viewers[0].show = () => { displayed++; }; const controller = new AbortController();
+    const showing = handle.showTray([2, 3], controller.signal, async () => { if (action === 'denied') throw Object.assign(Error('No access'), { code: 'ACCESS_REVOKED' }); });
+    const rejected = assert.rejects(showing, action === 'cancel' ? { name: 'AbortError' } : { code: action === 'model' ? 'MODEL_SELECTION_CHANGED' : 'ACCESS_REVOKED' });
+    if (action === 'model') f.viewers[0].model = {};
+    if (action === 'cancel') controller.abort();
+    treeReady(f.tree); await rejected; assert.equal(displayed, 0);
+  }
+});
+
+test('tray display sanitizes missing-tree and SDK failures while keeping terminal model identity', async t => {
+  const f = sdkFixture(), previous = globalThis.window; globalThis.window = f.window;
+  t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
+  await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
+  f.viewers[0].show = () => { throw Error('private SDK detail'); };
+  await assert.rejects(handle.showTray([2, 3]), error => error.code === 'TRAY_UNAVAILABLE' && !error.message.includes('private'));
+  f.model.getInstanceTree = () => { throw Error('private tree detail'); };
+  await assert.rejects(handle.showTray([2, 3]), error => error.code === 'TRAY_UNAVAILABLE' && !error.message.includes('private'));
+  handle.finish(); await assert.rejects(handle.showTray([2, 3]), { code: 'MODEL_SELECTION_CHANGED' });
+});
+
+test('pinned SDK show delegates only target visibility and exposes a read-only tree membership index', () => {
+  const sdk = readFileSync(new URL('../sdk/7.130.0/viewer3D.min.js', import.meta.url), 'utf8');
+  const match = sdk.match(/\.prototype.show=function\((\w+),(\w+)\)\{\2=\2\|\|this.model,this.impl.visibilityManager.show\(\1,\2\)\}/);
+  assert.ok(match, 'The pinned public show API only delegates to target visibility.');
+  assert.ok(sdk.includes('getNodeIndex(e){return this.nodeAccess.getIndex(e)}'));
+  assert.ok(sdk.includes('getIndex(e){return this.dbIdToIndex[e]}'));
+  assert.ok(sdk.includes('this.getObjectTree()}getFuzzyBox'), 'Pinned Model#getInstanceTree delegates to cached getObjectTree.');
+  assert.ok(sdk.includes('getObjectTree(e,t){const i=this._getObjectTree();if(void 0===e&&void 0===t)return i;'));
+  const calls = [], model = {}, receiver = { model, impl: { visibilityManager: { show(ids, targetModel) { calls.push([ids, targetModel]); } } } };
+  const show = new Function('return ' + match[0].slice('.prototype.show='.length))();
+  show.call(receiver, [2], model); assert.deepEqual(calls, [[[2], model]]);
+});
+
+test('tray-root adapter reads only selected IDs without rich metadata, geometry or appearance changes', async t => {
+  const f = sdkFixture(), previous = globalThis.window; globalThis.window = f.window;
+  t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
+  await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
+  const viewer = f.viewers[0]; viewer.getAggregateSelection = () => [{ model: f.model, selection: [2, 3] }];
+  for (const key of ['getObjectTree', 'getExternalIdMapping', 'getProperties', 'getFragmentList']) f.model[key] = () => { throw Error(`Forbidden rich read: ${key}`); };
+  for (const key of ['enumNodeChildren', 'enumNodeFragments', 'getNodeName']) f.tree[key] = () => { throw Error(`Forbidden traversal: ${key}`); };
+  let checked = false;
+  assert.deepEqual(await handle.readTrayRootSelection(undefined, async () => { checked = true; }), { objects: [{ objectId: 2 }, { objectId: 3 }] });
+  assert.equal(checked, true); assert.equal(f.facts.propertyReads, 0); assert.equal(f.facts.finishes, 0); assert.deepEqual(f.facts.isolated, []);
 });
 
 test('pinned SDK selectOnly keeps a clicked parent and reads its descendant bottom centre without isolation or implicit promotion', async t => {
