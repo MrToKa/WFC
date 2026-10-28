@@ -5,7 +5,8 @@ import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
 
 const UPSTREAM_INVENTORY_SHA256 = '314818762db3ff18405091cb170f2a8c3fbab5b8595b319721ebfbd8a757389a';
-const RUNTIME_INVENTORY_SHA256 = '140b5c914eb38f916e6410914d868c7083c888eefaa17011d645a29d7d57ec79';
+const RUNTIME_INVENTORY_SHA256 = 'fc7c83371e17ba39a589b77f7d80358237ef60088c9a40353e3834ac84d9c52d';
+const UPSTREAM_REVISION = 'b1c86f7c247580e1f5b41c38a1b9af1d2e290987';
 const RUNTIME_FILES = [
   'index.mjs', 'lib/errors.mjs', 'lib/io.mjs', 'lib/json.mjs', 'lib/limits.mjs',
   'lib/manifest.mjs', 'lib/pack.mjs', 'lib/paths.mjs', 'lib/profile.mjs',
@@ -59,7 +60,9 @@ async function main() {
   if (provenance.schemaVersion !== 1 || provenance.module !== 'routings-model-package' || provenance.version !== '1.0.0'
     || provenance.upstreamInventory?.sha256 !== UPSTREAM_INVENTORY_SHA256 || provenance.upstreamInventory.fileCount !== 24
     || provenance.upstreamInventory.totalBytes !== 216308 || provenance.runtimeInventorySha256 !== RUNTIME_INVENTORY_SHA256
-    || provenance.fileCount !== 12 || provenance.totalBytes !== 105418 || !Array.isArray(provenance.files)
+    || provenance.fileCount !== 12 || provenance.totalBytes !== 106346 || !Array.isArray(provenance.files)
+    || provenance.upstreamRevision?.repository !== 'MrToKa/routings-model-preparer'
+    || provenance.upstreamRevision.path !== 'routings-model-package' || provenance.upstreamRevision.commit !== UPSTREAM_REVISION
     || provenance.files.length !== RUNTIME_FILES.length) refuse('MODEL_VERIFIER_INVENTORY_INVALID');
   let canonical = '';
   for (let index = 0; index < RUNTIME_FILES.length; index++) {
@@ -87,7 +90,7 @@ async function main() {
     const bytes = await fs.readFile(destination);
     if (bytes.length !== record.bytes || sha256(bytes) !== record.sha256) refuse('MODEL_VERIFIER_DESTINATION_HASH_MISMATCH');
   }
-  console.log(JSON.stringify({ module: provenance.module, version: provenance.version, files: 12, bytes: 105418, runtimeInventorySha256: RUNTIME_INVENTORY_SHA256 }));
+  console.log(JSON.stringify({ module: provenance.module, version: provenance.version, files: 12, bytes: 106346, runtimeInventorySha256: RUNTIME_INVENTORY_SHA256 }));
 }
 
 main().catch(error => {
