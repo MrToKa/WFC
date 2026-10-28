@@ -1,0 +1,30 @@
+name: Validate nested raster verifier
+on:
+  pull_request:
+    paths:
+      - 'server/vendor/routings-model-package/**'
+      - 'server/viewerSessions/**'
+      - 'server/__tests__/modelRegistryPackage.node-test.ts'
+      - 'scripts/copy-model-verifier.mjs'
+      - 'scripts/tests/nested-raster-resources.test.mjs'
+      - 'package*.json'
+      - '.github/workflows/nested-raster-validation.yml'
+permissions:
+  contents: read
+jobs:
+  verifier-and-server:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    container: node@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Verify standalone raster package regressions
+        run: node --test scripts/tests/nested-raster-resources.test.mjs
+      - name: Install locked build and test dependencies
+        run: npm ci --ignore-scripts
+      - name: Build server and verify pinned runtime copy
+        run: npm run server:build
+      - name: Verify HTTP path decoding boundary
+        run: npm test -- --run server/viewerSessions/http.test.ts
