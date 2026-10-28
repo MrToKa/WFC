@@ -17,6 +17,7 @@ import { createModelStorage, type ModelResource, type ModelStorageClient } from 
 const projectId = '11111111-1111-4111-8111-111111111111';
 const versionId = '22222222-2222-4222-8222-222222222222';
 const prefix = `projects/${projectId}/versions/${versionId}/`;
+const archivePrefix = `archives/${projectId}/${versionId}/`;
 const roots: string[] = [];
 afterEach(async () => {
   for (const root of roots.splice(0)) await fs.rm(root, { recursive: true, force: true });
@@ -60,6 +61,60 @@ function fake() {
 }
 
 describe('private model storage', () => {
+  it('retains exact original ZIP bytes, verifies full readback and downloads a pinned verified copy', async () => {
+    const f = fake(), data = Buffer.from('PK original portable ZIP bytes');
+    const identity = { bytes: data.length, sha256: sha(data) };
+    await f.storage.putArchive(archivePrefix, identity, await file(data));
+    await f.storage.verifyArchive(archivePrefix, identity);
+    expect(f.objects.get(archivePrefix + 'package.zip')).toEqual(data);
+    expect(f.metadata).toEqual([{ 'Content-Type': 'application/zip' }]);
+    const verified = await f.storage.readVerifiedArchive(archivePrefix, identity);
+    try {
+      // A later object replacement cannot alter the already verified response handle.
+      f.objects.set(archivePrefix + 'package.zip', Buffer.alloc(data.length, 0));
+      expect(verified.bytes).toBe(data.length);
+      const downloaded = Buffer.alloc(data.length);
+      await verified.handle.read(downloaded, 0, downloaded.length, 0);
+      expect(downloaded).toEqual(data);
+    } finally { await verified.close(); }
+    await verified.close();
+  });
+
+  it('refuses corrupt ZIP bytes before returning any downloadable handle', async () => {
+    const f = fake(), data = Buffer.from('PK original portable ZIP bytes');
+    const identity = { bytes: data.length, sha256: sha(data) };
+    f.objects.set(archivePrefix + 'package.zip', Buffer.alloc(data.length, 0));
+    await expect(f.storage.readVerifiedArchive(archivePrefix, identity)).rejects.toMatchObject({ code: 'STORAGE_INTEGRITY_FAILED' });
+    await expect(f.storage.putArchive(archivePrefix, identity, await file(data))).rejects.toMatchObject({ code: 'STORAGE_INTEGRITY_FAILED' });
+    expect(f.client.putObject).not.toHaveBeenCalled();
+  });
+
+  it('distinguishes a legacy missing ZIP without pretending model resources are absent', async () => {
+    const f = fake(), data = Buffer.from('original');
+    await expect(f.storage.readVerifiedArchive(archivePrefix, { bytes: data.length, sha256: sha(data) })).rejects.toMatchObject({ code: 'STORAGE_ARCHIVE_MISSING' });
+    expect(f.client.getObject).not.toHaveBeenCalled();
+  });
+
+  it('cleans the owned unpublished ZIP, resources and ZIP multipart upload while preserving foreign versions', async () => {
+    const f = fake(), key = archivePrefix + 'package.zip';
+    f.objects.set(key, Buffer.from('partial'));
+    f.objects.set(prefix + 'resources/a.bin', Buffer.from('resource'));
+    f.objects.set('another-version/package.zip', Buffer.from('preserve'));
+    f.uploads.set(key + '\narchive-upload', { key, uploadId: 'archive-upload' });
+    await f.storage.removeUnpublishedArchive(archivePrefix);
+    expect(f.removed).toEqual([key]);
+    expect(f.objects.get(prefix + 'resources/a.bin')?.toString()).toBe('resource');
+    expect(f.aborted).toEqual(['archive-upload']);
+    expect(f.objects.get('another-version/package.zip')?.toString()).toBe('preserve');
+  });
+
+  it('keeps the archive key separate from resource APIs and rejects oversized archive identities', async () => {
+    const f = fake(), data = Buffer.from('original');
+    await expect(f.storage.putResource(prefix, { ...resource(data), path: 'package.zip' }, '/not-read')).rejects.toMatchObject({ code: 'STORAGE_RESOURCE_INVALID' });
+    await expect(f.storage.readVerifiedArchive(archivePrefix, { bytes: 2 * 1024 ** 3 + 1, sha256: sha(data) })).rejects.toMatchObject({ code: 'STORAGE_RESOURCE_INVALID' });
+    expect(f.client.statObject).not.toHaveBeenCalled();
+  });
+
   it('creates only a missing dedicated bucket and refuses any existing bucket policy', async () => {
     const f = fake(); f.client.bucketExists.mockResolvedValue(false);
     await f.storage.initialize(); expect(f.client.makeBucket).toHaveBeenCalledWith('test-models');

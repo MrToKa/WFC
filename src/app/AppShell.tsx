@@ -29,6 +29,7 @@ const ADMIN_LINKS: NavLinkConfig[] = [
   { to: '/materials', label: 'Materials' },
   { to: '/templates', label: 'Templates' },
   { to: '/admin', label: 'Admin' },
+  { to: '/preparer', label: 'Model preparer' },
 ] as const;
 
 const GUEST_LINKS: NavLinkConfig[] = [
@@ -162,7 +163,7 @@ export const AppShell = () => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const navLinks = user
-    ? [...AUTH_LINKS, ...ADMIN_LINKS.filter((link) => link.to === '/admin' ? user.isAdmin : canReadCatalogs(user))]
+    ? [...AUTH_LINKS, ...ADMIN_LINKS.filter((link) => ['/admin', '/preparer'].includes(link.to) ? user.isAdmin === true : canReadCatalogs(user))]
     : GUEST_LINKS;
 
   const displayName = (() => {

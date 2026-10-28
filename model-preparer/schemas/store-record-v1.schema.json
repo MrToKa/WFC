@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:routings:model-preparer:store-record:v1",
+  "title": "Immutable preparer store revision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "kind", "key", "revision", "previousHash", "committedAt", "value", "recordHash"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "kind": { "enum": ["job", "submission", "target", "cost"] },
+    "key": { "type": "string", "pattern": "^(?:[0-9a-f]{64}|[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$" },
+    "revision": { "type": "integer", "minimum": 1, "maximum": 100000 },
+    "previousHash": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+    "committedAt": { "type": "string", "format": "date-time" },
+    "value": { "type": "object" },
+    "recordHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  },
+  "$comment": "Runtime rejects duplicate decoded JSON keys, malformed UTF8, unknown envelope fields, unsafe/link paths and credential-bearing values. The recordHash is SHA256 of canonical sorted-key JSON for the envelope without recordHash. All revisions must form an unbroken previousHash chain; a separate checksummed high-water head must match its exact last revision/hash. Missing/corrupt/truncated state is never reset or replaced with an older eligible state. Head and record disagreement fail closed. The domain layer validates job/submission state machines; checksum is not a signature."
+}

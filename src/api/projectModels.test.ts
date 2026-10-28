@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchProjectModels, setProjectActiveModel, ProjectModelApiError } from './projectModels';
+import { downloadProjectModelPackage, fetchProjectModels, setProjectActiveModel, ProjectModelApiError } from './projectModels';
 
 vi.mock('./http', () => ({ getApiBaseUrl: () => 'http://fixture-api.invalid:4000' }));
 const projectId = '11111111-1111-4111-8111-111111111111';
@@ -12,6 +12,35 @@ beforeEach(() => { fetchMock = vi.fn(); vi.stubGlobal('fetch', fetchMock); });
 afterEach(() => vi.unstubAllGlobals());
 
 describe('project model metadata adapter', () => {
+  it('downloads only the explicit selected model package under the current WFC login', async () => {
+    fetchMock.mockResolvedValue(new Response('PK exact bytes', { headers: { 'Content-Type': 'application/zip', 'Content-Length': '14' } }));
+    const signal = new AbortController().signal;
+    const result = await downloadProjectModelPackage(projectId, id, 'current-login', { signal });
+    expect(result.blob.size).toBe(14);
+    expect(result.filename).toBe(`model-${id}.zip`);
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(`http://fixture-api.invalid:4000/api/projects/${projectId}/model-versions/${id}/package`, expect.objectContaining({
+      method: 'GET', signal, cache: 'no-store', redirect: 'error', headers: { Authorization: 'Bearer current-login' },
+    }));
+    expect(fetchMock.mock.calls[0][0]).not.toContain('current-login');
+  });
+
+  it.each([
+    ['text/html', '14', 'PK exact bytes'],
+    ['application/zip', '13', 'PK exact bytes'],
+    ['application/zip', '15', 'PK exact bytes'],
+    ['application/zip', String(2 * 1024 ** 3 + 1), 'PK'],
+  ])('rejects invalid package response identity %s/%s', async (type, length, body) => {
+    fetchMock.mockResolvedValue(new Response(body, { headers: { 'Content-Type': type, 'Content-Length': length } }));
+    await expect(downloadProjectModelPackage(projectId, id, 'current-login')).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+  });
+
+  it.each([['PACKAGE_NOT_FOUND', 404], ['PACKAGE_UNAVAILABLE', 503]] as const)('shows a safe %s package failure without exposing server details', async (code, status) => {
+    fetchMock.mockResolvedValue(Response.json({ code, error: 'private-storage-key' }, { status }));
+    const failure = await downloadProjectModelPackage(projectId, id, 'current-login').catch(error => error);
+    expect(failure).toMatchObject({ code, status });
+    expect(failure.message).not.toContain('private-storage-key');
+  });
+
   it('uses the configured API base, explicit legacy token, no-store and caller signal without resource/session requests', async () => {
     fetchMock.mockResolvedValue(Response.json({ versions: [version()], selection: selection() }));
     const signal = new AbortController().signal;

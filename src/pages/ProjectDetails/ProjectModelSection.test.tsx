@@ -1,12 +1,13 @@
 import { FluentProvider, webLightTheme } from '@fluentui/react-components';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ProjectModelVersion } from '@/api/projectModels';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { downloadProjectModelPackage, ProjectModelApiError, type ProjectModelVersion } from '@/api/projectModels';
 import { ProjectModelSection } from './ProjectModelSection';
 import { useProjectModelSelection } from './hooks/useProjectModelSelection';
 
 vi.mock('./hooks/useProjectModelSelection', () => ({ useProjectModelSelection: vi.fn() }));
+vi.mock('@/api/projectModels', async original => ({ ...(await original<typeof import('@/api/projectModels')>()), downloadProjectModelPackage: vi.fn() }));
 const projectId = '00000000-0000-4000-8000-000000000001';
 const firstId = '00000000-0000-4000-8000-000000000002';
 const secondId = '00000000-0000-4000-8000-000000000003';
@@ -27,12 +28,53 @@ beforeEach(() => {
   };
   vi.mocked(useProjectModelSelection).mockImplementation(() => current);
 });
+afterEach(() => vi.restoreAllMocks());
 const view = (canEdit = true) => <FluentProvider theme={webLightTheme}>
   <ProjectModelSection projectId={projectId} token="current-login" canEdit={canEdit} />
 </FluentProvider>;
 const region = () => screen.getByRole('region', { name: '3D model' });
 
 describe('project model section', () => {
+  it('downloads the explicitly active model ZIP without changing the model selection', async () => {
+    current.snapshot!.selection.activeModelVersionId = firstId;
+    vi.mocked(downloadProjectModelPackage).mockResolvedValue({ blob: new Blob(['PK bytes']), filename: 'model.zip' });
+    const create = vi.fn(() => 'blob:verified-model');
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: create });
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    render(view());
+    fireEvent.click(screen.getByRole('button', { name: 'Download SVF ZIP' }));
+    await waitFor(() => expect(click).toHaveBeenCalledOnce());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Download SVF ZIP' })).toBeEnabled());
+    expect(downloadProjectModelPackage).toHaveBeenCalledWith(projectId, firstId, 'current-login', { signal: expect.any(AbortSignal) });
+    expect(current.save).not.toHaveBeenCalled();
+    expect(current.changeDraft).not.toHaveBeenCalled();
+  });
+
+  it('reports a legacy missing ZIP while preserving the available model', async () => {
+    current.snapshot!.selection.activeModelVersionId = firstId;
+    vi.mocked(downloadProjectModelPackage).mockRejectedValue(new ProjectModelApiError('PACKAGE_NOT_FOUND', 404));
+    render(view());
+    fireEvent.click(screen.getByRole('button', { name: 'Download SVF ZIP' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('older model has no saved ZIP');
+    expect(screen.getByText('Status: Available')).toBeInTheDocument();
+    expect(current.save).not.toHaveBeenCalled();
+  });
+
+  it('cancels an in-progress ZIP download when the current login is removed', async () => {
+    current.snapshot!.selection.activeModelVersionId = firstId;
+    let signal: AbortSignal | undefined;
+    vi.mocked(downloadProjectModelPackage).mockImplementation(async (_project, _version, _token, options) => {
+      signal = options?.signal;
+      return new Promise((_resolve, reject) => signal!.addEventListener('abort', () => reject(signal!.reason), { once: true }));
+    });
+    const rendered = render(view());
+    fireEvent.click(screen.getByRole('button', { name: 'Download SVF ZIP' }));
+    rendered.rerender(<FluentProvider theme={webLightTheme}><ProjectModelSection projectId={projectId} token={null} canEdit /></FluentProvider>);
+    expect(signal?.aborted).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Downloading ZIP...' })).not.toBeInTheDocument();
+  });
+
   it('shows initial loading separately from an empty model list', () => {
     current = { ...current, snapshot: null, draftId: undefined, loading: true, stale: true };
     render(view());

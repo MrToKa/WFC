@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "wfc.preparer.scoped-check.v1",
+  "status": "PASS",
+  "scope": "Full Preparer Linux suite with temporary keys and local logout repair; fake transports only",
+  "tests": 329,
+  "pass": 329,
+  "fail": 0,
+  "cancelled": 0,
+  "skipped": 0,
+  "node": "24.22.0",
+  "image": "sha256:481326351dbfa8acc86afe4d2543a1b96a05d523dd95a4715928f7f25418854f",
+  "durationMs": 190224.931879,
+  "network": "none",
+  "sourceMount": "read-only",
+  "sourceFiles": 116,
+  "inputManifestSha256": "4dc1ec8c72960ec03414a607dd51ebf2f8405c0f16605f33501e80da20efa9a2",
+  "inputBookends": "PASS",
+  "tapSha256": "a2fa29259af29520eaf8de960ee35c6d6375c28383be5569dfd834a0b87dd07f",
+  "newModelConversion": "NOT_RUN_BY_USER_REQUIREMENT"
+}

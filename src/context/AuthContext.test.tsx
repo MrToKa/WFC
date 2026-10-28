@@ -10,7 +10,9 @@ const mocks = vi.hoisted(() => ({
   login: vi.fn(),
   update: vi.fn(),
   remove: vi.fn(),
+  revokePreparer: vi.fn(),
 }));
+vi.mock('@/api/preparer', () => ({ revokePreparerSession: mocks.revokePreparer }));
 vi.mock('@/api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api/client')>()),
   fetchCurrentUser: mocks.fetchUser,
@@ -44,6 +46,7 @@ beforeEach(() => {
   window.localStorage.clear();
   window.localStorage.setItem('wfc_auth_token', 'old-token');
   mocks.fetchUser.mockResolvedValue({ user });
+  mocks.revokePreparer.mockResolvedValue(true);
 });
 
 describe('authentication request races', () => {
@@ -96,6 +99,7 @@ describe('authentication request races', () => {
     expect(order).toEqual(['dispose', 'revoke']);
     expect(result.current.token).toBeNull();
     expect(window.sessionStorage.getItem('wfc.pathfinder.recalculation.pending.v1')).toBeNull();
+    expect(mocks.revokePreparer).toHaveBeenCalledWith('old-token');
     await waitFor(() => expect(result.current.viewerLogoutStatus).toBe('failed'));
     expect(fetch).toHaveBeenCalledWith('/api/viewer-sessions/revoke-login', expect.objectContaining({ method: 'POST' }));
     unwatch(); fetch.mockRestore();

@@ -146,6 +146,24 @@ export async function initializeModelRegistry(pool: Pool): Promise<void> {
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         FOREIGN KEY(project_id,active_model_version_id) REFERENCES model_versions(project_id,id) DEFERRABLE INITIALLY DEFERRED
       );
+      -- Retain independent ownership after a project cascade, as for model resources.
+      -- A content duplicate can carry a different original portable ZIP.
+      CREATE TABLE IF NOT EXISTS model_package_archives (
+        import_id UUID PRIMARY KEY,
+        project_id UUID NOT NULL,
+        model_version_id UUID NOT NULL,
+        storage_prefix TEXT NOT NULL UNIQUE,
+        owner_token UUID NOT NULL,
+        archive_sha256 TEXT NOT NULL CHECK (archive_sha256 ~ '^[0-9a-f]{64}$'),
+        archive_bytes BIGINT NOT NULL CHECK (archive_bytes >= 0 AND archive_bytes <= 2147483648),
+        published BOOLEAN NOT NULL DEFAULT FALSE,
+        cleaned_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CHECK (storage_prefix = 'archives/' || project_id::text || '/' || import_id::text || '/'),
+        CHECK (NOT published OR cleaned_at IS NULL)
+      );
+      CREATE INDEX IF NOT EXISTS model_package_archives_version
+        ON model_package_archives(project_id,model_version_id,created_at,import_id) WHERE published=TRUE;
       INSERT INTO project_model_selections(project_id) SELECT id FROM projects ON CONFLICT DO NOTHING;
       CREATE OR REPLACE FUNCTION initialize_project_model_selection() RETURNS trigger AS $$
       BEGIN
@@ -222,6 +240,9 @@ export async function initializeModelRegistry(pool: Pool): Promise<void> {
       END; $$ LANGUAGE plpgsql;
       DROP TRIGGER IF EXISTS protect_storage_ownership ON model_storage_ownership;
       CREATE TRIGGER protect_storage_ownership BEFORE UPDATE ON model_storage_ownership
+        FOR EACH ROW EXECUTE FUNCTION protect_model_storage_ownership();
+      DROP TRIGGER IF EXISTS protect_package_archive_ownership ON model_package_archives;
+      CREATE TRIGGER protect_package_archive_ownership BEFORE UPDATE ON model_package_archives
         FOR EACH ROW EXECUTE FUNCTION protect_model_storage_ownership();
     `);
     await client.query('COMMIT');

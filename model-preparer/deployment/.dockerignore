@@ -1,0 +1,5 @@
+**
+!Dockerfile
+!test-recovery.Dockerfile
+!docker-recovery-fixture.mjs
+!app-sigterm-fixture.mjs

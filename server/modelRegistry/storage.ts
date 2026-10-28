@@ -12,15 +12,18 @@ import { Client } from 'minio';
 import { config } from '../config.js';
 
 const MAX_RESOURCES = 100_000;
+const PACKAGE_PATH = 'package.zip';
 const MAX_FILE_BYTES = 2 * 1024 ** 3;
 const MAX_TOTAL_BYTES = 8 * 1024 ** 3;
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const PREFIX = new RegExp(`^projects/(${UUID})/versions/(${UUID})/$`);
+const ARCHIVE_PREFIX = new RegExp(`^archives/(${UUID})/(${UUID})/$`);
 const OPERATION_IDLE_MS = 120_000;
 const OPERATION_MAX_MS = 600_000;
 const MULTIPART_BATCH_SIZE = 512;
 
 export type ModelResource = { path: string; bytes: number; sha256: string };
+export type ModelArchive = { bytes: number; sha256: string };
 
 export type ModelStorageClient = {
   bucketExists(bucket: string): Promise<boolean>;
@@ -44,10 +47,15 @@ export type ModelStorageClient = {
 export type ModelStorage = {
   initialize(): Promise<void>;
   prefix(projectId: string, versionId: string): string;
+  archivePrefix(projectId: string, importId: string): string;
   putResource(prefix: string, resource: ModelResource, filename: string, signal?: AbortSignal): Promise<void>;
+  putArchive(prefix: string, archive: ModelArchive, filename: string, signal?: AbortSignal): Promise<void>;
+  verifyArchive(prefix: string, archive: ModelArchive, signal?: AbortSignal): Promise<void>;
+  readVerifiedArchive(prefix: string, archive: ModelArchive, signal?: AbortSignal): Promise<VerifiedModelResource>;
   verifyResources(prefix: string, resources: readonly ModelResource[], signal?: AbortSignal): Promise<{ resourceCount: number; totalBytes: number }>;
   /** Caller must hold the import DB lock and prove this prefix is owned and unpublished. */
   removeUnpublished(prefix: string): Promise<void>;
+  removeUnpublishedArchive(prefix: string): Promise<void>;
 };
 
 export interface VerifiedModelResource {
@@ -68,6 +76,12 @@ export class ModelStorageError extends Error {
 }
 
 function fail(code: string, message: string): never { throw new ModelStorageError(code, message); }
+const archiveResource = (archive: ModelArchive): ModelResource => {
+  if (!archive || !Number.isSafeInteger(archive.bytes) || archive.bytes < 0 || archive.bytes > MAX_FILE_BYTES || !/^[a-f0-9]{64}$/.test(archive.sha256)) {
+    fail('STORAGE_RESOURCE_INVALID', 'Model package archive identity is invalid.');
+  }
+  return { path: PACKAGE_PATH, bytes: archive.bytes, sha256: archive.sha256 };
+};
 const abortCheck = (signal?: AbortSignal): void => {
   if (signal?.aborted) fail('IMPORT_ABORTED', 'Model storage operation was interrupted.');
 };
@@ -75,6 +89,10 @@ const checkPrefix = (prefix: string): string => {
   if (typeof prefix !== 'string' || !PREFIX.test(prefix)) {
     fail('STORAGE_PREFIX_INVALID', 'Model storage prefix is invalid.');
   }
+  return prefix;
+};
+const checkArchivePrefix = (prefix: string): string => {
+  if (typeof prefix !== 'string' || !ARCHIVE_PREFIX.test(prefix)) fail('STORAGE_PREFIX_INVALID', 'Model package archive prefix is invalid.');
   return prefix;
 };
 const checkResource = (resource: ModelResource): void => {
@@ -192,7 +210,7 @@ export function createModelStorage(options: { client?: ModelStorageClient; bucke
 
   const readback = async (prefix: string, resource: ModelResource, signal: AbortSignal): Promise<void> => {
     abortCheck(signal);
-    const key = checkPrefix(prefix) + resource.path;
+    const key = prefix + resource.path;
     const stat = await client.statObject(bucket, key);
     if (stat.size !== resource.bytes) fail('STORAGE_INTEGRITY_FAILED', 'Stored model resource has an unexpected size.');
     const stream = await client.getObject(bucket, key);
@@ -218,175 +236,142 @@ export function createModelStorage(options: { client?: ModelStorageClient; bucke
     }
   };
 
-  return {
-    async readVerifiedResource(prefix, resource, signal) {
-      checkPrefix(prefix); checkResource(resource);
-      let directory: string | undefined;
-      let handle: import('node:fs/promises').FileHandle | undefined;
-      try {
-        return await operation(signal, async active => {
-          const key = prefix + resource.path;
-          let stat: { size: number };
-          try { stat = await client.statObject(bucket,key); }
-          catch (error) { if (absent(error)) fail('STORAGE_INTEGRITY_FAILED','Stored model resource is missing.'); throw error; }
-          if (stat.size !== resource.bytes) fail('STORAGE_INTEGRITY_FAILED','Stored model resource has an unexpected size.');
-          directory = await fs.mkdtemp(path.join(await fs.realpath(os.tmpdir()),'wfc-viewer-resource-'));
-          await fs.chmod(directory,0o700);
-          const filename = path.join(directory,'raw');
-          handle = await fs.open(filename,'wx+',0o600);
-          const output = handle;
-          let source: Readable;
-          try { source = await client.getObject(bucket,key); }
-          catch (error) { if (absent(error)) fail('STORAGE_INTEGRITY_FAILED','Stored model resource is missing.'); throw error; }
-          const abort = (): void => { source.destroy(active.reason instanceof Error ? active.reason : new Error('Interrupted model read')); };
-          active.addEventListener('abort',abort,{once:true});
-          let count = 0; const hash = createHash('sha256');
-          try {
-            abortCheck(active);
-            for await (const chunk of source) {
-              abortCheck(active);
-              const data = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-              count += data.length;
-              if (count > resource.bytes) fail('STORAGE_INTEGRITY_FAILED','Stored model resource exceeds its verified size.');
-              hash.update(data);
-              let offset = 0;
-              while (offset < data.length) {
-                abortCheck(active);
-                const written = await output.write(data,offset,data.length-offset);
-                if (!written.bytesWritten) fail('STORAGE_UNAVAILABLE','Private resource spool could not be written.');
-                offset += written.bytesWritten;
-              }
-            }
-            if (count !== resource.bytes || hash.digest('hex') !== resource.sha256) fail('STORAGE_INTEGRITY_FAILED','Stored model resource failed its byte identity check.');
-            await output.chmod(0o400);
-            const ready = await output.stat();
-            if (!ready.isFile() || ready.size !== resource.bytes || ready.nlink !== 1) fail('STORAGE_INTEGRITY_FAILED','Private resource spool changed.');
-            // POSIX unlink-on-open reclaims bytes even if this process is forcibly killed.
-            // Windows may retain the private name until the same pinned handle is closed.
-            try { await fs.unlink(filename); } catch (error) { if (process.platform !== 'win32' || !['EPERM','EACCES'].includes(errorCode(error) ?? '')) throw error; }
-            abortCheck(active);
-            const ownedDirectory = directory;
-            let closed = false;
-            return { handle: output,bytes: resource.bytes,async close() {
-              if (closed) return; closed = true;
-              try { await output.close(); } finally { await fs.rm(ownedDirectory,{recursive:true,force:true}); }
-            } };
-          } finally { active.removeEventListener('abort',abort); source.destroy(); }
-        });
-      } catch (error) {
-        try { await handle?.close(); } finally { if (directory) await fs.rm(directory,{recursive:true,force:true}); }
-        throw error;
-      }
-    },
-    async initialize() {
-      return operation(undefined, async () => {
-        if (!await client.bucketExists(bucket)) {
-          try { await client.makeBucket(bucket); }
-          catch (error) {
-            if (!['BucketAlreadyOwnedByYou', 'BucketAlreadyExists'].includes(errorCode(error) ?? '') || !await client.bucketExists(bucket)) throw error;
-          }
-        }
-        try {
-          const policy = await client.getBucketPolicy(bucket);
-          // This dedicated bucket uses authenticated access only. Never change an existing policy.
-          if (policy.trim()) fail('STORAGE_BUCKET_NOT_PRIVATE', 'The dedicated model bucket must have no bucket policy.');
-        } catch (error) {
-          if (errorCode(error) !== 'NoSuchBucketPolicy') throw error;
-        }
-      });
-    },
-    prefix(projectId, versionId) {
-      return checkPrefix(`projects/${projectId}/versions/${versionId}/`);
-    },
-    async putResource(prefix, resource, filename, signal) {
-      checkPrefix(prefix);
-      checkResource(resource);
-      return operation(signal, async (active, cancel) => {
-        await noLinks(filename);
-        const handle = await fs.open(filename, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
-        try {
-          const before = await handle.stat({ bigint: true });
-          if (!before.isFile() || before.nlink !== 1n || before.size !== BigInt(resource.bytes)) {
-            fail('STORAGE_SOURCE_UNSAFE', 'Model resource source is not an unchanged private regular file.');
-          }
-          const identity = stamp(before);
-          const key = prefix + resource.path;
-          let exists = false;
-          try { await client.statObject(bucket, key); exists = true; }
-          catch (error) { if (!absent(error)) throw error; }
+  const readVerifiedObject = async (prefix: string, resource: ModelResource, signal?: AbortSignal): Promise<VerifiedModelResource> => {
 
-          const hash = createHash('sha256');
-          let count = 0;
-          const meter = new UploadInput({
-            transform(chunk: Buffer, _encoding, done) {
-              count += chunk.length;
-              if (count > resource.bytes) return done(new ModelStorageError('STORAGE_SOURCE_CHANGED', 'Model resource source changed during upload.'));
-              hash.update(chunk);
-              done(null, chunk);
-            },
-            flush(done) {
-              if (count !== resource.bytes || hash.digest('hex') !== resource.sha256) return done(new ModelStorageError('STORAGE_SOURCE_CHANGED', 'Model resource source does not match its verified identity.'));
-              done();
-            },
-          });
-          const source = handle.createReadStream({ autoClose: false, start: 0 });
-          const pumping = pipeline(source, meter, { signal: active });
-          const abortInput = (): void => { meter.destroy(active.reason instanceof Error ? active.reason : new ModelStorageError('IMPORT_ABORTED', 'Model storage operation was interrupted.')); };
-          active.addEventListener('abort', abortInput, { once: true });
-          if (active.aborted) abortInput();
-          let putting: Promise<unknown> | undefined;
-          try {
-            if (exists) {
-              // Drain and validate the same local handle even when a known object is reused.
-              for await (const chunk of meter) { void chunk; abortCheck(active); }
-              await pumping;
-              await readback(prefix, resource, active);
-            } else {
-              putting = client.putObject(bucket, key, meter, resource.bytes, { 'Content-Type': 'application/octet-stream' });
-              await Promise.all([pumping, putting]);
-            }
-          } catch (error) {
-            cancel();
-            source.destroy(); meter.destroy();
-            await Promise.allSettled([pumping, ...(putting ? [putting] : [])]);
-            throw error;
-          } finally { active.removeEventListener('abort', abortInput); meter.destroy(); }
-          const after = await handle.stat({ bigint: true });
-          if (identity !== stamp(after)) fail('STORAGE_SOURCE_CHANGED', 'Model resource source changed during upload.');
-          await noLinks(filename);
-          const named = await fs.stat(filename, { bigint: true });
-          if (identity !== stamp(named)) fail('STORAGE_SOURCE_CHANGED', 'Model resource source was replaced during upload.');
+    let directory: string | undefined;
+    let handle: import('node:fs/promises').FileHandle | undefined;
+    try {
+      return await operation(signal, async active => {
+        const key = prefix + resource.path;
+        let stat: { size: number };
+        try { stat = await client.statObject(bucket,key); }
+        catch (error) { if (absent(error)) fail(resource.path === PACKAGE_PATH ? 'STORAGE_ARCHIVE_MISSING' : 'STORAGE_INTEGRITY_FAILED','Stored model file is missing.'); throw error; }
+        if (stat.size !== resource.bytes) fail('STORAGE_INTEGRITY_FAILED','Stored model resource has an unexpected size.');
+        directory = await fs.mkdtemp(path.join(await fs.realpath(os.tmpdir()),'wfc-viewer-resource-'));
+        await fs.chmod(directory,0o700);
+        const filename = path.join(directory,'raw');
+        handle = await fs.open(filename,'wx+',0o600);
+        const output = handle;
+        let source: Readable;
+        try { source = await client.getObject(bucket,key); }
+        catch (error) { if (absent(error)) fail(resource.path === PACKAGE_PATH ? 'STORAGE_ARCHIVE_MISSING' : 'STORAGE_INTEGRITY_FAILED','Stored model file is missing.'); throw error; }
+        const abort = (): void => { source.destroy(active.reason instanceof Error ? active.reason : new Error('Interrupted model read')); };
+        active.addEventListener('abort',abort,{once:true});
+        let count = 0; const hash = createHash('sha256');
+        try {
           abortCheck(active);
-        } finally { await handle.close(); }
+          for await (const chunk of source) {
+            abortCheck(active);
+            const data = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+            count += data.length;
+            if (count > resource.bytes) fail('STORAGE_INTEGRITY_FAILED','Stored model resource exceeds its verified size.');
+            hash.update(data);
+            let offset = 0;
+            while (offset < data.length) {
+              abortCheck(active);
+              const written = await output.write(data,offset,data.length-offset);
+              if (!written.bytesWritten) fail('STORAGE_UNAVAILABLE','Private resource spool could not be written.');
+              offset += written.bytesWritten;
+            }
+          }
+          if (count !== resource.bytes || hash.digest('hex') !== resource.sha256) fail('STORAGE_INTEGRITY_FAILED','Stored model resource failed its byte identity check.');
+          await output.chmod(0o400);
+          const ready = await output.stat();
+          if (!ready.isFile() || ready.size !== resource.bytes || ready.nlink !== 1) fail('STORAGE_INTEGRITY_FAILED','Private resource spool changed.');
+          // POSIX unlink-on-open reclaims bytes even if this process is forcibly killed.
+          // Windows may retain the private name until the same pinned handle is closed.
+          try { await fs.unlink(filename); } catch (error) { if (process.platform !== 'win32' || !['EPERM','EACCES'].includes(errorCode(error) ?? '')) throw error; }
+          abortCheck(active);
+          const ownedDirectory = directory;
+          let closed = false;
+          return { handle: output,bytes: resource.bytes,async close() {
+            if (closed) return; closed = true;
+            try { await output.close(); } finally { await fs.rm(ownedDirectory,{recursive:true,force:true}); }
+          } };
+        } finally { active.removeEventListener('abort',abort); source.destroy(); }
       });
-    },
-    async verifyResources(prefix, resources, signal) {
-      checkPrefix(prefix);
-      if (!Array.isArray(resources) || resources.length < 1 || resources.length > MAX_RESOURCES) fail('STORAGE_RESOURCE_INVALID', 'Model resource inventory size is invalid.');
-      let totalBytes = 0;
-      const names = new Set<string>();
-      for (const resource of resources) {
-        checkResource(resource);
-        const name = resource.path.toLowerCase();
-        if (names.has(name)) fail('STORAGE_RESOURCE_INVALID', 'Model resource inventory contains a duplicate key.');
-        names.add(name);
-        totalBytes += resource.bytes;
-        if (!Number.isSafeInteger(totalBytes) || totalBytes > MAX_TOTAL_BYTES) fail('STORAGE_RESOURCE_INVALID', 'Model resource inventory exceeds its storage limit.');
-      }
-      return operation(signal, async (active) => {
-        for (const resource of resources) await readback(prefix, resource, active);
-        return { resourceCount: resources.length, totalBytes };
-      });
-    },
-    async removeUnpublished(prefix) {
-      checkPrefix(prefix);
+    } catch (error) {
+      try { await handle?.close(); } finally { if (directory) await fs.rm(directory,{recursive:true,force:true}); }
+      throw error;
+    }
+  };
+
+
+  const putVerifiedObject = async (prefix: string, resource: ModelResource, filename: string, signal?: AbortSignal): Promise<void> => {
+
+    return operation(signal, async (active, cancel) => {
+      await noLinks(filename);
+      const handle = await fs.open(filename, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
+      try {
+        const before = await handle.stat({ bigint: true });
+        if (!before.isFile() || before.nlink !== 1n || before.size !== BigInt(resource.bytes)) {
+          fail('STORAGE_SOURCE_UNSAFE', 'Model resource source is not an unchanged private regular file.');
+        }
+        const identity = stamp(before);
+        const key = prefix + resource.path;
+        let exists = false;
+        try { await client.statObject(bucket, key); exists = true; }
+        catch (error) { if (!absent(error)) throw error; }
+
+        const hash = createHash('sha256');
+        let count = 0;
+        const meter = new UploadInput({
+          transform(chunk: Buffer, _encoding, done) {
+            count += chunk.length;
+            if (count > resource.bytes) return done(new ModelStorageError('STORAGE_SOURCE_CHANGED', 'Model resource source changed during upload.'));
+            hash.update(chunk);
+            done(null, chunk);
+          },
+          flush(done) {
+            if (count !== resource.bytes || hash.digest('hex') !== resource.sha256) return done(new ModelStorageError('STORAGE_SOURCE_CHANGED', 'Model resource source does not match its verified identity.'));
+            done();
+          },
+        });
+        const source = handle.createReadStream({ autoClose: false, start: 0 });
+        const pumping = pipeline(source, meter, { signal: active });
+        const abortInput = (): void => { meter.destroy(active.reason instanceof Error ? active.reason : new ModelStorageError('IMPORT_ABORTED', 'Model storage operation was interrupted.')); };
+        active.addEventListener('abort', abortInput, { once: true });
+        if (active.aborted) abortInput();
+        let putting: Promise<unknown> | undefined;
+        try {
+          if (exists) {
+            // Drain and validate the same local handle even when a known object is reused.
+            for await (const chunk of meter) { void chunk; abortCheck(active); }
+            await pumping;
+            await readback(prefix, resource, active);
+          } else {
+            putting = client.putObject(bucket, key, meter, resource.bytes, { 'Content-Type': resource.path === PACKAGE_PATH ? 'application/zip' : 'application/octet-stream' });
+            await Promise.all([pumping, putting]);
+          }
+        } catch (error) {
+          cancel();
+          source.destroy(); meter.destroy();
+          await Promise.allSettled([pumping, ...(putting ? [putting] : [])]);
+          throw error;
+        } finally { active.removeEventListener('abort', abortInput); meter.destroy(); }
+        const after = await handle.stat({ bigint: true });
+        if (identity !== stamp(after)) fail('STORAGE_SOURCE_CHANGED', 'Model resource source changed during upload.');
+        await noLinks(filename);
+        const named = await fs.stat(filename, { bigint: true });
+        if (identity !== stamp(named)) fail('STORAGE_SOURCE_CHANGED', 'Model resource source was replaced during upload.');
+        abortCheck(active);
+      } finally { await handle.close(); }
+    });
+  };
+
+
+  const removeOwnedObjects = async (prefix: string, archiveOnly: boolean): Promise<void> => {
       return operation(undefined, async (active) => {
         const removed = new Set<string>();
         const aborted = new Set<string>();
         let scannedUploads = 0;
         const validateKey = (key: unknown): string => {
           if (typeof key !== 'string' || !key.startsWith(prefix)) fail('STORAGE_CLEANUP_UNSAFE', 'Model cleanup inventory is outside its owned bound.');
-          try { checkResource({ path: key.slice(prefix.length), bytes: 0, sha256: '0'.repeat(64) }); }
+          try {
+            const relative = key.slice(prefix.length);
+            if (archiveOnly) { if (relative !== PACKAGE_PATH) throw new Error('Unsafe archive key'); }
+            else checkResource({ path: relative, bytes: 0, sha256: '0'.repeat(64) });
+          }
           catch { fail('STORAGE_CLEANUP_UNSAFE', 'Model cleanup resource identity is invalid.'); }
           return key;
         };
@@ -404,7 +389,7 @@ export function createModelStorage(options: { client?: ModelStorageClient; bucke
           const seenUploads = new Set<string>();
           await consume(client.listObjectsV2(bucket, prefix, true), (entry) => {
             const key = validateKey((entry as { name?: unknown }).name);
-            if (keys.has(key) || removed.has(key) || removed.size + keys.size >= MAX_RESOURCES) fail('STORAGE_CLEANUP_UNSAFE', 'Model cleanup inventory exceeds its owned bound.');
+            if (keys.has(key) || removed.has(key) || removed.size + keys.size >= (archiveOnly ? 1 : MAX_RESOURCES)) fail('STORAGE_CLEANUP_UNSAFE', 'Model cleanup inventory exceeds its owned bound.');
             keys.add(key); return true;
           });
           // MinIO's MPU prefix API matches an exact object key, not a directory.
@@ -440,6 +425,78 @@ export function createModelStorage(options: { client?: ModelStorageClient; bucke
           // complete objects and all remaining multipart IDs from the beginning.
         }
       });
+    };
+
+  return {
+    async readVerifiedResource(prefix, resource, signal) {
+      checkPrefix(prefix); checkResource(resource);
+      return readVerifiedObject(prefix, resource, signal);
+    },
+    async readVerifiedArchive(prefix, archive, signal) {
+      checkArchivePrefix(prefix);
+      return readVerifiedObject(prefix, archiveResource(archive), signal);
+    },
+    async putResource(prefix, resource, filename, signal) {
+      checkPrefix(prefix); checkResource(resource);
+      return putVerifiedObject(prefix, resource, filename, signal);
+    },
+    async putArchive(prefix, archive, filename, signal) {
+      checkArchivePrefix(prefix);
+      return putVerifiedObject(prefix, archiveResource(archive), filename, signal);
+    },
+    async verifyArchive(prefix, archive, signal) {
+      checkArchivePrefix(prefix);
+      const resource = archiveResource(archive);
+      return operation(signal, active => readback(prefix, resource, active));
+    },
+    async initialize() {
+      return operation(undefined, async () => {
+        if (!await client.bucketExists(bucket)) {
+          try { await client.makeBucket(bucket); }
+          catch (error) {
+            if (!['BucketAlreadyOwnedByYou', 'BucketAlreadyExists'].includes(errorCode(error) ?? '') || !await client.bucketExists(bucket)) throw error;
+          }
+        }
+        try {
+          const policy = await client.getBucketPolicy(bucket);
+          // This dedicated bucket uses authenticated access only. Never change an existing policy.
+          if (policy.trim()) fail('STORAGE_BUCKET_NOT_PRIVATE', 'The dedicated model bucket must have no bucket policy.');
+        } catch (error) {
+          if (errorCode(error) !== 'NoSuchBucketPolicy') throw error;
+        }
+      });
+    },
+    archivePrefix(projectId, importId) {
+      return checkArchivePrefix(`archives/${projectId}/${importId}/`);
+    },
+    prefix(projectId, versionId) {
+      return checkPrefix(`projects/${projectId}/versions/${versionId}/`);
+    },
+    async verifyResources(prefix, resources, signal) {
+      checkPrefix(prefix);
+      if (!Array.isArray(resources) || resources.length < 1 || resources.length > MAX_RESOURCES) fail('STORAGE_RESOURCE_INVALID', 'Model resource inventory size is invalid.');
+      let totalBytes = 0;
+      const names = new Set<string>();
+      for (const resource of resources) {
+        checkResource(resource);
+        const name = resource.path.toLowerCase();
+        if (names.has(name)) fail('STORAGE_RESOURCE_INVALID', 'Model resource inventory contains a duplicate key.');
+        names.add(name);
+        totalBytes += resource.bytes;
+        if (!Number.isSafeInteger(totalBytes) || totalBytes > MAX_TOTAL_BYTES) fail('STORAGE_RESOURCE_INVALID', 'Model resource inventory exceeds its storage limit.');
+      }
+      return operation(signal, async (active) => {
+        for (const resource of resources) await readback(prefix, resource, active);
+        return { resourceCount: resources.length, totalBytes };
+      });
+    },
+    async removeUnpublished(prefix) {
+      checkPrefix(prefix);
+      return removeOwnedObjects(prefix, false);
+    },
+    async removeUnpublishedArchive(prefix) {
+      checkArchivePrefix(prefix);
+      return removeOwnedObjects(prefix, true);
     },
   };
 }

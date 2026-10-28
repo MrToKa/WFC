@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express';
+import { pipeline } from 'node:stream/promises';
 import { z } from 'zod';
-import { requireProjectEdit } from '../middleware.js';
+import { authenticate, requireAdmin, requireProjectAccess, requireProjectEdit } from '../middleware.js';
 import { pool } from '../db.js';
 import { ModelRegistryError } from '../modelRegistry/errors.js';
 import { getModelRegistry } from '../modelRegistry/runtime.js';
@@ -41,6 +42,42 @@ modelRegistryRouter.get('/model-import-authorization', requireProjectEdit, async
 modelRegistryRouter.get('/model-versions', async (req, res) => {
   try { res.json(await getModelRegistry().listVersions(project(req))); }
   catch (error) { reportError(res, error); }
+});
+modelRegistryRouter.get('/model-versions/:versionId/package', requireAdmin, async (req, res) => {
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  const controller = new AbortController();
+  const disconnected = (): void => { if (!res.writableFinished) controller.abort(); };
+  res.once('close', disconnected);
+  let archive: Awaited<ReturnType<ReturnType<typeof getModelRegistry>['getPackage']>> | undefined;
+  try {
+    // Bytes are completely verified into a pinned private handle before response headers.
+    archive = await getModelRegistry().getPackage(project(req), identifier(req.params.versionId), controller.signal);
+    controller.signal.throwIfAborted();
+    // A large ZIP can take time to spool. Recheck login and current permissions before any bytes leave WFC.
+    let allowed = false;
+    authenticate(req, res, () => { allowed = true; });
+    if (!allowed) return;
+    allowed = false;
+    await requireAdmin(req, res, () => { allowed = true; });
+    if (!allowed) return;
+    allowed = false;
+    await requireProjectAccess(req, res, () => { allowed = true; });
+    if (!allowed) return;
+    controller.signal.throwIfAborted();
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${archive.filename}"`);
+    res.setHeader('Content-Length', archive.bytes);
+    res.setHeader('X-Package-SHA256', archive.sha256);
+    if (req.method === 'HEAD') res.end();
+    else await pipeline(archive.handle.createReadStream({ autoClose: true, start: 0 }), res, { signal: controller.signal });
+  } catch (error) {
+    if (res.headersSent || res.destroyed) { if (!res.destroyed) res.destroy(); }
+    else reportError(res, error);
+  } finally {
+    res.off('close', disconnected);
+    await archive?.close();
+  }
 });
 modelRegistryRouter.get('/model-imports/:importId', async (req, res) => {
   try {

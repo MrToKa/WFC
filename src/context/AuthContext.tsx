@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { invalidateViewerLogin, revokeViewerLogin, type RevokeOutcome } from '@/viewer/loginLifecycle';
 import { readStoredToken, TOKEN_STORAGE_KEY } from '@/api/session';
+import { revokePreparerSession } from '@/api/preparer';
 import {
   createContext,
   useCallback,
@@ -175,6 +176,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const operation = ++authOperation.current;
     invalidateViewerLogin(oldToken);
     if (oldToken) {
+      void revokePreparerSession(oldToken).catch(() => false);
       setViewerLogoutStatus('pending');
       // Capture the old credential before clearing it. No late result can restore login.
       void revokeViewerLogin(oldToken).then((outcome) => {

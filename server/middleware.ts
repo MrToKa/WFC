@@ -125,6 +125,7 @@ function isViewerSessionReadControl(method: string,path: string,withProject: boo
 }
 
 const technicianFileReadPaths = [
+  /^\/model-versions\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/package\/?$/i,
   /^\/files\/?$/i,
   /^\/files\/[0-9a-f-]+\/(download|versions)\/?$/i,
   /^\/files\/[0-9a-f-]+\/versions\/[0-9a-f-]+\/download\/?$/i,

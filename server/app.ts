@@ -18,6 +18,7 @@ import { templateFilesRouter } from './routes/templateFilesRoutes.js';
 import { userRouter } from './routes/userRoutes.js';
 import { authenticate, requireAdmin, requireCatalogAccess } from './middleware.js';
 import { createViewerSessionRouter } from './routes/viewerSessionRoutes.js';
+import { createPreparerRouter } from './routes/preparerRoutes.js';
 import { pool } from './db.js';
 import { principalTransaction, requestPrincipal } from './pathfinder/auth.js';
 import { PathFinderError } from './pathfinder/errors.js';
@@ -118,6 +119,7 @@ export const createApp = (): Express => {
   });
 
   app.use('/api/auth', authRouter);
+  app.use('/api/preparer', createPreparerRouter());
   app.use('/api/users', userRouter);
   app.use('/api/admin', adminUsersRouter);
   app.use('/api/materials', authenticate, requireCatalogAccess, withMaterialAuditActor);

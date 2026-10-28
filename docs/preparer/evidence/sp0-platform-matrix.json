@@ -1,0 +1,172 @@
+{
+  "schemaVersion": "wfc.preparer.sp0-platform-matrix.v1",
+  "sourceRevision": "00832078098f21d5e6e2b780c4c0d03bc3506086",
+  "branch": "sp-0-preparer-baseline-local-20261022",
+  "sourceWorktreeCleanBeforeDocumentation": true,
+  "status": "QUALIFIED_PLATFORM_COVERAGE",
+  "sp0StrictGate": "INCOMPLETE",
+  "fullLinuxMatrix": "NOT_RUN",
+  "scope": "Matching-source Windows non-Linux cases and the exact five Linux-only store controls, in separate executions. No full-run PASS or complete Linux matrix is asserted.",
+  "windows": {
+    "operationId": "d61022c2-9471-40b8-a2ba-ed25a95aa4c4",
+    "platform": "win32",
+    "node": "v24.19.0",
+    "finishedAt": "2026-10-22T01:51:45.003Z",
+    "coverage": "complete-requested-suites",
+    "strictSummaryStatus": "FAIL",
+    "sourceInputsUnchanged": true,
+    "copiedInputsUnchanged": true,
+    "suites": [
+      {
+        "name": "guard",
+        "status": "PASS",
+        "tests": 18,
+        "pass": 18,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "durationMs": 1202,
+        "exitCode": 0,
+        "joined": true,
+        "killed": false,
+        "childrenJoined": true,
+        "workersJoined": true,
+        "portsClosed": true,
+        "denied": 48,
+        "expectedDenied": 48,
+        "tapSha256": "f84e06356808ee1f6ec2e72ba8313c24e79e4531a0235171270632c075d8d83c"
+      },
+      {
+        "name": "package",
+        "status": "PASS",
+        "tests": 174,
+        "pass": 174,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "durationMs": 19727,
+        "exitCode": 0,
+        "joined": true,
+        "killed": false,
+        "childrenJoined": true,
+        "workersJoined": true,
+        "portsClosed": true,
+        "denied": 0,
+        "expectedDenied": 0,
+        "tapSha256": "47d674c217ed5fabe0d94b5f664f40061f5f09d0ea3786ee6d7347d7a701e3a1"
+      },
+      {
+        "name": "preparer",
+        "status": "FAIL",
+        "tests": 286,
+        "pass": 281,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 5,
+        "todo": 0,
+        "durationMs": 364253,
+        "exitCode": 0,
+        "joined": true,
+        "killed": false,
+        "childrenJoined": true,
+        "workersJoined": true,
+        "portsClosed": true,
+        "denied": 0,
+        "expectedDenied": 0,
+        "tapSha256": "5b9533fb62327760a66ca0816983a221f75a52c4e2468367dcbf325a859f351a"
+      }
+    ],
+    "reason": "The unchanged strict terminal gate requires tests equal pass and zero skipped/todo/fail/cancelled. The five Linux-only tests were skipped on Windows.",
+    "skippedTestFile": "model-preparer/test/store-linux.test.mjs"
+  },
+  "linux": {
+    "operationId": "eab7c528-2c6b-43ee-93de-042050041e07",
+    "attempt": 2,
+    "status": "PASS",
+    "platform": "linux",
+    "node": "v24.22.0",
+    "image": "sha256:ac0d16ab1b0f4c92922c20d1a13a5ea142d4c6e92558de1870daf4db7fd60fcf",
+    "testFile": "model-preparer/test/store-linux.test.mjs",
+    "tests": 5,
+    "pass": 5,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0,
+    "exitCode": 0,
+    "signal": null,
+    "timedOut": false,
+    "joined": true,
+    "helpersRemoved": true,
+    "sourceCopyBookends": "PASS",
+    "sourceMatchesWindowsInventory": true,
+    "scope": "Exactly five Linux process-identity/lease controls on copied source in an owned bounded no-network helper with read-only source. No WFC, APS, Docker socket, database or browser access.",
+    "controls": [
+      "Live owner boot, PID namespace and exact start ticks",
+      "Reused PID with a stale same-namespace start tick",
+      "Foreign boot and namespace never authorize recovery",
+      "Legacy owner records do not authorize namespace-blind recovery",
+      "Release preserves a changed process identity"
+    ],
+    "source": [
+      {
+        "path": "model-preparer/test/store-linux.test.mjs",
+        "sha256": "af82ce72b8ec55746929aacef3be5f73726af290027e88003cebfb97e14151e9",
+        "bytes": 4396
+      },
+      {
+        "path": "model-preparer/lib/store.mjs",
+        "sha256": "05725481c60107d9f6901002ae958a32b558dbfdbf8aec479f75a842f41af4fe",
+        "bytes": 34812
+      },
+      {
+        "path": "model-preparer/lib/contracts.mjs",
+        "sha256": "944ae01319be896a2c481693c51ea1a1ed8730cb1235ea4e6d261a929dda8883",
+        "bytes": 12724
+      }
+    ],
+    "firstAttempt": {
+      "status": "FAIL",
+      "exitCode": 0,
+      "joined": true,
+      "timedOut": false,
+      "terminalTotals": null,
+      "reason": "The default reporter produced no parseable terminal TAP totals. Attempt2 explicitly selected TAP. The failed first result remains retained."
+    }
+  },
+  "retainedEvidence": [
+    {
+      "path": ".preparer-work/sp0-os-pin-full-d61022c2-9471-40b8-a2ba-ed25a95aa4c4/evidence/summary.json",
+      "sha256": "540b111a4dc871e0e5ef86ce350e20014f4ad31b9a5edabcb5b734b4779476de"
+    },
+    {
+      "path": ".preparer-work/sp0-os-pin-full-d61022c2-9471-40b8-a2ba-ed25a95aa4c4/evidence/source-inputs.json",
+      "sha256": "56932e17d637e2501b804c8645f9887161a779cddc935152f88c0fcbe0fddd4f"
+    },
+    {
+      "path": ".preparer-work/sp0-linux-store-eab7c528-2c6b-43ee-93de-042050041e07/result-2.pass.private.json",
+      "sha256": "284e410bf04b3d371e10f0b054c2b38f2cfb64a7ccbe23148e7d89747cdd3d28"
+    },
+    {
+      "path": ".preparer-work/sp0-linux-store-eab7c528-2c6b-43ee-93de-042050041e07/linux-control-2.private.json",
+      "sha256": "a0281483a2bb2e272550634b908daca3e35779ababcb96c75bbf47d35c335853"
+    },
+    {
+      "path": ".preparer-work/sp0-linux-store-eab7c528-2c6b-43ee-93de-042050041e07/linux-control.private.json",
+      "sha256": "836cabf77dcd6dde71e58e745a9693255c72c1ec28dfc584708f041b08d16a55"
+    }
+  ],
+  "limits": {
+    "gateOrTimeoutChanged": false,
+    "fullRunPassAsserted": false,
+    "fullLinuxMatrixAsserted": false,
+    "main5180OfflineSeed": "NOT_RUN",
+    "main5180Restore": "NOT_RUN",
+    "main5180Update": "NOT_RUN",
+    "originalPostgreSqlStarted": false,
+    "autodesk": "NOT_RUN",
+    "productPerformanceQualified": false
+  }
+}

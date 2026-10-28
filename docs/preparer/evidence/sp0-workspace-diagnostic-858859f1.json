@@ -1,0 +1,15 @@
+{
+  "status": "FAIL",
+  "operationId": "858859f1-d0f9-4d60-a8a0-26a851354567",
+  "finishedAt": "2026-10-22T00:39:16.870Z",
+  "coverage": "selected-test-file",
+  "selectedTestFile": "app-test/workspace-service.test.mjs",
+  "guard": {"status":"PASS","tests":15,"pass":15,"denied":48,"expectedDenied":48,"workersJoined":true,"childrenJoined":true,"portsClosed":true},
+  "preparer": {"status":"FAIL","durationMs":339984,"tests":5,"pass":3,"fail":0,"cancelled":2,"exitCode":1,"killed":false,"joined":true,"workersJoined":false,"childrenJoined":false,"portsClosed":true,"reportedDenials":0,"workerEvidenceComplete":false},
+  "sourceInputsUnchanged": true,
+  "copiedInputsUnchanged": true,
+  "observations": ["Generate test cancelled at its 120-second deadline", "Save retry/resume control passed in about90seconds", "Multiple-view control cancelled at120seconds", "Missing worker exit evidence prevents a claim that the worker made no denied calls"],
+  "scope": "Copied-source exact-file diagnostic only; no real WFC, database, Docker, APS or browser acceptance",
+  "next": "Observe safe bounded stage/callsite checkpoints independently of terminal exit reports before another focused run; never count checkpoints as worker/join/port proof",
+  "fullBaseline": "INCOMPLETE"
+}

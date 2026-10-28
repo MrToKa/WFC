@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:routings-model-preparer:job-state:v1",
+  "title": "Model Preparer durable job projection v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "jobId", "kind", "createdAt", "updatedAt", "frozen", "frozenDigest", "status", "costEvidence", "costDecision", "upload", "submission", "download", "package", "lastGoodPackage", "history", "error", "interruption"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "jobId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "kind": { "enum": ["captured", "registered"] },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "frozenDigest": { "$ref": "#/$defs/hash" },
+    "frozen": { "oneOf": [{ "$ref": "#/$defs/captured" }, { "$ref": "#/$defs/registered" }] },
+    "status": { "enum": ["captured", "registered", "cost-blocked", "uploading", "uploaded", "submission-unknown", "submitted", "translating", "downloading", "downloaded", "verifying", "packaged", "failed", "interrupted"] },
+    "costEvidence": { "type": ["object", "null"] },
+    "costDecision": { "type": ["object", "null"] },
+    "upload": { "type": ["object", "null"] },
+    "submission": { "type": ["object", "null"] },
+    "download": { "type": ["object", "null"] },
+    "package": { "type": ["object", "null"] },
+    "lastGoodPackage": { "type": ["object", "null"] },
+    "history": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["at", "event"], "properties": { "at": { "type": "string", "format": "date-time" }, "event": { "type": "string", "pattern": "^[a-z-]+$" } } } },
+    "error": { "oneOf": [{ "type": "null" }, { "type": "object", "additionalProperties": false, "required": ["code", "message"], "properties": { "code": { "type": "string", "pattern": "^[A-Z_]+$" }, "message": { "type": "string" } } }] },
+    "interruption": { "oneOf": [{ "type": "null" }, { "type": "object", "additionalProperties": false, "required": ["at", "localOnly", "remoteCancellationConfirmed"], "properties": { "at": { "type": "string", "format": "date-time" }, "localOnly": { "const": true }, "remoteCancellationConfirmed": { "const": false } } }] }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "namespace": { "type": "object", "additionalProperties": false, "required": ["account", "application"], "properties": { "account": { "type": "string" }, "application": { "type": "string" } } },
+    "destination": { "type": "object", "additionalProperties": false, "required": ["bucket", "objectKey"], "properties": { "bucket": { "type": "string" }, "objectKey": { "type": "string" } } },
+    "conversion": { "type": "object", "additionalProperties": false, "required": ["format", "views", "xAdsForce"], "properties": { "format": { "const": "svf" }, "views": { "const": ["3d"] }, "xAdsForce": { "const": false } } },
+    "source": { "type": "object", "additionalProperties": false, "required": ["name", "bytes", "sha256", "snapshotPath", "capturedAt"], "properties": { "name": { "type": "string" }, "bytes": { "type": "integer", "minimum": 1 }, "sha256": { "$ref": "#/$defs/hash" }, "snapshotPath": { "type": "string" }, "capturedAt": { "type": "string", "format": "date-time" } } },
+    "captured": { "type": "object", "additionalProperties": false, "required": ["source", "namespace", "region", "destination", "conversion", "supportProfile", "label", "output", "uploadIdentity", "submissionIdentity", "remoteTargetIdentity", "objectId", "urn"], "properties": { "source": { "$ref": "#/$defs/source" }, "namespace": { "$ref": "#/$defs/namespace" }, "region": { "enum": ["EMEA", "US"] }, "destination": { "$ref": "#/$defs/destination" }, "conversion": { "$ref": "#/$defs/conversion" }, "supportProfile": { "const": "svf-local-7.130.0-v1" }, "label": { "type": "string" }, "output": { "type": "string" }, "uploadIdentity": { "$ref": "#/$defs/hash" }, "submissionIdentity": { "$ref": "#/$defs/hash" }, "remoteTargetIdentity": { "$ref": "#/$defs/hash" }, "objectId": { "type": "string" }, "urn": { "type": "string" } } },
+    "registered": { "type": "object", "additionalProperties": false, "required": ["packagePath", "source", "label"], "properties": { "packagePath": { "type": "string" }, "source": { "type": "object", "additionalProperties": false, "required": ["name", "bytes", "sha256", "identityBasis"], "properties": { "name": { "type": "string" }, "bytes": { "type": "integer", "minimum": 1 }, "sha256": { "$ref": "#/$defs/hash" }, "identityBasis": { "enum": ["observed-local-file", "captured-at-conversion"] } } }, "label": { "type": "string" } } }
+  }
+}

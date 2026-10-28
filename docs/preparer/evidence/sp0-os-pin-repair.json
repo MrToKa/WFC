@@ -1,0 +1,189 @@
+{
+  "schemaVersion": "wfc.preparer.sp0-os-pin-repair.v1",
+  "baseRevision": "af37b09334a20fecf695aaf9cf945dd495db91f2",
+  "status": "INCOMPLETE",
+  "source": [
+    {
+      "path": "scripts/preparer-baseline/isolation.mjs",
+      "bytes": 23565,
+      "sha256": "fe5223326609a2253654f52dcfb1d257bbff14c88276a0795b9bd9866c96fb42"
+    },
+    {
+      "path": "scripts/preparer-baseline/run.mjs",
+      "bytes": 27316,
+      "sha256": "23116ca949afa80b60d20648952678ae4d28e3972c26647e02336e2ec9fe8e4b"
+    },
+    {
+      "path": "scripts/preparer-baseline/guard.test.mjs",
+      "bytes": 10533,
+      "sha256": "e592d21c27778017276c3444bd185b4b869bb3faac31cdc126efe263910164ec"
+    },
+    {
+      "path": "scripts/preparer-baseline/run.test.mjs",
+      "bytes": 8555,
+      "sha256": "a10992abf1d614b392a4114aa94fe55222853b6d4adb6692e70b612c2da2123f"
+    },
+    {
+      "path": "scripts/preparer-baseline/child.mjs",
+      "bytes": 1440,
+      "sha256": "63679d89b48fbe813024e9e3f59963337c9968c2e28db4d200434d812ffc4312"
+    },
+    {
+      "path": "scripts/preparer-main/offline-seed.mjs",
+      "bytes": 31877,
+      "sha256": "049ef45c526451f4c4df079c9b1eceb7a7688c768735f12ace046a49a3681b5e"
+    },
+    {
+      "path": "scripts/preparer-main/offline-seed.test.mjs",
+      "bytes": 22364,
+      "sha256": "633e1b62ed93f7b0687d7d21b654b2f78bdfd98f2ecca3fce33d6d32873b4f20"
+    }
+  ],
+  "checks": [
+    {
+      "operation": "sp0-full-sidecar-baseline-fb9ede8f-8517-4406-a5f1-c9a4535ae52d",
+      "status": "FAIL",
+      "coverage": "complete-requested-suites",
+      "sourceInputsUnchanged": true,
+      "copiedInputsUnchanged": true,
+      "finishedAt": "2026-10-22T00:57:18.977Z",
+      "suites": [
+        {
+          "name": "guard",
+          "status": "PASS",
+          "tests": 17,
+          "pass": 17,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "durationMs": 935,
+          "joined": true,
+          "killed": false,
+          "childrenJoined": true,
+          "portsClosed": true,
+          "workersJoined": true,
+          "denied": 48
+        },
+        {
+          "name": "package",
+          "status": "PASS",
+          "tests": 174,
+          "pass": 174,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "durationMs": 19964,
+          "joined": true,
+          "killed": false,
+          "childrenJoined": true,
+          "portsClosed": true,
+          "workersJoined": true,
+          "denied": 0
+        },
+        {
+          "name": "preparer",
+          "status": "FAIL",
+          "tests": 286,
+          "pass": 280,
+          "fail": 1,
+          "cancelled": 0,
+          "skipped": 5,
+          "todo": 0,
+          "durationMs": 359920,
+          "joined": true,
+          "killed": false,
+          "childrenJoined": false,
+          "portsClosed": true,
+          "workersJoined": false,
+          "denied": 0
+        }
+      ]
+    },
+    {
+      "operation": "sp0-guard-os-pin-a40f2200-3a0f-45c5-983c-093d2043a45e",
+      "status": "PASS",
+      "coverage": "complete-requested-suites",
+      "sourceInputsUnchanged": true,
+      "copiedInputsUnchanged": true,
+      "finishedAt": "2026-10-22T01:17:51.693Z",
+      "suites": [
+        {
+          "name": "guard",
+          "status": "PASS",
+          "tests": 18,
+          "pass": 18,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "durationMs": 1272,
+          "joined": true,
+          "killed": false,
+          "childrenJoined": true,
+          "portsClosed": true,
+          "workersJoined": true,
+          "denied": 48
+        }
+      ]
+    },
+    {
+      "operation": "sp0-ops-os-pin-47b1dd39-56fa-4da9-b321-b6e14f075241",
+      "status": "SUBSET_PASS",
+      "coverage": "selected-test-file",
+      "sourceInputsUnchanged": true,
+      "copiedInputsUnchanged": true,
+      "finishedAt": "2026-10-22T01:18:19.685Z",
+      "suites": [
+        {
+          "name": "guard",
+          "status": "PASS",
+          "tests": 18,
+          "pass": 18,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "durationMs": 1189,
+          "joined": true,
+          "killed": false,
+          "childrenJoined": true,
+          "portsClosed": true,
+          "workersJoined": true,
+          "denied": 48
+        },
+        {
+          "name": "preparer",
+          "status": "PASS",
+          "tests": 14,
+          "pass": 14,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "durationMs": 1590,
+          "joined": true,
+          "killed": false,
+          "childrenJoined": true,
+          "portsClosed": true,
+          "workersJoined": true,
+          "denied": 0
+        }
+      ]
+    }
+  ],
+  "offlineSeedControl": {
+    "status": "PASS",
+    "tests": 19,
+    "scope": "Injected fake Docker finalization controls only"
+  },
+  "review": "CLEAR",
+  "limits": {
+    "fullPlatformMatrix": "NOT_RUN",
+    "mainBackup": "NOT_RUN",
+    "mainUpdate": "NOT_RUN",
+    "autodesk": "NOT_RUN"
+  },
+  "scope": "Local copied-source baseline diagnostics and explicit Windows OS executable identity. No WFC data, credentials or original runtime changes."
+}

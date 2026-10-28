@@ -3,6 +3,8 @@ const messages: Record<string, string> = {
   PACKAGE_ID_CONFLICT: 'The package identity conflicts with an existing package.',
   PROVENANCE_CONFLICT: 'The content fingerprint has conflicting source provenance.',
   MODEL_NOT_FOUND: 'The model version does not exist in this project.',
+  PACKAGE_NOT_FOUND: 'A downloadable package was not retained for this model version.',
+  PACKAGE_UNAVAILABLE: 'The retained model package is unavailable or failed its integrity check.',
   PROJECT_NOT_FOUND: 'The project no longer exists.',
   IMPORT_NOT_FOUND: 'The import no longer exists.',
   IMPORT_FENCED: 'The import is no longer owned by this worker.',

@@ -1,8 +1,8 @@
-import { useId } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import {
   Body1, Button, Caption1, Dropdown, Field, Option, Spinner, makeStyles, tokens,
 } from '@fluentui/react-components';
-import type { ProjectModelVersion } from '@/api/projectModels';
+import { downloadProjectModelPackage, ProjectModelApiError, type ProjectModelVersion } from '@/api/projectModels';
 import { useProjectModelSelection } from './hooks/useProjectModelSelection';
 
 const useStyles = makeStyles({
@@ -27,6 +27,34 @@ const optionLabel = (version: ProjectModelVersion): string =>
   `${version.label} — ${version.source.name} — ${dateLabel(version.importedAt ?? version.preparedAt)}`;
 
 type Props = { projectId: string | null; token: string | null; canEdit: boolean; className?: string };
+
+function ModelPackageDownload({ projectId, versionId, token }: { projectId: string; versionId: string; token: string }) {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const request = useRef<AbortController | null>(null);
+  useEffect(() => () => { request.current?.abort(); }, []);
+  const download = async (): Promise<void> => {
+    if (request.current) return;
+    const controller = new AbortController(); request.current = controller;
+    setPending(true); setError(null);
+    try {
+      const result = await downloadProjectModelPackage(projectId, versionId, token, { signal: controller.signal });
+      controller.signal.throwIfAborted();
+      const url = URL.createObjectURL(result.blob), anchor = document.createElement('a');
+      anchor.href = url; anchor.download = result.filename;
+      document.body.appendChild(anchor); anchor.click(); anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    } catch (failure) {
+      if (!controller.signal.aborted) setError(failure instanceof ProjectModelApiError ? failure.message : 'The model ZIP could not be downloaded. Try again.');
+    } finally {
+      if (!controller.signal.aborted) { request.current = null; setPending(false); }
+    }
+  };
+  return <div>
+    <Button disabled={pending} onClick={() => void download()}>{pending ? 'Downloading ZIP...' : 'Download SVF ZIP'}</Button>
+    {error ? <Body1 role="alert">{error}</Body1> : null}
+  </div>;
+}
 
 export function ProjectModelSection({ projectId, token, canEdit, className }: Props) {
   const styles = useStyles();
@@ -64,6 +92,7 @@ export function ProjectModelSection({ projectId, token, canEdit, className }: Pr
           <Caption1>Prepared: {dateLabel(active.preparedAt)}</Caption1>
           {active.importedAt ? <Caption1>Imported: {dateLabel(active.importedAt)}</Caption1> : null}
           <Body1>Status: {statusLabel(active)}</Body1>
+          {editable ? <ModelPackageDownload key={`${projectId}/${active.id}/${token}`} projectId={projectId!} versionId={active.id} token={token!} /> : null}
         </> : <Body1 role="alert" className={styles.error}>The selected model is missing from the project model list. Refresh to check its availability.</Body1>}
         {snapshot.versions.length === 0 ? <Body1>No prepared models are available for this project.</Body1> : null}
       </div> : null}

@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>3D preview — Model Preparer</title>
+  <link rel="stylesheet" href="/sdk/style.min.css">
+  <link rel="stylesheet" href="/web/preview.css">
+  <script type="module" src="/web/preview.mjs"></script>
+</head>
+<body>
+  <header class="preview-header">
+    <div class="preview-heading"><a href="/" class="preview-back">← Back to jobs</a><h1>Verified model preview</h1><p id="preview-status" role="status" aria-live="polite">Checking local resources…</p></div>
+    <div class="preview-controls"><p id="preview-facts">Viewer 7.130.0 · local resources</p><p id="preview-integrity" role="status"></p><button id="fit-model" type="button" disabled>Fit model to view</button><a id="preview-export" download hidden>Download ZIP</a></div>
+  </header>
+  <div id="preview-error" class="preview-error" role="alert" hidden></div>
+  <main id="viewer" aria-label="3D model geometry and properties"></main>
+  <div id="viewer-loading" class="viewer-loading"><span class="loading-symbol" aria-hidden="true">◇</span><p id="viewer-loading-label">Loading the verified local Viewer…</p><small>Uses local resources without starting a new conversion.</small></div>
+</body>
+</html>

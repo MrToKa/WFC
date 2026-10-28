@@ -1,0 +1,16 @@
+node_modules/
+data/
+work/
+*.tmp
+*.part
+*.zip
+*.nwd
+*.env
+.env*
+outputs/
+.runtime/
+.build/
+deployment/preview-runtime/
+deployment/build-contexts/
+*.tar
+*.log

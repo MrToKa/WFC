@@ -1,0 +1,76 @@
+{
+  "schemaVersion": "wfc.preparer.sp5-integration-qualification.v1",
+  "status": "PASS",
+  "productRevision": "543ae7a889fbf1abbf4937f5f83b2c6ee1b91ff4",
+  "images": {
+    "api": "sha256:ec6fc3cf89dc9fea8ae201e9507655ba6534f608070b79480a81910ae89ff451",
+    "web": "sha256:a9226e283b2bb2810bdf48484cd776d4bb6e6d92aad3706419f6c8724c6543d0",
+    "preparer": "sha256:3e815754b56d2c4ccbd79d4708ed289cc43e709c69f478ed708b86be9d20c488",
+    "postgres": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+    "minio": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e"
+  },
+  "browserAcceptance": "PASS",
+  "twoAdminIsolation": "PASS",
+  "restartAndLocalZipRecovery": "PASS",
+  "noCredentialPersistence": "PASS",
+  "threeStoreBackupRestore": "PASS",
+  "restoredAuthorityFenced": "PASS",
+  "realAutodeskRequests": 0,
+  "productionCloudAcceptance": "NOT_RUN_BY_USER_REQUIREMENT",
+  "cleanup": "PASS",
+  "resourcesRemoved": true,
+  "checkedAt": "2026-10-24T06:00:56.228Z",
+  "scope": "Actual isolated synthetic app/browser/HTTP/store restore; no fresh real model conversion or geometry acceptance",
+  "evidence": [
+    {
+      "name": "browser-proof.private.json",
+      "bytes": 1318,
+      "sha256": "02ddc2a9906fa8f9beeaac5908f1c1a52b3ff32540a7926ea9c6148d482aaacc"
+    },
+    {
+      "name": "http-before.private.json",
+      "bytes": 498,
+      "sha256": "5bc80bef314ab0860b0d12686a110561e6b900edde7e842faf795d35212dbb5f"
+    },
+    {
+      "name": "http-after.private.json",
+      "bytes": 323,
+      "sha256": "920c60b59f7cbcc52461d31ac71de9f783817efa6c2e3f32e9cd7e3da4378f3a"
+    },
+    {
+      "name": "persistent-keys-scan.private.json",
+      "bytes": 156,
+      "sha256": "930156e7bfa8a90a5e8b5e418b91f400cacb56c8959a24fb0af3460e356ed7ce"
+    },
+    {
+      "name": "live-role-proof.private.json",
+      "bytes": 332,
+      "sha256": "2b4186604a91e2173adcd8d9fbde2774df45bc561e1831ec14333786fd6bff55"
+    },
+    {
+      "name": "stopped.private.json",
+      "bytes": 211,
+      "sha256": "83576603577fba1f844f25be654d448814d0276a4e15a3ab0a81ae60938b82bc"
+    },
+    {
+      "name": "snapshot.private.json",
+      "bytes": 10528,
+      "sha256": "7749252a33e369395882b2396b73af0dd16bbaf10a12441abeb1871d41edf7a3"
+    },
+    {
+      "name": "restore.private.json",
+      "bytes": 24320,
+      "sha256": "54787be0102e723817305087d5c186d918d19596d22d1e3a222d377ee66b4027"
+    },
+    {
+      "name": "root-http-proof.private.json",
+      "bytes": 599,
+      "sha256": "84217942f23ef5233832281b2e024645ed47a795629079ea38a4ff8816973c70"
+    },
+    {
+      "name": "cleaned.private.json",
+      "bytes": 154,
+      "sha256": "9ab8a861d689e912c47e31d1109a5f9b7a51f59e4a1848740d5ed7513f231519"
+    }
+  ]
+}

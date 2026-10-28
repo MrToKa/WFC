@@ -1,0 +1,17 @@
+# Select explicitly alongside compose.yaml after the WFC integration is
+# installed. Authentication and the Free-plan declaration are enforced by the
+# workspace server; this file never creates Autodesk account/quota evidence.
+services:
+  preparer:
+    labels:
+      routings.preparer.mode: live
+      routings.preparer.workspace: wfc
+      routings.preparer.live-reuse-only: "false"
+      routings.preparer.proof-sha256: none
+    environment:
+      PREPARER_MODE: live
+      PREPARER_WFC_ORIGIN: ${PREPARER_WFC_ORIGIN:?Supply the fixed server-to-server WFC origin}
+      PREPARER_LIVE_REUSE_ONLY: "false"
+      PREPARER_PRICE_PROOF_PATH: ""
+      PREPARER_PRICE_PROOF_SHA256: ""
+    restart: unless-stopped
