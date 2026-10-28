@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "wfc.pfr2a.remote-observations.v1",
+  "observedAt": "2026-10-18T23:09:36.337Z",
+  "method": "configured-github-connector-read-only",
+  "wfc": {
+    "branch": "main",
+    "sha": "e1ef20202598bb4d3d78e4772cbbb9747ec23a00"
+  },
+  "pathFinder": {
+    "branch": "master",
+    "sha": "45c24bf5f433f13e102600b36f20327c77961d0a"
+  },
+  "candidate": {
+    "branch": "pf-r2a-drawing-positioning-local-20261019",
+    "remoteRefMatches": 0,
+    "pullRequestCount": 0,
+    "ciReview": "NOT_ESTABLISHED; local candidate unpublished"
+  },
+  "mutation": false
+}

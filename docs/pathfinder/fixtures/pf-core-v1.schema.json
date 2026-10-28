@@ -1,0 +1,1119 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:wfc:pathfinder:pf-core-v1",
+  "title": "PF-0 synthetic core parity corpus v1",
+  "description": "Golden reference transport only; not a production request schema. Deliberate invalid core inputs are valid fixture records.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "provenance": {
+          "const": "synthetic-core-extraction"
+        },
+        "coreCommit": {
+          "const": "45c24bf5f433f13e102600b36f20327c77961d0a"
+        },
+        "artifact": {
+          "const": "inputs"
+        },
+        "units": {
+          "const": "m"
+        },
+        "cases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/inputCase"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "provenance",
+        "coreCommit",
+        "artifact",
+        "units",
+        "cases"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "provenance": {
+          "const": "synthetic-core-extraction"
+        },
+        "coreCommit": {
+          "const": "45c24bf5f433f13e102600b36f20327c77961d0a"
+        },
+        "artifact": {
+          "const": "expected"
+        },
+        "cases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/expectedCase"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "provenance",
+        "coreCommit",
+        "artifact",
+        "cases"
+      ]
+    }
+  ],
+  "definitions": {
+    "point": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "options": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "connectionToleranceMeters": {
+          "type": "number"
+        },
+        "sampleSpacingMeters": {
+          "type": "number"
+        },
+        "secondaryDistanceMeters": {
+          "type": "number"
+        },
+        "preferVerticalApproach": {
+          "type": "boolean"
+        },
+        "maxGraphNodes": {
+          "type": "integer"
+        },
+        "maxGraphConnections": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "connectionToleranceMeters",
+        "sampleSpacingMeters",
+        "secondaryDistanceMeters",
+        "preferVerticalApproach",
+        "maxGraphNodes",
+        "maxGraphConnections"
+      ]
+    },
+    "segment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "categories": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 7
+        },
+        "points": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/point"
+          },
+          "minItems": 2
+        },
+        "connectionsAtEndsOnly": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "categories",
+        "points",
+        "connectionsAtEndsOnly"
+      ]
+    },
+    "face": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "face": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        },
+        "minimum": {
+          "$ref": "#/definitions/point"
+        },
+        "maximum": {
+          "$ref": "#/definitions/point"
+        },
+        "sampleCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "face",
+        "minimum",
+        "maximum",
+        "sampleCount"
+      ]
+    },
+    "fragment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "vertices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/point"
+          }
+        },
+        "triangleIndices": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "required": [
+        "vertices",
+        "triangleIndices"
+      ]
+    },
+    "geometryInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "routeName": {
+          "type": "string"
+        },
+        "categories": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 7
+        },
+        "shapeName": {
+          "type": "string"
+        },
+        "minimum": {
+          "$ref": "#/definitions/point"
+        },
+        "maximum": {
+          "$ref": "#/definitions/point"
+        },
+        "faceExtents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/face"
+          }
+        },
+        "meshFragments": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/fragment"
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "routeName",
+        "categories",
+        "shapeName",
+        "minimum",
+        "maximum",
+        "faceExtents",
+        "meshFragments"
+      ]
+    },
+    "projectSettings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "connectionSpareMeters": {
+          "$ref": "#/definitions/decimal"
+        },
+        "secondaryLengthMeters": {
+          "$ref": "#/definitions/decimal"
+        },
+        "increasePercent": {
+          "$ref": "#/definitions/decimal"
+        }
+      },
+      "required": [
+        "connectionSpareMeters",
+        "secondaryLengthMeters",
+        "increasePercent"
+      ]
+    },
+    "decimal": {
+      "type": "string",
+      "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$"
+    },
+    "syntheticDesignRoute": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "lengthMeters": {
+          "type": "number"
+        },
+        "fromDistanceMeters": {
+          "type": "number"
+        },
+        "toDistanceMeters": {
+          "type": "number"
+        },
+        "fromRequiresSecondary": {
+          "type": "boolean"
+        },
+        "toRequiresSecondary": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "success",
+        "lengthMeters",
+        "fromDistanceMeters",
+        "toDistanceMeters",
+        "fromRequiresSecondary",
+        "toRequiresSecondary"
+      ]
+    },
+    "sourceReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^tests/PathFinder\\.Routing\\.Tests/[A-Za-z]+\\.cs$"
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "path",
+        "line"
+      ]
+    },
+    "calculateInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "segments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/segment"
+          }
+        },
+        "from": {
+          "$ref": "#/definitions/point"
+        },
+        "to": {
+          "$ref": "#/definitions/point"
+        },
+        "category": {
+          "enum": [
+            1,
+            2,
+            4
+          ]
+        },
+        "options": {
+          "$ref": "#/definitions/options"
+        },
+        "reverse": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "segments",
+        "from",
+        "to",
+        "category",
+        "options"
+      ]
+    },
+    "lookupInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "segments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/segment"
+          }
+        },
+        "routing": {
+          "type": "string"
+        },
+        "options": {
+          "$ref": "#/definitions/options"
+        },
+        "reverse": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "segments",
+        "routing",
+        "options"
+      ]
+    },
+    "designInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "route": {
+          "$ref": "#/definitions/syntheticDesignRoute"
+        },
+        "projectSettings": {
+          "$ref": "#/definitions/projectSettings"
+        },
+        "reverse": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "route",
+        "projectSettings"
+      ]
+    },
+    "parseInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "routing": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "routing"
+      ]
+    },
+    "nameInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "leafToRootNames": {
+          "type": "array",
+          "items": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "required": [
+        "leafToRootNames"
+      ]
+    },
+    "geometryOnlyInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "geometry": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/geometryInput"
+          }
+        }
+      },
+      "required": [
+        "geometry"
+      ]
+    },
+    "geometryRouteInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "geometry": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/geometryInput"
+          }
+        },
+        "from": {
+          "$ref": "#/definitions/point"
+        },
+        "to": {
+          "$ref": "#/definitions/point"
+        },
+        "category": {
+          "enum": [
+            1,
+            2,
+            4
+          ]
+        },
+        "options": {
+          "$ref": "#/definitions/options"
+        }
+      },
+      "required": [
+        "geometry",
+        "from",
+        "to",
+        "category",
+        "options"
+      ]
+    },
+    "route": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "routeText": {
+          "type": "string"
+        },
+        "routeCodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "segmentIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "pathPoints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/point"
+          }
+        },
+        "lengthMeters": {
+          "type": "number"
+        },
+        "lengthRoundTrip": {
+          "type": "string"
+        },
+        "fromDistanceMeters": {
+          "type": "number"
+        },
+        "toDistanceMeters": {
+          "type": "number"
+        },
+        "fromRequiresSecondary": {
+          "type": "boolean"
+        },
+        "toRequiresSecondary": {
+          "type": "boolean"
+        },
+        "connectionGapCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "connectionGapLengthMeters": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "success",
+        "message",
+        "routeText",
+        "routeCodes",
+        "segmentIds",
+        "pathPoints",
+        "lengthMeters",
+        "lengthRoundTrip",
+        "fromDistanceMeters",
+        "toDistanceMeters",
+        "fromRequiresSecondary",
+        "toRequiresSecondary",
+        "connectionGapCount",
+        "connectionGapLengthMeters"
+      ]
+    },
+    "port": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "point": {
+          "$ref": "#/definitions/point"
+        },
+        "outward": {
+          "$ref": "#/definitions/point"
+        },
+        "u": {
+          "$ref": "#/definitions/point"
+        },
+        "v": {
+          "$ref": "#/definitions/point"
+        },
+        "width": {
+          "type": "number"
+        },
+        "height": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "point",
+        "outward",
+        "u",
+        "v",
+        "width",
+        "height"
+      ]
+    },
+    "outputSegment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "routeCode": {
+          "type": "string"
+        },
+        "categories": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 7
+        },
+        "points": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/point"
+          }
+        },
+        "connectionsAtEndsOnly": {
+          "type": "boolean"
+        },
+        "connectionSurfaceCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "verifiedPorts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/port"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "routeCode",
+        "categories",
+        "points",
+        "connectionsAtEndsOnly",
+        "connectionSurfaceCount",
+        "verifiedPorts"
+      ]
+    },
+    "output": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "const": "exception"
+            },
+            "exceptionType": {
+              "enum": [
+                "ArgumentException",
+                "ArgumentOutOfRangeException",
+                "ArgumentNullException"
+              ]
+            },
+            "parameter": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "status",
+            "exceptionType",
+            "parameter"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "const": "returned"
+            },
+            "route": {
+              "$ref": "#/definitions/route"
+            }
+          },
+          "required": [
+            "status",
+            "route"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "const": "returned"
+            },
+            "lengthBeforePercentageMeters": {
+              "$ref": "#/definitions/decimal"
+            },
+            "unroundedLengthMeters": {
+              "$ref": "#/definitions/decimal"
+            },
+            "designLengthMeters": {
+              "$ref": "#/definitions/decimal"
+            }
+          },
+          "required": [
+            "status",
+            "lengthBeforePercentageMeters",
+            "unroundedLengthMeters",
+            "designLengthMeters"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "const": "returned"
+            },
+            "codes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "status",
+            "codes"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "const": "returned"
+            },
+            "routeCode": {
+              "type": "string"
+            },
+            "ownerIndex": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "status",
+            "routeCode",
+            "ownerIndex"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "const": "returned"
+            },
+            "validatedBends": {
+              "type": "integer"
+            },
+            "fallbackBends": {
+              "type": "integer"
+            },
+            "validatedStraights": {
+              "type": "integer"
+            },
+            "fallbackStraights": {
+              "type": "integer"
+            },
+            "fallbackClearances": {
+              "type": "integer"
+            },
+            "diagnostics": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "segments": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/outputSegment"
+              }
+            }
+          },
+          "required": [
+            "status",
+            "validatedBends",
+            "fallbackBends",
+            "validatedStraights",
+            "fallbackStraights",
+            "fallbackClearances",
+            "diagnostics",
+            "segments"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "const": "returned"
+            },
+            "validatedBends": {
+              "type": "integer"
+            },
+            "fallbackBends": {
+              "type": "integer"
+            },
+            "validatedStraights": {
+              "type": "integer"
+            },
+            "fallbackStraights": {
+              "type": "integer"
+            },
+            "fallbackClearances": {
+              "type": "integer"
+            },
+            "diagnostics": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "segments": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/outputSegment"
+              }
+            },
+            "route": {
+              "$ref": "#/definitions/route"
+            }
+          },
+          "required": [
+            "status",
+            "validatedBends",
+            "fallbackBends",
+            "validatedStraights",
+            "fallbackStraights",
+            "fallbackClearances",
+            "diagnostics",
+            "segments",
+            "route"
+          ]
+        }
+      ]
+    },
+    "inputCase": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z0-9-]+$"
+            },
+            "kind": {
+              "const": "calculate"
+            },
+            "basis": {
+              "type": "string"
+            },
+            "sourceReferences": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/sourceReference"
+              },
+              "minItems": 1
+            },
+            "input": {
+              "$ref": "#/definitions/calculateInput"
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "basis",
+            "sourceReferences",
+            "input"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z0-9-]+$"
+            },
+            "kind": {
+              "const": "lookup"
+            },
+            "basis": {
+              "type": "string"
+            },
+            "sourceReferences": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/sourceReference"
+              },
+              "minItems": 1
+            },
+            "input": {
+              "$ref": "#/definitions/lookupInput"
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "basis",
+            "sourceReferences",
+            "input"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z0-9-]+$"
+            },
+            "kind": {
+              "const": "design"
+            },
+            "basis": {
+              "type": "string"
+            },
+            "sourceReferences": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/sourceReference"
+              },
+              "minItems": 1
+            },
+            "input": {
+              "$ref": "#/definitions/designInput"
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "basis",
+            "sourceReferences",
+            "input"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z0-9-]+$"
+            },
+            "kind": {
+              "const": "parse"
+            },
+            "basis": {
+              "type": "string"
+            },
+            "sourceReferences": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/sourceReference"
+              },
+              "minItems": 1
+            },
+            "input": {
+              "$ref": "#/definitions/parseInput"
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "basis",
+            "sourceReferences",
+            "input"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z0-9-]+$"
+            },
+            "kind": {
+              "const": "name"
+            },
+            "basis": {
+              "type": "string"
+            },
+            "sourceReferences": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/sourceReference"
+              },
+              "minItems": 1
+            },
+            "input": {
+              "$ref": "#/definitions/nameInput"
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "basis",
+            "sourceReferences",
+            "input"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z0-9-]+$"
+            },
+            "kind": {
+              "const": "geometry"
+            },
+            "basis": {
+              "type": "string"
+            },
+            "sourceReferences": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/sourceReference"
+              },
+              "minItems": 1
+            },
+            "input": {
+              "$ref": "#/definitions/geometryOnlyInput"
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "basis",
+            "sourceReferences",
+            "input"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z0-9-]+$"
+            },
+            "kind": {
+              "const": "geometry-route"
+            },
+            "basis": {
+              "type": "string"
+            },
+            "sourceReferences": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/sourceReference"
+              },
+              "minItems": 1
+            },
+            "input": {
+              "$ref": "#/definitions/geometryRouteInput"
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "basis",
+            "sourceReferences",
+            "input"
+          ]
+        }
+      ]
+    },
+    "expectedCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$"
+        },
+        "kind": {
+          "enum": [
+            "calculate",
+            "lookup",
+            "design",
+            "parse",
+            "name",
+            "geometry",
+            "geometry-route"
+          ]
+        },
+        "output": {
+          "$ref": "#/definitions/output"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "output"
+      ]
+    }
+  }
+}

@@ -1,0 +1,22 @@
+[
+  "shared/pathfinderInitialFillProgress.test.ts",
+  "server/pathfinder/initialFillProgress.test.ts",
+  "server/pathfinder/initialFillProgressRoutes.test.ts",
+  "src/api/pathfinderInitialFillProgress.test.ts",
+  "src/hooks/usePathfinderInitialFillProgress.test.tsx",
+  "src/components/pathfinder/PathFinderCableWorkspace.test.tsx",
+  "src/components/pathfinder/PathFinderCableRoutingPanel.test.tsx",
+  "src/hooks/useCableEndpointSelection.test.tsx",
+  "src/api/pathfinderCableEndpoints.test.ts",
+  "src/hooks/cableEndpointPendingStore.test.ts",
+  "src/pages/ProjectDetails/hooks/usePathFinder.test.tsx",
+  "src/pages/ProjectDetails/PathFinderResults.test.tsx",
+  "src/pages/ProjectDetails/PathFinderRevisionResults.test.tsx",
+  "src/components/pathfinder/PathFinderNeedsRoutingList.test.tsx",
+  "src/hooks/usePathFinderCableWorkflow.test.tsx",
+  "src/api/pathfinderCableWorkflow.test.ts",
+  "src/hooks/usePathfinderLocationImpactProgress.test.tsx",
+  "src/pages/ProjectDetails/PathFinderBatchReview.test.tsx",
+  "src/pages/ProjectDetails/hooks/usePathfinderBatchReview.test.tsx",
+  "src/pages/ProjectDetails/hooks/usePathfinderPendingApply.test.tsx"
+]

@@ -1,0 +1,289 @@
+{
+  "schemaVersion": "wfc.pf.catalog-operator-receipt.v1",
+  "status": "PASS",
+  "recordedAt": "2026-10-18T22:05:56.802Z",
+  "mode": "prepare",
+  "sourceFiles": [
+    {
+      "path": "scripts/pathfinder-tray-catalog/catalog.mjs",
+      "sha256": "5824b3e1c6b6acfe721bb8484a673afbb6aa0187110da427fe3f2ddbc4037545"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/source-lib.mjs",
+      "sha256": "9091da99b6624024e910367fa53254f3cdb6f4dcb94137f47487656dcb7d594d"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/transfer-lib.mjs",
+      "sha256": "9c8f45f6560a47a1090db371a6c330d074ce1ce0c9bc88f3c1390d0ee8800bc7"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/guard-io.mjs",
+      "sha256": "48d12d9df8a62e32901454096bcd94a21f1a9c3912ff139ee13726deceb9d5d1"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/preservation-lib.mjs",
+      "sha256": "d581d575ce5dbc5af3fc01b31c9858d48a8c28ce8a26a726b6afbe0b38306d0d"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/operator-lib.mjs",
+      "sha256": "039006bec4fa345a1fa62cd68189c94abf165200ef42c36acc0ba86ac2eb0722"
+    }
+  ],
+  "work": "pathfinder-engine/.scratch/tray-catalog-17cadea1-d54c-42b1-a563-2d3c514e7704",
+  "owner": "17cadea1-d54c-42b1-a563-2d3c514e7704",
+  "sourcePreflight": {
+    "status": "PASS",
+    "phases": [
+      "before",
+      "copy",
+      "after"
+    ],
+    "projections": {
+      "project": {
+        "count": 1,
+        "sha256": "c8c0ad6c83bad68d6219959b9b65c370eaaefca86b17467b7d3914f34ecdbf92"
+      },
+      "trays": {
+        "count": 330,
+        "sha256": "a502c10114fd3ce788043cc84adddd51786896277b7954d5ab17ce45fc77e31d"
+      },
+      "cable_types": {
+        "count": 51,
+        "sha256": "e742a55d7e3ed6499aff8c436c5b39270268aeb7680e8fffd43b23f864c2cf21"
+      },
+      "cable_type_default_materials": {
+        "count": 9,
+        "sha256": "a615b3566559406ba9e9cb43ddf10534dd39cba5653d97eff105fd51f37d56be"
+      },
+      "material_cable_types": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "material_trays": {
+        "count": 15,
+        "sha256": "d0a1d49fff7daaefc7a306bbef1349006e6bc70f57d443810094f6634ad1be85"
+      },
+      "project_support_distances": {
+        "count": 14,
+        "sha256": "fa0f73e8af51f9752455e118b251dcc5e8c9076b7813c5bb569089cc11c77cfd"
+      },
+      "material_supports": {
+        "count": 5,
+        "sha256": "87824b46d0e590d2a4173e0b01c8530552b90ad1b34e56680a3403b36e38e473"
+      },
+      "material_load_curves": {
+        "count": 3,
+        "sha256": "551ed474719f2c544b5573c2e7630758eda6eec35dc4f25341b01edaf2773046"
+      },
+      "material_load_curve_points": {
+        "count": 803,
+        "sha256": "7332bd76bee952f4a0c58fb5451c6b279e1eacda0a49910ba26f3bf9c30f8aa4"
+      },
+      "material_cable_type_standard_materials": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "material_tray_standard_materials": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "material_support_standard_materials": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "material_cable_installation_materials": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "material_cable_installation_standard_materials": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "project_tray_purpose_templates": {
+        "count": 6,
+        "sha256": "b93bbfb8c32e035c0520eeae49d6f5daae6b46ed6723181f27c6f608cedc9ce0"
+      },
+      "project_files": {
+        "count": 2,
+        "sha256": "c40c8d421b529d89b4a1783f2768015c25f3d9c566a114d6c1f0503c8eff8417"
+      },
+      "project_file_versions": {
+        "count": 1,
+        "sha256": "7a8cb6f1d8d7482f5597e66fd3e1a28a437c0d28fef2d620d42dccd03e757ed9"
+      },
+      "template_files": {
+        "count": 3,
+        "sha256": "09012a9c524b9e140ee2a7771f0c76117bf2fb857cfc11158b0b879f037e055d"
+      },
+      "template_file_versions": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "files": {
+        "count": 6,
+        "sha256": "4ef116bd4c421ad1a4392b7cd889155cc755662b12af84ae9087c21a51c48bc0"
+      }
+    },
+    "sha256": "16b02722a2fe96f754d593963018e8a93524e3b71a7521cf647262a186a9b23c"
+  },
+  "resume": {
+    "path": "pathfinder-engine/.scratch/tray-catalog-17cadea1-d54c-42b1-a563-2d3c514e7704/prepare-intent-fb2986b9-3247-4d0e-bb6d-728fb903ea74.private.json",
+    "bytes": 685,
+    "sha256": "bdab4bfa989dfa74aba4c992ee2cb92c727e63c7128f2859c06189a25513ca98"
+  },
+  "fileIntent": {
+    "path": "pathfinder-engine/.scratch/tray-catalog-17cadea1-d54c-42b1-a563-2d3c514e7704/file-plan.private.json",
+    "bytes": 10579,
+    "sha256": "3480d1ddc2573bfb3fe14482fe4cdcb11312fd5f68ab36bfc86aa5f275f7648e"
+  },
+  "storagePreservation": {
+    "schemaVersion": "wfc.pf.catalog-storage-preservation.v1",
+    "status": "PASS",
+    "failures": [],
+    "groups": {
+      "model": {
+        "before": 1026,
+        "after": 1026,
+        "unchanged": 1026,
+        "added": 0,
+        "invalid": 0,
+        "beforeSha256": "a3e6191e78deb6e195c7d94ed16d6b7a0a708fa179a8d4ea969a1bc4d294cdb1",
+        "afterSha256": "a3e6191e78deb6e195c7d94ed16d6b7a0a708fa179a8d4ea969a1bc4d294cdb1"
+      },
+      "project": {
+        "before": 0,
+        "after": 3,
+        "unchanged": 0,
+        "added": 3,
+        "invalid": 0,
+        "beforeSha256": "b1c75db0819767da1c3f981156e32add018da6a2abe47ea427ea433088469a5a",
+        "afterSha256": "ee8cc475198c4de6958a516850c83f1f8889b93ee07c2d9b4992892a8d843016"
+      },
+      "template": {
+        "before": 0,
+        "after": 3,
+        "unchanged": 0,
+        "added": 3,
+        "invalid": 0,
+        "beforeSha256": "e3fcae48c1a9eab988947898d5d8bc1e707924abb51e80561ea87b7ad9028fd8",
+        "afterSha256": "38466681808dd2278fc01dfcadfc4442f2205138b0f2dbe7bfe3fefa396ac6af"
+      }
+    },
+    "byteReadback": "checked-separately-per-staged-entry"
+  },
+  "plan": {
+    "path": "pathfinder-engine/.scratch/tray-catalog-17cadea1-d54c-42b1-a563-2d3c514e7704/transfer-plan.private.json",
+    "bytes": 1313111,
+    "sha256": "31dee403bcbb79a0e54c737b50224873f0df32328a839e0717c7ee155f364884"
+  },
+  "operation": "files-staged-plan-ready",
+  "input": {
+    "path": "pathfinder-engine/.scratch/tray-catalog-17cadea1-d54c-42b1-a563-2d3c514e7704/prepared.private.json",
+    "bytes": 583,
+    "sha256": "41e8cb8c00b12b3c3a12471d0b8db709a7c780362665ddc92ab82641f1a1f98c"
+  },
+  "rows": {
+    "trays": {
+      "insert": 330,
+      "enrich": 0,
+      "reuse": 0
+    },
+    "cable_types": {
+      "insert": 1,
+      "enrich": 50,
+      "reuse": 0
+    },
+    "cable_type_default_materials": {
+      "insert": 9,
+      "enrich": 0,
+      "reuse": 0
+    },
+    "material_cable_types": {
+      "insert": 0,
+      "enrich": 0,
+      "reuse": 0
+    },
+    "material_trays": {
+      "insert": 15,
+      "enrich": 0,
+      "reuse": 0
+    },
+    "project_support_distances": {
+      "insert": 14,
+      "enrich": 0,
+      "reuse": 0
+    },
+    "material_supports": {
+      "insert": 5,
+      "enrich": 0,
+      "reuse": 0
+    },
+    "material_load_curves": {
+      "insert": 3,
+      "enrich": 0,
+      "reuse": 0
+    },
+    "material_load_curve_points": {
+      "insert": 803,
+      "enrich": 0,
+      "reuse": 0
+    },
+    "material_cable_type_standard_materials": {
+      "insert": 0,
+      "enrich": 0,
+      "reuse": 0
+    },
+    "material_tray_standard_materials": {
+      "insert": 0,
+      "enrich": 0,
+      "reuse": 0
+    },
+    "material_support_standard_materials": {
+      "insert": 0,
+      "enrich": 0,
+      "reuse": 0
+    },
+    "material_cable_installation_materials": {
+      "insert": 0,
+      "enrich": 0,
+      "reuse": 0
+    },
+    "material_cable_installation_standard_materials": {
+      "insert": 0,
+      "enrich": 0,
+      "reuse": 0
+    },
+    "project_tray_purpose_templates": {
+      "insert": 6,
+      "enrich": 0,
+      "reuse": 0
+    },
+    "project_files": {
+      "insert": 2,
+      "enrich": 0,
+      "reuse": 0
+    },
+    "project_file_versions": {
+      "insert": 1,
+      "enrich": 0,
+      "reuse": 0
+    },
+    "template_files": {
+      "insert": 3,
+      "enrich": 0,
+      "reuse": 0
+    },
+    "template_file_versions": {
+      "insert": 0,
+      "enrich": 0,
+      "reuse": 0
+    }
+  },
+  "files": {
+    "count": 6,
+    "bytes": 872680,
+    "manifestSha256": "1295a359cfe6583ad7cc1bce630c554be7ec2b1784bfc73c1da281f846abb3af",
+    "receiptSha256": "e97f16249b7bac83cd881058cc9732ed09b3fd1a1d1ee58d30895447eb58ae5f"
+  },
+  "finishedAt": "2026-10-18T22:06:47.244Z"
+}

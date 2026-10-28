@@ -1,0 +1,112 @@
+{
+  "schemaVersion": "wfc.pf.u2-verification.v1",
+  "observedAt": "2026-10-20T17:49:13.5030026Z",
+  "branch": "pf-u2-cable-endpoint-selection-local-20261020",
+  "parentCommit": "d0da2def5a6757fca870f28ce9eb9aee4e298eac",
+  "status": "TECHNICAL_FOUNDATION_PASS",
+  "syntheticChecks": 240,
+  "actualPostgresChecks": 18,
+  "receipts": [
+    "u2-tests.json",
+    "u2-selection-sql.json",
+    "u2-commands-sql.json"
+  ],
+  "types": "PASS",
+  "lint": "PASS",
+  "source": [
+    {
+      "file": "server/app.ts",
+      "sha256": "464d0c93b076da3ca143cd1aba205d274c0a7da9404e7a6c71de19d7de38b2bc"
+    },
+    {
+      "file": "server/pathfinder/schema.ts",
+      "sha256": "3a6bfe78c74879e5e24b489854cea868ab30e41dc129785763d7dbd9e299479e"
+    },
+    {
+      "file": "server/pathfinder/endpointBindingRepository.ts",
+      "sha256": "856efbc9eb7f8af8bcdb2440af6cfe7e8c2b20a76dcaab21f996d6e4393c5e59"
+    },
+    {
+      "file": "server/pathfinder/endpointBindingRepository.test.ts",
+      "sha256": "d6a2fb22dae2a29faad9c255226387a90531dd3685f31cd3f62a0b1965c96c7d"
+    },
+    {
+      "file": "server/pathfinder/cableEndpointCommands.ts",
+      "sha256": "e7812c22fca2ffe97008eb15256541fb1acf4decc190588dd7569498637e23b0"
+    },
+    {
+      "file": "server/pathfinder/cableEndpointCommands.test.ts",
+      "sha256": "b3d1c3d430c55fc8b10f9c04fc6e71bb0692d80f71930c884f6f52af2effd683"
+    },
+    {
+      "file": "server/pathfinder/cableEndpointCommandsSql.integration.test.ts",
+      "sha256": "c56da651aba4b119c0c295ada383472de4bddf38a2d2086618ecd6d4fa3e192e"
+    },
+    {
+      "file": "server/pathfinder/cableEndpointRoutes.ts",
+      "sha256": "b027a7ce6ef889c25b48a6072af1575926266edf4be5b22ec544e9f2a89dc40d"
+    },
+    {
+      "file": "server/pathfinder/cableEndpointRoutes.test.ts",
+      "sha256": "156615a5b1f7f4e07b81ccee67da7677839ce0faaa067f90d290078c1e3bf1d7"
+    },
+    {
+      "file": "server/pathfinder/cableEndpointSelection.ts",
+      "sha256": "00e804f2e694c47f267e2aa27f453a8bb80e3da207eba32b0d55b5daf7f1ac3a"
+    },
+    {
+      "file": "server/pathfinder/cableEndpointSelection.test.ts",
+      "sha256": "8d31dc80f054bd4166a5ad862985ed36d5e2923ad09f63e20ec04548805d0848"
+    },
+    {
+      "file": "server/pathfinder/cableEndpointSelectionSchema.ts",
+      "sha256": "05ce513fd55ffa63cc78563d65c3ab52441acaf76d2f2fb97d3a041b79e85565"
+    },
+    {
+      "file": "server/pathfinder/cableEndpointSelectionSql.integration.test.ts",
+      "sha256": "0da7ef00441a6793ca61362335e198e563e0887201c3e66573e0d8ec054f5894"
+    },
+    {
+      "file": "shared/pathfinderCableEndpoints.ts",
+      "sha256": "680dd73120a41375dbfe86644c9f5cd61635add573a62fb40b702b4345e1ff31"
+    },
+    {
+      "file": "shared/pathfinderCableEndpoints.test.ts",
+      "sha256": "c9c2f9fd84bbb49c5d4dd0b432137146cc8cca6e386369ff7fd0a9527e0580e8"
+    },
+    {
+      "file": "src/api/pathfinderCableEndpoints.ts",
+      "sha256": "1295e775e38cb8accbcd962208b7460c43d29465e272fb299f5e9bcbccc62b8e"
+    },
+    {
+      "file": "src/api/pathfinderCableEndpoints.test.ts",
+      "sha256": "0055a23f0f7817c9581d41969748fefa69cfc50c07aa32f73bc1402ccf471039"
+    },
+    {
+      "file": "src/hooks/cableEndpointPendingStore.ts",
+      "sha256": "6f9edaac3ef22f4d177a636ef46a52d6d3475e44c66c398cb80e2600da7d4f2c"
+    },
+    {
+      "file": "src/hooks/cableEndpointPendingStore.test.ts",
+      "sha256": "a70d7cba5be10a358c6db9a521704a385a90c8c645d60c5281922f34801f4ea6"
+    },
+    {
+      "file": "src/hooks/useCableEndpointSelection.ts",
+      "sha256": "aab4389c701878fcb2695cda9e5005f26bdc4a2821d57783e5150fb93350ab88"
+    },
+    {
+      "file": "src/hooks/useCableEndpointSelection.test.tsx",
+      "sha256": "87755f1038cabc3accd4a85bffdcc5cc79c3a3e3dcaf288f8c0ee26a5415eacc"
+    }
+  ],
+  "fixture": {
+    "owner": "4327e6ad-aef6-4fbc-bca6-55bc40f345c2",
+    "containerId": "5ea2d613b46e39ff33454e62cb3ae23ef67aaf65bd9338d997d597382546fd5c",
+    "state": "RETIRED",
+    "generatedCredentialsRemoved": true
+  },
+  "runtime5191": "NOT_RUN",
+  "originalRuntimeWrites": false,
+  "nativeParity": "NOT_RUN",
+  "userAcceptance": "NOT_RUN"
+}

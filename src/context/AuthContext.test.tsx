@@ -47,6 +47,40 @@ beforeEach(() => {
 });
 
 describe('authentication request races', () => {
+  it('removes recalculation recovery immediately when the current refresh returns 401', async () => {
+    mocks.fetchUser.mockResolvedValue({ user: { ...user, isAdmin: true } });
+    const observedAfterAccessLoss: (string | null)[] = [];
+    const { result } = renderHook(() => {
+      const auth = useAuth();
+      if (!auth.initializing && auth.token === null) observedAfterAccessLoss.push(window.sessionStorage.getItem('wfc.pathfinder.recalculation.pending.v1'));
+      return auth;
+    }, { wrapper });
+    await waitFor(() => expect(result.current.user?.isAdmin).toBe(true));
+    window.sessionStorage.setItem('wfc.pathfinder.recalculation.pending.v1', 'synthetic uncertain command');
+    mocks.fetchUser.mockRejectedValueOnce(new ApiError(401, 'Expired current login'));
+    await act(async () => result.current.refreshUser());
+    expect(result.current.token).toBeNull(); expect(result.current.user).toBeNull();
+    expect(window.sessionStorage.getItem('wfc.pathfinder.recalculation.pending.v1')).toBeNull();
+    expect(observedAfterAccessLoss.length).toBeGreaterThan(0); expect(observedAfterAccessLoss.every(value => value === null)).toBe(true);
+  });
+
+  it('removes recalculation recovery before consumers observe administrator demotion', async () => {
+    mocks.fetchUser.mockResolvedValue({ user: { ...user, isAdmin: true } });
+    const observedAfterDemotion: (string | null)[] = [];
+    const { result } = renderHook(() => {
+      const auth = useAuth();
+      if (auth.user && !auth.user.isAdmin) observedAfterDemotion.push(window.sessionStorage.getItem('wfc.pathfinder.recalculation.pending.v1'));
+      return auth;
+    }, { wrapper });
+    await waitFor(() => expect(result.current.user?.isAdmin).toBe(true));
+    window.sessionStorage.setItem('wfc.pathfinder.recalculation.pending.v1', 'synthetic uncertain command');
+    mocks.fetchUser.mockResolvedValueOnce({ user: { ...user, isAdmin: false } });
+    await act(async () => result.current.refreshUser());
+    expect(result.current.token).toBe('old-token'); expect(result.current.user?.isAdmin).toBe(false);
+    expect(window.sessionStorage.getItem('wfc.pathfinder.recalculation.pending.v1')).toBeNull();
+    expect(observedAfterDemotion.length).toBeGreaterThan(0); expect(observedAfterDemotion.every(value => value === null)).toBe(true);
+  });
+
   it('disposes locally before sending login revoke, clears credentials and reports a failed revoke honestly', async () => {
     const order: string[] = [];
     const unwatch = watchViewerLogin('old-token', () => order.push('dispose'));
@@ -57,9 +91,11 @@ describe('authentication request races', () => {
     });
     const { result } = renderHook(useAuth, { wrapper });
     await waitFor(() => expect(result.current.initializing).toBe(false));
+    window.sessionStorage.setItem('wfc.pathfinder.recalculation.pending.v1','private pending command');
     act(() => result.current.signOut());
     expect(order).toEqual(['dispose', 'revoke']);
     expect(result.current.token).toBeNull();
+    expect(window.sessionStorage.getItem('wfc.pathfinder.recalculation.pending.v1')).toBeNull();
     await waitFor(() => expect(result.current.viewerLogoutStatus).toBe('failed'));
     expect(fetch).toHaveBeenCalledWith('/api/viewer-sessions/revoke-login', expect.objectContaining({ method: 'POST' }));
     unwatch(); fetch.mockRestore();
@@ -70,11 +106,14 @@ describe('authentication request races', () => {
     const unwatch = watchViewerLogin('old-token', dispose);
     const { result } = renderHook(useAuth, { wrapper });
     await waitFor(() => expect(result.current.initializing).toBe(false));
+    window.sessionStorage.setItem('wfc.pathfinder.recalculation.pending.v1','private pending command');
     act(() => window.dispatchEvent(new StorageEvent('storage', { key: 'wfc_auth_token', oldValue: 'independent-token', newValue: null })));
     expect(result.current.token).toBe('old-token');
     expect(dispose).not.toHaveBeenCalled();
+    expect(window.sessionStorage.getItem('wfc.pathfinder.recalculation.pending.v1')).not.toBeNull();
     act(() => window.dispatchEvent(new StorageEvent('storage', { key: 'wfc_auth_token', oldValue: 'old-token', newValue: null })));
     expect(result.current.token).toBeNull();
+    expect(window.sessionStorage.getItem('wfc.pathfinder.recalculation.pending.v1')).toBeNull();
     expect(dispose).toHaveBeenCalledTimes(1);
     unwatch();
   });

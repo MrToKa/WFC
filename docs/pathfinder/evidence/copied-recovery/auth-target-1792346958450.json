@@ -1,0 +1,215 @@
+{
+  "schemaVersion": "pathfinder.copied-recovery.auth-receipt.v1",
+  "status": "PASS",
+  "mode": "check-target",
+  "owner": "99ee171f-d5bd-48e1-9f24-f5df3471c82f",
+  "work": "pathfinder-engine/.scratch/copied-recovery-auth-0f377b03-db30-4369-a1ce-a36321e2dc1a",
+  "projectId": "1af0f807-7653-40ea-8391-7eea6c54e7d4",
+  "modelVersionId": "a613151e-c370-45c5-80f3-42ae58603b9a",
+  "sourceFiles": [
+    {
+      "path": "scripts/pathfinder-copied-recovery/auth.mjs",
+      "sha256": "731b1e80bbfce6dc9251f94b3d9aa277e5a592615213254a37ae2ae419d972f3",
+      "bytes": 10050
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/auth-lib.mjs",
+      "sha256": "273896e9f64771c74578cd5de61936f723ed7fe24ebc387d392126fffff0d1ce",
+      "bytes": 18501
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/auth-lib.test.mjs",
+      "sha256": "bd51d2bb9ba4faecd00b7cc42ce233dc2e0ca7d247ecee53530e44f072d47930",
+      "bytes": 16939
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/README-auth.md",
+      "sha256": "c0b62bb6b228edb3c1160dde56da518fee6466e13c1249c5b584833d6269abe3",
+      "bytes": 5541
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/binding.mjs",
+      "sha256": "5e242570745973a4af42af110e8eb29665331a3323f2d7ebb9016ba286c8046f",
+      "bytes": 9303
+    }
+  ],
+  "startedAt": "2026-10-18T18:09:19.209Z",
+  "finishedAt": "2026-10-18T18:09:20.123Z",
+  "binding": {
+    "runtime": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\copied-recovery-target-982a9013-34cb-4e3f-9e7c-c01325f5c0f8",
+    "owner": "7a64aa2a-88c3-43b9-962d-af391b72300d",
+    "project": "wfc-pathfinder-local-63ab3043713e",
+    "port": 5192,
+    "origin": "http://127.0.0.1:5192",
+    "containers": [
+      {
+        "role": "api",
+        "id": "8fbdc21c916ef22661bf8aafee934dde4c315c7df63f0308addf65b4c0c73dc1",
+        "image": "sha256:dce12a1f5ab6311bbaf04defb7277ff0d50fee36e29e49d47234e5bf4ea405fe",
+        "startedAt": "2026-10-18T18:09:04.943390092Z"
+      },
+      {
+        "role": "minio",
+        "id": "6aff0b133664223f77c5ea142b18f43868d6a0fbef7a4e85435404f9d6ed6ff9",
+        "image": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+        "startedAt": "2026-10-18T18:08:43.418339943Z"
+      },
+      {
+        "role": "postgres",
+        "id": "53b966f80906e5de063613d7b24b9def0ed4f04e7ec0266da4b28106085f04eb",
+        "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+        "startedAt": "2026-10-18T18:08:43.408491657Z"
+      },
+      {
+        "role": "storage-ready",
+        "id": "670b40bb38103dfc82114975286c3734e623b4a3ba2e62cc13dab6bec8786aed",
+        "image": "sha256:dce12a1f5ab6311bbaf04defb7277ff0d50fee36e29e49d47234e5bf4ea405fe",
+        "startedAt": "2026-10-18T18:09:04.250486684Z"
+      },
+      {
+        "role": "web",
+        "id": "f163f250e2916f68d29babfa54366b5e5c7497e357c44535e3f95945ead594b6",
+        "image": "sha256:561d51c3dd5ecb88459c17013890f9cd30089bb0760ccb9c5ff0ec3ade39f285",
+        "startedAt": "2026-10-18T18:09:10.75617721Z"
+      }
+    ]
+  },
+  "sourceBefore": {
+    "runtime": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\batched-capture-runtime-20261018-1600",
+    "owner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+    "project": "wfc-pathfinder-local-0cba87606e9b",
+    "port": 5191,
+    "origin": "http://127.0.0.1:5191",
+    "containers": [
+      {
+        "role": "api",
+        "id": "97e0ad80387c1c1e5148922356088ccbc7f77e5def61073c657b10769db09adb",
+        "image": "sha256:dce12a1f5ab6311bbaf04defb7277ff0d50fee36e29e49d47234e5bf4ea405fe",
+        "startedAt": "2026-10-18T16:37:14.241777817Z"
+      },
+      {
+        "role": "minio",
+        "id": "56456c8675afd1458df3ae87d8df4bf31131fa1807f7468e3958f900f53a73ed",
+        "image": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+        "startedAt": "2026-10-18T15:55:24.907837971Z"
+      },
+      {
+        "role": "postgres",
+        "id": "6a39e7b2d794055dccef0919cf3a99ddf60e0f3c0b5daae062cec1eb6c9b3785",
+        "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+        "startedAt": "2026-10-18T15:55:24.900140794Z"
+      },
+      {
+        "role": "storage-ready",
+        "id": "e26509d2b47f7a62ccc51196c7fec5fdb06c0df649cd000d3306a85dac563e8c",
+        "image": "sha256:dce12a1f5ab6311bbaf04defb7277ff0d50fee36e29e49d47234e5bf4ea405fe",
+        "startedAt": "2026-10-18T16:37:13.558001521Z"
+      },
+      {
+        "role": "web",
+        "id": "d864cc9ca17d0742277e77d4d929950ff9e5c8bd4dd940e57cb5702fe066f460",
+        "image": "sha256:561d51c3dd5ecb88459c17013890f9cd30089bb0760ccb9c5ff0ec3ade39f285",
+        "startedAt": "2026-10-18T16:37:20.024456112Z"
+      }
+    ]
+  },
+  "originalSession": {
+    "sessionId": "a2e7a133-8459-451b-b3f8-53504f94edf6",
+    "projectId": "1af0f807-7653-40ea-8391-7eea6c54e7d4",
+    "modelVersionId": "a613151e-c370-45c5-80f3-42ae58603b9a",
+    "loadId": "12b34569-9554-4a00-b78c-23411afed153",
+    "expiresAt": "2026-10-18T18:11:03.372Z",
+    "absoluteExpiresAt": "2026-10-18T18:36:03.372Z"
+  },
+  "originalLoginExpiresAt": "2026-10-25T18:06:03.000Z",
+  "outcomes": [
+    {
+      "label": "target_old_bearer",
+      "status": 401,
+      "bytes": 36,
+      "sha256": "6c539f3d55a1784c9812379a6654cc1d85bda92a1a24a7b162bb09cdc37f9de2"
+    },
+    {
+      "label": "target_old_cookie",
+      "status": 410,
+      "bytes": 72,
+      "sha256": "2e5f6e306c2c19b960a0b2e052b019b2058bb2303023f19faec43c96666ffc4b"
+    },
+    {
+      "label": "fresh_login",
+      "status": 200,
+      "bytes": 593,
+      "sha256": "fc48378cef8c90ef51420c9786dc5a90a3d1ee868c7fcebcbbb4e305a9e4f139"
+    },
+    {
+      "label": "fresh_users_me",
+      "status": 200,
+      "bytes": 244,
+      "sha256": "fed7f244a86ba5f336ac826c14691441959355e0110cb3cf4ed9e4fb358547f3"
+    },
+    {
+      "label": "fresh_viewer_session",
+      "status": 201,
+      "bytes": 293,
+      "sha256": "94d6d4b4a8304801c3d21a3b37198fadde5dcf49e9a1d9d635003525826735ae"
+    },
+    {
+      "label": "fresh_descriptor",
+      "status": 200,
+      "bytes": 405,
+      "sha256": "948761a4e89fbef9434b94d7455f18be524553ea34c44983448b54bc77d326be"
+    },
+    {
+      "label": "fresh_resource",
+      "status": 200,
+      "bytes": 997,
+      "sha256": "ee4df15128a2ad51a42603ba7a0bbfb52b1bfbf2cee07139af1fac2545fdac57"
+    }
+  ],
+  "freshTargetSession": {
+    "actorId": "ac288aa9-eb51-4dd6-872b-ec52dfeecbc9",
+    "loginId": "24f2c661-b1ef-4c8b-9fa7-611a843c3355",
+    "sessionId": "4b75a242-8495-49a8-bb88-c62e6cfe69c9",
+    "projectId": "1af0f807-7653-40ea-8391-7eea6c54e7d4",
+    "modelVersionId": "a613151e-c370-45c5-80f3-42ae58603b9a",
+    "loadId": "b529f096-8f74-42f9-bde3-24a088bef4e7",
+    "expiresAt": "2026-10-18T18:14:19.403Z",
+    "absoluteExpiresAt": "2026-10-18T18:39:19.403Z"
+  },
+  "expiryChanged": false,
+  "renewed": false,
+  "deletedSessions": 0,
+  "capsule": {
+    "path": "pathfinder-engine/.scratch/copied-recovery-auth-3dc221a4-c8d9-49e4-9b21-b935fac44671/capsule.private.json",
+    "bytes": 3391,
+    "sha256": "1499763e1068afa23076dd6b4eca5351a18beac4713bff99d61b64d7bd85d029"
+  },
+  "allowedAuth": {
+    "path": "pathfinder-engine/.scratch/copied-recovery-auth-0f377b03-db30-4369-a1ce-a36321e2dc1a/allowed-auth.private.json",
+    "bytes": 940,
+    "sha256": "d579bfd6b631341242a37ab2f96deaae684d8086184bb768f9e63a13cf0793b8"
+  },
+  "checkpoints": {
+    "login": {
+      "path": "pathfinder-engine/.scratch/copied-recovery-auth-0f377b03-db30-4369-a1ce-a36321e2dc1a/login.private.json",
+      "bytes": 537,
+      "sha256": "1df6637ea0b74120b37010e949a394bdb07e88d5c95d47e3d82ddec175b1fdcd"
+    },
+    "session": {
+      "path": "pathfinder-engine/.scratch/copied-recovery-auth-0f377b03-db30-4369-a1ce-a36321e2dc1a/session.private.json",
+      "bytes": 962,
+      "sha256": "1ccd5244aff96b4cc313a90a64ffc1f1aa3732a7fb97bfd0c15d45778704a44a"
+    },
+    "allowed-auth": {
+      "path": "pathfinder-engine/.scratch/copied-recovery-auth-0f377b03-db30-4369-a1ce-a36321e2dc1a/allowed-auth.private.json",
+      "bytes": 940,
+      "sha256": "d579bfd6b631341242a37ab2f96deaae684d8086184bb768f9e63a13cf0793b8"
+    }
+  },
+  "journal": {
+    "events": 16,
+    "bytes": 14006,
+    "finalSha256": "4ef365ac1460d90d1bef694f42d50f9b884ebe64582598cec08602f74ef2bed8",
+    "recordsSha256": "9af89b8fa788d4bb56aeec6e102bc40b79e0f6fc65dcdcb06d8001516da01f38"
+  }
+}

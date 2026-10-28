@@ -489,6 +489,16 @@ describe('partial cable Excel imports', () => {
 });
 
 describe('project cable type Excel validation', () => {
+  it('rejects an invalid Purpose copied from a legacy material before any project writes',async()=>{
+    const defaultQuery=client.query.getMockImplementation()!;
+    client.query.mockImplementation(async(sql:string,values?:unknown[])=>{
+      if(sql.includes('FROM material_cable_types'))return{rows:[{id,name:'Cable type',purpose:'Power\nVFD'}],rowCount:1};
+      return defaultQuery(sql,values);
+    });
+    assertInvalid(await importSheet(cableTypesRouter,[['Type'],['Cable type']]),'Purpose');
+    expect(client.query).toHaveBeenLastCalledWith('ROLLBACK');
+    expect(mocks.snapshot).not.toHaveBeenCalled();
+  });
   it('rejects missing names in populated rows', async () => {
     assertInvalid(
       await importSheet(cableTypesRouter, [

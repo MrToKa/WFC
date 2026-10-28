@@ -1,4 +1,5 @@
 import type { WorkSheet } from 'xlsx';
+import { cablePurposeInputSchema } from '../../shared/routingCablePurposes.js';
 import {
   getExcelRowNumber,
   readExcelImportRows,
@@ -15,7 +16,7 @@ export const validateMaterialExcelImport = (
   const rules: Record<string, Omit<ExcelImportColumn, 'headers'>> = {
     name: { required: true, maxLength: 200 },
     type: { required: true, maxLength: 200 },
-    purpose: { maxLength: kind === 'cable-type' ? 500 : 2000 },
+    purpose: { maxLength: kind === 'cable-type' ? undefined : 2000 },
     diameter: { type: 'number', min: 0, max: 1_000_000 },
     weight: { type: 'number', min: 0, max: 1_000_000 },
     weightKg: { type: 'number', min: 0, max: 1_000_000 },
@@ -36,6 +37,10 @@ export const validateMaterialExcelImport = (
   );
   const seen = new Map<string, number>();
   for (const [index, row] of readExcelImportRows(worksheet, []).entries()) {
+    const purposeHeader = aliases.purpose?.find(header => header in row);
+    if (kind === 'cable-type' && purposeHeader && !cablePurposeInputSchema.safeParse(String(row[purposeHeader] ?? '')).success) {
+      issues.push({row:getExcelRowNumber(row,index),column:purposeHeader,message:'Use a cable Purpose of at most 500 characters without control characters.'});
+    }
     const readIdentity = (headers: readonly string[]) => {
       const header = headers.find((candidate) => candidate in row);
       return header

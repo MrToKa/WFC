@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "pathfinder.purpose-policy.runtime-audit.v1",
+  "status": "FAIL",
+  "phase": "post-upgrade-resource-audit",
+  "error": "UNORDERED_NETWORK_COMPARISON",
+  "mutationCompleted": true,
+  "healthPassed": true,
+  "commandRepeated": false,
+  "details": "Identical network identities were returned in different array order; lifecycle operation was not repeated.",
+  "recordedAt": "2026-10-18T22:48:15.613Z"
+}

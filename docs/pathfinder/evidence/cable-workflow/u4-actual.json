@@ -1,0 +1,218 @@
+{
+  "schemaVersion": "wfc.pf.u4-evidence.v1",
+  "observedAt": "2026-10-20T18:46:03.8665791Z",
+  "branch": "pf-u4-conditional-initial-fill-local-20261020",
+  "inheritedHead": "12972001c1f5bc37c72411d6d3b8fd2e06d22749",
+  "status": "TECHNICAL_FOUNDATION_PASS",
+  "checks": {
+    "synthetic": {
+      "status": "PASS",
+      "distinctTests": 846,
+      "files": 31,
+      "receipt": "u4-tests.json",
+      "laterTestOnlyNarrowingRecheck": "62/62 PASS, overlapping cases"
+    },
+    "actualPostgres": {
+      "status": "PASS",
+      "tests": 12,
+      "files": 1,
+      "receipt": "u4-initialfill-sql.json",
+      "engineeringAdapters": "synthetic",
+      "nativeParity": "NOT_RUN"
+    },
+    "frontendTypes": "PASS",
+    "backendTypes": "PASS",
+    "changedSourceLint": "PASS",
+    "changedSourceFiles": 39,
+    "whitespace": "PASS",
+    "runtime5191": "NOT_RUN",
+    "browser": "NOT_RUN",
+    "humanAcceptance": "NOT_RUN",
+    "remoteAndCI": "NOT_RUN"
+  },
+  "fixture": {
+    "owner": "b7b5946e-dfb9-433f-aac6-25319c5ea674",
+    "containerId": "76d6b99f61d3718febd0c5c6b8d3596708797ab9f2ea26f4a6cbfbf8f7c1c788",
+    "state": "retired",
+    "privateCredentialsRemoved": true,
+    "memoryBacked": true
+  },
+  "newTables": [
+    "pf_initial_fill_mandates",
+    "pf_initial_fill_attempts",
+    "pf_initial_fill_dispatch"
+  ],
+  "priorStageTablesNeededInBackup": [
+    "pf_location_impacts",
+    "pf_location_impact_items",
+    "pf_location_impact_targets",
+    "pf_location_impact_dispatch",
+    "pf_location_impact_enrollments"
+  ],
+  "boundaries": {
+    "originalWfcBranch": "main",
+    "originalWfcHead": "96e63f13fdc2b1d30b8f8ff658dd662f25fac104",
+    "originalWfcStatus": "clean",
+    "runtimeChanged": false,
+    "preparer": "PAUSED",
+    "automation": "ACTIVE"
+  },
+  "sourceHashes": [
+    {
+      "path": "server/pathfinder/cableEndpointCommands.test.ts",
+      "sha256": "2bff442f8a5c2b0051dbed8affa0475188da88b394442434b4f3208656f0c746"
+    },
+    {
+      "path": "server/pathfinder/cableEndpointCommands.ts",
+      "sha256": "247dfd8da089067f891d91d5cf0f14204f49499fbbd45a3f823362cd0186170d"
+    },
+    {
+      "path": "server/pathfinder/cableWorkflowProof.test.ts",
+      "sha256": "646682f3bbf586ddfd5c4e6584741898b88632c496039c800d232dc36b737206"
+    },
+    {
+      "path": "server/pathfinder/cableWorkflowProof.ts",
+      "sha256": "bd411d0780d66ee1c060b3403145f17601dd728849d5fafa266cdffe7796fdb4"
+    },
+    {
+      "path": "server/pathfinder/cableWriteHistory.ts",
+      "sha256": "00633daf01285591b33fe4ad522e636f644ee3beb6128b618b033d83d45ea2d5"
+    },
+    {
+      "path": "server/pathfinder/initialFillAttempts.test.ts",
+      "sha256": "1efb5f1aca69129d4a6f8f58a11e27b4f827395ac9ecd9a3c4c82b523f6907dc"
+    },
+    {
+      "path": "server/pathfinder/initialFillAttempts.ts",
+      "sha256": "bf530e65b4893945c1c75d6ade159bd793eee5248f8e952f43faccd030e210aa"
+    },
+    {
+      "path": "server/pathfinder/initialFillAttemptSchema.ts",
+      "sha256": "262cc36f119aa384b9650d7206c91a1bc80851b9c3b63e03a87152089fadfb5d"
+    },
+    {
+      "path": "server/pathfinder/initialFillIdentity.test.ts",
+      "sha256": "2753c9d7fdae88bb929c0f77ec6f36a30234e2fa4372e587b9b67dfc7bbe8096"
+    },
+    {
+      "path": "server/pathfinder/initialFillIdentity.ts",
+      "sha256": "461eae6ccb598b66c23e0de34f18c412566ea016a2e6578ce9bbed88a5b1f204"
+    },
+    {
+      "path": "server/pathfinder/initialFillMandates.test.ts",
+      "sha256": "ebc21ebebe747edbc955e5e0020d88ab3b068d87618049afa4d5c3e63e7d2765"
+    },
+    {
+      "path": "server/pathfinder/initialFillMandates.ts",
+      "sha256": "14120ffef9fc935675ca3b0752981e7e20352c36b940f254e1de4f1f7e29769c"
+    },
+    {
+      "path": "server/pathfinder/initialFillMandateSchema.ts",
+      "sha256": "185bfccab4004c9d00fba9411f37d6b093fa9ffec98d243389a315ea2de3f4b2"
+    },
+    {
+      "path": "server/pathfinder/initialFillProducer.test.ts",
+      "sha256": "e4035059a849ce7d7d1ac306b7acc51a5e206c5177dc579608dfc9c67eb52eee"
+    },
+    {
+      "path": "server/pathfinder/initialFillProducer.ts",
+      "sha256": "a6fa002e443c9a95c9435d29caaa6a21f3ce5ff4a682748e438f34af5ca70e2d"
+    },
+    {
+      "path": "server/pathfinder/initialFillReceiptProof.test.ts",
+      "sha256": "7014194db5f536a6a661ed164f5a421f4ae3d80a9aa728758b0b4e12ccec5cf7"
+    },
+    {
+      "path": "server/pathfinder/initialFillReceiptProof.ts",
+      "sha256": "15d1ab255c37d77e65bb1acc4507ab77bba6c173b351f0c71296a06056bb2ffc"
+    },
+    {
+      "path": "server/pathfinder/initialFillSql.integration.test.ts",
+      "sha256": "136482f8a14a53664cb6cdee661d39600c64c44be8e9a5c18e9a4598e3893d9f"
+    },
+    {
+      "path": "server/pathfinder/initialFillWriter.test.ts",
+      "sha256": "9a063555884971f826fe8c88bc7da9bd8758dba436b912725e7dd3f6a006fb8c"
+    },
+    {
+      "path": "server/pathfinder/initialFillWriter.ts",
+      "sha256": "7b9328f4365b6ce3b5d6772b56c86719ffb84c3a00f575cdede2c6df8522acb8"
+    },
+    {
+      "path": "server/pathfinder/revisionResultRepository.test.ts",
+      "sha256": "5a625f21695e308c70c8c36ac34b1e257fb7c64a703eebff4a50b90be86ceb6d"
+    },
+    {
+      "path": "server/pathfinder/revisionResultRepository.ts",
+      "sha256": "f4cb6a38b772427f9b1a2e5eae2ea5d0187fbadaaf9604ba34da0a6cbd1c0247"
+    },
+    {
+      "path": "server/pathfinder/runtime.ts",
+      "sha256": "01b762a5bc68660633d3ba0b26fb44d1bf8a4a1f8bdb9316006840b21bb5e1d9"
+    },
+    {
+      "path": "server/pathfinder/schema.ts",
+      "sha256": "ad322f92569aa4e228517012e8fd5f838caf90543532aabcb68b25b8d2f7d5fc"
+    },
+    {
+      "path": "shared/pathfinderCableComparison.test.ts",
+      "sha256": "c3525d4754938e2dd9534802582b03064741e5c93ceb7b33ca698a5b8e851197"
+    },
+    {
+      "path": "shared/pathfinderCableComparison.ts",
+      "sha256": "7172652f667faf786c6cb71fcc490f8525903a35474124e7150292b4804068c0"
+    },
+    {
+      "path": "shared/pathfinderCableEndpoints.test.ts",
+      "sha256": "7e156952122f88dea460bef9d00d21ec08a88c0ea25435474a5142ca6bfa897e"
+    },
+    {
+      "path": "shared/pathfinderCableEndpoints.ts",
+      "sha256": "f8e32e1162db682f47c3b8cd2596fcf387eddc1e2abbc670392b7b8e40144042"
+    },
+    {
+      "path": "shared/pathfinderInitialFill.test.ts",
+      "sha256": "74a2642110c8e6b24107143cdb9fb627b1393d06cf2a7cb27400ae52659a983a"
+    },
+    {
+      "path": "shared/pathfinderInitialFill.ts",
+      "sha256": "9a3e8239eaf6db005a12a8bc402e09c06905bfbd09d13404ceea9fdf4294ead0"
+    },
+    {
+      "path": "src/api/pathfinderCableEndpoints.test.ts",
+      "sha256": "b70942522aa71e9071b991c909715198d2588cd883d86ba7b4aed6ad02d1851f"
+    },
+    {
+      "path": "src/api/pathfinderCableEndpoints.ts",
+      "sha256": "bb94d894e3a9eb55e143680fb5a9c91cd4b7e1de02df562362543bb3d6fcac9f"
+    },
+    {
+      "path": "src/components/pathfinder/PathFinderCableComparison.test.tsx",
+      "sha256": "efcd9531acce6bfd23e612394e52e07be3af782790aeef571bae9f99908621e1"
+    },
+    {
+      "path": "src/components/pathfinder/PathFinderCableComparison.tsx",
+      "sha256": "d91f8d15c4aa9f34fce45e8a42c095f87d0005b5a79f79f883f856c48d072aa6"
+    },
+    {
+      "path": "src/hooks/useCableEndpointSelection.test.tsx",
+      "sha256": "18d77a3331017d9d462b962d2e53f4c14a3e88feca544d29ee5e0ad4a2258828"
+    },
+    {
+      "path": "src/hooks/useCableEndpointSelection.ts",
+      "sha256": "095c8a4d57ba76b8b87b667d63c23672ec24e63e553e432edd20c6cdce85cce1"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderBatchReview.tsx",
+      "sha256": "1a59518a46640c2af6c1f74f4f53fc235d10f1644775a564a0e20bc7bf6dfa67"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderResults.test.tsx",
+      "sha256": "811d682e8d5ed57b7b5216682e0d0ddce5b088204c7be436a1e18a9e8337f617"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderResults.tsx",
+      "sha256": "b8858ab4518d666f54351e9bb187b3f14a9cc768aa370a06c7122f2372282742"
+    }
+  ]
+}

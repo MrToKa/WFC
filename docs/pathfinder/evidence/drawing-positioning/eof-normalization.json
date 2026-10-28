@@ -1,0 +1,43 @@
+{
+  "status": "PASS",
+  "files": [
+    {
+      "path": "src/api/trays.ts",
+      "beforeSha256": "4cf03046b56c10ca532e44da8fbf976da8d39a80bb538763c17ebb263994cf72",
+      "afterSha256": "b5a9ba1f4c2dc3540b5f7e698b63e3e8d70352effe76b2d92a1b4dd9269798d6",
+      "scope": "TRAILING_NEWLINES_ONLY"
+    },
+    {
+      "path": "src/pages/ProjectDetails.tsx",
+      "beforeSha256": "6646f29f6fd24953aed6446b631bebf3cc0eebd203a7340dcccdf55450cb1247",
+      "afterSha256": "0b54f0c1f8ce911f615b084ae9b365ddbf2542929af069c5a615d498760cf3a4",
+      "scope": "TRAILING_NEWLINES_ONLY"
+    },
+    {
+      "path": "src/pages/ProjectDetails/DetailsTab.tsx",
+      "beforeSha256": "e0a1ff8ce1dc8873be6e59c82b4aa9bcb6bddffc4f7cc70499f4a0a115051baa",
+      "afterSha256": "91c0b211806869c925dff65e63004de012373e17c5662d025309a049418a69df",
+      "scope": "TRAILING_NEWLINES_ONLY"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/useProjectDataRequests.test.tsx",
+      "beforeSha256": "939fa47b45f71b35cb53a106d18ac726e2b28c968caa65234c38e45e7fed1614",
+      "afterSha256": "2c0d308fbc47776e1b7b2cfcb904c469557829b9bb0f00a4e67bc8155ae0e4f4",
+      "scope": "TRAILING_NEWLINES_ONLY"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/useTraysSection.ts",
+      "beforeSha256": "90b7c1e4650c985d81458a7aa88b20c98d86c356da5553c9ee6608479df60b62",
+      "afterSha256": "c1057688054f920209a460d21496359c2f8843388da3623e430b46b0d1effb7d",
+      "scope": "TRAILING_NEWLINES_ONLY"
+    },
+    {
+      "path": "src/pages/TrayDetails.tsx",
+      "beforeSha256": "970a7302e3ab9dc5394def80dc417089d9e32cbfb2b0f7d160d7c4c4dd6eb813",
+      "afterSha256": "f26ab7b4c34fda07fade9f8f22f191ea9792dd5b35ef88e6f7964124c16ff777",
+      "scope": "TRAILING_NEWLINES_ONLY"
+    }
+  ],
+  "reason": "git diff --check trailing blank lines",
+  "functionalChanges": false
+}

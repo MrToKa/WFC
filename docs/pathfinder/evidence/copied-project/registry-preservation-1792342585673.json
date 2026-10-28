@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "pathfinder.copied-project.registry-preservation.v1",
+  "status": "PASS",
+  "recordedAt": "2026-10-18T16:56:19.392Z",
+  "storageProof": "key-size-etag-lastModified-metadata-only",
+  "atomicBackup": false,
+  "raw": {
+    "path": "pathfinder-engine/.scratch/copied-preservation-b095b53f-b3e9-4d44-a2f4-f596ea4ab452/registry-storage.private.json",
+    "bytes": 980961,
+    "sha256": "e5a1f7b277ad49b83faa103432acb01bd7d4f968b2f9103a5ae1800f3d47ea8f",
+    "exitCode": 0
+  },
+  "target": {
+    "owner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+    "project": "wfc-pathfinder-local-0cba87606e9b",
+    "apiId": "97e0ad80387c1c1e5148922356088ccbc7f77e5def61073c657b10769db09adb",
+    "apiImage": "sha256:dce12a1f5ab6311bbaf04defb7277ff0d50fee36e29e49d47234e5bf4ea405fe",
+    "pgId": "6a39e7b2d794055dccef0919cf3a99ddf60e0f3c0b5daae062cec1eb6c9b3785"
+  },
+  "groups": {
+    "model_package_identities": {
+      "count": 1,
+      "sha256": "27f8fa174c2a093b6dab596c067143eca7500a9d8fb5d793244749191d109e03"
+    },
+    "model_validation_reports": {
+      "count": 2,
+      "sha256": "a02286f7b19f7fe8519f230dccf7aa9743736b009b5e4d0bdda70f61de115bf2"
+    },
+    "model_import_jobs": {
+      "count": 2,
+      "sha256": "445699ad7f8ab866a4dbb6d19a58f85bb533b09e529309d8796516da6a83e84e"
+    },
+    "model_versions": {
+      "count": 2,
+      "sha256": "bfef4b8ddf0ad13ba08cf25b9c885117d17269ab2407677c4a700c8b498665ca"
+    },
+    "model_content_reservations": {
+      "count": 0,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "model_package_aliases": {
+      "count": 2,
+      "sha256": "14ef00775558941cde761fdb01aa5dab4e430a117f17d4857b9aa443257dd468"
+    },
+    "model_storage_ownership": {
+      "count": 2,
+      "sha256": "0f2c905f80345e291693f8747e531bb5023c353b010b95b1402027c8d470aee4"
+    }
+  },
+  "storage": {
+    "pf-local-models": {
+      "count": 684,
+      "sha256": "3fb243f95865666ea7eed0ea3d9ce76f5f92f6886e5a0c86ca36a29af6db2e06"
+    },
+    "pf-local-project-files": {
+      "count": 0,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "pf-local-template-files": {
+      "count": 0,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    }
+  }
+}

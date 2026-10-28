@@ -1,0 +1,13 @@
+{
+  "schemaVersion":"pathfinder.stage.remote-readback.v1",
+  "recordedAtUtc":"2026-10-18T14:42:40.931Z",
+  "readOnly":true,
+  "connector":"Configured GitHub fetch",
+  "observations":[
+    {"url":"https://api.github.com/repos/MrToKa/WFC/branches/main","commit":"e1ef20202598bb4d3d78e4772cbbb9747ec23a00"},
+    {"url":"https://api.github.com/repos/MrToKa/WFC/pulls?state=all&head=MrToKa%3Apf-8-ui-preservation-local-20261018&per_page=20","count":0},
+    {"url":"https://api.github.com/repos/MrToKa/PathFinder/branches/master","commit":"45c24bf5f433f13e102600b36f20327c77961d0a"}
+  ],
+  "candidateRemoteCiReview":"NOT_ESTABLISHED",
+  "scope":"Read-only remote state for this local delivery and next handoff; no fetch-ref mutation, push, PR, merge or deployment."
+}

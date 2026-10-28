@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "pathfinder.lookup.computer-use.v1",
+  "recordedAtUtc": "2026-10-18T10:02:24Z",
+  "status": "PASS",
+  "source": "73c13aa58519f26cbb96d93bbbb70bcdd5bb2cdd",
+  "apiImage": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+  "webImage": "sha256:1895a3fa33c25933024ab514ef61bd2d1568ffb33477d114541b855da65445b7",
+  "url": "http://127.0.0.1:5190/projects/105913f0-7ee4-45f2-bfd8-2c01f9be9f2a?tab=pathfinder",
+  "protectedViewerInstance": "44a93734-3fb3-464d-85dd-0d5111a7a7a8",
+  "checks": [
+    { "name": "Fresh page after cold backup, corrected candidate ready protected model", "status": "PASS" },
+    { "name": "Routes, Path and Path lookup with shared model", "status": "PASS" },
+    { "name": "Actual final forward lookup", "status": "PASS", "lengthMeters": 35.30345579516123, "connectionGap": "1", "gapCount": 4, "gapLengthMeters": 0.9840583861033791, "usedLeaves": 25 },
+    { "name": "Corrected Geometry leaves used label and separately scoped prepared fallback counts", "status": "PASS", "fallbackBends": 2, "fallbackStraights": 2, "fallbackClearances": 0 },
+    { "name": "Zoom and final stable filled Ghost, original tray colours and yellow line", "status": "PASS" }
+  ],
+  "evidence": ["final-corrected-ui.txt", "final-corrected-metrics.png", "path-lookup-final-delivery.png"],
+  "limits": ["This fresh display-only lookup job follows the retained archive; the archive contains the three earlier completed lookups and identical retained snapshot.", "No cable Apply or human engineering acceptance performed.", "Native comparison NOT_PERFORMED/NOT_REQUIRED_BY_USER; bounded converted model execution is the checked scope."]
+}

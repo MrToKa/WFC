@@ -1,0 +1,31 @@
+{
+  "status": "PASS",
+  "backupId": "469c37ef-ff35-4e76-985d-19e59d8f57f2",
+  "members": 8,
+  "images": 4,
+  "dumpVerification": {
+    "status": "PASS",
+    "method": "pg_restore-list-mounted-file",
+    "tocBytes": 63491,
+    "tocSha256": "876abbbd416282b44432cdc66efba4d6a195b8db1e174cc32e7744fb446c5571"
+  },
+  "modelAudit": {
+    "status": "PASS",
+    "totals": {
+      "versions": 4,
+      "resources": 1368,
+      "bytes": 1756031212
+    },
+    "selectionUnchanged": true,
+    "immutableReadyMetadataUnchanged": true
+  },
+  "fullRestore": "NOT_RUN",
+  "privateCompanion": "retained separately outside backup",
+  "baseline": {
+    "tables": 100,
+    "pfRootFiles": 63,
+    "pfRootBytes": 13834192
+  },
+  "port": 5191,
+  "protectedContainersUnchanged": 18
+}

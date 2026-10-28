@@ -1,0 +1,30 @@
+{
+  "status": "PASS",
+  "scope": "Actual protected UI capture and immutable evidence upload; host GET/exactPUT replay/hash and foreign-part refusal",
+  "sessionId": "dbe5af1c-29f3-4e50-9378-ea3883c7d148",
+  "partId": "6b09ca92-6290-4b85-b9d2-d2ffe06681de",
+  "evidenceBytes": 17041,
+  "evidenceSha256": "6e0b80be4ea41d31d636f45990a247692d55f77dc6cc2b38e0d128d42e19e945",
+  "completedObservationSha256": "037b10bca52f480b8676ccb207dd306fdfe518bf780859b3fdf3abba56dd9770",
+  "fragments": 22,
+  "observations": {
+    "displayToWorldMetres": "derived",
+    "globalOffsetDisplayUnits": "observed",
+    "globalOffsetMetres": "derived",
+    "legacySourceToWorldMetres": "derived",
+    "matrixPrecision": "unavailable-or-literal",
+    "metresPerDisplayUnit": "observed",
+    "modelTransform": "unavailable",
+    "objectLocalFrame": "unavailable-or-literal",
+    "placementTransform": "observed",
+    "sdkVersion": "unavailable-or-literal",
+    "sourceDocumentId": "unavailable-or-literal",
+    "sourceInstancePath": "unavailable-or-literal",
+    "sourceUnitLabel": "observed",
+    "stableExportEntityId": "unavailable-or-literal",
+    "upVector": "observed"
+  },
+  "sourcePayloadHashMatches": true,
+  "checks": 4,
+  "engineeringAccepted": false
+}

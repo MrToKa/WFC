@@ -1,0 +1,61 @@
+{
+  "schemaVersion": "pathfinder.session.crash-closure.v1",
+  "status": "FAIL",
+  "checkedAt": "2026-10-18T13:21:23.952Z",
+  "sourceReceipt": {
+    "path": "docs/pathfinder/evidence/session/crash-once-1792329583015.json",
+    "sha256": "e0c4c47bf4396f55dde7abb27e6d5f1c95b2b9f87161793bf60985484867f138"
+  },
+  "jobId": "c6cf2fad-c50e-49d8-aa40-4b8f45e2ba12",
+  "checks": {
+    "observedCountsCoherent": true,
+    "persistedCountsCoherent": true,
+    "oldOwnerFingerprintUnchanged": true,
+    "oldOwnerTypedNonNullInference": true,
+    "actualNewOwnerUuidValid": false,
+    "actualNewOwnerFingerprintChanged": false,
+    "all64NullSafeCalculated": true,
+    "completedExactlyNewAttempt": true,
+    "durableCancelRetained": true
+  },
+  "observedProgress": {
+    "state": "running",
+    "completed": 0,
+    "total": 64,
+    "attempts": 1,
+    "completeItems": 0,
+    "runningItems": 1,
+    "waitingItems": 63,
+    "ownerTokenFingerprint": "4160dbffb619df7b122481c93a8ae5e21091232e3714936df6aade5da4bb970f"
+  },
+  "persistedProgress": {
+    "state": "running",
+    "completed": 16,
+    "total": 64,
+    "attempts": 1,
+    "completeItems": 16,
+    "runningItems": 1,
+    "waitingItems": 47,
+    "ownerTokenFingerprint": "4160dbffb619df7b122481c93a8ae5e21091232e3714936df6aade5da4bb970f"
+  },
+  "current": {
+    "id": "c6cf2fad-c50e-49d8-aa40-4b8f45e2ba12",
+    "state": "complete",
+    "completed": 64,
+    "total": 64,
+    "attempts": 2,
+    "cancel_requested": true,
+    "ownerTokenFingerprint": null
+  },
+  "itemCounts": {
+    "count": 64,
+    "notCalculated": 0,
+    "nullStatus": 0
+  },
+  "ownerTypingScope": "Old actual owner text was not retained; non-null UUID is inferred from its saved fingerprint and the actual typed UUID column. The replacement owner UUID was read now and fingerprinted.",
+  "sourceHashes": {
+    "crashScript": "b68c791a8ea6653f0136d9c82e4bbf69b7083dd7da18d25a5da34bf5497fcb99",
+    "library": "118a919a2600706e3beea08985bbbc2539650c51d26ec7d9044efb247853dbcf"
+  },
+  "scope": "Additive read-only closure; no rerun, lease mutation, calculation, Apply or receipt overwrite."
+}

@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "wfc.pf.engine-observation-source.v1",
+  "at": "2026-10-20T08:07:29.603Z",
+  "codeParent": "3a7a8ef6ced9120df4b48bc3d4f4eb8e8623b0ed",
+  "status": "SOURCE_VERIFIED",
+  "scope": "Safe internal observations only; no resource limit, control flow, guard or C# mathematics changes.",
+  "pins": [
+    {
+      "path": "server/pathfinder/engine.ts",
+      "sha256": "0b561a0b75418fd9dae8d8cb10a9cbde978efb8550b4835ca8e76ccab992759d"
+    },
+    {
+      "path": "server/pathfinder/engine-preparation.test.ts",
+      "sha256": "c5bc4280fc1d6c796e660cb40c72940f28d48903872b2f20db70242516c3cee9"
+    },
+    {
+      "path": "server/pathfinder/engineResources.ts",
+      "sha256": "793d0bc1a6724205d3584bbb5903b11cdebd50fefbf428d0299d31fb813a0a25"
+    },
+    {
+      "path": "server/pathfinder/engineResources.test.ts",
+      "sha256": "c36c6f8b7ce566044ccf4c41383c22cddc204bde55454faf9128c0e1f7a358e8"
+    },
+    {
+      "path": "scripts/pathfinder-capacity/qualify-runner.mjs",
+      "sha256": "faa38a827d343217f1f12339330dd888c2201fe055b447c9ee954b89b090fe46"
+    }
+  ],
+  "tests": {
+    "assertions": 28,
+    "status": "PASS",
+    "receiptSha256": "d99f55492d1fdbf062cef8b520267e806d0b119627a78d767dce452f1a5718c2",
+    "throwingDiagnosticHelpersAndSink": "PASS_ORIGINAL_REFUSAL_AND_SUCCESS_UNCHANGED"
+  },
+  "serverTypes": "PASS",
+  "focusedLint": "PASS",
+  "whitespace": "PASS",
+  "independentReview": "NO_REMAINING_BLOCKING_FINDINGS_AFTER_OBSERVER_ISOLATION",
+  "actualPriorFailure": "trial4 ENGINE_RSS_UNAVAILABLE precise cause NOT_ESTABLISHED",
+  "candidate6Build": "NOT_RUN",
+  "candidate6RuntimeQualification": "NOT_RUN",
+  "normalProtectedPublication": "NOT_RUN",
+  "realApply": "NOT_RUN",
+  "originalApplicationChanged": false
+}

@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PF-2 isolated model capture</title>
+<link rel="stylesheet" href="/sdk/style.min.css"><style>
+body{margin:0;font:14px system-ui;background:#f2f5f7;color:#153143}header{padding:14px 22px;background:white;border-bottom:1px solid #ced8df}h1{font-size:20px;margin:0 0 6px}main{display:grid;grid-template-columns:350px 1fr;height:calc(100vh - 77px)}aside{padding:18px;overflow:auto}#viewer{position:relative;min-width:0;background:white}button{padding:11px;margin:5px 0;width:100%;cursor:pointer}button:disabled{opacity:.5;cursor:default}textarea{width:100%;box-sizing:border-box;min-height:110px;font:12px monospace}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:12px monospace}.note{padding:10px;background:#fff6d6;border:1px solid #e9d493;margin:12px 0}.status{font-weight:600;line-height:1.5}#activity{max-height:260px;overflow:auto}label{display:block;margin-top:18px}summary{cursor:pointer}</style></head>
+<body><header><h1>PF-2 · Isolated computational model capture</h1><div>Local copied Aalborg package · No WFC, database or Autodesk API writes</div></header><main><aside>
+<div id="status" class="status">Preparing the local model…</div><div class="note">Visual loading does not establish engineering readiness. Native visibility, category assignments and conversion equivalence require separate evidence.</div>
+<button id="inventory" disabled>Capture complete hierarchy inventory</button><button id="routes" disabled>Capture both reference routes</button>
+<label for="route">Route names for a bounded mesh capture</label><textarea id="route">/DFB018-1/DFB011/DFB012/DFB013/B002/B107-1/B107-2/B107-3/BC025/BC022-2/SECONDARY</textarea><button id="capture" disabled>Capture this route's geometry</button>
+<button id="cancel" disabled>Cancel capture</button><button id="entire" disabled>Show entire model</button>
+<details><summary>Actual SDK metadata and limits</summary><pre id="metadata"></pre></details><pre id="activity" aria-live="polite"></pre>
+</aside><div id="viewer"></div></main><script src="/sdk/viewer3D.min.js"></script><script type="module" src="/capture.mjs"></script></body></html>

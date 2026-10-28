@@ -1,0 +1,1404 @@
+{
+  "schemaVersion": "pathfinder.session.target-ops.v1",
+  "startedAt": "2026-10-18T12:59:56.956Z",
+  "status": "FAIL",
+  "targetProject": "wfc-pathfinder-local-bf1cba239f40",
+  "targetRuntime": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pathfinder-local-restore-bf1cba239f40",
+  "images": {
+    "api": "sha256:323f876ac757488376bcfab483934a35bb4175257a922134fa1a547f14c2227b",
+    "web": "sha256:511ba97e13046460948bf85ae3f5cdc0297658b8e95e13e1db51d3046b93e742"
+  },
+  "apiId": "feb4345daa590021732d0f0d2219db793f1d1b2237f15a16f5caa9c662d024e4",
+  "postgresId": "537355846bb844629004d97ce91f8fd10dcae660646b759702c5d22d40591614",
+  "checks": [
+    {
+      "runnerSha256": "4b940d5c8a7b72115369aa2004de4e12434ae5f4c6f14d014b8be9cc6ab3dc06",
+      "lengthMeters": 35.30345579516123,
+      "design": {
+        "lengthBeforePercentageMeters": "40.3034557951612",
+        "unroundedLengthMeters": "44.33380137467732",
+        "designLengthMeters": "45"
+      },
+      "name": "rebuilt-dll-full-real-route-design-reference",
+      "status": "PASS"
+    },
+    {
+      "name": "rebuilt-dll-full-dto-repeat-equality",
+      "status": "PASS"
+    },
+    {
+      "name": "rebuilt-dll-actual-memory-reuse",
+      "status": "PASS"
+    },
+    {
+      "httpStatus": 202,
+      "jobId": "dbc473b8-1b9d-4d58-9ade-bfdf85bff2e8",
+      "name": "lock-loss-preview-enqueued",
+      "status": "PASS"
+    },
+    {
+      "actualStatus": "complete",
+      "design": {
+        "designLengthMeters": "18",
+        "unroundedLengthMeters": "17.6",
+        "lengthBeforePercentageMeters": "16"
+      },
+      "name": "lock-loss-preview-known-maths",
+      "status": "PASS"
+    },
+    {
+      "processes": [
+        {
+          "pid": 96748,
+          "parentPid": 63822,
+          "command": "dotnet"
+        },
+        {
+          "pid": 96756,
+          "parentPid": 96748,
+          "command": "dotnet"
+        }
+      ],
+      "name": "lock-loss-observed-owned-pair",
+      "status": "PASS"
+    },
+    {
+      "postgresPids": [
+        438
+      ],
+      "name": "lock-loss-unique-holder",
+      "status": "PASS"
+    },
+    {
+      "name": "lock-loss-backend-terminated",
+      "status": "PASS"
+    }
+  ],
+  "scope": {
+    "noApply": true,
+    "noSource5190Writes": true,
+    "crashScope": "Observed active durable batch plus supervisor/worker pair, not an exact Core/frame instruction."
+  },
+  "real": {
+    "a": {
+      "schemaVersion": "pathfinder.model.response.v1",
+      "requestId": "dcffdfd7-1ff6-4efa-9225-5f2f77f6e39e",
+      "status": "calculated",
+      "message": "Path calculated.",
+      "engineeringAccepted": false,
+      "model": {
+        "projectId": "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a",
+        "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+        "contentSha256": "b5bb4fbe666b440c73bb1ffd2ee0db01be66146f8002e4a9df8dce8521db1d34",
+        "sourceContentSha256": null
+      },
+      "prepared": {
+        "key": "0021390ef09b898d2810e70f93c8c4ab90ddb04e2fc5dd38ec34264365bd214d",
+        "readiness": "needs_review",
+        "counts": {
+          "validatedBends": 5,
+          "fallbackBends": 2,
+          "validatedStraights": 17,
+          "fallbackStraights": 2,
+          "fallbackClearances": 0
+        },
+        "cacheScope": "fitted-centerlines-ports-and-canonical-mesh;surface-bvh-reconstructed-on-disk-load;graph-per-calculation",
+        "loadedFromDisk": true,
+        "objectCount": 52,
+        "segmentCount": 26,
+        "diagnosticCount": 36,
+        "diagnostics": [
+          "Inventory is explicitly partial.",
+          "Geometry capture is explicitly partial.",
+          "Source unit conversion is unverified.",
+          "Source/root/display transforms are unverified.",
+          "Native planning visibility is not established; display Ghost/isolation is never used as exclusion.",
+          "Cryptographic/evidenced source-to-conversion correspondence is not established.",
+          "dbid:425799: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:425800: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:425801: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:425802: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:425803: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:425804: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:425836: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426727: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426728: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426789: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426790: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426793: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426794: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426795: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426796: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426797: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426798: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426799: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426800: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426801: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426804: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:427079: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:427082: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:427083: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:427086: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:427100: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:425799: two measured cap sections with compatible neighbouring ports are required",
+          "dbid:427079: straight axis needs unique neighboring port evidence",
+          "dbid:427082: radial mesh surfaces do not prove a stable circular bend",
+          "dbid:427083: straight axis needs unique neighboring port evidence"
+        ],
+        "diagnosticsTruncated": false,
+        "engineeringAccepted": false
+      },
+      "effectiveCategory": "Control",
+      "route": {
+        "success": true,
+        "message": "Path calculated.",
+        "routeText": "/DFB018-1/DFB011/DFB012/DFB013/B002/B107-1/B107-2/B107-3/BC025/BC022-2",
+        "routeCodes": [
+          "/DFB018-1",
+          "/DFB011",
+          "/DFB012",
+          "/DFB013",
+          "/B002",
+          "/B107-1",
+          "/B107-2",
+          "/B107-3",
+          "/BC025",
+          "/BC022-2"
+        ],
+        "segmentIds": [
+          "dbid:427100",
+          "dbid:427079",
+          "dbid:427083",
+          "dbid:427082",
+          "dbid:427086",
+          "dbid:426728",
+          "dbid:426727",
+          "dbid:426789",
+          "dbid:426801",
+          "dbid:426800",
+          "dbid:426799",
+          "dbid:426798",
+          "dbid:426797",
+          "dbid:426796",
+          "dbid:426795",
+          "dbid:426794",
+          "dbid:426793",
+          "dbid:426804",
+          "dbid:425836",
+          "dbid:425799",
+          "dbid:425800",
+          "dbid:425801",
+          "dbid:425802",
+          "dbid:425803",
+          "dbid:425804"
+        ],
+        "pathPoints": [
+          {
+            "x": 45.16500215081601,
+            "y": -11.73700013993792,
+            "z": 1.5296001389080516
+          },
+          {
+            "x": 45.16500215081601,
+            "y": -9.409000607715171,
+            "z": 1.5296001389080516
+          },
+          {
+            "x": 45.16500215081601,
+            "y": -9.392354594092208,
+            "z": 1.5296001389080516
+          },
+          {
+            "x": 45.24300215242533,
+            "y": -9.094000610099357,
+            "z": 1.5296001389080516
+          },
+          {
+            "x": 46.183001978677794,
+            "y": -9.094000610099357,
+            "z": 1.5296001389080516
+          },
+          {
+            "x": 46.18300221709637,
+            "y": -9.094000610099357,
+            "z": 1.5296001389080516
+          },
+          {
+            "x": 47.637002094072386,
+            "y": -9.094000610099357,
+            "z": 1.5296001389080516
+          },
+          {
+            "x": 47.637002094072386,
+            "y": -9.348000320182365,
+            "z": 1.5296001389080516
+          },
+          {
+            "x": 48.7650023534718,
+            "y": -9.348000320182365,
+            "z": 1.5296001389080516
+          },
+          {
+            "x": 48.46500234155087,
+            "y": -9.847000750289482,
+            "z": 1.5296001389080516
+          },
+          {
+            "x": 48.46500234155087,
+            "y": -12.84700098870806,
+            "z": 1.5296001389080516
+          },
+          {
+            "x": 48.41500215081601,
+            "y": -12.847000869498771,
+            "z": 1.4704143955761424
+          },
+          {
+            "x": 48.41500215081601,
+            "y": -12.847000869498771,
+            "z": 4.000000174289369
+          },
+          {
+            "x": 48.41500215081601,
+            "y": -12.847000869498771,
+            "z": 4.000000353103303
+          },
+          {
+            "x": 48.41500215081601,
+            "y": -12.847000869498771,
+            "z": 6.100000317340516
+          },
+          {
+            "x": 48.11500213889508,
+            "y": -13.920000823722404,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 50.61681084184079,
+            "y": -13.920000823722404,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 50.61681119946866,
+            "y": -13.920000823722404,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 53.57581095246701,
+            "y": -13.920000823722404,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 53.57581131009488,
+            "y": -13.920000674710792,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 53.65580901988185,
+            "y": -13.920000674710792,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 53.72117643028644,
+            "y": -13.922855504110593,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 53.78604631212147,
+            "y": -13.93139545816247,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 53.849925168085775,
+            "y": -13.945555547703702,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 53.91232704197644,
+            "y": -13.965228028500777,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 53.97277721558396,
+            "y": -13.990263221076093,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.0308158200802,
+            "y": -14.020470649554955,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.100166585891465,
+            "y": -14.060500574094627,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.10016562336435,
+            "y": -14.060502241300759,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.13306997812711,
+            "y": -14.079498892751861,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.13306920387258,
+            "y": -14.079500233848517,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.20236782201104,
+            "y": -14.11950707224102,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.26041359202539,
+            "y": -14.149722227447791,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.32087181273969,
+            "y": -14.174763694346169,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.38328241491614,
+            "y": -14.194440908274279,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.44717047170472,
+            "y": -14.208604124978732,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.51204981270088,
+            "y": -14.217145560173389,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.57742672356753,
+            "y": -14.220000209794563,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.65742461232571,
+            "y": -14.220000209794563,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.65742468683152,
+            "y": -14.220001014457267,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.895424692315146,
+            "y": -14.220001014457267,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.895424796623274,
+            "y": -14.220000209794563,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.975420168620516,
+            "y": -14.220000209794563,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.0407959890806,
+            "y": -14.217145566005078,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.10567424566047,
+            "y": -14.208604288654042,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.16956124221103,
+            "y": -14.194441380371556,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.23197082627368,
+            "y": -14.174764621999293,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.29242808849056,
+            "y": -14.149723752369848,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.35047297645496,
+            "y": -14.119509328804106,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.419776321744884,
+            "y": -14.079500241672447,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.41978366806882,
+            "y": -14.079500399104267,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.45269095124416,
+            "y": -14.060502056994492,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.45269018330625,
+            "y": -14.060500726838953,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.522017100314606,
+            "y": -14.02048090266012,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.58005811999447,
+            "y": -13.990270053502497,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.64051112611725,
+            "y": -13.965232078619096,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.70291615599587,
+            "y": -13.945557497438235,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.76679839342503,
+            "y": -13.931396021416797,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.83167178137755,
+            "y": -13.92285541482816,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.897042720238,
+            "y": -13.920000674710792,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.97704185394673,
+            "y": -13.920000674710792,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.97704185394673,
+            "y": -13.920000823722404,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 56.5210023060265,
+            "y": -13.920000823722404,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 56.521002335828825,
+            "y": -13.920000823722404,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 58.132002799195334,
+            "y": -13.920000823722404,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 58.36000279931454,
+            "y": -13.526580604301017,
+            "z": 6.520000259524011
+          },
+          {
+            "x": 58.36000279931454,
+            "y": -13.526580604301017,
+            "z": 8.11100041413846
+          },
+          {
+            "x": 58.25143270043759,
+            "y": -13.375750395045799,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 58.25143270043759,
+            "y": -12.699146770849412,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 58.11056890951706,
+            "y": -12.81581725788509,
+            "z": 8.211000437980319
+          },
+          {
+            "x": 58.07197287129793,
+            "y": -12.777219267816545,
+            "z": 8.21100043798024
+          },
+          {
+            "x": 58.071973995966886,
+            "y": -12.777211389383098,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 58.015414984476685,
+            "y": -12.720654742047383,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.9835015071194,
+            "y": -12.686132120847113,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.95439510547811,
+            "y": -12.649211965962243,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.928275238487785,
+            "y": -12.61012191552368,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.90530295105082,
+            "y": -12.569102986400031,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.88561988109706,
+            "y": -12.526408088163956,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.86934738630103,
+            "y": -12.482300463732772,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.85658579584064,
+            "y": -12.43705206629787,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.8474137918108,
+            "y": -12.390941882550258,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.84188792410584,
+            "y": -12.344254212540653,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.84004226176171,
+            "y": -12.29727691677997,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.84004226176171,
+            "y": -12.217280598865074,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.840041442197844,
+            "y": -12.217280390248817,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.840041442197844,
+            "y": -11.751280697570365,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.840041442197844,
+            "y": -11.75128036974482,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.840041442197844,
+            "y": -8.751280816779655,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.840041442197844,
+            "y": -8.751280459151786,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.840041442197844,
+            "y": -6.751280339942497,
+            "z": 8.211000437980317
+          }
+        ],
+        "lengthMeters": 35.30345579516123,
+        "fromDistanceMeters": 0,
+        "toDistanceMeters": 0,
+        "fromRequiresSecondary": false,
+        "toRequiresSecondary": false,
+        "connectionGapCount": 4,
+        "connectionGapLengthMeters": 0.9840583861033791
+      },
+      "design": {
+        "lengthBeforePercentageMeters": "40.3034557951612",
+        "unroundedLengthMeters": "44.33380137467732",
+        "designLengthMeters": "45"
+      },
+      "projectSettings": {
+        "revision": "2",
+        "secondaryTrayLength": "3",
+        "endConnectionLength": "5",
+        "additionalBendingPercent": "10"
+      },
+      "usedConnectionGapMeters": null,
+      "lookupScope": null
+    },
+    "b": {
+      "schemaVersion": "pathfinder.model.response.v1",
+      "requestId": "fcc59bb2-3c8e-40e4-b160-f4f0ea38afa9",
+      "status": "calculated",
+      "message": "Path calculated.",
+      "engineeringAccepted": false,
+      "model": {
+        "projectId": "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a",
+        "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+        "contentSha256": "b5bb4fbe666b440c73bb1ffd2ee0db01be66146f8002e4a9df8dce8521db1d34",
+        "sourceContentSha256": null
+      },
+      "prepared": {
+        "key": "0021390ef09b898d2810e70f93c8c4ab90ddb04e2fc5dd38ec34264365bd214d",
+        "readiness": "needs_review",
+        "counts": {
+          "validatedBends": 5,
+          "fallbackBends": 2,
+          "validatedStraights": 17,
+          "fallbackStraights": 2,
+          "fallbackClearances": 0
+        },
+        "cacheScope": "fitted-centerlines-ports-and-canonical-mesh;surface-bvh-reconstructed-on-disk-load;graph-per-calculation",
+        "loadedFromDisk": true,
+        "objectCount": 52,
+        "segmentCount": 26,
+        "diagnosticCount": 36,
+        "diagnostics": [
+          "Inventory is explicitly partial.",
+          "Geometry capture is explicitly partial.",
+          "Source unit conversion is unverified.",
+          "Source/root/display transforms are unverified.",
+          "Native planning visibility is not established; display Ghost/isolation is never used as exclusion.",
+          "Cryptographic/evidenced source-to-conversion correspondence is not established.",
+          "dbid:425799: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:425800: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:425801: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:425802: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:425803: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:425804: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:425836: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426727: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426728: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426789: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426790: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426793: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426794: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426795: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426796: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426797: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426798: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426799: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426800: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426801: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426804: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:427079: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:427082: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:427083: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:427086: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:427100: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:425799: two measured cap sections with compatible neighbouring ports are required",
+          "dbid:427079: straight axis needs unique neighboring port evidence",
+          "dbid:427082: radial mesh surfaces do not prove a stable circular bend",
+          "dbid:427083: straight axis needs unique neighboring port evidence"
+        ],
+        "diagnosticsTruncated": false,
+        "engineeringAccepted": false
+      },
+      "effectiveCategory": "Control",
+      "route": {
+        "success": true,
+        "message": "Path calculated.",
+        "routeText": "/DFB018-1/DFB011/DFB012/DFB013/B002/B107-1/B107-2/B107-3/BC025/BC022-2",
+        "routeCodes": [
+          "/DFB018-1",
+          "/DFB011",
+          "/DFB012",
+          "/DFB013",
+          "/B002",
+          "/B107-1",
+          "/B107-2",
+          "/B107-3",
+          "/BC025",
+          "/BC022-2"
+        ],
+        "segmentIds": [
+          "dbid:427100",
+          "dbid:427079",
+          "dbid:427083",
+          "dbid:427082",
+          "dbid:427086",
+          "dbid:426728",
+          "dbid:426727",
+          "dbid:426789",
+          "dbid:426801",
+          "dbid:426800",
+          "dbid:426799",
+          "dbid:426798",
+          "dbid:426797",
+          "dbid:426796",
+          "dbid:426795",
+          "dbid:426794",
+          "dbid:426793",
+          "dbid:426804",
+          "dbid:425836",
+          "dbid:425799",
+          "dbid:425800",
+          "dbid:425801",
+          "dbid:425802",
+          "dbid:425803",
+          "dbid:425804"
+        ],
+        "pathPoints": [
+          {
+            "x": 45.16500215081601,
+            "y": -11.73700013993792,
+            "z": 1.5296001389080516
+          },
+          {
+            "x": 45.16500215081601,
+            "y": -9.409000607715171,
+            "z": 1.5296001389080516
+          },
+          {
+            "x": 45.16500215081601,
+            "y": -9.392354594092208,
+            "z": 1.5296001389080516
+          },
+          {
+            "x": 45.24300215242533,
+            "y": -9.094000610099357,
+            "z": 1.5296001389080516
+          },
+          {
+            "x": 46.183001978677794,
+            "y": -9.094000610099357,
+            "z": 1.5296001389080516
+          },
+          {
+            "x": 46.18300221709637,
+            "y": -9.094000610099357,
+            "z": 1.5296001389080516
+          },
+          {
+            "x": 47.637002094072386,
+            "y": -9.094000610099357,
+            "z": 1.5296001389080516
+          },
+          {
+            "x": 47.637002094072386,
+            "y": -9.348000320182365,
+            "z": 1.5296001389080516
+          },
+          {
+            "x": 48.7650023534718,
+            "y": -9.348000320182365,
+            "z": 1.5296001389080516
+          },
+          {
+            "x": 48.46500234155087,
+            "y": -9.847000750289482,
+            "z": 1.5296001389080516
+          },
+          {
+            "x": 48.46500234155087,
+            "y": -12.84700098870806,
+            "z": 1.5296001389080516
+          },
+          {
+            "x": 48.41500215081601,
+            "y": -12.847000869498771,
+            "z": 1.4704143955761424
+          },
+          {
+            "x": 48.41500215081601,
+            "y": -12.847000869498771,
+            "z": 4.000000174289369
+          },
+          {
+            "x": 48.41500215081601,
+            "y": -12.847000869498771,
+            "z": 4.000000353103303
+          },
+          {
+            "x": 48.41500215081601,
+            "y": -12.847000869498771,
+            "z": 6.100000317340516
+          },
+          {
+            "x": 48.11500213889508,
+            "y": -13.920000823722404,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 50.61681084184079,
+            "y": -13.920000823722404,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 50.61681119946866,
+            "y": -13.920000823722404,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 53.57581095246701,
+            "y": -13.920000823722404,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 53.57581131009488,
+            "y": -13.920000674710792,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 53.65580901988185,
+            "y": -13.920000674710792,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 53.72117643028644,
+            "y": -13.922855504110593,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 53.78604631212147,
+            "y": -13.93139545816247,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 53.849925168085775,
+            "y": -13.945555547703702,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 53.91232704197644,
+            "y": -13.965228028500777,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 53.97277721558396,
+            "y": -13.990263221076093,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.0308158200802,
+            "y": -14.020470649554955,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.100166585891465,
+            "y": -14.060500574094627,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.10016562336435,
+            "y": -14.060502241300759,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.13306997812711,
+            "y": -14.079498892751861,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.13306920387258,
+            "y": -14.079500233848517,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.20236782201104,
+            "y": -14.11950707224102,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.26041359202539,
+            "y": -14.149722227447791,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.32087181273969,
+            "y": -14.174763694346169,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.38328241491614,
+            "y": -14.194440908274279,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.44717047170472,
+            "y": -14.208604124978732,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.51204981270088,
+            "y": -14.217145560173389,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.57742672356753,
+            "y": -14.220000209794563,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.65742461232571,
+            "y": -14.220000209794563,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.65742468683152,
+            "y": -14.220001014457267,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.895424692315146,
+            "y": -14.220001014457267,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.895424796623274,
+            "y": -14.220000209794563,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 54.975420168620516,
+            "y": -14.220000209794563,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.0407959890806,
+            "y": -14.217145566005078,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.10567424566047,
+            "y": -14.208604288654042,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.16956124221103,
+            "y": -14.194441380371556,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.23197082627368,
+            "y": -14.174764621999293,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.29242808849056,
+            "y": -14.149723752369848,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.35047297645496,
+            "y": -14.119509328804106,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.419776321744884,
+            "y": -14.079500241672447,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.41978366806882,
+            "y": -14.079500399104267,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.45269095124416,
+            "y": -14.060502056994492,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.45269018330625,
+            "y": -14.060500726838953,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.522017100314606,
+            "y": -14.02048090266012,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.58005811999447,
+            "y": -13.990270053502497,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.64051112611725,
+            "y": -13.965232078619096,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.70291615599587,
+            "y": -13.945557497438235,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.76679839342503,
+            "y": -13.931396021416797,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.83167178137755,
+            "y": -13.92285541482816,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.897042720238,
+            "y": -13.920000674710792,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.97704185394673,
+            "y": -13.920000674710792,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 55.97704185394673,
+            "y": -13.920000823722404,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 56.5210023060265,
+            "y": -13.920000823722404,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 56.521002335828825,
+            "y": -13.920000823722404,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 58.132002799195334,
+            "y": -13.920000823722404,
+            "z": 6.475000257735871
+          },
+          {
+            "x": 58.36000279931454,
+            "y": -13.526580604301017,
+            "z": 6.520000259524011
+          },
+          {
+            "x": 58.36000279931454,
+            "y": -13.526580604301017,
+            "z": 8.11100041413846
+          },
+          {
+            "x": 58.25143270043759,
+            "y": -13.375750395045799,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 58.25143270043759,
+            "y": -12.699146770849412,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 58.11056890951706,
+            "y": -12.81581725788509,
+            "z": 8.211000437980319
+          },
+          {
+            "x": 58.07197287129793,
+            "y": -12.777219267816545,
+            "z": 8.21100043798024
+          },
+          {
+            "x": 58.071973995966886,
+            "y": -12.777211389383098,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 58.015414984476685,
+            "y": -12.720654742047383,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.9835015071194,
+            "y": -12.686132120847113,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.95439510547811,
+            "y": -12.649211965962243,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.928275238487785,
+            "y": -12.61012191552368,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.90530295105082,
+            "y": -12.569102986400031,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.88561988109706,
+            "y": -12.526408088163956,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.86934738630103,
+            "y": -12.482300463732772,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.85658579584064,
+            "y": -12.43705206629787,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.8474137918108,
+            "y": -12.390941882550258,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.84188792410584,
+            "y": -12.344254212540653,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.84004226176171,
+            "y": -12.29727691677997,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.84004226176171,
+            "y": -12.217280598865074,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.840041442197844,
+            "y": -12.217280390248817,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.840041442197844,
+            "y": -11.751280697570365,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.840041442197844,
+            "y": -11.75128036974482,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.840041442197844,
+            "y": -8.751280816779655,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.840041442197844,
+            "y": -8.751280459151786,
+            "z": 8.211000437980317
+          },
+          {
+            "x": 57.840041442197844,
+            "y": -6.751280339942497,
+            "z": 8.211000437980317
+          }
+        ],
+        "lengthMeters": 35.30345579516123,
+        "fromDistanceMeters": 0,
+        "toDistanceMeters": 0,
+        "fromRequiresSecondary": false,
+        "toRequiresSecondary": false,
+        "connectionGapCount": 4,
+        "connectionGapLengthMeters": 0.9840583861033791
+      },
+      "design": {
+        "lengthBeforePercentageMeters": "40.3034557951612",
+        "unroundedLengthMeters": "44.33380137467732",
+        "designLengthMeters": "45"
+      },
+      "projectSettings": {
+        "revision": "2",
+        "secondaryTrayLength": "3",
+        "endConnectionLength": "5",
+        "additionalBendingPercent": "10"
+      },
+      "usedConnectionGapMeters": null,
+      "lookupScope": null
+    },
+    "events": [
+      {
+        "type": "spawn",
+        "pid": 2269
+      },
+      {
+        "type": "rss",
+        "pid": 2269,
+        "bytes": 10006528,
+        "thresholdBytes": 536870912
+      },
+      {
+        "type": "rss",
+        "pid": 2269,
+        "bytes": 83206144,
+        "thresholdBytes": 536870912
+      },
+      {
+        "type": "ready",
+        "pid": 2269,
+        "runnerSha256": "4b940d5c8a7b72115369aa2004de4e12434ae5f4c6f14d014b8be9cc6ab3dc06"
+      },
+      {
+        "type": "dispatch",
+        "pid": 2269,
+        "requestId": "dcffdfd7-1ff6-4efa-9225-5f2f77f6e39e",
+        "requestOrdinal": 1
+      },
+      {
+        "type": "rss",
+        "pid": 2269,
+        "bytes": 97472512,
+        "thresholdBytes": 536870912
+      },
+      {
+        "type": "rss",
+        "pid": 2269,
+        "bytes": 120127488,
+        "thresholdBytes": 536870912
+      },
+      {
+        "type": "rss",
+        "pid": 2269,
+        "bytes": 134705152,
+        "thresholdBytes": 536870912
+      },
+      {
+        "type": "rss",
+        "pid": 2269,
+        "bytes": 143011840,
+        "thresholdBytes": 536870912
+      },
+      {
+        "type": "rss",
+        "pid": 2269,
+        "bytes": 146427904,
+        "thresholdBytes": 536870912
+      },
+      {
+        "type": "rss",
+        "pid": 2269,
+        "bytes": 149397504,
+        "thresholdBytes": 536870912
+      },
+      {
+        "type": "rss",
+        "pid": 2269,
+        "bytes": 150839296,
+        "thresholdBytes": 536870912
+      },
+      {
+        "type": "rss",
+        "pid": 2269,
+        "bytes": 154820608,
+        "thresholdBytes": 536870912
+      },
+      {
+        "type": "rss",
+        "pid": 2269,
+        "bytes": 155631616,
+        "thresholdBytes": 536870912
+      },
+      {
+        "type": "result",
+        "pid": 2269,
+        "requestId": "dcffdfd7-1ff6-4efa-9225-5f2f77f6e39e",
+        "requestOrdinal": 1,
+        "preparedReuse": "disk",
+        "retireAfterResponse": false
+      },
+      {
+        "type": "dispatch",
+        "pid": 2269,
+        "requestId": "fcc59bb2-3c8e-40e4-b160-f4f0ea38afa9",
+        "requestOrdinal": 2
+      },
+      {
+        "type": "rss",
+        "pid": 2269,
+        "bytes": 170971136,
+        "thresholdBytes": 536870912
+      },
+      {
+        "type": "result",
+        "pid": 2269,
+        "requestId": "fcc59bb2-3c8e-40e4-b160-f4f0ea38afa9",
+        "requestOrdinal": 2,
+        "preparedReuse": "memory",
+        "retireAfterResponse": false
+      },
+      {
+        "type": "retire",
+        "pid": 2269,
+        "reason": "shutdown"
+      },
+      {
+        "type": "closed",
+        "pid": 2269
+      }
+    ],
+    "runnerSha256": "4b940d5c8a7b72115369aa2004de4e12434ae5f4c6f14d014b8be9cc6ab3dc06"
+  },
+  "realRawSha256": "f95cf8098abf6fcecd7b071c7f7c34e067626abba08c9df11ac7cb17df92276e",
+  "error": "DOCKER_REQUEST_FAILED",
+  "finishedAt": "2026-10-18T13:00:01.415Z",
+  "api": {
+    "id": "feb4345daa590021732d0f0d2219db793f1d1b2237f15a16f5caa9c662d024e4",
+    "name": "wfc-pathfinder-local-bf1cba239f40-api-1",
+    "image": "sha256:323f876ac757488376bcfab483934a35bb4175257a922134fa1a547f14c2227b",
+    "running": false,
+    "startedAt": "2026-10-18T12:50:14.041428401Z",
+    "exitCode": 1,
+    "oomKilled": false,
+    "platform": "linux",
+    "mounts": [
+      {
+        "type": "volume",
+        "name": "wfc-pathfinder-local-bf1cba239f40_staging",
+        "destination": "/var/lib/wfc/model-imports",
+        "writable": true
+      },
+      {
+        "type": "volume",
+        "name": "wfc-pathfinder-local-bf1cba239f40_pathfinder",
+        "destination": "/var/lib/wfc/pathfinder",
+        "writable": true
+      }
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "pathfinder.automation-state.v1",
+  "observedAtUtc": "2026-10-18 02:46:03 UTC",
+  "status": "PASS",
+  "automationId": "pathfinder",
+  "automationStatus": "PAUSED",
+  "updatedThroughApplicationTool": true,
+  "existingPromptScheduleNameAndTargetPreserved": true,
+  "deliveryCommit": "bf9dfdf8b075259880b58cc7a31202844a902f87",
+  "branch": "pf-8-delivery-local-20261018",
+  "reason": "Independent local implementation/operations delivery is committed and verified at stated scopes. Remaining real native paired engineering gate requires an authorized full-precision export or working entitlement; repeated unchanged licence attempts are prohibited.",
+  "wholeFeatureEngineeringAcceptance": "BLOCKED",
+  "userAcceptance": "NOT_RUN",
+  "mergePushOrDeploymentPerformed": false
+}

@@ -1,0 +1,293 @@
+{
+  "schemaVersion": "pathfinder.routes-path.final-cleanup-readback.v1",
+  "observedAtUtc": "2026-10-18T08:35:50.5077569Z",
+  "sourceCommit": "542e101fd7d9a0cf53a70db7d898902e5437500c",
+  "apiImage": "sha256:fcd7b866447416caac43c44cb49d4cda7a2ff615608f8863d5497253309d26cd",
+  "webImage": "sha256:9cd76986937dc5ce4faa0583db9d7b4a73bcadcec33338a175bd8fa8641bc6c4",
+  "scope": "Read-only PostgreSQL repeatable-read snapshot after final-candidate integration attempt. Two integration assertions failed; cleanup and real-demo no-Apply assertions passed.",
+  "integrationReceipt": "live29-final-20261018T083254Z.json",
+  "cleanupStatus": "PASS",
+  "readback": {
+    "database": "wfc_pathfinder_local",
+    "temporaryFixtureCounts": {
+      "users": 0,
+      "projects": 0,
+      "locations": 0,
+      "cables": 0,
+      "triggers": 0
+    },
+    "synthetic": {
+      "projectId": "54cfad40-bd12-41e9-ab24-d90bdaafc993",
+      "connectionGap": "1",
+      "secondaryTrayLength": "5",
+      "endConnectionLength": "6",
+      "additionalBendingPercent": "10",
+      "activeModelVersionId": "a856352c-b3dd-4143-a723-1f4e7d3f2cb2"
+    },
+    "realDemo": {
+      "projectId": "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a",
+      "settings": {
+        "revision": "2",
+        "connectionGap": "1",
+        "secondaryTrayLength": "3",
+        "endConnectionLength": "5",
+        "additionalBendingPercent": "10"
+      },
+      "selection": {
+        "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+        "selectionRevision": "1"
+      },
+      "artifact": {
+        "id": "75c61dc7-d456-45b0-9052-2a0822240350",
+        "snapshotSha256": "b47365401aaf078374607c944e22ac5100f2aa6fe4389c056fbdd963526f17ed",
+        "objectCount": 52,
+        "routingLeafCount": 26
+      },
+      "bindings": [
+        {
+          "name": "=PF-DEMO-NETWORK-START",
+          "locationId": "3b9f01b2-5260-4efa-8914-5b4d54dc36ae",
+          "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+          "artifactId": "75c61dc7-d456-45b0-9052-2a0822240350",
+          "revision": "2",
+          "point": [
+            45.16500215081601,
+            -11.73700013993792,
+            1.5296001389080516
+          ],
+          "source": "manual",
+          "derivation": "manual-world-point",
+          "current": true
+        },
+        {
+          "name": "=PF-DEMO-NETWORK-END",
+          "locationId": "2d92f671-338b-49bc-be80-f356ca2332e8",
+          "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+          "artifactId": "75c61dc7-d456-45b0-9052-2a0822240350",
+          "revision": "2",
+          "point": [
+            57.840041442197844,
+            -6.751280339942497,
+            8.211000437980317
+          ],
+          "source": "manual",
+          "derivation": "manual-world-point",
+          "current": true
+        }
+      ],
+      "locationAudit": [
+        {
+          "id": "2db514a2-85bd-442b-94fb-2e1424fd9f8a",
+          "locationId": "2d92f671-338b-49bc-be80-f356ca2332e8",
+          "kind": "bind",
+          "registryRevision": "10",
+          "recordedAt": "2026-10-18T11:05:39.05572+03:00",
+          "eventData": {
+            "after": {
+              "point": [
+                57.840041442197844,
+                -6.751280339942497,
+                8.211000437980317
+              ],
+              "source": "manual",
+              "revision": "2",
+              "object_id": null,
+              "derivation": "manual-world-point",
+              "external_id": null,
+              "coordinate_frame": "canonical-world-metres",
+              "model_version_id": "925c0fc0-6e36-4d47-b1ce-38b0beff5953"
+            },
+            "before": {
+              "point": [
+                57.840041442197844,
+                -6.751280339942497,
+                8.211000437980317
+              ],
+              "source": "manual",
+              "revision": "1",
+              "object_id": null,
+              "derivation": "manual-world-point",
+              "external_id": null,
+              "coordinate_frame": "canonical-world-metres",
+              "model_version_id": "925c0fc0-6e36-4d47-b1ce-38b0beff5953"
+            }
+          }
+        },
+        {
+          "id": "5218ff57-9bf3-4ea0-9521-4e4b82a10c82",
+          "locationId": "3b9f01b2-5260-4efa-8914-5b4d54dc36ae",
+          "kind": "bind",
+          "registryRevision": "9",
+          "recordedAt": "2026-10-18T11:05:27.140818+03:00",
+          "eventData": {
+            "after": {
+              "point": [
+                45.16500215081601,
+                -11.73700013993792,
+                1.5296001389080516
+              ],
+              "source": "manual",
+              "revision": "2",
+              "object_id": null,
+              "derivation": "manual-world-point",
+              "external_id": null,
+              "coordinate_frame": "canonical-world-metres",
+              "model_version_id": "925c0fc0-6e36-4d47-b1ce-38b0beff5953"
+            },
+            "before": {
+              "point": [
+                45.16500215081601,
+                -11.73700013993792,
+                1.5296001389080516
+              ],
+              "source": "manual",
+              "revision": "1",
+              "object_id": null,
+              "derivation": "manual-world-point",
+              "external_id": null,
+              "coordinate_frame": "canonical-world-metres",
+              "model_version_id": "925c0fc0-6e36-4d47-b1ce-38b0beff5953"
+            }
+          }
+        },
+        {
+          "id": "c4d8ad83-3805-46fd-8ecf-befcdb168bc1",
+          "locationId": "2d92f671-338b-49bc-be80-f356ca2332e8",
+          "kind": "bind",
+          "registryRevision": "7",
+          "recordedAt": "2026-10-18T09:40:35.420577+03:00",
+          "eventData": {
+            "after": {
+              "point": [
+                57.840041442197844,
+                -6.751280339942497,
+                8.211000437980317
+              ],
+              "source": "manual",
+              "revision": "1",
+              "object_id": null,
+              "derivation": "manual-world-point",
+              "external_id": null,
+              "coordinate_frame": "canonical-world-metres",
+              "model_version_id": "925c0fc0-6e36-4d47-b1ce-38b0beff5953"
+            },
+            "before": null
+          }
+        },
+        {
+          "id": "a05745f0-232a-4de1-bf9f-8dbde27035c4",
+          "locationId": "2d92f671-338b-49bc-be80-f356ca2332e8",
+          "kind": "create",
+          "registryRevision": "6",
+          "recordedAt": "2026-10-18T09:40:35.38831+03:00",
+          "eventData": {
+            "after": {
+              "id": "2d92f671-338b-49bc-be80-f356ca2332e8",
+              "name": "=PF-DEMO-NETWORK-END",
+              "aliases": [
+                "=PF-DEMO-NETWORK-END"
+              ],
+              "revision": "1"
+            },
+            "before": null
+          }
+        },
+        {
+          "id": "2ee8ec22-5092-4de0-8009-a446b4bd23ed",
+          "locationId": "3b9f01b2-5260-4efa-8914-5b4d54dc36ae",
+          "kind": "bind",
+          "registryRevision": "5",
+          "recordedAt": "2026-10-18T09:40:35.359377+03:00",
+          "eventData": {
+            "after": {
+              "point": [
+                45.16500215081601,
+                -11.73700013993792,
+                1.5296001389080516
+              ],
+              "source": "manual",
+              "revision": "1",
+              "object_id": null,
+              "derivation": "manual-world-point",
+              "external_id": null,
+              "coordinate_frame": "canonical-world-metres",
+              "model_version_id": "925c0fc0-6e36-4d47-b1ce-38b0beff5953"
+            },
+            "before": null
+          }
+        },
+        {
+          "id": "8eac2acc-3022-4444-b8eb-c8c9615677d3",
+          "locationId": "3b9f01b2-5260-4efa-8914-5b4d54dc36ae",
+          "kind": "create",
+          "registryRevision": "4",
+          "recordedAt": "2026-10-18T09:40:35.328587+03:00",
+          "eventData": {
+            "after": {
+              "id": "3b9f01b2-5260-4efa-8914-5b4d54dc36ae",
+              "name": "=PF-DEMO-NETWORK-START",
+              "aliases": [
+                "=PF-DEMO-NETWORK-START"
+              ],
+              "revision": "1"
+            },
+            "before": null
+          }
+        },
+        {
+          "id": "4050d49c-6908-4257-81f0-af341d577705",
+          "locationId": "43b2230a-74af-4fd9-a021-4f7be9792c79",
+          "kind": "bind",
+          "registryRevision": "3",
+          "recordedAt": "2026-10-18T05:04:29.577686+03:00",
+          "eventData": {
+            "after": {
+              "point": [
+                61.181479806219656,
+                -38.17840248384549,
+                18.40188612485943
+              ],
+              "source": "manual",
+              "revision": "1",
+              "object_id": null,
+              "derivation": "picked-surface-point",
+              "external_id": null,
+              "coordinate_frame": "canonical-world-metres",
+              "model_version_id": "925c0fc0-6e36-4d47-b1ce-38b0beff5953"
+            },
+            "before": null
+          }
+        },
+        {
+          "id": "5cd16d27-b4d2-4f81-8ce8-72502b05a27f",
+          "locationId": "43b2230a-74af-4fd9-a021-4f7be9792c79",
+          "kind": "create",
+          "registryRevision": "2",
+          "recordedAt": "2026-10-18T05:04:29.545252+03:00",
+          "eventData": {
+            "after": {
+              "id": "43b2230a-74af-4fd9-a021-4f7be9792c79",
+              "name": "PF-DIAGNOSTIC-PICK",
+              "aliases": [
+                "PF-DIAGNOSTIC-ALIAS",
+                "PF-DIAGNOSTIC-PICK"
+              ],
+              "revision": "1"
+            },
+            "before": null
+          }
+        }
+      ],
+      "reviewCount": 3,
+      "applyReceiptCount": 0,
+      "cable": {
+        "id": "a49521ad-e4e1-47d9-b3b2-948375a83905",
+        "tag": "PF-MANUAL-DEMO",
+        "routing": null,
+        "designLength": null,
+        "installLength": null,
+        "cableWriteRevision": "0"
+      }
+    }
+  }
+}

@@ -1,0 +1,310 @@
+TAP version 13
+# Subtest: synthetic seed/source/package pins and exact decimal allowance linkage produce an import context
+ok 1 - synthetic seed/source/package pins and exact decimal allowance linkage produce an import context
+  ---
+  duration_ms: 3.4859
+  type: 'test'
+  ...
+# Subtest: input contract refuses non-PASS seed
+ok 2 - input contract refuses non-PASS seed
+  ---
+  duration_ms: 0.6428
+  type: 'test'
+  ...
+# Subtest: input contract refuses synthetic engineering bypass
+ok 3 - input contract refuses synthetic engineering bypass
+  ---
+  duration_ms: 0.4513
+  type: 'test'
+  ...
+# Subtest: input contract refuses 5190 target
+ok 4 - input contract refuses 5190 target
+  ---
+  duration_ms: 0.3383
+  type: 'test'
+  ...
+# Subtest: input contract refuses foreign owner
+ok 5 - input contract refuses foreign owner
+  ---
+  duration_ms: 0.3216
+  type: 'test'
+  ...
+# Subtest: input contract refuses wrong image
+ok 6 - input contract refuses wrong image
+  ---
+  duration_ms: 0.2956
+  type: 'test'
+  ...
+# Subtest: input contract refuses wrong receipt project
+ok 7 - input contract refuses wrong receipt project
+  ---
+  duration_ms: 0.358
+  type: 'test'
+  ...
+# Subtest: input contract refuses wrong source receipt pin
+ok 8 - input contract refuses wrong source receipt pin
+  ---
+  duration_ms: 0.3679
+  type: 'test'
+  ...
+# Subtest: input contract refuses original project reuse
+ok 9 - input contract refuses original project reuse
+  ---
+  duration_ms: 0.4
+  type: 'test'
+  ...
+# Subtest: input contract refuses missing connection allowance
+ok 10 - input contract refuses missing connection allowance
+  ---
+  duration_ms: 0.4502
+  type: 'test'
+  ...
+# Subtest: input contract refuses rounded allowance
+ok 11 - input contract refuses rounded allowance
+  ---
+  duration_ms: 0.368
+  type: 'test'
+  ...
+# Subtest: input contract refuses archive hash mismatch
+ok 12 - input contract refuses archive hash mismatch
+  ---
+  duration_ms: 0.3298
+  type: 'test'
+  ...
+# Subtest: input contract refuses full model fingerprint mismatch
+ok 13 - input contract refuses full model fingerprint mismatch
+  ---
+  duration_ms: 0.3217
+  type: 'test'
+  ...
+# Subtest: input contract refuses property resource mismatch
+ok 14 - input contract refuses property resource mismatch
+  ---
+  duration_ms: 0.2965
+  type: 'test'
+  ...
+# Subtest: input contract refuses resource total mismatch
+ok 15 - input contract refuses resource total mismatch
+  ---
+  duration_ms: 0.8929
+  type: 'test'
+  ...
+# Subtest: raw provided plan SHA is checked before trusting its fields
+ok 16 - raw provided plan SHA is checked before trusting its fields
+  ---
+  duration_ms: 0.2096
+  type: 'test'
+  ...
+# Subtest: normal workflow persists mutation intent first and imports/selects exactly once with no engineering gate bypass
+ok 17 - normal workflow persists mutation intent first and imports/selects exactly once with no engineering gate bypass
+  ---
+  duration_ms: 8.8452
+  type: 'test'
+  ...
+# Subtest: lost accepted upload reply reconciles the same persisted request without a second upload
+ok 18 - lost accepted upload reply reconciles the same persisted request without a second upload
+  ---
+  duration_ms: 1.1308
+  type: 'test'
+  ...
+# Subtest: unknown acceptance is durable and a resumed invocation never blindly uploads
+ok 19 - unknown acceptance is durable and a resumed invocation never blindly uploads
+  ---
+  duration_ms: 0.823
+  type: 'test'
+  ...
+# Subtest: persisted accepted pending job resumes by GET and same-key SQL reconciliation only
+ok 20 - persisted accepted pending job resumes by GET and same-key SQL reconciliation only
+  ---
+  duration_ms: 1.3017
+  type: 'test'
+  ...
+# Subtest: successful selection readback resumes without incrementing revision or PATCHing again
+ok 21 - successful selection readback resumes without incrementing revision or PATCHing again
+  ---
+  duration_ms: 0.8939
+  type: 'test'
+  ...
+# Subtest: lost selection reply is accepted only by exact CAS readback and is never retried
+ok 22 - lost selection reply is accepted only by exact CAS readback and is never retried
+  ---
+  duration_ms: 1.1297
+  type: 'test'
+  ...
+# Subtest: uncertain selection with unchanged baseline refuses a second PATCH on resume
+ok 23 - uncertain selection with unchanged baseline refuses a second PATCH on resume
+  ---
+  duration_ms: 0.9037
+  type: 'test'
+  ...
+# Subtest: a competing selection revision is retained and never overwritten
+ok 24 - a competing selection revision is retained and never overwritten
+  ---
+  duration_ms: 1.3238
+  type: 'test'
+  ...
+# Subtest: target replacement between intent and mutation refuses the request
+ok 25 - target replacement between intent and mutation refuses the request
+  ---
+  duration_ms: 0.3881
+  type: 'test'
+  ...
+# Subtest: self-consistent wrong DB-address claims cannot bypass the immutable target binding
+ok 26 - self-consistent wrong DB-address claims cannot bypass the immutable target binding
+  ---
+  duration_ms: 0.3897
+  type: 'test'
+  ...
+# Subtest: reconciliation refuses foreign job projectId
+ok 27 - reconciliation refuses foreign job projectId
+  ---
+  duration_ms: 0.4372
+  type: 'test'
+  ...
+# Subtest: reconciliation refuses foreign job requestedBy
+ok 28 - reconciliation refuses foreign job requestedBy
+  ---
+  duration_ms: 0.4114
+  type: 'test'
+  ...
+# Subtest: reconciliation refuses foreign job idempotencyKey
+ok 29 - reconciliation refuses foreign job idempotencyKey
+  ---
+  duration_ms: 0.3659
+  type: 'test'
+  ...
+# Subtest: reconciliation refuses foreign job archiveSha256
+ok 30 - reconciliation refuses foreign job archiveSha256
+  ---
+  duration_ms: 0.3985
+  type: 'test'
+  ...
+# Subtest: ready gate refuses foreign storage prefix before selection
+ok 31 - ready gate refuses foreign storage prefix before selection
+  ---
+  duration_ms: 0.6294
+  type: 'test'
+  ...
+# Subtest: ready gate refuses unpublished storage before selection
+ok 32 - ready gate refuses unpublished storage before selection
+  ---
+  duration_ms: 0.5882
+  type: 'test'
+  ...
+# Subtest: ready gate refuses resource bytes changed before selection
+ok 33 - ready gate refuses resource bytes changed before selection
+  ---
+  duration_ms: 0.5354
+  type: 'test'
+  ...
+# Subtest: ready gate refuses bad full validation report before selection
+ok 34 - ready gate refuses bad full validation report before selection
+  ---
+  duration_ms: 0.5059
+  type: 'test'
+  ...
+# Subtest: ready gate refuses readback resource mismatch before selection
+ok 35 - ready gate refuses readback resource mismatch before selection
+  ---
+  duration_ms: 1.1023
+  type: 'test'
+  ...
+# Subtest: ready gate refuses foreign package alias before selection
+ok 36 - ready gate refuses foreign package alias before selection
+  ---
+  duration_ms: 0.5283
+  type: 'test'
+  ...
+# Subtest: ready gate refuses contradictory full report check before selection
+ok 37 - ready gate refuses contradictory full report check before selection
+  ---
+  duration_ms: 0.5098
+  type: 'test'
+  ...
+# Subtest: ready gate refuses contradictory verified resource hash before selection
+ok 38 - ready gate refuses contradictory verified resource hash before selection
+  ---
+  duration_ms: 0.4668
+  type: 'test'
+  ...
+# Subtest: failed accepted job is retained and cannot trigger another upload/login
+ok 39 - failed accepted job is retained and cannot trigger another upload/login
+  ---
+  duration_ms: 0.4375
+  type: 'test'
+  ...
+# Subtest: row budget is enforced before any authenticated mutation
+ok 40 - row budget is enforced before any authenticated mutation
+  ---
+  duration_ms: 0.3263
+  type: 'test'
+  ...
+# Subtest: late upload result remains journaled when the overall deadline expires
+ok 41 - late upload result remains journaled when the overall deadline expires
+  ---
+  duration_ms: 0.5016
+  type: 'test'
+  ...
+# Subtest: cancellation after accepted upload retains uncertainty and suppresses selection
+ok 42 - cancellation after accepted upload retains uncertainty and suppresses selection
+  ---
+  duration_ms: 0.6537
+  type: 'test'
+  ...
+# Subtest: non-admin or another actor login is retained without upload
+ok 43 - non-admin or another actor login is retained without upload
+  ---
+  duration_ms: 0.4208
+  type: 'test'
+  ...
+# Subtest: journal and immutable intent guards run before any I/O
+ok 44 - journal and immutable intent guards run before any I/O
+  ---
+  duration_ms: 0.3379
+  type: 'test'
+  ...
+# Subtest: owned archive stream is destroyed even if fetch rejects before response headers
+ok 45 - owned archive stream is destroyed even if fetch rejects before response headers
+  ---
+  duration_ms: 0.7722
+  type: 'test'
+  ...
+# Subtest: malformed non-login HTTP body is privately retained before JSON validation fails
+ok 46 - malformed non-login HTTP body is privately retained before JSON validation fails
+  ---
+  duration_ms: 2.2988
+  type: 'test'
+  ...
+# Subtest: login HTTP reply never enters the private raw event journal
+ok 47 - login HTTP reply never enters the private raw event journal
+  ---
+  duration_ms: 0.3637
+  type: 'test'
+  ...
+# Subtest: an oversized HTTP response is refused and its owned reader is closed
+ok 48 - an oversized HTTP response is refused and its owned reader is closed
+  ---
+  duration_ms: 2.9027
+  type: 'test'
+  ...
+# Subtest: the actual serialized helper watchdog exits while stdin remains open before any SQL import
+ok 49 - the actual serialized helper watchdog exits while stdin remains open before any SQL import
+  ---
+  duration_ms: 83.5984
+  type: 'test'
+  ...
+# Subtest: resume acquires ownership before loading history and observes the last prior uncertain upload
+ok 50 - resume acquires ownership before loading history and observes the last prior uncertain upload
+  ---
+  duration_ms: 12.457
+  type: 'test'
+  ...
+1..50
+# tests 50
+# suites 0
+# pass 50
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 239.684

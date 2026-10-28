@@ -1,0 +1,67 @@
+{
+  "schemaVersion": "pathfinder.registry.http-tests.v1",
+  "observedAtUtc": "2026-10-18T02:03:37.968Z",
+  "origin": "http://127.0.0.1:5190",
+  "scope": "isolated-owned-runtime-current-admin-registry-cas-and-project-boundary",
+  "status": "PASS",
+  "passed": 13,
+  "total": 13,
+  "checks": [
+    {
+      "name": "unauthenticated-read-denied",
+      "status": "PASS"
+    },
+    {
+      "name": "admin-state-with-authoritative-details-and-empty-own-registry",
+      "status": "PASS"
+    },
+    {
+      "name": "project-location-and-alias-created-once",
+      "status": "PASS"
+    },
+    {
+      "name": "alias-collision-denied",
+      "status": "PASS"
+    },
+    {
+      "name": "stale-registry-write-denied",
+      "status": "PASS"
+    },
+    {
+      "name": "location-rename-alias-cas-persists",
+      "status": "PASS"
+    },
+    {
+      "name": "binding-to-nonselected-model-denied",
+      "status": "PASS"
+    },
+    {
+      "name": "nonfinite-manual-coordinates-denied",
+      "status": "PASS"
+    },
+    {
+      "name": "unknown-proof-request-field-denied",
+      "status": "PASS"
+    },
+    {
+      "name": "another-project-registry-not-leaked",
+      "status": "PASS"
+    },
+    {
+      "name": "engineer-role-and-project-read-do-not-grant-pathfinder",
+      "status": "PASS"
+    },
+    {
+      "name": "own-fixture-project-removed",
+      "status": "PASS"
+    },
+    {
+      "name": "own-fixture-user-removed",
+      "status": "PASS"
+    }
+  ],
+  "credentialsRecorded": false,
+  "originalRuntimeAccessed": false,
+  "realNativeParity": "BLOCKED; not exercised by these tests",
+  "sourceSha256": "84154d090f69838617b61bff67ef612feb08ee39f55efe08e751c06b7359f1f3"
+}

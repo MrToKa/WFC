@@ -1,0 +1,189 @@
+{
+  "status": "PASS",
+  "recordedAt": "2026-10-19T02:28:02.555Z",
+  "scope": "Frozen R4candidate1 sources; pure/mocked source suites, explicit fresh actual C# runner interoperability, no original database",
+  "combined": {
+    "sourceFiles": 63,
+    "passed": 1039,
+    "failed": 0,
+    "notRun": 5,
+    "rawSha256": "7906c6d6a227d586e8153fe13b94568b62e57484b01a6769a6024d09ac396efa"
+  },
+  "protectedRuntime": {
+    "suites": 11,
+    "passed": 178,
+    "failed": 0,
+    "rawSha256": "cf8b61f887b410e15ed83d8af19b3ee7b3cd2fe9a2e8865d610f1add01587e15"
+  },
+  "csharp": {
+    "schemaVersion": "wfc.pf.fitted-trace-test-receipt.v1",
+    "scope": "isolated-synthetic-CSharp;directory-sync-callback-mocked;actual-Linux-durability-NOT_RUN",
+    "status": "PASS",
+    "passed": 39,
+    "failed": 0,
+    "checks": [
+      {
+        "name": "fresh-memory-disk-real-fit-modes",
+        "status": "PASS"
+      },
+      {
+        "name": "stream-hash-and-byte-reference",
+        "status": "PASS"
+      },
+      {
+        "name": "stream-hash-and-byte-reference",
+        "status": "PASS"
+      },
+      {
+        "name": "stream-hash-and-byte-reference",
+        "status": "PASS"
+      },
+      {
+        "name": "identical-cold-memory-disk-export",
+        "status": "PASS"
+      },
+      {
+        "name": "stream-hash-and-byte-reference",
+        "status": "PASS"
+      },
+      {
+        "name": "export-does-not-change-routing-math-order",
+        "status": "PASS"
+      },
+      {
+        "name": "stream-hash-and-byte-reference",
+        "status": "PASS"
+      },
+      {
+        "name": "exact-segment-point-port-order",
+        "status": "PASS"
+      },
+      {
+        "name": "csharp-left-to-right-length-round-trip",
+        "status": "PASS"
+      },
+      {
+        "name": "binary64-diagonal-length-and-unsorted-membership",
+        "status": "PASS"
+      },
+      {
+        "name": "full-diagnostics-not-truncated",
+        "status": "PASS"
+      },
+      {
+        "name": "classification-and-engineering-not-invented",
+        "status": "PASS"
+      },
+      {
+        "name": "actual-module-digests",
+        "status": "PASS"
+      },
+      {
+        "name": "strict-export-request",
+        "status": "PASS"
+      },
+      {
+        "name": "strict-export-request",
+        "status": "PASS"
+      },
+      {
+        "name": "strict-export-request",
+        "status": "PASS"
+      },
+      {
+        "name": "strict-export-request",
+        "status": "PASS"
+      },
+      {
+        "name": "strict-export-request",
+        "status": "PASS"
+      },
+      {
+        "name": "unknown-export-request-fields-rejected",
+        "status": "PASS"
+      },
+      {
+        "name": "stream-byte-budget-no-truncation",
+        "status": "PASS"
+      },
+      {
+        "name": "cancel-before-stream",
+        "status": "PASS"
+      },
+      {
+        "name": "transient-byte-admission-before-write",
+        "status": "PASS"
+      },
+      {
+        "name": "transient-entry-admission-before-write",
+        "status": "PASS"
+      },
+      {
+        "name": "exclusive-write-readback-and-exact-replay",
+        "status": "PASS"
+      },
+      {
+        "name": "directory-sync-boundaries-invoked",
+        "status": "PASS"
+      },
+      {
+        "name": "foreign-or-tampered-target-no-overwrite",
+        "status": "PASS"
+      },
+      {
+        "name": "tampered-target-retained",
+        "status": "PASS"
+      },
+      {
+        "name": "incomplete-crash-path-preserved",
+        "status": "PASS"
+      },
+      {
+        "name": "incomplete-bytes-not-deleted",
+        "status": "PASS"
+      },
+      {
+        "name": "failed-final-directory-sync-is-not-success",
+        "status": "PASS"
+      },
+      {
+        "name": "uncertain-final-file-retained",
+        "status": "PASS"
+      },
+      {
+        "name": "completed-file-reconciles-after-sync-ack-loss",
+        "status": "PASS"
+      },
+      {
+        "name": "cancelled-partial-write-preserves-owned-temporary",
+        "status": "PASS"
+      },
+      {
+        "name": "cancelled-stage-never-acknowledged-or-deleted",
+        "status": "PASS"
+      },
+      {
+        "name": "unknown-staging-child-preserved",
+        "status": "PASS"
+      },
+      {
+        "name": "unknown-file-not-deleted",
+        "status": "PASS"
+      },
+      {
+        "name": "ordinary-prepare-shape-unchanged",
+        "status": "PASS"
+      },
+      {
+        "name": "export-for-nonprepare-refused",
+        "status": "PASS"
+      }
+    ],
+    "rawSha256": "77177d957e3c86c07776d5635458f7a178d35cfcbdf430f2d4130ed79988c78c",
+    "testAssemblySha256": "6db49cae353e95d7c890ef34faf54ba1dabe134dcf65cdb67f18a124aad97998",
+    "windowsDirectorySync": "injected; native Windows sync NOT_RUN",
+    "linuxNativeDirectorySync": "actual normal HTTP export succeeded, not crash/power-loss durability"
+  },
+  "countsOverlap": true,
+  "expectedRegenerated": false
+}

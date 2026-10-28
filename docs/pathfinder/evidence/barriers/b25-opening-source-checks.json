@@ -1,0 +1,178 @@
+{
+  "schemaVersion": "wfc.pf.b25-opening-source-checks.v1",
+  "status": "SOURCE_CHECKS_PASS_NATIVE_ACCEPTANCE_PENDING",
+  "operationId": "20abf31d-22a4-4fcb-a080-713b5c4ade03",
+  "baseCommit": "4224b4c9b18a5d59f9f826ec65dff2126a2441fd",
+  "sourceReceipt": {
+    "name": "pathfinder-engine/.scratch/b25-20abf31d-22a4-4fcb-a080-713b5c4ade03/source.private.json",
+    "bytes": 31312,
+    "sha256": "735fa8f502aa759f7a89752971c7e5942b794535778febd43cf17ff010adb4c7"
+  },
+  "sourceFiles": 151,
+  "sourceBytes": 1716882,
+  "sourceAndBuildCopyBookends": "PASS",
+  "coreAndTransportChecks": [
+    {
+      "suite": "inter-tray-first",
+      "passed": 32,
+      "failed": 0,
+      "log": {
+        "name": "pathfinder-engine/.scratch/b25-20abf31d-22a4-4fcb-a080-713b5c4ade03/inter-tray-first.log",
+        "bytes": 4509,
+        "sha256": "932075d770099f3e74fbad0eb9798bd2a6dd3b8acff2b0b0e6f1bda14300120a"
+      }
+    },
+    {
+      "suite": "constrained-first",
+      "passed": 66,
+      "failed": 0,
+      "log": {
+        "name": "pathfinder-engine/.scratch/b25-20abf31d-22a4-4fcb-a080-713b5c4ade03/constrained-first.log",
+        "bytes": 7806,
+        "sha256": "de941f58de7e03ec3ad2afd829baecb558b28512f5a4ea821f091f303c8696f7"
+      }
+    },
+    {
+      "suite": "local-first",
+      "passed": 42,
+      "failed": 0,
+      "log": {
+        "name": "pathfinder-engine/.scratch/b25-20abf31d-22a4-4fcb-a080-713b5c4ade03/local-first.log",
+        "bytes": 5135,
+        "sha256": "64136bf54265819b874692e2d41078f49865a59111d18df1f5671a2ec0b7f42b"
+      }
+    },
+    {
+      "suite": "mixed-first",
+      "passed": 31,
+      "failed": 0,
+      "log": {
+        "name": "pathfinder-engine/.scratch/b25-20abf31d-22a4-4fcb-a080-713b5c4ade03/mixed-first.log",
+        "bytes": 3395,
+        "sha256": "e50dfcee165be6606e947bad8d2921d6ac541d0bc4bc5f541d8378f10881f661"
+      }
+    },
+    {
+      "suite": "legacy-first",
+      "passed": 39,
+      "failed": 0,
+      "log": {
+        "name": "pathfinder-engine/.scratch/b25-20abf31d-22a4-4fcb-a080-713b5c4ade03/legacy-first.log",
+        "bytes": 5988,
+        "sha256": "212a0512d8099a9130987e79da681dfde0e5ea6e74b2be18ff61bc3447d58290"
+      }
+    },
+    {
+      "suite": "direct-first",
+      "passed": 63,
+      "failed": 0,
+      "log": {
+        "name": "pathfinder-engine/.scratch/b25-20abf31d-22a4-4fcb-a080-713b5c4ade03/direct-first.log",
+        "bytes": 6031,
+        "sha256": "a5ef7f35302da9bbb3a3566b5d3510af7b524bdd6e7b426d76ebbbc70b0dfb51"
+      }
+    },
+    {
+      "suite": "ledger-first",
+      "passed": 35,
+      "failed": 0,
+      "log": {
+        "name": "pathfinder-engine/.scratch/b25-20abf31d-22a4-4fcb-a080-713b5c4ade03/ledger-first.log",
+        "bytes": 3413,
+        "sha256": "20f1c3a3d1bd9c692797c90bc4f4429fe0700bab6a6ea30faa046850b23be2ab"
+      }
+    }
+  ],
+  "uniqueCoreAndTransportChecks": 308,
+  "maneuverChecks": 32,
+  "newImprovementRegressions": 10,
+  "typescript": {
+    "uniqueSelectedChecks": 282,
+    "failed": 0,
+    "pending": 0,
+    "sourcePins": [
+      {
+        "name": "shared/pathfinderBarrierMixed.ts",
+        "bytes": 40883,
+        "sha256": "f2883a8540a2b3ac2d9758300f2624800842afbb1776d79a0fd53e2f09e76d08"
+      },
+      {
+        "name": "shared/pathfinderBarrierMixed.test.ts",
+        "bytes": 35288,
+        "sha256": "0f40c5f6d07213ee889581df669e5b90921a7fd7fa4b3b0e1609ac928543fab5"
+      }
+    ],
+    "report": {
+      "name": "pathfinder-engine/.scratch/b25-20abf31d-22a4-4fcb-a080-713b5c4ade03/ts-selected-first.json",
+      "bytes": 113896,
+      "sha256": "eb4ae77d67e664eea0c17224a1120666c22ec1e27c4817a393b5e6f6eb08f5e2"
+    }
+  },
+  "emptyChecks": [
+    {
+      "check": "frontend-types-first.log",
+      "status": "PASS",
+      "log": {
+        "name": "pathfinder-engine/.scratch/b25-20abf31d-22a4-4fcb-a080-713b5c4ade03/frontend-types-first.log",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "check": "server-types-first.log",
+      "status": "PASS",
+      "log": {
+        "name": "pathfinder-engine/.scratch/b25-20abf31d-22a4-4fcb-a080-713b5c4ade03/server-types-first.log",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "check": "ts-lint-first.log",
+      "status": "PASS",
+      "log": {
+        "name": "pathfinder-engine/.scratch/b25-20abf31d-22a4-4fcb-a080-713b5c4ade03/ts-lint-first.log",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  ],
+  "builds": [
+    {
+      "check": "frontend-build-first.log",
+      "status": "PASS",
+      "positiveExitObservedByRoot": true,
+      "log": {
+        "name": "pathfinder-engine/.scratch/b25-20abf31d-22a4-4fcb-a080-713b5c4ade03/frontend-build-first.log",
+        "bytes": 7604,
+        "sha256": "25dc16c4f7143fc097218c13e3b853891e1cfb1204fd7f8a53721d53493e87dc"
+      }
+    },
+    {
+      "check": "server-build-first.log",
+      "status": "PASS",
+      "positiveExitObservedByRoot": true,
+      "log": {
+        "name": "pathfinder-engine/.scratch/b25-20abf31d-22a4-4fcb-a080-713b5c4ade03/server-build-first.log",
+        "bytes": 1799,
+        "sha256": "e9f1842c678fae76ad91e1a0236ea2dbbbecb68a9601ea2e1dc84b9f17e20dc9"
+      }
+    },
+    {
+      "check": "engine-publish-first.log",
+      "status": "PASS",
+      "positiveExitObservedByRoot": true,
+      "log": {
+        "name": "pathfinder-engine/.scratch/b25-20abf31d-22a4-4fcb-a080-713b5c4ade03/engine-publish-first.log",
+        "bytes": 2561,
+        "sha256": "3b901dcc0d81751ead32c93271569d5f410dde94de2982eefe3927b74031f7a0"
+      }
+    }
+  ],
+  "initialFailures": [],
+  "installed": false,
+  "realCableApply": false,
+  "sdkExecuted": false,
+  "engineeringAccepted": false,
+  "scope": "Executed source/synthetic checks and portable publish for strict incumbent upper-bound comparison. Exact old v2 behavior retained. Real native/collision acceptance and delivery are separate."
+}

@@ -1,0 +1,77 @@
+{
+  "schemaVersion": "wfc.pf.model-browser-parent-selection.v1",
+  "status": "STATIC_WEB_DELIVERED_REAL_BROWSER_CHECK_BLOCKED",
+  "branch": "pf-parent-modelbrowser-local-20261021",
+  "sourceRevision": "f52017d3cf79f5abfb71d587aad8ffac386eeec7",
+  "cause": "Pinned SDK default Model Browser tree click isolates without selecting.",
+  "treeClick": "selectOnly",
+  "modifiers": {
+    "shift": "toggleMultipleOverlayedSelection",
+    "ctrl": "toggleVisibility"
+  },
+  "checks": {
+    "adapterSourceMock": {
+      "status": "PASS",
+      "tests": 16
+    },
+    "focusedViewerSource": {
+      "status": "PASS",
+      "tests": 8
+    },
+    "syntax": "PASS",
+    "productionBuild": "PASS",
+    "independentReview": "PASS",
+    "realAalborgReread": "BLOCKED",
+    "realBrowserUI": "BLOCKED",
+    "humanEngineeringAcceptance": "NOT_RUN"
+  },
+  "sdk": {
+    "version": "7.130.0",
+    "file": "viewer-runtime/sdk/7.130.0/viewer3D.min.js",
+    "sha256": "2833d5c53d250f56a59b86f22491a972486b30fd90a103bce8310dcaa970fa5b",
+    "defaultSelectionMode": "LEAF_OBJECT",
+    "currentBrowserPreference": "NOT_OBSERVED"
+  },
+  "delivery": {
+    "status": "PASS",
+    "at": "2026-10-21T05:09:19.596Z",
+    "operatorSha256": "40e079c294d029a6f8c19ba8b9f74d4e8e1d73a0e0b1534710a5cc15bd6f3b5a",
+    "sourceRevision": "f52017d3cf79f5abfb71d587aad8ffac386eeec7",
+    "priorWebImage": "sha256:aa5e3afd5f1ebd8a387f3859a11773a5ff730b23d0be97811980eee70527bb0f",
+    "newWebImage": "sha256:1e52058136d3500488d48e3dd253b12cd56d1ebdb337281abf81510b5486756d",
+    "newWebContainer": "e11ce1f43603615da6c587eb4a92c75ab236013d2b5a69b3f98a17f3112c17ff",
+    "apiImage": "sha256:3476333e9163d1f251f0eb5ddee67d4fe776af6c73e4f3c57e1ebd85ca443166",
+    "apiUnchanged": true,
+    "postgresUnchanged": true,
+    "minioUnchanged": true,
+    "nonWebIdentityPreserved": true,
+    "externalProcessStateChangesObserved": true,
+    "servedRuntimeSha256": "bf4c8f76e63a04d6f08c0a618238bb5a417219433df1fc7700072363340e06a8",
+    "servedAdapterSha256": "21469bc088a33d3a3fb28a5a2d9e25b8b07cada9d5f7ff3894d877c7fd8eaadc",
+    "modelBrowserTreeClick": "selectOnly",
+    "assignBundle": "ProjectDetails-BMp99Zh3.js",
+    "healthStatus": 200,
+    "browserAcceptance": "NOT_RUN_SAVED_ORIGIN_REFUSAL",
+    "databaseAndModelWrites": "NONE",
+    "rollback": {
+      "bytes": 55296512,
+      "sha256": "aea55713c3c151e701217b2803870adf95c54e925bd6c6cfa58d1558a2bece65"
+    }
+  },
+  "limitations": [
+    "Native search-result semantics are unchanged.",
+    "User-saved FIRST_OBJECT/LAST_OBJECT may promote an ancestor; no preference was reset.",
+    "The existing8192-fragment selected bbox cap is unchanged.",
+    "No actual model endpoint Save, Review, Apply or new grant was performed."
+  ],
+  "cleanup": {
+    "newTestContainers": 0,
+    "newTestVolumes": 0,
+    "unneededBuildImages": 0,
+    "activeAndRollbackRetained": true,
+    "deniedPathsTouched": false,
+    "dockerPrune": false
+  },
+  "automation": "PAUSED_PENDING_LEGITIMATE_BROWSER_ACCESS",
+  "nextHandoff": "docs/pathfinder/handoffs/PF-U7-parent-model-browser-check.md"
+}

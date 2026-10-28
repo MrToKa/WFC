@@ -1,0 +1,86 @@
+{
+  "schemaVersion": "pathfinder.session.source-manifest.v1",
+  "files": [
+    {
+      "path": "scripts/pathfinder-session/fixtures/MemoryLane/MemoryLane.csproj",
+      "bytes": 328,
+      "sha256": "7b6d9f5af4007939a22b6d34e88f0bb651aefc28eca0cfd14402ca9e40bfbb5f"
+    },
+    {
+      "path": "scripts/pathfinder-session/fixtures/MemoryLane/Program.cs",
+      "bytes": 3771,
+      "sha256": "024476d752e69e8efa5c1f77d7cb2f9acfddf549b978f82b77e39f6b35910702"
+    },
+    {
+      "path": "scripts/pathfinder-session/fixtures/NoResponseLane/NoResponseLane.csproj",
+      "bytes": 313,
+      "sha256": "942b0723504b7fb6bdddef59eeafe9ef7ced8aadefd4ec9da9506bccdf47bc26"
+    },
+    {
+      "path": "scripts/pathfinder-session/fixtures/NoResponseLane/Program.cs",
+      "bytes": 3284,
+      "sha256": "f73aae4de8521f495b1fc69c6310e9e6505156f0300f08c51d8c671e0a3093a4"
+    },
+    {
+      "path": "scripts/pathfinder-session/job-controls.mjs",
+      "bytes": 22805,
+      "sha256": "ec202c4e4ff037df7c4a9fc52bf5ff3d967564a18c146cb43d834793ed47ebf1"
+    },
+    {
+      "path": "scripts/pathfinder-session/job-controls.test.mjs",
+      "bytes": 1034,
+      "sha256": "ce814da7998916807ea184398e86280d5b42eb00d367c6aee58a19f9ea19ba8f"
+    },
+    {
+      "path": "scripts/pathfinder-session/lib.mjs",
+      "bytes": 2598,
+      "sha256": "795f0dac3de590e9a3141f6f9dfbb446b0ae497c984694468dd18b75e5a741a9"
+    },
+    {
+      "path": "scripts/pathfinder-session/prepare.mjs",
+      "bytes": 6988,
+      "sha256": "d931e4bc95442c670bd4c06d14cbbb3543c18320cfa6bfe7e16836deb226a7d5"
+    },
+    {
+      "path": "scripts/pathfinder-session/qualify.mjs",
+      "bytes": 14071,
+      "sha256": "79d0b2a87e04ff4e3ab66fb61d5bdaf20869901ea947b65d48e375eee0ab5ae6"
+    },
+    {
+      "path": "scripts/pathfinder-session/README.md",
+      "bytes": 3893,
+      "sha256": "80e83ef4995f7edc026236d1df0aca12df6cc373606c16862fc989c654653efa"
+    },
+    {
+      "path": "scripts/pathfinder-session/run.mjs",
+      "bytes": 7807,
+      "sha256": "5a5689ef0805c8ead09c96c41f2f70e391fd216ccb39f425119346271c244373"
+    },
+    {
+      "path": "scripts/pathfinder-session/session.test.mjs",
+      "bytes": 2750,
+      "sha256": "1d235a2076be4fa1ffea9eade6e8b6ac88d177e3c1f2064ed1762a2335699650"
+    },
+    {
+      "path": "server/pathfinder/engineSession.ts",
+      "bytes": 23468,
+      "sha256": "5cfa14c83dd0566009baecaf757ed1698f0c339043faaff48b24d36eb84a4513"
+    },
+    {
+      "path": "server/pathfinder/engine.ts",
+      "bytes": 3392,
+      "sha256": "213e3690ee2b1fa1b35e46ae84cda14a69a9908770f4a27d58e0ce7e04a5b9ea"
+    },
+    {
+      "path": "server/pathfinder/worker.ts",
+      "bytes": 16439,
+      "sha256": "393dfa5ee13795f3feb4400f066faaa85d85c820471178b4b2fc98be78141ddc"
+    },
+    {
+      "path": "docker/pathfinder.compose.yml",
+      "bytes": 4189,
+      "sha256": "814a9df62725bd1e355fae41ec30add3cb8e07bde00875f4d50b4e2d46b64987"
+    }
+  ],
+  "sha256": "5cda9811a40824d060fc2b0996db196421ea6d70769ff2840dd88e1252cc4e1d"
+}

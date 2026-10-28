@@ -1,0 +1,179 @@
+{
+  "schemaVersion": "pathfinder.r0.policy-drawing-examples.v1",
+  "status": "PROPOSED_SYNTHETIC_CONTRACT_EXPECTATIONS",
+  "execution": "NOT_RUN",
+  "realProjectData": false,
+  "implementationEvidence": false,
+  "projectId": "11111111-1111-4111-8111-111111111111",
+  "projectTrayId": "22222222-2222-4222-8222-222222222222",
+  "purposeKey": "Synthetic shared tray",
+  "cases": [
+    {
+      "id": "catalog-raw-and-normalized-purpose",
+      "input": {"rawPurpose": " Synthetic shared tray "},
+      "expected": {"rawPurpose": " Synthetic shared tray ", "purposeKey": "Synthetic shared tray", "caseSensitive": true}
+    },
+    {
+      "id": "purpose-normalization-collision",
+      "input": {"rawPurposes": ["Caf\u00e9", "Cafe\u0301"]},
+      "expected": {"code": "PURPOSE_NORMALIZATION_COLLISION", "promote": false, "unionPermissions": false}
+    },
+    {
+      "id": "purpose-case-remains-distinct",
+      "input": {"rawPurposes": ["Synthetic tray", "SYNTHETIC TRAY"]},
+      "expected": {"purposeKeys": ["Synthetic tray", "SYNTHETIC TRAY"], "automaticCaseMerge": false}
+    },
+    {
+      "id": "missing-purpose-does-not-grant-routing",
+      "input": {"rawPurpose": null, "persistedRule": null},
+      "expected": {"purposeKey": null, "routingState": "unconfigured", "allowedCategories": [], "drawingMode": "use-default"}
+    },
+    {
+      "id": "explicit-zero-categories-excludes",
+      "request": {
+        "schemaVersion": "pathfinder.routing-purpose-policy.write.v1",
+        "expectedCatalogRevision": "10",
+        "expectedRevision": "4",
+        "idempotencyKey": "33333333-3333-4333-8333-333333333333",
+        "changes": [{"purposeKey": "Synthetic shared tray", "operation": "set", "allowedCategories": []}]
+      },
+      "expected": {"routingState": "excluded", "previousRevision": "4", "revision": "5", "auditEntriesAdded": 1}
+    },
+    {
+      "id": "reset-is-unconfigured-not-allow-all",
+      "request": {
+        "schemaVersion": "pathfinder.routing-purpose-policy.write.v1",
+        "expectedCatalogRevision": "10",
+        "expectedRevision": "5",
+        "idempotencyKey": "44444444-4444-4444-8444-444444444444",
+        "changes": [{"purposeKey": "Synthetic shared tray", "operation": "reset"}]
+      },
+      "expected": {"routingState": "unconfigured", "allowedCategories": [], "revision": "6"}
+    },
+    {
+      "id": "instrumentation-is-control-for-routing-only",
+      "input": {"mto": "Instrumentation", "cablePurpose": "power", "allowedCategories": ["Control"]},
+      "expected": {"effectiveRoutingCategory": "Control", "routingAllowed": true, "drawingCategory": "power", "mtoUnchanged": true, "cablePurposeUnchanged": true}
+    },
+    {
+      "id": "save-conflicts-after-catalog-change",
+      "input": {"expectedCatalogRevision": "10", "currentCatalogRevision": "11", "expectedRevision": "6", "currentRevision": "6"},
+      "expected": {"httpStatus": 409, "code": "CATALOG_REVISION_CONFLICT", "policyWrite": false}
+    },
+    {
+      "id": "save-conflicts-after-competing-save",
+      "input": {"expectedCatalogRevision": "11", "currentCatalogRevision": "11", "expectedRevision": "6", "currentRevision": "7"},
+      "expected": {"httpStatus": 409, "code": "POLICY_REVISION_CONFLICT", "policyWrite": false}
+    },
+    {
+      "id": "aba-is-not-a-current-proposal",
+      "input": {"savedStates": [{"revision": "7", "allowedCategories": ["LV"]}, {"revision": "8", "allowedCategories": ["Control"]}, {"revision": "9", "allowedCategories": ["LV"]}], "proposalRoutingPolicyRevision": "7"},
+      "expected": {"proposalStale": true, "currentRevision": "9", "contentEqualityDoesNotResetRevision": true}
+    },
+    {
+      "id": "idempotent-replay-does-not-increment",
+      "input": {"sameActorProjectDomainKeyAndRequest": true, "savedReceiptRevision": "9", "originalExpectedCatalogRevision": "11", "currentCatalogRevision": "12", "currentPolicyRevision": "13", "currentlyAuthorized": true},
+      "expected": {"duplicate": true, "returnedReceiptRevision": "9", "newAuditEntries": 0, "newRevisionIncrements": 0, "newCasPerformed": false, "receiptProvesCurrentRevision": false, "refreshCurrentPolicy": true}
+    },
+    {
+      "id": "new-idempotency-key-with-old-revision-conflicts",
+      "input": {"newCommandKey": true, "expectedCatalogRevision": "11", "currentCatalogRevision": "12", "expectedPolicyRevision": "9", "currentPolicyRevision": "13", "currentlyAuthorized": true},
+      "expected": {"httpStatus": 409, "duplicate": false, "persisted": false}
+    },
+    {
+      "id": "drawing-source-facts-change-full-trace-not-pf-catalog",
+      "input": {"normalizedDisplayRowsUnchanged": true, "privateProjectionSchemaVersion": "wfc.pf.catalog-copy-projection.v1", "beforeCatalogRevision": "12", "beforeDrawingInputRevision": "20", "beforeDependencyFactsSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "afterDependencyFactsSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "groundingTrefoilOrMaterialFactChanged": true, "routingProjectionUnchanged": true},
+      "expected": {"catalogRevision": "12", "routingContentSha256Changed": false, "drawingInputRevision": "21", "sourceProjectionSha256Changed": true, "contentSha256Changed": true, "fullSnapshotIdChanged": true, "oldDrawingSnapshotStale": true, "oldPreparationScopeStale": false, "pfProposalStaleBecauseOfDrawingFacts": false, "publicLosslessSourceRowsExposed": false}
+    },
+    {
+      "id": "routing-name-purpose-change-advances-pf-catalog",
+      "input": {"beforeCatalogRevision": "12", "routingTrayNameOrPurposeChanged": true, "modelGeometryUnchanged": true},
+      "expected": {"catalogRevision": "13", "routingContentSha256Changed": true, "contentSha256Changed": true, "oldPreparationScopeStale": true, "pfProposalStale": true, "newRouteSearchRequired": true}
+    },
+    {
+      "id": "unknown-category-and-dual-side-are-invalid",
+      "inputs": [{"allowedCategories": ["Instrumentation"]}, {"categoryModes": {"mv": "use-default", "power": {"left": true, "right": true}, "vfd": "left", "control": "right"}}],
+      "expected": {"httpStatus": 400, "persisted": false}
+    },
+    {
+      "id": "drawing-write-two-types-left",
+      "request": {
+        "schemaVersion": "pathfinder.drawing-purpose-policy.write.v1",
+        "expectedCatalogRevision": "11",
+        "expectedRevision": "2",
+        "idempotencyKey": "55555555-5555-4555-8555-555555555555",
+        "changes": [{"purposeKey": "Synthetic shared tray", "categoryModes": {"mv": "use-default", "power": "left", "vfd": "left", "control": "use-default"}}]
+      },
+      "expected": {"drawingPolicyRevision": "3", "routingPolicyRevisionUnchanged": true, "catalogRevisionUnchanged": true, "routingContentSha256Unchanged": true, "sourceProjectionSha256Unchanged": true, "pfGeometryUnchanged": true, "designLengthUnchanged": true}
+    },
+    {
+      "id": "two-compatible-types-left-share-bundle",
+      "input": {
+        "categoryModes": {"mv": "use-default", "power": "left", "vfd": "left", "control": "use-default"},
+        "cables": [{"id": "c-power", "drawingCategory": "power", "diameterMm": "12", "effectiveProfileRef": "synthetic-identical-normal-profile", "eligibleTrefoil": false}, {"id": "c-vfd", "drawingCategory": "vfd", "diameterMm": "12", "effectiveProfileRef": "synthetic-identical-normal-profile", "eligibleTrefoil": false}],
+        "profile": {"id": "synthetic-identical-normal-profile", "maxRows": 3, "maxColumns": 20, "bundleSpacing": "2D", "trefoil": false, "applyPhaseRotation": false, "diameterRangeMm": {"minimumExclusive": "8", "maximumInclusive": "15"}}
+      },
+      "expected": {"leftPool": ["c-power", "c-vfd"], "rightPool": [], "normalBundles": [{"side": "left", "cableIds": ["c-power", "c-vfd"]}], "oldSeparateTypeBlocks": false, "automaticDivider": false}
+    },
+    {
+      "id": "same-right-aggregation-rule",
+      "input": {"categoryModes": {"mv": "use-default", "power": "right", "vfd": "right", "control": "use-default"}, "compatibleCables": ["c-power", "c-vfd"]},
+      "expected": {"leftPool": [], "rightPool": ["c-power", "c-vfd"], "jointSidePacking": true, "automaticDivider": false}
+    },
+    {
+      "id": "different-effective-profiles-are-not-blindly-mixed",
+      "input": {"sameFinalSide": "left", "cables": [{"id": "c-power", "profileRef": "phase-trefoil-profile"}, {"id": "c-control", "profileRef": "ordinary-control-profile"}]},
+      "expected": {"oneSidePool": true, "compatibilitySubgroups": 2, "forcedMixedBundle": false, "phaseAndClampRulesRetained": true}
+    },
+    {
+      "id": "mixed-default-overrides-use-full-input",
+      "input": {"fullInputCategories": ["mv", "power", "vfd", "control"], "categoryModes": {"mv": "right", "power": "use-default", "vfd": "left", "control": "use-default"}},
+      "expected": {"legacyBeforeOverrides": {"mv": "left", "power": "right", "vfd": "right", "control": "right"}, "finalSides": {"mv": "right", "power": "right", "vfd": "left", "control": "right"}, "recomputeDefaultsAfterRemovingMv": false, "automaticDivider": true}
+    },
+    {
+      "id": "grounding-default-preserved",
+      "input": {"categoryModes": {"mv": "use-default", "power": "use-default", "vfd": "use-default", "control": "use-default"}, "cables": [{"id": "c-mv", "purpose": "mv", "drawingCategory": "mv", "family": "normal"}, {"id": "c-ground", "purpose": "grounding", "drawingCategory": "mv", "family": "grounding"}]},
+      "expected": {"finalSidesById": {"c-mv": "left", "c-ground": "right"}, "automaticDivider": true, "groundingInPhaseTrefoil": false}
+    },
+    {
+      "id": "explicit-mv-left-includes-grounding",
+      "input": {"categoryModes": {"mv": "left", "power": "use-default", "vfd": "use-default", "control": "use-default"}, "cables": [{"id": "c-mv", "purpose": "mv", "family": "normal"}, {"id": "c-ground", "purpose": "grounding", "family": "grounding"}]},
+      "expected": {"finalSidesById": {"c-mv": "left", "c-ground": "left"}, "compatibilitySubgroups": 2, "automaticDivider": false, "groundingInPhaseTrefoil": false, "requiredUiHelp": "MV positioning includes grounding cables.", "sourcePurposesUnchanged": true}
+    },
+    {
+      "id": "three-types-two-sides-including-mv-get-divider",
+      "input": {"occupiedLeft": ["c-mv", "c-power"], "occupiedRight": ["c-control"], "leftRightEdgePx": 240, "rightLeftEdgePx": 300},
+      "expected": {"automaticDivider": true, "dividerCount": 1, "dividerXpx": 270, "strokeWidthPx": 2, "physicalThicknessMm": null, "tooManyTypesByCount": false}
+    },
+    {
+      "id": "three-types-on-one-side-no-divider",
+      "input": {"occupiedLeft": [], "occupiedRight": ["c-power", "c-vfd", "c-control"]},
+      "expected": {"automaticDivider": false, "tooManyTypesByCount": false, "realCapacityAndCompatibilityWarningsRetained": true}
+    },
+    {
+      "id": "divider-cannot-overlap-cable-footprints",
+      "input": {"occupiedLeft": ["c-left"], "occupiedRight": ["c-right"], "leftRightEdgePx": 300, "rightLeftEdgePx": 301, "strokeWidthPx": 2},
+      "expected": {"state": "blocked", "code": "DRAWING_CAPACITY_CONFLICT", "silentlySkipDivider": false, "shrinkCables": false, "claimedVerifiedFreeCapacity": false}
+    },
+    {
+      "id": "unknown-diameter-not-verified-capacity",
+      "input": {"diameterMm": null, "legacyDisplayFallbackMm": "1"},
+      "expected": {"state": "diagnostic", "fallbackMarked": true, "verifiedDiameterMm": null, "claimedVerifiedFreeCapacity": false}
+    },
+    {
+      "id": "authorized-drawing-reader-sees-admin-selected-layout",
+      "input": {"currentIsAdmin": false, "currentTrayViewAuthorized": true, "savedDrawingPolicyRevision": "3", "adminSnapshotId": "66666666-6666-4666-8666-666666666666"},
+      "expected": {"readDrawingSnapshot": true, "sameSnapshotId": "66666666-6666-4666-8666-666666666666", "sameBundlesDividerPositions": true, "writePolicy": false, "readPfApis": false, "newModelResourceAccess": false}
+    },
+    {
+      "id": "forbidden-layout-read-does-not-draw-legacy",
+      "input": {"snapshotHttpStatus": 403, "cachedSnapshotFromAnotherProject": true},
+      "expected": {"renderCachedOtherProject": false, "silentLegacyFallback": false, "englishLayoutAccessError": true}
+    },
+    {
+      "id": "drawing-only-save-does-not-change-engineering-or-3d",
+      "input": {"onlyDrawingPolicyChanged": true, "oldDrawingPolicyRevision": "3", "newDrawingPolicyRevision": "4"},
+      "expected": {"drawingPreviewStale": true, "pfProposalStaleBecauseOfDrawingPolicy": false, "pfRouteChanged": false, "designLengthChanged": false, "installLengthChanged": false, "selected3dRouteChanged": false, "yellowLineChanged": false, "filledGhostChanged": false}
+    }
+  ]
+}

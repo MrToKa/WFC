@@ -1,0 +1,61 @@
+{
+  "schemaVersion": "pathfinder.converted.final-capture-normalization.v1",
+  "observedAt": "2026-10-17T21:14:49.777Z",
+  "status": "PASS",
+  "scope": "actual-sdk-final-mesh-index-decoder-capture-normalization",
+  "inventoryReceipt": "inventory-1792271145372-receipt.json",
+  "cases": [
+    {
+      "caseId": "nwd-lookup-01",
+      "status": "PASS",
+      "rawReceipt": "nwd-lookup-01-1792271633341-receipt.json",
+      "rawReceiptSha256": "ef1ec1af2cb5860817e6e2536ebc71694f38cdc79b607c25136cabe7ca03e1ee",
+      "snapshotPath": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf2-converted\\normalized\\1792271660578-d4729278-097a-4ebb-9d77-5370a266abae\\snapshot.json",
+      "snapshotSha256": "878b5e78703e3e9b250078828a71eb45739af091ca6e1b2f9194bac4ba7bfccb",
+      "snapshotBytes": 6482934,
+      "previousSnapshotSha256": "0d5546c5fe1992274b27ade65da9c1815488af0b82fea3e695a348894fd441af",
+      "geometryExact": true,
+      "objectsIncludingIdentityHierarchyPropertiesExact": true,
+      "coordinatesExact": true,
+      "nonProvenanceCaptureFlagsExact": true,
+      "modelIdentityExact": true,
+      "normalizedObjects": 68,
+      "fragments": 257,
+      "vertices": 91934,
+      "triangles": 93738,
+      "maximumMatrixAndSampleResidual": 0,
+      "completeInventorySeparatelyVerified": true,
+      "engineeringReadiness": "needs_review"
+    },
+    {
+      "caseId": "nwd-lookup-02",
+      "status": "PASS",
+      "rawReceipt": "nwd-lookup-02-1792271633820-receipt.json",
+      "rawReceiptSha256": "2af1d000678c8432d252c7af03f896b81350de71a737738db5195949b0468520",
+      "snapshotPath": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf2-converted\\normalized\\1792271660583-44de0ca7-c833-43fb-8917-3a87577595a9\\snapshot.json",
+      "snapshotSha256": "0c6350c86c1ef0165fa8920383fccb92d66bd52ce864ba46d0bab7856441889d",
+      "snapshotBytes": 2459301,
+      "previousSnapshotSha256": "5187d096f444767ad46973f9529e14ec79d21c1d7f32829994d70928f820f060",
+      "geometryExact": true,
+      "objectsIncludingIdentityHierarchyPropertiesExact": true,
+      "coordinatesExact": true,
+      "nonProvenanceCaptureFlagsExact": true,
+      "modelIdentityExact": true,
+      "normalizedObjects": 26,
+      "fragments": 99,
+      "vertices": 34674,
+      "triangles": 35772,
+      "maximumMatrixAndSampleResidual": 0,
+      "completeInventorySeparatelyVerified": true,
+      "engineeringReadiness": "needs_review"
+    }
+  ],
+  "explanation": "Snapshot hashes changed because independently recaptured raw part/receipt provenance changed. Every model coordinate, object identity/hierarchy/property, canonical mesh vertex/triangle index and non-provenance proof flag is exactly unchanged.",
+  "nativeReferenceComparison": "BLOCKED: native Manage2027 entitlement unavailable.",
+  "realModelEngineeringTolerance": "NOT_ESTABLISHED",
+  "engineeringWriteAuthorized": false,
+  "limitations": [
+    "Actual final decoder exercised in the local browser capture; selected geometry equality is not native/converted parity.",
+    "Full model hierarchy and selected route meshes remain distinct coverage scopes."
+  ]
+}

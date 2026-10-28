@@ -1,0 +1,231 @@
+{
+  "status": "PASS",
+  "scope": "Actual PostgreSQL/repository phases on retained generated UI fixture; no new engine; transaction-fencing probes explicitly primitive-only",
+  "phases": 11,
+  "checks": 11,
+  "receipts": [
+    {
+      "schemaVersion": "wfc.pf.geometry-trace-control-receipt.v1",
+      "phase": "read",
+      "phaseIntentId": "67d308ac-c9d9-4a85-8f0c-2e0ebaf83f9d",
+      "recordedAtUtc": "2026-10-19T02:10:10.133Z",
+      "status": "PASS",
+      "elapsedMilliseconds": 88.258714,
+      "checks": [
+        {
+          "name": "bounded manifest/pages/object records/history retain exact source references and unknown engineering facts",
+          "status": "PASS",
+          "scope": "actual repository/CSharp-derived immutable trace; no native/engineering acceptance"
+        }
+      ],
+      "preservationSha256": "182f5480fecd202e65d621c62ac1c206034d46a52ea1d678ed3daab1b7a5543a",
+      "appEngineStarted": false,
+      "cableApply": "NOT_PERFORMED",
+      "nativeParity": "NOT_PERFORMED",
+      "engineeringAcceptance": false
+    },
+    {
+      "schemaVersion": "wfc.pf.geometry-trace-control-receipt.v1",
+      "phase": "refusal",
+      "phaseIntentId": "2e2136a1-0267-4d40-bd91-3fe3c1ccc651",
+      "recordedAtUtc": "2026-10-19T02:10:19.492Z",
+      "status": "PASS",
+      "elapsedMilliseconds": 76.79792499999999,
+      "checks": [
+        {
+          "name": "exact command replay, same-key conflict and cross-project trace refusal",
+          "status": "PASS",
+          "scope": "actual current-admin repository; original command only"
+        }
+      ],
+      "preservationSha256": "182f5480fecd202e65d621c62ac1c206034d46a52ea1d678ed3daab1b7a5543a",
+      "appEngineStarted": false,
+      "cableApply": "NOT_PERFORMED",
+      "nativeParity": "NOT_PERFORMED",
+      "engineeringAcceptance": false
+    },
+    {
+      "schemaVersion": "wfc.pf.geometry-trace-control-receipt.v1",
+      "phase": "immutability",
+      "phaseIntentId": "383ad70e-94ad-4606-b9ed-073f2a8ef0ac",
+      "recordedAtUtc": "2026-10-19T02:10:28.904Z",
+      "status": "PASS",
+      "elapsedMilliseconds": 35.239046,
+      "checks": [
+        {
+          "name": "immutable trace and object row triggers reject UPDATE before any mutation",
+          "status": "PASS",
+          "scope": "actual PostgreSQL; rollback only"
+        }
+      ],
+      "preservationSha256": "182f5480fecd202e65d621c62ac1c206034d46a52ea1d678ed3daab1b7a5543a",
+      "appEngineStarted": false,
+      "cableApply": "NOT_PERFORMED",
+      "nativeParity": "NOT_PERFORMED",
+      "engineeringAcceptance": false
+    },
+    {
+      "schemaVersion": "wfc.pf.geometry-trace-control-receipt.v1",
+      "phase": "history-independence",
+      "phaseIntentId": "8a0d9be9-22af-46a4-a77b-8af0893e9d41",
+      "recordedAtUtc": "2026-10-19T02:10:38.778Z",
+      "status": "PASS",
+      "elapsedMilliseconds": 54.17203000000001,
+      "checks": [
+        {
+          "name": "historical GET/list/object remain independent of alternate active model and routing/location revisions",
+          "status": "PASS",
+          "scope": "actual repository SQL inside savepoint-backed rollback context; NOT trace publication or a committed model switch"
+        }
+      ],
+      "preservationSha256": "182f5480fecd202e65d621c62ac1c206034d46a52ea1d678ed3daab1b7a5543a",
+      "appEngineStarted": false,
+      "cableApply": "NOT_PERFORMED",
+      "nativeParity": "NOT_PERFORMED",
+      "engineeringAcceptance": false
+    },
+    {
+      "schemaVersion": "wfc.pf.geometry-trace-control-receipt.v1",
+      "phase": "auth-role",
+      "phaseIntentId": "75d8bb57-40e1-4b10-8ce3-92fabc419568",
+      "recordedAtUtc": "2026-10-19T02:10:48.459Z",
+      "status": "PASS",
+      "elapsedMilliseconds": 38.912221,
+      "checks": [
+        {
+          "name": "fresh administrator role/login/expiry enforcement with guarded owned-account restoration",
+          "status": "PASS",
+          "scope": "actual repository current-authority refusal; exact retained UI actor only"
+        }
+      ],
+      "preservationSha256": "182f5480fecd202e65d621c62ac1c206034d46a52ea1d678ed3daab1b7a5543a",
+      "appEngineStarted": false,
+      "cableApply": "NOT_PERFORMED",
+      "nativeParity": "NOT_PERFORMED",
+      "engineeringAcceptance": false
+    },
+    {
+      "schemaVersion": "wfc.pf.geometry-trace-control-receipt.v1",
+      "phase": "auth-login",
+      "phaseIntentId": "326b5cba-fec3-4e4e-94fd-467c05a0277e",
+      "recordedAtUtc": "2026-10-19T02:10:57.861Z",
+      "status": "PASS",
+      "elapsedMilliseconds": 45.729777,
+      "checks": [
+        {
+          "name": "fresh administrator role/login/expiry enforcement with guarded owned-account restoration",
+          "status": "PASS",
+          "scope": "actual repository current-authority refusal; exact retained UI actor only"
+        }
+      ],
+      "preservationSha256": "182f5480fecd202e65d621c62ac1c206034d46a52ea1d678ed3daab1b7a5543a",
+      "appEngineStarted": false,
+      "cableApply": "NOT_PERFORMED",
+      "nativeParity": "NOT_PERFORMED",
+      "engineeringAcceptance": false
+    },
+    {
+      "schemaVersion": "wfc.pf.geometry-trace-control-receipt.v1",
+      "phase": "auth-expiry",
+      "phaseIntentId": "02fadb2a-1c24-4add-9623-7333823cd15a",
+      "recordedAtUtc": "2026-10-19T02:11:07.252Z",
+      "status": "PASS",
+      "elapsedMilliseconds": 35.930122,
+      "checks": [
+        {
+          "name": "fresh administrator role/login/expiry enforcement with guarded owned-account restoration",
+          "status": "PASS",
+          "scope": "actual repository current-authority refusal; exact retained UI actor only"
+        }
+      ],
+      "preservationSha256": "182f5480fecd202e65d621c62ac1c206034d46a52ea1d678ed3daab1b7a5543a",
+      "appEngineStarted": false,
+      "cableApply": "NOT_PERFORMED",
+      "nativeParity": "NOT_PERFORMED",
+      "engineeringAcceptance": false
+    },
+    {
+      "schemaVersion": "wfc.pf.geometry-trace-control-receipt.v1",
+      "phase": "fencing-role",
+      "phaseIntentId": "18b7664a-e56c-4ba2-aba2-1c977754b5d8",
+      "recordedAtUtc": "2026-10-19T02:11:16.712Z",
+      "status": "PASS",
+      "elapsedMilliseconds": 49.348727999999994,
+      "checks": [
+        {
+          "name": "bounded production transaction lock/commit fence against rollback-only competing edit",
+          "status": "PASS",
+          "scope": "geometryTraceTransaction primitive; NOT actual trace-publication concurrency"
+        }
+      ],
+      "preservationSha256": "182f5480fecd202e65d621c62ac1c206034d46a52ea1d678ed3daab1b7a5543a",
+      "appEngineStarted": false,
+      "cableApply": "NOT_PERFORMED",
+      "nativeParity": "NOT_PERFORMED",
+      "engineeringAcceptance": false
+    },
+    {
+      "schemaVersion": "wfc.pf.geometry-trace-control-receipt.v1",
+      "phase": "fencing-selection",
+      "phaseIntentId": "0f647410-26fe-4355-8ec5-ff9b1d8e6c25",
+      "recordedAtUtc": "2026-10-19T02:11:26.267Z",
+      "status": "PASS",
+      "elapsedMilliseconds": 53.079367000000005,
+      "checks": [
+        {
+          "name": "bounded production transaction lock/commit fence against rollback-only competing edit",
+          "status": "PASS",
+          "scope": "geometryTraceTransaction primitive; NOT actual trace-publication concurrency"
+        }
+      ],
+      "preservationSha256": "182f5480fecd202e65d621c62ac1c206034d46a52ea1d678ed3daab1b7a5543a",
+      "appEngineStarted": false,
+      "cableApply": "NOT_PERFORMED",
+      "nativeParity": "NOT_PERFORMED",
+      "engineeringAcceptance": false
+    },
+    {
+      "schemaVersion": "wfc.pf.geometry-trace-control-receipt.v1",
+      "phase": "fencing-registry",
+      "phaseIntentId": "658e504f-01fc-4b35-b347-64e68e22d727",
+      "recordedAtUtc": "2026-10-19T02:11:35.667Z",
+      "status": "PASS",
+      "elapsedMilliseconds": 47.323505,
+      "checks": [
+        {
+          "name": "bounded production transaction lock/commit fence against rollback-only competing edit",
+          "status": "PASS",
+          "scope": "geometryTraceTransaction primitive; NOT actual trace-publication concurrency"
+        }
+      ],
+      "preservationSha256": "182f5480fecd202e65d621c62ac1c206034d46a52ea1d678ed3daab1b7a5543a",
+      "appEngineStarted": false,
+      "cableApply": "NOT_PERFORMED",
+      "nativeParity": "NOT_PERFORMED",
+      "engineeringAcceptance": false
+    },
+    {
+      "schemaVersion": "wfc.pf.geometry-trace-control-receipt.v1",
+      "phase": "fencing-timeout",
+      "phaseIntentId": "18a70161-982a-42a8-b309-ed9edf622cba",
+      "recordedAtUtc": "2026-10-19T02:11:47.993Z",
+      "status": "PASS",
+      "elapsedMilliseconds": 3048.816499,
+      "checks": [
+        {
+          "name": "bounded production transaction lock/commit fence against rollback-only competing edit",
+          "status": "PASS",
+          "scope": "geometryTraceTransaction primitive; NOT actual trace-publication concurrency"
+        }
+      ],
+      "preservationSha256": "182f5480fecd202e65d621c62ac1c206034d46a52ea1d678ed3daab1b7a5543a",
+      "appEngineStarted": false,
+      "cableApply": "NOT_PERFORMED",
+      "nativeParity": "NOT_PERFORMED",
+      "engineeringAcceptance": false
+    }
+  ],
+  "cableApply": "NOT_PERFORMED",
+  "nativeParity": "NOT_PERFORMED",
+  "engineeringAccepted": false
+}

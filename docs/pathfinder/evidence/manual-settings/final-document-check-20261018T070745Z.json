@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "pathfinder.manual-settings.document-check.v1",
+  "recordedAtUtc": "2026-10-18T07:07:45.8522508Z",
+  "sourceCheckpoint": "cfdcd3f5974636737ff34acec0fc3de391d35ab1",
+  "status": "PASS",
+  "documents": [
+    "docs/pathfinder/20-manual-review-and-project-gap.md",
+    "docs/pathfinder/21-manual-review-settings-report.md",
+    "docs/pathfinder/08-local-user-guide.md",
+    "docs/pathfinder/handoffs/PF-user-manual-review.md",
+    "docs/pathfinder/runtime/README.md"
+  ],
+  "existingRelativeLinks": 33,
+  "brokenLinks": 0,
+  "manualSettingsJsonFilesParsed": 11,
+  "independentPriorReview": "21 links and source810 hash checked read-only by frontend owner before final ops additions; one handoff relative reference corrected",
+  "originalResourcesChanged": false
+}

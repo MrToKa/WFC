@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "pathfinder.pf1.request.v1",
+  "requestId": "synthetic-control-example",
+  "operation": "calculate",
+  "timeoutMilliseconds": 30000,
+  "coordinateSystem": "right-handed-z-up-metres",
+  "projectSettings": {
+    "revision": "synthetic-settings-1",
+    "secondaryTrayLength": "4.5",
+    "endConnectionLength": "1.25",
+    "additionalBendingPercent": "10"
+  },
+  "options": {
+    "connectionToleranceMeters": 0.25,
+    "sampleSpacingMeters": 0.125,
+    "secondaryDistanceMeters": 2,
+    "preferVerticalApproach": true,
+    "maxGraphNodes": 500000,
+    "maxGraphConnections": 2000000
+  },
+  "category": "Instrumentation",
+  "from": { "x": 0, "y": 0, "z": 0 },
+  "to": { "x": 10, "y": 0, "z": 0 },
+  "segments": [
+    {
+      "id": "synthetic-A",
+      "name": "/A",
+      "allowedCategories": ["Control"],
+      "points": [{ "x": 0, "y": 0, "z": 0 }, { "x": 10, "y": 0, "z": 0 }],
+      "connectionsAtEndsOnly": false
+    }
+  ]
+}

@@ -1,0 +1,150 @@
+{
+  "exampleStatus": "ILLUSTRATIVE_NOT_CAPTURED_NOT_EXECUTED",
+  "contractStatus": "PROPOSED_NOT_IMPLEMENTED",
+  "schemaVersion": 1,
+  "projectId": "10000000-0000-4000-8000-000000000001",
+  "model": {
+    "modelVersionId": "20000000-0000-4000-8000-000000000001",
+    "contentFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "selectionRevision": 1,
+    "geometryArtifactSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "graphId": "30000000-0000-4000-8000-000000000001",
+    "graphRevision": 1,
+    "graphSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "readiness": "ready_in_example_only",
+    "coordinateConvention": "world-metres",
+    "canonicalAxes": "right-handed-z-up",
+    "transformEquation": "pWorldMetres = sourceToWorldMetres * pSource",
+    "displayEquation": "pDisplayLocalMetres = pWorldMetres - globalOffsetMetres",
+    "displayOffsetIncludedInMatrix": false,
+    "sourceToWorldMetres": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+    "matrixLayout": "column-major",
+    "globalOffsetMetres": [0, 0, 0],
+    "engineSourceCommit": "45c24bf5f433f13e102600b36f20327c77961d0a",
+    "adapterVersion": "illustrative-adapter-v1"
+  },
+  "projectSettings": {
+    "source": "project-details",
+    "settingsRevision": 1,
+    "settingsSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "secondaryTrayLength": 5,
+    "endConnectionLength": 6,
+    "additionalBendingPercent": 5
+  },
+  "locations": [
+    {
+      "locationId": "40000000-0000-4000-8000-000000000001",
+      "locationRevision": 1,
+      "displayName": "=CABINET-01",
+      "normalizedLookupKey": "=cabinet-01",
+      "confirmedAliases": [],
+      "binding": {
+        "bindingId": "50000000-0000-4000-8000-000000000001",
+        "bindingRevision": 1,
+        "modelVersionId": "20000000-0000-4000-8000-000000000001",
+        "kind": "virtual-point",
+        "modelObjectIdentity": null,
+        "pointMetres": [0, 0, 0],
+        "derivation": "explicit-manual-point",
+        "source": "manual",
+        "confirmation": "confirmed_in_example_only"
+      }
+    },
+    {
+      "locationId": "40000000-0000-4000-8000-000000000002",
+      "locationRevision": 1,
+      "displayName": "JB-205",
+      "normalizedLookupKey": "jb-205",
+      "confirmedAliases": ["JUNCTION-205"],
+      "binding": {
+        "bindingId": "50000000-0000-4000-8000-000000000002",
+        "bindingRevision": 1,
+        "modelVersionId": "20000000-0000-4000-8000-000000000001",
+        "kind": "virtual-point",
+        "modelObjectIdentity": null,
+        "pointMetres": [31, 0, 0],
+        "derivation": "explicit-manual-point",
+        "source": "manual",
+        "confirmation": "confirmed_in_example_only"
+      }
+    }
+  ],
+  "cableInput": {
+    "cableRecordId": "60000000-0000-4000-8000-000000000001",
+    "cableInputRevision": 1,
+    "cableWriteRevision": 1,
+    "currentRouting": null,
+    "currentDesignLength": null,
+    "cableInputSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "fromLocation": "=CABINET-01",
+    "toLocation": "JB-205",
+    "mto": "LV",
+    "calculationMode": "automatic-from-to",
+    "resolvedRoutingCategory": "LV",
+    "categoryMappingVersion": "user-confirmed-mto-map-2026-10-17-v1",
+    "categoryMappingDecisionDate": "2026-10-17",
+    "rules": {
+      "maximumConnectionGapMetres": 0.25,
+      "secondaryThresholdMetres": 2,
+      "preferVerticalApproach": true,
+      "planningExclusionRevision": 0
+    }
+  },
+  "proposal": {
+    "proposalId": "70000000-0000-4000-8000-000000000001",
+    "status": "calculated",
+    "applied": false,
+    "basedOnCableWriteRevision": 1,
+    "source": "pathfinder-proposal",
+    "inputSnapshotSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "routeText": "/SECONDARY/TRAY-001",
+    "pathArtifactSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "pathPointsMetres": [[0, 0, 0], [3, 0, 0], [30, 0, 0], [31, 0, 0]],
+    "orderedSegmentIdentities": ["illustrative-tray-001"],
+    "lengths": {
+      "graphPhysicalMetres": 27,
+      "fromApproachMetres": 3,
+      "toApproachMetres": 1,
+      "geometricMetres": 31,
+      "fromSecondary": true,
+      "toSecondary": false,
+      "replacedApproachesMetres": 3,
+      "secondaryCount": 1,
+      "secondaryReplacementMetres": 5,
+      "connectionReserveMetres": 6,
+      "increasePercent": 5,
+      "designMetresBeforeCeiling": "40.95",
+      "designMetres": 41
+    },
+    "gapMetrics": {"count": 0, "clearanceMicrometres": 0},
+    "warnings": []
+  },
+  "proposedApplyCommand": {
+    "projectId": "10000000-0000-4000-8000-000000000001",
+    "cableRecordId": "60000000-0000-4000-8000-000000000001",
+    "proposalId": "70000000-0000-4000-8000-000000000001",
+    "idempotencyKey": "80000000-0000-4000-8000-000000000001",
+    "expected": {
+      "cableInputRevision": 1,
+      "cableWriteRevision": 1,
+      "cableInputSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "modelVersionId": "20000000-0000-4000-8000-000000000001",
+      "contentFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "selectionRevision": 1,
+      "graphRevision": 1,
+      "graphSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "locationRevisions": [
+        {"locationId": "40000000-0000-4000-8000-000000000001", "revision": 1},
+        {"locationId": "40000000-0000-4000-8000-000000000002", "revision": 1}
+      ],
+      "locationBindingRevisions": [
+        {"bindingId": "50000000-0000-4000-8000-000000000001", "revision": 1},
+        {"bindingId": "50000000-0000-4000-8000-000000000002", "revision": 1}
+      ],
+      "settingsRevision": 1,
+      "settingsSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "inputSnapshotSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    "writeFields": ["routing", "designLength"]
+  }
+}

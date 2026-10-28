@@ -1,0 +1,409 @@
+{
+  "schemaVersion": "pathfinder.session.job-controls.summary.v1",
+  "status": "PASS",
+  "startedAtUtc": "2026-10-18T12:58:56.318Z",
+  "finishedAtUtc": "2026-10-18T12:59:37.857Z",
+  "target": {
+    "project": "wfc-pathfinder-local-bf1cba239f40",
+    "owner": "59d9d5bc-9c8f-4b4c-b97d-bb56751e5a6e",
+    "port": 5191,
+    "projectId": "54cfad40-bd12-41e9-ab24-d90bdaafc993",
+    "adminId": "ac288aa9-eb51-4dd6-872b-ec52dfeecbc9",
+    "apiId": "feb4345daa590021732d0f0d2219db793f1d1b2237f15a16f5caa9c662d024e4",
+    "apiImage": "sha256:323f876ac757488376bcfab483934a35bb4175257a922134fa1a547f14c2227b",
+    "postgresId": "537355846bb844629004d97ce91f8fd10dcae660646b759702c5d22d40591614",
+    "modelId": "a856352c-b3dd-4143-a723-1f4e7d3f2cb2"
+  },
+  "mode": {
+    "value": "session",
+    "proof": "Driver inspected actual target API Config.Env and failed closed unless PF_ENGINE_MODE=session."
+  },
+  "raw": {
+    "path": "docs/pathfinder/evidence/session/job-controls-raw-1792328576359.json",
+    "sha256": "32d319250ae89c8efa3f8dec5bb7e5b362ce6487a0804c83aedfb74beac0f73c",
+    "bytes": 62088
+  },
+  "sources": [
+    {
+      "path": "scripts/pathfinder-session/job-controls.mjs",
+      "sha256": "fd65f4b9d499ec5cc86f099803f8f0c8772821bfcea502568769d04c014c0339"
+    },
+    {
+      "path": "scripts/pathfinder-session/job-controls.test.mjs",
+      "sha256": "41ea8fb25a68c0329645b4dc8b479a966d673d3d8d1eb44a77359c9ade44f7d1"
+    },
+    {
+      "path": "server/pathfinder/worker.ts",
+      "sha256": "393dfa5ee13795f3feb4400f066faaa85d85c820471178b4b2fc98be78141ddc"
+    },
+    {
+      "path": "server/pathfinder/engineSession.ts",
+      "sha256": "5cfa14c83dd0566009baecaf757ed1698f0c339043faaff48b24d36eb84a4513"
+    }
+  ],
+  "ownerExecuted": {
+    "guards": {
+      "command": "node --test scripts/pathfinder-session/job-controls.test.mjs",
+      "pass": 6,
+      "fail": 0,
+      "toolOutput": "27aeca"
+    },
+    "live": {
+      "command": "runJobControls({target,loginToken,docker,request,receiptRoot}) via fresh target-only demoLogin",
+      "pass": 10,
+      "fail": 0,
+      "notRun": 0,
+      "toolOutput": "25e505"
+    }
+  },
+  "ownedCableCount": 256,
+  "createdJobs": [
+    "baca73ff-2c91-47a9-8a7e-34331af24fe4",
+    "4a0e8049-bac3-4ddd-be11-8463abead9c1",
+    "c5daae07-413b-464d-a48b-ac7970b63053",
+    "bb210c56-ac03-45ee-9394-d631e86f836d",
+    "2b54d1e7-32e6-4f8d-9fab-cc22f2eb1547",
+    "c4e0d196-4c12-4056-ad8c-1ad5c3fc4b6a",
+    "55be853d-4922-4d4f-8fa2-637acb29021c",
+    "44881490-6d6c-4426-b20c-612ec246d8f9",
+    "48a71ee8-041d-43a7-b475-6d3afa5e1e37"
+  ],
+  "checks": [
+    {
+      "name": "actual session durable proposal retains exact known Core/design/category and does not Apply",
+      "status": "PASS",
+      "milliseconds": 1538,
+      "end": {
+        "state": "complete",
+        "attempts": 1,
+        "completed": 1,
+        "total": 1,
+        "proposals": 1,
+        "stale": 0
+      },
+      "result": {
+        "status": "calculated",
+        "length": 10,
+        "design": "18",
+        "category": "Control",
+        "calculationMode": "calculate",
+        "engineeringAccepted": false
+      }
+    },
+    {
+      "name": "before-dispatch current admin denial creates no fresh job",
+      "status": "PASS",
+      "milliseconds": 1178,
+      "httpStatus": 403,
+      "boundary": "HTTP rejected before dispatch"
+    },
+    {
+      "name": "revocation during observed running durable batch: admin",
+      "status": "PASS",
+      "milliseconds": 2274,
+      "observed": {
+        "completed": 7,
+        "total": 256,
+        "owner": "dc1a3dff-98cc-46f1-8740-7be9c87d505a",
+        "attempts": 1
+      },
+      "committed": {
+        "proposalCount": 32
+      },
+      "end": {
+        "state": "failed",
+        "attempts": 1,
+        "completed": 32,
+        "total": 256,
+        "proposals": 32,
+        "stale": 0
+      },
+      "httpStatus": 403,
+      "boundary": "Running durable batch with a previously completed engine item and a currently running item. Exact private frame/deep-Core instant is not observable here."
+    },
+    {
+      "name": "revocation during observed running durable batch: login",
+      "status": "PASS",
+      "milliseconds": 2324,
+      "observed": {
+        "completed": 8,
+        "total": 256,
+        "owner": "6a2b43be-8c50-4396-bed1-9a556a7486b4",
+        "attempts": 1
+      },
+      "committed": {
+        "proposalCount": 30
+      },
+      "end": {
+        "state": "failed",
+        "attempts": 1,
+        "completed": 30,
+        "total": 256,
+        "proposals": 30,
+        "stale": 0
+      },
+      "httpStatus": 401,
+      "boundary": "Running durable batch with a previously completed engine item and a currently running item. Exact private frame/deep-Core instant is not observable here."
+    },
+    {
+      "name": "Project Details mutation during running batch marks later frozen proposals stale",
+      "status": "PASS",
+      "milliseconds": 6168,
+      "observed": {
+        "completed": 12,
+        "total": 256,
+        "owner": "9db6b5b1-5ba5-404c-9dc2-039afb5bdc72",
+        "attempts": 1
+      },
+      "committed": {
+        "proposalCount": 32
+      },
+      "end": {
+        "state": "complete",
+        "attempts": 1,
+        "completed": 256,
+        "total": 256,
+        "proposals": 256,
+        "stale": 224
+      },
+      "laterProposals": 224,
+      "laterNonStale": 0,
+      "boundary": "Running durable batch with a previously completed engine item and a currently running item. Exact private frame/deep-Core instant is not observable here."
+    },
+    {
+      "name": "intervening cable input edit in a running batch preserves manual values and invalidates frozen result",
+      "status": "PASS",
+      "milliseconds": 4910,
+      "observed": {
+        "completed": 35,
+        "total": 256,
+        "owner": "8334fe63-d7db-4e50-a29f-0de36898a724",
+        "attempts": 1
+      },
+      "end": {
+        "state": "complete",
+        "attempts": 1,
+        "completed": 256,
+        "total": 256,
+        "proposals": 256,
+        "stale": 1
+      },
+      "result": {
+        "proposalId": "db60b273-b6d1-4251-bc27-97f9892876c7",
+        "status": "stale",
+        "mto": "MV",
+        "routing": null,
+        "designLength": null,
+        "installLength": 99
+      },
+      "boundary": "The batch was active, but this selected waiting item was edited before its own dispatch; not an exact active-frame mutation claim."
+    },
+    {
+      "name": "seeded queued expired lease is recovered with owner change and unique item publication",
+      "status": "PASS",
+      "milliseconds": 8295,
+      "end": {
+        "state": "complete",
+        "attempts": 2,
+        "completed": 128,
+        "total": 128,
+        "proposals": 128,
+        "stale": 0
+      },
+      "recovered": {
+        "owner": "c1dab4d0-5e6b-45d9-b4cc-188579efa3bc",
+        "attempts": 2
+      },
+      "attributionLimit": "The old token was seeded without a live prior executor. The conditional SQL probe is not evidence of an actual obsolete worker attempting publication."
+    },
+    {
+      "name": "observed active lease owner rollover recovers one job without duplicate item publication",
+      "status": "PASS",
+      "milliseconds": 9218,
+      "observed": {
+        "completed": 32,
+        "total": 256,
+        "owner": "3dba4b96-276f-4905-a116-0208e5a642a5",
+        "attempts": 1
+      },
+      "end": {
+        "state": "complete",
+        "attempts": 2,
+        "completed": 256,
+        "total": 256,
+        "proposals": 256,
+        "stale": 0
+      },
+      "recovered": {
+        "owner": "621184ce-c515-45c0-88d5-8fc64296927c",
+        "attempts": 2
+      },
+      "published": {
+        "count": 256,
+        "distinctCables": 256
+      },
+      "attributionLimit": "Proposal rows do not record owner/attempt. This proves active owner rollover, recovery and final uniqueness, not an observed obsolete executor publication attempt."
+    },
+    {
+      "name": "running durable cancellation is terminal and prevents further publication",
+      "status": "PASS",
+      "milliseconds": 3393,
+      "observed": {
+        "completed": 34,
+        "total": 256,
+        "owner": "1b4c27a9-449b-4389-8a92-524304ef3cca",
+        "attempts": 1
+      },
+      "end": {
+        "state": "cancelled",
+        "attempts": 1,
+        "completed": 47,
+        "total": 256,
+        "proposals": 47,
+        "stale": 0
+      },
+      "boundary": "Running durable batch with a previously completed engine item and a currently running item. Exact private frame/deep-Core instant is not observable here."
+    },
+    {
+      "name": "no Review/Apply/seed cable mutation and copied real workflow preserved",
+      "status": "PASS"
+    }
+  ],
+  "before": {
+    "protected": {
+      "applies": 1,
+      "reviews": 3,
+      "seedCableHash": "71ece7b647538bbc04b6514beeca6b381253e050c98bfe4639459fa4c3d3bc1c"
+    },
+    "realWorkflow": {
+      "settings": {
+        "count": 1,
+        "sha256": "fd028bfed36351138279cea05254d6eb0bb712f9ca8fb7501643ebbb0760ae2d"
+      },
+      "selection": {
+        "count": 1,
+        "sha256": "53c9e37c1ada39e3fadd5ba7b00f508198e6c2fc12c189c8789380d61f5e80e9"
+      },
+      "registry": {
+        "count": 1,
+        "sha256": "ad9d92d44bd97652b37a8e97a0892eebc5f9314372504b35ab950492014d0984"
+      },
+      "planningArtifacts": {
+        "count": 2,
+        "sha256": "02a92c6d9d81be7cfc775920ba1577183e0d517def13532f325f616dae720ddd"
+      },
+      "locations": {
+        "count": 3,
+        "sha256": "14b33f54e2b6ad71318f8d586280a44771456dad365cdd0fc42e2a5f0657a8e7"
+      },
+      "aliases": {
+        "count": 4,
+        "sha256": "30a41e0035f5737aa29ae112d5873efee8c6df6345dc43a19f777d5b62aacf4b"
+      },
+      "bindings": {
+        "count": 3,
+        "sha256": "2a0d7dc92b71813355eee3946ac83cca0564bd7429e6f9ebc33ed56e1c47d434"
+      },
+      "modelObjects": {
+        "count": 104,
+        "sha256": "14b7cd1d1aa7ddf23c21895279e9c83c07f9fa21935f424213369f4ab270cd56"
+      },
+      "cables": {
+        "count": 1,
+        "sha256": "7d1bf598adb6ca623113993592717b0de159747e2280f7286bbb2a8f035dde1b"
+      },
+      "proposals": {
+        "count": 5,
+        "sha256": "5a5a10d25a41e24f1f02ee473062888f6d47f55c11b791f300ff198127031e18"
+      },
+      "reviews": {
+        "count": 3,
+        "sha256": "a1121bb28f1c633a229efd78b135200368154959caa4773fa640a8157a24f909"
+      },
+      "applies": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      }
+    }
+  },
+  "after": {
+    "protected": {
+      "applies": 1,
+      "reviews": 3,
+      "seedCableHash": "71ece7b647538bbc04b6514beeca6b381253e050c98bfe4639459fa4c3d3bc1c"
+    },
+    "realWorkflow": {
+      "settings": {
+        "count": 1,
+        "sha256": "fd028bfed36351138279cea05254d6eb0bb712f9ca8fb7501643ebbb0760ae2d"
+      },
+      "selection": {
+        "count": 1,
+        "sha256": "53c9e37c1ada39e3fadd5ba7b00f508198e6c2fc12c189c8789380d61f5e80e9"
+      },
+      "registry": {
+        "count": 1,
+        "sha256": "ad9d92d44bd97652b37a8e97a0892eebc5f9314372504b35ab950492014d0984"
+      },
+      "planningArtifacts": {
+        "count": 2,
+        "sha256": "02a92c6d9d81be7cfc775920ba1577183e0d517def13532f325f616dae720ddd"
+      },
+      "locations": {
+        "count": 3,
+        "sha256": "14b33f54e2b6ad71318f8d586280a44771456dad365cdd0fc42e2a5f0657a8e7"
+      },
+      "aliases": {
+        "count": 4,
+        "sha256": "30a41e0035f5737aa29ae112d5873efee8c6df6345dc43a19f777d5b62aacf4b"
+      },
+      "bindings": {
+        "count": 3,
+        "sha256": "2a0d7dc92b71813355eee3946ac83cca0564bd7429e6f9ebc33ed56e1c47d434"
+      },
+      "modelObjects": {
+        "count": 104,
+        "sha256": "14b7cd1d1aa7ddf23c21895279e9c83c07f9fa21935f424213369f4ab270cd56"
+      },
+      "cables": {
+        "count": 1,
+        "sha256": "7d1bf598adb6ca623113993592717b0de159747e2280f7286bbb2a8f035dde1b"
+      },
+      "proposals": {
+        "count": 5,
+        "sha256": "5a5a10d25a41e24f1f02ee473062888f6d47f55c11b791f300ff198127031e18"
+      },
+      "reviews": {
+        "count": 3,
+        "sha256": "a1121bb28f1c633a229efd78b135200368154959caa4773fa640a8157a24f909"
+      },
+      "applies": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      }
+    }
+  },
+  "cleanup": [
+    {
+      "name": "restore only cloned actor/login and synthetic project allowance values",
+      "status": "PASS",
+      "revisionRestored": false
+    }
+  ],
+  "sourceUnchanged": true,
+  "scope": {
+    "authority": "Actual HTTP/current-role/login SQL and durable job observations in a restored synthetic project.",
+    "busyBoundary": "Running durable batch with a previously completed engine item and a currently running item. Exact private frame/deep-Core instant is not observable here.",
+    "crashRecovery": "Owned by the runtime orchestrator separately; lease control here is deliberate SQL fault injection.",
+    "noApply": true,
+    "noReview": true,
+    "engineeringAcceptance": false
+  },
+  "limitations": [
+    "Current role/login and dependency changes were applied during an actual observed running durable batch; an exact private frame/Core instruction was not instrumented.",
+    "The manual cable input edit selected a waiting item in that running batch, before that item dispatch.",
+    "Actual active owner rollover is deliberate guarded SQL fault injection; proposal rows lack attempt attribution, so no observed obsolete-executor publication claim.",
+    "Natural API crash and graceful shutdown/restart gates are separate runtime-owner checks.",
+    "No Apply, Review, native oracle, full plant, engineering or human acceptance claim."
+  ]
+}

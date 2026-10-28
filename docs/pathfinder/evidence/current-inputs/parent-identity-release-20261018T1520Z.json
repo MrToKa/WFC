@@ -1,0 +1,14 @@
+{
+  "schemaVersion":"pathfinder.current-inputs.parent-release.v1",
+  "recordedAtUtc":"2026-10-18T15:20Z",
+  "decision":"execute-one-identity-only-read-only-observation",
+  "executor":"/root only",
+  "sourceSetSha256":"c269ed99981dbb2c8cf7a01aeccba37d99818117c6c9806733d2477b2f1ecb15",
+  "controls":{"file":"docs/pathfinder/evidence/current-inputs/source-identity-controls-1792336753122.json","sha256":"25c2de68338bec666891eb1526018345772c6c1d66b8fcb6e2724c807d2983c7","status":"36/36_AND_SYNTAX3_PASS"},
+  "sourceOnlyReview":{"file":"docs/pathfinder/evidence/current-inputs/source-identity-review-20261018T151949Z.json","sha256":"540ee47c52e65ad7558a9495a983401779b531a33b18266da9eac3d05a7040f3","status":"NO_REMAINING_MATERIAL_FINDINGS"},
+  "inspection":{"file":"docs/pathfinder/evidence/current-inputs/identity-inspection-20261018T1520Z.json","sha256":"1d5ff9ba65ebb57d64c7d188efa180f638238ffcf5a604b23734ba9a04ce0c06","status":"PASS_METADATA_ONLY_NO_SQL"},
+  "binding":{"path":"pathfinder-engine/.scratch/current-inputs-5c035b03-ab18-479a-b94d-7d9a4bc35018/binding.private.json","sha256":"05ac03c53ea07ccb53239aa468db76df647a4e1c176ff5a318a95dd541b18617"},
+  "scope":"One fixed identity SELECT in the existing bounded raw Client read-only transaction. No project/model/cable SELECT, writes or app bootstrap. Save raw versus canonical address/database/port/RO/isolation observations before host assertions. Diagnostic process PASS is not endpoint/content equality PASS.",
+  "originalCopyGuard":"UNCHANGED; no formatting cause or guard relaxation inferred before observation",
+  "historicalAttempt":"source-copy-20261018T1515Z.json remains FAIL_SOURCE_SQL_SERVER_IDENTITY"
+}

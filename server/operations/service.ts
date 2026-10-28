@@ -1,10 +1,11 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { createModelRegistryRepository } from '../modelRegistry/repository.js';
 import { createModelImportService } from '../modelRegistry/importService.js';
 import type { ModelResourceReader, ModelStorage } from '../modelRegistry/storage.js';
+import { fenceCalculationGrantInstallationInTransaction } from '../pathfinder/calculationGrantRepository.js';
 
 export function canonicalJson(value: unknown): string {
   if (value instanceof Date) return JSON.stringify(value.toISOString());
@@ -16,7 +17,7 @@ const hash = (value: unknown): string => createHash('sha256').update(canonicalJs
 const SESSION_TABLES = new Set(['viewer_login_bindings', 'viewer_resource_sessions']);
 const MAX_ROWS = 1_000_000;
 const MAX_OBJECTS = 100_000;
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$(?![\s\S])/;
 
 export async function inventory(pool: Pool) {
   const connection = await pool.connect();
@@ -89,18 +90,76 @@ export function requireQuarantine(environment: NodeJS.ProcessEnv): string {
   return environment.WFC_OPS_TARGET_ID!;
 }
 
+type FenceTable = 'viewer_resource_sessions' | 'viewer_login_bindings' | 'pf_installation_state';
+const FENCE_COLUMNS: Record<FenceTable, string[]> = { viewer_resource_sessions: ['revoked_at', 'revoke_reason'], viewer_login_bindings: ['revoked_at'], pf_installation_state: ['installation_epoch', 'updated_at'] };
+async function fenceRows(c: PoolClient, table: FenceTable | 'pf_calculation_grant_leases'): Promise<Record<string, unknown>[]> {
+  const size = (await c.query<{ count: string; json_bytes: string }>('SELECT COUNT(*) AS count,COALESCE(SUM(octet_length(to_jsonb(t)::text)),0) AS json_bytes FROM public."' + table + '" t')).rows[0];
+  if (!size || !Number.isSafeInteger(Number(size.count)) || Number(size.count) < 0 || Number(size.count) > MAX_ROWS || !Number.isSafeInteger(Number(size.json_bytes)) || Number(size.json_bytes) < 0 || Number(size.json_bytes) > 128 * 1024 ** 2) throw Error('RESTORE_FENCE_LIMIT');
+  const rows = (await c.query<{ value: Record<string, unknown> }>('SELECT to_jsonb(t) AS value FROM public."' + table + '" t')).rows.map(row => row.value);
+  if (rows.length !== Number(size.count)) throw Error('RESTORE_FENCE_CHANGED'); return rows;
+}
+function tablePin(rows: Record<string, unknown>[]) { return { rows: rows.length, sha256: hash(rows.map(row => canonicalJson(row)).sort()) }; }
+function fenceDelta(table: FenceTable, before: Record<string, unknown>[], after: Record<string, unknown>[]) {
+  const key = table === 'viewer_login_bindings' ? 'login_id' : table === 'pf_installation_state' ? 'singleton' : 'id';
+  const allowedColumns = FENCE_COLUMNS[table], protectedRows = (rows: Record<string, unknown>[]) => rows.map(row => canonicalJson(Object.fromEntries(Object.entries(row).filter(([field]) => !allowedColumns.includes(field))))).sort();
+  const old = new Map(before.map(row => [canonicalJson(row[key]), row])), fresh = new Map(after.map(row => [canonicalJson(row[key]), row]));
+  if (old.size !== before.length || fresh.size !== after.length || before.length !== after.length || hash(protectedRows(before)) !== hash(protectedRows(after))) throw Error('RESTORE_FENCE_PROTECTED_DATA_CHANGED');
+  let changedRows = 0;
+  for (const [identity, prior] of old) {
+    const current = fresh.get(identity); if (!current) throw Error('RESTORE_FENCE_PROTECTED_DATA_CHANGED');
+    if (canonicalJson(prior) !== canonicalJson(current)) changedRows++;
+    if (table !== 'pf_installation_state') {
+      if (prior.revoked_at !== null && canonicalJson(prior) !== canonicalJson(current) || current.revoked_at === null || typeof current.revoked_at !== 'string') throw Error('RESTORE_FENCE_REVOCATION_INVALID');
+      if (table === 'viewer_resource_sessions' && current.revoke_reason !== (prior.revoke_reason ?? 'logout')) throw Error('RESTORE_FENCE_REVOCATION_INVALID');
+    }
+  }
+  return { table, before: tablePin(before), after: tablePin(after), allowedColumns, protectedSha256: hash(protectedRows(before)), changedRows };
+}
+
 export async function fenceRestored(pool: Pool, environment: NodeJS.ProcessEnv) {
   const targetId = requireQuarantine(environment), connection = await pool.connect();
+  let committing = false;
   try {
     await connection.query('BEGIN');
+    await connection.query("SET LOCAL lock_timeout='3000ms';SET LOCAL statement_timeout='15000ms';SET LOCAL idle_in_transaction_session_timeout='30000ms'");
     await connection.query("SELECT pg_advisory_xact_lock(hashtextextended('wfc.operations.restore-fence.v1',0))");
+    await connection.query('LOCK TABLE viewer_resource_sessions,viewer_login_bindings IN SHARE ROW EXCLUSIVE MODE');
+    const beforeSessions = await fenceRows(connection, 'viewer_resource_sessions'), beforeLogins = await fenceRows(connection, 'viewer_login_bindings');
+    const schema = (await connection.query<{ installation: string | null; leases: string | null }>("SELECT to_regclass('public.pf_installation_state') AS installation,to_regclass('public.pf_calculation_grant_leases') AS leases")).rows[0];
+    if (!schema || Boolean(schema.installation) !== Boolean(schema.leases)) throw Error('RESTORE_GRANT_SCHEMA_INCOMPLETE');
+    const beforeInstallation = schema.installation ? await fenceRows(connection, 'pf_installation_state') : [];
+    const beforeLeases = schema.leases ? tablePin(await fenceRows(connection, 'pf_calculation_grant_leases')) : null;
+    const installation = { present: Boolean(schema.installation), rotated: false, previousEpoch: null as string | null, currentEpoch: null as string | null,
+      fencedActiveLeases: 0, fencedQuarantinedLeases: 0, leaseRowsUnchanged: true };
+    if (schema.installation) {
+      if (beforeInstallation.length !== 1 || beforeInstallation[0].singleton !== true || !UUID.test(String(beforeInstallation[0].installation_epoch))) throw Error('RESTORE_INSTALLATION_INVALID');
+      const previousEpoch = String(beforeInstallation[0].installation_epoch); installation.previousEpoch = previousEpoch; installation.currentEpoch = targetId;
+      if (previousEpoch !== targetId) {
+        const counts = (await connection.query<{ state: string; count: string }>("SELECT state,COUNT(*)::text AS count FROM pf_calculation_grant_leases WHERE installation_epoch=$1 AND state IN('active','quarantined') GROUP BY state ORDER BY state", [previousEpoch])).rows;
+        for (const row of counts) {
+          const count = Number(row.count); if (!['active', 'quarantined'].includes(row.state) || !Number.isSafeInteger(count) || count < 0 || count > MAX_ROWS) throw Error('RESTORE_FENCE_LIMIT');
+          if (row.state === 'active') installation.fencedActiveLeases = count; else installation.fencedQuarantinedLeases = count;
+        }
+        await fenceCalculationGrantInstallationInTransaction(connection, previousEpoch, targetId); installation.rotated = true;
+      }
+    }
     const sessions = await connection.query("UPDATE viewer_resource_sessions SET revoked_at=COALESCE(revoked_at,clock_timestamp()),revoke_reason=COALESCE(revoke_reason,'logout') WHERE revoked_at IS NULL");
     const logins = await connection.query('UPDATE viewer_login_bindings SET revoked_at=COALESCE(revoked_at,clock_timestamp()) WHERE revoked_at IS NULL');
     const active = Number((await connection.query("SELECT (SELECT COUNT(*) FROM viewer_resource_sessions WHERE revoked_at IS NULL)+(SELECT COUNT(*) FROM viewer_login_bindings WHERE revoked_at IS NULL) AS count")).rows[0].count);
     if (active !== 0) throw Error('RESTORED_SESSIONS_NOT_FENCED');
+    const tables = [fenceDelta('viewer_resource_sessions', beforeSessions, await fenceRows(connection, 'viewer_resource_sessions')),
+      fenceDelta('viewer_login_bindings', beforeLogins, await fenceRows(connection, 'viewer_login_bindings'))];
+    if (schema.installation) {
+      const afterInstallation = await fenceRows(connection, 'pf_installation_state');
+      if (afterInstallation.length !== 1 || afterInstallation[0].installation_epoch !== targetId) throw Error('RESTORE_INSTALLATION_NOT_FENCED');
+      tables.push(fenceDelta('pf_installation_state', beforeInstallation, afterInstallation));
+      if (canonicalJson(beforeLeases) !== canonicalJson(tablePin(await fenceRows(connection, 'pf_calculation_grant_leases')))) throw Error('RESTORE_LEASE_AUDIT_CHANGED');
+    }
+    committing = true;
     await connection.query('COMMIT');
-    return { schemaVersion: 1, command: 'fence-restored', status: 'PASS', targetId, sessionsRevoked: sessions.rowCount, durableLoginTombstones: logins.rowCount, activeRestoredBindings: 0, loginRowsDeleted: 0, requiresFreshJwtSigningSecret: true };
-  } catch (error) { await connection.query('ROLLBACK').catch(() => undefined); throw error; }
+    return { schemaVersion: 1, command: 'fence-restored', status: 'PASS', targetId, sessionsRevoked: sessions.rowCount, durableLoginTombstones: logins.rowCount, activeRestoredBindings: 0, loginRowsDeleted: 0, requiresFreshJwtSigningSecret: true,
+      fencingDelta: { schemaVersion: 'wfc.restore-fencing-delta.v1', targetId, tables, installation } };
+  } catch (error) { await connection.query('ROLLBACK').catch(() => undefined); if (committing) throw Error('RESTORE_FENCE_COMMIT_OUTCOME_UNKNOWN'); throw error; }
   finally { connection.release(); }
 }
 

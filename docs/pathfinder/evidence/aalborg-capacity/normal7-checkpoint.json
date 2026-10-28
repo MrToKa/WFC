@@ -1,0 +1,139 @@
+{
+  "schemaVersion": "wfc.pf.normal-full-network-checkpoint.v1",
+  "at": "2026-10-20T08:56:41.279Z",
+  "status": "NORMAL_PUBLICATION_TRACE_AND_CALCULATION_VERIFIED_BATCH_RUNNING",
+  "codeRevision": "b5690038c63b2fcfbc7e3457cbee709739829160",
+  "preparation": {
+    "status": "PASS",
+    "at": "2026-10-20T08:39:06.992Z",
+    "sessionId": "d8b64b1b-018c-4b69-b1d7-f9952c413f17",
+    "planSha256": "6adaeee3784e408e0b64e0094eeaa64c8fdb6461a018ccba0f7134a8db5c1545",
+    "state": "published",
+    "sessionRevision": "7",
+    "physicalLeaves": 1165,
+    "partsCommitted": 5,
+    "expectedParts": 5,
+    "payloadBytes": 114186790,
+    "failure": null,
+    "currentAggregate": {
+      "id": "6e21b230-188e-49b8-92a8-fd3f202a9567",
+      "artifactId": "04782773-0701-4e60-b3af-d4e42b3f8288",
+      "geometryRevision": "1",
+      "projectionSha256": "27f8cf8c352b8847b778f764ce942aa0bb61ebfab16aeb993c0a83bd100c38e2"
+    }
+  },
+  "trace": {
+    "id": "3976df4c-a6a1-4001-bf08-faf7070c4977",
+    "aggregateId": "6e21b230-188e-49b8-92a8-fd3f202a9567",
+    "counts": {
+      "objects": 2965,
+      "segments": 1165,
+      "diagnostics": 1484,
+      "points": 3794,
+      "ports": 1704
+    },
+    "contentSha256": "410bbca265e6bd88e3c3dedb0ab94068a8c4fd4b0d2651a5a3d4e222cc25f117",
+    "computationalSha256": "03c3eea6bfd95febe4fd593d45798de27999dcc169c71ab6f017be329d955149",
+    "engineeringAccepted": false,
+    "nativeParity": "not-performed"
+  },
+  "protectedBindings": {
+    "status": "PASS",
+    "at": "2026-10-20T08:40:31.601Z",
+    "aggregateId": "6e21b230-188e-49b8-92a8-fd3f202a9567",
+    "bindings": 4,
+    "suffixRootMappings": 2,
+    "descriptor": 200,
+    "cookieProtectedGet": 200,
+    "head": 200,
+    "missingCookie": 401,
+    "runtimeAssetsExact": 4,
+    "businessWrites": false,
+    "engineeringAcceptance": false
+  },
+  "ui": {
+    "suffixA105": "PASS_1_OF_1_DRAWABLE_AND_YELLOW_LINE",
+    "suffixA120": "PASS_1_OF_1_DRAWABLE_AND_YELLOW_LINE",
+    "filledGhost": "PASS_VISUAL_A120",
+    "clearRestore": "PASS_VISUAL_OPAQUE_PLANT_NO_ROUTE_LINE",
+    "evidence": [
+      {
+        "name": "ui-published-a105-final.ax.txt",
+        "sha256": "666e89c3d749ced8711476503eb76c9d7c089711d66d9c06909cbfd931e9173e",
+        "bytes": 4256
+      },
+      {
+        "name": "ui-published-a120.ax.txt",
+        "sha256": "28795722efddee71cf61f4a6a16bc511692effeeb7357fc721a84b3222f7aa20",
+        "bytes": 4256
+      },
+      {
+        "name": "ui-published-a120.png",
+        "sha256": "c17321609be1b85c05cf48e2462dacd328feb3e335209ba7f92408f5fee8f118",
+        "bytes": 94505
+      },
+      {
+        "name": "ui-published-clear-final.ax.txt",
+        "sha256": "512a42f7370b59754703a43c3e51a9735157f0e381f430dd70eeee0ea0fa4ac6",
+        "bytes": 1060
+      },
+      {
+        "name": "ui-published-clear-final.png",
+        "sha256": "17625fbc48cadda817087fe2341cd6792ec7bac96ca2a3f763f31d46d4283811",
+        "bytes": 67868
+      }
+    ],
+    "imagesPrivate": true
+  },
+  "realCalculationSample": {
+    "status": "PASS",
+    "at": "2026-10-20T08:53:39.590Z",
+    "jobId": "a29cd4c2-2d86-4ee0-9cbb-5bc598552781",
+    "scope": {
+      "items": 1808,
+      "mv": 0
+    },
+    "sampleHash": "c6e9eeb2ff23225eabcf068f5d613963aae140793a4b2f5b2c6f394c7c1ebc43",
+    "calculationMode": "calculate",
+    "dependencyVersion": "pathfinder.dependencies.v6",
+    "validRoute": true,
+    "loadedFromDisk": true,
+    "lengthLedgerValidatedAgainstDetails": true,
+    "projectSettings": {
+      "connectionGap": "1",
+      "secondaryTrayLength": "7",
+      "endConnectionLength": "5",
+      "additionalBendingPercent": "10"
+    },
+    "engineeringAccepted": false,
+    "realApply": false,
+    "sampleKind": "One actual fresh full calculate operation; not a design-only replay, not complete-batch acceptance."
+  },
+  "currentScope": {
+    "status": "PASS",
+    "at": "2026-10-20T08:48:42.921Z",
+    "jobId": "a29cd4c2-2d86-4ee0-9cbb-5bc598552781",
+    "selected": 1808,
+    "excludedMv": 332,
+    "categoryCounts": {
+      "Control": 345,
+      "Instrumentation": 1206,
+      "LV": 257
+    },
+    "oldJobCancelled": true,
+    "automaticPolicyPaused": true,
+    "projectRulesChanged": false,
+    "cableValuesChanged": false
+  },
+  "fullSelectedBatch": "RUNNING_NOT_FINAL",
+  "cableFence": {
+    "status": "PASS_AT_CHECKPOINT",
+    "cables": 2140,
+    "allCableColumnsSha256": "0cc900778484ca50a770c30a3566564c5975c5649885793aed8b8e8e426f9155",
+    "applyReceipts": 0,
+    "checkedAt": "2026-10-20T08:55:22.834Z"
+  },
+  "realApply": "NOT_RUN",
+  "engineeringAcceptance": "USER_REVIEW_REQUIRED",
+  "originalApplicationChanged": false
+}

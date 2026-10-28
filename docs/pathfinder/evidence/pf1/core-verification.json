@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "stage": "PF-1",
+  "recordedAt": "2026-10-17T20:36:52.2653186Z",
+  "status": "PASS",
+  "sourceCommit": "45c24bf5f433f13e102600b36f20327c77961d0a",
+  "sdkVersion": "9.0.319",
+  "targetFramework": "net9.0",
+  "freshCommand": "dotnet run --configuration Release --project pathfinder-engine/tests/PathFinder.Regression/PathFinder.Regression.csproj",
+  "exitCode": 0,
+  "regressionChecks": 105,
+  "optionalPrivateFixture": "NOT_RUN",
+  "coreSourcesByteIdentical": 11,
+  "originalRegressionSourcesByteIdentical": 8,
+  "compileIncludes": [
+    "EntryPoint.cs",
+    "Program.cs",
+    "GeometryTests.cs",
+    "EndpointApproachTests.cs",
+    "VerifiedPortTests.cs",
+    "MeshClearanceTests.cs",
+    "DesignLengthTests.cs",
+    "RouteNameResolverTests.cs",
+    "RouteLookupTests.cs"
+  ],
+  "projectReference": [
+    "../../src/PathFinder.Core/PathFinder.Core.csproj"
+  ],
+  "coreAssemblyName": "PathFinder.Core",
+  "assemblyAudit": "PASS",
+  "assemblyReferences": [
+    "System.Collections",
+    "System.Linq",
+    "System.Runtime",
+    "System.Runtime.Numerics",
+    "System.Text.RegularExpressions",
+    "System.Threading"
+  ],
+  "packageDependencyCount": 0,
+  "autodeskReferences": [],
+  "navisworksReferences": [],
+  "friendAssemblies": [
+    "PathFinder.Regression",
+    "PathFinder.Parity"
+  ],
+  "builtCoreSha256": "0ed9bb3fd253df22d901af0afc729ca5b929f8a9c48a37b46cd89bed1b3da1d6",
+  "sourceProvenanceSha256": "3b4728058ab7eaa417ba3d5f1f23f28119e84f12ad26f14c5aea2cf1fe9f0545",
+  "log": "core-regression.log",
+  "environment": {
+    "DOTNET_CLI_HOME": "pathfinder-engine/.dotnet-home",
+    "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
+    "DOTNET_SKIP_FIRST_TIME_EXPERIENCE": "1"
+  },
+  "observedSdkFirstRunSideEffect": "The SDK printed Installed an ASP.NET Core HTTPS development certificate. No trust or removal was attempted. Future runs should also set DOTNET_GENERATE_ASPNET_CERTIFICATE=false.",
+  "limitations": [
+    "Only existing synthetic detached-core checks executed",
+    "No Navisworks/native or converted-model parity claimed",
+    "No database, containers or running application accessed"
+  ]
+}

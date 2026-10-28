@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "wfc.pf.test-interruption.v1",
+  "observedAt": "2026-10-20T19:17:01.9385634Z",
+  "suite": "src/pages/ProjectDetails/PathFinderTab.test.tsx",
+  "status": "INTERRUPTED",
+  "reason": "Full legacy styled jsdom suite exceeded ten minutes; no terminal report and no PASS claimed. Run bounded affected scenarios separately.",
+  "startedAt": "2026-10-20T19:04:26.2959970Z",
+  "terminalCounts": "UNKNOWN",
+  "terminatedOnly": "Verified root-owned Vitest parent and direct worker; no application process/container action"
+}

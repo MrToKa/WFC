@@ -1,0 +1,190 @@
+{
+  "product": "d5cec2b00cb4815add3a9dd4ec8bffef26e13b24",
+  "files": [
+    {
+      "path": "server/models/cable.test.ts",
+      "bytes": 4490,
+      "sha256": "5d109ad9ecbf58c3ae528f73b647f26b14d01a2597a44928cc1c9ac08e3fba90"
+    },
+    {
+      "path": "server/models/cable.ts",
+      "bytes": 3951,
+      "sha256": "ab59502025a90d2ca5abeba8b6d7611e6cf0ed16b690cc07ba257eea647e7cbe"
+    },
+    {
+      "path": "server/models/cableListColumns.ts",
+      "bytes": 287,
+      "sha256": "67f0bea56099a3dc30ea5e99aa2e55969a79a8df5656356cc3d77cccac243021"
+    },
+    {
+      "path": "server/pathfinder/autoLengthSchema.ts",
+      "bytes": 3391,
+      "sha256": "3934d386778710b40a1233430861a8a4c53c2664e6f67e8b4babeec674868833"
+    },
+    {
+      "path": "server/pathfinder/autoLengthSql.integration.test.ts",
+      "bytes": 23910,
+      "sha256": "9a7cc2416fadc4aad1cbf34c0403b4edbc237ddd49f6c21e6ecbf9bd6b148422"
+    },
+    {
+      "path": "server/pathfinder/autoLengthStore.test.ts",
+      "bytes": 19172,
+      "sha256": "ab4197a4138c660e3d92726f732b9a97699ae0ad6c8e1b0b077002ae00309bd1"
+    },
+    {
+      "path": "server/pathfinder/autoLengthStore.ts",
+      "bytes": 22254,
+      "sha256": "ffa3dab6f3b9b6a0023db6e109b63d6a98d57767c6887fa81bae979f877cf4d5"
+    },
+    {
+      "path": "server/pathfinder/revisionResultRepository.test.ts",
+      "bytes": 52171,
+      "sha256": "c16db6a71caaea713218edf9bd7423406249134679957f31b0b1953c3beda4c3"
+    },
+    {
+      "path": "server/pathfinder/revisionResultRepository.ts",
+      "bytes": 42734,
+      "sha256": "f12598daf5b2bde9e6837c82d6d681766db2e53e624808c332354a4b582432ae"
+    },
+    {
+      "path": "server/pathfinder/schema.ts",
+      "bytes": 11274,
+      "sha256": "165bdf4c082b2f0309e1a0421d411c14cc925c4643cb2f4034bafdf614ff7950"
+    },
+    {
+      "path": "server/pathfinder/worker-barrier-currentness.test.ts",
+      "bytes": 24517,
+      "sha256": "2f9de80058e482e075e96050cc97b40d8c44f3fc5cf4a422fcfa8ffa46e83e73"
+    },
+    {
+      "path": "server/pathfinder/worker.ts",
+      "bytes": 35148,
+      "sha256": "f1886ae996b5ec85b981ab26b5fe44c3efefdc75aed1d3e3a5329f3777e98f3d"
+    },
+    {
+      "path": "server/routes/cablesAutoLengthHttp.integration.test.ts",
+      "bytes": 20173,
+      "sha256": "262a247f72bef70d7454e74fa9c6f8941a27dbdd22bff26d60a7a844f00efbd2"
+    },
+    {
+      "path": "server/routes/cablesAutoLengths.test.ts",
+      "bytes": 10516,
+      "sha256": "219a4b3dd95eacc450b712d9f84a8e33fe3fb2abd233b1289a2769f0a3284b76"
+    },
+    {
+      "path": "server/routes/cablesRoutes.test.ts",
+      "bytes": 9991,
+      "sha256": "18ad39abbed7892bf0c2a707f12c2a6cfe93878c4d9abf1f3a3c080980797efa"
+    },
+    {
+      "path": "server/routes/cablesRoutes.ts",
+      "bytes": 138893,
+      "sha256": "799beda53d6f445e7b920b745d821095f46ddb429503b5a46102f47095ac92ff"
+    },
+    {
+      "path": "shared/pathfinderAutoLength.test.ts",
+      "bytes": 2345,
+      "sha256": "b309808fc5fd8019be9553cd4e7a683e1bda9c989c147d904b4b80d9693e996d"
+    },
+    {
+      "path": "shared/pathfinderAutoLength.ts",
+      "bytes": 2214,
+      "sha256": "2efe557397b8a94db173a8319c2dcb08c8020fd6c366fb7ef4a61af8605dff74"
+    },
+    {
+      "path": "src/api/cableListPreferences.ts",
+      "bytes": 1140,
+      "sha256": "6b3ad5fd903f832d98abfbe91a5f6be01d32f3d3b65016d26a4d69320fee3027"
+    },
+    {
+      "path": "src/api/types/cable.ts",
+      "bytes": 6023,
+      "sha256": "afe59f7abbe34b66e91fe2bf67ce85a4538dbe5c5abc72e3f518aabd06eed801"
+    },
+    {
+      "path": "src/components/pathfinder/CableAutoCalculatedLength.test.tsx",
+      "bytes": 3145,
+      "sha256": "2c3487879087e3bae850748085e7904c9c9b9b01f711a6bf648aae0b475d3af4"
+    },
+    {
+      "path": "src/components/pathfinder/CableAutoCalculatedLength.tsx",
+      "bytes": 3107,
+      "sha256": "e4e48a8822c78782bf8a77ae4bd3886eb35a2951342ff24dcc718bb8c4f1f302"
+    },
+    {
+      "path": "src/components/pathfinder/PathFinderCableRoutingPanel.test.tsx",
+      "bytes": 32516,
+      "sha256": "e8223a50fd9748f4fc14f6b577a7f8378e0bdc1933a05d0221b43dcf6e6b2875"
+    },
+    {
+      "path": "src/components/pathfinder/PathFinderCableRoutingPanel.tsx",
+      "bytes": 15979,
+      "sha256": "00ccc2df93e24382fff35d307595b983ad0d1d2c0bf9148ded60e1d93be58c9d"
+    },
+    {
+      "path": "src/pages/CableDetails.test.tsx",
+      "bytes": 16829,
+      "sha256": "da70cd6f0dcc7907b011119dea00aeced3df9306908198718a02f638c78c0a01"
+    },
+    {
+      "path": "src/pages/CableDetails.tsx",
+      "bytes": 63931,
+      "sha256": "3ca5d557ea8beea0fea94f96238eaa63a940aa1b354699876454b79c431095dc"
+    },
+    {
+      "path": "src/pages/ProjectDetails/CableListTab.test.tsx",
+      "bytes": 13763,
+      "sha256": "f0f50fba31fdb1ff1187ddde3f65e2a38193c838f3b4f74a6b9f1ff4184a2bca"
+    },
+    {
+      "path": "src/pages/ProjectDetails/CableListTab.tsx",
+      "bytes": 25802,
+      "sha256": "27e69bac08f03b3704c6756b2c19dda83c9425e5ff9d3a8ca616d57407a85c78"
+    },
+    {
+      "path": "src/pages/ProjectDetails/DetailsTab.test.tsx",
+      "bytes": 10351,
+      "sha256": "806f4bab29ca1b62a3b7d1c9e4bad99f3c608d713de09c4be4a45f402afab37d"
+    },
+    {
+      "path": "src/pages/ProjectDetails/DetailsTab.tsx",
+      "bytes": 38395,
+      "sha256": "78ae1a9a759697d8bfc474f855a24f13ac9eba90dc207e26b4b5fd84ba777d8f"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderResults.test.tsx",
+      "bytes": 96060,
+      "sha256": "18b13d36196cde6acf13f237e74d234fda20460f3254086404dcd9e7d2151a4c"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderResults.tsx",
+      "bytes": 59616,
+      "sha256": "fc90c982ad1fe50fda87a4920834f4ab6747f5a02cf4b300ec8d0facfd3a60ea"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderTab.test.tsx",
+      "bytes": 99098,
+      "sha256": "8a1acb60166c6c3fa8f7a04fc8ba54e266b97702538531261c4d6d94b3a786bc"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderTab.tsx",
+      "bytes": 31783,
+      "sha256": "5e5859582685f7aa9c52352c4e9acff51770ec47bd01062c2fff551ef1d408a6"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/usePathfinderAutoLengthRead.test.tsx",
+      "bytes": 5876,
+      "sha256": "2fccb6c02052ed2f40597ce6c7423a1fd1fd81b763627872a56976bb5a2855be"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/usePathfinderAutoLengthRead.ts",
+      "bytes": 4403,
+      "sha256": "83ddaa7dad1b762193c690877778440053c51e28f987b4b5948409868f50adf2"
+    },
+    {
+      "path": "vite.config.ts",
+      "bytes": 1718,
+      "sha256": "33692d34e0a09a01fefc946e74e980ba1922e0f63ae312eaca6efbdf8540581e"
+    }
+  ]
+}

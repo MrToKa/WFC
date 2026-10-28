@@ -1,0 +1,44 @@
+{
+  "schemaVersion": "pathfinder.batched-capture.preparation-card-controls.v1",
+  "recordedAt": "2026-10-18T16:36:02Z",
+  "status": "PASS",
+  "scope": "Only recorded preparation card markup/copy and its focused singular/plural regression changed after frontend-source-controls-20261018T161500Z.json.",
+  "reason": "Actual browser screenshot showed adjacent inline typography and singular group grammar.",
+  "files": {
+    "src/pages/ProjectDetails/PathFinderRoutes.tsx": "01a3c100617edc0e9040d6825d11323ade75af1e5067eabd88a700e818830df5",
+    "src/pages/ProjectDetails/PathFinderRoutes.test.tsx": "9fabfb01e42abe69d4b8d3b207d6c3fe26a5930f45349c89b15761aab70b62ca"
+  },
+  "changes": [
+    "Prepared-name count uses correct singular/plural and omits transport group count from human UI.",
+    "Name count and both captions are separate blocks; captions have 4px top margin.",
+    "All actual model record return/attempted/omitted counts and incomplete matching warning remain.",
+    "Saved-input caveat now reads: These counts describe the last preparation. Prepare again after changing project inputs."
+  ],
+  "checks": [
+    {
+      "command": "node node_modules/vitest/vitest.mjs run src/pages/ProjectDetails/PathFinderRoutes.test.tsx --reporter=dot -t \"shows reloaded input\"",
+      "status": "PASS",
+      "passed": 2,
+      "skipped": 9,
+      "total": 11,
+      "seconds": 5.46
+    },
+    {
+      "command": "node node_modules/eslint/bin/eslint.js src/pages/ProjectDetails/PathFinderRoutes.tsx src/pages/ProjectDetails/PathFinderRoutes.test.tsx --max-warnings=0",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "command": "git diff --check -- src/pages/ProjectDetails/PathFinderRoutes.tsx src/pages/ProjectDetails/PathFinderRoutes.test.tsx",
+      "status": "PASS",
+      "exitCode": 0
+    }
+  ],
+  "notRerun": [
+    "Full regression suites and TypeScript were not repeated for this markup/text-only delta; prior exact checks remain separately bound to their earlier source hashes."
+  ],
+  "nonClaims": [
+    "No event handler, capture, API, data validation, runtime or database logic changed.",
+    "Browser rendering after rebuild remains parent verification; style assertions do not constitute screenshot proof."
+  ]
+}

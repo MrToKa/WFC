@@ -1,0 +1,320 @@
+{
+  "schemaVersion": "wfc.pf.barrier-capture-stage-evidence.v1",
+  "productCommit": "a967ddd12c8a7052f61abc290491554df75d2388",
+  "branch": "pf-b2-barrier-capture-local-20261021",
+  "recordedUtc": "2026-10-21T11:35:30.2415190Z",
+  "checks": {
+    "combinedTypeScript": {
+      "failed": 0,
+      "files": 7,
+      "status": "PASS",
+      "passed": 311,
+      "beforeFinalSessionRenewalFix": true
+    },
+    "finalController": {
+      "failed": 0,
+      "status": "PASS",
+      "passed": 88
+    },
+    "mockedSdkCapture": {
+      "passed": 39,
+      "status": "PASS"
+    },
+    "protectedBridge": {
+      "passed": 55,
+      "status": "PASS"
+    },
+    "affectedRuntime": {
+      "passed": 29,
+      "status": "PASS"
+    },
+    "csharpVerifier": {
+      "passed": 48,
+      "status": "PASS"
+    },
+    "crossLanguage": {
+      "status": "PASS",
+      "scope": "Synthetic TS capture -> real C# stdin verifier -> strict TS receipt; no SDK or runtime publication"
+    },
+    "actualLinuxPostgreSqlStorage": {
+      "qualification": "explicit trusted test stub; not SDK/C# evidence",
+      "status": "PASS",
+      "passed": 9
+    },
+    "actualLinuxVerifierProcess": {
+      "dotnetInvocations": 6,
+      "status": "PASS",
+      "passed": 4
+    },
+    "actualFrameSql": {
+      "status": "PASS",
+      "scope": "Exact current-frame DISTINCT ON SQL against synthetic PostgreSQL18 temp table; one common/two differing frames",
+      "rows": 1,
+      "differentFrameRows": 2
+    },
+    "coreAudit": {
+      "scope": "Read-only comparison with frozen-source B1 provenance; no PF0 validator runs",
+      "status": "PASS",
+      "files": [
+        {
+          "path": "src/PathFinder.Core/Routing/CableDesignLength.cs",
+          "sha256": "fa489d2948f3c7a4af8931cb79d775a61f4718d5ad3187bd5637598665d1ff5f",
+          "matches": true
+        },
+        {
+          "path": "src/PathFinder.Core/Routing/RouteCalculator.cs",
+          "sha256": "12e96c787902850bffad660d5d2a43333960d9920890cf8f547a730f67e0d0b8",
+          "matches": true
+        },
+        {
+          "path": "src/PathFinder.Core/Routing/RouteCodeParser.cs",
+          "sha256": "a97e2358374f0798c94103a8f0b20bf7c5a04208de523ea384afa528f70ec05f",
+          "matches": true
+        },
+        {
+          "path": "src/PathFinder.Core/Routing/RouteLookupCalculator.cs",
+          "sha256": "1914b875b675bc61e274a46f221d0633e5db21eab2fe0e34214c7c05aa5485ae",
+          "matches": true
+        },
+        {
+          "path": "src/PathFinder.Core/Routing/RouteNameResolver.cs",
+          "sha256": "9bf4964a00833f91a38f11f34e2eb377f1fb27ccd48d389731248ecf07174c34",
+          "matches": true
+        },
+        {
+          "path": "src/PathFinder.Core/Routing/RoutingModels.cs",
+          "sha256": "2de71cc5410e04cce309276cbd2591d218530d5ddfca4c77a2ad98f2ee02e4ea",
+          "matches": true
+        },
+        {
+          "path": "src/PathFinder.Core/Routing/TrayBendMeshGeometry.cs",
+          "sha256": "4d6f0c574166fbcb880cdc38bd10e589905fc74b1fe5709c33fd5e2ecab35948",
+          "matches": true
+        },
+        {
+          "path": "src/PathFinder.Core/Routing/TrayGeometryBuilder.cs",
+          "sha256": "9dd9abe707b3908c8d55a404e12d6b79b7785659f284dc4d84d9d2391dd225c7",
+          "matches": true
+        },
+        {
+          "path": "src/PathFinder.Core/Routing/TrayMeshClearance.cs",
+          "sha256": "75075cbf5b13d385f9932e1ad755815e39934e55bcbf123b657ae3b5363541e8",
+          "matches": true
+        },
+        {
+          "path": "src/PathFinder.Core/Routing/TrayMeshData.cs",
+          "sha256": "4ff9170f90a57f8509a9acb5b84dd95262e55b942d6ee892a0dd231563b3af31",
+          "matches": true
+        },
+        {
+          "path": "src/PathFinder.Core/Routing/TrayMeshGeometry.cs",
+          "sha256": "c88ed49513778ef809e581ecf8b4418b746b982c5b12f533d96478275de8deba",
+          "matches": true
+        }
+      ]
+    },
+    "clientTypes": "PASS",
+    "serverTypes": "PASS",
+    "changedTypeScriptLint": "PASS",
+    "stagedWhitespace": "PASS",
+    "independentSourceReviews": "PASS"
+  },
+  "initialFailures": {
+    "testTypeAndLintIssues": "repaired and rechecked",
+    "normalSessionRenewalObjectIdentity": "repaired; targeted final88PASS",
+    "windowsSql": {
+      "failed": 6,
+      "directoryFsyncGuardRetained": true,
+      "passed": 3,
+      "productionJsonbArrayBugFixed": true
+    }
+  },
+  "runtimeDelivery": "NOT_RUN",
+  "actualConvertedCapture": "NOT_RUN",
+  "actualAalborg": "NOT_RUN",
+  "maximumCapacity": "NOT_RUN",
+  "hardCombinedRssQualification": "NOT_RUN",
+  "independentSdkReenumeration": false,
+  "engineeringAccepted": false,
+  "sourceFiles": [
+    {
+      "path": "pathfinder-engine/src/PathFinder.BarrierVerifier/BarrierCaptureVerifier.cs",
+      "sha256": "af46124ce6bba571eceb2e58efcd636e9c17648cfb838eb740d88b7f9a2d22f4"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.BarrierVerifier/CaptureParser.cs",
+      "sha256": "a3c5d8a230dd6025df51efa815dfea8f5df9cc4b85c7f92316e7563841ff3fe0"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.BarrierVerifier/Contracts.cs",
+      "sha256": "2dfb89e85ca3666ee56890b6f4bb1faa001a2e440d206b03ac24318906299d96"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.BarrierVerifier/PathFinder.BarrierVerifier.csproj",
+      "sha256": "f7a259f4997802e84d51a4bf7c98a62ea20dbd0d17f2f6cebf7227b50a0a311f"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.BarrierVerifier/Program.cs",
+      "sha256": "4a38fe27ac35bf0162813d3e5b0a3b525ac10def0296e5dc4969708d5942f1bf"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.BarrierVerifier/README.md",
+      "sha256": "89292acf059b81a53697b72f208de3d1b3a3c35681351eaf1a6faba4f515e0b4"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.BarrierVerifier.Tests/Fixtures.cs",
+      "sha256": "5bf9b6472904d55f8b9ec5b319506b3c80af75400e029c4ab9b3297a53ece88f"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.BarrierVerifier.Tests/PathFinder.BarrierVerifier.Tests.csproj",
+      "sha256": "fd2f4d3816d030461de13d401426724b81851d348dd80c0f19ef49fd7bc36dea"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.BarrierVerifier.Tests/Program.cs",
+      "sha256": "9e2b119b3615ff7c014b10a64cf9fac2a417bb17ec520af14ad0d1d6ecf1e020"
+    },
+    {
+      "path": "scripts/copy-pathfinder-contracts.mjs",
+      "sha256": "3246c8a8fa4c7161998bc7772b3a24453af48339b0523db12f70c093bb8e098f"
+    },
+    {
+      "path": "scripts/viewer-runtime/module-closure.mjs",
+      "sha256": "202d85ae82b5b836052cf1a37d0d61e779d95bde3260599a612375cbe389f598"
+    },
+    {
+      "path": "server/app.ts",
+      "sha256": "d03dfa2d3113e4876ebd9e007d298f7abcd4c6848cf4f0c8a43db593c5bbd305"
+    },
+    {
+      "path": "server/pathfinder/barrierCaptureAuthority.test.ts",
+      "sha256": "80dfb90f3a34858a73e737b7d314656f0ca234f2a861081ae23678f7ffdb5e5d"
+    },
+    {
+      "path": "server/pathfinder/barrierCaptureAuthority.ts",
+      "sha256": "3bc7db35b11a60a4dd7895b546f998de4730093e1a18e15abf8edef47dc2b569"
+    },
+    {
+      "path": "server/pathfinder/barrierRegistryRepository.test.ts",
+      "sha256": "9189209613d760ed663feb50176f81682da221def38c8207317a3ab2b240d90c"
+    },
+    {
+      "path": "server/pathfinder/barrierRegistryRepository.ts",
+      "sha256": "2fcf4684b499ef1d166633d2a8161096cf1bbb1c7a4909f3c32d699c395668ba"
+    },
+    {
+      "path": "server/pathfinder/barrierRegistrySchema.ts",
+      "sha256": "d29de291e4617cad75166b01f7281e8b0b0d80500f5c3ab5b2c2ab1dbe2e2c2e"
+    },
+    {
+      "path": "server/pathfinder/barrierRegistrySql.integration.test.ts",
+      "sha256": "740922dfcb7e6382853d397a41ac9ea2d70801f132721f438251a705fe0cfdb3"
+    },
+    {
+      "path": "server/pathfinder/barrierRoutes.test.ts",
+      "sha256": "9bdd7a8028e60f1d51e7df971417a5b38734a19f7c6bb2a8a9598b5f80365769"
+    },
+    {
+      "path": "server/pathfinder/barrierRoutes.ts",
+      "sha256": "424c453e34a8361fa29c9f2e949cefb2b2303d667a0f0c700e771b7023d1e7c0"
+    },
+    {
+      "path": "server/pathfinder/barrierScope.ts",
+      "sha256": "27182fb378240b372eb243e7fc00fc25ff7d2f598d775e985eb9c13e8ed39854"
+    },
+    {
+      "path": "server/pathfinder/barrierStorage.test.ts",
+      "sha256": "023bf3e8e9a2f143e808e656f413b42548bc90bb0d045cbfc1ff1ea4a65dfe50"
+    },
+    {
+      "path": "server/pathfinder/barrierStorage.ts",
+      "sha256": "2468fa310f2f6b22ef069e0ccb5104e7df70c1eada6e8d012529116a0461ca8f"
+    },
+    {
+      "path": "server/pathfinder/barrierVerifier.ts",
+      "sha256": "19f851800d9211a1655cf2b23eff453ee9beb6a6a937b46a0cb4623575d06661"
+    },
+    {
+      "path": "server/pathfinder/barrierVerifierProcess.integration.test.ts",
+      "sha256": "8572e8126a1c2bc35a9229e5161ac7a5dfebd6abe7ffb5cd1c8da4686cbe3cb0"
+    },
+    {
+      "path": "server/pathfinder/schema.ts",
+      "sha256": "6571ff52d741c4d4c5eedb73e7a2a4102bd2cd218b4b7b702ce698b50f61ff0e"
+    },
+    {
+      "path": "src/api/pathfinderBarriers.test.ts",
+      "sha256": "7e340987e0c6ebbbe8454f05e5eaa788d23954d351d6c01ca7a06ec27baa694f"
+    },
+    {
+      "path": "src/api/pathfinderBarriers.ts",
+      "sha256": "1e343b015f96322f5d83f004bdf3fc518ed644753543c6a6cdf5938e4b3a0e07"
+    },
+    {
+      "path": "src/viewer/ViewerController.test.ts",
+      "sha256": "0ab3e4b7b20b8f9b3d4798c463fd64cb479b1c3db57ebb279c7c7ace01b17a28"
+    },
+    {
+      "path": "src/viewer/ViewerController.ts",
+      "sha256": "25aac9a9a50ab162b9bb82677331b58db7d9a6a5dafddae65748901cf32f39e7"
+    },
+    {
+      "path": "src/viewer/sessionApi.ts",
+      "sha256": "36f887208f6eb83db4fa7d3947b43decbb1f471f7d3a43aef4eeff0f95cd10e8"
+    },
+    {
+      "path": "viewer-runtime/adapter.mjs",
+      "sha256": "ef1375f26b5ece3c7f18ea263cdd742181b14ee32edd790a93e71f082de81a9e"
+    },
+    {
+      "path": "viewer-runtime/barrier-capture.d.mts",
+      "sha256": "e51c2a386e77e0c7beced9eb82c2dd61d485923a082a2ff7e1393ae4eedc1229"
+    },
+    {
+      "path": "viewer-runtime/barrier-capture.mjs",
+      "sha256": "0b2a0a056bf99e851f245b2efd289d12c167738e058d92a95dec175fe465e336"
+    },
+    {
+      "path": "viewer-runtime/bridge.mjs",
+      "sha256": "b10698eea2923a044bba81c044fccdc733472c8d2b6dcb288f4617729852d2ed"
+    },
+    {
+      "path": "viewer-runtime/protocol.mjs",
+      "sha256": "b1ce8f151e9a9677bdd79d76723f8ceb4cce7fd8b653348c32fb85509d84983c"
+    },
+    {
+      "path": "viewer-runtime/test/barrier-capture.test.mjs",
+      "sha256": "0831e1e61237123a5e1cb179976f174a9841ff530f1638d51633978d01df5b1b"
+    },
+    {
+      "path": "viewer-runtime/test/bridge.test.mjs",
+      "sha256": "f87527f56e9a2ab1d363a48ad291b5563359155bb7dfd844b1e813a1e0249c81"
+    }
+  ],
+  "fixtureRetirement": {
+    "status": "PASS",
+    "owner": "038dca96-00a7-4dc3-999c-75927876f159",
+    "retired": [
+      "wfc-pf-b2-linux-node-038dca96",
+      "wfc-pf-b2-linux-sql-038dca96"
+    ],
+    "originalsChanged": false,
+    "utc": "2026-10-21T11:25:26.0845658Z"
+  },
+  "cleanupRefusal": {
+    "parentsPreserved": true,
+    "targets": [
+      "pathfinder-engine/.scratch/barrier-capture-20261021/sql-root",
+      "pathfinder-engine/.scratch/barrier-capture-20261021/linux-sql"
+    ],
+    "retried": false,
+    "review": "automatic approval review",
+    "status": "BLOCKED",
+    "reason": "blocked by policy"
+  },
+  "remote": {
+    "retrievedUtc": "2026-10-21T11:32:50.594Z",
+    "unpublishedCi": "NOT_RUN",
+    "main": "96e63f13fdc2b1d30b8f8ff658dd662f25fac104",
+    "branchPrs": []
+  }
+}

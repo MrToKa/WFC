@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "pathfinder.batched-capture.server-compile.v1",
+  "status": "PASS",
+  "recordedAt": "2026-10-18T16:12:42.603Z",
+  "scratch": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\capture-server-07866bce-44ef-48fd-aa79-3b2fb846cef7",
+  "out": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\capture-server-07866bce-44ef-48fd-aa79-3b2fb846cef7\\compiled",
+  "compiled": [
+    {
+      "file": "candidateEligibilityIntegration.js",
+      "bytes": 18409,
+      "sha256": "9df396be853548b8d482e90e3e0b0741c9f6730affa85068863fbfabce951c56"
+    },
+    {
+      "file": "repository.js",
+      "bytes": 22625,
+      "sha256": "6460a72960e5c260c9ccfb768d0e7b991efb74a995f73f2b57e8418e293dd7ac"
+    }
+  ]
+}

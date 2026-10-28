@@ -1,0 +1,67 @@
+{
+  "schemaVersion": "pathfinder.computer-use.receipt.v1",
+  "observedAtUtc": "2026-10-18 02:37:01 UTC",
+  "scope": "actual-background-in-app-browser-isolated-port-5190; final yellow-tube/one-point image",
+  "checkedBaseCommit": "c95ad56ebbd6b020966fa0690c98c37516df1db1",
+  "uncommittedImplementation": true,
+  "apiImage": "sha256:562e80739ed2c105f280a8f460ba449b26aaa6a7a63bcb9b311ff58345407a01",
+  "webImage": "sha256:81bb13b4c3370c903e364503f99ef28341fa840e6c451adf9b5163281fd345cb",
+  "realDiagnosticProjectId": "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a",
+  "syntheticProjectId": "54cfad40-bd12-41e9-ab24-d90bdaafc993",
+  "checks": [
+    {
+      "name": "real-ordered-lookup-and-reverse",
+      "status": "PASS",
+      "observed": "Actual protected converted selected network; explicit1.0m diagnostic tolerance. 35.30345579516123m; four gaps totaling0.9840583861033791m. Reverse completed at the same total; no cable Apply.",
+      "screenshot": "pathfinder-real-ghost-final.png"
+    },
+    {
+      "name": "visible-yellow-route-original-colors-filled-ghost",
+      "status": "PASS",
+      "observed": "Bounded merged yellow tube follows exact C# points; original green/cyan trays and surrounding gray filled Ghost visibly present in actual copied real model.",
+      "screenshot": "pathfinder-real-ghost-final.png"
+    },
+    {
+      "name": "filled-ghost-with-empty-model-object-identities",
+      "status": "PASS",
+      "observed": "Synthetic exact path objectIds=[] ghosts the surrounding copied model and shows bright yellow synthetic segment. Resolves first-image failure; copied plant is visual context, not synthetic geometry correspondence.",
+      "screenshot": "synthetic-filled-ghost-final.png"
+    },
+    {
+      "name": "proposal-review-legibility-and-acknowledgment",
+      "status": "PASS",
+      "observed": "Visible separate text blocks10m/16m/17.6m/18m. Confirm available after exact-path acknowledgment; explicit Confirm enables Apply. No extra Apply performed in this retry; final-image SQL/HTTP Apply checked separately20/20.",
+      "screenshot": "synthetic-review-final.png"
+    },
+    {
+      "name": "one-point-zero-length-preview-and-review",
+      "status": "PASS",
+      "observed": "UI moved saved TOX10→0; automatic2/2 proposals0m geometry,6m before percentage,6.6m before rounding,7m design. Yellow single-point marker visible; loading acknowledgment completed and explicit Confirm enabled Apply. Never applied this7m result.",
+      "screenshot": "synthetic-one-point-final.png"
+    },
+    {
+      "name": "restored-shared-location-and-automatic-calculation",
+      "status": "PASS",
+      "observed": "UI restored savedTOX0→10,Y0,Z0.5; both cables matched; new automatic2/2 job completed; SYNTHETIC-1 geometry10m/design18m, before16m/17.6m. Changing location immediately made prior reviewed proposal outdated and disabled Apply."
+    },
+    {
+      "name": "clear-restores-original-visibility-colors",
+      "status": "PASS",
+      "observed": "Clear removed yellow overlay and filled Ghost; original opaque model and colors visibly restored. Camera remained at route view; no camera-restoration claim.",
+      "screenshot": "synthetic-clear-restored-final.png"
+    },
+    {
+      "name": "real-native-parity-and-real-engineering-apply",
+      "status": "BLOCKED",
+      "observed": "No licensed full-precision paired native reference. Real-model acceptance/Apply remains fenced; synthetic control does not remove this gate."
+    },
+    {
+      "name": "host-network-disconnection",
+      "status": "NOT_RUN",
+      "observed": "No computer-wide network disable. Separate source/CSP/internal-Docker-network receipt records actual offline scope."
+    }
+  ],
+  "secretsRecorded": false,
+  "originalApplicationOrDataChanged": false,
+  "userAcceptance": "NOT_REQUESTED; technical observations only"
+}

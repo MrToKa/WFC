@@ -1,0 +1,29 @@
+{
+  "status": "PASS",
+  "scope": "Normal authenticated Project Details PATCH and current-login durable producer + real C# core on three retained test cables; no Review/Apply",
+  "stages": [
+    {
+      "name": "S/E/P-only",
+      "generation": "8",
+      "jobId": "35ecd0ba-72e7-44cf-8c45-654846157c80",
+      "mode": "design",
+      "routesExact": true
+    },
+    {
+      "name": "gap-change",
+      "generation": "9",
+      "jobId": "4ae62d35-a977-405f-bbf1-782b48f4e254",
+      "mode": "calculate"
+    },
+    {
+      "name": "restore-original-settings",
+      "generation": "10",
+      "jobId": "442be2f8-70b8-415e-ac98-94d58b092076",
+      "mode": "calculate",
+      "routesAndDesignExact": true
+    }
+  ],
+  "projectValuesRestored": true,
+  "settingsRevisionAndProjectHistoryAdvanced": true,
+  "engineeringAccepted": false
+}

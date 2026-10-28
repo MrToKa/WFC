@@ -1,0 +1,260 @@
+{
+  "schemaVersion": "pathfinder.capacity.orchestration.v1",
+  "startedAt": "2026-10-18T12:03:09.967Z",
+  "owner": "ec0a626b-fe54-4e63-85a0-2d97878891f2",
+  "project": "wfc-pathfinder-local-ec0a626bfe54",
+  "scratch": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\capacity-run-ec0a626b-fe54-4e63-85a0-2d97878891f2",
+  "sourceBefore": {
+    "api": {
+      "id": "3d05017ee0fc2bb0b15c1a3e0aaeac258e996d2e024006667d3a4449c40d62c0",
+      "name": "wfc-pathfinder-local-api-1",
+      "image": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+      "running": true,
+      "startedAt": "2026-10-18T09:53:48.067931419Z",
+      "exitCode": 0,
+      "oomKilled": false,
+      "platform": "linux",
+      "mounts": [
+        {
+          "type": "volume",
+          "name": "wfc-pathfinder-local_pathfinder",
+          "destination": "/var/lib/wfc/pathfinder",
+          "writable": true
+        },
+        {
+          "type": "volume",
+          "name": "wfc-pathfinder-local_staging",
+          "destination": "/var/lib/wfc/model-imports",
+          "writable": true
+        }
+      ]
+    },
+    "postgres": {
+      "id": "6830635a4597dad696f1a5ced6846853cd9e1fee0f858450ad6f858e4c2e30b9",
+      "name": "wfc-pathfinder-local-postgres-1",
+      "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+      "running": true,
+      "startedAt": "2026-10-18T02:03:12.60010978Z",
+      "exitCode": 0,
+      "oomKilled": false,
+      "platform": "linux",
+      "mounts": [
+        {
+          "type": "volume",
+          "name": "wfc-pathfinder-local_postgres",
+          "destination": "/var/lib/postgresql",
+          "writable": true
+        }
+      ]
+    },
+    "apiResourceCeilings": {
+      "memoryBytes": 4294967296,
+      "pids": 256
+    },
+    "image": {
+      "id": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+      "architecture": "amd64",
+      "os": "linux",
+      "created": "2026-10-18T09:35:54.452738296Z"
+    }
+  },
+  "input": {
+    "manifestSha256": "f90e21941578e62d8f5d7426c2f78d039bfa0825e9ebd78cb78ee48d24be8e9a",
+    "referenceSha256": "93c5aec17494c703005b08b7467ab66012feecb703fbcb0eee4c2f23bf86a13f",
+    "snapshotSha256": "b47365401aaf078374607c944e22ac5100f2aa6fe4389c056fbdd963526f17ed",
+    "snapshotBytes": 2501953
+  },
+  "bench": {
+    "sourcePath": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\capacity-bench-final-070153afee914f3188947e2f07bce903\\publish",
+    "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\capacity-run-ec0a626b-fe54-4e63-85a0-2d97878891f2\\bench",
+    "files": [
+      {
+        "file": "PathFinder.Adapter.dll",
+        "bytes": 62976,
+        "sha256": "b70376b80f310b717726d0e4f17be69f98db81cce5fc1a868cb3fa938c3bcdbd"
+      },
+      {
+        "file": "PathFinder.Adapter.pdb",
+        "bytes": 21340,
+        "sha256": "4bc4ef6dd8b860425fdb5d6ea5c1cbdefc572115c570b42770fa6abe681b31ae"
+      },
+      {
+        "file": "PathFinder.CapacityBench.deps.json",
+        "bytes": 1716,
+        "sha256": "38440656ea6184d82e9738ab2103abe7494afced8e9dd088c145212b4f207f57"
+      },
+      {
+        "file": "PathFinder.CapacityBench.dll",
+        "bytes": 97792,
+        "sha256": "90c939476155552bf3be27bbee29e09e220e159c16996fa30dcde4f997691b2a"
+      },
+      {
+        "file": "PathFinder.CapacityBench.pdb",
+        "bytes": 22312,
+        "sha256": "b86abc665e20f39e5dec878b06f4aad04e3d4be3c532bb8d942df70e6a0dc591"
+      },
+      {
+        "file": "PathFinder.CapacityBench.runtimeconfig.json",
+        "bytes": 340,
+        "sha256": "3c0bf772b95c93363a0a14e5df78e4ec408c90f04cb7103205af97b2d276fab0"
+      },
+      {
+        "file": "PathFinder.Core.dll",
+        "bytes": 127488,
+        "sha256": "cdb662b43ea99ef584f54600901aa358133ef0494ae699d5e12ccd8dab713061"
+      },
+      {
+        "file": "PathFinder.Core.pdb",
+        "bytes": 55092,
+        "sha256": "7eb85b1728e2a70e0a27445d5af9defa190cf3c197290f59298e9505383d2dda"
+      },
+      {
+        "file": "PathFinder.Model.dll",
+        "bytes": 98816,
+        "sha256": "dc8aff9501236670907c64965a52339e4f4aff5b4a5ae6be4564af11a4f74b33"
+      },
+      {
+        "file": "PathFinder.Model.pdb",
+        "bytes": 28744,
+        "sha256": "c91f53e292e9ec9f98854f66dd9677a04ac8cae2739118df69e51e56d1b3959d"
+      }
+    ],
+    "omittedWindowsAppHosts": [
+      {
+        "file": "PathFinder.CapacityBench.exe",
+        "bytes": 156672,
+        "sha256": "60a0fbe776edacb2f61e8e8e9e245834455d442d96403f70af7ab0f42001a810"
+      }
+    ]
+  },
+  "image": {
+    "id": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+    "architecture": "amd64",
+    "os": "linux",
+    "created": "2026-10-18T09:35:54.452738296Z"
+  },
+  "resourceCeilings": {
+    "memoryBytes": 4294967296,
+    "pids": 256,
+    "cpuCount": 2,
+    "network": "none",
+    "readonlyRoot": true,
+    "wholeContainerDeadlineMilliseconds": 660000
+  },
+  "status": "FAIL",
+  "cleanup": {
+    "status": "PASS",
+    "containerId": "acfbeb64da0cb1e9006707b90d1c30fa99e6437c8aa20613cbd5fe7d5184f334",
+    "containerAbsent": true,
+    "externalDeadlineFired": false,
+    "interrupted": false,
+    "volumesCreated": 0,
+    "networksCreated": 0,
+    "imagesCreated": 0,
+    "filesDeleted": 0
+  },
+  "container": {
+    "id": "acfbeb64da0cb1e9006707b90d1c30fa99e6437c8aa20613cbd5fe7d5184f334",
+    "name": "wfc-pf-capacity-ec0a626bfe54",
+    "image": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+    "owner": "ec0a626b-fe54-4e63-85a0-2d97878891f2",
+    "project": "wfc-pathfinder-local-ec0a626bfe54",
+    "mounts": [
+      {
+        "Type": "bind",
+        "Source": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\capacity-run-ec0a626b-fe54-4e63-85a0-2d97878891f2\\input",
+        "Target": "/input",
+        "ReadOnly": true
+      },
+      {
+        "Type": "bind",
+        "Source": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\capacity-run-ec0a626b-fe54-4e63-85a0-2d97878891f2\\bench",
+        "Target": "/bench",
+        "ReadOnly": true
+      },
+      {
+        "Type": "bind",
+        "Source": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\capacity-run-ec0a626b-fe54-4e63-85a0-2d97878891f2\\tools",
+        "Target": "/tools",
+        "ReadOnly": true
+      },
+      {
+        "Type": "bind",
+        "Source": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\capacity-run-ec0a626b-fe54-4e63-85a0-2d97878891f2\\work",
+        "Target": "/work",
+        "ReadOnly": false
+      }
+    ]
+  },
+  "exit": {
+    "code": 0,
+    "oomKilled": false,
+    "error": null
+  },
+  "measurements": {
+    "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\capacity-run-ec0a626b-fe54-4e63-85a0-2d97878891f2\\work\\result.json",
+    "sha256": "5c2a262a020301da14a5afcea10796a856f533f4ccd6fdd6d7f70dee90d1dea5",
+    "status": "PASS",
+    "benchmark": "PASS",
+    "productionDatasets": 5
+  },
+  "sourceAfter": {
+    "api": {
+      "id": "3d05017ee0fc2bb0b15c1a3e0aaeac258e996d2e024006667d3a4449c40d62c0",
+      "name": "wfc-pathfinder-local-api-1",
+      "image": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+      "running": true,
+      "startedAt": "2026-10-18T09:53:48.067931419Z",
+      "exitCode": 0,
+      "oomKilled": false,
+      "platform": "linux",
+      "mounts": [
+        {
+          "type": "volume",
+          "name": "wfc-pathfinder-local_staging",
+          "destination": "/var/lib/wfc/model-imports",
+          "writable": true
+        },
+        {
+          "type": "volume",
+          "name": "wfc-pathfinder-local_pathfinder",
+          "destination": "/var/lib/wfc/pathfinder",
+          "writable": true
+        }
+      ]
+    },
+    "postgres": {
+      "id": "6830635a4597dad696f1a5ced6846853cd9e1fee0f858450ad6f858e4c2e30b9",
+      "name": "wfc-pathfinder-local-postgres-1",
+      "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+      "running": true,
+      "startedAt": "2026-10-18T02:03:12.60010978Z",
+      "exitCode": 0,
+      "oomKilled": false,
+      "platform": "linux",
+      "mounts": [
+        {
+          "type": "volume",
+          "name": "wfc-pathfinder-local_postgres",
+          "destination": "/var/lib/postgresql",
+          "writable": true
+        }
+      ]
+    },
+    "apiResourceCeilings": {
+      "memoryBytes": 4294967296,
+      "pids": 256
+    },
+    "image": {
+      "id": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+      "architecture": "amd64",
+      "os": "linux",
+      "created": "2026-10-18T09:35:54.452738296Z"
+    }
+  },
+  "sourceBindingsUnchanged": false,
+  "inputsUnchanged": true,
+  "publishedBenchUnchanged": true,
+  "preservationFailure": true,
+  "finishedAt": "2026-10-18T12:03:29.351Z"
+}

@@ -1,0 +1,73 @@
+{
+  "schemaVersion": "wfc.pf.current-full-recovery-probe.v1",
+  "status": "PASS",
+  "at": "2026-10-20T11:02:59.782Z",
+  "productionSourceCommit": "6e37e7a13d7ffa71690696c693c8ea5ce8960963",
+  "attempts": [
+    {
+      "attempt": 1,
+      "sourceSha256": "126a76b5becb88d8c24741bbc97d51d3839eb4ee12a3f7b9e8e976b1bf7daf3a",
+      "status": "FAIL",
+      "scope": "Daemon omitted false mount field; first helper not started",
+      "cleanup": {
+        "status": "PASS",
+        "helpersAbsent": true,
+        "removedVolumes": 2,
+        "sourcePinsExact": true
+      },
+      "sourceWriteOperations": 0,
+      "outsidePreserved": true,
+      "outsideSnapshotSha256": "8bbf7af895f041130b7ef394731f536dbea5c79f18bf3cf26e38a86cdca32b9b"
+    },
+    {
+      "attempt": 2,
+      "sourceSha256": "636c91d4ea97f20cb1772e54e282f74628c1bd0dbf137fc73372cbf6184bb933",
+      "status": "FAIL",
+      "scope": "Daemon Windows bind source normalization; capture helper not started",
+      "cleanup": {
+        "status": "PASS",
+        "helpersAbsent": true,
+        "removedVolumes": 2,
+        "sourcePinsExact": true
+      },
+      "sourceWriteOperations": 0,
+      "outsidePreserved": true,
+      "outsideSnapshotSha256": "8bbf7af895f041130b7ef394731f536dbea5c79f18bf3cf26e38a86cdca32b9b"
+    },
+    {
+      "attempt": 3,
+      "sourceSha256": "ef25c3a3671673cf427aefdda1e1c8f9387caa070ca7824fc7281ef1c16447a7",
+      "status": "PASS",
+      "scope": "Six actual bounded isolated synthetic helpers; archive/content/POSIX metadata round trip",
+      "cleanup": {
+        "status": "PASS",
+        "helpersAbsent": true,
+        "removedVolumes": 2,
+        "sourcePinsExact": true
+      },
+      "sourceWriteOperations": 0,
+      "outsidePreserved": true,
+      "outsideSnapshotSha256": "8bbf7af895f041130b7ef394731f536dbea5c79f18bf3cf26e38a86cdca32b9b"
+    }
+  ],
+  "actualProbe": {
+    "helpers": 6,
+    "removedVolumes": 2,
+    "defaultCapEffZero": true,
+    "readonlyRootErofs": true,
+    "tmpfsWritable": true,
+    "uidGidModeNanosecondsAndContentExact": true
+  },
+  "preflight": {
+    "status": "PASS",
+    "tables": 126,
+    "archiveOutputBytes": 3221225472,
+    "disk": {
+      "freeBytes": "90364391424",
+      "requiredBytes": "17056221124",
+      "linuxVolumeFreeBytes": "969618890752",
+      "linuxVolumeRequiredBytes": "7690141778"
+    }
+  },
+  "scope": "Actual synthetic Docker archive/capability qualification. No source writes, model conversion, native parity or engineering acceptance. Cold backup/restore not established by this receipt."
+}

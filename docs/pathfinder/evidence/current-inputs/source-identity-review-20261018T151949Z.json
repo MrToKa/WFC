@@ -1,0 +1,38 @@
+{
+  "schemaVersion":"pathfinder.current-inputs.identity-review.v1",
+  "recordedAt":"2026-10-18T15:19:49Z",
+  "status":"NO_REMAINING_MATERIAL_FINDINGS",
+  "reviewer":"/root/pf_runtime_map",
+  "scope":"Independent static review of the identity-only diagnostic delta; no live SQL/endpoint fact or business-copy success is asserted.",
+  "priorReview":"docs/pathfinder/evidence/current-inputs/source-review-20261018T151345Z.json",
+  "preservedFailure":"docs/pathfinder/evidence/current-inputs/source-copy-20261018T1515Z.json",
+  "source":[
+    {"path":"scripts/pathfinder-current-inputs/source-copy.mjs","sha256":"e1740f639a55fe08f1a5dff440ad9c4b3985379764a810ba754e6c333811fadf"},
+    {"path":"scripts/pathfinder-current-inputs/source-lib.mjs","sha256":"1fa12cd1d76662dfc350ac30551c1770cb5c502c640c7f89821c1ea98fe14b6f"},
+    {"path":"scripts/pathfinder-current-inputs/source-lib.test.mjs","sha256":"a72adffeff4e63f6879399f1e5ad56211094c27dd64e716d25a501a479aeba84"},
+    {"path":"scripts/pathfinder-current-inputs/README-source.md","sha256":"e657bba2c38ad208f1e0cad23a4d81c9c9728d4bf7968db7c2340f18f4a1607f"}
+  ],
+  "reviewedDelta":[
+    "Identity mode uses the exact bound original backend/endpoint/module checks and raw Client configuration; URI remains private and NODE_OPTIONS is cleared only for the helper process.",
+    "The fixed identityOnly:true branch returns immediately after the closed SQL identity SELECT and COMMIT, before any project/model/cable query. No business key is supplied in its config.",
+    "Both inet_server_addr()::text and host(inet_server_addr()) are observed separately, together with server port/database/effective and default read-only/isolation/transport state.",
+    "Diagnostic output is labelled OBSERVED. Its compact receipt explicitly says endpointGuard NOT_EVALUATED and businessQueries NOT_RUN; process/schema PASS does not imply server-identity equality.",
+    "The existing copy guard still compares the raw serverAddress exactly, and remains fail-closed. No address-format hypothesis has been accepted as fact or used to relax that guard.",
+    "The existing 35-second internal/45-second host deadline, awaited bounded stdout and durable raw-before-host-assert ordering are retained. Diagnostic raw output is capped at64KiB."
+  ],
+  "ownerExecutedChecks":{
+    "receipt":"docs/pathfinder/evidence/current-inputs/source-identity-controls-1792336753122.json",
+    "receiptSha256":"25c2de68338bec666891eb1526018345772c6c1d66b8fcb6e2724c807d2983c7",
+    "nodeTestPass":36,
+    "nodeTestFail":0,
+    "nodeSyntaxPass":3,
+    "rawTestSha256":"68b60f0d95a175bfd8652ac2d72bcb2d46ead5fcc90abb6bcb5fc84da73711b0",
+    "attribution":"Executed by source owner; reviewer read back current source, receipt and retained output hashes without rerunning tests."
+  },
+  "reviewerActions":{"testsExecuted":0,"databaseQueries":0,"containerOperations":0,"applicationEdits":0,"localReviewReceiptWrites":1},
+  "limitations":[
+    "The historical SOURCE_SQL_SERVER_IDENTITY failure remains FAIL. This review does not establish its cause.",
+    "Original identity observation is still NOT_RUN in the reviewed evidence and requires the parent coordinator's sole execution.",
+    "A later observed raw/canonical address difference, if any, requires a separately reviewed exact guard correction and new evidence; it cannot relabel the retained failure."
+  ]
+}

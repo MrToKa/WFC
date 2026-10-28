@@ -1,0 +1,11 @@
+{
+  "stage":"PF-B13a", "status":"PASS_WITH_LIMITATIONS", "baseCommit":"da86493",
+  "scope":"Pure structural multipart planning only",
+  "checks":{"sharedTests":45,"nativeTests":16,"fullTypes":"PASS","scopedLint":"PASS_0_WARNINGS","independentReview":"CLEAR"},
+  "syntheticControl":{"nodes":382523,"physicalOccurrences":620831,"originalTriangles":620831,"nodeLookupBytes":7650460,"maximumInputPageRecords":512,"maximumOriginalInputPages":2,"outputPages":1213,"parts":84,"testDurationMs":63046.7716,"planningElapsedMs":53607,"sampledMaximumRssBytes":276537344,"rssSamples":7562,"nodeHeapLimitMiB":384,"actualGeometry":"NOT_RUN","qualification":"NOT_MEASURED"},
+  "authority":"none",
+  "sourceFiles":{"shared/pathfinderBarrierMultipart.ts":"cd8e54ed598955ff88061294fe42a4c87b114854bf1ae9dd033b4e44a56cae31","shared/pathfinderBarrierMultipart.test.ts":"cca9d25147416166057628bad223fc891f5d491c747762bdaccac0843f6cc23c","viewer-runtime/barrier-plan.mjs":"3a87fdcb72c569e0b76c31fecf90c2a1493d56ac00348d150a8a56deac174997","viewer-runtime/barrier-plan.d.mts":"a68e02dba4cdbe4f2f5e716db3a50dbb95b1f288104d0642ca6709bd1df1e703","viewer-runtime/test/barrier-plan.test.mjs":"6ca78d48df5ad3c782ebfda911f58249660a2137d7072a927d2eb4702074f83c"},
+  "unchangedRuntime":{"web":"814475f9fe327887e0444fcd4e7e73411bc2f341d59b0748cac1f3b62578acee","api":"ac0d16ab1b0f4c92922c20d1a13a5ea142d4c6e92558de1870daf4db7fd60fcf","port":5191},
+  "notEstablished":["Actual Aalborg triangle/opening capacity", "SDK capture", "Barrier publication or collision clearance", "Own-endpoint exit/entry geometric proof", "Real cable routing or Apply", "Native or engineering acceptance"],
+  "next":"Server-owned bounded multipart admission/staging before protected producer wiring"
+}

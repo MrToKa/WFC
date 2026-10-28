@@ -1,0 +1,138 @@
+{
+  "branch": "pf-b8a-mixed-obstacles-local-20261021",
+  "originalAnd5191RuntimeChanged": false,
+  "realApply": false,
+  "actualAalborgCapacity": "FAIL_RETAINED_B8_512MiB_RESOURCE_LIMIT",
+  "actualOpeningAndBarrierAvoidance": "BLOCKED_ACTUAL_PROTECTED_CAPTURE_REQUIRED",
+  "sources": [
+    {
+      "sha256": "e915a1f4de1dfcf0c465c594ec42a0e4174284052693f2ac954d834c61d18d3e",
+      "file": "pathfinder-engine/src/PathFinder.BarrierVerifier/CaptureParser.cs"
+    },
+    {
+      "sha256": "564629863036318879306dcc7390d2348e160f49d515be35b7c7de147ee52705",
+      "file": "pathfinder-engine/tests/PathFinder.BarrierVerifier.Tests/Program.cs"
+    },
+    {
+      "sha256": "9926be9ab1e849e34bb3a4f0ba343e79bef7a5739684a96af65529d3786c548d",
+      "file": "shared/pathfinderBarriers.test.ts"
+    },
+    {
+      "sha256": "63b7cd4952e8cf215304717a6b3ad207d0fdbb82b4ac993b9d1a339bb58e48ec",
+      "file": "shared/pathfinderBarriers.ts"
+    },
+    {
+      "sha256": "da5b7e6673b5f2bd4ec0cc89302f6838a55c3f4bef9e6af79e129122d75df690",
+      "file": "src/pages/ProjectDetails/PathFinderBarrierResult.test.tsx"
+    },
+    {
+      "sha256": "5b64248497b52c94554650cda683ded987d0c1001856cee2d8be724e60d61ef1",
+      "file": "src/pages/ProjectDetails/PathFinderBarrierResult.tsx"
+    },
+    {
+      "sha256": "a2d09ab51ba99d312d7d9e6dea8207cfdf27724f1cea28fac36346a30dee946b",
+      "file": "src/pages/ProjectDetails/PathFinderBarriersPanel.test.tsx"
+    },
+    {
+      "sha256": "6713600f1708bf0e545562b5eaa685b1b2fad43c41d389620d246b73084d040e",
+      "file": "src/pages/ProjectDetails/PathFinderBarriersPanel.tsx"
+    },
+    {
+      "sha256": "695ede7666e90bf1a445d1f62440a6ab33a6251d437652610d355aceede8a638",
+      "file": "src/pages/ProjectDetails/PathFinderTab.tsx"
+    },
+    {
+      "sha256": "a5aa99d3d7a93223cf8315fcb3fd19d578c9f5ffcd574d65e8d620bd5b828dc3",
+      "file": "viewer-runtime/barrier-capture.mjs"
+    },
+    {
+      "sha256": "f80b9f4e59006580531d2322eb0fccae4e8815c1975ef65caa061bd7c79efe90",
+      "file": "viewer-runtime/test/barrier-capture.test.mjs"
+    }
+  ],
+  "productRevision": "7b6b74a2db46e59c2ccfcf4020758e7ee207a69a",
+  "schemaVersion": "wfc.pf.b8a-mixed-obstacles-evidence.v1",
+  "actualGroups": "NOT_CAPTURED_OR_QUALIFIED",
+  "algorithmsChanged": false,
+  "createdAt": "2026-10-21T18:13:28.8766651Z",
+  "limitsChanged": false,
+  "receipts": [
+    {
+      "sha256": "7399aadf5fa18112bcfae9824a5b58a76e829604067a7ee3c265945b988fa4dd",
+      "file": "ui-contracts1.log"
+    },
+    {
+      "sha256": "8f62f038cd3450725e8d190b842e54345be04188fd6bbdab9a0584d3ee7153af",
+      "file": "dotnet-build1.log"
+    },
+    {
+      "sha256": "1ccf398df238f400a3f70803f9daa8a6c6534e7ca2ed5b1dfcade5b09fd280fb",
+      "file": "dotnet-tests1.log"
+    },
+    {
+      "sha256": "75af5aeb56a03ee359605106f34ac5ba3bbf01c707b3f68b6decaa3449e4d6da",
+      "file": "viewer1.log"
+    },
+    {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "file": "client-types2.log"
+    },
+    {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "file": "server-types2.log"
+    },
+    {
+      "sha256": "5b8f457cbe24274e0e7c9284e09ea7b922da59889d4b9063952bec136cbe4ad1",
+      "file": "server-build2.log"
+    },
+    {
+      "sha256": "652ff6733f850735f2f70b9205b5009015fcc1e0b03367c80a8da5ab8d249bbd",
+      "file": "web-build2.log"
+    },
+    {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "file": "lint2.log"
+    },
+    {
+      "sha256": "49222ba37439f260416e91d783b269999fffbf265e4286053dff3dba35dfb762",
+      "file": "preservation2.json"
+    }
+  ],
+  "engineeringAccepted": false,
+  "status": "PASS_TECHNICAL_ONLY",
+  "uiScope": "component tests with mocks; real browser blocked, no deployed5191 change",
+  "checks": [
+    {
+      "name": "Vitest contract+Panel+Result",
+      "status": "PASS",
+      "files": 3,
+      "tests": 89
+    },
+    {
+      "name": "Node protected capture",
+      "status": "PASS",
+      "tests": 41
+    },
+    {
+      "name": "fresh .NET verifier",
+      "status": "PASS",
+      "tests": 50
+    },
+    {
+      "name": "client+server types",
+      "status": "PASS"
+    },
+    {
+      "name": "changed lint/syntax/whitespace",
+      "status": "PASS"
+    },
+    {
+      "name": "server+own web production builds",
+      "status": "PASS"
+    },
+    {
+      "name": "Core11/frozen3 read-only preservation",
+      "status": "PASS"
+    }
+  ]
+}

@@ -1,0 +1,506 @@
+{
+  "schemaVersion": "wfc.pf.b20-mixed-original-source-checks.v1",
+  "status": "PASS",
+  "at": "2026-10-22T13:12:21.029Z",
+  "checkedParent": "775376628b3aa6e2fb45e048dbd106b9e890167a",
+  "branch": "pf-b20-mixed-original-barriers-local-20261022",
+  "scope": "bounded manual mixed source implementation; not installed or live SDK acceptance",
+  "affected": {
+    "passed": 1298,
+    "failed": 0,
+    "skipped": 0,
+    "files": 31
+  },
+  "isolated": {
+    "admission": 38,
+    "sqlHttpProcess": 26,
+    "linuxMathAndFloorAndRunner": 81,
+    "helpersRemoved": true,
+    "networkRemoved": true
+  },
+  "floor": {
+    "captureSha256": "11a92f704cfd5b76e16008f5b822398d77a3c675f7f84c8c6774339a24637b32",
+    "receiptSha256": "e560995f1f8fc53613516be07c83ad6d5db9c58f1c37086e7352eb0de099e16f",
+    "vertices": 1056,
+    "triangles": 928,
+    "windows": 9,
+    "linux": 9,
+    "frame": "explicit offline package world; not current Viewer"
+  },
+  "pins": [
+    {
+      "path": "pathfinder-engine/src/PathFinder.BarrierVerifier/MixedBarrierCaptureVerifier.cs",
+      "bytes": 9091,
+      "sha256": "5157cf5d19a77ea11dcd4d159505196b6608cd06f007ed27a1260e3660b58a44"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.BarrierVerifier/MixedContracts.cs",
+      "bytes": 1827,
+      "sha256": "24fdb0a6f72db65194875ead0f4de51a5b82f8ae79193b443e730cc690d36200"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.BarrierVerifier/Program.cs",
+      "bytes": 2663,
+      "sha256": "af713fd34a752d5709972c22643285e9685f78f1e29a0c77aaf3c9cd53656a61"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Barriers/MixedBarrierKernel.cs",
+      "bytes": 32643,
+      "sha256": "a899ac28fecfccce47e899e6dab2d2fe900592e6a4aa732cb240259bde34a0ea"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Barriers/MixedDyadicSurfaceContact.cs",
+      "bytes": 9667,
+      "sha256": "5468ca8c9f5b7df083c9db194205ba15a1a2aab0abd9e73a5a896108e8f4c673"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Barriers/OriginalTriangleSurfaceContact.cs",
+      "bytes": 3217,
+      "sha256": "9e84836ee5009161145c66cc4ca2d3f5ffe6e23bcca0a5c144ce91144fadd165"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.MixedBarrierRuntime.Tests/MixedFixtures.cs",
+      "bytes": 7978,
+      "sha256": "db8b8e58b3606fc89cd9eb9fd16cfc6247d5e5ad90f2e3c40894b4ec19b39b49"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.MixedBarrierRuntime.Tests/PathFinder.MixedBarrierRuntime.Tests.csproj",
+      "bytes": 697,
+      "sha256": "86d569ef8438e00e0e0a7d69141d18f020a3e1455741dc63678fed3642d4f1b8"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.MixedBarrierRuntime.Tests/Program.cs",
+      "bytes": 15714,
+      "sha256": "0ecc25391287caebc1f4e17cbd24463694d491676b92d0d5fbd81f2c2ae5cda6"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.MixedBarrierRuntime.Tests/Transport.cs",
+      "bytes": 8467,
+      "sha256": "5bb5bdfff0894eacf96beabe81112788cab698807a1cf1258021a7b345dd3233"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.MixedBarriers.Tests/Fixtures.cs",
+      "bytes": 2994,
+      "sha256": "031dc3ba1e2514c991055a8a46dfb5061ff769e3f725a2916359e7f8e8aebebe"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.MixedBarriers.Tests/PathFinder.MixedBarriers.Tests.csproj",
+      "bytes": 662,
+      "sha256": "642fea55bd12673c3c4dbb9663857ee75a6a8eee28fc0290081321e2b01e87b4"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.MixedBarriers.Tests/Program.cs",
+      "bytes": 21745,
+      "sha256": "79f5e50c98f1ba8eb618fa890c12fd9bdcdb2a63bee4a7a4b35cd8352a1ceca1"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.MixedExactSurface.Tests/PathFinder.MixedExactSurface.Tests.csproj",
+      "bytes": 729,
+      "sha256": "ae2e64fff4c279a5970d244529fda7c84473cd16cba6987916029999729763f3"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.MixedExactSurface.Tests/Program.cs",
+      "bytes": 8119,
+      "sha256": "1f2ed9db0410989eecc05f14a44e963a6caaea3b1054ba6c7fa21bbb6913ed48"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/MixedBarrierArtifacts.cs",
+      "bytes": 12308,
+      "sha256": "5900fda7ba5717fff8923bb66bff61d498c66f0de4cafed58e09b946e071b5a1"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/MixedBarrierExecution.cs",
+      "bytes": 9044,
+      "sha256": "3faa65d04f9b2186f53273a3e9b054da101ad0b46a5bfe41a51f982c3853992c"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/MixedBarrierRoutingExecution.cs",
+      "bytes": 11499,
+      "sha256": "95a346ff8d2c3ada97f9602dfeff851f80659d747d19d67bab62d9d8d1de9456"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/Program.cs",
+      "bytes": 36709,
+      "sha256": "442eaf8f80938cb3407de97451d17a6b699211486201b70a40e62ad498f58f02"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/SessionExecutionContext.cs",
+      "bytes": 4550,
+      "sha256": "f87c99405594abf05eb04397e0050cbdc862bf1f44ef9320a85c91b4d5e6a693"
+    },
+    {
+      "path": "server/pathfinder/barrierCalculationScope.ts",
+      "bytes": 16072,
+      "sha256": "32beb2fec068cd321c2e3f6e3f62cf6706569c6e3d6fc281f9626ccf2bc54fd8"
+    },
+    {
+      "path": "server/pathfinder/barrierCaptureAuthority.test.ts",
+      "bytes": 26983,
+      "sha256": "3d642f6abf72f6ec4d810c0111b8e8c7464888921cbc8a7e67e3bc7d91f9dd90"
+    },
+    {
+      "path": "server/pathfinder/barrierCaptureAuthority.ts",
+      "bytes": 8983,
+      "sha256": "7b240f433d5db85ea3fecb6e6248078c733fa3ab8675fccd255a6b9d48dc3376"
+    },
+    {
+      "path": "server/pathfinder/barrierQualification.test.ts",
+      "bytes": 6941,
+      "sha256": "1d661e7549e53e2fe40b0620ba4eb046576e7098401428fa349fc8bf4b50a8bf"
+    },
+    {
+      "path": "server/pathfinder/barrierQualification.ts",
+      "bytes": 5351,
+      "sha256": "a83043c29fa13483a348a932e839518a708fe9226957329d9e0a852164dd456c"
+    },
+    {
+      "path": "server/pathfinder/barrierRegistryRepository.test.ts",
+      "bytes": 41564,
+      "sha256": "7625e5a9fd33af1e78e430f9f76d87340fe447d07a3bf893b257eea2ecf0a456"
+    },
+    {
+      "path": "server/pathfinder/barrierRegistryRepository.ts",
+      "bytes": 39146,
+      "sha256": "0dff4a5bdadfde98d2ff0e4de6938a19d91794b5db89ec5d8036980e5ffe1049"
+    },
+    {
+      "path": "server/pathfinder/barrierRegistrySql.integration.test.ts",
+      "bytes": 27682,
+      "sha256": "f3c9cedf77712ca2820571b0169bb400ce76edf570eff5e53bd1c4627f43dede"
+    },
+    {
+      "path": "server/pathfinder/barrierRoutes.test.ts",
+      "bytes": 20134,
+      "sha256": "8aa2a442454ef6c19760be307ce9037856278cc01639da8ff26398d37115bae8"
+    },
+    {
+      "path": "server/pathfinder/barrierRoutes.ts",
+      "bytes": 8183,
+      "sha256": "658243b4a7e3cd923cc8bbc9d9a1518409235247c2ac1704546d9e681cd07e25"
+    },
+    {
+      "path": "server/pathfinder/barrierStrategy.test.ts",
+      "bytes": 27281,
+      "sha256": "1bc8ccd68edfa262b24c5cd4b5b592da540f96b7f0fa7b4747f79df8f6391038"
+    },
+    {
+      "path": "server/pathfinder/barrierStrategy.ts",
+      "bytes": 7685,
+      "sha256": "39ce54e5a9eea10ec4e30eef8a67acd7f4ea21024ea23f0c6355b48faaba3cb6"
+    },
+    {
+      "path": "server/pathfinder/barrierVerifier.ts",
+      "bytes": 10845,
+      "sha256": "e832676e3f7bf8571ec36b3bf0f0a65026cb9cdf983e2cc3492e9f676a74be2d"
+    },
+    {
+      "path": "server/pathfinder/barrierVerifierProcess.integration.test.ts",
+      "bytes": 10693,
+      "sha256": "fff66adba9631d5f8c8912e80e1c2ca8544eb77d418c12008f133e6b3790757d"
+    },
+    {
+      "path": "server/pathfinder/barrierWorkerProjection.test.ts",
+      "bytes": 22489,
+      "sha256": "87122e2b32667e7d968400b6e6755180a7dff4297fe449e0b34582e84765b07e"
+    },
+    {
+      "path": "server/pathfinder/barrierWrites.test.ts",
+      "bytes": 18557,
+      "sha256": "aa2ebbb2b2c98a1f2d3f049cd51052d7e1fb1c578896da697fed914375135d2c"
+    },
+    {
+      "path": "server/pathfinder/barrierWrites.ts",
+      "bytes": 6926,
+      "sha256": "36f0404d06e0235d8f994cdbffefca4506b64b3c2cd31b68d4dd37db77e0843f"
+    },
+    {
+      "path": "server/pathfinder/cableWorkflowRepository.test.ts",
+      "bytes": 19485,
+      "sha256": "59d74fde1107d84244fec516f7b4e2bffe21ba21a8cd3e02a5ac8cd707f83bbd"
+    },
+    {
+      "path": "server/pathfinder/cableWorkflowRepository.ts",
+      "bytes": 24260,
+      "sha256": "09e1f0a6211db6d34cad23eb42161ab2983a093b0dfcc8fec6d8f0e089f1022d"
+    },
+    {
+      "path": "server/pathfinder/calculationEngineIdentity.ts",
+      "bytes": 12017,
+      "sha256": "209e8e76acd385544d6d304f0dc2069d870d29512c5ffd812bc580d874fe0e68"
+    },
+    {
+      "path": "server/pathfinder/dependencies.test.ts",
+      "bytes": 20956,
+      "sha256": "e9603e9eaf70577fd1e6ddf57ff218bfcbf0c1a4beae81f254750a6289b0dbf7"
+    },
+    {
+      "path": "server/pathfinder/dependencies.ts",
+      "bytes": 24199,
+      "sha256": "cccc1d7408de18667446eb64180e3d6cc17e82176889613b70bc4675a26db769"
+    },
+    {
+      "path": "server/pathfinder/dependencyBatch.ts",
+      "bytes": 9360,
+      "sha256": "b9dceb1166edf5f97a0126c84920e223f624e04a8b7583b906b6bf70bdebcf85"
+    },
+    {
+      "path": "server/pathfinder/initialFillReceiptProof.test.ts",
+      "bytes": 34301,
+      "sha256": "c46c5e8363f73ddc60f8134108180d25825c749e967bee6e0f1e57a53cfcce85"
+    },
+    {
+      "path": "server/pathfinder/initialFillReceiptProof.ts",
+      "bytes": 18823,
+      "sha256": "2316a190953fb96f8a2c3fb91a5fe83832a58031bd6e06b205e879ea196f8132"
+    },
+    {
+      "path": "server/pathfinder/jobContracts.ts",
+      "bytes": 13591,
+      "sha256": "700f2e6015c7bf766f6f86fdc5d7ab35916544179c1aa8b6c89c0a38a3dbc95a"
+    },
+    {
+      "path": "server/pathfinder/previews.ts",
+      "bytes": 16790,
+      "sha256": "a173c424d8d83ea7fbeb163b21bb2f437ad1eea156102cf7650364d6c0b4f441"
+    },
+    {
+      "path": "server/pathfinder/proposalApplicability.ts",
+      "bytes": 7952,
+      "sha256": "8a4acc369a6162d6e8758dd18d695d51d815fadac6c62b54bdfe86388895219c"
+    },
+    {
+      "path": "server/pathfinder/routingScope.ts",
+      "bytes": 8328,
+      "sha256": "93280b0810cf839616529d9a1be1a1967f57e846e186b5380ed5a5e4d29cd7ae"
+    },
+    {
+      "path": "server/pathfinder/worker.ts",
+      "bytes": 36406,
+      "sha256": "cddf4b76361168f7930570aeeda1ab1691274a9dbc6a0aba0b80b6648f22eb4b"
+    },
+    {
+      "path": "shared/pathfinderBarrierMixed.test.ts",
+      "bytes": 29963,
+      "sha256": "59b965c68e577b052825644dbf474c76429a75d1e6bb27579644b5fd0375c145"
+    },
+    {
+      "path": "shared/pathfinderBarrierMixed.ts",
+      "bytes": 38631,
+      "sha256": "caccfe1ddb516e56070400bca80233c00d0a7c7568a6770b1497d6da37a80d64"
+    },
+    {
+      "path": "shared/pathfinderBarrierSupported.test.ts",
+      "bytes": 9033,
+      "sha256": "c92428d07ae4d53e44bcfe62a812c43a1acc8e3b73bf35be4760d8b17e7df649"
+    },
+    {
+      "path": "shared/pathfinderBarrierSupported.ts",
+      "bytes": 11053,
+      "sha256": "77627640a20898c57025d4bf80e9e7ddf786f3ceada1aedb0a241fc46321426f"
+    },
+    {
+      "path": "shared/pathfinderCableWorkflowQueries.ts",
+      "bytes": 4899,
+      "sha256": "10bb2d9a8e8179415284c358d2a979ca4c907b8e6a556e6c3057bf2aa5dbe024"
+    },
+    {
+      "path": "shared/pathfinderEngineIdentity.ts",
+      "bytes": 6028,
+      "sha256": "888e05a13e5f696743a0d33633462129cdb0a12dd55f33fee2371f807df11b7d"
+    },
+    {
+      "path": "shared/pathfinderInitialFill.ts",
+      "bytes": 6053,
+      "sha256": "9020ba8e4ce19f4271a58fdb00227c3c956b1f425aaba44747ba420ed781b45e"
+    },
+    {
+      "path": "shared/pathfinderRecalculation.ts",
+      "bytes": 8025,
+      "sha256": "86c247dcc756dfa7bfc8949201e7fadc0d8d69595924597c57b1db94d4c84de6"
+    },
+    {
+      "path": "src/api/pathfinder.ts",
+      "bytes": 24286,
+      "sha256": "2833345931508d9c691d7bd8a9cbb59506cf9c2141b3bc981f3ed370fe542a07"
+    },
+    {
+      "path": "src/api/pathfinderBarriers.test.ts",
+      "bytes": 15645,
+      "sha256": "9ac63f9bca1567fc346d1aee117a00111d193cb228f5c9ca5a88451592e2defe"
+    },
+    {
+      "path": "src/api/pathfinderBarriers.ts",
+      "bytes": 8277,
+      "sha256": "645ea3dccd3cea62550bae46e4b05ccc2dd2e9f368a15a0e4ae9852cbae087e5"
+    },
+    {
+      "path": "src/components/pathfinder/PathFinderCableWorkspace.tsx",
+      "bytes": 29901,
+      "sha256": "f8b2c5f37f518d3b99866229a67508fbb0dee7535c060cb3aa58b02fcf6f2c78"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderBarrierResult.test.tsx",
+      "bytes": 18602,
+      "sha256": "2adbbba54d91e20f7261f1ab2815fd78fe569bd7ae9a2c18fe008b20860537cc"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderBarrierResult.tsx",
+      "bytes": 9272,
+      "sha256": "cf79b176534390041006526af63cc9b4236195c4d140bfe22d1a4e44782d3d05"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderCalculationGrantPanel.tsx",
+      "bytes": 7041,
+      "sha256": "9c787310c00955ca2bd68b45301150677c57b268c76614afad819e171e6989a5"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderResults.tsx",
+      "bytes": 63602,
+      "sha256": "202c7c650f7ae4c7432ed56e006881dfe556ae439dad4c3b28bce4f71a31709d"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderTab.tsx",
+      "bytes": 34120,
+      "sha256": "b502bbe31d06ed6bb90b56be78952496d9e38134e4743e066499a3391f5f85d7"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/barrierPendingPublication.test.ts",
+      "bytes": 9001,
+      "sha256": "f432b6fc9b4de52d6d908facede30c4e9b6fbf92a27fe764a7aebb65504869b8"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/barrierPendingPublication.ts",
+      "bytes": 9804,
+      "sha256": "b4235ed4eccbd3b736aaaaf3eedc030596f22b33c062a58647d39abd13ced5ad"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/usePathFinder.ts",
+      "bytes": 31312,
+      "sha256": "f68690303033b561b470705d65c033f7649e0724bdb4eb0b6511d8a421af06cb"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/usePathfinderBarriers.test.tsx",
+      "bytes": 61547,
+      "sha256": "98323a2e8dec554bac0b70c8a2d2866bf364b66603c64d83716728f624e9ed8f"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/usePathfinderBarriers.ts",
+      "bytes": 34866,
+      "sha256": "3f28fc913439b2621d45a05c9fbda0aaf0d6e1328525cdabe8dce4ac074fd1a0"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/usePathfinderBatchReview.ts",
+      "bytes": 15275,
+      "sha256": "e516cc804c032bc4db3b79b7328f57f1cae517b86d0178e68f0f1c9d6c7c47ab"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/usePathfinderPendingApply.test.tsx",
+      "bytes": 23522,
+      "sha256": "225cf1c884d8491c4c300c34d4bf612190393dc521d62e13fcde950223025446"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/usePathfinderPendingApply.ts",
+      "bytes": 14484,
+      "sha256": "6b6e52a08c4ff5b74c509748a0525667fd1ced4e0b324b1a1ce1e3e9cf619127"
+    },
+    {
+      "path": "src/viewer/ViewerController.test.ts",
+      "bytes": 97197,
+      "sha256": "d1f6602000d130b701f032344e456c14c242dcf9272ffe2b5c51bdf26c477f5b"
+    },
+    {
+      "path": "src/viewer/ViewerController.ts",
+      "bytes": 60733,
+      "sha256": "f4bf74be292ada12342c4d31b663fbdea544f7904619118aec2a43be642855ea"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "pathfinder-engine/.scratch/b20-730c158d/affected-final.private.json",
+      "bytes": 514740,
+      "sha256": "c1da5e69ec18e5808f9d7ce43018f78f15cd3e6e78da11670b9aac46e9ee85d8"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/b20-730c158d/types-fourth.log",
+      "bytes": 93,
+      "sha256": "b8eb3154847ce13af5e3a7672a976c5437a052bfd30d24dd327a019180231d04"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/b20-730c158d/lint-first.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/b20-730c158d/web-build-first.log",
+      "bytes": 7604,
+      "sha256": "c746eee8b429c9eeaf6bd234919c9497bc01dad65ebec7c9b0a56099223431e3"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/b20-730c158d/server-build-first.log",
+      "bytes": 1799,
+      "sha256": "e9f1842c678fae76ad91e1a0236ea2dbbbecb68a9601ea2e1dc84b9f17e20dc9"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/b20-730c158d/fixture-c7a68870-222f-4fcb-89e0-6dff4db198f7/result.private.json",
+      "bytes": 31712,
+      "sha256": "fed0155ae170f3640196baf7ae4574910eae66243d89eb2f8aafe88b8a5c72fd"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/b20-730c158d/admission-linux-6450d379-2182-4346-b2f6-09828e6f5998/result.private.json",
+      "bytes": 21797,
+      "sha256": "dd56964e233f83609371d45f45b8b6b73981731630fe82e395ddd5b160aa27f2"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/b20-730c158d/math-linux-d6feb164-fad8-471a-9988-c87aa07981da/result.private.json",
+      "bytes": 31960,
+      "sha256": "ae553682d5aa2012c5851cd2900a3e762e0c3cc10c9d9cf7ffd74165ef72d095"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/b20-730c158d/actual-floor-third.log",
+      "bytes": 3170,
+      "sha256": "55ab7828db6bf339f95df389e1b2150525e76855d84f39a1a392dc35fdde37b9"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/b20-730c158d/runtime-exact-windows.log",
+      "bytes": 2280,
+      "sha256": "a46b037cbbc3e346c29fdb095755d730a4f820ea7f2963c3f40c880f110b63c7"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/b20-730c158d/PathFinder.BarrierRuntime.Tests-first.log",
+      "bytes": 5987,
+      "sha256": "123b9c385d097a28b3b6ee6ccf7ae9131f171e17f40048cc6cef8e705567e8d4"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/b20-730c158d/PathFinder.DirectSecondary.Tests-first.log",
+      "bytes": 6031,
+      "sha256": "a5ef7f35302da9bbb3a3566b5d3510af7b524bdd6e7b426d76ebbbc70b0dfb51"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/b20-730c158d/PathFinder.Constrained.Tests-first.log",
+      "bytes": 6338,
+      "sha256": "bc7bc18984623ddbc117f72210b6473dd23ab1e89335d08e270a8ef13aaca276"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/b20-730c158d/PathFinder.LocalConnectors.Tests-first.log",
+      "bytes": 4895,
+      "sha256": "ab04451818c8c3b0951b4e4764876f289d19a2f76fb2fb81b08db740ff1845e8"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/b20-730c158d/PathFinder.RunnerSession.Tests-second.log",
+      "bytes": 226,
+      "sha256": "fc19059b9f9ee8198184c1575e6b2097db6fbf36a871704e431214fa7d51ee48"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/b20-730c158d/verifier-build-46edeb82-34bd-4836-999c-b439ee193299/compiled-verifier.pass.private.json",
+      "bytes": 6181,
+      "sha256": "48f3108d60f3d530cef4e3926eaf919c083d2b82173e6f0e64327030522e5ddc"
+    }
+  ],
+  "remaining": [
+    "durable exact-hash recovery/closure",
+    "authenticated own-terminal exit/entry",
+    "full multipart/catalog capacity",
+    "checked delivery",
+    "live Aalborg test"
+  ]
+}

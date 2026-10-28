@@ -1,0 +1,13 @@
+**
+!docker/
+!docker/pathfinder-producer/
+!docker/pathfinder-producer/package.json
+!docker/pathfinder-producer/package-lock.json
+!scripts/
+!scripts/pathfinder-background/
+!scripts/pathfinder-background/*.mjs
+scripts/pathfinder-background/*.test.mjs
+!public/
+!public/viewer-runtime/
+!public/viewer-runtime/7.130.0/
+!public/viewer-runtime/7.130.0/**

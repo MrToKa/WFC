@@ -1,0 +1,104 @@
+{
+  "schemaVersion": "pathfinder.routes-path.retained-metadata-source-verification.v1",
+  "recordedAtUtc": "2026-10-18T08:40:11.5897574Z",
+  "workspace": "C:/Users/todor.chankov/source/WFC-pathfinder-local",
+  "branch": "pf-two-tabs-local-20261018",
+  "baseCommit": "542e101fd7d9a0cf53a70db7d898902e5437500c",
+  "scope": "Source-only verification of authorized retained-metadata and stronger gap-contributor proof changes, before checkpoint/build/live rerun. Recorded from actual completed commands; no test rerun performed to create this receipt.",
+  "checks": [
+    {
+      "name": "Scoped unit regressions",
+      "status": "PASS",
+      "command": "npx vitest run server/pathfinder/worker-retained.test.ts server/pathfinder/previews.test.ts server/pathfinder/settings.test.ts server/pathfinder/matching.test.ts",
+      "processExitCode": 0,
+      "passed": 69,
+      "total": 69,
+      "files": [
+        {
+          "path": "server/pathfinder/worker-retained.test.ts",
+          "passed": 9
+        },
+        {
+          "path": "server/pathfinder/previews.test.ts",
+          "passed": 25
+        },
+        {
+          "path": "server/pathfinder/settings.test.ts",
+          "passed": 15
+        },
+        {
+          "path": "server/pathfinder/matching.test.ts",
+          "passed": 20
+        }
+      ],
+      "reportedDurationMilliseconds": 726,
+      "reportedStartLocal": "2026-10-18 11:37:36 Europe/Kiev"
+    },
+    {
+      "name": "Server TypeScript",
+      "status": "PASS",
+      "command": "npx tsc --noEmit -p server/tsconfig.json",
+      "processExitCode": 0,
+      "diagnostics": 0
+    },
+    {
+      "name": "Scoped ESLint",
+      "status": "PASS",
+      "command": "npx eslint server/pathfinder/worker.ts server/pathfinder/worker-retained.test.ts server/pathfinder/integration.ts --max-warnings=0",
+      "processExitCode": 0,
+      "diagnostics": 0
+    },
+    {
+      "name": "Whitespace diff check",
+      "status": "PASS",
+      "command": "git diff --check -- server/pathfinder/worker.ts server/pathfinder/worker-retained.test.ts server/pathfinder/integration.ts",
+      "processExitCode": 0,
+      "note": "Only routine LF-to-CRLF Git warnings; no diff errors."
+    }
+  ],
+  "sourceHashes": [
+    {
+      "path": "server/pathfinder/worker.ts",
+      "sha256": "7ee8d927e439e1a655a0fbf3411bac75225f1232399765e1c231112afa075c36"
+    },
+    {
+      "path": "server/pathfinder/worker-retained.test.ts",
+      "sha256": "3d2981a69ccc6832e95bc6bb979e23befb3e85c2d9a32ed6cd639174b73c9d06"
+    },
+    {
+      "path": "server/pathfinder/integration.ts",
+      "sha256": "e12c40e4f8afe0e9cb062d8221138f675d794694dd4b96471d35e0f0783b6ef9"
+    }
+  ],
+  "failedLiveAttempt": {
+    "status": "FAIL",
+    "passed": 27,
+    "total": 29,
+    "sourceCommit": "542e101fd7d9a0cf53a70db7d898902e5437500c",
+    "receipt": "live29-final-20261018T083254Z.json",
+    "binding": "live29-final-binding-20261018T083254Z.json",
+    "cleanupReadback": "cleanup-readback-final-20261018T083254Z.json",
+    "cleanupStatus": "PASS",
+    "classification": [
+      {
+        "type": "Real production metadata failure",
+        "observed": "Instrumentation proposal effectiveCategory was null, while status, exact 10 metre route and 18 metre design assertions had already passed.",
+        "cause": "Retained-geometry operation design response omitted original effectiveCategory and prepared diagnostics.",
+        "fix": "Merge the exact retained route and original diagnostics with the fresh C# decimal design/settings; map category from immutable calculation inputs and reject contradictions."
+      },
+      {
+        "type": "Over-specific driver assertion",
+        "observed": "The explicit changed-gap job reported design rather than calculate.",
+        "cause": "An automatic job may calculate the same exact new geometry before the explicit request uses it.",
+        "fix": "Require changed old/new geometry hashes and at least one successful fresh calculate contributor for the exact new hash after the gap PATCH. Preserve all gap authority/revision/staleness checks and record contributor/request identities."
+      }
+    ],
+    "historicalResponseIdentityLimitation": "The failed driver version did not retain full failed proposal responses, and cleanup removed its temporary rows. Historical failed proposal/job IDs cannot be recovered and are not invented."
+  },
+  "finalCandidateIntegration": {
+    "status": "NOT_RUN",
+    "reason": "Root must review, checkpoint, rebuild and release the next owned candidate."
+  },
+  "runtimeMutationsByTheseSourceChecks": 0,
+  "nativeParity": "NOT_PERFORMED; source checks do not grant human engineering acceptance."
+}

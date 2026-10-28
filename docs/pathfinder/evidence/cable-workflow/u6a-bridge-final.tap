@@ -1,0 +1,274 @@
+TAP version 13
+# Subtest: capture timing emits one bounded aggregate without identities or model values
+ok 1 - capture timing emits one bounded aggregate without identities or model values
+  ---
+  duration_ms: 32.1028
+  type: 'test'
+  ...
+# Subtest: capture timing logging cannot change success or stopped cleanup
+ok 2 - capture timing logging cannot change success or stopped cleanup
+  ---
+  duration_ms: 3.6141
+  type: 'test'
+  ...
+# Subtest: preparation exact discovery is current-admin authorized before and after SDK work, cancellation suppresses a late page
+ok 3 - preparation exact discovery is current-admin authorized before and after SDK work, cancellation suppresses a late page
+  ---
+  duration_ms: 3.1372
+  type: 'test'
+  ...
+# Subtest: independent lookup empty-visible scope sends only an allowlisted actionable message
+ok 4 - independent lookup empty-visible scope sends only an allowlisted actionable message
+  ---
+  duration_ms: 1.2673
+  type: 'test'
+  ...
+# Subtest: HELLO uses exact target origin, forged origin/source/identity/direction/replays have no side effects
+ok 5 - HELLO uses exact target origin, forged origin/source/identity/direction/replays have no side effects
+  ---
+  duration_ms: 0.5383
+  type: 'test'
+  ...
+# Subtest: computed path requires ordered complete bounded chunks and current cookie-bound admin permission
+ok 6 - computed path requires ordered complete bounded chunks and current cookie-bound admin permission
+  ---
+  duration_ms: 1.7126
+  type: 'test'
+  ...
+# Subtest: a successful zero-length engine result transports its one exact point without adding a second
+ok 7 - a successful zero-length engine result transports its one exact point without adding a second
+  ---
+  duration_ms: 1.181
+  type: 'test'
+  ...
+# Subtest: out-of-order/incomplete computed paths fail closed; Clear cancels a pending authorization
+ok 8 - out-of-order/incomplete computed paths fail closed; Clear cancels a pending authorization
+  ---
+  duration_ms: 2.6954
+  type: 'test'
+  ...
+# Subtest: picking and metadata reauthorize after SDK work; cancellation and revoked admin suppress results
+ok 9 - picking and metadata reauthorize after SDK work; cancellation and revoked admin suppress results
+  ---
+  duration_ms: 1.6119
+  type: 'test'
+  ...
+# Subtest: selection is cookie-bound admin authorized before and after SDK work, and Clear suppresses late selection
+ok 10 - selection is cookie-bound admin authorized before and after SDK work, and Clear suppresses late selection
+  ---
+  duration_ms: 1.516
+  type: 'test'
+  ...
+# Subtest: transparency is bounded to the current committed path and delayed authorization cannot change a replacement
+ok 11 - transparency is bounded to the current committed path and delayed authorization cannot change a replacement
+  ---
+  duration_ms: 1.7542
+  type: 'test'
+  ...
+# Subtest: transparency reauthorizes after material preflight and makes no change after role revocation
+ok 12 - transparency reauthorizes after material preflight and makes no change after role revocation
+  ---
+  duration_ms: 1.1945
+  type: 'test'
+  ...
+# Subtest: Clear, cancellation, replacement and disposal cannot publish late preflighted transparency
+ok 13 - Clear, cancellation, replacement and disposal cannot publish late preflighted transparency
+  ---
+  duration_ms: 3.5649
+  type: 'test'
+  ...
+# Subtest: late final transparency authorization cannot mutate a cleared path
+ok 14 - late final transparency authorization cannot mutate a cleared path
+  ---
+  duration_ms: 1.3445
+  type: 'test'
+  ...
+# Subtest: partial appearance restoration errors are sanitized and leave Clear available for retry
+ok 15 - partial appearance restoration errors are sanitized and leave Clear available for retry
+  ---
+  duration_ms: 5.0296
+  type: 'test'
+  ...
+# Subtest: model capture transport is request-bound, reauthorizes each part and reserves the replay budget
+ok 16 - model capture transport is request-bound, reauthorizes each part and reserves the replay budget
+  ---
+  duration_ms: 17.7645
+  type: 'test'
+  ...
+# Subtest: the overall capture deadline starts before initial authorization and refuses a delayed start
+ok 17 - the overall capture deadline starts before initial authorization and refuses a delayed start
+  ---
+  duration_ms: 1.9376
+  type: 'test'
+  ...
+# Subtest: a final capture response cannot publish after delayed postauthorization exceeds the shared deadline
+ok 18 - a final capture response cannot publish after delayed postauthorization exceeds the shared deadline
+  ---
+  duration_ms: 1.4669
+  type: 'test'
+  ...
+# Subtest: staged input ACKs and first output stay separately typed and reauthorize every round
+ok 19 - staged input ACKs and first output stay separately typed and reauthorize every round
+  ---
+  duration_ms: 4.2676
+  type: 'test'
+  ...
+# Subtest: Clear or revoked authority after a staged append cannot publish a late input ACK
+ok 20 - Clear or revoked authority after a staged append cannot publish a late input ACK
+  ---
+  duration_ms: 3.5222
+  type: 'test'
+  ...
+# Subtest: actual index promise gates MODEL_LOADED and descriptors use cookie-only fixed same-origin paths
+ok 21 - actual index promise gates MODEL_LOADED and descriptors use cookie-only fixed same-origin paths
+  ---
+  duration_ms: 0.6431
+  type: 'test'
+  ...
+# Subtest: cancelling INIT suppresses late readiness and permits a fresh controlled initialization
+ok 22 - cancelling INIT suppresses late readiness and permits a fresh controlled initialization
+  ---
+  duration_ms: 0.448
+  type: 'test'
+  ...
+# Subtest: new load aborts old load, rejects late progress/completion and cannot reuse old loadId
+ok 23 - new load aborts old load, rejects late progress/completion and cannot reuse old loadId
+  ---
+  duration_ms: 0.8672
+  type: 'test'
+  ...
+# Subtest: cancel pending load aborts transport and suppresses late model/index callbacks
+ok 24 - cancel pending load aborts transport and suppresses late model/index callbacks
+  ---
+  duration_ms: 0.54
+  type: 'test'
+  ...
+# Subtest: empty/marker-only/invalid routing clears previous overlays without invoking geometry
+ok 25 - empty/marker-only/invalid routing clears previous overlays without invoking geometry
+  ---
+  duration_ms: 2.1911
+  type: 'test'
+  ...
+# Subtest: partial/missing/ambiguous/non-drawable matches remain occurrence-preserving model-only results
+ok 26 - partial/missing/ambiguous/non-drawable matches remain occurrence-preserving model-only results
+  ---
+  duration_ms: 0.9933
+  type: 'test'
+  ...
+# Subtest: each route reads current cookie-bound published mappings without extending the parent command
+ok 27 - each route reads current cookie-bound published mappings without extending the parent command
+  ---
+  duration_ms: 1.4904
+  type: 'test'
+  ...
+# Subtest: multi-root project mappings remain one logical match and produce an English provenance indication
+ok 28 - multi-root project mappings remain one logical match and produce an English provenance indication
+  ---
+  duration_ms: 1.0128
+  type: 'test'
+  ...
+# Subtest: mapping identity, revision, shape and response budgets are checked before geometry
+ok 29 - mapping identity, revision, shape and response budgets are checked before geometry
+  ---
+  duration_ms: 2.6739
+  type: 'test'
+  ...
+# Subtest: protected mapping refusals preserve sanitized session and permission errors without falling back to names
+ok 30 - protected mapping refusals preserve sanitized session and permission errors without falling back to names
+  ---
+  duration_ms: 1.916
+  type: 'test'
+  ...
+# Subtest: Clear, cancellation, replacement and disposal abort late mapping reads before SDK access
+ok 31 - Clear, cancellation, replacement and disposal abort late mapping reads before SDK access
+  ---
+  duration_ms: 3.4932
+  type: 'test'
+  ...
+# Subtest: a replacement load resets only its own mapping revision pin
+ok 32 - a replacement load resets only its own mapping revision pin
+  ---
+  duration_ms: 1.3705
+  type: 'test'
+  ...
+# Subtest: clear and cancel invalidate pending route results, stale identity and unknown target cannot change active view
+ok 33 - clear and cancel invalidate pending route results, stale identity and unknown target cannot change active view
+  ---
+  duration_ms: 0.7489
+  type: 'test'
+  ...
+# Subtest: protected descriptor HTTP 401 yields sanitized SESSION_EXPIRED and no SDK model load
+ok 34 - protected descriptor HTTP 401 yields sanitized SESSION_EXPIRED and no SDK model load
+  ---
+  duration_ms: 0.6924
+  type: 'test'
+  ...
+# Subtest: protected descriptor HTTP 403 yields sanitized ACCESS_REVOKED and no SDK model load
+ok 35 - protected descriptor HTTP 403 yields sanitized ACCESS_REVOKED and no SDK model load
+  ---
+  duration_ms: 0.4661
+  type: 'test'
+  ...
+# Subtest: protected descriptor HTTP 409 yields sanitized MODEL_SELECTION_CHANGED and no SDK model load
+ok 36 - protected descriptor HTTP 409 yields sanitized MODEL_SELECTION_CHANGED and no SDK model load
+  ---
+  duration_ms: 0.576
+  type: 'test'
+  ...
+# Subtest: protected descriptor HTTP 410 yields sanitized SESSION_EXPIRED and no SDK model load
+ok 37 - protected descriptor HTTP 410 yields sanitized SESSION_EXPIRED and no SDK model load
+  ---
+  duration_ms: 0.5209
+  type: 'test'
+  ...
+# Subtest: protected descriptor HTTP 503 yields sanitized MODEL_UNAVAILABLE and no SDK model load
+ok 38 - protected descriptor HTTP 503 yields sanitized MODEL_UNAVAILABLE and no SDK model load
+  ---
+  duration_ms: 0.4053
+  type: 'test'
+  ...
+# Subtest: descriptor oversized/wrong identity/external entrypoint never reaches SDK
+ok 39 - descriptor oversized/wrong identity/external entrypoint never reaches SDK
+  ---
+  duration_ms: 1.0319
+  type: 'test'
+  ...
+# Subtest: 409 MODEL_UNAVAILABLE safe code is preserved without disclosing backend text
+ok 40 - 409 MODEL_UNAVAILABLE safe code is preserved without disclosing backend text
+  ---
+  duration_ms: 0.6224
+  type: 'test'
+  ...
+# Subtest: worker failure rechecks protected descriptor to identify revoked session without renewal
+ok 41 - worker failure rechecks protected descriptor to identify revoked session without renewal
+  ---
+  duration_ms: 0.724
+  type: 'test'
+  ...
+# Subtest: runtime error during indexing prevents late readiness and releases the failed model
+ok 42 - runtime error during indexing prevents late readiness and releases the failed model
+  ---
+  duration_ms: 0.5676
+  type: 'test'
+  ...
+# Subtest: DISPOSE aborts resources, removes listeners, acknowledges exactly once and ignores all late work
+ok 43 - DISPOSE aborts resources, removes listeners, acknowledges exactly once and ignores all late work
+  ---
+  duration_ms: 0.5707
+  type: 'test'
+  ...
+# Subtest: a saturated command registry still admits replay-safe CANCEL and terminal DISPOSE without growing it
+ok 44 - a saturated command registry still admits replay-safe CANCEL and terminal DISPOSE without growing it
+  ---
+  duration_ms: 96.718
+  type: 'test'
+  ...
+1..44
+# tests 44
+# suites 0
+# pass 44
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 306.8798

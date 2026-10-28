@@ -1,0 +1,140 @@
+{
+  "schemaVersion": "pathfinder.integration.v1",
+  "recordedAtUtc": "2026-10-18T06:54:57.673Z",
+  "projectId": "54cfad40-bd12-41e9-ab24-d90bdaafc993",
+  "scope": "separate local synthetic fixture only",
+  "status": "FAIL",
+  "passed": 22,
+  "total": 23,
+  "checks": [
+    {
+      "name": "shared project locations resolve both From/To uses",
+      "status": "PASS",
+      "milliseconds": 57
+    },
+    {
+      "name": "Project Details gap defaults to one metre, persists and rejects invalid API/SQL values",
+      "status": "PASS",
+      "milliseconds": 53
+    },
+    {
+      "name": "project mutex permits mixed-import and admin-assignment FK lock orders without a deadlock",
+      "status": "PASS",
+      "milliseconds": 13
+    },
+    {
+      "name": "actual durable job creates exact synthetic Instrumentation proposal",
+      "status": "PASS",
+      "milliseconds": 775,
+      "details": {
+        "geometry": 10,
+        "design": "18",
+        "scope": "local-synthetic-fixture"
+      }
+    },
+    {
+      "name": "queued ordered lookup and Reverse preserve exact points without Apply or cable changes",
+      "status": "PASS",
+      "milliseconds": 2622
+    },
+    {
+      "name": "lookup result becomes stale after model selection revision changes",
+      "status": "PASS",
+      "milliseconds": 1341
+    },
+    {
+      "name": "server-owned project gap fences overrides, routes, lookup and A to B to A staleness",
+      "status": "PASS",
+      "milliseconds": 3901
+    },
+    {
+      "name": "explicit forced retry replaces a seeded transient failure while automatic requests deduplicate",
+      "status": "PASS",
+      "milliseconds": 2554
+    },
+    {
+      "name": "explicit Review + Apply preserves installLength, adds history and replays idempotently",
+      "status": "PASS",
+      "milliseconds": 2524
+    },
+    {
+      "name": "manual routing A to B to A conflicts despite identical final inputs",
+      "status": "PASS",
+      "milliseconds": 1185
+    },
+    {
+      "name": "settings-only rerun uses retained geometry and exact Project Details formula",
+      "status": "PASS",
+      "milliseconds": 3651
+    },
+    {
+      "name": "bending percentage and SECONDARY Details values recalculate design without replacing unchanged geometry",
+      "status": "FAIL",
+      "milliseconds": 6359,
+      "message": "Expected values to be strictly deep-equal:\n+ actual - expected\n\n  {\n+   cable_write_revision: '18',\n-   cable_write_revision: '17',\n    design_length: 18,\n    install_length: 99,\n    routing: '/BC001'\n  }\n"
+    },
+    {
+      "name": "allowance A to B to A revision invalidates reviewed result",
+      "status": "PASS",
+      "milliseconds": 1200
+    },
+    {
+      "name": "active model selection A to null to A invalidates reviewed result",
+      "status": "PASS",
+      "milliseconds": 1277
+    },
+    {
+      "name": "revoked login cannot write locations, match, enqueue or read PF state",
+      "status": "PASS",
+      "milliseconds": 93
+    },
+    {
+      "name": "current admin revocation and cross-project proposal lookup are denied",
+      "status": "PASS",
+      "milliseconds": 1237
+    },
+    {
+      "name": "cancellation reaches terminal only after owned calculation stops",
+      "status": "PASS",
+      "milliseconds": 16303
+    },
+    {
+      "name": "expired lease recovery fences the obsolete owner and publishes once",
+      "status": "PASS",
+      "milliseconds": 933
+    },
+    {
+      "name": "receipt failure rolls back cable, history and receipt atomically",
+      "status": "PASS",
+      "milliseconds": 2475
+    },
+    {
+      "name": "admin revocation waits until protected Apply commits",
+      "status": "PASS",
+      "milliseconds": 1393
+    },
+    {
+      "name": "model health changes wait until protected Apply commits",
+      "status": "PASS",
+      "milliseconds": 1266
+    },
+    {
+      "name": "login expiration while Apply is paused rolls the write back",
+      "status": "PASS",
+      "milliseconds": 3871
+    },
+    {
+      "name": "untrusted upload remains non-native and requires a new explicit manual review before atomic real-scope Apply",
+      "status": "PASS",
+      "milliseconds": 1502
+    }
+  ],
+  "cleanup": [
+    {
+      "name": "fixture admin/projects/cables/locations/jobs/uploads removed; original synthetic gap/allowances/model restored; immutable audit events retained",
+      "status": "PASS"
+    }
+  ],
+  "nativeParity": "NOT_PERFORMED; manual per-proposal review policy does not claim native engineering parity or broader user acceptance.",
+  "sourceSha256": "97a183694995a552355b1c519e5177fb4f68c7b5a1f39f7251884fa47972edb0"
+}

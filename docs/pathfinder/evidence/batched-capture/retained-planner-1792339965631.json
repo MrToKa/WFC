@@ -1,0 +1,90 @@
+{
+  "schemaVersion": "pathfinder.batched-capture.retained-planner.v1",
+  "status": "PASS",
+  "observedAt": "2026-10-18T16:12:45.629Z",
+  "scope": "Retained real endpoint-name partition and protocol/staging verification only; no SDK/model capture, application, database or container actions.",
+  "source": {
+    "path": "pathfinder-engine/.scratch/current-inputs-2b20a8ae-a435-4d4d-aec4-005bb021a715/current-inputs.private.json",
+    "sha256": "0a84d1327950d4bd1d8420661f526cf1c97fdec5dbaaca71c429bf3e0c3bd897",
+    "bytes": 922311,
+    "cableCount": 2140,
+    "projectId": "0c0007c9-d73f-4d13-bc87-601c544727b7",
+    "modelVersionId": "9dbe511d-9c51-49e8-bb4a-b52033b98f35",
+    "contentFingerprint": "b5bb4fbe666b440c73bb1ffd2ee0db01be66146f8002e4a9df8dce8521db1d34"
+  },
+  "routeScope": {
+    "sourcePath": "pathfinder-engine/.scratch/pf-capacity-7b1ce2e8-46a6-45ad-bf6e-dfcee51a1e20/input/snapshots/75c61dc7-d456-45b0-9052-2a0822240350.json",
+    "sourceSha256": "b47365401aaf078374607c944e22ac5100f2aa6fe4389c056fbdd963526f17ed",
+    "selectedObjects": 52,
+    "boundaryRules": 10,
+    "method": "Reconstructed planner-only rules from distinct immutable selected-snapshot routeBoundaryId and recorded allowedCategories; fresh rule UUIDs, not a claim to recover original user rule UUIDs/order or validate this scope against current SDK."
+  },
+  "input": {
+    "rawTrimmedDistinctNames": 1527,
+    "normalizedDistinctNames": 1527,
+    "maxRawNameLength": 43,
+    "descriptor": {
+      "schemaVersion": "wfc.capture.input.v1",
+      "equipmentNameCount": 1527,
+      "chunkCount": 6,
+      "inputUtf8Bytes": 28214,
+      "scopeSha256": "574640542945390685c17747707fb454b55d086561dfd7c301fc1b1d13dfa708",
+      "equipmentNamesSha256": "4f6ea0280c5302713b4d3d30f15ca40a13d0746fa2ef4a11723d388d42b80268"
+    }
+  },
+  "transport": {
+    "startUtf8Bytes": 1742,
+    "chunks": [
+      {
+        "offset": 0,
+        "nameCount": 256,
+        "utf8Bytes": 4964
+      },
+      {
+        "offset": 256,
+        "nameCount": 256,
+        "utf8Bytes": 5567
+      },
+      {
+        "offset": 512,
+        "nameCount": 256,
+        "utf8Bytes": 4736
+      },
+      {
+        "offset": 768,
+        "nameCount": 256,
+        "utf8Bytes": 4991
+      },
+      {
+        "offset": 1024,
+        "nameCount": 256,
+        "utf8Bytes": 4735
+      },
+      {
+        "offset": 1280,
+        "nameCount": 247,
+        "utf8Bytes": 4750
+      }
+    ],
+    "ackCounts": [
+      0,
+      256,
+      512,
+      768,
+      1024,
+      1280,
+      1527
+    ],
+    "inputResponseCount": 7,
+    "remainingOutputResponses": 2993,
+    "totalResponseCap": 3000,
+    "allEnvelopesValid": true,
+    "finalAckDigestVerified": true
+  },
+  "readOnlyPinsUnchanged": true,
+  "limitations": [
+    "No captured geometry or endpoint matches were generated.",
+    "No engineering/native/visibility/whole-model coverage acceptance.",
+    "Business labels and rows remain private; public evidence contains only counts, hashes and resource identities."
+  ]
+}

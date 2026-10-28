@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "pathfinder.coverage.cleanup-preflight.v1",
+  "recordedAt": "2026-10-18T14:05:13.4408952Z",
+  "status": "VERIFIED_OWN_UNNECESSARY_FAILED_SETUP",
+  "target": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\coverage-controls-14b7cdcb-10cb-4ad5-a8d4-a1962a8f0ea7",
+  "fileCount": 1,
+  "bytes": 406,
+  "files": [
+    {
+      "name": "test-output-root.json",
+      "sha256": "6e44afcd49c3c3591e69a6169f6c8519cd17e634fbe8ca8e23d77b8d2ed04fb6"
+    }
+  ],
+  "preservedControls": "docs/pathfinder/evidence/coverage/controls-1792332191650.json",
+  "preservedFinalAudit": "docs/pathfinder/evidence/coverage/audit-1792332295000.json",
+  "note": "Only the marker from the initial failed fixture setup. Final controls, all detailed controls, retained inputs and denied paths are excluded."
+}

@@ -1,0 +1,98 @@
+{
+  "schemaVersion": "wfc.pathfinder.b22-owned-web-delivery.v1",
+  "status": "PASS",
+  "operationId": "a41eb0a3-85f4-4df5-8cd1-aa742762a4e6",
+  "productCommit": "89503dce1fd825baaa0bf8b179d8f5b83cbad02d",
+  "port": 5191,
+  "apiImage": "sha256:a43cac0dce21c81760c865f5cce81b774a07ecb3aa0f15963b530afe20c152dd",
+  "webImage": "sha256:0e66627494908c41490ee5a542da1d75dea70f2ed8a616a209c48ffd0296afcb",
+  "phases": [
+    {
+      "name": "prepare.pass.private.json",
+      "bytes": 19562,
+      "sha256": "6ab6a7748dffc270f5c0d54cf0fc4da14c85c98994a834587124f3d0226de6db",
+      "status": "PASS"
+    },
+    {
+      "name": "build.pass.private.json",
+      "bytes": 2074,
+      "sha256": "0289f6bd951e62ae5c06dcd69090db4a71840b2b2fe00af42a47b5b24b98eff3",
+      "status": "PASS"
+    },
+    {
+      "name": "install.pass.private.json",
+      "bytes": 37711,
+      "sha256": "2e5f85905c8a518b15e6726f268bff1c4425dcd18ebfc9be4788352167d09d78",
+      "status": "PASS"
+    },
+    {
+      "name": "static.pass.private.json",
+      "bytes": 37366,
+      "sha256": "3006e0ad6e898101cc3b1c04ba88148b19256b53020b79576d2530b9dbadc6ef",
+      "status": "PASS"
+    }
+  ],
+  "logs": [
+    {
+      "name": "web-prepare-v2.log",
+      "bytes": 121,
+      "sha256": "ec71e55c6e33f29e0dfe55b10f7112df816796d49eecffe4da509962f5119a07"
+    },
+    {
+      "name": "docker-web-build-v2.log",
+      "bytes": 208,
+      "sha256": "9e463af1d1861b40c79067d78f9a4ed6cffb54e85cdcc0236e21d9dc7420013f"
+    },
+    {
+      "name": "web-install-v2.log",
+      "bytes": 121,
+      "sha256": "f8446fae9b358862385b597f18a23e26dd6241eece995bcabcb9bcde730a55b6"
+    },
+    {
+      "name": "static-v2.log",
+      "bytes": 119,
+      "sha256": "3f8d0ed0e096b20ad06c991ef936d642336a4d89eb36586dd22e4d238b52136b"
+    }
+  ],
+  "apiSameRunningContainer": true,
+  "apiContainerIdSha256": "c72255e19ea1503f8c22fb730882a525ed897109ad531d6bcc7fa2e96ba59809",
+  "apiStartedAt": "2026-10-22T15:41:15.826946374Z",
+  "nonWebResourcesConserved": true,
+  "rollbackArchive": {
+    "bytes": 52927488,
+    "sha256": "ef47c3489066e75873dd420e65aa06292aa18ac1a2c1ecb5f2d7b5fb85fd7748"
+  },
+  "health": "PASS",
+  "index": "PASS",
+  "staticFiles": [
+    {
+      "path": "/viewer-runtime/7.130.0/barrier-capture.mjs",
+      "bytes": 36615,
+      "sha256": "998d4115cd40768a4694ee3fb5e4fd319af7a1bbad70b92cd810e64a55bda6b9"
+    },
+    {
+      "path": "/viewer-runtime/7.130.0/barrier-capture-errors.mjs",
+      "bytes": 2956,
+      "sha256": "bef60c5884d24d7475d0e914489a92a38b67ae3e68bc9f0346303019c707a1a0"
+    },
+    {
+      "path": "/viewer-runtime/7.130.0/barrier-multipart-runtime.mjs",
+      "bytes": 10778,
+      "sha256": "b9738f549eccb9dc65244a2c4f013caa9dc9e36dc86442c5f58cffa270352cd5"
+    },
+    {
+      "path": "/assets/ProjectDetails-o5atccMM.js",
+      "bytes": 867938,
+      "sha256": "2e0604d81a3f7a047e0ffb54a117f811a2e3a2808bdd1d8092b0fe3e5ffe8e62"
+    }
+  ],
+  "sourceChecks": {
+    "vitestPassed": 197,
+    "nodePassed": 40,
+    "historicalTabCasesDeselected": 71
+  },
+  "browserExecuted": false,
+  "sdkExecuted": false,
+  "realCableApply": false,
+  "scope": "Owned 5191 web delivery and fixed health/index/static probes. API remained the same running container. Live SDK/current-frame and real-cable engineering acceptance are separate."
+}

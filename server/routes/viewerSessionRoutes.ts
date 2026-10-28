@@ -82,7 +82,7 @@ export function createViewerSessionRouter(options: { runtime?: ViewerRuntime; po
         const who = await authenticated(req,res); if (!who) return;
         await runtime.service.revokeLogin(who); res.status(204).end(); return;
       }
-      const match = /^\/api\/projects\/([^/]+)\/model-versions\/([^/]+)\/viewer-sessions(?:\/([^/]+)(?:\/(renew|descriptor|resources)(?:\/(.*))?)?)?\/?$/.exec(raw);
+      const match = /^\/api\/projects\/([^/]+)\/model-versions\/([^/]+)\/viewer-sessions(?:\/([^/]+)(?:\/(renew|descriptor|resources|pathfinder-authorization|routing-bindings)(?:\/(.*))?)?)?\/?$/.exec(raw);
       if (!match) throw new ViewerSessionError('RESOURCE_NOT_FOUND',404);
       validateViewerQuery(req.originalUrl,match[4] === 'resources' && ['GET','HEAD'].includes(req.method)
         ? `${secure ? 'https' : 'http'}://${req.header('host')}` : undefined);
@@ -113,6 +113,16 @@ export function createViewerSessionRouter(options: { runtime?: ViewerRuntime; po
         setCookie(res,session,identity.cookieSecret,secure); res.status(200).json(session); return;
       }
       if (!['GET','HEAD'].includes(req.method)) method(res,'GET, HEAD');
+      if (match[4] === 'pathfinder-authorization') {
+        if (match[5]) throw new ViewerSessionError('RESOURCE_NOT_FOUND',404);
+        json(req,res,await runtime.service.authorizePathFinder(identity));
+        return;
+      }
+      if (match[4] === 'routing-bindings') {
+        if (match[5]) throw new ViewerSessionError('RESOURCE_NOT_FOUND',404);
+        json(req,res,await runtime.service.routingBindings(identity));
+        return;
+      }
       const authorized = await runtime.service.authorizeResource(identity);
       if (match[4] === 'descriptor') {
         if (match[5]) throw new ViewerSessionError('RESOURCE_NOT_FOUND',404);

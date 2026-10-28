@@ -1,0 +1,298 @@
+TAP version 13
+# Subtest: uses the actual reviewed production matcher and preserves punctuation, zeroes and NFC
+ok 1 - uses the actual reviewed production matcher and preserves punctuation, zeroes and NFC
+  ---
+  duration_ms: 0.9191
+  type: 'test'
+  ...
+# Subtest: JSON offsets append the SDK terminal slot and retain last mapped object properties
+ok 2 - JSON offsets append the SDK terminal slot and retain last mapped object properties
+  ---
+  duration_ms: 0.5519
+  type: 'test'
+  ...
+# Subtest: structural name is not a property alias and tree name remains the separately supplied object name
+ok 3 - structural name is not a property alias and tree name remains the separately supplied object name
+  ---
+  duration_ms: 0.7175
+  type: 'test'
+  ...
+# Subtest: inherits eligible instance aliases and retains origin object identity
+ok 4 - inherits eligible instance aliases and retains origin object identity
+  ---
+  duration_ms: 0.1881
+  type: 'test'
+  ...
+# Subtest: local display name shadows prototype property even when categories/attribute names differ
+ok 5 - local display name shadows prototype property even when categories/attribute names differ
+  ---
+  duration_ms: 0.1935
+  type: 'test'
+  ...
+# Subtest: display name shadowing is exact case before production normalization
+ok 6 - display name shadowing is exact case before production normalization
+  ---
+  duration_ms: 0.1298
+  type: 'test'
+  ...
+# Subtest: own hidden properties are included but inherited hidden properties are omitted
+ok 7 - own hidden properties are included but inherited hidden properties are omitted
+  ---
+  duration_ms: 0.1093
+  type: 'test'
+  ...
+# Subtest: last instance source wins exactly as the pinned worker, without combining prototypes
+ok 8 - last instance source wins exactly as the pinned worker, without combining prototypes
+  ---
+  duration_ms: 0.1123
+  type: 'test'
+  ...
+# Subtest: duplicate prototype display names survive when no local display name shadows them
+ok 9 - duplicate prototype display names survive when no local display name shadows them
+  ---
+  duration_ms: 0.129
+  type: 'test'
+  ...
+# Subtest: inline dbkey values follow flags and type, not the value table
+ok 10 - inline dbkey values follow flags and type, not the value table
+  ---
+  duration_ms: 0.1594
+  type: 'test'
+  ...
+# Subtest: nested inheritance applies shadowing at each level
+ok 11 - nested inheritance applies shadowing at each level
+  ---
+  duration_ms: 0.1813
+  type: 'test'
+  ...
+# Subtest: fails closed on self instance cycle
+ok 12 - fails closed on self instance cycle
+  ---
+  duration_ms: 0.363
+  type: 'test'
+  ...
+# Subtest: fails closed on mutual instance cycle
+ok 13 - fails closed on mutual instance cycle
+  ---
+  duration_ms: 0.0774
+  type: 'test'
+  ...
+# Subtest: fails closed on invalid instance target
+ok 14 - fails closed on invalid instance target
+  ---
+  duration_ms: 0.0559
+  type: 'test'
+  ...
+# Subtest: enforces depth without depending on the JavaScript stack limit
+ok 15 - enforces depth without depending on the JavaScript stack limit
+  ---
+  duration_ms: 2.6084
+  type: 'test'
+  ...
+# Subtest: rejects different version
+ok 16 - rejects different version
+  ---
+  duration_ms: 0.1431
+  type: 'test'
+  ...
+# Subtest: rejects nonmonotonic offsets
+ok 17 - rejects nonmonotonic offsets
+  ---
+  duration_ms: 0.0585
+  type: 'test'
+  ...
+# Subtest: rejects out of range offsets
+ok 18 - rejects out of range offsets
+  ---
+  duration_ms: 0.0537
+  type: 'test'
+  ...
+# Subtest: rejects unknown attribute
+ok 19 - rejects unknown attribute
+  ---
+  duration_ms: 0.0525
+  type: 'test'
+  ...
+# Subtest: rejects out of range value
+ok 20 - rejects out of range value
+  ---
+  duration_ms: 0.0706
+  type: 'test'
+  ...
+# Subtest: rejects duplicate external IDs
+ok 21 - rejects duplicate external IDs
+  ---
+  duration_ms: 0.0601
+  type: 'test'
+  ...
+# Subtest: rejects nonfinite values
+ok 22 - rejects nonfinite values
+  ---
+  duration_ms: 0.0584
+  type: 'test'
+  ...
+# Subtest: work budget fails before unbounded traversal
+ok 23 - work budget fails before unbounded traversal
+  ---
+  duration_ms: 0.078
+  type: 'test'
+  ...
+# Subtest: valid input preserves nulls, exact decimal strings and raw category
+ok 24 - valid input preserves nulls, exact decimal strings and raw category
+  ---
+  duration_ms: 0.5366
+  type: 'test'
+  ...
+# Subtest: legitimate absent cable type is preserved as exactly three nulls and never supplies a category
+ok 25 - legitimate absent cable type is preserved as exactly three nulls and never supplies a category
+  ---
+  duration_ms: 0.2725
+  type: 'test'
+  ...
+# Subtest: input refuses foreign model project
+ok 26 - input refuses foreign model project
+  ---
+  duration_ms: 0.1037
+  type: 'test'
+  ...
+# Subtest: input refuses foreign cable project
+ok 27 - input refuses foreign cable project
+  ---
+  duration_ms: 0.076
+  type: 'test'
+  ...
+# Subtest: input refuses foreign type owner
+ok 28 - input refuses foreign type owner
+  ---
+  duration_ms: 0.058
+  type: 'test'
+  ...
+# Subtest: input refuses mixed missing type identity
+ok 29 - input refuses mixed missing type identity
+  ---
+  duration_ms: 0.0541
+  type: 'test'
+  ...
+# Subtest: input refuses mixed missing type owner
+ok 30 - input refuses mixed missing type owner
+  ---
+  duration_ms: 0.0556
+  type: 'test'
+  ...
+# Subtest: input refuses mixed missing type name
+ok 31 - input refuses mixed missing type name
+  ---
+  duration_ms: 0.0689
+  type: 'test'
+  ...
+# Subtest: input refuses selected model mismatch
+ok 32 - input refuses selected model mismatch
+  ---
+  duration_ms: 0.0514
+  type: 'test'
+  ...
+# Subtest: input refuses unhealthy model
+ok 33 - input refuses unhealthy model
+  ---
+  duration_ms: 0.0582
+  type: 'test'
+  ...
+# Subtest: input refuses duplicate cable ID
+ok 34 - input refuses duplicate cable ID
+  ---
+  duration_ms: 0.1048
+  type: 'test'
+  ...
+# Subtest: input refuses numeric invented project allowance
+ok 35 - input refuses numeric invented project allowance
+  ---
+  duration_ms: 0.0619
+  type: 'test'
+  ...
+# Subtest: project name and converted fingerprint gates are explicit
+ok 36 - project name and converted fingerprint gates are explicit
+  ---
+  duration_ms: 0.1167
+  type: 'test'
+  ...
+# Subtest: same converted content may have a different portable package UUID without being a wrong model
+ok 37 - same converted content may have a different portable package UUID without being a wrong model
+  ---
+  duration_ms: 0.0916
+  type: 'test'
+  ...
+# Subtest: missing unique ambiguous and cross-end reuse use distinct keys and usages consistently
+ok 38 - missing unique ambiguous and cross-end reuse use distinct keys and usages consistently
+  ---
+  duration_ms: 0.4373
+  type: 'test'
+  ...
+# Subtest: same object matching tree plus properties is one candidate; separate objects remain ambiguous
+ok 39 - same object matching tree plus properties is one candidate; separate objects remain ambiguous
+  ---
+  duration_ms: 0.2488
+  type: 'test'
+  ...
+# Subtest: unlisted Description does not become an equipment alias
+ok 40 - unlisted Description does not become an equipment alias
+  ---
+  duration_ms: 0.1104
+  type: 'test'
+  ...
+# Subtest: mapping-only matches stay separate and cannot turn a missing reachable-tree match into unique
+ok 41 - mapping-only matches stay separate and cannot turn a missing reachable-tree match into unique
+  ---
+  duration_ms: 0.109
+  type: 'test'
+  ...
+# Subtest: existing requested capture comparison reports 257 distinct names and long raw keys without claiming a capture
+ok 42 - existing requested capture comparison reports 257 distinct names and long raw keys without claiming a capture
+  ---
+  duration_ms: 0.4894
+  type: 'test'
+  ...
+# Subtest: PDB structural name follows last instance name fallback for mapping-only diagnostics
+ok 43 - PDB structural name follows last instance name fallback for mapping-only diagnostics
+  ---
+  duration_ms: 0.088
+  type: 'test'
+  ...
+# Subtest: alias values match the unmodified pinned SDK getObjectProperties method on synthetic direct/inherited cases
+ok 44 - alias values match the unmodified pinned SDK getObjectProperties method on synthetic direct/inherited cases
+  ---
+  duration_ms: 9.5976
+  type: 'test'
+  ...
+# Subtest: unknown raw categories are not inferred from type names or normalized
+ok 45 - unknown raw categories are not inferred from type names or normalized
+  ---
+  duration_ms: 0.309
+  type: 'test'
+  ...
+# Subtest: public summary contains no business endpoint keys, tag, or unknown MTO values
+ok 46 - public summary contains no business endpoint keys, tag, or unknown MTO values
+  ---
+  duration_ms: 0.2408
+  type: 'test'
+  ...
+# Subtest: source receipt requires PASS preservation and exact raw bytes/hash/model binding
+ok 47 - source receipt requires PASS preservation and exact raw bytes/hash/model binding
+  ---
+  duration_ms: 0.2185
+  type: 'test'
+  ...
+# Subtest: durably retains a sanitized failure before any verifier or PDB audit when source input binding is invalid
+ok 48 - durably retains a sanitized failure before any verifier or PDB audit when source input binding is invalid
+  ---
+  duration_ms: 14.9442
+  type: 'test'
+  ...
+1..48
+# tests 48
+# suites 0
+# pass 48
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 110.2076

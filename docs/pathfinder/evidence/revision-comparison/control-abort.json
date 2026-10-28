@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "wfc.pf.revision-comparison-control-receipt.v1",
+  "status": "PASS",
+  "phase": "abort",
+  "phaseIntentId": "360cc961-86c2-4274-bde5-68c427a780aa",
+  "checks": [
+    {
+      "name": "Cancellation after real locked reads rolls the production transaction back",
+      "status": "PASS",
+      "scope": "actual PostgreSQL transaction primitive; no publication callback or business write"
+    }
+  ],
+  "beforeSha256": "f7d2ac0a03595c1a906e18ac1fa291864ed25f362fd797082d313a37ee0541b8",
+  "afterSha256": "f7d2ac0a03595c1a906e18ac1fa291864ed25f362fd797082d313a37ee0541b8",
+  "elapsedMilliseconds": 45,
+  "engineeringAccepted": false,
+  "productionComparisonPublicationTested": false,
+  "automaticApplyPerformed": false
+}

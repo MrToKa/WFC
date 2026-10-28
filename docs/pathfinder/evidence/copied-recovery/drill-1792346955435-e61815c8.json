@@ -1,0 +1,134 @@
+{
+  "schemaVersion": "pathfinder.copied-recovery.drill-receipt.v1",
+  "status": "PASS",
+  "action": "restore",
+  "startedAt": "2026-10-18T18:07:52.951Z",
+  "transport": {
+    "code": 0,
+    "signal": null,
+    "overflow": false,
+    "timedOut": false,
+    "stdinError": false,
+    "spawnError": false,
+    "stdout": {
+      "path": "pathfinder-engine/.scratch/copied-recovery-c8f5c134-d041-45b9-ab20-214ff70d30dc/step-ff1fefee-4ed1-40a9-8b60-f76d3841aaaf/stdout.private.json",
+      "bytes": 491,
+      "sha256": "c64b195dabbd1973567fc351795213377c47e823171f2da4c962d9023c13ad68"
+    },
+    "stderr": {
+      "path": "pathfinder-engine/.scratch/copied-recovery-c8f5c134-d041-45b9-ab20-214ff70d30dc/step-ff1fefee-4ed1-40a9-8b60-f76d3841aaaf/stderr.private.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "coreResult": {
+    "status": "PASS",
+    "runtime": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\copied-recovery-target-982a9013-34cb-4e3f-9e7c-c01325f5c0f8",
+    "owner": "7a64aa2a-88c3-43b9-962d-af391b72300d",
+    "project": "wfc-pathfinder-local-63ab3043713e",
+    "port": 5192,
+    "restore": {
+      "backupId": "b77a1ed0-2fa2-48a3-92f8-207a60b2035e",
+      "artifactsSha256": "46ee2eab5b16ba8de60b934e66dde33c66ccf52739cf05b52b6c2415598a9bc9",
+      "jwtRotated": true,
+      "sessionsFenced": true,
+      "inventoriesEqual": true
+    }
+  },
+  "drillId": "e09d28fa-580f-484a-a7f7-ac8b8a00cee7",
+  "phase": "restored",
+  "source": {
+    "runtime": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\batched-capture-runtime-20261018-1600",
+    "owner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+    "project": "wfc-pathfinder-local-0cba87606e9b",
+    "port": 5191,
+    "identity": {
+      "apiId": "97e0ad80387c1c1e5148922356088ccbc7f77e5def61073c657b10769db09adb",
+      "pgId": "6a39e7b2d794055dccef0919cf3a99ddf60e0f3c0b5daae062cec1eb6c9b3785",
+      "webId": "d864cc9ca17d0742277e77d4d929950ff9e5c8bd4dd940e57cb5702fe066f460",
+      "minioId": "56456c8675afd1458df3ae87d8df4bf31131fa1807f7468e3958f900f53a73ed",
+      "containers": [
+        {
+          "role": "api",
+          "id": "97e0ad80387c1c1e5148922356088ccbc7f77e5def61073c657b10769db09adb",
+          "image": "sha256:dce12a1f5ab6311bbaf04defb7277ff0d50fee36e29e49d47234e5bf4ea405fe"
+        },
+        {
+          "role": "minio",
+          "id": "56456c8675afd1458df3ae87d8df4bf31131fa1807f7468e3958f900f53a73ed",
+          "image": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e"
+        },
+        {
+          "role": "postgres",
+          "id": "6a39e7b2d794055dccef0919cf3a99ddf60e0f3c0b5daae062cec1eb6c9b3785",
+          "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751"
+        },
+        {
+          "role": "storage-ready",
+          "id": "e26509d2b47f7a62ccc51196c7fec5fdb06c0df649cd000d3306a85dac563e8c",
+          "image": "sha256:dce12a1f5ab6311bbaf04defb7277ff0d50fee36e29e49d47234e5bf4ea405fe"
+        },
+        {
+          "role": "web",
+          "id": "d864cc9ca17d0742277e77d4d929950ff9e5c8bd4dd940e57cb5702fe066f460",
+          "image": "sha256:561d51c3dd5ecb88459c17013890f9cd30089bb0760ccb9c5ff0ec3ade39f285"
+        }
+      ]
+    }
+  },
+  "target": {
+    "status": "PASS",
+    "runtime": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\copied-recovery-target-982a9013-34cb-4e3f-9e7c-c01325f5c0f8",
+    "owner": "7a64aa2a-88c3-43b9-962d-af391b72300d",
+    "project": "wfc-pathfinder-local-63ab3043713e",
+    "port": 5192,
+    "restore": {
+      "backupId": "b77a1ed0-2fa2-48a3-92f8-207a60b2035e",
+      "artifactsSha256": "46ee2eab5b16ba8de60b934e66dde33c66ccf52739cf05b52b6c2415598a9bc9",
+      "jwtRotated": true,
+      "sessionsFenced": true,
+      "inventoriesEqual": true
+    },
+    "verified": false,
+    "identity": {
+      "apiId": "8fbdc21c916ef22661bf8aafee934dde4c315c7df63f0308addf65b4c0c73dc1",
+      "pgId": "53b966f80906e5de063613d7b24b9def0ed4f04e7ec0266da4b28106085f04eb",
+      "webId": "f163f250e2916f68d29babfa54366b5e5c7497e357c44535e3f95945ead594b6",
+      "minioId": "6aff0b133664223f77c5ea142b18f43868d6a0fbef7a4e85435404f9d6ed6ff9",
+      "containers": [
+        {
+          "role": "api",
+          "id": "8fbdc21c916ef22661bf8aafee934dde4c315c7df63f0308addf65b4c0c73dc1",
+          "image": "sha256:dce12a1f5ab6311bbaf04defb7277ff0d50fee36e29e49d47234e5bf4ea405fe"
+        },
+        {
+          "role": "minio",
+          "id": "6aff0b133664223f77c5ea142b18f43868d6a0fbef7a4e85435404f9d6ed6ff9",
+          "image": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e"
+        },
+        {
+          "role": "postgres",
+          "id": "53b966f80906e5de063613d7b24b9def0ed4f04e7ec0266da4b28106085f04eb",
+          "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751"
+        },
+        {
+          "role": "storage-ready",
+          "id": "670b40bb38103dfc82114975286c3734e623b4a3ba2e62cc13dab6bec8786aed",
+          "image": "sha256:dce12a1f5ab6311bbaf04defb7277ff0d50fee36e29e49d47234e5bf4ea405fe"
+        },
+        {
+          "role": "web",
+          "id": "f163f250e2916f68d29babfa54366b5e5c7497e357c44535e3f95945ead594b6",
+          "image": "sha256:561d51c3dd5ecb88459c17013890f9cd30089bb0760ccb9c5ff0ec3ade39f285"
+        }
+      ]
+    }
+  },
+  "backupId": "b77a1ed0-2fa2-48a3-92f8-207a60b2035e",
+  "privateWork": "pathfinder-engine/.scratch/copied-recovery-c8f5c134-d041-45b9-ab20-214ff70d30dc",
+  "backupManifest": {
+    "bytes": 26217,
+    "sha256": "89b2c63ff10b97e36fab42bed3195d50f9f2d99522d3ee529a98b16fb39f335a"
+  },
+  "finishedAt": "2026-10-18T18:09:15.434Z"
+}

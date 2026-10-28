@@ -1,0 +1,143 @@
+{
+  "schemaVersion": "wfc.pf.b16-selected-wall-diagnosis.v1",
+  "at": "2026-10-22T08:02:04.787Z",
+  "status": "DIAGNOSIS_AND_NARROW_SOURCE_CHECKS_PASS",
+  "fingerprint": "b5bb4fbe666b440c73bb1ffd2ee0db01be66146f8002e4a9df8dce8521db1d34",
+  "actualRetained": {
+    "requestedObjects": 30,
+    "uniqueNameMatches": 30,
+    "triangleFragments": 29,
+    "lineFragments": 1,
+    "triangleVertices": 5558,
+    "triangles": 4421,
+    "localBoundaryFragments": 5,
+    "indexAndPositionDecode": "RAW original U32 indices/F32 coordinates checked, exact local edge diagnostics only",
+    "closedManifoldParity": "4421 odd; preserving all original faces cannot satisfy 3F=2E closed two-manifold criterion",
+    "lookupProjection": "Pinned SDK text-derived metadata fields; unconsumed entry tails retained opaque",
+    "work": 664556,
+    "elapsedMilliseconds": 278,
+    "observedRssBytes": 159264768
+  },
+  "checks": {
+    "nativePrimitiveTests": 83,
+    "moduleClosure": 4,
+    "frontendBuild": "PASS",
+    "independentSourceReview": "CLEAR"
+  },
+  "pins": [
+    {
+      "path": "viewer-runtime/barrier-capture.mjs",
+      "bytes": 36615,
+      "sha256": "998d4115cd40768a4694ee3fb5e4fd319af7a1bbad70b92cd810e64a55bda6b9"
+    },
+    {
+      "path": "viewer-runtime/barrier-producer.mjs",
+      "bytes": 48882,
+      "sha256": "db4e81b63e77991c36c442cc94e052445905720839502b50cd5f5811eb3e01c3"
+    },
+    {
+      "path": "viewer-runtime/test/barrier-capture.test.mjs",
+      "bytes": 32855,
+      "sha256": "35350f54b84f3d15619fa2f3d7d77d5def0489f585bae689cd5be33c24dd138a"
+    },
+    {
+      "path": "viewer-runtime/test/barrier-producer.test.mjs",
+      "bytes": 31352,
+      "sha256": "61e31515231f7d75959d8d9c67116be3840e730e3f1c2db0fa91ff9f039c4ae1"
+    }
+  ],
+  "inputPins": [
+    {
+      "path": "resources/output/0/objects_attrs.json.gz",
+      "bytes": 997,
+      "sha256": "ee4df15128a2ad51a42603ba7a0bbfb52b1bfbf2cee07139af1fac2545fdac57"
+    },
+    {
+      "path": "resources/output/0/objects_offs.json.gz",
+      "bytes": 1137003,
+      "sha256": "9be8c2f8a07b056b2ba713e7896ce8d71dc0b28c5ecd99d0246023267a216de8"
+    },
+    {
+      "path": "resources/output/0/objects_ids.json.gz",
+      "bytes": 1155258,
+      "sha256": "c0e00414833748b518ef32092affe3ccd380aa712859846a6b8f894305c1c5bb"
+    },
+    {
+      "path": "resources/output/0/objects_vals.json.gz",
+      "bytes": 2443733,
+      "sha256": "ef38e808230ffc76a7669b50f3dd7ab990cf2c5026aa37900c78ae2fb949a733"
+    },
+    {
+      "path": "resources/output/0/objects_avs.json.gz",
+      "bytes": 4650361,
+      "sha256": "7932608146d33fc615ee6c434f9d737ce7cdd492c1a7dd8f7b2eb151a97797b4"
+    },
+    {
+      "path": "resources/output/0/FragmentList.pack",
+      "bytes": 12251929,
+      "sha256": "4ec7a118a6d116000741b5f5bc27ba286fbb75713e769051630f8bf273e52e63"
+    },
+    {
+      "path": "resources/output/0/GeometryMetadata.pf",
+      "bytes": 1891722,
+      "sha256": "39c36e01cd77c81637e853ed36b032d5ef86957d42c9f75707dbaba4e05b35b0"
+    },
+    {
+      "path": "resources/output/0/0.pf",
+      "bytes": 544782,
+      "sha256": "5e7fde5f3adefe95c162bc2997a4ff8124843c195e4279b309b40e2d2398bed3"
+    },
+    {
+      "path": "resources/output/0/1.pf",
+      "bytes": 567866,
+      "sha256": "b11bdbe39024ae7ae09856260a8cb9116dc049d89511b9966eccc3916ef6a95f"
+    }
+  ],
+  "logs": [
+    {
+      "name": "requested-walls-v2.private.json",
+      "bytes": 5085,
+      "sha256": "591e551ca262e97dca35673b4b4e960c64eba9a04b1ecb2161049d149ce2dd7c"
+    },
+    {
+      "name": "primitive-topology-guarded.private.json",
+      "bytes": 34137,
+      "sha256": "60f23f66b096871b82824a64e9c12f75397b18f913ee53d296178fcdd555b3ce"
+    },
+    {
+      "name": "primitive-tests.log",
+      "bytes": 8258,
+      "sha256": "15da7367ba3fad5cdfcf48fbdd0ae64be5187f0e2736ffc419980e47d25b550f"
+    },
+    {
+      "name": "module-closure-corrected.log",
+      "bytes": 550,
+      "sha256": "38f282ddda437b9480b42bcab8cadbfe0457a10e89f4303ad175becc678386af"
+    },
+    {
+      "name": "frontend-build.log",
+      "bytes": 7604,
+      "sha256": "12b2e44d76573ffabde1a9276b59f619d82ac18ce7410b2a8862275997233d66"
+    }
+  ],
+  "retainedFailures": [
+    "Initial diagnostic pack parser omitted gzip decoding",
+    "Diagnostic assumed table physical order",
+    "Diagnostic assumed exact entry extent despite SDK random seeks",
+    "Diagnostic pack filename shape required .pf extension",
+    "First module-closure test command used wrong directory"
+  ],
+  "privateOperation": "44c38196-2e4b-40c4-9963-24912dd74ffc",
+  "limits": {
+    "browser": "BLOCKED_SAVED_REFUSAL",
+    "sdkExecuted": false,
+    "currentResidentGeometry": "NOT_RUN",
+    "aggregateWorldQualification": "NOT_RUN",
+    "publishedBarrierSet": false,
+    "routingClearance": false,
+    "wholeParentCapacity": "UNFINISHED",
+    "runtimeChanged": false,
+    "sourceWideLineFix": "strict classification only; not current reported error cure",
+    "businessRowsIncluded": false
+  }
+}

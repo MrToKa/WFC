@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "pathfinder.routes-path.live-binding.v1",
+  "observedAtUtc": "2026-10-18T08:38:11.2025885Z",
+  "sourceCommit": "542e101fd7d9a0cf53a70db7d898902e5437500c",
+  "branch": "pf-two-tabs-local-20261018",
+  "workspace": "C:/Users/todor.chankov/source/WFC-pathfinder-local",
+  "apiContainer": "63ab7d5d08c32c5446d07d943b49956e5545db411de8701f1b95f922de8ac1cc",
+  "apiImage": "sha256:fcd7b866447416caac43c44cb49d4cda7a2ff615608f8863d5497253309d26cd",
+  "webContainer": "feec2aa9a6ebcfbacb44b29bff6a95f32199b6af1c6bc85d453a9e5062bf7f11",
+  "webImage": "sha256:9cd76986937dc5ce4faa0583db9d7b4a73bcadcec33338a175bd8fa8641bc6c4",
+  "postgresContainer": "6830635a4597dad696f1a5ced6846853cd9e1fee0f858450ad6f858e4c2e30b9",
+  "database": "wfc_pathfinder_local",
+  "status": "FAIL",
+  "passed": 27,
+  "total": 29,
+  "receipt": "live29-final-20261018T083254Z.json",
+  "receiptSha256": "473911131f0614462ad228383dbd6dfb8e8d8d192f2946ee5ac03d72dcf43426",
+  "compiledContainerDriverSha256": "65ca907c52deacebdbe74cbc5cb16e4ad118dd06727e55090f49b53f419018e5",
+  "cleanup": "PASS",
+  "readOnlyCleanupAndUnappliedRealDemo": "cleanup-readback-final-20261018T083254Z.json",
+  "failures": [
+    {
+      "name": "actual durable job creates exact synthetic Instrumentation proposal",
+      "status": "FAIL",
+      "milliseconds": 1024,
+      "message": "Expected values to be strictly equal:\n\nnull !== 'Control'\n"
+    },
+    {
+      "name": "server-owned project gap fences overrides, routes, lookup and A to B to A staleness",
+      "status": "FAIL",
+      "milliseconds": 5197,
+      "message": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'design'\n- 'calculate'\n"
+    }
+  ],
+  "diagnosis": {
+    "instrumentationCategory": "A valid retained-geometry design rerun dropped original effectiveCategory and prepared metadata. Status, exact 10 metre route and 18 metre design assertions passed before category metadata failed.",
+    "gapMode": "A successful automatic calculation can populate the exact changed-gap geometry before the explicit request, whose valid retained mode is design. The driver must prove a fresh full calculation for the changed geometry hash rather than require one particular requester to own it.",
+    "historicalResponses": "This driver version retained failure messages but not full failed proposal responses. Its cleanup removed temporary rows, so failed proposal/job IDs cannot be recovered and are not fabricated.",
+    "authorizedCorrections": "Retain original prepared diagnostics and effective category from immutable calculation dependencies; add focused regression. Strengthen changed-gap proof with old/new hash distinction and a fresh successful calculate contributor after the PATCH. Capture exact failed proposal responses on future driver failures."
+  },
+  "nativeParity": "NOT_PERFORMED; no human acceptance claim."
+}

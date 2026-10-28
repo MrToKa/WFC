@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "wfc.pf.b26-popup-source-checks.v1",
+  "date": "2026-10-23",
+  "status": "PASS",
+  "changes": [
+    "Retain owned From/To display through transient reads and same-name cable revision changes without retaining mutation authority",
+    "Keep the selected cable popup and unresolved submission across routing preference changes and filtered list removal",
+    "Offer GET-only cable and endpoint refresh controls while preserving exact pending commands",
+    "Preserve confirmed Save feedback during subsequent refreshes",
+    "Classify only strict HTTP409 per-invocation calculation refusal evidence as rejected; keep lost COMMIT acknowledgement unknown"
+  ],
+  "tests": {
+    "selectedPopupTransportTransactionSuites": { "files": 6, "passed": 185, "failed": 0 },
+    "resultsAndTabIntegrationSuites": { "files": 2, "passed": 187, "failed": 0 },
+    "distinctTests": 372,
+    "typecheckClientAndServer": "PASS",
+    "productionSourceScopedLint": "PASS",
+    "webBuild": "PASS",
+    "serverBuild": "PASS",
+    "diffWhitespace": "PASS"
+  },
+  "observedLimitations": [
+    "The initial whole-directory lint process exhausted its default Node heap; explicit production source directories passed with an8GiB heap",
+    "Existing React act/theme warnings and web chunk-size warnings remain",
+    "A genuinely lost job acknowledgement without an exact client command identity remains unresolved rather than being automatically resubmitted",
+    "No authenticated browser/SDK interaction or real cable Apply was performed"
+  ],
+  "coreRoutingChanged": false,
+  "schemaMigrationAdded": false,
+  "runtimeInstalledByThisReceipt": false,
+  "engineeringAccepted": false
+}

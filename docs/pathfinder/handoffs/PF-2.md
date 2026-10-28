@@ -1,0 +1,45 @@
+# PF-2 — Computational model geometry and real-model reference checks
+
+## Authority and baseline
+
+Execute automatically under the user's stage-loop authorization. Work only in `C:/Users/todor.chankov/source/WFC-pathfinder-local`, new local branch `pf-2-model-geometry-20261017`, inheriting verified PF-1 `db1b76ec32286d290210ba11adc0738c96665372`. PF-1 delivers the unchanged independent engine, strict adapter/runner and fresh 105 regression / 215 parity-boundary checks. Read `00-specification.md`, `00-validation-matrix.md`, `01-stage-report.md`, engine/contract documentation and `evidence/pf1/native-oracle-feasibility.md` first.
+
+Original WFC remains clean main `e1ef20202598bb4d3d78e4772cbbb9747ec23a00`. Canonical PathFinder remains clean master `45c24bf5f433f13e102600b36f20327c77961d0a`; preserve the older dirty checkout at `35f4fb4…`. Live observations at 20:40 UTC on 17 October in `evidence/pf1/remote-observations.json` show these unchanged remote defaults, the unrelated open WFC PR #1 with COMMENTED reviews, no open PathFinder PR and no published CI statuses/checks/runs. Local PF-1 is unpublished. Refresh materially relevant observations when finalizing this stage.
+
+No push, PR, merge or updating the original running installation. No writes to its databases, storage, volumes, model selection or containers. Runtime/test resources must be separate with their own localhost listener and separately copied data. Keep bulk inputs, captures and build outputs ignored inside owned new directories, with retained hash/provenance receipts. Never touch/retry the denied `.pf0-work/core-1f723e37-f152-4a60-9b1e-46adc6c3179c` removal.
+
+## Purpose
+
+Implement a computational model snapshot from the real converted model, with fragment meshes, hierarchy, properties, stable/version-local identity, effective planning visibility, units and explicit transforms. Fit straight/bend geometry through the unchanged core and prepare reusable versioned routing artifacts. Visual readiness alone is insufficient. Expose precise diagnostics for exclusions, ambiguity, truncation, fitting/fallback and computational readiness.
+
+Canonical geometry is right-handed Z-up metres. `pWorld = sourceToWorldMetres * pSource`; that affine transform includes units/axes/root placement and excludes the display offset. `pDisplayLocal = pWorld - globalOffsetMetres`. Invert exactly once on picking. Do not transform already-canonical vertices again. If the SDK uses another display convention, declare and invert it explicitly. Native equipment reference is the centre of the bottom face of the visible world AABB. Camera occlusion, Ghost and isolation must not silently become routing exclusions.
+
+## Available real inputs and reference approach
+
+The source NWD is `D:/OneDrive - ACS/R230039_MAN-Aalborg HPU - LVSG & UPS DB & EIC/3D/Aalborg_ACS_CABLETRAY_30_03_26.nwd`, previously observed 155285346 bytes / SHA256 `11b2739d92020ee58a52a4e793cf8fd538fb30758eb42176aba93ac7319b048a`. Reverify before copying into owned ignored scratch; never open/save the original through the host.
+
+The prepared package is `C:/Users/todor.chankov/Documents/Codex/2026-10-16/routings-model-package-output/aalborg-svf-v1.zip`, historical SHA256 `8e11874a91215a7a35131dfcfb736a7ce43d801264525f8fd714cb364b9301d5`, content fingerprint `b5bb4fbe666b440c73bb1ffd2ee0db01be66146f8002e4a9df8dce8521db1d34`. Validate and use a separate copied/extracted instance. Its source identity is historically metadata-based; do not invent a cryptographic link to an unrecorded original translation. SDK 7.130.0 is already vendored in the worktree. Avoid cloud conversion calls when the existing package suffices.
+
+Installed Manage 2027 at `D:/Programs/Navisworks Manage 2027` and VS2022/net48 tooling appear available; successful licence/automation operation is NOT_RUN. The pinned `tests/PathFinder.Navisworks.Smoke/Runner.cs` demonstrates a package-free x64 STA automation host and dynamic AddPluginAssembly/ExecuteAddInPlugin without startup changes. Build a uniquely named test-only oracle and runner in the isolated worktree, using copied unchanged core/native capture sources, never replacing the installed AddinRibbon plugin or changing host configuration. Use a fresh owned host process and copied NWD; export to owned artifacts only; dispose only that owned process. Original tests that build the old checkout are not authorized substitutes.
+
+Capture complete full-precision inputs and outputs for representative actual straight, bend, junction, From/To, gap and SECONDARY cases: meshes with native fragment boundaries/world transforms/metres, identities and leaf-to-owner evidence, options/category/allowance snapshots, fitted geometry and exact route points/metrics/design breakdown. Source `RoutingSession`, `RoutingSession.Lookup` and `TrayMeshReader` are the authoritative native adapter. A test-only reflection helper may read private fittedInputs without modifying the pinned production bytes. Preserve `R`-format companions where the legacy JSON serializer would lose precision. Report native capture limits/truncation/fallbacks rather than silently treating missing mesh as full evidence. Existing rounded lookup totals and point counts alone are insufficient.
+
+## Implementation sequence
+
+1. Define a strict computational snapshot contract, canonical transform utilities and input integrity/provenance. Keep production format separate from PF-0 synthetic fixtures and native oracle transport.
+2. Implement converted geometry capture in an isolated offline harness/adapter. Preserve all source evidence needed for category/name resolution and mesh fitting; map dbIds/fragment IDs to explicit model-version identities, not durable cross-version identities inferred from names.
+3. Capture real native references with the unique oracle where available, match identities deliberately and compare converted/native transforms, endpoint bounds, geometry and route outputs. If a source/licence prerequisite is unavailable, record the concrete blocked check and continue independent authorized work; never manufacture a pair.
+4. Fit validated inputs through the extracted core. Cache/version by model content, adapter/engine/rules/exclusions and record hashes. Distinguish reusable fitted geometry from the core's per-calculation graph construction; do not claim an immutable prebuilt graph if it is still rebuilt inside Calculate. If a reusable graph API requires refactoring, preserve the pinned reference separately, prove unchanged numerical behavior and document actual caching scope. Coordinate such shared-core changes with parent before editing.
+5. Measure resource use and establish justified caps with cancellation/progress/integrity checks. PF-1's synthetic transport ceilings are not automatically sufficient for a plant model. Never silently truncate a model or exclude unmatched branches to obtain a pass.
+
+No WFC tab, persistent locations, background production jobs or cable Apply is required here. Those are PF-3–PF-6. Any temporary model/debug interface uses English and an isolated localhost address. Use `computer-use` for visual checks and normal automated tools for geometry/math validation. Never automate terminal commands through computer-use or an authentication/licence dialog.
+
+## Acceptance and reporting
+
+- Real converted capture has declared units/transforms/hierarchy/visibility, version-aware identities and hash-bound artifacts. Test transform/inverse invariants with actual SDK data, large offsets, nontrivial roots, mesh fragments and equipment-bottom selection.
+- Straight/bend/junction fitting and representative path/length/SECONDARY results are compared to full-precision native references, with discrete topology/flags exact and justified declared numerical tolerances. Do not alter engineering thresholds to fit observations or call synthetic-only checks native parity.
+- Build/cache lifecycle, cancellation, corruption, ambiguity and resource-limit behavior are verified; performance conclusions cite the actual measured model/scope.
+- Existing 105/215 regression coverage remains valid after any shared engine changes. Preserve Ghost and existing Viewer behavior; new test capture must not bypass the protected product bridge as a production integration strategy.
+- Keep reproducible code and compact reference cases/receipts under new PF-2 paths, bulk private model data in ignored owned storage. Deliver `02-model-geometry.md`, `02-stage-report.md`, appended matrix results and evidence under `evidence/pf2/`. Mark each check PASS/FAIL/BLOCKED/NOT_RUN at its actual scope.
+
+PF-2 is complete only when its computational and real-model evidence requirements are satisfied. Resolve feasible prerequisites actively. If an indispensable dependency remains unavailable, record the exact blocker and retain independent work without claiming completion. After a verified local delivery, commit locally, run `prepare-stage-handoff` for PF-3 and continue automatically. Final user acceptance and any integration into the existing installation remain separate.

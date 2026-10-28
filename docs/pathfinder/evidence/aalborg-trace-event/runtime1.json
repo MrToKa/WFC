@@ -1,0 +1,247 @@
+{
+  "schemaVersion": "wfc.pf.ordinary-trace-event-runtime.v1",
+  "status": "PASS",
+  "at": "2026-10-20T10:20:26.032Z",
+  "sourceCommit": "c68b4434ffadc73c7c6ca38997cfe4689aca928f",
+  "cases": [
+    {
+      "label": "trace-event-case2",
+      "scenario": "commit",
+      "policy": "disabled",
+      "status": "PASS",
+      "receiptSha256": "f9e20f169b2f833a8c5ceb88f68fa5fac196428613413cf1b20865ba61d025e5",
+      "elapsedMilliseconds": 3885.761879,
+      "actualExportCounts": {
+        "objects": 5,
+        "segments": 2,
+        "diagnostics": 10,
+        "points": 4,
+        "ports": 0
+      },
+      "beforeGeneration": "8",
+      "afterGeneration": "9",
+      "dirtyCalls": 1,
+      "finalCommits": 1,
+      "exactReplayVerified": true,
+      "completedDerivationNewKeyVerified": true,
+      "abortInjected": false,
+      "lostAcknowledgementInjected": false,
+      "containerRemoved": true,
+      "databaseDropped": true
+    },
+    {
+      "label": "trace-event-case3",
+      "scenario": "commit",
+      "policy": "paused",
+      "status": "PASS",
+      "receiptSha256": "6a3979abd5c68d829aadd0dacedfbb0352d6da00602550c82892bed9ee72a15c",
+      "elapsedMilliseconds": 4904.318499,
+      "actualExportCounts": {
+        "objects": 5,
+        "segments": 2,
+        "diagnostics": 10,
+        "points": 4,
+        "ports": 0
+      },
+      "beforeGeneration": "8",
+      "afterGeneration": "9",
+      "dirtyCalls": 1,
+      "finalCommits": 1,
+      "exactReplayVerified": true,
+      "completedDerivationNewKeyVerified": true,
+      "abortInjected": false,
+      "lostAcknowledgementInjected": false,
+      "containerRemoved": true,
+      "databaseDropped": true
+    },
+    {
+      "label": "trace-event-case4",
+      "scenario": "commit",
+      "policy": "expired",
+      "status": "PASS",
+      "receiptSha256": "a85728588a557f266b8cebd24ff75fdcadfe4d272b003dcd8ec8e8488c3c94aa",
+      "elapsedMilliseconds": 6367.974657000001,
+      "actualExportCounts": {
+        "objects": 5,
+        "segments": 2,
+        "diagnostics": 10,
+        "points": 4,
+        "ports": 0
+      },
+      "beforeGeneration": "8",
+      "afterGeneration": "9",
+      "dirtyCalls": 1,
+      "finalCommits": 1,
+      "exactReplayVerified": true,
+      "completedDerivationNewKeyVerified": true,
+      "abortInjected": false,
+      "lostAcknowledgementInjected": false,
+      "containerRemoved": true,
+      "databaseDropped": true
+    },
+    {
+      "label": "trace-event-case5",
+      "scenario": "rollback",
+      "policy": "paused",
+      "status": "PASS",
+      "receiptSha256": "8a81679dfeda219c35f7caccd618671f61a544dc53a42b3ec4a5b55bf9be5ace",
+      "elapsedMilliseconds": 8210.627459,
+      "actualExportCounts": {
+        "objects": 5,
+        "segments": 2,
+        "diagnostics": 10,
+        "points": 4,
+        "ports": 0
+      },
+      "beforeGeneration": "8",
+      "afterGeneration": "8",
+      "dirtyCalls": 1,
+      "finalCommits": 0,
+      "exactReplayVerified": false,
+      "completedDerivationNewKeyVerified": false,
+      "abortInjected": true,
+      "lostAcknowledgementInjected": false,
+      "containerRemoved": true,
+      "databaseDropped": true
+    },
+    {
+      "label": "trace-event-case6",
+      "scenario": "lost-ack",
+      "policy": "paused",
+      "status": "PASS",
+      "receiptSha256": "877ccc392e7b157858b57ee64f4fa147c2c35c04c9c78219025bceb41d77dd43",
+      "elapsedMilliseconds": 3677.835144,
+      "actualExportCounts": {
+        "objects": 5,
+        "segments": 2,
+        "diagnostics": 10,
+        "points": 4,
+        "ports": 0
+      },
+      "beforeGeneration": "8",
+      "afterGeneration": "9",
+      "dirtyCalls": 1,
+      "finalCommits": 1,
+      "exactReplayVerified": true,
+      "completedDerivationNewKeyVerified": true,
+      "abortInjected": false,
+      "lostAcknowledgementInjected": true,
+      "containerRemoved": true,
+      "databaseDropped": true
+    }
+  ],
+  "scope": "Five fresh owned synthetic SQL fixture databases; real CSharp export, worker and repository, with explicitly seeded model-health metadata. No actual converted/storage/native/human verification inferred.",
+  "historicalFailure": {
+    "case": "trace-event-case1",
+    "status": "FAIL",
+    "code": "23514",
+    "phase": "seed before publication",
+    "repaired": "test-only coherent synthetic metadata",
+    "helperRemoved": true,
+    "databaseDropped": true
+  },
+  "upgrade": {
+    "images": {
+      "api": "sha256:9387454711b7761c7434ee25f45ad4123435c7ce4fe87cb44c97f89ba1370fcd",
+      "web": "sha256:0e1e8823ffa72fae8e5b00d2407254ea25e2e134237e522af1cf89b9f152c80d"
+    },
+    "databaseBackup": {
+      "path": "trace-event1-current-database-backup.private.json",
+      "bytes": 11324657,
+      "sha256": "5221e2ff8d2516e6c790759563dcdf7a30da6fdc43d9cf2f853cad70743ee84a"
+    },
+    "apiWebOnly": true,
+    "otherOwnResourcesPreserved": true,
+    "outsideContainersPreserved": true
+  },
+  "calculationIdentity": {
+    "status": "PASS_UNCHANGED",
+    "contentSha256": "4b9fac7d2b045a230c5cbf7ce4aeaea08917a20b3605ee15642a5effff8a74fd"
+  },
+  "traceDerivation": {
+    "status": "CHANGED_EXPECTED",
+    "historical": "0486140ba2b1d98afa4afbd1450ce7eb93f4f241f99762189c17ae96735d131a",
+    "candidate": "883c213a7e6922e057833c5c3e3926f3908c4bcd72d70f59ef6961c56802ac6e",
+    "realRetracePerformed": false,
+    "oldCreateReplayRefusalsPreserved": true
+  },
+  "preservedNetwork": {
+    "sessionId": "d8b64b1b-018c-4b69-b1d7-f9952c413f17",
+    "aggregateId": "6e21b230-188e-49b8-92a8-fd3f202a9567",
+    "projectionSha256": "27f8cf8c352b8847b778f764ce942aa0bb61ebfab16aeb993c0a83bd100c38e2",
+    "payloadBytes": 114186790,
+    "traceId": "3976df4c-a6a1-4001-bf08-faf7070c4977",
+    "counts": {
+      "objects": 2965,
+      "segments": 1165,
+      "diagnostics": 1484,
+      "points": 3794,
+      "ports": 1704
+    }
+  },
+  "normalState": {
+    "observations": [
+      {
+        "read": 1,
+        "at": "2026-10-20T10:16:49.638Z",
+        "status": 200,
+        "elapsedMilliseconds": 2066.0615,
+        "bytes": 1707893,
+        "rawSha256": "6ae77bcc64ae096b5dd93c20b2ec60855485cb277e7a2a2c045ef22e0ffe2996",
+        "locations": 1527,
+        "cables": 2140,
+        "statuses": {
+          "missing": 1042,
+          "ambiguous": 48,
+          "automatic-ready": 437
+        },
+        "bothPoints": 230,
+        "nonMvBoth": 230,
+        "mvBoth": 0,
+        "withoutBothPoints": 1910,
+        "latestSelectedJobComplete": true,
+        "visibleCurrentProposals": 30,
+        "engineeringAccepted": false
+      },
+      {
+        "read": 2,
+        "at": "2026-10-20T10:16:51.694Z",
+        "status": 200,
+        "elapsedMilliseconds": 1940.7383,
+        "bytes": 1707893,
+        "rawSha256": "6ae77bcc64ae096b5dd93c20b2ec60855485cb277e7a2a2c045ef22e0ffe2996",
+        "locations": 1527,
+        "cables": 2140,
+        "statuses": {
+          "missing": 1042,
+          "ambiguous": 48,
+          "automatic-ready": 437
+        },
+        "bothPoints": 230,
+        "nonMvBoth": 230,
+        "mvBoth": 0,
+        "withoutBothPoints": 1910,
+        "latestSelectedJobComplete": true,
+        "visibleCurrentProposals": 30,
+        "engineeringAccepted": false
+      }
+    ],
+    "scope": "Two sequential authenticated normal no-store reads after upgrade; old private template mentions cold browser but no new cold timing proof is claimed."
+  },
+  "mvScope": {
+    "selectedNonMv": 1808,
+    "calculated": 230,
+    "locationsRequired": 1578,
+    "excludedMv": 332,
+    "allCategoryPolicyPaused": true,
+    "controlRevision": "7",
+    "grantEnabled": false
+  },
+  "businessFence": {
+    "all2140CableColumnsSha256": "0cc900778484ca50a770c30a3566564c5975c5649885793aed8b8e8e426f9155",
+    "applyReceipts": 0
+  },
+  "currentFullNetworkBackupRestore": "NOT_RUN_HISTORICAL_R10_ARCHIVE_PREDATES_FULL_NETWORK",
+  "engineeringAccepted": false,
+  "realApply": false
+}

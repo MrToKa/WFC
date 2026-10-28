@@ -1,0 +1,13 @@
+{
+  "status": "PASS",
+  "recordedAt": "2026-10-19T03:37:35.520Z",
+  "scope": "Normal5191 registry import into explicitly owned synthetic comparison project; previously converted real older package reused. No active selection change.",
+  "projectId": "56eadef6-8382-49f8-a652-c8f12026602e",
+  "olderModelVersionId": "c9810c49-cf53-450c-9667-516894b2a509",
+  "originalModelVersionId": "098a7e6f-6e39-4935-a98b-ba3b683875a5",
+  "archiveSha256": "a4538444641bfc96ce8915a0ef24c1adfebb50a72c1575a23cc475d9bd781183",
+  "archiveBytes": 174823508,
+  "versions": 2,
+  "autodeskUploadOrSubmit": "NOT_PERFORMED",
+  "engineeringAcceptance": false
+}

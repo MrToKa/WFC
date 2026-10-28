@@ -1,0 +1,202 @@
+{
+  "schemaVersion": "wfc.pf.aalborg-explicit-root-repair.v1",
+  "recordedAtUtc": "2026-10-20T05:03:47.330Z",
+  "branch": "pf-aalborg-tray-suffix-local-20261020",
+  "inheritedCommit": "f084f6f0595678d0edc537d8b46b6c3a2f957e24",
+  "checkedSourceFiles": [
+    {
+      "path": "scripts/copy-pathfinder-contracts.mjs",
+      "sha256": "94ab033cb498379c3385abe80a80ece2ffb9d42da1fdab99a6909943417cedcc"
+    },
+    {
+      "path": "scripts/viewer-runtime/module-closure.mjs",
+      "sha256": "25c9dd37f51a89e84ad2caccf23dcfc087027f7508cb2bd5ef2185630b4231d3"
+    },
+    {
+      "path": "server/routes/viewerSessionRoutes.ts",
+      "sha256": "574b2793eec76378ab6adc57a95d73ce30e8127d16572c8f07063d5bb9fa8ad4"
+    },
+    {
+      "path": "server/viewerSessions/resources.test.ts",
+      "sha256": "e4c55ca95ed87e0079a77f70a478276ce9cd8a735654d1631ddbf57c37409b29"
+    },
+    {
+      "path": "server/viewerSessions/routingBindings.test.ts",
+      "sha256": "fc98cb8d97b209f1b29c27dbf4fd0a119543d147c8b46242f3df3edf4c9ab01e"
+    },
+    {
+      "path": "server/viewerSessions/routingBindings.ts",
+      "sha256": "43618483c2d0dd3b2032b4de0f1c83fa96f8ef4a368252b91db2d7bd89435402"
+    },
+    {
+      "path": "server/viewerSessions/service.test.ts",
+      "sha256": "1b98928a446b9ded8bc288c624a2c9339776a4d033245680f255d64eb1ea2b3f"
+    },
+    {
+      "path": "server/viewerSessions/service.ts",
+      "sha256": "6947c309b2e7f724e1393e92acbbc9ae97258fd306e30b74f789c8b05e6505f6"
+    },
+    {
+      "path": "viewer-runtime/adapter.mjs",
+      "sha256": "883fd351f2441c3d1b13f810a074777b973fd56d8d0b0476991036095f13b2a1"
+    },
+    {
+      "path": "viewer-runtime/bridge.mjs",
+      "sha256": "093887e449ceb4ff24d8271204f2a981f241ac20f25a737ffce9167770cef527"
+    },
+    {
+      "path": "viewer-runtime/routes.mjs",
+      "sha256": "d6deee446ea9bfbeaf7071feb55f500a6e377aab1d74b9d75714f556d05045db"
+    },
+    {
+      "path": "viewer-runtime/routing-bindings.d.mts",
+      "sha256": "31969ee74ab87ac4b7e0e1d6b8bc4d33478c6873861840edadd50cf849f2ff0b"
+    },
+    {
+      "path": "viewer-runtime/routing-bindings.mjs",
+      "sha256": "ef095eac9833b2cd50504cba0194b015d485f932e6f3a305ebca105bd474dd89"
+    },
+    {
+      "path": "viewer-runtime/test/adapter.test.mjs",
+      "sha256": "312789c882822ac3dd11ab84044d9ff3037409f0f5d12c293d83d98b558e795a"
+    },
+    {
+      "path": "viewer-runtime/test/bridge.test.mjs",
+      "sha256": "a5b1a2fb49977263371f09cd65bc2ae7191ec20804a8417c2e8d231e82cbff91"
+    },
+    {
+      "path": "viewer-runtime/test/routes.test.mjs",
+      "sha256": "1b816714e1ca39dc905bf7cba3eed6d253722b255045415d7bb86fe1bedfa468"
+    },
+    {
+      "path": "viewer-runtime/test/routing-bindings.test.mjs",
+      "sha256": "012756db3a44ca202a737c471fd448c09b68d61e6d5983bd72de2209f3bced9a"
+    }
+  ],
+  "privateWork": "pathfinder-engine/.scratch/tray-catalog-c9674353-fcd4-4db9-945e-a71aff8dcea4",
+  "privateChecks": [
+    {
+      "name": "suffix-inventory-search1.private.json",
+      "bytes": 14845,
+      "sha256": "c48e046875ced7e373df43eb628bb7eddd576cd2f91741eff19b929560c8968a"
+    },
+    {
+      "name": "suffix-properties-and-ownership1.private.json",
+      "bytes": 5828,
+      "sha256": "3552d94bb76236909e70e2710acff1f8261d5497298fbcd4a45cf6bc821be1e0"
+    },
+    {
+      "name": "suffix-resolution1-result.private.json",
+      "bytes": 3993,
+      "sha256": "5c2122970883d2de1b7c3cf6c826688ea4ca4339fc48aaef6e8b8f2144599873"
+    },
+    {
+      "name": "prep3-result.private.json",
+      "bytes": 395,
+      "sha256": "ccb8f7c95c30ade9c222df85f3c7cd4ae0d88d74deac8de97a9f1ab318243f18"
+    },
+    {
+      "name": "ui-capture-refusal1.ax.txt",
+      "bytes": 110631,
+      "sha256": "e5bc8b62ecf1c76da97bacb04aff3cd715dc29f8f792d50c4d54d59e5644d279"
+    },
+    {
+      "name": "ui-capture-refusal1-errors.private.json",
+      "bytes": 2,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "name": "alias-build1-result.private.json",
+      "bytes": 1330,
+      "sha256": "8de0b6cc70ddc59719df6874ae19eb7898aef7f5a1d45ef1527519fc8ff2e5d5"
+    },
+    {
+      "name": "alias1-upgrade-result.private.json",
+      "bytes": 2909,
+      "sha256": "c6d505cfcc31c6d39e183d3dad966b2c79ae4c7c42da138e1a6ea17ea1f53277"
+    },
+    {
+      "name": "alias-post-verification1.private.json",
+      "bytes": 456,
+      "sha256": "76e21cdf49cf2cb3e131c8765dff227c9a5697b76e1549dc9aa0e75d82851864"
+    },
+    {
+      "name": "ui-alias1-330-summary.png",
+      "bytes": 55828,
+      "sha256": "11338cda927b759aaaab3fd98959c4c755ba0fb4ff53500729a556711185678c"
+    }
+  ],
+  "ownership": {
+    "requested": 330,
+    "selected": 330,
+    "excluded": 0,
+    "blockingDiagnostics": 0,
+    "newExplicitMappings": 2,
+    "totalExplicitMappings": 4,
+    "priorDecisionsPreserved": true,
+    "propertyDatabaseNamesCorroborated": true,
+    "geometrySubtreesDisjoint": true,
+    "humanEngineeringAcceptance": false
+  },
+  "preparation": {
+    "status": "PARTIAL_CAPTURE_RETAINED",
+    "at": "2026-10-20T04:59:35.367Z",
+    "sessionId": "6cd0c3a7-90c9-4a5f-a224-f33324e36bf8",
+    "planSha256": "38bba102250f8acbcb2e31bf0965e3eddd546aafd4d81d210e453925ea731685",
+    "state": "collecting",
+    "sessionRevision": "1",
+    "physicalLeaves": 1165,
+    "partsCommitted": 1,
+    "expectedParts": 5,
+    "payloadBytes": 29303274,
+    "failure": null,
+    "currentAggregate": null,
+    "declaredValidationInputBytes": 33554432,
+    "remainingAfterFirstPart": 4251158,
+    "wholeNetworkPublication": "BLOCKED",
+    "rawRefusalCode": "NOT_CAPTURED",
+    "sourceDiagnosedExpectedCode": "PREPARATION_VALIDATION_INPUT_LIMIT",
+    "realCalculation": 0,
+    "realApply": 0
+  },
+  "compatibility": {
+    "schemaVersion": "wfc.viewer.routing-bindings.v1",
+    "onlyCurrentPublishedExplicitDecisions": true,
+    "ordinaryViewerSessionAuthorization": true,
+    "parentRootInjection": false,
+    "maxMappings": 128,
+    "maxRoots": 512,
+    "maxBytes": 28672,
+    "runtimeUnitTests": 69,
+    "serverTests": 36,
+    "moduleClosureTests": 3,
+    "typecheck": "PASS",
+    "focusedLint": "PASS",
+    "realSqlNoPublication": "PASS",
+    "normalCookieGet": 200,
+    "normalCookieHead": 200,
+    "missingCookie": 401,
+    "positivePublishedMapping": "NOT_RUN"
+  },
+  "runtime": {
+    "port": 5191,
+    "owner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+    "project": "wfc-pathfinder-local-0cba87606e9b",
+    "images": {
+      "api": "sha256:4e3486d4c88ccd44ceed7550c6e96b4d9b83c16a9a6db68d9aa90d2e6e523757",
+      "web": "sha256:5d8ec1476d8f293c85a2839982a2d54f2c74919b1181213a6cea1638558582ab"
+    },
+    "apiWebOnly": true,
+    "cableRowsExact": true,
+    "otherOwnedResourcesPreserved": true
+  },
+  "next": {
+    "stage": "Versioned actual full-network capacity qualification",
+    "legacyProfile": "32MiB unchanged",
+    "candidateProfile": "128MiB NOT_YET_IMPLEMENTED_OR_QUALIFIED",
+    "partsCommitted": 1,
+    "expectedParts": 5,
+    "defaultMustRemainLegacy": true,
+    "realApply": "NOT_AUTHORIZED"
+  }
+}

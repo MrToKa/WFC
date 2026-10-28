@@ -1,0 +1,16 @@
+{
+  "status": "PASS",
+  "scope": "Actual production claim/finish SQL under savepoint-mapped transaction envelopes and outer rollback; four synthetic jobs/two projects; not sustained-engine throughput",
+  "sequence": [
+    "6ca16114-462b-41f1-b0c9-9822526e3556",
+    "df75a68c-993f-47d4-83bf-f198e4d45cc7",
+    "6ca16114-462b-41f1-b0c9-9822526e3556",
+    "6ca16114-462b-41f1-b0c9-9822526e3556"
+  ],
+  "projects": 2,
+  "jobs": 4,
+  "cleanYieldAttempts": 3,
+  "cleanYieldSlices": "21",
+  "beforeSha256": "d7faf7da8898a8a84d4f95cba0f5b38c9c435d483a34a7d97f0e7c52f7a5b682",
+  "afterSha256": "d7faf7da8898a8a84d4f95cba0f5b38c9c435d483a34a7d97f0e7c52f7a5b682"
+}

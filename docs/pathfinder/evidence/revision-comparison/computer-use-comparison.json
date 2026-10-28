@@ -1,0 +1,74 @@
+{
+  "status": "PASS",
+  "recordedAt": "2026-10-19T04:11:11.597Z",
+  "scope": "Computer-use normal admin UI on retained synthetic project with real converted models. Historical inspection uses protected server records; no reviewed frame/identity authored.",
+  "browserId": "2",
+  "tabId": "6",
+  "projectId": "56eadef6-8382-49f8-a652-c8f12026602e",
+  "actorId": "ac288aa9-eb51-4dd6-872b-ec52dfeecbc9",
+  "comparisonId": "55901b55-faba-444c-aaad-80b2b5809e45",
+  "checks": [
+    {
+      "name": "Older model selected through Project Details only in owned test project",
+      "status": "PASS"
+    },
+    {
+      "name": "Older BC022-2 exact-name absence retained as missing",
+      "status": "PASS"
+    },
+    {
+      "name": "Observed common BC001 captures have8old/9current objects and2leaves each",
+      "status": "PASS"
+    },
+    {
+      "name": "Three synthetic endpoint names remain missing, no invented bindings",
+      "status": "PASS"
+    },
+    {
+      "name": "Two immutable geometry traces created through normal UI",
+      "status": "PASS"
+    },
+    {
+      "name": "Old/current saved pair compared through normal UI and bounded worker",
+      "status": "PASS"
+    },
+    {
+      "name": "Common engineering frame remains unverified and engineering acceptance false",
+      "status": "PASS"
+    },
+    {
+      "name": "Unknown exclusions display Unavailable instead of zero",
+      "status": "PASS"
+    },
+    {
+      "name": "Historical old and new server records inspected with bbox/coordinates",
+      "status": "PASS"
+    },
+    {
+      "name": "Historical IDs never used to highlight current model",
+      "status": "PASS"
+    },
+    {
+      "name": "Original current model selected again",
+      "status": "PASS"
+    }
+  ],
+  "screenshots": [
+    {
+      "privateFile": "r6-older-trace.png",
+      "bytes": 72702,
+      "sha256": "c434cdbf37a0da9d0e94060647aa84088de48ae4ec9c6e3f749952c0f49e428d"
+    },
+    {
+      "privateFile": "r6-actual-comparison.png",
+      "bytes": 83525,
+      "sha256": "371f6d8073778ec84fd71330857555badee326eb038f01cd26e46a7952df55ac"
+    }
+  ],
+  "remaining": [
+    "Original BC022-2 preparation and synthetic endpoint reconfirmation still pending at this receipt.",
+    "No full-plant/native equivalence or human engineering acceptance."
+  ],
+  "engineeringAccepted": false,
+  "cableApply": "NOT_PERFORMED"
+}

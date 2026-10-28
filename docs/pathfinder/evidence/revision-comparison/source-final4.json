@@ -1,0 +1,35 @@
+{
+  "status": "PASS",
+  "recordedAt": "2026-10-19T04:25:58.822Z",
+  "scope": "Candidate4 final source adds only recovery/no-op fix and associated exact fixture/regression; 62 scoped checks PASS plus fresh server types/lint. Earlier combined1439 checks apply to otherwise unchanged application source. Final deployed normal API exact replay and target scope preserved.",
+  "sourceSha256": "6374a1493beb3dd783d1e7841d52d7f3fe70e400c8a769aff47c6da0b539b203",
+  "sourceFiles": 1378,
+  "nonDocumentSourceFiles": 1214,
+  "changedFromCandidate3": [
+    "docs/pathfinder/automation-progress.md",
+    "server/pathfinder/revisionComparisonFixtures.ts",
+    "server/pathfinder/revisionComparisonRepository.test.ts",
+    "server/pathfinder/revisionComparisonRepository.ts"
+  ],
+  "scopedTests": {
+    "passed": 62,
+    "failed": 0,
+    "notRun": 0,
+    "files": [
+      "server/pathfinder/comparisonCalculationProvenance.test.ts",
+      "server/pathfinder/endpointBindingMigrationReadiness.test.ts",
+      "server/pathfinder/revisionComparisonEndpointAdapter.test.ts",
+      "server/pathfinder/revisionComparisonRepository.test.ts",
+      "server/pathfinder/revisionComparisonRoutes.test.ts"
+    ]
+  },
+  "referenceFiles": 24,
+  "coreFilesUnchanged": 11,
+  "images": {
+    "api": "sha256:cae50e6368f5d26a7959ce7e265025b60b2ca1c7db29cff63efedaffafddd1b9",
+    "web": "sha256:39225998e73df4d2226ef5808d5f323f1417ec12b072e50bbc0559f1527f47ee"
+  },
+  "postUpgradeExactReplay": true,
+  "postUpgradeComparisonScopeUnchanged": true,
+  "latestRecoveryRegressionActualDatabase": "NOT_RUN; bounded in-memory production repository fixture regression only"
+}

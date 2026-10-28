@@ -1,0 +1,317 @@
+{
+  "schemaVersion": "wfc.pf.u6-actual.v1",
+  "recordedAt": "2026-10-20T19:43:39.865Z",
+  "branch": "pf-u6-direct-secondary-local-20261020",
+  "parentRevision": "85bfc2bd67652bacf4e289ab6883cb3319eb3913",
+  "status": "TECHNICAL_FOUNDATION_PASS",
+  "checks": {
+    "typescript": {
+      "status": "PASS",
+      "passed": 587,
+      "failed": 0,
+      "files": [
+        {
+          "path": "shared/pathfinderDirectSecondary.test.ts",
+          "total": 20,
+          "passed": 20
+        },
+        {
+          "path": "shared/pathfinderEngineIdentity.test.ts",
+          "total": 24,
+          "passed": 24
+        },
+        {
+          "path": "shared/pathfinderLengthLedger.test.ts",
+          "total": 17,
+          "passed": 17
+        },
+        {
+          "path": "server/pathfinder/cableWorkflowProof.test.ts",
+          "total": 49,
+          "passed": 49
+        },
+        {
+          "path": "server/pathfinder/calculationEngineIdentity.test.ts",
+          "total": 32,
+          "passed": 32
+        },
+        {
+          "path": "server/pathfinder/dependencies.test.ts",
+          "total": 22,
+          "passed": 22
+        },
+        {
+          "path": "server/pathfinder/dependencyBatch.test.ts",
+          "total": 22,
+          "passed": 22
+        },
+        {
+          "path": "server/pathfinder/directSecondaryStrategy.test.ts",
+          "total": 28,
+          "passed": 28
+        },
+        {
+          "path": "server/pathfinder/engineSession.test.ts",
+          "total": 44,
+          "passed": 44
+        },
+        {
+          "path": "server/pathfinder/initialFillReceiptProof.test.ts",
+          "total": 57,
+          "passed": 57
+        },
+        {
+          "path": "server/pathfinder/initialFillWriter.test.ts",
+          "total": 63,
+          "passed": 63
+        },
+        {
+          "path": "server/pathfinder/jobContracts.test.ts",
+          "total": 15,
+          "passed": 15
+        },
+        {
+          "path": "server/pathfinder/jobs-deleted-history.test.ts",
+          "total": 9,
+          "passed": 9
+        },
+        {
+          "path": "server/pathfinder/lengthLedger.test.ts",
+          "total": 13,
+          "passed": 13
+        },
+        {
+          "path": "server/pathfinder/previews.test.ts",
+          "total": 31,
+          "passed": 31
+        },
+        {
+          "path": "server/pathfinder/revisionResultRepository.test.ts",
+          "total": 23,
+          "passed": 23
+        },
+        {
+          "path": "server/pathfinder/worker-grant-recovery.test.ts",
+          "total": 10,
+          "passed": 10
+        },
+        {
+          "path": "server/pathfinder/worker-retained.test.ts",
+          "total": 9,
+          "passed": 9
+        },
+        {
+          "path": "server/pathfinder/workerReuse.test.ts",
+          "total": 31,
+          "passed": 31
+        },
+        {
+          "path": "server/pathfinder/workerScheduling.test.ts",
+          "total": 20,
+          "passed": 20
+        },
+        {
+          "path": "src/api/pathfinder.test.ts",
+          "total": 16,
+          "passed": 16
+        },
+        {
+          "path": "src/pages/ProjectDetails/PathFinderDirectSecondary.test.tsx",
+          "total": 6,
+          "passed": 6
+        },
+        {
+          "path": "server/pathfinder/worker-fatal.test.ts",
+          "total": 8,
+          "passed": 8
+        },
+        {
+          "path": "server/pathfinder/worker-session.test.ts",
+          "total": 11,
+          "passed": 11
+        },
+        {
+          "path": "server/pathfinder/workerSupersession.test.ts",
+          "total": 7,
+          "passed": 7
+        }
+      ],
+      "receipts": [
+        "docs/pathfinder/evidence/cable-workflow/u6-tests.json",
+        "docs/pathfinder/evidence/cable-workflow/u6-worker-regression-tests.json"
+      ]
+    },
+    "csharp": {
+      "status": "PASS",
+      "passed": 726,
+      "receipt": "docs/pathfinder/evidence/cable-workflow/u6-csharp-actual.json",
+      "goldenCases": 43
+    },
+    "canonicalSources": {
+      "status": "PASS",
+      "files": 11
+    },
+    "frontendTypes": "PASS",
+    "backendTypes": "PASS",
+    "changedSourceLint": {
+      "status": "PASS",
+      "files": 28
+    },
+    "diff": "PASS"
+  },
+  "sourceClosure": [
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/Program.cs",
+      "sha256": "a98a2c3e510002c3982d5694a54a4c0a1d651b4d06a3b93a4f61110f2eee7812"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/SessionProtocol.cs",
+      "sha256": "65e860a2eb39443a2f5d2697f60f69982e5b42889e4c9bdc961614126c35aa23"
+    },
+    {
+      "path": "server/pathfinder/calculationEngineIdentity.test.ts",
+      "sha256": "165270a96239ae9b885bd43675afb1811917e4edf88512ba3522ceb07777c763"
+    },
+    {
+      "path": "server/pathfinder/calculationEngineIdentity.ts",
+      "sha256": "bd09207b28cf014ad1afa11a6d858b9cb941b7176a4e905be57b7d7ee271e55e"
+    },
+    {
+      "path": "server/pathfinder/jobContracts.ts",
+      "sha256": "08d35b180d961fcf030fa9e7b7876881bd59f5332c2dba0d98597cd6150064d2"
+    },
+    {
+      "path": "server/pathfinder/jobs-deleted-history.test.ts",
+      "sha256": "f526447d56828ed7b4a5cfe12935d9569168d5573a1d754c56e75538ffc62708"
+    },
+    {
+      "path": "server/pathfinder/jobs.ts",
+      "sha256": "0a5f0ec1706aad08e2e34e1f926263f0346b700d56edcb81005947bbdff6d33c"
+    },
+    {
+      "path": "server/pathfinder/lengthLedger.test.ts",
+      "sha256": "768734605f778f3752f6cf16636624e01b18128a947ffcf37e924ac62653f3a3"
+    },
+    {
+      "path": "server/pathfinder/lengthLedger.ts",
+      "sha256": "0818de46553ed20f482467145a4f35f36fc2f547fd85748c344e95c1a78865fd"
+    },
+    {
+      "path": "server/pathfinder/previews.test.ts",
+      "sha256": "a0a3a6a59263d8cad4dd3b05d80b962e92404bbbbec05e2e36c21d00391279b5"
+    },
+    {
+      "path": "server/pathfinder/previews.ts",
+      "sha256": "753e98622c67457aa70ed752a2703b2cf7050dd4b1b4bd8de8a4c307750ffb2f"
+    },
+    {
+      "path": "server/pathfinder/worker-grant-recovery.test.ts",
+      "sha256": "cb2932a8f696360bfebcd063270e5cce1f57272cc123f0c769be571fe381407d"
+    },
+    {
+      "path": "server/pathfinder/worker.ts",
+      "sha256": "2f846013b42f826ce7a92df96da7f9af9e9377d959a50e62885842dac018224d"
+    },
+    {
+      "path": "server/pathfinder/workerReuse.test.ts",
+      "sha256": "bb4224d4ba0d95ece9dce8b18c2246b60f22b0495f509cdb8dd3d89b5edd3b2f"
+    },
+    {
+      "path": "shared/pathfinderEngineIdentity.test.ts",
+      "sha256": "cdc263ff73ab2af2a892953b2649686299f712b9bc2f708fc7f9d9664739f58c"
+    },
+    {
+      "path": "shared/pathfinderEngineIdentity.ts",
+      "sha256": "6573f00612a291c0c9a7c7a80d10c10df23f1cf087b219a4b354ae0b793467c6"
+    },
+    {
+      "path": "shared/pathfinderLengthLedger.test.ts",
+      "sha256": "1966f0b0fe5e57e306cb3bca986366e4110099cc71d24040d2758ca09cc83b7b"
+    },
+    {
+      "path": "shared/pathfinderLengthLedger.ts",
+      "sha256": "2070984ff97500acfeea7dcedb8136c180bf0828ebafb87a07c042b527342648"
+    },
+    {
+      "path": "src/api/pathfinder.test.ts",
+      "sha256": "be061e1612d0a09707e16a75bbd4386790442381882ca5015efbbdf94ea986b6"
+    },
+    {
+      "path": "src/api/pathfinder.ts",
+      "sha256": "b419fb2def4bf0ab3c61719005044a20ca349ba1355a730eeed1df88319ac265"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderPreview.tsx",
+      "sha256": "d0bd6fbbf14edf4de5712aa02ef04f9b575ea91c6d7ec0697ed19327c81b690b"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderResults.tsx",
+      "sha256": "7f39cc7cb3ea4bfe23cbedef3c6c4a7311125f51382e92e65067d21b6eb6603c"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderRevisionResults.tsx",
+      "sha256": "2303cf8bcb3dd75e6583bcb73bd22c062997bca876db3f5014d68bf6a230841b"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Adapter/DirectSecondary.cs",
+      "sha256": "1a0e5470eb18130a4f74f3ebaa4500980cd74a4c8bb2d7fab7955b6c226b1bce"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Core/Support/DirectSecondaryRoute.cs",
+      "sha256": "02911d47763d5ecaf29562e6afd08b30965020c7985a9fedc7d63fd52904471b"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.DirectSecondary.Tests/PathFinder.DirectSecondary.Tests.csproj",
+      "sha256": "b612e73d23f62b2abdaa19fd904690411b42006a88710d97313393f2b4932007"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.DirectSecondary.Tests/Program.cs",
+      "sha256": "1cd26c7fc4445c8dfaf562169ebd3a118c641ede11d5b3ce5bc08c104b7ae032"
+    },
+    {
+      "path": "server/pathfinder/directSecondaryStrategy.test.ts",
+      "sha256": "6585c172fbbad06004ad89ce0861325e03352cb6bbd2bc509efc55b500212442"
+    },
+    {
+      "path": "server/pathfinder/directSecondaryStrategy.ts",
+      "sha256": "2f1cfb4a33082d134b413c6a6b2daa05cca1e225ee515a8c0d3d19f7251fd41b"
+    },
+    {
+      "path": "server/pathfinder/jobContracts.test.ts",
+      "sha256": "799072b96c2d41ec2d3d35d0753c230b046d96c022e17b98334fc65f2e3dd1be"
+    },
+    {
+      "path": "shared/pathfinderDirectSecondary.test.ts",
+      "sha256": "94b5116d686c891be8a9dddd4420ded90e1e0d7f80f2ab73fa4013fba2ccc9b4"
+    },
+    {
+      "path": "shared/pathfinderDirectSecondary.ts",
+      "sha256": "1002810d6ce6cf9611512d13b1cb1395ca60a8718b6624d06df78298b68a2b66"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderDirectSecondary.test.tsx",
+      "sha256": "038e61428ed977acd9ce1b43ecc1b49886ac719e8a98a75a1984e94ee01fc66f"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderDirectSecondary.tsx",
+      "sha256": "359a9355dd828194457d918c966357a5a755a3f6cfc0a9ba4e0e48da16c5a62f"
+    }
+  ],
+  "independentReview": {
+    "status": "PASS",
+    "fixedFindings": [
+      "retained v2 category metadata",
+      "truthful legacy operational failures",
+      "reversed singleton direct path"
+    ]
+  },
+  "limitations": [
+    "All current checks use synthetic inputs or mocked IO; C# transport checks execute actual owned synthetic runner processes.",
+    "Actual converted-model direct calculation, SQL chain, computer-use,5191 upgrade and human acceptance remain NOT_RUN in U6.",
+    "No original5180/old5190/application or business data changes; no SQL/HTTP/Docker activity in U6.",
+    "Historical styled Tab49cases remain NOT_RUN from U5; no claim of full UI suite.",
+    "Saved browser-origin refusal remains; no bypass.",
+    "One stale referenced test DLL self-hash refusal was fixed by rebuilding; its failure receipt is retained and excluded from final passed counts.",
+    "User added properties+hidden-object matching on20October; handle in inherited U6a before U7. Simplified Preparer PAUSED."
+  ]
+}

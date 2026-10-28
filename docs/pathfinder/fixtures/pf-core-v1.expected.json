@@ -1,0 +1,2052 @@
+{
+  "schemaVersion": 1,
+  "artifact": "expected",
+  "provenance": "synthetic-core-extraction",
+  "coreCommit": "45c24bf5f433f13e102600b36f20327c77961d0a",
+  "cases": [
+    {
+      "id": "interior-endpoint-projections",
+      "kind": "calculate",
+      "output": {
+        "status": "returned",
+        "route": {
+          "success": true,
+          "message": "Path calculated.",
+          "routeText": "/B102",
+          "routeCodes": [
+            "/B102"
+          ],
+          "segmentIds": [
+            "long"
+          ],
+          "pathPoints": [
+            [
+              400,
+              1,
+              0
+            ],
+            [
+              400,
+              0,
+              0
+            ],
+            [
+              410,
+              0,
+              0
+            ],
+            [
+              410,
+              1,
+              0
+            ]
+          ],
+          "lengthMeters": 12,
+          "lengthRoundTrip": "12",
+          "fromDistanceMeters": 1,
+          "toDistanceMeters": 1,
+          "fromRequiresSecondary": false,
+          "toRequiresSecondary": false,
+          "connectionGapCount": 0,
+          "connectionGapLengthMeters": 0
+        }
+      }
+    },
+    {
+      "id": "secondary-equality",
+      "kind": "calculate",
+      "output": {
+        "status": "returned",
+        "route": {
+          "success": true,
+          "message": "Path calculated.",
+          "routeText": "/BC001",
+          "routeCodes": [
+            "/BC001"
+          ],
+          "segmentIds": [
+            "one"
+          ],
+          "pathPoints": [
+            [
+              2,
+              2,
+              0
+            ],
+            [
+              2,
+              0,
+              0
+            ],
+            [
+              8,
+              0,
+              0
+            ],
+            [
+              8,
+              2,
+              0
+            ]
+          ],
+          "lengthMeters": 10,
+          "lengthRoundTrip": "10",
+          "fromDistanceMeters": 2,
+          "toDistanceMeters": 2,
+          "fromRequiresSecondary": false,
+          "toRequiresSecondary": false,
+          "connectionGapCount": 0,
+          "connectionGapLengthMeters": 0
+        }
+      }
+    },
+    {
+      "id": "secondary-both-beyond",
+      "kind": "calculate",
+      "output": {
+        "status": "returned",
+        "route": {
+          "success": true,
+          "message": "Path calculated.",
+          "routeText": "/SECONDARY/BC001/SECONDARY",
+          "routeCodes": [
+            "/SECONDARY",
+            "/BC001",
+            "/SECONDARY"
+          ],
+          "segmentIds": [
+            "one"
+          ],
+          "pathPoints": [
+            [
+              2,
+              2.000001,
+              0
+            ],
+            [
+              2,
+              0,
+              0
+            ],
+            [
+              8,
+              0,
+              0
+            ],
+            [
+              8,
+              -3,
+              0
+            ]
+          ],
+          "lengthMeters": 11.000001000000001,
+          "lengthRoundTrip": "11.000001000000001",
+          "fromDistanceMeters": 2.000001,
+          "toDistanceMeters": 3,
+          "fromRequiresSecondary": true,
+          "toRequiresSecondary": true,
+          "connectionGapCount": 0,
+          "connectionGapLengthMeters": 0
+        }
+      }
+    },
+    {
+      "id": "secondary-from-only",
+      "kind": "calculate",
+      "output": {
+        "status": "returned",
+        "route": {
+          "success": true,
+          "message": "Path calculated.",
+          "routeText": "/SECONDARY/BC001",
+          "routeCodes": [
+            "/SECONDARY",
+            "/BC001"
+          ],
+          "segmentIds": [
+            "one"
+          ],
+          "pathPoints": [
+            [
+              2,
+              3,
+              0
+            ],
+            [
+              2,
+              0,
+              0
+            ],
+            [
+              8,
+              0,
+              0
+            ],
+            [
+              8,
+              1,
+              0
+            ]
+          ],
+          "lengthMeters": 10,
+          "lengthRoundTrip": "10",
+          "fromDistanceMeters": 3,
+          "toDistanceMeters": 1,
+          "fromRequiresSecondary": true,
+          "toRequiresSecondary": false,
+          "connectionGapCount": 0,
+          "connectionGapLengthMeters": 0
+        }
+      }
+    },
+    {
+      "id": "reverse-secondary",
+      "kind": "calculate",
+      "output": {
+        "status": "returned",
+        "route": {
+          "success": true,
+          "message": "Path calculated.",
+          "routeText": "/BC001/SECONDARY",
+          "routeCodes": [
+            "/BC001",
+            "/SECONDARY"
+          ],
+          "segmentIds": [
+            "one"
+          ],
+          "pathPoints": [
+            [
+              8,
+              1,
+              0
+            ],
+            [
+              8,
+              0,
+              0
+            ],
+            [
+              2,
+              0,
+              0
+            ],
+            [
+              2,
+              3,
+              0
+            ]
+          ],
+          "lengthMeters": 10,
+          "lengthRoundTrip": "10",
+          "fromDistanceMeters": 1,
+          "toDistanceMeters": 3,
+          "fromRequiresSecondary": false,
+          "toRequiresSecondary": true,
+          "connectionGapCount": 0,
+          "connectionGapLengthMeters": 0
+        }
+      }
+    },
+    {
+      "id": "gap-exact-tolerance",
+      "kind": "calculate",
+      "output": {
+        "status": "returned",
+        "route": {
+          "success": true,
+          "message": "Path calculated.",
+          "routeText": "/B001/B002",
+          "routeCodes": [
+            "/B001",
+            "/B002"
+          ],
+          "segmentIds": [
+            "a",
+            "b"
+          ],
+          "pathPoints": [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              2,
+              0,
+              0
+            ],
+            [
+              2.25,
+              0,
+              0
+            ],
+            [
+              4,
+              0,
+              0
+            ]
+          ],
+          "lengthMeters": 4,
+          "lengthRoundTrip": "4",
+          "fromDistanceMeters": 0,
+          "toDistanceMeters": 0,
+          "fromRequiresSecondary": false,
+          "toRequiresSecondary": false,
+          "connectionGapCount": 1,
+          "connectionGapLengthMeters": 0.25
+        }
+      }
+    },
+    {
+      "id": "gap-over-tolerance",
+      "kind": "calculate",
+      "output": {
+        "status": "returned",
+        "route": {
+          "success": false,
+          "message": "Selected From tray /B001 (3 m from object) and To tray /B002 (1 m from object) are disconnected at 0.25 m connection tolerance. Check route assignments and geometry between these trays.",
+          "routeText": "",
+          "routeCodes": [],
+          "segmentIds": [],
+          "pathPoints": [],
+          "lengthMeters": 0,
+          "lengthRoundTrip": "0",
+          "fromDistanceMeters": 0,
+          "toDistanceMeters": 0,
+          "fromRequiresSecondary": false,
+          "toRequiresSecondary": false,
+          "connectionGapCount": 0,
+          "connectionGapLengthMeters": 0
+        }
+      }
+    },
+    {
+      "id": "physical-micrometre-no-gap",
+      "kind": "calculate",
+      "output": {
+        "status": "returned",
+        "route": {
+          "success": true,
+          "message": "Path calculated.",
+          "routeText": "/B001/B002",
+          "routeCodes": [
+            "/B001",
+            "/B002"
+          ],
+          "segmentIds": [
+            "a",
+            "b"
+          ],
+          "pathPoints": [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              2,
+              0,
+              0
+            ],
+            [
+              2.0000005,
+              0,
+              0
+            ],
+            [
+              4,
+              0,
+              0
+            ]
+          ],
+          "lengthMeters": 4,
+          "lengthRoundTrip": "4",
+          "fromDistanceMeters": 0,
+          "toDistanceMeters": 0,
+          "fromRequiresSecondary": false,
+          "toRequiresSecondary": false,
+          "connectionGapCount": 0,
+          "connectionGapLengthMeters": 0
+        }
+      }
+    },
+    {
+      "id": "category-forbidden-bridge",
+      "kind": "calculate",
+      "output": {
+        "status": "returned",
+        "route": {
+          "success": false,
+          "message": "Selected From tray /B001 (0 m from object) and To tray /B002 (0 m from object) are disconnected at 0.25 m connection tolerance. Check route assignments and geometry between these trays.",
+          "routeText": "",
+          "routeCodes": [],
+          "segmentIds": [],
+          "pathPoints": [],
+          "lengthMeters": 0,
+          "lengthRoundTrip": "0",
+          "fromDistanceMeters": 0,
+          "toDistanceMeters": 0,
+          "fromRequiresSecondary": false,
+          "toRequiresSecondary": false,
+          "connectionGapCount": 0,
+          "connectionGapLengthMeters": 0
+        }
+      }
+    },
+    {
+      "id": "category-control-allowed",
+      "kind": "calculate",
+      "output": {
+        "status": "returned",
+        "route": {
+          "success": true,
+          "message": "Path calculated.",
+          "routeText": "/B001/C001/B002",
+          "routeCodes": [
+            "/B001",
+            "/C001",
+            "/B002"
+          ],
+          "segmentIds": [
+            "a",
+            "bridge",
+            "b"
+          ],
+          "pathPoints": [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              2,
+              0,
+              0
+            ],
+            [
+              4,
+              0,
+              0
+            ],
+            [
+              6,
+              0,
+              0
+            ]
+          ],
+          "lengthMeters": 6,
+          "lengthRoundTrip": "6",
+          "fromDistanceMeters": 0,
+          "toDistanceMeters": 0,
+          "fromRequiresSecondary": false,
+          "toRequiresSecondary": false,
+          "connectionGapCount": 0,
+          "connectionGapLengthMeters": 0
+        }
+      }
+    },
+    {
+      "id": "three-dimensional-diagonal",
+      "kind": "calculate",
+      "output": {
+        "status": "returned",
+        "route": {
+          "success": true,
+          "message": "Path calculated.",
+          "routeText": "/B001",
+          "routeCodes": [
+            "/B001"
+          ],
+          "segmentIds": [
+            "diagonal"
+          ],
+          "pathPoints": [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              3,
+              4,
+              12
+            ]
+          ],
+          "lengthMeters": 13,
+          "lengthRoundTrip": "13",
+          "fromDistanceMeters": 0,
+          "toDistanceMeters": 0,
+          "fromRequiresSecondary": false,
+          "toRequiresSecondary": false,
+          "connectionGapCount": 0,
+          "connectionGapLengthMeters": 0
+        }
+      }
+    },
+    {
+      "id": "port-only-interior-crossing",
+      "kind": "calculate",
+      "output": {
+        "status": "returned",
+        "route": {
+          "success": false,
+          "message": "Selected From tray /B001 (0 m from object) and To tray /B002 (0 m from object) are disconnected at 0.25 m connection tolerance. Check route assignments and geometry between these trays.",
+          "routeText": "",
+          "routeCodes": [],
+          "segmentIds": [],
+          "pathPoints": [],
+          "lengthMeters": 0,
+          "lengthRoundTrip": "0",
+          "fromDistanceMeters": 0,
+          "toDistanceMeters": 0,
+          "fromRequiresSecondary": false,
+          "toRequiresSecondary": false,
+          "connectionGapCount": 0,
+          "connectionGapLengthMeters": 0
+        }
+      }
+    },
+    {
+      "id": "nearest-three-dimensional-approach",
+      "kind": "calculate",
+      "output": {
+        "status": "returned",
+        "route": {
+          "success": true,
+          "message": "Path calculated.",
+          "routeText": "/B001/B003/B002",
+          "routeCodes": [
+            "/B001",
+            "/B003",
+            "/B002"
+          ],
+          "segmentIds": [
+            "vertical",
+            "bridge",
+            "side"
+          ],
+          "pathPoints": [
+            [
+              1,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              -1,
+              0,
+              0
+            ],
+            [
+              -1,
+              0.6,
+              0.4
+            ],
+            [
+              0,
+              0.6,
+              0.4
+            ],
+            [
+              1,
+              0.6,
+              0.4
+            ],
+            [
+              8,
+              0.6,
+              0.4
+            ],
+            [
+              8,
+              0,
+              1.2
+            ]
+          ],
+          "lengthMeters": 12.721110255092798,
+          "lengthRoundTrip": "12.721110255092798",
+          "fromDistanceMeters": 0,
+          "toDistanceMeters": 0.9999999999999999,
+          "fromRequiresSecondary": false,
+          "toRequiresSecondary": false,
+          "connectionGapCount": 0,
+          "connectionGapLengthMeters": 0
+        }
+      }
+    },
+    {
+      "id": "preferred-vertical-approach",
+      "kind": "calculate",
+      "output": {
+        "status": "returned",
+        "route": {
+          "success": true,
+          "message": "Path calculated.",
+          "routeText": "/B001/SECONDARY",
+          "routeCodes": [
+            "/B001",
+            "/SECONDARY"
+          ],
+          "segmentIds": [
+            "vertical"
+          ],
+          "pathPoints": [
+            [
+              1,
+              0,
+              0
+            ],
+            [
+              8,
+              0,
+              0
+            ],
+            [
+              8,
+              0,
+              1.2
+            ]
+          ],
+          "lengthMeters": 8.2,
+          "lengthRoundTrip": "8.2",
+          "fromDistanceMeters": 0,
+          "toDistanceMeters": 1.2,
+          "fromRequiresSecondary": false,
+          "toRequiresSecondary": true,
+          "connectionGapCount": 0,
+          "connectionGapLengthMeters": 0
+        }
+      }
+    },
+    {
+      "id": "vertical-nearby-band-equality",
+      "kind": "calculate",
+      "output": {
+        "status": "returned",
+        "route": {
+          "success": true,
+          "message": "Path calculated.",
+          "routeText": "/B001/SECONDARY",
+          "routeCodes": [
+            "/B001",
+            "/SECONDARY"
+          ],
+          "segmentIds": [
+            "vertical"
+          ],
+          "pathPoints": [
+            [
+              1,
+              0,
+              0
+            ],
+            [
+              8,
+              0,
+              0
+            ],
+            [
+              8,
+              0,
+              1.2
+            ]
+          ],
+          "lengthMeters": 8.2,
+          "lengthRoundTrip": "8.2",
+          "fromDistanceMeters": 0,
+          "toDistanceMeters": 1.2,
+          "fromRequiresSecondary": false,
+          "toRequiresSecondary": true,
+          "connectionGapCount": 0,
+          "connectionGapLengthMeters": 0
+        }
+      }
+    },
+    {
+      "id": "vertical-outside-nearby-band",
+      "kind": "calculate",
+      "output": {
+        "status": "returned",
+        "route": {
+          "success": true,
+          "message": "Path calculated.",
+          "routeText": "/B001/B003/B002",
+          "routeCodes": [
+            "/B001",
+            "/B003",
+            "/B002"
+          ],
+          "segmentIds": [
+            "vertical",
+            "bridge",
+            "side"
+          ],
+          "pathPoints": [
+            [
+              1,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              -1,
+              0,
+              0
+            ],
+            [
+              -1,
+              0.6,
+              0.4
+            ],
+            [
+              0,
+              0.6,
+              0.4
+            ],
+            [
+              8,
+              0.6,
+              0.4
+            ],
+            [
+              8,
+              0,
+              1.2
+            ]
+          ],
+          "lengthMeters": 12.721110255092798,
+          "lengthRoundTrip": "12.721110255092798",
+          "fromDistanceMeters": 0,
+          "toDistanceMeters": 0.9999999999999999,
+          "fromRequiresSecondary": false,
+          "toRequiresSecondary": false,
+          "connectionGapCount": 0,
+          "connectionGapLengthMeters": 0
+        }
+      }
+    },
+    {
+      "id": "graph-node-limit",
+      "kind": "calculate",
+      "output": {
+        "status": "returned",
+        "route": {
+          "success": false,
+          "message": "The selected tray geometry exceeds the 2 routing-node limit. Select a smaller tray area or simplify the tray geometry.",
+          "routeText": "",
+          "routeCodes": [],
+          "segmentIds": [],
+          "pathPoints": [],
+          "lengthMeters": 0,
+          "lengthRoundTrip": "0",
+          "fromDistanceMeters": 0,
+          "toDistanceMeters": 0,
+          "fromRequiresSecondary": false,
+          "toRequiresSecondary": false,
+          "connectionGapCount": 0,
+          "connectionGapLengthMeters": 0
+        }
+      }
+    },
+    {
+      "id": "ordered-lookup",
+      "kind": "lookup",
+      "output": {
+        "status": "returned",
+        "route": {
+          "success": true,
+          "message": "Entered path found.",
+          "routeText": "/C001/C002/C003",
+          "routeCodes": [
+            "/C001",
+            "/C002",
+            "/C003"
+          ],
+          "segmentIds": [
+            "start",
+            "bend",
+            "end"
+          ],
+          "pathPoints": [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              2,
+              0,
+              0
+            ],
+            [
+              2,
+              3,
+              0
+            ],
+            [
+              4,
+              3,
+              0
+            ],
+            [
+              4,
+              0,
+              0
+            ],
+            [
+              6,
+              0,
+              0
+            ]
+          ],
+          "lengthMeters": 12,
+          "lengthRoundTrip": "12",
+          "fromDistanceMeters": 0,
+          "toDistanceMeters": 0,
+          "fromRequiresSecondary": false,
+          "toRequiresSecondary": false,
+          "connectionGapCount": 0,
+          "connectionGapLengthMeters": 0
+        }
+      }
+    },
+    {
+      "id": "ordered-lookup-reverse",
+      "kind": "lookup",
+      "output": {
+        "status": "returned",
+        "route": {
+          "success": true,
+          "message": "Entered path found.",
+          "routeText": "/C003/C002/C001",
+          "routeCodes": [
+            "/C003",
+            "/C002",
+            "/C001"
+          ],
+          "segmentIds": [
+            "end",
+            "bend",
+            "start"
+          ],
+          "pathPoints": [
+            [
+              6,
+              0,
+              0
+            ],
+            [
+              4,
+              0,
+              0
+            ],
+            [
+              4,
+              3,
+              0
+            ],
+            [
+              2,
+              3,
+              0
+            ],
+            [
+              2,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0
+            ]
+          ],
+          "lengthMeters": 12,
+          "lengthRoundTrip": "12",
+          "fromDistanceMeters": 0,
+          "toDistanceMeters": 0,
+          "fromRequiresSecondary": false,
+          "toRequiresSecondary": false,
+          "connectionGapCount": 0,
+          "connectionGapLengthMeters": 0
+        }
+      }
+    },
+    {
+      "id": "lookup-missing-labels",
+      "kind": "lookup",
+      "output": {
+        "status": "returned",
+        "route": {
+          "success": false,
+          "message": "No visible route geometry found for: /C002, /C003.",
+          "routeText": "",
+          "routeCodes": [],
+          "segmentIds": [],
+          "pathPoints": [],
+          "lengthMeters": 0,
+          "lengthRoundTrip": "0",
+          "fromDistanceMeters": 0,
+          "toDistanceMeters": 0,
+          "fromRequiresSecondary": false,
+          "toRequiresSecondary": false,
+          "connectionGapCount": 0,
+          "connectionGapLengthMeters": 0
+        }
+      }
+    },
+    {
+      "id": "lookup-closed-loop-mainspan",
+      "kind": "lookup",
+      "output": {
+        "status": "returned",
+        "route": {
+          "success": true,
+          "message": "Entered path found.",
+          "routeText": "/5LD04",
+          "routeCodes": [
+            "/5LD04"
+          ],
+          "segmentIds": [
+            "loop"
+          ],
+          "pathPoints": [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              2,
+              0,
+              0
+            ],
+            [
+              2,
+              2,
+              0
+            ]
+          ],
+          "lengthMeters": 4,
+          "lengthRoundTrip": "4",
+          "fromDistanceMeters": 0,
+          "toDistanceMeters": 0,
+          "fromRequiresSecondary": false,
+          "toRequiresSecondary": false,
+          "connectionGapCount": 0,
+          "connectionGapLengthMeters": 0
+        }
+      }
+    },
+    {
+      "id": "lookup-branch-mainspan",
+      "kind": "lookup",
+      "output": {
+        "status": "returned",
+        "route": {
+          "success": true,
+          "message": "Entered path found.",
+          "routeText": "/5LD04",
+          "routeCodes": [
+            "/5LD04"
+          ],
+          "segmentIds": [
+            "a",
+            "fork"
+          ],
+          "pathPoints": [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              2,
+              0,
+              0
+            ],
+            [
+              2,
+              4,
+              0
+            ]
+          ],
+          "lengthMeters": 6,
+          "lengthRoundTrip": "6",
+          "fromDistanceMeters": 0,
+          "toDistanceMeters": 0,
+          "fromRequiresSecondary": false,
+          "toRequiresSecondary": false,
+          "connectionGapCount": 0,
+          "connectionGapLengthMeters": 0
+        }
+      }
+    },
+    {
+      "id": "parse-secondary-reentry",
+      "kind": "parse",
+      "output": {
+        "status": "returned",
+        "codes": [
+          "/C135",
+          "/C134",
+          "/C135"
+        ]
+      }
+    },
+    {
+      "id": "parse-adjacent-duplicate",
+      "kind": "parse",
+      "output": {
+        "status": "returned",
+        "codes": [
+          "/C135",
+          "/C134"
+        ]
+      }
+    },
+    {
+      "id": "parse-numeric-label",
+      "kind": "parse",
+      "output": {
+        "status": "returned",
+        "codes": [
+          "/5LD04",
+          "/5LD05-2"
+        ]
+      }
+    },
+    {
+      "id": "parse-marker-only",
+      "kind": "parse",
+      "output": {
+        "status": "exception",
+        "exceptionType": "ArgumentException",
+        "parameter": "text"
+      }
+    },
+    {
+      "id": "parse-malformed",
+      "kind": "parse",
+      "output": {
+        "status": "exception",
+        "exceptionType": "ArgumentException",
+        "parameter": "text"
+      }
+    },
+    {
+      "id": "design-no-secondary",
+      "kind": "design",
+      "output": {
+        "status": "returned",
+        "lengthBeforePercentageMeters": "106.01",
+        "unroundedLengthMeters": "116.611",
+        "designLengthMeters": "117"
+      }
+    },
+    {
+      "id": "design-one-secondary",
+      "kind": "design",
+      "output": {
+        "status": "returned",
+        "lengthBeforePercentageMeters": "102.539",
+        "unroundedLengthMeters": "112.7929",
+        "designLengthMeters": "113"
+      }
+    },
+    {
+      "id": "design-one-secondary-reverse",
+      "kind": "design",
+      "output": {
+        "status": "returned",
+        "lengthBeforePercentageMeters": "102.539",
+        "unroundedLengthMeters": "112.7929",
+        "designLengthMeters": "113"
+      }
+    },
+    {
+      "id": "design-both-secondary",
+      "kind": "design",
+      "output": {
+        "status": "returned",
+        "lengthBeforePercentageMeters": "29",
+        "unroundedLengthMeters": "29",
+        "designLengthMeters": "29"
+      }
+    },
+    {
+      "id": "design-zero-secondary-replacement",
+      "kind": "design",
+      "output": {
+        "status": "returned",
+        "lengthBeforePercentageMeters": "19",
+        "unroundedLengthMeters": "19",
+        "designLengthMeters": "19"
+      }
+    },
+    {
+      "id": "design-exact-integer",
+      "kind": "design",
+      "output": {
+        "status": "returned",
+        "lengthBeforePercentageMeters": "100",
+        "unroundedLengthMeters": "110",
+        "designLengthMeters": "110"
+      }
+    },
+    {
+      "id": "design-ceiling-fraction",
+      "kind": "design",
+      "output": {
+        "status": "returned",
+        "lengthBeforePercentageMeters": "10.00001",
+        "unroundedLengthMeters": "10.00001",
+        "designLengthMeters": "11"
+      }
+    },
+    {
+      "id": "design-zero",
+      "kind": "design",
+      "output": {
+        "status": "returned",
+        "lengthBeforePercentageMeters": "0",
+        "unroundedLengthMeters": "0",
+        "designLengthMeters": "0"
+      }
+    },
+    {
+      "id": "design-invalid-negative",
+      "kind": "design",
+      "output": {
+        "status": "exception",
+        "exceptionType": "ArgumentOutOfRangeException",
+        "parameter": "connectionSpareMeters"
+      }
+    },
+    {
+      "id": "design-approach-exceeds-length",
+      "kind": "design",
+      "output": {
+        "status": "exception",
+        "exceptionType": "ArgumentException",
+        "parameter": "route"
+      }
+    },
+    {
+      "id": "hierarchy-logical-owner",
+      "kind": "name",
+      "output": {
+        "status": "returned",
+        "routeCode": "/C135",
+        "ownerIndex": 1
+      }
+    },
+    {
+      "id": "hierarchy-qualified-component",
+      "kind": "name",
+      "output": {
+        "status": "returned",
+        "routeCode": "/B001",
+        "ownerIndex": 1
+      }
+    },
+    {
+      "id": "geometry-explicit-fallback",
+      "kind": "geometry",
+      "output": {
+        "status": "returned",
+        "validatedBends": 0,
+        "fallbackBends": 0,
+        "validatedStraights": 0,
+        "fallbackStraights": 1,
+        "fallbackClearances": 1,
+        "diagnostics": [],
+        "segments": [
+          {
+            "id": "straight",
+            "name": "B010",
+            "routeCode": "/B010",
+            "categories": 2,
+            "points": [
+              [
+                0,
+                0,
+                0
+              ],
+              [
+                10,
+                0,
+                0
+              ]
+            ],
+            "connectionsAtEndsOnly": false,
+            "connectionSurfaceCount": 0,
+            "verifiedPorts": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "geometry-box-mesh-straight",
+      "kind": "geometry",
+      "output": {
+        "status": "returned",
+        "validatedBends": 0,
+        "fallbackBends": 0,
+        "validatedStraights": 0,
+        "fallbackStraights": 1,
+        "fallbackClearances": 0,
+        "diagnostics": [
+          "straight: no repeated mesh end sections prove a straight extrusion"
+        ],
+        "segments": [
+          {
+            "id": "straight",
+            "name": "B010",
+            "routeCode": "/B010",
+            "categories": 2,
+            "points": [
+              [
+                0,
+                0,
+                0
+              ],
+              [
+                10,
+                0,
+                0
+              ]
+            ],
+            "connectionsAtEndsOnly": false,
+            "connectionSurfaceCount": 1,
+            "verifiedPorts": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "geometry-measured-circular-30",
+      "kind": "geometry-route",
+      "output": {
+        "status": "returned",
+        "validatedBends": 1,
+        "fallbackBends": 0,
+        "validatedStraights": 2,
+        "fallbackStraights": 0,
+        "fallbackClearances": 0,
+        "diagnostics": [],
+        "segments": [
+          {
+            "id": "bend",
+            "name": "/B002",
+            "routeCode": "/B002",
+            "categories": 6,
+            "points": [
+              [
+                11,
+                19.92,
+                30
+              ],
+              [
+                11,
+                19.999999999999957,
+                30
+              ],
+              [
+                10.99720379718118,
+                20.0747300935864,
+                30
+              ],
+              [
+                10.988830826225128,
+                20.149042266176167,
+                30
+              ],
+              [
+                10.974927912181819,
+                20.222520933956325,
+                30
+              ],
+              [
+                10.95557280578613,
+                20.294755174410934,
+                30
+              ],
+              [
+                10.930873748644187,
+                20.365341024366444,
+                30
+              ],
+              [
+                10.900968867902392,
+                20.433883739117622,
+                30
+              ],
+              [
+                10.8660254037844,
+                20.500000000000078,
+                30
+              ],
+              [
+                10.806025403784439,
+                20.603923048454135,
+                30
+              ]
+            ],
+            "connectionsAtEndsOnly": true,
+            "connectionSurfaceCount": 2,
+            "verifiedPorts": [
+              {
+                "point": [
+                  11,
+                  19.92,
+                  30
+                ],
+                "outward": [
+                  0,
+                  -1,
+                  0
+                ],
+                "u": [
+                  1,
+                  0,
+                  -0
+                ],
+                "v": [
+                  0,
+                  0,
+                  1
+                ],
+                "width": 0.6400000000000006,
+                "height": 0.10000000000000142
+              },
+              {
+                "point": [
+                  10.806025403784439,
+                  20.603923048454135,
+                  30
+                ],
+                "outward": [
+                  -0.5000000000000395,
+                  0.8660254037844157,
+                  0
+                ],
+                "u": [
+                  -0.8660254037844158,
+                  -0.5000000000000396,
+                  0
+                ],
+                "v": [
+                  0,
+                  0,
+                  1
+                ],
+                "width": 0.6399999999999995,
+                "height": 0.10000000000000142
+              }
+            ]
+          },
+          {
+            "id": "in",
+            "name": "/B001",
+            "routeCode": "/B001",
+            "categories": 6,
+            "points": [
+              [
+                11,
+                16.92,
+                30
+              ],
+              [
+                11,
+                19.92,
+                30
+              ]
+            ],
+            "connectionsAtEndsOnly": false,
+            "connectionSurfaceCount": 1,
+            "verifiedPorts": [
+              {
+                "point": [
+                  11,
+                  16.92,
+                  30
+                ],
+                "outward": [
+                  -0,
+                  -1,
+                  -0
+                ],
+                "u": [
+                  1,
+                  0,
+                  0
+                ],
+                "v": [
+                  0,
+                  0,
+                  -1
+                ],
+                "width": 0.6400000000000006,
+                "height": 0.10000000000000142
+              },
+              {
+                "point": [
+                  11,
+                  19.92,
+                  30
+                ],
+                "outward": [
+                  0,
+                  1,
+                  0
+                ],
+                "u": [
+                  1,
+                  0,
+                  0
+                ],
+                "v": [
+                  0,
+                  0,
+                  -1
+                ],
+                "width": 0.6400000000000006,
+                "height": 0.10000000000000142
+              }
+            ]
+          },
+          {
+            "id": "out",
+            "name": "/B003",
+            "routeCode": "/B003",
+            "categories": 6,
+            "points": [
+              [
+                9.306025403784432,
+                23.20199925980746,
+                30
+              ],
+              [
+                10.806025403784446,
+                20.603923048454117,
+                30
+              ]
+            ],
+            "connectionsAtEndsOnly": false,
+            "connectionSurfaceCount": 1,
+            "verifiedPorts": [
+              {
+                "point": [
+                  9.306025403784432,
+                  23.20199925980746,
+                  30
+                ],
+                "outward": [
+                  -0.5000000000000402,
+                  0.8660254037844155,
+                  -0
+                ],
+                "u": [
+                  0.8660254037844155,
+                  0.5000000000000402,
+                  0
+                ],
+                "v": [
+                  -0,
+                  0,
+                  1
+                ],
+                "width": 0.6399999999999995,
+                "height": 0.10000000000000142
+              },
+              {
+                "point": [
+                  10.806025403784446,
+                  20.603923048454117,
+                  30
+                ],
+                "outward": [
+                  0.5000000000000402,
+                  -0.8660254037844155,
+                  0
+                ],
+                "u": [
+                  0.8660254037844155,
+                  0.5000000000000402,
+                  0
+                ],
+                "v": [
+                  -0,
+                  0,
+                  1
+                ],
+                "width": 0.6399999999999995,
+                "height": 0.10000000000000142
+              }
+            ]
+          }
+        ],
+        "route": {
+          "success": true,
+          "message": "Path calculated.",
+          "routeText": "/B001/B002/B003",
+          "routeCodes": [
+            "/B001",
+            "/B002",
+            "/B003"
+          ],
+          "segmentIds": [
+            "in",
+            "bend",
+            "out"
+          ],
+          "pathPoints": [
+            [
+              11,
+              16.92,
+              30
+            ],
+            [
+              11,
+              19.92,
+              30
+            ],
+            [
+              11,
+              19.999999999999957,
+              30
+            ],
+            [
+              10.99720379718118,
+              20.0747300935864,
+              30
+            ],
+            [
+              10.988830826225128,
+              20.149042266176167,
+              30
+            ],
+            [
+              10.974927912181819,
+              20.222520933956325,
+              30
+            ],
+            [
+              10.95557280578613,
+              20.294755174410934,
+              30
+            ],
+            [
+              10.930873748644187,
+              20.365341024366444,
+              30
+            ],
+            [
+              10.900968867902392,
+              20.433883739117622,
+              30
+            ],
+            [
+              10.8660254037844,
+              20.500000000000078,
+              30
+            ],
+            [
+              10.806025403784439,
+              20.603923048454135,
+              30
+            ],
+            [
+              10.806025403784437,
+              20.603923048454135,
+              30
+            ],
+            [
+              9.306025403784439,
+              23.201999259807447,
+              30
+            ]
+          ],
+          "lengthMeters": 6.723476719868557,
+          "lengthRoundTrip": "6.723476719868557",
+          "fromDistanceMeters": 0,
+          "toDistanceMeters": 0,
+          "fromRequiresSecondary": false,
+          "toRequiresSecondary": false,
+          "connectionGapCount": 0,
+          "connectionGapLengthMeters": 0
+        }
+      }
+    },
+    {
+      "id": "geometry-measured-vertical-90-with-support",
+      "kind": "geometry-route",
+      "output": {
+        "status": "returned",
+        "validatedBends": 1,
+        "fallbackBends": 0,
+        "validatedStraights": 2,
+        "fallbackStraights": 0,
+        "fallbackClearances": 0,
+        "diagnostics": [],
+        "segments": [
+          {
+            "id": "bend",
+            "name": "/B002",
+            "routeCode": "/B002",
+            "categories": 6,
+            "points": [
+              [
+                11,
+                20,
+                29.92
+              ],
+              [
+                11,
+                20,
+                29.999999999999993
+              ],
+              [
+                10.996194698091745,
+                20,
+                30.08715574274765
+              ],
+              [
+                10.984807753012209,
+                20,
+                30.173648177666923
+              ],
+              [
+                10.965925826289068,
+                20,
+                30.258819045102516
+              ],
+              [
+                10.939692620785909,
+                20,
+                30.342020143325662
+              ],
+              [
+                10.90630778703665,
+                20,
+                30.422618261740695
+              ],
+              [
+                10.86602540378444,
+                20,
+                30.499999999999996
+              ],
+              [
+                10.819152044288991,
+                20,
+                30.573576436351043
+              ],
+              [
+                10.766044443118977,
+                20,
+                30.642787609686536
+              ],
+              [
+                10.707106781186546,
+                20,
+                30.707106781186546
+              ],
+              [
+                10.642787609686538,
+                20,
+                30.766044443118975
+              ],
+              [
+                10.573576436351045,
+                20,
+                30.81915204428899
+              ],
+              [
+                10.499999999999998,
+                20,
+                30.866025403784437
+              ],
+              [
+                10.422618261740697,
+                20,
+                30.90630778703665
+              ],
+              [
+                10.342020143325666,
+                20,
+                30.93969262078591
+              ],
+              [
+                10.258819045102516,
+                20,
+                30.96592582628907
+              ],
+              [
+                10.173648177666927,
+                20,
+                30.98480775301221
+              ],
+              [
+                10.087155742747653,
+                20,
+                30.996194698091745
+              ],
+              [
+                9.999999999999995,
+                20,
+                31
+              ],
+              [
+                9.88,
+                20,
+                31
+              ]
+            ],
+            "connectionsAtEndsOnly": true,
+            "connectionSurfaceCount": 2,
+            "verifiedPorts": [
+              {
+                "point": [
+                  11,
+                  20,
+                  29.92
+                ],
+                "outward": [
+                  0,
+                  0,
+                  -1
+                ],
+                "u": [
+                  -1,
+                  0,
+                  0
+                ],
+                "v": [
+                  0,
+                  1,
+                  0
+                ],
+                "width": 0.6400000000000006,
+                "height": 0.10000000000000142
+              },
+              {
+                "point": [
+                  9.88,
+                  20,
+                  31
+                ],
+                "outward": [
+                  -1,
+                  0,
+                  0
+                ],
+                "u": [
+                  0,
+                  -0,
+                  1
+                ],
+                "v": [
+                  0,
+                  1,
+                  0
+                ],
+                "width": 0.6400000000000006,
+                "height": 0.10000000000000142
+              }
+            ]
+          },
+          {
+            "id": "in",
+            "name": "/B001",
+            "routeCode": "/B001",
+            "categories": 6,
+            "points": [
+              [
+                11,
+                20,
+                26.92
+              ],
+              [
+                11,
+                20,
+                29.92
+              ]
+            ],
+            "connectionsAtEndsOnly": false,
+            "connectionSurfaceCount": 1,
+            "verifiedPorts": [
+              {
+                "point": [
+                  11,
+                  20,
+                  26.92
+                ],
+                "outward": [
+                  -0,
+                  -0,
+                  -1
+                ],
+                "u": [
+                  1,
+                  0,
+                  0
+                ],
+                "v": [
+                  0,
+                  1,
+                  0
+                ],
+                "width": 0.6400000000000006,
+                "height": 0.10000000000000142
+              },
+              {
+                "point": [
+                  11,
+                  20,
+                  29.92
+                ],
+                "outward": [
+                  0,
+                  0,
+                  1
+                ],
+                "u": [
+                  1,
+                  0,
+                  0
+                ],
+                "v": [
+                  0,
+                  1,
+                  0
+                ],
+                "width": 0.6400000000000006,
+                "height": 0.10000000000000142
+              }
+            ]
+          },
+          {
+            "id": "out",
+            "name": "/B003",
+            "routeCode": "/B003",
+            "categories": 6,
+            "points": [
+              [
+                6.88,
+                20,
+                31
+              ],
+              [
+                9.88,
+                20,
+                31
+              ]
+            ],
+            "connectionsAtEndsOnly": false,
+            "connectionSurfaceCount": 1,
+            "verifiedPorts": [
+              {
+                "point": [
+                  6.88,
+                  20,
+                  31
+                ],
+                "outward": [
+                  -1,
+                  -0,
+                  -0
+                ],
+                "u": [
+                  0,
+                  0,
+                  1
+                ],
+                "v": [
+                  0,
+                  -1,
+                  0
+                ],
+                "width": 0.6400000000000006,
+                "height": 0.10000000000000142
+              },
+              {
+                "point": [
+                  9.88,
+                  20,
+                  31
+                ],
+                "outward": [
+                  1,
+                  0,
+                  0
+                ],
+                "u": [
+                  0,
+                  0,
+                  1
+                ],
+                "v": [
+                  0,
+                  -1,
+                  0
+                ],
+                "width": 0.6400000000000006,
+                "height": 0.10000000000000142
+              }
+            ]
+          }
+        ],
+        "route": {
+          "success": true,
+          "message": "Path calculated.",
+          "routeText": "/B001/B002/B003",
+          "routeCodes": [
+            "/B001",
+            "/B002",
+            "/B003"
+          ],
+          "segmentIds": [
+            "in",
+            "bend",
+            "out"
+          ],
+          "pathPoints": [
+            [
+              11,
+              20,
+              26.92
+            ],
+            [
+              11,
+              20,
+              29.92
+            ],
+            [
+              11,
+              20,
+              29.999999999999993
+            ],
+            [
+              10.996194698091745,
+              20,
+              30.08715574274765
+            ],
+            [
+              10.984807753012209,
+              20,
+              30.173648177666923
+            ],
+            [
+              10.965925826289068,
+              20,
+              30.258819045102516
+            ],
+            [
+              10.939692620785909,
+              20,
+              30.342020143325662
+            ],
+            [
+              10.90630778703665,
+              20,
+              30.422618261740695
+            ],
+            [
+              10.86602540378444,
+              20,
+              30.499999999999996
+            ],
+            [
+              10.819152044288991,
+              20,
+              30.573576436351043
+            ],
+            [
+              10.766044443118977,
+              20,
+              30.642787609686536
+            ],
+            [
+              10.707106781186546,
+              20,
+              30.707106781186546
+            ],
+            [
+              10.642787609686538,
+              20,
+              30.766044443118975
+            ],
+            [
+              10.573576436351045,
+              20,
+              30.81915204428899
+            ],
+            [
+              10.499999999999998,
+              20,
+              30.866025403784437
+            ],
+            [
+              10.422618261740697,
+              20,
+              30.90630778703665
+            ],
+            [
+              10.342020143325666,
+              20,
+              30.93969262078591
+            ],
+            [
+              10.258819045102516,
+              20,
+              30.96592582628907
+            ],
+            [
+              10.173648177666927,
+              20,
+              30.98480775301221
+            ],
+            [
+              10.087155742747653,
+              20,
+              30.996194698091745
+            ],
+            [
+              9.999999999999995,
+              20,
+              31
+            ],
+            [
+              9.88,
+              20,
+              31
+            ],
+            [
+              6.88,
+              20,
+              31
+            ]
+          ],
+          "lengthMeters": 7.770297945152092,
+          "lengthRoundTrip": "7.770297945152092",
+          "fromDistanceMeters": 0,
+          "toDistanceMeters": 0,
+          "fromRequiresSecondary": false,
+          "toRequiresSecondary": false,
+          "connectionGapCount": 0,
+          "connectionGapLengthMeters": 0
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,116 @@
+{
+  "schemaVersion": "pathfinder.copied-project.seed-source-controls.v1",
+  "recordedAt": "2026-10-18T17:07:24.418Z",
+  "status": "PASS",
+  "branch": "pf-3-copied-project-local-20261018",
+  "baseRevision": "272b3a025d0ac107c44b1ab6b9b8d3bf20c50965",
+  "sources": [
+    {
+      "path": "scripts/pathfinder-copied-project/seed.mjs",
+      "bytes": 11032,
+      "sha256": "bc4bd20c28cebc0e07ccb55ab5cbadab28d4aa59421aa5c6fc512839b16624ec"
+    },
+    {
+      "path": "scripts/pathfinder-copied-project/seed-lib.mjs",
+      "bytes": 22926,
+      "sha256": "fb57bac5c9e886ec5fc536965513ad9eda83597c67b2e3206ddf77eca1705c44"
+    },
+    {
+      "path": "scripts/pathfinder-copied-project/seed-lib.test.mjs",
+      "bytes": 18695,
+      "sha256": "8a243569120edab4ad7ff87bbc695105288dbb9abb109745d65506f476c4ba30"
+    },
+    {
+      "path": "scripts/pathfinder-copied-project/README-seed.md",
+      "bytes": 6096,
+      "sha256": "c745cb4254b43a024dc1e19683d7107505f29bfae5d5827d43c395e006a86148"
+    }
+  ],
+  "actualChecks": {
+    "command": "node --test --test-reporter=tap scripts/pathfinder-copied-project/seed-lib.test.mjs",
+    "final": {
+      "tests": 52,
+      "pass": 52,
+      "fail": 0,
+      "skipped": 0,
+      "exitCode": 0,
+      "raw": {
+        "path": "pathfinder-engine/.scratch/copied-seed-controls-ef1fa75c2ed8433cbf5f0a37827aa99e/controls-final.tap",
+        "bytes": 9383,
+        "sha256": "7b0f9bfa3c7483ef90a2852489feeee70f89eca2ae7b634086896ae1d7d90961",
+        "tests": 52,
+        "pass": 52,
+        "fail": 0,
+        "skipped": 0,
+        "completedAt": "2026-10-18T17:06:13.635Z"
+      }
+    },
+    "syntax": {
+      "count": 3,
+      "pass": 3,
+      "results": [
+        {
+          "path": "scripts/pathfinder-copied-project/seed.mjs",
+          "exitCode": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "path": "scripts/pathfinder-copied-project/seed-lib.mjs",
+          "exitCode": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "path": "scripts/pathfinder-copied-project/seed-lib.test.mjs",
+          "exitCode": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    }
+  },
+  "history": [
+    {
+      "path": "pathfinder-engine/.scratch/copied-seed-controls-ef1fa75c2ed8433cbf5f0a37827aa99e/controls.tap",
+      "bytes": 14994,
+      "sha256": "2183baf556e5287892de7e0aed2eab19ca9a93cef37835ccc1e4f5834d7269a9",
+      "tests": 51,
+      "pass": 43,
+      "fail": 8,
+      "skipped": 0,
+      "completedAt": "2026-10-18T17:04:20.099Z",
+      "classification": "Test fixture failure: broad SELECT id,project_number prefix intercepted the separate full project readback. Corrected fake dispatch to exact FROM prefix; no application or database was executed. Exact historical source hashes were not separately recorded."
+    },
+    {
+      "path": "pathfinder-engine/.scratch/copied-seed-controls-ef1fa75c2ed8433cbf5f0a37827aa99e/controls-after-fixture-fix.tap",
+      "bytes": 9244,
+      "sha256": "ab717f2331eb1da4d01d38a3f76e76b6fc0749d57a37339e301caded80c0c0fe",
+      "tests": 51,
+      "pass": 51,
+      "fail": 0,
+      "skipped": 0,
+      "completedAt": "2026-10-18T17:04:38.666Z",
+      "classification": "51controls PASS after fixture correction, before final root/runtime guard and expanded fresh-row projection; final52 above applies to current source."
+    }
+  ],
+  "scope": [
+    "Synthetic in-memory2140cables/50types and fake raw Client; one actual retained input/receipt SHA validation reads own private copy only.",
+    "52checks cover source/model/resource/hash/type/category/raw string/decimal and NULL fidelity, fresh UUID maps, exact target guards, parameterized batches, read-only initial verification, conflicts, rollback, unknown COMMIT, close/late connection errors and a fixed helper malformed-input/shortened-watchdog subprocess.",
+    "No actual PostgreSQL transaction, Docker metadata/runtime operation, seed, import, original query, engineering Review or Apply performed by writer.",
+    "Parent alone may execute plan/apply/verify after independent source review/release; model import has a separate writer.",
+    "Private plans/raw business projections remain ignored scratch; no source business rows or credentials in these owned Git files."
+  ],
+  "actualExecution": {
+    "metadataQueries": 0,
+    "databaseQueries": 0,
+    "seed": "NOT_RUN",
+    "import": "NOT_RUN",
+    "reviewApply": "NOT_RUN"
+  },
+  "notes": [
+    "The generated watchdog control uses the fixed helper source with only a test-local shortened timer; production55s remains unchanged.",
+    "Readonly verify is initial-seed-only; it intentionally refuses post-import or matching changes.",
+    "New default routing/design/installNULLs are explicitly fresh copied-row initialization; original route/length values were not copied."
+  ]
+}

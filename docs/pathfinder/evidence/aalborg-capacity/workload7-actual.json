@@ -1,0 +1,265 @@
+{
+  "schemaVersion": "wfc.pf.actual-terminal-workload.v1",
+  "at": "2026-10-20T08:29:21.606Z",
+  "sourceRevision": "b5690038c63b2fcfbc7e3457cbee709739829160",
+  "status": "WORKLOAD_PASS",
+  "scope": "Copied immutable expired actual converted input; no protected SQL publication, engineering acceptance or real Apply.",
+  "hardHelperControls": {
+    "memoryBytes": 2147483648,
+    "memorySwapTotalBytes": 2147483648,
+    "nanoCpus": 1000000000,
+    "pids": 128,
+    "network": "none",
+    "readonlyRoot": true,
+    "database": false
+  },
+  "trials": [
+    {
+      "label": "trial10",
+      "mode": "publisher",
+      "status": "PASS",
+      "image": "sha256:84f4c147be8127b798d75e79497903fc4006c048440250527062f7d9e9dd3275",
+      "sourcePins": [
+        {
+          "path": "scripts/pathfinder-capacity/qualify-runner.mjs",
+          "sha256": "faa38a827d343217f1f12339330dd888c2201fe055b447c9ee954b89b090fe46"
+        },
+        {
+          "path": "scripts/pathfinder-capacity/qualify-trace.mjs",
+          "sha256": "52a346aa9bae65bb57026ce47403b6faa41b48dd3760458be70956debc6e07e4"
+        },
+        {
+          "path": "scripts/pathfinder-capacity/qualify-supervisor.mjs",
+          "sha256": "29fc3aab872a5d1442d24fc271544498ad55ce32adf64f956dbbed5377b0439c"
+        },
+        {
+          "path": "scripts/pathfinder-capacity/process.mjs",
+          "sha256": "3f514c11d4e65cdb5e5daa05c3a663158b774c45b87a42a0633af4476419de6c"
+        },
+        {
+          "path": "scripts/pathfinder-capacity/lib.mjs",
+          "sha256": "4a5eb36b44a60c5e4b4a736f1c113e3b6f3062145103b9e2574ccca940a8d58c"
+        }
+      ],
+      "totalMilliseconds": 36151.333585,
+      "counts": {
+        "parts": 5,
+        "totalInputBytes": 114186790,
+        "expectedPhysicalLeaves": 1165,
+        "expectedEquipmentObjects": 533,
+        "fittingDiagnostics": 1484,
+        "objects": 2965,
+        "physicalLeaves": 1165,
+        "fragments": 4531,
+        "vertices": 1567516,
+        "triangles": 1546617,
+        "projectionBytes": 114111391,
+        "traceIndexBytes": 486272
+      },
+      "hashes": {
+        "manifestSha256": "65ed46609361371bb1138697afb464bca88ff10861a3953f821b7b48cb84bf5a",
+        "orderedPlanSha256": "7eb7e8e9db97985396d4f35090bb6cb1d7967da7984ce5d269f8efd6a3d1f606",
+        "orderedScopeSha256": "cb20b1bf1a40927089882cb857ff166211100cea92c51df52b944fd4344047ce",
+        "orderedReceiptSha256": "40e22b106d0c0d56cdaf21474b4cdd135587fe372b7a9d1c60e2e961e96c69f4",
+        "runnerSha256": "cf010f32fb40f1b5a766ef15aa2bcb6e951bbc55db32944639d5bec5e9339d44",
+        "projectionSha256": "632ee32d1b6c5d23db48529f018541642a4e26bd306950e57f13013c3ed0a90b",
+        "traceIndexSha256": "9648c88cd8553bd4ded30f88aedfe7e1cc69aadda0229b664f18b071881e56ba",
+        "objectOrderSha256": "44fe0a75978003c52d045fe6dc4e1f73148f052e5aad7a9e58befa0c6f86d477"
+      },
+      "engineObservation": {
+        "mode": "oneshot",
+        "thresholdBytes": 2147483648,
+        "intervalMilliseconds": 100,
+        "observedMaximumBytes": 1176158208,
+        "samples": 187,
+        "wallMilliseconds": 18766.055305,
+        "exactPeak": false,
+        "outcome": "completed",
+        "rssFailure": {
+          "stage": "root-rss",
+          "errno": null,
+          "role": "root",
+          "rootStatusPresent": true,
+          "rootState": "Z",
+          "enumeratedCount": 3,
+          "retainedCount": 1,
+          "statusReadCount": 1
+        },
+        "lifecycle": {
+          "refusal": null,
+          "exit": {
+            "elapsedMilliseconds": 18760.920456,
+            "exitCode": 0,
+            "signalCode": null
+          },
+          "close": {
+            "elapsedMilliseconds": 18761.074310000004,
+            "exitCode": 0,
+            "signalCode": null
+          }
+        },
+        "rssTerminalReconciled": true
+      },
+      "fitting": {
+        "readiness": "needs_review",
+        "counts": {
+          "validatedBends": 91,
+          "fallbackBends": 141,
+          "validatedStraights": 761,
+          "fallbackStraights": 149,
+          "fallbackClearances": 0
+        },
+        "objectCount": 2965,
+        "segmentCount": 1165,
+        "diagnosticCount": 1484,
+        "engineeringAccepted": false
+      },
+      "measurement": {
+        "status": "PASS",
+        "spawned": true,
+        "code": 0,
+        "signal": null,
+        "wallMilliseconds": 36237.514308,
+        "measurementAndCleanupWallMilliseconds": 36249.023236,
+        "outputBytes": 3445,
+        "retainedOutputBytes": 3445,
+        "outputSha256": "6808f1f5610fd5c5f1a5c94b1e393d48941a0ed24beb953c605797903d34d5bd",
+        "stderrBytes": 0,
+        "sampleError": null,
+        "sampling": {
+          "intervalMilliseconds": 20,
+          "samples": 1412,
+          "maxTreeRssBytes": 1803091968,
+          "maxSupervisorRssBytes": 1530695680,
+          "maxDescendantsRssBytes": 1176190976,
+          "maxProcessCount": 3,
+          "sawDescendant": true,
+          "interpretation": "Sampled process-tree RSS estimate from sequential non-atomic /proc reads; may miss short peaks and is not an exact coincident peak. Supervisor and descendant maxima occur independently and must not be added."
+        },
+        "cleanup": {
+          "groupGone": true
+        }
+      },
+      "cgroup": {
+        "memoryPeak": "NOT_MEASURED",
+        "memoryMax": "NOT_MEASURED",
+        "memoryEvents": "NOT_MEASURED",
+        "cpuMax": "NOT_MEASURED",
+        "pidsMax": "NOT_MEASURED"
+      },
+      "helperRemoved": true,
+      "publicationInvoked": false
+    },
+    {
+      "label": "trial11",
+      "mode": "trace",
+      "status": "PASS",
+      "image": "sha256:84f4c147be8127b798d75e79497903fc4006c048440250527062f7d9e9dd3275",
+      "sourcePins": [
+        {
+          "path": "scripts/pathfinder-capacity/qualify-runner.mjs",
+          "sha256": "faa38a827d343217f1f12339330dd888c2201fe055b447c9ee954b89b090fe46"
+        },
+        {
+          "path": "scripts/pathfinder-capacity/qualify-trace.mjs",
+          "sha256": "52a346aa9bae65bb57026ce47403b6faa41b48dd3760458be70956debc6e07e4"
+        },
+        {
+          "path": "scripts/pathfinder-capacity/qualify-supervisor.mjs",
+          "sha256": "29fc3aab872a5d1442d24fc271544498ad55ce32adf64f956dbbed5377b0439c"
+        },
+        {
+          "path": "scripts/pathfinder-capacity/process.mjs",
+          "sha256": "3f514c11d4e65cdb5e5daa05c3a663158b774c45b87a42a0633af4476419de6c"
+        },
+        {
+          "path": "scripts/pathfinder-capacity/lib.mjs",
+          "sha256": "4a5eb36b44a60c5e4b4a736f1c113e3b6f3062145103b9e2574ccca940a8d58c"
+        }
+      ],
+      "totalMilliseconds": 67361.76021000001,
+      "counts": {
+        "parts": 5,
+        "totalInputBytes": 114186790,
+        "objects": 2965,
+        "physicalLeaves": 1165,
+        "fragments": 4531,
+        "vertices": 1567516,
+        "triangles": 1546617,
+        "captureEvidenceParts": 5,
+        "missingCaptureEvidenceParts": 0,
+        "traceObjects": 2965,
+        "fittedSegments": 1165,
+        "diagnostics": 1484,
+        "indexPages": 60,
+        "diagnosticPages": 15,
+        "fittedTraceBytes": 1971913,
+        "objectRecordsBytes": 16637964
+      },
+      "hashes": {
+        "manifestSha256": "65ed46609361371bb1138697afb464bca88ff10861a3953f821b7b48cb84bf5a",
+        "orderedPlanSha256": "7eb7e8e9db97985396d4f35090bb6cb1d7967da7984ce5d269f8efd6a3d1f606",
+        "orderedReceiptSha256": "40e22b106d0c0d56cdaf21474b4cdd135587fe372b7a9d1c60e2e961e96c69f4",
+        "unionResultSha256": "cc91c6f6a8ee76d3c9d845d966076245128b8800602cd49dd28ee03a2ad6dfae",
+        "unionSupervisionSha256": "0a56fee0a449c40badcec3e82906d26ee875ee613410806da009477d0b11d771",
+        "projectionSha256": "632ee32d1b6c5d23db48529f018541642a4e26bd306950e57f13013c3ed0a90b",
+        "traceIndexSha256": "9648c88cd8553bd4ded30f88aedfe7e1cc69aadda0229b664f18b071881e56ba",
+        "traceInputSha256": "2af12735ab9fbae2330cf9ea39611cec24fcb2fd1af0a5988315e0735ec6ff45",
+        "derivationSha256": "0486140ba2b1d98afa4afbd1450ce7eb93f4f241f99762189c17ae96735d131a",
+        "runnerSha256": "cf010f32fb40f1b5a766ef15aa2bcb6e951bbc55db32944639d5bec5e9339d44",
+        "fittedTraceSha256": "bda35fa1a8623ae6d5563a6a828be0a53aa50aa35a3cd1730093d8bb5411aca6",
+        "traceManifestBlobSha256": "995720de7560867f0d396af331bf9d55497bf1dd87bb5065cbd88f4c63391072",
+        "traceManifestContentSha256": "cf51a6daf994c3dd11ba45d3709fa8bf4fe4b75394109b69752dfc2be0c597c0",
+        "objectRecordsSha256": "ef48ac23b3ccd4b42fcf268c55e1bb71539b82b132ffa40e22f0b9787276a0a6",
+        "objectIndexSha256": "671131e6e3a918444f59ecaa0e453f02a0c4a705376c56b7b0e250b0eed65ba6",
+        "objectOrderSha256": "44fe0a75978003c52d045fe6dc4e1f73148f052e5aad7a9e58befa0c6f86d477"
+      },
+      "engineObservation": null,
+      "fitting": null,
+      "measurement": {
+        "status": "PASS",
+        "spawned": true,
+        "code": 0,
+        "signal": null,
+        "wallMilliseconds": 67457.677697,
+        "measurementAndCleanupWallMilliseconds": 67469.06040300001,
+        "outputBytes": 3725,
+        "retainedOutputBytes": 3725,
+        "outputSha256": "d36714057790ae0d5725919e4760712b78a88a2e492565485d705f3ec17aa6d4",
+        "stderrBytes": 0,
+        "sampleError": null,
+        "sampling": {
+          "intervalMilliseconds": 20,
+          "samples": 2943,
+          "maxTreeRssBytes": 1344507904,
+          "maxSupervisorRssBytes": 1122603008,
+          "maxDescendantsRssBytes": 1185607680,
+          "maxProcessCount": 3,
+          "sawDescendant": true,
+          "interpretation": "Sampled process-tree RSS estimate from sequential non-atomic /proc reads; may miss short peaks and is not an exact coincident peak. Supervisor and descendant maxima occur independently and must not be added."
+        },
+        "cleanup": {
+          "groupGone": true
+        }
+      },
+      "cgroup": {
+        "memoryPeak": "NOT_MEASURED",
+        "memoryMax": "NOT_MEASURED",
+        "memoryEvents": "NOT_MEASURED",
+        "cpuMax": "NOT_MEASURED",
+        "pidsMax": "NOT_MEASURED"
+      },
+      "helperRemoved": true,
+      "publicationInvoked": false
+    }
+  ],
+  "priorFailure": "trial8 retained FAIL; exact terminal-root branch repaired and exercised by trial10. Trial4 precise cause remains unknown.",
+  "heapScope": "Historical requested512MiB not enforced by inherited1536MiB old-space; no512MiB claim.",
+  "samplingScope": "Sequential sampled RSS is not an exact peak; individual process maxima cannot be added. Cgroupv2 metrics unavailable.",
+  "normalProtectedPublication": "NOT_RUN",
+  "normalTrace": "NOT_RUN",
+  "realCableProposals": "NOT_RUN",
+  "realApply": "NOT_RUN",
+  "engineeringAccepted": false,
+  "originalApplicationChanged": false
+}

@@ -1,0 +1,45 @@
+{
+  "status": "PASS",
+  "recordedAt": "2026-10-19T04:18:00.038Z",
+  "scope": "Only the three pre-existing named synthetic test points are explicitly reconfirmed byte-for-value in restored original current-model capture. No real endpoint, frame migration or engineering acceptance.",
+  "projectId": "56eadef6-8382-49f8-a652-c8f12026602e",
+  "current": {
+    "modelVersionId": "098a7e6f-6e39-4935-a98b-ba3b683875a5",
+    "selectionRevision": "3",
+    "contentFingerprint": "b5bb4fbe666b440c73bb1ffd2ee0db01be66146f8002e4a9df8dce8521db1d34",
+    "aggregateId": "adfd8568-327d-4487-9279-dddd3c344055",
+    "artifactId": "25a69d85-8c78-4eb3-b324-6ef6e93b6c65",
+    "projectionSha256": "be21e599ff56fe62de4f93d7b0781c9369f6f13b337af7423eac461bcc77d80e",
+    "captureFrameId": "7b695d22-5c67-443a-a587-538e3cba4cd2",
+    "geometryRevision": "5",
+    "traceId": "c7a0fe81-a9da-4314-b871-1e37773fdf79"
+  },
+  "objects": 13,
+  "bindings": [
+    {
+      "locationId": "0c0986b2-ce9c-48e1-baed-6a859e4f053b",
+      "bindingId": "90ae4c18-bbdd-4632-ac3a-0dcc3bf38317",
+      "bindingRevision": "6",
+      "locationRevision": "6",
+      "registryRevision": "16"
+    },
+    {
+      "locationId": "5ca6f9eb-033e-4f49-950d-2d7d814abd4c",
+      "bindingId": "d4d69e2b-e140-4891-be07-e40758052d6b",
+      "bindingRevision": "4",
+      "locationRevision": "4",
+      "registryRevision": "17"
+    },
+    {
+      "locationId": "217967bc-46a5-4ef6-b46d-c9a6c9c12800",
+      "bindingId": "3cf3e94e-d9d5-4a51-8eb8-6fcf4782326f",
+      "bindingRevision": "2",
+      "locationRevision": "3",
+      "registryRevision": "18"
+    }
+  ],
+  "pointsPreserved": true,
+  "namesAliasesPreserved": true,
+  "qualifiedEngineeringFrame": null,
+  "cableApply": "NOT_PERFORMED"
+}

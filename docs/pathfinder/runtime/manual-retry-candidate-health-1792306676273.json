@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS",
+  "recordedAtUtc": "2026-10-18T06:57:53.319Z",
+  "scope": "Isolated corrected-driver candidate startup; API/web/storage-ready recreated only within owned stack.",
+  "buildObservedHead": "cfdcd3f5974636737ff34acec0fc3de391d35ab1",
+  "origin": "http://127.0.0.1:5190",
+  "healthStatus": 200,
+  "health": {
+    "status": "ok"
+  },
+  "images": {
+    "api": "sha256:286e0d43fb12d23c77727eb2c899eac161571d98998e0eb0f212911006adb500",
+    "web": "sha256:500345218d8c3f4629725ce6b1d3cbeeb6dc12f7b4cb1f06d5b92ecf8949ba64"
+  },
+  "build": {
+    "finishedAt": "2026-10-18T06:56:54.117Z",
+    "files": [
+      {
+        "path": "docker/pathfinder.Dockerfile",
+        "bytes": 2082,
+        "sha256": "682018b4ff47990ea58b5657bccf434a948a16bdd99d06d0a84cd38ed53d0bc4"
+      },
+      {
+        "path": "docker/pathfinder.Dockerfile.dockerignore",
+        "bytes": 402,
+        "sha256": "68e8f31e1fa9e2b47e02f7184ad40d866387da57bdecc216284f83fce18c0a51"
+      },
+      {
+        "path": "docker/pathfinder.compose.yml",
+        "bytes": 4140,
+        "sha256": "4d50d6e8ef39ca8d317ba31ad28fb0061688f862078c641c9f4787aac523202e"
+      },
+      {
+        "path": "docker/pathfinder.nginx.conf",
+        "bytes": 6091,
+        "sha256": "562778962e2d97fe6a8265a0f5e5519e4dd919f9e7582e6f052d7d283e11058b"
+      }
+    ]
+  },
+  "previousWebComparison": {
+    "previousImage": "sha256:0f51326f43f82dbcbbae64ce8fe7763c6abe101a131f0130a3133c1d696ce280",
+    "currentImage": "sha256:500345218d8c3f4629725ce6b1d3cbeeb6dc12f7b4cb1f06d5b92ecf8949ba64",
+    "sameRootFSLayers": true,
+    "sameRuntimeConfig": true,
+    "note": "Reported image identity changed; filesystem layer digests and runtime Config remain identical. No old image identity is claimed for the new candidate."
+  },
+  "topology": {
+    "status": "PASS",
+    "project": "wfc-pathfinder-local",
+    "origin": "http://127.0.0.1:5190",
+    "services": [
+      "postgres",
+      "minio",
+      "storage-ready",
+      "api",
+      "web"
+    ],
+    "volumes": [
+      "postgres",
+      "minio",
+      "staging",
+      "pathfinder"
+    ],
+    "privateBackend": true,
+    "publishedPorts": [
+      5190
+    ]
+  },
+  "resources": {
+    "containers": [
+      {
+        "role": "web",
+        "id": "1da50b13c1e4cae953cfeb1a69128023dd51f9ec81497a827bc1c95cef4a4190",
+        "image": "sha256:500345218d8c3f4629725ce6b1d3cbeeb6dc12f7b4cb1f06d5b92ecf8949ba64",
+        "name": "wfc-pathfinder-local-web-1",
+        "running": true,
+        "startedAt": "2026-10-18T06:57:12.806537349Z"
+      },
+      {
+        "role": "api",
+        "id": "618a226f3a6ad62fbb23033d7674938ad0798a5def8492e4526d6f0661c405d1",
+        "image": "sha256:286e0d43fb12d23c77727eb2c899eac161571d98998e0eb0f212911006adb500",
+        "name": "wfc-pathfinder-local-api-1",
+        "running": true,
+        "startedAt": "2026-10-18T06:57:06.98230929Z"
+      },
+      {
+        "role": "storage-ready",
+        "id": "b68e604a29746a3643f301a882ee62e7157c87ae8d67904547569cda8c67a210",
+        "image": "sha256:286e0d43fb12d23c77727eb2c899eac161571d98998e0eb0f212911006adb500",
+        "name": "wfc-pathfinder-local-storage-ready-1",
+        "running": false,
+        "startedAt": "2026-10-18T06:57:06.288110873Z"
+      },
+      {
+        "role": "postgres",
+        "id": "6830635a4597dad696f1a5ced6846853cd9e1fee0f858450ad6f858e4c2e30b9",
+        "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+        "name": "wfc-pathfinder-local-postgres-1",
+        "running": true,
+        "startedAt": "2026-10-18T02:03:12.60010978Z"
+      },
+      {
+        "role": "minio",
+        "id": "e27a690c80957356c8a562e02b72249cf85a3d965f9a32fe596048a15f499820",
+        "image": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+        "name": "wfc-pathfinder-local-minio-1",
+        "running": true,
+        "startedAt": "2026-10-18T02:37:54.346155692Z"
+      }
+    ],
+    "volumes": [
+      "wfc-pathfinder-local_postgres",
+      "wfc-pathfinder-local_minio",
+      "wfc-pathfinder-local_staging",
+      "wfc-pathfinder-local_pathfinder"
+    ],
+    "networks": [
+      {
+        "id": "7e58e2a7f9544ca1b5efc7ae9773e69088168620ad34a6afb7abcea2a26b6cc0",
+        "name": "wfc-pathfinder-local_front"
+      },
+      {
+        "id": "77abead34a6b25bce147efa3a1eacd67d9a9b110028ea634ab904768e3e2274d",
+        "name": "wfc-pathfinder-local_backend"
+      }
+    ]
+  }
+}

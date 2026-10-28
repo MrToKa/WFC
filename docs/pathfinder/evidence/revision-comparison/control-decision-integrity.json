@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "wfc.pf.revision-comparison-control-receipt.v1",
+  "status": "PASS",
+  "phase": "decision-integrity",
+  "phaseIntentId": "49627ba7-d24e-4be2-9765-0268ea613643",
+  "checks": [
+    {
+      "name": "A target head cannot claim a foreign decision-set hash",
+      "status": "PASS",
+      "scope": "actual rollback-only SQL corruption probe and fail-closed reader"
+    }
+  ],
+  "beforeSha256": "f7d2ac0a03595c1a906e18ac1fa291864ed25f362fd797082d313a37ee0541b8",
+  "afterSha256": "f7d2ac0a03595c1a906e18ac1fa291864ed25f362fd797082d313a37ee0541b8",
+  "elapsedMilliseconds": 52,
+  "engineeringAccepted": false,
+  "productionComparisonPublicationTested": false,
+  "automaticApplyPerformed": false
+}

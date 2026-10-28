@@ -1,0 +1,88 @@
+{
+  "schemaVersion": "pathfinder.candidate-eligibility.source-checks.v1",
+  "recordedAt": "2026-10-18T15:58:48.303Z",
+  "branch": "pf-3-batched-capture-local-20261018",
+  "baseCommit": "6761cb76df79392befba6ace1c4d8c685b36cfdd",
+  "status": "PASS",
+  "source": [
+    {
+      "path": "server/pathfinder/repository.ts",
+      "sha256": "86f4725340eea25fd6a038ffbc8db88cedb5ea8e90394adedcfd7c70464917f8"
+    },
+    {
+      "path": "server/pathfinder/repository-match.test.ts",
+      "sha256": "58374b6b10f71588a20080db283f143d77105592e6fe63e3848efc516c9413c8"
+    },
+    {
+      "path": "server/pathfinder/candidateEligibilityIntegration.ts",
+      "sha256": "bef29fb4fc51152921d3824a1c7803acc535690e47cfb372b2408070c62242e9"
+    }
+  ],
+  "checks": [
+    {
+      "name": "focused-unit",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "server/pathfinder/repository-match.test.ts",
+        "--maxWorkers=1",
+        "--reporter=json",
+        "--outputFile",
+        "pathfinder-engine/.scratch/candidate-eligibility-171d501430eb45c596d64f274ac00ce2/unit.json"
+      ],
+      "status": "PASS",
+      "total": 12,
+      "passed": 12,
+      "failed": 0,
+      "evidence": {
+        "path": "pathfinder-engine/.scratch/candidate-eligibility-171d501430eb45c596d64f274ac00ce2/unit.json",
+        "bytes": 5124,
+        "sha256": "aca12879b2d6bf8088ee2db75a5eb862f1806667f615bd6bb5b1f073fad6d7aa"
+      }
+    },
+    {
+      "name": "server-types",
+      "command": [
+        "node",
+        "node_modules/typescript/bin/tsc",
+        "--noEmit",
+        "-p",
+        "server/tsconfig.json"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "stdoutBytes": 0
+    },
+    {
+      "name": "scoped-lint",
+      "command": [
+        "node",
+        "node_modules/eslint/bin/eslint.js",
+        "server/pathfinder/repository.ts",
+        "server/pathfinder/repository-match.test.ts",
+        "server/pathfinder/candidateEligibilityIntegration.ts",
+        "--max-warnings=0"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "stdoutBytes": 0
+    }
+  ],
+  "productionChange": "Only match() candidate SQL adds visibility<>hidden before ORDER/LIMIT; no normalization, unknown/manual, schema or geometry inference change.",
+  "integration": {
+    "status": "NOT_RUN",
+    "preparedControls": 12,
+    "entry": "runCandidateEligibilityIntegration(rawPool,{database,serverAddress,serverPort,syntheticProjectId})",
+    "prerequisites": [
+      "Parent explicitly releases a fresh verified owned restore after source checkpoint/build.",
+      "PF_LOCAL_DEMO=true; NEW max1 raw Pool with connectionTimeoutMillis5000/query_timeout5000, no app/db bootstrap.",
+      "Exact expected SQL wfc_pathfinder_local/address/port plus existing public synthetic-project marker; caller has verified Docker identities/images/network.",
+      "Caller bounds process and saves full returned receipt BEFORE assertions; function returns FAIL and always rolls back temporary fixture tables."
+    ],
+    "scope": "Actual production repository SQL and behavior on TEMP fixtures; not HTTP/full-production-FK/native/engineering proof."
+  },
+  "databaseConnectionsByWriter": 0,
+  "runtimeOperationsByWriter": 0,
+  "originalsAccessed": false
+}

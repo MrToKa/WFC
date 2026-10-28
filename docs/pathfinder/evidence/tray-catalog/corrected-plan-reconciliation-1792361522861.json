@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "wfc.pf.catalog-corrected-plan-reconciliation.v1",
+  "status": "PASS",
+  "recordedAt": "2026-10-18T22:12:02.861Z",
+  "purpose": "Expected initial-state refusal after corrected complete typed projection; read only, no writes",
+  "planSha256": "31dee403bcbb79a0e54c737b50224873f0df32328a839e0717c7ee155f364884",
+  "result": {
+    "schemaVersion": "wfc.pf.tray-catalog-transfer-result.v1",
+    "status": "FAIL",
+    "error": "TRANSFER_VERIFY_NOT_FINAL",
+    "phase": "snapshot",
+    "statementTag": "desired:template_files",
+    "writesAttempted": false,
+    "commitAttempted": false,
+    "commitConfirmed": false,
+    "rollbackConfirmed": true,
+    "transportError": false,
+    "outcome": "not_committed"
+  },
+  "raw": {
+    "path": "pathfinder-engine/.scratch/tray-catalog-17cadea1-d54c-42b1-a563-2d3c514e7704/corrected-plan-readonly-reconciliation-raw.private.json",
+    "bytes": 316,
+    "sha256": "f2babbb5b9c83c0ce061d59fac8263a8b0f54e6f82a527d24542676d0a6e3eb9"
+  },
+  "transport": {
+    "path": "pathfinder-engine/.scratch/tray-catalog-17cadea1-d54c-42b1-a563-2d3c514e7704/corrected-plan-readonly-reconciliation-transport.private.json",
+    "bytes": 785,
+    "sha256": "a0d9c04392cc22fdbac72f32f72169c596a664b22abbcaf2e5fbfe68c8239838"
+  },
+  "librarySha256": "4ff9970d627f55558729d5dceced362ae934edf7e6b2652e0b884ed30e5ff9e3"
+}

@@ -4,11 +4,14 @@ import fs from 'node:fs/promises';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { randomUUID } from 'node:crypto';
+import { hasBoundedDockerExecution, boundedDockerCommand, boundedDockerRequest, cleanupBoundedDockerHelper, isDockerBoundsError } from './docker-bounds.mjs';
 
 export class DockerError extends Error { constructor(code) { super(code); this.code=code; } }
 const fail=code=>{throw new DockerError(code);};
 export const imageId=value=>{if(!/^sha256:[a-f0-9]{64}$/.test(value??''))fail('EXACT_IMAGE_REQUIRED');return value;};
-export async function command(args,{input,output,maxBytes=16*1024**2,signal}={}) {
+export async function command(args,options={}) {
+  if(hasBoundedDockerExecution())return await boundedDockerCommand(args,options);
+  const {input,output,maxBytes=16*1024**2,signal}=options;
   const child=spawn('docker',args,{windowsHide:true,stdio:['pipe','pipe','pipe']});
   const chunks=[];let count=0,stderrBytes=0;
   child.stderr.on('data',bytes=>{stderrBytes+=bytes.length;}); // Foreign Docker errors can contain private configuration.
@@ -24,11 +27,12 @@ export async function command(args,{input,output,maxBytes=16*1024**2,signal}={})
   if(settled[2].value.code!==0)fail('DOCKER_COMMAND_FAILED');
   return Buffer.concat(chunks);
 }
-export async function jsonCommand(args,options){let value;try{value=JSON.parse((await command(args,options)).toString('utf8'));}catch(error){if(error instanceof DockerError)throw error;fail('DOCKER_RESPONSE_INVALID');}return value;}
+export async function jsonCommand(args,options){let value;try{value=JSON.parse((await command(args,options)).toString('utf8'));}catch(error){if(error instanceof DockerError||isDockerBoundsError(error))throw error;fail('DOCKER_RESPONSE_INVALID');}return value;}
 export async function createDocker() {
   const context=(await command(['context','inspect','--format','{{(index .Endpoints "docker").Host}}'],{maxBytes:4096})).toString().trim();
   let socketPath;if(context.startsWith('npipe:////./pipe/'))socketPath='\\\\.\\pipe\\'+context.slice('npipe:////./pipe/'.length);else if(context.startsWith('unix://'))socketPath=context.slice(7);else fail('LOCAL_DOCKER_CONTEXT_REQUIRED');
   async function request(method,url,body,{timeoutMs=120000}={}){
+    if(hasBoundedDockerExecution())return await boundedDockerRequest(socketPath,method,url,body,{timeoutMs});
     const encoded=body===undefined?undefined:Buffer.from(JSON.stringify(body));
     return await new Promise((resolve,reject)=>{const req=http.request({socketPath,path:'/v1.47'+url,method,headers:encoded?{'Content-Type':'application/json','Content-Length':encoded.length}:{},timeout:timeoutMs},res=>{const chunks=[];let length=0;res.on('data',bytes=>{length+=bytes.length;if(length>32*1024**2){req.destroy();reject(new DockerError('DOCKER_OUTPUT_LIMIT'));}else chunks.push(bytes);});res.on('end',()=>{if(res.statusCode<200||res.statusCode>=300)return reject(new DockerError('DOCKER_REQUEST_FAILED'));const raw=Buffer.concat(chunks);if(!raw.length)return resolve(null);try{resolve(JSON.parse(raw.toString()));}catch{reject(new DockerError('DOCKER_RESPONSE_INVALID'));}});});req.on('timeout',()=>req.destroy());req.on('error',()=>reject(new DockerError('DOCKER_REQUEST_FAILED')));req.end(encoded);});
   }
@@ -46,6 +50,13 @@ export async function createDocker() {
     async wait(id){return await request('POST','/containers/'+id+'/wait?condition=not-running',undefined,{timeoutMs:4*60*60*1000});},
     async run(image,{env=[],mounts=[],network,cmd,labels={},user='0'}={}){
       await inspectImage(image);const name='wfc-ops-'+randomUUID(),created=await request('POST','/containers/create?name='+name,{Image:image,User:user,Env:env,Cmd:cmd,Labels:{'wfc.operations.temporary':'true',...labels},HostConfig:{NetworkMode:network??'none',Mounts:mounts,AutoRemove:false,ReadonlyRootfs:false},AttachStdout:true,AttachStderr:true});
+      if(hasBoundedDockerExecution()){
+        let result,primary,failed=false;
+        try{await request('POST','/containers/'+created.Id+'/start');const exited=await request('POST','/containers/'+created.Id+'/wait?condition=not-running');const bytes=await command(['logs',created.Id],{maxBytes:32*1024**2});try{result=JSON.parse(bytes.toString().trim());}catch{fail('HELPER_RESPONSE_INVALID');}if(exited.StatusCode!==0&&result.status!=='FAIL'&&result.status!=='DEFERRED')fail('HELPER_FAILED');}
+        catch(error){failed=true;primary=error;}
+        try{await cleanupBoundedDockerHelper(created.Id);}catch(error){throw new AggregateError(failed?[primary,error]:[error],'Bounded helper cleanup is unconfirmed.');}
+        if(failed)throw primary;return result;
+      }
       try{await request('POST','/containers/'+created.Id+'/start');const exited=await request('POST','/containers/'+created.Id+'/wait?condition=not-running',undefined,{timeoutMs:4*60*60*1000});const bytes=await command(['logs',created.Id],{maxBytes:32*1024**2});let result;try{result=JSON.parse(bytes.toString().trim());}catch{fail('HELPER_RESPONSE_INVALID');}if(exited.StatusCode!==0&&result.status!=='FAIL'&&result.status!=='DEFERRED')fail('HELPER_FAILED');return result;}finally{const current=await inspect(created.Id).catch(()=>null);if(current?.State?.Running)await request('POST','/containers/'+created.Id+'/stop?t=45').catch(()=>undefined);await request('DELETE','/containers/'+created.Id+'?v=false').catch(()=>undefined);}
     }
   };

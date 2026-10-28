@@ -1,0 +1,96 @@
+{
+  "schemaVersion": "pathfinder.drawing-positioning.actual-run.v1",
+  "status": "PASS",
+  "programSha256": "2f433df02335ba521274d6505d13359aa02b73603a6ba81d5e89be246985eed1",
+  "containerId": "4470f8d070cca0a8e40a91a717eca5fcab4d383e3c9633c75025bf22ccde09cd",
+  "image": "sha256:dd7e5fb70c25ec6d09b64af594085ee177389b2a6997a070b2009b0f91306131",
+  "transport": {
+    "schemaVersion": "wfc.pf.catalog-transport.v1",
+    "bindingKind": "target",
+    "containerId": "4470f8d070cca0a8e40a91a717eca5fcab4d383e3c9633c75025bf22ccde09cd",
+    "label": "r2a-actual-controls-1792367290245",
+    "programSha256": "2f433df02335ba521274d6505d13359aa02b73603a6ba81d5e89be246985eed1",
+    "inputSha256": "2daa8f0715074776a8f5511b1f5b1e51a56d80033771df2f5e13bc17b9dd505b",
+    "exitCode": 0,
+    "signal": null,
+    "error": null,
+    "stdoutBytesObserved": 1832,
+    "stderrBytes": 0,
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "raw": {
+      "path": "r2a-actual-controls-1792367290245-raw.private.json",
+      "bytes": 1832,
+      "sha256": "61e47c57d72905c91e188224cfaac7c669b48f925fbfcab58ad81bdc09b6532a"
+    },
+    "outcome": "TRANSPORT_OK"
+  },
+  "result": {
+    "schemaVersion": "pathfinder.drawing-positioning.actual-controls.v1",
+    "status": "PASS",
+    "checks": [
+      {
+        "name": "strict current admin authoring; ordinary assigned drawing readers do not gain PF access",
+        "status": "PASS"
+      },
+      {
+        "name": "shared immutable layout snapshot has same identity for admin engineer basic and technician",
+        "status": "PASS"
+      },
+      {
+        "name": "early authenticated policy and export bounds through nginx without body bytes",
+        "status": "PASS"
+      },
+      {
+        "name": "duplicate escaped keys unknown fields and cross-category booleans fail closed",
+        "status": "PASS"
+      },
+      {
+        "name": "same-side mixed purposes pool jointly and drawing revision cannot change routing scope",
+        "status": "PASS"
+      },
+      {
+        "name": "concurrent policy CAS and exact-key replay save one command without duplicate history",
+        "status": "PASS"
+      },
+      {
+        "name": "default reset and MV plus another occupied side use the same verified layout",
+        "status": "PASS"
+      },
+      {
+        "name": "assigned engineer tray overrides persist and do not permit basic or technician writes",
+        "status": "PASS"
+      },
+      {
+        "name": "ordinary list and XLSX ignore arbitrary client occupancy and use current layout proof",
+        "status": "PASS"
+      },
+      {
+        "name": "atomic three-file export provenance exact replay and generated output does not stale itself",
+        "status": "PASS"
+      },
+      {
+        "name": "generated output replacement is scoped to tray and kind",
+        "status": "PASS"
+      },
+      {
+        "name": "changed tray revision stales prior report without changing cable lengths or routing",
+        "status": "PASS"
+      },
+      {
+        "name": "purpose remove and readd cannot revive authored side modes",
+        "status": "PASS"
+      },
+      {
+        "name": "current role login and assignment revocation fence reads writes and historical replay",
+        "status": "PASS"
+      },
+      {
+        "name": "real copied project settings routing masks bindings scopes and engineering lengths remain unmodified",
+        "status": "PASS"
+      }
+    ],
+    "cleanup": "PASS",
+    "startedAt": "2026-10-18T23:48:10.505Z",
+    "finishedAt": "2026-10-18T23:48:11.410Z"
+  }
+}

@@ -14,11 +14,11 @@ export function sessionBase(projectId: string, modelVersionId: string, sessionId
 }
 
 export async function viewerRequest<T>(path: string, token: string, options: {
-  method?: 'GET' | 'POST' | 'DELETE'; body?: unknown; signal?: AbortSignal;
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE'; body?: unknown; signal?: AbortSignal;
 } = {}): Promise<T> {
   const response = await fetch(path, {
     method: options.method ?? 'GET', signal: options.signal,
-    credentials: 'same-origin', cache: 'no-store',
+    credentials: 'same-origin', cache: 'no-store', mode: 'same-origin', redirect: 'error',
     headers: { Authorization: `Bearer ${token}`, ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }) },
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
   });

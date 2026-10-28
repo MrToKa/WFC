@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "wfc.pf.recalculation-control-result.v1",
+  "phase": "foreign-key",
+  "phaseIntentId": "d9615c6e-3b58-4e88-82e1-99f1b238b10b",
+  "status": "PASS",
+  "scope": "rollback-only production SQL primitives and reader; normal HTTP/producer/engine/UI tested separately",
+  "beforeSha256": "46467bab4ba8677d22831d833d83029bc96322379e94069fc0b5552eb45c3f4d",
+  "afterSha256": "46467bab4ba8677d22831d833d83029bc96322379e94069fc0b5552eb45c3f4d",
+  "elapsedMilliseconds": 77,
+  "nontransactionalSequenceAdvances": [],
+  "engineeringAccepted": false
+}

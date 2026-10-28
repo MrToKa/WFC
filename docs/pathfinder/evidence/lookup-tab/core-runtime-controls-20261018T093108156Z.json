@@ -1,0 +1,203 @@
+{
+  "schemaVersion": "pathfinder.independent-lookup.controls.v1",
+  "observedAtUtc": "2026-10-18T09:31:08.7890371Z",
+  "branch": "pf-path-lookup-local-20261018",
+  "baseRevision": "9e6561e33ccf9ab535fb2184c858ecd20240071d",
+  "status": "PASS_FOR_EXECUTED_CONTROLS",
+  "nativeParity": "NOT_ESTABLISHED",
+  "humanAcceptance": "NOT_RUN",
+  "checks": [
+    {
+      "suite": "existing PathFinder.Model.Tests",
+      "result": "PASS",
+      "passed": 94,
+      "total": 94,
+      "receipt": "model-regression-94-20261018T093108156Z.json",
+      "build": "dotnet build Release --artifacts-path in new owned lookup-model-compat scratch; 0 warnings/errors",
+      "inputsCopiedByteIdentical": true,
+      "fixtureSha256": "1fd49428742284e30071a0b293cca0a8f5eff8b47a2aaab10f1184cf73cd7e78"
+    },
+    {
+      "suite": "PathFinder.LookupScope.Tests",
+      "result": "PASS",
+      "passed": 37,
+      "total": 37,
+      "build": "isolated Release build; ProjectReference to new Model and pinned Core; 0 warnings/errors"
+    },
+    {
+      "suite": "Node protocol + model-capture + adapter + bridge",
+      "result": "PASS",
+      "passed": 75,
+      "total": 75,
+      "interop": "fresh isolated model runner; legacy, selected-root and independent lookup capture"
+    },
+    {
+      "suite": "ViewerController Vitest",
+      "result": "PASS",
+      "passed": 20,
+      "total": 20
+    },
+    {
+      "suite": "ModelRunner smoke",
+      "result": "PASS",
+      "passed": 42,
+      "total": 42,
+      "receipt": "../pf3/model-runner-2026-10-18T09-23-41-746Z.json"
+    }
+  ],
+  "sourceFiles": [
+    {
+      "path": "pathfinder-engine/src/PathFinder.Model/Contracts.cs",
+      "bytes": 5559,
+      "sha256": "5e856b09efc44bf821d9b608ee7832b44ba503d9e376d4d1c7c2c4701c6add5c"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Model/SnapshotReader.cs",
+      "bytes": 18105,
+      "sha256": "b21727ca8e8ecb063bbc4c3662074c6edb88f775cdcea3c8cc3c79f02aa9fb97"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Model/FittedModelCache.cs",
+      "bytes": 18534,
+      "sha256": "8aab769151996ea132f08a56b11065ed4e8706b4e082b61acdfad9b91db917a7"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Model/LookupScopeResolver.cs",
+      "bytes": 7384,
+      "sha256": "cab7859bf48573996d8e7223c03ed5ba2558dfd8d253fc6889d93ababd2db47d"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/Program.cs",
+      "bytes": 20246,
+      "sha256": "e083a812d0d6be21f84ecb60f319e3ad4271022f0352709e8c30783ebddfdf57"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/test-smoke.mjs",
+      "bytes": 16618,
+      "sha256": "f473629d4f3f95c7a0689e465d6bc90545c15400e8c4e2ddde42f195b86009e0"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.LookupScope.Tests/Program.cs",
+      "bytes": 11984,
+      "sha256": "d64a616dc1bc9bbcabc71f4d9b55310a2daa4b9e1524d7684f24c5e0691e6ac0"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.LookupScope.Tests/PathFinder.LookupScope.Tests.csproj",
+      "bytes": 372,
+      "sha256": "9e3380919408a21764da50b59fcf02f9fa74646bc62e8380075123813c277dbe"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.Model.Tests/Program.cs",
+      "bytes": 31073,
+      "sha256": "a5d1aa766c727dc8744459408901226520e4926327369cb56e380dea3732ccd5"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.Model.Tests/RouteBoundaryTests.cs",
+      "bytes": 4412,
+      "sha256": "c2a2c433e6e8c4e0f86911f315c670a27ac764fee587f98229368bc12181ffc0"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.Model.Tests/PathFinder.Model.Tests.csproj",
+      "bytes": 385,
+      "sha256": "c27ee4188ece44732d6d999093c9c1f5ba5d1775747082bd1850bd7404c63b68"
+    },
+    {
+      "path": "viewer-runtime/model-capture.mjs",
+      "bytes": 44198,
+      "sha256": "0536352226f80e75be6d533a811529bdcbd3868e66ab3d299c07ba826b91f838"
+    },
+    {
+      "path": "viewer-runtime/protocol.mjs",
+      "bytes": 17387,
+      "sha256": "22e89c66eedd46877db9120277bcc74d5f7f024a8e7d9a3bd38eaf42ffa48b92"
+    },
+    {
+      "path": "viewer-runtime/protocol.d.mts",
+      "bytes": 4184,
+      "sha256": "83241dccb8f73f7bcd9809f40106198a5b3df779eeef251884bb1756903d5a88"
+    },
+    {
+      "path": "viewer-runtime/adapter.mjs",
+      "bytes": 12991,
+      "sha256": "750fe0d3b99201b7b68fee6c85a6b69654be072b40b4efb6ef012677031eb8c5"
+    },
+    {
+      "path": "viewer-runtime/bridge.mjs",
+      "bytes": 21147,
+      "sha256": "60af940338276218f522f8ad9ff4f4b0b04108a776e54feba7c982e8e754853a"
+    },
+    {
+      "path": "viewer-runtime/test/model-capture.node-test.mjs",
+      "bytes": 23060,
+      "sha256": "9f9436216d02fd6ef18c63060ef2554a9f3dba6dc5230788eccba2b501ca8006"
+    },
+    {
+      "path": "viewer-runtime/test/protocol.test.mjs",
+      "bytes": 8660,
+      "sha256": "5357f16593ac994d4bc61e726271b921cde2dc39724d7e39cf2b650d4a956808"
+    },
+    {
+      "path": "viewer-runtime/test/adapter.test.mjs",
+      "bytes": 13993,
+      "sha256": "84e4fe2177e3b1a20f71a5a1d08af43c0b0824e27a111041f24f60a4132dd7d2"
+    },
+    {
+      "path": "viewer-runtime/test/bridge.test.mjs",
+      "bytes": 32182,
+      "sha256": "96e87ee0e8de97b6c3a46af7e1a6150e81204df198d19a6efe0ddf8a668bcda7"
+    },
+    {
+      "path": "src/viewer/ViewerController.ts",
+      "bytes": 30079,
+      "sha256": "6770659a6a4f11bb7808f1b5d648b3a4bea79f11ef746b5a931ffa838d244ab8"
+    },
+    {
+      "path": "src/viewer/ViewerController.test.ts",
+      "bytes": 23907,
+      "sha256": "3cc0a6a02ad7f1fb432b9a45f4f93b8fd0575383f802b09272b4173212ca0a9a"
+    }
+  ],
+  "assemblies": [
+    {
+      "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\lookup-third-tab-355e3adcdc474ac1957b986740f34df6\\artifacts\\bin\\PathFinder.ModelRunner\\release\\PathFinder.ModelRunner.dll",
+      "bytes": 51712,
+      "sha256": "cc6bc580316ec7c658c00e892a6914bc5209d07eed6ad13d72fb3dafe1bac129"
+    },
+    {
+      "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\lookup-third-tab-355e3adcdc474ac1957b986740f34df6\\artifacts\\bin\\PathFinder.Model\\release\\PathFinder.Model.dll",
+      "bytes": 98816,
+      "sha256": "eb2ced2b658f055cb123c93164a4aac7260fa0b2914f61052dd547b757a6bdf5"
+    },
+    {
+      "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\lookup-third-tab-355e3adcdc474ac1957b986740f34df6\\artifacts\\bin\\PathFinder.LookupScope.Tests\\release\\PathFinder.LookupScope.Tests.dll",
+      "bytes": 29184,
+      "sha256": "87e145701a9c036ef9b684b8e0885b30d4df93f5a48350ce72e86d2df93eae7f"
+    }
+  ],
+  "coreRoutingSourceDiff": "EMPTY",
+  "originalResourcesChanged": false,
+  "review": {
+    "mode": "read-only",
+    "scope": [
+      "server/pathfinder/lookups.ts purpose/auth/dependencies/storage reuse",
+      "server/pathfinder/worker.ts lookup lease/cancellation/commit fences",
+      "server/routes/pathfinderRoutes.ts lookup plan and upload",
+      "server/app.ts and isolated nginx transport auth/body bounds",
+      "src/pages/ProjectDetails/hooks/usePathFinder.ts plan/capture/create-ACK cancellation"
+    ],
+    "backendFindings": [],
+    "hookFindings": [],
+    "adjacentUiFinding": {
+      "priority": 2,
+      "issue": "Queued job ID was discarded on tab switch/common Clear after create acknowledgement without durable DELETE",
+      "owner": "/root/web_tabs_map",
+      "parentAccepted": true,
+      "state": "FIX_ASSIGNED_PENDING_CLOSING_REVIEW"
+    }
+  },
+  "limitations": [
+    "Synthetic controls do not establish native visibility/parity or human engineering acceptance.",
+    "Broad substring candidates may reach existing 4096-object/64MiB capture budgets before C# filters; explicit refusal, never truncation.",
+    "Initial interop attempt used historical DLL and failed new-field recognition; final75 controls used fresh isolated runner and all passed."
+  ]
+}

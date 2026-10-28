@@ -1,4 +1,5 @@
 import { ChangeLogTable } from '@/components/ChangeLogTable';
+import { useId } from 'react';
 import {
   Accordion,
   AccordionHeader,
@@ -27,8 +28,11 @@ import type {
 import type { CustomBundleRangesController } from './hooks/useCustomBundleRanges';
 import { CABLE_CATEGORY_CONFIG, CABLE_CATEGORY_ORDER } from './hooks/cableLayoutDefaults';
 import { ProjectModelSection } from './ProjectModelSection';
+import { RoutingPurposePolicyCard } from '@/components/RoutingPurposePolicyCard';
+import { CablePositioningCard } from '@/components/CablePositioningCard';
 
 type NumericFieldName =
+  | 'connectionGap'
   | 'secondaryTrayLength'
   | 'supportDistance'
   | 'supportWeight'
@@ -80,6 +84,9 @@ type DetailsTabProps = {
   project: Project;
   formattedDates: FormattedDates;
   isAdmin: boolean;
+  routingPolicyAdmin?: boolean;
+  drawingPolicyAdmin?: boolean;
+  onDrawingPolicySaved?: () => void;
   modelProjectId?: string | null;
   modelToken?: string | null;
   cableSpacingField: CableSpacingController;
@@ -107,6 +114,9 @@ export const DetailsTab = ({
   project,
   formattedDates,
   isAdmin,
+  routingPolicyAdmin = false,
+  drawingPolicyAdmin = false,
+  onDrawingPolicySaved,
   modelProjectId = null,
   modelToken = null,
   cableSpacingField,
@@ -124,6 +134,7 @@ export const DetailsTab = ({
   const supportsErrorMessage =
     supportDistanceOverrides.find((override) => override.supportsError)?.supportsError ?? null;
   const isSavingTrayTemplate = Object.values(trayTemplateSaving).some(Boolean);
+  const rerouteHelpId = useId();
 
   return (
     <div className={styles.tabPanel} role="tabpanel" aria-label="Details">
@@ -153,6 +164,21 @@ export const DetailsTab = ({
         projectId={modelProjectId}
         token={modelToken}
         canEdit={Boolean(isAdmin && modelToken && project.id === modelProjectId)}
+      />
+      <CablePositioningCard
+        className={styles.panel}
+        projectId={modelProjectId}
+        loadedProjectId={project.id}
+        token={modelToken}
+        isAdmin={drawingPolicyAdmin}
+        onSaved={onDrawingPolicySaved}
+      />
+      <RoutingPurposePolicyCard
+        className={styles.panel}
+        projectId={modelProjectId}
+        loadedProjectId={project.id}
+        token={modelToken}
+        isAdmin={routingPolicyAdmin}
       />
       <div className={styles.numericFieldsRow}>
         {numericFields.map((field) => {
@@ -186,7 +212,8 @@ export const DetailsTab = ({
                           ? 1
                           : Number((1 / 10 ** field.decimals).toFixed(field.decimals))
                       }
-                      min={0}
+                      min={field.field === 'connectionGap' ? 0.001 : 0}
+                      max={field.field === 'connectionGap' ? 100 : undefined}
                       size="small"
                     />
                   </Field>
@@ -206,24 +233,37 @@ export const DetailsTab = ({
       </div>
       <div className={styles.panel}>
         <Caption1>Automatic cable length calculation</Caption1>
+        <Body1><strong>Path Finder calculated length</strong></Body1>
         <Body1>
-          Auto calculated length [m] = ceil(Total routing length [m] × (1 + Additional % for
-          bending / 100) + For end connection [m])
+          Auto calculated length [m] shows the latest successful checked Path Finder result.
+          It is read-only and uses the model geometry and the project allowances below.
         </Body1>
         <Body1>
-          Current formula: ceil(Total routing length [m] × (1 +{' '}
-          {formatNumeric(project.additionalBendingPercent)} / 100) +{' '}
-          {formatNumeric(project.endConnectionLength)})
+          ceil((max(0, Geometric length − flagged From/To approach lengths) + Secondary tray
+          length × number of flagged approaches + For end connection) × (1 + Additional % for
+          bending / 100))
         </Body1>
         <Body1>
-          Total routing length is the sum of the tray lengths along the cable route, converted
-          from millimetres to metres. Each Secondary segment adds the project&apos;s Secondary tray
-          length.
+            Current Path Finder values: SECONDARY {project.secondaryTrayLength === null ? 'Not specified' : `${formatNumeric(project.secondaryTrayLength)} m`};
+          {' '}end connection reserve {formatNumeric(project.endConnectionLength)} m;
+          {' '}bending allowance {formatNumeric(project.additionalBendingPercent)}%.
         </Body1>
         <Caption1>
-          The formula applies the bending allowance and end connection length, then rounds up
-          to the next whole metre. No length is
-          calculated if the route is empty or a required segment length is missing or invalid.
+          Each flagged approach is replaced by SECONDARY. The end connection reserve is added
+          once before the percentage, then the result is rounded up. Measured connection gaps
+          are already included in geometric length and are not added again. Connection gap
+          controls which gaps can be connected.
+        </Caption1>
+        <Caption1>
+          A direct SECONDARY connection uses the actual 3D From/To distance, then adds For end
+          connection once before Additional % for bending and rounds up. Secondary tray length
+          does not replace this direct distance.
+        </Caption1>
+        <Caption1>
+          Existing Design length remains manually editable and changes from Path Finder only
+          after Review → Apply. When both Routing and Design length are empty, the confirmed
+          shared-location Save may fill them automatically after successful checks. Pending,
+          blocked or outdated calculations are shown beside the retained Auto length.
         </Caption1>
       </div>
       {supportDistanceOverrides.length > 0 ? (
@@ -456,6 +496,26 @@ export const DetailsTab = ({
               }}
               disabled={!isAdmin || cableSpacingField.saving}
             />
+            <Checkbox
+              label="Require minimum tray free space when routing"
+              checked={cableSpacingField.autoRerouteForFreeSpace}
+              aria-describedby={rerouteHelpId}
+              onChange={(_, data) => {
+                if (typeof data.checked === 'boolean') {
+                  void cableSpacingField.onToggleAutoRerouteForFreeSpace(data.checked);
+                }
+              }}
+              disabled={!isAdmin || cableSpacingField.saving || (
+                cableSpacingField.minFreeSpaceCurrent === null && !cableSpacingField.autoRerouteForFreeSpace
+              )}
+            />
+            <Caption1 id={rerouteHelpId}>
+              Cable routing balances tray loading even when this option is off.{' '}
+              {cableSpacingField.minFreeSpaceCurrent === null
+                ? 'Set and save the minimum tray free space before enabling this restriction.'
+                : `When enabled, uses the project's minimum free space (${cableSpacingField.minFreeSpaceCurrent}%) with a tolerance of 3 percentage points (${Math.max(0, cableSpacingField.minFreeSpaceCurrent - 3)}% accepted).`}
+              {' '}With this restriction enabled, if no compliant route is available, the affected cable remains unrouted and other cables continue calculating.
+            </Caption1>
           </div>
           {cableCategoryCards.map((card) => {
             const currentMaxRows = card.displayMaxRows.toLocaleString();

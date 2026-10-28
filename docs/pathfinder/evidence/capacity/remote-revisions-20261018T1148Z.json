@@ -1,0 +1,56 @@
+{
+  "observedAtUtc": "2026-10-18 11:47:34 UTC",
+  "checkedLocalHead": "8a726f72ab94da22681320f28ccebe1224cf8eb3",
+  "checkedLocalBranch": "pf-2-capacity-local-20261018",
+  "cachedOriginComparison": {
+    "behind": 0,
+    "ahead": 24
+  },
+  "gitLsRemote": {
+    "wfcMain": "e1ef20202598bb4d3d78e4772cbbb9747ec23a00",
+    "canonicalMaster": "45c24bf5f433f13e102600b36f20327c77961d0a"
+  },
+  "connectorBranches": [
+    {
+      "status": "fulfilled",
+      "value": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Action completed."
+          }
+        ],
+        "structuredContent": {
+          "branches": [
+            {
+              "branch": "main"
+            }
+          ],
+          "cursor": "MQ"
+        },
+        "isError": false
+      }
+    },
+    {
+      "status": "fulfilled",
+      "value": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Action completed."
+          }
+        ],
+        "structuredContent": {
+          "branches": [],
+          "cursor": null
+        },
+        "isError": false
+      }
+    }
+  ],
+  "limitations": [
+    "Read-only observations; no fetch/push/PR.",
+    "Candidate branch is local; no candidate remote CI or review is established.",
+    "Unrelated remote PR/review evidence remains historical in prior reports; not rerun for this additive measurement."
+  ]
+}

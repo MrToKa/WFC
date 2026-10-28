@@ -1,0 +1,80 @@
+{
+  "schemaVersion": "pathfinder.manual-settings.source-verification.v1",
+  "recordedAtUtc": "2026-10-18 06:35:28 UTC",
+  "sourceCommit": "873afeb3544fad56717eb07007d419852e66dc60",
+  "branch": "pf-manual-validation-settings-20261018",
+  "results": [
+    {
+      "owner": "backend",
+      "scope": "matching/settings/actual Node-to-C# process",
+      "status": "PASS",
+      "checks": 51,
+      "breakdown": {
+        "matching": 20,
+        "projectSettings": 15,
+        "engineProcess": 16
+      }
+    },
+    {
+      "owner": "backend",
+      "scope": "existing project routes/change log/middleware/project access/cable/history/export/length",
+      "status": "PASS",
+      "checks": 191,
+      "breakdown": {
+        "projectRoutes": 10,
+        "projectChangeLog": 4,
+        "middlewareProjectAccess": 137,
+        "cables": 40
+      }
+    },
+    {
+      "owner": "backend",
+      "scope": "production server TypeScript build",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "owner": "frontend",
+      "scope": "eight suites before final Confirm eligibility guard",
+      "status": "PASS",
+      "checks": 147,
+      "breakdown": {
+        "api": 5,
+        "numericGapHook": 9,
+        "pathFinderHook": 7,
+        "details": 7,
+        "pathFinderTab": 16,
+        "projectAccess": 56,
+        "routingsViewer": 30,
+        "viewerController": 17
+      }
+    },
+    {
+      "owner": "frontend",
+      "scope": "final affected PathFinder tab after Confirm eligibility guard; includes one added no-design settings-required case",
+      "status": "PASS",
+      "checks": 17
+    },
+    {
+      "owner": "frontend",
+      "scope": "final TypeScript + changed-files ESLint",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "owner": "runtime",
+      "scope": "owned configuration/cleanup/path identity negative controls",
+      "status": "PASS",
+      "checks": 17
+    }
+  ],
+  "evidenceKind": "Actual tool executions reported by the named implementation owners in this chat; no fresh aggregate rerun is claimed.",
+  "runtimeBuild": "IN_PROGRESS; start observed oldHEAD5485283 plus identical frozen working-tree source subsequently committed873afeb.",
+  "liveSqlHttp": "NOT_RUN_AT_RECORDING",
+  "computerUse": "NOT_RUN_AT_RECORDING",
+  "nativeOracle": "NOT_PERFORMED; NOT_REQUIRED_BY_USER",
+  "humanAcceptance": "PENDING_USER_REVIEW",
+  "pinnedCoreChanged": false,
+  "frozenExpectedRegenerated": false,
+  "originalResourcesMutated": false
+}

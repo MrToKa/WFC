@@ -1,0 +1,192 @@
+{
+  "schemaVersion": 1,
+  "sourceRepository": "https://github.com/MrToKa/PathFinder.git",
+  "sourceCommit": "45c24bf5f433f13e102600b36f20327c77961d0a",
+  "pf0BaselineCommit": "23741d1f485248ddb519f9e04e0b7856cc0e3def",
+  "coreAssembly": "PathFinder.Core",
+  "targetFramework": "net9.0",
+  "coreFiles": [
+    {
+      "sourcePath": "AddinRibbon/Routing/CableDesignLength.cs",
+      "path": "src/PathFinder.Core/Routing/CableDesignLength.cs",
+      "bytes": 2220,
+      "sha256": "fa489d2948f3c7a4af8931cb79d775a61f4718d5ad3187bd5637598665d1ff5f",
+      "frozenPf0Sha256": "fa489d2948f3c7a4af8931cb79d775a61f4718d5ad3187bd5637598665d1ff5f",
+      "matchesFrozenSource": true
+    },
+    {
+      "sourcePath": "AddinRibbon/Routing/RouteCalculator.cs",
+      "path": "src/PathFinder.Core/Routing/RouteCalculator.cs",
+      "bytes": 53842,
+      "sha256": "07f994daa20b93ed20758975fb4750d7c5b491bfdaba9ade855ff6a2f64f23e1",
+      "frozenPf0Sha256": "12e96c787902850bffad660d5d2a43333960d9920890cf8f547a730f67e0d0b8",
+      "matchesFrozenSource": false,
+      "derivation": "2026-10-25 authorized graph-preparation extension; original reference retained with frozenPf0Sha256"
+    },
+    {
+      "sourcePath": "AddinRibbon/Routing/RouteCodeParser.cs",
+      "path": "src/PathFinder.Core/Routing/RouteCodeParser.cs",
+      "bytes": 3247,
+      "sha256": "a97e2358374f0798c94103a8f0b20bf7c5a04208de523ea384afa528f70ec05f",
+      "frozenPf0Sha256": "a97e2358374f0798c94103a8f0b20bf7c5a04208de523ea384afa528f70ec05f",
+      "matchesFrozenSource": true
+    },
+    {
+      "sourcePath": "AddinRibbon/Routing/RouteLookupCalculator.cs",
+      "path": "src/PathFinder.Core/Routing/RouteLookupCalculator.cs",
+      "bytes": 25795,
+      "sha256": "1914b875b675bc61e274a46f221d0633e5db21eab2fe0e34214c7c05aa5485ae",
+      "frozenPf0Sha256": "1914b875b675bc61e274a46f221d0633e5db21eab2fe0e34214c7c05aa5485ae",
+      "matchesFrozenSource": true
+    },
+    {
+      "sourcePath": "AddinRibbon/Routing/RouteNameResolver.cs",
+      "path": "src/PathFinder.Core/Routing/RouteNameResolver.cs",
+      "bytes": 2272,
+      "sha256": "9bf4964a00833f91a38f11f34e2eb377f1fb27ccd48d389731248ecf07174c34",
+      "frozenPf0Sha256": "9bf4964a00833f91a38f11f34e2eb377f1fb27ccd48d389731248ecf07174c34",
+      "matchesFrozenSource": true
+    },
+    {
+      "sourcePath": "AddinRibbon/Routing/RoutingModels.cs",
+      "path": "src/PathFinder.Core/Routing/RoutingModels.cs",
+      "bytes": 11386,
+      "sha256": "2de71cc5410e04cce309276cbd2591d218530d5ddfca4c77a2ad98f2ee02e4ea",
+      "frozenPf0Sha256": "2de71cc5410e04cce309276cbd2591d218530d5ddfca4c77a2ad98f2ee02e4ea",
+      "matchesFrozenSource": true
+    },
+    {
+      "sourcePath": "AddinRibbon/Routing/TrayBendMeshGeometry.cs",
+      "path": "src/PathFinder.Core/Routing/TrayBendMeshGeometry.cs",
+      "bytes": 32190,
+      "sha256": "4d6f0c574166fbcb880cdc38bd10e589905fc74b1fe5709c33fd5e2ecab35948",
+      "frozenPf0Sha256": "4d6f0c574166fbcb880cdc38bd10e589905fc74b1fe5709c33fd5e2ecab35948",
+      "matchesFrozenSource": true
+    },
+    {
+      "sourcePath": "AddinRibbon/Routing/TrayGeometryBuilder.cs",
+      "path": "src/PathFinder.Core/Routing/TrayGeometryBuilder.cs",
+      "bytes": 23403,
+      "sha256": "9dd9abe707b3908c8d55a404e12d6b79b7785659f284dc4d84d9d2391dd225c7",
+      "frozenPf0Sha256": "9dd9abe707b3908c8d55a404e12d6b79b7785659f284dc4d84d9d2391dd225c7",
+      "matchesFrozenSource": true
+    },
+    {
+      "sourcePath": "AddinRibbon/Routing/TrayMeshClearance.cs",
+      "path": "src/PathFinder.Core/Routing/TrayMeshClearance.cs",
+      "bytes": 43323,
+      "sha256": "92ad70500c4ec03b5d264be43274c074f848773c312ca004e0de5c00d2770fc3",
+      "frozenPf0Sha256": "75075cbf5b13d385f9932e1ad755815e39934e55bcbf123b657ae3b5363541e8",
+      "matchesFrozenSource": false,
+      "derivation": "2026-10-25 authorized graph-preparation extension; original reference retained with frozenPf0Sha256"
+    },
+    {
+      "sourcePath": "AddinRibbon/Routing/TrayMeshData.cs",
+      "path": "src/PathFinder.Core/Routing/TrayMeshData.cs",
+      "bytes": 2817,
+      "sha256": "4ff9170f90a57f8509a9acb5b84dd95262e55b942d6ee892a0dd231563b3af31",
+      "frozenPf0Sha256": "4ff9170f90a57f8509a9acb5b84dd95262e55b942d6ee892a0dd231563b3af31",
+      "matchesFrozenSource": true
+    },
+    {
+      "sourcePath": "AddinRibbon/Routing/TrayMeshGeometry.cs",
+      "path": "src/PathFinder.Core/Routing/TrayMeshGeometry.cs",
+      "bytes": 23892,
+      "sha256": "c88ed49513778ef809e581ecf8b4418b746b982c5b12f533d96478275de8deba",
+      "frozenPf0Sha256": "c88ed49513778ef809e581ecf8b4418b746b982c5b12f533d96478275de8deba",
+      "matchesFrozenSource": true
+    }
+  ],
+  "regressionSources": [
+    {
+      "sourcePath": "tests/PathFinder.Routing.Tests/DesignLengthTests.cs",
+      "path": "tests/PathFinder.Regression/DesignLengthTests.cs",
+      "bytes": 3635,
+      "sha256": "c27fa32decb3dadd33aab05a77c7c2ba7346b0e3a32fd94909f465b4ace7e0ba",
+      "matchesSource": true
+    },
+    {
+      "sourcePath": "tests/PathFinder.Routing.Tests/EndpointApproachTests.cs",
+      "path": "tests/PathFinder.Regression/EndpointApproachTests.cs",
+      "bytes": 4753,
+      "sha256": "42ffcae2087c43f80e785f85ea0a25286e1077f5910009011798334a5f77aa2b",
+      "matchesSource": true
+    },
+    {
+      "sourcePath": "tests/PathFinder.Routing.Tests/GeometryTests.cs",
+      "path": "tests/PathFinder.Regression/GeometryTests.cs",
+      "bytes": 35226,
+      "sha256": "17e653678f35f39c1e19c597fe0947e66fefb65c1da5688ec6a91c437ae08d9a",
+      "matchesSource": true
+    },
+    {
+      "sourcePath": "tests/PathFinder.Routing.Tests/MeshClearanceTests.cs",
+      "path": "tests/PathFinder.Regression/MeshClearanceTests.cs",
+      "bytes": 27547,
+      "sha256": "b990c4a789b9bd7821b514208d632b964a30dd46f90bb8620b30ea9d810a7087",
+      "matchesSource": true
+    },
+    {
+      "sourcePath": "tests/PathFinder.Routing.Tests/Program.cs",
+      "path": "tests/PathFinder.Regression/Program.cs",
+      "bytes": 43743,
+      "sha256": "40c2c7ef53a04ab7b38b398748d217418ce32d0a016a39688b3042ca7b93952e",
+      "matchesSource": true
+    },
+    {
+      "sourcePath": "tests/PathFinder.Routing.Tests/RouteLookupTests.cs",
+      "path": "tests/PathFinder.Regression/RouteLookupTests.cs",
+      "bytes": 15238,
+      "sha256": "d7a74b2f37a1430132114d7e887a9893335284a13ebb667a720e2a4a6bfe0843",
+      "matchesSource": true
+    },
+    {
+      "sourcePath": "tests/PathFinder.Routing.Tests/RouteNameResolverTests.cs",
+      "path": "tests/PathFinder.Regression/RouteNameResolverTests.cs",
+      "bytes": 8205,
+      "sha256": "d5ffc9da399d13d10332d039ec89e1d2440237d5f0610bd842a6d47f80d24377",
+      "matchesSource": true
+    },
+    {
+      "sourcePath": "tests/PathFinder.Routing.Tests/VerifiedPortTests.cs",
+      "path": "tests/PathFinder.Regression/VerifiedPortTests.cs",
+      "bytes": 9729,
+      "sha256": "9faf7e94ae79394195cfd4858148753bae0afe2fcfaf43b3dd0ebeb472c97a47",
+      "matchesSource": true
+    }
+  ],
+  "metadataChanges": [
+    "Standalone PathFinder.Core.csproj with no PackageReference or native references",
+    "Properties/AssemblyInfo.cs grants internals only to PathFinder.Regression and PathFinder.Parity",
+    "Regression project replaces source inclusion with ProjectReference to PathFinder.Core and a separate audit entry point"
+  ],
+  "unavailableOptionalData": "Private 327-name Excel fixture is not included; default harness has 105 checks.",
+  "graphPreparationDerivation": {
+    "version": "wfc.pf.graph-contact-preparation.v1",
+    "authorizedDate": "2026-10-25",
+    "scope": "Bounded immutable contact preprocessing. Endpoint graph, search, opening maneuvers and engineering evidence remain request-local.",
+    "comparison": "Original no-cache construction retained; frozen original sources stored in reference/original-routing.",
+    "extensionFiles": [
+      {
+        "path": "src/PathFinder.Core/Support/GraphPreparation.cs",
+        "bytes": 10426,
+        "sha256": "3d62251ff88f759ff0cc508d0b5a714e0918fa227e51ddc448a6643941705de3"
+      },
+      {
+        "path": "src/PathFinder.Core/Support/GraphPreparationRouting.cs",
+        "bytes": 18303,
+        "sha256": "56c831b39c7257e28f335cb14404aa5853c61cb8dc6c8336afdd96fdedf71574"
+      },
+      {
+        "path": "src/PathFinder.Core/Support/GraphPreparationSerialization.cs",
+        "bytes": 9761,
+        "sha256": "1993887e01f5d8d428ec265cf1ce0ce374021cc26871ea0abbc801bc00340c5f"
+      },
+      {
+        "path": "src/PathFinder.Core/Support/GraphSurfaceFingerprint.cs",
+        "bytes": 1943,
+        "sha256": "130deb31ac03dde92fad8a95702be7870e1c227599e4e279a9db2b498c8617cc"
+      }
+    ]
+  }
+}

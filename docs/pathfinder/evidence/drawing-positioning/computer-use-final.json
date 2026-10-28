@@ -1,0 +1,114 @@
+{
+  "schemaVersion": "pathfinder.drawing-positioning.computer-use.v1",
+  "status": "PASS_AT_STATED_SCOPE",
+  "observedAt": "2026-10-18T23:57:40.169Z",
+  "origin": "http://127.0.0.1:5191",
+  "browserId": "2",
+  "tabId": "6",
+  "checks": [
+    {
+      "name": "English Cable positioning card uses four separate drawing categories and explicit defaults",
+      "status": "PASS"
+    },
+    {
+      "name": "Left and Right checkboxes are mutually exclusive",
+      "status": "PASS"
+    },
+    {
+      "name": "Save updates drawing revision while routing policy revision stays0",
+      "status": "PASS"
+    },
+    {
+      "name": "Reload retains authored modes",
+      "status": "PASS"
+    },
+    {
+      "name": "Compatible Power and Control jointly pack on left; VFD right creates one divider",
+      "status": "PASS"
+    },
+    {
+      "name": "All three categories on left render without divider and without TooManyTypes",
+      "status": "PASS"
+    },
+    {
+      "name": "Concurrent external change rejects stale browser save and offers discard/refresh",
+      "status": "PASS"
+    },
+    {
+      "name": "Reset persists Use default layout after reload",
+      "status": "PASS"
+    },
+    {
+      "name": "Basic project user sees no Cable positioning card or Path Finder tab",
+      "status": "PASS"
+    },
+    {
+      "name": "Basic user sees shared default drawing; edit/report controls absent",
+      "status": "PASS"
+    },
+    {
+      "name": "Missing diameter blocks shared drawing and reports N/A occupancy instead of silently rendering fallback",
+      "status": "PASS"
+    },
+    {
+      "name": "Real project tray A007 retains material/support/load-curve facts under new snapshot path",
+      "status": "PASS"
+    },
+    {
+      "name": "Protected model loads664556geometry/438156identifiers/6properties; all three Path Finder tools retained",
+      "status": "PASS"
+    }
+  ],
+  "screenshots": [
+    {
+      "name": "r2a-ui-basic-shared-drawing.png",
+      "bytes": 33219,
+      "sha256": "587ceb8e94268078d7bd2a76d8c4e7c86798302487758e5b3954d249a1a8e186",
+      "location": "PRIVATE_OWNED_WORK"
+    },
+    {
+      "name": "r2a-ui-blocked.png",
+      "bytes": 59748,
+      "sha256": "df09c1a31f2d67e2f4bc3f6d45b178ae51dbb5a19db3e9e1fb3332ce251d6d3b",
+      "location": "PRIVATE_OWNED_WORK"
+    },
+    {
+      "name": "r2a-ui-conflict.png",
+      "bytes": 61875,
+      "sha256": "7b3e45539022859a2a963b4bbd58f16a5ef56648bf624e6657c4aabbc29844f4",
+      "location": "PRIVATE_OWNED_WORK"
+    },
+    {
+      "name": "r2a-ui-mixed-divider.png",
+      "bytes": 35699,
+      "sha256": "aa68786a75a9dbe001f0d229925f895ffc8f8c7ddff4d72a9a6603137af071c7",
+      "location": "PRIVATE_OWNED_WORK"
+    },
+    {
+      "name": "r2a-ui-policy.png",
+      "bytes": 65119,
+      "sha256": "3fe7e26fab2c07e472272a24338ecacd8dd572526e3c241445c509a8f6c4c3c6",
+      "location": "PRIVATE_OWNED_WORK"
+    },
+    {
+      "name": "r2a-ui-protected-model.png",
+      "bytes": 78431,
+      "sha256": "1d639be4570d12ad6298cc7f31346480af459dec38e1590d5914b32465430819",
+      "location": "PRIVATE_OWNED_WORK"
+    },
+    {
+      "name": "r2a-ui-single-side.png",
+      "bytes": 35347,
+      "sha256": "3612dceacb97792ddaefb3c3791875f1e3c0c474182f4b9faef0e484f5b44bf7",
+      "location": "PRIVATE_OWNED_WORK"
+    }
+  ],
+  "fixtureCleanup": "PASS",
+  "demoAdminRestored": true,
+  "limitations": {
+    "realEngineeringApply": "NOT_RUN",
+    "freshGhostYellowRouteExecution": "NOT_RUN; unchanged sources and inherited verification only",
+    "docxVisualRender": "NOT_RUN; actual three-file API transport and source/race checks separately PASS",
+    "userAcceptance": "NOT_RUN"
+  }
+}

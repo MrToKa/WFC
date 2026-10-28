@@ -1,0 +1,653 @@
+{
+  "schemaVersion": "wfc.pf.barrier-kernel-stage-evidence.v1",
+  "productCommit": "66c1772436e131d19f4fa3deec3dbf768ecb4a0c",
+  "checkedUtc": "2026-10-21T10:34:06.2396438Z",
+  "checks": {
+    "schemaVersion": "wfc.pf.barrier-kernel-checks.v1",
+    "status": "PASS",
+    "passed": 94,
+    "failed": 0,
+    "scope": "Synthetic standalone whole-mesh barrier kernel checks only; no WFC routing, live model, openings survey or engineering acceptance",
+    "engineeringAccepted": false,
+    "nativeParity": "not-performed",
+    "numericPropertyStats": {
+      "Seed": 5904305,
+      "Trials": 200,
+      "Ready": 159,
+      "Refused": 41,
+      "Blocked": 318,
+      "Indeterminate": 0,
+      "CheckedSegments": 318,
+      "OrdinaryReady": 40
+    },
+    "checks": [
+      {
+        "name": "empty barrier scope refuses without a server-owned no-barrier declaration",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "solid wall blocks a through segment and identifies barrier",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "wall crossing is independent of segment direction",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "unobstructed same-side approach is clear",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "outside wall bounds remains clear",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "start inside a closed wall is blocked",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "end inside a closed wall is blocked",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "both endpoints inside a closed wall are blocked",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "zero-length interior point is blocked",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "zero-length exterior point is clear",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "start on wall surface is blocked",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "end on wall surface is blocked",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "zero-length surface point is blocked",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "coplanar travel within a face is blocked",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "coplanar segment crossing a face boundary is blocked",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "coplanar travel outside the face remains clear",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "edge contact is blocked",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "vertex contact is blocked",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "travel along a closed-solid edge is blocked",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "supported 0.1 mm thin wall is blocked",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "10 micrometre wall outside embedding guard can never be unsafe clear",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "poorly conditioned huge-aspect solid can never produce unsafe clear",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "huge-aspect interior point can never produce unsafe clear",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "rotated translated huge-aspect solid can never produce unsafe clear",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "far endpoint conditioning cannot report clear through an ordinary wall",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "whole reversed winding still blocks and contains",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "exact coordinate welding accepts triangle-local vertices",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "connected frame really contains 16 vertices and 32 triangles",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "connected watertight tunnel preserves actual opening",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "off-centre segment within actual tunnel remains clear",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "wall material beside tunnel blocks",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "wall material above tunnel blocks",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "tunnel rim contact is blocked",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "opening point within solid bounding box is not contained",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "point in connected frame material is contained",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "whole reversed connected tunnel preserves opening",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "opening also survives exact coordinate welding",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "separate closed frame bars preserve opening",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "separate closed frame bars still block material",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "floor slab with actual opening permits vertical passage",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "floor slab blocks cable crossing outside its opening",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "translated rotated wall uses world geometry",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "translated rotated connected opening stays passable",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "multiple barriers return actual obstructing identity",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "kernel does not mutate caller-owned vertex and index arrays",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "later caller mutation cannot change an immutable built kernel",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "repeated segment checks retain the same deterministic answer",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "seeded numeric property: 200 transformed solid trials never produce unsafe clear",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "incomplete selected mesh refuses",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "empty selected mesh refuses",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "unclosed mesh refuses",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "duplicate same-winding triangle refuses",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "duplicate reversed-winding triangle refuses",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "one reversed face violates consistent orientation",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "nonmanifold extra triangle refuses",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "intersecting closed shells in one mesh refuse",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "connected closed topology with self-crossing surface refuses",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "repeated index creates degenerate triangle and refuses",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "geometrically collapsed triangle refuses",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "out-of-range positive triangle index refuses",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "negative triangle index refuses",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "trailing partial triangle refuses",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "nonfinite vertex refuses: NaN",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "nonfinite segment is indeterminate: NaN",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "nonfinite vertex refuses: ∞",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "nonfinite segment is indeterminate: ∞",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "nonfinite vertex refuses: -∞",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "nonfinite segment is indeterminate: -∞",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "coordinate beyond configured magnitude refuses",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "query coordinate beyond configured magnitude is indeterminate",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "duplicate barrier identities refuse",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "empty barrier identity refuses",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "mesh count budget refuses rather than omitting barriers",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "triangle budget refuses rather than truncating geometry",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "vertex budget refuses rather than truncating geometry",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "BVH node budget refuses rather than building partial tree",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "build work exhaustion refuses rather than accepting unchecked topology",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "estimated allocation budget refuses before unbounded work",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "query work exhaustion is indeterminate, never clear",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "limited coordinate policy is applied to geometry",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "zero mesh budget is invalid",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "zero triangle budget is invalid",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "zero vertex budget is invalid",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "zero BVH node budget is invalid",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "zero build work budget is invalid",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "zero query work budget is invalid",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "zero estimated byte budget is invalid",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "zero BVH leaf size is invalid",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "nonpositive numeric tolerance is invalid",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "nonfinite numeric tolerance is invalid",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "nonfinite maximum coordinate is invalid",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "already cancelled build throws before returning usable kernel",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "cancellation during mesh enumeration prevents ready build",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "name": "already cancelled segment query throws rather than reporting clear",
+        "status": "PASS",
+        "detail": ""
+      }
+    ]
+  },
+  "workloadSmoke": {
+    "schemaVersion": "wfc.pf.barrier-kernel-workload-smoke.v1",
+    "status": "PASS",
+    "scope": "Synthetic 200-solid / 2400-triangle / 1600-vertex smoke with 2000 bounded centreline queries; not maximum-capacity qualification",
+    "maximumCapacityVerified": false,
+    "physicalCableRadiusChecked": false,
+    "engineeringAccepted": false,
+    "nativeParity": "not-performed",
+    "meshes": 200,
+    "vertices": 1600,
+    "triangles": 2400,
+    "queries": 2000,
+    "blocked": 1000,
+    "clear": 1000,
+    "indeterminate": 0,
+    "limits": {
+      "MaximumMeshes": 256,
+      "MaximumTriangles": 250000,
+      "MaximumVertices": 500000,
+      "MaximumBvhNodes": 500000,
+      "MaximumBuildWork": 40000000,
+      "MaximumQueryWork": 2000000,
+      "MaximumBuildMilliseconds": 60000,
+      "MaximumQueryMilliseconds": 10000,
+      "MaximumEstimatedBytes": 134217728,
+      "BvhLeafSize": 8,
+      "NumericToleranceMeters": 1E-07,
+      "MaximumCoordinateMagnitude": 1000000000
+    },
+    "summary": {
+      "MeshCount": 200,
+      "VertexCount": 1600,
+      "TriangleCount": 2400,
+      "BvhNodeCount": 1023,
+      "EstimatedBytes": 1023904,
+      "NumericToleranceMeters": 1E-07,
+      "PolicyVersion": "wfc.pf.registered-triangle-barriers.v1",
+      "CollisionVersion": "wfc.pf.triangle-centreline-collision.v1",
+      "Scope": "centreline-versus-qualified-closed-triangle-solids",
+      "PhysicalCableRadiusChecked": false
+    },
+    "buildMilliseconds": 517.4916,
+    "queryTotalMilliseconds": 34.9566,
+    "buildWork": 915926,
+    "queryTotalWork": 257765,
+    "maximumObservedQueryWork": 248,
+    "currentProcessPeakWorkingSet64": 52543488,
+    "mismatches": [],
+    "error": null
+  },
+  "coreAudit": {
+    "scope": "Read-only comparison with frozen provenance; no PF-0 validation scripts/receipt writes",
+    "files": [
+      {
+        "sha256": "fa489d2948f3c7a4af8931cb79d775a61f4718d5ad3187bd5637598665d1ff5f",
+        "matches": true,
+        "path": "src/PathFinder.Core/Routing/CableDesignLength.cs"
+      },
+      {
+        "sha256": "12e96c787902850bffad660d5d2a43333960d9920890cf8f547a730f67e0d0b8",
+        "matches": true,
+        "path": "src/PathFinder.Core/Routing/RouteCalculator.cs"
+      },
+      {
+        "sha256": "a97e2358374f0798c94103a8f0b20bf7c5a04208de523ea384afa528f70ec05f",
+        "matches": true,
+        "path": "src/PathFinder.Core/Routing/RouteCodeParser.cs"
+      },
+      {
+        "sha256": "1914b875b675bc61e274a46f221d0633e5db21eab2fe0e34214c7c05aa5485ae",
+        "matches": true,
+        "path": "src/PathFinder.Core/Routing/RouteLookupCalculator.cs"
+      },
+      {
+        "sha256": "9bf4964a00833f91a38f11f34e2eb377f1fb27ccd48d389731248ecf07174c34",
+        "matches": true,
+        "path": "src/PathFinder.Core/Routing/RouteNameResolver.cs"
+      },
+      {
+        "sha256": "2de71cc5410e04cce309276cbd2591d218530d5ddfca4c77a2ad98f2ee02e4ea",
+        "matches": true,
+        "path": "src/PathFinder.Core/Routing/RoutingModels.cs"
+      },
+      {
+        "sha256": "4d6f0c574166fbcb880cdc38bd10e589905fc74b1fe5709c33fd5e2ecab35948",
+        "matches": true,
+        "path": "src/PathFinder.Core/Routing/TrayBendMeshGeometry.cs"
+      },
+      {
+        "sha256": "9dd9abe707b3908c8d55a404e12d6b79b7785659f284dc4d84d9d2391dd225c7",
+        "matches": true,
+        "path": "src/PathFinder.Core/Routing/TrayGeometryBuilder.cs"
+      },
+      {
+        "sha256": "75075cbf5b13d385f9932e1ad755815e39934e55bcbf123b657ae3b5363541e8",
+        "matches": true,
+        "path": "src/PathFinder.Core/Routing/TrayMeshClearance.cs"
+      },
+      {
+        "sha256": "4ff9170f90a57f8509a9acb5b84dd95262e55b942d6ee892a0dd231563b3af31",
+        "matches": true,
+        "path": "src/PathFinder.Core/Routing/TrayMeshData.cs"
+      },
+      {
+        "sha256": "c88ed49513778ef809e581ecf8b4418b746b982c5b12f533d96478275de8deba",
+        "matches": true,
+        "path": "src/PathFinder.Core/Routing/TrayMeshGeometry.cs"
+      }
+    ],
+    "count": 11,
+    "status": "PASS"
+  },
+  "sourceFiles": [
+    {
+      "sha256": "17115bf20013c75e6c8d4e2980135d59d6d496159da6da303e7dde4a694de63c",
+      "path": "pathfinder-engine/src/PathFinder.Barriers/BarrierCollisionKernel.cs"
+    },
+    {
+      "sha256": "b4436cbac20b9e6a9dd78fb672ed791c3c89d5fa66d9d4145cf1d96ec783f27f",
+      "path": "pathfinder-engine/src/PathFinder.Barriers/Contracts.cs"
+    },
+    {
+      "sha256": "8d8862a80ba1f31b849ed6b4f1c621e77d751d45c8eea2ded969173c1a48929c",
+      "path": "pathfinder-engine/src/PathFinder.Barriers/Geometry.cs"
+    },
+    {
+      "sha256": "b49eaf28002a462d271147e566e14a067c2d57d910b6f76cef2a3221c5660d4c",
+      "path": "pathfinder-engine/src/PathFinder.Barriers/PathFinder.Barriers.csproj"
+    },
+    {
+      "sha256": "156fbfc30cc29446423d9c629326254196db15ed741c68d225049aab6f34a009",
+      "path": "pathfinder-engine/src/PathFinder.Barriers/README.md"
+    },
+    {
+      "sha256": "86ad651a45a678a0b87b326752b1f7282d29864b8200ee73e34a8fa0d2baf555",
+      "path": "pathfinder-engine/tests/PathFinder.Barriers.Tests/Fixtures.cs"
+    },
+    {
+      "sha256": "e77e7596138e10c75b4bba588b707f6a3ed366db4389409626160fde130ed4bd",
+      "path": "pathfinder-engine/tests/PathFinder.Barriers.Tests/PathFinder.Barriers.Tests.csproj"
+    },
+    {
+      "sha256": "f2ef6e3a05bee61ee1a0a0ffa4d36c6b4d5d77d54a95b2e2997afa3bd2f24d46",
+      "path": "pathfinder-engine/tests/PathFinder.Barriers.Tests/Program.cs"
+    }
+  ],
+  "initialNumericFailure": {
+    "repairedAndRechecked": true,
+    "passed": 88,
+    "failed": 1,
+    "retained": "numeric-repro.log",
+    "status": "FAIL"
+  },
+  "actualModelCapture": "NOT_RUN",
+  "routingIntegration": "NOT_RUN",
+  "engineeringAccepted": false,
+  "runtimeChanged": false
+}

@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "wfc.pfr0.model-inputs.v1",
+  "recordedAt": "2026-10-18T21:27:29.131Z",
+  "status": "PASS",
+  "scope": "current bytes bind two retained converted packages to earlier independent verification; no re-conversion/import/render/geometry comparison",
+  "items": [
+    {
+      "role": "current-converted-model",
+      "path": "pathfinder-engine/.scratch/pathfinder-local/aalborg-portable.zip",
+      "bytes": 439112840,
+      "sha256": "e3056f28efaa57eef65f81dbdfe41396d9e010bdc975738d1259c58af6c3a922",
+      "modelVersionId": "a613151e-c370-45c5-80f3-42ae58603b9a",
+      "resourceCountFromPriorAudit": 342,
+      "currentByteIntegrity": "PASS"
+    },
+    {
+      "role": "older-converted-model",
+      "path": "pathfinder-engine/.scratch/older-model-3bf01791-b0b5-427d-b2f7-4091d39abe3d/runner-state/output/aalborg-older-svf.zip",
+      "bytes": 174823508,
+      "sha256": "a4538444641bfc96ce8915a0ef24c1adfebb50a72c1575a23cc475d9bd781183",
+      "modelVersionId": null,
+      "resourceCountFromPriorAudit": 173,
+      "currentByteIntegrity": "PASS"
+    }
+  ],
+  "alignment": "NOT_RUN",
+  "qualifiedCrossVersionIdentity": "NOT_RUN",
+  "realGeometryPurposeMovementComparison": "NOT_RUN",
+  "nativeOracle": "user-waived; not performed",
+  "engineeringAcceptance": "NOT_RUN",
+  "olderModelImported": false
+}

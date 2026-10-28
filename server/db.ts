@@ -3,6 +3,7 @@ import { initializeMaterialIdentity } from './services/materialIdentitySchema.js
 import { initializeMaterialChangeLog } from './services/materialChangeLogSchema.js';
 import { initializeModelRegistry } from './modelRegistry/schema.js';
 import { initializeViewerSessions } from './viewerSessions/schema.js';
+import { initializePathFinder } from './pathfinder/schema.js';
 import { Pool } from 'pg';
 import { config } from './config.js';
 import { CABLE_MTO_VALUES } from './models/cable.js';
@@ -12,7 +13,7 @@ export const pool = new Pool({
 
 const cableMtoConstraintValues = CABLE_MTO_VALUES.map((value) => `'${value}'`).join(', ');
 const cableVersionChangeTypeConstraintValues = ["'create'", "'update'"].join(', ');
-const cableVersionChangeSourceConstraintValues = ["'manual'", "'import'"].join(', ');
+const cableVersionChangeSourceConstraintValues = ["'manual'", "'import'", "'pathfinder'"].join(', ');
 
 export async function initializeDatabase(): Promise<void> {
   await pool.query(`
@@ -89,6 +90,16 @@ export async function initializeDatabase(): Promise<void> {
   await pool.query(`
     ALTER TABLE projects
     ADD COLUMN IF NOT EXISTS secondary_tray_length NUMERIC;
+  `);
+
+  // Explicit project routing default, including projects created before this feature.
+  await pool.query(`
+    ALTER TABLE projects ADD COLUMN IF NOT EXISTS connection_gap NUMERIC NOT NULL DEFAULT 1;
+    ALTER TABLE projects ALTER COLUMN connection_gap SET DEFAULT 1;
+    UPDATE projects SET connection_gap=1 WHERE connection_gap IS NULL;
+    ALTER TABLE projects ALTER COLUMN connection_gap SET NOT NULL;
+    ALTER TABLE projects DROP CONSTRAINT IF EXISTS projects_connection_gap_check;
+    ALTER TABLE projects ADD CONSTRAINT projects_connection_gap_check CHECK(connection_gap > 0 AND connection_gap <= 100);
   `);
 
   await pool.query(`
@@ -2311,6 +2322,7 @@ export async function initializeDatabase(): Promise<void> {
   await initializeMaterialChangeLog(pool);
   await initializeModelRegistry(pool);
   await initializeViewerSessions(pool);
+  await initializePathFinder(pool);
 }
 
 export async function shutdownDatabase(): Promise<void> {

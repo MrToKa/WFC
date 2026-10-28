@@ -1,0 +1,119 @@
+{
+  "schemaVersion": "pathfinder.session.target.v1",
+  "status": "PASS",
+  "checkedAt": "2026-10-18T13:09:21.877Z",
+  "runtime": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pathfinder-local-restore-bf1cba239f40",
+  "project": "wfc-pathfinder-local-bf1cba239f40",
+  "owner": "59d9d5bc-9c8f-4b4c-b97d-bb56751e5a6e",
+  "origin": "http://127.0.0.1:5191",
+  "mode": "session",
+  "images": {
+    "api": "sha256:5cd3eca8f8a6972f038bd9766a8e5a68c1ac2cb59546d4ed96763c6de528c3f5",
+    "web": "sha256:4d6022fa8de5348d02d1a86cc691214142e3a3866032de9ba9a08a5068d10c66"
+  },
+  "api": {
+    "id": "3b02c809bac059ed210886766812ed002bfb89e95b3d18258875869b3a1c9284",
+    "name": "wfc-pathfinder-local-bf1cba239f40-api-1",
+    "image": "sha256:5cd3eca8f8a6972f038bd9766a8e5a68c1ac2cb59546d4ed96763c6de528c3f5",
+    "running": true,
+    "startedAt": "2026-10-18T13:08:41.180193502Z",
+    "exitCode": 0,
+    "oomKilled": false,
+    "platform": "linux",
+    "mounts": [
+      {
+        "type": "volume",
+        "name": "wfc-pathfinder-local-bf1cba239f40_pathfinder",
+        "destination": "/var/lib/wfc/pathfinder",
+        "writable": true
+      },
+      {
+        "type": "volume",
+        "name": "wfc-pathfinder-local-bf1cba239f40_staging",
+        "destination": "/var/lib/wfc/model-imports",
+        "writable": true
+      }
+    ]
+  },
+  "resources": {
+    "containers": [
+      {
+        "role": "web",
+        "id": "de261c20796894664e2ce3a7695afa12b9ff3aad250ad482c0075ce3e7de721b",
+        "image": "sha256:4d6022fa8de5348d02d1a86cc691214142e3a3866032de9ba9a08a5068d10c66",
+        "name": "wfc-pathfinder-local-bf1cba239f40-web-1",
+        "running": true,
+        "startedAt": "2026-10-18T13:08:46.927711447Z"
+      },
+      {
+        "role": "api",
+        "id": "3b02c809bac059ed210886766812ed002bfb89e95b3d18258875869b3a1c9284",
+        "image": "sha256:5cd3eca8f8a6972f038bd9766a8e5a68c1ac2cb59546d4ed96763c6de528c3f5",
+        "name": "wfc-pathfinder-local-bf1cba239f40-api-1",
+        "running": true,
+        "startedAt": "2026-10-18T13:08:41.180193502Z"
+      },
+      {
+        "role": "storage-ready",
+        "id": "f096a7da53905d4f0769d855092ce96de43b55e5d9013bd2f5a9d8cb4738f2f2",
+        "image": "sha256:5cd3eca8f8a6972f038bd9766a8e5a68c1ac2cb59546d4ed96763c6de528c3f5",
+        "name": "wfc-pathfinder-local-bf1cba239f40-storage-ready-1",
+        "running": false,
+        "startedAt": "2026-10-18T13:08:40.471578669Z"
+      },
+      {
+        "role": "postgres",
+        "id": "537355846bb844629004d97ce91f8fd10dcae660646b759702c5d22d40591614",
+        "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+        "name": "wfc-pathfinder-local-bf1cba239f40-postgres-1",
+        "running": true,
+        "startedAt": "2026-10-18T12:47:47.72907359Z"
+      },
+      {
+        "role": "minio",
+        "id": "44876e1db63775fcf78ff2044451ffa92fc7bb10154d69f79e84a81cfd339cf1",
+        "image": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+        "name": "wfc-pathfinder-local-bf1cba239f40-minio-1",
+        "running": true,
+        "startedAt": "2026-10-18T12:47:47.730480702Z"
+      }
+    ],
+    "volumes": [
+      "wfc-pathfinder-local-bf1cba239f40_postgres",
+      "wfc-pathfinder-local-bf1cba239f40_minio",
+      "wfc-pathfinder-local-bf1cba239f40_staging",
+      "wfc-pathfinder-local-bf1cba239f40_pathfinder"
+    ],
+    "networks": [
+      {
+        "id": "a9b611d1e72ef635ec4a58a6a20d00a8c8c0a86a2eea95ef64549cbe8d777284",
+        "name": "wfc-pathfinder-local-bf1cba239f40_front"
+      },
+      {
+        "id": "5b31c0ad3a81791464a1cc3f491de58e1bf3d56c5e95d514f22989165021a2d1",
+        "name": "wfc-pathfinder-local-bf1cba239f40_backend"
+      }
+    ]
+  },
+  "binaries": {
+    "/opt/pathfinder/PathFinder.ModelRunner.dll": "4b940d5c8a7b72115369aa2004de4e12434ae5f4c6f14d014b8be9cc6ab3dc06",
+    "/app/server/dist/server/pathfinder/engineSession.js": "5d0dfe630d46252c98461bfb4b208d98f82437d50ebc05153fe299d7d38400a8",
+    "/app/server/dist/server/pathfinder/worker.js": "1c53eae0275f9f8eb96733b5f2bce4259dcf2940ff83d57f5a0f6f992040dbaa"
+  },
+  "restore": {
+    "backupId": "3db9fa33-c10e-4646-82bc-fe99f3d8af35",
+    "artifactsSha256": "afce4f71413a8180f0af705c92e938b6f2af43f24687ab34a2d0f374d4cd1ce1",
+    "jwtRotated": true,
+    "sessionsFenced": true,
+    "inventoriesEqual": true
+  },
+  "health": {
+    "status": "ok"
+  },
+  "scope": {
+    "correctedWorker": true,
+    "primary5190Unchanged": true,
+    "modeOverrideOnlyTargetProcess": true,
+    "noApply": true
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "schemaVersion": "wfc.pf.selected-object-bottom-centre-delivery.v1",
+  "status": "STATIC_WEB_DELIVERED_REAL_BROWSER_CHECK_BLOCKED",
+  "branch": "pf-u9-selected-bounds-local-20261021",
+  "sourceRevision": "fee2d78861c7c0ec9b1dfcb5792f3f1487814992",
+  "checks": {
+    "hookPairPopup": {
+      "status": "PASS",
+      "tests": 120,
+      "runRevision": "3e9f3f614c854d1b559c73e7c4d7c33dff99e8b9",
+      "unchangedAt": "fee2d78861c7c0ec9b1dfcb5792f3f1487814992"
+    },
+    "viewerNode": {
+      "status": "PASS",
+      "tests": 48,
+      "revision": "fee2d78861c7c0ec9b1dfcb5792f3f1487814992"
+    },
+    "typescript": "PASS",
+    "scopedLint": "PASS",
+    "productionBuild": "PASS",
+    "independentReview": "PASS",
+    "realAalborgReread": "BLOCKED",
+    "actualBrowserUI": "BLOCKED",
+    "humanEngineeringAcceptance": "NOT_RUN"
+  },
+  "delivery": {
+    "status": "PASS",
+    "at": "2026-10-21T02:35:37.757Z",
+    "operatorSha256": "ac2ae3fd47fe250b14f1ce6cc791ca93b8f9d6bca92e2417180f6523d53da93e",
+    "sourceRevision": "fee2d78861c7c0ec9b1dfcb5792f3f1487814992",
+    "priorWebImage": "sha256:d7bb72be7953f6d11b4dffff3d6df1ac0e8e1d03cb37d8dc35a85aca1f43d0d8",
+    "newWebImage": "sha256:aa5e3afd5f1ebd8a387f3859a11773a5ff730b23d0be97811980eee70527bb0f",
+    "newWebContainer": "4d098f2e65b14efac495d85081faf025842fd0f00580fc98e9d224764e3556a5",
+    "apiImage": "sha256:3476333e9163d1f251f0eb5ddee67d4fe776af6c73e4f3c57e1ebd85ca443166",
+    "apiUnchanged": true,
+    "postgresUnchanged": true,
+    "minioUnchanged": true,
+    "nonWebIdentityPreserved": true,
+    "externalProcessStateChangesObserved": true,
+    "servedRuntimeSha256": "bf4c8f76e63a04d6f08c0a618238bb5a417219433df1fc7700072363340e06a8",
+    "assignBundle": "ProjectDetails-BMp99Zh3.js",
+    "healthStatus": 200,
+    "browserAcceptance": "NOT_RUN_SAVED_ORIGIN_REFUSAL",
+    "databaseAndModelWrites": "NONE",
+    "rollback": {
+      "bytes": 55296512,
+      "sha256": "63f69229a6b75bf05b40b4e1eaf1a2ce620cda4287a7436a5451199904edf3d7"
+    }
+  },
+  "cleanup": [
+    {
+      "ref": "wfc-pathfinder-web:8fffd6b8c896-selected-bounds-3e9f3f6",
+      "image": "sha256:5808309a12ebc22aaa3a5a4406b9aaa1b88fcd96e5815558f47528471dd6c926",
+      "status": "REMOVED_UNUSED_OWN_BUILD"
+    },
+    {
+      "ref": "sha256:bff56c450e07366b276f8fc20815c54bed0edbbd673adbdb543c9bbf26315cd0",
+      "status": "NOT_PRESENT"
+    }
+  ],
+  "limitations": [
+    "Manually assigned fixed-world points do not follow model revisions automatically.",
+    "The current context may display Saved endpoint and coordinates instead of the arbitrary selected object name after reload.",
+    "No real model Save, Review, Apply or new grant was performed.",
+    "No database/model data or computational API/runtime update was required."
+  ],
+  "automation": "PAUSED_PENDING_LEGITIMATE_BROWSER_ACCESS",
+  "nextHandoff": "docs/pathfinder/handoffs/PF-U7-selected-bounds-browser-check.md"
+}

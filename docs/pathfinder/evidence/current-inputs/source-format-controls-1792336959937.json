@@ -1,0 +1,119 @@
+{
+  "schemaVersion": "pathfinder.current-inputs.format-controls.v1",
+  "recordedAt": "2026-10-18T15:22:39.936Z",
+  "status": "PASS",
+  "source": [
+    {
+      "path": "scripts/pathfinder-current-inputs/source-copy.mjs",
+      "sha256": "e1740f639a55fe08f1a5dff440ad9c4b3985379764a810ba754e6c333811fadf"
+    },
+    {
+      "path": "scripts/pathfinder-current-inputs/source-lib.mjs",
+      "sha256": "e27790111fc3c959bb5ffbcc5e9a143ac8fd868c61847f01f3fba435c2ea3a3d"
+    },
+    {
+      "path": "scripts/pathfinder-current-inputs/source-lib.test.mjs",
+      "sha256": "c60d4a7ff8bc066831625583e69ad8dca70653712751063420f0cc399bd96964"
+    },
+    {
+      "path": "scripts/pathfinder-current-inputs/README-source.md",
+      "sha256": "fc2f477190782ab59ec0fd7f25e8bb46ac641da9cb55ff25c62816b570db07c5"
+    }
+  ],
+  "sourceSetSha256": "0638a253afe34a87f6d3f0ed20fd6d9fcc58026076f653a28dae979d19ee4c35",
+  "checks": [
+    {
+      "command": [
+        "node",
+        "--check",
+        "scripts/pathfinder-current-inputs/source-lib.mjs"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "error": null,
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": {
+        "path": "pathfinder-engine/.scratch/current-inputs-format-controls-4622416c-cd53-409f-85ba-f8dfe9601650/command-0.tap",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tests": null,
+      "pass": null,
+      "fail": null
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "scripts/pathfinder-current-inputs/source-copy.mjs"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "error": null,
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": {
+        "path": "pathfinder-engine/.scratch/current-inputs-format-controls-4622416c-cd53-409f-85ba-f8dfe9601650/command-1.tap",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tests": null,
+      "pass": null,
+      "fail": null
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "scripts/pathfinder-current-inputs/source-lib.test.mjs"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "error": null,
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": {
+        "path": "pathfinder-engine/.scratch/current-inputs-format-controls-4622416c-cd53-409f-85ba-f8dfe9601650/command-2.tap",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tests": null,
+      "pass": null,
+      "fail": null
+    },
+    {
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "scripts/pathfinder-current-inputs/source-lib.test.mjs"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "error": null,
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": {
+        "path": "pathfinder-engine/.scratch/current-inputs-format-controls-4622416c-cd53-409f-85ba-f8dfe9601650/command-3.tap",
+        "bytes": 7434,
+        "sha256": "8dde7442d101c5b3ee82dc06ea0d63e5adac218e8273116593b8f3a898372449"
+      },
+      "tests": 37,
+      "pass": 37,
+      "fail": 0
+    }
+  ],
+  "originalDatabaseQueriesByThisAgent": 0,
+  "runtimeOperationsByThisAgent": 0,
+  "actualObservation": {
+    "path": "docs/pathfinder/evidence/current-inputs/source-identity-20261018T1521Z.json",
+    "sha256": "ce997e9c50358e682831d3fc02ace8ceb14021936dc79657bd8e42796fc666ed"
+  },
+  "correction": "Use PostgreSQL host(inet_server_addr()) as serverAddress; retain raw inet text separately. All exact address/port/database/read-only/isolation predicates stay unchanged. No regexp, prefix matching or broad address acceptance.",
+  "preservedFailure": "docs/pathfinder/evidence/current-inputs/source-copy-20261018T1515Z.json",
+  "limitations": [
+    "Actual corrected original copy has not run; parent remains sole executor.",
+    "Focused tests use fake Client plus bounded no-DB watchdog children."
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "wfc.pfr0.local-baseline.v1",
+  "observedAt": "2026-10-18T21:26:18.682Z",
+  "startingCommit": "916256f0da14b8f21ca039b34bfae2de33b2bb0d",
+  "repositories": {
+    "candidate": {
+      "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local",
+      "head": "916256f0da14b8f21ca039b34bfae2de33b2bb0d",
+      "branch": "pf-r0-purpose-contracts-local-20261019",
+      "workingChanges": "M docs/pathfinder/automation-progress.md\n M docs/pathfinder/handoffs/PF-R0-purpose-revisions.md\n?? .pf0-work/\n?? .pf2-work/\n?? docs/pathfinder/34-r0-contracts.md\n?? docs/pathfinder/r0/",
+      "cachedAheadBehind": "42\t0"
+    },
+    "originalWfc": {
+      "path": "C:/Users/todor.chankov/source/WFC",
+      "head": "e1ef20202598bb4d3d78e4772cbbb9747ec23a00",
+      "branch": "main",
+      "workingChanges": "",
+      "cachedAheadBehind": "0\t0"
+    },
+    "canonicalPathFinder": {
+      "path": "C:/Users/todor.chankov/.codex/.chatgpt-projects/g-p-6ad0a317833c8191bf8e4e8c824a1056/work/review-pathfinder",
+      "head": "45c24bf5f433f13e102600b36f20327c77961d0a",
+      "branch": "master",
+      "workingChanges": "",
+      "cachedAheadBehind": "0\t0"
+    },
+    "olderPathFinder": {
+      "path": "C:/Users/todor.chankov/source/repos/MrToKa/PathFinder",
+      "head": "35f4fb46f7762503576bdacd9668f34a1be2b0ed",
+      "branch": "master",
+      "workingChanges": "M AddinRibbon/AddinRibbon.csproj\n M AddinRibbon/ClAddin.cs\n?? .vscode/",
+      "cachedAheadBehind": "0\t0"
+    }
+  }
+}

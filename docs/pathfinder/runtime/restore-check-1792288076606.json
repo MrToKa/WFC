@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS",
+  "checkedAt": "2026-10-18T01:47:56.605Z",
+  "source": {
+    "project": "wfc-pathfinder-local",
+    "port": 5190
+  },
+  "target": {
+    "project": "wfc-pathfinder-local-ad436ebc49b3",
+    "port": 5191,
+    "runtime": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pathfinder-local-restore-ad436ebc49b3"
+  },
+  "restore": {
+    "backupId": "719a6017-60d2-457c-8c79-f511af8590f9",
+    "artifactsSha256": "aec07d2c2c55a8e46e34fa0caad8a5e54546c4c47459906003a45d2f584b392b",
+    "jwtRotated": true,
+    "sessionsFenced": true,
+    "inventoriesEqual": true
+  },
+  "checks": {
+    "signingKeyDifferent": true,
+    "sourceBearerRejectedByTarget": 401,
+    "targetFreshBearerAccepted": 200,
+    "fullReadyResourceAuditPassed": true,
+    "databaseInventoryEqual": true,
+    "pathfinderArtifactInventoryEqual": true,
+    "modelSelectionPreserved": true,
+    "failedQuarantineStartRefused": true,
+    "primaryDemoRetirementRefused": true
+  },
+  "limits": [
+    "Initial PF3 runtime/schema only; later jobs/UI integrations require a final rebuilt drill.",
+    "Resource-session fencing operation passed, but this initial source had no pre-backup Viewer cookie positive control.",
+    "Same host/platform; human UI acceptance and cross-computer restore are separate."
+  ]
+}

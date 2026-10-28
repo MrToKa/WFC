@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "pathfinder.batched-capture.source-review.v1",
+  "recordedAt": "2026-10-18T16:08:12.770Z",
+  "status": "PASS",
+  "scope": "Independent read-only source review of root-owned actual-SQL wrapper, root C# input-scope/API/hook changes; no execution. Writer-owned driver listener closure checked only for integration boundaries.",
+  "sources": [
+    {
+      "path": "scripts/pathfinder-batched-capture/integration.mjs",
+      "sha256": "b935543c1cfef3b3447f4629af2edd7bd21d7577ff25e5a10e2443e1a1b2fe8b"
+    },
+    {
+      "path": "server/pathfinder/candidateEligibilityIntegration.ts",
+      "sha256": "7517fff5d33f11af70294256d003791410d0cfbf54d955b9cba3729248820f4d"
+    },
+    {
+      "path": "server/pathfinder/repository.ts",
+      "sha256": "86f4725340eea25fd6a038ffbc8db88cedb5ea8e90394adedcfd7c70464917f8"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Model/Contracts.cs",
+      "sha256": "86efb3515ab9816aa20d20ea10cc5b49fae5bd3d8e51f5e816c810a211394c15"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Model/SnapshotReader.cs",
+      "sha256": "7ed1837401dbcdb68a355bc0ee53ac7fc03e6b7b965eb73d078db4719af68fab"
+    },
+    {
+      "path": "src/api/pathfinder.ts",
+      "sha256": "8e9270ad276d7d466ca21f56dbd233f49c76b12eab1847214f2cdd98e946e171"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/usePathFinder.ts",
+      "sha256": "ab4cb8ff2bd60158b53b993403888661039d3ceb47d3a0632b45638539a464cd"
+    }
+  ],
+  "findings": [],
+  "closedFindings": [
+    "Host timeout/spawn/stdin flags and partial stdout survive into raw evidence before assertions.",
+    "Referenced 55s in-container watchdog covers awaited success stdout after pool.end(); timeout has flush callback plus 200ms forced exit.",
+    "Terminal poolError sampled after pool.end() and root caller retains Pool error listener.",
+    "Ownership/new5191/restore marker/exact API-PG network and SQL endpoint/synthetic marker are required before temporary SQL writes."
+  ],
+  "csharpEvidence": {
+    "path": "docs/pathfinder/evidence/batched-capture/csharp-input-1792339199298.json",
+    "recordedControls": 25,
+    "currentFourSourceHashesVerified": true,
+    "qualification": "Root controls attributed, not rerun by reviewer; proof flags remain false and legacy field omission preserved."
+  },
+  "hookContract": {
+    "status": "CONSISTENT_WITH_DOCUMENTED_COMMIT_BOUNDARY",
+    "detail": "Cancelled before upload cannot publish; an already-accepted artifact identity is retained with dirty/stale notice. Proposed POST abort change withdrawn; no server rollback claim."
+  },
+  "testsExecutedByReviewer": 0,
+  "databaseConnectionsByReviewer": 0,
+  "runtimeOperationsByReviewer": 0,
+  "limitations": [
+    "Source review does not establish actual integration12, fresh-image identity or real1527-name capture results."
+  ]
+}

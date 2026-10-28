@@ -1,0 +1,53 @@
+{
+  "status": "PASS",
+  "at": "2026-10-20T09:24:49.123Z",
+  "jobId": "a29cd4c2-2d86-4ee0-9cbb-5bc598552781",
+  "state": "complete",
+  "selectedCables": 1808,
+  "mvCables": 0,
+  "excludedMvCables": 332,
+  "categories": [
+    {
+      "mto": "Control",
+      "count": 345
+    },
+    {
+      "mto": "Instrumentation",
+      "count": 1206
+    },
+    {
+      "mto": "LV",
+      "count": 257
+    }
+  ],
+  "items": [
+    {
+      "state": "blocked",
+      "status": "locations_required",
+      "count": 1578
+    },
+    {
+      "state": "complete",
+      "status": "calculated",
+      "count": 230
+    }
+  ],
+  "calculatedProposals": 230,
+  "allFreshCalculate": true,
+  "allLengthLedgersValidatedAgainstDetails": true,
+  "allPreparedLoadedFromDisk": true,
+  "allRoutesSuccessful": true,
+  "activeJobs": 0,
+  "policyPaused": true,
+  "policyControlRevision": "7",
+  "cableFenceSha256": "0cc900778484ca50a770c30a3566564c5975c5649885793aed8b8e8e426f9155",
+  "applyReceipts": 0,
+  "reviews": 0,
+  "rawSha256": "ecea6d9a0907fffea621bec35e36bc73bcc8fa2b17a450e5175b017ab45374ca",
+  "engineeringAccepted": false,
+  "realApply": false,
+  "readOnly": true,
+  "rolledBack": true,
+  "scope": "Completed selected non-MV diagnostic proposals; no engineering acceptance or real Apply.",
+  "additionalCableFenceAt": "2026-10-20T09:25:06.173Z"
+}

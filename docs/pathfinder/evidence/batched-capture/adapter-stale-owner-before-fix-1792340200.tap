@@ -1,0 +1,42 @@
+TAP version 13
+# Subtest: a late cancelled sdk operation cannot clear its replacement capture
+not ok 1 - a late cancelled sdk operation cannot clear its replacement capture
+  ---
+  duration_ms: 10.4219
+  type: 'test'
+  location: 'C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\viewer-runtime\\test\\adapter.test.mjs:108:40'
+  failureType: 'testCodeFailure'
+  error: 'The local model or one of its resources could not be read.'
+  code: 'EXTRACTION_FAILED'
+  stack: |-
+    safeError (file:///C:/Users/todor.chankov/source/WFC-pathfinder-local/viewer-runtime/adapter.mjs:9:63)
+    Object.readModelCapture (file:///C:/Users/todor.chankov/source/WFC-pathfinder-local/viewer-runtime/adapter.mjs:252:87)
+    TestContext.<anonymous> (file:///C:/Users/todor.chankov/source/WFC-pathfinder-local/viewer-runtime/test/adapter.test.mjs:136:30)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+  ...
+# Subtest: a late cancelled digest operation cannot clear its replacement capture
+not ok 2 - a late cancelled digest operation cannot clear its replacement capture
+  ---
+  duration_ms: 2.6074
+  type: 'test'
+  location: 'C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\viewer-runtime\\test\\adapter.test.mjs:108:40'
+  failureType: 'testCodeFailure'
+  error: 'The local model or one of its resources could not be read.'
+  code: 'EXTRACTION_FAILED'
+  stack: |-
+    safeError (file:///C:/Users/todor.chankov/source/WFC-pathfinder-local/viewer-runtime/adapter.mjs:9:63)
+    Object.readModelCapture (file:///C:/Users/todor.chankov/source/WFC-pathfinder-local/viewer-runtime/adapter.mjs:252:87)
+    TestContext.<anonymous> (file:///C:/Users/todor.chankov/source/WFC-pathfinder-local/viewer-runtime/test/adapter.test.mjs:136:30)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 0
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 75.9443

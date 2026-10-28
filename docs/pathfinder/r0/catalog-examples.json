@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "wfc.pfr0.catalog-examples.v1",
+  "classification": "synthetic-contract-examples-not-business-rows",
+  "implementationStatus": "PROPOSED",
+  "catalog": {
+    "schemaVersion": "wfc.pf.catalog-copy-projection.v1",
+    "projectId": "10000000-0000-4000-8000-000000000001",
+    "catalogRevision": "12",
+    "source": {
+      "kind": "project-trays",
+      "projectionVersion": "lossless-tray-business-v1",
+      "privateSnapshotSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "rows": [
+      {
+        "trayId": "10000000-0000-4000-8000-000000000002",
+        "name": "BC022-2",
+        "purpose": "Power & Control",
+        "trayType": "SYNTHETIC-TRAY-TYPE",
+        "widthMm": "600.00000000000000001",
+        "heightMm": "100",
+        "declaredLengthMm": "12000.00000000000000001",
+        "includeGroundingCable": true,
+        "groundingCableTypeId": "10000000-0000-4000-8000-000000000003",
+        "useTrefoilClamps": false,
+        "trefoilClampSpacingMm": "600"
+      }
+    ],
+    "diagnostics": [],
+    "contentSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "negativeCases": [
+    {"id": "duplicate-normalized-route-name", "names": ["BC022-2", "bc022-2"], "expected": "needs-resolution"},
+    {"id": "missing-purpose", "purpose": null, "expected": "unconfigured"},
+    {"id": "missing-type-facts", "purpose": null, "diameterMm": null, "expected": "drawing-inputs-required"},
+    {"id": "foreign-grounding-type", "expected": "dependency-project-mismatch"},
+    {"id": "partly-applied-plan", "expected": "target-state-conflict"},
+    {"id": "source-numeric-roundtrip-through-number", "values": ["1.00000000000000001", "1.00000000000000002"], "expected": "distinct-lossless-values"}
+  ],
+  "notes": [
+    "Hashes are synthetic placeholders; this example is not a captured catalog.",
+    "No default routing permission follows from the textual purpose name.",
+    "Declared length is retained for audit and never replaces the engine geometry."
+  ]
+}

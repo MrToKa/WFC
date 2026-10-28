@@ -1,0 +1,21 @@
+{
+  "status": "PASS",
+  "scope": "Actual owned5191 nginx/API/current generated admin/serialized C# lane/off-thread trace worker/SQL publication; initial measured request through its owned web service, host5191 replay/list; retained converted diagnostic aggregate only",
+  "objects": 13,
+  "segments": 6,
+  "diagnostics": 13,
+  "exactCommandReplay": true,
+  "nonemptyHistoryList": true,
+  "elapsedMilliseconds": 20141,
+  "measurement": {
+    "intervalMilliseconds": 25,
+    "samples": 50,
+    "observedMaximumBytes": 315006976,
+    "exactPeak": false,
+    "includes": "Actual Linux API PID1 and descendants, Node worker-thread memory, serialized C# child if present; separate observer excluded"
+  },
+  "engineeringAccepted": false,
+  "nativeParity": "not-performed",
+  "traceId": "9bdde9be-422b-478c-a4ec-e1000701c573",
+  "fullProjectNetwork": "NOT_RUN"
+}

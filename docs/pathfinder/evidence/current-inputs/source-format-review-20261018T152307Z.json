@@ -1,0 +1,28 @@
+{
+  "schemaVersion":"pathfinder.current-inputs.format-review.v1",
+  "recordedAt":"2026-10-18T15:23:07Z",
+  "status":"NO_REMAINING_MATERIAL_FINDINGS",
+  "reviewer":"/root/pf_runtime_map",
+  "scope":"Static review of the minimal PostgreSQL inet display-format correction after the parent's actual identity-only observation; reviewer performs no live SQL or source-copy command.",
+  "source":[
+    {"path":"scripts/pathfinder-current-inputs/source-copy.mjs","sha256":"e1740f639a55fe08f1a5dff440ad9c4b3985379764a810ba754e6c333811fadf"},
+    {"path":"scripts/pathfinder-current-inputs/source-lib.mjs","sha256":"e27790111fc3c959bb5ffbcc5e9a143ac8fd868c61847f01f3fba435c2ea3a3d"},
+    {"path":"scripts/pathfinder-current-inputs/source-lib.test.mjs","sha256":"c60d4a7ff8bc066831625583e69ad8dca70653712751063420f0cc399bd96964"},
+    {"path":"scripts/pathfinder-current-inputs/README-source.md","sha256":"fc2f477190782ab59ec0fd7f25e8bb46ac641da9cb55ff25c62816b570db07c5"}
+  ],
+  "actualIdentityEvidence":{"path":"docs/pathfinder/evidence/current-inputs/source-identity-20261018T1521Z.json","sha256":"ce997e9c50358e682831d3fc02ace8ceb14021936dc79657bd8e42796fc666ed","scope":"Parent-executed identity-only observation: raw172.17.0.2/32, SQL host172.17.0.2, port5432, databasewfc_app, effective/default read-only on, repeatable read, transportError false; businessQueries NOT_RUN."},
+  "reviewedCorrection":[
+    "The identity SELECT now preserves inet_server_addr()::text as rawServerAddress and gets serverAddress from PostgreSQL host(inet_server_addr()).",
+    "The exact serverAddress, port, database, effective/default read-only, repeatable-read and transport predicates are unchanged. There is no prefix matching, regexp stripping, relaxed address set or bypass.",
+    "Identity-only output still reports both distinct values and returns before business queries. The normal snapshot retains the raw value alongside canonical serverAddress in transaction provenance.",
+    "The unchanged original endpoint/container binding, raw Client late configuration, no-bootstrap process argv, watchdog/output bounds and durable-before-assert evidence remain applicable.",
+    "Focused controls assert the SQL host/raw aliases, accept the observed formatting and refuse a wrong canonical host before any business query."
+  ],
+  "ownerExecutedChecks":{"receipt":"docs/pathfinder/evidence/current-inputs/source-format-controls-1792336959937.json","receiptSha256":"905f918b1efa648a8d8477e16270a09fc85c1f672e1f043ccb9e9e2c23026020","nodeTestPass":37,"nodeTestFail":0,"nodeSyntaxPass":3,"rawTestSha256":"8dde7442d101c5b3ee82dc06ea0d63e5adac218e8273116593b8f3a898372449","attribution":"Executed by source owner. Reviewer verified current file/receipt/raw-output hashes and read the delta without rerunning tests."},
+  "reviewerActions":{"testsExecuted":0,"databaseQueries":0,"containerOperations":0,"applicationEdits":0,"localReviewReceiptWrites":1},
+  "limitations":[
+    "The original pre-business SOURCE_SQL_SERVER_IDENTITY failure remains FAIL at source-copy-20261018T1515Z.json; it is never relabelled.",
+    "Observed identity formatting explains the old comparison mismatch. It is not a business-data copy or complete content-validation result.",
+    "The corrected original copy still requires the parent coordinator's new bound execution and actual project/model/resource/cable checks."
+  ]
+}

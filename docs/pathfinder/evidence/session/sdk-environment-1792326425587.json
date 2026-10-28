@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "pathfinder.session.sdk-environment.v1",
+  "recordedAtUtc": "2026-10-18T12:27:05.5813757Z",
+  "fixtureBuildStartedAt": "2026-10-18T12:24:48.4162225Z",
+  "fixtureRoot": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\session-memory-fixture-d6fc3563-37d7-4a65-84ce-1817912b9100",
+  "observedSdkMessage": "Installed an ASP.NET Core HTTPS development certificate.",
+  "rawBuildLogCapturedAtExecution": false,
+  "logEvidence": "Observed SDK message excerpt copied from the completed tool result; no build rerun.",
+  "certificateCreation": "UNKNOWN: no prior store inventory; NotBefore is validity metadata, not proof of store creation.",
+  "inspectedStore": "CurrentUser/My",
+  "filter": "Subject CN=localhost plus ASP.NET Core HTTPS extension OID1.3.6.1.4.1.311.84.1.1",
+  "certificates": [
+    {
+      "Subject": "CN=localhost",
+      "FriendlyName": "ASP.NET Core HTTPS development certificate",
+      "NotBeforeUtc": "2026-07-29T11:42:12.0000000Z",
+      "NotAfterUtc": "2027-07-29T11:42:12.0000000Z",
+      "StoreCreationMetadata": "Not exposed by the certificate provider; no prior certificate-store inventory exists."
+    }
+  ],
+  "privateKeyAccess": false,
+  "certificatesChangedOrRemoved": false,
+  "futureBuildEnvironment": {
+    "DOTNET_GENERATE_ASPNET_CERTIFICATE": "false",
+    "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
+    "DOTNET_SKIP_FIRST_TIME_EXPERIENCE": "1"
+  }
+}

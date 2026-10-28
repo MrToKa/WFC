@@ -1,0 +1,9 @@
+{
+  "source": "https://raw.githubusercontent.com/moby/profiles/6fe7deb1b9fb7c0397a4593480d7d22b9ee8caef/seccomp/default.json",
+  "commit": "6fe7deb1b9fb7c0397a4593480d7d22b9ee8caef",
+  "bytes": 17867,
+  "sha256": "6416b47770785a41ac59073cdc77d9fe98517df2799dc83ef207e622de3053f6",
+  "retrievedAt": "2026-10-19T08:46:48.245Z",
+  "modification": "Source bytes unchanged; runtime adds clone,setns,unshare,chroot rules. Chromium requires chroot inside its own user namespace; the container still drops all capabilities.",
+  "chromiumSandboxSource": "https://chromium.googlesource.com/chromium/src/+/290486f6ce9270fd05316988f76de73e4083e50c/sandbox/linux/services/credentials.cc"
+}

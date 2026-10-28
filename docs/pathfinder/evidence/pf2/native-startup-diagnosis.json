@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-10-17T20:51:51.1082410Z",
+  "status": "BLOCKED",
+  "implemented": "Unique net48 oracle and STA runner compiled successfully; capture path not executed",
+  "failedRun": "native-20261017-204843-0c58fb21",
+  "failedAt": "new NavisworksApplication(), before OpenFile/AddPluginAssembly",
+  "error": "Autodesk.Navisworks.Api.Automation.AutomationException: Failed to startup Navisworks: -2146959355\r\n   at Autodesk.Navisworks.Api.Automation.NavisworksApplication.Init(Boolean runningInstance)\r\n   at NativeOracleRunner.Run(String[] args)\r\n   at NativeOracleRunner.Main(String[] args)\r\n",
+  "hresult": "0x80080005",
+  "apiDocumentation": "D:/Programs/Navisworks Manage 2027/Autodesk.Navisworks.Automation.xml:53-59",
+  "registration": {
+    "progId": "Navisworks.Document.24",
+    "clsid": "{A64E673A-2D7A-5695-B8F2-CF38EA882F89}",
+    "localServer32": "D:\\Programs\\Navisworks Manage 2027\\Roamer.exe",
+    "registryModified": false
+  },
+  "relatedDcomEvents": [
+    {
+      "utc": "2026-10-17T20:49:56.7775525Z",
+      "eventId": 10010,
+      "message": "The server {A64E673A-2D7A-5695-B8F2-CF38EA882F89} did not register with DCOM within the required timeout."
+    }
+  ],
+  "remainingRelatedProcesses": [],
+  "nativeDataCaptured": false,
+  "originalOrCopySaved": false,
+  "sourcePreservationReceipt": "native-20261017-204843-0c58fb21.json",
+  "futureOption": {
+    "state": "NOT_RUN",
+    "commandLineApproach": "Owned Roamer process with -HideGui -DisableProgress -OpenFile <owned-copy> -AddPluginAssembly <unique-oracle> -ExecuteAddInPlugin PathFinderNativeOracle.PF2L <output> <specification> -Exit; no save switches",
+    "officialReference": "https://help.autodesk.com/cloudhelp/2022/ENU/Navisworks/files/GUID-3891FB9F-7BF1-4510-A1EE-121E975C0ACE.htm",
+    "scope": "Documented command-line switches may avoid DCOM startup path; actual installed2027 behavior/licence availability remains unverified; no licence/auth dialog automation"
+  }
+}

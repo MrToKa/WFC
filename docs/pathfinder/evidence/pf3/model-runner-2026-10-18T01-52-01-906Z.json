@@ -1,0 +1,152 @@
+{
+  "schemaVersion": "pathfinder.model.runner.tests.v1",
+  "observedAtUtc": "2026-10-18T01:52:07.898Z",
+  "scope": "synthetic-private-model-worker-and-frozen-saved-design-controls",
+  "status": "PASS",
+  "passed": 27,
+  "checks": [
+    {
+      "name": "strict-prepare-and-private-fit-cache",
+      "status": "PASS",
+      "details": {
+        "key": "42c996369e7f6b0aba3d24c4e01560ab6f6c19e42122f33a47c589738446fcf5",
+        "readiness": "needs_review",
+        "counts": {
+          "validatedBends": 0,
+          "fallbackBends": 0,
+          "validatedStraights": 0,
+          "fallbackStraights": 1,
+          "fallbackClearances": 0
+        },
+        "cacheScope": "fitted-centerlines-ports-and-canonical-mesh;surface-bvh-reconstructed-on-disk-load;graph-per-calculation",
+        "loadedFromDisk": false,
+        "objectCount": 1,
+        "segmentCount": 1,
+        "diagnosticCount": 1,
+        "diagnostics": [
+          "tray-1: no repeated mesh end sections prove a straight extrusion"
+        ],
+        "diagnosticsTruncated": false,
+        "engineeringAccepted": false
+      }
+    },
+    {
+      "name": "real-core-calculation-instrumentation-maps-to-control",
+      "status": "PASS",
+      "details": {
+        "length": 10,
+        "design": {
+          "lengthBeforePercentageMeters": "16",
+          "unroundedLengthMeters": "17.6",
+          "designLengthMeters": "18"
+        },
+        "engineeringAccepted": false
+      }
+    },
+    {
+      "name": "null-secondary-does-not-become-zero-when-flagged",
+      "status": "PASS"
+    },
+    {
+      "name": "unknown-category-requires-resolution",
+      "status": "PASS"
+    },
+    {
+      "name": "nonfinite-coordinate-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "cross-project-snapshot-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "snapshot-byte-integrity-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "path-injection-identity-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "unexpected-proof-property-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "duplicate-json-member-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "hard-worker-deadline",
+      "status": "PASS"
+    },
+    {
+      "name": "exact-decimal-underflow-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "smallest-exact-decimal-is-fixed-and-not-rounded-or-exponential",
+      "status": "PASS"
+    },
+    {
+      "name": "null-setting-revision-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "null-required-scalar-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "missing-explicit-private-root-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "unassigned-model-category-is-not-invented",
+      "status": "PASS"
+    },
+    {
+      "name": "frozen-saved-design-design-no-secondary",
+      "status": "PASS"
+    },
+    {
+      "name": "frozen-saved-design-design-one-secondary",
+      "status": "PASS"
+    },
+    {
+      "name": "frozen-saved-design-design-one-secondary-reverse",
+      "status": "PASS"
+    },
+    {
+      "name": "frozen-saved-design-design-both-secondary",
+      "status": "PASS"
+    },
+    {
+      "name": "frozen-saved-design-design-zero-secondary-replacement",
+      "status": "PASS"
+    },
+    {
+      "name": "frozen-saved-design-design-exact-integer",
+      "status": "PASS"
+    },
+    {
+      "name": "frozen-saved-design-design-ceiling-fraction",
+      "status": "PASS"
+    },
+    {
+      "name": "frozen-saved-design-design-zero",
+      "status": "PASS"
+    },
+    {
+      "name": "frozen-saved-design-design-invalid-negative",
+      "status": "PASS"
+    },
+    {
+      "name": "frozen-saved-design-design-approach-exceeds-length",
+      "status": "PASS"
+    }
+  ],
+  "scratch": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\modelrunner-b57a0692-ba7b-4070-8602-1c2893ab1c56",
+  "sourceSha256": "b1fcd6b3e1d6d44cbabae19ca5d4c1490296639601855634ae6f40c927d14b83",
+  "snapshotSha256": "8e68809bf0165f82790aa759bba7217afb8eba8e5192c924e213d402ec79baed",
+  "corePinsChanged": false,
+  "nativeParity": "BLOCKED; not established by synthetic controls"
+}

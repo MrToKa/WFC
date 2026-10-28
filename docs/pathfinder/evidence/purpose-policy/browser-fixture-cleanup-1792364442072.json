@@ -1,0 +1,14 @@
+{
+  "status": "PASS",
+  "removed": {
+    "projects": 1,
+    "trays": 2,
+    "users": 1,
+    "policyHistory": 5
+  },
+  "fixtureId": "2e074638-e5a6-4897-bbb4-e27686e17750",
+  "schemaVersion": "pathfinder.purpose-policy.fixture-cleanup.v1",
+  "owner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+  "apiId": "2d24fef0506ad34629dac1da02a97b5834619893eb28714089bcd2499d359f41",
+  "finishedAt": "2026-10-18T23:00:42.072Z"
+}

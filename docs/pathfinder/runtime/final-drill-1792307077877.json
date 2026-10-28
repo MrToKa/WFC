@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS",
+  "checkedAt": "2026-10-18T07:04:21.705Z",
+  "scope": "Same-host cold isolated PF database/MinIO/staging/artifact/images restore with actual Viewer cookie and JWT positive/negative controls.",
+  "backupId": "2ae6f51b-34ee-46d4-8594-757f882fd216",
+  "backup": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf-manual-backup-20261018-0703",
+  "sourceProject": "wfc-pathfinder-local",
+  "targetProject": "wfc-pathfinder-local-f5ba2d9a6783",
+  "targetRuntime": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pathfinder-local-restore-f5ba2d9a6783",
+  "sourceImages": {
+    "api": "sha256:286e0d43fb12d23c77727eb2c899eac161571d98998e0eb0f212911006adb500",
+    "web": "sha256:500345218d8c3f4629725ce6b1d3cbeeb6dc12f7b4cb1f06d5b92ecf8949ba64"
+  },
+  "targetImages": {
+    "api": "sha256:286e0d43fb12d23c77727eb2c899eac161571d98998e0eb0f212911006adb500",
+    "web": "sha256:500345218d8c3f4629725ce6b1d3cbeeb6dc12f7b4cb1f06d5b92ecf8949ba64"
+  },
+  "restore": {
+    "backupId": "2ae6f51b-34ee-46d4-8594-757f882fd216",
+    "artifactsSha256": "dc07cc99536316fb3f02a533c82d7eea9d548ddf64e488f30c84f2ff15b3f3b9",
+    "jwtRotated": true,
+    "sessionsFenced": true,
+    "inventoriesEqual": true
+  },
+  "crashRecovery": {
+    "status": "PASS",
+    "scope": "Actual extra-target API namespace/SIGKILL interruption and natural lease recovery; no SQL lease manipulation.",
+    "targetProject": "wfc-pathfinder-local-f5ba2d9a6783",
+    "targetApiId": "c82fd7ef292faa398b216d9acb1bb56e5ff72b432fb27bfbc668c6302088febf",
+    "jobId": "7a1dc6ec-7625-4160-b92a-097ead044d3c",
+    "disposableCableCount": 64,
+    "observedDotnetProcesses": [
+      {
+        "pid": 14791,
+        "parentPid": 13532,
+        "command": "dotnet"
+      },
+      {
+        "pid": 14803,
+        "parentPid": 14791,
+        "command": "dotnet"
+      }
+    ],
+    "beforeCrash": {
+      "status": "running",
+      "completed": 7,
+      "attempts": 1
+    },
+    "stopped": {
+      "exitCode": 137,
+      "pid": 0,
+      "oomKilled": false,
+      "stoppedTopRefused": true
+    },
+    "persistedAtCrash": {
+      "state": "running",
+      "attempts": 1,
+      "completed": 8,
+      "total": 64,
+      "leaseUntil": "2026-10-18T07:04:03.945766+00:00",
+      "runningItems": 1
+    },
+    "afterRecovery": {
+      "status": "complete",
+      "completed": 64,
+      "total": 64,
+      "attempts": 2,
+      "elapsedAfterRestartMs": 46113
+    },
+    "publication": {
+      "proposalCount": 64,
+      "distinctCableCount": 64,
+      "duplicateGroups": 0,
+      "unchangedCables": 64,
+      "adminCurrent": true,
+      "loginCurrent": true
+    },
+    "sourceHealthDuringTargetCrash": 200,
+    "cleanup": "Exact new target jobs received durable cancellation; disposable rows remain only in the extra target, retired by the enclosing successful drill.",
+    "limits": [
+      "Container PID namespace stopped and old observed host PIDs absent after restart; no host-wide process inspection.",
+      "Recovery test performs no cable Apply.",
+      "Only this restored synthetic fixture was interrupted."
+    ]
+  },
+  "checks": {
+    "sourceCookieBefore": 200,
+    "sourceCookieAfterSourceResume": 200,
+    "sourceCookieAfterExtraRestoreAndCrash": 200,
+    "copiedCookieOnTarget": 410,
+    "copiedCookieFailure": "SESSION_REVOKED",
+    "oldBearerOnTarget": 401,
+    "freshTargetCookie": 200,
+    "activeModelSelectionPreserved": true,
+    "realModelReadback": {
+      "versions": 2,
+      "resources": 684,
+      "bytes": 878015606
+    },
+    "pathfinderArtifacts": {
+      "files": 13,
+      "bytes": 2547207,
+      "sha256": "dc07cc99536316fb3f02a533c82d7eea9d548ddf64e488f30c84f2ff15b3f3b9"
+    }
+  },
+  "limits": [
+    "Same host/platform; cross-computer restore is NOT_RUN.",
+    "Native/converted engineering parity remains unaccepted.",
+    "No original application/database/storage/container writes."
+  ],
+  "retirement": {
+    "status": "PASS",
+    "project": "wfc-pathfinder-local-f5ba2d9a6783",
+    "removedVerifiedRestoreFixtureOnly": true,
+    "resources": {
+      "containers": [],
+      "volumes": [],
+      "networks": []
+    }
+  }
+}

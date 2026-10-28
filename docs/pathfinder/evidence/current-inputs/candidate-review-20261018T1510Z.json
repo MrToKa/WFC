@@ -1,0 +1,13 @@
+{
+  "schemaVersion":"pathfinder.current-inputs.candidate-review.v1",
+  "reviewer":"/root",
+  "recordedAtUtc":"2026-10-18T15:09:59Z",
+  "status":"NO_REMAINING_MATERIAL_FINDINGS",
+  "method":"Read-only candidate CLI/library/controls/README source review. Root did not rerun the owner's tests.",
+  "resolvedFindings":["Legitimate all-null cable type identity/name triple is accepted; mixed/foreign triples still fail.","Portable package UUID equality is diagnostic only when authoritative converted fingerprint and resource pins match.","Mapped-only object candidates remain separately labelled, outside ordinary reachable-tree counts."],
+  "source":{"candidate-audit.mjs":"4b1dff94b037bb75adde819b89c1b4442cf0e2a322cb1fdc77b385b5e7c98022","candidate-lib.mjs":"5c73eaaf54dac1979c14b06554e9c78760603b2f1edf6efc1c307340ee2bbf9e","candidate-lib.test.mjs":"584bae9b4975abe75a6a3255467eb9ea87ea4d7970d0f2c8e0304543444b951b","README-candidates.md":"55a8495500b4d5ec64ac68abfb5557671c94114870af99135a93fafec9bdb13f"},
+  "ownerValidation":{"receipt":"docs/pathfinder/evidence/current-inputs/candidate-source-controls-1792336100796.json","sha256":"723ae9209723673294e0f9088cdde1e65018ec4b6d4b42c99b39bf99aed0e2bb","focusedControls":"48/48 on previous CLI2f017b4c and final library/test bytes;18 SDK differential synthetic object comparisons","finalDelta":"CLI descriptive SDK offset literals only, final syntax and1/1 failure-receipt control PASS; no library/test/receipt-binding behavior delta"},
+  "sourceCopyReceiptContract":"Exact schema/statusPASS/preservationPASS/checkedModelFingerprint/privateSnapshot path+bytes+hash; no heuristic aliases.",
+  "actualBusinessAudit":"NOT_RUN_PENDING_GUARDED_SOURCE_COPY",
+  "limitations":"Metadata candidates are not equipment role, native visibility, bottom-centre geometry, confirmed binding, routing readiness or engineering acceptance. No actual DB/runtime action or original write by this reviewer."
+}

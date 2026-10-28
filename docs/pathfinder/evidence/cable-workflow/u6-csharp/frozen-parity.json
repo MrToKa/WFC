@@ -1,0 +1,1359 @@
+{
+  "stage": "PF-1",
+  "check": "golden-replay-and-boundaries",
+  "status": "PASS",
+  "observedAtUtc": "2026-10-20T19:39:26.8340003+00:00",
+  "coreAssembly": "PathFinder.Core",
+  "coreAssemblyPath": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\direct-secondary-u6-b5b39e66-132e-43ec-a265-c65ceef9a764\\artifacts\\bin\\PathFinder.Parity\\release\\PathFinder.Core.dll",
+  "coreAssemblySha256": "fa6af65fba588a26f326e41217269b601bc6bdfad136ba3b2fc0ac7d5bb9d662",
+  "inputsSha256": "1fd49428742284e30071a0b293cca0a8f5eff8b47a2aaab10f1184cf73cd7e78",
+  "expectedSha256": "43ea08d2e7e5ff4e56d1fe5c4435bada300a215b0da3164f5179d27ca4b23a5a",
+  "numericAbsoluteToleranceMeters": 1E-09,
+  "discreteFieldsExact": true,
+  "decimalStringsExact": true,
+  "replayCaseCount": 43,
+  "passedChecks": 215,
+  "failedChecks": 0,
+  "limitations": [
+    "Synthetic frozen inputs only; native/converted real-model parity not established.",
+    "Test-only internal constructors are used for synthetic design fixtures; production transport validation is tested separately."
+  ],
+  "cases": [
+    {
+      "id": "interior-endpoint-projections",
+      "kind": "calculate",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "secondary-equality",
+      "kind": "calculate",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "secondary-both-beyond",
+      "kind": "calculate",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "secondary-from-only",
+      "kind": "calculate",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "reverse-secondary",
+      "kind": "calculate",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "gap-exact-tolerance",
+      "kind": "calculate",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "gap-over-tolerance",
+      "kind": "calculate",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "physical-micrometre-no-gap",
+      "kind": "calculate",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "category-forbidden-bridge",
+      "kind": "calculate",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "category-control-allowed",
+      "kind": "calculate",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "three-dimensional-diagonal",
+      "kind": "calculate",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "port-only-interior-crossing",
+      "kind": "calculate",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "nearest-three-dimensional-approach",
+      "kind": "calculate",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "preferred-vertical-approach",
+      "kind": "calculate",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "vertical-nearby-band-equality",
+      "kind": "calculate",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "vertical-outside-nearby-band",
+      "kind": "calculate",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "graph-node-limit",
+      "kind": "calculate",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "ordered-lookup",
+      "kind": "lookup",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "ordered-lookup-reverse",
+      "kind": "lookup",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "lookup-missing-labels",
+      "kind": "lookup",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "lookup-closed-loop-mainspan",
+      "kind": "lookup",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "lookup-branch-mainspan",
+      "kind": "lookup",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "parse-secondary-reentry",
+      "kind": "parse",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "parse-adjacent-duplicate",
+      "kind": "parse",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "parse-numeric-label",
+      "kind": "parse",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "parse-marker-only",
+      "kind": "parse",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "parse-malformed",
+      "kind": "parse",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "design-no-secondary",
+      "kind": "design",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "design-one-secondary",
+      "kind": "design",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "design-one-secondary-reverse",
+      "kind": "design",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "design-both-secondary",
+      "kind": "design",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "design-zero-secondary-replacement",
+      "kind": "design",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "design-exact-integer",
+      "kind": "design",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "design-ceiling-fraction",
+      "kind": "design",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "design-zero",
+      "kind": "design",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "design-invalid-negative",
+      "kind": "design",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "design-approach-exceeds-length",
+      "kind": "design",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "hierarchy-logical-owner",
+      "kind": "name",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "hierarchy-qualified-component",
+      "kind": "name",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "geometry-explicit-fallback",
+      "kind": "geometry",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "geometry-box-mesh-straight",
+      "kind": "geometry",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "geometry-measured-circular-30",
+      "kind": "geometry-route",
+      "status": "PASS",
+      "differences": []
+    },
+    {
+      "id": "geometry-measured-vertical-90-with-support",
+      "kind": "geometry-route",
+      "status": "PASS",
+      "differences": []
+    }
+  ],
+  "checks": [
+    {
+      "name": "frozen-inputs-sha256",
+      "status": "PASS",
+      "detail": "1fd49428742284e30071a0b293cca0a8f5eff8b47a2aaab10f1184cf73cd7e78"
+    },
+    {
+      "name": "frozen-expected-sha256",
+      "status": "PASS",
+      "detail": "43ea08d2e7e5ff4e56d1fe5c4435bada300a215b0da3164f5179d27ca4b23a5a"
+    },
+    {
+      "name": "frozen-case-count",
+      "status": "PASS",
+      "detail": "input=43;expected=43"
+    },
+    {
+      "name": "golden:interior-endpoint-projections",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:interior-endpoint-projections",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:secondary-equality",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:secondary-equality",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:secondary-both-beyond",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:secondary-both-beyond",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:secondary-from-only",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:secondary-from-only",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:reverse-secondary",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:reverse-secondary",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:gap-exact-tolerance",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:gap-exact-tolerance",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:gap-over-tolerance",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:gap-over-tolerance",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:physical-micrometre-no-gap",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:physical-micrometre-no-gap",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:category-forbidden-bridge",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:category-forbidden-bridge",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:category-control-allowed",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:category-control-allowed",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:three-dimensional-diagonal",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:three-dimensional-diagonal",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:port-only-interior-crossing",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:port-only-interior-crossing",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:nearest-three-dimensional-approach",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:nearest-three-dimensional-approach",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:preferred-vertical-approach",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:preferred-vertical-approach",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:vertical-nearby-band-equality",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:vertical-nearby-band-equality",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:vertical-outside-nearby-band",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:vertical-outside-nearby-band",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:graph-node-limit",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:graph-node-limit",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:ordered-lookup",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:ordered-lookup",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:ordered-lookup-reverse",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:ordered-lookup-reverse",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:lookup-missing-labels",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:lookup-missing-labels",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:lookup-closed-loop-mainspan",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:lookup-closed-loop-mainspan",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:lookup-branch-mainspan",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:lookup-branch-mainspan",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:parse-secondary-reentry",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:parse-secondary-reentry",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:parse-adjacent-duplicate",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:parse-adjacent-duplicate",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:parse-numeric-label",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:parse-numeric-label",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:parse-marker-only",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:parse-marker-only",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:parse-malformed",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:parse-malformed",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:design-no-secondary",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:design-no-secondary",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:design-one-secondary",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:design-one-secondary",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:design-one-secondary-reverse",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:design-one-secondary-reverse",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:design-both-secondary",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:design-both-secondary",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:design-zero-secondary-replacement",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:design-zero-secondary-replacement",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:design-exact-integer",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:design-exact-integer",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:design-ceiling-fraction",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:design-ceiling-fraction",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:design-zero",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:design-zero",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:design-invalid-negative",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:design-invalid-negative",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:design-approach-exceeds-length",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:design-approach-exceeds-length",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:hierarchy-logical-owner",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:hierarchy-logical-owner",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:hierarchy-qualified-component",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:hierarchy-qualified-component",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:geometry-explicit-fallback",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:geometry-explicit-fallback",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:geometry-box-mesh-straight",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:geometry-box-mesh-straight",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:geometry-measured-circular-30",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:geometry-measured-circular-30",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "golden:geometry-measured-vertical-90-with-support",
+      "status": "PASS",
+      "detail": "matched"
+    },
+    {
+      "name": "repeat:geometry-measured-vertical-90-with-support",
+      "status": "PASS",
+      "detail": "same input serialized twice against extracted DLL"
+    },
+    {
+      "name": "comparator-rejects:discrete-integer",
+      "status": "PASS",
+      "detail": "control.connectionGapCount: exact discrete value differs"
+    },
+    {
+      "name": "comparator-rejects:ordered-ids",
+      "status": "PASS",
+      "detail": "control[0]: string differs (a != b); control[1]: string differs (b != a)"
+    },
+    {
+      "name": "comparator-rejects:decimal-string",
+      "status": "PASS",
+      "detail": "control: string differs (12.34567890123456789 != 12.34567890123456788)"
+    },
+    {
+      "name": "comparator-rejects:numeric-above-tolerance",
+      "status": "PASS",
+      "detail": "control: 1 != 1.00000001; delta=9.99999993922529E-09"
+    },
+    {
+      "name": "comparator-accepts:within-tolerance",
+      "status": "PASS",
+      "detail": "absolute delta 1e-10m"
+    },
+    {
+      "name": "adapter-fixture:interior-endpoint-projections",
+      "status": "PASS",
+      "detail": "calculated; full route compared; "
+    },
+    {
+      "name": "adapter-fixture:secondary-equality",
+      "status": "PASS",
+      "detail": "calculated; full route compared; "
+    },
+    {
+      "name": "adapter-fixture:secondary-both-beyond",
+      "status": "PASS",
+      "detail": "calculated; full route compared; "
+    },
+    {
+      "name": "adapter-fixture:secondary-from-only",
+      "status": "PASS",
+      "detail": "calculated; full route compared; "
+    },
+    {
+      "name": "adapter-fixture:reverse-secondary",
+      "status": "PASS",
+      "detail": "calculated; full route compared; "
+    },
+    {
+      "name": "adapter-fixture:gap-exact-tolerance",
+      "status": "PASS",
+      "detail": "calculated; full route compared; "
+    },
+    {
+      "name": "adapter-fixture:gap-over-tolerance",
+      "status": "PASS",
+      "detail": "no_path; full route compared; "
+    },
+    {
+      "name": "adapter-fixture:physical-micrometre-no-gap",
+      "status": "PASS",
+      "detail": "calculated; full route compared; "
+    },
+    {
+      "name": "adapter-fixture:category-forbidden-bridge",
+      "status": "PASS",
+      "detail": "no_path; full route compared; "
+    },
+    {
+      "name": "adapter-fixture:category-control-allowed",
+      "status": "PASS",
+      "detail": "calculated; full route compared; "
+    },
+    {
+      "name": "adapter-fixture:three-dimensional-diagonal",
+      "status": "PASS",
+      "detail": "calculated; full route compared; "
+    },
+    {
+      "name": "adapter-fixture:port-only-interior-crossing",
+      "status": "PASS",
+      "detail": "no_path; full route compared; "
+    },
+    {
+      "name": "adapter-fixture:nearest-three-dimensional-approach",
+      "status": "PASS",
+      "detail": "calculated; full route compared; "
+    },
+    {
+      "name": "adapter-fixture:preferred-vertical-approach",
+      "status": "PASS",
+      "detail": "calculated; full route compared; "
+    },
+    {
+      "name": "adapter-fixture:vertical-nearby-band-equality",
+      "status": "PASS",
+      "detail": "calculated; full route compared; "
+    },
+    {
+      "name": "adapter-fixture:vertical-outside-nearby-band",
+      "status": "PASS",
+      "detail": "calculated; full route compared; "
+    },
+    {
+      "name": "adapter-fixture:graph-node-limit",
+      "status": "PASS",
+      "detail": "resource_limit; full route compared; "
+    },
+    {
+      "name": "adapter-fixture:ordered-lookup",
+      "status": "PASS",
+      "detail": "calculated; full route compared; "
+    },
+    {
+      "name": "adapter-fixture:ordered-lookup-reverse",
+      "status": "PASS",
+      "detail": "calculated; full route compared; "
+    },
+    {
+      "name": "adapter-fixture:lookup-missing-labels",
+      "status": "PASS",
+      "detail": "no_path; full route compared; "
+    },
+    {
+      "name": "adapter-fixture:lookup-closed-loop-mainspan",
+      "status": "PASS",
+      "detail": "calculated; full route compared; "
+    },
+    {
+      "name": "adapter-fixture:lookup-branch-mainspan",
+      "status": "PASS",
+      "detail": "calculated; full route compared; "
+    },
+    {
+      "name": "adapter-fixture:parse-secondary-reentry",
+      "status": "PASS",
+      "detail": "parsed; codes"
+    },
+    {
+      "name": "adapter-fixture:parse-adjacent-duplicate",
+      "status": "PASS",
+      "detail": "parsed; codes"
+    },
+    {
+      "name": "adapter-fixture:parse-numeric-label",
+      "status": "PASS",
+      "detail": "parsed; codes"
+    },
+    {
+      "name": "adapter-fixture:parse-marker-only",
+      "status": "PASS",
+      "detail": "invalid_request"
+    },
+    {
+      "name": "adapter-fixture:parse-malformed",
+      "status": "PASS",
+      "detail": "invalid_request"
+    },
+    {
+      "name": "adapter-fixture:hierarchy-logical-owner",
+      "status": "PASS",
+      "detail": "resolved; routeCode"
+    },
+    {
+      "name": "adapter-fixture:hierarchy-qualified-component",
+      "status": "PASS",
+      "detail": "resolved; routeCode"
+    },
+    {
+      "name": "adapter-fixture:geometry-explicit-fallback",
+      "status": "PASS",
+      "detail": "geometry_ready; "
+    },
+    {
+      "name": "adapter-fixture:geometry-box-mesh-straight",
+      "status": "PASS",
+      "detail": "geometry_ready; "
+    },
+    {
+      "name": "adapter-fixture:geometry-measured-circular-30",
+      "status": "PASS",
+      "detail": "calculated; "
+    },
+    {
+      "name": "adapter-fixture:geometry-measured-vertical-90-with-support",
+      "status": "PASS",
+      "detail": "calculated; "
+    },
+    {
+      "name": "adapter-valid-calculation",
+      "status": "PASS",
+      "detail": "calculated"
+    },
+    {
+      "name": "instrumentation-control-parity",
+      "status": "PASS",
+      "detail": "calculated"
+    },
+    {
+      "name": "adapter-repeat-byte-stable",
+      "status": "PASS",
+      "detail": "same request serialized twice"
+    },
+    {
+      "name": "design-allowances-not-geometric-length",
+      "status": "PASS",
+      "detail": "10m geometric \u002B 2m spare, then 5%, ceiling = 13m"
+    },
+    {
+      "name": "secondary-setting-required-when-used",
+      "status": "PASS",
+      "detail": "settings_required"
+    },
+    {
+      "name": "nullable-secondary-not-used",
+      "status": "PASS",
+      "detail": "No synthetic fallback/default inserted when SECONDARY is unused."
+    },
+    {
+      "name": "missing-label-containing-limit-is-no-path",
+      "status": "PASS",
+      "detail": "no_path; code text must not be mistaken for a graph budget error."
+    },
+    {
+      "name": "adapter-rejects:schema-version",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:missing-schema",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:unknown-operation",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:unknown-field",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:wrong-coordinate-system",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:category-missing",
+      "status": "PASS",
+      "detail": "expected=category_required;actual=category_required"
+    },
+    {
+      "name": "adapter-rejects:category-unknown",
+      "status": "PASS",
+      "detail": "expected=category_required;actual=category_required"
+    },
+    {
+      "name": "adapter-rejects:category-numeric",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:settings-missing",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:settings-negative-spare",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:settings-negative-percentage",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:settings-negative-secondary",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:settings-decimal-excess-precision",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:settings-decimal-underflow",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:settings-decimal-overflow",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:settings-claimed-authority",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:duplicate-segment-id",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:empty-segment-id",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:one-point-segment",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:unknown-tray-category",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:unknown-nested-field",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:negative-tolerance",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:zero-spacing",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:unbounded-graph-nodes",
+      "status": "PASS",
+      "detail": "expected=resource_limit;actual=resource_limit"
+    },
+    {
+      "name": "adapter-rejects:unbounded-graph-connections",
+      "status": "PASS",
+      "detail": "expected=resource_limit;actual=resource_limit"
+    },
+    {
+      "name": "adapter-rejects:zero-timeout",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:unbounded-timeout",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:nonfinite-coordinate-string",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:extreme-coordinate",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:missing-endpoint",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:null-segments",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:null-segment",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:null-point",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:null-options",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:null-project-settings",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:missing-setting-field",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:invalid-port-frame",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:duplicate-mapped-tray-categories",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:fabricated-internal-design-route",
+      "status": "PASS",
+      "detail": "expected=invalid_request;actual=invalid_request"
+    },
+    {
+      "name": "adapter-rejects:malformed-json",
+      "status": "PASS",
+      "detail": "invalid_request"
+    },
+    {
+      "name": "adapter-rejects:array-envelope",
+      "status": "PASS",
+      "detail": "invalid_request"
+    },
+    {
+      "name": "adapter-rejects:null-envelope",
+      "status": "PASS",
+      "detail": "invalid_request"
+    },
+    {
+      "name": "adapter-rejects:duplicate-root-member",
+      "status": "PASS",
+      "detail": "invalid_request"
+    },
+    {
+      "name": "adapter-rejects:duplicate-nested-member",
+      "status": "PASS",
+      "detail": "invalid_request"
+    },
+    {
+      "name": "adapter-rejects:nonfinite-overflow",
+      "status": "PASS",
+      "detail": "invalid_request"
+    },
+    {
+      "name": "adapter-rejects:decimal-token-excess-precision",
+      "status": "PASS",
+      "detail": "invalid_request"
+    },
+    {
+      "name": "adapter-rejects:decimal-token-underflow",
+      "status": "PASS",
+      "detail": "invalid_request"
+    },
+    {
+      "name": "adapter-rejects:deep-json",
+      "status": "PASS",
+      "detail": "invalid_request"
+    },
+    {
+      "name": "adapter-rejects:trailing-json",
+      "status": "PASS",
+      "detail": "invalid_request"
+    },
+    {
+      "name": "adapter-rejects:invalid-utf8",
+      "status": "PASS",
+      "detail": "malformed UTF-8 inside JSON name"
+    },
+    {
+      "name": "adapter-rejects:request-byte-limit",
+      "status": "PASS",
+      "detail": "8388609 bytes"
+    },
+    {
+      "name": "adapter-rejects:empty-input",
+      "status": "PASS",
+      "detail": "0 bytes"
+    },
+    {
+      "name": "adapter-rejects:segment-count-limit",
+      "status": "PASS",
+      "detail": "4097 segments \u003E 4096 cap"
+    },
+    {
+      "name": "adapter-rejects:point-array-limit",
+      "status": "PASS",
+      "detail": "8193 points \u003E 8192 per segment cap"
+    },
+    {
+      "name": "adapter-rejects:triangle-index-range",
+      "status": "PASS",
+      "detail": "Triangle index outside its own vertex buffer."
+    },
+    {
+      "name": "adapter-rejects:duplicate-geometry-id",
+      "status": "PASS",
+      "detail": "Geometry identity uniqueness checked separately from segment DTO."
+    },
+    {
+      "name": "adapter-decimal-text-full-precision",
+      "status": "PASS",
+      "detail": "calculated; exact base-10 snapshot retained across wire response"
+    },
+    {
+      "name": "adapter-decimal-accepts:removable-trailing-zeros",
+      "status": "PASS",
+      "detail": "calculated; mathematically exact decimal"
+    },
+    {
+      "name": "adapter-decimal-accepts:numeric-exponent",
+      "status": "PASS",
+      "detail": "calculated; mathematically exact decimal"
+    },
+    {
+      "name": "adapter-cancelled-before-work",
+      "status": "PASS",
+      "detail": "cancelled"
+    },
+    {
+      "name": "adapter-deadline-during-work",
+      "status": "PASS",
+      "detail": "status=deadline_exceeded;elapsedMs=154;cooperative deadline after envelope validation"
+    },
+    {
+      "name": "adapter-cancelled-during-work",
+      "status": "PASS",
+      "detail": "cancelled"
+    },
+    {
+      "name": "tie-same-input-stable",
+      "status": "PASS",
+      "detail": "/BC101"
+    },
+    {
+      "name": "tie-permutation-characterized",
+      "status": "PASS",
+      "detail": "original=/BC101;permuted=/BC101;equalLength=10;sameRouteNotRequired=true;preserve-core-ordering"
+    },
+    {
+      "name": "cli:valid",
+      "status": "PASS",
+      "detail": "exit=0;status=calculated;stderr="
+    },
+    {
+      "name": "cli:full-result-roundtrip",
+      "status": "PASS",
+      "detail": "Child worker result preserved (immutable core route and exact decimal strings)."
+    },
+    {
+      "name": "cli:malformed",
+      "status": "PASS",
+      "detail": "exit=2;status=invalid_request;stderr="
+    },
+    {
+      "name": "cli:null-envelope",
+      "status": "PASS",
+      "detail": "exit=2;status=invalid_request;stderr="
+    },
+    {
+      "name": "cli:array-envelope",
+      "status": "PASS",
+      "detail": "exit=2;status=invalid_request;stderr="
+    },
+    {
+      "name": "cli:timeout-String",
+      "status": "PASS",
+      "detail": "exit=2;status=invalid_request;stderr="
+    },
+    {
+      "name": "cli:timeout-Null",
+      "status": "PASS",
+      "detail": "exit=2;status=invalid_request;stderr="
+    },
+    {
+      "name": "cli:timeout-True",
+      "status": "PASS",
+      "detail": "exit=2;status=invalid_request;stderr="
+    },
+    {
+      "name": "cli:timeout-Number",
+      "status": "PASS",
+      "detail": "exit=2;status=invalid_request;stderr="
+    },
+    {
+      "name": "cli:timeout-Object",
+      "status": "PASS",
+      "detail": "exit=2;status=invalid_request;stderr="
+    },
+    {
+      "name": "cli:no-path",
+      "status": "PASS",
+      "detail": "exit=3;status=no_path;stderr="
+    },
+    {
+      "name": "cli:missing-limit-label",
+      "status": "PASS",
+      "detail": "exit=3;status=no_path;stderr="
+    },
+    {
+      "name": "cli:settings-required",
+      "status": "PASS",
+      "detail": "exit=3;status=settings_required;stderr="
+    },
+    {
+      "name": "cli:graph-budget",
+      "status": "PASS",
+      "detail": "exit=5;status=resource_limit;stderr="
+    },
+    {
+      "name": "cli:hard-deadline",
+      "status": "PASS",
+      "detail": "exit=4;status=deadline_exceeded;stderr="
+    },
+    {
+      "name": "core-is-separate-assembly",
+      "status": "PASS",
+      "detail": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\direct-secondary-u6-b5b39e66-132e-43ec-a265-c65ceef9a764\\artifacts\\bin\\PathFinder.Parity\\release\\PathFinder.Core.dll"
+    },
+    {
+      "name": "core-has-no-native-or-desktop-references",
+      "status": "PASS",
+      "detail": "System.Runtime, System.Collections, System.Runtime.Numerics, System.Text.RegularExpressions, System.Linq, System.Threading"
+    }
+  ],
+  "failures": []
+}

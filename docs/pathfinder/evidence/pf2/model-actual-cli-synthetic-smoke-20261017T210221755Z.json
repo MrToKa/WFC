@@ -1,0 +1,125 @@
+{
+  "status": "PASS",
+  "failedChecks": 0,
+  "observedAtUtc": "2026-10-17T21:02:21.7527825+00:00",
+  "scratchDirectory": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\modelcheck-smoke-20b0d123aded458fbb0c3fe9364115fe",
+  "checks": [
+    {
+      "stderr": "",
+      "status": "PASS",
+      "actualExit": 0,
+      "expectedExit": 0,
+      "output": {
+        "status": "completed_route",
+        "output": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\modelcheck-smoke-20b0d123aded458fbb0c3fe9364115fe\\cold.json",
+        "diagnosticChecks": "PASS",
+        "objects": 1,
+        "fittedSegments": 1,
+        "routeSuccess": true,
+        "routeLengthMetresR": "10",
+        "pathPoints": 2,
+        "readiness": "needs_review",
+        "elapsedMilliseconds": 130.8437
+      },
+      "name": "cold-route"
+    },
+    {
+      "stderr": "",
+      "status": "PASS",
+      "actualExit": 0,
+      "expectedExit": 0,
+      "output": {
+        "status": "completed_route",
+        "output": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\modelcheck-smoke-20b0d123aded458fbb0c3fe9364115fe\\warm.json",
+        "diagnosticChecks": "PASS",
+        "objects": 1,
+        "fittedSegments": 1,
+        "routeSuccess": true,
+        "routeLengthMetresR": "10",
+        "pathPoints": 2,
+        "readiness": "needs_review",
+        "elapsedMilliseconds": 120.894
+      },
+      "name": "disk-route"
+    },
+    {
+      "name": "full-result-and-cache-readiness",
+      "status": "PASS"
+    },
+    {
+      "stderr": "",
+      "status": "PASS",
+      "actualExit": 3,
+      "expectedExit": 3,
+      "output": {
+        "status": "completed_no_path",
+        "output": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\modelcheck-smoke-20b0d123aded458fbb0c3fe9364115fe\\no-path.json",
+        "diagnosticChecks": "PASS",
+        "objects": 1,
+        "fittedSegments": 1,
+        "routeSuccess": false,
+        "routeLengthMetresR": "0",
+        "pathPoints": 0,
+        "readiness": "needs_review",
+        "elapsedMilliseconds": 107.3313
+      },
+      "name": "no-path-label"
+    },
+    {
+      "stderr": "",
+      "status": "PASS",
+      "actualExit": 2,
+      "expectedExit": 2,
+      "output": {
+        "schemaVersion": "pathfinder.modelcheck.result.v1",
+        "status": "invalid_input",
+        "message": "Invalid route name: BAD;LABEL. Separate route names with /. (Parameter 'text')"
+      },
+      "name": "invalid-route"
+    },
+    {
+      "stderr": "",
+      "status": "PASS",
+      "actualExit": 2,
+      "expectedExit": 2,
+      "output": {
+        "schemaVersion": "pathfinder.modelcheck.result.v1",
+        "status": "invalid_input",
+        "message": "The input string 'not-a-number' was not in a correct format."
+      },
+      "name": "invalid-budget"
+    },
+    {
+      "stderr": "",
+      "status": "PASS",
+      "actualExit": 4,
+      "expectedExit": 4,
+      "output": {
+        "schemaVersion": "pathfinder.modelcheck.result.v1",
+        "status": "deadline_exceeded",
+        "maximumMilliseconds": 1
+      },
+      "name": "hard-deadline"
+    },
+    {
+      "stderr": "",
+      "status": "PASS",
+      "actualExit": 2,
+      "expectedExit": 2,
+      "output": {
+        "schemaVersion": "pathfinder.modelcheck.result.v1",
+        "status": "invalid_input",
+        "message": "Output already exists; choose a unique receipt path."
+      },
+      "name": "existing-receipt-rejected"
+    },
+    {
+      "name": "existing-receipt-preserved",
+      "status": "PASS"
+    }
+  ],
+  "stage": "PF-2",
+  "scope": "explicitly-synthetic-ModelCheck-CLI-smoke",
+  "passedChecks": 9,
+  "nativeConvertedParity": "NOT_ESTABLISHED"
+}

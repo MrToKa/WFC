@@ -1,0 +1,388 @@
+{
+  "schemaVersion": 1,
+  "kind": "PF-0 synthetic golden reference",
+  "status": "PASS",
+  "coreCommit": "45c24bf5f433f13e102600b36f20327c77961d0a",
+  "referenceSourceRoot": "C:\\Users\\todor.chankov\\.codex\\.chatgpt-projects\\g-p-6ad0a317833c8191bf8e4e8c824a1056\\work\\review-pathfinder",
+  "provenance": "synthetic-core-extraction",
+  "units": "m",
+  "caseCount": 43,
+  "byKind": {
+    "calculate": 17,
+    "lookup": 5,
+    "parse": 5,
+    "design": 10,
+    "name": 2,
+    "geometry": 2,
+    "geometry-route": 2
+  },
+  "comparison": {
+    "samePinnedCore": "byte-identical JSON",
+    "independentSyntheticNumericAbsoluteToleranceMeters": 1e-9,
+    "discreteFields": "exact IDs, order, flags, counts and exception type",
+    "designValues": "exact decimal numerical equality using invariant strings",
+    "realConvertedTolerance": "NOT_ESTABLISHED; paired native/converted inputs missing",
+    "engineThresholdsUnchanged": true
+  },
+  "decisions": {
+    "projectDetailsAuthoritative": [
+      "secondaryLengthMeters",
+      "connectionSpareMeters",
+      "increasePercent"
+    ],
+    "instrumentationUses": "Control",
+    "automaticResults": "proposals requiring explicit Review and Apply",
+    "goldenSettings": "synthetic constructor inputs; not project settings defaults"
+  },
+  "coreSources": [
+    {
+      "path": "AddinRibbon/Routing/CableDesignLength.cs",
+      "bytes": 2220,
+      "sha256": "fa489d2948f3c7a4af8931cb79d775a61f4718d5ad3187bd5637598665d1ff5f",
+      "isolatedCopySha256": "fa489d2948f3c7a4af8931cb79d775a61f4718d5ad3187bd5637598665d1ff5f",
+      "copyMatches": true,
+      "anchors": [
+        12
+      ],
+      "capability": "Decimal design length, SECONDARY replacement, one spare, percentage, final ceiling"
+    },
+    {
+      "path": "AddinRibbon/Routing/RouteCalculator.cs",
+      "bytes": 51930,
+      "sha256": "12e96c787902850bffad660d5d2a43333960d9920890cf8f547a730f67e0d0b8",
+      "isolatedCopySha256": "12e96c787902850bffad660d5d2a43333960d9920890cf8f547a730f67e0d0b8",
+      "copyMatches": true,
+      "anchors": [
+        21,
+        27,
+        140,
+        864
+      ],
+      "capability": "Category-filtered sparse contact graph, endpoint approach, lexicographic gap ranking and physical length"
+    },
+    {
+      "path": "AddinRibbon/Routing/RouteCodeParser.cs",
+      "bytes": 3247,
+      "sha256": "a97e2358374f0798c94103a8f0b20bf7c5a04208de523ea384afa528f70ec05f",
+      "isolatedCopySha256": "a97e2358374f0798c94103a8f0b20bf7c5a04208de523ea384afa528f70ec05f",
+      "copyMatches": true,
+      "anchors": [
+        23,
+        33,
+        61
+      ],
+      "capability": "Tray label extraction and qualified component recognition"
+    },
+    {
+      "path": "AddinRibbon/Routing/RouteLookupCalculator.cs",
+      "bytes": 25795,
+      "sha256": "1914b875b675bc61e274a46f221d0633e5db21eab2fe0e34214c7c05aa5485ae",
+      "isolatedCopySha256": "1914b875b675bc61e274a46f221d0633e5db21eab2fe0e34214c7c05aa5485ae",
+      "copyMatches": true,
+      "anchors": [
+        18,
+        38,
+        47,
+        126,
+        175
+      ],
+      "capability": "Ordered manual route parse and graph walk, main-span/branch/closed-loop inference"
+    },
+    {
+      "path": "AddinRibbon/Routing/RouteNameResolver.cs",
+      "bytes": 2272,
+      "sha256": "9bf4964a00833f91a38f11f34e2eb377f1fb27ccd48d389731248ecf07174c34",
+      "isolatedCopySha256": "9bf4964a00833f91a38f11f34e2eb377f1fb27ccd48d389731248ecf07174c34",
+      "copyMatches": true,
+      "anchors": [
+        14,
+        33
+      ],
+      "capability": "Hierarchy logical route and owner identity resolution"
+    },
+    {
+      "path": "AddinRibbon/Routing/RoutingModels.cs",
+      "bytes": 11386,
+      "sha256": "2de71cc5410e04cce309276cbd2591d218530d5ddfca4c77a2ad98f2ee02e4ea",
+      "isolatedCopySha256": "2de71cc5410e04cce309276cbd2591d218530d5ddfca4c77a2ad98f2ee02e4ea",
+      "copyMatches": true,
+      "anchors": [
+        19,
+        73,
+        124,
+        150,
+        201
+      ],
+      "capability": "Detached metres, category flags, immutable polylines/ports/options/result and Reverse"
+    },
+    {
+      "path": "AddinRibbon/Routing/TrayBendMeshGeometry.cs",
+      "bytes": 32190,
+      "sha256": "4d6f0c574166fbcb880cdc38bd10e589905fc74b1fe5709c33fd5e2ecab35948",
+      "isolatedCopySha256": "4d6f0c574166fbcb880cdc38bd10e589905fc74b1fe5709c33fd5e2ecab35948",
+      "copyMatches": true,
+      "anchors": [
+        26,
+        351
+      ],
+      "capability": "Measured circular bend fit, tangent stubs and five-degree polyline sampling"
+    },
+    {
+      "path": "AddinRibbon/Routing/TrayGeometryBuilder.cs",
+      "bytes": 23403,
+      "sha256": "9dd9abe707b3908c8d55a404e12d6b79b7785659f284dc4d84d9d2391dd225c7",
+      "isolatedCopySha256": "9dd9abe707b3908c8d55a404e12d6b79b7785659f284dc4d84d9d2391dd225c7",
+      "copyMatches": true,
+      "anchors": [
+        29,
+        64,
+        100,
+        103
+      ],
+      "capability": "Typed straight/bend reconstruction with diagnostics and reported bbox fallback"
+    },
+    {
+      "path": "AddinRibbon/Routing/TrayMeshClearance.cs",
+      "bytes": 43315,
+      "sha256": "75075cbf5b13d385f9932e1ad755815e39934e55bcbf123b657ae3b5363541e8",
+      "isolatedCopySha256": "75075cbf5b13d385f9932e1ad755815e39934e55bcbf123b657ae3b5363541e8",
+      "copyMatches": true,
+      "anchors": [
+        52,
+        104,
+        159,
+        270
+      ],
+      "capability": "Actual triangle-surface BVH clearance and measured-section contacts, bounded caches"
+    },
+    {
+      "path": "AddinRibbon/Routing/TrayMeshData.cs",
+      "bytes": 2817,
+      "sha256": "4ff9170f90a57f8509a9acb5b84dd95262e55b942d6ee892a0dd231563b3af31",
+      "isolatedCopySha256": "4ff9170f90a57f8509a9acb5b84dd95262e55b942d6ee892a0dd231563b3af31",
+      "copyMatches": true,
+      "anchors": [
+        9,
+        15,
+        31,
+        39
+      ],
+      "capability": "Indexed world-space triangle fragments and detached-data bounds"
+    },
+    {
+      "path": "AddinRibbon/Routing/TrayMeshGeometry.cs",
+      "bytes": 23892,
+      "sha256": "c88ed49513778ef809e581ecf8b4418b746b982c5b12f533d96478275de8deba",
+      "isolatedCopySha256": "c88ed49513778ef809e581ecf8b4418b746b982c5b12f533d96478275de8deba",
+      "copyMatches": true,
+      "anchors": [
+        16,
+        27,
+        149
+      ],
+      "capability": "Measured straight candidates, cap evidence and compatible neighboring port resolution"
+    }
+  ],
+  "harnessSources": [
+    {
+      "path": "tests/PathFinder.Routing.Tests/DesignLengthTests.cs",
+      "bytes": 3635,
+      "sha256": "c27fa32decb3dadd33aab05a77c7c2ba7346b0e3a32fd94909f465b4ace7e0ba",
+      "isolatedCopySha256": "c27fa32decb3dadd33aab05a77c7c2ba7346b0e3a32fd94909f465b4ace7e0ba",
+      "copyMatches": true
+    },
+    {
+      "path": "tests/PathFinder.Routing.Tests/EndpointApproachTests.cs",
+      "bytes": 4753,
+      "sha256": "42ffcae2087c43f80e785f85ea0a25286e1077f5910009011798334a5f77aa2b",
+      "isolatedCopySha256": "42ffcae2087c43f80e785f85ea0a25286e1077f5910009011798334a5f77aa2b",
+      "copyMatches": true
+    },
+    {
+      "path": "tests/PathFinder.Routing.Tests/GeometryTests.cs",
+      "bytes": 35226,
+      "sha256": "17e653678f35f39c1e19c597fe0947e66fefb65c1da5688ec6a91c437ae08d9a",
+      "isolatedCopySha256": "17e653678f35f39c1e19c597fe0947e66fefb65c1da5688ec6a91c437ae08d9a",
+      "copyMatches": true
+    },
+    {
+      "path": "tests/PathFinder.Routing.Tests/MeshClearanceTests.cs",
+      "bytes": 27547,
+      "sha256": "b990c4a789b9bd7821b514208d632b964a30dd46f90bb8620b30ea9d810a7087",
+      "isolatedCopySha256": "b990c4a789b9bd7821b514208d632b964a30dd46f90bb8620b30ea9d810a7087",
+      "copyMatches": true
+    },
+    {
+      "path": "tests/PathFinder.Routing.Tests/PathFinder.Routing.Tests.csproj",
+      "bytes": 856,
+      "sha256": "91fc1904a17f7217cdf105177a3e6e0ac35306e647a7ea6913da138b69610110",
+      "isolatedCopySha256": "91fc1904a17f7217cdf105177a3e6e0ac35306e647a7ea6913da138b69610110",
+      "copyMatches": true
+    },
+    {
+      "path": "tests/PathFinder.Routing.Tests/Program.cs",
+      "bytes": 43743,
+      "sha256": "40c2c7ef53a04ab7b38b398748d217418ce32d0a016a39688b3042ca7b93952e",
+      "isolatedCopySha256": "40c2c7ef53a04ab7b38b398748d217418ce32d0a016a39688b3042ca7b93952e",
+      "copyMatches": true
+    },
+    {
+      "path": "tests/PathFinder.Routing.Tests/RouteLookupTests.cs",
+      "bytes": 15238,
+      "sha256": "d7a74b2f37a1430132114d7e887a9893335284a13ebb667a720e2a4a6bfe0843",
+      "isolatedCopySha256": "d7a74b2f37a1430132114d7e887a9893335284a13ebb667a720e2a4a6bfe0843",
+      "copyMatches": true
+    },
+    {
+      "path": "tests/PathFinder.Routing.Tests/RouteNameResolverTests.cs",
+      "bytes": 8205,
+      "sha256": "d5ffc9da399d13d10332d039ec89e1d2440237d5f0610bd842a6d47f80d24377",
+      "isolatedCopySha256": "d5ffc9da399d13d10332d039ec89e1d2440237d5f0610bd842a6d47f80d24377",
+      "copyMatches": true
+    },
+    {
+      "path": "tests/PathFinder.Routing.Tests/VerifiedPortTests.cs",
+      "bytes": 9729,
+      "sha256": "9faf7e94ae79394195cfd4858148753bae0afe2fcfaf43b3dd0ebeb472c97a47",
+      "isolatedCopySha256": "9faf7e94ae79394195cfd4858148753bae0afe2fcfaf43b3dd0ebeb472c97a47",
+      "copyMatches": true
+    }
+  ],
+  "supportingSourcePins": [
+    {
+      "path": "AddinRibbon/Services/RoutingSession.cs",
+      "bytes": 24747,
+      "sha256": "4249f982005015ef9e6975f5a89b8fa065fa47a2b97e637ca27e6131783c42c0"
+    },
+    {
+      "path": "AddinRibbon/Services/RoutingSession.Lookup.cs",
+      "bytes": 5690,
+      "sha256": "87c35cc315f913415531d0d25ab8dd398a880381d660202966d18214f1553702"
+    },
+    {
+      "path": "AddinRibbon/Services/TrayMeshReader.cs",
+      "bytes": 11758,
+      "sha256": "12ab6acee2cd4b9c881447fefbf751c3141f0405c4c37e0c379b8bec87e76815"
+    },
+    {
+      "path": "AddinRibbon/Ctr/PathFinderControl.cs",
+      "bytes": 42234,
+      "sha256": "c72ad8d8cf56c6334d2a9a65c5de904dec0495b3fd54df167fb18f5f74a22a64"
+    },
+    {
+      "path": "AddinRibbon/AddinRibbon.csproj",
+      "bytes": 3462,
+      "sha256": "618290a091de470d139e496a087727b94c99848942d3fbe2d0c90be8869ea34c"
+    },
+    {
+      "path": "docs/Validation.md",
+      "bytes": 48913,
+      "sha256": "7e134c803433ec05fdaf54ec2967a22e98255abad725648767e935d28de9c1a7"
+    },
+    {
+      "path": "docs/ActionPlan.md",
+      "bytes": 33184,
+      "sha256": "1d54f1b11d96c7e94e940597936348f6356db8a8e2a769c2cc2ada8f68f389f1"
+    },
+    {
+      "path": "tests/PathFinder.Routing.Tests/README.md",
+      "bytes": 5227,
+      "sha256": "0da7493f47eb2e80a80c58b0e187cdc1cef2d589640a0053c7317ac4536efe2d"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "pf-core-v1.inputs.json",
+      "bytes": 223109,
+      "sha256": "1fd49428742284e30071a0b293cca0a8f5eff8b47a2aaab10f1184cf73cd7e78"
+    },
+    {
+      "path": "pf-core-v1.expected.json",
+      "bytes": 49832,
+      "sha256": "43ea08d2e7e5ff4e56d1fe5c4435bada300a215b0da3164f5179d27ca4b23a5a"
+    },
+    {
+      "path": "pf-core-v1.schema.json",
+      "bytes": 25431,
+      "sha256": "b65addd83e0e3b400246e28da6b9a0dedfcb6517008b643a0203694f2f36f759"
+    },
+    {
+      "path": "generator/Program.cs",
+      "bytes": 10553,
+      "sha256": "127e1d0fe89dd5bd41cd396bd5200837a7fb008c776b9326bb1634a9235ea5d0"
+    },
+    {
+      "path": "generator/GoldenExtractor.csproj",
+      "bytes": 456,
+      "sha256": "957561bc4bdb7873d96216c972a2cb0fe12c980048bad462edc96d66450967ae"
+    },
+    {
+      "path": "generator/CaptureGeometry.cs",
+      "bytes": 3337,
+      "sha256": "3b4ac928911a8c21feb8ed5810c84a7d6cfc7fe5f4d4191d51fd8a3a9d08320d"
+    },
+    {
+      "path": "generator/CaptureGeometry.csproj",
+      "bytes": 539,
+      "sha256": "cbef8afc87576bc54755e66be25bc85cd4b7de535a48f91179087396f1702c89"
+    }
+  ],
+  "evidence": {
+    "pureRelease": {
+      "status": "PASS",
+      "checks": 105,
+      "log": "../evidence/pf-core-release.log",
+      "privateExcel327Included": false
+    },
+    "extraction": {
+      "status": "PASS",
+      "expectedCases": 43,
+      "repeatByteIdentical": true,
+      "log": "../evidence/pf-core-golden-extraction.log",
+      "repeatLog": "../evidence/pf-core-golden-repeat.log"
+    },
+    "geometryCapture": {
+      "exitCode": 0,
+      "stdoutLogEmpty": true,
+      "log": "../evidence/pf-core-geometry-capture.log",
+      "proof": "Inputs retain the unchanged original GeometryTests.CircularMeshFixture meshes; expected contains two 1-bend/2-straight validated results"
+    },
+    "schema": {
+      "status": "PASS",
+      "draft": "draft-07",
+      "validator": "Ajv 6.15.0",
+      "negativeControls": 6,
+      "log": "../evidence/pf-core-schema-validation.log"
+    }
+  },
+  "notRun": [
+    {
+      "scope": "private327 Excel fixture",
+      "reason": "Not supplied; 105 current groups, not historical106"
+    },
+    {
+      "scope": "Navisworks native smoke",
+      "reason": "No native execution authorized in PF-0"
+    },
+    {
+      "scope": "paired native/converted model equivalence",
+      "reason": "Full-precision paired geometry, identity, rule and endpoint captures not present"
+    },
+    {
+      "scope": "WFC implementation/admin/registry/proposal Apply",
+      "reason": "Contracts-only PF-0"
+    }
+  ],
+  "historicalOnly": {
+    "source": "docs/Validation.md:7-18 at pinned commit",
+    "reportedPureChecks": 106,
+    "reportedNativeGroups": 70,
+    "reportedAalborgRoutes": 2,
+    "roundedGeometricLengthsMeters": [
+      100.972,
+      35.299
+    ],
+    "rawLogPathsPresentInEitherInspectedCheckout": false,
+    "usableAsFullPrecisionGolden": false
+  }
+}

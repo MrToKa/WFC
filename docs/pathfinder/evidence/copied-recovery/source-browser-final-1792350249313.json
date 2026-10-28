@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "pathfinder.copied-recovery.source-final-browser.v1",
+  "status": "PASS",
+  "recordedAt": "2026-10-18T19:04:09.308Z",
+  "method": "computer-use",
+  "origin": "http://127.0.0.1:5191",
+  "sourceOwner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+  "projectId": "1af0f807-7653-40ea-8391-7eea6c54e7d4",
+  "modelVersionId": "a613151e-c370-45c5-80f3-42ae58603b9a",
+  "observations": {
+    "modelReady": true,
+    "tools": [
+      "Routes",
+      "Path",
+      "Path lookup"
+    ],
+    "snapshotObjects": 13,
+    "cableTotal": 2140,
+    "cablesDisplayed": 2140,
+    "preparedNames": 1527,
+    "recordsReturned": 438155,
+    "recordsChecked": 438155,
+    "recordsUnavailable": 0,
+    "geometry": 664556,
+    "identifiers": 438156,
+    "properties": 6,
+    "routeRulesRecovered": false,
+    "bindingsSaved": 0,
+    "calculateReviewApply": 0
+  },
+  "screenshot": {
+    "path": "docs/pathfinder/evidence/copied-recovery/source-final.png",
+    "bytes": 80611,
+    "sha256": "8e29e5558fcd6ee6f0cca5162b008d9b8b065892aced18bfab2fb7857e3cf4e6"
+  },
+  "tabDeliverable": true,
+  "retiredTargetPageClosed": true,
+  "tabIdentityNote": "Browser-local numeric tab IDs were reassigned after heartbeat reconnection. Final source was selected by exact5191URL; only exact retired5192URL was closed."
+}

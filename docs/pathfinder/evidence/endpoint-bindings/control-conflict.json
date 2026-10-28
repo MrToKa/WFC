@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "wfc.pf.endpoint-control-receipt.v1",
+  "phase": "conflict",
+  "phaseIntentId": "580c44af-3ea6-4bb1-9aa8-366e83b7d52e",
+  "recordedAtUtc": "2026-10-19T03:11:04.047Z",
+  "status": "PASS",
+  "elapsedMilliseconds": 39.275436,
+  "checks": [
+    {
+      "name": "Same-key conflicting body refuses without changing shared state",
+      "status": "PASS",
+      "scope": "actual command replay refusal"
+    }
+  ],
+  "preservationSha256": "262209c85922ae83a1b9b3c252f66c9e7a8153d84e2e85cfc05da33a36c1292a",
+  "cableApply": "NOT_PERFORMED",
+  "nativeParity": "NOT_PERFORMED",
+  "engineeringAcceptance": false
+}

@@ -1,0 +1,48 @@
+{
+  "schemaVersion": "pathfinder.coverage.controls.v1",
+  "recordedAt": "2026-10-18T14:03:16.616Z",
+  "command": "node --test --test-reporter=tap scripts/pathfinder-coverage/coverage.test.mjs",
+  "exitCode": 0,
+  "signal": null,
+  "totals": {
+    "tests": 43,
+    "pass": 43,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "status": "PASS",
+  "sources": [
+    {
+      "path": "scripts/pathfinder-coverage/audit.mjs",
+      "sha256": "7afc8b8f34b8304bce7c3e9d994a5cf6cbe833557598cb8aa12d4571dbebcc09"
+    },
+    {
+      "path": "scripts/pathfinder-coverage/retained.mjs",
+      "sha256": "9d060c512c399ec3583d7653068cf73f8286c585d8b8faec12ca08cdeb9788a4"
+    },
+    {
+      "path": "scripts/pathfinder-coverage/coverage.test.mjs",
+      "sha256": "cef905c2c730d5fc3cf0e43095964b0e0e7ae9231e5c0cf6324c9a76164d785c"
+    },
+    {
+      "path": "scripts/pathfinder-coverage/README.md",
+      "sha256": "3490781bf9e019e7d520e7950bbe90360e51c37adc136494f58183a2aac4632b"
+    }
+  ],
+  "tap": {
+    "path": "docs/pathfinder/evidence/coverage/controls-1792332191650.tap",
+    "bytes": 8759,
+    "sha256": "ed3a805d7c86bfc1ff1b048a89e03c191bb5f86ab3984a1acbce9ef317e9f24c"
+  },
+  "stderr": "",
+  "historicalSetupFailure": {
+    "actual": true,
+    "commandExit": 1,
+    "controls": 36,
+    "passed": 0,
+    "reason": "Initial fixture mkdir ENOENT before any audit ran; corrected fixture parent creation. Tool output chunk f9fd4d retained in chat; no historical receipt file claimed."
+  },
+  "preservation": "Only newly owned fixture copies/results and this evidence were written. No original checkout, runtime, DB, Core, Model, frozen or denied path was changed."
+}

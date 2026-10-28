@@ -1,0 +1,74 @@
+{
+  "schemaVersion": "pathfinder.copied-recovery.cleanup.v1",
+  "status": "PASS",
+  "recordedAt": "2026-10-18T19:04:09.317Z",
+  "newFixture": {
+    "project": "wfc-pathfinder-local-63ab3043713e",
+    "containersRemoved": 5,
+    "volumesRemoved": 4,
+    "networksRemoved": 2,
+    "receipt": "docs/pathfinder/evidence/copied-recovery/drill-1792350020124-d40ce548.json"
+  },
+  "retained": [
+    "5191 demonstration",
+    "5190 demonstration",
+    "backup8members+privatecompanion+75fileadjunct",
+    "private execution evidence and useful immutable provenance"
+  ],
+  "deniedPreviousCleanup": {
+    "reason": "Automatic approval review rejected deletion: blocked by policy. No retries, bypasses or parent operations.",
+    "children": [
+      {
+        "path": ".pf0-work/core-1f723e37-f152-4a60-9b1e-46adc6c3179c",
+        "exists": true,
+        "directory": true,
+        "contentsRead": false,
+        "removalAttempted": false
+      },
+      {
+        "path": ".pf2-work/model-tests-2733f823d57d477ba5e338a7d9a08cc9",
+        "exists": true,
+        "directory": true,
+        "contentsRead": false,
+        "removalAttempted": false
+      },
+      {
+        "path": "pathfinder-engine/.scratch/model-tests-c13957af670e4ee2869cf876aa60d581",
+        "exists": true,
+        "directory": true,
+        "contentsRead": false,
+        "removalAttempted": false
+      },
+      {
+        "path": "pathfinder-engine/.scratch/lookup-model-compat-459be54639f5400ebe91f856c64d7f5a",
+        "exists": true,
+        "directory": true,
+        "contentsRead": false,
+        "removalAttempted": false
+      },
+      {
+        "path": "pathfinder-engine/.scratch/capacity-bench-build-6134b7566e7a43c9a3bd05843a30018f",
+        "exists": true,
+        "directory": true,
+        "contentsRead": false,
+        "removalAttempted": false
+      },
+      {
+        "path": "pathfinder-engine/.scratch/capacity-bench-selftest-0e06d25a9f8c459594fe6a376c0660ee",
+        "exists": true,
+        "directory": true,
+        "contentsRead": false,
+        "removalAttempted": false
+      },
+      {
+        "path": "pathfinder-engine/.scratch/coverage-controls-14b7cdcb-10cb-4ad5-a8d4-a1962a8f0ea7",
+        "exists": true,
+        "directory": true,
+        "contentsRead": false,
+        "removalAttempted": false
+      }
+    ]
+  },
+  "dockerPrune": false,
+  "physicalDiskReclaimed": "NOT_MEASURED"
+}

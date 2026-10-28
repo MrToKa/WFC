@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "pathfinder.settings-reuse.observation.v1",
+  "observedAtUtc": "2026-10-18T02:10:59.485Z",
+  "status": "PASS",
+  "scope": "actual-details-ui-save-and-server-retained-route-design-recalculation",
+  "projectId": "54cfad40-bd12-41e9-ab24-d90bdaafc993",
+  "settings": {
+    "secondaryTrayLength": "5",
+    "endConnectionLength": "7",
+    "additionalBendingPercent": "10"
+  },
+  "expectedDesign": "19",
+  "appliedCableLengthStill": 18,
+  "proposals": [
+    {
+      "id": "056615af-5f17-4db2-a840-6168703ca4e7",
+      "cableId": "519c4d9f-d919-435d-8f57-2c606d2259ec",
+      "calculationMode": "design",
+      "design": {
+        "designLengthMeters": "19",
+        "unroundedLengthMeters": "18.7",
+        "lengthBeforePercentageMeters": "17"
+      },
+      "lengthMeters": 10
+    },
+    {
+      "id": "19757543-0ffa-48aa-a902-144112977b72",
+      "cableId": "a642bb9e-6ede-4200-91da-64a828f3b9fd",
+      "calculationMode": "design",
+      "design": {
+        "designLengthMeters": "19",
+        "unroundedLengthMeters": "18.7",
+        "lengthBeforePercentageMeters": "17"
+      },
+      "lengthMeters": 10
+    }
+  ],
+  "credentialsRecorded": false
+}

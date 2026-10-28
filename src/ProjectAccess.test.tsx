@@ -26,6 +26,7 @@ const project = {
   customer: 'Customer',
   manager: null,
   description: '',
+  connectionGap: 1,
   secondaryTrayLength: null,
   supportDistance: null,
   supportWeight: null,

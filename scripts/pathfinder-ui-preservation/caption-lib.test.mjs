@@ -1,0 +1,7 @@
+import test from 'node:test';import assert from 'node:assert/strict';import{captionBinding}from'./caption-lib.mjs';
+const old='sha256:'+'a'.repeat(64),next='sha256:'+'b'.repeat(64),snapshot=web=>({capture:{target:{owner:'owner',project:'own-extra',runtime:'own',apiId:'api',apiImage:'api-image',webImage:web}},moduleHashes:{runner:'same',worker:'same'}});
+test('caption permits only explicitly expected new web identity',()=>{assert.equal(captionBinding(snapshot(old),snapshot(next),{phase:'C1',expectedWeb:next}).apiFixed,true);});
+test('caption before snapshot requires original web image',()=>{assert.throws(()=>captionBinding(snapshot(old),snapshot(next),{phase:'C0'}),/BEFORE_WEB/);});
+test('caption rejects changed API process even with approved web',()=>{const after=snapshot(next);after.capture.target.apiId='other';assert.throws(()=>captionBinding(snapshot(old),after,{phase:'C1',expectedWeb:next}),/API_BINDING/);});
+test('caption rejects changed compiled production module',()=>{const after=snapshot(next);after.moduleHashes.runner='other';assert.throws(()=>captionBinding(snapshot(old),after,{phase:'C1',expectedWeb:next}),/API_BINDING/);});
+test('caption rejects wrong or unchanged web identity',()=>{assert.throws(()=>captionBinding(snapshot(old),snapshot(next),{phase:'C1',expectedWeb:old}),/NEW_WEB/);assert.throws(()=>captionBinding(snapshot(old),snapshot(old),{phase:'C1',expectedWeb:old}),/NEW_WEB/);});

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "wfc.pf.revision-comparison-control-receipt.v1",
+  "status": "PASS",
+  "phase": "fencing-target",
+  "phaseIntentId": "777d39f4-37d3-4582-8187-7c5f7bdff72e",
+  "checks": [
+    {
+      "name": "Production project/role/login/target locks fence competing edits or time out",
+      "status": "PASS",
+      "scope": "actual pg_blocking_pids with the exact transaction holder; competing edit always rolls back; primitive-only proof"
+    }
+  ],
+  "beforeSha256": "f7d2ac0a03595c1a906e18ac1fa291864ed25f362fd797082d313a37ee0541b8",
+  "afterSha256": "f7d2ac0a03595c1a906e18ac1fa291864ed25f362fd797082d313a37ee0541b8",
+  "elapsedMilliseconds": 62,
+  "engineeringAccepted": false,
+  "productionComparisonPublicationTested": false,
+  "automaticApplyPerformed": false
+}

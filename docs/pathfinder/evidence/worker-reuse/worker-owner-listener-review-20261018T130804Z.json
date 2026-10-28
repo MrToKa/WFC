@@ -1,0 +1,77 @@
+{
+  "schemaVersion": "pathfinder.worker-owner.listener-review.v1",
+  "recordedAtUtc": "2026-10-18T13:08:04.9698052Z",
+  "status": "NO_REMAINING_MATERIAL_FINDINGS",
+  "scope": "Independent closing read-only review of duplicate/late pg owner errors during lane retirement and client release",
+  "sourceFiles": [
+    {
+      "path": "server/pathfinder/worker.ts",
+      "sha256": "3ce7708dd65a9571571f962a4380163c11bc1433a8494893e21e1d8c9c26377f"
+    },
+    {
+      "path": "server/pathfinder/worker-session.test.ts",
+      "sha256": "e5a8d4a58059e3f69b17498bbb7e075a53d302c2d5d30593a4f835107ff65723"
+    },
+    {
+      "path": "server/pathfinder/engineSession.ts",
+      "sha256": "5cfa14c83dd0566009baecaf757ed1698f0c339043faaff48b24d36eb84a4513"
+    },
+    {
+      "path": "server/index.ts",
+      "sha256": "b3133a1c0d84ac379cf097825ecfceb99b89fef8aee9dc19e8df82262ee94eb4"
+    },
+    {
+      "path": "node_modules/pg-pool/index.js",
+      "sha256": "e362a6ffacb7544389b17984c6c0e3205c58e870d5ee8c86b388cc630a662427"
+    },
+    {
+      "path": "node_modules/pg/lib/client.js",
+      "sha256": "7e6ba79fe6bc1db15ec66ce67cd0f96b6b27c300ccec45911dc15f5121f709f4"
+    }
+  ],
+  "review": [
+    {
+      "area": "Checked-out owner error lifetime",
+      "anchors": "worker.ts:175-176,205-211,221-228",
+      "finding": "Persistent error handler precedes lock query and remains while executor closes; repeated errors stop this worker without losing listener coverage."
+    },
+    {
+      "area": "Healthy client handoff",
+      "anchors": "worker.ts:198-199; installed pg-pool/index.js:348-361",
+      "finding": "Pool release synchronously installs idle handler; owner then removes only its own listener. No asynchronous listener gap is introduced."
+    },
+    {
+      "area": "Damaged transport",
+      "anchors": "worker.ts:179-196; installed pg/lib/client.js:617-643",
+      "finding": "Runtime-checked concrete Client.end is awaited while handler remains, then release(true) discards rather than pools. Close failure retains handler/client and sets fatal stop."
+    },
+    {
+      "area": "Unreaped engine lane",
+      "anchors": "worker.ts:222-226,235",
+      "finding": "Executor close failure aborts same worker, retains owner and listener, refuses reuse, and makes stop reject."
+    }
+  ],
+  "quarantineBoundary": {
+    "healthySession": "A still-live retained advisory session continues to hold the database lock until backend termination or connection loss.",
+    "alreadyLostSession": "A dead PostgreSQL session releases its advisory lock externally. Same-process stop, retained error handler and fatal shutdown are guaranteed; global exclusion of another backend owner is not guaranteed once this session is lost.",
+    "publication": "Existing owner_token, lease, stopping signal, principal and dependency checks remain unchanged; this review does not claim a new global durable quarantine mechanism."
+  },
+  "ownerReportedChecks": {
+    "affectedTests": 61,
+    "status": "PASS",
+    "types": "PASS",
+    "scopedLint": "PASS",
+    "reviewerReran": false
+  },
+  "reviewerActions": {
+    "sourceReads": true,
+    "tests": "NOT_RUN",
+    "runtime": "NONE",
+    "productionSourceEdits": "NONE",
+    "preservationAuditExecution": "HELD"
+  },
+  "limitations": [
+    "Actual restored-target PostgreSQL termination qualification remains a separate owner scope.",
+    "No original database-content audit or full-plant claim."
+  ]
+}

@@ -48,6 +48,7 @@ type UseTraysSectionParams = {
   project: { id: string; projectNumber: string } | null;
   token: string | null;
   exportToken?: string | null;
+  readToken?: string | null;
   showToast: ShowToast;
 };
 
@@ -74,6 +75,7 @@ type TrayDialogController = {
 
 type UseTraysSectionResult = {
   trays: Tray[];
+  freeSpaceByTrayId: Record<string, number | null>;
   traysLoading: boolean;
   traysRefreshing: boolean;
   traysError: string | null;
@@ -98,9 +100,7 @@ type UseTraysSectionResult = {
   openEditTrayDialog: (tray: Tray) => void;
   handleDeleteTray: (tray: Tray) => Promise<void>;
   handleImportTrays: (event: ChangeEvent<HTMLInputElement>) => Promise<void>;
-  handleExportTrays: (
-    freeSpaceByTrayId?: Record<string, number | null>
-  ) => Promise<void>;
+  handleExportTrays: () => Promise<void>;
   handleGetTraysTemplate: () => Promise<void>;
   trayDialog: TrayDialogController;
 };
@@ -115,13 +115,18 @@ export const useTraysSection = ({
   project,
   token,
   exportToken = token,
+  readToken = token,
   showToast
 }: UseTraysSectionParams): UseTraysSectionResult => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const latestRequest = useRef(0);
   const projectSnapshot = defaultProjectSnapshot(project);
 
+  const readScope = JSON.stringify([projectId, token, exportToken, readToken]);
+  const latestReadScope = useRef(readScope); latestReadScope.current = readScope;
+  const [metricsScope, setMetricsScope] = useState(readScope);
   const [trays, setTrays] = useState<Tray[]>([]);
+  const [freeSpaceByTrayId, setFreeSpaceByTrayId] = useState<Record<string, number | null>>({});
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -219,6 +224,7 @@ export const useTraysSection = ({
   const reloadTrays = useCallback(
     async ({ showSpinner = true }: { showSpinner?: boolean } = {}) => {
       const request = ++latestRequest.current;
+      setFreeSpaceByTrayId({});
       if (!projectId) {
         setTrays([]);
         setIsLoading(false);
@@ -235,12 +241,14 @@ export const useTraysSection = ({
       setError(null);
 
       try {
-        const response = await fetchTrays(projectId);
-        if (request !== latestRequest.current) return;
+        const response = await fetchTrays(projectId, { drawingMetrics: true, token: readToken ?? exportToken ?? token ?? undefined });
+        if (request !== latestRequest.current || latestReadScope.current !== readScope) return;
         setTrays(sortTrays(response.trays));
+        setMetricsScope(readScope);
+        setFreeSpaceByTrayId(response.freeSpaceByTrayId ?? {});
         setPage(1);
       } catch (err) {
-        if (request !== latestRequest.current) return;
+        if (request !== latestRequest.current || latestReadScope.current !== readScope) return;
         console.error('Failed to load trays', err);
         if (err instanceof ApiError) {
           if (err.status === 404) {
@@ -262,7 +270,7 @@ export const useTraysSection = ({
         }
       }
     },
-    [projectId, sortTrays]
+    [projectId, sortTrays, token, exportToken, readToken, readScope]
   );
 
   useEffect(() => {
@@ -391,12 +399,14 @@ export const useTraysSection = ({
 
       try {
         if (dialogMode === 'create') {
-          const response = await createTray(token, projectSnapshot.id, input);
+          setFreeSpaceByTrayId({});
+        const response = await createTray(token, projectSnapshot.id, input);
           setTrays((previous: Tray[]) => sortTrays([...previous, response.tray]));
           setPage(1);
           showToast({ intent: 'success', title: 'Tray created' });
         } else if (editingTrayId) {
-          const response = await updateTray(
+          setFreeSpaceByTrayId({});
+        const response = await updateTray(
             token,
             projectSnapshot.id,
             editingTrayId,
@@ -468,6 +478,7 @@ export const useTraysSection = ({
       setPendingTrayId(tray.id);
 
       try {
+        setFreeSpaceByTrayId({});
         await deleteTray(token, projectSnapshot.id, tray.id);
         setTrays((previous: Tray[]) => {
           const next = previous.filter((item) => item.id !== tray.id);
@@ -519,6 +530,7 @@ export const useTraysSection = ({
       try {
         const response = await importTrays(token, projectSnapshot.id, file);
         setTrays(sortTrays(response.trays));
+        setFreeSpaceByTrayId({});
         setPage(1);
 
         showToast(excelImportSuccessToast(file.name, response.summary, 'Trays'));
@@ -533,7 +545,7 @@ export const useTraysSection = ({
   );
 
   const handleExportTrays = useCallback(
-    async (freeSpaceByTrayId?: Record<string, number | null>) => {
+    async () => {
       if (!projectSnapshot || !exportToken) {
         showToast({
           intent: 'error',
@@ -546,9 +558,7 @@ export const useTraysSection = ({
       setIsExporting(true);
 
       try {
-        const blob = await exportTrays(exportToken, projectSnapshot.id, {
-          freeSpaceByTrayId
-        });
+        const blob = await exportTrays(exportToken, projectSnapshot.id);
         const link = document.createElement('a');
         const url = window.URL.createObjectURL(blob);
         const fileName = `${sanitizeFileSegment(
@@ -625,6 +635,7 @@ export const useTraysSection = ({
 
   return {
     trays,
+    freeSpaceByTrayId: metricsScope === readScope ? freeSpaceByTrayId : {},
     traysLoading: isLoading,
     traysRefreshing: isRefreshing,
     traysError: error,

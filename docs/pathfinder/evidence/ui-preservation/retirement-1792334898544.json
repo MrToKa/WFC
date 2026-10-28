@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "pathfinder.ui-preservation.retirement.v1",
+  "status": "PASS",
+  "recordedAt": "2026-10-18T14:48:18.543Z",
+  "target": {
+    "owner": "7fa65ffa-ef34-46a7-b4c1-55cd19f8fa74",
+    "project": "wfc-pathfinder-local-f673a0facba3"
+  },
+  "dispositionSha256": "6757e7ab4e7d39629f724b809763620799d3a65d945640bb82f1da1adba9b2ef",
+  "phases": [
+    {
+      "phase": "A0",
+      "rawSha256": "827a38d3f17d0447092518010417acaa403bef5c7ffc4097c3cc9c43735fc567"
+    },
+    {
+      "phase": "A1",
+      "rawSha256": "fbc0382bf3bbdfbba588122bbeb47652c6f3a0bff031050d12b0a806efd67f3a"
+    },
+    {
+      "phase": "A2",
+      "rawSha256": "2228654b1bcbe3858af8d1eea004774c8567b48e78e09c2a251100c3a22b5162"
+    },
+    {
+      "phase": "A3",
+      "rawSha256": "a511b31a4ea5b0a49439f659756a4b6d04b28f4e378b30fd78e4885e3deb3999"
+    }
+  ],
+  "result": {
+    "status": "PASS",
+    "project": "wfc-pathfinder-local-f673a0facba3",
+    "removedVerifiedRestoreFixtureOnly": true,
+    "resources": {
+      "containers": [],
+      "volumes": [],
+      "networks": []
+    }
+  }
+}

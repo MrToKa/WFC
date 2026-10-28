@@ -1,0 +1,185 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS",
+  "capturedAt": "2026-10-17T20:15:03.694Z",
+  "referenceCommit": "45c24bf5f433f13e102600b36f20327c77961d0a",
+  "scope": "PF-0 synthetic contracts/compatibility baseline only; no web implementation",
+  "environment": {
+    "dotnetSdk": "9.0.319",
+    "targetFramework": "net9.0",
+    "configuration": "Release",
+    "node": "v24.19.0",
+    "platform": "win32",
+    "architecture": "x64",
+    "dotnetCliHome": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\.pf0-work\\core-1f723e37-f152-4a60-9b1e-46adc6c3179c\\.dotnet-home",
+    "dotnetCliHomeIsPrivateToOwnTemporaryCopy": true,
+    "nugetPackagesExplicitlyRedirected": false,
+    "thirdPartyPackageReferences": 0,
+    "globalSdkCacheSideEffectsIndependentlyAudited": false,
+    "telemetryOptOut": true,
+    "skipFirstTimeExperience": true
+  },
+  "commands": [
+    {
+      "command": "dotnet run --configuration Release --project C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\.pf0-work\\core-1f723e37-f152-4a60-9b1e-46adc6c3179c\\tests\\PathFinder.Routing.Tests\\PathFinder.Routing.Tests.csproj",
+      "exitCode": 0,
+      "log": "pf-core-release.log",
+      "checks": 105
+    },
+    {
+      "command": "dotnet run --configuration Release --project C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\.pf0-work\\core-1f723e37-f152-4a60-9b1e-46adc6c3179c\\tools\\CaptureGeometry\\CaptureGeometry.csproj -- <initial41-inputs> <own-temp>/captured-inputs.json",
+      "exitCode": 0,
+      "log": "pf-core-geometry-capture.log",
+      "stdoutEmpty": true,
+      "retainedInputConstructorBodyMatchesCapture": true
+    },
+    {
+      "command": "dotnet run --configuration Release --project C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\.pf0-work\\core-1f723e37-f152-4a60-9b1e-46adc6c3179c\\tools\\GoldenExtractor\\GoldenExtractor.csproj -- <captured43-inputs> <owned-fixtures>/pf-core-v1.expected.json",
+      "exitCode": 0,
+      "log": "pf-core-golden-extraction.log",
+      "caseCount": 43
+    },
+    {
+      "command": "dotnet run --no-build --configuration Release --project C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\.pf0-work\\core-1f723e37-f152-4a60-9b1e-46adc6c3179c\\tools\\GoldenExtractor\\GoldenExtractor.csproj -- <captured43-inputs> <own-temp>/golden-repeat.json",
+      "exitCode": 0,
+      "log": "pf-core-golden-repeat.log",
+      "repeatByteIdentical": true
+    },
+    {
+      "command": "node <own-temp>/validate-corpus.cjs <owned-fixtures> <own-temp>/golden-repeat.json",
+      "exitCode": 0,
+      "log": "pf-core-schema-validation.log",
+      "validator": "existing read-only WFC node_modules/ajv 6.15.0",
+      "schemaDraft": "draft-07",
+      "positiveDocuments": 2,
+      "negativeControls": 6
+    }
+  ],
+  "constructorBodySha256": "69c05a63108f6d5af52b2b980b367449979e3fe4e250517d2a7ec3bd77c1e874",
+  "metadataFinalization": "Three group anchors and two hierarchy group anchors were tightened after extraction. Constructor inputs, IDs and kinds were explicitly compared with captured-inputs.json and are byte-identical after deterministic constructor-body serialization.",
+  "sourceCopies": {
+    "core": 11,
+    "harness": 9,
+    "allExactSha256Matches": true,
+    "sourceInventory": {
+      "bytes": 6693,
+      "sha256": "6697ad87675ab3dbd7db65a0de70de4ecac8c85358a6b14bf80525d333592984"
+    }
+  },
+  "fixtureManifest": {
+    "bytes": 13592,
+    "sha256": "0c3aac68b43f5e19201037716c13e3a0b8b6cd6074ea015eaf23de8c93b26392"
+  },
+  "parityDocument": {
+    "bytes": 14552,
+    "sha256": "35dbd552377a1bc776b9eb1716615eaaa3349b3056febed688ae6e9de13bb457"
+  },
+  "artifacts": [
+    {
+      "path": "pf-core-v1.inputs.json",
+      "bytes": 223109,
+      "sha256": "1fd49428742284e30071a0b293cca0a8f5eff8b47a2aaab10f1184cf73cd7e78"
+    },
+    {
+      "path": "pf-core-v1.expected.json",
+      "bytes": 49832,
+      "sha256": "43ea08d2e7e5ff4e56d1fe5c4435bada300a215b0da3164f5179d27ca4b23a5a"
+    },
+    {
+      "path": "pf-core-v1.schema.json",
+      "bytes": 25431,
+      "sha256": "b65addd83e0e3b400246e28da6b9a0dedfcb6517008b643a0203694f2f36f759"
+    },
+    {
+      "path": "generator/Program.cs",
+      "bytes": 10553,
+      "sha256": "127e1d0fe89dd5bd41cd396bd5200837a7fb008c776b9326bb1634a9235ea5d0"
+    },
+    {
+      "path": "generator/GoldenExtractor.csproj",
+      "bytes": 456,
+      "sha256": "957561bc4bdb7873d96216c972a2cb0fe12c980048bad462edc96d66450967ae"
+    },
+    {
+      "path": "generator/CaptureGeometry.cs",
+      "bytes": 3337,
+      "sha256": "3b4ac928911a8c21feb8ed5810c84a7d6cfc7fe5f4d4191d51fd8a3a9d08320d"
+    },
+    {
+      "path": "generator/CaptureGeometry.csproj",
+      "bytes": 539,
+      "sha256": "cbef8afc87576bc54755e66be25bc85cd4b7de535a48f91179087396f1702c89"
+    }
+  ],
+  "logs": [
+    {
+      "path": "pf-core-release.log",
+      "bytes": 8477,
+      "sha256": "4bade93f84120f55e47d85c00b2eb671499e4c1f1f0002cebf49d3ccce2f8190"
+    },
+    {
+      "path": "pf-core-golden-extraction.log",
+      "bytes": 52,
+      "sha256": "9e1ed7ffffaf4d8ea12b0fbbfb39d17d1b96978170607f10d1d123d4981b511e"
+    },
+    {
+      "path": "pf-core-golden-repeat.log",
+      "bytes": 52,
+      "sha256": "9e1ed7ffffaf4d8ea12b0fbbfb39d17d1b96978170607f10d1d123d4981b511e"
+    },
+    {
+      "path": "pf-core-geometry-capture.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "pf-core-schema-validation.log",
+      "bytes": 486,
+      "sha256": "1194ecf618105caad96db02147046a6c2405c3e5865432308c60dbfe33adc966"
+    }
+  ],
+  "notRun": [
+    {
+      "scope": "private327 Excel fixture",
+      "reason": "Not supplied; 105 current groups, not historical106"
+    },
+    {
+      "scope": "Navisworks native smoke",
+      "reason": "No native execution authorized in PF-0"
+    },
+    {
+      "scope": "paired native/converted model equivalence",
+      "reason": "Full-precision paired geometry, identity, rule and endpoint captures not present"
+    },
+    {
+      "scope": "WFC implementation/admin/registry/proposal Apply",
+      "reason": "Contracts-only PF-0"
+    }
+  ],
+  "cleanup": {
+    "status": "BLOCKED",
+    "action": "recursive Remove-Item of own temporary execution copy",
+    "reason": "Automatic approval review rejected action: blocked by policy",
+    "attempts": 1,
+    "commandExecuted": false,
+    "deletionMutations": 0,
+    "noRetry": true,
+    "target": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\.pf0-work\\core-1f723e37-f152-4a60-9b1e-46adc6c3179c",
+    "resolvedTarget": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\.pf0-work\\core-1f723e37-f152-4a60-9b1e-46adc6c3179c",
+    "verifiedParent": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\.pf0-work",
+    "runId": "1f723e37-f152-4a60-9b1e-46adc6c3179c",
+    "files": 162,
+    "directories": 51,
+    "bytes": 3586733.0,
+    "reparseEntries": 0,
+    "observedAt": "2026-10-17T20:16:13.4235119Z",
+    "targetRetained": true,
+    "scope": "Only own temporary execution tree; original repositories, docs, fixtures and evidence excluded"
+  },
+  "limitations": [
+    "Synthetic extraction does not establish native/converted model equivalence.",
+    "105 current groups exclude the unavailable private327 Excel fixture.",
+    "No Navisworks/native or WFC integration execution.",
+    "SDK global/cache side effects were not comprehensively audited; original checkouts were never execution working directories."
+  ]
+}

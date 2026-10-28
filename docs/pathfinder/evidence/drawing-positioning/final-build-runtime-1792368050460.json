@@ -1,0 +1,323 @@
+{
+  "schemaVersion": "pathfinder.drawing-positioning.final-build-runtime.v1",
+  "status": "PASS",
+  "scope": "WHITESPACE_ONLY_CHANGES_SINCE622_AND_UI_CHECKS",
+  "sourceFiles": [
+    {
+      "path": "docker/pathfinder.Dockerfile",
+      "sha256": "682018b4ff47990ea58b5657bccf434a948a16bdd99d06d0a84cd38ed53d0bc4"
+    },
+    {
+      "path": "docker/pathfinder.Dockerfile.dockerignore",
+      "sha256": "68e8f31e1fa9e2b47e02f7184ad40d866387da57bdecc216284f83fce18c0a51"
+    },
+    {
+      "path": "docker/pathfinder.compose.yml",
+      "sha256": "814a9df62725bd1e355fae41ec30add3cb8e07bde00875f4d50b4e2d46b64987"
+    },
+    {
+      "path": "docker/pathfinder.nginx.conf",
+      "sha256": "f9b3015215873a7e40be7c81852158714d7f8cb46f11dbb1658cce1036e51ad2"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "1ce1921a9408d2c8283f1c11449321625c43524b53971b5176f90ba44468f5b7"
+    },
+    {
+      "path": "package.json",
+      "sha256": "18e01e6309890ac529283d8576ed6da4f5fdc87b6e00a39f2368491d9046125b"
+    },
+    {
+      "path": "server/app.ts",
+      "sha256": "4be5657f997813ea532a1e597511113f9ec060e139ed5cc50b715e08d571a7ad"
+    },
+    {
+      "path": "server/middleware.ts",
+      "sha256": "65fe29f2ce40b6b301f30917182df98cda82be74bf82041a9b8212dd52911fc7"
+    },
+    {
+      "path": "server/pathfinder/catalog.test.ts",
+      "sha256": "c7807869536b426f12612c55b7358466aba707cdcbd54025c4eb3c693222cc48"
+    },
+    {
+      "path": "server/pathfinder/catalog.ts",
+      "sha256": "6e044b7be2506101754acaa91f0de863f0df03fc2640966cfe216b5a084c57b0"
+    },
+    {
+      "path": "server/pathfinder/drawingAccess.test.ts",
+      "sha256": "264e143a448da7ed2f120c8836b352a14d6943d020da36bf9420269c9e31152c"
+    },
+    {
+      "path": "server/pathfinder/drawingAccess.ts",
+      "sha256": "f2f8a55519a4674fdcca5484f67efac31c6c4ab7d14e1a5c961c6aa0a6dfdb5a"
+    },
+    {
+      "path": "server/pathfinder/drawingExportStage.test.ts",
+      "sha256": "d4b7e8e4bb8f60a97065dd11dc591c50464538a74000111c90172d65db339e27"
+    },
+    {
+      "path": "server/pathfinder/drawingExports.test.ts",
+      "sha256": "53c7c1265b6cf0d48624cd0e08511be5fb0a1838167c2b4dc6a188af9819e44c"
+    },
+    {
+      "path": "server/pathfinder/drawingExports.ts",
+      "sha256": "90a82eae0410de89e14127177e5411fb18d9bbaaca506a7987d2cff09622d809"
+    },
+    {
+      "path": "server/pathfinder/drawingPolicy.test.ts",
+      "sha256": "b05afb7de1cbf4a87c2f79e7d0d17c5f399fc5d04d71d19eb76f97bf98887f7d"
+    },
+    {
+      "path": "server/pathfinder/drawingPolicy.ts",
+      "sha256": "320a8c0f296047ce72a86804f0d07f6499df096a325e9711022626b85507bf7b"
+    },
+    {
+      "path": "server/pathfinder/drawingPolicyRoutes.test.ts",
+      "sha256": "b0816954f658e8989deb046434b422e95bb5576d76e3c5f14c9bf95f4c1227bb"
+    },
+    {
+      "path": "server/pathfinder/drawingPolicyRoutes.ts",
+      "sha256": "bbd28170ce0e2bdc2521f6eecd698329044201202b0bb5d7d4ca112f52693653"
+    },
+    {
+      "path": "server/pathfinder/drawingSnapshotRoutes.test.ts",
+      "sha256": "2f63ca5894f5897e75d3bba0d8449d0fc2f92ec09a2b392f08a12cd7c16c0139"
+    },
+    {
+      "path": "server/pathfinder/drawingSnapshotRoutes.ts",
+      "sha256": "d61d451ac67820b2c81553bfb8df498b21bb5ca4f25e9ce0fe58860b09339735"
+    },
+    {
+      "path": "server/pathfinder/drawingSnapshots.test.ts",
+      "sha256": "2d1c0e0ce1cc31a3af4edc7f721abbf73e8c4699f884ed7b8a0588b3f866d727"
+    },
+    {
+      "path": "server/pathfinder/drawingSnapshots.ts",
+      "sha256": "07fab5f43a50120c0082eb411993f36f854f8e6c9861108466a36c5a502d8fe2"
+    },
+    {
+      "path": "server/pathfinder/policyJson.ts",
+      "sha256": "644d895ab16b6baea362a8c69825288b48ea6389d196738209a85349a2ab5362"
+    },
+    {
+      "path": "server/pathfinder/policySchema.ts",
+      "sha256": "859284b0ebae2a94a6a3f88db8701cd4317218d9ecbc747a192c6a67762e6159"
+    },
+    {
+      "path": "server/pathfinder/schema.ts",
+      "sha256": "8acb31952720472478d42e575336a2da784e578626e42f7d77d0860a86baf84a"
+    },
+    {
+      "path": "server/routes/traysRoutes.ts",
+      "sha256": "741c811fe230d8a1a28bcd3973ebee1c31792705177292f871326fba2e6a6679"
+    },
+    {
+      "path": "shared/pathfinderDrawingPolicy.test.ts",
+      "sha256": "07dd1452eda57fdd662bb0f5a0ae091e990939939ffe9a8a00313e3301ce88ea"
+    },
+    {
+      "path": "shared/pathfinderDrawingPolicy.ts",
+      "sha256": "af9297e6c1c56c62239e56bb04a4814bdd1126122ceb2220c2b3ba929508793d"
+    },
+    {
+      "path": "shared/trayDrawing/index.test.ts",
+      "sha256": "3be90bbd084e2397876332b98af654eab538ddb5060a902dcec299782c161a92"
+    },
+    {
+      "path": "shared/trayDrawing/index.ts",
+      "sha256": "d3f294e51adee91995a3dc4adc43322c53a56b401b2f38b426bcf7feb55a3bf4"
+    },
+    {
+      "path": "shared/trayDrawing/ranges.ts",
+      "sha256": "fb43fd7a503451c62f1219ee67ec9c54c62d60a786bf07762ddd44b3d53e4346"
+    },
+    {
+      "path": "shared/trayDrawing/recording.ts",
+      "sha256": "906370e703f230b8dbceff5911c27a544fbbaaf011ee355c194098b65ac257ef"
+    },
+    {
+      "path": "shared/trayDrawing/service.ts",
+      "sha256": "2a355fc270dc3434ef37f0360c72c7490982e04d45afb6381e0ab7f07afe3374"
+    },
+    {
+      "path": "shared/trayDrawing/trefoilClampDrawing.ts",
+      "sha256": "2cb623f8bc3dc6358a99a014897e06e14f01020ad5e9bb4892a263ee3020e5aa"
+    },
+    {
+      "path": "shared/trayDrawing/trefoilClamps.ts",
+      "sha256": "9cd15c34a776c6ccb187ae81a1ae2edb29c1132cea6cd212cc2d1bad746a466d"
+    },
+    {
+      "path": "shared/trayDrawing/types.ts",
+      "sha256": "95e57314de037c3393031ad98451287d86de8dd0acc68d914afb3d65d0eb2b58"
+    },
+    {
+      "path": "shared/trayDrawingInputs.test.ts",
+      "sha256": "ebcb8f42c7940cff772d07de530ae08b43bb7b901a250efe73bccee1ef1ee908"
+    },
+    {
+      "path": "shared/trayDrawingInputs.ts",
+      "sha256": "2bdfa34855598959dfb024de0a6abb7088085be5f67f03c22797192d2f8da27b"
+    },
+    {
+      "path": "shared/trayDrawingSnapshot.ts",
+      "sha256": "ccd5f9e9ddd0555d8ea8e997c42ce7aa79bf7f6e254a1f9b7ae329f5ee6ae66c"
+    },
+    {
+      "path": "src/api/pathfinderDrawing.test.ts",
+      "sha256": "6617730a1a72d48b30458d0f8c86986bbb549eb4959a2310d69de0b54238dfd4"
+    },
+    {
+      "path": "src/api/pathfinderDrawing.ts",
+      "sha256": "4e6799d27afc5f9f263475c8743d25f5b3a57a901adc6f3702dece5969568a8c"
+    },
+    {
+      "path": "src/api/trayDrawing.test.ts",
+      "sha256": "c2cee9519c70724f4c1836050d72d7313262ab5974163f06bbeff22b470c7bb2"
+    },
+    {
+      "path": "src/api/trayDrawing.ts",
+      "sha256": "0c920348c88472e552289b45ef6ecc4f3c7f1bbfb1f2d882ad84a1eeedad76ab"
+    },
+    {
+      "path": "src/api/trays.test.ts",
+      "sha256": "4748e8933eaf16a1d77eb3ce8197f27a7036cd168a3ce6e48baa778bad6dd918"
+    },
+    {
+      "path": "src/api/trays.ts",
+      "sha256": "b5a9ba1f4c2dc3540b5f7e698b63e3e8d70352effe76b2d92a1b4dd9269798d6"
+    },
+    {
+      "path": "src/components/CablePositioningCard.test.tsx",
+      "sha256": "769c80310efbf3d12a1902c9a78c1d7fc03eb5ad1ca96c29b7c0849f1cbca1df"
+    },
+    {
+      "path": "src/components/CablePositioningCard.tsx",
+      "sha256": "78b02c3efc1f77d83c4da686c91ab393fe070365e9af9d7840670e782a0c71a3"
+    },
+    {
+      "path": "src/pages/ProjectDetails.tsx",
+      "sha256": "0b54f0c1f8ce911f615b084ae9b365ddbf2542929af069c5a615d498760cf3a4"
+    },
+    {
+      "path": "src/pages/ProjectDetails/DetailsTab.tsx",
+      "sha256": "91c0b211806869c925dff65e63004de012373e17c5662d025309a049418a69df"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/useDrawingPurposePolicy.test.ts",
+      "sha256": "2d92fad4db92d76989243bb9033a0d77a283a4fe7fd782ca10c03e6f696b9342"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/useDrawingPurposePolicy.ts",
+      "sha256": "26792ab53c12a8073b9ed0204c689b782eb62b7dae96dada9a83d2bbde8a21e4"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/useProjectDataRequests.test.tsx",
+      "sha256": "2c0d308fbc47776e1b7b2cfcb904c469557829b9bb0f00a4e67bc8155ae0e4f4"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/useTraysSection.ts",
+      "sha256": "c1057688054f920209a460d21496359c2f8843388da3623e430b46b0d1effb7d"
+    },
+    {
+      "path": "src/pages/TrayDetails.tsx",
+      "sha256": "f26ab7b4c34fda07fade9f8f22f191ea9792dd5b35ef88e6f7964124c16ff777"
+    },
+    {
+      "path": "src/pages/TrayDetails/hooks/useTrayData.test.ts",
+      "sha256": "f778258f26fa1dd53ae484cee0acd0efd3899e2dfedad497a411e525f92d7ca6"
+    },
+    {
+      "path": "src/pages/TrayDetails/hooks/useTrayData.ts",
+      "sha256": "e8ba201ce0d8c8badcd64006dfacf73530d00994e50146c79a09919356b63317"
+    },
+    {
+      "path": "src/pages/TrayDetails/trayDrawingService.ts",
+      "sha256": "36ddaffaf7f8e7970ff5f16963683d8311137d4313154fa7e8d9aa450e720028"
+    },
+    {
+      "path": "src/pages/TrayDetails/trefoilClampDrawing.ts",
+      "sha256": "ee66324e24f5134341a8b852db081919ac6a93e4781f3421c8003f10d16d85e9"
+    },
+    {
+      "path": "src/pages/TrayDetails/trefoilClamps.ts",
+      "sha256": "fe4be5320c43ddefd534a90220bcd56a5c4dd1e23f62479d738e11bba285724c"
+    },
+    {
+      "path": "src/utils/trayReportGeneration.test.ts",
+      "sha256": "9a15433168340057847745bb61f77145e3d84cf2c967994b566368834c771675"
+    },
+    {
+      "path": "src/utils/trayReportGeneration.ts",
+      "sha256": "5bc3c3359f18a44643a72d4dbbfe5561503e96157b133533d728f424270d60a3"
+    }
+  ],
+  "images": {
+    "api": "sha256:1ae01697093fa8374af378d16fdacef6158bef167ef419937bd7a309641e8fa0",
+    "web": "sha256:134cce47c50621e7ac39f78d22cbcbd57094798ac3bcc4e1fc65a87556cc6698"
+  },
+  "resources": {
+    "containers": [
+      {
+        "role": "web",
+        "id": "191de419eae68ca3b9826178f984b19a523e0c14a6f3ea058ba29165b481452b",
+        "image": "sha256:134cce47c50621e7ac39f78d22cbcbd57094798ac3bcc4e1fc65a87556cc6698",
+        "name": "wfc-pathfinder-local-0cba87606e9b-web-1",
+        "running": true,
+        "startedAt": "2026-10-19T00:00:44.370433726Z"
+      },
+      {
+        "role": "api",
+        "id": "a2e930da7a641941a776a552c1b048bc59473c9ad4dc99b020bffa4e1e5e25ed",
+        "image": "sha256:1ae01697093fa8374af378d16fdacef6158bef167ef419937bd7a309641e8fa0",
+        "name": "wfc-pathfinder-local-0cba87606e9b-api-1",
+        "running": true,
+        "startedAt": "2026-10-19T00:00:38.543241267Z"
+      },
+      {
+        "role": "storage-ready",
+        "id": "e26509d2b47f7a62ccc51196c7fec5fdb06c0df649cd000d3306a85dac563e8c",
+        "image": "sha256:dce12a1f5ab6311bbaf04defb7277ff0d50fee36e29e49d47234e5bf4ea405fe",
+        "name": "wfc-pathfinder-local-0cba87606e9b-storage-ready-1",
+        "running": false,
+        "startedAt": "2026-10-18T16:37:13.558001521Z"
+      },
+      {
+        "role": "postgres",
+        "id": "6a39e7b2d794055dccef0919cf3a99ddf60e0f3c0b5daae062cec1eb6c9b3785",
+        "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+        "name": "wfc-pathfinder-local-0cba87606e9b-postgres-1",
+        "running": true,
+        "startedAt": "2026-10-18T15:55:24.900140794Z"
+      },
+      {
+        "role": "minio",
+        "id": "56456c8675afd1458df3ae87d8df4bf31131fa1807f7468e3958f900f53a73ed",
+        "image": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+        "name": "wfc-pathfinder-local-0cba87606e9b-minio-1",
+        "running": true,
+        "startedAt": "2026-10-18T23:29:41.044602549Z"
+      }
+    ],
+    "volumes": [
+      "wfc-pathfinder-local-0cba87606e9b_postgres",
+      "wfc-pathfinder-local-0cba87606e9b_minio",
+      "wfc-pathfinder-local-0cba87606e9b_staging",
+      "wfc-pathfinder-local-0cba87606e9b_pathfinder"
+    ],
+    "networks": [
+      {
+        "id": "ef7ba0d6199afe8c1c361d27acc12f52fbdeca7e575af51ac9e63054cf8301d1",
+        "name": "wfc-pathfinder-local-0cba87606e9b_front"
+      },
+      {
+        "id": "3ab7652221239fe0a4c35f64be8a706aa6182633775d7aa0627fa1b54968e57d",
+        "name": "wfc-pathfinder-local-0cba87606e9b_backend"
+      }
+    ]
+  },
+  "health": "PASS",
+  "protectedContainersUnchanged": 18,
+  "dataRolesUnchanged": true,
+  "finishedAt": "2026-10-19T00:00:50.460Z"
+}

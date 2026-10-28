@@ -1,114 +1,50 @@
-import { useState, useEffect } from 'react';
-import {
-  Project,
-  Tray,
-  Cable,
-  fetchProject,
-  fetchTray,
-  fetchTrays,
-  fetchCables,
-} from '../../../api/client';
-import { ApiError } from '../../../api/client';
-import { filterCablesByTray, sortTrays } from '../TrayDetails.utils';
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
+import type { Project, Tray, Cable } from '../../../api/client';
+import { fetchTrays } from '../../../api/client';
+import { fetchTrayDrawingSnapshot, type TrayDrawingResponse } from '@/api/trayDrawing';
+import { sortTrays } from '../TrayDetails.utils';
 
-export const useTrayData = (projectId: string | undefined, trayId: string | undefined) => {
-  const [project, setProject] = useState<Project | null>(null);
-  const [tray, setTray] = useState<Tray | null>(null);
+type State = { identity: string; response: TrayDrawingResponse | null; isLoading: boolean; error: string | null };
+export const useTrayData = (projectId: string | undefined, trayId: string | undefined, token: string | null = null) => {
+  const identity = JSON.stringify([projectId, trayId, token]);
+  const latest = useRef(identity); latest.current = identity;
+  const active = useRef<AbortController | null>(null);
+  const [state, setState] = useState<State>({ identity, response: null, isLoading: true, error: null });
   const [trays, setTrays] = useState<Tray[]>([]);
-  const [trayCables, setTrayCables] = useState<Cable[]>([]);
-  const [projectCables, setProjectCables] = useState<Cable[]>([]);
-  const [cablesError, setCablesError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-
+  const applyDrawingSnapshot = useCallback((response: TrayDrawingResponse) => {
+    if (response.snapshot.projectId !== projectId || response.snapshot.projectTrayId !== trayId || latest.current !== identity) return;
+    setState({ identity, response, isLoading: false, error: null });
+  }, [identity, projectId, trayId]);
+  const refreshDrawing = useCallback(async () => {
+    active.current?.abort(); const abort = new AbortController(); active.current = abort;
+    setState({ identity, response: null, isLoading: true, error: null });
+    if (!projectId || !trayId || !token) { setState({ identity, response: null, isLoading: false, error: 'Sign in and select a tray to load its shared drawing.' }); return; }
+    try {
+      const response = await fetchTrayDrawingSnapshot(projectId, trayId, token, abort.signal);
+      if (abort.signal.aborted || latest.current !== identity) return;
+      applyDrawingSnapshot(response);
+    } catch (error) {
+      if (abort.signal.aborted || latest.current !== identity) return;
+      setState({ identity, response: null, isLoading: false, error: error instanceof Error ? error.message : 'The shared tray drawing could not be loaded. Refresh to try again.' });
+    }
+  }, [identity, projectId, trayId, token, applyDrawingSnapshot]);
+  useEffect(() => { void refreshDrawing(); return () => active.current?.abort(); }, [refreshDrawing]);
   useEffect(() => {
-    let active = true;
-    setProject(null);
-    setTray(null);
-    setTrays([]);
-    setCablesError(null);
-    const load = async () => {
-      if (!projectId || !trayId) {
-        setError('Tray not found.');
-        setTrayCables([]);
-        setProjectCables([]);
-        setTrays([]);
-        setIsLoading(false);
-        return;
-      }
-
-      setIsLoading(true);
-      setError(null);
-      setTrayCables([]);
-      setProjectCables([]);
-      setCablesError(null);
-
-      try {
-        const [projectResponse, trayResponse] = await Promise.all([
-          fetchProject(projectId),
-          fetchTray(projectId, trayId),
-        ]);
-
-        if (!active) return;
-
-        setProject(projectResponse.project);
-        setTray(trayResponse.tray);
-
-        try {
-          const cablesResponse = await fetchCables(projectId);
-          if (!active) return;
-          setProjectCables(cablesResponse.cables);
-          setTrayCables(filterCablesByTray(cablesResponse.cables, trayResponse.tray.name));
-        } catch (cableError) {
-          if (!active) return;
-          console.error('Failed to load tray cables', cableError);
-          setCablesError('Failed to load cables for this tray.');
-          setProjectCables([]);
-        }
-      } catch (err) {
-        if (!active) return;
-        console.error('Failed to load tray details', err);
-        if (err instanceof ApiError && err.status === 404) {
-          setError('Tray not found.');
-        } else {
-          setError('Failed to load tray details.');
-        }
-        setTrayCables([]);
-        setProjectCables([]);
-        setTrays([]);
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        const traysResponse = await fetchTrays(projectId);
-        if (!active) return;
-        setTrays(sortTrays(traysResponse.trays));
-      } catch (err) {
-        if (!active) return;
-        console.error('Failed to load trays for navigation', err);
-      } finally {
-        if (active) setIsLoading(false);
-      }
-    };
-
-    void load();
-    return () => {
-      active = false;
-    };
-  }, [projectId, trayId]);
-
+    let closed = false; setTrays([]);
+    if (projectId && token) void fetchTrays(projectId).then(value => { if (!closed && latest.current === identity) setTrays(sortTrays(value.trays)); }).catch(() => {});
+    return () => { closed = true; };
+  }, [identity, projectId, token]);
+  const view = state.identity === identity ? state : { identity, response: null, isLoading: true, error: null };
+  const response = view.response;
+  const project = useMemo(() => response ? { ...response.data.project, canEdit: response.permissions.canEdit } as unknown as Project : null, [response]);
+  // Existing tray mutation hooks request a refresh; they cannot replace frozen drawing inputs piecemeal.
+  const setTray: Dispatch<SetStateAction<Tray | null>> = useCallback(() => { void refreshDrawing(); }, [refreshDrawing]);
+  const setTrayCables: Dispatch<SetStateAction<Cable[]>> = useCallback(() => { void refreshDrawing(); }, [refreshDrawing]);
   return {
     project,
-    tray,
-    trays,
-    trayCables,
-    projectCables,
-    cablesError,
-    isLoading,
-    error,
-    setTray,
-    setTrays,
-    setTrayCables,
+    tray: response?.data.tray as unknown as Tray | null ?? null,
+    trays, trayCables: response?.data.trayCables as unknown as Cable[] ?? [], projectCables: response?.data.cables as unknown as Cable[] ?? [],
+    cablesError: null, isLoading: view.isLoading, error: view.error, setTray, setTrays, setTrayCables,
+    drawingResponse: response, refreshDrawing, applyDrawingSnapshot,
   };
 };

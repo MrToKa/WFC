@@ -15,6 +15,7 @@ export type Project = {
   customer: string;
   manager: string | null;
   description: string | null;
+  connectionGap: number;
   secondaryTrayLength: number | null;
   supportDistance: number | null;
   supportWeight: number | null;
@@ -80,6 +81,7 @@ export type ProjectCableLayout = {
   considerBundleSpacingAsFree: boolean | null;
   minFreeSpacePercent: number | null;
   maxFreeSpacePercent: number | null;
+  autoRerouteForFreeSpace?: boolean;
   mv: ProjectCableCategorySettings | null;
   power: ProjectCableCategorySettings | null;
   vfd: ProjectCableCategorySettings | null;
@@ -98,6 +100,7 @@ export type ProjectCableLayoutInput = {
   considerBundleSpacingAsFree?: boolean | null;
   minFreeSpacePercent?: number | null;
   maxFreeSpacePercent?: number | null;
+  autoRerouteForFreeSpace?: boolean;
   mv?: ProjectCableCategorySettingsInput;
   power?: ProjectCableCategorySettingsInput;
   vfd?: ProjectCableCategorySettingsInput;

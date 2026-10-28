@@ -1,0 +1,122 @@
+{
+  "schemaVersion": "pathfinder.current-inputs.fullname-controls.v1",
+  "recordedAt": "2026-10-18T15:31:49.079Z",
+  "status": "PASS",
+  "source": [
+    {
+      "path": "scripts/pathfinder-current-inputs/source-copy.mjs",
+      "sha256": "beae476a6259c964aadd3f73795b74b33095ced3992dca4b6c2faba640cd2fc3"
+    },
+    {
+      "path": "scripts/pathfinder-current-inputs/source-lib.mjs",
+      "sha256": "a548802eb80bf02290363e620199a6f4b941a682f76d22b571c17fb8414dbb61"
+    },
+    {
+      "path": "scripts/pathfinder-current-inputs/source-lib.test.mjs",
+      "sha256": "e6e71e0cf2e8da5e0feca1bc69e5cce1060e359d8beced74c5a6d4755e93f074"
+    },
+    {
+      "path": "scripts/pathfinder-current-inputs/README-source.md",
+      "sha256": "b8e6e2e517650f6003f43ed11e7735a422b93783d33ae4a315842ac7082f4062"
+    }
+  ],
+  "sourceSetSha256": "a4099528c1d996b4e10f8a808f080fd00888ccc8f5cf26bd93e2c6fa1acb1238",
+  "checks": [
+    {
+      "command": [
+        "node",
+        "--check",
+        "scripts/pathfinder-current-inputs/source-lib.mjs"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "error": null,
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": {
+        "path": "pathfinder-engine/.scratch/current-inputs-fullname-controls-42036a42-c2a4-43db-bcab-044581048af8/command-0.tap",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tests": null,
+      "pass": null,
+      "fail": null
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "scripts/pathfinder-current-inputs/source-copy.mjs"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "error": null,
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": {
+        "path": "pathfinder-engine/.scratch/current-inputs-fullname-controls-42036a42-c2a4-43db-bcab-044581048af8/command-1.tap",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tests": null,
+      "pass": null,
+      "fail": null
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "scripts/pathfinder-current-inputs/source-lib.test.mjs"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "error": null,
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": {
+        "path": "pathfinder-engine/.scratch/current-inputs-fullname-controls-42036a42-c2a4-43db-bcab-044581048af8/command-2.tap",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tests": null,
+      "pass": null,
+      "fail": null
+    },
+    {
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "scripts/pathfinder-current-inputs/source-lib.test.mjs"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "error": null,
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": {
+        "path": "pathfinder-engine/.scratch/current-inputs-fullname-controls-42036a42-c2a4-43db-bcab-044581048af8/command-3.tap",
+        "bytes": 9194,
+        "sha256": "eac382d33ab2d5a8da138a173f0d8e3844e37a5449d67e5718b53e0037331a25"
+      },
+      "tests": 45,
+      "pass": 45,
+      "fail": 0
+    }
+  ],
+  "originalDatabaseQueriesByThisAgent": 0,
+  "runtimeOperationsByThisAgent": 0,
+  "actualObservation": {
+    "path": "docs/pathfinder/evidence/current-inputs/source-project-identity-20261018T1529Z.json",
+    "sha256": "3126f3ff0ca4577c0a32dde424e743e7f9e4675449aec685de57d249f5be9b35"
+  },
+  "correction": "Keep screenshot UUID, guard observed full normalized name HPU Aalborg 2023 and exact project number P230039 / H.7500062. No source rename, ID substitution, prefix match or relaxed model fingerprint/resource guard.",
+  "preservedFailures": [
+    "docs/pathfinder/evidence/current-inputs/source-copy-20261018T1515Z.json",
+    "docs/pathfinder/evidence/current-inputs/source-copy-corrected-20261018T1524Z.json"
+  ],
+  "limitations": [
+    "Actual corrected original copy has not run; root remains sole executor.",
+    "Controls use fake Client and bounded no-DB watchdog children."
+  ]
+}

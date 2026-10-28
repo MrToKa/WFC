@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "pathfinder.ui-preservation.baseline.v1",
+  "recordedAtUtc": "2026-10-18T14:10:11Z",
+  "branch": "pf-8-ui-preservation-local-20261018",
+  "handoffCommit": "e275dd5ee61adb339649a63cd2695dcabcec10f7",
+  "baseDeliveryCommit": "7aedfe0b0b14b38ba58bc20ef40599403d4114c6",
+  "cachedOriginMain": {"commit":"e1ef20202598bb4d3d78e4772cbbb9747ec23a00","baseDeliveryAhead":29,"baseDeliveryBehind":0},
+  "remoteConnector": {"observedAtUtc":"2026-10-18T14:04:33Z","readOnly":true,"observations":[
+    {"url":"https://api.github.com/repos/MrToKa/WFC/branches/main","commit":"e1ef20202598bb4d3d78e4772cbbb9747ec23a00"},
+    {"url":"https://api.github.com/repos/MrToKa/WFC/pulls?state=all&head=MrToKa%3Apf-2-coverage-local-20261018&per_page=20","count":0}
+  ],"candidateRemoteCiReview":"NOT_ESTABLISHED"},
+  "automation": {"id":"pathfinder","status":"ACTIVE","updatedThroughApplicationTool":true,"schedulePreserved":"Every10minutes","targetThreadId":"01a1437a-c394-7650-aae2-5d25e2573207","promptCurrentBranchAndHandoff":true,"quietOnUnchanged":true,"sevenDeniedChildrenPreserved":true},
+  "scope": "Recovery scheduling for current direct implementation; inspect active agents before any continuation. No remote publication or runtime qualification implied."
+}

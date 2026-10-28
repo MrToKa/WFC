@@ -1,0 +1,113 @@
+{
+  "schemaVersion": "pathfinder.purpose-policy.browser.v1",
+  "status": "PASS",
+  "browserId": "2",
+  "tabId": "6",
+  "realProjectId": "1af0f807-7653-40ea-8391-7eea6c54e7d4",
+  "checks": [
+    {
+      "name": "Real catalog",
+      "status": "PASS",
+      "trays": 330,
+      "purposes": 6,
+      "policyRevision": "0"
+    },
+    {
+      "name": "Distinct internal spacing remains separate and visible",
+      "status": "PASS",
+      "variants": 2
+    },
+    {
+      "name": "Synthetic Control save and unchanged other purpose",
+      "status": "PASS",
+      "revision": "1"
+    },
+    {
+      "name": "Full reload retains checkbox",
+      "status": "PASS"
+    },
+    {
+      "name": "Reset returns Unconfigured",
+      "status": "PASS",
+      "revision": "2"
+    },
+    {
+      "name": "Explicit empty mask shows Excluded",
+      "status": "PASS",
+      "revision": "3"
+    },
+    {
+      "name": "Reset exclusion",
+      "status": "PASS",
+      "revision": "4"
+    },
+    {
+      "name": "Concurrent stale edit refused and disabled",
+      "status": "PASS"
+    },
+    {
+      "name": "Explicit discard loads current server revision and other purpose",
+      "status": "PASS",
+      "revision": "5"
+    },
+    {
+      "name": "History shows only five successful saves",
+      "status": "PASS",
+      "events": 5
+    },
+    {
+      "name": "Engineer keeps project editing; admin policy and PF tab hidden",
+      "status": "PASS",
+      "engineerIdentity": true,
+      "detailsLoaded": true,
+      "existingProjectEditing": true,
+      "routingCardVisible": false,
+      "pathFinderTabVisible": false
+    },
+    {
+      "name": "Existing demonstration administrator restored",
+      "status": "PASS"
+    },
+    {
+      "name": "Protected model and three tools retained",
+      "status": "PASS",
+      "geometry": 664556,
+      "identifiers": 438156,
+      "properties": 6
+    }
+  ],
+  "realPermissionMutations": 0,
+  "engineeringApply": false,
+  "nativeParity": "NOT_RUN",
+  "screenshots": [
+    {
+      "privateFile": "r2-real-permissions.png",
+      "bytes": 92330,
+      "sha256": "3c4c8121efc95fed354b45321288e62db5b2703a2d365de66d9cb00e9eb13998"
+    },
+    {
+      "privateFile": "r2-ui-saved.png",
+      "bytes": 67052,
+      "sha256": "15ee72fcc8cce69e4665ced6d5e798459d1dfdfe0d96729009f082f2413c95f9"
+    },
+    {
+      "privateFile": "r2-ui-conflict.png",
+      "bytes": 69692,
+      "sha256": "ec6d050dcce023ca3c6041f160bbc70af699336370a820cf4352f377981d9ce0"
+    },
+    {
+      "privateFile": "r2-ui-engineer.png",
+      "bytes": 57078,
+      "sha256": "3f58db115ff16e77d7a70aba5d8165a53a6b2a0f94be24866940f792067da9a9"
+    },
+    {
+      "privateFile": "r2-protected-model.png",
+      "bytes": 77384,
+      "sha256": "94fe492d60ee0e94ec9a58ab0c81374f549f4b6244e8d0e9c3f9f73859941455"
+    }
+  ],
+  "finishedAt": "2026-10-18T23:02:16.582Z",
+  "fixtureCleanupReceipt": "browser-fixture-cleanup-1792364442072.json",
+  "apiImage": "sha256:2097b386515435d50aa1e095e4c12e340b2d2bab71c44707fc85bc89340ad476",
+  "webImage": "sha256:77611de13845a691984a784b4e4d5a7642412ea656b33bb97f4218b9a9cae845"
+}

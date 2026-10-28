@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "pathfinder.batched-capture.screenshot-cleanup.v1",
+  "recordedAt": "2026-10-18T16:43:50.2235368Z",
+  "scope": "Only three own unnecessary framing screenshots; successful initial and final evidence retained.",
+  "files": [
+    {
+      "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\docs\\pathfinder\\evidence\\batched-capture\\prepared-input-scope-first.png",
+      "bytes": 74693,
+      "sha256": "2c6a5324308644e7c2a335ecce18e212bc7b60fee1a65cf12df370877572ff8d"
+    },
+    {
+      "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\docs\\pathfinder\\evidence\\batched-capture\\prepared-input-scope-overview.png",
+      "bytes": 75798,
+      "sha256": "f2fe95cef52d3fce336c485a94099b03b66ee26b7db0527faeb3fa30e47c4f01"
+    },
+    {
+      "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\docs\\pathfinder\\evidence\\batched-capture\\prepared-input-scope-card.png",
+      "bytes": 78876,
+      "sha256": "ac74ef3465860e276b081edf849e9d8a3f340b716b49a14a81628ee278dc8456"
+    }
+  ],
+  "status": "PASS"
+}

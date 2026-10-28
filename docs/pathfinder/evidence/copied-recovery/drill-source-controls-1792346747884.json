@@ -1,0 +1,128 @@
+{
+  "schemaVersion": "pathfinder.copied-recovery.drill-source-controls.v1",
+  "status": "PASS",
+  "recordedAt": "2026-10-18T18:05:47.882Z",
+  "commands": [
+    {
+      "command": "node --test --test-concurrency=1 scripts/pathfinder-copied-recovery/drill.test.mjs",
+      "exitCode": 0,
+      "passed": 8,
+      "failed": 0
+    },
+    {
+      "command": "node --check scripts/pathfinder-copied-recovery/drill.test.mjs",
+      "exitCode": 0
+    }
+  ],
+  "sources": [
+    {
+      "path": "scripts/pathfinder-copied-recovery/drill.test.mjs",
+      "bytes": 8969,
+      "sha256": "1b8deadfce47ebe1444a0180d8d391a3d0bf25bf6b39751b2022fdefafcd22c8"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/drill.mjs",
+      "bytes": 19327,
+      "sha256": "775dde06b8e77e95480c10375d52f2a0a5715ae61993c2138846ed16de26352a"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/binding.mjs",
+      "bytes": 9303,
+      "sha256": "5e242570745973a4af42af110e8eb29665331a3323f2d7ebb9016ba286c8046f"
+    }
+  ],
+  "controls": [
+    {
+      "action": "init/info",
+      "status": "PASS",
+      "work": "pathfinder-engine/.scratch/copied-recovery-78f541bb-0f42-4a80-9688-8562cdef180b"
+    },
+    {
+      "action": "backup",
+      "expected": "DRILL_BACKUP_ALREADY_BEGUN",
+      "actual": "DRILL_BACKUP_ALREADY_BEGUN",
+      "status": "PASS",
+      "work": "pathfinder-engine/.scratch/copied-recovery-aecab8d4-0a40-4fc0-bac3-55a92be93c6e"
+    },
+    {
+      "action": "restore",
+      "expected": "DRILL_RESTORE_ALREADY_BEGUN",
+      "actual": "DRILL_RESTORE_ALREADY_BEGUN",
+      "status": "PASS",
+      "work": "pathfinder-engine/.scratch/copied-recovery-0d38b2fe-ea9c-4a0e-925a-1c9c373596c6"
+    },
+    {
+      "action": "retire-target",
+      "expected": "DRILL_PRIVATE_RECORD",
+      "actual": "DRILL_PRIVATE_RECORD",
+      "status": "PASS",
+      "work": "pathfinder-engine/.scratch/copied-recovery-eca67612-d1c6-4cfd-879c-8c501b6eb930"
+    },
+    {
+      "action": "backup",
+      "expected": "DRILL_PROOF_HASH",
+      "actual": "DRILL_PROOF_HASH",
+      "status": "PASS",
+      "work": "pathfinder-engine/.scratch/copied-recovery-a7af922d-67ef-4af0-b817-2410c8f307fb"
+    },
+    {
+      "action": "backup",
+      "expected": "DRILL_PROOF_AUTHORITY",
+      "actual": "DRILL_PROOF_AUTHORITY",
+      "status": "PASS",
+      "work": "pathfinder-engine/.scratch/copied-recovery-b8f74df0-961a-4c96-bcfc-06e2f1655c15"
+    },
+    {
+      "action": "backup",
+      "expected": "DRILL_AUTH_SCOPE",
+      "actual": "DRILL_AUTH_SCOPE",
+      "status": "PASS",
+      "work": "pathfinder-engine/.scratch/copied-recovery-2e72d456-e254-4f32-a774-4173284e8d47"
+    },
+    {
+      "action": "backup",
+      "expected": "DRILL_PROOF_ROLES_MISSING",
+      "actual": "DRILL_PROOF_ROLES_MISSING",
+      "status": "PASS",
+      "work": "pathfinder-engine/.scratch/copied-recovery-f610f888-c8a5-43bc-9d7d-960d665a0526"
+    }
+  ],
+  "privateControls": {
+    "path": "pathfinder-engine/.scratch/recovery-drill-controls-e5b98bc7-f58b-4c38-895c-69836e1a8242/receipt.json",
+    "bytes": 8473,
+    "sha256": "1d7010f827f2515a8a79c2d06ebac54683276fb67aef08a9d176c1765807d6b9"
+  },
+  "finalTap": {
+    "path": "pathfinder-engine/.scratch/drill-control-run-a98aa798-8ab0-4a7e-9639-a6e2d5137c9f.tap",
+    "bytes": 895,
+    "sha256": "714d0aba231d2c729dbf84280cf8bdd59ca55ddd0685833c7d86320fe071153e"
+  },
+  "history": [
+    {
+      "classification": "TEST_HARNESS_FAILURE",
+      "passed": 0,
+      "failed": 8,
+      "tap": {
+        "path": "pathfinder-engine/.scratch/drill-control-run-6ad669a2-88fd-4da9-98ee-2b2dc5953771.tap",
+        "bytes": 10375,
+        "sha256": "d50d30f8c7f1055ff8d20cd2c160421e70b7960d236b05338135151b2962d4dc"
+      },
+      "detail": "The test-only sentinel originally blocked Node internal spawn for permitted local icacls. Corrected only the sentinel allowlist. No product failure or runtime attempt is claimed."
+    }
+  ],
+  "scope": {
+    "realCli": true,
+    "dockerDispatches": 0,
+    "coreDispatches": 0,
+    "databaseQueries": 0,
+    "httpRequests": 0,
+    "actualRuntimeMutations": 0,
+    "ownedFileFixturesOnly": true,
+    "actualRecovery": "NOT_RUN_PARENT_ONLY"
+  },
+  "limitations": [
+    "Rejection controls stop before real binding/core. They do not prove actual backup, restore, resource audit or retirement success.",
+    "Private record tampering affects only newly generated test work; active drill c8f5c134 and live source remain untouched."
+  ],
+  "retainedFixtures": "docs/pathfinder/evidence/copied-recovery/control-fixtures-e5b98bc7-f58b-4c38-895c-69836e1a8242"
+}

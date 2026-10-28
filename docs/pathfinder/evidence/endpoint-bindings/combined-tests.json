@@ -1,0 +1,469 @@
+{
+  "status": "PASS",
+  "recordedAt": "2026-10-19T03:10:36.270Z",
+  "preCommitHead": "c7adcab176058331c75c352eaf1f39e51b6e10d9",
+  "sourceContextSha256": "ab3a4e732c8703da09513ac27cefe36f0bdb64696ac838c1ce0a4a8619460b2b",
+  "files": 75,
+  "passed": 1234,
+  "failed": 0,
+  "notRun": 5,
+  "rawSha256": "c34daed273fe675a7e1c8cfc44ce027bcaeef355deafe893d08edc53abf9e7ee",
+  "tests": [
+    {
+      "file": "shared/pathfinderDrawingPolicy.test.ts",
+      "passed": 19,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "shared/pathfinderEndpointAttachment.test.ts",
+      "passed": 46,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "shared/pathfinderEndpointBindings.test.ts",
+      "passed": 35,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "shared/pathfinderGeometryTrace.test.ts",
+      "passed": 25,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "shared/pathfinderPreparation.test.ts",
+      "passed": 10,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "shared/pathfinderPurposePolicy.test.ts",
+      "passed": 38,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "shared/preparationMerge.test.ts",
+      "passed": 25,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "shared/trayDrawingInputs.test.ts",
+      "passed": 33,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/applicability.test.ts",
+      "passed": 17,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/captureInputScope.test.ts",
+      "passed": 18,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/catalog.test.ts",
+      "passed": 19,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/dependencies.test.ts",
+      "passed": 7,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/drawingAccess.test.ts",
+      "passed": 14,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/drawingExports.test.ts",
+      "passed": 14,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/drawingExportStage.test.ts",
+      "passed": 20,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/drawingPolicy.test.ts",
+      "passed": 29,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/drawingPolicyRoutes.test.ts",
+      "passed": 15,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/drawingSnapshotRoutes.test.ts",
+      "passed": 16,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/drawingSnapshots.test.ts",
+      "passed": 16,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/endpointBinding.integration.test.ts",
+      "passed": 14,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/endpointBindingRepository.test.ts",
+      "passed": 32,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/endpointBindingRoutes.test.ts",
+      "passed": 22,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/endpointBindingSchema.test.ts",
+      "passed": 5,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/endpointCalculationProvenance.test.ts",
+      "passed": 14,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/engine-preparation.test.ts",
+      "passed": 3,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/engine.test.ts",
+      "passed": 16,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/engineResources.test.ts",
+      "passed": 4,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/engineSession.test.ts",
+      "passed": 42,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/geometryTrace.integration.test.ts",
+      "passed": 9,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/geometryTraceBuilder.test.ts",
+      "passed": 28,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/geometryTraceRepository.test.ts",
+      "passed": 17,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/geometryTraceRoutes.test.ts",
+      "passed": 16,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/geometryTraceStorage.test.ts",
+      "passed": 11,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/geometryTraceThread.test.ts",
+      "passed": 15,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/geometryTraceWorker.test.ts",
+      "passed": 13,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/lookup-engine.test.ts",
+      "passed": 0,
+      "failed": 0,
+      "notRun": 5
+    },
+    {
+      "file": "server/pathfinder/lookup-transport.test.ts",
+      "passed": 3,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/lookups.test.ts",
+      "passed": 27,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/matching.test.ts",
+      "passed": 20,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/policySchema.test.ts",
+      "passed": 5,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/preparation.integration.test.ts",
+      "passed": 4,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/preparationContext.test.ts",
+      "passed": 6,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/preparationEngineLane.test.ts",
+      "passed": 13,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/preparationPlans.test.ts",
+      "passed": 26,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/preparationPublisher.test.ts",
+      "passed": 20,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/preparationRoutes.test.ts",
+      "passed": 14,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/preparationSessions.test.ts",
+      "passed": 26,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/preparationStorage.test.ts",
+      "passed": 24,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/preparationUnionTask.test.ts",
+      "passed": 9,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/preparationUnionWorker.test.ts",
+      "passed": 15,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/previews.test.ts",
+      "passed": 25,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/purposePolicy.test.ts",
+      "passed": 55,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/purposePolicyRoutes.test.ts",
+      "passed": 8,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/repository-match.test.ts",
+      "passed": 16,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/routingScope.test.ts",
+      "passed": 9,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/settings.test.ts",
+      "passed": 15,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/storage-digest.test.ts",
+      "passed": 2,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/worker-retained.test.ts",
+      "passed": 9,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "server/pathfinder/worker-session.test.ts",
+      "passed": 11,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "src/api/pathfinderEndpointBindings.test.ts",
+      "passed": 4,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "src/api/pathfinderGeometryTrace.test.ts",
+      "passed": 3,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "src/api/pathfinderPreparation.test.ts",
+      "passed": 3,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "src/viewer/ViewerController.test.ts",
+      "passed": 27,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "shared/trayDrawing/index.test.ts",
+      "passed": 38,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "src/pages/ProjectDetails/EndpointBindingHistory.test.tsx",
+      "passed": 3,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "src/pages/ProjectDetails/EndpointBindingPanel.test.tsx",
+      "passed": 5,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "src/pages/ProjectDetails/GeometryTracePanel.test.tsx",
+      "passed": 3,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "src/pages/ProjectDetails/PathFinderRoutes.test.tsx",
+      "passed": 11,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "src/pages/ProjectDetails/PathFinderTab.test.tsx",
+      "passed": 52,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "src/pages/ProjectDetails/ProjectPreparationPanel.test.tsx",
+      "passed": 4,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "src/pages/ProjectDetails/hooks/collectPreparationDiscovery.test.ts",
+      "passed": 7,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "src/pages/ProjectDetails/hooks/useEndpointBinding.test.tsx",
+      "passed": 4,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "src/pages/ProjectDetails/hooks/useGeometryTrace.test.tsx",
+      "passed": 3,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "src/pages/ProjectDetails/hooks/usePathFinder.test.tsx",
+      "passed": 20,
+      "failed": 0,
+      "notRun": 0
+    },
+    {
+      "file": "src/pages/ProjectDetails/hooks/useProjectPreparation.test.tsx",
+      "passed": 8,
+      "failed": 0,
+      "notRun": 0
+    }
+  ],
+  "firstRun": {
+    "passed": 1224,
+    "failed": 7,
+    "notRun": 5,
+    "reason": "Legacy repository-match mocks did not model new preparation/context/head reads. Adapted fixture and added three authority regressions; production unchanged after first run."
+  }
+}

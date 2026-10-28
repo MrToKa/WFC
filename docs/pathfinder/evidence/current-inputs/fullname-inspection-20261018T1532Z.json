@@ -1,0 +1,84 @@
+{
+  "schemaVersion": "pathfinder.current-inputs.inspection-receipt.v1",
+  "recordedAt": "2026-10-18T15:32:23.665Z",
+  "status": "PASS",
+  "privateSnapshot": null,
+  "checks": [
+    {
+      "name": "exact-source-containers-networks-published-port-endpoint-modules-checkout",
+      "status": "PASS"
+    }
+  ],
+  "scope": "Original project engineering-only read-only source copy; no application bootstrap/storage/business writes.",
+  "limits": {
+    "rows": 100000,
+    "outputBytes": 67108864,
+    "childMilliseconds": 35000,
+    "processMilliseconds": 45000,
+    "stderrBytes": 32768,
+    "receiptBytes": 131072
+  },
+  "tool": {
+    "files": [
+      {
+        "path": "scripts/pathfinder-current-inputs/source-copy.mjs",
+        "sha256": "beae476a6259c964aadd3f73795b74b33095ced3992dca4b6c2faba640cd2fc3"
+      },
+      {
+        "path": "scripts/pathfinder-current-inputs/source-lib.mjs",
+        "sha256": "a548802eb80bf02290363e620199a6f4b941a682f76d22b571c17fb8414dbb61"
+      },
+      {
+        "path": "scripts/pathfinder-current-inputs/source-lib.test.mjs",
+        "sha256": "e6e71e0cf2e8da5e0feca1bc69e5cce1060e359d8beced74c5a6d4755e93f074"
+      },
+      {
+        "path": "scripts/pathfinder-current-inputs/README-source.md",
+        "sha256": "b8e6e2e517650f6003f43ed11e7735a422b93783d33ae4a315842ac7082f4062"
+      }
+    ],
+    "sourceSetSha256": "a4099528c1d996b4e10f8a808f080fd00888ccc8f5cf26bd93e2c6fa1acb1238"
+  },
+  "bindingFile": {
+    "path": "pathfinder-engine/.scratch/current-inputs-2b20a8ae-a435-4d4d-aec4-005bb021a715/binding.private.json",
+    "bytes": 4492,
+    "sha256": "55b52e338ace26422bdd5f3bb260d3e92440a3cd166c318fcbbb0cf7af612489"
+  },
+  "source": {
+    "revision": "e1ef20202598bb4d3d78e4772cbbb9747ec23a00",
+    "branch": "main",
+    "sourceSetSha256": "c2cf57f7c6abc91a4b8c7deb758cdb3d584da8c6e96f316873ef1fe1f5291b57",
+    "backend": {
+      "id": "f65cc58eea401f9c80de3be44342c3a6157f48fd6468a4d5a6b3df8ceeaac427",
+      "name": "/wfc-app-backend-1",
+      "image": "sha256:481326351dbfa8acc86afe4d2543a1b96a05d523dd95a4715928f7f25418854f",
+      "startedAt": "2026-10-17T12:24:29.337651343Z"
+    },
+    "postgres": {
+      "id": "2f1d30dd30411bf8b7e873b893d1a87a064cd618651d1f2646b8c5d739f72f36",
+      "name": "/wfc_app",
+      "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+      "startedAt": "2026-10-16T14:08:28.33027284Z"
+    },
+    "binding": {
+      "route": "Docker Desktop host published port to exact PostgreSQL container",
+      "host": "host.docker.internal",
+      "port": "5434",
+      "database": "wfc_app",
+      "serverAddress": "172.17.0.2",
+      "serverPort": 5432,
+      "dns": [
+        {
+          "address": "192.168.65.254",
+          "family": 4
+        },
+        {
+          "address": "fdc4:f303:9324::254",
+          "family": 6
+        }
+      ]
+    }
+  },
+  "dbQueries": "NOT_RUN",
+  "finishedAt": "2026-10-18T15:32:24.214Z"
+}

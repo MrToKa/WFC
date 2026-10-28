@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "pathfinder.manual-review.automation-pause.v1",
+  "recordedAtUtc": "2026-10-18T07:10:11.4772549Z",
+  "automationId": "pathfinder",
+  "tool": "mcp__codex_app__automation_update",
+  "toolResult": "Updated automation in app; status PAUSED",
+  "storedStatus": "PAUSED",
+  "deliveryCommit": "961d24ff0f8e6cbbe9a77807d631aa0b3d7f00ef",
+  "branch": "pf-manual-validation-settings-20261018",
+  "reason": "Scoped local technical delivery verified; next step is actual human manual route/length review, not another unchanged native licence attempt",
+  "configurationPreservation": "Full saved heartbeat name/prompt/schedule/target resubmitted unchanged; only status changed in this call",
+  "currentDecision": "Navisworks oracle not mandatory; manual per-proposal Review+Apply; Details gap default1m and all3allowances",
+  "humanAcceptance": "PENDING",
+  "mainIntegration": "NOT_AUTHORIZED",
+  "originalResourcesChanged": false
+}

@@ -1,0 +1,12 @@
+{
+  "status": "FAIL",
+  "scope": "PRE_MIGRATION_CHECKPOINT_ONLY",
+  "code": "NODE_PIPE_WRITE_EOF",
+  "completeMarker": false,
+  "backupAccepted": false,
+  "ownedRuntimeResumed": true,
+  "protectedContainersUnchanged": 18,
+  "partialBackupRetained": true,
+  "correctiveAction": "Verify pg_restore --list from read-only mounted dump file; no stdin pipe. Retry only in a new owned backup2 path after review.",
+  "observedAt": "2026-10-19T00:15:16.101Z"
+}

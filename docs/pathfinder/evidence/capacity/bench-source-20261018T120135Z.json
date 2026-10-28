@@ -1,0 +1,274 @@
+{
+  "schemaVersion": "pathfinder.capacity.bench-source.v1",
+  "recordedAtUtc": "2026-10-18T12:01:35Z",
+  "worktree": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local",
+  "branch": "pf-2-capacity-local-20261018",
+  "baseRevision": "8a726f72ab94da22681320f28ccebe1224cf8eb3",
+  "sourceStatus": "Additive benchmark source frozen; not committed by this agent.",
+  "status": "PASS",
+  "sourceScope": "Only new pathfinder-engine/tools/PathFinder.CapacityBench/** source and this additive evidence receipt.",
+  "sourceFiles": [
+    {
+      "path": "Benchmark.cs",
+      "sha256": "7a1f67683f6f3d03b65d98a951e71bdf851f5d0748edc2d04c0d173d740cd6f0"
+    },
+    {
+      "path": "Contracts.cs",
+      "sha256": "fb0eb0499be38e228ee082141f611dbb19052c40aa387f8eb4239c16fa12bd53"
+    },
+    {
+      "path": "Input.cs",
+      "sha256": "676c933f9c977c4cbd3867ef10603c77bb8af159ecf0bfb7c4a9d2c237a7a399"
+    },
+    {
+      "path": "PathFinder.CapacityBench.csproj",
+      "sha256": "a89385bd290d67e3772960a748aaf4b76e9ac8fd9dc1c3f69baa44b2760a84ff"
+    },
+    {
+      "path": "Program.cs",
+      "sha256": "b607a90d8c1a01e2bcf076d13e298cddec6d08ea1c0cd517c59cfb33178bbd2b"
+    },
+    {
+      "path": "README.md",
+      "sha256": "244840b11067bc37ea904c22a69b586ed15823c5b2a8b35e8378973503959e7b"
+    },
+    {
+      "path": "Synthetic.cs",
+      "sha256": "262ece6176a4f03b971f25e260c2826daa20e0613a87ddfc4ab2895ce52c150f"
+    }
+  ],
+  "publish": {
+    "directory": "pathfinder-engine/.scratch/capacity-bench-final-070153afee914f3188947e2f07bce903/publish",
+    "command": "dotnet publish pathfinder-engine/tools/PathFinder.CapacityBench/PathFinder.CapacityBench.csproj --configuration Release --artifacts-path <new capacity-bench-final root> --output <same root>/publish --nologo --verbosity minimal",
+    "exitCode": 0,
+    "frameworkSdk": "9.0.319",
+    "assemblies": [
+      {
+        "name": "PathFinder.Adapter.dll",
+        "sha256": "b70376b80f310b717726d0e4f17be69f98db81cce5fc1a868cb3fa938c3bcdbd"
+      },
+      {
+        "name": "PathFinder.CapacityBench.dll",
+        "sha256": "90c939476155552bf3be27bbee29e09e220e159c16996fa30dcde4f997691b2a"
+      },
+      {
+        "name": "PathFinder.Core.dll",
+        "sha256": "cdb662b43ea99ef584f54600901aa358133ef0494ae699d5e12ccd8dab713061"
+      },
+      {
+        "name": "PathFinder.Model.dll",
+        "sha256": "dc8aff9501236670907c64965a52339e4f4aff5b4a5ae6be4564af11a4f74b33"
+      }
+    ],
+    "notes": "Portable DLL invocation is tested. Windows apphost EXE is unused and is not a claim of Linux binary compatibility; orchestration mounts the appropriate DLL/JSON/PDB payload."
+  },
+  "selfTest": {
+    "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\capacity-bench-final-selftest-093dcbe87eb14a989b6a0c6cc97e3ed4\\result.json",
+    "recordedAtUtc": "2026-10-18T11:59:57.590Z",
+    "status": "PASS",
+    "datasetCount": 3,
+    "phaseCount": 21,
+    "phaseStatuses": [
+      "PASS"
+    ],
+    "inputSnapshotUnchanged": true,
+    "controls": {
+      "status": "PASS",
+      "preCancelledObserved": true,
+      "cancellationDuringInputEnumeration": true,
+      "cancellationMilliseconds": 0.3775,
+      "cancellationScope": "Deterministically cancelled when the unchanged core enumerates the second eligible segment; no claim of deepest-search interruption latency.",
+      "graphBudgetFailureObserved": true,
+      "graphBudgetFailure": {
+        "maxGraphNodes": 2,
+        "success": false,
+        "message": "The selected tray geometry exceeds the 2 routing-node limit. Select a smaller tray area or simplify the tray geometry."
+      },
+      "effectiveDefaultBudgets": {
+        "connectionToleranceMeters": 1,
+        "sampleSpacingMeters": 0.125,
+        "secondaryDistanceMeters": 2,
+        "preferVerticalApproach": true,
+        "maxGraphNodes": 200000,
+        "maxGraphConnections": 1000000
+      },
+      "note": "Only negative-control graph budget is lowered. No production/default capacity ceiling is raised."
+    },
+    "sha256": "7c5a7df3eda4f52cd7235d5202c837966297de24cd3f869d2313e851a2ddb58a",
+    "command": "dotnet <final publish>/PathFinder.CapacityBench.dll --self-test --work-root <new capacity-bench-final-selftest directory>",
+    "exitCode": 0,
+    "scope": "Three mathematical datasets (provided 8-segment seed plus generated8/64);21 measured phases; exact16m/25m/Instrumentation-Control expectation; warm-disk/full semantic equality and same PreparedModel reference; cancellation and explicit2-node failure."
+  },
+  "rootNegativeControls": {
+    "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\capacity-final-input-controls-e8030fc6e20546c0b322520c1a192815\\receipt.json",
+    "sha256": "39a8cbd4e29e1ec84774a72bdce1a73dd1a40291c81a03dfc74c387c17408df1",
+    "schemaVersion": "pathfinder.capacity.input-controls.v1",
+    "observedAtUtc": "2026-10-18T12:00:42.957Z",
+    "status": "PASS",
+    "executableSha256": "90c939476155552bf3be27bbee29e09e220e159c16996fa30dcde4f997691b2a",
+    "passed": 17,
+    "total": 17,
+    "checks": [
+      {
+        "name": "duplicate-member",
+        "status": "PASS",
+        "preflightWorkRootPreserved": true,
+        "exitCode": 2,
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT"
+      },
+      {
+        "name": "unknown-nested-member",
+        "status": "PASS",
+        "preflightWorkRootPreserved": true,
+        "exitCode": 2,
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT"
+      },
+      {
+        "name": "nonfinite-overflow-coordinate",
+        "status": "PASS",
+        "preflightWorkRootPreserved": true,
+        "exitCode": 2,
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT"
+      },
+      {
+        "name": "wrong-point-arity",
+        "status": "PASS",
+        "preflightWorkRootPreserved": true,
+        "exitCode": 2,
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT"
+      },
+      {
+        "name": "snapshot-hash-mismatch",
+        "status": "PASS",
+        "preflightWorkRootPreserved": true,
+        "exitCode": 2,
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT"
+      },
+      {
+        "name": "snapshot-project-mismatch",
+        "status": "PASS",
+        "preflightWorkRootPreserved": true,
+        "exitCode": 2,
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT"
+      },
+      {
+        "name": "snapshot-content-mismatch",
+        "status": "PASS",
+        "preflightWorkRootPreserved": true,
+        "exitCode": 2,
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT"
+      },
+      {
+        "name": "snapshot-outside-input-root",
+        "status": "PASS",
+        "preflightWorkRootPreserved": true,
+        "exitCode": 2,
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT"
+      },
+      {
+        "name": "conflicting-project-gap",
+        "status": "PASS",
+        "preflightWorkRootPreserved": true,
+        "exitCode": 2,
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT"
+      },
+      {
+        "name": "numeric-project-decimal",
+        "status": "PASS",
+        "preflightWorkRootPreserved": true,
+        "exitCode": 2,
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT"
+      },
+      {
+        "name": "negative-project-allowance",
+        "status": "PASS",
+        "preflightWorkRootPreserved": true,
+        "exitCode": 2,
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT"
+      },
+      {
+        "name": "unknown-category",
+        "status": "PASS",
+        "preflightWorkRootPreserved": true,
+        "exitCode": 2,
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT"
+      },
+      {
+        "name": "graph-node-budget",
+        "status": "PASS",
+        "preflightWorkRootPreserved": true,
+        "exitCode": 2,
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT"
+      },
+      {
+        "name": "repeat-budget",
+        "status": "PASS",
+        "preflightWorkRootPreserved": true,
+        "exitCode": 2,
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT"
+      },
+      {
+        "name": "oversized-manifest",
+        "status": "PASS",
+        "preflightWorkRootPreserved": true,
+        "exitCode": 2,
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT"
+      },
+      {
+        "name": "preexisting-work-root",
+        "status": "PASS",
+        "preflightWorkRootPreserved": true,
+        "exitCode": 2,
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT"
+      },
+      {
+        "name": "independent-lookup-purpose",
+        "status": "PASS",
+        "preflightWorkRootPreserved": true,
+        "exitCode": 2,
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT"
+      }
+    ],
+    "scope": "New benchmark CLI rejection controls; not model engineering or application acceptance. Files remain below fresh owned scratch; no live runtime access."
+  },
+  "independentReview": {
+    "status": "CLOSED",
+    "scope": "Read-only reviewer confirmed fit timeout gating, separately timed memory cache reference check, honest prevalidation/JIT/OS and combined query+design+hash metrics, unchanged Core/decimal math.",
+    "resolvedFindings": [
+      "Non-null prepared result after cancellation could have bypassed cold/warm phase status; dependent phases now require PASS.",
+      "Same-instance GetOrBuild was outside the phase timer; now recorded as memory-fit-hit.",
+      "Cold wording now means absent fitted cache only; prevalidation and shared JIT/OS state explicit."
+    ]
+  },
+  "pendingExecution": {
+    "realCopiedNetwork": "NOT_RUN by this agent; owned orchestration is preparing the actual baseline.",
+    "fullSynthetic8_64_256_1024": "NOT_RUN by this agent; self-test is only8/64.",
+    "productionOneShotComparison": "NOT_RUN by this agent; separate orchestration responsibility."
+  },
+  "limitations": [
+    "No Core/Model/Adapter/production ModelRunner source changes; ProjectReference uses existing assemblies without copied math sources.",
+    "Repeated-query benchmark uses identical endpoints/category/options, so query-order, changed-endpoint/category independence is not proved.",
+    "Cold is empty fitted cache after input prevalidation; process/JIT/OS state is shared across sequential datasets.",
+    "Query metrics include unchanged Calculate, design, expected checks and canonical serialization/hash.",
+    "Own-process allocation/current/lifetime peak metrics are not per-phase isolated peak or child-tree RSS; external sampling is separate.",
+    "Synthetic chains above100 route codes are Core probes, not WFC Viewer/Apply compatibility evidence.",
+    "No reusable graph implementation, native parity, whole-plant capacity, user engineering acceptance, runtime changes, DB writes or publication is claimed."
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "status": "PASS",
+  "scope": "actual Linux filesystem deliberate link-window simulation; no actual process or power crash",
+  "checks": [
+    {
+      "name": "verified-link-window-retry-repairs-only-owned-alias",
+      "status": "PASS"
+    },
+    {
+      "name": "ambiguous-three-link-pair-is-preserved-and-refused",
+      "status": "PASS"
+    },
+    {
+      "name": "tampered-single-link-is-preserved-and-refused",
+      "status": "PASS"
+    },
+    {
+      "name": "tampered-two-link-pair-is-preserved-and-refused",
+      "status": "PASS"
+    }
+  ],
+  "cleanup": "PASS",
+  "projectId": "58490e71-85f2-45f0-863a-434bf628b230",
+  "sessionId": "24e95f88-9c83-4d9a-8df3-44c9e8a59cd9"
+}

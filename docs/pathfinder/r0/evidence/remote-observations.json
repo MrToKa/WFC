@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "wfc.pfr0.remote-observations.v1",
+  "observedAt": "2026-10-18 21:20:35 UTC",
+  "method": "configured-github-connector-read-only",
+  "wfc": {
+    "branch": "main",
+    "sha": "e1ef20202598bb4d3d78e4772cbbb9747ec23a00",
+    "url": "https://api.github.com/repos/MrToKa/WFC/branches/main"
+  },
+  "pathFinder": {
+    "branch": "master",
+    "sha": "45c24bf5f433f13e102600b36f20327c77961d0a",
+    "url": "https://api.github.com/repos/MrToKa/PathFinder/branches/master"
+  },
+  "candidate": {
+    "branch": "pf-r0-purpose-contracts-local-20261019",
+    "pullRequestSearchCount": 0,
+    "published": false,
+    "ciReview": "NOT_ESTABLISHED; candidate is local only"
+  },
+  "mutation": false
+}

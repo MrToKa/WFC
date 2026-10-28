@@ -1,0 +1,77 @@
+{
+  "schemaVersion": "pathfinder.candidate-eligibility.transport-closure.v1",
+  "recordedAt": "2026-10-18T16:01:54.315Z",
+  "status": "PASS",
+  "source": [
+    {
+      "path": "server/pathfinder/repository.ts",
+      "sha256": "86f4725340eea25fd6a038ffbc8db88cedb5ea8e90394adedcfd7c70464917f8"
+    },
+    {
+      "path": "server/pathfinder/repository-match.test.ts",
+      "sha256": "30190ba8cef8a0f287e486f58871f8fd5cdec6212f616b067fc37653d50abeba"
+    },
+    {
+      "path": "server/pathfinder/candidateEligibilityIntegration.ts",
+      "sha256": "7517fff5d33f11af70294256d003791410d0cfbf54d955b9cba3729248820f4d"
+    }
+  ],
+  "checks": [
+    {
+      "name": "new-repeat-transport-error-and-discard-control",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "server/pathfinder/repository-match.test.ts",
+        "--testNamePattern",
+        "actual-SQL driver catches repeated transport",
+        "--maxWorkers=1",
+        "--reporter=json",
+        "--outputFile",
+        "pathfinder-engine/.scratch/candidate-eligibility-171d501430eb45c596d64f274ac00ce2/transport.json"
+      ],
+      "status": "PASS",
+      "passed": 1,
+      "failed": 0,
+      "pending": 12,
+      "evidence": {
+        "path": "pathfinder-engine/.scratch/candidate-eligibility-171d501430eb45c596d64f274ac00ce2/transport.json",
+        "sha256": "450a2ed9ff98f3a52130897431c02138be20c2617a8c7f7c2110326ef033c91c"
+      }
+    },
+    {
+      "name": "server-types-after-closure",
+      "command": [
+        "node",
+        "node_modules/typescript/bin/tsc",
+        "--noEmit",
+        "-p",
+        "server/tsconfig.json"
+      ],
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "two-edited-file-lint-after-closure",
+      "command": [
+        "node",
+        "node_modules/eslint/bin/eslint.js",
+        "server/pathfinder/repository-match.test.ts",
+        "server/pathfinder/candidateEligibilityIntegration.ts",
+        "--max-warnings=0"
+      ],
+      "status": "PASS",
+      "exitCode": 0
+    }
+  ],
+  "priorUnitScope": {
+    "path": "docs/pathfinder/evidence/batched-capture/candidate-source-checks-1792339128304.json",
+    "passed": 12,
+    "qualification": "Executed before the driver-only listener closure. Unchanged tests not repeated as requested; final new control validates repeated Client errors during rollback, listener lifetime and discard."
+  },
+  "change": "Driver only: catch asynchronous checked-out Client errors through cleanup/release; keep handler on discarded/damaged Client; healthy release hands off synchronously to Pool before removing its own listener. Parent caller owns Pool error listener and end().",
+  "integration": "NOT_RUN",
+  "databaseConnectionsByWriter": 0,
+  "runtimeOperationsByWriter": 0
+}

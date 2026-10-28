@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "pathfinder.worker-reuse.automation.v1",
+  "observedAtUtc": "2026-10-18T12:19:26Z",
+  "automationId": "pathfinder",
+  "tool": "mcp__codex_app__automation_update",
+  "mode": "update",
+  "resultStatus": "ACTIVE",
+  "targetThreadId": "01a1437a-c394-7650-aae2-5d25e2573207",
+  "schedulePreserved": "ten-minute existing heartbeat",
+  "namePreserved": true,
+  "branch": "pf-2-worker-reuse-local-20261018",
+  "handoffCommit": "ed0770f39790fdedf937a190d99908681c11a532",
+  "authority": "Standing explicit user stage-loop authorization plus current continuation; routine stage confirmations are waived.",
+  "promptScope": "New worker-reuse handoff, active-agent/no-duplicate checks, six denied cleanup children, quiet while unchanged, existing isolation/no-Apply/no-publication constraints."
+}

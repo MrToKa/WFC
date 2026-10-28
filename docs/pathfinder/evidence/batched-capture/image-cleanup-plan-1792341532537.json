@@ -1,0 +1,58 @@
+{
+  "schemaVersion": "pathfinder.batched-capture.owned-obsolete-images.v1",
+  "recordedAt": "2026-10-18T16:38:52.090Z",
+  "status": "PLANNED",
+  "owner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+  "project": "wfc-pathfinder-local-0cba87606e9b",
+  "scope": "Only six exact unused own intermediate build images. No containers/volumes/networks, shared restore images, parents or prune.",
+  "images": [
+    {
+      "id": "sha256:786cd3538cbfd77c06ad2a7cfbac91108f45d2a7e4b1de2216920baafdfd2614",
+      "bytes": 184584065,
+      "tags": [
+        "wfc-pathfinder-api:8fffd6b8c896-mve0x1jn"
+      ],
+      "references": 0
+    },
+    {
+      "id": "sha256:a01662212b0a98d4cdd11c6702fc4ee6a8497f8fac37c02834ee73cfc609bd33",
+      "bytes": 55133981,
+      "tags": [
+        "wfc-pathfinder-web:8fffd6b8c896-mve0x1jn"
+      ],
+      "references": 0
+    },
+    {
+      "id": "sha256:48c406e205433c59c899af7428d243c071f8fa0bd37b9bb977f3cda21b717545",
+      "bytes": 184584065,
+      "tags": [
+        "wfc-pathfinder-api:8fffd6b8c896-mve100gl"
+      ],
+      "references": 0
+    },
+    {
+      "id": "sha256:5f76c5cce3a9bdabeef6416bf82d5f3fcfa089e3f78a6a8566bb4f8da8b171e3",
+      "bytes": 55133981,
+      "tags": [
+        "wfc-pathfinder-web:8fffd6b8c896-mve100gl"
+      ],
+      "references": 0
+    },
+    {
+      "id": "sha256:08d842043cecd526668bd7ec192ef424508ed5f47a7029a10139c0381ee6724a",
+      "bytes": 184584065,
+      "tags": [
+        "wfc-pathfinder-api:8fffd6b8c896-mve19ras"
+      ],
+      "references": 0
+    },
+    {
+      "id": "sha256:1ce8e58355cd9244a585ce14f6c6a008618ccf2759e37f0bf89a730bea142d16",
+      "bytes": 55134207,
+      "tags": [
+        "wfc-pathfinder-web:8fffd6b8c896-mve19ras"
+      ],
+      "references": 0
+    }
+  ]
+}

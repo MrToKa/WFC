@@ -1,0 +1,112 @@
+{
+  "schemaVersion": "wfc.pf.b15-popup-source-checks.v1",
+  "status": "PASS",
+  "at": "2026-10-22T07:32:48.062Z",
+  "checkedParent": "8d980e6f58c8baf014037e73fb4c43e487b65988",
+  "pins": [
+    {
+      "path": "scripts/pathfinder-local/web-image-install.mjs",
+      "bytes": 5161,
+      "sha256": "567226453d171ae983ddd27e0145da95b0b0594ed7c4018fb7578c25453f5ed8"
+    },
+    {
+      "path": "server/pathfinder/cableEndpointCommands.test.ts",
+      "bytes": 53891,
+      "sha256": "b8ec44b50d4cce98d4760d6924476eae3bc6a906b8a87fd40db39fd8437ed00d"
+    },
+    {
+      "path": "src/components/pathfinder/PathFinderCableRoutingPanel.test.tsx",
+      "bytes": 40087,
+      "sha256": "e05f92e9179aecd54cfe065606f99e6aea0677e1cbd5982cf645115739d29bab"
+    },
+    {
+      "path": "src/components/pathfinder/PathFinderCableRoutingPanel.tsx",
+      "bytes": 18358,
+      "sha256": "4f5c1ee84343ec3e43009a9763fe948746e967ff3806910e49463c44abadad74"
+    },
+    {
+      "path": "src/components/pathfinder/PathFinderCableWorkspace.test.tsx",
+      "bytes": 34825,
+      "sha256": "eda4fbb2f50b0da66effb43f2d836ab35a5c0ae23ff39dc779ba045f1f1cd275"
+    },
+    {
+      "path": "src/components/pathfinder/PathFinderCableWorkspace.tsx",
+      "bytes": 26224,
+      "sha256": "561c78b4878126937391a9ab3dbc79a42111a7a28d5150e3d9ecf8a03ccaeb5e"
+    },
+    {
+      "path": "src/hooks/useCableEndpointPairSelection.test.tsx",
+      "bytes": 32146,
+      "sha256": "d48e608c5441211c4c3d0fe0425d5fe36826f7e32451febf74ba409d7c0fe887"
+    },
+    {
+      "path": "src/hooks/useCableEndpointPairSelection.ts",
+      "bytes": 20015,
+      "sha256": "6197b7d44105340745170229bcc43fb0849c851c45aa43938782daee63c9c620"
+    }
+  ],
+  "logs": [
+    {
+      "name": "installer.log",
+      "bytes": 1222,
+      "sha256": "93d17ff499b324d450fc0aaca14f3a5cf21a1080441049bbb36104843d44bb65"
+    },
+    {
+      "name": "endpoint-contracts.log",
+      "bytes": 664,
+      "sha256": "1dc8d1d11309eb3c70c4f9808fa468dcc4a5d889c8040cad4282819050cced95"
+    },
+    {
+      "name": "components-first.log",
+      "bytes": 1354,
+      "sha256": "1cf2e878c0c26955adb40f3482a81c215d50bc8f86b50858820cdb1197469e5e"
+    },
+    {
+      "name": "final-hooks-panel-server.log",
+      "bytes": 2140,
+      "sha256": "3c0ca5c6e276ad18911e0af2253ed01bc3a7b12ff48887064e09755f75d68200"
+    },
+    {
+      "name": "types.log",
+      "bytes": 93,
+      "sha256": "b8eb3154847ce13af5e3a7672a976c5437a052bfd30d24dd327a019180231d04"
+    },
+    {
+      "name": "lint.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "server-build.log",
+      "bytes": 1799,
+      "sha256": "daf51bd915f0b8c9607cba38dff973e9b0c8538a7d8e1b98bb252b538f7584f3"
+    },
+    {
+      "name": "frontend-build.log",
+      "bytes": 7604,
+      "sha256": "66dd91a4fb9cbf961f2dea132bfd6e675bcfc592ecb83c0d585dc92b489d3e62"
+    }
+  ],
+  "checks": {
+    "uniqueVitestTests": 429,
+    "uniqueVitestFiles": 12,
+    "installerTests": 16,
+    "types": "PASS",
+    "scopedLint": "PASS",
+    "serverBuild": "PASS",
+    "frontendBuild": "PASS",
+    "independentReview": "CLEAR",
+    "gitDiffCheck": "PASS"
+  },
+  "limits": {
+    "pairServerTests": "synthetic SQL only",
+    "browser": "BLOCKED_SAVED_REFUSAL",
+    "actualSdk": "NOT_RUN",
+    "actualAalborg": "NOT_RUN",
+    "realCableWrites": false,
+    "serverProductionChange": false,
+    "delivery": "NOT_RUN",
+    "wholeParentQualification": "UNFINISHED"
+  },
+  "privateOperation": "c120e085-0e32-4a98-b8fb-82a54d45536c"
+}

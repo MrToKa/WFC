@@ -1,0 +1,32 @@
+{
+  "status": "PASS",
+  "scope": "Exact original object key/bytes/etag/lastModified; existing SHA-verified copy evidence retained separately; no fresh full-object SHA scan claimed",
+  "originalTotal": 1032,
+  "additionalOwnedObjects": 342,
+  "groups": [
+    {
+      "role": "project",
+      "originalObjects": 3,
+      "retainedObjects": 3,
+      "ownedAdditionalObjects": 0,
+      "baselineSha256": "de83f284e628b85a132878edacb8e7f62678438d3051013f1455d1831879d3ea",
+      "status": "PASS"
+    },
+    {
+      "role": "template",
+      "originalObjects": 3,
+      "retainedObjects": 3,
+      "ownedAdditionalObjects": 0,
+      "baselineSha256": "c1d0f3f2d4e39f1cd37a37e94f132075192b02aaf958c5e2ddbdf25a948a917e",
+      "status": "PASS"
+    },
+    {
+      "role": "model",
+      "originalObjects": 1026,
+      "retainedObjects": 1026,
+      "ownedAdditionalObjects": 342,
+      "baselineSha256": "c0387bddb66d5433266eb5fa6ffce4a755800119618a7005e5af7719beb099a4",
+      "status": "PASS"
+    }
+  ]
+}

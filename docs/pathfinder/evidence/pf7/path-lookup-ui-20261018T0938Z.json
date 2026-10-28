@@ -1,0 +1,98 @@
+{
+  "schemaVersion": "pathfinder.ui-validation.v1",
+  "recordedAt": "2026-10-18T09:38:00Z",
+  "status": "PASS",
+  "worktree": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local",
+  "branch": "pf-path-lookup-local-20261018",
+  "finalSourceRevision": "60e9ce66680d2e86b17be5c9a73d1247d20d9fc0",
+  "scope": "Three accessible tools with one protected model host; independent Path lookup UI and durable cancellation fences. This receipt records source tests, not browser acceptance or native engineering parity.",
+  "ownedFiles": [
+    {
+      "path": "src/pages/ProjectDetails/PathFinderTab.tsx",
+      "sha256": "f853f2287f78c7e230c4a06a346dbabba79f741a656b04dd9619a144ffc36cee"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderLookup.tsx",
+      "sha256": "e42fe1517e74a32dc38e43bbb6cdca4ef8a4807f6d82eec0cf56d17eef639085"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderTab.test.tsx",
+      "sha256": "852570aee92efa8a918b1406d948650f01d78b55df236181935dab9351fd7d16"
+    }
+  ],
+  "checks": [
+    {
+      "name": "Full UI regression before the final narrow delta",
+      "status": "PASS",
+      "command": "node node_modules/vitest/vitest.mjs run src/pages/ProjectDetails/PathFinderTab.test.tsx --reporter=verbose",
+      "passed": 44,
+      "failed": 0,
+      "skipped": 0,
+      "loaded": 44,
+      "durationSeconds": 752.58,
+      "sourceScope": "The process loaded the files before the prepared-network copy correction, retained-job detachment helper, three new post-ACK cases and strengthened completed-result assertion. It is not a claim of one full 47-case run on final bytes."
+    },
+    {
+      "name": "Final-byte affected regression",
+      "status": "PASS",
+      "command": "node node_modules/vitest/vitest.mjs run src/pages/ProjectDetails/PathFinderTab.test.tsx --reporter=verbose -t 'acknowledged pending|shows actual nullable|clears completed lookup|cancels the queued job|pending model capture|late model capture|lookup on route'",
+      "passed": 9,
+      "failed": 0,
+      "skipped": 38,
+      "loaded": 47,
+      "durationSeconds": 125.04,
+      "sourceScope": "Final owned file hashes above. These isolated jsdom cases ran in a separate process alongside the remaining pre-delta regression.",
+      "assertions": [
+        "Route, reverse and copied-routing edits clear old lookup results while retaining drafts.",
+        "Explicit cancellation aborts pending capture and DELETEs a late accepted job ID without displaying it.",
+        "Explicit cancellation DELETEs an acknowledged queued job and rejects its late completed response.",
+        "A tab switch DELETEs the acknowledged pending job exactly once and rejects its late result.",
+        "Shared Clear DELETEs the acknowledged pending job exactly once and rejects its late result.",
+        "A project dependency revision DELETEs the acknowledged pending job exactly once and rejects its late result.",
+        "Prepared-network diagnostic counts remain actual or unavailable; fallback copy does not claim every fallback is on the returned route.",
+        "A tab switch before capture ACK fences the eventual ID and preserves the route draft.",
+        "A completed result is cleared on a settings revision change without issuing DELETE for its completed job."
+      ]
+    },
+    {
+      "name": "Frontend TypeScript on final owned bytes",
+      "status": "PASS",
+      "command": "node node_modules/typescript/bin/tsc --noEmit",
+      "exitCode": 0
+    },
+    {
+      "name": "Scoped ESLint on final owned bytes",
+      "status": "PASS",
+      "command": "node node_modules/eslint/bin/eslint.js src/pages/ProjectDetails/PathFinderTab.tsx src/pages/ProjectDetails/PathFinderLookup.tsx src/pages/ProjectDetails/PathFinderTab.test.tsx --max-warnings=0",
+      "exitCode": 0
+    },
+    {
+      "name": "Whitespace diff check",
+      "status": "PASS",
+      "command": "git diff --check -- src/pages/ProjectDetails/PathFinderTab.tsx src/pages/ProjectDetails/PathFinderLookup.tsx src/pages/ProjectDetails/PathFinderTab.test.tsx",
+      "exitCode": 0,
+      "note": "Only informational LF-to-CRLF working-copy warnings were emitted."
+    },
+    {
+      "name": "Final owned files match committed checkpoint and remain tracked-clean",
+      "status": "PASS",
+      "command": "git status --short -- src/pages/ProjectDetails/PathFinderTab.tsx src/pages/ProjectDetails/PathFinderLookup.tsx src/pages/ProjectDetails/PathFinderTab.test.tsx",
+      "exitCode": 0,
+      "output": ""
+    }
+  ],
+  "reviewFindingClosure": {
+    "reviewer": "/root/viewer_tab_capabilities",
+    "status": "RESOLVED",
+    "reviewedRevision": "60e9ce66680d2e86b17be5c9a73d1247d20d9fc0",
+    "finding": "After creation ACK, tab/common-Clear cleanup dropped the retained pending job ID without durable server cancellation.",
+    "resolution": "cancelRetainedJob clears the ref before DELETE. Active/model/settings cleanup, ownership detachment and input/reset edits call it, so overlapping cleanup effects cannot DELETE twice. Completed polling clears the ref before display; existing pre-ACK late-ID cancellation remains.",
+    "closingAssessment": "Read-only closing source review found the original P2 resolved and no additional findings in that scope. The reviewer did not edit files or execute duplicate tests."
+  },
+  "limits": [
+    "No claim of a single full 47-case run on final bytes; the two run scopes are preserved separately.",
+    "Browser checks, coordinated candidate start and replacement backup/restore remain parent-owned follow-up work.",
+    "This UI assignment did not build, start, restart, restore, clean up or write runtime/database resources.",
+    "Original checkouts, original containers/data, runtime helpers and the three denied scratch directories were not changed by this assignment."
+  ]
+}

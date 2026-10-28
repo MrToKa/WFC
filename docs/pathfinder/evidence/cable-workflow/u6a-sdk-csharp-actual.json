@@ -1,0 +1,281 @@
+{
+  "stage": "PF-U6a",
+  "attempts": [
+    {
+      "reason": "Draft malformed-cycle fixture inadvertently assigned an unrelated node a missing parent; corrected fixture, no production guard relaxation. Final108/108 PASS.",
+      "receipt": "u6a-sdk-csharp/draft-fixture-refusal.log",
+      "passed": 104,
+      "failed": 1,
+      "status": "FAIL"
+    },
+    {
+      "reason": "Earlier draft console run used obsolete all-property index/allowlist assertions and auto-selected stale checkout ModelRunner for old lookup; final command explicitly selects the current owned isolated DLL. These draft failures are excluded from final passing counts.",
+      "status": "FAIL"
+    }
+  ],
+  "schemaVersion": "wfc.pf.u6a-sdk-csharp-actual.v1",
+  "build": {
+    "artifactsRoot": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\equipment-visibility-u6a-5617da3b-234b-40ac-abae-1553bc92392f\\artifacts",
+    "errors": 0,
+    "status": "PASS",
+    "warnings": 0
+  },
+  "sourceState": "Frozen SDK/CSharp ownership; sourceClosure is exact tested precommit bytes",
+  "recordedAtUtc": "2026-10-20T20:12:25.9717486Z",
+  "commands": [
+    "dotnet build pathfinder-engine/tools/PathFinder.ModelRunner/PathFinder.ModelRunner.csproj --artifacts-path \"C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\equipment-visibility-u6a-5617da3b-234b-40ac-abae-1553bc92392f\\artifacts\" -c Release",
+    "dotnet build pathfinder-engine/tests/PathFinder.Model.Tests/PathFinder.Model.Tests.csproj --artifacts-path \"C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\equipment-visibility-u6a-5617da3b-234b-40ac-abae-1553bc92392f\\artifacts\" -c Release",
+    "dotnet \"C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\equipment-visibility-u6a-5617da3b-234b-40ac-abae-1553bc92392f\\artifacts\\bin\\PathFinder.Model.Tests\\release\\PathFinder.Model.Tests.dll\" \"C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\equipment-visibility-u6a-5617da3b-234b-40ac-abae-1553bc92392f\\model-regression-root\" --equipment-eligibility",
+    "dotnet \"C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\equipment-visibility-u6a-5617da3b-234b-40ac-abae-1553bc92392f\\artifacts\\bin\\PathFinder.Model.Tests\\release\\PathFinder.Model.Tests.dll\" \"C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\equipment-visibility-u6a-5617da3b-234b-40ac-abae-1553bc92392f\\model-regression-root\"",
+    "dotnet \"C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\equipment-visibility-u6a-5617da3b-234b-40ac-abae-1553bc92392f\\artifacts\\bin\\PathFinder.Model.Tests\\release\\PathFinder.Model.Tests.dll\" \"C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\equipment-visibility-u6a-5617da3b-234b-40ac-abae-1553bc92392f\\model-regression-root\" --input-scope",
+    "$env:PF_MODEL_RUNNER_DLL=\"C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\equipment-visibility-u6a-5617da3b-234b-40ac-abae-1553bc92392f\\artifacts\\bin\\PathFinder.ModelRunner\\release\\PathFinder.ModelRunner.dll\"; node --test viewer-runtime/test/display-visibility.test.mjs viewer-runtime/test/pathfinder.test.mjs viewer-runtime/test/model-capture.node-test.mjs"
+  ],
+  "receipts": [
+    {
+      "repositoryPath": "docs/pathfinder/evidence/cable-workflow/u6a-sdk-csharp/sdk-tests.log",
+      "scratchPath": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\equipment-visibility-u6a-5617da3b-234b-40ac-abae-1553bc92392f\\sdk-tests-final2.log",
+      "bytes": 11825,
+      "sha256": "77cdc1731cb4a310ff4282ac71b3a25b127ad367c6d1247799855aa8d713f2dd",
+      "byteExactCopy": true
+    },
+    {
+      "repositoryPath": "docs/pathfinder/evidence/cable-workflow/u6a-sdk-csharp/equipment-eligibility.json",
+      "scratchPath": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\equipment-visibility-u6a-5617da3b-234b-40ac-abae-1553bc92392f\\equipment-eligibility-final2.json",
+      "bytes": 7435,
+      "sha256": "bc68f7491695191bae28d5d3256edf4c0a95e32538f7142c279c18d7b8454ade",
+      "byteExactCopy": true
+    },
+    {
+      "repositoryPath": "docs/pathfinder/evidence/cable-workflow/u6a-sdk-csharp/legacy-model-regression.json",
+      "scratchPath": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\equipment-visibility-u6a-5617da3b-234b-40ac-abae-1553bc92392f\\model-regression-root\\docs\\pathfinder\\evidence\\pf2\\model-tests-latest.json",
+      "bytes": 18382,
+      "sha256": "55b54ee03112f22b0eaf113b6c0a77ccf88833793f564d6a1a4ffd9da56863b9",
+      "byteExactCopy": true
+    },
+    {
+      "repositoryPath": "docs/pathfinder/evidence/cable-workflow/u6a-sdk-csharp/input-scope.json",
+      "scratchPath": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\equipment-visibility-u6a-5617da3b-234b-40ac-abae-1553bc92392f\\input-scope-final.json",
+      "bytes": 3929,
+      "sha256": "798aeaa8443017b10e737ca1d1227a17111225cc5c624af6d26e6a8dc0ce71de",
+      "byteExactCopy": true
+    },
+    {
+      "repositoryPath": "docs/pathfinder/evidence/cable-workflow/u6a-sdk-csharp/canonical11.json",
+      "scratchPath": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\equipment-visibility-u6a-5617da3b-234b-40ac-abae-1553bc92392f\\canonical11-final.json",
+      "bytes": 2207,
+      "sha256": "0f0506d4e442943023a8b45e63db57d89e20f2ab175a2da795f26704d65a255d",
+      "byteExactCopy": true
+    },
+    {
+      "repositoryPath": "docs/pathfinder/evidence/cable-workflow/u6a-sdk-csharp/build-runner.log",
+      "scratchPath": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\equipment-visibility-u6a-5617da3b-234b-40ac-abae-1553bc92392f\\build-runner-final.log",
+      "bytes": 1077,
+      "sha256": "006d09a61753c8af45f2ff7684a47dc041aa381c3c44d7997ce51b3e3288d67c",
+      "byteExactCopy": true
+    },
+    {
+      "repositoryPath": "docs/pathfinder/evidence/cable-workflow/u6a-sdk-csharp/build-model-tests.log",
+      "scratchPath": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\equipment-visibility-u6a-5617da3b-234b-40ac-abae-1553bc92392f\\build-model-tests-final.log",
+      "bytes": 848,
+      "sha256": "3d0d27056e7d52b5680e3848b5d8e24f83829ad3238867da1a9a45fd9d17564c",
+      "byteExactCopy": true
+    },
+    {
+      "repositoryPath": "docs/pathfinder/evidence/cable-workflow/u6a-sdk-csharp/draft-fixture-refusal.log",
+      "scratchPath": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\equipment-visibility-u6a-5617da3b-234b-40ac-abae-1553bc92392f\\sdk-tests-first.log",
+      "bytes": 12168,
+      "sha256": "cf6588c971425099c7306baa738406bb5d9f866a13367fd6410cda732f067141",
+      "byteExactCopy": true
+    }
+  ],
+  "capacity": {
+    "scope": "synthetic-source-capacity-zero-delay-yields-accelerated-not-real-SDK",
+    "rows": 438155,
+    "scalarValues": 3505240,
+    "fragmentVisibilitySlots": 664556,
+    "sdkPropertyCalls": 856,
+    "queryMatches": 1,
+    "milliseconds": 3437,
+    "rssDeltaBytes": 685551616
+  },
+  "scope": {
+    "runtimeChanges": "none",
+    "realAalborgReread": "NOT_RUN",
+    "authority": "No real cable Review/Apply/initial-fill mutation performed",
+    "browser": "NOT_RUN_BY_AGENT",
+    "realModelEngineering": "NOT_RUN",
+    "artifactPolicy": "Current U6a DLL, generated private regression roots and receipts retained for U7; no original/shared bin or historical receipts overwritten.",
+    "visibility": "SDK display baseline only; nativeHidden stays null and all native proof flags remain false",
+    "nativeParity": "not-performed",
+    "httpSqlDocker": "NOT_RUN",
+    "frozenExpectedRegenerated": false
+  },
+  "syntheticInterop": {
+    "sha256": "4c92e2d2c197601871ce612adc868cc777e86e794fdb9eccaf287a38d46b4851",
+    "cases": 6,
+    "engineeringAccepted": false,
+    "scope": "Synthetic SDK fixtures -> production capture/assembler -> current real CSharp one-shot worker; sixth case additionally uses production shared.mergePreparationParts to form exact aggregate adapter/proof closure",
+    "ownedModelRunnerDll": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\equipment-visibility-u6a-5617da3b-234b-40ac-abae-1553bc92392f\\artifacts\\bin\\PathFinder.ModelRunner\\release\\PathFinder.ModelRunner.dll"
+  },
+  "capacityLimitations": [
+    "Zero-delay yields are accelerated with setImmediate in the source fixture; this is not real SDK or full-plant elapsed time.",
+    "RSS delta includes transient creation of3505240 mock scalar property values plus SDK row objects, inventory/index and fresh visibility observations; no256MiB total-process bound is claimed.",
+    "Only query-matching postings are retained; SDK scan/count/UTF8 page/deadline limits remain fail-closed."
+  ],
+  "baseHead": "270ce934cadb00a23698616609304ae2cab25b41",
+  "canonical11": {
+    "checks": [
+      {
+        "sha256": "fa489d2948f3c7a4af8931cb79d775a61f4718d5ad3187bd5637598665d1ff5f",
+        "path": "src/PathFinder.Core/Routing/CableDesignLength.cs",
+        "bytes": 2220,
+        "matches": true
+      },
+      {
+        "sha256": "12e96c787902850bffad660d5d2a43333960d9920890cf8f547a730f67e0d0b8",
+        "path": "src/PathFinder.Core/Routing/RouteCalculator.cs",
+        "bytes": 51930,
+        "matches": true
+      },
+      {
+        "sha256": "a97e2358374f0798c94103a8f0b20bf7c5a04208de523ea384afa528f70ec05f",
+        "path": "src/PathFinder.Core/Routing/RouteCodeParser.cs",
+        "bytes": 3247,
+        "matches": true
+      },
+      {
+        "sha256": "1914b875b675bc61e274a46f221d0633e5db21eab2fe0e34214c7c05aa5485ae",
+        "path": "src/PathFinder.Core/Routing/RouteLookupCalculator.cs",
+        "bytes": 25795,
+        "matches": true
+      },
+      {
+        "sha256": "9bf4964a00833f91a38f11f34e2eb377f1fb27ccd48d389731248ecf07174c34",
+        "path": "src/PathFinder.Core/Routing/RouteNameResolver.cs",
+        "bytes": 2272,
+        "matches": true
+      },
+      {
+        "sha256": "2de71cc5410e04cce309276cbd2591d218530d5ddfca4c77a2ad98f2ee02e4ea",
+        "path": "src/PathFinder.Core/Routing/RoutingModels.cs",
+        "bytes": 11386,
+        "matches": true
+      },
+      {
+        "sha256": "4d6f0c574166fbcb880cdc38bd10e589905fc74b1fe5709c33fd5e2ecab35948",
+        "path": "src/PathFinder.Core/Routing/TrayBendMeshGeometry.cs",
+        "bytes": 32190,
+        "matches": true
+      },
+      {
+        "sha256": "9dd9abe707b3908c8d55a404e12d6b79b7785659f284dc4d84d9d2391dd225c7",
+        "path": "src/PathFinder.Core/Routing/TrayGeometryBuilder.cs",
+        "bytes": 23403,
+        "matches": true
+      },
+      {
+        "sha256": "75075cbf5b13d385f9932e1ad755815e39934e55bcbf123b657ae3b5363541e8",
+        "path": "src/PathFinder.Core/Routing/TrayMeshClearance.cs",
+        "bytes": 43315,
+        "matches": true
+      },
+      {
+        "sha256": "4ff9170f90a57f8509a9acb5b84dd95262e55b942d6ee892a0dd231563b3af31",
+        "path": "src/PathFinder.Core/Routing/TrayMeshData.cs",
+        "bytes": 2817,
+        "matches": true
+      },
+      {
+        "sha256": "c88ed49513778ef809e581ecf8b4418b746b982c5b12f533d96478275de8deba",
+        "path": "src/PathFinder.Core/Routing/TrayMeshGeometry.cs",
+        "bytes": 23892,
+        "matches": true
+      }
+    ],
+    "status": "PASS"
+  },
+  "sourceClosure": [
+    {
+      "sha256": "20aafe27e07f3a132cbf4af10e29b0a2f53115f4e164ecd3eb92c5d49626a506",
+      "path": "viewer-runtime/display-visibility.mjs",
+      "bytes": 6306
+    },
+    {
+      "sha256": "da6a79fdf2f4462f20f01686c7ae0ee0ed1d171d588f6b3d5fb65659435e453b",
+      "path": "viewer-runtime/display-visibility.d.mts",
+      "bytes": 1128
+    },
+    {
+      "sha256": "bf4c8f76e63a04d6f08c0a618238bb5a417219433df1fc7700072363340e06a8",
+      "path": "viewer-runtime/pathfinder.mjs",
+      "bytes": 39018
+    },
+    {
+      "sha256": "741103abd01317d03596f17d00a26d205179a0c9873146ad3ebe146612d165f0",
+      "path": "viewer-runtime/model-capture.mjs",
+      "bytes": 57822
+    },
+    {
+      "sha256": "3d92e59e2952666c794a9dea266e407848d3f8dfad99f69c22ea8cf19ea22f1b",
+      "path": "viewer-runtime/test/display-visibility.test.mjs",
+      "bytes": 6220
+    },
+    {
+      "sha256": "0fec03cfde88cce050a14e35100ea1132ca23529281097e2888f61389e12b79e",
+      "path": "viewer-runtime/test/pathfinder.test.mjs",
+      "bytes": 50700
+    },
+    {
+      "sha256": "4e955ae28482545630158445e11f91068517e6dc1dab7dfc49ff5d0ad7cd3e58",
+      "path": "viewer-runtime/test/model-capture.node-test.mjs",
+      "bytes": 45976
+    },
+    {
+      "sha256": "fa5f773c8856f3acdf2017b898b1f1531cf4a44815d62dee28dde787f61e4aee",
+      "path": "pathfinder-engine/src/PathFinder.Model/Contracts.cs",
+      "bytes": 7335
+    },
+    {
+      "sha256": "37d619c1d0be490fa9fd749c704c0dff3d66bd3a447e241681ed3f7362afc756",
+      "path": "pathfinder-engine/src/PathFinder.Model/SnapshotReader.cs",
+      "bytes": 22958
+    },
+    {
+      "sha256": "21557f7cb022f5e150c8f227e467307824da15b484dbdc01cd0975af6a467391",
+      "path": "pathfinder-engine/tests/PathFinder.Model.Tests/Program.cs",
+      "bytes": 31993
+    },
+    {
+      "sha256": "48661c4b0704a05a2885e2fae7810d01853c94514b28d9703518ddd424f3208b",
+      "path": "pathfinder-engine/tests/PathFinder.Model.Tests/EquipmentEligibilityTests.cs",
+      "bytes": 7843
+    }
+  ],
+  "passed": 267,
+  "failed": 0,
+  "branch": "pf-u6a-properties-visible-local-20261020",
+  "status": "PASS",
+  "suites": [
+    {
+      "files": 3,
+      "passed": 108,
+      "name": "SDK visibility/discovery/capture",
+      "failed": 0
+    },
+    {
+      "passed": 40,
+      "name": "CSharp equipment metadata boundary",
+      "failed": 0
+    },
+    {
+      "passed": 94,
+      "name": "CSharp legacy Model regression",
+      "failed": 0
+    },
+    {
+      "passed": 25,
+      "name": "CSharp capture-input scope",
+      "failed": 0
+    }
+  ]
+}

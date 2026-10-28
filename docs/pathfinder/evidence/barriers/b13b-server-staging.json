@@ -1,0 +1,134 @@
+{
+  "schemaVersion": "wfc.pf.barriers.b13b-server-staging.v1",
+  "baseRevision": "5c3a5087d15a12ae624c44d1ec300adda2fb36ef",
+  "stageStatus": "TECHNICAL_SOURCE_FOUNDATION_PASS",
+  "source": [
+    {
+      "path": "shared/pathfinderBarrierMultipartSessions.ts",
+      "bytes": 14141,
+      "sha256": "4b2144bed84eb6863fabc6871065d24dceb13a5325ef6d2d8250501a82a85c37"
+    },
+    {
+      "path": "shared/pathfinderBarrierMultipartSessions.test.ts",
+      "bytes": 13785,
+      "sha256": "f49cef6fe1caa5ddf549782eca93416a1edae1fec2435c1d97b3b9dc8615d0fc"
+    },
+    {
+      "path": "server/pathfinder/barrierMultipartSchema.ts",
+      "bytes": 6686,
+      "sha256": "4220e9ff341d9a837bfa0e5d716169f7130e612a68132b22e9da039cc2e6ecf5"
+    },
+    {
+      "path": "server/pathfinder/barrierMultipartRepository.ts",
+      "bytes": 48104,
+      "sha256": "43d32c7c44d58b6df05db58e7d51ff294b7a412f6b6cd0e1160f6dfdccdb2e40"
+    },
+    {
+      "path": "server/pathfinder/barrierMultipartRepository.test.ts",
+      "bytes": 6038,
+      "sha256": "072d59f6973e4fc62c76a18bff621ba035eec631cc83975b1e70c831d95250fa"
+    },
+    {
+      "path": "server/pathfinder/barrierMultipartRepository.integration.test.ts",
+      "bytes": 25208,
+      "sha256": "3436ff4c6d3423076b71a23c5ea3e80f507b92f8aab9524359d6d2115fdfc6e3"
+    },
+    {
+      "path": "server/pathfinder/barrierMultipartStorage.ts",
+      "bytes": 17705,
+      "sha256": "cf0177238b8afd5b7dc1e534b8db5259d68c6b96e96b583aa2b94becdf3913bd"
+    },
+    {
+      "path": "server/pathfinder/barrierMultipartStorage.test.ts",
+      "bytes": 21385,
+      "sha256": "83a9f2d94cc648783ccb10265918a758c71d10fd825bab0f8f2d3a39709239cd"
+    }
+  ],
+  "authority": "none",
+  "geometryValidation": "NOT_VALIDATED",
+  "qualification": "NOT_MEASURED",
+  "checks": {
+    "shared": {
+      "status": "PASS",
+      "pass": 12
+    },
+    "repositoryUnit": {
+      "status": "PASS",
+      "pass": 7
+    },
+    "windowsStorage": {
+      "status": "PASS",
+      "pass": 6,
+      "linuxConditionalSkip": 21,
+      "durableWriteSuccessClaim": false
+    },
+    "linuxStorage": {
+      "status": "PASS",
+      "pass": 26,
+      "windowsConditionalSkip": 1
+    },
+    "freshPostgresql": {
+      "status": "PASS",
+      "pass": 12,
+      "fullTinyStoredPipeline": true,
+      "namespacePublishedHeadCreated": false
+    },
+    "types": {
+      "status": "PASS",
+      "scope": "Full frontend and server"
+    },
+    "lint": {
+      "status": "PASS",
+      "warnings": 0
+    },
+    "independentReview": "CLEAR"
+  },
+  "fixture": {
+    "operationId": "6cda1a92-cad1-4639-9051-8d9edfff8949",
+    "attempt": 6,
+    "nodeImage": "sha256:82472d42d50ee798a07aba7291d66d1b6dbb9d3ac18a56904bf92126ea718621",
+    "postgresImage": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+    "sourceFiles": 36,
+    "sourceCopyBookends": "PASS",
+    "helperMemoryBytes": 805306368,
+    "nanoCpus": 1000000000,
+    "hostPorts": 0,
+    "readOnlyRoot": true,
+    "helpersRemoved": true,
+    "networkRemoved": true,
+    "at": "2026-10-22T01:30:19.946Z"
+  },
+  "retainedFailures": [
+    {
+      "attempts": [
+        1,
+        2
+      ],
+      "status": "FAIL",
+      "scope": "Fixture startup before tests; remote-exec/cleanup uncertainty; no owned helpers currently observed; two empty diagnostic networks retained"
+    },
+    {
+      "attempts": [
+        3,
+        4,
+        5
+      ],
+      "status": "FAIL",
+      "scope": "Fixture startup before tests; socket directory on read-only root/default initialization lookup; positive helper/network cleanup"
+    },
+    {
+      "status": "FAIL",
+      "scope": "First nonfrozen server typecheck; four mechanical errors corrected before final full PASS"
+    }
+  ],
+  "limits": {
+    "runtime5191": "NOT_RUN",
+    "aAlborgSdk": "BLOCKED",
+    "actualCivilTriangles": "NOT_RUN",
+    "openings": "NOT_RUN",
+    "largeGeometryCapacity": "NOT_MEASURED",
+    "globalQualification": "NOT_RUN",
+    "cableWrites": "NOT_RUN"
+  },
+  "scope": "Additive unwired v2 sessions, permanent physical reservations and immutable packed staging. All stored data remains unqualified. No production migration, publication, collision-clear proof, real-data Apply or browser workaround."
+}

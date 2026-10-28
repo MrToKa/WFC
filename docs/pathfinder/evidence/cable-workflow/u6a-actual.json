@@ -1,0 +1,319 @@
+{
+  "schemaVersion": "wfc.pf.cable-workflow.u6a.actual.v1",
+  "at": "2026-10-20T20:27:47.030Z",
+  "branch": "pf-u6a-properties-visible-local-20261020",
+  "baseCommit": "270ce934cadb00a23698616609304ae2cab25b41",
+  "status": "TECHNICAL_SOURCE_PASS_REAL_MODEL_BLOCKED",
+  "sourceClosure": [
+    {
+      "sha256": "fa5f773c8856f3acdf2017b898b1f1531cf4a44815d62dee28dde787f61e4aee",
+      "path": "pathfinder-engine/src/PathFinder.Model/Contracts.cs"
+    },
+    {
+      "sha256": "37d619c1d0be490fa9fd749c704c0dff3d66bd3a447e241681ed3f7362afc756",
+      "path": "pathfinder-engine/src/PathFinder.Model/SnapshotReader.cs"
+    },
+    {
+      "sha256": "48661c4b0704a05a2885e2fae7810d01853c94514b28d9703518ddd424f3208b",
+      "path": "pathfinder-engine/tests/PathFinder.Model.Tests/EquipmentEligibilityTests.cs"
+    },
+    {
+      "sha256": "21557f7cb022f5e150c8f227e467307824da15b484dbdc01cd0975af6a467391",
+      "path": "pathfinder-engine/tests/PathFinder.Model.Tests/Program.cs"
+    },
+    {
+      "sha256": "bd3757c6646a64070f433216b4449b58ab6f9a0380bfa94e41985f18c06ba741",
+      "path": "scripts/copy-pathfinder-contracts.mjs"
+    },
+    {
+      "sha256": "1a605d41a08733d67f418cc2d62800776dbefeaca5bfc7d80a9bf90678960054",
+      "path": "scripts/viewer-runtime/module-closure.mjs"
+    },
+    {
+      "sha256": "464563553cf7451dee5c417e743ee4ccd96e34ecf1a62902fc7f44c610792c5f",
+      "path": "scripts/viewer-runtime/module-closure.test.mjs"
+    },
+    {
+      "sha256": "b3e8cf905e85a3e1511e4531c0d6a65ff7421d36740e4745d08ea0b078a6ae14",
+      "path": "server/pathfinder/automaticEndpointCandidates.test.ts"
+    },
+    {
+      "sha256": "862eccbf62844fcb54a1c3795b619a618e5d3940b4bce7fc8285253ba9bbdbe7",
+      "path": "server/pathfinder/automaticEndpointCandidates.ts"
+    },
+    {
+      "sha256": "db346c4ebd366bdc0183ee19341c6810a2326b98c98b09d2ec3e63731038de33",
+      "path": "server/pathfinder/calculationEngineIdentity.test.ts"
+    },
+    {
+      "sha256": "73ca943688b202ba8af26d003f6dfa350c53378a29272ad277298244146e2344",
+      "path": "server/pathfinder/calculationEngineIdentity.ts"
+    },
+    {
+      "sha256": "c1f32d36615eb546e316d07f9179a1314f5e0dfac2c6b99d3f5d3680a643306c",
+      "path": "server/pathfinder/catalog.ts"
+    },
+    {
+      "sha256": "934279116667dc7178bb5f177cc33d6a6fd0bdff63088b2edd7b67d25956b00d",
+      "path": "server/pathfinder/contracts.ts"
+    },
+    {
+      "sha256": "f1d22ebdfd2c33f7d985fb7e7ddea72b392a32713ee34a14d08f94bd72e8c00f",
+      "path": "server/pathfinder/endpointCalculationProvenance.ts"
+    },
+    {
+      "sha256": "9be689215ea63bef1799e141b3e98d097a059cbfa267ffdbb8b375c5b4e41528",
+      "path": "server/pathfinder/geometryTraceBuilder.ts"
+    },
+    {
+      "sha256": "fec3d3a9fd153621ff516f340aa2204d5ceb8b5203189fef648516c73d332628",
+      "path": "server/pathfinder/managedPreparationWorkflow.test.ts"
+    },
+    {
+      "sha256": "20cae69281aa3e649b6e7a191b434e70ffd6b1b802b644273f18f876a1b1efdf",
+      "path": "server/pathfinder/matching.test.ts"
+    },
+    {
+      "sha256": "fc6dff91b7c87396938e4c2deb3a7ce49014a731be628e701a33477e9f8be67f",
+      "path": "server/pathfinder/matching.ts"
+    },
+    {
+      "sha256": "f9607f39f574dac8ca234ebd487e95d32d474850b5882dd8e83c221e0a085d6e",
+      "path": "server/pathfinder/preparationPlans.test.ts"
+    },
+    {
+      "sha256": "946693fcd6f9da3dd35ee9de5c8ae60793da9a0b091d19884d59c99d25ca14ec",
+      "path": "server/pathfinder/preparationPlans.ts"
+    },
+    {
+      "sha256": "1f2b4a03d6c34e260f96252e243761b00afdd731ee77696fcd04cd24d408fe77",
+      "path": "server/pathfinder/preparationUnionTask.test.ts"
+    },
+    {
+      "sha256": "68c6db3ade4ebbf1ef0d5572889dcf73a62e0e2e6a34eec0a03e572dbcad0a0c",
+      "path": "server/pathfinder/preparationUnionTask.ts"
+    },
+    {
+      "sha256": "a34222caab2eb2c06c06aced7c0e8e2d6d9e097f72c9af22d460d96a842d594e",
+      "path": "server/pathfinder/previews.test.ts"
+    },
+    {
+      "sha256": "3426e8719c41b4c6c394908620bc4d7192ff62af50c5d291279fa04610506d71",
+      "path": "server/pathfinder/previews.ts"
+    },
+    {
+      "sha256": "730a7e67816ce182b49ca0692b55049a9fd22cca0d0e50c7df266a31a97bdbd8",
+      "path": "server/pathfinder/repository-match.test.ts"
+    },
+    {
+      "sha256": "224eab59d005243837265fe54acc7a67c882aa4817b31a81065fe9e0e4d3e51b",
+      "path": "server/pathfinder/repository.ts"
+    },
+    {
+      "sha256": "da5045dff6129caaec38dd4062c44902691c24507b1df7758774aa24caeb0c90",
+      "path": "shared/collectPreparationDiscovery.ts"
+    },
+    {
+      "sha256": "147f6a093662273df3f4e9cd65e92fed32267ce6b25279bcf950834a0d39af5b",
+      "path": "shared/pathfinderEquipmentVisibility.test.ts"
+    },
+    {
+      "sha256": "b0b308ce25880cc7e06267d30fc751de386f8c83380ad4e2ba1b0e4ca6b068ca",
+      "path": "shared/pathfinderGeometryTrace.ts"
+    },
+    {
+      "sha256": "a7721f5a204c6f8f08bc78984739001ece07e0a2217f678be788ea768973d8f5",
+      "path": "shared/pathfinderPreparation.ts"
+    },
+    {
+      "sha256": "35cf897abb8fbb67f6d50df7b551fb2827bd1034d535679cc63a01ea5cf99c27",
+      "path": "shared/preparationMerge.test.ts"
+    },
+    {
+      "sha256": "f1bc1bacee734746cdbe447e0a447e58c656461f253dac32dabc7d8822af4571",
+      "path": "shared/preparationMerge.ts"
+    },
+    {
+      "sha256": "fa571d3b379eacdfcfcc8c2c7ea1ed7c1a0b258ef88068316a7596d43170c0a6",
+      "path": "src/pages/ProjectDetails/hooks/collectPreparationDiscovery.test.ts"
+    },
+    {
+      "sha256": "9a864b65b493ba9a4989c0dfed60f228df45dcc628f088ff9fd375db427443f1",
+      "path": "src/pages/ProjectDetails/ProjectPreparationPanel.tsx"
+    },
+    {
+      "sha256": "e82190fd66dd766bddac3edadde28bd228d21907d19de2d4bbe32a30d05c381b",
+      "path": "src/viewer/ViewerController.test.ts"
+    },
+    {
+      "sha256": "2f3bf43e70d52fd90408aa9273ed4d9320b8b5f950f5ffbf3476f4c712ffc24a",
+      "path": "src/viewer/ViewerController.ts"
+    },
+    {
+      "sha256": "e6c857664bb3933ef111a473b7bbacaeefba53548ec29e787520d541c2281297",
+      "path": "viewer-runtime/adapter.mjs"
+    },
+    {
+      "sha256": "da6a79fdf2f4462f20f01686c7ae0ee0ed1d171d588f6b3d5fb65659435e453b",
+      "path": "viewer-runtime/display-visibility.d.mts"
+    },
+    {
+      "sha256": "20aafe27e07f3a132cbf4af10e29b0a2f53115f4e164ecd3eb92c5d49626a506",
+      "path": "viewer-runtime/display-visibility.mjs"
+    },
+    {
+      "sha256": "960fee998e407c21f42442b7edec0e85763d5df6ef36ce86949ecf962ff620e5",
+      "path": "viewer-runtime/equipment-names.d.mts"
+    },
+    {
+      "sha256": "dbd24d32d0f1637de9187fa3c404bd75af6565d9588e47367cfb7f59d4d69bf1",
+      "path": "viewer-runtime/equipment-names.mjs"
+    },
+    {
+      "sha256": "741103abd01317d03596f17d00a26d205179a0c9873146ad3ebe146612d165f0",
+      "path": "viewer-runtime/model-capture.mjs"
+    },
+    {
+      "sha256": "bf4c8f76e63a04d6f08c0a618238bb5a417219433df1fc7700072363340e06a8",
+      "path": "viewer-runtime/pathfinder.mjs"
+    },
+    {
+      "sha256": "69194a630148f8362bd56957e6a7aa770905ad8619e1d00269db1f2616d49d99",
+      "path": "viewer-runtime/preparation-input.d.mts"
+    },
+    {
+      "sha256": "35af2fdab9f64d7741342acc3df18162cab5f5fedbff8bac15f3706b1e553668",
+      "path": "viewer-runtime/preparation-input.mjs"
+    },
+    {
+      "sha256": "2629246fad17088fa9d7e707bed8139151ec708f1fd3141c53351515de02cc17",
+      "path": "viewer-runtime/routes.mjs"
+    },
+    {
+      "sha256": "68b6f84871e133a4087629d1b54dc405027c93f3bf9935052d45f7cbae19e097",
+      "path": "viewer-runtime/test/bridge.test.mjs"
+    },
+    {
+      "sha256": "3d92e59e2952666c794a9dea266e407848d3f8dfad99f69c22ea8cf19ea22f1b",
+      "path": "viewer-runtime/test/display-visibility.test.mjs"
+    },
+    {
+      "sha256": "28a23028e58f0bb5a8957598777da3e5f92546c678198681460acadc5ca1b06f",
+      "path": "viewer-runtime/test/equipment-names.test.mjs"
+    },
+    {
+      "sha256": "b4b89441a042207e9205a6837481b8e8dfaebaec29404870866bf98f178c31f8",
+      "path": "viewer-runtime/test/legacy-routes.test.mjs"
+    },
+    {
+      "sha256": "4e955ae28482545630158445e11f91068517e6dc1dab7dfc49ff5d0ad7cd3e58",
+      "path": "viewer-runtime/test/model-capture.node-test.mjs"
+    },
+    {
+      "sha256": "0fec03cfde88cce050a14e35100ea1132ca23529281097e2888f61389e12b79e",
+      "path": "viewer-runtime/test/pathfinder.test.mjs"
+    },
+    {
+      "sha256": "dc3a95d07e88e43850c686fcfba2d3094c9ebcddf39252ab20ad5e27c3f37072",
+      "path": "viewer-runtime/test/preparation-input.test.mjs"
+    }
+  ],
+  "checks": {
+    "typescript": {
+      "status": "PASS",
+      "tests": 514,
+      "files": 19,
+      "receipt": "u6a-final-ts.json"
+    },
+    "viewerNode": {
+      "status": "PASS",
+      "tests": 265,
+      "receipt": "u6a-final-node.tap"
+    },
+    "moduleClosure": {
+      "status": "PASS",
+      "tests": 3,
+      "receipt": "u6a-module-closure.tap"
+    },
+    "csharp": {
+      "status": "PASS",
+      "tests": 159,
+      "receipt": "u6a-sdk-csharp-actual.json",
+      "sourceHashesReverified": true,
+      "scope": "Existing current-stage 40metadata+94legacyModel+25input-scope;108SDK tests overlap final265 and are not counted twice"
+    },
+    "distinctChecks": 941,
+    "canonicalSourceAudit": {
+      "status": "PASS",
+      "files": 11
+    },
+    "sourceFreeze": {
+      "status": "PASS",
+      "files": 53
+    },
+    "frontendBackendTypes": "PASS",
+    "scopedLint": "PASS",
+    "diff": {
+      "status": "PASS_SOURCE_SCOPE",
+      "rawDiagnosticException": {
+        "path": "docs/pathfinder/evidence/cable-workflow/u6a-node.tap",
+        "lines": [
+          107,
+          109
+        ],
+        "reason": "Original failed Node assertion output has two whitespace-only diagnostic lines; immutable failure evidence retained byte-exact."
+      }
+    },
+    "localServerBuild": "PASS",
+    "compiledProjection": {
+      "status": "PASS",
+      "files": 32,
+      "receipt": "u6a-build-closure.json"
+    },
+    "realAalborgReread": "BLOCKED",
+    "liveVisual": "BLOCKED",
+    "realModelFunctional": "NOT_RUN",
+    "nativeParity": "NOT_RUN",
+    "humanEngineeringAcceptance": "NOT_RUN",
+    "liveRemoteCi": "NOT_RUN"
+  },
+  "retainedFailures": [
+    {
+      "receipt": "u6a-node.tap",
+      "status": "FAIL",
+      "passed": 258,
+      "failed": 1,
+      "reason": "Bridge mock still used old v2 response without required v3 SDK visibility proof; test fixture corrected, production guards unchanged."
+    },
+    {
+      "receipt": "u6a-sdk-csharp-actual.json",
+      "status": "FAIL_HISTORY_RETAINED",
+      "reason": "Draft fixture and stale DLL failures retained by original owner; final159 CSharp receipts and source hashes verified."
+    }
+  ],
+  "boundaries": {
+    "runtimeWrites": false,
+    "sqlHttpDockerActions": false,
+    "viewerBypass": false,
+    "realCalculations": false,
+    "reviewApplyInitialFill": false,
+    "original5180Or5190Changed": false,
+    "preparer": "PAUSED",
+    "pushPrMergeDeployment": false
+  },
+  "capacity": {
+    "scope": "synthetic-source-capacity-zero-delay-yields-accelerated-not-real-SDK",
+    "rows": 438155,
+    "scalarValues": 3505240,
+    "fragmentVisibilitySlots": 664556,
+    "sdkPropertyCalls": 856,
+    "queryMatches": 1,
+    "milliseconds": 3437,
+    "rssDeltaBytes": 685551616
+  },
+  "capacityLimitations": [
+    "Zero-delay yields are accelerated with setImmediate in the source fixture; this is not real SDK or full-plant elapsed time.",
+    "RSS delta includes transient creation of3505240 mock scalar property values plus SDK row objects, inventory/index and fresh visibility observations; no256MiB total-process bound is claimed.",
+    "Only query-matching postings are retained; SDK scan/count/UTF8 page/deadline limits remain fail-closed."
+  ]
+}

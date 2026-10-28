@@ -1,0 +1,790 @@
+{
+  "schemaVersion": "pathfinder.worker-reuse.preservation.v1",
+  "recordedAtUtc": "2026-10-18T14:50:02.228Z",
+  "status": "PASS",
+  "repository": {
+    "root": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local",
+    "branch": "pf-8-ui-preservation-local-20261018",
+    "head": "e275dd5ee61adb339649a63cd2695dcabcec10f7"
+  },
+  "baselines": [
+    {
+      "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\docs\\pathfinder\\evidence\\capacity\\final-preservation-1792325162813.json",
+      "bytes": 24414,
+      "sha256": "a88eec49c3fafd2e5f1517e40d679525c6fd36e22f6bbe49afc547de0bcfdb00"
+    },
+    {
+      "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\docs\\pathfinder\\evidence\\pf2-capacity\\input-provenance-1792324304556.json",
+      "bytes": 9897,
+      "sha256": "1e8a290d483f8baed2672cadf36adfe9f0ae30018d85a09419a03d220be1ad6f"
+    }
+  ],
+  "source": {
+    "project": "wfc-pathfinder-local",
+    "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65",
+    "port": 5190,
+    "apiImage": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+    "apiId": "3d05017ee0fc2bb0b15c1a3e0aaeac258e996d2e024006667d3a4449c40d62c0",
+    "postgresId": "6830635a4597dad696f1a5ced6846853cd9e1fee0f858450ad6f858e4c2e30b9",
+    "branch": "pf-2-capacity-local-20261018",
+    "commit": "8a726f72ab94da22681320f28ccebe1224cf8eb3",
+    "database": {
+      "host": "postgres",
+      "port": 5432,
+      "name": "wfc_pathfinder_local"
+    },
+    "api": {
+      "id": "3d05017ee0fc2bb0b15c1a3e0aaeac258e996d2e024006667d3a4449c40d62c0",
+      "name": "/wfc-pathfinder-local-api-1",
+      "image": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+      "running": true,
+      "startedAt": "2026-10-18T09:53:48.067931419Z",
+      "composeProject": "wfc-pathfinder-local",
+      "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65"
+    },
+    "postgres": {
+      "id": "6830635a4597dad696f1a5ced6846853cd9e1fee0f858450ad6f858e4c2e30b9",
+      "name": "/wfc-pathfinder-local-postgres-1",
+      "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+      "running": true,
+      "startedAt": "2026-10-18T02:03:12.60010978Z",
+      "composeProject": "wfc-pathfinder-local",
+      "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65"
+    }
+  },
+  "checks": [
+    {
+      "name": "source-snapshot-unchanged",
+      "status": "PASS"
+    },
+    {
+      "name": "copied-snapshot-unchanged",
+      "status": "PASS"
+    },
+    {
+      "name": "manifest-unchanged",
+      "status": "PASS"
+    },
+    {
+      "name": "reference-unchanged",
+      "status": "PASS"
+    },
+    {
+      "name": "all12-workflow-hashes-counts-unchanged",
+      "status": "PASS"
+    },
+    {
+      "name": "active-current-planning-artifact-unchanged",
+      "status": "PASS"
+    },
+    {
+      "name": "compiled-helper-and-source-snapshot-stable-across-audit",
+      "status": "PASS"
+    },
+    {
+      "name": "additional-containers-owned-and-isolated",
+      "status": "PASS"
+    },
+    {
+      "name": "all18-baseline-container-identities-unchanged",
+      "status": "PASS"
+    },
+    {
+      "name": "original13-container-identities-unchanged",
+      "status": "PASS"
+    },
+    {
+      "name": "own5-container-identities-unchanged",
+      "status": "PASS"
+    },
+    {
+      "name": "all6-denied-directories-retained",
+      "status": "PASS"
+    }
+  ],
+  "workflow": {
+    "status": "PASS",
+    "categories": 12,
+    "comparison": [
+      {
+        "category": "settings",
+        "before": {
+          "count": 1,
+          "sha256": "fd028bfed36351138279cea05254d6eb0bb712f9ca8fb7501643ebbb0760ae2d"
+        },
+        "after": {
+          "count": 1,
+          "sha256": "fd028bfed36351138279cea05254d6eb0bb712f9ca8fb7501643ebbb0760ae2d"
+        },
+        "unchanged": true
+      },
+      {
+        "category": "selection",
+        "before": {
+          "count": 1,
+          "sha256": "53c9e37c1ada39e3fadd5ba7b00f508198e6c2fc12c189c8789380d61f5e80e9"
+        },
+        "after": {
+          "count": 1,
+          "sha256": "53c9e37c1ada39e3fadd5ba7b00f508198e6c2fc12c189c8789380d61f5e80e9"
+        },
+        "unchanged": true
+      },
+      {
+        "category": "registry",
+        "before": {
+          "count": 1,
+          "sha256": "ad9d92d44bd97652b37a8e97a0892eebc5f9314372504b35ab950492014d0984"
+        },
+        "after": {
+          "count": 1,
+          "sha256": "ad9d92d44bd97652b37a8e97a0892eebc5f9314372504b35ab950492014d0984"
+        },
+        "unchanged": true
+      },
+      {
+        "category": "planningArtifacts",
+        "before": {
+          "count": 2,
+          "sha256": "02a92c6d9d81be7cfc775920ba1577183e0d517def13532f325f616dae720ddd"
+        },
+        "after": {
+          "count": 2,
+          "sha256": "02a92c6d9d81be7cfc775920ba1577183e0d517def13532f325f616dae720ddd"
+        },
+        "unchanged": true
+      },
+      {
+        "category": "locations",
+        "before": {
+          "count": 3,
+          "sha256": "14b33f54e2b6ad71318f8d586280a44771456dad365cdd0fc42e2a5f0657a8e7"
+        },
+        "after": {
+          "count": 3,
+          "sha256": "14b33f54e2b6ad71318f8d586280a44771456dad365cdd0fc42e2a5f0657a8e7"
+        },
+        "unchanged": true
+      },
+      {
+        "category": "aliases",
+        "before": {
+          "count": 4,
+          "sha256": "30a41e0035f5737aa29ae112d5873efee8c6df6345dc43a19f777d5b62aacf4b"
+        },
+        "after": {
+          "count": 4,
+          "sha256": "30a41e0035f5737aa29ae112d5873efee8c6df6345dc43a19f777d5b62aacf4b"
+        },
+        "unchanged": true
+      },
+      {
+        "category": "bindings",
+        "before": {
+          "count": 3,
+          "sha256": "2a0d7dc92b71813355eee3946ac83cca0564bd7429e6f9ebc33ed56e1c47d434"
+        },
+        "after": {
+          "count": 3,
+          "sha256": "2a0d7dc92b71813355eee3946ac83cca0564bd7429e6f9ebc33ed56e1c47d434"
+        },
+        "unchanged": true
+      },
+      {
+        "category": "modelObjects",
+        "before": {
+          "count": 104,
+          "sha256": "14b7cd1d1aa7ddf23c21895279e9c83c07f9fa21935f424213369f4ab270cd56"
+        },
+        "after": {
+          "count": 104,
+          "sha256": "14b7cd1d1aa7ddf23c21895279e9c83c07f9fa21935f424213369f4ab270cd56"
+        },
+        "unchanged": true
+      },
+      {
+        "category": "cables",
+        "before": {
+          "count": 1,
+          "sha256": "7d1bf598adb6ca623113993592717b0de159747e2280f7286bbb2a8f035dde1b"
+        },
+        "after": {
+          "count": 1,
+          "sha256": "7d1bf598adb6ca623113993592717b0de159747e2280f7286bbb2a8f035dde1b"
+        },
+        "unchanged": true
+      },
+      {
+        "category": "proposals",
+        "before": {
+          "count": 5,
+          "sha256": "5a5a10d25a41e24f1f02ee473062888f6d47f55c11b791f300ff198127031e18"
+        },
+        "after": {
+          "count": 5,
+          "sha256": "5a5a10d25a41e24f1f02ee473062888f6d47f55c11b791f300ff198127031e18"
+        },
+        "unchanged": true
+      },
+      {
+        "category": "reviews",
+        "before": {
+          "count": 3,
+          "sha256": "a1121bb28f1c633a229efd78b135200368154959caa4773fa640a8157a24f909"
+        },
+        "after": {
+          "count": 3,
+          "sha256": "a1121bb28f1c633a229efd78b135200368154959caa4773fa640a8157a24f909"
+        },
+        "unchanged": true
+      },
+      {
+        "category": "applies",
+        "before": {
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "after": {
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "unchanged": true
+      }
+    ],
+    "registryRevision": "11",
+    "latestPlanningArtifact": {
+      "id": "75c61dc7-d456-45b0-9052-2a0822240350",
+      "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+      "snapshotSha256": "b47365401aaf078374607c944e22ac5100f2aa6fe4389c056fbdd963526f17ed",
+      "objectCount": 52
+    },
+    "selectedProject": "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a",
+    "database": {
+      "database": "wfc_pathfinder_local",
+      "address": "172.28.0.3/32",
+      "port": 5432
+    },
+    "rawAuditOutputSha256": "d33462fc266dd3ab78e6974c7bafdc54c52442691e27e02e23c63c6688bab0e5"
+  },
+  "containers": {
+    "status": "PASS",
+    "baselineCount": 18,
+    "originalCount": 13,
+    "ownCount": 5,
+    "currentCount": 18,
+    "additionalIds": [],
+    "additional": [],
+    "comparison": [
+      {
+        "id": "1d2a63a1b6710bbbfcf4663c61732ea4989ebc3229d6437d22d7ff10d265d47b",
+        "name": "/aalborg-offline-viewer-gateway-1",
+        "before": {
+          "id": "1d2a63a1b6710bbbfcf4663c61732ea4989ebc3229d6437d22d7ff10d265d47b",
+          "name": "/aalborg-offline-viewer-gateway-1",
+          "image": "sha256:6ff1cadaccac6e2cb4ae8b4f87e7ed6e0d1ea5fa7cd781793b5f673859cddc20",
+          "running": true,
+          "startedAt": "2026-10-16T14:08:20.484859769Z",
+          "composeProject": "aalborg-offline-viewer",
+          "owner": null
+        },
+        "after": {
+          "id": "1d2a63a1b6710bbbfcf4663c61732ea4989ebc3229d6437d22d7ff10d265d47b",
+          "name": "/aalborg-offline-viewer-gateway-1",
+          "image": "sha256:6ff1cadaccac6e2cb4ae8b4f87e7ed6e0d1ea5fa7cd781793b5f673859cddc20",
+          "running": true,
+          "startedAt": "2026-10-16T14:08:20.484859769Z",
+          "composeProject": "aalborg-offline-viewer",
+          "owner": null
+        },
+        "unchanged": true
+      },
+      {
+        "id": "1d5592c188a8d60c55d58a29ae0bab14ee67cae51ee00bb1822f75cd9beef99d",
+        "name": "/wfc-app-frontend-1",
+        "before": {
+          "id": "1d5592c188a8d60c55d58a29ae0bab14ee67cae51ee00bb1822f75cd9beef99d",
+          "name": "/wfc-app-frontend-1",
+          "image": "sha256:86870eab49e4b14e81d751ba26a0b5644dfd570954041b665801155487b65b78",
+          "running": true,
+          "startedAt": "2026-10-17T12:24:23.192279537Z",
+          "composeProject": "wfc-app",
+          "owner": null
+        },
+        "after": {
+          "id": "1d5592c188a8d60c55d58a29ae0bab14ee67cae51ee00bb1822f75cd9beef99d",
+          "name": "/wfc-app-frontend-1",
+          "image": "sha256:86870eab49e4b14e81d751ba26a0b5644dfd570954041b665801155487b65b78",
+          "running": true,
+          "startedAt": "2026-10-17T12:24:23.192279537Z",
+          "composeProject": "wfc-app",
+          "owner": null
+        },
+        "unchanged": true
+      },
+      {
+        "id": "1ffdec229a12d50458d6b0dc1de5b7ebf79a5f464614ccccc7ef22fef86188bb",
+        "name": "/routings-preparer-preparer-1",
+        "before": {
+          "id": "1ffdec229a12d50458d6b0dc1de5b7ebf79a5f464614ccccc7ef22fef86188bb",
+          "name": "/routings-preparer-preparer-1",
+          "image": "sha256:f7bfe7434ee7e8a864452b98678339a940bb621cfccdd21ad715f591ace6ad77",
+          "running": true,
+          "startedAt": "2026-10-17T09:30:09.74632792Z",
+          "composeProject": "routings-preparer",
+          "owner": null
+        },
+        "after": {
+          "id": "1ffdec229a12d50458d6b0dc1de5b7ebf79a5f464614ccccc7ef22fef86188bb",
+          "name": "/routings-preparer-preparer-1",
+          "image": "sha256:f7bfe7434ee7e8a864452b98678339a940bb621cfccdd21ad715f591ace6ad77",
+          "running": true,
+          "startedAt": "2026-10-17T09:30:09.74632792Z",
+          "composeProject": "routings-preparer",
+          "owner": null
+        },
+        "unchanged": true
+      },
+      {
+        "id": "2f1d30dd30411bf8b7e873b893d1a87a064cd618651d1f2646b8c5d739f72f36",
+        "name": "/wfc_app",
+        "before": {
+          "id": "2f1d30dd30411bf8b7e873b893d1a87a064cd618651d1f2646b8c5d739f72f36",
+          "name": "/wfc_app",
+          "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+          "running": true,
+          "startedAt": "2026-10-16T14:08:28.33027284Z",
+          "composeProject": null,
+          "owner": null
+        },
+        "after": {
+          "id": "2f1d30dd30411bf8b7e873b893d1a87a064cd618651d1f2646b8c5d739f72f36",
+          "name": "/wfc_app",
+          "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+          "running": true,
+          "startedAt": "2026-10-16T14:08:28.33027284Z",
+          "composeProject": null,
+          "owner": null
+        },
+        "unchanged": true
+      },
+      {
+        "id": "31a298d2589caf6aa4ffe62aed90fb4f41ed2048ac52f940e47b4a7e2638e874",
+        "name": "/aalborg-offline-viewer-viewer-1",
+        "before": {
+          "id": "31a298d2589caf6aa4ffe62aed90fb4f41ed2048ac52f940e47b4a7e2638e874",
+          "name": "/aalborg-offline-viewer-viewer-1",
+          "image": "sha256:6ff1cadaccac6e2cb4ae8b4f87e7ed6e0d1ea5fa7cd781793b5f673859cddc20",
+          "running": true,
+          "startedAt": "2026-10-16T14:08:20.493037766Z",
+          "composeProject": "aalborg-offline-viewer",
+          "owner": null
+        },
+        "after": {
+          "id": "31a298d2589caf6aa4ffe62aed90fb4f41ed2048ac52f940e47b4a7e2638e874",
+          "name": "/aalborg-offline-viewer-viewer-1",
+          "image": "sha256:6ff1cadaccac6e2cb4ae8b4f87e7ed6e0d1ea5fa7cd781793b5f673859cddc20",
+          "running": true,
+          "startedAt": "2026-10-16T14:08:20.493037766Z",
+          "composeProject": "aalborg-offline-viewer",
+          "owner": null
+        },
+        "unchanged": true
+      },
+      {
+        "id": "3265e0bb1d03f23889e765c20ae81212e677bd89f79e2ec7f263bb27ec508ecb",
+        "name": "/niedax-postgres",
+        "before": {
+          "id": "3265e0bb1d03f23889e765c20ae81212e677bd89f79e2ec7f263bb27ec508ecb",
+          "name": "/niedax-postgres",
+          "image": "sha256:af1fcdc0950249ff31a7b72cca8f3bf2a05acde380196ce2ab5cff6355aafb0a",
+          "running": true,
+          "startedAt": "2026-10-16T14:08:20.518513019Z",
+          "composeProject": "niedax-generator",
+          "owner": null
+        },
+        "after": {
+          "id": "3265e0bb1d03f23889e765c20ae81212e677bd89f79e2ec7f263bb27ec508ecb",
+          "name": "/niedax-postgres",
+          "image": "sha256:af1fcdc0950249ff31a7b72cca8f3bf2a05acde380196ce2ab5cff6355aafb0a",
+          "running": true,
+          "startedAt": "2026-10-16T14:08:20.518513019Z",
+          "composeProject": "niedax-generator",
+          "owner": null
+        },
+        "unchanged": true
+      },
+      {
+        "id": "3d05017ee0fc2bb0b15c1a3e0aaeac258e996d2e024006667d3a4449c40d62c0",
+        "name": "/wfc-pathfinder-local-api-1",
+        "before": {
+          "id": "3d05017ee0fc2bb0b15c1a3e0aaeac258e996d2e024006667d3a4449c40d62c0",
+          "name": "/wfc-pathfinder-local-api-1",
+          "image": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+          "running": true,
+          "startedAt": "2026-10-18T09:53:48.067931419Z",
+          "composeProject": "wfc-pathfinder-local",
+          "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65"
+        },
+        "after": {
+          "id": "3d05017ee0fc2bb0b15c1a3e0aaeac258e996d2e024006667d3a4449c40d62c0",
+          "name": "/wfc-pathfinder-local-api-1",
+          "image": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+          "running": true,
+          "startedAt": "2026-10-18T09:53:48.067931419Z",
+          "composeProject": "wfc-pathfinder-local",
+          "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65"
+        },
+        "unchanged": true
+      },
+      {
+        "id": "54d0022b687a3d9af2b1937f6afc5dafcaffa40584c1e1992efb16c828a5c992",
+        "name": "/niedax-frontend",
+        "before": {
+          "id": "54d0022b687a3d9af2b1937f6afc5dafcaffa40584c1e1992efb16c828a5c992",
+          "name": "/niedax-frontend",
+          "image": "sha256:88efc2b14924b52ddf902c798ff6c8183e5eca9a551e3933f2c224893e27dd81",
+          "running": true,
+          "startedAt": "2026-10-16T14:08:20.508506964Z",
+          "composeProject": "niedax-generator",
+          "owner": null
+        },
+        "after": {
+          "id": "54d0022b687a3d9af2b1937f6afc5dafcaffa40584c1e1992efb16c828a5c992",
+          "name": "/niedax-frontend",
+          "image": "sha256:88efc2b14924b52ddf902c798ff6c8183e5eca9a551e3933f2c224893e27dd81",
+          "running": true,
+          "startedAt": "2026-10-16T14:08:20.508506964Z",
+          "composeProject": "niedax-generator",
+          "owner": null
+        },
+        "unchanged": true
+      },
+      {
+        "id": "5a5257297c09596752c28dc246767cedcb17fea506492bfa69b11846c1ce4e2e",
+        "name": "/niedax-gateway",
+        "before": {
+          "id": "5a5257297c09596752c28dc246767cedcb17fea506492bfa69b11846c1ce4e2e",
+          "name": "/niedax-gateway",
+          "image": "sha256:1ce9f99177667c70f907966e2b55e4b1fbede2ab0e9fcaaac2229a27ae12b686",
+          "running": true,
+          "startedAt": "2026-10-16T14:08:20.520293427Z",
+          "composeProject": "niedax-generator",
+          "owner": null
+        },
+        "after": {
+          "id": "5a5257297c09596752c28dc246767cedcb17fea506492bfa69b11846c1ce4e2e",
+          "name": "/niedax-gateway",
+          "image": "sha256:1ce9f99177667c70f907966e2b55e4b1fbede2ab0e9fcaaac2229a27ae12b686",
+          "running": true,
+          "startedAt": "2026-10-16T14:08:20.520293427Z",
+          "composeProject": "niedax-generator",
+          "owner": null
+        },
+        "unchanged": true
+      },
+      {
+        "id": "6830635a4597dad696f1a5ced6846853cd9e1fee0f858450ad6f858e4c2e30b9",
+        "name": "/wfc-pathfinder-local-postgres-1",
+        "before": {
+          "id": "6830635a4597dad696f1a5ced6846853cd9e1fee0f858450ad6f858e4c2e30b9",
+          "name": "/wfc-pathfinder-local-postgres-1",
+          "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+          "running": true,
+          "startedAt": "2026-10-18T02:03:12.60010978Z",
+          "composeProject": "wfc-pathfinder-local",
+          "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65"
+        },
+        "after": {
+          "id": "6830635a4597dad696f1a5ced6846853cd9e1fee0f858450ad6f858e4c2e30b9",
+          "name": "/wfc-pathfinder-local-postgres-1",
+          "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+          "running": true,
+          "startedAt": "2026-10-18T02:03:12.60010978Z",
+          "composeProject": "wfc-pathfinder-local",
+          "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65"
+        },
+        "unchanged": true
+      },
+      {
+        "id": "6ad45aea3b8f180629fd43f9be9f9ab4c6c1d99dbcda72612cb60a2b2e623705",
+        "name": "/wfc-minio",
+        "before": {
+          "id": "6ad45aea3b8f180629fd43f9be9f9ab4c6c1d99dbcda72612cb60a2b2e623705",
+          "name": "/wfc-minio",
+          "image": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+          "running": true,
+          "startedAt": "2026-10-17T09:48:41.528161291Z",
+          "composeProject": "wfc",
+          "owner": null
+        },
+        "after": {
+          "id": "6ad45aea3b8f180629fd43f9be9f9ab4c6c1d99dbcda72612cb60a2b2e623705",
+          "name": "/wfc-minio",
+          "image": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+          "running": true,
+          "startedAt": "2026-10-17T09:48:41.528161291Z",
+          "composeProject": "wfc",
+          "owner": null
+        },
+        "unchanged": true
+      },
+      {
+        "id": "966629b7cce4c9b74b2a39d5705bffded88093747dcd54d0939b56e06d9e6d02",
+        "name": "/aalborg-aps-viewer-viewer-1",
+        "before": {
+          "id": "966629b7cce4c9b74b2a39d5705bffded88093747dcd54d0939b56e06d9e6d02",
+          "name": "/aalborg-aps-viewer-viewer-1",
+          "image": "sha256:3afcb538328d92ea565f457b694d80872cea4f2d6d70038830bff128eee5db75",
+          "running": false,
+          "startedAt": "2026-10-16T05:18:05.048644042Z",
+          "composeProject": "aalborg-aps-viewer",
+          "owner": null
+        },
+        "after": {
+          "id": "966629b7cce4c9b74b2a39d5705bffded88093747dcd54d0939b56e06d9e6d02",
+          "name": "/aalborg-aps-viewer-viewer-1",
+          "image": "sha256:3afcb538328d92ea565f457b694d80872cea4f2d6d70038830bff128eee5db75",
+          "running": false,
+          "startedAt": "2026-10-16T05:18:05.048644042Z",
+          "composeProject": "aalborg-aps-viewer",
+          "owner": null
+        },
+        "unchanged": true
+      },
+      {
+        "id": "aa1d9cb94233c4bf375cb15acb80d2ea3465e04e0b3f6163248cccb91b316e39",
+        "name": "/niedax-migrations",
+        "before": {
+          "id": "aa1d9cb94233c4bf375cb15acb80d2ea3465e04e0b3f6163248cccb91b316e39",
+          "name": "/niedax-migrations",
+          "image": "sha256:b2c1093ba19acc184b0cf9d84f1126536c6e5b40a22e58e4707dec381dbd265d",
+          "running": false,
+          "startedAt": "2026-10-13T10:44:08.346925904Z",
+          "composeProject": "niedax-generator",
+          "owner": null
+        },
+        "after": {
+          "id": "aa1d9cb94233c4bf375cb15acb80d2ea3465e04e0b3f6163248cccb91b316e39",
+          "name": "/niedax-migrations",
+          "image": "sha256:b2c1093ba19acc184b0cf9d84f1126536c6e5b40a22e58e4707dec381dbd265d",
+          "running": false,
+          "startedAt": "2026-10-13T10:44:08.346925904Z",
+          "composeProject": "niedax-generator",
+          "owner": null
+        },
+        "unchanged": true
+      },
+      {
+        "id": "c1a106369b924f76df3f74eb6c80848a56041aaece45e80e11d1db746a68dbf5",
+        "name": "/niedax-backend",
+        "before": {
+          "id": "c1a106369b924f76df3f74eb6c80848a56041aaece45e80e11d1db746a68dbf5",
+          "name": "/niedax-backend",
+          "image": "sha256:f91ec3c3ee353af233a48b96e7e3e872ce73646de7ad28401f681de3545c68a7",
+          "running": true,
+          "startedAt": "2026-10-16T14:08:20.514865059Z",
+          "composeProject": "niedax-generator",
+          "owner": null
+        },
+        "after": {
+          "id": "c1a106369b924f76df3f74eb6c80848a56041aaece45e80e11d1db746a68dbf5",
+          "name": "/niedax-backend",
+          "image": "sha256:f91ec3c3ee353af233a48b96e7e3e872ce73646de7ad28401f681de3545c68a7",
+          "running": true,
+          "startedAt": "2026-10-16T14:08:20.514865059Z",
+          "composeProject": "niedax-generator",
+          "owner": null
+        },
+        "unchanged": true
+      },
+      {
+        "id": "da6d9d618282fcc3a58b8722516f365a778c05ac34520281b0f39a4bf70c54ef",
+        "name": "/wfc-pathfinder-local-storage-ready-1",
+        "before": {
+          "id": "da6d9d618282fcc3a58b8722516f365a778c05ac34520281b0f39a4bf70c54ef",
+          "name": "/wfc-pathfinder-local-storage-ready-1",
+          "image": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+          "running": false,
+          "startedAt": "2026-10-18T09:51:49.231834855Z",
+          "composeProject": "wfc-pathfinder-local",
+          "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65"
+        },
+        "after": {
+          "id": "da6d9d618282fcc3a58b8722516f365a778c05ac34520281b0f39a4bf70c54ef",
+          "name": "/wfc-pathfinder-local-storage-ready-1",
+          "image": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+          "running": false,
+          "startedAt": "2026-10-18T09:51:49.231834855Z",
+          "composeProject": "wfc-pathfinder-local",
+          "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65"
+        },
+        "unchanged": true
+      },
+      {
+        "id": "e27a690c80957356c8a562e02b72249cf85a3d965f9a32fe596048a15f499820",
+        "name": "/wfc-pathfinder-local-minio-1",
+        "before": {
+          "id": "e27a690c80957356c8a562e02b72249cf85a3d965f9a32fe596048a15f499820",
+          "name": "/wfc-pathfinder-local-minio-1",
+          "image": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+          "running": true,
+          "startedAt": "2026-10-18T09:53:46.326853695Z",
+          "composeProject": "wfc-pathfinder-local",
+          "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65"
+        },
+        "after": {
+          "id": "e27a690c80957356c8a562e02b72249cf85a3d965f9a32fe596048a15f499820",
+          "name": "/wfc-pathfinder-local-minio-1",
+          "image": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+          "running": true,
+          "startedAt": "2026-10-18T09:53:46.326853695Z",
+          "composeProject": "wfc-pathfinder-local",
+          "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65"
+        },
+        "unchanged": true
+      },
+      {
+        "id": "f65cc58eea401f9c80de3be44342c3a6157f48fd6468a4d5a6b3df8ceeaac427",
+        "name": "/wfc-app-backend-1",
+        "before": {
+          "id": "f65cc58eea401f9c80de3be44342c3a6157f48fd6468a4d5a6b3df8ceeaac427",
+          "name": "/wfc-app-backend-1",
+          "image": "sha256:481326351dbfa8acc86afe4d2543a1b96a05d523dd95a4715928f7f25418854f",
+          "running": true,
+          "startedAt": "2026-10-17T12:24:29.337651343Z",
+          "composeProject": "wfc-app",
+          "owner": null
+        },
+        "after": {
+          "id": "f65cc58eea401f9c80de3be44342c3a6157f48fd6468a4d5a6b3df8ceeaac427",
+          "name": "/wfc-app-backend-1",
+          "image": "sha256:481326351dbfa8acc86afe4d2543a1b96a05d523dd95a4715928f7f25418854f",
+          "running": true,
+          "startedAt": "2026-10-17T12:24:29.337651343Z",
+          "composeProject": "wfc-app",
+          "owner": null
+        },
+        "unchanged": true
+      },
+      {
+        "id": "ffc99c7a98ffd5b9df7fc145737b6e0d9d6c9bdb36bf5ad57e1219f021e9bf5d",
+        "name": "/wfc-pathfinder-local-web-1",
+        "before": {
+          "id": "ffc99c7a98ffd5b9df7fc145737b6e0d9d6c9bdb36bf5ad57e1219f021e9bf5d",
+          "name": "/wfc-pathfinder-local-web-1",
+          "image": "sha256:1895a3fa33c25933024ab514ef61bd2d1568ffb33477d114541b855da65445b7",
+          "running": true,
+          "startedAt": "2026-10-18T09:53:53.783174377Z",
+          "composeProject": "wfc-pathfinder-local",
+          "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65"
+        },
+        "after": {
+          "id": "ffc99c7a98ffd5b9df7fc145737b6e0d9d6c9bdb36bf5ad57e1219f021e9bf5d",
+          "name": "/wfc-pathfinder-local-web-1",
+          "image": "sha256:1895a3fa33c25933024ab514ef61bd2d1568ffb33477d114541b855da65445b7",
+          "running": true,
+          "startedAt": "2026-10-18T09:53:53.783174377Z",
+          "composeProject": "wfc-pathfinder-local",
+          "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65"
+        },
+        "unchanged": true
+      }
+    ]
+  },
+  "snapshot": {
+    "source": {
+      "path": "/var/lib/wfc/pathfinder/snapshots/75c61dc7-d456-45b0-9052-2a0822240350.json",
+      "bytes": 2501953,
+      "sha256": "b47365401aaf078374607c944e22ac5100f2aa6fe4389c056fbdd963526f17ed"
+    },
+    "copied": {
+      "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf-capacity-7b1ce2e8-46a6-45ad-bf6e-dfcee51a1e20\\input\\snapshots\\75c61dc7-d456-45b0-9052-2a0822240350.json",
+      "bytes": 2501953,
+      "sha256": "b47365401aaf078374607c944e22ac5100f2aa6fe4389c056fbdd963526f17ed"
+    },
+    "manifest": {
+      "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf-capacity-7b1ce2e8-46a6-45ad-bf6e-dfcee51a1e20\\input\\manifest.json",
+      "bytes": 1179,
+      "sha256": "f90e21941578e62d8f5d7426c2f78d039bfa0825e9ebd78cb78ee48d24be8e9a"
+    },
+    "reference": {
+      "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf-capacity-7b1ce2e8-46a6-45ad-bf6e-dfcee51a1e20\\reference.private.json",
+      "bytes": 15329,
+      "sha256": "93c5aec17494c703005b08b7467ab66012feecb703fbcb0eee4c2f23bf86a13f"
+    }
+  },
+  "deniedDirectories": [
+    {
+      "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\.pf0-work\\core-1f723e37-f152-4a60-9b1e-46adc6c3179c",
+      "exists": true,
+      "isDirectory": true,
+      "check": "existence-only lstat; no contents or mutation"
+    },
+    {
+      "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\.pf2-work\\model-tests-2733f823d57d477ba5e338a7d9a08cc9",
+      "exists": true,
+      "isDirectory": true,
+      "check": "existence-only lstat; no contents or mutation"
+    },
+    {
+      "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\model-tests-c13957af670e4ee2869cf876aa60d581",
+      "exists": true,
+      "isDirectory": true,
+      "check": "existence-only lstat; no contents or mutation"
+    },
+    {
+      "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\lookup-model-compat-459be54639f5400ebe91f856c64d7f5a",
+      "exists": true,
+      "isDirectory": true,
+      "check": "existence-only lstat; no contents or mutation"
+    },
+    {
+      "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\capacity-bench-build-6134b7566e7a43c9a3bd05843a30018f",
+      "exists": true,
+      "isDirectory": true,
+      "check": "existence-only lstat; no contents or mutation"
+    },
+    {
+      "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\capacity-bench-selftest-0e06d25a9f8c459594fe6a376c0660ee",
+      "exists": true,
+      "isDirectory": true,
+      "check": "existence-only lstat; no contents or mutation"
+    }
+  ],
+  "isolationVerifier": {
+    "status": "NOT_RUN_BY_THIS_SCRIPT",
+    "path": "pathfinder-engine/verify-isolation.mjs",
+    "instruction": "Coordinator runs existing verifier separately once after final release; frozen PF-0 generators must not be run."
+  },
+  "operationScope": {
+    "docker": "inspect/list and fixed read-only exec only",
+    "database": "Existing compiled lookupAudit uses REPEATABLE READ READ ONLY against verified own5190 PG",
+    "authMutations": 0,
+    "jobsCreated": 0,
+    "applyOperations": 0,
+    "lifecycleOperations": 0,
+    "healthRequests": 0,
+    "cleanupActions": 0
+  },
+  "limitations": [
+    "No original database-content audit is claimed.",
+    "Additional isolated qualification/restore containers are allowed; all18 baseline IDs/images/start times must stay exact.",
+    "Mount array enumeration order is not a container identity field and is not compared.",
+    "Denied directories receive existence-only lstat; no contents, removal, movement, archive or parent operation."
+  ],
+  "sourceScript": {
+    "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\docs\\pathfinder\\evidence\\worker-reuse\\audit-preservation.mjs",
+    "bytes": 16075,
+    "sha256": "c79faecaece5165d0cd6b831e77af0380f8a0fb323294de8dc43f4514bd973e0"
+  },
+  "auditHelperSource": {
+    "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\server\\pathfinder\\lookupAudit.ts",
+    "bytes": 4148,
+    "sha256": "8fb1f532824ceec4cb50dc68738eafd788b56ecfdcb860f901218345121c8896"
+  },
+  "compiledAuditHelper": {
+    "path": "/app/server/dist/server/pathfinder/lookupAudit.js",
+    "bytes": 4619,
+    "sha256": "9496ca3ecce0da3cc2eebb039dc25e5e301dd4d681d17f4c16b1c030edb8fcd6"
+  }
+}

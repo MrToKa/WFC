@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "wfc.pf.current-full-recovery-controls.v1",
+  "status": "PASS",
+  "at": "2026-10-20T11:25:33.682Z",
+  "sourceCheckpoint": "7c0c673",
+  "artifacts": {
+    "files": 372,
+    "bytes": 736625033,
+    "sha256": "c054b1995af3ea2e7b6fd3bef1bb98110db971436428391de61fa9d72a3fcac1",
+    "readOnly": true,
+    "addedCapability": "DAC_OVERRIDE only for exact trusted opt-in inventory"
+  },
+  "toc": {
+    "status": "PASS",
+    "method": "pg_restore-list-mounted-file",
+    "tocBytes": 84447,
+    "tocSha256": "18919ffbe542f4840d81f000ec185771166c9e8053caab39dff5da5b69716c76"
+  },
+  "allHelpersRemoved": true,
+  "sourceUnchanged": true,
+  "outsideFreshBaselinePreserved": true,
+  "outsideCounts": {
+    "containers": 18,
+    "volumes": 28,
+    "networks": 14
+  },
+  "historicalUnqualifiedVolumeRetained": true,
+  "realApply": false
+}

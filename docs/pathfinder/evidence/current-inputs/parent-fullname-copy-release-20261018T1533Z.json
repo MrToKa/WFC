@@ -1,0 +1,14 @@
+{
+  "schemaVersion":"pathfinder.current-inputs.parent-release.v1",
+  "recordedAtUtc":"2026-10-18T15:32:24Z",
+  "decision":"execute-one-fresh-read-only-copy-with-observed-full-project-identity",
+  "executor":"/root only",
+  "sourceSetSha256":"a4099528c1d996b4e10f8a808f080fd00888ccc8f5cf26bd93e2c6fa1acb1238",
+  "resolution":"docs/pathfinder/evidence/current-inputs/project-identity-resolution-20261018T1530Z.json",
+  "controls":{"file":"docs/pathfinder/evidence/current-inputs/source-fullname-controls-1792337509080.json","sha256":"a3b2f418a651d106bdcd03f8a753397d4fc33aedf60f73eeb0c16d04dc83c686","status":"45/45_AND_SYNTAX3_PASS"},
+  "sourceOnlyReview":{"file":"docs/pathfinder/evidence/current-inputs/source-fullname-review-20261018T153223Z.json","sha256":"796d59d42ffadf2d1bcdf05c4cb28017bebb4134b4073c83732a87687009f19a","status":"NO_REMAINING_MATERIAL_FINDINGS"},
+  "inspection":{"file":"docs/pathfinder/evidence/current-inputs/fullname-inspection-20261018T1532Z.json","sha256":"14fc6a5f190447287db0b798fbec9cc1283ad420142aa9a9453879a02be4e6b9","status":"PASS_METADATA_ONLY"},
+  "binding":{"path":"pathfinder-engine/.scratch/current-inputs-2b20a8ae-a435-4d4d-aec4-005bb021a715/binding.private.json","sha256":"55b52e338ace26422bdd5f3bb260d3e92440a3cd166c318fcbbb0cf7af612489"},
+  "scope":"Same screenshotUUID, full observed name and exact number plus strict SQL endpoint/read-only gates. Active model fingerprintb5 and five resource path/bytes/hash checks precede cables. Before/copy/after full private rows and diffs precede assertions; no original writes, bootstrap, restart, model import, jobs, Review or Apply.",
+  "history":"Both prior copy failures and two separate diagnostic observations are retained. This is a new evidence attempt after proved fixes, not an unchanged retry or a business PASS at release."
+}

@@ -1,0 +1,11 @@
+{
+  "schemaVersion":"pathfinder.current-inputs.canonical-matching-observation.v1",
+  "recordedAtUtc":"2026-10-18T15:41Z",
+  "method":"Independent read-only addon_tabs_map source mapping; no edits/builds/tests/DB/browser/container actions.",
+  "canonicalCommit":"45c24bf5f433f13e102600b36f20327c77961d0a",
+  "canonicalEndpointResolution":{"source":"AddinRibbon/Services/RoutingSession.cs:143-222","semantics":"Trimmed DisplayName equality with OrdinalIgnoreCase after a Contains presearch. Explicit selection may resolve ambiguity. Filter currently visible/nonempty-geometry candidates before deciding unique/missing/ambiguous; bottom centre of visible world AABB converted to metres.","noAutomaticRewrites":["prefix/contains final match","leading slash/equality/punctuation removal","leading-zero removal","ancestor path parsing","arbitrary property aliases"]},
+  "distinctRouteLookup":{"source":"AddinRibbon/Services/RoutingSession.Lookup.cs:40-41","semantics":"Leading slash trimming belongs to route-code lookup, not From/To endpoint resolution."},
+  "acceptedWebExtension":{"source":"server/pathfinder/matching.ts:5-19; docs/pathfinder/00-specification.md:109-111","semantics":"NFC/trim/uppercase equality and configured Name/Tag/Equipment Name/Equipment Tag/Location aliases plus confirmed shared project bindings. Unicode handling is not byte-for-byte .NET OrdinalIgnoreCase equivalence."},
+  "genuineSeparateBug":{"source":"server/pathfinder/repository.ts:187-192","status":"OBSERVED_SOURCE_NOT_FIXED_IN_THIS_STAGE","problem":"Known-hidden object rows currently count toward automatic matching ambiguity and LIMIT3 before visibility filtering. Canonical filters hidden first; previews already exclude hidden. Cannot explain zero name matches.","minimumNextFix":"SQL geometry_role=object AND visibility<>hidden before ORDER/LIMIT; retain unknown candidates and singleton-unknown unverified behavior. Do not post-filter LIMIT3 or invent a has-geometry flag from fragment count."},
+  "scope":"No missing canonical fuzzy rule explains the current zero metadata matches. Explicit identity/alias mapping/manual engineering confirmation is required. No matching policy changed by this observation."
+}

@@ -1,0 +1,21 @@
+{
+  "status": "PASS",
+  "validator": "Ajv",
+  "version": "6.15.0",
+  "schemaDraft": "draft-07",
+  "inputCases": 43,
+  "expectedCases": 43,
+  "negativeSchemaControls": 6,
+  "repeatByteIdentical": true,
+  "expectedBytes": 49832,
+  "expectedSha256": "43ea08d2e7e5ff4e56d1fe5c4435bada300a215b0da3164f5179d27ca4b23a5a",
+  "byKind": {
+    "calculate": 17,
+    "lookup": 5,
+    "parse": 5,
+    "design": 10,
+    "name": 2,
+    "geometry": 2,
+    "geometry-route": 2
+  }
+}

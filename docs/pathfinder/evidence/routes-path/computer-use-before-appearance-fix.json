@@ -1,0 +1,88 @@
+{
+  "schemaVersion": "pathfinder.routes-path.computer-use.v1",
+  "recordedAtUtc": "2026-10-18T08:15:43.918Z",
+  "sourceCheckpoint": "46152f9873764ec22537029d98bbfcc453052768",
+  "origin": "http://127.0.0.1:5190",
+  "images": {
+    "api": "sha256:905dcb21138065e4b8cd028a6747fd613d080f6bb562d7901c034eb9c7ae4bce",
+    "web": "sha256:09dcf672529ea4e119e8655411cdc9288851aeaa5e059d12c4b4415f4e6baa85"
+  },
+  "projectId": "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a",
+  "checks": [
+    {
+      "name": "Visible outer Path Finder and exactly Routes + Path inner tabs; ArrowLeft/Right and Enter activation",
+      "status": "PASS"
+    },
+    {
+      "name": "One protected Viewer instance retained, From/To and two rule drafts retained across tabs",
+      "status": "PASS",
+      "instanceId": "c5d20b17-8d8b-4b7c-a1d0-f61e416f8940"
+    },
+    {
+      "name": "Ten actual model roots in two category rules; newest edit moves row; all-off exclusion; dirty blocks standalone and cable calculation; successful prepare releases; Discard restores last accepted categories",
+      "status": "PASS",
+      "preparedObjects": 52
+    },
+    {
+      "name": "New artifact correctly stales shared bindings; unchanged QA From/To manual points reconfirmed through UI and matched reused at both ends",
+      "status": "PASS"
+    },
+    {
+      "name": "Standalone shared-name Control path and reverse retain geometric/design values, original endpoint names and reverse route text",
+      "status": "PASS",
+      "geometryMetres": 35.30345579516123,
+      "designMetres": "45",
+      "gaps": 4,
+      "gapMetres": 0.9840583861033791,
+      "approachMetres": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "Default filled Ghost/original green-cyan route/yellow exact line",
+      "status": "PASS",
+      "screenshot": "path-forward.png"
+    },
+    {
+      "name": "Explicit transparency75 and opaque0 use black Ghost shader and obscure original colors",
+      "status": "FAIL",
+      "followup": "Viewer material appearance correction in progress",
+      "screenshots": [
+        "path-transparency-75.png",
+        "path-opaque-observed.png"
+      ]
+    },
+    {
+      "name": "Clear restores original full-color model visibility",
+      "status": "PASS",
+      "screenshot": "clear-restored.png"
+    },
+    {
+      "name": "Actual selected model object provides finite world-metres bottom-centre through protected readSelection",
+      "status": "PASS",
+      "selectedName": "ENDATUM 2 of GENSEC /H2=HA2=WPA4_BQ005/U1/Pillar1",
+      "point": [
+        40.082870526594206,
+        -26.57800105451159,
+        18.73965692067685
+      ]
+    },
+    {
+      "name": "Technical Confirm enables separate Apply; Routes/Path switch removes current review eligibility; changing SECONDARY trigger shows preference mismatch",
+      "status": "PASS",
+      "actualApplyPerformed": false,
+      "screenshot": "review-enables-apply.png"
+    },
+    {
+      "name": "Saved location editor retains obsolete stale hint after successful reconfirm",
+      "status": "FAIL",
+      "followup": "Small caption/fencing correction implemented and focused-tested; final browser recheck pending"
+    }
+  ],
+  "temporaryTransparency98": "Used only to inspect proposal colors while diagnosing the explicit-percent shader issue; not represented as successful75percent behavior.",
+  "humanAcceptance": "PENDING",
+  "nativeComparison": "NOT_PERFORMED / NOT_REQUIRED_BY_USER",
+  "actualDemoApplyPerformed": false,
+  "credentialsRecorded": false
+}

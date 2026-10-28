@@ -1,0 +1,383 @@
+{
+  "schemaVersion": "wfc.pf.u7-independent-qualification.v1",
+  "observedAt": "2026-10-20T21:12:26.694Z",
+  "baseCommit": "b5a12e5ce7877381bcb3c67cab86c6bf6a9fe1ec",
+  "branch": "pf-u7-integrated-workflow-local-20261020",
+  "status": "TECHNICAL_INDEPENDENT_PASS",
+  "accepted": false,
+  "scope": "Atomic pair popup, client recovery, synthetic PostgreSQL command transactions and dynamic lossless inventory foundation. Not the genuine import-engine-initial-fill chain or real Aalborg UI acceptance.",
+  "sourceChecks": {
+    "total": 498,
+    "vitest": {
+      "root321": {
+        "status": "PASS",
+        "tests": 321,
+        "receipt": {
+          "path": "pathfinder-engine/.scratch/u7-final-combined.json",
+          "sha256": "386e931050478a07efb8fe6f01e27ca19f6c99030ab8217e3a317e673c119ce8"
+        }
+      },
+      "results75": {
+        "status": "PASS",
+        "tests": 75,
+        "executor": "read_performance",
+        "evidence": "Agent executed complete Results suite after durable Hide/nonce fix: 75/75 PASS, 2026-10-21. Direct tool output; no persisted JSON reporter. Previous 74-test root receipt is not added.",
+        "sourceSha256": "afbf4af963452c6cdc127af9ec415dc47aed8800f60db14bb499cff89a42f304"
+      }
+    },
+    "node": {
+      "status": "PASS",
+      "tests": 102,
+      "receipt": {
+        "path": "pathfinder-engine/.scratch/u7-final-node.tap",
+        "sha256": "8dba2f85f0973cae007343a5935f8b420df59ea78cb119142690aa73cf7b60b6"
+      }
+    }
+  },
+  "actualSql": {
+    "pair": {
+      "status": "PASS",
+      "checks": [
+        {
+          "name": "actual atomic heads, exact shared fanout, mandates and untouched cable columns",
+          "status": "PASS",
+          "milliseconds": 301
+        },
+        {
+          "name": "second binding failure rolls back both heads, registry, impacts, mandates and receipts",
+          "status": "PASS",
+          "milliseconds": 324
+        },
+        {
+          "name": "outer receipt failure rolls back both heads, both intents and child command receipts",
+          "status": "PASS",
+          "milliseconds": 301
+        },
+        {
+          "name": "exact replay and saved close recover committed pair after context edits",
+          "status": "PASS",
+          "milliseconds": 276
+        },
+        {
+          "name": "immutable pair and child tombstones refuse all late writes after stale context",
+          "status": "PASS",
+          "milliseconds": 195
+        },
+        {
+          "name": "same canonical location aliases deduplicate the physical head while retaining exact child authority",
+          "status": "PASS",
+          "milliseconds": 210
+        },
+        {
+          "name": "conflicting alias drafts and stale untouched opposite context are refused before mutation",
+          "status": "PASS",
+          "milliseconds": 418
+        },
+        {
+          "name": "actual role and login revocation prevent save and recovery without writes",
+          "status": "PASS",
+          "milliseconds": 354
+        },
+        {
+          "name": "same key under another real principal cannot replay the first administrator receipt",
+          "status": "PASS",
+          "milliseconds": 254
+        },
+        {
+          "name": "MVCC hides intermediate first head while second head waits on a genuine PostgreSQL lock",
+          "status": "PASS",
+          "milliseconds": 260
+        },
+        {
+          "name": "all preexisting public table rows and table set remain exactly unchanged",
+          "status": "PASS",
+          "tables": 138
+        }
+      ],
+      "scope": "Actual PostgreSQL compiled savePair/closePair, authority, binding helper, impact/mandate/FK/immutable ledger and rollback; explicitly simulated read-context metadata in a separate schema.",
+      "notProven": [
+        "Full production-schema business integration",
+        "Actual package import or Ready validation",
+        "C# calculation/admission/seal/initial-fill writer",
+        "Automatic matching or live SDK selection",
+        "HTTP/browser/real-model engineering acceptance"
+      ],
+      "receipt": {
+        "path": "pathfinder-engine/.scratch/cable-workflow-u7-ce473847-dd7c-4f58-b70e-ed5e7c3c3d81/pair-sql-qualification-613dad9c-9f48-49b1-9f38-e894bdc88b36.private.json",
+        "sha256": "3466447c31045a7b351b5c696c10f8905d7659f6a93c4e05aa78a83b352186d3"
+      }
+    },
+    "inventory": {
+      "status": "PARTIAL",
+      "checks": [
+        {
+          "name": "synthetic-probes",
+          "status": "PASS"
+        },
+        {
+          "name": "all-public-stable-lossless",
+          "status": "PASS",
+          "tables": "138"
+        },
+        {
+          "name": "precision-change-refused",
+          "status": "PASS"
+        },
+        {
+          "name": "extra-empty-table-refused",
+          "status": "PASS"
+        },
+        {
+          "name": "synthetic-baseline-restored",
+          "status": "PASS"
+        },
+        {
+          "name": "production-restore-fence-delta",
+          "status": "PASS"
+        },
+        {
+          "name": "two-auth-groups",
+          "status": "NOT_RUN"
+        }
+      ],
+      "scope": "Actual compiled dynamic public-table catalog/cursor and comparator readback plus production restore-fence; not backup/restore, engine routing, browser, or engineering acceptance.",
+      "receipt": {
+        "path": "pathfinder-engine/.scratch/cable-workflow-u7-601db0c5-64e2-4395-9a77-11bc22bef7e6/inventory-qualification.private.json",
+        "sha256": "2ac334721346d4db6a36af883f8ce6eaa0e32ab20dcf5e46ec412dbdcdf4fd3a"
+      }
+    }
+  },
+  "checks": [
+    {
+      "name": "frontend-types",
+      "status": "PASS",
+      "receipt": {
+        "path": "pathfinder-engine/.scratch/u7-final-frontend-types2.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "name": "server-build",
+      "status": "PASS",
+      "receipt": {
+        "path": "pathfinder-engine/.scratch/u7-server-build-after-inventory.log",
+        "sha256": "9654b863afc42d53353b325ca20d0ee8ca665ed1de578fdba1f2149f3b5dbf3b"
+      }
+    },
+    {
+      "name": "web-build",
+      "status": "PASS",
+      "receipt": {
+        "path": "pathfinder-engine/.scratch/u7-final-web-build.log",
+        "sha256": "7e46405778804cc9c66c2a8355900211eb67842ea8944361ac61b2c5b9e27aa2"
+      }
+    },
+    {
+      "name": "changed-root-lint-and-diff",
+      "status": "PASS"
+    }
+  ],
+  "corrections": [
+    {
+      "name": "actual-inventory-catalog-SQL",
+      "initial": "FAIL42601",
+      "fix": "Missing outer jsonb_build_object parenthesis; fresh actual full-schema inventory passed."
+    },
+    {
+      "name": "frontend-test-fixture-type",
+      "initial": "FAIL2352",
+      "fix": "New required legacyRecovery field added to mocked pair assignment; final types pass."
+    }
+  ],
+  "fixtures": [
+    {
+      "owner": "1cd59b6a-f4d2-4023-a597-0a28f228a6e4",
+      "status": "RETIRED",
+      "containerId": "1dcbc0d17f4e848203c9c8224a4417dade817962335d856dd866badedcbcec8c",
+      "at": "2026-10-20T20:38:11.127Z"
+    },
+    {
+      "owner": "ce473847-dd7c-4f58-b70e-ed5e7c3c3d81",
+      "status": "RETIRED",
+      "containerId": "46ae97a8def83ce0ccb9bf5b248a56560add08a9df1a7482368dfc997b906b84",
+      "at": "2026-10-20T21:06:48.717Z"
+    },
+    {
+      "owner": "601db0c5-64e2-4395-9a77-11bc22bef7e6",
+      "status": "RETIRED",
+      "containerId": "e42ea59854d208d2bd7f231bd0ad77aad35b1ee1dfffb6f3ecb808c344464f53",
+      "at": "2026-10-20T21:06:50.125Z"
+    }
+  ],
+  "gates": [
+    {
+      "name": "real-Aalborg-local-reread",
+      "status": "BLOCKED",
+      "reason": "Saved origin permission denies browser observation/navigation. No alternate surface or indirect reread."
+    },
+    {
+      "name": "full-genuine-import-preparation-admission-engine-initial-fill-chain",
+      "status": "NOT_RUN"
+    },
+    {
+      "name": "resource-session-auth-group-fence-on-real-foreign-key-import",
+      "status": "NOT_RUN"
+    },
+    {
+      "name": "native-parity-and-human-engineering-acceptance",
+      "status": "NOT_RUN"
+    },
+    {
+      "name": "5191-upgrade-and-backup-restore",
+      "status": "NOT_RUN",
+      "next": "PF-U8"
+    }
+  ],
+  "isolation": {
+    "originalWfcCommit": "96e63f13fdc2b1d30b8f8ff658dd662f25fac104",
+    "originalWfcTrackedClean": true,
+    "originalsAnd5190Unchanged": true,
+    "noPushPrMerge": true,
+    "no5191WritesOrRestart": true,
+    "preparerPaused": true,
+    "cachedOriginMainDivergence": {
+      "behind": 3,
+      "ahead": 112
+    },
+    "liveRemoteAndCI": "NOT_RUN"
+  },
+  "sources": [
+    {
+      "path": "scripts/pathfinder-cable-workflow/inventory-qualification.mjs",
+      "sha256": "a19fb682075bb2308481523aedfa1f9a0af29d23fd30c5378aea660282c4c52d"
+    },
+    {
+      "path": "scripts/pathfinder-cable-workflow/owned-pg.mjs",
+      "sha256": "29ca1afef1b2e8a0703a51a168182901c83a5b49d5fda760471df3b734aa4b03"
+    },
+    {
+      "path": "scripts/pathfinder-cable-workflow/pair-sql-qualification.mjs",
+      "sha256": "3cf1712221b2d50ec95d8dbdcb81795b69c5bcf116bb25b77a10666160042560"
+    },
+    {
+      "path": "scripts/pathfinder-cable-workflow/pair-sql-qualification.test.mjs",
+      "sha256": "9d05bb740acc52f8d02e61cac80e615050ac6f8e9e37597174b87290a92bc673"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/current-inventory-lib.mjs",
+      "sha256": "c3583f5e302b8727617480f43a5744c3b3825c991adb813fdf2224a85f8a8963"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/current-inventory-lib.test.mjs",
+      "sha256": "fd4f2a712c9bea5e939656978351cdd7b2bc276768ee874813b6c8da3e22c876"
+    },
+    {
+      "path": "scripts/pathfinder-local/runtime-backup-controls.test.mjs",
+      "sha256": "8af42fa26e1b93de9c4db86d382657b3b726fa9e9ea119de4fe7f5116448d55f"
+    },
+    {
+      "path": "scripts/pathfinder-local/runtime-lib.mjs",
+      "sha256": "9adca3b70d80fe539a4882df8814755647f22598daf50a38dde4842a5e7c914b"
+    },
+    {
+      "path": "server/operations/losslessInventory.test.ts",
+      "sha256": "ce7374e28621d02b19e8ea1efee5347f3c50dbff19eef24b8ac97dec9ad28a8d"
+    },
+    {
+      "path": "server/operations/losslessInventory.ts",
+      "sha256": "44ceac7d9b792587573e12216d31107e5b80cd589d623a54bd104bd04389acf1"
+    },
+    {
+      "path": "server/pathfinder/cableEndpointCommands.test.ts",
+      "sha256": "6c1c1661baf0d25bb5ccbe1be07e396905c55f8c2acbd6f10437f4f4cb582539"
+    },
+    {
+      "path": "server/pathfinder/cableEndpointCommands.ts",
+      "sha256": "77eeca626efe8f3af08997aeee7db780a9befea95c3258c87b66ca3f66d7d7d4"
+    },
+    {
+      "path": "server/pathfinder/cableEndpointRoutes.test.ts",
+      "sha256": "15f5a686a2eae8d1b7f7c247d0280b099eada5ec57441758f124a9ad25fe6d8e"
+    },
+    {
+      "path": "server/pathfinder/cableEndpointRoutes.ts",
+      "sha256": "ddf712f12451ffc172d358b7ce69ae40c7fe40ac452a81b9344abf788b78e845"
+    },
+    {
+      "path": "shared/pathfinderCableEndpointPair.test.ts",
+      "sha256": "a552ec6253b6fd4645c1c4771a77b74274cb73c77a7d851b7ba9dfb01ebdc22a"
+    },
+    {
+      "path": "shared/pathfinderCableEndpointPair.ts",
+      "sha256": "44682afddbea5ebc4a3d6d3d70b76766f12d72d072e5248cf549fbe384ecec1a"
+    },
+    {
+      "path": "shared/pathfinderCableEndpoints.ts",
+      "sha256": "5842bff10b8fc7f7f88e26c4b07c349aff3bf568115cb525faad242f71820547"
+    },
+    {
+      "path": "src/api/pathfinderCableEndpointPairs.test.ts",
+      "sha256": "1836c3ccc0c5219b488ff76164b417a719a16a390f693bf3fbf6baf8997be35a"
+    },
+    {
+      "path": "src/api/pathfinderCableEndpointPairs.ts",
+      "sha256": "f2c8e5d358e7df441102a8ba6efd814154de3cbcfd26d7f51935cbb956718d2f"
+    },
+    {
+      "path": "src/api/pathfinderCableEndpoints.ts",
+      "sha256": "395a898de4c2b0ac9360753da27414d3ce8bb0c32cb300f3f7b928a7af7fdee4"
+    },
+    {
+      "path": "src/components/pathfinder/PathFinderCableRoutingPanel.test.tsx",
+      "sha256": "63efb1dee420ca6d1620f59c71177e0d457e7c30f1be311f20300b8f15192628"
+    },
+    {
+      "path": "src/components/pathfinder/PathFinderCableRoutingPanel.tsx",
+      "sha256": "0984a4f064095ef182cbfb058e1979102db09012272e8a12d60f0a9dc94b357a"
+    },
+    {
+      "path": "src/components/pathfinder/PathFinderCableWorkspace.test.tsx",
+      "sha256": "6f143db568bd0bc4e431b615a0397cfe97e8f4c7828b114abb5e4315db99c567"
+    },
+    {
+      "path": "src/components/pathfinder/PathFinderCableWorkspace.tsx",
+      "sha256": "cbe72cc01c43a86755fdf71b5de1a6c6b1991e1646ce9362d0dc7ca4fac1914a"
+    },
+    {
+      "path": "src/hooks/cableEndpointPairPendingStore.test.ts",
+      "sha256": "68c196786cf5287b055f3c6ab0d191a8500eb7e7d1f5c2b9a3a9fd58ad1bf05e"
+    },
+    {
+      "path": "src/hooks/cableEndpointPairPendingStore.ts",
+      "sha256": "624d84d8d6bba7300960638380f2a22690c04d5fae26eecadb8583bc7385ead2"
+    },
+    {
+      "path": "src/hooks/cableEndpointPendingKeys.ts",
+      "sha256": "a5afaac2823e94a650976de839e39c3622016a575e3c8a75308d5947e6ede62c"
+    },
+    {
+      "path": "src/hooks/cableEndpointPendingStore.ts",
+      "sha256": "3017ffb462c22a742e08789d227990dd80b4dcf35d8a15e4876988a7fece17ce"
+    },
+    {
+      "path": "src/hooks/useCableEndpointPairSelection.test.tsx",
+      "sha256": "f7298aee19cef3faaf27f82161f7742b061cde70995431151b5a245ddfbb0f4a"
+    },
+    {
+      "path": "src/hooks/useCableEndpointPairSelection.ts",
+      "sha256": "9ee85f2bc4c3517a1f381943da660a6a79750a0a56f09ec4a2d45738a36a109c"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderResults.test.tsx",
+      "sha256": "afbf4af963452c6cdc127af9ec415dc47aed8800f60db14bb499cff89a42f304"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderResults.tsx",
+      "sha256": "fba4a6ef66ce6d41f35b13f012d10659039771cec3b38a8c09cd019c2f642d8d"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderTab.tsx",
+      "sha256": "92bbf092563f83c8ebfd67d0d07348a329ef3f80a3b1169fcb7da3016323c210"
+    }
+  ]
+}

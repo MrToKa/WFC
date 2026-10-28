@@ -1,0 +1,38 @@
+{
+  "status": "PASS",
+  "recordedAt": "2026-10-19T02:28:02.558Z",
+  "scope": "Computer-use normal signed-in admin and protected viewer on owned5191 copied-model UI fixture;13object diagnostic network, no cable Apply",
+  "checks": [
+    "three English tools and protected model render",
+    "first historical trace coordinate/identity/length/audit inspection",
+    "normal protected discovery/freeze/capture/publish aggregate2",
+    "22 completed fragment observations persisted and read",
+    "two immutable traces retained after page reload",
+    "object coordinate/mesh/C#polyline/historicaldeclared evidence readable",
+    "unknown object-local and common engineering frame explicit",
+    "ordered route /BC022-2 =7.0102199231977425m, zero gaps, one fallback",
+    "original tray colours and yellow overlay",
+    "filled Ghost background",
+    "Clear restores opaque whole model and removes route"
+  ],
+  "screenshots": [
+    {
+      "privateFile": "r4-ui-bounds-and-length.png",
+      "sha256": "a69a58324483ef8dfdc402027a9f91737df7f332c702bbabe18cdc3eb2383bf9"
+    },
+    {
+      "privateFile": "r4-ui-completed-observations-visible.png",
+      "sha256": "28d730f7f7f9f81319943e3a6043c7fcad94546878de33ddc48a8f105077580c"
+    },
+    {
+      "privateFile": "r4-ui-filled-ghost-route.png",
+      "sha256": "baf4124f2680d3f4bf7dd5af30462ba3a8ca7c821c5021cd4c336bf5a19e74b8"
+    },
+    {
+      "privateFile": "r4-ui-clear-opaque.png",
+      "sha256": "c0f11b297b4aba92e58da2882e5daac9918014c4d74a8afa5a6aab6fd141d00e"
+    }
+  ],
+  "bodyWidth": "observed narrow300px stacked cards, no visible horizontal overflow",
+  "engineeringAccepted": false
+}

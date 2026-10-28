@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "observedAtUtc": "2026-10-18T07:41:16Z",
+  "method": "read-only git ls-remote --heads against each configured origin",
+  "wfc": {
+    "branch": "main",
+    "commit": "e1ef20202598bb4d3d78e4772cbbb9747ec23a00",
+    "featureBranch": "pf-two-tabs-local-20261018",
+    "featureBranchReturned": false
+  },
+  "canonicalPathFinder": {
+    "branch": "master",
+    "commit": "45c24bf5f433f13e102600b36f20327c77961d0a"
+  },
+  "localFeatureBaseCommit": "fcd8f1dc39569c430125b897c95756fac9c28a89",
+  "localTrackingObservation": {
+    "observedAtUtc": "2026-10-18T07:54:34Z",
+    "trackingCommit": "e1ef20202598bb4d3d78e4772cbbb9747ec23a00",
+    "baseBehindMain": 0,
+    "baseAheadMain": 17,
+    "scope": "before the new Routes + Path checkpoint; later local commits increase the ahead count"
+  },
+  "localChangesAtObservation": "uncommitted coordinated implementation and documentation; inspect delivery checkpoint for final source",
+  "remotePullRequestAndCi": "NOT_RUN; unpublished feature has no remote candidate revision to verify",
+  "pushOrRemoteMutation": false
+}

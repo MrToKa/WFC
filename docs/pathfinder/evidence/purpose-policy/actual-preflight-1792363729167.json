@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "pathfinder.purpose-policy.actual-preflight.v1",
+  "status": "PASS",
+  "sqlRollbackControl": {
+    "status": "PASS",
+    "sourceSha256": "a8b0d0719ed1b2a5eac69b95e1225255aef5e9815b253cf1be252ec69b4afbc3",
+    "stdoutSha256": "b680c8b195713dfa322ff08e06e55c6039febb83d37f44842b296577f23f20fe"
+  },
+  "wrongContextRefusal": {
+    "status": "PASS",
+    "code": "ISOLATED_RUNTIME_REQUIRED",
+    "cleanup": "NOT_NEEDED",
+    "checksRun": 0,
+    "exitCode": 1
+  },
+  "owner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+  "project": "wfc-pathfinder-local-0cba87606e9b",
+  "apiId": "2d24fef0506ad34629dac1da02a97b5834619893eb28714089bcd2499d359f41",
+  "pgId": "6a39e7b2d794055dccef0919cf3a99ddf60e0f3c0b5daae062cec1eb6c9b3785",
+  "finishedAt": "2026-10-18T22:48:49.166Z"
+}

@@ -1,0 +1,89 @@
+{
+  "schemaVersion": "pathfinder.capacity.bench-cleanup.v1",
+  "recordedAtUtc": "2026-10-18T12:04:32.4939613Z",
+  "status": "BLOCKED",
+  "reason": "Automatic approval review rejected the recursive Remove-Item command before process creation with `blocked by policy`.",
+  "scope": "Only two explicitly owned superseded benchmark build/self-test directories were considered. Final publish/self-test/17-control proofs are retained.",
+  "preflight": {
+    "recordedAtUtc": "2026-10-18T12:03:35.6242461Z",
+    "targets": [
+      {
+        "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\capacity-bench-build-6134b7566e7a43c9a3bd05843a30018f",
+        "bytes": 2384195,
+        "files": 103,
+        "directories": 27,
+        "linkFree": true
+      },
+      {
+        "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\capacity-bench-selftest-0e06d25a9f8c459594fe6a376c0660ee",
+        "bytes": 118604,
+        "files": 14,
+        "directories": 8,
+        "linkFree": true
+      }
+    ],
+    "retained": [
+      {
+        "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\capacity-bench-final-070153afee914f3188947e2f07bce903\\publish\\PathFinder.CapacityBench.dll",
+        "sha256": "90c939476155552bf3be27bbee29e09e220e159c16996fa30dcde4f997691b2a"
+      },
+      {
+        "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\capacity-bench-final-selftest-093dcbe87eb14a989b6a0c6cc97e3ed4\\result.json",
+        "sha256": "7c5a7df3eda4f52cd7235d5202c837966297de24cd3f869d2313e851a2ddb58a"
+      },
+      {
+        "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\capacity-final-input-controls-e8030fc6e20546c0b322520c1a192815\\receipt.json",
+        "sha256": "39a8cbd4e29e1ec84774a72bdce1a73dd1a40291c81a03dfc74c387c17408df1"
+      },
+      {
+        "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\docs\\pathfinder\\evidence\\capacity\\bench-source-20261018T120135Z.json",
+        "sha256": "02b746a1bf5a37a196f2a5b47321c170726352e0f6bb10f33a07c450d8117b82"
+      }
+    ]
+  },
+  "attempt": {
+    "executed": false,
+    "tool": "exec_command / native PowerShell Remove-Item -LiteralPath -Recurse",
+    "automaticApprovalReview": "REJECTED",
+    "statedReason": "blocked by policy",
+    "retry": false,
+    "bypass": false,
+    "parentDeletion": false,
+    "prune": false
+  },
+  "postReadOnlyVerification": {
+    "recordedAtUtc": "2026-10-18T12:04:32.4939613Z",
+    "targets": [
+      {
+        "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\capacity-bench-build-6134b7566e7a43c9a3bd05843a30018f",
+        "exists": true
+      },
+      {
+        "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\capacity-bench-selftest-0e06d25a9f8c459594fe6a376c0660ee",
+        "exists": true
+      }
+    ],
+    "retained": [
+      {
+        "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\capacity-bench-final-070153afee914f3188947e2f07bce903\\publish\\PathFinder.CapacityBench.dll",
+        "sha256": "90c939476155552bf3be27bbee29e09e220e159c16996fa30dcde4f997691b2a"
+      },
+      {
+        "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\capacity-bench-final-selftest-093dcbe87eb14a989b6a0c6cc97e3ed4\\result.json",
+        "sha256": "7c5a7df3eda4f52cd7235d5202c837966297de24cd3f869d2313e851a2ddb58a"
+      },
+      {
+        "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\capacity-final-input-controls-e8030fc6e20546c0b322520c1a192815\\receipt.json",
+        "sha256": "39a8cbd4e29e1ec84774a72bdce1a73dd1a40291c81a03dfc74c387c17408df1"
+      }
+    ]
+  },
+  "summary": {
+    "eligibleBytes": 2502799,
+    "eligibleFiles": 117,
+    "deletedBytes": 0,
+    "bothTargetsStillExist": true,
+    "retainedProofHashesUnchanged": true
+  },
+  "instructions": "Do not retry these targets or bypass the rejection through another tool, archive/move or parent deletion. Previously denied scratch children were not targeted."
+}

@@ -9,6 +9,7 @@ import { initializeObjectStorage } from './services/objectStorageService.js';
 import { initializeModelRegistry, stopModelRegistry } from './modelRegistry/runtime.js';
 import { stopViewerSessions } from './viewerSessions/runtime.js';
 import { viewerHttpPolicy } from './viewerSessions/http.js';
+import { initializePathFinderRuntime, stopPathFinderRuntime } from './pathfinder/runtime.js';
 
 const app = createApp();
 if (viewerHttpPolicy().allowInsecureLanHttp) {
@@ -29,10 +30,13 @@ function startListening(server: http.Server | https.Server, protocol: string): v
   const shutdown = () => {
     if (shuttingDown) return;
     shuttingDown = true;
-    server.close();
-    const deadline = setTimeout(() => process.exit(1), 30_000);
+    // Stop ordinary admission immediately, but keep the exact private cleanup
+    // transport reachable until the managed host confirms its physical join.
+    app.set('wfcShuttingDown', true);
+    const deadline = setTimeout(() => process.exit(1), 120_000);
     deadline.unref();
-    void Promise.allSettled([stopViewerSessions(),stopModelRegistry()]).finally(() => process.exit(0));
+    void Promise.allSettled([stopViewerSessions(),stopModelRegistry(),stopPathFinderRuntime()])
+      .then(results => {server.close();process.exit(results.some(result => result.status === 'rejected') ? 1 : 0);});
   };
   process.once('SIGTERM', shutdown);
   process.once('SIGINT', shutdown);
@@ -46,6 +50,7 @@ const startServer = async (): Promise<void> => {
     await initializeDatabase();
     await initializeObjectStorage();
     await initializeModelRegistry();
+    await initializePathFinderRuntime();
     if (config.https.enabled) {
       const resolvePath = (value: string): string =>
         path.isAbsolute(value) ? value : path.resolve(process.cwd(), value);

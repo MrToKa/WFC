@@ -1,0 +1,89 @@
+{
+  "schemaVersion": "wfc.pf.b15-popup-delivery.v1",
+  "status": "FRONTEND_DELIVERY_PASS",
+  "at": "2026-10-22T07:35:40.825Z",
+  "branch": "pf-b15-cable-popup-save-local-20261022",
+  "revision": "d140709feadeb12f030ac0286385e32870cb21dc",
+  "image": "sha256:a0e6972c41356185cefc12a5781995a71820e5298ebb405ed34dc59a79270529",
+  "previousImage": "sha256:7841f9104bb63acf395840a4375499f5d4e4155eca749858b8776b56a2d9981f",
+  "apiImage": "sha256:ac0d16ab1b0f4c92922c20d1a13a5ea142d4c6e92558de1870daf4db7fd60fcf",
+  "apiSameRunningContainer": true,
+  "nonwebConservation": "PASS",
+  "health": "PASS",
+  "indexAsset": "PASS",
+  "servedFiles": [
+    {
+      "path": "/viewer-runtime/7.130.0/barrier-capture.mjs",
+      "bytes": 36436,
+      "sha256": "e4327539ac1f3afc1e98624ed7e3fa10aa7ff53aaae8c2e3d0e22eda2c6e9bf0"
+    },
+    {
+      "path": "/viewer-runtime/7.130.0/barrier-capture-errors.mjs",
+      "bytes": 2956,
+      "sha256": "bef60c5884d24d7475d0e914489a92a38b67ae3e68bc9f0346303019c707a1a0"
+    },
+    {
+      "path": "/viewer-runtime/7.130.0/barrier-multipart-runtime.mjs",
+      "bytes": 10778,
+      "sha256": "b9738f549eccb9dc65244a2c4f013caa9dc9e36dc86442c5f58cffa270352cd5"
+    },
+    {
+      "path": "/assets/ProjectDetails-CSe8e9Kb.js",
+      "bytes": 853293,
+      "sha256": "9070db5b538069378355b079730783bcb2a977d605845d268311bfdc550c1f46"
+    }
+  ],
+  "imageArchive": {
+    "bytes": 52922880,
+    "sha256": "52ae4929fc89e81693909bd90d1207a9ab0365d06b9a190d7c470fd5ab456d7e"
+  },
+  "sourceFiles": 44,
+  "privateOperation": "c120e085-0e32-4a98-b8fb-82a54d45536c",
+  "evidence": [
+    {
+      "name": "prepare.pass.private.json",
+      "bytes": 17814,
+      "sha256": "cee941af6d056f6836ed4441aeda15b9f2b2ac161133b80c85ee6ace7c33bfe8"
+    },
+    {
+      "name": "validation.pass.private.json",
+      "bytes": 11926,
+      "sha256": "0bbfd0d195cf7261354e5ef1f86e4895316bfd17ee148972f87b477dacd80e4c"
+    },
+    {
+      "name": "docker-build.log",
+      "bytes": 155,
+      "sha256": "22df7adad5d7ddcb97c168707ed32d70f432d3d73ad360897f52ff8304c7229e"
+    },
+    {
+      "name": "install.pass.private.json",
+      "bytes": 35928,
+      "sha256": "c166740203ff5fd04a3858d460bee588ba1d5834be77273f233632b080c23f5a"
+    },
+    {
+      "name": "static.pass.private.json",
+      "bytes": 1141,
+      "sha256": "89634f324be763f1a638f424913719944d16fe7a6ebf53fcafc8ac5f1f6dc650"
+    }
+  ],
+  "checks": {
+    "vitest": 429,
+    "installer": 16,
+    "types": "PASS",
+    "lint": "PASS",
+    "serverBuild": "PASS",
+    "frontendBuild": "PASS",
+    "dockerBuild": "PASS",
+    "review": "CLEAR"
+  },
+  "limits": {
+    "actualBrowser": "BLOCKED_SAVED_REFUSAL",
+    "actualSdk": "NOT_RUN",
+    "actualAalborg": "NOT_RUN",
+    "serverProductionChange": false,
+    "newServerMount": false,
+    "realCableWrites": false,
+    "originalServicesChanged": false,
+    "wholeParentQualification": "UNFINISHED"
+  }
+}

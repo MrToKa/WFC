@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "wfc.pfr0.catalog-counts.v1",
+  "recordedAt": "2026-10-18T21:21:45.507Z",
+  "scope": "read-only isolated5191 catalog counts; no business rows or application writes",
+  "owner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+  "project": "wfc-pathfinder-local-0cba87606e9b",
+  "port": 5191,
+  "projectId": "1af0f807-7653-40ea-8391-7eea6c54e7d4",
+  "modelVersionId": "a613151e-c370-45c5-80f3-42ae58603b9a",
+  "apiId": "97e0ad80387c1c1e5148922356088ccbc7f77e5def61073c657b10769db09adb",
+  "pgId": "6a39e7b2d794055dccef0919cf3a99ddf60e0f3c0b5daae062cec1eb6c9b3785",
+  "status": "PASS",
+  "transactionReadOnly": true,
+  "counts": {
+    "projects": "1",
+    "trays": "0",
+    "purpose_templates": "0",
+    "cables": "2140",
+    "cable_types": "50",
+    "types_missing_purpose": "50",
+    "types_missing_diameter": "50",
+    "active_jobs": "0"
+  },
+  "activeModelMatches": true
+}

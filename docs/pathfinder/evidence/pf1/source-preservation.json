@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "stage": "PF-1",
+  "observedAtUtc": "2026-10-17T20:43:59.535Z",
+  "baseCommit": "23741d1f485248ddb519f9e04e0b7856cc0e3def",
+  "branch": "pf-1-independent-engine-20261017",
+  "sourceProvenanceSha256": "3b4728058ab7eaa417ba3d5f1f23f28119e84f12ad26f14c5aea2cf1fe9f0545",
+  "status": "PASS",
+  "checks": [
+    {
+      "name": "extracted-core-and-original-regression-source-bytes",
+      "status": "PASS",
+      "details": {
+        "core": 11,
+        "originalRegressionSources": 8
+      }
+    },
+    {
+      "name": "staged-core-and-original-regression-byte-integrity",
+      "status": "PASS",
+      "details": {
+        "stagedSourceCount": 19
+      }
+    },
+    {
+      "name": "frozen-pf0-files-preserved",
+      "status": "PASS",
+      "details": {
+        "unchangedFiles": 30,
+        "originalMatrixContentPreserved": true
+      }
+    },
+    {
+      "name": "original-checkouts-and-local-changes-preserved",
+      "status": "PASS",
+      "details": [
+        {
+          "name": "originalWfc",
+          "head": "e1ef20202598bb4d3d78e4772cbbb9747ec23a00",
+          "branch": "main",
+          "status": []
+        },
+        {
+          "name": "referencePathFinder",
+          "head": "45c24bf5f433f13e102600b36f20327c77961d0a",
+          "branch": "master",
+          "status": []
+        },
+        {
+          "name": "oldPathFinder",
+          "head": "35f4fb46f7762503576bdacd9668f34a1be2b0ed",
+          "branch": "master",
+          "status": [
+            "M AddinRibbon/AddinRibbon.csproj",
+            "M AddinRibbon/ClAddin.cs",
+            "?? .vscode/settings.json"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "original-container-identities-images-and-start-times-preserved",
+      "status": "PASS",
+      "details": {
+        "count": 13,
+        "environmentOrCredentialsRead": false,
+        "databaseContentAudit": false,
+        "stageContainersCreated": 0
+      }
+    }
+  ],
+  "inheritedCleanup": {
+    "status": "BLOCKED",
+    "reason": "PF-0 removal denied: blocked by policy",
+    "retried": false,
+    "path": ".pf0-work/core-1f723e37-f152-4a60-9b1e-46adc6c3179c"
+  },
+  "globalSdkStateAuditClaimed": false
+}

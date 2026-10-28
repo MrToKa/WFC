@@ -1,0 +1,121 @@
+{
+  "schemaVersion": "pathfinder.copied-recovery.closure-source-privacy.v1",
+  "status": "PASS",
+  "recordedAt": "2026-10-18T19:06:24.473Z",
+  "sourcePinsChecked": [
+    {
+      "path": "scripts/pathfinder-copied-recovery/audit.mjs",
+      "expected": "920748cba87be8a4b658ae5228c41f1ae9b19f0c936bbc17ff7dfe585ae13588",
+      "bytes": 21410,
+      "sha256": "920748cba87be8a4b658ae5228c41f1ae9b19f0c936bbc17ff7dfe585ae13588"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/audit-lib.mjs",
+      "expected": "48d5e75e674ce76a6170c223cd333fd30b9e04efb7ea80ec6023d5045b9195af",
+      "bytes": 19001,
+      "sha256": "48d5e75e674ce76a6170c223cd333fd30b9e04efb7ea80ec6023d5045b9195af"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/audit-lib.test.mjs",
+      "expected": "7463cbdbc7e69053efb28b42f80de1a4b11c97b6ec87fc3777fe2d4744ba2d28",
+      "bytes": 17669,
+      "sha256": "7463cbdbc7e69053efb28b42f80de1a4b11c97b6ec87fc3777fe2d4744ba2d28"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/README-audit.md",
+      "expected": "56c3215b04776602083cb91bb6df41447ca3d77eb4ba94e3aa038212682e81e9",
+      "bytes": 7384,
+      "sha256": "56c3215b04776602083cb91bb6df41447ca3d77eb4ba94e3aa038212682e81e9"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/auth.mjs",
+      "expected": "731b1e80bbfce6dc9251f94b3d9aa277e5a592615213254a37ae2ae419d972f3",
+      "bytes": 10050,
+      "sha256": "731b1e80bbfce6dc9251f94b3d9aa277e5a592615213254a37ae2ae419d972f3"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/auth-lib.mjs",
+      "expected": "273896e9f64771c74578cd5de61936f723ed7fe24ebc387d392126fffff0d1ce",
+      "bytes": 18501,
+      "sha256": "273896e9f64771c74578cd5de61936f723ed7fe24ebc387d392126fffff0d1ce"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/auth-lib.test.mjs",
+      "expected": "bd51d2bb9ba4faecd00b7cc42ce233dc2e0ca7d247ecee53530e44f072d47930",
+      "bytes": 16939,
+      "sha256": "bd51d2bb9ba4faecd00b7cc42ce233dc2e0ca7d247ecee53530e44f072d47930"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/README-auth.md",
+      "expected": "c0b62bb6b228edb3c1160dde56da518fee6466e13c1249c5b584833d6269abe3",
+      "bytes": 5541,
+      "sha256": "c0b62bb6b228edb3c1160dde56da518fee6466e13c1249c5b584833d6269abe3"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/binding.mjs",
+      "expected": "5e242570745973a4af42af110e8eb29665331a3323f2d7ebb9016ba286c8046f",
+      "bytes": 9303,
+      "sha256": "5e242570745973a4af42af110e8eb29665331a3323f2d7ebb9016ba286c8046f"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/binding.test.mjs",
+      "expected": "af64d6fb645f78c24e69ce62d0a7f8018d536caf61768ed4307ea9879ee80dcb",
+      "bytes": 3533,
+      "sha256": "af64d6fb645f78c24e69ce62d0a7f8018d536caf61768ed4307ea9879ee80dcb"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/drill.mjs",
+      "expected": "775dde06b8e77e95480c10375d52f2a0a5715ae61993c2138846ed16de26352a",
+      "bytes": 19327,
+      "sha256": "775dde06b8e77e95480c10375d52f2a0a5715ae61993c2138846ed16de26352a"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/provenance.mjs",
+      "expected": "d1e8e364669158f73c10adbd99ecaf2cb3034efcac761b19b3131e332fe51a59",
+      "bytes": 10202,
+      "sha256": "d1e8e364669158f73c10adbd99ecaf2cb3034efcac761b19b3131e332fe51a59"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/provenance-lib.mjs",
+      "expected": "bd2546bc979c547b3be1508f14e7e3940b1dad79563164292939c9b4d9769597",
+      "bytes": 2194,
+      "sha256": "bd2546bc979c547b3be1508f14e7e3940b1dad79563164292939c9b4d9769597"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/provenance-lib.test.mjs",
+      "expected": "dea49243bee5c122012ce4ccb7d3e1af0a1a52b8fe084aada2e70a59d4f80bc7",
+      "bytes": 9884,
+      "sha256": "dea49243bee5c122012ce4ccb7d3e1af0a1a52b8fe084aada2e70a59d4f80bc7"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/README.md",
+      "expected": "b453e863b7c179e6e94913c7b583bbc102b3b37e887368b542a09da8cba699fc",
+      "bytes": 4788,
+      "sha256": "b453e863b7c179e6e94913c7b583bbc102b3b37e887368b542a09da8cba699fc"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/drill.test.mjs",
+      "expected": "1b8deadfce47ebe1444a0180d8d391a3d0bf25bf6b39751b2022fdefafcd22c8",
+      "bytes": 8969,
+      "sha256": "1b8deadfce47ebe1444a0180d8d391a3d0bf25bf6b39751b2022fdefafcd22c8"
+    }
+  ],
+  "publicEvidenceScan": {
+    "files": 71,
+    "bytes": 501765,
+    "findings": 0,
+    "method": "JSON key/value scan for credential keys, JWT, Bearer and Viewer-cookie literals; bounded new evidence tree only, no claim of a universal secret detector."
+  },
+  "remoteObservation": {
+    "at": "2026-10-18T19:06:05Z",
+    "method": "configured read-only GitHub fetch",
+    "wfcMain": "e1ef20202598bb4d3d78e4772cbbb9747ec23a00",
+    "pathFinderMaster": "45c24bf5f433f13e102600b36f20327c77961d0a",
+    "candidateBranchMatches": 0,
+    "candidatePullRequests": 0,
+    "remoteCandidateReviewOrCI": "NOT_ESTABLISHED"
+  },
+  "originalCheckoutsUnchanged": true,
+  "oldPathFinderDirtyChangesPreserved": true,
+  "pushMergeDeployment": 0
+}

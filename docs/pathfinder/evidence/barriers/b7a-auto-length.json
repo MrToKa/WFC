@@ -1,0 +1,172 @@
+{
+  "schemaVersion": "wfc.pf.auto-length-stage-receipt.v1",
+  "stage": "PF-B7a",
+  "status": "TECHNICALLY_CHECKED",
+  "product": {
+    "branch": "pf-b7a-auto-length-local-20261021",
+    "commit": "d5cec2b00cb4815add3a9dd4ec8bffef26e13b24",
+    "sourceFiles": 37
+  },
+  "recordedAt": "2026-10-21T17:22:03.608Z",
+  "overlappingGroups": true,
+  "checks": [
+    {
+      "log": "core-check2.log",
+      "sha256": "1ef91b065ab0866e09abdf200b2beeb2d37eb7b495068fd0c3cd60b88f82fedf",
+      "bytes": 27904,
+      "status": "PASS",
+      "tests": 154,
+      "scope": "Core contracts/store/ordinary API/immutable baseline before later historical-store cases"
+    },
+    {
+      "log": "sql-worker-check3.log",
+      "sha256": "f894adbef572c79f7fff7ed18de7b2018cc2d31f64b0da2156e99af3db59b925",
+      "bytes": 19183,
+      "status": "PASS",
+      "tests": 94,
+      "scope": "Exact store + actual worker flow over seams +18 actual owned PostgreSQL cases"
+    },
+    {
+      "log": "http-check8.log",
+      "sha256": "72fd6eb521be02fdc7b0e19d37b0ddb399d5e054cd63eb921d6835317d15b57b",
+      "bytes": 3489,
+      "status": "PASS",
+      "tests": 12,
+      "scope": "Actual ordinary HTTP/JWT/current-role/project gates and real Auto read SQL; source metadata synthetic"
+    },
+    {
+      "log": "regression-check8.log",
+      "sha256": "680478accd0446e6fd5c26cf4b6a5f22d9043f9342df534643d89a665e9800f9",
+      "bytes": 26705,
+      "status": "PASS",
+      "tests": 126,
+      "scope": "Five passing downstream/drawing/legacy worker/baseline groups; separate route import failed here and was repaired in following check"
+    },
+    {
+      "log": "cables-regression9.log",
+      "sha256": "eb38155cb2f46f6fce8d899f20bcce0371fbb4c199f90c8d3f87bf067fbab4e9",
+      "bytes": 1636,
+      "status": "PASS",
+      "tests": 12,
+      "scope": "Existing Cable route handlers after explicit unit middleware boundary"
+    },
+    {
+      "log": "preferences11.log",
+      "sha256": "aca42d58f264f9de0f5ea1c8b74dd3fa42bd7d25e8368fb4f3b7b7606a7b862f",
+      "bytes": 3829,
+      "status": "PASS",
+      "tests": 28,
+      "scope": "Personal columns/account preferences"
+    },
+    {
+      "log": "ui-check2.log",
+      "sha256": "b1247e024c83f422e0c94b31d4e18280b80a69bd745d34d30b9300aabbeaeef2",
+      "bytes": 58944,
+      "status": "PASS",
+      "tests": 151,
+      "scope": "Only Results105/Panel30/Auto-display11/Auto-read-hook5; other file failures are recorded and repaired separately"
+    },
+    {
+      "log": "ui-affected-check4.log",
+      "sha256": "358fe6a511f4bce778588db1d23bc385ea2d788281561091bf5ce651940eba8b",
+      "bytes": 19647,
+      "status": "PASS",
+      "tests": 22,
+      "scope": "Passing cases only in CableDetails/CableList/Details; remaining two assertions repaired below"
+    },
+    {
+      "log": "ui-final-affected9.log",
+      "sha256": "6e2712f4eea8eff788c0b4e248cd1f34c69022dd38b74691d25d90a092fe2e99",
+      "bytes": 2779,
+      "status": "PASS",
+      "tests": 1,
+      "scope": "Corrected old saved column order expectation"
+    },
+    {
+      "log": "ui-detail-final10.log",
+      "sha256": "e6db7601d0c7c1def52fdfd4cecc7b86c753fb2c198c03743d40b50d236dcd26",
+      "bytes": 1242,
+      "status": "PASS",
+      "tests": 1,
+      "scope": "Corrected post-dialog accessibility and read-only Auto/Design edit"
+    },
+    {
+      "log": "tab-seam-check8.log",
+      "sha256": "e42e1194f082d48fdb9dcc072c37e39a330e095d9c73be95ccc6903dea23dd71",
+      "bytes": 10942,
+      "status": "PASS",
+      "tests": 1,
+      "scope": "New Tab exact-result normal-read seam;60 unchanged cases skipped, B7 evidence reused"
+    },
+    {
+      "log": "server-types-check7.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "status": "PASS",
+      "scope": "Final server type check"
+    },
+    {
+      "log": "client-types-final11.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "status": "PASS",
+      "scope": "Final client type check"
+    },
+    {
+      "log": "lint10.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "status": "PASS",
+      "scope": "Changed-source lint"
+    },
+    {
+      "log": "test-lint-final11.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "status": "PASS",
+      "scope": "Final two corrected test files lint"
+    },
+    {
+      "log": "server-build10.log",
+      "sha256": "973e4f87ceeb2f06f4bcc6c00548c07445882b742fe1f2981e29a1c698b7e4b6",
+      "bytes": 1463,
+      "status": "PASS",
+      "scope": "Server production build and contract closure"
+    },
+    {
+      "log": "web-build10.log",
+      "sha256": "31c32da19775d1be5630ef125f5a1fead54a9c196752c27d0305aa1dd0511673",
+      "bytes": 13644,
+      "status": "PASS",
+      "scope": "Isolated production web build, ordinary chunk warnings retained"
+    },
+    {
+      "log": "sql-restore6.json",
+      "sha256": "7cbf3d6f8c107af0bc1417584b9eb53f8ca5a7896c46d266436d0d3bca525d38",
+      "bytes": 3702,
+      "status": "PASS",
+      "scope": "Actual17-table dump/restore,3Auto tables, sequence gaps28 then29, revoked restored login; full runtime epoch/grant drill is B9"
+    },
+    {
+      "log": "sql-retirement.json",
+      "sha256": "9ad2557c9fe80916320f4b6ba6224b4c352ed985661a062646f33ab358960031",
+      "bytes": 507,
+      "status": "PASS",
+      "scope": "Only owned PostgreSQL55442 fixture retired after exact ID/owner/image/stage/port/tmpfs checks"
+    }
+  ],
+  "remote": {
+    "main": "96e63f13fdc2b1d30b8f8ff658dd662f25fac104",
+    "mainInspectedAt": "2026-10-21T17:16:23Z",
+    "stagePullRequests": 0,
+    "ci": "NOT_RUN"
+  },
+  "limitations": [
+    "Prior failed scopes/logs retained and scoped separately; groups are not a unique test total.",
+    "Display reports last successful value, not live physical freshness or write authority.",
+    "Actual civil/Aalborg/2140 capacity/browser/native parity NOT_RUN.",
+    "Full grant/runtime deployment and epoch/JWT/model restore qualification remains B8/B9.",
+    "No5191/original update, real-data Apply, push/PR/merge/deployment."
+  ],
+  "next": "PF-B8 full independent qualification, exact actual-capture limitations, then B9 and queued Simplified Preparer."
+}

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "pathfinder.drawing-positioning.reference-reconciliation.v1",
+  "status": "PASS",
+  "unchangedReferencePaths": 23,
+  "immutableArtifactsAndCore": 19,
+  "unchangedAssertionBaselines": 4,
+  "pureCoreFiles": 11,
+  "expectedRegenerated": false,
+  "initialAllPathsCheck": "FAIL before build; explicitly mutable pre-r2a service source was incorrectly treated as frozen artifact",
+  "baseline": {
+    "path": "src/pages/TrayDetails/trayDrawingService.ts",
+    "kind": "pre-r2a-source-assertion-baseline-not-pixel-golden",
+    "lockedWorkingTreeSha256": "6ec59229008eac99cb60b56f26cfae125e1e88255edb2d69da615b2140bfd0ea",
+    "priorCommit": "a96e45a11450ff4ee64d856bbe39b897b8c1052c",
+    "priorGitBlobSha256": "e085c6bd574ff05486e08878ee5b04163309eafb4b6ca4e30eb27a5c38a11bbf",
+    "priorCRLFSha256": "6ec59229008eac99cb60b56f26cfae125e1e88255edb2d69da615b2140bfd0ea",
+    "currentWrapperSha256": "36ddaffaf7f8e7970ff5f16963683d8311137d4313154fa7e8d9aa450e720028",
+    "authority": "PF-R2a replaces drawing implementation; original assertions/fixtures/defaults/receipt remain untouched"
+  },
+  "observedAt": "2026-10-18T23:35:17.689Z"
+}

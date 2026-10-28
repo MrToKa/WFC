@@ -1,0 +1,221 @@
+{
+  "schemaVersion": "pathfinder.capacity.summary.v1",
+  "recordedAtUtc": "2026-10-18T12:07:54.351Z",
+  "measurementStatus": "PASS",
+  "preservationStatus": "PASS",
+  "cleanupStatus": "PASS",
+  "initialOrchestrationStatus": "FAIL",
+  "originalFalseFailure": "Docker source mount enumeration order only; corrected derived preservation audit is retained separately.",
+  "totalMeasurementWallMilliseconds": 17322.980802000002,
+  "sourceImageId": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+  "caps": {
+    "memoryBytes": 4294967296,
+    "pids": 256,
+    "cpuCount": 2,
+    "network": "none",
+    "readonlyRoot": true,
+    "wholeContainerDeadlineMilliseconds": 660000
+  },
+  "datasetCount": 5,
+  "productionQueryCount": 15,
+  "directQueryCount": 50,
+  "processControls": [
+    {
+      "name": "pre-cancelled process does not spawn",
+      "status": "PASS"
+    },
+    {
+      "name": "hard deadline retires the observed owned process group",
+      "status": "PASS"
+    },
+    {
+      "name": "oversized stdout is rejected without a false full-output hash",
+      "status": "PASS"
+    },
+    {
+      "name": "cancellation retires an actually observed production .NET supervisor/worker group",
+      "status": "PASS"
+    }
+  ],
+  "existingRealReference": {
+    "expectedSemanticSha256": "aa699a152c24fbe945453452564df6073f5e3a503620f475f29cbd394058c5bd",
+    "directSemanticSha256": "aa699a152c24fbe945453452564df6073f5e3a503620f475f29cbd394058c5bd",
+    "matches": true
+  },
+  "benchmarkSampledTreeRssEstimateBytes": 145903616,
+  "wholeTestContainerCgroupPeakBytes": null,
+  "rows": [
+    {
+      "label": "current-partial-52-object-model-network",
+      "kind": "copied-real",
+      "objects": 52,
+      "segments": 26,
+      "status": "PASS",
+      "productionStatus": "PASS",
+      "lengthMeters": 35.30345579516123,
+      "designLengthMeters": "45",
+      "directColdFitMilliseconds": 502.407,
+      "directColdQueryMilliseconds": 599.8532,
+      "directWarmDiskFitMilliseconds": 213.1629,
+      "directWarmDiskQueryMilliseconds": 339.5159,
+      "directMemoryFitHitMilliseconds": 1.2493,
+      "directMemoryQueryMedianMilliseconds": 0.74875,
+      "directMemoryQueriesPerSecond": 1207.729468599034,
+      "productionColdMilliseconds": 1336.9428269999999,
+      "productionDiskWarmMedianMilliseconds": 1200.381785,
+      "productionDiskWarmQueriesPerSecond": 0.833068289186011,
+      "maxSampledProductionTreeRssEstimateBytes": 153210880,
+      "allFullRouteAndDesignComparisonsMatch": true,
+      "allWorkersObserved": true,
+      "allOwnedProcessGroupsRetired": true
+    },
+    {
+      "label": "Mathematical chain of 8 straight 2m segments",
+      "kind": "synthetic",
+      "objects": 8,
+      "segments": 8,
+      "status": "PASS",
+      "productionStatus": "PASS",
+      "lengthMeters": 16,
+      "designLengthMeters": "24",
+      "directColdFitMilliseconds": 60.7661,
+      "directColdQueryMilliseconds": 1.043,
+      "directWarmDiskFitMilliseconds": 15.5619,
+      "directWarmDiskQueryMilliseconds": 0.2482,
+      "directMemoryFitHitMilliseconds": 0.0242,
+      "directMemoryQueryMedianMilliseconds": 0.0884,
+      "directMemoryQueriesPerSecond": 10552.697533306951,
+      "productionColdMilliseconds": 396.62029299999995,
+      "productionDiskWarmMedianMilliseconds": 462.11848800000007,
+      "productionDiskWarmQueriesPerSecond": 2.1639471823079277,
+      "maxSampledProductionTreeRssEstimateBytes": 103428096,
+      "allFullRouteAndDesignComparisonsMatch": true,
+      "allWorkersObserved": true,
+      "allOwnedProcessGroupsRetired": true
+    },
+    {
+      "label": "Mathematical chain of 64 straight 2m segments",
+      "kind": "synthetic",
+      "objects": 64,
+      "segments": 64,
+      "status": "PASS",
+      "productionStatus": "PASS",
+      "lengthMeters": 128,
+      "designLengthMeters": "147",
+      "directColdFitMilliseconds": 95.4844,
+      "directColdQueryMilliseconds": 1.1771,
+      "directWarmDiskFitMilliseconds": 73.1003,
+      "directWarmDiskQueryMilliseconds": 0.8026,
+      "directMemoryFitHitMilliseconds": 0.0453,
+      "directMemoryQueryMedianMilliseconds": 0.61275,
+      "directMemoryQueriesPerSecond": 1576.0441292356188,
+      "productionColdMilliseconds": 405.4263439999995,
+      "productionDiskWarmMedianMilliseconds": 449.47806500000024,
+      "productionDiskWarmQueriesPerSecond": 2.22480267196131,
+      "maxSampledProductionTreeRssEstimateBytes": 105619456,
+      "allFullRouteAndDesignComparisonsMatch": true,
+      "allWorkersObserved": true,
+      "allOwnedProcessGroupsRetired": true
+    },
+    {
+      "label": "Mathematical chain of 256 straight 2m segments",
+      "kind": "synthetic",
+      "objects": 256,
+      "segments": 256,
+      "status": "PASS",
+      "productionStatus": "PASS",
+      "lengthMeters": 512,
+      "designLengthMeters": "569",
+      "directColdFitMilliseconds": 107.1541,
+      "directColdQueryMilliseconds": 2.4632,
+      "directWarmDiskFitMilliseconds": 42.4255,
+      "directWarmDiskQueryMilliseconds": 3.9084,
+      "directMemoryFitHitMilliseconds": 0.122,
+      "directMemoryQueryMedianMilliseconds": 1.59595,
+      "directMemoryQueriesPerSecond": 288.04228460738034,
+      "productionColdMilliseconds": 562.3458659999997,
+      "productionDiskWarmMedianMilliseconds": 444.98656649999975,
+      "productionDiskWarmQueriesPerSecond": 2.2472588506781372,
+      "maxSampledProductionTreeRssEstimateBytes": 115449856,
+      "allFullRouteAndDesignComparisonsMatch": true,
+      "allWorkersObserved": true,
+      "allOwnedProcessGroupsRetired": true
+    },
+    {
+      "label": "Mathematical chain of 1024 straight 2m segments",
+      "kind": "synthetic",
+      "objects": 1024,
+      "segments": 1024,
+      "status": "PASS",
+      "productionStatus": "PASS",
+      "lengthMeters": 2048,
+      "designLengthMeters": "2259",
+      "directColdFitMilliseconds": 163.581,
+      "directColdQueryMilliseconds": 7.2834,
+      "directWarmDiskFitMilliseconds": 103.8201,
+      "directWarmDiskQueryMilliseconds": 11.0571,
+      "directMemoryFitHitMilliseconds": 0.4178,
+      "directMemoryQueryMedianMilliseconds": 10.14985,
+      "directMemoryQueriesPerSecond": 83.26732662961965,
+      "productionColdMilliseconds": 777.4344550000005,
+      "productionDiskWarmMedianMilliseconds": 653.764865000001,
+      "productionDiskWarmQueriesPerSecond": 1.5296019311163174,
+      "maxSampledProductionTreeRssEstimateBytes": 136368128,
+      "allFullRouteAndDesignComparisonsMatch": true,
+      "allWorkersObserved": true,
+      "allOwnedProcessGroupsRetired": true
+    }
+  ],
+  "receipts": {
+    "orchestration": {
+      "path": "docs/pathfinder/evidence/capacity/orchestration-original-1792325273563.json",
+      "bytes": 9049,
+      "sha256": "b7feb909796f0b0817167116ead4813318c9ba75335a858d84dbf0f0b9ab3d4b"
+    },
+    "measurements": {
+      "path": "docs/pathfinder/evidence/capacity/measurements-1792325273563.json",
+      "bytes": 37153,
+      "sha256": "5c2a262a020301da14a5afcea10796a856f533f4ccd6fdd6d7f70dee90d1dea5"
+    },
+    "benchmark": {
+      "path": "docs/pathfinder/evidence/capacity/benchmark-1792325273563.json",
+      "bytes": 164026,
+      "sha256": "9ec1069beab2643c509067b9d1925e8ef13c37890575ede2dff2460b0f588035"
+    },
+    "firstAttempt": {
+      "path": "docs/pathfinder/evidence/capacity/attempt-mount-zero-value-1792325273563.json",
+      "bytes": 7008,
+      "sha256": "bf886b2a45e93eb485f173b962ada95c569b77f4b7b88b0837964752370a5c4d"
+    },
+    "firstCleanup": {
+      "path": "docs/pathfinder/evidence/capacity/attempt-cleanup-1792325273563.json",
+      "bytes": 473,
+      "sha256": "758860989514a9c94b7448ee31817b180f42682bd860970ad0c3c8593f9ed8dc"
+    },
+    "amendment": {
+      "path": "docs/pathfinder/evidence/capacity/preservation-amendment-1792325273563.json",
+      "sha256": "4fe7eceecd4907a0e7714e6111760670e96ad7861442703686735366bdcce38c"
+    },
+    "sourceManifest": {
+      "path": "docs/pathfinder/evidence/capacity/source-manifest-1792325273563.json",
+      "sha256": "89d440fc395d5f7d349b37810427fd58454abb1266809617098838960a3c947f"
+    }
+  },
+  "limits": {
+    "sampledProcessTreeRss": "20ms nominal interval, sequential non-atomic /proc VmRSS reads. Sampled tree RSS estimate may miss short peaks; exact coincident peak is unproved. Sampling overhead is included. Supervisor/descendant separate maxima must not be summed.",
+    "productionMode": "Fresh .NET supervisor and owned worker on every query. Cold=empty fitted cache, warm=same disk cache in a new process. No endpoint graph reuse.",
+    "directBenchMode": "Same PreparedModel references benchmarked separately; not implemented in the production worker.",
+    "wholePlantCapacity": "NOT_ESTABLISHED",
+    "lookupTiming": "NOT_MEASURED",
+    "nativeParity": "NOT_PERFORMED",
+    "engineeringAcceptance": false
+  },
+  "notes": [
+    "Direct query timings include unchanged graph construction, design calculation, expectation checks and full semantic serialization/hash.",
+    "Cold refers only to empty fitted cache. Prevalidation and earlier datasets can warm process/JIT/OS caches.",
+    "Memory reuse is a benchmark scenario; production remains fresh supervised one-shot processes and rebuilds endpoint graphs.",
+    "Process-tree RSS is a sampled estimate from non-atomic reads; exact peak is unproved.",
+    "Only this selected partial network and labelled straight chains are established; full-plant capacity, lookup timing and native parity remain unproved.",
+    "No repeated calculations were run after the source-mount metadata comparison fix."
+  ]
+}

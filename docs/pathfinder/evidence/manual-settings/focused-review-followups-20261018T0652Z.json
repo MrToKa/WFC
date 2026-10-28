@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "pathfinder.manual-settings.focused-followups.v1",
+  "recordedAtUtc": "2026-10-18T06:52:03Z",
+  "baseCommit": "873afeb3544fad56717eb07007d419852e66dc60",
+  "branch": "pf-manual-validation-settings-20261018",
+  "checkedSource": "The following frozen changes are in the next local checkpoint; final source manifest binds bytes separately",
+  "frontend": {
+    "files": ["src/pages/ProjectDetails/PathFinderResults.tsx", "src/pages/ProjectDetails/PathFinderTab.test.tsx"],
+    "reproducedDefect": "Deferred Review response restored old cable panel after selection changed. Apply stayed disabled in that reproduction; no Apply authorization bypass was observed.",
+    "fix": "Selection/proposal/dependency context and generation fences discard stale Review completions; selection/unmount fence late Apply success notices.",
+    "affectedPathFinderTabTests": { "passed": 19, "total": 19, "status": "PASS" },
+    "typeScript": "PASS; exit0",
+    "eslint": "PASS; exit0"
+  },
+  "backend": {
+    "files": ["server/pathfinder/jobContracts.ts", "server/pathfinder/jobs.ts", "server/pathfinder/apply.ts", "server/pathfinder/applicability.test.ts", "server/pathfinder/integration.ts"],
+    "finding": "DTO could invite Review for a design above existing WFC write limit; Apply already rejected the write.",
+    "fix": "Shared canonical whole-number 0..1,000,000m guard in proposal eligibility and Apply; clear compatibility issue; no formula change.",
+    "boundaryTests": { "passed": 17, "total": 17, "status": "PASS" },
+    "actualNodeToCSharpProcessTests": { "passed": 16, "total": 16, "status": "PASS" },
+    "productionBuild": "PASS; TypeScript exit0",
+    "extendedLiveDriver": "23 controls; additionally tests actual oversize design, canApply false, Review409 and unchanged cable; NOT_RUN on new candidate at recording"
+  },
+  "evidenceKind": "Actual isolated test commands reported by the owning agents; parent inspected combined diffs; no unrun fresh aggregate suite claimed",
+  "runtimeMutationAtRecording": false,
+  "originalResourcesChanged": false
+}

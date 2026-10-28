@@ -1,0 +1,220 @@
+{
+  "schemaVersion": "pathfinder.ui-preservation.summary.v1",
+  "status": "PASS",
+  "recordedAt": "2026-10-18T14:31:32.454Z",
+  "target": {
+    "owner": "7fa65ffa-ef34-46a7-b4c1-55cd19f8fa74",
+    "project": "wfc-pathfinder-local-f673a0facba3",
+    "runtime": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pathfinder-local-restore-f673a0facba3",
+    "apiId": "acc437aeb807a88a31903d4f83b0701053e408dbe8d3aeab9abe6c3366a1a1c0",
+    "apiImage": "sha256:e0a6d7425b5280e429c3f25fa0d94922553ae08005f3773676f0cc5291f2904e",
+    "webImage": "sha256:5abc6002a709407b7edd0b7f631abdca75df0cff83c936dccaf76930d8e095fc"
+  },
+  "phases": [
+    {
+      "phase": "A0",
+      "receipt": "docs/pathfinder/evidence/ui-preservation/A0-1792333406131-a63b7b97.json",
+      "receiptSha256": "f9ba1c910c3d53945cb117d49c03df13ac3918eced2bd8fff336ac25074a97f4",
+      "rawSha256": "827a38d3f17d0447092518010417acaa403bef5c7ffc4097c3cc9c43735fc567",
+      "status": "PASS"
+    },
+    {
+      "phase": "A1",
+      "receipt": "docs/pathfinder/evidence/ui-preservation/A1-1792333525287-a9aa9160.json",
+      "receiptSha256": "f5e8215cf92afed587fb38c5da0ed12a8f34de5c359bbb2c11b44b9c33c775c7",
+      "rawSha256": "fbc0382bf3bbdfbba588122bbeb47652c6f3a0bff031050d12b0a806efd67f3a",
+      "status": "PASS"
+    },
+    {
+      "phase": "A2",
+      "receipt": "docs/pathfinder/evidence/ui-preservation/A2-1792333640071-3c3473c8.json",
+      "receiptSha256": "9f3d6fbdde8c47023ff460506327e2e556fe3ab64ba5e55ee9a22489c3f29408",
+      "rawSha256": "2228654b1bcbe3858af8d1eea004774c8567b48e78e09c2a251100c3a22b5162",
+      "status": "PASS"
+    },
+    {
+      "phase": "A3",
+      "receipt": "docs/pathfinder/evidence/ui-preservation/A3-1792333808133-c3974b4a.json",
+      "receiptSha256": "2c5c753f08b18196cc030d34f51b10e9ca7e8c3a7901f078c181940b41bfa9ae",
+      "rawSha256": "a511b31a4ea5b0a49439f659756a4b6d04b28f4e378b30fd78e4885e3deb3999",
+      "status": "PASS"
+    }
+  ],
+  "checks": [
+    {
+      "name": "A0 durable raw readback",
+      "status": "PASS"
+    },
+    {
+      "name": "A1 durable raw readback",
+      "status": "PASS"
+    },
+    {
+      "name": "A1 fromA0 durable diff readback",
+      "status": "PASS"
+    },
+    {
+      "name": "A1 fromPrevious durable diff readback",
+      "status": "PASS"
+    },
+    {
+      "name": "A2 durable raw readback",
+      "status": "PASS"
+    },
+    {
+      "name": "A2 fromA0 durable diff readback",
+      "status": "PASS"
+    },
+    {
+      "name": "A2 fromPrevious durable diff readback",
+      "status": "PASS"
+    },
+    {
+      "name": "A3 durable raw readback",
+      "status": "PASS"
+    },
+    {
+      "name": "A3 fromA0 durable diff readback",
+      "status": "PASS"
+    },
+    {
+      "name": "A3 fromPrevious durable diff readback",
+      "status": "PASS"
+    },
+    {
+      "name": "protected settings",
+      "status": "PASS"
+    },
+    {
+      "name": "protected selection",
+      "status": "PASS"
+    },
+    {
+      "name": "protected registry",
+      "status": "PASS"
+    },
+    {
+      "name": "protected planningArtifacts",
+      "status": "PASS"
+    },
+    {
+      "name": "protected locations",
+      "status": "PASS"
+    },
+    {
+      "name": "protected aliases",
+      "status": "PASS"
+    },
+    {
+      "name": "protected bindings",
+      "status": "PASS"
+    },
+    {
+      "name": "protected modelObjects",
+      "status": "PASS"
+    },
+    {
+      "name": "protected cables",
+      "status": "PASS"
+    },
+    {
+      "name": "protected reviews",
+      "status": "PASS"
+    },
+    {
+      "name": "protected applies",
+      "status": "PASS"
+    },
+    {
+      "name": "retained qualified module runner",
+      "status": "PASS"
+    },
+    {
+      "name": "retained qualified module server/dist/server/pathfinder/worker.js",
+      "status": "PASS"
+    },
+    {
+      "name": "retained qualified module server/dist/server/pathfinder/engineSession.js",
+      "status": "PASS"
+    }
+  ],
+  "source": {
+    "head": "e275dd5ee61adb339649a63cd2695dcabcec10f7",
+    "files": {
+      "scripts/pathfinder-ui-preservation/capture.mjs": "d47033756bf979eb5f0f27a29b6c5c11b6d99313bdea12c985f210d50049d012",
+      "scripts/pathfinder-ui-preservation/lib.mjs": "942f28ab29c961eefd594dd0838a3ed09a8cbdc08e907d285b80b7990be01ff9",
+      "scripts/pathfinder-ui-preservation/lib.test.mjs": "c8909ef95e0b278b739b79a53955b5c59e8322e05ad1df0a038ba2afb5b3e819",
+      "scripts/pathfinder-ui-preservation/quiesce.mjs": "59b9a8f8a99444cb746caf5f5b5575760d806d239f5406527cf45aa112305900",
+      "scripts/pathfinder-ui-preservation/retire.mjs": "d23e35f7b02a8ff6cddd58bad94c1e6ef4ba19577a73ea2a834b5c0a867c4e90",
+      "scripts/pathfinder-ui-preservation/README.md": "330dd86a858700620f4f0d68a39fcb010bb644c2ef3e549720536ad1f6f30c6a"
+    }
+  },
+  "qualifiedModules": [
+    {
+      "module": "runner",
+      "file": "pathfinder-engine/.scratch/session-qualified-artifact-fddb02fc-29e9-4fe2-bac0-5321fc2f913d/runner/PathFinder.ModelRunner.dll",
+      "sha256": "4b940d5c8a7b72115369aa2004de4e12434ae5f4c6f14d014b8be9cc6ab3dc06",
+      "matchesObservedTarget": true
+    },
+    {
+      "module": "server/dist/server/pathfinder/worker.js",
+      "file": "pathfinder-engine/.scratch/session-qualified-artifact-fddb02fc-29e9-4fe2-bac0-5321fc2f913d/compiled-pathfinder/worker.js",
+      "sha256": "1c53eae0275f9f8eb96733b5f2bce4259dcf2940ff83d57f5a0f6f992040dbaa",
+      "matchesObservedTarget": true
+    },
+    {
+      "module": "server/dist/server/pathfinder/engineSession.js",
+      "file": "pathfinder-engine/.scratch/session-qualified-artifact-fddb02fc-29e9-4fe2-bac0-5321fc2f913d/compiled-pathfinder/engineSession.js",
+      "sha256": "5d0dfe630d46252c98461bfb4b208d98f82437d50ebc05153fe299d7d38400a8",
+      "matchesObservedTarget": true
+    }
+  ],
+  "counts": {
+    "before": {
+      "settings": 1,
+      "selection": 1,
+      "registry": 1,
+      "planningArtifacts": 2,
+      "locations": 3,
+      "aliases": 4,
+      "bindings": 3,
+      "modelObjects": 104,
+      "cables": 1,
+      "proposals": 5,
+      "reviews": 3,
+      "applies": 0
+    },
+    "after": {
+      "settings": 1,
+      "selection": 1,
+      "registry": 1,
+      "planningArtifacts": 2,
+      "locations": 3,
+      "aliases": 4,
+      "bindings": 3,
+      "modelObjects": 104,
+      "cables": 1,
+      "proposals": 6,
+      "reviews": 3,
+      "applies": 0
+    }
+  },
+  "observedChanges": {
+    "A0A1": "Exactly1 current authorized automatic calculate job,1 item,1 immutable proposal; design mode reuses geometry.",
+    "A1A2": "Exactly1 standalone preview job and1 pf_lookup_results row; no items/proposals/business edits.",
+    "A2A3": "Zero workflow or auxiliary row changes."
+  },
+  "controls": {
+    "passed": 34,
+    "total": 34,
+    "sourceReceipt": "docs/pathfinder/evidence/ui-preservation/startup-1792333377210.json"
+  },
+  "scope": {
+    "historicalLostComparison": "FAIL_NOT_RETAINED; this new run cannot recover or diagnose its exact cause",
+    "engineeringAcceptance": "NOT_PERFORMED",
+    "wholePlantCoverage": "NOT_PROVED",
+    "primaryPreservation": "PENDING_PARENT_AUDIT",
+    "cleanup": "HOLD_FOR_PARENT_DISPOSITION",
+    "captionIssue": "Parent observed stale displayed-path notice after Clear; separate from persisted data, no application source changes"
+  }
+}

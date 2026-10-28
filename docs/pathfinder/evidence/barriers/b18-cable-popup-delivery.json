@@ -1,0 +1,56 @@
+{
+  "schemaVersion": "wfc.pf.b18-popup-delivery.v1",
+  "status": "PASS",
+  "at": "2026-10-22T09:54:52.165Z",
+  "productCommit": "2741f8171336454a7eaba2662518474a67dc61c5",
+  "webImage": "sha256:58745a011bffe5cc65676f15ceb275e7b70061e2972db5944165a1f74cc2b9ee",
+  "previousWebImage": "sha256:a0e6972c41356185cefc12a5781995a71820e5298ebb405ed34dc59a79270529",
+  "apiImage": "sha256:ac0d16ab1b0f4c92922c20d1a13a5ea142d4c6e92558de1870daf4db7fd60fcf",
+  "apiSameRunningContainer": true,
+  "nonwebResourcesConserved": true,
+  "port": 5191,
+  "archive": {
+    "bytes": 52923392,
+    "sha256": "306d5efb9ff056f25f05b952a8d4102a74a1f04b753e57664908e7efca5a3da0"
+  },
+  "health": 200,
+  "index": {
+    "bytes": 955,
+    "sha256": "9ddc60b257cb45be0b02f843982f8abde0d758a1992aa1fdda99d5d524f86eda"
+  },
+  "entryAsset": {
+    "path": "/assets/index-BnWCbI8r.js",
+    "bytes": 716405,
+    "sha256": "c9532fe7842db47948372bfb794c14783acac673509685503b0dacb10407cdf5"
+  },
+  "servedFiles": [
+    {
+      "path": "/viewer-runtime/7.130.0/barrier-capture.mjs",
+      "bytes": 36615,
+      "sha256": "998d4115cd40768a4694ee3fb5e4fd319af7a1bbad70b92cd810e64a55bda6b9"
+    },
+    {
+      "path": "/viewer-runtime/7.130.0/barrier-capture-errors.mjs",
+      "bytes": 2956,
+      "sha256": "bef60c5884d24d7475d0e914489a92a38b67ae3e68bc9f0346303019c707a1a0"
+    },
+    {
+      "path": "/viewer-runtime/7.130.0/barrier-multipart-runtime.mjs",
+      "bytes": 10778,
+      "sha256": "b9738f549eccb9dc65244a2c4f013caa9dc9e36dc86442c5f58cffa270352cd5"
+    },
+    {
+      "path": "/assets/ProjectDetails-Bow7nPs_.js",
+      "bytes": 857923,
+      "sha256": "f1bfa2218b8368eecb17cbbbb3f8ef000a78cdeb8f65dc8b1f8be91f176ea653"
+    }
+  ],
+  "checks": {
+    "sourcePins": 66,
+    "uniqueVitestChecks": 473,
+    "pureInstallerChecks": 16,
+    "staticFiles": 4,
+    "rollbackAndStateEnvCAS": "PASS"
+  },
+  "scope": "Owned frontend-only installation. API was not restarted; no SQL/model/cable/Apply or original-service mutations. No browser/SDK/Aalborg acceptance; barrier exact-outcome and geometry routing remain unfinished."
+}

@@ -1,0 +1,1905 @@
+{
+  "schemaVersion": "pathfinder.coverage.result.v1",
+  "startedAt": "2026-10-18T14:04:02.963Z",
+  "status": "PASS_WITH_GAPS",
+  "technicalIntegrity": "PASS",
+  "engineeringAcceptance": "NOT_PERFORMED_USER_REVIEW_REQUIRED",
+  "nativeOracle": "NOT_PERFORMED_NOT_REQUIRED_BY_USER",
+  "limits": {
+    "parts": 512,
+    "partBytes": 2097152,
+    "totalPartBytes": 536870912,
+    "objects": 1000000,
+    "fragments": 5000000,
+    "depth": 512,
+    "metadataRows": 10000,
+    "snapshotObjects": 4096,
+    "snapshotBytes": 67108864,
+    "outputBytes": 2097152,
+    "elapsedMilliseconds": 120000,
+    "rssBytes": 1610612736
+  },
+  "inputs": [
+    {
+      "path": "pathfinder-engine/.scratch/session-qualified-artifact-fddb02fc-29e9-4fe2-bac0-5321fc2f913d/compiled-pathfinder/matching.js",
+      "bytes": 5429,
+      "sha256": "ce1b3976d838516ed2a769da7adfa3a27eb7ced4f8c689017f9f03a64d040ca6"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/session-qualified-artifact-fddb02fc-29e9-4fe2-bac0-5321fc2f913d/compiled-pathfinder/errors.js",
+      "bytes": 248,
+      "sha256": "c8178daeea72fb50913028f109316f06da6f94bee63e6cfd65c6830913b23cfd"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-receipt.json",
+      "bytes": 31847,
+      "sha256": "ade029bcbe1b764ff7257017d6633ab90f9e4be4a560a5217e1c3fad708d1986"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0000.json",
+      "bytes": 652652,
+      "sha256": "10129b1e80b1d86f27b5840bb26a64e38cd8743ec3e25a5f466f0c5afc53bae8"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0001.json",
+      "bytes": 664376,
+      "sha256": "17e26daf04879b99626bf457ecd0055bc9361f63f0fbf8118e60583c5fa0236c"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0002.json",
+      "bytes": 673372,
+      "sha256": "831f503066489da5513d4a9261ec642cfdf00282f7296a8ea4ff2efe5f52ea18"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0003.json",
+      "bytes": 671251,
+      "sha256": "05483c5c3d84d4d8e6ab2e694c8fe661a83530b866f7e8cb39a5e7cbcbfbac50"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0004.json",
+      "bytes": 674755,
+      "sha256": "177dd9a2c6844fbac0a7574bf8b3ee8b3066896eac79404f93ac9eb38a4743f9"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0005.json",
+      "bytes": 681042,
+      "sha256": "918602ba78a5270a868c1cd010075d4941720985ced926acb0985137c87e92ad"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0006.json",
+      "bytes": 682590,
+      "sha256": "1703fc2b4fcab0cc5df25c17246f8c2befc73b78b9712489c7f11fc5fe3013fa"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0007.json",
+      "bytes": 676564,
+      "sha256": "f4717bbc10f0b6a8d2952555fb6ff7b1b0dad5b8db6840315d3fb552a07aa5aa"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0008.json",
+      "bytes": 671798,
+      "sha256": "944290325df6c496888a8a29ceaca3262b3bd17408f15563d7e8fdec1268e5aa"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0009.json",
+      "bytes": 683565,
+      "sha256": "f7ff5b59d1eae1212960f438fc74ef78d9571fe4e9260921a615d93816c10a98"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0010.json",
+      "bytes": 677025,
+      "sha256": "e2613124daa8e67ca2638b9efcbb6e71bff1de3a4eef2d3ee8c23927aebea764"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0011.json",
+      "bytes": 678052,
+      "sha256": "809f24be682ce32265b6f342148c5a238cc48223e0ccf6aa44236286fb3ba7ad"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0012.json",
+      "bytes": 670469,
+      "sha256": "efa0aeb169feb7a067a60fb13c9d26d7e4a06ab33c67c8a6f62cc41e948ab0f8"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0013.json",
+      "bytes": 684436,
+      "sha256": "24fda23f06536574ea0745acaf18cfe4a405d65b6e36d5a64553315561a53f1a"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0014.json",
+      "bytes": 678167,
+      "sha256": "a6fedfc0684c4b4028a42dd423aa26a7d089c9ea5f340f605e232da6cafe2e1c"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0015.json",
+      "bytes": 677022,
+      "sha256": "bd5ae03f5277f54c66e18a47158d8484b6c05ea69ed65d8ca838dee95fe1d5f2"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0016.json",
+      "bytes": 671510,
+      "sha256": "2e99e1caf9c98119cdc79ec94c58f6e247a72fa94ebd53def5466d24b5aa71ad"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0017.json",
+      "bytes": 682599,
+      "sha256": "3c0f6acb2abb3ea38a7dcf9d102b9472ba396286a69d4b9663f5e34a5825807f"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0018.json",
+      "bytes": 679959,
+      "sha256": "5bf96eb8436fb3a902200e9f01c65bc2e8187c793ae4a6d7388675a54de7ea1f"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0019.json",
+      "bytes": 677373,
+      "sha256": "db1e6a691fc12fa5cb83200a0e6d323f7331b889387f0a2d0aba84cbef9f3c4c"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0020.json",
+      "bytes": 671601,
+      "sha256": "0dfa054a26a52721cb9e404f802d4e1c0dccd5456adda86be8a453cff7d57b7a"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0021.json",
+      "bytes": 681699,
+      "sha256": "ee79cda4e8dcaebaf050c638367b6035a58d15a9074d9730a47a15bb1cb9860c"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0022.json",
+      "bytes": 679984,
+      "sha256": "4c6527bdc0fdfb5474869460f359e0fe214960efb35556bcf166d3701f1e05d6"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0023.json",
+      "bytes": 676935,
+      "sha256": "bf1da8b1f9b30caa4319b57760df22d93c751558a33527f577efbb4557e4aeca"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0024.json",
+      "bytes": 672162,
+      "sha256": "5e7efc73e76f4f8ac7328ae56706580a9d3812886e25e10cc2d726ff42690b52"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0025.json",
+      "bytes": 671113,
+      "sha256": "aa55d0c50594a506bb44c06990438202eaf063673417c02337ea47f1fdee173f"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0026.json",
+      "bytes": 676446,
+      "sha256": "a448c92b332ad8bc36927541e774e97b0393b60eaa4688ca85b9c82b88c3b19b"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0027.json",
+      "bytes": 674229,
+      "sha256": "bdd74e8d56a9c8867072a44bafdd8fdc007372f34eefeafb4e8a7977a4d3a419"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0028.json",
+      "bytes": 679379,
+      "sha256": "2f8ff45aed333f14b7b7b4d0cb24803da5f28553d2684025584eae1b8a4a824a"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0029.json",
+      "bytes": 674568,
+      "sha256": "0d8fab17ed821a04ff4080a61057a8a6c6daab4eed1a8a2bbb2b0692d65fdbc9"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0030.json",
+      "bytes": 672624,
+      "sha256": "fc467464580ec14e9a41abf57e488087c6ed63231a33d81cb5432b215f0c7f97"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0031.json",
+      "bytes": 672293,
+      "sha256": "5e88bf21c037df01e20efdc54bfd31366c0d860a81b6c212bd97bac530cc0ea7"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0032.json",
+      "bytes": 682505,
+      "sha256": "ba91bba2035e7a0ba4e54cb5f095c1c67ae91a55eb0a3b2dc36c49962c03f8a5"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0033.json",
+      "bytes": 684498,
+      "sha256": "5d2eb97eaa745b297eaaf15a2403f47af4e79a34275d4c8425ae7d7954a9f8ff"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0034.json",
+      "bytes": 688119,
+      "sha256": "43c7ad13af329843b42bb19651145ec70e92ab8f327205c1ac4c3082e71b375e"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0035.json",
+      "bytes": 696001,
+      "sha256": "2987e365e35bf72d0fb309e83dd2d15617552243f737f9e039a0d9e57529084e"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0036.json",
+      "bytes": 639095,
+      "sha256": "bb08684d4e8d25e9dc7604a9c420c5d9dc2cb2a96f2a14ca8e08e51428f06b3d"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0037.json",
+      "bytes": 672741,
+      "sha256": "513d1692c56c1fdf38819f51f67602043a5766973c9906d21b657626b3c2c885"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0038.json",
+      "bytes": 675553,
+      "sha256": "715ab64a1841e91c730052b5d3221aa866e128a2db48480971a1b251d20c2353"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0039.json",
+      "bytes": 652640,
+      "sha256": "284ac8aec75f8928cc8955502044f8243450c5d04d95d7327db9da694bb1f7c0"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0040.json",
+      "bytes": 672470,
+      "sha256": "c8f951b54d2ff457a6b07e09619037466e5a72e8815c2c49142523189af27af2"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0041.json",
+      "bytes": 659041,
+      "sha256": "96adb01174d52b9d3bddfd95e5e27e9020acdf343a87ef977d0281358c56fc59"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0042.json",
+      "bytes": 673944,
+      "sha256": "22d1f91c36fb0d43b4e5c9f7983fb3183f8c4f8ac1b2b733bb41e099ef61dcc7"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0043.json",
+      "bytes": 667226,
+      "sha256": "591042193e2246297f8a6c95d0b82ff22fa0e4e7ef0e5b312fbaa9c137c20257"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0044.json",
+      "bytes": 693011,
+      "sha256": "992b8fb0714d88418daccbd570bfb66802479f1916b9e7014fff15ac0eee5999"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0045.json",
+      "bytes": 684889,
+      "sha256": "5b0edb08c8b5035c5264f5f49b98c725cf7d078a260d43e6d8b82672f5e4307a"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0046.json",
+      "bytes": 634592,
+      "sha256": "425b35cccb309a65c9aed57feb205ea1b02f5473a6ddcefab70b94657eea792d"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0047.json",
+      "bytes": 650415,
+      "sha256": "a6e0292f9576a64d4f69c7abf907d19cc06d5bf3139284449634b08e16daffb2"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0048.json",
+      "bytes": 649791,
+      "sha256": "3547fafe736abeebeab976b961d9cd467a2abe47413e0315e08b400b345c81ec"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0049.json",
+      "bytes": 664845,
+      "sha256": "57998d0c22a9a21996297535d78ea610f5f999315b310ef281cc3e96521df72f"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0050.json",
+      "bytes": 661519,
+      "sha256": "0837b4f9c6236fdfb5e760570183b17e86ef8625d89957393eca9fb57c730a23"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0051.json",
+      "bytes": 667989,
+      "sha256": "bf755a088d0a7f5a155ebff5d0aa0aba4f4b1b5a02154052c55e7daa5023eef0"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0052.json",
+      "bytes": 665157,
+      "sha256": "cc30c172a33b3e2874600a37fb59a9c953a726322f115d1e920eab6c0af2a39d"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0053.json",
+      "bytes": 662713,
+      "sha256": "3782eab6898632bc5792e73e41274d9407aeaafda511124ea4d44a369c82ceeb"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0054.json",
+      "bytes": 706435,
+      "sha256": "140ca26967ec932b882b01a8d9f120b1754e1b1b55a24b8ce5679f7bc3dd6b96"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0055.json",
+      "bytes": 720221,
+      "sha256": "8be8d03baee667199386773cdc5133e5e66d15dc821d7ad700c9c1ca13754ecd"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0056.json",
+      "bytes": 718472,
+      "sha256": "26e8cf7227687ff709f8d8fb501ab799a0a1acfe7cf496fad896483e12dff177"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0057.json",
+      "bytes": 715760,
+      "sha256": "74b83601a712f09c90e9aad1a286f9bc7f00d29bcce665c84213ece640ddd7da"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0058.json",
+      "bytes": 716719,
+      "sha256": "5812c7bfac9103d5940c1bb91c4297e9d5910221f48a3e1da8e7e13a4d5afe66"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0059.json",
+      "bytes": 712381,
+      "sha256": "c589623e189320a1c59e7f02347e073112f746e218d676948bd2be15b2e03188"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0060.json",
+      "bytes": 700936,
+      "sha256": "23a851959e96c970ac377204434543470a9b5c0cef5c18efdddd2392d747462d"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0061.json",
+      "bytes": 709060,
+      "sha256": "2a21884ef614b6928cfd8d1cfab5dc0dd12b4d6ca9dea34393c72d59582bf1c3"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0062.json",
+      "bytes": 712596,
+      "sha256": "493ecf3fd94c3f144e4124435d19aa9c942723e21af8815358b6c19de2915410"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0063.json",
+      "bytes": 712828,
+      "sha256": "4b1a32b1f23e6a6438f67dd66f8188c5dbb7d6961f6735ceac157c87081667b0"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0064.json",
+      "bytes": 710923,
+      "sha256": "223b6cee18922e4280a41f76929ecd86dd95d6a3b67693b22762e54c4d1dc8af"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0065.json",
+      "bytes": 712652,
+      "sha256": "059a5773bbc2643983d29d4aa9d085c2cd3d4172bff2646fb33fcee0d2a733e8"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0066.json",
+      "bytes": 708925,
+      "sha256": "e1377b7672084f15fe4fd845da153e57e6b05ceef06154a7b9ace0009fa92032"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0067.json",
+      "bytes": 711459,
+      "sha256": "362a2adc3f9bda906cea87bdcae3a5181509066de16dcfeba5ec33595db4c193"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0068.json",
+      "bytes": 708966,
+      "sha256": "6f58d3e4306abd1112800f98a148f1ec13173be43d9950d2d0029fe71eebd865"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0069.json",
+      "bytes": 709781,
+      "sha256": "cefadd46af63796e31fea1bc6c902756e7da7a7f032bcbdcccf31e5cddbed1af"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0070.json",
+      "bytes": 723572,
+      "sha256": "882964f6c643f48ca622bcbce1b873cc5b6c56a9c890d8c58e6d264b10d8b6ff"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0071.json",
+      "bytes": 735733,
+      "sha256": "e0e5fdd3645b9a0be00eecc4ee22fcd8a7e932fe11eca9578c1ec3d67a54df40"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0072.json",
+      "bytes": 737116,
+      "sha256": "261519501ba1af831c9e47fdcb76c7364f313b36a4b6574299b46ea8daf07a4d"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0073.json",
+      "bytes": 746155,
+      "sha256": "7be6cc660c700f17d7a07a90a17f7e275ccf33278c5f46ef3ec75f3cca35dc63"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0074.json",
+      "bytes": 758819,
+      "sha256": "16801d358c4132d87a4074c7651f36d3dceb2361a26f2743b139e662dcc2b64d"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0075.json",
+      "bytes": 759435,
+      "sha256": "1a79a64842b4ce4346373acf96244a21b8aa147420e52727fd740d76f355af47"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0076.json",
+      "bytes": 759988,
+      "sha256": "e3d28217f0bc20a67fc694b9289ebcd32bc47258a484bc81746b76086b4042c3"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0077.json",
+      "bytes": 760421,
+      "sha256": "98a1c3406768a6122fbe806554c89c04e48da31483e5a3fc337c6de92c3d8470"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0078.json",
+      "bytes": 760299,
+      "sha256": "e74853ee4ae74ce1381b7695974025d02855b82112f9de54a87e5ee2e31c1481"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0079.json",
+      "bytes": 759475,
+      "sha256": "3bdae1221ba944163f9cab5d9837441c4beaaad81b23f97645d7916506a289d2"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0080.json",
+      "bytes": 757669,
+      "sha256": "082049c546df5a7728545fc4a92a5d42049eff063da08983537a11acacdbb486"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0081.json",
+      "bytes": 723740,
+      "sha256": "58ef0c77ae9c184bd43eb2357eb3c8ee7045a55ac57d665f805ad70b8acb0aab"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0082.json",
+      "bytes": 713075,
+      "sha256": "2049687c01859446e3faa29bfaf736b63945ddf6232c7cd72f9ed6310ae7e907"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0083.json",
+      "bytes": 713346,
+      "sha256": "35a378a9b87ae23eda0fc4b2acf3fdfdcb754ce112ea6437eb5f448a083106a2"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0084.json",
+      "bytes": 721535,
+      "sha256": "6f707b4d1e47a38da8f5ffdf52c9c824ba566e2d0168400da645e798bc7b501a"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0085.json",
+      "bytes": 738109,
+      "sha256": "79796f7f2423a92151f4e1c924ef95940b365bf326e18e791baa875210480660"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0086.json",
+      "bytes": 758838,
+      "sha256": "785004b68dfa636f16f8694512a8baa481fe7aa24e481451db61d66c359a2cd4"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0087.json",
+      "bytes": 769756,
+      "sha256": "49b39b2c03666f8d6de2354e16b6930e8403b3745159e52ae95f096b3dd59405"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0088.json",
+      "bytes": 776428,
+      "sha256": "e43ccde465f3bb72b8024764719ee1690ed5b8b16a8f0cfe41b52dccc5a41b22"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0089.json",
+      "bytes": 780102,
+      "sha256": "7cfe182c46df895b0be9af50ef679cbaa29dae39820d6d70e42e7de9b7bd90b3"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0090.json",
+      "bytes": 781605,
+      "sha256": "b4a23c03ed533974a9d6b2e20dc1ebdddb380e5eee98341b2a7f592285c32e36"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0091.json",
+      "bytes": 780082,
+      "sha256": "ec0f003b6086c4cbc932c3c626c6587a6d834496565710739e43e532abe84111"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0092.json",
+      "bytes": 781392,
+      "sha256": "952593fad822f3ec2957d415e9b9b18c0a0217b78ab067237ecefe3544261047"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0093.json",
+      "bytes": 783638,
+      "sha256": "3017d08f21f5a3674c5087d917a66bdcbff0156a6d58d9b3be9ebfb77afc3279"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0094.json",
+      "bytes": 781415,
+      "sha256": "659766c90bab50b3d5fa355dcd83486a4c205ff6518ace3454d27ff0fc655a7e"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0095.json",
+      "bytes": 778933,
+      "sha256": "de48c0154378e0ab070a931cd67cce7c4e2cef222c0ab90e0e3a4946d65645af"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0096.json",
+      "bytes": 784005,
+      "sha256": "efc7537408fb508a213c98c58b498a2eab0c2c522371f8a614d31e39668cbbac"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0097.json",
+      "bytes": 782621,
+      "sha256": "6dfa0d82c98fe4e5cf20a10ad00c3fc1d7936c60d39e4d1d34e186c94900ec9b"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0098.json",
+      "bytes": 780826,
+      "sha256": "2d0d0ebeb97a761016f54f74b02d6fa723fdc99795a492510b906525b6adab31"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0099.json",
+      "bytes": 777874,
+      "sha256": "5e63b582cdfba2a2133731f559ba49fd3eb8699992a31d978074a7d6cfbeb323"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0100.json",
+      "bytes": 776688,
+      "sha256": "b80e8f6742d2b8495e622ca10bdc047f9cc08640d5dd0311d6411620868cb336"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0101.json",
+      "bytes": 778322,
+      "sha256": "edc2dc09f5ec9015ff20c41424ad10158de2eaec003e4265879bab9aec6e6b8c"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0102.json",
+      "bytes": 779678,
+      "sha256": "bbf4b231a287c24bbf79ab890e476874f80e57ad090ce4d3960c7184fad1c26d"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0103.json",
+      "bytes": 779921,
+      "sha256": "61f5fc8df43640a65547277d97f4a4e974c99e450fc8e9fa340558f5301c5fc2"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0104.json",
+      "bytes": 780106,
+      "sha256": "cc2cc7130f79db06a172ab03283c3b03576696a3ff47b69b090eba9487fa4ed4"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0105.json",
+      "bytes": 777760,
+      "sha256": "da2cf93a51a62b7a42ae5a0ab3d00cee726c5db4f28e0f2d9d66a1c307f1524d"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0106.json",
+      "bytes": 777012,
+      "sha256": "5157c59632163fe72c96af1cfea5ac0e8d18808b0f565af6a032648c79a7d5f1"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0107.json",
+      "bytes": 775223,
+      "sha256": "7aabb657b285dcd3429a9c6fae1c7266f5cab698411a8d838ac43db2e60a201b"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0108.json",
+      "bytes": 774346,
+      "sha256": "45b7dd768220790168c15d8c500b1ec31d2db2f38d25f1b8846c3240706cd25c"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0109.json",
+      "bytes": 777433,
+      "sha256": "893fee642cb1fd924474c2d0c4ac722c05d8c79e49a8ef0701813d2c4882ed88"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0110.json",
+      "bytes": 774654,
+      "sha256": "c5db088461d40976e8f10326447a40a4a78445c47287b0511199596cfdb20a53"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0111.json",
+      "bytes": 770708,
+      "sha256": "e5a182d9f395efc6020d4a437df8c5323f74da4fcadf18e1896fd49202b00b71"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0112.json",
+      "bytes": 770052,
+      "sha256": "df07b3cb10cdb5f2d9b696239bb75c95cb08f42c7ce7469ca6e832ac949ea0d9"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0113.json",
+      "bytes": 770040,
+      "sha256": "6a4e3801e44f8fc61aee92bfcd91a31d30e429bf108f91725a64976b900350b2"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0114.json",
+      "bytes": 753389,
+      "sha256": "ba1a9f12eebf7528e5e69a194e691abb0a728698ba240ff91d7f8a17c67316ca"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0115.json",
+      "bytes": 721286,
+      "sha256": "e8f68980491d3f88fc47f144eb8aee65ae0c8f312734f6488a7c94ded12f6ff4"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0116.json",
+      "bytes": 725679,
+      "sha256": "f2d3dc7280ed4c7d82bddefa1a04d5f3f90793d270fd2b385bb22059b15bd62a"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0117.json",
+      "bytes": 717070,
+      "sha256": "f8a15ee575dc7d5e2312c39c3d22efdf5a374129c18a733e279d4045465384a7"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0118.json",
+      "bytes": 716857,
+      "sha256": "439f77050cb5709b3a53a577fd8e8adb9c4f588ea4dc6a8ddc509358f1be7af0"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0119.json",
+      "bytes": 722327,
+      "sha256": "f0437c1ac676ad2a29838cf012a5613838caba48a2cd4cd26a23a9ce0f09dbdc"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0120.json",
+      "bytes": 720352,
+      "sha256": "c26b637b093d1769e8a65ae9eeb69264888bba626cce86a2cb1f3a58e0cf51b3"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0121.json",
+      "bytes": 721546,
+      "sha256": "cc8b054d47deb6292fe86488d432381ad605286d5ee3602f0f305d2757dbeafc"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0122.json",
+      "bytes": 717769,
+      "sha256": "533bdd113b7147e29e909fed9036ff2ab7ec219e0a05f54d84eeecad7305dbd8"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0123.json",
+      "bytes": 721194,
+      "sha256": "a9b37ea941c0840427fcd8128c5fe64431bffdb8d56fd702c77712072eee4db2"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0124.json",
+      "bytes": 715278,
+      "sha256": "2ccb9df5f04a8949577c468df33ad6c19425219e0b2d473c106763a82328cb65"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0125.json",
+      "bytes": 708066,
+      "sha256": "de28fdd73249348123720a68357f2cee825554b7f0066ab84fa8b63a38ed5ab2"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0126.json",
+      "bytes": 716464,
+      "sha256": "d6f075a1da2dbc3c0e839bdf581705be817cb59b2d2c9933fd0e4400362104f9"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0127.json",
+      "bytes": 720511,
+      "sha256": "a5b48fa4a121c8692894d0504a08b5ace7beefb3bef11d68f3de5807f0307957"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0128.json",
+      "bytes": 723138,
+      "sha256": "cc004a8e5f19fe2485ff8c675fe4745505979ee67d201b2b4671c67f8b355060"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0129.json",
+      "bytes": 718649,
+      "sha256": "2fdb2934beb57c6b741f9eecde71c40eeeb79241eb9c9cce00125c1a098728a2"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0130.json",
+      "bytes": 721607,
+      "sha256": "96d44fa9425702fd3ff18fc70420242cbfb2999af704f59dcc93265481afe95b"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0131.json",
+      "bytes": 718326,
+      "sha256": "9b33f0abe1835d8e92cbdc2d94d0be5656a37ee6c56df1416835c84277f1907f"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0132.json",
+      "bytes": 719004,
+      "sha256": "d48eb2db16355cce9ae94009ec8a96bee71dd9148c1c4317ec5b59ba652cb8b1"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0133.json",
+      "bytes": 713618,
+      "sha256": "ca18533e4f5e74f5bd85466a9a1de899201165e0fa6426aef6b91ddfd22f1cda"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0134.json",
+      "bytes": 717591,
+      "sha256": "1649ace909bd84f94311384531c043912ef0484a0c14d167e1cd594ea8856c38"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0135.json",
+      "bytes": 717735,
+      "sha256": "47c6642fc331fd9e5a74450e0d4e4c7825c5cffe35e81896811c5302dfc20582"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0136.json",
+      "bytes": 722696,
+      "sha256": "ee87c5182679f943c35d26daa6f9b5678041cd31284bd3d5d43fb1bf6f8d5153"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0137.json",
+      "bytes": 719301,
+      "sha256": "f4de17febd330defc17cd197b864f99805eef1dc508904b05efc8f1babebdde9"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0138.json",
+      "bytes": 721941,
+      "sha256": "e6a3dd5900923d17f52ae90b17dd7d5b740cc23b6df36fd1f8e867e7b2985702"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0139.json",
+      "bytes": 717563,
+      "sha256": "b7f98aef60fa9eab83acc985feb58304d7d5d8745b56d41493cdb0bf986a4c5a"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0140.json",
+      "bytes": 720785,
+      "sha256": "437e9775ab4f0b8ae85a85981f1c52b05c7695e13e61a86880c0b378f113ba17"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0141.json",
+      "bytes": 715196,
+      "sha256": "1dd69f409cbec712a8cf54e8cfec4b95f7efb081df94b3296dbe9d04eecdbc3c"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0142.json",
+      "bytes": 716564,
+      "sha256": "511e57e6ec932c85d6cc8eda270ad2fa38c6b89df012241472a18c7655dc44d3"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0143.json",
+      "bytes": 715930,
+      "sha256": "7df5afe65f2bf3f201b15469bcadbc0e600014c560ad941a918af5e8d6111cb7"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0144.json",
+      "bytes": 721517,
+      "sha256": "b00143c760a7c4c0ff9bb89e88bb8823f1246bb160a395052d3cb5f61fe68a40"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0145.json",
+      "bytes": 721787,
+      "sha256": "98450732806602c9d8bf49602d2921fd84b9ef800413c128e35b1f27e53c382f"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0146.json",
+      "bytes": 720344,
+      "sha256": "0bee09d01a5c426ae9867af538da6153ce4998975379daff11b1ad2a9ddfcd69"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0147.json",
+      "bytes": 719257,
+      "sha256": "ecd7d2ccd9a2145fe7f17ce2914131cb049e58b8f56fbd737672c6edf7d813dd"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0148.json",
+      "bytes": 719439,
+      "sha256": "5f7a51bccf0be8916b154ad867977c6bcfef5b5c3dbd197bb01098852a049246"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0149.json",
+      "bytes": 716833,
+      "sha256": "c48a182e7a80a822434dbfb886e8cd088fb89cae360aaf222b4707611ff23d80"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0150.json",
+      "bytes": 721286,
+      "sha256": "68c814b0ba1f708486bdb6980741e68f7f95560b171036406c6ea6afb0e3fb87"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0151.json",
+      "bytes": 757223,
+      "sha256": "ca7ba9d3442876252d6ab4cbc3deb74c7e40656f031b5071485617978ab86826"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0152.json",
+      "bytes": 762644,
+      "sha256": "bd96b76c76e512b7a020fc83b52401982d360205a45c3ff7216abfabe0c11de8"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0153.json",
+      "bytes": 769639,
+      "sha256": "f492a9c0bbaf1dd84ff56c53169aa084d0c55c0df10be48d07883e49934a2bc3"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0154.json",
+      "bytes": 669703,
+      "sha256": "295d0912d034d8b69de1706ebee3896f5c871fbb79a76272c66b4b542cae32ce"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0155.json",
+      "bytes": 703300,
+      "sha256": "02cc624d1c88ec6e61176a0e4de0e8bf5560a0a741783f6800dfecbbdebc6f76"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0156.json",
+      "bytes": 692418,
+      "sha256": "0f72822eb167bb4f237ee4d55b6d5ee5e4e7d086f5b6040835f5bdd7984a1568"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0157.json",
+      "bytes": 714818,
+      "sha256": "3b4ef1eb597ea919ae272e312451b603b56a84b2f144261b69b094b1f34e43fb"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0158.json",
+      "bytes": 724860,
+      "sha256": "4852f17afaca7d6de05aea2b2251d896479cb4db22ca0a7ea7de3e7431f165ef"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0159.json",
+      "bytes": 715417,
+      "sha256": "5f05b978d2df252248e715a3f7759662020a9506d68545b96cd0dcdd2dd3a03d"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0160.json",
+      "bytes": 713980,
+      "sha256": "6c3dccdb040dd10722ee27be952adb21a6fb20d1a056e71e0b66aa08094ab14e"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0161.json",
+      "bytes": 717323,
+      "sha256": "7be0ada2e7984b5c8469283b923734be73f0c4cff78b9d22d2ebb41340165903"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0162.json",
+      "bytes": 712135,
+      "sha256": "0a09093981f81fc20996489a98782ae1eef92aac05e924c6d759609b06ddabc1"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0163.json",
+      "bytes": 713197,
+      "sha256": "f8bdd6e530dadb279807a478685834218b2758b92d137fd9082bf79edb3fbed8"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0164.json",
+      "bytes": 713565,
+      "sha256": "eeb1cc6ae896f3eaedd3fac12193d6ca1847ba073af074aaaf63e60e2351241e"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0165.json",
+      "bytes": 718710,
+      "sha256": "5bf6a77d4dc93bdf7beb0b4405923d83341edd6186db9332aba00df29eda8879"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0166.json",
+      "bytes": 710036,
+      "sha256": "0d2254af55dfbb8ee435946af80e6e5f873b7c04d9323e09d39e4dcac4cab5ce"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0167.json",
+      "bytes": 713064,
+      "sha256": "caae42e956691e970d316512363494aa88def31d10d4aac346fdeac6bbf925e1"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0168.json",
+      "bytes": 715063,
+      "sha256": "da277a49ce71327e644ea919782f18b9b2d5df052c3d09c1dc2be1ae20ad9974"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0169.json",
+      "bytes": 716793,
+      "sha256": "2a6ebd28178d24816f666a7654b025e898b73c2e20e149572af8b6f554b29f47"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0170.json",
+      "bytes": 714672,
+      "sha256": "e691cb1138ce6dd5c4e162e63075831213ed59f2ecdace2dc4654f6a57bf0558"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0171.json",
+      "bytes": 711902,
+      "sha256": "4c4bb3a8857fad7079c088ea393a2d9fd773281475e630228e065578f68003e2"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0172.json",
+      "bytes": 716898,
+      "sha256": "8ca087bf840fdf849834db352a5b1109e1554d3199e8b935127f8d233dab395c"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0173.json",
+      "bytes": 712918,
+      "sha256": "ff0773385da171a4d399518cb47ab3d456fbf96fa074105943758a958bb121ec"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0174.json",
+      "bytes": 710484,
+      "sha256": "ba84ad0a22fd90e55586bd14edfa857429d13dd534e829d4253df4364e04f420"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0175.json",
+      "bytes": 721076,
+      "sha256": "6b94a333eeec338233a6c4ed32eee09606428223c44e41beadabc895524a2988"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0176.json",
+      "bytes": 721047,
+      "sha256": "e6ec337a5eb553d0c034858e55d9391aa8d3e7ff804ae16852386f7255601b0e"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0177.json",
+      "bytes": 723733,
+      "sha256": "e4b8ad31bf8ffae718058d775a9cd6b0162d9759b7fec0b402cbfc39d51dcb9a"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0178.json",
+      "bytes": 704882,
+      "sha256": "c7089160f2b2cd36544cb3fcf7611b3540646b5b55c1531c16455d071e62513a"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0179.json",
+      "bytes": 704798,
+      "sha256": "afc01c583c642652d02a698be44bdb5c76ff92a1b89db955c9811f1534332dd8"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0180.json",
+      "bytes": 715304,
+      "sha256": "bd8fe309f1fd2f9bd08831d85d159bf05e46d3bde4e98eedc1d19019766c2861"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0181.json",
+      "bytes": 709037,
+      "sha256": "7c1af98f66e7577edeb7dfd3dda14458cab08cf0672630d3e13083b769fa6e37"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0182.json",
+      "bytes": 711853,
+      "sha256": "853b1feac15cd2897128371c1fff524b1fabf1454fef26d95a1702a847c5df70"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0183.json",
+      "bytes": 711134,
+      "sha256": "efc0390ffc00549a1d8dec00307c9fa6e492b762dfb2bc45d592a32368b5df10"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0184.json",
+      "bytes": 705171,
+      "sha256": "0b2a8d8e28b4a41b82a0157980776a12f40b05f8f4fd86cb902b1ccc6e5cd6b4"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0185.json",
+      "bytes": 717837,
+      "sha256": "2627747bc8bbb74624e42dd46fe7a4cd9eb1390db05d38a34ba365213529f4a3"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0186.json",
+      "bytes": 718796,
+      "sha256": "f8b16ac2fe7796a36f9c45674f83cabeb2e7c145cc41e1d5b0aade4fabc5fc2b"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0187.json",
+      "bytes": 761389,
+      "sha256": "1defa3e2a52d58b163b66537ccd6b2d89eef54b43254464632dcab3516c63f52"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0188.json",
+      "bytes": 753193,
+      "sha256": "98bd0e0374939a07e907628d9503c1b113776210a00a5284754b79a7fc90b594"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0189.json",
+      "bytes": 749896,
+      "sha256": "ab238873f57289a0dc5925bc9f353accbcca7c8c1ce4eadfc89bf21a51f3cba5"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0190.json",
+      "bytes": 715179,
+      "sha256": "e5037ed6be61da4eccf99b9ce208789cadb8136f4b3fc3d3696be37fd295d6d6"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0191.json",
+      "bytes": 673528,
+      "sha256": "8c133854e02d5b2be75b356e9a839cd7005baa62ea9971ed760037e0aa0f52b2"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0192.json",
+      "bytes": 675764,
+      "sha256": "53c683bdf4f3dea8e659dc052fce53af3537485161ca1c7e5f6a7e9cb0dde905"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0193.json",
+      "bytes": 675502,
+      "sha256": "f5455c6913a2705471ec000d86612bf42cc025809f9a9368c85100422249abfb"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0194.json",
+      "bytes": 689090,
+      "sha256": "9b00f5accab7150d07d7c57d27efd371ebb9ef5ef7670b6d6d1ca2864b0bae19"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0195.json",
+      "bytes": 708211,
+      "sha256": "20be449427b0f7b8862d49b0f0dbd6214fcfef15a85bef349f7430e1b4cba488"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0196.json",
+      "bytes": 731175,
+      "sha256": "73415cc4a4e0199c8f85684edc8e9fd049c3dd64af09a9e91c66fe92eb72f1be"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0197.json",
+      "bytes": 728300,
+      "sha256": "00e1bf2a8d82e9fb280475d30cea97423ed44da6d15eda79aa5fdaad84da618a"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0198.json",
+      "bytes": 673593,
+      "sha256": "7949f3407b26bd1b702e02e82ebd85e6269942a6a49c3ad427dd8ac2da3b06f3"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0199.json",
+      "bytes": 673062,
+      "sha256": "769ffa0fe1c61b65121624af8d779cb5a81197404171cff98b2149098281790f"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0200.json",
+      "bytes": 694126,
+      "sha256": "1e02f3ec7319082c0e5367f1ebee341a059753760927cfd50066dc586f0f8768"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0201.json",
+      "bytes": 665809,
+      "sha256": "c017870d87d8eec34eeb4c018952a8341ae04f29b876a9182c75ba83cd96e165"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0202.json",
+      "bytes": 680497,
+      "sha256": "019859efcb55239fa0515eaf92d0bc2bb80e7775dfef843a932e4c4a8c7b75b4"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0203.json",
+      "bytes": 721176,
+      "sha256": "69b4ffe7bb187a01e99d89d601aa65e65371abcbe5dabbecae6551c80928d33d"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0204.json",
+      "bytes": 722718,
+      "sha256": "cd96a8e25e60b6e68d3fb7b1d0ce0d4212d761df63f5a6aad3a0362cb558e762"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0205.json",
+      "bytes": 722523,
+      "sha256": "e32636c540bcae2b48aeeb39bac2e735b05d9c30b991516e71b5baa0dc27ff3c"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0206.json",
+      "bytes": 722200,
+      "sha256": "934e76ad59ed99922737bd5e6602525aefa73423657f8bb773c63d57849b3836"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0207.json",
+      "bytes": 687430,
+      "sha256": "1afa34f7fed4afd71a2417d2edb72d77ba28e8ee4033818ba6cf4937f83051aa"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0208.json",
+      "bytes": 679308,
+      "sha256": "72c331cba83db546fa157e0f55c1be61ed6e44340885b8767f0ae0457ed4cd94"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0209.json",
+      "bytes": 721407,
+      "sha256": "952ab9597eb06c06652095c1a83061df486253c4c7e35b62e7c4f9a273f50d67"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0210.json",
+      "bytes": 735854,
+      "sha256": "b21079e26d422de1fe1590f06b81703b12d9e15d702bbc3a37737fdabe09a4ae"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0211.json",
+      "bytes": 728959,
+      "sha256": "3b03107ba2429397ff7a220fbb19d5c963139acc81d14eb6d28acf8e0bfc1108"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0212.json",
+      "bytes": 746958,
+      "sha256": "a52f9ca1973a4b926e4e6e3aeec5bfe5eb83b40ed4453b59a26b407cd12bac7d"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-0213.json",
+      "bytes": 692528,
+      "sha256": "e5e5482260e566c41368322b277d5de49155f7d31ac55670016434b39c3a813e"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/pf-capacity-7b1ce2e8-46a6-45ad-bf6e-dfcee51a1e20/input/snapshots/75c61dc7-d456-45b0-9052-2a0822240350.json",
+      "bytes": 2501953,
+      "sha256": "b47365401aaf078374607c944e22ac5100f2aa6fe4389c056fbdd963526f17ed"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/session-coverage-metadata-a9fb410e-504c-4679-b359-b9171fa5501f/metadata.json",
+      "bytes": 7874,
+      "sha256": "85af065d0f31943f6cc1e0fecbb1eebca7f97f50a96c2f99a47b17fc6017648b"
+    }
+  ],
+  "checks": [
+    {
+      "name": "production-matching-code-and-dependency",
+      "status": "PASS"
+    },
+    {
+      "name": "all-declared-parts-hashes-offsets-ids-fragments",
+      "status": "PASS"
+    },
+    {
+      "name": "parents-roots-cycles-depth-child-counts",
+      "status": "PASS"
+    },
+    {
+      "name": "selected-identities-ancestors-fragments-boundaries-mesh",
+      "status": "PASS"
+    },
+    {
+      "name": "internal-coordinate-declarations-consistent-no-transform-applied",
+      "status": "PASS"
+    },
+    {
+      "name": "all-retained-qa-project-scoped-aliases-bindings-endpoints",
+      "status": "PASS"
+    }
+  ],
+  "source": {
+    "branch": "pf-2-coverage-local-20261018",
+    "commit": "f2f5e6ab33970d82dda660aac80d0cecfa80a59b",
+    "sourceFiles": [
+      {
+        "path": "scripts/pathfinder-coverage/audit.mjs",
+        "sha256": "7afc8b8f34b8304bce7c3e9d994a5cf6cbe833557598cb8aa12d4571dbebcc09"
+      },
+      {
+        "path": "scripts/pathfinder-coverage/retained.mjs",
+        "sha256": "9d060c512c399ec3583d7653068cf73f8286c585d8b8faec12ca08cdeb9788a4"
+      },
+      {
+        "path": "scripts/pathfinder-capacity/lib.mjs",
+        "sha256": "4a5eb36b44a60c5e4b4a736f1c113e3b6f3062145103b9e2574ccca940a8d58c"
+      }
+    ],
+    "sourceSetSha256": "4f6e4928d1e6e712b1f69b6470bd0b458b94ba5957bc3ab969b4f72371adc17f"
+  },
+  "manifestSha256": "421135de16f3c35bad7446b0c0930652035a746183e17ce6b63d6c75a21c845f",
+  "label": "Aalborg retained inventory and selected QA scope",
+  "progress": {
+    "partsChecked": 214,
+    "objectsIndexed": 438155,
+    "bytesChecked": 152879123,
+    "fragmentAssociationsChecked": 664556
+  },
+  "inventory": {
+    "status": "PASS",
+    "partsChecked": 214,
+    "bytesChecked": 152879123,
+    "objects": 438155,
+    "fragments": 664556,
+    "fragmentAssociations": 664556,
+    "objectsWithFragments": 343310,
+    "objectsWithExternalIds": 438155,
+    "fragmentIdsUnassociated": 0,
+    "minimumDbId": 1,
+    "maximumDbId": 438156,
+    "sortedDbIdsSha256": "9bc1f637f14c5d8551678e4a86b3f6972bb9e7e81f9e91c4a367b72f4309c7c0",
+    "missingDbIdsWithinOneToMaxDeclaredMappingOrObserved": 1,
+    "missingDbIdExamples": [
+      388764
+    ],
+    "mappingRangeDeclarationOnly": true,
+    "externalIdentityObjectCountDeclaration": 438156,
+    "declarationDifference": 1,
+    "identityDeclarationReconciliation": {
+      "status": "BLOCKED",
+      "reason": "Receipt declares property-database mapping count; retained inventory alone does not identify the mapping-only object."
+    },
+    "names": {
+      "normalizedDistinct": 370919,
+      "duplicateGroups": 8469,
+      "duplicateObjectOccurrences": 75705,
+      "examples": [
+        {
+          "normalizedNameSha256": "9238425de37631971d2346f2b2ecb452b630717e2a8ce78319e609e276d87fdf",
+          "count": 3638,
+          "ids": [
+            11,
+            57,
+            58,
+            62,
+            63,
+            69,
+            70,
+            74,
+            75,
+            86,
+            173,
+            205,
+            247,
+            248,
+            255,
+            256
+          ]
+        },
+        {
+          "normalizedNameSha256": "81a0d84c98955115840803a9e989253fad27c0abbf59107c0a8a5f66aab1ccff",
+          "count": 41169,
+          "ids": [
+            15,
+            16,
+            17,
+            19,
+            20,
+            21,
+            24,
+            25,
+            26,
+            28,
+            29,
+            30,
+            33,
+            34,
+            35,
+            37
+          ]
+        },
+        {
+          "normalizedNameSha256": "4f1f5ad497f632e9909a2f429d80b0cce666cb1734e37fc0d8383662e47dd6ce",
+          "count": 2,
+          "ids": [
+            42,
+            43
+          ]
+        },
+        {
+          "normalizedNameSha256": "5795beb635c069c4256696cb4ec1f625e4eb9bd9cc6e451039c9db681d1445dd",
+          "count": 2,
+          "ids": [
+            46,
+            47
+          ]
+        },
+        {
+          "normalizedNameSha256": "857ca3a3ed55603c07d1bbd38bb0b3b89f2f685d2d3d7bd493cd19a1cae8e1e2",
+          "count": 2,
+          "ids": [
+            48,
+            49
+          ]
+        },
+        {
+          "normalizedNameSha256": "de717133804b794f005da60b511521bc4583389713f7c618191fe734d8ec3bf2",
+          "count": 2,
+          "ids": [
+            52,
+            53
+          ]
+        },
+        {
+          "normalizedNameSha256": "9068d1ea22fe0b6a3d22329f7313896e27e4892fbe6a2fe99c01f43b62278549",
+          "count": 2,
+          "ids": [
+            64,
+            65
+          ]
+        },
+        {
+          "normalizedNameSha256": "75f23b9483c51d22ab43f7ea02e17f71c11098999fdbf6c13685631cace706fc",
+          "count": 2,
+          "ids": [
+            76,
+            77
+          ]
+        },
+        {
+          "normalizedNameSha256": "30b3197585845122fe06709918555425cc37e834f4808be1f7a2351e80b7ee51",
+          "count": 2,
+          "ids": [
+            236,
+            237
+          ]
+        },
+        {
+          "normalizedNameSha256": "edb514ce0871a277dbd5c20969f5f0e0f13aacb2ce64c619f05ff6e9282dcf76",
+          "count": 2,
+          "ids": [
+            238,
+            239
+          ]
+        },
+        {
+          "normalizedNameSha256": "36224fa1101b2148c5e2510c8cd3583dd40280f6a63d4a78ebe2bf28b7f2c1e8",
+          "count": 2,
+          "ids": [
+            242,
+            243
+          ]
+        },
+        {
+          "normalizedNameSha256": "2fd3155ee9176bdbeb31158166c1323212aa29e9cb688f86bdf367dc6011796a",
+          "count": 2,
+          "ids": [
+            391,
+            392
+          ]
+        },
+        {
+          "normalizedNameSha256": "4c5d8981945641c4ef9789062de3d197ccb173b1d2522ec492794370cdc571d6",
+          "count": 2,
+          "ids": [
+            533,
+            534
+          ]
+        },
+        {
+          "normalizedNameSha256": "695627a457525d7ce959403f7983f55190c7c61d48e0eb8e6b1849a0da0b4fc4",
+          "count": 2,
+          "ids": [
+            627,
+            628
+          ]
+        },
+        {
+          "normalizedNameSha256": "45ffad4a364200b961de8614af28ecca62c917d7b004d9a253f4850cbe4fbbe9",
+          "count": 2,
+          "ids": [
+            629,
+            630
+          ]
+        },
+        {
+          "normalizedNameSha256": "f984da54c8901d6d2524f0f95082f1326167b4fcb710d8a906a31590c7aaf5f0",
+          "count": 2,
+          "ids": [
+            744,
+            745
+          ]
+        }
+      ]
+    },
+    "externalIds": {
+      "distinct": 438155,
+      "duplicateGroups": 0,
+      "examples": []
+    },
+    "visibility": {
+      "nativeHidden": {
+        "null": 438155
+      },
+      "displayHidden": {
+        "false": 438155
+      },
+      "displayOff": {
+        "false": 438155
+      },
+      "planningVisibilityEvidence": {
+        "SDK display flags do not prove native inherited visibility": 438155
+      }
+    }
+  },
+  "hierarchy": {
+    "status": "PASS",
+    "rootCount": 1,
+    "roots": [
+      {
+        "id": "dbid:1",
+        "name": "aalborg-11b2739d92020ee58a52a4e793cf8fd538fb30758eb42176aba93ac7319b048a.nwd",
+        "children": 2,
+        "descendants": 438154,
+        "objectsWithFragmentsIncludingSelf": 343310,
+        "fragmentsIncludingSelf": 664556
+      }
+    ],
+    "rootIdsSha256": "080a9ed428559ef602668b4c00f114f1a11c3f6b02a435f0bdc154578e4d7f22",
+    "rootsTruncated": false,
+    "maximumDepth": 14,
+    "topLevelGroups": 2,
+    "topLevelGroupSummary": [
+      {
+        "id": "dbid:2",
+        "name": "Aalborg_HPU-EXPORT_20260304.nwd",
+        "children": 3,
+        "descendants": 389961,
+        "objectsWithFragmentsIncludingSelf": 307730,
+        "fragmentsIncludingSelf": 625153
+      },
+      {
+        "id": "dbid:389965",
+        "name": "Aalborg_ACS_CABLETRAY_04_03_26.fbx",
+        "children": 1,
+        "descendants": 48191,
+        "objectsWithFragmentsIncludingSelf": 35580,
+        "fragmentsIncludingSelf": 39403
+      }
+    ],
+    "topLevelGroupsTruncated": false,
+    "terminalObjects": 343310
+  },
+  "selected": {
+    "status": "PASS",
+    "artifactId": "75c61dc7-d456-45b0-9052-2a0822240350",
+    "projectId": "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a",
+    "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+    "contentSha256": "b5bb4fbe666b440c73bb1ffd2ee0db01be66146f8002e4a9df8dce8521db1d34",
+    "objects": 52,
+    "roles": {
+      "routing-leaf": 26,
+      "hierarchy": 26
+    },
+    "categoryAssignmentSources": {
+      "explicit-planning": 26,
+      "unassigned": 26
+    },
+    "categorySets": {
+      "Control+LV": 26,
+      "none": 26
+    },
+    "planningExcluded": {
+      "false": 52
+    },
+    "effectiveVisibility": {
+      "unknown": 52
+    },
+    "fragments": 99,
+    "vertices": 34674,
+    "triangles": 35772,
+    "inventoryObjectsNotSelected": 438103,
+    "selectedObjectFraction": 0.00011867946274720134,
+    "selectedObjectInventoryFragmentAssociations": 99,
+    "selectedRoots": [
+      {
+        "id": "dbid:425797",
+        "name": "/BC022-2",
+        "inventoryDescendants": 7,
+        "inventoryFragmentOwnersIncludingSelf": 6,
+        "inventoryFragmentsIncludingSelf": 22,
+        "selectedObjectsIncludingSelf": 8,
+        "selectedRoutingLeaves": 6
+      },
+      {
+        "id": "dbid:425834",
+        "name": "/BC025",
+        "inventoryDescendants": 2,
+        "inventoryFragmentOwnersIncludingSelf": 1,
+        "inventoryFragmentsIncludingSelf": 5,
+        "selectedObjectsIncludingSelf": 3,
+        "selectedRoutingLeaves": 1
+      },
+      {
+        "id": "dbid:426725",
+        "name": "/B002",
+        "inventoryDescendants": 3,
+        "inventoryFragmentOwnersIncludingSelf": 2,
+        "inventoryFragmentsIncludingSelf": 9,
+        "selectedObjectsIncludingSelf": 4,
+        "selectedRoutingLeaves": 2
+      },
+      {
+        "id": "dbid:426787",
+        "name": "/B107-1",
+        "inventoryDescendants": 3,
+        "inventoryFragmentOwnersIncludingSelf": 2,
+        "inventoryFragmentsIncludingSelf": 6,
+        "selectedObjectsIncludingSelf": 4,
+        "selectedRoutingLeaves": 2
+      },
+      {
+        "id": "dbid:426791",
+        "name": "/B107-2",
+        "inventoryDescendants": 10,
+        "inventoryFragmentOwnersIncludingSelf": 9,
+        "inventoryFragmentsIncludingSelf": 30,
+        "selectedObjectsIncludingSelf": 11,
+        "selectedRoutingLeaves": 9
+      },
+      {
+        "id": "dbid:426802",
+        "name": "/B107-3",
+        "inventoryDescendants": 2,
+        "inventoryFragmentOwnersIncludingSelf": 1,
+        "inventoryFragmentsIncludingSelf": 3,
+        "selectedObjectsIncludingSelf": 3,
+        "selectedRoutingLeaves": 1
+      },
+      {
+        "id": "dbid:427077",
+        "name": "/DFB011",
+        "inventoryDescendants": 2,
+        "inventoryFragmentOwnersIncludingSelf": 1,
+        "inventoryFragmentsIncludingSelf": 3,
+        "selectedObjectsIncludingSelf": 3,
+        "selectedRoutingLeaves": 1
+      },
+      {
+        "id": "dbid:427080",
+        "name": "/DFB012",
+        "inventoryDescendants": 3,
+        "inventoryFragmentOwnersIncludingSelf": 2,
+        "inventoryFragmentsIncludingSelf": 12,
+        "selectedObjectsIncludingSelf": 4,
+        "selectedRoutingLeaves": 2
+      },
+      {
+        "id": "dbid:427084",
+        "name": "/DFB013",
+        "inventoryDescendants": 2,
+        "inventoryFragmentOwnersIncludingSelf": 1,
+        "inventoryFragmentsIncludingSelf": 4,
+        "selectedObjectsIncludingSelf": 3,
+        "selectedRoutingLeaves": 1
+      },
+      {
+        "id": "dbid:427098",
+        "name": "/DFB018-1",
+        "inventoryDescendants": 2,
+        "inventoryFragmentOwnersIncludingSelf": 1,
+        "inventoryFragmentsIncludingSelf": 5,
+        "selectedObjectsIncludingSelf": 3,
+        "selectedRoutingLeaves": 1
+      }
+    ],
+    "qualification": "Only explicit selected capture is computationally scoped. Other names/fragments do not establish tray eligibility, categories, geometry, bounds or properties."
+  },
+  "coordinates": {
+    "status": "PASS",
+    "scope": "Internal retained declarations only; vertices are read without applying any transform.",
+    "vertexFrame": "canonical-world-metres",
+    "sourceUnits": "m",
+    "metresPerSourceUnit": 1,
+    "globalOffsetMetres": [
+      42.89071492700009,
+      -24.354130538688224,
+      5.195000167136811
+    ],
+    "sourceToWorldMetres": [
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      1
+    ],
+    "displayToWorldMetres": [
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      42.89071492700009,
+      -24.354130538688224,
+      5.195000167136811,
+      1
+    ],
+    "nativeTransformProof": "NOT_PERFORMED_NOT_REQUIRED_BY_USER",
+    "sourceLinkVerified": false,
+    "unitsVerified": false,
+    "transformsVerified": false
+  },
+  "endpoints": {
+    "status": "PASS",
+    "scope": "All supplied QA rows only; no representative business cable list. Binding currentness is relative to the supplied selected artifact, not a live artifact query.",
+    "rows": {
+      "cables": 3,
+      "locations": 6,
+      "aliases": 7,
+      "bindings": 6,
+      "selection": 2
+    },
+    "realProjectCables": 1,
+    "otherProjectCables": 2,
+    "normalization": "Pinned production NFC -> trim -> uppercase; punctuation and leading zeroes preserved.",
+    "locationsByProject": {
+      "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a": 3,
+      "54cfad40-bd12-41e9-ab24-d90bdaafc993": 3
+    },
+    "bindings": [
+      {
+        "projectId": "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a",
+        "locationId": "2d92f671-338b-49bc-be80-f356ca2332e8",
+        "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+        "artifactId": "75c61dc7-d456-45b0-9052-2a0822240350",
+        "source": "manual",
+        "coordinateFrame": "canonical-world-metres",
+        "pointSha256": "d19901a40b1969b5d77847d655a0a2ed7f8b047cf8b2c3b6229537a995a1de34",
+        "assessment": "current-against-retained-selected-artifact"
+      },
+      {
+        "projectId": "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a",
+        "locationId": "3b9f01b2-5260-4efa-8914-5b4d54dc36ae",
+        "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+        "artifactId": "75c61dc7-d456-45b0-9052-2a0822240350",
+        "source": "manual",
+        "coordinateFrame": "canonical-world-metres",
+        "pointSha256": "959cdb4a356d34ac399fc2d755b512c8dee6a316f9d2dc9585e726f9273839a6",
+        "assessment": "current-against-retained-selected-artifact"
+      },
+      {
+        "projectId": "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a",
+        "locationId": "43b2230a-74af-4fd9-a021-4f7be9792c79",
+        "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+        "artifactId": "6a04c032-707f-490c-9cc6-325a04a63250",
+        "source": "manual",
+        "coordinateFrame": "canonical-world-metres",
+        "pointSha256": "61faee762145c5b0024556241fd2914a435881bb31fa424a57353d57abbec150",
+        "assessment": "stale-against-selected-artifact"
+      },
+      {
+        "projectId": "54cfad40-bd12-41e9-ab24-d90bdaafc993",
+        "locationId": "2c1c2698-345d-49cc-9d48-bd37017088a5",
+        "modelVersionId": "a856352c-b3dd-4143-a723-1f4e7d3f2cb2",
+        "artifactId": "260a7911-8906-4026-8924-9d5929155dcd",
+        "source": "automatic",
+        "coordinateFrame": "canonical-world-metres",
+        "pointSha256": "984cf809540367fd0e20b3eb1516b8df3b8f459663c7da76de5401cee5d9e8d8",
+        "assessment": "artifact-currentness-unavailable"
+      },
+      {
+        "projectId": "54cfad40-bd12-41e9-ab24-d90bdaafc993",
+        "locationId": "6d5f5734-2316-4b67-bb4d-0975a9e6ef75",
+        "modelVersionId": "a856352c-b3dd-4143-a723-1f4e7d3f2cb2",
+        "artifactId": "260a7911-8906-4026-8924-9d5929155dcd",
+        "source": "manual",
+        "coordinateFrame": "canonical-world-metres",
+        "pointSha256": "984cf809540367fd0e20b3eb1516b8df3b8f459663c7da76de5401cee5d9e8d8",
+        "assessment": "artifact-currentness-unavailable"
+      },
+      {
+        "projectId": "54cfad40-bd12-41e9-ab24-d90bdaafc993",
+        "locationId": "e9ce58c8-e95a-4af7-a066-be11cd5b5443",
+        "modelVersionId": "a856352c-b3dd-4143-a723-1f4e7d3f2cb2",
+        "artifactId": "260a7911-8906-4026-8924-9d5929155dcd",
+        "source": "manual",
+        "coordinateFrame": "canonical-world-metres",
+        "pointSha256": "f607f1ee02fb0e27e0f911f6fa6975ca465cb66a97197d4026e49bf0faa6efe8",
+        "assessment": "artifact-currentness-unavailable"
+      }
+    ],
+    "endpoints": [
+      {
+        "cableId": "519c4d9f-d919-435d-8f57-2c606d2259ec",
+        "projectId": "54cfad40-bd12-41e9-ab24-d90bdaafc993",
+        "endpoint": "from",
+        "endpointTextSha256": "d25adbbae954f98b7617a8260109c13081f5d33afd155115635dda8a21e42de9",
+        "normalizedTextSha256": "d25adbbae954f98b7617a8260109c13081f5d33afd155115635dda8a21e42de9",
+        "empty": false,
+        "rawInventoryName": {
+          "status": "NOT_RUN",
+          "reason": "Different project/model; never matched to real inventory."
+        },
+        "selectedSharedAutomaticCandidates": null,
+        "selectedStandalonePathCandidates": null,
+        "recordedRegistry": {
+          "status": "unknown-artifact-currentness",
+          "productionResultWithOmittedMatchingRows": "missing",
+          "locationId": "6d5f5734-2316-4b67-bb4d-0975a9e6ef75",
+          "source": "manual",
+          "assessment": "artifact-currentness-unavailable",
+          "derivedUsing": "Pinned production matchLocation plus retained artifact-currentness qualification; live matching rows absent."
+        }
+      },
+      {
+        "cableId": "519c4d9f-d919-435d-8f57-2c606d2259ec",
+        "projectId": "54cfad40-bd12-41e9-ab24-d90bdaafc993",
+        "endpoint": "to",
+        "endpointTextSha256": "1148701b0e44758eb82c93f74ef65a836b6a8588cfee412fa9bfb9c02e879c80",
+        "normalizedTextSha256": "1148701b0e44758eb82c93f74ef65a836b6a8588cfee412fa9bfb9c02e879c80",
+        "empty": false,
+        "rawInventoryName": {
+          "status": "NOT_RUN",
+          "reason": "Different project/model; never matched to real inventory."
+        },
+        "selectedSharedAutomaticCandidates": null,
+        "selectedStandalonePathCandidates": null,
+        "recordedRegistry": {
+          "status": "unknown-artifact-currentness",
+          "productionResultWithOmittedMatchingRows": "missing",
+          "locationId": "e9ce58c8-e95a-4af7-a066-be11cd5b5443",
+          "source": "manual",
+          "assessment": "artifact-currentness-unavailable",
+          "derivedUsing": "Pinned production matchLocation plus retained artifact-currentness qualification; live matching rows absent."
+        }
+      },
+      {
+        "cableId": "a49521ad-e4e1-47d9-b3b2-948375a83905",
+        "projectId": "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a",
+        "endpoint": "from",
+        "endpointTextSha256": "b0b39ccbff7fa477b1f19d3ff361cc8f191c0f36a0700b6e7a9b01c2f7a2e0c1",
+        "normalizedTextSha256": "b0b39ccbff7fa477b1f19d3ff361cc8f191c0f36a0700b6e7a9b01c2f7a2e0c1",
+        "empty": false,
+        "rawInventoryName": {
+          "status": "missing",
+          "candidates": 0,
+          "dbIdExamples": [],
+          "propertiesNotAvailable": true,
+          "roleVisibilityEligibilityNotEstablished": true
+        },
+        "selectedSharedAutomaticCandidates": {
+          "count": 0,
+          "ids": [],
+          "contract": "visible role object only"
+        },
+        "selectedStandalonePathCandidates": {
+          "count": 0,
+          "ids": [],
+          "contract": "role object or routing-leaf; visibility not hidden"
+        },
+        "recordedRegistry": {
+          "status": "matched",
+          "productionResultWithOmittedMatchingRows": "matched",
+          "locationId": "3b9f01b2-5260-4efa-8914-5b4d54dc36ae",
+          "source": "manual",
+          "assessment": "current-against-retained-selected-artifact",
+          "derivedUsing": "Pinned production matchLocation plus retained artifact-currentness qualification; live matching rows absent."
+        }
+      },
+      {
+        "cableId": "a49521ad-e4e1-47d9-b3b2-948375a83905",
+        "projectId": "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a",
+        "endpoint": "to",
+        "endpointTextSha256": "6e7325582a4083b1d4488f68e5f1982472b96b1d4b322fd77634d1e0a2a688f8",
+        "normalizedTextSha256": "6e7325582a4083b1d4488f68e5f1982472b96b1d4b322fd77634d1e0a2a688f8",
+        "empty": false,
+        "rawInventoryName": {
+          "status": "missing",
+          "candidates": 0,
+          "dbIdExamples": [],
+          "propertiesNotAvailable": true,
+          "roleVisibilityEligibilityNotEstablished": true
+        },
+        "selectedSharedAutomaticCandidates": {
+          "count": 0,
+          "ids": [],
+          "contract": "visible role object only"
+        },
+        "selectedStandalonePathCandidates": {
+          "count": 0,
+          "ids": [],
+          "contract": "role object or routing-leaf; visibility not hidden"
+        },
+        "recordedRegistry": {
+          "status": "matched",
+          "productionResultWithOmittedMatchingRows": "matched",
+          "locationId": "2d92f671-338b-49bc-be80-f356ca2332e8",
+          "source": "manual",
+          "assessment": "current-against-retained-selected-artifact",
+          "derivedUsing": "Pinned production matchLocation plus retained artifact-currentness qualification; live matching rows absent."
+        }
+      },
+      {
+        "cableId": "a642bb9e-6ede-4200-91da-64a828f3b9fd",
+        "projectId": "54cfad40-bd12-41e9-ab24-d90bdaafc993",
+        "endpoint": "from",
+        "endpointTextSha256": "1148701b0e44758eb82c93f74ef65a836b6a8588cfee412fa9bfb9c02e879c80",
+        "normalizedTextSha256": "1148701b0e44758eb82c93f74ef65a836b6a8588cfee412fa9bfb9c02e879c80",
+        "empty": false,
+        "rawInventoryName": {
+          "status": "NOT_RUN",
+          "reason": "Different project/model; never matched to real inventory."
+        },
+        "selectedSharedAutomaticCandidates": null,
+        "selectedStandalonePathCandidates": null,
+        "recordedRegistry": {
+          "status": "unknown-artifact-currentness",
+          "productionResultWithOmittedMatchingRows": "missing",
+          "locationId": "e9ce58c8-e95a-4af7-a066-be11cd5b5443",
+          "source": "manual",
+          "assessment": "artifact-currentness-unavailable",
+          "derivedUsing": "Pinned production matchLocation plus retained artifact-currentness qualification; live matching rows absent."
+        }
+      },
+      {
+        "cableId": "a642bb9e-6ede-4200-91da-64a828f3b9fd",
+        "projectId": "54cfad40-bd12-41e9-ab24-d90bdaafc993",
+        "endpoint": "to",
+        "endpointTextSha256": "d25adbbae954f98b7617a8260109c13081f5d33afd155115635dda8a21e42de9",
+        "normalizedTextSha256": "d25adbbae954f98b7617a8260109c13081f5d33afd155115635dda8a21e42de9",
+        "empty": false,
+        "rawInventoryName": {
+          "status": "NOT_RUN",
+          "reason": "Different project/model; never matched to real inventory."
+        },
+        "selectedSharedAutomaticCandidates": null,
+        "selectedStandalonePathCandidates": null,
+        "recordedRegistry": {
+          "status": "unknown-artifact-currentness",
+          "productionResultWithOmittedMatchingRows": "missing",
+          "locationId": "6d5f5734-2316-4b67-bb4d-0975a9e6ef75",
+          "source": "manual",
+          "assessment": "artifact-currentness-unavailable",
+          "derivedUsing": "Pinned production matchLocation plus retained artifact-currentness qualification; live matching rows absent."
+        }
+      }
+    ],
+    "repeatedEndpointKeys": [
+      {
+        "projectId": "54cfad40-bd12-41e9-ab24-d90bdaafc993",
+        "normalizedTextSha256": "d25adbbae954f98b7617a8260109c13081f5d33afd155115635dda8a21e42de9",
+        "uses": [
+          {
+            "cableId": "519c4d9f-d919-435d-8f57-2c606d2259ec",
+            "endpoint": "from"
+          },
+          {
+            "cableId": "a642bb9e-6ede-4200-91da-64a828f3b9fd",
+            "endpoint": "to"
+          }
+        ],
+        "locationIds": [
+          "6d5f5734-2316-4b67-bb4d-0975a9e6ef75"
+        ],
+        "sameRecordedLocation": true
+      },
+      {
+        "projectId": "54cfad40-bd12-41e9-ab24-d90bdaafc993",
+        "normalizedTextSha256": "1148701b0e44758eb82c93f74ef65a836b6a8588cfee412fa9bfb9c02e879c80",
+        "uses": [
+          {
+            "cableId": "519c4d9f-d919-435d-8f57-2c606d2259ec",
+            "endpoint": "to"
+          },
+          {
+            "cableId": "a642bb9e-6ede-4200-91da-64a828f3b9fd",
+            "endpoint": "from"
+          }
+        ],
+        "locationIds": [
+          "e9ce58c8-e95a-4af7-a066-be11cd5b5443"
+        ],
+        "sameRecordedLocation": true
+      }
+    ],
+    "missingEvidence": [
+      "No live artifact purpose/status/latest inventory or pf_location_matching rows.",
+      "Full inventory has no equipment bounds/meshes/properties/native visibility; name-only misses cannot establish property-alias misses.",
+      "Synthetic current artifact is not supplied; its bindings remain unknown rather than being falsely matched to the real model."
+    ]
+  },
+  "gaps": [
+    {
+      "name": "external-map-vs-instance-tree-count-reconciliation",
+      "status": "BLOCKED",
+      "reason": "Receipt declares property-database mapping count; retained inventory alone does not identify the mapping-only object."
+    },
+    {
+      "name": "full-model-computational-geometry-properties-visibility-and-category-coverage",
+      "status": "BLOCKED",
+      "reason": "Only the supplied explicit 52-object (or manifest-selected) scope has computational geometry; full inventory is hierarchy and fragment associations."
+    },
+    {
+      "name": "representative-business-endpoint-coverage",
+      "status": "NOT_RUN",
+      "reason": "Only supplied QA rows are retained."
+    },
+    {
+      "name": "whole-plant-routing-capacity-and-global-prebuilt-graph",
+      "status": "NOT_RUN",
+      "reason": "Metadata traversal is neither a product capture nor a graph/capacity test."
+    }
+  ],
+  "finishedAt": "2026-10-18T14:04:12.131Z",
+  "elapsedMilliseconds": 9167.4833,
+  "memory": {
+    "rss": 575983616,
+    "heapTotal": 516714496,
+    "heapUsed": 385801080,
+    "external": 9785364,
+    "arrayBuffers": 4943626,
+    "peakRssBytes": 604778496
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "status": "PASS",
+  "recordedAt": "2026-10-19T02:03:47.126Z",
+  "branch": "pf-r4-geometry-trace-local-20261019",
+  "preCommitHead": "3d78bc245e15957c1607c4ebc2dd95a31a44f8b4",
+  "checks": [
+    {
+      "name": "frontend-types",
+      "status": "PASS",
+      "exitCode": 0,
+      "rawSha256": "834ce6d54b672d3e9117366af0a7626600a3f256a09bf855eb5ddcf2f12f4ba1"
+    },
+    {
+      "name": "server-types",
+      "status": "PASS",
+      "exitCode": 0,
+      "rawSha256": "5d54f274cb723074ca626b6a691acc1bdb90a8c2054b20b1da4f4ab79b080cf2"
+    },
+    {
+      "name": "changed-ts-lint",
+      "status": "PASS",
+      "exitCode": 0,
+      "rawSha256": "0407923005b43f4ba795dc8fb63b591c8d5dca71b7b697144a1fb376013b7ea8",
+      "fileCount": 36
+    },
+    {
+      "name": "frozen-references",
+      "status": "PASS",
+      "immutableArtifactsAndCore": 19,
+      "unchangedReferences": 23,
+      "pureCoreFiles": 11,
+      "reconciledMutableDrawingWrapper": 1,
+      "expectedRegenerated": false
+    }
+  ]
+}

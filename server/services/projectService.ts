@@ -21,6 +21,7 @@ export const ensureProjectExists = async (
         p.manager,
         p.description,
         p.secondary_tray_length,
+        p.connection_gap,
         p.support_distance,
         p.support_weight,
         p.tray_load_safety_factor,

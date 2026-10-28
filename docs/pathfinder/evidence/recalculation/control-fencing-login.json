@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "wfc.pf.recalculation-control-result.v1",
+  "phase": "fencing-login",
+  "phaseIntentId": "03129fb6-8a37-4d6e-b4fa-adc81a3ec58c",
+  "status": "PASS",
+  "scope": "rollback-only production SQL primitives and reader; normal HTTP/producer/engine/UI tested separately",
+  "beforeSha256": "46467bab4ba8677d22831d833d83029bc96322379e94069fc0b5552eb45c3f4d",
+  "afterSha256": "46467bab4ba8677d22831d833d83029bc96322379e94069fc0b5552eb45c3f4d",
+  "elapsedMilliseconds": 56,
+  "nontransactionalSequenceAdvances": [],
+  "engineeringAccepted": false
+}

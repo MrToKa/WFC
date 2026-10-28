@@ -1,0 +1,20 @@
+{
+  "schemaVersion":"pathfinder.ui-preservation.parent-disposition.v1",
+  "decision":"retire-owned-target",
+  "recordedAtUtc":"2026-10-18T14:47:12Z",
+  "targetOwner":"7fa65ffa-ef34-46a7-b4c1-55cd19f8fa74",
+  "targetProject":"wfc-pathfinder-local-f673a0facba3",
+  "targetPort":5191,
+  "reason":"Fresh four-phase data-preservation and additive caption checks passed; full private rows/diffs retained and hash-bound before assertions. Target is no longer needed for diagnosis or demonstration; existing5190 demonstration remains preserved.",
+  "evidence":[
+    {"file":"docs/pathfinder/evidence/ui-preservation/summary-1792333892454.json","status":"PASS_24_SCOPED_CHECKS"},
+    {"file":"docs/pathfinder/evidence/ui-preservation/C0-1792334390995-69802d93.json","status":"PASS","sha256":"fac6f845f750eb248932e1725fd469e39630d5038833adad03dd8bb58696a04f"},
+    {"file":"docs/pathfinder/evidence/ui-preservation/C1-1792334796719-96a78df3.json","status":"PASS","sha256":"6fb0523f3b0a103c4909d6eeacd4c00205c2c6735c9c0954e2b43c8acc63a923"},
+    {"file":"docs/pathfinder/evidence/ui-preservation/clear-caption-verification-1792334626800.json","status":"PASS_5_SELECTED_TESTS_TYPES_LINT"},
+    {"file":"docs/pathfinder/evidence/ui-preservation/caption-browser-observation-20261018T1445Z.json","status":"PASS_CLEAR_NOTICE_DRAFTS"}
+  ],
+  "ownBrowserTabClosed":true,
+  "ownBrowserTabClosedAtUtc":"2026-10-18T14:47Z",
+  "scope":"Only exact owned5191 containers/volumes/networks and proven unreferenced same-owner candidate images. No primary/original resources, retained archive, exact qualified modules, saved evidence or any seven denied scratch children/parents may be removed.",
+  "limitations":["Historical stage25 FAIL_NOT_RETAINED remains unchanged.","New-web calculation while Viewer was loading produced a defensive retained-result notice; Clear removed it. New-web Ghost render not asserted.","No engineering acceptance or Review/Apply performed; final primary preservation audit follows retirement."]
+}

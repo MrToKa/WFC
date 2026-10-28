@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "pathfinder.revision-plan.aps-older-discovery.v1",
+  "status": "PASS",
+  "checkedAt": "2026-10-18T19:36:54.882Z",
+  "source": {
+    "name": "Aalborg_ACS_CABLETRAY_07_10_24.nwd",
+    "bytes": 69785194,
+    "sha256": "cf61d87b355b3d77d4c6f71a06183fb1d225cbe1bd937b60783d156aedc4df36",
+    "sha1": "2d7b9ffa98479e65d7512e72b907d7a59587a29d",
+    "sourceStampUnchanged": true
+  },
+  "requests": [
+    {
+      "label": "authentication",
+      "status": 200,
+      "bytes": 874,
+      "sha256": "18e085b256a440963908b1a346ee0ae1558a6a171088e63a0930db82767c45f4"
+    },
+    {
+      "label": "bucket_details",
+      "status": 200,
+      "bytes": 272,
+      "sha256": "e6e940904cd7705179c5d07a1c13ce0e12a6d9c923eb84ac0eec77fc07f10bc9"
+    },
+    {
+      "label": "list_objects_0",
+      "status": 200,
+      "bytes": 638,
+      "sha256": "eaa050a5b5cadbccf545dac1cb1a9d287db005fbd1f91ec847ad1d82a771006f"
+    }
+  ],
+  "cloudDataMutations": 0,
+  "translationSubmissions": 0,
+  "secretValuesDisclosed": false,
+  "existingBucketOwned": true,
+  "applicationHash": "f5696ee28d890d199072755335f46908500e29fa0c8a53d79c4485cbc5df63c4",
+  "objectCount": 1,
+  "exactContentMatches": 0,
+  "sameNameMatches": 0,
+  "disposition": "NO_EXACT_EXISTING_OBJECT_NEW_CONVERSION_REQUIRED",
+  "currentFreeAllowanceReview": "NOT_RUN_REQUIRED_BEFORE_NEW_UPLOAD_SUBMIT"
+}

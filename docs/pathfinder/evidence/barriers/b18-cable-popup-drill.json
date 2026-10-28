@@ -1,0 +1,190 @@
+{
+  "schemaVersion": "wfc.pf.b18-popup-source-checks.v1",
+  "status": "PASS",
+  "at": "2026-10-22T09:50:15.427Z",
+  "checkedParent": "4fc1bec19788bd157b00f4ef34d9ae834a2ed201",
+  "pins": [
+    {
+      "path": "scripts/pathfinder-local/web-image-install.mjs",
+      "bytes": 5161,
+      "sha256": "16d11c756a379d4fd7fad45f68bbfe0c8dc1022ae868fca94d7d912a297525f3"
+    },
+    {
+      "path": "src/components/pathfinder/PathFinderCableRoutingPanel.test.tsx",
+      "bytes": 41809,
+      "sha256": "a0b15343ccdfac09e279fdfce16e7aa9d35b10e3f4db2f02ff9385183f9b5936"
+    },
+    {
+      "path": "src/components/pathfinder/PathFinderCableRoutingPanel.tsx",
+      "bytes": 20126,
+      "sha256": "b59a81ca8280504e789103baee2e7a7767df7f006e622b54e283965bfe08411f"
+    },
+    {
+      "path": "src/components/pathfinder/PathFinderCableWorkspace.test.tsx",
+      "bytes": 40541,
+      "sha256": "c4140943401df415d7365f300221253ab802474a72f8ee5a039ebb335a051b81"
+    },
+    {
+      "path": "src/components/pathfinder/PathFinderCableWorkspace.tsx",
+      "bytes": 29862,
+      "sha256": "e2a4c220ed934d2e782a36d324f873805013ce4d76f4f651f6ab8579f40ddbed"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderResults.test.tsx",
+      "bytes": 106604,
+      "sha256": "15099f4b8f1d247c2d5a94104f25e04a675f5273809371c79539c326eeff19e4"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderResults.tsx",
+      "bytes": 63046,
+      "sha256": "5dd12d5bf683d72b429c3cea99eeca0a32f23e586740af18c3952283ab4af4b7"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderTab.test.tsx",
+      "bytes": 106098,
+      "sha256": "a4ff171d9eb886d5d2ddc8ea32fbc69713929b7df84ed647f357402a2d90e77f"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderTab.tsx",
+      "bytes": 34110,
+      "sha256": "eb24218a46e1aa637327d719ce7f72994433ebdcbd4fe3c0db70b5d33465e51d"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/usePathFinder.ts",
+      "bytes": 31073,
+      "sha256": "9842c87b88080106a6ce50354decbd46b0596a8a83695bfa4a8b44378b401f5d"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/usePathfinderBarriers.test.tsx",
+      "bytes": 42500,
+      "sha256": "b07b3b4498fd9831d4a16105f546b5ed60153f2212786d8a090bcdc904769fc1"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/usePathfinderBarriers.ts",
+      "bytes": 25964,
+      "sha256": "d1f1d235ba26a98af86ff2f9037041b8967bb3a06255756b1cd3e4ff70b6faed"
+    },
+    {
+      "path": "src/viewer/ViewerController.test.ts",
+      "bytes": 91623,
+      "sha256": "8c101e7f903cbc5e86ee5ef2730a1c0d09e534173edc0015c52521f38183ff40"
+    },
+    {
+      "path": "src/viewer/ViewerController.ts",
+      "bytes": 58982,
+      "sha256": "b1ad82e7e6e360925de8512a0c7d56f31729f6784c0fac7e116f1a9c8633e0ed"
+    }
+  ],
+  "logs": [
+    {
+      "name": "popup-full-second.log",
+      "bytes": 21183,
+      "sha256": "bb86512a3ef5944bc824a8c5e57c7f99a9f3196647d88742e3c997493869e100"
+    },
+    {
+      "name": "popup-tab-verbose.log",
+      "bytes": 16572,
+      "sha256": "9b961112e581e5cf2e39cf5afd77cd4ee78e7ca339bf6694873720124ae689e9"
+    },
+    {
+      "name": "publication-boundary-first.log",
+      "bytes": 533,
+      "sha256": "4be469f33300e12ca92e69845b0a9ac25333504bc57720806f172b2852644a1e"
+    },
+    {
+      "name": "facade-final.log",
+      "bytes": 346,
+      "sha256": "315d6c2138c9f0b18ee1fb06c13b256b8bf61e46ec54946f69c55b35b2cb9e29"
+    },
+    {
+      "name": "popup-results-targeted.log",
+      "bytes": 726,
+      "sha256": "4c8a52e7247e6aeca89d06449e8a0be265664264419e3038d1778e748a6bc3f7"
+    },
+    {
+      "name": "popup-tab-targeted.log",
+      "bytes": 917,
+      "sha256": "aae90ae130b23f2b0d8b2127e9961c737679a9f8a9e669cecb6229541a44b08a"
+    },
+    {
+      "name": "ui-typecheck-final.log",
+      "bytes": 93,
+      "sha256": "b8eb3154847ce13af5e3a7672a976c5437a052bfd30d24dd327a019180231d04"
+    },
+    {
+      "name": "ui-lint-final.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "ui-server-build-final.log",
+      "bytes": 1799,
+      "sha256": "e9f1842c678fae76ad91e1a0236ea2dbbbecb68a9601ea2e1dc84b9f17e20dc9"
+    },
+    {
+      "name": "ui-frontend-build-final.log",
+      "bytes": 7600,
+      "sha256": "7e23ad7f7f66ee7848b12618a0f4e2754eebdca2a6d33f119aaeb909094d17c4"
+    },
+    {
+      "name": "web-installer-final.log",
+      "bytes": 1223,
+      "sha256": "dfb945aca6df2f5c7a77f92cab043c6759b0cf5edefa842febea023fdeaeb148"
+    }
+  ],
+  "uniqueVitestChecks": 473,
+  "pureInstallerChecks": 16,
+  "checks": {
+    "types": "PASS",
+    "scopedLint": "PASS",
+    "frontendBuild": "PASS",
+    "serverBuild": "PASS",
+    "independentReview": "CLEAR",
+    "browser": "NOT_RUN_SAVED_REFUSAL",
+    "actualAalborg": "NOT_RUN"
+  },
+  "interruptedRuns": [
+    "popup-first.log",
+    "popup-full-second.log"
+  ],
+  "caveat": "The second multi-file run was interrupted after Workspace/Panel/Results passed. Tab72 was then completed separately. No test count is inferred from interrupted Tab work.",
+  "latestRetainedWallDiagnostic": {
+    "requestedObjects": 28,
+    "exactDbIdNameMatches": 28,
+    "selectedClosureNodes": 28,
+    "fragments": 28,
+    "primitiveCounts": {
+      "triangles": 28
+    },
+    "vertices": 4790,
+    "triangles": 3789,
+    "rawLocalTopologyFragments": 28,
+    "localBoundaryFragments": 3,
+    "localNonmanifoldFragments": 0,
+    "localInconsistentFragments": 0,
+    "localCollapsedFragments": 0,
+    "localRepeatedFaceFragments": 0,
+    "localZeroAreaFragments": 0,
+    "fingerprint": "b5bb4fbe666b440c73bb1ffd2ee0db01be66146f8002e4a9df8dce8521db1d34",
+    "liveScopeBindingVerified": false,
+    "globalTopology": "NOT_RUN",
+    "sdk": "NOT_RUN",
+    "publicationQualification": "NOT_RUN",
+    "routingClearance": false
+  },
+  "behavior": {
+    "perCableDrillDefault": false,
+    "propagationToSharedCables": false,
+    "exactAcknowledgedJobOnly": true,
+    "unknownSubmissionNotRetried": true,
+    "currentConfigurationFence": true,
+    "prePutFailureIsNotUnknownWrite": true,
+    "genuinePriorPutUncertaintyRetained": true
+  },
+  "remaining": [
+    "durable terminal barrier refusal and historical reconciliation",
+    "paged surface/occupancy/own-terminal routing integration",
+    "actual Aalborg browser acceptance",
+    "Simplified Preparer after PathFinder"
+  ]
+}

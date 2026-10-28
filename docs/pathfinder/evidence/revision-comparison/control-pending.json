@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "wfc.pf.revision-comparison-control-receipt.v1",
+  "status": "PASS",
+  "phase": "pending",
+  "phaseIntentId": "40adcd2d-8a5b-43b3-ad23-3aed3268bd6e",
+  "checks": [
+    {
+      "name": "A later pending intent cannot be represented by comparison:null not-required authority",
+      "status": "PASS",
+      "scope": "actual rollback-only synthetic intent and production dependency reader; no producer publication"
+    }
+  ],
+  "beforeSha256": "f7d2ac0a03595c1a906e18ac1fa291864ed25f362fd797082d313a37ee0541b8",
+  "afterSha256": "f7d2ac0a03595c1a906e18ac1fa291864ed25f362fd797082d313a37ee0541b8",
+  "elapsedMilliseconds": 42,
+  "engineeringAccepted": false,
+  "productionComparisonPublicationTested": false,
+  "automaticApplyPerformed": false
+}

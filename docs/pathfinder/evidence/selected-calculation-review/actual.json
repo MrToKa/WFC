@@ -1,0 +1,146 @@
+{
+  "schemaVersion": "wfc.pathfinder.selected-calculation-review.actual.v1",
+  "at": "2026-10-20T16:11:57.967Z",
+  "worktree": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local",
+  "branch": "pf-review-scope-consistency-local-20261020",
+  "baseCommit": "e0eb4f8bf84dbfb388c6c10cb6f7b7be19867119",
+  "revisionScope": "Frozen source bytes; read Git for containing local commit.",
+  "sourceSha256": {
+    "src/pages/ProjectDetails/PathFinderResults.tsx": "f546161b1a0382eb0f49472904556cd5f2e4236d3950030efcdfbafebfa75e05",
+    "src/pages/ProjectDetails/PathFinderResults.test.tsx": "f897ff633f3e597199b30e1980b6eea370bca3b7d9362a89dbc6fbc3e404b44a",
+    "src/pages/ProjectDetails/PathFinderRevisionResults.tsx": "babf71dc289c47d7775d638f8ce2bd0f706d31052e8c236adc0d540686beac2f",
+    "src/pages/ProjectDetails/PathFinderRevisionResults.test.tsx": "859186582483cb375be1778f72a036b092cc08225a8e1748311af6e31445b008",
+    "src/pages/ProjectDetails/PathFinderTab.test.tsx": "b6657251a00d518bfc5a96c755c3f028c467abc2ad9bfa9d1e28a7fe9316c7b2"
+  },
+  "diagnosis": {
+    "status": "PASS",
+    "selectedCompletedScopeVerified": true,
+    "selectedAt": "2026-10-20T08:48:42.348Z",
+    "completedAt": "2026-10-20T09:22:33.391Z",
+    "durationMilliseconds": 2031043,
+    "calculated": 230,
+    "blocked": 1578,
+    "canApplyForExactUserResult": true,
+    "stale": false,
+    "compatible": true,
+    "observedAt": "2026-10-20T15:55:12.985Z",
+    "projectReviews": 0,
+    "projectApplies": 0,
+    "engineMode": "oneshot",
+    "performanceImprovementClaimed": false,
+    "phaseTimes": "NOT_RUN"
+  },
+  "checks": {
+    "status": "PASS",
+    "at": "2026-10-20T16:11:13.802Z",
+    "distinctTargetedTests": 64,
+    "results": 20,
+    "revisionResults": 18,
+    "revisionResultsHook": 18,
+    "affectedTabIntegration": 8,
+    "fullTabRemainder": 49,
+    "fullTabRemainderStatus": "NOT_RUN",
+    "frontendTypecheck": "PASS",
+    "backendTypecheck": "PASS",
+    "scopedEslint": "PASS",
+    "diffCheck": "PASS",
+    "independentSourceReview": "PASS after missing Open path again job argument corrected",
+    "failuresRetained": [
+      "Initial read-only diagnostic timed out waiting for its own checked-out pooled client; bounded corrected diagnostic passed and exact orphan helper was terminated.",
+      "Initial typecheck failed missing Open path again job argument; fixed and final frontend/backend typecheck passed.",
+      "Full57-case Tab attempt interrupted without results; no full-suite PASS claim.",
+      "First bounded affected Tab run6PASS/2FAIL from legacy disabled-versus-removed control assertions; test-only assertions updated to match scoped invalidation, final8/8PASS."
+    ],
+    "actualRecordedGetIntegration": {
+      "status": "PASS",
+      "tests": 1,
+      "productionComponentsAndHook": true,
+      "individualAndBatchApplyEnabledAfterStubbedReview": true,
+      "liveReviewApply": false,
+      "liveTransportCalls": 0
+    },
+    "liveBrowserRender": "NOT_RUN",
+    "reason": "Saved browser-tool refusal unchanged; no bypass attempted.",
+    "nativeParity": "NOT_RUN",
+    "humanEngineeringAcceptance": "NOT_RUN",
+    "remoteCi": "NOT_RUN"
+  },
+  "build": {
+    "status": "PASS",
+    "at": "2026-10-20T16:08:10.357Z",
+    "operatorSha256": "8c6e5a5153ba44cdf8f75c86f183609bf4ac4cbbf281117237488b979cb81193",
+    "webImage": "sha256:4bd4bda6b99e35e03d1cbcbdca80d17db9a66e871fb9e94825c16b93702d333a",
+    "sourceClosure": {
+      "status": "PASS",
+      "files": 1280,
+      "totalBytes": 94473363,
+      "sha256": "8cae1e3894cbfa0c5bed3fb8610db1b5409248aeed264d1535053b771746223e"
+    },
+    "outsideConfigurationPreserved": true,
+    "outsideRunningStateChanges": []
+  },
+  "upgrade": {
+    "status": "PASS",
+    "at": "2026-10-20T16:11:37.219Z",
+    "operatorSha256": "1989a67685fd7903f0893ed3f1f6355011d6793eecf86e3c9c059d96e6beed0c",
+    "webOnly": true,
+    "webImage": "sha256:4bd4bda6b99e35e03d1cbcbdca80d17db9a66e871fb9e94825c16b93702d333a",
+    "apiImage": "sha256:78536ccdf8050ccd732f383d09da56456e3fc9b10d9312568238577eea976f9c",
+    "apiContainerUnchanged": true,
+    "postgresAndMinioUnchanged": true,
+    "allDatabaseCables": 2153,
+    "cableRowsUnchanged": true,
+    "preexistingDatabaseApplyReceipts": 2,
+    "applyCountUnchanged": true,
+    "engineIdentityUnchanged": true,
+    "activeJobsBefore": 1,
+    "activeJobsAfter": 1,
+    "jobProgressAllowed": true,
+    "outsideConfigurationPreserved": true,
+    "outsideRunningStateChanges": [
+      {
+        "id": "f65cc58eea401f9c80de3be44342c3a6157f48fd6468a4d5a6b3df8ceeaac427",
+        "name": "/wfc-app-backend-1",
+        "beforeRunning": true,
+        "afterRunning": true,
+        "beforeStartedAt": "2026-10-20T16:10:21.868091869Z",
+        "afterStartedAt": "2026-10-20T16:11:22.478127848Z"
+      }
+    ],
+    "databaseBackup": {
+      "path": "ui-database/database.dump",
+      "bytes": 20064233,
+      "sha256": "853c5b3cb6fd5995fafbbcc99c57a76886bedbe5f525e8cba34f00fbc3d866d1",
+      "private": true,
+      "method": "Concurrent consistent pg_dump; mounted TOC verified",
+      "toc": {
+        "status": "PASS",
+        "method": "pg_restore-list-mounted-file",
+        "tocBytes": 84447,
+        "tocSha256": "cafbdb0ee6dc10681870d06e8e5b79f88cfe48e0057fb1597bfd4b0519c1cce1"
+      }
+    },
+    "newRestoreDrill": "NOT_RUN"
+  },
+  "finalReadback": {
+    "healthStatus": 200,
+    "exactRuntimeResources": true,
+    "ownedTemporaryHelpers": 0,
+    "dumpBytesAndHashReverified": true,
+    "currentExactTargetCanApply": true,
+    "currentExactTargetStale": false,
+    "productionBytesMatchFrozenBuild": true
+  },
+  "boundaries": {
+    "serverCoreProtocolChanged": false,
+    "engineModeChanged": false,
+    "newCalculationSubmitted": false,
+    "jobCancelled": false,
+    "realReviewApplyPerformed": false,
+    "original5180Controlled": false,
+    "old5190Controlled": false,
+    "pushPrMergePerformed": false,
+    "preparerOrPfAutomationResumed": false,
+    "deniedHistoricalPathsUntouched": true
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "schemaVersion":"pathfinder.current-inputs.project-resolution.v1",
+  "recordedAtUtc":"2026-10-18T15:30:24Z",
+  "decision":"retain-pinned-project-id-and-pin-observed-full-name-and-number",
+  "target":{"id":"0c0007c9-d73f-4d13-bc87-601c544727b7","projectNumber":"P230039 / H.7500062","name":"HPU Aalborg 2023"},
+  "evidence":{"diagnosticReceipt":"docs/pathfinder/evidence/current-inputs/source-project-identity-20261018T1529Z.json","receiptSha256":"3126f3ff0ca4577c0a32dde424e743e7f9e4675449aec685de57d249f5be9b35","privateRawBytes":622,"privateRawSha256":"969ccd3200a7e8176d445d26ac8b3caa3e0c12ff6abac53a57b74eb135b21ca4","targetRows":1,"boundedDiscoveryRows":3,"discoveryOverflow":false,"otherDiscoveryRowsWithNormalizedHumanNameOrPrefix":0},
+  "basis":"The pinned UUID is the project URL in the user's original Routings Viewer screenshots. Bounded actual discovery finds that same UUID with the sole HPU Aalborg name prefix, full stored year2023 and exact number. Original e1ef ProjectDetails.tsx1574 renders projectNumber — name. Earlier HPU Aalborg was a human description/lead, not the exact stored name.",
+  "change":"Update local source-copy and candidate expected identity to the exact observed full name AND project number while retaining the same UUID. No original rename, data modification, fuzzy runtime target selection or switch to another project.",
+  "remainingGuards":"Actual selected model fingerprintb5bb4fbe666b440c73bb1ffd2ee0db01be66146f8002e4a9df8dce8521db1d34 and five resource pins still required before cable read/candidate audit. No engineering acceptance inferred.",
+  "historicalAttempts":"First1515 SQL identity FAIL and1524 project identity FAIL remain unchanged; no business snapshot exists yet.",
+  "privacy":"Only the selected target's identity is recorded here; other discovered project labels remain private. No cable rows, credentials or customer fields."
+}

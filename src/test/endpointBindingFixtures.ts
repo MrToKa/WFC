@@ -1,0 +1,171 @@
+import { createHash } from 'node:crypto';
+import { canonicalPurposeJson } from '../../shared/pathfinderPurposePolicy';
+import {
+  endpointBindingContextSchema,
+  endpointBindingSchema,
+  endpointBindingWriteSchema,
+  endpointBindingHistorySchema,
+  endpointBindingReceiptSchema,
+  endpointBindingContentHashInput,
+  endpointMigrationDecisionSchema,
+  endpointMigrationContentHashInput,
+} from '../../shared/pathfinderEndpointBindings';
+export const endpointIds = {
+  project: '11111111-1111-1111-1111-111111111111',
+  model: '22222222-2222-2222-2222-222222222222',
+  location: '33333333-3333-3333-3333-333333333333',
+  aggregate: '44444444-4444-4444-4444-444444444444',
+  artifact: '55555555-5555-5555-5555-555555555555',
+  frame: '66666666-6666-6666-6666-666666666666',
+  binding: '77777777-7777-7777-7777-777777777777',
+  actor: '88888888-8888-8888-8888-888888888888',
+  key: '99999999-9999-9999-9999-999999999999',
+  trace: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+  object: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+};
+export function endpointBindingFixture() {
+  const id = endpointIds;
+  const binding = endpointBindingSchema.parse({
+    schemaVersion: 'wfc.pf.endpoint-binding.v1',
+    id: id.binding,
+    projectId: id.project,
+    locationId: id.location,
+    locationRevision: '2',
+    bindingRevision: '1',
+    locationRegistryRevision: '2',
+    modelVersionId: id.model,
+    aggregateId: id.aggregate,
+    artifactId: id.artifact,
+    projectionSha256: 'a'.repeat(64),
+    captureFrameId: id.frame,
+    qualifiedProjectFrameId: null,
+    status: 'confirmed',
+    mode: 'fixed-world',
+    pointProjectMetres: [1.25, 2, 3],
+    derivation: 'picked-surface-point',
+    sourceObject: null,
+    attachment: null,
+    sourceDecisionId: null,
+    supersedesBindingId: null,
+    legacyObservationId: null,
+    priorPointProjectMetres: null,
+    priorCaptureFrameId: null,
+    displacementBasis: 'none',
+    displacementVectorMetres: null,
+    displacementMetres: null,
+    confirmedBy: id.actor,
+    confirmedAt: '2026-10-19T00:00:00Z',
+    reason: 'Synthetic reviewed surface point',
+    contentSha256: '0'.repeat(64),
+  });
+  binding.contentSha256 = createHash('sha256')
+    .update(canonicalPurposeJson(endpointBindingContentHashInput(binding)))
+    .digest('hex');
+  const context = endpointBindingContextSchema.parse({
+    schemaVersion: 'wfc.pf.endpoint-binding-context.v1',
+    projectId: id.project,
+    locationId: id.location,
+    registryRevision: '2',
+    location: {
+      id: id.location,
+      name: 'Synthetic equipment',
+      aliases: ['Shared  alias'],
+      revision: '2',
+    },
+    current: {
+      modelVersionId: id.model,
+      selectionRevision: '1',
+      contentFingerprint: 'b'.repeat(64),
+      aggregateId: id.aggregate,
+      artifactId: id.artifact,
+      projectionSha256: 'a'.repeat(64),
+      captureFrameId: id.frame,
+      geometryRevision: '1',
+      traceId: id.trace,
+    },
+    head: binding,
+    legacy: null,
+    capabilities: [
+      { mode: 'fixed-world', supported: true, reasonCodes: [] },
+      { mode: 'object-derived', supported: true, reasonCodes: [] },
+      {
+        mode: 'object-attached',
+        supported: false,
+        reasonCodes: ['OBJECT_LOCAL_FRAME_UNAVAILABLE'],
+      },
+    ],
+    readiness: { status: 'confirmed', calculationReady: true, reasonCodes: [] },
+    usage: { fromOccurrences: 2, toOccurrences: 3, distinctCables: 4 },
+  });
+  const write = endpointBindingWriteSchema.parse({
+    schemaVersion: 'wfc.pf.endpoint-binding-write.v1',
+    expectedRegistryRevision: '1',
+    expectedLocationRevision: '1',
+    expectedHeadId: null,
+    expectedSelectionRevision: '1',
+    modelVersionId: id.model,
+    aggregateId: id.aggregate,
+    projectionSha256: 'a'.repeat(64),
+    captureFrameId: id.frame,
+    idempotencyKey: id.key,
+    reason: binding.reason,
+    location: { name: context.location!.name, aliases: context.location!.aliases },
+    mode: 'fixed-world',
+    pointProjectMetres: binding.pointProjectMetres,
+    derivation: binding.derivation,
+    provenanceObject: null,
+  });
+  const receipt = endpointBindingReceiptSchema.parse({
+    schemaVersion: 'wfc.pf.endpoint-binding-receipt.v1',
+    projectId: id.project,
+    locationId: id.location,
+    registryRevision: '2',
+    locationRevision: '2',
+    binding,
+    duplicate: false,
+  });
+  const history = endpointBindingHistorySchema.parse({
+    schemaVersion: 'wfc.pf.endpoint-binding-history.v1',
+    projectId: id.project,
+    locationId: id.location,
+    bindings: [binding],
+    nextBeforeRevision: null,
+  });
+  const migration = endpointMigrationDecisionSchema.parse({
+    schemaVersion: 'wfc.pf.endpoint-migration-decision.v1',
+    id: id.key,
+    projectId: id.project,
+    locationId: id.location,
+    sourceBindingId: binding.id,
+    sourceHeadId: binding.id,
+    expectedLocationRevision: '2',
+    expectedRegistryRevision: '2',
+    target: context.current,
+    evaluation: {
+      schemaVersion: 'wfc.pf.endpoint-migration-evaluation.v1',
+      sourceBindingId: binding.id,
+      sourcePointProjectMetres: binding.pointProjectMetres,
+      sourcePointInTargetFrameMetres: null,
+      targetPointProjectMetres: null,
+      displacementVectorMetres: null,
+      displacementMetres: null,
+      proposal: null,
+      disposition: 'frame-unverified',
+      status: 'stale',
+      reasonCodes: ['COMMON_FRAME_UNVERIFIED'],
+      candidateObjectRevisionIds: [],
+      evidenceIds: [],
+      evidenceReferences: [],
+      requiresConfirmation: true,
+      attachmentPolicyVersion: 'wfc.pf.endpoint-attachment-policy.v1',
+    },
+    createdBy: id.actor,
+    createdAt: '2026-10-19T00:00:00Z',
+    reason: 'Review carry without invented evidence',
+    contentSha256: '0'.repeat(64),
+  });
+  migration.contentSha256 = createHash('sha256')
+    .update(canonicalPurposeJson(endpointMigrationContentHashInput(migration)))
+    .digest('hex');
+  return { binding, context, write, receipt, history, migration };
+}

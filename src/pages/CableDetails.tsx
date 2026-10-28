@@ -1,4 +1,4 @@
-import { calculateAutoCableLength } from '@/utils/cableLength';
+import { CableAutoCalculatedLength } from '@/components/pathfinder/CableAutoCalculatedLength';
 import { ChangeLogTable } from '@/components/ChangeLogTable';
 import { canEditProject, canExportChangeLogs } from '@/utils/permissions';
 import type { ChangeEvent, FormEvent } from 'react';
@@ -41,7 +41,6 @@ import {
   fetchCables,
   fetchCableDetails,
   fetchCableVersions,
-  fetchTrays,
   syncCableBaseMaterials,
   type Cable,
   type CableDetails as CableDetailsData,
@@ -51,7 +50,6 @@ import {
   type CableTypeDefaultMaterial,
   type ChangeOrderSourceCatalog,
   type ProjectChangeLogEntry,
-  type Tray,
   updateCable,
   updateCableMaterial,
 } from '@/api/client';
@@ -272,7 +270,7 @@ const formatCableVersionOption = (version: CableVersion): string => {
 
 const formatCableVersionChange = (version: CableVersion): string =>
   `${version.changeType === 'create' ? 'Created' : 'Updated'} via ${
-    version.changeSource === 'import' ? 'import' : 'manual save'
+    version.changeSource === 'import' ? 'import' : version.changeSource === 'pathfinder' ? 'PathFinder apply' : 'manual save'
   }`;
 
 const dateFormatter = new Intl.DateTimeFormat(undefined, {
@@ -439,7 +437,6 @@ export const CableDetails = () => {
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [comparedVersionId, setComparedVersionId] = useState<string | null>(null);
   const [projectCables, setProjectCables] = useState<Cable[]>([]);
-  const [projectTrays, setProjectTrays] = useState<Tray[]>([]);
   const [cableTypes, setCableTypes] = useState<CableType[]>([]);
   const [catalogDialogOpen, setCatalogDialogOpen] = useState(false);
   const [addingMaterial, setAddingMaterial] = useState(false);
@@ -569,41 +566,6 @@ export const CableDetails = () => {
     };
 
     void loadProjectCables();
-
-    return () => {
-      active = false;
-    };
-  }, [projectId]);
-
-  useEffect(() => {
-    if (!projectId) {
-      setProjectTrays([]);
-      return;
-    }
-
-    let active = true;
-
-    const loadProjectTrays = async () => {
-      try {
-        const response = await fetchTrays(projectId);
-
-        if (!active) {
-          return;
-        }
-
-        setProjectTrays(response.trays);
-      } catch (err) {
-        console.error('Failed to load trays for cable auto length', err);
-
-        if (!active) {
-          return;
-        }
-
-        setProjectTrays([]);
-      }
-    };
-
-    void loadProjectTrays();
 
     return () => {
       active = false;
@@ -1157,24 +1119,6 @@ export const CableDetails = () => {
     return `Last updated ${dateFormatter.format(new Date(details.cable.updatedAt))}`;
   }, [details]);
 
-  const autoCalculatedLength = useMemo(
-    () =>
-      calculateAutoCableLength(
-        details?.cable.routing,
-        projectTrays,
-        project?.secondaryTrayLength,
-        project?.additionalBendingPercent,
-        project?.endConnectionLength,
-      ),
-    [
-      details?.cable.routing,
-      project?.secondaryTrayLength,
-      project?.additionalBendingPercent,
-      project?.endConnectionLength,
-      projectTrays,
-    ],
-  );
-
   const sourceMaterialDetails = details?.materialCableType;
   const cableTypesForDialog = useMemo(() => {
     if (!details) {
@@ -1444,7 +1388,7 @@ export const CableDetails = () => {
         <Body1 className={styles.routingText}>{formatOptionalText(details.cable.routing)}</Body1>
         <div className={styles.field}>
           <Caption1 className={styles.label}>Auto calculated length [m]</Caption1>
-          <Body1>{formatNumeric(autoCalculatedLength)}</Body1>
+          <CableAutoCalculatedLength value={details.cable} />
         </div>
       </Card>
 

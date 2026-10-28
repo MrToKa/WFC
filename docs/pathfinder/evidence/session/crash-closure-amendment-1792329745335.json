@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "pathfinder.session.crash-closure-amendment.v1",
+  "status": "PASS",
+  "checkedAt": "2026-10-18T13:22:25.334Z",
+  "supersedesAggregateOnly": {
+    "path": "docs/pathfinder/evidence/session/crash-readonly-closure-1792329683952.json",
+    "sha256": "4b120d77e6cbdb44eae3aa36a58fbc4c81cef0080c9c784b37f4ecc52e9eaa32",
+    "reason": "The previous aggregate incorrectly treated an optional unavailable replacement owner UUID as required. All saved required observations are retained unchanged."
+  },
+  "jobId": "c6cf2fad-c50e-49d8-aa40-4b8f45e2ba12",
+  "requiredChecks": {
+    "observedCountsCoherent": true,
+    "persistedCountsCoherent": true,
+    "oldOwnerFingerprintUnchanged": true,
+    "oldOwnerTypedNonNullInference": true,
+    "all64NullSafeCalculated": true,
+    "completedExactlyNewAttempt": true,
+    "durableCancelRetained": true
+  },
+  "replacementOwnerUuid": {
+    "status": "NOT_RETAINED",
+    "observedCurrentOwnerToken": null,
+    "scope": "Completed job state clears the current owner token. Actual attempts1→2 and unique completion are proved; a replacement owner UUID was not sampled while running and is not claimed."
+  },
+  "sourceReceipt": {
+    "path": "docs/pathfinder/evidence/session/crash-once-1792329583015.json",
+    "sha256": "e0c4c47bf4396f55dde7abb27e6d5f1c95b2b9f87161793bf60985484867f138"
+  },
+  "scope": "Derived scope correction over retained read-only observations; no new crash, SQL mutation, calculation, overwrite or inferred owner identity."
+}

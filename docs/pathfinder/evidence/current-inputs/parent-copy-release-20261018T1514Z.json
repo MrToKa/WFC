@@ -1,0 +1,14 @@
+{
+  "schemaVersion":"pathfinder.current-inputs.parent-release.v1",
+  "recordedAtUtc":"2026-10-18T15:14:35Z",
+  "decision":"execute-one-guarded-read-only-source-copy",
+  "executor":"/root only; source writer explicitly on standby",
+  "authority":"User's standing isolated-development/test-or-separately-copied-data authorization and committed PF-3 current-input handoff4ade614; no extra human engineering approval inferred.",
+  "sourceControls":{"file":"docs/pathfinder/evidence/current-inputs/source-controls-1792336375340.json","sha256":"7df4965cf0d1257d68e0692daa2a70f6458bfe0c805177423d6b71fd925bfee4","status":"33/33_PASS_AND_SYNTAX3_PASS","sourceSetSha256":"0fa4a1cb148310f2c9c5f77ad6b62be60a3983aabb8253482c69d0df64de5ef6"},
+  "independentSourceReview":{"file":"docs/pathfinder/evidence/current-inputs/source-review-20261018T151345Z.json","sha256":"673dbc4d875092b80ad6f5cd0761e888320c95c0d8b94892f2f9a14c50e286a0","status":"NO_REMAINING_MATERIAL_FINDINGS_SOURCE_ONLY"},
+  "inspection":{"file":"docs/pathfinder/evidence/current-inputs/source-inspection-20261018T1514Z.json","sha256":"2c7c30dadd52729c817c6d67f8e6c4f19f9adde2ad2f8edba1b2cd0c6faa471a","status":"PASS_NO_SQL"},
+  "binding":{"path":"pathfinder-engine/.scratch/current-inputs-ccf201d8-8aa3-42f4-a4f9-4a02c4611b41/binding.private.json","sha256":"c844fb99732a34f95b91b4b8ead69fc11e0c4e7d0b90bf71f0c7adf347810533"},
+  "scope":"Fixed before/copy/after repeatable-read read-only engineering projections for guarded HPU project/active model/cables. Actual SQL endpoint/transaction/project/content checks must still pass. No original app bootstrap/writes/import/Review/Apply/newjobs/restart/secret copying or retry on unexplained differences.",
+  "duplicateInspection":"A crossed independent writer3027 inspection is retained metadata-only history; it connected no database and will not be used to run a second copy.",
+  "actualSourceCopy":"NOT_RUN_AT_RELEASE"
+}

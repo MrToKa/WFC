@@ -23,6 +23,7 @@ import { authenticate, requireAdmin } from '../middleware.js';
 import { listStandardMaterialAssignments } from '../services/standardMaterialService.js';
 import { createMaterialCableTypeSchema, updateMaterialCableTypeSchema } from '../validators.js';
 import { registerStandardMaterialMutationRoutes } from './standardMaterialRoutes.js';
+import { cablePurposeInputSchema } from '../../shared/routingCablePurposes.js';
 
 const MATERIAL_CABLE_EXCEL_HEADERS = {
   name: 'Type',
@@ -514,7 +515,7 @@ materialCableTypesRouter.post(
 
       prepared.push({
         name,
-        purpose: readString(readCell(row, MATERIAL_CABLE_EXCEL_HEADER_ALIASES.purpose)),
+        purpose: cablePurposeInputSchema.parse(readString(readCell(row, MATERIAL_CABLE_EXCEL_HEADER_ALIASES.purpose))) || null,
         material: readString(readCell(row, MATERIAL_CABLE_EXCEL_HEADER_ALIASES.material)),
         description: readString(readCell(row, MATERIAL_CABLE_EXCEL_HEADER_ALIASES.description)),
         manufacturer: readString(readCell(row, MATERIAL_CABLE_EXCEL_HEADER_ALIASES.manufacturer)),

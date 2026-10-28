@@ -1,0 +1,7 @@
+{
+  "status": "PASS",
+  "files": 63,
+  "bytes": 13834192,
+  "inventorySha256": "1a60e84e60b76226ca617ca8dc2c6591120fc995ccfe60e972b20c155d409db5",
+  "scope": "Every pre-R5 PF_ROOT filename, byte count and SHA256 exact; no additions or removals."
+}

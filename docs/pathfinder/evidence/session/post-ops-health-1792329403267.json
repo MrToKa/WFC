@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "pathfinder.session.post-ops.v1",
+  "status": "PASS",
+  "checkedAt": "2026-10-18T13:16:43.267Z",
+  "api": {
+    "id": "3b02c809bac059ed210886766812ed002bfb89e95b3d18258875869b3a1c9284",
+    "name": "wfc-pathfinder-local-bf1cba239f40-api-1",
+    "image": "sha256:5cd3eca8f8a6972f038bd9766a8e5a68c1ac2cb59546d4ed96763c6de528c3f5",
+    "running": true,
+    "startedAt": "2026-10-18T13:15:38.870281964Z",
+    "exitCode": 0,
+    "oomKilled": false,
+    "platform": "linux",
+    "mounts": [
+      {
+        "type": "volume",
+        "name": "wfc-pathfinder-local-bf1cba239f40_pathfinder",
+        "destination": "/var/lib/wfc/pathfinder",
+        "writable": true
+      },
+      {
+        "type": "volume",
+        "name": "wfc-pathfinder-local-bf1cba239f40_staging",
+        "destination": "/var/lib/wfc/model-imports",
+        "writable": true
+      }
+    ]
+  },
+  "mode": "session",
+  "targetProject": "wfc-pathfinder-local-bf1cba239f40",
+  "health": {
+    "status": "ok"
+  },
+  "notes": [
+    "Actual64-job crash recovery NOT_RUN: first observation missed; one authorized improved observation raced completion before KILL. Both raw failed gates retained.",
+    "No further attempts or workload/timing changes.",
+    "Root browser window reserved before retirement."
+  ],
+  "original5190HealthStatus": 200
+}

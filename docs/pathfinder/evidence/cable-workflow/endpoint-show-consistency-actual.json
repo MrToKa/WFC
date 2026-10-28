@@ -1,0 +1,179 @@
+{
+  "format": "WFC-PF-ENDPOINT-SHOW-CONSISTENCY",
+  "at": "2026-10-21T09:50:23.1930557Z",
+  "branch": "pf-endpoint-show-consistency-local-20261021",
+  "revision": "1e844ed57926acc92f19e67a23dc78e134e55cea",
+  "cause": "Blanket proposal.stale display rejection after cable-write revision change despite exact current endpoint heads/points/model/hints",
+  "actualReadOnlyDiagnostic": {
+    "status": "PASS",
+    "scope": "Actual selected cable read-only proposal/head/command diagnostic; no login impersonation or changes",
+    "results": [
+      {
+        "status": "calculated",
+        "createdAt": "2026-10-21T09:04:29.539Z",
+        "dependencyVersion": "pathfinder.dependencies.v7",
+        "cableRevisionChanged": true,
+        "modelSelectionMatches": true,
+        "ends": [
+          {
+            "end": "from",
+            "headFound": true,
+            "mode": "fixed-world",
+            "exactHead": true,
+            "exactPoint": true,
+            "hasCurrentSavedObjectHint": true,
+            "hasSavedObjectName": true
+          },
+          {
+            "end": "to",
+            "headFound": true,
+            "mode": "fixed-world",
+            "exactHead": true,
+            "exactPoint": true,
+            "hasCurrentSavedObjectHint": true,
+            "hasSavedObjectName": true
+          }
+        ]
+      }
+    ]
+  },
+  "sourceChecks": {
+    "revision": "1e844ed57926acc92f19e67a23dc78e134e55cea",
+    "clientTypecheck": "PASS",
+    "independentResolverReview": "PASS",
+    "changedThreeTsFilesStrictLint": "PASS",
+    "runtimeTests": {
+      "failed": 0,
+      "passed": 49
+    },
+    "regressionTests": {
+      "files": 5,
+      "failed": 0,
+      "passed": 255
+    },
+    "at": "2026-10-21T09:45:55.3027641Z",
+    "status": "PASS",
+    "diffCheck": "PASS",
+    "initialJsonOnlyRun": "CANCELLED_BY_ROOT_FOR_PROGRESS_REPORTING_NO_RESULT_CLAIM"
+  },
+  "regression": {
+    "passed": 255,
+    "status": "PASS",
+    "files": 5,
+    "failed": 0
+  },
+  "runtimeTests": {
+    "passed": 49,
+    "status": "PASS",
+    "failed": 0,
+    "scope": "Actual runtime controller with synthetic SDK parent fragments; no real SDK rendering claim"
+  },
+  "productionWebBuild": "PASS",
+  "delivery": {
+    "status": "PASS",
+    "at": "2026-10-21T09:46:54.522Z",
+    "operatorSha256": "27581aa3bd2bbbe52e72310fd45257336b38431076436835f219ec4e186fc25e",
+    "sourceRevision": "1e844ed57926acc92f19e67a23dc78e134e55cea",
+    "priorWebImage": "sha256:c111ff208fffc832871d3eb0f1dc64263c912886bdbf20c95ff383e4ea17a0da",
+    "newWebImage": "sha256:4fd5982ca8c68fe40c358d16925f1f3eab1e46faf92b09a3d365e9f9da165732",
+    "newWebContainer": "6ce04783fd3b84a9c9e7ae962d8dbcb5ec58fc7bc0ea69ccc9acd03fc1a740bc",
+    "apiImage": "sha256:c5f12fb2685d169527da50586ee45614d6a2bbc28a6f976b309be72a2a77da44",
+    "apiUnchanged": true,
+    "postgresUnchanged": true,
+    "minioUnchanged": true,
+    "nonWebIdentityPreserved": true,
+    "externalProcessStateChangesObserved": true,
+    "servedRuntimeSha256": "bf4c8f76e63a04d6f08c0a618238bb5a417219433df1fc7700072363340e06a8",
+    "servedAdapterSha256": "21469bc088a33d3a3fb28a5a2d9e25b8b07cada9d5f7ff3894d877c7fd8eaadc",
+    "nativeWindowBrowserAcceptance": "NOT_RUN_SAVED_ORIGIN_REFUSAL",
+    "popupBundle": "ProjectDetails-USQ04PJG.js",
+    "assignBundle": "ProjectDetails-USQ04PJG.js",
+    "healthStatus": 200,
+    "browserAcceptance": "NOT_RUN_SAVED_ORIGIN_REFUSAL",
+    "databaseAndModelWrites": "NONE",
+    "rollback": {
+      "bytes": 55313920,
+      "sha256": "dc8a4645a5f23e467368427a3b2f696b9d5eec044006250158cc607a281e76a2"
+    }
+  },
+  "engine": {
+    "status": "PASS",
+    "identity": "ebb19973d052848e544e5d75e382f599498453375a6478ef84000c306836021d",
+    "scope": "Forced identity read from unchanged production API after static update"
+  },
+  "externalState": {
+    "status": "OBSERVED_ONLY",
+    "changes": [
+      {
+        "name": "/wfc-app-backend-1",
+        "startTimeChanged": true,
+        "sameImage": true,
+        "beforeRunning": true,
+        "afterRunning": true
+      }
+    ],
+    "scope": "External non-owned process state; identities/config preserved by activation guard; no management issued"
+  },
+  "backup": {
+    "scope": "Fresh static-web rollback and private runtime metadata only",
+    "restore": "NOT_RUN",
+    "archive": {
+      "bytes": 55313920,
+      "sha256": "dc8a4645a5f23e467368427a3b2f696b9d5eec044006250158cc607a281e76a2"
+    },
+    "fullDatabaseBackupThisTask": "NOT_RUN_STATIC_WEB_ONLY",
+    "earlierFullColdArchive": "c388f3f6-dada-4f05-9faf-6b0b9f628907"
+  },
+  "realBrowser": {
+    "status": "NOT_RUN",
+    "reason": "Unchanged saved origin refusal; no retry or native/CDP/alternate browser/origin bypass"
+  },
+  "preservation": {
+    "mathBindingsInitialFill": "UNCHANGED",
+    "sources": "READ_ONLY",
+    "saveCalculationGrantReviewApply": "NOT_ISSUED",
+    "apiPostgresMinio": "UNCHANGED",
+    "original5180And5190": "NO_MANAGEMENT_OR_WRITES_BY_TASK",
+    "reviewApplyStaleness": "UNCHANGED",
+    "newTestContainersOrServers": 0,
+    "foreignAndDeniedPaths": "UNTOUCHED",
+    "prunePushPrMerge": "NOT_ISSUED"
+  },
+  "repository": {
+    "featureCi": "NOT_RUN_UNPUBLISHED",
+    "cachedBehind": 3,
+    "liveRemoteMainLastObserved": "96e63f13fdc2b1d30b8f8ff658dd662f25fac104",
+    "featurePr": "NONE_RETURNED",
+    "cachedAhead": 138,
+    "originalMain": "96e63f13fdc2b1d30b8f8ff658dd662f25fac104",
+    "liveRemoteObservation": "2026-10-21T09:18:55.180Z",
+    "originalStatus": "CLEAN"
+  },
+  "receipts": [
+    {
+      "name": "final.json",
+      "bytes": 98388,
+      "sha256": "ba8382ea784b3d675928d99578119d2f6d702be2060bfb1b46756aa290818690"
+    },
+    {
+      "name": "runtime-tests.log",
+      "bytes": 5995,
+      "sha256": "c7d62c15f136df78af1b36c3d77ee6687c09912a388294ccc7bb02cc1bbe0ab7"
+    },
+    {
+      "name": "source-checks.json",
+      "bytes": 496,
+      "sha256": "3b71e8af65d7b93fd0f55e43c7ad93025acff9cfc4a7b95cedce9e0126de3f34"
+    },
+    {
+      "name": "actual-endpoint-diagnostic.json",
+      "bytes": 895,
+      "sha256": "b20a0af62d9a39997713c8fe2c5a2c1aea74442621ee504d26cce6d074b7fc77"
+    },
+    {
+      "name": "build-web.log",
+      "bytes": 12568,
+      "sha256": "8bb9d1ff87ec798d6a930c2ef8975ea2ee4d24fc2839e870659b0887c3458656"
+    }
+  ]
+}

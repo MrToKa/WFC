@@ -1,0 +1,105 @@
+{
+  "schemaVersion": "wfc.pf.b21-owned-delivery.v1",
+  "status": "PASS",
+  "productCommit": "67a71dc594528b4eda3e4dd10d300994537ec527",
+  "operationId": "311088ee-167b-4461-ac0e-dbbfd0c4aa26",
+  "port": 5191,
+  "installed": {
+    "apiImage": "sha256:a43cac0dce21c81760c865f5cce81b774a07ecb3aa0f15963b530afe20c152dd",
+    "webImage": "sha256:e3426832821bad6d25fd138e352aa16cb080e66a09a70f8d61e7fbdea5a8e673",
+    "imagePair": "PASS",
+    "engineIdentitySha256": "a3d28d1a61ea83a5aa451fefc48476728adf9d5fd3283131aa5bc0eefaf46e41"
+  },
+  "phases": [
+    {
+      "phase": "init",
+      "status": "PASS",
+      "receiptSha256": "633c24cff0fd16780e22afa019c2566156ab76214a088a5f236080d041fc4995"
+    },
+    {
+      "phase": "backup",
+      "status": "PASS",
+      "receiptSha256": "bfd1be22090056cb3b95b900ac42d076aecb3968c7c1144852ba94146224d24e"
+    },
+    {
+      "phase": "restore-quarantine",
+      "status": "PASS",
+      "receiptSha256": "182ddab724b4685360c56c49d72b42f07eea2b84a9d499cead98137956427f92"
+    },
+    {
+      "phase": "candidate-build",
+      "status": "PASS",
+      "receiptSha256": "7b8f87a26606a065d894ce140370ee486cc1a3934a30a777234d60796462193b"
+    },
+    {
+      "phase": "target-migration",
+      "status": "PASS",
+      "receiptSha256": "3e0ed2dd034ca6a4f3b2d5ba7de3fd09f4a868f4f7626886419501da24a5ada2"
+    },
+    {
+      "phase": "target-runtime",
+      "status": "PASS",
+      "receiptSha256": "f804c122af0cf98f87eae1eaa86b12352162d5d2b1c58241c3ae1fef4f6cb60f"
+    },
+    {
+      "phase": "update-source",
+      "status": "PASS",
+      "receiptSha256": "9c9c8e13b029b784957878dae3b7b17f744ddef000023b733e5cf267b52d4f3b"
+    },
+    {
+      "phase": "source-runtime",
+      "status": "PASS",
+      "receiptSha256": "824e912d417a929ba21cbea49b2eca5d905cf20e012aa7dbaeb2bfef0f25a5e8"
+    },
+    {
+      "phase": "retire-target",
+      "status": "PASS",
+      "receiptSha256": "c72ff66cf0b9c26f5d5def068e16a01ddaabbc532635a333c54a1e48a7dd983a"
+    }
+  ],
+  "conservation": {
+    "sourceInventory": "PASS",
+    "existingApplicationRows": "PASS",
+    "historyGlobalsAndSequences": "PASS",
+    "exactAddedTables": 1,
+    "exactAddedLookupIndexes": 2,
+    "targetRetired": "PASS"
+  },
+  "postDelivery": {
+    "receiptSha256": "99ddcc21b54e324e4c57ce337e739a8769e47bd72ca408efe8967fd1eab24d7e",
+    "health": "PASS",
+    "index": "PASS",
+    "indexSha256": "f8db9e3d7219bb39a20fa9f48ee8d6d8a9c44d78d552bbe48021ef5fe59e67a3",
+    "staticAssets": 1,
+    "staticAssetBytes": 716405,
+    "staticAssetSha256": "7d56db9488a03c493d293ec1db8b25533c68531b1930ec16016d9405639209ba"
+  },
+  "packagedLinuxAalborg": {
+    "status": "PASS",
+    "runId": "2dd6474c-a8dd-4cd3-b1a0-a3329c8c7e1c",
+    "resultSha256": "67e194f2308a760fac8d3c5cd85e00697b9bd8a912bc206db12eb13abbc689ab",
+    "apiImage": "sha256:a43cac0dce21c81760c865f5cce81b774a07ecb3aa0f15963b530afe20c152dd",
+    "captureSha256": "9dcf2027d175de5a761a582d7be493441458ea9cda7f5449c1f3f058440a7a45",
+    "verificationReceiptSha256": "d0391823260f745628fee638426755e92177d82e8bc6de97c516eab121b47373",
+    "fragments": 28,
+    "originalVertices": 4790,
+    "originalTriangles": 3789,
+    "originalSurfaceComponents": 3,
+    "qualifiedClosedSolidComponents": 25,
+    "fullWindowsReceiptParity": "PASS",
+    "sourceInputArtifactBookends": "PASS",
+    "processJoin": "PASS",
+    "helperRemoval": "PASS"
+  },
+  "acceptance": {
+    "b20MixedAndB21RecoveryInstalled": "PASS",
+    "b22PopupCorrections": "IN_PROGRESS",
+    "liveSdkCurrentFrame": "NOT_VERIFIED",
+    "realCableRouting": "NOT_VERIFIED",
+    "realCableApply": "NOT_PERFORMED",
+    "engineeringAcceptance": "NOT_GRANTED",
+    "ownTerminalExitEntry": "NOT_IMPLEMENTED",
+    "wholeModelMultipartCapacity": "NOT_VERIFIED",
+    "simplifiedPreparer": "REMAINING"
+  }
+}

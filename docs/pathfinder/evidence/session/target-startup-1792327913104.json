@@ -1,0 +1,142 @@
+{
+  "schemaVersion": "pathfinder.session.target.v1",
+  "status": "PASS",
+  "checkedAt": "2026-10-18T12:51:53.104Z",
+  "runtime": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pathfinder-local-restore-bf1cba239f40",
+  "project": "wfc-pathfinder-local-bf1cba239f40",
+  "owner": "59d9d5bc-9c8f-4b4c-b97d-bb56751e5a6e",
+  "origin": "http://127.0.0.1:5191",
+  "mode": "session",
+  "images": {
+    "api": "sha256:323f876ac757488376bcfab483934a35bb4175257a922134fa1a547f14c2227b",
+    "web": "sha256:511ba97e13046460948bf85ae3f5cdc0297658b8e95e13e1db51d3046b93e742"
+  },
+  "api": {
+    "id": "feb4345daa590021732d0f0d2219db793f1d1b2237f15a16f5caa9c662d024e4",
+    "name": "wfc-pathfinder-local-bf1cba239f40-api-1",
+    "image": "sha256:323f876ac757488376bcfab483934a35bb4175257a922134fa1a547f14c2227b",
+    "running": true,
+    "startedAt": "2026-10-18T12:50:14.041428401Z",
+    "exitCode": 0,
+    "oomKilled": false,
+    "platform": "linux",
+    "mounts": [
+      {
+        "type": "volume",
+        "name": "wfc-pathfinder-local-bf1cba239f40_staging",
+        "destination": "/var/lib/wfc/model-imports",
+        "writable": true
+      },
+      {
+        "type": "volume",
+        "name": "wfc-pathfinder-local-bf1cba239f40_pathfinder",
+        "destination": "/var/lib/wfc/pathfinder",
+        "writable": true
+      }
+    ]
+  },
+  "resources": {
+    "containers": [
+      {
+        "role": "web",
+        "id": "e9d826da4a94105b4a44d55e6757c2b3f4f4ee262f535aeef68539a5575b1354",
+        "image": "sha256:511ba97e13046460948bf85ae3f5cdc0297658b8e95e13e1db51d3046b93e742",
+        "name": "wfc-pathfinder-local-bf1cba239f40-web-1",
+        "running": true,
+        "startedAt": "2026-10-18T12:50:19.860561518Z"
+      },
+      {
+        "role": "api",
+        "id": "feb4345daa590021732d0f0d2219db793f1d1b2237f15a16f5caa9c662d024e4",
+        "image": "sha256:323f876ac757488376bcfab483934a35bb4175257a922134fa1a547f14c2227b",
+        "name": "wfc-pathfinder-local-bf1cba239f40-api-1",
+        "running": true,
+        "startedAt": "2026-10-18T12:50:14.041428401Z"
+      },
+      {
+        "role": "storage-ready",
+        "id": "b08f3c65ac979ec519771f5b853130bd60b336b448f52176591155dc2a57a1ee",
+        "image": "sha256:323f876ac757488376bcfab483934a35bb4175257a922134fa1a547f14c2227b",
+        "name": "wfc-pathfinder-local-bf1cba239f40-storage-ready-1",
+        "running": false,
+        "startedAt": "2026-10-18T12:50:13.361975191Z"
+      },
+      {
+        "role": "postgres",
+        "id": "537355846bb844629004d97ce91f8fd10dcae660646b759702c5d22d40591614",
+        "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+        "name": "wfc-pathfinder-local-bf1cba239f40-postgres-1",
+        "running": true,
+        "startedAt": "2026-10-18T12:47:47.72907359Z"
+      },
+      {
+        "role": "minio",
+        "id": "44876e1db63775fcf78ff2044451ffa92fc7bb10154d69f79e84a81cfd339cf1",
+        "image": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+        "name": "wfc-pathfinder-local-bf1cba239f40-minio-1",
+        "running": true,
+        "startedAt": "2026-10-18T12:47:47.730480702Z"
+      }
+    ],
+    "volumes": [
+      "wfc-pathfinder-local-bf1cba239f40_postgres",
+      "wfc-pathfinder-local-bf1cba239f40_minio",
+      "wfc-pathfinder-local-bf1cba239f40_staging",
+      "wfc-pathfinder-local-bf1cba239f40_pathfinder"
+    ],
+    "networks": [
+      {
+        "id": "a9b611d1e72ef635ec4a58a6a20d00a8c8c0a86a2eea95ef64549cbe8d777284",
+        "name": "wfc-pathfinder-local-bf1cba239f40_front"
+      },
+      {
+        "id": "5b31c0ad3a81791464a1cc3f491de58e1bf3d56c5e95d514f22989165021a2d1",
+        "name": "wfc-pathfinder-local-bf1cba239f40_backend"
+      }
+    ]
+  },
+  "binaries": {
+    "/opt/pathfinder/PathFinder.ModelRunner.dll": "4b940d5c8a7b72115369aa2004de4e12434ae5f4c6f14d014b8be9cc6ab3dc06",
+    "/app/server/dist/server/pathfinder/engineSession.js": "5d0dfe630d46252c98461bfb4b208d98f82437d50ebc05153fe299d7d38400a8",
+    "/app/server/dist/server/pathfinder/worker.js": "fffc9e6a74a4ac6eb1a69b66a75db29a4cf5d1f5be2dc65c3a0ebbc890f12997"
+  },
+  "restore": {
+    "backupId": "3db9fa33-c10e-4646-82bc-fe99f3d8af35",
+    "artifactsSha256": "afce4f71413a8180f0af705c92e938b6f2af43f24687ab34a2d0f374d4cd1ce1",
+    "jwtRotated": true,
+    "sessionsFenced": true,
+    "inventoriesEqual": true
+  },
+  "synthetic": {
+    "projectId": "54cfad40-bd12-41e9-ab24-d90bdaafc993",
+    "actorId": "ac288aa9-eb51-4dd6-872b-ec52dfeecbc9",
+    "idempotencyKey": "dea16581-a840-420d-81c6-77145eddf2d0",
+    "status": "seeded",
+    "createdAt": "2026-10-18T02:03:42.867Z",
+    "importId": "b646e89b-edc0-4a55-987d-b413d1985209",
+    "modelVersionId": "a856352c-b3dd-4143-a723-1f4e7d3f2cb2",
+    "seed": {
+      "scope": "local-synthetic-fixture",
+      "projectId": "54cfad40-bd12-41e9-ab24-d90bdaafc993",
+      "modelVersionId": "a856352c-b3dd-4143-a723-1f4e7d3f2cb2",
+      "cableIds": [
+        "519c4d9f-d919-435d-8f57-2c606d2259ec",
+        "a642bb9e-6ede-4200-91da-64a828f3b9fd"
+      ],
+      "artifactId": "260a7911-8906-4026-8924-9d5929155dcd",
+      "snapshotSha256": "1b1c6b0ba144dd6d0d651e4445c4a843bc7070d9861f343ca9ea00245b1ec431",
+      "registryRevision": "2",
+      "message": "Only the known synthetic 10-metre straight fixture is accepted for local demonstration. Real model engineering acceptance remains blocked."
+    },
+    "seededAt": "2026-10-18T02:04:10.426Z"
+  },
+  "health": {
+    "status": "ok"
+  },
+  "scope": {
+    "original5190Unchanged": true,
+    "defaultMode": "oneshot",
+    "modeOverrideOnlyTargetProcess": true,
+    "noApply": true
+  }
+}

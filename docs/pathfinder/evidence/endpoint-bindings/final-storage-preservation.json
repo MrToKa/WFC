@@ -1,0 +1,22 @@
+{
+  "status": "PASS",
+  "scope": "Exact existing keys/bytes/etag/lastModified. Full raw SHA scan is the separate checkpoint proof.",
+  "total": 1374,
+  "groups": [
+    {
+      "role": "project",
+      "objects": 3,
+      "sha256": "de83f284e628b85a132878edacb8e7f62678438d3051013f1455d1831879d3ea"
+    },
+    {
+      "role": "template",
+      "objects": 3,
+      "sha256": "c1d0f3f2d4e39f1cd37a37e94f132075192b02aaf958c5e2ddbdf25a948a917e"
+    },
+    {
+      "role": "model",
+      "objects": 1368,
+      "sha256": "7b0646a16e44434a3511b436fdb3c8813ed6e8708c742684a4d06087372d970b"
+    }
+  ]
+}

@@ -1,0 +1,161 @@
+{
+  "schemaVersion": "wfc.pf.u1-verification.v1",
+  "observedAt": "2026-10-20T17:25:22.360Z",
+  "branch": "pf-u1-cable-diagnostics-local-20261020",
+  "parentCommit": "5f0119a7939e0e144cfec13966103207a81fc580",
+  "status": "TECHNICAL_FOUNDATION_PASS",
+  "source": [
+    {
+      "file": "server/pathfinder/cableWorkflowCursor.test.ts",
+      "sha256": "b414919e0ea0f6edde68f564f877d100ffb9020838b313a66979dd1df3215f95"
+    },
+    {
+      "file": "server/pathfinder/cableWorkflowCursor.ts",
+      "sha256": "bd30d245f605571cc8799beabb01eb05256d32750cfda38c2dddc1052a73c6da"
+    },
+    {
+      "file": "server/pathfinder/cableWorkflowProof.test.ts",
+      "sha256": "1123f21be77c01bf1acb1fe79efb0149508af17440b3b08cd9bb1ecc3127d382"
+    },
+    {
+      "file": "server/pathfinder/cableWorkflowProof.ts",
+      "sha256": "9a6ec751a03a47177d66f44ae9783c9f14b8d37d5a9a976bb5fde151066b1855"
+    },
+    {
+      "file": "server/pathfinder/cableWorkflowRead.test.ts",
+      "sha256": "9de8a1ff7f646e0280e01314c932e330c72de694200e2f4c9346503265868d84"
+    },
+    {
+      "file": "server/pathfinder/cableWorkflowRead.ts",
+      "sha256": "a9226180eb6e0b7e01f4dbda87093cd304386b57104929dad67bfd06e1052819"
+    },
+    {
+      "file": "server/pathfinder/cableWorkflowRepository.test.ts",
+      "sha256": "5e886a7bf8e750a9e94d6e02ddbb746f009c160ab57cbf6886f03469967dbb73"
+    },
+    {
+      "file": "server/pathfinder/cableWorkflowRepository.ts",
+      "sha256": "0084871a81bf7f24ff974540870971b039e1c72a9db8c536523809143eb6ed1e"
+    },
+    {
+      "file": "server/pathfinder/cableWorkflowRoutes.test.ts",
+      "sha256": "f19c243bc001fd25a55426144d0a4d294f4f5b8aad99825d1223cbe4c72bbefc"
+    },
+    {
+      "file": "server/pathfinder/cableWorkflowRoutes.ts",
+      "sha256": "7bbcc0c712dcd7d5cafe58c6ff4f17ea406c74e6322ee3a80ce7e62502b0258d"
+    },
+    {
+      "file": "server/pathfinder/cableWorkflowSql.integration.test.ts",
+      "sha256": "45917e2dbf10dbd939db7b1fbea1117a0bf282fdcc971f877a6c6eb61e079196"
+    },
+    {
+      "file": "server/pathfinder/revisionResultSchema.ts",
+      "sha256": "0b4a17e2ef006abebfe886315189d65402023e4df8c07b8e78dbf2eb292a58cc"
+    },
+    {
+      "file": "server/routes/pathfinderRoutes.ts",
+      "sha256": "3ab8f8aaa7914e78d2d70299c355caa22337c85071e533a2f6ddc506b0863f38"
+    },
+    {
+      "file": "shared/pathfinderCableWorkflowQueries.test.ts",
+      "sha256": "314609a24a41a5485df12be59e56f0773216ab33be7ade17ff27e65c779865bd"
+    },
+    {
+      "file": "shared/pathfinderCableWorkflowQueries.ts",
+      "sha256": "ce4728584bb9ec2fd352ba0c5f0a896e809b6d75981e530b642d617c9f571b86"
+    },
+    {
+      "file": "src/api/pathfinderCableWorkflow.test.ts",
+      "sha256": "e2b7406a90710ac1e3caad651458b028bff39244a952becfa490e997530860d4"
+    },
+    {
+      "file": "src/api/pathfinderCableWorkflow.ts",
+      "sha256": "11aac9ff4994747c125437cf34d51461782181fc1e287d55a1cdeb681d100d5b"
+    },
+    {
+      "file": "src/components/pathfinder/PathFinderNeedsRoutingList.test.tsx",
+      "sha256": "9f62d7c72a959e16df9b528ab567389a59b9050f380b49c5b2bbe85d6d9271a7"
+    },
+    {
+      "file": "src/components/pathfinder/PathFinderNeedsRoutingList.tsx",
+      "sha256": "9f0fd5714b6a86ca6adaaffff08c014c37a604d1b49eee3f9e4d2795c5dc00ce"
+    },
+    {
+      "file": "src/hooks/usePathFinderCableWorkflow.test.tsx",
+      "sha256": "ba2a2dd9d9cd268756c3898f5622ea70533fd23c0c433a35e16fa7e3db8cbd10"
+    },
+    {
+      "file": "src/hooks/usePathFinderCableWorkflow.ts",
+      "sha256": "4a920c68ee6df8fcc69e12e815649701069360fac744e0c06a75277ad192e25a"
+    }
+  ],
+  "tests": {
+    "status": "PASS",
+    "tests": 212,
+    "files": 11,
+    "synthetic": 206,
+    "actualPostgresReadSlice": 6,
+    "report": "docs/pathfinder/evidence/cable-workflow/u1-tests.json",
+    "reportSha256": "a1d2b558ef86d44dfb90fd0ac70dd02f11f6d94f465b018e490b6703ac6038db",
+    "startedAt": "2026-10-20T17:22:03.081Z"
+  },
+  "typecheck": {
+    "status": "PASS",
+    "command": "npm run typecheck",
+    "frontendAndBackend": true,
+    "finalSession": 30841
+  },
+  "lint": {
+    "status": "PASS",
+    "sourceFiles": 21,
+    "finalThreeChangedFilesRechecked": true
+  },
+  "stagedWhitespace": "PASS",
+  "fixture": {
+    "owner": "cbc1a2b3-08f4-4533-83fb-fd42f7235361",
+    "id": "bd714c1a5a2800f6a49afce2673e317d82f3d94cbfd9d578f7547446b72a1355",
+    "image": "sha256:20edbde7749f822887a1a022ad526fde0a47d6b2be9a8364433605cf65099416",
+    "database": "wfc_pfu1_cbc1a2b3_08f4_4533_83fb_fd42f7235361",
+    "state": "retired",
+    "createdAt": "2026-10-20T17:17:47.617Z",
+    "retiredAt": "2026-10-20T17:23:35.943Z",
+    "generatedPrivateCredentialsRemoved": true
+  },
+  "actualSqlScope": "Real read transaction, current role/login, context, metadata, index creation, cursors and pagination in a disposable synthetic database; common engineering, endpoint and proposal-proof adapters explicitly mocked.",
+  "fixedDraftFailures": [
+    "native select label association",
+    "read source syntax",
+    "active item/common outcome contradiction",
+    "unbounded callback/auth/rollback waits",
+    "expiry/abort during commit",
+    "caught cumulative budget overflow",
+    "TS18048 nullable metadata guard"
+  ],
+  "notRun": [
+    "5191 migration/build/HTTP",
+    "live browser visual behavior",
+    "real converted-model engineering calculation",
+    "native parity",
+    "user acceptance",
+    "live remote/CI"
+  ],
+  "preserved": [
+    "5191 app and data",
+    "original5180 checkout/containers/data",
+    "old5190",
+    "read-only sources",
+    "existing models/backups",
+    "historically denied paths"
+  ],
+  "limits": {
+    "scannedCandidates": 200,
+    "matches": 100,
+    "retainedAdmissions": 10000,
+    "proofBytes": 262144,
+    "responseBytes": 8388608,
+    "readBytes": 33554432,
+    "deadlineMilliseconds": 15000
+  },
+  "next": "PF-U2 exact model object selection and shared endpoint commands/recovery; automation remains ACTIVE, Preparer PAUSED."
+}

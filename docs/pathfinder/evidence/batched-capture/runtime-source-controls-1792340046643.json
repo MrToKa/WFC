@@ -1,0 +1,218 @@
+{
+  "schemaVersion": "pathfinder.batched-capture.runtime-source-checks.v1",
+  "status": "PASS",
+  "observedAt": "2026-10-18T16:14:06.596Z",
+  "revision": "6761cb76df79392befba6ace1c4d8c685b36cfdd",
+  "branch": "pf-3-batched-capture-local-20261018",
+  "sourceState": "Owned source frozen after tests; other agents have independent uncommitted deliveries in this shared isolated checkout.",
+  "sources": [
+    {
+      "path": "viewer-runtime/capture-input.mjs",
+      "sha256": "8996f8cbe65568cc7be54009076f483b7abd351b521e8ccd3df228af58728bad",
+      "bytes": 12302
+    },
+    {
+      "path": "viewer-runtime/capture-input.d.mts",
+      "sha256": "b183bb3fd2ab4ae1f01d2e3b7584708d3fba8881186e6db1f6d0e8c3dc8773e4",
+      "bytes": 3205
+    },
+    {
+      "path": "viewer-runtime/protocol.mjs",
+      "sha256": "10aa6fa5d3073f9b5b598fe08c98f5b2e029f4e1a13da41c3d0b8c9d065c43e2",
+      "bytes": 17718
+    },
+    {
+      "path": "viewer-runtime/adapter.mjs",
+      "sha256": "12358618ea6d3b44455415861b146b125dc47a0c913d1f0cc9890c07a591e12f",
+      "bytes": 15737
+    },
+    {
+      "path": "viewer-runtime/bridge.mjs",
+      "sha256": "de0fbb03560ce54c6943fd26f31104d93bd5378bb8ba7c06f2d94af7374a8439",
+      "bytes": 21434
+    },
+    {
+      "path": "viewer-runtime/model-capture.mjs",
+      "sha256": "c0d96718910f42d4330cba15cd012d806da72a36be75e7cb38f8d27af340cf6b",
+      "bytes": 47995
+    },
+    {
+      "path": "viewer-runtime/model-capture.d.mts",
+      "sha256": "d9b8836a9bdb25b622ac97b5c56c99c2ac57250878f6d0c2006a42b5202054be",
+      "bytes": 919
+    },
+    {
+      "path": "scripts/viewer-runtime/prepare.mjs",
+      "sha256": "0abcaff533bdee4bf54a065ba3fe6c4bb6964b975e3f32145105a64c9c11c65f",
+      "bytes": 8743
+    },
+    {
+      "path": "viewer-runtime/test/capture-input.test.mjs",
+      "sha256": "ea10b984c390876c07fb180518416387c67ad0188d49f8893fbf5a70c0a546bf",
+      "bytes": 9798
+    },
+    {
+      "path": "viewer-runtime/test/adapter.test.mjs",
+      "sha256": "155094c429779d65b44e7766a347c17c880fd9bacbf6dc423d74faacada6b90e",
+      "bytes": 16635
+    },
+    {
+      "path": "viewer-runtime/test/bridge.test.mjs",
+      "sha256": "c9163d3653ef01a03be8382277edb8f8b1e676c8b1b7d7ba980d80fa5652911b",
+      "bytes": 34855
+    },
+    {
+      "path": "viewer-runtime/test/model-capture.node-test.mjs",
+      "sha256": "e39a0a01e6c121df40c51d231719d33d866f2941ab8c138e40a2a8123c6f6103",
+      "bytes": 28352
+    }
+  ],
+  "checks": {
+    "focusedRuntime": {
+      "status": "PASS",
+      "executedBy": "runtime source owner",
+      "command": "PF_MODEL_RUNNER_DLL=<fresh published DLL> node --test --test-reporter=tap viewer-runtime/test/capture-input.test.mjs viewer-runtime/test/protocol.test.mjs viewer-runtime/test/model-capture.node-test.mjs viewer-runtime/test/adapter.test.mjs viewer-runtime/test/bridge.test.mjs",
+      "tests": 97,
+      "pass": 97,
+      "fail": 0,
+      "skipped": 0,
+      "exitCode": 0,
+      "raw": {
+        "path": "docs/pathfinder/evidence/batched-capture/runtime-controls-20261018T1636Z.tap",
+        "bytes": 24350,
+        "sha256": "50c3e8b43381d4fb771166972ddebe4b803b640a581f9ac244a1f7e5d09b38e0",
+        "createdAtUtc": "2026-10-18T16:11:23.893Z",
+        "completedAtUtc": "2026-10-18T16:11:27.739Z",
+        "filenameTimeNote": "T1636Z is an inaccurate human-chosen filename label, not the observed test time; filesystem timestamps above record the actual 16:11UTC run."
+      },
+      "runner": {
+        "path": "pathfinder-engine/.scratch/capture-runner-3e6108f3-8bbd-497c-b2fe-3e3c1017c02d/runner/PathFinder.ModelRunner.dll",
+        "sha256": "5d84d7799eb95d441b427568d67f2af82a61bdc09b5420432ead7915ebb5fe97"
+      }
+    },
+    "syntax": {
+      "status": "PASS",
+      "count": 10,
+      "command": "node --check <each owned .mjs>",
+      "results": [
+        {
+          "file": "viewer-runtime/capture-input.mjs",
+          "status": "PASS",
+          "exitCode": 0,
+          "output": ""
+        },
+        {
+          "file": "viewer-runtime/protocol.mjs",
+          "status": "PASS",
+          "exitCode": 0,
+          "output": ""
+        },
+        {
+          "file": "viewer-runtime/adapter.mjs",
+          "status": "PASS",
+          "exitCode": 0,
+          "output": ""
+        },
+        {
+          "file": "viewer-runtime/bridge.mjs",
+          "status": "PASS",
+          "exitCode": 0,
+          "output": ""
+        },
+        {
+          "file": "viewer-runtime/model-capture.mjs",
+          "status": "PASS",
+          "exitCode": 0,
+          "output": ""
+        },
+        {
+          "file": "scripts/viewer-runtime/prepare.mjs",
+          "status": "PASS",
+          "exitCode": 0,
+          "output": ""
+        },
+        {
+          "file": "viewer-runtime/test/capture-input.test.mjs",
+          "status": "PASS",
+          "exitCode": 0,
+          "output": ""
+        },
+        {
+          "file": "viewer-runtime/test/adapter.test.mjs",
+          "status": "PASS",
+          "exitCode": 0,
+          "output": ""
+        },
+        {
+          "file": "viewer-runtime/test/bridge.test.mjs",
+          "status": "PASS",
+          "exitCode": 0,
+          "output": ""
+        },
+        {
+          "file": "viewer-runtime/test/model-capture.node-test.mjs",
+          "status": "PASS",
+          "exitCode": 0,
+          "output": ""
+        }
+      ]
+    }
+  },
+  "historicalAttempts": [
+    {
+      "toolChunk": "289819",
+      "tests": 75,
+      "pass": 74,
+      "fail": 1,
+      "status": "FAIL",
+      "cause": "Initial existing runtime suites used the old default ModelRunner DLL which rejected the already-supported lookupRouteCodes capture metadata. Fresh published strict DLL used for the final successful run.",
+      "rawLog": "Tool history only; no durable complete raw file claimed."
+    },
+    {
+      "toolChunk": "75c9a4",
+      "tests": 97,
+      "pass": 96,
+      "fail": 1,
+      "status": "FAIL",
+      "cause": "New synthetic staged capture fixture incorrectly asserted one SDK property call. Actual behavior is one full inventory pass plus a bounded ancestor-recovery read. Test now asserts one full six-object pass and recovery limited to known ancestor IDs; production scan behavior unchanged by this assertion fix.",
+      "retainedToolOutput": {
+        "path": "docs/pathfinder/evidence/batched-capture/runtime-controls-initial-fixture-failure-75c9a4.log",
+        "bytes": 10838,
+        "sha256": "4508aac7f9e46e5713dd7dc742f2b646ddfcbfd7874dfe41be082e51553c88c9",
+        "completeness": "Tool-returned output, potentially truncated; not claimed to be a complete TAP transcript."
+      }
+    }
+  ],
+  "retainedNamePlanner": {
+    "path": "docs/pathfinder/evidence/batched-capture/retained-planner-1792339965631.json",
+    "sha256": "18b60c0702c822778d72d4714924e9ce1b6b9fc3d529c8e5ab12d95697e9f3c9",
+    "status": "PASS",
+    "names": 1527,
+    "chunks": 6,
+    "inputAcks": 7,
+    "remainingOutputResponses": 2993,
+    "noSDK": true
+  },
+  "limits": {
+    "unchanged": [
+      "65536-byte command envelope",
+      "3000 total capture ACK plus output responses",
+      "4096 bridge lifetime command budget",
+      "300-second deadline from staged START",
+      "24KiB event /64MiB capture",
+      "SDK geometry and selected object quotas"
+    ],
+    "addedInputOnly": {
+      "names": 4096,
+      "chunks": 16,
+      "namesPerChunk": 256,
+      "canonicalScopeBytes": 1048576
+    }
+  },
+  "limitations": [
+    "Tests use synthetic SDK fixtures except read-only real-name planner partition. No actual SDK capture, application/database writes, deployment, native visibility/parity or engineering acceptance was performed by this owner.",
+    "Actual property-return omissions are retained with complete=false and unknown endpoint absence/uniqueness; compact provenance cannot reconstruct full original rule/name payloads after reload.",
+    "No second Core/math implementation or existing frozen PF-0 fixture/receipt changes.",
+    "Shared frontend/server/C# checks were executed by their respective owners, not rerun or attributed here."
+  ]
+}

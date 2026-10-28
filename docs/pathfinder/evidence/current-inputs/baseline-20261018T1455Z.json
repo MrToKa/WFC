@@ -1,0 +1,14 @@
+{
+  "schemaVersion":"pathfinder.current-inputs.baseline.v1",
+  "recordedAtUtc":"2026-10-18T14:55Z",
+  "branch":"pf-3-input-coverage-local-20261018",
+  "handoffCommit":"4ade614f15d7fcb72b82aff144bb7915adee340d",
+  "deliveryBase":"de093daf26531cfbedf3d12a3a52f5d8a3f136a1",
+  "localOriginalCheckouts":{"observedAtUtc":"2026-10-18T14:52UTC","wfc":{"branch":"main","commit":"e1ef20202598bb4d3d78e4772cbbb9747ec23a00","clean":true,"cachedAhead":0,"cachedBehind":0},"canonicalPathFinder":{"branch":"master","commit":"45c24bf5f433f13e102600b36f20327c77961d0a","clean":true,"cachedAhead":0,"cachedBehind":0},"oldPathFinder":{"branch":"master","commit":"35f4fb46f7762503576bdacd9668f34a1be2b0ed","preservedChanges":["AddinRibbon/AddinRibbon.csproj","AddinRibbon/ClAddin.cs",".vscode/"],"cachedAhead":0,"cachedBehind":0}},
+  "remote":{"configuredConnectorReadOnly":true,"observedPinsAtUtc":"2026-10-18T14:42:40.931Z","wfcMain":"e1ef20202598bb4d3d78e4772cbbb9747ec23a00","pathFinderMaster":"45c24bf5f433f13e102600b36f20327c77961d0a","newBranchPrQueryAtUtc":"2026-10-18T14:52:41.068Z","newBranchPrCount":0,"candidateCiReview":"NOT_ESTABLISHED"},
+  "automation":{"id":"pathfinder","updatedThroughApplicationTool":true,"status":"ACTIVE","rrulePreserved":"Every10minutes","targetThreadPreserved":"01a1437a-c394-7650-aae2-5d25e2573207","currentBranchHandoffAndSevenDeniedChildrenInPrompt":true,"quietOnUnchanged":true},
+  "originalDbActualRead":"NOT_RUN_HELD_FOR_GUARD_REVIEW_AND_PARENT_RELEASE",
+  "currentBusinessProjectAndCounts":"UNKNOWN",
+  "currentActiveModelLink":"UNKNOWN",
+  "scope":"Technical delivery/handoff bookkeeping and read-only repository/connector observations. No original database connection or business snapshot implied."
+}

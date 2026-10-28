@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS",
+  "scope": "Explicit separate synthetic geometry/cable acceptance fixture only.",
+  "recordedAt": "2026-10-18T02:04:10.427Z",
+  "project": "wfc-pathfinder-local",
+  "syntheticFixture": {
+    "projectId": "54cfad40-bd12-41e9-ab24-d90bdaafc993",
+    "actorId": "ac288aa9-eb51-4dd6-872b-ec52dfeecbc9",
+    "idempotencyKey": "dea16581-a840-420d-81c6-77145eddf2d0",
+    "status": "seeded",
+    "createdAt": "2026-10-18T02:03:42.867Z",
+    "importId": "b646e89b-edc0-4a55-987d-b413d1985209",
+    "modelVersionId": "a856352c-b3dd-4143-a723-1f4e7d3f2cb2",
+    "seed": {
+      "scope": "local-synthetic-fixture",
+      "projectId": "54cfad40-bd12-41e9-ab24-d90bdaafc993",
+      "modelVersionId": "a856352c-b3dd-4143-a723-1f4e7d3f2cb2",
+      "cableIds": [
+        "519c4d9f-d919-435d-8f57-2c606d2259ec",
+        "a642bb9e-6ede-4200-91da-64a828f3b9fd"
+      ],
+      "artifactId": "260a7911-8906-4026-8924-9d5929155dcd",
+      "snapshotSha256": "1b1c6b0ba144dd6d0d651e4445c4a843bc7070d9861f343ca9ea00245b1ec431",
+      "registryRevision": "2",
+      "message": "Only the known synthetic 10-metre straight fixture is accepted for local demonstration. Real model engineering acceptance remains blocked."
+    },
+    "seededAt": "2026-10-18T02:04:10.426Z"
+  },
+  "realModelEngineeringAccepted": false,
+  "originalAppWritesByThisTool": 0
+}

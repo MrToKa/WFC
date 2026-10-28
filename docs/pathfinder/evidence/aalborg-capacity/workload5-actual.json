@@ -1,0 +1,567 @@
+{
+  "schemaVersion": "wfc.pf.actual-workload-qualification.v1",
+  "at": "2026-10-20T08:02:16.217Z",
+  "sourceCheckpoint": "3a7a8ef6ced9120df4b48bc3d4f4eb8e8623b0ed",
+  "scope": "Expired immutable actual converted input; workload capacity only, not protected SQL publication, engineering acceptance or real Apply.",
+  "hardHelperControls": {
+    "memoryBytes": 2147483648,
+    "memorySwapTotalBytes": 2147483648,
+    "nanoCpus": 1000000000,
+    "pids": 128,
+    "network": "none",
+    "readonlyRoot": true,
+    "sourceVolume": false,
+    "database": false
+  },
+  "nominalWorkerHeapEnforcement": "FAIL_EXISTING_PARENT_FLAG_OVERRIDE; observed1536MiBold+192MiByoung, not512MiB",
+  "trials": [
+    {
+      "label": "trial2",
+      "mode": "union",
+      "status": "PASS",
+      "apiImage": "sha256:f6b69de4095fb372f3ea7d22b2f7a946f7fbab63fd9a0aa74986e7c4176182a3",
+      "sourcePins": [
+        {
+          "path": "scripts/pathfinder-capacity/qualify-runner.mjs",
+          "sha256": "0be1e94aac4906a5a677125239d1997f18870b9c5bc9ec222428c06120dbc643"
+        },
+        {
+          "path": "scripts/pathfinder-capacity/qualify-trace.mjs",
+          "sha256": "52a346aa9bae65bb57026ce47403b6faa41b48dd3760458be70956debc6e07e4"
+        },
+        {
+          "path": "scripts/pathfinder-capacity/qualify-supervisor.mjs",
+          "sha256": "29fc3aab872a5d1442d24fc271544498ad55ce32adf64f956dbbed5377b0439c"
+        },
+        {
+          "path": "scripts/pathfinder-capacity/process.mjs",
+          "sha256": "3f514c11d4e65cdb5e5daa05c3a663158b774c45b87a42a0633af4476419de6c"
+        },
+        {
+          "path": "scripts/pathfinder-capacity/lib.mjs",
+          "sha256": "4a5eb36b44a60c5e4b4a736f1c113e3b6f3062145103b9e2574ccca940a8d58c"
+        }
+      ],
+      "wallMilliseconds": 15918.324787,
+      "counts": {
+        "parts": 5,
+        "totalInputBytes": 114186790,
+        "expectedPhysicalLeaves": 1165,
+        "expectedEquipmentObjects": 533,
+        "objects": 2965,
+        "physicalLeaves": 1165,
+        "fragments": 4531,
+        "vertices": 1567516,
+        "triangles": 1546617,
+        "projectionBytes": 114111391,
+        "traceIndexBytes": 486272
+      },
+      "hashes": {
+        "manifestSha256": "65ed46609361371bb1138697afb464bca88ff10861a3953f821b7b48cb84bf5a",
+        "orderedPlanSha256": "7eb7e8e9db97985396d4f35090bb6cb1d7967da7984ce5d269f8efd6a3d1f606",
+        "orderedScopeSha256": "cb20b1bf1a40927089882cb857ff166211100cea92c51df52b944fd4344047ce",
+        "orderedReceiptSha256": "40e22b106d0c0d56cdaf21474b4cdd135587fe372b7a9d1c60e2e961e96c69f4",
+        "projectionSha256": "632ee32d1b6c5d23db48529f018541642a4e26bd306950e57f13013c3ed0a90b",
+        "traceIndexSha256": "9648c88cd8553bd4ded30f88aedfe7e1cc69aadda0229b664f18b071881e56ba",
+        "objectOrderSha256": "44fe0a75978003c52d045fe6dc4e1f73148f052e5aad7a9e58befa0c6f86d477"
+      },
+      "observation": null,
+      "fitting": null,
+      "cancellation": null,
+      "externalMeasurement": {
+        "status": "PASS",
+        "spawned": true,
+        "code": 0,
+        "signal": null,
+        "wallMilliseconds": 15995.618321,
+        "measurementAndCleanupWallMilliseconds": 16001.194527,
+        "outputBytes": 2440,
+        "retainedOutputBytes": 2440,
+        "outputSha256": "965d545fe0dceff7aaf12f1e5c7b438779731c016def82fc829b8e8e24fc90c0",
+        "stderrBytes": 0,
+        "sampleError": null,
+        "sampling": {
+          "intervalMilliseconds": 20,
+          "samples": 625,
+          "maxTreeRssBytes": 1325936640,
+          "maxSupervisorRssBytes": 1325936640,
+          "maxDescendantsRssBytes": 0,
+          "maxProcessCount": 1,
+          "sawDescendant": false,
+          "interpretation": "Sampled process-tree RSS estimate from sequential non-atomic /proc reads; may miss short peaks and is not an exact coincident peak. Supervisor and descendant maxima occur independently and must not be added."
+        },
+        "cleanup": {
+          "groupGone": true
+        }
+      },
+      "cgroup": {
+        "memoryPeak": "NOT_MEASURED",
+        "memoryMax": "NOT_MEASURED",
+        "memoryEvents": "NOT_MEASURED",
+        "cpuMax": "NOT_MEASURED",
+        "pidsMax": "NOT_MEASURED"
+      },
+      "helperRemoved": true,
+      "publicationInvoked": false
+    },
+    {
+      "label": "trial3",
+      "mode": "union",
+      "status": "PASS",
+      "apiImage": "sha256:f6b69de4095fb372f3ea7d22b2f7a946f7fbab63fd9a0aa74986e7c4176182a3",
+      "sourcePins": [
+        {
+          "path": "scripts/pathfinder-capacity/qualify-runner.mjs",
+          "sha256": "0be1e94aac4906a5a677125239d1997f18870b9c5bc9ec222428c06120dbc643"
+        },
+        {
+          "path": "scripts/pathfinder-capacity/qualify-trace.mjs",
+          "sha256": "52a346aa9bae65bb57026ce47403b6faa41b48dd3760458be70956debc6e07e4"
+        },
+        {
+          "path": "scripts/pathfinder-capacity/qualify-supervisor.mjs",
+          "sha256": "29fc3aab872a5d1442d24fc271544498ad55ce32adf64f956dbbed5377b0439c"
+        },
+        {
+          "path": "scripts/pathfinder-capacity/process.mjs",
+          "sha256": "3f514c11d4e65cdb5e5daa05c3a663158b774c45b87a42a0633af4476419de6c"
+        },
+        {
+          "path": "scripts/pathfinder-capacity/lib.mjs",
+          "sha256": "4a5eb36b44a60c5e4b4a736f1c113e3b6f3062145103b9e2574ccca940a8d58c"
+        }
+      ],
+      "wallMilliseconds": 20913.112932,
+      "counts": {
+        "parts": 5,
+        "totalInputBytes": 114186790,
+        "expectedPhysicalLeaves": 1165,
+        "expectedEquipmentObjects": 533,
+        "objects": 2965,
+        "physicalLeaves": 1165,
+        "fragments": 4531,
+        "vertices": 1567516,
+        "triangles": 1546617,
+        "projectionBytes": 114111391,
+        "traceIndexBytes": 486272
+      },
+      "hashes": {
+        "manifestSha256": "65ed46609361371bb1138697afb464bca88ff10861a3953f821b7b48cb84bf5a",
+        "orderedPlanSha256": "7eb7e8e9db97985396d4f35090bb6cb1d7967da7984ce5d269f8efd6a3d1f606",
+        "orderedScopeSha256": "cb20b1bf1a40927089882cb857ff166211100cea92c51df52b944fd4344047ce",
+        "orderedReceiptSha256": "40e22b106d0c0d56cdaf21474b4cdd135587fe372b7a9d1c60e2e961e96c69f4",
+        "projectionSha256": "632ee32d1b6c5d23db48529f018541642a4e26bd306950e57f13013c3ed0a90b",
+        "traceIndexSha256": "9648c88cd8553bd4ded30f88aedfe7e1cc69aadda0229b664f18b071881e56ba",
+        "objectOrderSha256": "44fe0a75978003c52d045fe6dc4e1f73148f052e5aad7a9e58befa0c6f86d477"
+      },
+      "observation": null,
+      "fitting": null,
+      "cancellation": null,
+      "externalMeasurement": {
+        "status": "PASS",
+        "spawned": true,
+        "code": 0,
+        "signal": null,
+        "wallMilliseconds": 21011.321208,
+        "measurementAndCleanupWallMilliseconds": 21018.8479,
+        "outputBytes": 2437,
+        "retainedOutputBytes": 2437,
+        "outputSha256": "92b35e5e5336f0f9ab4cb862a9d137d44398cf44ae5f9460b4a6aabffe32ec64",
+        "stderrBytes": 0,
+        "sampleError": null,
+        "sampling": {
+          "intervalMilliseconds": 20,
+          "samples": 837,
+          "maxTreeRssBytes": 1410867200,
+          "maxSupervisorRssBytes": 1410867200,
+          "maxDescendantsRssBytes": 0,
+          "maxProcessCount": 1,
+          "sawDescendant": false,
+          "interpretation": "Sampled process-tree RSS estimate from sequential non-atomic /proc reads; may miss short peaks and is not an exact coincident peak. Supervisor and descendant maxima occur independently and must not be added."
+        },
+        "cleanup": {
+          "groupGone": true
+        }
+      },
+      "cgroup": {
+        "memoryPeak": "NOT_MEASURED",
+        "memoryMax": "NOT_MEASURED",
+        "memoryEvents": "NOT_MEASURED",
+        "cpuMax": "NOT_MEASURED",
+        "pidsMax": "NOT_MEASURED"
+      },
+      "helperRemoved": true,
+      "publicationInvoked": false
+    },
+    {
+      "label": "trial5",
+      "mode": "cancel",
+      "status": "PASS",
+      "apiImage": "sha256:f6b69de4095fb372f3ea7d22b2f7a946f7fbab63fd9a0aa74986e7c4176182a3",
+      "sourcePins": [
+        {
+          "path": "scripts/pathfinder-capacity/qualify-runner.mjs",
+          "sha256": "0be1e94aac4906a5a677125239d1997f18870b9c5bc9ec222428c06120dbc643"
+        },
+        {
+          "path": "scripts/pathfinder-capacity/qualify-trace.mjs",
+          "sha256": "52a346aa9bae65bb57026ce47403b6faa41b48dd3760458be70956debc6e07e4"
+        },
+        {
+          "path": "scripts/pathfinder-capacity/qualify-supervisor.mjs",
+          "sha256": "29fc3aab872a5d1442d24fc271544498ad55ce32adf64f956dbbed5377b0439c"
+        },
+        {
+          "path": "scripts/pathfinder-capacity/process.mjs",
+          "sha256": "3f514c11d4e65cdb5e5daa05c3a663158b774c45b87a42a0633af4476419de6c"
+        },
+        {
+          "path": "scripts/pathfinder-capacity/lib.mjs",
+          "sha256": "4a5eb36b44a60c5e4b4a736f1c113e3b6f3062145103b9e2574ccca940a8d58c"
+        }
+      ],
+      "wallMilliseconds": 5002.998592,
+      "counts": {
+        "parts": 5,
+        "totalInputBytes": 114186790,
+        "expectedPhysicalLeaves": 1165,
+        "expectedEquipmentObjects": 533
+      },
+      "hashes": {
+        "manifestSha256": "65ed46609361371bb1138697afb464bca88ff10861a3953f821b7b48cb84bf5a",
+        "orderedPlanSha256": "7eb7e8e9db97985396d4f35090bb6cb1d7967da7984ce5d269f8efd6a3d1f606",
+        "orderedScopeSha256": "cb20b1bf1a40927089882cb857ff166211100cea92c51df52b944fd4344047ce",
+        "orderedReceiptSha256": "40e22b106d0c0d56cdaf21474b4cdd135587fe372b7a9d1c60e2e961e96c69f4"
+      },
+      "observation": null,
+      "fitting": null,
+      "cancellation": {
+        "spawned": true,
+        "online": true,
+        "abortRequested": true,
+        "joined": true,
+        "released": true
+      },
+      "externalMeasurement": {
+        "status": "PASS",
+        "spawned": true,
+        "code": 0,
+        "signal": null,
+        "wallMilliseconds": 5058.17162,
+        "measurementAndCleanupWallMilliseconds": 5060.508495,
+        "outputBytes": 1492,
+        "retainedOutputBytes": 1492,
+        "outputSha256": "38594acfdeee9c903570a39b1caf2e6a902baf410c2a9131834dc2a6e98a9dd9",
+        "stderrBytes": 0,
+        "sampleError": null,
+        "sampling": {
+          "intervalMilliseconds": 20,
+          "samples": 229,
+          "maxTreeRssBytes": 275558400,
+          "maxSupervisorRssBytes": 275558400,
+          "maxDescendantsRssBytes": 0,
+          "maxProcessCount": 1,
+          "sawDescendant": false,
+          "interpretation": "Sampled process-tree RSS estimate from sequential non-atomic /proc reads; may miss short peaks and is not an exact coincident peak. Supervisor and descendant maxima occur independently and must not be added."
+        },
+        "cleanup": {
+          "groupGone": true
+        }
+      },
+      "cgroup": {
+        "memoryPeak": "NOT_MEASURED",
+        "memoryMax": "NOT_MEASURED",
+        "memoryEvents": "NOT_MEASURED",
+        "cpuMax": "NOT_MEASURED",
+        "pidsMax": "NOT_MEASURED"
+      },
+      "helperRemoved": true,
+      "publicationInvoked": false
+    },
+    {
+      "label": "trial7",
+      "mode": "publisher",
+      "status": "PASS",
+      "apiImage": "sha256:f6b69de4095fb372f3ea7d22b2f7a946f7fbab63fd9a0aa74986e7c4176182a3",
+      "sourcePins": [
+        {
+          "path": "scripts/pathfinder-capacity/qualify-runner.mjs",
+          "sha256": "8f589ce6fae919b1d9d8ac2181be20e1a5c8214707fab0317ef15ccb0ba71c7e"
+        },
+        {
+          "path": "scripts/pathfinder-capacity/qualify-trace.mjs",
+          "sha256": "52a346aa9bae65bb57026ce47403b6faa41b48dd3760458be70956debc6e07e4"
+        },
+        {
+          "path": "scripts/pathfinder-capacity/qualify-supervisor.mjs",
+          "sha256": "29fc3aab872a5d1442d24fc271544498ad55ce32adf64f956dbbed5377b0439c"
+        },
+        {
+          "path": "scripts/pathfinder-capacity/process.mjs",
+          "sha256": "3f514c11d4e65cdb5e5daa05c3a663158b774c45b87a42a0633af4476419de6c"
+        },
+        {
+          "path": "scripts/pathfinder-capacity/lib.mjs",
+          "sha256": "4a5eb36b44a60c5e4b4a736f1c113e3b6f3062145103b9e2574ccca940a8d58c"
+        }
+      ],
+      "wallMilliseconds": 43185.350239,
+      "counts": {
+        "parts": 5,
+        "totalInputBytes": 114186790,
+        "expectedPhysicalLeaves": 1165,
+        "expectedEquipmentObjects": 533,
+        "fittingDiagnostics": 1484,
+        "objects": 2965,
+        "physicalLeaves": 1165,
+        "fragments": 4531,
+        "vertices": 1567516,
+        "triangles": 1546617,
+        "projectionBytes": 114111391,
+        "traceIndexBytes": 486272
+      },
+      "hashes": {
+        "manifestSha256": "65ed46609361371bb1138697afb464bca88ff10861a3953f821b7b48cb84bf5a",
+        "orderedPlanSha256": "7eb7e8e9db97985396d4f35090bb6cb1d7967da7984ce5d269f8efd6a3d1f606",
+        "orderedScopeSha256": "cb20b1bf1a40927089882cb857ff166211100cea92c51df52b944fd4344047ce",
+        "orderedReceiptSha256": "40e22b106d0c0d56cdaf21474b4cdd135587fe372b7a9d1c60e2e961e96c69f4",
+        "runnerSha256": "cf010f32fb40f1b5a766ef15aa2bcb6e951bbc55db32944639d5bec5e9339d44",
+        "projectionSha256": "632ee32d1b6c5d23db48529f018541642a4e26bd306950e57f13013c3ed0a90b",
+        "traceIndexSha256": "9648c88cd8553bd4ded30f88aedfe7e1cc69aadda0229b664f18b071881e56ba",
+        "objectOrderSha256": "44fe0a75978003c52d045fe6dc4e1f73148f052e5aad7a9e58befa0c6f86d477"
+      },
+      "observation": {
+        "mode": "oneshot",
+        "thresholdBytes": 2147483648,
+        "intervalMilliseconds": 100,
+        "observedMaximumBytes": 1175183360,
+        "samples": 187,
+        "wallMilliseconds": 18714.163139,
+        "exactPeak": false,
+        "outcome": "completed"
+      },
+      "fitting": {
+        "readiness": "needs_review",
+        "counts": {
+          "validatedBends": 91,
+          "fallbackBends": 141,
+          "validatedStraights": 761,
+          "fallbackStraights": 149,
+          "fallbackClearances": 0
+        },
+        "objectCount": 2965,
+        "segmentCount": 1165,
+        "diagnosticCount": 1484,
+        "engineeringAccepted": false
+      },
+      "cancellation": null,
+      "externalMeasurement": {
+        "status": "PASS",
+        "spawned": true,
+        "code": 0,
+        "signal": null,
+        "wallMilliseconds": 43282.76651,
+        "measurementAndCleanupWallMilliseconds": 43283.220218999995,
+        "outputBytes": 3071,
+        "retainedOutputBytes": 3071,
+        "outputSha256": "de0ac56cbddb0399201da2df07832ee8c1a62fff1c30aaf20f4fb7a189457755",
+        "stderrBytes": 0,
+        "sampleError": null,
+        "sampling": {
+          "intervalMilliseconds": 20,
+          "samples": 1750,
+          "maxTreeRssBytes": 1782202368,
+          "maxSupervisorRssBytes": 1509040128,
+          "maxDescendantsRssBytes": 1176739840,
+          "maxProcessCount": 3,
+          "sawDescendant": true,
+          "interpretation": "Sampled process-tree RSS estimate from sequential non-atomic /proc reads; may miss short peaks and is not an exact coincident peak. Supervisor and descendant maxima occur independently and must not be added."
+        },
+        "cleanup": {
+          "groupGone": true
+        }
+      },
+      "cgroup": {
+        "memoryPeak": "NOT_MEASURED",
+        "memoryMax": "NOT_MEASURED",
+        "memoryEvents": "NOT_MEASURED",
+        "cpuMax": "NOT_MEASURED",
+        "pidsMax": "NOT_MEASURED"
+      },
+      "helperRemoved": true,
+      "publicationInvoked": false
+    },
+    {
+      "label": "trial6",
+      "mode": "trace",
+      "status": "PASS",
+      "apiImage": "sha256:f6b69de4095fb372f3ea7d22b2f7a946f7fbab63fd9a0aa74986e7c4176182a3",
+      "sourcePins": [
+        {
+          "path": "scripts/pathfinder-capacity/qualify-runner.mjs",
+          "sha256": "8f589ce6fae919b1d9d8ac2181be20e1a5c8214707fab0317ef15ccb0ba71c7e"
+        },
+        {
+          "path": "scripts/pathfinder-capacity/qualify-trace.mjs",
+          "sha256": "52a346aa9bae65bb57026ce47403b6faa41b48dd3760458be70956debc6e07e4"
+        },
+        {
+          "path": "scripts/pathfinder-capacity/qualify-supervisor.mjs",
+          "sha256": "29fc3aab872a5d1442d24fc271544498ad55ce32adf64f956dbbed5377b0439c"
+        },
+        {
+          "path": "scripts/pathfinder-capacity/process.mjs",
+          "sha256": "3f514c11d4e65cdb5e5daa05c3a663158b774c45b87a42a0633af4476419de6c"
+        },
+        {
+          "path": "scripts/pathfinder-capacity/lib.mjs",
+          "sha256": "4a5eb36b44a60c5e4b4a736f1c113e3b6f3062145103b9e2574ccca940a8d58c"
+        }
+      ],
+      "wallMilliseconds": 68235.534867,
+      "counts": {
+        "parts": 5,
+        "totalInputBytes": 114186790,
+        "objects": 2965,
+        "physicalLeaves": 1165,
+        "fragments": 4531,
+        "vertices": 1567516,
+        "triangles": 1546617,
+        "captureEvidenceParts": 5,
+        "missingCaptureEvidenceParts": 0,
+        "traceObjects": 2965,
+        "fittedSegments": 1165,
+        "diagnostics": 1484,
+        "indexPages": 60,
+        "diagnosticPages": 15,
+        "fittedTraceBytes": 1971913,
+        "objectRecordsBytes": 16637964
+      },
+      "hashes": {
+        "manifestSha256": "65ed46609361371bb1138697afb464bca88ff10861a3953f821b7b48cb84bf5a",
+        "orderedPlanSha256": "7eb7e8e9db97985396d4f35090bb6cb1d7967da7984ce5d269f8efd6a3d1f606",
+        "orderedReceiptSha256": "40e22b106d0c0d56cdaf21474b4cdd135587fe372b7a9d1c60e2e961e96c69f4",
+        "unionResultSha256": "f6e3d13b740d67e4c8ddeede2f2f39ab65cc64262996be7976f3507c1988cf94",
+        "unionSupervisionSha256": "d310bece416285c5155b887e8c23930f9b44552106930cb59d0011368d3f9e5a",
+        "projectionSha256": "632ee32d1b6c5d23db48529f018541642a4e26bd306950e57f13013c3ed0a90b",
+        "traceIndexSha256": "9648c88cd8553bd4ded30f88aedfe7e1cc69aadda0229b664f18b071881e56ba",
+        "traceInputSha256": "2af12735ab9fbae2330cf9ea39611cec24fcb2fd1af0a5988315e0735ec6ff45",
+        "derivationSha256": "0486140ba2b1d98afa4afbd1450ce7eb93f4f241f99762189c17ae96735d131a",
+        "runnerSha256": "cf010f32fb40f1b5a766ef15aa2bcb6e951bbc55db32944639d5bec5e9339d44",
+        "fittedTraceSha256": "8aa798e4e4d097fc83b6eae33af2f5ab2cfd9ace2cc6f9ee62460684806c67a0",
+        "traceManifestBlobSha256": "49af2cfd65f7244766ed03a414e0c9b24ac69680f84be2d6edf1e0f47614d3bf",
+        "traceManifestContentSha256": "842cde025e5bab812c0092878d8a5ffcb3f1955aab59b2f4ba56a3af682de87f",
+        "objectRecordsSha256": "28aca1b8e58ad86fd482c5ca5ad87ec5a128303c497a5b8d280421520b86e036",
+        "objectIndexSha256": "62eff8563167e3364957080125260fefb08e594e4915c6f87b3c36a949659056",
+        "objectOrderSha256": "44fe0a75978003c52d045fe6dc4e1f73148f052e5aad7a9e58befa0c6f86d477"
+      },
+      "observation": null,
+      "fitting": null,
+      "cancellation": null,
+      "externalMeasurement": {
+        "status": "PASS",
+        "spawned": true,
+        "code": 0,
+        "signal": null,
+        "wallMilliseconds": 68346.412158,
+        "measurementAndCleanupWallMilliseconds": 68361.132765,
+        "outputBytes": 3713,
+        "retainedOutputBytes": 3713,
+        "outputSha256": "fe58632648be5fdd4130334835eeef00ae91f42539fdd11835f3da7c0a6376f5",
+        "stderrBytes": 0,
+        "sampleError": null,
+        "sampling": {
+          "intervalMilliseconds": 20,
+          "samples": 2981,
+          "maxTreeRssBytes": 1356582912,
+          "maxSupervisorRssBytes": 1137029120,
+          "maxDescendantsRssBytes": 1181155328,
+          "maxProcessCount": 3,
+          "sawDescendant": true,
+          "interpretation": "Sampled process-tree RSS estimate from sequential non-atomic /proc reads; may miss short peaks and is not an exact coincident peak. Supervisor and descendant maxima occur independently and must not be added."
+        },
+        "cleanup": {
+          "groupGone": true
+        }
+      },
+      "cgroup": {
+        "memoryPeak": "NOT_MEASURED",
+        "memoryMax": "NOT_MEASURED",
+        "memoryEvents": "NOT_MEASURED",
+        "cpuMax": "NOT_MEASURED",
+        "pidsMax": "NOT_MEASURED"
+      },
+      "helperRemoved": true,
+      "publicationInvoked": false
+    }
+  ],
+  "arrival": {
+    "status": "PASS",
+    "hashes": {
+      "manifestSha256": "65ed46609361371bb1138697afb464bca88ff10861a3953f821b7b48cb84bf5a",
+      "orderedPlanSha256": "7eb7e8e9db97985396d4f35090bb6cb1d7967da7984ce5d269f8efd6a3d1f606",
+      "orderedScopeSha256": "cb20b1bf1a40927089882cb857ff166211100cea92c51df52b944fd4344047ce",
+      "orderedReceiptSha256": "40e22b106d0c0d56cdaf21474b4cdd135587fe372b7a9d1c60e2e961e96c69f4",
+      "projectionSha256": "632ee32d1b6c5d23db48529f018541642a4e26bd306950e57f13013c3ed0a90b",
+      "traceIndexSha256": "9648c88cd8553bd4ded30f88aedfe7e1cc69aadda0229b664f18b071881e56ba",
+      "objectOrderSha256": "44fe0a75978003c52d045fe6dc4e1f73148f052e5aad7a9e58befa0c6f86d477"
+    },
+    "counts": {
+      "parts": 5,
+      "totalInputBytes": 114186790,
+      "expectedPhysicalLeaves": 1165,
+      "expectedEquipmentObjects": 533,
+      "objects": 2965,
+      "physicalLeaves": 1165,
+      "fragments": 4531,
+      "vertices": 1567516,
+      "triangles": 1546617,
+      "projectionBytes": 114111391,
+      "traceIndexBytes": 486272
+    }
+  },
+  "priorFittingRefusal": {
+    "label": "trial4",
+    "status": "FAIL",
+    "code": "ENGINE_RSS_UNAVAILABLE",
+    "preciseCause": "NOT_ESTABLISHED",
+    "oomKilled": false,
+    "helperRemoved": true
+  },
+  "diagnosticSource": {
+    "status": "SOURCE_VERIFIED",
+    "tests": 22,
+    "serverTypes": "PASS",
+    "focusedLint": "PASS",
+    "pins": [
+      {
+        "path": "server/pathfinder/engine.ts",
+        "sha256": "4bd31c0cb8cd472721db732ff5dedeeb0bc39bcd54057dcf025f70cb4cba4a49"
+      },
+      {
+        "path": "server/pathfinder/engine-preparation.test.ts",
+        "sha256": "6c6a0a45550fcf94b150a716ea4f253deb8f9ff6cba54e5e7ef5ae1b95e559db"
+      },
+      {
+        "path": "server/pathfinder/engineResources.ts",
+        "sha256": "793d0bc1a6724205d3584bbb5903b11cdebd50fefbf428d0299d31fb813a0a25"
+      },
+      {
+        "path": "server/pathfinder/engineResources.test.ts",
+        "sha256": "c36c6f8b7ce566044ccf4c41383c22cddc204bde55454faf9128c0e1f7a358e8"
+      },
+      {
+        "path": "scripts/pathfinder-capacity/qualify-runner.mjs",
+        "sha256": "8f589ce6fae919b1d9d8ac2181be20e1a5c8214707fab0317ef15ccb0ba71c7e"
+      }
+    ],
+    "behaviorChanges": false
+  },
+  "normalProtectedPublication": "NOT_RUN",
+  "normalTrace": "NOT_RUN",
+  "realCableProposals": "NOT_RUN",
+  "realApply": "NOT_RUN",
+  "nativeParity": "not-performed",
+  "engineeringAccepted": false,
+  "originalApplicationChanged": false
+}

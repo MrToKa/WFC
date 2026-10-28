@@ -1,0 +1,79 @@
+{
+  "schemaVersion": "pathfinder.ui-preservation.quiescence.v1",
+  "status": "PASS",
+  "recordedAt": "2026-10-18T14:27:00.193Z",
+  "target": {
+    "owner": "7fa65ffa-ef34-46a7-b4c1-55cd19f8fa74",
+    "apiId": "acc437aeb807a88a31903d4f83b0701053e408dbe8d3aeab9abe6c3366a1a1c0"
+  },
+  "scope": "Observed stable read-only workflow/job state across >15-second automatic scan cadence; no permanent-silence claim.",
+  "durationMilliseconds": 19893,
+  "stableMilliseconds": 19578,
+  "observations": [
+    {
+      "observedAt": "2026-10-18T14:26:40.615Z",
+      "file": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\ui-preservation-c43b7c81-a9cc-4eca-a349-ef06a6c9f338\\quiet-1792333600615.private.json",
+      "bytes": 1345,
+      "sha256": "71dd73d87df0f1cb75c079bfd3df9d8bd2d1b0fcf8be098fc88e6957848e264a",
+      "quiet": true,
+      "stateSha256": "35166b9798748385cb29cfd0becee280323cfce32e4a9d5881d14868768b7874"
+    },
+    {
+      "observedAt": "2026-10-18T14:26:43.003Z",
+      "file": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\ui-preservation-c43b7c81-a9cc-4eca-a349-ef06a6c9f338\\quiet-1792333603003.private.json",
+      "bytes": 1345,
+      "sha256": "71dd73d87df0f1cb75c079bfd3df9d8bd2d1b0fcf8be098fc88e6957848e264a",
+      "quiet": true,
+      "stateSha256": "35166b9798748385cb29cfd0becee280323cfce32e4a9d5881d14868768b7874"
+    },
+    {
+      "observedAt": "2026-10-18T14:26:45.391Z",
+      "file": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\ui-preservation-c43b7c81-a9cc-4eca-a349-ef06a6c9f338\\quiet-1792333605391.private.json",
+      "bytes": 1345,
+      "sha256": "71dd73d87df0f1cb75c079bfd3df9d8bd2d1b0fcf8be098fc88e6957848e264a",
+      "quiet": true,
+      "stateSha256": "35166b9798748385cb29cfd0becee280323cfce32e4a9d5881d14868768b7874"
+    },
+    {
+      "observedAt": "2026-10-18T14:26:47.775Z",
+      "file": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\ui-preservation-c43b7c81-a9cc-4eca-a349-ef06a6c9f338\\quiet-1792333607775.private.json",
+      "bytes": 1345,
+      "sha256": "71dd73d87df0f1cb75c079bfd3df9d8bd2d1b0fcf8be098fc88e6957848e264a",
+      "quiet": true,
+      "stateSha256": "35166b9798748385cb29cfd0becee280323cfce32e4a9d5881d14868768b7874"
+    },
+    {
+      "observedAt": "2026-10-18T14:26:50.138Z",
+      "file": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\ui-preservation-c43b7c81-a9cc-4eca-a349-ef06a6c9f338\\quiet-1792333610138.private.json",
+      "bytes": 1345,
+      "sha256": "71dd73d87df0f1cb75c079bfd3df9d8bd2d1b0fcf8be098fc88e6957848e264a",
+      "quiet": true,
+      "stateSha256": "35166b9798748385cb29cfd0becee280323cfce32e4a9d5881d14868768b7874"
+    },
+    {
+      "observedAt": "2026-10-18T14:26:52.496Z",
+      "file": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\ui-preservation-c43b7c81-a9cc-4eca-a349-ef06a6c9f338\\quiet-1792333612496.private.json",
+      "bytes": 1345,
+      "sha256": "71dd73d87df0f1cb75c079bfd3df9d8bd2d1b0fcf8be098fc88e6957848e264a",
+      "quiet": true,
+      "stateSha256": "35166b9798748385cb29cfd0becee280323cfce32e4a9d5881d14868768b7874"
+    },
+    {
+      "observedAt": "2026-10-18T14:26:54.894Z",
+      "file": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\ui-preservation-c43b7c81-a9cc-4eca-a349-ef06a6c9f338\\quiet-1792333614894.private.json",
+      "bytes": 1345,
+      "sha256": "71dd73d87df0f1cb75c079bfd3df9d8bd2d1b0fcf8be098fc88e6957848e264a",
+      "quiet": true,
+      "stateSha256": "35166b9798748385cb29cfd0becee280323cfce32e4a9d5881d14868768b7874"
+    },
+    {
+      "observedAt": "2026-10-18T14:26:57.260Z",
+      "file": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\ui-preservation-c43b7c81-a9cc-4eca-a349-ef06a6c9f338\\quiet-1792333617260.private.json",
+      "bytes": 1345,
+      "sha256": "71dd73d87df0f1cb75c079bfd3df9d8bd2d1b0fcf8be098fc88e6957848e264a",
+      "quiet": true,
+      "stateSha256": "35166b9798748385cb29cfd0becee280323cfce32e4a9d5881d14868768b7874"
+    }
+  ],
+  "targetRetired": false
+}

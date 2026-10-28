@@ -1,0 +1,173 @@
+{
+  "schemaVersion": "pathfinder.lookup.source-verification.v1",
+  "recordedAtUtc": "2026-10-18T09:32:42Z",
+  "worktree": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local",
+  "branch": "pf-path-lookup-local-20261018",
+  "baseRevision": "9e6561e33ccf9ab535fb2184c858ecd20240071d",
+  "revisionScope": "Uncommitted source frozen for parent review and candidate commit/build.",
+  "status": "PASS",
+  "checks": [
+    {
+      "name": "Focused source/transport and fresh real production Node to .NET process tests",
+      "status": "PASS",
+      "passed": 106,
+      "total": 106,
+      "files": 8,
+      "command": "PF_LOOKUP_ENGINE_DLL=<fresh Viewer-owned DLL below> npx vitest run server/pathfinder/lookups.test.ts server/pathfinder/lookup-transport.test.ts server/pathfinder/storage-digest.test.ts server/pathfinder/lookup-engine.test.ts server/pathfinder/previews.test.ts server/pathfinder/settings.test.ts server/pathfinder/matching.test.ts server/pathfinder/worker-retained.test.ts --maxWorkers=2",
+      "actualResult": {
+        "chunk_id": "b7aeee",
+        "wall_time_seconds": 6.19618,
+        "exit_code": 0,
+        "original_token_count": 375,
+        "output": "\n RUN  v3.2.4 C:/Users/todor.chankov/source/WFC-pathfinder-local\n\n ✓ server/pathfinder/lookups.test.ts (27 tests) 77ms\n ✓ server/pathfinder/lookup-transport.test.ts (3 tests) 87ms\n ✓ server/pathfinder/lookup-engine.test.ts (5 tests) 2487ms\n   ✓ new dedicated lookup DTO through production Node and an explicitly selected fresh .NET worker > fits the mathematical fixture and returns exact 10m plus immutable lookup scope and used gap  347ms\n   ✓ new dedicated lookup DTO through production Node and an explicitly selected fresh .NET worker > keeps exact native reversal and SECONDARY/duplicate semantics  737ms\n   ✓ new dedicated lookup DTO through production Node and an explicitly selected fresh .NET worker > refuses a different requested capture scope instead of looking outside its immutable inventory  378ms\n   ✓ new dedicated lookup DTO through production Node and an explicitly selected fresh .NET worker > refuses dedicated lookup geometry for both planning preparation and cable calculation  765ms\n ✓ server/pathfinder/previews.test.ts (25 tests) 27ms\n ✓ server/pathfinder/matching.test.ts (20 tests) 12ms\n ✓ server/pathfinder/settings.test.ts (15 tests) 9ms\n ✓ server/pathfinder/storage-digest.test.ts (2 tests) 5ms\n ✓ server/pathfinder/worker-retained.test.ts (9 tests) 4ms\n\n Test Files  8 passed (8)\n      Tests  106 passed (106)\n   Start at  12:30:25\n   Duration  4.36s (transform 888ms, setup 1.15s, collect 2.45s, tests 2.71s, environment 1ms, prepare 567ms)\n\n"
+      }
+    },
+    {
+      "name": "Server TypeScript",
+      "status": "PASS",
+      "command": "npx tsc --noEmit -p server/tsconfig.json",
+      "actualResult": {
+        "chunk_id": "c7ec34",
+        "wall_time_seconds": 9.4673086,
+        "exit_code": 0,
+        "original_token_count": 0,
+        "output": ""
+      },
+      "additional": "Repeated after adding the read-only audit helper; no diagnostics."
+    },
+    {
+      "name": "Scoped ESLint including owned server files and tests",
+      "status": "PASS",
+      "actualResult": {
+        "chunk_id": "ff64eb",
+        "wall_time_seconds": 9.4847028,
+        "exit_code": 0,
+        "original_token_count": 0,
+        "output": ""
+      },
+      "additional": "Audit helper, focused integration driver and process suite also checked after their final additions."
+    },
+    {
+      "name": "git diff --check",
+      "status": "PASS",
+      "detail": "No whitespace errors. Git emitted normal LF/CRLF conversion warnings."
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "server/app.ts",
+      "sha256": "09bbfb341f495a4f8d1a5e398427db0f85d7b1198bfdfbc1028a2a25c3d4bf2e"
+    },
+    {
+      "path": "server/routes/pathfinderRoutes.ts",
+      "sha256": "772accd194195882693bc2c2053dd1dccc7cb917be542aa5833ab533d2ec8095"
+    },
+    {
+      "path": "server/pathfinder/contracts.ts",
+      "sha256": "341794e09e1cc49465319a34f9955687ed2694a48f7dac2c9bde1f0564c442a2"
+    },
+    {
+      "path": "server/pathfinder/jobContracts.ts",
+      "sha256": "98d3b0f17a23d8c8a1659e725b9844d7440fd3c06db6dc3810e8a5a86f58f6cb"
+    },
+    {
+      "path": "server/pathfinder/lookups.ts",
+      "sha256": "e458cb5388ea3f07f8011a14f6acf4d10ca7fc7410c68afae501d6c4ee4d70a8"
+    },
+    {
+      "path": "server/pathfinder/repository.ts",
+      "sha256": "8e0f022a1104ab5f61fea26a1f9bd788cb46cf52f60400af70277cb9806c4038"
+    },
+    {
+      "path": "server/pathfinder/schema.ts",
+      "sha256": "f986dbba12e8197232b2718906f7d1fc801f496f3cfc4f23283b1fb65d36b06b"
+    },
+    {
+      "path": "server/pathfinder/storage.ts",
+      "sha256": "1b80beea5c4ac3d12232b0f796973335e1299b6d4bc4dc810d314f779eb0ec46"
+    },
+    {
+      "path": "server/pathfinder/worker.ts",
+      "sha256": "6c5806b03b864645cf27709f81b5104937d80db946cc53e1f755a5415390c718"
+    },
+    {
+      "path": "server/pathfinder/previews.ts",
+      "sha256": "7f823642bc5dd74dbb8aba740ee0b48b7752ea2df7500d60d95edbe7a8e5c75a"
+    },
+    {
+      "path": "server/pathfinder/lookups.test.ts",
+      "sha256": "e3b2c1a5d36c6d0273f4634a99bd188900afebdb9bfc6f5054946a7e61e9ffe7"
+    },
+    {
+      "path": "server/pathfinder/lookup-transport.test.ts",
+      "sha256": "2ec7217013e4b3ef4665ff9dff29745f425318465d3ad0bee8534319c4e598ff"
+    },
+    {
+      "path": "server/pathfinder/storage-digest.test.ts",
+      "sha256": "c98353f1c970f28c13e6bb3fd1c2fbcf74c1999c910c0f1107735e51fa656114"
+    },
+    {
+      "path": "server/pathfinder/lookup-engine.test.ts",
+      "sha256": "31c2a5e9c0b7a2791068ce7cdf7fde0f084407d1960760baa9e87815da9dc661"
+    },
+    {
+      "path": "server/pathfinder/lookupFixture.ts",
+      "sha256": "859d95c2cd01e879900373ebd5ca8b0cb4984c4047e0559d6fc62a538875d54e"
+    },
+    {
+      "path": "server/pathfinder/lookup.integration.ts",
+      "sha256": "6675c5fc72e6ca1dafd5e9c5ea8f1fe8f90415d5d40e9fbe7d65656c36b19111"
+    },
+    {
+      "path": "docker/pathfinder.nginx.conf",
+      "sha256": "59fda9eead80aaac29578acd54b0e1d6197d9711b3387787070a6b9ffba66111"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/lookup-third-tab-355e3adcdc474ac1957b986740f34df6/artifacts/bin/PathFinder.ModelRunner/release/PathFinder.ModelRunner.dll",
+      "sha256": "cc6bc580316ec7c658c00e892a6914bc5209d07eed6ad13d72fb3dafe1bac129"
+    },
+    {
+      "path": "server/pathfinder/lookupAudit.ts",
+      "sha256": "8fb1f532824ceec4cb50dc68738eafd788b56ecfdcb860f901218345121c8896"
+    }
+  ],
+  "implemented": [
+    "Private pinned-C# parser endpoint; distinct immutable capture scope.",
+    "Server-owned planning|lookup artifact purpose; planning latest excludes lookup.",
+    "Independent capture/job dependencies, current auth/model/gap/revision fences.",
+    "Exact lookup SHA reuse only within current project/model/fingerprint/purpose plus file-integrity validation.",
+    "Lookup snapshots cannot become planning imports or standalone calculations.",
+    "Frozen used gap, distinct returned geometry leaves, scoped fallback diagnostics and optional immutable C# lookup scope.",
+    "Lookup worker and GET recheck immutable snapshot file integrity.",
+    "Exact scoped large-body route: existing current admin/project/login before buffering; 256 MiB bound; /lookups/plan remains small."
+  ],
+  "transportEvidence": [
+    "Headers-only anonymous/demoted/revoked/missing-project requests rejected before body bytes.",
+    "Authorized headers-only >256 MiB capture rejected immediately with 413.",
+    "Valid >100 KiB capture reaches mocked lookup service through actual Express app.",
+    "Same large body at /lookups/plan receives 413."
+  ],
+  "liveIntegration": {
+    "status": "NOT_RUN",
+    "reason": "Awaiting explicit parent exclusive runtime release after source checkpoint/build.",
+    "driver": "server/pathfinder/lookup.integration.ts",
+    "compiledCommand": "node server/dist/server/pathfinder/lookup.integration.js 54cfad40-bd12-41e9-ab24-d90bdaafc993",
+    "expectedChecks": 10,
+    "scope": "Existing owned synthetic fixture only; no Apply. Before/after planning/registry/location/binding/cable/Apply invariants and own resources cleaned.",
+    "noPlanningArtifactLiveCase": "NOT_RUN intentionally: existing immutable planning history is preserved; source tests prove no planning artifact/registry required."
+  },
+  "readOnlyAudit": {
+    "helper": "server/pathfinder/lookupAudit.ts",
+    "compiledCommand": "node server/dist/server/pathfinder/lookupAudit.js 105913f0-7ee4-45f2-bfd8-2c01f9be9f2a",
+    "scope": "Repeatable read-only transaction; compact SHA256/counts for planning artifacts, registry, locations/aliases/bindings, model objects, cables, proposals, reviews and Apply receipts."
+  },
+  "isolation": {
+    "originalCheckouts": "Not edited or built by this agent.",
+    "originalInstallation": "No container/runtime/live DB changes by this agent.",
+    "temporaryResources": "Five process tests created then successfully removed only a fresh owned lookup-node-* scratch directory.",
+    "previouslyDeniedScratchChildren": "Not targeted or retried.",
+    "pushPrMerge": false,
+    "nativeParity": "NOT_PERFORMED",
+    "userAcceptance": "Not asserted"
+  }
+}

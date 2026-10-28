@@ -1,0 +1,294 @@
+{
+  "schemaVersion": "pathfinder.drawing-positioning.source-closure.v1",
+  "status": "PASS",
+  "observedAt": "2026-10-18T23:56:57.967Z",
+  "candidate": {
+    "branch": "pf-r2a-drawing-positioning-local-20261019",
+    "head": "4832f9500a8c80f4e3571d2ace31989662bbbd7e",
+    "cachedAheadBehind": "48\t0",
+    "upstream": "NONE"
+  },
+  "repositories": {
+    "originalWfc": {
+      "path": "C:/Users/todor.chankov/source/WFC",
+      "head": "e1ef20202598bb4d3d78e4772cbbb9747ec23a00",
+      "branch": "main",
+      "workingChanges": "",
+      "cachedAheadBehind": "0\t0",
+      "matchesBaseline": true
+    },
+    "canonicalPathFinder": {
+      "path": "C:/Users/todor.chankov/.codex/.chatgpt-projects/g-p-6ad0a317833c8191bf8e4e8c824a1056/work/review-pathfinder",
+      "head": "45c24bf5f433f13e102600b36f20327c77961d0a",
+      "branch": "master",
+      "workingChanges": "",
+      "cachedAheadBehind": "0\t0",
+      "matchesBaseline": true
+    },
+    "olderPathFinder": {
+      "path": "C:/Users/todor.chankov/source/repos/MrToKa/PathFinder",
+      "head": "35f4fb46f7762503576bdacd9668f34a1be2b0ed",
+      "branch": "master",
+      "workingChanges": "M AddinRibbon/AddinRibbon.csproj\n M AddinRibbon/ClAddin.cs\n?? .vscode/",
+      "cachedAheadBehind": "0\t0",
+      "matchesBaseline": true
+    }
+  },
+  "frozenUnchanged": 23,
+  "referenceRegenerated": false,
+  "intentionallyMutableDrawingBaseline": "reference-reconciliation.json",
+  "checks": {
+    "tests": 622,
+    "testFiles": 31,
+    "typecheck": "PASS",
+    "lintFiles": 56,
+    "lint": "PASS",
+    "actualSqlHttpControls": 15,
+    "actualCleanup": "PASS",
+    "realTrayMetrics": {
+      "trays": 330,
+      "ready": 330,
+      "blocked": 0,
+      "elapsedMs": 19307.96943
+    }
+  },
+  "independentReview": {
+    "status": "PASS_SOURCE_REVIEW",
+    "scope": "export authority/dependency fences, immutable proof v2, shared report consistency, bounded fixture cleanup/XLSX assertion",
+    "noEngineeringAcceptance": true
+  },
+  "sourceFiles": [
+    {
+      "path": "scripts/pathfinder-drawing-positioning/actual-controls.mjs",
+      "sha256": "2f433df02335ba521274d6505d13359aa02b73603a6ba81d5e89be246985eed1"
+    },
+    {
+      "path": "server/pathfinder/drawingAccess.test.ts",
+      "sha256": "264e143a448da7ed2f120c8836b352a14d6943d020da36bf9420269c9e31152c"
+    },
+    {
+      "path": "server/pathfinder/drawingAccess.ts",
+      "sha256": "f2f8a55519a4674fdcca5484f67efac31c6c4ab7d14e1a5c961c6aa0a6dfdb5a"
+    },
+    {
+      "path": "server/pathfinder/drawingExportStage.test.ts",
+      "sha256": "d4b7e8e4bb8f60a97065dd11dc591c50464538a74000111c90172d65db339e27"
+    },
+    {
+      "path": "server/pathfinder/drawingExports.test.ts",
+      "sha256": "53c7c1265b6cf0d48624cd0e08511be5fb0a1838167c2b4dc6a188af9819e44c"
+    },
+    {
+      "path": "server/pathfinder/drawingExports.ts",
+      "sha256": "90a82eae0410de89e14127177e5411fb18d9bbaaca506a7987d2cff09622d809"
+    },
+    {
+      "path": "server/pathfinder/drawingPolicy.test.ts",
+      "sha256": "b05afb7de1cbf4a87c2f79e7d0d17c5f399fc5d04d71d19eb76f97bf98887f7d"
+    },
+    {
+      "path": "server/pathfinder/drawingPolicy.ts",
+      "sha256": "320a8c0f296047ce72a86804f0d07f6499df096a325e9711022626b85507bf7b"
+    },
+    {
+      "path": "server/pathfinder/drawingPolicyRoutes.test.ts",
+      "sha256": "b0816954f658e8989deb046434b422e95bb5576d76e3c5f14c9bf95f4c1227bb"
+    },
+    {
+      "path": "server/pathfinder/drawingPolicyRoutes.ts",
+      "sha256": "bbd28170ce0e2bdc2521f6eecd698329044201202b0bb5d7d4ca112f52693653"
+    },
+    {
+      "path": "server/pathfinder/drawingSnapshotRoutes.test.ts",
+      "sha256": "2f63ca5894f5897e75d3bba0d8449d0fc2f92ec09a2b392f08a12cd7c16c0139"
+    },
+    {
+      "path": "server/pathfinder/drawingSnapshotRoutes.ts",
+      "sha256": "d61d451ac67820b2c81553bfb8df498b21bb5ca4f25e9ce0fe58860b09339735"
+    },
+    {
+      "path": "server/pathfinder/drawingSnapshots.test.ts",
+      "sha256": "2d1c0e0ce1cc31a3af4edc7f721abbf73e8c4699f884ed7b8a0588b3f866d727"
+    },
+    {
+      "path": "server/pathfinder/drawingSnapshots.ts",
+      "sha256": "07fab5f43a50120c0082eb411993f36f854f8e6c9861108466a36c5a502d8fe2"
+    },
+    {
+      "path": "shared/pathfinderDrawingPolicy.test.ts",
+      "sha256": "07dd1452eda57fdd662bb0f5a0ae091e990939939ffe9a8a00313e3301ce88ea"
+    },
+    {
+      "path": "shared/pathfinderDrawingPolicy.ts",
+      "sha256": "af9297e6c1c56c62239e56bb04a4814bdd1126122ceb2220c2b3ba929508793d"
+    },
+    {
+      "path": "shared/trayDrawing/index.test.ts",
+      "sha256": "3be90bbd084e2397876332b98af654eab538ddb5060a902dcec299782c161a92"
+    },
+    {
+      "path": "shared/trayDrawing/index.ts",
+      "sha256": "d3f294e51adee91995a3dc4adc43322c53a56b401b2f38b426bcf7feb55a3bf4"
+    },
+    {
+      "path": "shared/trayDrawing/ranges.ts",
+      "sha256": "fb43fd7a503451c62f1219ee67ec9c54c62d60a786bf07762ddd44b3d53e4346"
+    },
+    {
+      "path": "shared/trayDrawing/recording.ts",
+      "sha256": "906370e703f230b8dbceff5911c27a544fbbaaf011ee355c194098b65ac257ef"
+    },
+    {
+      "path": "shared/trayDrawing/service.ts",
+      "sha256": "2a355fc270dc3434ef37f0360c72c7490982e04d45afb6381e0ab7f07afe3374"
+    },
+    {
+      "path": "shared/trayDrawing/trefoilClampDrawing.ts",
+      "sha256": "2cb623f8bc3dc6358a99a014897e06e14f01020ad5e9bb4892a263ee3020e5aa"
+    },
+    {
+      "path": "shared/trayDrawing/trefoilClamps.ts",
+      "sha256": "9cd15c34a776c6ccb187ae81a1ae2edb29c1132cea6cd212cc2d1bad746a466d"
+    },
+    {
+      "path": "shared/trayDrawing/types.ts",
+      "sha256": "95e57314de037c3393031ad98451287d86de8dd0acc68d914afb3d65d0eb2b58"
+    },
+    {
+      "path": "shared/trayDrawingInputs.test.ts",
+      "sha256": "ebcb8f42c7940cff772d07de530ae08b43bb7b901a250efe73bccee1ef1ee908"
+    },
+    {
+      "path": "shared/trayDrawingInputs.ts",
+      "sha256": "2bdfa34855598959dfb024de0a6abb7088085be5f67f03c22797192d2f8da27b"
+    },
+    {
+      "path": "shared/trayDrawingSnapshot.ts",
+      "sha256": "ccd5f9e9ddd0555d8ea8e997c42ce7aa79bf7f6e254a1f9b7ae329f5ee6ae66c"
+    },
+    {
+      "path": "src/api/pathfinderDrawing.test.ts",
+      "sha256": "6617730a1a72d48b30458d0f8c86986bbb549eb4959a2310d69de0b54238dfd4"
+    },
+    {
+      "path": "src/api/pathfinderDrawing.ts",
+      "sha256": "4e6799d27afc5f9f263475c8743d25f5b3a57a901adc6f3702dece5969568a8c"
+    },
+    {
+      "path": "src/api/trayDrawing.test.ts",
+      "sha256": "ce374e1771ffa6fa0191bc38dfc60fbd3772616370e40531d16021e9dd4da0a9"
+    },
+    {
+      "path": "src/api/trayDrawing.ts",
+      "sha256": "8691e35232b33bf85c65671c7b823b0ac2b52a846302c93d144bd8715d0e1ee7"
+    },
+    {
+      "path": "src/api/trays.test.ts",
+      "sha256": "4748e8933eaf16a1d77eb3ce8197f27a7036cd168a3ce6e48baa778bad6dd918"
+    },
+    {
+      "path": "src/components/CablePositioningCard.test.tsx",
+      "sha256": "4f02fd376299de350f98e321206c66ba7fa23184671f33a5b5ec881eb9060253"
+    },
+    {
+      "path": "src/components/CablePositioningCard.tsx",
+      "sha256": "f8772851ffe025979a246c1116a113e26fa65ef0d8c3f70b7c7ea55cb8d6e1cb"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/useDrawingPurposePolicy.test.ts",
+      "sha256": "2d92fad4db92d76989243bb9033a0d77a283a4fe7fd782ca10c03e6f696b9342"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/useDrawingPurposePolicy.ts",
+      "sha256": "e6e0e8f8065e0cc9b4a462707498ca78a3ca3e35d4df0efd752702e070bec0c3"
+    },
+    {
+      "path": "src/pages/TrayDetails/hooks/useTrayData.test.ts",
+      "sha256": "ad36ab6528f81b704c3b4eafa8a07769c989575ff1e953b5298b01b8f16ffffc"
+    },
+    {
+      "path": "src/utils/trayReportGeneration.test.ts",
+      "sha256": "9a15433168340057847745bb61f77145e3d84cf2c967994b566368834c771675"
+    },
+    {
+      "path": "src/utils/trayReportGeneration.ts",
+      "sha256": "5bc3c3359f18a44643a72d4dbbfe5561503e96157b133533d728f424270d60a3"
+    },
+    {
+      "path": "docker/pathfinder.nginx.conf",
+      "sha256": "f9b3015215873a7e40be7c81852158714d7f8cb46f11dbb1658cce1036e51ad2"
+    },
+    {
+      "path": "server/app.ts",
+      "sha256": "4be5657f997813ea532a1e597511113f9ec060e139ed5cc50b715e08d571a7ad"
+    },
+    {
+      "path": "server/middleware.ts",
+      "sha256": "65fe29f2ce40b6b301f30917182df98cda82be74bf82041a9b8212dd52911fc7"
+    },
+    {
+      "path": "server/pathfinder/catalog.test.ts",
+      "sha256": "c7807869536b426f12612c55b7358466aba707cdcbd54025c4eb3c693222cc48"
+    },
+    {
+      "path": "server/pathfinder/catalog.ts",
+      "sha256": "6e044b7be2506101754acaa91f0de863f0df03fc2640966cfe216b5a084c57b0"
+    },
+    {
+      "path": "server/pathfinder/policyJson.ts",
+      "sha256": "644d895ab16b6baea362a8c69825288b48ea6389d196738209a85349a2ab5362"
+    },
+    {
+      "path": "server/pathfinder/policySchema.ts",
+      "sha256": "859284b0ebae2a94a6a3f88db8701cd4317218d9ecbc747a192c6a67762e6159"
+    },
+    {
+      "path": "server/pathfinder/schema.ts",
+      "sha256": "8acb31952720472478d42e575336a2da784e578626e42f7d77d0860a86baf84a"
+    },
+    {
+      "path": "server/routes/traysRoutes.ts",
+      "sha256": "741c811fe230d8a1a28bcd3973ebee1c31792705177292f871326fba2e6a6679"
+    },
+    {
+      "path": "src/api/trays.ts",
+      "sha256": "4cf03046b56c10ca532e44da8fbf976da8d39a80bb538763c17ebb263994cf72"
+    },
+    {
+      "path": "src/pages/ProjectDetails.tsx",
+      "sha256": "6646f29f6fd24953aed6446b631bebf3cc0eebd203a7340dcccdf55450cb1247"
+    },
+    {
+      "path": "src/pages/ProjectDetails/DetailsTab.tsx",
+      "sha256": "e0a1ff8ce1dc8873be6e59c82b4aa9bcb6bddffc4f7cc70499f4a0a115051baa"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/useProjectDataRequests.test.tsx",
+      "sha256": "939fa47b45f71b35cb53a106d18ac726e2b28c968caa65234c38e45e7fed1614"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/useTraysSection.ts",
+      "sha256": "90b7c1e4650c985d81458a7aa88b20c98d86c356da5553c9ee6608479df60b62"
+    },
+    {
+      "path": "src/pages/TrayDetails.tsx",
+      "sha256": "970a7302e3ab9dc5394def80dc417089d9e32cbfb2b0f7d160d7c4c4dd6eb813"
+    },
+    {
+      "path": "src/pages/TrayDetails/hooks/useTrayData.ts",
+      "sha256": "e8ba201ce0d8c8badcd64006dfacf73530d00994e50146c79a09919356b63317"
+    },
+    {
+      "path": "src/pages/TrayDetails/trayDrawingService.ts",
+      "sha256": "36ddaffaf7f8e7970ff5f16963683d8311137d4313154fa7e8d9aa450e720028"
+    },
+    {
+      "path": "src/pages/TrayDetails/trefoilClampDrawing.ts",
+      "sha256": "ee66324e24f5134341a8b852db081919ac6a93e4781f3421c8003f10d16d85e9"
+    },
+    {
+      "path": "src/pages/TrayDetails/trefoilClamps.ts",
+      "sha256": "fe4be5320c43ddefd534a90220bcd56a5c4dd1e23f62479d738e11bba285724c"
+    }
+  ]
+}

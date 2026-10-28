@@ -1,0 +1,117 @@
+{
+  "schemaVersion": "pathfinder.blocked-wakeup-audit.v1",
+  "observedAtUtc": "2026-10-18 05:39:31 UTC",
+  "checkedCommit": "ce8eab091990807d11f2a2230117e9f9689be93d",
+  "branch": "pf-8-delivery-local-20261018",
+  "workingTree": {
+    "trackedChanges": [],
+    "untracked": [
+      ".pf0-work/",
+      ".pf2-work/"
+    ],
+    "deniedChildrenUntouched": true
+  },
+  "localAndRemote": {
+    "featureAheadOfLiveWfcMain": 11,
+    "featureBehindLiveWfcMain": 0,
+    "featureRemoteBranch": "ABSENT",
+    "wfc": {
+      "localBranch": "main",
+      "localHead": "e1ef20202598bb4d3d78e4772cbbb9747ec23a00",
+      "liveMain": "e1ef20202598bb4d3d78e4772cbbb9747ec23a00",
+      "trackedChanges": 0
+    },
+    "canonicalPathfinder": {
+      "localBranch": "master",
+      "localHead": "45c24bf5f433f13e102600b36f20327c77961d0a",
+      "liveMaster": "45c24bf5f433f13e102600b36f20327c77961d0a",
+      "trackedChanges": 0
+    },
+    "oldPathfinder": {
+      "branch": "master",
+      "head": "35f4fb46f7762503576bdacd9668f34a1be2b0ed",
+      "workingChanges": [
+        "AddinRibbon/AddinRibbon.csproj",
+        "AddinRibbon/ClAddin.cs",
+        ".vscode/"
+      ],
+      "aheadOfLiveMaster": 0,
+      "behindLiveMaster": 24,
+      "cachedOriginMasterCounts": "0/0; stale ref, not live-remote proof"
+    }
+  },
+  "sourceControlConnector": {
+    "repositoriesConfirmed": [
+      "MrToKa/WFC",
+      "MrToKa/PathFinder"
+    ],
+    "openPrSearch": {
+      "wfc": [
+        {
+          "number": 1,
+          "title": "Add Roxtec routing filters and matching cables table",
+          "scope": "unrelated; neither reviewed nor attached for this feature",
+          "reviewStates": [
+            "COMMENTED",
+            "COMMENTED"
+          ]
+        }
+      ],
+      "pathfinder": [],
+      "localFeaturePr": "NONE_FOUND"
+    },
+    "defaultCommitStatuses": {
+      "wfc": [],
+      "pathfinder": []
+    },
+    "defaultCommitPrTriggeredWorkflowRuns": {
+      "wfc": [],
+      "pathfinder": []
+    },
+    "limits": [
+      "Empty remote status arrays do not establish passing CI.",
+      "Workflow wrapper returns first-page PR-triggered runs only.",
+      "No published remote commit or CI exists for this local feature."
+    ]
+  },
+  "nativeAudit": {
+    "scope": [
+      "docs/pathfinder/evidence/pf2/native*",
+      "pathfinder-engine/.scratch/pf2-native recorded run outputs"
+    ],
+    "newReferenceAfterUtc": "2026-10-18T02:46:00Z",
+    "newReferenceFound": false,
+    "existingRunDirectories": 2,
+    "captureFilesPresent": 0,
+    "lastActualFailure": "NOT Authorized / entitlement not found; exit2 before capture",
+    "licenceRetested": false,
+    "fullNativeOracle": "BLOCKED"
+  },
+  "automation": {
+    "id": "pathfinder",
+    "historicalPauseReceipt": "automation-paused-20261018.json",
+    "observedBefore": {
+      "status": "ACTIVE",
+      "updatedAt": 1792301196054
+    },
+    "causeOfReactivation": "UNKNOWN; no inferred user provision of native data or licence change",
+    "action": "Application-tool update to PAUSED",
+    "storedStatusRechecked": "PAUSED",
+    "existingPromptNameScheduleTargetPreserved": true
+  },
+  "workPerformed": "Read-only state/evidence review and document-only handoff refresh; no duplicate implementation.",
+  "testsRerun": false,
+  "nativeHostLaunched": false,
+  "originalAppOrRuntimeMutated": false,
+  "cleanupAttempted": false,
+  "remoteMutationPerformed": false,
+  "remaining": {
+    "nativeParity": "BLOCKED",
+    "fullPlantCaptureAndCapacity": "NOT_RUN",
+    "reusableGraphPreparation": "NOT_IMPLEMENTED",
+    "realEngineeringApply": "BLOCKED",
+    "userAcceptance": "NOT_RUN"
+  },
+  "nextHandoff": "docs/pathfinder/handoffs/PF-2-resume-native-validation.md",
+  "nextAction": "Obtain an authorized complete same-source full-precision native export, or actual working entitlement plus user authorization for another bounded native capture. Do not repeat unchanged refusal."
+}

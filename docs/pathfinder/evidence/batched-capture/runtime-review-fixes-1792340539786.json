@@ -1,0 +1,231 @@
+{
+  "schemaVersion": "pathfinder.batched-capture.runtime-review-fixes.v1",
+  "observedAt": "2026-10-18T16:22:19.377Z",
+  "status": "PASS",
+  "revision": "6761cb76df79392befba6ace1c4d8c685b36cfdd",
+  "branch": "pf-3-batched-capture-local-20261018",
+  "sources": [
+    {
+      "path": "viewer-runtime/capture-input.mjs",
+      "bytes": 12302,
+      "sha256": "8996f8cbe65568cc7be54009076f483b7abd351b521e8ccd3df228af58728bad"
+    },
+    {
+      "path": "viewer-runtime/capture-input.d.mts",
+      "bytes": 3205,
+      "sha256": "b183bb3fd2ab4ae1f01d2e3b7584708d3fba8881186e6db1f6d0e8c3dc8773e4"
+    },
+    {
+      "path": "viewer-runtime/protocol.mjs",
+      "bytes": 17718,
+      "sha256": "10aa6fa5d3073f9b5b598fe08c98f5b2e029f4e1a13da41c3d0b8c9d065c43e2"
+    },
+    {
+      "path": "viewer-runtime/adapter.mjs",
+      "bytes": 16023,
+      "sha256": "e4cb8701ecd31da21753e4d23e7b3ac1490448c4a5aac58e75f2f8323e5923d6"
+    },
+    {
+      "path": "viewer-runtime/bridge.mjs",
+      "bytes": 23978,
+      "sha256": "0bddfb106172a6eb4e2f82f205d60610ba3caf7365948fc2f644f2eeba335907"
+    },
+    {
+      "path": "viewer-runtime/model-capture.mjs",
+      "bytes": 47995,
+      "sha256": "c0d96718910f42d4330cba15cd012d806da72a36be75e7cb38f8d27af340cf6b"
+    },
+    {
+      "path": "viewer-runtime/model-capture.d.mts",
+      "bytes": 919,
+      "sha256": "d9b8836a9bdb25b622ac97b5c56c99c2ac57250878f6d0c2006a42b5202054be"
+    },
+    {
+      "path": "scripts/viewer-runtime/prepare.mjs",
+      "bytes": 8743,
+      "sha256": "0abcaff533bdee4bf54a065ba3fe6c4bb6964b975e3f32145105a64c9c11c65f"
+    },
+    {
+      "path": "viewer-runtime/test/capture-input.test.mjs",
+      "bytes": 9798,
+      "sha256": "ea10b984c390876c07fb180518416387c67ad0188d49f8893fbf5a70c0a546bf"
+    },
+    {
+      "path": "viewer-runtime/test/adapter.test.mjs",
+      "bytes": 20288,
+      "sha256": "f0f87f91de8a5d06ff4dbc23eb61592e07be107ba2f466aeb844b1c176b7ca43"
+    },
+    {
+      "path": "viewer-runtime/test/bridge.test.mjs",
+      "bytes": 37819,
+      "sha256": "1b39b87d5e78d63bf0517e5cb07a8ef3c43c94de5b691b1e776e7b538ea20933"
+    },
+    {
+      "path": "viewer-runtime/test/model-capture.node-test.mjs",
+      "bytes": 28352,
+      "sha256": "e39a0a01e6c121df40c51d231719d33d866f2941ab8c138e40a2a8123c6f6103"
+    }
+  ],
+  "changedSincePriorFreeze": [
+    "viewer-runtime/adapter.mjs",
+    "viewer-runtime/bridge.mjs",
+    "viewer-runtime/test/adapter.test.mjs",
+    "viewer-runtime/test/bridge.test.mjs"
+  ],
+  "reviewFindings": [
+    {
+      "kind": "source finding independently raised, then actually reproduced",
+      "issue": "Deferred failure from cancelled capture A could call unqualified adapter cleanup and clear replacement B.",
+      "preFix": {
+        "tests": 2,
+        "pass": 0,
+        "fail": 2,
+        "raw": "docs/pathfinder/evidence/batched-capture/adapter-stale-owner-before-fix-1792340200.tap"
+      },
+      "fix": "Both asynchronous adapter catches cancel only when their captured state still owns capture. Tests defer both SDK and digest work, start B, deliver A late, then prove B accepts all chunks and begins metadata output."
+    },
+    {
+      "kind": "source finding independently raised, then actually reproduced",
+      "issue": "Initial authorization elapsed before adapter timer start, and final postauthorization could outlive completed adapter timer, exceeding the common 300s budget.",
+      "preFix": {
+        "tests": 2,
+        "pass": 0,
+        "fail": 2,
+        "raw": "docs/pathfinder/evidence/batched-capture/bridge-deadline-before-fix-1792340400.tap"
+      },
+      "fix": "Bridge creates a private capture deadline and timer before initial START authorization; all capture rounds share it through final authorized emit. Timeout abort/discard and cleanup are scope-owned. Adapter receives the original startedAt and uses only its remaining budget. Synthetic Date controls defer initial and final authorization beyond300s and prove no late SDK start or terminal success."
+    }
+  ],
+  "actualChecks": {
+    "executedBy": "Owned runtime implementation agent",
+    "final": {
+      "command": "PF_MODEL_RUNNER_DLL=<published5d84d779 DLL> node --test --test-reporter=tap viewer-runtime/test/capture-input.test.mjs viewer-runtime/test/protocol.test.mjs viewer-runtime/test/model-capture.node-test.mjs viewer-runtime/test/adapter.test.mjs viewer-runtime/test/bridge.test.mjs",
+      "tests": 101,
+      "pass": 101,
+      "fail": 0,
+      "skipped": 0,
+      "exitCode": 0,
+      "raw": "docs/pathfinder/evidence/batched-capture/runtime-review-final-1792340601.tap"
+    },
+    "syntax": {
+      "command": "node --check <each owned .mjs>",
+      "count": 10,
+      "pass": 10,
+      "results": [
+        {
+          "path": "viewer-runtime/capture-input.mjs",
+          "exitCode": 0
+        },
+        {
+          "path": "viewer-runtime/protocol.mjs",
+          "exitCode": 0
+        },
+        {
+          "path": "viewer-runtime/adapter.mjs",
+          "exitCode": 0
+        },
+        {
+          "path": "viewer-runtime/bridge.mjs",
+          "exitCode": 0
+        },
+        {
+          "path": "viewer-runtime/model-capture.mjs",
+          "exitCode": 0
+        },
+        {
+          "path": "scripts/viewer-runtime/prepare.mjs",
+          "exitCode": 0
+        },
+        {
+          "path": "viewer-runtime/test/capture-input.test.mjs",
+          "exitCode": 0
+        },
+        {
+          "path": "viewer-runtime/test/adapter.test.mjs",
+          "exitCode": 0
+        },
+        {
+          "path": "viewer-runtime/test/bridge.test.mjs",
+          "exitCode": 0
+        },
+        {
+          "path": "viewer-runtime/test/model-capture.node-test.mjs",
+          "exitCode": 0
+        }
+      ]
+    }
+  },
+  "historicalIntermediate": {
+    "raw": "docs/pathfinder/evidence/batched-capture/adapter-bridge-review-controls-1792340600.tap",
+    "tests": 48,
+    "pass": 47,
+    "fail": 1,
+    "cause": "A prior synthetic append-authorization fixture skipped START entirely. New bridge scope validation correctly refused this invalid sequence before reaching the intended ACL boundary. Fixture now performs and observes a legitimate initial ACK before its delayed append, preserving the intended Clear/revocation check."
+  },
+  "rawArtifacts": [
+    {
+      "path": "docs/pathfinder/evidence/batched-capture/adapter-stale-owner-before-fix-1792340200.tap",
+      "bytes": 2097,
+      "sha256": "c38e36ad51725dc8cc749cecefeaced0e23dd6d01d7ed991e30dd4a4cdc364aa",
+      "createdAtUtc": "2026-10-18T16:17:22.618Z",
+      "completedAtUtc": "2026-10-18T16:17:22.737Z",
+      "tests": 2,
+      "pass": 0,
+      "fail": 2,
+      "skip": 0
+    },
+    {
+      "path": "docs/pathfinder/evidence/batched-capture/adapter-owned-cancel-final-1792340201.tap",
+      "bytes": 11855,
+      "sha256": "d2d92125b52ec7e3dac0b5e6818187be50b7eefb70f105314190316bfccd03c7",
+      "createdAtUtc": "2026-10-18T16:17:31.505Z",
+      "completedAtUtc": "2026-10-18T16:17:31.760Z",
+      "tests": 46,
+      "pass": 46,
+      "fail": 0,
+      "skip": 0
+    },
+    {
+      "path": "docs/pathfinder/evidence/batched-capture/bridge-deadline-before-fix-1792340400.tap",
+      "bytes": 1908,
+      "sha256": "d7490fceb3ee30ebaf51f9eb5649cfd6bba43ae00fd5ab1664c37a8273393127",
+      "createdAtUtc": "2026-10-18T16:19:14.025Z",
+      "completedAtUtc": "2026-10-18T16:19:14.152Z",
+      "tests": 2,
+      "pass": 0,
+      "fail": 2,
+      "skip": 0
+    },
+    {
+      "path": "docs/pathfinder/evidence/batched-capture/adapter-bridge-review-controls-1792340600.tap",
+      "bytes": 13107,
+      "sha256": "7503192ebd164d2742dd74aea698b5a70930f63008bfea6a5ad793b46872388f",
+      "createdAtUtc": "2026-10-18T16:20:10.143Z",
+      "completedAtUtc": "2026-10-18T16:20:10.430Z",
+      "tests": 48,
+      "pass": 47,
+      "fail": 1,
+      "skip": 0
+    },
+    {
+      "path": "docs/pathfinder/evidence/batched-capture/runtime-review-final-1792340601.tap",
+      "bytes": 25315,
+      "sha256": "306c72dbb75e0bd4b3d0ea9cd4951d408518256b33d9287ad18c219828d51eff",
+      "createdAtUtc": "2026-10-18T16:20:59.182Z",
+      "completedAtUtc": "2026-10-18T16:21:02.992Z",
+      "tests": 101,
+      "pass": 101,
+      "fail": 0,
+      "skip": 0
+    }
+  ],
+  "priorSourceReceipt": "docs/pathfinder/evidence/batched-capture/runtime-source-controls-1792340046643.json",
+  "retainedNamePlanner": "docs/pathfinder/evidence/batched-capture/retained-planner-1792339965631.json",
+  "scopeLimits": [
+    "No SDK-version/math/Core/UI/server-schema changes from this closing fix.",
+    "Both frozen new production modules require a fresh isolated candidate build; tests are not a deployment claim.",
+    "No database, browser, container or original-application actions by this owner.",
+    "No engineering/native parity, endpoint binding or full plant geometry acceptance.",
+    "Raw filename numeric/time suffixes are labels; actual file timestamps above bind each test run."
+  ]
+}

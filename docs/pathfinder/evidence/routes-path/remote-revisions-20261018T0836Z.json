@@ -1,0 +1,25 @@
+{
+  "observedAtUtc": "2026-10-18T08:35:13.292Z",
+  "results": [
+    {
+      "status": "fulfilled",
+      "value": {
+        "chunk_id": "f33afa",
+        "wall_time_seconds": 0.7304528,
+        "exit_code": 0,
+        "original_token_count": 15,
+        "output": "e1ef20202598bb4d3d78e4772cbbb9747ec23a00\trefs/heads/main\n"
+      }
+    },
+    {
+      "status": "fulfilled",
+      "value": {
+        "chunk_id": "f856cf",
+        "wall_time_seconds": 0.642154,
+        "exit_code": 0,
+        "original_token_count": 15,
+        "output": "45c24bf5f433f13e102600b36f20327c77961d0a\trefs/heads/master\n"
+      }
+    }
+  ]
+}

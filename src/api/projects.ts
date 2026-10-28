@@ -37,6 +37,7 @@ export async function createProject(
     customer: string;
     manager?: string | null;
     description?: string;
+    connectionGap?: number;
     secondaryTrayLength?: number | null;
     supportDistance?: number | null;
     supportWeight?: number | null;
@@ -64,6 +65,7 @@ export async function updateProject(
     customer?: string;
     manager?: string | null;
     description?: string;
+    connectionGap?: number;
     secondaryTrayLength?: number | null;
     supportDistance?: number | null;
     supportWeight?: number | null;

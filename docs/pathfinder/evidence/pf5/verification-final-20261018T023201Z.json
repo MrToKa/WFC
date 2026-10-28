@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-10-18T02:32:58.3974963Z",
+  "workspace": "C:/Users/todor.chankov/source/WFC-pathfinder-local",
+  "checks": [
+    {
+      "passed": 34,
+      "report": "engine-registry-20261018T022600Z.json",
+      "status": "PASS",
+      "total": 34,
+      "command": "node node_modules/vitest/vitest.mjs run server/pathfinder/engine.test.ts server/pathfinder/matching.test.ts --reporter=json --outputFile=docs/pathfinder/evidence/pf5/engine-registry-20261018T022600Z.json",
+      "name": "Current-source registry and actual Node/.NET process/dependency suite"
+    },
+    {
+      "configuration": "Synthetic mocked unit fixtures only; see earlier verification checkpoint for initial absent-config attempt.",
+      "passed": 40,
+      "report": "legacy-cables-configured-20261018T021300Z.json",
+      "status": "PASS",
+      "total": 40,
+      "name": "Legacy cable/history/export/length regression"
+    },
+    {
+      "total": 20,
+      "passed": 20,
+      "status": "PASS",
+      "database": "wfc_pathfinder_local",
+      "postgresImage": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+      "cleanup": "PASS; private temporary fixture removed; append-only audit retained",
+      "name": "Actual SQL/HTTP jobs, lookup, locking, authorization, Review/Apply",
+      "apiStartedAtUtc": "2026-10-18T02:30:03.797198485Z",
+      "apiImage": "sha256:562e80739ed2c105f280a8f460ba449b26aaa6a7a63bcb9b311ff58345407a01",
+      "postgresContainer": "6830635a4597dad696f1a5ced6846853cd9e1fee0f858450ad6f858e4c2e30b9",
+      "report": "jobs-apply-20261018T023201Z.json",
+      "apiContainer": "e8c8a954be28f08d3c48da861e6f726a16b1c1b9270f3822c54a781661b1ad67",
+      "command": "docker exec e8c8a954be28f08d3c48da861e6f726a16b1c1b9270f3822c54a781661b1ad67 node server/dist/server/pathfinder/integration.js 54cfad40-bd12-41e9-ab24-d90bdaafc993"
+    },
+    {
+      "status": "PASS",
+      "command": "node node_modules/typescript/bin/tsc --noEmit -p server/tsconfig.json",
+      "exitCode": 0,
+      "name": "Server TypeScript"
+    }
+  ],
+  "nativeParity": "BLOCKED; synthetic controls do not prove native/converted engineering correspondence or real model length parity.",
+  "limitations": [
+    "20-control cancellation covers queued/terminal and durable automatic-scan cancellation intent; separate Node test cancels spawned owned child. Active container crash/restart requires separate receipt.",
+    "No full concurrent import HTTP or paused settings/location mutation test is claimed.",
+    "Large plant capacity, reusable immutable graph adjacency, real visibility/category/calibration and real engineering Apply remain unresolved."
+  ],
+  "sourceHashes": [
+    {
+      "path": "server/pathfinder/auth.ts",
+      "sha256": "7c69e345036f627606617b3ba8ff1b0b6a0639e94f5bd885d3d55157895848ef"
+    },
+    {
+      "path": "server/pathfinder/schema.ts",
+      "sha256": "d4f3c3fd76a23f249e8b7ef7055374f79a43657f7973eb146b6bef38d40a25b4"
+    },
+    {
+      "path": "server/pathfinder/apply.ts",
+      "sha256": "5f2bc54660587f0da52b7c668137b04e215629280675f5fc181eb3ad8c9a005a"
+    },
+    {
+      "path": "server/pathfinder/integration.ts",
+      "sha256": "e8b94b97c2596ba6cfd720a36f2c14dcc5b08001b4a048cc516960946f14cbec"
+    },
+    {
+      "path": "server/pathfinder/jobs.ts",
+      "sha256": "e641d6b28a0162da2001060d444c2c2956f6adaf7af4d2beef890d89d482e03f"
+    },
+    {
+      "path": "server/pathfinder/worker.ts",
+      "sha256": "ca133ff8d7bb3cb5fe532bea891e839c00bb7338a8619453e7b429051d10fafe"
+    },
+    {
+      "path": "server/pathfinder/lookups.ts",
+      "sha256": "86f0e97eb24b88f82d05144abace44bf134c076e5267325b4ffd1886d1b0ea0d"
+    },
+    {
+      "path": "server/pathfinder/engine.ts",
+      "sha256": "213e3690ee2b1fa1b35e46ae84cda14a69a9908770f4a27d58e0ce7e04a5b9ea"
+    },
+    {
+      "path": "server/pathfinder/engine.test.ts",
+      "sha256": "2409829421dfcdf2b489ae1a56e020b1c4949feaf8d283f38cf0cef78d86c13e"
+    },
+    {
+      "path": "server/pathfinder/repository.ts",
+      "sha256": "0ad23d78046b67096c9e5f6a40a730be4650f9eacaf7214fbbc9702514630330"
+    },
+    {
+      "path": "server/routes/pathfinderRoutes.ts",
+      "sha256": "e09571f54e49c08d205c6dd7a08b5b83ea992a0f554b52edfbf9a38d8c2c69de"
+    }
+  ],
+  "earlierCandidateCheckpoint": "verification-final-20261018T022415Z.json",
+  "backendSourceUnchanged": "Final overlay changed frontend/rendering only; both actual SQL/HTTP receipts record compiled driver SHA25617d3fa559c337a2d6a4724c8dbd65de956edff3a4e05c7534fdb9aedc1ac2404."
+}

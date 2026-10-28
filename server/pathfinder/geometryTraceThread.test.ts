@@ -1,0 +1,96 @@
+// @vitest-environment node
+import { describe, expect, it, vi } from 'vitest';
+import { geometryTraceFixture } from './geometryTraceFixtures.js';
+import { canonicalPurposeJson } from '../../shared/pathfinderPurposePolicy.js';
+import { LARGE_PREPARATION_CAPACITY_PROFILE, LEGACY_PREPARATION_CAPACITY_PROFILE, preparationCapacity } from '../../shared/pathfinderCapacity.js';
+import { preparationPlanHashInput } from '../../shared/pathfinderPreparation.js';
+import { geometryTraceBytesHash, geometryTraceHash } from './geometryTraceBuilder.js';
+import { executeGeometryTraceThread, executeGeometryEvidenceThread, geometryTraceThreadInputSchema, type GeometryTraceThreadStorage, type GeometryTraceThreadInput } from './geometryTraceThread.js';
+import { createCompletedCaptureEvidence, type CompletedCaptureEvidence } from '../../viewer-runtime/capture-evidence.mjs';
+const id = (n: number) => `c1000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+const encode = (value: unknown) => Buffer.from(canonicalPurposeJson(value));
+function fixture() {
+  const f = geometryTraceFixture(), bytes = new Map<string, Buffer>();
+  const put = (payloadRef: string, value: unknown) => { const b = encode(value); bytes.set(payloadRef, b); return { payloadRef, sha256: geometryTraceBytesHash(b), bytes: b.length }; };
+  f.aggregate.projection = { schemaVersion: 'pathfinder.model.snapshot.v1', ...put(f.aggregate.projection.payloadRef, f.snapshot) }; f.fitted.snapshotSha256 = f.aggregate.projection.sha256;
+  f.aggregate.traceIndex = { schemaVersion: 'wfc.pf.preparation-trace-index.v1', ...put(f.aggregate.traceIndex.payloadRef, f.traceIndex) };
+  const frozen = { traceId: f.traceId, exportId: f.fitted.exportId, fittedBlobId: f.fittedBlob.payloadRef, recordsBlobId: f.recordsBlobId, frozenBlobId: id(80), aggregate: f.aggregate, plan: f.plan, runtimeFingerprint: f.runtimeFingerprint, evidence: [], declaredLengths: f.declaredLengths, createdAt: f.createdAt, createdBy: f.createdBy };
+  const input: GeometryTraceThreadInput = { schemaVersion: 'wfc.pf.geometry-trace-thread.v1', requestId: id(90), projectId: f.aggregate.projectId, sessionId: f.aggregate.sessionId, traceId: f.traceId, exportId: f.fitted.exportId, frozenBlob: put(frozen.frozenBlobId, frozen), storageLockBuffer: new SharedArrayBuffer(4) };
+  let exportBytes = Buffer.from(JSON.stringify(f.fitted)); let reference = { schemaVersion: 'wfc.pf.fitted-trace-reference.v1' as const, exportId: f.fitted.exportId, sha256: geometryTraceBytesHash(exportBytes), bytes: exportBytes.length, counts: f.fitted.counts, engine: f.fitted.engine, rulesSha256: f.fitted.rulesSha256, snapshotSha256: f.fitted.snapshotSha256, preparedKey: f.fitted.preparedKey };
+  const refreshFittedExport = () => { exportBytes = Buffer.from(JSON.stringify(f.fitted)); reference = { ...reference, sha256: geometryTraceBytesHash(exportBytes), bytes: exportBytes.length, snapshotSha256: f.fitted.snapshotSha256 }; };
+  const storage: GeometryTraceThreadStorage = { readPreparationBlob: vi.fn(async (_p, _s, ref, limit) => { const b = bytes.get(ref.payloadRef); if (!b || b.length !== ref.bytes || b.length > limit || geometryTraceBytesHash(b) !== ref.sha256) throw Error('integrity'); return Buffer.from(b); }), storePreparationBlob: vi.fn(async (_p, _s, target, value, limit) => { const ref = put(target, value); if (ref.bytes > limit) throw Error('limit'); return ref; }), readFittedExport: vi.fn(async () => ({ bytes: exportBytes, payload: f.fitted, reference })), adoptFittedExport: vi.fn(async (_p, _s, target, value) => { bytes.set(target, value.bytes); return { payloadRef: target, sha256: reference.sha256, bytes: reference.bytes }; }) };
+  return { f, bytes, put, frozen, input, storage, refreshFittedExport };
+}
+describe('off-thread geometry trace task', () => {
+  it('adopts exact full fitted output and emits only immutable references/oneMiBpages while retaining2051warnings', async () => { const f = fixture(), result = await executeGeometryTraceThread(f.input, f.storage), manifest = JSON.parse(f.bytes.get(result.manifest.payloadRef)!.toString()), records = JSON.parse(f.bytes.get(result.objectRecords.payloadRef)!.toString()); expect(result.objectCount).toBe(3); expect(result.diagnosticCount).toBe(2051); expect(result.diagnosticPages.reduce((n, p) => n + p.rowCount, 0)).toBe(2051); expect(result.indexPages.every(p => p.bytes <= 1024 ** 2 && p.rowCount <= 50)).toBe(true); expect(manifest.diagnostics).toHaveLength(32); expect(manifest.diagnosticsTruncated).toBe(true); expect(manifest.fullDiagnostics).toEqual(result.fittedTrace); expect(records[0].geometry.fitted.geometricLengthMetres).toBe(7); expect(records[1].geometry.fitted.geometricLengthRoundTrip).toBe('1.7320508075688772'); expect(records[0].coordinates.qualifiedProjectFrame).toBe(null); expect(result).not.toHaveProperty('records'); expect(result).not.toHaveProperty('snapshot'); });
+  it.each(['foreign', 'oversize', 'tamper'] as const)('refuses %s frozen references before producing index files', async kind => { const f = fixture(); if (kind === 'foreign') f.input.projectId = id(99); if (kind === 'oversize') { f.frozen.aggregate.projection.bytes = 32 * 1024 ** 2 + 1; f.input.frozenBlob = f.put(f.frozen.frozenBlobId, f.frozen); } if (kind === 'tamper') f.bytes.set(f.input.frozenBlob.payloadRef, Buffer.from('{}')); await expect(executeGeometryTraceThread(f.input, f.storage)).rejects.toBeDefined(); expect(f.storage.storePreparationBlob).not.toHaveBeenCalled(); });
+  it('never acknowledges a failed immutable record write', async () => { const f = fixture(); vi.mocked(f.storage.storePreparationBlob).mockRejectedValue(Error('quota')); await expect(executeGeometryTraceThread(f.input, f.storage)).rejects.toThrow('quota'); });
+});
+
+describe('trace projection capacity is selected only by the frozen plan', () => {
+  const freeze = (f: ReturnType<typeof fixture>) => { f.input.frozenBlob = f.put(f.frozen.frozenBlobId, f.frozen); };
+  const selectLargeProfile = (f: ReturnType<typeof fixture>) => {
+    f.frozen.plan.limitsProfile = LARGE_PREPARATION_CAPACITY_PROFILE;
+    f.frozen.plan.orderedPlanSha256 = geometryTraceHash(preparationPlanHashInput(f.frozen.plan));
+    f.frozen.aggregate.orderedPlanSha256 = f.frozen.plan.orderedPlanSha256;
+    freeze(f);
+  };
+  it('keeps a legacy plan at 32MiB and refuses before reading/adopting fitted output', async () => {
+    const f = fixture(); expect(f.frozen.plan.limitsProfile).toBe(LEGACY_PREPARATION_CAPACITY_PROFILE);
+    f.frozen.aggregate.projection.bytes = 32 * 1024 ** 2 + 1; freeze(f);
+    await expect(executeGeometryTraceThread(f.input, f.storage)).rejects.toThrow('GEOMETRY_TRACE_BUILD_LIMIT');
+    expect(f.storage.readFittedExport).not.toHaveBeenCalled(); expect(f.storage.storePreparationBlob).not.toHaveBeenCalled();
+  });
+  it('reads and parses a valid greater-than-32MiB v2 projection while retaining distinct output bounds', async () => {
+    const f = fixture(), projectionBytes = Buffer.concat([encode(f.f.snapshot), Buffer.alloc(32 * 1024 ** 2, 0x20)]);
+    // Padding changes only encoded input size; the complete JSON geometry and
+    // all identities remain validated by the actual parser and trace builder.
+    f.bytes.set(f.frozen.aggregate.projection.payloadRef, projectionBytes);
+    f.frozen.aggregate.projection = { ...f.frozen.aggregate.projection, bytes: projectionBytes.length, sha256: geometryTraceBytesHash(projectionBytes) };
+    f.f.fitted.snapshotSha256 = f.frozen.aggregate.projection.sha256; f.refreshFittedExport(); selectLargeProfile(f);
+    const result = await executeGeometryTraceThread(f.input, f.storage);
+    expect(result.objectCount).toBe(3); expect(projectionBytes.length).toBeGreaterThan(32 * 1024 ** 2);
+    expect(projectionBytes.length).toBeLessThan(128 * 1024 ** 2);
+    expect(f.storage.readPreparationBlob).toHaveBeenCalledWith(f.input.projectId, f.input.sessionId, f.frozen.aggregate.projection, preparationCapacity(LARGE_PREPARATION_CAPACITY_PROFILE).projectionInputBytes);
+    expect(f.storage.readPreparationBlob).toHaveBeenCalledWith(f.input.projectId, f.input.sessionId, f.frozen.aggregate.traceIndex, 16 * 1024 ** 2);
+    expect(f.storage.storePreparationBlob).toHaveBeenCalledWith(f.input.projectId, f.input.sessionId, f.frozen.recordsBlobId, expect.any(Array), 32 * 1024 ** 2);
+    expect(result.fittedTrace.bytes).toBeLessThanOrEqual(32 * 1024 ** 2);
+  }, 20_000);
+  it('refuses a v2 projection above 128MiB before any projection read or output adoption', async () => {
+    const f = fixture(); selectLargeProfile(f); f.frozen.aggregate.projection.bytes = 128 * 1024 ** 2 + 1; freeze(f);
+    await expect(executeGeometryTraceThread(f.input, f.storage)).rejects.toThrow('GEOMETRY_TRACE_BUILD_LIMIT');
+    expect(f.storage.readFittedExport).not.toHaveBeenCalled(); expect(f.storage.readPreparationBlob).toHaveBeenCalledTimes(1);
+    expect(f.storage.storePreparationBlob).not.toHaveBeenCalled();
+  });
+  it('rejects an unknown frozen profile and a profile changed without immutable hash agreement', async () => {
+    const unknown = fixture(); Object.assign(unknown.frozen.plan, { limitsProfile: 'wfc.pf.unbounded.v99' }); freeze(unknown);
+    await expect(executeGeometryTraceThread(unknown.input, unknown.storage)).rejects.toBeDefined(); expect(unknown.storage.readFittedExport).not.toHaveBeenCalled();
+    const changed = fixture(); changed.frozen.plan.limitsProfile = LARGE_PREPARATION_CAPACITY_PROFILE; freeze(changed);
+    await expect(executeGeometryTraceThread(changed.input, changed.storage)).rejects.toThrow('GEOMETRY_TRACE_BUILD_INVALID'); expect(changed.storage.readFittedExport).not.toHaveBeenCalled();
+    const mismatch = fixture(); mismatch.frozen.plan.limitsProfile = LARGE_PREPARATION_CAPACITY_PROFILE;
+    mismatch.frozen.plan.orderedPlanSha256 = geometryTraceHash(preparationPlanHashInput(mismatch.frozen.plan)); freeze(mismatch);
+    await expect(executeGeometryTraceThread(mismatch.input, mismatch.storage)).rejects.toThrow('GEOMETRY_TRACE_BUILD_INVALID'); expect(mismatch.storage.readFittedExport).not.toHaveBeenCalled();
+  });
+  it('rejects profile and byte-limit smuggling in the worker envelope', () => {
+    const f = fixture();
+    expect(geometryTraceThreadInputSchema.safeParse({ ...f.input, limitsProfile: LARGE_PREPARATION_CAPACITY_PROFILE }).success).toBe(false);
+    expect(geometryTraceThreadInputSchema.safeParse({ ...f.input, projectionInputBytes: 128 * 1024 ** 2 }).success).toBe(false);
+  });
+});
+const matrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+async function evidenceFixture() {
+  const f = fixture(); f.f.snapshot.coordinates.sourceToWorldMetres = matrix; f.f.snapshot.objects.forEach((object, index) => object.fragments.forEach(fragment => { fragment.id = 'fragment:' + index; }));
+  const partBlob = f.put(id(60), f.f.snapshot);
+  const observed = <T>(value: T) => ({ status: 'observed' as const, value, api: 'syntheticSDK', reason: null });
+  const derived = <T>(value: T) => ({ status: 'derived' as const, value, api: 'synthetic composition', reason: null });
+  const missing = () => ({ status: 'unavailable' as const, value: null, api: 'unavailableSDK', reason: 'SDK_VALUE_UNAVAILABLE' });
+  const evidence = await createCompletedCaptureEvidence({ schemaVersion: 'wfc.pf.completed-capture-evidence.v1', binding: { projectId: f.input.projectId, modelVersionId: f.f.aggregate.modelVersionId, contentFingerprint: f.f.aggregate.contentFingerprint, selectionRevision: f.f.plan.selectionRevision, loadId: id(61), captureId: id(62), sessionId: f.input.sessionId, partId: id(63), planSha256: f.f.plan.orderedPlanSha256, coordinateFrameId: f.f.plan.coordinateFrameId, partPayloadSha256: partBlob.sha256 }, observations: { sdkVersion: 'synthetic', matrixPrecision: 'binary64', sourceUnitLabel: observed('m'), metresPerDisplayUnit: observed(1), upVector: observed<[number, number, number]>([0, 0, 1]), globalOffsetDisplayUnits: observed<[number, number, number]>([0, 0, 0]), globalOffsetMetres: derived<[number, number, number]>([0, 0, 0]), displayToWorldMetres: derived(matrix), legacySourceToWorldMetres: derived(matrix), modelTransform: missing(), placementTransform: missing(), objectLocalFrame: null, sourceDocumentId: null, sourceInstancePath: null, stableExportEntityId: null }, fragments: f.f.snapshot.objects.flatMap(object => object.fragments.map(fragment => ({ objectId: object.id, fragmentId: fragment.id, originalWorldMatrix: observed(matrix), displayWorldMatrix: observed(matrix), canonicalMatrix: derived(matrix), transformAlreadyApplied: true as const }))), diagnostics: [] });
+  const input = { schemaVersion: 'wfc.pf.geometry-evidence-thread.v1' as const, requestId: id(64), projectId: f.input.projectId, sessionId: f.input.sessionId, partId: id(63), evidenceBlob: f.put(id(65), evidence), partBlob, expected: { modelVersionId: f.f.plan.modelVersionId, contentFingerprint: f.f.plan.contentFingerprint, selectionRevision: f.f.plan.selectionRevision, planSha256: f.f.plan.orderedPlanSha256, coordinateFrameId: f.f.plan.coordinateFrameId }, storageLockBuffer: new SharedArrayBuffer(4) };
+  const rehash = async (value: CompletedCaptureEvidence) => { const { sha256: _sha, ...body } = value; const next = await createCompletedCaptureEvidence(body); input.evidenceBlob = f.put(id(65), next); return next; };
+  return { ...f, input, evidence, rehash, missing };
+}
+describe('off-thread completed capture evidence closure', () => {
+  it('validates exact part/binding/coordinate/fragment evidence with no transforms applied again', async () => { const f = await evidenceFixture(); await expect(executeGeometryEvidenceThread(f.input, f.storage)).resolves.toMatchObject({ partId: f.input.partId, validatedPartSha256: f.input.partBlob.sha256, evidenceBlob: f.input.evidenceBlob }); expect(f.storage.storePreparationBlob).not.toHaveBeenCalled(); });
+  it.each(['unit', 'scale', 'offset', 'display', 'up', 'fragment', 'part', 'missing-fragment'] as const)('refuses rehashed contradictory %s evidence', async kind => { const f = await evidenceFixture(), changed = structuredClone(f.evidence); if (kind === 'unit') changed.observations.sourceUnitLabel.value = 'mm'; if (kind === 'scale') changed.observations.metresPerDisplayUnit.value = 2; if (kind === 'offset') changed.observations.globalOffsetMetres.value = [8, 0, 0]; if (kind === 'display') changed.observations.displayToWorldMetres.value![12] = 8; if (kind === 'up') changed.observations.upVector.value = [0, 1, 0]; if (kind === 'fragment') changed.fragments[0].canonicalMatrix.value![12] = 8; if (kind === 'part') changed.binding.partId = id(99); if (kind === 'missing-fragment') changed.fragments.pop(); await f.rehash(changed); await expect(executeGeometryEvidenceThread(f.input, f.storage)).rejects.toBeDefined(); });
+  it('distinguishes unavailable offset from observed zero without granting frame qualification', async () => { const f = await evidenceFixture(), original = f.input.evidenceBlob.sha256, changed = structuredClone(f.evidence); changed.observations.globalOffsetDisplayUnits = f.missing(); changed.observations.globalOffsetMetres = f.missing(); changed.observations.displayToWorldMetres.reason = 'MISSING_OFFSET_DEFAULT_ZERO_NOT_VERIFIED'; await f.rehash(changed); expect(f.input.evidenceBlob.sha256).not.toBe(original); await expect(executeGeometryEvidenceThread(f.input, f.storage)).resolves.toHaveProperty('schemaVersion', 'wfc.pf.geometry-evidence-validated.v1'); expect(changed.observations.objectLocalFrame).toBe(null); });
+});

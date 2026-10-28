@@ -1,0 +1,79 @@
+{
+  "status": "PASS",
+  "recordedAt": "2026-10-19T05:10:51.962Z",
+  "scope": "Actual PostgreSQL primitives on exact retained synthetic fixture, all mutations rolled back; normal producer, HTTP, engine and UI are separate evidence.",
+  "phases": [
+    {
+      "phase": "events-coalesce",
+      "status": "PASS",
+      "elapsedMilliseconds": 44
+    },
+    {
+      "phase": "details-event",
+      "status": "PASS",
+      "elapsedMilliseconds": 41
+    },
+    {
+      "phase": "drawing-ignore",
+      "status": "PASS",
+      "elapsedMilliseconds": 45
+    },
+    {
+      "phase": "apply-marker-ignore",
+      "status": "PASS",
+      "elapsedMilliseconds": 42
+    },
+    {
+      "phase": "cable-statement",
+      "status": "PASS",
+      "elapsedMilliseconds": 43
+    },
+    {
+      "phase": "generation-fence",
+      "status": "PASS",
+      "elapsedMilliseconds": 53
+    },
+    {
+      "phase": "authority-expiry",
+      "status": "PASS",
+      "elapsedMilliseconds": 45
+    },
+    {
+      "phase": "authority-revocation",
+      "status": "PASS",
+      "elapsedMilliseconds": 44
+    },
+    {
+      "phase": "immutable",
+      "status": "PASS",
+      "elapsedMilliseconds": 374
+    },
+    {
+      "phase": "foreign-key",
+      "status": "PASS",
+      "elapsedMilliseconds": 77
+    },
+    {
+      "phase": "fencing-role",
+      "status": "PASS",
+      "elapsedMilliseconds": 62
+    },
+    {
+      "phase": "fencing-login",
+      "status": "PASS",
+      "elapsedMilliseconds": 56
+    },
+    {
+      "phase": "fencing-state",
+      "status": "PASS",
+      "elapsedMilliseconds": 61
+    },
+    {
+      "phase": "cable-state-order",
+      "status": "PASS",
+      "elapsedMilliseconds": 65
+    }
+  ],
+  "engineeringAccepted": false,
+  "automaticApplyPerformed": false
+}

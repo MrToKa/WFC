@@ -1,0 +1,105 @@
+{
+  "schemaVersion": "pathfinder.runner.session.source-verification.v1",
+  "recordedAtUtc": "2026-10-18T12:41:04.4627668Z",
+  "branch": "pf-2-worker-reuse-local-20261018",
+  "baselineCommit": "ed0770f39790fdedf937a190d99908681c11a532",
+  "status": "PASS",
+  "sourceFiles": [
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/Program.cs",
+      "bytes": 20753,
+      "sha256": "2ddb7fdee36d7119ca37869318dca6b3e575aa83095ab1fc87e65b955184ea5d"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/Session.cs",
+      "bytes": 13547,
+      "sha256": "32ef66ffb981cfb5fde657092504ba36bfc4a048ac73ddcd8016a405e0b39a63"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/SessionProtocol.cs",
+      "bytes": 6076,
+      "sha256": "dde646cb9c031959fa8f87302d66974890be6ba7cbe12150d52ccfa31007159a"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/SessionExecutionContext.cs",
+      "bytes": 1108,
+      "sha256": "eafd19ffc558cfe1d9cda4a6b00e3ffb9ea28abae78fb437a2c92f2c791e283a"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/PathFinder.ModelRunner.csproj",
+      "bytes": 551,
+      "sha256": "ad2dd57312de2fb239560a635a4e16f476d975c7ddd1e20d3af40041387bf5d9"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/README.md",
+      "bytes": 6372,
+      "sha256": "495ede215fcb45f0bde94863fd5acbc9ed7885ffde88ee094a855c8255c3d7b5"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.RunnerSession.Tests/PathFinder.RunnerSession.Tests.csproj",
+      "bytes": 386,
+      "sha256": "8afd402c22652b5687608551e528f74ede23d3ca2dc5c474bb92e9b3824f48be"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.RunnerSession.Tests/Program.cs",
+      "bytes": 17702,
+      "sha256": "1ec59818f9a11e12525414e05cfdbf8523c32d13fd4ba8b08bff1e20b1881422"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.RunnerSession.Tests/Corpus.cs",
+      "bytes": 10693,
+      "sha256": "f12657d0b966261aa80ee60c0fd907107a9be27e530ec653626d4e27be6923b3"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.RunnerSession.Tests/README.md",
+      "bytes": 2739,
+      "sha256": "d4d76e926c55f45816964d6dd3459d62308c951f45793da17c3ab19a789e89a8"
+    }
+  ],
+  "build": {
+    "status": "PASS",
+    "framework": "net9.0",
+    "useAppHost": false,
+    "runner": "pathfinder-engine/.scratch/runner-session-tests-94f20d805e4f4fd593cc119583ec62e7/publish/PathFinder.ModelRunner.dll",
+    "runnerSha256": "0a421550ac7e01a7e4659a543927cb5fd20eacac7a9cc687cc08c812a5b8c56a"
+  },
+  "session": {
+    "status": "PASS",
+    "passed": 308,
+    "failed": 0,
+    "receipt": "pathfinder-engine/.scratch/runner-session-run-75cc7fd30e174d7eb15589dfa079ab69/result.json",
+    "receiptSha256": "8ef09e45aeb9d8cc1daa89179ad79cfe7c9d80ff89ccde566448d559c54bb1f9",
+    "syntheticCases": 31,
+    "countRetirementRuns": 3,
+    "comparison": "complete response excluding requestId and prepared.loadedFromDisk only"
+  },
+  "oneShot": {
+    "status": "PASS",
+    "passed": 42,
+    "total": 42,
+    "receipt": "docs/pathfinder/evidence/pf3/model-runner-2026-10-18T12-40-07-762Z.json",
+    "receiptSha256": "de25527f2f9a6b84346b1948099fee4ca21042843caad2b57647adc5ac2ea89c"
+  },
+  "coreModelDiff": "",
+  "earlierFailedAttempt": {
+    "receipt": "pathfinder-engine/.scratch/runner-session-run-1a2fb09feeea44449aaf4ac24d307edd/result.json",
+    "status": "FAIL",
+    "reason": "Test harness exception filter omitted InvalidDataException; fixed without weakening zero/oversize refusal",
+    "preserved": true
+  },
+  "limitations": [
+    "Synthetic host controls do not establish Linux memory enforcement, ten-minute lifetime, durable DB fences, whole-plant capacity or human engineering acceptance.",
+    "One prepared identity retained; Core graph remains rebuilt per calculation.",
+    "No runtime5190 updates, original data access, push, merge or commits performed by this writer."
+  ],
+  "previousSourceReceipt": "docs/pathfinder/evidence/worker-reuse/runner-source-20261018T123542Z.json",
+  "reviewFix": {
+    "scope": "First-byte activity is observed before an entire next frame exists; guard while waiting and immediately before forwarding; no guard after forwarding begins.",
+    "actualControls": [
+      "Partial prefix with open input rejects and joins without publishing A",
+      "Partial payload with open input rejects and joins without publishing A",
+      "Immediate legitimate B after receiving A succeeds with memory reuse"
+    ],
+    "wireOrMathChanged": false
+  }
+}

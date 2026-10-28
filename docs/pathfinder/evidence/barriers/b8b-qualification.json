@@ -1,0 +1,179 @@
+{
+  "schemaVersion": "wfc.pf.b8b-qualification.v1",
+  "status": "PASS_TECHNICAL_PLANNING_SCOPE",
+  "recordedUtc": "2026-10-21T19:52:11.5283707Z",
+  "baseCommit": "38e4f20ca6bbbb6ee04a5aab6390afb40d8c0a6d",
+  "runnerSha256": "2c92a10c43d9a9c91df1f1451ec7ade6bb0e42b794c7cad12ea63c30713f86ac",
+  "sourceFiles": 15,
+  "buildProjects": 15,
+  "checks": {
+    "reader": 37,
+    "model": 131,
+    "lookup": 37,
+    "fittedTrace": 39,
+    "windowsSession": 433,
+    "linuxSession": 435,
+    "protectedTransport": 39,
+    "regression": 105,
+    "goldenCases": 43,
+    "goldenChecks": 215,
+    "barrierKernel": 94,
+    "captureVerifier": 50,
+    "constrained": 54,
+    "localConnector": 40,
+    "lengthLedger": 35,
+    "directSecondary": 63,
+    "overlap": "Groups overlap; not one summed test population."
+  },
+  "modelLibraryEvidence": {
+    "status": "PASS",
+    "currentTrace39": "PASS",
+    "checkedUtc": "2026-10-21T19:42:29.439944Z",
+    "modelSha256": "c8231451afc1805b856a6b58bb47abba021784d9def39a3abc0e8a7715ed87b2",
+    "sameModelLibraryAsModel131Reader37Lookup37": true
+  },
+  "syntheticLinux": {
+    "counts": {
+      "plannedSession": 69,
+      "actualSession": 69,
+      "plannedOneShot": 6,
+      "actualOneShot": 6,
+      "successfulCalculated": 73,
+      "expectedTypedRefusals": 2,
+      "failures": 0,
+      "byMode": {
+        "session": {
+          "calculated": 68,
+          "expectedTypedRefusals": 1,
+          "failed": 0
+        },
+        "oneshot": {
+          "calculated": 5,
+          "expectedTypedRefusals": 1,
+          "failed": 0
+        }
+      },
+      "sessionSupervisorProcesses": 2,
+      "fittedReuse": {
+        "none": 0,
+        "build": 2,
+        "disk": 2,
+        "memory": 65
+      }
+    },
+    "elapsedMilliseconds": 32510.33371,
+    "memory": {
+      "exactPeak": false,
+      "sampleIntervalMilliseconds": 100,
+      "combinedEngineSamples": 209,
+      "maximumSampledSupervisorWorkerRssBytes": 176205824,
+      "nodeSamples": 305,
+      "maximumSampledNodeRssBytes": 136060928,
+      "oneShotProcessRss": "NOT_SAMPLED_BY_PRODUCTION_CALCULATE_EXECUTOR",
+      "containerExitAndOomInspect": "NOT_RUN_REQUIRES_ROOT_OUTER_RECEIPT"
+    },
+    "independent": {
+      "status": "PASS",
+      "planned": 69,
+      "verified": 69,
+      "oneShotCompared": 6,
+      "clearSegments": 4226
+    },
+    "outerExitCode": 0,
+    "oomKilled": false,
+    "timeout": false
+  },
+  "actual": {
+    "source": "One actual retained converted330-tray model and reported cable; no civil triangles",
+    "snapshotSha256": "27f8cf8c352b8847b778f764ce942aa0bb61ebfab16aeb993c0a83bd100c38e2",
+    "snapshotBytes": 114111391,
+    "requestModes": [
+      {
+        "name": "cold-owned-empty-cache",
+        "status": "calculated",
+        "success": true,
+        "milliseconds": 20037.923754,
+        "loadedFromDisk": false
+      },
+      {
+        "name": "disk-owned-cache",
+        "status": "calculated",
+        "success": true,
+        "milliseconds": 11872.326485000001,
+        "loadedFromDisk": true
+      },
+      {
+        "name": "session-first-disk",
+        "status": "calculated",
+        "success": true,
+        "milliseconds": 16580.687837999998,
+        "loadedFromDisk": true
+      },
+      {
+        "name": "session-warm-1",
+        "status": "calculated",
+        "success": true,
+        "milliseconds": 2350.8092049999977,
+        "loadedFromDisk": true
+      },
+      {
+        "name": "session-warm-2",
+        "status": "calculated",
+        "success": true,
+        "milliseconds": 1262.454724999996,
+        "loadedFromDisk": true
+      }
+    ],
+    "normalizedFullDtoEquality": "PASS, only requestId/prepared.loadedFromDisk normalized",
+    "memory": {
+      "intervalMilliseconds": 100,
+      "exactPeak": false,
+      "oneshotMaximumSampledTreeRssBytes": 442335232,
+      "oneshotSamples": 317,
+      "sessionMaximumObservedTreeRssBytes": 450367488,
+      "nodeMaximumSampledRssBytes": 82026496,
+      "unavailableSamples": 1
+    },
+    "outerExitCode": 0,
+    "oomKilled": false,
+    "timeout": false,
+    "sourceBookends": "PASS unchanged",
+    "noMemoryPhaseFile": true
+  },
+  "managedWorkerBudgetBytes": 335544320,
+  "combinedSampledRssBudgetBytes": 536870912,
+  "forcedGc": false,
+  "preservation": {
+    "status": "PASS",
+    "coreFiles": 11,
+    "frozenFixtures": 3
+  },
+  "cleanup": {
+    "status": "PASS",
+    "retiredTestContainers": 13,
+    "hostFilesRemoved": false,
+    "volumesRemoved": false
+  },
+  "actualCivilOpenings": "BLOCKED_PROTECTED_CAPTURE_REQUIRED",
+  "full2140Capacity": "NOT_RUN",
+  "nativeParity": "NOT_RUN_NO_LICENSE",
+  "browserAcceptance": "BLOCKED_SAVED_ORIGIN_REFUSAL_NOT_RETRIED",
+  "engineeringAccepted": false,
+  "deployment5191": "NOT_RUN_B9_REQUIRED",
+  "sourceOrOriginalWrites": false,
+  "realDataApply": false,
+  "priorFailures": "Retained diagnostics attempts1-5 and failed build/session receipts; no relabelling.",
+  "remoteReadOnlyObservation": {
+    "observedUtc": "2026-10-21T19:53Z",
+    "originalWfc": "clean main",
+    "originalAndLiveMain": "96e63f13fdc2b1d30b8f8ff658dd662f25fac104",
+    "canonicalPathFinder": "45c24bf5f433f13e102600b36f20327c77961d0a",
+    "headPrSearchReturned": 0,
+    "baseCombinedStatusesReturned": 0,
+    "basePrTriggeredWorkflowRunsReturned": 0,
+    "ciOrReviewApproval": false,
+    "workflowLimit": "PR-triggered only, first page",
+    "remoteWrites": false
+  },
+  "productCommit": "985afcd9ab3d0423d9352f999757a9f46fcce023"
+}

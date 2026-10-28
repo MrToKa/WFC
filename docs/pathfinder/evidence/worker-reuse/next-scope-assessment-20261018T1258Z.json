@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "pathfinder.stage.next-scope-assessment.v1",
+  "recordedAtUtc": "2026-10-18T12:58:20Z",
+  "status": "READ_ONLY_PREPARATION",
+  "workerQualification": "IN_PROGRESS; does not mark delivery accepted",
+  "nextBoundedIndependentWork": "Retained converted hierarchy/name/fragment coverage versus current planning selection; exact/ambiguous/missing matches only for actually supplied copied cable endpoints.",
+  "inventory": {
+    "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-receipt.json",
+    "sha256": "ade029bcbe1b764ff7257017d6633ab90f9e4be4a560a5217e1c3fad708d1986",
+    "schemaVersion": "pathfinder.converted.inventory.v1",
+    "declaredParts": 214,
+    "declaredObjects": 438155,
+    "declaredFragments": 664556,
+    "inventoryComplete": true,
+    "geometryComplete": false,
+    "propertiesComplete": false,
+    "contentFingerprint": "b5bb4fbe666b440c73bb1ffd2ee0db01be66146f8002e4a9df8dce8521db1d34",
+    "verifiedNow": "Receipt identity/declared values only. All-part integrity and count reconciliation are next-stage checks, not newly asserted PASS."
+  },
+  "selectedPlanning": {
+    "objects": 52,
+    "routingLeaves": 26,
+    "sha256": "b47365401aaf078374607c944e22ac5100f2aa6fe4389c056fbdd963526f17ed"
+  },
+  "cables": {
+    "retainedArchive": "pathfinder-engine/.scratch/path-lookup-archive-462d5a9465e8/manifest.json",
+    "preparationFinding": "Verified archive has three QA/synthetic cables across two projects. Current real demonstration project has one QA cable. A representative business cable From/To list has not been located; do not invent endpoint coverage."
+  },
+  "graph": {
+    "contract": "00-specification.md:41 and PF-2 assignment retain once-per-model reusable graph expectation; native oracle waiver does not waive it.",
+    "sourceFinding": "Unchanged RouteCalculator.cs inserts query endpoint projections before contact construction, and parallel attachments depend on those initial nodes.",
+    "sourceAnchors": [
+      "pathfinder-engine/src/PathFinder.Core/Routing/RouteCalculator.cs:99",
+      "pathfinder-engine/src/PathFinder.Core/Routing/RouteCalculator.cs:124",
+      "pathfinder-engine/src/PathFinder.Core/Routing/RouteCalculator.cs:633",
+      "pathfinder-engine/src/PathFinder.Core/Routing/RouteCalculator.cs:687"
+    ],
+    "conclusion": "Persistent fitted geometry/worker reuse is not literal global graph completion. Do not add an unused graph artifact or substitute a fixed topology. A separately scoped topology/query-overlay refactor would require reconciled source contract and new parity qualification."
+  },
+  "preservation": {
+    "activePlanningMutation": 0,
+    "categoryAssignmentsInvented": 0,
+    "originalQueries": 0,
+    "stageAuditPerformed": false
+  },
+  "humanOnly": [
+    "Engineering route and length acceptance",
+    "Resolve category/root/business endpoint ambiguities that available source evidence cannot establish"
+  ]
+}

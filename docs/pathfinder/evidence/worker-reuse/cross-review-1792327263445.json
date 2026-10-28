@@ -1,0 +1,134 @@
+{
+  "schemaVersion": "pathfinder.worker.cross-review.v1",
+  "recordedAtUtc": "2026-10-18T12:41:03.445Z",
+  "status": "FAIL",
+  "scope": "Independent read-only C# runner cross-review plus separately authorized minimal Node post-join correction; pending C# protocol correction and qualification.",
+  "reviewedCandidate": {
+    "baselineReceipt": "docs/pathfinder/evidence/worker-reuse/runner-source-20261018T123542Z.json",
+    "baselineReceiptSha256": "b18f2eb015dbdfce87b0d1f65e53b8c70fbc9585b0983ad292f5a904fb0d3705",
+    "runnerSha256": "d54d146331a85554d4039cac5314247a3ee2df0997e8cef9cbaa00434f1bf292",
+    "sourceHashes": [
+      {
+        "path": "pathfinder-engine/tools/PathFinder.ModelRunner/Program.cs",
+        "bytes": 20753,
+        "sha256": "2ddb7fdee36d7119ca37869318dca6b3e575aa83095ab1fc87e65b955184ea5d",
+        "matchesReviewedCandidateBaseline": true
+      },
+      {
+        "path": "pathfinder-engine/tools/PathFinder.ModelRunner/Session.cs",
+        "bytes": 13547,
+        "sha256": "32ef66ffb981cfb5fde657092504ba36bfc4a048ac73ddcd8016a405e0b39a63",
+        "matchesReviewedCandidateBaseline": false
+      },
+      {
+        "path": "pathfinder-engine/tools/PathFinder.ModelRunner/SessionProtocol.cs",
+        "bytes": 6076,
+        "sha256": "dde646cb9c031959fa8f87302d66974890be6ba7cbe12150d52ccfa31007159a",
+        "matchesReviewedCandidateBaseline": false
+      },
+      {
+        "path": "pathfinder-engine/tools/PathFinder.ModelRunner/SessionExecutionContext.cs",
+        "bytes": 1108,
+        "sha256": "eafd19ffc558cfe1d9cda4a6b00e3ffb9ea28abae78fb437a2c92f2c791e283a",
+        "matchesReviewedCandidateBaseline": true
+      },
+      {
+        "path": "pathfinder-engine/tests/PathFinder.RunnerSession.Tests/Program.cs",
+        "bytes": 17702,
+        "sha256": "1ec59818f9a11e12525414e05cfdbf8523c32d13fd4ba8b08bff1e20b1881422",
+        "matchesReviewedCandidateBaseline": false
+      },
+      {
+        "path": "pathfinder-engine/tests/PathFinder.RunnerSession.Tests/Corpus.cs",
+        "bytes": 10693,
+        "sha256": "f12657d0b966261aa80ee60c0fd907107a9be27e530ec653626d4e27be6923b3",
+        "matchesReviewedCandidateBaseline": true
+      },
+      {
+        "path": "pathfinder-engine/tests/PathFinder.RunnerSession.Tests/README.md",
+        "bytes": 2495,
+        "sha256": "9bc46d65865d3de566913301f54d459ed05fea2545d5c884d71cd2a1fe114b1c",
+        "matchesReviewedCandidateBaseline": true
+      }
+    ]
+  },
+  "findings": [
+    {
+      "id": "SESSION-PIPELINE-PARTIAL",
+      "priority": 2,
+      "status": "OPEN_COORDINATED_OWNER_FIX",
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/Session.cs",
+      "anchor": "RunSessionSupervisor nextInput=ReadFrame while busy; winner/nextInput.IsCompleted guard",
+      "problem": "A partially pipelined second frame does not complete ReadFrame, so its pending task cannot trigger the busy-input guard. The first positive result may be forwarded, then the rest of the second frame can be accepted in the following iteration.",
+      "reproducer": "Send a valid request A followed by one prefix byte (or a complete prefix with a partial body) of request B while A is executing. After receiving A, finish B. Require refusal with no queued second request; existing full-frame-only pipelining case does not establish this.",
+      "coordination": "Parent authorized C# owner to observe first busy input byte and add focused cases; reviewer made no C# edits or test runs."
+    },
+    {
+      "id": "NODE-POST-JOIN-DEADLINE",
+      "priority": 2,
+      "status": "RESOLVED_SOURCE_AND_UNIT_CHECKED",
+      "file": "server/pathfinder/engineSession.ts",
+      "anchor": "execute after await retire and before returning DTO",
+      "problem": "An abort or outer deadline during delayed retiring-group join could be latched but ignored on return.",
+      "resolution": "Common final check() and original deadline check after join, before any DTO return; focused cancellation and deadline during join cases added under parent authorization."
+    }
+  ],
+  "confirmedBoundaries": [
+    "One-shot shared Execute path differs only by optional session cache context; pinned Core/Model unchanged.",
+    "One prepared exact snapshot/rules identity is retained; cached reference telemetry is explicit and graph remains per calculation.",
+    "Geometry operations calculate/lookup/prepare re-read immutable bytes and validate hash/project/model/purpose before cache use.",
+    "Retained design preserves old early-return semantics: server worker performs readSnapshot and authorization/dependency/publication fencing. Lookup-plan has no artifact; do not claim every C# operation rehashes a snapshot.",
+    "Request settings/category/options are reconstructed per invocation; exact decimal output and response DTO are preserved.",
+    "The31-case synthetic parity corpus compares complete response except requestId and prepared.loadedFromDisk;303 checks include192 request-count controls and must not be described as303 independent routing scenarios.",
+    "Supervisor/worker hard deadline layers, lifetime/count/idle policies, framed strict UTF8/duplicate/cap checks and sampled RSS guard are present; actual Linux enforcement and durable publication qualification remain separate."
+  ],
+  "checks": {
+    "csharpTestsByReviewer": "NOT_RUN",
+    "csharpTestsReportedByOwner": {
+      "session": 303,
+      "oneShot": 42,
+      "sourceReceipt": "docs/pathfinder/evidence/worker-reuse/runner-source-20261018T123542Z.json"
+    },
+    "authorizedNodeChecks": {
+      "affectedTests": {
+        "status": "PASS",
+        "passed": 55,
+        "transport": 42,
+        "workerLifecycle": 4,
+        "existingRetained": 9
+      },
+      "serverTypecheck": "PASS",
+      "scopedLint": "PASS",
+      "sourceHashes": [
+        {
+          "path": "server/pathfinder/engineSession.ts",
+          "sha256": "5cfa14c83dd0566009baecaf757ed1698f0c339043faaff48b24d36eb84a4513",
+          "bytes": 23468
+        },
+        {
+          "path": "server/pathfinder/engineSession.test.ts",
+          "sha256": "3d9cd8006c5a6e1df846216a21fe24d37aeb12abec27ce9d1644feb770e012cb",
+          "bytes": 23418
+        },
+        {
+          "path": "server/pathfinder/worker.ts",
+          "sha256": "393dfa5ee13795f3feb4400f066faaa85d85c820471178b4b2fc98be78141ddc",
+          "bytes": 16439
+        },
+        {
+          "path": "server/pathfinder/worker-session.test.ts",
+          "sha256": "2dc8fce9f536d26ac4934d2b40404dfa137c195a5ef4e8d389f8c09e5cf7e248",
+          "bytes": 3851
+        }
+      ]
+    },
+    "runtimeOperationsByReviewer": 0,
+    "current5190Writes": 0,
+    "originalResourceWrites": 0
+  },
+  "limitations": [
+    "C# partial-pipeline correction and new binary/source binding are pending; this receipt is not final acceptance.",
+    "Synthetic/control review does not establish native parity, whole-plant capacity, engineering acceptance or persistent changed-query independence beyond actual retained qualification results.",
+    "No runtime tests were rerun by this reviewer during cross-review."
+  ]
+}

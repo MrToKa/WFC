@@ -1,0 +1,138 @@
+{
+  "schemaVersion": "pathfinder.capacity.sources.v1",
+  "recordedAtUtc": "2026-10-18T12:07:54.285Z",
+  "branch": "pf-2-capacity-local-20261018",
+  "baseCommit": "8a726f72ab94da22681320f28ccebe1224cf8eb3",
+  "workingTreeSourceNote": "Additive capacity files were uncommitted during execution. Current metadata-only preservation comparator fix was added afterward; actual copied measurement tools are hashed separately below.",
+  "sources": [
+    {
+      "path": "pathfinder-engine/tools/PathFinder.CapacityBench/Benchmark.cs",
+      "bytes": 17747,
+      "sha256": "7a1f67683f6f3d03b65d98a951e71bdf851f5d0748edc2d04c0d173d740cd6f0"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.CapacityBench/Contracts.cs",
+      "bytes": 2131,
+      "sha256": "fb0eb0499be38e228ee082141f611dbb19052c40aa387f8eb4239c16fa12bd53"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.CapacityBench/Input.cs",
+      "bytes": 9558,
+      "sha256": "676c933f9c977c4cbd3867ef10603c77bb8af159ecf0bfb7c4a9d2c237a7a399"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.CapacityBench/PathFinder.CapacityBench.csproj",
+      "bytes": 483,
+      "sha256": "a89385bd290d67e3772960a748aaf4b76e9ac8fd9dc1c3f69baa44b2760a84ff"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.CapacityBench/Program.cs",
+      "bytes": 6863,
+      "sha256": "b607a90d8c1a01e2bcf076d13e298cddec6d08ea1c0cd517c59cfb33178bbd2b"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.CapacityBench/README.md",
+      "bytes": 5703,
+      "sha256": "244840b11067bc37ea904c22a69b586ed15823c5b2a8b35e8378973503959e7b"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.CapacityBench/Synthetic.cs",
+      "bytes": 3597,
+      "sha256": "262ece6176a4f03b971f25e260c2826daa20e0613a87ddfc4ab2895ce52c150f"
+    },
+    {
+      "path": "scripts/pathfinder-capacity/README.md",
+      "bytes": 4707,
+      "sha256": "ab1cbf4667852be7777d70744352d8610cd822b89913711375236c5b8f6f7617"
+    },
+    {
+      "path": "scripts/pathfinder-capacity/bench-input-controls.mjs",
+      "bytes": 8698,
+      "sha256": "5150e7eafc6c777cfc6cbd41bd7029ac3c8d58e19befc7394ddc92a16844ad47"
+    },
+    {
+      "path": "scripts/pathfinder-capacity/capacity.test.mjs",
+      "bytes": 8675,
+      "sha256": "c1bd9d43bf80032c9bce0c1ac5f0b72d336c6fdd1439d542c7887f790b991688"
+    },
+    {
+      "path": "scripts/pathfinder-capacity/lib.mjs",
+      "bytes": 10276,
+      "sha256": "4a5eb36b44a60c5e4b4a736f1c113e3b6f3062145103b9e2574ccca940a8d58c"
+    },
+    {
+      "path": "scripts/pathfinder-capacity/process.mjs",
+      "bytes": 6172,
+      "sha256": "3f514c11d4e65cdb5e5daa05c3a663158b774c45b87a42a0633af4476419de6c"
+    },
+    {
+      "path": "scripts/pathfinder-capacity/run.mjs",
+      "bytes": 15454,
+      "sha256": "e1880820e961a3f54f4a213fdf4d8e896a1bf282bb215609f8aa41411b1c023d"
+    },
+    {
+      "path": "scripts/pathfinder-capacity/sampler.mjs",
+      "bytes": 16009,
+      "sha256": "21e2f7323528ea61409226f32ef01000a95cf694a1f18e67e17684c7675ce51d"
+    }
+  ],
+  "executionTools": [
+    {
+      "path": "pathfinder-engine/.scratch/capacity-run-ec0a626b-fe54-4e63-85a0-2d97878891f2/tools/lib.mjs",
+      "bytes": 9989,
+      "sha256": "cc0701facac44a3c0f82cab6e06a3d7bb87a486d10e62dde27ff0745b8a4b143",
+      "matchesCurrentSource": false
+    },
+    {
+      "path": "pathfinder-engine/.scratch/capacity-run-ec0a626b-fe54-4e63-85a0-2d97878891f2/tools/process.mjs",
+      "bytes": 6172,
+      "sha256": "3f514c11d4e65cdb5e5daa05c3a663158b774c45b87a42a0633af4476419de6c",
+      "matchesCurrentSource": true
+    },
+    {
+      "path": "pathfinder-engine/.scratch/capacity-run-ec0a626b-fe54-4e63-85a0-2d97878891f2/tools/sampler.mjs",
+      "bytes": 16009,
+      "sha256": "21e2f7323528ea61409226f32ef01000a95cf694a1f18e67e17684c7675ce51d",
+      "matchesCurrentSource": true
+    }
+  ],
+  "actualSamplerAndProcessUnchanged": true,
+  "actualImageId": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+  "actualBenchAssemblies": [
+    {
+      "name": "PathFinder.CapacityBench",
+      "version": "1.0.0.0",
+      "sha256": "90c939476155552bf3be27bbee29e09e220e159c16996fa30dcde4f997691b2a"
+    },
+    {
+      "name": "PathFinder.Model",
+      "version": "1.0.0.0",
+      "sha256": "dc8aff9501236670907c64965a52339e4f4aff5b4a5ae6be4564af11a4f74b33"
+    },
+    {
+      "name": "PathFinder.Core",
+      "version": "1.0.0.0",
+      "sha256": "cdb662b43ea99ef584f54600901aa358133ef0494ae699d5e12ccd8dab713061"
+    },
+    {
+      "name": "PathFinder.Adapter",
+      "version": "1.0.0.0",
+      "sha256": "b70376b80f310b717726d0e4f17be69f98db81cce5fc1a868cb3fa938c3bcdbd"
+    }
+  ],
+  "guardTests": {
+    "status": "PASS",
+    "passed": 28,
+    "failed": 0,
+    "command": "node --test scripts/pathfinder-capacity/capacity.test.mjs"
+  },
+  "syntaxChecks": {
+    "status": "PASS",
+    "files": [
+      "run.mjs",
+      "sampler.mjs",
+      "process.mjs"
+    ]
+  },
+  "contemporaneousMethodReview": "docs/pathfinder/evidence/capacity/method-review-1792324992552.json"
+}

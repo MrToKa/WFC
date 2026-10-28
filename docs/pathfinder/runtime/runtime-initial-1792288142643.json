@@ -1,0 +1,210 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS",
+  "scope": "Initial isolated runtime prerequisites and own model import; not final PF8 acceptance.",
+  "recordedAt": "2026-10-18T01:48:59.566Z",
+  "timezone": "Europe/Kiev",
+  "revisionAtRecording": "c95ad56ebbd6b020966fa0690c98c37516df1db1",
+  "branchAtRecording": "pf-4-viewer-local-20261018",
+  "configuration": {
+    "status": "PASS",
+    "project": "wfc-pathfinder-local",
+    "origin": "http://127.0.0.1:5190",
+    "services": [
+      "postgres",
+      "minio",
+      "storage-ready",
+      "api",
+      "web"
+    ],
+    "volumes": [
+      "postgres",
+      "minio",
+      "staging",
+      "pathfinder"
+    ],
+    "privateBackend": true,
+    "publishedPorts": [
+      5190
+    ]
+  },
+  "runtime": {
+    "status": "PASS",
+    "project": "wfc-pathfinder-local",
+    "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65",
+    "origin": "http://127.0.0.1:5190",
+    "runtime": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pathfinder-local",
+    "state": "running",
+    "resources": {
+      "containers": [
+        {
+          "role": "web",
+          "id": "be4a10d41a6a6c2474d3f9c419c9daf53aab2ee2c6f3ac608c57cdff8151fb41",
+          "image": "sha256:737bbbb1930ff07fa00298b9d6625fb4a11d47118a07367ea7955fc18dd66f4b",
+          "name": "wfc-pathfinder-local-web-1",
+          "running": true,
+          "startedAt": "2026-10-18T01:45:31.347030771Z"
+        },
+        {
+          "role": "api",
+          "id": "179742684f01caca32219d961c363967d9188d37f9249b8ece8939bcca126f64",
+          "image": "sha256:f28783e5465e62677b508a0119bf30658b613e25011539227fb6051dee5ce5e8",
+          "name": "wfc-pathfinder-local-api-1",
+          "running": true,
+          "startedAt": "2026-10-18T01:45:25.346750436Z"
+        },
+        {
+          "role": "storage-ready",
+          "id": "2b96ee515c6dbb48a9df1a3045d934ae092c3645e10cd988c35d3f58625d28d8",
+          "image": "sha256:f28783e5465e62677b508a0119bf30658b613e25011539227fb6051dee5ce5e8",
+          "name": "wfc-pathfinder-local-storage-ready-1",
+          "running": false,
+          "startedAt": "2026-10-18T01:42:49.15202311Z"
+        },
+        {
+          "role": "minio",
+          "id": "d4a78127ea9999a8f2872cc9e098a71792e235938c885921984fb6a253fa256c",
+          "image": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+          "name": "wfc-pathfinder-local-minio-1",
+          "running": true,
+          "startedAt": "2026-10-18T01:45:23.610862495Z"
+        },
+        {
+          "role": "postgres",
+          "id": "40d4a1dd2c8d1522544fd6c1fcce0cc8467090d41640f473448f9abdb393054b",
+          "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+          "name": "wfc-pathfinder-local-postgres-1",
+          "running": true,
+          "startedAt": "2026-10-18T01:42:48.971257568Z"
+        }
+      ],
+      "volumes": [
+        "wfc-pathfinder-local_postgres",
+        "wfc-pathfinder-local_minio",
+        "wfc-pathfinder-local_staging",
+        "wfc-pathfinder-local_pathfinder"
+      ],
+      "networks": [
+        {
+          "id": "7e58e2a7f9544ca1b5efc7ae9773e69088168620ad34a6afb7abcea2a26b6cc0",
+          "name": "wfc-pathfinder-local_front"
+        },
+        {
+          "id": "77abead34a6b25bce147efa3a1eacd67d9a9b110028ea634ab904768e3e2274d",
+          "name": "wfc-pathfinder-local_backend"
+        }
+      ]
+    }
+  },
+  "images": {
+    "api": "sha256:f28783e5465e62677b508a0119bf30658b613e25011539227fb6051dee5ce5e8",
+    "web": "sha256:737bbbb1930ff07fa00298b9d6625fb4a11d47118a07367ea7955fc18dd66f4b"
+  },
+  "build": {
+    "finishedAt": "2026-10-18T01:42:41.293Z",
+    "files": [
+      {
+        "path": "docker/pathfinder.Dockerfile",
+        "bytes": 2082,
+        "sha256": "682018b4ff47990ea58b5657bccf434a948a16bdd99d06d0a84cd38ed53d0bc4"
+      },
+      {
+        "path": "docker/pathfinder.Dockerfile.dockerignore",
+        "bytes": 402,
+        "sha256": "68e8f31e1fa9e2b47e02f7184ad40d866387da57bdecc216284f83fce18c0a51"
+      },
+      {
+        "path": "docker/pathfinder.compose.yml",
+        "bytes": 3912,
+        "sha256": "b05d06071ce552a36a025d2d5616372ae927f82df8ca8958183292d226b47cf5"
+      },
+      {
+        "path": "docker/pathfinder.nginx.conf",
+        "bytes": 3901,
+        "sha256": "371ee662474983d4daf085b3ff47d750b39525b0894935a746099a5e0972cf0c"
+      }
+    ]
+  },
+  "demo": {
+    "projectId": "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a",
+    "adminUserId": "ac288aa9-eb51-4dd6-872b-ec52dfeecbc9",
+    "syntheticSettings": {
+      "secondaryTrayLength": 3,
+      "endConnectionLength": 5,
+      "additionalBendingPercent": 10
+    },
+    "createdAt": "2026-10-18T01:43:12.598Z",
+    "model": {
+      "versionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+      "contentFingerprint": "b5bb4fbe666b440c73bb1ffd2ee0db01be66146f8002e4a9df8dce8521db1d34",
+      "package": {
+        "bytes": 439112840,
+        "sha256": "e3056f28efaa57eef65f81dbdfe41396d9e010bdc975738d1259c58af6c3a922"
+      },
+      "resources": 342
+    }
+  },
+  "checks": {
+    "nodeTests": {
+      "result": "PASS",
+      "output": "✔ candidate Compose resolves only own loopback port/private services (361.0512ms)\n✔ original Compose project and invalid resource identities are refused (0.4912ms)\n✔ owned state refuses original checkout, original ports and original image tags (0.2989ms)\n✔ path containment rejects sibling prefix and traversal (0.1787ms)\n✔ a restore with a shared project-name prefix is never selected as the source project (0.1578ms)\n✔ failed quarantine and retired targets cannot be exposed by start (0.4135ms)\n✔ retirement refuses the primary demonstration before changing Docker state (0.2135ms)\n✔ PF artifact inventory hashes all exact bytes and observes changes (7.9413ms)\n✔ PF artifact inventory refuses a junction instead of traversing outside its root (1.8799ms)\nℹ tests 9\nℹ suites 0\nℹ pass 9\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 459.7756\n"
+    },
+    "imageBuild": "PASS",
+    "firstBootstrap": "PASS",
+    "actualPortableImportAndSelection": "PASS",
+    "authoritativeArtifactsBackupAndRestore": "PASS; see restore-check receipt",
+    "finalApplicationIntegration": "NOT_RUN"
+  },
+  "files": [
+    {
+      "path": "docker/pathfinder.Dockerfile",
+      "bytes": 2082,
+      "sha256": "682018b4ff47990ea58b5657bccf434a948a16bdd99d06d0a84cd38ed53d0bc4"
+    },
+    {
+      "path": "docker/pathfinder.Dockerfile.dockerignore",
+      "bytes": 402,
+      "sha256": "68e8f31e1fa9e2b47e02f7184ad40d866387da57bdecc216284f83fce18c0a51"
+    },
+    {
+      "path": "docker/pathfinder.compose.yml",
+      "bytes": 3912,
+      "sha256": "b05d06071ce552a36a025d2d5616372ae927f82df8ca8958183292d226b47cf5"
+    },
+    {
+      "path": "docker/pathfinder.nginx.conf",
+      "bytes": 3901,
+      "sha256": "371ee662474983d4daf085b3ff47d750b39525b0894935a746099a5e0972cf0c"
+    },
+    {
+      "path": "scripts/pathfinder-local/check-restore.mjs",
+      "bytes": 3995,
+      "sha256": "fcac90c0d9f4605a67adda8b0ccad6a1ee21a0a0336d11cdaf028d46ad0f3589"
+    },
+    {
+      "path": "scripts/pathfinder-local/container-ops.mjs",
+      "bytes": 2220,
+      "sha256": "bea4190fb38a86b7015569a09afa975c742e4eb284f2841e25bca1f6efed94d9"
+    },
+    {
+      "path": "scripts/pathfinder-local/record-runtime.mjs",
+      "bytes": 1989,
+      "sha256": "2bd05cea34b83c2eb1303332b5f6c2d5e14d8bb14a279ac14d34855004d92357"
+    },
+    {
+      "path": "scripts/pathfinder-local/runtime-lib.mjs",
+      "bytes": 40264,
+      "sha256": "73f8523a1bdf21c14d12cb93acd74dafc5e0333201af3038b68597057b5550a8"
+    },
+    {
+      "path": "scripts/pathfinder-local/runtime.mjs",
+      "bytes": 1977,
+      "sha256": "a254a61830b28b8405427a19ca9a0457876fe54500f236e4cc53735a7204453a"
+    },
+    {
+      "path": "scripts/pathfinder-local/runtime.test.mjs",
+      "bytes": 4016,
+      "sha256": "7e30701bf759414c8ac1f723148ccb81fd7a505c8ae89b5e9c0b0604c29852ed"
+    }
+  ]
+}

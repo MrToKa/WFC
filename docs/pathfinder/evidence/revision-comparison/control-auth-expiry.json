@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "wfc.pf.revision-comparison-control-receipt.v1",
+  "status": "PASS",
+  "phase": "auth-expiry",
+  "phaseIntentId": "7d118856-fb98-4c7e-b63d-38c8c4922275",
+  "checks": [
+    {
+      "name": "Expired signed-principal lifetime refuses admission",
+      "status": "PASS",
+      "scope": "production transaction guard; no login mutation"
+    }
+  ],
+  "beforeSha256": "f7d2ac0a03595c1a906e18ac1fa291864ed25f362fd797082d313a37ee0541b8",
+  "afterSha256": "f7d2ac0a03595c1a906e18ac1fa291864ed25f362fd797082d313a37ee0541b8",
+  "elapsedMilliseconds": 36,
+  "engineeringAccepted": false,
+  "productionComparisonPublicationTested": false,
+  "automaticApplyPerformed": false
+}

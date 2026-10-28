@@ -1,0 +1,12 @@
+import type { ProducerProfile } from './container-profile.mjs';
+import type { ManagedIdentity } from './managed-runner.mjs';
+import type { HostProofJournal } from './host-proof-journal.mjs';
+export interface ManagedHostConfiguration { readonly key: string; readonly owner: string; readonly project: string; readonly image: string; readonly runtimeInventorySha256: string; readonly workPath: string; readonly seccompSha256: string }
+export interface ManagedHostObservation { readonly type: string; readonly attemptId?: string; readonly containerId?: string; readonly state?: string; readonly code?: string; readonly faultCode?: string; readonly quarantineCode?: string; readonly exitCode?: number; readonly stderrBytes?: number; readonly removed?: boolean; readonly resourceRequests?:number;readonly resourceBytes?:number;readonly resourceHandles?:number }
+export const HOST_MAIN_LIMITS: Readonly<{ configurationBytes: 16384; seccompBytes: number; stopBytes: 4096; observations: 256; attempts: 256; workFiles: 8192; stopPollMilliseconds: 500 }>;
+export function parseManagedHostConfiguration(raw: Buffer): ManagedHostConfiguration;
+export function parseHostMainArguments(argv: string[]): Readonly<{ configurationPath: string }>;
+export function sanitizeManagedHostObservation(value: unknown): ManagedHostObservation;
+export function loadManagedHostConfiguration(configurationPath: string, options?: { root?: string }): Promise<{ configuration: ManagedHostConfiguration; work: { root: string; relative: string; directory: string; owner: string }; configurationSha256: string; seccompBytes: Buffer; seccompSha256: string }>;
+export interface ManagedHostWorkerOptions { configuration: ManagedHostConfiguration; seccompBytes: Buffer; seccompSha256: string; journal: HostProofJournal; signal: AbortSignal; observe(value: unknown): void; beforeStart(input: { attemptId: string; identity: ManagedIdentity; profile: ProducerProfile }): Promise<void> }
+export function runManagedHostMain(argv: string[], options?: { root?: string; listenForSignals?: boolean; runWorker?(options: ManagedHostWorkerOptions): Promise<{ stopped: boolean; lastErrorCode: string | null }>; createJournal?: (configuration: { workPath: string; owner: string; project: string; image: string; runtimeInventorySha256: string }, options?: { root?: string }) => Promise<HostProofJournal> }): Promise<Readonly<{ stopped: true; state: 'joined' | 'quarantined'; runId: string; configurationSha256: string; pendingProofs: number | null; operationErrorCode: string | null }>>;

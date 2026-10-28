@@ -1,0 +1,96 @@
+{
+  "schemaVersion": "wfc.pf.current-full-recovery-attempt.v1",
+  "status": "FAIL",
+  "attempt": 2,
+  "code": "PF_BACKUP_INVALID",
+  "payloadMembers": 8,
+  "acceptedArchive": false,
+  "cause": "Artifact audit failed with EACCES; final manifest correctly refused. Failed archive is retained without modification.",
+  "cleanup": {
+    "status": "PASS",
+    "scopeNonce": "4da18a98-8e41-40d5-ae71-727a15cb488b",
+    "operationJoined": true,
+    "commandsJoined": true,
+    "helpersRemoved": true,
+    "remoteExecUnknown": false,
+    "unknownDockerMutation": false
+  },
+  "originalRecovery": {
+    "status": "UNCONFIRMED",
+    "code": "ERR_ASSERTION"
+  },
+  "subsequentReadOnlyReconciliation": {
+    "status": "PASS",
+    "webHealth200": true,
+    "normalCurrentAdmin200": true,
+    "postgresStartedAtUnchanged": true,
+    "fullStaticPins": 5
+  },
+  "mountOrderObservations": [
+    {
+      "read": 1,
+      "configSame": true,
+      "hostConfigSame": true,
+      "rawMountsSame": true,
+      "reversedMountsSame": false
+    },
+    {
+      "read": 2,
+      "configSame": true,
+      "hostConfigSame": true,
+      "rawMountsSame": true,
+      "reversedMountsSame": false
+    },
+    {
+      "read": 3,
+      "configSame": true,
+      "hostConfigSame": true,
+      "rawMountsSame": true,
+      "reversedMountsSame": false
+    },
+    {
+      "read": 4,
+      "configSame": true,
+      "hostConfigSame": true,
+      "rawMountsSame": true,
+      "reversedMountsSame": false
+    },
+    {
+      "read": 5,
+      "configSame": true,
+      "hostConfigSame": true,
+      "rawMountsSame": true,
+      "reversedMountsSame": false
+    },
+    {
+      "read": 6,
+      "configSame": true,
+      "hostConfigSame": true,
+      "rawMountsSame": true,
+      "reversedMountsSame": false
+    },
+    {
+      "read": 7,
+      "configSame": true,
+      "hostConfigSame": true,
+      "rawMountsSame": false,
+      "reversedMountsSame": true
+    },
+    {
+      "read": 8,
+      "configSame": true,
+      "hostConfigSame": true,
+      "rawMountsSame": true,
+      "reversedMountsSame": false
+    }
+  ],
+  "unqualifiedVolume": {
+    "reportedBytes": 1,
+    "referenceCount": 0,
+    "deleted": false,
+    "ownership": "UNCONFIRMED; event history unavailable"
+  },
+  "wholeOutsideEquality": "FAIL: one additional anonymous volume",
+  "restore": "NOT_RUN",
+  "realApply": false
+}

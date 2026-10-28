@@ -1,0 +1,135 @@
+{
+  "schemaVersion": "pathfinder.lookup.runtime-binding.v1",
+  "recordedAtUtc": "2026-10-18T09:41:18.363Z",
+  "sourceRevision": "60e9ce66680d2e86b17be5c9a73d1247d20d9fc0",
+  "sourceDriverSha256": "6675c5fc72e6ca1dafd5e9c5ea8f1fe8f90415d5d40e9fbe7d65656c36b19111",
+  "compiledDriverSha256": "89b7ac6c2a18b8c4189979d95dd6d214b4e5bd26488eba05ed81521f1ddcb78e",
+  "compiledAuditSha256": "9496ca3ecce0da3cc2eebb039dc25e5e301dd4d681d17f4c16b1c030edb8fcd6",
+  "privateConfiguration": {
+    "database": {
+      "host": "postgres",
+      "name": "wfc_pathfinder_local"
+    },
+    "pfRoot": "/var/lib/wfc/pathfinder",
+    "engine": "/opt/pathfinder/PathFinder.ModelRunner.dll",
+    "compiledDriverSha256": "89b7ac6c2a18b8c4189979d95dd6d214b4e5bd26488eba05ed81521f1ddcb78e",
+    "compiledAuditSha256": "9496ca3ecce0da3cc2eebb039dc25e5e301dd4d681d17f4c16b1c030edb8fcd6"
+  },
+  "containersBefore": [
+    {
+      "name": "/wfc-pathfinder-local-api-1",
+      "id": "ad429b5aae2296380cbc259ca4b9a74e0fd975de353eac383fb3167dd24e1e9e",
+      "image": "sha256:1630510e3240a8ede43d9cc9b77297bedb150cc25ad9480e9425f31797177bc3",
+      "startedAt": "2026-10-18T09:38:27.560354659Z",
+      "health": "healthy",
+      "workingDirectory": "/app",
+      "config": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\docker\\pathfinder.compose.yml",
+      "privateEnvironmentFile": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pathfinder-local\\runtime.env",
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "wfc-pathfinder-local_pathfinder",
+          "Destination": "/var/lib/wfc/pathfinder"
+        },
+        {
+          "Type": "volume",
+          "Name": "wfc-pathfinder-local_staging",
+          "Destination": "/var/lib/wfc/model-imports"
+        }
+      ]
+    },
+    {
+      "name": "/wfc-pathfinder-local-web-1",
+      "id": "f7b4d610a90be3ed0a06d2eb68655cdd60f919ea7bb9ae0fa56338006b17f274",
+      "image": "sha256:f4b5a13c603d091e1473983aed9d20e26daabf04e4603819883c28e860fb6617",
+      "startedAt": "2026-10-18T09:38:33.34515307Z",
+      "health": "healthy",
+      "workingDirectory": "/",
+      "config": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\docker\\pathfinder.compose.yml",
+      "privateEnvironmentFile": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pathfinder-local\\runtime.env",
+      "mounts": []
+    },
+    {
+      "name": "/wfc-pathfinder-local-postgres-1",
+      "id": "6830635a4597dad696f1a5ced6846853cd9e1fee0f858450ad6f858e4c2e30b9",
+      "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+      "startedAt": "2026-10-18T02:03:12.60010978Z",
+      "health": "healthy",
+      "workingDirectory": "",
+      "config": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\docker\\pathfinder.compose.yml",
+      "privateEnvironmentFile": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pathfinder-local\\runtime.env",
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "wfc-pathfinder-local_postgres",
+          "Destination": "/var/lib/postgresql"
+        }
+      ]
+    }
+  ],
+  "containersAfter": [
+    {
+      "name": "/wfc-pathfinder-local-api-1",
+      "id": "ad429b5aae2296380cbc259ca4b9a74e0fd975de353eac383fb3167dd24e1e9e",
+      "image": "sha256:1630510e3240a8ede43d9cc9b77297bedb150cc25ad9480e9425f31797177bc3",
+      "startedAt": "2026-10-18T09:38:27.560354659Z",
+      "health": "healthy",
+      "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65",
+      "project": "wfc-pathfinder-local"
+    },
+    {
+      "name": "/wfc-pathfinder-local-web-1",
+      "id": "f7b4d610a90be3ed0a06d2eb68655cdd60f919ea7bb9ae0fa56338006b17f274",
+      "image": "sha256:f4b5a13c603d091e1473983aed9d20e26daabf04e4603819883c28e860fb6617",
+      "startedAt": "2026-10-18T09:38:33.34515307Z",
+      "health": "healthy",
+      "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65",
+      "project": "wfc-pathfinder-local"
+    },
+    {
+      "name": "/wfc-pathfinder-local-postgres-1",
+      "id": "6830635a4597dad696f1a5ced6846853cd9e1fee0f858450ad6f858e4c2e30b9",
+      "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+      "startedAt": "2026-10-18T02:03:12.60010978Z",
+      "health": "healthy",
+      "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65",
+      "project": "wfc-pathfinder-local"
+    }
+  ],
+  "evidence": {
+    "path": "docs/pathfinder/evidence/path-lookup/live10-60e9ce6-20261018T094056Z.json",
+    "sha256": "1ae8836d469dc9744c90cf5627ff7e188eaf487e08bb816ddb0b6552d567de2f",
+    "status": "PASS",
+    "passed": 10,
+    "total": 10
+  },
+  "cleanupReadback": {
+    "recordedAtUtc": "2026-10-18T09:41:18.363Z",
+    "artifactRows": 0,
+    "ownedFixtureActors": 0,
+    "snapshotFiles": [
+      {
+        "id": "af80b618-35e0-4a7e-aecc-bb4630e5d7e4",
+        "exists": false
+      },
+      {
+        "id": "cd20cba5-5d98-4fc8-bb0d-c26de85d9163",
+        "exists": false
+      }
+    ],
+    "compiledDriverSha256": "89b7ac6c2a18b8c4189979d95dd6d214b4e5bd26488eba05ed81521f1ddcb78e"
+  },
+  "realProjectIsolation": {
+    "status": "PASS",
+    "planningRegistryLocationAliasBindingModelObjectsCableProposalReviewApplyHashesUnchanged": true,
+    "before": "real-before-synthetic-60e9ce6-20261018T094043Z.json",
+    "afterAndUiBaseline": "real-ui-baseline-60e9ce6-20261018T094118Z.json",
+    "applyCount": 0
+  },
+  "limitations": [
+    "No original checkout or application writes; owned synthetic fixture only.",
+    "No new no-planning-model import was attempted; independence without planning artifact has source-level tests.",
+    "Native parity and user engineering acceptance were not performed.",
+    "No /health probe or blocked supplemental health/startup receipt command was retried."
+  ]
+}

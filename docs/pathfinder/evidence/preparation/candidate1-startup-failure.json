@@ -1,0 +1,12 @@
+{
+  "status": "FAIL",
+  "scope": "ISOLATED_5191_CANDIDATE1_STARTUP",
+  "code": "ERR_MODULE_NOT_FOUND",
+  "missing": "server/dist/viewer-runtime/preparation-input.mjs",
+  "failureBeforeDatabaseInitialization": true,
+  "apiState": "exited",
+  "webState": "created",
+  "sourceFix": "scripts/copy-pathfinder-contracts.mjs plus compiled publisher import smoke check",
+  "databaseAndStorageContainersRetained": true,
+  "originalApplicationUpdated": false
+}

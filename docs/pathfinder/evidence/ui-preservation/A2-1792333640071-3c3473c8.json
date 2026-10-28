@@ -1,0 +1,489 @@
+{
+  "schemaVersion": "pathfinder.ui-preservation.capture.v1",
+  "phase": "A2",
+  "recordedAt": "2026-10-18T14:27:20.446Z",
+  "status": "PASS",
+  "target": {
+    "owner": "7fa65ffa-ef34-46a7-b4c1-55cd19f8fa74",
+    "project": "wfc-pathfinder-local-f673a0facba3",
+    "runtime": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pathfinder-local-restore-f673a0facba3",
+    "apiId": "acc437aeb807a88a31903d4f83b0701053e408dbe8d3aeab9abe6c3366a1a1c0",
+    "apiImage": "sha256:e0a6d7425b5280e429c3f25fa0d94922553ae08005f3773676f0cc5291f2904e",
+    "webImage": "sha256:5abc6002a709407b7edd0b7f631abdca75df0cff83c936dccaf76930d8e095fc"
+  },
+  "source": {
+    "head": "e275dd5ee61adb339649a63cd2695dcabcec10f7",
+    "modules": {
+      "server/dist/server/pathfinder/worker.js": "1c53eae0275f9f8eb96733b5f2bce4259dcf2940ff83d57f5a0f6f992040dbaa",
+      "server/dist/server/pathfinder/engineSession.js": "5d0dfe630d46252c98461bfb4b208d98f82437d50ebc05153fe299d7d38400a8",
+      "runner": "4b940d5c8a7b72115369aa2004de4e12434ae5f4c6f14d014b8be9cc6ab3dc06"
+    },
+    "tools": {
+      "capture.mjs": "d47033756bf979eb5f0f27a29b6c5c11b6d99313bdea12c985f210d50049d012",
+      "lib.mjs": "942f28ab29c961eefd594dd0838a3ed09a8cbdc08e907d285b80b7990be01ff9",
+      "lib.test.mjs": "c8909ef95e0b278b739b79a53955b5c59e8322e05ad1df0a038ba2afb5b3e819",
+      "quiesce.mjs": "59b9a8f8a99444cb746caf5f5b5575760d806d239f5406527cf45aa112305900",
+      "retire.mjs": "d23e35f7b02a8ff6cddd58bad94c1e6ef4ba19577a73ea2a834b5c0a867c4e90"
+    }
+  },
+  "raw": {
+    "file": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\ui-preservation-c43b7c81-a9cc-4eca-a349-ef06a6c9f338\\A2-1792333640071-3c3473c8.private.json",
+    "bytes": 371393,
+    "sha256": "2228654b1bcbe3858af8d1eea004774c8567b48e78e09c2a251100c3a22b5162"
+  },
+  "summary": {
+    "settings": {
+      "count": 1,
+      "sha256": "fd028bfed36351138279cea05254d6eb0bb712f9ca8fb7501643ebbb0760ae2d"
+    },
+    "selection": {
+      "count": 1,
+      "sha256": "53c9e37c1ada39e3fadd5ba7b00f508198e6c2fc12c189c8789380d61f5e80e9"
+    },
+    "registry": {
+      "count": 1,
+      "sha256": "ad9d92d44bd97652b37a8e97a0892eebc5f9314372504b35ab950492014d0984"
+    },
+    "planningArtifacts": {
+      "count": 2,
+      "sha256": "02a92c6d9d81be7cfc775920ba1577183e0d517def13532f325f616dae720ddd"
+    },
+    "locations": {
+      "count": 3,
+      "sha256": "14b33f54e2b6ad71318f8d586280a44771456dad365cdd0fc42e2a5f0657a8e7"
+    },
+    "aliases": {
+      "count": 4,
+      "sha256": "30a41e0035f5737aa29ae112d5873efee8c6df6345dc43a19f777d5b62aacf4b"
+    },
+    "bindings": {
+      "count": 3,
+      "sha256": "2a0d7dc92b71813355eee3946ac83cca0564bd7429e6f9ebc33ed56e1c47d434"
+    },
+    "modelObjects": {
+      "count": 104,
+      "sha256": "14b7cd1d1aa7ddf23c21895279e9c83c07f9fa21935f424213369f4ab270cd56"
+    },
+    "cables": {
+      "count": 1,
+      "sha256": "7d1bf598adb6ca623113993592717b0de159747e2280f7286bbb2a8f035dde1b"
+    },
+    "proposals": {
+      "count": 6,
+      "sha256": "b3d456f297cea18cf5c20509f8042fe1c060ab53f63b9eb43a4fbcc485a7c68e"
+    },
+    "reviews": {
+      "count": 3,
+      "sha256": "a1121bb28f1c633a229efd78b135200368154959caa4773fa640a8157a24f909"
+    },
+    "applies": {
+      "count": 0,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    }
+  },
+  "auxCounts": {
+    "jobs": 22,
+    "items": 7,
+    "results": 15,
+    "matches": 0,
+    "events": 9,
+    "models": 1
+  },
+  "durable": true,
+  "preconditions": "PASS",
+  "fromA0": {
+    "difference": {
+      "file": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\ui-preservation-c43b7c81-a9cc-4eca-a349-ef06a6c9f338\\A2-1792333640071-3c3473c8-fromA0.diff.private.json",
+      "bytes": 32467,
+      "sha256": "159d8f10eaf2ce41136c0fb40134214fba1723194618dfa3b584c1f1e35f9bb5"
+    },
+    "status": "PASS",
+    "checks": [
+      {
+        "name": "immutable settings",
+        "status": "PASS"
+      },
+      {
+        "name": "immutable selection",
+        "status": "PASS"
+      },
+      {
+        "name": "immutable registry",
+        "status": "PASS"
+      },
+      {
+        "name": "immutable planningArtifacts",
+        "status": "PASS"
+      },
+      {
+        "name": "immutable locations",
+        "status": "PASS"
+      },
+      {
+        "name": "immutable aliases",
+        "status": "PASS"
+      },
+      {
+        "name": "immutable bindings",
+        "status": "PASS"
+      },
+      {
+        "name": "immutable modelObjects",
+        "status": "PASS"
+      },
+      {
+        "name": "immutable cables",
+        "status": "PASS"
+      },
+      {
+        "name": "immutable reviews",
+        "status": "PASS"
+      },
+      {
+        "name": "immutable applies",
+        "status": "PASS"
+      },
+      {
+        "name": "existing proposals fully immutable",
+        "status": "PASS"
+      },
+      {
+        "name": "unchanged models",
+        "status": "PASS"
+      },
+      {
+        "name": "unchanged matches",
+        "status": "PASS"
+      },
+      {
+        "name": "unchanged events",
+        "status": "PASS"
+      },
+      {
+        "name": "existing result rows immutable",
+        "status": "PASS"
+      },
+      {
+        "name": "no job or item deletion",
+        "status": "PASS"
+      },
+      {
+        "name": "new jobs single ordinary UI login",
+        "status": "PASS"
+      },
+      {
+        "name": "current authorized UI job 3b5b61c2-b8f7-4715-8c71-11bb116a706b",
+        "status": "PASS"
+      },
+      {
+        "name": "current authorized UI job 89a9648c-3de9-4fb5-a1db-3f85b0c09b3d",
+        "status": "PASS"
+      },
+      {
+        "name": "new item belongs to new automatic job 89a9648c-3de9-4fb5-a1db-3f85b0c09b3d/a49521ad-e4e1-47d9-b3b2-948375a83905",
+        "status": "PASS"
+      },
+      {
+        "name": "new proposal exact causal dependency f40ba703-be5c-4a27-b688-1b6e9e915898",
+        "status": "PASS",
+        "jobId": "89a9648c-3de9-4fb5-a1db-3f85b0c09b3d",
+        "cableId": "a49521ad-e4e1-47d9-b3b2-948375a83905",
+        "calculationMode": "design"
+      },
+      {
+        "name": "preview has no cable item/proposal 3b5b61c2-b8f7-4715-8c71-11bb116a706b",
+        "status": "PASS"
+      },
+      {
+        "name": "automatic job complete exact cable scope 89a9648c-3de9-4fb5-a1db-3f85b0c09b3d",
+        "status": "PASS",
+        "cableIds": [
+          "a49521ad-e4e1-47d9-b3b2-948375a83905"
+        ]
+      },
+      {
+        "name": "new standalone preview result 3b5b61c2-b8f7-4715-8c71-11bb116a706b",
+        "status": "PASS"
+      }
+    ],
+    "changes": {
+      "settings": {
+        "added": 0,
+        "removed": 0,
+        "changed": []
+      },
+      "selection": {
+        "added": 0,
+        "removed": 0,
+        "changed": []
+      },
+      "registry": {
+        "added": 0,
+        "removed": 0,
+        "changed": []
+      },
+      "planningArtifacts": {
+        "added": 0,
+        "removed": 0,
+        "changed": []
+      },
+      "locations": {
+        "added": 0,
+        "removed": 0,
+        "changed": []
+      },
+      "aliases": {
+        "added": 0,
+        "removed": 0,
+        "changed": []
+      },
+      "bindings": {
+        "added": 0,
+        "removed": 0,
+        "changed": []
+      },
+      "modelObjects": {
+        "added": 0,
+        "removed": 0,
+        "changed": []
+      },
+      "cables": {
+        "added": 0,
+        "removed": 0,
+        "changed": []
+      },
+      "proposals": {
+        "added": 1,
+        "removed": 0,
+        "changed": []
+      },
+      "reviews": {
+        "added": 0,
+        "removed": 0,
+        "changed": []
+      },
+      "applies": {
+        "added": 0,
+        "removed": 0,
+        "changed": []
+      },
+      "jobs": {
+        "added": 2,
+        "removed": 0,
+        "changed": []
+      },
+      "items": {
+        "added": 1,
+        "removed": 0,
+        "changed": []
+      },
+      "results": {
+        "added": 1,
+        "removed": 0,
+        "changed": []
+      },
+      "matches": {
+        "added": 0,
+        "removed": 0,
+        "changed": []
+      },
+      "events": {
+        "added": 0,
+        "removed": 0,
+        "changed": []
+      },
+      "models": {
+        "added": 0,
+        "removed": 0,
+        "changed": []
+      }
+    }
+  },
+  "fromPrevious": {
+    "difference": {
+      "file": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\ui-preservation-c43b7c81-a9cc-4eca-a349-ef06a6c9f338\\A2-1792333640071-3c3473c8-fromPrevious.diff.private.json",
+      "bytes": 16744,
+      "sha256": "0b54dbc12098944d0788d2a1ada9104fad875f38c19eca80fdbb8db54543fd56"
+    },
+    "status": "PASS",
+    "checks": [
+      {
+        "name": "immutable settings",
+        "status": "PASS"
+      },
+      {
+        "name": "immutable selection",
+        "status": "PASS"
+      },
+      {
+        "name": "immutable registry",
+        "status": "PASS"
+      },
+      {
+        "name": "immutable planningArtifacts",
+        "status": "PASS"
+      },
+      {
+        "name": "immutable locations",
+        "status": "PASS"
+      },
+      {
+        "name": "immutable aliases",
+        "status": "PASS"
+      },
+      {
+        "name": "immutable bindings",
+        "status": "PASS"
+      },
+      {
+        "name": "immutable modelObjects",
+        "status": "PASS"
+      },
+      {
+        "name": "immutable cables",
+        "status": "PASS"
+      },
+      {
+        "name": "immutable reviews",
+        "status": "PASS"
+      },
+      {
+        "name": "immutable applies",
+        "status": "PASS"
+      },
+      {
+        "name": "existing proposals fully immutable",
+        "status": "PASS"
+      },
+      {
+        "name": "unchanged models",
+        "status": "PASS"
+      },
+      {
+        "name": "unchanged matches",
+        "status": "PASS"
+      },
+      {
+        "name": "unchanged events",
+        "status": "PASS"
+      },
+      {
+        "name": "existing result rows immutable",
+        "status": "PASS"
+      },
+      {
+        "name": "no job or item deletion",
+        "status": "PASS"
+      },
+      {
+        "name": "new jobs single ordinary UI login",
+        "status": "PASS"
+      },
+      {
+        "name": "current authorized UI job 3b5b61c2-b8f7-4715-8c71-11bb116a706b",
+        "status": "PASS"
+      },
+      {
+        "name": "preview has no cable item/proposal 3b5b61c2-b8f7-4715-8c71-11bb116a706b",
+        "status": "PASS"
+      },
+      {
+        "name": "new standalone preview result 3b5b61c2-b8f7-4715-8c71-11bb116a706b",
+        "status": "PASS"
+      }
+    ],
+    "changes": {
+      "settings": {
+        "added": 0,
+        "removed": 0,
+        "changed": []
+      },
+      "selection": {
+        "added": 0,
+        "removed": 0,
+        "changed": []
+      },
+      "registry": {
+        "added": 0,
+        "removed": 0,
+        "changed": []
+      },
+      "planningArtifacts": {
+        "added": 0,
+        "removed": 0,
+        "changed": []
+      },
+      "locations": {
+        "added": 0,
+        "removed": 0,
+        "changed": []
+      },
+      "aliases": {
+        "added": 0,
+        "removed": 0,
+        "changed": []
+      },
+      "bindings": {
+        "added": 0,
+        "removed": 0,
+        "changed": []
+      },
+      "modelObjects": {
+        "added": 0,
+        "removed": 0,
+        "changed": []
+      },
+      "cables": {
+        "added": 0,
+        "removed": 0,
+        "changed": []
+      },
+      "proposals": {
+        "added": 0,
+        "removed": 0,
+        "changed": []
+      },
+      "reviews": {
+        "added": 0,
+        "removed": 0,
+        "changed": []
+      },
+      "applies": {
+        "added": 0,
+        "removed": 0,
+        "changed": []
+      },
+      "jobs": {
+        "added": 1,
+        "removed": 0,
+        "changed": []
+      },
+      "items": {
+        "added": 0,
+        "removed": 0,
+        "changed": []
+      },
+      "results": {
+        "added": 1,
+        "removed": 0,
+        "changed": []
+      },
+      "matches": {
+        "added": 0,
+        "removed": 0,
+        "changed": []
+      },
+      "events": {
+        "added": 0,
+        "removed": 0,
+        "changed": []
+      },
+      "models": {
+        "added": 0,
+        "removed": 0,
+        "changed": []
+      }
+    }
+  },
+  "phaseShape": true
+}

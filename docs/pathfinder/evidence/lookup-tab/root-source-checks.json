@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "pathfinder.lookup.root-source-checks.v1",
+  "observedAtUtc": "2026-10-18T09:31:00Z",
+  "baselineCommit": "9e6561e33ccf9ab535fb2184c858ecd20240071d",
+  "branch": "pf-path-lookup-local-20261018",
+  "scope": "API schemas, protected capture orchestration and cancellation; no runtime or native acceptance inferred",
+  "checks": [
+    { "name": "API and hook regression", "status": "PASS", "passed": 23, "command": "node node_modules/vitest/vitest.mjs run src/api/pathfinder.test.ts src/pages/ProjectDetails/hooks/usePathFinder.test.tsx --testTimeout 30000", "durationSeconds": 2.32 },
+    { "name": "frontend TypeScript", "status": "PASS", "command": "node node_modules/typescript/bin/tsc --noEmit" },
+    { "name": "server TypeScript", "status": "PASS", "command": "node node_modules/typescript/bin/tsc --noEmit -p server/tsconfig.json" },
+    { "name": "API and hook scoped ESLint", "status": "PASS", "warnings": 0 }
+  ],
+  "historicalAttempt": "An initial 22/23 run exposed the cross-realm aborted-signal message. The explicit guarded DOMException correction was tested with 23/23, then the final canonical token schema tightening was separately rerun with 23/23 at 09:28 UTC.",
+  "pending": ["combined source manifest and source checkpoint", "new images and real browser/API checks"]
+}

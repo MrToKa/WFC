@@ -1,0 +1,429 @@
+{
+  "schemaVersion": "pathfinder.lookup.final-audit.v1",
+  "recordedAtUtc": "2026-10-18T10:03:01.981Z",
+  "status": "PASS",
+  "sourceRevision": "73c13aa58519f26cbb96d93bbbb70bcdd5bb2cdd",
+  "scope": "Corrected candidate after final root UI check; read-only audit and integrity readback.",
+  "containers": [
+    {
+      "name": "/wfc-pathfinder-local-api-1",
+      "id": "3d05017ee0fc2bb0b15c1a3e0aaeac258e996d2e024006667d3a4449c40d62c0",
+      "image": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+      "startedAt": "2026-10-18T09:53:48.067931419Z",
+      "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65",
+      "project": "wfc-pathfinder-local",
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "wfc-pathfinder-local_staging",
+          "Destination": "/var/lib/wfc/model-imports"
+        },
+        {
+          "Type": "volume",
+          "Name": "wfc-pathfinder-local_pathfinder",
+          "Destination": "/var/lib/wfc/pathfinder"
+        }
+      ]
+    },
+    {
+      "name": "/wfc-pathfinder-local-web-1",
+      "id": "ffc99c7a98ffd5b9df7fc145737b6e0d9d6c9bdb36bf5ad57e1219f021e9bf5d",
+      "image": "sha256:1895a3fa33c25933024ab514ef61bd2d1568ffb33477d114541b855da65445b7",
+      "startedAt": "2026-10-18T09:53:53.783174377Z",
+      "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65",
+      "project": "wfc-pathfinder-local",
+      "mounts": []
+    },
+    {
+      "name": "/wfc-pathfinder-local-postgres-1",
+      "id": "6830635a4597dad696f1a5ced6846853cd9e1fee0f858450ad6f858e4c2e30b9",
+      "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+      "startedAt": "2026-10-18T02:03:12.60010978Z",
+      "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65",
+      "project": "wfc-pathfinder-local",
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "wfc-pathfinder-local_postgres",
+          "Destination": "/var/lib/postgresql"
+        }
+      ]
+    }
+  ],
+  "baselineReceipt": "docs/pathfinder/evidence/path-lookup/real-ui-baseline-60e9ce6-20261018T094118Z.json",
+  "baseline": {
+    "schemaVersion": "pathfinder.lookup.audit.v1",
+    "recordedAtUtc": "2026-10-18T09:41:18.339Z",
+    "projectId": "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a",
+    "scope": "isolated database; repeatable read-only snapshot",
+    "database": {
+      "database": "wfc_pathfinder_local",
+      "address": "172.28.0.3/32",
+      "port": 5432
+    },
+    "registryRevision": "11",
+    "latestPlanningArtifact": {
+      "id": "75c61dc7-d456-45b0-9052-2a0822240350",
+      "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+      "snapshotSha256": "b47365401aaf078374607c944e22ac5100f2aa6fe4389c056fbdd963526f17ed",
+      "objectCount": 52
+    },
+    "planningArtifactList": [
+      {
+        "id": "6a04c032-707f-490c-9cc6-325a04a63250",
+        "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+        "snapshotSha256": "df1b67a0c832e9eed426d4f00741373616b4738f0520b65eb3ff3898c9fd2640",
+        "objectCount": 52
+      },
+      {
+        "id": "75c61dc7-d456-45b0-9052-2a0822240350",
+        "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+        "snapshotSha256": "b47365401aaf078374607c944e22ac5100f2aa6fe4389c056fbdd963526f17ed",
+        "objectCount": 52
+      }
+    ],
+    "planningArtifactsAndWorkflow": {
+      "settings": {
+        "count": 1,
+        "sha256": "fd028bfed36351138279cea05254d6eb0bb712f9ca8fb7501643ebbb0760ae2d"
+      },
+      "selection": {
+        "count": 1,
+        "sha256": "53c9e37c1ada39e3fadd5ba7b00f508198e6c2fc12c189c8789380d61f5e80e9"
+      },
+      "registry": {
+        "count": 1,
+        "sha256": "ad9d92d44bd97652b37a8e97a0892eebc5f9314372504b35ab950492014d0984"
+      },
+      "planningArtifacts": {
+        "count": 2,
+        "sha256": "02a92c6d9d81be7cfc775920ba1577183e0d517def13532f325f616dae720ddd"
+      },
+      "locations": {
+        "count": 3,
+        "sha256": "14b33f54e2b6ad71318f8d586280a44771456dad365cdd0fc42e2a5f0657a8e7"
+      },
+      "aliases": {
+        "count": 4,
+        "sha256": "30a41e0035f5737aa29ae112d5873efee8c6df6345dc43a19f777d5b62aacf4b"
+      },
+      "bindings": {
+        "count": 3,
+        "sha256": "2a0d7dc92b71813355eee3946ac83cca0564bd7429e6f9ebc33ed56e1c47d434"
+      },
+      "modelObjects": {
+        "count": 104,
+        "sha256": "14b7cd1d1aa7ddf23c21895279e9c83c07f9fa21935f424213369f4ab270cd56"
+      },
+      "cables": {
+        "count": 1,
+        "sha256": "7d1bf598adb6ca623113993592717b0de159747e2280f7286bbb2a8f035dde1b"
+      },
+      "proposals": {
+        "count": 5,
+        "sha256": "5a5a10d25a41e24f1f02ee473062888f6d47f55c11b791f300ff198127031e18"
+      },
+      "reviews": {
+        "count": 3,
+        "sha256": "a1121bb28f1c633a229efd78b135200368154959caa4773fa640a8157a24f909"
+      },
+      "applies": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      }
+    },
+    "nativeParity": "NOT_PERFORMED; no Apply or engineering acceptance asserted"
+  },
+  "currentAudit": {
+    "schemaVersion": "pathfinder.lookup.audit.v1",
+    "recordedAtUtc": "2026-10-18T10:02:39.486Z",
+    "projectId": "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a",
+    "scope": "isolated database; repeatable read-only snapshot",
+    "database": {
+      "database": "wfc_pathfinder_local",
+      "address": "172.28.0.3/32",
+      "port": 5432
+    },
+    "registryRevision": "11",
+    "latestPlanningArtifact": {
+      "id": "75c61dc7-d456-45b0-9052-2a0822240350",
+      "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+      "snapshotSha256": "b47365401aaf078374607c944e22ac5100f2aa6fe4389c056fbdd963526f17ed",
+      "objectCount": 52
+    },
+    "planningArtifactList": [
+      {
+        "id": "6a04c032-707f-490c-9cc6-325a04a63250",
+        "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+        "snapshotSha256": "df1b67a0c832e9eed426d4f00741373616b4738f0520b65eb3ff3898c9fd2640",
+        "objectCount": 52
+      },
+      {
+        "id": "75c61dc7-d456-45b0-9052-2a0822240350",
+        "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+        "snapshotSha256": "b47365401aaf078374607c944e22ac5100f2aa6fe4389c056fbdd963526f17ed",
+        "objectCount": 52
+      }
+    ],
+    "planningArtifactsAndWorkflow": {
+      "settings": {
+        "count": 1,
+        "sha256": "fd028bfed36351138279cea05254d6eb0bb712f9ca8fb7501643ebbb0760ae2d"
+      },
+      "selection": {
+        "count": 1,
+        "sha256": "53c9e37c1ada39e3fadd5ba7b00f508198e6c2fc12c189c8789380d61f5e80e9"
+      },
+      "registry": {
+        "count": 1,
+        "sha256": "ad9d92d44bd97652b37a8e97a0892eebc5f9314372504b35ab950492014d0984"
+      },
+      "planningArtifacts": {
+        "count": 2,
+        "sha256": "02a92c6d9d81be7cfc775920ba1577183e0d517def13532f325f616dae720ddd"
+      },
+      "locations": {
+        "count": 3,
+        "sha256": "14b33f54e2b6ad71318f8d586280a44771456dad365cdd0fc42e2a5f0657a8e7"
+      },
+      "aliases": {
+        "count": 4,
+        "sha256": "30a41e0035f5737aa29ae112d5873efee8c6df6345dc43a19f777d5b62aacf4b"
+      },
+      "bindings": {
+        "count": 3,
+        "sha256": "2a0d7dc92b71813355eee3946ac83cca0564bd7429e6f9ebc33ed56e1c47d434"
+      },
+      "modelObjects": {
+        "count": 104,
+        "sha256": "14b7cd1d1aa7ddf23c21895279e9c83c07f9fa21935f424213369f4ab270cd56"
+      },
+      "cables": {
+        "count": 1,
+        "sha256": "7d1bf598adb6ca623113993592717b0de159747e2280f7286bbb2a8f035dde1b"
+      },
+      "proposals": {
+        "count": 5,
+        "sha256": "5a5a10d25a41e24f1f02ee473062888f6d47f55c11b791f300ff198127031e18"
+      },
+      "reviews": {
+        "count": 3,
+        "sha256": "a1121bb28f1c633a229efd78b135200368154959caa4773fa640a8157a24f909"
+      },
+      "applies": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      }
+    },
+    "nativeParity": "NOT_PERFORMED; no Apply or engineering acceptance asserted"
+  },
+  "unchangedCategories": [
+    "settings",
+    "selection",
+    "registry",
+    "planningArtifacts",
+    "locations",
+    "aliases",
+    "bindings",
+    "modelObjects",
+    "cables",
+    "proposals",
+    "reviews",
+    "applies"
+  ],
+  "changedCategories": [],
+  "latestLookup": {
+    "schemaVersion": "pathfinder.lookup.final-readback.v1",
+    "recordedAtUtc": "2026-10-18T10:03:01.981Z",
+    "projectId": "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a",
+    "database": {
+      "host": "postgres",
+      "name": "wfc_pathfinder_local"
+    },
+    "job": {
+      "id": "06c0b624-2d84-432e-9f1d-1c6f23cc4f6c",
+      "state": "complete",
+      "cancelRequested": false,
+      "createdAt": "2026-10-18T10:00:14.598Z",
+      "reverse": false,
+      "inputRouteText": "/DFB018-1/DFB011/DFB012/DFB013/B002/B107-1/B107-2/B107-3/BC025/BC022-2/SECONDARY",
+      "dependencyGap": "1",
+      "settingsRevision": "2",
+      "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+      "selectionRevision": "1",
+      "staleAtCompletion": false,
+      "itemCount": 0
+    },
+    "artifact": {
+      "id": "b06ab4c4-60e2-4b87-8010-61e1b547f795",
+      "purpose": "lookup",
+      "snapshotSha256": "1aa3036066f74aa7dfe0dfb9d702f8107bdb5836a2f563be8cb6432e113f8b6b",
+      "bytes": 2571046,
+      "objectCount": 55,
+      "routingLeaves": 27,
+      "capture": {
+        "adapterVersion": "wfc.protected-lookup-capture.v1",
+        "sourceKind": "converted",
+        "inventoryComplete": false,
+        "geometryComplete": false,
+        "unitsVerified": false,
+        "transformsVerified": false,
+        "planningVisibilityKnown": false,
+        "sourceLinkVerified": false,
+        "evidenceSha256": [
+          "4f06368b009609ae0c70c33932772d587c891b802d82af1daee0156d7582c9df"
+        ],
+        "lookupRouteCodes": [
+          "/DFB018-1",
+          "/DFB011",
+          "/DFB012",
+          "/DFB013",
+          "/B002",
+          "/B107-1",
+          "/B107-2",
+          "/B107-3",
+          "/BC025",
+          "/BC022-2"
+        ]
+      }
+    },
+    "result": {
+      "status": "calculated",
+      "engineeringAccepted": false,
+      "design": null,
+      "usedConnectionGapMeters": 1,
+      "lookupScope": {
+        "warnings": [
+          "Scope uses current SDK display visibility; native visibility, native-converted parity and engineering acceptance remain unverified.",
+          "1 broad name-discovery leaves were excluded by canonical logical-owner resolution."
+        ],
+        "uniqueCodeCount": 10,
+        "resolvedLeafCount": 26,
+        "requestedCodeCount": 10,
+        "resolvedOwnerCount": 10,
+        "discoveredObjectCount": 55
+      },
+      "prepared": {
+        "key": "71540578da0f49932ebaa50ca37d48072a3ea11df324616d797beb6bce5ef382",
+        "counts": {
+          "fallbackBends": 2,
+          "validatedBends": 5,
+          "fallbackStraights": 2,
+          "fallbackClearances": 0,
+          "validatedStraights": 17
+        },
+        "readiness": "needs_review",
+        "cacheScope": "fitted-centerlines-ports-and-canonical-mesh;surface-bvh-reconstructed-on-disk-load;graph-per-calculation",
+        "diagnostics": [
+          "Inventory is explicitly partial.",
+          "Geometry capture is explicitly partial.",
+          "Source unit conversion is unverified.",
+          "Source/root/display transforms are unverified.",
+          "Native planning visibility is not established; display Ghost/isolation is never used as exclusion.",
+          "Cryptographic/evidenced source-to-conversion correspondence is not established.",
+          "dbid:425799: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:425800: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:425801: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:425802: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:425803: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:425804: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:425836: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426727: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426728: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426789: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426790: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426793: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426794: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426795: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426796: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426797: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426798: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426799: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426800: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426801: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:426804: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:427079: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:427082: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:427083: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:427086: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:427100: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+          "dbid:425799: two measured cap sections with compatible neighbouring ports are required",
+          "dbid:427079: straight axis needs unique neighboring port evidence",
+          "dbid:427082: radial mesh surfaces do not prove a stable circular bend",
+          "dbid:427083: straight axis needs unique neighboring port evidence"
+        ],
+        "objectCount": 52,
+        "segmentCount": 26,
+        "loadedFromDisk": true,
+        "diagnosticCount": 36,
+        "engineeringAccepted": false,
+        "diagnosticsTruncated": false
+      },
+      "route": {
+        "routeText": "/DFB018-1/DFB011/DFB012/DFB013/B002/B107-1/B107-2/B107-3/BC025/BC022-2",
+        "lengthMeters": 35.30345579516123,
+        "connectionGapCount": 4,
+        "connectionGapLengthMeters": 0.9840583861033791,
+        "distinctGeometryLeaves": 25,
+        "pointCount": 90,
+        "pointsSha256": "98599df6c0955c0d285e4e2864bf3bad6f50dd850f8175be1a3eab77ab79c231",
+        "firstPoint": {
+          "x": 45.16500215081601,
+          "y": -11.73700013993792,
+          "z": 1.5296001389080516
+        },
+        "lastPoint": {
+          "x": 57.840041442197844,
+          "y": -6.751280339942497,
+          "z": 8.211000437980317
+        }
+      }
+    },
+    "cables": [
+      {
+        "id": "a49521ad-e4e1-47d9-b3b2-948375a83905",
+        "tag": "PF-MANUAL-DEMO",
+        "routing": null,
+        "design_length": null,
+        "install_length": null,
+        "cable_write_revision": "0"
+      }
+    ],
+    "applyCount": 0,
+    "fileHashes": {
+      "server/dist/server/pathfinder/lookups.js": "0010a08bff9199f3f45d77c36c3f58a6807dd222470345bf8da75c2fde511993",
+      "server/dist/server/pathfinder/worker.js": "bc79cc13ccbf0cc8e5bde8f85185ab476c4e4044f2dd8308920628554f02b86e",
+      "server/dist/server/pathfinder/lookupAudit.js": "9496ca3ecce0da3cc2eebb039dc25e5e301dd4d681d17f4c16b1c030edb8fcd6",
+      "server/dist/server/pathfinder/lookup.integration.js": "89b7ac6c2a18b8c4189979d95dd6d214b4e5bd26488eba05ed81521f1ddcb78e",
+      "/opt/pathfinder/PathFinder.ModelRunner.dll": "3fa47573ad88697ebcac5150f72d4fcd24678b3fb52b8d74a7f7b131157eda50"
+    }
+  },
+  "servedWebModuleHashes": [
+    {
+      "path": "/usr/share/nginx/html/viewer-runtime/7.130.0/pathfinder.mjs",
+      "sha256": "d3cbee6038f995e03ac4049500f701eee35fa293f0ec646a76e8aeae907ab2d5"
+    },
+    {
+      "path": "/usr/share/nginx/html/viewer-runtime/7.130.0/model-capture.mjs",
+      "sha256": "0536352226f80e75be6d533a811529bdcbd3868e66ab3d299c07ba826b91f838"
+    },
+    {
+      "path": "/usr/share/nginx/html/viewer-runtime/7.130.0/bridge.mjs",
+      "sha256": "60af940338276218f522f8ad9ff4f4b0b04108a776e54feba7c982e8e754853a"
+    },
+    {
+      "path": "/usr/share/nginx/html/viewer-runtime/7.130.0/adapter.mjs",
+      "sha256": "750fe0d3b99201b7b68fee6c85a6b69654be072b40b4efb6ef012677031eb8c5"
+    }
+  ],
+  "priorFocusedLiveProof": {
+    "receipt": "docs/pathfinder/evidence/path-lookup/live10-60e9ce6-20261018T094056Z.json",
+    "passed": 10,
+    "total": 10,
+    "currentCompiledDriverSha256": "89b7ac6c2a18b8c4189979d95dd6d214b4e5bd26488eba05ed81521f1ddcb78e",
+    "sameCompiledDriverAsTested": true,
+    "rerun": "NOT_RUN; no unnecessary repeat of the same tested backend payload."
+  },
+  "sideEffects": "No DB mutations, runtime actions, /health probes, source edits, integration reruns or cleanup operations.",
+  "limitations": "Technical verification only. Captured source visibility, native-converted parity and engineering acceptance remain unverified; result retains needs_review/fallback diagnostics and no Apply."
+}

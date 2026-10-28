@@ -1,0 +1,180 @@
+{
+  "schemaVersion": "pathfinder.model.runner.tests.v1",
+  "observedAtUtc": "2026-10-18T02:02:08.741Z",
+  "scope": "synthetic-private-model-worker-and-frozen-saved-design-controls",
+  "status": "PASS",
+  "passed": 34,
+  "checks": [
+    {
+      "name": "strict-prepare-and-private-fit-cache",
+      "status": "PASS",
+      "details": {
+        "key": "e3b09e277f9dd52af9d44015b9206e89996bcf8f6b99c31c9c1b52c1a3d91214",
+        "readiness": "needs_review",
+        "counts": {
+          "validatedBends": 0,
+          "fallbackBends": 0,
+          "validatedStraights": 0,
+          "fallbackStraights": 1,
+          "fallbackClearances": 0
+        },
+        "cacheScope": "fitted-centerlines-ports-and-canonical-mesh;surface-bvh-reconstructed-on-disk-load;graph-per-calculation",
+        "loadedFromDisk": false,
+        "objectCount": 1,
+        "segmentCount": 1,
+        "diagnosticCount": 1,
+        "diagnostics": [
+          "tray-1: no repeated mesh end sections prove a straight extrusion"
+        ],
+        "diagnosticsTruncated": false,
+        "engineeringAccepted": false
+      }
+    },
+    {
+      "name": "real-core-calculation-instrumentation-maps-to-control",
+      "status": "PASS",
+      "details": {
+        "length": 10,
+        "design": {
+          "lengthBeforePercentageMeters": "16",
+          "unroundedLengthMeters": "17.6",
+          "designLengthMeters": "18"
+        },
+        "engineeringAccepted": false
+      }
+    },
+    {
+      "name": "null-secondary-does-not-become-zero-when-flagged",
+      "status": "PASS"
+    },
+    {
+      "name": "unknown-category-requires-resolution",
+      "status": "PASS"
+    },
+    {
+      "name": "ordered-lookup-native-parser-without-equipment-tails-or-design",
+      "status": "PASS"
+    },
+    {
+      "name": "reverse-lookup-is-native-exact-reversal",
+      "status": "PASS"
+    },
+    {
+      "name": "reverse-calculation-swaps-approaches-and-keeps-original-formula",
+      "status": "PASS"
+    },
+    {
+      "name": "lookup-missing-code-is-no-path",
+      "status": "PASS"
+    },
+    {
+      "name": "lookup-invalid-and-secondary-only-input-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "core-graph-budget-is-controlled-resource-limit",
+      "status": "PASS"
+    },
+    {
+      "name": "mode-specific-route-and-reverse-fields-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "nonfinite-coordinate-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "cross-project-snapshot-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "snapshot-byte-integrity-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "path-injection-identity-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "unexpected-proof-property-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "duplicate-json-member-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "hard-worker-deadline",
+      "status": "PASS"
+    },
+    {
+      "name": "exact-decimal-underflow-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "smallest-exact-decimal-is-fixed-and-not-rounded-or-exponential",
+      "status": "PASS"
+    },
+    {
+      "name": "null-setting-revision-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "null-required-scalar-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "missing-explicit-private-root-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "unassigned-model-category-is-not-invented",
+      "status": "PASS"
+    },
+    {
+      "name": "frozen-saved-design-design-no-secondary",
+      "status": "PASS"
+    },
+    {
+      "name": "frozen-saved-design-design-one-secondary",
+      "status": "PASS"
+    },
+    {
+      "name": "frozen-saved-design-design-one-secondary-reverse",
+      "status": "PASS"
+    },
+    {
+      "name": "frozen-saved-design-design-both-secondary",
+      "status": "PASS"
+    },
+    {
+      "name": "frozen-saved-design-design-zero-secondary-replacement",
+      "status": "PASS"
+    },
+    {
+      "name": "frozen-saved-design-design-exact-integer",
+      "status": "PASS"
+    },
+    {
+      "name": "frozen-saved-design-design-ceiling-fraction",
+      "status": "PASS"
+    },
+    {
+      "name": "frozen-saved-design-design-zero",
+      "status": "PASS"
+    },
+    {
+      "name": "frozen-saved-design-design-invalid-negative",
+      "status": "PASS"
+    },
+    {
+      "name": "frozen-saved-design-design-approach-exceeds-length",
+      "status": "PASS"
+    }
+  ],
+  "scratch": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\modelrunner-7c99111b-f22c-4f80-9065-f72d285b1390",
+  "sourceSha256": "710dd154ae47fcbbe486fe299d46aaad74f9019952ab111eb7627b68de545a06",
+  "snapshotSha256": "19996832b67fc92c50565759b07eb9abd39d95a23db428b2cc77eef2ff344f0d",
+  "corePinsChanged": false,
+  "nativeParity": "BLOCKED; not established by synthetic controls"
+}

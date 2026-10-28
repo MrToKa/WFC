@@ -1,0 +1,14 @@
+{
+  "schemaVersion":"pathfinder.current-inputs.parent-release.v1",
+  "recordedAtUtc":"2026-10-18T15:28:59Z",
+  "decision":"execute-one-bounded-project-identity-only-observation",
+  "executor":"/root only",
+  "sourceSetSha256":"6c4a7ba80a002e2830cccc3dd7e4f45e9014a760286e3ff4ac8449a359cb6a48",
+  "controls":{"file":"docs/pathfinder/evidence/current-inputs/source-project-controls-1792337296830.json","sha256":"2535a5d4cae9724b1607a5fc25957438ea4257233cca4140dca55808efc432ed","status":"41/41_AND_SYNTAX3_PASS"},
+  "sourceOnlyReview":{"file":"docs/pathfinder/evidence/current-inputs/source-project-review-20261018T152841Z.json","sha256":"263cb8fb8a8b814dc0c59eb033248e861e3371a264d9a2ec338d969ebd2fce27","status":"NO_REMAINING_MATERIAL_FINDINGS"},
+  "inspection":{"file":"docs/pathfinder/evidence/current-inputs/project-inspection-20261018T1529Z.json","sha256":"8347e2d70c89957c4f88dccfec8975a24ef1a3e02c16ca2d560f69e4fd191755","status":"PASS_METADATA_ONLY"},
+  "binding":{"path":"pathfinder-engine/.scratch/current-inputs-a9d8bc01-868e-4af4-926c-4e6026ecb5c4/binding.private.json","sha256":"bd267e2ba322ae8c24c9da0acb064c735e04428f8477faecc898c665153798d4"},
+  "scope":"After exact SQL endpoint/read-only guard, only id/project_number/name for the pinned UUID and fixed bounded Aalborg/HPU identity search. LIMIT11 with overflow refusal. Full labels private; no allowances/customer/model/cable SELECT, original writes/bootstrap, automatic project selection or target guard relaxation.",
+  "reason":"Corrected SQL formatter passes endpoint but original project-name assumption fails. Original UI title source uses projectNumber — name (original e1ef ProjectDetails.tsx1574); the actual stored labels are unknown until this observation.",
+  "historicalAttempts":"1515Z SQL identity FAIL and corrected1524Z project identity FAIL remain unchanged; this diagnostic is not a successful business copy."
+}

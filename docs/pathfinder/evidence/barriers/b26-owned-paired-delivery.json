@@ -1,0 +1,173 @@
+{
+  "port": 5191,
+  "installed": {
+    "api": "sha256:5caaaa42e30ef1c3eee2fca0298b4cfa49e3dd76c2ef8c3994f55a6553539fd9",
+    "web": "sha256:42d14c76cf336045890c0f99458d3e02f6ab75988aa43c029a03e1f28e37b739"
+  },
+  "status": "PASS",
+  "phases": [
+    {
+      "sha256": "e08fd68a53c12d100ca5fbffc6614f4d983cf5ec13909cef4ad0d887171e6fb7",
+      "phase": "init",
+      "bytes": 1384,
+      "status": "PASS"
+    },
+    {
+      "sha256": "d52270cc69d32ee6b98ea4346100cdde4e1dd2d76abb153ba4e8a5d74a5f402a",
+      "phase": "backup",
+      "bytes": 2998,
+      "status": "PASS"
+    },
+    {
+      "sha256": "785ce6ede1ce6ba4375de0cb970fea8be5f4e6c5ec8cdc913dff92df84830736",
+      "phase": "restore-quarantine",
+      "bytes": 2513,
+      "status": "PASS"
+    },
+    {
+      "sha256": "6a01dd550eb70b30c50c7f40fde4e8c8172561cae3fab5eb2b2923ce9a8b41a0",
+      "phase": "candidate-build",
+      "bytes": 4165,
+      "status": "PASS"
+    },
+    {
+      "sha256": "faae70e677ca813f83bbf154f501e7888d5a82f4d83dc6a6405d956e0ecff177",
+      "phase": "target-migration",
+      "bytes": 9014,
+      "status": "PASS"
+    },
+    {
+      "sha256": "4a3ba22284a20bb6021022d187ef7ddf99cd220092197bf14cecc74f8dc25b0c",
+      "phase": "target-runtime",
+      "bytes": 6901,
+      "status": "PASS"
+    },
+    {
+      "sha256": "91fbd5a03b955366df352bebb80a9740c45ad6b7e2f21d951b2ad85e71ccf31f",
+      "phase": "update-source",
+      "bytes": 7137,
+      "status": "PASS"
+    },
+    {
+      "sha256": "acedf95f71663e84e77cbb8f40c2bcf800b1d896c363750734a506593a7adb88",
+      "phase": "source-runtime",
+      "bytes": 5366,
+      "status": "PASS"
+    },
+    {
+      "sha256": "397b8a966eae9d41ddcebf32bce8f74601ca2882c06a83608c81b847bddea337",
+      "phase": "retire-target",
+      "bytes": 3516,
+      "status": "PASS"
+    }
+  ],
+  "liveFrameCurrentness": false,
+  "qualifications": [
+    {
+      "phase": "target-migration",
+      "comparison": {
+        "schemaVersion": "wfc.pf.conservation-v5.migration-facts.v1",
+        "status": "PASS",
+        "policySha256": "46486bf17296b85e02488c08f161faecdf33c044be9602e9877776e603e014c7",
+        "legacyTablesChecked": 142,
+        "legacyRowsChecked": "81252",
+        "newTables": [],
+        "managedChanges": [],
+        "failures": []
+      },
+      "sha256": "0b3bbe6f8e41316a9e56d3ff32fd92c7d62ac8536635bd86a1a3feef805f5ca6",
+      "status": "PASS"
+    },
+    {
+      "phase": "target-runtime",
+      "comparison": {
+        "schemaVersion": "wfc.pf.conservation-v5.runtime-facts.v1",
+        "status": "PASS",
+        "policySha256": "7f6936293e8c5c924b0b3ad0c236a67f30328bf542b3dd7020de56afc3aa76ab",
+        "legacyTablesChecked": 142,
+        "managedChanges": [],
+        "engineChangedProjects": 0,
+        "eventsAdded": 0,
+        "failures": []
+      },
+      "sha256": "b5ac379538aeb82af2fa2a28b720b3e9e25a547ddecce1db793d5873ff6b7370",
+      "status": "PASS"
+    },
+    {
+      "phase": "source-runtime",
+      "comparison": {
+        "schemaVersion": "wfc.pf.conservation-v5.runtime-facts.v1",
+        "status": "PASS",
+        "policySha256": "7f6936293e8c5c924b0b3ad0c236a67f30328bf542b3dd7020de56afc3aa76ab",
+        "legacyTablesChecked": 142,
+        "managedChanges": [],
+        "engineChangedProjects": 0,
+        "eventsAdded": 0,
+        "failures": []
+      },
+      "sha256": "2cefb988a0604fb086c75f128907509e2ada2d41ec6f86c8c72ff94cd5fe522a",
+      "status": "PASS"
+    }
+  ],
+  "sdkExecuted": false,
+  "engineeringAccepted": false,
+  "businessWrites": false,
+  "browserAccessed": false,
+  "realCableApply": false,
+  "engineIdentitySha256": "b3157008f42eced7281f7b093e4b898f23fe244e808da5a605c324f57ac58090",
+  "postDeliveryReceipt": {
+    "sha256": "930e5d1991dcf825662994632cedb4046f71f2e2f923c703a3eea4e859626054",
+    "bytes": 30869
+  },
+  "schemaVersion": "wfc.pf.b26-owned-delivery.v1",
+  "sourceReceiptBookends": "PASS",
+  "productCommit": "798a562d2fcc018ee29d8ec6eacf7f6c1958bc4b",
+  "operationId": "d050dc78-383e-4002-946f-0aa89b231986",
+  "date": "2026-10-23",
+  "health": "PASS",
+  "servedFiles": [
+    {
+      "path": "/",
+      "bytes": 955,
+      "sha256": "12f6480415cd2dba26cd94019dc7d493068decd1431c0a7167d5c13adf0aaf8a"
+    },
+    {
+      "path": "/assets/index-D8bbydFK.js",
+      "bytes": 716405,
+      "sha256": "60bf38be8310c09a2cd316b4ab819764e1f48eb7f1bd1c9e2175de04b3002e04"
+    },
+    {
+      "path": "/assets/ProjectDetails-BYSvA0RJ.js",
+      "bytes": 871287,
+      "sha256": "455ba0953550b243460e7039b84423a69fdbf11d8800a678a01f872beb430250"
+    },
+    {
+      "path": "/assets/ViewerController-BlHbq25M.js",
+      "bytes": 143955,
+      "sha256": "6523eb91f9ad4b86f663ddd2ebcbc84d482fca8843412cda105ef0322635e612"
+    },
+    {
+      "path": "/viewer-runtime/7.130.0/barrier-capture.mjs",
+      "bytes": 36615,
+      "sha256": "998d4115cd40768a4694ee3fb5e4fd319af7a1bbad70b92cd810e64a55bda6b9"
+    },
+    {
+      "path": "/viewer-runtime/7.130.0/barrier-capture-errors.mjs",
+      "bytes": 2956,
+      "sha256": "bef60c5884d24d7475d0e914489a92a38b67ae3e68bc9f0346303019c707a1a0"
+    },
+    {
+      "path": "/viewer-runtime/7.130.0/barrier-multipart-runtime.mjs",
+      "bytes": 10778,
+      "sha256": "b9738f549eccb9dc65244a2c4f013caa9dc9e36dc86442c5f58cffa270352cd5"
+    }
+  ],
+  "cleanup": {
+    "status": "PASS",
+    "operationJoined": true,
+    "commandsJoined": true,
+    "helpersRemoved": true,
+    "remoteExecUnknown": false,
+    "unknownDockerMutation": false
+  }
+}

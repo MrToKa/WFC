@@ -1,0 +1,94 @@
+{
+  "status": "PASS",
+  "scope": "Actual5191 nginx/API with current generated-admin token; all mutation bodies invalid or oversized before comparison/review writes.",
+  "checks": [
+    {
+      "name": "unauthenticated header-only100MiB",
+      "status": "PASS",
+      "httpStatus": 401,
+      "code": "AUTHENTICATION_REQUIRED",
+      "headerOnly": true,
+      "elapsedMilliseconds": 8
+    },
+    {
+      "name": "admin header-only65537bytes",
+      "status": "PASS",
+      "httpStatus": 413,
+      "code": "REVISION_COMPARISON_BODY_LIMIT",
+      "headerOnly": true,
+      "elapsedMilliseconds": 12
+    },
+    {
+      "name": "duplicate decoded keys",
+      "status": "PASS",
+      "httpStatus": 400,
+      "code": "DUPLICATE_JSON_MEMBER",
+      "headerOnly": false,
+      "elapsedMilliseconds": 9
+    },
+    {
+      "name": "nonfinite number",
+      "status": "PASS",
+      "httpStatus": 400,
+      "code": "INVALID_POLICY_JSON",
+      "headerOnly": false,
+      "elapsedMilliseconds": 5
+    },
+    {
+      "name": "invalid UTF8",
+      "status": "PASS",
+      "httpStatus": 400,
+      "code": "INVALID_POLICY_JSON",
+      "headerOnly": false,
+      "elapsedMilliseconds": 5
+    },
+    {
+      "name": "compressed request",
+      "status": "PASS",
+      "httpStatus": 415,
+      "code": "REVISION_COMPARISON_ENCODING_UNSUPPORTED",
+      "headerOnly": false,
+      "elapsedMilliseconds": 5
+    },
+    {
+      "name": "unsupported method",
+      "status": "PASS",
+      "httpStatus": 405,
+      "code": "REVISION_COMPARISON_METHOD_UNSUPPORTED",
+      "headerOnly": false,
+      "elapsedMilliseconds": 6
+    },
+    {
+      "name": "noncanonical offset",
+      "status": "PASS",
+      "httpStatus": 400,
+      "code": "INVALID_REVISION_COMPARISON_REQUEST",
+      "headerOnly": false,
+      "elapsedMilliseconds": 7
+    },
+    {
+      "name": "unexpected actor override",
+      "status": "PASS",
+      "httpStatus": 400,
+      "code": "INVALID_REVISION_COMPARISON_REQUEST",
+      "headerOnly": false,
+      "elapsedMilliseconds": 5
+    },
+    {
+      "name": "case varied suffix remains guarded",
+      "status": "PASS",
+      "httpStatus": 405,
+      "code": "REVISION_COMPARISON_METHOD_UNSUPPORTED",
+      "headerOnly": false,
+      "elapsedMilliseconds": 8
+    },
+    {
+      "name": "invented engineering approval flag refused",
+      "status": "PASS",
+      "httpStatus": 400,
+      "code": "INVALID_REVISION_COMPARISON_REQUEST",
+      "headerOnly": false,
+      "elapsedMilliseconds": 5
+    }
+  ]
+}

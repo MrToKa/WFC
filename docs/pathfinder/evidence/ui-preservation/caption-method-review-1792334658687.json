@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "pathfinder.ui-preservation.caption-review.v1",
+  "recordedAt": "2026-10-18T14:44:18.686Z",
+  "reviewer": "/root/viewer_tab_capabilities",
+  "status": "NO_REMAINING_MATERIAL_FINDINGS",
+  "source": {
+    "caption-check.mjs": "6e5c1128aa806ba35aa1cc5c75a04d32e17395d0fc3cbc0d5d5ca2563bdcc510",
+    "caption-lib.mjs": "545a0830e8482e260dd4cef371e07e947d6550b12b01acfc68cfd38fe270b4fb",
+    "caption-lib.test.mjs": "e00e9ec808a7569b66d358b9e45faa6558facdc8b320bc6d1f214f0deff84037"
+  },
+  "scope": "Independent read-only review of binding guards, raw/diff durability-before-assertions, exact C0/C1 causal shape and no cleanup-on-failure. Reviewer executed zero tests/runtime/DB calls.",
+  "ownerValidation": {
+    "focusedControls": 5,
+    "passed": 5,
+    "syntax": "PASS",
+    "unchangedOriginalControls": 34,
+    "rerunOriginalControls": false
+  },
+  "observations": {
+    "C0": "PASS; C0-1792334390995-69802d93.json",
+    "C1": "PENDING_PARENT_BROWSER_AND_CAPTURE"
+  },
+  "historicalLostComparison": "FAIL_NOT_RETAINED"
+}

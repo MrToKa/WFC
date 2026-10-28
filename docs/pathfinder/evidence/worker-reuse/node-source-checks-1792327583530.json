@@ -1,0 +1,152 @@
+{
+  "schemaVersion": "pathfinder.worker-session.node-source-checks.v1",
+  "recordedAtUtc": "2026-10-18T12:46:23.456Z",
+  "status": "PASS",
+  "executor": "viewer_tab_capabilities; Node implementation/test owner; these checks were actually executed by this owner in the current task, not independently rerun at receipt creation.",
+  "repository": {
+    "root": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local",
+    "branch": "pf-2-worker-reuse-local-20261018",
+    "baselineCommit": "ed0770f39790fdedf937a190d99908681c11a532",
+    "observedHead": "ed0770f39790fdedf937a190d99908681c11a532"
+  },
+  "sourceFiles": [
+    {
+      "path": "server/pathfinder/engineSession.ts",
+      "bytes": 23468,
+      "sha256": "5cfa14c83dd0566009baecaf757ed1698f0c339043faaff48b24d36eb84a4513"
+    },
+    {
+      "path": "server/pathfinder/engineSession.test.ts",
+      "bytes": 23418,
+      "sha256": "3d9cd8006c5a6e1df846216a21fe24d37aeb12abec27ce9d1644feb770e012cb"
+    },
+    {
+      "path": "server/pathfinder/worker-session.test.ts",
+      "bytes": 3851,
+      "sha256": "2dc8fce9f536d26ac4934d2b40404dfa137c195a5ef4e8d389f8c09e5cf7e248"
+    },
+    {
+      "path": "server/pathfinder/worker.ts",
+      "bytes": 16439,
+      "sha256": "393dfa5ee13795f3feb4400f066faaa85d85c820471178b4b2fc98be78141ddc"
+    },
+    {
+      "path": "server/index.ts",
+      "bytes": 3423,
+      "sha256": "b3133a1c0d84ac379cf097825ecfceb99b89fef8aee9dc19e8df82262ee94eb4"
+    },
+    {
+      "path": "server/pathfinder/engine.ts",
+      "bytes": 3392,
+      "sha256": "213e3690ee2b1fa1b35e46ae84cda14a69a9908770f4a27d58e0ce7e04a5b9ea"
+    }
+  ],
+  "changesOwned": [
+    "server/pathfinder/engineSession.ts",
+    "server/pathfinder/engineSession.test.ts",
+    "server/pathfinder/worker.ts",
+    "server/pathfinder/worker-session.test.ts"
+  ],
+  "parentOwnedIncludedInChecks": "server/index.ts minimal shutdown exit-status change; not edited by this owner.",
+  "unchangedBoundary": {
+    "file": "server/pathfinder/engine.ts",
+    "sha256": "213e3690ee2b1fa1b35e46ae84cda14a69a9908770f4a27d58e0ce7e04a5b9ea",
+    "note": "Original one-shot launcher retained; git diff against baseline was empty for this file, HTTP lookup code, job DTO schemas and Model/Core."
+  },
+  "checks": [
+    {
+      "name": "Affected Node unit/regression tests",
+      "status": "PASS",
+      "command": "node node_modules/vitest/vitest.mjs run server/pathfinder/engineSession.test.ts server/pathfinder/worker-session.test.ts server/pathfinder/worker-retained.test.ts --reporter=dot",
+      "workingDirectory": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local",
+      "exitCode": 0,
+      "passed": 55,
+      "failed": 0,
+      "files": 3,
+      "suites": [
+        {
+          "file": "server/pathfinder/engineSession.test.ts",
+          "passed": 42,
+          "scope": "Fake-child transport/protocol, budgets, no queue, startup/dispatch cancellation, idle/count/age, RSS observation, complete-group retirement, poison and post-join cancellation/deadline."
+        },
+        {
+          "file": "server/pathfinder/worker-session.test.ts",
+          "passed": 4,
+          "scope": "Fake PG advisory owner lifecycle, lock loss, close-before-unlock and fatal quarantine; no actual DB mutations."
+        },
+        {
+          "file": "server/pathfinder/worker-retained.test.ts",
+          "passed": 9,
+          "scope": "Existing retained-geometry metadata regression checks."
+        }
+      ],
+      "capturedSummary": [
+        "Test Files  3 passed (3)",
+        "Tests  55 passed (55)",
+        "Start at  15:39:41",
+        "Duration  1.13s (transform 139ms, setup 410ms, collect 411ms, tests 849ms, environment 0ms, prepare 258ms)"
+      ],
+      "toolEvidence": {
+        "chunkId": "8bfc87",
+        "rawOutputCapturedInToolResult": true,
+        "rawLogFileSaved": false
+      }
+    },
+    {
+      "name": "Server TypeScript no emit",
+      "status": "PASS",
+      "command": "node node_modules/typescript/bin/tsc --noEmit -p server/tsconfig.json",
+      "workingDirectory": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local",
+      "exitCode": 0,
+      "diagnosticOutput": "",
+      "wallTimeSeconds": 5.7056305,
+      "toolEvidence": {
+        "chunkId": "9e7d14",
+        "rawOutputCapturedInToolResult": true,
+        "rawLogFileSaved": false
+      },
+      "scope": "Complete server tsconfig only; no claim that a separate frontend typecheck was run."
+    },
+    {
+      "name": "Scoped ESLint including parent shutdown delta",
+      "status": "PASS",
+      "command": "node node_modules/eslint/bin/eslint.js server/pathfinder/engineSession.ts server/pathfinder/engineSession.test.ts server/pathfinder/worker-session.test.ts server/pathfinder/worker.ts server/index.ts --max-warnings=0",
+      "workingDirectory": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local",
+      "exitCode": 0,
+      "diagnosticOutput": "",
+      "wallTimeSeconds": 4.5456766,
+      "toolEvidence": {
+        "chunkId": "db81b5",
+        "rawOutputCapturedInToolResult": true,
+        "rawLogFileSaved": false
+      }
+    }
+  ],
+  "rawLogs": {
+    "availability": "Original command outputs remain in this task tool results; no separate raw log artifacts were saved at execution time. This additive receipt records those observed commands/results without rerunning them or inventing raw log files.",
+    "rerunForReceipt": false
+  },
+  "qualificationScope": {
+    "currentModeDefault": "oneshot",
+    "httpLookupPlan": "existing one-shot path unchanged",
+    "sessionModePlatform": "Linux actual /proc RSS and whole-process-group support required; unsupported default platform fails closed",
+    "privateTelemetry": "Observer only; never added to public or stored EngineResponse DTO",
+    "realDotNetOrLinuxExecution": "NOT_RUN_BY_THIS_OWNER_IN_THESE_CHECKS; separate runtime qualification owner",
+    "realDurableDatabaseAuthorityRecovery": "NOT_RUN_BY_THIS_OWNER_IN_THESE_CHECKS; separate restored-target driver",
+    "nativeParity": "NOT_PERFORMED",
+    "wholePlantCapacity": "NOT_ESTABLISHED",
+    "engineeringAcceptance": false
+  },
+  "relatedEvidence": {
+    "nodeFindingResolved": "NODE-POST-JOIN-DEADLINE",
+    "csharpIndependentClosingReview": "docs/pathfinder/evidence/worker-reuse/cross-review-closed-1792327496205.json"
+  },
+  "receiptCreationActivities": {
+    "sourceReadsOnly": true,
+    "newEvidenceFile": true,
+    "checksRerun": 0,
+    "sourceEdits": 0,
+    "runtimeWrites": 0,
+    "originalOr5190Writes": 0
+  }
+}

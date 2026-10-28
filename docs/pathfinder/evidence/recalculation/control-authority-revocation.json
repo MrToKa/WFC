@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "wfc.pf.recalculation-control-result.v1",
+  "phase": "authority-revocation",
+  "phaseIntentId": "6a584983-1839-4a3e-8915-be28bda2b2d5",
+  "status": "PASS",
+  "scope": "rollback-only production SQL primitives and reader; normal HTTP/producer/engine/UI tested separately",
+  "beforeSha256": "46467bab4ba8677d22831d833d83029bc96322379e94069fc0b5552eb45c3f4d",
+  "afterSha256": "46467bab4ba8677d22831d833d83029bc96322379e94069fc0b5552eb45c3f4d",
+  "elapsedMilliseconds": 44,
+  "nontransactionalSequenceAdvances": [],
+  "engineeringAccepted": false
+}

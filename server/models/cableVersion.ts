@@ -1,7 +1,7 @@
 import type { CableMtoValue } from './cable.js';
 
 export type CableVersionChangeType = 'create' | 'update';
-export type CableVersionChangeSource = 'manual' | 'import';
+export type CableVersionChangeSource = 'manual' | 'import' | 'pathfinder';
 
 export type CableVersionRow = {
   id: string;

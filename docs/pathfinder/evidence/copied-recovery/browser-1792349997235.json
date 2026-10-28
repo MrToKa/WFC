@@ -1,0 +1,56 @@
+{
+  "schemaVersion": "pathfinder.copied-recovery.browser.v1",
+  "status": "PASS",
+  "recordedAt": "2026-10-18T18:59:57.230Z",
+  "method": "computer-use",
+  "tabId": "4",
+  "targetOwner": "7a64aa2a-88c3-43b9-962d-af391b72300d",
+  "projectId": "1af0f807-7653-40ea-8391-7eea6c54e7d4",
+  "modelVersionId": "a613151e-c370-45c5-80f3-42ae58603b9a",
+  "backupId": "b77a1ed0-2fa2-48a3-92f8-207a60b2035e",
+  "ownTabClosed": true,
+  "sourceTabRetained": "3",
+  "observations": {
+    "normalAdminLogin": true,
+    "tools": [
+      "Routes",
+      "Path",
+      "Path lookup"
+    ],
+    "snapshotObjects": 13,
+    "cableTotal": 2140,
+    "cablesDisplayed": 2140,
+    "preparedNames": 1527,
+    "recordsReturned": 438155,
+    "recordsChecked": 438155,
+    "recordsUnavailable": 0,
+    "reloadRetainsCounts": true,
+    "routeRulesRecovered": false,
+    "missingLocationsRetained": true,
+    "modelReady": true,
+    "geometry": 664556,
+    "identifiers": 438156,
+    "properties": 6,
+    "settings": {
+      "secondaryTrayLength": 7,
+      "endConnectionLength": 5,
+      "additionalBendingPercent": 10,
+      "connectionGap": 1
+    },
+    "coordinatesSaved": 0,
+    "calculationsRequested": 0,
+    "reviewOrApply": 0
+  },
+  "screenshots": [
+    {
+      "path": "docs/pathfinder/evidence/copied-recovery/restored-routes.png",
+      "bytes": 78765,
+      "sha256": "4d534dbe85c57c2574dfa1b198a0b25836e94124600f3a96cad9d902922984c5"
+    },
+    {
+      "path": "docs/pathfinder/evidence/copied-recovery/restored-after-reload.png",
+      "bytes": 78745,
+      "sha256": "aae8b9799439b1ce1da986442020a54aeea581fe90d4b0bccc73ef2a38e0f3c8"
+    }
+  ]
+}

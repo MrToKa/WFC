@@ -1,0 +1,31 @@
+{
+  "status": "PASS",
+  "work": "pathfinder-engine/.scratch/older-model-3bf01791-b0b5-427d-b2f7-4091d39abe3d",
+  "source": {
+    "name": "Aalborg_ACS_CABLETRAY_07_10_24.nwd",
+    "bytes": 69785194,
+    "sha256": "cf61d87b355b3d77d4c6f71a06183fb1d225cbe1bd937b60783d156aedc4df36",
+    "sha1": "2d7b9ffa98479e65d7512e72b907d7a59587a29d",
+    "contentVerified": true
+  },
+  "recordedAt": "2026-10-18T21:09:06.838Z",
+  "evidence": "older-model-actual.json",
+  "package": {
+    "status": "PASS",
+    "verification": {
+      "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\older-model-3bf01791-b0b5-427d-b2f7-4091d39abe3d\\runner-state\\observations\\b4a39913-3c35-4591-b741-19b5a0658329-independent-package.private.json",
+      "bytes": 110046,
+      "sha256": "4cc31711f0abaeb565308d0fa0351530b0fcc3a0b37611eeb20343e33294d27a"
+    },
+    "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\older-model-3bf01791-b0b5-427d-b2f7-4091d39abe3d\\runner-state\\output\\aalborg-older-svf.zip",
+    "packageId": "f1074064-2cb8-4d6e-8412-e025343c6e27",
+    "sha256": "a4538444641bfc96ce8915a0ef24c1adfebb50a72c1575a23cc475d9bd781183",
+    "bytes": 174823508,
+    "contentFingerprint": "6f6fdfd86ef0a9061b74062675a3c72c971cfa1c43539e4adf42b9122c75d639",
+    "resourceCount": 173,
+    "totalRawBytes": 174769843
+  },
+  "comparison": "NOT_RUN",
+  "modelImportedIntoWfc": false,
+  "activeModelChanged": false
+}

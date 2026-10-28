@@ -1,0 +1,91 @@
+{
+  "schemaVersion": "wfc.pf.engine-terminal-reconciliation-source.v1",
+  "at": "2026-10-20T08:24:52.649Z",
+  "codeParent": "d56dce2d2da8b10da851a5e251adca67cea0e0b3",
+  "status": "SOURCE_VERIFIED",
+  "pins": [
+    {
+      "path": "server/pathfinder/engine.ts",
+      "sha256": "c2a941b90541cdf5fcb8d2e65f099ff503f8d8707d65b7ee557330942480c4f6"
+    },
+    {
+      "path": "server/pathfinder/engine-preparation.test.ts",
+      "sha256": "470118f28b9b945e2a2e51e4d66af917ef594880e091a9b808290a1c2049d461"
+    },
+    {
+      "path": "server/pathfinder/engineResources.ts",
+      "sha256": "74171184a3637bba6e771fcb4b857e9df975850ad973ac282798e2c22abe186d"
+    },
+    {
+      "path": "server/pathfinder/engineResources.test.ts",
+      "sha256": "ef80c7c16338339aade2ff270d8aae416e62b0eeaf06f59d4b29845001459789"
+    }
+  ],
+  "priorFailure": {
+    "label": "trial8",
+    "status": "FAIL",
+    "image": "sha256:3fb5bca1b28b2024f90b31f1ddf06098c7652a051127053c4901edbe4eca1524",
+    "code": "ENGINE_RSS_UNAVAILABLE",
+    "oomKilled": false,
+    "deadline": false,
+    "observation": {
+      "mode": "oneshot",
+      "thresholdBytes": 2147483648,
+      "intervalMilliseconds": 100,
+      "observedMaximumBytes": 1180282880,
+      "samples": 230,
+      "wallMilliseconds": 23128.080357,
+      "exactPeak": false,
+      "outcome": "refused",
+      "rssFailure": {
+        "stage": "root-rss",
+        "errno": null,
+        "role": "root",
+        "rootStatusPresent": true,
+        "rootState": "Z",
+        "enumeratedCount": 3,
+        "retainedCount": 1,
+        "statusReadCount": 1
+      },
+      "lifecycle": {
+        "refusal": {
+          "elapsedMilliseconds": 23127.293218,
+          "exitCode": null,
+          "signalCode": null
+        },
+        "exit": {
+          "elapsedMilliseconds": 23127.948425000002,
+          "exitCode": 0,
+          "signalCode": null
+        },
+        "close": {
+          "elapsedMilliseconds": 23128.044002000002,
+          "exitCode": 0,
+          "signalCode": null
+        }
+      }
+    },
+    "helperRemoved": true,
+    "interpretation": "Own Linux root was observed Z without VmRSS before Node exit acknowledgement; raw exit and close subsequently acknowledged code0. Historical trial4 exact cause remains unknown."
+  },
+  "repairScope": "Linux preparation only; exact trusted root-rss/errno-null/Z/root-only evidence and prior samples, <=1000ms within unchanged deadline, acknowledged exit/close0 with null signals, positive owned process-group ESRCH, original UTF8/schema/requestID validation; no zero-RSS fallback.",
+  "tests": {
+    "status": "PASS",
+    "assertions": 70,
+    "receiptSha256": "fe59ea2fec51092792f6cd54819282725fe7812ccf69a98b032cb389d864518d"
+  },
+  "serverTypes": "PASS",
+  "focusedLint": "PASS",
+  "whitespace": "PASS",
+  "independentReviews": "TWO_NO_BLOCKING_SOURCE_FINDINGS",
+  "geometryMathematicsChanged": false,
+  "resourceLimitsChanged": false,
+  "authenticationChanged": false,
+  "candidate7Build": "NOT_RUN",
+  "candidate7ActualWorkload": "NOT_RUN",
+  "normalProtectedPublication": "NOT_RUN",
+  "realCableProposals": "NOT_RUN",
+  "realApply": "NOT_RUN",
+  "engineeringAccepted": false,
+  "originalApplicationChanged": false
+}

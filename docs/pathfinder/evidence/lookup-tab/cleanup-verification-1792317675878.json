@@ -1,0 +1,44 @@
+{
+  "schemaVersion": "pathfinder.lookup.cleanup-verification.v1",
+  "status": "PASS",
+  "recordedAt": "2026-10-18T10:01:15.873Z",
+  "cleanup": "docs/pathfinder/runtime/cleanup-1792317597812.json",
+  "cleanupSha256": "a8512b93e9875facebd116f724dbb40033917f915397f95f38d2d186a76c3f10",
+  "removedFileCount": 8,
+  "removedArchiveBytes": 1348954278,
+  "removedImageCount": 4,
+  "retainedBackup": {
+    "directory": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\path-lookup-archive-462d5a9465e8",
+    "backupId": "3db9fa33-c10e-4646-82bc-fe99f3d8af35",
+    "verification": {
+      "method": "Existing runtime.mjs verify-backup invoked after cleanup",
+      "exitCode": 0,
+      "status": "PASS"
+    }
+  },
+  "privateCompanionRetained": true,
+  "target": {
+    "runtime": "C:/Users/todor.chankov/source/WFC-pathfinder-local/pathfinder-engine/.scratch/pathfinder-local-restore-50fae7c4061f",
+    "project": "wfc-pathfinder-local-50fae7c4061f",
+    "verification": {
+      "method": "Existing runtime.mjs info invoked after cleanup",
+      "exitCode": 0,
+      "status": "PASS",
+      "state": "retired",
+      "resources": {
+        "containers": [],
+        "volumes": [],
+        "networks": []
+      }
+    }
+  },
+  "checksRecordedFromActualToolOutputs": true,
+  "originalResourceCleanupInvoked": false,
+  "deniedPathsTouched": false,
+  "recursiveDirectoryRemovalInvoked": false,
+  "dockerPruneInvoked": false,
+  "limits": [
+    "Removed archive bytes are exact file sizes. Image sizes do not establish physical layer bytes reclaimed.",
+    "No supplemental health/startup receipt command was retried."
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "status": "PASS",
+  "scope": "Actual normal host5191 trace pipeline after post-admission role revocation and natural lease expiry, same exact command/intent identity with retained staging",
+  "traceId": "0dd84cd9-b64d-48fc-8e3d-81fbfc5a25c3",
+  "aggregateId": "7ca536d8-29a0-4fbc-ad4e-e31bd2fd747c",
+  "exactReplay": true,
+  "captureEvidenceReferences": 1,
+  "counts": {
+    "objects": 13,
+    "segments": 6,
+    "diagnostics": 13,
+    "points": 23,
+    "ports": 10
+  },
+  "engineeringAccepted": false,
+  "nativeParity": "not-performed"
+}

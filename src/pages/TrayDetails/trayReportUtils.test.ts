@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 import {
   buildTrayPlaceholderValues,
   replaceDocxPlaceholders,
+  resolveTrayReportImageFallbacks,
+  type DocxImageDefinition,
   type TrayPlaceholderContext,
 } from './trayReportUtils';
 import { TRAY_REPORT_PLACEHOLDERS, TRAY_REPORT_VARIABLES } from './trayReportVariables';
@@ -128,6 +130,56 @@ const paragraphXml = (text: string) =>
   `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${text}</w:body></w:document>`;
 
 describe('tray report Variables API', () => {
+  it.each([
+    { label: 'missing catalog image', id: null, contentType: null },
+    { label: 'non-image catalog attachment', id: 'catalog-document', contentType: 'application/pdf' },
+    { label: 'untyped catalog attachment', id: 'catalog-document', contentType: null },
+  ])('keeps an honest export fallback for a $label', async ({ id, contentType }) => {
+    const context = createContext();
+    context.materialTrayMetadata = {
+      ...context.materialTrayMetadata!,
+      imageTemplateId: id,
+      imageTemplateContentType: contentType,
+    };
+    const bundle = buildTrayPlaceholderValues(context);
+    const token = TRAY_REPORT_PLACEHOLDERS['tray-details:tray-type-image'];
+    expect(bundle.images['tray-details:tray-type-image']).toBe('trayTemplate');
+    const replacements = resolveTrayReportImageFallbacks(
+      { [token]: bundle.values['tray-details:tray-type-image'] },
+      { [token]: bundle.images['tray-details:tray-type-image'] },
+      {},
+    );
+    const output = await replaceDocxPlaceholders(
+      await inputBlob(paragraphXml(`<w:p><w:r><w:t>${token}</w:t></w:r></w:p>`)),
+      replacements,
+    );
+    const xml = await xmlOf(output);
+    expect(xml).toContain('Tray type illustration is unavailable.');
+    expect(xml).not.toContain(token);
+    expect(xml).not.toContain('*****');
+  });
+
+  it('replaces every unresolved optional image alias after download or preparation failure', async () => {
+    const sources = {
+      '{{TRAYPICTURE}}': 'trayTemplate',
+      '{{CUSTOMTRAYIMAGE}}': 'trayTemplate',
+      '{{DIAGRAMTRAYPIC}}': 'loadCurve',
+      '{{FILLPICTURE}}': 'bundles',
+    } as const;
+    const replacements = resolveTrayReportImageFallbacks({}, sources, {});
+    const output = await replaceDocxPlaceholders(
+      await inputBlob(paragraphXml(Object.keys(sources).map((token) =>
+        `<w:p><w:r><w:t>${token}</w:t></w:r></w:p>`,
+      ).join(''))),
+      replacements,
+    );
+    const xml = await xmlOf(output);
+    expect(xml).not.toMatch(/\{\{[A-Z]+\}\}/);
+    expect(xml).toContain('Tray load curve visualization is unavailable.');
+    expect(xml).toContain('Tray laying concept visualization is unavailable.');
+    expect(xml.match(/Tray type illustration is unavailable\./g)).toHaveLength(2);
+  });
+
   it('provides every new variable and gives the correct calculation and reserve', () => {
     const bundle = buildTrayPlaceholderValues(createContext());
     for (const variable of TRAY_REPORT_VARIABLES) expect(bundle.values[variable.id]).toBeDefined();
@@ -306,6 +358,81 @@ describe('tray report Variables API', () => {
 });
 
 describe('Word export', () => {
+  it('keeps distinct image bytes and dimensions when long names collide with each other and existing media', async () => {
+    const reference = await JSZip.loadAsync(readFileSync('Template files/ReportMacroTemplate_MV.docx'));
+    const curveBytes = await reference.file('word/media/image2.png')!.async('uint8array');
+    const bundleBytes = await reference.file('word/media/image3.png')!.async('uint8array');
+    expect(curveBytes).not.toEqual(bundleBytes);
+
+    const prefix = 'a'.repeat(80);
+    const existingName = `${'a'.repeat(48)}-1.png`;
+    const zip = new JSZip();
+    zip.file('word/document.xml', paragraphXml(
+      '<w:p><w:r><w:t>{{DIAGRAMTRAYPIC}}</w:t></w:r></w:p>' +
+      '<w:p><w:r><w:t>{{FILLPICTURE}}</w:t></w:r></w:p>',
+    ));
+    zip.file('word/_rels/document.xml.rels',
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      `<Relationship Id="rId9" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${existingName}"/>` +
+      '</Relationships>',
+    );
+    zip.file('[Content_Types].xml',
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="png" ContentType="image/png"/></Types>',
+    );
+    zip.file(`word/media/${existingName}`, curveBytes);
+    const images: Record<string, DocxImageDefinition> = {
+      '{{DIAGRAMTRAYPIC}}': { data: curveBytes, widthEmu: 1828800, heightEmu: 914400,
+        fileName: `${prefix}_LoadCurve`, contentType: 'image/png', description: 'Expected load curve' },
+      '{{FILLPICTURE}}': { data: bundleBytes, widthEmu: 914400, heightEmu: 3657600,
+        fileName: `${prefix}_Bundles`, contentType: 'image/png', description: 'Expected portrait bundles' },
+    };
+    const output = await replaceDocxPlaceholders(
+      new Blob([Uint8Array.from(await zip.generateAsync({ type: 'uint8array' }))]),
+      resolveTrayReportImageFallbacks({}, {
+        '{{DIAGRAMTRAYPIC}}': 'loadCurve', '{{FILLPICTURE}}': 'bundles',
+      }, images),
+      { images },
+    );
+    const result = await JSZip.loadAsync(await blobBytes(output));
+    const rels = new DOMParser().parseFromString(
+      await result.file('word/_rels/document.xml.rels')!.async('string'), 'application/xml',
+    );
+    const relationships = new Map(Array.from(rels.getElementsByTagName('Relationship')).map((node) =>
+      [node.getAttribute('Id')!, node.getAttribute('Target')!] as const,
+    ));
+    expect(relationships.get('rId9')).toBe(`media/${existingName}`);
+    expect(await result.file(`word/media/${existingName}`)!.async('uint8array')).toEqual(curveBytes);
+    const document = new DOMParser().parseFromString(
+      await result.file('word/document.xml')!.async('string'), 'application/xml',
+    );
+    const wordNs = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    const drawingNs = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+    const wpNs = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
+    const relNs = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+    const paragraphs = Array.from(document.getElementsByTagNameNS(wordNs, 'p'));
+    const targets: string[] = [];
+    for (const image of Object.values(images)) {
+      const paragraph = paragraphs.find((node) =>
+        node.getElementsByTagNameNS(wpNs, 'docPr')[0]?.getAttribute('name') === image.description,
+      )!;
+      expect(paragraph).toBeDefined();
+      const blip = paragraph.getElementsByTagNameNS(drawingNs, 'blip')[0];
+      const target = relationships.get(blip.getAttributeNS(relNs, 'embed')!)!;
+      targets.push(target);
+      expect(target).not.toBe(`media/${existingName}`);
+      expect(await result.file(`word/${target}`)!.async('uint8array')).toEqual(image.data);
+      const extent = paragraph.getElementsByTagNameNS(wpNs, 'extent')[0];
+      expect(extent.getAttribute('cx')).toBe(String(image.widthEmu));
+      expect(extent.getAttribute('cy')).toBe(String(image.heightEmu));
+    }
+    expect(new Set(targets).size).toBe(2);
+    expect((await result.file('word/document.xml')!.async('string'))).not.toMatch(/\{\{[A-Z]+\}\}/);
+    const contentTypes = new DOMParser().parseFromString(
+      await result.file('[Content_Types].xml')!.async('string'), 'application/xml',
+    );
+    expect(contentTypes.getElementsByTagName('Default')).toHaveLength(1);
+  });
+
   it('preserves the reference calculation order and places all conclusions before the final picture', async () => {
     const zip = await JSZip.loadAsync(readFileSync('Template files/ReportMacroTemplate_LV.docx'));
     const xml = await zip.file('word/document.xml')!.async('string');

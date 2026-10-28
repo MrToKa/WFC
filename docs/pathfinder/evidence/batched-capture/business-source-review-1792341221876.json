@@ -1,0 +1,87 @@
+{
+  "schemaVersion": "pathfinder.batched-capture.business-source-review.v1",
+  "observedAt": "2026-10-18T16:33:41.875Z",
+  "status": "PASS_SOURCE_REVIEW",
+  "branch": "pf-3-batched-capture-local-20261018",
+  "baseRevision": "6761cb76df79392befba6ace1c4d8c685b36cfdd",
+  "reviewer": "/root/addon_tabs_map",
+  "source": {
+    "path": "scripts/pathfinder-batched-capture/business.mjs",
+    "bytes": 7744,
+    "sha256": "34d0906ae0fdac9a48bbeb5195eb27cedaad2c67972d8f9fe5e2759011af4c00"
+  },
+  "baseline": {
+    "path": "docs/pathfinder/evidence/batched-capture/business-1792341157585.json",
+    "bytes": 1538,
+    "sha256": "14022ecfc0d3d9481cbe3c92620366ade99f8438e72d2f1fd6f239ff5a619555"
+  },
+  "baselineRaw": {
+    "path": "pathfinder-engine/.scratch/capture-business-ce742c2c-afc7-43ec-aa9f-1990550aca48/business.private.json",
+    "bytes": 19151,
+    "sha256": "d0790595999856d9673690d4cd18b880cba61a3310216cb3e5d641cf8930d81e",
+    "exitCode": 0,
+    "verifiedFromRetainedFile": true
+  },
+  "historicalV1": {
+    "path": "docs/pathfinder/evidence/batched-capture/business-1792340871782.json",
+    "bytes": 1330,
+    "sha256": "eae596b58823938cd93e06624248f587f746fd05c7c540c2222a8b434c78c305"
+  },
+  "resolvedFinding": {
+    "kind": "Lossy PostgreSQL NUMERIC/BIGINT decoding could hide a changed SQL row.",
+    "anchors": [
+      "scripts/pathfinder-batched-capture/business.mjs:20",
+      "scripts/pathfinder-batched-capture/business.mjs:21",
+      "scripts/pathfinder-batched-capture/business.mjs:30",
+      "scripts/pathfinder-batched-capture/business.mjs:35"
+    ],
+    "closure": "The fixed four SELECTs return explicit string keys and to_jsonb(t)::text row_text. Exact SQL-generated text stays inside JSON strings through pg and both raw and hash transport. Baseline schema/projection fences refuse V1 comparison. Default comparison refuses additions; explicit allow-new preserves every baseline row while reporting additions."
+  },
+  "reviewedControls": [
+    "Owned non-primary5191 runtime, owner labels/API+PG binding before raw helper; exact SQL database/address/port/read-only gate.",
+    "Repeatable-read read-only transaction,5s statement/6s query/5s connect limits,30s internal and35s host process deadlines.",
+    "LIMIT100001 with100000-row refusal per each fixed group;32MiB host output cap and private output persisted before success assertion.",
+    "Full retained before/current private outputs are SHA-bound; private comparison persisted before preservation assertion; old IDs are indexed linearly.",
+    "No app bootstrap or business writes, no direct original/primary target selected."
+  ],
+  "attributedOwnerObservation": {
+    "baselineStatus": "PASS",
+    "recordedAt": "2026-10-18T16:32:31.402Z",
+    "finishedAt": "2026-10-18T16:32:37.585Z",
+    "target": {
+      "owner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+      "project": "wfc-pathfinder-local-0cba87606e9b",
+      "apiId": "c84871e5b2b447d438e3b15f12ac3e7dbe7146637113bee3f7598198867b6c3d",
+      "apiImage": "sha256:08d842043cecd526668bd7ec192ef424508ed5f47a7029a10139c0381ee6724a",
+      "pgId": "6a39e7b2d794055dccef0919cf3a99ddf60e0f3c0b5daae062cec1eb6c9b3785"
+    },
+    "precisionControl": {
+      "numericDecodedEqual": true,
+      "numericTextDistinct": true,
+      "bigintDecodedEqual": true,
+      "bigintTextDistinct": true
+    },
+    "counts": {
+      "projects": 2,
+      "types": 2,
+      "cables": 3,
+      "selections": 2
+    },
+    "attribution": "Root executed this read-only V2 baseline and actual four-boolean SQL precision probe. Reviewer read source and retained evidence only."
+  },
+  "remainingMaterialFindings": [],
+  "reviewerActivity": {
+    "tests": 0,
+    "builds": 0,
+    "databaseQueries": 0,
+    "runtimeOperations": 0,
+    "productSourceEdits": 0,
+    "newEvidenceFiles": 1
+  },
+  "limits": [
+    "V2 baseline was captured AFTER the first browser capture; it cannot retroactively prove preservation across that first operation.",
+    "Historical V1 baseline remains retained and un-compared; it is not exact SQL-row proof.",
+    "The planned second capture and V2 after-comparison are NOT_RUN by this reviewer and not claimed by this receipt.",
+    "This bounded tool covers projects,cable_types,cables and project_model_selections only; it is not a claim about all workflow/engine history or original data."
+  ]
+}

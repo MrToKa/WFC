@@ -1,3 +1,4 @@
+import type { AutoLengthView } from '../../shared/pathfinderAutoLength.js';
 import { toNumberOrNull } from './cableType.js';
 
 export const CABLE_MTO_VALUES = ['MV', 'LV', 'Instrumentation', 'Control'] as const;
@@ -63,6 +64,10 @@ export type PublicCable = {
   createdAt: string;
   updatedAt: string;
 };
+
+/** Ordinary cable routes add this separate read-only projection. The generic
+ * business mapper also serves immutable drawing inputs and retains its shape. */
+export type PublicCableWithAutoLength = PublicCable & AutoLengthView;
 
 const toIsoString = (value: Date | string): string =>
   typeof value === 'string' ? value : value.toISOString();

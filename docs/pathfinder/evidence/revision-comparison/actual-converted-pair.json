@@ -1,0 +1,88 @@
+{
+  "status": "PASS",
+  "recordedAt": "2026-10-19T04:02:03.070Z",
+  "scope": "Real converted older/current BC001 bounded requested scope through protected capture and normal UI worker publication, then normal HTTP same-pair/exact-command replay. No native/whole-plant or human engineering acceptance.",
+  "comparisonId": "55901b55-faba-444c-aaad-80b2b5809e45",
+  "comparisonContentSha256": "3d12e4c8df568f85a62e44c3391d2a771d3994aba38208b95327ffbe269bab38",
+  "publishedBy": "ac288aa9-eb51-4dd6-872b-ec52dfeecbc9",
+  "httpReplayActor": "9ac1ea26-8bee-4719-87c5-1693df5682b4",
+  "source": {
+    "aggregateId": "8b66aa0d-6f21-42cc-b764-ac8e790ff5a1",
+    "traceId": "4ba0f64c-92df-4812-95d7-2a4c7a265f92",
+    "projectionSha256": "82e0fd19d57a7608a6a09d9715d94e1e927aaedad367cfc03fbb187496dee2e5",
+    "traceContentSha256": "99038591f42060a598c199aed5fe4a663ea95f8bd08bd98464f3f937dc51a170",
+    "modelVersionId": "c9810c49-cf53-450c-9667-516894b2a509",
+    "captureFrameId": "c8a5135f-5867-449a-ab5a-bfd851fae1cc",
+    "geometryRevision": "3",
+    "coverage": {
+      "requestedScopeSha256": "1d4248f6f2da718b1ca70f4f2e774aa6aff2b52deeeffd3eac476a2b462e11f9",
+      "comparableScopeSha256": "854f06ca5d42fb80fa8ea6fd42ebc5a40dc0da2446fe91fc36b0b8a5083aeb97",
+      "requestedScopeComplete": true,
+      "includedObjects": 8,
+      "excludedObjects": null,
+      "basis": "prepared-requested-scope"
+    },
+    "routing": {
+      "catalogRevision": "2",
+      "routingContentSha256": "8d4bfd9630568f99a300ca976a530aea9454e73dbc5fabf428f015cfbc9ad22f",
+      "routingPolicyRevision": "1",
+      "routingPolicySha256": "fed7164a8b25609bd6dcb6e158e8e8121b5f774423c426f907340bf80900de66"
+    }
+  },
+  "target": {
+    "aggregateId": "351c71c7-93a8-4347-b475-ab6cf2e98f00",
+    "traceId": "540daaff-cf60-43c1-9ead-7fd6119645a1",
+    "projectionSha256": "37fcc25b80a093934f622b6d360cb1cf86a7c3e3665763abc94d45195028bd28",
+    "traceContentSha256": "e8185db60a2c49fa26f53f5d920e24be32f4186191829f3c7b6bc80d1a9c1524",
+    "modelVersionId": "098a7e6f-6e39-4935-a98b-ba3b683875a5",
+    "captureFrameId": "7b695d22-5c67-443a-a587-538e3cba4cd2",
+    "geometryRevision": "4",
+    "coverage": {
+      "requestedScopeSha256": "36797470b533077f774b60838c2d6e9bdccc855ca0b4e569546807382ef157ec",
+      "comparableScopeSha256": "854f06ca5d42fb80fa8ea6fd42ebc5a40dc0da2446fe91fc36b0b8a5083aeb97",
+      "requestedScopeComplete": true,
+      "includedObjects": 9,
+      "excludedObjects": null,
+      "basis": "prepared-requested-scope"
+    },
+    "routing": {
+      "catalogRevision": "2",
+      "routingContentSha256": "8d4bfd9630568f99a300ca976a530aea9454e73dbc5fabf428f015cfbc9ad22f",
+      "routingPolicyRevision": "1",
+      "routingPolicySha256": "fed7164a8b25609bd6dcb6e158e8e8121b5f774423c426f907340bf80900de66"
+    }
+  },
+  "counts": {
+    "sourceObjects": 8,
+    "targetObjects": 9,
+    "changes": 17,
+    "candidateEdges": 11,
+    "matched": 0,
+    "unresolved": 17
+  },
+  "readiness": {
+    "package": "historical",
+    "geometry": "ready",
+    "frame": "unverified",
+    "mappings": "requires-review",
+    "endpoints": "not-evaluated",
+    "calculation": "not-evaluated",
+    "review": "required-per-proposal",
+    "apply": "requires-fresh-human-review",
+    "reasonCodes": [
+      "COMMON_FRAME_UNVERIFIED",
+      "CHANGE_REVIEW_REQUIRED"
+    ]
+  },
+  "flags": {
+    "correspondence-unverified": 8,
+    "ambiguous": 3,
+    "absent-from-scope": 9
+  },
+  "allRowsRequireReview": true,
+  "automaticBindingCarry": false,
+  "selectionPreserved": true,
+  "comparisonRevisionPreserved": true,
+  "engineeringAccepted": false,
+  "cableApply": "NOT_PERFORMED"
+}

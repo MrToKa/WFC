@@ -1,6 +1,6 @@
 import { FluentProvider, webDarkTheme, webLightTheme } from '@fluentui/react-components';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RouteCheckResult } from '@/viewer/routeValidation';
 import { RoutingsViewerTab } from './RoutingsViewerTab';
 import { useRoutingsViewer } from './hooks/useRoutingsViewer';
@@ -24,6 +24,7 @@ const view = (token: string | null = 'token-a', dark = false) => <FluentProvider
   <RoutingsViewerTab projectId={projectId} loadedProjectId={projectId} token={token} />
 </FluentProvider>;
 beforeEach(() => {
+  vi.spyOn(window, 'open').mockReturnValue(null);
   vi.clearAllMocks(); current = {
     scope: { projectId, loadedProjectId: projectId, token: 'token-a' }, phase: 'ready', message: 'The model and its identifiers are ready.',
     lifecycleKey: 'test-lifecycle', model: null, checking: false, result: null, operationId: null, currentRoute: null, canShow: true, canZoom: false,
@@ -36,6 +37,7 @@ beforeEach(() => {
   vi.mocked(useRoutingsViewer).mockImplementation(() => current);
   vi.mocked(useRoutingCables).mockImplementation(() => cables);
 });
+afterEach(() => { vi.restoreAllMocks(); });
 describe('Routings viewer controls', () => {
   it.each(['loading', 'no-model'] as const)('offers keyboard information while %s without enabling cable routing', phase => {
     const cable = { id: modelId, projectId, tag: 'Information only', routing: '/A', fromLocation: '  From\n日本語  ', toLocation: null };
@@ -157,6 +159,8 @@ describe('Routings viewer controls', () => {
     const rows = screen.getAllByRole('button', { name: 'DUP' }); expect(rows).toHaveLength(2);
     expect(rows[0]).toHaveAttribute('data-cable-id', first.id); expect(rows[1]).toHaveAttribute('data-cable-id', second.id);
     fireEvent.click(rows[1]); expect(cables.select).toHaveBeenCalledWith(second.id); expect(current.showCable).toHaveBeenCalledWith(second);
+    expect(screen.getByRole('dialog', { name: 'DUP' })).toHaveAttribute('data-cable-id', second.id);
+    expect(screen.getByRole('dialog', { name: 'DUP' })).toHaveAttribute('data-pinned', 'true'); expect(window.open).toHaveBeenCalledOnce();
     expect(current.show).not.toHaveBeenCalled(); expect(screen.queryByRole('button', { name: 'Show route' })).not.toBeInTheDocument();
     expect(rows[1]).toHaveTextContent('DUP'); expect(rows[1]).not.toHaveAttribute('title');
   });

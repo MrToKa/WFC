@@ -1,0 +1,162 @@
+{
+  "schemaVersion": "pathfinder.copied-recovery.auth-receipt.v1",
+  "status": "PASS",
+  "mode": "check-source",
+  "owner": "44d7afb7-c1fd-4ff5-b795-d274b807d3a4",
+  "work": "pathfinder-engine/.scratch/copied-recovery-auth-0580f4a7-dbc0-4232-ae2b-695df61c993d",
+  "projectId": "1af0f807-7653-40ea-8391-7eea6c54e7d4",
+  "modelVersionId": "a613151e-c370-45c5-80f3-42ae58603b9a",
+  "sourceFiles": [
+    {
+      "path": "scripts/pathfinder-copied-recovery/auth.mjs",
+      "sha256": "731b1e80bbfce6dc9251f94b3d9aa277e5a592615213254a37ae2ae419d972f3",
+      "bytes": 10050
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/auth-lib.mjs",
+      "sha256": "273896e9f64771c74578cd5de61936f723ed7fe24ebc387d392126fffff0d1ce",
+      "bytes": 18501
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/auth-lib.test.mjs",
+      "sha256": "bd51d2bb9ba4faecd00b7cc42ce233dc2e0ca7d247ecee53530e44f072d47930",
+      "bytes": 16939
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/README-auth.md",
+      "sha256": "c0b62bb6b228edb3c1160dde56da518fee6466e13c1249c5b584833d6269abe3",
+      "bytes": 5541
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/binding.mjs",
+      "sha256": "5e242570745973a4af42af110e8eb29665331a3323f2d7ebb9016ba286c8046f",
+      "bytes": 9303
+    }
+  ],
+  "startedAt": "2026-10-18T18:07:36.347Z",
+  "finishedAt": "2026-10-18T18:07:37.134Z",
+  "binding": {
+    "runtime": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\batched-capture-runtime-20261018-1600",
+    "owner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+    "project": "wfc-pathfinder-local-0cba87606e9b",
+    "port": 5191,
+    "origin": "http://127.0.0.1:5191",
+    "containers": [
+      {
+        "role": "api",
+        "id": "97e0ad80387c1c1e5148922356088ccbc7f77e5def61073c657b10769db09adb",
+        "image": "sha256:dce12a1f5ab6311bbaf04defb7277ff0d50fee36e29e49d47234e5bf4ea405fe",
+        "startedAt": "2026-10-18T18:07:24.473417843Z"
+      },
+      {
+        "role": "minio",
+        "id": "56456c8675afd1458df3ae87d8df4bf31131fa1807f7468e3958f900f53a73ed",
+        "image": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+        "startedAt": "2026-10-18T18:07:22.256876975Z"
+      },
+      {
+        "role": "postgres",
+        "id": "6a39e7b2d794055dccef0919cf3a99ddf60e0f3c0b5daae062cec1eb6c9b3785",
+        "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+        "startedAt": "2026-10-18T15:55:24.900140794Z"
+      },
+      {
+        "role": "storage-ready",
+        "id": "e26509d2b47f7a62ccc51196c7fec5fdb06c0df649cd000d3306a85dac563e8c",
+        "image": "sha256:dce12a1f5ab6311bbaf04defb7277ff0d50fee36e29e49d47234e5bf4ea405fe",
+        "startedAt": "2026-10-18T16:37:13.558001521Z"
+      },
+      {
+        "role": "web",
+        "id": "d864cc9ca17d0742277e77d4d929950ff9e5c8bd4dd940e57cb5702fe066f460",
+        "image": "sha256:561d51c3dd5ecb88459c17013890f9cd30089bb0760ccb9c5ff0ec3ade39f285",
+        "startedAt": "2026-10-18T18:07:30.501560066Z"
+      }
+    ]
+  },
+  "sourceBefore": {
+    "runtime": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\batched-capture-runtime-20261018-1600",
+    "owner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+    "project": "wfc-pathfinder-local-0cba87606e9b",
+    "port": 5191,
+    "origin": "http://127.0.0.1:5191",
+    "containers": [
+      {
+        "role": "api",
+        "id": "97e0ad80387c1c1e5148922356088ccbc7f77e5def61073c657b10769db09adb",
+        "image": "sha256:dce12a1f5ab6311bbaf04defb7277ff0d50fee36e29e49d47234e5bf4ea405fe",
+        "startedAt": "2026-10-18T16:37:14.241777817Z"
+      },
+      {
+        "role": "minio",
+        "id": "56456c8675afd1458df3ae87d8df4bf31131fa1807f7468e3958f900f53a73ed",
+        "image": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+        "startedAt": "2026-10-18T15:55:24.907837971Z"
+      },
+      {
+        "role": "postgres",
+        "id": "6a39e7b2d794055dccef0919cf3a99ddf60e0f3c0b5daae062cec1eb6c9b3785",
+        "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+        "startedAt": "2026-10-18T15:55:24.900140794Z"
+      },
+      {
+        "role": "storage-ready",
+        "id": "e26509d2b47f7a62ccc51196c7fec5fdb06c0df649cd000d3306a85dac563e8c",
+        "image": "sha256:dce12a1f5ab6311bbaf04defb7277ff0d50fee36e29e49d47234e5bf4ea405fe",
+        "startedAt": "2026-10-18T16:37:13.558001521Z"
+      },
+      {
+        "role": "web",
+        "id": "d864cc9ca17d0742277e77d4d929950ff9e5c8bd4dd940e57cb5702fe066f460",
+        "image": "sha256:561d51c3dd5ecb88459c17013890f9cd30089bb0760ccb9c5ff0ec3ade39f285",
+        "startedAt": "2026-10-18T16:37:20.024456112Z"
+      }
+    ]
+  },
+  "originalSession": {
+    "sessionId": "a2e7a133-8459-451b-b3f8-53504f94edf6",
+    "projectId": "1af0f807-7653-40ea-8391-7eea6c54e7d4",
+    "modelVersionId": "a613151e-c370-45c5-80f3-42ae58603b9a",
+    "loadId": "12b34569-9554-4a00-b78c-23411afed153",
+    "expiresAt": "2026-10-18T18:11:03.372Z",
+    "absoluteExpiresAt": "2026-10-18T18:36:03.372Z"
+  },
+  "originalLoginExpiresAt": "2026-10-25T18:06:03.000Z",
+  "outcomes": [
+    {
+      "label": "source_old_users_me",
+      "status": 200,
+      "bytes": 244,
+      "sha256": "fed7f244a86ba5f336ac826c14691441959355e0110cb3cf4ed9e4fb358547f3"
+    },
+    {
+      "label": "source_old_descriptor",
+      "status": 200,
+      "bytes": 405,
+      "sha256": "a2a823126dda4153890ef3fa9ceb6cc17cc7d734745906a7876ab5cd6900ee32"
+    },
+    {
+      "label": "source_old_resource",
+      "status": 200,
+      "bytes": 997,
+      "sha256": "ee4df15128a2ad51a42603ba7a0bbfb52b1bfbf2cee07139af1fac2545fdac57"
+    }
+  ],
+  "freshTargetSession": null,
+  "expiryChanged": false,
+  "renewed": false,
+  "deletedSessions": 0,
+  "capsule": {
+    "path": "pathfinder-engine/.scratch/copied-recovery-auth-3dc221a4-c8d9-49e4-9b21-b935fac44671/capsule.private.json",
+    "bytes": 3391,
+    "sha256": "1499763e1068afa23076dd6b4eca5351a18beac4713bff99d61b64d7bd85d029"
+  },
+  "allowedAuth": null,
+  "checkpoints": {},
+  "journal": {
+    "events": 8,
+    "bytes": 8949,
+    "finalSha256": "cb7f157436da826f8c824f9a164dc31ea61664dc647571338d0bc05df30d9bcb",
+    "recordsSha256": "3225b5ce04a647049ca3556ecc1ecd87c97dfc3bfdadb4101f072ab14d60ca5d"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "wfc.pf.endpoint-control-receipt.v1",
+  "phase": "fencing-registry",
+  "phaseIntentId": "402ae1bf-7666-4a72-8e7b-eb46b2f13f5a",
+  "recordedAtUtc": "2026-10-19T03:12:38.533Z",
+  "status": "PASS",
+  "elapsedMilliseconds": 52.880285,
+  "checks": [
+    {
+      "name": "Current authority/current model/registry transaction locks fence the competing edit",
+      "status": "PASS",
+      "scope": "actual production transaction primitive ONLY; not a paused full confirmation race"
+    }
+  ],
+  "preservationSha256": "262209c85922ae83a1b9b3c252f66c9e7a8153d84e2e85cfc05da33a36c1292a",
+  "cableApply": "NOT_PERFORMED",
+  "nativeParity": "NOT_PERFORMED",
+  "engineeringAcceptance": false
+}

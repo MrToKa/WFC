@@ -1,0 +1,22 @@
+{
+  "status": "PASS",
+  "scope": "Actual two simultaneous normal host5191 PUTs on generated synthetic B location; production project mutex, immutable receipt and CAS.",
+  "sameKey": {
+    "httpStatuses": [
+      200,
+      200
+    ],
+    "newBindings": 1,
+    "duplicateReceipts": 1
+  },
+  "competingCommands": {
+    "httpStatuses": [
+      200,
+      409
+    ],
+    "newBindings": 1,
+    "refused": 1
+  },
+  "cableApply": "NOT_PERFORMED",
+  "engineeringAcceptance": false
+}

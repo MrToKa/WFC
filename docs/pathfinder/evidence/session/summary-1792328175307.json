@@ -1,0 +1,112 @@
+{
+  "schemaVersion": "pathfinder.session.summary.v1",
+  "status": "PASS",
+  "checkedAt": "2026-10-18T12:56:15.349Z",
+  "checks": 210,
+  "methodologyUnitChecks": 15,
+  "raw": [
+    {
+      "mode": "age",
+      "kind": "result",
+      "path": "docs\\pathfinder\\evidence\\session\\qualification-age-1792328175307-result.json",
+      "bytes": 3325687,
+      "sha256": "704127ff3bbdfb00f8f8f7169d87f86b8b4b39287cacde7c3d8eea66c928eea7"
+    },
+    {
+      "mode": "age",
+      "kind": "orchestration",
+      "path": "docs\\pathfinder\\evidence\\session\\qualification-age-1792328175307-orchestration.json",
+      "bytes": 6036,
+      "sha256": "fe0b9e2acdabbb34ea11ae72ce71ad59bddaf0060ae9440855ba3c3f1e5edf16"
+    },
+    {
+      "mode": "mixed",
+      "kind": "result",
+      "path": "docs\\pathfinder\\evidence\\session\\qualification-mixed-1792328175307-result.json",
+      "bytes": 424027,
+      "sha256": "2a34ae092903a6aac1d57ea26a65601a16abf8f5840c8d459c46f60866235890"
+    },
+    {
+      "mode": "mixed",
+      "kind": "orchestration",
+      "path": "docs\\pathfinder\\evidence\\session\\qualification-mixed-1792328175307-orchestration.json",
+      "bytes": 6046,
+      "sha256": "3c96ef36e7d1e65270cdb5a4b8af7d7b980a0907b0997ba4294cd273969a68ab"
+    },
+    {
+      "mode": "policy",
+      "kind": "result",
+      "path": "docs\\pathfinder\\evidence\\session\\qualification-policy-1792328175307-result.json",
+      "bytes": 374170,
+      "sha256": "799b5dabf4692dfa3ca4a8bab1792eae2539cc8c5971bc4939c7ada4f052aa59"
+    },
+    {
+      "mode": "policy",
+      "kind": "orchestration",
+      "path": "docs\\pathfinder\\evidence\\session\\qualification-policy-1792328175307-orchestration.json",
+      "bytes": 6049,
+      "sha256": "4176f5d67cfb684715f79b2de49e5cfca1f27af00f7318ae88285034ffd96020"
+    },
+    {
+      "mode": "rss",
+      "kind": "result",
+      "path": "docs\\pathfinder\\evidence\\session\\qualification-rss-1792328175307-result.json",
+      "bytes": 3707,
+      "sha256": "c3962bf1e06460628e0ca16d8c1c2cd7c206339ac30fd85a085b0300f70f2a7e"
+    },
+    {
+      "mode": "rss",
+      "kind": "orchestration",
+      "path": "docs\\pathfinder\\evidence\\session\\qualification-rss-1792328175307-orchestration.json",
+      "bytes": 6036,
+      "sha256": "ea0f239e7c2613ba60b60f8b5bc89208d2d65fe63bb11bf244416223761085ee"
+    },
+    {
+      "mode": "deadline",
+      "kind": "result",
+      "path": "docs\\pathfinder\\evidence\\session\\qualification-deadline-1792328175307-result.json",
+      "bytes": 34570,
+      "sha256": "a4b57353dced8f6113d3e346efc08bd8c8c88e7aa787064a87cf05ea09c76685"
+    },
+    {
+      "mode": "deadline",
+      "kind": "orchestration",
+      "path": "docs\\pathfinder\\evidence\\session\\qualification-deadline-1792328175307-orchestration.json",
+      "bytes": 6056,
+      "sha256": "56fb457e2ab44139bec4842e77346ef861dceb8217e1fd2a7c39e29557ea59ca"
+    }
+  ],
+  "real": {
+    "fromToLengthMeters": 35.30345579516123,
+    "design": {
+      "lengthBeforePercentageMeters": "40.3034557951612",
+      "unroundedLengthMeters": "44.33380137467732",
+      "designLengthMeters": "45"
+    },
+    "sessionAColdMilliseconds": 1277.774073,
+    "sessionBMilliseconds": 233.8854309999997,
+    "sessionARepeatMilliseconds": 151.88227000000006,
+    "variedWarmMedianMilliseconds": 192.88385049999988,
+    "freshABAMilliseconds": [
+      1206.874774,
+      1270.1205920000002,
+      1199.8811829999995
+    ],
+    "freshABAMedianMilliseconds": 1206.874774,
+    "sampleCountFresh": 3,
+    "sampleCountSession": 3,
+    "sampledSessionTreeRssEstimateBytes": 198942720,
+    "freshRss": "NOT_MEASURED",
+    "graphBuiltPerQuery": true,
+    "fullRealExistingRouteDesignEquality": true,
+    "all31ForwardAndReversedFullDtoEquality": true
+  },
+  "limits": [
+    "Selected52-object/26-routing-leaf scope; no full plant/native/engineering acceptance.",
+    "RSS estimates are non-atomic sequential /proc observations and may miss peaks.",
+    "Small IPC samples include sampler overhead; no general performance guarantee.",
+    "Networkless qualification host DLL and rebuilt target DLL have different build metadata; target requires separate semantic check.",
+    "Historical deadline check status-label collision retained; corrected bounded rerun all8PASS."
+  ],
+  "source5190Unchanged": true
+}

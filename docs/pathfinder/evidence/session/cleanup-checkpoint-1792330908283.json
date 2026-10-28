@@ -1,0 +1,349 @@
+{
+  "schemaVersion": "pathfinder.session.cleanup-checkpoint.v1",
+  "status": "PARTIAL",
+  "checkedAt": "2026-10-18T13:41:48.283Z",
+  "artifact": {
+    "schemaVersion": "pathfinder.session.retained-artifact.v1",
+    "status": "PASS",
+    "checkedAt": "2026-10-18T13:41:48.282Z",
+    "root": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\session-qualified-artifact-fddb02fc-29e9-4fe2-bac0-5321fc2f913d",
+    "files": [
+      {
+        "file": "compiled-pathfinder/applicability.test.js",
+        "bytes": 661,
+        "sha256": "d34f34ddccac7445167222c9998d701ff0f7aa995817a3fcecb0dca746199811"
+      },
+      {
+        "file": "compiled-pathfinder/apply.js",
+        "bytes": 7237,
+        "sha256": "58db6bf4f5f09ef215512de86ca53e22c5ddd357982fee42d3b6447c6f783a26"
+      },
+      {
+        "file": "compiled-pathfinder/audit.js",
+        "bytes": 1615,
+        "sha256": "45ca9812173169dfdbc0ee614fbca7a370865c2ee3906dc4ff69a18f395df6c6"
+      },
+      {
+        "file": "compiled-pathfinder/auth.js",
+        "bytes": 2260,
+        "sha256": "006bde2a4bb72333e26c72566df3d68c971caef9c39bff52c068131c88f8d6ad"
+      },
+      {
+        "file": "compiled-pathfinder/contracts.js",
+        "bytes": 5319,
+        "sha256": "b650290811c20d009c4ed3e182a2f12563e95d7a9354e979e6ba6d30d2ef74a4"
+      },
+      {
+        "file": "compiled-pathfinder/demoSeed.js",
+        "bytes": 5625,
+        "sha256": "effb693e62970aacbf5efed7e012c4c6612f0ffb130bb2ebb90e563270ac58cd"
+      },
+      {
+        "file": "compiled-pathfinder/dependencies.js",
+        "bytes": 6105,
+        "sha256": "f5db0fd8d3bbcd420c683f9c927f6df8bd46eddb571d84badffab97da3010b88"
+      },
+      {
+        "file": "compiled-pathfinder/engine.js",
+        "bytes": 3738,
+        "sha256": "e43b8223cdf657f107e54e25461d3bb3d2883d126fc58280d043f556ba5591df"
+      },
+      {
+        "file": "compiled-pathfinder/engine.test.js",
+        "bytes": 10967,
+        "sha256": "7c572c0c97c3662f0493918b161b7692772001654095e69c8137538d659bc943"
+      },
+      {
+        "file": "compiled-pathfinder/engineSession.js",
+        "bytes": 24114,
+        "sha256": "5d0dfe630d46252c98461bfb4b208d98f82437d50ebc05153fe299d7d38400a8"
+      },
+      {
+        "file": "compiled-pathfinder/engineSession.test.js",
+        "bytes": 24544,
+        "sha256": "a374d41f9729eca8f33a01b578b8e4502df36cae245023b8dc7efcb7469a7eba"
+      },
+      {
+        "file": "compiled-pathfinder/errors.js",
+        "bytes": 248,
+        "sha256": "c8178daeea72fb50913028f109316f06da6f94bee63e6cfd65c6830913b23cfd"
+      },
+      {
+        "file": "compiled-pathfinder/integration.js",
+        "bytes": 55998,
+        "sha256": "b66420a5a89ef191695e899ffc71b761c183a799dddf8951b827331f1577277a"
+      },
+      {
+        "file": "compiled-pathfinder/jobContracts.js",
+        "bytes": 6001,
+        "sha256": "27242208d4eff5301da97e798c15508ffe53bf6f18d7dba480e71d6e3054c070"
+      },
+      {
+        "file": "compiled-pathfinder/jobs.js",
+        "bytes": 10911,
+        "sha256": "80f52f1892a4d6823d0f24e90a7f91b241d96027c9dca9c9549b6b72d8544df9"
+      },
+      {
+        "file": "compiled-pathfinder/jobsSchema.js",
+        "bytes": 8219,
+        "sha256": "3e23a9bb20698cd01cd65681d94a53189e2a4dd465d90ef9e0f566369877618b"
+      },
+      {
+        "file": "compiled-pathfinder/lookup-engine.test.js",
+        "bytes": 4853,
+        "sha256": "c49ab47b9b969d535d0e629a0fe46c6ac2adafd3b8d5b7c8314c8908f7f38074"
+      },
+      {
+        "file": "compiled-pathfinder/lookup-transport.test.js",
+        "bytes": 5411,
+        "sha256": "18f0cff90c1d074f1fb780959eb4b3d5f3c584d8373d3febcef24cbef92625d4"
+      },
+      {
+        "file": "compiled-pathfinder/lookup.integration.js",
+        "bytes": 20418,
+        "sha256": "89b7ac6c2a18b8c4189979d95dd6d214b4e5bd26488eba05ed81521f1ddcb78e"
+      },
+      {
+        "file": "compiled-pathfinder/lookupAudit.js",
+        "bytes": 4619,
+        "sha256": "9496ca3ecce0da3cc2eebb039dc25e5e301dd4d681d17f4c16b1c030edb8fcd6"
+      },
+      {
+        "file": "compiled-pathfinder/lookupFixture.js",
+        "bytes": 1465,
+        "sha256": "102bf36729e2ee2d6f8a4569dfc564286839c92ec231cda8e3462971e2ebeb8d"
+      },
+      {
+        "file": "compiled-pathfinder/lookups.js",
+        "bytes": 12689,
+        "sha256": "0010a08bff9199f3f45d77c36c3f58a6807dd222470345bf8da75c2fde511993"
+      },
+      {
+        "file": "compiled-pathfinder/lookups.test.js",
+        "bytes": 19512,
+        "sha256": "89c32db28a776c1ae107f771e1deae84787af34a13fb99a95609e67d93f4b459"
+      },
+      {
+        "file": "compiled-pathfinder/matching.js",
+        "bytes": 5429,
+        "sha256": "ce1b3976d838516ed2a769da7adfa3a27eb7ced4f8c689017f9f03a64d040ca6"
+      },
+      {
+        "file": "compiled-pathfinder/matching.test.js",
+        "bytes": 6406,
+        "sha256": "fa61e329f382a932a0efedddd3cdf18f980be6b5b6151634fff51a9451e7918f"
+      },
+      {
+        "file": "compiled-pathfinder/previews.js",
+        "bytes": 9469,
+        "sha256": "898bfa1a417e3c15dcec70b4a43f4462a30729225be1d30f915892429f913d42"
+      },
+      {
+        "file": "compiled-pathfinder/previews.test.js",
+        "bytes": 17261,
+        "sha256": "77417f7168f69c863c6dc1857354b4730dd3c091591e7af74018451bcc5ea8a0"
+      },
+      {
+        "file": "compiled-pathfinder/repository.js",
+        "bytes": 22600,
+        "sha256": "fa4b222d93129bab32c395e19c8d141c57fc82f700af8ea468b80260e139736b"
+      },
+      {
+        "file": "compiled-pathfinder/runtime.js",
+        "bytes": 1126,
+        "sha256": "73f7de42b683fbd934fd63f2bc2d4f849d33646dbd407d1e3a537022731b6a82"
+      },
+      {
+        "file": "compiled-pathfinder/schema.js",
+        "bytes": 8478,
+        "sha256": "896fb4691eee45c0739a1e6a732e80cc118658a6e7f5f7cd40a3400ffd72e5eb"
+      },
+      {
+        "file": "compiled-pathfinder/settings.js",
+        "bytes": 1403,
+        "sha256": "8ba6b95353d3d27c7c83dd0fdb1c0bbf33a2abaa9e42e0677b75ece567d4aaca"
+      },
+      {
+        "file": "compiled-pathfinder/settings.test.js",
+        "bytes": 2716,
+        "sha256": "49a22c40bff8ac3f443a46a4569a4bb0f83ea89296780f7638c1e0f7afdb43b1"
+      },
+      {
+        "file": "compiled-pathfinder/storage-digest.test.js",
+        "bytes": 1076,
+        "sha256": "e25ba4ca40066597d0e8338ed627e6387c9217a42eb88f46421b0abc39f8b0ef"
+      },
+      {
+        "file": "compiled-pathfinder/storage.js",
+        "bytes": 3079,
+        "sha256": "c9c93e69aeb981c38d2f8d6f9b26a9b170a33e2e257fe098ef9081cc07305443"
+      },
+      {
+        "file": "compiled-pathfinder/syntheticFixture.js",
+        "bytes": 2878,
+        "sha256": "3f038fafb1f43b1c7537d4cb8c6a6f7bb6736ae27613d55e9bcc91ebdd50d089"
+      },
+      {
+        "file": "compiled-pathfinder/transactions.js",
+        "bytes": 412,
+        "sha256": "1bb09f109e26aa1ea345b4c0aeed5bb4cb74f6f23889e9929f485b2b693fc46e"
+      },
+      {
+        "file": "compiled-pathfinder/worker-retained.test.js",
+        "bytes": 3976,
+        "sha256": "e0a000e5a0f5b1d45ea1c5925a5cdf1ad270612879f7de459d32c52146a8226a"
+      },
+      {
+        "file": "compiled-pathfinder/worker-session.test.js",
+        "bytes": 9626,
+        "sha256": "1c40e29a86ac4f75a5cc067cb4e7ba5b15ea2cf1ad496d12b1c59a29c2b568e5"
+      },
+      {
+        "file": "compiled-pathfinder/worker.js",
+        "bytes": 20798,
+        "sha256": "1c53eae0275f9f8eb96733b5f2bce4259dcf2940ff83d57f5a0f6f992040dbaa"
+      },
+      {
+        "file": "owner.json",
+        "bytes": 336,
+        "sha256": "365bcc38ad117a60c2e914e796a250f1aad6d33d825519eb27eeb10d6ffa9024"
+      },
+      {
+        "file": "runner/PathFinder.Adapter.dll",
+        "bytes": 62976,
+        "sha256": "2835df7ab56cd66eb572511601c46aeabaa82a20fe35f28fe01b5e168d901c7d"
+      },
+      {
+        "file": "runner/PathFinder.Adapter.pdb",
+        "bytes": 20308,
+        "sha256": "b122cbcc7e85d7c643819a545b04b1fe522985a3efecc2cd2d72b48b9ac71ea7"
+      },
+      {
+        "file": "runner/PathFinder.Core.dll",
+        "bytes": 126976,
+        "sha256": "348cc821eb997dfb57c6a15e73c28731ad3ccdf4257748621f38936868b26e60"
+      },
+      {
+        "file": "runner/PathFinder.Core.pdb",
+        "bytes": 54132,
+        "sha256": "7efe3ddbef8c82a516392467f0a246a66642a4890124f0ae4b3b9a68f0031808"
+      },
+      {
+        "file": "runner/PathFinder.Model.dll",
+        "bytes": 98816,
+        "sha256": "54ce0ee2d193ce397f564e5daa964ea57aa55255c44a5da8dd93dd786406def8"
+      },
+      {
+        "file": "runner/PathFinder.Model.pdb",
+        "bytes": 27700,
+        "sha256": "458eb2d1378581fbe108842755028e0308b73ab7a928f51639f693e736f76210"
+      },
+      {
+        "file": "runner/PathFinder.ModelRunner.deps.json",
+        "bytes": 1639,
+        "sha256": "a001d7170054300e9551ced8be628577c9f3df9ee92dc8ada22a1f7ef0fe2828"
+      },
+      {
+        "file": "runner/PathFinder.ModelRunner.dll",
+        "bytes": 78848,
+        "sha256": "4b940d5c8a7b72115369aa2004de4e12434ae5f4c6f14d014b8be9cc6ab3dc06"
+      },
+      {
+        "file": "runner/PathFinder.ModelRunner.pdb",
+        "bytes": 20308,
+        "sha256": "c1996aa55ae9de14ea3533d06f3b0d22f970e1a11f5886e1d2ae617a548bb7ce"
+      },
+      {
+        "file": "runner/PathFinder.ModelRunner.runtimeconfig.json",
+        "bytes": 328,
+        "sha256": "4719954ee973dde9617a64d30002c1df89df2f75ab40e6b01db8b3126388ce5f"
+      }
+    ],
+    "totalBytes": 851629,
+    "manifestSha256": "2bd5ec7d0bb85f38996e8b7ac71c0c0c3a936e9f2665b93cee13ea58c3e63001",
+    "scope": "Exact qualified Linux runner and dependencies plus current compiled PF modules copied before target retirement; no environment or credential files."
+  },
+  "retirement": {
+    "status": "PASS",
+    "project": "wfc-pathfinder-local-bf1cba239f40",
+    "owner": "59d9d5bc-9c8f-4b4c-b97d-bb56751e5a6e",
+    "details": {
+      "at": "2026-10-18T13:39:03.234Z",
+      "resources": {
+        "containers": [
+          {
+            "role": "web",
+            "id": "de261c20796894664e2ce3a7695afa12b9ff3aad250ad482c0075ce3e7de721b",
+            "image": "sha256:4d6022fa8de5348d02d1a86cc691214142e3a3866032de9ba9a08a5068d10c66",
+            "name": "wfc-pathfinder-local-bf1cba239f40-web-1",
+            "running": false,
+            "startedAt": "2026-10-18T13:08:46.927711447Z"
+          },
+          {
+            "role": "api",
+            "id": "3b02c809bac059ed210886766812ed002bfb89e95b3d18258875869b3a1c9284",
+            "image": "sha256:5cd3eca8f8a6972f038bd9766a8e5a68c1ac2cb59546d4ed96763c6de528c3f5",
+            "name": "wfc-pathfinder-local-bf1cba239f40-api-1",
+            "running": false,
+            "startedAt": "2026-10-18T13:19:12.709581331Z"
+          },
+          {
+            "role": "storage-ready",
+            "id": "f096a7da53905d4f0769d855092ce96de43b55e5d9013bd2f5a9d8cb4738f2f2",
+            "image": "sha256:5cd3eca8f8a6972f038bd9766a8e5a68c1ac2cb59546d4ed96763c6de528c3f5",
+            "name": "wfc-pathfinder-local-bf1cba239f40-storage-ready-1",
+            "running": false,
+            "startedAt": "2026-10-18T13:08:40.471578669Z"
+          },
+          {
+            "role": "postgres",
+            "id": "537355846bb844629004d97ce91f8fd10dcae660646b759702c5d22d40591614",
+            "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+            "name": "wfc-pathfinder-local-bf1cba239f40-postgres-1",
+            "running": false,
+            "startedAt": "2026-10-18T12:47:47.72907359Z"
+          },
+          {
+            "role": "minio",
+            "id": "44876e1db63775fcf78ff2044451ffa92fc7bb10154d69f79e84a81cfd339cf1",
+            "image": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+            "name": "wfc-pathfinder-local-bf1cba239f40-minio-1",
+            "running": false,
+            "startedAt": "2026-10-18T12:47:47.730480702Z"
+          }
+        ],
+        "volumes": [
+          "wfc-pathfinder-local-bf1cba239f40_postgres",
+          "wfc-pathfinder-local-bf1cba239f40_minio",
+          "wfc-pathfinder-local-bf1cba239f40_staging",
+          "wfc-pathfinder-local-bf1cba239f40_pathfinder"
+        ],
+        "networks": [
+          {
+            "id": "a9b611d1e72ef635ec4a58a6a20d00a8c8c0a86a2eea95ef64549cbe8d777284",
+            "name": "wfc-pathfinder-local-bf1cba239f40_front"
+          },
+          {
+            "id": "5b31c0ad3a81791464a1cc3f491de58e1bf3d56c5e95d514f22989165021a2d1",
+            "name": "wfc-pathfinder-local-bf1cba239f40_backend"
+          }
+        ]
+      }
+    },
+    "remaining": {
+      "containers": [],
+      "volumes": [],
+      "networks": []
+    }
+  },
+  "postUiAudit": {
+    "status": "FAIL_NOT_RETAINED",
+    "reason": "The comparison reported a mismatch, but the returned12-group audit object was not retained before its assertion threw. Retirement was erroneously invoked without conditioning on that result, so current target DB cannot be re-read. No passing post-UI12-group or DB noApply result is inferred.",
+    "sequencingErrorAcknowledged": true,
+    "original5190Touched": false
+  },
+  "imageCleanup": {
+    "status": "NOT_RUN",
+    "reason": "Held pending parent disposition after the audit/retirement sequencing error."
+  }
+}

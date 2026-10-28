@@ -1,0 +1,308 @@
+{
+  "schemaVersion": "pathfinder.session.final-source-inventory.v1",
+  "recordedAt": "2026-10-18T13:43:50.290Z",
+  "scope": "Final observed source bytes; dated qualification bundle/actual run receipts retain their own earlier exact bindings. This is not a claim every file was in each earlier test bundle.",
+  "files": [
+    {
+      "file": "scripts/pathfinder-session/crash-once.mjs",
+      "bytes": 9202,
+      "sha256": "b68c791a8ea6653f0136d9c82e4bbf69b7083dd7da18d25a5da34bf5497fcb99"
+    },
+    {
+      "file": "scripts/pathfinder-session/fixtures/MemoryLane/MemoryLane.csproj",
+      "bytes": 328,
+      "sha256": "7b6d9f5af4007939a22b6d34e88f0bb651aefc28eca0cfd14402ca9e40bfbb5f"
+    },
+    {
+      "file": "scripts/pathfinder-session/fixtures/MemoryLane/Program.cs",
+      "bytes": 3771,
+      "sha256": "024476d752e69e8efa5c1f77d7cb2f9acfddf549b978f82b77e39f6b35910702"
+    },
+    {
+      "file": "scripts/pathfinder-session/fixtures/NoResponseLane/NoResponseLane.csproj",
+      "bytes": 313,
+      "sha256": "942b0723504b7fb6bdddef59eeafe9ef7ced8aadefd4ec9da9506bccdf47bc26"
+    },
+    {
+      "file": "scripts/pathfinder-session/fixtures/NoResponseLane/Program.cs",
+      "bytes": 3284,
+      "sha256": "f73aae4de8521f495b1fc69c6310e9e6505156f0300f08c51d8c671e0a3093a4"
+    },
+    {
+      "file": "scripts/pathfinder-session/job-controls.mjs",
+      "bytes": 32766,
+      "sha256": "fd65f4b9d499ec5cc86f099803f8f0c8772821bfcea502568769d04c014c0339"
+    },
+    {
+      "file": "scripts/pathfinder-session/job-controls.test.mjs",
+      "bytes": 1295,
+      "sha256": "41ea8fb25a68c0329645b4dc8b479a966d673d3d8d1eb44a77359c9ade44f7d1"
+    },
+    {
+      "file": "scripts/pathfinder-session/lib.mjs",
+      "bytes": 3182,
+      "sha256": "118a919a2600706e3beea08985bbbc2539650c51d26ec7d9044efb247853dbcf"
+    },
+    {
+      "file": "scripts/pathfinder-session/prepare.mjs",
+      "bytes": 6988,
+      "sha256": "d931e4bc95442c670bd4c06d14cbbb3543c18320cfa6bfe7e16836deb226a7d5"
+    },
+    {
+      "file": "scripts/pathfinder-session/qualify.mjs",
+      "bytes": 14071,
+      "sha256": "79d0b2a87e04ff4e3ab66fb61d5bdaf20869901ea947b65d48e375eee0ab5ae6"
+    },
+    {
+      "file": "scripts/pathfinder-session/README.md",
+      "bytes": 5724,
+      "sha256": "b54eb6a216922fa02795ea78513a84eb324c04e7f3a307065ba2eae7a8f86a9d"
+    },
+    {
+      "file": "scripts/pathfinder-session/run.mjs",
+      "bytes": 7807,
+      "sha256": "5a5689ef0805c8ead09c96c41f2f70e391fd216ccb39f425119346271c244373"
+    },
+    {
+      "file": "scripts/pathfinder-session/session.test.mjs",
+      "bytes": 3438,
+      "sha256": "3e0cd6a9b7285dfea1e07db5127386d4331bd1a91c30b268e8c91dba9cacd271"
+    },
+    {
+      "file": "scripts/pathfinder-session/target-ops.mjs",
+      "bytes": 9456,
+      "sha256": "f6071b83523b6ac5f5fd1cf7a21c9a070cc9b064b6707ba469210fc51b0037f1"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/bin/Release/net9.0/PathFinder.Adapter.dll",
+      "bytes": 62976,
+      "sha256": "adf9368542bba021a5ed26f723d20abd3ce67a959d8a2acbaea692499a409081"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/bin/Release/net9.0/PathFinder.Adapter.pdb",
+      "bytes": 21284,
+      "sha256": "9ed2686e79eee5a3c9a95b522f0636dadb36f7b4bb4881896567e1db2cf8a045"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/bin/Release/net9.0/PathFinder.Core.dll",
+      "bytes": 126976,
+      "sha256": "6bf5e93292fb2a4102dbe1ff414bb3648d6dde764d9bfcb59dd5357930dbdc7f"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/bin/Release/net9.0/PathFinder.Core.pdb",
+      "bytes": 55036,
+      "sha256": "1599270307c5a355836e46df5e86e6ec49102c899a48b55d121976448bc84e9f"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/bin/Release/net9.0/PathFinder.Model.dll",
+      "bytes": 86016,
+      "sha256": "143772dbc6525b8ef2827797ccbe81cc49158cc4e0bf2ab7ee456491f0724651"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/bin/Release/net9.0/PathFinder.Model.pdb",
+      "bytes": 26336,
+      "sha256": "b0460d51ef8f52a362c5b0223f8293ccc6062629c7bae5dfea45d0f78c6fbb47"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/bin/Release/net9.0/PathFinder.ModelRunner.deps.json",
+      "bytes": 1710,
+      "sha256": "c7e6d9cb4afef731af751b21eb86a7862f5868429495955e7ecb86e60290d673"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/bin/Release/net9.0/PathFinder.ModelRunner.dll",
+      "bytes": 48128,
+      "sha256": "e14f1ec074bc50cba7175d63b918570b484f209d330a6446923581b5636b349d"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/bin/Release/net9.0/PathFinder.ModelRunner.exe",
+      "bytes": 156672,
+      "sha256": "2723f5a43bb5c55681418b5d39a74dac4a11e9e4464363d160c599c94a4f1f24"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/bin/Release/net9.0/PathFinder.ModelRunner.pdb",
+      "bytes": 16252,
+      "sha256": "ed9eba44a8dcd1c65c9c05ee2456c9a62896854eecaa5e4d5df03b8ad6de4b51"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/bin/Release/net9.0/PathFinder.ModelRunner.runtimeconfig.json",
+      "bytes": 340,
+      "sha256": "3c0bf772b95c93363a0a14e5df78e4ec408c90f04cb7103205af97b2d276fab0"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/obj/PathFinder.ModelRunner.csproj.nuget.dgspec.json",
+      "bytes": 12069,
+      "sha256": "b7405b5e249e4d4dd21db4d2891ccee770da8b5d28cc735f84341517866eba18"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/obj/PathFinder.ModelRunner.csproj.nuget.g.props",
+      "bytes": 1496,
+      "sha256": "f28cf6d996fb991c0f01cc1580acde9b2ffab611f2bd345ef54f78ec885fe939"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/obj/PathFinder.ModelRunner.csproj.nuget.g.targets",
+      "bytes": 150,
+      "sha256": "971cc9b535384849b5c661d776cd7a80833a416265e32e8968e06c367368b8b5"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/obj/project.assets.json",
+      "bytes": 5225,
+      "sha256": "e6228b5850470190d7edd63dfbd91fc20e2e44f79f44e6c92215ef06f3a506a9"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/obj/project.nuget.cache",
+      "bytes": 280,
+      "sha256": "8d5951cefa1f19fe102fb7ed84063ff4a2c4ae6f9f143df1561a7c852f34cdd3"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/obj/Release/net9.0/.NETCoreApp,Version=v9.0.AssemblyAttributes.cs",
+      "bytes": 198,
+      "sha256": "9e76499c4e5cb623ad4889eaa99b1a53d9c970efcf902d8b096e78a19ee4285d"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/obj/Release/net9.0/apphost.exe",
+      "bytes": 156672,
+      "sha256": "2723f5a43bb5c55681418b5d39a74dac4a11e9e4464363d160c599c94a4f1f24"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/obj/Release/net9.0/PathFind.CDDA2BDF.Up2Date",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/obj/Release/net9.0/PathFinder.ModelRunner.AssemblyInfo.cs",
+      "bytes": 1042,
+      "sha256": "2455cd427996c415635cec77eeaf4e67200edab1f2a67ebba040fbc48bbac950"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/obj/Release/net9.0/PathFinder.ModelRunner.AssemblyInfoInputs.cache",
+      "bytes": 66,
+      "sha256": "14d1a2bad0cbe1bbc7ace7ec629dfd0f3725226e5bec6a6edba4c4560f72a1d0"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/obj/Release/net9.0/PathFinder.ModelRunner.assets.cache",
+      "bytes": 421,
+      "sha256": "beaf05dcd4f1183321db24ba1c064e8930c66facc8de8eb749ea3cb71682dc48"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/obj/Release/net9.0/PathFinder.ModelRunner.csproj.AssemblyReference.cache",
+      "bytes": 2775,
+      "sha256": "81920cd332a7ebef5bd0504c85d04d244a38af6b4d700d4149536ef1ace8f1fa"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/obj/Release/net9.0/PathFinder.ModelRunner.csproj.CoreCompileInputs.cache",
+      "bytes": 66,
+      "sha256": "7e48bd551eeaaebaca07b3035fa9c5f60515109e0d271a87c4c247d5748a5ebf"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/obj/Release/net9.0/PathFinder.ModelRunner.csproj.FileListAbsolute.txt",
+      "bytes": 3488,
+      "sha256": "9e6e77f37b6c22fc91d9931241290fb30c032a8c9914e0819fa1ae3f17d3e6e1"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/obj/Release/net9.0/PathFinder.ModelRunner.dll",
+      "bytes": 48128,
+      "sha256": "e14f1ec074bc50cba7175d63b918570b484f209d330a6446923581b5636b349d"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/obj/Release/net9.0/PathFinder.ModelRunner.GeneratedMSBuildEditorConfig.editorconfig",
+      "bytes": 751,
+      "sha256": "68efc4eef965404dae55d28cb0ab20b5a8497e0ca945d10cec4a8970418f4e7c"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/obj/Release/net9.0/PathFinder.ModelRunner.genruntimeconfig.cache",
+      "bytes": 66,
+      "sha256": "23ceff3805100fcc3c71d39144d19754ffc042d7ea79a15b3a0a21c678c387ae"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/obj/Release/net9.0/PathFinder.ModelRunner.GlobalUsings.g.cs",
+      "bytes": 295,
+      "sha256": "f3f134e9e825e3e7268090f58b1af2bda2de513f61a09c56f48b9b8d08612abc"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/obj/Release/net9.0/PathFinder.ModelRunner.pdb",
+      "bytes": 16252,
+      "sha256": "ed9eba44a8dcd1c65c9c05ee2456c9a62896854eecaa5e4d5df03b8ad6de4b51"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/obj/Release/net9.0/PathFinder.ModelRunner.sourcelink.json",
+      "bytes": 165,
+      "sha256": "50b5aed69ee2298c401eba6de089039722cc42b36929f5d60d8ab1782c19471e"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/obj/Release/net9.0/ref/PathFinder.ModelRunner.dll",
+      "bytes": 12288,
+      "sha256": "801b14123afa876cbeab4d4838c65ba978d830aa5b730d1e5ba62fdf2ad1fe37"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/obj/Release/net9.0/refint/PathFinder.ModelRunner.dll",
+      "bytes": 12288,
+      "sha256": "801b14123afa876cbeab4d4838c65ba978d830aa5b730d1e5ba62fdf2ad1fe37"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/PathFinder.ModelRunner.csproj",
+      "bytes": 551,
+      "sha256": "ad2dd57312de2fb239560a635a4e16f476d975c7ddd1e20d3af40041387bf5d9"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/Program.cs",
+      "bytes": 20753,
+      "sha256": "2ddb7fdee36d7119ca37869318dca6b3e575aa83095ab1fc87e65b955184ea5d"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/README.md",
+      "bytes": 6372,
+      "sha256": "495ede215fcb45f0bde94863fd5acbc9ed7885ffde88ee094a855c8255c3d7b5"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/Session.cs",
+      "bytes": 13547,
+      "sha256": "32ef66ffb981cfb5fde657092504ba36bfc4a048ac73ddcd8016a405e0b39a63"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/SessionExecutionContext.cs",
+      "bytes": 1108,
+      "sha256": "eafd19ffc558cfe1d9cda4a6b00e3ffb9ea28abae78fb437a2c92f2c791e283a"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/SessionProtocol.cs",
+      "bytes": 6076,
+      "sha256": "dde646cb9c031959fa8f87302d66974890be6ba7cbe12150d52ccfa31007159a"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/test-smoke.mjs",
+      "bytes": 16618,
+      "sha256": "f473629d4f3f95c7a0689e465d6bc90545c15400e8c4e2ddde42f195b86009e0"
+    },
+    {
+      "file": "docker/pathfinder.compose.yml",
+      "bytes": 4189,
+      "sha256": "814a9df62725bd1e355fae41ec30add3cb8e07bde00875f4d50b4e2d46b64987"
+    },
+    {
+      "file": "server/index.ts",
+      "bytes": 3423,
+      "sha256": "b3133a1c0d84ac379cf097825ecfceb99b89fef8aee9dc19e8df82262ee94eb4"
+    },
+    {
+      "file": "server/pathfinder/engineSession.ts",
+      "bytes": 23468,
+      "sha256": "5cfa14c83dd0566009baecaf757ed1698f0c339043faaff48b24d36eb84a4513"
+    },
+    {
+      "file": "server/pathfinder/engine.ts",
+      "bytes": 3392,
+      "sha256": "213e3690ee2b1fa1b35e46ae84cda14a69a9908770f4a27d58e0ce7e04a5b9ea"
+    },
+    {
+      "file": "server/pathfinder/worker.ts",
+      "bytes": 18164,
+      "sha256": "3ce7708dd65a9571571f962a4380163c11bc1433a8494893e21e1d8c9c26377f"
+    },
+    {
+      "file": "server/pathfinder/jobContracts.ts",
+      "bytes": 6921,
+      "sha256": "98d3b0f17a23d8c8a1659e725b9844d7440fd3c06db6dc3810e8a5a86f58f6cb"
+    }
+  ],
+  "sha256": "2d36c66a6e62d58d8d1836dea6461e0a7a27954375245efd6edcc4b6b19e89ca"
+}

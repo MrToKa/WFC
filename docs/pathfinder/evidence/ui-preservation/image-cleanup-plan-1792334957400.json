@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "pathfinder.ui-preservation.image-cleanup-plan.v1",
+  "status": "PASS",
+  "recordedAt": "2026-10-18T14:49:17.400Z",
+  "project": "wfc-pathfinder-local-f673a0facba3",
+  "images": [
+    {
+      "id": "sha256:e0a6d7425b5280e429c3f25fa0d94922553ae08005f3773676f0cc5291f2904e",
+      "logicalBytes": 184573345,
+      "tags": [
+        "wfc-pathfinder-api:7fa65ffaef34-mvdwteli"
+      ],
+      "owner": "7fa65ffa-ef34-46a7-b4c1-55cd19f8fa74"
+    },
+    {
+      "id": "sha256:5abc6002a709407b7edd0b7f631abdca75df0cff83c936dccaf76930d8e095fc",
+      "logicalBytes": 55129919,
+      "tags": [
+        "wfc-pathfinder-web:7fa65ffaef34-mvdwteli"
+      ],
+      "owner": "7fa65ffa-ef34-46a7-b4c1-55cd19f8fa74"
+    },
+    {
+      "id": "sha256:577e040fa919c6c556e69bd34f3697d49d14d2b6b00d10c600ce1beb26803014",
+      "logicalBytes": 55129303,
+      "tags": [
+        "wfc-pathfinder-web:7fa65ffaef34-caption-mvdxp5at"
+      ],
+      "owner": "7fa65ffa-ef34-46a7-b4c1-55cd19f8fa74"
+    }
+  ],
+  "containerReferences": 0
+}

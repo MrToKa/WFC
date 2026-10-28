@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ApiError, Project, updateProject } from '@/api/client';
 import type { CableBundleSpacing } from '@/api/types';
@@ -104,11 +104,13 @@ export type CableSpacingController = {
   maxFreeSpaceError: string | null;
   saving: boolean;
   considerBundleSpacingAsFree: boolean;
+  autoRerouteForFreeSpace: boolean;
   onInputChange: (value: string) => void;
   onMinFreeSpaceChange: (value: string) => void;
   onMaxFreeSpaceChange: (value: string) => void;
   onSave: () => Promise<void>;
   onToggleConsiderBundleSpacingAsFree: (value: boolean) => Promise<void>;
+  onToggleAutoRerouteForFreeSpace: (value: boolean) => Promise<void>;
 };
 
 export type CableCategoryController = {
@@ -234,6 +236,17 @@ export const useCableLayoutSettings = ({
   const [spacingInput, setSpacingInput] = useState<string>('');
   const [spacingError, setSpacingError] = useState<string | null>(null);
   const [spacingSaving, setSpacingSaving] = useState<boolean>(false);
+  const rerouteOwner = JSON.stringify([project?.id ?? null, token, isAdmin]);
+  const liveRerouteOwner = useRef(rerouteOwner);
+  liveRerouteOwner.current = rerouteOwner;
+  const pendingReroute = useRef<{ owner: string } | null>(null);
+  const [rerouteDraft, setRerouteDraft] = useState<{
+    owner: string; checked: boolean; saving: boolean; error: string | null;
+  } | null>(null);
+  const currentRerouteDraft = rerouteDraft?.owner === rerouteOwner ? rerouteDraft : null;
+  const autoRerouteForFreeSpace = currentRerouteDraft?.checked
+    ?? project?.cableLayout?.autoRerouteForFreeSpace === true;
+  const rerouteSaving = currentRerouteDraft?.saving === true;
   const [considerBundleSpacingAsFree, setConsiderBundleSpacingAsFree] =
     useState<boolean>(false);
   const [minFreeSpaceInput, setMinFreeSpaceInput] = useState<string>('');
@@ -283,6 +296,10 @@ export const useCableLayoutSettings = ({
       Boolean(project?.cableLayout?.considerBundleSpacingAsFree)
     );
   }, [project?.cableLayout?.considerBundleSpacingAsFree]);
+
+  useEffect(() => {
+    setRerouteDraft(previous => previous?.owner === rerouteOwner && previous.saving ? previous : null);
+  }, [rerouteOwner, project?.cableLayout?.autoRerouteForFreeSpace]);
 
   useEffect(() => {
     setCategoryInputs(createInitialCategoryInputs(project));
@@ -355,6 +372,11 @@ export const useCableLayoutSettings = ({
     }
 
     if (parsedMin.error || parsedMax.error) {
+      return;
+    }
+
+    if (project.cableLayout?.autoRerouteForFreeSpace === true && parsedMin.numeric === null) {
+      setMinFreeSpaceError('Set a minimum free space or turn off automatic rerouting first.');
       return;
     }
 
@@ -508,6 +530,47 @@ export const useCableLayoutSettings = ({
       token
     ]
   );
+
+  const handleToggleAutoRerouteForFreeSpace = useCallback(async (checked: boolean) => {
+    if (pendingReroute.current?.owner === rerouteOwner) return;
+    const previousValue = autoRerouteForFreeSpace;
+    const refuse = (message: string) => {
+      setRerouteDraft({ owner: rerouteOwner, checked: previousValue, saving: false, error: message });
+      showToast({ intent: 'error', title: 'Automatic rerouting not saved', body: message });
+    };
+    if (!project || !token) {
+      refuse('You need to be signed in to update automatic rerouting.');
+      return;
+    }
+    if (!isAdmin) {
+      refuse('Only administrators can update automatic rerouting.');
+      return;
+    }
+    if (checked && project.cableLayout?.minFreeSpacePercent == null) {
+      refuse('Set and save the minimum tray free space before enabling automatic rerouting.');
+      return;
+    }
+    if (checked === previousValue) return;
+    const ticket = { owner: rerouteOwner };
+    pendingReroute.current = ticket;
+    const current = () => pendingReroute.current === ticket && liveRerouteOwner.current === ticket.owner;
+    setRerouteDraft({ owner: ticket.owner, checked, saving: true, error: null });
+    try {
+      await updateProject(token, project.id, { cableLayout: { autoRerouteForFreeSpace: checked } });
+      if (!current()) return;
+      await reloadProject();
+      if (!current()) return;
+      setRerouteDraft({ owner: ticket.owner, checked, saving: false, error: null });
+      showToast({ intent: 'success', title: 'Automatic rerouting updated' });
+    } catch (error) {
+      if (!current()) return;
+      const message = error instanceof ApiError ? error.message : 'Failed to update automatic rerouting.';
+      setRerouteDraft({ owner: ticket.owner, checked: previousValue, saving: false, error: message });
+      showToast({ intent: 'error', title: 'Update failed', body: message });
+    } finally {
+      if (pendingReroute.current === ticket) pendingReroute.current = null;
+    }
+  }, [autoRerouteForFreeSpace, isAdmin, project, reloadProject, rerouteOwner, showToast, token]);
 
   const handleMaxRowsChange = useCallback((key: CategoryKey, value: string) => {
     setCategoryInputs((previous) => ({
@@ -781,24 +844,30 @@ export const useCableLayoutSettings = ({
       input: spacingInput,
       minFreeSpaceInput,
       maxFreeSpaceInput,
-      error: spacingError,
+      error: currentRerouteDraft?.error ?? spacingError,
       minFreeSpaceError,
       maxFreeSpaceError,
-      saving: spacingSaving,
+      saving: spacingSaving || rerouteSaving,
       considerBundleSpacingAsFree,
+      autoRerouteForFreeSpace,
       onInputChange: handleSpacingChange,
       onMinFreeSpaceChange: handleMinFreeSpaceChange,
       onMaxFreeSpaceChange: handleMaxFreeSpaceChange,
       onSave: handleSaveSpacing,
-      onToggleConsiderBundleSpacingAsFree: handleToggleBundleSpacingAsFree
+      onToggleConsiderBundleSpacingAsFree: handleToggleBundleSpacingAsFree,
+      onToggleAutoRerouteForFreeSpace: handleToggleAutoRerouteForFreeSpace
     }),
     [
       considerBundleSpacingAsFree,
+      autoRerouteForFreeSpace,
+      currentRerouteDraft?.error,
+      rerouteSaving,
       handleMaxFreeSpaceChange,
       handleMinFreeSpaceChange,
       handleSaveSpacing,
       handleSpacingChange,
       handleToggleBundleSpacingAsFree,
+      handleToggleAutoRerouteForFreeSpace,
       maxFreeSpaceError,
       maxFreeSpaceInput,
       minFreeSpaceError,

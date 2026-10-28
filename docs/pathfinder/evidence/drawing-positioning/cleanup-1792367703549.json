@@ -1,0 +1,12 @@
+{
+  "status": "PASS",
+  "scope": "ONLY_OWN_SUPERSEDED_UNREFERENCED_IMAGES",
+  "removedImages": [
+    "sha256:29202b007e32673a896df731df443d7565864106430f95599d41a8a09336ca86",
+    "sha256:38f737b49e94cdb2c008b463eb1a18e78bd1c5f35d653f7bc571cb9f5275262d"
+  ],
+  "protectedContainersUnchanged": 18,
+  "fixtureCleanup": "PASS",
+  "deniedPathsTouched": false,
+  "prune": false
+}

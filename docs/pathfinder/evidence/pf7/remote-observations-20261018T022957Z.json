@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "pathfinder.remote-observation.v1",
+  "observedAtUtc": "2026-10-18T02:29:57Z",
+  "method": "read-only git ls-remote; no fetch, push or local-ref update",
+  "wfcMain": "e1ef20202598bb4d3d78e4772cbbb9747ec23a00",
+  "canonicalPathFinderMaster": "45c24bf5f433f13e102600b36f20327c77961d0a",
+  "localFeatureBranch": "pf-4-viewer-local-20261018",
+  "sameNamedRemoteBranch": "ABSENT",
+  "prReviewsAndCi": "NOT_REFRESHED; no remote checks are claimed for this unpublished local feature",
+  "remoteMutationPerformed": false
+}

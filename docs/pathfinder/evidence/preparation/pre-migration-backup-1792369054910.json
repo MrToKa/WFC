@@ -1,0 +1,17 @@
+{
+  "status": "PASS",
+  "backupId": "ffb2c4d0-bdc7-41fa-823c-ba428e6adab8",
+  "members": 8,
+  "databaseDumpVerification": {
+    "status": "PASS",
+    "method": "pg_restore-list-mounted-file",
+    "tocBytes": 50808,
+    "tocSha256": "bd6f5ce13e7b9cf9cd34a1aac381e36a66810b7cc3d58ec3b89e25c964598c85"
+  },
+  "work": "pathfinder-engine/.scratch/tray-catalog-6089519f-d9e6-45e0-8ef6-f9d8c7792287",
+  "protectedContainersUnchanged": 18,
+  "postBackupProfile": "r3-approved-runtime.private.json",
+  "initialFailure": "initial-backup-pipe-failure.json",
+  "scope": "COLD_BACKUP_HASH_AND_TOC_VERIFICATION; FULL_RESTORE_NOT_RUN",
+  "finishedAt": "2026-10-19T00:17:34.910Z"
+}

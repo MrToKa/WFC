@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "pathfinder.copied-recovery.provenance-source-controls.v1",
+  "status": "PASS",
+  "observedAt": "2026-10-18T18:01:31.6848076Z",
+  "executor": "viewer_tab_capabilities",
+  "branch": "pf-8-copied-project-recovery-local-20261018",
+  "baselineRevision": "94f83c11747e3ff6d3efb7b8064ef115b364c5df",
+  "ownedSourceFrozen": true,
+  "ownedSource": { "path": "scripts/pathfinder-copied-recovery/provenance-lib.test.mjs", "bytes": 9884, "sha256": "dea49243bee5c122012ce4ccb7d3e1af0a1a52b8fe084aada2e70a59d4f80bc7" },
+  "testedReadOnlyDependencies": [
+    { "path": "scripts/pathfinder-copied-recovery/provenance-lib.mjs", "bytes": 2194, "sha256": "bd2546bc979c547b3be1508f14e7e3940b1dad79563164292939c9b4d9769597", "owner": "root" },
+    { "path": "scripts/pathfinder-copied-recovery/binding.test.mjs", "bytes": 3533, "sha256": "af64d6fb645f78c24e69ce62d0a7f8018d536caf61768ed4307ea9879ee80dcb", "owner": "root" },
+    { "path": "scripts/pathfinder-copied-recovery/binding.mjs", "bytes": 9303, "sha256": "5e242570745973a4af42af110e8eb29665331a3323f2d7ebb9016ba286c8046f", "owner": "root" }
+  ],
+  "checks": [
+    {
+      "command": "node --test --test-reporter=tap scripts/pathfinder-copied-recovery/provenance-lib.test.mjs scripts/pathfinder-copied-recovery/binding.test.mjs",
+      "status": "PASS", "exitCode": 0, "toolChunk": "ea9115",
+      "tests": 73, "passed": 73, "failed": 0, "skipped": 0, "durationMilliseconds": 243.1262,
+      "suites": { "newProvenanceControls": 55, "existingBindingControls": 18 },
+      "raw": { "path": "docs/pathfinder/evidence/copied-recovery/provenance-binding-controls-1792346468534.tap", "bytes": 12568, "sha256": "bdcdeec581771f14395e823546373561ec32d48c70ac168255e4a3eb7ebb6e29", "lastWriteTimeUtc": "2026-10-18T18:01:08.8610434Z" }
+    },
+    { "command": "node --check scripts/pathfinder-copied-recovery/provenance-lib.test.mjs", "status": "PASS", "exitCode": 0, "toolChunk": "a638d1" }
+  ],
+  "coverage": [
+    "Fourteen enumerated sensitive key patterns, case variants and deep object/array traversal.",
+    "Authentication keys in JSON response bodies and twice-embedded JSON strings.",
+    "Synthetic bearer, JWT-shaped and Viewer-cookie value patterns, including a malformed JSON-shaped string containing a guarded value.",
+    "Safe non-authentication inputs, no input mutation, depth64 boundary, wide node budget and cyclic-input refusal.",
+    "Independently constructed synthetic67-event chain and known SHA256 test vector.",
+    "Exact event count, ordered filename, schema, numeric sequence, intent and preceding raw-byte link.",
+    "Middle and final content tamper, whitespace-only raw tamper, malformed event JSON, final SHA, total bytes, intent SHA, record ordering and directory/path identity pins.",
+    "Existing source/target isolation and verified-target-only retirement profile guards."
+  ],
+  "limitations": [
+    "Every journal, request, credential-shaped string and auth pattern used by these controls is synthetic. No actual private provenance file or retained event was read.",
+    "The enumerated secret guards are tested; this is not a comprehensive classifier or proof that arbitrary input contains no secret.",
+    "Pure chain validation is tested against trusted synthetic receipt pins. Actual retained67-event bytes, file copying, adjunct sealing, backup-manifest linkage and runtime ownership remain for the parent-controlled operational execution.",
+    "No actual PostgreSQL, Docker, HTTP, browser, backup, restore, retirement or source-runtime operation was performed."
+  ],
+  "changedFiles": ["scripts/pathfinder-copied-recovery/provenance-lib.test.mjs"],
+  "dependenciesEdited": false,
+  "failedHistoricalRuns": [],
+  "acceptance": "Focused source controls only; no operational recovery, engineering, native parity or human acceptance claim."
+}

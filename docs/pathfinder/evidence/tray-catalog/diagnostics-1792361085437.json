@@ -1,0 +1,104 @@
+{
+  "schemaVersion": "wfc.pf.tray-catalog-diagnostics-summary.v1",
+  "status": "OBSERVED",
+  "sourceProjectionSha256": "16b02722a2fe96f754d593963018e8a93524e3b71a7521cf647262a186a9b23c",
+  "privateDetailsSha256": "58d37705d096f7a3aa52885629ba496436887684013cc9b487415f7a4b78440c",
+  "counts": {
+    "trays": 330,
+    "cableTypes": 51,
+    "materialTrays": 15,
+    "rawPurposeDistinct": 6,
+    "purposeKeyDistinct": 6,
+    "rawTrayNameDistinct": 330,
+    "trayNameKeyDistinct": 330,
+    "captureLookupKeyDistinct": 330
+  },
+  "checks": {
+    "purposeNormalization": {
+      "status": "PASS",
+      "groups": 0,
+      "rows": 0
+    },
+    "trayNameNormalization": {
+      "status": "PASS",
+      "groups": 0,
+      "rows": 0
+    },
+    "captureLookupKeyAmbiguity": {
+      "status": "PASS",
+      "groups": 0,
+      "rows": 0
+    },
+    "missingTrayPurpose": {
+      "status": "PASS",
+      "groups": 0,
+      "rows": 0
+    },
+    "missingTrayType": {
+      "status": "PASS",
+      "groups": 0,
+      "rows": 0
+    },
+    "missingCableTypePurpose": {
+      "status": "PASS",
+      "groups": 0,
+      "rows": 0
+    },
+    "unsupportedRouteCodes": {
+      "status": "PASS",
+      "groups": 0,
+      "rows": 0
+    },
+    "materialTypeCollisions": {
+      "status": "PASS",
+      "groups": 0,
+      "rows": 0
+    },
+    "materialSqlCollation": {
+      "status": "NOT_VERIFIED",
+      "rows": 345
+    },
+    "materialTypeSqlVerification": {
+      "status": "PASS",
+      "rows": 0
+    },
+    "missingMaterialMatch": {
+      "status": "PASS",
+      "groups": 0,
+      "rows": 0
+    },
+    "ambiguousMaterialMatch": {
+      "status": "PASS",
+      "groups": 0,
+      "rows": 0
+    },
+    "unverifiedMaterialMatch": {
+      "status": "PASS",
+      "rows": 0
+    }
+  },
+  "tables": {
+    "trays": {
+      "rows": 330,
+      "status": "PASS"
+    },
+    "cable_types": {
+      "rows": 51,
+      "status": "PASS"
+    },
+    "material_trays": {
+      "rows": 15,
+      "status": "NOT_VERIFIED"
+    }
+  },
+  "privateRef": {
+    "path": "pathfinder-engine/.scratch/tray-catalog-17cadea1-d54c-42b1-a563-2d3c514e7704/catalog-diagnostics.private.json",
+    "bytes": 897,
+    "sha256": "c49ef7211f14c4882cca2d1c2da60b9d6fa6496340e16b8e0a9e4dabb5bed836"
+  },
+  "sourceSnapshot": {
+    "path": "source-copy-raw.private.json",
+    "bytes": 590826,
+    "sha256": "8734d78924da2d0051bd447e1771cf8d99be31bf077adf5c6fe3b65bd7969c7f"
+  }
+}

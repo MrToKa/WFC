@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "pathfinder.drawing-positioning.storage-preservation.v1",
+  "status": "PASS",
+  "totalObjects": 1032,
+  "counts": {
+    "project": 3,
+    "template": 3,
+    "model": 1026
+  },
+  "exactLogicalInventoryUnchanged": true,
+  "beforeSha256": "d7143363a57d751d4ac56f4e52cc19c50dfc358a6e97bdfc03b727a7edc8249c",
+  "after": {
+    "path": "r2a-final-storage-raw.private.json",
+    "bytes": 234707,
+    "sha256": "d7143363a57d751d4ac56f4e52cc19c50dfc358a6e97bdfc03b727a7edc8249c"
+  }
+}

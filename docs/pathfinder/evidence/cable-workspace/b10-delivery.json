@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "wfc.pf.b10-delivery-evidence.v1",
+  "status": "PASS",
+  "operationId": "9bd528af-e78b-4c1e-a58b-5c99af915751",
+  "at": "2026-10-21T23:24:39.199Z",
+  "productRevision": "d4bec199deb18b430dc4b885f72255840c2d71e1",
+  "webImage": "sha256:e40d07e7c7a5f9ef5e88c0765d9ec198d9ec96a8a262e03f9dd2bda2b6ad976c",
+  "apiImage": "sha256:ac0d16ab1b0f4c92922c20d1a13a5ea142d4c6e92558de1870daf4db7fd60fcf",
+  "apiSameRunningContainer": true,
+  "sourcePort": 5191,
+  "http": {
+    "health": 200,
+    "index": {
+      "bytes": 955,
+      "sha256": "b327486bd99fe0505bcfcbacc4c2ca8e8f3402c975d47a33f883da274ac21ef6"
+    },
+    "asset": {
+      "path": "/assets/index-DkJibgi0.js",
+      "bytes": 716405,
+      "sha256": "8ee1e653fd8bc370c86c1eafb68a2591fa12fadfa436b52cc89e377bd1a8862d"
+    }
+  },
+  "imageArchive": {
+    "bytes": 55346688,
+    "sha256": "4d6694053251828ada6e07ed1921e2a5a6f687836a2a6d5a32b6ac17b705ed77"
+  },
+  "privateReceiptSha256": "7ec6f25cb35fef446fe8903aa917042732a55c593badc258150401233d8e5cf3",
+  "validation": {
+    "componentCases": 84,
+    "tabCases": 5,
+    "tabIntentionallyUnselected": 61,
+    "webPlannerCases": 16,
+    "typecheck": "PASS",
+    "frontendTypesAfterCompactList": "PASS"
+  },
+  "browser": "BLOCKED",
+  "civilEngineeringAcceptance": "NOT_RUN",
+  "sourceDataWrites": false
+}

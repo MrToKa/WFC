@@ -1,0 +1,20 @@
+{
+  "status": "PASS",
+  "scope": "Post-build final Git whitespace check; only build-time module-closure helper and test-only fixture, no runtime source/semantics change",
+  "files": [
+    {
+      "path": "scripts/viewer-runtime/module-closure.mjs",
+      "beforeSha256": "e48c49062c165b60a7d5ba9c96d55894fe5d2237732fd8fbcec1ee43b03623b3",
+      "afterSha256": "da0356238a233943bdb563def391de230e83d3eaa8f18d48ada5d11f9132827a",
+      "removedBytes": 2,
+      "runtimeSource": false
+    },
+    {
+      "path": "src/test/preparationFixtures.ts",
+      "beforeSha256": "84ffe4065dc921e058e654914096b862e745e216a41738afd5278072bf94f767",
+      "afterSha256": "55642ef8e0f17c7e58fcec91453e8f2e9846eac27aade540944312fd7b7cdbbe",
+      "removedBytes": 2,
+      "runtimeSource": false
+    }
+  ]
+}

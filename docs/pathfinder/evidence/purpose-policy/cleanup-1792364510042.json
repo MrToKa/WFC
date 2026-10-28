@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "pathfinder.purpose-policy.cleanup.v1",
+  "status": "PASS",
+  "removedImages": [
+    {
+      "id": "sha256:e126ee87d59511a36a11302c300204850c501c695eb4f28e6899ee4401595947",
+      "tags": [
+        "wfc-pathfinder-api:8fffd6b8c896-mveeopps"
+      ]
+    },
+    {
+      "id": "sha256:81453dbe442b5e10228dccd41f6b81445b4139bd9c5bacc6f28cefb316736fef",
+      "tags": [
+        "wfc-pathfinder-web:8fffd6b8c896-mveeopps"
+      ]
+    },
+    {
+      "id": "sha256:dafdd62ebcf3f5783a4db8de5484ef5728375fd08b220d730cc342faa5d216a6",
+      "tags": [
+        "wfc-pathfinder-web:8fffd6b8c896-mveezm39"
+      ]
+    }
+  ],
+  "deadFixtureCredentialFileRemoved": true,
+  "retained": [
+    "5191 demonstration/current images",
+    "pre-migration backup/private companion",
+    "model packages/private source and audit proofs",
+    "screenshots and reports"
+  ],
+  "historicalDeniedPathsUntouched": true,
+  "dockerPrune": false,
+  "finishedAt": "2026-10-18T23:01:50.040Z"
+}

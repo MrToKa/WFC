@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "stage": "PF-3",
+  "recordedAtUtc": "2026-10-18T01:44:20.8491713Z",
+  "workspace": "C:/Users/todor.chankov/source/WFC-pathfinder-local",
+  "sourceHashes": [
+    {
+      "path": "server/pathfinder/matching.test.ts",
+      "sha256": "43f4f5b2c2f420a50f4b75336313461b6a5474175bc94755f54a6ddf59f830d9"
+    },
+    {
+      "path": "server/pathfinder/registry.integration.sql",
+      "sha256": "d32c1a5e5bd88e69449611877cb401fd71fbfa3fb40a9b248ba22f6d2f368c33"
+    },
+    {
+      "path": "server/pathfinder/schema.ts",
+      "sha256": "ec709071d35b63ca53e213d4d8c886ebc01a50be4d1a97eff3329112fb7d9729"
+    },
+    {
+      "path": "server/pathfinder/repository.ts",
+      "sha256": "105ebb70a509a0818825305ae8c58c7958d908f4ac436f5b1a74a61070038cf6"
+    },
+    {
+      "path": "server/pathfinder/contracts.ts",
+      "sha256": "6a76911f0d34b93ca2a8944fd4c927fd7ace55275c5fcd3686dacbe78a54d990"
+    }
+  ],
+  "checks": [
+    {
+      "name": "Conservative matching/hierarchy/contracts",
+      "status": "PASS",
+      "passed": 20,
+      "failed": 0,
+      "command": "node node_modules/vitest/vitest.mjs run server/pathfinder/matching.test.ts"
+    },
+    {
+      "name": "Server TypeScript",
+      "status": "PASS",
+      "exitCode": 0,
+      "command": "node node_modules/typescript/bin/tsc --noEmit -p server/tsconfig.json"
+    },
+    {
+      "name": "Actual isolated PostgreSQL invariants",
+      "status": "PASS",
+      "passed": 10,
+      "failed": 0,
+      "containerIdPrefix": "40d4a1dd2c8d",
+      "containerName": "wfc-pathfinder-local-postgres-1",
+      "database": "wfc_pathfinder_local",
+      "databaseUser": "pf_local",
+      "command": "Get-Content -Raw server/pathfinder/registry.integration.sql | docker exec -i 40d4a1dd2c8d psql --no-password -U pf_local -d wfc_pathfinder_local --set ON_ERROR_STOP=1",
+      "observedOutput": [
+        "BEGIN",
+        "DO",
+        "NOTICE: PASS: 10 isolated registry/revision SQL assertions; all fixture rows rolled back",
+        "ROLLBACK"
+      ],
+      "fixtureCleanup": "All test records rolled back; no committed fixture data."
+    }
+  ],
+  "engineeringAcceptance": "BLOCKED: Native/converted reference gate is not satisfied. All uploaded artifacts retain engineeringAccepted=false.",
+  "limitations": [
+    "HTTP authorization, concurrency, actual automatic matching and Viewer integration remain for later isolated integration checks."
+  ]
+}

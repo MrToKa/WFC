@@ -4,6 +4,9 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 const database = vi.hoisted(() => ({ query: vi.fn(), connect: vi.fn() }));
 vi.mock('../db.js', () => ({ pool: database }));
+// This suite invokes individual route handlers; real authentication/project
+// gates are exercised by the owned ordinary HTTP/SQL integration suite.
+vi.mock('../middleware.js', () => ({ authenticate: vi.fn() }));
 vi.mock('../services/projectService.js', () => ({
   ensureProjectExists: vi.fn().mockResolvedValue({ id: 'project' }),
 }));

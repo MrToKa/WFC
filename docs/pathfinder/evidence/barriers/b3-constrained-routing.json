@@ -1,0 +1,124 @@
+{
+  "schemaVersion": "wfc.pf.constrained-routing-stage-evidence.v1",
+  "productCommit": "fbf7ddd7e0c0f709655bff9224299866e7a28564",
+  "branch": "pf-b3-constrained-routing-local-20261021",
+  "recordedUtc": "2026-10-21T12:01:08.3564627+00:00",
+  "checks": {
+    "constrained": {
+      "failed": 0,
+      "passed": 54,
+      "status": "PASS"
+    },
+    "contracts": {
+      "failed": 0,
+      "passed": 140,
+      "files": 3,
+      "status": "PASS"
+    },
+    "legacyRegression": {
+      "status": "PASS",
+      "passed": 105
+    },
+    "frozenParity": {
+      "failed": 0,
+      "passed": 215,
+      "cases": 43,
+      "status": "PASS"
+    },
+    "ledger": {
+      "failed": 0,
+      "passed": 35,
+      "status": "PASS"
+    },
+    "directSecondary": {
+      "failed": 0,
+      "passed": 63,
+      "status": "PASS"
+    },
+    "clientTypes": "PASS",
+    "serverTypes": "PASS",
+    "changedTypeScriptLint": "PASS",
+    "pinnedElevenAndFrozenHashAudit": "PASS",
+    "independentSourceReview": "PASS",
+    "actualConvertedGeometry": "NOT_RUN",
+    "browserUi": "NOT_RUN",
+    "maximumCapacity": "NOT_RUN",
+    "combinedApiEngine512MiB": "NOT_RUN"
+  },
+  "initialFailures": [
+    "Two target-typed params fixture constructors did not compile; corrected explicit constructors; initial build receipt retained."
+  ],
+  "sourceFiles": [
+    {
+      "path": "pathfinder-engine/src/PathFinder.Core/Support/ConstrainedRoute.cs",
+      "sha256": "3b2d729ca1b950c51af7d879a0ccd5c7ba5731b311d8279aacd4328e0c93925d"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Core/Support/ConstrainedRoutingModels.cs",
+      "sha256": "2a0834c44e170fdc82bebac29b9adcbc86c87aa726859d5d743cf903021e6203"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Core/Support/ConstrainedSecondaryRoute.cs",
+      "sha256": "404a1fce582cee5af99551e5ae6c62d38d2b88046386b706954eb33999646ce6"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.Constrained.Tests/Fixtures.cs",
+      "sha256": "291d6e11ef1356d5fb6c1713a954b0ce9ac7729403fa34a83109cb835887e24b"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.Constrained.Tests/PathFinder.Constrained.Tests.csproj",
+      "sha256": "873a23871b82c983f9328978eb5dc6d3c7189f6810935166db7c7000f761e79a"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.Constrained.Tests/Program.cs",
+      "sha256": "9af10ec95d67f13249fe13535e6906fb0bc1d450033ffa89b3e23832d018f337"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.Constrained.Tests/README.md",
+      "sha256": "8284340b4b08e39d7dcbd3ac1a1964b92db97dd8367abf96e9eea7e07b81d960"
+    },
+    {
+      "path": "shared/pathfinderBarrierDecisions.test.ts",
+      "sha256": "d645aa193738f44d57c941b6b4cf5e4d82992eb017b303299f2073c9bcfab2f6"
+    },
+    {
+      "path": "shared/pathfinderBarrierDecisions.ts",
+      "sha256": "4f818138d68c67d22f1045eb46b525704b4380e59544d2a684882d46c9043ec8"
+    }
+  ],
+  "rawEvidenceRoot": "pathfinder-engine/.scratch/barrier-routing-20261021-7e52ad81-3875-4701-adbc-4fb38acc9d1e",
+  "boundaries": {
+    "physicalCableRadiusChecked": false,
+    "frozenExpectedUnchanged": true,
+    "engineeringAccepted": false,
+    "actualCableWrites": 0,
+    "originalElevenSourcesUnchanged": true,
+    "onlySyntheticData": true,
+    "runtimeChanges": 0,
+    "nativeParity": "not-performed"
+  },
+  "limits": {
+    "inputTrays": 4096,
+    "countedWork": 20000000,
+    "collisionQueries": 100000,
+    "timeoutMs": 30000,
+    "candidatesPerEnd": 16,
+    "graphNodes": 100000,
+    "qualification": "Declared refusal ceilings, not maximum capacity; graph instructions not fully instrumented; last indivisible reported oracle query may exceed remaining work.",
+    "pairs": 64,
+    "graphConnections": 300000,
+    "pieces": 50000
+  },
+  "remaining": [
+    "B4 offset-opening local connectors",
+    "B5-B7 UI/runtime/dependencies/write integration",
+    "B8 actual Aalborg and representative qualification",
+    "B9 backup/coherent isolated delivery/recovery"
+  ],
+  "remote": {
+    "main": "96e63f13fdc2b1d30b8f8ff658dd662f25fac104",
+    "branchPrCount": 0,
+    "ci": "No new remote CI acceptance claimed",
+    "observedUtc": "2026-10-21T11:54:04.138Z"
+  }
+}

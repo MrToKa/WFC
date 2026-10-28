@@ -1,0 +1,330 @@
+// @vitest-environment node
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { Pool } from 'pg';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { BARRIER_CAPTURE_VERSION, barrierCanonicalJson, type BarrierCapture, type BarrierModelScope } from '../../shared/pathfinderBarriers.js';
+import { MIXED_BARRIER_POLICY } from '../../shared/pathfinderBarrierMixed.js';
+import { barrierEnumerationHashInput } from '../../viewer-runtime/barrier-capture.mjs';
+import { barrierPublicationReceiptSchema } from '../../shared/pathfinderBarrierOutcomes.js';
+import { initializeBarrierRegistrySchema } from './barrierRegistrySchema.js';
+import { BarrierCaptureQualificationRefusal, barrierRegistryTransaction, createBarrierRegistryRepository, type BarrierCaptureCommand, type BarrierCaptureIntent,
+  type BarrierRegistryAdapters } from './barrierRegistryRepository.js';
+import { barrierBytesHash, barrierValueHash, encodeBarrierJson, readBarrierBytes } from './barrierStorage.js';
+import type { JobPrincipal } from './jobContracts.js';
+
+/** Real PostgreSQL + immutable local storage tests in one fresh disposable database.
+ * Qualification is an explicitly trusted TEST STUB, not C#/SDK/engineering evidence.
+ * Never imports the application database singleton or its full initializer. */
+const sqlUrl = process.env.PF_B2_SQL_URL;
+const id = (n: number) => `b2100000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+const projectId = id(1), otherProjectId = id(2), modelId = id(3), otherModelId = id(4);
+const firstAdmin = id(5), secondAdmin = id(6);
+const matrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+let pool: Pool | undefined;
+let who: JobPrincipal, secondWho: JobPrincipal;
+let sequence = 100;
+const nextId = () => id(sequence++);
+function scope(project = projectId): BarrierModelScope {
+  return { projectId: project, modelVersionId: project === projectId ? modelId : otherModelId, contentFingerprint: 'a'.repeat(64),
+    selectionRevision: '1', captureFrameId: id(7), captureFrameSha256: 'b'.repeat(64), coordinateFrame: 'canonical-world-metres' };
+}
+const currentScope: BarrierRegistryAdapters['currentScope'] = async (client, project) => {
+  // Deliberately small authoritative SQL fixture: actual row locks and tenant
+  // identity, while active model/SDK frame collection is tested separately.
+  const rows = (await client.query<{ id: string }>('SELECT id FROM model_versions WHERE project_id=$1 FOR SHARE', [project])).rows;
+  if (rows.length !== 1 || rows[0].id !== scope(project).modelVersionId) throw Error('Synthetic current scope unavailable.');
+  return scope(project);
+};
+const qualification = () => ({ producerVersion: 'wfc.pf.barrier-verifier.v1' as const,
+  computationalMeshes: 1, verificationSha256: 'c'.repeat(64) });
+function repository(qualifyCapture: BarrierRegistryAdapters['qualifyCapture'] = async () => qualification()) {
+  if (!pool) throw Error('Disposable SQL fixture is not initialized.');
+  return createBarrierRegistryRepository(pool, { currentScope, publicationFrameSha256: () => 'f'.repeat(64), qualifyCapture });
+}
+async function captureCommand(actor = who): Promise<BarrierCaptureCommand> {
+  const current = await repository().get(projectId, actor);
+  return { schemaVersion: 'wfc.pf.barrier-capture-command.v1', scope: scope(), expectedRegistryRevision: current.registryRevision,
+    idempotencyKey: nextId(), selectedParents: [{ selectionId: nextId(), kind: 'wall', objectId: 'dbid:10', dbId: 10,
+      externalId: null, name: 'Synthetic tetrahedron parent', identityBasis: 'version-local-only', inclusion: 'own-and-all-descendant-fragments' }] };
+}
+function capture(intent: BarrierCaptureIntent): BarrierCapture {
+  const value: BarrierCapture = { schemaVersion: BARRIER_CAPTURE_VERSION, captureId: intent.id, scope: intent.command.scope,
+    selectedParents: intent.command.selectedParents,
+    fragments: [{ source: { fragmentId: 15, ownerObjectId: 'dbid:11', parentSelectionIds: [intent.command.selectedParents[0].selectionId],
+      sourceUnits: 'm', metresPerSourceUnit: 1, sourceToWorldMetres: [...matrix], transformSha256: barrierValueHash(matrix) },
+    bounds: { minimum: [0, 0, 0], maximum: [1, 1, 1] }, verticesMetres: [[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]],
+    triangleIndices: [0, 2, 1, 0, 1, 3, 0, 3, 2, 1, 2, 3] }],
+    observation: { state: 'reported-complete', verification: 'unverified', enumeratedFragmentIds: [15],
+      unavailableFragmentIds: [], enumerationSha256: 'd'.repeat(64) } };
+  value.observation.enumerationSha256 = barrierValueHash(barrierEnumerationHashInput(value)); return value;
+}
+const captureBytes = (intent: BarrierCaptureIntent) => Buffer.from(barrierCanonicalJson(capture(intent)));
+const outcomeQuery = (intent: BarrierCaptureIntent) => ({ commandSha256: barrierValueHash(intent.command), captureSha256: barrierBytesHash(captureBytes(intent)), frameSha256: 'f'.repeat(64) });
+const logicalRefusal = (input: { captureSha256: string }) => new BarrierCaptureQualificationRefusal(input.captureSha256, 'f'.repeat(64), '9'.repeat(64));
+async function stateCounts() {
+  const result = await pool!.query<{ heads: string; snapshots: string; receipts: string }>(`SELECT
+    (SELECT count(*)::text FROM pf_barrier_heads WHERE project_id=$1) AS heads,
+    (SELECT count(*)::text FROM pf_barrier_snapshots WHERE project_id=$1) AS snapshots,
+    (SELECT count(*)::text FROM pf_barrier_receipts WHERE project_id=$1) AS receipts`, [projectId]);
+  return { ...result.rows[0], head: (await pool!.query('SELECT revision::text,snapshot_id FROM pf_barrier_heads WHERE project_id=$1', [projectId])).rows };
+}
+async function assertFreshOwnedRoot() {
+  const configured = process.env.PF_ROOT;
+  if (!configured || !path.isAbsolute(configured)) throw Error('PF_B2_SQL_URL also requires a fresh absolute PF_ROOT.');
+  const worktree = path.resolve(fileURLToPath(new URL('../../', import.meta.url))), scratch = path.join(worktree, 'pathfinder-engine', '.scratch');
+  const target = path.resolve(configured), relative = path.relative(scratch, target);
+  if (!relative || relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative))
+    throw Error('Refuse storage outside the isolated worktree scratch directory.');
+  // Inspect all already-existing target ancestors, without creating or removing
+  // anything. The production storage writer creates only the fresh owned root.
+  let current = target;
+  for (;;) {
+    try {
+      const stat = await fs.lstat(current);
+      if (!stat.isDirectory() || stat.isSymbolicLink() || await fs.realpath(current) !== path.resolve(current))
+        throw Error('Refuse an unsafe disposable storage ancestor.');
+    } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    if (current === scratch) break;
+    const parent = path.dirname(current); if (parent === current) throw Error('Scratch root was not reached.'); current = parent;
+  }
+  try { if ((await fs.readdir(target)).length) throw Error('Refuse nonempty disposable PF_ROOT.'); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+}
+
+describe.runIf(Boolean(sqlUrl))('PF-B2 actual SQL and storage in fresh explicit 55439 fixture', () => {
+  beforeAll(async () => {
+    const url = new URL(sqlUrl!);
+    if (!['postgres:', 'postgresql:'].includes(url.protocol) || url.hostname !== '127.0.0.1' || url.port !== '55439'
+      || url.pathname !== '/pf_b2_fixture' || decodeURIComponent(url.username) !== 'pf_b2_fixture' || url.search || url.hash)
+      throw Error('Refuse any database other than explicit loopback 55439/pf_b2_fixture.');
+    await assertFreshOwnedRoot();
+    pool = new Pool({ connectionString: sqlUrl, max: 4, connectionTimeoutMillis: 3000, query_timeout: 10000 });
+    const identity = (await pool.query<{ db: string; username: string }>('SELECT current_database() AS db,current_user AS username')).rows;
+    if (identity.length !== 1 || identity[0].db !== 'pf_b2_fixture' || identity[0].username !== 'pf_b2_fixture')
+      throw Error('Disposable database identity mismatch.');
+    const existing = await pool.query("SELECT tablename FROM pg_tables WHERE schemaname='public'");
+    if (existing.rows.length) throw Error('Refuse an existing database: this fixture never resets tables.');
+    await pool.query(`CREATE TABLE projects(id uuid PRIMARY KEY);
+      CREATE TABLE users(id uuid PRIMARY KEY,is_admin boolean NOT NULL);
+      CREATE TABLE viewer_login_bindings(login_id uuid PRIMARY KEY,user_id uuid,expires_at timestamptz,revoked_at timestamptz);
+      CREATE TABLE model_versions(id uuid PRIMARY KEY,project_id uuid NOT NULL REFERENCES projects(id),UNIQUE(project_id,id));`);
+    await initializeBarrierRegistrySchema(pool); await initializeBarrierRegistrySchema(pool);
+    await pool.query('INSERT INTO projects VALUES($1),($2)', [projectId, otherProjectId]);
+    await pool.query('INSERT INTO users VALUES($1,true),($2,true)', [firstAdmin, secondAdmin]);
+    await pool.query('INSERT INTO model_versions VALUES($1,$2),($3,$4)', [modelId, projectId, otherModelId, otherProjectId]);
+    who = { userId: firstAdmin, loginId: id(8), loginExpiresAt: Date.now() + 600000 };
+    secondWho = { userId: secondAdmin, loginId: id(9), loginExpiresAt: Date.now() + 600000 };
+  }, 20000);
+  afterAll(async () => { await pool?.end(); }); // Root owns fixture retirement; preserve all evidence.
+
+  it('initializes the real schema twice and starts unconfigured without fabricating a barrier scope', async () => {
+    const tables = (await pool!.query("SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename LIKE 'pf_barrier_%' ORDER BY tablename")).rows;
+    expect(tables.map(row => row.tablename)).toEqual(['pf_barrier_capture_intents', 'pf_barrier_command_closures', 'pf_barrier_heads', 'pf_barrier_receipts', 'pf_barrier_snapshots']);
+    const triggers = (await pool!.query("SELECT t.tgname FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND NOT t.tgisinternal AND t.tgname LIKE 'pf_barrier_%'")).rows;
+    expect(triggers.map(row => row.tgname).sort()).toEqual(['pf_barrier_command_closure_immutable', 'pf_barrier_immutable', 'pf_barrier_immutable', 'pf_barrier_intent_delete', 'pf_barrier_intent_immutable']);
+    const version = Number((await pool!.query("SELECT current_setting('server_version_num') AS version")).rows[0].version);
+    expect(Number.isSafeInteger(version) && version > 0).toBe(true);
+    const constraints = (await pool!.query("SELECT c.conname,c.contype,c.convalidated,pg_get_constraintdef(c.oid,true) AS definition FROM pg_constraint c WHERE c.conrelid='public.pf_barrier_command_closures'::regclass ORDER BY c.conname")).rows;
+    expect(constraints.filter(row => row.contype !== 'n')).toEqual([
+      { conname: 'pf_barrier_closure_command_hash', contype: 'c', convalidated: true, definition: "CHECK (command_sha256 ~ '^[a-f0-9]{64}$'::text)" },
+      { conname: 'pf_barrier_closure_project_fk', contype: 'f', convalidated: true, definition: 'FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE' },
+      { conname: 'pf_barrier_closure_record_bytes', contype: 'c', convalidated: true, definition: 'CHECK (octet_length(record::text) <= 16384)' },
+      { conname: 'pf_barrier_closure_record_hash', contype: 'c', convalidated: true, definition: "CHECK (record_sha256 ~ '^[a-f0-9]{64}$'::text)" },
+      { conname: 'pf_barrier_closure_tenant_id', contype: 'u', convalidated: true, definition: 'UNIQUE (project_id, id)' },
+      { conname: 'pf_barrier_command_closures_pkey', contype: 'p', convalidated: true, definition: 'PRIMARY KEY (project_id, command_sha256)' },
+    ]);
+    const columns = ['project_id', 'command_sha256', 'id', 'record_sha256', 'record', 'closed_by', 'login_id', 'closed_at'];
+    const attributes = (await pool!.query("SELECT attname,attnotnull FROM pg_attribute WHERE attrelid='public.pf_barrier_command_closures'::regclass AND attnum>0 AND NOT attisdropped ORDER BY attnum")).rows;
+    expect(attributes).toEqual(columns.map(attname => ({ attname, attnotnull: true })));
+    // PostgreSQL 18 exposes each NOT NULL in pg_constraint as well as
+    // pg_attribute. Earlier catalogs keep the same eight attnotnull facts.
+    expect(constraints.filter(row => row.contype === 'n')).toEqual(version >= 180000 ? [...columns].sort().map(column => ({
+      conname: 'pf_barrier_command_closures_' + column + '_not_null', contype: 'n', convalidated: true, definition: 'NOT NULL ' + column,
+    })) : []);
+    const indexes = (await pool!.query("SELECT indexname,indexdef FROM pg_indexes WHERE schemaname='public' AND indexname IN('pf_barrier_capture_intents_command_sha256_lookup','pf_barrier_receipts_command_sha256_lookup') ORDER BY indexname")).rows;
+    expect(indexes).toHaveLength(2);
+    expect(indexes.map(row => row.indexname)).toEqual(['pf_barrier_capture_intents_command_sha256_lookup', 'pf_barrier_receipts_command_sha256_lookup']);
+    for (const row of indexes) { expect(row.indexdef).toContain('USING btree (project_id, request_sha256)'); expect(row.indexdef).not.toContain('UNIQUE'); }
+    expect(await repository().get(projectId, who)).toMatchObject({ state: 'unconfigured', registryRevision: '0', snapshot: null });
+  });
+
+  it('serializes concurrent same-key capture admissions to one durable intent', async () => {
+    const repo = repository(), command = await captureCommand();
+    const values = await Promise.all([repo.begin(projectId, who, command), repo.begin(projectId, who, command)]);
+    expect(values[0].intent).toEqual(values[1].intent); expect(values.map(value => value.duplicate).sort()).toEqual([false, true]);
+    expect((await pool!.query('SELECT id FROM pf_barrier_capture_intents WHERE project_id=$1 AND actor_id=$2 AND idempotency_key=$3',
+      [projectId, who.userId, command.idempotencyKey])).rows).toHaveLength(1);
+    expect((await stateCounts()).head).toEqual([]);
+    await expect(repo.begin(projectId, who, { ...command, selectedParents: [{ ...command.selectedParents[0], name: 'Changed same key' }] }))
+      .rejects.toMatchObject({ code: 'BARRIER_IDEMPOTENCY_CONFLICT' });
+  });
+
+  it('publishes an explicit empty scope once and reconciles the identical command without another revision', async () => {
+    const qualify = vi.fn<BarrierRegistryAdapters['qualifyCapture']>(async () => qualification()), repo = repository(qualify);
+    const command = { schemaVersion: 'wfc.pf.barrier-registry-command.v1', action: 'declare-empty', scope: scope(),
+      expectedRegistryRevision: '0', idempotencyKey: nextId(), reason: 'Synthetic SQL fixture explicitly selects no barriers.' };
+    const first = await repo.command(projectId, who, command), counts = await stateCounts(), again = await repo.command(projectId, who, command);
+    expect(first.snapshot).toMatchObject({ mode: 'explicit-empty', registryRevision: '1' }); expect(again).toEqual({ ...first, duplicate: true });
+    expect(await stateCounts()).toEqual(counts); expect(qualify).not.toHaveBeenCalled();
+    expect(await repo.get(projectId, who)).toMatchObject({ state: 'ready', registryRevision: '1', selectedParents: [] });
+    expect((await repo.getSnapshot(projectId, who, first.snapshot.snapshotId)).geometry.mode).toBe('explicit-empty');
+  });
+
+  it('atomically publishes exact capture/fragment provenance with the trusted SQL-only qualifier stub', async () => {
+    const qualify = vi.fn<BarrierRegistryAdapters['qualifyCapture']>(async () => qualification()), repo = repository(qualify);
+    const { intent } = await repo.begin(projectId, who, await captureCommand()), raw = captureBytes(intent);
+    const first = barrierPublicationReceiptSchema.parse(await repo.publish(projectId, who, intent.id, raw)), counts = await stateCounts();
+    const again = await repo.publish(projectId, who, intent.id, raw);
+    expect(again).toEqual({ ...first, duplicate: true }); expect(await stateCounts()).toEqual(counts); expect(qualify).toHaveBeenCalledOnce();
+    expect(qualify.mock.calls[0][0].captureSha256).toBe(barrierBytesHash(raw));
+    const manifest = await repo.getSnapshot(projectId, who, first.snapshot.snapshotId);
+    expect(manifest.capture).toEqual({ captureId: intent.id, payloadSha256: barrierBytesHash(raw) });
+    expect(manifest.selectedParents).toEqual(intent.command.selectedParents); expect(manifest.engineeringAccepted).toBe(false);
+    expect(manifest.geometry.mode).toBe('mesh-set'); if (manifest.geometry.mode !== 'mesh-set') throw Error('Expected mesh fixture.');
+    const source = capture(intent).fragments[0], fragment = manifest.geometry.fragments[0];
+    expect(fragment.source).toEqual(source.source); expect(fragment.bounds).toEqual(source.bounds); expect(fragment.vertices).toBe(4); expect(fragment.triangles).toBe(4);
+    expect(await readBarrierBytes(projectId, intent.id, fragment.mesh)).toEqual(encodeBarrierJson({ verticesMetres: source.verticesMetres, triangleIndices: source.triangleIndices }));
+    const row = (await pool!.query('SELECT state,capture_sha256 FROM pf_barrier_capture_intents WHERE id=$1', [intent.id])).rows[0];
+    expect(row).toEqual({ state: 'complete', capture_sha256: barrierBytesHash(raw) });
+    expect(await repo.get(projectId, who)).toMatchObject({ state: 'ready', snapshot: first.snapshot });
+    expect(await repo.list(projectId, who)).toMatchObject({ snapshots: [first.snapshot, expect.objectContaining({ mode: 'explicit-empty' })] });
+  });
+
+  it('rechecks current role after asynchronous qualification and retains the previous head on revocation', async () => {
+    const before = await stateCounts();
+    const qualify = vi.fn<BarrierRegistryAdapters['qualifyCapture']>(async () => {
+      await pool!.query('UPDATE users SET is_admin=false WHERE id=$1', [secondWho.userId]); return qualification();
+    });
+    const repo = repository(qualify), { intent } = await repo.begin(projectId, secondWho, await captureCommand(secondWho));
+    try {
+      await expect(repo.publish(projectId, secondWho, intent.id, captureBytes(intent))).rejects.toMatchObject({ code: 'ADMIN_REQUIRED' });
+      expect(qualify).toHaveBeenCalledOnce(); expect(await stateCounts()).toEqual(before);
+      expect((await pool!.query('SELECT state FROM pf_barrier_capture_intents WHERE id=$1', [intent.id])).rows[0].state).toBe('pending');
+    } finally { await pool!.query('UPDATE users SET is_admin=true WHERE id=$1', [secondWho.userId]); }
+  });
+
+  it('retains the immutable publication if the qualification callback refuses', async () => {
+    const before = await stateCounts(), repo = repository(async () => { throw Error('Synthetic topology refusal'); });
+    const { intent } = await repo.begin(projectId, who, await captureCommand());
+    await expect(repo.publish(projectId, who, intent.id, captureBytes(intent))).rejects.toThrow('Synthetic topology refusal');
+    expect(await stateCounts()).toEqual(before);
+    expect((await repository().get(projectId, who)).state).toBe('ready');
+  });
+  it('persists one exact terminal refusal in real PostgreSQL and fences a concurrent replay without changing the head', async () => {
+    const before = await stateCounts(); let entered!: () => void, release!: () => void;
+    const started = new Promise<void>(resolve => { entered = resolve; }), wait = new Promise<void>(resolve => { release = resolve; });
+    const qualify = vi.fn<BarrierRegistryAdapters['qualifyCapture']>(async input => { entered(); await wait; throw logicalRefusal(input); });
+    const repo = repository(qualify), { intent } = await repo.begin(projectId, who, await captureCommand());
+    const first = repo.publish(projectId, who, intent.id, captureBytes(intent));
+    let refusal: Awaited<ReturnType<typeof repo.publish>> | undefined;
+    try {
+      await Promise.race([started, first.then(() => { throw Error('Publication ended before the controlled qualifier boundary'); })]);
+      await expect(repo.publish(projectId, who, intent.id, captureBytes(intent))).rejects.toMatchObject({ code: 'BARRIER_CAPTURE_IN_PROGRESS' });
+    } finally { release(); refusal = await first; }
+    expect(refusal).toMatchObject({ outcome: 'not-published', intentId: intent.id, ...outcomeQuery(intent), duplicate: false });
+    expect(await repo.publish(projectId, who, intent.id, captureBytes(intent))).toEqual({ ...refusal, duplicate: true });
+    expect(await repo.readCaptureOutcome(projectId, who, intent.id, outcomeQuery(intent))).toEqual({ ...refusal, duplicate: true });
+    const after = await stateCounts(); expect(after.head).toEqual(before.head); expect(after.snapshots).toBe(before.snapshots);
+    expect(Number(after.receipts)).toBe(Number(before.receipts) + 1); expect(qualify).toHaveBeenCalledOnce();
+    expect((await pool!.query('SELECT state,lease_token,lease_expires_at FROM pf_barrier_capture_intents WHERE id=$1', [intent.id])).rows)
+      .toEqual([{ state: 'pending', lease_token: null, lease_expires_at: null }]);
+  }, 20000);
+  it('prevents a real expired successful worker from publishing after a replacement worker persisted refusal', async () => {
+    const before = await stateCounts(); let entered!: () => void, release!: () => void, calls = 0;
+    const started = new Promise<void>(resolve => { entered = resolve; }), wait = new Promise<void>(resolve => { release = resolve; });
+    const repo = repository(async input => { if (++calls === 1) { entered(); await wait; return qualification(); } throw logicalRefusal(input); });
+    const { intent } = await repo.begin(projectId, who, await captureCommand()), old = repo.publish(projectId, who, intent.id, captureBytes(intent));
+    let refusal: Awaited<ReturnType<typeof repo.publish>>, oldOutcome: Awaited<ReturnType<typeof repo.publish>> | undefined;
+    try {
+      await Promise.race([started, old.then(() => { throw Error('Publication ended before the controlled qualifier boundary'); })]);
+      await pool!.query("UPDATE pf_barrier_capture_intents SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE id=$1", [intent.id]);
+      refusal = await repo.publish(projectId, who, intent.id, captureBytes(intent));
+    } finally { release(); oldOutcome = await old; }
+    expect(oldOutcome).toEqual({ ...refusal!, duplicate: true });
+    const after = await stateCounts(); expect(after.head).toEqual(before.head); expect(after.snapshots).toBe(before.snapshots);
+    expect(Number(after.receipts)).toBe(Number(before.receipts) + 1); expect(calls).toBe(2);
+  }, 20000);
+  it('lets real committed success win when an expired worker later returns logical refusal', async () => {
+    let entered!: () => void, release!: () => void, calls = 0;
+    const started = new Promise<void>(resolve => { entered = resolve; }), wait = new Promise<void>(resolve => { release = resolve; });
+    const repo = repository(async input => { if (++calls === 1) { entered(); await wait; throw logicalRefusal(input); } return qualification(); });
+    const { intent } = await repo.begin(projectId, who, await captureCommand()), old = repo.publish(projectId, who, intent.id, captureBytes(intent));
+    let publication: Awaited<ReturnType<typeof repo.publish>>, oldOutcome: Awaited<ReturnType<typeof repo.publish>> | undefined;
+    try {
+      await Promise.race([started, old.then(() => { throw Error('Publication ended before the controlled qualifier boundary'); })]);
+      await pool!.query("UPDATE pf_barrier_capture_intents SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE id=$1", [intent.id]);
+      publication = await repo.publish(projectId, who, intent.id, captureBytes(intent));
+    } finally { release(); oldOutcome = await old; }
+    expect(oldOutcome).toEqual({ ...publication!, duplicate: true }); expect(publication!).toHaveProperty('snapshot');
+    expect((await pool!.query('SELECT id FROM pf_barrier_snapshots WHERE storage_intent_id=$1', [intent.id])).rows).toHaveLength(1);
+  }, 20000);
+  it('reconciles an actually committed refusal after a synthetic lost COMMIT acknowledgement', async () => {
+    let failCommit = false;
+    const wrappedPool = { connect: async () => {
+      const client = await pool!.connect();
+      return { release: (error?: boolean) => client.release(error), query: async (sql: string, values?: unknown[]) => {
+        const result = await client.query(sql, values);
+        if (sql.startsWith('INSERT INTO pf_barrier_receipts')) failCommit = true;
+        if (sql === 'COMMIT' && failCommit) { failCommit = false; throw Error('Synthetic lost acknowledgement after actual COMMIT'); }
+        return result;
+      } };
+    } } as unknown as Pool;
+    const qualify = vi.fn<BarrierRegistryAdapters['qualifyCapture']>(async input => { throw logicalRefusal(input); });
+    const repo = createBarrierRegistryRepository(wrappedPool, { currentScope, publicationFrameSha256: () => 'f'.repeat(64), qualifyCapture: qualify });
+    const { intent } = await repo.begin(projectId, who, await captureCommand());
+    await expect(repo.publish(projectId, who, intent.id, captureBytes(intent))).rejects.toMatchObject({ code: 'BARRIER_COMMIT_OUTCOME_UNKNOWN' });
+    expect(await repository().readCaptureOutcome(projectId, who, intent.id, outcomeQuery(intent))).toMatchObject({ outcome: 'not-published', duplicate: true });
+    expect(qualify).toHaveBeenCalledOnce();
+  }, 20000);
+
+  it('enforces tenant composite foreign keys for model and published head identities', async () => {
+    const existing = (await pool!.query('SELECT id FROM pf_barrier_snapshots WHERE project_id=$1 LIMIT 1', [projectId])).rows[0].id;
+    await expect(pool!.query(`INSERT INTO pf_barrier_snapshots(id,project_id,model_version_id,registry_revision,storage_intent_id,manifest_blob,manifest,created_by,login_id)
+      VALUES($1,$2,$3,99,$4,'{}','{}',$5,$6)`, [nextId(), projectId, otherModelId, nextId(), who.userId, who.loginId])).rejects.toMatchObject({ code: '23503' });
+    await expect(pool!.query('INSERT INTO pf_barrier_heads(project_id,revision,snapshot_id) VALUES($1,1,$2)', [otherProjectId, existing]))
+      .rejects.toMatchObject({ code: '23503' });
+    await expect(repository().getSnapshot(otherProjectId, who, existing)).rejects.toMatchObject({ code: 'BARRIER_SNAPSHOT_NOT_FOUND' });
+    expect((await pool!.query('SELECT id FROM pf_barrier_snapshots WHERE project_id=$1', [otherProjectId])).rows).toEqual([]);
+  });
+
+  it('keeps snapshot, receipt and completed intent evidence immutable in real PostgreSQL', async () => {
+    const before = await stateCounts();
+    const snapshot = (await pool!.query('SELECT id,manifest FROM pf_barrier_snapshots WHERE project_id=$1 ORDER BY registry_revision DESC LIMIT 1', [projectId])).rows[0];
+    const intent = (await pool!.query("SELECT id,frozen FROM pf_barrier_capture_intents WHERE project_id=$1 AND state='complete' LIMIT 1", [projectId])).rows[0];
+    await expect(pool!.query("UPDATE pf_barrier_snapshots SET manifest='{}' WHERE id=$1", [snapshot.id])).rejects.toMatchObject({ code: 'P0001' });
+    await expect(pool!.query('DELETE FROM pf_barrier_receipts WHERE project_id=$1', [projectId])).rejects.toMatchObject({ code: 'P0001' });
+    await expect(pool!.query("UPDATE pf_barrier_capture_intents SET frozen='{}' WHERE id=$1", [intent.id])).rejects.toMatchObject({ code: 'P0001' });
+    await expect(pool!.query('DELETE FROM pf_barrier_capture_intents WHERE id=$1', [intent.id])).rejects.toMatchObject({ code: 'P0001' });
+    expect((await pool!.query('SELECT manifest FROM pf_barrier_snapshots WHERE id=$1', [snapshot.id])).rows[0].manifest).toEqual(snapshot.manifest);
+    expect((await pool!.query('SELECT frozen FROM pf_barrier_capture_intents WHERE id=$1', [intent.id])).rows[0].frozen).toEqual(intent.frozen);
+    expect(await stateCounts()).toEqual(before);
+  });
+
+  it('rolls back all transaction mutations when the synchronous final authority fence fails', async () => {
+    expect((await pool!.query('SELECT project_id FROM pf_barrier_heads WHERE project_id=$1', [otherProjectId])).rows).toEqual([]);
+    await expect(barrierRegistryTransaction(pool!, otherProjectId, who, async client => {
+      await client.query('INSERT INTO pf_barrier_heads(project_id,revision) VALUES($1,0)', [otherProjectId]); return 'uncommitted';
+    }, undefined, () => { throw Error('Synthetic final authority expiry'); })).rejects.toThrow('Synthetic final authority expiry');
+    expect((await pool!.query('SELECT project_id FROM pf_barrier_heads WHERE project_id=$1', [otherProjectId])).rows).toEqual([]);
+  });
+
+  it('atomically stores exact mixed-v2 publication and historical success without reinterpreting its command or inventing frame evidence', async () => {
+    const qualifier = vi.fn<BarrierRegistryAdapters['qualifyCapture']>(async input => ({ producerVersion: 'wfc.pf.barrier-mixed-verifier.v2', geometryPolicy: MIXED_BARRIER_POLICY,
+      originalGeometrySha256: '8'.repeat(64), verificationSha256: '9'.repeat(64), componentMemberships: [{ componentId: 'synthetic-sql-component', kind: 'original-surface',
+        fragmentIds: [15], parentSelectionIds: [input.capture.selectedParents[0].selectionId], triangleCount: 4, sourceMembershipSha256: '7'.repeat(64) }],
+      engineeringAccepted: false, ownTerminalExemptionsSupported: false, authority: 'none' }));
+    const repo = repository(qualifier), legacy = await captureCommand(), command = { ...legacy, schemaVersion: 'wfc.pf.barrier-capture-command.v2' as const, geometryPolicy: MIXED_BARRIER_POLICY };
+    const admitted = await repo.begin(projectId, who, command); expect(admitted.schemaVersion).toBe('wfc.pf.barrier-intent-receipt.v2');
+    const outcome = await repo.publish(projectId, who, admitted.intent.id, captureBytes(admitted.intent));
+    expect(outcome).toMatchObject({ schemaVersion: 'wfc.pf.barrier-publication-receipt.v2', snapshot: { mode: 'mixed-mesh-set', geometryPolicy: MIXED_BARRIER_POLICY } });
+    if ('outcome' in outcome) throw Error('Expected mixed publication');
+    const frozen = (await pool!.query('SELECT frozen FROM pf_barrier_capture_intents WHERE project_id=$1 AND id=$2', [projectId, admitted.intent.id])).rows[0].frozen;
+    expect(frozen.command).toEqual(command); expect((await repo.getSnapshot(projectId, who, outcome.snapshot.snapshotId)).schemaVersion).toBe('wfc.pf.barrier-snapshot.v2');
+    expect(await repo.readCaptureOutcome(projectId, who, admitted.intent.id, outcomeQuery(admitted.intent))).toMatchObject({ schemaVersion: 'wfc.pf.barrier-capture-outcome.v2', outcome: 'published',
+      frameBinding: 'not-recorded', frameSha256: null, publication: { ...outcome, duplicate: true } });
+    await expect(repo.begin(projectId, who, { ...legacy, idempotencyKey: command.idempotencyKey })).rejects.toMatchObject({ code: 'BARRIER_IDEMPOTENCY_CONFLICT' });
+    expect(qualifier).toHaveBeenCalledOnce();
+  });
+});

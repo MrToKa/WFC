@@ -1,0 +1,90 @@
+{
+  "sourceRepository": "https://github.com/MrToKa/PathFinder.git",
+  "commit": "45c24bf5f433f13e102600b36f20327c77961d0a",
+  "files": [
+    {
+      "path": "Pinned/Routing/CableDesignLength.cs",
+      "sourcePath": "AddinRibbon/Routing/CableDesignLength.cs",
+      "sha256": "fa489d2948f3c7a4af8931cb79d775a61f4718d5ad3187bd5637598665d1ff5f",
+      "bytes": 2220
+    },
+    {
+      "path": "Pinned/Routing/RouteCalculator.cs",
+      "sourcePath": "AddinRibbon/Routing/RouteCalculator.cs",
+      "sha256": "12e96c787902850bffad660d5d2a43333960d9920890cf8f547a730f67e0d0b8",
+      "bytes": 51930
+    },
+    {
+      "path": "Pinned/Routing/RouteCodeParser.cs",
+      "sourcePath": "AddinRibbon/Routing/RouteCodeParser.cs",
+      "sha256": "a97e2358374f0798c94103a8f0b20bf7c5a04208de523ea384afa528f70ec05f",
+      "bytes": 3247
+    },
+    {
+      "path": "Pinned/Routing/RouteLookupCalculator.cs",
+      "sourcePath": "AddinRibbon/Routing/RouteLookupCalculator.cs",
+      "sha256": "1914b875b675bc61e274a46f221d0633e5db21eab2fe0e34214c7c05aa5485ae",
+      "bytes": 25795
+    },
+    {
+      "path": "Pinned/Routing/RouteNameResolver.cs",
+      "sourcePath": "AddinRibbon/Routing/RouteNameResolver.cs",
+      "sha256": "9bf4964a00833f91a38f11f34e2eb377f1fb27ccd48d389731248ecf07174c34",
+      "bytes": 2272
+    },
+    {
+      "path": "Pinned/Routing/RoutingModels.cs",
+      "sourcePath": "AddinRibbon/Routing/RoutingModels.cs",
+      "sha256": "2de71cc5410e04cce309276cbd2591d218530d5ddfca4c77a2ad98f2ee02e4ea",
+      "bytes": 11386
+    },
+    {
+      "path": "Pinned/Routing/TrayBendMeshGeometry.cs",
+      "sourcePath": "AddinRibbon/Routing/TrayBendMeshGeometry.cs",
+      "sha256": "4d6f0c574166fbcb880cdc38bd10e589905fc74b1fe5709c33fd5e2ecab35948",
+      "bytes": 32190
+    },
+    {
+      "path": "Pinned/Routing/TrayGeometryBuilder.cs",
+      "sourcePath": "AddinRibbon/Routing/TrayGeometryBuilder.cs",
+      "sha256": "9dd9abe707b3908c8d55a404e12d6b79b7785659f284dc4d84d9d2391dd225c7",
+      "bytes": 23403
+    },
+    {
+      "path": "Pinned/Routing/TrayMeshClearance.cs",
+      "sourcePath": "AddinRibbon/Routing/TrayMeshClearance.cs",
+      "sha256": "75075cbf5b13d385f9932e1ad755815e39934e55bcbf123b657ae3b5363541e8",
+      "bytes": 43315
+    },
+    {
+      "path": "Pinned/Routing/TrayMeshData.cs",
+      "sourcePath": "AddinRibbon/Routing/TrayMeshData.cs",
+      "sha256": "4ff9170f90a57f8509a9acb5b84dd95262e55b942d6ee892a0dd231563b3af31",
+      "bytes": 2817
+    },
+    {
+      "path": "Pinned/Routing/TrayMeshGeometry.cs",
+      "sourcePath": "AddinRibbon/Routing/TrayMeshGeometry.cs",
+      "sha256": "c88ed49513778ef809e581ecf8b4418b746b982c5b12f533d96478275de8deba",
+      "bytes": 23892
+    },
+    {
+      "path": "Pinned/Services/RoutingSession.cs",
+      "sourcePath": "AddinRibbon/Services/RoutingSession.cs",
+      "sha256": "4249f982005015ef9e6975f5a89b8fa065fa47a2b97e637ca27e6131783c42c0",
+      "bytes": 24747
+    },
+    {
+      "path": "Pinned/Services/RoutingSession.Lookup.cs",
+      "sourcePath": "AddinRibbon/Services/RoutingSession.Lookup.cs",
+      "sha256": "87c35cc315f913415531d0d25ab8dd398a880381d660202966d18214f1553702",
+      "bytes": 5690
+    },
+    {
+      "path": "Pinned/Services/TrayMeshReader.cs",
+      "sourcePath": "AddinRibbon/Services/TrayMeshReader.cs",
+      "sha256": "12ab6acee2cd4b9c881447fefbf751c3141f0405c4c37e0c379b8bec87e76815",
+      "bytes": 11758
+    }
+  ]
+}

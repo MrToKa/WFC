@@ -1,0 +1,95 @@
+{
+  "schemaVersion": "pathfinder.current-inputs.candidate-controls.v1",
+  "recordedAt": "2026-10-18T15:08:20.796Z",
+  "status": "PASS_AT_SYNTHETIC_CONTROL_SCOPE",
+  "executedBy": "viewer_tab_capabilities",
+  "branch": "pf-3-input-coverage-local-20261018",
+  "source": [
+    {
+      "path": "scripts/pathfinder-current-inputs/candidate-audit.mjs",
+      "sha256": "4b1dff94b037bb75adde819b89c1b4442cf0e2a322cb1fdc77b385b5e7c98022"
+    },
+    {
+      "path": "scripts/pathfinder-current-inputs/candidate-lib.mjs",
+      "sha256": "5c73eaaf54dac1979c14b06554e9c78760603b2f1edf6efc1c307340ee2bbf9e"
+    },
+    {
+      "path": "scripts/pathfinder-current-inputs/candidate-lib.test.mjs",
+      "sha256": "584bae9b4975abe75a6a3255467eb9ea87ea4d7970d0f2c8e0304543444b951b"
+    },
+    {
+      "path": "scripts/pathfinder-current-inputs/README-candidates.md",
+      "sha256": "55a8495500b4d5ec64ac68abfb5557671c94114870af99135a93fafec9bdb13f"
+    }
+  ],
+  "checks": [
+    {
+      "command": "node --test --test-reporter=tap scripts/pathfinder-current-inputs/candidate-lib.test.mjs",
+      "exitCode": 0,
+      "passed": 48,
+      "failed": 0,
+      "skipped": 0,
+      "rawTap": {
+        "path": "docs/pathfinder/evidence/current-inputs/candidate-controls-1792336038813.tap",
+        "sha256": "680bfce240cc9225d36e9571f861c4d4398696a6c856859960cf05ef8e14661e"
+      },
+      "cliSourceAtFullSuiteSha256": "2f017b4c05080ca09b69eb9de748d64a2bbadb893f356d1841fc7149f511e94c",
+      "libraryAndTestBytesMatchFinal": true
+    },
+    {
+      "command": "node --check scripts/pathfinder-current-inputs/candidate-audit.mjs",
+      "exitCode": 0,
+      "scope": "Final metadata-only source-anchor correction."
+    },
+    {
+      "command": "node --check scripts/pathfinder-current-inputs/candidate-lib.mjs",
+      "exitCode": 0
+    },
+    {
+      "command": "node --test --test-reporter=tap --test-name-pattern='durably retains a sanitized failure' scripts/pathfinder-current-inputs/candidate-lib.test.mjs",
+      "exitCode": 0,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "rawTap": {
+        "path": "docs/pathfinder/evidence/current-inputs/candidate-metadata-delta-1792336100796.tap",
+        "sha256": "0ea0b714faae813ca7ab6b89c2e3afb642e03a5aa80704a86d8469c38ed3e3e1"
+      },
+      "scope": "Final CLI bytes after descriptive SDK source-offset corrections; no decoder or matcher change."
+    }
+  ],
+  "differentialSemantics": {
+    "status": "PASS",
+    "syntheticObjectsCompared": 18,
+    "method": "Executed the unmodified pinned SDK getObjectProperties method over synthetic raw-property adapters, comparing direct/inherited/shadowed/hidden/last-instance/inline-key values with the decoder. No live SDK or native oracle was executed.",
+    "sdkWorkerSha256": "9637ed11308c549b6dbd290d6270e53587122ebb5ffd7f87987ea9a8f897f46a"
+  },
+  "review": {
+    "reviewer": "root",
+    "scope": "Source-only review of initial CLI2f017b4c / final library+test+README bytes",
+    "findings": [
+      {
+        "name": "Nullable cable type triple",
+        "status": "RESOLVED_SOURCE_AND_CONTROLS"
+      },
+      {
+        "name": "Same-content portable package UUID mismatch",
+        "status": "RESOLVED_SOURCE_AND_CONTROL"
+      }
+    ],
+    "finalMetadataOnlyDelta": "SDK constructor/enum offsets corrected to actual UTF-16 source locations; targeted receipt test and syntax passed."
+  },
+  "sourceCopyContract": {
+    "schemaVersion": "pathfinder.current-inputs.source-receipt.v1",
+    "requires": "status PASS; preservation.status PASS; checkedModelFingerprint; privateSnapshot.path/bytes/sha256 must match exact supplied current-input raw file.",
+    "agreedWith": "addon_tabs_map"
+  },
+  "actualBusinessCandidateAudit": "NOT_RUN_AWAITING_ACTUAL_SOURCE_COPY_AND_ROOT_RELEASE",
+  "actions": {
+    "databaseQueries": 0,
+    "databaseWrites": 0,
+    "applicationOrContainerActions": 0,
+    "productionSourceEdits": 0
+  },
+  "privateFixturePolicy": "Synthetic fixture scratch and failed-control receipts retained; no cleanup or denied-path retry."
+}

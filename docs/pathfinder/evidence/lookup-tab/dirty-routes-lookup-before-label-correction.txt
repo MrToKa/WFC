@@ -1,0 +1,97 @@
+Browser tab: 2, Title: "ACS App", URL: "http://127.0.0.1:5190/projects/105913f0-7ee4-45f2-bfd8-2c01f9be9f2a?tab=pathfinder".
+0 AXWebArea ACS App, URL: 127.0.0.1:5190/projects/105913f0-7ee4-45f2-bfd8-2c01f9be9f2a?tab=pathfinder
+	1 link Description: Skip to main content, Value: 127.0.0.1:5190/projects/105913f0-7ee4-45f2-bfd8-2c01f9be9f2a?tab=pathfinder#app-root
+	2 container root
+		3 container
+			4 link Description: ACS App, Value: 127.0.0.1:5190/
+			5 container Primary
+				6 link Description: Projects, Value: 127.0.0.1:5190/
+				7 link Description: Materials, Value: 127.0.0.1:5190/materials
+				8 link Description: Templates, Value: 127.0.0.1:5190/templates
+				9 link Description: Admin, Value: 127.0.0.1:5190/admin
+			10 switch (settable, boolean) Description: Toggle dark mode, Value: 1, ID: switch-_r_3_
+			11 text Dark
+			12 link Description: View account, Help: PathFinder Local demo, Value: 127.0.0.1:5190/account
+			13 button Sign out
+		14 container PF-LOCAL-DEMO — PathFinder isolated demonstration
+			15 container project-details-heading
+				16 text PF-LOCAL-DEMO  —  PathFinder isolated demonstration
+			17 text Customer:  Local synthetic fixture You can edit this project.
+			18 tab group Project sections
+				19 tab (selectable, settable, boolean) Details, Value: 0
+				20 tab (selectable, settable, boolean) Cable types, Value: 0
+				21 tab (selectable, settable, boolean) Cables list, Value: 0
+				22 tab (selectable, settable, boolean) Routings viewer, Value: 0
+				23 tab (selected, settable, boolean) Path Finder, Value: 1
+				24 tab (selectable, settable, boolean) Trays, Value: 0
+				25 tab (selectable, settable, boolean) Cables MTOs, Value: 0
+				26 tab (selectable, settable, boolean) Change Orders, Value: 0
+				27 tab (selectable, settable, boolean) Internal NCRs, Value: 0
+				28 tab (selectable, settable, boolean) Roxtec, Value: 0
+				29 tab (selectable, settable, boolean) Files, Value: 0
+				30 tab (selectable, settable, boolean) Variables API, Value: 0
+			31 container Path Finder
+				32 container
+					33 heading Path Finder, Value: 2
+						34 text Path Finder
+					35 text The active model is ready. Route rules have changed. Prepare all rules in Routes or discard the draft before calculating, reviewing or applying Path results. Path lookup uses the active model independently.
+					36 button Refresh Path Finder
+					37 button Reload model
+					38 text Path lookup reads the ordered route geometry from the active model. Routes preparation and category drafts are independent. This tool does not change cable endpoints, routes or lengths.
+					39 button Clear
+					40 button Zoom to path
+					41 button Restore view
+					42 tab group Path Finder tools
+						43 tab (selectable, settable, boolean) Routes, Value: 0
+						44 tab (selectable, settable, boolean) Path, Value: 0
+						45 tab (selected, settable, boolean) Path lookup, Value: 1
+					46 text Background transparency to apply (%)
+					47 text field (settable) Description: Background transparency to apply percent, Value: 0, ID: field-_r_a___control
+					48 button Apply transparency
+					49 button Opaque background
+					50 container Path lookup
+						51 container Path lookup
+							52 heading Ordered route lookup, Value: 3
+								53 text Ordered route lookup
+							54 text Read one ordered route directly from the active model. Routes preparation and category rules are independent. Equipment approaches, SECONDARY, cable design length and Apply are unavailable here.
+							55 text Ordered route
+							56 text entry area (settable) Description: Path Finder ordered route, Value: /DFB018-1/DFB011/DFB012/DFB013/B002/B107-1/B107-2/B107-3/BC025/BC022-2/SECONDARY, ID: field-_r_12___control
+							57 text Separate exact tray identifiers with /.
+							58 button (disabled) Use cable routing for lookup
+							59 checkbox (settable, integer) Description: Reverse route order, Value: 1
+							60 text Connection gap:  1  m. Change this in Project Details. Larger values permit larger unmodelled gaps.
+							61 button Show route
+							62 button Reverse preview
+							63 button Restore lookup view
+							64 text No cable From/To endpoints are assigned to this lookup.
+							65 text The exact ordered lookup is displayed.
+							66 container Ordered lookup result
+								67 text Lookup complete  —  reverse preview Ordered lookup calculated without equipment approaches or full cable design allowances. Connection gap used:  1  m Ordered network length:  35.30345579516123  m Connection gaps:  4 ; total gap length:  0.9840583861033791  m
+								68 button (collapsed) Lookup route text, Secondary Actions: Expand
+									69 text Lookup route text
+								70 container Prepared lookup geometry diagnostics
+									71 text Prepared lookup geometry — leaf count:  25 Prepared geometry fallbacks — bends:  2 ; straights:  2 ; clearances:  0
+									72 text Fallback geometry exists in the prepared lookup network and may be outside the returned route. Review the relevant geometry against the model.
+								73 text This lookup does not assign cable endpoints or a design length. Apply is unavailable for ordered lookups.
+				74 container Protected 3D model
+					75 AXWebArea WFC · Local 3D viewer, URL: 127.0.0.1:5190/viewer-runtime/7.130.0/index.html?instanceId=5d1592d0-7ab6-4cae-8fed-269ddf4551ed&projectId=105913f0-7ee4-45f2-bfd8-2c01f9be9f2a
+						76 container
+							77 container Description: Interactive 3D model, ID: viewer-container
+								78 container
+									79 image
+									80 text Downloading Loading... Loading... Rendering... Optimizing...
+									81 container guiviewer3d-toolbar
+										82 text f
+										83 container modelTools
+											84 text S
+											85 text e
+										86 container settingsTools
+											87 text C
+											88 text r
+											89 text n
+											90 text i
+							91 text The model and its identifiers are loaded.
+							92 text Geometry: 664556; identifiers: 438156; properties: 6.
+			93 button Back
+
+The focused UI element is 0 AXWebArea ACS App, URL: 127.0.0.1:5190/projects/105913f0-7ee4-45f2-bfd8-2c01f9be9f2a?tab=pathfinder

@@ -272,15 +272,29 @@ test('every writing entrypoint rejects a missing or malformed owned-quarantine g
   assert.equal(requireQuarantine(quarantine), targetId);
 });
 
-function fenceDatabase(options: { failLoginUpdate?: boolean; activeAfterUpdate?: number } = {}) {
-  let sessions = [{ id: 'old', revoked_at: 'previous-time', revoke_reason: 'expired' }, { id: 'active', revoked_at: null as string | null, revoke_reason: null as string | null }];
-  let logins = [{ id: 'old-login', revoked_at: 'previous-login-time' }, { id: 'active-login', revoked_at: null as string | null }];
-  let saved: { sessions: typeof sessions; logins: typeof logins } | null = null;
-  const pool = new FakePool(sql => {
-    if (sql === 'BEGIN') { saved = structuredClone({ sessions, logins }); return answer(); }
-    if (sql === 'ROLLBACK') { assert.ok(saved); ({ sessions, logins } = saved); saved = null; return answer(); }
-    if (sql === 'COMMIT') { saved = null; return answer(); }
-    if (sql.startsWith('SELECT pg_advisory_xact_lock')) return answer();
+function fenceDatabase(options: { failLoginUpdate?: boolean; activeAfterUpdate?: number; installationEpoch?: string; leaseState?: 'active' | 'quarantined'; corruptProtected?: boolean; corruptLease?: boolean; commitUnknown?: boolean } = {}) {
+  let sessions: Row[] = [{ id: 'old', revoked_at: 'previous-time', revoke_reason: 'expired' }, { id: 'active', revoked_at: null, revoke_reason: null }];
+  let logins: Row[] = [{ login_id: 'old-login', revoked_at: 'previous-login-time', user_id: 'fixture-user' }, { login_id: 'active-login', revoked_at: null, user_id: 'fixture-user' }];
+  let installation: Row[] = options.installationEpoch ? [{ singleton: true, installation_epoch: options.installationEpoch, updated_at: '2026-10-18T00:00:00.000001+00:00' }] : [];
+  let leases: Row[] = options.installationEpoch ? [{ id: 'original-owner', installation_epoch: options.installationEpoch, state: options.leaseState ?? 'active', closed_at: null, owner_sha256: 'd'.repeat(64), expires_at: '2026-10-18T00:15:00.000001+00:00' }] : [];
+  let saved: { sessions: Row[]; logins: Row[]; installation: Row[]; leases: Row[] } | null = null;
+  const pool = new FakePool((sql, parameters) => {
+    if (sql === 'BEGIN') { saved = structuredClone({ sessions, logins, installation, leases }); return answer(); }
+    if (sql === 'ROLLBACK') { if (saved) ({ sessions, logins, installation, leases } = saved); saved = null; return answer(); }
+    if (sql === 'COMMIT') { saved = null; if (options.commitUnknown) throw Error('fixture committed transport lost'); return answer(); }
+    if (sql.startsWith('SELECT pg_advisory_xact_lock') || sql.startsWith('SET LOCAL') || sql.startsWith('LOCK TABLE')) return answer();
+    if (sql.startsWith("SELECT to_regclass('public.pf_installation_state')")) return answer([{ installation: options.installationEpoch ? 'pf_installation_state' : null, leases: options.installationEpoch ? 'pf_calculation_grant_leases' : null }]);
+    const tables: Record<string, Row[]> = { viewer_resource_sessions: sessions, viewer_login_bindings: logins, pf_installation_state: installation, pf_calculation_grant_leases: leases };
+    const table = sql.match(/FROM public\."([^"]+)" t$/)?.[1];
+    if (table && sql.startsWith('SELECT COUNT(*)')) return answer([{ count: String(tables[table].length), json_bytes: String(Buffer.byteLength(JSON.stringify(tables[table]))) }]);
+    if (table && sql.startsWith('SELECT to_jsonb(t)')) return answer(tables[table].map(value => ({ value: structuredClone(value) })));
+    if (sql.startsWith('SELECT state,COUNT(*)::text AS count FROM pf_calculation_grant_leases')) return answer(['active', 'quarantined'].map(state => ({ state, count: String(leases.filter(row => row.state === state && row.installation_epoch === parameters[0]).length) })).filter(row => row.count !== '0'));
+    if (sql.startsWith('UPDATE pf_installation_state')) {
+      if (installation[0]?.installation_epoch !== parameters[0]) return answer();
+      installation[0].installation_epoch = parameters[1]; installation[0].updated_at = '2026-10-19T00:00:00.000001+00:00';
+      if (options.corruptLease) { leases[0].state = 'released'; leases[0].closed_at = 'false-join'; }
+      return answer([{ installation_epoch: parameters[1] }]);
+    }
     if (sql.startsWith('UPDATE viewer_resource_sessions SET revoked_at=COALESCE')) {
       let count = 0;
       for (const row of sessions) if (row.revoked_at === null) { row.revoked_at = 'fenced-time'; row.revoke_reason ??= 'logout'; count++; }
@@ -290,13 +304,39 @@ function fenceDatabase(options: { failLoginUpdate?: boolean; activeAfterUpdate?:
       if (options.failLoginUpdate) throw Error('fixture DB failure');
       let count = 0;
       for (const row of logins) if (row.revoked_at === null) { row.revoked_at = 'fenced-time'; count++; }
+      if (options.corruptProtected) logins[0].user_id = 'unexpected-trigger-write';
       return answer([], count);
     }
     if (sql.startsWith('SELECT (SELECT COUNT(*) FROM viewer_resource_sessions')) return answer([{ count: String(options.activeAfterUpdate ?? sessions.filter(row => row.revoked_at === null).length + logins.filter(row => row.revoked_at === null).length) }]);
     throw Error('Unexpected fake query: ' + sql);
   });
-  return { pool, rows: () => structuredClone({ sessions, logins }) };
+  return { pool, rows: () => structuredClone({ sessions, logins, installation, leases }) };
 }
+
+for (const leaseState of ['active', 'quarantined'] as const) test('owned restore rotates installation atomically while retaining an unjoined ' + leaseState + ' lease byte-exact', async () => {
+  const db = fenceDatabase({ installationEpoch: projectId, leaseState }), before = db.rows(), receipt = await fenceRestored(db.pool.asPool(), quarantine);
+  assert.equal(db.pool.connects, 1); assert.equal(receipt.fencingDelta.installation.present, true); assert.equal(receipt.fencingDelta.installation.rotated, true);
+  assert.equal(receipt.fencingDelta.installation.previousEpoch, projectId); assert.equal(receipt.fencingDelta.installation.currentEpoch, targetId);
+  assert.equal(receipt.fencingDelta.installation.fencedActiveLeases, leaseState === 'active' ? 1 : 0);
+  assert.equal(receipt.fencingDelta.installation.fencedQuarantinedLeases, leaseState === 'quarantined' ? 1 : 0);
+  assert.deepEqual(db.rows().leases, before.leases); assert.equal(db.rows().leases[0].closed_at, null); assert.equal(db.rows().installation[0].installation_epoch, targetId);
+  const epoch = receipt.fencingDelta.tables.find(row => row.table === 'pf_installation_state')!;
+  assert.equal(epoch.before.sha256, digest(before.installation.map(canonicalJson).sort())); assert.equal(epoch.after.sha256, digest(db.rows().installation.map(canonicalJson).sort()));
+  assert.deepEqual(epoch.allowedColumns, ['installation_epoch', 'updated_at']); assert.equal(epoch.changedRows, 1);
+  assert.ok(!db.pool.statements.some(sql => /UPDATE pf_calculation_grant_leases|DELETE FROM pf_|INSERT INTO pf_calculation_grant_revisions/.test(sql)));
+  const repeat = await fenceRestored(db.pool.asPool(), quarantine); assert.equal(repeat.fencingDelta.installation.rotated, false); assert.deepEqual(db.rows().leases, before.leases);
+});
+
+for (const option of ['failLoginUpdate', 'corruptProtected', 'corruptLease'] as const) test('restore grant epoch and login fencing roll back together on ' + option, async () => {
+  const db = fenceDatabase({ installationEpoch: projectId, [option]: true }), before = db.rows();
+  await assert.rejects(fenceRestored(db.pool.asPool(), quarantine)); assert.deepEqual(db.rows(), before); assert.ok(!db.pool.statements.includes('COMMIT'));
+});
+
+test('an uncertain fencing COMMIT reports unknown and never emits a false PASS receipt', async () => {
+  const db = fenceDatabase({ installationEpoch: projectId, commitUnknown: true });
+  await assert.rejects(fenceRestored(db.pool.asPool(), quarantine), /RESTORE_FENCE_COMMIT_OUTCOME_UNKNOWN/);
+  assert.equal(db.rows().installation[0].installation_epoch, targetId); assert.equal(db.rows().leases[0].state, 'active');
+});
 
 test('fencing retains durable login tombstones and prior revocations, uses one transaction and is idempotent', async () => {
   const db = fenceDatabase(), before = db.rows();

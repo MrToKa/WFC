@@ -1,0 +1,30 @@
+{
+  "revision": "8770104",
+  "source": [
+    {
+      "file": "pathfinder-engine/tests/PathFinder.BarrierRuntime.Tests/Program.cs",
+      "sha256": "463a8f7ae3eaac4e48857196e243f7b08f05e9abb0cc181ed3681651c82444c2",
+      "bytes": 38549
+    },
+    {
+      "file": "pathfinder-engine/tests/PathFinder.BarrierRuntime.Tests/Workload.cs",
+      "sha256": "4a87e88eac4bcf9f1ef6e63ba7c360c694f1fa9285c43fba6f97a475ccf49385",
+      "bytes": 24281
+    },
+    {
+      "file": "scripts/pathfinder-barriers/qualify-session.mjs",
+      "sha256": "ba952001e9efe5498f8dfb68b24a78ade714df120452216812229cda508e436c",
+      "bytes": 31382
+    },
+    {
+      "file": "scripts/pathfinder-barriers/qualify-session.test.mjs",
+      "sha256": "6701837ea6e74fb27c1befefb43ad35635b964eb159b0af54357052818b18f66",
+      "bytes": 6213
+    },
+    {
+      "file": "server/pathfinder/autoLengthGrantSql.integration.test.ts",
+      "sha256": "2f858af27662ab3a5956017a731d805d26fd6160605f325c22f9b9f550b18a13",
+      "bytes": 19588
+    }
+  ]
+}

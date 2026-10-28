@@ -1,0 +1,140 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS",
+  "recordedAtUtc": "2026-10-18T08:56:45.030Z",
+  "scope": "Final own primary health and exact-resource readback after verified replacement/extra retirement/obsolete payload cleanup.",
+  "sourceCheckpoint": "cb02f43000a51b4f511346d2aa666d09929570e0",
+  "branch": "pf-two-tabs-local-20261018",
+  "sourceManifest": "docs/pathfinder/evidence/pf7/sources-1792312859326.json",
+  "sourceSetSha256": "330b195d97b089e2c2cd063af96155dd513166a9711392a25dfa753df3777275",
+  "origin": "http://127.0.0.1:5190",
+  "healthStatus": 200,
+  "health": {
+    "status": "ok"
+  },
+  "images": {
+    "api": "sha256:7d216f20dfe2ec7b46f7ed9b357ea1a9171be73127d6422b673031b9971fb111",
+    "web": "sha256:36d9e4d6c7f8d826ded465dc4c7bf45fd61e62212e868d7e5f8430896a35307f"
+  },
+  "topology": {
+    "status": "PASS",
+    "project": "wfc-pathfinder-local",
+    "origin": "http://127.0.0.1:5190",
+    "services": [
+      "postgres",
+      "minio",
+      "storage-ready",
+      "api",
+      "web"
+    ],
+    "volumes": [
+      "postgres",
+      "minio",
+      "staging",
+      "pathfinder"
+    ],
+    "privateBackend": true,
+    "publishedPorts": [
+      5190
+    ]
+  },
+  "resources": {
+    "containers": [
+      {
+        "role": "web",
+        "id": "0c99d10a9931c6ef30a705aa4977c7d61c53076b456fbebc0939db9efca33779",
+        "image": "sha256:36d9e4d6c7f8d826ded465dc4c7bf45fd61e62212e868d7e5f8430896a35307f",
+        "name": "wfc-pathfinder-local-web-1",
+        "running": true,
+        "startedAt": "2026-10-18T08:48:18.497808769Z"
+      },
+      {
+        "role": "api",
+        "id": "0a8e4ea5e210fc2dea098945189bb6b5335201a62e934f85e8294febfd27f319",
+        "image": "sha256:7d216f20dfe2ec7b46f7ed9b357ea1a9171be73127d6422b673031b9971fb111",
+        "name": "wfc-pathfinder-local-api-1",
+        "running": true,
+        "startedAt": "2026-10-18T08:48:12.204799835Z"
+      },
+      {
+        "role": "storage-ready",
+        "id": "d237b1fb124f828da82731bb06b687ac30d38f0a0f6c9fa0dfd0c5a3c9e603ea",
+        "image": "sha256:7d216f20dfe2ec7b46f7ed9b357ea1a9171be73127d6422b673031b9971fb111",
+        "name": "wfc-pathfinder-local-storage-ready-1",
+        "running": false,
+        "startedAt": "2026-10-18T08:41:24.278496312Z"
+      },
+      {
+        "role": "postgres",
+        "id": "6830635a4597dad696f1a5ced6846853cd9e1fee0f858450ad6f858e4c2e30b9",
+        "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+        "name": "wfc-pathfinder-local-postgres-1",
+        "running": true,
+        "startedAt": "2026-10-18T02:03:12.60010978Z"
+      },
+      {
+        "role": "minio",
+        "id": "e27a690c80957356c8a562e02b72249cf85a3d965f9a32fe596048a15f499820",
+        "image": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+        "name": "wfc-pathfinder-local-minio-1",
+        "running": true,
+        "startedAt": "2026-10-18T08:48:10.487023114Z"
+      }
+    ],
+    "volumes": [
+      "wfc-pathfinder-local_postgres",
+      "wfc-pathfinder-local_minio",
+      "wfc-pathfinder-local_staging",
+      "wfc-pathfinder-local_pathfinder"
+    ],
+    "networks": [
+      {
+        "id": "7e58e2a7f9544ca1b5efc7ae9773e69088168620ad34a6afb7abcea2a26b6cc0",
+        "name": "wfc-pathfinder-local_front"
+      },
+      {
+        "id": "77abead34a6b25bce147efa3a1eacd67d9a9b110028ea634ab904768e3e2274d",
+        "name": "wfc-pathfinder-local_backend"
+      }
+    ]
+  },
+  "retainedBackup": {
+    "directory": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf-two-tabs-backup-20261018-0847",
+    "backupId": "d7d63dce-4549-4e78-9bc5-7ff6a9eddc7b",
+    "payloadBytes": 1348954278,
+    "privateCompanion": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf-two-tabs-backup-20261018-0847.private.json",
+    "privateCompanionBytes": 2350,
+    "fullyVerifiedBy": "docs/pathfinder/runtime/cleanup-1792313736971.json"
+  },
+  "retiredOldBackup": {
+    "directory": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf-manual-backup-20261018-0703",
+    "backupId": "2ae6f51b-34ee-46d4-8594-757f882fd216",
+    "payloadsRetired": true,
+    "compactMetadataRetained": true,
+    "privateCompanionRetained": true,
+    "privateCompanionBytes": 2350,
+    "archiveRestorable": false
+  },
+  "extraTargetReadback": {
+    "project": "wfc-pathfinder-local-06519db336e2",
+    "status": "retired",
+    "resources": {
+      "containers": [],
+      "volumes": [],
+      "networks": []
+    }
+  },
+  "drill": "docs/pathfinder/runtime/final-drill-1792313480874.json",
+  "drillStatus": "PASS",
+  "previewRecoveryStatus": "PARTIAL",
+  "previewExactJobCrashStatus": "NOT_RUN",
+  "previewQueuedCancellationStatus": "PASS",
+  "cleanup": "docs/pathfinder/runtime/cleanup-1792313736971.json",
+  "limits": [
+    "The fast preview advanced between observation and KILL: exact-job preview crash recovery is NOT_RUN, not a PASS.",
+    "The queued-preview cancellation and no-workflow-write controls passed.",
+    "No physical reclaimed image-layer bytes inferred from reported image sizes.",
+    "All three rejected scratch directories, compact historical/failure evidence and the small old private companion remain untouched.",
+    "Cross-computer restore remains NOT_RUN; native parity is not asserted; explicit per-proposal manual Review remains required."
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "check": "converted-mesh-index-enumeration",
+  "stage": "PF-2",
+  "status": "PASS",
+  "observedAtUtc": "2026-10-17T21:14:03.5233204Z",
+  "scope": "Direct unchanged pinned SDK triangle enumerator and capture helper; synthetic representations plus retained actual indexed fragment sample. No browser capture/native parity claim.",
+  "execution": "One earlier completed run in this worker turn; this receipt records that run without a rerun.",
+  "command": "node --test C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\tools\\model-capture\\test\\mesh-indices.test.mjs",
+  "environment": {
+    "PF_MESH_INDEX_ACTUAL_PART": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf2-converted\\captures\\nwd-lookup-01-1792271184742-object-0000.json",
+    "sourceScope": "Isolated WFC-pathfinder-local worktree",
+    "browserActions": 0,
+    "nativeActions": 0,
+    "modelCheckReruns": 0
+  },
+  "tests": 6,
+  "passed": 6,
+  "failed": 0,
+  "skipped": 0,
+  "testCases": [
+    "one nonindexed triangle visits exactly the three original vertices",
+    "multiple nonindexed triangles retain contiguous original index order",
+    "indexed triangles retain winding and repeated shared indices",
+    "indexed SDK groups retain group order and base-vertex offsets",
+    "missing pinned triangle API is an explicit failure",
+    "indexed actual captured fragment indices remain byte-order identical"
+  ],
+  "sdk": {
+    "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\viewer-runtime\\sdk\\7.130.0\\viewer3D.min.js",
+    "version": "7.130.0",
+    "sha256": "2833d5c53d250f56a59b86f22491a972486b30fd90a103bce8310dcaa970fa5b",
+    "function": "enumMeshTriangles, internal jh",
+    "sourceExtraction": "Unchanged function jh between exact function jh(e,t){ / function Kh(e,t){ anchors; isolated VM with fixture vertex accessors",
+    "callback": "vertexA, vertexB, vertexC, indexA, indexB, indexC, optional normals and triangle index"
+  },
+  "helper": {
+    "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\tools\\model-capture\\mesh-indices.mjs",
+    "sha256": "17e276d3a03dfb9e66c81e165d75f1fb7051b894e14f88344932aa860be1822e"
+  },
+  "testSource": {
+    "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\tools\\model-capture\\test\\mesh-indices.test.mjs",
+    "sha256": "36401ae02f7f05e9d533f6151f98a47e3a4b0f42c1b050b7286231423027c41f"
+  },
+  "actualSample": {
+    "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf2-converted\\captures\\nwd-lookup-01-1792271184742-object-0000.json",
+    "sha256": "99f6b10bde294ddbe3064315803f5a2a5a362027ac5cf54b32652e1954a44be6",
+    "allFragmentTriangleIndexArraysCompared": true,
+    "indexOrderPreserved": true
+  },
+  "limitations": [
+    "Fresh final UI capture and normalization are separate parent checks.",
+    "The actual sample verifies indexed triangle order only; no native/converted route equality or engineering acceptance is inferred."
+  ]
+}

@@ -1,0 +1,75 @@
+{
+  "schemaVersion": "pathfinder.routes-path.live-binding.v1",
+  "observedAtUtc": "2026-10-18T08:45:15.2755867Z",
+  "sourceCommit": "cb02f43000a51b4f511346d2aa666d09929570e0",
+  "branch": "pf-two-tabs-local-20261018",
+  "workspace": "C:/Users/todor.chankov/source/WFC-pathfinder-local",
+  "apiContainer": "0a8e4ea5e210fc2dea098945189bb6b5335201a62e934f85e8294febfd27f319",
+  "apiImage": "sha256:7d216f20dfe2ec7b46f7ed9b357ea1a9171be73127d6422b673031b9971fb111",
+  "apiStartedAtUtc": "2026-10-18T08:41:25.002181589Z",
+  "webContainer": "0c99d10a9931c6ef30a705aa4977c7d61c53076b456fbebc0939db9efca33779",
+  "webImage": "sha256:36d9e4d6c7f8d826ded465dc4c7bf45fd61e62212e868d7e5f8430896a35307f",
+  "webStartedAtUtc": "2026-10-18T08:41:30.837984613Z",
+  "postgresContainer": "6830635a4597dad696f1a5ced6846853cd9e1fee0f858450ad6f858e4c2e30b9",
+  "database": "wfc_pathfinder_local",
+  "command": "docker exec 0a8e4ea5e210fc2dea098945189bb6b5335201a62e934f85e8294febfd27f319 node server/dist/server/pathfinder/integration.js 54cfad40-bd12-41e9-ab24-d90bdaafc993",
+  "status": "PASS",
+  "passed": 29,
+  "total": 29,
+  "receipt": "live29-corrected-20261018T084236Z.json",
+  "receiptSha256": "c2463eecb72db2f63ca3a0cb92d4ed7598b6787d3d38b9a078e57cf2399bb277",
+  "compiledContainerDriverSha256": "b66420a5a89ef191695e899ffc71b761c183a799dddf8951b827331f1577277a",
+  "receiptRecordedDriverSha256": "b66420a5a89ef191695e899ffc71b761c183a799dddf8951b827331f1577277a",
+  "compiledContainerWorkerSha256": "a00f415d9e7c1ca684faa16e09b814a2d601800a5c52fe6183383d4167c4b99f",
+  "driverSourceSha256": "e12c40e4f8afe0e9cb062d8221138f675d794694dd4b96471d35e0f0783b6ef9",
+  "workerSourceSha256": "7ee8d927e439e1a655a0fbf3411bac75225f1232399765e1c231112afa075c36",
+  "cleanup": "PASS",
+  "readOnlyCleanupAndUnappliedRealDemo": "cleanup-readback-corrected-20261018T084236Z.json",
+  "instrumentationControlProof": [
+    {
+      "name": "actual durable job creates exact synthetic Instrumentation proposal",
+      "status": "PASS",
+      "milliseconds": 1084,
+      "details": {
+        "geometry": 10,
+        "design": "18",
+        "scope": "local-synthetic-fixture"
+      }
+    }
+  ],
+  "gapContributorProof": [
+    {
+      "name": "server-owned project gap fences overrides, routes, lookup and A to B to A staleness",
+      "status": "PASS",
+      "milliseconds": 3892,
+      "details": {
+        "oldProposalId": "abc5ce04-5ede-4530-ab52-d2a73ee913c4",
+        "requestedProposalId": "7daacf40-fb2a-4a70-b1b4-86649feba10f",
+        "requestedJobId": "66279e2f-125d-46f6-a648-fcbea3c1a541",
+        "requestedCalculationMode": "calculate",
+        "oldGeometryHash": "e82c792676dbf0f6217137392d55618a1dc34ed773cbeccc12e2c5de7dab9291",
+        "changedGeometryHash": "a0bb1156cab06b51f19f5da1396b35963aa59e1c371293d84846dfe385fa2026",
+        "freshFullCalculationProposalId": "7daacf40-fb2a-4a70-b1b4-86649feba10f",
+        "freshFullCalculationJobId": "66279e2f-125d-46f6-a648-fcbea3c1a541",
+        "freshFullCalculationCreatedAt": "2026-10-18T08:42:54.358Z",
+        "gapChangedAfter": "2026-10-18T08:42:53.092Z"
+      }
+    }
+  ],
+  "priorFailedAttempt": {
+    "receipt": "live29-final-20261018T083254Z.json",
+    "binding": "live29-final-binding-20261018T083254Z.json",
+    "status": "FAIL",
+    "passed": 27,
+    "total": 29,
+    "preserved": true,
+    "correctionEvidence": "retained-metadata-source-verification-20261018T084011Z.json",
+    "historicalResponseIdentityLimitation": "Failed proposal/job IDs were not retained by the old driver and were removed by its cleanup; no IDs were invented."
+  },
+  "historicalRealMetadata": {
+    "currentArtifactId": "75c61dc7-d456-45b0-9052-2a0822240350",
+    "currentArtifactProposals": "Current capture proposals retain Control and prepared diagnostics (26 fitted segments).",
+    "olderStaleArtifact": "Historical design-only proposal 5fcfea03-6258-417c-8fc2-31ebbc695de3 on old artifact 6a04c032-707f-490c-9cc6-325a04a63250 still has null category/prepared. Its full calculation source 74739a68-99e3-402e-afc4-663e81020c63 retains diagnostics. Immutable historical records were not patched."
+  },
+  "nativeParity": "NOT_PERFORMED; technical integration checks do not grant human engineering acceptance."
+}

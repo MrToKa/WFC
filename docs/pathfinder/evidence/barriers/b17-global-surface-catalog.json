@@ -1,0 +1,282 @@
+{
+  "schemaVersion": "wfc.pf.b17-global-surface-catalog-checks.v1",
+  "at": "2026-10-22T09:03:13.248Z",
+  "baseline": "22932bebd6d96a1e975064385d9a3e1f0e39395a",
+  "branch": "pf-b17-global-surface-catalog-local-20261022",
+  "status": "TECHNICAL_SOURCE_PASS",
+  "source": [
+    {
+      "path": "pathfinder-engine/src/PathFinder.BarrierVerifier/BarrierCaptureVerifier.cs",
+      "bytes": 15193,
+      "sha256": "af46124ce6bba571eceb2e58efcd636e9c17648cfb838eb740d88b7f9a2d22f4"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.BarrierVerifier/CaptureParser.cs",
+      "bytes": 16532,
+      "sha256": "e915a1f4de1dfcf0c465c594ec42a0e4174284052693f2ac954d834c61d18d3e"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.BarrierVerifier/Contracts.cs",
+      "bytes": 2534,
+      "sha256": "2dfb89e85ca3666ee56890b6f4bb1faa001a2e440d206b03ac24318906299d96"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.BarrierVerifier/MultipartContracts.cs",
+      "bytes": 5988,
+      "sha256": "1ba864485c4c8adb0aa3e503bab8a874a7dbdffb5260ef74f2ce817224e59eeb"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.BarrierVerifier/PackedPartReader.cs",
+      "bytes": 28777,
+      "sha256": "6896cef399093c5d4ab9979c18a28a209eff2da17e7d66da03dcf3ca7733c41f"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.BarrierVerifier/PathFinder.BarrierVerifier.csproj",
+      "bytes": 424,
+      "sha256": "f7a259f4997802e84d51a4bf7c98a62ea20dbd0d17f2f6cebf7227b50a0a311f"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.BarrierVerifier/Program.cs",
+      "bytes": 1861,
+      "sha256": "4a38fe27ac35bf0162813d3e5b0a3b525ac10def0296e5dc4969708d5942f1bf"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.BarrierVerifier/README.md",
+      "bytes": 5432,
+      "sha256": "89292acf059b81a53697b72f208de3d1b3a3c35681351eaf1a6faba4f515e0b4"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.BarrierVerifier/SURFACE-CATALOG.md",
+      "bytes": 4657,
+      "sha256": "b7d63eee8429e8ba56bc2ba6ab9d2133cbd5ce4b7f214815e779ee7fa0185ded"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.BarrierVerifier/SurfaceCatalogBinary.cs",
+      "bytes": 5861,
+      "sha256": "cbf6361d4a560564299dfdf2f93e311fa76079fd97d9f11fed67607d9cf26440"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.BarrierVerifier/SurfaceCatalogCompiler.cs",
+      "bytes": 28368,
+      "sha256": "330d09b17c913c74d3d37d074b515dd20836780a77d712419e18d0bca2beb423"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.BarrierVerifier/SurfaceCatalogContracts.cs",
+      "bytes": 4717,
+      "sha256": "4fccf2c22dea9d92d6fe3aebb7a75fe749678647da0eb5ddeb7787cd8d845e43"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.BarrierVerifier/SurfaceCatalogFiles.cs",
+      "bytes": 11721,
+      "sha256": "6dd39d4e025cdba46dd342e93bd5b371be70ab8a103ef8725dd621b719c11f51"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.BarrierVerifier/SurfaceCatalogJson.cs",
+      "bytes": 7725,
+      "sha256": "7dcb44d564b91ce698603cfa6639a1881c030b67fee65d30fce19ca82f68fa26"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.BarrierVerifier/SurfaceCatalogReader.cs",
+      "bytes": 17359,
+      "sha256": "dfb47d3aab3ab103c5cfd8c78aab9e93a66ca588216d4aafaa3a0c50a07ed1ec"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Barriers/BarrierCollisionKernel.cs",
+      "bytes": 27025,
+      "sha256": "17115bf20013c75e6c8d4e2980135d59d6d496159da6da303e7dde4a694de63c"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Barriers/Contracts.cs",
+      "bytes": 2542,
+      "sha256": "b4436cbac20b9e6a9dd78fb672ed791c3c89d5fa66d9d4145cf1d96ec783f27f"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Barriers/Geometry.cs",
+      "bytes": 8644,
+      "sha256": "8d8862a80ba1f31b849ed6b4f1c621e77d751d45c8eea2ded969173c1a48929c"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Barriers/PathFinder.Barriers.csproj",
+      "bytes": 300,
+      "sha256": "b49eaf28002a462d271147e566e14a067c2d57d910b6f76cef2a3221c5660d4c"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Barriers/README.md",
+      "bytes": 6734,
+      "sha256": "156fbfc30cc29446423d9c629326254196db15ed741c68d225049aab6f34a009"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.BarrierPacked.Tests/Fixtures.cs",
+      "bytes": 11325,
+      "sha256": "69944da754ae083ea9903c4c0d392a047d3f43ae7733c35be71532005498086e"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.BarrierPacked.Tests/PathFinder.BarrierPacked.Tests.csproj",
+      "bytes": 445,
+      "sha256": "023d17ee5323ae0280208bdced8a7e3bcdd1dfaf815bb6fe49e7b0619ee9dffc"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.BarrierPacked.Tests/Program.cs",
+      "bytes": 19455,
+      "sha256": "7c135b10443442b5a3acfcebdf29e8aefcb7be59fe2aeeba53e0df169286cf68"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.SurfaceCatalog.Tests/PathFinder.SurfaceCatalog.Tests.csproj",
+      "bytes": 550,
+      "sha256": "74383b3f1ab20a7700d5dad2a03a6dbc1784b39fb2c962cfe0e39821620ec656"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.SurfaceCatalog.Tests/Program.cs",
+      "bytes": 20798,
+      "sha256": "34e245a0f80e0451abc6a80989459fe08ce84b640a2390569203975d5418e1c3"
+    },
+    {
+      "path": "server/pathfinder/barrierMultipartCatalogSource.test.ts",
+      "bytes": 20107,
+      "sha256": "1e3d1a3ec6c913995a9e0bfc5f00efebb21d71a5cfcadc85a6d1ca69f74a73cf"
+    },
+    {
+      "path": "server/pathfinder/barrierMultipartCatalogSource.ts",
+      "bytes": 12335,
+      "sha256": "ed732c33e7a5e95057e7220fba3482eeaf6c1ebd26953c966685ed259f6bca03"
+    },
+    {
+      "path": "server/pathfinder/barrierMultipartRepository.integration.test.ts",
+      "bytes": 56743,
+      "sha256": "539117b8155b57a8a1852989ba35b4012683484dd5a7cd77a30709fb5fe4ed7b"
+    },
+    {
+      "path": "server/pathfinder/barrierMultipartRepository.test.ts",
+      "bytes": 11240,
+      "sha256": "2bb53a2136fccce608800a2515969632e99c049e84a7e0b8dcd890e26e795062"
+    },
+    {
+      "path": "server/pathfinder/barrierMultipartRepository.ts",
+      "bytes": 76870,
+      "sha256": "c14acb484d7f720e2552eb0035ad6e1c477976149dd29f3d52d5d91799d00922"
+    }
+  ],
+  "checks": {
+    "surfaceWindows": {
+      "status": "PASS",
+      "localCases": 6,
+      "goldens": 21,
+      "valid": 7,
+      "refused": 14,
+      "console": "SURFACE_TESTS passed=27 failed=0"
+    },
+    "surfaceLinux": {
+      "status": "PASS",
+      "localCases": 6,
+      "goldens": 21,
+      "console": "SURFACE_TESTS passed=27 failed=0",
+      "memoryBytes": 536870912,
+      "sourceBookends": "PASS",
+      "artifactBookends": "PASS",
+      "goldenBookends": "PASS",
+      "helpersJoinedAndRemoved": true
+    },
+    "packedRegression": {
+      "windows": "PASS",
+      "linux": "PASS",
+      "localCases": 31,
+      "goldens": 26,
+      "console": "PACKED_TESTS passed=32 failed=0",
+      "helpersJoinedAndRemoved": true
+    },
+    "serverUnits": {
+      "status": "PASS",
+      "tests": 25
+    },
+    "syntheticSqlHttp": {
+      "status": "PASS",
+      "tests": 37,
+      "helpersRemoved": true,
+      "networkRemoved": true
+    },
+    "types": "PASS_BEFORE_LATER_POPUP_EDITS",
+    "scopedLint": "PASS",
+    "serverBuild": "PASS_BEFORE_LATER_POPUP_EDITS",
+    "frontendBuild": "PASS_BEFORE_LATER_POPUP_EDITS",
+    "independentReview": "CLEAR",
+    "actualSdk": "BLOCKED_SAVED_BROWSER_REFUSAL",
+    "actualAalborg": "BLOCKED_SAVED_BROWSER_REFUSAL",
+    "runtimeInstallation": "NOT_RUN"
+  },
+  "limits": {
+    "geometryValidation": "STRUCTURAL_COMPLETE",
+    "qualification": "NOT_MEASURED",
+    "authority": "none",
+    "sdkSourceBytesVerified": false,
+    "solidOccupancyQualified": false,
+    "sourceGeometryProvenance": "protected-producer-reported",
+    "hierarchyMembershipProvenance": "protected-producer-reported",
+    "automaticProtectedExportCompilerRunner": "NOT_IMPLEMENTED",
+    "surfaceQueries": "NOT_IMPLEMENTED",
+    "destinationSpecificLinuxDiskHeadroom": "NOT_RUN_ROOT_FILESYSTEM_ONLY",
+    "measuredPeakRss": "NOT_MEASURED",
+    "wholeParentCapacity": "NOT_MEASURED"
+  },
+  "failuresRetained": [
+    {
+      "check": "first types/server build",
+      "reason": "TS2322 discriminant narrowing; explicit part branch correction, final pass"
+    },
+    {
+      "check": "initial Windows independent fixtures",
+      "reason": "PROFILE_BINDING raw expected profile key order; full profile canonical comparison fixed, final pass"
+    },
+    {
+      "check": "first Linux driver call",
+      "reason": "noncanonical Windows slash path refused before helper; exact canonical argument retry passed"
+    }
+  ],
+  "runtime": {
+    "changed": false,
+    "web": "sha256:a0e6972c41356185cefc12a5781995a71820e5298ebb405ed34dc59a79270529",
+    "api": "sha256:ac0d16ab1b0f4c92922c20d1a13a5ea142d4c6e92558de1870daf4db7fd60fcf"
+  },
+  "privateOperation": "13328c95-c8fa-4221-9763-31686f3093d7",
+  "evidence": [
+    {
+      "name": "csharp-windows-final.log",
+      "bytes": 2016,
+      "sha256": "98335a6e956d08a78cb858d5c9dbb535caa053c2dde88c26c9bdacf40a38cf2e"
+    },
+    {
+      "name": "packed-windows-final.log",
+      "bytes": 2876,
+      "sha256": "636bfde35879ff574db7ad4e21cbb94ae32b73da54c5972979ae8aa3f6418507"
+    },
+    {
+      "name": "server-units-final.log",
+      "bytes": 419,
+      "sha256": "7ceb7099fdf19cea0f676161b3c6bea1ad217375de594dfb68395e42a61fc11b"
+    },
+    {
+      "name": "linux-tests-2.private.log",
+      "bytes": 3852,
+      "sha256": "86bb79903eb5d860f04ca37d924df93e878201d599462702f65125a9f26855ef"
+    },
+    {
+      "name": "typecheck-final.log",
+      "bytes": 93,
+      "sha256": "b8eb3154847ce13af5e3a7672a976c5437a052bfd30d24dd327a019180231d04"
+    },
+    {
+      "name": "lint-final.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "server-build-final.log",
+      "bytes": 1799,
+      "sha256": "e9f1842c678fae76ad91e1a0236ea2dbbbecb68a9601ea2e1dc84b9f17e20dc9"
+    },
+    {
+      "name": "frontend-build.log",
+      "bytes": 7604,
+      "sha256": "4248396c2c9ca0b20e0fb269d2cd2a7e91666072a2e0ae3e6465a6a5ed1e951b"
+    }
+  ]
+}

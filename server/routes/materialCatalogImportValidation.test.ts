@@ -60,6 +60,16 @@ const invoke = async (router: Router, worksheet: XLSX.WorkSheet) => {
   return response;
 };
 
+describe('material cable Purpose import contract',()=>{
+  it.each(['Power\nVFD','Bad\u0001Purpose','X'.repeat(501)])('rejects invalid Purpose before opening a write transaction',async purpose=>{
+    vi.clearAllMocks();
+    const response=await invoke(materialCableTypesRouter,XLSX.utils.json_to_sheet([{Type:'Cable',Purpose:purpose}]));
+    expect(response.status).toHaveBeenCalledWith(400);
+    expect(response.json).toHaveBeenCalledWith(expect.objectContaining({issues:expect.arrayContaining([expect.objectContaining({row:2,column:'Purpose'})])}));
+    expect(databaseMocks.pool.connect).not.toHaveBeenCalled();
+  });
+});
+
 describe.each(catalogs)('$name Excel validation', ({ router, weight }) => {
   beforeEach(() => {
     vi.clearAllMocks();

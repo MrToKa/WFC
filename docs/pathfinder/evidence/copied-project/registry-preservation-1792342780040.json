@@ -1,0 +1,128 @@
+{
+  "schemaVersion": "pathfinder.copied-project.registry-preservation.v2",
+  "status": "PASS",
+  "recordedAt": "2026-10-18T16:59:33.674Z",
+  "storageProof": "key-size-etag-lastModified-metadata-only",
+  "atomicBackup": false,
+  "raw": {
+    "path": "pathfinder-engine/.scratch/copied-preservation-98728783-afbd-4623-a95a-159c81b02ea4/registry-storage.private.json",
+    "bytes": 1738200,
+    "sha256": "98c500c96719eb7e4aa39c704f5c018a39a3d455999540c26d8b658732cd41e0",
+    "exitCode": 0
+  },
+  "target": {
+    "owner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+    "project": "wfc-pathfinder-local-0cba87606e9b",
+    "apiId": "97e0ad80387c1c1e5148922356088ccbc7f77e5def61073c657b10769db09adb",
+    "apiImage": "sha256:dce12a1f5ab6311bbaf04defb7277ff0d50fee36e29e49d47234e5bf4ea405fe",
+    "pgId": "6a39e7b2d794055dccef0919cf3a99ddf60e0f3c0b5daae062cec1eb6c9b3785"
+  },
+  "groups": {
+    "model_package_identities": {
+      "count": 1,
+      "sha256": "27f8fa174c2a093b6dab596c067143eca7500a9d8fb5d793244749191d109e03"
+    },
+    "model_validation_reports": {
+      "count": 2,
+      "sha256": "a02286f7b19f7fe8519f230dccf7aa9743736b009b5e4d0bdda70f61de115bf2"
+    },
+    "model_import_jobs": {
+      "count": 2,
+      "sha256": "445699ad7f8ab866a4dbb6d19a58f85bb533b09e529309d8796516da6a83e84e"
+    },
+    "model_versions": {
+      "count": 2,
+      "sha256": "bfef4b8ddf0ad13ba08cf25b9c885117d17269ab2407677c4a700c8b498665ca"
+    },
+    "model_content_reservations": {
+      "count": 0,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "model_package_aliases": {
+      "count": 2,
+      "sha256": "14ef00775558941cde761fdb01aa5dab4e430a117f17d4857b9aa443257dd468"
+    },
+    "model_storage_ownership": {
+      "count": 2,
+      "sha256": "0f2c905f80345e291693f8747e531bb5023c353b010b95b1402027c8d470aee4"
+    },
+    "pf_project_state": {
+      "count": 2,
+      "sha256": "b96cf5db7e84702712cc7927ee3df9f9c59bd4a5da8c8be9ac668e56182f6e8c"
+    },
+    "pf_locations": {
+      "count": 6,
+      "sha256": "439ee6d3f0bf60c7046bd5cbc1744df09307314beee6366c76936c92871d3408"
+    },
+    "pf_location_aliases": {
+      "count": 7,
+      "sha256": "d104fbdc8193d2ba4e275c4b93ff04330fe90eddf0852b3fa87824c6f502b22b"
+    },
+    "pf_artifacts": {
+      "count": 6,
+      "sha256": "b9b24308cb7f47001f20fad2c4b1293756bc6ebd7d59ea411542cb44835c8b56"
+    },
+    "pf_model_objects": {
+      "count": 133,
+      "sha256": "037fef9201bdd108e43e51339c16b3701f9ec0ac85c4523a393b6b33fc44a0b3"
+    },
+    "pf_location_bindings": {
+      "count": 6,
+      "sha256": "a4a37c9f83740d1872907e33246613ef45e41d900d6a7bedce40ae267c250067"
+    },
+    "pf_location_matches": {
+      "count": 1,
+      "sha256": "1bff652bf8a275c2e3f9ba20fe35edd55e76e99cfd6860ae0cfbf4672932ec70"
+    },
+    "pf_location_events": {
+      "count": 107,
+      "sha256": "e45af3edcf854e5a36ce62f2b0077b88c9a2d6bbf5df2176527c85100c765571"
+    },
+    "pf_jobs": {
+      "count": 44,
+      "sha256": "9d0b69004404fc9d6c1d0a6927563e0b55cc626d803feb0fc957eafa042e91e2"
+    },
+    "pf_job_items": {
+      "count": 52,
+      "sha256": "7bbfd23df26bb8b06c83eb77b63005a60bd76250be2f489929899492831faad7"
+    },
+    "pf_proposals": {
+      "count": 47,
+      "sha256": "b8a7b7a4e6c38793aee5bbdca0b37ae4c1057b95d6dc666c94d6cc418009e090"
+    },
+    "pf_lookup_results": {
+      "count": 14,
+      "sha256": "d38bda93abfb1a57400c0ac8e329d2723cc83dd4201284b64bbb04ceaa6277e9"
+    },
+    "pf_synthetic_projects": {
+      "count": 1,
+      "sha256": "a6c0b52cda05b01cf57c7caac3c25c420ca989686afa8f07f580097e6b7153cb"
+    },
+    "pf_synthetic_proofs": {
+      "count": 1,
+      "sha256": "1a2730022d8ce04dc9297dde05154b47a3e15183178f8b53f04535f0601fef0e"
+    },
+    "pf_reviews": {
+      "count": 6,
+      "sha256": "5c5a485cb606d6e4d22496c164672423b570cc2009399863463dd4057be9d709"
+    },
+    "pf_apply_receipts": {
+      "count": 1,
+      "sha256": "f54c8957f45519cd677f1c414e99403ff57dd6b91aeda675e0ece79cbf55ce04"
+    }
+  },
+  "storage": {
+    "pf-local-models": {
+      "count": 684,
+      "sha256": "3fb243f95865666ea7eed0ea3d9ce76f5f92f6886e5a0c86ca36a29af6db2e06"
+    },
+    "pf-local-project-files": {
+      "count": 0,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "pf-local-template-files": {
+      "count": 0,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    }
+  }
+}

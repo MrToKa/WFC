@@ -1,0 +1,116 @@
+{
+  "schemaVersion": "pathfinder.ui-preservation.independent-source-review.v1",
+  "recordedAt": "2026-10-18T14:24:49.168Z",
+  "status": "PASS_SCOPED_SOURCE_REVIEW",
+  "reviewer": "viewer_tab_capabilities; independent read-only reviewer, not new harness writer.",
+  "sources": [
+    {
+      "path": "scripts/pathfinder-ui-preservation/lib.mjs",
+      "bytes": 17789,
+      "sha256": "942f28ab29c961eefd594dd0838a3ed09a8cbdc08e907d285b80b7990be01ff9"
+    },
+    {
+      "path": "scripts/pathfinder-ui-preservation/capture.mjs",
+      "bytes": 9976,
+      "sha256": "d47033756bf979eb5f0f27a29b6c5c11b6d99313bdea12c985f210d50049d012"
+    },
+    {
+      "path": "scripts/pathfinder-ui-preservation/quiesce.mjs",
+      "bytes": 5375,
+      "sha256": "59b9a8f8a99444cb746caf5f5b5575760d806d239f5406527cf45aa112305900"
+    },
+    {
+      "path": "scripts/pathfinder-ui-preservation/retire.mjs",
+      "bytes": 2792,
+      "sha256": "d23e35f7b02a8ff6cddd58bad94c1e6ef4ba19577a73ea2a834b5c0a867c4e90"
+    }
+  ],
+  "inspectedSourceContracts": [
+    "server/pathfinder/lookupAudit.ts exact ordered12 SQL and hash(JSON.parse(JSON.stringify(rows))).",
+    "server/pathfinder/dependencies.ts current DTO/hash/geometryHash/request items.",
+    "server/pathfinder/settings.ts raw numeric text settings and Number(connection_gap) option normalization.",
+    "server/pathfinder/previews.ts shared endpoint/current model/artifact/registry/Settings/input contracts.",
+    "Prior addon semantic review accepted: existing proposal/result rows immutable; previews use pf_jobs+pf_lookup_results, never pf_previews."
+  ],
+  "findings": [
+    {
+      "id": "F1",
+      "priority": "P2",
+      "initialIssue": "After raw capture, JSON/schema/diff/classification exceptions could skip private/public compact failure evidence.",
+      "resolution": "Raw and full diff files are exclusive, fsynced and readback-hashed before assertions; capture catch durably records safe FAIL with retained raw/diff references and targetRetired:false.",
+      "status": "RESOLVED_BY_SOURCE_READ"
+    },
+    {
+      "id": "F2",
+      "priority": "P2",
+      "initialIssue": "Preview provenance checked only self-consistent diagnostic input/hash and math, not current authoritative dependency fields.",
+      "resolution": "Current active/latest planning artifact/model/content/registry/Details and exact shared QA endpoints/Control/nonreverse/options are fenced. Input artifact/expected revisions/options and endpoint name/objectId must match actual dependency/binding.",
+      "status": "RESOLVED_BY_SOURCE_READ"
+    },
+    {
+      "id": "F3",
+      "priority": "P2",
+      "initialIssue": "Added job_items could lack a new authorized calculation parent/proposal/cable attribution.",
+      "resolution": "Every added item must join a new allowed calculate job, existing cable and exact current-dependency proposal; automatic and preview job scopes are distinct.",
+      "status": "RESOLVED_BY_SOURCE_READ"
+    },
+    {
+      "id": "F4",
+      "priority": "P2",
+      "initialIssue": "Raw baseline/previous paths were not bound to sidecar hash/owner/API/module/expected phase/time sequence.",
+      "resolution": "validatedCapture checks exclusive PASS sidecar/raw bytes/hash, expected A0/previous phase, same owner/runtime/API/images/modules and strictly earlier capture time; phase gates restrict A0→A1 calculation, A1→A2 preview and A2→A3 no changes.",
+      "status": "RESOLVED_BY_SOURCE_READ"
+    },
+    {
+      "id": "F5",
+      "priority": "P2",
+      "initialIssue": "Any same-content historical/different-model artifact could satisfy the current automatic dependency check.",
+      "resolution": "Both current dependency paths require the latest retained planning artifact for the active model, matching production selection order.",
+      "status": "RESOLVED_BY_SOURCE_READ"
+    },
+    {
+      "id": "F6",
+      "priority": "P2",
+      "initialIssue": "Quiescence exec/parse/ownership exceptions could lose its compact failure and collected observations.",
+      "resolution": "Top-level quiescence catch persists safe FAIL with all previously durable observation/raw references and targetRetired:false.",
+      "status": "RESOLVED_BY_SOURCE_READ"
+    }
+  ],
+  "remainingMaterialFindings": [],
+  "positiveReview": [
+    "All12 queries and their order match lookupAudit; SQL executes in one repeatable-read read-only transaction.",
+    "Existing proposal/result rows may not change or disappear; business, registry, model, Review and Apply rows stay exact.",
+    "New automatic proposals/items are allowed only at A1 and require the exact authorized current dependency/job/item/cable/hash scope.",
+    "A2 permits one standalone preview job/result with no cable item/proposal additions; A3 permits no recorded changes.",
+    "Quiescence samples complete ordered workflow hashes plus all project job/item/result state across at least16.5seconds and refuses pending work; it makes no permanent-silence claim.",
+    "Retirement is a separate explicit entry point requiring four durable PASS phases, unchanged evidence hashes and a separately supplied matching owner disposition. No capture/quiescence finally performs cleanup."
+  ],
+  "testAttribution": {
+    "reviewerExecutedTests": 0,
+    "reviewerExecutedAppDbBrowserContainerActions": 0,
+    "writerEvidence": {
+      "path": "docs/pathfinder/evidence/ui-preservation/startup-1792333377210.json",
+      "sha256": "72ba9a274d125961b17c3cb645a4bd8cacdce3aea4e9b9f482cddb9c1c27bf6c",
+      "status": "PASS",
+      "passed": 34,
+      "total": 34,
+      "note": "Read source hashes/status from actual writer startup record; did not rerun34 focused controls."
+    },
+    "syntax": {
+      "status": "PASS_OWNER_REPORTED",
+      "scope": [
+        "capture.mjs",
+        "quiesce.mjs",
+        "retire.mjs"
+      ],
+      "note": "Owner message reports actual syntax checks; not independently executed, no unrecorded raw transcript is fabricated."
+    }
+  },
+  "limits": [
+    "This closes source-level harness findings; it does not claim successful A1/A2/A3 comparisons, quiescence observations, browser behavior or retirement before their actual receipts exist.",
+    "Observed snapshots and sampled cadence do not prove permanent silence or an exact Core/worker instruction instant.",
+    "Root is the designated browser actor and runtime owner controls restored target lifecycle; reviewer did not act on either.",
+    "Historical worker-stage FAIL_NOT_RETAINED remains unchanged; a fresh investigation cannot reconstruct its missing comparison.",
+    "No production source changes, original/source5190 mutations, native/engineering/human acceptance or Apply are established by this review."
+  ]
+}

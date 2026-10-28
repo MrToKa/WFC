@@ -1,0 +1,44 @@
+{
+  "schemaVersion": "pathfinder.current-inputs.source-review.v1",
+  "recordedAt": "2026-10-18T15:13:45Z",
+  "status": "NO_REMAINING_MATERIAL_FINDINGS",
+  "reviewer": "/root/pf_runtime_map",
+  "scope": "Independent static review of the frozen source-copy helpers and owner-provided control evidence; no original source-copy command or database connection executed by the reviewer.",
+  "source": [
+    {"path":"scripts/pathfinder-current-inputs/source-copy.mjs","sha256":"fd83907a49dd0dbf9d5680774a625f130a9f074f1c9cb48d07f69e010df8fdd3","bytes":16143},
+    {"path":"scripts/pathfinder-current-inputs/source-lib.mjs","sha256":"7e2b86d87da93b791912e56f9c8a552f7096dd4fa0304abc7cb3870fc8646fcd","bytes":21591},
+    {"path":"scripts/pathfinder-current-inputs/source-lib.test.mjs","sha256":"bc0a2df518e69db9ce02f7404e15f50deced9da1e4b830bc13b1af2f0434cb85","bytes":17558},
+    {"path":"scripts/pathfinder-current-inputs/README-source.md","sha256":"0b411f57abf1cc68e9e76beaa64de37e24abfd615821bb6b275b01f6cb316720","bytes":5321}
+  ],
+  "ownerSourceSetSha256": "0fa4a1cb148310f2c9c5f77ad6b62be60a3983aabb8253482c69d0df64de5ef6",
+  "sharedDependencyReviewed": {"path":"scripts/pathfinder-capacity/lib.mjs","sha256":"4a5eb36b44a60c5e4b4a736f1c113e3b6f3062145103b9e2574ccca940a8d58c","bytes":10276,"scope":"Canonical hashing and bounded UTF-8/duplicate-member/nonfinite JSON parsing only; existing capacity execution tools were not run."},
+  "closedFindings": [
+    {"id":"remote-exec-deadline","resolution":"The helper no longer relies on terminating the host Docker client to bound the remote Node process. A fixed 35-second in-container watchdog covers imports, Client connect, reads, rollback/end and awaited stdout completion; the metadata-only DNS probe has a 7-second internal watchdog. Host limits remain 45 and 10 seconds."},
+    {"id":"stdout-drain-deadline","resolution":"Generated copy and probe programs await stdout write completion before clearing their internal watchdog, including bounded sanitized failure output."},
+    {"id":"same-project-type-read","resolution":"Both the cable byte preflight and cable row query join cable_types by type ID and project ID. Non-null missing/foreign type joins are refused; an explicitly unresolved all-null triple remains distinct from normal e1ef NOT NULL schema state."},
+    {"id":"inherited-preload","resolution":"The two original-container helper exec commands clear NODE_OPTIONS only for their own process; no container environment/configuration change or environment-value disclosure is needed."}
+  ],
+  "reviewedGuards": [
+    "Closed Docker metadata projection excludes Config.Env; exact original backend/PostgreSQL ID, image, start time, network and published port are checked.",
+    "Private DATABASE_URL remains inside the original backend. The explicit Docker Desktop host-published route and SQL server address/port/database are verified before project SELECTs.",
+    "URI endpoint and option/file indirection are checked before parsing; only parsed pg config is passed, followed by fixed read-only startup options and timeouts, without connectionString reparsing.",
+    "Raw pg Client imports no application bootstrap. The transaction is repeatable-read/read-only, checks effective/default read-only state, and uses fixed SELECT/SET LOCAL/BEGIN/COMMIT/ROLLBACK statements.",
+    "Project UUID/name, active same-project model, converted fingerprint and exactly five pinned property-resource entries are fenced.",
+    "Cables use deterministic ordering, LIMIT 100001, row cap 100000 and conservative byte preflight before materializing text. Raw decimal strings, names, nulls, MTO and PostgreSQL timestamp microseconds are retained without defaults/category inference.",
+    "Exclusive owner-marked private outputs and readback hashes preserve raw phase bytes/failure metadata before validation; before/copy/after project/selection/model/cable comparisons are persisted before equality assertions.",
+    "Sanitized compact receipts contain no URI, credentials, query values, user records or business rows. External/unexplained projection changes fail closed without automatic retry."
+  ],
+  "ownerExecutedChecks": {
+    "receipt": {"path":"docs/pathfinder/evidence/current-inputs/source-controls-1792336375340.json","sha256":"7df4965cf0d1257d68e0692daa2a70f6458bfe0c805177423d6b71fd925bfee4"},
+    "nodeTest": {"pass":33,"fail":0,"executedBy":"source-copy owner, not reviewer","rawSha256":"27dc726a57b84f107694dab6261e6502b1ca0c3343808b2b4696207b5b6aa5ae"},
+    "nodeSyntax": {"pass":3,"executedBy":"source-copy owner, not reviewer"},
+    "reviewerVerification":"Current four source hashes, owner receipt hash and retained test-output hash match the provided evidence. Tests were read/referenced, not rerun."
+  },
+  "reviewerActions": {"testsExecuted":0,"sourceCopyCommandsExecuted":0,"databaseQueries":0,"containerOperations":0,"applicationEdits":0,"localReviewReceiptWrites":1},
+  "limitations": [
+    "This is a source-review closure, not a live original database/transaction/content PASS. Original SQL execution remains subject to the parent coordinator's release and the actual runtime guards.",
+    "Focused fake-Client controls and short no-DB watchdog child tests do not prove the original database's current data or state.",
+    "The copy checks only project, selection, model and cable projections. Wider original/container and isolated-primary preservation is a separate parent audit.",
+    "The V8 heap cap is not a total process-memory bound. Candidate matches do not establish geometry readiness, visibility, business category acceptance or engineering approval."
+  ]
+}

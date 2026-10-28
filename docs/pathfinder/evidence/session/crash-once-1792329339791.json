@@ -1,0 +1,131 @@
+{
+  "schemaVersion": "pathfinder.session.crash-once.v1",
+  "status": "FAIL",
+  "startedAt": "2026-10-18T13:15:35.111Z",
+  "targetProject": "wfc-pathfinder-local-bf1cba239f40",
+  "apiId": "3b02c809bac059ed210886766812ed002bfb89e95b3d18258875869b3a1c9284",
+  "image": "sha256:5cd3eca8f8a6972f038bd9766a8e5a68c1ac2cb59546d4ed96763c6de528c3f5",
+  "oldJobId": "2e7766ba-5053-4d7f-8669-83176ddfd2b4",
+  "scope": "One explicit new force job reusing exactly64 owned prior fixture cables. Parallel read-only SQL/process observations; no delay, lease edit or hidden calculation replay.",
+  "checks": [
+    {
+      "name": "mode-and-owner",
+      "status": "PASS"
+    },
+    {
+      "name": "exact-prior64-owned-cables",
+      "status": "PASS"
+    },
+    {
+      "name": "explicit-new-job",
+      "status": "PASS"
+    },
+    {
+      "name": "namespace-killed",
+      "status": "PASS"
+    },
+    {
+      "name": "actual-running-work-persisted",
+      "status": "FAIL"
+    }
+  ],
+  "cableIds": [
+    "01710140-6ae2-4b33-ac48-8630c09b1034",
+    "0b1db0b5-b4a4-4b4c-b016-a989827b2219",
+    "12434394-3bf8-4bc9-b4f2-fe0b5a658a28",
+    "12a8efed-fe6c-4929-b434-37dd9158981d",
+    "15b2c3a8-4d8d-4cf1-8724-2c689afc0886",
+    "15e3b5f5-4cad-42fc-aab7-88162e55d2ed",
+    "16d2a543-a561-49a2-884a-9857895b53ec",
+    "28224524-03dd-411c-9a42-e9df2140b804",
+    "2ac2d642-7040-4fc6-aac0-d83128daca1e",
+    "2f74e374-5e2e-460f-86a8-f4819076542d",
+    "3550d598-ee2b-46ce-ab7b-6b5c2397e647",
+    "3d44e9e1-538c-4455-bd64-cac8848b65a0",
+    "404fdeea-0fe9-4fc2-8fa0-bcb29c811b1a",
+    "423c61e1-f807-4997-a22f-391ba43d607a",
+    "43eea5b3-c073-4e2c-95c0-7db6f3da93f5",
+    "4768c9b5-baa8-4036-9473-67fc8360b08b",
+    "47e435a0-3208-4d9f-a2e3-cd25e5d7a083",
+    "4e24ef27-ad71-4053-8e71-4a1fc3ba6a6d",
+    "58ee8223-463f-4267-92fc-25e32690d132",
+    "5a3f1111-7dad-40bc-9ba0-f568af627273",
+    "5b1b78ed-44f6-45e8-b6d3-47939f11058b",
+    "5d1f06a6-562c-4e2a-8536-a4710b987908",
+    "60f611bf-9f42-482b-93ff-e062f5bdb796",
+    "62533834-24e0-4947-9534-c5a92ff768fe",
+    "679b24ef-ec88-414e-8f51-af21663f476a",
+    "6b45eeaa-81b1-48c7-9c44-229d6e063238",
+    "6c1dbf34-624f-45fb-9ca0-671caebf4564",
+    "7441bd94-64aa-4f57-81e8-1ccef5d83037",
+    "74636578-4406-4188-a6ed-523d570c6398",
+    "7a02d59f-7765-45c7-afcd-f2e4023a8919",
+    "7d27e66d-fdea-4aa9-be21-389389dd47b2",
+    "7e73e20c-6fe4-4021-8340-ea3b487a070a",
+    "83d72c56-6e24-485d-af1c-809de69660c9",
+    "84709e00-2952-46eb-bc1d-56fab8bb6bae",
+    "84d95d5f-fc33-49a7-9c76-c2da5452fbd6",
+    "877d7e7a-011e-4fd6-b462-3f0cf34aa065",
+    "896844e8-1c24-4b6a-9412-9be793c3332d",
+    "962db5f7-4a4c-4c5a-a96a-da153337bd26",
+    "98bef0be-2fa5-452b-a8ab-a5025f9427d6",
+    "9fd1e1b4-7a95-4117-8e9f-55505a590f9b",
+    "a3b3a40b-fe50-471c-bed4-21e5fb4e56e7",
+    "a7c43077-ca93-4ca9-a035-ddcc4a085477",
+    "a7f59955-1d2a-453c-804e-8a59e64ad22f",
+    "a8ce2fee-423a-4752-96ba-aa219b062625",
+    "a90d9da3-f910-4160-8540-e444ccaf0898",
+    "ab026562-b244-497a-88d0-d8321242db39",
+    "b852dd95-30e2-4284-9d9c-2bf2d2b5475f",
+    "bc3cfdf0-478c-40e8-a697-f8a2d70547a2",
+    "bc88fa2a-2fcc-4244-bd78-f9514684b6a7",
+    "be18dabc-65e3-4d85-bc1e-f57ad6f1549c",
+    "d3f1a337-f3be-4496-8a6b-c0942a1d44e8",
+    "d964e4ee-4636-4ab8-8034-19cce8cea754",
+    "d98746cd-379a-448e-afcb-f875ece7cd65",
+    "df3af5b1-92ba-4242-85a8-eff3f50544e7",
+    "e1e18e20-1e23-44cf-8919-b4129f2938d2",
+    "e55ab530-d13d-4ce0-89a9-54a2c8714168",
+    "e858bef7-b16d-4ef1-9558-0bebcd75fc17",
+    "ec1ed2f1-d3d0-4af8-ac97-a66d810624c2",
+    "ee044471-4627-443e-ae33-3d2e34914f78",
+    "f0c8c773-736d-4131-b036-15d151b8dbb8",
+    "f35a2844-bb0a-4fec-8e60-c371ae1efa33",
+    "f602c37a-ec42-4124-ab06-69aec83af363",
+    "f9843027-6a64-46a6-9889-ae4d76e678eb",
+    "fca70111-91e6-4b56-98a8-cb6830f6c5c3"
+  ],
+  "jobId": "7fbf7529-8cb0-467e-a519-e77271ac87c3",
+  "observed": {
+    "job": {
+      "state": "running",
+      "completed": 0,
+      "total": 64,
+      "attempts": 1,
+      "runningItems": 1
+    },
+    "processes": [
+      {
+        "pid": 50741,
+        "parentPid": 37623,
+        "command": "dotnet"
+      },
+      {
+        "pid": 50749,
+        "parentPid": 50741,
+        "command": "dotnet"
+      }
+    ],
+    "checkedAt": "2026-10-18T13:15:37.693Z"
+  },
+  "persistedAtCrash": {
+    "state": "running",
+    "completed": 4,
+    "total": 64,
+    "attempts": 1,
+    "runningItems": 0
+  },
+  "error": "SESSION_CRASH_ACTUAL_RUNNING_WORK_PERSISTED",
+  "durableCancelStatus": 200,
+  "finishedAt": "2026-10-18T13:15:39.791Z"
+}

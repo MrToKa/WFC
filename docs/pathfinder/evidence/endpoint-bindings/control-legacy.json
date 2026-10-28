@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "wfc.pf.endpoint-control-receipt.v1",
+  "phase": "legacy",
+  "phaseIntentId": "8a8cca53-f690-4c4a-8037-7ded44d19210",
+  "recordedAtUtc": "2026-10-19T03:11:22.897Z",
+  "status": "PASS",
+  "elapsedMilliseconds": 51.973689,
+  "checks": [
+    {
+      "name": "Atomic explicit shared location/head confirmation",
+      "status": "PASS",
+      "scope": "actual production repository and PostgreSQL; no cable Apply or frame qualification"
+    }
+  ],
+  "preservationSha256": "262209c85922ae83a1b9b3c252f66c9e7a8153d84e2e85cfc05da33a36c1292a",
+  "cableApply": "NOT_PERFORMED",
+  "nativeParity": "NOT_PERFORMED",
+  "engineeringAcceptance": false
+}

@@ -1,0 +1,168 @@
+{
+  "schemaVersion": "wfc.pathfinder.aalborg-real-input-checks.v1",
+  "status": "EXECUTED_WITH_UNRESOLVED_ROUTE_LIMIT",
+  "installedApiImage": "sha256:a43cac0dce21c81760c865f5cce81b774a07ecb3aa0f15963b530afe20c152dd",
+  "scope": "Actual packaged native supervisor on unchanged retained Aalborg planning snapshot, latest retained endpoints and28 original wall/floor objects; offline frame only.",
+  "geometry": {
+    "objects": 28,
+    "vertices": 4790,
+    "triangles": 3789,
+    "surfaces": 3,
+    "closedSolids": 25,
+    "originalCaptureSha256": "9dcf2027d175de5a761a582d7be493441458ea9cda7f5449c1f3f058440a7a45",
+    "derivedCaptureSha256": "5e508559c990ef6477efc0c35d06c04a95c20c14662b6c30f359ad1f29fc32f6",
+    "snapshotSha256": "27f8cf8c352b8847b778f764ce942aa0bb61ebfab16aeb993c0a83bd100c38e2"
+  },
+  "coordinateComparison": {
+    "toleranceMetres": 0.1,
+    "inclusive": true,
+    "witnesses": 8,
+    "maximumEuclideanUpperBoundMetres": 8.098227944691265e-7,
+    "collisionToleranceChanged": false
+  },
+  "cases": [
+    {
+      "cableTag": "=L2=LC1=WGB1",
+      "cableId": "0004aa3a-229e-4d7b-8ae7-a2b25881aa84",
+      "drillThroughWalls": false,
+      "runnerStatus": "calculated",
+      "message": "Path calculated.",
+      "designLengthMetres": "30",
+      "finalSegmentCount": 39,
+      "runnerBarrierStatus": "clear-selected-scope",
+      "checkedSegments": 39,
+      "collisionQueries": 5035,
+      "independentStatus": "NO_EXACT_CONTACT_OR_CLOSED_TOPOLOGY_CONTAINMENT_DETECTED",
+      "contactSegments": [],
+      "processJoined": true,
+      "helperRemoved": true,
+      "elapsedMilliseconds": 11855.196875000001,
+      "requestSha256": "5f8e9bdaac49b11816dbaf7cf0444d68a61264ec467882ad99452130b4194e40",
+      "responseSha256": "20c0b98e59846ce77b00c0e3a21af8bf4f9429a58633c397227bb1b3caff1e58",
+      "processSha256": "d43c1c62d892bbbfc1ba1830769867c2c2dc3a080dc241456d4b4465c14839fe"
+    },
+    {
+      "cableTag": "=L2=LC1=WGB1",
+      "cableId": "0004aa3a-229e-4d7b-8ae7-a2b25881aa84",
+      "drillThroughWalls": true,
+      "runnerStatus": "calculated",
+      "message": "Path calculated.",
+      "designLengthMetres": "30",
+      "finalSegmentCount": 39,
+      "runnerBarrierStatus": "bypassed",
+      "checkedSegments": 0,
+      "collisionQueries": 0,
+      "independentStatus": "NO_EXACT_CONTACT_OR_CLOSED_TOPOLOGY_CONTAINMENT_DETECTED",
+      "contactSegments": [],
+      "processJoined": true,
+      "helperRemoved": true,
+      "elapsedMilliseconds": 9578.490096000001,
+      "requestSha256": "5421b85025d39aeafb74171c1de9eabb405ca1bb65ae713bddb9cb42d6a27817",
+      "responseSha256": "5dd248cd6747341fe1345f858fba02bf04291cf2c489de16d2c365a00320641c",
+      "processSha256": "55159fb1879ac7b106d60f8b2d632928b433f8848dfd28dff615d650b057a22e"
+    },
+    {
+      "cableTag": "=H1=KF1=TAC1=WGA1",
+      "cableId": "e358f983-8104-4a5a-bb42-56e001b44c82",
+      "drillThroughWalls": false,
+      "runnerStatus": "resource_limit",
+      "message": "Constrained route search is incomplete: COLLISION_QUERY_LIMIT.",
+      "designLengthMetres": null,
+      "finalSegmentCount": 0,
+      "runnerBarrierStatus": null,
+      "checkedSegments": null,
+      "collisionQueries": 100000,
+      "independentStatus": "NO_SUCCESSFUL_FINAL_POLYLINE",
+      "contactSegments": [],
+      "processJoined": true,
+      "helperRemoved": true,
+      "elapsedMilliseconds": 12545.849726,
+      "requestSha256": "d7010214cee4eddfd9978b23830ead4d22fbabebb9dee30636d73badec6a2c87",
+      "responseSha256": "101e29db4ac5eec22fab0a14c650a39a3ad668d16dd6b18426ac642fdfb9e7bb",
+      "processSha256": "a200411c1770dfa62ec4eb2d4dbfc811225d5421fcc1d48e7b100d2a0d8ce104"
+    },
+    {
+      "cableTag": "=H1=KF1=TAC1=WGA1",
+      "cableId": "e358f983-8104-4a5a-bb42-56e001b44c82",
+      "drillThroughWalls": true,
+      "runnerStatus": "calculated",
+      "message": "Path calculated.",
+      "designLengthMetres": "90",
+      "finalSegmentCount": 237,
+      "runnerBarrierStatus": "bypassed",
+      "checkedSegments": 0,
+      "collisionQueries": 0,
+      "independentStatus": "BYPASS_ROUTE_HAS_GEOMETRY_CONTACT_OR_CONTAINMENT",
+      "contactSegments": [
+        {
+          "segmentIndex": 62,
+          "contacts": 2,
+          "fragments": [
+            442
+          ]
+        },
+        {
+          "segmentIndex": 198,
+          "contacts": 2,
+          "fragments": [
+            851
+          ]
+        }
+      ],
+      "processJoined": true,
+      "helperRemoved": true,
+      "elapsedMilliseconds": 11192.392232,
+      "requestSha256": "c38c3023c8d0753a59cc29af7d4ed9e55febfd8e2faa7e74fc22929f894ddcae",
+      "responseSha256": "5dcdffa9baf2f8e7db24f2517a1cd49d99d15e3b10ea8bad80c044104d1855b0",
+      "processSha256": "23fb41ae4795f8649f94be9832a86fa33c8782ff0918418b93f3da9d263ad7c1"
+    }
+  ],
+  "independentAnalyticChecks": {
+    "executedCases": 11,
+    "status": "PASS",
+    "scope": "analytic exact-contact/opening/occupancy cases only; no actual model result inferred"
+  },
+  "openingAndCrossingProbes": [
+    {
+      "kind": "floor",
+      "fragmentId": 11,
+      "solidContactCount": 4,
+      "openingCandidateContactCount": 0,
+      "openingCandidateBasis": "source-contact-bracketed-gap-in-two-projected-directions",
+      "physicalOpeningOrCableClearanceCertified": false
+    },
+    {
+      "kind": "wall",
+      "fragmentId": 391,
+      "solidContactCount": 2,
+      "openingCandidateContactCount": null,
+      "openingCandidateBasis": "not-found-within-bounded-candidates",
+      "physicalOpeningOrCableClearanceCertified": false
+    }
+  ],
+  "proofs": [
+    {
+      "name": "native-routes-ea844356-90ea-478f-a5d2-62755bc3cfbf/result.private.json",
+      "bytes": 7512,
+      "sha256": "299b5a3972471a7b13d2f7eddfdb41254c347df6d20649a05824b62bbecd7813"
+    },
+    {
+      "name": "crossings-b72244cb-f33e-4b96-91d2-ed673dd26545/result.private.json",
+      "bytes": 202698,
+      "sha256": "bcb139ad87291e33aa77d6cb3b064c1a802042dcbcd29beaaca79765ad4927d1"
+    },
+    {
+      "name": "coordinate-corroboration-2dddc9de-a973-4d67-93f5-646ed766d3dc/result.private.json",
+      "bytes": 9414,
+      "sha256": "93f2076b263277de85c3193b1e4b5e25a7d58209607dc0905378f08717412354"
+    }
+  ],
+  "allHelpersRemoved": true,
+  "sourceInputBookends": "PASS",
+  "sdkExecuted": false,
+  "liveFrameCurrentness": false,
+  "realCableApply": false,
+  "publicationAuthority": false,
+  "engineeringAccepted": false,
+  "remaining": "H1 drilling-OFF reaches the unchanged100000 collision-query bound; repeated graph-edge checks are being addressed. Own-terminal and whole-model capacity remain separate."
+}

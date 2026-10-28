@@ -1,0 +1,157 @@
+{
+  "schemaVersion": "pathfinder.batched-capture.independent-source-review.v1",
+  "observedAt": "2026-10-18T16:23:23.570Z",
+  "status": "PASS_SOURCE_REVIEW",
+  "branch": "pf-3-batched-capture-local-20261018",
+  "baseRevision": "6761cb76df79392befba6ace1c4d8c685b36cfdd",
+  "reviewer": "/root/addon_tabs_map",
+  "scope": "Read-only integration/source review of bounded staged capture, controller, root hook, durable scope validation and the two authorized review fixes.",
+  "sources": [
+    {
+      "path": "viewer-runtime/capture-input.mjs",
+      "bytes": 12302,
+      "sha256": "8996f8cbe65568cc7be54009076f483b7abd351b521e8ccd3df228af58728bad"
+    },
+    {
+      "path": "viewer-runtime/protocol.mjs",
+      "bytes": 17718,
+      "sha256": "10aa6fa5d3073f9b5b598fe08c98f5b2e029f4e1a13da41c3d0b8c9d065c43e2"
+    },
+    {
+      "path": "viewer-runtime/adapter.mjs",
+      "bytes": 16023,
+      "sha256": "e4cb8701ecd31da21753e4d23e7b3ac1490448c4a5aac58e75f2f8323e5923d6"
+    },
+    {
+      "path": "viewer-runtime/bridge.mjs",
+      "bytes": 23978,
+      "sha256": "0bddfb106172a6eb4e2f82f205d60610ba3caf7365948fc2f644f2eeba335907"
+    },
+    {
+      "path": "viewer-runtime/model-capture.mjs",
+      "bytes": 47995,
+      "sha256": "c0d96718910f42d4330cba15cd012d806da72a36be75e7cb38f8d27af340cf6b"
+    },
+    {
+      "path": "src/viewer/ViewerController.ts",
+      "bytes": 34142,
+      "sha256": "fda7c68b1b15d79101a9cf926c14e25baca967eceb36aa7bc880bcfd47a77eba"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderRoutes.tsx",
+      "bytes": 16002,
+      "sha256": "2e716bf15d7406a2c310c2f63721777aeff173e1e0a78a7a0a990dc8c0348160"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/usePathFinder.ts",
+      "bytes": 21593,
+      "sha256": "ab4cb8ff2bd60158b53b993403888661039d3ceb47d3a0632b45638539a464cd"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderTab.tsx",
+      "bytes": 28582,
+      "sha256": "28296846d3bb5f10d79e7fe7a753d1df58147cdae8673addce86ea8e09a2f89b"
+    },
+    {
+      "path": "src/api/pathfinder.ts",
+      "bytes": 15133,
+      "sha256": "8e9270ad276d7d466ca21f56dbd233f49c76b12eab1847214f2cdd98e946e171"
+    },
+    {
+      "path": "server/pathfinder/contracts.ts",
+      "bytes": 8304,
+      "sha256": "9cafa21c55973998d951de38687f91eafcf4a42c1fee0a2d703d7394c744f3f5"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Model/Contracts.cs",
+      "bytes": 6603,
+      "sha256": "86efb3515ab9816aa20d20ea10cc5b49fae5bd3d8e51f5e816c810a211394c15"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Model/SnapshotReader.cs",
+      "bytes": 19940,
+      "sha256": "7ed1837401dbcdb68a355bc0ee53ac7fc03e6b7b965eb73d078db4719af68fab"
+    },
+    {
+      "path": "viewer-runtime/test/adapter.test.mjs",
+      "bytes": 20288,
+      "sha256": "f0f87f91de8a5d06ff4dbc23eb61592e07be107ba2f466aeb844b1c176b7ca43"
+    },
+    {
+      "path": "viewer-runtime/test/bridge.test.mjs",
+      "bytes": 37819,
+      "sha256": "1b39b87d5e78d63bf0517e5cb07a8ef3c43c94de5b691b1e776e7b538ea20933"
+    }
+  ],
+  "inputs": [
+    {
+      "path": "docs/pathfinder/handoffs/PF-3-batched-capture.md",
+      "bytes": 6838,
+      "sha256": "d3a6001ca0da15c9d53da8655adf59301241fa9a688daa86c31851b8585cd039"
+    },
+    {
+      "path": "docs/pathfinder/evidence/batched-capture/runtime-review-fixes-1792340539786.json",
+      "bytes": 8953,
+      "sha256": "8561928ffea560d28c870961a11b0dfe09c7fab61cfd0dcdef8779af3fe0ebdd"
+    },
+    {
+      "path": "docs/pathfinder/evidence/batched-capture/runtime-review-final-1792340601.tap",
+      "bytes": 25315,
+      "sha256": "306c72dbb75e0bd4b3d0ea9cd4951d408518256b33d9287ad18c219828d51eff"
+    }
+  ],
+  "findings": [
+    {
+      "id": "operation-owned-cleanup",
+      "status": "RESOLVED",
+      "originalAnchors": [
+        "viewer-runtime/adapter.mjs:194",
+        "viewer-runtime/adapter.mjs:209"
+      ],
+      "closure": "Both deferred error paths cancel only if the captured A state still owns the collector. Replacement B retains its timer, chunks and output; the SDK/digest regressions exercise both paths."
+    },
+    {
+      "id": "overall-authority-window-deadline",
+      "status": "RESOLVED",
+      "anchors": [
+        "viewer-runtime/bridge.mjs:43",
+        "viewer-runtime/bridge.mjs:49",
+        "viewer-runtime/bridge.mjs:59",
+        "viewer-runtime/bridge.mjs:129",
+        "viewer-runtime/bridge.mjs:145",
+        "viewer-runtime/adapter.mjs:236"
+      ],
+      "closure": "The private bridge scope starts before initial authorization, propagates the original start to the adapter and stays guarded through final authorization/publication. Timeout and cleanup are scope-owned: expired A checks captureScope===A before clearing the handle; releaseCapture(A) never clears the B pointer; replacement/Clear/load/cancel abort and release their actual scopes."
+    }
+  ],
+  "remainingMaterialFindings": [],
+  "reviewedInvariants": [
+    "Closed directional messages and complete UTF-8 envelope <=65536 bytes; <=4096 names,16 chunks,256 names per chunk and1MiB aggregate input.",
+    "START ACK plus chunk ACKs plus output share3000 responses; capture admission reserves the unchanged4096 replay map.",
+    "No extraction before all staged input digests, count, order and duplicate checks complete; output summary closes against the frozen request and descriptor.",
+    "Original300s covers initial authorization, input collection, generator and final authorization; SDK callbacks retain independent45s and abort/identity checks.",
+    "Indexed/attempted/returned/omitted property rows are durably distinguished; incomplete scans report unknown endpoint absence/uniqueness and never grant native or engineering proof.",
+    "Current model/load/generation/admin authorization and pre-upload server/UI dependency fences remain in place. Accepted in-flight snapshot uploads deliberately retain authoritative identity and dirty-scope notices.",
+    "Legacy lookup remains independent, un-staged and cannot carry planning inputScope; old snapshots may omit inputScope."
+  ],
+  "verification": {
+    "testsExecutedByReviewer": 0,
+    "buildsExecutedByReviewer": 0,
+    "databaseQueriesByReviewer": 0,
+    "runtimeOperationsByReviewer": 0,
+    "productSourceEditsByReviewer": 0,
+    "evidenceFilesCreatedByReviewer": 1,
+    "attributedOwnerChecks": {
+      "receipt": "docs/pathfinder/evidence/batched-capture/runtime-review-fixes-1792340539786.json",
+      "finalRuntimeTests": 101,
+      "pass": 101,
+      "fail": 0,
+      "raw": "docs/pathfinder/evidence/batched-capture/runtime-review-final-1792340601.tap",
+      "attribution": "Read recorded owner results and relevant regression source; not independently rerun. Historical two2-case pre-fix failures and intermediate invalid fixture remain retained."
+    }
+  },
+  "limits": [
+    "Source review is not browser/runtime deployment, original data preservation or engineering acceptance proof.",
+    "No full-plant capture/capacity, real endpoint matches, native parity or new Apply acceptance claim."
+  ]
+}

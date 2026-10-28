@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "status": "ABANDONED",
+  "recordedAtUtc": "2026-10-18T08:54:55.879Z",
+  "scope": "Optional retirement of the negligible old private companion was withdrawn by parent steering before any deletion.",
+  "sourceRestoredTo": "cb02f43000a51b4f511346d2aa666d09929570e0",
+  "optionalChecks": {
+    "passed": 21,
+    "total": 22,
+    "failedName": "private retirement refuses symlinks instead of following another credential file",
+    "failureCode": "EPERM",
+    "reason": "Windows session could not create the added file-symlink test fixture. This is not an automatic approval denial or a new denied deletion directory."
+  },
+  "restoredFiles": [
+    {
+      "file": "scripts/pathfinder-local/cleanup-obsolete.mjs",
+      "sha256": "739f5dbd3de238305a15260bbfd5ab1b7927737208cc626131cf5d71c21945e4",
+      "matchesCheckpoint": true
+    },
+    {
+      "file": "scripts/pathfinder-local/runtime.test.mjs",
+      "sha256": "029217c3e650cad02fd36e389433d2637f8cd0bf523bf131622747772ad0a753",
+      "matchesCheckpoint": true
+    }
+  ],
+  "cleanupExecuted": false,
+  "limits": [
+    "No passing optional-extension suite is claimed.",
+    "Original19-control frozen cleanup remains the selected implementation; the small old private companion is retained."
+  ]
+}

@@ -1,0 +1,139 @@
+{
+  "schemaVersion": "wfc.pf.floating-cable-windows.v1",
+  "recordedAt": "2026-10-21T06:25:54.833Z",
+  "branch": "pf-floating-cable-windows-local-20261021",
+  "sourceRevision": "8eed67c996352ece4ef207b039328aa1d2166fc0",
+  "files": [
+    "src/components/pathfinder/PathFinderCableRoutingPanel.test.tsx",
+    "src/components/pathfinder/PathFinderCableRoutingPanel.tsx",
+    "src/components/pathfinder/PathFinderCableWorkspace.test.tsx",
+    "src/components/pathfinder/PathFinderCableWorkspace.tsx",
+    "src/components/pathfinder/PathFinderNeedsRoutingList.test.tsx",
+    "src/components/pathfinder/PathFinderNeedsRoutingList.tsx",
+    "src/hooks/useFloatingCablePanel.test.tsx",
+    "src/hooks/useFloatingCablePanel.ts",
+    "src/pages/ProjectDetails/CableInformationPanel.test.tsx",
+    "src/pages/ProjectDetails/CableInformationPanel.tsx",
+    "src/pages/ProjectDetails/PathFinderResults.test.tsx",
+    "src/pages/ProjectDetails/PathFinderResults.tsx",
+    "src/pages/ProjectDetails/RoutingsViewerTab.test.tsx",
+    "src/pages/ProjectDetails/RoutingsViewerTab.tsx",
+    "src/pages/ProjectDetails/hooks/useCableInformationPanel.test.ts",
+    "src/pages/ProjectDetails/hooks/useCableInformationPanel.ts"
+  ],
+  "checks": {
+    "status": "PASS",
+    "passed": 399,
+    "failed": 0,
+    "pending": 0,
+    "suites": [
+      {
+        "file": "src/hooks/useCableEndpointPairSelection.test.tsx",
+        "passed": 21
+      },
+      {
+        "file": "src/hooks/useCableEndpointSelection.test.tsx",
+        "passed": 77
+      },
+      {
+        "file": "src/hooks/useFloatingCablePanel.test.tsx",
+        "passed": 14
+      },
+      {
+        "file": "src/components/pathfinder/PathFinderCableRoutingPanel.test.tsx",
+        "passed": 25
+      },
+      {
+        "file": "src/components/pathfinder/PathFinderCableWorkspace.test.tsx",
+        "passed": 23
+      },
+      {
+        "file": "src/components/pathfinder/PathFinderNeedsRoutingList.test.tsx",
+        "passed": 13
+      },
+      {
+        "file": "src/pages/ProjectDetails/CableInformationPanel.test.tsx",
+        "passed": 14
+      },
+      {
+        "file": "src/pages/ProjectDetails/PathFinderResults.test.tsx",
+        "passed": 80
+      },
+      {
+        "file": "src/pages/ProjectDetails/PathFinderTab.test.tsx",
+        "passed": 57
+      },
+      {
+        "file": "src/pages/ProjectDetails/RoutingsViewerTab.test.tsx",
+        "passed": 30
+      },
+      {
+        "file": "src/pages/ProjectDetails/hooks/useCableInformationPanel.test.ts",
+        "passed": 45
+      }
+    ],
+    "receiptSha256": "aa6d78f2ccd041bbf728b98e591d870b01f36885162b2e9f2ad71b028e51ac05",
+    "clientTypes": "PASS",
+    "changedFileLint": "PASS",
+    "diffCheck": "PASS",
+    "independentSourceReview": "PASS_AFTER_HISTORY_SHOW_CORRECTION"
+  },
+  "deployment": {
+    "status": "PASS",
+    "at": "2026-10-21T06:24:09.481Z",
+    "operatorSha256": "59a2bcd1bb65ebbcf1acb14870ddd1c01e51e424987732c994889e4074145491",
+    "sourceRevision": "8eed67c996352ece4ef207b039328aa1d2166fc0",
+    "priorWebImage": "sha256:1e52058136d3500488d48e3dd253b12cd56d1ebdb337281abf81510b5486756d",
+    "newWebImage": "sha256:a6f80c989013aab71bc4a653470266d4a19c4845bd43fa82aa83f1c1fabcf8ac",
+    "newWebContainer": "68ed8cb9a2ccf20260e48e2f16b12f450ec2b816445aed93e601543865e3c680",
+    "apiImage": "sha256:3476333e9163d1f251f0eb5ddee67d4fe776af6c73e4f3c57e1ebd85ca443166",
+    "apiUnchanged": true,
+    "postgresUnchanged": true,
+    "minioUnchanged": true,
+    "nonWebIdentityPreserved": true,
+    "externalProcessStateChangesObserved": true,
+    "servedRuntimeSha256": "bf4c8f76e63a04d6f08c0a618238bb5a417219433df1fc7700072363340e06a8",
+    "servedAdapterSha256": "21469bc088a33d3a3fb28a5a2d9e25b8b07cada9d5f7ff3894d877c7fd8eaadc",
+    "nativeWindowBrowserAcceptance": "NOT_RUN_SAVED_ORIGIN_REFUSAL",
+    "popupBundle": "ProjectDetails-Fao1jYGd.js",
+    "assignBundle": "ProjectDetails-Fao1jYGd.js",
+    "healthStatus": 200,
+    "browserAcceptance": "NOT_RUN_SAVED_ORIGIN_REFUSAL",
+    "databaseAndModelWrites": "NONE",
+    "rollback": {
+      "bytes": 55297024,
+      "sha256": "f2e75bea8e10c5b1656f214322bca9025441fd013de8bb855dd8e49a9e87c998"
+    }
+  },
+  "buildLogSha256": "79f616e25c1d30f9f0a2c9757cd6bda09dcbb98869bf49e51d04891875021404",
+  "scope": "static web only; existing 5191 web service recreated, API/PostgreSQL/MinIO unchanged",
+  "browser": {
+    "status": "BLOCKED",
+    "reason": "Existing saved origin refusal; no unchanged retry or alternate browser/native/CDP bypass.",
+    "nativePopupAndSecondMonitor": "NOT_RUN",
+    "realAalborgReread": "BLOCKED",
+    "engineeringAcceptance": "NOT_RUN"
+  },
+  "original": {
+    "localBranch": "main",
+    "localCommit": "96e63f13fdc2b1d30b8f8ff658dd662f25fac104",
+    "localStatus": "CLEAN_OBSERVED",
+    "changesByThisTask": "NONE",
+    "externalRestartingBackendObserved": true
+  },
+  "remote": {
+    "mainObservedThisTurn": "96e63f13fdc2b1d30b8f8ff658dd662f25fac104",
+    "openPrForThisLocalBranch": 0,
+    "localFeaturePublished": false,
+    "localFeatureRemoteCi": "NOT_RUN"
+  },
+  "cleanup": {
+    "disposableContainersCreated": 0,
+    "testVolumesCreated": 0,
+    "ownRootScratchOutputsMovedToIgnoredEvidence": true,
+    "deniedPathsAndParentsUntouched": true,
+    "generalPrune": false,
+    "retained": "Active demo, prior web image and fresh rollback tar/private runtime metadata, existing U8 database/model archives and evidence"
+  },
+  "pending": "Actual browser checks in PF-U7-floating-cable-windows-browser-check.md; Simplified Preparer remains sequenced after required PF checks."
+}

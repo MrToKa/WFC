@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "pathfinder.copied-recovery.phase-proof.v1",
+  "status": "PASS",
+  "phase": "backup-qualified",
+  "drillId": "e09d28fa-580f-484a-a7f7-ac8b8a00cee7",
+  "sourceOwner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+  "recordedAt": "2026-10-18T18:07:52.872Z",
+  "backupId": "b77a1ed0-2fa2-48a3-92f8-207a60b2035e",
+  "adjunctVerified": true,
+  "sourceHealthy": true,
+  "receipts": [
+    {
+      "role": "backup",
+      "path": "docs/pathfinder/evidence/copied-recovery/drill-1792346855507-3c0a7ebd.json",
+      "sha256": "82b6f1af01e1da8ffbfbb9b1bdcbaa09a9d24b6f02c4a31177fc9412ea7ddcc6"
+    },
+    {
+      "role": "source-auth-check",
+      "path": "docs/pathfinder/evidence/copied-recovery/auth-source-1792346855541.json",
+      "sha256": "8f079be10f8861af421fd23bb9756701b245b0e0369aa7cc2f7d276b358abcc6"
+    },
+    {
+      "role": "adjunct",
+      "path": "docs/pathfinder/evidence/copied-recovery/provenance-1792346857384-e21ef6e0.json",
+      "sha256": "e0d09e87ffa749d0417701df0917abd863a2376786bfb7e77fbd6e30761abc69"
+    }
+  ]
+}

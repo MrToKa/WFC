@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "pathfinder.purpose-policy.build.v1",
+  "status": "PASS",
+  "images": {
+    "api": "sha256:e126ee87d59511a36a11302c300204850c501c695eb4f28e6899ee4401595947",
+    "web": "sha256:81453dbe442b5e10228dccd41f6b81445b4139bd9c5bacc6f28cefb316736fef"
+  },
+  "tags": {
+    "api": "wfc-pathfinder-api:8fffd6b8c896-mveeopps",
+    "web": "wfc-pathfinder-web:8fffd6b8c896-mveeopps"
+  },
+  "sourceOwner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+  "project": "wfc-pathfinder-local-0cba87606e9b",
+  "port": 5191,
+  "finishedAt": "2026-10-18T22:37:59.883Z"
+}

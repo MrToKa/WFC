@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "pathfinder.delivery.document-audit.v1",
+  "observedAtUtc": "2026-10-18T02:44:05.4954943Z",
+  "baseCommit": "03db8f7b557c1afcf05c18b81e704119db459503",
+  "branch": "pf-8-delivery-local-20261018",
+  "documents": [
+    "docs/pathfinder/03-stage-report.md",
+    "docs/pathfinder/04-stage-report.md",
+    "docs/pathfinder/05-stage-report.md",
+    "docs/pathfinder/06-stage-report.md",
+    "docs/pathfinder/07-stage-report.md",
+    "docs/pathfinder/08-stage-report.md",
+    "docs/pathfinder/08-local-user-guide.md",
+    "docs/pathfinder/runtime/README.md",
+    "docs/pathfinder/handoffs/PF-2-resume-native-validation.md",
+    "docs/pathfinder/handoffs/PF-3.md",
+    "docs/pathfinder/handoffs/PF-4.md",
+    "docs/pathfinder/handoffs/PF-5.md",
+    "docs/pathfinder/handoffs/PF-6.md",
+    "docs/pathfinder/handoffs/PF-7.md",
+    "docs/pathfinder/handoffs/PF-8.md"
+  ],
+  "localLinksChecked": 24,
+  "missing": [],
+  "status": "PASS",
+  "scope": "local-document-link-existence;not-engineering-acceptance"
+}

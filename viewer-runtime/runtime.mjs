@@ -13,7 +13,7 @@ if (!bootstrap || window.parent === window) {
     for (const [key, value] of Object.entries(facts)) evidence.dataset[key] = String(value);
   } });
   const bridge = createRuntimeBridge({ window, bootstrap, adapter, onState(state) {
-    status.textContent = state.phase === 'loaded' ? 'The model and its identifiers are loaded.' : state.phase === 'route' ? `Drawable segments: ${state.drawableCount}; lines: ${state.lineCount}.` : state.phase === 'disposed' ? 'The viewer has been closed.' : state.phase === 'error' ? 'The viewer stopped because of an error.' : 'Preparing the local viewer…';
+    status.textContent = state.phase === 'loaded' ? 'The model and its identifiers are loaded.' : state.phase === 'route' ? `Drawable segments: ${state.drawableCount}; lines: ${state.lineCount}.` : state.phase === 'disposed' ? 'The viewer has been closed.' : state.phase === 'error' ? `Viewer operation failed: ${state.operation ?? 'viewer'} (${state.code ?? 'UNKNOWN'}).` : 'Preparing the local viewer…';
   } });
   window.addEventListener('pagehide', () => bridge.dispose(), { once: true });
 }

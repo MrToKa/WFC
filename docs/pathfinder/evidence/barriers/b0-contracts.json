@@ -1,0 +1,47 @@
+{
+  "stage": "PF-B0",
+  "scope": "New independent barrier contracts only; production routing/capture/registry not integrated",
+  "baseline": "57d2694899c1e046cbe38037600df61fbbae21b1",
+  "realModelChecks": "NOT_RUN",
+  "runtimeChanges": "NONE",
+  "tests": {
+    "success": true,
+    "passed": 58,
+    "failed": 0,
+    "files": 1
+  },
+  "sourceCore11": "UNCHANGED",
+  "remote": {
+    "retrievedAt": "2026-10-21T10:06:26.347Z",
+    "ci": "NOT_RUN_UNPUBLISHED",
+    "main": "96e63f13fdc2b1d30b8f8ff658dd662f25fac104",
+    "featurePr": "NONE_RETURNED"
+  },
+  "capacity": "DECLARED_NOT_QUALIFIED",
+  "branch": "pf-w0-barrier-contracts-local-20261021",
+  "checkedFiles": [
+    {
+      "path": "shared/pathfinderBarriers.ts",
+      "sha256": "0b0b3b59e955cb8d4da14c7b904f948701dd676cfd1df8b656355c7324703676"
+    },
+    {
+      "path": "shared/pathfinderBarriers.test.ts",
+      "sha256": "af1058dc0b11ba06c0361bff42d682989cb7a8dc2a2fef2a2f920f7152a33870"
+    }
+  ],
+  "automation": {
+    "id": "path-finder-purpose-rules-and-model-revisions",
+    "scope": "PF-B0-B9",
+    "status": "ACTIVE",
+    "sameThread": true
+  },
+  "at": "2026-10-21T10:15:08.3990264Z",
+  "initialFailure": "Collection/type error from ZodEffects.max; repaired, initial receipt retained",
+  "validation": {
+    "serverTypes": "PASS",
+    "diffCheck": "PASS",
+    "clientTypes": "PASS",
+    "status": "PASS",
+    "changedFilesStrictLint": "PASS"
+  }
+}

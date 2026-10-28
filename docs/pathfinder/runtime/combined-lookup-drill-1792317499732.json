@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS",
+  "checkedAt": "2026-10-18T09:55:33.519Z",
+  "scope": "Same-host cold isolated PF database/MinIO/staging/artifact/images restore with actual Viewer cookie and JWT positive/negative controls. Retained dedicated real lookup readback and verified restore-target retirement.",
+  "backupId": "3db9fa33-c10e-4646-82bc-fe99f3d8af35",
+  "backup": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\path-lookup-archive-462d5a9465e8",
+  "sourceProject": "wfc-pathfinder-local",
+  "targetProject": "wfc-pathfinder-local-50fae7c4061f",
+  "targetRuntime": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pathfinder-local-restore-50fae7c4061f",
+  "sourceImages": {
+    "api": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+    "web": "sha256:1895a3fa33c25933024ab514ef61bd2d1568ffb33477d114541b855da65445b7"
+  },
+  "targetImages": {
+    "api": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+    "web": "sha256:1895a3fa33c25933024ab514ef61bd2d1568ffb33477d114541b855da65445b7"
+  },
+  "restore": {
+    "backupId": "3db9fa33-c10e-4646-82bc-fe99f3d8af35",
+    "artifactsSha256": "afce4f71413a8180f0af705c92e938b6f2af43f24687ab34a2d0f374d4cd1ce1",
+    "jwtRotated": true,
+    "sessionsFenced": true,
+    "inventoriesEqual": true
+  },
+  "crashRecovery": {
+    "status": "NOT_RUN",
+    "reason": "Explicitly omitted by operator."
+  },
+  "previewRecovery": {
+    "status": "NOT_RUN",
+    "reason": "Explicitly omitted by operator."
+  },
+  "checks": {
+    "sourceCookieBefore": 200,
+    "sourceCookieAfterSourceResume": 200,
+    "sourceCookieAfterExtraRestoreAndCrash": 200,
+    "copiedCookieOnTarget": 410,
+    "copiedCookieFailure": "SESSION_REVOKED",
+    "oldBearerOnTarget": 401,
+    "freshTargetCookie": 200,
+    "activeModelSelectionPreserved": true,
+    "realModelReadback": {
+      "versions": 2,
+      "resources": 684,
+      "bytes": 878015606
+    },
+    "pathfinderArtifacts": {
+      "files": 27,
+      "bytes": 7678830,
+      "sha256": "afce4f71413a8180f0af705c92e938b6f2af43f24687ab34a2d0f374d4cd1ce1"
+    }
+  },
+  "limits": [
+    "Same host/platform; cross-computer restore is NOT_RUN.",
+    "Native/converted engineering parity remains unaccepted.",
+    "No original application/database/storage/container writes.",
+    "Standalone preview recovery/cancellation is incomplete; inspect the explicit PARTIAL/NOT_RUN previewRecovery controls.",
+    "Worker and standalone preview crash recovery were explicitly skipped in this archive operation; no new crash PASS is claimed."
+  ],
+  "derivedAt": "2026-10-18T09:58:19.731Z",
+  "rawDrill": "docs/pathfinder/runtime/final-drill-1792317333519.json",
+  "rawDrillPreserved": true,
+  "lookupReadback": {
+    "evidence": "docs/pathfinder/evidence/lookup-tab/restored-lookup-readback-1792317387751.json",
+    "status": "PASS",
+    "backupId": "3db9fa33-c10e-4646-82bc-fe99f3d8af35",
+    "lookup": {
+      "projectId": "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a",
+      "jobId": "d522c782-4b4c-49f1-b797-3718b3fcf316",
+      "httpStatus": 200,
+      "status": "complete",
+      "kind": "lookup",
+      "stale": false,
+      "lengthMeters": 35.30345579516123,
+      "pointCount": 90,
+      "design": null,
+      "engineeringAccepted": false,
+      "acceptanceScope": "diagnostic-lookup",
+      "connectionGap": "1",
+      "diagnostics": {
+        "geometryLeavesUsed": 25,
+        "fallbackBends": 2,
+        "fallbackStraights": 2,
+        "fallbackClearances": 0
+      }
+    },
+    "artifact": {
+      "jobId": "d522c782-4b4c-49f1-b797-3718b3fcf316",
+      "jobState": "complete",
+      "jobKind": "lookup",
+      "artifactId": "b06ab4c4-60e2-4b87-8010-61e1b547f795",
+      "purpose": "lookup",
+      "snapshotSha256": "1aa3036066f74aa7dfe0dfb9d702f8107bdb5836a2f563be8cb6432e113f8b6b",
+      "dependencySha256": "1aa3036066f74aa7dfe0dfb9d702f8107bdb5836a2f563be8cb6432e113f8b6b"
+    },
+    "fileIntegrityMethod": "Existing GET lookup service readSnapshot SHA256 verification plus nonstale result; DB artifact/dependency hash independently equal expected raw snapshot hash.",
+    "freshTargetTokenOnlyInMemory": true
+  },
+  "retirementEvidence": "C:/Users/todor.chankov/source/WFC-pathfinder-local/docs/pathfinder/evidence/lookup-tab/restore-target-retirement-20261018T095731438Z.json",
+  "retirement": {
+    "status": "PASS",
+    "project": "wfc-pathfinder-local-50fae7c4061f",
+    "removedVerifiedRestoreFixtureOnly": true,
+    "resources": {
+      "containers": [],
+      "volumes": [],
+      "networks": []
+    }
+  },
+  "buildBinding": "docs/pathfinder/evidence/lookup-tab/build-binding-1792316973178.json",
+  "checkpoint": "73c13aa58519f26cbb96d93bbbb70bcdd5bb2cdd",
+  "cleanup": {
+    "oldArchivesOrImagesRemoved": false,
+    "releaseRequired": true
+  },
+  "rawDrillSha256": "763424df20e5a94c46fbcce362f9f9f6409b27c807979d9b8638da783741e42a"
+}

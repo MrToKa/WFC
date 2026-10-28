@@ -1,0 +1,196 @@
+{
+  "schemaVersion": "wfc.pf.r7-runtime-controls.v1",
+  "status": "PASS",
+  "recordedAt": "2026-10-19T07:57:43.011Z",
+  "scope": "Actual root5191normalHTTP, declared exact test fault, productionworker/C#, computer-use and preservation checks; no engineering acceptance or successful Review/Apply",
+  "authorization": {
+    "currentNonadminContext": 403,
+    "currentNonadminCommand": 403,
+    "anonymousContext": 401,
+    "supersededReview": {
+      "status": 409,
+      "code": "AUTOMATIC_GENERATION_SUPERSEDED"
+    },
+    "expiredOriginalAuthorityUnderAnotherValidLogin": {
+      "status": 409,
+      "code": "AUTOMATIC_AUTHORITY_EXPIRED"
+    },
+    "fixtureActorRoleRestored": true,
+    "currentStateExpiryRestoredExactly": true,
+    "immutableEnrollmentEdited": false
+  },
+  "recovery": {
+    "status": "PASS",
+    "jobId": "e93747db-0c82-4b1d-8f41-98f04941e745",
+    "attempts": 2,
+    "slices": 4,
+    "unchangedProposals": 3,
+    "itemsRestoredExactly": true,
+    "scope": "Declared expired-lease injection on a new test job, recovered through production worker and real C#; not an observed process crash",
+    "historicalHarnessFailure": "Post-recovery HTTP assertion incorrectly assumed an unwrapped job; no reinjection",
+    "engineeringAccepted": false
+  },
+  "cancellation": {
+    "status": "PASS",
+    "generation": "13",
+    "jobId": "ed574e78-29c8-4f3c-b000-56e3288e75d4",
+    "beforeState": "running",
+    "beforeCompleted": 0,
+    "afterState": "cancelled",
+    "afterCompleted": 0,
+    "automaticPaused": true,
+    "beforeActionEvidence": "Actual own tmp captures fsynced before authenticated DELETE; exact host copies retained; own tmp retired",
+    "directJobMutation": false,
+    "scope": "Actual running-production-job cancellation; unreaped child process fault remains mocked coverage"
+  },
+  "storage": {
+    "status": "PASS",
+    "recordedAt": "2026-10-19T07:49:03.542Z",
+    "scope": "Exact keys/bytes/ETag/lastModified equality to retained R6 final metadata; no new resource, no raw SHA re-hash claimed",
+    "objects": 1547,
+    "groups": 3
+  },
+  "references": {
+    "status": "PASS",
+    "checkouts": 3,
+    "scope": "Branch/HEAD/status/trimmed tracked patch digests; untracked file contents not newly certified"
+  },
+  "cleanup": {
+    "unusedOwnImages": 4,
+    "ownTmpFiles": 6,
+    "ownTmpDirectories": 1,
+    "newTestContainers": 0,
+    "prune": false,
+    "force": false,
+    "deniedHistoricalPathsTouched": false,
+    "retained": "5191demo/checkpoint/privatecompanion/evidence",
+    "reclaimedBytes": "NOT_MEASURED"
+  },
+  "computerUse": {
+    "status": "PASS",
+    "userTab": "iab2/tab3",
+    "scope": "Fixed allowed HTTP5191, currentv5proposal provenance/three tools/yellow path/filledGhost/Clear/Restore; no NOP product access",
+    "screenshots": [
+      {
+        "privateFile": "r7-final-proposal-ui.png",
+        "bytes": 94049,
+        "sha256": "a7a79a18279925af4c77945575d929ad8fe54c7374fb721042483a8ebd0d663e"
+      },
+      {
+        "privateFile": "r7-final-cleared-ui.png",
+        "bytes": 73971,
+        "sha256": "ee5fba9214bfead1e0461df60bede4d2c170cfe7a86121fb6f5f0eff37d71369"
+      }
+    ],
+    "blockedOldErrorPage": "Existing error-document acquisition was protocol-refused; no errorpage inspected. Fresh allowed HTTP navigation used normal app.",
+    "engineeringAccepted": false
+  },
+  "sourceRegression": {
+    "backendAndShared": {
+      "suites": 189,
+      "passed": 1484,
+      "failed": 0,
+      "notRun": 5
+    },
+    "focusedFatalObserverSession": 79,
+    "types": "PASS",
+    "eslint": "PASS",
+    "frontend": "Separate final receipt required"
+  },
+  "externalLifecycle": {
+    "status": "EXTERNAL_CHANGE",
+    "identities": 18,
+    "strictResumedStartTimes": 17,
+    "oneAutonomousOriginalBackendRestartLoop": true,
+    "originalOperationsByAgent": 0,
+    "fullConfigurationBeforeFirstFullPin": "NOT_ESTABLISHED",
+    "rootOwned5191StartCountAfterUserDaemonStart": 4
+  },
+  "privateEvidence": [
+    {
+      "privateFile": "r7-security-nonadmin-get.private.json",
+      "bytes": 728,
+      "sha256": "c157c735b4df831ebc2bf8aa6f2aa20ce44b7272417636891e920d84f1abdf86"
+    },
+    {
+      "privateFile": "r7-security-nonadmin-post.private.json",
+      "bytes": 728,
+      "sha256": "c157c735b4df831ebc2bf8aa6f2aa20ce44b7272417636891e920d84f1abdf86"
+    },
+    {
+      "privateFile": "r7-security-anonymous-get.private.json",
+      "bytes": 655,
+      "sha256": "fa1a8cf4229f6a0474b172a85126ab35ef27a606184e592976558e887db0e7b2"
+    },
+    {
+      "privateFile": "r7-security-expired-review-refusal.private.json",
+      "bytes": 627,
+      "sha256": "3933bdadd7b76f76a62593a7820fb5ce30a1a2145eba49887a6890027c55ed3b"
+    },
+    {
+      "privateFile": "r7-security-restore-fixture-admin-raw.private.json",
+      "bytes": 789,
+      "sha256": "0f73af2f4e5ba5817dee14c243765ba2bcfed646d12facb2d9838a13081643c9"
+    },
+    {
+      "privateFile": "r7-expiry-review-refusal.private.json",
+      "bytes": 623,
+      "sha256": "513c8af7ce01c8a3d60ca862f4df4b44df980fb8331be59f64e3e9b78557e2ca"
+    },
+    {
+      "privateFile": "r7-expiry-restore-raw.private.json",
+      "bytes": 43,
+      "sha256": "668b187916e665fc6881c067d12818a94aa6654dfbeb0e5b6f99376ad89386f8"
+    },
+    {
+      "privateFile": "r7-recovery-final-result.private.json",
+      "bytes": 457,
+      "sha256": "3afdbb68009ffdc5490f5380682e5a4b016fc47e39a33e120e3c8aba490af952"
+    },
+    {
+      "privateFile": "r7-cancellation2-live-raw.private.json",
+      "bytes": 29612,
+      "sha256": "246ed2230d5786141c4305a351ec7f4c0eace053be7179baf78c692cd61a3b7e"
+    },
+    {
+      "privateFile": "r7-final-storage-summary.private.json",
+      "bytes": 234,
+      "sha256": "402c7bafb8fc8610f20bedb950ff5834352fc5eece71f86224bd225267c1a257"
+    },
+    {
+      "privateFile": "r7-final-references.private.json",
+      "bytes": 1169,
+      "sha256": "5f26db48a06ee27ac9fa15052c5f126fa3408c35faf32483c617fa76ab05c2c9"
+    },
+    {
+      "privateFile": "r7-cleanup-images-result.private.json",
+      "bytes": 107,
+      "sha256": "5bf4b47a31deb95f3d939229f455d30fb2e23dce77c1a492035c5ebd1c92837d"
+    },
+    {
+      "privateFile": "r7-cleanup-own-tmp-raw.private.json",
+      "bytes": 112,
+      "sha256": "60d86e406142d3de8eaf19140cc5f83d36a02e8620cb5f388da491dcdca7bc64"
+    },
+    {
+      "privateFile": "r7-final-backend-tests10.private.json",
+      "bytes": 575902,
+      "sha256": "fbda8fb3164d7e43a21c56955df5fb4687bbe6f670ac5d72f2078cf6bec82274"
+    },
+    {
+      "privateFile": "r7-upgrade3-result.private.json",
+      "bytes": 2755,
+      "sha256": "84431189b258cddf11bc1e11222104ba78114111dc4d1211591d6401dadd7985"
+    },
+    {
+      "privateFile": "r7-user-docker-resume-final.private.json",
+      "bytes": 14403,
+      "sha256": "66b772870903d5bd1ef578e264f50c64a6140d67f2c5180910d3db598cda5159"
+    },
+    {
+      "privateFile": "r7-protected-external-profile3.private.json",
+      "bytes": 13867,
+      "sha256": "bf97872d5cf0adc4b6a34915fc2e4d291a0ad0004818f0ea1201b538a820a058"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "wfc.pf.endpoint-control-receipt.v1",
+  "phase": "old-key",
+  "phaseIntentId": "2ee14bbe-c8ea-4b38-9867-7334273b9612",
+  "recordedAtUtc": "2026-10-19T03:10:45.284Z",
+  "status": "PASS",
+  "elapsedMilliseconds": 47.27392,
+  "checks": [
+    {
+      "name": "Exact historical command reconciliation before current CAS",
+      "status": "PASS",
+      "scope": "actual immutable command receipt; no new binding or revision"
+    }
+  ],
+  "preservationSha256": "262209c85922ae83a1b9b3c252f66c9e7a8153d84e2e85cfc05da33a36c1292a",
+  "cableApply": "NOT_PERFORMED",
+  "nativeParity": "NOT_PERFORMED",
+  "engineeringAcceptance": false
+}

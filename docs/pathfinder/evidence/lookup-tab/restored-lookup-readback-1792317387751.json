@@ -1,0 +1,55 @@
+{
+  "schemaVersion": "pathfinder.lookup.restored-readback.v1",
+  "status": "PASS",
+  "at": "2026-10-18T09:56:27.749Z",
+  "scope": "Fresh target login and read-only retained dedicated lookup after cold combined restore",
+  "backupId": "3db9fa33-c10e-4646-82bc-fe99f3d8af35",
+  "drill": "docs/pathfinder/runtime/final-drill-1792317333519.json",
+  "target": {
+    "project": "wfc-pathfinder-local-50fae7c4061f",
+    "runtime": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pathfinder-local-restore-50fae7c4061f",
+    "port": 5191,
+    "images": {
+      "api": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+      "web": "sha256:1895a3fa33c25933024ab514ef61bd2d1568ffb33477d114541b855da65445b7"
+    }
+  },
+  "lookup": {
+    "projectId": "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a",
+    "jobId": "d522c782-4b4c-49f1-b797-3718b3fcf316",
+    "httpStatus": 200,
+    "status": "complete",
+    "kind": "lookup",
+    "stale": false,
+    "lengthMeters": 35.30345579516123,
+    "pointCount": 90,
+    "design": null,
+    "engineeringAccepted": false,
+    "acceptanceScope": "diagnostic-lookup",
+    "connectionGap": "1",
+    "diagnostics": {
+      "geometryLeavesUsed": 25,
+      "fallbackBends": 2,
+      "fallbackStraights": 2,
+      "fallbackClearances": 0
+    }
+  },
+  "artifact": {
+    "jobId": "d522c782-4b4c-49f1-b797-3718b3fcf316",
+    "jobState": "complete",
+    "jobKind": "lookup",
+    "artifactId": "b06ab4c4-60e2-4b87-8010-61e1b547f795",
+    "purpose": "lookup",
+    "snapshotSha256": "1aa3036066f74aa7dfe0dfb9d702f8107bdb5836a2f563be8cb6432e113f8b6b",
+    "dependencySha256": "1aa3036066f74aa7dfe0dfb9d702f8107bdb5836a2f563be8cb6432e113f8b6b"
+  },
+  "fileIntegrityMethod": "Existing GET lookup service readSnapshot SHA256 verification plus nonstale result; DB artifact/dependency hash independently equal expected raw snapshot hash.",
+  "freshTargetTokenOnlyInMemory": true,
+  "sourceApplicationWrites": false,
+  "sourceOrOriginalBusinessDataWrites": false,
+  "crossComputerRestore": "NOT_RUN",
+  "nativeParity": "NOT_ESTABLISHED",
+  "workerCrashRecovery": "NOT_RUN_EXPLICIT_SKIP",
+  "previewCrashRecovery": "NOT_RUN_EXPLICIT_SKIP",
+  "targetRetirement": "PENDING"
+}
