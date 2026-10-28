@@ -1,5 +1,5 @@
 import { Readable } from 'node:stream';
-import { createGunzip } from 'node:zlib';
+import { createGunzip, crc32 } from 'node:zlib';
 import { openZip } from './zip.mjs';
 import { DEFAULT_LIMITS, resolveLimits } from './limits.mjs';
 import { PackageError, fail } from './errors.mjs';
@@ -14,7 +14,7 @@ const PLATFORM = 'Autodesk.CloudPlatform.';
 // never bypasses the independent asset, tuple, metadata or resource checks.
 const SUPPORTED_TOOLKITS = new Set(['LMVTK 5.0.26.0', 'LMVTK 5.0.43.0']);
 export const ASSET_TYPES = Object.freeze([
-  'ProteinMaterials', ...[
+  'ProteinMaterials', PLATFORM + 'Image', ...[
     'FragmentList', 'GeometryMetadataList', 'InstanceTree', 'PackFile',
     'PropertyAttributes', 'PropertyAVs', 'PropertyIDs', 'PropertyOffsets',
     'PropertyValues', 'PropertyViewables', 'ViewingMetadata',
@@ -32,6 +32,7 @@ export const JSON_BASENAMES = Object.freeze([
   'Materials.json.gz', 'objects_attrs.json.gz', 'objects_avs.json.gz',
   'objects_ids.json.gz', 'objects_offs.json.gz', 'objects_vals.json.gz', 'objects_viewables.json.gz',
 ]);
+const IMAGE_EXTENSION = /[.](?:png|jpe?g)$/i;
 const JSON_TYPES = new Map([
   ['ProteinMaterials', 'Materials.json.gz'],
   [PLATFORM + 'PropertyAttributes', 'objects_attrs.json.gz'],
@@ -56,6 +57,14 @@ function unsupported(message, details = {}) {
     const value = details[key];
     if (typeof value === 'string' && /^[A-Za-z0-9 ._-]{1,80}$/.test(value)) technical[key] = value;
     else if (typeof value === 'number' && Number.isSafeInteger(value)) technical[key] = value;
+  }
+  if (Number.isSafeInteger(details.assetIndex) && details.assetIndex >= 0) technical.assetIndex = details.assetIndex;
+  if (Array.isArray(details.invalidAssetFields)) technical.invalidAssetFields = details.invalidAssetFields.filter(key => ['id', 'type', 'URI', 'size', 'usize'].includes(key));
+  const safeType = value => typeof value === 'string' && /^(?:Autodesk[.]CloudPlatform[.][A-Za-z][A-Za-z0-9_]{0,80}|ProteinMaterials)$/.test(value);
+  if (safeType(details.assetType)) technical.assetType = details.assetType;
+  if (Array.isArray(details.unsupportedAssetTypes)) technical.unsupportedAssetTypes = details.unsupportedAssetTypes.filter(safeType).slice(0,32);
+  for (const key of ['size', 'usize']) {
+    if (Number.isSafeInteger(details[key])) technical[key] = details[key];
   }
   try { process.stderr.write(JSON.stringify({ event: 'svf-profile-rejected', reason: message, ...technical }) + '\n'); } catch {}
   fail('UNSUPPORTED_PROFILE', message, details);
@@ -152,6 +161,89 @@ function validateMaterials(value) {
   return count;
 }
 
+
+// Raster images are inert manifest-declared resources. These checks validate
+// their container/header, not pixel decoding or arbitrary material schemas.
+function validateImage(bytes, resourcePath, limits, check) {
+  const invalid = () => unsupported('Invalid or unsupported raster image container.');
+  const dimensions = (width, height) => {
+    if (!width || !height || !Number.isSafeInteger(width * height * 4) || width * height * 4 > limits.maxNestedBytes) {
+      fail('PACKAGE_LIMIT_EXCEEDED', 'Image decoded dimensions exceed the nested-resource budget.');
+    }
+  };
+  if (/[.]png$/i.test(resourcePath)) {
+    if (bytes.length < 45 || !bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) invalid();
+    let offset = 8, header = false, data = false, ended = false, palette = false, colorType;
+    while (offset < bytes.length) {
+      check();
+      if (offset + 12 > bytes.length) invalid();
+      const length = bytes.readUInt32BE(offset), end = offset + 12 + length;
+      if (length > 0x7fffffff || end > bytes.length) invalid();
+      const type = bytes.toString('ascii', offset+4, offset+8);
+      if (!/^[A-Za-z]{4}$/.test(type) || (bytes[offset+6] & 32)) invalid();
+      if (crc32(bytes.subarray(offset+4, end-4)) !== bytes.readUInt32BE(end-4)) invalid();
+      if (!header && type !== 'IHDR') invalid();
+      if (type === 'IHDR') {
+        if (header || length !== 13) invalid();
+        const width = bytes.readUInt32BE(offset+8), height = bytes.readUInt32BE(offset+12);
+        if (width > 0x7fffffff || height > 0x7fffffff) invalid();
+        if (!width || !height) invalid();
+        dimensions(width,height);
+        const depth = bytes[offset+16]; colorType = bytes[offset+17];
+        const depths = {0:[1,2,4,8,16],2:[8,16],3:[1,2,4,8],4:[8,16],6:[8,16]};
+        if (!depths[colorType]?.includes(depth) || bytes[offset+18] !== 0 || bytes[offset+19] !== 0 || bytes[offset+20] > 1) invalid();
+        header = true;
+      } else if (type === 'PLTE') {
+        if (palette || data || !length || length % 3 || length > 768) invalid();
+        palette = true;
+      } else if (type === 'IDAT') {
+        if (colorType === 3 && !palette) invalid();
+        data = true;
+      } else if (type === 'IEND') {
+        if (!data || length !== 0 || end !== bytes.length) invalid();
+        ended = true;
+      } else if (!(bytes[offset+4] & 32)) invalid();
+      offset = end;
+    }
+    if (!header || !data || !ended) invalid();
+    return;
+  }
+  if (!/[.]jpe?g$/i.test(resourcePath) || bytes.length < 4 || bytes.readUInt16BE(0) !== 0xffd8) invalid();
+  let offset = 2, frame = false, scan = false, entropy = false;
+  while (offset < bytes.length) {
+    check();
+    if (entropy) {
+      while (offset < bytes.length && bytes[offset] !== 0xff) offset++;
+      if (offset === bytes.length) invalid();
+    }
+    if (bytes[offset++] !== 0xff) invalid();
+    while (offset < bytes.length && bytes[offset] === 0xff) offset++;
+    if (offset >= bytes.length) invalid();
+    const marker = bytes[offset++];
+    if (entropy && (marker === 0x00 || marker >= 0xd0 && marker <= 0xd7)) continue;
+    entropy = false;
+    if (marker === 0xd9) {
+      if (!frame || !scan || offset !== bytes.length) invalid();
+      return;
+    }
+    if (marker === 0xd8 || marker === 0x00 || marker >= 0xd0 && marker <= 0xd7 || offset+2 > bytes.length) invalid();
+    const length = bytes.readUInt16BE(offset), end = offset+length;
+    if (length < 2 || end > bytes.length) invalid();
+    if (marker >= 0xc0 && marker <= 0xcf && ![0xc4,0xc8,0xcc].includes(marker)) {
+      if (frame || ![0xc0,0xc1,0xc2].includes(marker) || length < 8 || bytes[offset+2] !== 8) invalid();
+      const components = bytes[offset+7];
+      if (![1,3,4].includes(components) || length !== 8+3*components) invalid();
+      dimensions(bytes.readUInt16BE(offset+5),bytes.readUInt16BE(offset+3));
+      frame = true;
+    } else if (marker === 0xda) {
+      if (!frame || length < 6 || ![1,2,3,4].includes(bytes[offset+2]) || length !== 6+2*bytes[offset+2]) invalid();
+      scan = true; entropy = true;
+    } else if (![0xc4,0xdb,0xdd,0xfe].includes(marker) && !(marker >= 0xe0 && marker <= 0xef)) invalid();
+    offset = end;
+  }
+  invalid();
+}
+
 function sniffBinary(prefix, path) {
   const hex = prefix.subarray(0, 4).toString('hex');
   if (prefix.subarray(0, 2).toString('ascii') === 'MZ' || [
@@ -188,7 +280,18 @@ function validateSvfManifest(value, resources, archive) {
   let embedded = 0;
   for (const asset of value.assets) {
     fields(asset, ['id', 'type', 'URI', 'size', 'usize'], ['typeset'], 'SVF asset');
-    if (!text(asset.id) || !text(asset.URI) || !ASSET_TYPES.includes(asset.type) || !size(asset.size) || !size(asset.usize)) unsupported('Invalid or unsupported SVF asset.');
+    const invalidAssetFields = [
+      ...(!text(asset.id) ? ['id'] : []),
+      ...(!text(asset.URI) ? ['URI'] : []),
+      ...(!ASSET_TYPES.includes(asset.type) ? ['type'] : []),
+      ...(!size(asset.size) ? ['size'] : []),
+      ...(!size(asset.usize) ? ['usize'] : []),
+    ];
+    if (invalidAssetFields.length) unsupported('Invalid or unsupported SVF asset.', {
+      assetIndex: value.assets.indexOf(asset), invalidAssetFields, assetType: asset.type,
+      size: asset.size, usize: asset.usize,
+      unsupportedAssetTypes: [...new Set(value.assets.map(item => item?.type).filter(type => !ASSET_TYPES.includes(type)))],
+    });
     if (ids.has(asset.id) || uris.has(asset.URI)) fail('INVALID_MANIFEST', 'Duplicate SVF asset ID or URI.');
     ids.add(asset.id); uris.add(asset.URI);
     if (Object.hasOwn(asset, 'typeset') && (!text(asset.typeset) || !typesets.has(asset.typeset))) unsupported('SVF asset has an absent or invalid typeset reference.');
@@ -208,7 +311,9 @@ function validateSvfManifest(value, resources, archive) {
     const resource = resources.get(resolved);
     if (!resource) fail('RESOURCE_MISSING', 'A declared SVF sibling resource is missing.', { path: resolved });
     if (asset.size !== resource.bytes) fail('RESOURCE_SIZE_MISMATCH', 'SVF asset raw size differs from the portable resource record.', { path: resolved });
-    if (JSON_TYPES.has(asset.type)) {
+    if (asset.type === PLATFORM + 'Image') {
+      if (!IMAGE_EXTENSION.test(asset.URI)) unsupported('Declared image is not a supported PNG/JPEG sibling.');
+    } else if (JSON_TYPES.has(asset.type)) {
       if (asset.URI !== JSON_TYPES.get(asset.type)) unsupported('Unknown JSON asset type/basename binding.', { path: resolved });
     } else if (!/\.(pf|bin|pack)$/.test(asset.URI)) unsupported('Unsupported binary asset suffix.', { path: resolved });
     references.set(resolved, asset);
@@ -308,7 +413,7 @@ export async function validateProfile(provider, { limits = DEFAULT_LIMITS, signa
     totalRaw += resource.bytes;
     if (!Number.isSafeInteger(totalRaw) || totalRaw > limits.maxTotalResourceBytes) fail('PACKAGE_LIMIT_EXCEEDED', 'Raw resource aggregate exceeds its limit.');
     const basename = resource.path.slice(PREFIX.length);
-    if (resource.path !== ENTRY && resource.path !== PROPERTY_DB && !JSON_BASENAMES.includes(basename) && !/\.(pf|bin|pack)$/.test(basename)) {
+    if (resource.path !== ENTRY && resource.path !== PROPERTY_DB && !JSON_BASENAMES.includes(basename) && !IMAGE_EXTENSION.test(basename) && !/\.(pf|bin|pack)$/.test(basename)) {
       if (/\.(js|mjs|html?|css|wasm|exe|dll|ps1|sh)$/i.test(basename)) fail('EXECUTABLE_CONTENT', 'Runtime or executable files are forbidden in model resources.');
       unsupported('Unknown model resource suffix or basename.', { path: resource.path });
     }
@@ -365,6 +470,7 @@ export async function validateProfile(provider, { limits = DEFAULT_LIMITS, signa
     const timeout = setTimeout(() => original.destroy(new PackageError('PACKAGE_LIMIT_EXCEEDED', 'Profile verification exceeded the time limit.')), Math.max(1, deadline - Date.now()));
     const abort = () => original.destroy(new PackageError('PACKAGE_ABORTED', 'Profile verification was cancelled.'));
     signal?.addEventListener('abort', abort, { once: true });
+    const image = manifestInfo.references.get(resource.path)?.type === PLATFORM + 'Image';
     let first, rawBytes = 0;
     const rawPrefix = [], chunks = [], prefixChunks = [];
     let rawPrefixLength = 0, prefixLength = 0, inflatedBytes = 0, compressed = false;
@@ -381,6 +487,8 @@ export async function validateProfile(provider, { limits = DEFAULT_LIMITS, signa
         head = Buffer.concat([head, Buffer.from(next.value)]);
       }
       compressed = head.length >= 2 && head[0] === 0x1f && head[1] === 0x8b;
+      if (image && compressed) unsupported('Raster image must be a raw PNG/JPEG resource.');
+      if (image && resource.bytes > limits.maxNestedBytes) fail('PACKAGE_LIMIT_EXCEEDED', 'Image exceeds the nested-resource byte budget.');
       if (structured && !compressed) fail('GZIP_INVALID', 'Recognized JSON resources must retain their raw gzip envelope.', { path: resource.path });
       const input = Readable.from((async function* () {
         let item = { done: false, value: head };
@@ -402,15 +510,15 @@ export async function validateProfile(provider, { limits = DEFAULT_LIMITS, signa
           check();
           const bytes = Buffer.from(item);
           inflatedBytes += bytes.length;
-          const cap = structured ? limits.maxNestedBytes : limits.maxFileBytes;
+          const cap = structured || image ? limits.maxNestedBytes : limits.maxFileBytes;
           if (inflatedBytes > cap || (compressed && inflatedBytes > Math.max(1, resource.bytes) * limits.maxExpansionRatio)) fail('PACKAGE_LIMIT_EXCEEDED', 'Resource inflation exceeds its byte or ratio limit.', { path: resource.path });
-          if (structured) addNested(bytes.length);
+          if (structured || image) addNested(bytes.length);
           else {
             terminalInflatedBytes += bytes.length;
             if (terminalInflatedBytes > limits.maxTotalResourceBytes) fail('PACKAGE_LIMIT_EXCEEDED', 'Terminal data streaming exceeds the computational aggregate limit.');
           }
           if (prefixLength < 1024) { const part = bytes.subarray(0, 1024 - prefixLength); prefixChunks.push(part); prefixLength += part.length; }
-          if (structured) chunks.push(bytes);
+          if (structured || image) chunks.push(bytes);
         }
       } finally {
         input.removeListener('error', forwardError);
@@ -425,6 +533,7 @@ export async function validateProfile(provider, { limits = DEFAULT_LIMITS, signa
       sniffBinary(Buffer.concat(rawPrefix), resource.path);
       if (!structured) sniffBinary(prefix, resource.path);
       if (resource.path === PROPERTY_DB && (compressed || !prefix.subarray(0, 16).equals(Buffer.from('SQLite format 3\0', 'ascii')))) unsupported('properties.db must be a raw SQLite format-3 data file.');
+      if (image) validateImage(Buffer.concat(chunks, inflatedBytes), resource.path, limits, check);
       if (compressed) gzip.push({ path: resource.path, rawBytes, inflatedBytes, structured, status: 'PASS' });
       return structured ? decodeJson(Buffer.concat(chunks, inflatedBytes), { maxDepth: limits.maxDepth }) : null;
     } catch (error) {
@@ -452,7 +561,7 @@ export async function validateProfile(provider, { limits = DEFAULT_LIMITS, signa
   return {
     status: 'PASS', supportProfile: 'svf-local-7.130.0-v1',
     closure: { status: 'PASS', externalReferences: manifestInfo.references.size, embeddedReferences: 1, additionalResources: ['properties.db'], assetCount: manifestInfo.assetCount, typesetCount: manifestInfo.typesetCount },
-    sizes: { rawResourceBytes: totalRaw, resourceCount: resources.size, nestedInflatedBytes, terminalInflatedBytes, inspectedNestedScope: 'SVF entries and recognized gzip JSON', terminalScope: 'Opaque binary/property integrity streams; no semantic execution' },
+    sizes: { rawResourceBytes: totalRaw, resourceCount: resources.size, nestedInflatedBytes, terminalInflatedBytes, inspectedNestedScope: 'SVF entries, recognized gzip JSON and raster image containers', terminalScope: 'Opaque binary/property integrity streams; no semantic execution' },
     embeddedEntries, structuredJsonCount, emptyMaterialTextureMaps: materialMaps,
     gzip: { status: 'PASS', count: gzip.length, resources: gzip },
     durationMs: Date.now() - started,

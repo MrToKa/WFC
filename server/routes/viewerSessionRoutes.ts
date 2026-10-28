@@ -146,7 +146,9 @@ export function createViewerSessionRouter(options: { runtime?: ViewerRuntime; po
           if (current.version.storagePrefix !== authorized.version.storagePrefix || current.version.contentFingerprint !== authorized.version.contentFingerprint ||
             same?.sha256 !== resource.sha256 || same.bytes !== resource.bytes) throw new ViewerSessionError('MODEL_UNAVAILABLE',409);
           signal.throwIfAborted();
-          res.setHeader('Accept-Ranges','bytes'); res.setHeader('Content-Type','application/octet-stream');
+          res.setHeader('Accept-Ranges','bytes');
+          const contentType = /[.]png$/i.test(resource.path) ? 'image/png' : /[.]jpe?g$/i.test(resource.path) ? 'image/jpeg' : 'application/octet-stream';
+          res.setHeader('Content-Type',contentType);
           res.setHeader('Content-Length',range ? range.end-range.start+1 : resource.bytes);
           if (range) res.setHeader('Content-Range',`bytes ${range.start}-${range.end}/${resource.bytes}`);
           res.status(range ? 206 : 200);
