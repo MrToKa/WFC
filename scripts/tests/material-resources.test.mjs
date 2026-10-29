@@ -163,3 +163,16 @@ test('corrupt Protein gzip is rejected before a package is ready', async t => {
   const f = await fixture(t, { after: data => { const b = data.get(PREFIX + 'ProteinMaterials.json.gz'); b[b.length - 5] ^= 1; } });
   await assert.rejects(validateProfile(f.provider), { code: 'GZIP_INVALID' });
 });
+
+test('embedded metadata IDs cannot shadow an active image URI in the pinned Viewer lookup', async t => {
+  const f = await fixture(t, { mutateAssets: assets => {
+    assets.find(a => a.URI === 'embed:/metadata.json').id = 'Texture Folder/Fixture Logo.png';
+  } });
+  await assert.rejects(validateProfile(f.provider), { code: 'RESOURCE_MISSING' });
+});
+test('case-folded asset-ID ambiguity is refused before material image selection', async t => {
+  const f = await fixture(t, { mutate: ({ simple }) => {
+    simple.materials.group.materials.bitmap.properties.uris.unifiedbitmap_Bitmap.values[0] = 'image-id';
+  }, mutateAssets: assets => { assets.find(a => a.URI === 'embed:/metadata.json').id = 'IMAGE-ID'; } });
+  await assert.rejects(validateProfile(f.provider), { code: 'UNSUPPORTED_PROFILE' });
+});

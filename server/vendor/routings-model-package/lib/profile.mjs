@@ -122,7 +122,7 @@ function validateMetadata(value) {
   }
 }
 
-function validateMaterials(value, { protein = false, references, check }) {
+function validateMaterials(value, { protein = false, references, assets, check }) {
   fields(value, ['name', 'version', 'scene', 'materials'], [], 'Materials root');
   if (value.name !== (protein ? 'LMVTK Protein Materials' : 'LMVTK Simple Materials') || value.version !== '1.0') unsupported('Unsupported material name or version.');
   fields(value.scene, ['SceneUnit', 'YIsUp'], [], 'Material scene');
@@ -137,9 +137,9 @@ function validateMaterials(value, { protein = false, references, check }) {
     // Match the pinned SDK: an asset ID has priority, otherwise use its exact
     // relative URI. Never resolve traversal, encoded separators or aliases.
     validateResourcePath(PREFIX + uri);
-    const ids = [...references].filter(([, asset]) => asset.id.toLowerCase() === uri.toLowerCase());
+    const ids = assets.filter(asset => asset.id.toLowerCase() === uri.toLowerCase());
     if (ids.length > 1) unsupported('Ambiguous material image asset identity.');
-    const row = ids[0] ?? [...references].find(([resourcePath]) => resourcePath === PREFIX + uri);
+    const row = ids.length ? [PREFIX + ids[0].URI, ids[0]] : [...references].find(([resourcePath]) => resourcePath === PREFIX + uri);
     if (!row || row[1].type !== PLATFORM + 'Image') fail('RESOURCE_MISSING', 'Material bitmap does not resolve to a declared image.');
     return row[0];
   }
@@ -408,7 +408,7 @@ function validateSvfManifest(value, resources, archive) {
       fail('RESOURCE_UNEXPECTED', 'A resource is outside the supported SVF closure.', { path: resource.path });
     }
   }
-  return { references, assetCount: value.assets.length, typesetCount: typesets.size };
+  return { references, assets: value.assets, assetCount: value.assets.length, typesetCount: typesets.size };
 }
 
 /** Inspect only a bounded supported SVF envelope for dependency discovery.
@@ -643,7 +643,7 @@ export async function validateProfile(provider, { limits = DEFAULT_LIMITS, signa
     const data = await inspectResource(resource, structured);
     if (structured) structuredJsonCount++;
     if (basename === 'Materials.json.gz' || basename === 'ProteinMaterials.json.gz') {
-      const material = validateMaterials(data, { protein: basename === 'ProteinMaterials.json.gz', references: manifestInfo.references, check });
+      const material = validateMaterials(data, { protein: basename === 'ProteinMaterials.json.gz', references: manifestInfo.references, assets: manifestInfo.assets, check });
       materialMaps += material.emptyTextureMaps; materialTextureBindings += material.textureBindings;
       for (const image of material.images) materialImages.add(image);
     }
