@@ -94,10 +94,10 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
         : pf.viewerPhase !== 'ready' ? 'The model is not ready. Reload it to continue.'
           : pf.busy ? 'The model is busy. Wait for the current operation to finish.'
             : state.loading ? 'Reading the current tray status…'
-              : state.busy ? 'Checking project trays. You can stop this check.'
+              : state.busy ? state.unknown ? 'Checking the earlier tray update. You can stop this check.' : 'Checking project trays. You can stop this check.'
                 : reading ? 'Saving the selected tray and updating the network…'
                   : displayPending ? display?.status === 'hiding' ? 'Restoring the normal model view…' : 'Showing the tray in the model…'
-                    : state.unknown ? 'An earlier tray update needs checking. Use Discover project tray candidates to continue.' : null;
+                    : state.unknown ? 'An earlier tray update needs checking. Use Retry tray update to continue.' : null;
   const show = async (trayId: string) => {
     if (!context || disabled || reading || !modelCurrent || pending.current || pendingDisplay.current) return;
     const target = trayDisplayTarget({ trayId, context, plan, discovery });
@@ -198,11 +198,11 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
   };
   return <section aria-label="Project tray preparation">
     <Button appearance="primary" disabled={writeDisabled} onClick={() => void state.checkTrays()}>
-      Discover project tray candidates
+      {state.unknown ? state.busy ? 'Checking tray update…' : 'Retry tray update' : 'Discover project tray candidates'}
     </Button>
     {state.busy ? <Button onClick={state.pause} style={{ marginLeft: 8 }}>Stop checking</Button> : null}
     {disabledReason ? <p>{disabledReason}</p> : null}
-    {working ? <Spinner size="tiny" label={state.progress ?? 'Checking trays and preparing the network…'} style={{ marginBlock: 12 }} />
+    {working ? <Spinner size="tiny" label={state.progress ?? (state.unknown ? 'Checking the earlier tray update…' : 'Checking trays and preparing the network…')} style={{ marginBlock: 12 }} />
       : saved ? <p role="status">Network ready. {found} of {context!.trays.length} trays assigned{found < context!.trays.length ? `; ${context!.trays.length - found} still need a model selection` : ''}.</p>
         : <p>Check the trays to prepare the routing network automatically.</p>}
     {state.error ? <p role="alert">{state.error}</p> : null}

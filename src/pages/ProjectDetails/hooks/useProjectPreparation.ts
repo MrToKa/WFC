@@ -118,6 +118,17 @@ const reloadRequired = (error: unknown) =>
       error.code === 'CAPTURE_RELOAD_REQUIRED',
   );
 class PreparationDisplayScopeError extends Error {}
+const automaticRecoveryDelays = [250, 750] as const;
+const recoverableReceipt = (error: unknown) =>
+  (error instanceof PreparationApiError || error instanceof GeometryTraceApiError)
+    ? error.outcome === 'unknown' && ![401, 403].includes(error.status ?? 0)
+    : error instanceof TypeError;
+const waitForRecovery = (milliseconds: number, signal: AbortSignal) => new Promise<void>((resolve, reject) => {
+  const aborted = () => { clearTimeout(timer); reject(new DOMException('Project preparation paused.', 'AbortError')); };
+  const timer = setTimeout(() => { signal.removeEventListener('abort', aborted); resolve(); }, milliseconds);
+  if (signal.aborted) aborted();
+  else signal.addEventListener('abort', aborted, { once: true });
+});
 
 export function useProjectPreparation(pf: PF, active: boolean) {
   const access = pf.preparationAccess;
@@ -299,12 +310,20 @@ export function useProjectPreparation(pf: PF, active: boolean) {
               'The command outcome is unknown. Retry the same command before making further changes.',
           }));
         else {
-          if ((error instanceof PreparationApiError||error instanceof GeometryTraceApiError) && error.outcome === 'refused')
+          let refreshedRefusal = false;
+          if ((error instanceof PreparationApiError||error instanceof GeometryTraceApiError) && error.outcome === 'refused') {
             pending.current = null;
+            // A definite refusal has no unknown write to protect. Refresh its
+            // scope so the next selection need not reload a healthy viewer.
+            if (automaticRun.current) {
+              try { await readCurrent(abort.signal); refreshedRefusal = true; }
+              catch { /* Keep the original refusal and any unresolved scope. */ }
+            }
+          }
           update((value) => ({
             ...value,
-            unknown: false,
-            conflict: (error instanceof PreparationApiError||error instanceof GeometryTraceApiError) && error.status === 409,
+            unknown: Boolean(pending.current),
+            conflict: !refreshedRefusal && (error instanceof PreparationApiError||error instanceof GeometryTraceApiError) && error.status === 409,
             error:
               error instanceof DOMException && error.name === 'AbortError'
                 ? null
@@ -334,7 +353,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
         update((value) => ({ ...value, busy: false, loading: false }));
       }
     },
-    [enabled, identity, update],
+    [enabled, identity, readCurrent, update],
   );
   const execute = useCallback(
     async (command: Pending, signal: AbortSignal, automatic = false) => {
@@ -342,7 +361,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
       pending.current = command;
       update((value) => ({ ...value, unknown: false }));
       let sessionId: string | undefined;
-      switch (command.kind) {
+      const invoke = async (command: Pending) => { switch (command.kind) {
         case 'create': {
           const session = await createPreparation(
             access.projectId!,
@@ -402,6 +421,25 @@ export function useProjectPreparation(pf: PF, active: boolean) {
           );
           sessionId = command.sessionId;
           break;
+      } };
+      let attemptCommand = command;
+      for (let attempt = 0; ; attempt++) {
+        try { await invoke(attemptCommand); break; }
+        catch (error) {
+          assertCurrent(signal);
+          const saved = pending.current;
+          // A committed part can advance ownership to its evidence command.
+          // Replay that exact evidence, never recapture or upload the part again.
+          const ownsSaved = saved === attemptCommand || (attemptCommand.kind === 'part' && saved?.kind === 'evidence'
+            && saved.sessionId === attemptCommand.sessionId && saved.partId === attemptCommand.partId);
+          if (!automatic || !saved || !ownsSaved || attempt >= automaticRecoveryDelays.length || !recoverableReceipt(error)) throw error;
+          attemptCommand = saved;
+          const label = saved.kind === 'trace' ? 'Tray network saved. Confirming its final check'
+            : saved.kind === 'resolution' ? 'Confirming the saved tray assignment' : 'Confirming the saved tray update';
+          update(value => ({ ...value, progress: `${label} (${attempt + 2} of ${automaticRecoveryDelays.length + 1})…`, notice: null }));
+          await waitForRecovery(automaticRecoveryDelays[attempt], signal);
+          assertCurrent(signal);
+        }
       }
       // A confirmed mutation remains confirmed even if the subsequent status read fails.
       assertCurrent();
