@@ -69,6 +69,7 @@ export class ViewerController {
   private loadId: string | null = null;
   private session: ViewerSession | null = null;
   private routeRequestId: string | null = null;
+  private trayDisplayGeneration: number | null = null;
   private activeLoadRequestId: string | null = null;
   private selectionRevision: number | null = null;
   private pending = new Map<string, Pending>();
@@ -590,12 +591,13 @@ export class ViewerController {
     current();
   }
 
-  /** Reveal and focus all resolved tray roots without taking route/selection ownership. */
+  /** Inspect resolved tray roots in Ghost mode, replacing the previous route display. */
   async showTray(sdkObjectIds: number[]): Promise<void> {
     if (!Array.isArray(sdkObjectIds) || sdkObjectIds.length === 0 || sdkObjectIds.length > 512) throw new Error('Invalid tray objects');
     const ids = [...sdkObjectIds];
     if (!ids.every(id => Number.isSafeInteger(id) && id > 0 && id <= 2147483647) || new Set(ids).size !== ids.length) throw new Error('Invalid tray objects');
-    const { instanceId, modelVersionId, loadId, selectionRevision, generation, routeGeneration } = this;
+    const { instanceId, modelVersionId, loadId, selectionRevision, generation } = this;
+    let routeGeneration = this.routeGeneration;
     const current = () => {
       if (this.disposed || !this.loaded || !modelVersionId || !loadId || this.instanceId !== instanceId || this.modelVersionId !== modelVersionId
         || this.loadId !== loadId || this.selectionRevision !== selectionRevision || this.generation !== generation || this.routeGeneration !== routeGeneration)
@@ -604,8 +606,26 @@ export class ViewerController {
     current();
     if (!await this.checkSelection()) throw new Error('Model is not ready');
     current();
+    this.resetRouteRequests();
+    routeGeneration = this.routeGeneration;
+    this.trayDisplayGeneration = routeGeneration;
     await this.sendAsync('SHOW_TRAY', { sdkObjectIds: ids }, 'TRAY_SHOWN');
     current();
+  }
+
+  /** Restore the model and wait until the viewer confirms that Ghost was cleared. */
+  async hideTray(): Promise<void> {
+    // A newer route owns its own appearance; stale panel cleanup must leave it alone.
+    if (this.trayDisplayGeneration !== this.routeGeneration) return;
+    if (this.disposed || !this.loaded || !this.modelVersionId || !this.loadId) throw new Error('Model is not ready');
+    const { generation, modelVersionId, loadId } = this;
+    this.resetRouteRequests();
+    const routeGeneration = this.routeGeneration;
+    this.trayDisplayGeneration = routeGeneration;
+    await this.sendAsync('CLEAR_ROUTE', { reason: 'user' }, 'ROUTE_CLEARED');
+    if (this.disposed || !this.loaded || this.generation !== generation || this.modelVersionId !== modelVersionId
+      || this.loadId !== loadId || this.routeGeneration !== routeGeneration) throw new DOMException('Tray display cancelled.', 'AbortError');
+    this.trayDisplayGeneration = null;
   }
 
   async setPathTransparency(percent: number): Promise<void> {
@@ -910,11 +930,15 @@ export class ViewerController {
     }
   }
 
-  clear(reason: 'user' | 'empty' | 'selection' | 'model-change' | 'logout' = 'user'): string {
+  private resetRouteRequests(): void {
     this.captureInputAbort?.abort(); this.captureInputAbort = null;
+    this.trayDisplayGeneration = null;
     ++this.routeGeneration;
     this.routeRequestId = null;
     this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'READ_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'SET_PATH_TRANSPARENCY', 'SHOW_LOCATION', 'SHOW_TRAY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE']);
+  }
+  clear(reason: 'user' | 'empty' | 'selection' | 'model-change' | 'logout' = 'user'): string {
+    this.resetRouteRequests();
     return this.send('CLEAR_ROUTE', { reason }, 'ROUTE_CLEARED');
   }
   zoom(): string {

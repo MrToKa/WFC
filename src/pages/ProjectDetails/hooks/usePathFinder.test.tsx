@@ -7,7 +7,7 @@ import { ViewerAccessError } from '@/viewer/sessionApi';
 import type { ViewerController } from '@/viewer/ViewerController';
 import { BARRIER_CAPTURE_ERROR_CODES, BARRIER_CAPTURE_ERROR_MESSAGES, barrierCaptureErrorMessage } from '../../../../viewer-runtime/barrier-capture-errors.mjs';
 
-const facts = vi.hoisted(() => ({ disposed: vi.fn(), load: vi.fn(), capture: vi.fn(), barrierCapture: vi.fn(), barrierPublish: vi.fn(), readSelection: vi.fn(), readTrayRootSelection: vi.fn(), ready: true, showLocation: vi.fn(), showTray: vi.fn(), transparency: vi.fn(), clear: vi.fn(), cancelPicking: vi.fn(), instances: 0, events: [] as ((event: { type: string; payload: Record<string, unknown> }) => void)[] }));
+const facts = vi.hoisted(() => ({ disposed: vi.fn(), load: vi.fn(), capture: vi.fn(), barrierCapture: vi.fn(), barrierPublish: vi.fn(), readSelection: vi.fn(), readTrayRootSelection: vi.fn(), ready: true, showLocation: vi.fn(), showTray: vi.fn(), hideTray: vi.fn(), transparency: vi.fn(), clear: vi.fn(), cancelPicking: vi.fn(), instances: 0, events: [] as ((event: { type: string; payload: Record<string, unknown> }) => void)[] }));
 vi.mock('@/api/pathfinder', async importOriginal => {
   const original = await importOriginal<typeof import('@/api/pathfinder')>();
   return { ...original, fetchPathFinderState: vi.fn(), fetchPathFinderLookupPlan: vi.fn(), fetchPathFinderProposal: vi.fn(), fetchPathFinderJob: vi.fn(), pathFinderRequest: vi.fn(), submitPathFinderCalculation: vi.fn() };
@@ -15,7 +15,7 @@ vi.mock('@/api/pathfinder', async importOriginal => {
 vi.mock('@/api/projectModels', () => ({ fetchProjectModels: vi.fn() }));
 vi.mock('@/viewer/ViewerController', () => ({ ViewerController: class {
   constructor(options: { onEvent: (event: { type: string; payload: Record<string, unknown> }) => void }) { facts.instances++; facts.events.push(options.onEvent); } dispose = facts.disposed; load = facts.load;
-  readSelection = facts.readSelection; readTrayRootSelection = facts.readTrayRootSelection; showLocation = facts.showLocation; showTray = facts.showTray; setPathTransparency = facts.transparency; clear = facts.clear; cancelPicking = facts.cancelPicking;
+  readSelection = facts.readSelection; readTrayRootSelection = facts.readTrayRootSelection; showLocation = facts.showLocation; showTray = facts.showTray; hideTray = facts.hideTray; setPathTransparency = facts.transparency; clear = facts.clear; cancelPicking = facts.cancelPicking;
   captureModel = facts.capture; getLoadSnapshot = () => ({ ready: facts.ready });
   captureBarriers = facts.barrierCapture; publishBarriers = facts.barrierPublish;
 } }));
@@ -32,7 +32,7 @@ function state(): PathFinderState { return { schemaVersion: 1, projectId, regist
   locations: [{ id: locationId, name: 'EQ-001', aliases: ['Equipment A'], revision: '1', binding: null }] }; }
 let container: { current: HTMLDivElement };
 beforeEach(() => {
-  vi.clearAllMocks(); facts.instances = 0; facts.events.length = 0; facts.ready = true; facts.readTrayRootSelection.mockReset(); facts.showTray.mockReset().mockResolvedValue(undefined); container = { current: document.createElement('div') }; document.body.append(container.current);
+  vi.clearAllMocks(); facts.instances = 0; facts.events.length = 0; facts.ready = true; facts.readTrayRootSelection.mockReset(); facts.showTray.mockReset().mockResolvedValue(undefined); facts.hideTray.mockReset().mockResolvedValue(undefined); container = { current: document.createElement('div') }; document.body.append(container.current);
   vi.mocked(fetchPathFinderState).mockResolvedValue(state()); vi.mocked(pathFinderRequest).mockResolvedValue({ locationId });
   vi.mocked(submitPathFinderCalculation).mockReset().mockResolvedValue({ kind: 'acknowledged', jobId: locationId, registryRevision: '8', duplicate: false });
   vi.mocked(fetchPathFinderProposal).mockReset(); vi.mocked(fetchPathFinderJob).mockReset();
@@ -110,6 +110,121 @@ describe('fresh popup calculation submission without Viewer appearance changes',
     act(() => view.result.current.reloadViewer());
     await act(async () => { finish(); expect(await pending).toBe(false); });
     expect(facts.clear).not.toHaveBeenCalled(); view.unmount();
+  });
+  it('hides a tray only for the ready matching model and waits without locking the project or writing data', async () => {
+    const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
+    await act(async () => { expect(await view.result.current.hideTray(preparationModelScope)).toBe(false); });
+    expect(facts.hideTray).not.toHaveBeenCalled();
+    act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+    for (const mismatch of [{ modelVersionId: locationId }, { selectionRevision: '9' }, { contentFingerprint: 'b'.repeat(64) }]) {
+      await act(async () => { expect(await view.result.current.hideTray({ ...preparationModelScope, ...mismatch })).toBe(false); });
+    }
+    expect(facts.hideTray).not.toHaveBeenCalled();
+    let finish!: () => void; facts.hideTray.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+    let hidden: boolean | undefined, pending!: Promise<void>;
+    act(() => { pending = view.result.current.hideTray(preparationModelScope).then(value => { hidden = value; }); });
+    expect(hidden).toBeUndefined(); expect(view.result.current.busy).toBe(false);
+    await act(async () => { finish(); await pending; });
+    expect(hidden).toBe(true); expect(facts.hideTray).toHaveBeenCalledExactlyOnceWith();
+    expect(facts.clear).not.toHaveBeenCalled(); expect(facts.showTray).not.toHaveBeenCalled(); expect(facts.transparency).not.toHaveBeenCalled();
+    expect(facts.readSelection).not.toHaveBeenCalled(); expect(pathFinderRequest).not.toHaveBeenCalled();
+    expect(fetchPathFinderState).toHaveBeenCalledTimes(1); view.unmount();
+  });
+  it('reports an incomplete tray restore while keeping the model ready for another hide attempt', async () => {
+    const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
+    act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+    facts.hideTray.mockRejectedValueOnce(new ViewerAccessError('APPEARANCE_RESTORE_FAILED', 0));
+    await act(async () => { expect(await view.result.current.hideTray(preparationModelScope)).toBe(false); });
+    expect(view.result.current.error).toContain('Press Clear again'); expect(view.result.current.viewerPhase).toBe('ready');
+    expect(view.result.current.busy).toBe(false); expect(facts.disposed).not.toHaveBeenCalled();
+    await act(async () => { expect(await view.result.current.hideTray(preparationModelScope)).toBe(true); });
+    expect(pathFinderRequest).not.toHaveBeenCalled(); view.unmount();
+  });
+  it('defers tray cleanup until a current project write finishes while Show continues to refuse busy state', async () => {
+    const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
+    act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+    let finish!: (value: Record<string, unknown>) => void, writing!: Promise<unknown>, hiding!: Promise<boolean>;
+    vi.mocked(pathFinderRequest).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    act(() => { writing = view.result.current.action('/synthetic-write', {}); });
+    expect(view.result.current.busy).toBe(true);
+    act(() => { hiding = view.result.current.hideTray(preparationModelScope); });
+    await act(async () => { expect(await view.result.current.showTray(preparationModelScope, [55])).toBe(false); });
+    expect(facts.hideTray).not.toHaveBeenCalled(); expect(facts.showTray).not.toHaveBeenCalled();
+    await act(async () => { finish({ accepted: true }); await writing; });
+    await act(async () => { expect(await hiding).toBe(true); });
+    expect(facts.hideTray).toHaveBeenCalledOnce(); expect(facts.clear).not.toHaveBeenCalled();
+    expect(pathFinderRequest).toHaveBeenCalledTimes(1); view.unmount();
+  });
+  it('waits for an active preparation capture instead of aborting it to restore a tray', async () => {
+    const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
+    act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+    let finish!: (value: unknown) => void, preparing!: Promise<unknown>, hiding!: Promise<boolean>;
+    facts.capture.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    act(() => { preparing = view.result.current.runProjectPreparation(preparationModelScope,
+      viewer => viewer.capture({ routeCodes: ['/BC1'], allowedCategories: ['Control'], equipmentNames: [] })); });
+    const signal = facts.capture.mock.calls[0][2].signal as AbortSignal;
+    act(() => { hiding = view.result.current.hideTray(preparationModelScope); });
+    expect(signal.aborted).toBe(false); expect(facts.hideTray).not.toHaveBeenCalled();
+    expect(facts.clear).not.toHaveBeenCalled(); expect(facts.cancelPicking).not.toHaveBeenCalled();
+    await act(async () => { finish({ snapshot: { fixture: 'completed capture' }, summary: {} }); await preparing; });
+    await act(async () => { expect(await hiding).toBe(true); });
+    expect(signal.aborted).toBe(false); expect(facts.hideTray).toHaveBeenCalledOnce();
+    expect(pathFinderRequest).not.toHaveBeenCalled(); view.unmount();
+  });
+  it('does not let deferred old tray cleanup hide a new tray accepted after the project becomes idle', async () => {
+    const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
+    act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+    let finish!: (value: Record<string, unknown>) => void, writing!: Promise<unknown>, hiding!: Promise<boolean>;
+    vi.mocked(pathFinderRequest).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    act(() => { writing = view.result.current.action('/synthetic-write', {}); });
+    act(() => { hiding = view.result.current.hideTray(preparationModelScope); });
+    await act(async () => { finish({ accepted: true }); await writing; });
+    await act(async () => { expect(await view.result.current.showTray(preparationModelScope, [66])).toBe(true); });
+    await act(async () => { expect(await hiding).toBe(false); });
+    expect(facts.showTray).toHaveBeenCalledExactlyOnceWith([66]); expect(facts.hideTray).not.toHaveBeenCalled();
+    expect(facts.clear).not.toHaveBeenCalled(); expect(pathFinderRequest).toHaveBeenCalledTimes(1); view.unmount();
+  });
+  it.each(['model', 'logout'] as const)('abandons deferred tray cleanup after %s changes without a display mutation', async change => {
+    const initialProps = { token: 'token' as string | null };
+    const view = renderHook(props => usePathFinder({ projectId, loadedProjectId: projectId, ...props, isAdmin: true, container, automaticStatePolling: false }), { initialProps });
+    await waitFor(() => expect(facts.instances).toBe(1)); act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+    let finish!: (value: Record<string, unknown>) => void, writing!: Promise<unknown>, hiding!: Promise<boolean>;
+    vi.mocked(pathFinderRequest).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    act(() => { writing = view.result.current.action('/synthetic-write', {}); });
+    act(() => { hiding = view.result.current.hideTray(preparationModelScope); });
+    expect(facts.hideTray).not.toHaveBeenCalled();
+    if (change === 'logout') view.rerender({ token: null });
+    else {
+      const next = state(); next.activeModel.contentFingerprint = 'b'.repeat(64);
+      vi.mocked(fetchPathFinderState).mockResolvedValue(next); await act(() => view.result.current.refreshState());
+    }
+    await act(async () => { finish({ accepted: true }); await writing; });
+    await act(async () => { expect(await hiding).toBe(false); });
+    expect(facts.hideTray).not.toHaveBeenCalled(); expect(facts.clear).not.toHaveBeenCalled();
+    expect(pathFinderRequest).toHaveBeenCalledTimes(1); view.unmount();
+  });
+  it.each(['reload', 'logout', 'role', 'model', 'selection', 'fingerprint', 'access'] as const)('rejects a late tray hide acknowledgement after %s changed', async change => {
+    const initialProps = { token: 'token' as string | null, isAdmin: true };
+    const view = renderHook(props => usePathFinder({ projectId, loadedProjectId: projectId, ...props, container, automaticStatePolling: false }), { initialProps });
+    await waitFor(() => expect(facts.instances).toBe(1)); act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+    let finish!: () => void, pending!: Promise<boolean>;
+    facts.hideTray.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+    act(() => { pending = view.result.current.hideTray(preparationModelScope); });
+    if (change === 'reload') act(() => view.result.current.reloadViewer());
+    else if (change === 'logout') view.rerender({ ...initialProps, token: null });
+    else if (change === 'role') view.rerender({ ...initialProps, isAdmin: false });
+    else if (change === 'access') act(() => facts.events[0]({ type: 'ERROR', payload: { code: 'ACCESS_REVOKED', operation: 'viewer' } }));
+    else {
+      const next = state();
+      if (change === 'model') next.activeModel.modelVersionId = locationId;
+      if (change === 'selection') next.activeModel.selectionRevision = '77';
+      if (change === 'fingerprint') next.activeModel.contentFingerprint = 'b'.repeat(64);
+      vi.mocked(fetchPathFinderState).mockResolvedValue(next);
+      await act(() => view.result.current.refreshState());
+    }
+    await act(async () => { finish(); expect(await pending).toBe(false); });
+    expect(facts.hideTray).toHaveBeenCalledTimes(1); expect(facts.clear).not.toHaveBeenCalled();
+    expect(pathFinderRequest).not.toHaveBeenCalled(); view.unmount();
   });
   const preferences = (): PathFinderPreferences => ({ secondaryDistanceMeters: 2, preferVerticalApproach: true,
     barrierRouting: { schemaVersion: 'wfc.pf.barrier-admission-intent.v1', scope: barrierRequest().scope,

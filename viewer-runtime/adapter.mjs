@@ -227,7 +227,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
       pathfinder = createPathFinderController(viewer, { window, signal });
       const loadedModel = viewer.model;
       multipart = createBarrierMultipartRuntime(viewer, { descriptor, signal, isCurrent: () => !finished && viewer.model != null });
-      let computedPath = false, legacyPath = false;
+      let computedPath = false, legacyPath = false, trayDisplay = false;
       async function captureEvent(captureId, index, operationSignal, onProgress) {
         if (!capture || capture.id !== captureId || capture.index !== index || capture.reading) throw safeError('EXTRACTION_FAILED');
         const currentCapture = capture; currentCapture.reading = true; currentCapture.onProgress = onProgress;
@@ -266,7 +266,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
         // Restore only our route appearance. Ghost/isolation must not become an
         // automatic endpoint exclusion, and a failed restoration must refuse.
         routes.prepareForVisibilityObservation(); legacyPath = false;
-        pathfinder.prepareForVisibilityObservation(); computedPath = false;
+        pathfinder.prepareForVisibilityObservation(); computedPath = trayDisplay = false;
       }
       async function inputAck(state, request, operationSignal) {
         if (capture !== state || state.reading || state.iterator) throw safeError('EXTRACTION_FAILED');
@@ -300,16 +300,17 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
         showRoute(text, options = {}) {
           const bindings = options.routingBindings === undefined ? undefined : parseRoutingBindings(options.routingBindings, descriptor);
           if (options.routingBindings !== undefined && !bindings) throw safeError('ROUTING_BINDINGS_INVALID');
-          pathfinder.clear(); computedPath = false; legacyPath = true;
+          pathfinder.clear(); computedPath = trayDisplay = false; legacyPath = true;
           return routes.showRoute(text, { ...options, routingBindings: bindings });
         },
         clearRoute() {
           cancelCapture();
-          if (computedPath) pathfinder.clear(); else if (legacyPath) routes.clearRoute(); else { viewer.clearSelection(); viewer.fitToView(); }
-          computedPath = legacyPath = false;
+          if (computedPath || trayDisplay) pathfinder.clear(); else if (legacyPath) routes.clearRoute(); else { viewer.clearSelection(); viewer.fitToView(); }
+          if (trayDisplay) viewer.fitToView();
+          computedPath = legacyPath = trayDisplay = false;
         },
         fitRoute() { if (computedPath) pathfinder.fit(); else routes.fitRoute(); },
-        showComputedPath(value) { if (legacyPath) routes.clearRoute(); legacyPath = false; const result = pathfinder.showPath(value); computedPath = true; return result; },
+        showComputedPath(value) { if (legacyPath) routes.clearRoute(); legacyPath = false; const result = pathfinder.showPath(value); computedPath = true; trayDisplay = false; return result; },
         readModelObjects: pathfinder.readObjects,
         readPreparationObjects(request, operationSignal) {
           active(operationSignal); prepareForEndpointVisibility();
@@ -352,15 +353,19 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
           try { tree = await locationTree(loadedModel, displaySignal); }
           catch (error) { if (error?.code === 'LOCATION_UNAVAILABLE') throw safeError('TRAY_UNAVAILABLE'); throw error; }
           currentModel();
-          if (!ids.every(id => containsLocation(tree, id)) || typeof viewer.show !== 'function' || typeof viewer.fitToView !== 'function') throw safeError('TRAY_UNAVAILABLE');
+          if (!ids.every(id => containsLocation(tree, id)) || typeof viewer.fitToView !== 'function') throw safeError('TRAY_UNAVAILABLE');
           await beforeCommit();
           currentModel();
           try {
-            // Reveal all resolved roots together, preserving the user's current
-            // selection and any route overlays, Ghost or appearance baseline.
-            viewer.show(ids, loadedModel);
+            if (legacyPath) { routes.clearRoute(); legacyPath = false; }
+            trayDisplay = true;
+            pathfinder.showTray(ids); computedPath = false;
             viewer.fitToView(ids, loadedModel);
-          } catch { throw safeError('TRAY_UNAVAILABLE'); }
+          } catch {
+            try { pathfinder.clear({ preserveSelection: true }); computedPath = trayDisplay = false; }
+            catch { throw safeError('APPEARANCE_RESTORE_FAILED'); }
+            throw safeError('TRAY_UNAVAILABLE');
+          }
         },
         setPathTransparency: pathfinder.setTransparency,
         pickPoint: pathfinder.pickPoint,

@@ -15,11 +15,13 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
   const state = useProjectPreparation(pf, active);
   const [query, setQuery] = useState('');
   const [reading, setReading] = useState<string | null>(null);
-  const [display, setDisplay] = useState<{ owner: string; scope: string; trayId: string; status: 'showing' | 'shown' | 'failed' } | null>(null);
+  const [display, setDisplay] = useState<{ owner: string; scope: string; trayId: string; status: 'showing' | 'shown' | 'failed' | 'hiding' | 'hide-failed' } | null>(null);
+  const [showError, setShowError] = useState<{ owner: string; scope: string; trayId: string } | null>(null);
   const [selectionError, setSelectionError] = useState<{ trayId: string; message: string } | null>(null);
   const [permissions, setPermissions] = useState<{ owner: string; value: RoutingPurposePolicy } | null>(null);
   const pending = useRef<object | null>(null);
   const pendingDisplay = useRef<object | null>(null);
+  const ownedPeek = useRef<{ restore: () => Promise<boolean> } | null>(null);
   const owner = JSON.stringify([pf.preparationAccess, state.context?.scope.modelVersionId,
     state.context?.scope.contentFingerprint, state.context?.scope.selectionRevision, pf.data?.activeModel, pf.preparationViewerGeneration, active]);
   const permissionOwner = JSON.stringify([pf.preparationAccess, state.context?.projectId,
@@ -27,7 +29,8 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
   const context = state.context;
   const displayScope = JSON.stringify(context?.scope);
   const currentDisplay = display?.owner === owner && display.scope === displayScope ? display : null;
-  const showPending = display?.owner === owner && display.status === 'showing';
+  const currentShowError = showError?.owner === owner && showError.scope === displayScope ? showError : null;
+  const displayPending = display?.owner === owner && (display.status === 'showing' || display.status === 'hiding');
   const modelCurrent = Boolean(context && pf.data?.activeModel && context.projectId === pf.preparationAccess?.projectId && sameModel(pf.data.activeModel, context.scope));
   const readyNotificationKey = active && state.networkReady && modelCurrent && context?.currentAggregate && pf.viewerPhase === 'ready'
     ? state.networkReadinessKey : null;
@@ -35,9 +38,17 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
   const latestOwner = useRef(owner), latestScope = useRef(state.context?.scope);
   latestOwner.current = owner; latestScope.current = state.context?.scope;
   useEffect(() => {
-    pending.current = null; pendingDisplay.current = null; setReading(null); setDisplay(null); setSelectionError(null); setQuery('');
+    pending.current = null; pendingDisplay.current = null; setReading(null); setDisplay(null); setShowError(null); setSelectionError(null); setQuery('');
     return () => { pending.current = null; pendingDisplay.current = null; };
   }, [owner]);
+  useEffect(() => {
+    pendingDisplay.current = null; setDisplay(null); setShowError(null);
+    return () => { pendingDisplay.current = null; };
+  }, [displayScope]);
+  useEffect(() => () => {
+    const peek = ownedPeek.current; ownedPeek.current = null;
+    if (peek) void peek.restore().catch(() => {});
+  }, [owner, displayScope]);
   const working = state.busy || Boolean(reading);
   useEffect(() => {
     onBusyChange?.(working);
@@ -75,7 +86,7 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
   const filtered = context?.trays.filter(tray => !query.trim() || [tray.rawName, tray.routeName, tray.purposeKey ?? '']
     .some(value => searchText(value).includes(searchText(query)))) ?? [];
   const disabled = !active || pf.busy || pf.viewerPhase !== 'ready';
-  const writeDisabled = disabled || working || showPending || state.loading;
+  const writeDisabled = disabled || working || displayPending || state.loading;
   const disabledReason = !active ? 'Open Routes to use these controls.'
     : pf.viewerPhase === 'loading' ? 'The model is loading. Wait for it to finish.'
       : pf.viewerPhase === 'no-model' ? 'Load a model to use these controls.'
@@ -84,7 +95,7 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
             : state.loading ? 'Reading the current tray status…'
               : state.busy ? 'Checking project trays. You can stop this check.'
                 : reading ? 'Saving the selected tray and updating the network…'
-                  : showPending ? 'Showing the tray in the model…'
+                  : displayPending ? display?.status === 'hiding' ? 'Restoring the normal model view…' : 'Showing the tray in the model…'
                     : state.unknown ? 'An earlier tray update needs checking. Use Discover project tray candidates to continue.' : null;
   const show = async (trayId: string) => {
     if (!context || disabled || reading || !modelCurrent || pending.current || pendingDisplay.current) return;
@@ -93,12 +104,50 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
     const currentOwner = latestOwner.current, scope = { ...context.scope }, scopeKey = JSON.stringify(scope), ticket = {};
     const current = () => pendingDisplay.current === ticket && latestOwner.current === currentOwner
       && JSON.stringify(latestScope.current) === scopeKey;
-    pendingDisplay.current = ticket; setDisplay({ owner: currentOwner, scope: scopeKey, trayId, status: 'showing' });
+    const previousPeek = ownedPeek.current, previousDisplay = currentDisplay, peek = { restore: () => pf.hideTray(scope) };
+    const failedDisplay = previousDisplay ?? { owner: currentOwner, scope: scopeKey, trayId, status: 'failed' as const };
+    ownedPeek.current = peek;
+    pendingDisplay.current = ticket; setShowError(null); setDisplay({ owner: currentOwner, scope: scopeKey, trayId, status: 'showing' });
     try {
       const shown = await pf.showTray(scope, [...target.objectIds]);
-      if (current()) setDisplay({ owner: currentOwner, scope: scopeKey, trayId, status: shown ? 'shown' : 'failed' });
+      if (current()) {
+        if (!shown) {
+          ownedPeek.current = previousPeek ?? peek;
+          setShowError({ owner: currentOwner, scope: scopeKey, trayId });
+        }
+        setDisplay(shown ? { owner: currentOwner, scope: scopeKey, trayId, status: 'shown' } : failedDisplay);
+      }
     } catch {
-      if (current()) setDisplay({ owner: currentOwner, scope: scopeKey, trayId, status: 'failed' });
+      if (current()) {
+        ownedPeek.current = previousPeek ?? peek;
+        setDisplay(failedDisplay); setShowError({ owner: currentOwner, scope: scopeKey, trayId });
+      }
+    } finally {
+      if (pendingDisplay.current === ticket) {
+        const completedInScope = current(); pendingDisplay.current = null;
+        if (!completedInScope && latestOwner.current === currentOwner) setDisplay(null);
+      }
+    }
+  };
+  const hide = async (trayId: string) => {
+    if (!context || disabled || reading || !modelCurrent || pending.current || pendingDisplay.current
+      || currentDisplay?.trayId !== trayId || !['shown', 'failed', 'hide-failed'].includes(currentDisplay.status)) return;
+    const currentOwner = latestOwner.current, scope = { ...context.scope }, scopeKey = JSON.stringify(scope), ticket = {};
+    const current = () => pendingDisplay.current === ticket && latestOwner.current === currentOwner
+      && JSON.stringify(latestScope.current) === scopeKey;
+    const peek = ownedPeek.current; ownedPeek.current = null;
+    pendingDisplay.current = ticket; setShowError(null); setDisplay({ owner: currentOwner, scope: scopeKey, trayId, status: 'hiding' });
+    try {
+      const hidden = await pf.hideTray(scope);
+      if (current()) {
+        if (!hidden) ownedPeek.current = peek;
+        setDisplay(hidden ? null : { owner: currentOwner, scope: scopeKey, trayId, status: 'hide-failed' });
+      }
+    } catch {
+      if (current()) {
+        ownedPeek.current = peek;
+        setDisplay({ owner: currentOwner, scope: scopeKey, trayId, status: 'hide-failed' });
+      }
     } finally {
       if (pendingDisplay.current === ticket) {
         const completedInScope = current(); pendingDisplay.current = null;
@@ -168,6 +217,8 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
           const target = trayDisplayTarget({ trayId: tray.projectTrayId, context, plan, discovery });
           const unavailable = !modelCurrent ? 'Load the matching model before showing this tray.' : target.message;
           const showing = currentDisplay?.trayId === tray.projectTrayId && currentDisplay.status === 'showing';
+          const hiding = currentDisplay?.trayId === tray.projectTrayId && currentDisplay.status === 'hiding';
+          const canHide = currentDisplay?.trayId === tray.projectTrayId && ['shown', 'hiding', 'hide-failed'].includes(currentDisplay.status);
           return <article key={tray.projectTrayId} aria-label={`Tray ${tray.rawName}`}
           style={{ border: `1px solid ${tokens.colorNeutralStroke2}`, borderRadius: 6, padding: 12, minWidth: 0, overflowWrap: 'anywhere' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
@@ -180,14 +231,20 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
               ? permissions.value.rules.find(rule => rule.purposeKey === tray.purposeKey)?.allowedCategories.join(', ') || 'Routing permitted'
               : 'Routing permitted' : tray.policyState === 'excluded' ? 'Excluded from routing' : 'Set routing permissions in Project Details'}
           </p>
-          <Button disabled={disabled || Boolean(reading) || showPending || !modelCurrent || !target.objectIds.length}
-            aria-label={`Show tray ${tray.rawName}`} onClick={() => void show(tray.projectTrayId)}
+          <Button disabled={disabled || Boolean(reading) || displayPending || !modelCurrent || (!canHide && !target.objectIds.length)}
+            aria-label={`${canHide ? 'Hide' : 'Show'} tray ${tray.rawName}`} onClick={() => void (canHide ? hide(tray.projectTrayId) : show(tray.projectTrayId))}
             style={{ width: '100%', whiteSpace: 'normal', marginBottom: 8 }}>
-            {showing ? 'Showing tray…' : 'Show tray'}
+            {showing ? 'Showing tray…' : hiding ? 'Hiding tray…' : canHide ? 'Hide' : 'Show tray'}
           </Button>
           {unavailable ? <p style={{ marginBlock: 8 }}>{unavailable}</p> : null}
           {currentDisplay?.trayId === tray.projectTrayId && currentDisplay.status === 'shown' ? <p role="status">Tray shown in model.</p> : null}
-          {currentDisplay?.trayId === tray.projectTrayId && currentDisplay.status === 'failed' ? <p role="alert">The tray could not be shown. Check the model and try again.</p> : null}
+          {currentShowError?.trayId === tray.projectTrayId ? <p role="alert">The tray could not be shown. Check the model and try again.</p> : null}
+          {currentDisplay?.trayId === tray.projectTrayId && currentDisplay.status === 'failed' ? <Button
+            disabled={disabled || Boolean(reading) || displayPending || !modelCurrent} aria-label={`Hide tray ${tray.rawName}`}
+            onClick={() => void hide(tray.projectTrayId)} style={{ width: '100%', whiteSpace: 'normal', marginBottom: 8 }}>
+            Hide
+          </Button> : null}
+          {currentDisplay?.trayId === tray.projectTrayId && currentDisplay.status === 'hide-failed' ? <p role="alert">The normal model view could not be restored. Check the model and select Hide to try again.</p> : null}
           <Button disabled={writeDisabled || !modelCurrent || state.unknown} aria-label={`Use current model selection for ${tray.rawName}`}
             onClick={() => void assign(tray.projectTrayId)} style={{ width: '100%', whiteSpace: 'normal' }}>
             {reading === tray.projectTrayId ? 'Assigning tray…' : 'Use current model selection'}

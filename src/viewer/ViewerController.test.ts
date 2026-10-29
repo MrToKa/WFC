@@ -93,6 +93,15 @@ describe('PathFinder protected Viewer capabilities', () => {
     s.message('MODEL_LOADED', { sdkVersion: '7.130.0', format: 'svf', nodeIndexReady: true }, command.requestId, identity);
     return { ...s, identity };
   }
+  async function trayDisplayed() {
+    const s = await loaded();
+    s.send.mockImplementation(value => {
+      if (value.type === 'SHOW_TRAY') s.message('TRAY_SHOWN', { sdkObjectIds: value.payload.sdkObjectIds }, value.requestId, s.identity);
+    });
+    await s.c.showTray([23, 24]);
+    s.send.mockImplementation(() => {});
+    return s;
+  }
   it('reads tray-root IDs with exact load identity and checks selection before and after without requesting rich endpoint metadata', async () => {
     const s = await loaded(), reads = vi.mocked(fetch).mock.calls.length;
     s.send.mockImplementation(value => {
@@ -242,7 +251,7 @@ describe('PathFinder protected Viewer capabilities', () => {
     s.message('LOCATION_SHOWN', { sdkObjectId: 23 }, command.requestId, s.identity);
     expect(s.events.some(event => event.type === 'LOCATION_SHOWN')).toBe(false); expect(s.c.getLoadSnapshot()?.ready).toBe(true);
   });
-  it('tray display freezes all roots, awaits its exact current-load acknowledgement and preserves the committed route', async () => {
+  it('tray display freezes all roots, awaits its exact current-load acknowledgement and retires the previous route display', async () => {
     const s = await loaded(); let received = 0;
     s.send.mockImplementation(value => {
       if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
@@ -250,7 +259,7 @@ describe('PathFinder protected Viewer capabilities', () => {
       if (phase === 'appended') received += value.payload.points.length;
       if (phase) s.message('COMPUTED_PATH_UPDATED', { pathId: value.payload.pathId, phase, received }, value.requestId, s.identity);
     });
-    const routeRequestId = await s.c.showComputedPath({ pathId: generateId(), points: [[0, 0, 0]], objectIds: [23] });
+    await s.c.showComputedPath({ pathId: generateId(), points: [[0, 0, 0]], objectIds: [23] });
     const clearCount = s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE').length;
     const ids = [23, 24]; let shown = false; const showing = s.c.showTray(ids).then(() => { shown = true; }); ids[0] = 25;
     await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'SHOW_TRAY')).toBe(true));
@@ -261,7 +270,8 @@ describe('PathFinder protected Viewer capabilities', () => {
     s.message('TRAY_SHOWN', { sdkObjectIds: [23, 24] }, command.requestId, s.identity);
     await showing; expect(shown).toBe(true);
     expect(s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE')).toHaveLength(clearCount);
-    s.c.zoom(); expect(s.send.mock.calls.at(-1)?.[0]).toMatchObject({ type: 'ZOOM_ROUTE', payload: { routeRequestId } });
+    expect(() => s.c.zoom()).toThrow('No drawable route');
+    await expect(s.c.setPathTransparency(75)).rejects.toThrow('No drawable route');
   });
   it('tray display rejects empty, invalid, duplicated and oversized root sets before checking access or sending commands', async () => {
     const s = await loaded(), fetchCount = vi.mocked(fetch).mock.calls.length, sends = s.send.mock.calls.length;
@@ -308,6 +318,88 @@ describe('PathFinder protected Viewer capabilities', () => {
     s.message('ROUTE_CLEARED', {}, cleared, s.identity);
     s.message('TRAY_SHOWN', { sdkObjectIds: [23, 24] }, command.requestId, s.identity);
     expect(s.events.some(event => event.type === 'TRAY_SHOWN')).toBe(false); expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+  });
+  it('tray inspection cancels a pending computed commit so its late receipt cannot restore route ownership', async () => {
+    const s = await loaded(); let received = 0;
+    s.send.mockImplementation(value => {
+      if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
+      const phase = value.type === 'BEGIN_COMPUTED_PATH' ? 'begun' : value.type === 'APPEND_COMPUTED_PATH' ? 'appended' : null;
+      if (phase === 'appended') received += value.payload.points.length;
+      if (phase) s.message('COMPUTED_PATH_UPDATED', { pathId: value.payload.pathId, phase, received }, value.requestId, s.identity);
+    });
+    const computing = s.c.showComputedPath({ pathId: generateId(), points: [[0, 0, 0]], objectIds: [23] });
+    const rejected = expect(computing).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'COMMIT_COMPUTED_PATH')).toBe(true));
+    const commit = s.send.mock.calls.find(call => call[0].type === 'COMMIT_COMPUTED_PATH')![0];
+    const showing = s.c.showTray([23, 24]);
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'SHOW_TRAY')).toBe(true));
+    await rejected;
+    s.message('COMPUTED_PATH_UPDATED', { pathId: commit.payload.pathId, phase: 'displayed', received }, commit.requestId, s.identity);
+    const tray = s.send.mock.calls.find(call => call[0].type === 'SHOW_TRAY')![0];
+    s.message('TRAY_SHOWN', { sdkObjectIds: [23, 24] }, tray.requestId, s.identity); await showing;
+    expect(s.events.some(event => event.type === 'COMPUTED_PATH_UPDATED' && event.payload.phase === 'displayed')).toBe(false);
+    expect(() => s.c.zoom()).toThrow('No drawable route'); expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+  });
+  it('hiding a tray waits for the exact clear acknowledgement without starting any server write', async () => {
+    const s = await trayDisplayed(), fetchCount = vi.mocked(fetch).mock.calls.length;
+    let hidden = false; const hiding = s.c.hideTray().then(() => { hidden = true; });
+    const command = s.send.mock.calls.find(call => call[0].type === 'CLEAR_ROUTE')![0];
+    expect(command.payload).toEqual({ reason: 'user' }); expect(hidden).toBe(false);
+    s.message('ROUTE_CLEARED', {}, command.requestId, { ...s.identity, loadId: generateId() });
+    await Promise.resolve(); expect(hidden).toBe(false);
+    s.message('ROUTE_CLEARED', {}, command.requestId, s.identity); await hiding;
+    expect(hidden).toBe(true); expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+    expect(vi.mocked(fetch).mock.calls).toHaveLength(fetchCount); expect(() => s.c.zoom()).toThrow('No drawable route');
+  });
+  it('a newer clear cancels tray hiding and the old acknowledgement cannot finish it', async () => {
+    const s = await trayDisplayed(), hiding = s.c.hideTray(), rejected = expect(hiding).rejects.toMatchObject({ name: 'AbortError' });
+    const old = s.send.mock.calls.find(call => call[0].type === 'CLEAR_ROUTE')![0];
+    const current = s.c.clear(); await rejected;
+    const count = s.events.filter(event => event.type === 'ROUTE_CLEARED').length;
+    s.message('ROUTE_CLEARED', {}, old.requestId, s.identity);
+    expect(s.events.filter(event => event.type === 'ROUTE_CLEARED')).toHaveLength(count);
+    s.message('ROUTE_CLEARED', {}, current, s.identity);
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+  });
+  it.each(['reload', 'logout'] as const)('cancels an in-flight tray hide on %s and ignores its late receipt', async reason => {
+    const s = await trayDisplayed(), hiding = s.c.hideTray(), rejected = expect(hiding).rejects.toMatchObject({ name: 'AbortError' });
+    const command = s.send.mock.calls.find(call => call[0].type === 'CLEAR_ROUTE')![0];
+    const reloading = reason === 'reload' ? s.c.load(versionId) : null;
+    if (reason === 'logout') invalidateViewerLogin('login-a');
+    await rejected;
+    const count = s.events.filter(event => event.type === 'ROUTE_CLEARED').length;
+    s.message('ROUTE_CLEARED', {}, command.requestId, s.identity);
+    expect(s.events.filter(event => event.type === 'ROUTE_CLEARED')).toHaveLength(count);
+    expect(s.c.getLoadSnapshot()?.ready).not.toBe(true);
+    s.c.dispose(); await reloading;
+  });
+  it('keeps a failed tray restore retryable and only completes after a successful clear receipt', async () => {
+    const s = await trayDisplayed();
+    s.send.mockImplementation(value => {
+      if (value.type === 'CLEAR_ROUTE') s.message('ERROR', { code: 'APPEARANCE_RESTORE_FAILED', message: 'Restore incomplete', retryable: true, operation: 'CLEAR_ROUTE' }, value.requestId, s.identity);
+    });
+    await expect(s.c.hideTray()).rejects.toMatchObject({ code: 'APPEARANCE_RESTORE_FAILED' });
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+    s.send.mockImplementation(value => { if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity); });
+    const previous = s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE').length;
+    await expect(s.c.hideTray()).resolves.toBeUndefined();
+    expect(s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE')).toHaveLength(previous + 1);
+  });
+  it.each(['computed route', 'explicit clear'] as const)('late tray cleanup does not clear a newer %s', async replacement => {
+    const s = await trayDisplayed(); let received = 0;
+    s.send.mockImplementation(value => {
+      if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
+      const phase = value.type === 'BEGIN_COMPUTED_PATH' ? 'begun' : value.type === 'APPEND_COMPUTED_PATH' ? 'appended' : value.type === 'COMMIT_COMPUTED_PATH' ? 'displayed' : null;
+      if (phase === 'appended') received += value.payload.points.length;
+      if (phase) s.message('COMPUTED_PATH_UPDATED', { pathId: value.payload.pathId, phase, received }, value.requestId, s.identity);
+    });
+    const routeRequestId = replacement === 'computed route'
+      ? await s.c.showComputedPath({ pathId: generateId(), points: [[0, 0, 0]], objectIds: [23] }) : null;
+    if (replacement === 'explicit clear') s.c.clear();
+    const count = s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE').length;
+    await expect(s.c.hideTray()).resolves.toBeUndefined();
+    expect(s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE')).toHaveLength(count);
+    if (routeRequestId) { s.c.zoom(); expect(s.send.mock.calls.at(-1)?.[0]).toMatchObject({ type: 'ZOOM_ROUTE', payload: { routeRequestId } }); }
   });
   it('small multipart controls retain exact intent identity and leave model appearance alone', async () => {
     const s = await loaded(), intentId = generateId();

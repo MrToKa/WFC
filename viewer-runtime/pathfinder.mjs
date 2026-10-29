@@ -152,7 +152,7 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
     for (const state of pendingCloneCleanup) { if (restoreState(state)) pendingCloneCleanup.delete(state); else failed = true; }
     if (failed) { recoveryRequired = true; throw restoreFailure(appearance?.lastRestoreError ?? [...pendingCloneCleanup][0]?.lastRestoreError); }
   }
-  function clear() {
+  function clear({ preserveSelection = false } = {}) {
     viewGeneration++; transparencyOperation++;
     let failed = false, firstError;
     const attempt = work => { try { work(); return true; } catch (error) { failed = true; firstError ??= error; return false; } };
@@ -169,7 +169,8 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
       if (!prior.passRestored && attempt(() => { if (typeof prior.pass === 'boolean') viewer.impl.toggleGhosting(prior.pass); })) prior.passRestored = true;
       if (prior.visibilityRestored && !prior.materials.size && prior.preferenceRestored && prior.passRestored) ghost = undefined;
     }
-    attempt(() => viewer.clearSelection()); attempt(() => viewer.impl.invalidate(true, true, true));
+    if (!preserveSelection) attempt(() => viewer.clearSelection());
+    attempt(() => viewer.impl.invalidate(true, true, true));
     recoveryRequired = failed;
     if (failed) throw restoreFailure(firstError);
   }
@@ -179,6 +180,25 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
     // hiding from before PF appearance. A fresh model/controller is required.
     if (baselineVisibilityUnknown) throw fail('PREPARATION_VISIBILITY_UNAVAILABLE');
     if (ghost || appearance || pendingCloneCleanup.size || recoveryRequired || overlays.length || geometries.length || bounds || material || sceneActive) clear();
+  }
+  function showTray(objectIds) {
+    active();
+    if (!Array.isArray(objectIds) || !objectIds.length || objectIds.length > 512 || ![...objectIds].every(positiveId) || new Set(objectIds).size !== objectIds.length) throw fail('TRAY_UNAVAILABLE');
+    const visibility = model.visibilityManager;
+    if (typeof visibility?.getDefaultVisibility !== 'function' || typeof visibility?.getVisibility !== 'function' || typeof visibility?.setVisibility !== 'function'
+      || typeof viewer.isolate !== 'function' || typeof viewer.setGhosting !== 'function' || typeof viewer.impl?.toggleGhosting !== 'function') throw fail('SDK_UNSUPPORTED');
+    // Share the route appearance baseline, but draw no cable line or marker.
+    // Isolating the tray leaves its roots solid and draws the remaining model in Ghost.
+    clear({ preserveSelection: true });
+    try {
+      captureGhost(); viewer.isolate([...objectIds], model);
+      viewer.setGhosting(true); captureGhost(); viewer.impl.toggleGhosting(true);
+      viewer.impl.invalidate(true, true, true);
+    } catch (error) {
+      try { clear({ preserveSelection: true }); }
+      catch (cleanup) { throw restoreFailure(cleanup); }
+      throw error;
+    }
   }
   function showPath({ points, objectIds }) {
     active();
@@ -584,5 +604,5 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
       signal?.addEventListener('abort', abort, { once: true }); operationSignal?.addEventListener('abort', abort, { once: true });
     });
   }
-  return { showPath, fit, clear, prepareForVisibilityObservation, readObjects, readPreparationObjects, readSelection, readTrayRootSelection, setTransparency, pickPoint, dispose() { if (disposed) return; pick?.cancel(); try { clear(); } catch (error) { if (error?.code !== 'APPEARANCE_RESTORE_FAILED') throw error; /* The adapter still finishes the SDK viewer; attached materials remain owned by that SDK teardown. */ } finally { disposed = true; inventoryPromise = externalPromise = preparationEquipment = preparationSubtree = undefined; } } };
+  return { showPath, showTray, fit, clear, prepareForVisibilityObservation, readObjects, readPreparationObjects, readSelection, readTrayRootSelection, setTransparency, pickPoint, dispose() { if (disposed) return; pick?.cancel(); try { clear(); } catch (error) { if (error?.code !== 'APPEARANCE_RESTORE_FAILED') throw error; /* The adapter still finishes the SDK viewer; attached materials remain owned by that SDK teardown. */ } finally { disposed = true; inventoryPromise = externalPromise = preparationEquipment = preparationSubtree = undefined; } } };
 }
