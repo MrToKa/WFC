@@ -28,6 +28,10 @@ jobs:
         run: node --test viewer-runtime/test/generate-id.test.mjs viewer-runtime/test/sha256.test.mjs viewer-runtime/test/producer-host.test.mjs viewer-runtime/test/barrier-multipart-transport.test.mjs viewer-runtime/test/bridge.test.mjs scripts/viewer-runtime/module-closure.test.mjs
       - name: Verify HTTP panel and integrity regressions
         run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/api/httpCryptoCompatibility.test.ts src/pages/ProjectDetails/EndpointBindingPanel.test.tsx src/pages/ProjectDetails/hooks/useRoutingsViewer.test.ts
+      - name: Verify tray Ghost and appearance restoration
+        run: node --test --test-concurrency=2 viewer-runtime/test/adapter.test.mjs viewer-runtime/test/pathfinder.test.mjs
+      - name: Verify tray Show and Hide lifecycle
+        run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/pages/ProjectDetails/ProjectPreparationPanel.test.tsx src/pages/ProjectDetails/hooks/usePathFinder.test.tsx src/viewer/ViewerController.test.ts
       - name: Check application and server types
         run: npm run typecheck
       - name: Build server with shared runtime dependencies

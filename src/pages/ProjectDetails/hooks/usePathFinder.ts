@@ -64,6 +64,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
   const entityReads = useRef<{ proposal: AbortController | null; job: AbortController | null }>({ proposal: null, job: null });
   const isolatedEntityReads = useRef(new Set<AbortController>());
   const popupSubmission = useRef<object | null>(null);
+  const trayDisplaySequence = useRef(0);
   const [revision, setRevision] = useState(0), [view, setView] = useState<View>(initial);
   const latestView = useRef(view); latestView.current = view;
   const live = useCallback((run: Run) => !run.closed && runRef.current === run && latest.current === scope, [scope]);
@@ -386,8 +387,8 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
     }
   }, [captureProgress, isAdmin, live, update]);
   const visible = renderedScope.current === scope ? view : initial;
-  const showTray = useCallback(async (expected: Pick<PreparationScope, 'modelVersionId' | 'contentFingerprint' | 'selectionRevision'>, ids: number[]): Promise<boolean> => {
-    const target = { ...expected }, objectIds = [...ids], run = runRef.current;
+  const displayTray = useCallback(async (expected: Pick<PreparationScope, 'modelVersionId' | 'contentFingerprint' | 'selectionRevision'>, ids: number[] | null): Promise<boolean> => {
+    const target = { ...expected }, objectIds = ids === null ? null : [...ids], run = runRef.current;
     if (!run || !isAdmin || !run.viewer) return false;
     const viewer = run.viewer, generation = run.generation;
     const current = () => {
@@ -396,15 +397,27 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
         && run.modelVersionId === target.modelVersionId && run.selectionRevision === target.selectionRevision && run.contentFingerprint === target.contentFingerprint
         && model?.modelVersionId === target.modelVersionId && model.selectionRevision === target.selectionRevision && model.contentFingerprint === target.contentFingerprint;
     };
-    if (!current() || latestView.current.busy || projectPreparationCapture.current || planningCapture.current || lookupCapture.current) return false;
-    try { await viewer.showTray(objectIds); return current(); }
+    const busy = () => latestView.current.busy || projectPreparationCapture.current || planningCapture.current || lookupCapture.current;
+    if (!current()) return false;
+    if (objectIds === null) {
+      const sequence = trayDisplaySequence.current;
+      // Panel cleanup must restore its appearance without interrupting an active capture.
+      while (current() && busy()) await new Promise<void>(resolve => window.setTimeout(resolve, 50));
+      if (!current() || trayDisplaySequence.current !== sequence) return false;
+    } else {
+      if (busy()) return false;
+      ++trayDisplaySequence.current;
+    }
+    try { if (objectIds === null) await viewer.hideTray(); else await viewer.showTray(objectIds); return current(); }
     catch (error) { if (current() && !(error instanceof DOMException && error.name === 'AbortError')) update(run, { error: message(error) }); return false; }
   }, [isAdmin, live, update]);
+  const showTray = useCallback((expected: Pick<PreparationScope, 'modelVersionId' | 'contentFingerprint' | 'selectionRevision'>, ids: number[]) => displayTray(expected, ids), [displayTray]);
+  const hideTray = useCallback((expected: Pick<PreparationScope, 'modelVersionId' | 'contentFingerprint' | 'selectionRevision'>) => displayTray(expected, null), [displayTray]);
   const clear = useCallback(() => { try { runRef.current?.viewer?.clear(); } catch { /* A terminal viewer is already closed. */ } }, []);
   return { ...visible, preparationAccess: scope, preparationViewerGeneration: visible.viewerPhase === 'ready' ? runRef.current?.generation ?? -1 : -1, runProjectPreparation, refresh: () => { if (visible.viewerPhase === 'error') setRevision(value => value + 1); else void refresh(runRef.current, true); }, refreshState: () => refresh(runRef.current, true), reloadViewer: () => setRevision(value => value + 1), action, actionWithoutRefresh, matchAll, saveLocation, uploadSnapshot, calculate, submitCalculation, readProposal, readJob, reviewProposal, prepareModel, startLookup, readLookup, startPreview, readPreview,
     pickPoint: (): Promise<PickedPoint | null> => viewerAction(viewer => viewer.pickPoint()), cancelPicking: () => runRef.current?.viewer?.cancelPicking(),
     readObjects: (query: string, cursor = 0): Promise<ViewerModelObjectsPage | null> => viewerAction(viewer => viewer.readModelObjects(cursor, query)),
-    readSelection: () => viewerAction(viewer => viewer.readSelection()), readTrayRootSelection, showTray,
+    readSelection: () => viewerAction(viewer => viewer.readSelection()), readTrayRootSelection, showTray, hideTray,
     showLocation: async (sdkObjectId: number): Promise<boolean> => (await viewerAction(async viewer => {
       const expected = visible.data?.activeModel, run = runRef.current;
       if (visible.viewerPhase !== 'ready' || !expected || run?.modelVersionId !== expected.modelVersionId

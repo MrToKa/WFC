@@ -161,7 +161,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     if (!parsed) throw failure('INVALID_MESSAGE');
     return { descriptor: parsed, modelUrl: new URL(parsed.entrypoint, base).href };
   }
-  function stopRoute(exceptRequestId) {
+  function stopRoute(exceptRequestId, clearAppearance = true) {
     routeController?.abort(); routeController = undefined;
     releaseCapture(captureScope, true);
     if (routeRequest) { const entry = requests.get(routeRequest.requestId); if (entry?.status === 'pending') entry.status = 'cancelled'; }
@@ -176,7 +176,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
         controller.abort();
       }
     }
-    handle?.clearRoute();
+    if (clearAppearance) handle?.clearRoute();
   }
   function stopLoad() {
     releaseCapture(captureScope, true);
@@ -289,6 +289,11 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
         await handle.showTray(command.payload.sdkObjectIds, signal, async () => {
           await requirePathFinder(command, signal);
           if (!live()) throw failure('INVALID_STATE');
+          // The tray peek replaces route appearance. Retire stale route and
+          // transparency commands before the current, authorized peek commits.
+          // The adapter restores the old appearance while retaining the model
+          // selection needed by the adjacent tray-assignment action.
+          stopRoute(command.requestId, false);
         });
         if (!live()) return;
         if (!emit(command, 'TRAY_SHOWN', command.payload)) throw failure('INVALID_MESSAGE');

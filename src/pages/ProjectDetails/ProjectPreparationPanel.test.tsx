@@ -19,10 +19,11 @@ function setup() {
     return { objects: (selected?.objects ?? []).map((object: {objectId: number}) => ({ objectId: object.objectId, parentId: 20 })) };
   });
   const showTray = vi.fn(async () => true);
+  const hideTray = vi.fn(async () => true);
   const pf = { preparationAccess: { projectId: state.context.projectId, token: 'test-token' }, data: { activeModel: { ...state.context.scope } }, preparationViewerGeneration: 1, viewerPhase: 'ready', busy: false,
-    showTray, runProjectPreparation: vi.fn(async (_scope, operation) => operation({ readTrayRootSelection: read, readSelection: readMetadata })) } as unknown as ReturnType<typeof usePathFinder>;
+    showTray, hideTray, runProjectPreparation: vi.fn(async (_scope, operation) => operation({ readTrayRootSelection: read, readSelection: readMetadata })) } as unknown as ReturnType<typeof usePathFinder>;
   vi.mocked(useProjectPreparation).mockReturnValue(state as unknown as ReturnType<typeof useProjectPreparation>);
-  return { state, pf, read, readMetadata, showTray, tray: state.context.trays[0] };
+  return { state, pf, read, readMetadata, showTray, hideTray, tray: state.context.trays[0] };
 }
 beforeEach(() => {
   vi.clearAllMocks();
@@ -195,10 +196,11 @@ describe('simple project tray preparation', () => {
 });
 
 describe('project tray inspection', () => {
-  it('waits for the display acknowledgement without changing assignments or creating global busy feedback', async () => {
-    const { state, pf, tray, showTray, read, readMetadata } = setup(), busy = vi.fn();
+  it('waits for show and hide acknowledgements without changing assignments or creating global busy feedback', async () => {
+    const { state, pf, tray, showTray, hideTray, read, readMetadata } = setup(), busy = vi.fn();
     let finish!: (shown: boolean) => void; showTray.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
-    render(<ProjectPreparationPanel pf={pf} active onBusyChange={busy} />);
+    let finishHide!: (hidden: boolean) => void; hideTray.mockImplementationOnce(() => new Promise(resolve => { finishHide = resolve; }));
+    const view = render(<ProjectPreparationPanel pf={pf} active onBusyChange={busy} />);
     const show = screen.getByRole('button', { name: `Show tray ${tray.rawName}` });
     fireEvent.click(show);
     expect(showTray).toHaveBeenCalledExactlyOnceWith(state.context.scope, [1]);
@@ -209,9 +211,23 @@ describe('project tray inspection', () => {
     expect(busy.mock.calls.every(([value]) => value === false)).toBe(true);
     await act(async () => finish(true));
     expect(screen.getByText('Tray shown in model.')).toBeVisible(); expect(show).toBeEnabled();
+    const hide = screen.getByRole('button', { name: `Hide tray ${tray.rawName}` }); expect(hide).toHaveTextContent(/^Hide$/);
     expect(screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` })).toBeEnabled();
+    fireEvent.click(hide);
+    expect(hideTray).toHaveBeenCalledExactlyOnceWith(state.context.scope);
+    expect(hide).toHaveTextContent('Hiding tray…'); expect(hide).toBeDisabled();
+    expect(screen.getByRole('button', { name: `Hide tray ${tray.rawName}` })).toBe(hide);
+    expect(screen.queryByRole('button', { name: `Show tray ${tray.rawName}` })).toBeNull();
+    expect(screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Discover project tray candidates' })).toBeDisabled();
+    await act(async () => finishHide(true));
+    expect(screen.getByRole('button', { name: `Show tray ${tray.rawName}` })).toHaveTextContent('Show tray');
+    expect(screen.queryByText('Tray shown in model.')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Discover project tray candidates' })).toBeEnabled();
+    expect(busy.mock.calls.every(([value]) => value === false)).toBe(true);
     expect(state.assignTray).not.toHaveBeenCalled(); expect(state.checkTrays).not.toHaveBeenCalled();
     expect(read).not.toHaveBeenCalled(); expect(readMetadata).not.toHaveBeenCalled(); expect(pf.runProjectPreparation).not.toHaveBeenCalled();
+    view.unmount(); expect(hideTray).toHaveBeenCalledTimes(1);
   });
   it('shows every manually assigned root before frozen or automatic roots', async () => {
     const { state, pf, tray, showTray } = setup();
@@ -221,6 +237,66 @@ describe('project tray inspection', () => {
     fireEvent.click(screen.getByRole('button', { name: `Show tray ${tray.rawName}` }));
     await waitFor(() => expect(screen.getByText('Tray shown in model.')).toBeVisible());
     expect(showTray).toHaveBeenCalledExactlyOnceWith(state.context.scope, [99, 55]); expect(state.assignTray).not.toHaveBeenCalled();
+  });
+  it('moves the Hide action to the last tray shown and blocks switching while hide is pending', async () => {
+    const { state, pf, tray, showTray, hideTray } = setup();
+    const nextTray = { ...tray, projectTrayId: '85000000-0000-4000-8000-000000000001', rawName: 'A120' };
+    state.context.trays.push(nextTray);
+    state.context.resolutions = [{ id: 'second-tray', projectTrayId: nextTray.projectTrayId, mode: 'roots', rootObjectIds: ['dbid:55'],
+      scope: { ...state.context.scope }, reason: 'Assigned physical tray', actorId: 'admin', createdAt: '2026-10-27T00:00:00Z' }];
+    let finishHide!: (hidden: boolean) => void; hideTray.mockImplementationOnce(() => new Promise(resolve => { finishHide = resolve; }));
+    render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: `Show tray ${tray.rawName}` }));
+    await screen.findByRole('button', { name: `Hide tray ${tray.rawName}` });
+    fireEvent.click(screen.getByRole('button', { name: `Show tray ${nextTray.rawName}` }));
+    const hide = await screen.findByRole('button', { name: `Hide tray ${nextTray.rawName}` });
+    expect(screen.getByRole('button', { name: `Show tray ${tray.rawName}` })).toBeEnabled();
+    expect(showTray).toHaveBeenNthCalledWith(1, state.context.scope, [1]);
+    expect(showTray).toHaveBeenNthCalledWith(2, state.context.scope, [55]);
+    expect(hideTray).not.toHaveBeenCalled();
+    fireEvent.click(hide);
+    expect(screen.getByRole('button', { name: `Show tray ${tray.rawName}` })).toBeDisabled();
+    await act(async () => finishHide(true));
+    expect(screen.getAllByRole('button', { name: /^Show tray / })).toHaveLength(2);
+    expect(hideTray).toHaveBeenCalledExactlyOnceWith(state.context.scope);
+    expect(state.assignTray).not.toHaveBeenCalled(); expect(state.checkTrays).not.toHaveBeenCalled();
+  });
+  it.each(['refused', 'error'] as const)('preserves the shown tray’s Hide action when the next display is %s', async outcome => {
+    const { state, pf, tray, showTray, hideTray } = setup();
+    const nextTray = { ...tray, projectTrayId: '85000000-0000-4000-8000-000000000001', rawName: 'A120' };
+    state.context.trays.push(nextTray);
+    state.context.resolutions = [{ id: 'second-tray', projectTrayId: nextTray.projectTrayId, mode: 'roots', rootObjectIds: ['dbid:55'],
+      scope: { ...state.context.scope }, reason: 'Assigned physical tray', actorId: 'admin', createdAt: '2026-10-27T00:00:00Z' }];
+    showTray.mockResolvedValueOnce(true);
+    if (outcome === 'refused') showTray.mockResolvedValueOnce(false); else showTray.mockRejectedValueOnce(new Error('Viewer preflight failed'));
+    render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: `Show tray ${tray.rawName}` }));
+    await screen.findByRole('button', { name: `Hide tray ${tray.rawName}` });
+    fireEvent.click(screen.getByRole('button', { name: `Show tray ${nextTray.rawName}` }));
+    const nextCard = screen.getByRole('article', { name: `Tray ${nextTray.rawName}` });
+    expect(await within(nextCard).findByRole('alert')).toHaveTextContent('The tray could not be shown.');
+    const hide = screen.getByRole('button', { name: `Hide tray ${tray.rawName}` }); expect(hide).toBeEnabled();
+    expect(within(screen.getByRole('article', { name: `Tray ${tray.rawName}` })).getByText('Tray shown in model.')).toBeVisible();
+    expect(within(nextCard).getByRole('button', { name: `Show tray ${nextTray.rawName}` })).toBeEnabled();
+    expect(hideTray).not.toHaveBeenCalled(); fireEvent.click(hide);
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /^Show tray / })).toHaveLength(2));
+    expect(hideTray).toHaveBeenCalledExactlyOnceWith(state.context.scope);
+    expect(screen.queryByText('Tray shown in model.')).toBeNull();
+    expect(state.assignTray).not.toHaveBeenCalled(); expect(state.checkTrays).not.toHaveBeenCalled();
+  });
+  it.each(['refused', 'error'] as const)('keeps a %s hide retryable without claiming the normal view was restored', async outcome => {
+    const { state, pf, tray, hideTray } = setup();
+    if (outcome === 'refused') hideTray.mockResolvedValueOnce(false); else hideTray.mockRejectedValueOnce(new Error('Viewer failure'));
+    render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: `Show tray ${tray.rawName}` }));
+    const hide = await screen.findByRole('button', { name: `Hide tray ${tray.rawName}` }); fireEvent.click(hide);
+    expect(await screen.findByRole('alert')).toHaveTextContent('The normal model view could not be restored. Check the model and select Hide to try again.');
+    expect(hide).toBeEnabled(); expect(hide).toHaveTextContent(/^Hide$/);
+    expect(screen.queryByRole('button', { name: `Show tray ${tray.rawName}` })).toBeNull();
+    fireEvent.click(hide);
+    expect(await screen.findByRole('button', { name: `Show tray ${tray.rawName}` })).toBeEnabled();
+    expect(screen.queryByRole('alert')).toBeNull(); expect(hideTray).toHaveBeenCalledTimes(2);
+    expect(state.assignTray).not.toHaveBeenCalled(); expect(state.checkTrays).not.toHaveBeenCalled();
   });
   it('can inspect ambiguous candidates during a read-only status check without ready-network or mutation authority', async () => {
     const { state, pf, tray, showTray } = setup(); state.busy = true; state.loading = true; state.unknown = true; state.conflict = true; state.networkReady = false;
@@ -252,6 +328,28 @@ describe('project tray inspection', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('The tray could not be shown.');
     expect(screen.queryByText('Tray shown in model.')).toBeNull(); expect(show).toBeEnabled(); expect(state.assignTray).not.toHaveBeenCalled();
   });
+  it.each(['refused', 'error'] as const)('allows Hide recovery after an initial %s show while keeping Show retryable', async outcome => {
+    const { state, pf, tray, showTray, hideTray } = setup();
+    if (outcome === 'refused') showTray.mockResolvedValueOnce(false); else showTray.mockRejectedValueOnce(new Error('Tray appearance rollback failed'));
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: `Show tray ${tray.rawName}` }));
+    await screen.findByRole('alert');
+    expect(screen.getByRole('button', { name: `Show tray ${tray.rawName}` })).toBeEnabled();
+    const hide = screen.getByRole('button', { name: `Hide tray ${tray.rawName}` }); expect(hide).toBeEnabled();
+    expect(screen.queryByText('Tray shown in model.')).toBeNull(); fireEvent.click(hide);
+    await waitFor(() => expect(screen.queryByRole('button', { name: `Hide tray ${tray.rawName}` })).toBeNull());
+    expect(screen.getByRole('button', { name: `Show tray ${tray.rawName}` })).toBeEnabled();
+    expect(screen.queryByRole('alert')).toBeNull(); expect(hideTray).toHaveBeenCalledExactlyOnceWith(state.context.scope);
+    expect(state.assignTray).not.toHaveBeenCalled(); expect(state.checkTrays).not.toHaveBeenCalled();
+    view.unmount(); expect(hideTray).toHaveBeenCalledTimes(1);
+  });
+  it.each(['refused', 'error'] as const)('retains cleanup ownership after an initial %s show', async outcome => {
+    const { state, pf, tray, showTray, hideTray } = setup();
+    if (outcome === 'refused') showTray.mockResolvedValueOnce(false); else showTray.mockRejectedValueOnce(new Error('Tray appearance rollback failed'));
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: `Show tray ${tray.rawName}` })); await screen.findByRole('alert');
+    view.unmount(); expect(hideTray).toHaveBeenCalledExactlyOnceWith(state.context.scope);
+  });
   it.each(['generation', 'model', 'access', 'inactive', 'scope'] as const)('ignores a late display acknowledgement after a %s change', async change => {
     const { state, pf, tray, showTray } = setup(); let finish!: (shown: boolean) => void;
     showTray.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
@@ -270,6 +368,87 @@ describe('project tray inspection', () => {
       const show = screen.getByRole('button', { name: `Show tray ${tray.rawName}` }); expect(show).toBeEnabled(); fireEvent.click(show);
       expect(await screen.findByText('Tray shown in model.')).toBeVisible(); expect(showTray).toHaveBeenCalledTimes(2);
     }
+  });
+  it.each(['generation', 'model', 'access', 'inactive', 'scope'] as const)('ignores a late hide failure after a %s change', async change => {
+    const { state, pf, tray, hideTray } = setup(); let finish!: (hidden: boolean) => void;
+    hideTray.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: `Show tray ${tray.rawName}` }));
+    fireEvent.click(await screen.findByRole('button', { name: `Hide tray ${tray.rawName}` }));
+    const next = change === 'generation' ? { ...pf, preparationViewerGeneration: 2 }
+      : change === 'model' ? { ...pf, data: { ...pf.data!, activeModel: { ...pf.data!.activeModel, contentFingerprint: 'e'.repeat(64) } } }
+        : change === 'access' ? { ...pf, preparationAccess: { ...pf.preparationAccess, token: 'new-login' } } : pf;
+    if (change === 'scope') vi.mocked(useProjectPreparation).mockReturnValue({ ...state,
+      context: { ...state.context, scope: { ...state.context.scope, routingPolicyRevision: '9' } } } as unknown as ReturnType<typeof useProjectPreparation>);
+    view.rerender(<ProjectPreparationPanel pf={next} active={change !== 'inactive'} />);
+    await act(async () => finish(false));
+    expect(screen.getByRole('button', { name: `Show tray ${tray.rawName}` })).toHaveTextContent('Show tray');
+    expect(screen.queryByRole('button', { name: `Hide tray ${tray.rawName}` })).toBeNull();
+    expect(screen.queryByText(/could not be restored/)).toBeNull();
+    expect(screen.queryByText('Tray shown in model.')).toBeNull();
+  });
+  it('does not clear a newer tray display when a previous scope finishes hiding', async () => {
+    const { state, pf, tray, showTray, hideTray } = setup(); let finish!: (hidden: boolean) => void;
+    hideTray.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: `Show tray ${tray.rawName}` }));
+    fireEvent.click(await screen.findByRole('button', { name: `Hide tray ${tray.rawName}` }));
+    const changedScope = { ...state.context.scope, routingPolicyRevision: '9' };
+    vi.mocked(useProjectPreparation).mockReturnValue({ ...state,
+      context: { ...state.context, scope: changedScope } } as unknown as ReturnType<typeof useProjectPreparation>);
+    view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    const show = screen.getByRole('button', { name: `Show tray ${tray.rawName}` }); expect(show).toBeEnabled(); fireEvent.click(show);
+    await screen.findByRole('button', { name: `Hide tray ${tray.rawName}` });
+    await act(async () => finish(true));
+    expect(screen.getByRole('button', { name: `Hide tray ${tray.rawName}` })).toBeEnabled();
+    expect(screen.getByText('Tray shown in model.')).toBeVisible();
+    expect(showTray).toHaveBeenNthCalledWith(2, changedScope, [1]);
+    expect(hideTray).toHaveBeenCalledExactlyOnceWith(state.context.scope);
+  });
+  it.each([
+    ['shown', 'leave'], ['pending', 'leave'], ['shown', 'unmount'], ['pending', 'unmount'],
+  ] as const)('restores this panel’s %s peek on %s without reviving late feedback', async (phase, exit) => {
+    const { state, pf, tray, showTray, hideTray } = setup(); let finish!: (shown: boolean) => void;
+    if (phase === 'pending') showTray.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: `Show tray ${tray.rawName}` }));
+    if (phase === 'shown') await screen.findByRole('button', { name: `Hide tray ${tray.rawName}` });
+    if (exit === 'leave') view.rerender(<ProjectPreparationPanel pf={pf} active={false} />); else view.unmount();
+    expect(hideTray).toHaveBeenCalledExactlyOnceWith(state.context.scope);
+    if (phase === 'pending') await act(async () => finish(true));
+    expect(screen.queryByText('Tray shown in model.')).toBeNull();
+    expect(screen.queryByRole('button', { name: `Hide tray ${tray.rawName}` })).toBeNull();
+    view.unmount(); expect(hideTray).toHaveBeenCalledTimes(1);
+  });
+  it('releases the previous scope before allowing a new tray peek', async () => {
+    const { state, pf, tray, showTray, hideTray } = setup();
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: `Show tray ${tray.rawName}` }));
+    await screen.findByRole('button', { name: `Hide tray ${tray.rawName}` });
+    const changedScope = { ...state.context.scope, routingPolicyRevision: '9' };
+    vi.mocked(useProjectPreparation).mockReturnValue({ ...state,
+      context: { ...state.context, scope: changedScope } } as unknown as ReturnType<typeof useProjectPreparation>);
+    view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    expect(hideTray).toHaveBeenCalledExactlyOnceWith(state.context.scope);
+    fireEvent.click(screen.getByRole('button', { name: `Show tray ${tray.rawName}` }));
+    await screen.findByRole('button', { name: `Hide tray ${tray.rawName}` });
+    expect(showTray).toHaveBeenNthCalledWith(2, changedScope, [1]);
+    view.unmount(); expect(hideTray).toHaveBeenNthCalledWith(2, changedScope);
+  });
+  it('handles a rejected cleanup without leaving stale tray feedback', async () => {
+    const { pf, tray, hideTray } = setup(); hideTray.mockRejectedValueOnce(new Error('Viewer closed'));
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: `Show tray ${tray.rawName}` }));
+    await screen.findByRole('button', { name: `Hide tray ${tray.rawName}` });
+    view.rerender(<ProjectPreparationPanel pf={pf} active={false} />);
+    await act(async () => {});
+    expect(screen.queryByText('Tray shown in model.')).toBeNull(); expect(screen.queryByRole('alert')).toBeNull();
+    expect(hideTray).toHaveBeenCalledTimes(1);
+  });
+  it('does not clear another model display when this panel has not attempted a peek', () => {
+    const { pf, hideTray } = setup();
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    view.unmount(); expect(hideTray).not.toHaveBeenCalled();
   });
 });
 

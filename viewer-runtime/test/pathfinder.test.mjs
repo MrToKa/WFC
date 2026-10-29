@@ -311,6 +311,58 @@ test('exact ordered path is rendered without fitting; filled Ghost and all origi
   assert.equal(f.viewer.impl.fadeMaterial.opacity, 0.15); assert.equal(f.viewer.impl.fadeMaterial.variants[0].opacity, 0.3); assert.equal(f.viewer.impl.showGhosting, false); f.controller.dispose();
 });
 
+test('tray focus ghosts only the background without a cable overlay and switching trays keeps the original baseline', () => {
+  const f = fixture(), visibility = f.model.visibilityManager, prior = structuredClone({ defaultVisible: visibility.defaultVisible, states: visibility.states });
+  f.viewer.isolate = ids => { f.viewer.isolated = [...ids]; visibility.defaultVisible = false; visibility.states = ids.map(id => [id, true]); };
+  f.viewer.clearSelection = () => { throw Error('Tray focus must preserve the current selection.'); };
+  for (const method of ['addScene', 'addMesh']) f.viewer.overlays[method] = () => { throw Error('Tray focus must not allocate a cable overlay.'); };
+  const ids = [2]; f.controller.showTray(ids); ids[0] = 3;
+  assert.deepEqual(f.viewer.isolated, [2]); assert.equal(f.meshes.length, 0); assert.equal(f.clones.length, 0); assert.equal(f.registered.size, 0);
+  assert.equal(f.originalMaterial.opacity, 0.8); assert.equal(f.viewer.impl.fadeMaterial.opacity, 0.025); assert.equal(f.viewer.impl.fadeMaterial.variants[0].opacity, 0.025);
+  assert.equal(f.viewer.preference, true); assert.equal(f.viewer.impl.showGhosting, true); assert.equal(f.viewer.fittedBounds, undefined);
+  f.controller.showTray([3]); assert.deepEqual(f.viewer.isolated, [3]); assert.deepEqual(visibility.states, [[3, true]]);
+  f.viewer.clearSelection = () => {}; f.controller.clear();
+  assert.deepEqual({ defaultVisible: visibility.defaultVisible, states: visibility.states }, prior);
+  assert.equal(f.viewer.preference, false); assert.equal(f.viewer.impl.showGhosting, false); assert.equal(f.viewer.impl.fadeMaterial.opacity, 0.15); assert.equal(f.viewer.impl.fadeMaterial.variants[0].opacity, 0.3);
+  f.controller.clear(); f.controller.dispose();
+});
+
+test('computed path and tray focus replace each other without retaining overlays or losing prior visibility', () => {
+  const f = fixture(), visibility = f.model.visibilityManager;
+  f.viewer.isolate = ids => { f.viewer.isolated = [...ids]; visibility.defaultVisible = false; visibility.states = ids.map(id => [id, true]); };
+  const points = [[4, 5, 6], [8, 9, 10]].map(point => modelCoordinates(f.model).toCanonical(point));
+  f.controller.showPath({ points, objectIds: [2] }); const oldOverlay = f.meshes[0];
+  f.controller.showTray([3]); assert.equal(f.meshes.length, 0); assert.equal(oldOverlay.geometry.disposed, true); assert.equal(oldOverlay.material.disposed, true);
+  assert.deepEqual(f.viewer.isolated, [3]); assert.equal(f.viewer.impl.fadeMaterial.opacity, 0.025);
+  f.controller.showPath({ points, objectIds: [2] }); assert.equal(f.meshes.length, 1); assert.deepEqual(f.viewer.isolated, [2]);
+  f.controller.clear(); assert.equal(f.meshes.length, 0); assert.equal(visibility.defaultVisible, true); assert.deepEqual(visibility.states, [[3, false]]);
+  assert.equal(f.viewer.impl.fadeMaterial.opacity, 0.15); f.controller.dispose();
+});
+
+test('invalid or unsupported tray focus preserves an existing computed path without partial appearance changes', () => {
+  const f = fixture(); f.controller.showPath({ points: [[1000, -2000, 3]], objectIds: [2] });
+  const overlay = f.meshes[0], isolated = f.viewer.isolated;
+  for (const ids of [null, [], [0], [-1], ['2'], [2, 2], Array(1), Array.from({ length: 513 }, (_, index) => index + 1)])
+    assert.throws(() => f.controller.showTray(ids), { code: 'TRAY_UNAVAILABLE' });
+  const restore = f.model.visibilityManager.setVisibility; delete f.model.visibilityManager.setVisibility;
+  assert.throws(() => f.controller.showTray([3]), { code: 'SDK_UNSUPPORTED' });
+  assert.equal(f.meshes[0], overlay); assert.equal(overlay.geometry.disposed, undefined); assert.equal(f.viewer.isolated, isolated); assert.equal(f.viewer.impl.fadeMaterial.opacity, 0.025);
+  f.model.visibilityManager.setVisibility = restore; f.controller.dispose();
+});
+
+test('tray focus rolls back a failed SDK mutation and retains failed restoration for a later Clear', () => {
+  const f = fixture(), visibility = f.model.visibilityManager, isolate = f.viewer.isolate;
+  f.viewer.isolate = () => { visibility.defaultVisible = false; throw Error('SDK isolate failed.'); };
+  assert.throws(() => f.controller.showTray([2]), /SDK isolate failed/);
+  assert.equal(visibility.defaultVisible, true); assert.deepEqual(visibility.states, [[3, false]]); assert.equal(f.viewer.impl.fadeMaterial.opacity, 0.15);
+  f.viewer.isolate = isolate; f.controller.showTray([3]);
+  const restore = visibility.setVisibility; visibility.setVisibility = () => { throw Error('SDK restore failed.'); };
+  assert.throws(() => f.controller.clear(), { code: 'APPEARANCE_RESTORE_FAILED' });
+  assert.throws(() => f.controller.showTray([2]), { code: 'APPEARANCE_RESTORE_FAILED' });
+  visibility.setVisibility = restore; f.controller.clear(); assert.equal(visibility.defaultVisible, true); assert.deepEqual(visibility.states, [[3, false]]);
+  assert.equal(f.viewer.impl.fadeMaterial.opacity, 0.15); f.controller.dispose();
+});
+
 test('merged yellow tubes retain exact segment axes, vertical/reversed order and a bounded Uint16 draw budget', () => {
   const points = [[1000000000, -20, 30], [1000000000, -20, 40], [1000000003, -16, 40], [1000000000, -20, 40]], original = structuredClone(points);
   const result = createExactPathBatches(points, 0.02); assert.deepEqual(points, original); assert.deepEqual(result.origin, points[0]); assert.equal(result.segmentCount, 3); assert.equal(result.markerRadius, null);

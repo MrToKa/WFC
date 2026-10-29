@@ -136,7 +136,7 @@ test('location display is protected and acknowledges the exact target without re
   assert.equal(f.facts.fits, 1); assert.equal(f.messages('ERROR').length, 0); f.bridge.dispose();
 });
 
-test('tray display is protected and acknowledges all roots without retiring the committed route', async () => {
+test('tray display retires old route ownership while the adapter controls appearance and selection', async () => {
   const f = fixture(); await f.loaded(); const pathId = uuid(9800);
   f.send('BEGIN_COMPUTED_PATH', { pathId, pointCount: 1, objectIds: [2] }); await turn();
   f.send('APPEND_COMPUTED_PATH', { pathId, offset: 0, points: [[1, 2, 3]] }); await turn();
@@ -147,7 +147,10 @@ test('tray display is protected and acknowledges all roots without retiring the 
   assert.deepEqual(f.messages('TRAY_SHOWN').at(-1), { ...command, type: 'TRAY_SHOWN' });
   assert.equal(f.fetches.filter(x => x.url.endsWith('/pathfinder-authorization')).length, authorizations + 2);
   f.send('ZOOM_ROUTE', { routeRequestId: committed.requestId }); await turn();
-  assert.equal(f.facts.fits, 1); assert.equal(f.messages('ERROR').length, 0); f.bridge.dispose();
+  assert.equal(f.facts.fits, 0); assert.equal(f.messages('ERROR').at(-1).payload.code, 'NO_DRAWABLE_ROUTE');
+  const hidden = f.send('CLEAR_ROUTE', { reason: 'user' }); await turn();
+  assert.deepEqual(f.messages('ROUTE_CLEARED').at(-1), { ...hidden, type: 'ROUTE_CLEARED', payload: {} });
+  assert.equal(f.facts.clears, clears + 1); f.bridge.dispose();
 });
 
 test('tray authorization is rechecked immediately before reveal after asynchronous preparation', async () => {

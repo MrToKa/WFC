@@ -22,6 +22,11 @@ function sdkFixture(options = {}) {
   const model = { getInstanceTree: () => options.lazyTree ? null : tree, getObjectTree: options.getObjectTree ?? (success => success(tree)),
     getProperties(id, success, failure) { facts.propertyReads++; if (options.getProperties) options.getProperties(id, success, failure); else success({ properties: [{ displayName: 'Length', displayValue: '1' }, { displayName: 'Width', displayValue: '2' }] }); },
     getFragmentList: () => ({ getCount: () => 12 }), getData: () => ({ fragments: { length: 12 } }), isLoadDone: () => false };
+  if (options.trayVisibility) model.visibilityManager = {
+    defaultVisible: true, states: [[3, false]],
+    getDefaultVisibility() { return this.defaultVisible; }, getVisibility() { return this.states.map(entry => [...entry]); },
+    setVisibility(defaultVisible, states) { this.defaultVisible = defaultVisible; this.states = states.map(entry => [...entry]); },
+  };
   class Viewer {
     constructor(_container, config = {}) {
       this.config = config; this.model = model; this.listeners = new Map(); this.theme = null;
@@ -46,7 +51,7 @@ function sdkFixture(options = {}) {
     resize() {}
     clearSelection() {}
     setGhosting() {}
-    isolate(ids) { facts.isolated.push(ids); }
+    isolate(ids) { facts.isolated.push(ids); if (model.visibilityManager) { model.visibilityManager.defaultVisible = false; model.visibilityManager.states = ids.map(id => [id, true]); } }
     finish() { facts.finishes++; }
   }
   const viewing = { GuiViewer3D: Viewer, GEOMETRY_LOADED_EVENT: 'geometry', PROGRESS_UPDATE_EVENT: 'progress', ERROR_EVENT: 'error',
@@ -148,26 +153,33 @@ test('location SDK failure stays recoverable and a finished model cannot be disp
   handle.finish(); await assert.rejects(handle.showLocation(2), { code: 'MODEL_SELECTION_CHANGED' });
 });
 
-test('tray display reveals and focuses every root together without changing selection, route appearance or Ghost', async t => {
-  const f = sdkFixture(), previous = globalThis.window; globalThis.window = f.window;
+test('tray display ghosts the background, fits every root and restores the previous view on Clear', async t => {
+  const f = sdkFixture({ trayVisibility: true }), previous = globalThis.window; globalThis.window = f.window;
   t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
   await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
   const viewer = f.viewers[0], calls = [], background = { opacity: viewer.impl.fadeMaterial.opacity, ghost: viewer.impl.showGhosting };
-  viewer.show = (ids, model) => { calls.push(['show', [...ids], model]); };
-  viewer.fitToView = (ids, model) => { calls.push(['fit', [...ids], model]); };
-  for (const method of ['clearSelection', 'select', 'isolate', 'setGhosting']) viewer[method] = () => { throw Error('Display must not call ' + method); };
+  const isolate = viewer.isolate.bind(viewer);
+  viewer.isolate = (ids, model) => { calls.push(['isolate', [...ids], model]); isolate(ids); };
+  viewer.fitToView = (ids, model) => { calls.push(['fit', ids && [...ids], model]); };
+  for (const method of ['clearSelection', 'select']) viewer[method] = () => { throw Error('Display must not call ' + method); };
   const ids = [2, 3]; let authorized = 0;
   await handle.showTray(ids, undefined, async () => { assert.equal(calls.length, 0); ids[0] = 999; authorized++; });
-  assert.equal(authorized, 1); assert.deepEqual(calls, [['show', [2, 3], f.model], ['fit', [2, 3], f.model]]);
+  assert.equal(authorized, 1); assert.deepEqual(calls, [['isolate', [2, 3], f.model], ['fit', [2, 3], f.model]]);
+  assert.equal(viewer.impl.fadeMaterial.opacity, 0.025); assert.equal(viewer.impl.fadeMaterial.variants[0].opacity, 0.025);
+  assert.equal(viewer.impl.showGhosting, true); assert.deepEqual(f.facts.isolated, [[2, 3]]);
+  assert.deepEqual(f.model.visibilityManager.states, [[2, true], [3, true]]);
+  viewer.clearSelection = () => {};
+  handle.clearRoute();
   assert.deepEqual({ opacity: viewer.impl.fadeMaterial.opacity, ghost: viewer.impl.showGhosting }, background);
-  assert.deepEqual(f.facts.isolated, []);
+  assert.deepEqual(f.model.visibilityManager.getVisibility(), [[3, false]]); assert.equal(f.model.visibilityManager.defaultVisible, true);
+  assert.deepEqual(calls.at(-1), ['fit', undefined, undefined]);
 });
 
 test('tray display validates the whole root set before any SDK mutation', async t => {
-  const f = sdkFixture(), previous = globalThis.window; globalThis.window = f.window;
+  const f = sdkFixture({ trayVisibility: true }), previous = globalThis.window; globalThis.window = f.window;
   t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
   await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
-  let displayed = 0, authorized = 0; f.viewers[0].show = () => { displayed++; };
+  let displayed = 0, authorized = 0; f.viewers[0].isolate = () => { displayed++; };
   for (const ids of [[], [2, 999], [0], [-1], [1.5], [2147483648], ['2'], [2, 2], Array(1), Array.from({ length: 513 }, (_, at) => at + 1), null, 2])
     await assert.rejects(handle.showTray(ids, undefined, async () => { authorized++; }), { code: 'TRAY_UNAVAILABLE' });
   assert.equal(displayed, 0); assert.equal(authorized, 0);
@@ -176,10 +188,10 @@ test('tray display validates the whole root set before any SDK mutation', async 
 
 test('delayed tray display refuses changed model, denied authority and cancellation before revealing any root', async t => {
   for (const action of ['model', 'denied', 'cancel']) {
-    let treeReady; const f = sdkFixture({ lazyTree: true, getObjectTree: callback => { treeReady = callback; } }), previous = globalThis.window;
+    let treeReady; const f = sdkFixture({ trayVisibility: true, lazyTree: true, getObjectTree: callback => { treeReady = callback; } }), previous = globalThis.window;
     globalThis.window = f.window; t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
     await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
-    let displayed = 0; f.viewers[0].show = () => { displayed++; }; const controller = new AbortController();
+    let displayed = 0; f.viewers[0].isolate = () => { displayed++; }; const controller = new AbortController();
     const showing = handle.showTray([2, 3], controller.signal, async () => { if (action === 'denied') throw Object.assign(Error('No access'), { code: 'ACCESS_REVOKED' }); });
     const rejected = assert.rejects(showing, action === 'cancel' ? { name: 'AbortError' } : { code: action === 'model' ? 'MODEL_SELECTION_CHANGED' : 'ACCESS_REVOKED' });
     if (action === 'model') f.viewers[0].model = {};
@@ -189,14 +201,35 @@ test('delayed tray display refuses changed model, denied authority and cancellat
 });
 
 test('tray display sanitizes missing-tree and SDK failures while keeping terminal model identity', async t => {
-  const f = sdkFixture(), previous = globalThis.window; globalThis.window = f.window;
+  const f = sdkFixture({ trayVisibility: true }), previous = globalThis.window; globalThis.window = f.window;
   t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
   await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
-  f.viewers[0].show = () => { throw Error('private SDK detail'); };
+  f.viewers[0].isolate = () => { throw Error('private SDK detail'); };
   await assert.rejects(handle.showTray([2, 3]), error => error.code === 'TRAY_UNAVAILABLE' && !error.message.includes('private'));
   f.model.getInstanceTree = () => { throw Error('private tree detail'); };
   await assert.rejects(handle.showTray([2, 3]), error => error.code === 'TRAY_UNAVAILABLE' && !error.message.includes('private'));
   handle.finish(); await assert.rejects(handle.showTray([2, 3]), { code: 'MODEL_SELECTION_CHANGED' });
+});
+
+test('tray focus replaces a legacy route without capturing its Ghost view as the restoration baseline', async t => {
+  const f = sdkFixture({ trayVisibility: true }), previous = globalThis.window; globalThis.window = f.window;
+  t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
+  await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
+  await handle.showRoute('BC1'); assert.equal(f.viewers[0].impl.fadeMaterial.opacity, 0.025);
+  await handle.showTray([3]); assert.deepEqual(f.facts.isolated.at(-1), [3]);
+  handle.clearRoute(); assert.equal(f.viewers[0].impl.fadeMaterial.opacity, 0.4);
+  assert.equal(f.model.visibilityManager.defaultVisible, true); assert.deepEqual(f.model.visibilityManager.getVisibility(), [[3, false]]);
+});
+
+test('tray focus rolls back Ghost if fitting fails and remains recoverable', async t => {
+  const f = sdkFixture({ trayVisibility: true }), previous = globalThis.window; globalThis.window = f.window;
+  t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
+  await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
+  const viewer = f.viewers[0]; viewer.fitToView = () => { throw Error('private fit failure'); };
+  await assert.rejects(handle.showTray([2]), { code: 'TRAY_UNAVAILABLE' });
+  assert.equal(viewer.impl.fadeMaterial.opacity, 0.4); assert.deepEqual(f.model.visibilityManager.getVisibility(), [[3, false]]);
+  viewer.fitToView = () => {}; await handle.showTray([3]); handle.clearRoute();
+  assert.equal(viewer.impl.fadeMaterial.opacity, 0.4); assert.deepEqual(f.model.visibilityManager.getVisibility(), [[3, false]]);
 });
 
 test('pinned SDK show delegates only target visibility and exposes a read-only tree membership index', () => {
