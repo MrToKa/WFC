@@ -1,3 +1,4 @@
+import { digestSha256 } from '../../utils/sha256';
 import type { PathFinderPreview, PathFinderProposal, PathFinderState } from '@/api/pathfinder';
 import { fetchEndpointBinding } from '@/api/pathfinderEndpointBindings';
 import { fetchGeometryObjectRevision } from '@/api/pathfinderGeometryTrace';
@@ -47,7 +48,7 @@ export function previewEndpointObjectIds(preview: PathFinderPreview, state: Path
 }
 
 async function digest(value: unknown): Promise<string> {
-  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalPurposeJson(value))))]
+  return [...new Uint8Array(await digestSha256(new TextEncoder().encode(canonicalPurposeJson(value))))]
     .map(byte => byte.toString(16).padStart(2, '0')).join('');
 }
 

@@ -1,3 +1,4 @@
+import { digestSha256 } from '../utils/sha256';
 import { getApiBaseUrl } from './http';
 import { CableEndpointApiError, verifyCableEndpointReceipt } from './pathfinderCableEndpoints';
 import { canonicalPurposeJson, parsePurposeJson, policyUuidSchema } from '../../shared/pathfinderPurposePolicy';
@@ -13,7 +14,7 @@ const refuse = (): never => { throw new CableEndpointApiError('INVALID_REQUEST',
 const equal = (left: unknown, right: unknown) => canonicalPurposeJson(left) === canonicalPurposeJson(right);
 async function commandHash(command: CableEndpointPairCommand) {
   const bytes = new TextEncoder().encode(canonicalPurposeJson(cableEndpointPairCommandHashInput(command)));
-  return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), byte => byte.toString(16).padStart(2, '0')).join('');
+  return Array.from(new Uint8Array(await digestSha256(bytes)), byte => byte.toString(16).padStart(2, '0')).join('');
 }
 async function verifyReceipt(value: unknown, projectId: string, cableId: string, command: CableEndpointPairCommand, accountId: string): Promise<CableEndpointPairReceipt> {
   const parsed = cableEndpointPairReceiptSchema.safeParse(value); if (!parsed.success) return invalid();

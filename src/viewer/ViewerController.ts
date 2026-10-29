@@ -1,3 +1,4 @@
+import { digestSha256 } from '../utils/sha256';
 import { generateId } from '@/utils/generateId';
 import { FRAME_PATH, MAX_PATH_POINTS, MAX_PATH_CHUNK_POINTS, isCanonicalPoint, validateEnvelope, type BridgeEnvelope, type ComputedPath, type PickedPoint, type ViewerModelObjectsPage, type ViewerSelection, type ViewerTrayRootSelection, type ModelCaptureRequest, type ModelCaptureProgress } from '../../viewer-runtime/protocol.mjs';
 import { createModelCaptureAssembler } from '../../viewer-runtime/model-capture.mjs';
@@ -734,7 +735,7 @@ export class ViewerController {
       || capture.scope.selectionRevision !== String(this.selectionRevision) || !validateBarrierFrameObservation(frame) || frame.loadId !== session.loadId
       || frame.projectId !== capture.scope.projectId || frame.modelVersionId !== capture.scope.modelVersionId
       || frame.contentFingerprint !== capture.scope.contentFingerprint) throw new Error('Barrier publication scope changed');
-    const frameDigest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(barrierCanonicalJson(barrierFrameObservationHashInput(frame)))))]
+    const frameDigest = [...new Uint8Array(await digestSha256(new TextEncoder().encode(barrierCanonicalJson(barrierFrameObservationHashInput(frame)))))]
       .map(value => value.toString(16).padStart(2, '0')).join('');
     if (frameDigest !== frame.contentSha256 || !sameSession()) throw new Error('Barrier publication frame changed');
     if (new TextEncoder().encode(JSON.stringify(observation)).byteLength > BARRIER_LIMITS.captureBytes + 16 * 1024) throw new Error('Barrier publication exceeds its byte limit');
@@ -759,13 +760,13 @@ export class ViewerController {
         || String(this.selectionRevision) !== capture.scope.selectionRevision) throw new Error('Barrier publication response arrived after its context changed');
       const outcome = barrierPublicationOutcomeSchema.parse(result);
       if (outcome.schemaVersion === 'wfc.pf.barrier-publication-refusal.v1') {
-        const captureDigest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(barrierCanonicalJson(capture))))]
+        const captureDigest = [...new Uint8Array(await digestSha256(new TextEncoder().encode(barrierCanonicalJson(capture))))]
           .map(value => value.toString(16).padStart(2, '0')).join('');
         if (controller.signal.aborted || !sameSession() || String(this.selectionRevision) !== capture.scope.selectionRevision
           || outcome.intentId !== intentId || outcome.captureSha256 !== captureDigest || outcome.frameSha256 !== frameDigest)
           throw new Error('Barrier refusal receipt scope changed');
         if (command) {
-          const commandDigest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(barrierCanonicalJson(command))))]
+          const commandDigest = [...new Uint8Array(await digestSha256(new TextEncoder().encode(barrierCanonicalJson(command))))]
             .map(value => value.toString(16).padStart(2, '0')).join('');
           if (controller.signal.aborted || !sameSession() || String(this.selectionRevision) !== capture.scope.selectionRevision
             || outcome.commandSha256 !== commandDigest) throw new Error('Barrier refusal original command changed');

@@ -362,6 +362,7 @@ describe('project preparation lifecycle', () => {
     expect(result.current.busy).toBe(true);
     await act(async () => { finishUpload({ schemaVersion: 'wfc.pf.preparation-part-receipt.v1', part: committed, sessionRevision: '2', duplicate: false } as never); });
     await waitFor(() => expect(result.current.progress).toContain('Saving capture evidence for part 1 of 1'));
+    await waitFor(() => expect(saveCaptureEvidence).toHaveBeenCalledOnce());
     expect(result.current.busy).toBe(true);
     expect(capture).toHaveBeenCalledOnce();
     vi.mocked(api.fetchPreparationSession).mockResolvedValue({ ...session, state: 'collecting', parts: [committed], coverage: { expectedParts: 1, committedParts: 1, requestedScopeComplete: true, missingPartIds: [] } });

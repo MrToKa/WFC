@@ -1,3 +1,4 @@
+import { digestSha256 } from '../utils/sha256';
 import { z } from 'zod';
 import { getApiBaseUrl } from './http';
 import { pathFinderRequestDeadline, discardPathFinderBody, releasePathFinderReader } from './pathfinderRequestDeadline';
@@ -183,9 +184,7 @@ const invalid = (): never => {
   throw new PreparationApiError('INVALID_RESPONSE', 502);
 };
 async function sha(value: unknown): Promise<string> {
-  const bytes = await crypto.subtle.digest(
-    'SHA-256',
-    new TextEncoder().encode(canonicalPurposeJson(value)),
+  const bytes = await digestSha256(new TextEncoder().encode(canonicalPurposeJson(value)),
   );
   return [...new Uint8Array(bytes)].map((value) => value.toString(16).padStart(2, '0')).join('');
 }

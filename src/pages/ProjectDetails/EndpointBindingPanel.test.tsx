@@ -45,6 +45,33 @@ function setup() {
 }
 beforeEach(() => vi.clearAllMocks());
 describe('narrow shared endpoint editor', () => {
+  it('mounts and confirms a shared location on LAN HTTP without randomUUID or SubtleCrypto', async () => {
+    const sourceCrypto = globalThis.crypto;
+    const getRandomValues = vi.fn((bytes: Uint8Array) => sourceCrypto.getRandomValues(bytes));
+    vi.stubGlobal('crypto', { getRandomValues });
+    try {
+      const { state, props } = setup();
+      render(<EndpointBindingPanel {...props} />);
+      expect(globalThis.crypto.randomUUID).toBeUndefined();
+      expect(globalThis.crypto.subtle).toBeUndefined();
+      expect(screen.getByRole('region', { name: 'Shared endpoint binding' })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Pick surface point in 3D' }));
+      await waitFor(() => expect(screen.getByLabelText('Endpoint X in metres')).toHaveValue('12.25'));
+      fireEvent.change(screen.getByLabelText('Reason for confirmation'), {
+        target: { value: 'Reviewed location on the LAN' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm shared endpoint' }));
+      expect(state.save).toHaveBeenCalledOnce();
+      expect(state.save.mock.calls[0][0]).toMatchObject({
+        mode: 'fixed-world',
+        pointProjectMetres: [12.25, -3, 4.5],
+        idempotencyKey: expect.stringMatching(/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/),
+      });
+      expect(getRandomValues.mock.calls.length).toBeGreaterThanOrEqual(2);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
   it('shows unavailable migration evidence without offering confirmation or moving the old point', () => {
     const f = setup();
     f.state.migration = f.migration as never;

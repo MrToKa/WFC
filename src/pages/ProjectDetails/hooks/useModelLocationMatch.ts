@@ -1,3 +1,4 @@
+import { generateId } from '@/utils/generateId';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { canonicalPurposeJson, parsePurposeJson, policyUuidSchema } from '../../../../shared/pathfinderPurposePolicy';
 import { normalizeEndpointLocation } from '../../../../shared/pathfinderEndpointBindings';
@@ -110,7 +111,7 @@ export async function collectModelLocationMatch(context: ModelLocationMatchConte
 export function modelLocationMatchPage(context: ModelLocationMatchContext, scan: Scan, names: string[], registryRevision: string): ModelLocationMatchAssign {
   const wanted = new Set(names.map(normalizeEndpointLocation));
   return modelLocationMatchAssignSchema.parse({ schemaVersion: 'wfc.pf.model-location-match-assign.v1', current: context.current,
-    namesSha256: context.namesSha256, expectedRegistryRevision: registryRevision, idempotencyKey: crypto.randomUUID(), names,
+    namesSha256: context.namesSha256, expectedRegistryRevision: registryRevision, idempotencyKey: generateId(), names,
     scan: { ...scan, candidates: scan.candidates.flatMap(candidate => {
       const matchedNames = candidate.matchedNames.filter(name => wanted.has(normalizeEndpointLocation(name)));
       return matchedNames.length ? [{ ...candidate, matchedNames }] : [];

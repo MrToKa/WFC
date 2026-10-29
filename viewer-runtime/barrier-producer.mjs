@@ -1,3 +1,4 @@
+import { digestSha256 } from './sha256.mjs';
 // Protected SDK observations only. Pages and seals remain unqualified evidence.
 import { BARRIER_MULTIPART_PLANNER_PROFILE as P, barrierPlanCanonical, barrierPlanHash,
   planBarrierFragmentSplitHints, planBarrierMultipart } from './barrier-plan.mjs';
@@ -38,7 +39,7 @@ function execution(viewer, { loadId, isCurrent, signal, startedAt = Date.now(), 
   const digest = async bytes => {
     check(); need(bytes instanceof Uint8Array && bytes.byteLength <= L.chunkBytes, 'BARRIER_MULTIPART_CHUNK_LIMIT');
     const copy = Uint8Array.from(bytes);
-    const result = await abortable(() => sha256 ? sha256(copy) : globalThis.crypto.subtle.digest('SHA-256', copy)
+    const result = await abortable(() => sha256 ? sha256(copy) : digestSha256(copy)
       .then(value => [...new Uint8Array(value)].map(byte => byte.toString(16).padStart(2, '0')).join('')), signal);
     check(); need(hash(result)); return result;
   };

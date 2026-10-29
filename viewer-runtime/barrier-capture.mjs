@@ -1,3 +1,4 @@
+import { digestSha256 } from './sha256.mjs';
 // Protected selected-barrier observations. Importing this module does not read SDK globals.
 // Neither capture completeness nor its hashes establish producer/server authority.
 import { BARRIER_CAPTURE_ERROR_CODES, BARRIER_CAPTURE_ERROR_MESSAGES } from './barrier-capture-errors.mjs';
@@ -48,7 +49,7 @@ export function barrierCanonicalJson(value) {
   return fail('Unsupported barrier JSON value.');
 }
 const bytes = value => encoder.encode(barrierCanonicalJson(value)).byteLength;
-const digest = async value => [...new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', encoder.encode(barrierCanonicalJson(value))))]
+const digest = async value => [...new Uint8Array(await digestSha256(encoder.encode(barrierCanonicalJson(value))))]
   .map(value => value.toString(16).padStart(2, '0')).join('');
 export function validateBarrierCaptureRequest(value) {
   try { return exact(value, ['captureId', 'scope', 'selectedParents']) && uuid(value.captureId) && scope(value.scope)

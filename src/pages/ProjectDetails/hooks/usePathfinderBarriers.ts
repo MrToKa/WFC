@@ -1,3 +1,4 @@
+import { generateId } from '@/utils/generateId';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { beginBarrierCapture, changeBarrierRegistry, getBarrierRegistry, getBarrierSnapshot, getLatestBarrierSnapshot,
   getBarrierCommandRecovery, closeBarrierCommand } from '@/api/pathfinderBarriers';
@@ -290,7 +291,7 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
         if (!Number.isInteger(object.objectId) || object.objectId <= 0) throw new Error('A selected Model Browser object has no valid parent identity.');
         const objectId = `dbid:${object.objectId}`;
         if (known.has(objectId)) continue;
-        const parent = barrierSelectedParentSchema.parse({ selectionId: crypto.randomUUID(), kind, objectId, dbId: object.objectId,
+        const parent = barrierSelectedParentSchema.parse({ selectionId: generateId(), kind, objectId, dbId: object.objectId,
           externalId: object.externalId, name: object.name, identityBasis: 'version-local-only', inclusion: 'own-and-all-descendant-fragments' });
         draft.push(parent); known.add(objectId);
       }
@@ -441,13 +442,13 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
       let saved: Pending;
       if (base.draftParents.length) {
         const command = barrierCaptureCommandSchema.parse({ schemaVersion: 'wfc.pf.barrier-capture-command.v2', geometryPolicy: MIXED_BARRIER_POLICY, scope: base.registry.scope,
-          expectedRegistryRevision: base.registry.registryRevision, idempotencyKey: crypto.randomUUID(), selectedParents: base.draftParents });
+          expectedRegistryRevision: base.registry.registryRevision, idempotencyKey: generateId(), selectedParents: base.draftParents });
         saved = { type: 'capture', command: freeze(command), writeStarted: false };
       } else {
         const reason = emptyReason.trim();
         if (!reason) throw new Error('A reason is required to explicitly declare no barriers.');
         const command = barrierRegistryCommandSchema.parse({ schemaVersion: 'wfc.pf.barrier-registry-command.v2', geometryPolicy: MIXED_BARRIER_POLICY, action: 'declare-empty', scope: base.registry.scope,
-          expectedRegistryRevision: base.registry.registryRevision, idempotencyKey: crypto.randomUUID(), reason });
+          expectedRegistryRevision: base.registry.registryRevision, idempotencyKey: generateId(), reason });
         if (command.action !== 'declare-empty') return;
         saved = { type: 'empty', command: freeze(command), writeStarted: false };
       }

@@ -1,3 +1,4 @@
+import { generateId } from '@/utils/generateId';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { purposeKeySchema, type CatalogEnvelope } from '../../../../shared/pathfinderPurposePolicy';
 import { drawingPurposeDiagnostics, DEFAULT_DRAWING_MODES, isDefaultDrawingModes, type DrawingCategoryModes } from '../../../../shared/pathfinderDrawingPolicy';
@@ -162,7 +163,7 @@ export function useDrawingPurposePolicy({ projectId, loadedProjectId, token, isA
       return [{ purposeKey, categoryModes: { ...(selected ?? DEFAULT_DRAWING_MODES) } }];
     });
     await send(run, { schemaVersion: 'pathfinder.drawing-purpose-policy.write.v1', expectedCatalogRevision: previous.snapshot.catalog.catalogRevision,
-      expectedRevision: previous.snapshot.policy.drawingPolicyRevision, idempotencyKey: crypto.randomUUID(), changes });
+      expectedRevision: previous.snapshot.policy.drawingPolicyRevision, idempotencyKey: generateId(), changes });
   }, [current, send]);
   const retrySave = useCallback(async (): Promise<void> => { const run = runRef.current; if (run && current(run) && run.pending && !run.mutation) await send(run, run.pending); }, [current, send]);
   const refreshHistory = useCallback(async (): Promise<void> => { const run = runRef.current; if (run) await historyRun(run); }, [historyRun]);

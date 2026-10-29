@@ -1,3 +1,4 @@
+import { generateId } from '@/utils/generateId';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 import { parsePurposeJson } from '../../../../shared/pathfinderPurposePolicy';
@@ -165,7 +166,7 @@ export function usePathfinderPendingApply(access: PendingApplyAccess) {
       if (existing) { setState(value => ({ ...value, pending: Object.freeze(existing) })); request.current = null; return false; }
       if (stored.intents.length >= MAX_INTENTS) throw new Error('Pending Apply recovery is full.');
       const intent = Object.freeze(intentSchema.parse({ ...input, projectId: access.projectId, accountId: access.accountId,
-        idempotencyKey: crypto.randomUUID(), createdAt: new Date().toISOString() }));
+        idempotencyKey: generateId(), createdAt: new Date().toISOString() }));
       writeStore({ version: 1, intents: [...stored.intents, intent] });
       setState(value => ({ ...value, pending: intent, message: null, error: null }));
       return await execute(intent, ticket);

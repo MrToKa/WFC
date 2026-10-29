@@ -1,3 +1,4 @@
+import { generateId } from '@/utils/generateId';
 import { useEffect, useState } from 'react';
 import { Button, Field, Input, Textarea } from '@fluentui/react-components';
 import {
@@ -144,7 +145,7 @@ export function RevisionMappingReview({
     if (!canSave) return;
     const parsed = revisionComparisonDecisionWriteSchema.parse({
       ...command,
-      idempotencyKey: crypto.randomUUID(),
+      idempotencyKey: generateId(),
     });
     void onSave(parsed);
   };

@@ -1,3 +1,4 @@
+import { digestSha256 } from '../utils/sha256';
 import { getApiBaseUrl } from './http';
 import { canonicalPurposeJson, parsePurposeJson, policyUuidSchema } from '../../shared/pathfinderPurposePolicy';
 import { cableWorkflowPageSchema, classifyCableWorkflow, type CableWorkflowPage, type CableWorkflowRow } from '../../shared/pathfinderCableWorkflow';
@@ -27,7 +28,7 @@ function refusal(status: number, value: unknown): never {
         : 'Cable diagnostics are unavailable. Try refreshing the list.');
 }
 async function sha256(value: unknown): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalPurposeJson(value)));
+  const digest = await digestSha256(new TextEncoder().encode(canonicalPurposeJson(value)));
   return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 }
 async function read<T>(projectId: string, token: string, suffix: string, hashInput: unknown, verify: (value: unknown, queryHash: string) => T, signal?: AbortSignal): Promise<T> {

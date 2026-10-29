@@ -1,3 +1,4 @@
+import { digestSha256 } from './sha256.mjs';
 // SDK display visibility only. Native visibility remains unknown.
 export const DISPLAY_VISIBILITY_SCHEMA = 'wfc.pf.sdk-display-visibility.v1';
 export const EQUIPMENT_VISIBILITY_POLICY = 'wfc.pf.project-exact-candidates.v3';
@@ -32,7 +33,7 @@ export async function captureDisplayVisibility(viewer, tree, ids, { check = () =
   }
   for (let id = 0; id < count; id++) { check(); visibleFragments[id] = bool(fragments.isFragVisible(id)) ? 1 : 0; bytes[16 + ids.length * 9 + id] = visibleFragments[id]; if (id % 8192 === 0 && performance.now() - lastYield >= 16) { await pause(); lastYield = performance.now(); } }
   check(); if (viewer.model !== model) fail();
-  const contentSha256 = [...new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', bytes))].map(value => value.toString(16).padStart(2, '0')).join(''); check(); if (viewer.model !== model) fail();
+  const contentSha256 = [...new Uint8Array(await digestSha256(bytes))].map(value => value.toString(16).padStart(2, '0')).join(''); check(); if (viewer.model !== model) fail();
   const scope = Object.freeze({ schemaVersion: DISPLAY_VISIBILITY_SCHEMA, basis: 'sdk-display-before-pf-appearance', contentSha256 });
   function lineage(id) {
     const seen = new Set(); let current = id;

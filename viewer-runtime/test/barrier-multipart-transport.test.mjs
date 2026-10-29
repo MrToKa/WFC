@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { webcrypto } from 'node:crypto';
 import { fixture, id, H, reply, h, hash, commandHash } from './barrier-multipart-fixture.mjs';
 import { createBarrierMultipartTransport } from '../barrier-multipart-transport.mjs';
 import { BARRIER_MULTIPART_PRODUCER_PROFILE as profile, barrierMultipartContextHashInput,
@@ -24,6 +25,26 @@ async function prepareCompletion(f, partCount = 2) {
     partCount, bookendProfile: BARRIER_MULTIPART_PRODUCER_BOOKEND_PROFILE },
   stagePart: index => writer.stage({ kind: 'part', partIndex: index, planSealSha256: writer.snapshot().roots.plan, bytes: new Uint8Array([index + 1, 2, 3]) }) };
 }
+
+test('the default command key factory stages and cancels on LAN HTTP without randomUUID', async () => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+  Object.defineProperty(globalThis, 'crypto', { configurable: true, value: { getRandomValues: webcrypto.getRandomValues.bind(webcrypto) } });
+  try {
+    const f = fixture(), writer = await f.transport({ randomUUID: undefined }).open(f.start);
+    assert.equal(globalThis.crypto.randomUUID, undefined);
+    assert.equal(globalThis.crypto.subtle, undefined);
+    await writer.stage({ kind: 'page', page: f.page() });
+    const cancelled = await writer.cancel();
+    const keys = f.calls.filter(call => call.options.method === 'POST').map(call => JSON.parse(call.options.body).idempotencyKey);
+    assert.equal(keys.length, 2);
+    assert.equal(new Set(keys).size, 2);
+    for (const key of keys) assert.match(key, /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/);
+    assert.equal(cancelled.session.state, 'cancelled');
+  } finally {
+    if (descriptor) Object.defineProperty(globalThis, 'crypto', descriptor);
+    else delete globalThis.crypto;
+  }
+});
 
 test('direct frame admission uses exact Viewer cookie URL and never copies bearer credentials', async () => {
   const f = fixture(), transport = f.transport(); const admitted = await transport.admit(f.command, f.frame);

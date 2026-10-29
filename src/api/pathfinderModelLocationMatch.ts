@@ -1,3 +1,4 @@
+import { digestSha256 } from '../utils/sha256';
 import { getApiBaseUrl } from './http';
 import { pathFinderRequestDeadline, discardPathFinderBody, releasePathFinderReader } from './pathfinderRequestDeadline';
 import { canonicalPurposeJson, parsePurposeJson, policyUuidSchema } from '../../shared/pathfinderPurposePolicy';
@@ -18,7 +19,7 @@ export function isModelLocationMatchBusy(error: unknown): error is ModelLocation
   return error instanceof ModelLocationMatchApiError && error.status === 503 && busyCodes.has(error.code);
 }
 export async function modelLocationMatchHash(value: unknown): Promise<string> {
-  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalPurposeJson(value)));
+  const bytes = await digestSha256(new TextEncoder().encode(canonicalPurposeJson(value)));
   return Array.from(new Uint8Array(bytes), n => n.toString(16).padStart(2, '0')).join('');
 }
 const invalid = (): never => { throw new ModelLocationMatchApiError('INVALID_RESPONSE', null, 'unknown', 'The location matching response could not be verified. Retain any pending assignment and check its status.'); };

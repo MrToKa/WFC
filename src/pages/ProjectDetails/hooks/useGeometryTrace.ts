@@ -1,3 +1,5 @@
+import { digestSha256 } from '../../../utils/sha256';
+import { generateId } from '@/utils/generateId';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   createGeometryTrace,
@@ -226,9 +228,7 @@ export function useGeometryTrace(pf: ReturnType<typeof usePathFinder>, active: b
         current(signal);
         const digest = [
           ...new Uint8Array(
-            await crypto.subtle.digest(
-              'SHA-256',
-              new TextEncoder().encode(canonicalPurposeJson(object)),
+            await digestSha256(new TextEncoder().encode(canonicalPurposeJson(object)),
             ),
           ),
         ]
@@ -274,7 +274,7 @@ export function useGeometryTrace(pf: ReturnType<typeof usePathFinder>, active: b
             aggregateId,
             expectedProjectionSha256: projectionSha256,
             derivationVersion: GEOMETRY_TRACE_DERIVATION,
-            idempotencyKey: crypto.randomUUID(),
+            idempotencyKey: generateId(),
           },
           signal,
         );
@@ -309,9 +309,7 @@ export function useGeometryTrace(pf: ReturnType<typeof usePathFinder>, active: b
         current(signal);
         const digest = [
           ...new Uint8Array(
-            await crypto.subtle.digest(
-              'SHA-256',
-              new TextEncoder().encode(canonicalPurposeJson(evidence)),
+            await digestSha256(new TextEncoder().encode(canonicalPurposeJson(evidence)),
             ),
           ),
         ]

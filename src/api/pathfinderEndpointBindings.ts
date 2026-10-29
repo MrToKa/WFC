@@ -1,3 +1,4 @@
+import { digestSha256 } from '../utils/sha256';
 import { getApiBaseUrl } from './http';
 import {
   parsePurposeJson,
@@ -53,9 +54,7 @@ const invalid = (): never => {
 async function verifyBinding(binding: EndpointBinding) {
   const digest = [
     ...new Uint8Array(
-      await crypto.subtle.digest(
-        'SHA-256',
-        new TextEncoder().encode(canonicalPurposeJson(endpointBindingContentHashInput(binding))),
+      await digestSha256(new TextEncoder().encode(canonicalPurposeJson(endpointBindingContentHashInput(binding))),
       ),
     ),
   ]
@@ -299,9 +298,7 @@ export async function evaluateEndpointMigration(
     return invalid();
   const digest = [
     ...new Uint8Array(
-      await crypto.subtle.digest(
-        'SHA-256',
-        new TextEncoder().encode(
+      await digestSha256(new TextEncoder().encode(
           canonicalPurposeJson(endpointMigrationContentHashInput(parsed.data)),
         ),
       ),
