@@ -1,0 +1,68 @@
+{
+  "status": "PASS",
+  "recordedAt": "2026-10-19T03:05:56.173Z",
+  "scope": "Root source checks before final test-only repository mock fix; that file has separate agent16tests/type/lint PASS. Full combined2 pending.",
+  "checks": [
+    {
+      "name": "frontend-types",
+      "status": "PASS",
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "server-types",
+      "status": "PASS",
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "lint",
+      "status": "PASS",
+      "files": [
+        "server/app.ts",
+        "server/pathfinder/apply.ts",
+        "server/pathfinder/dependencies.ts",
+        "server/pathfinder/jobContracts.ts",
+        "server/pathfinder/jobs.ts",
+        "server/pathfinder/previews.test.ts",
+        "server/pathfinder/previews.ts",
+        "server/pathfinder/repository.ts",
+        "server/pathfinder/routingScope.test.ts",
+        "server/pathfinder/routingScope.ts",
+        "server/pathfinder/runtime.ts",
+        "server/pathfinder/schema.ts",
+        "src/pages/ProjectDetails/PathFinderTab.test.tsx",
+        "src/pages/ProjectDetails/PathFinderTab.tsx",
+        "server/pathfinder/dependencies.test.ts",
+        "server/pathfinder/endpointBinding.integration.test.ts",
+        "server/pathfinder/endpointBinding.integration.ts",
+        "server/pathfinder/endpointBindingFixtures.ts",
+        "server/pathfinder/endpointBindingRepository.test.ts",
+        "server/pathfinder/endpointBindingRepository.ts",
+        "server/pathfinder/endpointBindingRoutes.test.ts",
+        "server/pathfinder/endpointBindingRoutes.ts",
+        "server/pathfinder/endpointBindingSchema.test.ts",
+        "server/pathfinder/endpointBindingSchema.ts",
+        "server/pathfinder/endpointCalculationProvenance.test.ts",
+        "server/pathfinder/endpointCalculationProvenance.ts",
+        "shared/pathfinderEndpointAttachment.test.ts",
+        "shared/pathfinderEndpointAttachment.ts",
+        "shared/pathfinderEndpointBindings.test.ts",
+        "shared/pathfinderEndpointBindings.ts",
+        "shared/pathfinderEndpointFixtures.ts",
+        "src/api/pathfinderEndpointBindings.test.ts",
+        "src/api/pathfinderEndpointBindings.ts",
+        "src/pages/ProjectDetails/EndpointBindingHistory.test.tsx",
+        "src/pages/ProjectDetails/EndpointBindingHistory.tsx",
+        "src/pages/ProjectDetails/EndpointBindingPanel.test.tsx",
+        "src/pages/ProjectDetails/EndpointBindingPanel.tsx",
+        "src/pages/ProjectDetails/hooks/useEndpointBinding.test.tsx",
+        "src/pages/ProjectDetails/hooks/useEndpointBinding.ts",
+        "src/test/endpointBindingFixtures.ts"
+      ],
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "referenceLockFiles": 24,
+  "pureCoreFiles": 11,
+  "reconciledMutableDrawingWrapper": 1,
+  "expectedRegenerated": false
+}

@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS",
+  "recordedAtUtc": "2026-10-18T07:56:28.862Z",
+  "scope": "Owned two-tab Routes/Path candidate startup; no original resources touched and old verified backup2ae retained.",
+  "buildObservedHead": "46152f9873764ec22537029d98bbfcc453052768",
+  "branch": "pf-two-tabs-local-20261018",
+  "origin": "http://127.0.0.1:5190",
+  "healthStatus": 200,
+  "health": {
+    "status": "ok"
+  },
+  "images": {
+    "api": "sha256:905dcb21138065e4b8cd028a6747fd613d080f6bb562d7901c034eb9c7ae4bce",
+    "web": "sha256:09dcf672529ea4e119e8655411cdc9288851aeaa5e059d12c4b4415f4e6baa85"
+  },
+  "build": {
+    "finishedAt": "2026-10-18T07:55:50.952Z",
+    "files": [
+      {
+        "path": "docker/pathfinder.Dockerfile",
+        "bytes": 2082,
+        "sha256": "682018b4ff47990ea58b5657bccf434a948a16bdd99d06d0a84cd38ed53d0bc4"
+      },
+      {
+        "path": "docker/pathfinder.Dockerfile.dockerignore",
+        "bytes": 402,
+        "sha256": "68e8f31e1fa9e2b47e02f7184ad40d866387da57bdecc216284f83fce18c0a51"
+      },
+      {
+        "path": "docker/pathfinder.compose.yml",
+        "bytes": 4140,
+        "sha256": "4d50d6e8ef39ca8d317ba31ad28fb0061688f862078c641c9f4787aac523202e"
+      },
+      {
+        "path": "docker/pathfinder.nginx.conf",
+        "bytes": 6091,
+        "sha256": "562778962e2d97fe6a8265a0f5e5519e4dd919f9e7582e6f052d7d283e11058b"
+      }
+    ]
+  },
+  "topology": {
+    "status": "PASS",
+    "project": "wfc-pathfinder-local",
+    "origin": "http://127.0.0.1:5190",
+    "services": [
+      "postgres",
+      "minio",
+      "storage-ready",
+      "api",
+      "web"
+    ],
+    "volumes": [
+      "postgres",
+      "minio",
+      "staging",
+      "pathfinder"
+    ],
+    "privateBackend": true,
+    "publishedPorts": [
+      5190
+    ]
+  },
+  "resources": {
+    "containers": [
+      {
+        "role": "web",
+        "id": "64153d63c111e32c581721467e4811a58b8dc850020d645de97409b0c86d865b",
+        "image": "sha256:09dcf672529ea4e119e8655411cdc9288851aeaa5e059d12c4b4415f4e6baa85",
+        "name": "wfc-pathfinder-local-web-1",
+        "running": true,
+        "startedAt": "2026-10-18T07:56:06.402605379Z"
+      },
+      {
+        "role": "api",
+        "id": "3d68ca29bfa715f668c22fbc75da4898572cf2e80ad341f2979d6cb58ab5f147",
+        "image": "sha256:905dcb21138065e4b8cd028a6747fd613d080f6bb562d7901c034eb9c7ae4bce",
+        "name": "wfc-pathfinder-local-api-1",
+        "running": true,
+        "startedAt": "2026-10-18T07:56:00.5856758Z"
+      },
+      {
+        "role": "storage-ready",
+        "id": "0456b89e74ef7813ca3fbf3891b4e35f90413981f9051bf957290bb6ba337305",
+        "image": "sha256:905dcb21138065e4b8cd028a6747fd613d080f6bb562d7901c034eb9c7ae4bce",
+        "name": "wfc-pathfinder-local-storage-ready-1",
+        "running": false,
+        "startedAt": "2026-10-18T07:55:59.872160844Z"
+      },
+      {
+        "role": "postgres",
+        "id": "6830635a4597dad696f1a5ced6846853cd9e1fee0f858450ad6f858e4c2e30b9",
+        "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+        "name": "wfc-pathfinder-local-postgres-1",
+        "running": true,
+        "startedAt": "2026-10-18T02:03:12.60010978Z"
+      },
+      {
+        "role": "minio",
+        "id": "e27a690c80957356c8a562e02b72249cf85a3d965f9a32fe596048a15f499820",
+        "image": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+        "name": "wfc-pathfinder-local-minio-1",
+        "running": true,
+        "startedAt": "2026-10-18T07:02:07.977598881Z"
+      }
+    ],
+    "volumes": [
+      "wfc-pathfinder-local_postgres",
+      "wfc-pathfinder-local_minio",
+      "wfc-pathfinder-local_staging",
+      "wfc-pathfinder-local_pathfinder"
+    ],
+    "networks": [
+      {
+        "id": "7e58e2a7f9544ca1b5efc7ae9773e69088168620ad34a6afb7abcea2a26b6cc0",
+        "name": "wfc-pathfinder-local_front"
+      },
+      {
+        "id": "77abead34a6b25bce147efa3a1eacd67d9a9b110028ea634ab904768e3e2274d",
+        "name": "wfc-pathfinder-local_backend"
+      }
+    ]
+  },
+  "limits": [
+    "Actual29-control backend/browser/replacement-backup/preview-recovery checks are pending; startup alone does not prove them.",
+    "All three historically rejected scratch directories remain untouched."
+  ]
+}

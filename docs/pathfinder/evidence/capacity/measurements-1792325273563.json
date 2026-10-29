@@ -1,0 +1,874 @@
+{
+  "schemaVersion": "pathfinder.capacity.measurements.v1",
+  "startedAt": "2026-10-18T12:03:10.716Z",
+  "status": "PASS",
+  "manifestSha256": "8cbd39a96e7607e530b4e893ee5bae432e2d4e70ae1e3f4c3ddfcc73bf4bfb2b",
+  "production": [
+    {
+      "label": "current-partial-52-object-model-network",
+      "kind": "copied-real",
+      "status": "PASS",
+      "queries": [
+        {
+          "phase": "one-shot-cold",
+          "iteration": 0,
+          "status": "PASS",
+          "requestSha256": "8c32a56442cace05db795937cf044f0aba4cca07c0e5fa61ae92c695277c7e9e",
+          "measurement": {
+            "status": "PASS",
+            "spawned": true,
+            "code": 0,
+            "signal": null,
+            "wallMilliseconds": 1336.9428269999999,
+            "measurementAndCleanupWallMilliseconds": 1352.3644199999999,
+            "outputBytes": 11519,
+            "retainedOutputBytes": 11519,
+            "outputSha256": "0b9261b897f9a999d48a0b086b9c652ed4330de5b6435ec1660f1e75a26648c3",
+            "stderrBytes": 0,
+            "sampleError": null,
+            "sampling": {
+              "intervalMilliseconds": 20,
+              "samples": 60,
+              "maxTreeRssBytes": 153210880,
+              "maxSupervisorRssBytes": 48332800,
+              "maxDescendantsRssBytes": 105185280,
+              "maxProcessCount": 2,
+              "sawDescendant": true,
+              "interpretation": "Sampled process-tree RSS estimate from sequential non-atomic /proc reads; may miss short peaks and is not an exact coincident peak. Supervisor and descendant maxima occur independently and must not be added."
+            },
+            "cleanup": {
+              "groupGone": true
+            }
+          },
+          "responsePath": "/work/production/case-0/response-0.json",
+          "responseStatus": "calculated",
+          "semanticSha256": "aa699a152c24fbe945453452564df6073f5e3a503620f475f29cbd394058c5bd",
+          "matchesDirectFullRouteAndDesign": true,
+          "matchesExistingRealReference": true,
+          "loadedFromDisk": false,
+          "cacheStateExpected": true,
+          "fullPathPointCount": 90,
+          "segmentIdCount": 25,
+          "lengthMeters": 35.30345579516123,
+          "designLengthMeters": "45",
+          "queryThroughputPerSecond": 0.7479751413483593
+        },
+        {
+          "phase": "one-shot-disk-warm",
+          "iteration": 1,
+          "status": "PASS",
+          "requestSha256": "9f95c548bc2be9381e9f2e62d254d235bb5b8c1cf842b000581f0f3fb72072b5",
+          "measurement": {
+            "status": "PASS",
+            "spawned": true,
+            "code": 0,
+            "signal": null,
+            "wallMilliseconds": 1177.3330560000004,
+            "measurementAndCleanupWallMilliseconds": 1194.6181970000007,
+            "outputBytes": 11518,
+            "retainedOutputBytes": 11518,
+            "outputSha256": "80a362455cc1cbeef82e0c881623495bd104a4207a324a803fdbebf784de82f4",
+            "stderrBytes": 0,
+            "sampleError": null,
+            "sampling": {
+              "intervalMilliseconds": 20,
+              "samples": 53,
+              "maxTreeRssBytes": 145289216,
+              "maxSupervisorRssBytes": 46612480,
+              "maxDescendantsRssBytes": 99848192,
+              "maxProcessCount": 2,
+              "sawDescendant": true,
+              "interpretation": "Sampled process-tree RSS estimate from sequential non-atomic /proc reads; may miss short peaks and is not an exact coincident peak. Supervisor and descendant maxima occur independently and must not be added."
+            },
+            "cleanup": {
+              "groupGone": true
+            }
+          },
+          "responsePath": "/work/production/case-0/response-1.json",
+          "responseStatus": "calculated",
+          "semanticSha256": "aa699a152c24fbe945453452564df6073f5e3a503620f475f29cbd394058c5bd",
+          "matchesDirectFullRouteAndDesign": true,
+          "matchesExistingRealReference": true,
+          "loadedFromDisk": true,
+          "cacheStateExpected": true,
+          "fullPathPointCount": 90,
+          "segmentIdCount": 25,
+          "lengthMeters": 35.30345579516123,
+          "designLengthMeters": "45",
+          "queryThroughputPerSecond": 0.8493773235226308
+        },
+        {
+          "phase": "one-shot-disk-warm",
+          "iteration": 2,
+          "status": "PASS",
+          "requestSha256": "212d9986e13b7864dbf927382468f9ab94c5aad251f94fe1585d71aa2e9db71b",
+          "measurement": {
+            "status": "PASS",
+            "spawned": true,
+            "code": 0,
+            "signal": null,
+            "wallMilliseconds": 1223.4305139999997,
+            "measurementAndCleanupWallMilliseconds": 1242.7243610000005,
+            "outputBytes": 11518,
+            "retainedOutputBytes": 11518,
+            "outputSha256": "0aeb7ba73f2214d5f613e0746ca6d8027a80d35d68ff04a7128bbd66b4f34ba3",
+            "stderrBytes": 0,
+            "sampleError": null,
+            "sampling": {
+              "intervalMilliseconds": 20,
+              "samples": 55,
+              "maxTreeRssBytes": 147279872,
+              "maxSupervisorRssBytes": 45572096,
+              "maxDescendantsRssBytes": 101707776,
+              "maxProcessCount": 2,
+              "sawDescendant": true,
+              "interpretation": "Sampled process-tree RSS estimate from sequential non-atomic /proc reads; may miss short peaks and is not an exact coincident peak. Supervisor and descendant maxima occur independently and must not be added."
+            },
+            "cleanup": {
+              "groupGone": true
+            }
+          },
+          "responsePath": "/work/production/case-0/response-2.json",
+          "responseStatus": "calculated",
+          "semanticSha256": "aa699a152c24fbe945453452564df6073f5e3a503620f475f29cbd394058c5bd",
+          "matchesDirectFullRouteAndDesign": true,
+          "matchesExistingRealReference": true,
+          "loadedFromDisk": true,
+          "cacheStateExpected": true,
+          "fullPathPointCount": 90,
+          "segmentIdCount": 25,
+          "lengthMeters": 35.30345579516123,
+          "designLengthMeters": "45",
+          "queryThroughputPerSecond": 0.8173737605501642
+        }
+      ],
+      "baselineSemanticSha256": "aa699a152c24fbe945453452564df6073f5e3a503620f475f29cbd394058c5bd",
+      "inputSnapshotUnchanged": true,
+      "diskWarmThroughputQueriesPerSecond": 0.833068289186011
+    },
+    {
+      "label": "Mathematical chain of 8 straight 2m segments",
+      "kind": "synthetic",
+      "status": "PASS",
+      "queries": [
+        {
+          "phase": "one-shot-cold",
+          "iteration": 0,
+          "status": "PASS",
+          "requestSha256": "b16f8f6edbe733c53a1fe224f162f94026b23800e49c694b498c7993c04ea3f8",
+          "measurement": {
+            "status": "PASS",
+            "spawned": true,
+            "code": 0,
+            "signal": null,
+            "wallMilliseconds": 396.62029299999995,
+            "measurementAndCleanupWallMilliseconds": 404.8381609999997,
+            "outputBytes": 2874,
+            "retainedOutputBytes": 2874,
+            "outputSha256": "9436665ea24bb0bfd5f9d86d7c4ec46fcf4a6841030b025d929ca3d7ef7bb9b0",
+            "stderrBytes": 0,
+            "sampleError": null,
+            "sampling": {
+              "intervalMilliseconds": 20,
+              "samples": 18,
+              "maxTreeRssBytes": 103428096,
+              "maxSupervisorRssBytes": 45473792,
+              "maxDescendantsRssBytes": 57954304,
+              "maxProcessCount": 2,
+              "sawDescendant": true,
+              "interpretation": "Sampled process-tree RSS estimate from sequential non-atomic /proc reads; may miss short peaks and is not an exact coincident peak. Supervisor and descendant maxima occur independently and must not be added."
+            },
+            "cleanup": {
+              "groupGone": true
+            }
+          },
+          "responsePath": "/work/production/case-1/response-0.json",
+          "responseStatus": "calculated",
+          "semanticSha256": "bad7f0306abd1a8fc525a94220424f3323cd14fe9206c292fe1503d4723592df",
+          "matchesDirectFullRouteAndDesign": true,
+          "matchesExistingRealReference": null,
+          "loadedFromDisk": false,
+          "cacheStateExpected": true,
+          "fullPathPointCount": 9,
+          "segmentIdCount": 8,
+          "lengthMeters": 16,
+          "designLengthMeters": "24",
+          "queryThroughputPerSecond": 2.521303164888742
+        },
+        {
+          "phase": "one-shot-disk-warm",
+          "iteration": 1,
+          "status": "PASS",
+          "requestSha256": "4f79e3853e42fa911595158e81ccc6c4133dc4feca215dd798832e4fc98feffa",
+          "measurement": {
+            "status": "PASS",
+            "spawned": true,
+            "code": 0,
+            "signal": null,
+            "wallMilliseconds": 483.5022140000001,
+            "measurementAndCleanupWallMilliseconds": 504.09913900000174,
+            "outputBytes": 2873,
+            "retainedOutputBytes": 2873,
+            "outputSha256": "601eb9dc80b1c629808cef0a98a3b8a220b69f205d27dd9e17fb3d61b8e2da1a",
+            "stderrBytes": 0,
+            "sampleError": null,
+            "sampling": {
+              "intervalMilliseconds": 20,
+              "samples": 22,
+              "maxTreeRssBytes": 100077568,
+              "maxSupervisorRssBytes": 45744128,
+              "maxDescendantsRssBytes": 54333440,
+              "maxProcessCount": 2,
+              "sawDescendant": true,
+              "interpretation": "Sampled process-tree RSS estimate from sequential non-atomic /proc reads; may miss short peaks and is not an exact coincident peak. Supervisor and descendant maxima occur independently and must not be added."
+            },
+            "cleanup": {
+              "groupGone": true
+            }
+          },
+          "responsePath": "/work/production/case-1/response-1.json",
+          "responseStatus": "calculated",
+          "semanticSha256": "bad7f0306abd1a8fc525a94220424f3323cd14fe9206c292fe1503d4723592df",
+          "matchesDirectFullRouteAndDesign": true,
+          "matchesExistingRealReference": null,
+          "loadedFromDisk": true,
+          "cacheStateExpected": true,
+          "fullPathPointCount": 9,
+          "segmentIdCount": 8,
+          "lengthMeters": 16,
+          "designLengthMeters": "24",
+          "queryThroughputPerSecond": 2.068242856070975
+        },
+        {
+          "phase": "one-shot-disk-warm",
+          "iteration": 2,
+          "status": "PASS",
+          "requestSha256": "e967ada143d437f9c590ea5e0087d51e6d1bbbf6da77feeeaf24fe1a46e65d2c",
+          "measurement": {
+            "status": "PASS",
+            "spawned": true,
+            "code": 0,
+            "signal": null,
+            "wallMilliseconds": 440.73476200000005,
+            "measurementAndCleanupWallMilliseconds": 448.159995,
+            "outputBytes": 2873,
+            "retainedOutputBytes": 2873,
+            "outputSha256": "bedf9366896bae18f9e473e870a837c28f760f24d33ae4626862e450b9407f73",
+            "stderrBytes": 0,
+            "sampleError": null,
+            "sampling": {
+              "intervalMilliseconds": 20,
+              "samples": 20,
+              "maxTreeRssBytes": 100605952,
+              "maxSupervisorRssBytes": 45326336,
+              "maxDescendantsRssBytes": 55279616,
+              "maxProcessCount": 2,
+              "sawDescendant": true,
+              "interpretation": "Sampled process-tree RSS estimate from sequential non-atomic /proc reads; may miss short peaks and is not an exact coincident peak. Supervisor and descendant maxima occur independently and must not be added."
+            },
+            "cleanup": {
+              "groupGone": true
+            }
+          },
+          "responsePath": "/work/production/case-1/response-2.json",
+          "responseStatus": "calculated",
+          "semanticSha256": "bad7f0306abd1a8fc525a94220424f3323cd14fe9206c292fe1503d4723592df",
+          "matchesDirectFullRouteAndDesign": true,
+          "matchesExistingRealReference": null,
+          "loadedFromDisk": true,
+          "cacheStateExpected": true,
+          "fullPathPointCount": 9,
+          "segmentIdCount": 8,
+          "lengthMeters": 16,
+          "designLengthMeters": "24",
+          "queryThroughputPerSecond": 2.268938341650482
+        }
+      ],
+      "baselineSemanticSha256": "bad7f0306abd1a8fc525a94220424f3323cd14fe9206c292fe1503d4723592df",
+      "inputSnapshotUnchanged": true,
+      "diskWarmThroughputQueriesPerSecond": 2.1639471823079277
+    },
+    {
+      "label": "Mathematical chain of 64 straight 2m segments",
+      "kind": "synthetic",
+      "status": "PASS",
+      "queries": [
+        {
+          "phase": "one-shot-cold",
+          "iteration": 0,
+          "status": "PASS",
+          "requestSha256": "e430ef1de43cdbc9f59ba9135a6dc17cc1352f34db9ab51a97a74d64b48b9985",
+          "measurement": {
+            "status": "PASS",
+            "spawned": true,
+            "code": 0,
+            "signal": null,
+            "wallMilliseconds": 405.4263439999995,
+            "measurementAndCleanupWallMilliseconds": 424.7579970000006,
+            "outputBytes": 11857,
+            "retainedOutputBytes": 11857,
+            "outputSha256": "c3574a96ab17c7356b1fa1ac4de48c8667d8147e7fe6bb1f59e603b0d759f38d",
+            "stderrBytes": 0,
+            "sampleError": null,
+            "sampling": {
+              "intervalMilliseconds": 20,
+              "samples": 19,
+              "maxTreeRssBytes": 105619456,
+              "maxSupervisorRssBytes": 45445120,
+              "maxDescendantsRssBytes": 60174336,
+              "maxProcessCount": 2,
+              "sawDescendant": true,
+              "interpretation": "Sampled process-tree RSS estimate from sequential non-atomic /proc reads; may miss short peaks and is not an exact coincident peak. Supervisor and descendant maxima occur independently and must not be added."
+            },
+            "cleanup": {
+              "groupGone": true
+            }
+          },
+          "responsePath": "/work/production/case-2/response-0.json",
+          "responseStatus": "calculated",
+          "semanticSha256": "d0d8a1e196882e294ce78abb10db21f0e53b844f9e228e7601a43da56305e954",
+          "matchesDirectFullRouteAndDesign": true,
+          "matchesExistingRealReference": null,
+          "loadedFromDisk": false,
+          "cacheStateExpected": true,
+          "fullPathPointCount": 65,
+          "segmentIdCount": 64,
+          "lengthMeters": 128,
+          "designLengthMeters": "147",
+          "queryThroughputPerSecond": 2.4665392735307825
+        },
+        {
+          "phase": "one-shot-disk-warm",
+          "iteration": 1,
+          "status": "PASS",
+          "requestSha256": "0e800b8b42d243aba50f64e27571f083904fe903ec36f1bbb99b47cfd69311e5",
+          "measurement": {
+            "status": "PASS",
+            "spawned": true,
+            "code": 0,
+            "signal": null,
+            "wallMilliseconds": 447.0134369999996,
+            "measurementAndCleanupWallMilliseconds": 451.156246999999,
+            "outputBytes": 11856,
+            "retainedOutputBytes": 11856,
+            "outputSha256": "5a28d6d4ebbb839c1e2129e9cd759eceaae1f34c801636fa2bba177ca7c768c1",
+            "stderrBytes": 0,
+            "sampleError": null,
+            "sampling": {
+              "intervalMilliseconds": 20,
+              "samples": 20,
+              "maxTreeRssBytes": 104771584,
+              "maxSupervisorRssBytes": 45555712,
+              "maxDescendantsRssBytes": 59215872,
+              "maxProcessCount": 2,
+              "sawDescendant": true,
+              "interpretation": "Sampled process-tree RSS estimate from sequential non-atomic /proc reads; may miss short peaks and is not an exact coincident peak. Supervisor and descendant maxima occur independently and must not be added."
+            },
+            "cleanup": {
+              "groupGone": true
+            }
+          },
+          "responsePath": "/work/production/case-2/response-1.json",
+          "responseStatus": "calculated",
+          "semanticSha256": "d0d8a1e196882e294ce78abb10db21f0e53b844f9e228e7601a43da56305e954",
+          "matchesDirectFullRouteAndDesign": true,
+          "matchesExistingRealReference": null,
+          "loadedFromDisk": true,
+          "cacheStateExpected": true,
+          "fullPathPointCount": 65,
+          "segmentIdCount": 64,
+          "lengthMeters": 128,
+          "designLengthMeters": "147",
+          "queryThroughputPerSecond": 2.2370692181228566
+        },
+        {
+          "phase": "one-shot-disk-warm",
+          "iteration": 2,
+          "status": "PASS",
+          "requestSha256": "71b17a312806182b6c90556de784d97ecdf7df9c62fa4900b210fabce544e2f3",
+          "measurement": {
+            "status": "PASS",
+            "spawned": true,
+            "code": 0,
+            "signal": null,
+            "wallMilliseconds": 451.9426930000009,
+            "measurementAndCleanupWallMilliseconds": 471.3028950000007,
+            "outputBytes": 11856,
+            "retainedOutputBytes": 11856,
+            "outputSha256": "72bb64fda32ed79cc4e3c76b95a10731a86ded8cd42e5ae9f9a10a3f17bd951d",
+            "stderrBytes": 0,
+            "sampleError": null,
+            "sampling": {
+              "intervalMilliseconds": 20,
+              "samples": 21,
+              "maxTreeRssBytes": 102449152,
+              "maxSupervisorRssBytes": 45432832,
+              "maxDescendantsRssBytes": 57016320,
+              "maxProcessCount": 2,
+              "sawDescendant": true,
+              "interpretation": "Sampled process-tree RSS estimate from sequential non-atomic /proc reads; may miss short peaks and is not an exact coincident peak. Supervisor and descendant maxima occur independently and must not be added."
+            },
+            "cleanup": {
+              "groupGone": true
+            }
+          },
+          "responsePath": "/work/production/case-2/response-2.json",
+          "responseStatus": "calculated",
+          "semanticSha256": "d0d8a1e196882e294ce78abb10db21f0e53b844f9e228e7601a43da56305e954",
+          "matchesDirectFullRouteAndDesign": true,
+          "matchesExistingRealReference": null,
+          "loadedFromDisk": true,
+          "cacheStateExpected": true,
+          "fullPathPointCount": 65,
+          "segmentIdCount": 64,
+          "lengthMeters": 128,
+          "designLengthMeters": "147",
+          "queryThroughputPerSecond": 2.2126699147672646
+        }
+      ],
+      "baselineSemanticSha256": "d0d8a1e196882e294ce78abb10db21f0e53b844f9e228e7601a43da56305e954",
+      "inputSnapshotUnchanged": true,
+      "diskWarmThroughputQueriesPerSecond": 2.22480267196131
+    },
+    {
+      "label": "Mathematical chain of 256 straight 2m segments",
+      "kind": "synthetic",
+      "status": "PASS",
+      "queries": [
+        {
+          "phase": "one-shot-cold",
+          "iteration": 0,
+          "status": "PASS",
+          "requestSha256": "59fffaae54ca4c7d0f10ff6f23a327d0bcda5f99bc916a4e8693fee3724a1114",
+          "measurement": {
+            "status": "PASS",
+            "spawned": true,
+            "code": 0,
+            "signal": null,
+            "wallMilliseconds": 562.3458659999997,
+            "measurementAndCleanupWallMilliseconds": 581.7744739999998,
+            "outputBytes": 42773,
+            "retainedOutputBytes": 42773,
+            "outputSha256": "704c3660eead384de613ec06e709ae1cd8944cc975f574203c515de6d1de9b33",
+            "stderrBytes": 0,
+            "sampleError": null,
+            "sampling": {
+              "intervalMilliseconds": 20,
+              "samples": 26,
+              "maxTreeRssBytes": 115449856,
+              "maxSupervisorRssBytes": 45518848,
+              "maxDescendantsRssBytes": 69931008,
+              "maxProcessCount": 2,
+              "sawDescendant": true,
+              "interpretation": "Sampled process-tree RSS estimate from sequential non-atomic /proc reads; may miss short peaks and is not an exact coincident peak. Supervisor and descendant maxima occur independently and must not be added."
+            },
+            "cleanup": {
+              "groupGone": true
+            }
+          },
+          "responsePath": "/work/production/case-3/response-0.json",
+          "responseStatus": "calculated",
+          "semanticSha256": "0e7cf12c1845eee0aa38786583688f2484154b46919335e462b10959ed87029c",
+          "matchesDirectFullRouteAndDesign": true,
+          "matchesExistingRealReference": null,
+          "loadedFromDisk": false,
+          "cacheStateExpected": true,
+          "fullPathPointCount": 257,
+          "segmentIdCount": 256,
+          "lengthMeters": 512,
+          "designLengthMeters": "569",
+          "queryThroughputPerSecond": 1.7782650508539537
+        },
+        {
+          "phase": "one-shot-disk-warm",
+          "iteration": 1,
+          "status": "PASS",
+          "requestSha256": "74cb7ee5c01d2e24c5e1bf4982086f7af1aca21a5625887e5f72a6db7ae3a2f4",
+          "measurement": {
+            "status": "PASS",
+            "spawned": true,
+            "code": 0,
+            "signal": null,
+            "wallMilliseconds": 387.31055600000036,
+            "measurementAndCleanupWallMilliseconds": 407.5544410000002,
+            "outputBytes": 42772,
+            "retainedOutputBytes": 42772,
+            "outputSha256": "bbe4fb2a7c5e29e8c8adf71ea23d6b8aab678c127c83ee359196affa93700961",
+            "stderrBytes": 0,
+            "sampleError": null,
+            "sampling": {
+              "intervalMilliseconds": 20,
+              "samples": 18,
+              "maxTreeRssBytes": 111075328,
+              "maxSupervisorRssBytes": 45600768,
+              "maxDescendantsRssBytes": 65474560,
+              "maxProcessCount": 2,
+              "sawDescendant": true,
+              "interpretation": "Sampled process-tree RSS estimate from sequential non-atomic /proc reads; may miss short peaks and is not an exact coincident peak. Supervisor and descendant maxima occur independently and must not be added."
+            },
+            "cleanup": {
+              "groupGone": true
+            }
+          },
+          "responsePath": "/work/production/case-3/response-1.json",
+          "responseStatus": "calculated",
+          "semanticSha256": "0e7cf12c1845eee0aa38786583688f2484154b46919335e462b10959ed87029c",
+          "matchesDirectFullRouteAndDesign": true,
+          "matchesExistingRealReference": null,
+          "loadedFromDisk": true,
+          "cacheStateExpected": true,
+          "fullPathPointCount": 257,
+          "segmentIdCount": 256,
+          "lengthMeters": 512,
+          "designLengthMeters": "569",
+          "queryThroughputPerSecond": 2.581907424180814
+        },
+        {
+          "phase": "one-shot-disk-warm",
+          "iteration": 2,
+          "status": "PASS",
+          "requestSha256": "5e6227a2c0d5af1f4791be44b076beeff3ed87cd2e1cc4e1356b8eb0961fba42",
+          "measurement": {
+            "status": "PASS",
+            "spawned": true,
+            "code": 0,
+            "signal": null,
+            "wallMilliseconds": 502.66257699999915,
+            "measurementAndCleanupWallMilliseconds": 515.9681369999998,
+            "outputBytes": 42772,
+            "retainedOutputBytes": 42772,
+            "outputSha256": "4d42563b3411a63ed8b75e849eb627134b08e8cea66b9209ee92d670105b59dd",
+            "stderrBytes": 0,
+            "sampleError": null,
+            "sampling": {
+              "intervalMilliseconds": 20,
+              "samples": 23,
+              "maxTreeRssBytes": 112578560,
+              "maxSupervisorRssBytes": 48046080,
+              "maxDescendantsRssBytes": 64770048,
+              "maxProcessCount": 2,
+              "sawDescendant": true,
+              "interpretation": "Sampled process-tree RSS estimate from sequential non-atomic /proc reads; may miss short peaks and is not an exact coincident peak. Supervisor and descendant maxima occur independently and must not be added."
+            },
+            "cleanup": {
+              "groupGone": true
+            }
+          },
+          "responsePath": "/work/production/case-3/response-2.json",
+          "responseStatus": "calculated",
+          "semanticSha256": "0e7cf12c1845eee0aa38786583688f2484154b46919335e462b10959ed87029c",
+          "matchesDirectFullRouteAndDesign": true,
+          "matchesExistingRealReference": null,
+          "loadedFromDisk": true,
+          "cacheStateExpected": true,
+          "fullPathPointCount": 257,
+          "segmentIdCount": 256,
+          "lengthMeters": 512,
+          "designLengthMeters": "569",
+          "queryThroughputPerSecond": 1.9894061061163932
+        }
+      ],
+      "baselineSemanticSha256": "0e7cf12c1845eee0aa38786583688f2484154b46919335e462b10959ed87029c",
+      "inputSnapshotUnchanged": true,
+      "diskWarmThroughputQueriesPerSecond": 2.2472588506781372
+    },
+    {
+      "label": "Mathematical chain of 1024 straight 2m segments",
+      "kind": "synthetic",
+      "status": "PASS",
+      "queries": [
+        {
+          "phase": "one-shot-cold",
+          "iteration": 0,
+          "status": "PASS",
+          "requestSha256": "d33d17f1250362e41188baeefea4ef9b887a66303a2e0be056d6df9798012bd5",
+          "measurement": {
+            "status": "PASS",
+            "spawned": true,
+            "code": 0,
+            "signal": null,
+            "wallMilliseconds": 777.4344550000005,
+            "measurementAndCleanupWallMilliseconds": 789.7370110000011,
+            "outputBytes": 166954,
+            "retainedOutputBytes": 166954,
+            "outputSha256": "0f1b0abaada73790d0922f19e491f646a4f5c53701d502f99bc801037334b231",
+            "stderrBytes": 0,
+            "sampleError": null,
+            "sampling": {
+              "intervalMilliseconds": 20,
+              "samples": 35,
+              "maxTreeRssBytes": 136368128,
+              "maxSupervisorRssBytes": 46374912,
+              "maxDescendantsRssBytes": 90501120,
+              "maxProcessCount": 2,
+              "sawDescendant": true,
+              "interpretation": "Sampled process-tree RSS estimate from sequential non-atomic /proc reads; may miss short peaks and is not an exact coincident peak. Supervisor and descendant maxima occur independently and must not be added."
+            },
+            "cleanup": {
+              "groupGone": true
+            }
+          },
+          "responsePath": "/work/production/case-4/response-0.json",
+          "responseStatus": "calculated",
+          "semanticSha256": "2e86d5961bf3009358424a6a814a3c24d1f072c6d5d3476ab610f74fe7915aac",
+          "matchesDirectFullRouteAndDesign": true,
+          "matchesExistingRealReference": null,
+          "loadedFromDisk": false,
+          "cacheStateExpected": true,
+          "fullPathPointCount": 1025,
+          "segmentIdCount": 1024,
+          "lengthMeters": 2048,
+          "designLengthMeters": "2259",
+          "queryThroughputPerSecond": 1.286282069914176
+        },
+        {
+          "phase": "one-shot-disk-warm",
+          "iteration": 1,
+          "status": "PASS",
+          "requestSha256": "b749c763de1fc3b94b541232c2380ae3140b7e2810a8b55cf996449021f71d8d",
+          "measurement": {
+            "status": "PASS",
+            "spawned": true,
+            "code": 0,
+            "signal": null,
+            "wallMilliseconds": 648.7815010000013,
+            "measurementAndCleanupWallMilliseconds": 667.0748050000002,
+            "outputBytes": 166953,
+            "retainedOutputBytes": 166953,
+            "outputSha256": "1220202c0e65d6103e9c7d840696d101c956dc2ebbd363096da6f8d828d2d05c",
+            "stderrBytes": 0,
+            "sampleError": null,
+            "sampling": {
+              "intervalMilliseconds": 20,
+              "samples": 30,
+              "maxTreeRssBytes": 129200128,
+              "maxSupervisorRssBytes": 46448640,
+              "maxDescendantsRssBytes": 83640320,
+              "maxProcessCount": 2,
+              "sawDescendant": true,
+              "interpretation": "Sampled process-tree RSS estimate from sequential non-atomic /proc reads; may miss short peaks and is not an exact coincident peak. Supervisor and descendant maxima occur independently and must not be added."
+            },
+            "cleanup": {
+              "groupGone": true
+            }
+          },
+          "responsePath": "/work/production/case-4/response-1.json",
+          "responseStatus": "calculated",
+          "semanticSha256": "2e86d5961bf3009358424a6a814a3c24d1f072c6d5d3476ab610f74fe7915aac",
+          "matchesDirectFullRouteAndDesign": true,
+          "matchesExistingRealReference": null,
+          "loadedFromDisk": true,
+          "cacheStateExpected": true,
+          "fullPathPointCount": 1025,
+          "segmentIdCount": 1024,
+          "lengthMeters": 2048,
+          "designLengthMeters": "2259",
+          "queryThroughputPerSecond": 1.5413509763435718
+        },
+        {
+          "phase": "one-shot-disk-warm",
+          "iteration": 2,
+          "status": "PASS",
+          "requestSha256": "b238307de741ece9f7de06303b45990e3484526f306f11f4b63a3cf4d7edc321",
+          "measurement": {
+            "status": "PASS",
+            "spawned": true,
+            "code": 0,
+            "signal": null,
+            "wallMilliseconds": 658.7482290000007,
+            "measurementAndCleanupWallMilliseconds": 678.2302909999999,
+            "outputBytes": 166953,
+            "retainedOutputBytes": 166953,
+            "outputSha256": "6b0042a337b8ec64a0303b42f6b18734fb3817193502322684d55c5c2887dc0d",
+            "stderrBytes": 0,
+            "sampleError": null,
+            "sampling": {
+              "intervalMilliseconds": 20,
+              "samples": 30,
+              "maxTreeRssBytes": 129101824,
+              "maxSupervisorRssBytes": 45600768,
+              "maxDescendantsRssBytes": 83501056,
+              "maxProcessCount": 2,
+              "sawDescendant": true,
+              "interpretation": "Sampled process-tree RSS estimate from sequential non-atomic /proc reads; may miss short peaks and is not an exact coincident peak. Supervisor and descendant maxima occur independently and must not be added."
+            },
+            "cleanup": {
+              "groupGone": true
+            }
+          },
+          "responsePath": "/work/production/case-4/response-2.json",
+          "responseStatus": "calculated",
+          "semanticSha256": "2e86d5961bf3009358424a6a814a3c24d1f072c6d5d3476ab610f74fe7915aac",
+          "matchesDirectFullRouteAndDesign": true,
+          "matchesExistingRealReference": null,
+          "loadedFromDisk": true,
+          "cacheStateExpected": true,
+          "fullPathPointCount": 1025,
+          "segmentIdCount": 1024,
+          "lengthMeters": 2048,
+          "designLengthMeters": "2259",
+          "queryThroughputPerSecond": 1.518030646576507
+        }
+      ],
+      "baselineSemanticSha256": "2e86d5961bf3009358424a6a814a3c24d1f072c6d5d3476ab610f74fe7915aac",
+      "inputSnapshotUnchanged": true,
+      "diskWarmThroughputQueriesPerSecond": 1.5296019311163174
+    }
+  ],
+  "processControls": [
+    {
+      "name": "pre-cancelled process does not spawn",
+      "status": "PASS",
+      "observation": {
+        "status": "CANCELLED",
+        "spawned": false,
+        "stderrBytes": 0,
+        "wallMilliseconds": 0,
+        "cleanup": {
+          "groupGone": true
+        }
+      }
+    },
+    {
+      "name": "hard deadline retires the observed owned process group",
+      "status": "PASS",
+      "observation": {
+        "status": "TIMEOUT",
+        "spawned": true,
+        "code": null,
+        "signal": "SIGKILL",
+        "wallMilliseconds": 254.437772,
+        "measurementAndCleanupWallMilliseconds": 263.902203,
+        "outputBytes": 0,
+        "retainedOutputBytes": 0,
+        "outputSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderrBytes": 0,
+        "sampleError": null,
+        "sampling": {
+          "intervalMilliseconds": 20,
+          "samples": 11,
+          "maxTreeRssBytes": 101183488,
+          "maxSupervisorRssBytes": 53239808,
+          "maxDescendantsRssBytes": 47943680,
+          "maxProcessCount": 2,
+          "sawDescendant": true,
+          "interpretation": "Sampled process-tree RSS estimate from sequential non-atomic /proc reads; may miss short peaks and is not an exact coincident peak. Supervisor and descendant maxima occur independently and must not be added."
+        },
+        "cleanup": {
+          "groupGone": true
+        }
+      }
+    },
+    {
+      "name": "oversized stdout is rejected without a false full-output hash",
+      "status": "PASS",
+      "observation": {
+        "status": "OUTPUT_LIMIT",
+        "spawned": true,
+        "code": null,
+        "signal": "SIGKILL",
+        "wallMilliseconds": 21.826152000000093,
+        "measurementAndCleanupWallMilliseconds": 24.06046200000003,
+        "outputBytes": 4096,
+        "retainedOutputBytes": 0,
+        "outputSha256": null,
+        "stderrBytes": 0,
+        "sampleError": null,
+        "sampling": {
+          "intervalMilliseconds": 20,
+          "samples": 1,
+          "maxTreeRssBytes": 18894848,
+          "maxSupervisorRssBytes": 18894848,
+          "maxDescendantsRssBytes": 0,
+          "maxProcessCount": 1,
+          "sawDescendant": false,
+          "interpretation": "Sampled process-tree RSS estimate from sequential non-atomic /proc reads; may miss short peaks and is not an exact coincident peak. Supervisor and descendant maxima occur independently and must not be added."
+        },
+        "cleanup": {
+          "groupGone": true
+        }
+      }
+    },
+    {
+      "name": "cancellation retires an actually observed production .NET supervisor/worker group",
+      "status": "PASS",
+      "observation": {
+        "status": "CANCELLED",
+        "spawned": true,
+        "code": null,
+        "signal": "SIGKILL",
+        "wallMilliseconds": 164.30342500000006,
+        "measurementAndCleanupWallMilliseconds": 182.5544890000001,
+        "outputBytes": 0,
+        "retainedOutputBytes": 0,
+        "outputSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderrBytes": 0,
+        "sampleError": null,
+        "sampling": {
+          "intervalMilliseconds": 20,
+          "samples": 8,
+          "maxTreeRssBytes": 59351040,
+          "maxSupervisorRssBytes": 45469696,
+          "maxDescendantsRssBytes": 13881344,
+          "maxProcessCount": 2,
+          "sawDescendant": true,
+          "interpretation": "Sampled process-tree RSS estimate from sequential non-atomic /proc reads; may miss short peaks and is not an exact coincident peak. Supervisor and descendant maxima occur independently and must not be added."
+        },
+        "cleanup": {
+          "groupGone": true
+        }
+      }
+    }
+  ],
+  "benchmark": {
+    "measurement": {
+      "status": "PASS",
+      "spawned": true,
+      "code": 0,
+      "signal": null,
+      "wallMilliseconds": 5968.427898,
+      "measurementAndCleanupWallMilliseconds": 5980.92666,
+      "outputBytes": 164026,
+      "retainedOutputBytes": 164026,
+      "outputSha256": "9ec1069beab2643c509067b9d1925e8ef13c37890575ede2dff2460b0f588035",
+      "stderrBytes": 0,
+      "sampleError": null,
+      "sampling": {
+        "intervalMilliseconds": 20,
+        "samples": 265,
+        "maxTreeRssBytes": 145903616,
+        "maxSupervisorRssBytes": 145903616,
+        "maxDescendantsRssBytes": 0,
+        "maxProcessCount": 1,
+        "sawDescendant": false,
+        "interpretation": "Sampled process-tree RSS estimate from sequential non-atomic /proc reads; may miss short peaks and is not an exact coincident peak. Supervisor and descendant maxima occur independently and must not be added."
+      },
+      "cleanup": {
+        "groupGone": true
+      }
+    },
+    "status": "PASS",
+    "fullOutputPath": "/work/bench.stdout.json",
+    "receiptSha256": "9ec1069beab2643c509067b9d1925e8ef13c37890575ede2dff2460b0f588035",
+    "datasetCount": 5
+  },
+  "methodology": {
+    "sampledProcessTreeRss": "20ms nominal interval, sequential non-atomic /proc VmRSS reads. Sampled tree RSS estimate may miss short peaks; exact coincident peak is unproved. Sampling overhead is included. Supervisor/descendant separate maxima must not be summed.",
+    "productionMode": "Fresh .NET supervisor and owned worker on every query. Cold=empty fitted cache, warm=same disk cache in a new process. No endpoint graph reuse.",
+    "directBenchMode": "Same PreparedModel references benchmarked separately; not implemented in the production worker.",
+    "wholePlantCapacity": "NOT_ESTABLISHED",
+    "lookupTiming": "NOT_MEASURED",
+    "nativeParity": "NOT_PERFORMED",
+    "engineeringAcceptance": false
+  },
+  "existingRealReference": {
+    "expectedSemanticSha256": "aa699a152c24fbe945453452564df6073f5e3a503620f475f29cbd394058c5bd",
+    "directSemanticSha256": "aa699a152c24fbe945453452564df6073f5e3a503620f475f29cbd394058c5bd",
+    "matches": true
+  },
+  "wholeDeadlineReached": false,
+  "containerCgroupMemoryPeakBytes": null,
+  "wallMilliseconds": 17322.980802000002,
+  "retainedRequestResponseBytes": 883794,
+  "finishedAt": "2026-10-18T12:03:28.038Z"
+}

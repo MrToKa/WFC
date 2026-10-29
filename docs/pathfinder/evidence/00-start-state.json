@@ -1,0 +1,108 @@
+{
+  "observedAtUtc": "2026-10-17T20:07:04.4657796Z",
+  "userTimeZone": "Europe/Kiev",
+  "originalWfc": {
+    "path": "C:\\Users\\todor.chankov\\source\\WFC",
+    "head": "e1ef20202598bb4d3d78e4772cbbb9747ec23a00",
+    "branch": "main",
+    "status": [],
+    "cachedUpstream": "e1ef20202598bb4d3d78e4772cbbb9747ec23a00",
+    "worktrees": [
+      "worktree C:/Users/todor.chankov/source/WFC",
+      "HEAD e1ef20202598bb4d3d78e4772cbbb9747ec23a00",
+      "branch refs/heads/main",
+      "",
+      "worktree C:/Users/todor.chankov/source/WFC-pathfinder-local",
+      "HEAD e1ef20202598bb4d3d78e4772cbbb9747ec23a00",
+      "branch refs/heads/pf-0-contracts-baseline-20261017",
+      ""
+    ]
+  },
+  "referencePathFinder": {
+    "path": "C:\\Users\\todor.chankov\\.codex\\.chatgpt-projects\\g-p-6ad0a317833c8191bf8e4e8c824a1056\\work\\review-pathfinder",
+    "head": "45c24bf5f433f13e102600b36f20327c77961d0a",
+    "branch": "master",
+    "status": [],
+    "cachedUpstream": "45c24bf5f433f13e102600b36f20327c77961d0a",
+    "worktrees": [
+      "worktree C:/Users/todor.chankov/.codex/.chatgpt-projects/g-p-6ad0a317833c8191bf8e4e8c824a1056/work/review-pathfinder",
+      "HEAD 45c24bf5f433f13e102600b36f20327c77961d0a",
+      "branch refs/heads/master",
+      ""
+    ]
+  },
+  "oldPathFinder": {
+    "path": "C:\\Users\\todor.chankov\\source\\repos\\MrToKa\\PathFinder",
+    "head": "35f4fb46f7762503576bdacd9668f34a1be2b0ed",
+    "branch": "master",
+    "status": [
+      " M AddinRibbon/AddinRibbon.csproj",
+      " M AddinRibbon/ClAddin.cs",
+      "?? .vscode/settings.json"
+    ],
+    "cachedUpstream": "35f4fb46f7762503576bdacd9668f34a1be2b0ed",
+    "worktrees": [
+      "worktree C:/Users/todor.chankov/source/repos/MrToKa/PathFinder",
+      "HEAD 35f4fb46f7762503576bdacd9668f34a1be2b0ed",
+      "branch refs/heads/master",
+      ""
+    ]
+  },
+  "oldPathFinderDirtyFiles": [
+    {
+      "path": "AddinRibbon/AddinRibbon.csproj",
+      "sha256": "489481798af78588192a73fac63bd8284872e619ea1ad845ac042b66d2d0effa",
+      "bytes": 5856
+    },
+    {
+      "path": "AddinRibbon/ClAddin.cs",
+      "sha256": "9f262392b8f5afe5dc5515af95af298791b900d1b1c450c5cf207e889769cacb",
+      "bytes": 2941
+    },
+    {
+      "path": ".vscode/settings.json",
+      "sha256": "6fde5335f219f6c5dafe5240722e74d1ef55897551f3c9d06fdf962ac085ee56",
+      "bytes": 46
+    }
+  ],
+  "isolatedWorktree": {
+    "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local",
+    "head": "e1ef20202598bb4d3d78e4772cbbb9747ec23a00",
+    "branch": "pf-0-contracts-baseline-20261017",
+    "status": [],
+    "cachedUpstream": null,
+    "worktrees": [
+      "worktree C:/Users/todor.chankov/source/WFC",
+      "HEAD e1ef20202598bb4d3d78e4772cbbb9747ec23a00",
+      "branch refs/heads/main",
+      "",
+      "worktree C:/Users/todor.chankov/source/WFC-pathfinder-local",
+      "HEAD e1ef20202598bb4d3d78e4772cbbb9747ec23a00",
+      "branch refs/heads/pf-0-contracts-baseline-20261017",
+      ""
+    ]
+  },
+  "docker": {
+    "available": true,
+    "serverVersion": [
+      "28.5.1"
+    ],
+    "containerRows": [
+      "1d2a63a1b6710bbbfcf4663c61732ea4989ebc3229d6437d22d7ff10d265d47b|/aalborg-offline-viewer-gateway-1|sha256:6ff1cadaccac6e2cb4ae8b4f87e7ed6e0d1ea5fa7cd781793b5f673859cddc20|running|2026-10-16T14:08:20.484859769Z",
+      "1d5592c188a8d60c55d58a29ae0bab14ee67cae51ee00bb1822f75cd9beef99d|/wfc-app-frontend-1|sha256:86870eab49e4b14e81d751ba26a0b5644dfd570954041b665801155487b65b78|running|2026-10-17T12:24:23.192279537Z",
+      "1ffdec229a12d50458d6b0dc1de5b7ebf79a5f464614ccccc7ef22fef86188bb|/routings-preparer-preparer-1|sha256:f7bfe7434ee7e8a864452b98678339a940bb621cfccdd21ad715f591ace6ad77|running|2026-10-17T09:30:09.74632792Z",
+      "2f1d30dd30411bf8b7e873b893d1a87a064cd618651d1f2646b8c5d739f72f36|/wfc_app|sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751|running|2026-10-16T14:08:28.33027284Z",
+      "31a298d2589caf6aa4ffe62aed90fb4f41ed2048ac52f940e47b4a7e2638e874|/aalborg-offline-viewer-viewer-1|sha256:6ff1cadaccac6e2cb4ae8b4f87e7ed6e0d1ea5fa7cd781793b5f673859cddc20|running|2026-10-16T14:08:20.493037766Z",
+      "3265e0bb1d03f23889e765c20ae81212e677bd89f79e2ec7f263bb27ec508ecb|/niedax-postgres|sha256:af1fcdc0950249ff31a7b72cca8f3bf2a05acde380196ce2ab5cff6355aafb0a|running|2026-10-16T14:08:20.518513019Z",
+      "54d0022b687a3d9af2b1937f6afc5dafcaffa40584c1e1992efb16c828a5c992|/niedax-frontend|sha256:88efc2b14924b52ddf902c798ff6c8183e5eca9a551e3933f2c224893e27dd81|running|2026-10-16T14:08:20.508506964Z",
+      "5a5257297c09596752c28dc246767cedcb17fea506492bfa69b11846c1ce4e2e|/niedax-gateway|sha256:1ce9f99177667c70f907966e2b55e4b1fbede2ab0e9fcaaac2229a27ae12b686|running|2026-10-16T14:08:20.520293427Z",
+      "6ad45aea3b8f180629fd43f9be9f9ab4c6c1d99dbcda72612cb60a2b2e623705|/wfc-minio|sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e|running|2026-10-17T09:48:41.528161291Z",
+      "966629b7cce4c9b74b2a39d5705bffded88093747dcd54d0939b56e06d9e6d02|/aalborg-aps-viewer-viewer-1|sha256:3afcb538328d92ea565f457b694d80872cea4f2d6d70038830bff128eee5db75|exited|2026-10-16T05:18:05.048644042Z",
+      "aa1d9cb94233c4bf375cb15acb80d2ea3465e04e0b3f6163248cccb91b316e39|/niedax-migrations|sha256:b2c1093ba19acc184b0cf9d84f1126536c6e5b40a22e58e4707dec381dbd265d|exited|2026-10-13T10:44:08.346925904Z",
+      "c1a106369b924f76df3f74eb6c80848a56041aaece45e80e11d1db746a68dbf5|/niedax-backend|sha256:f91ec3c3ee353af233a48b96e7e3e872ce73646de7ad28401f681de3545c68a7|running|2026-10-16T14:08:20.514865059Z",
+      "f65cc58eea401f9c80de3be44342c3a6157f48fd6468a4d5a6b3df8ceeaac427|/wfc-app-backend-1|sha256:481326351dbfa8acc86afe4d2543a1b96a05d523dd95a4715928f7f25418854f|running|2026-10-17T12:24:29.337651343Z"
+    ],
+    "environmentRead": false,
+    "volumesMountedByStage": false
+  }
+}

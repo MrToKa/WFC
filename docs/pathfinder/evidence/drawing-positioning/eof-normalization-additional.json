@@ -1,0 +1,37 @@
+{
+  "status": "PASS",
+  "functionalChanges": false,
+  "files": [
+    {
+      "path": "src/api/trayDrawing.test.ts",
+      "beforeSha256": "ce374e1771ffa6fa0191bc38dfc60fbd3772616370e40531d16021e9dd4da0a9",
+      "afterSha256": "c2cee9519c70724f4c1836050d72d7313262ab5974163f06bbeff22b470c7bb2"
+    },
+    {
+      "path": "src/api/trayDrawing.ts",
+      "beforeSha256": "8691e35232b33bf85c65671c7b823b0ac2b52a846302c93d144bd8715d0e1ee7",
+      "afterSha256": "0c920348c88472e552289b45ef6ecc4f3c7f1bbfb1f2d882ad84a1eeedad76ab"
+    },
+    {
+      "path": "src/components/CablePositioningCard.test.tsx",
+      "beforeSha256": "4f02fd376299de350f98e321206c66ba7fa23184671f33a5b5ec881eb9060253",
+      "afterSha256": "769c80310efbf3d12a1902c9a78c1d7fc03eb5ad1ca96c29b7c0849f1cbca1df"
+    },
+    {
+      "path": "src/components/CablePositioningCard.tsx",
+      "beforeSha256": "f8772851ffe025979a246c1116a113e26fa65ef0d8c3f70b7c7ea55cb8d6e1cb",
+      "afterSha256": "78b02c3efc1f77d83c4da686c91ab393fe070365e9af9d7840670e782a0c71a3"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/useDrawingPurposePolicy.ts",
+      "beforeSha256": "e6e0e8f8065e0cc9b4a462707498ca78a3ca3e35d4df0efd752702e070bec0c3",
+      "afterSha256": "26792ab53c12a8073b9ed0204c689b782eb62b7dae96dada9a83d2bbde8a21e4"
+    },
+    {
+      "path": "src/pages/TrayDetails/hooks/useTrayData.test.ts",
+      "beforeSha256": "ad36ab6528f81b704c3b4eafa8a07769c989575ff1e953b5298b01b8f16ffffc",
+      "afterSha256": "f778258f26fa1dd53ae484cee0acd0efd3899e2dfedad497a411e525f92d7ca6"
+    }
+  ],
+  "priorRebuild": "Candidate3 built successfully; identical-image assertion failed. No deployment/mutation. Source differs only by recorded whitespace; next final build replaces this unused candidate."
+}

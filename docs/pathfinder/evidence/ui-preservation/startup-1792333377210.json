@@ -1,0 +1,97 @@
+{
+  "schemaVersion": "pathfinder.ui-preservation.startup.v1",
+  "status": "PASS",
+  "recordedAt": "2026-10-18T14:22:57.182Z",
+  "head": "e275dd5ee61adb339649a63cd2695dcabcec10f7",
+  "target": {
+    "owner": "7fa65ffa-ef34-46a7-b4c1-55cd19f8fa74",
+    "project": "wfc-pathfinder-local-f673a0facba3",
+    "runtime": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pathfinder-local-restore-f673a0facba3",
+    "port": 5191,
+    "resources": {
+      "containers": [
+        {
+          "role": "web",
+          "id": "dd1c4b72087f46b9c731091f45e9c6bbb011808ac1fa4ba0cd13c4869ae8f36c",
+          "image": "sha256:5abc6002a709407b7edd0b7f631abdca75df0cff83c936dccaf76930d8e095fc",
+          "name": "wfc-pathfinder-local-f673a0facba3-web-1",
+          "running": true,
+          "startedAt": "2026-10-18T14:18:51.395755198Z"
+        },
+        {
+          "role": "api",
+          "id": "acc437aeb807a88a31903d4f83b0701053e408dbe8d3aeab9abe6c3366a1a1c0",
+          "image": "sha256:e0a6d7425b5280e429c3f25fa0d94922553ae08005f3773676f0cc5291f2904e",
+          "name": "wfc-pathfinder-local-f673a0facba3-api-1",
+          "running": true,
+          "startedAt": "2026-10-18T14:18:45.640101988Z"
+        },
+        {
+          "role": "storage-ready",
+          "id": "a5edd8a9c3dff3342fc1997db5c65462b5ea8f284b68396ebd6c15b40dee897f",
+          "image": "sha256:e0a6d7425b5280e429c3f25fa0d94922553ae08005f3773676f0cc5291f2904e",
+          "name": "wfc-pathfinder-local-f673a0facba3-storage-ready-1",
+          "running": false,
+          "startedAt": "2026-10-18T14:18:44.950733492Z"
+        },
+        {
+          "role": "postgres",
+          "id": "cd0dd774f43f393ffd93edbff45b18c5d8d78bd666ef90e9213f6d2c5b0e0e02",
+          "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+          "name": "wfc-pathfinder-local-f673a0facba3-postgres-1",
+          "running": true,
+          "startedAt": "2026-10-18T14:10:23.058317846Z"
+        },
+        {
+          "role": "minio",
+          "id": "cc7e9835b1fd1665f045a7b40529e64c4a39a0a1ec83f8f920e86aae3560925e",
+          "image": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+          "name": "wfc-pathfinder-local-f673a0facba3-minio-1",
+          "running": true,
+          "startedAt": "2026-10-18T14:10:23.048210229Z"
+        }
+      ],
+      "volumes": [
+        "wfc-pathfinder-local-f673a0facba3_postgres",
+        "wfc-pathfinder-local-f673a0facba3_minio",
+        "wfc-pathfinder-local-f673a0facba3_staging",
+        "wfc-pathfinder-local-f673a0facba3_pathfinder"
+      ],
+      "networks": [
+        {
+          "id": "888d4f6035cf530ea272c2f6ecd920d7a3b69355e5c8d867a9264e1eeadd4c38",
+          "name": "wfc-pathfinder-local-f673a0facba3_front"
+        },
+        {
+          "id": "e5c897442d30f4de2361c2470fadeb0d599b928de4695f2494a1b8afb322da98",
+          "name": "wfc-pathfinder-local-f673a0facba3_backend"
+        }
+      ]
+    }
+  },
+  "mode": "PF_ENGINE_MODE=session",
+  "memoryBytes": 4294967296,
+  "pids": 256,
+  "health": {
+    "status": "ok"
+  },
+  "source": {
+    "capture.mjs": "d47033756bf979eb5f0f27a29b6c5c11b6d99313bdea12c985f210d50049d012",
+    "lib.mjs": "942f28ab29c961eefd594dd0838a3ed09a8cbdc08e907d285b80b7990be01ff9",
+    "lib.test.mjs": "c8909ef95e0b278b739b79a53955b5c59e8322e05ad1df0a038ba2afb5b3e819",
+    "quiesce.mjs": "59b9a8f8a99444cb746caf5f5b5575760d806d239f5406527cf45aa112305900",
+    "retire.mjs": "d23e35f7b02a8ff6cddd58bad94c1e6ef4ba19577a73ea2a834b5c0a867c4e90"
+  },
+  "controls": {
+    "status": "PASS",
+    "passed": 34,
+    "total": 34
+  },
+  "scope": {
+    "source5190Writes": false,
+    "originalContainerWrites": false,
+    "loginYet": false,
+    "productionSourceUnchangedDuringBuild": true,
+    "hostAuditScriptsChangedDuringBuild": true
+  }
+}

@@ -1,0 +1,227 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS",
+  "checkedAt": "2026-10-18T08:51:01.120Z",
+  "scope": "Same-host cold isolated PF database/MinIO/staging/artifact/images restore with actual Viewer cookie and JWT positive/negative controls.",
+  "backupId": "d7d63dce-4549-4e78-9bc5-7ff6a9eddc7b",
+  "backup": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf-two-tabs-backup-20261018-0847",
+  "sourceProject": "wfc-pathfinder-local",
+  "targetProject": "wfc-pathfinder-local-06519db336e2",
+  "targetRuntime": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pathfinder-local-restore-06519db336e2",
+  "sourceImages": {
+    "api": "sha256:7d216f20dfe2ec7b46f7ed9b357ea1a9171be73127d6422b673031b9971fb111",
+    "web": "sha256:36d9e4d6c7f8d826ded465dc4c7bf45fd61e62212e868d7e5f8430896a35307f"
+  },
+  "targetImages": {
+    "api": "sha256:7d216f20dfe2ec7b46f7ed9b357ea1a9171be73127d6422b673031b9971fb111",
+    "web": "sha256:36d9e4d6c7f8d826ded465dc4c7bf45fd61e62212e868d7e5f8430896a35307f"
+  },
+  "restore": {
+    "backupId": "d7d63dce-4549-4e78-9bc5-7ff6a9eddc7b",
+    "artifactsSha256": "976c1dce06b12414e46f8dbc7a1bfb03c18bcc99dec102caf73cd781ac7ca856",
+    "jwtRotated": true,
+    "sessionsFenced": true,
+    "inventoriesEqual": true
+  },
+  "crashRecovery": {
+    "status": "PASS",
+    "scope": "Actual extra-target API namespace/SIGKILL interruption and natural lease recovery; no SQL lease manipulation.",
+    "targetProject": "wfc-pathfinder-local-06519db336e2",
+    "targetApiId": "46beb120b882c0dea1f2d9bed81f033d0d945fe6fb4fd998411dae55771070d2",
+    "jobId": "b1cafb1c-09b3-4372-a289-9a095b857b71",
+    "disposableCableCount": 64,
+    "observedDotnetProcesses": [
+      {
+        "pid": 79084,
+        "parentPid": 77711,
+        "command": "dotnet"
+      },
+      {
+        "pid": 79096,
+        "parentPid": 79084,
+        "command": "dotnet"
+      }
+    ],
+    "beforeCrash": {
+      "status": "running",
+      "completed": 8,
+      "attempts": 1
+    },
+    "stopped": {
+      "exitCode": 137,
+      "pid": 0,
+      "oomKilled": false,
+      "stoppedTopRefused": true
+    },
+    "persistedAtCrash": {
+      "state": "running",
+      "attempts": 1,
+      "completed": 9,
+      "total": 64,
+      "leaseUntil": "2026-10-18T08:50:34.749783+00:00",
+      "runningItems": 1
+    },
+    "afterRecovery": {
+      "status": "complete",
+      "completed": 64,
+      "total": 64,
+      "attempts": 2,
+      "elapsedAfterRestartMs": 46252
+    },
+    "publication": {
+      "proposalCount": 64,
+      "distinctCableCount": 64,
+      "duplicateGroups": 0,
+      "unchangedCables": 64,
+      "adminCurrent": true,
+      "loginCurrent": true
+    },
+    "sourceHealthDuringTargetCrash": 200,
+    "cleanup": "Exact new target jobs received durable cancellation; disposable rows remain only in the extra target, retired by the enclosing successful drill.",
+    "limits": [
+      "Container PID namespace stopped and old observed host PIDs absent after restart; no host-wide process inspection.",
+      "Recovery test performs no cable Apply.",
+      "Only this restored synthetic fixture was interrupted."
+    ]
+  },
+  "previewRecovery": {
+    "status": "PARTIAL",
+    "scope": "Actual extra-target standalone preview interruption, natural recovery and queued cancellation; no SQL delay/lease manipulation.",
+    "targetProject": "wfc-pathfinder-local-06519db336e2",
+    "targetApiId": "46beb120b882c0dea1f2d9bed81f033d0d945fe6fb4fd998411dae55771070d2",
+    "submittedPreviewCount": 12,
+    "knownFixture": {
+      "from": [
+        0,
+        0,
+        0.5
+      ],
+      "to": [
+        10,
+        0,
+        0.5
+      ],
+      "settings": {
+        "revision": "85",
+        "connectionGap": "1",
+        "secondaryTrayLength": "5",
+        "endConnectionLength": "6",
+        "additionalBendingPercent": "10"
+      },
+      "geometricLengthMeters": 10,
+      "lengthBeforePercentageMeters": "16",
+      "unroundedLengthMeters": "17.6",
+      "designLengthMeters": "18",
+      "formula": "Ceiling((10 + 6) * 1.10) = 18; zero approaches, no SECONDARY replacement."
+    },
+    "crash": {
+      "status": "NOT_RUN",
+      "reason": "KILL did not leave exactly one of the observed running previews persisted as interrupted. Target restarted; no natural-recovery PASS inferred.",
+      "observedDotnetProcesses": [
+        {
+          "pid": 83763,
+          "parentPid": 79281,
+          "command": "dotnet"
+        },
+        {
+          "pid": 83775,
+          "parentPid": 83763,
+          "command": "dotnet"
+        }
+      ],
+      "observedRunningPreviewJobs": [
+        {
+          "id": "b0b72f52-3aae-4139-acee-2876d513738c",
+          "attempts": 1,
+          "completed": 0
+        }
+      ],
+      "persistedRunningCount": 1,
+      "stopped": {
+        "exitCode": 137,
+        "pid": 0,
+        "oomKilled": false,
+        "stoppedTopRefused": true
+      },
+      "sourceHealthDuringTargetCrash": 200
+    },
+    "queuedCancellation": {
+      "status": "PASS",
+      "jobId": "485d473a-7b21-4743-850c-dfc253a8beb4",
+      "observedBefore": "queued",
+      "afterCancel": "cancelled",
+      "readback": {
+        "state": "cancelled",
+        "cancelRequested": true,
+        "results": 0,
+        "items": 0,
+        "proposals": 0
+      }
+    },
+    "workflowBefore": {
+      "cables": 66,
+      "cableSha256": "b459d0fa9dd04b777dcc522a092c04170272126fe23bc4caf97419f2d3132929",
+      "proposals": 103,
+      "reviews": 3,
+      "applyReceipts": 1,
+      "jobItems": 172,
+      "locations": 3,
+      "bindings": 3,
+      "aliases": 3
+    },
+    "workflowAfter": {
+      "cables": 66,
+      "cableSha256": "b459d0fa9dd04b777dcc522a092c04170272126fe23bc4caf97419f2d3132929",
+      "proposals": 103,
+      "reviews": 3,
+      "applyReceipts": 1,
+      "jobItems": 172,
+      "locations": 3,
+      "bindings": 3,
+      "aliases": 3
+    },
+    "noWorkflowWrites": true,
+    "cleanup": "Only these new transient preview jobs were cancelled. Extra-target retirement removes their rows.",
+    "limits": [
+      "Fast unobserved races are NOT_RUN, never synthetic recovery/cancellation PASS.",
+      "No cable, registry, proposal, review or Apply writes are allowed by this drill.",
+      "Same-host/container-PID proof only; no native engineering parity or cross-computer restore claim."
+    ]
+  },
+  "checks": {
+    "sourceCookieBefore": 200,
+    "sourceCookieAfterSourceResume": 200,
+    "sourceCookieAfterExtraRestoreAndCrash": 200,
+    "copiedCookieOnTarget": 410,
+    "copiedCookieFailure": "SESSION_REVOKED",
+    "oldBearerOnTarget": 401,
+    "freshTargetCookie": 200,
+    "activeModelSelectionPreserved": true,
+    "realModelReadback": {
+      "versions": 2,
+      "resources": 684,
+      "bytes": 878015606
+    },
+    "pathfinderArtifacts": {
+      "files": 19,
+      "bytes": 5084052,
+      "sha256": "976c1dce06b12414e46f8dbc7a1bfb03c18bcc99dec102caf73cd781ac7ca856"
+    }
+  },
+  "limits": [
+    "Same host/platform; cross-computer restore is NOT_RUN.",
+    "Native/converted engineering parity remains unaccepted.",
+    "No original application/database/storage/container writes.",
+    "Standalone preview recovery/cancellation is incomplete; inspect the explicit PARTIAL/NOT_RUN previewRecovery controls."
+  ],
+  "retirement": {
+    "status": "PASS",
+    "project": "wfc-pathfinder-local-06519db336e2",
+    "removedVerifiedRestoreFixtureOnly": true,
+    "resources": {
+      "containers": [],
+      "volumes": [],
+      "networks": []
+    }
+  }
+}

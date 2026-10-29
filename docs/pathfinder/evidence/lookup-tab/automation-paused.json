@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "pathfinder.lookup.automation-state.v1",
+  "recordedAtUtc": "2026-10-18 10:04:51 UTC",
+  "tool": "mcp__codex_app__automation_update",
+  "appResult": {
+    "content": [
+      {
+        "type": "text",
+        "text": "Updated automation in the app."
+      },
+      {
+        "type": "text",
+        "text": "{\"automationId\":\"pathfinder\",\"mode\":\"update\",\"status\":\"PAUSED\"}"
+      }
+    ],
+    "isError": false
+  },
+  "readback": {
+    "name": "PathFinder — автоматично изпълнение на етапите",
+    "status": "PAUSED",
+    "rrule": "FREQ=MINUTELY;INTERVAL=10",
+    "targetThreadId": "01a1437a-c394-7650-aae2-5d25e2573207"
+  },
+  "scope": "Updated existing heartbeat through app tool; read-only TOML confirms status/name/schedule/target. No manual automation-file editing.",
+  "handoff": "docs/pathfinder/handoffs/PF-path-lookup-manual-review.md",
+  "userEngineeringAcceptance": "PENDING"
+}

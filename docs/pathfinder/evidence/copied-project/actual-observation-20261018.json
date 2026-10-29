@@ -1,0 +1,103 @@
+{
+  "schemaVersion": "pathfinder.copied-project.actual-observation.v1",
+  "recordedAt": "2026-10-18T17:29:38.488Z",
+  "status": "PASS",
+  "projectId": "1af0f807-7653-40ea-8391-7eea6c54e7d4",
+  "modelVersionId": "a613151e-c370-45c5-80f3-42ae58603b9a",
+  "registryCapture": {
+    "receipt": "docs/pathfinder/evidence/copied-project/registry-preservation-1792344448755.json",
+    "raw": {
+      "path": "pathfinder-engine/.scratch/copied-preservation-e0fec3c3-a491-4f6f-be5f-b0a4d22a0f65/registry-storage.private.json",
+      "bytes": 4321805,
+      "sha256": "5d3431a2b75e5ff8c72ebb6da478be6d46b0430d53c437bbc76ebbd5f2271169",
+      "exitCode": 0
+    }
+  },
+  "artifact": {
+    "id": "9723d683-96d2-48cd-814a-f2de5a0be8f6",
+    "objectCount": 13,
+    "capture": {
+      "inputScope": {
+        "chunkCount": 6,
+        "scopeSha256": "fc97eec20909aade5f4cca53ad0d9ef7c9f79cef2322b8512f054dc6086dac26",
+        "propertyScan": {
+          "complete": true,
+          "indexedObjectCount": 438155,
+          "omittedObjectCount": 0,
+          "returnedObjectCount": 438155,
+          "attemptedObjectCount": 438155
+        },
+        "schemaVersion": "wfc.capture.input.v1",
+        "inputUtf8Bytes": 27278,
+        "equipmentNameCount": 1527,
+        "equipmentNamesSha256": "4f6ea0280c5302713b4d3d30f15ca40a13d0746fa2ef4a11723d388d42b80268"
+      },
+      "sourceKind": "converted",
+      "unitsVerified": false,
+      "adapterVersion": "wfc.protected-selected-capture.v1",
+      "evidenceSha256": [
+        "02c2d64e59cf20440ab185b772aa9527925c728aad5d672d6bec4dff7beb628e"
+      ],
+      "geometryComplete": false,
+      "inventoryComplete": false,
+      "sourceLinkVerified": false,
+      "transformsVerified": false,
+      "planningVisibilityKnown": false
+    },
+    "engineeringAccepted": false
+  },
+  "counts": {
+    "locations": 1527,
+    "aliases": 1527,
+    "matches": {
+      "missing": 1527
+    },
+    "bindings": 0,
+    "events": {
+      "auto_create": 1527
+    },
+    "jobs": 0,
+    "proposals": 0,
+    "reviews": 0,
+    "applies": 0,
+    "syntheticMarkers": 0
+  },
+  "checks": {
+    "oneArtifact": true,
+    "inputScope": true,
+    "completeSdkScan": true,
+    "allMissing": true,
+    "noInventedBindings": true,
+    "onlyUnboundIdentityEvents": true,
+    "noCalculationsOrAcceptance": true
+  },
+  "browser": {
+    "method": "computer-use",
+    "url": "http://127.0.0.1:5191/projects/1af0f807-7653-40ea-8391-7eea6c54e7d4?tab=pathfinder",
+    "cableDenominator": 2140,
+    "details": {
+      "secondaryTrayLength": 7,
+      "endConnectionLength": 5,
+      "additionalBendingPercent": 10,
+      "connectionGap": 1
+    },
+    "reload": {
+      "snapshotAndCountsPersist": true,
+      "rawRulesRecovered": false,
+      "unresolvedLocationsPersist": true
+    },
+    "manualFormOpened": true,
+    "manualPointSaved": false,
+    "screenshots": [
+      "details-before-model.png",
+      "details-settings.png",
+      "prepared-1527.png",
+      "resolve-missing-location.png"
+    ]
+  },
+  "limitations": [
+    "Only /BC022-2 diagnostic group (425797), LV+Control; not a classified whole-plant network",
+    "All1527 distinct names missing;3empty endpoint uses remain input work",
+    "No native oracle, engineering acceptance or new calculated cable lengths/Ghost-route display asserted"
+  ]
+}

@@ -3,10 +3,13 @@ import type { Pool, PoolClient } from 'pg';
 import { resolveUserRole, type UserRow } from '../models/user.js';
 import { ViewerSessionError } from './errors.js';
 import type { AuthorizedViewerResource, ResourceIdentity, ViewerPrincipal, ViewerSessionDto, ViewerVersion } from './types.js';
+import { readViewerRoutingBindings } from './routingBindings.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const secretPattern = /^[A-Za-z0-9_-]{43}$/;
 type Row = Record<string, any>;
+type AuthorizedViewerCapability = Pick<AuthorizedViewerResource, 'session'>;
+type AuthorizedViewerRow = { session: ViewerSessionDto; versionRow: Row };
 export function viewerUuid(input: unknown): string {
   if (typeof input !== 'string' || !UUID.test(input)) throw new ViewerSessionError('INVALID_VIEWER_REQUEST');
   return input.toLowerCase();
@@ -58,11 +61,15 @@ export function createViewerSessionService(options: { pool: Pool; clock?: () => 
   async function revokeRow(client: PoolClient, id: string, reason: string): Promise<void> {
     await client.query(`UPDATE viewer_resource_sessions SET revoked_at=$2,revoke_reason=$3 WHERE id=$1 AND revoked_at IS NULL`, [id,new Date(now()),reason]);
   }
-  async function authorize(client: PoolClient, input: ResourceIdentity): Promise<AuthorizedViewerResource | ViewerSessionError> {
+  async function authorizeRow(client: PoolClient, input: ResourceIdentity, mode: 'resource' | 'capability' = 'resource'): Promise<AuthorizedViewerRow | ViewerSessionError> {
     const projectId = viewerUuid(input.projectId), modelVersionId = viewerUuid(input.modelVersionId), sessionId = viewerUuid(input.sessionId);
     if (!secretPattern.test(input.cookieSecret ?? '')) return new ViewerSessionError('AUTH_REQUIRED', 401);
+    // Capability checks need live model health, never its large resource manifest.
+    // Only this private literal mode selects the projection; all authority joins,
+    // guards and locks below are shared with the full resource authorization.
+    const versionProjection = mode === 'capability' ? "json_build_object('state', v.state, 'health', v.health)" : 'row_to_json(v)';
     const result = await client.query<Row>(`SELECT row_to_json(s) AS session,row_to_json(l) AS login,
-      row_to_json(v) AS version,u.is_admin,u.role,pms.active_model_version_id,pms.selection_revision,
+      ${versionProjection} AS version,u.is_admin,u.role,pms.active_model_version_id,pms.selection_revision,
       EXISTS(SELECT 1 FROM user_project_access a WHERE a.user_id=u.id AND a.project_id=s.project_id) AS assigned
       FROM viewer_resource_sessions s
       JOIN viewer_login_bindings l ON l.login_id=s.login_id AND l.user_id=s.user_id
@@ -88,7 +95,17 @@ export function createViewerSessionService(options: { pool: Pool; clock?: () => 
     if (role !== 'admin' && role !== 'engineer' && !row.assigned) {
       await revokeRow(client, sessionId, 'access'); return new ViewerSessionError('ACCESS_REVOKED', 403);
     }
-    return { session: dto(s), version: version(row.version) };
+    return { session: dto(s), versionRow: row.version };
+  }
+  async function authorize(client: PoolClient, input: ResourceIdentity): Promise<AuthorizedViewerResource | ViewerSessionError> {
+    const authorized = await authorizeRow(client,input);
+    if (authorized instanceof ViewerSessionError) return authorized;
+    return { session: authorized.session, version: version(authorized.versionRow) };
+  }
+  async function authorizeCapability(client: PoolClient, input: ResourceIdentity): Promise<AuthorizedViewerCapability | ViewerSessionError> {
+    const authorized = await authorizeRow(client,input,'capability');
+    if (authorized instanceof ViewerSessionError) return authorized;
+    return { session: authorized.session };
   }
   return {
     async create(input: { principal: ViewerPrincipal; projectId: string; modelVersionId: string; loadId: string }): Promise<{ session: ViewerSessionDto; cookieSecret: string }> {
@@ -113,6 +130,29 @@ export function createViewerSessionService(options: { pool: Pool; clock?: () => 
       return unwrap(result);
     },
     async authorizeResource(input: ResourceIdentity): Promise<AuthorizedViewerResource> { return unwrap(await transaction(client => authorize(client,input))); },
+    async routingBindings(input: ResourceIdentity) {
+      return transaction(async client => {
+        const current = unwrap(await authorize(client,input));
+        const result = await readViewerRoutingBindings(client, { projectId: current.session.projectId,
+          modelVersionId: current.session.modelVersionId, contentFingerprint: current.version.contentFingerprint });
+        // This read grants the ordinary model-view projection only. Recheck the
+        // live session/selection/login/assignment before its transaction commits.
+        const checked = unwrap(await authorize(client,input));
+        if (checked.version.contentFingerprint !== current.version.contentFingerprint || checked.session.loadId !== current.session.loadId)
+          throw new ViewerSessionError('MODEL_SELECTION_CHANGED',409);
+        return result;
+      });
+    },
+    async authorizePathFinder(input: ResourceIdentity): Promise<{ authorized: true; loadId: string }> {
+      return transaction(async client => {
+        const current = unwrap(await authorizeCapability(client,input));
+        const user = await client.query<{ is_admin: boolean }>(`SELECT u.is_admin FROM users u
+          JOIN viewer_resource_sessions s ON s.user_id=u.id WHERE s.id=$1 FOR SHARE OF u`,[current.session.sessionId]);
+        if (user.rows[0]?.is_admin !== true) throw new ViewerSessionError('ACCESS_REVOKED',403);
+        unwrap(await authorizeCapability(client,input));
+        return { authorized: true, loadId: current.session.loadId };
+      });
+    },
     async renew(input: ResourceIdentity & { principal: ViewerPrincipal }): Promise<ViewerSessionDto> {
       const who = principal(input.principal);
       return unwrap(await transaction(async client => {

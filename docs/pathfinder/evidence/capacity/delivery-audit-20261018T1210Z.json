@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "pathfinder.capacity.delivery-audit.v1",
+  "baseCommit": "8a726f72ab94da22681320f28ccebe1224cf8eb3",
+  "branch": "pf-2-capacity-local-20261018",
+  "status": "PASS",
+  "checks": {
+    "publicCapacityJsonParsed": 16,
+    "currentSourceHashesMatched": 14,
+    "newReportAndHandoffLocalLinksResolved": 22,
+    "sourceManifest": "source-manifest-1792325273563.json",
+    "sourceAndOriginalPreservationAudit": "../pf2/isolation-1792325122300.json",
+    "workflowAndContainerPreservationAudit": "final-preservation-1792325162813.json"
+  },
+  "limits": [
+    "Counts refer to files present when the check ran, before this audit file was created.",
+    "This is source/delivery validation, not a rerun of mathematical or historical application tests.",
+    "No real engineering acceptance, Apply or publication."
+  ]
+}

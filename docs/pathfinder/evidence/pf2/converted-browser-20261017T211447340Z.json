@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "pathfinder.browser.actual-capture.v1",
+  "observedAtUtc": "2026-10-17T21:14:47.2992098Z",
+  "status": "PASS",
+  "scope": "computer-use-rendering-and-final-selected-capture",
+  "url": "http://127.0.0.1:5185/",
+  "screenshot": "converted-browser-final.png",
+  "screenshotSha256": "19814c82adf02ac1651b200e71013e33dc9b8c8690cccfbe2fbf72741e7392d1",
+  "axTrace": "pathfinder-engine/.scratch/pf2-converted/browser-final-capture-ax.txt",
+  "axTraceSha256": "f8d6554b90af912a81dfb6256f191f7ce4570abcf4ee07c31c7e41e75947fe53",
+  "retainedConsoleLogs": null,
+  "finalVisibleResult": "nwd-lookup-02 saved: 26 objects, 99 fragments",
+  "sdkMeshHelperRequest": [
+    {
+      "method": "GET",
+      "path": "/mesh-indices.mjs",
+      "status": 200
+    }
+  ],
+  "observedHttpFailures": [],
+  "sourceHashes": [
+    {
+      "path": "pathfinder-engine\\tools\\model-capture\\capture.mjs",
+      "sha256": "c5f8ce64dc909b95927d61ffc65ecd1abc3fe211b84c44c90ebf5c7a8880e49c"
+    },
+    {
+      "path": "pathfinder-engine\\tools\\model-capture\\mesh-indices.mjs",
+      "sha256": "17e276d3a03dfb9e66c81e165d75f1fb7051b894e14f88344932aa860be1822e"
+    },
+    {
+      "path": "pathfinder-engine\\tools\\model-capture\\server.mjs",
+      "sha256": "4eab61a64ec4e4ba5ec70fdd614ba7f848f8fb29bbd6d425dce2ffc365b1bd36"
+    }
+  ],
+  "nativeParityClaimed": false,
+  "engineeringWriteAuthorized": false,
+  "originalRuntimeAccessed": false
+}

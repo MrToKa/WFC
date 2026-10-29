@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "pathfinder.ui-preservation.web-entry-artifact.v1",
+  "status": "PASS",
+  "recordedAt": "2026-10-18T14:47:36.109Z",
+  "target": {
+    "owner": "7fa65ffa-ef34-46a7-b4c1-55cd19f8fa74",
+    "webId": "00bc5fc95339841da806646dfe2e3d931f87f60fab608e43e7d0663f5b885e03",
+    "webImage": "sha256:577e040fa919c6c556e69bd34f3697d49d14d2b6b00d10c600ce1beb26803014"
+  },
+  "files": [
+    {
+      "file": "pathfinder-engine\\.scratch\\ui-preservation-c43b7c81-a9cc-4eca-a349-ef06a6c9f338\\qualified-caption-index.html",
+      "bytes": 955,
+      "sha256": "621c442ed49eb82d472aad4f219e9ffdaf3e238da97bbb69791aa0d0d95124a6"
+    },
+    {
+      "file": "pathfinder-engine\\.scratch\\ui-preservation-c43b7c81-a9cc-4eca-a349-ef06a6c9f338\\qualified-caption-index-B9FuVVuE.js",
+      "bytes": 643900,
+      "sha256": "ed7c956435d6c87d31cd29ad108e3af869c0568ba373e985902b79af2fd0e4f6"
+    }
+  ],
+  "totalBytes": 644855,
+  "scope": "Exact served HTML and directly referenced JS/CSS entry assets only; not a complete standalone app/model bundle. Current qualified API modules remain retained separately."
+}

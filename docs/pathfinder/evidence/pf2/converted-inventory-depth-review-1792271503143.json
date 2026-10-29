@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "pathfinder.converted.inventory-depth-review.v1",
+  "observedAt": "2026-10-17T21:11:43.142Z",
+  "status": "PASS",
+  "scope": "complete-inventory-hierarchy-boundary-fix-and-actual-capture-revalidation",
+  "fix": "Memoize absolute ancestor depth, then add the unresolved path length before accepting each node. Root-first order cannot bypass the 512-node bound.",
+  "syntheticChecks": {
+    "status": "PASS",
+    "passed": 27,
+    "failed": 0,
+    "evidence": "converted-normalizer-tests-1792271475604.json",
+    "newControls": [
+      "root-first513reject",
+      "deep-first513reject",
+      "root-first512accept",
+      "deep-first512accept"
+    ]
+  },
+  "actualRevalidation": [
+    {
+      "caseId": "nwd-lookup-01",
+      "status": "PASS",
+      "byteIdentical": true,
+      "snapshotSha256": "0d5546c5fe1992274b27ade65da9c1815488af0b82fea3e695a348894fd441af",
+      "previousDirectory": "pathfinder-engine/.scratch/pf2-converted/normalized/1792271204697-c02e718b-f05f-41bd-aa61-d3492e0b22d3",
+      "newDirectory": "pathfinder-engine/.scratch/pf2-converted/normalized/1792271487364-8ba4c424-8f98-437c-a61f-e4f4d79b2fe2"
+    },
+    {
+      "caseId": "nwd-lookup-02",
+      "status": "PASS",
+      "byteIdentical": true,
+      "snapshotSha256": "5187d096f444767ad46973f9529e14ec79d21c1d7f32829994d70928f820f060",
+      "previousDirectory": "pathfinder-engine/.scratch/pf2-converted/normalized/1792271204713-58fe717c-fe0a-485e-99cc-ed4e9b2e58de",
+      "newDirectory": "pathfinder-engine/.scratch/pf2-converted/normalized/1792271487395-ce722e8f-ea5a-4d76-a97f-3646719befdb"
+    }
+  ],
+  "previousModelCheckResultsRemainApplicable": true,
+  "modelCheckRerun": false,
+  "reason": "Existing actual snapshots are byte-identical; this fix changes inventory depth validation only.",
+  "nativeActions": false,
+  "limitations": [
+    "Actual normalized geometry remains selected scope and needs_review.",
+    "No native/converted engineering parity or accepted real-model tolerance is established."
+  ]
+}

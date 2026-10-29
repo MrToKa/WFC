@@ -1,0 +1,404 @@
+{
+  "schemaVersion": "wfc.pf.b8-qualification-evidence.v1",
+  "createdAt": "2026-10-21T18:04:49.391Z",
+  "sourceRevision": "8770104",
+  "checkedProductionParent": "d5cec2b00cb4815add3a9dd4ec8bffef26e13b24",
+  "branch": "pf-b8-barrier-qualification-local-20261021",
+  "status": "INDEPENDENT_TECHNICAL_PASS_ACTUAL_MODEL_FAIL_AND_CIVIL_BLOCKED",
+  "scope": "Synthetic qualification plus actual readonly330-tray replay; no real-data Apply or actual civil/opening acceptance",
+  "artifacts": [
+    {
+      "file": "artifacts/bin/PathFinder.ModelRunner/release/PathFinder.ModelRunner.dll",
+      "sha256": "5deb17cb8e526256c96555f8173698c364e629c5b56262bc31f10ad02932d3f1"
+    },
+    {
+      "file": "artifacts/bin/PathFinder.BarrierRuntime.Tests/release/PathFinder.BarrierRuntime.Tests.dll",
+      "sha256": "b5ca2059dcfb2a014376e180b596e559f722513a4e41b4872f71b9f40a8b64fc"
+    }
+  ],
+  "suites": [
+    {
+      "name": "Barriers.Tests",
+      "status": "PASS",
+      "passed": 94,
+      "failed": 0,
+      "receipt": "run-PathFinder.Barriers.Tests.log",
+      "sha256": "320b16280592208087dc6ae09bea076c2a643b12150b0e974967e148f6c013f0"
+    },
+    {
+      "name": "BarrierVerifier.Tests",
+      "status": "PASS",
+      "passed": 48,
+      "failed": 0,
+      "receipt": "run-PathFinder.BarrierVerifier.Tests.log",
+      "sha256": "b1be3a3a55db068d27de0169f8690cd3b7fbb95d6236f995cfa79f7feb731bf9"
+    },
+    {
+      "name": "Constrained.Tests",
+      "status": "PASS",
+      "passed": 54,
+      "failed": 0,
+      "receipt": "run-PathFinder.Constrained.Tests.log",
+      "sha256": "bc7bc18984623ddbc117f72210b6473dd23ab1e89335d08e270a8ef13aaca276"
+    },
+    {
+      "name": "LocalConnectors.Tests",
+      "status": "PASS",
+      "passed": 40,
+      "failed": 0,
+      "receipt": "run-PathFinder.LocalConnectors.Tests.log",
+      "sha256": "c6d0a1f6d05533bc90126815497808fede4fb0fbb588417ae0e8d00389510ad5"
+    },
+    {
+      "name": "LengthLedger.Tests",
+      "status": "PASS",
+      "passed": 35,
+      "failed": 0,
+      "receipt": "run-PathFinder.LengthLedger.Tests.log",
+      "sha256": "20f1c3a3d1bd9c692797c90bc4f4429fe0700bab6a6ea30faa046850b23be2ab"
+    },
+    {
+      "name": "DirectSecondary.Tests",
+      "status": "PASS",
+      "passed": 63,
+      "failed": 0,
+      "receipt": "run-PathFinder.DirectSecondary.Tests.log",
+      "sha256": "a5ef7f35302da9bbb3a3566b5d3510af7b524bdd6e7b426d76ebbbc70b0dfb51"
+    },
+    {
+      "name": "RunnerSession.Tests",
+      "status": "PASS",
+      "passed": 308,
+      "failed": 0,
+      "receipt": "run-PathFinder.RunnerSession.Tests.log",
+      "sha256": "801d3ae14fbed169d946999cb2a5cdd048e47dc56d9a7755f12be0145e381e30"
+    },
+    {
+      "name": "Regression",
+      "status": "PASS",
+      "passed": 105,
+      "failed": 0,
+      "receipt": "run-PathFinder.Regression.log",
+      "sha256": "aaea035751617808cb82a95f9e9618513dbf9f20320ca2424cf2bab2a5c4082d"
+    }
+  ],
+  "checks": [
+    {
+      "name": "Core11+PF0frozen3 preservation",
+      "status": "PASS",
+      "receipt": "preservation2.json"
+    },
+    {
+      "name": "frozen43golden215comparisons",
+      "status": "PASS",
+      "receipt": "parity2.log"
+    },
+    {
+      "name": "Viewer bridge/capture/protocol/geometry",
+      "status": "PASS_SCOPED",
+      "passed": 254,
+      "initialFailed": 1,
+      "total": 255,
+      "receipt": "viewer-check2.log",
+      "correction": "Fresh owned PF_MODEL_RUNNER_DLL selected; failing interop case rerun1PASS in viewer-interop-corrected3.log. Remaining254 unchanged. All SDK tests synthetic/mocked."
+    },
+    {
+      "name": "contracts/security/strategy/history/session",
+      "status": "PASS",
+      "passed": 468,
+      "files": 9,
+      "receipt": "contracts-security5.log"
+    },
+    {
+      "name": "actual Windows Node↔.NET",
+      "status": "PASS",
+      "passed": 18,
+      "receipt": "node-dotnet-check6.log"
+    },
+    {
+      "name": "actual Windows protected transport",
+      "status": "PASS",
+      "passed": 39,
+      "receipt": "transport-windows5.log"
+    },
+    {
+      "name": "driver pure guards",
+      "status": "PASS",
+      "passed": 34,
+      "receipt": "driver-pure-final8.log"
+    },
+    {
+      "name": "real SQL grant→seal→Auto rollback boundaries",
+      "status": "PASS",
+      "passed": 4,
+      "receipt": "grant-auto-sql4.log",
+      "scope": "realSQL/repository/grant/enrollment/transactions/sealer/Auto; synthetic engine/physical-input currentness, not actual worker/producer/HTTP/Apply"
+    },
+    {
+      "name": "server typecheck",
+      "status": "PASS",
+      "receipt": "server-types8.log"
+    },
+    {
+      "name": "changed lint/node syntax/whitespace",
+      "status": "PASS",
+      "receipt": "lint8.log"
+    }
+  ],
+  "linux": {
+    "status": "PASS",
+    "manifestSha256": "716dbb0ab0b02855c5e1eacf247741065f90a8965355fdc1513e38e828122e1e",
+    "counts": {
+      "plannedSession": 69,
+      "actualSession": 69,
+      "plannedOneShot": 6,
+      "actualOneShot": 6,
+      "successfulCalculated": 73,
+      "expectedTypedRefusals": 2,
+      "failures": 0,
+      "byMode": {
+        "session": {
+          "calculated": 68,
+          "expectedTypedRefusals": 1,
+          "failed": 0
+        },
+        "oneshot": {
+          "calculated": 5,
+          "expectedTypedRefusals": 1,
+          "failed": 0
+        }
+      },
+      "sessionSupervisorProcesses": 2,
+      "fittedReuse": {
+        "none": 0,
+        "build": 2,
+        "disk": 2,
+        "memory": 65
+      }
+    },
+    "latencyPopulations": {
+      "definition": "elapsed execute/runEngine time, including startup or retirement join when it occurred; failures retained",
+      "allSession": {
+        "count": 69,
+        "medianMilliseconds": 169.74481199999718,
+        "p95Milliseconds": 628.4184210000003,
+        "maximumMilliseconds": 1200.1059619999996
+      },
+      "retirement": {
+        "count": 65,
+        "medianMilliseconds": 168.3857300000018,
+        "p95Milliseconds": 299.2571970000008,
+        "maximumMilliseconds": 1200.1059619999996
+      },
+      "startupIncluded": {
+        "count": 2,
+        "medianMilliseconds": 1101.0048245000007,
+        "p95Milliseconds": 1200.1059619999996,
+        "maximumMilliseconds": 1200.1059619999996
+      },
+      "fittedMemoryReuse": {
+        "count": 65,
+        "medianMilliseconds": 164.30913800000053,
+        "p95Milliseconds": 278.84352899999976,
+        "maximumMilliseconds": 628.4184210000003
+      },
+      "oneShot": {
+        "count": 6,
+        "medianMilliseconds": 948.7345935000012,
+        "p95Milliseconds": 1043.2629020000022,
+        "maximumMilliseconds": 1043.2629020000022
+      },
+      "readyStartup": {
+        "count": 2,
+        "medianMilliseconds": 250.95887999999945,
+        "p95Milliseconds": 318.02388199999996,
+        "maximumMilliseconds": 318.02388199999996
+      }
+    },
+    "memory": {
+      "exactPeak": false,
+      "sampleIntervalMilliseconds": 100,
+      "combinedEngineSamples": 178,
+      "maximumSampledSupervisorWorkerRssBytes": 181329920,
+      "nodeSamples": 273,
+      "maximumSampledNodeRssBytes": 138231808,
+      "oneShotProcessRss": "NOT_SAMPLED_BY_PRODUCTION_CALCULATE_EXECUTOR",
+      "containerExitAndOomInspect": "NOT_RUN_REQUIRES_ROOT_OUTER_RECEIPT"
+    },
+    "elapsedMilliseconds": 30515.073513,
+    "init": true,
+    "hardMemoryBytes": 1073741824,
+    "engineSampledLimitBytes": 536870912,
+    "network": "none",
+    "outerDeadlineMilliseconds": 600000,
+    "driverDeadlineMilliseconds": 480000,
+    "rawReceiptSha256": "0b3abe19b0d9d31506d7a85637ce28e076b835005cfbd2a69597bd5d2d36fd22",
+    "independent": {
+      "schemaVersion": "wfc.pf.barrier-session-independent-verification.v1",
+      "status": "PASS",
+      "manifestSha256": "716dbb0ab0b02855c5e1eacf247741065f90a8965355fdc1513e38e828122e1e",
+      "planned": 69,
+      "verified": 69,
+      "oneShotCompared": 6,
+      "retirementPopulation": 65,
+      "distinctEndpointPairs": 16,
+      "categories": [
+        "Control",
+        "Instrumentation",
+        "LV"
+      ],
+      "verifiedClearSegments": 4226,
+      "scope": "retained synthetic raw triangles and exact ordered response polylines; centreline-only; not actual civil/SDK coverage,2140 capacity,native parity or engineering acceptance",
+      "engineeringAccepted": false,
+      "nativeParity": "not-performed"
+    },
+    "container": {
+      "type": "synthetic-linux-session",
+      "exit": 0,
+      "id": "a400f0085c58bcb04a75c8a5809f71e5782c829c3560fa0710de983b0c135e6b",
+      "oom": false,
+      "image": "sha256:c5f12fb2685d169527da50586ee45614d6a2bbc28a6f976b309be72a2a77da44",
+      "init": true,
+      "file": "linux-session-owner3.json"
+    },
+    "qualification": "modest synthetic65meshes/528vertices/800triangles/16endpointpairs/3categories; not wholeactualproject capacity"
+  },
+  "retainedFailures": [
+    {
+      "attempt": 1,
+      "status": "FAIL_LAUNCH",
+      "reason": "Launcher omitted transitive capacity helper; no driver workload ran",
+      "exit": 1,
+      "oom": false
+    },
+    {
+      "attempt": 2,
+      "status": "FAIL_PREREQUISITE",
+      "reason": "No init/subreaper, unlike actual compose init:true; request64 strict10s group join failed after63PASS. Source-supported orphan mechanism not observed final/proc proof.",
+      "actualCounts": {
+        "plannedSession": 69,
+        "actualSession": 64,
+        "plannedOneShot": 6,
+        "actualOneShot": 0,
+        "successfulCalculated": 63,
+        "expectedTypedRefusals": 0,
+        "failures": 1,
+        "byMode": {
+          "session": {
+            "calculated": 63,
+            "expectedTypedRefusals": 0,
+            "failed": 1
+          },
+          "oneshot": {
+            "calculated": 0,
+            "expectedTypedRefusals": 0,
+            "failed": 0
+          }
+        },
+        "sessionSupervisorProcesses": 1,
+        "fittedReuse": {
+          "none": 0,
+          "build": 1,
+          "disk": 0,
+          "memory": 62
+        }
+      },
+      "failures": [
+        {
+          "stage": "session-63",
+          "code": "ENGINE_SESSION_REAP_FAILED",
+          "atMilliseconds": 34007.726720000006
+        },
+        {
+          "stage": "driver",
+          "code": "ENGINE_SESSION_REAP_FAILED",
+          "atMilliseconds": 34074.857758000006
+        },
+        {
+          "stage": "executor-close",
+          "code": "ENGINE_SESSION_REAP_FAILED",
+          "atMilliseconds": 34075.350259000006
+        },
+        {
+          "stage": "process-join",
+          "code": "QUALIFICATION_PROCESS_IDENTITY_OR_JOIN_UNPROVEN",
+          "atMilliseconds": 34075.586001
+        }
+      ],
+      "rawReceiptSha256": "58e8cdc560aadf9f8c02df37c37a48ebf8bf579fd665da87a12b2b1f1c1b4c20",
+      "exit": 1,
+      "oom": false
+    },
+    {
+      "status": "CORRECTED_TEST_HARNESS",
+      "reason": "Nullable testfixture compile warning repaired/rebuilt final6; stale interop DLL corrected without production guard change; exact first attempts retained privately."
+    }
+  ],
+  "actualAalborg": {
+    "schemaVersion": "wfc.pf.actual-aalborg-diagnostic.v1",
+    "status": "FAIL_DIAGNOSTIC",
+    "sourceKind": "actual-retained-converted-model",
+    "sourceSnapshotSha256": "27f8cf8c352b8847b778f764ce942aa0bb61ebfab16aeb993c0a83bd100c38e2",
+    "actualObjects": 2965,
+    "actualSnapshotBytes": 114111391,
+    "actualRoutingLeaves": 1165,
+    "endpointHeadsVerified": 2,
+    "endpointMode": "current-confirmed-fixed-world",
+    "projectDetailsRead": true,
+    "retainedNumericPreferences": true,
+    "elapsedMilliseconds": 987.6849,
+    "responseSchema": "pathfinder.model.response.v1",
+    "responseStatus": "resource_limit",
+    "routeSuccess": false,
+    "routeSha256": null,
+    "requestSha256": "45a4b2dc0d02645e4a2ba61d2c5ebce31865f9ccc1d7096424f779c10fa70a4a",
+    "responseSha256": "e8b45fd842257ecb8e0dc4009d7a9a839df614e3558cf24b7599d23e5c2b1f6b",
+    "error": null,
+    "barrierAvoidance": "BLOCKED_ACTUAL_PROTECTED_CIVIL_CAPTURE_REQUIRED",
+    "barrierTablesInCurrent5191": false,
+    "requiredSources": [
+      "3D-Modell_BIS_20260304.rvm",
+      "DB2401_DESIGN_01-PIPE+GRID_20260304.rvm"
+    ],
+    "geometryScope": "real330-tray planning snapshot and current endpoint heads only; no civil obstacle triangles; not a protected v8 result, actual opening qualification, native parity or engineering acceptance",
+    "realDataApply": false,
+    "engineeringAccepted": false,
+    "copy": {
+      "files": [
+        {
+          "file": "04782773-0701-4e60-b3af-d4e42b3f8288.json",
+          "bytes": 114111391,
+          "sha256": "27f8cf8c352b8847b778f764ce942aa0bb61ebfab16aeb993c0a83bd100c38e2"
+        },
+        {
+          "file": "projection.json",
+          "bytes": 114111391,
+          "sha256": "27f8cf8c352b8847b778f764ce942aa0bb61ebfab16aeb993c0a83bd100c38e2"
+        },
+        {
+          "file": "trace-index.json",
+          "bytes": 486272,
+          "sha256": "ee579fe5e2ff063f4d8372a8aee1deadc6189d18a74cd61f83f0dd625ef0fc14"
+        }
+      ],
+      "noSourceWrites": true
+    },
+    "bookend": {
+      "noSourceWrites": true,
+      "noApply": true,
+      "ownerImageBookend": "PASS",
+      "checkedUtc": "2026-10-21T18:02:59.8750459Z",
+      "scopeAndEndpointsAndCableBusinessUnchanged": true
+    },
+    "engineeringAcceptance": "NOT_RUN",
+    "actualBarrierGeometry": "BLOCKED_PROTECTED_CAPTURE_AND_QUALIFICATION_REQUIRED",
+    "current5191BarrierSchema": "NOT_DEPLOYED",
+    "browser": "Saved refusal retained; no retry/bypass"
+  },
+  "retirement": {
+    "ownedFixtureCount": 4,
+    "noPrune": true,
+    "archivesPreserved": true
+  },
+  "next": "PF-B8a mixed obstacle classification; PF-B8b actual snapshot memory investigation. Preserve512MiB/defaultguards; no actualmodelPASS, deployment or Apply."
+}

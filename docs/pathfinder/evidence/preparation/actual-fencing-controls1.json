@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "wfc.pf.preparation-fencing.integration.v1",
+  "recordedAtUtc": "2026-10-19T01:10:37.353Z",
+  "projectId": "58490e71-85f2-45f0-863a-434bf628b230",
+  "status": "PASS",
+  "checks": [
+    {
+      "name": "current-admin",
+      "status": "PASS",
+      "ownerPid": 79730,
+      "probePid": 79729,
+      "blockingPids": [
+        79730
+      ],
+      "rolledBack": true
+    },
+    {
+      "name": "model-selection",
+      "status": "PASS",
+      "ownerPid": 79730,
+      "probePid": 79729,
+      "blockingPids": [
+        79730
+      ],
+      "rolledBack": true
+    },
+    {
+      "name": "location-registry",
+      "status": "PASS",
+      "ownerPid": 79730,
+      "probePid": 79729,
+      "blockingPids": [
+        79730
+      ],
+      "rolledBack": true
+    }
+  ],
+  "unchanged": true,
+  "deadlineMilliseconds": 30000,
+  "scope": "Production current-admin/selection/registry SQL fencing only; no engine, HTTP, Apply, model conversion or global test hook."
+}

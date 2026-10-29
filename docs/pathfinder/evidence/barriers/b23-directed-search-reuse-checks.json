@@ -1,0 +1,223 @@
+{
+  "schemaVersion": "wfc.pathfinder.b23-directed-search-reuse-checks.v1",
+  "status": "SOURCE_CHECKS_PASS_REAL_ROUTE_UNRESOLVED",
+  "operationId": "a775ec13-61ad-4436-a855-57d1f89f519d",
+  "baseCommit": "5a4e51ad3c27773c044c63fb3300e16f7c24b6bf",
+  "sourceFiles": [
+    {
+      "name": "pathfinder-engine/src/PathFinder.Core/Support/ConstrainedRoutingModels.cs",
+      "bytes": 16454,
+      "sha256": "09d9d735743cd70a6509737ca9f101bb6006201e3a9415e8df3f0ea1449458b6"
+    },
+    {
+      "name": "pathfinder-engine/src/PathFinder.Core/Support/LocalConnectorModels.cs",
+      "bytes": 8493,
+      "sha256": "785b48ce2a60c581a6e6e5caa7bf9a6cf6374a2a0982102447b16baedadc8066"
+    },
+    {
+      "name": "pathfinder-engine/src/PathFinder.Core/Support/LocalConnectorPlanner.cs",
+      "bytes": 14034,
+      "sha256": "6e252421ea162e37be97ee83d5ed7b48fb392cede4dd329b6c59fff0b5e01c2d"
+    },
+    {
+      "name": "pathfinder-engine/tests/PathFinder.Constrained.Tests/Program.cs",
+      "bytes": 48152,
+      "sha256": "2fcc81d0a50fc7714beb6260c012cee0cbd754166058a1b93f729dbdc7a159ce"
+    },
+    {
+      "name": "pathfinder-engine/tests/PathFinder.LocalConnectors.Tests/Program.cs",
+      "bytes": 31825,
+      "sha256": "94638782013084ebce0b01b842e82e0f08354f8abc42be3b6962916182e6ca89"
+    }
+  ],
+  "allCopiedSources": 146,
+  "sourceCopyAndOriginalBookends": "PASS",
+  "tests": [
+    {
+      "name": "constrained-first.log",
+      "passed": 66,
+      "failed": 0,
+      "bytes": 8491,
+      "sha256": "46df237c3a152b867bb43c22e02da784be1cf96e570adc22c6c123aba934de18"
+    },
+    {
+      "name": "local-first.log",
+      "passed": 42,
+      "failed": 0,
+      "bytes": 5135,
+      "sha256": "5e96ee5f312f815951d5a6cc171a35855667319dd2388d8e400f7b897256730e"
+    },
+    {
+      "name": "mixed-final.log",
+      "passed": 20,
+      "failed": 0,
+      "bytes": 2280,
+      "sha256": "a46b037cbbc3e346c29fdb095755d730a4f820ea7f2963c3f40c880f110b63c7"
+    },
+    {
+      "name": "legacy-final.log",
+      "passed": 39,
+      "failed": 0,
+      "bytes": 5987,
+      "sha256": "9cbae8c35e7e664793c14c19a8348e78973b8671ec71c1ac2fc8b5bda123054f"
+    },
+    {
+      "name": "direct-final.log",
+      "passed": 63,
+      "failed": 0,
+      "bytes": 6031,
+      "sha256": "a5ef7f35302da9bbb3a3566b5d3510af7b524bdd6e7b426d76ebbbc70b0dfb51"
+    },
+    {
+      "name": "ledger-final.log",
+      "passed": 35,
+      "failed": 0,
+      "bytes": 3413,
+      "sha256": "20f1c3a3d1bd9c692797c90bc4f4429fe0700bab6a6ea30faa046850b23be2ab"
+    }
+  ],
+  "passed": 265,
+  "failed": 0,
+  "newRegressions": 14,
+  "portableRunnerPublish": "PASS",
+  "publishedArtifacts": [
+    {
+      "name": "PathFinder.Adapter.dll",
+      "bytes": 88064,
+      "sha256": "680f7d02b41d8680ce88d8553ee90f2d30b8079b0bbe7afbc07e28f9ba5bd3e3"
+    },
+    {
+      "name": "PathFinder.Adapter.pdb",
+      "bytes": 37236,
+      "sha256": "10980d39c456322d579695e9a784315ff05a6d164b564081bcad71ec7af39e1a"
+    },
+    {
+      "name": "PathFinder.BarrierVerifier.deps.json",
+      "bytes": 885,
+      "sha256": "025c9f088ffab3df7d7f806708352da37d97822887b95c0d6f886422ec87edc6"
+    },
+    {
+      "name": "PathFinder.BarrierVerifier.dll",
+      "bytes": 241664,
+      "sha256": "28c2ed859c96b559a407e106da79d296d694301b1c1bc488253f10a3eeb33583"
+    },
+    {
+      "name": "PathFinder.BarrierVerifier.pdb",
+      "bytes": 105616,
+      "sha256": "db1fd4da082a12fefccb76cb307fe6efc5f31dbb78f6e68685357bd9c56f29d6"
+    },
+    {
+      "name": "PathFinder.BarrierVerifier.runtimeconfig.json",
+      "bytes": 340,
+      "sha256": "3c0bf772b95c93363a0a14e5df78e4ec408c90f04cb7103205af97b2d276fab0"
+    },
+    {
+      "name": "PathFinder.Barriers.dll",
+      "bytes": 119296,
+      "sha256": "04991c2d660d6f5804b8eeda815b7caf7915bbfc0cca4922c8d19abb9e0ca057"
+    },
+    {
+      "name": "PathFinder.Barriers.pdb",
+      "bytes": 60164,
+      "sha256": "b93290a82452553ea948e36ad86dff54d515854d65caaeff75211dc594fbcd8b"
+    },
+    {
+      "name": "PathFinder.Core.dll",
+      "bytes": 174592,
+      "sha256": "dc789deced1bb5425f2d5ab85685203977e3b4f6bd6bdde24cf2a5845e3b3770"
+    },
+    {
+      "name": "PathFinder.Core.pdb",
+      "bytes": 144952,
+      "sha256": "014bfeb09750619533406b145071e2f4f71bf17af781d3c273df20152d2fb40e"
+    },
+    {
+      "name": "PathFinder.Model.dll",
+      "bytes": 121344,
+      "sha256": "f0fbef27322e1505a3cf234ef56645647c1e06bc6a028ad579b8e4207d1a9de3"
+    },
+    {
+      "name": "PathFinder.Model.pdb",
+      "bytes": 54468,
+      "sha256": "907751c2cc8e16e8628185997d3cff27621f870e35c0729df34cd141b23ab712"
+    },
+    {
+      "name": "PathFinder.ModelRunner.deps.json",
+      "bytes": 2530,
+      "sha256": "7f3fc2954fcfca3a1928db712ed61149db6457b6b5b620804fd9a3be9caa4a36"
+    },
+    {
+      "name": "PathFinder.ModelRunner.dll",
+      "bytes": 247808,
+      "sha256": "fbed41eb908f8ae5d699f06f765ba99286b0068a4a2862ede7dd16441301f16f"
+    },
+    {
+      "name": "PathFinder.ModelRunner.pdb",
+      "bytes": 91028,
+      "sha256": "534faaa6072295d850b5c0fd09f36b90c615fa7aaf9a93f1d6960a04bb9ec062"
+    },
+    {
+      "name": "PathFinder.ModelRunner.runtimeconfig.json",
+      "bytes": 340,
+      "sha256": "3c0bf772b95c93363a0a14e5df78e4ec408c90f04cb7103205af97b2d276fab0"
+    }
+  ],
+  "candidateLinuxNativeExecution": {
+    "bytes": 7956,
+    "sha256": "1f7bfa685079a627b2e9888039c4a017a00c62909b7afb3a81ea44aae6eca32c",
+    "status": "EXECUTED",
+    "cases": [
+      {
+        "cableTag": "=L2=LC1=WGB1",
+        "drillThroughWalls": false,
+        "status": "calculated",
+        "reason": "LEGACY_PAIR_CLEAR",
+        "queries": 4852,
+        "pairAttempts": 1,
+        "responseSha256": "174470db7c8d3c53008b6c208268abe557d9f0f0122f5a0f0638d20ab604d55e"
+      },
+      {
+        "cableTag": "=L2=LC1=WGB1",
+        "drillThroughWalls": true,
+        "status": "calculated",
+        "reason": "DRILLING_BYPASS",
+        "queries": 0,
+        "pairAttempts": 0,
+        "responseSha256": "5dd248cd6747341fe1345f858fba02bf04291cf2c489de16d2c365a00320641c"
+      },
+      {
+        "cableTag": "=H1=KF1=TAC1=WGA1",
+        "drillThroughWalls": false,
+        "status": "resource_limit",
+        "reason": "CANDIDATE_PAIR_LIMIT",
+        "queries": 7608,
+        "pairAttempts": 64,
+        "responseSha256": "07b11a2852b9fb0e973b5142da0281142901c517c85fc87080e5e0ab4cfabf7f"
+      },
+      {
+        "cableTag": "=H1=KF1=TAC1=WGA1",
+        "drillThroughWalls": true,
+        "status": "calculated",
+        "reason": "DRILLING_BYPASS",
+        "queries": 0,
+        "pairAttempts": 0,
+        "responseSha256": "5dcdffa9baf2f8e7db24f2517a1cd49d99d15e3b10ea8bad80c044104d1855b0"
+      }
+    ],
+    "allHelpersRemoved": true
+  },
+  "retainedInitialInvocation": {
+    "log": "mixed-first.log",
+    "exitCode": 2,
+    "assertionsExecuted": 0,
+    "reason": "Required runner and fresh work-root arguments were absent; corrected invocation is mixed-final.log."
+  },
+  "installed": false,
+  "limitsRaised": false,
+  "collisionToleranceChanged": false,
+  "geometryChanged": false,
+  "realCableApply": false,
+  "sdkExecuted": false,
+  "engineeringAccepted": false,
+  "scope": "Finite per-calculation exact directed segment search reuse; actual final route and standalone connector checks remain fresh. Candidate H1 OFF exhausts64 pairs after7608 physical queries; no successful route claimed."
+}

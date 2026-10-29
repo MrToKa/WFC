@@ -1,0 +1,71 @@
+TAP version 13
+# Subtest: valid input preserves nulls, exact decimal strings and raw category
+ok 1 - valid input preserves nulls, exact decimal strings and raw category
+  ---
+  duration_ms: 1.4819
+  type: 'test'
+  ...
+# Subtest: input refuses foreign model project
+ok 2 - input refuses foreign model project
+  ---
+  duration_ms: 0.3908
+  type: 'test'
+  ...
+# Subtest: input refuses foreign cable project
+ok 3 - input refuses foreign cable project
+  ---
+  duration_ms: 0.1641
+  type: 'test'
+  ...
+# Subtest: project name and converted fingerprint gates are explicit
+ok 4 - project name and converted fingerprint gates are explicit
+  ---
+  duration_ms: 0.1559
+  type: 'test'
+  ...
+# Subtest: exact current project identity requires the full observed name and matching project number
+ok 5 - exact current project identity requires the full observed name and matching project number
+  ---
+  duration_ms: 0.4035
+  type: 'test'
+  ...
+# Subtest: source receipt requires PASS preservation and exact raw bytes/hash/model binding
+ok 6 - source receipt requires PASS preservation and exact raw bytes/hash/model binding
+  ---
+  duration_ms: 0.2962
+  type: 'test'
+  ...
+# Subtest: durably retains a sanitized failure before any verifier or PDB audit when source input binding is invalid
+not ok 7 - durably retains a sanitized failure before any verifier or PDB audit when source input binding is invalid
+  ---
+  duration_ms: 18.0534
+  type: 'test'
+  location: 'C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\scripts\\pathfinder-current-inputs\\candidate-lib.test.mjs:163:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'CURRENT_PROJECT_IDENTITY'
+    - 'CURRENT_CONTENT_BINDING'
+               ^
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'CURRENT_CONTENT_BINDING'
+  actual: 'CURRENT_PROJECT_IDENTITY'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///C:/Users/todor.chankov/source/WFC-pathfinder-local/scripts/pathfinder-current-inputs/candidate-lib.test.mjs:167:42)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 6
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 96.4931

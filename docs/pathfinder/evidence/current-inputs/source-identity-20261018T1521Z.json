@@ -1,0 +1,106 @@
+{
+  "schemaVersion": "pathfinder.current-inputs.identity-receipt.v1",
+  "recordedAt": "2026-10-18T15:20:46.099Z",
+  "status": "PASS",
+  "privateSnapshot": null,
+  "checks": [
+    {
+      "name": "source-and-endpoint-reverified-before-connection",
+      "status": "PASS"
+    },
+    {
+      "name": "identity-only-whitelisted-observation-saved-before-assertion",
+      "status": "PASS"
+    }
+  ],
+  "scope": "Only SQL endpoint/read-only identity observation; no project, model, cable or other business SELECT.",
+  "limits": {
+    "rows": 100000,
+    "outputBytes": 67108864,
+    "childMilliseconds": 35000,
+    "processMilliseconds": 45000,
+    "stderrBytes": 32768,
+    "receiptBytes": 131072
+  },
+  "tool": {
+    "files": [
+      {
+        "path": "scripts/pathfinder-current-inputs/source-copy.mjs",
+        "sha256": "e1740f639a55fe08f1a5dff440ad9c4b3985379764a810ba754e6c333811fadf"
+      },
+      {
+        "path": "scripts/pathfinder-current-inputs/source-lib.mjs",
+        "sha256": "1fa12cd1d76662dfc350ac30551c1770cb5c502c640c7f89821c1ea98fe14b6f"
+      },
+      {
+        "path": "scripts/pathfinder-current-inputs/source-lib.test.mjs",
+        "sha256": "a72adffeff4e63f6879399f1e5ad56211094c27dd64e716d25a501a479aeba84"
+      },
+      {
+        "path": "scripts/pathfinder-current-inputs/README-source.md",
+        "sha256": "e657bba2c38ad208f1e0cad23a4d81c9c9728d4bf7968db7c2340f18f4a1607f"
+      }
+    ],
+    "sourceSetSha256": "c269ed99981dbb2c8cf7a01aeccba37d99818117c6c9806733d2477b2f1ecb15"
+  },
+  "source": {
+    "revision": "e1ef20202598bb4d3d78e4772cbbb9747ec23a00",
+    "branch": "main",
+    "sourceSetSha256": "c2cf57f7c6abc91a4b8c7deb758cdb3d584da8c6e96f316873ef1fe1f5291b57",
+    "backend": {
+      "id": "f65cc58eea401f9c80de3be44342c3a6157f48fd6468a4d5a6b3df8ceeaac427",
+      "name": "/wfc-app-backend-1",
+      "image": "sha256:481326351dbfa8acc86afe4d2543a1b96a05d523dd95a4715928f7f25418854f",
+      "startedAt": "2026-10-17T12:24:29.337651343Z"
+    },
+    "postgres": {
+      "id": "2f1d30dd30411bf8b7e873b893d1a87a064cd618651d1f2646b8c5d739f72f36",
+      "name": "/wfc_app",
+      "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+      "startedAt": "2026-10-16T14:08:28.33027284Z"
+    },
+    "binding": {
+      "route": "Docker Desktop host published port to exact PostgreSQL container",
+      "host": "host.docker.internal",
+      "port": "5434",
+      "database": "wfc_app",
+      "serverAddress": "172.17.0.2",
+      "serverPort": 5432,
+      "dns": [
+        {
+          "address": "192.168.65.254",
+          "family": 4
+        },
+        {
+          "address": "fdc4:f303:9324::254",
+          "family": 6
+        }
+      ]
+    }
+  },
+  "rawIdentity": {
+    "path": "pathfinder-engine/.scratch/current-inputs-5c035b03-ab18-479a-b94d-7d9a4bc35018/identity.private.json",
+    "bytes": 299,
+    "sha256": "2904902feb816a0f444621b4998df3916aab24e95b558f839cd46463e10ece4b"
+  },
+  "process": {
+    "exitCode": 0,
+    "signal": null,
+    "error": null,
+    "stderrBytes": 0,
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "identity": {
+    "rawServerAddress": "172.17.0.2/32",
+    "canonicalServerAddress": "172.17.0.2",
+    "serverPort": 5432,
+    "database": "wfc_app",
+    "readOnly": "on",
+    "defaultReadOnly": "on",
+    "isolation": "repeatable read",
+    "transportError": false
+  },
+  "endpointGuard": "NOT_EVALUATED: observation only; existing copy identity guard remains unchanged",
+  "businessQueries": "NOT_RUN",
+  "finishedAt": "2026-10-18T15:20:46.928Z"
+}

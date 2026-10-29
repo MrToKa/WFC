@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "pathfinder.runner.session.tests.v1",
+  "recordedAtUtc": "2026-10-20T19:39:48.7280793+00:00",
+  "status": "FAIL",
+  "passed": 9,
+  "failed": 1,
+  "runnerSha256": "b4b5d17b84ec1b8f1bc66a8d429093ee04582fee444bdd46d62c89cc2bce90a6",
+  "manifest": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\direct-secondary-u6-b5b39e66-132e-43ec-a265-c65ceef9a764\\legacy-session\\corpus\\manifest.json",
+  "scope": "synthetic-runner-protocol-and-mixed-semantics-not-native-or-full-plant",
+  "checks": [
+    {
+      "label": "BE32-exact-roundtrip",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "clean-EOF",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "partial-prefix",
+      "status": "PASS",
+      "detail": "EndOfStreamException"
+    },
+    {
+      "label": "partial-payload",
+      "status": "PASS",
+      "detail": "EndOfStreamException"
+    },
+    {
+      "label": "zero-frame",
+      "status": "PASS",
+      "detail": "InvalidDataException"
+    },
+    {
+      "label": "unsigned-frame-cap-before-allocation",
+      "status": "PASS",
+      "detail": "InvalidDataException"
+    },
+    {
+      "label": "invalid-UTF8",
+      "status": "PASS",
+      "detail": "DecoderFallbackException"
+    },
+    {
+      "label": "duplicate-member",
+      "status": "PASS",
+      "detail": "InvalidDataException"
+    },
+    {
+      "label": "closed-ready",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "unexpected-test-fault",
+      "status": "FAIL",
+      "detail": {
+        "type": "InvalidDataException",
+        "Message": "Session binary or protocol identity mismatch."
+      }
+    }
+  ]
+}

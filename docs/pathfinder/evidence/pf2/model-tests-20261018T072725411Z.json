@@ -1,0 +1,497 @@
+{
+  "stage": "PF-2",
+  "scope": "synthetic-model-contract-transform-fitted-cache",
+  "status": "PASS",
+  "observedAtUtc": "2026-10-18T07:27:25.399092+00:00",
+  "passedChecks": 94,
+  "failedChecks": 0,
+  "elapsedMilliseconds": 451,
+  "peakWorkingSetBytes": 51245056,
+  "scratchDirectory": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine/.scratch/model-tests-c13957af670e4ee2869cf876aa60d581",
+  "sourceSnapshotSha256": "003c075d7f7808837caba3497f54c369428fabb41e5d243a171453a8f57504e2",
+  "realNativeConvertedParity": "NOT_ESTABLISHED_BY_SYNTHETIC_TESTS",
+  "reusableRoutingGraph": false,
+  "limits": {
+    "MaximumBytes": 268435456,
+    "MaximumObjects": 1000000,
+    "MaximumFragments": 100000,
+    "MaximumVertices": 5000000,
+    "MaximumTriangles": 5000000,
+    "MaximumDepth": 512,
+    "MaximumPropertiesPerObject": 1024,
+    "MaximumCachedModels": 2
+  },
+  "checks": [
+    {
+      "name": "unit-axis-root-composition",
+      "status": "PASS",
+      "detail": "Nontrivial axis permutation, millimetres to metres, root placement."
+    },
+    {
+      "name": "inverse-binary64-large-root",
+      "status": "PASS",
+      "detail": "roundTripErrorSourceUnits=0"
+    },
+    {
+      "name": "global-offset-once",
+      "status": "PASS",
+      "detail": "pDisplay = pWorld - offset; inverse adds once."
+    },
+    {
+      "name": "affine-composition-roundtrip",
+      "status": "PASS",
+      "detail": "Column-major matrix composition tested in binary64."
+    },
+    {
+      "name": "double-application-detectable",
+      "status": "PASS",
+      "detail": "Second source/root application changes canonical coordinates and is prohibited by boundary."
+    },
+    {
+      "name": "singular-matrix",
+      "status": "PASS",
+      "detail": "ArgumentException: Perspective matrices are not model affine transforms."
+    },
+    {
+      "name": "perspective-matrix",
+      "status": "PASS",
+      "detail": "ArgumentException: Perspective matrices are not model affine transforms."
+    },
+    {
+      "name": "nonfinite-matrix",
+      "status": "PASS",
+      "detail": "ArgumentException: An affine matrix needs 16 finite binary64 values."
+    },
+    {
+      "name": "strict-canonical-snapshot",
+      "status": "PASS",
+      "detail": "Synthetic fixture admitted through strict transport."
+    },
+    {
+      "name": "cold-fitted-cache-build",
+      "status": "PASS",
+      "detail": "fitted-centerlines-ports-and-canonical-mesh;surface-bvh-reconstructed-on-disk-load;graph-per-calculation"
+    },
+    {
+      "name": "synthetic-proof-not-engineering-authorization",
+      "status": "PASS",
+      "detail": "needs_review"
+    },
+    {
+      "name": "warm-reuses-fitted-instance",
+      "status": "PASS",
+      "detail": "Same fitted geometry objects retained; graph is not cached."
+    },
+    {
+      "name": "disk-restores-centerline-and-port-cache",
+      "status": "PASS",
+      "detail": "fitted-centerlines-ports-and-canonical-mesh;surface-bvh-reconstructed-on-disk-load;graph-per-calculation"
+    },
+    {
+      "name": "canonical-not-transformed-twice",
+      "status": "PASS",
+      "detail": "Recorded source matrix includes a large translation; already canonical vertices remain unchanged."
+    },
+    {
+      "name": "equipment-bottom-world-aabb",
+      "status": "PASS",
+      "detail": "Centre of bottom visible canonical AABB, Z-up."
+    },
+    {
+      "name": "graph-built-per-calculation",
+      "status": "PASS",
+      "detail": "No prepared reusable graph claim."
+    },
+    {
+      "name": "restored-route-geometric-parity",
+      "status": "PASS",
+      "detail": "Full route generated from cold/restored fitted segments."
+    },
+    {
+      "name": "cache-invalidates:model-version",
+      "status": "PASS",
+      "detail": "Changed snapshot evidence participates in cache key."
+    },
+    {
+      "name": "cache-invalidates:content",
+      "status": "PASS",
+      "detail": "Changed snapshot evidence participates in cache key."
+    },
+    {
+      "name": "cache-invalidates:source-adapter",
+      "status": "PASS",
+      "detail": "Changed snapshot evidence participates in cache key."
+    },
+    {
+      "name": "cache-invalidates:visibility",
+      "status": "PASS",
+      "detail": "Changed snapshot evidence participates in cache key."
+    },
+    {
+      "name": "cache-invalidates:category",
+      "status": "PASS",
+      "detail": "Changed snapshot evidence participates in cache key."
+    },
+    {
+      "name": "cache-invalidates:display-offset",
+      "status": "PASS",
+      "detail": "Changed snapshot evidence participates in cache key."
+    },
+    {
+      "name": "cache-invalidates:explicit-exclusion",
+      "status": "PASS",
+      "detail": "Exclusion identities/version are hash-bound."
+    },
+    {
+      "name": "unknown-exclusion",
+      "status": "PASS",
+      "detail": "ArgumentException: Exclusion references unknown object identity."
+    },
+    {
+      "name": "unknown-rule-version",
+      "status": "PASS",
+      "detail": "ArgumentException: Unknown rules or invalid exclusion identities."
+    },
+    {
+      "name": "multiple-exclusions-validated-against-object-index",
+      "status": "PASS",
+      "detail": "All valid identities are resolved through one ordinal object index, including non-tray objects."
+    },
+    {
+      "name": "unknown-exclusion-after-valid-identities",
+      "status": "PASS",
+      "detail": "ArgumentException: Exclusion references unknown object identity."
+    },
+    {
+      "name": "effective-native-hidden-ancestor",
+      "status": "PASS",
+      "detail": "Native hidden ancestor excludes visible child."
+    },
+    {
+      "name": "unknown-native-visibility-not-display-hidden",
+      "status": "PASS",
+      "detail": "Unknown native planning state is reported, provisionally fitted and never promoted by Ghost visibility."
+    },
+    {
+      "name": "partial-selection-explicit-readiness",
+      "status": "PASS",
+      "detail": "Partial captures never claim whole-model readiness."
+    },
+    {
+      "name": "external-id-ambiguity-preserved",
+      "status": "PASS",
+      "detail": "External IDs never collapse distinct version-local instances."
+    },
+    {
+      "name": "category-is-explicit-planning-input",
+      "status": "PASS",
+      "detail": "Missing assignment remains unresolved, without inference from tray properties."
+    },
+    {
+      "name": "hierarchy-owner-never-inherits-fallback-tray",
+      "status": "PASS",
+      "detail": "A named logical tray owner and its physical leaf must not both become routing geometry."
+    },
+    {
+      "name": "generic-object-keeps-equipment-anchor-not-tray",
+      "status": "PASS",
+      "detail": "A physical equipment object with inherited tray labels remains an object/anchor candidate."
+    },
+    {
+      "name": "explicit-routing-leaf-preserves-diagnosed-empty-mesh-fallback",
+      "status": "PASS",
+      "detail": "Only an explicitly selected leaf can retain the existing intentional mesh fallback."
+    },
+    {
+      "name": "snapshot-rejects:unknown-schema",
+      "status": "PASS",
+      "detail": "ArgumentException: Unsupported snapshot schema."
+    },
+    {
+      "name": "snapshot-rejects:unknown-field",
+      "status": "PASS",
+      "detail": "JsonException: The JSON property \u0027ignored\u0027 could not be mapped to any .NET member contained in type \u0027PathFinder.Model.ModelSnapshot\u0027."
+    },
+    {
+      "name": "snapshot-rejects:missing-geometry-role",
+      "status": "PASS",
+      "detail": "JsonException: JSON deserialization for type \u0027PathFinder.Model.SnapshotObject\u0027 was missing required properties including: \u0027geometryRole\u0027."
+    },
+    {
+      "name": "snapshot-rejects:unknown-geometry-role",
+      "status": "PASS",
+      "detail": "ArgumentException: Unknown object geometry role."
+    },
+    {
+      "name": "snapshot-rejects:hierarchy-with-physical-mesh",
+      "status": "PASS",
+      "detail": "ArgumentException: Hierarchy-only objects cannot carry physical fragment meshes."
+    },
+    {
+      "name": "snapshot-rejects:routing-leaf-with-child",
+      "status": "PASS",
+      "detail": "ArgumentException: A routing-leaf cannot be the parent of another inventory object."
+    },
+    {
+      "name": "snapshot-rejects:source-space-not-canonical",
+      "status": "PASS",
+      "detail": "ArgumentException: Only already canonical world-metre vertices are admitted; adapters must transform exactly once before the boundary."
+    },
+    {
+      "name": "snapshot-rejects:unapplied-transform",
+      "status": "PASS",
+      "detail": "ArgumentException: Canonical fragment has unapplied transforms; refuse a second or missing conversion."
+    },
+    {
+      "name": "snapshot-rejects:missing-source-matrix-with-verified-transform",
+      "status": "PASS",
+      "detail": "ArgumentException: Verified transforms require a source-to-world matrix."
+    },
+    {
+      "name": "snapshot-rejects:unknown-units-claimed-verified",
+      "status": "PASS",
+      "detail": "ArgumentException: Verified units require a declared unit and positive scale."
+    },
+    {
+      "name": "snapshot-rejects:missing-source-sha-claimed-linked",
+      "status": "PASS",
+      "detail": "ArgumentException: A verified source link needs its source content SHA256."
+    },
+    {
+      "name": "snapshot-rejects:bad-hash",
+      "status": "PASS",
+      "detail": "ArgumentException: Invalid lowercase SHA256."
+    },
+    {
+      "name": "snapshot-rejects:duplicate-object",
+      "status": "PASS",
+      "detail": "ArgumentException: Duplicate version-local object identity."
+    },
+    {
+      "name": "snapshot-rejects:null-object",
+      "status": "PASS",
+      "detail": "ArgumentException: Object cannot be null."
+    },
+    {
+      "name": "snapshot-rejects:parent-cycle",
+      "status": "PASS",
+      "detail": "ArgumentException: A routing-leaf cannot be the parent of another inventory object."
+    },
+    {
+      "name": "snapshot-rejects:missing-parent-complete",
+      "status": "PASS",
+      "detail": "ArgumentException: Complete inventory references a missing parent."
+    },
+    {
+      "name": "snapshot-rejects:inverted-bounds",
+      "status": "PASS",
+      "detail": "ArgumentException: Inverted world bounds."
+    },
+    {
+      "name": "snapshot-rejects:vertex-outside-bounds",
+      "status": "PASS",
+      "detail": "ArgumentException: Canonical vertex lies outside declared object world bounds."
+    },
+    {
+      "name": "snapshot-rejects:triangle-index-range",
+      "status": "PASS",
+      "detail": "ArgumentException: Triangle index outside its fragment vertices."
+    },
+    {
+      "name": "snapshot-rejects:triangle-triplet-count",
+      "status": "PASS",
+      "detail": "ArgumentException: Invalid mesh arrays."
+    },
+    {
+      "name": "snapshot-rejects:unknown-category",
+      "status": "PASS",
+      "detail": "ArgumentException: Unknown planning category."
+    },
+    {
+      "name": "snapshot-rejects:mapped-category-duplicate",
+      "status": "PASS",
+      "detail": "ArgumentException: Duplicate mapped planning category."
+    },
+    {
+      "name": "snapshot-rejects:inferred-category-unassigned",
+      "status": "PASS",
+      "detail": "ArgumentException: Unassigned category cannot contain inferred planning assignments."
+    },
+    {
+      "name": "duplicate-json-member",
+      "status": "PASS",
+      "detail": "ArgumentException: Duplicate JSON property."
+    },
+    {
+      "name": "numeric-overflow",
+      "status": "PASS",
+      "detail": "ArgumentException: Invalid source unit scale."
+    },
+    {
+      "name": "object-limit",
+      "status": "PASS",
+      "detail": "ArgumentException: Object count outside snapshot budget."
+    },
+    {
+      "name": "vertex-limit",
+      "status": "PASS",
+      "detail": "ArgumentException: Model mesh resource budget exceeded."
+    },
+    {
+      "name": "triangle-limit",
+      "status": "PASS",
+      "detail": "ArgumentException: Model mesh resource budget exceeded."
+    },
+    {
+      "name": "byte-limit",
+      "status": "PASS",
+      "detail": "ArgumentException: Snapshot byte budget exceeded."
+    },
+    {
+      "name": "hierarchy-total-depth-root-first",
+      "status": "PASS",
+      "detail": "ArgumentException: Object hierarchy total depth exceeds its budget."
+    },
+    {
+      "name": "hierarchy-exact-depth-root-first",
+      "status": "PASS",
+      "detail": "Actual linked depth limit is independent of inventory ordering and short name evidence."
+    },
+    {
+      "name": "hierarchy-total-depth-deep-first",
+      "status": "PASS",
+      "detail": "ArgumentException: Cyclic or over-depth object hierarchy."
+    },
+    {
+      "name": "hierarchy-exact-depth-deep-first",
+      "status": "PASS",
+      "detail": "Actual linked depth limit is independent of inventory ordering and short name evidence."
+    },
+    {
+      "name": "selected-boundary-canonical-route-resolver",
+      "status": "PASS",
+      "detail": "Canonical resolver is bounded to the selected ancestor; an outside logical route cannot win."
+    },
+    {
+      "name": "selected-boundary-native-shape-search",
+      "status": "PASS",
+      "detail": "Pinned native FindShapeName chooses the nearest shape inside the same selected boundary."
+    },
+    {
+      "name": "selected-boundary-self-stops-ancestor-search",
+      "status": "PASS",
+      "detail": "Direct leaf selection preserves canonical fallback without taking its ancestor\u0027s name."
+    },
+    {
+      "name": "selected-boundary-invalidates-fitted-cache",
+      "status": "PASS",
+      "detail": "The selected root participates in the snapshot content hash."
+    },
+    {
+      "name": "selected-boundary-disk-restores-identical-labels",
+      "status": "PASS",
+      "detail": "Cold and restored model metadata agree."
+    },
+    {
+      "name": "selected-boundary-rejects-missing",
+      "status": "PASS",
+      "detail": "ArgumentException: Selected route boundary is not an ancestor of its physical leaf."
+    },
+    {
+      "name": "selected-boundary-rejects-nonancestor",
+      "status": "PASS",
+      "detail": "ArgumentException: Selected route boundary is not an ancestor of its physical leaf."
+    },
+    {
+      "name": "selected-boundary-rejects-competing-route",
+      "status": "PASS",
+      "detail": "ArgumentException: A selected route boundary belongs only to a routing-leaf without competing route/shape labels."
+    },
+    {
+      "name": "selected-boundary-rejects-competing-shape",
+      "status": "PASS",
+      "detail": "ArgumentException: A selected route boundary belongs only to a routing-leaf without competing route/shape labels."
+    },
+    {
+      "name": "selected-boundary-rejects-hierarchy-role",
+      "status": "PASS",
+      "detail": "ArgumentException: A selected route boundary belongs only to a routing-leaf without competing route/shape labels."
+    },
+    {
+      "name": "selected-boundary-rejects-forged-chain-name",
+      "status": "PASS",
+      "detail": "ArgumentException: Selected route boundary hierarchy names disagree with parents."
+    },
+    {
+      "name": "selected-boundary-legacy-serialization-omits-new-field",
+      "status": "PASS",
+      "detail": "The optional field never adds null members to legacy snapshots."
+    },
+    {
+      "name": "cancel-while-waiting-for-other-model-fit",
+      "status": "PASS",
+      "detail": "An explicitly held preparation gate cannot postpone cancellation until the other fit completes."
+    },
+    {
+      "name": "disk-cache-corruption-detected",
+      "status": "PASS",
+      "detail": "InvalidDataException: Fitted-cache payload corruption detected."
+    },
+    {
+      "name": "corrupt-cache-preserved-for-inspection",
+      "status": "PASS",
+      "detail": "Corrupt entry was not silently overwritten."
+    },
+    {
+      "name": "disk-cache-incomplete-publication-detected",
+      "status": "PASS",
+      "detail": "InvalidDataException: Incomplete fitted-cache entry; preserve and rebuild explicitly."
+    },
+    {
+      "name": "disk-cache-engine-version-mismatch",
+      "status": "PASS",
+      "detail": "InvalidDataException: Stale or mismatched fitted-cache manifest."
+    },
+    {
+      "name": "frozen-mesh-fitted-cache-parity:geometry-explicit-fallback",
+      "status": "PASS",
+      "detail": "Cold fitting equals restored centerlines, ports, surfaces and diagnostics."
+    },
+    {
+      "name": "frozen-mesh-fitted-cache-parity:geometry-box-mesh-straight",
+      "status": "PASS",
+      "detail": "Cold fitting equals restored centerlines, ports, surfaces and diagnostics."
+    },
+    {
+      "name": "frozen-mesh-fitted-cache-parity:geometry-measured-circular-30",
+      "status": "PASS",
+      "detail": "Cold fitting equals restored centerlines, ports, surfaces and diagnostics."
+    },
+    {
+      "name": "frozen-route-restored-cache-parity:geometry-measured-circular-30",
+      "status": "PASS",
+      "detail": "Exact path points and binary64 totals remain unchanged after disk reconstruction."
+    },
+    {
+      "name": "frozen-mesh-fitted-cache-parity:geometry-measured-vertical-90-with-support",
+      "status": "PASS",
+      "detail": "Cold fitting equals restored centerlines, ports, surfaces and diagnostics."
+    },
+    {
+      "name": "frozen-route-restored-cache-parity:geometry-measured-vertical-90-with-support",
+      "status": "PASS",
+      "detail": "Exact path points and binary64 totals remain unchanged after disk reconstruction."
+    },
+    {
+      "name": "cancel-before-read",
+      "status": "PASS",
+      "detail": "OperationCanceledException: The operation was canceled."
+    },
+    {
+      "name": "cancel-before-cache",
+      "status": "PASS",
+      "detail": "OperationCanceledException: The operation was canceled."
+    }
+  ],
+  "failures": []
+}

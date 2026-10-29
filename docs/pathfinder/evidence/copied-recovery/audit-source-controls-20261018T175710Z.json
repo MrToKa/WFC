@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "pathfinder.copied-recovery.audit-source-controls.v1",
+  "status": "PASS",
+  "observedAt": "2026-10-18T17:57:10.7164541Z",
+  "branch": "pf-8-copied-project-recovery-local-20261018",
+  "baselineRevision": "94f83c11747e3ff6d3efb7b8064ef115b364c5df",
+  "executor": "viewer_tab_capabilities",
+  "sourceFrozen": true,
+  "sources": [
+    { "path": "scripts/pathfinder-copied-recovery/audit.mjs", "bytes": 21410, "sha256": "920748cba87be8a4b658ae5228c41f1ae9b19f0c936bbc17ff7dfe585ae13588" },
+    { "path": "scripts/pathfinder-copied-recovery/audit-lib.mjs", "bytes": 19001, "sha256": "48d5e75e674ce76a6170c223cd333fd30b9e04efb7ea80ec6023d5045b9195af" },
+    { "path": "scripts/pathfinder-copied-recovery/audit-lib.test.mjs", "bytes": 17669, "sha256": "7463cbdbc7e69053efb28b42f80de1a4b11c97b6ec87fc3777fe2d4744ba2d28" },
+    { "path": "scripts/pathfinder-copied-recovery/README-audit.md", "bytes": 7384, "sha256": "56c3215b04776602083cb91bb6df41447ca3d77eb4ba94e3aa038212682e81e9" }
+  ],
+  "sharedDependency": { "path": "scripts/pathfinder-copied-recovery/binding.mjs", "bytes": 9303, "sha256": "5e242570745973a4af42af110e8eb29665331a3323f2d7ebb9016ba286c8046f", "owner": "root", "notEditedByThisExecutor": true },
+  "checks": [
+    {
+      "name": "focused synthetic controls and host child watchdog",
+      "command": "node --test --test-reporter=tap scripts/pathfinder-copied-recovery/audit-lib.test.mjs",
+      "status": "PASS", "exitCode": 0, "tests": 48, "passed": 48, "failed": 0, "skipped": 0,
+      "durationMilliseconds": 195.0904,
+      "toolChunk": "829140",
+      "raw": { "path": "docs/pathfinder/evidence/copied-recovery/audit-controls-1792346000.tap", "bytes": 9165, "sha256": "16aca93310df0c36a8b514446b3f1792110debc2e42ae2a2cf40f41c99f9159b", "lastWriteTimeUtc": "2026-10-18T17:54:55.2972147Z" },
+      "scope": "Synthetic JSONB-text snapshots and an actual short-lived host Node child waiting for stdin; no PostgreSQL, Docker, HTTP or runtime operation.",
+      "filenameIsTimeEvidence": false
+    },
+    { "command": "node --check scripts/pathfinder-copied-recovery/audit.mjs", "status": "PASS", "exitCode": 0, "toolChunk": "0d6f0e" },
+    { "command": "node --check scripts/pathfinder-copied-recovery/audit-lib.mjs", "status": "PASS", "exitCode": 0, "toolChunk": "14498d" },
+    { "command": "node --check scripts/pathfinder-copied-recovery/audit-lib.test.mjs", "status": "PASS", "exitCode": 0, "toolChunk": "c5444a" }
+  ],
+  "historicalChecks": [
+    { "status": "PASS", "passed": 48, "failed": 0, "skipped": 0, "toolChunk": "3bdcc0", "durableFullTap": null, "scope": "Earlier same-suite invocation before final I/O durability and README changes; not the final frozen source check." }
+  ],
+  "independentReview": {
+    "reviewer": "pf_runtime_map",
+    "method": "Source-only review; reviewer ran no tests, PostgreSQL, Docker, HTTP or runtime operations.",
+    "status": "NO_REMAINING_MATERIAL_FINDING_REPORTED",
+    "reviewedShortHashes": ["920748cb", "48d5e75e", "7463cbdb", "56c3215b"],
+    "resolvedSourceFindings": [
+      "PostgreSQL ORDER BY now repeats the primary-key expression before COLLATE C; no invalid output-alias-in-expression lookup.",
+      "Validator key ordering now uses UTF-8 byte order consistent with SQL C collation and storage ordering, including BMP/astral synthetic coverage.",
+      "Owned-auth comparison pins exact safe metadata for target, backup, IDs, load, expiries and cookie-secret SHA while retaining every old auth row byte-exact."
+    ],
+    "sourceFindingsWereActualSqlFailures": false,
+    "closingDelta": [
+      "Best-effort storage iterator destruction no longer prevents PostgreSQL close.",
+      "Host capture records transport error and waits for child close before retaining the final raw output.",
+      "Baseline and comparison-input references are durably retained before comparison classification.",
+      "Start/end source hashes fence the audit implementation and shared binding.",
+      "Added README with exact comparison modes, limits, durability and proof boundaries."
+    ]
+  },
+  "intendedActualComparison": {
+    "businessTables": 27, "separateAuthTables": 2, "storageBuckets": 3,
+    "modes": ["exact", "restore-fence", "owned-auth", "business-only"],
+    "businessRepresentation": "Exact PostgreSQL JSONB text preserved as strings for hashing and comparison; JavaScript parsing is only a syntax/schema check.",
+    "storageProof": "Key, raw size, ETag, lastModified and metadata only; raw model/artifact SHA is delegated to separately executed backup/restore inventory checks.",
+    "businessOnlyAuthentication": "NOT_CHECKED",
+    "ownedAuthInput": "Hash-pinned closed-schema allowed-auth.private.json safe metadata; never a bearer token or cookie."
+  },
+  "notRun": ["Actual database snapshot", "Actual source or restored-target comparison", "Backup", "Restore", "HTTP login/session probes", "Browser review", "Container operations", "Raw storage SHA verification", "Retirement"],
+  "mutations": { "productionSource": false, "database": false, "http": false, "runtime": false, "originalCheckout": false, "containers": false },
+  "acceptance": "Source controls only. No operational recovery, engineering, native parity or human acceptance is inferred."
+}

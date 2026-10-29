@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { CABLE_LIST_COLUMN_IDS } from './models/cableListColumns.js';
 import { CABLE_MTO_VALUES } from './models/cable.js';
+import { cablePurposeInputSchema } from '../shared/routingCablePurposes.js';
 import { CHANGE_ORDER_SOURCE_CATALOGS } from './models/changeOrder.js';
 import {
   STANDARD_MATERIAL_UNITS,
@@ -124,6 +125,7 @@ const cableLayoutSchema = z
     considerBundleSpacingAsFree: z.boolean().nullable().optional(),
     minFreeSpacePercent: z.number().int().min(1).max(100).nullable().optional(),
     maxFreeSpacePercent: z.number().int().min(1).max(100).nullable().optional(),
+    autoRerouteForFreeSpace: z.boolean().optional(),
     mv: cableCategorySettingsSchema.optional(),
     power: cableCategorySettingsSchema.optional(),
     vfd: cableCategorySettingsSchema.optional(),
@@ -140,6 +142,7 @@ const projectFieldSchema = {
   manager: z.string().trim().max(200).optional(),
   description: z.string().trim().max(2000).optional(),
   secondaryTrayLength: z.number().min(0).max(1_000_000).nullable().optional(),
+  connectionGap: z.number().finite().positive().max(100).optional(),
   supportDistance: z.number().min(0).max(1_000_000).nullable().optional(),
   supportWeight: z.number().min(0).max(1_000_000).nullable().optional(),
   additionalBendingPercent: z.number().finite().min(0).max(1_000_000).optional(),
@@ -164,6 +167,7 @@ export const updateProjectSchema = z
     manager: projectFieldSchema.manager,
     description: projectFieldSchema.description.optional(),
     secondaryTrayLength: projectFieldSchema.secondaryTrayLength,
+    connectionGap: projectFieldSchema.connectionGap,
     supportDistance: projectFieldSchema.supportDistance,
     supportWeight: projectFieldSchema.supportWeight,
     additionalBendingPercent: projectFieldSchema.additionalBendingPercent,
@@ -182,6 +186,7 @@ export const updateProjectSchema = z
       value.manager !== undefined ||
       value.description !== undefined ||
       value.secondaryTrayLength !== undefined ||
+      value.connectionGap !== undefined ||
       value.supportDistance !== undefined ||
       value.supportWeight !== undefined ||
       value.additionalBendingPercent !== undefined ||
@@ -208,7 +213,7 @@ export const clearProjectDataSchema = z
 
 const cableTypeNumericField = z.number().min(0).max(1_000_000).nullable().optional();
 
-const cableTypeStringField = z.string().trim().max(500).optional();
+const cableTypePurposeField = cablePurposeInputSchema.optional();
 
 const materialCableTypeStringField = z.string().trim().max(2000).nullable().optional();
 const minimumOrderQuantityField = z
@@ -247,7 +252,7 @@ export const createCableTypeSchema = z
   .object({
     name: z.string().trim().min(1).max(200),
     sourceMaterialCableTypeId: z.string().uuid().optional(),
-    purpose: cableTypeStringField,
+    purpose: cableTypePurposeField,
     diameterMm: cableTypeNumericField,
     weightKgPerM: cableTypeNumericField,
   })
@@ -257,7 +262,7 @@ export const updateCableTypeSchema = z
   .object({
     name: z.string().trim().min(1).max(200).optional(),
     sourceMaterialCableTypeId: z.string().uuid().optional(),
-    purpose: cableTypeStringField,
+    purpose: cableTypePurposeField,
     diameterMm: cableTypeNumericField,
     weightKgPerM: cableTypeNumericField,
   })
@@ -275,7 +280,7 @@ export const updateCableTypeSchema = z
 export const createMaterialCableTypeSchema = z
   .object({
     name: z.string().trim().min(1).max(200),
-    purpose: cableTypeStringField,
+    purpose: cableTypePurposeField,
     material: materialCableTypeStringField,
     description: materialCableTypeStringField,
     manufacturer: materialCableTypeStringField,
@@ -294,7 +299,7 @@ export const createMaterialCableTypeSchema = z
 export const updateMaterialCableTypeSchema = z
   .object({
     name: z.string().trim().min(1).max(200).optional(),
-    purpose: cableTypeStringField,
+    purpose: cableTypePurposeField,
     material: materialCableTypeStringField,
     description: materialCableTypeStringField,
     manufacturer: materialCableTypeStringField,
@@ -471,7 +476,7 @@ export const createCableSchema = z
     cableTypeId: z.string().trim().uuid(),
     fromLocation: cableStringField,
     toLocation: cableStringField,
-    routing: cableStringField,
+    routing: z.string().trim().max(8000).optional(),
     delivery: cableStringField,
     designLength: z.number().int().min(0).max(1_000_000).nullable().optional(),
     installLength: z.number().int().min(0).max(1_000_000).nullable().optional(),
@@ -519,7 +524,7 @@ export const updateCableSchema = z
     cableTypeId: z.string().trim().uuid().optional(),
     fromLocation: cableStringField,
     toLocation: cableStringField,
-    routing: cableStringField,
+    routing: z.string().trim().max(8000).optional(),
     delivery: cableStringField,
     designLength: z.number().int().min(0).max(1_000_000).nullable().optional(),
     installLength: z.number().int().min(0).max(1_000_000).nullable().optional(),

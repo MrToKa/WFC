@@ -1,0 +1,86 @@
+{
+  "schemaVersion": "pathfinder.batched-capture.frontend-controls.v1",
+  "recordedAt": "2026-10-18T16:15:00Z",
+  "status": "PASS",
+  "branch": "pf-3-batched-capture-local-20261018",
+  "observedHead": "6761cb76df79392befba6ace1c4d8c685b36cfdd",
+  "sourceState": "owned source frozen; coordinated uncommitted implementation",
+  "files": {
+    "src/viewer/ViewerController.ts": "fda7c68b1b15d79101a9cf926c14e25baca967eceb36aa7bc880bcfd47a77eba",
+    "src/viewer/ViewerController.test.ts": "39caec37c92f28a04d0297f31883538cefd799f46218001506dbce33e5d0e292",
+    "src/pages/ProjectDetails/PathFinderRoutes.tsx": "2e716bf15d7406a2c310c2f63721777aeff173e1e0a78a7a0a990dc8c0348160",
+    "src/pages/ProjectDetails/PathFinderRoutes.test.tsx": "e78f1ac04a82404f3423048130a87ecb9e569ebc6bf05767b942de465bb795d3",
+    "src/pages/ProjectDetails/PathFinderTab.tsx": "28296846d3bb5f10d79e7fe7a753d1df58147cdae8673addce86ea8e09a2f89b",
+    "src/pages/ProjectDetails/PathFinderTab.test.tsx": "cbf4b5e53ebefcde8ecc08669800863fe51d8c5fd682c17c2b542ebf9300d160",
+    "server/pathfinder/contracts.ts": "9cafa21c55973998d951de38687f91eafcf4a42c1fee0a2d703d7394c744f3f5",
+    "server/pathfinder/captureInputScope.test.ts": "eba99a8a867f14d085301a74d838bdab3621e10e17db2f9c9fd39d71781ca11e"
+  },
+  "checks": [
+    {
+      "name": "final integrated Controller, Routes, server capture input schema",
+      "command": "node node_modules/vitest/vitest.mjs run src/viewer/ViewerController.test.ts src/pages/ProjectDetails/PathFinderRoutes.test.tsx server/pathfinder/captureInputScope.test.ts --reporter=dot",
+      "status": "PASS",
+      "files": 3,
+      "passed": 53,
+      "failed": 0,
+      "seconds": 14.36
+    },
+    {
+      "name": "affected existing Tab rule prepare and dirty gate regression",
+      "command": "node node_modules/vitest/vitest.mjs run src/pages/ProjectDetails/PathFinderTab.test.tsx --reporter=dot -t \"prepares every ordered|updates a selected root|adds checked|includes arbitrary|dirty category|prepared rule baseline\"",
+      "status": "PASS",
+      "passed": 7,
+      "skipped": 44,
+      "totalDiscovered": 51,
+      "seconds": 40.97
+    },
+    {
+      "name": "requested nontechnical saved preparation copy",
+      "command": "node node_modules/vitest/vitest.mjs run src/pages/ProjectDetails/PathFinderRoutes.test.tsx --reporter=dot -t \"shows reloaded input\"",
+      "status": "PASS",
+      "passed": 1,
+      "skipped": 9,
+      "seconds": 2.49
+    },
+    {
+      "name": "frontend TypeScript final",
+      "command": "node node_modules/typescript/bin/tsc --noEmit",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "server TypeScript",
+      "command": "node node_modules/typescript/bin/tsc --noEmit -p server/tsconfig.json",
+      "status": "PASS",
+      "exitCode": 0,
+      "note": "server owned contracts remained unchanged after this check"
+    },
+    {
+      "name": "scoped ESLint final eight owned source/test files",
+      "status": "PASS",
+      "exitCode": 0,
+      "maxWarnings": 0
+    },
+    {
+      "name": "git diff --check owned files",
+      "status": "PASS",
+      "exitCode": 0,
+      "note": "only Git line-ending informational warnings"
+    }
+  ],
+  "coverage": [
+    "1,527 synthetic endpoint spellings create exactly six <=256-name staged chunks within message bounds, one START and one output stream.",
+    "Clear cancels mid-input; forged ready hashes and complete request-summary mismatch refuse completion.",
+    "Positive staged completion uses real assembler and preserves final durable inputScope scan counts.",
+    "Routes selected-cable, endpoint, standalone-name, model and detachment changes cancel pending capture and invalidate parent pre-upload guard.",
+    "A save already accepted during POST remains recorded as earlier scope and does not clear current draft warning.",
+    "Server schema retains legacy compatibility and refuses contradictory scan counts, unknown proof keys, pending null scan and native/completeness claim escalation.",
+    "Reload card states saved input scope and partial location warning; it makes no current input hash match or location absence claim."
+  ],
+  "nonClaims": [
+    "Synthetic 1,527-name tests do not prove actual SDK inventory scan or business endpoint matching.",
+    "No browser, database, SDK capture, upload, Docker build or runtime lifecycle was performed by this source-control task.",
+    "No current UI descriptor-to-current-draft comparison or engineering/native acceptance is inferred."
+  ],
+  "runtimeSourceReceipt": "runtime-source-controls-1792340046643.json"
+}

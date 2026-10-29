@@ -1,0 +1,22 @@
+{
+  "stage": "PF-1",
+  "recordedAtUtc": "2026-10-17T20:42:16.015Z",
+  "status": "PASS",
+  "results": [
+    {
+      "name": "runner-build",
+      "exitCode": 0,
+      "status": "PASS"
+    },
+    {
+      "name": "regression",
+      "exitCode": 0,
+      "status": "PASS"
+    },
+    {
+      "name": "parity",
+      "exitCode": 0,
+      "status": "PASS"
+    }
+  ]
+}

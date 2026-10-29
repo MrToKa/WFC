@@ -1,0 +1,152 @@
+{
+  "schemaVersion": 1,
+  "observedAtUtc": "2026-10-17T20:20:36.436Z",
+  "status": "PASS",
+  "scope": "Git-staged delivery closure and pinned raw bytes; no runtime/native parity claim",
+  "initialWhitespaceCheck": "FAIL for captured CRLF/EOF bytes under plain whitespace rules; no fixture bytes rewritten; scoped CR/EOF attributes then applied",
+  "finalWhitespaceCheck": "PASS",
+  "files": [
+    {
+      "path": "docs/pathfinder/00-parity-fixtures.md",
+      "bytes": 14552,
+      "sha256": "35dbd552377a1bc776b9eb1716615eaaa3349b3056febed688ae6e9de13bb457",
+      "indexBytesMatch": true
+    },
+    {
+      "path": "docs/pathfinder/evidence/00-start-state.json",
+      "bytes": 5933,
+      "sha256": "ea9fd62941936a96fa560b96491b5dc6d9ee46f16ad4f17b3be6db0650bbdb75",
+      "indexBytesMatch": true
+    },
+    {
+      "path": "docs/pathfinder/evidence/01-github-observations.json",
+      "bytes": 5804,
+      "sha256": "e497032e20a64eb2549188ec1b4f79685b5239a282047150dc170a971bf06069",
+      "indexBytesMatch": true
+    },
+    {
+      "path": "docs/pathfinder/evidence/02-final-validation.json",
+      "bytes": 6556,
+      "sha256": "8bda60db673058fc4c19d5c4746f9c84b3b66de0f9102f1ba645debcbaba72e5",
+      "indexBytesMatch": true
+    },
+    {
+      "path": "docs/pathfinder/evidence/03-document-review.json",
+      "bytes": 2118,
+      "sha256": "377628d5e7deb26fac1a2ffec120bbb1c75c992129ffeb7a929fec02ca2752af",
+      "indexBytesMatch": true
+    },
+    {
+      "path": "docs/pathfinder/evidence/audit-git-index.mjs",
+      "bytes": 3185,
+      "sha256": "9fd9b9c899ff9ba13a0b1d26196210a1649882396290b37493b56ea42e26c999",
+      "indexBytesMatch": true
+    },
+    {
+      "path": "docs/pathfinder/evidence/pf-core-geometry-capture.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "indexBytesMatch": true
+    },
+    {
+      "path": "docs/pathfinder/evidence/pf-core-golden-extraction.log",
+      "bytes": 52,
+      "sha256": "9e1ed7ffffaf4d8ea12b0fbbfb39d17d1b96978170607f10d1d123d4981b511e",
+      "indexBytesMatch": true
+    },
+    {
+      "path": "docs/pathfinder/evidence/pf-core-golden-repeat.log",
+      "bytes": 52,
+      "sha256": "9e1ed7ffffaf4d8ea12b0fbbfb39d17d1b96978170607f10d1d123d4981b511e",
+      "indexBytesMatch": true
+    },
+    {
+      "path": "docs/pathfinder/evidence/pf-core-release.log",
+      "bytes": 8477,
+      "sha256": "4bade93f84120f55e47d85c00b2eb671499e4c1f1f0002cebf49d3ccce2f8190",
+      "indexBytesMatch": true
+    },
+    {
+      "path": "docs/pathfinder/evidence/pf-core-run-context.json",
+      "bytes": 367,
+      "sha256": "d713d57e94f8ee028d915cf9a9afa4875413fff2be82c6aa2a77952ccc2ac515",
+      "indexBytesMatch": true
+    },
+    {
+      "path": "docs/pathfinder/evidence/pf-core-schema-validation.log",
+      "bytes": 486,
+      "sha256": "1194ecf618105caad96db02147046a6c2405c3e5865432308c60dbfe33adc966",
+      "indexBytesMatch": true
+    },
+    {
+      "path": "docs/pathfinder/evidence/pf-core-source-inventory.json",
+      "bytes": 6693,
+      "sha256": "6697ad87675ab3dbd7db65a0de70de4ecac8c85358a6b14bf80525d333592984",
+      "indexBytesMatch": true
+    },
+    {
+      "path": "docs/pathfinder/evidence/pf-core-summary.json",
+      "bytes": 7660,
+      "sha256": "83aac7ecce734fe8f2bf61472db4e6a90c8a215517b2600533c268bd33b4ab11",
+      "indexBytesMatch": true
+    },
+    {
+      "path": "docs/pathfinder/evidence/validate-pf0.mjs",
+      "bytes": 12245,
+      "sha256": "c81edf5bb1eea6a3a0e11221e262aeaa186d862d55844226d99d33484337327f",
+      "indexBytesMatch": true
+    },
+    {
+      "path": "docs/pathfinder/fixtures/generator/CaptureGeometry.cs",
+      "bytes": 3337,
+      "sha256": "3b4ac928911a8c21feb8ed5810c84a7d6cfc7fe5f4d4191d51fd8a3a9d08320d",
+      "indexBytesMatch": true
+    },
+    {
+      "path": "docs/pathfinder/fixtures/generator/CaptureGeometry.csproj",
+      "bytes": 539,
+      "sha256": "cbef8afc87576bc54755e66be25bc85cd4b7de535a48f91179087396f1702c89",
+      "indexBytesMatch": true
+    },
+    {
+      "path": "docs/pathfinder/fixtures/generator/GoldenExtractor.csproj",
+      "bytes": 456,
+      "sha256": "957561bc4bdb7873d96216c972a2cb0fe12c980048bad462edc96d66450967ae",
+      "indexBytesMatch": true
+    },
+    {
+      "path": "docs/pathfinder/fixtures/generator/Program.cs",
+      "bytes": 10553,
+      "sha256": "127e1d0fe89dd5bd41cd396bd5200837a7fb008c776b9326bb1634a9235ea5d0",
+      "indexBytesMatch": true
+    },
+    {
+      "path": "docs/pathfinder/fixtures/pf-core-v1.expected.json",
+      "bytes": 49832,
+      "sha256": "43ea08d2e7e5ff4e56d1fe5c4435bada300a215b0da3164f5179d27ca4b23a5a",
+      "indexBytesMatch": true
+    },
+    {
+      "path": "docs/pathfinder/fixtures/pf-core-v1.inputs.json",
+      "bytes": 223109,
+      "sha256": "1fd49428742284e30071a0b293cca0a8f5eff8b47a2aaab10f1184cf73cd7e78",
+      "indexBytesMatch": true
+    },
+    {
+      "path": "docs/pathfinder/fixtures/pf-core-v1.manifest.json",
+      "bytes": 13592,
+      "sha256": "0c3aac68b43f5e19201037716c13e3a0b8b6cd6074ea015eaf23de8c93b26392",
+      "indexBytesMatch": true
+    },
+    {
+      "path": "docs/pathfinder/fixtures/pf-core-v1.schema.json",
+      "bytes": 25431,
+      "sha256": "b65addd83e0e3b400246e28da6b9a0dedfcb6517008b643a0203694f2f36f759",
+      "indexBytesMatch": true
+    }
+  ],
+  "requiredLogsStaged": 5,
+  "stagedFileCountAtObservation": 31,
+  "pinnedRawFileCount": 23,
+  "temporaryCopyStaged": false
+}

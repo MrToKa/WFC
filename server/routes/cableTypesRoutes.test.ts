@@ -52,6 +52,23 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 
+describe('project copies retain a routable cable Purpose',()=>{
+  it.each([['create','/','post'],['update','/:cableTypeId','patch']] as const)('rejects legacy invalid material Purpose during %s before changing project data',async(_name,path,method)=>{
+    const selected=(cableTypesRouter as unknown as {stack:Layer[]}).stack.find(layer=>layer.route?.path===path&&layer.route.methods[method])!.route!.stack.at(-1)!.handle;
+    const ordinaryQuery=client.query.getMockImplementation()!;
+    client.query.mockImplementation(async(sql:string,args?:unknown[])=>{
+      if(sql.includes('FROM material_cable_types'))return{rows:[{id:sourceMaterialId,name:'Cable',purpose:'Power\nVFD'}],rowCount:1};
+      if(sql.includes('SELECT id, name, source_material_cable_type_id'))return{rows:[{id:'type',name:'Cable'}],rowCount:1};
+      return ordinaryQuery(sql,args);
+    });
+    const res=response();await selected({...request,body:{name:'Cable'}} as Request,res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({error:expect.stringContaining('invalid Purpose')});
+    expect(client.query.mock.calls.some(([sql])=>/^\s*(?:INSERT|UPDATE|DELETE)\b/.test(sql))).toBe(false);
+    expect(client.query).toHaveBeenLastCalledWith('ROLLBACK');
+  });
+});
+
 describe('cable type material history transactions', () => {
   it('commits the deletion and its authenticated history together', async () => {
     const res = response();

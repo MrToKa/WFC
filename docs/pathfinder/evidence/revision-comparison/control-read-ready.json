@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "wfc.pf.revision-comparison-control-receipt.v1",
+  "status": "PASS",
+  "phase": "read-ready",
+  "phaseIntentId": "531ebd8f-ff4b-46b3-8e4c-3c01be2f9b02",
+  "checks": [
+    {
+      "name": "Current target comparison scope is readable under current authority",
+      "status": "PASS",
+      "scope": "actual production transaction and caller-client reader; existing normal comparison only"
+    }
+  ],
+  "beforeSha256": "f7d2ac0a03595c1a906e18ac1fa291864ed25f362fd797082d313a37ee0541b8",
+  "afterSha256": "f7d2ac0a03595c1a906e18ac1fa291864ed25f362fd797082d313a37ee0541b8",
+  "elapsedMilliseconds": 50,
+  "engineeringAccepted": false,
+  "productionComparisonPublicationTested": false,
+  "automaticApplyPerformed": false
+}

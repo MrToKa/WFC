@@ -1,0 +1,136 @@
+{
+  "schemaVersion": "wfc.pf.b8b-source-files.v1",
+  "baseCommit": "38e4f20ca6bbbb6ee04a5aab6390afb40d8c0a6d",
+  "scope": "Final frozen B8b C# source and root-built checked runner closure; product commit records these source bytes",
+  "observedUtc": "2026-10-21T19:52:11.5181174Z",
+  "sourceFiles": [
+    {
+      "path": "pathfinder-engine/src/PathFinder.Model/Contracts.cs",
+      "bytes": 13165,
+      "sha256": "1362bb3877d3204a09d0ccab2627d8cd74b58358d6a6f11195e697938388fedb"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Model/FittedModelCache.cs",
+      "bytes": 29444,
+      "sha256": "18a87f54054bf070cc9b03a5f8b686b7cdefcc3f85cccd0a530b6a2eedfea902"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Model/SnapshotReader.cs",
+      "bytes": 27229,
+      "sha256": "fecd76e2a2abbad9a7ab360ef313c76a8433466eff41a3c9794f443da44b05fb"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.Model.Tests/Program.cs",
+      "bytes": 40728,
+      "sha256": "5468e768a8913b3cf8d91adc7315b4f625872bee962f54b9e8799ad65cb94179"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.RunnerSession.Tests/CheckedPreparation.cs",
+      "bytes": 15878,
+      "sha256": "667200ca27cc042e4a9f30be912cce7dcc5e19572dc25c93bdf321b90a49c196"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.RunnerSession.Tests/MemoryPhaseProbeChecks.cs",
+      "bytes": 4559,
+      "sha256": "3ec44c1d0d70154ed3db4b00b5376ae6248511dca9c0c3d637460357fbaf7ee8"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.RunnerSession.Tests/Program.cs",
+      "bytes": 18664,
+      "sha256": "bd33e88bd6477c05bc90f630757afc5114371eb7b1bcb29e615d350f348d17b5"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.RunnerSession.Tests/TransferredPreparation.cs",
+      "bytes": 14915,
+      "sha256": "6f013b25b8485a89123385ff53c403a007aa360ee26772804875caec7b43e6d8"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.RunnerSession.Tests/WorkerMemoryPolicyChecks.cs",
+      "bytes": 8673,
+      "sha256": "d35d843068f9a29bf92e3873ae714d997a639d53a1174f77684e08479ff8ae21"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/BarrierRoutingExecution.cs",
+      "bytes": 13868,
+      "sha256": "95d513c597c922899f6ae96aad90fc4aae54d85ef86252a31958ab7350f3fbe2"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/PreparationMemoryTrace.cs",
+      "bytes": 5619,
+      "sha256": "1e3aefd97605a06caf2c99bc923b2d26e8fc4c6b90ee6a83e1cd45ac4a2753a9"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/Program.cs",
+      "bytes": 36578,
+      "sha256": "281e6c70aff5bf55198b57dd0cdc37d71fe8af32a9eeac4bf6146c8c735ae5d1"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/Session.cs",
+      "bytes": 13183,
+      "sha256": "3b30ee6ab0079a873fa963336dc08ba424e3557ba026d5752b7731326ca8a9d3"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/SessionExecutionContext.cs",
+      "bytes": 4275,
+      "sha256": "39096932fc705e9adab3c8250800a86406f05973c1c6a59404bc35fb48b3ce31"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/WorkerMemoryPolicy.cs",
+      "bytes": 2274,
+      "sha256": "603c8466533450cce4f3e7446db257ef49f2fab1ade322f73805d36d22be9bf0"
+    }
+  ],
+  "runnerClosure": [
+    {
+      "file": "PathFinder.Adapter.dll",
+      "bytes": 88064,
+      "sha256": "08e031d882c926de7bac732ce3219548b38ede48ef07dc1678489702880b3cda"
+    },
+    {
+      "file": "PathFinder.Barriers.dll",
+      "bytes": 57344,
+      "sha256": "b1450bd3777cf44f0116d6c76532a4f9e9a52115aca8f28be1e2c186eb4cceda"
+    },
+    {
+      "file": "PathFinder.BarrierVerifier.deps.json",
+      "bytes": 885,
+      "sha256": "025c9f088ffab3df7d7f806708352da37d97822887b95c0d6f886422ec87edc6"
+    },
+    {
+      "file": "PathFinder.BarrierVerifier.dll",
+      "bytes": 76800,
+      "sha256": "9b0a1750e71649712a823edf9f9018bd17e6f69fdd3da70144cfb8bd5f9e8c6d"
+    },
+    {
+      "file": "PathFinder.BarrierVerifier.runtimeconfig.json",
+      "bytes": 340,
+      "sha256": "3c0bf772b95c93363a0a14e5df78e4ec408c90f04cb7103205af97b2d276fab0"
+    },
+    {
+      "file": "PathFinder.Core.dll",
+      "bytes": 173056,
+      "sha256": "07945e9daf31aa4b5a05e426cd361bf5b671688209a0a155bec8dc8ab804088d"
+    },
+    {
+      "file": "PathFinder.Model.dll",
+      "bytes": 121344,
+      "sha256": "c8231451afc1805b856a6b58bb47abba021784d9def39a3abc0e8a7715ed87b2"
+    },
+    {
+      "file": "PathFinder.ModelRunner.deps.json",
+      "bytes": 2530,
+      "sha256": "7f3fc2954fcfca3a1928db712ed61149db6457b6b5b620804fd9a3be9caa4a36"
+    },
+    {
+      "file": "PathFinder.ModelRunner.dll",
+      "bytes": 210432,
+      "sha256": "2c92a10c43d9a9c91df1f1451ec7ade6bb0e42b794c7cad12ea63c30713f86ac"
+    },
+    {
+      "file": "PathFinder.ModelRunner.runtimeconfig.json",
+      "bytes": 340,
+      "sha256": "3c0bf772b95c93363a0a14e5df78e4ec408c90f04cb7103205af97b2d276fab0"
+    }
+  ],
+  "productCommit": "985afcd9ab3d0423d9352f999757a9f46fcce023"
+}

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "wfc.pf.current-full-recovery-source-attempt.v1",
+  "status": "FAIL",
+  "checkedAt": "2026-10-20T10:48:54.038Z",
+  "gitParent": "a15721d6014d6841ca434ed93698f72675d34b5c",
+  "testedSource": "Uncommitted first frozen working source; exact pre-fix file hashes NOT_CAPTURED",
+  "scope": "four Node test files, mocked transports and temporary FS, no actual Docker backup/restore",
+  "tests": 180,
+  "passed": 179,
+  "failed": 1,
+  "cancelled": 0,
+  "skipped": 0,
+  "tap": {
+    "bytes": 37928,
+    "sha256": "8ff7fee51eb0870e9d7618b76993a01fa834d145eb81542e8782013dcbde766a"
+  },
+  "failure": "Four late synthetic transport errors failed the bounds file after all54 individual controls passed.",
+  "repair": "Once-only request destruction and faithful fake; subsequent source review also guards synchronous end-close, stderr failure and repeated helper start."
+}

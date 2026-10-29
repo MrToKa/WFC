@@ -1,0 +1,171 @@
+{
+  "schemaVersion": "wfc.pathfinder.review-discoverability.actual.v1",
+  "at": "2026-10-20T15:18:10.104Z",
+  "worktree": "C:/Users/todor.chankov/source/WFC-pathfinder-local",
+  "branch": "pf-review-discoverability-local-20261020",
+  "baseCommit": "26be0e789e279a893da34a9e0d74d646e4e7ed5c",
+  "sourceSha256": {
+    "src/pages/ProjectDetails/PathFinderBatchReview.tsx": "9f954d52e630fd9089cc640d30275a5cf8f0a56e0adac754de351fc557641318",
+    "src/pages/ProjectDetails/PathFinderBatchReview.test.tsx": "7c902092cc4ef2af19d1f8d0b76771d2edf0c866849cff4bb996e4e17425474c",
+    "src/pages/ProjectDetails/PathFinderResults.tsx": "6b0269d01d4f75991dcda89139be5df78df5f39fd38476b5b13fdd0958cbade8",
+    "src/pages/ProjectDetails/PathFinderResults.test.tsx": "709377fb6e691f4d4d77bcfa803e5f214ee1a1aa68a1267ba53bd763dafd7f4f",
+    "src/pages/ProjectDetails/PathFinderRevisionResults.tsx": "ffb45dfdad7cc8e99e0d1c9c586466bba2338b55f57c8c4949aed8a2185f1112",
+    "src/pages/ProjectDetails/PathFinderRevisionResults.test.tsx": "feefbe4dbc6aca928f74b1ca6481746ad5389ce3e172425e8865f337bdf025aa",
+    "src/pages/ProjectDetails/hooks/usePathfinderRevisionResults.ts": "e08c8ff65716182eccef0dd71ff48ec0dea841877cd6eecd99640438fb271b4b",
+    "src/pages/ProjectDetails/hooks/usePathfinderRevisionResults.test.tsx": "917339d7ae9c32c5bed21446ea686a2118c51e4679287483d7b93b15694ab9d1",
+    "src/pages/ProjectDetails/PathFinderTab.test.tsx": "6f22b002b66f2464473c2397476d9de749ba2324a7f70a75df82a8f42e8da942"
+  },
+  "revisionScope": "Working source file bytes; containing commit read from Git. Production files frozen before build.",
+  "diagnosis": {
+    "status": "PASS",
+    "method": "Normal authenticated GET and read-only SQL, not browser page-content access.",
+    "projectCableCount": 2140,
+    "cablesUnchanged": true,
+    "applyReceiptsUnchanged": true,
+    "resourcesUnchanged": true,
+    "cancelledSample": [
+      {
+        "jobState": "cancelled",
+        "total": 2140,
+        "completed": 1981,
+        "calculated": 71,
+        "canApply": false,
+        "stale": false,
+        "compatibilityIssue": null,
+        "status": "calculated",
+        "message": "Path calculated.",
+        "routingPreferences": {
+          "secondaryDistanceMeters": 2,
+          "preferVerticalApproach": true
+        },
+        "endpointSources": {
+          "from": "automatic-model-candidate",
+          "to": "automatic-model-candidate"
+        }
+      }
+    ],
+    "completeSample": [
+      {
+        "jobState": "complete",
+        "total": 1808,
+        "completed": 1808,
+        "calculated": 230,
+        "canApply": true,
+        "stale": false,
+        "compatibilityIssue": null,
+        "status": "calculated",
+        "message": "Path calculated.",
+        "routingPreferences": {
+          "secondaryDistanceMeters": 2,
+          "preferVerticalApproach": true
+        },
+        "endpointSources": {
+          "from": "automatic-model-candidate",
+          "to": "automatic-model-candidate"
+        }
+      }
+    ],
+    "scopeLimitation": "One proposal per selected job checked; 230 calculated is the complete-job result count, not proof that all230are currently applicable."
+  },
+  "checks": {
+    "targetedTests": {
+      "status": "PASS",
+      "distinctTests": 55,
+      "components": 32,
+      "revisionHook": 18,
+      "tabIntegration": 5,
+      "tabIntegrationScope": "Four selected affected scenarios + one dirty-rule scenario; remaining52Tabcases not rerun this delivery."
+    },
+    "typecheck": "PASS",
+    "scopedEslint": "PASS",
+    "diffCheck": "PASS",
+    "independentSourceReview": "PASS",
+    "operatorSyntaxAndReview": "PASS",
+    "liveBrowserControl": "BLOCKED",
+    "humanEngineeringAcceptance": "NOT_RUN"
+  },
+  "build": {
+    "status": "PASS",
+    "at": "2026-10-20T15:15:58.263Z",
+    "operatorSha256": "401cb200bb61f6529f2540d3891fd7722049ff41a5f7a7cf473240af6e59a479",
+    "webImage": "sha256:2cab777210ebef28b251378187c326e3febbe2293dc8b38b733e19efe1742f56",
+    "apiUntouched": true,
+    "sourceClosure": {
+      "status": "PASS",
+      "scope": "explicit-consumed-web-build-inputs.v1",
+      "files": 1277,
+      "totalBytes": 94412540,
+      "sha256": "9ccbb3e3beffd1938162fc3312aef1db68a3a06b86f9e84780aa95d3e28dc227"
+    },
+    "outsideConfigurationPreserved": true,
+    "outsideRunningStateChanges": [
+      {
+        "id": "f65cc58eea401f9c80de3be44342c3a6157f48fd6468a4d5a6b3df8ceeaac427",
+        "name": "/wfc-app-backend-1",
+        "beforeRunning": true,
+        "afterRunning": true,
+        "beforeStartedAt": "2026-10-20T15:14:47.160291409Z",
+        "afterStartedAt": "2026-10-20T15:15:47.749214146Z"
+      }
+    ],
+    "externalTransition": "Existing original WFC backend restart loop changed StartedAt during build; agent did not control it. Configuration was preserved."
+  },
+  "upgrade": {
+    "status": "PASS",
+    "at": "2026-10-20T15:16:47.863Z",
+    "operatorSha256": "08f84f1eb430cacf6ab483d7fc653fbfa7d8684d3eb555abb08c392126e6eaed",
+    "webOnly": true,
+    "webImage": "sha256:2cab777210ebef28b251378187c326e3febbe2293dc8b38b733e19efe1742f56",
+    "apiImage": "sha256:78536ccdf8050ccd732f383d09da56456e3fc9b10d9312568238577eea976f9c",
+    "apiContainerUnchanged": true,
+    "postgresAndMinioUnchanged": true,
+    "allDatabaseCableCount": 2153,
+    "allDatabaseCableRowsUnchanged": true,
+    "existingAllDatabaseApplyReceipts": 2,
+    "applyCountUnchanged": true,
+    "activeJobsBefore": 2,
+    "activeJobsAfter": 2,
+    "jobAndProposalProgressAllowed": true,
+    "engineIdentityUnchanged": true,
+    "outsideConfigurationPreserved": true,
+    "outsideRunningStateChanges": [],
+    "databaseBackup": {
+      "path": "ui-database/database.dump",
+      "bytes": 16225946,
+      "sha256": "4bd99928f272ad181e173227afcc0a79f72da862afa367714f744579e4ab43d2",
+      "private": true,
+      "method": "pg_dump consistent snapshot while calculations continue",
+      "toc": {
+        "status": "PASS",
+        "method": "pg_restore-list-mounted-file",
+        "tocBytes": 84447,
+        "tocSha256": "eff1146bcf8fecda3a25865a1fc37815b468e697fa8715b6626f539897741785"
+      }
+    },
+    "databaseRestoreDrill": "NOT_RUN"
+  },
+  "finalReadback": {
+    "health": 200,
+    "oldCompleteProposalStatus": 200,
+    "oldCompleteSampleCanApply": true,
+    "oldCompleteSampleStale": false,
+    "oldCompleteSampleCompatibilityIssue": null,
+    "oldCompleteJobTotal": 1808,
+    "oldCompleteJobCalculatedCount": 230,
+    "ownedTemporaryHelperContainers": 0,
+    "databaseDumpBytesAndHashReverified": true
+  },
+  "boundaries": {
+    "newCalculationSubmitted": false,
+    "jobCancelled": false,
+    "realReviewOrApplyPerformed": false,
+    "originalWfc5180Controlled": false,
+    "old5190Controlled": false,
+    "pushPrMergePerformed": false,
+    "primaryPreparerResumed": false,
+    "pfAutomationResumed": false,
+    "deniedHistoricalPathsUntouched": true
+  },
+  "retained": "5191demo, previous model archive and DB backups, new consistentDBbackup, rollback web image, ignored raw evidence. No disposable test stack created.",
+  "remaining": "Human reviews actual current non-MV proposals and explicitly chooses Review/Apply. Current live browser session remains unavailable to the tool; no bypass attempted."
+}

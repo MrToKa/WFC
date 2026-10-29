@@ -1,0 +1,86 @@
+{
+  "status": "PASS",
+  "scope": "Actual host5191 nginx/API transport; generated current-admin token; all mutation bodies invalid or oversized before any binding write",
+  "checks": [
+    {
+      "name": "unauthenticated declared100MiB refused before body",
+      "status": "PASS",
+      "httpStatus": 401,
+      "code": "AUTHENTICATION_REQUIRED",
+      "headerOnly": true,
+      "elapsedMilliseconds": 6
+    },
+    {
+      "name": "current admin control65537bytes refused before body",
+      "status": "PASS",
+      "httpStatus": 413,
+      "code": "ENDPOINT_BODY_LIMIT",
+      "headerOnly": true,
+      "elapsedMilliseconds": 7
+    },
+    {
+      "name": "duplicate decoded JSON keys rejected",
+      "status": "PASS",
+      "httpStatus": 400,
+      "code": "DUPLICATE_JSON_MEMBER",
+      "headerOnly": false,
+      "elapsedMilliseconds": 6
+    },
+    {
+      "name": "nonfinite JSON number rejected",
+      "status": "PASS",
+      "httpStatus": 400,
+      "code": "INVALID_POLICY_JSON",
+      "headerOnly": false,
+      "elapsedMilliseconds": 6
+    },
+    {
+      "name": "invalid UTF8 refused",
+      "status": "PASS",
+      "httpStatus": 400,
+      "code": "INVALID_POLICY_JSON",
+      "headerOnly": false,
+      "elapsedMilliseconds": 5
+    },
+    {
+      "name": "compressed body refused",
+      "status": "PASS",
+      "httpStatus": 415,
+      "code": "ENDPOINT_ENCODING_UNSUPPORTED",
+      "headerOnly": false,
+      "elapsedMilliseconds": 4
+    },
+    {
+      "name": "unsupported mutation method typed refusal",
+      "status": "PASS",
+      "httpStatus": 405,
+      "code": "ENDPOINT_METHOD_UNSUPPORTED",
+      "headerOnly": false,
+      "elapsedMilliseconds": 5
+    },
+    {
+      "name": "noncanonical offset refused",
+      "status": "PASS",
+      "httpStatus": 400,
+      "code": "INVALID_ENDPOINT_BINDING_REQUEST",
+      "headerOnly": false,
+      "elapsedMilliseconds": 6
+    },
+    {
+      "name": "unexpected actor query refused",
+      "status": "PASS",
+      "httpStatus": 400,
+      "code": "INVALID_ENDPOINT_BINDING_REQUEST",
+      "headerOnly": false,
+      "elapsedMilliseconds": 6
+    },
+    {
+      "name": "mixed case cannot fall through to generic handler",
+      "status": "PASS",
+      "httpStatus": 405,
+      "code": "ENDPOINT_METHOD_UNSUPPORTED",
+      "headerOnly": false,
+      "elapsedMilliseconds": 5
+    }
+  ]
+}

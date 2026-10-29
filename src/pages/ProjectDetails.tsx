@@ -7,18 +7,10 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { ApiError, updateProject, type CableMtoOption } from '@/api/client';
 import type {
-  ProjectCableCategorySettings,
-  ProjectCableLayout,
   ProjectTrayPurposeTemplate,
 } from '@/api/types';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
-import { getBundleRangeLabel, getTrayBundleOverrides } from '@/utils/trayBundleOverrides';
-import type {
-  CustomBundleRange as TrayBundleRange,
-  TrayBundleOverride,
-} from '@/utils/trayBundleOverrides';
-
 import { useProjectDetailsStyles } from './ProjectDetails.styles';
 import { ProjectDetailsTab } from './ProjectDetails.forms';
 import { formatNumeric, isWordDocument } from './ProjectDetails.utils';
@@ -29,6 +21,7 @@ import { CableTypeDialog } from './ProjectDetails/CableTypeDialog';
 import { CableTypesTab } from './ProjectDetails/CableTypesTab';
 import { DetailsTab } from './ProjectDetails/DetailsTab';
 import { RoutingsViewerTab } from './ProjectDetails/RoutingsViewerTab';
+import { PathFinderTab } from './ProjectDetails/PathFinderTab';
 import { TrayDialog } from './ProjectDetails/TrayDialog';
 import { TraysTab } from './ProjectDetails/TraysTab';
 import { CableListChangeLog, SectionChangeLog } from './ProjectDetails/SectionChangeLog';
@@ -57,138 +50,18 @@ import { useProjectFilesSection } from './ProjectDetails/hooks/useProjectFilesSe
 import { useCableLayoutSettings } from './ProjectDetails/hooks/useCableLayoutSettings';
 import { useCustomBundleRanges } from './ProjectDetails/hooks/useCustomBundleRanges';
 import {
-  CABLE_CATEGORY_CONFIG,
-  DEFAULT_CABLE_SPACING,
-  DEFAULT_CATEGORY_SETTINGS,
-  type CableCategoryKey,
-} from './ProjectDetails/hooks/cableLayoutDefaults';
-import {
-  calculateTrayFreeSpaceMetrics,
-  filterCablesByTray,
-  matchCableCategory,
-} from './TrayDetails/TrayDetails.utils';
-import type { TrayFreeSpaceMetrics } from './TrayDetails/TrayDetails.utils';
-import {
-  TrayDrawingService,
-  determineCableDiameterGroup,
-  determineCableDiameterGroupWithCustomRanges,
-  type CableBundleMap,
-  type CategoryLayoutConfig,
-} from './TrayDetails/trayDrawingService';
-import {
   PROJECT_FILE_CATEGORIES,
   PROJECT_FILE_CATEGORY_LABELS,
   getProjectFileCategory,
 } from './ProjectDetails/projectFileUtils';
 import { useMaterialData } from './TrayDetails/hooks';
 
-const CATEGORY_KEYS: CableCategoryKey[] = ['power', 'control', 'mv', 'vfd'];
-
-const normalizeCustomBundleRangeMaxRows = (value: number | null | undefined): number | null => {
-  if (typeof value !== 'number' || !Number.isInteger(value)) {
-    return null;
-  }
-
-  if (value < 1 || value > 1_000) {
-    return null;
-  }
-
-  return value;
-};
-
-const buildBundleMaxRowsByKey = (
-  ranges: TrayBundleRange[] | null | undefined,
-): Record<string, number> | undefined => {
-  if (!ranges || ranges.length === 0) {
-    return undefined;
-  }
-
-  const entries = ranges
-    .map((range) => {
-      const maxRows = normalizeCustomBundleRangeMaxRows(range.maxRows ?? null);
-      if (maxRows === null) {
-        return null;
-      }
-      return [getBundleRangeLabel(range), maxRows] as const;
-    })
-    .filter((entry): entry is readonly [string, number] => entry !== null);
-
-  if (entries.length === 0) {
-    return undefined;
-  }
-
-  return Object.fromEntries(entries);
-};
-
-const buildCategoryLayoutConfig = (
-  layout: ProjectCableLayout | null | undefined,
-  spacingBetweenCablesMm: number,
-): CategoryLayoutConfig =>
-  CATEGORY_KEYS.reduce<CategoryLayoutConfig>((acc, category) => {
-    const defaults = DEFAULT_CATEGORY_SETTINGS[category];
-    const layoutSettings = layout?.[category] ?? null;
-    const trefoil = CABLE_CATEGORY_CONFIG[category].showTrefoil
-      ? (layoutSettings?.trefoil ?? defaults.trefoil)
-      : false;
-    const trefoilSpacingBetweenBundles = CABLE_CATEGORY_CONFIG[category].allowTrefoilSpacing
-      ? (layoutSettings?.trefoilSpacingBetweenBundles ?? defaults.trefoilSpacingBetweenBundles)
-      : defaults.trefoilSpacingBetweenBundles;
-    const applyPhaseRotation = CABLE_CATEGORY_CONFIG[category].allowPhaseRotation
-      ? (layoutSettings?.applyPhaseRotation ?? defaults.applyPhaseRotation)
-      : defaults.applyPhaseRotation;
-    const customRanges = layout?.customBundleRanges?.[category] ?? null;
-
-    acc[category] = {
-      maxRows: layoutSettings?.maxRows ?? defaults.maxRows,
-      maxColumns: layoutSettings?.maxColumns ?? defaults.maxColumns,
-      bundleSpacing: layoutSettings?.bundleSpacing ?? defaults.bundleSpacing,
-      cableSpacing: spacingBetweenCablesMm,
-      trefoil,
-      trefoilSpacingBetweenBundles,
-      applyPhaseRotation,
-      bundleMaxRowsByKey: buildBundleMaxRowsByKey(customRanges),
-    };
-    return acc;
-  }, {} as CategoryLayoutConfig);
-
-const mergeTrayLayoutOverrides = (
-  baseLayout: ProjectCableLayout | null,
-  override: TrayBundleOverride | null,
-): ProjectCableLayout | null => {
-  if (!override?.useCustom) {
-    return baseLayout;
-  }
-
-  const mergedCategories = CATEGORY_KEYS.reduce<
-    Record<CableCategoryKey, ProjectCableCategorySettings>
-  >(
-    (acc, key) => {
-      const defaults = DEFAULT_CATEGORY_SETTINGS[key];
-      const baseSettings = (baseLayout?.[key] as ProjectCableCategorySettings | null) ?? defaults;
-      const overrideSettings = override.categories?.[key];
-      acc[key] = overrideSettings ? { ...baseSettings, ...overrideSettings } : baseSettings;
-      return acc;
-    },
-    {} as Record<CableCategoryKey, ProjectCableCategorySettings>,
-  );
-
-  return {
-    cableSpacing: baseLayout?.cableSpacing ?? DEFAULT_CABLE_SPACING,
-    considerBundleSpacingAsFree: baseLayout?.considerBundleSpacingAsFree ?? null,
-    minFreeSpacePercent: baseLayout?.minFreeSpacePercent ?? null,
-    maxFreeSpacePercent: baseLayout?.maxFreeSpacePercent ?? null,
-    power: mergedCategories.power ?? DEFAULT_CATEGORY_SETTINGS.power,
-    control: mergedCategories.control ?? DEFAULT_CATEGORY_SETTINGS.control,
-    mv: mergedCategories.mv ?? DEFAULT_CATEGORY_SETTINGS.mv,
-    vfd: mergedCategories.vfd ?? DEFAULT_CATEGORY_SETTINGS.vfd,
-    customBundleRanges: override.customBundleRanges ?? {},
-  };
-};
 const VALID_TABS: ProjectDetailsTab[] = [
   'details',
   'cables',
   'cable-list',
   'routings-viewer',
+  'pathfinder',
   'trays',
   'roxtec',
   'files',
@@ -218,7 +91,7 @@ export const ProjectDetails = () => {
     useProjectDetailsData({ projectId, token });
   const canEdit = canEditProject(user, project, projectId);
   const canViewAll = canReadCatalogs(user);
-  const routingTabRequested = searchParams.get('tab') === 'routings-viewer';
+  const routingTabRequested = searchParams.get('tab') === 'routings-viewer' || searchParams.get('tab') === 'pathfinder' && Boolean(user?.isAdmin);
   const { materialTrays } = useMaterialData(routingTabRequested ? undefined : projectId, canViewAll && !routingTabRequested);
   const canExport = Boolean(token && (canViewAll || user?.role === 'technician'));
   const canExportHistory = canExportChangeLogs(user, token);
@@ -254,7 +127,7 @@ export const ProjectDetails = () => {
 
   const tabParam = searchParams.get('tab') as ProjectDetailsTab | null;
   const selectedTab: ProjectDetailsTab =
-    tabParam && VALID_TABS.includes(tabParam) && (canViewAll || !ADMIN_TABS.includes(tabParam) || (tabParam === 'files' && canReadFiles))
+    tabParam && VALID_TABS.includes(tabParam) && (tabParam !== 'pathfinder' || Boolean(user?.isAdmin)) && (canViewAll || !ADMIN_TABS.includes(tabParam) || (tabParam === 'files' && canReadFiles))
       ? tabParam
       : 'details';
   const [selectedCableReportMto, setSelectedCableReportMto] = useState<CableMtoOption | null>(null);
@@ -267,9 +140,8 @@ export const ProjectDetails = () => {
     ProjectTrayPurposeTemplate
   > | null>(null);
 
-  const canonicalProjectId = project?.id ?? projectId ?? null;
   // Manual routing owns its fresh full tray read and does not load the cable tables.
-  const tableProjectId = selectedTab === 'routings-viewer' ? undefined : projectId;
+  const tableProjectId = selectedTab === 'routings-viewer' || selectedTab === 'pathfinder' ? undefined : projectId;
 
   const {
     cables,
@@ -395,6 +267,7 @@ export const ProjectDetails = () => {
     traysLoading,
     traysRefreshing,
     traysError,
+    freeSpaceByTrayId: serverTrayFreeSpaceById,
     traysImporting,
     traysExporting,
     traysGettingTemplate,
@@ -419,6 +292,7 @@ export const ProjectDetails = () => {
     project,
     token: canEdit && tableProjectId ? token : null,
     exportToken: canExport ? token : null,
+    readToken: token,
     showToast,
   });
 
@@ -505,6 +379,14 @@ export const ProjectDetails = () => {
       });
   }, [effectiveTrayTemplates, project, trays, wordFileOptions]);
 
+  const connectionGapField = useProjectNumericField({
+    project,
+    field: 'connectionGap',
+    token,
+    isAdmin: canEdit,
+    showToast,
+    reloadProject,
+  });
   const secondaryTrayLengthField = useProjectNumericField({
     project,
     field: 'secondaryTrayLength',
@@ -558,6 +440,12 @@ export const ProjectDetails = () => {
   const numericFields = useMemo(
     () => [
       {
+        field: 'connectionGap' as const,
+        label: NUMERIC_FIELD_LABELS.connectionGap,
+        unit: 'm',
+        ...connectionGapField,
+      },
+      {
         field: 'secondaryTrayLength' as const,
         label: NUMERIC_FIELD_LABELS.secondaryTrayLength,
         unit: 'm',
@@ -595,6 +483,7 @@ export const ProjectDetails = () => {
       },
     ],
     [
+      connectionGapField,
       secondaryTrayLengthField,
       supportDistanceField,
       supportWeightField,
@@ -643,139 +532,9 @@ export const ProjectDetails = () => {
     reloadProject,
   });
 
-  const trayDrawingService = useMemo(() => new TrayDrawingService(), []);
-
-  const projectCableSpacingMm = useMemo(() => {
-    const spacing = project?.cableLayout?.cableSpacing;
-    if (typeof spacing === 'number' && Number.isFinite(spacing) && spacing >= 0) {
-      return spacing;
-    }
-    return DEFAULT_CABLE_SPACING;
-  }, [project?.cableLayout?.cableSpacing]);
-
   const minFreeSpacePercent = project?.cableLayout?.minFreeSpacePercent ?? null;
   const maxFreeSpacePercent = project?.cableLayout?.maxFreeSpacePercent ?? null;
-
-  const trayFreeSpaceMetricsById = useMemo<Record<string, TrayFreeSpaceMetrics>>(() => {
-    if (trays.length === 0) {
-      return {};
-    }
-
-    const baseLayout = project?.cableLayout ?? null;
-    const docAvailable = typeof document !== 'undefined';
-    const canvas = docAvailable ? document.createElement('canvas') : null;
-
-    return trays.reduce<Record<string, TrayFreeSpaceMetrics>>((acc, tray) => {
-      const trayOverride: TrayBundleOverride | null =
-        canonicalProjectId && tray.id ? getTrayBundleOverrides(canonicalProjectId, tray.id) : null;
-      const effectiveLayout = mergeTrayLayoutOverrides(baseLayout, trayOverride);
-      const spacingBetweenCables =
-        typeof effectiveLayout?.cableSpacing === 'number' &&
-        Number.isFinite(effectiveLayout.cableSpacing) &&
-        effectiveLayout.cableSpacing >= 0
-          ? effectiveLayout.cableSpacing
-          : projectCableSpacingMm;
-      const layoutConfig = buildCategoryLayoutConfig(effectiveLayout, spacingBetweenCables);
-
-      const trayCables = filterCablesByTray(cables, tray.name);
-
-      // Use effective custom bundle ranges (tray-level overrides or project-level)
-      const effectiveCustomRanges = effectiveLayout?.customBundleRanges;
-
-      const cableBundles = trayCables.reduce<CableBundleMap>((bundleAcc, cable) => {
-        const category = matchCableCategory(cable.purpose);
-        if (!category) {
-          return bundleAcc;
-        }
-
-        if (!bundleAcc[category]) {
-          bundleAcc[category] = {};
-        }
-
-        const bucket = bundleAcc[category];
-        // Use custom bundle ranges for this category if available
-        const categoryCustomRanges = effectiveCustomRanges?.[category as CableCategoryKey];
-        const bundleKey =
-          categoryCustomRanges && categoryCustomRanges.length > 0
-            ? determineCableDiameterGroupWithCustomRanges(
-                cable.diameterMm ?? null,
-                categoryCustomRanges,
-              )
-            : determineCableDiameterGroup(cable.diameterMm ?? null);
-        if (!bucket[bundleKey]) {
-          bucket[bundleKey] = [];
-        }
-        bucket[bundleKey].push(cable);
-        return bundleAcc;
-      }, {} as CableBundleMap);
-
-      let layoutSummary = null;
-      if (
-        canvas &&
-        trayDrawingService &&
-        typeof tray.widthMm === 'number' &&
-        tray.widthMm > 0 &&
-        typeof tray.heightMm === 'number' &&
-        tray.heightMm > 0
-      ) {
-        const rungHeightMm = findMaterialTrayByType(tray.type)?.rungHeightMm ?? null;
-        try {
-          layoutSummary = trayDrawingService.drawTrayLayout(
-            canvas,
-            tray,
-            trayCables,
-            cableBundles,
-            6,
-            spacingBetweenCables,
-            layoutConfig,
-            { rungHeightMm },
-          );
-        } catch (error) {
-          console.error('Failed to build tray layout summary', {
-            trayId: tray.id,
-            error,
-          });
-        }
-      }
-
-      const metrics = calculateTrayFreeSpaceMetrics({
-        tray,
-        cables: trayCables,
-        layout: effectiveLayout,
-        spacingBetweenCablesMm: spacingBetweenCables,
-        considerBundleSpacingAsFree: Boolean(effectiveLayout?.considerBundleSpacingAsFree),
-        layoutSummary: layoutSummary ?? undefined,
-      });
-
-      acc[tray.id] = metrics;
-
-      return acc;
-    }, {});
-  }, [
-    cables,
-    canonicalProjectId,
-    findMaterialTrayByType,
-    project?.cableLayout,
-    projectCableSpacingMm,
-    trayDrawingService,
-    trays,
-  ]);
-
-  const trayFreeSpaceById = useMemo<Record<string, number | null>>(
-    () =>
-      Object.entries(trayFreeSpaceMetricsById).reduce(
-        (acc, [trayId, metrics]) => {
-          acc[trayId] =
-            metrics.calculationAvailable && metrics.freeWidthPercent !== null
-              ? metrics.freeWidthPercent
-              : null;
-          return acc;
-        },
-        {} as Record<string, number | null>,
-      ),
-    [trayFreeSpaceMetricsById],
-  );
-
+  const trayFreeSpaceById = serverTrayFreeSpaceById;
   const variablesApiSections = useMemo<VariablesApiSection[]>(() => {
     if (!project) {
       return [];
@@ -924,6 +683,11 @@ export const ProjectDetails = () => {
         value: formattedDates?.updated ?? '-',
       },
       {
+        id: 'details:connection-gap',
+        name: 'Connection gap',
+        value: formatNumberWithUnit(project.connectionGap, 'm'),
+      },
+      {
         id: 'details:secondary-tray-length',
         name: 'Secondary tray length',
         value: formatNumberWithUnit(project.secondaryTrayLength, 'm'),
@@ -1060,16 +824,8 @@ export const ProjectDetails = () => {
     ];
 
     const sampleTray = trays[0] ?? null;
-    const sampleMetrics =
-      sampleTray && sampleTray.id in trayFreeSpaceMetricsById
-        ? trayFreeSpaceMetricsById[sampleTray.id]
-        : null;
-    const sampleFreeSpace = sampleTray
-      ? formatPercentValue(sampleMetrics?.freeWidthPercent ?? null)
-      : '-';
-    const sampleOccupiedWidth = sampleTray
-      ? formatNumberWithUnit(sampleMetrics?.occupiedWidthMm ?? null, 'mm')
-      : '-';
+    const sampleFreeSpace = sampleTray ? formatPercentValue(trayFreeSpaceById[sampleTray.id] ?? null) : '-';
+    const sampleOccupiedWidth = '-';
     const describeDynamicValue = (value: string): string =>
       value === '-' ? 'Dynamic per tray during export' : `${value} (example)`;
     const calculatedValueNote = 'Calculated per tray during export';
@@ -1356,7 +1112,7 @@ export const ProjectDetails = () => {
     projectFiles,
     user,
     trays,
-    trayFreeSpaceMetricsById,
+    trayFreeSpaceById,
     trayTemplateRows,
     findMaterialTrayManufacturer,
   ]);
@@ -1367,6 +1123,7 @@ export const ProjectDetails = () => {
   const handleTabSelect = useCallback(
     (_event: unknown, data: { value: TabValue }) => {
       const requested = data.value as ProjectDetailsTab;
+      if (requested === 'pathfinder' && !user?.isAdmin) return;
       // Apply the same section permissions to navigation events and direct URLs.
       const tab = ADMIN_TABS.includes(requested) && !canViewAll && !(requested === 'files' && canReadFiles) ? selectedTab : requested;
       setSearchParams((previous) => {
@@ -1379,7 +1136,7 @@ export const ProjectDetails = () => {
         return next;
       });
     },
-    [canReadFiles, canViewAll, selectedTab, setSearchParams],
+    [canReadFiles, canViewAll, selectedTab, setSearchParams, user?.isAdmin],
   );
 
   const handleCreateCable = useCallback(() => {
@@ -1588,6 +1345,7 @@ export const ProjectDetails = () => {
         <Tab value="cables">Cable types</Tab>
         <Tab value="cable-list">Cables list</Tab>
         <Tab value="routings-viewer">Routings viewer</Tab>
+        {user?.isAdmin ? <Tab value="pathfinder">Path Finder</Tab> : null}
         <Tab value="trays">Trays</Tab>
         {canViewAll ? <Tab value="cable-report">Cables MTOs</Tab> : null}
         {canViewAll ? <Tab value="change-orders">Change Orders</Tab> : null}
@@ -1600,6 +1358,9 @@ export const ProjectDetails = () => {
       {selectedTab === 'routings-viewer' ? (
         <RoutingsViewerTab projectId={projectId ?? null} loadedProjectId={project.id} token={token} />
       ) : null}
+      {selectedTab === 'pathfinder' && user?.isAdmin ? (
+        <PathFinderTab key={projectId} projectId={projectId ?? null} loadedProjectId={project.id} token={token} isAdmin={Boolean(user.isAdmin)} accountId={user.id} />
+      ) : null}
 
       {selectedTab === 'details' ? (
         <DetailsTab
@@ -1609,6 +1370,9 @@ export const ProjectDetails = () => {
           formattedDates={formattedDates}
           isAdmin={canEdit}
           modelProjectId={projectId ?? null}
+          routingPolicyAdmin={Boolean(user?.isAdmin)}
+          drawingPolicyAdmin={Boolean(user?.isAdmin)}
+          onDrawingPolicySaved={() => void reloadTrays({ showSpinner: false })}
           modelToken={token}
           cableSpacingField={cableSpacingField}
           cableCategoryCards={cableCategoryCards}
@@ -1692,7 +1456,7 @@ export const ProjectDetails = () => {
           onRefresh={() => void reloadTrays({ showSpinner: false })}
           onCreate={openCreateTrayDialog}
           onImportClick={() => traysFileInputRef.current?.click()}
-          onExport={() => void handleExportTrays(trayFreeSpaceById)}
+          onExport={() => void handleExportTrays()}
           onGetTemplate={() => void handleGetTraysTemplate()}
           onImportFileChange={handleImportTrays}
           isImporting={traysImporting}

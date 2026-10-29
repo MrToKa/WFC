@@ -61,6 +61,24 @@ export type DocxImageDefinition = {
   description?: string;
 };
 
+/** An optional image may be absent or fail preparation; keep that fact visible. */
+export const resolveTrayReportImageFallbacks = (
+  replacements: Record<string, string>,
+  sources: Record<string, PlaceholderImageSource>,
+  images: Record<string, DocxImageDefinition>,
+): Record<string, string> => {
+  const resolved = { ...replacements };
+  const missingText: Record<PlaceholderImageSource, string> = {
+    loadCurve: 'Tray load curve visualization is unavailable.',
+    bundles: 'Tray laying concept visualization is unavailable.',
+    trayTemplate: 'Tray type illustration is unavailable.',
+  };
+  for (const [placeholder, source] of Object.entries(sources)) {
+    if (!images[placeholder]) resolved[placeholder] = missingText[source];
+  }
+  return resolved;
+};
+
 export type TrayPlaceholderContext = {
   project: Project;
   trays: Tray[];
@@ -263,7 +281,10 @@ export const buildTrayPlaceholderValues = (
   const trayWidthSourceMm = tray.widthMm ?? materialTrayMetadata?.widthMm ?? null;
   const trayMaterialWeightPerMeterKg = materialTrayMetadata?.weightKgPerM ?? null;
   const trayRungHeightMm = materialTrayMetadata?.rungHeightMm ?? null;
-  const trayTypeImageAvailable = Boolean(materialTrayMetadata?.imageTemplateId);
+  const trayTypeImageAvailable = Boolean(
+    materialTrayMetadata?.imageTemplateId &&
+      materialTrayMetadata.imageTemplateContentType?.startsWith('image/'),
+  );
 
   // Calculate useful tray height (tray height - rung height)
   const usefulTrayHeightMm =
@@ -740,9 +761,8 @@ export const buildTrayPlaceholderValues = (
 
   imagesById['tray-details:load-curve-canvas'] = 'loadCurve';
   imagesById['tray-details:concept-canvas'] = 'bundles';
-  if (trayTypeImageAvailable) {
-    imagesById['tray-details:tray-type-image'] = 'trayTemplate';
-  }
+  // Retain the intended source even when absent, so export can write an honest fallback.
+  imagesById['tray-details:tray-type-image'] = 'trayTemplate';
 
   return {
     values,
@@ -943,14 +963,21 @@ const embedImages = async (
   }, 0);
 
   const relationshipMap: Record<string, string> = {};
+  const occupiedMediaPaths = new Set(Object.keys(zip.files).map((name) => name.toLowerCase()));
   let mediaIndex = 0;
 
   for (const [placeholder, imageDef] of Object.entries(images)) {
     const extension = imageDef.contentType.includes('png') ? 'png' : 'jpeg';
-    const safeName =
-      sanitizeMediaFileName(imageDef.fileName) || `generated-${Date.now()}-${mediaIndex}`;
-    const mediaFileName = `${safeName}.${extension}`;
-    const mediaPath = `word/media/${mediaFileName}`;
+    const safeName = sanitizeMediaFileName(imageDef.fileName) || 'generated';
+    // Long report names share a truncated prefix. Each relationship must retain
+    // its own bytes, including when the template already has the same media name.
+    let mediaFileName: string;
+    let mediaPath: string;
+    do {
+      mediaFileName = `${safeName}-${++mediaIndex}.${extension}`;
+      mediaPath = `word/media/${mediaFileName}`;
+    } while (occupiedMediaPaths.has(mediaPath.toLowerCase()));
+    occupiedMediaPaths.add(mediaPath.toLowerCase());
 
     zip.file(mediaPath, imageDef.data);
 
@@ -964,7 +991,6 @@ const embedImages = async (
     relationshipElement.setAttribute('Target', `media/${mediaFileName}`);
     relsDoc.documentElement?.appendChild(relationshipElement);
     relationshipMap[placeholder] = nextRelId;
-    mediaIndex += 1;
   }
 
   zip.file(relsPath, serializer.serializeToString(relsDoc));

@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "pathfinder.manual-settings.cleanup-readback.v1",
+  "observedAtUtc": "2026-10-18T06:59:19.8355238Z",
+  "scope": "Read-only own PostgreSQL; no data mutation",
+  "postgresContainer": "6830635a4597dad696f1a5ced6846853cd9e1fee0f858450ad6f858e4c2e30b9",
+  "database": "wfc_pathfinder_local",
+  "readback": {
+    "synthetic": {
+      "projectId": "54cfad40-bd12-41e9-ab24-d90bdaafc993",
+      "connectionGap": "1",
+      "secondaryTrayLength": "5",
+      "endConnectionLength": "6",
+      "additionalBendingPercent": "10",
+      "activeModelVersionId": "a856352c-b3dd-4143-a723-1f4e7d3f2cb2",
+      "privateTestUsers": 0,
+      "privateTestProjects": 0,
+      "privateTestLocations": 0,
+      "privateTestCables": 0,
+      "pauseFailureTriggers": 0
+    },
+    "realDemo": {
+      "projectId": "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a",
+      "cableId": "a49521ad-e4e1-47d9-b3b2-948375a83905",
+      "routing": null,
+      "designLength": null,
+      "connectionGap": "1",
+      "secondaryTrayLength": "3",
+      "endConnectionLength": "5",
+      "additionalBendingPercent": "10",
+      "applyReceipts": 0
+    }
+  }
+}

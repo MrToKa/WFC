@@ -1,0 +1,74 @@
+{
+  "schemaVersion": "pathfinder.manual-settings.live-binding.v1",
+  "observedAtUtc": "2026-10-18T07:00:11.0876579Z",
+  "sourceCommit": "cfdcd3f5974636737ff34acec0fc3de391d35ab1",
+  "workspace": "C:/Users/todor.chankov/source/WFC-pathfinder-local",
+  "apiContainer": "618a226f3a6ad62fbb23033d7674938ad0798a5def8492e4526d6f0661c405d1",
+  "apiImage": "sha256:286e0d43fb12d23c77727eb2c899eac161571d98998e0eb0f212911006adb500",
+  "apiStartedAtUtc": "2026-10-18T06:57:06.982309290Z",
+  "ownWebObservation": "\"1da50b13c1e4cae953cfeb1a69128023dd51f9ec81497a827bc1c95cef4a4190\" \"sha256:500345218d8c3f4629725ce6b1d3cbeeb6dc12f7b4cb1f06d5b92ecf8949ba64\"",
+  "postgresContainer": "6830635a4597dad696f1a5ced6846853cd9e1fee0f858450ad6f858e4c2e30b9",
+  "database": "wfc_pathfinder_local",
+  "command": "docker exec 618a226f3a6ad62fbb23033d7674938ad0798a5def8492e4526d6f0661c405d1 node server/dist/server/pathfinder/integration.js 54cfad40-bd12-41e9-ab24-d90bdaafc993",
+  "status": "PASS",
+  "passed": 23,
+  "total": 23,
+  "receipt": "live23-20261018T065834Z.json",
+  "receiptSha256": "2e84fb12e7cdb37b2f20573f67a5d9406ffeafc1a0433d9485e4f2b04f24a170",
+  "compiledDriverSha256": "3cf3e8ecc8845215484925ad27317838a67d1f35110baf796e935e6f62e21289",
+  "containerRecordedDriverSha256": "3cf3e8ecc8845215484925ad27317838a67d1f35110baf796e935e6f62e21289",
+  "cleanup": "PASS",
+  "readOnlyCleanupAndUnappliedRealDemo": "cleanup-readback-20261018T065834Z.json",
+  "nativeParity": "NOT_PERFORMED; explicit per-proposal manual review permits local Apply without a native parity claim; broader human engineering acceptance remains pending.",
+  "priorAttempt": {
+    "status": "FAIL",
+    "apiContainer": "ce13a2b3d3fc51272e57957ef99618cce94203eb7453d1752ea965a49ed7befe",
+    "sourceCommit": "feac4eb8b85f38ef4f9a0ec6f53845e8df2bb033",
+    "apiImage": "sha256:21217ed7aff55b9a101f65bd2e6eb75f7c5d818318a25c6ea52a8ced14baeb55",
+    "compiledDriverSha256": "97a183694995a552355b1c519e5177fb4f68c7b5a1f39f7251884fa47972edb0",
+    "reason": "The test read its unchanged-write baseline before calculate() deliberately updated a private fixture cable tag/revision. Corrected only the baseline ordering, retaining oversized-design canApply/Review/no-write assertions; no API production behavior changed in the correction.",
+    "cleanup": "PASS",
+    "passed": 22,
+    "total": 23,
+    "receipt": "live23-20261018T065457Z-failed.json"
+  },
+  "testedControls": [
+    "Project gap default1, fractional persistence, API/SQL invalid values",
+    "Current-project authority over caller tolerance for jobs and lookup",
+    "Gap full route recompute and proposal/review/lookup staleness including A-to-B-to-A",
+    "All three Details design allowances and retained geometry",
+    "Actual oversized SECONDARY design: canApply=false, compatibility issue, Review409 and no cable write",
+    "Fresh manual review required; legacy-unclassified review denied; actual actor/time/ID and nativeParity not-performed provenance",
+    "Atomic rollback, auth through commit, idempotency, install preservation, cancellation intent and recovery fencing"
+  ],
+  "sourceHashes": [
+    {
+      "path": "server/db.ts",
+      "sha256": "5ed6a350da160b6db3ae6087d22f5b93f699e319791e8e5fbb2cb6a14523b8ce"
+    },
+    {
+      "path": "server/pathfinder/settings.ts",
+      "sha256": "48b96d52bb072a9f6d25db315073d439456df15d4cd136714dc7c96708b1ec93"
+    },
+    {
+      "path": "server/pathfinder/jobContracts.ts",
+      "sha256": "46374060c1d43e1837f89fa3c31b1a413bbcbe2e1fe419fdd2582413dbee7a35"
+    },
+    {
+      "path": "server/pathfinder/jobs.ts",
+      "sha256": "08703304fecaf85dde9322a7a325b097f15887cb59f1f8d4fa254a5d025dc342"
+    },
+    {
+      "path": "server/pathfinder/apply.ts",
+      "sha256": "084567f0548cfbca8136c3bce4d9f3b5535dc522df56c01b0594420690a3ea48"
+    },
+    {
+      "path": "server/pathfinder/worker.ts",
+      "sha256": "1ffe73225c4241c53a0df0acb57b05911b6fc48ef815f4635f286cee739a7112"
+    },
+    {
+      "path": "server/pathfinder/integration.ts",
+      "sha256": "e56711316cd4bf0f3eff369b11cee1c4135ef75b1c90fec3c1b4a41196b4899c"
+    }
+  ]
+}

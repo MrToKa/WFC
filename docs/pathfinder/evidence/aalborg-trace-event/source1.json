@@ -1,0 +1,51 @@
+{
+  "schemaVersion": "wfc.pf.ordinary-trace-event-source.v1",
+  "status": "PASS_SOURCE_RUNTIME_NOT_RUN",
+  "at": "2026-10-20T10:01:15.844Z",
+  "gitParent": "4a5548c812a16529889425bff8fa54d85f0eef1c",
+  "files": [
+    {
+      "path": "server/pathfinder/geometryTraceRepository.ts",
+      "bytes": 32395,
+      "sha256": "b46a310bd506c38671e7951780536fb5e70ceb0e00f882356d30a487289aa919"
+    },
+    {
+      "path": "server/pathfinder/geometryTraceRepository.test.ts",
+      "bytes": 30780,
+      "sha256": "73bbf1f2905c1f3a5d6644bf77c35b77db874acb6461b808016c19a2bb4a4fa5"
+    },
+    {
+      "path": "server/pathfinder/ordinaryTraceEvent.integration.ts",
+      "bytes": 34142,
+      "sha256": "9aa822296316223b361942038979f57177a5459892954e8b5cd2b292a3381d0d"
+    }
+  ],
+  "reports": [
+    {
+      "name": "ordinary-trace-event-tests1.json",
+      "tests": 93,
+      "files": 3,
+      "sha256": "7410557263f115dce6fb5f444fc9fcf7cbeb17cd1de5cada2878f63410c812a9"
+    },
+    {
+      "name": "ordinary-trace-event-contract-tests1.json",
+      "tests": 11,
+      "files": 2,
+      "sha256": "e7a67de17abfd3d5ce3ef0558e2821c8a1690ee773054a2a5f8dcc1179baf9db"
+    }
+  ],
+  "checks": {
+    "focusedTests": 104,
+    "serverTypes": "PASS",
+    "scopedLint": "PASS",
+    "serverBuildCompiledClosure": "PASS",
+    "independentSourceReview": "PASS",
+    "privateLauncherSyntaxReview": "PASS",
+    "actualDatabaseAtomicity": "NOT_RUN",
+    "candidateImage": "NOT_RUN",
+    "runtimeDeployment": "NOT_RUN"
+  },
+  "fixtureScope": "Five synthetic objects: two exact named tray hierarchy roots with STRAIGHT physical children and one equipment; actual C# export and worker, no fabricated fitted output. Healthy package SQL metadata is explicitly seeded test state, not real converted/model-storage verification.",
+  "engineeringAccepted": false,
+  "realApply": false
+}

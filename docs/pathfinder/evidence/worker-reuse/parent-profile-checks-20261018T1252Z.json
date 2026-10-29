@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "pathfinder.session.parent-profile-checks.v1",
+  "recordedAtUtc": "2026-10-18T12:52:44.8055428Z",
+  "status": "PASS",
+  "command": "node --test scripts/pathfinder-local/runtime.test.mjs",
+  "exitCode": 0,
+  "passed": 19,
+  "failed": 0,
+  "scope": "Affected isolated Compose/profile guards; no startup/login/jobs/restarts on 5190. Existing tests create and clean their own scratch control files only.",
+  "rawLog": "pathfinder-engine/.scratch/session-parent-checks-51968bafa2254af9877f6d91e8780cc7/runtime-tests.txt",
+  "rawLogSha256": "8b2deaebb86936b69f934fedfb4c1470bde67b2adfe60e8b7737cfa1cd113d0d",
+  "sourceFiles": [
+    {
+      "path": "docker/pathfinder.compose.yml",
+      "sha256": "814a9df62725bd1e355fae41ec30add3cb8e07bde00875f4d50b4e2d46b64987"
+    },
+    {
+      "path": "scripts/pathfinder-local/runtime.test.mjs",
+      "sha256": "029217c3e650cad02fd36e389433d2637f8cd0bf523bf131622747772ad0a753"
+    },
+    {
+      "path": "scripts/pathfinder-local/runtime-lib.mjs",
+      "sha256": "4a27ed7c07ec6da9eb5c13e29a1e4271ca65978e4bb25df7b737b01b6d8d24ce"
+    }
+  ]
+}

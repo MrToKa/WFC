@@ -1,0 +1,26 @@
+{
+  "status": "PASS",
+  "at": "2026-10-20T11:29:52.158Z",
+  "sourcePort": 5191,
+  "cables": 2140,
+  "selectedNonMv": 1808,
+  "excludedMv": 332,
+  "categories": {
+    "Control": 345,
+    "Instrumentation": 1206,
+    "LV": 257
+  },
+  "states": {
+    "blocked:locations_required": 1578,
+    "complete:calculated": 230
+  },
+  "locations": 1527,
+  "policyPaused": true,
+  "controlRevision": "7",
+  "grantEnabled": false,
+  "allCableColumnsSha256": "0cc900778484ca50a770c30a3566564c5975c5649885793aed8b8e8e426f9155",
+  "applyReceipts": 0,
+  "engineeringAccepted": false,
+  "fullRecovery": "BLOCKED_WINDOWS_MEMORY",
+  "scope": "Normal authenticated state/job/policy/grant reads and independent read-only all-column cable fence; no new calculation or Apply."
+}

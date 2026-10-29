@@ -1,0 +1,48 @@
+{
+  "schemaVersion": "wfc.pfr0.source-contract-review.v1",
+  "recordedAt": "2026-10-18T21:33:31.790Z",
+  "status": "PASS",
+  "scope": "independent read-only source/document review; not app/runtime/capacity/engineering verification",
+  "reviewer": "old_model_conversion_map",
+  "files": [
+    {
+      "file": "docs/pathfinder/34-r0-contracts.md",
+      "reviewedSha256": "3a933dc05724913bc72e1595b7c85b8b693d47c6f711c81fcca5b608067f36de",
+      "currentSha256": "cd3f66e40a0a96506312f52aabc1d0e9f8d1d748d53ce59e845f4e52ad32df98",
+      "metadataStatusOnly": true
+    },
+    {
+      "file": "docs/pathfinder/r0/policy-drawing-contracts.md",
+      "reviewedSha256": "9d34b3a9473a8a75586b3b6e085919989d1d20b8d047bc88e356b70e0d26013e",
+      "currentSha256": "9d34b3a9473a8a75586b3b6e085919989d1d20b8d047bc88e356b70e0d26013e",
+      "metadataStatusOnly": false
+    },
+    {
+      "file": "docs/pathfinder/r0/policy-drawing-examples.json",
+      "reviewedSha256": "337af243a082f082e5e8ec5e8fec2c0213a2d7d23a2463f753936fe5f71c6308",
+      "currentSha256": "337af243a082f082e5e8ec5e8fec2c0213a2d7d23a2463f753936fe5f71c6308",
+      "metadataStatusOnly": false
+    },
+    {
+      "file": "docs/pathfinder/r0/geometry-revision-contracts.md",
+      "reviewedSha256": "19dcd2bd3189f408a11a4ce2a14d1e739563ed952c0c41d3cf52a16405d6c401",
+      "currentSha256": "19dcd2bd3189f408a11a4ce2a14d1e739563ed952c0c41d3cf52a16405d6c401",
+      "metadataStatusOnly": false
+    },
+    {
+      "file": "docs/pathfinder/r0/geometry-revision-examples.json",
+      "reviewedSha256": "cdad7b76fc5caf7b47ffabf0cf15fdc37ff6753fdf51d85473423f80a4d907d7",
+      "currentSha256": "cdad7b76fc5caf7b47ffabf0cf15fdc37ff6753fdf51d85473423f80a4d907d7",
+      "metadataStatusOnly": false
+    }
+  ],
+  "closedFindings": [
+    "private-copy versus normalized-public catalog strict shapes",
+    "current-authority exact replay before new-command CAS",
+    "routing-only transitive engineering hash closure",
+    "immutable frame/alignment correction identities"
+  ],
+  "remainingMaterialFindings": [],
+  "testsRunByReviewer": false,
+  "runtimeOperationsByReviewer": false
+}

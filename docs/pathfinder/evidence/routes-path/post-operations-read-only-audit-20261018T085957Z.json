@@ -1,0 +1,198 @@
+{
+  "schemaVersion": "pathfinder.routes-path.post-operations-read-only-audit.v1",
+  "recordedAtUtc": "2026-10-18T08:59:57.7511852Z",
+  "status": "PASS",
+  "sourceCommit": "cb02f43000a51b4f511346d2aa666d09929570e0",
+  "branch": "pf-two-tabs-local-20261018",
+  "scope": "Read-only repeatable-read audit of primary isolated runtime after backup/restore operations and final browser Control preview. No integration rerun, authorization HTTP transaction, fixture, source or database mutation.",
+  "containers": [
+    {
+      "id": "0a8e4ea5e210fc2dea098945189bb6b5335201a62e934f85e8294febfd27f319",
+      "image": "sha256:7d216f20dfe2ec7b46f7ed9b357ea1a9171be73127d6422b673031b9971fb111",
+      "service": "api",
+      "status": "running",
+      "startedAtUtc": "2026-10-18T08:48:12.204799835Z",
+      "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65",
+      "project": "wfc-pathfinder-local"
+    },
+    {
+      "id": "0c99d10a9931c6ef30a705aa4977c7d61c53076b456fbebc0939db9efca33779",
+      "image": "sha256:36d9e4d6c7f8d826ded465dc4c7bf45fd61e62212e868d7e5f8430896a35307f",
+      "service": "web",
+      "status": "running",
+      "startedAtUtc": "2026-10-18T08:48:18.497808769Z",
+      "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65",
+      "project": "wfc-pathfinder-local"
+    },
+    {
+      "id": "6830635a4597dad696f1a5ced6846853cd9e1fee0f858450ad6f858e4c2e30b9",
+      "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+      "service": "postgres",
+      "status": "running",
+      "startedAtUtc": "2026-10-18T02:03:12.60010978Z",
+      "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65",
+      "project": "wfc-pathfinder-local"
+    }
+  ],
+  "readback": {
+    "database": "wfc_pathfinder_local",
+    "transactionReadOnly": "on",
+    "projectId": "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a",
+    "settings": {
+      "revision": "2",
+      "connectionGap": "1",
+      "secondaryTrayLength": "3",
+      "endConnectionLength": "5",
+      "additionalBendingPercent": "10"
+    },
+    "registryRevision": "11",
+    "activeModel": {
+      "versionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+      "selectionRevision": "1"
+    },
+    "artifact": {
+      "id": "75c61dc7-d456-45b0-9052-2a0822240350",
+      "sha256": "b47365401aaf078374607c944e22ac5100f2aa6fe4389c056fbdd963526f17ed",
+      "objectCount": 52,
+      "routingLeafCount": 26
+    },
+    "cable": {
+      "id": "a49521ad-e4e1-47d9-b3b2-948375a83905",
+      "tag": "PF-MANUAL-DEMO",
+      "cableWriteRevision": "0",
+      "routing": null,
+      "designLength": null,
+      "installLength": null
+    },
+    "applyReceiptCount": 0,
+    "currentArtifactProposals": [
+      {
+        "id": "f8899236-3942-4208-8fe2-be2136607f17",
+        "status": "calculated",
+        "geometryHash": "81754e745c71e401d94311edc36fee664685a9e025fd033884af0e5f698ebc24",
+        "calculationMode": "calculate",
+        "effectiveCategory": "Control",
+        "routingPreferences": {
+          "secondaryDistanceMeters": 2,
+          "preferVerticalApproach": true
+        },
+        "preparedPresent": true,
+        "preparedSegmentCount": 26,
+        "preparedCounts": {
+          "fallbackBends": 2,
+          "validatedBends": 5,
+          "fallbackStraights": 2,
+          "fallbackClearances": 0,
+          "validatedStraights": 17
+        },
+        "lengthMeters": 35.30345579516123,
+        "design": {
+          "designLengthMeters": "45",
+          "unroundedLengthMeters": "44.33380137467732",
+          "lengthBeforePercentageMeters": "40.3034557951612"
+        },
+        "jobState": "complete",
+        "cancelRequested": false
+      },
+      {
+        "id": "4aa44682-26f0-41c4-878c-be8ca0c68953",
+        "status": "calculated",
+        "geometryHash": "ede9f4b700da5126e9554c2cde05f1279d87c5e4622187326ec11b1e6bf3a159",
+        "calculationMode": "calculate",
+        "effectiveCategory": "Control",
+        "routingPreferences": {
+          "secondaryDistanceMeters": 3,
+          "preferVerticalApproach": true
+        },
+        "preparedPresent": true,
+        "preparedSegmentCount": 26,
+        "preparedCounts": {
+          "fallbackBends": 2,
+          "validatedBends": 5,
+          "fallbackStraights": 2,
+          "fallbackClearances": 0,
+          "validatedStraights": 17
+        },
+        "lengthMeters": 35.30345579516123,
+        "design": {
+          "designLengthMeters": "45",
+          "unroundedLengthMeters": "44.33380137467732",
+          "lengthBeforePercentageMeters": "40.3034557951612"
+        },
+        "jobState": "complete",
+        "cancelRequested": false
+      },
+      {
+        "id": "b0f4977a-caf7-4a35-9fb2-3d15e0aa3278",
+        "status": "calculated",
+        "geometryHash": "568a96b5d992edd09d86d2bd17be37f985e703ef9010e3ad2b3a26dd670890d1",
+        "calculationMode": "calculate",
+        "effectiveCategory": "Control",
+        "routingPreferences": {
+          "secondaryDistanceMeters": 2,
+          "preferVerticalApproach": true
+        },
+        "preparedPresent": true,
+        "preparedSegmentCount": 26,
+        "preparedCounts": {
+          "fallbackBends": 2,
+          "validatedBends": 5,
+          "fallbackStraights": 2,
+          "fallbackClearances": 0,
+          "validatedStraights": 17
+        },
+        "lengthMeters": 35.30345579516123,
+        "design": {
+          "designLengthMeters": "45",
+          "unroundedLengthMeters": "44.33380137467732",
+          "lengthBeforePercentageMeters": "40.3034557951612"
+        },
+        "jobState": "complete",
+        "cancelRequested": false
+      }
+    ],
+    "latestStandalonePreview": {
+      "jobId": "0b0d76a9-1000-4d8f-88fe-33d6052ea785",
+      "kind": "preview",
+      "status": "complete",
+      "createdAt": "2026-10-18T11:58:27.592241+03:00",
+      "completed": 1,
+      "total": 1,
+      "category": "Control",
+      "reverse": false,
+      "artifactId": "75c61dc7-d456-45b0-9052-2a0822240350",
+      "settings": {
+        "revision": "2",
+        "connectionGap": "1",
+        "endConnectionLength": "5",
+        "secondaryTrayLength": "3",
+        "additionalBendingPercent": "10"
+      },
+      "options": {
+        "maxGraphNodes": 200000,
+        "maxGraphConnections": 1000000,
+        "sampleSpacingMeters": 0.125,
+        "preferVerticalApproach": true,
+        "secondaryDistanceMeters": 2,
+        "connectionToleranceMeters": 1
+      },
+      "resultStatus": "calculated",
+      "effectiveCategory": "Control",
+      "staleAtCompletion": false,
+      "lengthMeters": 35.30345579516123,
+      "design": {
+        "designLengthMeters": "45",
+        "unroundedLengthMeters": "44.33380137467732",
+        "lengthBeforePercentageMeters": "40.3034557951612"
+      },
+      "pointCount": 90,
+      "routeText": "/DFB018-1/DFB011/DFB012/DFB013/B002/B107-1/B107-2/B107-3/BC025/BC022-2",
+      "preparedSegmentCount": 26,
+      "jobItemCount": 0,
+      "proposalCount": 0,
+      "reviewCount": 0,
+      "applyReceiptCount": 0
+    }
+  },
+  "nativeParity": "NOT_PERFORMED; user engineering acceptance remains separate."
+}

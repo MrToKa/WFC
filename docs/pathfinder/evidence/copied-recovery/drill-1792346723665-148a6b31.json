@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "pathfinder.copied-recovery.drill-receipt.v1",
+  "status": "PASS",
+  "action": "init",
+  "startedAt": "2026-10-18T18:05:23.594Z",
+  "drillId": "b77865a0-918f-4782-89de-d3d85b3246cf",
+  "phase": "planned",
+  "source": {
+    "runtime": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\batched-capture-runtime-20261018-1600",
+    "owner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+    "project": "wfc-pathfinder-local-0cba87606e9b",
+    "port": 5191
+  },
+  "target": {
+    "runtime": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\copied-recovery-target-5549925a-9f90-4a89-a574-292e92b689c4",
+    "port": 5192,
+    "verified": false
+  },
+  "privateWork": "pathfinder-engine/.scratch/copied-recovery-eca67612-d1c6-4cfd-879c-8c501b6eb930",
+  "finishedAt": "2026-10-18T18:05:23.665Z"
+}

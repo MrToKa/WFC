@@ -1,0 +1,185 @@
+{
+  "schemaVersion": "pathfinder.ui.clear-notice.verification.v1",
+  "recordedAt": "2026-10-18T14:43:46.751Z",
+  "status": "PASS",
+  "repository": {
+    "branch": "pf-8-ui-preservation-local-20261018",
+    "commit": "e275dd5ee61adb339649a63cd2695dcabcec10f7"
+  },
+  "scope": "Three frontend owner-loss effects clear their local notice. Drafts, preferences, cancellation flags, hooks, API and server code unchanged.",
+  "sources": [
+    {
+      "path": "src/pages/ProjectDetails/PathFinderPreview.tsx",
+      "sha256": "ab592324d353be478f6031f5b46c84319311f00e0669371888e54d7ebdf3c847"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderLookup.tsx",
+      "sha256": "e6ed1b4bea51a3660e0f719cf6de2f8d6d441fa494855a194760f3c6fa22cb36"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderResults.tsx",
+      "sha256": "a5a3790ce8c9e5018d0d5eccba1ee57d2f05ca9aaf3e3e14473fa7ec3e1abfcc"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderTab.test.tsx",
+      "sha256": "9f8fad9f5449aaffcfa9cf2d61fecd7b5eed10f1fe03ac639a413a75f89bda04"
+    }
+  ],
+  "checks": {
+    "ui": {
+      "command": "node node_modules/vitest/vitest.mjs run src/pages/ProjectDetails/PathFinderTab.test.tsx -t 'shared Clear' --maxWorkers=1 --minWorkers=1 --reporter=json --outputFile=pathfinder-engine/.scratch/clear-caption-2644d56fdb004bdabe3037e3a07d9814/final.json",
+      "exitCode": 0,
+      "result": {
+        "path": "pathfinder-engine/.scratch/clear-caption-2644d56fdb004bdabe3037e3a07d9814/final.json",
+        "sha256": "9f8367a03d81713ef45f28d84e0891726c62c328bf351d3d4625cda1c2a58127",
+        "bytes": 17482,
+        "passed": 5,
+        "failed": 0,
+        "filtered": 46,
+        "success": true,
+        "classification": "Five bounded Clear cases pass; the other46 cases were intentionally filtered, not freshly verified.",
+        "cases": [
+          {
+            "title": "shared Clear removes the displayed standalone notice and result while preserving drafts and preferences without requests",
+            "status": "passed",
+            "durationMilliseconds": 34305.4743
+          },
+          {
+            "title": "shared Clear prevents a late standalone display acknowledgement from restoring its notice or result",
+            "status": "passed",
+            "durationMilliseconds": 20551.842699999994
+          },
+          {
+            "title": "shared Clear removes a completed lookup notice while preserving its route draft without cancellation requests",
+            "status": "passed",
+            "durationMilliseconds": 14278.385899999994
+          },
+          {
+            "title": "shared Clear removes the proposal review notice and eligibility without another review or Apply",
+            "status": "passed",
+            "durationMilliseconds": 14657.217499999999
+          },
+          {
+            "title": "cancels an acknowledged pending lookup when detached by shared Clear",
+            "status": "passed",
+            "durationMilliseconds": 14061.040899999993
+          }
+        ]
+      }
+    },
+    "frontendTypes": {
+      "command": "node node_modules/typescript/bin/tsc --noEmit",
+      "exitCode": 0,
+      "toolOutputChunk": "8cb398",
+      "status": "PASS"
+    },
+    "scopedLint": {
+      "command": "node node_modules/eslint/bin/eslint.js src/pages/ProjectDetails/PathFinderPreview.tsx src/pages/ProjectDetails/PathFinderLookup.tsx src/pages/ProjectDetails/PathFinderResults.tsx src/pages/ProjectDetails/PathFinderTab.test.tsx --max-warnings=0",
+      "exitCode": 0,
+      "toolOutputChunk": "56e4e9",
+      "status": "PASS"
+    },
+    "diffCheck": {
+      "command": "git diff --check -- <four owned frontend files>",
+      "exitCode": 0,
+      "status": "PASS"
+    }
+  },
+  "historicalRuns": {
+    "preFix": {
+      "path": "pathfinder-engine/.scratch/clear-caption-2644d56fdb004bdabe3037e3a07d9814/pre-fix.json",
+      "sha256": "cd88387aea60c25e75a779aad354b2eea4380b8692333ba5f861c8c6603cd612",
+      "bytes": 18447,
+      "passed": 2,
+      "failed": 3,
+      "filtered": 46,
+      "success": false,
+      "classification": "Actual reproduced stale notice in three tools; late-ACK and existing pending-lookup Clear controls passed.",
+      "cases": [
+        {
+          "title": "shared Clear removes the displayed standalone notice and result while preserving drafts and preferences without requests",
+          "status": "failed",
+          "durationMilliseconds": 28195.281499999983,
+          "failure": [
+            "AssertionError: expected <span role=\"status\" …(1)></span> to be null\n    at C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\src\\pages\\ProjectDetails\\PathFinderTab.test.tsx:276:104\n    at file:///C:/Users/todor.chankov/source/WFC-pathfinder-local/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+          ]
+        },
+        {
+          "title": "shared Clear prevents a late standalone display acknowledgement from restoring its notice or result",
+          "status": "passed",
+          "durationMilliseconds": 21415.790399999998
+        },
+        {
+          "title": "shared Clear removes a completed lookup notice while preserving its route draft without cancellation requests",
+          "status": "failed",
+          "durationMilliseconds": 13384.676399999997,
+          "failure": [
+            "AssertionError: expected <span role=\"status\" …(1)></span> to be null\n    at C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\src\\pages\\ProjectDetails\\PathFinderTab.test.tsx:299:74\n    at file:///C:/Users/todor.chankov/source/WFC-pathfinder-local/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+          ]
+        },
+        {
+          "title": "shared Clear removes the proposal review notice and eligibility without another review or Apply",
+          "status": "failed",
+          "durationMilliseconds": 12339.117299999984,
+          "failure": [
+            "AssertionError: expected <span role=\"status\" …(1)></span> to be null\n    at C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\src\\pages\\ProjectDetails\\PathFinderTab.test.tsx:307:81\n    at file:///C:/Users/todor.chankov/source/WFC-pathfinder-local/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+          ]
+        },
+        {
+          "title": "cancels an acknowledged pending lookup when detached by shared Clear",
+          "status": "passed",
+          "durationMilliseconds": 13555.656799999997
+        }
+      ]
+    },
+    "firstPostFix": {
+      "path": "pathfinder-engine/.scratch/clear-caption-2644d56fdb004bdabe3037e3a07d9814/post-fix.json",
+      "sha256": "bcde0c5e7e0d1653ffcc68bc7a90dd9a80e93101d3d5a286094e951bd3c2a0f2",
+      "bytes": 17841,
+      "passed": 4,
+      "failed": 1,
+      "filtered": 46,
+      "success": false,
+      "classification": "Production stale-notice assertions passed; one new test used Fluent raw textContent (RoutesRoutes) instead of its accessible tab name. Test assertion corrected; production bytes unchanged.",
+      "cases": [
+        {
+          "title": "shared Clear removes the displayed standalone notice and result while preserving drafts and preferences without requests",
+          "status": "failed",
+          "durationMilliseconds": 31026.498499999998,
+          "failure": [
+            "AssertionError: expected [ 'RoutesRoutes', 'Path', …(1) ] to deeply equal [ 'Routes', 'Path', 'Path lookup' ]\n    at C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\src\\pages\\ProjectDetails\\PathFinderTab.test.tsx:279:68\n    at file:///C:/Users/todor.chankov/source/WFC-pathfinder-local/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+          ]
+        },
+        {
+          "title": "shared Clear prevents a late standalone display acknowledgement from restoring its notice or result",
+          "status": "passed",
+          "durationMilliseconds": 20510.0849
+        },
+        {
+          "title": "shared Clear removes a completed lookup notice while preserving its route draft without cancellation requests",
+          "status": "passed",
+          "durationMilliseconds": 16204.334800000004
+        },
+        {
+          "title": "shared Clear removes the proposal review notice and eligibility without another review or Apply",
+          "status": "passed",
+          "durationMilliseconds": 15212.881800000003
+        },
+        {
+          "title": "cancels an acknowledged pending lookup when detached by shared Clear",
+          "status": "passed",
+          "durationMilliseconds": 12169.088499999998
+        }
+      ]
+    }
+  },
+  "toolchain": {
+    "node": "v24.19.0",
+    "vitest": "3.2.4",
+    "typescript": "5.9.3",
+    "eslint": "9.37.0"
+  },
+  "runtime": "NOT_RUN_BY_THIS_AGENT; parent owns fresh web build and browser verification.",
+  "full51CaseFile": "NOT_RUN; selected5 only,46 intentionally filtered.",
+  "preservation": "No original checkout, database, credentials, container, Core, Model, frozen fixture or denied scratch resource was changed. Actual CUA verification and data-preservation receipts are separate."
+}

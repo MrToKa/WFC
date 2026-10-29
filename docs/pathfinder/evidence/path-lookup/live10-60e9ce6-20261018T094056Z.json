@@ -1,0 +1,144 @@
+{
+  "schemaVersion": "pathfinder.lookup.integration.v1",
+  "recordedAtUtc": "2026-10-18T09:40:56.760Z",
+  "projectId": "54cfad40-bd12-41e9-ab24-d90bdaafc993",
+  "modelVersionId": "a856352c-b3dd-4143-a723-1f4e7d3f2cb2",
+  "scope": "separate owned synthetic 10m fixture; adapter DTO uses converted shape with every engineering/native proof false",
+  "status": "PASS",
+  "passed": 10,
+  "total": 10,
+  "checks": [
+    {
+      "name": "private parser returns distinct canonical capture scope while preserving original ordered lookup text",
+      "status": "PASS",
+      "milliseconds": 464,
+      "details": {
+        "routeCodes": [
+          "/BC001"
+        ],
+        "connectionGap": "1",
+        "selectionRevision": "35"
+      }
+    },
+    {
+      "name": "actual API and nginx reject anonymous and oversized capture headers before body upload",
+      "status": "PASS",
+      "milliseconds": 15,
+      "details": {
+        "apiAnonymous": 401,
+        "webAnonymous": 401,
+        "apiOversize": 413,
+        "webOversize": 413
+      }
+    },
+    {
+      "name": "independent capture computes exact 10m lookup without planning promotion, endpoint matching or cable writes",
+      "status": "PASS",
+      "milliseconds": 516,
+      "details": {
+        "jobId": "120fabf2-448e-40fb-9400-0a6024d4cd6c",
+        "artifactId": "af80b618-35e0-4a7e-aecc-bb4630e5d7e4",
+        "snapshotSha256": "4d652fcc0d881527265bbdf49e30b0429068f17e211e88502e35524c2ccf6d57",
+        "lengthMeters": 10,
+        "diagnostics": {
+          "geometryLeavesUsed": 1,
+          "fallbackBends": 0,
+          "fallbackStraights": 1,
+          "fallbackClearances": 0
+        },
+        "lookupScope": {
+          "warnings": [
+            "Scope uses current SDK display visibility; native visibility, native-converted parity and engineering acceptance remain unverified."
+          ],
+          "uniqueCodeCount": 1,
+          "resolvedLeafCount": 1,
+          "requestedCodeCount": 1,
+          "resolvedOwnerCount": 1,
+          "discoveredObjectCount": 2
+        }
+      }
+    },
+    {
+      "name": "Reverse and repeated capture reuse exact lookup bytes and preserve metric semantics",
+      "status": "PASS",
+      "milliseconds": 1359,
+      "details": {
+        "reverseJob": "a0224d9e-4ebd-4de2-a121-5f3750aacd6e",
+        "artifacts": [
+          "af80b618-35e0-4a7e-aecc-bb4630e5d7e4"
+        ],
+        "points": [
+          [
+            10,
+            0,
+            0.5
+          ],
+          [
+            0,
+            0,
+            0.5
+          ]
+        ]
+      }
+    },
+    {
+      "name": "native SECONDARY and adjacent duplicate lookup semantics retain 10m geometry without design allowances",
+      "status": "PASS",
+      "milliseconds": 1274,
+      "details": {
+        "jobId": "3fc569e7-5a3a-4404-891b-206aad58f4f0",
+        "lengthMeters": 10
+      }
+    },
+    {
+      "name": "bounded lookup capture passes nginx and API limits beyond the prior 10 MiB transport ceiling",
+      "status": "PASS",
+      "milliseconds": 5255,
+      "details": {
+        "jobId": "cc9eb2c6-09c2-488b-872e-f3f69a341bab",
+        "bytes": 13201771
+      }
+    },
+    {
+      "name": "lookup scope cannot become a planning artifact or a standalone calculate request",
+      "status": "PASS",
+      "milliseconds": 124,
+      "details": {
+        "lookupArtifactId": "af80b618-35e0-4a7e-aecc-bb4630e5d7e4"
+      }
+    },
+    {
+      "name": "project/model identity, client gap and current selection overrides fail before new storage",
+      "status": "PASS",
+      "milliseconds": 28
+    },
+    {
+      "name": "current administrator and login revocation remain enforced on independent lookup",
+      "status": "PASS",
+      "milliseconds": 16
+    },
+    {
+      "name": "completed lookup exposes frozen used gap and becomes stale after Project Details changes",
+      "status": "PASS",
+      "milliseconds": 8,
+      "details": {
+        "jobId": "120fabf2-448e-40fb-9400-0a6024d4cd6c",
+        "frozenGap": "1",
+        "stale": true
+      }
+    }
+  ],
+  "cleanup": [
+    {
+      "name": "owned actor/login/jobs/results/lookup artifacts and exact snapshot files removed; planning/registry/bindings/cables/Apply unchanged; Details gap restored",
+      "status": "PASS",
+      "artifactsRemoved": [
+        "af80b618-35e0-4a7e-aecc-bb4630e5d7e4",
+        "cd20cba5-5d98-4fc8-bb0d-c26de85d9163"
+      ]
+    }
+  ],
+  "noPlanningArtifactLiveCase": "NOT_RUN: this fixture has existing immutable planning history. Source tests independently prove no planning artifact/registry query is required. No history was relabeled or deleted.",
+  "nativeParity": "NOT_PERFORMED; no user engineering acceptance or real-model Apply",
+  "sourceSha256": "89b7ac6c2a18b8c4189979d95dd6d214b4e5bd26488eba05ed81521f1ddcb78e"
+}

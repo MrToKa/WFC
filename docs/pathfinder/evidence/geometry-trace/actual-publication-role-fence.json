@@ -1,0 +1,15 @@
+{
+  "status": "PASS",
+  "scope": "Actual normal nginx/API trace request, committed exact pending intent observed before temporary generated-actor demotion, final publication authority refusal; not a synthetic adapter or primitive-only fence",
+  "httpStatus": 403,
+  "code": "ADMIN_REQUIRED",
+  "ownedActorRestored": true,
+  "proof": {
+    "priorProofHashUnchanged": true,
+    "sets": 0,
+    "objects": 0,
+    "receipts": 0
+  },
+  "leaseExpiresAt": "2026-10-19T02:23:16.728Z",
+  "engineeringAccepted": false
+}

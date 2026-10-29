@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "pathfinder.drawing-positioning.final-runtime-preservation.v1",
+  "status": "PASS",
+  "tablesChecked": 53,
+  "unexpectedChanged": [],
+  "allowedV2NewProofs": 1,
+  "exactLogicalStorageUnchanged": true,
+  "totalObjects": 1032,
+  "databaseRaw": {
+    "path": "r2a-final-53-reconciliation-raw.private.json",
+    "bytes": 17269812,
+    "sha256": "9049ae799cf635e1547048de2280ac36180560637cae531b0f9f6a85e8a11e09"
+  },
+  "storageRaw": {
+    "path": "r2a-final4-storage-raw.private.json",
+    "bytes": 234707,
+    "sha256": "d7143363a57d751d4ac56f4e52cc19c50dfc358a6e97bdfc03b727a7edc8249c"
+  },
+  "finishedAt": "2026-10-19T00:01:54.682Z"
+}

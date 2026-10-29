@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "wfc.pf.cable-workflow.u0.actual.v1",
+  "at": "2026-10-20T16:55:00.880Z",
+  "worktree": "C:/Users/todor.chankov/source/WFC-pathfinder-local",
+  "branch": "pf-u0-cable-workflow-contracts-local-20261020",
+  "baseCommit": "57a203ae170e43276dee5ff43a288f803d2c0fbe",
+  "revisionScope": "Final source bytes; read Git for containing local commit",
+  "sourceSha256": {
+    "shared/pathfinderCableWorkflow.ts": "debcd96acfcdc20581c1016ae530ea88488b8170537283fbc01a1629e7f5f6eb",
+    "shared/pathfinderCableWorkflow.test.ts": "700b9d09a97a47cef9f6b849a100139ea071da46454cc8ac4be8821288251541"
+  },
+  "checks": {
+    "syntheticContracts": {
+      "status": "PASS",
+      "tests": 47
+    },
+    "frontendBackendTypecheck": "PASS",
+    "scopedEslint": "PASS",
+    "diffCheck": "PASS",
+    "runtimeBuild": "NOT_RUN",
+    "liveVisual": "NOT_RUN",
+    "nativeParity": "NOT_RUN",
+    "humanEngineeringAcceptance": "NOT_RUN",
+    "remoteCi": "NOT_RUN"
+  },
+  "reviewCorrections": [
+    "Added per-cable item states so blocked siblings do not inherit the active job Calculating label.",
+    "Added bounded scanned cursor/query/context contracts so an empty filtered page cannot conceal later failed cables."
+  ],
+  "automation": {
+    "id": "path-finder-purpose-rules-and-model-revisions",
+    "name": "Path Finder — shared locations and cable routing",
+    "status": "ACTIVE",
+    "updatedThroughApp": true,
+    "duplicateCreated": false,
+    "intervalMinutes": 10,
+    "scope": "PF-U only; latest direct SECONDARY rule included; Preparer paused"
+  },
+  "boundaries": {
+    "serverUiEnabled": false,
+    "databaseOrModelsChanged": false,
+    "calculationsSubmitted": false,
+    "realReviewApplyOrInitialFill": false,
+    "original5180Or5190Controlled": false,
+    "pushPrMergeDeployment": false,
+    "historicalDeniedPathsUntouched": true
+  },
+  "decisions": {
+    "initialFill": "Only both current fields blank; partial and zero are existing; final server authority and CAS remain mandatory",
+    "directSecondary": "D<F OR D<T, all device types and existing non-MV scope; actual distance+E then P and ceiling, no extra S/gap; U6 not implemented"
+  }
+}

@@ -32,6 +32,7 @@ import {
 } from '../utils/excelImport.js';
 import { snapshotStandardMaterialsToProjectCableType } from '../services/projectCableTypeSnapshotService.js';
 import { buildNamedCatalogLookup, findNamedCatalogMatch } from '../utils/catalogNameMatching.js';
+import { cablePurposeInputSchema } from '../../shared/routingCablePurposes.js';
 import {
   createCableTypeDefaultMaterialSchema,
   createCableTypeSchema,
@@ -359,6 +360,12 @@ cableTypesRouter.post(
         return;
       }
 
+      if (!cablePurposeInputSchema.safeParse(materialCableType.purpose ?? null).success) {
+        await client.query('ROLLBACK');
+        res.status(400).json({error:'The selected material cable type has an invalid Purpose. Correct its Purpose in Materials before copying it to the project.'});
+        return;
+      }
+
       const duplicateResult = await client.query<{ id: string }>(
         `
           SELECT id
@@ -415,7 +422,7 @@ cableTypesRouter.post(
           randomUUID(),
           projectId,
           materialCableType.name,
-          normalizeOptionalString(materialCableType.purpose ?? null),
+          normalizeOptionalString(cablePurposeInputSchema.parse(materialCableType.purpose ?? null)),
           normalizeOptionalString(materialCableType.material ?? null),
           normalizeOptionalString(materialCableType.description ?? null),
           normalizeOptionalString(materialCableType.manufacturer ?? null),
@@ -526,6 +533,12 @@ cableTypesRouter.patch(
         return;
       }
 
+      if (!cablePurposeInputSchema.safeParse(materialCableType.purpose ?? null).success) {
+        await client.query('ROLLBACK');
+        res.status(400).json({error:'The selected material cable type has an invalid Purpose. Correct its Purpose in Materials before copying it to the project.'});
+        return;
+      }
+
       const duplicateResult = await client.query<{ id: string }>(
         `
           SELECT id
@@ -581,7 +594,7 @@ cableTypesRouter.patch(
         `,
         [
           materialCableType.name,
-          normalizeOptionalString(materialCableType.purpose ?? null),
+          normalizeOptionalString(cablePurposeInputSchema.parse(materialCableType.purpose ?? null)),
           normalizeOptionalString(materialCableType.material ?? null),
           normalizeOptionalString(materialCableType.description ?? null),
           normalizeOptionalString(materialCableType.manufacturer ?? null),
@@ -840,6 +853,9 @@ cableTypesRouter.post(
       const seenMaterialIds = new Map<string, number>();
       for (const row of prepared) {
         const material = materialCableTypes.get(row.key)!;
+        if (!cablePurposeInputSchema.safeParse(material.purpose ?? null).success) {
+          issues.push({row:row.rowNumber,column:CABLE_EXCEL_HEADERS.purpose,message:`Material cable type "${material.name}" has an invalid Purpose. Correct it in Materials before importing.`});
+        }
         const firstRow = seenMaterialIds.get(material.id);
         if (firstRow !== undefined) {
           issues.push({
@@ -906,7 +922,7 @@ cableTypesRouter.post(
               WHERE id = $10;
             `,
             [
-              normalizeOptionalString(materialCableType.purpose ?? null),
+              normalizeOptionalString(cablePurposeInputSchema.parse(materialCableType.purpose ?? null)),
               normalizeOptionalString(materialCableType.material ?? null),
               normalizeOptionalString(materialCableType.description ?? null),
               normalizeOptionalString(materialCableType.manufacturer ?? null),
@@ -952,7 +968,7 @@ cableTypesRouter.post(
               cableTypeId,
               projectId,
               materialCableType.name,
-              normalizeOptionalString(materialCableType.purpose ?? null),
+              normalizeOptionalString(cablePurposeInputSchema.parse(materialCableType.purpose ?? null)),
               normalizeOptionalString(materialCableType.material ?? null),
               normalizeOptionalString(materialCableType.description ?? null),
               normalizeOptionalString(materialCableType.manufacturer ?? null),

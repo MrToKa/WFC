@@ -1,0 +1,55 @@
+{
+  "status": "PASS",
+  "recordedAt": "2026-10-19T01:24:09.978Z",
+  "branch": "pf-r3-project-preparation-local-20261019",
+  "preCommitHead": "881352e403367c7b1e0e4c4d1858f1acb3e1f302",
+  "checks": [
+    {
+      "name": "frontend-types",
+      "status": "PASS",
+      "exitCode": 0,
+      "rawSha256": "834ce6d54b672d3e9117366af0a7626600a3f256a09bf855eb5ddcf2f12f4ba1"
+    },
+    {
+      "name": "server-types",
+      "status": "PASS",
+      "exitCode": 0,
+      "rawSha256": "5d54f274cb723074ca626b6a691acc1bdb90a8c2054b20b1da4f4ab79b080cf2"
+    },
+    {
+      "name": "changed-ts-lint",
+      "status": "PASS",
+      "exitCode": 0,
+      "rawSha256": "bcacbf51b06b3d13695891e9f4e5410cc83ae919953358a3c17565212d012ec6",
+      "fileCount": 55
+    },
+    {
+      "name": "frozen-reference-lock",
+      "status": "PASS",
+      "immutableArtifactsAndCore": 19,
+      "unchangedReferences": 23,
+      "pureCoreFiles": 11,
+      "reconciledMutableDrawingSource": 1,
+      "expectedRegenerated": false
+    },
+    {
+      "name": "deployed-source-code-binding",
+      "status": "PASS",
+      "codeFiles": 1117,
+      "buildContextSha256": "f927dfb69784c7c2918d398d948ca51fe700e910a87c60c13b25709bd7b60146",
+      "documentationEditsAfterBuild": true,
+      "byteIdenticalCodeFiles": 1115,
+      "postBuildNonRuntimeEofNormalization": "eof-normalization.json",
+      "runtimeCodeUnchanged": true
+    },
+    {
+      "name": "combined-pure-mocked-tests",
+      "status": "PASS",
+      "sourceFiles": 52,
+      "passed": 893,
+      "failed": 0,
+      "notRun": 5,
+      "rawSha256": "c02b3e05b5e9ecdd2b6ff4e0123533339173f06977e3138ee70abf4094c006e0"
+    }
+  ]
+}

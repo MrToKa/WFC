@@ -1,0 +1,110 @@
+{
+  "schemaVersion": "wfc.pf.r7-final-source-checks.v1",
+  "postVerificationAdjustment": {
+    "path": "server/pathfinder/recalculationRepository.test.ts",
+    "change": "Removed one extra blank line at EOF after full tests; no statement or runtime source changed.",
+    "verification": "Exact one-line whitespace-only diff and clean git diff --check; full regression is the recorded tested context."
+  },
+  "status": "PASS",
+  "recordedAt": "2026-10-19T08:07:54.133Z",
+  "source": {
+    "branch": "pf-r7-durable-recalculation-local-20261019",
+    "headAtBuild": "bc6e0e1fd3188a7dfd2cc27ba228b3cbe46ef2c1",
+    "contextSha256": "a5f4f2bde38ca3789fd07c55c4319467b189608e95f47e5918de6084f64d24ed",
+    "contextFiles": 1420,
+    "sourceFilesUnchangedSinceBuild": 943,
+    "scope": "Current relevant code/test files equal exact candidate3 build manifest; later docs/private receipts are separate"
+  },
+  "backendAndShared": {
+    "files": 87,
+    "jsonSuites": 189,
+    "passed": 1484,
+    "failed": 0,
+    "notRun": 5
+  },
+  "frontend": {
+    "files": 7,
+    "passed": 83,
+    "failed": 0,
+    "notRun": 0,
+    "seconds": 967.38,
+    "command": "npx vitest run [seven exact frontend files] --exclude **/.scratch/** --fileParallelism=false --maxWorkers=1 --reporter=verbose",
+    "filesChecked": [
+      "src/api/pathfinderRecalculations.test.ts",
+      "src/api/pathfinderProvenance.test.ts",
+      "src/pages/ProjectDetails/PathFinderTab.test.tsx",
+      "src/context/AuthContext.test.tsx",
+      "src/pages/ProjectDetails/PathFinderResults.test.tsx",
+      "src/pages/ProjectDetails/PathFinderRecalculationPanel.test.tsx",
+      "src/pages/ProjectDetails/hooks/usePathfinderRecalculations.test.tsx"
+    ],
+    "evidence": "Root terminal session92792 actual exit0/footer retained; not a fabricated complete JSON case log"
+  },
+  "combinedDisjoint": {
+    "files": 94,
+    "passed": 1567,
+    "failed": 0,
+    "notRun": 5
+  },
+  "focusedFatalObserverSession": {
+    "passed": 79,
+    "overlapsCombined": true
+  },
+  "types": {
+    "status": "PASS",
+    "command": "npm run typecheck",
+    "evidence": "Root terminal session81246 exit0; front and server tsc"
+  },
+  "lint": {
+    "status": "PASS",
+    "command": "npm run lint",
+    "evidence": "Root terminal session56285 exit0"
+  },
+  "build": {
+    "status": "PASS",
+    "candidate": 3,
+    "images": {
+      "api": "sha256:6b182c2704f15168e42032bab390f97949f432dffe6b8e788ce94498dba2fe0b",
+      "web": "sha256:6d7aa2a62bf2a41fb2749f08965392f62c630bda2d62b810e96989407afe3719"
+    }
+  },
+  "coreModelRunnerFrozenFixtures": {
+    "status": "PASS",
+    "scope": "No git diff from inheritedR7head; no expected/receipt regeneration or native parity claim"
+  },
+  "independentSourceReview": {
+    "status": "NO_ACTIONABLE_P1_P2",
+    "scope": "Original automatic authority/current role and expiry/dependency locks tocommit/idempotency/bounded SQL; source-only, not an additional runtime pass"
+  },
+  "historicalInterruptedRun": {
+    "status": "INTERRUPTED",
+    "scope": "First JSON-only frontend run, no completed result; separate final verbose serial pass above"
+  },
+  "privateEvidence": [
+    {
+      "privateFile": "r7-final-backend-tests10.private.json",
+      "bytes": 575902,
+      "sha256": "fbda8fb3164d7e43a21c56955df5fb4687bbe6f670ac5d72f2078cf6bec82274"
+    },
+    {
+      "privateFile": "r7-final-frontend-tests12-footer.private.json",
+      "bytes": 2361,
+      "sha256": "5b7d897659b11de3f6fb7a46b5f57d4d289dc904c470fc14f8ed3d92c7cbde78"
+    },
+    {
+      "privateFile": "r7-frontend-interrupted.private.json",
+      "bytes": 297,
+      "sha256": "fc0320beb204b8993dabecaafb53d31d177fe0c42e1a189b7ef758d56bc77d89"
+    },
+    {
+      "privateFile": "r7-candidate-build3-result.private.json",
+      "bytes": 272827,
+      "sha256": "cd46365fc5fb48503469982e8361e4b3eda2a41467a8bfd295396f448b7b44aa"
+    },
+    {
+      "privateFile": "r7-delivery-source-scan.private.json",
+      "bytes": 16709,
+      "sha256": "010600597066e2014f972d3e9ac7792cc26ba26d7332d7165c59760308e0afac"
+    }
+  ]
+}

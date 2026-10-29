@@ -1,0 +1,17 @@
+{
+  "observedAtUtc": "2026-10-18T08:59:44.331Z",
+  "automationId": "pathfinder",
+  "operation": "Application automation_update; existing heartbeat updated, schedule/name/target preserved",
+  "status": "PAUSED",
+  "applicationReadback": {
+    "automationId": "pathfinder",
+    "mode": "update",
+    "status": "PAUSED"
+  },
+  "reason": "Scoped local Routes + Path delivery ready for actual human route/length review. No repeated unchanged technical checks; no human acceptance assumed.",
+  "sourceCheckpoint": "cb02f43000a51b4f511346d2aa666d09929570e0",
+  "branch": "pf-two-tabs-local-20261018",
+  "promptUpdated": true,
+  "targetThreadId": "01a1437a-c394-7650-aae2-5d25e2573207",
+  "notificationPreferenceChanged": false
+}

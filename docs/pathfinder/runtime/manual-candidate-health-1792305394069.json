@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS",
+  "recordedAtUtc": "2026-10-18T06:36:34.069Z",
+  "scope": "Fresh isolated manual-validation/settings candidate startup and read-only migration metadata; no original resources touched.",
+  "buildObservedHead": "5485283eda397616ca99f9d41982d2ecd65dc36d",
+  "frozenSourceCheckpoint": "873afeb3544fad56717eb07007d419852e66dc60",
+  "revisionNote": "Build began from the frozen working tree before the checkpoint commit; commit identity was confirmed later, not observed at build start.",
+  "origin": "http://127.0.0.1:5190",
+  "healthStatus": 200,
+  "health": {
+    "status": "ok"
+  },
+  "images": {
+    "api": "sha256:e8844ae844819d75353059abfbc62ca17591b06a558a02250aba255def407b4e",
+    "web": "sha256:a71c01cfa8d2c003357852bbb12e5a2c3667c2b6ddcabaac4e1912d3e81409bb"
+  },
+  "topology": {
+    "status": "PASS",
+    "project": "wfc-pathfinder-local",
+    "origin": "http://127.0.0.1:5190",
+    "services": [
+      "postgres",
+      "minio",
+      "storage-ready",
+      "api",
+      "web"
+    ],
+    "volumes": [
+      "postgres",
+      "minio",
+      "staging",
+      "pathfinder"
+    ],
+    "privateBackend": true,
+    "publishedPorts": [
+      5190
+    ]
+  },
+  "resources": {
+    "containers": [
+      {
+        "role": "web",
+        "id": "e793b36246484e71c0da09ee415c613511d8cfbc382160ef0a083054226c3879",
+        "image": "sha256:a71c01cfa8d2c003357852bbb12e5a2c3667c2b6ddcabaac4e1912d3e81409bb",
+        "name": "wfc-pathfinder-local-web-1",
+        "running": true,
+        "startedAt": "2026-10-18T06:36:01.539732709Z"
+      },
+      {
+        "role": "api",
+        "id": "237d2cf338c8f4d758359a607bf46d1257f9112a26fc2d870d157b8fa36db816",
+        "image": "sha256:e8844ae844819d75353059abfbc62ca17591b06a558a02250aba255def407b4e",
+        "name": "wfc-pathfinder-local-api-1",
+        "running": true,
+        "startedAt": "2026-10-18T06:35:55.732123676Z"
+      },
+      {
+        "role": "storage-ready",
+        "id": "2174a58d9b2f2ccbdc01d703b413d38764eb85fbb0dcdfec7e2cd482e8e17d30",
+        "image": "sha256:e8844ae844819d75353059abfbc62ca17591b06a558a02250aba255def407b4e",
+        "name": "wfc-pathfinder-local-storage-ready-1",
+        "running": false,
+        "startedAt": "2026-10-18T06:35:55.001047336Z"
+      },
+      {
+        "role": "postgres",
+        "id": "6830635a4597dad696f1a5ced6846853cd9e1fee0f858450ad6f858e4c2e30b9",
+        "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+        "name": "wfc-pathfinder-local-postgres-1",
+        "running": true,
+        "startedAt": "2026-10-18T02:03:12.60010978Z"
+      },
+      {
+        "role": "minio",
+        "id": "e27a690c80957356c8a562e02b72249cf85a3d965f9a32fe596048a15f499820",
+        "image": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+        "name": "wfc-pathfinder-local-minio-1",
+        "running": true,
+        "startedAt": "2026-10-18T02:37:54.346155692Z"
+      }
+    ],
+    "volumes": [
+      "wfc-pathfinder-local_postgres",
+      "wfc-pathfinder-local_minio",
+      "wfc-pathfinder-local_staging",
+      "wfc-pathfinder-local_pathfinder"
+    ],
+    "networks": [
+      {
+        "id": "7e58e2a7f9544ca1b5efc7ae9773e69088168620ad34a6afb7abcea2a26b6cc0",
+        "name": "wfc-pathfinder-local_front"
+      },
+      {
+        "id": "77abead34a6b25bce147efa3a1eacd67d9a9b110028ea634ab904768e3e2274d",
+        "name": "wfc-pathfinder-local_backend"
+      }
+    ]
+  },
+  "migration": {
+    "default": "1",
+    "nullable": "NO",
+    "projects": 2,
+    "projectsAt1Metre": 2,
+    "invalidValues": 0,
+    "legacyReviews": 3
+  }
+}

@@ -1,0 +1,475 @@
+{
+  "schemaVersion": "wfc.pf.catalog-failed-apply-reconciliation.v1",
+  "status": "PASS",
+  "recordedAt": "2026-10-18T22:10:45.540Z",
+  "failedReceipt": "docs/pathfinder/evidence/tray-catalog/operator-1792361378114-dd620ad1.json",
+  "scope": "Independent read-only complete45table comparison with pre-transfer capture",
+  "result": "No relational changes; pre-transfer state exact",
+  "comparison": {
+    "schemaVersion": "wfc.pf.catalog-preservation-comparison.v1",
+    "status": "PASS",
+    "failures": [],
+    "tables": {
+      "projects": {
+        "before": 3,
+        "after": 3,
+        "unchanged": 3,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "232f9237ad2d178ee761a3a6545be2900bc909c0d72af68a2d9bfd7c68ef01fe",
+        "afterSha256": "232f9237ad2d178ee761a3a6545be2900bc909c0d72af68a2d9bfd7c68ef01fe"
+      },
+      "cable_types": {
+        "before": 52,
+        "after": 52,
+        "unchanged": 52,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "e8de342171791d71b8e2eca13ec51f1cf76cbcda7299b96d1f47bb41efe87f03",
+        "afterSha256": "e8de342171791d71b8e2eca13ec51f1cf76cbcda7299b96d1f47bb41efe87f03"
+      },
+      "cables": {
+        "before": 2143,
+        "after": 2143,
+        "unchanged": 2143,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "6f2313cec59a99969dbcbf9337604ba436c383c1be56e3501aaf18c30ed994d1",
+        "afterSha256": "6f2313cec59a99969dbcbf9337604ba436c383c1be56e3501aaf18c30ed994d1"
+      },
+      "project_model_selections": {
+        "before": 3,
+        "after": 3,
+        "unchanged": 3,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4ff827df7dc4aea7c507819993c18f578b11a1dff1fbc3b2339f8dca375bc52a",
+        "afterSha256": "4ff827df7dc4aea7c507819993c18f578b11a1dff1fbc3b2339f8dca375bc52a"
+      },
+      "model_package_identities": {
+        "before": 1,
+        "after": 1,
+        "unchanged": 1,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "d15ea4b82935b40b875a937a997c0fefe7660b8d3bd0b4895f8e51290956a023",
+        "afterSha256": "d15ea4b82935b40b875a937a997c0fefe7660b8d3bd0b4895f8e51290956a023"
+      },
+      "model_validation_reports": {
+        "before": 3,
+        "after": 3,
+        "unchanged": 3,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "29cca03333a7ee4746639fd033c31ac53188a6ede16460ee9784cce792a79761",
+        "afterSha256": "29cca03333a7ee4746639fd033c31ac53188a6ede16460ee9784cce792a79761"
+      },
+      "model_import_jobs": {
+        "before": 3,
+        "after": 3,
+        "unchanged": 3,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "a410dbe7d2e5ee6e52f348150df6e482c09f7c54b4c28431462cd18e8eccab60",
+        "afterSha256": "a410dbe7d2e5ee6e52f348150df6e482c09f7c54b4c28431462cd18e8eccab60"
+      },
+      "model_versions": {
+        "before": 3,
+        "after": 3,
+        "unchanged": 3,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "1a883308b254c07dc7b5159b0368538da0cf51f3e280e2d71470d424e3ea9e6d",
+        "afterSha256": "1a883308b254c07dc7b5159b0368538da0cf51f3e280e2d71470d424e3ea9e6d"
+      },
+      "model_content_reservations": {
+        "before": 0,
+        "after": 0,
+        "unchanged": 0,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "model_package_aliases": {
+        "before": 3,
+        "after": 3,
+        "unchanged": 3,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "fd6deaba543949d298239a6fc18dda726668068abfe534df012a88eaacdde86a",
+        "afterSha256": "fd6deaba543949d298239a6fc18dda726668068abfe534df012a88eaacdde86a"
+      },
+      "model_storage_ownership": {
+        "before": 3,
+        "after": 3,
+        "unchanged": 3,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "71062f5e5c159263e4eac096c8e305c30e78801eaed70d0c29e2b16d363420d8",
+        "afterSha256": "71062f5e5c159263e4eac096c8e305c30e78801eaed70d0c29e2b16d363420d8"
+      },
+      "pf_project_state": {
+        "before": 3,
+        "after": 3,
+        "unchanged": 3,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4bb800ef58647ee02435514ec83fdf1d0313d0f1437103ae9632a1f2acd3d96c",
+        "afterSha256": "4bb800ef58647ee02435514ec83fdf1d0313d0f1437103ae9632a1f2acd3d96c"
+      },
+      "pf_locations": {
+        "before": 1533,
+        "after": 1533,
+        "unchanged": 1533,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "681aa4ac8f25176e67997768c07697172b78d15d2a3919bb79ba011e013ab3ff",
+        "afterSha256": "681aa4ac8f25176e67997768c07697172b78d15d2a3919bb79ba011e013ab3ff"
+      },
+      "pf_location_aliases": {
+        "before": 1534,
+        "after": 1534,
+        "unchanged": 1534,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "124392ce8bb2b4500de3e6cb94e535d72b54571bda70beee5b575814e28db00c",
+        "afterSha256": "124392ce8bb2b4500de3e6cb94e535d72b54571bda70beee5b575814e28db00c"
+      },
+      "pf_artifacts": {
+        "before": 7,
+        "after": 7,
+        "unchanged": 7,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "b40d51b8111b86699e4a127c5a168afe7024260ecd8ca5213e81c9a01f05c495",
+        "afterSha256": "b40d51b8111b86699e4a127c5a168afe7024260ecd8ca5213e81c9a01f05c495"
+      },
+      "pf_model_objects": {
+        "before": 146,
+        "after": 146,
+        "unchanged": 146,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "a3aac6dc1d98ef71f77d3c341a4c12222d54d1d14fd8fa5c1ea4664217187985",
+        "afterSha256": "a3aac6dc1d98ef71f77d3c341a4c12222d54d1d14fd8fa5c1ea4664217187985"
+      },
+      "pf_location_bindings": {
+        "before": 6,
+        "after": 6,
+        "unchanged": 6,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "ec25ae19f1b5143b4d34d38f62885f7e076a5d72230984fef92ec87f0ae696f6",
+        "afterSha256": "ec25ae19f1b5143b4d34d38f62885f7e076a5d72230984fef92ec87f0ae696f6"
+      },
+      "pf_location_matches": {
+        "before": 1528,
+        "after": 1528,
+        "unchanged": 1528,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "80a1db6906c501372c5882fe29d302b4f1f5a6da2f7e6aef84f48e2c7332e71b",
+        "afterSha256": "80a1db6906c501372c5882fe29d302b4f1f5a6da2f7e6aef84f48e2c7332e71b"
+      },
+      "pf_location_events": {
+        "before": 1634,
+        "after": 1634,
+        "unchanged": 1634,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "88a1b8c28a9a5e0d64b4b8c25adca8eda530a34091fb94e4566e0650bff26b5c",
+        "afterSha256": "88a1b8c28a9a5e0d64b4b8c25adca8eda530a34091fb94e4566e0650bff26b5c"
+      },
+      "pf_jobs": {
+        "before": 44,
+        "after": 44,
+        "unchanged": 44,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "43a32d7f2593cdaf6fe0f163adebb24a32baf7eb4c2c207ef27c4503749ef5a1",
+        "afterSha256": "43a32d7f2593cdaf6fe0f163adebb24a32baf7eb4c2c207ef27c4503749ef5a1"
+      },
+      "pf_job_items": {
+        "before": 52,
+        "after": 52,
+        "unchanged": 52,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "9cd6bd0fbae1d49097eb7046d588d46df0266378c434009180a83ca1e7f5c8b5",
+        "afterSha256": "9cd6bd0fbae1d49097eb7046d588d46df0266378c434009180a83ca1e7f5c8b5"
+      },
+      "pf_proposals": {
+        "before": 47,
+        "after": 47,
+        "unchanged": 47,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "8a723faea54c4238026d2162a1e9581bdbb1c1b0902cce84e0f157d2eb01794f",
+        "afterSha256": "8a723faea54c4238026d2162a1e9581bdbb1c1b0902cce84e0f157d2eb01794f"
+      },
+      "pf_lookup_results": {
+        "before": 14,
+        "after": 14,
+        "unchanged": 14,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "5492455b2a8d16fb501d712a659cffc9448ffa92c893669183e6fc84652396e2",
+        "afterSha256": "5492455b2a8d16fb501d712a659cffc9448ffa92c893669183e6fc84652396e2"
+      },
+      "pf_synthetic_projects": {
+        "before": 1,
+        "after": 1,
+        "unchanged": 1,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "1a27c0ce92d03c850031544a20f5107af71e67e6d9a8f6d06e9321d5fbd383bb",
+        "afterSha256": "1a27c0ce92d03c850031544a20f5107af71e67e6d9a8f6d06e9321d5fbd383bb"
+      },
+      "pf_synthetic_proofs": {
+        "before": 1,
+        "after": 1,
+        "unchanged": 1,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "c7b7f41a6feaef635e2cc4d36b2da229920bf466c9d2926ff52f54c8510d860f",
+        "afterSha256": "c7b7f41a6feaef635e2cc4d36b2da229920bf466c9d2926ff52f54c8510d860f"
+      },
+      "pf_reviews": {
+        "before": 6,
+        "after": 6,
+        "unchanged": 6,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "afe947259d1e4803399efbc08bd2f9b14b37614027544e00c5b08342575311f9",
+        "afterSha256": "afe947259d1e4803399efbc08bd2f9b14b37614027544e00c5b08342575311f9"
+      },
+      "pf_apply_receipts": {
+        "before": 1,
+        "after": 1,
+        "unchanged": 1,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "6a1c5d0d628599a26faa473d31b7cc3dd8efa67a242eef3726d68b266e4e85b0",
+        "afterSha256": "6a1c5d0d628599a26faa473d31b7cc3dd8efa67a242eef3726d68b266e4e85b0"
+      },
+      "trays": {
+        "before": 0,
+        "after": 0,
+        "unchanged": 0,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "cable_type_default_materials": {
+        "before": 0,
+        "after": 0,
+        "unchanged": 0,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "material_cable_types": {
+        "before": 1,
+        "after": 1,
+        "unchanged": 1,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "2af61ecb3d3842f677b3df9fd4605e45046e79316337fd56388898588ec359ca",
+        "afterSha256": "2af61ecb3d3842f677b3df9fd4605e45046e79316337fd56388898588ec359ca"
+      },
+      "material_trays": {
+        "before": 0,
+        "after": 0,
+        "unchanged": 0,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "project_support_distances": {
+        "before": 0,
+        "after": 0,
+        "unchanged": 0,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "material_supports": {
+        "before": 0,
+        "after": 0,
+        "unchanged": 0,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "material_load_curves": {
+        "before": 0,
+        "after": 0,
+        "unchanged": 0,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "material_load_curve_points": {
+        "before": 0,
+        "after": 0,
+        "unchanged": 0,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "material_cable_type_standard_materials": {
+        "before": 0,
+        "after": 0,
+        "unchanged": 0,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "material_tray_standard_materials": {
+        "before": 0,
+        "after": 0,
+        "unchanged": 0,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "material_support_standard_materials": {
+        "before": 0,
+        "after": 0,
+        "unchanged": 0,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "material_cable_installation_materials": {
+        "before": 0,
+        "after": 0,
+        "unchanged": 0,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "material_cable_installation_standard_materials": {
+        "before": 0,
+        "after": 0,
+        "unchanged": 0,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "project_tray_purpose_templates": {
+        "before": 0,
+        "after": 0,
+        "unchanged": 0,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "project_files": {
+        "before": 0,
+        "after": 0,
+        "unchanged": 0,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "project_file_versions": {
+        "before": 0,
+        "after": 0,
+        "unchanged": 0,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "template_files": {
+        "before": 0,
+        "after": 0,
+        "unchanged": 0,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "template_file_versions": {
+        "before": 0,
+        "after": 0,
+        "unchanged": 0,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      }
+    }
+  },
+  "raw": {
+    "path": "pathfinder-engine/.scratch/tray-catalog-17cadea1-d54c-42b1-a563-2d3c514e7704/failed-apply-reconcile-raw.private.json",
+    "bytes": 6398825,
+    "sha256": "a10f370b7a9c7b168130722ab7048fbf046be321ef09ac0795b47107765d9614"
+  },
+  "privateComparison": {
+    "path": "pathfinder-engine/.scratch/tray-catalog-17cadea1-d54c-42b1-a563-2d3c514e7704/failed-apply-reconciliation.private.json",
+    "bytes": 15162,
+    "sha256": "ba86b40cf85cfe267c5ff2859d22bccd8e13c5669c04854f937ec6f32112ea41"
+  }
+}

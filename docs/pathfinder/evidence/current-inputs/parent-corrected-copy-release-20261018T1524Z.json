@@ -1,0 +1,14 @@
+{
+  "schemaVersion":"pathfinder.current-inputs.parent-release.v1",
+  "recordedAtUtc":"2026-10-18T15:23:28Z",
+  "decision":"execute-one-corrected-guarded-read-only-source-copy",
+  "executor":"/root only; both source and candidate writers perform no original SQL",
+  "sourceSetSha256":"0638a253afe34a87f6d3f0ed20fd6d9fcc58026076f653a28dae979d19ee4c35",
+  "reason":"Actual identity diagnostic observes raw172.17.0.2/32 versus canonical172.17.0.2 with every other expected identity/RO predicate satisfied. Minimal SQL host() selects the exact address for unchanged expected host/port/database/RO/isolation predicates; raw address remains metadata.",
+  "controls":{"file":"docs/pathfinder/evidence/current-inputs/source-format-controls-1792336959937.json","sha256":"905f918b1efa648a8d8477e16270a09fc85c1f672e1f043ccb9e9e2c23026020","status":"37/37_AND_SYNTAX3_PASS"},
+  "sourceOnlyReview":{"file":"docs/pathfinder/evidence/current-inputs/source-format-review-20261018T152307Z.json","sha256":"97120402b68b3aa4117ced6b7c10b50c99686dc27ecf51ffe648a4e1b3b84438","status":"NO_REMAINING_MATERIAL_FINDINGS"},
+  "inspection":{"file":"docs/pathfinder/evidence/current-inputs/corrected-inspection-20261018T1524Z.json","sha256":"25b5cbc19df37c2f461be50bb806e8fff7d90cb61d64eb54e25dfb7d0e0bab91","status":"PASS_METADATA_ONLY"},
+  "binding":{"path":"pathfinder-engine/.scratch/current-inputs-62d06e8c-dab4-4416-bf3e-988522b92759/binding.private.json","sha256":"9fe0de2370421622aa24eb2f2d55829738d98ea8151f9267b6ae3aeb0cc15589"},
+  "scope":"One fixed bounded before/copy/after read-only source copy with original project/model/cable gates and private evidence-before-assertions. No original writes/app bootstrap/restart/import/Review/Apply or unchanged retry.",
+  "historicalAttempt":"First1515Zcopy remains FAIL; diagnostic1521Z is separate observation-only evidence. Corrected business copy is NOT_RUN at this release."
+}

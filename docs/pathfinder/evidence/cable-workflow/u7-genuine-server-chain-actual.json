@@ -1,0 +1,151 @@
+{
+  "schemaVersion": "wfc.pf.u7-genuine-server-chain-public.v1",
+  "status": "SYNTHETIC_SERVER_CHAIN_PASS",
+  "generatedAt": "2026-10-20T23:28:16.946Z",
+  "branch": "pf-u7-genuine-chain-local-20261021",
+  "qualificationCheckpoint": "442c981ebcb9ab3e26361ab18059a2b25cd8e6b7",
+  "productRevision": "ea9848cbb42b33009f419745e857fa1b4f9ad237",
+  "fixtureOwner": "597b6afc-8319-4272-b540-5c0c29adcf85",
+  "images": {
+    "api": "sha256:3476333e9163d1f251f0eb5ddee67d4fe776af6c73e4f3c57e1ebd85ca443166",
+    "postgres": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751"
+  },
+  "sources": {
+    "coordinator": {
+      "path": "pathfinder-engine/.scratch/u8-linux-fixture-6b6e9d41-a671-49f4-a839-3cd11802d155/coordinator-v6.mjs",
+      "sha256": "720354a600e1b1ad1dbf656711718d01cbeb8a91353ac0bc1da6b4b0fc233c86"
+    },
+    "bootstrap": {
+      "path": "pathfinder-engine/.scratch/linux-import-chain-f222af4a-7658-4c76-8c06-e91db138e849/u7-bootstrap-linux.mjs",
+      "sha256": "58ec03ff09c9a982052e94df14e8881cd55b8125f4dd452eed14f6c5b4b2a629"
+    },
+    "chain": {
+      "path": "pathfinder-engine/.scratch/linux-import-chain-f222af4a-7658-4c76-8c06-e91db138e849/u7-fixed-world-chain-linux-diagnostic-v4.mjs",
+      "sha256": "dce6be408c4d08fc81c798a4a467ebaaf924242b82e57c4970a2bf0b56266f08"
+    },
+    "factory": {
+      "path": "scripts/model-registry/integration.mjs",
+      "sha256": "451494bb2dced967db9f5c45c9290ca0b91d1fa04968c282c31bd672213cc7af"
+    }
+  },
+  "engineIdentity": {
+    "version": "45c24bf5f433f13e102600b36f20327c77961d0a",
+    "runnerSha256": "ca8e20d527f720d56a7933d3de0567ffd49bcfb81590f1d11c854a291498f23b",
+    "contentSha256": "ebb19973d052848e544e5d75e382f599498453375a6478ef84000c306836021d",
+    "schemaVersion": "wfc.pf.engine-identity.v1",
+    "policyVersions": {
+      "fitting": "pf2.rules.v1",
+      "numeric": "wfc.pf.binary64-decimal-design.v1",
+      "routing": "wfc.pf.core-routing.v1",
+      "projection": "wfc.pf.model-runner-v1-projection.v1",
+      "categoryMapping": "wfc-mto-v1",
+      "directSecondary": "nearest-eligible-tray-or.v1"
+    },
+    "coreModuleSha256": "38cc6efa6a7bc9b370a8b13c78c61b593a98bdae84135018518bd21f554aa373",
+    "derivationSha256": "da5027d8b80005b0e26c3acb9e5171644469dd4c9953feab2ac6ed2647d54840",
+    "modelModuleSha256": "6e3e9ba6d5e589123e15ddba86e9097e11fece8248d49bfc8c6b4f36ab4fb913",
+    "adapterModuleSha256": "c165a42035beb2875ec2909b5434c9696d1e639417c7b2eee03ac405d9c67a7b"
+  },
+  "phases": {
+    "preflight": {
+      "exitCode": 0,
+      "status": "PASS",
+      "receiptSha256": "68768eefc53d544ee38c9bebcba19b80bed5019e238224180299799e6231a3a7"
+    },
+    "bootstrap": {
+      "exitCode": 0,
+      "status": "PASS",
+      "receiptSha256": "ae818c682018a6708a960922fa79acfbcf2d615cfbf8f48dfc1ee0540cce0d7b"
+    },
+    "chain": {
+      "exitCode": 0,
+      "status": "PASS",
+      "receiptSha256": "87a1d376fa893eef101d26a5fc425adb30415b89f3c582abcf849b11babd207b"
+    }
+  },
+  "verification": {
+    "checks": [
+      {
+        "name": "real-prepare-publish-trace",
+        "status": "PASS"
+      },
+      {
+        "name": "direct-formula-shared-reuse-blank-write-existing-review-install-MV",
+        "status": "PASS"
+      },
+      {
+        "name": "exact-pair-replay-and-writer-rediscovery-idempotent",
+        "status": "PASS"
+      },
+      {
+        "name": "genuine-queued-cancellation-preserves-new-blank-cable",
+        "status": "PASS"
+      }
+    ],
+    "timesMilliseconds": {
+      "genuine-preparation-and-trace": 4005,
+      "atomic-shared-fixed-world-save": 59,
+      "real-impact-admission-worker-seal": 2333,
+      "real-conditional-initial-fill": 147
+    },
+    "importedResources": 3,
+    "importedBytes": 878,
+    "retainedFiles": 32,
+    "retainedBytes": 400239,
+    "manifestSha256": "976d2ced29f03e6c04bcaa30d33c7b4de68b4d39172be7a565072866961061c8"
+  },
+  "observed": {
+    "directDistanceMetres": 0.5,
+    "formulaVersion": "direct-secondary-3d.v1",
+    "beforePercentMetres": "5.5",
+    "beforeRoundingMetres": "6.05",
+    "designLengthMetres": "7",
+    "routing": "/SECONDARY",
+    "receiptBackedCurrent": true,
+    "existingValuesRequireReview": true,
+    "calculatedProposals": 2
+  },
+  "sourceChecks": {
+    "boundaryPortGuards": 50,
+    "finalCoordinatorPureGuards": 85,
+    "finalDiagnosticChainPureGuards": 29,
+    "exactFailedFixtureRetirementPureGuards": 30,
+    "countsAreSeparateRevisionScopes": true,
+    "syntaxLintIndependentReview": "PASS"
+  },
+  "cleanup": {
+    "status": "PASS",
+    "removedPostgres": true,
+    "removedVolume": true,
+    "importServer": "PASS",
+    "calculationServer": "PASS",
+    "preservation": {
+      "status": "PASS",
+      "identityPreserved": true,
+      "externalProcessObservationsChanged": true
+    },
+    "finalObservationSha256": "a6ea6e552543d59480ef50a823c34a39d0b4948786789cde9f9fa2cdade29fb3"
+  },
+  "receipts": {
+    "outer": "dd0abd1c4826c04163c6e2d69c851bca3c7e18ac8d693b06356f0d62aa231a36",
+    "bootstrap": "1cc5bbc80166f9b6a26168a894dbdbeeac51b0f8d669c1c070242a2f4cfe90ae",
+    "chain": "f24e8be1ffad1aa304f9ac73d46d219d0a59eb0959fd953ccd2c2dfe311e7f41",
+    "cleanup": "b8defe5255f6373d0d36077c1ebd004e6ccefba516c4c21cb592445252535730"
+  },
+  "limitations": {
+    "storage": "Owned streaming filesystem adapter; MinIO wire transport NOT_RUN by this slice",
+    "SDKObjectPropertyVisibility": "BLOCKED by saved browser-origin refusal; actual Aalborg reread required first",
+    "realModelEngineering": "NOT_RUN",
+    "nativeParity": "NOT_RUN",
+    "humanReviewApply": "NOT_RUN",
+    "activeEngineCancellation": "NOT_RUN; genuine queued cancellation only",
+    "instrumentation": "Shared eligibility/admission and queued cancellation verified; completed Instrumentation formula NOT_RUN",
+    "UI": "Product popup already installed on owned5191; actual browser acceptance BLOCKED",
+    "initialFillAudit": "Receipt-backed live proof validates strict nativeParity:not-performed and engineeringAccepted:false; no fabricated human review"
+  },
+  "priorFailuresPreserved": true,
+  "originalCheckoutsAndSource5191WrittenByThisQualification": false,
+  "preparer": "PAUSED",
+  "pushed": false,
+  "merged": false
+}

@@ -1,0 +1,68 @@
+{
+  "observedAtUtc": {
+    "current_time": "2026-10-18 09:31:01 UTC"
+  },
+  "branchSearch": [
+    {
+      "status": "fulfilled",
+      "value": {
+        "label": "wfc-main",
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "Action completed."
+            }
+          ],
+          "structuredContent": {
+            "branches": [
+              {
+                "branch": "main"
+              }
+            ],
+            "cursor": "MQ"
+          },
+          "isError": false
+        }
+      }
+    },
+    {
+      "status": "fulfilled",
+      "value": {
+        "label": "unpublished-feature",
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "Action completed."
+            }
+          ],
+          "structuredContent": {
+            "branches": [],
+            "cursor": null
+          },
+          "isError": false
+        }
+      }
+    }
+  ],
+  "pullRequestSearch": {
+    "query": "head:pf-path-lookup-local-20261018",
+    "repository": "MrToKa/WFC",
+    "state": "all",
+    "issues": []
+  },
+  "gitLsRemote": {
+    "wfcMain": "e1ef20202598bb4d3d78e4772cbbb9747ec23a00",
+    "canonicalMaster": "45c24bf5f433f13e102600b36f20327c77961d0a"
+  },
+  "cachedOriginMainComparison": {
+    "behind": 0,
+    "ahead": 21,
+    "checkedHead": "9e6561e33ccf9ab535fb2184c858ecd20240071d"
+  },
+  "limits": [
+    "Feature not published; no candidate PR, remote review or CI result.",
+    "Branch connector presence does not itself supply exact remote SHAs; ls-remote separately observed them."
+  ]
+}

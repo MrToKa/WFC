@@ -1,0 +1,121 @@
+{
+  "schemaVersion": "wfc.pf.capacity-memory-source-checkpoint.v1",
+  "at": "2026-10-20T07:47:40.620Z",
+  "codeParent": "dbba48a2a6f8aeb55aeee59e69e64d1d74564a15",
+  "scope": "Source verification after actual full-input 2GiB union OOM; not successful real-input qualification or engineering acceptance.",
+  "status": "SOURCE_VERIFIED",
+  "pins": [
+    {
+      "path": "scripts/pathfinder-capacity/qualify-runner.mjs",
+      "sha256": "0be1e94aac4906a5a677125239d1997f18870b9c5bc9ec222428c06120dbc643"
+    },
+    {
+      "path": "scripts/pathfinder-capacity/qualify-trace.mjs",
+      "sha256": "52a346aa9bae65bb57026ce47403b6faa41b48dd3760458be70956debc6e07e4"
+    },
+    {
+      "path": "server/pathfinder/preparationUnionTask.ts",
+      "sha256": "279cc4207b5020b9bca4b164bbc215a3852b7af4e8e04cc58600c9573d3fa51e"
+    },
+    {
+      "path": "server/pathfinder/preparationUnionTask.test.ts",
+      "sha256": "bf7c4d020e6ffac3c844ed198a15f1c4544ed1d4e28adeb2fa7d56dc228a48dc"
+    },
+    {
+      "path": "server/pathfinder/preparationUnionWorker.ts",
+      "sha256": "1ad11087a11e59364c17b26bab1215086463bf3a8634af70ae071200b466f481"
+    },
+    {
+      "path": "server/pathfinder/preparationUnionWorker.test.ts",
+      "sha256": "238b0a77f858eacbf7bd5b2a63f8fcaad403c1a839d41b031cdd166ba1aacecc"
+    },
+    {
+      "path": "server/pathfinder/preparationSessions.ts",
+      "sha256": "d19bb024bf6ac87580b87e01e37c84592f84c5326bbb74af7fda67d914a869fb"
+    },
+    {
+      "path": "server/pathfinder/preparationSessions.test.ts",
+      "sha256": "7adf2e0c7daba8313aeb3bb0153c771cec728b6c1be8f25cc14e7bd615a9c883"
+    },
+    {
+      "path": "server/pathfinder/preparationPublisher.ts",
+      "sha256": "f1a7008f0200bd87082287f19b03dd7979df72a1561bbac4bcd81fe61c39d556"
+    },
+    {
+      "path": "server/pathfinder/preparationPublisher.test.ts",
+      "sha256": "601936d15e6249b33d1769d87e02703af233983b234ad3e297d9b37dc6817f3c"
+    },
+    {
+      "path": "server/pathfinder/preparationPublisherMemory.test.ts",
+      "sha256": "5add01f9d69b3f8bd9b8862e39f11fb2a809e8beb46870a3f80688350b504762"
+    },
+    {
+      "path": "server/pathfinder/storage.ts",
+      "sha256": "a3bd3ac3438afbf8ec3e0e3a637b04b942f28a6a5ea79df954b562f9c9b3923d"
+    },
+    {
+      "path": "server/pathfinder/storage-bytes.test.ts",
+      "sha256": "85905f8ee3f313fcfb9f159ba629c0584638a8de18d20f31487b100dfb0c3598"
+    },
+    {
+      "path": "shared/preparationMerge.ts",
+      "sha256": "98a60f561ae1cd0fe2bff25e42f0bf3cfb9188e634f2a200f69015c490f1aced"
+    },
+    {
+      "path": "shared/preparationMerge.test.ts",
+      "sha256": "66d9334d941dbdbd5c4dd4ad0fe327996b62e855a70a9013330819b27cf0d5ad"
+    }
+  ],
+  "tests": [
+    {
+      "file": "memory-union-tests1.json",
+      "assertions": 145,
+      "status": "PASS",
+      "receiptSha256": "dc32d8c37340ea3b04a78702ec63ce1a941fda42335311d1b9bf04dd43b2daca"
+    },
+    {
+      "file": "memory-storage-tests1.json",
+      "assertions": 31,
+      "status": "PASS",
+      "receiptSha256": "4385195bc057146c4fcdc2522422dd12053534f20e95c33ed99f2cb169c09854"
+    },
+    {
+      "file": "memory-session-tests2.json",
+      "assertions": 38,
+      "status": "PASS",
+      "receiptSha256": "d6a5076a0fb26e1321b4c644bdc9a14756dc6fa90336bcf92263debaebb587fb"
+    }
+  ],
+  "uniqueAssertions": 176,
+  "affectedSuiteRerun": 38,
+  "frontendTypecheck": "PASS",
+  "serverTypecheck": "PASS_AFTER_TEST_ASSERTION_TYPING_FIX",
+  "focusedLint": "PASS",
+  "whitespace": "PASS",
+  "independentSourceReviews": "NO_BLOCKING_FINDINGS",
+  "actualCapture": {
+    "parts": 5,
+    "bytes": 114186790,
+    "physicalLeaves": 1165,
+    "projectTrays": 330,
+    "captureEvidenceParts": 5
+  },
+  "firstRealUnion": {
+    "status": "FAIL",
+    "exitCode": 137,
+    "oomKilled": true,
+    "hardMemoryBytes": 2147483648,
+    "lastObservedWholeNodeRssBytes": 766734336,
+    "lastPhase": "runner",
+    "exactPeak": "NOT_MEASURED",
+    "helperRemoved": true,
+    "publicationInvoked": false
+  },
+  "newRealUnion": "NOT_RUN",
+  "newFitting": "NOT_RUN",
+  "newProtectedPublication": "NOT_RUN",
+  "realApply": "NOT_RUN",
+  "cSharpChanged": false,
+  "limitsRaised": false,
+  "originalApplicationChanged": false
+}

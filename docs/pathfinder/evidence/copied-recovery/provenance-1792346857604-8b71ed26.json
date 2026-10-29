@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "pathfinder.copied-recovery.provenance-receipt.v1",
+  "status": "PASS",
+  "startedAt": "2026-10-18T18:07:37.480Z",
+  "mode": "verify",
+  "drillId": "e09d28fa-580f-484a-a7f7-ac8b8a00cee7",
+  "chain": {
+    "events": 67,
+    "bytes": 2414498,
+    "finalSha256": "709f5179b5a76908067300cf5b9c97b07b92bae63cc314a43bf13515f5df818c",
+    "recordsSha256": "89d72b91dcfc30c30bfd3c832c402c3a05be2a42d202d9c769bcb27cef1a8f74"
+  },
+  "coreManifest": {
+    "path": "pathfinder-engine/.scratch/copied-recovery-c8f5c134-d041-45b9-ab20-214ff70d30dc/backup/manifest.json",
+    "bytes": 26217,
+    "sha256": "89b2c63ff10b97e36fab42bed3195d50f9f2d99522d3ee529a98b16fb39f335a"
+  },
+  "backupId": "b77a1ed0-2fa2-48a3-92f8-207a60b2035e",
+  "seal": {
+    "path": "pathfinder-engine/.scratch/copied-recovery-c8f5c134-d041-45b9-ab20-214ff70d30dc/provenance/seal.private.json",
+    "bytes": 826,
+    "sha256": "e39e7ac6140e48a19e392d064fc984bb9a6998a4e720bb46a6371812bcf2cc09"
+  },
+  "adjunctManifest": {
+    "path": "pathfinder-engine/.scratch/copied-recovery-c8f5c134-d041-45b9-ab20-214ff70d30dc/provenance/manifest.private.json",
+    "bytes": 19275,
+    "sha256": "19608da12ec0ba9f429ee8a01f78b214a5b252c13a76d1ae97da9306fb618a49"
+  },
+  "files": 75,
+  "totalBytes": 4148668,
+  "authMaterialExcluded": true,
+  "rawModelBackupScope": "Core archive, not this adjunct; actual raw resource proof is supplied separately by backup/restore audits.",
+  "finishedAt": "2026-10-18T18:07:37.604Z"
+}

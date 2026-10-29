@@ -1,0 +1,83 @@
+{
+  "schemaVersion": "pathfinder.batched-capture.runtime-baseline.v1",
+  "recordedAt": "2026-10-18T16:06:20.219Z",
+  "status": "PASS",
+  "sourceHead": "6761cb76df79392befba6ace1c4d8c685b36cfdd",
+  "meaning": "Fresh owned restore baseline only, before new source build. Existing5190/originals not touched.",
+  "runtime": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\batched-capture-runtime-20261018-1600",
+  "project": "wfc-pathfinder-local-0cba87606e9b",
+  "owner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+  "port": 5191,
+  "restore": {
+    "backupId": "3db9fa33-c10e-4646-82bc-fe99f3d8af35",
+    "artifactsSha256": "afce4f71413a8180f0af705c92e938b6f2af43f24687ab34a2d0f374d4cd1ce1",
+    "jwtRotated": true,
+    "sessionsFenced": true,
+    "inventoriesEqual": true
+  },
+  "resources": {
+    "containers": [
+      {
+        "role": "web",
+        "id": "0da5986f67a359d22cd08c1e7bcf0cb5059ca914fe10844989f0512ffc534d57",
+        "image": "sha256:1895a3fa33c25933024ab514ef61bd2d1568ffb33477d114541b855da65445b7",
+        "name": "wfc-pathfinder-local-0cba87606e9b-web-1",
+        "running": true,
+        "startedAt": "2026-10-18T15:55:52.777860491Z"
+      },
+      {
+        "role": "api",
+        "id": "dc65848eb4ec48ccf68108d9913c879b0c11bbea87fc275df39f94272b4880c2",
+        "image": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+        "name": "wfc-pathfinder-local-0cba87606e9b-api-1",
+        "running": true,
+        "startedAt": "2026-10-18T15:55:46.943739121Z"
+      },
+      {
+        "role": "storage-ready",
+        "id": "aef158ee3b96e8504f26169ab34d8065c235d196153116f8532324dbf6d51b84",
+        "image": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+        "name": "wfc-pathfinder-local-0cba87606e9b-storage-ready-1",
+        "running": false,
+        "startedAt": "2026-10-18T15:55:46.189280818Z"
+      },
+      {
+        "role": "postgres",
+        "id": "6a39e7b2d794055dccef0919cf3a99ddf60e0f3c0b5daae062cec1eb6c9b3785",
+        "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+        "name": "wfc-pathfinder-local-0cba87606e9b-postgres-1",
+        "running": true,
+        "startedAt": "2026-10-18T15:55:24.900140794Z"
+      },
+      {
+        "role": "minio",
+        "id": "56456c8675afd1458df3ae87d8df4bf31131fa1807f7468e3958f900f53a73ed",
+        "image": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+        "name": "wfc-pathfinder-local-0cba87606e9b-minio-1",
+        "running": true,
+        "startedAt": "2026-10-18T15:55:24.907837971Z"
+      }
+    ],
+    "volumes": [
+      "wfc-pathfinder-local-0cba87606e9b_postgres",
+      "wfc-pathfinder-local-0cba87606e9b_minio",
+      "wfc-pathfinder-local-0cba87606e9b_staging",
+      "wfc-pathfinder-local-0cba87606e9b_pathfinder"
+    ],
+    "networks": [
+      {
+        "id": "ef7ba0d6199afe8c1c361d27acc12f52fbdeca7e575af51ac9e63054cf8301d1",
+        "name": "wfc-pathfinder-local-0cba87606e9b_front"
+      },
+      {
+        "id": "3ab7652221239fe0a4c35f64be8a706aa6182633775d7aa0627fa1b54968e57d",
+        "name": "wfc-pathfinder-local-0cba87606e9b_backend"
+      }
+    ]
+  },
+  "localRunnerInterop": {
+    "path": "pathfinder-engine/.scratch/capture-runner-3e6108f3-8bbd-497c-b2fe-3e3c1017c02d/runner/PathFinder.ModelRunner.dll",
+    "sha256": "5d84d7799eb95d441b427568d67f2af82a61bdc09b5420432ead7915ebb5fe97",
+    "scope": "Fresh local publish for capture interop only; not Linux runtime qualification or native parity."
+  }
+}

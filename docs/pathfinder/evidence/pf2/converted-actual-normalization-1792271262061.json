@@ -1,0 +1,189 @@
+{
+  "schemaVersion": "pathfinder.converted.actual-normalization.v1",
+  "observedAt": "2026-10-17T21:07:42.061Z",
+  "status": "PASS",
+  "scope": "actual-sdk-selected-converted-mesh-normalization-and-strict-model-interop",
+  "inventory": {
+    "receipt": "inventory-1792271145372-receipt.json",
+    "sha256": "ade029bcbe1b764ff7257017d6633ab90f9e4be4a560a5217e1c3fad708d1986",
+    "objectCount": 438155,
+    "fragmentCount": 664556,
+    "inventoryComplete": true,
+    "geometryComplete": false
+  },
+  "cases": [
+    {
+      "caseId": "nwd-lookup-01",
+      "status": "PASS",
+      "snapshotPath": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf2-converted\\normalized\\1792271204697-c02e718b-f05f-41bd-aa61-d3492e0b22d3\\snapshot.json",
+      "snapshotBytes": 6482934,
+      "snapshotSha256": "0d5546c5fe1992274b27ade65da9c1815488af0b82fea3e695a348894fd441af",
+      "rawCaptureReceiptSha256": "7375f11d81a8fd48b00827a41e82f07185faf6f1b4b82971ac73a2d3a601d0ae",
+      "rawPartClosureSha256": "d5b0a47fba69267e50db859570e24d4b1cb9ab1ccd36974704fd0813dc83591c",
+      "strictModelInterop": "PASS",
+      "objects": 68,
+      "fragments": 257,
+      "vertices": 91934,
+      "triangles": 93738,
+      "maximumMatrixCompositionAndSampleResidual": 0,
+      "completeInventorySeparatelyVerified": true,
+      "rawSelectedGeometryComplete": true,
+      "normalizedInventoryComplete": false,
+      "normalizedGeometryComplete": false,
+      "coordinates": {
+        "vertexFrame": "canonical-world-metres",
+        "sourceUnits": "m",
+        "metresPerSourceUnit": 1,
+        "sourceToWorldMetres": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1
+        ],
+        "globalOffsetMetres": [
+          42.89071492700009,
+          -24.354130538688224,
+          5.195000167136811
+        ],
+        "displayToWorldMetres": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          42.89071492700009,
+          -24.354130538688224,
+          5.195000167136811,
+          1
+        ]
+      },
+      "proofFlags": {
+        "adapterVersion": "pf2.converted-normalizer.v1",
+        "sourceKind": "converted",
+        "inventoryComplete": false,
+        "geometryComplete": false,
+        "unitsVerified": false,
+        "transformsVerified": false,
+        "planningVisibilityKnown": false,
+        "sourceLinkVerified": false,
+        "evidenceSha256": [
+          "7375f11d81a8fd48b00827a41e82f07185faf6f1b4b82971ac73a2d3a601d0ae",
+          "d5b0a47fba69267e50db859570e24d4b1cb9ab1ccd36974704fd0813dc83591c",
+          "ade029bcbe1b764ff7257017d6633ab90f9e4be4a560a5217e1c3fad708d1986"
+        ]
+      },
+      "diagnostics": [],
+      "engineeringReadiness": "needs_review"
+    },
+    {
+      "caseId": "nwd-lookup-02",
+      "status": "PASS",
+      "snapshotPath": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf2-converted\\normalized\\1792271204713-58fe717c-fe0a-485e-99cc-ed4e9b2e58de\\snapshot.json",
+      "snapshotBytes": 2459301,
+      "snapshotSha256": "5187d096f444767ad46973f9529e14ec79d21c1d7f32829994d70928f820f060",
+      "rawCaptureReceiptSha256": "7f61100d80e7192ce582dff464e86f4e0d112782a7631f2e242d81f7335c2e53",
+      "rawPartClosureSha256": "fa766e5fbb322be480c5cff7145d289b5d6e89f64570b3ea136878f268dfcb08",
+      "strictModelInterop": "PASS",
+      "objects": 26,
+      "fragments": 99,
+      "vertices": 34674,
+      "triangles": 35772,
+      "maximumMatrixCompositionAndSampleResidual": 0,
+      "completeInventorySeparatelyVerified": true,
+      "rawSelectedGeometryComplete": true,
+      "normalizedInventoryComplete": false,
+      "normalizedGeometryComplete": false,
+      "coordinates": {
+        "vertexFrame": "canonical-world-metres",
+        "sourceUnits": "m",
+        "metresPerSourceUnit": 1,
+        "sourceToWorldMetres": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1
+        ],
+        "globalOffsetMetres": [
+          42.89071492700009,
+          -24.354130538688224,
+          5.195000167136811
+        ],
+        "displayToWorldMetres": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          42.89071492700009,
+          -24.354130538688224,
+          5.195000167136811,
+          1
+        ]
+      },
+      "proofFlags": {
+        "adapterVersion": "pf2.converted-normalizer.v1",
+        "sourceKind": "converted",
+        "inventoryComplete": false,
+        "geometryComplete": false,
+        "unitsVerified": false,
+        "transformsVerified": false,
+        "planningVisibilityKnown": false,
+        "sourceLinkVerified": false,
+        "evidenceSha256": [
+          "7f61100d80e7192ce582dff464e86f4e0d112782a7631f2e242d81f7335c2e53",
+          "fa766e5fbb322be480c5cff7145d289b5d6e89f64570b3ea136878f268dfcb08",
+          "ade029bcbe1b764ff7257017d6633ab90f9e4be4a560a5217e1c3fad708d1986"
+        ]
+      },
+      "diagnostics": [],
+      "engineeringReadiness": "needs_review"
+    }
+  ],
+  "nativeReferenceComparison": "BLOCKED: native Manage2027 entitlement unavailable; no complete native oracle capture.",
+  "realModelEngineeringTolerance": "NOT_ESTABLISHED",
+  "engineeringWriteAuthorized": false,
+  "limitations": [
+    "Actual binary64 matrix targets, composition and sample consistency verified; this does not establish native/conversion numeric equivalence.",
+    "The converter source geometry may retain its own prior precision limits; double capture math does not recover lost source precision.",
+    "Full hierarchy inventory is separate from the selected 94-object, 356-fragment mesh scopes; the full model mesh is not captured.",
+    "Unknown inherited native visibility, unassigned production categories and source-to-conversion linkage remain explicit unresolved gates."
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "schemaVersion": "wfc.pf.current-full-recovery-attempt.v1",
+  "status": "FAIL",
+  "at": "2026-10-20T11:08:01.530Z",
+  "attempt": 1,
+  "sourceCommit": "6e37e7a13d7ffa71690696c693c8ea5ce8960963",
+  "code": "PF_OPERATION_FAILED",
+  "phase": "Model-resource audit before cold observation, dump or image/archive capture",
+  "cleanup": {
+    "status": "PASS",
+    "scopeNonce": "fb7cc387-61e7-41a8-be17-a5315faf74f2",
+    "operationJoined": true,
+    "commandsJoined": true,
+    "helpersRemoved": true,
+    "remoteExecUnknown": false,
+    "unknownDockerMutation": false
+  },
+  "recovery": {
+    "status": "PASS",
+    "sourceApiWebHealthy": true,
+    "postgresRestarted": false
+  },
+  "outsidePreserved": true,
+  "causeProof": {
+    "status": "PASS",
+    "sameResourceBytes": 233991168,
+    "observations": [
+      {
+        "tmpBytes": 134217728,
+        "status": "PASS",
+        "outcome": {
+          "status": "FAIL",
+          "code": "STORAGE_EXHAUSTED"
+        },
+        "expectedBytes": 233991168,
+        "tmpFreeBytes": "134217728",
+        "tmpTotalBytes": "134217728",
+        "rollbackConfirmed": true
+      },
+      {
+        "tmpBytes": 536870912,
+        "status": "PASS",
+        "outcome": {
+          "status": "PASS",
+          "bytes": 233991168
+        },
+        "expectedBytes": 233991168,
+        "tmpFreeBytes": "536870912",
+        "tmpTotalBytes": "536870912",
+        "rollbackConfirmed": true
+      }
+    ],
+    "correctedTmpBytes": 536870912,
+    "fullAudit": {
+      "versions": 5,
+      "resources": 1541,
+      "bytes": 1930801055
+    },
+    "allModelsHealthy": true
+  },
+  "diagnosticAttempt1": "HELPER_RESPONSE_INVALID: root standalone probe omitted required JWT configuration; retained, helpers removed/outside unchanged. Corrected separate diagnostic2 passed.",
+  "source5191Retained": true,
+  "completedArchive": false,
+  "restore": "NOT_RUN",
+  "realApply": false
+}

@@ -1,0 +1,153 @@
+{
+  "schemaVersion": "pathfinder.batched-capture.csharp-check.v1",
+  "status": "PASS",
+  "recordedAt": "2026-10-18T15:59:51.955Z",
+  "scratch": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\capture-input-dotnet-0b0ec41c-ec57-4993-a21d-edaa58f06231",
+  "checks": [
+    {
+      "name": "input-scope-incomplete-sdk-coverage-retained",
+      "status": "PASS",
+      "detail": "Synthetic descriptor exercises actual-size input counts; SDK omission remains unknown, not engineering acceptance."
+    },
+    {
+      "name": "input-scope-roundtrip-hashes-counts",
+      "status": "PASS",
+      "detail": "Recorded counts/digests survive strict C# serialization."
+    },
+    {
+      "name": "input-scope-legacy-omits-field",
+      "status": "PASS",
+      "detail": "Historical capture remains unchanged when provenance is absent."
+    },
+    {
+      "name": "input-scope-rejects-unknown-schema",
+      "status": "PASS",
+      "detail": "ArgumentException: Capture input scope is outside its bounded session contract."
+    },
+    {
+      "name": "input-scope-rejects-too-many-names",
+      "status": "PASS",
+      "detail": "ArgumentException: Capture input scope is outside its bounded session contract."
+    },
+    {
+      "name": "input-scope-rejects-too-many-chunks",
+      "status": "PASS",
+      "detail": "ArgumentException: Capture input scope is outside its bounded session contract."
+    },
+    {
+      "name": "input-scope-rejects-too-few-chunks",
+      "status": "PASS",
+      "detail": "ArgumentException: Capture input scope is outside its bounded session contract."
+    },
+    {
+      "name": "input-scope-rejects-zero-chunks-nonempty",
+      "status": "PASS",
+      "detail": "ArgumentException: Capture input scope is outside its bounded session contract."
+    },
+    {
+      "name": "input-scope-rejects-too-many-bytes",
+      "status": "PASS",
+      "detail": "ArgumentException: Capture input scope is outside its bounded session contract."
+    },
+    {
+      "name": "input-scope-rejects-bad-hash",
+      "status": "PASS",
+      "detail": "ArgumentException: Invalid lowercase SHA256."
+    },
+    {
+      "name": "input-scope-rejects-bad-names-hash",
+      "status": "PASS",
+      "detail": "ArgumentException: Invalid lowercase SHA256."
+    },
+    {
+      "name": "input-scope-rejects-missing-final-scan",
+      "status": "PASS",
+      "detail": "ArgumentException: Completed capture needs SDK row coverage."
+    },
+    {
+      "name": "input-scope-rejects-forged-complete",
+      "status": "PASS",
+      "detail": "ArgumentException: Capture property row coverage is inconsistent."
+    },
+    {
+      "name": "input-scope-rejects-returned-above-attempted",
+      "status": "PASS",
+      "detail": "ArgumentException: Capture property row coverage is inconsistent."
+    },
+    {
+      "name": "input-scope-rejects-attempted-above-index",
+      "status": "PASS",
+      "detail": "ArgumentException: Capture property row coverage is inconsistent."
+    },
+    {
+      "name": "input-scope-rejects-negative-returned",
+      "status": "PASS",
+      "detail": "ArgumentException: Capture property row coverage is inconsistent."
+    },
+    {
+      "name": "input-scope-rejects-wrong-omissions",
+      "status": "PASS",
+      "detail": "ArgumentException: Capture property row coverage is inconsistent."
+    },
+    {
+      "name": "input-scope-rejects-unknown-member",
+      "status": "PASS",
+      "detail": "JsonException: The JSON property 'engineeringAccepted' could not be mapped to any .NET member contained in type 'PathFinder.Model.CaptureInputScope'."
+    },
+    {
+      "name": "input-scope-sdk-row-closure",
+      "status": "PASS",
+      "detail": "SDK row closure alone grants no native proof."
+    },
+    {
+      "name": "input-scope-no-forged-inventoryComplete",
+      "status": "PASS",
+      "detail": "ArgumentException: Recorded selected input scope cannot claim native or engineering proofs."
+    },
+    {
+      "name": "input-scope-no-forged-geometryComplete",
+      "status": "PASS",
+      "detail": "ArgumentException: Recorded selected input scope cannot claim native or engineering proofs."
+    },
+    {
+      "name": "input-scope-no-forged-unitsVerified",
+      "status": "PASS",
+      "detail": "ArgumentException: Recorded selected input scope cannot claim native or engineering proofs."
+    },
+    {
+      "name": "input-scope-no-forged-transformsVerified",
+      "status": "PASS",
+      "detail": "ArgumentException: Recorded selected input scope cannot claim native or engineering proofs."
+    },
+    {
+      "name": "input-scope-no-forged-planningVisibilityKnown",
+      "status": "PASS",
+      "detail": "ArgumentException: Recorded selected input scope cannot claim native or engineering proofs."
+    },
+    {
+      "name": "input-scope-no-forged-sourceLinkVerified",
+      "status": "PASS",
+      "detail": "ArgumentException: Recorded selected input scope cannot claim native or engineering proofs."
+    }
+  ],
+  "sources": [
+    {
+      "file": "pathfinder-engine/src/PathFinder.Model/Contracts.cs",
+      "sha256": "86efb3515ab9816aa20d20ea10cc5b49fae5bd3d8e51f5e816c810a211394c15"
+    },
+    {
+      "file": "pathfinder-engine/src/PathFinder.Model/SnapshotReader.cs",
+      "sha256": "7ed1837401dbcdb68a355bc0ee53ac7fc03e6b7b965eb73d078db4719af68fab"
+    },
+    {
+      "file": "pathfinder-engine/tests/PathFinder.Model.Tests/InputScopeTests.cs",
+      "sha256": "6dc971e4f5be5571bc9cf40f7a62660fa0c74e1ddf5374ae259d0be4413e6488"
+    },
+    {
+      "file": "pathfinder-engine/tests/PathFinder.Model.Tests/Program.cs",
+      "sha256": "6c5e3531614ca31cef2404edd88ad1fccb7fe74eeb61b83f5abf2f663238ca13"
+    }
+  ],
+  "build": "PASS",
+  "finishedAt": "2026-10-18T15:59:59.298Z"
+}

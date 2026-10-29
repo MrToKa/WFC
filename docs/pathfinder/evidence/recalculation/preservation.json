@@ -1,0 +1,1569 @@
+{
+  "schemaVersion": "wfc.pf.r7-preservation-evidence.v1",
+  "status": "PASS",
+  "recordedAt": "2026-10-19T07:47:42.991Z",
+  "scope": "Actual root-executed offline reconciliation of the isolated 5191 retained fixture and full SQL/PF_ROOT snapshots; no business rows are included in this public receipt.",
+  "source": {
+    "branch": "pf-r7-durable-recalculation-local-20261019",
+    "headAtCandidateBuild": "bc6e0e1fd3188a7dfd2cc27ba228b3cbe46ef2c1",
+    "workingTreeSourceSha256": "a5f4f2bde38ca3789fd07c55c4319467b189608e95f47e5918de6084f64d24ed",
+    "sourceFiles": 1420,
+    "candidate": 3,
+    "stageCommitAtCapture": "NOT_YET_COMMITTED",
+    "images": {
+      "api": "sha256:6b182c2704f15168e42032bab390f97949f432dffe6b8e788ce94498dba2fe0b",
+      "web": "sha256:6d7aa2a62bf2a41fb2749f08965392f62c630bda2d62b810e96989407afe3719"
+    }
+  },
+  "runtime": {
+    "port": 5191,
+    "candidate": 3,
+    "apiContainer": "3edd0b47ab7e401a3c5d17530d99fc4e0adeea2300a2ccef483b39da52872537",
+    "webContainer": "edc60e0f89b6e36d676e46d09bdf908ccb8a5e6f746677fa426ee80d6f36c378",
+    "upgradeRecordedAt": "2026-10-19T07:31:02.9Z"
+  },
+  "sql": {
+    "baselineTables": 110,
+    "finalTables": 116,
+    "passedTables": 116,
+    "exactOldTables": 104,
+    "receiptQualifiedOldTables": 6,
+    "newTables": 6,
+    "newTableNames": [
+      "pf_engine_project_service",
+      "pf_recalculation_claims",
+      "pf_recalculation_commands",
+      "pf_recalculation_enrollments",
+      "pf_recalculation_events",
+      "pf_recalculation_state"
+    ],
+    "oldJobsProtected": 57,
+    "oldJobChanges": "Only additive last_served_at=NULL and dispatch_slices=0; every pre-existing field exact.",
+    "newAutomaticJobs": 10,
+    "newJobItems": 30,
+    "newProposals": 27,
+    "commands": 7,
+    "engineIdentities": 3,
+    "engineeringValues": "Six normal fixture Project Details PATCH operations acknowledged; final engineering values restored exactly; only settings revision and six history entries advanced.",
+    "ordinaryCableReviewApplyState": "All cable rows and ordinary business rows remain exact; the sole fixture project history/settings-revision exception is described above. Existing reviews and Apply receipts remain exact."
+  },
+  "pfRoot": {
+    "status": "PASS",
+    "baselineFiles": 114,
+    "finalFiles": 114,
+    "baselineBytes": 17384086,
+    "finalBytes": 17384086,
+    "changedOrMissingBaselineFiles": 0,
+    "newFiles": 0,
+    "unclassifiedFiles": 0
+  },
+  "commands": {
+    "status": "PASS",
+    "count": 7,
+    "evidenceBases": [
+      {
+        "evidenceBasis": "immutable-server-record-and-observed-ui-no-preaction-intent",
+        "commands": 4
+      },
+      {
+        "evidenceBasis": "saved-normal-http-request-receipt",
+        "commands": 3
+      }
+    ],
+    "limitation": "Four UI commands are reconciled retrospectively from exact immutable server records, separately captured scheduler rows and root-observed UI actions. They are not represented as saved pre-action HTTP intents, captured network exchanges or unknown-outcome retry proof."
+  },
+  "faultControls": {
+    "recovery": {
+      "status": "PASS",
+      "scope": "One explicitly declared expired-lease injection on a new completed synthetic job; actual production worker recovery, not an observed process crash.",
+      "attemptsBefore": 1,
+      "attemptsAfter": 2,
+      "slicesBefore": 3,
+      "slicesAfter": 4,
+      "unchangedImmutableProposals": 3,
+      "itemsRestoredExactly": 3,
+      "injectionEvidence": "Original saved-before-action legacy intent; actual acknowledgement and exact program/input/container/transport hash linkage; no post-injection full snapshot was invented."
+    },
+    "cancellation": {
+      "status": "PASS",
+      "scope": "Normal retry, observed running new synthetic job, normal DELETE, then actual cancelled job and paused producer.",
+      "completedBefore": 0,
+      "completedAfter": 0,
+      "proposalsBefore": 0,
+      "proposalsAfter": 0,
+      "waitingItemsAfter": 2,
+      "runningItemRetainedAfter": 1,
+      "attempts": 1,
+      "slices": 1,
+      "restartObservedAfterCancellation": false
+    }
+  },
+  "phaseChecks": [
+    {
+      "name": "EXACT_NEW_JOB_FAULT_CONTROL_RECEIPTS",
+      "status": "PASS"
+    },
+    {
+      "name": "SIX_EXACT_DETAILS_PATCHES_AND_RESTORED_VALUES",
+      "status": "PASS"
+    },
+    {
+      "name": "ALL_57_OLD_JOBS_ONLY_NEW_DEFAULT_COLUMNS",
+      "status": "PASS"
+    },
+    {
+      "name": "EXACT_COMMAND_REQUESTS_AND_RECEIPTS",
+      "status": "PASS"
+    },
+    {
+      "name": "EXACT_AUTOMATIC_JOB_ITEM_PROPOSAL_AND_V5_CLOSURES",
+      "status": "PASS"
+    },
+    {
+      "name": "SIX_NEW_TABLES_EXACT_ROWS_AND_EVENT_AUTHORITY",
+      "status": "PASS"
+    },
+    {
+      "name": "EXACT_AUTH_LOGIN_AND_PROTECTED_SESSION_CHANGES",
+      "status": "PASS"
+    },
+    {
+      "name": "FILE_CLOSURE_COUNTS",
+      "status": "INFO",
+      "baselineFiles": 114,
+      "newFiles": 0,
+      "cacheReferences": 0
+    },
+    {
+      "name": "ALL_114_BASELINE_FILES_AND_STRICT_NEW_CACHE_CLOSURE",
+      "status": "PASS"
+    }
+  ],
+  "tables": [
+    {
+      "table": "cable_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "cable_type_default_materials",
+      "status": "PASS",
+      "beforeRows": 9,
+      "afterRows": 9,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "c03d11dcedb2af5c4e30fa4aebc3d964255974223db9bbdce3282f83c4a9ac3b",
+      "afterSha256": "c03d11dcedb2af5c4e30fa4aebc3d964255974223db9bbdce3282f83c4a9ac3b"
+    },
+    {
+      "table": "cable_types",
+      "status": "PASS",
+      "beforeRows": 54,
+      "afterRows": 54,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "1b33c7d78c9e5c4466dc2ff57af1364858f8fa4ad562d1acc193d6af7b2f61fb",
+      "afterSha256": "1b33c7d78c9e5c4466dc2ff57af1364858f8fa4ad562d1acc193d6af7b2f61fb"
+    },
+    {
+      "table": "cable_versions",
+      "status": "PASS",
+      "beforeRows": 4,
+      "afterRows": 4,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "c4902dd010f509c871dd73382dcca52d10859898be6b7e091ed992d3028c2dda",
+      "afterSha256": "c4902dd010f509c871dd73382dcca52d10859898be6b7e091ed992d3028c2dda"
+    },
+    {
+      "table": "cables",
+      "status": "PASS",
+      "beforeRows": 2146,
+      "afterRows": 2146,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "fc7dab381ed726c79e3e26b061608a1ac03bede809b9ca1d1ae819dca13909a4",
+      "afterSha256": "fc7dab381ed726c79e3e26b061608a1ac03bede809b9ca1d1ae819dca13909a4"
+    },
+    {
+      "table": "material_cable_installation_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_cable_installation_standard_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_cable_type_standard_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_cable_types",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "8dea74f41aa63c5e2a0f4e6c5b6f20af9332f67e97a5112e78c067baacea6735",
+      "afterSha256": "8dea74f41aa63c5e2a0f4e6c5b6f20af9332f67e97a5112e78c067baacea6735"
+    },
+    {
+      "table": "material_change_logs",
+      "status": "PASS",
+      "beforeRows": 24,
+      "afterRows": 24,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "a5dbc5aa4b21d701152fa8e61ca662f05ee66749579273dd9c29f17b971d9b3c",
+      "afterSha256": "a5dbc5aa4b21d701152fa8e61ca662f05ee66749579273dd9c29f17b971d9b3c"
+    },
+    {
+      "table": "material_instrument_installation_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_instrument_installation_standard_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_instrument_standard_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_instruments",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_load_curve_points",
+      "status": "PASS",
+      "beforeRows": 803,
+      "afterRows": 803,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "bd6f99c61ea42e41df816769f5e3a2b635946ab426ea881dfe95fc83c3bd64fb",
+      "afterSha256": "bd6f99c61ea42e41df816769f5e3a2b635946ab426ea881dfe95fc83c3bd64fb"
+    },
+    {
+      "table": "material_load_curves",
+      "status": "PASS",
+      "beforeRows": 3,
+      "afterRows": 3,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "61e091a7f3bb604a1d2e2e0a994997a701f3f94d128d491fc07964fadb377e2f",
+      "afterSha256": "61e091a7f3bb604a1d2e2e0a994997a701f3f94d128d491fc07964fadb377e2f"
+    },
+    {
+      "table": "material_product_identities",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_support_standard_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_supports",
+      "status": "PASS",
+      "beforeRows": 5,
+      "afterRows": 5,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "c2dea4a696914b9bfb8b39786b4bc1acb93d90085180c5a14ae733a69ec271c1",
+      "afterSha256": "c2dea4a696914b9bfb8b39786b4bc1acb93d90085180c5a14ae733a69ec271c1"
+    },
+    {
+      "table": "material_tray_installation_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_tray_installation_standard_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_tray_standard_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_trays",
+      "status": "PASS",
+      "beforeRows": 15,
+      "afterRows": 15,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "7cfb65419838e46aa07673952ec814804553a600fe8d6129b28ff3d991403dcb",
+      "afterSha256": "7cfb65419838e46aa07673952ec814804553a600fe8d6129b28ff3d991403dcb"
+    },
+    {
+      "table": "model_content_reservations",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "model_import_jobs",
+      "status": "PASS",
+      "beforeRows": 5,
+      "afterRows": 5,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "eb64675cba1e76eafc5ab94bdc81afb00d206a46c480d4d7712c2292f9930602",
+      "afterSha256": "eb64675cba1e76eafc5ab94bdc81afb00d206a46c480d4d7712c2292f9930602"
+    },
+    {
+      "table": "model_package_aliases",
+      "status": "PASS",
+      "beforeRows": 4,
+      "afterRows": 4,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "32a25e2aca7f661948894a307cf0d20cc7cfcf1b2d4e3b2a369fbb5916498faf",
+      "afterSha256": "32a25e2aca7f661948894a307cf0d20cc7cfcf1b2d4e3b2a369fbb5916498faf"
+    },
+    {
+      "table": "model_package_identities",
+      "status": "PASS",
+      "beforeRows": 2,
+      "afterRows": 2,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "f24b5acf2f50052a0d9a3460b52c49bd35b2167d893d656ea5b5c40f6d5af5af",
+      "afterSha256": "f24b5acf2f50052a0d9a3460b52c49bd35b2167d893d656ea5b5c40f6d5af5af"
+    },
+    {
+      "table": "model_storage_ownership",
+      "status": "PASS",
+      "beforeRows": 4,
+      "afterRows": 4,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "9195d092e9c90a26fca76e760266ef6050992165704b1fa2bd2c1e73523aa398",
+      "afterSha256": "9195d092e9c90a26fca76e760266ef6050992165704b1fa2bd2c1e73523aa398"
+    },
+    {
+      "table": "model_validation_reports",
+      "status": "PASS",
+      "beforeRows": 4,
+      "afterRows": 4,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "d3b6cadb1748d118e4e0175dd61a216b25c9a915e7ecd31becaa7c1fe51e5246",
+      "afterSha256": "d3b6cadb1748d118e4e0175dd61a216b25c9a915e7ecd31becaa7c1fe51e5246"
+    },
+    {
+      "table": "model_versions",
+      "status": "PASS",
+      "beforeRows": 5,
+      "afterRows": 5,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "21f82f4ba403e27b9a56e13064aec644db67e4ae568de691a2e873af1d2dfd76",
+      "afterSha256": "21f82f4ba403e27b9a56e13064aec644db67e4ae568de691a2e873af1d2dfd76"
+    },
+    {
+      "table": "pf_apply_receipts",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "df72b6ba8cf895a0dd3f7c24f3c8e2bdf3d928cf63a2e698d95e37efd591d06f",
+      "afterSha256": "df72b6ba8cf895a0dd3f7c24f3c8e2bdf3d928cf63a2e698d95e37efd591d06f"
+    },
+    {
+      "table": "pf_artifact_routing_scopes",
+      "status": "PASS",
+      "beforeRows": 5,
+      "afterRows": 5,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "1efcdde8a096e33b3bbe12dbaaea6181fb8ea5e232ac601912214a76c5f6ff82",
+      "afterSha256": "1efcdde8a096e33b3bbe12dbaaea6181fb8ea5e232ac601912214a76c5f6ff82"
+    },
+    {
+      "table": "pf_artifacts",
+      "status": "PASS",
+      "beforeRows": 13,
+      "afterRows": 13,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "27f7314d8cb2ec6af86d620763c16b7b32e332f62df1b9bcda68b269e1622749",
+      "afterSha256": "27f7314d8cb2ec6af86d620763c16b7b32e332f62df1b9bcda68b269e1622749"
+    },
+    {
+      "table": "pf_capture_evidence",
+      "status": "PASS",
+      "beforeRows": 4,
+      "afterRows": 4,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "293344f71b18f9b3eee6f71470c35281f6d6037d14675033e04f2c84c58472ae",
+      "afterSha256": "293344f71b18f9b3eee6f71470c35281f6d6037d14675033e04f2c84c58472ae"
+    },
+    {
+      "table": "pf_catalog_events",
+      "status": "PASS",
+      "beforeRows": 7,
+      "afterRows": 7,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "1fb9eeabf887a01ecaa112add70330a025c23dfb639160b9b0168a5b3765a04a",
+      "afterSha256": "1fb9eeabf887a01ecaa112add70330a025c23dfb639160b9b0168a5b3765a04a"
+    },
+    {
+      "table": "pf_catalog_purpose_incarnations",
+      "status": "PASS",
+      "beforeRows": 7,
+      "afterRows": 7,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "0d22a4fa9737bf7b308bc3deb6f04335e1ea028c7b924905bda68b2cda989381",
+      "afterSha256": "0d22a4fa9737bf7b308bc3deb6f04335e1ea028c7b924905bda68b2cda989381"
+    },
+    {
+      "table": "pf_catalog_snapshots",
+      "status": "PASS",
+      "beforeRows": 5,
+      "afterRows": 5,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "a5a3e6bc954ab6c20a98980beab75aa0a29cac6394f7bfd2aa64a94bb93d28cb",
+      "afterSha256": "a5a3e6bc954ab6c20a98980beab75aa0a29cac6394f7bfd2aa64a94bb93d28cb"
+    },
+    {
+      "table": "pf_drawing_export_files",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_drawing_exports",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_drawing_generated_files",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_drawing_policy_history",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_drawing_policy_receipts",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_drawing_purpose_rules",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_endpoint_binding_commands",
+      "status": "PASS",
+      "beforeRows": 14,
+      "afterRows": 14,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "531806c77ac8a618eb0a927e579072d917c187595a3eefc89ba6a63b44f02a58",
+      "afterSha256": "531806c77ac8a618eb0a927e579072d917c187595a3eefc89ba6a63b44f02a58"
+    },
+    {
+      "table": "pf_endpoint_binding_heads",
+      "status": "PASS",
+      "beforeRows": 3,
+      "afterRows": 3,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4204e3fa7fe976c7a2b201b727cf550aac89707c8cb372b689e0883394579e7e",
+      "afterSha256": "4204e3fa7fe976c7a2b201b727cf550aac89707c8cb372b689e0883394579e7e"
+    },
+    {
+      "table": "pf_endpoint_binding_revisions",
+      "status": "PASS",
+      "beforeRows": 12,
+      "afterRows": 12,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "0bbbf74f510a2530ce58a1766eaedafb183210ac5fbafd65ca9398f876bd5068",
+      "afterSha256": "0bbbf74f510a2530ce58a1766eaedafb183210ac5fbafd65ca9398f876bd5068"
+    },
+    {
+      "table": "pf_endpoint_legacy_observations",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "d37bc142bd28f9f7602d3abef7450b302b87878760c18f8ff83ac10d8b480289",
+      "afterSha256": "d37bc142bd28f9f7602d3abef7450b302b87878760c18f8ff83ac10d8b480289"
+    },
+    {
+      "table": "pf_endpoint_migration_decisions",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "6ea7f7b42579186ea1fff00980f06cfe2a98a26fe6ff59921bba47376f365164",
+      "afterSha256": "6ea7f7b42579186ea1fff00980f06cfe2a98a26fe6ff59921bba47376f365164"
+    },
+    {
+      "table": "pf_engine_project_service",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 4,
+      "removedRows": 0,
+      "addedRows": 4,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "e1a2fc917a0d11e48796fd4681bcda2ee568695b409803224344584a82db9ddb"
+    },
+    {
+      "table": "pf_geometry_object_revisions",
+      "status": "PASS",
+      "beforeRows": 56,
+      "afterRows": 56,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "0c73aa09cab130943028c7c9dbad69be89896c33d2eb3a53378ccc5c3abf16f0",
+      "afterSha256": "0c73aa09cab130943028c7c9dbad69be89896c33d2eb3a53378ccc5c3abf16f0"
+    },
+    {
+      "table": "pf_geometry_trace_diagnostics",
+      "status": "PASS",
+      "beforeRows": 55,
+      "afterRows": 55,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "9929826a3aa65beb9fafb594f4db28711af4d548ca8d171e1082a6896ccef906",
+      "afterSha256": "9929826a3aa65beb9fafb594f4db28711af4d548ca8d171e1082a6896ccef906"
+    },
+    {
+      "table": "pf_geometry_trace_intents",
+      "status": "PASS",
+      "beforeRows": 5,
+      "afterRows": 5,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "beb00df836192d7ca9fa798dd7b583b5a51f14ba1d88f6da2d047d70a21789e0",
+      "afterSha256": "beb00df836192d7ca9fa798dd7b583b5a51f14ba1d88f6da2d047d70a21789e0"
+    },
+    {
+      "table": "pf_geometry_trace_receipts",
+      "status": "PASS",
+      "beforeRows": 5,
+      "afterRows": 5,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "506f0c7c956404ff09a884f86ed3782642a96f71361dc48d3e6122127f1b6ee4",
+      "afterSha256": "506f0c7c956404ff09a884f86ed3782642a96f71361dc48d3e6122127f1b6ee4"
+    },
+    {
+      "table": "pf_geometry_trace_sets",
+      "status": "PASS",
+      "beforeRows": 5,
+      "afterRows": 5,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "be926a011891888f5895ab8c9a67a14c8f478b13cff9690422ca84176ccf8804",
+      "afterSha256": "be926a011891888f5895ab8c9a67a14c8f478b13cff9690422ca84176ccf8804"
+    },
+    {
+      "table": "pf_job_items",
+      "status": "PASS",
+      "beforeRows": 79,
+      "afterRows": 109,
+      "removedRows": 0,
+      "addedRows": 30,
+      "beforeSha256": "fe959d4d1811fec3ee7a063279f0faf4cabaa551beaeac7c494783c15c2e4cb1",
+      "afterSha256": "07ee550e8280f00856da81f82e04565cf873c8e0e04acb8c07b4b5c1b6167a98"
+    },
+    {
+      "table": "pf_jobs",
+      "status": "PASS",
+      "beforeRows": 57,
+      "afterRows": 67,
+      "removedRows": 57,
+      "addedRows": 67,
+      "beforeSha256": "f09d7f9ab3b0d19e357919f5351a8a6815caf7ad83d758f5aa4d4c8f93dd0d67",
+      "afterSha256": "fca5f9566c81021e27013c6947f3d59812c142aeb0a872769cc15b76959ad176"
+    },
+    {
+      "table": "pf_location_aliases",
+      "status": "PASS",
+      "beforeRows": 1538,
+      "afterRows": 1538,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4b9a0f07b9eb0bdf38ec47c44b53901c5070be6bde6b3328ffb9a6f000d06403",
+      "afterSha256": "4b9a0f07b9eb0bdf38ec47c44b53901c5070be6bde6b3328ffb9a6f000d06403"
+    },
+    {
+      "table": "pf_location_bindings",
+      "status": "PASS",
+      "beforeRows": 7,
+      "afterRows": 7,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "b02db12af132bb97ea878bffa182975bf797bc0c6d35f57c813c8a3e8b34352b",
+      "afterSha256": "b02db12af132bb97ea878bffa182975bf797bc0c6d35f57c813c8a3e8b34352b"
+    },
+    {
+      "table": "pf_location_events",
+      "status": "PASS",
+      "beforeRows": 1636,
+      "afterRows": 1636,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "762a217f64d498a594d70ec380310107f99a1d2b9fcd3f5164f86ab4af959eeb",
+      "afterSha256": "762a217f64d498a594d70ec380310107f99a1d2b9fcd3f5164f86ab4af959eeb"
+    },
+    {
+      "table": "pf_location_matches",
+      "status": "PASS",
+      "beforeRows": 1528,
+      "afterRows": 1528,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "b5eaf101a322d2ecc806fd07f3aaabdc41169ac40984140fd291134b69f57586",
+      "afterSha256": "b5eaf101a322d2ecc806fd07f3aaabdc41169ac40984140fd291134b69f57586"
+    },
+    {
+      "table": "pf_locations",
+      "status": "PASS",
+      "beforeRows": 1536,
+      "afterRows": 1536,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "3e31f0e9ca5d24a5293bc61528e2cb5926c23e84e561419a999679e421ca4781",
+      "afterSha256": "3e31f0e9ca5d24a5293bc61528e2cb5926c23e84e561419a999679e421ca4781"
+    },
+    {
+      "table": "pf_lookup_results",
+      "status": "PASS",
+      "beforeRows": 18,
+      "afterRows": 18,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "882e0e18fa9717fea9faba2faaf8528b4f1d9e941247efe548222449e751f053",
+      "afterSha256": "882e0e18fa9717fea9faba2faaf8528b4f1d9e941247efe548222449e751f053"
+    },
+    {
+      "table": "pf_model_objects",
+      "status": "PASS",
+      "beforeRows": 202,
+      "afterRows": 202,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "59766af5bf3ac1b6340d1ae76768b2e86bee93b52ae8ff6596c566a21e9c6dd1",
+      "afterSha256": "59766af5bf3ac1b6340d1ae76768b2e86bee93b52ae8ff6596c566a21e9c6dd1"
+    },
+    {
+      "table": "pf_preparation_aggregates",
+      "status": "PASS",
+      "beforeRows": 5,
+      "afterRows": 5,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "1b5d7f50faee9eaf962984ddad3e39a385d2c037e0078626a5ec9e77cbb6776a",
+      "afterSha256": "1b5d7f50faee9eaf962984ddad3e39a385d2c037e0078626a5ec9e77cbb6776a"
+    },
+    {
+      "table": "pf_preparation_commands",
+      "status": "PASS",
+      "beforeRows": 12,
+      "afterRows": 12,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "90b7cd0162414db22a682454f5e55c303b3cfc28c8c5eb4c08ed324f4bbfabe3",
+      "afterSha256": "90b7cd0162414db22a682454f5e55c303b3cfc28c8c5eb4c08ed324f4bbfabe3"
+    },
+    {
+      "table": "pf_preparation_events",
+      "status": "PASS",
+      "beforeRows": 16,
+      "afterRows": 16,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4ae06ffa722e067fd08c873f3cc0baf30a17cc5ed5f938ee39af92386599616b",
+      "afterSha256": "4ae06ffa722e067fd08c873f3cc0baf30a17cc5ed5f938ee39af92386599616b"
+    },
+    {
+      "table": "pf_preparation_parts",
+      "status": "PASS",
+      "beforeRows": 5,
+      "afterRows": 5,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "dd22b081e6ae51101f1cd7e9bba8bc37b28635bced0bd7d98cd1d1e27bda15c8",
+      "afterSha256": "dd22b081e6ae51101f1cd7e9bba8bc37b28635bced0bd7d98cd1d1e27bda15c8"
+    },
+    {
+      "table": "pf_preparation_resolution_events",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_preparation_resolutions",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_preparation_sessions",
+      "status": "PASS",
+      "beforeRows": 6,
+      "afterRows": 6,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "0cb7cc7fb80b643a2d54d3a5ce74da55df35a14bd90447cb4fe3c55bf9d6ba3d",
+      "afterSha256": "0cb7cc7fb80b643a2d54d3a5ce74da55df35a14bd90447cb4fe3c55bf9d6ba3d"
+    },
+    {
+      "table": "pf_project_preparations",
+      "status": "PASS",
+      "beforeRows": 2,
+      "afterRows": 2,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "de7da848d573792f649e21d62ca432e4548c6d05cfca1abc198fa4cf8d5766b0",
+      "afterSha256": "de7da848d573792f649e21d62ca432e4548c6d05cfca1abc198fa4cf8d5766b0"
+    },
+    {
+      "table": "pf_project_state",
+      "status": "PASS",
+      "beforeRows": 4,
+      "afterRows": 4,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "901679d7c89601aca3c3d7f67ad732828aa0197e9b06f55ba27ea8a8c8f96374",
+      "afterSha256": "901679d7c89601aca3c3d7f67ad732828aa0197e9b06f55ba27ea8a8c8f96374"
+    },
+    {
+      "table": "pf_proposals",
+      "status": "PASS",
+      "beforeRows": 74,
+      "afterRows": 101,
+      "removedRows": 0,
+      "addedRows": 27,
+      "beforeSha256": "7e12c2ef690adeccb31d4670e137d682e0d594c4ae182fc388d865058d35bf9c",
+      "afterSha256": "c4c30801135f048cf6e775bb1949aa40f420aa44691a3bc970c19a9306eeab5f"
+    },
+    {
+      "table": "pf_purpose_project_state",
+      "status": "PASS",
+      "beforeRows": 4,
+      "afterRows": 4,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "d26fb19fb4acec54d4a28b08ceb50defa0c329d7bf40c038e4cda3497f4fd9bf",
+      "afterSha256": "d26fb19fb4acec54d4a28b08ceb50defa0c329d7bf40c038e4cda3497f4fd9bf"
+    },
+    {
+      "table": "pf_recalculation_claims",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 1,
+      "removedRows": 0,
+      "addedRows": 1,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "ae0f05d607ddcfbbaf943428feab49796aafdcb05a07a2021b92d3aa98b6182f"
+    },
+    {
+      "table": "pf_recalculation_commands",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 7,
+      "removedRows": 0,
+      "addedRows": 7,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "c07d85e2ef729e1f1004c9290131293fdc9910260d24b5e6726918b62e05263d"
+    },
+    {
+      "table": "pf_recalculation_enrollments",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 10,
+      "removedRows": 0,
+      "addedRows": 10,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "983d766a8d0a0625e7f9664bd78fd1573d9e08e9d5572b15a9c229e5c39bdd14"
+    },
+    {
+      "table": "pf_recalculation_events",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 22,
+      "removedRows": 0,
+      "addedRows": 22,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "a0a9a02e407f9c3d6a79150619e9708c168b43c16f5fe829a6aa5c3024eda8de"
+    },
+    {
+      "table": "pf_recalculation_state",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 4,
+      "removedRows": 0,
+      "addedRows": 4,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "2522502fbcb53e9b8d0b2eb6853983fa469f89b2b2fab7788eae10abf01a2e59"
+    },
+    {
+      "table": "pf_reviews",
+      "status": "PASS",
+      "beforeRows": 6,
+      "afterRows": 6,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "2b260bd55da2d30a7ce487386743a030dd4b958cf5ddd64e3149129a241134cb",
+      "afterSha256": "2b260bd55da2d30a7ce487386743a030dd4b958cf5ddd64e3149129a241134cb"
+    },
+    {
+      "table": "pf_revision_binding_frame_qualifications",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_revision_comparison_changes",
+      "status": "PASS",
+      "beforeRows": 69,
+      "afterRows": 69,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "38885e087ca6ea4b392a6ddf46eb4ce88d38b73ab999b52ae46dd80ca2e32bbb",
+      "afterSha256": "38885e087ca6ea4b392a6ddf46eb4ce88d38b73ab999b52ae46dd80ca2e32bbb"
+    },
+    {
+      "table": "pf_revision_comparison_commands",
+      "status": "PASS",
+      "beforeRows": 4,
+      "afterRows": 4,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "91853008068b621fb9da8870232f82286e450bd2f0068f674b711faf6341fc3b",
+      "afterSha256": "91853008068b621fb9da8870232f82286e450bd2f0068f674b711faf6341fc3b"
+    },
+    {
+      "table": "pf_revision_comparison_decision_heads",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_revision_comparison_decision_objects",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_revision_comparison_decisions",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_revision_comparison_intents",
+      "status": "PASS",
+      "beforeRows": 3,
+      "afterRows": 3,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "bc3fb15df697d7a71248cd10660e054c23b9a682a64dc4ac135bbce8729a5bdc",
+      "afterSha256": "bc3fb15df697d7a71248cd10660e054c23b9a682a64dc4ac135bbce8729a5bdc"
+    },
+    {
+      "table": "pf_revision_comparison_sets",
+      "status": "PASS",
+      "beforeRows": 3,
+      "afterRows": 3,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "6f7c740ee741b732667e66c3a37294776d6e27fd3d41bd88bf0840a241d4e176",
+      "afterSha256": "6f7c740ee741b732667e66c3a37294776d6e27fd3d41bd88bf0840a241d4e176"
+    },
+    {
+      "table": "pf_revision_comparison_state",
+      "status": "PASS",
+      "beforeRows": 4,
+      "afterRows": 4,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "a18d87fe930dfbd4434bb97cd52c4387204f5b42ddde4ac50e98c496edecb173",
+      "afterSha256": "a18d87fe930dfbd4434bb97cd52c4387204f5b42ddde4ac50e98c496edecb173"
+    },
+    {
+      "table": "pf_revision_comparison_targets",
+      "status": "PASS",
+      "beforeRows": 2,
+      "afterRows": 2,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "172582873906acb6ff6f20e760fe81db6f76d429fa2d285cc812b2bb0dcdddd8",
+      "afterSha256": "172582873906acb6ff6f20e760fe81db6f76d429fa2d285cc812b2bb0dcdddd8"
+    },
+    {
+      "table": "pf_routing_policy_history",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "0cb893f780377737aa3e6ee3a3021c32da94c4ef452d7e1c90cf88dc353783f6",
+      "afterSha256": "0cb893f780377737aa3e6ee3a3021c32da94c4ef452d7e1c90cf88dc353783f6"
+    },
+    {
+      "table": "pf_routing_policy_receipts",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "54d13dc15e3f19542fcd93c0c9e6dda445fcbd46a8120f06b896237e247eb536",
+      "afterSha256": "54d13dc15e3f19542fcd93c0c9e6dda445fcbd46a8120f06b896237e247eb536"
+    },
+    {
+      "table": "pf_routing_purpose_rules",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "cdddc7592ad804b6155380cf7a5bccfff943c866c350ad268e763e99a8bc0750",
+      "afterSha256": "cdddc7592ad804b6155380cf7a5bccfff943c866c350ad268e763e99a8bc0750"
+    },
+    {
+      "table": "pf_synthetic_projects",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "04c42ff680c801d555e0d932dd30b4a010d4402dfd52dc6abf49734199c04c97",
+      "afterSha256": "04c42ff680c801d555e0d932dd30b4a010d4402dfd52dc6abf49734199c04c97"
+    },
+    {
+      "table": "pf_synthetic_proofs",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "7fa651412c1b8d7eb50f9c912762b33e53bce12345d3fcb583780308aeb5ca9f",
+      "afterSha256": "7fa651412c1b8d7eb50f9c912762b33e53bce12345d3fcb583780308aeb5ca9f"
+    },
+    {
+      "table": "pf_tray_drawing_settings",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_tray_drawing_settings_history",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_tray_drawing_snapshots",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "f59286a68d1984b870f71f8b8c4ecad18e79c086087da75164a857d7040bb9f9",
+      "afterSha256": "f59286a68d1984b870f71f8b8c4ecad18e79c086087da75164a857d7040bb9f9"
+    },
+    {
+      "table": "project_change_order_items",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "project_change_order_revisions",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "project_change_orders",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "project_file_versions",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "064117da06140b49aa9d8c53731c40275127908942a5a76378b038f72e1c1d4a",
+      "afterSha256": "064117da06140b49aa9d8c53731c40275127908942a5a76378b038f72e1c1d4a"
+    },
+    {
+      "table": "project_files",
+      "status": "PASS",
+      "beforeRows": 2,
+      "afterRows": 2,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "5940384b6c4fc1262d56c50914139116c5724e1696b6a69210d5c13247996c86",
+      "afterSha256": "5940384b6c4fc1262d56c50914139116c5724e1696b6a69210d5c13247996c86"
+    },
+    {
+      "table": "project_model_selections",
+      "status": "PASS",
+      "beforeRows": 4,
+      "afterRows": 4,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "b2d4dd3e46cc38ffc58968732f7a2275aa058de7adedf759af0d0a5daa3f43b2",
+      "afterSha256": "b2d4dd3e46cc38ffc58968732f7a2275aa058de7adedf759af0d0a5daa3f43b2"
+    },
+    {
+      "table": "project_roxtec_entries",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "project_support_distances",
+      "status": "PASS",
+      "beforeRows": 14,
+      "afterRows": 14,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "f2ac07dab3d7f547a544d8be85da823cec0c747abc062236100ee76fd5f2aa89",
+      "afterSha256": "f2ac07dab3d7f547a544d8be85da823cec0c747abc062236100ee76fd5f2aa89"
+    },
+    {
+      "table": "project_tray_purpose_templates",
+      "status": "PASS",
+      "beforeRows": 6,
+      "afterRows": 6,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "653fae36dd6d433ad5d56463c920cab760ed83cc7a5d48e7507ded2c5a94ee3d",
+      "afterSha256": "653fae36dd6d433ad5d56463c920cab760ed83cc7a5d48e7507ded2c5a94ee3d"
+    },
+    {
+      "table": "projects",
+      "status": "PASS",
+      "beforeRows": 4,
+      "afterRows": 4,
+      "removedRows": 1,
+      "addedRows": 1,
+      "beforeSha256": "9276cc0cbffa49e356bb8446457523028c86fcfaeb43c7a0471674957886541f",
+      "afterSha256": "1647e37505640f62c063744513b0e97903b718329048e8d4ef16d7bdc1054347"
+    },
+    {
+      "table": "standard_material_references",
+      "status": "PASS",
+      "beforeRows": 21,
+      "afterRows": 21,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "dff418502444a69cf3915d832b4fda7601b8ad637bccb969cb1fb071acdbb815",
+      "afterSha256": "dff418502444a69cf3915d832b4fda7601b8ad637bccb969cb1fb071acdbb815"
+    },
+    {
+      "table": "template_file_versions",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "template_files",
+      "status": "PASS",
+      "beforeRows": 3,
+      "afterRows": 3,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "9379f8e37538b67f1b74983045a9225c55b9b877b793e5a5433d6fee683a9fd7",
+      "afterSha256": "9379f8e37538b67f1b74983045a9225c55b9b877b793e5a5433d6fee683a9fd7"
+    },
+    {
+      "table": "trays",
+      "status": "PASS",
+      "beforeRows": 331,
+      "afterRows": 331,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "0a926ab338f32333cd4f4c67592de0d369a9518256e770619291a1ce3a65e6c9",
+      "afterSha256": "0a926ab338f32333cd4f4c67592de0d369a9518256e770619291a1ce3a65e6c9"
+    },
+    {
+      "table": "user_project_access",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "users",
+      "status": "PASS",
+      "beforeRows": 2,
+      "afterRows": 2,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "8ad1c93213c0ee3bcfab043898a1a66fe6b564e6508973acf1225698edef205f",
+      "afterSha256": "8ad1c93213c0ee3bcfab043898a1a66fe6b564e6508973acf1225698edef205f"
+    },
+    {
+      "table": "viewer_login_bindings",
+      "status": "PASS",
+      "beforeRows": 28,
+      "afterRows": 29,
+      "removedRows": 0,
+      "addedRows": 1,
+      "beforeSha256": "3eb0c2b96cba07dd852ba35ffdfefde6dbf0e9bab978dda8849b529401be7b27",
+      "afterSha256": "f3cc82d34d8d72be66a960af03cd5d6c4a2b0e125312c4f4c1f87c7a09403f3c"
+    },
+    {
+      "table": "viewer_resource_sessions",
+      "status": "PASS",
+      "beforeRows": 61,
+      "afterRows": 64,
+      "removedRows": 0,
+      "addedRows": 3,
+      "beforeSha256": "82f03eae89a3fc02814935d4e75150412487b20e2ac2b08c5161819556b6e88b",
+      "afterSha256": "3727beed092c133bc060b934e69663a6ac708258881097dabf1d863db07d35d1"
+    }
+  ],
+  "classifierHistory": [
+    {
+      "status": "FAIL",
+      "recordedAt": "2026-10-19T07:46:04.044Z",
+      "report": "audit-r7-private-7ee64d07-e3e0-457d-8ae9-c41ab62bbf36.private.json",
+      "passedTables": 113,
+      "failedPhase": "EXACT_AUTOMATIC_JOB_ITEM_PROPOSAL_AND_V5_CLOSURES:PROPOSAL_ROUTE_RECEIPT",
+      "cause": "Classifier compared raw stored route.pathPoints to the API DTO. The product removes pathPoints and exposes points plus unique objectIds in detail responses.",
+      "correction": "Reproduce the exact jobs.ts proposalDto projection; preserve full stored-result, dependency, geometry, batch and independent receipt hash checks. No data exception or runtime rewrite."
+    },
+    {
+      "status": "PASS",
+      "recordedAt": "2026-10-19T07:47:42.991Z",
+      "report": "audit-r7-private-b2af3bf9-0e4f-44a9-82b1-ddb9299f5fb2.private.json",
+      "passedTables": 116,
+      "same41RetainedInputPins": true
+    }
+  ],
+  "outsideContainers": {
+    "status": "EXTERNAL_CHANGE",
+    "unchangedClaimed": false,
+    "protectedIdentitiesObserved": 18,
+    "upgradeObservation": "17strict/1external-restart-loop",
+    "scope": "Outside runtime activity, including autonomous restarts, is captured and explained separately. This SQL/PF_ROOT audit does not classify external containers as unchanged."
+  },
+  "privateEvidencePins": [
+    {
+      "name": "r7-before-all-tables-raw.private.json",
+      "bytes": 18551928,
+      "sha256": "6c09a5f351fa88b55fac6ba0a5934924c39bca9a062451151c3bd5e0233a1709"
+    },
+    {
+      "name": "r7-after-all-tables-raw.private.json",
+      "bytes": 18938199,
+      "sha256": "213501d42dc67110b007c42dd068468266bc09edeb8821212185081b9eab6a69"
+    },
+    {
+      "name": "r7-final-audit-anchors.private.json",
+      "bytes": 10845,
+      "sha256": "362b5315472b13242e500a531230ee96ddfa0ffa56ce2e913883c6ed169dcda6"
+    },
+    {
+      "name": "r7-final-scheduler-raw.private.json",
+      "bytes": 23324,
+      "sha256": "e9b22ee9a5f90c791d932e5b7e6bab34567b387b5ba40db2c5c1e6244eab1a96"
+    },
+    {
+      "name": "r7-final-auth-raw.private.json",
+      "bytes": 2022,
+      "sha256": "30464f6ba9c79f80107f99aba965677bb9b99aa071a8c1ab808c8727e18894f5"
+    },
+    {
+      "name": "r7-http-enrollment-state.private.json",
+      "bytes": 84474,
+      "sha256": "e3b2fed6573e5795fbe812ef9c1b81004895b40cd2d8e7f77117e54bd85964b4"
+    },
+    {
+      "name": "r7-http-settings-initial-proposals.private.json",
+      "bytes": 35783,
+      "sha256": "7459f1c279a5a2a47b3c8efb2c80ff8244ff585014d9b50013b34df851f50736"
+    },
+    {
+      "name": "r7-http-settings-design-results.private.json",
+      "bytes": 38657,
+      "sha256": "d44f1db989d667210590cff3ec7739d3784fa417c950e598311e3fb2b27a5ae4"
+    },
+    {
+      "name": "r7-http-settings-gap-results.private.json",
+      "bytes": 38570,
+      "sha256": "6e8dadf9c50127f9b31c0d5a017f2bee68238336c132fdf0d399de672fffc776"
+    },
+    {
+      "name": "r7-http-settings-restored-results.private.json",
+      "bytes": 38649,
+      "sha256": "8b23c8a3a6fcaa1104ddbbba4d29f2798cf9a22ca2cabfd91ba03aeda2824d2a"
+    },
+    {
+      "name": "r7-http-settings2-initial-proposals.private.json",
+      "bytes": 35783,
+      "sha256": "71970df2e4655897130a7299b51185c4a69bab3d5ebf72cf2e37bf9a4825b66e"
+    },
+    {
+      "name": "r7-http-settings2-design-results.private.json",
+      "bytes": 38657,
+      "sha256": "15d5575ee1235241aad1117344c7533abaa14d3f763e124e77b1f8da0cca31dd"
+    },
+    {
+      "name": "r7-http-settings2-gap-results.private.json",
+      "bytes": 38570,
+      "sha256": "c6d60865ac75d37fa13794815d7825a032a5f1833888a2592f76b73e47c3c5f2"
+    },
+    {
+      "name": "r7-http-settings2-restored-results.private.json",
+      "bytes": 38549,
+      "sha256": "32dd2fe0dd1c3cbf493b1919f2ba243829a288ed375fc7b7290e84c7d1077ba1"
+    },
+    {
+      "name": "r7-recovery-proposals.private.json",
+      "bytes": 168291,
+      "sha256": "e9ffe08bfec3b921d4d039c46398eee4efb28d2059dee1389178013881406575"
+    },
+    {
+      "name": "r7-recovery-proposal-2b99948d-a9ad-40d3-aa31-326c1c48ee3d.private.json",
+      "bytes": 13269,
+      "sha256": "2bc2409346f4f776b35c50478ab0dab807c670db0bd159ef32da1b15d9116b56"
+    },
+    {
+      "name": "r7-recovery-proposal-bd148deb-3769-493a-a67e-40d639ff0ef8.private.json",
+      "bytes": 13270,
+      "sha256": "1a52ad1238edfe64fb4267383bdd61a3b415d057531cc775d9ed3c294d68a3de"
+    },
+    {
+      "name": "r7-recovery-proposal-f34fac9e-cb3b-4a74-b138-5e69e389a768.private.json",
+      "bytes": 10603,
+      "sha256": "58356450daed6a80ff2bda27e70ebba0c38b4a9e5d13d2cd532c9c248aebb0ad"
+    },
+    {
+      "name": "r7-http-enrollment-command-intent.private.json",
+      "bytes": 363,
+      "sha256": "1da33ed7554d4b8b70e6bff9e245f3fa55def0f3c04672c9d7d10939a982de92"
+    },
+    {
+      "name": "r7-http-enrollment-noop.private.json",
+      "bytes": 1419,
+      "sha256": "3a308994c10497d8d61ecefeb562b5ea17ddfcc73fcf2ca71cbb4d4d00973091"
+    },
+    {
+      "name": "r7-recovery-resume-intent.private.json",
+      "bytes": 263,
+      "sha256": "2a8a5c2bc4ca744f4d268ff14cd0cb1b096ef481393693b8a988e20d5e8ebf8a"
+    },
+    {
+      "name": "r7-recovery-resume-receipt.private.json",
+      "bytes": 1486,
+      "sha256": "c937a9f417544a6bbec2c60a7e921730ed82bfb3bd8a03c55ebb3ca7e914faf1"
+    },
+    {
+      "name": "r7-cancellation2-trigger-intent.private.json",
+      "bytes": 570,
+      "sha256": "04c64523a399bee55bcd043bbb5eb513b7991e62595927d474937c9d4e8175c1"
+    },
+    {
+      "name": "r7-cancellation2-trigger.private.json",
+      "bytes": 1062,
+      "sha256": "d9f55c8819ee71847ee476fa37a70f0b1ed7c4731412ee516a4984fe3fa5da8d"
+    },
+    {
+      "name": "r7-http-settings-design-patch.private.json",
+      "bytes": 1533,
+      "sha256": "26cfa9b7925e191e5062caf36eddf64150466149a893239e0482f9803e6ee0ed"
+    },
+    {
+      "name": "r7-http-settings-gap-patch.private.json",
+      "bytes": 1879,
+      "sha256": "ee6c1946710bc333238153e8967a298239c3922fa4ccfbb8b15c9c9f75bc3b1d"
+    },
+    {
+      "name": "r7-http-settings-restore-patch.private.json",
+      "bytes": 2357,
+      "sha256": "4b14e37554e819f6094c110514f251691f2969d5b6f27d04f1eea6ec17233919"
+    },
+    {
+      "name": "r7-http-settings2-design-patch.private.json",
+      "bytes": 2798,
+      "sha256": "e6eee0264869d0c96a3fad67f1d92995455e616c7e0592dfa5a300ff4446a799"
+    },
+    {
+      "name": "r7-http-settings2-gap-patch.private.json",
+      "bytes": 3144,
+      "sha256": "416deebf543df3a92bbf5f10281cbc8412528a93d646c30cd98addb6b048a1d4"
+    },
+    {
+      "name": "r7-http-settings2-restore-patch.private.json",
+      "bytes": 3622,
+      "sha256": "de32ae2155b446c840865c7b35062fca4b9ba214feca0358bd59dfca749d5cea"
+    },
+    {
+      "name": "r7-recovery-final-response.private.json",
+      "bytes": 1359,
+      "sha256": "fdaafa8565edcbc0a13c0223ea9d716d647a599d8175441b6395d0f4da3f3b05"
+    },
+    {
+      "name": "r7-recovery-before-raw.private.json",
+      "bytes": 38557,
+      "sha256": "0f0178047d8c9815d55889a07ae6317ceb65b1600c2fd34705de3e06cdf8a1ea"
+    },
+    {
+      "name": "r7-recovery-fault-intent.private.json",
+      "bytes": 433,
+      "sha256": "49288170c67dc36892c8eaa78154d2fee38ecf68335df6d7fecdfefd186cf4a6"
+    },
+    {
+      "name": "r7-recovery-after-raw.private.json",
+      "bytes": 38557,
+      "sha256": "30415219ea37f880be7f974557164e6f668f5da41dff63789c3e89be315bfb2c"
+    },
+    {
+      "name": "r7-recovery-injection-raw.private.json",
+      "bytes": 131,
+      "sha256": "b9e51621accbef76963afc67d5319b8906ce66da571e11fc4517d8a488ad3d9e"
+    },
+    {
+      "name": "r7-recovery-injection-transport.private.json",
+      "bytes": 759,
+      "sha256": "b284979de0f7b86e75b2477b6c39e2a4d4a1f0b9c05d00a8d0f9b5d517d65805"
+    },
+    {
+      "name": "r7-recovery-injection-protected-pre-763ff755-8cef-429c-a66b-86e883e8490a.private.json",
+      "bytes": 14576,
+      "sha256": "d67b1117b6ceec461208f7d01b4fba3e89f892ab959237627bbed57d7ae31885"
+    },
+    {
+      "name": "r7-cancellation2-response.private.json",
+      "bytes": 388,
+      "sha256": "29dd2a1fca7ecbd059bb253efe573186f3f6395bce8a7c12b05943af8e334a8c"
+    },
+    {
+      "name": "r7-cancellation2-before.private.json",
+      "bytes": 17837,
+      "sha256": "f7fc9be4876acf7793c3e9c2529b05405fc5631214a8a017339c5b68b4b361a9"
+    },
+    {
+      "name": "r7-cancellation2-intent.private.json",
+      "bytes": 292,
+      "sha256": "757ac8b6076eb86eefbff99b1133e55b593c7a53a6212b593c1a9833138a4aa6"
+    },
+    {
+      "name": "r7-cancellation2-after.private.json",
+      "bytes": 17821,
+      "sha256": "a2d2e258d51f3d30d4e42db77c2b27f86ce49c9a8213a5e6f134f70beed6852f"
+    },
+    {
+      "name": "audit-r7-private-b2af3bf9-0e4f-44a9-82b1-ddb9299f5fb2.private.json",
+      "bytes": 58267,
+      "sha256": "bd703a38aa2d1707ac74902f744b0b1cc7cebe4e937c98cd3c5a45e239fb6238"
+    },
+    {
+      "name": "audit-r7-private-7ee64d07-e3e0-457d-8ae9-c41ab62bbf36.private.json",
+      "bytes": 89198,
+      "sha256": "8988d08f0b797ced9b928d6559e6a26a8c7f3fb200a37ef1a415a0799fafd2e9"
+    },
+    {
+      "name": "r7-candidate-build3-result.private.json",
+      "bytes": 272827,
+      "sha256": "cd46365fc5fb48503469982e8361e4b3eda2a41467a8bfd295396f448b7b44aa"
+    },
+    {
+      "name": "r7-upgrade3-result.private.json",
+      "bytes": 2755,
+      "sha256": "84431189b258cddf11bc1e11222104ba78114111dc4d1211591d6401dadd7985"
+    },
+    {
+      "name": "audit-r7-private.mjs",
+      "bytes": 51188,
+      "sha256": "a8c3e0cdcfd492d28fe1ad82a833cbcdc638e0667c21d11e8ecd75dbad6f8358"
+    }
+  ],
+  "limitations": [
+    "Only actual SQL row-multiset/PF_ROOT preservation within the stated isolated scope is PASS here.",
+    "Root separately captures storage-byte, reference-checkout and external-container observations; this receipt does not replace them.",
+    "Some UI command evidence is retrospective; no pre-action intent history or unrecorded browser exchange is fabricated.",
+    "Rollback-only SQL controls authorize no persistent extra business deltas.",
+    "No real-data engineering acceptance, native parity, real bindings or automatic Review/Apply follows from these results."
+  ],
+  "sanitization": "Counts, aggregate digests, source/runtime revisions, bounded fault scope and evidence classifications only; no business rows, names, routes, coordinates, secrets or cookie hashes."
+}

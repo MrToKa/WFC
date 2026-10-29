@@ -1,0 +1,54 @@
+{
+  "schemaVersion": "pathfinder.purpose-policy.backup.v1",
+  "status": "PASS",
+  "stage": "PF-R2",
+  "sourceOwner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+  "project": "wfc-pathfinder-local-0cba87606e9b",
+  "port": 5191,
+  "work": "pathfinder-engine/.scratch/tray-catalog-f135b9e0-02e8-40e2-9ae6-5c98b67c1a8a",
+  "backupId": "89f25359-4b21-4c8b-b88c-9268a9806522",
+  "manifestSha256": "4de72d4f61467841d7282022da23372c9a6f3dbd63b7796660bc354153d884b5",
+  "files": [
+    {
+      "path": "database.dump",
+      "bytes": 1014518,
+      "sha256": "b487e1414600c79d73d81c303a8c29221bf4615fc9b2747eec32fef64c65ecf3"
+    },
+    {
+      "path": "minio.wfcops",
+      "bytes": 1319579251,
+      "sha256": "03600ce010c648e4796ff3dd9513ad93bcfbd1beafbd4d4c54f0df959b8e1897"
+    },
+    {
+      "path": "staging.wfcops",
+      "bytes": 184,
+      "sha256": "072e2a6236db8f055a2ed3c503cc1ac8259f1050dec36b52fb79d2ab01512f06"
+    },
+    {
+      "path": "pathfinder.wfcops",
+      "bytes": 9350877,
+      "sha256": "109a1cb94d2bcf97fe93d5ea3bfdf98ba732e33118123d8b87e6006f05e940e8"
+    },
+    {
+      "path": "api-image.tar",
+      "bytes": 184610304,
+      "sha256": "f3c57f11c8480a7b3325c64a10ac0fa97ef33e9ab8f2dd37c2a0ebd0f29294da"
+    },
+    {
+      "path": "web-image.tar",
+      "bytes": 55154176,
+      "sha256": "046fa6cf1e615f1ba9a659b1b0c3a18d4d5d6894b12fb77d2bf5c9a4d2903fa5"
+    },
+    {
+      "path": "postgres-image.tar",
+      "bytes": 162226688,
+      "sha256": "9c16e896147969ee35d3ed04af8f17b80543da9d6fb80cfbbc9abdf117191d62"
+    },
+    {
+      "path": "minio-image.tar",
+      "bytes": 62259712,
+      "sha256": "7a3e953b6647a85a4932e6d4a1d4931c4333c519abc09c2b5bab37aaeaad1e9d"
+    }
+  ],
+  "finishedAt": "2026-10-18T22:30:26.866Z"
+}

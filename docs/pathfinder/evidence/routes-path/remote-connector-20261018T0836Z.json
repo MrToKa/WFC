@@ -1,0 +1,89 @@
+{
+  "observedAtUtc": "2026-10-18T08:34:59.538Z",
+  "results": [
+    {
+      "status": "fulfilled",
+      "value": {
+        "label": "wfcMain",
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "Action completed."
+            }
+          ],
+          "structuredContent": {
+            "branches": [
+              {
+                "branch": "main"
+              }
+            ],
+            "cursor": "MQ"
+          },
+          "isError": false
+        }
+      }
+    },
+    {
+      "status": "fulfilled",
+      "value": {
+        "label": "wfcFeature",
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "Action completed."
+            }
+          ],
+          "structuredContent": {
+            "branches": [],
+            "cursor": null
+          },
+          "isError": false
+        }
+      }
+    },
+    {
+      "status": "fulfilled",
+      "value": {
+        "label": "featurePR",
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "Action completed."
+            }
+          ],
+          "structuredContent": {
+            "issues": []
+          },
+          "isError": false
+        }
+      }
+    },
+    {
+      "status": "fulfilled",
+      "value": {
+        "label": "canonical",
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "Action completed."
+            }
+          ],
+          "structuredContent": {
+            "branches": [
+              {
+                "branch": "master"
+              }
+            ],
+            "cursor": "MQ"
+          },
+          "isError": false
+        }
+      }
+    }
+  ],
+  "scope": "Connector branch/PR presence only; branch search does not return commit SHAs. Exact remote revisions are independently dated in remote-baseline-20261018T0741Z.json. No candidate branch/PR means no remote candidate CI verification."
+}

@@ -39,7 +39,7 @@ export default defineConfig({
   },
   test: {
     // These copied geometry/protocol suites use Node's runner and run separately.
-    exclude: [...configDefaults.exclude, 'viewer-runtime/test/**'],
+    exclude: [...configDefaults.exclude, 'viewer-runtime/test/**', '**/.scratch/**'],
     globals: true,
     environment: 'jsdom',
     setupFiles: 'src/test/setup.ts',

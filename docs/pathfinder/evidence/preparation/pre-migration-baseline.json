@@ -1,0 +1,415 @@
+{
+  "status": "PASS",
+  "scope": "READ_ONLY_REPEATABLE_READ_ALL_PUBLIC_TABLES_BEFORE_R3_MIGRATION",
+  "tableCount": 81,
+  "rowCount": 10095,
+  "rawSha256": "dac75a7544e5b802a7d9db8efcc54c973c5ca991f711a03f33f446d00cbc37aa",
+  "tables": [
+    {
+      "table": "cable_materials",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "cable_type_default_materials",
+      "count": "9",
+      "sha256": "1619c817b1f4c89b4d860b642c52a2984f5a2f2de56a25546b2da16914f3e44b"
+    },
+    {
+      "table": "cable_types",
+      "count": "53",
+      "sha256": "d26ff7a6f12d7c7f385a509b6fc11bfa9d50d9aee107521594018dab53fc800b"
+    },
+    {
+      "table": "cable_versions",
+      "count": "4",
+      "sha256": "b0e8e1f79accf93bc6b7504a0465901adc6df9d2e4a7bc4816896d0f58f9dd7e"
+    },
+    {
+      "table": "cables",
+      "count": "2143",
+      "sha256": "602d24d81befe959f3cee8b0e856166bc8b942e084f04ae9c6c65fa3b836b6ec"
+    },
+    {
+      "table": "material_cable_installation_materials",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_cable_installation_standard_materials",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_cable_type_standard_materials",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_cable_types",
+      "count": "1",
+      "sha256": "54208f0b0213c074e9905b1d921aa0b2978ebebc43eaed2331728c81f980464c"
+    },
+    {
+      "table": "material_change_logs",
+      "count": "24",
+      "sha256": "14f10265775bbcc6133ec5d4e6b8d5621bfca0d96fc54bad67d70507fd7b29b4"
+    },
+    {
+      "table": "material_instrument_installation_materials",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_instrument_installation_standard_materials",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_instrument_standard_materials",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_instruments",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_load_curve_points",
+      "count": "803",
+      "sha256": "e22548148df239c48a42ebd3a4a2cc03c627633e90f1fd08f24974a0e62db2f4"
+    },
+    {
+      "table": "material_load_curves",
+      "count": "3",
+      "sha256": "e10c257aac0e4537afae09bdd66baaf06798452ac22ffdbbb9b1bfcad4f68d27"
+    },
+    {
+      "table": "material_product_identities",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_support_standard_materials",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_supports",
+      "count": "5",
+      "sha256": "46792e1eeaf3d1de64583c7779872f76efe910f5d0b42e28fe781c3d210861b8"
+    },
+    {
+      "table": "material_tray_installation_materials",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_tray_installation_standard_materials",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_tray_standard_materials",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_trays",
+      "count": "15",
+      "sha256": "b0903e38dc1597b98a534eec38d0575684f1a633ee73f851fbdf424b2ba19db2"
+    },
+    {
+      "table": "model_content_reservations",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "model_import_jobs",
+      "count": "3",
+      "sha256": "85f056848823d1939380ade89ddd21687d4984519522436068bbf8f04b6c6895"
+    },
+    {
+      "table": "model_package_aliases",
+      "count": "3",
+      "sha256": "5289f13781042f310c094d95bb7c947282a9ec97b0ffb652cf68aa679e1452f4"
+    },
+    {
+      "table": "model_package_identities",
+      "count": "1",
+      "sha256": "2167c07d7323cce0ef6c56dbd4dd551d9ec788a063e5bd6d86881d789a33a965"
+    },
+    {
+      "table": "model_storage_ownership",
+      "count": "3",
+      "sha256": "2116853b05d4df936c67616fab2bd622d157d25dd39ab63ce6a37f3cd9982cb2"
+    },
+    {
+      "table": "model_validation_reports",
+      "count": "3",
+      "sha256": "83133a75280776e3a36fcadc1052bc81828383b7cbb11e606ff47efa5e630681"
+    },
+    {
+      "table": "model_versions",
+      "count": "3",
+      "sha256": "b2670399de9ccce3a0c7c39827a7aa3cff9dedc2414dfa425a4d13a3dc344dd1"
+    },
+    {
+      "table": "pf_apply_receipts",
+      "count": "1",
+      "sha256": "06ffd51b450ae75b3e7ca210f55469761e9b0b470f9632207e3f17b70e2513aa"
+    },
+    {
+      "table": "pf_artifact_routing_scopes",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_artifacts",
+      "count": "7",
+      "sha256": "ff05f215e6c61e75ab97f2fba6f51eee485ff39329349a8d9081da857c842a3f"
+    },
+    {
+      "table": "pf_catalog_events",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_catalog_purpose_incarnations",
+      "count": "6",
+      "sha256": "d617f55b10f0a6380f5a5129602276af11bb81722abc58f5f6d4f8fd54d33ead"
+    },
+    {
+      "table": "pf_catalog_snapshots",
+      "count": "2",
+      "sha256": "ea4de8506960b2742e417f6a547beee24833c8fd12d3104c5307ff1a35ccf5a4"
+    },
+    {
+      "table": "pf_drawing_export_files",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_drawing_exports",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_drawing_generated_files",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_drawing_policy_history",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_drawing_policy_receipts",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_drawing_purpose_rules",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_job_items",
+      "count": "52",
+      "sha256": "556963644815f86b94bbc0d0eca137c36712c801de466b49a186ae672bfb037a"
+    },
+    {
+      "table": "pf_jobs",
+      "count": "44",
+      "sha256": "5d02d77d2d6843c3c3b8c008c6c4200bfbab4b0bfec28baf3cabe054fc809488"
+    },
+    {
+      "table": "pf_location_aliases",
+      "count": "1534",
+      "sha256": "38899010c72b0a07782b8ed22399b55cf443d54cdbafeb8823131c86b4625cd1"
+    },
+    {
+      "table": "pf_location_bindings",
+      "count": "6",
+      "sha256": "7e0d7ed9c480846fb2918df1d4199e3a92ac9bf061b2a9ace6ea698f63946b86"
+    },
+    {
+      "table": "pf_location_events",
+      "count": "1634",
+      "sha256": "912f8233d6cbada06681f45973d219693cd078a7fb8dd84f6667e339c1152c8a"
+    },
+    {
+      "table": "pf_location_matches",
+      "count": "1528",
+      "sha256": "2434a21e112b8285fb53602fefe166e8163debca29903e6947a927eaf0987c3a"
+    },
+    {
+      "table": "pf_locations",
+      "count": "1533",
+      "sha256": "dd94a38890f3a735f3dc5edc7652c8f73275aadce4f51c28a2fa36b2b14b9bb1"
+    },
+    {
+      "table": "pf_lookup_results",
+      "count": "14",
+      "sha256": "f3d7ee38c635fa053710d0d082500ead10240ac75b5776419f6e2a36ce74450e"
+    },
+    {
+      "table": "pf_model_objects",
+      "count": "146",
+      "sha256": "29507ead91083ca3fc0a58cb63cd0904aec2b4c9edfecb817019554719a9ebaf"
+    },
+    {
+      "table": "pf_project_state",
+      "count": "3",
+      "sha256": "6e5e164d4cb685526dc0baaacc391d91d3efb4323b13aeb0d9b614dfdea2b07f"
+    },
+    {
+      "table": "pf_proposals",
+      "count": "47",
+      "sha256": "10ba8b3c370698b08855467ad831d8d9c02f8234e56f77527056399d466792c0"
+    },
+    {
+      "table": "pf_purpose_project_state",
+      "count": "3",
+      "sha256": "4483596040995767ec4d8a617aedc7d91cc4ad67a0a22cef8e79ddba518c6f97"
+    },
+    {
+      "table": "pf_reviews",
+      "count": "6",
+      "sha256": "07e3a4a143b8bc23ec92475b0d2398c2552a6aa3db834e47ba7855833a227e93"
+    },
+    {
+      "table": "pf_routing_policy_history",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_routing_policy_receipts",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_routing_purpose_rules",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_synthetic_projects",
+      "count": "1",
+      "sha256": "d1f3464731b104dc55c3b5dab033cf1905207058c07671c9fdbe8799ac41dab4"
+    },
+    {
+      "table": "pf_synthetic_proofs",
+      "count": "1",
+      "sha256": "cd06b2af2bd524cb3891786d31e07a3a6711e67c5bd8832c7c3201e8e6a93835"
+    },
+    {
+      "table": "pf_tray_drawing_settings",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_tray_drawing_settings_history",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_tray_drawing_snapshots",
+      "count": "1",
+      "sha256": "e94e18c428c32b8ccf7936713a13a7d6723a88b45e84154ac8a7835c06d207b5"
+    },
+    {
+      "table": "project_change_order_items",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "project_change_order_revisions",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "project_change_orders",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "project_file_versions",
+      "count": "1",
+      "sha256": "a20ecfda7fe696d522b82eb2e0bf53bda3eea2869f69561dc5be3deba8005f08"
+    },
+    {
+      "table": "project_files",
+      "count": "2",
+      "sha256": "d73af227264a3da254bc2fde70f6acb38158e0c32008f4a67e188537818522be"
+    },
+    {
+      "table": "project_model_selections",
+      "count": "3",
+      "sha256": "c9c0d709e8d63e3a8930527207be0fc5b1b98c768d46e4e6681c0b6569b2b850"
+    },
+    {
+      "table": "project_roxtec_entries",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "project_support_distances",
+      "count": "14",
+      "sha256": "622f4d11eb8df589b0d641944665f9c1444695572e1afaf32c2a656bc4fba176"
+    },
+    {
+      "table": "project_tray_purpose_templates",
+      "count": "6",
+      "sha256": "2ec091f2c1d981a6b65b817c2f8c74914dff47f597d6f3ccce5f80ff909c26b7"
+    },
+    {
+      "table": "projects",
+      "count": "3",
+      "sha256": "a88f3071d34ea7ef00f7ce3dacbfe8b115e29b0162ce9d950397924bf41a543b"
+    },
+    {
+      "table": "standard_material_references",
+      "count": "21",
+      "sha256": "e1d025242fe7de659264e9c8f31dcfcdb4f633bae40716620f6da10decfd9464"
+    },
+    {
+      "table": "template_file_versions",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "template_files",
+      "count": "3",
+      "sha256": "8adeed45eb15c6e2e449387cd2e14ad8dac4927699a0ae96015f0c57d2359503"
+    },
+    {
+      "table": "trays",
+      "count": "330",
+      "sha256": "c3b79c848ef621239f2bc4c4146983241bb1be99b188ad56cc0ea31be2e3efba"
+    },
+    {
+      "table": "user_project_access",
+      "count": "0",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "users",
+      "count": "1",
+      "sha256": "273e6261fae69fcead56884c9b5110cc77d58f1c8d322c951529a1d818a6345b"
+    },
+    {
+      "table": "viewer_login_bindings",
+      "count": "22",
+      "sha256": "c3aeb8e9217166437ea771790d8dbafe6e72a5b1bf12a3de33f7f0d3cae7fb4b"
+    },
+    {
+      "table": "viewer_resource_sessions",
+      "count": "44",
+      "sha256": "d5d315b332b8bf4ef043098b100dac571033b127bacedae4e88a6be88114ff2a"
+    }
+  ],
+  "businessRowsInGit": false
+}

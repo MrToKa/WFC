@@ -1,0 +1,128 @@
+{
+  "schemaVersion": "pathfinder.capacity.method-review.v1",
+  "recordedAtUtc": "2026-10-18T12:03:12.477Z",
+  "status": "PASS",
+  "scope": "Read-only independent source/methodology review; no implementation, build, test or runtime benchmark executed by this reviewer.",
+  "repository": {
+    "root": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local",
+    "branch": "pf-2-capacity-local-20261018",
+    "head": "8a726f72ab94da22681320f28ccebe1224cf8eb3"
+  },
+  "sources": [
+    {
+      "path": "pathfinder-engine/tools/PathFinder.CapacityBench/Program.cs",
+      "bytes": 6863,
+      "sha256": "b607a90d8c1a01e2bcf076d13e298cddec6d08ea1c0cd517c59cfb33178bbd2b"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.CapacityBench/Benchmark.cs",
+      "bytes": 17747,
+      "sha256": "7a1f67683f6f3d03b65d98a951e71bdf851f5d0748edc2d04c0d173d740cd6f0"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.CapacityBench/Input.cs",
+      "bytes": 9558,
+      "sha256": "676c933f9c977c4cbd3867ef10603c77bb8af159ecf0bfb7c4a9d2c237a7a399"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.CapacityBench/Contracts.cs",
+      "bytes": 2131,
+      "sha256": "fb0eb0499be38e228ee082141f611dbb19052c40aa387f8eb4239c16fa12bd53"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.CapacityBench/Synthetic.cs",
+      "bytes": 3597,
+      "sha256": "262ece6176a4f03b971f25e260c2826daa20e0613a87ddfc4ab2895ce52c150f"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.CapacityBench/README.md",
+      "bytes": 5703,
+      "sha256": "244840b11067bc37ea904c22a69b586ed15823c5b2a8b35e8378973503959e7b"
+    },
+    {
+      "path": "scripts/pathfinder-capacity/lib.mjs",
+      "bytes": 9989,
+      "sha256": "cc0701facac44a3c0f82cab6e06a3d7bb87a486d10e62dde27ff0745b8a4b143"
+    },
+    {
+      "path": "scripts/pathfinder-capacity/process.mjs",
+      "bytes": 6172,
+      "sha256": "3f514c11d4e65cdb5e5daa05c3a663158b774c45b87a42a0633af4476419de6c"
+    },
+    {
+      "path": "scripts/pathfinder-capacity/run.mjs",
+      "bytes": 15379,
+      "sha256": "63779e9d8002d2e312907b8fa426eac622326e8bca00f5b813259196f984f68a"
+    },
+    {
+      "path": "scripts/pathfinder-capacity/sampler.mjs",
+      "bytes": 16009,
+      "sha256": "21e2f7323528ea61409226f32ef01000a95cf694a1f18e67e17684c7675ce51d"
+    },
+    {
+      "path": "scripts/pathfinder-capacity/bench-input-controls.mjs",
+      "bytes": 8698,
+      "sha256": "5150e7eafc6c777cfc6cbd41bd7029ac3c8d58e19befc7394ddc92a16844ad47"
+    }
+  ],
+  "findings": [
+    {
+      "id": "R1",
+      "finding": "Fit Measure can retain a value after a post-operation timeout; callers previously ignored fit status.",
+      "resolution": "RESOLVED: cold-fit, warm-disk-fit and memory-fit-hit require nonnull value and explicit PASS before dependent queries; memory hit is separately measured."
+    },
+    {
+      "id": "R2",
+      "finding": "Cold phase wording could imply process-cold parsing/JIT despite prevalidation and earlier datasets.",
+      "resolution": "RESOLVED: cold is explicitly absent fitted caches; prevalidation/JIT/OS and sequential process reuse are declared; query timing includes Calculate, design, expected checks and canonical JSON/hash."
+    },
+    {
+      "id": "R3",
+      "finding": "Independent lookup-purpose rejection control was initially malformed and could pass an unrelated reader rejection.",
+      "resolution": "RESOLVED: current control creates a valid dedicated lookup snapshot and requires the intended planning-purpose rejection message. Earlier observed receipt has INVALID_INPUT/exit2 and exact purpose message; final control execution belongs to parent."
+    },
+    {
+      "id": "R4",
+      "finding": "Valid bounded C# exit1 result was discarded before raw per-phase evidence could be retained.",
+      "resolution": "RESOLVED: PASS/EXIT_FAILED output is retained and strictly parsed; exit0/PASS and exit1/FAIL agreement required; incomplete timeout/output/cleanup paths fail before claimed success."
+    },
+    {
+      "id": "R5",
+      "finding": "One timeout could mask another mathematical failure in aggregate PARTIAL classification.",
+      "resolution": "RESOLVED: any validated benchmark FAIL is conservatively aggregate hard FAIL, retaining all raw phase outcomes."
+    },
+    {
+      "id": "R6",
+      "finding": "Unexpected production process/output/cleanup failures were classified as partial.",
+      "resolution": "RESOLVED: only TIMEOUT/CANCELLED transport outcomes may be partial; other process failures set entryFailure. Decoded resource_limit/deadline_exceeded may be partial; other non-calculated outcomes fail."
+    }
+  ],
+  "confirmedProperties": [
+    "The direct benchmark invokes existing FittedModelCache, unchanged RouteCalculator and CableDesignLength; decimal strings use the exact existing converter and canonical output.",
+    "Synthetic expectations include exact known segment identity set, 2*N route length, zero endpoint approaches/SECONDARY/gaps and ceiling formula; synthetic sizes beyond100 route codes claim Core capacity only.",
+    "Full route points, flags, effective category and all design strings are canonicalized without point rounding. Direct real baseline and production results compare against the copied existing preview result.",
+    "Copied source snapshot is the only real geometry mount; source runtime storage and Docker socket are not mounted in the benchmark container. Own networknone, readonly root, resource budgets and exact mount paths are guarded.",
+    "Process-group cleanup is bounded; RSS reads are explicitly sequential/non-atomic estimates, not exact coincident peaks or guaranteed lower bounds. Independent maxima are not summed.",
+    "Dedicated benchmark cache/work outputs are fresh and do not alter production runner code, production graph reuse, existing limits or frozen PF-0 fixtures."
+  ],
+  "limits": [
+    "Current real input is a partial52-object26-leaf selected network; full-plant performance and engineering accuracy are not established.",
+    "Repeated queries use identical inputs; changed-query order/category/endpoint independence for a future persistent worker is not established.",
+    "PreparedModel in-memory reuse is a benchmark scenario only. Production remains one-shot; its graph is reconstructed per calculation.",
+    "Native parity, verified units/transforms/visibility/source correspondence and engineering or human acceptance are outside this review.",
+    "No latest timing or memory result is asserted by this source review; actual benchmark execution is owned separately."
+  ],
+  "reviewerActivity": {
+    "sourceReads": "PASS",
+    "sourceEdits": 0,
+    "builds": 0,
+    "testsExecuted": 0,
+    "containersCreated": 0,
+    "runtimeCalls": 0,
+    "cleanupActions": 0
+  },
+  "postBenchmarkPreservation": {
+    "status": "NOT_RUN",
+    "reason": "Parent will authorize read-only final comparison after actual benchmark completes."
+  }
+}

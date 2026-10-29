@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "wfc.pf.aalborg-followup-readiness.v1",
+  "recordedAtUtc": "2026-10-19T21:48:18.458Z",
+  "technicalCommit": "4f7505ea67b163d4b3c4269330d8b5306a335547",
+  "handoff": "docs/pathfinder/handoffs/PF-Aalborg-complete-network-and-proposals.md",
+  "status": "BLOCKED",
+  "executedStep": "Readiness check for the first dependent action; existing pending user scope question has no answer.",
+  "dataGate": {
+    "missingRequestedTrayRoots": 2,
+    "excludedTrays": 0,
+    "userScopeAnswer": "PENDING",
+    "missingEndpointNames": 1042,
+    "ambiguousEndpointNames": 48
+  },
+  "actions": {
+    "newExclusions": 0,
+    "newPartCaptures": 0,
+    "newPublication": 0,
+    "realCalculations": 0,
+    "realApply": 0,
+    "backgroundGrantChanges": 0
+  },
+  "independentWork": "Repair, regression, real discovery, saved plan, diagnostics and source review complete at recorded scope; no further useful independent implementation identified.",
+  "automation": {
+    "id": "path-finder-purpose-rules-and-model-revisions",
+    "status": "PAUSED",
+    "verifiedThrough": "App view tool and saved automation configuration"
+  },
+  "finalResourceCheck": "PASS",
+  "outsideContainersExact": true,
+  "sourceHashesExact": true,
+  "technicalDeliveryFiles": 46,
+  "technicalSourceAndTestFiles": 43,
+  "engineeringAcceptance": "NOT_RUN"
+}

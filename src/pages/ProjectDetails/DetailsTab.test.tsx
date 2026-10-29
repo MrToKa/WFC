@@ -15,6 +15,7 @@ const fixture: Omit<DetailsProps, 'styles' | 'onTrayTemplateChange'> = {
     customer: 'Customer',
     manager: null,
     description: null,
+    connectionGap: 1,
     secondaryTrayLength: null,
     supportDistance: null,
     supportWeight: null,
@@ -52,11 +53,13 @@ const fixture: Omit<DetailsProps, 'styles' | 'onTrayTemplateChange'> = {
     maxFreeSpaceError: null,
     saving: false,
     considerBundleSpacingAsFree: false,
+    autoRerouteForFreeSpace: false,
     onInputChange: vi.fn(),
     onMinFreeSpaceChange: vi.fn(),
     onMaxFreeSpaceChange: vi.fn(),
     onSave: vi.fn(async () => {}),
     onToggleConsiderBundleSpacingAsFree: vi.fn(async () => {}),
+    onToggleAutoRerouteForFreeSpace: vi.fn(async () => {}),
   },
   cableCategoryCards: [],
   customBundleRanges: {
@@ -125,7 +128,72 @@ const StatefulDetails = ({
   );
 };
 
+const NumericDetails = ({ project = fixture.project, isAdmin = true, numericFields = [] }: { project?: DetailsProps['project']; isAdmin?: boolean; numericFields?: DetailsProps['numericFields'] }) => {
+  const styles = useProjectDetailsStyles();
+  return <FluentProvider theme={webLightTheme}><DetailsTab {...fixture} styles={styles} project={project} isAdmin={isAdmin} numericFields={numericFields} onTrayTemplateChange={vi.fn(async () => {})} /></FluentProvider>;
+};
+
+const CapacityDetails = ({ min = null, enabled = false, canEdit = true, saving = false, toggle }: {
+  min?: number | null; enabled?: boolean; canEdit?: boolean; saving?: boolean;
+  toggle: DetailsProps['cableSpacingField']['onToggleAutoRerouteForFreeSpace'];
+}) => {
+  const styles = useProjectDetailsStyles();
+  return <FluentProvider theme={webLightTheme}><DetailsTab {...fixture} styles={styles} isAdmin={canEdit}
+    cableSpacingField={{ ...fixture.cableSpacingField, minFreeSpaceCurrent: min, autoRerouteForFreeSpace: enabled, saving, onToggleAutoRerouteForFreeSpace: toggle }}
+    onTrayTemplateChange={vi.fn(async () => {})} /></FluentProvider>;
+};
+
+describe('DetailsTab automatic free-space rerouting', () => {
+  const label = 'Require minimum tray free space when routing';
+  it('starts disabled and requires a saved project minimum before enabling', () => {
+    const toggle = vi.fn(async () => {});
+    render(<CapacityDetails toggle={toggle} />);
+    const checkbox = screen.getByRole('checkbox', { name: label });
+    expect(checkbox).not.toBeChecked(); expect(checkbox).toBeDisabled();
+    expect(checkbox).toHaveAccessibleDescription(/balances tray loading even when this option is off/);
+    expect(checkbox).toHaveAccessibleDescription(/Set and save the minimum tray free space/);
+    expect(toggle).not.toHaveBeenCalled();
+  });
+  it('uses the actual project threshold and three percentage-point tolerance', () => {
+    const toggle = vi.fn(async () => {});
+    render(<CapacityDetails min={42} toggle={toggle} />);
+    const checkbox = screen.getByRole('checkbox', { name: label });
+    expect(checkbox).toBeEnabled();
+    expect(checkbox).toHaveAccessibleDescription(/When enabled, uses the project's minimum free space/);
+    expect(checkbox).toHaveAccessibleDescription(/minimum free space \(42%\).*3 percentage points \(39% accepted\)/);
+    expect(checkbox).toHaveAccessibleDescription(/the affected cable remains unrouted and other cables continue calculating/);
+    fireEvent.click(checkbox); expect(toggle).toHaveBeenCalledExactlyOnceWith(true);
+  });
+  it('allows an existing enabled setting to be turned off even if its minimum was removed', () => {
+    const toggle = vi.fn(async () => {});
+    render(<CapacityDetails enabled toggle={toggle} />);
+    const checkbox = screen.getByRole('checkbox', { name: label });
+    expect(checkbox).toBeChecked(); expect(checkbox).toBeEnabled();
+    fireEvent.click(checkbox); expect(toggle).toHaveBeenCalledExactlyOnceWith(false);
+  });
+  it.each([{ canEdit: false, saving: false }, { canEdit: true, saving: true }])('prevents edits with current permissions or while saving: %j', props => {
+    render(<CapacityDetails min={42} toggle={vi.fn(async () => {})} {...props} />);
+    expect(screen.getByRole('checkbox', { name: label })).toBeDisabled();
+  });
+});
+
 describe('DetailsTab tray report templates', () => {
+  it('renders a separate metre gap card with three-decimal input and existing read-only behavior', () => {
+    const change = vi.fn(), save = vi.fn(async () => {}), numericFields: DetailsProps['numericFields'] = [{ field: 'connectionGap', label: 'Connection gap', unit: 'm', input: '1', decimals: 3, error: null, saving: false, onInputChange: change, onSave: save }];
+    const { rerender } = render(<NumericDetails numericFields={numericFields} />), card = screen.getByText('Connection gap').parentElement!;
+    expect(within(card).getByText('1 m')).toBeVisible(); const input = within(card).getByRole('spinbutton', { name: 'Update value [m]' }); expect(input).toHaveAttribute('step', '0.001'); expect(input).toHaveAttribute('min', '0.001'); expect(input).toHaveAttribute('max', '100');
+    fireEvent.change(input, { target: { value: '0.25' } }); expect(change).toHaveBeenCalledWith('0.25'); fireEvent.click(within(card).getByRole('button', { name: 'Save' })); expect(save).toHaveBeenCalledOnce();
+    rerender(<NumericDetails numericFields={numericFields} isAdmin={false} />); expect(screen.getByText('Connection gap')).toBeVisible(); expect(screen.queryByRole('spinbutton', { name: 'Update value [m]' })).toBeNull();
+  });
+  it('explains the checked Path Finder Auto field, exact allowance order and separate Design approval', () => {
+    render(<NumericDetails project={{ ...fixture.project, connectionGap: 1, secondaryTrayLength: 4, endConnectionLength: 6, additionalBendingPercent: 10 }} />);
+    expect(screen.queryByText('Tray-list estimate')).toBeNull(); expect(screen.getByText('Path Finder calculated length')).toBeVisible();
+    expect(screen.getByText(/Auto calculated length \[m\] shows the latest successful checked Path Finder result/)).toBeVisible();
+    expect(screen.getByText('ceil((max(0, Geometric length − flagged From/To approach lengths) + Secondary tray length × number of flagged approaches + For end connection) × (1 + Additional % for bending / 100))')).toBeVisible();
+    expect(screen.getByText('Current Path Finder values: SECONDARY 4 m; end connection reserve 6 m; bending allowance 10%.')).toBeVisible(); expect(screen.getByText(/Measured connection gaps are already included in geometric length and are not added again/)).toBeVisible();
+    expect(screen.getByText(/direct SECONDARY connection uses the actual 3D From\/To distance/)).toBeVisible();
+    expect(screen.getByText(/Existing Design length remains manually editable/)).toBeVisible();
+  });
   it('keeps the separate model section visible for read-only project access', () => {
     render(<StatefulDetails onSave={vi.fn(async () => {})} canEdit={false} />);
     expect(screen.getByRole('region', { name: '3D model' })).toBeInTheDocument();

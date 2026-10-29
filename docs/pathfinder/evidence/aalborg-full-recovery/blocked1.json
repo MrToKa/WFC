@@ -1,0 +1,93 @@
+{
+  "schemaVersion": "wfc.pf.current-full-recovery-blocked.v1",
+  "status": "BLOCKED_WINDOWS_MEMORY",
+  "at": "2026-10-20T11:34:26.171Z",
+  "operatorCommit": "7c0c673fd1a6aa442c4989c816d760f2626797b6",
+  "privateObserverSha256": "84bda1313a7991b9bac0f0b0f7418d97cda4b4e5742832e7d4905c41045db3a4",
+  "preflights": [
+    {
+      "attempt": 4,
+      "at": "2026-10-20T11:23:47.733Z",
+      "status": "BLOCKED",
+      "failedChecks": [
+        "windowsMemoryHeadroom"
+      ],
+      "windowsFreePhysicalBytes": 2724896768,
+      "windowsFreeVirtualBytes": 3825889280,
+      "linuxVmAvailableBytes": 12869611520,
+      "disk": {
+        "freeBytes": "86795653120",
+        "requiredBytes": "17056770268",
+        "linuxVolumeFreeBytes": "969618685952",
+        "linuxVolumeRequiredBytes": "7690507874"
+      },
+      "port5192Free": true,
+      "sourceHealthy": true
+    },
+    {
+      "attempt": 5,
+      "at": "2026-10-20T11:25:20.567Z",
+      "status": "BLOCKED",
+      "failedChecks": [
+        "windowsMemoryHeadroom"
+      ],
+      "windowsFreePhysicalBytes": 2686881792,
+      "windowsFreeVirtualBytes": 4353859584,
+      "linuxVmAvailableBytes": 12703526912,
+      "disk": {
+        "freeBytes": "86790258688",
+        "requiredBytes": "17056923253",
+        "linuxVolumeFreeBytes": "969618427904",
+        "linuxVolumeRequiredBytes": "7690609864"
+      },
+      "port5192Free": true,
+      "sourceHealthy": true
+    }
+  ],
+  "requiredWindowsPhysicalBytes": 3221225472,
+  "requiredWindowsVirtualBytes": 2147483648,
+  "requiredLinuxVmAvailableBytes": 4294967296,
+  "memoryViews": "Separate overlapping observations; never summed.",
+  "remedies": "Unloaded and replaced only the agent test page; host memory remained below guard. No outside process or original container stopped.",
+  "sourceDemo": {
+    "port": 5191,
+    "healthy": true,
+    "detailsUiAvailable": true,
+    "settings": {
+      "connectionGap": 1,
+      "secondaryTrayLength": 7,
+      "endConnectionLength": 5,
+      "additionalBendingPercent": 10
+    },
+    "uiText": {
+      "bytes": 23698,
+      "sha256": "07408457099a09c0940a85cd21b4f5155360539f2fcbdff26e1dd731ac3e3c5c"
+    },
+    "screenshot": {
+      "bytes": 58923,
+      "sha256": "7d59e4cb190f93fa92145cb1fa4e7b733d31c714c736ae7327cc743e453118be"
+    }
+  },
+  "backup1": "FAIL",
+  "backup2": "FAIL",
+  "backup3": "NOT_RUN",
+  "restore5192": "NOT_RUN",
+  "targetReadback": "NOT_RUN",
+  "targetRetirement": "NOT_RUN_TARGET_NOT_CREATED",
+  "cleanup": {
+    "ownedTemporaryHelpers": "REMOVED_VERIFIED",
+    "probeVolumesRemoved": 2,
+    "unqualifiedAnonymousVolume": "RETAINED_1B_REFCOUNT0",
+    "failedArchivesPrivateCompanionsEvidence": "RETAINED_NEEDED_FOR_DIAGNOSIS_AND_CONTINUATION",
+    "globalPrune": false
+  },
+  "automation": {
+    "id": "path-finder-purpose-rules-and-model-revisions",
+    "status": "PAUSED",
+    "appToolUpdated": true,
+    "tomlReadback": true
+  },
+  "nextHandoff": "docs/pathfinder/handoffs/PF-Aalborg-current-full-recovery-resume.md",
+  "engineeringAccepted": false,
+  "realApply": false
+}

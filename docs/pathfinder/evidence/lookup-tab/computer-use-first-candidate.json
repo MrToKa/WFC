@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "pathfinder.lookup.computer-use.v1",
+  "recordedAtUtc": "2026-10-18T09:50:06Z",
+  "source": "60e9ce66680d2e86b17be5c9a73d1247d20d9fc0",
+  "images": { "api": "1630510e3240a8ede43d9cc9b77297bedb150cc25ad9480e9425f31797177bc3", "web": "f4b5a13c603d091e1473983aed9d20e26daabf04e4603819883c28e860fb6617" },
+  "url": "http://127.0.0.1:5190/projects/105913f0-7ee4-45f2-bfd8-2c01f9be9f2a?tab=pathfinder",
+  "observedViewerInstance": "5d1592d0-7ab6-4cae-8fed-269ddf4551ed",
+  "method": "Computer-use AX, semantic controls and screenshots only; no NOP_VIEWER or hidden state product API",
+  "checks": [
+    { "name": "Three tabs, one retained protected Viewer, English UI and lookup draft persistence", "status": "PASS" },
+    { "name": "Actual forward and reverse lookup", "status": "PASS", "lengthMeters": 35.30345579516123, "gapCount": 4, "gapLengthMeters": 0.9840583861033791, "usedLeaves": 25, "connectionGapUsed": "1", "nativeEngineeringAcceptance": false },
+    { "name": "Ghost, original tray colours, yellow line, Zoom, explicit transparency75 and Opaque0 controls", "status": "PASS", "scope": "Visible rendering and controls; no claim of programmatic material inspection" },
+    { "name": "Restore clears the lookup; switching to Routes and Path retains input and restores appearance", "status": "PASS" },
+    { "name": "Unsaved B002 rule does not block actual full ordered lookup; Path calculations remain disabled; discard restores stored planning state", "status": "PASS", "evidence": ["dirty-routes-lookup-before-label-correction.txt", "path-dirty-fenced-before-label-correction.txt"] },
+    { "name": "Actual capture cancellation returns ready input with cancellation notice and no late result", "status": "PASS", "evidence": "cancel-before-label-correction.txt" },
+    { "name": "Used-leaf diagnostic caption", "status": "FAIL_CORRECTED_IN_SOURCE", "reason": "25 used leaves were incorrectly captioned as all prepared leaves", "correction": "73c13aa58519f26cbb96d93bbbb70bcdd5bb2cdd", "finalBrowser": "NOT_RUN at this record boundary" }
+  ],
+  "interactionNotes": ["An early ready-text wait expired while the large model was still loading; a later current AX observation showed ready with no console warnings/errors.", "The first semantic Cancel click scrolled its target into view without activation; after a fresh screenshot, the visible button was activated by coordinates and cancellation was observed."],
+  "limits": ["The existing real project has planning history; live absence-of-history case is NOT_RUN.", "Native comparison NOT_PERFORMED/NOT_REQUIRED_BY_USER; manual engineering acceptance PENDING.", "No cable Apply, real location edits or planning preparation were performed. Read-only workflow audit is recorded separately."]
+}

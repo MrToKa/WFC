@@ -17,6 +17,7 @@ export type ProjectRow = {
   manager: string | null;
   description: string | null;
   secondary_tray_length: string | number | null;
+  connection_gap: string | number;
   support_distance: string | number | null;
   support_weight: string | number | null;
   additional_bending_percent: string | number;
@@ -38,6 +39,7 @@ export type PublicProject = {
   manager: string | null;
   description: string | null;
   secondaryTrayLength: number | null;
+  connectionGap: number;
   supportDistance: number | null;
   supportWeight: number | null;
   additionalBendingPercent: number;
@@ -95,6 +97,7 @@ export type PublicCableLayout = {
   considerBundleSpacingAsFree: boolean | null;
   minFreeSpacePercent: number | null;
   maxFreeSpacePercent: number | null;
+  autoRerouteForFreeSpace?: boolean;
   mv: PublicCableCategorySettings | null;
   power: PublicCableCategorySettings | null;
   vfd: PublicCableCategorySettings | null;
@@ -388,6 +391,7 @@ const toCableLayoutSettings = (value: unknown): PublicCableLayout => {
       considerBundleSpacingAsFree: null,
       minFreeSpacePercent: null,
       maxFreeSpacePercent: null,
+      autoRerouteForFreeSpace: false,
       mv: null,
       power: null,
       vfd: null,
@@ -405,6 +409,7 @@ const toCableLayoutSettings = (value: unknown): PublicCableLayout => {
     ),
     minFreeSpacePercent: parseFreeSpacePercent(record.minFreeSpacePercent),
     maxFreeSpacePercent: parseFreeSpacePercent(record.maxFreeSpacePercent),
+    autoRerouteForFreeSpace: record.autoRerouteForFreeSpace === true,
     mv: parseCategorySettings(record.mv),
     power: parseCategorySettings(record.power),
     vfd: parseCategorySettings(record.vfd),
@@ -422,6 +427,7 @@ export const mapProjectRow = (row: ProjectRow): PublicProject => ({
   manager: row.manager ?? null,
   description: row.description ?? null,
   secondaryTrayLength: toNumberOrNull(row.secondary_tray_length),
+  connectionGap: toNumberOrNull(row.connection_gap) ?? 1,
   supportDistance: toNumberOrNull(row.support_distance),
   supportWeight: toNumberOrNull(row.support_weight),
   additionalBendingPercent: toNumberOrNull(row.additional_bending_percent) ?? 10,

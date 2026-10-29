@@ -1,0 +1,44 @@
+{
+  "schemaVersion": "pathfinder.converted.normalization-observations.v1",
+  "observedAt": "2026-10-17T21:04:47.569Z",
+  "scope": "actual-converted-capture-negative-observations",
+  "status": "FAIL",
+  "observations": [
+    {
+      "receipt": "inventory-1792270723025-receipt.json",
+      "sha256": "e9a13c225d63266a9f9186b1ea40edab54a241ec9e3e139e100f7e2fa44b2ae9",
+      "check": "unique-full-inventory",
+      "status": "FAIL",
+      "reportedObjects": 438156,
+      "uniqueObjects": 438155,
+      "duplicateId": "dbid:1",
+      "cause": "SDK recursive enumeration includes the root; initial code inserted the root twice."
+    },
+    {
+      "receipt": "nwd-lookup-01-1792270763832-receipt.json",
+      "sha256": "6d044a3e243652ba8d2c4006885a3b7ff089ff46af2d4c96a67601dc566a99df",
+      "check": "finite-canonical-coordinate-mapping",
+      "status": "FAIL",
+      "exampleVertex": [
+        null,
+        null,
+        null
+      ],
+      "cause": "Unsupported SDK Matrix4.setPosition(x,y,z) overload produced nonfinite translation values; serialized null."
+    },
+    {
+      "receipt": "nwd-lookup-01-1792270964774-receipt.json",
+      "sha256": "90600d39ddd0be5a6685d832684ae384f47d538feab320639a694d56e9e6172b",
+      "check": "binary64-fragment-composition",
+      "status": "FAIL",
+      "maximumObservedFirstFragmentCompositionResidualMetres": 9.5367431640625e-7,
+      "rawGlobalOffsetX": 42.89071492700009,
+      "storedMatrixOffsetX": 42.890716552734375,
+      "cause": "SDK THREE.Matrix4 Float32 storage rounded offsets and composed fragment transforms."
+    }
+  ],
+  "limitations": [
+    "These are actual rejected capture attempts. They do not establish native/converted parity or acceptance.",
+    "Original bulk captures are retained; corrected captures must produce new independent receipts."
+  ]
+}

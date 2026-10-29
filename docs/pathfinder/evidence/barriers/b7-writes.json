@@ -1,0 +1,138 @@
+{
+  "schemaVersion": "wfc.pf.barrier-writes-stage-receipt.v1",
+  "stage": "PF-B7",
+  "status": "TECHNICALLY_CHECKED",
+  "product": {
+    "branch": "pf-b7-protected-writes-local-20261021",
+    "commit": "34c603c709742e94788077efef54fab7ca37e824",
+    "sourceFiles": 43
+  },
+  "recordedAt": "2026-10-21T16:52:59.295Z",
+  "checks": [
+    {
+      "log": "protected-check3.log",
+      "sha256": "674c6ca63ef32b917dbd96a0043ac8b0e764eb5490fd0a217bf289d790737cee",
+      "bytes": 871,
+      "status": "PASS",
+      "tests": 387,
+      "scope": "Protected writer, initial fill, receipt, workflow and shared group before later focused additions"
+    },
+    {
+      "log": "evidence-status-check7.log",
+      "sha256": "caa747ca96aa00c454368d149f4537b0189bc07b83cd2097477bed3c042b5d11",
+      "bytes": 323,
+      "status": "PASS",
+      "tests": 27,
+      "scope": "Exact barrier evidence statuses and physical fence"
+    },
+    {
+      "log": "baseline-check6.log",
+      "sha256": "99498aa30274181a8c2c74d7a4dc67026d8e23262c492c8353249a35a1b0c6a5",
+      "bytes": 336,
+      "status": "PASS",
+      "tests": 68,
+      "scope": "Protected accepted baseline and tamper links"
+    },
+    {
+      "log": "history-check5.log",
+      "sha256": "e6367a372744f5fb3a88fcb8b43a6143e97cb77b2398cc081a22650e8f2b4742",
+      "bytes": 720,
+      "status": "PASS",
+      "tests": 158,
+      "scope": "History, recovery, applicability and human writer"
+    },
+    {
+      "log": "sql-initialfill-check5.log",
+      "sha256": "4ddba94e2cf2bf786d09a0fe7fb370d71108913060bebcf6788ad98783dc68b6",
+      "bytes": 2297,
+      "status": "PASS",
+      "tests": 19,
+      "scope": "Actual owned PostgreSQL endpoint/mandate/initial fill and metadata; geometry/identity adapters synthetic"
+    },
+    {
+      "log": "sql-protected-check8.log",
+      "sha256": "1aa754a0b66afd9a3619801a0ca66740532d2a88c1cd5e2b1bfc8c91c806bca8",
+      "bytes": 343,
+      "status": "PASS",
+      "tests": 16,
+      "scope": "Actual owned PostgreSQL human Review/Apply/CAS/history/auth/commit locking; geometry/identity adapters synthetic"
+    },
+    {
+      "log": "ui-recovery-check11.log",
+      "sha256": "658b231ce089027f6a9dc1d515c58b15a58ef9ffbb52735f8e927bf350cd4afa",
+      "bytes": 21971,
+      "status": "PASS",
+      "tests": 112,
+      "scope": "Pending recovery, batch and revision UI"
+    },
+    {
+      "log": "ui-popup-check14.log",
+      "sha256": "29f17675a7a2f633f77d3162ff01856e7b862757c1d1ef3f41f8349f96736326",
+      "bytes": 33533,
+      "status": "PASS",
+      "tests": 160,
+      "scope": "Popup/workspace/Results before final viewer ownership fix"
+    },
+    {
+      "log": "ui-results-check16.log",
+      "sha256": "b541005f12d9fb31deaca0132922ceb56d1dd384861928e305e6e9cad2af0428",
+      "bytes": 20519,
+      "status": "PASS",
+      "tests": 103,
+      "scope": "Final Results with parent viewer ownership regression"
+    },
+    {
+      "log": "ui-tab-final17.log",
+      "sha256": "445fe40e1cba431a4f6976dcc061758a4234e2df0d88e2eac336f1cd30d4ee0e",
+      "bytes": 14314,
+      "status": "PASS",
+      "tests": 60,
+      "scope": "Full final Tab suite on frozen product source"
+    },
+    {
+      "log": "server-build-check15.log",
+      "sha256": "973e4f87ceeb2f06f4bcc6c00548c07445882b742fe1f2981e29a1c698b7e4b6",
+      "bytes": 1463,
+      "status": "PASS",
+      "scope": "Server build and contract packaging"
+    },
+    {
+      "log": "client-types-final17.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "status": "PASS",
+      "scope": "Final client type check"
+    },
+    {
+      "log": "lint-final17.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "status": "PASS",
+      "scope": "Final changed-source static analysis"
+    }
+  ],
+  "overlappingGroups": true,
+  "ownedSqlFixture": {
+    "port": 55441,
+    "retired": true,
+    "receipt": "sql-retirement.json",
+    "sha256": "ceae1a4023c520ce81112a462b308c30f86b78eebdc9f1cbc049df240d6d944c"
+  },
+  "remote": {
+    "inspectedAt": [
+      "2026-10-21T16:04:33Z",
+      "2026-10-21T16:04:34Z"
+    ],
+    "main": "96e63f13fdc2b1d30b8f8ff658dd662f25fac104",
+    "stagePullRequests": 0,
+    "ci": "NOT_RUN"
+  },
+  "limits": [
+    "Technical checks do not imply human engineering acceptance.",
+    "Actual civil capture, photographed Aalborg cable, real2140 capacity and browser checks NOT_RUN.",
+    "Historical UI and fixture failures retained privately; groups overlap and are not a unique total.",
+    "No5191/original update, real-data Apply, push, PR, merge or deployment.",
+    "Pinned C# and frozen PF0 expected data unchanged; unchanged B6 numerical evidence reused."
+  ],
+  "next": "PF-B7a immediate readonly Auto calculated length before B8/B9; user reconfirmed both-blank automatic initial fill."
+}

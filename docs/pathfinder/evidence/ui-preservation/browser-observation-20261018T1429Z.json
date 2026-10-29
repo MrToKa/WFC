@@ -1,0 +1,18 @@
+{
+  "schemaVersion":"pathfinder.ui-preservation.browser-observation.v1",
+  "recordedAtUtc":"2026-10-18T14:29:50Z",
+  "status":"PASS_VISUAL_WITH_CAPTION_ISSUE",
+  "target":{"origin":"http://127.0.0.1:5191","project":"wfc-pathfinder-local-f673a0facba3","owner":"7fa65ffa-ef34-46a7-b4c1-55cd19f8fa74","projectId":"105913f0-7ee4-45f2-bfd8-2c01f9be9f2a","modelVersionId":"925c0fc0-6e36-4d47-b1ce-38b0beff5953","apiImagePrefix":"e0a6d742","webImagePrefix":"5abc6002"},
+  "method":"Computer-use ordinary background IAB tab; fresh UI login, Details -> one Path Finder mount, one standalone Calculate, one Clear. No direct Viewer/evaluation/HTTP API calls.",
+  "observed":{"outerTab":"Path Finder","tools":["Routes","Path","Path lookup"],"language":"English","modelGeometry":664556,"identifiers":438156,"properties":6,"from":"=PF-DEMO-NETWORK-START","to":"=PF-DEMO-NETWORK-END","category":"Control","preferVertical":true,"secondaryTriggerMeters":2,"details":{"connectionGap":1,"secondaryTrayLength":3,"endConnectionLength":5,"additionalBendingPercent":10},"lengthMeters":35.30345579516123,"fromApproachMeters":0,"toApproachMeters":0,"gapCount":4,"gapLengthMeters":0.9840583861033791,"lengthBeforePercentage":"40.3034557951612","unroundedDesignLength":"44.33380137467732","designLengthMeters":"45","filledGhost":"PASS_VISUAL","originalRouteColorsAndYellow":"PASS_VISUAL","clearResultRemovedAndOpaqueWholeModel":"PASS_VISUAL"},
+  "screenshots":[
+    {"path":"path-result-20261018.jpg","bytes":114897,"sha256":"777370319d9b729fa6bbe9626b6990cff3388301119f2dc050739844c279f8ce","use":"Completed route/metrics and filled Ghost."},
+    {"path":"path-stable-20261018.jpg","bytes":106752,"sha256":"846d273a13de4b186bb04aaef4be6a8721d97bf4ff75f11e33b33817abad1156","use":"Stable normal viewport with surrounding project context and Ghost."},
+    {"path":"clear-result-20261018.jpg","bytes":76185,"sha256":"d9b2c782ab7c821b55f2ad21c4f04cf01284ec4977135bac0abf74c1325a7a82","use":"Whole opaque model restored; three tools visible."},
+    {"path":"path-overview-20261018.jpg","bytes":109168,"sha256":"469a12c51a6456cd68d6ad02d06ed4b07940aa6a62b913f535ff525c583454fe","use":"Retained transient full-page screenshot; renderer says Rendering and background incomplete. NOT used as a Ghost visual PASS; subsequent normal viewport is complete."}
+  ],
+  "captionIssue":{"status":"OBSERVED","afterClear":"The exact standalone path is displayed. Review its route and length.","effect":"Stale explanatory caption remains after result is removed; geometry/Clear restoration still works. Source mapping requested separately, no patch or new UI verification claimed here."},
+  "limits":["No Review or Apply UI action; database preservation is proved only by separately saved A0/A1/A2/A3 audits, not this screenshot.","Selected converted network only; no human engineering/native/fullplant acceptance.","A3 DB result and own-tab close were pending when this receipt was recorded."],
+  "original5190UiTouches":0,
+  "credentialValuesPrinted":false
+}

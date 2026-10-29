@@ -1,0 +1,164 @@
+{
+  "schemaVersion": "pathfinder.worker.cross-review-closed.v1",
+  "recordedAtUtc": "2026-10-18T12:44:56.204Z",
+  "status": "PASS",
+  "scope": "Read-only closing review of C# first-byte busy-input guard, legitimate sequential request behavior, and previously reviewed unchanged runner boundaries.",
+  "supersedesReviewConclusionOnly": {
+    "path": "docs/pathfinder/evidence/worker-reuse/cross-review-1792327263445.json",
+    "sha256": "d6c70daa0d580edb1d667c5bb5263a0dfa68469437b2fe4d78f7915ec66364be",
+    "historicalFilePreserved": true
+  },
+  "ownerEvidence": {
+    "path": "docs/pathfinder/evidence/worker-reuse/runner-source-final-20261018T124105Z.json",
+    "sha256": "26c5e7b128c1af2650625b255f2a27e5ccf2a79957ac2aa62e4bd36c328bb39e",
+    "runnerPath": "pathfinder-engine/.scratch/runner-session-tests-94f20d805e4f4fd593cc119583ec62e7/publish/PathFinder.ModelRunner.dll",
+    "runnerSha256": "0a421550ac7e01a7e4659a543927cb5fd20eacac7a9cc687cc08c812a5b8c56a",
+    "session": {
+      "path": "pathfinder-engine/.scratch/runner-session-run-75cc7fd30e174d7eb15589dfa079ab69/result.json",
+      "sha256": "8ef09e45aeb9d8cc1daa89179ad79cfe7c9d80ff89ccde566448d559c54bb1f9",
+      "status": "PASS",
+      "passed": 308,
+      "failed": 0,
+      "independentlyRerun": false
+    },
+    "oneShot": {
+      "path": "docs/pathfinder/evidence/pf3/model-runner-2026-10-18T12-40-07-762Z.json",
+      "sha256": "de25527f2f9a6b84346b1948099fee4ca21042843caad2b57647adc5ac2ea89c",
+      "passed": 42,
+      "independentlyRerun": false
+    }
+  },
+  "sourceHashes": [
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/Program.cs",
+      "bytes": 20753,
+      "sha256": "2ddb7fdee36d7119ca37869318dca6b3e575aa83095ab1fc87e65b955184ea5d",
+      "matchesOwnerFreeze": true
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/Session.cs",
+      "bytes": 13547,
+      "sha256": "32ef66ffb981cfb5fde657092504ba36bfc4a048ac73ddcd8016a405e0b39a63",
+      "matchesOwnerFreeze": true
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/SessionProtocol.cs",
+      "bytes": 6076,
+      "sha256": "dde646cb9c031959fa8f87302d66974890be6ba7cbe12150d52ccfa31007159a",
+      "matchesOwnerFreeze": true
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/SessionExecutionContext.cs",
+      "bytes": 1108,
+      "sha256": "eafd19ffc558cfe1d9cda4a6b00e3ffb9ea28abae78fb437a2c92f2c791e283a",
+      "matchesOwnerFreeze": true
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/PathFinder.ModelRunner.csproj",
+      "bytes": 551,
+      "sha256": "ad2dd57312de2fb239560a635a4e16f476d975c7ddd1e20d3af40041387bf5d9",
+      "matchesOwnerFreeze": true
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/README.md",
+      "bytes": 6372,
+      "sha256": "495ede215fcb45f0bde94863fd5acbc9ed7885ffde88ee094a855c8255c3d7b5",
+      "matchesOwnerFreeze": true
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.RunnerSession.Tests/PathFinder.RunnerSession.Tests.csproj",
+      "bytes": 386,
+      "sha256": "8afd402c22652b5687608551e528f74ede23d3ca2dc5c474bb92e9b3824f48be",
+      "matchesOwnerFreeze": true
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.RunnerSession.Tests/Program.cs",
+      "bytes": 17702,
+      "sha256": "1ec59818f9a11e12525414e05cfdbf8523c32d13fd4ba8b08bff1e20b1881422",
+      "matchesOwnerFreeze": true
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.RunnerSession.Tests/Corpus.cs",
+      "bytes": 10693,
+      "sha256": "f12657d0b966261aa80ee60c0fd907107a9be27e530ec653626d4e27be6923b3",
+      "matchesOwnerFreeze": true
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.RunnerSession.Tests/README.md",
+      "bytes": 2739,
+      "sha256": "d4d76e926c55f45816964d6dd3459d62308c951f45793da17c3ab19a789e89a8",
+      "matchesOwnerFreeze": true
+    }
+  ],
+  "findings": [
+    {
+      "id": "SESSION-PIPELINE-PARTIAL",
+      "status": "RESOLVED",
+      "productionAnchors": [
+        "SessionProtocol.ReadFrame optional firstActivity callback immediately after first nonzero read and before prefix/body remainder.",
+        "RunSessionSupervisor competes responseRead, nextInput and first-byte activity; rejects activity or EOF while calculation is active.",
+        "A final activity/complete-input guard runs immediately before forwarding response; no post-forward activity guard rejects a legitimate immediate next request."
+      ],
+      "testSource": "PathFinder.RunnerSession.Tests/Program.cs partial-prefix and partial-payload with stdin kept open, plus immediate legitimate B after receiving A.",
+      "ownerActualRelevantChecks": [
+        {
+          "label": "pipelined-input-refuses-and-joins",
+          "status": "PASS",
+          "detail": null
+        },
+        {
+          "label": "pipelined-input-publishes-no-false-result",
+          "status": "PASS",
+          "detail": null
+        },
+        {
+          "label": "pipelined-partial-prefix-joined-with-open-input",
+          "status": "PASS",
+          "detail": null
+        },
+        {
+          "label": "pipelined-partial-prefix-publishes-no-A",
+          "status": "PASS",
+          "detail": null
+        },
+        {
+          "label": "pipelined-partial-payload-joined-with-open-input",
+          "status": "PASS",
+          "detail": null
+        },
+        {
+          "label": "pipelined-partial-payload-publishes-no-A",
+          "status": "PASS",
+          "detail": null
+        },
+        {
+          "label": "immediate-B-after-received-A-is-legal",
+          "status": "PASS",
+          "detail": null
+        }
+      ]
+    },
+    {
+      "id": "NODE-POST-JOIN-DEADLINE",
+      "status": "PREVIOUSLY_RESOLVED",
+      "sourceSha256": "5cfa14c83dd0566009baecaf757ed1698f0c339043faaff48b24d36eb84a4513",
+      "sourceAnd55AffectedChecks": "Recorded in previous review; no Node source was changed or rerun for this closing C# review."
+    }
+  ],
+  "otherReviewConclusion": "No remaining material findings in bounded oneshot compatibility, frame limits/duplicate/UTF8/partial EOF, parent/child deadline, exact prepared identity, per-request geometry integrity/purpose/options/settings, resource retirement or the reviewed31-case corpus methodology.",
+  "validationCaveat": "Geometry operations calculate/lookup/prepare rehash in C#; retained design keeps prior early-return math and server worker readSnapshot/auth/dependency/publication fences. Lookup-plan has no snapshot. No universal all-operation C# rehash claim.",
+  "reviewerActivities": {
+    "csharpEdits": 0,
+    "csharpBuilds": 0,
+    "csharpTestExecutions": 0,
+    "nodeEdits": 0,
+    "runtimeOperations": 0,
+    "originalOr5190Writes": 0,
+    "evidenceWrites": 1
+  },
+  "limitations": [
+    "Owner execution receipts were hash-verified/read, not independently rerun.",
+    "31 synthetic semantic cases and308 checks, including count/protocol controls, do not establish308 distinct routing scenarios.",
+    "Linux RSS enforcement, persistent production parity/performance, durable DB authority/recovery fences, full-plant capacity and human engineering acceptance belong to separate actual qualification."
+  ]
+}

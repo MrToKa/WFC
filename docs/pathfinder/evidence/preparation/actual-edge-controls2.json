@@ -1,0 +1,76 @@
+{
+  "status": "PASS",
+  "results": [
+    {
+      "name": "model-session",
+      "status": 201,
+      "code": null,
+      "bodyVersion": null,
+      "bodyBytes": 293,
+      "bodyKeys": [
+        "sessionId",
+        "projectId",
+        "modelVersionId",
+        "loadId",
+        "expiresAt",
+        "absoluteExpiresAt"
+      ]
+    },
+    {
+      "name": "unauth-control",
+      "status": 401,
+      "code": "AUTHENTICATION_REQUIRED",
+      "bodyVersion": "wfc.pf.preparation-error.v1",
+      "bodyBytes": 182
+    },
+    {
+      "name": "unauth-part",
+      "status": 401,
+      "code": "AUTHENTICATION_REQUIRED",
+      "bodyVersion": "wfc.pf.preparation-error.v1",
+      "bodyBytes": 182
+    },
+    {
+      "name": "oversize-control",
+      "status": 413,
+      "code": "PREPARATION_BODY_LIMIT",
+      "bodyVersion": "wfc.pf.preparation-error.v1",
+      "bodyBytes": 164
+    },
+    {
+      "name": "oversize-part",
+      "status": 413,
+      "code": "PREPARATION_BODY_LIMIT",
+      "bodyVersion": "wfc.pf.preparation-error.v1",
+      "bodyBytes": 164
+    },
+    {
+      "name": "twelve-mib-invalid",
+      "status": 400,
+      "code": "INVALID_PREPARATION_REQUEST",
+      "bodyVersion": "wfc.pf.preparation-error.v1",
+      "bodyBytes": 182
+    },
+    {
+      "name": "gzip-refused",
+      "status": 415,
+      "code": "PREPARATION_ENCODING_UNSUPPORTED",
+      "bodyVersion": "wfc.pf.preparation-error.v1",
+      "bodyBytes": 192
+    },
+    {
+      "name": "mixed-unauth",
+      "status": 401,
+      "code": "AUTHENTICATION_REQUIRED",
+      "bodyVersion": "wfc.pf.preparation-error.v1",
+      "bodyBytes": 182
+    },
+    {
+      "name": "mixed-twelve-mib",
+      "status": 400,
+      "code": "INVALID_PREPARATION_REQUEST",
+      "bodyVersion": "wfc.pf.preparation-error.v1",
+      "bodyBytes": 182
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <AssemblyName>PathFinder.Regression</AssemblyName>
+    <StartupObject>PathFinderRegression.EntryPoint</StartupObject>
+    <LangVersion>7.3</LangVersion>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/PathFinder.Core/PathFinder.Core.csproj" />
+    <Compile Include="EntryPoint.cs" />
+    <Compile Include="Program.cs" />
+    <Compile Include="GeometryTests.cs" />
+    <Compile Include="EndpointApproachTests.cs" />
+    <Compile Include="VerifiedPortTests.cs" />
+    <Compile Include="MeshClearanceTests.cs" />
+    <Compile Include="DesignLengthTests.cs" />
+    <Compile Include="RouteNameResolverTests.cs" />
+    <Compile Include="RouteLookupTests.cs" />
+  </ItemGroup>
+</Project>

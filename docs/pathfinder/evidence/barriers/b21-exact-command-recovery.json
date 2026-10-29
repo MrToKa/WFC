@@ -1,0 +1,259 @@
+{
+  "schemaVersion": "wfc.pf.b21-exact-command-recovery-checks.v1",
+  "status": "PASS",
+  "at": "2026-10-22T14:50:12.970Z",
+  "checkedParent": "4a1bc2bc0563c281132af513ed4963332c0b2de3",
+  "branch": "pf-b21-exact-barrier-recovery-local-20261022",
+  "scope": "checked source; installation and live SDK acceptance pending",
+  "assertions": {
+    "uniquePassed": 717,
+    "failed": 0,
+    "posixCasesNotRunInWindows": 21,
+    "unselectedHistoricalTabCases": 72,
+    "overlapCountedOnce": true
+  },
+  "isolated": {
+    "actualSqlCookieHttpProcess": 45,
+    "actualConservation": 6,
+    "pureDeliveryGuards": 160,
+    "helpersRemoved": true,
+    "networksRemoved": true
+  },
+  "aalborg": {
+    "requestedNamesMatched": 28,
+    "fragments": 28,
+    "originalVertices": 4790,
+    "originalTriangles": 3789,
+    "originalSurfaceComponents": 3,
+    "qualifiedClosedSolidComponents": 25,
+    "captureSha256": "9dcf2027d175de5a761a582d7be493441458ea9cda7f5449c1f3f058440a7a45",
+    "receiptSha256": "d0391823260f745628fee638426755e92177d82e8bc6de97c516eab121b47373",
+    "frame": "explicit retained package world; no current Viewer/SDK/publication authority"
+  },
+  "pins": [
+    {
+      "path": "scripts/pathfinder-barriers/delivery-policy-selector-v5.mjs",
+      "bytes": 1366,
+      "sha256": "ab9bce0f829777cb50158dc4a74c964604e4d7684ee883ac1412e1ef4bb8194a"
+    },
+    {
+      "path": "scripts/pathfinder-barriers/delivery-policy-selector-v5.test.mjs",
+      "bytes": 1937,
+      "sha256": "f8cc4f5a1e0f9fa8feef12fa3a70d3bd574da4611d091692f1502b4fa6bdeb12"
+    },
+    {
+      "path": "scripts/pathfinder-barriers/migration-conservation-v5.mjs",
+      "bytes": 43590,
+      "sha256": "4ee80d6bed66c558d238c64d5602d28c7072fb56db2a8f5d361b537b605ef9c4"
+    },
+    {
+      "path": "scripts/pathfinder-barriers/migration-conservation-v5.test.mjs",
+      "bytes": 40207,
+      "sha256": "5b2f488f58dd9609668880a23c98f62fe2d6359f373b9a15c1a63610d75c9b82"
+    },
+    {
+      "path": "scripts/pathfinder-barriers/owned-update-v3-runtime.mjs",
+      "bytes": 52731,
+      "sha256": "5199dd5548941d4510027568b374de2f67233e3f0e15c0945e46950ecbd528f3"
+    },
+    {
+      "path": "scripts/pathfinder-barriers/owned-update-v3-runtime.test.mjs",
+      "bytes": 9705,
+      "sha256": "021ffdbbc370b66e0eadbd661167daedc55461c44dfd97af18c937d5eed449fd"
+    },
+    {
+      "path": "scripts/pathfinder-barriers/owned-update-v3.mjs",
+      "bytes": 14846,
+      "sha256": "14df3c1a1f937ca2187748a47a5e9df35b2e2cb1beaca9517b952dbde414656f"
+    },
+    {
+      "path": "scripts/pathfinder-barriers/owned-update-v3.test.mjs",
+      "bytes": 15476,
+      "sha256": "8fff6abf248203d25899db77d3b0a809c639a26e16e519cc81b1232bc4ded38a"
+    },
+    {
+      "path": "server/pathfinder/barrierCommandRecoverySql.integration.test.ts",
+      "bytes": 41909,
+      "sha256": "f8f3d2310f2b069ab7ef89f58813b0e9a20769956e26ec95e5ef0032150bce0b"
+    },
+    {
+      "path": "server/pathfinder/barrierRegistryRepository.test.ts",
+      "bytes": 54687,
+      "sha256": "e042897e3ba4d00363b61ca79a6a9b3e8966b73aa73ebe3836c8b22bb7cb908f"
+    },
+    {
+      "path": "server/pathfinder/barrierRegistryRepository.ts",
+      "bytes": 55811,
+      "sha256": "97d40e01ac8586afd2c100683ef938d0fad20aafc8a14c60a052f002e032555a"
+    },
+    {
+      "path": "server/pathfinder/barrierRegistrySchema.ts",
+      "bytes": 6158,
+      "sha256": "e3ff5b438bb9f46c34527db35a56e6ef37cdf522b02e72540045e37c3e156f65"
+    },
+    {
+      "path": "server/pathfinder/barrierRegistrySql.integration.test.ts",
+      "bytes": 30837,
+      "sha256": "fd16afa9a72c7f8e171d5469795ad63327beab29b29afad3cd48aedf7ed38f10"
+    },
+    {
+      "path": "server/pathfinder/barrierRoutes.test.ts",
+      "bytes": 24150,
+      "sha256": "b444117420b61b339c064a3553d75e6d4c4c0677ef996d213de2af805b7c7446"
+    },
+    {
+      "path": "server/pathfinder/barrierRoutes.ts",
+      "bytes": 9073,
+      "sha256": "df35116a4ed7a2d1e71e854937aa638350d374a2ed8ed9adac0694d312c295d5"
+    },
+    {
+      "path": "shared/pathfinderBarrierRecovery.test.ts",
+      "bytes": 10193,
+      "sha256": "a6f6a326899194086458cce1bbf2d97f0a50e5f7e8893bd3d9f11db8c6f57129"
+    },
+    {
+      "path": "shared/pathfinderBarrierRecovery.ts",
+      "bytes": 14431,
+      "sha256": "24aad50500df2810cfd3bb349d67b70f7cd13e68835665256a62a17797a023e0"
+    },
+    {
+      "path": "src/api/pathfinderBarriers.test.ts",
+      "bytes": 20965,
+      "sha256": "c5d8f7b38ef72f40460668f94078d6b4c1aeb91a6748ace9e9aa2b408ba45181"
+    },
+    {
+      "path": "src/api/pathfinderBarriers.ts",
+      "bytes": 10089,
+      "sha256": "6fd7085a276db720c1150788ba1e25e20376bd2609aaea22cef0b872036d3ad1"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderBarriersPanel.test.tsx",
+      "bytes": 17840,
+      "sha256": "dac15f3fb71cfdf31e0343541de8229fb20ad743abe63a60294fe7c0dbe91639"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderBarriersPanel.tsx",
+      "bytes": 9669,
+      "sha256": "8942a255377724020a7486b733e930f737c777f45590b5a3ac724b04bcc7d7e3"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderTab.test.tsx",
+      "bytes": 108004,
+      "sha256": "300c938acea7bb05879803c758ed64a9f9a863abbf136c9f9ad71fd9d02ded56"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/barrierPendingPublication.test.ts",
+      "bytes": 14705,
+      "sha256": "13b8a152a4f02f33ab5b681244ca87566306bb75420712aee7341c6f9921b6f0"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/barrierPendingPublication.ts",
+      "bytes": 12460,
+      "sha256": "2a843c5e7525647abe86535c7a059a8df065a0b3ee7370b61a93f5cfef11a869"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/usePathfinderBarriers.test.tsx",
+      "bytes": 79647,
+      "sha256": "a84db61a5daa92d1df879f876500045dcc8c599eb96625a48c1d017e23d23c84"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/usePathfinderBarriers.ts",
+      "bytes": 38780,
+      "sha256": "fbbfc5bd5c7b60fed07e749fe00966f9062f1cb9ed3891b74c7835cee5f7172a"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "pathfinder-engine/.scratch/b21-8b118869-9033-4774-be45-89c7b9e4ad94/server-affected-first.private.json",
+      "bytes": 228264,
+      "sha256": "d66077be638e12200b2fcb62e23c94501248764fc6bd49a558e6a3c3a51aba15"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/b21-8b118869-9033-4774-be45-89c7b9e4ad94/backend-hardening.private.json",
+      "bytes": 29826,
+      "sha256": "b70ebe3fd40ae8024348041e1015edcdf3362bb37887d4abcec09cfd398aadb7"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/b21-8b118869-9033-4774-be45-89c7b9e4ad94/routes-hardening.private.json",
+      "bytes": 27201,
+      "sha256": "cf6587db870312daff47a9bf4eee93ec80d4c842f6a65549af4928fd70f711a2"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/b21-8b118869-9033-4774-be45-89c7b9e4ad94/frontend-first.private.json",
+      "bytes": 19792,
+      "sha256": "0ddf13c716bd08b23589c3e6a8c3642ad4fa4dd5f027e9d009700a888738363b"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/b21-8b118869-9033-4774-be45-89c7b9e4ad94/recovery-ui-final.private.json",
+      "bytes": 37210,
+      "sha256": "1e1f2c5f0ab4e86023c24c59c23644163eb58131f2c6596137790db8f407d701"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/b21-8b118869-9033-4774-be45-89c7b9e4ad94/contract-first.private.json",
+      "bytes": 10192,
+      "sha256": "84722972418951686170bb66578c1c6cb4657b26697e9bd4a90476a41f0df7fd"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/b21-8b118869-9033-4774-be45-89c7b9e4ad94/tab-recovery-second.private.json",
+      "bytes": 24904,
+      "sha256": "671eb6c2e94d56f4d35318888a9f03d3272bffeb0bc96da533a07951b9ac303e"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/b21-8b118869-9033-4774-be45-89c7b9e4ad94/types-final.log",
+      "bytes": 93,
+      "sha256": "b8eb3154847ce13af5e3a7672a976c5437a052bfd30d24dd327a019180231d04"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/b21-8b118869-9033-4774-be45-89c7b9e4ad94/lint-current.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/b21-8b118869-9033-4774-be45-89c7b9e4ad94/web-build-final.log",
+      "bytes": 7604,
+      "sha256": "9272512972613223af9aef4702ff8dd3dece38fda402dd0d781ebb4b13560b27"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/b21-8b118869-9033-4774-be45-89c7b9e4ad94/server-build-final.log",
+      "bytes": 1799,
+      "sha256": "e9f1842c678fae76ad91e1a0236ea2dbbbecb68a9601ea2e1dc84b9f17e20dc9"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/b21-8b118869-9033-4774-be45-89c7b9e4ad94/delivery-first.log",
+      "bytes": 12703,
+      "sha256": "e1626692bf777fed15139a719eac554bffa8b2c1e83aff59147ec91449047fff"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/b21-8b118869-9033-4774-be45-89c7b9e4ad94/fixture-56f9e24e-51f3-45be-b7da-dbe02d6366c4/result.private.json",
+      "bytes": 31923,
+      "sha256": "52a8201bf505b03e3d06d763e6582177087ba04883b8862c6a05a5edaca2d594"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/b21-8b118869-9033-4774-be45-89c7b9e4ad94/v5-conservation-sql-ecb03373-af17-440b-b54a-ae8a51984182/result.private.json",
+      "bytes": 54677,
+      "sha256": "99276633bcabb6541e0031abc5c5f2c851e9b7c7753dfd596ee3849aedf9100f"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/b21-8b118869-9033-4774-be45-89c7b9e4ad94/aalborg-offline-multi/guard-ed2ca1be-96ea-4052-aba4-48a17b66c3fa.private.json",
+      "bytes": 360,
+      "sha256": "51cb2fa013ce46a543b691e19b0997c8ccf912e15e716782186ae255ac3cbb72"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/b21-8b118869-9033-4774-be45-89c7b9e4ad94/aalborg-offline-multi/qualification-4a91ec24-4c3e-4e43-8d73-d937be6caa85.private.json",
+      "bytes": 8515,
+      "sha256": "3985d054d2069d73379efb98f00702167dd218fef3693aa8ee8c383b506de9d2"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/b21-8b118869-9033-4774-be45-89c7b9e4ad94/aalborg-offline-multi/qualification-4a91ec24-4c3e-4e43-8d73-d937be6caa85.stdout.private.json",
+      "bytes": 8750,
+      "sha256": "d0391823260f745628fee638426755e92177d82e8bc6de97c516eab121b47373"
+    }
+  ],
+  "remaining": [
+    "checked paired installation",
+    "authenticated own-terminal exit/entry",
+    "full multipart/catalog capacity",
+    "live Aalborg route acceptance",
+    "Simplified Preparer"
+  ]
+}

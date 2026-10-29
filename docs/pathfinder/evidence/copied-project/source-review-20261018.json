@@ -1,0 +1,90 @@
+{
+  "schemaVersion": "pathfinder.copied-project.source-review.v1",
+  "recordedAt": "2026-10-18T17:20:35.654Z",
+  "status": "NO_REMAINING_MATERIAL_FINDINGS",
+  "scope": "Independent read-only source review of frozen local tools; no engineering acceptance",
+  "reviewerExecutions": {
+    "tests": 0,
+    "sql": 0,
+    "docker": 0,
+    "edits": 0
+  },
+  "writerControls": {
+    "seed": {
+      "passed": 52,
+      "syntax": 3,
+      "receipt": "seed-source-controls-1792343244418.json"
+    },
+    "import": {
+      "passed": 50,
+      "syntax": 3,
+      "receipt": "import-source-controls-1792343549296.json"
+    }
+  },
+  "closures": [
+    "Source-field and NULL/default fidelity for new rows; exact immutable plan and no synthetic engineering marker",
+    "Durable commit/upload/selection uncertainty and no repair upserts or blind upload/CAS retry",
+    "Child watchdog installed before stdin; archive stream closes after failed fetch",
+    "Run lock precedes resume-history read",
+    "Lossless differences retained before assertion; exact new model/report/ownership and manifest key/size additions",
+    "Seven model and sixteen PF table old rows plus three bucket metadata projections",
+    "Offline helper compares exact added IDs and later full row strings; initial SQL seed/verify separately establishes copied-field fidelity"
+  ],
+  "source": [
+    {
+      "path": "scripts/pathfinder-copied-project/seed.mjs",
+      "bytes": 11032,
+      "sha256": "bc4bd20c28cebc0e07ccb55ab5cbadab28d4aa59421aa5c6fc512839b16624ec"
+    },
+    {
+      "path": "scripts/pathfinder-copied-project/seed-lib.mjs",
+      "bytes": 22926,
+      "sha256": "fb57bac5c9e886ec5fc536965513ad9eda83597c67b2e3206ddf77eca1705c44"
+    },
+    {
+      "path": "scripts/pathfinder-copied-project/seed-lib.test.mjs",
+      "bytes": 18695,
+      "sha256": "8a243569120edab4ad7ff87bbc695105288dbb9abb109745d65506f476c4ba30"
+    },
+    {
+      "path": "scripts/pathfinder-copied-project/README-seed.md",
+      "bytes": 6096,
+      "sha256": "c745cb4254b43a024dc1e19683d7107505f29bfae5d5827d43c395e006a86148"
+    },
+    {
+      "path": "scripts/pathfinder-copied-project/import.mjs",
+      "bytes": 26756,
+      "sha256": "9d1d2e4f740efe95aa30950a539b7d934658c4c76cc25df341eecdaf20aa7b1f"
+    },
+    {
+      "path": "scripts/pathfinder-copied-project/import-lib.mjs",
+      "bytes": 23039,
+      "sha256": "67506d5b2a2b59b196629be02fb221344e68370fb981dd8dc5e4b99b532e17b4"
+    },
+    {
+      "path": "scripts/pathfinder-copied-project/import-lib.test.mjs",
+      "bytes": 23644,
+      "sha256": "923697c860c0fd009411ae1b122ca4a949394e9b32d06c6d808febbb539b0bee"
+    },
+    {
+      "path": "scripts/pathfinder-copied-project/README-import.md",
+      "bytes": 7130,
+      "sha256": "d38fd838de8ccfa8eb44f91dc4db58db81f53e880c7d1cfd386d5325f2394ffa"
+    },
+    {
+      "path": "scripts/pathfinder-copied-project/preservation.mjs",
+      "bytes": 11087,
+      "sha256": "6448b8d1ea14730d01825fb31526bd298eef682605d3d9b9840c958ad20a9959"
+    },
+    {
+      "path": "scripts/pathfinder-copied-project/verify-business.mjs",
+      "bytes": 6895,
+      "sha256": "da058d8e78bf013ce462ec9373d47337ea561e25472f3577b22688c99568e335"
+    }
+  ],
+  "limitations": [
+    "Source-only review; actual SQL/import/browser checks are separately recorded",
+    "Object metadata comparison is not raw object SHA readback or atomic backup",
+    "No fabricated location bindings, native equivalence or human engineering acceptance"
+  ]
+}

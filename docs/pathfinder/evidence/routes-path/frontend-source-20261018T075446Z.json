@@ -1,0 +1,154 @@
+{
+  "schemaVersion": "pathfinder.routes-path.frontend-source.v1",
+  "createdAtUtc": "2026-10-18T07:54:46.5380847Z",
+  "scope": "Isolated source-only Routes and Path implementation. No runtime/container/database writes by this agent.",
+  "branch": "pf-two-tabs-local-20261018",
+  "baseCommitAtVerification": "fcd8f1dc39569c430125b897c95756fac9c28a89",
+  "productionFrozen": true,
+  "sourceFiles": [
+    {
+      "path": "src/pages/ProjectDetails/PathFinderTab.tsx",
+      "sha256": "f3a77515cc175926a47bd8c714aa2d6d14add188a4e0ea50acbcd56cc90d6eb4"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderResults.tsx",
+      "sha256": "37957d808537d302bf9570b1bcf058a977d2d69e4aa791c3df6269fd625ecda2"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderLookup.tsx",
+      "sha256": "9781800577bdc253230e0d13cba54a441309a944d269fd6024c01dad8aee6f8d"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderRoutes.tsx",
+      "sha256": "0138f3f8dd1d2ab9f50aba18bf8ae50383a76c789b94a1929064045434c04e0c"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderPreview.tsx",
+      "sha256": "736798a9c1cd1e2c9bd0aa247b3c5f199157da8d2d1e2790b9b7b6f3d7c7a790"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderTab.test.tsx",
+      "sha256": "2eba6f8b729af52ba5507bbfaaf7295225d27a002fac63d2ecae23a8e5f595c3"
+    }
+  ],
+  "checks": [
+    {
+      "name": "Expanded UI suite",
+      "command": "npx vitest run src/pages/ProjectDetails/PathFinderTab.test.tsx --testTimeout=30000 --maxWorkers=1 --reporter=verbose",
+      "status": "PASS",
+      "passed": 36,
+      "failed": 0,
+      "processExitCode": 0,
+      "startedAtReportedLocal": "2026-10-18 10:45:26 Europe/Kiev",
+      "durationSeconds": 471.33,
+      "testExecutionSeconds": 468.18,
+      "slowestCaseMilliseconds": 25384,
+      "binding": "This run loaded modules before the final equal-name callback and defensive late-capture dirty followups. The focused checks below verify affected behavior on the final production files. The suite-local timeout metadata was also added after this run loaded; this run used its stated CLI 30-second timeout."
+    },
+    {
+      "name": "Final callback historical endpoint-save",
+      "command": "npx vitest run src/pages/ProjectDetails/PathFinderTab.test.tsx -t 'resolves either cable endpoint' --maxWorkers=1 --testTimeout=30000",
+      "status": "PASS",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 35,
+      "processExitCode": 0,
+      "startedAtReportedLocal": "2026-10-18 10:48:18 Europe/Kiev",
+      "durationSeconds": 12.01,
+      "testExecutionSeconds": 9.5,
+      "binding": "Final production equal-name callback present."
+    },
+    {
+      "name": "Final endpoint-name capture and accepted-save cancellation reconciliation",
+      "command": "npx vitest run src/pages/ProjectDetails/PathFinderTab.test.tsx -t 'includes arbitrary standalone endpoint names|reconciles the prepared rule baseline' --testTimeout=60000 --maxWorkers=1 --cache=false --reporter=verbose",
+      "status": "PASS",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 34,
+      "processExitCode": 0,
+      "startedAtReportedLocal": "2026-10-18 10:51:51 Europe/Kiev",
+      "durationSeconds": 38.35,
+      "testExecutionSeconds": 36.04,
+      "binding": "Final production files including equal-name callback and accepted-save reconciliation/defensive dirty branch present. The final suite-local timeout metadata is typechecked separately."
+    },
+    {
+      "name": "Frontend TypeScript final",
+      "command": "npx tsc --noEmit",
+      "status": "PASS",
+      "processExitCode": 0,
+      "binding": "After final production and suite-local timeout metadata edits."
+    },
+    {
+      "name": "Server TypeScript",
+      "command": "npx tsc --noEmit -p server/tsconfig.json",
+      "status": "PASS",
+      "processExitCode": 0,
+      "binding": "Final frozen production; subsequent edit was frontend test timeout metadata only."
+    },
+    {
+      "name": "Owned-file ESLint final",
+      "command": "npx eslint <six sourceFiles paths> --max-warnings=0",
+      "status": "PASS",
+      "processExitCode": 0,
+      "binding": "After final production and test metadata edits."
+    },
+    {
+      "name": "Temporary diagnostics",
+      "status": "PASS",
+      "remainingDebugCounterOrConsoleInfoMatches": 0
+    },
+    {
+      "name": "Computer-use on new production image",
+      "status": "NOT_RUN",
+      "owner": "Parent agent after isolated runtime rebuild."
+    }
+  ],
+  "priorAttempts": [
+    {
+      "scope": "Adapted historical UI suite before additional new cases",
+      "status": "PASS",
+      "passed": 19,
+      "durationSeconds": 33.89,
+      "finalSourceProof": false
+    },
+    {
+      "scope": "Intermediate 31-case suite",
+      "status": "FAIL",
+      "passed": 30,
+      "failed": 1,
+      "reason": "Arrow-key roving focus did not operate in jsdom. The test now checks focused-tab Enter activation; actual browser navigation remains parent computer-use scope.",
+      "finalSourceProof": false
+    },
+    {
+      "scope": "Pre-final 35-case attempts",
+      "status": "INTERRUPTED",
+      "reason": "Expanded Fluent/jsdom role/style queries exceeded the default five-second case budget. Partial timeouts were observed, and no complete PASS is claimed for these attempts. An isolated historical case passed in 10.16 seconds with a larger budget. Temporary render counters did not detect a render loop and were removed.",
+      "finalSourceProof": false
+    }
+  ],
+  "reviewedCorrections": [
+    "Two accessible Routes/Path panels share one protected Viewer and hook; mode and display-ownership generation fences reject hidden late previews and invalidate Review/Apply acknowledgement.",
+    "Route category rules are ordered with newest update winning; all rules are prepared together, empty category sets explicitly exclude selected objects, and arbitrary standalone endpoint names join bounded equipment capture.",
+    "Every category-rule edit/clear invalidates current display and blocks calculations/review until successful preparation or explicit draft discard; failures retain the dirty gate.",
+    "A successful same-model persisted snapshot rebases the prepared rule baseline after viewer cancellation; newer local drafts remain dirty. Model/selection scope changes cannot receive an old baseline.",
+    "Standalone previews preserve original From/To labels, support native defaults, reverse/cancel and explicit background transparency, and never apply cable writes.",
+    "Saved shared locations remain name-only inputs so server matching and shared-location provenance remain authoritative."
+  ],
+  "review": {
+    "reviewer": "/root/viewer_tab_capabilities",
+    "result": "PASS",
+    "finding": "Accepted-snapshot cancellation race resolved; no remaining authority gap reported."
+  },
+  "isolation": {
+    "originalCheckoutsEdited": false,
+    "originalContainersChanged": false,
+    "runtimeResourcesCreatedByThisAgent": 0,
+    "credentialsCopiedOrPrinted": false,
+    "testsUseMockHookAndSyntheticInMemoryData": true
+  },
+  "limitations": [
+    "Actual new-image browser behavior and manual user acceptance are not asserted by this source receipt.",
+    "Current selection and extraction limits remain bounded; this receipt does not claim whole-plant native parity.",
+    "The full-suite module timing and final focused followups are intentionally distinguished rather than reporting the final source hashes as having been present when the earlier full run began."
+  ]
+}

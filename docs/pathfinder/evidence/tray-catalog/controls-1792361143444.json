@@ -1,0 +1,75 @@
+{
+  "schemaVersion": "wfc.pf.catalog-control-results.v1",
+  "status": "PASS",
+  "recordedAt": "2026-10-18T22:05:43.444Z",
+  "revision": "9c5fa34646016d670dc1c30a4704375ef5591010",
+  "workingChanges": "R1 scoped new operator modules at exact source hashes",
+  "counts": {
+    "tests": 189,
+    "pass": 189,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "exitCode": 0,
+  "raw": {
+    "path": "pathfinder-engine/.scratch/tray-catalog-17cadea1-d54c-42b1-a563-2d3c514e7704/r1-control-results.private.json",
+    "bytes": 38799,
+    "sha256": "5a5e3101b2c25ebde2f259718a9e92505a1846b051c2136af7c88da7385f418d"
+  },
+  "sourceFiles": [
+    {
+      "path": "scripts/pathfinder-tray-catalog/source-lib.mjs",
+      "sha256": "9091da99b6624024e910367fa53254f3cdb6f4dcb94137f47487656dcb7d594d"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/source-lib.test.mjs",
+      "sha256": "08ec4c867670ee2f4210da78f4672843e778b3bc59892f4c2212da6f5d86379c"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/transfer-lib.mjs",
+      "sha256": "9c8f45f6560a47a1090db371a6c330d074ce1ce0c9bc88f3c1390d0ee8800bc7"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/transfer-lib.test.mjs",
+      "sha256": "effb28b8298ccc0d5b0d7e416bc4303981706494ee6d4ed334d5bf80487b373c"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/guard-io.mjs",
+      "sha256": "48d12d9df8a62e32901454096bcd94a21f1a9c3912ff139ee13726deceb9d5d1"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/guard-io.test.mjs",
+      "sha256": "c2e641cf5465af5fce14b9c754a4b1673a8a846784f7ed2fd7b70762222076e5"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/preservation-lib.mjs",
+      "sha256": "d581d575ce5dbc5af3fc01b31c9858d48a8c28ce8a26a726b6afbe0b38306d0d"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/preservation-lib.test.mjs",
+      "sha256": "92bd6beca6be74d5ca478b51f74abadbc06764b1c2ccdf1503899bb8a4d580e1"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/operator-lib.mjs",
+      "sha256": "039006bec4fa345a1fa62cd68189c94abf165200ef42c36acc0ba86ac2eb0722"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/operator-lib.test.mjs",
+      "sha256": "0788b56afb2bc71466d4abfb473d13a42f333d24f7c56aef11d5bef8c2c675f9"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/diagnostics-lib.mjs",
+      "sha256": "5adbc03cb61f5c17a5cb16236f7ba32394d1b66854ad14878ca0180bc3aaacd0"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/diagnostics-lib.test.mjs",
+      "sha256": "2faebb369d83586a142896ef046e7d274b1ac5d96428a07a30bedb84ceab1bf8"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/catalog.mjs",
+      "sha256": "5824b3e1c6b6acfe721bb8484a673afbb6aa0187110da427fe3f2ddbc4037545"
+    }
+  ]
+}

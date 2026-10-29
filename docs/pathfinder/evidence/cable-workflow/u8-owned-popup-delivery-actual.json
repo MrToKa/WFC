@@ -1,0 +1,215 @@
+{
+  "schemaVersion": "wfc.pf.u8-owned-popup-delivery-actual.v1",
+  "status": "TECHNICAL_OPERATIONAL_DELIVERED",
+  "observedAt": "2026-10-20T22:27:38.432Z",
+  "branch": "pf-u8-owned-popup-delivery-local-20261021",
+  "sourceRevision": "ea9848cbb42b33009f419745e857fa1b4f9ad237",
+  "source": {
+    "owner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+    "project": "wfc-pathfinder-local-0cba87606e9b",
+    "port": 5191
+  },
+  "images": {
+    "api": "sha256:3476333e9163d1f251f0eb5ddee67d4fe776af6c73e4f3c57e1ebd85ca443166",
+    "web": "sha256:d7bb72be7953f6d11b4dffff3d6df1ac0e8e1d03cb37d8dc35a85aca1f43d0d8"
+  },
+  "phases": {
+    "backup": "PASS",
+    "restore": "PASS",
+    "build": "PASS",
+    "update": "PASS",
+    "strictPostUpdateEquality": "FAIL",
+    "reviewedStartupControlTransition": "PASS",
+    "exactConstraintTechnicalReview": "PASS",
+    "new5192FixtureRetirement": "PASS"
+  },
+  "archive": {
+    "status": "PASS",
+    "backupId": "68f005f8-02dc-4dc9-8631-d81ea6a1aace",
+    "members": [
+      {
+        "path": "database.dump",
+        "bytes": 20836863,
+        "sha256": "f351e39d3938afd67436ce275005647e9959bc4cabd5298e76ee44a637bf6314"
+      },
+      {
+        "path": "minio.wfcops",
+        "bytes": 1935499846,
+        "sha256": "75794ff3b2b158d004aea0131951580b3a1d773e67018103005a4a1feb3c3107"
+      },
+      {
+        "path": "staging.wfcops",
+        "bytes": 184,
+        "sha256": "906093f179fe41cdfffc9f70c0e889008f0e3499ecaa582e2d1e63e8dca5b9cd"
+      },
+      {
+        "path": "pathfinder.wfcops",
+        "bytes": 736738313,
+        "sha256": "0d1de4d67aa8a4374db4ef18030ad8c7e85ba04e85d3a9ca4a4907b58476420c"
+      },
+      {
+        "path": "api-image.tar",
+        "bytes": 185218560,
+        "sha256": "5d90a41fb6b5d63129c4864e86fec28953cc81678ee8e781665fbcdf6bc1c44b"
+      },
+      {
+        "path": "web-image.tar",
+        "bytes": 55269376,
+        "sha256": "bd54bb4e21cff38134ac6fbc00ef9d0829ffb250544a526a977204aa89decd7e"
+      },
+      {
+        "path": "postgres-image.tar",
+        "bytes": 162226688,
+        "sha256": "9c16e896147969ee35d3ed04af8f17b80543da9d6fb80cfbbc9abdf117191d62"
+      },
+      {
+        "path": "minio-image.tar",
+        "bytes": 62259712,
+        "sha256": "7a3e953b6647a85a4932e6d4a1d4931c4333c519abc09c2b5bab37aaeaad1e9d"
+      },
+      {
+        "path": "losslessInventory.mjs",
+        "bytes": 26099,
+        "sha256": "0f0fd212f0ed35177ff301c5d15faeb8ab6e90646cda89772289063ef5e3b49f"
+      }
+    ],
+    "scope": "All9membersstream-hashed;4imagearchivesstructure-and-content-verified;notnewbackup/dataacceptance"
+  },
+  "recovery": {
+    "oldTables": 126,
+    "beforeFence": "EXACT_PASS",
+    "afterFence": "QUALIFIED_3_TABLE_PASS",
+    "qualifiedTables": 3,
+    "targetApiWebActivated": false
+  },
+  "dataConservation": {
+    "oldTablesActuallyQueried": 126,
+    "postTables": 134,
+    "exactOtherOldTables": 120,
+    "priorRowsInFiveAppendOnlyHistories": "BYTE_EXACT_PASS",
+    "changedSchedulerStates": 5,
+    "appendCounts": {
+      "calculateLeases": 1,
+      "enrollments": 1,
+      "engineEvents": 5,
+      "admissions": 1,
+      "blockedBaselines": 3
+    },
+    "newCalculationJobs": 0,
+    "changedCableRows": 0,
+    "modelRegistryEqual": true,
+    "modelResourceAudits": "ALL_5_VERSIONS_PASS",
+    "artifactsEqual": true,
+    "originalDataStatus": "FAIL",
+    "rawWholeTableEquality": false,
+    "qualifiedTransitionSchema": "wfc.pf.u8-startup-control-transition.v2",
+    "engineeringAcceptance": "NOT_RUN"
+  },
+  "sourceChecks": [
+    {
+      "scope": "streaming-provider/operator/core-recovery",
+      "passed": 219,
+      "status": "PASS"
+    },
+    {
+      "scope": "migration-comparison-pure-controls",
+      "passed": 23,
+      "status": "PASS"
+    },
+    {
+      "scope": "final-generated-helper-and-diagnostic-controls",
+      "passed": 51,
+      "status": "PASS",
+      "actualExecution": "NOT_RUN_AT_FINAL_D091_REVISION"
+    },
+    {
+      "scope": "final-startup-transition-v2-pure-controls",
+      "passed": 31,
+      "status": "PASS"
+    },
+    {
+      "scope": "exact-new5192-retirement-pure-controls",
+      "passed": 60,
+      "status": "PASS"
+    }
+  ],
+  "remaining": {
+    "actualAalborgReread": "BLOCKED_SAVED_BROWSER_ORIGIN_REFUSAL",
+    "actualPopupSdkUi": "BLOCKED",
+    "genuineSyntheticImportToInitialFillChain": "NOT_RUN_NEXT",
+    "closedBrowserProducerRequalification": "NOT_RUN",
+    "nativeParity": "NOT_RUN",
+    "humanEngineeringAcceptance": "NOT_RUN"
+  },
+  "retainedFailures": [
+    "original-inventory-128MiB-limit",
+    "resource-spool-64MiB-limit",
+    "strict-post-update-whole-table-delta",
+    "embedded-helper-syntax",
+    "operator-changed-after-launch-with-actual-data-delta",
+    "initial-observer-state-predicate-too-narrow"
+  ],
+  "cleanup": {
+    "target": {
+      "owner": "06913518-dd3d-4ca0-8e39-02edf461ba63",
+      "project": "wfc-pathfinder-local-48e1dd28dd04",
+      "port": 5192
+    },
+    "targetResources": {
+      "containers": [],
+      "volumes": [],
+      "networks": []
+    },
+    "sourceIdentityPreserved": true,
+    "outsideIdentityPreserved": true,
+    "failedEvidencePreserved": true,
+    "sharedPrune": false
+  },
+  "proofs": [
+    {
+      "path": "pathfinder-engine/.scratch/cable-workflow-u8-f3012712-9f45-40ad-a199-140c79052b69/backup.pass.private.json",
+      "bytes": 416,
+      "sha256": "8647953077d24f2a737cd7ae970a7dedc9f16d7dc0d0ce9b6b99c36606c7d04b"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/cable-workflow-u8-f3012712-9f45-40ad-a199-140c79052b69/restore.pass.private.json",
+      "bytes": 2958,
+      "sha256": "60d2d72247f2e0d45936f99b7fc3252f3288e6ffeb5bc2704a24cd8f8493eada"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/cable-workflow-u8-f3012712-9f45-40ad-a199-140c79052b69/build.pass.private.json",
+      "bytes": 965,
+      "sha256": "f0bca273e702a3dd04e26c0174807e3849803287cbf13163f9025af44e7b482b"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/cable-workflow-u8-f3012712-9f45-40ad-a199-140c79052b69/update.pass.private.json",
+      "bytes": 659,
+      "sha256": "e036774ebca5072167fd1ed670660d595487d3a08ec2c975fd6cd7806eb7d55c"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/cable-workflow-u8-f3012712-9f45-40ad-a199-140c79052b69/post-update-audit.private.json",
+      "bytes": 158468,
+      "sha256": "55f3c95e2b58157b48b97653fe10417f474bf88d5bde75d8bab22112b8fa0b78"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/cable-workflow-u8-f3012712-9f45-40ad-a199-140c79052b69/startup-control-transition-v2.private.json",
+      "bytes": 4543,
+      "sha256": "94a3992258f1553365d53cf90b579d5c633adef422354249879a7f049830911e"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/cable-workflow-u8-f3012712-9f45-40ad-a199-140c79052b69/technical-schema-review.private.json",
+      "bytes": 2916,
+      "sha256": "d49b17191a2d7ccd85041fd0af6834f5d4ae47cbb90d935e66e62bf2e96f9ed9"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/cable-workflow-u8-f3012712-9f45-40ad-a199-140c79052b69/engine-identity-current.private.json",
+      "bytes": 1750,
+      "sha256": "d6d4c5180452f1169f66cd5d64348f0078a96ddd1a46e2088d895a2a7667a81e"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/u8-exact-retirement-b5123bc3-4567-4d27-b49d-91975681b781/receipt.private.json",
+      "bytes": 2642,
+      "sha256": "f3a0b7180452d162b79f89c37d2f4af6e501a10bec5b2540743b9ed8f5ace636"
+    }
+  ]
+}

@@ -1,0 +1,67 @@
+{
+  "schemaVersion": "wfc.pf.current-full-recovery-source.v1",
+  "status": "PASS_SOURCE_ACTUAL_CONTROLS_PENDING",
+  "at": "2026-10-20T11:21:41.753Z",
+  "baseCommit": "6e37e7a13d7ffa71690696c693c8ea5ce8960963",
+  "files": [
+    {
+      "path": "scripts/pathfinder-local/runtime-lib.mjs",
+      "bytes": 55557,
+      "sha256": "0deca6c19396588a219f8ed22ee322d55ba8e90bc1084dc55d29b2a492899752"
+    },
+    {
+      "path": "scripts/pathfinder-local/runtime-backup-controls.test.mjs",
+      "bytes": 6817,
+      "sha256": "272bffed69d5c9a37becc221f08290abe5fc866dbb7b66bee6a897aebd0ac4c9"
+    },
+    {
+      "path": "scripts/operations/docker-bounds.mjs",
+      "bytes": 32112,
+      "sha256": "74ec42cbfdc85f047f86c447f879a060f712ae697dc2675b77baefd7d85a60b8"
+    },
+    {
+      "path": "scripts/operations/docker-bounds.test.mjs",
+      "bytes": 29595,
+      "sha256": "0c33dcd9cbfb97b5c053481bbdd5068466138314118908c9fe717d7df2d06553"
+    },
+    {
+      "path": "scripts/operations/docker.mjs",
+      "bytes": 8896,
+      "sha256": "b55d226f139e6f148e25972962ecd32fe180efd90140f14b853f4e77ef18ce14"
+    },
+    {
+      "path": "scripts/operations/test/operations.node-test.mjs",
+      "bytes": 25250,
+      "sha256": "980a33c255c5441ee34a3b6fb4f4e89a124cdeea84639cd53e0413506a512425"
+    },
+    {
+      "path": "scripts/operations/restore-fencing.test.mjs",
+      "bytes": 13807,
+      "sha256": "4699d2877b1f70a9dce360f933ae358dceb333b5bd442bc3586bedc7a2645638"
+    },
+    {
+      "path": "scripts/pathfinder-local/runtime.test.mjs",
+      "bytes": 15332,
+      "sha256": "6d5f1baa762b260bf20140f085001346b7593777e447965ed6e7be3de704d71f"
+    }
+  ],
+  "checks": {
+    "nodeTests": 232,
+    "failed": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "scopedLint": "PASS",
+    "independentReview": "PASS",
+    "scope": "Five node control suites, mocked Docker/temporary files only."
+  },
+  "tap": {
+    "bytes": 48421,
+    "sha256": "792f0348a5c11ae49cc9ee159daff9e6c63384f77632c89ed0bc06dc2211bd43"
+  },
+  "changes": "Fail-fast artifact audit with exact opt-in read capability; closed readonly tiny tmpfs shadows prevent PostgreSQL TOC anonymous volumes.",
+  "actualControls": "RUNNING",
+  "backup1": "FAIL",
+  "backup2": "FAIL",
+  "restore": "NOT_RUN",
+  "realApply": false
+}

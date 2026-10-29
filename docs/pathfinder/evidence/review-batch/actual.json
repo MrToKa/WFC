@@ -1,0 +1,148 @@
+{
+  "schemaVersion": "wfc.pathfinder.review-batch.actual.v1",
+  "observedAt": "2026-10-20T14:45:52.217Z",
+  "worktree": "C:/Users/todor.chankov/source/WFC-pathfinder-local",
+  "branch": "pf-review-batch-preview-local-20261020",
+  "baseCommit": "efe9fc0b7358ed2397d4850eb770335be676b890",
+  "revisionScope": "Uncommitted delivery source identified by sourceSha256; containing local commit must be read from Git.",
+  "sourceSha256": {
+    "server/pathfinder/jobs.ts": "f103a1adce9c3a917d041e3cb7aef673aa572472e2c36c2990c73dd7e5a29c0c",
+    "server/pathfinder/jobs-recent-window.test.ts": "2fbac4acddba9085996280cf7f10df22479616eb77dce31c3911659684e60db0",
+    "src/pages/ProjectDetails/PathFinderResults.tsx": "61682953f0278704c09ca1024b0779f9a144434535303fe46c9417653c98addd",
+    "src/pages/ProjectDetails/PathFinderResults.test.tsx": "9ee6485c6478944d6571e7513e312fac936b8fa4955068b7afb0386ad2af8d0c",
+    "src/pages/ProjectDetails/PathFinderRevisionResults.tsx": "2abb13bb09d163e71cd84e72216e85fd03a400528582905df7b33021bca475bb",
+    "src/pages/ProjectDetails/PathFinderRevisionResults.test.tsx": "3d13ece123ea3a513907c4faa9b4a265842e8618c74d8f56bf5a865dda39f02f",
+    "src/pages/ProjectDetails/PathFinderTab.tsx": "e2a71dc2ef2c34e3bb6749ac03f662f22b9abacd9bfc8d53dee7ce24c952694c",
+    "src/pages/ProjectDetails/PathFinderTab.test.tsx": "f8696e29901652d633d71807c9467eaa7f085bb4c5b917227793538cf90449d4",
+    "src/pages/ProjectDetails/PathFinderBatchReview.tsx": "9e9c536c8e91438803dfed9bede063b9453c8acdc3631947f406e0e2a2828c79",
+    "src/pages/ProjectDetails/PathFinderBatchReview.test.tsx": "bbbfb55813248e02e8ffff4d9c673e1e49784dbae905209f05b6239c50c80e43",
+    "src/pages/ProjectDetails/hooks/usePathFinder.ts": "c322f85b700c4d2d5e291daa56b60fb39e2794c86a2d8c67466ca148664bffcc",
+    "src/pages/ProjectDetails/hooks/usePathFinder.test.tsx": "6ce584278a6d22889aedca91ec8960281d742ed19eff59e64e8257172b7c42c5",
+    "src/pages/ProjectDetails/hooks/usePathfinderBatchReview.ts": "cbdd9a2016a8aa90236acae1584d25a09abfaf1c40040c0cdefc9f50b4d6e1bc",
+    "src/pages/ProjectDetails/hooks/usePathfinderBatchReview.test.tsx": "d3fedfbec9fe3b85df89f0a98d320f4bfb48e7e67aacedcbcaa041ad49304a56",
+    "src/pages/ProjectDetails/hooks/usePathfinderPendingApply.ts": "1db82b8b1bf7c34e3accee46f003f623a9a451b19b26668c5409f2fb7bf0809e",
+    "src/viewer/ViewerController.ts": "9ba6700dddd67b84038ceb3e926d5ae64de446a8efc0b4f278c692c1bac41fab",
+    "src/viewer/ViewerController.test.ts": "9e1e110ac0ce1e53ea660404d68f9a3c5ba7bba300c38d885363867fbcef34c0"
+  },
+  "cancellation": {
+    "status": "PASS",
+    "at": "2026-10-20T14:24:59.599Z",
+    "jobs": 2,
+    "activeJobs": 0,
+    "projectCableCount": 2140,
+    "projectCableValuesUnchanged": true,
+    "applyReceiptsUnchanged": true,
+    "proposalsBefore": 412,
+    "proposalsAfter": 412,
+    "firstIdentification": "FAIL before mutation: timestamp precision mismatch; corrected bounded millisecond identity selected exactly two jobs."
+  },
+  "checks": {
+    "targetedTests": {
+      "status": "PASS",
+      "distinctTests": 228,
+      "scopes": {
+        "tabResultsRevisionBatchControls": 74,
+        "batchHook": 26,
+        "pendingApplyRecovery": 34,
+        "pathFinderHook": 36,
+        "viewerController": 47,
+        "recentWindowAndDeletedHistory": 11
+      }
+    },
+    "firstTabRun": {
+      "status": "FAIL",
+      "passed": 52,
+      "total": 57,
+      "reason": "New action mocks and blocked labels required fixture updates; final combined 74 passed."
+    },
+    "typecheck": "PASS",
+    "scopedEslint": "PASS",
+    "diffCheck": "PASS",
+    "productionDockerBuild": "PASS",
+    "buildOperatorBeforeAfterByteSourceClosure": "NOT_MEASURED",
+    "liveBrowserVisualAcceptance": "BLOCKED",
+    "humanEngineeringAcceptance": "NOT_RUN"
+  },
+  "build": {
+    "status": "PASS",
+    "images": {
+      "api": "sha256:78536ccdf8050ccd732f383d09da56456e3fc9b10d9312568238577eea976f9c",
+      "web": "sha256:4f6acddc21724b8c3d62d74bcb810576a4c4d317fb6509c5995cde7c829a5f1c"
+    },
+    "sourceRuntimePreserved": true,
+    "provenanceLimitation": "The running operator parsed its earlier source; later source-closure additions and later script hash are not attributed to that build. Production sources were frozen before build."
+  },
+  "firstUpgrade": {
+    "status": "FAIL",
+    "rollbackAtFailure": "UNCONFIRMED",
+    "automaticDatabaseRestore": false,
+    "cause": "Unordered but otherwise identical mounts from an unrelated stopped container failed the strict bookend after successful startup and rollback."
+  },
+  "reconciliation": {
+    "status": "PASS",
+    "rollbackConfirmed": true,
+    "originalImagesRestored": true,
+    "cableValuesUnchanged": true,
+    "applyReceiptsUnchanged": true
+  },
+  "upgrade": {
+    "status": "PASS",
+    "at": "2026-10-20T14:43:11.855Z",
+    "port": 5191,
+    "apiWebOnly": true,
+    "healthStatus": 200,
+    "images": {
+      "api": "sha256:78536ccdf8050ccd732f383d09da56456e3fc9b10d9312568238577eea976f9c",
+      "web": "sha256:4f6acddc21724b8c3d62d74bcb810576a4c4d317fb6509c5995cde7c829a5f1c"
+    },
+    "operatorSha256": "84d2b302d604c0a20289daafa317676dec9254eda7fe423f3bb917ca517bec96",
+    "engineIdentityUnchanged": true,
+    "allDatabaseCableCount": 2153,
+    "allDatabaseCableRowsUnchanged": true,
+    "preexistingAllDatabaseApplyReceiptCount": 2,
+    "applyReceiptCountUnchanged": true,
+    "newEngineeringReviewOrApplyPerformed": false,
+    "outsideConfigurationPreserved": true,
+    "outsideRunningStateChanges": [],
+    "postgresAndMinioUnrestarted": true,
+    "databaseBackup": {
+      "path": "review-database-case2/database.dump",
+      "bytes": 13759262,
+      "sha256": "6251f2e5accf5f398cc0cba83d0459825e9303c7df8a74028024f5a5aa44906c",
+      "private": true,
+      "toc": {
+        "status": "PASS",
+        "method": "pg_restore-list-mounted-file",
+        "tocBytes": 84447,
+        "tocSha256": "615fa7d9dd41696f667bf0f39164f66aca1e6fc32e79d8d74d47b2fb3ef44d45"
+      }
+    },
+    "bothNewDatabaseDumpsReverified": true,
+    "fullModelArchive": "Existing separately verified archive retained; no new full model archive claimed."
+  },
+  "cleanup": {
+    "ownedTemporaryHelperContainersRemaining": 0,
+    "unneededTestStackCreated": false,
+    "retained": "5191 demonstration, verified database dumps, original rollback images, model archive, private failure/reconciliation evidence",
+    "deniedHistoricalPathsUntouched": true,
+    "globalPrunePerformed": false,
+    "firstFinalReadback": "FAIL before writes: review image provenance label also identified the two retained API/web containers. Exact verified runtime IDs excluded on corrected readback; no deletion attempted."
+  },
+  "remote": {
+    "observedMain": "96e63f13fdc2b1d30b8f8ff658dd662f25fac104",
+    "method": "git ls-remote origin refs/heads/main",
+    "cachedComparisonBeforeDeliveryCommit": {
+      "ahead": 90,
+      "behind": 3
+    },
+    "pushPrMergePerformed": false,
+    "remoteCi": "NOT_RUN"
+  },
+  "limitations": [
+    "Current live UI behavior not observed: browser tool refused origin access despite enabled user settings. No bypass used.",
+    "228 automated checks do not prove actual engineering acceptance or live filled-Ghost rendering.",
+    "No new calculation was submitted following the explicitly approved cancellation.",
+    "Pending Apply Retry/Close confirmation refreshes through the normal idle poll; ordinary Apply and batch completion force refresh.",
+    "Original WFC5180 and5190 were not controlled; primary Preparer integration and PF recurring automation remain paused."
+  ]
+}

@@ -1,0 +1,537 @@
+{
+  "schemaVersion": "pathfinder.older-model.summary.v1",
+  "recordedAt": "2026-10-18T21:09:06.838Z",
+  "status": "PASS",
+  "scope": "source/upload/translation/download/offline-package verification only",
+  "source": {
+    "name": "Aalborg_ACS_CABLETRAY_07_10_24.nwd",
+    "bytes": 69785194,
+    "sha256": "cf61d87b355b3d77d4c6f71a06183fb1d225cbe1bd937b60783d156aedc4df36",
+    "sha1": "2d7b9ffa98479e65d7512e72b907d7a59587a29d"
+  },
+  "jobId": "bef49b27-4a02-4123-a326-b0dc60e50a26",
+  "phase": "packaged",
+  "supportProfile": "svf-local-7.130.0-v1",
+  "costReview": {
+    "status": "VERIFIED_AT_MUTATION",
+    "proofSha256": "af4dd22f282fba4bfa89e972cc19e240a109c2d2d21e07d85a77530beabd05d4",
+    "checkedAt": "2026-10-18T19:39:23.134Z",
+    "expiresAt": "2026-10-18T20:09:23.134Z",
+    "offering": "Free",
+    "paidFallback": false,
+    "complexJobsAvailableObserved": 18,
+    "maxSubmissions": 1,
+    "maxReadCalls": 2000,
+    "observationsDiscrepancyReport": "33-older-model-preparation.md"
+  },
+  "executions": [
+    {
+      "name": "64d27317-a27d-4b55-af34-b152a9fe68ed.json",
+      "sha256": "fa957ea6b7c6285465916d40b503dd3e543d8e5abe444ed2e43b58b7ae1fa631",
+      "bytes": 5021,
+      "command": "run",
+      "startedAt": "2026-10-18T19:49:32.432Z",
+      "finishedAt": "2026-10-18T19:49:43.173Z",
+      "status": "BLOCKED",
+      "errorCode": "IDENTITY_MISMATCH",
+      "job": {
+        "jobId": "bef49b27-4a02-4123-a326-b0dc60e50a26",
+        "kind": "captured",
+        "status": "failed",
+        "frozenDigest": "0c462520ed49807dec6902b7a04a3815725238b188b7b5bf14ad91241a5571e3",
+        "source": {
+          "name": "Aalborg_ACS_CABLETRAY_07_10_24.nwd",
+          "bytes": 69785194,
+          "sha256": "cf61d87b355b3d77d4c6f71a06183fb1d225cbe1bd937b60783d156aedc4df36"
+        },
+        "submission": {
+          "phase": "none",
+          "attempts": 0,
+          "acknowledgements": 0,
+          "lastObservation": null
+        },
+        "downloaded": false,
+        "checkpointCount": 0,
+        "package": null,
+        "errorCode": "IDENTITY_MISMATCH"
+      },
+      "providerCounts": {
+        "auth": 1,
+        "getStorage": 1,
+        "createStorage": 0,
+        "getObject": 1,
+        "getManifest": 1,
+        "signedResource": 0,
+        "rawResource": 0,
+        "initiateUpload": 1,
+        "uploadPart": 5,
+        "completeUpload": 1,
+        "submit": 0,
+        "totalRequests": 11,
+        "readRequests": 4,
+        "cloudDataMutations": 7
+      },
+      "objectProbe": null,
+      "independentPackage": null,
+      "readProofHistory": []
+    },
+    {
+      "name": "b347cddb-ae6e-4b3e-a133-71849b44dddc.json",
+      "sha256": "d482e6bdc95c409f80cc5067b0ceef52554c137b2f556945b224e8b02d4df1fa",
+      "bytes": 5496,
+      "command": "probe-object",
+      "startedAt": "2026-10-18T19:51:40.721Z",
+      "finishedAt": "2026-10-18T19:51:42.353Z",
+      "status": "PASS",
+      "errorCode": null,
+      "job": {
+        "jobId": "bef49b27-4a02-4123-a326-b0dc60e50a26",
+        "kind": "captured",
+        "status": "failed",
+        "frozenDigest": "0c462520ed49807dec6902b7a04a3815725238b188b7b5bf14ad91241a5571e3",
+        "source": {
+          "name": "Aalborg_ACS_CABLETRAY_07_10_24.nwd",
+          "bytes": 69785194,
+          "sha256": "cf61d87b355b3d77d4c6f71a06183fb1d225cbe1bd937b60783d156aedc4df36"
+        },
+        "submission": {
+          "phase": "none",
+          "attempts": 0,
+          "acknowledgements": 0,
+          "lastObservation": null
+        },
+        "downloaded": false,
+        "checkpointCount": 0,
+        "package": null,
+        "errorCode": "IDENTITY_MISMATCH"
+      },
+      "providerCounts": {
+        "auth": 1,
+        "getStorage": 0,
+        "createStorage": 0,
+        "getObject": 1,
+        "getManifest": 0,
+        "signedResource": 0,
+        "rawResource": 0,
+        "initiateUpload": 0,
+        "uploadPart": 0,
+        "completeUpload": 0,
+        "submit": 0,
+        "totalRequests": 2,
+        "readRequests": 1,
+        "cloudDataMutations": 0
+      },
+      "objectProbe": {
+        "status": "PASS",
+        "bytes": 69785194,
+        "sha256": "cf61d87b355b3d77d4c6f71a06183fb1d225cbe1bd937b60783d156aedc4df36",
+        "remoteSha1": "2d7b9ffa98479e65d7512e72b907d7a59587a29d",
+        "localSha1": "2d7b9ffa98479e65d7512e72b907d7a59587a29d"
+      },
+      "independentPackage": null,
+      "readProofHistory": []
+    },
+    {
+      "name": "08d70f6a-a367-484e-8a52-86bafc01a41e.json",
+      "sha256": "6d08fe7f13fe816c7a30e55f0532b068af7fbd17541c11ccfff396356cf09028",
+      "bytes": 5602,
+      "command": "continue-first-submission",
+      "startedAt": "2026-10-18T19:55:21.170Z",
+      "finishedAt": "2026-10-18T19:55:45.185Z",
+      "status": "PASS",
+      "errorCode": null,
+      "job": {
+        "jobId": "bef49b27-4a02-4123-a326-b0dc60e50a26",
+        "kind": "captured",
+        "status": "submitted",
+        "frozenDigest": "0c462520ed49807dec6902b7a04a3815725238b188b7b5bf14ad91241a5571e3",
+        "source": {
+          "name": "Aalborg_ACS_CABLETRAY_07_10_24.nwd",
+          "bytes": 69785194,
+          "sha256": "cf61d87b355b3d77d4c6f71a06183fb1d225cbe1bd937b60783d156aedc4df36"
+        },
+        "submission": {
+          "phase": "submitted",
+          "attempts": 1,
+          "acknowledgements": 1,
+          "lastObservation": null
+        },
+        "downloaded": false,
+        "checkpointCount": 0,
+        "package": null,
+        "errorCode": null
+      },
+      "providerCounts": {
+        "auth": 1,
+        "getStorage": 1,
+        "createStorage": 0,
+        "getObject": 2,
+        "getManifest": 1,
+        "signedResource": 0,
+        "rawResource": 0,
+        "initiateUpload": 0,
+        "uploadPart": 0,
+        "completeUpload": 0,
+        "submit": 1,
+        "totalRequests": 6,
+        "readRequests": 4,
+        "cloudDataMutations": 1
+      },
+      "objectProbe": null,
+      "independentPackage": null,
+      "readProofHistory": []
+    },
+    {
+      "name": "ec25a387-07ec-4003-8f8a-207c8be6020d.json",
+      "sha256": "236b236303162e7d173c7743ba1c97ef90c77b01bea61d5cb8bce85a9d717a29",
+      "bytes": 4646,
+      "command": "poll",
+      "startedAt": "2026-10-18T19:55:58.628Z",
+      "finishedAt": "2026-10-18T19:56:36.412Z",
+      "status": "PASS",
+      "errorCode": null,
+      "job": {
+        "jobId": "bef49b27-4a02-4123-a326-b0dc60e50a26",
+        "kind": "captured",
+        "status": "submitted",
+        "frozenDigest": "0c462520ed49807dec6902b7a04a3815725238b188b7b5bf14ad91241a5571e3",
+        "source": {
+          "name": "Aalborg_ACS_CABLETRAY_07_10_24.nwd",
+          "bytes": 69785194,
+          "sha256": "cf61d87b355b3d77d4c6f71a06183fb1d225cbe1bd937b60783d156aedc4df36"
+        },
+        "submission": {
+          "phase": "complete",
+          "attempts": 1,
+          "acknowledgements": 1,
+          "lastObservation": "success"
+        },
+        "downloaded": false,
+        "checkpointCount": 0,
+        "package": null,
+        "errorCode": null
+      },
+      "providerCounts": {
+        "auth": 1,
+        "getStorage": 0,
+        "createStorage": 0,
+        "getObject": 0,
+        "getManifest": 5,
+        "signedResource": 0,
+        "rawResource": 0,
+        "initiateUpload": 0,
+        "uploadPart": 0,
+        "completeUpload": 0,
+        "submit": 0,
+        "totalRequests": 6,
+        "readRequests": 5,
+        "cloudDataMutations": 0
+      },
+      "objectProbe": null,
+      "independentPackage": null,
+      "readProofHistory": []
+    },
+    {
+      "name": "c0309093-1cdf-48f4-af66-316ed950209e.json",
+      "sha256": "6f7c127399abb4bac984a588c2558172b5e69b1798bbc6a20f0294bcc5c422e2",
+      "bytes": 3918,
+      "command": "download",
+      "startedAt": "2026-10-18T19:57:01.975Z",
+      "finishedAt": "2026-10-18T20:09:28.450Z",
+      "status": "BLOCKED",
+      "errorCode": "COST_EXPIRED",
+      "job": {
+        "jobId": "bef49b27-4a02-4123-a326-b0dc60e50a26",
+        "kind": "captured",
+        "status": "failed",
+        "frozenDigest": "0c462520ed49807dec6902b7a04a3815725238b188b7b5bf14ad91241a5571e3",
+        "source": {
+          "name": "Aalborg_ACS_CABLETRAY_07_10_24.nwd",
+          "bytes": 69785194,
+          "sha256": "cf61d87b355b3d77d4c6f71a06183fb1d225cbe1bd937b60783d156aedc4df36"
+        },
+        "submission": {
+          "phase": "complete",
+          "attempts": 1,
+          "acknowledgements": 1,
+          "lastObservation": "success"
+        },
+        "downloaded": false,
+        "checkpointCount": 0,
+        "package": null,
+        "errorCode": "COST_EXPIRED"
+      },
+      "providerCounts": {
+        "auth": 1,
+        "getStorage": 0,
+        "createStorage": 0,
+        "getObject": 0,
+        "getManifest": 2,
+        "signedResource": 142,
+        "rawResource": 1,
+        "initiateUpload": 0,
+        "uploadPart": 0,
+        "completeUpload": 0,
+        "submit": 0,
+        "totalRequests": 146,
+        "readRequests": 145,
+        "cloudDataMutations": 0
+      },
+      "objectProbe": null,
+      "independentPackage": null,
+      "readProofHistory": []
+    },
+    {
+      "name": "ad20ba27-4831-49f8-bb4a-7c0fd9c75080-readonly-download.json",
+      "sha256": "18f0960bb0b86f9e723644f78f027c6cec55ffa1a909669f9775b8525407502a",
+      "bytes": 4128,
+      "command": "readonly-download",
+      "startedAt": "2026-10-18T20:16:12.857Z",
+      "finishedAt": "2026-10-18T20:36:35.693Z",
+      "status": "BLOCKED",
+      "errorCode": "COST_EXPIRED",
+      "job": {
+        "jobId": "bef49b27-4a02-4123-a326-b0dc60e50a26",
+        "frozenDigest": "0c462520ed49807dec6902b7a04a3815725238b188b7b5bf14ad91241a5571e3",
+        "status": "failed",
+        "submissionPhase": "complete",
+        "submissionAttempts": 1,
+        "acknowledgements": 1,
+        "downloadStatus": "downloading",
+        "checkpointCount": 70,
+        "errorCode": "COST_EXPIRED"
+      },
+      "providerCounts": {
+        "auth": 1,
+        "getStorage": 0,
+        "createStorage": 0,
+        "getObject": 0,
+        "getManifest": 2,
+        "signedResource": 173,
+        "rawResource": 70,
+        "initiateUpload": 0,
+        "uploadPart": 0,
+        "completeUpload": 0,
+        "submit": 0,
+        "totalRequests": 246,
+        "readRequests": 245,
+        "cloudDataMutations": 0
+      },
+      "objectProbe": null,
+      "independentPackage": null,
+      "readProofHistory": [
+        {
+          "proofSha256": "8004f85d4724f384619f8394db633be4653d45b4f3528e87c63e23804f5059b8",
+          "pointerSha256": "b1d97e8f2d2c15609e79fb4fbcc48e949cd8e45b9d740a0a66766c894c6ade4f",
+          "checkedAt": "2026-10-18T20:06:14.072Z",
+          "expiresAt": "2026-10-18T20:36:14.072Z",
+          "accountSourceMatches": true,
+          "cloudMutationCounts": {
+            "storage": 0,
+            "upload": 0,
+            "submit": 0
+          },
+          "maxUploadBytes": 0,
+          "atReservationAttempt": 0,
+          "activatedAt": "2026-10-18T20:16:13.217Z",
+          "journal": {
+            "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\older-model-3bf01791-b0b5-427d-b2f7-4091d39abe3d\\runner-state\\read-download-ad20ba27-4831-49f8-bb4a-7c0fd9c75080\\00000-proof-activated.private.json",
+            "bytes": 578,
+            "sha256": "8d3278c486f964d5506939a639ab514138e56eddde556d4fdb24942f0df45a67"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a7b0c3f6-4574-4adb-9098-134eb141fd04-readonly-download.json",
+      "sha256": "e8561c042c146710a4f3b44b54f457946fb7775a99bad4a296a52f9983c22281",
+      "bytes": 5489,
+      "command": "readonly-download",
+      "startedAt": "2026-10-18T20:39:24.590Z",
+      "finishedAt": "2026-10-18T21:07:35.784Z",
+      "status": "PASS",
+      "errorCode": null,
+      "job": {
+        "jobId": "bef49b27-4a02-4123-a326-b0dc60e50a26",
+        "frozenDigest": "0c462520ed49807dec6902b7a04a3815725238b188b7b5bf14ad91241a5571e3",
+        "status": "downloaded",
+        "submissionPhase": "complete",
+        "submissionAttempts": 1,
+        "acknowledgements": 1,
+        "downloadStatus": "downloaded",
+        "checkpointCount": 173,
+        "errorCode": null
+      },
+      "providerCounts": {
+        "auth": 1,
+        "getStorage": 0,
+        "createStorage": 0,
+        "getObject": 0,
+        "getManifest": 2,
+        "signedResource": 173,
+        "rawResource": 104,
+        "initiateUpload": 0,
+        "uploadPart": 0,
+        "completeUpload": 0,
+        "submit": 0,
+        "totalRequests": 280,
+        "readRequests": 279,
+        "cloudDataMutations": 0
+      },
+      "objectProbe": null,
+      "independentPackage": null,
+      "readProofHistory": [
+        {
+          "proofSha256": "47341ef5e94e31fc846cee6a0b2d61d57ec463bf48d1fac66440e2de447876c7",
+          "pointerSha256": "6cc71f7f6544c12853e4d34f6ce57a5439efd2b0ce6f31292a50c4923639b44e",
+          "checkedAt": "2026-10-18T20:32:18.048Z",
+          "expiresAt": "2026-10-18T21:02:18.048Z",
+          "accountSourceMatches": true,
+          "cloudMutationCounts": {
+            "storage": 0,
+            "upload": 0,
+            "submit": 0
+          },
+          "maxUploadBytes": 0,
+          "atReservationAttempt": 0,
+          "activatedAt": "2026-10-18T20:39:25.230Z",
+          "journal": {
+            "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\older-model-3bf01791-b0b5-427d-b2f7-4091d39abe3d\\runner-state\\read-download-a7b0c3f6-4574-4adb-9098-134eb141fd04\\00000-proof-activated.private.json",
+            "bytes": 578,
+            "sha256": "601c90fe4fed98b532ad1e976611f0c4a4ac9f6978d44c5b49a74e9e11e650db"
+          }
+        },
+        {
+          "proofSha256": "b018a362c81f2f58b83e5b8bff22dd7192d4c252bce56a31e40a248d652a023f",
+          "pointerSha256": "aef04338ca38bf34af36efe4839ba51be750c085b0b030e5d5d060f076b80fcf",
+          "checkedAt": "2026-10-18T20:50:30.900Z",
+          "expiresAt": "2026-10-18T21:20:30.900Z",
+          "accountSourceMatches": true,
+          "cloudMutationCounts": {
+            "storage": 0,
+            "upload": 0,
+            "submit": 0
+          },
+          "maxUploadBytes": 0,
+          "atReservationAttempt": 176,
+          "activatedAt": "2026-10-18T20:53:49.923Z",
+          "journal": {
+            "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\older-model-3bf01791-b0b5-427d-b2f7-4091d39abe3d\\runner-state\\read-download-a7b0c3f6-4574-4adb-9098-134eb141fd04\\00009-proof-activated.private.json",
+            "bytes": 642,
+            "sha256": "70c56c1ff401534fb8642e82ed62af24792f42d795234380ece639d535849ac3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "b4a39913-3c35-4591-b741-19b5a0658329.json",
+      "sha256": "c8ec26056d1186021a895201a800bdb99dd5c7c37b6b5836cbad481c3845c20e",
+      "bytes": 6194,
+      "command": "package",
+      "startedAt": "2026-10-18T21:07:48.724Z",
+      "finishedAt": "2026-10-18T21:09:01.699Z",
+      "status": "PASS",
+      "errorCode": null,
+      "job": {
+        "jobId": "bef49b27-4a02-4123-a326-b0dc60e50a26",
+        "kind": "captured",
+        "status": "packaged",
+        "frozenDigest": "0c462520ed49807dec6902b7a04a3815725238b188b7b5bf14ad91241a5571e3",
+        "source": {
+          "name": "Aalborg_ACS_CABLETRAY_07_10_24.nwd",
+          "bytes": 69785194,
+          "sha256": "cf61d87b355b3d77d4c6f71a06183fb1d225cbe1bd937b60783d156aedc4df36"
+        },
+        "submission": {
+          "phase": "complete",
+          "attempts": 1,
+          "acknowledgements": 1,
+          "lastObservation": "success"
+        },
+        "downloaded": true,
+        "checkpointCount": 173,
+        "package": {
+          "status": "PASS",
+          "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\older-model-3bf01791-b0b5-427d-b2f7-4091d39abe3d\\runner-state\\output\\aalborg-older-svf.zip",
+          "bytes": 174823508,
+          "sha256": "a4538444641bfc96ce8915a0ef24c1adfebb50a72c1575a23cc475d9bd781183",
+          "packageId": "f1074064-2cb8-4d6e-8412-e025343c6e27",
+          "contentFingerprint": "6f6fdfd86ef0a9061b74062675a3c72c971cfa1c43539e4adf42b9122c75d639",
+          "resourceCount": 173,
+          "totalRawBytes": 174769843
+        },
+        "errorCode": null
+      },
+      "providerCounts": {
+        "totalRequests": 0,
+        "cloudDataMutations": 0
+      },
+      "objectProbe": null,
+      "independentPackage": {
+        "status": "PASS",
+        "verification": {
+          "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\older-model-3bf01791-b0b5-427d-b2f7-4091d39abe3d\\runner-state\\observations\\b4a39913-3c35-4591-b741-19b5a0658329-independent-package.private.json",
+          "bytes": 110046,
+          "sha256": "4cc31711f0abaeb565308d0fa0351530b0fcc3a0b37611eeb20343e33294d27a"
+        },
+        "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\older-model-3bf01791-b0b5-427d-b2f7-4091d39abe3d\\runner-state\\output\\aalborg-older-svf.zip",
+        "packageId": "f1074064-2cb8-4d6e-8412-e025343c6e27",
+        "sha256": "a4538444641bfc96ce8915a0ef24c1adfebb50a72c1575a23cc475d9bd781183",
+        "bytes": 174823508,
+        "contentFingerprint": "6f6fdfd86ef0a9061b74062675a3c72c971cfa1c43539e4adf42b9122c75d639",
+        "resourceCount": 173,
+        "totalRawBytes": 174769843
+      },
+      "readProofHistory": []
+    }
+  ],
+  "providerTotals": {
+    "auth": 7,
+    "getStorage": 2,
+    "createStorage": 0,
+    "getObject": 4,
+    "getManifest": 13,
+    "signedResource": 488,
+    "rawResource": 175,
+    "initiateUpload": 1,
+    "uploadPart": 5,
+    "completeUpload": 1,
+    "submit": 1,
+    "totalRequests": 697,
+    "readRequests": 683,
+    "cloudDataMutations": 8
+  },
+  "package": {
+    "status": "PASS",
+    "verification": {
+      "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\older-model-3bf01791-b0b5-427d-b2f7-4091d39abe3d\\runner-state\\observations\\b4a39913-3c35-4591-b741-19b5a0658329-independent-package.private.json",
+      "bytes": 110046,
+      "sha256": "4cc31711f0abaeb565308d0fa0351530b0fcc3a0b37611eeb20343e33294d27a"
+    },
+    "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\older-model-3bf01791-b0b5-427d-b2f7-4091d39abe3d\\runner-state\\output\\aalborg-older-svf.zip",
+    "packageId": "f1074064-2cb8-4d6e-8412-e025343c6e27",
+    "sha256": "a4538444641bfc96ce8915a0ef24c1adfebb50a72c1575a23cc475d9bd781183",
+    "bytes": 174823508,
+    "contentFingerprint": "6f6fdfd86ef0a9061b74062675a3c72c971cfa1c43539e4adf42b9122c75d639",
+    "resourceCount": 173,
+    "totalRawBytes": 174769843
+  },
+  "sourceReview": {
+    "continuationRunnerSha256": "c9f7ec715f3edfa270f982da459e393d058e2320b4678cd59aa0745f2cbd66ca",
+    "readonlyDownloadSha256": "ce6a0f33a9408d2b7a1aa2b649e24090fa3c265de8090fad6dcd9b027d605d63",
+    "independentReadOnlyReview": "PASS",
+    "originalFailedRunPreserved": true,
+    "continuation": "first submission after exact object GET; same proof; ledger none/0/0; fallback upload/storage refused"
+  },
+  "comparison": "NOT_RUN",
+  "modelImportedIntoWfc": false,
+  "activeModelChanged": false,
+  "wfcFeatureImplementation": "NOT_RUN",
+  "originalPreparerSourceOrRuntimeModified": false,
+  "originalWfcSourceOrRuntimeModified": false,
+  "newContainersCreated": 0,
+  "privateAccountEvidenceCommitted": false,
+  "credentialsCommitted": false,
+  "currentModelEngineeringAcceptance": "NOT_RUN",
+  "nativeParity": "WAIVED_BY_USER_NOT_PROVEN"
+}

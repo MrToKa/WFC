@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "pathfinder.capacity.cleanup.v1",
+  "status": "PASS",
+  "recordedAt": "2026-10-18T12:03:08.832Z",
+  "containerId": "351555b855be6444feaefe3b9e8ab55283b7e38f425cfef4127f096aa48cd48d",
+  "owner": "0321dc60-0aa1-464b-8437-813bf0600905",
+  "reason": "Corrected omitted-false mount inspection guard; original failure receipt retained.",
+  "neverStarted": true,
+  "containerAbsent": true,
+  "volumesCreated": 0,
+  "networksCreated": 0,
+  "filesDeleted": 0
+}

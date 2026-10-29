@@ -1,0 +1,89 @@
+{
+  "status": "PASS",
+  "phaseCount": 16,
+  "scope": "Explicit synthetic retained UI fixture, actual production repository/PostgreSQL transaction controls; fencing phases test the production transaction primitive, not paused full HTTP writes.",
+  "checks": [
+    {
+      "phase": "confirm",
+      "status": "PASS",
+      "elapsedMilliseconds": 50.444461000000004
+    },
+    {
+      "phase": "replay",
+      "status": "PASS",
+      "elapsedMilliseconds": 39.90915100000001
+    },
+    {
+      "phase": "old-key",
+      "status": "PASS",
+      "elapsedMilliseconds": 47.27392
+    },
+    {
+      "phase": "no-op",
+      "status": "PASS",
+      "elapsedMilliseconds": 57.04174199999999
+    },
+    {
+      "phase": "conflict",
+      "status": "PASS",
+      "elapsedMilliseconds": 39.275436
+    },
+    {
+      "phase": "usage",
+      "status": "PASS",
+      "elapsedMilliseconds": 44.630852
+    },
+    {
+      "phase": "legacy",
+      "status": "PASS",
+      "elapsedMilliseconds": 51.973689
+    },
+    {
+      "phase": "migration-refusal",
+      "status": "PASS",
+      "elapsedMilliseconds": 66.29567499999999
+    },
+    {
+      "phase": "immutable",
+      "status": "PASS",
+      "elapsedMilliseconds": 49.860178999999995
+    },
+    {
+      "phase": "fk",
+      "status": "PASS",
+      "elapsedMilliseconds": 38.21677100000001
+    },
+    {
+      "phase": "rollback",
+      "status": "PASS",
+      "elapsedMilliseconds": 50.057078999999995
+    },
+    {
+      "phase": "auth-expiry",
+      "status": "PASS",
+      "elapsedMilliseconds": 35.529205999999995
+    },
+    {
+      "phase": "fencing-role",
+      "status": "PASS",
+      "elapsedMilliseconds": 56.35014400000001
+    },
+    {
+      "phase": "fencing-selection",
+      "status": "PASS",
+      "elapsedMilliseconds": 53.734243
+    },
+    {
+      "phase": "fencing-registry",
+      "status": "PASS",
+      "elapsedMilliseconds": 52.880285
+    },
+    {
+      "phase": "fencing-timeout",
+      "status": "PASS",
+      "elapsedMilliseconds": 3047.384562
+    }
+  ],
+  "engineeringAcceptance": false,
+  "cableApply": "NOT_PERFORMED"
+}

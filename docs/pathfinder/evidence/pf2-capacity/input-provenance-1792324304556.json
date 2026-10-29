@@ -1,0 +1,285 @@
+{
+  "schemaVersion": "pathfinder.capacity.input.provenance.v1",
+  "status": "PASS",
+  "recordedAtUtc": "2026-10-18T11:51:44.555Z",
+  "source": {
+    "project": "wfc-pathfinder-local",
+    "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65",
+    "port": 5190,
+    "apiImage": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+    "apiId": "3d05017ee0fc2bb0b15c1a3e0aaeac258e996d2e024006667d3a4449c40d62c0",
+    "postgresId": "6830635a4597dad696f1a5ced6846853cd9e1fee0f858450ad6f858e4c2e30b9",
+    "branch": "pf-2-capacity-local-20261018",
+    "commit": "8a726f72ab94da22681320f28ccebe1224cf8eb3"
+  },
+  "inputDirectory": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf-capacity-7b1ce2e8-46a6-45ad-bf6e-dfcee51a1e20\\input",
+  "privateManifest": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf-capacity-7b1ce2e8-46a6-45ad-bf6e-dfcee51a1e20\\input\\manifest.json",
+  "privateReference": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf-capacity-7b1ce2e8-46a6-45ad-bf6e-dfcee51a1e20\\reference.private.json",
+  "manifestSha256": "f90e21941578e62d8f5d7426c2f78d039bfa0825e9ebd78cb78ee48d24be8e9a",
+  "referenceSha256": "93c5aec17494c703005b08b7467ab66012feecb703fbcb0eee4c2f23bf86a13f",
+  "snapshot": {
+    "id": "75c61dc7-d456-45b0-9052-2a0822240350",
+    "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf-capacity-7b1ce2e8-46a6-45ad-bf6e-dfcee51a1e20\\input\\snapshots\\75c61dc7-d456-45b0-9052-2a0822240350.json",
+    "sourcePath": "/var/lib/wfc/pathfinder/snapshots/75c61dc7-d456-45b0-9052-2a0822240350.json",
+    "sha256": "b47365401aaf078374607c944e22ac5100f2aa6fe4389c056fbdd963526f17ed",
+    "bytes": 2501953,
+    "projectId": "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a",
+    "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+    "contentSha256": "b5bb4fbe666b440c73bb1ffd2ee0db01be66146f8002e4a9df8dce8521db1d34",
+    "selectionRevision": "1",
+    "registryRevision": "11",
+    "objects": 52,
+    "routingLeaves": 26,
+    "hierarchyObjects": 26,
+    "capture": {
+      "adapterVersion": "wfc.protected-selected-capture.v1",
+      "sourceKind": "converted",
+      "inventoryComplete": false,
+      "geometryComplete": false,
+      "unitsVerified": false,
+      "transformsVerified": false,
+      "planningVisibilityKnown": false,
+      "sourceLinkVerified": false,
+      "evidenceSha256": [
+        "2e3022a65df9623758504e28b046a49420e3edabd73b5079848cb5efac94119a"
+      ]
+    },
+    "coordinates": {
+      "vertexFrame": "canonical-world-metres",
+      "sourceUnits": "m",
+      "metresPerSourceUnit": 1,
+      "sourceToWorldMetres": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ],
+      "globalOffsetMetres": [
+        42.89071492700009,
+        -24.354130538688224,
+        5.195000167136811
+      ],
+      "displayToWorldMetres": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        42.89071492700009,
+        -24.354130538688224,
+        5.195000167136811,
+        1
+      ]
+    }
+  },
+  "settings": {
+    "revision": "2",
+    "connectionGap": "1",
+    "secondaryTrayLength": "3",
+    "endConnectionLength": "5",
+    "additionalBendingPercent": "10"
+  },
+  "bindings": {
+    "from": {
+      "name": "=PF-DEMO-NETWORK-START",
+      "point": [
+        45.16500215081601,
+        -11.73700013993792,
+        1.5296001389080516
+      ],
+      "source": "shared-location",
+      "objectId": null,
+      "locationId": "3b9f01b2-5260-4efa-8914-5b4d54dc36ae",
+      "bindingRevision": "3"
+    },
+    "to": {
+      "name": "=PF-DEMO-NETWORK-END",
+      "point": [
+        57.840041442197844,
+        -6.751280339942497,
+        8.211000437980317
+      ],
+      "source": "shared-location",
+      "objectId": null,
+      "locationId": "2d92f671-338b-49bc-be80-f356ca2332e8",
+      "bindingRevision": "2"
+    }
+  },
+  "options": {
+    "maxGraphNodes": 200000,
+    "maxGraphConnections": 1000000,
+    "sampleSpacingMeters": 0.125,
+    "preferVerticalApproach": true,
+    "secondaryDistanceMeters": 2,
+    "connectionToleranceMeters": 1
+  },
+  "reference": {
+    "kind": "preview",
+    "jobId": "0b0d76a9-1000-4d8f-88fe-33d6052ea785",
+    "status": "calculated",
+    "lengthMeters": 35.30345579516123,
+    "routeText": "/DFB018-1/DFB011/DFB012/DFB013/B002/B107-1/B107-2/B107-3/BC025/BC022-2",
+    "pathPointCount": 90,
+    "segmentIdCount": 25,
+    "design": {
+      "designLengthMeters": "45",
+      "unroundedLengthMeters": "44.33380137467732",
+      "lengthBeforePercentageMeters": "40.3034557951612"
+    },
+    "prepared": {
+      "objectCount": 52,
+      "segmentCount": 26,
+      "counts": {
+        "fallbackBends": 2,
+        "validatedBends": 5,
+        "fallbackStraights": 2,
+        "fallbackClearances": 0,
+        "validatedStraights": 17
+      },
+      "readiness": "needs_review",
+      "cacheScope": "fitted-centerlines-ports-and-canonical-mesh;surface-bvh-reconstructed-on-disk-load;graph-per-calculation"
+    },
+    "engineeringAccepted": false
+  },
+  "preservation": {
+    "containerCount": 18,
+    "originalContainerCount": 13,
+    "containerIdentitiesUnchanged": true,
+    "containerBeforeSha256": "fdfde944c628ea23b107f14e2a112d24b0521f90061098eedc34fe3542b510ea",
+    "containerAfterSha256": "fdfde944c628ea23b107f14e2a112d24b0521f90061098eedc34fe3542b510ea",
+    "workflowBefore": {
+      "settings": {
+        "count": 1,
+        "sha256": "fd028bfed36351138279cea05254d6eb0bb712f9ca8fb7501643ebbb0760ae2d"
+      },
+      "selection": {
+        "count": 1,
+        "sha256": "53c9e37c1ada39e3fadd5ba7b00f508198e6c2fc12c189c8789380d61f5e80e9"
+      },
+      "registry": {
+        "count": 1,
+        "sha256": "ad9d92d44bd97652b37a8e97a0892eebc5f9314372504b35ab950492014d0984"
+      },
+      "planningArtifacts": {
+        "count": 2,
+        "sha256": "02a92c6d9d81be7cfc775920ba1577183e0d517def13532f325f616dae720ddd"
+      },
+      "locations": {
+        "count": 3,
+        "sha256": "14b33f54e2b6ad71318f8d586280a44771456dad365cdd0fc42e2a5f0657a8e7"
+      },
+      "aliases": {
+        "count": 4,
+        "sha256": "30a41e0035f5737aa29ae112d5873efee8c6df6345dc43a19f777d5b62aacf4b"
+      },
+      "bindings": {
+        "count": 3,
+        "sha256": "2a0d7dc92b71813355eee3946ac83cca0564bd7429e6f9ebc33ed56e1c47d434"
+      },
+      "modelObjects": {
+        "count": 104,
+        "sha256": "14b7cd1d1aa7ddf23c21895279e9c83c07f9fa21935f424213369f4ab270cd56"
+      },
+      "cables": {
+        "count": 1,
+        "sha256": "7d1bf598adb6ca623113993592717b0de159747e2280f7286bbb2a8f035dde1b"
+      },
+      "proposals": {
+        "count": 5,
+        "sha256": "5a5a10d25a41e24f1f02ee473062888f6d47f55c11b791f300ff198127031e18"
+      },
+      "reviews": {
+        "count": 3,
+        "sha256": "a1121bb28f1c633a229efd78b135200368154959caa4773fa640a8157a24f909"
+      },
+      "applies": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      }
+    },
+    "workflowAfter": {
+      "settings": {
+        "count": 1,
+        "sha256": "fd028bfed36351138279cea05254d6eb0bb712f9ca8fb7501643ebbb0760ae2d"
+      },
+      "selection": {
+        "count": 1,
+        "sha256": "53c9e37c1ada39e3fadd5ba7b00f508198e6c2fc12c189c8789380d61f5e80e9"
+      },
+      "registry": {
+        "count": 1,
+        "sha256": "ad9d92d44bd97652b37a8e97a0892eebc5f9314372504b35ab950492014d0984"
+      },
+      "planningArtifacts": {
+        "count": 2,
+        "sha256": "02a92c6d9d81be7cfc775920ba1577183e0d517def13532f325f616dae720ddd"
+      },
+      "locations": {
+        "count": 3,
+        "sha256": "14b33f54e2b6ad71318f8d586280a44771456dad365cdd0fc42e2a5f0657a8e7"
+      },
+      "aliases": {
+        "count": 4,
+        "sha256": "30a41e0035f5737aa29ae112d5873efee8c6df6345dc43a19f777d5b62aacf4b"
+      },
+      "bindings": {
+        "count": 3,
+        "sha256": "2a0d7dc92b71813355eee3946ac83cca0564bd7429e6f9ebc33ed56e1c47d434"
+      },
+      "modelObjects": {
+        "count": 104,
+        "sha256": "14b7cd1d1aa7ddf23c21895279e9c83c07f9fa21935f424213369f4ab270cd56"
+      },
+      "cables": {
+        "count": 1,
+        "sha256": "7d1bf598adb6ca623113993592717b0de159747e2280f7286bbb2a8f035dde1b"
+      },
+      "proposals": {
+        "count": 5,
+        "sha256": "5a5a10d25a41e24f1f02ee473062888f6d47f55c11b791f300ff198127031e18"
+      },
+      "reviews": {
+        "count": 3,
+        "sha256": "a1121bb28f1c633a229efd78b135200368154959caa4773fa640a8157a24f909"
+      },
+      "applies": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      }
+    },
+    "workflowUnchanged": true,
+    "sourceBytesUnchanged": true,
+    "copyBytesExact": true,
+    "noJobsCreated": true,
+    "noApply": true,
+    "noAuthMutation": true,
+    "noContainerLifecycleOperation": true,
+    "noSourceEdits": true
+  },
+  "limitations": [
+    "Copied current partial selected planning snapshot only: 52 objects/26 routing leaves; no full-plant capacity claim.",
+    "Existing standalone preview is an internal regression reference, not a Navisworks oracle or independent engineering acceptance.",
+    "Native visibility/source correspondence, unit and transform verification remain unproved as declared by capture flags.",
+    "No timing, benchmark, production job, Apply or native-parity check was performed during this read-only extraction."
+  ],
+  "localPreflightNote": "Initial reference matching compared JSON property order and stopped before any manifest/reference write. Final matcher uses deep structural equality for parsed JSON; runtime data were not changed."
+}

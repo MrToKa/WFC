@@ -1,0 +1,96 @@
+{
+  "schemaVersion": "wfc.pf.current-full-recovery-public.v1",
+  "observedAt": "2026-10-20T12:47:13.723Z",
+  "branch": "pf-aalborg-current-full-recovery-local-20261020",
+  "deliveryParent": "d5e678dc5bcb59f1a05e803af5addec1641b1035",
+  "operatorSourceRevision": "7c0c673fd1a6aa442c4989c816d760f2626797b6",
+  "runtimeSourceRevision": "c68b4434ffadc73c7c6ca38997cfe4689aca928f",
+  "engineeringAccepted": false,
+  "nativeParity": "not-performed",
+  "status": "PASS",
+  "phase": "backup3",
+  "backupId": "980bde15-08db-43f6-bdca-e90730e65410",
+  "preflights": [
+    {
+      "filename": "full-recovery1-preflight7.private.json",
+      "bytes": 1182,
+      "sha256": "ffbe1e7f1992c5ac2e7a3376a4b9386e2edbe409c0506967a83d14bc5082dc36"
+    },
+    {
+      "filename": "full-recovery1-preflight8.private.json",
+      "bytes": 1182,
+      "sha256": "caea34152c170b83f02dd0322e1b2324127e76f1e92958ba3dfa4c92a0988ed8"
+    }
+  ],
+  "immutableBackupProfile": {
+    "filename": "full-recovery1-profile7.private.json",
+    "bytes": 20121,
+    "sha256": "6b16a991fc78b1b61fa20f731086ee0ab2cfda159af1373b70602e75ca0724b7"
+  },
+  "members": 8,
+  "images": 4,
+  "tables": 126,
+  "payloads": [
+    {
+      "file": "database.dump",
+      "bytes": 11324768
+    },
+    {
+      "file": "minio.wfcops",
+      "bytes": 1935541847
+    },
+    {
+      "file": "staging.wfcops",
+      "bytes": 184
+    },
+    {
+      "file": "pathfinder.wfcops",
+      "bytes": 736738313
+    },
+    {
+      "file": "api-image.tar",
+      "bytes": 185217024
+    },
+    {
+      "file": "web-image.tar",
+      "bytes": 55246848
+    },
+    {
+      "file": "postgres-image.tar",
+      "bytes": 162226688
+    },
+    {
+      "file": "minio-image.tar",
+      "bytes": 62259712
+    }
+  ],
+  "totalCorePayloadBytes": 3148555384,
+  "coreManifest": {
+    "bytes": 129224,
+    "sha256": "5a2bf676716bd9ea72e294c9136d1e11d744041d96f9e6999601707b2581193d"
+  },
+  "hostCompanion": {
+    "path": "full-recovery1-backup3-host-companion.private.json",
+    "bytes": 3871,
+    "sha256": "010b4390f4aec17706c50c438f8bccca43e25865817c87a16cfd9cb2c31fc1fd"
+  },
+  "separateProducerImage": true,
+  "producerRestarted": false,
+  "source5191Retained": true,
+  "rawReceipt": {
+    "filename": "full-recovery1-backup3-result.private.json",
+    "bytes": 61501,
+    "sha256": "f97f7ee3b66d198999380f549217d025097530d8588b53a0acb39bef677674be"
+  },
+  "sourceAfter": {
+    "filename": "full-recovery1-source-final2.private.json",
+    "bytes": 780,
+    "sha256": "876416e2f383eb6c16f115c9c077905954eb2dba42222fac336ce8e34aaf0f6e"
+  },
+  "sourceLifecycleExact": true,
+  "oldMemoryBlock": "Historical; user freed memory, actual profiles7/8 PASS",
+  "failedBackupAttemptsRetained": [
+    1,
+    2
+  ]
+}

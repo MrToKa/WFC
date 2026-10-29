@@ -1,0 +1,37 @@
+{
+  "schemaVersion":"pathfinder.current-inputs.fullname-review.v1",
+  "recordedAt":"2026-10-18T15:32:23Z",
+  "status":"NO_REMAINING_MATERIAL_FINDINGS",
+  "reviewer":"/root/pf_runtime_map",
+  "scope":"Static review of the parent's same-project observed full-name/number guard correction; private observed labels verified without a live database query or original mutation.",
+  "source":[
+    {"path":"scripts/pathfinder-current-inputs/source-copy.mjs","sha256":"beae476a6259c964aadd3f73795b74b33095ced3992dca4b6c2faba640cd2fc3"},
+    {"path":"scripts/pathfinder-current-inputs/source-lib.mjs","sha256":"a548802eb80bf02290363e620199a6f4b941a682f76d22b571c17fb8414dbb61"},
+    {"path":"scripts/pathfinder-current-inputs/source-lib.test.mjs","sha256":"e6e71e0cf2e8da5e0feca1bc69e5cce1060e359d8beced74c5a6d4755e93f074"},
+    {"path":"scripts/pathfinder-current-inputs/README-source.md","sha256":"b8e6e2e517650f6003f43ed11e7735a422b93783d33ae4a315842ac7082f4062"}
+  ],
+  "identityResolutionBasis":{
+    "publicObservation":{"path":"docs/pathfinder/evidence/current-inputs/source-project-identity-20261018T1529Z.json","sha256":"3126f3ff0ca4577c0a32dde424e743e7f9e4675449aec685de57d249f5be9b35"},
+    "privateRaw":{"path":"pathfinder-engine/.scratch/current-inputs-a9d8bc01-868e-4af4-926c-4e6026ecb5c4/project-identity.private.json","sha256":"969ccd3200a7e8176d445d26ac8b3caa3e0c12ff6abac53a57b74eb135b21ca4"},
+    "pinnedProjectIdUnchanged":"0c0007c9-d73f-4d13-bc87-601c544727b7",
+    "targetRows":1,
+    "discoveryRows":3,
+    "reviewerVerifiedTargetNameEqualsNewExpected":true,
+    "reviewerVerifiedTargetNumberEqualsNewExpected":true,
+    "disposition":"Parent retains the original screenshot/project UUID and guards its observed complete name and number. It does not switch or rename the original project. Full observed rows remain private."
+  },
+  "reviewedDelta":[
+    "The pinned project UUID remains unchanged. Expected name now equals the actual observed full name under the existing NFC/trim/uppercase equality; projectNumber has a new exact string equality predicate.",
+    "Both raw Client project guard and host snapshot validation require the same UUID/full-name/number contract. Neither accepts the former shortened name, a prefix-only match or another project number.",
+    "The config explicitly passes projectNumber to the serialized raw Client. Fixed parameterized queries and every endpoint/read-only/time/output/private-evidence guard remain applicable.",
+    "The active same-project model, exact converted fingerprint and five pinned property-resource checks are unchanged and remain before the cable byte preflight/row query.",
+    "No source project record, original source file, container configuration or data is edited by this guard-profile correction."
+  ],
+  "ownerExecutedChecks":{"receipt":"docs/pathfinder/evidence/current-inputs/source-fullname-controls-1792337509080.json","receiptSha256":"a3b2f418a651d106bdcd03f8a753397d4fc33aedf60f73eeb0c16d04dc83c686","nodeTestPass":45,"nodeTestFail":0,"nodeSyntaxPass":3,"rawTestSha256":"eac382d33ab2d5a8da138a173f0d8e3844e37a5449d67e5718b53e0037331a25","attribution":"Source-owner execution; reviewer verified frozen source/receipt/output hashes and read the added omitted-year/wrong-number refusal cases without rerunning them."},
+  "reviewerActions":{"testsExecuted":0,"databaseQueries":0,"containerOperations":0,"applicationEdits":0,"localReviewReceiptWrites":1},
+  "limitations":[
+    "The two earlier SQL identity/project identity failed copy receipts remain FAIL and are retained.",
+    "Project identity observation establishes only identity labels under the endpoint/read-only gate. It does not establish the current model/resource/cable content or a successful complete source copy.",
+    "The next corrected source copy remains the parent's sole newly bound operation and must pass every current model/resource/cable guard."
+  ]
+}

@@ -1,0 +1,273 @@
+{
+  "schemaVersion": "wfc.pf.b13c-protected-producer-checks.v1",
+  "at": "2026-10-22T02:27:37.764Z",
+  "baseline": "6e35605468a4af40631e16b17d2f74389350431b",
+  "branch": "pf-b13c-protected-multipart-producer-local-20261022",
+  "status": "TECHNICAL_SOURCE_PASS",
+  "pins": [
+    {
+      "path": "server/pathfinder/barrierMultipartContext.ts",
+      "bytes": 20108,
+      "sha256": "c8058d5062c7f3b869ea17e93fcf7ed3e9b6c8d6802f4abf33b509b21e38e986"
+    },
+    {
+      "path": "server/pathfinder/barrierMultipartContext.test.ts",
+      "bytes": 15492,
+      "sha256": "b41d38b6e28530152273a0f0c7ad365d8a884ec515a4af588ecefcb0d626ee04"
+    },
+    {
+      "path": "server/pathfinder/barrierMultipartContext.integration.test.ts",
+      "bytes": 23074,
+      "sha256": "4ad13176ba07c01eb72ce5869970f3692937e5de2bbdc428e687332dfb5de270"
+    },
+    {
+      "path": "server/pathfinder/barrierMultipartRoutes.ts",
+      "bytes": 11458,
+      "sha256": "f3748df1654efebad1aae9c24b136431c6be075404d282a99db32ca2f6b73455"
+    },
+    {
+      "path": "server/pathfinder/barrierMultipartRoutes.test.ts",
+      "bytes": 15241,
+      "sha256": "b5dc51665fb454aabbf9958c449061f93334ae52431a4379e6d248f72a983d63"
+    },
+    {
+      "path": "server/pathfinder/barrierMultipartRepository.ts",
+      "bytes": 51270,
+      "sha256": "6fcd009cc2942e6def68c18e6f59f186770ac692a40368e68c41eed30477af98"
+    },
+    {
+      "path": "server/pathfinder/barrierMultipartRepository.test.ts",
+      "bytes": 7452,
+      "sha256": "a57b5767fac8e9711a694b43645585fee9d06df02842b0c1180fe9601538c57b"
+    },
+    {
+      "path": "server/pathfinder/barrierMultipartRepository.integration.test.ts",
+      "bytes": 28880,
+      "sha256": "eae18b3ffbe81a550abb16122b7d686864409f3507e2349e645459ebdde7808b"
+    },
+    {
+      "path": "server/pathfinder/barrierMultipartSchema.ts",
+      "bytes": 7771,
+      "sha256": "bd238c4d745b535ca0202add83878e46318a8234a6788445f816f7a090ea4ca9"
+    },
+    {
+      "path": "viewer-runtime/barrier-multipart-protocol.mjs",
+      "bytes": 17054,
+      "sha256": "c8d14409957cc6b79009aeebd996072188bc26685b0d0c7005c274aea77e6593"
+    },
+    {
+      "path": "viewer-runtime/barrier-multipart-protocol.d.mts",
+      "bytes": 3079,
+      "sha256": "5115fcecfbe4b9e4fddae9caf753cd08c9070da7bd836aced09de6f1a80f09f3"
+    },
+    {
+      "path": "viewer-runtime/barrier-multipart-transport.mjs",
+      "bytes": 24326,
+      "sha256": "b52aed54d7b4fa0efd6d5dbe4356ea7550fd709a0044790550d2260d2d566731"
+    },
+    {
+      "path": "viewer-runtime/barrier-multipart-transport.d.mts",
+      "bytes": 2378,
+      "sha256": "2b4b53d965438a971a22dbf71807412e1c182a23b950cc84765afa39a97559e7"
+    },
+    {
+      "path": "viewer-runtime/barrier-producer.mjs",
+      "bytes": 35542,
+      "sha256": "bd2c626d8b38365325d1645e6c1072263c583c61e6c8b8500e6680884aae749f"
+    },
+    {
+      "path": "viewer-runtime/barrier-producer.d.mts",
+      "bytes": 1961,
+      "sha256": "05b20272732450955fa63c689960d826b9afc50a28d92a095159c5c6b44dafbb"
+    },
+    {
+      "path": "viewer-runtime/barrier-multipart-runtime.mjs",
+      "bytes": 7303,
+      "sha256": "6ba0aa902354130061f574dbb9c3e89307922f79197c95ae6b9107eac8c3ccfd"
+    },
+    {
+      "path": "viewer-runtime/barrier-multipart-runtime.d.mts",
+      "bytes": 1121,
+      "sha256": "524452ae7985da281fa7b9dceaff3358ea1f26563c6d182964a0ceae1b69bfa3"
+    },
+    {
+      "path": "viewer-runtime/test/barrier-multipart-fixture.mjs",
+      "bytes": 8498,
+      "sha256": "16bb87385cf84ed2b6b3050744b4b0c4c3203f8464c9174bb0d59031fcf1ca18"
+    },
+    {
+      "path": "viewer-runtime/test/barrier-multipart-protocol.test.mjs",
+      "bytes": 5101,
+      "sha256": "5309534439a4e39d225b8e83f0d6b4086a99cc49064e0076fb32776e03ce1aa2"
+    },
+    {
+      "path": "viewer-runtime/test/barrier-multipart-transport.test.mjs",
+      "bytes": 14735,
+      "sha256": "9ca87935e80b43e628f925e1574c0aebc5b81b9b107f8cbac246426a0abd8c44"
+    },
+    {
+      "path": "viewer-runtime/test/barrier-producer.test.mjs",
+      "bytes": 19366,
+      "sha256": "039d9f622723675384f86d24a3523a82147297b3c3508ccb984a849ecec9b739"
+    },
+    {
+      "path": "viewer-runtime/test/barrier-multipart-runtime.test.mjs",
+      "bytes": 9025,
+      "sha256": "292252401da3580ea1eda12cc83e4a19b2cfe1a776f4de4d5368663be6e00d6e"
+    },
+    {
+      "path": "viewer-runtime/adapter.mjs",
+      "bytes": 20733,
+      "sha256": "592dc3c85ae7761cba03607bf02d811175761a03025026123a5e070e4696bcc6"
+    },
+    {
+      "path": "viewer-runtime/bridge.mjs",
+      "bytes": 34102,
+      "sha256": "415252ec29dad9b35211da76604b0f35ddb695d9c91af06dcf2bc7a2f6416156"
+    },
+    {
+      "path": "viewer-runtime/protocol.mjs",
+      "bytes": 20449,
+      "sha256": "ee5b0e68a5c5c07ca02307c1302c687700c57707a8908c4dec480cc9410963c1"
+    },
+    {
+      "path": "viewer-runtime/test/bridge.test.mjs",
+      "bytes": 64336,
+      "sha256": "dbdefe9b92e6029b20183a1009889ef8fae1f26ce0c94bfe887cf7792703830b"
+    },
+    {
+      "path": "viewer-runtime/test/protocol.test.mjs",
+      "bytes": 10067,
+      "sha256": "9645ce5ac52acaa49160ab463ec0767cf2d06a8437129bcd4faf3d1a4877ef2e"
+    },
+    {
+      "path": "src/viewer/ViewerController.ts",
+      "bytes": 58569,
+      "sha256": "7df0574ebf35513911fac254f3cd81479f16d73d668117cd1f3cd7b5b94347e0"
+    },
+    {
+      "path": "src/viewer/ViewerController.test.ts",
+      "bytes": 90026,
+      "sha256": "0b5134ce06703c769f6da3a7c2c7528d02aec04cd1c8020d95b7104af820b4f2"
+    },
+    {
+      "path": "scripts/viewer-runtime/module-closure.mjs",
+      "bytes": 3421,
+      "sha256": "ff30dd65ac5cdc5170823ac636983c3510f6d62ccea35a2f2dcfc51d0c5723f0"
+    },
+    {
+      "path": "scripts/viewer-runtime/module-closure.test.mjs",
+      "bytes": 4769,
+      "sha256": "2e7267624730eb1a2a713a2e910a2f0948f6956b451700cbd9a2fbc780045f19"
+    }
+  ],
+  "checks": {
+    "native": {
+      "status": "PASS",
+      "tests": 127,
+      "fail": 0,
+      "skipped": 0,
+      "heapMiB": 384,
+      "scope": "Deterministic synthetic SDK/transport/lifecycle/protocol and both deployed module closure graphs; no actual SDK model"
+    },
+    "serverUnits": {
+      "status": "PASS",
+      "tests": 51,
+      "scope": "Context18 + routes24 + repository9"
+    },
+    "controller": {
+      "status": "PASS",
+      "tests": 94
+    },
+    "actualLinux": {
+      "status": "PASS",
+      "tests": 21,
+      "repository": 14,
+      "protectedCookieHttp": 7,
+      "sourceFiles": 53,
+      "sourceCopyBookends": "PASS",
+      "helpersRemoved": true,
+      "networkRemoved": true,
+      "scope": "Fresh exactly owned PostgreSQL and real loopback Express + filesystem, synthetic prepared metadata; no principal/current-scope mocks"
+    },
+    "types": "PASS",
+    "scopedLint": "PASS",
+    "serverBuild": "PASS",
+    "frontendBuild": "PASS",
+    "independentReview": "CLEAR"
+  },
+  "failuresRetained": [
+    {
+      "scope": "First Context unit fixture",
+      "result": "FAIL",
+      "tests": 51,
+      "pass": 48,
+      "fail": 3,
+      "reason": "Synthetic SQL seam omitted existing current-login binding INSERT. Test fixture corrected without changing production guards."
+    },
+    {
+      "scope": "First full types",
+      "result": "FAIL",
+      "reason": "Nine nullable match errors in new routes; explicit never-return guard correction."
+    },
+    {
+      "scope": "Actual Linux fixture attempt1",
+      "result": "FAIL",
+      "tests": 21,
+      "pass": 20,
+      "fail": 1,
+      "helpersRemoved": true,
+      "networkRemoved": true,
+      "reason": "Missing Cookie rejects400 HEADER_INVALID; authored test expected401. Exact missing/wrong cookie status+code assertions corrected."
+    }
+  ],
+  "operational": {
+    "operationId": "b016cf14-17e5-4ffb-86d9-946a60f24d26",
+    "rootSoleExecutor": true,
+    "productionWiring": false,
+    "initializer": false,
+    "installed5191": false,
+    "current5191Web": "sha256:814475f9fe327887e0444fcd4e7e73411bc2f341d59b0748cac1f3b62578acee",
+    "current5191Api": "sha256:ac0d16ab1b0f4c92922c20d1a13a5ea142d4c6e92558de1870daf4db7fd60fcf",
+    "realApply": false,
+    "originalResourcesOperated": false
+  },
+  "limitations": {
+    "geometryBytesCodec": "NOT_IMPLEMENTED",
+    "geometryValidation": "NOT_VALIDATED",
+    "qualification": "NOT_MEASURED",
+    "authority": "none",
+    "publication": "NOT_IMPLEMENTED",
+    "actualAalborg": "BLOCKED",
+    "reason": "Saved browser refusal; no retry or bypass. Synthetic SDK/real HTTP controls do not prove actual civil geometry, openings or model capacity."
+  },
+  "sourceControl": {
+    "liveOriginMain": "96e63f13fdc2b1d30b8f8ff658dd662f25fac104",
+    "originalCleanSame": true,
+    "cachedAhead": 180,
+    "cachedBehind": 3,
+    "connector": "Generic Action completed acknowledgement only; branch/PR/CI status unknown. No CI acceptance claimed."
+  },
+  "retainedEvidence": [
+    {
+      "path": "pathfinder-engine/.scratch/barrier-multipart-producer-b016cf14-17e5-4ffb-86d9-946a60f24d26/native-final.private.log",
+      "sha256": "5d12187c1f8e5a61a411126af544706a523065b558717f80b49ec60548b72f2b"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/barrier-multipart-producer-b016cf14-17e5-4ffb-86d9-946a60f24d26/linux-tests-1.private.log",
+      "sha256": "03499281a7395603496c2ce1cddafa651e62ec55d358897e743dea9d82f5bbd3"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/barrier-multipart-producer-b016cf14-17e5-4ffb-86d9-946a60f24d26/linux-tests-2.private.log",
+      "sha256": "cc0dd9e8e570aeeb4ff0af59b3097c05222e4b2c1affb229a30419d63cef79c1"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/barrier-multipart-producer-b016cf14-17e5-4ffb-86d9-946a60f24d26/linux-fixture-1.result.private.json",
+      "sha256": "dcc2f51054746f9f37223a64824f0926f15cb51942552e0a9420a9683ed76ce5"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/barrier-multipart-producer-b016cf14-17e5-4ffb-86d9-946a60f24d26/linux-fixture-2.result.private.json",
+      "sha256": "cb9141b7f64e20b5284b961043795a808c7972b8176cc3c2c95d999ff86e9a8d"
+    }
+  ]
+}
