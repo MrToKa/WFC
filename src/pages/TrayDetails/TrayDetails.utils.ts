@@ -6,9 +6,23 @@ import {
 } from '../ProjectDetails/hooks/cableLayoutDefaults';
 import { determineCableDiameterGroup, type TrayLayoutSummary } from './trayDrawingService';
 import { TrayFormState, TrayFormErrors } from './TrayDetails.types';
+import type { TrayAutoLengthMeasurement, TrayAutoLengthReference } from '../../../shared/trayAutoLength';
 
 export const KN_PER_KG = 9.80665 / 1000;
 export const FLOAT_TOLERANCE = 1e-6;
+
+export class TrayAutoLengthRequest {
+  private ticket: object | null = null;
+
+  get pending(): boolean { return this.ticket !== null; }
+
+  start(owner: string, currentOwner: () => string): () => boolean {
+    const ticket = {}; this.ticket = ticket;
+    return () => this.ticket === ticket && currentOwner() === owner;
+  }
+
+  cancel(): void { this.ticket = null; }
+}
 
 export const toNullableString = (value: string): string | null => {
   const trimmed = value.trim();
@@ -21,8 +35,37 @@ export const toTrayFormState = (tray: Tray): TrayFormState => ({
   purpose: tray.purpose ?? '',
   widthMm: tray.widthMm !== null ? String(tray.widthMm) : '',
   heightMm: tray.heightMm !== null ? String(tray.heightMm) : '',
-  lengthMm: tray.lengthMm !== null ? String(tray.lengthMm) : '',
+  lengthMm: tray.lengthMm !== null ? tray.lengthSource === 'auto' ? tray.lengthMm.toFixed(3) : String(tray.lengthMm) : '',
+  lengthSource: tray.lengthSource ?? 'manual',
+  autoLengthRequested: false,
+  autoLengthReference: tray.lengthSource === 'auto' && tray.lengthCalculation ? autoLengthReference(tray.lengthCalculation) : undefined,
   weightKgPerM: ''
+});
+
+const autoLengthReference = (measurement: TrayAutoLengthReference): TrayAutoLengthReference => ({
+  modelVersionId: measurement.modelVersionId,
+  geometryRevision: measurement.geometryRevision,
+  aggregateId: measurement.aggregateId,
+  traceId: measurement.traceId,
+});
+
+export const applyTrayAutoLength = (values: TrayFormState, measurement: TrayAutoLengthMeasurement,
+  approvedManualLengthMm = values.approvedManualLengthMm): TrayFormState => ({
+  ...values,
+  lengthMm: measurement.lengthMm.toFixed(3),
+  lengthSource: 'auto',
+  autoLengthRequested: true,
+  autoLengthReference: autoLengthReference(measurement),
+  approvedManualLengthMm,
+});
+
+export const requiresTrayAutoLengthApproval = (values: TrayFormState, saved: Pick<Tray, 'lengthMm' | 'lengthSource'>): boolean =>
+  values.lengthSource !== 'auto' && (values.lengthMm.trim() !== '' || saved.lengthSource !== 'auto' && saved.lengthMm !== null);
+
+export const updateTrayFormField = (values: TrayFormState, field: keyof TrayFormState, value: string): TrayFormState => ({
+  ...values,
+  [field]: value,
+  ...(field === 'lengthMm' ? { lengthSource: 'manual' as const, autoLengthRequested: false, autoLengthReference: undefined, approvedManualLengthMm: undefined } : {}),
 });
 
 export const parseNumberInput = (value: string): { numeric: number | null; error?: string } => {
@@ -88,6 +131,10 @@ export const buildTrayInput = (values: TrayFormState): { input: TrayInput; error
   if (lengthResult.error) {
     errors.lengthMm = lengthResult.error;
   }
+  const requestedAutoLength = values.lengthSource === 'auto' && values.autoLengthRequested;
+  if (requestedAutoLength && !values.autoLengthReference) {
+    errors.lengthMm = 'Use Auto-length again to verify this calculated length before saving.';
+  }
 
   const input: TrayInput = {
     name,
@@ -95,7 +142,10 @@ export const buildTrayInput = (values: TrayFormState): { input: TrayInput; error
     purpose: toNullableString(values.purpose),
     widthMm: widthResult.numeric,
     heightMm: heightResult.numeric,
-    lengthMm: lengthResult.numeric
+    lengthMm: lengthResult.numeric,
+    ...(values.lengthSource === 'manual' ? { lengthSource: 'manual' as const } : {}),
+    ...(requestedAutoLength ? { lengthSource: 'auto' as const, autoLengthReference: values.autoLengthReference,
+      ...(values.approvedManualLengthMm !== undefined ? { approvedManualLengthMm: values.approvedManualLengthMm } : {}) } : {}),
   };
 
   return { input, errors };

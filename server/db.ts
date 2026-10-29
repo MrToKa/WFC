@@ -889,6 +889,21 @@ export async function initializeDatabase(): Promise<void> {
 
   await pool.query(`
     ALTER TABLE trays
+      ADD COLUMN IF NOT EXISTS length_source TEXT NOT NULL DEFAULT 'manual'
+        CHECK (length_source IN ('manual', 'auto')),
+      ADD COLUMN IF NOT EXISTS length_calculation JSONB;
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'trays'::regclass AND conname = 'trays_length_calculation_source_check') THEN
+        ALTER TABLE trays ADD CONSTRAINT trays_length_calculation_source_check CHECK (
+          (length_source = 'manual' AND length_calculation IS NULL) OR
+          (length_source = 'auto' AND length_mm IS NOT NULL AND length_calculation IS NOT NULL AND jsonb_typeof(length_calculation) = 'object')
+        );
+      END IF;
+    END $$;
+  `);
+
+  await pool.query(`
+    ALTER TABLE trays
     ADD COLUMN IF NOT EXISTS include_grounding_cable BOOLEAN NOT NULL DEFAULT FALSE;
   `);
 

@@ -112,6 +112,7 @@ const basicProjectReadPaths = [
   /^\/cable-types\/[0-9a-f-]+\/details\/?$/i,
   /^\/cables\/[0-9a-f-]+\/(details|versions)\/?$/i,
   /^\/trays\/[0-9a-f-]+\/?$/i,
+  /^\/trays\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/auto-length\/?$/i,
   /^\/trays\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/drawing-snapshot\/?$/i,
   /^\/roxtec\/\d+\/?$/i,
 ];

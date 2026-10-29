@@ -72,8 +72,8 @@ CREATE OR REPLACE FUNCTION pf_catalog_tray_mutation() RETURNS trigger LANGUAGE p
  IF TG_OP<>'DELETE' THEN new_pid=NEW.project_id;new_key=pf_catalog_key(NEW.purpose);END IF;
  IF TG_OP='UPDATE' THEN
   routing_changed=ROW(OLD.id,OLD.project_id,OLD.name,OLD.purpose) IS DISTINCT FROM ROW(NEW.id,NEW.project_id,NEW.name,NEW.purpose);
-  drawing_changed=routing_changed OR ROW(OLD.tray_type,OLD.width_mm,OLD.height_mm,OLD.length_mm,OLD.include_grounding_cable,OLD.grounding_cable_type_id,OLD.use_trefoil_clamps,OLD.trefoil_clamp_spacing_mm)
-   IS DISTINCT FROM ROW(NEW.tray_type,NEW.width_mm,NEW.height_mm,NEW.length_mm,NEW.include_grounding_cable,NEW.grounding_cable_type_id,NEW.use_trefoil_clamps,NEW.trefoil_clamp_spacing_mm);
+  drawing_changed=routing_changed OR ROW(OLD.tray_type,OLD.width_mm,OLD.height_mm,OLD.length_mm,OLD.length_source,OLD.length_calculation,OLD.include_grounding_cable,OLD.grounding_cable_type_id,OLD.use_trefoil_clamps,OLD.trefoil_clamp_spacing_mm)
+   IS DISTINCT FROM ROW(NEW.tray_type,NEW.width_mm,NEW.height_mm,NEW.length_mm,NEW.length_source,NEW.length_calculation,NEW.include_grounding_cable,NEW.grounding_cable_type_id,NEW.use_trefoil_clamps,NEW.trefoil_clamp_spacing_mm);
  ELSE routing_changed=true;drawing_changed=true;END IF;
  IF NOT routing_changed AND NOT drawing_changed THEN RETURN COALESCE(NEW,OLD);END IF;
  FOR pid IN SELECT DISTINCT value FROM unnest(ARRAY[old_pid,new_pid]) value WHERE value IS NOT NULL ORDER BY value LOOP

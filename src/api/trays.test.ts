@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchTrays, exportTrays } from './trays';
+import { fetchTrays, exportTrays, fetchTrayAutoLength } from './trays';
 import { request } from './http';
 vi.mock('./http', async () => ({ ...await vi.importActual<typeof import('./http')>('./http'), request: vi.fn() }));
 const id='11111111-1111-1111-1111-111111111111';
@@ -21,5 +21,41 @@ describe('authoritative tray drawing metrics',()=>{
     const fetch=vi.fn().mockResolvedValue(new Response('synthetic'));vi.stubGlobal('fetch',fetch);
     await (exportTrays as (...args: unknown[])=>Promise<Blob>)('login',id,{freeSpaceByTrayId:{[id]:99}});
     expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({});
+  });
+});
+
+describe('tray centerline length preview', () => {
+  const measurement = {
+    lengthMm: 12035.127,
+    elementCount: 3,
+    modelVersionId: id,
+    geometryRevision: '2',
+    aggregateId: '22222222-2222-4222-8222-222222222222',
+    traceId: '33333333-3333-4333-8333-333333333333',
+  };
+
+  it('reads the measurement and its model reference without writing the tray', async () => {
+    vi.mocked(request).mockResolvedValue({ autoLength: measurement });
+    await expect(fetchTrayAutoLength('editor', id, id)).resolves.toEqual(measurement);
+    expect(request).toHaveBeenCalledWith(`/api/projects/${id}/trays/${id}/auto-length`, { token: 'editor' });
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects incomplete measurements instead of supplying a usable zero or unverified value', async () => {
+    for (const invalid of [
+      { ...measurement, lengthMm: null },
+      { ...measurement, lengthMm: -1 },
+      { ...measurement, elementCount: 0 },
+      { ...measurement, traceId: undefined },
+    ]) {
+      vi.mocked(request).mockResolvedValue({ autoLength: invalid });
+      await expect(fetchTrayAutoLength('editor', id, id)).rejects.toMatchObject({ status: 502 });
+    }
+  });
+
+  it('preserves an actionable unavailable-network error from the server', async () => {
+    const unavailable = new Error('Prepare the routing network with centerline data before using Auto-length.');
+    vi.mocked(request).mockRejectedValue(unavailable);
+    await expect(fetchTrayAutoLength('editor', id, id)).rejects.toBe(unavailable);
   });
 });

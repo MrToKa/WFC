@@ -1,3 +1,5 @@
+import type { TrayAutoLengthReference, TrayLengthSource } from '../../../shared/trayAutoLength';
+
 export type TrayFormState = {
   name: string;
   type: string;
@@ -5,6 +7,10 @@ export type TrayFormState = {
   widthMm: string;
   heightMm: string;
   lengthMm: string;
+  lengthSource: TrayLengthSource;
+  autoLengthRequested?: boolean;
+  autoLengthReference?: TrayAutoLengthReference;
+  approvedManualLengthMm?: number;
   weightKgPerM: string;
 };
 

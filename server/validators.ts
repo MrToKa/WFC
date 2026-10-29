@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { trayAutoLengthReferenceSchema, trayLengthSourceSchema } from '../shared/trayAutoLength.js';
 import { CABLE_LIST_COLUMN_IDS } from './models/cableListColumns.js';
 import { CABLE_MTO_VALUES } from './models/cable.js';
 import { cablePurposeInputSchema } from '../shared/routingCablePurposes.js';
@@ -609,6 +610,9 @@ export const updateTraySchema = z
     widthMm: trayNumericField,
     heightMm: trayNumericField,
     lengthMm: trayNumericField,
+    lengthSource: trayLengthSourceSchema.optional(),
+    autoLengthReference: trayAutoLengthReferenceSchema.optional(),
+    approvedManualLengthMm: z.number().finite().min(0).max(1_000_000).optional(),
     includeGroundingCable: z.boolean().optional(),
     groundingCableTypeId: z.union([z.string().trim().uuid(), z.null()]).optional(),
     useTrefoilClamps: z.boolean().optional(),
@@ -623,12 +627,24 @@ export const updateTraySchema = z
       value.widthMm !== undefined ||
       value.heightMm !== undefined ||
       value.lengthMm !== undefined ||
+      value.lengthSource !== undefined ||
       value.includeGroundingCable !== undefined ||
       value.groundingCableTypeId !== undefined ||
       value.useTrefoilClamps !== undefined ||
       value.trefoilClampSpacingMm !== undefined,
     { message: 'At least one field must be provided' },
-  );
+  )
+  .superRefine((value, ctx) => {
+    if (value.lengthSource === 'auto' && (value.lengthMm == null || !value.autoLengthReference)) {
+      ctx.addIssue({ code: 'custom', path: ['autoLengthReference'], message: 'Calculate the automatic length before saving it.' });
+    }
+    if (value.autoLengthReference && value.lengthSource !== 'auto') {
+      ctx.addIssue({ code: 'custom', path: ['autoLengthReference'], message: 'An automatic length reference requires the automatic source.' });
+    }
+    if (value.approvedManualLengthMm !== undefined && value.lengthSource !== 'auto') {
+      ctx.addIssue({ code: 'custom', path: ['approvedManualLengthMm'], message: 'Manual length replacement approval requires the automatic source.' });
+    }
+  });
 
 const materialNumericField = z.number().min(0).max(1_000_000).nullable().optional();
 
