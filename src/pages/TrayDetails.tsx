@@ -25,6 +25,7 @@ import {
   ApiError,
   deleteTray,
   updateTray,
+  fetchTrayAutoLength,
   downloadProjectFile,
   fetchProjectFiles,
   downloadTemplateFile
@@ -33,6 +34,7 @@ import { fetchTrayDrawingSnapshot, saveTrayDrawingSettings, exportTrayDrawing, d
 import { computeTrayDrawing, replayTrayDrawing, type DrawingCanvas } from '../../shared/trayDrawing/index';
 import { makeTrayDrawingInput } from '../../shared/trayDrawingInputs';
 import { trayBundleOverrideSchema } from '../../shared/trayDrawingSnapshot';
+import type { TrayAutoLengthMeasurement } from '../../shared/trayAutoLength';
 import type {
   CableBundleSpacing,
   ProjectCableCategorySettings,
@@ -75,6 +77,10 @@ import {
   toTrayFormState,
   parseNumberInput,
   buildTrayInput,
+  applyTrayAutoLength,
+  requiresTrayAutoLengthApproval,
+  updateTrayFormField,
+  TrayAutoLengthRequest,
   formatDimensionValue,
   formatWeightValue,
   matchCableCategory,
@@ -801,10 +807,24 @@ export const TrayDetails = () => {
     widthMm: '',
     heightMm: '',
     lengthMm: '',
+    lengthSource: 'manual',
     weightKgPerM: ''
   });
   const [formErrors, setFormErrors] = useState<TrayFormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [autoLengthPending, setAutoLengthPending] = useState(false);
+  const [autoLengthError, setAutoLengthError] = useState<string | null>(null);
+  const [autoLengthProposal, setAutoLengthProposal] = useState<{ owner: string; measurement: TrayAutoLengthMeasurement; currentLengthMm: string; savedManualLengthMm?: number } | null>(null);
+  const autoLengthRequest = useRef(new TrayAutoLengthRequest());
+  const autoLengthOwner = JSON.stringify([projectId, trayId, token, canEdit, isEditing, tray?.id, tray?.updatedAt]);
+  const latestAutoLengthOwner = useRef(autoLengthOwner); latestAutoLengthOwner.current = autoLengthOwner;
+  const resetAutoLength = useCallback(() => {
+    autoLengthRequest.current.cancel(); setAutoLengthPending(false); setAutoLengthError(null); setAutoLengthProposal(null);
+  }, []);
+  useEffect(() => {
+    resetAutoLength();
+    return () => { autoLengthRequest.current.cancel(); };
+  }, [autoLengthOwner, resetAutoLength]);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [isGeneratingReport, setIsGeneratingReport] = useState<boolean>(false);
   const reportGeneration = useRef<TrayReportGeneration | null>(null);
@@ -1724,11 +1744,39 @@ export const TrayDetails = () => {
   const handleFieldChange =
     (field: keyof TrayFormState) =>
     (_event: ChangeEvent<HTMLInputElement>, data: { value: string }) => {
-      setFormValues((previous) => ({
-        ...previous,
-        [field]: data.value
-      }));
+      if (field === 'lengthMm') resetAutoLength();
+      setFormValues((previous) => updateTrayFormField(previous, field, data.value));
     };
+
+  const handleAutoLength = async () => {
+    if (!project || !tray || !token || !canEdit || !isEditing || isSubmitting || isDeleting || isGeneratingReport || autoLengthRequest.current.pending
+      || bundleSaving || drawingSaveUnknown || pendingDrawingSave.current || pendingDrawingExport.current || reportGeneration.current) return;
+    const owner = autoLengthOwner, current = autoLengthRequest.current.start(owner, () => latestAutoLengthOwner.current);
+    setAutoLengthPending(true); setAutoLengthError(null); setAutoLengthProposal(null);
+    try {
+      const measurement = await fetchTrayAutoLength(token, project.id, tray.id);
+      if (!current()) return;
+      if (requiresTrayAutoLengthApproval(formValues, tray)) {
+        setAutoLengthProposal({ owner, measurement, currentLengthMm: formValues.lengthMm.trim(),
+          ...(tray.lengthSource !== 'auto' && tray.lengthMm !== null ? { savedManualLengthMm: tray.lengthMm } : {}) });
+      } else {
+        setFormValues(previous => applyTrayAutoLength(previous, measurement));
+        setFormErrors(previous => ({ ...previous, lengthMm: undefined }));
+      }
+    } catch (error) {
+      if (current()) setAutoLengthError(error instanceof Error ? error.message : 'The tray length could not be calculated. Try Auto-length again.');
+    } finally {
+      if (current()) { autoLengthRequest.current.cancel(); setAutoLengthPending(false); }
+    }
+  };
+
+  const handleAcceptAutoLength = () => {
+    if (!autoLengthProposal || autoLengthProposal.owner !== latestAutoLengthOwner.current || !canEdit || !isEditing || isSubmitting || autoLengthRequest.current.pending
+      || bundleSaving || drawingSaveUnknown || pendingDrawingSave.current || pendingDrawingExport.current || reportGeneration.current) return;
+    setFormValues(previous => applyTrayAutoLength(previous, autoLengthProposal.measurement, autoLengthProposal.savedManualLengthMm));
+    setFormErrors(previous => ({ ...previous, lengthMm: undefined }));
+    setAutoLengthProposal(null);
+  };
 
   const handleTypeSelect = useCallback(
     (_event: unknown, data: { optionValue?: string }) => {
@@ -2159,9 +2207,9 @@ export const TrayDetails = () => {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (pendingDrawingSave.current || pendingDrawingExport.current || reportGeneration.current) return;
+    if (pendingDrawingSave.current || pendingDrawingExport.current || reportGeneration.current || autoLengthRequest.current.pending) return;
 
-    if (!project || !tray || !token) {
+    if (!project || !tray || !token || !canEdit) {
       showToast({
         intent: 'error',
         title: 'Admin access required',
@@ -2271,6 +2319,7 @@ export const TrayDetails = () => {
   }, [project, tray, token, navigate, showToast]);
 
   const handleCancelEdit = () => {
+    resetAutoLength();
     if (tray) {
       setFormValues(toTrayFormState(tray));
     }
@@ -2982,6 +3031,15 @@ export const TrayDetails = () => {
           currentTypeHasMaterial={currentTypeHasMaterial}
           isLoadingMaterials={isLoadingMaterials}
           isSubmitting={isSubmitting || drawingSaveUnknown || bundleSaving}
+          autoLengthPending={autoLengthPending}
+          autoLengthError={autoLengthError}
+          autoLengthDisabled={!canEdit || drawingSaveUnknown || bundleSaving || isDeleting || isGeneratingReport}
+          onAutoLength={() => void handleAutoLength()}
+          autoLengthProposal={autoLengthProposal?.owner === autoLengthOwner ? {
+            currentLengthMm: autoLengthProposal.currentLengthMm, proposedLengthMm: autoLengthProposal.measurement.lengthMm.toFixed(3),
+            savedManualLengthMm: autoLengthProposal.savedManualLengthMm,
+          } : null}
+          onAcceptAutoLength={handleAcceptAutoLength}
           onFieldChange={handleFieldChange}
           onTypeSelect={handleTypeSelect}
           onPurposeSelect={handlePurposeSelect}

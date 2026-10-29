@@ -64,6 +64,7 @@ export const TrayInfoSection: React.FC<TrayInfoSectionProps> = ({
         <Body1>
           {tray.lengthMm !== null ? numberFormatter.format(tray.lengthMm) : '-'}
         </Body1>
+        {tray.lengthSource === 'auto' ? <Caption1>Auto-calculated</Caption1> : null}
       </div>
       <div className={styles.field}>
         <Caption1>Created</Caption1>

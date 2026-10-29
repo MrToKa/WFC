@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({ query: vi.fn(), verifyAccessToken: vi.fn() }))
 vi.mock('./db.js', () => ({ pool: { query: mocks.query } }));
 vi.mock('./auth.js', () => ({ verifyAccessToken: mocks.verifyAccessToken }));
 
-import { authenticate, requireAdmin } from './middleware.js';
+import { authenticate, requireAdmin, requireProjectAccess } from './middleware.js';
 
 const responseStub = () => {
   const response = { status: vi.fn(), json: vi.fn() };
@@ -87,5 +87,33 @@ describe('requireAdmin', () => {
     expect(request.isAdmin).toBe(true);
     expect(next).toHaveBeenCalledOnce();
     expect(response.status).not.toHaveBeenCalled();
+  });
+});
+
+describe('tray Auto-length read access', () => {
+  const projectId = '00000000-0000-4000-8000-000000000001';
+  const trayId = '00000000-0000-4000-8000-000000000002';
+  it.each(['basic', 'technician', 'engineer'] as const)('permits an assigned %s to preview the tray length', async (role) => {
+    mocks.query.mockResolvedValue({ rows: [{ exists: 1 }] });
+    const res = responseStub(), next = vi.fn();
+    await requireProjectAccess({ userId: 'reader', role, params: { projectId }, method: 'GET', path: `/trays/${trayId}/auto-length` } as unknown as Request, res, next);
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.status).not.toHaveBeenCalled();
+  });
+  it('still rejects a preview from an unassigned project', async () => {
+    mocks.query.mockResolvedValue({ rows: [] });
+    const res = responseStub(), next = vi.fn();
+    await requireProjectAccess({ userId: 'reader', role: 'basic', params: { projectId }, method: 'GET', path: `/trays/${trayId}/auto-length` } as unknown as Request, res, next);
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
+  });
+  it('does not extend the read exception to writes or other tray actions', async () => {
+    mocks.query.mockResolvedValue({ rows: [{ exists: 1 }] });
+    for (const [method, path] of [['POST', `/trays/${trayId}/auto-length`], ['GET', `/trays/${trayId}/auto-length-extra`]]) {
+      const res = responseStub(), next = vi.fn();
+      await requireProjectAccess({ userId: 'reader', role: 'basic', params: { projectId }, method, path } as unknown as Request, res, next);
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(next).not.toHaveBeenCalled();
+    }
   });
 });

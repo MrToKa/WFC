@@ -32,6 +32,9 @@ export const describeTrayChanges = (before: TrayRow | null, after: TrayRow): str
     const newValue = format(current[field]);
     if (oldValue !== newValue) changes.push(`${label}: ${oldValue} → ${newValue}`);
   }
+  if (previous && previous.lengthSource !== current.lengthSource) {
+    changes.push(`Length source: ${previous.lengthSource} → ${current.lengthSource}`);
+  }
   return changes;
 };
 

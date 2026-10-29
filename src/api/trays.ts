@@ -1,6 +1,7 @@
 import { request, ApiError, getApiBaseUrl, uploadExcelFile } from './http';
 import type { Tray, TrayInput, CableImportSummary } from './types';
 import { projectDrawingMetricsSchema } from '../../shared/trayDrawingSnapshot';
+import { trayAutoLengthResponseSchema, type TrayAutoLengthMeasurement } from '../../shared/trayAutoLength';
 
 export async function fetchTrays(projectId: string, options: { drawingMetrics?: true; token?: string } = {}): Promise<{ trays: Tray[]; freeSpaceByTrayId?: Record<string, number | null> }> {
   const response = await request<{ trays: Tray[]; freeSpaceByTrayId?: Record<string, number | null> }>(`/api/projects/${projectId}/trays${options.drawingMetrics ? '?drawingMetrics=1' : ''}`, { token: options.token });
@@ -18,6 +19,20 @@ export async function fetchTray(
   return request<{ tray: Tray }>(
     `/api/projects/${projectId}/trays/${trayId}`
   );
+}
+
+export async function fetchTrayAutoLength(
+  token: string,
+  projectId: string,
+  trayId: string,
+): Promise<TrayAutoLengthMeasurement> {
+  const response = await request<unknown>(
+    `/api/projects/${projectId}/trays/${trayId}/auto-length`,
+    { token },
+  );
+  const parsed = trayAutoLengthResponseSchema.safeParse(response);
+  if (!parsed.success) throw new ApiError(502, 'The tray centerline length could not be read. Try Auto-length again.');
+  return parsed.data.autoLength;
 }
 
 export async function createTray(

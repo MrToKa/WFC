@@ -5,12 +5,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TrayRow } from '../models/tray.js';
 
 const database = vi.hoisted(() => ({ query: vi.fn(), connect: vi.fn() }));
+const autoLength = vi.hoisted(() => ({ read: vi.fn() }));
 vi.mock('../db.js', () => ({ pool: database }));
+vi.mock('../services/trayAutoLengthService.js', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../services/trayAutoLengthService.js')>(),
+  readCurrentTrayAutoLength: autoLength.read,
+}));
 vi.mock('../services/projectService.js', () => ({
   ensureProjectExists: vi.fn().mockResolvedValue({ id: 'project' }),
 }));
 import { traysRouter } from './traysRoutes.js';
 import { ensureProjectExists } from '../services/projectService.js';
+import { TrayAutoLengthError } from '../services/trayAutoLengthService.js';
 
 type Handler = (req: Request, res: Response) => Promise<void>;
 type Layer = {
@@ -23,7 +29,7 @@ const handler = (method: string, path: string) =>
 const client = { query: vi.fn(), release: vi.fn() };
 let stored: TrayRow;
 const response = () => {
-  const res = { status: vi.fn(), json: vi.fn() };
+  const res = { status: vi.fn(), json: vi.fn(), setHeader: vi.fn() };
   res.status.mockReturnValue(res);
   return res as unknown as Response;
 };
@@ -31,11 +37,13 @@ const request = (body: unknown) =>
   ({
     params: { projectId: 'project', trayId: 'tray' },
     userId: 'actor',
+    query: {},
     body,
   }) as unknown as Request;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  autoLength.read.mockReset();
   vi.mocked(ensureProjectExists).mockResolvedValue({ id: 'project' } as Awaited<
     ReturnType<typeof ensureProjectExists>
   >);
@@ -75,11 +83,148 @@ beforeEach(() => {
     if (sql.includes('UPDATE trays') && !sql.includes('change_log =')) {
       const assignments = sql.slice(sql.indexOf('SET'), sql.indexOf('WHERE'));
       for (const [, field, parameter] of assignments.matchAll(/(\w+) = \$(\d+)/g)) {
-        stored = { ...stored, [field]: values![Number(parameter) - 1] };
+        const value = values![Number(parameter) - 1];
+        stored = { ...stored, [field]: field === 'length_calculation' && typeof value === 'string' ? JSON.parse(value) : value };
       }
+      if (assignments.includes("length_source = 'manual'")) stored.length_source = 'manual';
+      if (assignments.includes('length_calculation = NULL')) stored.length_calculation = null;
       return { rows: [{ ...stored }], rowCount: 1 };
     }
     return { rows: [], rowCount: 1 };
+  });
+});
+
+describe('automatic tray length persistence', () => {
+  const reference = { modelVersionId: '00000000-0000-4000-8000-000000000001', geometryRevision: '2', aggregateId: '00000000-0000-4000-8000-000000000002', traceId: '00000000-0000-4000-8000-000000000003' };
+  const measurement = { ...reference, lengthMm: 4567.891, elementCount: 3 };
+  const automaticInput = { lengthMm: measurement.lengthMm, lengthSource: 'auto', autoLengthReference: reference };
+  const makeAutomatic = (lengthMm = measurement.lengthMm) => {
+    stored.length_mm = lengthMm;
+    stored.length_source = 'auto';
+    stored.length_calculation = { ...measurement, lengthMm, calculatedAt: '2026-10-29T12:00:00.000Z' };
+  };
+  beforeEach(() => autoLength.read.mockResolvedValue(measurement));
+
+  it('previews a project tray measurement without changing stored data', async () => {
+    const res = response();
+    await handler('get', '/:trayId/auto-length')(request({}), res);
+    expect(autoLength.read).toHaveBeenCalledWith(database, 'project', 'tray');
+    expect(res.json).toHaveBeenCalledWith({ autoLength: measurement });
+    expect(res.setHeader).toHaveBeenCalledWith('Cache-Control', 'private, no-store');
+    expect(database.connect).not.toHaveBeenCalled();
+  });
+
+  it('returns actionable service errors without raw internal error details', async () => {
+    autoLength.read.mockRejectedValue(new TrayAutoLengthError('TRAY_AUTO_LENGTH_UNAVAILABLE', 'Prepare the current network first.'));
+    const res = response();
+    await handler('get', '/:trayId/auto-length')(request({}), res);
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Prepare the current network first.', code: 'TRAY_AUTO_LENGTH_UNAVAILABLE' });
+  });
+
+  it('rolls back when automatic geometry becomes unavailable during Save', async () => {
+    stored.length_mm = null;
+    autoLength.read.mockRejectedValue(new TrayAutoLengthError('TRAY_AUTO_LENGTH_UNAVAILABLE', 'Prepare the current network first.'));
+    const res = response();
+    await handler('patch', '/:trayId')(request(automaticInput), res);
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Prepare the current network first.', code: 'TRAY_AUTO_LENGTH_UNAVAILABLE' });
+    expect(client.query).toHaveBeenLastCalledWith('ROLLBACK');
+    expect(stored.length_mm).toBeNull();
+  });
+
+  it('does not calculate a tray from a different project', async () => {
+    database.query.mockResolvedValue({ rows: [] });
+    const res = response();
+    await handler('get', '/:trayId/auto-length')(request({}), res);
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(autoLength.read).not.toHaveBeenCalled();
+  });
+
+  it('saves an empty length from a freshly recomputed measurement and its provenance in one transaction', async () => {
+    stored.length_mm = null;
+    const res = response();
+    await handler('patch', '/:trayId')(request(automaticInput), res);
+    expect(autoLength.read).toHaveBeenCalledWith(client, 'project', 'tray');
+    expect(res.json).toHaveBeenCalledWith({ tray: expect.objectContaining({ lengthMm: measurement.lengthMm, lengthSource: 'auto', lengthCalculation: { ...measurement, calculatedAt: expect.any(String) } }) });
+    expect(client.query).toHaveBeenLastCalledWith('COMMIT');
+  });
+
+  it.each([undefined, 'manual'] as const)('protects a pre-existing manual length with source %s when no approval was supplied', async (source) => {
+    stored.length_source = source;
+    const res = response();
+    await handler('patch', '/:trayId')(request(automaticInput), res);
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'TRAY_MANUAL_LENGTH_APPROVAL_REQUIRED' }));
+    expect(autoLength.read).not.toHaveBeenCalled();
+    expect(client.query).toHaveBeenLastCalledWith('ROLLBACK');
+    expect(stored.length_mm).toBe(3000);
+  });
+
+  it.each([3000, 0])('replaces a manual length %s only after approval for that locked value', async (lengthMm) => {
+    stored.length_mm = lengthMm;
+    const res = response();
+    await handler('patch', '/:trayId')(request({ ...automaticInput, approvedManualLengthMm: lengthMm }), res);
+    expect(res.status).not.toHaveBeenCalled();
+    expect(stored.length_source).toBe('auto');
+    expect(client.query).toHaveBeenLastCalledWith('COMMIT');
+  });
+
+  it('rejects approval for an old manual value after another editor changed it', async () => {
+    stored.length_mm = 3100;
+    const res = response();
+    await handler('patch', '/:trayId')(request({ ...automaticInput, approvedManualLengthMm: 3000 }), res);
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(stored.length_mm).toBe(3100);
+    expect(autoLength.read).not.toHaveBeenCalled();
+  });
+
+  it('can refresh an already automatic length without manual replacement approval', async () => {
+    makeAutomatic(4000);
+    await handler('patch', '/:trayId')(request(automaticInput), response());
+    expect(stored.length_mm).toBe(measurement.lengthMm);
+    expect(stored.length_source).toBe('auto');
+    expect(client.query).toHaveBeenLastCalledWith('COMMIT');
+  });
+
+  it.each(['modelVersionId', 'geometryRevision', 'aggregateId', 'traceId', 'lengthMm'] as const)('rejects a preview whose %s changed', async (field) => {
+    stored.length_mm = null;
+    autoLength.read.mockResolvedValue({ ...measurement, [field]: field === 'lengthMm' ? 4567.892 : field === 'geometryRevision' ? '3' : '00000000-0000-4000-8000-000000000099' });
+    const res = response();
+    await handler('patch', '/:trayId')(request(automaticInput), res);
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'TRAY_AUTO_LENGTH_STALE' }));
+    expect(stored.length_mm).toBeNull();
+    expect(client.query).toHaveBeenLastCalledWith('ROLLBACK');
+  });
+
+  it.each([{ purpose: 'Power' }, { lengthMm: measurement.lengthMm }])('preserves automatic provenance for unrelated or unchanged legacy saves', async (input) => {
+    makeAutomatic();
+    const previousCalculation = stored.length_calculation;
+    await handler('patch', '/:trayId')(request(input), response());
+    expect(stored.length_source).toBe('auto');
+    expect(stored.length_calculation).toEqual(previousCalculation);
+    expect(autoLength.read).not.toHaveBeenCalled();
+  });
+
+  it.each([{ lengthMm: 1234.567 }, { lengthMm: null }, { lengthSource: 'manual' }])('clears auto provenance on an explicit manual length edit', async (input) => {
+    makeAutomatic();
+    await handler('patch', '/:trayId')(request(input), response());
+    expect(stored.length_source).toBe('manual');
+    expect(stored.length_calculation).toBeNull();
+    expect(autoLength.read).not.toHaveBeenCalled();
+  });
+
+  it.each([4000, null])('clears automatic provenance on Excel overwrite, including blank cells', async (importedLength) => {
+    makeAutomatic();
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([['Name', 'Length [mm]'], ['T1', importedLength]]), 'Trays');
+    const req = { ...request({}), file: { originalname: 'trays.xlsx', buffer: XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) } };
+    await handler('post', '/import')(req as unknown as Request, response());
+    expect(stored.length_source).toBe('manual');
+    expect(stored.length_calculation).toBeNull();
+    expect(stored.length_mm).toBe(importedLength);
+    expect(client.query).toHaveBeenLastCalledWith('COMMIT');
   });
 });
 afterEach(() => vi.restoreAllMocks());
