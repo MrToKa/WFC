@@ -79,8 +79,8 @@ function fields(value, required, optional = [], label = 'Object') {
 function text(value) { return typeof value === 'string' && value.length > 0 && value.length <= 1024 && !/[\x00-\x1f\x7f]/.test(value); }
 function size(value) { return Number.isSafeInteger(value) && value >= 0; }
 function tupleKey(value) { return `${value.class}\0${value.type}\0${value.version}`; }
-function meterValue(value) {
-  return object(value) && Object.keys(value).length === 1 && Object.hasOwn(value, 'value') && value.value === 'm';
+function displayUnitValue(value) {
+  return object(value) && Object.keys(value).length === 1 && Object.hasOwn(value, 'value') && ['m', 'mm'].includes(value.value);
 }
 function decodeJson(bytes, options) {
   let source;
@@ -458,9 +458,9 @@ export async function inspectSvfEnvelope(svfBytes, { limits = DEFAULT_LIMITS, si
     }
     const info = validateSvfManifest(manifest, declared, archive);
     assertNoCaseCollisions([...declared.keys()]);
-    let duplicateMeterUnit = 0;
+    let duplicateDisplayUnit = 0;
     const metadata = await jsonEntry('metadata.json', ({ path, key, previous, value }) => {
-      if (path === '$.metadata["default display unit"]' && key === 'default display unit' && meterValue(previous) && meterValue(value) && duplicateMeterUnit++ === 0) return true;
+      if (path === '$.metadata["default display unit"]' && key === 'default display unit' && displayUnitValue(previous) && displayUnitValue(value) && previous.value === value.value && duplicateDisplayUnit++ === 0) return true;
       return false;
     });
     validateMetadata(metadata); check();
@@ -536,9 +536,9 @@ export async function validateProfile(provider, { limits = DEFAULT_LIMITS, signa
     }
     const manifest = await jsonEntry('manifest.json');
     manifestInfo = validateSvfManifest(manifest, resources, archive);
-    let duplicateMeterUnit = 0;
+    let duplicateDisplayUnit = 0;
     const metadata = await jsonEntry('metadata.json', ({ path, key, previous, value }) => {
-      if (path === '$.metadata["default display unit"]' && key === 'default display unit' && meterValue(previous) && meterValue(value) && duplicateMeterUnit++ === 0) return true;
+      if (path === '$.metadata["default display unit"]' && key === 'default display unit' && displayUnitValue(previous) && displayUnitValue(value) && previous.value === value.value && duplicateDisplayUnit++ === 0) return true;
       return false;
     });
     validateMetadata(metadata);

@@ -7,9 +7,9 @@
     "fileCount": 24,
     "totalBytes": 216308
   },
-  "runtimeInventorySha256": "4f3ba6b35a4f23f9b6f7d97267c206aa2b045aa751fa7a3bf37b78730cc6e1b2",
+  "runtimeInventorySha256": "96a852b4e476f16132b8ec457012a970d0fc39c6575354c06714c4f454fd71bf",
   "fileCount": 12,
-  "totalBytes": 119863,
+  "totalBytes": 119983,
   "policy": "The listed runtime files are unchanged copies of the pinned upstreamRevision. upstreamInventory identifies the original historical snapshot. WFC owns this provenance file and index.d.mts; no SDK or Preparer runtime is distributed.",
   "files": [
     {
@@ -54,8 +54,8 @@
     },
     {
       "path": "lib/profile.mjs",
-      "bytes": 43982,
-      "sha256": "3298c458a696fd356eaf2bbb23fb94ba11065a87b1a87955d1291b16c3ddc209"
+      "bytes": 44102,
+      "sha256": "9b6c019c45cbe1e731fb2c46a7c4b2cee8913d04943693148e8203b3aca68d3d"
     },
     {
       "path": "lib/verify.mjs",
@@ -76,6 +76,6 @@
   "upstreamRevision": {
     "repository": "MrToKa/routings-model-preparer",
     "path": "routings-model-package",
-    "commit": "02231e4271b944d34bd6985e958280a4988598c8"
+    "commit": "268937281033ae849a43d832d7580d0fc79e0140"
   }
 }

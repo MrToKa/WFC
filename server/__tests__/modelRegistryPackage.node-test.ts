@@ -46,8 +46,8 @@ test('compiled runtime contains the exact pinned public module, independent of C
     const bytes = await fs.readFile(path.join(root, ...name.split('/')));
     totalBytes += bytes.length; canonical += `${name}\t${bytes.length}\t${sha256(bytes)}\n`;
   }
-  assert.equal(totalBytes, 119863);
-  assert.equal(sha256(Buffer.from(canonical)), '4f3ba6b35a4f23f9b6f7d97267c206aa2b045aa751fa7a3bf37b78730cc6e1b2');
+  assert.equal(totalBytes, 119983);
+  assert.equal(sha256(Buffer.from(canonical)), '96a852b4e476f16132b8ec457012a970d0fc39c6575354c06714c4f454fd71bf');
   assert.equal(JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8')).engines.node, '>=24 <25');
 });
 
