@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
-import { canonicalPurposeJson, normalizeCatalogKey, routingCatalogDiagnostics } from '../../shared/pathfinderPurposePolicy.js';
+import { canonicalPurposeJson, normalizeCatalogKey, routingCatalogDiagnostics, PURPOSE_POLICY_LIMITS } from '../../shared/pathfinderPurposePolicy.js';
 import { PREPARATION_LIMITS, preparationContextSchema, preparationPlanSchema, preparationPlanHashInput, preparationPartScopeHashInput, preparationResolutionMatchesScope, type PreparationContext, type PreparationCreate, type PreparationPlan, preparationAggregateSchema, type PreparationScope } from '../../shared/pathfinderPreparation.js';
 import { readRoutingCatalog } from './catalog.js';
 import { readRoutingPolicyScope } from './purposePolicy.js';
@@ -10,6 +10,18 @@ import { LEGACY_PREPARATION_CAPACITY_PROFILE, preparationCapacityProfileSchema, 
 export const preparationDigest = (value: unknown) => createHash('sha256').update(canonicalPurposeJson(value)).digest('hex');
 const fail = (code: string, status = 409): never => { throw new PathFinderError(code, status, 'The project preparation changed or requires a routing decision. Refresh and try again.'); };
 const scopeKeys = ['modelVersionId', 'contentFingerprint', 'selectionRevision', 'catalogRevision', 'routingContentSha256', 'routingPolicyRevision', 'routingPolicySha256', 'locationRegistryRevision', 'resolutionRevision'] as const;
+function presentationType(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed && trimmed.length <= 500 && !/[\u0000-\u001f\u007f-\u009f]/u.test(trimmed)
+    && [...trimmed].every(character => character.length !== 1 || character.charCodeAt(0) < 0xd800 || character.charCodeAt(0) > 0xdfff) ? trimmed : null;
+}
+function presentationMillimetres(value: unknown): number | null {
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  if (typeof value === 'string' && (value.length > 100 || !/^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$(?![\s\S])/.test(value))) return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric >= 0 ? numeric : null;
+}
 export const equalPreparationScope = (a: PreparationScope, b: PreparationScope, { ignoreResolution = false } = {}) => scopeKeys.every(key => ignoreResolution && key === 'resolutionRevision' || a[key] === b[key]);
 export const toDbId = (value: string) => Number(value.slice(5));
 export function preparationFrameId(projectId: string, modelId: string, fingerprint: string): string {
@@ -27,6 +39,13 @@ export async function readPreparationContext(c: PoolClient, projectId: string): 
   const currentModel = (await c.query<{ state: string; health: string; content_fingerprint: string }>('SELECT state,health,content_fingerprint FROM model_versions WHERE project_id=$1 AND id=$2 FOR SHARE', [projectId, model.active_model_version_id])).rows[0];
   if (!currentModel || currentModel.state !== 'ready' || currentModel.health !== 'healthy' || currentModel.content_fingerprint !== model.content_fingerprint) return fail('MODEL_UNAVAILABLE');
   const catalog = await readRoutingCatalog(c, projectId), routing = await readRoutingPolicyScope(c, projectId);
+  // Current display facts are intentionally separate from the routing catalog's
+  // null dimension placeholders, immutable plans and drawing proof budgets.
+  const detailRows = (await c.query<{ id: string; tray_type: unknown; width_mm: unknown; height_mm: unknown }>(
+    '/* preparation-tray-details */ SELECT id::text,tray_type,width_mm::text,height_mm::text FROM trays WHERE project_id=$1 ORDER BY id LIMIT 100001', [projectId])).rows;
+  if (detailRows.length > PURPOSE_POLICY_LIMITS.catalogRows) return fail('PREPARATION_TRAY_DETAILS_LIMIT', 413);
+  const detailsById = new Map(detailRows.map(row => [row.id, { type: presentationType(row.tray_type),
+    widthMm: presentationMillimetres(row.width_mm), heightMm: presentationMillimetres(row.height_mm) }]));
   const state = await readPreparationState(c, projectId);
   const registry = (await c.query<{ revision: string }>('SELECT registry_revision::text AS revision FROM pf_project_state WHERE project_id=$1 FOR UPDATE', [projectId])).rows[0];
   if (!registry) return fail('PREPARATION_REGISTRY_REQUIRED');
@@ -45,7 +64,8 @@ export async function readPreparationContext(c: PoolClient, projectId: string): 
     // once with engine classes; one shared network serves independent purposes.
     const allowedCategories: Array<'MV' | 'LV' | 'Control'> | undefined = rule
       ? Array.isArray(rule.allowed_categories) && rule.allowed_categories.length ? ['MV', 'LV', 'Control'] : [] : undefined;
-    return { projectTrayId: row.projectTrayId, rawName: row.rawName, purposeKey: row.purposeKey, routeName, allowedCategories: allowedCategories ?? [], policyState: codes.length ? 'invalid' as const : !rule ? 'unconfigured' as const : allowedCategories?.length ? 'configured' as const : 'excluded' as const, diagnosticCodes: codes };
+    return { projectTrayId: row.projectTrayId, rawName: row.rawName, purposeKey: row.purposeKey, routeName, allowedCategories: allowedCategories ?? [], policyState: codes.length ? 'invalid' as const : !rule ? 'unconfigured' as const : allowedCategories?.length ? 'configured' as const : 'excluded' as const, diagnosticCodes: codes,
+      details: detailsById.get(row.projectTrayId) ?? { type: null, widthMm: null, heightMm: null } };
   });
   for (const ids of codeNames.values()) if (ids.length > 1) for (const tray of trays) if (ids.includes(tray.projectTrayId)) { tray.diagnosticCodes.push('ROUTE_CODE_COLLISION'); tray.policyState = 'invalid'; }
   const endpointRows = (await c.query<{ name: string }>(`SELECT DISTINCT value COLLATE "C" AS name FROM cables c CROSS JOIN LATERAL(VALUES(c.from_location),(c.to_location)) e(value) WHERE c.project_id=$1 AND value IS NOT NULL AND btrim(value)<>'' ORDER BY name LIMIT 4097`, [projectId])).rows;

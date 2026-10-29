@@ -34,6 +34,41 @@ beforeEach(() => {
 afterEach(async () => { await act(async () => {}); });
 
 describe('simple project tray preparation', () => {
+  it('shows the project tray type and width by height in millimetres for an assigned tray', () => {
+    const { pf, tray } = setup(); tray.details = { type: 'Cable ladder RA 60', widthMm: 600, heightMm: 77 };
+    render(<ProjectPreparationPanel pf={pf} active />);
+    const card = within(screen.getByRole('article', { name: `Tray ${tray.rawName}` }));
+    expect(card.getByText('Assigned')).toBeVisible(); expect(card.getByText('Type')).toBeVisible();
+    expect(card.getByText('Cable ladder RA 60')).toBeVisible(); expect(card.getByText('Width × height')).toBeVisible();
+    expect(card.getByText('600 × 77 mm')).toBeVisible();
+  });
+  it('preserves fractional and zero dimensions while showing missing values without inventing zero', () => {
+    const { pf, tray } = setup(); tray.details = { type: null, widthMm: 600.125, heightMm: 0 };
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByText('Not specified')).toBeVisible(); expect(screen.getByText('600.125 × 0 mm')).toBeVisible();
+    tray.details = { type: null, widthMm: null, heightMm: 77 }; view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByText('— × 77 mm')).toBeVisible(); expect(screen.queryByText('0 × 77 mm')).toBeNull();
+  });
+  it('keeps an older context without tray details usable without claiming a type or dimension', () => {
+    const { pf, tray } = setup(); delete tray.details;
+    render(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByText('Not available')).toBeVisible(); expect(screen.getByText('— × — mm')).toBeVisible();
+    expect(screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` })).toBeEnabled();
+  });
+  it('reveals details after assignment and retires them when the current model changes', () => {
+    const { pf, state, tray } = setup(); tray.details = { type: 'Cable ladder RA 60', widthMm: 600, heightMm: 77 };
+    const resolution = { id: 'tray-decision', projectTrayId: tray.projectTrayId, mode: 'exclude' as const, rootObjectIds: [],
+      scope: { ...state.context.scope }, reason: 'Selection pending', actorId: 'admin', createdAt: '2026-10-29T00:00:00Z' };
+    state.context.resolutions = [resolution];
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByText('Not assigned')).toBeVisible(); expect(screen.queryByText('Cable ladder RA 60')).toBeNull();
+    state.context.resolutions = [{ ...resolution, mode: 'roots', rootObjectIds: ['dbid:23'] }];
+    view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByText('600 × 77 mm')).toBeVisible();
+    const changedPf = { ...pf, data: { ...pf.data!, activeModel: { ...pf.data!.activeModel, modelVersionId: '22222222-2222-4222-8222-222222222223' } } };
+    view.rerender(<ProjectPreparationPanel pf={changedPf} active />);
+    expect(screen.queryByText('Cable ladder RA 60')).toBeNull(); expect(screen.queryByText('600 × 77 mm')).toBeNull();
+  });
   it('has one network action plus show and immediate selection on each tray', () => {
     const { state, pf, tray } = setup(); render(<ProjectPreparationPanel pf={pf} active />);
     expect(screen.getAllByRole('button')).toHaveLength(3);

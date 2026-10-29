@@ -215,6 +215,7 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
       {!filtered.length ? <p>No project trays match this search.</p> : null}
       <div aria-label="Project trays" style={{ display: 'grid', gap: 12 }}>
         {filtered.map(tray => {
+          const isAssigned = assigned(tray.projectTrayId);
           const target = trayDisplayTarget({ trayId: tray.projectTrayId, context, plan, discovery });
           const unavailable = !modelCurrent ? 'Load the matching model before showing this tray.' : target.message;
           const showing = currentDisplay?.trayId === tray.projectTrayId && currentDisplay.status === 'showing';
@@ -224,8 +225,12 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
           style={{ border: `1px solid ${tokens.colorNeutralStroke2}`, borderRadius: 6, padding: 12, minWidth: 0, overflowWrap: 'anywhere' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
             <h4 style={{ margin: '0 0 8px' }}>{tray.rawName}</h4>
-            <span>{assigned(tray.projectTrayId) ? 'Assigned' : 'Not assigned'}</span>
+            <span>{isAssigned ? 'Assigned' : 'Not assigned'}</span>
           </div>
+          {isAssigned ? <dl style={{ display: 'grid', gridTemplateColumns: 'max-content minmax(0, 1fr)', gap: '4px 8px', margin: '0 0 12px' }}>
+            <dt>Type</dt><dd style={{ margin: 0 }}>{tray.details ? tray.details.type || 'Not specified' : 'Not available'}</dd>
+            <dt>Width × height</dt><dd style={{ margin: 0 }}>{tray.details?.widthMm ?? '—'} × {tray.details?.heightMm ?? '—'} mm</dd>
+          </dl> : null}
           <strong>Purpose and routing permission</strong>
           <p style={{ marginBlock: 8 }}>{tray.purposeKey ?? 'Missing purpose'}<br />
             {tray.policyState === 'configured' ? permissions?.owner === permissionOwner
