@@ -84,7 +84,8 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
   };
   const found = context?.trays.filter(tray => assigned(tray.projectTrayId)).length ?? 0;
   const filtered = context?.trays.filter(tray => !query.trim() || [tray.rawName, tray.routeName, tray.purposeKey ?? '']
-    .some(value => searchText(value).includes(searchText(query)))) ?? [];
+    .some(value => searchText(value).includes(searchText(query))))
+    .sort((a, b) => a.rawName.localeCompare(b.rawName, undefined, { numeric: true, sensitivity: 'base' })) ?? [];
   const disabled = !active || pf.busy || pf.viewerPhase !== 'ready';
   const writeDisabled = disabled || working || displayPending || state.loading;
   const disabledReason = !active ? 'Open Routes to use these controls.'
