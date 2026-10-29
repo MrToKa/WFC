@@ -70,7 +70,7 @@ async function fixture(t, options = {}) {
   ]);
   const properties = { PropertyAttributes: 'attrs', PropertyAVs: 'avs', PropertyIDs: 'ids',
     PropertyOffsets: 'offs', PropertyValues: 'vals', PropertyViewables: 'viewables' };
-  const metadata = Buffer.from('{"version":"1.0","metadata":{}}');
+  const metadata = Buffer.from(options.metadataText ?? '{"version":"1.0","metadata":{}}');
   const assets = [{ id: 'image-id', type: IMAGE, URI: 'Texture Folder/Fixture Logo.png', size: image.length, usize: image.length }];
   for (const [basename, doc] of [['Materials.json.gz', docs.simple], ['ProteinMaterials.json.gz', docs.protein]]) {
     assets.push({ id: basename, type: 'ProteinMaterials', URI: basename, size: data.get(PREFIX + basename).length, usize: Buffer.byteLength(JSON.stringify(doc)) });
@@ -175,4 +175,16 @@ test('case-folded asset-ID ambiguity is refused before material image selection'
     simple.materials.group.materials.bitmap.properties.uris.unifiedbitmap_Bitmap.values[0] = 'image-id';
   }, mutateAssets: assets => { assets.find(a => a.URI === 'embed:/metadata.json').id = 'IMAGE-ID'; } });
   await assert.rejects(validateProfile(f.provider), { code: 'UNSUPPORTED_PROFILE' });
+});
+
+test('portable verification accepts the observed millimetre metadata pair and preserves its SVF bytes', async t => {
+  const f = await fixture(t, { metadataText: '{"version":"1.0","metadata":{"default display unit":{"value":"mm"},"default display unit":{"value":"mm"}}}' });
+  const before = Buffer.from(f.data.get(PREFIX + '0.svf'));
+  assert.equal((await inspectSvfEnvelope(before)).status, 'INSPECTED');
+  assert.equal((await verifyPackage(f.archive)).status, 'PASS');
+  assert.deepEqual(f.data.get(PREFIX + '0.svf'), before);
+});
+test('portable verification rejects conflicting display units', async t => {
+  const f = await fixture(t, { metadataText: '{"version":"1.0","metadata":{"default display unit":{"value":"m"},"default display unit":{"value":"mm"}}}' });
+  await assert.rejects(verifyPackage(f.archive), { code: 'INVALID_MANIFEST' });
 });
