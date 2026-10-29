@@ -1,5 +1,6 @@
 name: Validate model package verifier
 on:
+  workflow_call:
   pull_request:
     paths:
       - 'server/vendor/routings-model-package/**'
@@ -31,3 +32,4 @@ jobs:
         run: node --test server/dist/server/__tests__/modelRegistryPackage.node-test.js
       - name: Verify HTTP path decoding boundary
         run: npm test -- --run server/viewerSessions/http.test.ts
+

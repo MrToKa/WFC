@@ -1,0 +1,44 @@
+{
+  "stateDirectory": "D:\\WFC-Deploy\\State",
+  "applications": [
+    {
+      "name": "wfc",
+      "repository": "MrToKa/WFC",
+      "branch": "main",
+      "compatibility": "wfc-v1",
+      "kind": "compose",
+      "project": "wfc",
+      "workingDirectory": "C:\\Users\\todor.chankov\\source\\repos\\WFC",
+      "composeFiles": ["docker-compose.yml"],
+      "envFile": ".env",
+      "services": { "api": "wfc-api", "web": "wfc-web" },
+      "images": { "api": "ghcr.io/mrtoka/wfc-api", "web": "ghcr.io/mrtoka/wfc-web" },
+      "healthUrl": "http://192.168.5.55:5173/health",
+      "healthExpected": { "status": "ok" },
+      "prepareHook": "D:\\WFC-Deploy\\Hooks\\Prepare-Wfc.ps1"
+    },
+    {
+      "name": "preparer",
+      "repository": "MrToKa/routings-model-preparer",
+      "branch": "main",
+      "compatibility": "preparer-v1",
+      "kind": "preparer",
+      "project": "routings-preparer",
+      "services": { "preparer": "routings-preparer-preparer-1" },
+      "images": { "preparer": "ghcr.io/mrtoka/routings-model-preparer" },
+      "launcher": "C:\\Users\\todor.chankov\\source\\routings-model-preparer\\preparer-source\\start-preparer.ps1",
+      "launcherParameters": {
+        "Mode": "live",
+        "ListenAddress": "192.168.5.55",
+        "Port": 8083,
+        "EnvFilePath": "D:\\WFC-Preparer\\Config\\.env",
+        "ImportRoot": "D:\\WFC-Preparer\\Packages",
+        "SourceDirectory": "D:\\WFC-Preparer\\Sources",
+        "WfcOrigin": "http://192.168.5.55:5173"
+      },
+      "healthUrl": "http://192.168.5.55:8083/health",
+      "healthExpected": { "status": "ok", "mode": "live", "authentication": "wfc" },
+      "prepareHook": "D:\\WFC-Deploy\\Hooks\\Prepare-Preparer.ps1"
+    }
+  ]
+}

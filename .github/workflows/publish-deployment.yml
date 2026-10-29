@@ -1,0 +1,74 @@
+name: Publish tested deployment
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deployment-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  app-checks:
+    uses: ./.github/workflows/http-crypto-validation.yml
+  package-checks:
+    uses: ./.github/workflows/nested-raster-validation.yml
+  updater-checks:
+    runs-on: windows-2025
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Exercise updater transactions with isolated Docker and HTTP mocks
+        shell: pwsh
+        run: ./scripts/cicd/Update-Deployment.tests.ps1
+  validate-build:
+    if: github.event_name == 'pull_request'
+    needs: [app-checks, package-checks, updater-checks]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    steps: &image_steps
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Verify release contract tests
+        run: node --test scripts/cicd/release.test.mjs
+      - name: Define registry paths
+        run: echo "IMAGE_ROOT=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+      - name: Build the two application images
+        env:
+          PUBLISH: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+        run: |
+          set -euo pipefail
+          output=(--load)
+          if [ "$PUBLISH" = true ]; then
+            printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+            output=(--push)
+          fi
+          docker buildx build "${output[@]}" --target api-runtime --label "org.opencontainers.image.revision=$GITHUB_SHA" --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" --tag "$IMAGE_ROOT/wfc-api:$GITHUB_SHA" --metadata-file /tmp/api-metadata.json .
+          docker buildx build "${output[@]}" --target web-runtime --label "org.opencontainers.image.revision=$GITHUB_SHA" --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" --build-arg VITE_API_URL=/ --tag "$IMAGE_ROOT/wfc-web:$GITHUB_SHA" --metadata-file /tmp/web-metadata.json .
+      - name: Publish a complete deployment manifest
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          node scripts/cicd/release.mjs wfc-v1 /tmp/deployment.json "api=$IMAGE_ROOT/wfc-api=/tmp/api-metadata.json" "web=$IMAGE_ROOT/wfc-web=/tmp/web-metadata.json"
+          # Creating the release is the final publication step. Partial builds
+          # cannot become deployable. Never overwrite an existing manifest.
+          if ! gh release view "deploy-$GITHUB_SHA" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "deploy-$GITHUB_SHA" /tmp/deployment.json --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Deployment $GITHUB_SHA" --notes 'Tested API and web images. See docs/AUTOMATIC-DEPLOYMENT.md for installation and compatibility rules.' --prerelease
+          fi
+  publish:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: [app-checks, package-checks, updater-checks]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      contents: write
+      packages: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps: *image_steps
