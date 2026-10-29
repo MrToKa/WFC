@@ -1,3 +1,4 @@
+import { digestSha256 } from '../utils/sha256';
 import { z } from 'zod';
 import { getApiBaseUrl } from './http';
 import { pathFinderRequestDeadline, discardPathFinderBody, releasePathFinderReader } from './pathfinderRequestDeadline';
@@ -194,9 +195,7 @@ async function verifyManifest(value: unknown, projectId: string, traceId?: strin
     return invalid();
   const digest = [
     ...new Uint8Array(
-      await crypto.subtle.digest(
-        'SHA-256',
-        new TextEncoder().encode(canonicalPurposeJson(geometryTraceContentHashInput(parsed.data))),
+      await digestSha256(new TextEncoder().encode(canonicalPurposeJson(geometryTraceContentHashInput(parsed.data))),
       ),
     ),
   ]

@@ -1,3 +1,5 @@
+import { digestSha256 } from '../../../utils/sha256';
+import { generateId } from '@/utils/generateId';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   fetchPreparationContext,
@@ -97,7 +99,7 @@ async function networkTraceCommand(context: PreparationContext): Promise<Geometr
   const aggregate = context.currentAggregate!;
   const bytes = new TextEncoder().encode(canonicalPurposeJson({ schemaVersion: 'wfc.pf.automatic-network-trace-key.v1',
     projectId: context.projectId, aggregateId: aggregate.id, projectionSha256: aggregate.projection.sha256, derivationVersion: GEOMETRY_TRACE_DERIVATION }));
-  const hex = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(value => value.toString(16).padStart(2, '0')).join('');
+  const hex = [...new Uint8Array(await digestSha256(bytes))].map(value => value.toString(16).padStart(2, '0')).join('');
   return { schemaVersion: 'wfc.pf.geometry-trace-create.v1', aggregateId: aggregate.id,
     expectedProjectionSha256: aggregate.projection.sha256, derivationVersion: GEOMETRY_TRACE_DERIVATION,
     idempotencyKey: `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}` };
@@ -511,7 +513,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
             body: {
               schemaVersion: 'wfc.pf.preparation-create.v1',
               expected: value.context.scope,
-              idempotencyKey: crypto.randomUUID(),
+              idempotencyKey: generateId(),
               discovery: structuredClone(value.discovery),
             },
           },
@@ -536,7 +538,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
             body: {
               schemaVersion: 'wfc.pf.preparation-resolution.write.v1',
               expected: value.context.scope,
-              idempotencyKey: crypto.randomUUID(),
+              idempotencyKey: generateId(),
               projectTrayId,
               mode,
               rootObjectIds: [...rootObjectIds],
@@ -688,7 +690,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
             body: {
               schemaVersion: 'wfc.pf.preparation-mutation.v1',
               expectedSessionRevision: value.session.sessionRevision,
-              idempotencyKey: crypto.randomUUID(),
+              idempotencyKey: generateId(),
               reason,
             },
           },
@@ -730,7 +732,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
           body: {
             schemaVersion: 'wfc.pf.preparation-mutation.v1',
             expectedSessionRevision: current.sessionRevision,
-            idempotencyKey: crypto.randomUUID(),
+            idempotencyKey: generateId(),
             reason,
           },
         };
@@ -869,7 +871,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
       if (!sameModel(resolution.scope, fresh.context.scope)) throw new Error('The active model changed. Check the trays again.');
       fresh = await execute({ kind: 'resolution', body: {
         schemaVersion: 'wfc.pf.preparation-resolution.write.v1', expected: fresh.context.scope,
-        idempotencyKey: crypto.randomUUID(), projectTrayId: resolution.projectTrayId, mode: 'roots',
+        idempotencyKey: generateId(), projectTrayId: resolution.projectTrayId, mode: 'roots',
         rootObjectIds: [...resolution.rootObjectIds], reason: 'Retained the previously assigned roots in the same model after project routing inputs changed.',
       } }, signal, true);
     }
@@ -895,7 +897,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
       const discovery = await discoverTrays(context, signal);
       fresh = await execute({ kind: 'create', body: {
         schemaVersion: 'wfc.pf.preparation-create.v1', expected: context.scope,
-        idempotencyKey: crypto.randomUUID(), discovery: structuredClone(discovery), unresolvedTrayPolicy: 'skip',
+        idempotencyKey: generateId(), discovery: structuredClone(discovery), unresolvedTrayPolicy: 'skip',
       } }, signal, true);
       session = fresh.session;
       if (!session || !sameScope(session.plan, fresh.context.scope)) throw new Error('Project routing inputs changed. Check the trays again.');
@@ -907,7 +909,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
     update(value => ({ ...value, progress: 'Finishing the tray update…' }));
     fresh = await execute({ kind: 'publish', sessionId: fresh.session.id, body: {
       schemaVersion: 'wfc.pf.preparation-mutation.v1', expectedSessionRevision: fresh.session.sessionRevision,
-      idempotencyKey: crypto.randomUUID(), reason: 'Update the project tray network from the current model.',
+      idempotencyKey: generateId(), reason: 'Update the project tray network from the current model.',
     } }, signal, true);
     if (!publishedNetworkMatches(fresh.context) || fresh.session?.state !== 'published' || fresh.context.currentAggregate!.sessionId !== fresh.session.id)
       throw new Error('The tray update could not be confirmed. Check the trays again.');
@@ -943,7 +945,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
         update(value => ({ ...value, progress: 'Assigning the selected model tray…' }));
         fresh = await execute({ kind: 'resolution', body: {
           schemaVersion: 'wfc.pf.preparation-resolution.write.v1', expected: fresh.context.scope,
-          idempotencyKey: crypto.randomUUID(), projectTrayId, mode: 'roots', rootObjectIds: roots,
+          idempotencyKey: generateId(), projectTrayId, mode: 'roots', rootObjectIds: roots,
           reason: 'Assigned from the current model selection.',
         } }, signal, true);
       }

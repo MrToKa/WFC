@@ -1,3 +1,4 @@
+import { digestSha256 } from '../utils/sha256';
 import { z } from 'zod';
 import { getApiBaseUrl } from './http';
 import { BARRIER_LIMITS, barrierCanonicalJson } from '../../shared/pathfinderBarriers';
@@ -57,7 +58,7 @@ export async function getBarrierRegistry(projectId: string, token: string, signa
 export async function getBarrierSnapshot(projectId: string, token: string, snapshotId: string, signal?: AbortSignal): Promise<BarrierSnapshot> {
   z.string().uuid().parse(snapshotId);
   const snapshot = barrierSnapshotSchema.parse(await request(projectId, token, `/snapshots/${snapshotId}`, undefined, signal));
-  const digest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(barrierCanonicalJson(barrierSnapshotHashInput(snapshot)))))]
+  const digest = [...new Uint8Array(await digestSha256(new TextEncoder().encode(barrierCanonicalJson(barrierSnapshotHashInput(snapshot)))))]
     .map(value => value.toString(16).padStart(2, '0')).join('');
   if (signal?.aborted) throw new DOMException('Barrier manifest read cancelled.', 'AbortError');
   if (snapshot.snapshotId !== snapshotId || snapshot.scope.projectId !== projectId || snapshot.contentSha256 !== digest)

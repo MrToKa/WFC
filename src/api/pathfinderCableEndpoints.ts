@@ -1,3 +1,4 @@
+import { digestSha256 } from '../utils/sha256';
 import { getApiBaseUrl } from './http';
 import { canonicalPurposeJson, parsePurposeJson, policyHashSchema, policyUuidSchema } from '../../shared/pathfinderPurposePolicy';
 import { endpointBindingContentHashInput } from '../../shared/pathfinderEndpointBindings';
@@ -19,7 +20,7 @@ const invalid = (): never => { throw new CableEndpointApiError('INVALID_RESPONSE
 const invalidRequest = (): never => { throw new CableEndpointApiError('INVALID_REQUEST', 400, 'Use the current cable, endpoint, model and administrator account.', 'refused'); };
 const equal = (a: unknown, b: unknown) => canonicalPurposeJson(a) === canonicalPurposeJson(b);
 async function sha256(value: unknown): Promise<string> {
-  return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalPurposeJson(value)))), byte => byte.toString(16).padStart(2, '0')).join('');
+  return Array.from(new Uint8Array(await digestSha256(new TextEncoder().encode(canonicalPurposeJson(value)))), byte => byte.toString(16).padStart(2, '0')).join('');
 }
 export function cableEndpointCommandSha256(value: CableEndpointCommand): Promise<string> { return sha256(cableEndpointCommandSchema.parse(value)); }
 function failure(status: number, value: unknown): never {

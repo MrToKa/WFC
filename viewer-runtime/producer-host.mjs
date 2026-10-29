@@ -1,3 +1,4 @@
+import { generateId } from './generate-id.mjs';
 import { validateEnvelope, isUuid, SDK_VERSION } from './protocol.mjs';
 
 const allowed=new Set(['READ_PREPARATION_OBJECTS','START_MODEL_CAPTURE','READ_MODEL_CAPTURE']);
@@ -37,7 +38,7 @@ export function createProducerHost(window) {
     });
   };
   const envelope=(type,payload,handshake=false)=>({channel:'wfc-routings-viewer',protocolVersion:1,instanceId:configuration.instanceId,projectId:configuration.projectId,
-    modelVersionId:handshake?null:configuration.modelVersionId,loadId:handshake?null:configuration.loadId,requestId:window.crypto.randomUUID(),type,payload});
+    modelVersionId:handshake?null:configuration.modelVersionId,loadId:handshake?null:configuration.loadId,requestId:generateId(window.crypto),type,payload});
   return Object.freeze({
     async initialize(input){
       const keys=['instanceId','projectId','modelVersionId','loadId','sessionId'];

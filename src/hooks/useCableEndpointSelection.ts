@@ -1,3 +1,4 @@
+import { generateId } from '@/utils/generateId';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { isCanonicalPoint, type CanonicalPoint, type ViewerSelection } from '../../viewer-runtime/protocol.mjs';
 import { endpointPointSchema, type EndpointCurrentScope, type EndpointObjectRef } from '../../shared/pathfinderEndpointBindings';
@@ -248,7 +249,7 @@ export function useCableEndpointSelection(access: CableEndpointSelectionAccess) 
   const persistDraft = useCallback(async (context: CableEndpointContext, draft: Draft, reason: string, abort: AbortController) => {
     if (!live() || !latest.current.active || abort.signal.aborted || calculationKey === null || initialFillKey === null) return false;
     const command = cableEndpointCommandSchema.parse({ ...(initialFillKey === 'unspecified' ? { schemaVersion: 'wfc.pf.cable-endpoint-command.v2' }
-      : { schemaVersion: 'wfc.pf.cable-endpoint-command.v3', initialFill: JSON.parse(initialFillKey) }), calculation: JSON.parse(calculationKey), idempotencyKey: crypto.randomUUID(),
+      : { schemaVersion: 'wfc.pf.cable-endpoint-command.v3', initialFill: JSON.parse(initialFillKey) }), calculation: JSON.parse(calculationKey), idempotencyKey: generateId(),
       expectedContextSha256: context.contextSha256, expectedCableWriteRevision: context.cableWriteRevision, expectedLogicalName: context.logicalName,
       expectedRegistryRevision: context.registryRevision, expectedLocationId: context.location?.id ?? null, expectedLocationRevision: context.location?.revision ?? null,
       expectedHeadId: context.head?.id ?? null, expectedCurrent: context.current, reason,

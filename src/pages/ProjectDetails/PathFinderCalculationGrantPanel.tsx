@@ -1,3 +1,4 @@
+import { generateId } from '@/utils/generateId';
 import { useState } from 'react';
 import { Button, Caption1, Checkbox, Spinner } from '@fluentui/react-components';
 import { usePathfinderCalculationGrants, type CalculationGrantAccess } from './hooks/usePathfinderCalculationGrants';
@@ -30,7 +31,7 @@ export function PathFinderCalculationGrantPanel(props: CalculationGrantPanelProp
   const changed = checked !== persistedEnabled || checked && !samePreferences;
   const save = () => {
     if (unavailable || !context || !changed || checked && !validOptions) return;
-    const common = { schemaVersion: 'wfc.pf.calculation-grant-command.v1' as const, expectedControlRevision: context.controlRevision, idempotencyKey: crypto.randomUUID(), reason: `Administrator requested ${checked ? 'enable' : 'disable'} for background model recalculation.` };
+    const common = { schemaVersion: 'wfc.pf.calculation-grant-command.v1' as const, expectedControlRevision: context.controlRevision, idempotencyKey: generateId(), reason: `Administrator requested ${checked ? 'enable' : 'disable'} for background model recalculation.` };
     const command: CalculationGrantCommand = checked ? { ...common, action: 'enable', preferences: { ...props.preferences! }, timeoutMilliseconds: timeoutValue } : { ...common, action: 'disable' };
     state.command(command);
   };

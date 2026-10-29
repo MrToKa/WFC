@@ -1,3 +1,4 @@
+import { generateId } from '@/utils/generateId';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { purposeKeySchema, routingCatalogDiagnostics } from '../../../../shared/pathfinderPurposePolicy';
 import {
@@ -167,7 +168,7 @@ export function useRoutingPurposePolicy({ projectId, loadedProjectId, token, isA
     });
     await send(run, { schemaVersion: 'pathfinder.routing-purpose-policy.write.v1', expectedCatalogRevision: previous.snapshot.catalog.catalogRevision,
       expectedCablePurposesSha256: previous.snapshot.policy.cablePurposesSha256,
-      expectedRevision: previous.snapshot.policy.routingPolicyRevision, idempotencyKey: crypto.randomUUID(), changes });
+      expectedRevision: previous.snapshot.policy.routingPolicyRevision, idempotencyKey: generateId(), changes });
   }, [current, send]);
   const retrySave = useCallback(async (): Promise<void> => { const run = runRef.current; if (run && current(run) && run.pending && !run.mutation) await send(run, run.pending); }, [current, send]);
   const refreshHistory = useCallback(async (): Promise<void> => { const run = runRef.current; if (run) await historyRun(run); }, [historyRun]);

@@ -1,3 +1,4 @@
+import { generateId } from '@/utils/generateId';
 import { TrayReportGeneration } from '@/utils/trayReportGeneration';
 import { LoadCurveDrawingService } from './TrayDetails/loadCurveDrawingService';
 import { TRAY_REPORT_PLACEHOLDERS } from './TrayDetails/trayReportVariables';
@@ -2047,7 +2048,7 @@ export const TrayDetails = () => {
     const pending = pendingDrawingSave.current;
     const body: DrawingSettingsWrite = pending ?? {
       schemaVersion: 'pathfinder.tray-drawing-settings.write.v1', expectedDrawingInputRevision: drawingResponse.snapshot.drawingInputRevision,
-      expectedRevision: drawingResponse.override.revision, idempotencyKey: crypto.randomUUID(), value: override === null ? null : trayBundleOverrideSchema.parse(override),
+      expectedRevision: drawingResponse.override.revision, idempotencyKey: generateId(), value: override === null ? null : trayBundleOverrideSchema.parse(override),
     };
     pendingDrawingSave.current = body; setBundleSaving(true); setDrawingSaveUnknown(false); setDrawingSaveError(null);
     try {
@@ -2850,7 +2851,7 @@ export const TrayDetails = () => {
       const exportBody = {
         schemaVersion: 'pathfinder.tray-drawing-export.write.v1' as const,
         snapshotId: drawingResponse.snapshot.snapshotId, expectedContentSha256: drawingResponse.snapshot.contentSha256,
-        idempotencyKey: crypto.randomUUID(), files: [
+        idempotencyKey: generateId(), files: [
           { kind: 'load-curve' as const, fileName: loadCurve, contentType: 'image/jpeg' as const, base64: await generation.wait(drawingBlobBase64(loadCurveBlob)) },
           { kind: 'bundles' as const, fileName: bundles, contentType: 'image/jpeg' as const, base64: await generation.wait(drawingBlobBase64(bundlesBlob)) },
           { kind: 'report' as const, fileName: report, contentType: WORD_MIME_TYPE as 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', base64: await generation.wait(drawingBlobBase64(updatedDocumentBlob)) },

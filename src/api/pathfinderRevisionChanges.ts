@@ -1,3 +1,4 @@
+import { digestSha256 } from '../utils/sha256';
 import { getApiBaseUrl } from './http';
 import {
   parsePurposeJson,
@@ -235,7 +236,7 @@ export async function verifyRevisionContent(value: { contentSha256: string }) {
   const { contentSha256, ...input } = value;
   const actual = [
     ...new Uint8Array(
-      await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalPurposeJson(input))),
+      await digestSha256(new TextEncoder().encode(canonicalPurposeJson(input))),
     ),
   ]
     .map((byte) => byte.toString(16).padStart(2, '0'))

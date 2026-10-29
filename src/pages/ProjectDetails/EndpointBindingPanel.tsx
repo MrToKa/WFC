@@ -1,3 +1,4 @@
+import { generateId } from '@/utils/generateId';
 import { useEffect, useRef, useState } from 'react';
 import {
   Body1,
@@ -66,7 +67,7 @@ export function EndpointBindingPanel(props: EndpointBindingPanelProps) {
   return props.isAdmin ? <AdminEndpointBindingPanel {...props} /> : null;
 }
 function AdminEndpointBindingPanel(props: EndpointBindingPanelProps) {
-  const [newId, setNewId] = useState(() => crypto.randomUUID());
+  const [newId, setNewId] = useState(() => generateId());
   const locationId = props.locationId ?? newId;
   const binding = useEndpointBinding({ ...props, locationId });
   const [draft, setDraft] = useState<Draft>(() => fresh(props.initialName));
@@ -112,7 +113,7 @@ function AdminEndpointBindingPanel(props: EndpointBindingPanelProps) {
     };
   }, [identity, props.initialName]);
   useEffect(() => {
-    if (!props.locationId) setNewId(crypto.randomUUID());
+    if (!props.locationId) setNewId(generateId());
   }, [props.projectId, props.loadedProjectId, props.token, props.locationId]);
   const context = binding.context;
   useEffect(() => {
@@ -199,7 +200,7 @@ function AdminEndpointBindingPanel(props: EndpointBindingPanelProps) {
       aggregateId: current.aggregateId,
       projectionSha256: current.projectionSha256,
       captureFrameId: current.captureFrameId,
-      idempotencyKey: crypto.randomUUID(),
+      idempotencyKey: generateId(),
       reason: draft.reason.trim(),
       location: {
         name: draft.name.normalize('NFC').trim(),
@@ -247,7 +248,7 @@ function AdminEndpointBindingPanel(props: EndpointBindingPanelProps) {
       targetCaptureFrameId: current.captureFrameId,
       objectDecisionId: null,
       frameDecisionId: null,
-      idempotencyKey: crypto.randomUUID(),
+      idempotencyKey: generateId(),
       reason: draft.reason.trim(),
     });
   };
@@ -273,7 +274,7 @@ function AdminEndpointBindingPanel(props: EndpointBindingPanelProps) {
       expectedLocationRevision: decision.expectedLocationRevision,
       expectedHeadId: decision.sourceHeadId,
       expectedSelectionRevision: decision.target.selectionRevision,
-      idempotencyKey: crypto.randomUUID(),
+      idempotencyKey: generateId(),
       reason: draft.reason.trim(),
     });
   };

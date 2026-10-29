@@ -1,3 +1,4 @@
+import { digestSha256 } from '../../../utils/sha256';
 import { z } from 'zod';
 import { barrierCanonicalJson, barrierModelScopeSchema, type BarrierModelScope } from '../../../../shared/pathfinderBarriers';
 import { policyHashSchema, policyUuidSchema } from '../../../../shared/pathfinderPurposePolicy';
@@ -41,7 +42,7 @@ const recordDomain = (value: BarrierPendingCommand) => value.schemaVersion === '
   ? 'wfc.pf.barrier-pending-record.v2' : 'wfc.pf.barrier-pending-record.v1';
 export async function barrierPendingHash(value: unknown): Promise<string> {
   const bytes = new TextEncoder().encode(barrierCanonicalJson(value));
-  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(value => value.toString(16).padStart(2, '0')).join('');
+  return [...new Uint8Array(await digestSha256(bytes))].map(value => value.toString(16).padStart(2, '0')).join('');
 }
 export async function barrierPendingTokenHash(token: string): Promise<string> {
   if (!token || token.length > 65_536) throw new Error('BARRIER_PENDING_TOKEN_INVALID');

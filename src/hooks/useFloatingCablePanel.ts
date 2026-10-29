@@ -1,3 +1,4 @@
+import { generateId } from '@/utils/generateId';
 import { useCallback, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
 
 export type FloatingCableWindowRequest = { window: Window | null; blocked: boolean; id: string };
@@ -12,7 +13,7 @@ type Options = { open: boolean; title: string; scopeKey: ScopeKey; width?: numbe
 export function requestFloatingCableWindow(options: WindowOptions, existing?: FloatingCableWindowRequest | null): FloatingCableWindowRequest {
   try {
     if (existing?.window && !existing.window.closed) { existing.window.focus(); return existing; }
-  } catch { return { window: null, blocked: true, id: crypto.randomUUID() }; }
+  } catch { return { window: null, blocked: true, id: generateId() }; }
   let child: Window | null = null;
   try {
     child = window.open('about:blank', '_blank', `popup=yes,width=${options.width ?? 520},height=${options.height ?? 780},resizable=yes,scrollbars=yes`);
@@ -21,7 +22,7 @@ export function requestFloatingCableWindow(options: WindowOptions, existing?: Fl
     child?.close();
     child = null;
   }
-  return { window: child, blocked: child === null, id: crypto.randomUUID() };
+  return { window: child, blocked: child === null, id: generateId() };
 }
 
 function copyAttributes(source: HTMLElement, destination: HTMLElement) {

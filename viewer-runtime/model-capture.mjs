@@ -1,3 +1,4 @@
+import { digestSha256 } from './sha256.mjs';
 // Protected-runtime capture only. Importing this module does not read SDK globals.
 // The parent application uses only the pure assembler and the bounded bridge.
 import { validateModelCaptureInputDescriptor, validateModelCaptureInputScope, modelCaptureScopeBytes, CAPTURE_INPUT_LIMITS } from './capture-input.mjs';
@@ -106,7 +107,7 @@ export async function* captureSelectedModel(viewer, input, { signal, onProgress,
   active();
   if (request.inputScope) {
     const inputBytes = modelCaptureScopeBytes(request), namesBytes = encoder.encode(serialize(request.equipmentNames));
-    const hash = async data => { active(); const value = Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', data))).map(v => v.toString(16).padStart(2, '0')).join(''); active(); return value; };
+    const hash = async data => { active(); const value = Array.from(new Uint8Array(await digestSha256(data))).map(v => v.toString(16).padStart(2, '0')).join(''); active(); return value; };
     if (request.equipmentNames.length !== request.inputScope.equipmentNameCount || inputBytes.length !== request.inputScope.inputUtf8Bytes || inputBytes.length > CAPTURE_INPUT_LIMITS.bytes || await hash(inputBytes) !== request.inputScope.scopeSha256 || await hash(namesBytes) !== request.inputScope.equipmentNamesSha256) refuse('Staged capture scope digest mismatch.');
   }
   const sdk = globalThis.Autodesk?.Viewing?.Private, THREE = globalThis.THREE;
@@ -135,7 +136,7 @@ export async function* captureSelectedModel(viewer, input, { signal, onProgress,
   const evidence = { sdkVersion: String(globalThis.LMV_VIEWER_VERSION ?? 'unknown'), matrixPrecision: 'binary64', upVector: up, metresPerDisplayUnit: scale, globalOffsetDisplayUnits: offset, globalOffsetMetres: offset.map(value => value * scale), displayToWorldMetres: Array.from(displayToWorld.elements), modelTransform: model.getModelTransform?.() ? Array.from(model.getModelTransform().elements) : null, placementTransform: model.getPlacementTransform?.() ? Array.from(model.getPlacementTransform().elements) : null, composition: 'canonicalVertex = displayToWorldMetres * sdkFragmentWorldMatrix * decodedLocalVertex; placement/root transform is not applied twice.', sourceLinkVerified: false, nativeVisibilityKnown: false, fragments: [] };
   const lookup = request.lookupRouteCodes !== undefined;
   const captureScope = { ...(request.preparationSlice ? { preparationSlice: request.preparationSlice } : lookup ? { lookupRouteCodes: request.lookupRouteCodes, visibility: 'current-sdk-display-only-native-unknown' } : request.routeRules ? { routeRules: request.routeRules } : { routeCodes: request.routeCodes, allowedCategories: request.allowedCategories }), equipmentNames: request.equipmentNames };
-  const metadataHash = Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', encoder.encode(serialize({ ...evidence, scope: captureScope }))))).map(value => value.toString(16).padStart(2, '0')).join('');
+  const metadataHash = Array.from(new Uint8Array(await digestSha256(encoder.encode(serialize({ ...evidence, scope: captureScope }))))).map(value => value.toString(16).padStart(2, '0')).join('');
   const header = { schemaVersion: 'pathfinder.model.snapshot.v1', model: { projectId: request.projectId, modelVersionId: request.modelVersionId, contentSha256: request.contentFingerprint }, capture: { adapterVersion: lookup ? 'wfc.protected-lookup-capture.v1' : 'wfc.protected-selected-capture.v1', ...(lookup ? { lookupRouteCodes: request.lookupRouteCodes } : {}), ...(request.inputScope ? { inputScope: { ...request.inputScope, propertyScan: null } } : {}), sourceKind: 'converted', inventoryComplete: false, geometryComplete: false, unitsVerified: false, transformsVerified: false, planningVisibilityKnown: false, sourceLinkVerified: false, evidenceSha256: [metadataHash] }, coordinates: { vertexFrame: 'canonical-world-metres', sourceUnits, metresPerSourceUnit: scale, sourceToWorldMetres: Array.from(sourceToWorld.elements), globalOffsetMetres: offset.map(value => value * scale), displayToWorldMetres: Array.from(displayToWorld.elements) } };
   validateHeader(header);
   let eventCount = 0, transportBytes = 0, snapshotBytes = size(header);

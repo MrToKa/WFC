@@ -1,3 +1,4 @@
+import { generateId } from '@/utils/generateId';
 import { useState } from 'react';
 import { Button, Caption1, ProgressBar, Spinner } from '@fluentui/react-components';
 import { usePathfinderRecalculations, type RecalculationAccess } from './hooks/usePathfinderRecalculations';
@@ -18,7 +19,7 @@ export function PathFinderRecalculationPanel(props: RecalculationPanelProps) {
   const timeoutValue = Number(timeout), validOptions = recalculationPreferencesSchema.safeParse(props.preferences).success && recalculationTimeoutSchema.safeParse(timeoutValue).success;
   const send = (action: RecalculationCommand['action']) => {
     if (unavailable || !context || action === 'enable' && !validOptions) return;
-    const common = { schemaVersion: 'wfc.pf.recalculation-command.v1' as const, expectedControlRevision: context.controlRevision, idempotencyKey: crypto.randomUUID(), reason: `Administrator requested ${action} from Path Finder.` };
+    const common = { schemaVersion: 'wfc.pf.recalculation-command.v1' as const, expectedControlRevision: context.controlRevision, idempotencyKey: generateId(), reason: `Administrator requested ${action} from Path Finder.` };
     if ((action === 'resume' || action === 'retry') && !context.automaticPairPolicy) return;
     state.command(action === 'enable' ? { ...common, schemaVersion: 'wfc.pf.recalculation-command.v2', action,
       preferences: { ...props.preferences! }, timeoutMilliseconds: timeoutValue, automaticPairPolicy: { ...AUTOMATIC_PAIR_POLICY } }
