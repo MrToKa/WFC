@@ -52,6 +52,9 @@ async function request(projectId: string, token: string, command?: ModelLocation
       throw new ModelLocationMatchApiError(code, response.status, outcome,
         response.status === 503 && busyCodes.has(code) ? 'The project is temporarily busy. The same saved location assignment is retained.'
           : response.status === 401 || response.status === 403 ? 'Current administrator access is required. Any pending assignment is retained.'
+          : response.status === 409 && code === 'ENDPOINT_PREPARATION_REQUIRED'
+            ? 'The active model has no valid published routing preparation. In Routes, choose Discover project tray candidates or Retry tray update, then retry Find and assign From/To. '
+              + (command ? 'Existing locations are kept. Preserve and reconcile any pending assignment before starting again.' : 'No location assignment was submitted.')
           : response.status === 409 ? 'The project, model or locations changed. Reconcile any pending assignment before finding locations again.'
             : 'Location matching could not be completed. Any pending assignment is retained.');
     }
