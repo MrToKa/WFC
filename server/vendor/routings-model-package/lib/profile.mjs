@@ -29,12 +29,12 @@ export const TYPESET_TUPLES = Object.freeze([
   ['Viewpoint', 'ViewpointDefinition', 1], ['NamedItemTree', 'NamedItemTreeNode', 1],
 ].map(([className, type, version]) => Object.freeze({ class: PLATFORM + className, type: PLATFORM + type, version })));
 export const JSON_BASENAMES = Object.freeze([
-  'Materials.json.gz', 'objects_attrs.json.gz', 'objects_avs.json.gz',
+  'Materials.json.gz', 'ProteinMaterials.json.gz', 'objects_attrs.json.gz', 'objects_avs.json.gz',
   'objects_ids.json.gz', 'objects_offs.json.gz', 'objects_vals.json.gz', 'objects_viewables.json.gz',
 ]);
 const IMAGE_EXTENSION = /[.](?:png|jpe?g)$/i;
 const JSON_TYPES = new Map([
-  ['ProteinMaterials', 'Materials.json.gz'],
+  ['ProteinMaterials', ['Materials.json.gz', 'ProteinMaterials.json.gz']],
   [PLATFORM + 'PropertyAttributes', 'objects_attrs.json.gz'],
   [PLATFORM + 'PropertyAVs', 'objects_avs.json.gz'],
   [PLATFORM + 'PropertyIDs', 'objects_ids.json.gz'],
@@ -122,45 +122,127 @@ function validateMetadata(value) {
   }
 }
 
-function validateMaterials(value) {
+function validateMaterials(value, { protein = false, references, check }) {
   fields(value, ['name', 'version', 'scene', 'materials'], [], 'Materials root');
-  if (value.name !== 'LMVTK Simple Materials' || value.version !== '1.0') unsupported('Unsupported material name or version.');
+  if (value.name !== (protein ? 'LMVTK Protein Materials' : 'LMVTK Simple Materials') || value.version !== '1.0') unsupported('Unsupported material name or version.');
   fields(value.scene, ['SceneUnit', 'YIsUp'], [], 'Material scene');
   if (!size(value.scene.SceneUnit) || ![0, 1].includes(value.scene.YIsUp) || !object(value.materials)) unsupported('Unsupported material scene or records.');
-  let count = 0;
+  const boundedString = item => typeof item === 'string' && item.length <= 65536 && !/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(item);
+  const stringArray = items => Array.isArray(items) && items.length <= 4096 && items.every(boundedString);
+  const imageBindings = new Set();
+  let emptyTextureMaps = 0, textureBindings = 0;
+  function imageReference(uri) {
+    if (!text(uri)) unsupported('A material bitmap URI is absent or invalid.');
+    if (/^[A-Za-z][A-Za-z0-9+.-]*:|^\/\//.test(uri)) fail('EXTERNAL_REFERENCE', 'Material texture URI must not contain a scheme or network destination.');
+    // Match the pinned SDK: an asset ID has priority, otherwise use its exact
+    // relative URI. Never resolve traversal, encoded separators or aliases.
+    validateResourcePath(PREFIX + uri);
+    const ids = [...references].filter(([, asset]) => asset.id.toLowerCase() === uri.toLowerCase());
+    if (ids.length > 1) unsupported('Ambiguous material image asset identity.');
+    const row = ids[0] ?? [...references].find(([resourcePath]) => resourcePath === PREFIX + uri);
+    if (!row || row[1].type !== PLATFORM + 'Image') fail('RESOURCE_MISSING', 'Material bitmap does not resolve to a declared image.');
+    return row[0];
+  }
   for (const outer of Object.values(value.materials)) {
+    check();
     fields(outer, ['version', 'userassets', 'materials'], [], 'Material group');
     if (outer.version !== 2 || !Array.isArray(outer.userassets) || !outer.userassets.every(text) || !object(outer.materials)) unsupported('Unsupported material group shape.');
-    for (const id of outer.userassets) if (!Object.hasOwn(outer.materials, id)) unsupported('Material userasset points to an absent inner material.');
-    for (const inner of Object.values(outer.materials)) {
-      fields(inner, ['tag', 'proteinType', 'definition', 'properties', 'transparent', 'textures'], [], 'Inner material');
-      if (typeof inner.tag !== 'string' || typeof inner.proteinType !== 'string' || inner.definition !== 'SimplePhong' || typeof inner.transparent !== 'boolean') unsupported('Unsupported inner material definition.');
-      if (!object(inner.textures) || Object.keys(inner.textures).length !== 0) unsupported('V1 permits only empty material texture maps.');
-      fields(inner.properties, [], ['integers', 'booleans', 'scalars', 'colors'], 'Material properties');
+    for (const id of outer.userassets) {
+      if (!Object.hasOwn(outer.materials, id)) unsupported('Material userasset points to an absent inner material.');
+      if (!(protein ? ['SimplePhong', 'Generic'] : ['SimplePhong']).includes(outer.materials[id]?.definition)) unsupported('Unsupported root material definition.');
+    }
+    const edges = new Map(), bitmapPaths = new Map();
+    function connections(entry, targets) {
+      if (!Array.isArray(entry.connections) || entry.connections.length > 4096 || !entry.connections.every(text)) unsupported('Invalid material connections.');
+      for (const id of entry.connections) {
+        if (!Object.hasOwn(outer.materials, id)) unsupported('Material connection points to an absent inner material.');
+        targets.push(id);
+      }
+    }
+    for (const [id, inner] of Object.entries(outer.materials)) {
+      check();
+      fields(inner, ['tag', 'definition', 'properties'], ['proteinType', 'transparent', 'textures', 'categories', 'keywords'], 'Inner material');
+      const supported = protein ? ['SimplePhong', 'Generic', 'UnifiedBitmap'] : ['SimplePhong', 'UnifiedBitmap'];
+      if (!boundedString(inner.tag) || !supported.includes(inner.definition) ||
+        inner.proteinType !== undefined && !boundedString(inner.proteinType) ||
+        inner.transparent !== undefined && typeof inner.transparent !== 'boolean' ||
+        inner.categories !== undefined && !stringArray(inner.categories) ||
+        inner.keywords !== undefined && !stringArray(inner.keywords)) unsupported('Unsupported inner material definition.');
+      if (inner.definition === 'SimplePhong' && (typeof inner.transparent !== 'boolean' || !object(inner.textures))) unsupported('Unsupported SimplePhong material shape.');
+      const targets = []; edges.set(id, targets);
+      const categories = protein ? ['integers', 'booleans', 'scalars', 'colors', 'strings', 'uris', 'textures', 'choicelists', 'uuids', 'references']
+        : ['integers', 'booleans', 'scalars', 'colors', 'uris'];
+      fields(inner.properties, [], categories, 'Material properties');
       for (const [kind, properties] of Object.entries(inner.properties)) {
         if (!object(properties)) unsupported('Invalid material property category.');
-        for (const entry of Object.values(properties)) {
-          if (kind === 'integers') { if (!Number.isSafeInteger(entry)) unsupported('Invalid integer material property.'); }
-          else if (kind === 'booleans') { if (typeof entry !== 'boolean') unsupported('Invalid boolean material property.'); }
-          else if (kind === 'scalars') {
-            fields(entry, ['units', 'values'], [], 'Material scalar');
-            if (typeof entry.units !== 'string' || !Array.isArray(entry.values) || !entry.values.every(Number.isFinite)) unsupported('Invalid scalar material property.');
-          } else {
-            fields(entry, ['values'], [], 'Material color');
-            if (!Array.isArray(entry.values)) unsupported('Invalid color material property.');
+        for (const [propertyName, entry] of Object.entries(properties)) {
+          check();
+          if (kind === 'integers' && Number.isSafeInteger(entry) || kind === 'booleans' && typeof entry === 'boolean') continue;
+          if (kind === 'references' || kind === 'textures') {
+            fields(entry, ['connections'], [], 'Material connection');
+            connections(entry, targets); continue;
+          }
+          fields(entry, kind === 'scalars' ? ['units', 'values'] : ['values'], protein ? ['connections'] : [], 'Material property');
+          if (!Array.isArray(entry.values) || entry.values.length > 4096) unsupported('Invalid material value array.');
+          if (entry.connections !== undefined) connections(entry, targets);
+          if (kind === 'scalars') {
+            if (!boundedString(entry.units) || !entry.values.every(Number.isFinite)) unsupported('Invalid scalar material property.');
+          } else if (kind === 'integers' || kind === 'choicelists') {
+            if (!protein || !entry.values.every(Number.isSafeInteger)) unsupported('Invalid integer material property.');
+          } else if (kind === 'booleans') {
+            if (!protein || !entry.values.every(item => typeof item === 'boolean')) unsupported('Invalid boolean material property.');
+          } else if (kind === 'colors') {
             for (const color of entry.values) {
               fields(color, ['r', 'g', 'b', 'a'], [], 'Material RGBA');
               if (!Object.values(color).every(Number.isFinite)) unsupported('Invalid RGBA material value.');
             }
+          } else {
+            if (!stringArray(entry.values)) unsupported('Invalid textual material property.');
+            if (kind === 'uris') {
+              if (!['thumbnail', 'unifiedbitmap_Bitmap'].includes(propertyName) || !protein && (propertyName !== 'unifiedbitmap_Bitmap' || inner.definition !== 'UnifiedBitmap')) unsupported('Unsupported material URI property.');
+              if (!protein) {
+                if (entry.values.length !== 1) unsupported('A material bitmap must declare exactly one URI.');
+                bitmapPaths.set(id, imageReference(entry.values[0]));
+              }
+            }
           }
         }
       }
-      count++;
+      if (inner.textures !== undefined) {
+        if (!object(inner.textures)) unsupported('Invalid material texture map.');
+        if (Object.keys(inner.textures).length === 0) emptyTextureMaps++;
+        for (const [slot, entry] of Object.entries(inner.textures)) {
+          if (inner.definition !== 'SimplePhong' || !['generic_diffuse', 'generic_bump', 'generic_specular', 'generic_alpha'].includes(slot)) unsupported('Unsupported material texture slot.');
+          fields(entry, ['connections'], [], 'Material texture');
+          connections(entry, targets);
+          if (entry.connections.length !== 1 || outer.materials[entry.connections[0]].definition !== 'UnifiedBitmap') unsupported('A SimplePhong texture must connect to one UnifiedBitmap.');
+        }
+      }
+    }
+    // Bounded local graph traversal proves all connections terminate. Protein
+    // Generic/SimplePhong roots are supplemental catalog data: the pinned SDK
+    // selects Protein roots only for Prism definitions, which this profile
+    // rejects. Their thumbnails/bitmap strings therefore are not fetch edges.
+    const done = new Set(), visiting = new Set();
+    function visit(id, depth) {
+      check();
+      if (depth > 64 || visiting.has(id)) unsupported('Cyclic or excessive material connection graph.');
+      if (done.has(id)) return;
+      visiting.add(id);
+      for (const next of edges.get(id)) visit(next, depth + 1);
+      visiting.delete(id); done.add(id);
+    }
+    for (const id of edges.keys()) visit(id, 0);
+    if (!protein) {
+      for (const inner of Object.values(outer.materials)) for (const entry of Object.values(inner.textures ?? {})) {
+        const resourcePath = bitmapPaths.get(entry.connections[0]);
+        if (!resourcePath) unsupported('Connected UnifiedBitmap has no usable image URI.');
+        textureBindings++; imageBindings.add(resourcePath);
+      }
     }
   }
-  return count;
+  return { emptyTextureMaps, textureBindings, images: imageBindings };
 }
-
 
 // Raster images are inert manifest-declared resources. These checks validate
 // their container/header, not pixel decoding or arbitrary material schemas.
@@ -315,10 +397,11 @@ function validateSvfManifest(value, resources, archive) {
     if (asset.type === PLATFORM + 'Image') {
       if (!IMAGE_EXTENSION.test(asset.URI)) unsupported('Declared image is not a supported PNG/JPEG sibling.');
     } else if (JSON_TYPES.has(asset.type)) {
-      if (asset.URI !== JSON_TYPES.get(asset.type)) unsupported('Unknown JSON asset type/basename binding.', { path: resolved });
+      if (!(Array.isArray(JSON_TYPES.get(asset.type)) ? JSON_TYPES.get(asset.type) : [JSON_TYPES.get(asset.type)]).includes(asset.URI)) unsupported('Unknown JSON asset type/basename binding.', { path: resolved });
     } else if (!/\.(pf|bin|pack)$/.test(asset.URI)) unsupported('Unsupported binary asset suffix.', { path: resolved });
     references.set(resolved, asset);
   }
+  if (references.has(PREFIX + 'ProteinMaterials.json.gz') && !references.has(PREFIX + 'Materials.json.gz')) unsupported('Supplemental Protein materials require Simple Materials.');
   if (embedded !== 1) fail('RESOURCE_MISSING', 'SVF must declare exactly one embed:/metadata.json asset.');
   for (const resource of resources.values()) {
     if (resource.path !== ENTRY && resource.path !== PROPERTY_DB && !references.has(resource.path)) {
@@ -552,13 +635,18 @@ export async function validateProfile(provider, { limits = DEFAULT_LIMITS, signa
     }
   }
 
-  let materialMaps = 0, structuredJsonCount = 0;
+  let materialMaps = 0, materialTextureBindings = 0, structuredJsonCount = 0;
+  const materialImages = new Set();
   for (const resource of resources.values()) {
     if (resource.path === ENTRY) continue;
     const basename = resource.path.slice(PREFIX.length), structured = JSON_BASENAMES.includes(basename);
     const data = await inspectResource(resource, structured);
     if (structured) structuredJsonCount++;
-    if (basename === 'Materials.json.gz') materialMaps += validateMaterials(data);
+    if (basename === 'Materials.json.gz' || basename === 'ProteinMaterials.json.gz') {
+      const material = validateMaterials(data, { protein: basename === 'ProteinMaterials.json.gz', references: manifestInfo.references, check });
+      materialMaps += material.emptyTextureMaps; materialTextureBindings += material.textureBindings;
+      for (const image of material.images) materialImages.add(image);
+    }
   }
   check();
   return {
@@ -566,6 +654,7 @@ export async function validateProfile(provider, { limits = DEFAULT_LIMITS, signa
     closure: { status: 'PASS', externalReferences: manifestInfo.references.size, embeddedReferences: 1, additionalResources: ['properties.db'], assetCount: manifestInfo.assetCount, typesetCount: manifestInfo.typesetCount },
     sizes: { rawResourceBytes: totalRaw, resourceCount: resources.size, nestedInflatedBytes, terminalInflatedBytes, inspectedNestedScope: 'SVF entries, recognized gzip JSON and raster image containers', terminalScope: 'Opaque binary/property integrity streams; no semantic execution' },
     embeddedEntries, structuredJsonCount, emptyMaterialTextureMaps: materialMaps,
+    materialTextureBindings, materialReferencedImages: materialImages.size,
     gzip: { status: 'PASS', count: gzip.length, resources: gzip },
     durationMs: Date.now() - started,
   };
