@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "wfc.pf.endpoint-control-receipt.v1",
+  "phase": "immutable",
+  "phaseIntentId": "2790286e-7e90-4292-97a4-4d4e150c001b",
+  "recordedAtUtc": "2026-10-19T03:11:41.636Z",
+  "status": "PASS",
+  "elapsedMilliseconds": 49.860178999999995,
+  "checks": [
+    {
+      "name": "Immutable records refuse deletion",
+      "status": "PASS",
+      "scope": "actual PostgreSQL rollback-only probes; absent optional record families are not separately claimed"
+    }
+  ],
+  "preservationSha256": "262209c85922ae83a1b9b3c252f66c9e7a8153d84e2e85cfc05da33a36c1292a",
+  "cableApply": "NOT_PERFORMED",
+  "nativeParity": "NOT_PERFORMED",
+  "engineeringAcceptance": false
+}

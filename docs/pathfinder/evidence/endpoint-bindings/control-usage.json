@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "wfc.pf.endpoint-control-receipt.v1",
+  "phase": "usage",
+  "phaseIntentId": "f492016b-19ff-4dc4-adad-0be6ffa22f71",
+  "recordedAtUtc": "2026-10-19T03:11:13.430Z",
+  "status": "PASS",
+  "elapsedMilliseconds": 44.630852,
+  "checks": [
+    {
+      "name": "Shared alias counts include both cable ends and multiple cables",
+      "status": "PASS",
+      "scope": "actual all-project cable usage; independent of selected UI cables"
+    }
+  ],
+  "preservationSha256": "262209c85922ae83a1b9b3c252f66c9e7a8153d84e2e85cfc05da33a36c1292a",
+  "cableApply": "NOT_PERFORMED",
+  "nativeParity": "NOT_PERFORMED",
+  "engineeringAcceptance": false
+}

@@ -1,0 +1,193 @@
+{
+  "schemaVersion": "pathfinder.current-inputs.candidate-diagnosis.v1",
+  "status": "SOURCE_DECODING_DIFFERENTIAL_PASS",
+  "inputs": {
+    "candidateReceipt": {
+      "path": "docs/pathfinder/evidence/current-inputs/candidates-20261018T1534Z.json",
+      "sha256": "250df66e5490ba6b6ff7394610c5828fd58fd6856d93aa676bc19bbad0aec01f"
+    },
+    "privateCandidates": {
+      "path": "pathfinder-engine/.scratch/current-candidates-9162fedb-016e-4b0e-b5ba-c2b744125f20/candidates.private.json",
+      "sha256": "d79bfe7584a1f72a3546b735d9d796d85743c6eb9ca4afe6d9f67f12b24a75df"
+    },
+    "currentInput": {
+      "path": "pathfinder-engine/.scratch/current-inputs-2b20a8ae-a435-4d4d-aec4-005bb021a715/current-inputs.private.json",
+      "sha256": "0a84d1327950d4bd1d8420661f526cf1c97fdec5dbaaca71c429bf3e0c3bd897"
+    },
+    "pdb": [
+      {
+        "path": "pathfinder-engine/.scratch/pf2-converted/package/resources/output/0/objects_attrs.json.gz",
+        "sha256": "ee4df15128a2ad51a42603ba7a0bbfb52b1bfbf2cee07139af1fac2545fdac57",
+        "bytes": 997,
+        "decodedBytes": 5948
+      },
+      {
+        "path": "pathfinder-engine/.scratch/pf2-converted/package/resources/output/0/objects_offs.json.gz",
+        "sha256": "9be8c2f8a07b056b2ba713e7896ce8d71dc0b28c5ecd99d0246023267a216de8",
+        "bytes": 1137003,
+        "decodedBytes": 3390880
+      },
+      {
+        "path": "pathfinder-engine/.scratch/pf2-converted/package/resources/output/0/objects_avs.json.gz",
+        "sha256": "7932608146d33fc615ee6c434f9d737ce7cdd492c1a7dd8f7b2eb151a97797b4",
+        "bytes": 4650361,
+        "decodedBytes": 32950895
+      },
+      {
+        "path": "pathfinder-engine/.scratch/pf2-converted/package/resources/output/0/objects_vals.json.gz",
+        "sha256": "ef38e808230ffc76a7669b50f3dd7ab990cf2c5026aa37900c78ae2fb949a733",
+        "bytes": 2443733,
+        "decodedBytes": 28625435
+      },
+      {
+        "path": "pathfinder-engine/.scratch/pf2-converted/package/resources/output/0/objects_ids.json.gz",
+        "sha256": "c0e00414833748b518ef32092affe3ccd380aa712859846a6b8f894305c1c5bb",
+        "bytes": 1155258,
+        "decodedBytes": 9045169
+      }
+    ],
+    "selectedSnapshot": {
+      "path": "pathfinder-engine/.scratch/pf-capacity-7b1ce2e8-46a6-45ad-bf6e-dfcee51a1e20/input/snapshots/75c61dc7-d456-45b0-9052-2a0822240350.json",
+      "sha256": "b47365401aaf078374607c944e22ac5100f2aa6fe4389c056fbdd963526f17ed"
+    },
+    "sdkWorker": {
+      "path": "viewer-runtime/sdk/7.130.0/lmvworker.min.js",
+      "sha256": "9637ed11308c549b6dbd290d6270e53587122ebb5ffd7f87987ea9a8f897f46a"
+    }
+  },
+  "population": {
+    "mappedObjects": 438156,
+    "instancePairs": 0,
+    "eligiblePropertyPairs": 425133,
+    "eligiblePropertyPopulations": [
+      {
+        "attributeId": 13,
+        "displayName": "Name",
+        "category": "Item",
+        "pairs": 392674,
+        "objects": 392674,
+        "nonemptyPairs": 392674,
+        "firstObject": 1
+      },
+      {
+        "attributeId": 27,
+        "displayName": "NAME",
+        "category": "AVEVA",
+        "pairs": 32459,
+        "objects": 32459,
+        "nonemptyPairs": 32459,
+        "firstObject": 321839
+      }
+    ],
+    "objectsWithNonemptyEligibleAliases": 392674,
+    "totalDistinctPerObjectAliases": 416527,
+    "exactEndpointMatchesInEligibleAliases": 0,
+    "exactEndpointKeysAnywhereInRawPdbValues": 1,
+    "rawValueMatchingAttributeIds": [
+      69
+    ],
+    "decoder": {
+      "prototypeObjectsCached": 0,
+      "inheritedReads": 0
+    }
+  },
+  "privateResultCounts": {
+    "rows": 1527,
+    "missingRows": 1527,
+    "treeCandidates": 0,
+    "mappingOnlyCandidates": 0
+  },
+  "differential": {
+    "actualPdbObjectsCompared": 115,
+    "propertyArrayDifferences": 0,
+    "method": "Unmodified six pinned SDK property methods, actual PDB arrays. JSON value lookup adapter only; no live SDK/browser/native execution.",
+    "selectionRecipe": "All52 retained selected snapshot dbIds, mapping-only388764, first16 mapped objects containing each eligible property attribute,32 evenly spaced mapped IDs. Deduplicate, cap128, sortascending.",
+    "sampleDbIdsSha256": "41136681ed9f921d198bdb4696a73f0e32908b8c5e135d46b57edc70e620f90a",
+    "comparisonDigestsSha256": "73c639b647d9ae73eac5580e75688d999384730bd6a02a5336e53d6321cec6d1"
+  },
+  "retainedSdkCaptureComparison": {
+    "objects": 52,
+    "differentFullPropertyArrays": 0,
+    "comparison": "Canonical sorted category/name/string-value arrays from retained52-object SDK-derived snapshot vs decoder; no re-capture."
+  },
+  "safeNamingProfiles": {
+    "endpointKeys": {
+      "values": 1527,
+      "leadingSlash": 0,
+      "leadingEquals": 1449,
+      "hasSlash": 41,
+      "hasEquals": 1493,
+      "hasSpace": 68
+    },
+    "allRawPdbStringValues": {
+      "values": 427049,
+      "leadingSlash": 43206,
+      "leadingEquals": 23854,
+      "hasSlash": 395108,
+      "hasEquals": 142083,
+      "hasSpace": 360714
+    }
+  },
+  "bounds": {
+    "workBudget": 50000000,
+    "rssCap": 1610612736,
+    "elapsedLimit": 180000,
+    "elapsedMilliseconds": 1169.2018,
+    "peakRssBytes": 489369600
+  },
+  "scope": "Host read-only diagnostic. No labels, business rows, or new matching transformations exported. No DB/runtime/source mutations; metadata candidates are not bindings or engineering proof.",
+  "recordedAt": "2026-10-18T15:40:28.719Z",
+  "executedBy": "viewer_tab_capabilities",
+  "execution": {
+    "mainToolChunk": "032e85",
+    "mainExitCode": 0,
+    "databaseQueries": 0,
+    "databaseWrites": 0,
+    "applicationBrowserContainerActions": 0,
+    "sourceEdits": 0,
+    "wholeCandidateAuditRerun": false,
+    "inventoryPartsReread": false
+  },
+  "followupAttributeCheck": {
+    "matchingRawValueIndices": 1,
+    "matchedEndpointKeyUsageCount": 1,
+    "attribute": {
+      "attributeId": 69,
+      "attributeName": "lcldrvm_props:lcldrvm_prop_:visotext",
+      "displayName": ":VISOTEXT",
+      "category": "AVEVA",
+      "type": 20,
+      "flags": 0,
+      "occurrences": 1,
+      "exampleDbIds": [
+        322290
+      ]
+    },
+    "populationVerification": [
+      {
+        "attributeId": 13,
+        "pairs": 392674,
+        "distinctObjects": 392674,
+        "duplicatePairsOnSameObject": 0
+      },
+      {
+        "attributeId": 27,
+        "pairs": 32459,
+        "distinctObjects": 32459,
+        "duplicatePairsOnSameObject": 0
+      }
+    ],
+    "inlineKeyFalseAssociationExcluded": true,
+    "scope": "Technical field definitions/aggregate counts only; the matching business value was not printed or published and was not promoted to an alias."
+  },
+  "interpretation": {
+    "supported": "Zero accepted exact candidates is consistent with the actual model name/field contents under the accepted whitelist; there is no observed decoder mismatch in115 actual-source differentials or all52 retained SDK-captured property arrays.",
+    "notEstablished": [
+      "No per-record independent SDK replay across all438156 mapped objects.",
+      "No proof that the model is the wrong model; active content identity passed the separate source-copy/candidate gates.",
+      "No approved namespace rewrite, punctuation stripping, fuzzy matching or new property alias policy.",
+      "No usable equipment role, geometric endpoint, native visibility, confirmed binding or engineering acceptance."
+    ],
+    "nextBoundary": "Review actual name/field namespace and necessary endpoint mappings with explicit evidence. Do not silently admit the non-whitelisted :VISOTEXT field or transform endpoint identifiers."
+  }
+}

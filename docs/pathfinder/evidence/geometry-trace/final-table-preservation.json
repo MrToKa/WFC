@@ -1,0 +1,840 @@
+{
+  "status": "PASS",
+  "recordedAt": "2026-10-19T02:26:44.351Z",
+  "scope": "Every89pre-R4 table; exact ordinary-auth and ownedUI preparation/lookup deltas separately qualified; all business/model/routing/length/install/write-revision/drawing rows exact",
+  "baselineTables": 89,
+  "currentTables": 95,
+  "exactTables": 75,
+  "deltas": [
+    {
+      "table": "pf_artifact_routing_scopes",
+      "status": "OWNED_FIXTURE_DELTA",
+      "removedRows": 0,
+      "addedRows": 1
+    },
+    {
+      "table": "pf_artifacts",
+      "status": "OWNED_FIXTURE_DELTA",
+      "removedRows": 0,
+      "addedRows": 1
+    },
+    {
+      "table": "pf_jobs",
+      "status": "OWNED_FIXTURE_DELTA",
+      "removedRows": 0,
+      "addedRows": 1
+    },
+    {
+      "table": "pf_lookup_results",
+      "status": "OWNED_FIXTURE_DELTA",
+      "removedRows": 0,
+      "addedRows": 1
+    },
+    {
+      "table": "pf_model_objects",
+      "status": "OWNED_FIXTURE_DELTA",
+      "removedRows": 0,
+      "addedRows": 13
+    },
+    {
+      "table": "pf_preparation_aggregates",
+      "status": "OWNED_FIXTURE_DELTA",
+      "removedRows": 0,
+      "addedRows": 1
+    },
+    {
+      "table": "pf_preparation_commands",
+      "status": "OWNED_FIXTURE_DELTA",
+      "removedRows": 0,
+      "addedRows": 2
+    },
+    {
+      "table": "pf_preparation_events",
+      "status": "OWNED_FIXTURE_DELTA",
+      "removedRows": 0,
+      "addedRows": 3
+    },
+    {
+      "table": "pf_preparation_parts",
+      "status": "OWNED_FIXTURE_DELTA",
+      "removedRows": 0,
+      "addedRows": 1
+    },
+    {
+      "table": "pf_preparation_sessions",
+      "status": "OWNED_FIXTURE_DELTA",
+      "removedRows": 0,
+      "addedRows": 1
+    },
+    {
+      "table": "pf_project_preparations",
+      "status": "OWNED_FIXTURE_DELTA",
+      "removedRows": 1,
+      "addedRows": 1
+    },
+    {
+      "table": "pf_project_state",
+      "status": "OWNED_FIXTURE_DELTA",
+      "removedRows": 1,
+      "addedRows": 1
+    },
+    {
+      "table": "viewer_login_bindings",
+      "status": "ORDINARY_AUTH_DELTA",
+      "removedRows": 0,
+      "addedRows": 2
+    },
+    {
+      "table": "viewer_resource_sessions",
+      "status": "ORDINARY_AUTH_DELTA",
+      "removedRows": 1,
+      "addedRows": 4
+    }
+  ],
+  "newTables": [
+    {
+      "table": "pf_capture_evidence",
+      "rows": 1,
+      "allOwnedFixture": true
+    },
+    {
+      "table": "pf_geometry_object_revisions",
+      "rows": 26,
+      "allOwnedFixture": true
+    },
+    {
+      "table": "pf_geometry_trace_diagnostics",
+      "rows": 26,
+      "allOwnedFixture": true
+    },
+    {
+      "table": "pf_geometry_trace_intents",
+      "rows": 2,
+      "allOwnedFixture": true
+    },
+    {
+      "table": "pf_geometry_trace_receipts",
+      "rows": 2,
+      "allOwnedFixture": true
+    },
+    {
+      "table": "pf_geometry_trace_sets",
+      "rows": 2,
+      "allOwnedFixture": true
+    }
+  ],
+  "results": [
+    {
+      "table": "cable_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "cable_type_default_materials",
+      "status": "PASS",
+      "beforeRows": 9,
+      "afterRows": 9,
+      "beforeSha256": "d3815a4e45a9b2aaa67effbf2c31e2d4b7b2724b926727932e85246da4ec448a",
+      "afterSha256": "d3815a4e45a9b2aaa67effbf2c31e2d4b7b2724b926727932e85246da4ec448a"
+    },
+    {
+      "table": "cable_types",
+      "status": "PASS",
+      "beforeRows": 53,
+      "afterRows": 53,
+      "beforeSha256": "caeaa4379b8fa36543fc7eddcaf1d651d4f2f1b952c6eecac2b0e3bdc46ebcd3",
+      "afterSha256": "caeaa4379b8fa36543fc7eddcaf1d651d4f2f1b952c6eecac2b0e3bdc46ebcd3"
+    },
+    {
+      "table": "cable_versions",
+      "status": "PASS",
+      "beforeRows": 4,
+      "afterRows": 4,
+      "beforeSha256": "75ea3c47bf8e168276f47b3a2e7931c03f2f96d34a32e03ee1baa4c9ed491677",
+      "afterSha256": "75ea3c47bf8e168276f47b3a2e7931c03f2f96d34a32e03ee1baa4c9ed491677"
+    },
+    {
+      "table": "cables",
+      "status": "PASS",
+      "beforeRows": 2143,
+      "afterRows": 2143,
+      "beforeSha256": "4ef8bb8daedc0d083b69195b64a4e0db6fc6a6de3f859b0b6a74d77877e727e8",
+      "afterSha256": "4ef8bb8daedc0d083b69195b64a4e0db6fc6a6de3f859b0b6a74d77877e727e8"
+    },
+    {
+      "table": "material_cable_installation_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_cable_installation_standard_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_cable_type_standard_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_cable_types",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "beforeSha256": "6d5e1e53be024992fce38b11c28dea9479b6ad233d4a5675ca6ec468751fc121",
+      "afterSha256": "6d5e1e53be024992fce38b11c28dea9479b6ad233d4a5675ca6ec468751fc121"
+    },
+    {
+      "table": "material_change_logs",
+      "status": "PASS",
+      "beforeRows": 24,
+      "afterRows": 24,
+      "beforeSha256": "8000392798a6aaa17fd9f2457effe78ee6c350836d03219c5d8e0b4014bfecbb",
+      "afterSha256": "8000392798a6aaa17fd9f2457effe78ee6c350836d03219c5d8e0b4014bfecbb"
+    },
+    {
+      "table": "material_instrument_installation_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_instrument_installation_standard_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_instrument_standard_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_instruments",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_load_curve_points",
+      "status": "PASS",
+      "beforeRows": 803,
+      "afterRows": 803,
+      "beforeSha256": "afbfef79fe67dceafd4e8946126627a6ebdc38546a5a21c11bbde83c1d934e4f",
+      "afterSha256": "afbfef79fe67dceafd4e8946126627a6ebdc38546a5a21c11bbde83c1d934e4f"
+    },
+    {
+      "table": "material_load_curves",
+      "status": "PASS",
+      "beforeRows": 3,
+      "afterRows": 3,
+      "beforeSha256": "c448d8ef66de2d1b98a40aee368da50ba769b1bb5596b4722bcb71e482e9799e",
+      "afterSha256": "c448d8ef66de2d1b98a40aee368da50ba769b1bb5596b4722bcb71e482e9799e"
+    },
+    {
+      "table": "material_product_identities",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_support_standard_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_supports",
+      "status": "PASS",
+      "beforeRows": 5,
+      "afterRows": 5,
+      "beforeSha256": "dc4b926fa6d677655f77477042f901e915fac1bd01462fdae80c15f58f25055c",
+      "afterSha256": "dc4b926fa6d677655f77477042f901e915fac1bd01462fdae80c15f58f25055c"
+    },
+    {
+      "table": "material_tray_installation_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_tray_installation_standard_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_tray_standard_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_trays",
+      "status": "PASS",
+      "beforeRows": 15,
+      "afterRows": 15,
+      "beforeSha256": "d11028a3ab29dc81b23c0ce50357e991e51c65b8c529b33a05497bd8e9e3d759",
+      "afterSha256": "d11028a3ab29dc81b23c0ce50357e991e51c65b8c529b33a05497bd8e9e3d759"
+    },
+    {
+      "table": "model_content_reservations",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "model_import_jobs",
+      "status": "PASS",
+      "beforeRows": 4,
+      "afterRows": 4,
+      "beforeSha256": "c4f69c6e32458d4f68cb2efe1ae3a3d371d8745a70721be9032365abd0c13c12",
+      "afterSha256": "c4f69c6e32458d4f68cb2efe1ae3a3d371d8745a70721be9032365abd0c13c12"
+    },
+    {
+      "table": "model_package_aliases",
+      "status": "PASS",
+      "beforeRows": 3,
+      "afterRows": 3,
+      "beforeSha256": "40034db4633e05830eb1e0d65817545593a320323ce4352bac6d2def194a313e",
+      "afterSha256": "40034db4633e05830eb1e0d65817545593a320323ce4352bac6d2def194a313e"
+    },
+    {
+      "table": "model_package_identities",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "beforeSha256": "8d4871d0940e6d3baed4eb681cc9259d5a14f5c6627b1b13f218b4f4e78990d4",
+      "afterSha256": "8d4871d0940e6d3baed4eb681cc9259d5a14f5c6627b1b13f218b4f4e78990d4"
+    },
+    {
+      "table": "model_storage_ownership",
+      "status": "PASS",
+      "beforeRows": 3,
+      "afterRows": 3,
+      "beforeSha256": "a682798f1a01469c6a34a6290de7e31abfb6f5c700a0ff5600c8d47d37f97d1c",
+      "afterSha256": "a682798f1a01469c6a34a6290de7e31abfb6f5c700a0ff5600c8d47d37f97d1c"
+    },
+    {
+      "table": "model_validation_reports",
+      "status": "PASS",
+      "beforeRows": 3,
+      "afterRows": 3,
+      "beforeSha256": "06bbf22e8f8d3529ca0a6bd4faf5ea0ba3a20b09824c9cc96665bb00abcfd404",
+      "afterSha256": "06bbf22e8f8d3529ca0a6bd4faf5ea0ba3a20b09824c9cc96665bb00abcfd404"
+    },
+    {
+      "table": "model_versions",
+      "status": "PASS",
+      "beforeRows": 4,
+      "afterRows": 4,
+      "beforeSha256": "e59857ec4bd70f460ff7c21e04fa5666046d1260123687aff8910e3b4c8b6db8",
+      "afterSha256": "e59857ec4bd70f460ff7c21e04fa5666046d1260123687aff8910e3b4c8b6db8"
+    },
+    {
+      "table": "pf_apply_receipts",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "beforeSha256": "d0daac4c4144be2069652098e6cb8df6ebafe08b6ec52f3908dcfaa4f6df121b",
+      "afterSha256": "d0daac4c4144be2069652098e6cb8df6ebafe08b6ec52f3908dcfaa4f6df121b"
+    },
+    {
+      "table": "pf_artifact_routing_scopes",
+      "status": "OWNED_FIXTURE_DELTA",
+      "beforeRows": 1,
+      "afterRows": 2,
+      "beforeSha256": "2e6815f2d694160aaeb9ce3a0864eb693e55520ee11d44ed185524b935659ea5",
+      "afterSha256": "873e5dbbaf75a57e1afbf54adb1d3260b826d8d858e7eb646864b857975e97c0"
+    },
+    {
+      "table": "pf_artifacts",
+      "status": "OWNED_FIXTURE_DELTA",
+      "beforeRows": 9,
+      "afterRows": 10,
+      "beforeSha256": "a4e8c88d7e9900cc534eb68d8875ddc48270b85ce2c625fc2a28869b22104bd0",
+      "afterSha256": "c2512e159315729310c5e64c8b0245da11b59200ac6d0b32d0da258acf261edc"
+    },
+    {
+      "table": "pf_catalog_events",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "beforeSha256": "1acfe459e1f135b9936a7132708239a0cb888475cb953fa3c6ffb3aacb29be7d",
+      "afterSha256": "1acfe459e1f135b9936a7132708239a0cb888475cb953fa3c6ffb3aacb29be7d"
+    },
+    {
+      "table": "pf_catalog_purpose_incarnations",
+      "status": "PASS",
+      "beforeRows": 7,
+      "afterRows": 7,
+      "beforeSha256": "52ad491c6a9a381c578a5e8d2601618b16bc4abb593234c3e7524be2974cffd8",
+      "afterSha256": "52ad491c6a9a381c578a5e8d2601618b16bc4abb593234c3e7524be2974cffd8"
+    },
+    {
+      "table": "pf_catalog_snapshots",
+      "status": "PASS",
+      "beforeRows": 3,
+      "afterRows": 3,
+      "beforeSha256": "06e93014930faca55a3fb6db4157e2c15592b41063a174683161103683cde213",
+      "afterSha256": "06e93014930faca55a3fb6db4157e2c15592b41063a174683161103683cde213"
+    },
+    {
+      "table": "pf_drawing_export_files",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_drawing_exports",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_drawing_generated_files",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_drawing_policy_history",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_drawing_policy_receipts",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_drawing_purpose_rules",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_job_items",
+      "status": "PASS",
+      "beforeRows": 52,
+      "afterRows": 52,
+      "beforeSha256": "a663bfee57a440fd233ec68e3e5c6e0edd395e5c62142b8071197047dc7b9393",
+      "afterSha256": "a663bfee57a440fd233ec68e3e5c6e0edd395e5c62142b8071197047dc7b9393"
+    },
+    {
+      "table": "pf_jobs",
+      "status": "OWNED_FIXTURE_DELTA",
+      "beforeRows": 45,
+      "afterRows": 46,
+      "beforeSha256": "a4d54ca38cd121d603d527e53935e0b0086176df75517006822686d9e55650f3",
+      "afterSha256": "4a3ffefa29a595fae8ffe01645d0a2fdff60870ed19e958fb3c8bdbfd484693c"
+    },
+    {
+      "table": "pf_location_aliases",
+      "status": "PASS",
+      "beforeRows": 1534,
+      "afterRows": 1534,
+      "beforeSha256": "0652d983c92704cf98267b20c966af577aadaa2401a312056a8682ef47bb0dde",
+      "afterSha256": "0652d983c92704cf98267b20c966af577aadaa2401a312056a8682ef47bb0dde"
+    },
+    {
+      "table": "pf_location_bindings",
+      "status": "PASS",
+      "beforeRows": 6,
+      "afterRows": 6,
+      "beforeSha256": "4237b59e62704a1f2efe97b9dbd06b4d222fcfdee5e8fc26dd55250e1ca0cccf",
+      "afterSha256": "4237b59e62704a1f2efe97b9dbd06b4d222fcfdee5e8fc26dd55250e1ca0cccf"
+    },
+    {
+      "table": "pf_location_events",
+      "status": "PASS",
+      "beforeRows": 1634,
+      "afterRows": 1634,
+      "beforeSha256": "41dd6384eb4401581bd69c09b81e078e0f8ba6f8631382092529eed3ff879c76",
+      "afterSha256": "41dd6384eb4401581bd69c09b81e078e0f8ba6f8631382092529eed3ff879c76"
+    },
+    {
+      "table": "pf_location_matches",
+      "status": "PASS",
+      "beforeRows": 1528,
+      "afterRows": 1528,
+      "beforeSha256": "f9ed70eb6023a792b337a8b060e8d7d1ac1ca781bc151e4b4290079bb1b84f37",
+      "afterSha256": "f9ed70eb6023a792b337a8b060e8d7d1ac1ca781bc151e4b4290079bb1b84f37"
+    },
+    {
+      "table": "pf_locations",
+      "status": "PASS",
+      "beforeRows": 1533,
+      "afterRows": 1533,
+      "beforeSha256": "0d6a26067ab7b614047376d2d340f6549e23320dce8c0157bb925e3daace00d6",
+      "afterSha256": "0d6a26067ab7b614047376d2d340f6549e23320dce8c0157bb925e3daace00d6"
+    },
+    {
+      "table": "pf_lookup_results",
+      "status": "OWNED_FIXTURE_DELTA",
+      "beforeRows": 15,
+      "afterRows": 16,
+      "beforeSha256": "91ea16f20c0381750ce0590e75a69af0ca38f4ca81a13ee13b48732a9ecd89eb",
+      "afterSha256": "1545d91673db4eeaf5e08aa4f0ab73a6a6ab9ba1f7b20f3e3d858408bed4af3b"
+    },
+    {
+      "table": "pf_model_objects",
+      "status": "OWNED_FIXTURE_DELTA",
+      "beforeRows": 159,
+      "afterRows": 172,
+      "beforeSha256": "b0f4ff0b6a5973a524e4a14eda381661c3e3ca1dc7f98b6739a48efad1af34a3",
+      "afterSha256": "9841347567cc067057ce8d475e8a601626f5ba1b6703699a59640fc904dcd5fa"
+    },
+    {
+      "table": "pf_preparation_aggregates",
+      "status": "OWNED_FIXTURE_DELTA",
+      "beforeRows": 1,
+      "afterRows": 2,
+      "beforeSha256": "036b1b2f7623920c41c83efe7fa2a29c7ba3826acf71dde059729adc9c17d2f6",
+      "afterSha256": "fc43540e4925933768da070120521b55556a111fef8fe6a27dbcc16238cdb098"
+    },
+    {
+      "table": "pf_preparation_commands",
+      "status": "OWNED_FIXTURE_DELTA",
+      "beforeRows": 4,
+      "afterRows": 6,
+      "beforeSha256": "e696310686c9edc5dfc6d48b044960d8d8ba9f8a6c9ff123b2adaa4eacc2a5d7",
+      "afterSha256": "b7ad81a191bf47e5fdc651fb482fae6a977c86f8f6a77b595d6de8c115ebf00a"
+    },
+    {
+      "table": "pf_preparation_events",
+      "status": "OWNED_FIXTURE_DELTA",
+      "beforeRows": 4,
+      "afterRows": 7,
+      "beforeSha256": "78458189ea31f0d3563511982990d66f10023ac14293ac8ed26afb8fd83b6e34",
+      "afterSha256": "f81c5f655c8d6619e45cfe0ca42455e2b189e07ee7cc5beb826d48d0078088fd"
+    },
+    {
+      "table": "pf_preparation_parts",
+      "status": "OWNED_FIXTURE_DELTA",
+      "beforeRows": 1,
+      "afterRows": 2,
+      "beforeSha256": "7aa782c452484c9b388e2266a6ffbb87156edee5613e37e0abfabf070beb6551",
+      "afterSha256": "43aab6e40640b00dbf297ceb0a59a847e8c5783299e0d1f6c9b8082cc8a6ab81"
+    },
+    {
+      "table": "pf_preparation_resolution_events",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_preparation_resolutions",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_preparation_sessions",
+      "status": "OWNED_FIXTURE_DELTA",
+      "beforeRows": 2,
+      "afterRows": 3,
+      "beforeSha256": "53badd51f33ac25c7a118b09ec4375235acd5e5364f38fa1041b17ff191ae407",
+      "afterSha256": "f22407f71ec6b9b2d240aea4200e41943ca07c989b524bb14ae4eab45bbdf139"
+    },
+    {
+      "table": "pf_project_preparations",
+      "status": "OWNED_FIXTURE_DELTA",
+      "beforeRows": 2,
+      "afterRows": 2,
+      "beforeSha256": "7de1a2035bf9f15865faba491361f2c1f11d3d90d401a0626536591aa35a47c2",
+      "afterSha256": "f1661ab7bd33da3e7802a6fe71e8f490998183f5786b0434cb74a658aad1b24e"
+    },
+    {
+      "table": "pf_project_state",
+      "status": "OWNED_FIXTURE_DELTA",
+      "beforeRows": 4,
+      "afterRows": 4,
+      "beforeSha256": "41b57bcc568901f27afd5f0cff5e7e254407d78213cad2481db5e8476a67e56b",
+      "afterSha256": "72030d58c1246badb8cde33df91ebb2899d6fd36c2397ee2966625f7017abb64"
+    },
+    {
+      "table": "pf_proposals",
+      "status": "PASS",
+      "beforeRows": 47,
+      "afterRows": 47,
+      "beforeSha256": "60c09b8c4c8b61cbdea27e2f3084b5e55067bae3ac188edfe80d4603821b9998",
+      "afterSha256": "60c09b8c4c8b61cbdea27e2f3084b5e55067bae3ac188edfe80d4603821b9998"
+    },
+    {
+      "table": "pf_purpose_project_state",
+      "status": "PASS",
+      "beforeRows": 4,
+      "afterRows": 4,
+      "beforeSha256": "aa2376b04c10966a3f946a9c3a25af5c5f2c39bddc517cc8aea14be569eb96e0",
+      "afterSha256": "aa2376b04c10966a3f946a9c3a25af5c5f2c39bddc517cc8aea14be569eb96e0"
+    },
+    {
+      "table": "pf_reviews",
+      "status": "PASS",
+      "beforeRows": 6,
+      "afterRows": 6,
+      "beforeSha256": "ae12992d81f09df90d6b2c644b8d7841fdf763fa31326bd06c8fb3108a38e2e8",
+      "afterSha256": "ae12992d81f09df90d6b2c644b8d7841fdf763fa31326bd06c8fb3108a38e2e8"
+    },
+    {
+      "table": "pf_routing_policy_history",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "beforeSha256": "74f59a5acb3c8a70f0569edc7d54d825b47bcdac2eb2c446255bb4d6f8254119",
+      "afterSha256": "74f59a5acb3c8a70f0569edc7d54d825b47bcdac2eb2c446255bb4d6f8254119"
+    },
+    {
+      "table": "pf_routing_policy_receipts",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "beforeSha256": "542ed29de9a6ce7993b6644dda93ba45fe37d7acb49559fff52ab1d1332daefd",
+      "afterSha256": "542ed29de9a6ce7993b6644dda93ba45fe37d7acb49559fff52ab1d1332daefd"
+    },
+    {
+      "table": "pf_routing_purpose_rules",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "beforeSha256": "9d66247ad2dbd5294be37cf0198f3ddcc887a6419f22daff56c29ede33de6762",
+      "afterSha256": "9d66247ad2dbd5294be37cf0198f3ddcc887a6419f22daff56c29ede33de6762"
+    },
+    {
+      "table": "pf_synthetic_projects",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "beforeSha256": "2310f89a1814f9023d83573348a1726048698d829ce15be6015387f016998c40",
+      "afterSha256": "2310f89a1814f9023d83573348a1726048698d829ce15be6015387f016998c40"
+    },
+    {
+      "table": "pf_synthetic_proofs",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "beforeSha256": "1595ccd12715b0763124c09626d2a48fa83fc3ec699f0b1391511ad8c80d913a",
+      "afterSha256": "1595ccd12715b0763124c09626d2a48fa83fc3ec699f0b1391511ad8c80d913a"
+    },
+    {
+      "table": "pf_tray_drawing_settings",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_tray_drawing_settings_history",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_tray_drawing_snapshots",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "beforeSha256": "e944e683a9852c5ccb5eaaeab5a06c080371f9544e7e73322e113be49a56eb38",
+      "afterSha256": "e944e683a9852c5ccb5eaaeab5a06c080371f9544e7e73322e113be49a56eb38"
+    },
+    {
+      "table": "project_change_order_items",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "project_change_order_revisions",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "project_change_orders",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "project_file_versions",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "beforeSha256": "359dd6506ba53ceeeb23b44b80cd538e8f4e24365ceed33b03889fe008a91f7f",
+      "afterSha256": "359dd6506ba53ceeeb23b44b80cd538e8f4e24365ceed33b03889fe008a91f7f"
+    },
+    {
+      "table": "project_files",
+      "status": "PASS",
+      "beforeRows": 2,
+      "afterRows": 2,
+      "beforeSha256": "045f8b3aff24d1a76fd28b8da2e1a98bb36efaec543511d6f4c0ef69a2756d7d",
+      "afterSha256": "045f8b3aff24d1a76fd28b8da2e1a98bb36efaec543511d6f4c0ef69a2756d7d"
+    },
+    {
+      "table": "project_model_selections",
+      "status": "PASS",
+      "beforeRows": 4,
+      "afterRows": 4,
+      "beforeSha256": "c1de60cebe832843361a2b849bb53c0cd59d8106e5667853732208a36dbc4c11",
+      "afterSha256": "c1de60cebe832843361a2b849bb53c0cd59d8106e5667853732208a36dbc4c11"
+    },
+    {
+      "table": "project_roxtec_entries",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "project_support_distances",
+      "status": "PASS",
+      "beforeRows": 14,
+      "afterRows": 14,
+      "beforeSha256": "ecb4120d823abee1b05128ec41b48835a9fb550491a2549491c5ac1aac40da99",
+      "afterSha256": "ecb4120d823abee1b05128ec41b48835a9fb550491a2549491c5ac1aac40da99"
+    },
+    {
+      "table": "project_tray_purpose_templates",
+      "status": "PASS",
+      "beforeRows": 6,
+      "afterRows": 6,
+      "beforeSha256": "8284f8e88d4dbc3c0a1f406257c6630938729cbf957958c47a659931af0371fa",
+      "afterSha256": "8284f8e88d4dbc3c0a1f406257c6630938729cbf957958c47a659931af0371fa"
+    },
+    {
+      "table": "projects",
+      "status": "PASS",
+      "beforeRows": 4,
+      "afterRows": 4,
+      "beforeSha256": "54395336515f01f18f7c5f30f9d5b3ee7f0f6c9ce05fe0179a95fe08963a3cf2",
+      "afterSha256": "54395336515f01f18f7c5f30f9d5b3ee7f0f6c9ce05fe0179a95fe08963a3cf2"
+    },
+    {
+      "table": "standard_material_references",
+      "status": "PASS",
+      "beforeRows": 21,
+      "afterRows": 21,
+      "beforeSha256": "7991adbac147a924a548ecfd10672636706fb066d969343db4f39d3ce613253a",
+      "afterSha256": "7991adbac147a924a548ecfd10672636706fb066d969343db4f39d3ce613253a"
+    },
+    {
+      "table": "template_file_versions",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "template_files",
+      "status": "PASS",
+      "beforeRows": 3,
+      "afterRows": 3,
+      "beforeSha256": "9eb0381b3f115ab180989001802b433dfc07b6f11479b2c071f588317fd31eb0",
+      "afterSha256": "9eb0381b3f115ab180989001802b433dfc07b6f11479b2c071f588317fd31eb0"
+    },
+    {
+      "table": "trays",
+      "status": "PASS",
+      "beforeRows": 331,
+      "afterRows": 331,
+      "beforeSha256": "43c233d72070658f1cfd4928fdbd16b7817a29298a723d6c91b50b8fdd997ed0",
+      "afterSha256": "43c233d72070658f1cfd4928fdbd16b7817a29298a723d6c91b50b8fdd997ed0"
+    },
+    {
+      "table": "user_project_access",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "users",
+      "status": "PASS",
+      "beforeRows": 2,
+      "afterRows": 2,
+      "beforeSha256": "86bde4476272e813e8482c65c9708ea9783d04544d7cd1eee0ba88b7e6b3252b",
+      "afterSha256": "86bde4476272e813e8482c65c9708ea9783d04544d7cd1eee0ba88b7e6b3252b"
+    },
+    {
+      "table": "viewer_login_bindings",
+      "status": "ORDINARY_AUTH_DELTA",
+      "beforeRows": 25,
+      "afterRows": 27,
+      "beforeSha256": "6a6755f16fb70c0673bad1bdb440f4fbfed45cf5f8ffed9a4173caf3b411e3d1",
+      "afterSha256": "34003cb28af68b2bfca3c6dcf33cc4edab7d116cd78ce446f29d68592ae52004"
+    },
+    {
+      "table": "viewer_resource_sessions",
+      "status": "ORDINARY_AUTH_DELTA",
+      "beforeRows": 50,
+      "afterRows": 53,
+      "beforeSha256": "4904643cc4404a79a9cd938bb899e73f7f58328c01566e95ede4c0d150b27fed",
+      "afterSha256": "709e1d565c24103d3bb335804f19c612c702de9d974467e859260bf39b869899"
+    }
+  ]
+}

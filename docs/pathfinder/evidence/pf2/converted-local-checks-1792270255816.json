@@ -1,0 +1,1074 @@
+{
+  "schemaVersion": "pathfinder.converted.local-checks.v1",
+  "observedAt": "2026-10-17T20:50:55.815Z",
+  "status": "PASS",
+  "sdkVersion": "7.130.0",
+  "sdkFiles": [
+    {
+      "name": "viewer3D.min.js",
+      "bytes": 3388432,
+      "sha256": "2833d5c53d250f56a59b86f22491a972486b30fd90a103bce8310dcaa970fa5b"
+    },
+    {
+      "name": "style.min.css",
+      "bytes": 239201,
+      "sha256": "630eb9440c8484a7f2e1fac43017c891d17d2a98f7cc8d02b2675c05b142e724"
+    },
+    {
+      "name": "lmvworker.min.js",
+      "bytes": 620608,
+      "sha256": "9637ed11308c549b6dbd290d6270e53587122ebb5ffd7f87987ea9a8f897f46a"
+    },
+    {
+      "name": "res/locales/en/allstrings.json",
+      "bytes": 44092,
+      "sha256": "b8e05c029e6207bf57f42ca21dfafabf200dc358a203aeb12a63097d53a03675"
+    },
+    {
+      "name": "extensions/ViewCubeUi/ViewCubeUi.min.js",
+      "bytes": 50106,
+      "sha256": "47f1e06c7ee58887b31da3d530dcc2ce919a21159ac003291f0825c65b16a3fb"
+    },
+    {
+      "name": "extensions/Measure/Measure.min.js",
+      "bytes": 316114,
+      "sha256": "f77ba22dd324652c4efa99a6b96545ea17df8a160dd8cb27220b12d57532257f"
+    },
+    {
+      "name": "extensions/Section/Section.min.js",
+      "bytes": 38001,
+      "sha256": "91feead7ab4214384e7a23ba6da16020e9e5619708f430072ef1ba347234ef45"
+    },
+    {
+      "name": "extensions/BimWalk/BimWalk.min.js",
+      "bytes": 146419,
+      "sha256": "1ca66f30b862d5398854e833d94ab9d5d75bd2c9218273500282bcd5f55cf515"
+    },
+    {
+      "name": "extensions/LayerManager/LayerManager.min.js",
+      "bytes": 17453,
+      "sha256": "1c075fac86611659b70b92949b93a00186ee64050a1d6ea4e00f555875f92c87"
+    },
+    {
+      "name": "extensions/CompGeom/CompGeom.min.js",
+      "bytes": 189193,
+      "sha256": "72cc934edf084c7e21059fc2cb91275aec968812915a039cb6d9e1e94da41908"
+    },
+    {
+      "name": "extensions/Hyperlink/Hyperlink.min.js",
+      "bytes": 20729,
+      "sha256": "8db9547d24ce8237699da83e1af90d8bf8fa8609b286289b3f9a08d8dc5f4d0c"
+    },
+    {
+      "name": "extensions/Snapping/Snapping.min.js",
+      "bytes": 36801,
+      "sha256": "7d14b62bdb6ce06e5ab3fbae1f0b7a46fe9907a17ca7042e1ff1d6aed93ad023"
+    },
+    {
+      "name": "res/environments/boardwalk_irr.logluv.dds",
+      "bytes": 98432,
+      "sha256": "b83d3eae6dd1a2e4a9147c31771f0534a574edf3dadd9decd148a233719a491c"
+    },
+    {
+      "name": "res/environments/field_irr.logluv.dds",
+      "bytes": 98432,
+      "sha256": "260f69160fc22ee75bcb51451943debf919db2f0370061198286a8cbb553a006"
+    },
+    {
+      "name": "res/environments/riverbank_irr.logluv.dds",
+      "bytes": 98432,
+      "sha256": "f1e98c4019e1a818a423ecb4f94f588ec65c01e34fdaa4c63929b0c9f8a6e5e7"
+    },
+    {
+      "name": "res/textures/VCarrows.png",
+      "bytes": 1840,
+      "sha256": "0546f8d285beab79e54f6e95770106c97369fa416c231f7cf9254778db75e422"
+    },
+    {
+      "name": "res/ui/powered-by-autodesk-blk-rgb.png",
+      "bytes": 22996,
+      "sha256": "d2e78031a919f716501287c83238d08d5a36b53064a0e91e1eee0a793043afc7"
+    },
+    {
+      "name": "res/ui/spinner.png",
+      "bytes": 1074,
+      "sha256": "8d2e55049f4ff654410e5a50a71244bdc954c6ae64fc711fe5fa336c69f8e036"
+    },
+    {
+      "name": "res/textures/centerMarker_X.png",
+      "bytes": 1338,
+      "sha256": "9000720d6278dd6ea11095b815b1d66fea13db04761bd73ae088afee3530817b"
+    },
+    {
+      "name": "res/textures/cardinalPoint.png",
+      "bytes": 919,
+      "sha256": "5544d0ce2bd9f76cbad84159b7796f9babbb687abe0c4e9e1ab3eca0f799905e"
+    },
+    {
+      "name": "extensions/Beeline/Beeline.js",
+      "bytes": 30135,
+      "sha256": "e9d371ddfaf0101911d88b17dbcd1da4a90c8d911d78cb7ab488e7995a2fa395"
+    },
+    {
+      "name": "extensions/CAM360/CAM360.js",
+      "bytes": 16073,
+      "sha256": "fc4ace93a8547be17fb5fe6b0d4b7d17cd9f2e722aad98f57f3e71d1e13afc49"
+    },
+    {
+      "name": "extensions/OMV/OMV.js",
+      "bytes": 36447,
+      "sha256": "ced1e27b4b3cfd7c5da051eb5c4044f34353a84a5edec11afea1669e950e94f5"
+    },
+    {
+      "name": "extensions/MemoryLimited/MemoryLimited.js",
+      "bytes": 1649113,
+      "sha256": "8dd678bc55721737385babc1525fa71bcd3c9e894a3988915c6c190462dd52c9"
+    },
+    {
+      "name": "extensions/GestureDocumentNavigation/GestureDocumentNavigation.js",
+      "bytes": 29185,
+      "sha256": "9af5793b388b6be9569e683630377cfb4dfa684d0af7ff23ada205a8e5f56960"
+    },
+    {
+      "name": "extensions/PropertySearch/PropertySearch.js",
+      "bytes": 7414,
+      "sha256": "0abe0d55559a849531ddd4826c080c1153c2571697bd958f0c82e55acf6c335e"
+    },
+    {
+      "name": "extensions/ScalarisSimulation/ScalarisSimulation.js",
+      "bytes": 82054,
+      "sha256": "db6b862e05402ffc128f082cc3f4195ca4d3de2c772815ede1302a50e63673a2"
+    },
+    {
+      "name": "extensions/FusionSim/FusionSim.js",
+      "bytes": 92477,
+      "sha256": "aac5dad1136ad2f3d5a10bacb071e96c445b6106ffc3c719b3857dec4cf758bb"
+    },
+    {
+      "name": "extensions/DiffTool/DiffTool.js",
+      "bytes": 1343389,
+      "sha256": "c3cb54cebbd8b691023a6b8b23573b819693ff78e9bfc1cdf9d7bf26714bd003"
+    },
+    {
+      "name": "extensions/MaterialXLoader/MaterialXLoader.js",
+      "bytes": 120766,
+      "sha256": "b805396f1fd55d9d5878815eaec6a78a9f153be31fd9362a52053d8fea52fa38"
+    },
+    {
+      "name": "extensions/Wireframes/Wireframes.js",
+      "bytes": 16797,
+      "sha256": "b06745b965730142de7dcb2102431c5148e79da73d8b68a8701f61401ec20335"
+    },
+    {
+      "name": "extensions/ZoomWindow/ZoomWindow.js",
+      "bytes": 64379,
+      "sha256": "998473d3e98535f181c41acd969f317aa05faac1cc63b7d05d065f60ad8ca82f"
+    },
+    {
+      "name": "extensions/Hyperlink/Hyperlink.js",
+      "bytes": 57756,
+      "sha256": "11cecf44fd49fe948e3ce5002a917db702cac25c07cb5cbc90fe459d80d0c513"
+    },
+    {
+      "name": "extensions/BimWalk/BimWalk.js",
+      "bytes": 284431,
+      "sha256": "40dfdb7db2edd5c071565487de3ac4dd834be2fada14a258a674ceaee272f288"
+    },
+    {
+      "name": "extensions/Section/Section.js",
+      "bytes": 128899,
+      "sha256": "18707b4a72715467767f6d6000a35e0c3cacd3b0abc8c4009a495a9c3053bf25"
+    },
+    {
+      "name": "extensions/SmartSection/SmartSection.js",
+      "bytes": 300358,
+      "sha256": "6eca23cf227fd97e581355ebcd4f127ee793cd1a64a7498fbf4b71f0bb19789f"
+    },
+    {
+      "name": "extensions/SmartSectionUI/SmartSectionUI.js",
+      "bytes": 404651,
+      "sha256": "e0beed3cb50c5b3a9f9c7f178bf91fb6ace9d51d935fc766a93dcaa180fd0969"
+    },
+    {
+      "name": "extensions/SplitScreen/SplitScreen.js",
+      "bytes": 37989,
+      "sha256": "7bd82c8f4feedd1ea66d6d8145b62a31b51ff8519b5e73f950c1a35fbae7ae91"
+    },
+    {
+      "name": "extensions/CrossFadeEffects/CrossFadeEffects.js",
+      "bytes": 27136,
+      "sha256": "4032ea61cacac66d86e29fe0f0c36b0aa6b6ce57ad512ad5d0fa82a3cb1aaadd"
+    },
+    {
+      "name": "extensions/Edit2D/Edit2D.js",
+      "bytes": 1185785,
+      "sha256": "907150aee126733a0c5798ddd42c169e1984aac3a3d2609bfeb7f278d9968299"
+    },
+    {
+      "name": "extensions/Edit3D/Edit3D.js",
+      "bytes": 49945,
+      "sha256": "baa5b9e1b58c3955161317b35497abf32919cc4a7b32707b07a3280c265aef16"
+    },
+    {
+      "name": "extensions/VisualClusters/VisualClusters.js",
+      "bytes": 87557,
+      "sha256": "c3c86a01bc2fdb418a15b7d008373ed834a3cf29285a0d6a01532df79c667567"
+    },
+    {
+      "name": "extensions/Moldflow/Moldflow.js",
+      "bytes": 37470,
+      "sha256": "075342647d225ba6d40af12970061f44a0d840a08b92db5e99d0ddcb278fc4b1"
+    },
+    {
+      "name": "extensions/PixelCompare/PixelCompare.js",
+      "bytes": 133351,
+      "sha256": "9ad2a18ff4b1ead2c29dcd27d6695951ded1acb17cca0eac301ac9e07eb3eb80"
+    },
+    {
+      "name": "extensions/Measure/Measure.js",
+      "bytes": 930818,
+      "sha256": "da8513d9ad90341300828365f1b547eb5d849ec336ed9385844bfafbf4d04cf2"
+    },
+    {
+      "name": "extensions/Markup/Markup.js",
+      "bytes": 627196,
+      "sha256": "fc447590a3d6812cf46cfd2cb6ab409092caf883798bb74764685b0b5d7d1ea9"
+    },
+    {
+      "name": "extensions/ViewCubeUi/ViewCubeUi.js",
+      "bytes": 171323,
+      "sha256": "77d7fb567a521b5da4fd4493f69cd7d1089ae41d95559b4c76e592ba5e6d9540"
+    },
+    {
+      "name": "extensions/BimMarkups/BimMarkups.js",
+      "bytes": 1395647,
+      "sha256": "ed95fb44bf1bdb3e2c21e41c8367017482ffb4cd3baff5fcc42f5ea6ac24a3fd"
+    },
+    {
+      "name": "extensions/Minimap2D/Minimap2D.js",
+      "bytes": 55670,
+      "sha256": "37f1142d2b79923970e86a7d4ca696d4935848293928a6ed664d79dfb3da3a93"
+    },
+    {
+      "name": "extensions/RollCamera/RollCamera.js",
+      "bytes": 42486,
+      "sha256": "8227e3c04e8fa1dcaf33334eaf67d7855f7844b3ba0e6fc7fa1f0102836d092b"
+    },
+    {
+      "name": "extensions/LayerManager/LayerManager.js",
+      "bytes": 74958,
+      "sha256": "952de5e2181bb3145fdf4c4f7e5f0e7205ea1c0b7bcd92cf69af392f9c95477e"
+    },
+    {
+      "name": "extensions/ModelAlignmentService/ModelAlignmentService.js",
+      "bytes": 100060,
+      "sha256": "0a07d89ec089c8ba6e5cd56e0c1400f9448034730e55e160554e1010b2fe2b35"
+    },
+    {
+      "name": "extensions/Crop/Crop.js",
+      "bytes": 34731,
+      "sha256": "4d09e2eba9451af2279b14e9f9977b1142b3e92bf803826a6bddf4b13b791b17"
+    },
+    {
+      "name": "extensions/StringExtractor/StringExtractor.js",
+      "bytes": 23889,
+      "sha256": "cdc2f2c0c11583bfa79f810fd0bb03c80f2649c15e5524ff014559d841830657"
+    },
+    {
+      "name": "extensions/ModelSheetTransition/ModelSheetTransition.js",
+      "bytes": 136797,
+      "sha256": "d5d3c4b5360d81c11d0f1def5e3998bf4021460c15c8af5742e8603e086d0201"
+    },
+    {
+      "name": "extensions/DataExchange/DataExchange.js",
+      "bytes": 12930,
+      "sha256": "797f1dc6fa1d31c2dfb05665da2d65bd3dda1c0d284f76f99778575926c32e5a"
+    },
+    {
+      "name": "extensions/Multipage/Multipage.js",
+      "bytes": 80771,
+      "sha256": "5554b1108292c4b3538decdab1b3da7ae35354600568c8460a3303bdc635ae7f"
+    },
+    {
+      "name": "extensions/VdsProperties/VdsProperties.js",
+      "bytes": 1717330,
+      "sha256": "00b5c1833184652ede8e1478b838d29bda9ccbf5b7bb60b15c6fbd8d22cb8984"
+    },
+    {
+      "name": "extensions/NotificationManager/NotificationManager.js",
+      "bytes": 105838,
+      "sha256": "6cd2482518bdb3a8b6c54d3e685d901181ddad6653b624452f7ee9ae3947d917"
+    },
+    {
+      "name": "extensions/AggregateService/AggregateService.js",
+      "bytes": 3696520,
+      "sha256": "1969ca95f3e56c6beaa9dccf10f74c0ab1b2a537541426427057b8191688c86a"
+    },
+    {
+      "name": "extensions/VirtualTextures/VirtualTextures.js",
+      "bytes": 178674,
+      "sha256": "bcc331c81d242ec1ce2cb6af7a023e5eeb644f141a58e5a2637a940afc3df2dc"
+    },
+    {
+      "name": "res/fonts/ArtifaktLegendBlack.woff2",
+      "bytes": 68612,
+      "sha256": "5f70b799304abdf308aeec460faf06f3c115fc516bfda7ef527bee888376a7db"
+    },
+    {
+      "name": "res/environments/SharpHighlights_irr.logluv.dds",
+      "bytes": 98432,
+      "sha256": "98a9df167018a77eda9dc6c94d0bb5ef5daa850b18883e1b39f4eb8ad5607be8"
+    },
+    {
+      "name": "res/environments/SharpHighlights_mipdrop.logluv.dds",
+      "bytes": 524408,
+      "sha256": "32f7ebd3a24d42e528075f7e6d529e66004c778a86514b121d4fec3a0ee03662"
+    },
+    {
+      "name": "extensions/NPR/NPR.min.js",
+      "bytes": 26681,
+      "sha256": "08f22c8e85ae1939f6655ecad955e39f52c0427081313667b414a88b78b1d844"
+    },
+    {
+      "name": "extensions/Beeline/Beeline.min.js",
+      "bytes": 15689,
+      "sha256": "813a96f824ae1e0ad0fd572d3c556f7af39af92ec30604c8554e0cbf43fd29d2"
+    },
+    {
+      "name": "extensions/CAM360/CAM360.min.js",
+      "bytes": 6413,
+      "sha256": "8bb25e59c10d900b2946ba9b885252544e5f579026e827a6b10adc63c3403c93"
+    },
+    {
+      "name": "extensions/OMV/OMV.min.js",
+      "bytes": 11010,
+      "sha256": "dca33c5b423b5b5c76c7a2c8918d788a888ca3ceb249ccabd096c83e8b69c3d2"
+    },
+    {
+      "name": "extensions/DOF/DOF.min.js",
+      "bytes": 25974,
+      "sha256": "867164b1995ed3dac115c75b3a2c3fbf52d9f1c1b0e9b160ae5f517c2d7cdd15"
+    },
+    {
+      "name": "extensions/MSDF/MSDF.min.js",
+      "bytes": 195842,
+      "sha256": "57ca45d0bb107b467d4c99e09374dcd228d69b77029c27eee30f1b922f32b1ff"
+    },
+    {
+      "name": "extensions/MemoryLimited/MemoryLimited.min.js",
+      "bytes": 373968,
+      "sha256": "bfbd3341c47023097e6786a9f932ae7f50a54e32378f3e01915ea67a339d0176"
+    },
+    {
+      "name": "extensions/MemoryLimitedDebug/MemoryLimitedDebug.min.js",
+      "bytes": 40579,
+      "sha256": "5ebd832eaffa0b7a72a24429a932d0785daa1ce2ebbfdcc868d226ac20a6be8f"
+    },
+    {
+      "name": "extensions/GestureDocumentNavigation/GestureDocumentNavigation.min.js",
+      "bytes": 9574,
+      "sha256": "72ed424d24f20470be976a23389b1809595d51149ade388e37f0b111a038816a"
+    },
+    {
+      "name": "extensions/PropertySearch/PropertySearch.min.js",
+      "bytes": 2352,
+      "sha256": "c517b86a20b4ac3ac1a90a5dee66751769d29b795a23e18bdef366c2f5f46189"
+    },
+    {
+      "name": "extensions/PropertyQuery/PropertyQuery.min.js",
+      "bytes": 6552,
+      "sha256": "cce23541c89cb3f56e10fe3cdae363f73e7b4f7c72a1102027047202b5fd8d49"
+    },
+    {
+      "name": "extensions/DataPersistence/DataPersistence.min.js",
+      "bytes": 3067,
+      "sha256": "43ac6a8dfeca1e892f1f3ba68b8e4a809c051bd3c7cbd088d073178fdae26803"
+    },
+    {
+      "name": "extensions/ReCap/ReCap.min.js",
+      "bytes": 25302611,
+      "sha256": "9a6288373616ad06d3ad820bd505f61e60b1254a58f692736e91af5334e30d4b"
+    },
+    {
+      "name": "extensions/Scalaris/Scalaris.min.js",
+      "bytes": 290051,
+      "sha256": "d2c2a019cb91b5034a22e0442157b875d842d1cd43b979db311d6155aa30e978"
+    },
+    {
+      "name": "extensions/ScalarisSimulation/ScalarisSimulation.min.js",
+      "bytes": 26448,
+      "sha256": "11485d744a3ae71347d8cd0e8205af1aa911e40bb8a7ca0e75ce3e3b483f5a13"
+    },
+    {
+      "name": "extensions/SceneBuilder/SceneBuilder.min.js",
+      "bytes": 27359,
+      "sha256": "74fedec6d7aaca95568cb423bd9f56613978ad0497f472dbfd7eac9c481b557c"
+    },
+    {
+      "name": "extensions/FusionSim/FusionSim.min.js",
+      "bytes": 32850,
+      "sha256": "1074726f841c076733a8102e58f58202acb44538578eeb14341c21e8ecb850a7"
+    },
+    {
+      "name": "extensions/ProtocolProxy/ProtocolProxy.min.js",
+      "bytes": 4710,
+      "sha256": "20b814f72cad57e530c1492d76d26cd4eda59e5d7e91a9ef1325ff8446f5ea97"
+    },
+    {
+      "name": "extensions/DiffTool/DiffTool.min.js",
+      "bytes": 327002,
+      "sha256": "34f2e4197ee40540cb02bc1d85b57e00005bfa04aeabab9ffde5a7eb301d380d"
+    },
+    {
+      "name": "extensions/DeveloperTools/DeveloperTools.min.js",
+      "bytes": 531342,
+      "sha256": "f988ca33b68d95cdea988c274f29af901a633d06e3431ba76550f571da259158"
+    },
+    {
+      "name": "extensions/MaterialXLoader/MaterialXLoader.min.js",
+      "bytes": 9928,
+      "sha256": "d66ff57041cda3bacd1859d47a096f8a61da5d74559fbe7f3a652f09773471a3"
+    },
+    {
+      "name": "extensions/Wireframes/Wireframes.min.js",
+      "bytes": 6715,
+      "sha256": "8d167b60c7fe61f4922eb7802cf86c0e421c64399f17ac67afa60ec4b310e6f4"
+    },
+    {
+      "name": "extensions/ZoomWindow/ZoomWindow.min.js",
+      "bytes": 20174,
+      "sha256": "59bc5df6438d3905bfad5f6d0df72307fe184d4ea88a16e47557432aa6720d75"
+    },
+    {
+      "name": "extensions/AEC/AEC.min.js",
+      "bytes": 871571,
+      "sha256": "2260f6597c8ac1c861e1ed72431db9b254bddc853eabcedae2e66e5379533e41"
+    },
+    {
+      "name": "extensions/Pushpins/Pushpins.min.js",
+      "bytes": 108340,
+      "sha256": "911b064a96c7e44c4ba499e9ad917e7ac59dc0e5be839f26244cca0ef4f2c345"
+    },
+    {
+      "name": "extensions/SmartSection/SmartSection.min.js",
+      "bytes": 130871,
+      "sha256": "06a8ed2ed8bbf6818b486fd28622763157d8d658c2a8792fa923976cde3004ae"
+    },
+    {
+      "name": "extensions/SmartSectionUI/SmartSectionUI.min.js",
+      "bytes": 176946,
+      "sha256": "7871965147f683e2afe59625683f087a8bedf1bdec564df59029f47b0ef104f1"
+    },
+    {
+      "name": "extensions/SplitScreen/SplitScreen.min.js",
+      "bytes": 13648,
+      "sha256": "2bd190d22ed81ceb27dcfb892321d1205d44e0c315328d0be6887e45e6a2f0f7"
+    },
+    {
+      "name": "extensions/CrossFadeEffects/CrossFadeEffects.min.js",
+      "bytes": 5779,
+      "sha256": "45e60b265450f324df46b9b7b33a9e4d73a5414afa80008e6f149ed20f7b3239"
+    },
+    {
+      "name": "extensions/Edit2D/Edit2D.min.js",
+      "bytes": 728338,
+      "sha256": "b71001a3b318ed5acf6f28de92c19939cbf9807134a9b7d1d388aabdc06f1467"
+    },
+    {
+      "name": "extensions/Edit3D/Edit3D.min.js",
+      "bytes": 19932,
+      "sha256": "74c2fc0c4addaa0ee1d8146672758992edf4be2752ca25bf5ef745baa53bde77"
+    },
+    {
+      "name": "extensions/VisualClusters/VisualClusters.min.js",
+      "bytes": 21318,
+      "sha256": "e1623a9f9dd0dddd45e559ca7fca0515790fe47b9ff9d44c51593a61cabc5250"
+    },
+    {
+      "name": "extensions/Moldflow/Moldflow.min.js",
+      "bytes": 11294,
+      "sha256": "72f62d0d103afe5b4f2e87d92606192b2169c56bfce36f57c7373570e47a2538"
+    },
+    {
+      "name": "extensions/PixelCompare/PixelCompare.min.js",
+      "bytes": 59315,
+      "sha256": "076a9848b78848e9582d61e4109908569e60a42969d2a0df13d9ab47e201a645"
+    },
+    {
+      "name": "extensions/Markup/Markup.min.js",
+      "bytes": 203094,
+      "sha256": "151b18834d542283c46e95abf06f55a021a1416272f4db5f218c985a898c81f0"
+    },
+    {
+      "name": "extensions/PDF/PDF.min.js",
+      "bytes": 586785,
+      "sha256": "9907c068f63f13c4cce15e7767e799ac70040fe6fd6613caaa3f94e122cad7fb"
+    },
+    {
+      "name": "extensions/DocumentBrowser/DocumentBrowser.min.js",
+      "bytes": 37753,
+      "sha256": "5aba1a907d7718aeb37fcfe53b01100aba8f50feb3166923a1151a658b300d9b"
+    },
+    {
+      "name": "extensions/Geolocation/Geolocation.min.js",
+      "bytes": 15172,
+      "sha256": "472f6522d78c70f56a1c18d2aca135b69b3af918442482170a94a0ae7a95bee6"
+    },
+    {
+      "name": "extensions/Fusion360/Fusion360.min.js",
+      "bytes": 37755,
+      "sha256": "6a62a205545ff94a9ae83a0e101506f9ddc8dcf076d4c9cec63fa5460f3ec50c"
+    },
+    {
+      "name": "extensions/BimMarkups/BimMarkups.min.js",
+      "bytes": 514984,
+      "sha256": "66481c7b0aedc8acdff8662a731f1e9ca1aadd8590df753eedc1e47e293d4330"
+    },
+    {
+      "name": "extensions/Minimap2D/Minimap2D.min.js",
+      "bytes": 20731,
+      "sha256": "25960fac05bd0bfc906e307ca49b63f390a833c44c997c0ec72d1689cc2932d4"
+    },
+    {
+      "name": "extensions/RollCamera/RollCamera.min.js",
+      "bytes": 9644,
+      "sha256": "f526731b9c63d452aabfa0ebca9faac3e3740530eec501755dcb517a590184c1"
+    },
+    {
+      "name": "extensions/Popout/Popout.min.js",
+      "bytes": 8880,
+      "sha256": "1a9f13020c1bbd109612e0c7ea223ac2776009caac841937fd95a55879ee4c38"
+    },
+    {
+      "name": "extensions/StandardSurface/StandardSurface.min.js",
+      "bytes": 205742,
+      "sha256": "a56c559c838b7088f321ad3db96ccff8d9a2c128ecdd54d00edf46afc7f0a158"
+    },
+    {
+      "name": "extensions/MaterialConverterPrism/MaterialConverterPrism.min.js",
+      "bytes": 231051,
+      "sha256": "098753309e37400c83143052a8b5cc5273d156e12e50340e77ebbd077363b5e2"
+    },
+    {
+      "name": "extensions/DWF/DWF.min.js",
+      "bytes": 888562,
+      "sha256": "b9c3345fc7c747473b7b977c8b5ee4aa6215f76c7b0533f1c8e1d3bb35c2fd18"
+    },
+    {
+      "name": "extensions/ModelAlignment/ModelAlignment.min.js",
+      "bytes": 174118,
+      "sha256": "6808b52dc4ad067de67f747aedb470db3847c68a44c8e5f2de7ece2049ac7e11"
+    },
+    {
+      "name": "extensions/ModelAlignmentService/ModelAlignmentService.min.js",
+      "bytes": 19652,
+      "sha256": "9ac06cad81f78745f28f259aba80433268c7c70b1d0a26927d9ec724eec17656"
+    },
+    {
+      "name": "extensions/MixpanelProvider/MixpanelProvider.min.js",
+      "bytes": 422898,
+      "sha256": "07864087549dd956ee0d1fa690e0dccf3ce4bc16c59b3ad0371d890aa0a17c47"
+    },
+    {
+      "name": "extensions/Crop/Crop.min.js",
+      "bytes": 11495,
+      "sha256": "e4d32ddd8275443223d62c808ee509f8648a14e542f8c9f1bba9ba3fb2ea972f"
+    },
+    {
+      "name": "extensions/DataVisualization/DataVisualization.min.js",
+      "bytes": 70973,
+      "sha256": "e630ae0ec5d969184d541bd980346bdf4e515ca3eef750f41849618a9d75fcdb"
+    },
+    {
+      "name": "extensions/StringExtractor/StringExtractor.min.js",
+      "bytes": 5227,
+      "sha256": "a61aeefb696b49174e79765cecbc95c76f8cd325156129a728d7461e971f73b2"
+    },
+    {
+      "name": "extensions/ModelSheetTransition/ModelSheetTransition.min.js",
+      "bytes": 42204,
+      "sha256": "9ce5b280b2f14ef998b43144a6e674b814033c53b0ae8f57088cc473785fcc3b"
+    },
+    {
+      "name": "extensions/BoxSelection/BoxSelection.min.js",
+      "bytes": 20055,
+      "sha256": "aae20c947f78fd8c36d15688af69551b134920e8c2064ff0c8d77640fa751f08"
+    },
+    {
+      "name": "extensions/glTF/glTF.min.js",
+      "bytes": 449219,
+      "sha256": "75a8ae8fcf753863bfe9b06e83aee0ff3f14a5c8096018098ab4082b72a97d4e"
+    },
+    {
+      "name": "extensions/VaultPrintUI/VaultPrintUI.min.js",
+      "bytes": 17086,
+      "sha256": "344997e470449c098d280bed18d6129a2ef4c3d5b8439c9a686994928bfb71a6"
+    },
+    {
+      "name": "extensions/VaultMarkupsUI/VaultMarkupsUI.min.js",
+      "bytes": 219912,
+      "sha256": "d2571be63aa8bebc947ee613445066d3c48f150d0c332ec2e0ce2d193668f929"
+    },
+    {
+      "name": "extensions/DataExchange/DataExchange.min.js",
+      "bytes": 4239,
+      "sha256": "ec4ef12845075233b581da0d1946c71987f7dd0aa33d09c8393c2e23e1c1e4cf"
+    },
+    {
+      "name": "extensions/Multipage/Multipage.min.js",
+      "bytes": 23582,
+      "sha256": "c748335806ce266052e98e449d3a1df837b0307b41093bebf545ee7ff4c13ce2"
+    },
+    {
+      "name": "extensions/Filter/Filter.min.js",
+      "bytes": 147819,
+      "sha256": "9c6076f502d36080bdaba1f5bd8f776b2e2a51922fde85376d90d1691e0bb0e5"
+    },
+    {
+      "name": "extensions/CustomProperties/CustomProperties.min.js",
+      "bytes": 71828,
+      "sha256": "6fe7d10895a43b85f97492c435d6c1b7e6044a58943bf0cd20093a4aada933a2"
+    },
+    {
+      "name": "extensions/VdsProperties/VdsProperties.min.js",
+      "bytes": 354674,
+      "sha256": "2d8a43be9342d564bbd50529540eba644e2ca09805b8a3a88dca1b3c2b5a8ac0"
+    },
+    {
+      "name": "extensions/Assistant/Assistant.min.js",
+      "bytes": 873002,
+      "sha256": "810572a704ebdbf5dd547549eee429f7e5e7e703c2f8ba44a7460e88334fb48d"
+    },
+    {
+      "name": "extensions/NotificationManager/NotificationManager.min.js",
+      "bytes": 42244,
+      "sha256": "ce9c2469b5e2736dce7577de90a504f61a2cf9addc2ff5307b5e322544d45c23"
+    },
+    {
+      "name": "extensions/AggregateService/AggregateService.min.js",
+      "bytes": 824723,
+      "sha256": "ef12f6a049e56a9428f8c11642206c8068f97323159ac135b04c99188ebccff6"
+    },
+    {
+      "name": "extensions/MaterialX/MaterialX.min.js",
+      "bytes": 9144,
+      "sha256": "c47579e04ea4207fcb9974ee59e516e265d836892a8fb04893789d2013573d79"
+    },
+    {
+      "name": "extensions/VirtualTextures/VirtualTextures.min.js",
+      "bytes": 55579,
+      "sha256": "eadc729bad219519399a217f95f144ddef47baf0d14058bd4a7434d406f454d1"
+    },
+    {
+      "name": "extensions/Grids/Grids.min.js",
+      "bytes": 29609,
+      "sha256": "22747d54183d6e4a06c768bad8751b49bf6def4b888b376caf461785ea6633c7"
+    },
+    {
+      "name": "extensions/GridsUI/GridsUI.min.js",
+      "bytes": 31101,
+      "sha256": "9978cee3c627e75f8b266279dd2b77106bd4b97b5abb44d7421a7bf8d309db1c"
+    },
+    {
+      "name": "res/environments/DarkSky_irr.logluv.dds",
+      "bytes": 98432,
+      "sha256": "523f4691a6574815e2c6770add1d2cf10366035730140b52b0432cf2c6a31de1"
+    },
+    {
+      "name": "res/environments/DarkSky_mipdrop.logluv.dds",
+      "bytes": 524408,
+      "sha256": "8722f27f4be5a0fa63ba51e64438e47af4ecff9344761b525c6aae4fdd0567a7"
+    },
+    {
+      "name": "res/environments/GreyRoom_irr.logluv.dds",
+      "bytes": 98432,
+      "sha256": "221ae14bbe3000fc30a40e65578cbc143f26c3f37c851c8717fa239db227d562"
+    },
+    {
+      "name": "res/environments/GreyRoom_mipdrop.logluv.dds",
+      "bytes": 524408,
+      "sha256": "9ef138802aa84551e2db8939071fd0d6028d724b7d5e318ce053c91bfc54bb9d"
+    },
+    {
+      "name": "res/environments/PhotoBooth_irr.logluv.dds",
+      "bytes": 98432,
+      "sha256": "48b4b0969e7e13c2b885e3d6d9ade2a3e031db0bac614b4ac909c3f2901d274d"
+    },
+    {
+      "name": "res/environments/PhotoBooth_mipdrop.logluv.dds",
+      "bytes": 524408,
+      "sha256": "880d1d972eda0b90282e62c6adeab99bf0c091cbb6af9189f89ac2c1143c509c"
+    },
+    {
+      "name": "res/environments/TranquilityBlue_irr.logluv.dds",
+      "bytes": 98432,
+      "sha256": "337fdde27ee1a3dbeefbf470907460d696b85806405d24aef83fd3aa4f6121a7"
+    },
+    {
+      "name": "res/environments/TranquilityBlue_mipdrop.logluv.dds",
+      "bytes": 524408,
+      "sha256": "b684471209d7bc4f4521bd5f88586a66a9edd5d5dfe0f63a2d3e862d119126c6"
+    },
+    {
+      "name": "res/environments/InfinityPool_irr.logluv.dds",
+      "bytes": 98432,
+      "sha256": "c7a88b450fa9bb0e28db7c9040eb20dd56c309a13c5fe48bd83eae44afe11228"
+    },
+    {
+      "name": "res/environments/InfinityPool_mipdrop.logluv.dds",
+      "bytes": 524408,
+      "sha256": "744b20fe19e977a190c8f90cf5dbb1ec4d98be2ca196b889693ed0e49de7b479"
+    },
+    {
+      "name": "res/environments/riverbank_mipdrop.logluv.dds",
+      "bytes": 524408,
+      "sha256": "0d7bb0e253bdcbb071265da29e833f3757628342780792b61e4168bfe405f312"
+    },
+    {
+      "name": "res/environments/IDViz_irr.logluv.dds",
+      "bytes": 393344,
+      "sha256": "63b6614d4e73b9ef53f6c1bce668465306f19e7050e00def16b0b36db54169ce"
+    },
+    {
+      "name": "res/environments/IDViz_mipdrop.logluv.dds",
+      "bytes": 524408,
+      "sha256": "2af3b563738b0396882cec8f3d7f834f79b194c029d9e85ed875663e12a6ab97"
+    },
+    {
+      "name": "res/environments/RimHighlights_irr.logluv.dds",
+      "bytes": 98432,
+      "sha256": "ddc9a62dae22394d338545464e4fd0a864c0b9223dc4ce136cf0f682256ace2a"
+    },
+    {
+      "name": "res/environments/RimHighlights_mipdrop.logluv.dds",
+      "bytes": 524408,
+      "sha256": "4783c6dafcefd1db7a9ffcc662d15079098fa580cb2a93c29bba4b9bacd760a4"
+    },
+    {
+      "name": "res/environments/CoolLight_irr.logluv.dds",
+      "bytes": 98432,
+      "sha256": "774c8668594de1913fb91968bcbb23bc0d9008550f0e533472080037d13d9dbb"
+    },
+    {
+      "name": "res/environments/CoolLight_mipdrop.logluv.dds",
+      "bytes": 524408,
+      "sha256": "15e1576ec2738a5b6d7aebd7500f49e9a0a87e3864f2d2bd123de755e193ecdd"
+    },
+    {
+      "name": "res/environments/WarmLight_irr.logluv.dds",
+      "bytes": 98432,
+      "sha256": "c1cc5d1a1f690c7d8ac2ed0b7122e16561868c24871823c5746b335985341c21"
+    },
+    {
+      "name": "res/environments/WarmLight_mipdrop.logluv.dds",
+      "bytes": 524408,
+      "sha256": "17d4d6dc9cef08f66b716f1a114ecdef4e27a224d3c4ed48be583e2f91d6fdba"
+    },
+    {
+      "name": "res/environments/SoftLight_irr.logluv.dds",
+      "bytes": 98432,
+      "sha256": "b975f1333f66f86dc74fdc725c08055716b404a4f8b43ca87a183606201216c5"
+    },
+    {
+      "name": "res/environments/SoftLight_mipdrop.logluv.dds",
+      "bytes": 524408,
+      "sha256": "04dacaf2d404ad336e02cda44ac3999744959cdcf0cce1a1e6a233a37a8f509e"
+    },
+    {
+      "name": "res/environments/GridLight_irr.logluv.dds",
+      "bytes": 98432,
+      "sha256": "b5f836390cca1d925dede2a224dcf317201f50bbad35c9f7941ead845e394ac2"
+    },
+    {
+      "name": "res/environments/GridLight_mipdrop.logluv.dds",
+      "bytes": 524408,
+      "sha256": "ec9f4419ee25e5b950e24c2484326a82634c6346a544ebadf4b39c8fe522541f"
+    },
+    {
+      "name": "res/environments/Plaza_irr.logluv.dds",
+      "bytes": 98432,
+      "sha256": "fe5558e5f1c8c89c0c48e8fd7fe66e9b6b5829b847a28ec129250d6314392f2a"
+    },
+    {
+      "name": "res/environments/Plaza_mipdrop.logluv.dds",
+      "bytes": 524408,
+      "sha256": "fa17afd8c2869151f38c65a6fee71630ee6f5ce798710ae27c9478a76c709c5e"
+    },
+    {
+      "name": "res/environments/SnowField_irr.logluv.dds",
+      "bytes": 98432,
+      "sha256": "8066ec9f452f1fef90cb9680ec3baa5e4f3d025dfee07e38b4634f0193d2ad3b"
+    },
+    {
+      "name": "res/environments/SnowField_mipdrop.logluv.dds",
+      "bytes": 524408,
+      "sha256": "d4b81fe3c46e05fd9968dcadb874c3141af9ffe500b92b13529d440f6de8faa2"
+    },
+    {
+      "name": "res/environments/field_mipdrop.logluv.dds",
+      "bytes": 524408,
+      "sha256": "e4e7470dff0c7608aa4cbd62ace950c161ffee003e8824afc4393740b2f2163c"
+    },
+    {
+      "name": "res/environments/boardwalk_mipdrop.logluv.dds",
+      "bytes": 524408,
+      "sha256": "cac9ed6dd337a4baee44fe7722b1cd793d82379085d5f0b300593ddbb0c51513"
+    },
+    {
+      "name": "res/environments/Harbor_irr.logluv.dds",
+      "bytes": 98432,
+      "sha256": "fd6ecbc8fb55a27db933cd28274812c292b655a929f6aad1729bc74e64888980"
+    },
+    {
+      "name": "res/environments/Harbor_mipdrop.logluv.dds",
+      "bytes": 524408,
+      "sha256": "fdbc2b2c3741497b8e35f86df3d47b4c9b777cb22d43f5be6cec180781081dc4"
+    },
+    {
+      "name": "res/environments/Night_irr.logluv.dds",
+      "bytes": 98432,
+      "sha256": "02f1b9aecad008e007baf063bffa26a5d49aceab3fbdd9b624f23a2986f16aeb"
+    },
+    {
+      "name": "res/environments/Night_mipdrop.logluv.dds",
+      "bytes": 524408,
+      "sha256": "b2cf4da03a4cb43a7ec3f9683f8c685b7e0aa62b6d6147603f211e9d0030f8d3"
+    },
+    {
+      "name": "res/environments/Parking_irr.logluv.dds",
+      "bytes": 98432,
+      "sha256": "2e60bfae3bb8d0c77fd435cbf3ac253c88f751f924aa5ccd148d021144eaf2b8"
+    },
+    {
+      "name": "res/environments/Parking_mipdrop.logluv.dds",
+      "bytes": 524408,
+      "sha256": "4f05222d7f14e648a03fb3db6578b0b4b97e9cfafd0a97d2baaf00a7e73da7c3"
+    },
+    {
+      "name": "res/environments/RiverRoad_irr.logluv.dds",
+      "bytes": 98432,
+      "sha256": "fde9b21e5e69235387beaaadad0a2494f223122bb199762d3ca7d54d438032e7"
+    },
+    {
+      "name": "res/environments/RiverRoad_mipdrop.logluv.dds",
+      "bytes": 524408,
+      "sha256": "fc4684c914662f3c77c7c2b650a5f24e060f3a834aede4a706dc89ffa97e4c3a"
+    },
+    {
+      "name": "res/environments/crossroads_irr.logluv.dds",
+      "bytes": 98432,
+      "sha256": "f1b435f87cb9dfa43abf1cbf412ac4bbbf6a558687b3e3afa1dcf41304ac79e5"
+    },
+    {
+      "name": "res/environments/crossroads_mipdrop.logluv.dds",
+      "bytes": 524408,
+      "sha256": "63518e337cc3b9448128cbb38c93d7103ba38b145571ed6c35d8bd2e57d907c0"
+    },
+    {
+      "name": "res/environments/seaport_irr.logluv.dds",
+      "bytes": 98432,
+      "sha256": "21166f7d8a9d570fbf79ca2dde6d1c7bf519feb96079960dfe6a5b8892d17fd8"
+    },
+    {
+      "name": "res/environments/seaport_mipdrop.logluv.dds",
+      "bytes": 524408,
+      "sha256": "3f04fbb10d6905dbe6b4b9716b0c55bcf42fa6f2c477157eb6bc690993c931a4"
+    },
+    {
+      "name": "res/environments/glacier_irr.logluv.dds",
+      "bytes": 393344,
+      "sha256": "3fbf2d753903479b44794bc92589fb6e89e5e7ba092e42fa3a25c82acc2b5f8b"
+    },
+    {
+      "name": "res/environments/glacier_mipdrop.logluv.dds",
+      "bytes": 524408,
+      "sha256": "3aa5abfca5387ded1073adb44ad4d3ab499a0b5b81ed75a2b4e4967f5d0c884c"
+    },
+    {
+      "name": "res/environments/Reflection_irr.logluv.dds",
+      "bytes": 98432,
+      "sha256": "7ae73c1d47d42e5b9900f11fa6055553341f3989eeeed1ad43d5721728b21282"
+    },
+    {
+      "name": "res/environments/Reflection_mipdrop.logluv.dds",
+      "bytes": 524408,
+      "sha256": "d82eb30c7e95dbe73832075394d11e31bc3bb4220e87404a1f0158d62b55f81b"
+    },
+    {
+      "name": "res/environments/CityNight_irr.logluv.dds",
+      "bytes": 98432,
+      "sha256": "d0273470f7b45ccd23913310f8974838ae8b60ecd0192ac618c92c8dc4938223"
+    },
+    {
+      "name": "res/environments/CityNight_mipdrop.logluv.dds",
+      "bytes": 524408,
+      "sha256": "df0d5bc313827fcd6cdbd4315637d3182fd749cd505e3322bf94b65a865798f1"
+    },
+    {
+      "name": "res/textures/VCcompass-pointer-b.png",
+      "bytes": 3805,
+      "sha256": "a48721771b42e86c1c04634fcddfcb61980e09a29a2a88ffbeee57c23df30395"
+    },
+    {
+      "name": "res/textures/VCcompass-base.png",
+      "bytes": 9123,
+      "sha256": "cf85e56eb8097cba9a5553ff5302f6290dc4025b89a0097f56edbf6b35ca5958"
+    },
+    {
+      "name": "res/textures/VCedge1.png",
+      "bytes": 365,
+      "sha256": "f1e82674f3361a8949e64f660386a88f992703abc3fa0079682f5a59a66e95d9"
+    },
+    {
+      "name": "res/textures/VChome.png",
+      "bytes": 491,
+      "sha256": "4aa9416700e76e3bd7bd54831189a650dc2eb86304323eebce94329e3ccfc27c"
+    },
+    {
+      "name": "res/textures/VCcontext.png",
+      "bytes": 379,
+      "sha256": "2e7b255f634c5f4e7f084c8a963302dc1a753dfc50e69d1e908ecd41b912310d"
+    },
+    {
+      "name": "res/textures/VChomeS.png",
+      "bytes": 502,
+      "sha256": "4b925af07278ded22ab49c1261241a15f239f825c4b6435cbdf4cd9eaf04fae4"
+    },
+    {
+      "name": "res/textures/VCarrowsS0.png",
+      "bytes": 1935,
+      "sha256": "8ea6cc208f584d5e561f7fff4cb466b484d9d271946222f143c43c0c165b9cda"
+    },
+    {
+      "name": "res/textures/VCarrowsS1.png",
+      "bytes": 1829,
+      "sha256": "905363414e125590a841ee2a53d6855946aae9e7c133e951aeff05bad6b1ab01"
+    },
+    {
+      "name": "res/textures/VCcontextS.png",
+      "bytes": 399,
+      "sha256": "80ebdd92faece393fd611217a82855eb2e188cf7c70488832377a832e4a3d369"
+    },
+    {
+      "name": "extensions/ReCap/RchExtractor.wasm",
+      "bytes": 359178,
+      "sha256": "488b1f162a3f46e99c08c6280716233fb98d0a186a224554e19c63d60fa7d1aa"
+    },
+    {
+      "name": "extensions/ReCap/764644b358c6fdc3506d.png",
+      "bytes": 7858,
+      "sha256": "de708e0b7cfa7bfec3bd691b11659ebc1933ebedf61feca45033edfccb093c85"
+    },
+    {
+      "name": "extensions/ReCap/836a657a525d607d5abf.gif",
+      "bytes": 57842,
+      "sha256": "d04cc0b437c12656cd2eb4f3436955395909f090ec462a314f5bcc4cc6693aa5"
+    },
+    {
+      "name": "extensions/ReCap/1899649c96fc75b6d661.png",
+      "bytes": 12687,
+      "sha256": "ed0ba4024eff5fa95c2cb7a60d59bad9ebc0d41a241c060240f3588ac23797a3"
+    },
+    {
+      "name": "extensions/ReCap/1d0fc815978fd59690bd.gif",
+      "bytes": 791050,
+      "sha256": "1f78d2250660daec52840b1f770c84229867ddd15e766c4831ed6802edb736c1"
+    },
+    {
+      "name": "extensions/ReCap/6fbd54e0e1221b51701c.gif",
+      "bytes": 802634,
+      "sha256": "edf2b9254683c858dbe4925fb0e1afa9f4bed3e39e1c15a1d9d4253dd27a322e"
+    },
+    {
+      "name": "extensions/ReCap/319446910edc0c34c906.gif",
+      "bytes": 2421142,
+      "sha256": "4cd675381fca4bab993e836384c348ffdd8de66c4c171b5bc80bbda2ceb15785"
+    },
+    {
+      "name": "extensions/ReCap/4dd831dbcdccfe5019c6.gif",
+      "bytes": 1810272,
+      "sha256": "2404c8fd0d056ee5e9702e205b32bc2d3dba34308382f4cc57e31f64bd02a420"
+    },
+    {
+      "name": "extensions/ReCap/50129f26e8f1dd424024.gif",
+      "bytes": 1184682,
+      "sha256": "cf2a96de69c8f8e4d647b74d601658898b5dd9ed4989b1636c968765559994ec"
+    },
+    {
+      "name": "extensions/ReCap/58f5141bd4633bb9d3e5.gif",
+      "bytes": 173208,
+      "sha256": "6657c86915aa8c98e526d20f756d6eceacf360b1b3f52c705a86d77ce4457769"
+    },
+    {
+      "name": "extensions/ReCap/ffb3672fbe48aa3ec487.gif",
+      "bytes": 941447,
+      "sha256": "4017fbaf9a9604a995edf241704cbdacead6d1fc3be0a296b896761c35a17d9f"
+    },
+    {
+      "name": "extensions/ProtocolProxy/WorkerInjectedCode.min.js",
+      "bytes": 2654,
+      "sha256": "5eb0173872f2414f76c85623cc2dfd7e000803e6165bdecfd501fd6cd22e524d"
+    },
+    {
+      "name": "res/fonts/arimo-v29-latin_latin-ext-regular.woff",
+      "bytes": 58108,
+      "sha256": "59f264986dcfb155d04ad17819bc98a7ebe2bfc846659561d890125f95e786b6"
+    },
+    {
+      "name": "res/fonts/tinos-v24-latin_latin-ext-regular.woff",
+      "bytes": 76712,
+      "sha256": "2e8c04bfed9676e6292d67c692ad83ccd0ee504e71ca282d23389f0fe2e374e5"
+    },
+    {
+      "name": "res/fonts/cousine-v27-latin_latin-ext-regular.woff",
+      "bytes": 68448,
+      "sha256": "3da8d56a74cf74c689584362b5fcf95c204098a77014f3d24eabae3726c02e1c"
+    },
+    {
+      "name": "res/fonts/FoxitDingbats.woff",
+      "bytes": 28180,
+      "sha256": "0b71b7f7f11134aa634e8d171312a7bee7c754b30b831bb24891e09b9e7bc92f"
+    },
+    {
+      "name": "res/fonts/FoxitSymbol.woff",
+      "bytes": 16272,
+      "sha256": "95b521011a4c28634da6dffe65051629dd78b60e04b7fbdc50d91f5265f4899c"
+    }
+  ],
+  "checks": [
+    {
+      "name": "isolated-bootstrap",
+      "status": "PASS",
+      "detail": "Copied verified package exposed at an independent loopback listener."
+    },
+    {
+      "name": "network-csp",
+      "status": "PASS",
+      "detail": "External connection and font origins are blocked by the capture page policy."
+    },
+    {
+      "name": "write-authorization",
+      "status": "PASS",
+      "detail": "Missing origin/token rejected before writes."
+    },
+    {
+      "name": "write-path-boundary",
+      "status": "PASS",
+      "detail": "Traversal capture name rejected."
+    },
+    {
+      "name": "model-resource-allowlist",
+      "status": "PASS",
+      "detail": "Only hash-verified listed resource paths can be served."
+    },
+    {
+      "name": "write-schema-boundary",
+      "status": "PASS",
+      "detail": "Unrelated payload schema rejected."
+    }
+  ],
+  "packageSha256": "e3056f28efaa57eef65f81dbdfe41396d9e010bdc975738d1259c58af6c3a922",
+  "limitations": [
+    "HTTP and pinned SDK integrity checks only; no browser or native/converted geometry parity is implied."
+  ]
+}

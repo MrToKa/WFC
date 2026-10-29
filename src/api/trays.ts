@@ -1,12 +1,16 @@
 import { request, ApiError, getApiBaseUrl, uploadExcelFile } from './http';
 import type { Tray, TrayInput, CableImportSummary } from './types';
+import { projectDrawingMetricsSchema } from '../../shared/trayDrawingSnapshot';
 
-export async function fetchTrays(
-  projectId: string
-): Promise<{ trays: Tray[] }> {
-  return request<{ trays: Tray[] }>(`/api/projects/${projectId}/trays`);
+export async function fetchTrays(projectId: string, options: { drawingMetrics?: true; token?: string } = {}): Promise<{ trays: Tray[]; freeSpaceByTrayId?: Record<string, number | null> }> {
+  const response = await request<{ trays: Tray[]; freeSpaceByTrayId?: Record<string, number | null> }>(`/api/projects/${projectId}/trays${options.drawingMetrics ? '?drawingMetrics=1' : ''}`, { token: options.token });
+  if (options.drawingMetrics) {
+    const parsed = projectDrawingMetricsSchema.safeParse(response);
+    if (!parsed.success || parsed.data.project.id !== projectId) throw new ApiError(502, 'Shared drawing metrics are unavailable. Refresh the trays.');
+    return { trays: parsed.data.trays as unknown as Tray[], freeSpaceByTrayId: parsed.data.freeSpaceByTrayId };
+  }
+  return response;
 }
-
 export async function fetchTray(
   projectId: string,
   trayId: string
@@ -70,8 +74,7 @@ export async function importTrays(
 
 export async function exportTrays(
   token: string,
-  projectId: string,
-  options?: { freeSpaceByTrayId?: Record<string, number | null> }
+  projectId: string
 ): Promise<Blob> {
   const response = await fetch(
     `${getApiBaseUrl()}/api/projects/${projectId}/trays/export`,
@@ -81,11 +84,7 @@ export async function exportTrays(
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        ...(options?.freeSpaceByTrayId
-          ? { freeSpaceByTrayId: options.freeSpaceByTrayId }
-          : {})
-      })
+      body: JSON.stringify({})
     }
   );
 

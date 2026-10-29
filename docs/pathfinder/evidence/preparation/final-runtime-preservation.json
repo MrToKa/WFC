@@ -1,0 +1,81 @@
+{
+  "status": "PASS",
+  "recordedAt": "2026-10-19T01:28:13.759Z",
+  "repositories": {
+    "originalWfc": {
+      "path": "C:/Users/todor.chankov/source/WFC",
+      "head": "e1ef20202598bb4d3d78e4772cbbb9747ec23a00",
+      "branch": "main",
+      "workingChanges": "",
+      "cachedAheadBehind": "0\t0",
+      "matchesBaseline": true
+    },
+    "canonicalPathFinder": {
+      "path": "C:/Users/todor.chankov/.codex/.chatgpt-projects/g-p-6ad0a317833c8191bf8e4e8c824a1056/work/review-pathfinder",
+      "head": "45c24bf5f433f13e102600b36f20327c77961d0a",
+      "branch": "master",
+      "workingChanges": "",
+      "cachedAheadBehind": "0\t0",
+      "matchesBaseline": true
+    },
+    "olderPathFinder": {
+      "path": "C:/Users/todor.chankov/source/repos/MrToKa/PathFinder",
+      "head": "35f4fb46f7762503576bdacd9668f34a1be2b0ed",
+      "branch": "master",
+      "workingChanges": "M AddinRibbon/AddinRibbon.csproj\n M AddinRibbon/ClAddin.cs\n?? .vscode/",
+      "cachedAheadBehind": "0\t0",
+      "matchesBaseline": true
+    }
+  },
+  "protectedContainersUnchanged": 18,
+  "runtimeOwner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+  "project": "wfc-pathfinder-local-0cba87606e9b",
+  "port": 5191,
+  "roles": [
+    {
+      "role": "web",
+      "id": "7e59d30f3a831d4626e278b74cf9ebf21005fc5866d4e891f46287ef7684c4db",
+      "image": "sha256:09f71fd6039ce971e9322327ca9ca4cff73a42b8f076f99466e4cc4c09763d07"
+    },
+    {
+      "role": "api",
+      "id": "6f7d04e4de8b220bf3b2b500ac69976574cf2ed2a0d1b0ee8b1877fac6a8994e",
+      "image": "sha256:65c482531c4d584444567f35069b393b0554236d4aa279357880049a3c033efe"
+    },
+    {
+      "role": "storage-ready",
+      "id": "e26509d2b47f7a62ccc51196c7fec5fdb06c0df649cd000d3306a85dac563e8c",
+      "image": "sha256:dce12a1f5ab6311bbaf04defb7277ff0d50fee36e29e49d47234e5bf4ea405fe"
+    },
+    {
+      "role": "postgres",
+      "id": "6a39e7b2d794055dccef0919cf3a99ddf60e0f3c0b5daae062cec1eb6c9b3785",
+      "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751"
+    },
+    {
+      "role": "minio",
+      "id": "56456c8675afd1458df3ae87d8df4bf31131fa1807f7468e3958f900f53a73ed",
+      "image": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e"
+    }
+  ],
+  "sourceProjectReadiness": {
+    "trays": 330,
+    "rules": 0,
+    "aggregates": 0,
+    "applies": 0
+  },
+  "uiFixturePublication": {
+    "counts": {
+      "objects": 13,
+      "vertices": 7592,
+      "fragments": 22,
+      "triangles": 8036,
+      "physicalLeaves": 6
+    },
+    "engineeringAccepted": false,
+    "nativeParity": "not-performed",
+    "geometryRevision": "1"
+  },
+  "originalOr5190Mutations": false,
+  "pushPrMerge": false
+}

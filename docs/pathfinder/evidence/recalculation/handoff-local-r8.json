@@ -1,0 +1,50 @@
+{
+  "recordedAt": "2026-10-19T08:11:21.357Z",
+  "scope": "After verified R7 technical commit, before finalized handoff metadata commit and immediate R8 branch",
+  "branch": "pf-r7-durable-recalculation-local-20261019",
+  "head": "5bb425204952ab63dc0d9685974b929bf8fb9847",
+  "status": "M docs/pathfinder/automation-progress.md\n?? .pf0-work/\n?? .pf2-work/\n?? docs/pathfinder/evidence/recalculation/handoff-remote-r8final.json\n?? docs/pathfinder/handoffs/PF-R8-background-automation.md",
+  "cachedOriginComparison": "0\t59",
+  "technicalDelivery": {
+    "files": 92,
+    "insertions": 6070,
+    "deletions": 137
+  },
+  "verification": {
+    "files": 94,
+    "passed": 1567,
+    "failed": 0,
+    "notRun": 5,
+    "frontendSeconds": 967.38,
+    "types": "PASS",
+    "lint": "PASS",
+    "preservationTables": 116,
+    "pfRootFiles": 114
+  },
+  "referenceRepositories": [
+    {
+      "directory": "C:/Users/todor.chankov/source/WFC",
+      "branch": "main",
+      "head": "e1ef20202598bb4d3d78e4772cbbb9747ec23a00",
+      "status": "",
+      "changesSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "directory": "C:/Users/todor.chankov/.codex/.chatgpt-projects/g-p-6ad0a317833c8191bf8e4e8c824a1056/work/review-pathfinder",
+      "branch": "master",
+      "head": "45c24bf5f433f13e102600b36f20327c77961d0a",
+      "status": "",
+      "changesSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "directory": "C:/Users/todor.chankov/source/repos/MrToKa/PathFinder",
+      "branch": "master",
+      "head": "35f4fb46f7762503576bdacd9668f34a1be2b0ed",
+      "status": "M AddinRibbon/AddinRibbon.csproj\n M AddinRibbon/ClAddin.cs\n?? .vscode/",
+      "changesSha256": "b6834d58e3725a8ed702680a530d27888d025b4b7fcfb1088424947479e55b2e"
+    }
+  ],
+  "remote": "handoff-remote-r8final.json",
+  "stageAcceptance": "Technical local diagnostic/synthetic scope only; no engineering acceptance",
+  "next": "Finalize this metadata commit then immediately create inherited pf-r8-background-automation-local-20261019 and execute its prompt"
+}

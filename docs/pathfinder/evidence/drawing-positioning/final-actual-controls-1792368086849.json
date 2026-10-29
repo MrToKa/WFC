@@ -1,0 +1,101 @@
+{
+  "status": "PASS",
+  "scope": "FRESH_FINAL_RUNTIME_AFTER_WHITESPACE_ONLY_NORMALIZATION",
+  "container": {
+    "role": "api",
+    "id": "a2e930da7a641941a776a552c1b048bc59473c9ad4dc99b020bffa4e1e5e25ed",
+    "image": "sha256:1ae01697093fa8374af378d16fdacef6158bef167ef419937bd7a309641e8fa0",
+    "name": "wfc-pathfinder-local-0cba87606e9b-api-1",
+    "running": true,
+    "startedAt": "2026-10-19T00:00:38.543241267Z"
+  },
+  "result": {
+    "schemaVersion": "pathfinder.drawing-positioning.actual-controls.v1",
+    "status": "PASS",
+    "checks": [
+      {
+        "name": "strict current admin authoring; ordinary assigned drawing readers do not gain PF access",
+        "status": "PASS"
+      },
+      {
+        "name": "shared immutable layout snapshot has same identity for admin engineer basic and technician",
+        "status": "PASS"
+      },
+      {
+        "name": "early authenticated policy and export bounds through nginx without body bytes",
+        "status": "PASS"
+      },
+      {
+        "name": "duplicate escaped keys unknown fields and cross-category booleans fail closed",
+        "status": "PASS"
+      },
+      {
+        "name": "same-side mixed purposes pool jointly and drawing revision cannot change routing scope",
+        "status": "PASS"
+      },
+      {
+        "name": "concurrent policy CAS and exact-key replay save one command without duplicate history",
+        "status": "PASS"
+      },
+      {
+        "name": "default reset and MV plus another occupied side use the same verified layout",
+        "status": "PASS"
+      },
+      {
+        "name": "assigned engineer tray overrides persist and do not permit basic or technician writes",
+        "status": "PASS"
+      },
+      {
+        "name": "ordinary list and XLSX ignore arbitrary client occupancy and use current layout proof",
+        "status": "PASS"
+      },
+      {
+        "name": "atomic three-file export provenance exact replay and generated output does not stale itself",
+        "status": "PASS"
+      },
+      {
+        "name": "generated output replacement is scoped to tray and kind",
+        "status": "PASS"
+      },
+      {
+        "name": "changed tray revision stales prior report without changing cable lengths or routing",
+        "status": "PASS"
+      },
+      {
+        "name": "purpose remove and readd cannot revive authored side modes",
+        "status": "PASS"
+      },
+      {
+        "name": "current role login and assignment revocation fence reads writes and historical replay",
+        "status": "PASS"
+      },
+      {
+        "name": "real copied project settings routing masks bindings scopes and engineering lengths remain unmodified",
+        "status": "PASS"
+      }
+    ],
+    "cleanup": "PASS",
+    "startedAt": "2026-10-19T00:01:25.842Z",
+    "finishedAt": "2026-10-19T00:01:26.719Z"
+  },
+  "transport": {
+    "schemaVersion": "wfc.pf.catalog-transport.v1",
+    "bindingKind": "target",
+    "containerId": "a2e930da7a641941a776a552c1b048bc59473c9ad4dc99b020bffa4e1e5e25ed",
+    "label": "r2a-final-actual-controls",
+    "programSha256": "2f433df02335ba521274d6505d13359aa02b73603a6ba81d5e89be246985eed1",
+    "inputSha256": "3295b0dab145426164c8598a686d048cf9ef6bbafafbbcbfbb63dc9dc4df537e",
+    "exitCode": 0,
+    "signal": null,
+    "error": null,
+    "stdoutBytesObserved": 1832,
+    "stderrBytes": 0,
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "raw": {
+      "path": "r2a-final-actual-controls-raw.private.json",
+      "bytes": 1832,
+      "sha256": "743eb9888964982741f4892452aee78567abc62cdef9040aaebf062156b2094d"
+    },
+    "outcome": "TRANSPORT_OK"
+  }
+}

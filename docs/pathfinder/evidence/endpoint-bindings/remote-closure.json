@@ -1,0 +1,44 @@
+{
+  "status": "PASS",
+  "recordedAt": "2026-10-19T03:02:44.705Z",
+  "scope": "Fresh configured GitHub connector GET; cached refs not used as current proof",
+  "observations": [
+    {
+      "url": "https://api.github.com/repos/MrToKa/WFC/git/ref/heads/main",
+      "result": {
+        "ref": "refs/heads/main",
+        "node_id": "REF_kwDOQC3Ufa9yZWZzL2hlYWRzL21haW4",
+        "url": "https://api.github.com/repos/MrToKa/WFC/git/refs/heads/main",
+        "object": {
+          "sha": "e1ef20202598bb4d3d78e4772cbbb9747ec23a00",
+          "type": "commit",
+          "url": "https://api.github.com/repos/MrToKa/WFC/git/commits/e1ef20202598bb4d3d78e4772cbbb9747ec23a00"
+        }
+      }
+    },
+    {
+      "url": "https://api.github.com/repos/MrToKa/PathFinder/git/ref/heads/master",
+      "result": {
+        "ref": "refs/heads/master",
+        "node_id": "REF_kwDONRQ9M7FyZWZzL2hlYWRzL21hc3Rlcg",
+        "url": "https://api.github.com/repos/MrToKa/PathFinder/git/refs/heads/master",
+        "object": {
+          "sha": "45c24bf5f433f13e102600b36f20327c77961d0a",
+          "type": "commit",
+          "url": "https://api.github.com/repos/MrToKa/PathFinder/git/commits/45c24bf5f433f13e102600b36f20327c77961d0a"
+        }
+      }
+    },
+    {
+      "url": "https://api.github.com/repos/MrToKa/WFC/git/matching-refs/heads/pf-r5",
+      "result": []
+    },
+    {
+      "url": "https://api.github.com/repos/MrToKa/WFC/pulls?state=all&head=MrToKa:pf-r5-endpoint-attachments-local-20261019&per_page=100",
+      "result": []
+    }
+  ],
+  "candidateCI": "NOT_ESTABLISHED",
+  "candidateReview": "NOT_ESTABLISHED",
+  "publishing": "NOT_PERFORMED"
+}

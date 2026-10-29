@@ -1,0 +1,107 @@
+{
+  "schemaVersion": "wfc.pf.availability-source.v1",
+  "status": "PASS_SOURCE_RUNTIME_NOT_RUN",
+  "at": "2026-10-20T09:26:44.179Z",
+  "gitParent": "aef9d38f58bf2c188f51105385d731de9c749e31",
+  "files": [
+    {
+      "path": "scripts/copy-pathfinder-contracts.mjs",
+      "bytes": 3513,
+      "sha256": "de0e60d2a7facfe7b2d0b4ecd290c96c47913b2fd7db6c0812d9f56b3e7de163"
+    },
+    {
+      "path": "shared/pathfinderCalculationAvailability.ts",
+      "bytes": 2009,
+      "sha256": "e87af45f3237fbee08015b67f606d6e4e418be4a735cc51652d991f433557213"
+    },
+    {
+      "path": "shared/pathfinderCalculationAvailability.test.ts",
+      "bytes": 2283,
+      "sha256": "d78d5264538dba6b02357f10b07b82c72121b4cdf7fbe05c9065876c286f59eb"
+    },
+    {
+      "path": "server/pathfinder/repository.ts",
+      "bytes": 25569,
+      "sha256": "3dd571b8a4c8b719181c6d8cfce1e99c31ab3a65233638c5eba771290418fa46"
+    },
+    {
+      "path": "server/pathfinder/repository-match.test.ts",
+      "bytes": 14003,
+      "sha256": "b57d8f2de19c11d4a4b50bfd8dea7fbe2cd68c62450e9791975d73bcbb10e976"
+    },
+    {
+      "path": "server/pathfinder/repository-state.test.ts",
+      "bytes": 9471,
+      "sha256": "84ce28e1775daa9f58c1352ab498f3aebad46c5cbdfed5ac0b6891e967152070"
+    },
+    {
+      "path": "server/pathfinder/displayEndpointAvailability.ts",
+      "bytes": 6768,
+      "sha256": "7ed6481bbdc3b7008a6d4753853f1579ab574ac2e48966b6d5a773d9272720e6"
+    },
+    {
+      "path": "server/pathfinder/displayEndpointAvailability.test.ts",
+      "bytes": 10276,
+      "sha256": "99fad061d37df43ad0c9104831816e428ad78ed8419b80f115b3b2608fede14a"
+    },
+    {
+      "path": "server/pathfinder/displayLocationMatchIndex.ts",
+      "bytes": 1530,
+      "sha256": "4ba7f00550f6e28106730a3cc08ea0b0acb6e3de7fe7bf4ece78d3634bd9266a"
+    },
+    {
+      "path": "server/pathfinder/displayLocationMatchIndex.test.ts",
+      "bytes": 3098,
+      "sha256": "b75db4563ea2e6a57ed9aa357f25c8404a078ad29259e5d3d686e47953d2cb45"
+    },
+    {
+      "path": "src/api/pathfinder.ts",
+      "bytes": 17377,
+      "sha256": "16d0de52664487cc38fea6918f27f99e9acb0b15d575972061ce65b4e4519cab"
+    },
+    {
+      "path": "src/api/pathfinder.test.ts",
+      "bytes": 20273,
+      "sha256": "adb45aafa0048189526a667ac4b0db72d87372538c0648537ee44bcdde08e0fa"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderTab.tsx",
+      "bytes": 23976,
+      "sha256": "9cf2b82669c1ef509a44fdd0f8565a2c1a09d4dd1e29e947231f800d293ee142"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderTab.test.tsx",
+      "bytes": 86596,
+      "sha256": "e3084c4dbe5d7747d864c9f5a710b45fafe5c8589cd19b3270e817de314b837d"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/useProjectPreparation.ts",
+      "bytes": 26153,
+      "sha256": "1a77cb694c4917bba146cfed46f0ee07e1d7efcde5cbb57a9c813e5bc11dd549"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/useProjectPreparation.test.tsx",
+      "bytes": 26169,
+      "sha256": "eec9da79a94381470d9348b104e97f55378599aa2c6cc2c9d33fad60313aa8a0"
+    }
+  ],
+  "checks": {
+    "focused": {
+      "status": "PASS",
+      "files": 8,
+      "passed": 161,
+      "failed": 0,
+      "reportSha256": "04221f042aca371c501ca39d21d0e5f3c556c11d4fbab841d83cc9f9cd0cbe1e"
+    },
+    "frontendTypes": "PASS",
+    "serverTypes": "PASS",
+    "scopedLint": "PASS",
+    "serverBuildAndCompiledClosure": "PASS",
+    "independentSourceReview": "PASS",
+    "runtimeUpgrade": "NOT_RUN",
+    "runtimeAvailability": "NOT_RUN",
+    "calculationIdentityAfter": "NOT_RUN"
+  },
+  "engineeringAccepted": false,
+  "realApply": false
+}

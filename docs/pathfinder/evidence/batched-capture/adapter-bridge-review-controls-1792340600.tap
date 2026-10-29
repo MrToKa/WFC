@@ -1,0 +1,316 @@
+TAP version 13
+# Subtest: SDK initialization uses pinned local assets, explicit local worker root and cookie credentials only
+ok 1 - SDK initialization uses pinned local assets, explicit local worker root and cookie credentials only
+  ---
+  duration_ms: 2.5254
+  type: 'test'
+  ...
+# Subtest: capture adapter preserves only the typed empty lookup scope error and keeps unexpected SDK errors generic
+ok 2 - capture adapter preserves only the typed empty lookup scope error and keeps unexpected SDK errors generic
+  ---
+  duration_ms: 38.6566
+  type: 'test'
+  ...
+# Subtest: staged adapter acknowledges all input before one SDK read, admits committed index0 and clears private input
+ok 3 - staged adapter acknowledges all input before one SDK read, admits committed index0 and clears private input
+  ---
+  duration_ms: 4.7762
+  type: 'test'
+  ...
+# Subtest: a late cancelled sdk operation cannot clear its replacement capture
+ok 4 - a late cancelled sdk operation cannot clear its replacement capture
+  ---
+  duration_ms: 3.1881
+  type: 'test'
+  ...
+# Subtest: a late cancelled digest operation cannot clear its replacement capture
+ok 5 - a late cancelled digest operation cannot clear its replacement capture
+  ---
+  duration_ms: 2.858
+  type: 'test'
+  ...
+# Subtest: missing renderer feature flag API fails before SDK initialization instead of allowing edges-only Ghost
+ok 6 - missing renderer feature flag API fails before SDK initialization instead of allowing edges-only Ghost
+  ---
+  duration_ms: 0.3517
+  type: 'test'
+  ...
+# Subtest: wrong SDK version and asset failure remain controlled, no SDK model is started
+ok 7 - wrong SDK version and asset failure remain controlled, no SDK model is started
+  ---
+  duration_ms: 0.283
+  type: 'test'
+  ...
+# Subtest: aborted SDK assets detach listeners and pending initialization cannot start a viewer
+ok 8 - aborted SDK assets detach listeners and pending initialization cannot start a viewer
+  ---
+  duration_ms: 0.2491
+  type: 'test'
+  ...
+# Subtest: geometry/index/property worker callbacks gate evidence, original lighting is preserved and dispose releases all state
+ok 9 - geometry/index/property worker callbacks gate evidence, original lighting is preserved and dispose releases all state
+  ---
+  duration_ms: 17.2034
+  type: 'test'
+  ...
+# Subtest: property read error prevents ready evidence and caller abort releases a stalled property callback
+ok 10 - property read error prevents ready evidence and caller abort releases a stalled property callback
+  ---
+  duration_ms: 31.6061
+  type: 'test'
+  ...
+# Subtest: aborting a geometry load or rejecting an external URL cannot retain an active viewer
+ok 11 - aborting a geometry load or rejecting an external URL cannot retain an active viewer
+  ---
+  duration_ms: 1.2618
+  type: 'test'
+  ...
+# Subtest: prepared name index normalizes collisions and a unique name without fragments stays non-drawable
+ok 12 - prepared name index normalizes collisions and a unique name without fragments stays non-drawable
+  ---
+  duration_ms: 59.8989
+  type: 'test'
+  ...
+# Subtest: pending object-tree index is cancellable and ignores late SDK callback
+ok 13 - pending object-tree index is cancellable and ignores late SDK callback
+  ---
+  duration_ms: 15.4938
+  type: 'test'
+  ...
+# Subtest: independent lookup empty-visible scope sends only an allowlisted actionable message
+ok 14 - independent lookup empty-visible scope sends only an allowlisted actionable message
+  ---
+  duration_ms: 22.413
+  type: 'test'
+  ...
+# Subtest: HELLO uses exact target origin, forged origin/source/identity/direction/replays have no side effects
+ok 15 - HELLO uses exact target origin, forged origin/source/identity/direction/replays have no side effects
+  ---
+  duration_ms: 0.6417
+  type: 'test'
+  ...
+# Subtest: computed path requires ordered complete bounded chunks and current cookie-bound admin permission
+ok 16 - computed path requires ordered complete bounded chunks and current cookie-bound admin permission
+  ---
+  duration_ms: 2.0139
+  type: 'test'
+  ...
+# Subtest: a successful zero-length engine result transports its one exact point without adding a second
+ok 17 - a successful zero-length engine result transports its one exact point without adding a second
+  ---
+  duration_ms: 1.7639
+  type: 'test'
+  ...
+# Subtest: out-of-order/incomplete computed paths fail closed; Clear cancels a pending authorization
+ok 18 - out-of-order/incomplete computed paths fail closed; Clear cancels a pending authorization
+  ---
+  duration_ms: 1.4133
+  type: 'test'
+  ...
+# Subtest: picking and metadata reauthorize after SDK work; cancellation and revoked admin suppress results
+ok 19 - picking and metadata reauthorize after SDK work; cancellation and revoked admin suppress results
+  ---
+  duration_ms: 1.1904
+  type: 'test'
+  ...
+# Subtest: selection is cookie-bound admin authorized before and after SDK work, and Clear suppresses late selection
+ok 20 - selection is cookie-bound admin authorized before and after SDK work, and Clear suppresses late selection
+  ---
+  duration_ms: 1.2278
+  type: 'test'
+  ...
+# Subtest: transparency is bounded to the current committed path and delayed authorization cannot change a replacement
+ok 21 - transparency is bounded to the current committed path and delayed authorization cannot change a replacement
+  ---
+  duration_ms: 2.1286
+  type: 'test'
+  ...
+# Subtest: transparency reauthorizes after material preflight and makes no change after role revocation
+ok 22 - transparency reauthorizes after material preflight and makes no change after role revocation
+  ---
+  duration_ms: 0.9854
+  type: 'test'
+  ...
+# Subtest: Clear, cancellation, replacement and disposal cannot publish late preflighted transparency
+ok 23 - Clear, cancellation, replacement and disposal cannot publish late preflighted transparency
+  ---
+  duration_ms: 2.5357
+  type: 'test'
+  ...
+# Subtest: late final transparency authorization cannot mutate a cleared path
+ok 24 - late final transparency authorization cannot mutate a cleared path
+  ---
+  duration_ms: 0.8966
+  type: 'test'
+  ...
+# Subtest: partial appearance restoration errors are sanitized and leave Clear available for retry
+ok 25 - partial appearance restoration errors are sanitized and leave Clear available for retry
+  ---
+  duration_ms: 2.7694
+  type: 'test'
+  ...
+# Subtest: model capture transport is request-bound, reauthorizes each part and reserves the replay budget
+ok 26 - model capture transport is request-bound, reauthorizes each part and reserves the replay budget
+  ---
+  duration_ms: 13.1054
+  type: 'test'
+  ...
+# Subtest: the overall capture deadline starts before initial authorization and refuses a delayed start
+ok 27 - the overall capture deadline starts before initial authorization and refuses a delayed start
+  ---
+  duration_ms: 1.4008
+  type: 'test'
+  ...
+# Subtest: a final capture response cannot publish after delayed postauthorization exceeds the shared deadline
+ok 28 - a final capture response cannot publish after delayed postauthorization exceeds the shared deadline
+  ---
+  duration_ms: 1.035
+  type: 'test'
+  ...
+# Subtest: staged input ACKs and first output stay separately typed and reauthorize every round
+ok 29 - staged input ACKs and first output stay separately typed and reauthorize every round
+  ---
+  duration_ms: 3.1361
+  type: 'test'
+  ...
+# Subtest: Clear or revoked authority after a staged append cannot publish a late input ACK
+not ok 30 - Clear or revoked authority after a staged append cannot publish a late input ACK
+  ---
+  duration_ms: 1.5044
+  type: 'test'
+  location: 'C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\viewer-runtime\\test\\bridge.test.mjs:240:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'EXTRACTION_FAILED'
+    - 'ACCESS_REVOKED'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'ACCESS_REVOKED'
+  actual: 'EXTRACTION_FAILED'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///C:/Users/todor.chankov/source/WFC-pathfinder-local/viewer-runtime/test/bridge.test.mjs:244:327)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: actual index promise gates MODEL_LOADED and descriptors use cookie-only fixed same-origin paths
+ok 31 - actual index promise gates MODEL_LOADED and descriptors use cookie-only fixed same-origin paths
+  ---
+  duration_ms: 0.8621
+  type: 'test'
+  ...
+# Subtest: cancelling INIT suppresses late readiness and permits a fresh controlled initialization
+ok 32 - cancelling INIT suppresses late readiness and permits a fresh controlled initialization
+  ---
+  duration_ms: 0.336
+  type: 'test'
+  ...
+# Subtest: new load aborts old load, rejects late progress/completion and cannot reuse old loadId
+ok 33 - new load aborts old load, rejects late progress/completion and cannot reuse old loadId
+  ---
+  duration_ms: 0.6563
+  type: 'test'
+  ...
+# Subtest: cancel pending load aborts transport and suppresses late model/index callbacks
+ok 34 - cancel pending load aborts transport and suppresses late model/index callbacks
+  ---
+  duration_ms: 0.3871
+  type: 'test'
+  ...
+# Subtest: empty/marker-only/invalid routing clears previous overlays without invoking geometry
+ok 35 - empty/marker-only/invalid routing clears previous overlays without invoking geometry
+  ---
+  duration_ms: 1.0675
+  type: 'test'
+  ...
+# Subtest: partial/missing/ambiguous/non-drawable matches remain occurrence-preserving model-only results
+ok 36 - partial/missing/ambiguous/non-drawable matches remain occurrence-preserving model-only results
+  ---
+  duration_ms: 0.619
+  type: 'test'
+  ...
+# Subtest: clear and cancel invalidate pending route results, stale identity and unknown target cannot change active view
+ok 37 - clear and cancel invalidate pending route results, stale identity and unknown target cannot change active view
+  ---
+  duration_ms: 0.5175
+  type: 'test'
+  ...
+# Subtest: protected descriptor HTTP 401 yields sanitized SESSION_EXPIRED and no SDK model load
+ok 38 - protected descriptor HTTP 401 yields sanitized SESSION_EXPIRED and no SDK model load
+  ---
+  duration_ms: 0.4702
+  type: 'test'
+  ...
+# Subtest: protected descriptor HTTP 403 yields sanitized ACCESS_REVOKED and no SDK model load
+ok 39 - protected descriptor HTTP 403 yields sanitized ACCESS_REVOKED and no SDK model load
+  ---
+  duration_ms: 0.3511
+  type: 'test'
+  ...
+# Subtest: protected descriptor HTTP 409 yields sanitized MODEL_SELECTION_CHANGED and no SDK model load
+ok 40 - protected descriptor HTTP 409 yields sanitized MODEL_SELECTION_CHANGED and no SDK model load
+  ---
+  duration_ms: 0.4237
+  type: 'test'
+  ...
+# Subtest: protected descriptor HTTP 410 yields sanitized SESSION_EXPIRED and no SDK model load
+ok 41 - protected descriptor HTTP 410 yields sanitized SESSION_EXPIRED and no SDK model load
+  ---
+  duration_ms: 0.289
+  type: 'test'
+  ...
+# Subtest: protected descriptor HTTP 503 yields sanitized MODEL_UNAVAILABLE and no SDK model load
+ok 42 - protected descriptor HTTP 503 yields sanitized MODEL_UNAVAILABLE and no SDK model load
+  ---
+  duration_ms: 0.4592
+  type: 'test'
+  ...
+# Subtest: descriptor oversized/wrong identity/external entrypoint never reaches SDK
+ok 43 - descriptor oversized/wrong identity/external entrypoint never reaches SDK
+  ---
+  duration_ms: 1.664
+  type: 'test'
+  ...
+# Subtest: 409 MODEL_UNAVAILABLE safe code is preserved without disclosing backend text
+ok 44 - 409 MODEL_UNAVAILABLE safe code is preserved without disclosing backend text
+  ---
+  duration_ms: 0.4479
+  type: 'test'
+  ...
+# Subtest: worker failure rechecks protected descriptor to identify revoked session without renewal
+ok 45 - worker failure rechecks protected descriptor to identify revoked session without renewal
+  ---
+  duration_ms: 0.4526
+  type: 'test'
+  ...
+# Subtest: runtime error during indexing prevents late readiness and releases the failed model
+ok 46 - runtime error during indexing prevents late readiness and releases the failed model
+  ---
+  duration_ms: 0.4273
+  type: 'test'
+  ...
+# Subtest: DISPOSE aborts resources, removes listeners, acknowledges exactly once and ignores all late work
+ok 47 - DISPOSE aborts resources, removes listeners, acknowledges exactly once and ignores all late work
+  ---
+  duration_ms: 0.407
+  type: 'test'
+  ...
+# Subtest: a saturated command registry still admits replay-safe CANCEL and terminal DISPOSE without growing it
+ok 48 - a saturated command registry still admits replay-safe CANCEL and terminal DISPOSE without growing it
+  ---
+  duration_ms: 70.3782
+  type: 'test'
+  ...
+1..48
+# tests 48
+# suites 0
+# pass 47
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 243.3939

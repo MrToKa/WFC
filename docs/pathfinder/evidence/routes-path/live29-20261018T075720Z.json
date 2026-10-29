@@ -1,0 +1,175 @@
+{
+  "schemaVersion": "pathfinder.integration.v1",
+  "recordedAtUtc": "2026-10-18T07:58:24.707Z",
+  "projectId": "54cfad40-bd12-41e9-ab24-d90bdaafc993",
+  "scope": "separate local synthetic fixture only",
+  "status": "PASS",
+  "passed": 29,
+  "total": 29,
+  "checks": [
+    {
+      "name": "shared project locations resolve both From/To uses",
+      "status": "PASS",
+      "milliseconds": 60
+    },
+    {
+      "name": "standalone preview computes exact C# geometry/design without creating cables, proposals, reviews or Apply writes",
+      "status": "PASS",
+      "milliseconds": 593,
+      "details": {
+        "previewJob": "d569ecbc-364c-4524-a881-8afee5ab71c6",
+        "lengthMeters": 10,
+        "designLengthMeters": "18"
+      }
+    },
+    {
+      "name": "standalone preview named aliases resolve both endpoints without saving another location",
+      "status": "PASS",
+      "milliseconds": 1263
+    },
+    {
+      "name": "standalone Reverse uses exact C# reversal with unchanged design length and original labels",
+      "status": "PASS",
+      "milliseconds": 2608
+    },
+    {
+      "name": "standalone preview rejects invalid coordinates, unknown categories and client-owned gap/allowance overrides",
+      "status": "PASS",
+      "milliseconds": 340
+    },
+    {
+      "name": "standalone preview fences active artifact, selection, settings and location revisions",
+      "status": "PASS",
+      "milliseconds": 1015
+    },
+    {
+      "name": "standalone preview enforces current admin access and isolates ordinary job readers",
+      "status": "PASS",
+      "milliseconds": 1339
+    },
+    {
+      "name": "Project Details gap defaults to one metre, persists and rejects invalid API/SQL values",
+      "status": "PASS",
+      "milliseconds": 47
+    },
+    {
+      "name": "project mutex permits mixed-import and admin-assignment FK lock orders without a deadlock",
+      "status": "PASS",
+      "milliseconds": 13
+    },
+    {
+      "name": "actual durable job creates exact synthetic Instrumentation proposal",
+      "status": "PASS",
+      "milliseconds": 1212,
+      "details": {
+        "geometry": 10,
+        "design": "18",
+        "scope": "local-synthetic-fixture"
+      }
+    },
+    {
+      "name": "queued ordered lookup and Reverse preserve exact points without Apply or cable changes",
+      "status": "PASS",
+      "milliseconds": 2521
+    },
+    {
+      "name": "lookup result becomes stale after model selection revision changes",
+      "status": "PASS",
+      "milliseconds": 1373
+    },
+    {
+      "name": "server-owned project gap fences overrides, routes, lookup and A to B to A staleness",
+      "status": "PASS",
+      "milliseconds": 4952
+    },
+    {
+      "name": "explicit forced retry replaces a seeded transient failure while automatic requests deduplicate",
+      "status": "PASS",
+      "milliseconds": 2467
+    },
+    {
+      "name": "explicit Review + Apply preserves installLength, adds history and replays idempotently",
+      "status": "PASS",
+      "milliseconds": 2551
+    },
+    {
+      "name": "manual routing A to B to A conflicts despite identical final inputs",
+      "status": "PASS",
+      "milliseconds": 1182
+    },
+    {
+      "name": "settings-only rerun uses retained geometry and exact Project Details formula",
+      "status": "PASS",
+      "milliseconds": 2516
+    },
+    {
+      "name": "bending percentage and SECONDARY Details values recalculate design without replacing unchanged geometry",
+      "status": "PASS",
+      "milliseconds": 7337
+    },
+    {
+      "name": "allowance A to B to A revision invalidates reviewed result",
+      "status": "PASS",
+      "milliseconds": 1224
+    },
+    {
+      "name": "active model selection A to null to A invalidates reviewed result",
+      "status": "PASS",
+      "milliseconds": 1243
+    },
+    {
+      "name": "revoked login cannot write locations, match, enqueue or read PF state",
+      "status": "PASS",
+      "milliseconds": 95
+    },
+    {
+      "name": "current admin revocation and cross-project proposal lookup are denied",
+      "status": "PASS",
+      "milliseconds": 1148
+    },
+    {
+      "name": "cancellation reaches terminal only after owned calculation stops",
+      "status": "PASS",
+      "milliseconds": 16324
+    },
+    {
+      "name": "expired lease recovery fences the obsolete owner and publishes once",
+      "status": "PASS",
+      "milliseconds": 961
+    },
+    {
+      "name": "receipt failure rolls back cable, history and receipt atomically",
+      "status": "PASS",
+      "milliseconds": 1280
+    },
+    {
+      "name": "admin revocation waits until protected Apply commits",
+      "status": "PASS",
+      "milliseconds": 1361
+    },
+    {
+      "name": "model health changes wait until protected Apply commits",
+      "status": "PASS",
+      "milliseconds": 1252
+    },
+    {
+      "name": "login expiration while Apply is paused rolls the write back",
+      "status": "PASS",
+      "milliseconds": 3912
+    },
+    {
+      "name": "untrusted upload remains non-native and requires a new explicit manual review before atomic real-scope Apply",
+      "status": "PASS",
+      "milliseconds": 1517
+    }
+  ],
+  "cleanup": [
+    {
+      "name": "fixture admin/projects/cables/locations/jobs/uploads removed; original synthetic gap/allowances/model restored; immutable audit events retained",
+      "status": "PASS"
+    }
+  ],
+  "nativeParity": "NOT_PERFORMED; manual per-proposal review policy does not claim native engineering parity or broader user acceptance.",
+  "sourceSha256": "65ca907c52deacebdbe74cbc5cb16e4ad118dd06727e55090f49b53f419018e5",
+  "evidence": "/var/lib/wfc/pathfinder/integration/integration-c794c50d-5839-410b-a34d-0b57c873092e.json"
+}

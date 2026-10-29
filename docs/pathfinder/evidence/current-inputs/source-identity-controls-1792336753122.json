@@ -1,0 +1,115 @@
+{
+  "schemaVersion": "pathfinder.current-inputs.identity-controls.v1",
+  "recordedAt": "2026-10-18T15:19:13.121Z",
+  "status": "PASS",
+  "source": [
+    {
+      "path": "scripts/pathfinder-current-inputs/source-copy.mjs",
+      "sha256": "e1740f639a55fe08f1a5dff440ad9c4b3985379764a810ba754e6c333811fadf"
+    },
+    {
+      "path": "scripts/pathfinder-current-inputs/source-lib.mjs",
+      "sha256": "1fa12cd1d76662dfc350ac30551c1770cb5c502c640c7f89821c1ea98fe14b6f"
+    },
+    {
+      "path": "scripts/pathfinder-current-inputs/source-lib.test.mjs",
+      "sha256": "a72adffeff4e63f6879399f1e5ad56211094c27dd64e716d25a501a479aeba84"
+    },
+    {
+      "path": "scripts/pathfinder-current-inputs/README-source.md",
+      "sha256": "e657bba2c38ad208f1e0cad23a4d81c9c9728d4bf7968db7c2340f18f4a1607f"
+    }
+  ],
+  "sourceSetSha256": "c269ed99981dbb2c8cf7a01aeccba37d99818117c6c9806733d2477b2f1ecb15",
+  "checks": [
+    {
+      "command": [
+        "node",
+        "--check",
+        "scripts/pathfinder-current-inputs/source-lib.mjs"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "error": null,
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": {
+        "path": "pathfinder-engine/.scratch/current-inputs-identity-controls-5d7af298-6ff2-46b7-b059-74ef36f2053e/command-0.tap",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tests": null,
+      "pass": null,
+      "fail": null
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "scripts/pathfinder-current-inputs/source-copy.mjs"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "error": null,
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": {
+        "path": "pathfinder-engine/.scratch/current-inputs-identity-controls-5d7af298-6ff2-46b7-b059-74ef36f2053e/command-1.tap",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tests": null,
+      "pass": null,
+      "fail": null
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "scripts/pathfinder-current-inputs/source-lib.test.mjs"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "error": null,
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": {
+        "path": "pathfinder-engine/.scratch/current-inputs-identity-controls-5d7af298-6ff2-46b7-b059-74ef36f2053e/command-2.tap",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tests": null,
+      "pass": null,
+      "fail": null
+    },
+    {
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "scripts/pathfinder-current-inputs/source-lib.test.mjs"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "error": null,
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": {
+        "path": "pathfinder-engine/.scratch/current-inputs-identity-controls-5d7af298-6ff2-46b7-b059-74ef36f2053e/command-3.tap",
+        "bytes": 7178,
+        "sha256": "68b60f0d95a175bfd8652ac2d72bcb2d46ead5fcc90abb6bcb5fc84da73711b0"
+      },
+      "tests": 36,
+      "pass": 36,
+      "fail": 0
+    }
+  ],
+  "originalDatabaseQueriesByThisAgent": 0,
+  "runtimeOperationsByThisAgent": 0,
+  "existingCopyGuard": "UNCHANGED: still compares raw serverAddress exactly; no identity-format hypothesis accepted as fact.",
+  "diagnostic": "New root-only identity mode executes only the identity SELECT and transaction controls, returns a closed nonsecret metadata projection; actual original execution remains NOT_RUN.",
+  "preservedFailure": "docs/pathfinder/evidence/current-inputs/source-copy-20261018T1515Z.json",
+  "limitations": [
+    "Focused fake-Client controls and actual no-DB watchdog children; no live SQL identity observation yet."
+  ]
+}

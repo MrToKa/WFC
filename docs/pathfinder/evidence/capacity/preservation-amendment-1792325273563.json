@@ -1,0 +1,90 @@
+{
+  "schemaVersion": "pathfinder.capacity.preservation-amendment.v1",
+  "recordedAtUtc": "2026-10-18T12:07:54.277Z",
+  "status": "PASS",
+  "originalOrchestrationStatus": "FAIL",
+  "originalOrchestration": {
+    "path": "docs/pathfinder/evidence/capacity/orchestration-original-1792325273563.json",
+    "bytes": 9049,
+    "sha256": "b7feb909796f0b0817167116ead4813318c9ba75335a858d84dbf0f0b9ab3d4b"
+  },
+  "measurementStatus": "PASS",
+  "measurementReceipt": {
+    "path": "docs/pathfinder/evidence/capacity/measurements-1792325273563.json",
+    "bytes": 37153,
+    "sha256": "5c2a262a020301da14a5afcea10796a856f533f4ccd6fdd6d7f70dee90d1dea5"
+  },
+  "correction": "Docker source mount arrays are unordered metadata. Compare their complete exact bindings after sorting by destination only. Never sort route/path arrays. No calculation was rerun.",
+  "normalizedBeforeAfterEqual": true,
+  "currentReadbackEqual": true,
+  "currentReadback": {
+    "api": {
+      "id": "3d05017ee0fc2bb0b15c1a3e0aaeac258e996d2e024006667d3a4449c40d62c0",
+      "name": "wfc-pathfinder-local-api-1",
+      "image": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+      "running": true,
+      "startedAt": "2026-10-18T09:53:48.067931419Z",
+      "exitCode": 0,
+      "oomKilled": false,
+      "platform": "linux",
+      "mounts": [
+        {
+          "type": "volume",
+          "name": "wfc-pathfinder-local_staging",
+          "destination": "/var/lib/wfc/model-imports",
+          "writable": true
+        },
+        {
+          "type": "volume",
+          "name": "wfc-pathfinder-local_pathfinder",
+          "destination": "/var/lib/wfc/pathfinder",
+          "writable": true
+        }
+      ]
+    },
+    "postgres": {
+      "id": "6830635a4597dad696f1a5ced6846853cd9e1fee0f858450ad6f858e4c2e30b9",
+      "name": "wfc-pathfinder-local-postgres-1",
+      "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+      "running": true,
+      "startedAt": "2026-10-18T02:03:12.60010978Z",
+      "exitCode": 0,
+      "oomKilled": false,
+      "platform": "linux",
+      "mounts": [
+        {
+          "type": "volume",
+          "name": "wfc-pathfinder-local_postgres",
+          "destination": "/var/lib/postgresql",
+          "writable": true
+        }
+      ]
+    },
+    "apiResourceCeilings": {
+      "memoryBytes": 4294967296,
+      "pids": 256
+    },
+    "image": {
+      "id": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+      "architecture": "amd64",
+      "os": "linux",
+      "created": "2026-10-18T09:35:54.452738296Z"
+    }
+  },
+  "inputFilesUnchangedInOriginalReceipt": true,
+  "publishedBenchUnchangedInOriginalReceipt": true,
+  "cleanup": {
+    "status": "PASS",
+    "containerId": "acfbeb64da0cb1e9006707b90d1c30fa99e6437c8aa20613cbd5fe7d5184f334",
+    "containerAbsent": true,
+    "externalDeadlineFired": false,
+    "interrupted": false,
+    "volumesCreated": 0,
+    "networksCreated": 0,
+    "imagesCreated": 0,
+    "filesDeleted": 0
+  },
+  "independentPreservationReceipt": "docs/pathfinder/evidence/capacity/final-preservation-1792325162813.json",
+  "independentPreservationSha256": "a88eec49c3fafd2e5f1517e40d679525c6fd36e22f6bbe49afc547de0bcfdb00",
+  "scope": "Corrected metadata-only false failure; original raw FAIL receipt remains unchanged. All five datasets and fifteen production queries completed once."
+}

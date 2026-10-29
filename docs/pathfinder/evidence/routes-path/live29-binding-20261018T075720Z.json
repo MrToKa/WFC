@@ -1,0 +1,91 @@
+{
+  "schemaVersion": "pathfinder.routes-path.live-binding.v1",
+  "observedAtUtc": "2026-10-18T07:59:27.5937676Z",
+  "sourceCommit": "46152f9873764ec22537029d98bbfcc453052768",
+  "branch": "pf-two-tabs-local-20261018",
+  "workspace": "C:/Users/todor.chankov/source/WFC-pathfinder-local",
+  "apiContainer": "3d68ca29bfa715f668c22fbc75da4898572cf2e80ad341f2979d6cb58ab5f147",
+  "apiImage": "sha256:905dcb21138065e4b8cd028a6747fd613d080f6bb562d7901c034eb9c7ae4bce",
+  "apiStartedAtUtc": "2026-10-18T07:56:00.5856758Z",
+  "webContainer": "64153d63c111e32c581721467e4811a58b8dc850020d645de97409b0c86d865b",
+  "webImage": "sha256:09dcf672529ea4e119e8655411cdc9288851aeaa5e059d12c4b4415f4e6baa85",
+  "webStartedAtUtc": "2026-10-18T07:56:06.402605379Z",
+  "postgresContainer": "6830635a4597dad696f1a5ced6846853cd9e1fee0f858450ad6f858e4c2e30b9",
+  "database": "wfc_pathfinder_local",
+  "command": "docker exec 3d68ca29bfa715f668c22fbc75da4898572cf2e80ad341f2979d6cb58ab5f147 node server/dist/server/pathfinder/integration.js 54cfad40-bd12-41e9-ab24-d90bdaafc993",
+  "status": "PASS",
+  "passed": 29,
+  "total": 29,
+  "receipt": "live29-20261018T075720Z.json",
+  "receiptSha256": "2ba7e4f42c875a2bc806779c6b73d0e3e2b919019fadd3e15a05d29c4da8a0ed",
+  "compiledContainerDriverSha256": "65ca907c52deacebdbe74cbc5cb16e4ad118dd06727e55090f49b53f419018e5",
+  "receiptRecordedDriverSha256": "65ca907c52deacebdbe74cbc5cb16e4ad118dd06727e55090f49b53f419018e5",
+  "hostIgnoredCompiledDriverSha256": "3cf3e8ecc8845215484925ad27317838a67d1f35110baf796e935e6f62e21289",
+  "hostDriverNote": "Retained host ignored output is from the previous delivery; it was not executed. Candidate container fresh compiled driver is the executed and receipt-bound artifact.",
+  "cleanup": "PASS",
+  "readOnlyCleanupAndUnappliedRealDemo": "cleanup-readback-20261018T075720Z.json",
+  "nativeParity": "NOT_PERFORMED; technical checks do not grant human engineering acceptance.",
+  "deniedChildren": [
+    {
+      "path": ".pf0-work/core-1f723e37-f152-4a60-9b1e-46adc6c3179c",
+      "exists": true,
+      "operation": "Retained; no removal, write, retry or bypass by this live verification."
+    },
+    {
+      "path": ".pf2-work/model-tests-2733f823d57d477ba5e338a7d9a08cc9",
+      "exists": true,
+      "operation": "Retained; no removal, write, retry or bypass by this live verification."
+    },
+    {
+      "path": "pathfinder-engine/.scratch/model-tests-c13957af670e4ee2869cf876aa60d581",
+      "exists": true,
+      "operation": "Retained; no removal, write, retry or bypass by this live verification."
+    }
+  ],
+  "sourceHashes": [
+    {
+      "path": "server/pathfinder/previews.ts",
+      "sha256": "11fad8cf5514b346ed00d96b3d9a1343aa185042999473334917caad740d468b"
+    },
+    {
+      "path": "server/pathfinder/contracts.ts",
+      "sha256": "28e304454d2c4fba839facb98398a06e8cae3f957c65d3b9e6c0cabe8e4ebdef"
+    },
+    {
+      "path": "server/pathfinder/jobContracts.ts",
+      "sha256": "ae22fbe1b1940a5ecee169fb4cac4b9e20540894c023e6e9e2058fb9f644f7c1"
+    },
+    {
+      "path": "server/pathfinder/jobs.ts",
+      "sha256": "f53e50a997129f0da3bf9d3e5638a291449af9d728a8cbc15ec023c30f1c1186"
+    },
+    {
+      "path": "server/pathfinder/jobsSchema.ts",
+      "sha256": "64ef70136ffc5853bc9dd2de322bbae2c7ede22533c77985eaf9f8c6b92bb321"
+    },
+    {
+      "path": "server/pathfinder/repository.ts",
+      "sha256": "9f908d7afffd2b8e00a243e22ee9fac04bf05a912e9b902231ff038fd25c1a1a"
+    },
+    {
+      "path": "server/pathfinder/runtime.ts",
+      "sha256": "85bab3252e65b02f422c16f0c62671357a574296883b1383de166e4d32c9c055"
+    },
+    {
+      "path": "server/pathfinder/worker.ts",
+      "sha256": "f259b16bae9e443095b74689e08021a88c5e37b1573d747dde730b3de1c66668"
+    },
+    {
+      "path": "server/pathfinder/apply.ts",
+      "sha256": "93201ad2f4a67dcb88e7061ad8248366cb272c5d977b45ffa268fba213560800"
+    },
+    {
+      "path": "server/pathfinder/integration.ts",
+      "sha256": "91a29c78061eb9022e9de4cb0655356e97acdba9770fed546bfb2127021ecab4"
+    },
+    {
+      "path": "server/routes/pathfinderRoutes.ts",
+      "sha256": "d07cd7fb559ed4de74f03436d630ec3994d5382c99fcc36d7246fbc37f8f8fdc"
+    }
+  ]
+}

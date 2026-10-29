@@ -1,0 +1,52 @@
+import express,{Router,type Request,type Response,type NextFunction} from 'express';
+import type {Pool} from 'pg';
+import {z} from 'zod';
+import {CALCULATION_GRANT_LIMITS,calculationGrantCommandSchema,calculationGrantErrorSchema} from '../../shared/pathfinderCalculationGrant.js';
+import {policyUuidSchema} from '../../shared/pathfinderPurposePolicy.js';
+import {verifyAccessToken} from '../auth.js';
+import {requestPrincipal} from './auth.js';
+import {PathFinderError} from './errors.js';
+import {parsePolicyJson} from './policyJson.js';
+import type {CalculationGrantRepository} from './calculationGrantRepository.js';
+
+export function sendCalculationGrantError(res:Response,error:unknown):void{
+  const status=(error as {status?:number}|null)?.status;
+  const safe=error instanceof PathFinderError?error:error instanceof z.ZodError||status===400?new PathFinderError('INVALID_CALCULATION_GRANT_REQUEST',400,'The calculation grant command is invalid.'):
+    status===413?new PathFinderError('CALCULATION_GRANT_BODY_LIMIT',413,'The calculation grant command exceeds its limit.'):
+    status===415?new PathFinderError('CALCULATION_GRANT_ENCODING_UNSUPPORTED',415,'Use uncompressed UTF-8 application/json.'):
+    new PathFinderError('CALCULATION_GRANT_OUTCOME_UNKNOWN',500,'The command could not be confirmed. Retain its exact body and key, then reconcile.');
+  res.setHeader('Cache-Control','private, no-store');res.status(safe.status).json(calculationGrantErrorSchema.parse({schemaVersion:'wfc.pf.calculation-grant-error.v1',
+    code:safe.code,message:safe.message,outcome:safe.status>=500?'unknown':'refused',currentControlRevision:null}));
+}
+/** Fixed HUMAN management family; no producer capability or lease owner token is accepted here. */
+export function createCalculationGrantRouter(_pool:Pool,repository:CalculationGrantRepository):Router{
+  const router=Router({mergeParams:true,caseSensitive:true}),project=(req:Request)=>policyUuidSchema.parse(req.params.projectId);
+  router.use(async(req,res,next)=>{
+    if(!/^\/calculation-grants(?:\/|$)/i.test(req.path)){next('router');return;}
+    res.setHeader('Cache-Control','private, no-store');const bearer=/^Bearer\s+(\S+)$/i.exec((req.header('authorization')??'').trim())?.[1];
+    if(!bearer){sendCalculationGrantError(res,new PathFinderError('AUTHENTICATION_REQUIRED',401));return;}
+    try{const payload=verifyAccessToken(bearer);req.userId=policyUuidSchema.parse(payload.sub);req.loginId=policyUuidSchema.parse(payload.jti);
+      if(!Number.isSafeInteger(payload.exp))throw new Error('Invalid expiry.');req.loginExpiresAt=payload.exp!*1000;
+    }catch{sendCalculationGrantError(res,new PathFinderError('LOGIN_REVOKED',401));return;}
+    try{
+      await repository.authorize(project(req),requestPrincipal(req));
+      if(['POST','PUT','PATCH'].includes(req.method)){
+        const length=req.header('content-length');if(length!==undefined&&(!/^(?:0|[1-9][0-9]*)$(?![\s\S])/.test(length)||BigInt(length)>BigInt(CALCULATION_GRANT_LIMITS.controlBytes))){res.setHeader('Connection','close');throw new PathFinderError('CALCULATION_GRANT_BODY_LIMIT',413);}
+        if(!/^application\/json(?:\s*;\s*charset=utf-8)?$/i.test(req.header('content-type')??''))throw new PathFinderError('CALCULATION_GRANT_CONTENT_TYPE_REQUIRED',415);
+        if((req.header('content-encoding')??'identity').toLowerCase()!=='identity')throw new PathFinderError('CALCULATION_GRANT_ENCODING_UNSUPPORTED',415);
+      }
+      next();
+    }catch(error){sendCalculationGrantError(res,error);}
+  });
+  const empty=(req:Request)=>z.object({}).strict().parse(req.query);
+  router.get('/calculation-grants/context',async(req,res)=>{try{empty(req);res.json(await repository.context(project(req),requestPrincipal(req)));}catch(error){sendCalculationGrantError(res,error);}});
+  router.post('/calculation-grants/commands',express.raw({type:()=>true,limit:CALCULATION_GRANT_LIMITS.controlBytes,inflate:false}),async(req,res)=>{
+    const controller=new AbortController(),close=()=>{if(!res.writableEnded)controller.abort();};res.once('close',close);
+    try{empty(req);if(!Buffer.isBuffer(req.body))throw new PathFinderError('INVALID_CALCULATION_GRANT_REQUEST',400);
+      const command=calculationGrantCommandSchema.parse(parsePolicyJson(req.body,{maxBytes:CALCULATION_GRANT_LIMITS.controlBytes}));
+      res.json(await repository.command(project(req),requestPrincipal(req),command,controller.signal));
+    }catch(error){if(!res.destroyed)sendCalculationGrantError(res,error);}finally{res.removeListener('close',close);}
+  });
+  router.use((_req,res)=>sendCalculationGrantError(res,new PathFinderError('CALCULATION_GRANT_METHOD_UNSUPPORTED',405)));
+  router.use((error:unknown,_req:Request,res:Response,_next:NextFunction)=>sendCalculationGrantError(res,error));return router;
+}

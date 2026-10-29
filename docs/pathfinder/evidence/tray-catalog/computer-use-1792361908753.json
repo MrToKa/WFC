@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "wfc.pf.catalog-computer-use.v1",
+  "status": "PASS",
+  "recordedAt": "2026-10-18T22:18:28.752Z",
+  "method": "computer-use/cua_repl; actual local browser UI",
+  "origin": "http://127.0.0.1:5191",
+  "projectId": "1af0f807-7653-40ea-8391-7eea6c54e7d4",
+  "modelVersionId": "a613151e-c370-45c5-80f3-42ae58603b9a",
+  "checks": [
+    {
+      "name": "Actual tray catalog displayed with33pages",
+      "status": "PASS"
+    },
+    {
+      "name": "Tray detail drawing inputs/material dimensions/support weight/load curve visible",
+      "status": "PASS"
+    },
+    {
+      "name": "Path Finder Routes/Path/Path lookup controls remain present",
+      "status": "PASS"
+    },
+    {
+      "name": "Active model ready; protected3D model visually rendered",
+      "status": "PASS"
+    },
+    {
+      "name": "Details-derived gap1/SECONDARY7/end5/bending10 visible",
+      "status": "PASS"
+    }
+  ],
+  "modelHUD": {
+    "geometry": 664556,
+    "identifiers": 438156,
+    "properties": 6
+  },
+  "existingDiagnosticSnapshotObjects": 13,
+  "engineeringApply": "NOT_RUN",
+  "newLocationMappings": "NOT_RUN",
+  "fullProjectGraph": "NOT_RUN",
+  "humanAcceptance": "NOT_CLAIMED",
+  "screenshots": [
+    {
+      "path": "pathfinder-engine/.scratch/tray-catalog-17cadea1-d54c-42b1-a563-2d3c514e7704/trays-ui.png",
+      "bytes": 84660,
+      "sha256": "2e0ca09211d8b57af0257de28a4a622da998770c977ee80839ff19e34d731d82",
+      "width": 65536,
+      "height": 4292542531
+    },
+    {
+      "path": "pathfinder-engine/.scratch/tray-catalog-17cadea1-d54c-42b1-a563-2d3c514e7704/tray-detail-ui.png",
+      "bytes": 50908,
+      "sha256": "e0fcf11d874c27ad569681e3d44e0ee68378b0b9ec1cff7974226a4f3163af67",
+      "width": 65536,
+      "height": 4292542531
+    },
+    {
+      "path": "pathfinder-engine/.scratch/tray-catalog-17cadea1-d54c-42b1-a563-2d3c514e7704/pathfinder-ui.png",
+      "bytes": 76229,
+      "sha256": "34a63ea883bd9d03d916a62c2817c45aebde6d78439b29cd0ce13b609bbf9684",
+      "width": 65536,
+      "height": 4292542531
+    }
+  ],
+  "privateScreenshotsNotInGit": true
+}

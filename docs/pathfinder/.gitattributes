@@ -1,0 +1,4 @@
+# PF-0 pins raw fixture/evidence bytes, including captured EOF newlines.
+fixtures/** -text whitespace=cr-at-eol,-blank-at-eof
+evidence/** -text whitespace=cr-at-eol,-blank-at-eof
+00-parity-fixtures.md -text whitespace=cr-at-eol,-blank-at-eof

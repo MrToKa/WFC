@@ -1,0 +1,268 @@
+TAP version 13
+# Subtest: valid small hierarchy joins exact mesh/identities; manual point resolves absent name and both ends reuse one location
+ok 1 - valid small hierarchy joins exact mesh/identities; manual point resolves absent name and both ends reuse one location
+  ---
+  duration_ms: 118.269
+  type: 'test'
+  ...
+# Subtest: reject offset discontinuity and persist exact failure
+ok 2 - reject offset discontinuity and persist exact failure
+  ---
+  duration_ms: 90.521
+  type: 'test'
+  ...
+# Subtest: reject duplicate IDs and persist exact failure
+ok 3 - reject duplicate IDs and persist exact failure
+  ---
+  duration_ms: 86.2242
+  type: 'test'
+  ...
+# Subtest: reject orphan parent and persist exact failure
+ok 4 - reject orphan parent and persist exact failure
+  ---
+  duration_ms: 77.9418
+  type: 'test'
+  ...
+# Subtest: reject cycle even when another root exists and persist exact failure
+ok 5 - reject cycle even when another root exists and persist exact failure
+  ---
+  duration_ms: 98.0704
+  type: 'test'
+  ...
+# Subtest: reject child count mismatch and persist exact failure
+ok 6 - reject child count mismatch and persist exact failure
+  ---
+  duration_ms: 77.4152
+  type: 'test'
+  ...
+# Subtest: reject out of range fragment and persist exact failure
+ok 7 - reject out of range fragment and persist exact failure
+  ---
+  duration_ms: 88.277
+  type: 'test'
+  ...
+# Subtest: reject fragment associated twice and persist exact failure
+ok 8 - reject fragment associated twice and persist exact failure
+  ---
+  duration_ms: 75.9784
+  type: 'test'
+  ...
+# Subtest: reject incorrect declared total and persist exact failure
+ok 9 - reject incorrect declared total and persist exact failure
+  ---
+  duration_ms: 79.4407
+  type: 'test'
+  ...
+# Subtest: reject selected cross-model identity and persist exact failure
+ok 10 - reject selected cross-model identity and persist exact failure
+  ---
+  duration_ms: 80.4318
+  type: 'test'
+  ...
+# Subtest: reject selected name drift and persist exact failure
+ok 11 - reject selected name drift and persist exact failure
+  ---
+  duration_ms: 75.5786
+  type: 'test'
+  ...
+# Subtest: reject selected external identity drift and persist exact failure
+ok 12 - reject selected external identity drift and persist exact failure
+  ---
+  duration_ms: 90.5077
+  type: 'test'
+  ...
+# Subtest: reject selected ancestry drift and persist exact failure
+ok 13 - reject selected ancestry drift and persist exact failure
+  ---
+  duration_ms: 75.2367
+  type: 'test'
+  ...
+# Subtest: reject route boundary outside ancestor chain and persist exact failure
+ok 14 - reject route boundary outside ancestor chain and persist exact failure
+  ---
+  duration_ms: 88.2981
+  type: 'test'
+  ...
+# Subtest: reject selected fragment belongs to other object and persist exact failure
+ok 15 - reject selected fragment belongs to other object and persist exact failure
+  ---
+  duration_ms: 81.8335
+  type: 'test'
+  ...
+# Subtest: reject mesh triangle references missing vertex and persist exact failure
+ok 16 - reject mesh triangle references missing vertex and persist exact failure
+  ---
+  duration_ms: 89.6729
+  type: 'test'
+  ...
+# Subtest: reject fragment transform not already applied and persist exact failure
+ok 17 - reject fragment transform not already applied and persist exact failure
+  ---
+  duration_ms: 101.6599
+  type: 'test'
+  ...
+# Subtest: reject missing category assignment evidence and persist exact failure
+ok 18 - reject missing category assignment evidence and persist exact failure
+  ---
+  duration_ms: 85.2925
+  type: 'test'
+  ...
+# Subtest: reject invented category assignment evidence and persist exact failure
+ok 19 - reject invented category assignment evidence and persist exact failure
+  ---
+  duration_ms: 86.3631
+  type: 'test'
+  ...
+# Subtest: reject canonical vertex outside supplied world bounds and persist exact failure
+ok 20 - reject canonical vertex outside supplied world bounds and persist exact failure
+  ---
+  duration_ms: 98.49
+  type: 'test'
+  ...
+# Subtest: reject display offset mismatch and persist exact failure
+ok 21 - reject display offset mismatch and persist exact failure
+  ---
+  duration_ms: 99.7682
+  type: 'test'
+  ...
+# Subtest: reject project-scoped alias join and persist exact failure
+ok 22 - reject project-scoped alias join and persist exact failure
+  ---
+  duration_ms: 101.1338
+  type: 'test'
+  ...
+# Subtest: reject project-scoped binding join and persist exact failure
+ok 23 - reject project-scoped binding join and persist exact failure
+  ---
+  duration_ms: 102.5535
+  type: 'test'
+  ...
+# Subtest: reject alias normalization mismatch and persist exact failure
+ok 24 - reject alias normalization mismatch and persist exact failure
+  ---
+  duration_ms: 99.6736
+  type: 'test'
+  ...
+# Subtest: reject binding canonical frame guard and persist exact failure
+ok 25 - reject binding canonical frame guard and persist exact failure
+  ---
+  duration_ms: 99.8733
+  type: 'test'
+  ...
+# Subtest: reject binding invalid point and persist exact failure
+ok 26 - reject binding invalid point and persist exact failure
+  ---
+  duration_ms: 100.9174
+  type: 'test'
+  ...
+# Subtest: reject metadata active content mismatch and persist exact failure
+ok 27 - reject metadata active content mismatch and persist exact failure
+  ---
+  duration_ms: 102.436
+  type: 'test'
+  ...
+# Subtest: hash mismatch writes expected/actual hash and preserves input bytes
+ok 28 - hash mismatch writes expected/actual hash and preserves input bytes
+  ---
+  duration_ms: 97.1286
+  type: 'test'
+  ...
+# Subtest: traversal input is rejected and a fresh failure receipt is retained
+ok 29 - traversal input is rejected and a fresh failure receipt is retained
+  ---
+  duration_ms: 79.4558
+  type: 'test'
+  ...
+# Subtest: unapproved executable matching hash never executes
+ok 30 - unapproved executable matching hash never executes
+  ---
+  duration_ms: 81.4069
+  type: 'test'
+  ...
+# Subtest: duplicate JSON members are rejected and their failure retained
+ok 31 - duplicate JSON members are rejected and their failure retained
+  ---
+  duration_ms: 84.5969
+  type: 'test'
+  ...
+# Subtest: existing output is never overwritten
+ok 32 - existing output is never overwritten
+  ---
+  duration_ms: 7.5753
+  type: 'test'
+  ...
+# Subtest: symlink or junction ancestors are rejected before input access
+ok 33 - symlink or junction ancestors are rejected before input access
+  ---
+  duration_ms: 81.2168
+  type: 'test'
+  ...
+# Subtest: absolute input path is rejected
+ok 34 - absolute input path is rejected
+  ---
+  duration_ms: 4.7578
+  type: 'test'
+  ...
+# Subtest: stale model and stale artifact cannot be reported as current manual bindings
+ok 35 - stale model and stale artifact cannot be reported as current manual bindings
+  ---
+  duration_ms: 149.5483
+  type: 'test'
+  ...
+# Subtest: punctuation and leading zeroes survive actual production normalization
+ok 36 - punctuation and leading zeroes survive actual production normalization
+  ---
+  duration_ms: 181.414
+  type: 'test'
+  ...
+# Subtest: actual production NFC normalization joins composed and decomposed text
+ok 37 - actual production NFC normalization joins composed and decomposed text
+  ---
+  duration_ms: 200.3565
+  type: 'test'
+  ...
+# Subtest: shared cable matching excludes routing leaf; standalone fallback may use it
+ok 38 - shared cable matching excludes routing leaf; standalone fallback may use it
+  ---
+  duration_ms: 208.4609
+  type: 'test'
+  ...
+# Subtest: other project remains unmatched to real inventory even with identical content fingerprint
+ok 39 - other project remains unmatched to real inventory even with identical content fingerprint
+  ---
+  duration_ms: 199.7407
+  type: 'test'
+  ...
+# Subtest: sparse maximum dbId is audited arithmetically without scanning two billion values
+ok 40 - sparse maximum dbId is audited arithmetically without scanning two billion values
+  ---
+  duration_ms: 180.6523
+  type: 'test'
+  ...
+# Subtest: oversize valid row-budget output persists compact FAIL instead of losing its receipt
+ok 41 - oversize valid row-budget output persists compact FAIL instead of losing its receipt
+  ---
+  duration_ms: 377.0777
+  type: 'test'
+  ...
+# Subtest: unbound known location has unknown matching state when live ambiguity records are absent
+ok 42 - unbound known location has unknown matching state when live ambiguity records are absent
+  ---
+  duration_ms: 196.6833
+  type: 'test'
+  ...
+# Subtest: unlisted additional capture part is rejected instead of being silently skipped
+ok 43 - unlisted additional capture part is rejected instead of being silently skipped
+  ---
+  duration_ms: 175.5794
+  type: 'test'
+  ...
+1..43
+# tests 43
+# suites 0
+# pass 43
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4880.5743

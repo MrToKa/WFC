@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "pathfinder.manual-settings.post-operations-browser.v1",
+  "recordedAtUtc": "2026-10-18T07:09:29.5518463Z",
+  "sourceCheckpoint": "cfdcd3f5974636737ff34acec0fc3de391d35ab1",
+  "origin": "http://127.0.0.1:5190",
+  "apiImage": "sha256:286e0d43fb12d23c77727eb2c899eac161571d98998e0eb0f212911006adb500",
+  "webImage": "sha256:500345218d8c3f4629725ce6b1d3cbeeb6dc12f7b4cb1f06d5b92ecf8949ba64",
+  "initialOpenFrame": "BLANK_AFTER_MAINTENANCE; result panel still present; final-after-backup.png",
+  "recoveryAction": "Full browser page reload and ready proposal reselect",
+  "finalCheck": "PASS_AFTER_RELOAD: filled Ghost/yellow route, geometry664556,35.30345579516123m/design45m, Confirm enabled/Apply disabled",
+  "finalScreenshot": "final-after-backup-reload.png",
+  "automaticFrameRecovery": "NOT_PROVEN; operator reload documented",
+  "actualDemoApplyPerformed": false,
+  "humanAcceptance": "PENDING",
+  "originalResourcesChanged": false
+}

@@ -1,0 +1,258 @@
+{
+  "schemaVersion": "wfc.pf.b25-owned-paired-delivery.v1",
+  "status": "PASS",
+  "operationId": "0ba258ed-2ce8-4449-bd6e-8e45178dd3aa",
+  "authoringOperationId": "20abf31d-22a4-4fcb-a080-713b5c4ade03",
+  "productCommit": "743d73af2fd7b3f1402fa3eff60a88e88f6d9e13",
+  "port": 5191,
+  "installed": {
+    "apiImage": "sha256:68938938120f20b4e877c6e6709ba44578dbe54c957fe7aa2b9cfc8190bfb8a5",
+    "webImage": "sha256:06f072c8a0c88f8cda4baff8c72612715530c0cf0038689dab74db5e34e2f155",
+    "engineIdentitySha256": "b3157008f42eced7281f7b093e4b898f23fe244e808da5a605c324f57ac58090",
+    "imagePair": "PASS"
+  },
+  "sourceChecks": {
+    "name": "docs/pathfinder/evidence/barriers/b25-opening-source-checks.json",
+    "bytes": 6051,
+    "sha256": "2f496d1a532c4bb9db1e05b1d04ba482e2b8c9319b60a74b6a65283a5f57d190"
+  },
+  "nativeAndIndependentChecks": {
+    "name": "docs/pathfinder/evidence/barriers/b25-aalborg-opening-native-checks.json",
+    "bytes": 7889,
+    "sha256": "e8c77ee6f0699f421e75335cdd439d90cf5cb227c7c72c257da1445a5d62fce1"
+  },
+  "phases": [
+    {
+      "phase": "init",
+      "status": "PASS",
+      "receipt": {
+        "bytes": 1384,
+        "sha256": "dbeec0f38a1867fe67478ff36b7ce27909f79fc712887d8dda8f9577204ff30f"
+      }
+    },
+    {
+      "phase": "backup",
+      "status": "PASS",
+      "receipt": {
+        "bytes": 2998,
+        "sha256": "f498b89846e000bec316942ad865dbee2b97bd98f04da566154256e1205e1c9b"
+      }
+    },
+    {
+      "phase": "restore-quarantine",
+      "status": "PASS",
+      "receipt": {
+        "bytes": 2513,
+        "sha256": "5c427d5e0596ed180198f8fee82d0540713e2d5968b74c1dbd5b8bcb2a2faa44"
+      }
+    },
+    {
+      "phase": "candidate-build",
+      "status": "PASS",
+      "receipt": {
+        "bytes": 4165,
+        "sha256": "98c5f50d936d2432a7fc69f1052c49a9dfd9436913c2e672c41fa23b60bf63dc"
+      }
+    },
+    {
+      "phase": "target-migration",
+      "status": "PASS",
+      "receipt": {
+        "bytes": 9014,
+        "sha256": "c2c58d3cd615681f6ee1439c301a237dea00a95d0eabcc829a8d752caa605d51"
+      }
+    },
+    {
+      "phase": "target-runtime",
+      "status": "PASS",
+      "receipt": {
+        "bytes": 6901,
+        "sha256": "f4207d7a7d61da0a559de6b001c594e9e179f2289ba31367d98bfb9e6438c913"
+      }
+    },
+    {
+      "phase": "update-source",
+      "status": "PASS",
+      "receipt": {
+        "bytes": 7137,
+        "sha256": "f92ac43938db8b8a1bd13159ca166079d3c51a387f644c23264ccd6c18a9d1c7"
+      }
+    },
+    {
+      "phase": "source-runtime",
+      "status": "PASS",
+      "receipt": {
+        "bytes": 5366,
+        "sha256": "7ed2aa1bb5f6581a74ebe639d40b7b86ba65b5ff52687c4498b06006738cd061"
+      }
+    },
+    {
+      "phase": "retire-target",
+      "status": "PASS",
+      "receipt": {
+        "bytes": 3516,
+        "sha256": "accf7aa724227df44491c11192169928dc9e19b2306bfd4c9b1b070ec79cc904"
+      }
+    }
+  ],
+  "qualificationPolicy": {
+    "profile": "post-b20-terminal-closure-additive-v5",
+    "selectorSha256": "ab9bce0f829777cb50158dc4a74c964604e4d7684ee883ac1412e1ef4bb8194a",
+    "qualifierSha256": "4ee80d6bed66c558d238c64d5602d28c7072fb56db2a8f5d361b537b605ef9c4"
+  },
+  "qualifications": [
+    {
+      "phase": "target-migration",
+      "status": "PASS",
+      "receipt": {
+        "bytes": 5192,
+        "sha256": "14b792d276bc5e5511d796b6259923ecc73f2ff061f483a1e36ab2894cd6088d"
+      },
+      "qualificationReceiptSha256": "60d0ce7b8b870aa04af84d682bd5edfe8bf7d988cbb611ebbdc8e8f5fb1f65f5",
+      "qualifierSha256": "4ee80d6bed66c558d238c64d5602d28c7072fb56db2a8f5d361b537b605ef9c4",
+      "policySha256": "46486bf17296b85e02488c08f161faecdf33c044be9602e9877776e603e014c7",
+      "legacyTablesChecked": 142,
+      "legacyRowsChecked": "81168",
+      "newTables": [],
+      "managedChanges": []
+    },
+    {
+      "phase": "target-runtime",
+      "status": "PASS",
+      "receipt": {
+        "bytes": 5482,
+        "sha256": "7115fc8038ac44c31e84f5c9e19dedbf8418d5917e9e17f0b789b386c7aebef0"
+      },
+      "qualificationReceiptSha256": "7f92704175cbe823883cf3d5f88abff92153293fdfc43ad5cb5ca6979e61ede5",
+      "qualifierSha256": "4ee80d6bed66c558d238c64d5602d28c7072fb56db2a8f5d361b537b605ef9c4",
+      "policySha256": "7f6936293e8c5c924b0b3ad0c236a67f30328bf542b3dd7020de56afc3aa76ab",
+      "legacyTablesChecked": 142,
+      "managedChanges": []
+    },
+    {
+      "phase": "source-runtime",
+      "status": "PASS",
+      "receipt": {
+        "bytes": 5449,
+        "sha256": "64c1fd5397ecc48e6751135a303cf6b777cde42a5c6b5d766983ab6ce7931d13"
+      },
+      "qualificationReceiptSha256": "0f4f443981778806589bdedc147997d3ddd42dfbc1152a2e8a30800b89000d98",
+      "qualifierSha256": "4ee80d6bed66c558d238c64d5602d28c7072fb56db2a8f5d361b537b605ef9c4",
+      "policySha256": "7f6936293e8c5c924b0b3ad0c236a67f30328bf542b3dd7020de56afc3aa76ab",
+      "legacyTablesChecked": 142,
+      "managedChanges": []
+    }
+  ],
+  "conservation": {
+    "existingTables": 142,
+    "existingRawRows": "81168",
+    "newTables": [],
+    "managedChanges": [],
+    "sourceInventory": "PASS",
+    "historyGlobalsAndSequences": "PASS",
+    "nonApplicationAndForeignResources": "PASS",
+    "targetRetired": "PASS"
+  },
+  "pairedInstall": {
+    "receipt": {
+      "bytes": 401,
+      "sha256": "e857c3b6202ec3d05cccb5fea085ab7da0296224f493dadb523111a73aca599c"
+    },
+    "stateSha256": "f59e77cb0174fa192349bf6df30458da4ddc906a582c5a710c9e98adbf0acdeb",
+    "envSha256": "0e7c9d264bb04ab277996d6e832daac95145869ba8d581212e741c177411b121"
+  },
+  "postDelivery": {
+    "receipt": {
+      "bytes": 30871,
+      "sha256": "aed0e3b4223da7c953801570343e1f4aee528fedb2a93a9abf23da00c04e558b"
+    },
+    "operator": {
+      "name": "pathfinder-engine/.scratch/b25-20abf31d-22a4-4fcb-a080-713b5c4ade03/post-delivery-v2.mjs",
+      "bytes": 25315,
+      "sha256": "297d0bf585fb28072d20b056641ce3307b0084689d69a7388c497bd0247b9c96"
+    },
+    "health": "PASS",
+    "index": "PASS",
+    "staticFiles": [
+      {
+        "path": "/",
+        "bytes": 955,
+        "sha256": "07979eb3e603e3dc724a899126053669b3dc3cc4590702b636256c4661bee688"
+      },
+      {
+        "path": "/assets/index-BRCZvRgR.js",
+        "bytes": 716405,
+        "sha256": "319755c61f8adb22c93688b0eebd00aa4e04184ec7376904e87db2a11a16399a"
+      },
+      {
+        "path": "/assets/ProjectDetails-BSoMikpZ.js",
+        "bytes": 867938,
+        "sha256": "103036b6482f22d82aecf2f284fdc1cc0ba1d3b24182b15d920eea85b878d489"
+      },
+      {
+        "path": "/assets/ViewerController-CQQ7KHeK.js",
+        "bytes": 143955,
+        "sha256": "26f40d40976a596b187bf2b82ed14be6b21725978389dc4748b044e9521c42d7"
+      },
+      {
+        "path": "/viewer-runtime/7.130.0/barrier-capture.mjs",
+        "bytes": 36615,
+        "sha256": "998d4115cd40768a4694ee3fb5e4fd319af7a1bbad70b92cd810e64a55bda6b9"
+      },
+      {
+        "path": "/viewer-runtime/7.130.0/barrier-capture-errors.mjs",
+        "bytes": 2956,
+        "sha256": "bef60c5884d24d7475d0e914489a92a38b67ae3e68bc9f0346303019c707a1a0"
+      },
+      {
+        "path": "/viewer-runtime/7.130.0/barrier-multipart-runtime.mjs",
+        "bytes": 10778,
+        "sha256": "b9738f549eccb9dc65244a2c4f013caa9dc9e36dc86442c5f58cffa270352cd5"
+      }
+    ],
+    "expectedBytesReadFromInstalledCandidateImage": true,
+    "immutableWebImageInspectSha256": "6dc2b76f301f7a909b1fbf2d9407bcfe461f9366697f16daca68db48067c3b32",
+    "before": {
+      "sha256": "5d290ef1eb71d5b52cb9618c7e81739f49d8c07d0502895fc8a12ca74ef84c9a",
+      "containers": 5,
+      "outsideContainers": 18,
+      "volumes": 4,
+      "networks": 2
+    },
+    "after": {
+      "sha256": "5d290ef1eb71d5b52cb9618c7e81739f49d8c07d0502895fc8a12ca74ef84c9a",
+      "containers": 5,
+      "outsideContainers": 18,
+      "volumes": 4,
+      "networks": 2
+    },
+    "unchangedResourceWindow": true,
+    "stoppedImageReader": {
+      "neverStarted": true,
+      "removed": true
+    },
+    "cleanup": {
+      "status": "PASS",
+      "operationJoined": true,
+      "commandsJoined": true,
+      "helpersRemoved": true,
+      "remoteExecUnknown": false,
+      "unknownDockerMutation": false
+    }
+  },
+  "recorder": {
+    "name": "pathfinder-engine/.scratch/b25-20abf31d-22a4-4fcb-a080-713b5c4ade03/record-owned-delivery-v1.mjs",
+    "bytes": 19671,
+    "sha256": "f17020a2fb518c4b38c7441f3a73d45888939db4632d0424de1786c22dd4e6b1"
+  },
+  "sourceReceiptBookends": "PASS",
+  "businessWrites": false,
+  "browserAccessed": false,
+  "sdkExecuted": false,
+  "applicationAuthUsed": false,
+  "realCableApply": false,
+  "liveFrameCurrentness": false,
+  "publicationAuthority": false,
+  "engineeringAccepted": false,
+  "scope": "Owned paired 5191 delivery and seven exact candidate-image/served-static byte comparisons after qualified initialization and all eight delivery phases, with positive target retirement and reader cleanup. Source and offline native evidence remain separate from live SDK/current-frame, real cable Apply or full engineering acceptance."
+}

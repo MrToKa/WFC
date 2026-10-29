@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "pathfinder.worker-session.cross-review.v1",
+  "recordedAtUtc": "2026-10-18T12:40:40.9978956Z",
+  "scope": "Closing read-only server session/worker/shutdown review",
+  "status": "NO_REMAINING_MATERIAL_FINDINGS",
+  "sourceFiles": [
+    {
+      "path": "server/pathfinder/engineSession.ts",
+      "sha256": "5cfa14c83dd0566009baecaf757ed1698f0c339043faaff48b24d36eb84a4513"
+    },
+    {
+      "path": "server/pathfinder/worker.ts",
+      "sha256": "393dfa5ee13795f3feb4400f066faaa85d85c820471178b4b2fc98be78141ddc"
+    },
+    {
+      "path": "server/pathfinder/worker-session.test.ts",
+      "sha256": "2dc8fce9f536d26ac4934d2b40404dfa137c195a5ef4e8d389f8c09e5cf7e248"
+    },
+    {
+      "path": "server/pathfinder/engineSession.test.ts",
+      "sha256": "3d9cd8006c5a6e1df846216a21fe24d37aeb12abec27ce9d1644feb770e012cb"
+    },
+    {
+      "path": "server/index.ts",
+      "sha256": "b3133a1c0d84ac379cf097825ecfceb99b89fef8aee9dc19e8df82262ee94eb4"
+    }
+  ],
+  "previousFindingReceipt": "docs/pathfinder/evidence/worker-reuse/server-cross-review-20261018T123856Z.json",
+  "resolution": {
+    "file": "server/pathfinder/engineSession.ts",
+    "lines": [
+      610,
+      612,
+      613,
+      614
+    ],
+    "sourceResult": "Common cancellation/closed/callFailure check and unchanged original deadline guard now run after awaited group retirement and immediately before returning the DTO.",
+    "regressionSource": "server/pathfinder/engineSession.test.ts:464 cancellation and :486 original deadline while awaiting delayed groupGone",
+    "reviewerExecution": "NOT_RUN; inspected production source and targeted test assertions only",
+    "ownerReported": "55 affected unit checks/types/scoped lint PASS; not independently rerun by reviewer"
+  },
+  "otherReviewedAreas": "No additional material findings in bounded startup/frame/lane admission/group quarantine/auth/dependency/shutdown scope.",
+  "runtimeActions": "NONE",
+  "productionSourceMutations": "NONE"
+}

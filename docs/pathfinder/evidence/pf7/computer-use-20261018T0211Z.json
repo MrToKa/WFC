@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "pathfinder.computer-use.receipt.v1",
+  "observedAtUtc": "2026-10-18T02:11:27Z",
+  "scope": "actual-background-in-app-browser-isolated-port-5190; first integrated image",
+  "checkedBaseCommit": "c95ad56ebbd6b020966fa0690c98c37516df1db1",
+  "uncommittedImplementation": true,
+  "apiImage": "sha256:9e7e63567b1fe43b135b719d7dcae0e30972833e08859930a4b611f79bcb356b",
+  "webImage": "sha256:3b4eb0779b471a841f44df165369debda93d0238a095768e6ed7c725746d3fd0",
+  "realDiagnosticProjectId": "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a",
+  "syntheticProjectId": "54cfad40-bd12-41e9-ab24-d90bdaafc993",
+  "checks": [
+    {"name":"fresh-admin-login-and-pathfinder-deep-link", "status":"PASS", "observed":"English PathFinder tab and protected model; 664556 fragments, 438156 viewer identifiers."},
+    {"name":"protected-selected-network-capture-and-upload", "status":"PASS", "observed":"10 explicitly chosen codes, diagnostic Control planning assignment, hierarchy progress 32768/438155 then successful 52-object upload. Native visibility and engineering proof explicitly unverified.", "evidence":"actual-capture-1792289114650.json"},
+    {"name":"actual-surface-pick-point-only-confirmation-and-save", "status":"PASS", "observed":"Roof pick yielded [61.181479806219656,-38.17840248384549,18.40188612485943]. Explicit Use as manual coordinates then alias save; no object binding invented.", "screenshot":"actual-model-shared-pick.png"},
+    {"name":"real-point-alias-and-snapshot-survive-browser-reload", "status":"PASS", "observed":"Saved location menu retained PF-DIAGNOSTIC-PICK, alias and exact coordinates after reload; snapshot still 52 objects."},
+    {"name":"engineer-project-access-does-not-grant-pathfinder-deep-link", "status":"PASS", "observed":"Fresh disposable engineer read project Details. Explicit ?tab=pathfinder rendered Details fallback, no PF tab or protected iframe. Own test user subsequently signed out/deleted; private generated credentials cleared.", "screenshot":"engineer-deep-link-denied.png"},
+    {"name":"automatic-synthetic-two-cable-proposals", "status":"PASS", "observed":"Both Control/Instrumentation cables matched, job completed 2/2. Synthetic labels visible, geometry 10m, before percentage 16m, before rounding 17.6m, design 18m."},
+    {"name":"explicit-review-apply-and-existing-cable-history", "status":"PASS", "observed":"Apply disabled before review, enabled after explicit Confirm, then routing/design saved. Cable list showed /BC001 and 18. Cable Details revision displayed Updated via PathFinder apply and actor. Installed-length preservation is independently SQL-tested; not claimed as visible in this cable detail view.", "screenshots":["synthetic-apply-confirmed.png","synthetic-cable-history.png"]},
+    {"name":"one-manual-location-resolution-serves-both-directions", "status":"PASS", "observed":"Own fixture edits made SYNTHETIC-1 From and SYNTHETIC-2 To reference the same unresolved identity. Both displayed missing. One manual save [0,0,0.5] reported 2 reusable cables; both became matched and automatic job completed 2/2.", "screenshots":["shared-location-before-resolution.png","shared-location-after-resolution.png"]},
+    {"name":"details-allowance-only-recalculation-without-auto-overwrite", "status":"PASS", "observed":"UI changed reserve6→7. New proposal showed retained geometry10m, before percentage17m, before rounding18.7m, design19m. Both server results used calculationMode design; already-applied cable value stayed18. UI restored reserve6; both fresh proposals returned18 in design mode.", "evidence":["settings-reuse-1792289459485.json","settings-reuse-1792289487640.json"], "screenshot":"details-reserve-recalculated-19.png"},
+    {"name":"filled-ghost-with-empty-model-object-identities", "status":"FAIL", "observed":"Synthetic exact path with objectIds=[] left the surrounding model opaque. Controller correction and actual retry are pending. This image does not prove Ghost for that case."},
+    {"name":"proposal-review-text-legibility", "status":"FAIL", "observed":"Inline text groups visually concatenated. Block spacing correction pending."},
+    {"name":"later-proposal-confirm-review-readiness", "status":"NOT_RUN", "observed":"Immediate AX showed disabled Confirm for the19m proposal; did not wait/recheck before restoring settings. Earlier18m review/Apply passed; retest after final image."},
+    {"name":"real-native-parity-and-real-engineering-apply", "status":"BLOCKED", "observed":"Licensed native full-precision reference unavailable. No acceptance granted to real captured model."},
+    {"name":"final-lookup-ui-offline-and-combined-restore", "status":"NOT_RUN", "observed":"Awaiting next lookup/Ghost image and coordinated operational drill."}
+  ],
+  "secretsRecorded": false,
+  "originalApplicationOrDataChanged": false,
+  "userAcceptance": "NOT_REQUESTED; technical observations only"
+}

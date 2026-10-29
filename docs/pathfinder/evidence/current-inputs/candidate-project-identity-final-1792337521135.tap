@@ -1,0 +1,52 @@
+TAP version 13
+# Subtest: valid input preserves nulls, exact decimal strings and raw category
+ok 1 - valid input preserves nulls, exact decimal strings and raw category
+  ---
+  duration_ms: 1.3871
+  type: 'test'
+  ...
+# Subtest: input refuses foreign model project
+ok 2 - input refuses foreign model project
+  ---
+  duration_ms: 0.3731
+  type: 'test'
+  ...
+# Subtest: input refuses foreign cable project
+ok 3 - input refuses foreign cable project
+  ---
+  duration_ms: 0.1657
+  type: 'test'
+  ...
+# Subtest: project name and converted fingerprint gates are explicit
+ok 4 - project name and converted fingerprint gates are explicit
+  ---
+  duration_ms: 0.1623
+  type: 'test'
+  ...
+# Subtest: exact current project identity requires the full observed name and matching project number
+ok 5 - exact current project identity requires the full observed name and matching project number
+  ---
+  duration_ms: 0.4013
+  type: 'test'
+  ...
+# Subtest: source receipt requires PASS preservation and exact raw bytes/hash/model binding
+ok 6 - source receipt requires PASS preservation and exact raw bytes/hash/model binding
+  ---
+  duration_ms: 0.2874
+  type: 'test'
+  ...
+# Subtest: durably retains a sanitized failure before any verifier or PDB audit when source input binding is invalid
+ok 7 - durably retains a sanitized failure before any verifier or PDB audit when source input binding is invalid
+  ---
+  duration_ms: 17.9665
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 91.6122

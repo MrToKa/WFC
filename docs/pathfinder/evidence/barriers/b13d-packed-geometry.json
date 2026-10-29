@@ -1,0 +1,249 @@
+{
+  "schemaVersion": "wfc.pf.b13d-packed-geometry-checks.v1",
+  "at": "2026-10-22T06:31:07.789Z",
+  "baseline": "b896cef828d8bf6c8b79abe5ee9a2e2c7cef381c",
+  "branch": "pf-b13d-packed-geometry-local-20261022",
+  "status": "TECHNICAL_SOURCE_PASS",
+  "pins": [
+    {
+      "path": "docs/pathfinder/96-large-barrier-capacity-plan.md",
+      "bytes": 25301,
+      "sha256": "5b8aff700f58f6a70426a43fff4be57eaf535d1e289dbe1a04b26607801f78c8"
+    },
+    {
+      "path": "docs/pathfinder/100-packed-barrier-format.md",
+      "bytes": 11490,
+      "sha256": "de63e28cda064e12c7c8e73d9fef3c3659f39c07811c73b579e30c610fad7711"
+    },
+    {
+      "path": "scripts/viewer-runtime/module-closure.mjs",
+      "bytes": 3452,
+      "sha256": "e10fce7af9f74a7e1d4a4cc7bb8308ef818fb64c7933d2dca6ad698a55f0c2ac"
+    },
+    {
+      "path": "scripts/viewer-runtime/module-closure.test.mjs",
+      "bytes": 4800,
+      "sha256": "d78c7ba231b39a858b640617ff5b77bd16de09489fc6c73e74a4652f3992bb3e"
+    },
+    {
+      "path": "server/pathfinder/barrierMultipartRepository.ts",
+      "bytes": 53315,
+      "sha256": "b0d475c28618388223828203a99516d82ea626f45b7313d9b412a4308d43a588"
+    },
+    {
+      "path": "server/pathfinder/barrierMultipartRepository.integration.test.ts",
+      "bytes": 30196,
+      "sha256": "00e6fb58c15bcf1d851723e2522a03e3551470cffc61170b43260614b275d0be"
+    },
+    {
+      "path": "shared/pathfinderBarrierPackedGeometry.ts",
+      "bytes": 11997,
+      "sha256": "f030e06529c9fccaf3b74ed68981051c6def615b7e586548595078f8c0668886"
+    },
+    {
+      "path": "shared/pathfinderBarrierPackedGeometry.test.ts",
+      "bytes": 13015,
+      "sha256": "568ea4135e660b6a75d6b327caf83cab0a463887fd30317e0083faaf761335c3"
+    },
+    {
+      "path": "viewer-runtime/barrier-packed-geometry.mjs",
+      "bytes": 21933,
+      "sha256": "c790d50b0439f2f0dd053d05ebe5ca80785ddf90c185a3312b4d7b647ebc69ca"
+    },
+    {
+      "path": "viewer-runtime/barrier-packed-geometry.d.mts",
+      "bytes": 1886,
+      "sha256": "67b331b2f7918ad10b875e722a126b9caff86bb2363fc3e6a9f41cf9f258f715"
+    },
+    {
+      "path": "viewer-runtime/barrier-producer.mjs",
+      "bytes": 47961,
+      "sha256": "4dad2ee2d377fa39b83c8e4e4ae77a4757b533d45d7eef81939d426158d5a425"
+    },
+    {
+      "path": "viewer-runtime/barrier-producer.d.mts",
+      "bytes": 2668,
+      "sha256": "3f180617d2e9d50a1d0ac0157e178f370b75a5730626ee8efe0fc24adcd0ff27"
+    },
+    {
+      "path": "viewer-runtime/barrier-multipart-runtime.mjs",
+      "bytes": 8173,
+      "sha256": "6b09300c3f6a7811423a85c78493641a0215e32b4cb2fe7c5a4c0e00265d5ac9"
+    },
+    {
+      "path": "viewer-runtime/test/barrier-packed-geometry.test.mjs",
+      "bytes": 16277,
+      "sha256": "e2889d131389f9677d99b7936159ce000f9ca82847a9ab4f3d7c27facf2a5c44"
+    },
+    {
+      "path": "viewer-runtime/test/barrier-producer.test.mjs",
+      "bytes": 28079,
+      "sha256": "e07b138a41908e1fe2e699e9ee51aa2556ecca804f7365fa6ed445a015164929"
+    },
+    {
+      "path": "viewer-runtime/test/barrier-multipart-runtime.test.mjs",
+      "bytes": 10585,
+      "sha256": "9b9abd5003fd86f7e90670335433ff747fc13c7e5fbc8cabd03de7bd07874f65"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.BarrierVerifier/MultipartContracts.cs",
+      "bytes": 5491,
+      "sha256": "a160836f6eb421465c19d1a1edce07509c992c23fb13bb42183466df8adcdc8c"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.BarrierVerifier/PackedPartReader.cs",
+      "bytes": 25606,
+      "sha256": "c1ee2d3c11b57bcd13f86772af5cb813e6655d1a9e7c42fbfbfd4626e7ee2861"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.BarrierPacked.Tests/PathFinder.BarrierPacked.Tests.csproj",
+      "bytes": 445,
+      "sha256": "023d17ee5323ae0280208bdced8a7e3bcdd1dfaf815bb6fe49e7b0619ee9dffc"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.BarrierPacked.Tests/Fixtures.cs",
+      "bytes": 11325,
+      "sha256": "69944da754ae083ea9903c4c0d392a047d3f43ae7733c35be71532005498086e"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.BarrierPacked.Tests/Program.cs",
+      "bytes": 19455,
+      "sha256": "7c135b10443442b5a3acfcebdf29e8aefcb7be59fe2aeeba53e0df169286cf68"
+    }
+  ],
+  "checks": {
+    "native": {
+      "status": "PASS",
+      "tests": 52,
+      "skipped": 0,
+      "scope": "codec11, simulated SDK producer26, lifecycle11, copy closure4"
+    },
+    "shared": {
+      "status": "PASS",
+      "tests": 11
+    },
+    "storedPart": {
+      "status": "PASS",
+      "tests": 14,
+      "scope": "Fresh isolated Linux/PostgreSQL opaque stored-part/currentness only; 35 source bookends"
+    },
+    "csharpWindows": {
+      "status": "PASS",
+      "localCases": 31,
+      "goldenCases": 26,
+      "consoleSummary": "PACKED_TESTS passed=32 failed=0 (includes one aggregate golden runner)"
+    },
+    "csharpLinux": {
+      "status": "PASS",
+      "localCases": 31,
+      "goldenCases": 26,
+      "consoleSummary": "PACKED_TESTS passed=32 failed=0",
+      "runtime": "Microsoft.NETCore.App 9.0.21 [/usr/share/dotnet/shared/Microsoft.NETCore.App]",
+      "helperMemoryBytes": 536870912,
+      "sourceBookends": "PASS",
+      "artifactBookends": "PASS",
+      "goldenBookends": "PASS",
+      "buildArtifactSourceLink": "PASS",
+      "helpersJoinedAndRemoved": true,
+      "measuredPeakRss": "NOT_MEASURED"
+    },
+    "types": "PASS",
+    "scopedLint": "PASS",
+    "serverBuild": "PASS",
+    "frontendBuild": "PASS",
+    "independentReview": "CLEAR",
+    "actualSdk": "BLOCKED_SAVED_BROWSER_REFUSAL",
+    "actualAalborg": "BLOCKED_SAVED_BROWSER_REFUSAL",
+    "globalQualification": "NOT_RUN",
+    "publication": "NOT_RUN",
+    "installation5191": "NOT_RUN"
+  },
+  "failuresRetained": [
+    {
+      "scope": "First new C# build",
+      "status": "FAIL",
+      "reason": "NETSDK1004: missing generated restore assets; corrected with offline BCL-only restore"
+    },
+    {
+      "scope": "Linux codec attempt 9ca1809a",
+      "status": "FAIL",
+      "reason": "Exact source-copy records compared with inconsistent sort order; console passed but final fixture failed. Same ordinal sort correction; fresh 8cde7976 passed."
+    }
+  ],
+  "limits": {
+    "geometryValidation": "STRUCTURAL_ONLY",
+    "qualification": "NOT_MEASURED",
+    "authority": "none",
+    "sdkSourceBytesVerified": false,
+    "sourceGeometryProvenance": "protected-producer-reported",
+    "durableFinalProducerCompletion": "NOT_IMPLEMENTED_REQUIRED_BEFORE_PUBLICATION"
+  },
+  "runtime": {
+    "web": "sha256:814475f9fe327887e0444fcd4e7e73411bc2f341d59b0748cac1f3b62578acee",
+    "api": "sha256:ac0d16ab1b0f4c92922c20d1a13a5ea142d4c6e92558de1870daf4db7fd60fcf",
+    "changed": false
+  },
+  "privateOperation": "61f194f1-40dd-4af4-9d23-9187c5f8224a",
+  "evidence": [
+    {
+      "name": "native-closure-final.private.log",
+      "bytes": 5766,
+      "sha256": "7cfe5f22b209d45b0acce511bbfae8a10c6c4b1f6c1e72a7021fbe21306a9005"
+    },
+    {
+      "name": "runtime-final.private.log",
+      "bytes": 1247,
+      "sha256": "559ec49824da0b92d6d92670836423788670b2d93d9805ebf4636ba04154a7ed"
+    },
+    {
+      "name": "shared-final.private.log",
+      "bytes": 518,
+      "sha256": "6527c47086dca322978299168a5b16773b39f19f72f8e0d387701813570da1f3"
+    },
+    {
+      "name": "types-final.private.log",
+      "bytes": 93,
+      "sha256": "b8eb3154847ce13af5e3a7672a976c5437a052bfd30d24dd327a019180231d04"
+    },
+    {
+      "name": "lint-final.private.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "server-build-final.private.log",
+      "bytes": 1799,
+      "sha256": "be79d7b23683016eee4aca62a5a1cdfe3ef8e856d424574f5c9ae77c3cbca7f3"
+    },
+    {
+      "name": "frontend-build-final.private.log",
+      "bytes": 7604,
+      "sha256": "9a8b03002eec18dece5284d8f5f6ecd2d4cf7a7c1bff9527636fd60a910e335a"
+    },
+    {
+      "name": "csharp-build-first.private.log",
+      "bytes": 1065,
+      "sha256": "6a14e7526f90bad1a71c0dcb4d056adeca68e3150dec17801a31761abd27fea8"
+    },
+    {
+      "name": "csharp-build-portable.private.log",
+      "bytes": 847,
+      "sha256": "9878c275568d760337c2debf135d513d27b3dcf24a90cdb91adc2086ec59b9a7"
+    },
+    {
+      "name": "csharp-windows-first.private.log",
+      "bytes": 2876,
+      "sha256": "636bfde35879ff574db7ad4e21cbb94ae32b73da54c5972979ae8aa3f6418507"
+    },
+    {
+      "name": "goldens-first.private.log",
+      "bytes": 111,
+      "sha256": "767183daa1cf44ec4b2bbd38c142d26cb56433500108e32a2a4cb667c0fe9b56"
+    },
+    {
+      "name": "linux-tests-1.private.log",
+      "bytes": 649,
+      "sha256": "fe78890948baa32bc374bb3ba7cf16d3addc13c93bd13c05cfcdcdacc410d966"
+    }
+  ]
+}

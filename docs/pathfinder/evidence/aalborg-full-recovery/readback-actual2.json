@@ -1,0 +1,74 @@
+{
+  "schemaVersion": "wfc.pf.current-full-recovery-public.v1",
+  "observedAt": "2026-10-20T12:47:13.723Z",
+  "branch": "pf-aalborg-current-full-recovery-local-20261020",
+  "deliveryParent": "d5e678dc5bcb59f1a05e803af5addec1641b1035",
+  "operatorSourceRevision": "7c0c673fd1a6aa442c4989c816d760f2626797b6",
+  "runtimeSourceRevision": "c68b4434ffadc73c7c6ca38997cfe4689aca928f",
+  "engineeringAccepted": false,
+  "nativeParity": "not-performed",
+  "status": "PASS",
+  "phase": "normal-existing-admin-readback2",
+  "rawReceipt": {
+    "filename": "full-recovery1-readback2-result.private.json",
+    "bytes": 7225,
+    "sha256": "e3d13ce04072975ec619d9e9e2b5e429faabf6570505a0072b43324110ed24c6"
+  },
+  "backupId": "980bde15-08db-43f6-bdca-e90730e65410",
+  "port": 5192,
+  "normalCurrentAdmin": true,
+  "legacyDemoMetadataMatchesActor": false,
+  "normalExistingAccount": true,
+  "noReset": true,
+  "noPromotion": true,
+  "userExplicitCredentialSourceApproval": true,
+  "protectedAccess": {
+    "descriptor200": true,
+    "resource200": true,
+    "resourceBytes": 997,
+    "resourceSha256": "ee4df15128a2ad51a42603ba7a0bbfb52b1bfbf2cee07139af1fac2545fdac57",
+    "missingCookie401": true,
+    "normalClose204": true,
+    "closedSession410": true,
+    "oldSourceCookieTiming": "NOT_RUN"
+  },
+  "copiedProject": {
+    "cables": 2140,
+    "trays": 330,
+    "locations": 1527,
+    "secondaryTrayLength": 7,
+    "endConnectionLength": 5,
+    "additionalBendingPercent": 10,
+    "connectionGap": 1
+  },
+  "network": {
+    "objects": 2965,
+    "segments": 1165,
+    "parts": 5,
+    "partBytes": 114186790,
+    "modelMappings": 4
+  },
+  "nonMv": {
+    "selected": 1808,
+    "calculated": 230,
+    "locationsRequired": 1578,
+    "excludedMv": 332,
+    "mv": 0,
+    "all230NormalApiRead": true,
+    "all230LengthLedgersValidated": true,
+    "all230ImmutableHashesMatch": true
+  },
+  "authority": {
+    "policyPaused": true,
+    "controlRevision": "7",
+    "grantStatus": "disabled",
+    "producer": "unqualified",
+    "activationPerformed": false
+  },
+  "noNewCalculations": true,
+  "noNewReview": true,
+  "noRealApply": true,
+  "requests": 254,
+  "responseBytes": 40799466,
+  "sourceHTTPRequests": 0
+}

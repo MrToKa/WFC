@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "wfc.pf.u6a-qualification-addendum.v1",
+  "observedAt": "2026-10-20T20:31:04.5148291Z",
+  "baseCommit": "3b4f7220e4e8726255a5b112d76582b23271a88f",
+  "scope": "Additional source-only checks. No SQL, HTTP, Docker, browser or 5191 changes.",
+  "status": "PASS",
+  "historicalDistinctChecks": 941,
+  "additionalDistinctChecks": 24,
+  "qualifiedDistinctChecks": 965,
+  "checks": [
+    {
+      "receipt": "u6a-final-identity-catalog.json",
+      "passed": 58,
+      "failed": 0,
+      "overlappingPriorIdentityCases": 34,
+      "newIdentityReplacementCases": 5,
+      "newCatalogCases": 19
+    },
+    {
+      "name": "local-server-build",
+      "status": "PASS",
+      "receipt": "u6a-server-build.log"
+    },
+    {
+      "name": "changed-test-lint-and-diff",
+      "status": "PASS",
+      "files": 1
+    }
+  ],
+  "sourceClosure": {
+    "previousReceipt": "u6a-actual.json",
+    "priorPaths": 53,
+    "unchanged": 52,
+    "onlyChangedPath": "server/pathfinder/calculationEngineIdentity.test.ts",
+    "sha256": "75b3a2800f5d410fb1e445209d34d5db5779f1e1c0da0fd5151f02f6f02deaf7",
+    "productionBytesUnchanged": true
+  },
+  "limits": [
+    "32 projections are a selected derivation allowlist, not a fully hashed transitive SDK import closure. The 9 copied runtime modules have verified build-copy hashes.",
+    "Actual Aalborg reread and functional/UI acceptance remain BLOCKED by saved browser-origin permission. Computer Use package initializes; no blocked page was accessed through Brave.",
+    "Prior failed/overlapping receipts remain historical; no results were regenerated."
+  ],
+  "originalWfc": {
+    "branch": "main",
+    "commit": "96e63f13fdc2b1d30b8f8ff658dd662f25fac104",
+    "workingTree": "clean",
+    "cachedOriginMain": "96e63f13fdc2b1d30b8f8ff658dd662f25fac104",
+    "liveRemoteCi": "NOT_RUN"
+  }
+}

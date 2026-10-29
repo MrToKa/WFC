@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "pathfinder.drawing-positioning.backup.v1",
+  "status": "PASS",
+  "backupId": "038dcba7-048b-4475-928b-e2d7327cd2a1",
+  "sourceOwner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+  "sourceProject": "wfc-pathfinder-local-0cba87606e9b",
+  "port": 5191,
+  "archiveMembers": 8,
+  "manifestSha256": "0e0d9bb6b923bc9607f8ac1c0076f539c38c3f8c050bf992bec6024b1bf146cc",
+  "protectedContainers": 18,
+  "protectedUnchanged": true,
+  "restoredRunningState": true,
+  "scope": "Cold owned5191 complete database/storage/artifact/image backup; private companion outside archive; no original/5190 changes",
+  "finishedAt": "2026-10-18T23:29:59.398Z"
+}

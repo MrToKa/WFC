@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "pathfinder.copied-recovery.phase-proof.v1",
+  "status": "PASS",
+  "phase": "target-qualified",
+  "drillId": "e09d28fa-580f-484a-a7f7-ac8b8a00cee7",
+  "sourceOwner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+  "recordedAt": "2026-10-18T19:00:00.194Z",
+  "backupId": "b77a1ed0-2fa2-48a3-92f8-207a60b2035e",
+  "targetOwner": "7a64aa2a-88c3-43b9-962d-af391b72300d",
+  "losslessFence": true,
+  "ownedAuth": true,
+  "businessAfterUi": true,
+  "fullModelAudit": true,
+  "browserVerified": true,
+  "receipts": [
+    {
+      "role": "target-fence",
+      "path": "docs/pathfinder/evidence/copied-recovery/audit-1792346958413-d6cf53f8.json",
+      "sha256": "fc344a67fb0cf1aa55d4b0571908a32c0a6dad78fbbad194ed6f08636051af8a"
+    },
+    {
+      "role": "target-auth",
+      "path": "docs/pathfinder/evidence/copied-recovery/auth-target-1792346958450.json",
+      "sha256": "bcb5a4240c8c3735211c169aff20f4608cd5eb6732203fede6c1a4fa920323b6"
+    },
+    {
+      "role": "owned-auth",
+      "path": "docs/pathfinder/evidence/copied-recovery/audit-1792346963056-da0df95d.json",
+      "sha256": "8acb4ed99aa320c52a4e00259198d8f3f0b070e7f3ba45034b377583a75595a2"
+    },
+    {
+      "role": "model-audit",
+      "path": "docs/pathfinder/evidence/copied-recovery/drill-1792346971127-2b381af3.json",
+      "sha256": "4c35c4b77166e4527a93340326865d0e05d225a44c2c934c2373d6a075c34875"
+    },
+    {
+      "role": "target-ui-business",
+      "path": "docs/pathfinder/evidence/copied-recovery/audit-1792350000182-90246b71.json",
+      "sha256": "ce1ef7669709e9991e83fc745ba821602d7078aa1ecfd02c75e7d8144bb0393e"
+    },
+    {
+      "role": "browser",
+      "path": "docs/pathfinder/evidence/copied-recovery/browser-1792349997235.json",
+      "sha256": "375f63df0a010ef02be440414534636ded88263e1790595cc88959af82a8b2e0"
+    }
+  ]
+}

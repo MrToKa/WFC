@@ -1,0 +1,107 @@
+{
+  "schemaVersion": "wfc.pf.current-full-recovery-public.v1",
+  "observedAt": "2026-10-20T12:47:13.723Z",
+  "branch": "pf-aalborg-current-full-recovery-local-20261020",
+  "deliveryParent": "d5e678dc5bcb59f1a05e803af5addec1641b1035",
+  "operatorSourceRevision": "7c0c673fd1a6aa442c4989c816d760f2626797b6",
+  "runtimeSourceRevision": "c68b4434ffadc73c7c6ca38997cfe4689aca928f",
+  "engineeringAccepted": false,
+  "nativeParity": "not-performed",
+  "status": "PASS",
+  "technicalDelivery": "Verified current-full-network backup/restore/normalAPI/UI/retirement. Human engineering acceptance remains outstanding.",
+  "publicReceipts": [
+    {
+      "filename": "resume-actual1.json",
+      "bytes": 2717,
+      "sha256": "6accdd6ed38ebb8ad12897eac54aa26b03bb80100ac7f769d94930f428e10ad5"
+    },
+    {
+      "filename": "restore-actual1.json",
+      "bytes": 1205,
+      "sha256": "05d1f0988e548cac1f41fc6ac765642c1e4b5fffebd8cc2b3de41922cf9aa5bd"
+    },
+    {
+      "filename": "readback-attempt1.json",
+      "bytes": 1006,
+      "sha256": "6467f5d16c976318233a3fb31e6d805e9621794c7a81f6b8b22a3aae4b810081"
+    },
+    {
+      "filename": "readback-actual2.json",
+      "bytes": 2188,
+      "sha256": "71354116f5ffe3c0475179625d5658a94ea5551a27fc88051beb9ce998d34ecc"
+    },
+    {
+      "filename": "post-ui-attempt1.json",
+      "bytes": 914,
+      "sha256": "d0cd3029a13e696a92e4ae3297680fcabee4d88eeadef5766383d5c89ac77e60"
+    },
+    {
+      "filename": "ui-actual1.json",
+      "bytes": 3596,
+      "sha256": "35441590787e1e128af4423061b4c2ab0b09228c38afa8111f61b6bbd305e6a0"
+    },
+    {
+      "filename": "retire-actual1.json",
+      "bytes": 1528,
+      "sha256": "1967e79c5c8053ad58a5513d89d980f7a73aeb9b9b242a330c5a55ec35d1431e"
+    }
+  ],
+  "privateControls": [
+    {
+      "filename": "full-recovery1-observer.mjs",
+      "bytes": 25919,
+      "sha256": "84bda1313a7991b9bac0f0b0f7418d97cda4b4e5742832e7d4905c41045db3a4"
+    },
+    {
+      "filename": "full-recovery1-target-readback-existing.mjs",
+      "bytes": 24563,
+      "sha256": "50cd7ba89bff5fc826e5d56d5fd829f1438d0da4e472a9de818d0f8cfc1c7100"
+    },
+    {
+      "filename": "full-recovery1-post-ui2.mjs",
+      "bytes": 9889,
+      "sha256": "ee9a8033826b9dc198de23f84d15e7376d849c25e9fd9f4f63481e8928738216"
+    },
+    {
+      "filename": "full-recovery1-make-restore-profile.mjs",
+      "bytes": 14770,
+      "sha256": "737898c3647d39ad0e3e1e23d0a381f06051c20a625501229a39137e37c709f4"
+    }
+  ],
+  "sourceFence": {
+    "status": "PASS",
+    "at": "2026-10-20T12:30:04.306Z",
+    "cables": 2140,
+    "allCableColumnsSha256": "0cc900778484ca50a770c30a3566564c5975c5649885793aed8b8e8e426f9155",
+    "applyReceipts": 0,
+    "readOnly": true,
+    "rolledBack": true
+  },
+  "sourceFinal": {
+    "filename": "full-recovery1-source-final2.private.json",
+    "bytes": 780,
+    "sha256": "876416e2f383eb6c16f115c9c077905954eb2dba42222fac336ce8e34aaf0f6e"
+  },
+  "nonMv": {
+    "selected": 1808,
+    "calculated": 230,
+    "locationsRequired": 1578,
+    "excludedMv": 332
+  },
+  "remainingHumanWork": {
+    "sharedLocationsMissing": 1042,
+    "sharedLocationsAmbiguous": 48,
+    "crossRevisionMappings": 17,
+    "engineeringReviewAndExplicitApply": true
+  },
+  "automation": {
+    "id": "path-finder-purpose-rules-and-model-revisions",
+    "status": "PAUSED",
+    "toolUpdated": true,
+    "tomlReadbackAt": "2026-10-20T12:46:07.3439309Z"
+  },
+  "noPushPrMergeDeployment": true,
+  "sourceRuntimeUpdated": false,
+  "originalsAnd5190Unchanged": true,
+  "cleanupScope": "Only newly owned and positively qualified5192fixture; source5191/private backup/evidence/denied paths/unqualified1Bvolume retained"
+}

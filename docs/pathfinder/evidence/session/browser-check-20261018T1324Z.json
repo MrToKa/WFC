@@ -1,0 +1,72 @@
+{
+  "schemaVersion": "pathfinder.session.browser-check.v1",
+  "recordedAtUtc": "2026-10-18T13:33:44.5795049Z",
+  "status": "PASS",
+  "method": "Actual in-app browser through computer-use/CUA; ordinary UI login, Path fields, Calculate path and Clear. No app-state evaluation, direct NOP_VIEWER or API injection.",
+  "origin": "http://127.0.0.1:5191",
+  "projectId": "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a",
+  "apiContainer": "3b02c809bac059ed210886766812ed002bfb89e95b3d18258875869b3a1c9284",
+  "apiImage": "sha256:5cd3eca8f8a6972f038bd9766a8e5a68c1ac2cb59546d4ed96763c6de528c3f5",
+  "webImage": "sha256:4d6022fa8de5348d02d1a86cc691214142e3a3866032de9ba9a08a5068d10c66",
+  "observations": {
+    "outerTab": "Path Finder",
+    "tools": [
+      "Routes",
+      "Path",
+      "Path lookup"
+    ],
+    "from": "=PF-DEMO-NETWORK-START",
+    "to": "=PF-DEMO-NETWORK-END",
+    "category": "Control",
+    "details": {
+      "additionalBendingPercent": 10,
+      "secondaryTrayLengthMeters": 3,
+      "connectionGapMeters": 1,
+      "endConnectionLengthMeters": 5
+    },
+    "geometricLengthMeters": 35.30345579516123,
+    "fromApproachMeters": 0,
+    "toApproachMeters": 0,
+    "connectionGapCount": 4,
+    "connectionGapLengthMeters": 0.9840583861033791,
+    "lengthBeforePercentageMeters": "40.3034557951612",
+    "unroundedDesignLengthMeters": "44.33380137467732",
+    "designLengthMeters": "45",
+    "modelGeometry": 664556,
+    "identifiers": 438156,
+    "properties": 6,
+    "uiCompletion": "Standalone path Complete 1/1",
+    "filledGhost": "PASS_VISUAL",
+    "originalRouteColorsAndYellow": "PASS_VISUAL",
+    "clear": "PASS_VISUAL: removes yellow/result and restores opaque whole-model view after render completes",
+    "englishUi": "PASS_AT_OBSERVED_SCOPE"
+  },
+  "screenshots": [
+    {
+      "path": "docs/pathfinder/evidence/session/viewer-path-session-20261018.png",
+      "bytes": 108160,
+      "sha256": "cc0697aa538b2343c4cce08e4f9d28ce92ee21cdea47c2079bc3a35b0c030330"
+    },
+    {
+      "path": "docs/pathfinder/evidence/session/viewer-clear-session-20261018.png",
+      "bytes": 76374,
+      "sha256": "560db6deb84d7b9e353304e6aee414a45f6087524b6ca78e3bb7296fdf5a9ce3"
+    }
+  ],
+  "cleanup": {
+    "credentialValuesNotPrinted": true,
+    "original5190UiTouches": 0,
+    "reviewOperations": 0,
+    "applyOperations": 0,
+    "ownTabClosed": true
+  },
+  "limitations": [
+    "Selected copied real planning network only; not whole-plant geometric/category acceptance.",
+    "Visual checks do not validate native geometry or authorize engineering Apply.",
+    "No standalone-preview crash was performed by this browser check. Durable batch crash has separate evidence."
+  ],
+  "relatedReceipts": [
+    "target-startup-corrected-1792328961877.json",
+    "crash-once-1792329583015.json"
+  ]
+}

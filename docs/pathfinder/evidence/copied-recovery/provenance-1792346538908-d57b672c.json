@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "pathfinder.copied-recovery.provenance-receipt.v1",
+  "status": "PASS",
+  "startedAt": "2026-10-18T18:02:18.589Z",
+  "mode": "prepare",
+  "drillId": "e09d28fa-580f-484a-a7f7-ac8b8a00cee7",
+  "chain": {
+    "events": 67,
+    "bytes": 2414498,
+    "finalSha256": "709f5179b5a76908067300cf5b9c97b07b92bae63cc314a43bf13515f5df818c",
+    "recordsSha256": "89d72b91dcfc30c30bfd3c832c402c3a05be2a42d202d9c769bcb27cef1a8f74"
+  },
+  "adjunctManifest": {
+    "path": "pathfinder-engine/.scratch/copied-recovery-c8f5c134-d041-45b9-ab20-214ff70d30dc/provenance/manifest.private.json",
+    "bytes": 19275,
+    "sha256": "19608da12ec0ba9f429ee8a01f78b214a5b252c13a76d1ae97da9306fb618a49"
+  },
+  "files": 75,
+  "totalBytes": 4148668,
+  "authMaterialExcluded": true,
+  "rawModelsInCoreBackup": true,
+  "finishedAt": "2026-10-18T18:02:18.908Z"
+}

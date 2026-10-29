@@ -1,0 +1,36 @@
+{
+  "recordedAt": "2026-10-19T04:39:43.658Z",
+  "scope": "After R6 technical commit, before metadata-only R7 handoff commit",
+  "branch": "pf-r6-model-revisions-local-20261019",
+  "head": "0c4937d0c0667c252259ebe672389f96fc1fe573",
+  "status": "?? .pf0-work/\n?? .pf2-work/\n?? docs/pathfinder/evidence/revision-comparison/handoff-remote-r7final.json",
+  "cachedOriginComparison": "0\t57",
+  "technicalDelivery": {
+    "files": 92,
+    "insertions": 6670,
+    "deletions": 29
+  },
+  "referenceRepositories": [
+    {
+      "directory": "C:/Users/todor.chankov/source/WFC",
+      "branch": "main",
+      "head": "e1ef20202598bb4d3d78e4772cbbb9747ec23a00",
+      "status": "",
+      "changesSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "directory": "C:/Users/todor.chankov/.codex/.chatgpt-projects/g-p-6ad0a317833c8191bf8e4e8c824a1056/work/review-pathfinder",
+      "branch": "master",
+      "head": "45c24bf5f433f13e102600b36f20327c77961d0a",
+      "status": "",
+      "changesSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "directory": "C:/Users/todor.chankov/source/repos/MrToKa/PathFinder",
+      "branch": "master",
+      "head": "35f4fb46f7762503576bdacd9668f34a1be2b0ed",
+      "status": "M AddinRibbon/AddinRibbon.csproj\n M AddinRibbon/ClAddin.cs\n?? .vscode/",
+      "changesSha256": "b6834d58e3725a8ed702680a530d27888d025b4b7fcfb1088424947479e55b2e"
+    }
+  ]
+}

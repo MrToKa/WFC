@@ -1,0 +1,9 @@
+{
+  "schemaVersion": "pathfinder.automation.stage-update.v1",
+  "recordedAtUtc": "2026-10-18T13:49:10Z",
+  "automationId": "pathfinder",
+  "toolResult": "Updated automation in the app; ACTIVE",
+  "readBack": {"status":"ACTIVE","branch":"pf-2-coverage-local-20261018","handoffCommit":"f2f5e6ab33970d82dda660aac80d0cecfa80a59b","quietPolicyPresent":true},
+  "preserved": {"name":"PathFinder — автоматично изпълнение на етапите","schedule":"Every10minutes","targetThreadId":"01a1437a-c394-7650-aae2-5d25e2573207"},
+  "scope": "Recovery scheduling for current stage; inspect live agents/status before new work. Not a separate concurrent implementation or passing coverage result."
+}

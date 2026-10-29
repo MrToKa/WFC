@@ -1,0 +1,181 @@
+{
+  "schemaVersion": "wfc.pf.b26-confirmed-h1-intrinsic-geometry-checks.v1",
+  "status": "INDEPENDENT_OFFLINE_GEOMETRY_DIAGNOSTIC_COMPLETE",
+  "operationId": "4baf7d97-8848-41af-8631-4d393a650885",
+  "originalNativeDriver": {
+    "status": "REFUSED",
+    "failureCode": "B26_NATIVE_SOURCE_OR_FOREIGN_RESOURCE_CHANGED",
+    "failureSha256": "a48cbeae00f89c0b6e7edafd7d6799bf8c41125624cd6b35306944a8ec1c0dd9",
+    "sourceSha256": "89dac97400cb1fea29f8be3d50c283be84971bc8ecabfb857a72e866bcf2ab91",
+    "wholeRunResourceConservation": "NOT_PROVEN",
+    "finalSourceBookends": "NOT_REACHED",
+    "endResourceSnapshot": "NOT_RETAINED",
+    "refusalReplaced": false
+  },
+  "intrinsicAudit": {
+    "name": "pathfinder-engine/.scratch/b26-4baf7d97-8848-41af-8631-4d393a650885/intrinsic-audit-874f8802-9126-47bd-974d-e1a4f11437c1/result.private.json",
+    "bytes": 152418,
+    "sha256": "5400a0c20f70c2f1200e504f49d54f46fcb4435d3aeff6cbc3da8a5c9c1bf0af",
+    "status": "INTRINSIC_NATIVE_PROOFS_AUDITED",
+    "sourceSha256": "cfc94c30dfaa9407c161dbb3a814014b9e125d5d88ca222dffce7bf0b7a7105a",
+    "intrinsicNativeProcesses": 2,
+    "intrinsicProcessAndArtifactJoins": "PASS",
+    "recordedHelpersRemoved": true,
+    "currentHelperAbsenceChecked": true,
+    "auditInputOutputBookends": "PASS",
+    "nativeRerunByAuditor": false,
+    "laterResourceObservation": {
+      "stableDuringAudit": false,
+      "classificationAgainstOriginalBegin": "ONLY_IDENTIFIED_FOREIGN_STARTED_AT_CHANGED",
+      "ownedStateEnvironmentAndResourceIdentityComparisonsUnchanged": true,
+      "foreignActorKnown": false,
+      "foreignCauseKnown": false,
+      "originalFailedEndSnapshotObserved": false,
+      "originalWholeWindowConservationInferred": false
+    }
+  },
+  "independentGeometry": {
+    "name": "pathfinder-engine/.scratch/b26-4baf7d97-8848-41af-8631-4d393a650885/confirmed-crossings-0dedb8f1-8eb3-47e0-bca4-fb8c9785a8a2/result.private.json",
+    "bytes": 358053,
+    "sha256": "cb7978ae3a21ad1e11530ec044913d16d220b07f951a5d11ca7bad440da60c75",
+    "status": "ONLY_ORIGINAL_GEOMETRY_DIAGNOSTIC",
+    "sourceSha256": "cd10a0a98cef1e7befbc05c4b900d33d1a8a839b2740f7ff87aae3778d84f9fb",
+    "sourceInputBookends": "PASS",
+    "copiedExactMathSourceSha256": "cabc734387d31b3dd1bfe86cd07708772338e81e5ac4b411ff9c169b69818399",
+    "copiedMathBlockIdentical": true,
+    "finalSegmentsChecked": 258,
+    "analyticContactAndOccupancyChecks": 11,
+    "analyticCodeComparisonChecks": 3
+  },
+  "packagedRuntime": {
+    "apiImage": "sha256:68938938120f20b4e877c6e6709ba44578dbe54c957fe7aa2b9cfc8190bfb8a5",
+    "engineIdentitySha256": "b3157008f42eced7281f7b093e4b898f23fe244e808da5a605c324f57ac58090",
+    "hostCandidateMounted": false,
+    "normalSupervisorArguments": [],
+    "workerLimitsChanged": false
+  },
+  "input": {
+    "fixtureSha256": "9fa84c9178c54403e08cfe93d43186361685a17c4f6f68f84696ad503c16ff0a",
+    "userConfirmationSha256": "ef12792d56824fe88703fa354da4d6bd635ae664cffd10d826837056f0f7bb20",
+    "confirmedFromMetres": [51.2619021370831, -6.471190246329826, 4.04500007176938],
+    "unchangedToMetres": [36.660040660184904, -11.198630603538078, 2.600000138526582],
+    "onlyRequestOverrides": ["requestId", "from"],
+    "expectedRouteForced": false,
+    "savedProjectEndpointChanged": false,
+    "protectedFromObjectIdentityVerified": false
+  },
+  "originalGeometry": {
+    "captureSha256": "9dcf2027d175de5a761a582d7be493441458ea9cda7f5449c1f3f058440a7a45",
+    "fragments": 28,
+    "vertices": 4790,
+    "triangles": 3789,
+    "coordinatesMatricesIndicesAndMembershipsIdentical": true,
+    "worldVerticesUsedOnce": true,
+    "wholeRvmCoverageEstablished": false
+  },
+  "runs": [
+    {
+      "caseName": "H1.off",
+      "drillThroughWalls": false,
+      "intrinsicRunnerStatus": "calculated",
+      "responseSha256": "9557b5f7ba7d647990f160685d8b634c6e489ba1e4aeba52fa78f31f8e4ce79b",
+      "route": "/SECONDARY/BC020/BC030/BC030-1/BC175/C107-2/C107-1/C002/DFC003/DFC002/DFC001/DFBC002-1",
+      "physicalLengthMetres": 43.80162051112078,
+      "designLengthMetres": "58",
+      "pointCount": 116,
+      "productionProofStatus": "clear-selected-scope",
+      "productionCheckedSegments": 115,
+      "reason": "ACCESSIBLE_STRAIGHT_PAIR_CLEAR_INTER_TRAY_OPENING_MANEUVER_V1",
+      "independentStatus": "NO_EXACT_CONTACT_OR_CLOSED_TOPOLOGY_CONTAINMENT_DETECTED",
+      "independentSegments": 115,
+      "triangleContacts": 0,
+      "ambiguousTriangleObservations": 0,
+      "containedRoutePoints": 0,
+      "ambiguousOccupancyPoints": 0,
+      "literalExpectedRouteComparison": {
+        "exactForward": false,
+        "exactReverse": false,
+        "extraCodes": ["SECONDARY"],
+        "missingCodes": [],
+        "elevenTrayCodesFollowExpectedReverseOrder": true,
+        "secondaryMarkerSubsequentlyAllowedByUser": true,
+        "originalCheckerComparisonRewritten": false
+      },
+      "namedWallObservations": [
+        {
+          "volmodel": 581,
+          "dbId": 168594,
+          "fragmentId": 391,
+          "originalTriangles": 232,
+          "locatorSegmentIndex": 19,
+          "spansBothVertexBoundsPlanes": true,
+          "exactTriangleContactsThisWall": 0,
+          "exactTriangleContactsAll28": 0,
+          "ambiguousObservations": 0,
+          "boundsAreLocatorOnly": true,
+          "openingTraversalCertified": false
+        },
+        {
+          "volmodel": 2112,
+          "dbId": 171737,
+          "fragmentId": 851,
+          "originalTriangles": 48,
+          "locatorSegmentIndex": 75,
+          "spansBothVertexBoundsPlanes": true,
+          "exactTriangleContactsThisWall": 0,
+          "exactTriangleContactsAll28": 0,
+          "ambiguousObservations": 0,
+          "boundsAreLocatorOnly": true,
+          "openingTraversalCertified": false
+        }
+      ],
+      "c002C1071ExactReferenceSubpolyline": {
+        "fromPointIndex": 74,
+        "toPointIndex": 77,
+        "orientation": "Q-to-P",
+        "legs": 3,
+        "segmentIndices": [74, 75, 76],
+        "triangleContactsAll28": 0,
+        "triangleContactsWall2112": 0,
+        "ambiguousObservationsAll28": 0
+      },
+      "bothWallTraversalsCertified": false
+    },
+    {
+      "caseName": "H1.on",
+      "drillThroughWalls": true,
+      "intrinsicRunnerStatus": "calculated",
+      "responseSha256": "ff4981ed289674fb1bc737d8e0659e7f752c857a236a6b4745a79e661416c5a8",
+      "route": "/SECONDARY/BC022-3/BC022-1/BC025/C143-3/C143-2/C143-1/C002/DFC003/DFC002/DFC001/DFBC002-1",
+      "physicalLengthMetres": 50.875302159923784,
+      "designLengthMetres": "66",
+      "pointCount": 144,
+      "productionProofStatus": "bypassed",
+      "productionCheckedSegments": 0,
+      "reason": "DRILLING_BYPASS",
+      "independentStatus": "EXACT_CONTACT_OR_CLOSED_CONTAINMENT_DETECTED",
+      "independentSegments": 143,
+      "triangleContacts": 6,
+      "ambiguousTriangleObservations": 0,
+      "containedRoutePoints": 0,
+      "ambiguousOccupancyPoints": 0,
+      "wall2112TriangleContacts": 2,
+      "triangleContactsAreNotDistinctPenetrationCount": true
+    }
+  ],
+  "limits": {
+    "liveSdkCaptureVerified": false,
+    "liveViewerFrameCurrentnessVerified": false,
+    "realReviewApplyPerformed": false,
+    "projectEndpointWritePerformed": false,
+    "projectRoutingOrLengthWritePerformed": false,
+    "engineeringAccepted": false,
+    "physicalCableRadiusChecked": false,
+    "nearDistanceClearanceChecked": false,
+    "coordinateCorroborationToleranceUsedForCollision": false,
+    "ownTerminalExemptionsApplied": false,
+    "equipment23UsedForOpeningDecision": false,
+    "proxyPortalCreated": false,
+    "obstacleGeometryModified": false
+  }
+}

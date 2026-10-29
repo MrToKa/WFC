@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "pathfinder.automation-blocker-pause.v1",
+  "observedAtUtc": "2026-10-17T21:16:30.4818035Z",
+  "id": "pathfinder",
+  "kind": "heartbeat",
+  "status": "PAUSED",
+  "updatedThrough": "Codex app automation_update",
+  "reason": "Installed native reference host reports entitlement not found; stop repeated dependent attempts per user instruction",
+  "promptNameScheduleTargetPreserved": true,
+  "targetThreadId": "01a1437a-c394-7650-aae2-5d25e2573207",
+  "taskComplete": false,
+  "dependentStage": "PF-2",
+  "resumePrerequisite": "Authorized complete native reference or resolved local entitlement before another native capture"
+}

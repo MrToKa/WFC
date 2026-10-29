@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS",
+  "recordedAtUtc": "2026-10-18T07:05:44.352Z",
+  "scope": "Final own primary health and retained-archive identity after successful restored-target retirement and exact older-resource cleanup.",
+  "sourceCheckpoint": "cfdcd3f5974636737ff34acec0fc3de391d35ab1",
+  "origin": "http://127.0.0.1:5190",
+  "healthStatus": 200,
+  "health": {
+    "status": "ok"
+  },
+  "images": {
+    "api": "sha256:286e0d43fb12d23c77727eb2c899eac161571d98998e0eb0f212911006adb500",
+    "web": "sha256:500345218d8c3f4629725ce6b1d3cbeeb6dc12f7b4cb1f06d5b92ecf8949ba64"
+  },
+  "topology": {
+    "status": "PASS",
+    "project": "wfc-pathfinder-local",
+    "origin": "http://127.0.0.1:5190",
+    "services": [
+      "postgres",
+      "minio",
+      "storage-ready",
+      "api",
+      "web"
+    ],
+    "volumes": [
+      "postgres",
+      "minio",
+      "staging",
+      "pathfinder"
+    ],
+    "privateBackend": true,
+    "publishedPorts": [
+      5190
+    ]
+  },
+  "resources": {
+    "containers": [
+      {
+        "role": "web",
+        "id": "1da50b13c1e4cae953cfeb1a69128023dd51f9ec81497a827bc1c95cef4a4190",
+        "image": "sha256:500345218d8c3f4629725ce6b1d3cbeeb6dc12f7b4cb1f06d5b92ecf8949ba64",
+        "name": "wfc-pathfinder-local-web-1",
+        "running": true,
+        "startedAt": "2026-10-18T07:02:15.693568023Z"
+      },
+      {
+        "role": "api",
+        "id": "618a226f3a6ad62fbb23033d7674938ad0798a5def8492e4526d6f0661c405d1",
+        "image": "sha256:286e0d43fb12d23c77727eb2c899eac161571d98998e0eb0f212911006adb500",
+        "name": "wfc-pathfinder-local-api-1",
+        "running": true,
+        "startedAt": "2026-10-18T07:02:09.594005079Z"
+      },
+      {
+        "role": "storage-ready",
+        "id": "b68e604a29746a3643f301a882ee62e7157c87ae8d67904547569cda8c67a210",
+        "image": "sha256:286e0d43fb12d23c77727eb2c899eac161571d98998e0eb0f212911006adb500",
+        "name": "wfc-pathfinder-local-storage-ready-1",
+        "running": false,
+        "startedAt": "2026-10-18T06:57:06.288110873Z"
+      },
+      {
+        "role": "postgres",
+        "id": "6830635a4597dad696f1a5ced6846853cd9e1fee0f858450ad6f858e4c2e30b9",
+        "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+        "name": "wfc-pathfinder-local-postgres-1",
+        "running": true,
+        "startedAt": "2026-10-18T02:03:12.60010978Z"
+      },
+      {
+        "role": "minio",
+        "id": "e27a690c80957356c8a562e02b72249cf85a3d965f9a32fe596048a15f499820",
+        "image": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+        "name": "wfc-pathfinder-local-minio-1",
+        "running": true,
+        "startedAt": "2026-10-18T07:02:07.977598881Z"
+      }
+    ],
+    "volumes": [
+      "wfc-pathfinder-local_postgres",
+      "wfc-pathfinder-local_minio",
+      "wfc-pathfinder-local_staging",
+      "wfc-pathfinder-local_pathfinder"
+    ],
+    "networks": [
+      {
+        "id": "7e58e2a7f9544ca1b5efc7ae9773e69088168620ad34a6afb7abcea2a26b6cc0",
+        "name": "wfc-pathfinder-local_front"
+      },
+      {
+        "id": "77abead34a6b25bce147efa3a1eacd67d9a9b110028ea634ab904768e3e2274d",
+        "name": "wfc-pathfinder-local_backend"
+      }
+    ]
+  },
+  "retainedBackup": {
+    "directory": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf-manual-backup-20261018-0703",
+    "backupId": "2ae6f51b-34ee-46d4-8594-757f882fd216",
+    "payloadBytes": 1346348226,
+    "privateCompanion": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf-manual-backup-20261018-0703.private.json",
+    "fullyVerifiedBy": "docs/pathfinder/runtime/cleanup-1792307113805.json"
+  },
+  "drill": "docs/pathfinder/runtime/final-drill-1792307077877.json",
+  "cleanup": "docs/pathfinder/runtime/cleanup-1792307113805.json",
+  "limits": [
+    "No physical reclaimed image-layer bytes inferred from image metadata.",
+    "Historical failed/test receipts and compact retired manifests remain.",
+    "Cross-computer restore remains NOT_RUN; native parity is not asserted; per-proposal manual Review remains required."
+  ]
+}

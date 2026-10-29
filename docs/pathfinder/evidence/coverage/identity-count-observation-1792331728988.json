@@ -1,0 +1,196 @@
+{
+  "schemaVersion": "pathfinder.coverage.identity-count-observation.v1",
+  "recordedAtUtc": "2026-10-18T13:55:28.987Z",
+  "status": "OBSERVED_RECONCILED_IDENTITY_SETS",
+  "executedBy": "viewer_tab_capabilities; read-only host file analysis, source inspection. No app/SDK execution, DB/browser/containers/jobs/tests or source edits.",
+  "inventoryReceipt": {
+    "path": "pathfinder-engine/.scratch/pf2-converted/captures/inventory-1792271145372-receipt.json",
+    "bytes": 31847,
+    "sha256": "ade029bcbe1b764ff7257017d6633ab90f9e4be4a560a5217e1c3fad708d1986",
+    "schemaVersion": "pathfinder.converted.inventory.v1",
+    "declaredObjectCount": 438155,
+    "declaredExternalIdentityObjectCount": 438156,
+    "contentFingerprint": "b5bb4fbe666b440c73bb1ffd2ee0db01be66146f8002e4a9df8dce8521db1d34"
+  },
+  "actualNarrowInventoryReads": {
+    "toolOutput": "1588e7",
+    "parts": 214,
+    "bytes": 152879123,
+    "objectRows": 438155,
+    "distinctDbIds": 438155,
+    "treeRoot": {
+      "dbId": 1,
+      "present": true
+    },
+    "treeDbIdsNotInSourceDerivedPdbMapping": 0,
+    "externalIdMismatchesAgainstRawPdb": 0,
+    "externalIdsPerRetainedObject": 1,
+    "missingMappedDbIds": [
+      388764
+    ],
+    "fullPartHashHierarchyFragmentAcceptance": "NOT_RUN_HERE; delegated independent coverage CLI performs those gates."
+  },
+  "propertyDbMapping": {
+    "inputs": [
+      {
+        "path": "pathfinder-engine/.scratch/pf2-converted/package/resources/output/0/objects_ids.json.gz",
+        "bytes": 1155258,
+        "sha256": "c0e00414833748b518ef32092affe3ccd380aa712859846a6b8f894305c1c5bb",
+        "decodedBytes": 9045169,
+        "decodedArrayLength": 438157,
+        "packageRecordedSha256": "c0e00414833748b518ef32092affe3ccd380aa712859846a6b8f894305c1c5bb",
+        "packageVerifiedSha256": "c0e00414833748b518ef32092affe3ccd380aa712859846a6b8f894305c1c5bb",
+        "matchesPackageVerification": true
+      },
+      {
+        "path": "pathfinder-engine/.scratch/pf2-converted/package/resources/output/0/objects_attrs.json.gz",
+        "bytes": 997,
+        "sha256": "ee4df15128a2ad51a42603ba7a0bbfb52b1bfbf2cee07139af1fac2545fdac57",
+        "decodedBytes": 5948,
+        "decodedArrayLength": 79,
+        "packageRecordedSha256": "ee4df15128a2ad51a42603ba7a0bbfb52b1bfbf2cee07139af1fac2545fdac57",
+        "packageVerifiedSha256": "ee4df15128a2ad51a42603ba7a0bbfb52b1bfbf2cee07139af1fac2545fdac57",
+        "matchesPackageVerification": true
+      },
+      {
+        "path": "pathfinder-engine/.scratch/pf2-converted/package/resources/output/0/objects_offs.json.gz",
+        "bytes": 1137003,
+        "sha256": "9be8c2f8a07b056b2ba713e7896ce8d71dc0b28c5ecd99d0246023267a216de8",
+        "decodedBytes": 3390880,
+        "decodedArrayLength": 438157,
+        "packageRecordedSha256": "9be8c2f8a07b056b2ba713e7896ce8d71dc0b28c5ecd99d0246023267a216de8",
+        "packageVerifiedSha256": "9be8c2f8a07b056b2ba713e7896ce8d71dc0b28c5ecd99d0246023267a216de8",
+        "matchesPackageVerification": true
+      },
+      {
+        "path": "pathfinder-engine/.scratch/pf2-converted/package/resources/output/0/objects_avs.json.gz",
+        "bytes": 4650361,
+        "sha256": "7932608146d33fc615ee6c434f9d737ce7cdd492c1a7dd8f7b2eb151a97797b4",
+        "decodedBytes": 32950895,
+        "decodedArrayLength": 8561698,
+        "packageRecordedSha256": "7932608146d33fc615ee6c434f9d737ce7cdd492c1a7dd8f7b2eb151a97797b4",
+        "packageVerifiedSha256": "7932608146d33fc615ee6c434f9d737ce7cdd492c1a7dd8f7b2eb151a97797b4",
+        "matchesPackageVerification": true
+      },
+      {
+        "path": "pathfinder-engine/.scratch/pf2-converted/package/resources/output/0/objects_vals.json.gz",
+        "bytes": 2443733,
+        "sha256": "ef38e808230ffc76a7669b50f3dd7ab990cf2c5026aa37900c78ae2fb949a733",
+        "decodedBytes": 28625435,
+        "decodedArrayLength": 865214,
+        "packageRecordedSha256": "ef38e808230ffc76a7669b50f3dd7ab990cf2c5026aa37900c78ae2fb949a733",
+        "packageVerifiedSha256": "ef38e808230ffc76a7669b50f3dd7ab990cf2c5026aa37900c78ae2fb949a733",
+        "matchesPackageVerification": true
+      }
+    ],
+    "verification": {
+      "path": "pathfinder-engine/.scratch/pf2-converted/package-verification.json",
+      "sha256": "b3f7b5bdd667e9ed2c6d0d2ae122809f2004185465b81fba0ffc9735f86c2fd9",
+      "contentFingerprint": "b5bb4fbe666b440c73bb1ffd2ee0db01be66146f8002e4a9df8dce8521db1d34",
+      "status": "PASS"
+    },
+    "rawIdsLength": 438157,
+    "skippedIndex0": 0,
+    "firstIncludedIndex": 1,
+    "lastIncludedIndex": 438156,
+    "distinctExternalIds": 438156,
+    "sourceDerivedDistinctMappedDbIds": 438156,
+    "scope": "Mapping reconstruction follows the inspected pinned SDK simple assignment loop; it is not a live SDK re-capture."
+  },
+  "mappingOnlyRecord": {
+    "dbId": 388764,
+    "externalIdSha256": "0b15f9abaf1f9b74c2a55b30a661b12b8bbc9defff2c6645203a1584d802186e",
+    "offset": 3834397,
+    "nextOffset": 3834411,
+    "propertyPairCount": 14,
+    "structural": [
+      {
+        "attributeId": 1,
+        "category": "__name__",
+        "valueIndex": 778658,
+        "value": "STRUCTURE 436 of ZONE /2025-03-14_N001-Arkitektfagmodel.ifc"
+      },
+      {
+        "attributeId": 3,
+        "category": "__parent__",
+        "valueIndex": 758098,
+        "value": 382528
+      }
+    ],
+    "declaredParentDbId": 382528,
+    "parentRawChildCount": 693,
+    "parentExplicitlyReferencesRecord": true,
+    "childAttributeCount": 0,
+    "instanceOfAttributeCount": 0
+  },
+  "inspectedSources": [
+    {
+      "path": "pathfinder-engine/tools/model-capture/capture.mjs",
+      "sha256": "c5f8ce64dc909b95927d61ffc65ecd1abc3fe211b84c44c90ebf5c7a8880e49c",
+      "bytes": 19530,
+      "anchors": [
+        {
+          "line": 61,
+          "meaning": "Starts nodeIds with tree root before recursive enumeration."
+        },
+        {
+          "line": 63,
+          "meaning": "Recursive enumNodeChildren deduplicates IDs and fails beyond object quota."
+        },
+        {
+          "line": 83,
+          "meaning": "Obtains separate complete model.getExternalIdMapping."
+        },
+        {
+          "line": 85,
+          "meaning": "Reverses external keys into distinct dbId map."
+        },
+        {
+          "line": 112,
+          "meaning": "Counts reachable nodeIds versus distinct mapped dbIds independently."
+        }
+      ]
+    },
+    {
+      "path": "viewer-runtime/sdk/7.130.0/viewer3D.min.js",
+      "sha256": "2833d5c53d250f56a59b86f22491a972486b30fd90a103bce8310dcaa970fa5b",
+      "bytes": 3388432,
+      "anchors": [
+        {
+          "meaning": "Recursive enumNodeChildren invokes callback on initial/root node too, then descendants.",
+          "utf16CodeUnitOffset": 1324077
+        },
+        {
+          "meaning": "Model external-ID mapping delegates to property DB.",
+          "utf16CodeUnitOffset": 1782023
+        }
+      ]
+    },
+    {
+      "path": "viewer-runtime/sdk/7.130.0/lmvworker.min.js",
+      "sha256": "9637ed11308c549b6dbd290d6270e53587122ebb5ffd7f87987ea9a8f897f46a",
+      "bytes": 620608,
+      "anchors": [
+        {
+          "meaning": "PDB external mapping iterates IDs indices1..<idsOffsets.length, without tree membership restriction.",
+          "utf16CodeUnitOffset": 136336
+        },
+        {
+          "meaning": "PDB buildObjectTreeRec sets a node only when retained children plus fragment association count is nonzero.",
+          "utf16CodeUnitOffset": 138317
+        }
+      ]
+    }
+  ],
+  "interpretation": {
+    "countBasis": "438155 is root-inclusive reachable SDK tree membership;438156 is distinct property-DB mapped IDs. The exact set difference is dbId388764, not an omitted tree root.",
+    "pruningStrength": "CONSISTENT_NOT_PROOF",
+    "pruning": "The inspected SDK can omit a childless node without fragment associations. The actual loaded-tree construction path and fragment mapping for this record were not observed or replayed here.",
+    "unknowns": [
+      "Reason why the actual loaded tree omitted dbId388764 remains unproved.",
+      "No phantom/hidden/native object or tray/equipment/category classification follows from the difference.",
+      "No mesh/property completeness, native visibility, source correspondence, engineering acceptance or whole-plant eligibility claim."
+    ],
+    "taxonomy": "Names such as STRUCTURE or ZONE and selected-root names are descriptive diagnostics only. Tray eligibility/categories require retained explicit assignment source and allowedCategories; legacy capture records unassigned/empty categories."
+  }
+}

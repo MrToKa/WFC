@@ -1,0 +1,63 @@
+{
+  "schemaVersion": "pathfinder.worker-session.cross-review.v1",
+  "recordedAtUtc": "2026-10-18T12:38:56.0924886Z",
+  "scope": "Independent read-only server session/worker/shutdown review",
+  "status": "FINDING",
+  "sourceFiles": [
+    {
+      "path": "server/pathfinder/engineSession.ts",
+      "sha256": "2dbc1535907520fdab408ecead1c4ad932a756481d7f3b23aa72b4cdf8dff0aa"
+    },
+    {
+      "path": "server/pathfinder/worker.ts",
+      "sha256": "393dfa5ee13795f3feb4400f066faaa85d85c820471178b4b2fc98be78141ddc"
+    },
+    {
+      "path": "server/pathfinder/worker-session.test.ts",
+      "sha256": "2dc8fce9f536d26ac4934d2b40404dfa137c195a5ef4e8d389f8c09e5cf7e248"
+    },
+    {
+      "path": "server/pathfinder/engineSession.test.ts",
+      "sha256": "2d6a6e67a9b84a7a4962b31ed28aaa1e643bd72406afc329a0ec8cb839a241f2"
+    },
+    {
+      "path": "server/index.ts",
+      "sha256": "b3133a1c0d84ac379cf097825ecfceb99b89fef8aee9dc19e8df82262ee94eb4"
+    }
+  ],
+  "findings": [
+    {
+      "priority": "P1",
+      "file": "server/pathfinder/engineSession.ts",
+      "lines": [
+        596,
+        603,
+        610
+      ],
+      "title": "Recheck cancellation and original deadline after retirement join",
+      "trigger": "A valid retiring result arrives, groupGone stays false, then cancellation or original outer deadline occurs before group reaping succeeds.",
+      "observedFromSource": "execute awaits retire then returns response without check(); stopCall records callFailure but fault() returns for current.retiring.",
+      "impact": "A successful DTO can resolve after cancellation/deadline. Caller-signal publication fences help cancellation, but original outer timer only sets local callFailure so a late success can be persisted.",
+      "recommendedFix": "Run check() and the unchanged original deadline check after awaited retirement and immediately before returning, with delayed-group cancel/deadline controls.",
+      "reproducer": "Fake retiring reply; groupGone false until2s; timeout100ms (outer1600ms), then groupGone true. Current source returns response.",
+      "execution": "NOT_RUN; source-only reproducer",
+      "writerNotified": true,
+      "writerAcknowledged": true
+    }
+  ],
+  "checkedAreas": [
+    "Closed frame/schema/hash/ordinal/request identity",
+    "Async startup hashing cancellation and no hidden queue",
+    "Kill/groupGone join and fatal quarantine before lane replacement",
+    "Idle/count/age/RSS and cumulative budgets",
+    "Advisory-owner lifecycle and preserved authority/dependency publication fences",
+    "Shutdown failure exit status"
+  ],
+  "testsRunByReviewer": "NOT_RUN",
+  "runtimeActions": "NONE",
+  "sourceMutations": "NONE",
+  "limitations": [
+    "Independent Linux qualification is a separate owner scope.",
+    "This finding receipt captures reviewed bytes before the coordinated fix."
+  ]
+}

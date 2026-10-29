@@ -1,0 +1,240 @@
+import { z } from 'zod';
+import { getApiBaseUrl } from './http';
+import type { CanonicalPoint } from '../../viewer-runtime/protocol.mjs';
+import { validateModelCaptureInputScope, type ModelCaptureInputScope } from '../../viewer-runtime/capture-input.mjs';
+import { engineIdentitySchema } from '../../shared/pathfinderEngineIdentity';
+import { parsePurposeJson, policyHashSchema, policyRevisionSchema } from '../../shared/pathfinderPurposePolicy';
+import { lengthLedgerSchema } from '../../shared/pathfinderLengthLedger';
+import { directSecondaryDecisionSchema, directSecondaryRouteIssue, type DirectSecondaryDecision } from '../../shared/pathfinderDirectSecondary';
+import { revisionResultEnvelopeSchema } from '../../shared/pathfinderRevisionResults';
+import { calculationAvailabilitySchema } from '../../shared/pathfinderCalculationAvailability';
+import { calculationSubmissionRefusalSchema } from '../../shared/pathfinderCalculationSubmission';
+import { automaticPairPolicySchema, automaticPairStatuses } from '../../shared/pathfinderAutomaticPair';
+import { recalculationReasonSchema } from '../../shared/pathfinderRecalculation';
+import { sealedCableItemApplicabilitySchema } from '../../shared/pathfinderItemApplicability';
+import { supportedBarrierAdmissionIntentSchema as barrierAdmissionIntentSchema, type AnyBarrierAdmissionIntent as BarrierAdmissionIntent,
+  supportedBarrierExecutionSchema as barrierExecutionSchema, supportedBarrierEngineIdentitySchema as barrierEngineIdentitySchema } from '../../shared/pathfinderBarrierSupported';
+
+const uuid = z.string().uuid(), revision = z.string().regex(/^(0|[1-9][0-9]{0,18})$/);
+const point = z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]);
+const captureProvenance = z.object({ inputScope: z.custom<ModelCaptureInputScope>(value => validateModelCaptureInputScope(value)).optional() }).passthrough();
+const match = z.object({ status: z.enum(['matched', 'missing', 'ambiguous', 'stale']), locationId: uuid.nullable(), candidates: z.array(z.string().max(2048)) });
+const location = z.object({ id: uuid, name: z.string(), aliases: z.array(z.string()), revision,
+  calculationAvailability: calculationAvailabilitySchema.optional(),
+  matching: z.object({ status: z.enum(['missing', 'ambiguous', 'unverified']), candidateObjectIds: z.array(z.string()) }).optional(),
+  binding: z.object({ modelVersionId: uuid, revision, point, objectId: z.string().nullable(), externalId: z.string().nullable(), source: z.enum(['manual', 'automatic']), status: z.enum(['confirmed', 'stale']), derivation: z.enum(['manual-world-point', 'picked-surface-point', 'equipment-bottom-aabb', 'matched-model-bottom-aabb.v1']).optional(), coordinateFrame: z.literal('canonical-world-metres').optional() }).nullable() });
+const numeric = z.union([z.string(), z.number().finite()]).nullable();
+const jobSchema = z.object({ id: uuid, projectId: uuid, kind: z.enum(['calculate', 'lookup', 'preview']).optional(), status: z.enum(['queued', 'running', 'complete', 'cancelled', 'failed']), total: z.number().int().nonnegative(), completed: z.number().int().nonnegative(), cancelRequested: z.boolean(), failure: z.string().nullable(), attempts: z.number().int().nonnegative(), createdAt: z.string(), updatedAt: z.string() });
+const jobAutomaticUpdateSchema = z.object({ status: z.enum(automaticPairStatuses), receiptId: uuid.nullable(), reasonCode: recalculationReasonSchema.nullable() }).strict()
+  .refine(value => ['written', 'already-written'].includes(value.status) === (value.receiptId !== null));
+const jobItemSchema = z.object({ cableId: uuid, status: z.string(), state: z.string(), message: z.string().nullable(), automaticUpdate: jobAutomaticUpdateSchema.optional() });
+const connectionGapSchema = z.string().max(64).regex(/^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/).refine(value => Number.isFinite(Number(value)) && Number(value) > 0 && Number(value) <= 100);
+const projectSettingsSchema = z.object({ revision, connectionGap: connectionGapSchema, secondaryTrayLength: z.string().nullable(), endConnectionLength: z.string().nullable(), additionalBendingPercent: z.string().nullable() });
+const designSchema = z.object({ lengthBeforePercentageMeters: z.string(), unroundedLengthMeters: z.string(), designLengthMeters: z.string() });
+const routingPreferencesSchema = z.object({ secondaryDistanceMeters: z.number().finite().min(0).max(1_000_000), preferVerticalApproach: z.boolean(), barrierRouting: barrierAdmissionIntentSchema.optional() });
+const proposalProvenanceSchema = z.object({
+  dependencyVersion: z.enum(['pathfinder.dependencies.v1', 'pathfinder.dependencies.v2', 'pathfinder.dependencies.v3', 'pathfinder.dependencies.v4', 'pathfinder.dependencies.v5', 'pathfinder.dependencies.v6','pathfinder.dependencies.v7','pathfinder.dependencies.v8']),
+  dependencyHash: policyHashSchema, engineIdentity: z.union([engineIdentitySchema,barrierEngineIdentitySchema]).nullable(),
+  automatic: z.object({ generation: policyRevisionSchema, authorityEpoch: policyRevisionSchema, current: z.boolean(), reasonCode: z.string().min(1).max(96).nullable() }).strict().nullable(),
+  endpointSources: z.object({from:z.enum(['automatic-model-candidate','confirmed-shared-location']),to:z.enum(['automatic-model-candidate','confirmed-shared-location'])}).strict().optional(),
+}).strict().superRefine((value, context) => {
+  if (['pathfinder.dependencies.v5','pathfinder.dependencies.v6','pathfinder.dependencies.v7','pathfinder.dependencies.v8'].includes(value.dependencyVersion) !== (value.engineIdentity !== null)
+    || value.engineIdentity && (value.dependencyVersion==='pathfinder.dependencies.v8') !== (value.engineIdentity.schemaVersion==='wfc.pf.engine-identity.v2' || value.engineIdentity.schemaVersion==='wfc.pf.engine-identity.v3')) context.addIssue({ code: 'custom', message: 'Engine implementation identity must agree with the dependency version.' });
+  if (value.dependencyVersion==='pathfinder.dependencies.v6'
+    ? !value.endpointSources || !Object.values(value.endpointSources).includes('automatic-model-candidate')
+    : ['pathfinder.dependencies.v7','pathfinder.dependencies.v8'].includes(value.dependencyVersion)?!value.endpointSources:value.endpointSources!==undefined) context.addIssue({code:'custom',message:'Automatic endpoint provenance must agree with the dependency version.'});
+});
+const proposalSummaryObjectSchema = z.object({ schemaVersion: z.literal('wfc.pf.proposal.v2').optional(), provenance: proposalProvenanceSchema.optional(), id: uuid, projectId: uuid, jobId: uuid, cableId: uuid, status: z.string(), proposalHash: z.string().regex(/^[a-f0-9]{64}$/), cableWriteRevision: revision,
+  stale: z.boolean(), synthetic: z.boolean(), engineeringAccepted: z.boolean(), acceptanceScope: z.string(), canApply: z.boolean(), compatibilityIssue: z.string().nullable(), message: z.string(), engineeringMessage: z.string(),
+  design: designSchema.nullable(),lengthLedger:lengthLedgerSchema.nullable().optional(),directSecondary:directSecondaryDecisionSchema.nullable().optional(),revisionResultHash:policyHashSchema.nullable().optional(),revisionBaselineHash:policyHashSchema.nullable().optional(),
+  route: z.unknown().nullable(), routingPreferences: routingPreferencesSchema.nullable(), createdAt: z.string(), calculationMode: z.enum(['calculate', 'design']).optional(),
+  itemApplicability:sealedCableItemApplicabilitySchema.nullable().optional(),barriers:barrierExecutionSchema.nullable().optional() });
+const validateProposalItem=(value:z.infer<typeof proposalSummaryObjectSchema>,context:z.RefinementCtx)=>{
+    if(value.provenance?.dependencyVersion==='pathfinder.dependencies.v8'&&value.status==='calculated'&&!value.barriers)
+      context.addIssue({code:'custom',message:'Protected calculated results require exact barrier execution evidence.'});
+    if(value.barriers&&value.provenance?.dependencyVersion!=='pathfinder.dependencies.v8')
+      context.addIssue({code:'custom',message:'Historical results cannot acquire obstacle verification.'});
+    if(value.barriers && ((value.barriers.schemaVersion==='wfc.pf.barrier-execution.v2') !== (value.provenance?.engineIdentity?.schemaVersion==='wfc.pf.engine-identity.v3')
+      || (value.barriers.schemaVersion==='wfc.pf.barrier-execution.v2') !== (value.routingPreferences?.barrierRouting?.schemaVersion==='wfc.pf.barrier-admission-intent.v2')))
+      context.addIssue({code:'custom',message:'Mixed execution, exact submitted admission and engine identity must retain the same explicit lane.'});
+    const proof=value.itemApplicability;
+    if(proof&&(proof.projectId!==value.projectId||proof.jobId!==value.jobId||proof.cableId!==value.cableId||proof.proposalId!==value.id
+      ||proof.dependencyHash!==value.provenance?.dependencyHash||proof.dependencyVersion!==value.provenance?.dependencyVersion))context.addIssue({code:'custom',message:'Sealed item applicability must belong to the exact proposal.'});
+    if (value.directSecondary && value.provenance?.engineIdentity?.policyVersions.directSecondary !== value.directSecondary.policyVersion)
+      context.addIssue({ code: 'custom', message: 'Direct strategy must be explicitly recorded in this proposal’s engine identity.' });
+    if (value.lengthLedger?.schemaVersion === 'wfc.pf.length-components.v2'
+      && (!value.directSecondary || JSON.stringify(value.lengthLedger.directSecondary) !== JSON.stringify(value.directSecondary)))
+      context.addIssue({ code: 'custom', message: 'Direct length components require their exact direct strategy decision.' });
+    if (value.directSecondary?.mode === 'direct-secondary' && value.lengthLedger && value.lengthLedger.schemaVersion !== 'wfc.pf.length-components.v2')
+      context.addIssue({ code: 'custom', message: 'Direct strategy cannot use the legacy secondary-end formula.' });
+  };
+const proposalSummarySchema=proposalSummaryObjectSchema.superRefine(validateProposalItem);
+const computedRouteSchema = z.object({ success: z.boolean(), message: z.string(), routeText: z.string(), routeCodes: z.array(z.string()), segmentIds: z.array(z.string()),
+  points: z.array(point).max(200000), objectIds: z.array(z.string()).max(200000), lengthMeters: z.number().finite(), fromDistanceMeters: z.number().finite(), toDistanceMeters: z.number().finite(), fromRequiresSecondary: z.boolean(), toRequiresSecondary: z.boolean(), connectionGapCount: z.number().int().nonnegative(), connectionGapLengthMeters: z.number().finite() });
+const validateDirectComputedRoute = (value: { directSecondary?: DirectSecondaryDecision | null; route: z.infer<typeof computedRouteSchema> | null }, context: z.RefinementCtx) => {
+  if (value.directSecondary && value.route) {
+    const issue = directSecondaryRouteIssue(value.directSecondary, value.route);
+    if (issue) context.addIssue({ code: 'custom', message: issue });
+  }
+};
+const legacyDisplayEndpointSchema = z.object({ locationId: uuid, bindingRevision: revision, point });
+const boundDisplayEndpointSchema = legacyDisplayEndpointSchema.extend({ locationRevision: revision, bindingId: uuid,
+  bindingContentSha256: policyHashSchema, mode: z.enum(['fixed-world', 'object-derived', 'object-attached']),
+  captureFrameId: uuid, qualifiedProjectFrameId: uuid.nullable(), aggregateId: uuid, projectionSha256: policyHashSchema,
+  sourceObjectRevisionId: uuid.nullable(), migrationDecisionId: uuid.nullable() });
+const automaticDisplayEndpointSchema = z.object({ kind: z.literal('automatic-equipment-anchor'), locationId: uuid, locationRevision: revision,
+  point, modelVersionId: uuid, artifactId: uuid, aggregateId: uuid, captureFrameId: uuid, projectionSha256: policyHashSchema,
+  traceId: uuid, sourceObjectRevisionId: uuid, sourceObjectId: z.string().max(16).regex(/^dbid:(?:0|[1-9][0-9]*)(?![\s\S])/),
+  sourceObjectRecordSha256: policyHashSchema, contentSha256: policyHashSchema });
+const displayScope = { projectId: uuid, model: z.object({ id: uuid, selectionRevision: revision, contentFingerprint: policyHashSchema }),
+  artifact: z.object({ id: uuid, sha256: policyHashSchema }) };
+const displayPreparation = z.object({ aggregateId: uuid, captureFrameId: uuid, projectionSha256: policyHashSchema });
+// This is a display-only projection of metadata already returned by proposal GET.
+// Optional malformed/historical evidence never prevents reading the calculation itself.
+const proposalDisplayDependenciesSchema = z.union([
+  z.object({ schemaVersion: z.literal('pathfinder.dependencies.v2'), ...displayScope, from: legacyDisplayEndpointSchema, to: legacyDisplayEndpointSchema }),
+  z.object({ schemaVersion: z.enum(['pathfinder.dependencies.v3', 'pathfinder.dependencies.v4', 'pathfinder.dependencies.v5']), ...displayScope,
+    preparation: displayPreparation, from: boundDisplayEndpointSchema, to: boundDisplayEndpointSchema }),
+  z.object({ schemaVersion: z.enum(['pathfinder.dependencies.v6','pathfinder.dependencies.v7','pathfinder.dependencies.v8']), ...displayScope, preparation: displayPreparation,
+    from: z.union([automaticDisplayEndpointSchema, boundDisplayEndpointSchema]), to: z.union([automaticDisplayEndpointSchema, boundDisplayEndpointSchema]) }),
+]);
+const proposalSchema = proposalSummaryObjectSchema.extend({ route: computedRouteSchema.nullable(), effectiveCategory: z.string().nullable().optional(),revisionResult:revisionResultEnvelopeSchema.nullable().optional(),
+  dependencies: proposalDisplayDependenciesSchema.optional().catch(undefined) }).superRefine((value, context) => { validateProposalItem(value, context); validateDirectComputedRoute(value, context); });
+const diagnosticCount = z.number().int().nonnegative().max(1_000_000).nullable();
+const lookupPlanSchema = z.object({ routeCodes: z.array(z.string().min(2).max(256).regex(/^\/[A-Z0-9][A-Z0-9_.-]*$/).refine(value => value !== '/SECONDARY')).min(1).max(100), connectionGap: connectionGapSchema, selectionRevision: revision });
+const lookupSchema = z.object({ id: uuid, projectId: uuid, kind: z.literal('lookup'), status: z.enum(['queued', 'running', 'complete', 'cancelled', 'failed']), total: z.literal(1), completed: z.number().int().min(0).max(1), createdAt: z.string(), updatedAt: z.string(), failure: z.string().nullable(),
+  input: z.object({ routeText: z.string(), reverse: z.boolean() }), result: z.object({ status: z.string(), message: z.string(), route: computedRouteSchema.nullable(), design: z.null(), engineeringAccepted: z.literal(false), acceptanceScope: z.literal('diagnostic-lookup'), stale: z.boolean(), prepared: z.unknown(), connectionGap: connectionGapSchema,
+    diagnostics: z.object({ geometryLeavesUsed: diagnosticCount, fallbackBends: diagnosticCount, fallbackStraights: diagnosticCount, fallbackClearances: diagnosticCount }) }).nullable() });
+const endpointSchema = z.object({ name: z.string().max(500), point: point.optional() });
+const categorySchema = z.enum(['MV', 'LV', 'Control', 'Instrumentation']);
+const preferences = { secondaryDistanceMeters: z.number().finite().min(0).max(1_000_000).optional(), preferVerticalApproach: z.boolean().optional(), barrierRouting: barrierAdmissionIntentSchema.optional() };
+const previewInputSchema = z.object({ from: endpointSchema, to: endpointSchema, category: categorySchema, cablePurpose: z.string().min(1).max(500).optional(), reverse: z.boolean(), ...preferences,
+  artifactId: uuid, expectedSelectionRevision: revision, expectedSettingsRevision: revision, expectedRegistryRevision: revision });
+const resolvedEndpointSchema = z.object({ name: z.string(), point, source: z.enum(['manual-world-point', 'shared-location', 'equipment-bottom-aabb']), objectId: z.string().nullable(), locationId: uuid.nullable(), bindingRevision: revision.nullable() });
+const previewSchema = z.object({ id: uuid, projectId: uuid, kind: z.literal('preview'), status: z.enum(['queued', 'running', 'complete', 'cancelled', 'failed']), total: z.literal(1), completed: z.number().int().min(0).max(1), cancelRequested: z.boolean(), createdAt: z.string(), updatedAt: z.string(), failure: z.string().nullable(),
+  input: previewInputSchema, result: z.object({ status: z.string(), message: z.string(), route: computedRouteSchema.nullable(), design: designSchema.nullable(), prepared: z.unknown(), effectiveCategory: z.string().nullable(), settings: projectSettingsSchema,
+    directSecondary: directSecondaryDecisionSchema.nullable().optional(),barriers:barrierExecutionSchema.nullable().optional(),
+    from: resolvedEndpointSchema, to: resolvedEndpointSchema, stale: z.boolean(), engineeringAccepted: z.literal(false), acceptanceScope: z.literal('standalone-preview'), canApply: z.literal(false) }).superRefine(validateDirectComputedRoute).nullable() });
+const cable = z.object({ id: uuid, cableId: z.number().int(), tag: z.string().nullable(), fromLocation: z.string().nullable(), toLocation: z.string().nullable(), mto: z.string().nullable(),
+  routing: z.string().nullable(), designLength: numeric, installLength: numeric, cableWriteRevision: revision, fromMatch: match, toMatch: match });
+const stateSchema = z.object({ schemaVersion: z.literal(1), projectId: uuid, registryRevision: revision,
+  activeModel: z.object({ modelVersionId: uuid.nullable(), selectionRevision: revision, contentFingerprint: z.string().nullable() }),
+  settings: projectSettingsSchema,
+  cables: z.array(cable).max(100000), locations: z.array(location),
+  artifacts: z.array(z.object({ id: uuid, modelVersionId: uuid, snapshotSha256: z.string(), objectCount: z.number().int(), engineeringAccepted: z.boolean(), readiness: z.string(), capture: captureProvenance, coordinates: z.record(z.unknown()), createdAt: z.string() })),
+  jobs: z.array(jobSchema), proposals: z.array(proposalSummarySchema) });
+export type PathFinderState = z.infer<typeof stateSchema>;
+export type PathFinderLocation = z.infer<typeof location>;
+export type PathFinderCable = z.infer<typeof cable>;
+export type PathFinderProposal = z.infer<typeof proposalSchema>;
+export type PathFinderJob = z.infer<typeof jobSchema> & { items?: z.infer<typeof jobItemSchema>[] };
+export type PathFinderLookup = z.infer<typeof lookupSchema>;
+export type PathFinderLookupPlan = z.infer<typeof lookupPlanSchema>;
+export type PathFinderPreview = z.infer<typeof previewSchema>;
+export type PathFinderPreferences = { secondaryDistanceMeters: number; preferVerticalApproach: boolean; barrierRouting?: BarrierAdmissionIntent };
+export type PathFinderCalculationSubmission =
+  | { kind: 'not-submitted'; code: string }
+  | { kind: 'rejected'; status: 400 | 409; code: string }
+  | { kind: 'acknowledged'; jobId: string; registryRevision: string; duplicate: boolean }
+  | { kind: 'unknown'; code: string };
+const popupCalculationRequestSchema = z.object({ cableIds: z.array(uuid).min(1).max(10_000), expectedRegistryRevision: revision, force: z.literal(true),
+  automaticPairPolicy: automaticPairPolicySchema.optional(),
+  options: z.object({ connectionToleranceMeters: z.number().finite().positive().max(100), sampleSpacingMeters: z.literal(0.125),
+    maxGraphNodes: z.literal(200_000), maxGraphConnections: z.literal(1_000_000), secondaryDistanceMeters: z.number().finite().min(0).max(1_000_000),
+    preferVerticalApproach: z.boolean(), barrierRouting: barrierAdmissionIntentSchema }).strict() }).strict();
+const popupCalculationAcknowledgementSchema = z.object({ jobId: uuid, registryRevision: revision, duplicate: z.boolean() }).strict();
+const popupCalculationRefusalSchema = z.object({ code: z.string().regex(/^[A-Z][A-Z0-9_]{0,95}$/), error: z.string().max(4096) }).strict();
+export type PathFinderPreviewInput = Omit<z.infer<typeof previewInputSchema>, 'artifactId' | 'expectedSelectionRevision' | 'expectedSettingsRevision' | 'expectedRegistryRevision'>;
+export class PathFinderApiError extends Error {
+  constructor(public readonly code: string, public readonly status: number) {
+    super(code === 'PREVIEW_LOCATION_MISSING' ? 'A From/To name was not found. Choose a point or save a shared location, then calculate again.'
+      : code === 'PREVIEW_LOCATION_AMBIGUOUS' ? 'A From/To name matches more than one object. Choose the intended point or save a shared location.'
+      : code === 'PREVIEW_LOCATION_STALE' ? 'A shared From/To location needs confirmation against the active model.'
+      : code === 'APPEARANCE_RESTORE_FAILED' ? 'Some viewer appearance could not be restored. Press Clear again, or reload the model.'
+      : status === 401 ? 'Sign in again to use Path Finder.' : status === 403 ? 'Path Finder requires current administrator access.'
+      : status === 409 ? 'The project changed. Refresh Path Finder and review the latest values before trying again.'
+        : status === 413 ? 'This file or project exceeds the supported size. Use a bounded canonical snapshot.'
+          : 'Path Finder could not complete the operation. Review the input and try again.');
+  }
+}
+async function read(response: Response, maximumBytes = 32 * 1024 * 1024, strict = false): Promise<unknown> {
+  const reader = response.body?.getReader(); if (!reader) throw new PathFinderApiError('INVALID_RESPONSE', 502);
+  let size = 0; const chunks: Uint8Array[] = [];
+  try { for (;;) { const chunk = await reader.read(); if (chunk.done) break; size += chunk.value.byteLength; if (size > maximumBytes) throw new PathFinderApiError('RESPONSE_LIMIT', 413); chunks.push(chunk.value); } }
+  finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
+  const bytes = new Uint8Array(size); let offset = 0; for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+  try { const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); return strict ? parsePurposeJson(text, { maximumBytes }) : JSON.parse(text); } catch { throw new PathFinderApiError('INVALID_RESPONSE', 502); }
+}
+export async function pathFinderRequest(projectId: string, token: string, path: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE', body?: unknown, signal?: AbortSignal): Promise<Record<string, unknown>> {
+  if (!uuid.safeParse(projectId).success || !token || !/^\/(?:state|locations(?:\/[0-9a-f-]{36}(?:\/binding)?)?|artifacts|match|jobs(?:\/[0-9a-f-]{36})?|lookups(?:\/(?:plan|[0-9a-f-]{36}))?|previews(?:\/[0-9a-f-]{36})?|proposals(?:\/[0-9a-f-]{36}(?:\/(?:apply|review|reverse|close-pending-apply))?)?)$/.test(path)) throw new PathFinderApiError('INVALID_REQUEST', 400);
+  const response = await fetch(`${getApiBaseUrl()}/api/projects/${projectId}/pathfinder${path}`, { method, signal, cache: 'no-store', credentials: 'same-origin', redirect: 'error',
+    headers: { Authorization: `Bearer ${token}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+  const value = await read(response);
+  if (!response.ok) throw new PathFinderApiError(value && typeof value === 'object' && 'code' in value && typeof value.code === 'string' ? value.code : 'REQUEST_FAILED', response.status);
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new PathFinderApiError('INVALID_RESPONSE', 502);
+  return value as Record<string, unknown>;
+}
+/** One popup submission. Only the actual HTTP status and an audited server
+ * refusal can prove rejection after fetch starts; local body/parse errors do
+ * not prove that the job failed to commit. This function never retries. */
+export async function submitPathFinderCalculation(projectId: string, token: string, body: unknown,
+  options: { signal?: AbortSignal; isCurrent?: () => boolean } = {}): Promise<PathFinderCalculationSubmission> {
+  let encoded: string;
+  try {
+    if (!uuid.safeParse(projectId).success || !token) return { kind: 'not-submitted', code: 'INVALID_REQUEST' };
+    const parsed = popupCalculationRequestSchema.safeParse(body);
+    if (!parsed.success || parsed.data.options.barrierRouting.scope.projectId !== projectId) return { kind: 'not-submitted', code: 'INVALID_REQUEST' };
+    encoded = JSON.stringify(parsed.data);
+    if (options.signal?.aborted) return { kind: 'not-submitted', code: 'CALCULATION_CANCELLED' };
+    if (options.isCurrent && !options.isCurrent()) return { kind: 'not-submitted', code: 'CALCULATION_CONTEXT_CHANGED' };
+  } catch { return { kind: 'not-submitted', code: 'INVALID_REQUEST' }; }
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/api/projects/${projectId}/pathfinder/jobs`, { method: 'POST', signal: options.signal,
+      cache: 'no-store', credentials: 'same-origin', redirect: 'error', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: encoded });
+    const value = await read(response, 8192, true);
+    if (response.status === 202) {
+      const acknowledgement = popupCalculationAcknowledgementSchema.safeParse(value);
+      return acknowledgement.success ? { kind: 'acknowledged', ...acknowledgement.data } : { kind: 'unknown', code: 'INVALID_CALCULATION_ACKNOWLEDGEMENT' };
+    }
+    const confirmedRefusal = calculationSubmissionRefusalSchema.safeParse(value);
+    if (response.status === 409 && confirmedRefusal.success)
+      return { kind: 'rejected', status: 409, code: confirmedRefusal.data.code };
+    const refused = popupCalculationRefusalSchema.safeParse(value);
+    // These branches precede job insertion/COMMIT in the current /jobs route
+    // and jobs.create. COMMIT uncertainty is a distinct 503, never rejection.
+    if (refused.success && (response.status === 400 && refused.data.code === 'INVALID_PATHFINDER_REQUEST'
+      || response.status === 409 && ['REGISTRY_CONFLICT', 'BARRIER_ROUTING_INTENT_REQUIRED'].includes(refused.data.code)))
+      return { kind: 'rejected', status: response.status as 400 | 409, code: refused.data.code };
+    return { kind: 'unknown', code: refused.success ? refused.data.code : 'CALCULATION_SUBMISSION_UNKNOWN' };
+  } catch { return { kind: 'unknown', code: 'CALCULATION_SUBMISSION_UNKNOWN' }; }
+}
+export async function fetchPathFinderState(projectId: string, token: string, signal?: AbortSignal): Promise<PathFinderState> {
+  const value = stateSchema.safeParse(await pathFinderRequest(projectId, token, '/state', 'GET', undefined, signal));
+  if (!value.success || value.data.projectId !== projectId) throw new PathFinderApiError('INVALID_RESPONSE', 502);
+  return value.data;
+}
+export function parsePathFinderProposal(value: unknown): PathFinderProposal {
+  const parsed = proposalSchema.safeParse(value); if (!parsed.success) throw new PathFinderApiError('INVALID_RESPONSE', 502); return parsed.data;
+}
+export async function fetchPathFinderProposal(projectId: string, token: string, proposalId: string, signal?: AbortSignal): Promise<PathFinderProposal> {
+  const value = parsePathFinderProposal(await pathFinderRequest(projectId, token, `/proposals/${proposalId}`, 'GET', undefined, signal));
+  if (value.projectId !== projectId || value.id !== proposalId) throw new PathFinderApiError('INVALID_RESPONSE', 502); return value;
+}
+export async function fetchPathFinderJob(projectId: string, token: string, jobId: string, signal?: AbortSignal): Promise<PathFinderJob> {
+  const parsed = jobSchema.extend({ items: z.array(jobItemSchema) }).safeParse(await pathFinderRequest(projectId, token, `/jobs/${jobId}`, 'GET', undefined, signal));
+  if (!parsed.success || parsed.data.projectId !== projectId || parsed.data.id !== jobId) throw new PathFinderApiError('INVALID_RESPONSE', 502); return parsed.data;
+}
+export async function fetchPathFinderLookup(projectId: string, token: string, jobId: string, signal?: AbortSignal): Promise<PathFinderLookup> {
+  const parsed = lookupSchema.safeParse(await pathFinderRequest(projectId, token, `/lookups/${jobId}`, 'GET', undefined, signal));
+  if (!parsed.success || parsed.data.projectId !== projectId || parsed.data.id !== jobId) throw new PathFinderApiError('INVALID_RESPONSE', 502); return parsed.data;
+}
+export async function fetchPathFinderLookupPlan(projectId: string, token: string, routeText: string, expectedSelectionRevision: string, signal?: AbortSignal): Promise<PathFinderLookupPlan> {
+  const parsed = lookupPlanSchema.safeParse(await pathFinderRequest(projectId, token, '/lookups/plan', 'POST', { routeText, expectedSelectionRevision }, signal));
+  if (!parsed.success || parsed.data.selectionRevision !== expectedSelectionRevision || new Set(parsed.data.routeCodes).size !== parsed.data.routeCodes.length) throw new PathFinderApiError('INVALID_RESPONSE', 502);
+  return parsed.data;
+}
+export async function fetchPathFinderPreview(projectId: string, token: string, jobId: string, signal?: AbortSignal): Promise<PathFinderPreview> {
+  const parsed = previewSchema.safeParse(await pathFinderRequest(projectId, token, `/previews/${jobId}`, 'GET', undefined, signal));
+  if (!parsed.success || parsed.data.projectId !== projectId || parsed.data.id !== jobId) throw new PathFinderApiError('INVALID_RESPONSE', 502); return parsed.data;
+}
+export type PathFinderBindingInput = { modelVersionId: string; expectedSelectionRevision: string; expectedRegistryRevision: string; point: CanonicalPoint; objectId: string | null; externalId: string | null };

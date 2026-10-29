@@ -1,0 +1,1559 @@
+{
+  "schemaVersion": "pathfinder.runner.session.tests.v1",
+  "recordedAtUtc": "2026-10-20T19:40:22.0970917+00:00",
+  "status": "PASS",
+  "passed": 308,
+  "failed": 0,
+  "runnerSha256": "b4b5d17b84ec1b8f1bc66a8d429093ee04582fee444bdd46d62c89cc2bce90a6",
+  "manifest": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\direct-secondary-u6-b5b39e66-132e-43ec-a265-c65ceef9a764\\legacy-session-current\\corpus\\manifest.json",
+  "scope": "synthetic-runner-protocol-and-mixed-semantics-not-native-or-full-plant",
+  "checks": [
+    {
+      "label": "BE32-exact-roundtrip",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "clean-EOF",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "partial-prefix",
+      "status": "PASS",
+      "detail": "EndOfStreamException"
+    },
+    {
+      "label": "partial-payload",
+      "status": "PASS",
+      "detail": "EndOfStreamException"
+    },
+    {
+      "label": "zero-frame",
+      "status": "PASS",
+      "detail": "InvalidDataException"
+    },
+    {
+      "label": "unsigned-frame-cap-before-allocation",
+      "status": "PASS",
+      "detail": "InvalidDataException"
+    },
+    {
+      "label": "invalid-UTF8",
+      "status": "PASS",
+      "detail": "DecoderFallbackException"
+    },
+    {
+      "label": "duplicate-member",
+      "status": "PASS",
+      "detail": "InvalidDataException"
+    },
+    {
+      "label": "closed-ready",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "full-semantic-parity: A baseline chain",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-status: A baseline chain",
+      "status": "PASS",
+      "detail": "calculated"
+    },
+    {
+      "label": "known-mathematical-length: A baseline chain",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "full-semantic-parity: B different endpoints",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-status: B different endpoints",
+      "status": "PASS",
+      "detail": "calculated"
+    },
+    {
+      "label": "known-mathematical-length: B different endpoints",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "full-semantic-parity: A repeated after B",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-status: A repeated after B",
+      "status": "PASS",
+      "detail": "calculated"
+    },
+    {
+      "label": "known-mathematical-length: A repeated after B",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "actual-prepared-reference-reuse",
+      "status": "PASS",
+      "detail": {
+        "pid": 21596,
+        "ordinal": 3
+      }
+    },
+    {
+      "label": "full-semantic-parity: Reverse A",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-status: Reverse A",
+      "status": "PASS",
+      "detail": "calculated"
+    },
+    {
+      "label": "known-mathematical-length: Reverse A",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "full-semantic-parity: Category MV",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-status: Category MV",
+      "status": "PASS",
+      "detail": "calculated"
+    },
+    {
+      "label": "known-mathematical-length: Category MV",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "full-semantic-parity: Category LV",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-status: Category LV",
+      "status": "PASS",
+      "detail": "calculated"
+    },
+    {
+      "label": "known-mathematical-length: Category LV",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "full-semantic-parity: Category Control",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-status: Category Control",
+      "status": "PASS",
+      "detail": "calculated"
+    },
+    {
+      "label": "known-mathematical-length: Category Control",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "full-semantic-parity: Category Instrumentation",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-status: Category Instrumentation",
+      "status": "PASS",
+      "detail": "calculated"
+    },
+    {
+      "label": "known-mathematical-length: Category Instrumentation",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "full-semantic-parity: Gap small",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-status: Gap small",
+      "status": "PASS",
+      "detail": "no_path"
+    },
+    {
+      "label": "full-semantic-parity: Gap large after small",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-status: Gap large after small",
+      "status": "PASS",
+      "detail": "calculated"
+    },
+    {
+      "label": "known-mathematical-length: Gap large after small",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "full-semantic-parity: Gap small after large",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-status: Gap small after large",
+      "status": "PASS",
+      "detail": "no_path"
+    },
+    {
+      "label": "full-semantic-parity: SECONDARY approach",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-status: SECONDARY approach",
+      "status": "PASS",
+      "detail": "calculated"
+    },
+    {
+      "label": "full-semantic-parity: Changed exact Details allowances",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-status: Changed exact Details allowances",
+      "status": "PASS",
+      "detail": "calculated"
+    },
+    {
+      "label": "known-mathematical-length: Changed exact Details allowances",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "full-semantic-parity: Different query options",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-status: Different query options",
+      "status": "PASS",
+      "detail": "calculated"
+    },
+    {
+      "label": "known-mathematical-length: Different query options",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "full-semantic-parity: Ordered lookup interleaved",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-status: Ordered lookup interleaved",
+      "status": "PASS",
+      "detail": "calculated"
+    },
+    {
+      "label": "known-mathematical-length: Ordered lookup interleaved",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "full-semantic-parity: Reverse ordered lookup",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-status: Reverse ordered lookup",
+      "status": "PASS",
+      "detail": "calculated"
+    },
+    {
+      "label": "known-mathematical-length: Reverse ordered lookup",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "full-semantic-parity: Retained design interleaved",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-status: Retained design interleaved",
+      "status": "PASS",
+      "detail": "calculated"
+    },
+    {
+      "label": "full-semantic-parity: Rules exclude middle",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-status: Rules exclude middle",
+      "status": "PASS",
+      "detail": "no_path"
+    },
+    {
+      "label": "full-semantic-parity: A after rules reset",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-status: A after rules reset",
+      "status": "PASS",
+      "detail": "calculated"
+    },
+    {
+      "label": "known-mathematical-length: A after rules reset",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "full-semantic-parity: Changed snapshot category MV",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-status: Changed snapshot category MV",
+      "status": "PASS",
+      "detail": "no_path"
+    },
+    {
+      "label": "full-semantic-parity: Changed snapshot category LV",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-status: Changed snapshot category LV",
+      "status": "PASS",
+      "detail": "calculated"
+    },
+    {
+      "label": "full-semantic-parity: Changed snapshot category Control",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-status: Changed snapshot category Control",
+      "status": "PASS",
+      "detail": "no_path"
+    },
+    {
+      "label": "full-semantic-parity: Parallel tie A",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-status: Parallel tie A",
+      "status": "PASS",
+      "detail": "calculated"
+    },
+    {
+      "label": "full-semantic-parity: Parallel distinct attachment B",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-status: Parallel distinct attachment B",
+      "status": "PASS",
+      "detail": "calculated"
+    },
+    {
+      "label": "full-semantic-parity: Parallel tie A after B",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-status: Parallel tie A after B",
+      "status": "PASS",
+      "detail": "calculated"
+    },
+    {
+      "label": "full-semantic-parity: Original model after alternate model",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-status: Original model after alternate model",
+      "status": "PASS",
+      "detail": "calculated"
+    },
+    {
+      "label": "known-mathematical-length: Original model after alternate model",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "full-semantic-parity: Explicit core graph budget",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-status: Explicit core graph budget",
+      "status": "PASS",
+      "detail": "resource_limit"
+    },
+    {
+      "label": "full-semantic-parity: Valid A following resource retirement",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-status: Valid A following resource retirement",
+      "status": "PASS",
+      "detail": "calculated"
+    },
+    {
+      "label": "known-mathematical-length: Valid A following resource retirement",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "full-semantic-parity: Dedicated lookup scope",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-status: Dedicated lookup scope",
+      "status": "PASS",
+      "detail": "calculated"
+    },
+    {
+      "label": "known-mathematical-length: Dedicated lookup scope",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "full-semantic-parity: Dedicated lookup cannot become planning",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-status: Dedicated lookup cannot become planning",
+      "status": "PASS",
+      "detail": "invalid_request"
+    },
+    {
+      "label": "full-semantic-parity: Valid planning after purpose refusal",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-status: Valid planning after purpose refusal",
+      "status": "PASS",
+      "detail": "calculated"
+    },
+    {
+      "label": "known-mathematical-length: Valid planning after purpose refusal",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "resource-retirement-uses-new-process",
+      "status": "PASS",
+      "detail": [
+        21596,
+        42552,
+        42788
+      ]
+    },
+    {
+      "label": "request-count-pass-1-ordinal-1",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-2",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-3",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-4",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-5",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-6",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-7",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-8",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-9",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-10",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-11",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-12",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-13",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-14",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-15",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-16",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-17",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-18",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-19",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-20",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-21",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-22",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-23",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-24",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-25",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-26",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-27",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-28",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-29",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-30",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-31",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-32",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-33",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-34",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-35",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-36",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-37",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-38",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-39",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-40",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-41",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-42",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-43",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-44",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-45",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-46",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-47",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-48",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-49",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-50",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-51",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-52",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-53",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-54",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-55",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-56",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-57",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-58",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-59",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-60",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-61",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-62",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-63",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-1-ordinal-64",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "64-count-clean-retirement-pass-1",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-1",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-2",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-3",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-4",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-5",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-6",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-7",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-8",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-9",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-10",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-11",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-12",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-13",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-14",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-15",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-16",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-17",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-18",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-19",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-20",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-21",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-22",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-23",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-24",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-25",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-26",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-27",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-28",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-29",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-30",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-31",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-32",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-33",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-34",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-35",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-36",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-37",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-38",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-39",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-40",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-41",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-42",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-43",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-44",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-45",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-46",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-47",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-48",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-49",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-50",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-51",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-52",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-53",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-54",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-55",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-56",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-57",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-58",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-59",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-60",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-61",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-62",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-63",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-2-ordinal-64",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "64-count-clean-retirement-pass-2",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-1",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-2",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-3",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-4",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-5",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-6",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-7",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-8",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-9",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-10",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-11",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-12",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-13",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-14",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-15",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-16",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-17",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-18",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-19",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-20",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-21",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-22",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-23",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-24",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-25",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-26",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-27",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-28",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-29",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-30",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-31",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-32",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-33",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-34",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-35",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-36",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-37",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-38",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-39",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-40",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-41",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-42",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-43",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-44",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-45",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-46",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-47",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-48",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-49",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-50",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-51",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-52",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-53",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-54",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-55",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-56",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-57",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-58",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-59",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-60",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-61",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-62",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-63",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "request-count-pass-3-ordinal-64",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "64-count-clean-retirement-pass-3",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "partial-frame-process-refusal",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "oversize-process-refusal",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "duplicate-process-refusal",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-dotnet-hard-deadline status",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-dotnet-hard-deadline retires",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "independent-dotnet-hard-deadline process joined",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "cross-project-input status",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "cross-project-input retires",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "cross-project-input process joined",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "wrong-snapshot-SHA status",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "wrong-snapshot-SHA retires",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "wrong-snapshot-SHA process joined",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "memory-hit-cannot-bypass-immutable-file-SHA",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "pipelined-input-refuses-and-joins",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "pipelined-input-publishes-no-false-result",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "pipelined-partial-prefix-joined-with-open-input",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "pipelined-partial-prefix-publishes-no-A",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "pipelined-partial-payload-joined-with-open-input",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "pipelined-partial-payload-publishes-no-A",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "immediate-B-after-received-A-is-legal",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "unknown-request-member-refusal",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "label": "new-lane-valid-after-terminal-faults",
+      "status": "PASS",
+      "detail": null
+    }
+  ]
+}

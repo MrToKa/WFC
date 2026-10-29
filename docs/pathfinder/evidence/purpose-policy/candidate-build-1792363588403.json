@@ -1,0 +1,156 @@
+{
+  "schemaVersion": "pathfinder.purpose-policy.build.v1",
+  "status": "PASS",
+  "images": {
+    "api": "sha256:2097b386515435d50aa1e095e4c12e340b2d2bab71c44707fc85bc89340ad476",
+    "web": "sha256:dafdd62ebcf3f5783a4db8de5484ef5728375fd08b220d730cc342faa5d216a6"
+  },
+  "tags": {
+    "api": "wfc-pathfinder-api:8fffd6b8c896-mveezm39",
+    "web": "wfc-pathfinder-web:8fffd6b8c896-mveezm39"
+  },
+  "sourceOwner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+  "project": "wfc-pathfinder-local-0cba87606e9b",
+  "port": 5191,
+  "sourceHead": "8f0888527ca31fdf864912d1d2ad1514033a28f0",
+  "sourceFiles": [
+    {
+      "path": "docker/pathfinder.nginx.conf",
+      "sha256": "f0f6dab83892fc8757f22dbaa632ca5a12e9b57738e86926b7644a10052cf32e"
+    },
+    {
+      "path": "scripts/pathfinder-purpose-policy/actual-controls.mjs",
+      "sha256": "210ba5204400a2f27b4f43edbb3db748b03d1b5032fc014e7f300ecf3509c298"
+    },
+    {
+      "path": "server/app.ts",
+      "sha256": "0f8192cfbf11a9ea2a053d3e04738261849ece3883fbe857fc04f74a64362b22"
+    },
+    {
+      "path": "server/pathfinder/catalog.test.ts",
+      "sha256": "baa7839a01969ed13f69b5245b97435a514a5fdba1dc47e1e197e247a21c77df"
+    },
+    {
+      "path": "server/pathfinder/catalog.ts",
+      "sha256": "a05ba11b04355adb13ecd116d99d7ace9c41fd0c6c01cefd27f868cad9b4b3a2"
+    },
+    {
+      "path": "server/pathfinder/dependencies.ts",
+      "sha256": "7890855e009551ed638ec537f512fe62a23ba55322114b7cd41281003850a80f"
+    },
+    {
+      "path": "server/pathfinder/engine.test.ts",
+      "sha256": "80e0e39d5a717fdd873cb325fe91d8aaecb60e1ae25c0cc0bd60aeb14937c57b"
+    },
+    {
+      "path": "server/pathfinder/jobContracts.ts",
+      "sha256": "72683f8b1734428b1677eb837f8e159eaa953a85856c661a87f26dc2fb380cfb"
+    },
+    {
+      "path": "server/pathfinder/policyJson.ts",
+      "sha256": "9dfd43269f651d6868bda8e2e389f19f0c786dce0dc78f630dc11a342ae9905f"
+    },
+    {
+      "path": "server/pathfinder/policySchema.integration.sql",
+      "sha256": "a8b0d0719ed1b2a5eac69b95e1225255aef5e9815b253cf1be252ec69b4afbc3"
+    },
+    {
+      "path": "server/pathfinder/policySchema.test.ts",
+      "sha256": "d0252d2b9ed03208f9b3907d4f27686ac4cc5b3e8c199bab070e262afa7a0b96"
+    },
+    {
+      "path": "server/pathfinder/policySchema.ts",
+      "sha256": "ea2e5c755c91e688575c3692d924950a960ecee072585963493abb278257334c"
+    },
+    {
+      "path": "server/pathfinder/previews.test.ts",
+      "sha256": "ad62ccffa2c989eb73d9782d715b1cb075ab2fe7e33012cfd5bb847223dbed21"
+    },
+    {
+      "path": "server/pathfinder/previews.ts",
+      "sha256": "3df26fa419a2a3b07473b301eb51111dca83610b3591aa73db2689f291054cbb"
+    },
+    {
+      "path": "server/pathfinder/purposePolicy.test.ts",
+      "sha256": "c1344ef590347c7f5953d1f05885154352b408ab90858222124b6f08e9fe1de5"
+    },
+    {
+      "path": "server/pathfinder/purposePolicy.ts",
+      "sha256": "16f3d9c8073567a10ed5e4dfe8cd64698dc2c5b2aa77ba5e048c9fb372fd2ac6"
+    },
+    {
+      "path": "server/pathfinder/purposePolicyRoutes.test.ts",
+      "sha256": "2d233a4c21c748f85b435b8d0f63ff547fba16a86e489aa38c967c5546b69612"
+    },
+    {
+      "path": "server/pathfinder/purposePolicyRoutes.ts",
+      "sha256": "80dd1842aada698e5403ed495262d86e8010ca48f49b59757fc2fd32bc87af03"
+    },
+    {
+      "path": "server/pathfinder/routingScope.test.ts",
+      "sha256": "9f96402395459a7899cabba668d43177c206f466764bd469f2ff07d95fb77136"
+    },
+    {
+      "path": "server/pathfinder/routingScope.ts",
+      "sha256": "28ce4ad3c5fe69d1838ddcb084371c92bc2c65cf0a3c5a8693516eb3c4781846"
+    },
+    {
+      "path": "server/pathfinder/schema.ts",
+      "sha256": "3b8fab7583a7aab6409e2b2d3ef67853d6926b152942d2d08b034c34643677b9"
+    },
+    {
+      "path": "server/pathfinder/worker.ts",
+      "sha256": "7f2868873da414562c583bd5f2a31e524e972ed12db909adf4ca51685e92026e"
+    },
+    {
+      "path": "shared/pathfinderPurposePolicy.test.ts",
+      "sha256": "beb77e1cb330651859f9d2eb8de98af2e6f53984013b6490565595e221983a99"
+    },
+    {
+      "path": "shared/pathfinderPurposePolicy.ts",
+      "sha256": "257a1c8fc603b9bf357e53dc8aaf5ba20bc7cfb30736b60c1ba5febcc8c1b10b"
+    },
+    {
+      "path": "src/api/pathfinderPolicies.test.ts",
+      "sha256": "e340019060fda2c6ca8cb4c4de4e92c2d23a7bf9c661e79fbe70c3be1bdf3490"
+    },
+    {
+      "path": "src/api/pathfinderPolicies.ts",
+      "sha256": "7d75bcb6275671123846e99ce1f444807e9a87b3a6717613a2b036ba2d88ab0f"
+    },
+    {
+      "path": "src/components/RoutingPurposePolicyCard.tsx",
+      "sha256": "b4a94695b67e8ede6aad4000bfe63a88cc5912043351089cac9691b5879c0320"
+    },
+    {
+      "path": "src/pages/ProjectDetails.tsx",
+      "sha256": "1289f5a5b83d64934d8503b8c1637179e96925c21f21f1d52bedde0ef83b77c4"
+    },
+    {
+      "path": "src/pages/ProjectDetails/DetailsTab.tsx",
+      "sha256": "f2c30412ab55a864cd9ee495aad09684f59f4bc38be926b535fe3505e828385e"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/useRoutingPurposePolicy.test.ts",
+      "sha256": "3385e161743aa8dbd5a0b899c491cdb73fbccd0db8c2c896c7077c78dfe1d28f"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/useRoutingPurposePolicy.ts",
+      "sha256": "0fc120fb3f22ba28cfa2d698b072a87925089b7e117e7b9097e712656f383c81"
+    },
+    {
+      "path": "tsconfig.json",
+      "sha256": "4129afb050e04f33dcb78ad3fabf28873e1f91fc99da74e942f190a7a6d3af9a"
+    }
+  ],
+  "checks": {
+    "typecheck": "PASS",
+    "pureAndMockedTests": {
+      "status": "PASS",
+      "files": 9,
+      "tests": 162
+    },
+    "targetedLint": "PASS"
+  },
+  "finishedAt": "2026-10-18T22:46:28.429Z"
+}

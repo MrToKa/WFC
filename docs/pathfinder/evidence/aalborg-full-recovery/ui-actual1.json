@@ -1,0 +1,113 @@
+{
+  "schemaVersion": "wfc.pf.current-full-recovery-public.v1",
+  "observedAt": "2026-10-20T12:47:13.723Z",
+  "branch": "pf-aalborg-current-full-recovery-local-20261020",
+  "deliveryParent": "d5e678dc5bcb59f1a05e803af5addec1641b1035",
+  "operatorSourceRevision": "7c0c673fd1a6aa442c4989c816d760f2626797b6",
+  "runtimeSourceRevision": "c68b4434ffadc73c7c6ca38997cfe4689aca928f",
+  "engineeringAccepted": false,
+  "nativeParity": "not-performed",
+  "status": "PASS",
+  "phase": "actual-computer-use-and-post-UI-closure",
+  "rawReceipts": [
+    {
+      "filename": "full-recovery1-ui-visual1.private.json",
+      "bytes": 3084,
+      "sha256": "25fc02154732a297f0202bc0b09063a2a0f760405cf4561f4b25124ec3774293"
+    },
+    {
+      "filename": "full-recovery1-ui3-result.private.json",
+      "bytes": 44683,
+      "sha256": "1136f1f450976efc64e94e323ca473541210da308059d3902597e2cb2657e4cc"
+    },
+    {
+      "filename": "full-recovery1-ui-auth2.private.json",
+      "bytes": 849,
+      "sha256": "61a8df7fe18e3c419ad39555dd29b97675c092e6132b2782e6557691b6145844"
+    },
+    {
+      "filename": "full-recovery1-qualification1.private.json",
+      "bytes": 2746,
+      "sha256": "a7d7dd14d03d6af7ee990bbe523b183884a00b027ccc8586542e916c4f54dbee"
+    }
+  ],
+  "observations": {
+    "protectedViewer": true,
+    "existingNonMvProposal": true,
+    "exactComputedPathShown": true,
+    "filledGhost": true,
+    "originalTrayColors": true,
+    "yellowLine": true,
+    "zoomToPath": true,
+    "clear": true,
+    "wholeOpaqueModelRestored": true
+  },
+  "targetTabsClosed": true,
+  "sourceTabPreserved": true,
+  "normalExistingAdminLogin": true,
+  "secondTabReusedSameLogin": true,
+  "screenshotMetadataOnly": [
+    {
+      "filename": "full-recovery1-ui-target-route3.png",
+      "bytes": 98741,
+      "sha256": "0c49f14f273b21f87ae55ee4124cf2878153bbb239053f9a3fd46d5d638ee88e"
+    },
+    {
+      "filename": "full-recovery1-ui-target-route3.txt",
+      "bytes": 110987,
+      "sha256": "4537dd9432d9161a348de527129e80e4acd3516857b4198a89ef087bc336fe47"
+    },
+    {
+      "filename": "full-recovery1-ui-target-clear2.png",
+      "bytes": 77481,
+      "sha256": "b475c6bf9b6882eb12aeb0d63dc45ef98fb8d61170cf0fc0916f5a6ec355934d"
+    },
+    {
+      "filename": "full-recovery1-ui-target-clear2.txt",
+      "bytes": 111013,
+      "sha256": "d2fd78f77613c74091f8bbefd67a482741888700baea127751ced260351c7338"
+    },
+    {
+      "filename": "full-recovery1-ui-target-details-before-close2.txt",
+      "bytes": 24222,
+      "sha256": "51f62c146aa8563b8267cc16500c88f09bcf499009d9dc07d8af00d9b95edcb0"
+    },
+    {
+      "filename": "full-recovery1-ui-target-closed-tabs2.json",
+      "bytes": 390,
+      "sha256": "0425967cbcca3aadba857c744040117855ca7ead24e4e5b37ac48350425f380b"
+    }
+  ],
+  "imagesAndBusinessRowsKeptPrivate": true,
+  "intermediateProgressiveFrames": "NOT_USED as Ghost proof; actual final route3/clear2 bytes were independently visually inspected",
+  "businessAndPfTables": 124,
+  "fullRowHashesExact": true,
+  "installationEpochUnchanged": true,
+  "leaseRowsExact": true,
+  "authenticationGroups": [
+    {
+      "table": "viewer_login_bindings",
+      "beforeRows": 33,
+      "afterRows": 34,
+      "rowCountDelta": 1
+    },
+    {
+      "table": "viewer_resource_sessions",
+      "beforeRows": 137,
+      "afterRows": 139,
+      "rowCountDelta": 2
+    }
+  ],
+  "uiAuthentication": {
+    "created": 1
+  },
+  "uiViewerSessions": {
+    "created": 2,
+    "unrevoked": 0,
+    "closed": 2
+  },
+  "qualificationChecks": 14,
+  "noNewCalculations": true,
+  "noNewReview": true,
+  "noRealApply": true
+}

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "wfc.pf.current-full-recovery-public.v1",
+  "observedAt": "2026-10-20T12:47:13.723Z",
+  "branch": "pf-aalborg-current-full-recovery-local-20261020",
+  "deliveryParent": "d5e678dc5bcb59f1a05e803af5addec1641b1035",
+  "operatorSourceRevision": "7c0c673fd1a6aa442c4989c816d760f2626797b6",
+  "runtimeSourceRevision": "c68b4434ffadc73c7c6ca38997cfe4689aca928f",
+  "engineeringAccepted": false,
+  "nativeParity": "not-performed",
+  "status": "FAIL",
+  "code": "FULL_RECOVERY_REFERENCE",
+  "phase": "private-reference-contract-before-intent-or-SQL",
+  "started": false,
+  "sqlOperations": 0,
+  "rawReceipt": {
+    "filename": "full-recovery1-ui1-failure.private.json",
+    "bytes": 556,
+    "sha256": "9661400e21bccee7149b00983802d610710d87ad0616e7bf842b4f0078801ccf"
+  },
+  "correction": "Strict baseline-only path→filename adapter, new immutable driver and attempts2/3; other guards unchanged."
+}

@@ -8,12 +8,13 @@ import { uploadExcelFile } from '../utils/excelUpload.js';
 import * as XLSX from 'xlsx';
 import { pool } from '../db.js';
 import { mapTrayRow } from '../models/tray.js';
-import type { PublicTray, TrayRow } from '../models/tray.js';
+import type { TrayRow } from '../models/tray.js';
 import { mapProjectRow } from '../models/project.js';
-import {
-  computeTrayFreeSpaceByTrayId,
-  type TrayCableForFreeSpace,
-} from '../utils/trayFreeSpace.js';
+import { drawingAccessTransaction } from '../pathfinder/drawingAccess.js';
+import { readProjectDrawingFreeSpace } from '../pathfinder/drawingSnapshots.js';
+import { requestPrincipal } from '../pathfinder/auth.js';
+import { PathFinderError } from '../pathfinder/errors.js';
+import { projectDrawingMetricsSchema } from '../../shared/trayDrawingSnapshot.js';
 import { authenticate, requireProjectEdit, requireProjectExport } from '../middleware.js';
 import { ensureProjectExists } from '../services/projectService.js';
 import { recordTrayChanges } from '../services/trayChangeLogService.js';
@@ -103,22 +104,6 @@ const selectTraysQuery = `
   FROM trays
 `;
 
-type CableFreeSpaceRow = {
-  routing: string | null;
-  purpose: string | null;
-  diameter_mm: string | number | null;
-};
-
-const selectTrayCablesQuery = `
-  SELECT
-    c.routing,
-    ct.purpose AS purpose,
-    ct.diameter_mm AS diameter_mm
-  FROM cables c
-  JOIN cable_types ct ON ct.id = c.cable_type_id
-  WHERE c.project_id = $1;
-`;
-
 type TrayImportRequest = Request & {
   params: {
     projectId?: string;
@@ -144,6 +129,10 @@ traysRouter.get('/', async (req: Request, res: Response): Promise<void> => {
   }
 
   try {
+    if (req.query.drawingMetrics === '1') {
+      const metrics = await drawingAccessTransaction(pool, projectId, requestPrincipal(req), async client => projectDrawingMetricsSchema.parse(await readProjectDrawingFreeSpace(client, projectId)));
+      res.setHeader('Cache-Control', 'private, no-store'); res.json(metrics); return;
+    }
     const project = await ensureProjectExists(projectId);
 
     if (!project) {
@@ -266,74 +255,10 @@ traysRouter.post(
     }
 
     try {
-      const projectRow = await ensureProjectExists(projectId);
-
-      if (!projectRow) {
-        res.status(404).json({ error: 'Project not found' });
-        return;
-      }
-
-      const [traysResult, cablesResult] = await Promise.all([
-        pool.query<TrayRow>(
-          `
-            ${selectTraysQuery}
-            WHERE project_id = $1
-            ORDER BY name ASC;
-          `,
-          [projectId],
-        ),
-        pool.query<CableFreeSpaceRow>(selectTrayCablesQuery, [projectId]),
-      ]);
-
-      const trays = traysResult.rows.map(mapTrayRow);
-      const project = mapProjectRow(projectRow);
-
-      const cables: TrayCableForFreeSpace[] = cablesResult.rows.map((row: CableFreeSpaceRow) => ({
-        routing: row.routing ?? null,
-        purpose: row.purpose ?? null,
-        diameterMm: toNumberOrNull(row.diameter_mm),
-      }));
-
-      const computedFreeSpaceByTrayId = computeTrayFreeSpaceByTrayId({
-        trays,
-        cables,
-        layout: project.cableLayout,
-      });
-
-      const providedMap = req.body?.freeSpaceByTrayId;
-      const sanitizedProvided: Record<string, number | null> = {};
-
-      if (providedMap && typeof providedMap === 'object' && !Array.isArray(providedMap)) {
-        for (const [trayId, value] of Object.entries(providedMap)) {
-          if (value === null) {
-            sanitizedProvided[trayId] = null;
-            continue;
-          }
-
-          if (typeof value === 'number') {
-            if (Number.isFinite(value)) {
-              sanitizedProvided[trayId] = value;
-            }
-            continue;
-          }
-
-          if (typeof value === 'string') {
-            const parsed = Number(value);
-            if (Number.isFinite(parsed)) {
-              sanitizedProvided[trayId] = parsed;
-            }
-          }
-        }
-      }
-
-      const freeSpaceByTrayId: Record<string, number | null> = {
-        ...computedFreeSpaceByTrayId,
-      };
-
-      for (const [trayId, value] of Object.entries(sanitizedProvided)) {
-        freeSpaceByTrayId[trayId] = value;
-      }
-
+      const exported = await drawingAccessTransaction(pool, projectId, requestPrincipal(req), async client => {
+      const computed = projectDrawingMetricsSchema.parse(await readProjectDrawingFreeSpace(client, projectId));
+      const { project, trays, freeSpaceByTrayId } = computed;
+      // Legacy client free-space maps never override the server's computed layout.
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Trays', {
         views: [{ state: 'frozen', ySplit: 1 }],
@@ -349,7 +274,7 @@ traysRouter.post(
         { name: TRAY_EXCEL_HEADERS.freeSpace, key: 'freeSpace', width: 24 },
       ] as const;
 
-      const rows = trays.map((tray: PublicTray) => {
+      const rows = trays.map((tray) => {
         const freeSpacePercent = freeSpaceByTrayId[tray.id];
         const roundedFreeSpace =
           typeof freeSpacePercent === 'number' && Number.isFinite(freeSpacePercent)
@@ -401,11 +326,22 @@ traysRouter.post(
         }
       });
 
+      const proof = workbook.addWorksheet('Drawing provenance');
+      proof.addRow(['Layout algorithm', computed.layoutAlgorithmVersion]);
+      proof.addRow(['Catalog revision', computed.revisions.catalogRevision]);
+      proof.addRow(['Drawing policy revision', computed.revisions.drawingPolicyRevision]);
+      proof.addRow(['Drawing input revision', computed.revisions.drawingInputRevision]);
+      proof.addRow(['Tray ID', 'Layout SHA256', 'Input SHA256', 'State']);
+      for (const row of computed.provenance) proof.addRow([row.trayId, row.layoutSha256, row.inputSha256, row.state]);
       const buffer = await workbook.xlsx.writeBuffer();
 
       const projectSegment = sanitizeFileSegment(project.projectNumber);
       const fileName = `${projectSegment}-trays.xlsx`;
 
+      return { buffer: Buffer.from(buffer), fileName };
+      });
+      const { buffer, fileName } = exported;
+      res.setHeader('Cache-Control', 'private, no-store');
       res.setHeader(
         'Content-Type',
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -415,7 +351,7 @@ traysRouter.post(
       res.send(Buffer.from(buffer));
     } catch (error) {
       console.error('Export trays error', error);
-      res.status(500).json({ error: 'Failed to export trays' });
+      res.status(error instanceof PathFinderError ? error.status : 500).json({ error: error instanceof PathFinderError ? error.message : 'Failed to export trays', ...(error instanceof PathFinderError ? { code: error.code } : {}) });
     }
   },
 );

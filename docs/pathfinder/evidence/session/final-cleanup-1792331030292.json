@@ -1,0 +1,131 @@
+{
+  "schemaVersion": "pathfinder.session.final-cleanup.v1",
+  "status": "PASS_OWNED_RESOURCE_CLEANUP_WITH_AUDIT_LIMITATION",
+  "startedAt": "2026-10-18T13:43:48.666Z",
+  "targetProject": "wfc-pathfinder-local-bf1cba239f40",
+  "targetOwner": "59d9d5bc-9c8f-4b4c-b97d-bb56751e5a6e",
+  "retirement": {
+    "status": "PASS",
+    "resourcesRemoved": {
+      "containers": 5,
+      "volumes": 4,
+      "networks": 2
+    },
+    "remaining": {
+      "containers": [],
+      "volumes": [],
+      "networks": []
+    }
+  },
+  "removedImages": [
+    {
+      "id": "sha256:323f876ac757488376bcfab483934a35bb4175257a922134fa1a547f14c2227b",
+      "tags": [
+        "wfc-pathfinder-api:59d9d5bc9c8f-mvdtnpxl"
+      ],
+      "logicalBytes": 184571995
+    },
+    {
+      "id": "sha256:511ba97e13046460948bf85ae3f5cdc0297658b8e95e13e1db51d3046b93e742",
+      "tags": [
+        "wfc-pathfinder-web:59d9d5bc9c8f-mvdtnpxl"
+      ],
+      "logicalBytes": 55129919
+    },
+    {
+      "id": "sha256:5cd3eca8f8a6972f038bd9766a8e5a68c1ac2cb59546d4ed96763c6de528c3f5",
+      "tags": [
+        "wfc-pathfinder-api:59d9d5bc9c8f-mvdubs12"
+      ],
+      "logicalBytes": 184573345
+    },
+    {
+      "id": "sha256:4d6022fa8de5348d02d1a86cc691214142e3a3866032de9ba9a08a5068d10c66",
+      "tags": [
+        "wfc-pathfinder-web:59d9d5bc9c8f-mvdubs12"
+      ],
+      "logicalBytes": 55129919
+    }
+  ],
+  "physicalBytesReclaimed": "NOT_MEASURED",
+  "noGlobalPrune": true,
+  "filesDeleted": 0,
+  "postUiTargetAudit": {
+    "status": "FAIL_NOT_RETAINED",
+    "scope": "Original comparison failed; final target object was not persisted and retirement was incorrectly started without gating on that result. No final target equality or DB noApply PASS is claimed."
+  },
+  "qualifiedArtifact": "pathfinder-engine/.scratch/session-qualified-artifact-fddb02fc-29e9-4fe2-bac0-5321fc2f913d/artifact-manifest.json",
+  "primaryPreservation": "docs/pathfinder/evidence/worker-reuse/preservation-1792330963032-1cb78243.json",
+  "comparisonProcedure": {
+    "baseline": {
+      "path": "docs/pathfinder/evidence/session/job-controls-corrected-raw-1792329096322.json",
+      "sha256": "cda1b52bcf8273a63a5f58eb615344a862c5adc98c0520e0ed42fec1a88e9a19",
+      "jsonPath": "before.realWorkflow",
+      "value": {
+        "settings": {
+          "count": 1,
+          "sha256": "fd028bfed36351138279cea05254d6eb0bb712f9ca8fb7501643ebbb0760ae2d"
+        },
+        "selection": {
+          "count": 1,
+          "sha256": "53c9e37c1ada39e3fadd5ba7b00f508198e6c2fc12c189c8789380d61f5e80e9"
+        },
+        "registry": {
+          "count": 1,
+          "sha256": "ad9d92d44bd97652b37a8e97a0892eebc5f9314372504b35ab950492014d0984"
+        },
+        "planningArtifacts": {
+          "count": 2,
+          "sha256": "02a92c6d9d81be7cfc775920ba1577183e0d517def13532f325f616dae720ddd"
+        },
+        "locations": {
+          "count": 3,
+          "sha256": "14b33f54e2b6ad71318f8d586280a44771456dad365cdd0fc42e2a5f0657a8e7"
+        },
+        "aliases": {
+          "count": 4,
+          "sha256": "30a41e0035f5737aa29ae112d5873efee8c6df6345dc43a19f777d5b62aacf4b"
+        },
+        "bindings": {
+          "count": 3,
+          "sha256": "2a0d7dc92b71813355eee3946ac83cca0564bd7429e6f9ebc33ed56e1c47d434"
+        },
+        "modelObjects": {
+          "count": 104,
+          "sha256": "14b7cd1d1aa7ddf23c21895279e9c83c07f9fa21935f424213369f4ab270cd56"
+        },
+        "cables": {
+          "count": 1,
+          "sha256": "7d1bf598adb6ca623113993592717b0de159747e2280f7286bbb2a8f035dde1b"
+        },
+        "proposals": {
+          "count": 5,
+          "sha256": "5a5a10d25a41e24f1f02ee473062888f6d47f55c11b791f300ff198127031e18"
+        },
+        "reviews": {
+          "count": 3,
+          "sha256": "a1121bb28f1c633a229efd78b135200368154959caa4773fa640a8157a24f909"
+        },
+        "applies": {
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        }
+      }
+    },
+    "observedCommand": [
+      "docker",
+      "exec",
+      "3b02c809bac059ed210886766812ed002bfb89e95b3d18258875869b3a1c9284",
+      "node",
+      "server/dist/server/pathfinder/lookupAudit.js",
+      "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a"
+    ],
+    "observedJsonPath": "planningArtifactsAndWorkflow",
+    "comparison": "Recursively sorted object keys using scripts/pathfinder-session/lib.mjs canonical; arrays preserve order. Compare exact JSON strings.",
+    "survivingOutput": "Error: POST_UI_REAL_WORKFLOW_CHANGED at eval line10. The returned audit object and differing group were not logged or written.",
+    "differingGroup": "UNKNOWN_NOT_RETAINED",
+    "replayed": false
+  },
+  "sourceInventory": "docs/pathfinder/evidence/session/final-source-inventory-1792331030290.json",
+  "finishedAt": "2026-10-18T13:43:50.292Z"
+}

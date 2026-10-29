@@ -1,0 +1,165 @@
+{
+  "schemaVersion": "pathfinder.session.orchestration.v1",
+  "mode": "mixed",
+  "startedAt": "2026-10-18T12:45:14.710Z",
+  "status": "PASS",
+  "sourceBefore": {
+    "api": {
+      "id": "3d05017ee0fc2bb0b15c1a3e0aaeac258e996d2e024006667d3a4449c40d62c0",
+      "name": "wfc-pathfinder-local-api-1",
+      "image": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+      "running": true,
+      "startedAt": "2026-10-18T09:53:48.067931419Z",
+      "exitCode": 0,
+      "oomKilled": false,
+      "platform": "linux",
+      "mounts": [
+        {
+          "type": "volume",
+          "name": "wfc-pathfinder-local_staging",
+          "destination": "/var/lib/wfc/model-imports",
+          "writable": true
+        },
+        {
+          "type": "volume",
+          "name": "wfc-pathfinder-local_pathfinder",
+          "destination": "/var/lib/wfc/pathfinder",
+          "writable": true
+        }
+      ]
+    },
+    "postgres": {
+      "id": "6830635a4597dad696f1a5ced6846853cd9e1fee0f858450ad6f858e4c2e30b9",
+      "name": "wfc-pathfinder-local-postgres-1",
+      "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+      "running": true,
+      "startedAt": "2026-10-18T02:03:12.60010978Z",
+      "exitCode": 0,
+      "oomKilled": false,
+      "platform": "linux",
+      "mounts": [
+        {
+          "type": "volume",
+          "name": "wfc-pathfinder-local_postgres",
+          "destination": "/var/lib/postgresql",
+          "writable": true
+        }
+      ]
+    },
+    "image": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+    "memoryBytes": 4294967296,
+    "pids": 256
+  },
+  "bundle": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\session-qualification-0f2d7896-a8c4-4a6f-8e87-2b989ab5f157\\bundle",
+  "work": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\session-qualification-0f2d7896-a8c4-4a6f-8e87-2b989ab5f157\\run-mixed-7cdd8a51-c410-4043-b8ab-c6ae63af9f3c",
+  "owner": "7cdd8a51-c410-4043-b8ab-c6ae63af9f3c",
+  "project": "wfc-pathfinder-local-7cdd8a51c410",
+  "policy": {
+    "memoryBytes": 4294967296,
+    "pids": 256,
+    "cpus": 2,
+    "network": "none",
+    "timeoutMilliseconds": 180000
+  },
+  "cleanup": {
+    "status": "PASS",
+    "containerId": "942068de02a98e540cc7d368cb98c866104306a09311567c5492c010855207c5",
+    "absent": true,
+    "volumesCreated": 0,
+    "networksCreated": 0,
+    "imagesCreated": 0,
+    "interrupted": false
+  },
+  "container": {
+    "id": "942068de02a98e540cc7d368cb98c866104306a09311567c5492c010855207c5",
+    "name": "wfc-pf-session-7cdd8a51c410",
+    "image": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+    "owner": "7cdd8a51-c410-4043-b8ab-c6ae63af9f3c",
+    "project": "wfc-pathfinder-local-7cdd8a51c410",
+    "mounts": [
+      {
+        "Type": "bind",
+        "Source": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\session-qualification-0f2d7896-a8c4-4a6f-8e87-2b989ab5f157\\bundle",
+        "Target": "/qualification",
+        "ReadOnly": true
+      },
+      {
+        "Type": "bind",
+        "Source": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\session-qualification-0f2d7896-a8c4-4a6f-8e87-2b989ab5f157\\bundle\\server",
+        "Target": "/app/server/dist",
+        "ReadOnly": true
+      },
+      {
+        "Type": "bind",
+        "Source": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\session-qualification-0f2d7896-a8c4-4a6f-8e87-2b989ab5f157\\bundle\\runner",
+        "Target": "/opt/pathfinder",
+        "ReadOnly": true
+      },
+      {
+        "Type": "bind",
+        "Source": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\session-qualification-0f2d7896-a8c4-4a6f-8e87-2b989ab5f157\\run-mixed-7cdd8a51-c410-4043-b8ab-c6ae63af9f3c",
+        "Target": "/work",
+        "ReadOnly": false
+      }
+    ]
+  },
+  "exit": {
+    "code": 0,
+    "oomKilled": false
+  },
+  "result": {
+    "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\session-qualification-0f2d7896-a8c4-4a6f-8e87-2b989ab5f157\\run-mixed-7cdd8a51-c410-4043-b8ab-c6ae63af9f3c\\result.json",
+    "sha256": "2a34ae092903a6aac1d57ea26a65601a16abf8f5840c8d459c46f60866235890",
+    "status": "PASS",
+    "checks": 117
+  },
+  "sourceAfter": {
+    "api": {
+      "id": "3d05017ee0fc2bb0b15c1a3e0aaeac258e996d2e024006667d3a4449c40d62c0",
+      "name": "wfc-pathfinder-local-api-1",
+      "image": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+      "running": true,
+      "startedAt": "2026-10-18T09:53:48.067931419Z",
+      "exitCode": 0,
+      "oomKilled": false,
+      "platform": "linux",
+      "mounts": [
+        {
+          "type": "volume",
+          "name": "wfc-pathfinder-local_staging",
+          "destination": "/var/lib/wfc/model-imports",
+          "writable": true
+        },
+        {
+          "type": "volume",
+          "name": "wfc-pathfinder-local_pathfinder",
+          "destination": "/var/lib/wfc/pathfinder",
+          "writable": true
+        }
+      ]
+    },
+    "postgres": {
+      "id": "6830635a4597dad696f1a5ced6846853cd9e1fee0f858450ad6f858e4c2e30b9",
+      "name": "wfc-pathfinder-local-postgres-1",
+      "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+      "running": true,
+      "startedAt": "2026-10-18T02:03:12.60010978Z",
+      "exitCode": 0,
+      "oomKilled": false,
+      "platform": "linux",
+      "mounts": [
+        {
+          "type": "volume",
+          "name": "wfc-pathfinder-local_postgres",
+          "destination": "/var/lib/postgresql",
+          "writable": true
+        }
+      ]
+    },
+    "image": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+    "memoryBytes": 4294967296,
+    "pids": 256
+  },
+  "sourceUnchanged": true,
+  "finishedAt": "2026-10-18T12:45:41.368Z"
+}

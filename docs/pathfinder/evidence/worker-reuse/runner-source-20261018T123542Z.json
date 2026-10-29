@@ -1,0 +1,95 @@
+{
+  "schemaVersion": "pathfinder.runner.session.source-verification.v1",
+  "recordedAtUtc": "2026-10-18T12:35:42.5306962Z",
+  "branch": "pf-2-worker-reuse-local-20261018",
+  "baselineCommit": "ed0770f39790fdedf937a190d99908681c11a532",
+  "status": "PASS",
+  "sourceFiles": [
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/Program.cs",
+      "bytes": 20753,
+      "sha256": "2ddb7fdee36d7119ca37869318dca6b3e575aa83095ab1fc87e65b955184ea5d"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/Session.cs",
+      "bytes": 12788,
+      "sha256": "df135491b1d93030108a58ab90c4a5d1723163df8e9cd26bc46660a502729597"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/SessionProtocol.cs",
+      "bytes": 6013,
+      "sha256": "9b2defab8292e150d762baa92bbd043c519da46d955457d1e2799603598b9c01"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/SessionExecutionContext.cs",
+      "bytes": 1108,
+      "sha256": "eafd19ffc558cfe1d9cda4a6b00e3ffb9ea28abae78fb437a2c92f2c791e283a"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/PathFinder.ModelRunner.csproj",
+      "bytes": 551,
+      "sha256": "ad2dd57312de2fb239560a635a4e16f476d975c7ddd1e20d3af40041387bf5d9"
+    },
+    {
+      "path": "pathfinder-engine/tools/PathFinder.ModelRunner/README.md",
+      "bytes": 6372,
+      "sha256": "495ede215fcb45f0bde94863fd5acbc9ed7885ffde88ee094a855c8255c3d7b5"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.RunnerSession.Tests/PathFinder.RunnerSession.Tests.csproj",
+      "bytes": 386,
+      "sha256": "8afd402c22652b5687608551e528f74ede23d3ca2dc5c474bb92e9b3824f48be"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.RunnerSession.Tests/Program.cs",
+      "bytes": 15955,
+      "sha256": "83e0f16184d8467729c95af82d9ba276d59d4f50719e4a0f532e816567378031"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.RunnerSession.Tests/Corpus.cs",
+      "bytes": 10693,
+      "sha256": "f12657d0b966261aa80ee60c0fd907107a9be27e530ec653626d4e27be6923b3"
+    },
+    {
+      "path": "pathfinder-engine/tests/PathFinder.RunnerSession.Tests/README.md",
+      "bytes": 2495,
+      "sha256": "9bc46d65865d3de566913301f54d459ed05fea2545d5c884d71cd2a1fe114b1c"
+    }
+  ],
+  "build": {
+    "status": "PASS",
+    "framework": "net9.0",
+    "useAppHost": false,
+    "runner": "pathfinder-engine/.scratch/runner-session-tests-96cfb091eac9431486ad34b5c7da5844/publish/PathFinder.ModelRunner.dll",
+    "runnerSha256": "d54d146331a85554d4039cac5314247a3ee2df0997e8cef9cbaa00434f1bf292"
+  },
+  "session": {
+    "status": "PASS",
+    "passed": 303,
+    "failed": 0,
+    "receipt": "pathfinder-engine/.scratch/runner-session-run-025f5922853c4dbfb4553fcc8b8b3aee/result.json",
+    "receiptSha256": "ab460137adbe83c8a4de92dd5fe880ae9858166e0228e7791c766e224b17307c",
+    "syntheticCases": 31,
+    "countRetirementRuns": 3,
+    "comparison": "complete response excluding requestId and prepared.loadedFromDisk only"
+  },
+  "oneShot": {
+    "status": "PASS",
+    "passed": 42,
+    "total": 42,
+    "receipt": "docs/pathfinder/evidence/pf3/model-runner-2026-10-18T12-33-36-969Z.json",
+    "receiptSha256": "4e84f33b1bf73a78544c71966ff47ea9551d6489a5cdd9f7c691d7a7ce66d0fa"
+  },
+  "coreModelDiff": "",
+  "earlierFailedAttempt": {
+    "receipt": "pathfinder-engine/.scratch/runner-session-run-1a2fb09feeea44449aaf4ac24d307edd/result.json",
+    "status": "FAIL",
+    "reason": "Test harness exception filter omitted InvalidDataException; fixed without weakening zero/oversize refusal",
+    "preserved": true
+  },
+  "limitations": [
+    "Synthetic host controls do not establish Linux memory enforcement, ten-minute lifetime, durable DB fences, whole-plant capacity or human engineering acceptance.",
+    "One prepared identity retained; Core graph remains rebuilt per calculation.",
+    "No runtime5190 updates, original data access, push, merge or commits performed by this writer."
+  ]
+}

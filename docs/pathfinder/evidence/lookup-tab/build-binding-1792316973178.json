@@ -1,0 +1,306 @@
+{
+  "schemaVersion": "pathfinder.lookup.build-binding.v1",
+  "status": "PASS",
+  "at": "2026-10-18T09:49:33.178Z",
+  "checkpoint": "73c13aa58519f26cbb96d93bbbb70bcdd5bb2cdd",
+  "sourceManifest": "docs/pathfinder/evidence/pf7/sources-1792316750590.json",
+  "sourceManifestSha256": "61a67b68a2f8703ce87a8437a1e5f8268de792f5c4b2775f66be22e57078dc5b",
+  "sourceSetSha256": "c3a58fd623df881da39fa8f043a6260eb93ca3f989d938089a15015de958f2d7",
+  "sourceFilesVerifiedBeforeAndAfter": 828,
+  "preflight": "docs/pathfinder/evidence/lookup-tab/build-preflight-1792316847404.json",
+  "build": {
+    "method": "node scripts/pathfinder-local/runtime.mjs build",
+    "finishedAt": "2026-10-18T09:47:55.512Z",
+    "configurationFiles": [
+      {
+        "path": "docker/pathfinder.Dockerfile",
+        "bytes": 2082,
+        "sha256": "682018b4ff47990ea58b5657bccf434a948a16bdd99d06d0a84cd38ed53d0bc4"
+      },
+      {
+        "path": "docker/pathfinder.Dockerfile.dockerignore",
+        "bytes": 402,
+        "sha256": "68e8f31e1fa9e2b47e02f7184ad40d866387da57bdecc216284f83fce18c0a51"
+      },
+      {
+        "path": "docker/pathfinder.compose.yml",
+        "bytes": 4140,
+        "sha256": "4d50d6e8ef39ca8d317ba31ad28fb0061688f862078c641c9f4787aac523202e"
+      },
+      {
+        "path": "docker/pathfinder.nginx.conf",
+        "bytes": 6101,
+        "sha256": "59fda9eead80aaac29578acd54b0e1d6197d9711b3387787070a6b9ffba66111"
+      }
+    ],
+    "images": {
+      "api": {
+        "id": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+        "tags": [
+          "wfc-pathfinder-api:7c713695a3c9-mvdn6gez"
+        ],
+        "created": "2026-10-18T09:35:54.452738296Z",
+        "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65",
+        "project": "wfc-pathfinder-local",
+        "size": 184547487
+      },
+      "web": {
+        "id": "sha256:1895a3fa33c25933024ab514ef61bd2d1568ffb33477d114541b855da65445b7",
+        "tags": [
+          "wfc-pathfinder-web:7c713695a3c9-mvdn6gez"
+        ],
+        "created": "2026-10-18T09:47:52.25419049Z",
+        "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65",
+        "project": "wfc-pathfinder-local",
+        "size": 55129906
+      }
+    },
+    "tags": {
+      "api": "wfc-pathfinder-api:7c713695a3c9-mvdn6gez",
+      "web": "wfc-pathfinder-web:7c713695a3c9-mvdn6gez"
+    },
+    "logs": [
+      {
+        "role": "api",
+        "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pathfinder-local\\build-mvdn6gez-api.log",
+        "bytes": 13028,
+        "sha256": "5d008e17cb479511437a472a641ab83895c16bcf2e1e7050b767c64f8ed7192e"
+      },
+      {
+        "role": "web",
+        "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pathfinder-local\\build-mvdn6gez-web.log",
+        "bytes": 2338,
+        "sha256": "7aa63c7636b7fc1dac7d4efe1418cbe52220cb0f314b1170e15bac40cac7ed25"
+      }
+    ]
+  },
+  "apiPayloadComparison": {
+    "referenceImage": "sha256:1630510e3240a8ede43d9cc9b77297bedb150cc25ad9480e9425f31797177bc3",
+    "candidateImage": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+    "imageIdEqual": false,
+    "referenceConfigSha256": "c0989c7ca361050561df8f96bd5e345b0a1dd0e1f2629f516b68c993c4c0bf95",
+    "candidateConfigSha256": "c0989c7ca361050561df8f96bd5e345b0a1dd0e1f2629f516b68c993c4c0bf95",
+    "completeConfigEqual": true,
+    "referenceRootFsSha256": "fa9ad9c1ee25ed72364f1af2d5214d96501ac2d95b6ca8b85e3952068c318215",
+    "candidateRootFsSha256": "fa9ad9c1ee25ed72364f1af2d5214d96501ac2d95b6ca8b85e3952068c318215",
+    "rootFsEqual": true,
+    "referenceLayers": [
+      "sha256:e58989146fcec76699871403b9897b5c014af1ccd85f5a9300a215e7975525d7",
+      "sha256:91329da0c497f409b176173a5c4702c9fd79d88e677ec0ada4a0d07f6a001eb1",
+      "sha256:85065cc72b0d3cbe08cd9e8c086688b7836ee321e313096d1cfb441674361f65",
+      "sha256:992664ed29448f28bcd1ca52f64e3d6e28894cc53078f8ed765ecc82e837b4e1",
+      "sha256:48d457b4d425826a81482c431354f54f6aad16b9e333a83ae7b0e6134e625243",
+      "sha256:2a6eed505b5b4a67181ba3c04fbc7d81f168bf03786bfa54468578b5c1efdead",
+      "sha256:172a56220b91db6faa7b46613e8c6b0bcf43d0c3831c7a4ae7add8d2fc56b6e8",
+      "sha256:5a54b3228f88901c0cb72c99b590377e8a648d1cd91e8895e8e1f3aa2311549b",
+      "sha256:dc89843225987aaed1c324d079fc1dd3a7c46d9fd721f45ce3d42c1d9a7531c9",
+      "sha256:7c176ac6427351d589835d33ef957b5810e001c65357b5a387f594456637476d",
+      "sha256:1fbf5e1bab97411f96c4ba95ab527c5cf2270012783ea96cb0f0ec32dff82f37",
+      "sha256:4805e54630be12ba6e68da7216a9689762b6c6c70aa2dbbaf0e98473892c4447",
+      "sha256:00d8b142d8222caf9b15e7102f4b960d5d4b31fb5e212604856f10c519ac00d1",
+      "sha256:bee6226cdc4d23fa0d5112a5a65cd0d415a0e9ee8f173d615720140889c3ec16",
+      "sha256:86bbfaa5de125878577eff0b376a01f5528c4d355ec410290d5e7438b91d2e53",
+      "sha256:63e1672be0930c996b4ffacc115b1de01eb567b31cb9007c1d0dffda3c2398a1"
+    ],
+    "candidateLayers": [
+      "sha256:e58989146fcec76699871403b9897b5c014af1ccd85f5a9300a215e7975525d7",
+      "sha256:91329da0c497f409b176173a5c4702c9fd79d88e677ec0ada4a0d07f6a001eb1",
+      "sha256:85065cc72b0d3cbe08cd9e8c086688b7836ee321e313096d1cfb441674361f65",
+      "sha256:992664ed29448f28bcd1ca52f64e3d6e28894cc53078f8ed765ecc82e837b4e1",
+      "sha256:48d457b4d425826a81482c431354f54f6aad16b9e333a83ae7b0e6134e625243",
+      "sha256:2a6eed505b5b4a67181ba3c04fbc7d81f168bf03786bfa54468578b5c1efdead",
+      "sha256:172a56220b91db6faa7b46613e8c6b0bcf43d0c3831c7a4ae7add8d2fc56b6e8",
+      "sha256:5a54b3228f88901c0cb72c99b590377e8a648d1cd91e8895e8e1f3aa2311549b",
+      "sha256:dc89843225987aaed1c324d079fc1dd3a7c46d9fd721f45ce3d42c1d9a7531c9",
+      "sha256:7c176ac6427351d589835d33ef957b5810e001c65357b5a387f594456637476d",
+      "sha256:1fbf5e1bab97411f96c4ba95ab527c5cf2270012783ea96cb0f0ec32dff82f37",
+      "sha256:4805e54630be12ba6e68da7216a9689762b6c6c70aa2dbbaf0e98473892c4447",
+      "sha256:00d8b142d8222caf9b15e7102f4b960d5d4b31fb5e212604856f10c519ac00d1",
+      "sha256:bee6226cdc4d23fa0d5112a5a65cd0d415a0e9ee8f173d615720140889c3ec16",
+      "sha256:86bbfaa5de125878577eff0b376a01f5528c4d355ec410290d5e7438b91d2e53",
+      "sha256:63e1672be0930c996b4ffacc115b1de01eb567b31cb9007c1d0dffda3c2398a1"
+    ],
+    "layerCount": 16,
+    "platformEqual": true,
+    "filePayloadComparisonMethod": "Identical ordered SHA256 RootFS diff-ID layers prove the complete immutable filesystem file bytes/metadata identical; no separate per-file scan was performed.",
+    "serverPayloadIdentical": true
+  },
+  "reuseScope": "Previously executed10 synthetic backend live checks apply to identical server/rootfs/process payload; fresh corrected browser/UI check still required.",
+  "runtime": {
+    "project": "wfc-pathfinder-local",
+    "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65",
+    "port": 5190,
+    "desiredState": "built"
+  },
+  "containersBeforeAndAfter": [
+    {
+      "id": "966629b7cce4c9b74b2a39d5705bffded88093747dcd54d0939b56e06d9e6d02",
+      "name": "/aalborg-aps-viewer-viewer-1",
+      "image": "sha256:3afcb538328d92ea565f457b694d80872cea4f2d6d70038830bff128eee5db75",
+      "startedAt": "2026-10-16T05:18:05.048644042Z",
+      "running": false,
+      "project": "aalborg-aps-viewer",
+      "owner": null
+    },
+    {
+      "id": "1d2a63a1b6710bbbfcf4663c61732ea4989ebc3229d6437d22d7ff10d265d47b",
+      "name": "/aalborg-offline-viewer-gateway-1",
+      "image": "sha256:6ff1cadaccac6e2cb4ae8b4f87e7ed6e0d1ea5fa7cd781793b5f673859cddc20",
+      "startedAt": "2026-10-16T14:08:20.484859769Z",
+      "running": true,
+      "project": "aalborg-offline-viewer",
+      "owner": null
+    },
+    {
+      "id": "31a298d2589caf6aa4ffe62aed90fb4f41ed2048ac52f940e47b4a7e2638e874",
+      "name": "/aalborg-offline-viewer-viewer-1",
+      "image": "sha256:6ff1cadaccac6e2cb4ae8b4f87e7ed6e0d1ea5fa7cd781793b5f673859cddc20",
+      "startedAt": "2026-10-16T14:08:20.493037766Z",
+      "running": true,
+      "project": "aalborg-offline-viewer",
+      "owner": null
+    },
+    {
+      "id": "c1a106369b924f76df3f74eb6c80848a56041aaece45e80e11d1db746a68dbf5",
+      "name": "/niedax-backend",
+      "image": "sha256:f91ec3c3ee353af233a48b96e7e3e872ce73646de7ad28401f681de3545c68a7",
+      "startedAt": "2026-10-16T14:08:20.514865059Z",
+      "running": true,
+      "project": "niedax-generator",
+      "owner": null
+    },
+    {
+      "id": "54d0022b687a3d9af2b1937f6afc5dafcaffa40584c1e1992efb16c828a5c992",
+      "name": "/niedax-frontend",
+      "image": "sha256:88efc2b14924b52ddf902c798ff6c8183e5eca9a551e3933f2c224893e27dd81",
+      "startedAt": "2026-10-16T14:08:20.508506964Z",
+      "running": true,
+      "project": "niedax-generator",
+      "owner": null
+    },
+    {
+      "id": "5a5257297c09596752c28dc246767cedcb17fea506492bfa69b11846c1ce4e2e",
+      "name": "/niedax-gateway",
+      "image": "sha256:1ce9f99177667c70f907966e2b55e4b1fbede2ab0e9fcaaac2229a27ae12b686",
+      "startedAt": "2026-10-16T14:08:20.520293427Z",
+      "running": true,
+      "project": "niedax-generator",
+      "owner": null
+    },
+    {
+      "id": "aa1d9cb94233c4bf375cb15acb80d2ea3465e04e0b3f6163248cccb91b316e39",
+      "name": "/niedax-migrations",
+      "image": "sha256:b2c1093ba19acc184b0cf9d84f1126536c6e5b40a22e58e4707dec381dbd265d",
+      "startedAt": "2026-10-13T10:44:08.346925904Z",
+      "running": false,
+      "project": "niedax-generator",
+      "owner": null
+    },
+    {
+      "id": "3265e0bb1d03f23889e765c20ae81212e677bd89f79e2ec7f263bb27ec508ecb",
+      "name": "/niedax-postgres",
+      "image": "sha256:af1fcdc0950249ff31a7b72cca8f3bf2a05acde380196ce2ab5cff6355aafb0a",
+      "startedAt": "2026-10-16T14:08:20.518513019Z",
+      "running": true,
+      "project": "niedax-generator",
+      "owner": null
+    },
+    {
+      "id": "1ffdec229a12d50458d6b0dc1de5b7ebf79a5f464614ccccc7ef22fef86188bb",
+      "name": "/routings-preparer-preparer-1",
+      "image": "sha256:f7bfe7434ee7e8a864452b98678339a940bb621cfccdd21ad715f591ace6ad77",
+      "startedAt": "2026-10-17T09:30:09.74632792Z",
+      "running": true,
+      "project": "routings-preparer",
+      "owner": null
+    },
+    {
+      "id": "2f1d30dd30411bf8b7e873b893d1a87a064cd618651d1f2646b8c5d739f72f36",
+      "name": "/wfc_app",
+      "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+      "startedAt": "2026-10-16T14:08:28.33027284Z",
+      "running": true,
+      "project": null,
+      "owner": null
+    },
+    {
+      "id": "f65cc58eea401f9c80de3be44342c3a6157f48fd6468a4d5a6b3df8ceeaac427",
+      "name": "/wfc-app-backend-1",
+      "image": "sha256:481326351dbfa8acc86afe4d2543a1b96a05d523dd95a4715928f7f25418854f",
+      "startedAt": "2026-10-17T12:24:29.337651343Z",
+      "running": true,
+      "project": "wfc-app",
+      "owner": null
+    },
+    {
+      "id": "1d5592c188a8d60c55d58a29ae0bab14ee67cae51ee00bb1822f75cd9beef99d",
+      "name": "/wfc-app-frontend-1",
+      "image": "sha256:86870eab49e4b14e81d751ba26a0b5644dfd570954041b665801155487b65b78",
+      "startedAt": "2026-10-17T12:24:23.192279537Z",
+      "running": true,
+      "project": "wfc-app",
+      "owner": null
+    },
+    {
+      "id": "6ad45aea3b8f180629fd43f9be9f9ab4c6c1d99dbcda72612cb60a2b2e623705",
+      "name": "/wfc-minio",
+      "image": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+      "startedAt": "2026-10-17T09:48:41.528161291Z",
+      "running": true,
+      "project": "wfc",
+      "owner": null
+    },
+    {
+      "id": "ad429b5aae2296380cbc259ca4b9a74e0fd975de353eac383fb3167dd24e1e9e",
+      "name": "/wfc-pathfinder-local-api-1",
+      "image": "sha256:1630510e3240a8ede43d9cc9b77297bedb150cc25ad9480e9425f31797177bc3",
+      "startedAt": "2026-10-18T09:38:27.560354659Z",
+      "running": true,
+      "project": "wfc-pathfinder-local",
+      "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65"
+    },
+    {
+      "id": "e27a690c80957356c8a562e02b72249cf85a3d965f9a32fe596048a15f499820",
+      "name": "/wfc-pathfinder-local-minio-1",
+      "image": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+      "startedAt": "2026-10-18T08:48:10.487023114Z",
+      "running": true,
+      "project": "wfc-pathfinder-local",
+      "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65"
+    },
+    {
+      "id": "6830635a4597dad696f1a5ced6846853cd9e1fee0f858450ad6f858e4c2e30b9",
+      "name": "/wfc-pathfinder-local-postgres-1",
+      "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+      "startedAt": "2026-10-18T02:03:12.60010978Z",
+      "running": true,
+      "project": "wfc-pathfinder-local",
+      "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65"
+    },
+    {
+      "id": "91182164f769df982f1dfe9cbc7707b6885bac68d20e2617f85683bdd6761725",
+      "name": "/wfc-pathfinder-local-storage-ready-1",
+      "image": "sha256:1630510e3240a8ede43d9cc9b77297bedb150cc25ad9480e9425f31797177bc3",
+      "startedAt": "2026-10-18T09:38:26.833444335Z",
+      "running": false,
+      "project": "wfc-pathfinder-local",
+      "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65"
+    },
+    {
+      "id": "f7b4d610a90be3ed0a06d2eb68655cdd60f919ea7bb9ae0fa56338006b17f274",
+      "name": "/wfc-pathfinder-local-web-1",
+      "image": "sha256:f4b5a13c603d091e1473983aed9d20e26daabf04e4603819883c28e860fb6617",
+      "startedAt": "2026-10-18T09:38:33.34515307Z",
+      "running": true,
+      "project": "wfc-pathfinder-local",
+      "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65"
+    }
+  ],
+  "containerBindingsUnchanged": true,
+  "originalContainerCount": 13,
+  "ownContainerCount": 5,
+  "startedOrStoppedOrRecreated": false,
+  "cleanupInvoked": false,
+  "originalResourceOperationsInvoked": false,
+  "hold": "Build only; previously running1630510e/f4b5 candidate unchanged; await root authorization before start"
+}

@@ -1,0 +1,41 @@
+{
+  "status": "PASS",
+  "scope": "Exact unreferenced own R3 candidate1–4 image tags only; current6 and working rollback5 retained",
+  "removed": [
+    {
+      "image": "sha256:ef7c1b4b8d5ec42b0963f1823be93aec126932b0731728c351cab7d06135978d",
+      "tag": "wfc-pathfinder-api:8fffd6b8c896-mveizgku"
+    },
+    {
+      "image": "sha256:7afd86406bf837f6201613651103f48f72529f6b56ca4add79493768d7f9f371",
+      "tag": "wfc-pathfinder-web:8fffd6b8c896-mveizgku"
+    },
+    {
+      "image": "sha256:369d85d4cc056452a786fe8364a8b80a3808f362519248424f75931f3ce1c179",
+      "tag": "wfc-pathfinder-api:8fffd6b8c896-mvej43uw"
+    },
+    {
+      "image": "sha256:0b6602ee5090b137aefb52ff8083b06111d3f5b08070b343dea3645cdeb0003f",
+      "tag": "wfc-pathfinder-web:8fffd6b8c896-mvej43uw"
+    },
+    {
+      "image": "sha256:52770fa4067b02d6149d35c03be7397292db823d16a3058e26986abbf108f6db",
+      "tag": "wfc-pathfinder-api:8fffd6b8c896-mvejfyxx"
+    },
+    {
+      "image": "sha256:4788777c1bbf9f9081806c0f048d8ddfa55ebc604a55d8c6dfcea2e92409664a",
+      "tag": "wfc-pathfinder-web:8fffd6b8c896-mvejfyxx"
+    },
+    {
+      "image": "sha256:a14cf3de9e567c08f17aa48da3658ed32c3e825bd3ab53f34823f8ab3be87a45",
+      "tag": "wfc-pathfinder-api:8fffd6b8c896-mvejhmc0"
+    },
+    {
+      "image": "sha256:bf4b5a6ff3de6dcb0332082790fcfa28644eb9b778ed10420deec3a20cbf1b3c",
+      "tag": "wfc-pathfinder-web:8fffd6b8c896-mvejhmc0"
+    }
+  ],
+  "prune": false,
+  "deniedPathsTouched": false,
+  "fixtureRetention": "UI converted-model and engine fixtures retained with durable intents for required R4–R10 checks"
+}

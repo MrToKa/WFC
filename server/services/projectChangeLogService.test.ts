@@ -13,6 +13,18 @@ const project = mapProjectRow({
 } as ProjectRow);
 
 describe('project change tracker', () => {
+  it('records enabling and disabling automatic rerouting with its project setting label', () => {
+    const enabled = { ...project, cableLayout: { ...project.cableLayout, autoRerouteForFreeSpace: true } };
+    expect(describeProjectChanges(project, enabled)).toEqual([
+      'Bundles configuration / Automatically reroute for minimum free space: Disabled → Enabled',
+    ]);
+    expect(describeProjectChanges(enabled, project)).toEqual([
+      'Bundles configuration / Automatically reroute for minimum free space: Enabled → Disabled',
+    ]);
+  });
+  it('records connection gap changes with their Details label',()=>{
+    expect(describeProjectChanges(project,{...project,connectionGap:1.125})).toEqual(['Connection gap: 1 → 1.125']);
+  });
   it('ignores timestamps and unchanged settings', () => {
     expect(describeProjectChanges(project, { ...project, updatedAt: '2026-02-01' })).toEqual([]);
   });

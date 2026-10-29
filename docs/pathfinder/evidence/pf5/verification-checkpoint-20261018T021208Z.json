@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-10-18T02:12:08.1479254Z",
+  "workspace": "C:/Users/todor.chankov/source/WFC-pathfinder-local",
+  "checks": [
+    {
+      "name": "Registry plus actual Node/.NET process and dependency suite",
+      "status": "PASS",
+      "passed": 34,
+      "total": 34,
+      "command": "node node_modules/vitest/vitest.mjs run server/pathfinder/engine.test.ts server/pathfinder/matching.test.ts",
+      "scope": "20 registry controls; 14 process/dependency/compatibility/pagination controls. Includes actual ordered lookup and Reverse."
+    },
+    {
+      "name": "Legacy cable/history/export/length regression",
+      "status": "PASS",
+      "passed": 40,
+      "total": 40,
+      "report": "legacy-cables-configured-20261018T021300Z.json",
+      "configuration": "Explicit synthetic unit-only DATABASE_URL/JWT/MINIO values. Network endpoints point to unreachable 127.0.0.1:1; database methods are mocked. No runtime credentials used.",
+      "earlierAttempt": {
+        "status": "CONFIGURATION_FAILED",
+        "report": "legacy-cables-20261018T021200Z.json",
+        "details": "Two suites could not import config because DATABASE_URL was absent. Nine assertions in unaffected suites passed. No assertion failed. Repeated with explicit isolated unit fixtures."
+      }
+    },
+    {
+      "name": "Actual SQL/HTTP jobs and Apply",
+      "status": "PASS",
+      "passed": 16,
+      "total": 16,
+      "report": "jobs-apply-20261018T020526Z.json",
+      "apiContainer": "20352cc1fc82dcf189a759555c3698f8666c050838cc50cff753f051f8c25384",
+      "apiImage": "sha256:9e7e63567b1fe43b135b719d7dcae0e30972833e08859930a4b611f79bcb356b",
+      "postgresContainer": "6830635a4597dad696f1a5ced6846853cd9e1fee0f858450ad6f858e4c2e30b9"
+    },
+    {
+      "name": "Server TypeScript",
+      "status": "PASS",
+      "exitCode": 0,
+      "command": "node node_modules/typescript/bin/tsc --noEmit -p server/tsconfig.json"
+    }
+  ],
+  "testSourceHashes": [
+    {
+      "sha256": "2409829421dfcdf2b489ae1a56e020b1c4949feaf8d283f38cf0cef78d86c13e",
+      "path": "server/pathfinder/engine.test.ts"
+    },
+    {
+      "sha256": "213e3690ee2b1fa1b35e46ae84cda14a69a9908770f4a27d58e0ce7e04a5b9ea",
+      "path": "server/pathfinder/engine.ts"
+    },
+    {
+      "sha256": "43f4f5b2c2f420a50f4b75336313461b6a5474175bc94755f54a6ddf59f830d9",
+      "path": "server/pathfinder/matching.test.ts"
+    }
+  ],
+  "nativeParity": "BLOCKED; not established by synthetic controls.",
+  "followUp": "Subsequent queued-lookup HTTP and forced-retry/cancellation-intent changes require the next rebuilt candidate and expanded 19-control live driver; no PASS is inferred for that pending run."
+}

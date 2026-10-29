@@ -1,0 +1,73 @@
+{
+  "stage": "PF-B12",
+  "status": "PASS_WITH_LIMITATIONS",
+  "productCommit": "22114f4dd05c0f310d8e1cbd908d36332cc42346",
+  "operationId": "4fcfd5a0-6906-413d-91be-8a36084e1898",
+  "at": "2026-10-22T00:28:20.390Z",
+  "delivery": {
+    "port": 5191,
+    "webImage": "sha256:814475f9fe327887e0444fcd4e7e73411bc2f341d59b0748cac1f3b62578acee",
+    "apiImage": "sha256:ac0d16ab1b0f4c92922c20d1a13a5ea142d4c6e92558de1870daf4db7fd60fcf",
+    "apiSameRunningContainer": true,
+    "nonwebResourceConservation": "PASS",
+    "http": {
+      "health": 200,
+      "index": 200,
+      "asset": 200,
+      "diagnosticModule": {
+        "status": 200,
+        "bytes": 2148,
+        "sha256": "b4c936787570653e7c88de52603726920ef78440146039844d9b292925a051a2"
+      }
+    },
+    "archive": {
+      "bytes": 55345152,
+      "sha256": "4fd98d01f894edf7247595d5b6eb7792b6735ef8ff6c8c27b63a5da6adb9d3a7"
+    }
+  },
+  "diagnosis": {
+    "metadataRead": "PASS",
+    "activeFingerprint": "b5bb4fbe666b440c73bb1ffd2ee0db01be66146f8002e4a9df8dce8521db1d34",
+    "pendingIntents": 7,
+    "publishedSnapshots": 0,
+    "latestSelectedParents": 2,
+    "latestCaptureAllocated": false,
+    "retainedMetadata": {
+      "hierarchyNodes": [
+        321834,
+        60689
+      ],
+      "fragments": [
+        382095,
+        238736
+      ],
+      "combinedFragments": 620831,
+      "currentV1FragmentLimit": 8192
+    },
+    "scope": "Metadata and retained fragment-membership verification; no triangle/civil/engineering acceptance"
+  },
+  "checks": {
+    "runtime": 119,
+    "moduleClosure": 4,
+    "hooks": 108,
+    "controller": 91,
+    "installer": 16,
+    "types": "PASS",
+    "lint": "PASS_0_WARNINGS",
+    "review": "CLEAR",
+    "correctedBuild": "PASS",
+    "install": "PASS"
+  },
+  "retainedFailures": [
+    "Initial Controller null-snapshot test expectation",
+    "Initial missing module declaration typecheck",
+    "Initial candidate server-copy missing-module build; bounded operator cleanup-unconfirmed code retained, daemon terminal Error observed"
+  ],
+  "unresolved": [
+    "Whole-parent multipart support PLANNED in plan96",
+    "Actual browser/SDK capture BLOCKED by saved refusal; no bypass",
+    "Real Aalborg obstacle geometry/opening/cable qualification NOT_RUN",
+    "No agent real Apply",
+    "Simplified Preparer remains incomplete in separate worktree"
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "pathfinder.copied-recovery.drill-receipt.v1",
+  "status": "FAIL",
+  "action": "init",
+  "startedAt": "2026-10-18T18:05:02.112Z",
+  "error": "TEST_EXTERNAL_FORBIDDEN",
+  "recovery": "Keep partial archive/private companion/record/raw transport. Never repeat a begun backup/restore/retirement. Inspect accepted state and source health before explicit reconciliation.",
+  "drillId": "f385af2e-1dfc-4c57-b489-1e2517c4215b",
+  "phase": "planned",
+  "source": {
+    "runtime": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\batched-capture-runtime-20261018-1600",
+    "owner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+    "project": "wfc-pathfinder-local-0cba87606e9b",
+    "port": 5191
+  },
+  "target": {
+    "runtime": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\copied-recovery-target-3006a8fc-1527-4441-a081-b5800e5c2dfb",
+    "port": 5192,
+    "verified": false
+  },
+  "privateWork": "pathfinder-engine/.scratch/copied-recovery-ab860847-5503-4ac2-b8c1-ba1f1b557a94",
+  "finishedAt": "2026-10-18T18:05:02.144Z"
+}

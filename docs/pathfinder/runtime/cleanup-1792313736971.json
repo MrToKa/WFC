@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS",
+  "recordedAtUtc": "2026-10-18T08:55:36.968Z",
+  "scope": "Exact verified older same-owner backup data archives and unreferenced images carrying this isolated owner; no recursive directory deletion or Docker prune.",
+  "finalDrill": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\docs\\pathfinder\\runtime\\final-drill-1792313480874.json",
+  "retainedBackup": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf-two-tabs-backup-20261018-0847",
+  "retainedBackupId": "d7d63dce-4549-4e78-9bc5-7ff6a9eddc7b",
+  "retiredBackup": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf-manual-backup-20261018-0703",
+  "retiredBackupId": "2ae6f51b-34ee-46d4-8594-757f882fd216",
+  "removedFiles": [
+    {
+      "absolute": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf-manual-backup-20261018-0703\\database.dump",
+      "bytes": 482732,
+      "sha256": "f205157824565386f366a036eb80741ec4c473096a013d7871c7df85d144e789"
+    },
+    {
+      "absolute": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf-manual-backup-20261018-0703\\minio.wfcops",
+      "bytes": 879162677,
+      "sha256": "022ac70662a3b0b9ee5285c70e67bdec59b4a323fa0887250dadcd3ab16a6205"
+    },
+    {
+      "absolute": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf-manual-backup-20261018-0703\\staging.wfcops",
+      "bytes": 184,
+      "sha256": "77a63aa14dbdb44df06397ee5ce667d6f93fe99cf8dfa069d2772dbbbbb9487b"
+    },
+    {
+      "absolute": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf-manual-backup-20261018-0703\\pathfinder.wfcops",
+      "bytes": 2551081,
+      "sha256": "7359505833b883121004aacd9c5ee6bb2028d9521103f79ea2f0dbf17e067617"
+    },
+    {
+      "absolute": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf-manual-backup-20261018-0703\\api-image.tar",
+      "bytes": 184539648,
+      "sha256": "7c860804c5235051c2c737b5bd869d529f3b4c3fa726212c4bc0c4b4a964cfed"
+    },
+    {
+      "absolute": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf-manual-backup-20261018-0703\\web-image.tar",
+      "bytes": 55125504,
+      "sha256": "b3c40fb751969cb041cbeed2ed32526e1162f8cca344283b87c7162b50b9d902"
+    },
+    {
+      "absolute": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf-manual-backup-20261018-0703\\postgres-image.tar",
+      "bytes": 162226688,
+      "sha256": "9c16e896147969ee35d3ed04af8f17b80543da9d6fb80cfbbc9abdf117191d62"
+    },
+    {
+      "absolute": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf-manual-backup-20261018-0703\\minio-image.tar",
+      "bytes": 62259712,
+      "sha256": "7a3e953b6647a85a4932e6d4a1d4931c4333c519abc09c2b5bab37aaeaad1e9d"
+    }
+  ],
+  "removedImages": [
+    {
+      "id": "sha256:9cd76986937dc5ce4faa0583db9d7b4a73bcadcec33338a175bd8fa8641bc6c4",
+      "tags": [
+        "wfc-pathfinder-web:7c713695a3c9-mvdkfwfq"
+      ],
+      "bytes": 55128662
+    },
+    {
+      "id": "sha256:09dcf672529ea4e119e8655411cdc9288851aeaa5e059d12c4b4415f4e6baa85",
+      "tags": [
+        "wfc-pathfinder-web:7c713695a3c9-mvdj68d7"
+      ],
+      "bytes": 55121347
+    },
+    {
+      "id": "sha256:fcd7b866447416caac43c44cb49d4cda7a2ff615608f8863d5497253309d26cd",
+      "tags": [
+        "wfc-pathfinder-api:7c713695a3c9-mvdkfwfq"
+      ],
+      "bytes": 184521695
+    },
+    {
+      "id": "sha256:905dcb21138065e4b8cd028a6747fd613d080f6bb562d7901c034eb9c7ae4bce",
+      "tags": [
+        "wfc-pathfinder-api:7c713695a3c9-mvdj68d7"
+      ],
+      "bytes": 184521695
+    },
+    {
+      "id": "sha256:286e0d43fb12d23c77727eb2c899eac161571d98998e0eb0f212911006adb500",
+      "tags": [
+        "wfc-pathfinder-api:7c713695a3c9-mvdh2l62"
+      ],
+      "bytes": 184513047
+    },
+    {
+      "id": "sha256:500345218d8c3f4629725ce6b1d3cbeeb6dc12f7b4cb1f06d5b92ecf8949ba64",
+      "tags": [
+        "wfc-pathfinder-web:7c713695a3c9-mvdh2l62"
+      ],
+      "bytes": 55105259
+    }
+  ],
+  "limits": [
+    "Build cache, real capture/native inputs, all original containers/images and both denied historical scratch children remain untouched.",
+    "Image sizes are reported sizes, not a claim of reclaimed physical layer bytes."
+  ],
+  "removedArchiveBytes": 1346348226
+}

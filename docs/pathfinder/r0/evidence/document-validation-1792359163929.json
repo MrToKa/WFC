@@ -1,0 +1,66 @@
+{
+  "schemaVersion": "wfc.pfr0.document-validation.v1",
+  "recordedAt": "2026-10-18T21:32:43.928Z",
+  "status": "PASS",
+  "revision": "916256f plus named R0 documentation working tree",
+  "scope": "JSON syntax/finite numbers/document invariants/reference hashes/links/known-secret scan only; NOT production DTO, app, engine, UI, capacity or engineering verification",
+  "checks": [
+    {
+      "name": "synthetic-and-proposed-labels",
+      "status": "PASS"
+    },
+    {
+      "name": "finite-json-numbers",
+      "status": "PASS"
+    },
+    {
+      "name": "policy-case-identities-and-required-boundaries",
+      "status": "PASS"
+    },
+    {
+      "name": "purpose-normalization-example",
+      "status": "PASS"
+    },
+    {
+      "name": "routing-drawing-dependencies-separated",
+      "status": "PASS"
+    },
+    {
+      "name": "bounded-bigint-revision-example",
+      "status": "PASS"
+    },
+    {
+      "name": "manual-apply-and-install-preservation-example",
+      "status": "PASS"
+    },
+    {
+      "name": "background-grant-denies-review-apply",
+      "status": "PASS"
+    },
+    {
+      "name": "lossless-decimal-example",
+      "status": "PASS"
+    },
+    {
+      "name": "frozen24files-eleven-core-reference-integrity",
+      "status": "PASS"
+    },
+    {
+      "name": "local-document-links",
+      "status": "PASS"
+    },
+    {
+      "name": "known-credential-values-absent",
+      "status": "PASS"
+    }
+  ],
+  "policySyntheticCases": 29,
+  "geometryExampleRoots": 23,
+  "referenceFiles": 24,
+  "coreFiles": 11,
+  "links": 54,
+  "missingLinks": [],
+  "scannedR0Files": 12,
+  "rawSecretMatches": 0,
+  "secretValuesDisclosed": false
+}

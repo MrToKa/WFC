@@ -1,0 +1,11 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  PathFinder.Core -> C:\Users\todor.chankov\source\WFC-pathfinder-local\pathfinder-engine\src\PathFinder.Core\bin\Release\net9.0\PathFinder.Core.dll
+  PathFinder.Adapter -> C:\Users\todor.chankov\source\WFC-pathfinder-local\pathfinder-engine\src\PathFinder.Adapter\bin\Release\net9.0\PathFinder.Adapter.dll
+  PathFinder.LocalRunner -> C:\Users\todor.chankov\source\WFC-pathfinder-local\pathfinder-engine\tools\PathFinder.LocalRunner\bin\Release\net9.0\PathFinder.LocalRunner.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:01.03

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "wfc.pf.revision-comparison-control-receipt.v1",
+  "status": "PASS",
+  "phase": "immutable",
+  "phaseIntentId": "dc52cf81-b30e-4ca7-a235-bc10a43400a5",
+  "checks": [
+    {
+      "name": "Comparison, row, intent, decision and command evidence refuse rewriting/deletion",
+      "status": "PASS",
+      "scope": "actual trigger probes; synthetic decision/intent/command exist only inside confirmed rollback; qualification sidecar not claimed"
+    }
+  ],
+  "beforeSha256": "f7d2ac0a03595c1a906e18ac1fa291864ed25f362fd797082d313a37ee0541b8",
+  "afterSha256": "f7d2ac0a03595c1a906e18ac1fa291864ed25f362fd797082d313a37ee0541b8",
+  "elapsedMilliseconds": 49,
+  "engineeringAccepted": false,
+  "productionComparisonPublicationTested": false,
+  "automaticApplyPerformed": false
+}

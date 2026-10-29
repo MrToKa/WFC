@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "pathfinder.copied-recovery.automation-stop.v1",
+  "status": "PASS",
+  "recordedAt": "2026-10-18T19:07:48Z",
+  "automationId": "pathfinder",
+  "action": "delete",
+  "observedAppResult": {
+    "isError": false,
+    "deleteStatus": "deleted",
+    "message": "Deleted automation in the app."
+  },
+  "reason": "Authorized recovery technical delivery completed. Remaining human route classification, physical shared-location mapping and per-proposal engineering review cannot be fabricated by automatic runs.",
+  "technicalCommit": "e98726e04ce032c86d22a2c791a624e2262cb82b",
+  "handoff": "docs/pathfinder/handoffs/PF-human-engineering-review.md",
+  "originalInstallUpdated": false,
+  "pushMergeDeployment": 0
+}

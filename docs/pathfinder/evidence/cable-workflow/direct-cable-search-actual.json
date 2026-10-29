@@ -1,0 +1,229 @@
+{
+  "format": "WFC-PF-DIRECT-CABLE-SEARCH",
+  "observedAt": "2026-10-21T09:28:16.6406409Z",
+  "branch": "pf-direct-cable-search-local-20261021",
+  "sourceRevision": "dbf67a2bb0380a1852f2d2098ccf4194cec7b32f",
+  "implemented": [
+    "ASCII literal candidate prefilter before SQL limit with conservative Unicode fallback",
+    "Automatic empty search portion traversal; 30-second total deadline and 51-portion bound",
+    "Visible result history, context/auth/cursor/cancellation protection",
+    "Submitted search and filter-specific empty result UI; no automatic selection/write"
+  ],
+  "regression": {
+    "status": "PASS",
+    "passed": 367,
+    "failed": 0,
+    "files": 12
+  },
+  "postgresFixture": {
+    "status": "PASS",
+    "passed": 9,
+    "failed": 0,
+    "files": 1,
+    "scope": "Actual separate PostgreSQL18 read/auth/cursor with synthetic records; engineering proof adapters mocked",
+    "retired": true
+  },
+  "checks": {
+    "clientTypes": "PASS",
+    "serverTypes": "PASS",
+    "changedFileStrictLint": "PASS",
+    "diffCheck": "PASS",
+    "independentHookReview": "PASS",
+    "productionApiBuild": "PASS",
+    "productionWebBuild": "PASS"
+  },
+  "actualCandidateQuery": {
+    "status": "PASS",
+    "scope": "Actual current project read-only candidate SQL; not browser or workflow classification acceptance",
+    "candidates": 2,
+    "exactTagMatches": 1,
+    "executionMilliseconds": 7.594
+  },
+  "computerUse": {
+    "status": "PASS",
+    "scope": "Independent synthetic no-account/API/model fixture5193; real component/hook/API parser",
+    "action": "One submitted search traversed two empty portions to CABLE-LATE-405; selected cable remained None",
+    "screenshot": "C:/Users/todor.chankov/.codex/.chatgpt-projects/g-p-6ad0a317833c8191bf8e4e8c824a1056/work/pf-popup-theme-endpoints/direct-search-browser.png",
+    "tabClosed": true,
+    "serverStopped": true,
+    "generatedFilesRemoved": true
+  },
+  "realAalborgBrowser": {
+    "status": "NOT_RUN",
+    "reason": "Existing saved origin refusal unchanged; no alternate browser/origin or native/CDP bypass"
+  },
+  "delivery": {
+    "status": "PASS",
+    "at": "2026-10-21T09:20:18.341Z",
+    "sourceRevision": "dbf67a2bb0380a1852f2d2098ccf4194cec7b32f",
+    "operatorSha256": "53cea9d670bc302e78fd3284b191d48ca7491e416d45cd3034cc65013cceac25",
+    "images": {
+      "api": "sha256:c5f12fb2685d169527da50586ee45614d6a2bbc28a6f976b309be72a2a77da44",
+      "web": "sha256:c111ff208fffc832871d3eb0f1dc64263c912886bdbf20c95ff383e4ea17a0da"
+    },
+    "containers": {
+      "api": "d63f2f0c49d589af09132564a6d92ab2e11965530618da066a6f50b9ac9cc964",
+      "web": "8f7b294313e6782b96537e52548fe0c78c6bb47e0b681acc599bf8cadafd42bf"
+    },
+    "engineIdentity": "ebb19973d052848e544e5d75e382f599498453375a6478ef84000c306836021d",
+    "postgresMinioPreserved": true,
+    "outsideIdentitiesPreserved": true,
+    "externalProcessStateChangesObserved": false,
+    "servedRuntimeSha256": "bf4c8f76e63a04d6f08c0a618238bb5a417219433df1fc7700072363340e06a8",
+    "servedAdapterSha256": "21469bc088a33d3a3fb28a5a2d9e25b8b07cada9d5f7ff3894d877c7fd8eaadc",
+    "healthStatus": 200,
+    "backupDirectory": "pathfinder-engine\\.scratch\\direct-cable-search-update-20261021\\cold-backup",
+    "realAalborgUI": "NOT_RUN_SAVED_ORIGIN_REFUSAL"
+  },
+  "backup": {
+    "status": "PASS",
+    "at": "2026-10-21T09:17:25.1Z",
+    "id": "c388f3f6-dada-4f05-9faf-6b0b9f628907",
+    "createdAt": "2026-10-21T09:15:29.388Z",
+    "profile": "cold-pg-minio-staging-pathfinder-v2",
+    "directory": "pathfinder-engine/.scratch/direct-cable-search-update-20261021/cold-backup",
+    "memberBytes": 3159728840.0,
+    "manifestSha256": "95692b4452455ef7aa1b6af57b7aa5a56e030dc76c4c5584abb50eefc6de81df",
+    "privateCompanionRetained": true,
+    "restoreThisTask": "NOT_RUN"
+  },
+  "protectedRows": {
+    "status": "PASS",
+    "at": "2026-10-21T09:21:10.552Z",
+    "scope": "Read-only hashes against fresh cold archive; no Save/calculation/Review/Apply",
+    "results": [
+      {
+        "table": "cables",
+        "status": "PASS",
+        "rows": "2153"
+      },
+      {
+        "table": "cable_types",
+        "status": "PASS",
+        "rows": "57"
+      },
+      {
+        "table": "projects",
+        "status": "PASS",
+        "rows": "5"
+      },
+      {
+        "table": "trays",
+        "status": "PASS",
+        "rows": "334"
+      },
+      {
+        "table": "model_versions",
+        "status": "PASS",
+        "rows": "5"
+      },
+      {
+        "table": "model_resources",
+        "status": "NOT_PRESENT",
+        "rows": null
+      },
+      {
+        "table": "project_model_selections",
+        "status": "PASS",
+        "rows": "5"
+      },
+      {
+        "table": "pf_locations",
+        "status": "PASS",
+        "rows": "1536"
+      },
+      {
+        "table": "pf_location_aliases",
+        "status": "PASS",
+        "rows": "1538"
+      },
+      {
+        "table": "pf_endpoint_binding_heads",
+        "status": "PASS",
+        "rows": "22"
+      },
+      {
+        "table": "pf_endpoint_binding_revisions",
+        "status": "PASS",
+        "rows": "36"
+      },
+      {
+        "table": "pf_endpoint_binding_commands",
+        "status": "PASS",
+        "rows": "53"
+      },
+      {
+        "table": "pf_jobs",
+        "status": "PASS",
+        "rows": "105"
+      },
+      {
+        "table": "pf_job_items",
+        "status": "PASS",
+        "rows": "25399"
+      },
+      {
+        "table": "pf_proposals",
+        "status": "PASS",
+        "rows": "1073"
+      }
+    ]
+  },
+  "receipts": [
+    {
+      "name": "final.json",
+      "bytes": 141620,
+      "sha256": "b362fe029cf86836accd402639a23c6dc08dce4cd7d9877c934056ddaba0b6d7"
+    },
+    {
+      "name": "sql-run-b9392248/sql.json",
+      "bytes": 4491,
+      "sha256": "89e2db7b08a1aa324a45ed71954618b51bb7ce5fcc137cb1d0177069fe8af797"
+    },
+    {
+      "name": "real-candidate-query.json",
+      "bytes": 212,
+      "sha256": "2656cf98ab14ed8034c0b853d0b3220c2030525cb0e0c428e3577b785bd25719"
+    },
+    {
+      "name": "build-api.log",
+      "bytes": 14400,
+      "sha256": "10514782981f4676580a8b555f4aee0a4e139c1d8bfdf0df54bf213aee9d701b"
+    },
+    {
+      "name": "build-web.log",
+      "bytes": 2544,
+      "sha256": "f42e3ee6e4d93dd9341333d1b051518cc906499e120703cebb7cb310754cddcf"
+    }
+  ],
+  "preservation": {
+    "original5180And5190": "UNCHANGED_BY_THIS_TASK",
+    "syncedSources": "READ_ONLY",
+    "engineIdentity": "UNCHANGED",
+    "newSchema": "NONE",
+    "saveCalculationGrantReviewApply": "NOT_ISSUED",
+    "foreignUntracked": [
+      ".pf0-work/",
+      ".pf2-work/"
+    ],
+    "historicalDeniedPaths": "UNTOUCHED",
+    "retained": [
+      "Cold archive",
+      "Private companion and receipts",
+      "Rollback images",
+      "Demonstration"
+    ],
+    "globalPrune": "NOT_ISSUED"
+  },
+  "repository": {
+    "originalMain": "96e63f13fdc2b1d30b8f8ff658dd662f25fac104",
+    "originalStatus": "CLEAN",
+    "liveRemoteMain": "96e63f13fdc2b1d30b8f8ff658dd662f25fac104",
+    "remoteRetrievedAt": "2026-10-21T09:18:55.180Z",
+    "cachedBehind": 3,
+    "cachedAhead": 136,
+    "featurePr": "NONE_RETURNED",
+    "featureCi": "NOT_RUN_UNPUBLISHED",
+    "pushPrMerge": "NOT_ISSUED"
+  }
+}

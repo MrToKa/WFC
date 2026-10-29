@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "wfc.pf.current-full-recovery-public.v1",
+  "observedAt": "2026-10-20T12:47:13.723Z",
+  "branch": "pf-aalborg-current-full-recovery-local-20261020",
+  "deliveryParent": "d5e678dc5bcb59f1a05e803af5addec1641b1035",
+  "operatorSourceRevision": "7c0c673fd1a6aa442c4989c816d760f2626797b6",
+  "runtimeSourceRevision": "c68b4434ffadc73c7c6ca38997cfe4689aca928f",
+  "engineeringAccepted": false,
+  "nativeParity": "not-performed",
+  "status": "PASS",
+  "phase": "fresh-restore1",
+  "backupId": "980bde15-08db-43f6-bdca-e90730e65410",
+  "port": 5192,
+  "tables": 126,
+  "authenticationGroups": 2,
+  "qualifiedFencingTables": 3,
+  "leaseRowsExact": true,
+  "jwtRotated": true,
+  "epochRotated": true,
+  "producerVariablesBlank": 7,
+  "disjointResources": true,
+  "sourceClosure": {
+    "status": "PASS",
+    "tables": 126,
+    "changedTables": 0,
+    "qualifiedFieldSets": 0,
+    "leaseRowsExact": true
+  },
+  "source5191Retained": true,
+  "sourceRetireInvoked": false,
+  "targetAuthorityActivated": false,
+  "rawReceipt": {
+    "filename": "full-recovery1-restore1-result.private.json",
+    "bytes": 7397,
+    "sha256": "75156fd794a1c0f153d1eb794e957778fbaf5b6fd3312bd7f455e2a473252dc7"
+  }
+}

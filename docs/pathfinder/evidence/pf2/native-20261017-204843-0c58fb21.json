@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "check": "owned-native-reference-capture",
+  "runId": "native-20261017-204843-0c58fb21",
+  "startedUtc": "2026-10-17T20:48:44.7155829Z",
+  "elapsedMilliseconds": 73043,
+  "runnerExitCode": 2,
+  "timedOut": false,
+  "captureStatus": null,
+  "sourceModel": "D:\\OneDrive - ACS\\R230039_MAN-Aalborg HPU - LVSG & UPS DB & EIC\\3D\\Aalborg_ACS_CABLETRAY_30_03_26.nwd",
+  "sourceBytes": 155285346,
+  "sourceSha256Before": "11b2739d92020ee58a52a4e793cf8fd538fb30758eb42176aba93ac7319b048a",
+  "sourceSha256After": "11b2739d92020ee58a52a4e793cf8fd538fb30758eb42176aba93ac7319b048a",
+  "copiedModel": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf2-native\\input\\11b2739d92020ee58a52a4e793cf8fd538fb30758eb42176aba93ac7319b048a.nwd",
+  "copiedSha256After": "11b2739d92020ee58a52a4e793cf8fd538fb30758eb42176aba93ac7319b048a",
+  "sourcePreserved": true,
+  "copiedModelPreserved": true,
+  "ownedRunDirectory": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf2-native\\native-20261017-204843-0c58fb21",
+  "capture": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\pf2-native\\native-20261017-204843-0c58fb21\\capture.json",
+  "captureSha256": null,
+  "nativeHost": "D:\\Programs\\Navisworks Manage 2027\\Roamer.exe",
+  "hostFileVersion": "24.0.1453.24",
+  "pluginSha256": "1ed59af57d0d721458dc70cc7ebcb5dd985939a6a74e9fc76be68fc1526ce9a8",
+  "provenanceSha256": "7ed173090eb42b83931fcb3c14147837c3fd702749011c3f80f47cb470b436e6",
+  "capturedRequests": [
+    {
+      "caseId": null,
+      "lookupSuccess": null,
+      "lengthMetersR": null,
+      "diagnostics": null,
+      "automaticCases": [
+        {
+          "caseId": null,
+          "success": null,
+          "lengthMetersR": null,
+          "fromRequiresSecondary": null,
+          "toRequiresSecondary": null,
+          "design": null
+        }
+      ]
+    }
+  ],
+  "parityClaim": false,
+  "notes": "Actual selected-network native reference only; converted pairing and true equipment identities require separate verification."
+}

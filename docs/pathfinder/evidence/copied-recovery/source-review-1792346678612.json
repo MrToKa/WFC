@@ -1,0 +1,150 @@
+{
+  "schemaVersion": "pathfinder.copied-recovery.independent-source-review.v1",
+  "status": "PASS",
+  "findingStatus": "NO_REMAINING_MATERIAL_FINDINGS",
+  "recordedAt": "2026-10-18T18:04:38.6088628Z",
+  "reviewer": "pf_runtime_map",
+  "branch": "pf-8-copied-project-recovery-local-20261018",
+  "baselineRevision": "94f83c11747e3ff6d3efb7b8064ef115b364c5df",
+  "method": "Static source review, code-path comparison and local file/hash readback. No reviewer test, PostgreSQL, Docker, HTTP, browser or lifecycle execution.",
+  "sourceCount": 15,
+  "sources": [
+    {
+      "path": "scripts/pathfinder-copied-recovery/audit.mjs",
+      "bytes": 21410,
+      "sha256": "920748cba87be8a4b658ae5228c41f1ae9b19f0c936bbc17ff7dfe585ae13588"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/audit-lib.mjs",
+      "bytes": 19001,
+      "sha256": "48d5e75e674ce76a6170c223cd333fd30b9e04efb7ea80ec6023d5045b9195af"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/audit-lib.test.mjs",
+      "bytes": 17669,
+      "sha256": "7463cbdbc7e69053efb28b42f80de1a4b11c97b6ec87fc3777fe2d4744ba2d28"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/README-audit.md",
+      "bytes": 7384,
+      "sha256": "56c3215b04776602083cb91bb6df41447ca3d77eb4ba94e3aa038212682e81e9"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/auth.mjs",
+      "bytes": 10050,
+      "sha256": "731b1e80bbfce6dc9251f94b3d9aa277e5a592615213254a37ae2ae419d972f3"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/auth-lib.mjs",
+      "bytes": 18501,
+      "sha256": "273896e9f64771c74578cd5de61936f723ed7fe24ebc387d392126fffff0d1ce"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/auth-lib.test.mjs",
+      "bytes": 16939,
+      "sha256": "bd51d2bb9ba4faecd00b7cc42ce233dc2e0ca7d247ecee53530e44f072d47930"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/README-auth.md",
+      "bytes": 5541,
+      "sha256": "c0b62bb6b228edb3c1160dde56da518fee6466e13c1249c5b584833d6269abe3"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/binding.mjs",
+      "bytes": 9303,
+      "sha256": "5e242570745973a4af42af110e8eb29665331a3323f2d7ebb9016ba286c8046f"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/binding.test.mjs",
+      "bytes": 3533,
+      "sha256": "af64d6fb645f78c24e69ce62d0a7f8018d536caf61768ed4307ea9879ee80dcb"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/drill.mjs",
+      "bytes": 19327,
+      "sha256": "775dde06b8e77e95480c10375d52f2a0a5715ae61993c2138846ed16de26352a"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/provenance.mjs",
+      "bytes": 10202,
+      "sha256": "d1e8e364669158f73c10adbd99ecaf2cb3034efcac761b19b3131e332fe51a59"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/provenance-lib.mjs",
+      "bytes": 2194,
+      "sha256": "bd2546bc979c547b3be1508f14e7e3940b1dad79563164292939c9b4d9769597"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/provenance-lib.test.mjs",
+      "bytes": 9884,
+      "sha256": "dea49243bee5c122012ce4ccb7d3e1af0a1a52b8fe084aada2e70a59d4f80bc7"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/README.md",
+      "bytes": 4788,
+      "sha256": "b453e863b7c179e6e94913c7b583bbc102b3b37e887368b542a09da8cba699fc"
+    }
+  ],
+  "controlReceipts": [
+    {
+      "path": "docs/pathfinder/evidence/copied-recovery/auth-source-controls-1792345713726.json",
+      "bytes": 3926,
+      "sha256": "d465cd9dd39e7b89fe72bc55ab3016624b60c886d741ccda2834245fb68957be"
+    },
+    {
+      "path": "docs/pathfinder/evidence/copied-recovery/audit-source-controls-20261018T175710Z.json",
+      "bytes": 5257,
+      "sha256": "8681da0cbeea531342955153efc9e5aa3bf1084b85ac41ae4fb35437b27642c5"
+    },
+    {
+      "path": "docs/pathfinder/evidence/copied-recovery/provenance-source-controls-20261018T180131Z.json",
+      "bytes": 3837,
+      "sha256": "0147405eb28f9a811fd6f42a9c454ca949afc7faac3bc902d3fc2e5771f8ba72"
+    }
+  ],
+  "ownerExecutedControls": {
+    "auth": 45,
+    "audit": 48,
+    "provenance": 55,
+    "binding": 18,
+    "combinedExecutions": 166,
+    "reviewerExecutions": 0,
+    "drillCliControls": "Pending separate source-review delta and parent gate; not included in166.",
+    "drillAndProvenanceSyntax": "Parent directly reported PASS on final775dde06/d1e8e364; not executed by reviewer."
+  },
+  "resolvedSourceFindings": [
+    "Login expiry bound now matches production604800seconds; corrected before tests, with no actual failed login claim.",
+    "Audit SQL ORDER BY repeats its key expression before COLLATE C and uses matching UTF8 ordering; no actual SQL syntax failure claimed.",
+    "Owned fresh authentication additions are pinned to safe target/backup/actor/login/session/load/project/model/expiry/cookie-secret-SHA metadata; old rows stay exact.",
+    "Drill phase-proof audit children are bound to recorded fresh target identities and backup UUID, with full difference status/hash/comparison checked.",
+    "Browser ownTabClosed is required before target qualification; source5191 is expressly refused before any retirement.",
+    "Provenance prepare now describes raw-model proof as a separate core-archive scope, rather than claiming a backup already exists."
+  ],
+  "reviewedContracts": [
+    "Exact source5191 tuple, oneshot engine mode, fixed4images, private own endpoints, labels, networks, mounts and fresh5192ownership.",
+    "Lossless27whole-table JSONB-text comparison; separate2auth-table fencing policies and3bucket metadata comparisons.",
+    "Normal own APIs prove oldBearer401 separately from oldCookie410SESSION_REVOKED using target Origin; fresh authorized descriptor and997-byte pinned resource are positive controls.",
+    "Raw capture and full diff retention precede assertions; failures retain bounded evidence and do not automatically retire.",
+    "Drill persists begun phases before mutation and rejects blind repeated backup/restore/retirement, retaining accepted owner on restore-returned.",
+    "Exactly75allowlisted host provenance files, original67event chain and exact pinned source/plan/receipt links are copied privately and later sealed to core manifest SHA/backup UUID.",
+    "Core backup has8payloads and a separate secret companion. Full model-resource rawSHA audit and PF_ROOT file SHA inventory are distinct from generic decoded inventory."
+  ],
+  "limitations": [
+    "This source review proves no actual backup, restore, auth rejection, browser or retirement result. Parent operational receipts are separate.",
+    "S3 key/size/ETag/mtime/user-metadata equality is metadata proof only; it is not raw object SHA or an atomic PostgreSQL-storage snapshot.",
+    "Post-UI business-only mode explicitly reports authentication NOT_CHECKED; prior strict restore-fence and owned-auth gates remain separate.",
+    "The provenance scanner checks enumerated patterns within a fixed known input set, not arbitrary-secret detection. Copy readback and ACL are checked; no per-copy power-loss durability claim is made.",
+    "Killing the host Node child does not prove every Docker helper stopped. Failed or timed-out core operations remain uncertain and require explicit inspection, with no automatic retry or deletion.",
+    "Forthcoming drill.test.mjs is deliberately excluded from this15-file frozen review and needs its own additive review/control evidence.",
+    "No engineering, native parity, complete-plant classification, From/To binding or user acceptance follows from these operational tools."
+  ],
+  "reviewerActions": {
+    "sourceEdits": 0,
+    "testsExecuted": 0,
+    "databaseQueries": 0,
+    "httpRequests": 0,
+    "dockerCalls": 0,
+    "runtimeMutations": 0,
+    "localReviewReceiptWritten": 1
+  }
+}

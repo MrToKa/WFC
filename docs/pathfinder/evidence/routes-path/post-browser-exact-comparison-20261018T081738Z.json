@@ -1,0 +1,54 @@
+{
+  "schemaVersion": "pathfinder.routes-path.post-browser-exact-comparison.v1",
+  "observedAtUtc": "2026-10-18T08:17:38.1814282Z",
+  "scope": "Read-only repeatable-read exact JSONB comparisons; dependency references are SQL observations, not a replacement for product authorization or human acceptance.",
+  "sourceCommit": "46152f9873764ec22537029d98bbfcc453052768",
+  "apiImage": "sha256:905dcb21138065e4b8cd028a6747fd613d080f6bb562d7901c034eb9c7ae4bce",
+  "precedingReadback": "post-browser-readback-20261018T081614Z.json",
+  "readback": {
+    "currentRegistryRevision": "10",
+    "settingsRevision": "2",
+    "all90PointsReverseExactly": true,
+    "allRouteCodesReverseExactly": true,
+    "designExactlyEqual": true,
+    "proposalDependencyReferences": [
+      {
+        "id": "f8899236-3942-4208-8fe2-be2136607f17",
+        "routingPreferences": {
+          "secondaryDistanceMeters": 2,
+          "preferVerticalApproach": true
+        },
+        "referencesCurrent": true,
+        "reviewCount": 1
+      },
+      {
+        "id": "4aa44682-26f0-41c4-878c-be8ca0c68953",
+        "routingPreferences": {
+          "secondaryDistanceMeters": 3,
+          "preferVerticalApproach": true
+        },
+        "referencesCurrent": true,
+        "reviewCount": 0
+      },
+      {
+        "id": "74739a68-99e3-402e-afc4-663e81020c63",
+        "routingPreferences": {
+          "secondaryDistanceMeters": 2,
+          "preferVerticalApproach": true
+        },
+        "referencesCurrent": false,
+        "reviewCount": 0
+      },
+      {
+        "id": "5fcfea03-6258-417c-8fc2-31ebbc695de3",
+        "routingPreferences": {
+          "secondaryDistanceMeters": 2,
+          "preferVerticalApproach": true
+        },
+        "referencesCurrent": false,
+        "reviewCount": 2
+      }
+    ],
+    "applyReceiptCount": 0
+  }
+}

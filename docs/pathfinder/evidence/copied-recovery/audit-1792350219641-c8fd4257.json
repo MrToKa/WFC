@@ -1,0 +1,517 @@
+{
+  "schemaVersion": "pathfinder.copied-recovery.audit.v1",
+  "status": "PASS",
+  "startedAt": "2026-10-18T19:03:36.621Z",
+  "projection": "lossless-postgresql-jsonb-text",
+  "storageProof": "object-key-size-etag-lastModified-user-metadata-only",
+  "atomicStorageDatabaseSnapshot": false,
+  "rawModelArtifactShaProof": "NOT_PERFORMED_BY_THIS_TOOL",
+  "engineeringAccepted": false,
+  "sourceFiles": [
+    {
+      "path": "scripts/pathfinder-copied-recovery/audit.mjs",
+      "sha256": "920748cba87be8a4b658ae5228c41f1ae9b19f0c936bbc17ff7dfe585ae13588"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/audit-lib.mjs",
+      "sha256": "48d5e75e674ce76a6170c223cd333fd30b9e04efb7ea80ec6023d5045b9195af"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/binding.mjs",
+      "sha256": "5e242570745973a4af42af110e8eb29665331a3323f2d7ebb9016ba286c8046f"
+    }
+  ],
+  "operation": "capture_and_compare",
+  "target": {
+    "kind": "source",
+    "runtime": "pathfinder-engine/.scratch/batched-capture-runtime-20261018-1600",
+    "owner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+    "project": "wfc-pathfinder-local-0cba87606e9b",
+    "port": 5191,
+    "backupId": null,
+    "apiId": "97e0ad80387c1c1e5148922356088ccbc7f77e5def61073c657b10769db09adb",
+    "apiImage": "sha256:dce12a1f5ab6311bbaf04defb7277ff0d50fee36e29e49d47234e5bf4ea405fe",
+    "pgId": "6a39e7b2d794055dccef0919cf3a99ddf60e0f3c0b5daae062cec1eb6c9b3785",
+    "pgImage": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+    "webId": "d864cc9ca17d0742277e77d4d929950ff9e5c8bd4dd940e57cb5702fe066f460",
+    "webImage": "sha256:561d51c3dd5ecb88459c17013890f9cd30089bb0760ccb9c5ff0ec3ade39f285",
+    "minioId": "56456c8675afd1458df3ae87d8df4bf31131fa1807f7468e3958f900f53a73ed",
+    "minioImage": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+    "pgAddress": "172.29.0.2",
+    "startedAt": {
+      "api": "2026-10-18T18:07:24.473417843Z",
+      "web": "2026-10-18T18:07:30.501560066Z",
+      "postgres": "2026-10-18T15:55:24.900140794Z",
+      "minio": "2026-10-18T18:07:22.256876975Z"
+    }
+  },
+  "phase": "source-final-after-browser",
+  "transport": {
+    "exitCode": 0,
+    "signal": null,
+    "stdoutBytes": 6751148,
+    "stderrBytes": 0,
+    "outputLimited": false
+  },
+  "raw": {
+    "path": "pathfinder-engine/.scratch/copied-recovery-audit-02b7d10c-42f9-4aac-ae6f-f5333eb2b9a4/snapshot.private.json",
+    "bytes": 6751148,
+    "sha256": "c7f9fd96a1153e9fa2f37d60db2f5d4c3578be1e204b211e9798bcacef8e0fa7"
+  },
+  "summary": {
+    "groups": {
+      "projects": {
+        "count": 3,
+        "sha256": "232f9237ad2d178ee761a3a6545be2900bc909c0d72af68a2d9bfd7c68ef01fe"
+      },
+      "cable_types": {
+        "count": 52,
+        "sha256": "e8de342171791d71b8e2eca13ec51f1cf76cbcda7299b96d1f47bb41efe87f03"
+      },
+      "cables": {
+        "count": 2143,
+        "sha256": "6f2313cec59a99969dbcbf9337604ba436c383c1be56e3501aaf18c30ed994d1"
+      },
+      "project_model_selections": {
+        "count": 3,
+        "sha256": "4ff827df7dc4aea7c507819993c18f578b11a1dff1fbc3b2339f8dca375bc52a"
+      },
+      "model_package_identities": {
+        "count": 1,
+        "sha256": "d15ea4b82935b40b875a937a997c0fefe7660b8d3bd0b4895f8e51290956a023"
+      },
+      "model_validation_reports": {
+        "count": 3,
+        "sha256": "29cca03333a7ee4746639fd033c31ac53188a6ede16460ee9784cce792a79761"
+      },
+      "model_import_jobs": {
+        "count": 3,
+        "sha256": "a410dbe7d2e5ee6e52f348150df6e482c09f7c54b4c28431462cd18e8eccab60"
+      },
+      "model_versions": {
+        "count": 3,
+        "sha256": "1a883308b254c07dc7b5159b0368538da0cf51f3e280e2d71470d424e3ea9e6d"
+      },
+      "model_content_reservations": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "model_package_aliases": {
+        "count": 3,
+        "sha256": "fd6deaba543949d298239a6fc18dda726668068abfe534df012a88eaacdde86a"
+      },
+      "model_storage_ownership": {
+        "count": 3,
+        "sha256": "71062f5e5c159263e4eac096c8e305c30e78801eaed70d0c29e2b16d363420d8"
+      },
+      "pf_project_state": {
+        "count": 3,
+        "sha256": "4bb800ef58647ee02435514ec83fdf1d0313d0f1437103ae9632a1f2acd3d96c"
+      },
+      "pf_locations": {
+        "count": 1533,
+        "sha256": "681aa4ac8f25176e67997768c07697172b78d15d2a3919bb79ba011e013ab3ff"
+      },
+      "pf_location_aliases": {
+        "count": 1534,
+        "sha256": "124392ce8bb2b4500de3e6cb94e535d72b54571bda70beee5b575814e28db00c"
+      },
+      "pf_artifacts": {
+        "count": 7,
+        "sha256": "b40d51b8111b86699e4a127c5a168afe7024260ecd8ca5213e81c9a01f05c495"
+      },
+      "pf_model_objects": {
+        "count": 146,
+        "sha256": "a3aac6dc1d98ef71f77d3c341a4c12222d54d1d14fd8fa5c1ea4664217187985"
+      },
+      "pf_location_bindings": {
+        "count": 6,
+        "sha256": "ec25ae19f1b5143b4d34d38f62885f7e076a5d72230984fef92ec87f0ae696f6"
+      },
+      "pf_location_matches": {
+        "count": 1528,
+        "sha256": "80a1db6906c501372c5882fe29d302b4f1f5a6da2f7e6aef84f48e2c7332e71b"
+      },
+      "pf_location_events": {
+        "count": 1634,
+        "sha256": "88a1b8c28a9a5e0d64b4b8c25adca8eda530a34091fb94e4566e0650bff26b5c"
+      },
+      "pf_jobs": {
+        "count": 44,
+        "sha256": "43a32d7f2593cdaf6fe0f163adebb24a32baf7eb4c2c207ef27c4503749ef5a1"
+      },
+      "pf_job_items": {
+        "count": 52,
+        "sha256": "9cd6bd0fbae1d49097eb7046d588d46df0266378c434009180a83ca1e7f5c8b5"
+      },
+      "pf_proposals": {
+        "count": 47,
+        "sha256": "8a723faea54c4238026d2162a1e9581bdbb1c1b0902cce84e0f157d2eb01794f"
+      },
+      "pf_lookup_results": {
+        "count": 14,
+        "sha256": "5492455b2a8d16fb501d712a659cffc9448ffa92c893669183e6fc84652396e2"
+      },
+      "pf_synthetic_projects": {
+        "count": 1,
+        "sha256": "1a27c0ce92d03c850031544a20f5107af71e67e6d9a8f6d06e9321d5fbd383bb"
+      },
+      "pf_synthetic_proofs": {
+        "count": 1,
+        "sha256": "c7b7f41a6feaef635e2cc4d36b2da229920bf466c9d2926ff52f54c8510d860f"
+      },
+      "pf_reviews": {
+        "count": 6,
+        "sha256": "afe947259d1e4803399efbc08bd2f9b14b37614027544e00c5b08342575311f9"
+      },
+      "pf_apply_receipts": {
+        "count": 1,
+        "sha256": "6a1c5d0d628599a26faa473d31b7cc3dd8efa67a242eef3726d68b266e4e85b0"
+      }
+    },
+    "auth": {
+      "viewer_login_bindings": {
+        "count": 19,
+        "sha256": "28a847ed2ca573d40e8b972469c369cf6ddae8ca2873b3a611086d468e6a6ce6"
+      },
+      "viewer_resource_sessions": {
+        "count": 34,
+        "sha256": "75cb2f5d81a56eb6be21b5c4d132eb8c4daf30b2b24d248985aa772473601545"
+      }
+    },
+    "storage": {
+      "pf-local-models": {
+        "count": 1026,
+        "sha256": "ad3d92003405f1eb7e4d1eabf71bb78903143ebcb7ee9b084b366f3b42642bbe"
+      },
+      "pf-local-project-files": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "pf-local-template-files": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      }
+    },
+    "precisionControl": {
+      "numericDecodedEqual": true,
+      "bigintDecodedEqual": true,
+      "numericTextA": "1.00000000000000001",
+      "numericTextB": "1.00000000000000002",
+      "bigintTextA": "9007199254740992",
+      "bigintTextB": "9007199254740993"
+    },
+    "quiescence": {
+      "before": {
+        "activePathfinderJobs": "0",
+        "activeModelImports": "0"
+      },
+      "after": {
+        "activePathfinderJobs": "0",
+        "activeModelImports": "0"
+      }
+    },
+    "comparison": {
+      "status": "PASS",
+      "authentication": "NOT_CHECKED",
+      "failures": [],
+      "groups": {
+        "projects": {
+          "before": 3,
+          "after": 3,
+          "unchanged": 3,
+          "missing": 0,
+          "added": 0,
+          "changed": 0
+        },
+        "cable_types": {
+          "before": 52,
+          "after": 52,
+          "unchanged": 52,
+          "missing": 0,
+          "added": 0,
+          "changed": 0
+        },
+        "cables": {
+          "before": 2143,
+          "after": 2143,
+          "unchanged": 2143,
+          "missing": 0,
+          "added": 0,
+          "changed": 0
+        },
+        "project_model_selections": {
+          "before": 3,
+          "after": 3,
+          "unchanged": 3,
+          "missing": 0,
+          "added": 0,
+          "changed": 0
+        },
+        "model_package_identities": {
+          "before": 1,
+          "after": 1,
+          "unchanged": 1,
+          "missing": 0,
+          "added": 0,
+          "changed": 0
+        },
+        "model_validation_reports": {
+          "before": 3,
+          "after": 3,
+          "unchanged": 3,
+          "missing": 0,
+          "added": 0,
+          "changed": 0
+        },
+        "model_import_jobs": {
+          "before": 3,
+          "after": 3,
+          "unchanged": 3,
+          "missing": 0,
+          "added": 0,
+          "changed": 0
+        },
+        "model_versions": {
+          "before": 3,
+          "after": 3,
+          "unchanged": 3,
+          "missing": 0,
+          "added": 0,
+          "changed": 0
+        },
+        "model_content_reservations": {
+          "before": 0,
+          "after": 0,
+          "unchanged": 0,
+          "missing": 0,
+          "added": 0,
+          "changed": 0
+        },
+        "model_package_aliases": {
+          "before": 3,
+          "after": 3,
+          "unchanged": 3,
+          "missing": 0,
+          "added": 0,
+          "changed": 0
+        },
+        "model_storage_ownership": {
+          "before": 3,
+          "after": 3,
+          "unchanged": 3,
+          "missing": 0,
+          "added": 0,
+          "changed": 0
+        },
+        "pf_project_state": {
+          "before": 3,
+          "after": 3,
+          "unchanged": 3,
+          "missing": 0,
+          "added": 0,
+          "changed": 0
+        },
+        "pf_locations": {
+          "before": 1533,
+          "after": 1533,
+          "unchanged": 1533,
+          "missing": 0,
+          "added": 0,
+          "changed": 0
+        },
+        "pf_location_aliases": {
+          "before": 1534,
+          "after": 1534,
+          "unchanged": 1534,
+          "missing": 0,
+          "added": 0,
+          "changed": 0
+        },
+        "pf_artifacts": {
+          "before": 7,
+          "after": 7,
+          "unchanged": 7,
+          "missing": 0,
+          "added": 0,
+          "changed": 0
+        },
+        "pf_model_objects": {
+          "before": 146,
+          "after": 146,
+          "unchanged": 146,
+          "missing": 0,
+          "added": 0,
+          "changed": 0
+        },
+        "pf_location_bindings": {
+          "before": 6,
+          "after": 6,
+          "unchanged": 6,
+          "missing": 0,
+          "added": 0,
+          "changed": 0
+        },
+        "pf_location_matches": {
+          "before": 1528,
+          "after": 1528,
+          "unchanged": 1528,
+          "missing": 0,
+          "added": 0,
+          "changed": 0
+        },
+        "pf_location_events": {
+          "before": 1634,
+          "after": 1634,
+          "unchanged": 1634,
+          "missing": 0,
+          "added": 0,
+          "changed": 0
+        },
+        "pf_jobs": {
+          "before": 44,
+          "after": 44,
+          "unchanged": 44,
+          "missing": 0,
+          "added": 0,
+          "changed": 0
+        },
+        "pf_job_items": {
+          "before": 52,
+          "after": 52,
+          "unchanged": 52,
+          "missing": 0,
+          "added": 0,
+          "changed": 0
+        },
+        "pf_proposals": {
+          "before": 47,
+          "after": 47,
+          "unchanged": 47,
+          "missing": 0,
+          "added": 0,
+          "changed": 0
+        },
+        "pf_lookup_results": {
+          "before": 14,
+          "after": 14,
+          "unchanged": 14,
+          "missing": 0,
+          "added": 0,
+          "changed": 0
+        },
+        "pf_synthetic_projects": {
+          "before": 1,
+          "after": 1,
+          "unchanged": 1,
+          "missing": 0,
+          "added": 0,
+          "changed": 0
+        },
+        "pf_synthetic_proofs": {
+          "before": 1,
+          "after": 1,
+          "unchanged": 1,
+          "missing": 0,
+          "added": 0,
+          "changed": 0
+        },
+        "pf_reviews": {
+          "before": 6,
+          "after": 6,
+          "unchanged": 6,
+          "missing": 0,
+          "added": 0,
+          "changed": 0
+        },
+        "pf_apply_receipts": {
+          "before": 1,
+          "after": 1,
+          "unchanged": 1,
+          "missing": 0,
+          "added": 0,
+          "changed": 0
+        }
+      },
+      "auth": {
+        "viewer_login_bindings": {
+          "before": 19,
+          "after": 19,
+          "unchanged": 19,
+          "missing": 0,
+          "added": 0,
+          "changed": 0
+        },
+        "viewer_resource_sessions": {
+          "before": 33,
+          "after": 34,
+          "unchanged": 33,
+          "missing": 0,
+          "added": 1,
+          "changed": 0
+        }
+      },
+      "storage": {
+        "pf-local-models": {
+          "before": 1026,
+          "after": 1026,
+          "unchanged": 1026,
+          "missing": 0,
+          "added": 0,
+          "changed": 0
+        },
+        "pf-local-project-files": {
+          "before": 0,
+          "after": 0,
+          "unchanged": 0,
+          "missing": 0,
+          "added": 0,
+          "changed": 0
+        },
+        "pf-local-template-files": {
+          "before": 0,
+          "after": 0,
+          "unchanged": 0,
+          "missing": 0,
+          "added": 0,
+          "changed": 0
+        }
+      }
+    }
+  },
+  "baseline": {
+    "path": "docs/pathfinder/evidence/copied-recovery/audit-1792346766950-f2483ab0.json",
+    "sha256": "e6f3b8d536a084864b5a68f6a407bd0f839d149f0ec27e32b6e1a61b44564629",
+    "raw": {
+      "path": "pathfinder-engine/.scratch/copied-recovery-audit-2ee57ccc-cdac-4d00-bb0e-3d1b7dad59b1/snapshot.private.json",
+      "bytes": 6749751,
+      "sha256": "6f85f3e8e718957dc72cec64bf6988f4a6cf27e8508c6b5f342ecbf57159b2e3"
+    }
+  },
+  "comparisonInput": {
+    "path": "pathfinder-engine/.scratch/copied-recovery-audit-02b7d10c-42f9-4aac-ae6f-f5333eb2b9a4/comparison-input.private.json",
+    "bytes": 749,
+    "sha256": "44bea0af8164445e4eac8e54337a4eb9c45302ccdffa50439b7671541a3a519c"
+  },
+  "difference": {
+    "path": "pathfinder-engine/.scratch/copied-recovery-audit-02b7d10c-42f9-4aac-ae6f-f5333eb2b9a4/difference.private.json",
+    "bytes": 6687,
+    "sha256": "58fc03d1ec2f79584e9b54a5ab744badf385ca930eb99f98f6798b70fea5328c"
+  },
+  "finishedAt": "2026-10-18T19:03:39.639Z",
+  "finalSourceFiles": [
+    {
+      "path": "scripts/pathfinder-copied-recovery/audit.mjs",
+      "sha256": "920748cba87be8a4b658ae5228c41f1ae9b19f0c936bbc17ff7dfe585ae13588"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/audit-lib.mjs",
+      "sha256": "48d5e75e674ce76a6170c223cd333fd30b9e04efb7ea80ec6023d5045b9195af"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/binding.mjs",
+      "sha256": "5e242570745973a4af42af110e8eb29665331a3323f2d7ebb9016ba286c8046f"
+    }
+  ],
+  "privateDirectory": "pathfinder-engine/.scratch/copied-recovery-audit-02b7d10c-42f9-4aac-ae6f-f5333eb2b9a4"
+}

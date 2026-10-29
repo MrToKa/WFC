@@ -1,0 +1,48 @@
+{
+  "schemaVersion": "wfc.pf.u6-contract-checks.v1",
+  "observedAt": "2026-10-20T19:36:48Z",
+  "branch": "pf-u6-direct-secondary-local-20261020",
+  "baseRevision": "85bfc2bd67652bacf4e289ab6883cb3319eb3913",
+  "scope": "Synthetic source contracts and mocked browser API only; uncommitted U6 working source at observation.",
+  "checks": [
+    {
+      "command": "npx vitest run shared/pathfinderDirectSecondary.test.ts shared/pathfinderLengthLedger.test.ts server/pathfinder/lengthLedger.test.ts server/pathfinder/jobContracts.test.ts src/api/pathfinder.test.ts --maxWorkers=1 --no-file-parallelism",
+      "status": "PASS",
+      "passed": 81,
+      "failed": 0,
+      "files": [
+        { "path": "shared/pathfinderDirectSecondary.test.ts", "passed": 20 },
+        { "path": "shared/pathfinderLengthLedger.test.ts", "passed": 17 },
+        { "path": "server/pathfinder/lengthLedger.test.ts", "passed": 13 },
+        { "path": "server/pathfinder/jobContracts.test.ts", "passed": 15 },
+        { "path": "src/api/pathfinder.test.ts", "passed": 16 }
+      ]
+    },
+    {
+      "command": "npx eslint shared/pathfinderDirectSecondary.ts shared/pathfinderDirectSecondary.test.ts shared/pathfinderLengthLedger.ts shared/pathfinderLengthLedger.test.ts server/pathfinder/lengthLedger.ts server/pathfinder/lengthLedger.test.ts server/pathfinder/jobContracts.ts server/pathfinder/jobContracts.test.ts src/api/pathfinder.ts src/api/pathfinder.test.ts --max-warnings=0",
+      "status": "PASS",
+      "detail": "Rerun after final v2 status literals and explicit v2 test-fixture status narrowing; all ten owned files passed."
+    },
+    {
+      "command": "npx tsc --noEmit",
+      "status": "PASS",
+      "limitation": "Ran before the final status-literal narrowing; root aggregate types are the final check."
+    },
+    {
+      "command": "npx tsc --noEmit -p server/tsconfig.json",
+      "status": "FAIL",
+      "detail": "One existing worker-grant-recovery.test.ts fixture helper returned the newly widened LengthLedger union for a v1 response. Reported to root for a legacyLengthLedgerSchema fixture narrowing; no production parser weakening requested. Root final check pending."
+    },
+    {
+      "command": "git diff --check -- shared/pathfinderDirectSecondary.ts shared/pathfinderDirectSecondary.test.ts shared/pathfinderLengthLedger.ts shared/pathfinderLengthLedger.test.ts server/pathfinder/lengthLedger.ts server/pathfinder/lengthLedger.test.ts server/pathfinder/jobContracts.ts server/pathfinder/jobContracts.test.ts src/api/pathfinder.ts src/api/pathfinder.test.ts",
+      "status": "PASS",
+      "detail": "Git emitted only configured LF/CRLF normalization warnings."
+    }
+  ],
+  "limitations": [
+    "No real runtime, SQL, HTTP, Docker or browser execution by this agent.",
+    "No native parity or human engineering acceptance claimed.",
+    "C# remains the sole authoritative routing and design calculator. The TypeScript contracts validate evidence and do not reproduce its engineering decimal formula.",
+    "True nearest category-eligible geometry and current dependency ownership are enforced by the C# implementation and server strategy boundary; a DTO alone does not prove collision clearance."
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "status": "PASS",
+  "backupId": "ed1b2fa8-f832-45df-b5de-8eec4fe693ff",
+  "members": 8,
+  "images": 4,
+  "databaseDump": {
+    "status": "PASS",
+    "method": "pg_restore-list-mounted-file",
+    "tocBytes": 55175,
+    "tocSha256": "b85259bd7d6544bc0526e4cb7b3180ad5db4b089bb8cee239a5f7b2f636e24b7"
+  },
+  "modelAudit": {
+    "status": "PASS",
+    "versions": 4,
+    "resources": 1368,
+    "bytes": 1756031212,
+    "algorithm": "SHA-256",
+    "scope": "Every raw resource of all4ready models; all successful handles closed"
+  },
+  "fullRestore": "NOT_RUN",
+  "protectedContainers": 18,
+  "port": 5191,
+  "sourceRevision": "3d78bc245e15957c1607c4ebc2dd95a31a44f8b4 plus coordinated R4 source changes; live runtime R3candidate6",
+  "retainedPrivateCompanionOutsideArchive": true,
+  "manifestSha256": "9a21aa9a2d669b83932aa2b5926977e662efa36768dcd7b802cc60a8c2e4f121"
+}

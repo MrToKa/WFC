@@ -32,6 +32,7 @@ import { CABLE_LIST_COLUMNS, type CableListColumnId } from '@/api/cableListPrefe
 import { useAuth } from '@/context/AuthContext';
 import { useCableListColumns } from './hooks/useCableListColumns';
 import { CableListColumnsDialog } from './CableListColumnsDialog';
+import { CableAutoCalculatedLength } from '@/components/pathfinder/CableAutoCalculatedLength';
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 import { CABLE_LIST_PAGE_SIZE_OPTIONS, type CableFormState } from '../ProjectDetails.forms';
@@ -284,7 +285,10 @@ export const CableListTab = ({
                   <th
                     key={id}
                     className={
-                      id === 'designLength' || id === 'diameterMm' || id === 'weightKgPerM'
+                      id === 'designLength' ||
+                      id === 'autoCalculatedLength' ||
+                      id === 'diameterMm' ||
+                      id === 'weightKgPerM'
                         ? `${styles.tableHeadCell} ${styles.numericCell}`
                         : styles.tableHeadCell
                     }
@@ -472,6 +476,11 @@ export const CableListTab = ({
                         ) : (
                           (cable.delivery ?? '-')
                         )}
+                      </td>
+                    ) : null}
+                    {visibleColumns.has('autoCalculatedLength') ? (
+                      <td className={`${styles.tableCell} ${styles.numericCell}`}>
+                        <CableAutoCalculatedLength value={cable} compact />
                       </td>
                     ) : null}
                     {visibleColumns.has('designLength') ? (

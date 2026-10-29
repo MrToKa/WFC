@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "pathfinder.drawing-positioning.backup-inspection.v1",
+  "status": "FAIL",
+  "code": "DOCKER_HELPER_METHOD_MISMATCH",
+  "scope": "Operator attempted an unavailable listContainers helper after successful owned-runtime validation. The documented helper exposes containers/inspect instead.",
+  "backupStarted": false,
+  "runtimeMutations": false,
+  "privateBackupIntentWritten": false,
+  "correction": "Use the inspected helper API for the read-only inventory, then start one explicit owned backup."
+}

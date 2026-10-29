@@ -1,0 +1,125 @@
+{
+  "schemaVersion": "pathfinder.current-inputs.project-controls.v1",
+  "recordedAt": "2026-10-18T15:28:16.829Z",
+  "status": "PASS",
+  "source": [
+    {
+      "path": "scripts/pathfinder-current-inputs/source-copy.mjs",
+      "sha256": "beae476a6259c964aadd3f73795b74b33095ced3992dca4b6c2faba640cd2fc3"
+    },
+    {
+      "path": "scripts/pathfinder-current-inputs/source-lib.mjs",
+      "sha256": "defe0f36d1e0c7265067104fabadbb4b2ed50dc797b9bac0f98ecade5c7cd158"
+    },
+    {
+      "path": "scripts/pathfinder-current-inputs/source-lib.test.mjs",
+      "sha256": "6635ff8a8385c558d2036d7f85e06da2c07b31a4513f59d849341d533158193a"
+    },
+    {
+      "path": "scripts/pathfinder-current-inputs/README-source.md",
+      "sha256": "31fc47acba71663bb3b716b4fd7c8d7a9e0c5c1d5d27a625a6b531721ff58e86"
+    }
+  ],
+  "sourceSetSha256": "6c4a7ba80a002e2830cccc3dd7e4f45e9014a760286e3ff4ac8449a359cb6a48",
+  "checks": [
+    {
+      "command": [
+        "node",
+        "--check",
+        "scripts/pathfinder-current-inputs/source-lib.mjs"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "error": null,
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": {
+        "path": "pathfinder-engine/.scratch/current-inputs-project-controls-dbf5196b-3ea5-4b49-b89a-a503248f0a36/command-0.tap",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tests": null,
+      "pass": null,
+      "fail": null
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "scripts/pathfinder-current-inputs/source-copy.mjs"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "error": null,
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": {
+        "path": "pathfinder-engine/.scratch/current-inputs-project-controls-dbf5196b-3ea5-4b49-b89a-a503248f0a36/command-1.tap",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tests": null,
+      "pass": null,
+      "fail": null
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "scripts/pathfinder-current-inputs/source-lib.test.mjs"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "error": null,
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": {
+        "path": "pathfinder-engine/.scratch/current-inputs-project-controls-dbf5196b-3ea5-4b49-b89a-a503248f0a36/command-2.tap",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tests": null,
+      "pass": null,
+      "fail": null
+    },
+    {
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=tap",
+        "scripts/pathfinder-current-inputs/source-lib.test.mjs"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "error": null,
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": {
+        "path": "pathfinder-engine/.scratch/current-inputs-project-controls-dbf5196b-3ea5-4b49-b89a-a503248f0a36/command-3.tap",
+        "bytes": 8449,
+        "sha256": "2196cd818aa6b8a6949ef1295548ae9f9bf61b3a835ba5b7d6752c050f1647d0"
+      },
+      "tests": 41,
+      "pass": 41,
+      "fail": 0
+    }
+  ],
+  "originalDatabaseQueriesByThisAgent": 0,
+  "runtimeOperationsByThisAgent": 0,
+  "diagnostic": "Project-identity mode passes exact canonical SQL/RO guard then queries only id/project_number/name for fixed UUID and fixed Aalborg/HPU search. LIMIT11 refuses overflow after saving raw. Names remain private; no auto-choice or copyguard relaxation.",
+  "failureEvidence": "Only already-selected project identity or model identity/resource references are retained in private guard-error envelopes; wrapper remains code-only, no added queries.",
+  "preservedFailures": [
+    {
+      "path": "docs/pathfinder/evidence/current-inputs/source-copy-20261018T1515Z.json",
+      "sha256": "4fbe4c0c88c8589d9bc090a88718b85f62aad06ed183f529f0ff7cd730f030fd"
+    },
+    {
+      "path": "docs/pathfinder/evidence/current-inputs/source-copy-corrected-20261018T1524Z.json",
+      "sha256": "e11c6a05da766e782593fa48003d9f523ed46d6461adf6a7708a1ef773fe1506"
+    }
+  ],
+  "limitations": [
+    "Actual project diagnostic and corrected copy remain NOT_RUN by writer; root is sole original SQL executor.",
+    "Controls use fake Client plus bounded no-DB watchdog children."
+  ]
+}

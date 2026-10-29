@@ -1,0 +1,68 @@
+{
+  "schemaVersion": "pathfinder.copied-recovery.binding-preflight.v1",
+  "recordedAt": "2026-10-18T17:51:55.255Z",
+  "status": "PASS",
+  "resources": {
+    "containers": [
+      {
+        "role": "api",
+        "id": "97e0ad80387c1c1e5148922356088ccbc7f77e5def61073c657b10769db09adb",
+        "image": "sha256:dce12a1f5ab6311bbaf04defb7277ff0d50fee36e29e49d47234e5bf4ea405fe",
+        "name": "wfc-pathfinder-local-0cba87606e9b-api-1",
+        "running": true,
+        "startedAt": "2026-10-18T16:37:14.241777817Z"
+      },
+      {
+        "role": "web",
+        "id": "d864cc9ca17d0742277e77d4d929950ff9e5c8bd4dd940e57cb5702fe066f460",
+        "image": "sha256:561d51c3dd5ecb88459c17013890f9cd30089bb0760ccb9c5ff0ec3ade39f285",
+        "name": "wfc-pathfinder-local-0cba87606e9b-web-1",
+        "running": true,
+        "startedAt": "2026-10-18T16:37:20.024456112Z"
+      },
+      {
+        "role": "postgres",
+        "id": "6a39e7b2d794055dccef0919cf3a99ddf60e0f3c0b5daae062cec1eb6c9b3785",
+        "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+        "name": "wfc-pathfinder-local-0cba87606e9b-postgres-1",
+        "running": true,
+        "startedAt": "2026-10-18T15:55:24.900140794Z"
+      },
+      {
+        "role": "minio",
+        "id": "56456c8675afd1458df3ae87d8df4bf31131fa1807f7468e3958f900f53a73ed",
+        "image": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+        "name": "wfc-pathfinder-local-0cba87606e9b-minio-1",
+        "running": true,
+        "startedAt": "2026-10-18T15:55:24.907837971Z"
+      },
+      {
+        "role": "storage-ready",
+        "id": "e26509d2b47f7a62ccc51196c7fec5fdb06c0df649cd000d3306a85dac563e8c",
+        "image": "sha256:dce12a1f5ab6311bbaf04defb7277ff0d50fee36e29e49d47234e5bf4ea405fe",
+        "name": "wfc-pathfinder-local-0cba87606e9b-storage-ready-1",
+        "running": false,
+        "startedAt": "2026-10-18T16:37:13.558001521Z"
+      }
+    ],
+    "volumes": [
+      "wfc-pathfinder-local-0cba87606e9b_postgres",
+      "wfc-pathfinder-local-0cba87606e9b_minio",
+      "wfc-pathfinder-local-0cba87606e9b_staging",
+      "wfc-pathfinder-local-0cba87606e9b_pathfinder"
+    ],
+    "networks": [
+      {
+        "id": "3ab7652221239fe0a4c35f64be8a706aa6182633775d7aa0627fa1b54968e57d",
+        "name": "wfc-pathfinder-local-0cba87606e9b_backend"
+      },
+      {
+        "id": "ef7ba0d6199afe8c1c361d27acc12f52fbdeca7e575af51ac9e63054cf8301d1",
+        "name": "wfc-pathfinder-local-0cba87606e9b_front"
+      }
+    ]
+  },
+  "pgAddress": "172.29.0.2",
+  "owner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+  "sourceSha256": "5e242570745973a4af42af110e8eb29665331a3323f2d7ebb9016ba286c8046f"
+}

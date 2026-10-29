@@ -1,0 +1,155 @@
+{
+  "schemaVersion": "wfc.pf.u6a-build-closure.v1",
+  "at": "2026-10-20T20:26:51.594Z",
+  "status": "PASS",
+  "projectionCount": 32,
+  "identity": {
+    "schemaVersion": "wfc.pf.engine-identity.v1",
+    "version": "45c24bf5f433f13e102600b36f20327c77961d0a",
+    "runnerSha256": "4c92e2d2c197601871ce612adc868cc777e86e794fdb9eccaf287a38d46b4851",
+    "modelModuleSha256": "fcc8c7571863fa8fa02b2392db42d746183766d26afda7933aac9baa374beeb8",
+    "coreModuleSha256": "e8148beafea5c5257251b7c8d9c7ff59ea8d12e02bfda466a0f58e8d46d92274",
+    "adapterModuleSha256": "eda7b0902da6391b964934d5514967dc8ecdf6d1b8e702c36d4abb2c1ebe529e",
+    "derivationSha256": "da5027d8b80005b0e26c3acb9e5171644469dd4c9953feab2ac6ed2647d54840",
+    "policyVersions": {
+      "numeric": "wfc.pf.binary64-decimal-design.v1",
+      "routing": "wfc.pf.core-routing.v1",
+      "fitting": "pf2.rules.v1",
+      "projection": "wfc.pf.model-runner-v1-projection.v1",
+      "categoryMapping": "wfc-mto-v1",
+      "directSecondary": "nearest-eligible-tray-or.v1"
+    },
+    "contentSha256": "5a0c2e0b98729595a4255d2517d21f504de92c5cec98de392ccf71da9c1741c7"
+  },
+  "projections": [
+    {
+      "name": "./calculationEngineIdentity.js",
+      "sha256": "eae522c55f4c79da5ad89d2072b025779a1466f3c070ca680aedbdc76470f92d"
+    },
+    {
+      "name": "./dependencies.js",
+      "sha256": "505750763c78b337102a20a089946ab93b18e6a2069f8c79ca59397f8dbc455f"
+    },
+    {
+      "name": "./dependencyBatch.js",
+      "sha256": "bc49d6cb595343655042322b7f40c47d5f660e2c2a5a410dbe56d4848b33fa37"
+    },
+    {
+      "name": "./settings.js",
+      "sha256": "8ba6b95353d3d27c7c83dd0fdb1c0bbf33a2abaa9e42e0677b75ece567d4aaca"
+    },
+    {
+      "name": "./jobContracts.js",
+      "sha256": "024e46eff9a0398710aee81f902184aa0af1af5d2c49d95e698f5f8a5b074677"
+    },
+    {
+      "name": "./endpointCalculationProvenance.js",
+      "sha256": "cf4d80442d279ff96aca83b49c297b755d95685207fa31c5dd0ae2f5d8a448e3"
+    },
+    {
+      "name": "./comparisonCalculationProvenance.js",
+      "sha256": "21e3b6f1d0a261bdff4cff0e3ec61c8f9ac51a54c223c3b7fc2b1f6ac8273703"
+    },
+    {
+      "name": "./routingScope.js",
+      "sha256": "0f4551bd38d3e80c06eb97c4d8a4cb9d38a4a8b09cbf7c4d1a9ad14fbdcb39a2"
+    },
+    {
+      "name": "./worker.js",
+      "sha256": "683cf75436dd46d2dfa5489780469c26d404c2c15c267584ac2d7eb969d08b6c"
+    },
+    {
+      "name": "./previews.js",
+      "sha256": "7169f528f21a36f799c442e3cdd10b99492a72ad5c40e4409cd025c26fc8e6cb"
+    },
+    {
+      "name": "./engineSession.js",
+      "sha256": "b295d7900de87714ef8a16409842ea6f5f8f2da5218615edc43a2d9573d8a2c7"
+    },
+    {
+      "name": "./lengthLedger.js",
+      "sha256": "7ef4eb27e04ca0fcf282c7115d409c9335e993c4a03a856c9df5ef6844a7b1e8"
+    },
+    {
+      "name": "./automaticEndpointCandidates.js",
+      "sha256": "59b090be8629ceeef476d9bb881507503bc58c1461090c201014fd698aa8b8d2"
+    },
+    {
+      "name": "./matching.js",
+      "sha256": "f92fed03af6c42ccf92c264ec325d08ba6e5a36237813e7249e77540a89fca0e"
+    },
+    {
+      "name": "./policyJson.js",
+      "sha256": "29e1de6eb7f7d1a41b532ec05fbaa34f80c242bb2dbf7a5118996153a84642b2"
+    },
+    {
+      "name": "./directSecondaryStrategy.js",
+      "sha256": "6b2e661afaf6bceec77d18ebf4a86d13725a2725cd7ade62dd52c29605823d8f"
+    },
+    {
+      "name": "./contracts.js",
+      "sha256": "0db1c5e4693a84fb7c415a3b8f1c39156f1af8f301f81db7c4931681c5ccd2bb"
+    },
+    {
+      "name": "./preparationUnionTask.js",
+      "sha256": "9f97bb62aa591bf16d1e750588693f0e56899891353a158ec19b105fb0666bb1"
+    },
+    {
+      "name": "../../shared/pathfinderEngineIdentity.js",
+      "sha256": "2c5a70054c6268294bad376fe9705cd3485844062d58940738794cc78e607e98"
+    },
+    {
+      "name": "../../shared/pathfinderLengthLedger.js",
+      "sha256": "b52fb2ff27b47b40d87033d02b59c4606a4b324f4edddc82445b32b08fcd163a"
+    },
+    {
+      "name": "../../shared/pathfinderDirectSecondary.js",
+      "sha256": "be3359e98130ce14f7e39751732733acc659963130e256421fb05437c476eebb"
+    },
+    {
+      "name": "../../shared/pathfinderPurposePolicy.js",
+      "sha256": "4c914ac4c570bdc718e4fbf1940592432af8a7579023e72b9f9adfbf808a52e0"
+    },
+    {
+      "name": "../../shared/pathfinderPreparation.js",
+      "sha256": "d20ea34ff6e55f7720e90ef245dcadf79c6f6e990f0403a7704ce09f46905484"
+    },
+    {
+      "name": "../../shared/pathfinderCapacity.js",
+      "sha256": "486c95ea3f969eff69d8a54801becd824082ddac1674c65a574504799030c8bf"
+    },
+    {
+      "name": "../../shared/pathfinderGeometryTrace.js",
+      "sha256": "7426a2a01cbced43691c52914da2d9060600c76b5d81c20a42301347809c5b93"
+    },
+    {
+      "name": "../../shared/pathfinderEndpointBindings.js",
+      "sha256": "59820568d48f3c8a2f904933250e4e047c29a74ed20b535b5ab19761d64c4f9a"
+    },
+    {
+      "name": "../../shared/preparationMerge.js",
+      "sha256": "281b37f655afbdf87c821c9c1eb5d9c900b316549e2aed6324f148fdbff75f5b"
+    },
+    {
+      "name": "../../viewer-runtime/equipment-names.mjs",
+      "sha256": "dbd24d32d0f1637de9187fa3c404bd75af6565d9588e47367cfb7f59d4d69bf1"
+    },
+    {
+      "name": "../../viewer-runtime/display-visibility.mjs",
+      "sha256": "20aafe27e07f3a132cbf4af10e29b0a2f53115f4e164ecd3eb92c5d49626a506"
+    },
+    {
+      "name": "../../viewer-runtime/preparation-input.mjs",
+      "sha256": "35af2fdab9f64d7741342acc3df18162cab5f5fedbff8bac15f3706b1e553668"
+    },
+    {
+      "name": "../../viewer-runtime/pathfinder.mjs",
+      "sha256": "bf4c8f76e63a04d6f08c0a618238bb5a417219433df1fc7700072363340e06a8"
+    },
+    {
+      "name": "../../viewer-runtime/model-capture.mjs",
+      "sha256": "741103abd01317d03596f17d00a26d205179a0c9873146ad3ebe146612d165f0"
+    }
+  ],
+  "scope": "Actual local compiled module/DLL filesystem checks only; no running engine admission/runtime/browser/model access"
+}

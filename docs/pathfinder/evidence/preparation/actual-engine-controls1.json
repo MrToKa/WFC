@@ -1,0 +1,91 @@
+{
+  "schemaVersion": "wfc.pf.preparation.integration.v1",
+  "recordedAtUtc": "2026-10-19T00:54:20.461Z",
+  "status": "PASS",
+  "sourceProjectId": "1af0f807-7653-40ea-8391-7eea6c54e7d4",
+  "projectId": "58490e71-85f2-45f0-863a-434bf628b230",
+  "actorId": "af2a7836-3347-4837-8c1d-f0e83dd7cba8",
+  "modelId": "f34e61fb-86d5-4bcf-b482-3140417cd6ce",
+  "checks": [
+    {
+      "name": "unique synthetic metadata fixture; source model resources remain read-only",
+      "status": "PASS",
+      "details": {
+        "projectId": "58490e71-85f2-45f0-863a-434bf628b230",
+        "modelId": "f34e61fb-86d5-4bcf-b482-3140417cd6ce",
+        "sourceModelId": "a613151e-c370-45c5-80f3-42ae58603b9a",
+        "resourceCount": 342,
+        "objectWrites": 0,
+        "conversions": 0
+      }
+    },
+    {
+      "name": "server freezes exactly two ordered parts with authoritative Control masks and replays create",
+      "status": "PASS",
+      "details": {
+        "sessionId": "6d906997-9d70-491b-953f-ed8dd5ed19af",
+        "parts": 2,
+        "physicalLeaves": 513
+      }
+    },
+    {
+      "name": "reverse arrival commits exact receipts; replay is stable and conflicting bytes refuse",
+      "status": "PASS",
+      "details": {
+        "partId": "c1845121-7e0c-432d-b0f0-8dc9c5ac3247",
+        "payloadSha256": "0564a45ccc93cfceead4eec9bc01bb7af54d079b54fda5e1477800d1ca5f130a"
+      }
+    },
+    {
+      "name": "whole-union C# preparation atomically publishes one aggregate/artifact/trusted pointer",
+      "status": "PASS",
+      "details": {
+        "aggregateId": "87a44d1b-1cb3-47aa-8ff4-44083302074e",
+        "artifactId": "f5a56dc9-9ed3-46af-a94f-a820e03b4b7f",
+        "counts": {
+          "aggregates": 1,
+          "artifacts": 1
+        }
+      }
+    },
+    {
+      "name": "manual-coordinate calculation crosses segments in different committed parts",
+      "status": "PASS",
+      "details": {
+        "lengthMeters": 20.5,
+        "jobId": "162804f7-1c0b-4fb6-8026-6636589e54f4"
+      }
+    },
+    {
+      "name": "manual diagnostic artifact cannot supersede trusted project preparation",
+      "status": "PASS"
+    },
+    {
+      "name": "cancelled replacement retains previous whole aggregate; cancellation replays exactly",
+      "status": "PASS"
+    },
+    {
+      "name": "dependency mutation refuses old capture but historical publication receipt remains available",
+      "status": "PASS"
+    },
+    {
+      "name": "current nonadministrator and revoked login cannot read or replay preparation",
+      "status": "PASS"
+    },
+    {
+      "name": "no cable Apply was attempted or persisted",
+      "status": "PASS"
+    }
+  ],
+  "cleanup": [
+    {
+      "name": "generated fixture retained privately for UI; source metadata unchanged",
+      "status": "PASS"
+    }
+  ],
+  "retainedEvidence": "Generated preparation/artifact files are retained; this runner performs SQL-only cleanup.",
+  "nativeParity": "NOT_PERFORMED",
+  "realApply": "NOT_PERFORMED",
+  "wallMilliseconds": 12628,
+  "fixtureRetainedPrivately": true
+}

@@ -1,0 +1,176 @@
+{
+  "schemaVersion": "wfc.pathfinder.stage-evidence.v1",
+  "stage": "PF-B5",
+  "status": "PASS_WITH_EXTERNAL_CHECKS_NOT_RUN",
+  "productRevision": "07fe6dd79676c1ed45153d2ab3cd79a1ac96680e",
+  "baseRevision": "658997b4223be2f61daaa7dccc48e7cb563eb8b3",
+  "branch": "pf-b5-barrier-authoring-local-20261021",
+  "changedSourceFiles": [
+    "shared/pathfinderBarrierAdmission.ts",
+    "shared/pathfinderBarrierAdmission.test.ts",
+    "src/api/pathfinder.ts",
+    "src/api/pathfinderBarriers.ts",
+    "src/api/pathfinderBarriers.manifest.test.ts",
+    "src/components/pathfinder/PathFinderCableWorkspace.tsx",
+    "src/components/pathfinder/PathFinderCableWorkspace.test.tsx",
+    "src/pages/ProjectDetails/PathFinderBarriersPanel.tsx",
+    "src/pages/ProjectDetails/PathFinderBarriersPanel.test.tsx",
+    "src/pages/ProjectDetails/PathFinderTab.tsx",
+    "src/pages/ProjectDetails/PathFinderTab.test.tsx",
+    "src/pages/ProjectDetails/hooks/usePathfinderBarriers.ts",
+    "src/pages/ProjectDetails/hooks/usePathfinderBarriers.test.tsx",
+    "src/pages/ProjectDetails/hooks/usePathFinder.ts",
+    "src/pages/ProjectDetails/hooks/usePathFinder.test.tsx",
+    "src/pages/ProjectDetails/hooks/collectPreparationDiscovery.test.ts",
+    "src/pages/ProjectDetails/hooks/useProjectPreparation.test.tsx"
+  ],
+  "checks": [
+    {
+      "name": "admission-and-protected-facade",
+      "status": "PASS",
+      "cases": 105
+    },
+    {
+      "name": "panel-hook-and-preparation",
+      "status": "PASS",
+      "cases": 70,
+      "newPanelAndHookCases": 39
+    },
+    {
+      "name": "manifest-and-workspace",
+      "status": "PASS",
+      "cases": 33
+    },
+    {
+      "name": "PathFinderTab",
+      "status": "PASS",
+      "cases": 60,
+      "seconds": 708.31,
+      "limitations": "jsdom; nonfatal React act warnings; not actual browser or runtime performance"
+    },
+    {
+      "name": "unchanged-existing-barrier-api",
+      "status": "PASS",
+      "cases": 4,
+      "source": "initial combined UI report; old API functions unchanged thereafter"
+    },
+    {
+      "name": "client-types",
+      "status": "PASS"
+    },
+    {
+      "name": "server-types",
+      "status": "PASS"
+    },
+    {
+      "name": "changed-file-lint",
+      "status": "PASS",
+      "files": 17
+    },
+    {
+      "name": "git-diff-check",
+      "status": "PASS"
+    },
+    {
+      "name": "actual-converted-capture-and-browser",
+      "status": "NOT_RUN",
+      "reason": "Unchanged saved-origin refusal; no retries/bypasses"
+    },
+    {
+      "name": "B6-runtime-and-B7-write-integration",
+      "status": "NOT_RUN",
+      "reason": "Separate following stages; no B5 release"
+    }
+  ],
+  "retainedEarlierAttempts": [
+    {
+      "name": "initial-combined-ui",
+      "passed": 114,
+      "failed": 2,
+      "resolution": "Corrected missing prepared fixture and exact new standalone intent expectation; final suite passed"
+    },
+    {
+      "name": "initial-client-types",
+      "status": "FAIL",
+      "errors": 3,
+      "resolution": "Old facade mocks gained explicit new methods; final check passed"
+    },
+    {
+      "name": "combined-root-retry",
+      "status": "INTERRUPTED",
+      "reason": "Abnormal duration; only exact verified owned test process tree stopped; split runs completed"
+    }
+  ],
+  "logs": [
+    {
+      "file": "admission-facade-initial.json",
+      "bytes": 42092,
+      "sha256": "f9895d68333905d9f2bd9ec908acf83f4cda5ebf02f21bcfb5de2b03b5a752cb"
+    },
+    {
+      "file": "ui-initial.json",
+      "bytes": 45357,
+      "sha256": "6e9a6af2c96db65e7be12091f2745404246e2cd627a06ac3b882dd0c2101b0ad"
+    },
+    {
+      "file": "authoring-final.json",
+      "bytes": 26778,
+      "sha256": "5e7e236116fcf8a3b3913e663687ef389671cfe0e505eff49f8ef1c9a70d15ac"
+    },
+    {
+      "file": "manifest-workspace-final.log",
+      "bytes": 6949,
+      "sha256": "cc5f60ce3c27f309a6d7384d41864c6bbf86c497c90742c74a7675910ac629e2"
+    },
+    {
+      "file": "tab-final.log",
+      "bytes": 14287,
+      "sha256": "d0ba289bbef823325ffbfc2ae098b55a649c8c455513fd9f13f46af1cd9d258f"
+    },
+    {
+      "file": "client-types-initial.log",
+      "bytes": 2017,
+      "sha256": "b8fc49571ea1bdb37161dc6e850fc69dcea649f2fab636a33b2a608363599e2a"
+    },
+    {
+      "file": "client-types-final.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "server-types-final.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "lint-final.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "root-initial-hang-owned-processes.json",
+      "bytes": 9549,
+      "sha256": "519466edecb5488f26bde334def1c865044dfcf3d8ba4d2c2a4ec426f9f3a74d"
+    }
+  ],
+  "scratchRelative": "pathfinder-engine/.scratch/barrier-authoring-20261021-e4731432-f987-43da-8092-3e12cc372667",
+  "remote": {
+    "main": "96e63f13fdc2b1d30b8f8ff658dd662f25fac104",
+    "retrievedAt": "2026-10-21T13:00:47Z",
+    "stagePrs": 0,
+    "cachedAhead": 149,
+    "cachedBehind": 3,
+    "ci": "NOT_RUN"
+  },
+  "isolation": {
+    "originalCheckoutReadOnlyVerified": true,
+    "originalMainClean": true,
+    "runtimeWrites": false,
+    "containerChanges": false,
+    "realCableApply": false,
+    "frozenFixturesChanged": false,
+    "corePinnedFilesChanged": false,
+    "deniedCleanupRetried": false
+  },
+  "acceptedByUser": false
+}

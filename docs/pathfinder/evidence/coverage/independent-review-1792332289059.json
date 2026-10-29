@@ -1,0 +1,130 @@
+{
+  "schemaVersion": "pathfinder.coverage.independent-source-review.v1",
+  "recordedAtUtc": "2026-10-18T14:04:49.059Z",
+  "status": "PASS_SCOPED_SOURCE_REVIEW",
+  "reviewer": "viewer_tab_capabilities; independent read-only reviewer, not CLI writer.",
+  "inspectedFiles": [
+    {
+      "path": "scripts/pathfinder-coverage/audit.mjs",
+      "bytes": 45488,
+      "sha256": "7afc8b8f34b8304bce7c3e9d994a5cf6cbe833557598cb8aa12d4571dbebcc09"
+    },
+    {
+      "path": "scripts/pathfinder-coverage/retained.mjs",
+      "bytes": 1619,
+      "sha256": "9d060c512c399ec3583d7653068cf73f8286c585d8b8faec12ca08cdeb9788a4"
+    }
+  ],
+  "reviewScope": [
+    "Complete declared-part hashes/bytes/schema/offset/ID checks and hierarchy/fragment accounting.",
+    "Selected identity/external-ID/ancestor/fragment/boundary joins and explicit category scope; internal canonical units/transforms only.",
+    "Project-scoped recorded aliases/locations/bindings and endpoint matching versus missing live evidence.",
+    "Safe read paths, fixed production matching/dependency hashes, exclusive output and durable bounded failure receipts.",
+    "Cooperative resource-budget observations and avoiding sparse-ID/many-root/repeated-registry superlinear work."
+  ],
+  "initialFindings": [
+    {
+      "id": "F1",
+      "priority": "P2",
+      "problem": "Final output-size gate threw outside the catch, losing an oversize-result failure receipt.",
+      "resolution": "Oversize results are reduced to a bounded FAIL summary containing source/input/phase/count/budget evidence, then created exclusively at the preflighted safe output.",
+      "anchors": [
+        328,
+        329,
+        330,
+        331,
+        332,
+        333,
+        334,
+        335,
+        336,
+        337
+      ],
+      "status": "RESOLVED_BY_SOURCE_READ"
+    },
+    {
+      "id": "F2",
+      "priority": "P2",
+      "problem": "Selected-snapshot integrity admitted unknown/missing categoryAssignmentSource and vertices outside object bounds.",
+      "resolution": "Explicit known planning assignment enum/relationship and canonical vertex containment using the native-reader1e-6 tolerance are checked; dedicated lookup-purpose captures excluded.",
+      "anchors": [
+        188,
+        192,
+        207
+      ],
+      "status": "RESOLVED_BY_SOURCE_READ"
+    },
+    {
+      "id": "F3",
+      "priority": "P2",
+      "problem": "Sparse high dbIds could cause2.1b gap iterations; many roots and per-cable location/alias reconstruction admitted excessive work before budget sampling.",
+      "resolution": "Sorted arithmetic gap accounting, root-ID Set, per-project alias/DTO/name indexes and match caching replace those loops; hierarchy and endpoint loops sample cooperative budgets.",
+      "anchors": [
+        134,
+        135,
+        136,
+        155,
+        160,
+        169,
+        253,
+        254,
+        255,
+        256,
+        257,
+        258,
+        259,
+        260,
+        261
+      ],
+      "status": "RESOLVED_BY_SOURCE_READ"
+    },
+    {
+      "id": "F4",
+      "priority": "P2",
+      "problem": "A recorded unbound location could be labelled missing after omitting unavailable live matching rows.",
+      "resolution": "The audit reports unknown-unbound-matching-state separately from the explicitly qualified production result with omitted rows.",
+      "anchors": [
+        272,
+        278
+      ],
+      "status": "RESOLVED_BY_SOURCE_READ"
+    }
+  ],
+  "remainingMaterialFindings": [],
+  "testAttribution": {
+    "independentlyExecutedByReviewer": 0,
+    "writerControls": {
+      "path": "docs/pathfinder/evidence/coverage/controls-1792332191650.json",
+      "sha256": "64997e4d28a160fa9732924d61c4725de373d76720fa28d98cdc396b64e0da1d",
+      "command": "node --test --test-reporter=tap scripts/pathfinder-coverage/coverage.test.mjs",
+      "status": "PASS",
+      "totals": {
+        "tests": 43,
+        "pass": 43,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "tap": {
+        "path": "docs/pathfinder/evidence/coverage/controls-1792332191650.tap",
+        "bytes": 8759,
+        "sha256": "ed3a805d7c86bfc1ff1b048a89e03c191bb5f86ab3984a1acbce9ef317e9f24c"
+      },
+      "note": "Receipt/hash read by reviewer; control execution belongs to addon_tabs_map and was not rerun."
+    },
+    "historicalSetupFailure": {
+      "source": "Writer retained controls receipt and parent context.",
+      "classification": "Fixture mkdir ENOENT before any audit, not an engine/algorithm failure.",
+      "detail": "Initial36 fixture-setup failures were corrected by setup only. No nonexistent raw receipt or independently observed failure is claimed."
+    }
+  },
+  "limits": [
+    "This closes source-level issues only; it does not itself execute the214-part retained audit or establish its result.",
+    "Elapsed/RSS guards are cooperative sampled observations, not a hard process deadline or proof of peak memory.",
+    "Incomplete full-model meshes/properties/native visibility/category assignment and absent live artifact/matching data stay explicit gaps.",
+    "Names/taxonomy do not assign trays/categories; manual bindings are assessed relative to supplied project/model/artifact only.",
+    "Separate identity-count observation traces mapping-only dbId388764; omission cause is only consistent with SDK pruning, not proven.",
+    "No app/DB/browser/container action, test execution, input mutation, code edit, native/engineering/human acceptance or original resource change by this review."
+  ]
+}

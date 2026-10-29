@@ -1,0 +1,206 @@
+{
+  "schemaVersion": "pathfinder.copied-recovery.actual-evidence-review.v1",
+  "status": "PASS",
+  "recordedAt": "2026-10-18T19:05:17.655Z",
+  "reviewer": "/root/recovery_evidence_review",
+  "method": "Independent read-only receipt/manifests review, prior full streaming SHA-256 readback, referenced receipt/image hash checks, and visual inspection of retained screenshots. No repeated payload readback for this persistence step.",
+  "drillId": "e09d28fa-580f-484a-a7f7-ac8b8a00cee7",
+  "backupId": "b77a1ed0-2fa2-48a3-92f8-207a60b2035e",
+  "coreManifestSha256": "89b2c63ff10b97e36fab42bed3195d50f9f2d99522d3ee529a98b16fb39f335a",
+  "independentReadback": {
+    "status": "PASS",
+    "performedEarlierInThisReview": true,
+    "repeatedForReceipt": false,
+    "core": {
+      "files": 8,
+      "bytes": 1793208640,
+      "allSizeAndSha256Matched": true
+    },
+    "adjunct": {
+      "files": 75,
+      "bytes": 4148668,
+      "importEventFiles": 67,
+      "allSizeAndSha256Matched": true
+    },
+    "manifestCompletionSealBindingMatched": true,
+    "allPhaseProofReferencesMatched": true
+  },
+  "checks": [
+    {
+      "name": "source-exact-after-cold-backup",
+      "status": "PASS",
+      "scope": "All 27 business/model/PathFinder groups, separate 2 auth groups and 3 bucket metadata inventories exact; zero active jobs/imports."
+    },
+    {
+      "name": "restored-persistent-auth-fence",
+      "status": "PASS",
+      "scope": "27 groups and 3 bucket metadata inventories exact; old auth rows retained with only permitted tombstones. 2 login bindings and 6 resource sessions newly revoked."
+    },
+    {
+      "name": "controlled-owned-auth-additions",
+      "status": "PASS",
+      "scope": "Exactly one authorized fresh login binding and one resource session added; all old auth rows and 27 business groups/storage unchanged."
+    },
+    {
+      "name": "normal-protected-resource",
+      "status": "PASS",
+      "scope": "Source positives after backup at 18:07:37Z and target old bearer 401 / old cookie 410 plus fresh positives at 18:09:20Z, before original session idle expiry 18:11:03Z. Actual resource 997 bytes with expected SHA."
+    },
+    {
+      "name": "full-raw-model-and-artifact-recovery",
+      "status": "PASS",
+      "scope": "Both retained raw audits report 3 model versions, 1026 resources, 1317023409 bytes with full size/SHA checks; restored artifact aggregate matches backup 29 files / 9342710 bytes."
+    },
+    {
+      "name": "post-browser-business-preservation",
+      "status": "PASS",
+      "scope": "Target and final source all 27 business groups and 3 bucket metadata inventories unchanged. Auth explicitly NOT_CHECKED after browser activity."
+    },
+    {
+      "name": "target-only-retirement",
+      "status": "PASS",
+      "scope": "Qualification 19:00:00Z precedes retirement 19:00:01-20Z; only fresh target project wfc-pathfinder-local-63ab3043713e, 5 containers / 4 volumes / 2 networks removed; resource lists empty and source metadata healthy."
+    },
+    {
+      "name": "final-source-demonstration",
+      "status": "PASS",
+      "scope": "Final source browser receipt on 5191 and visually inspected source-final.png show copied project, Path Finder with Routes / Path / Path lookup, loaded model and preparation card 1527 names / 438155 returned and checked / 0 unavailable. Cable total 2140 remains a recorded CUA/AX observation, not visible in this image."
+    },
+    {
+      "name": "wider-original-and-5190-preservation",
+      "status": "PASS",
+      "scope": "Reviewed all 12 PASS preservation checks; all 18 baseline containers retain IDs/images/start times, 13 original plus 5 existing 5190. No original database-content audit inferred."
+    },
+    {
+      "name": "cleanup-boundary",
+      "status": "PASS",
+      "scope": "7 previously denied directories checked only for existence, no content reads/removal attempts/bypass/prune; demo, archive, private companion, provenance retained. Physical disk reclamation NOT_MEASURED."
+    }
+  ],
+  "findings": [],
+  "limitations": [
+    "Review does not independently execute the application, database, HTTP or Docker; actual operational execution belongs to the parent executor.",
+    "Restored target screenshots visibly show copied-project identity and loaded model/geometry; 2140/1527 restored counts rely on recorded computer-use AX observations. The final source screenshot separately makes the 1527/438155 preparation card visible.",
+    "Bucket metadata equality is separate from full raw model resource SHA proof; generic decoded inventory alone is not a lossless numeric proof.",
+    "This operational recovery acceptance does not establish native oracle parity, whole-plant engineering routing, saved mappings, real cable length acceptance, a new Ghost route demonstration, or user review/Apply. Raw route-rule UI inputs are not claimed recovered.",
+    "Source 5191 web/API/MinIO start times changed through its authorized cold backup. Original and existing 5190 start times remain preserved.",
+    "Final report, progress, commit, human handoff and automation state are coordinated by the parent and are outside this evidence receipt."
+  ],
+  "references": [
+    {
+      "path": "docs/pathfinder/evidence/copied-recovery/proof-source-ready-1792346766991.json",
+      "bytes": 978,
+      "sha256": "fad65a6a59a554063065e240bc33315db0969e5bd4ea95d76485d18de3c3b9eb"
+    },
+    {
+      "path": "docs/pathfinder/evidence/copied-recovery/proof-backup-qualified-1792346872872.json",
+      "bytes": 1048,
+      "sha256": "6b28bf9df3ca526dd928d669588ca40e6d00f7bb6374c506466ef6e84cc91596"
+    },
+    {
+      "path": "docs/pathfinder/evidence/copied-recovery/proof-target-qualified-1792350000194.json",
+      "bytes": 1824,
+      "sha256": "ebb34c2fabb11983037795af2259d43b74d7937fac08b7eec3bcd46d60ff2224"
+    },
+    {
+      "path": "docs/pathfinder/evidence/copied-recovery/drill-1792346855507-3c0a7ebd.json",
+      "bytes": 12495,
+      "sha256": "82b6f1af01e1da8ffbfbb9b1bdcbaa09a9d24b6f02c4a31177fc9412ea7ddcc6"
+    },
+    {
+      "path": "docs/pathfinder/evidence/copied-recovery/drill-1792346955435-e61815c8.json",
+      "bytes": 5799,
+      "sha256": "01fbae466d785cb68ead0582596c17dcee749bf5ccd3f9ef1ac575512ca10f7b"
+    },
+    {
+      "path": "docs/pathfinder/evidence/copied-recovery/provenance-1792346857384-e21ef6e0.json",
+      "bytes": 1485,
+      "sha256": "e0d09e87ffa749d0417701df0917abd863a2376786bfb7e77fbd6e30761abc69"
+    },
+    {
+      "path": "docs/pathfinder/evidence/copied-recovery/provenance-1792346857604-8b71ed26.json",
+      "bytes": 1487,
+      "sha256": "804641bfc4a9378ba9edd1eb75c9be4065100354c2acd3f76ca05da4ec4953db"
+    },
+    {
+      "path": "docs/pathfinder/evidence/copied-recovery/audit-1792346860612-83d64f1f.json",
+      "bytes": 15438,
+      "sha256": "d2d57ca803aa4d644e5352f70bfb0de222cfde4970ce28ee0e8a90c7975d35d4"
+    },
+    {
+      "path": "docs/pathfinder/evidence/copied-recovery/audit-1792346958413-d6cf53f8.json",
+      "bytes": 15810,
+      "sha256": "fc344a67fb0cf1aa55d4b0571908a32c0a6dad78fbbad194ed6f08636051af8a"
+    },
+    {
+      "path": "docs/pathfinder/evidence/copied-recovery/audit-1792346963056-da0df95d.json",
+      "bytes": 15745,
+      "sha256": "8acb4ed99aa320c52a4e00259198d8f3f0b070e7f3ba45034b377583a75595a2"
+    },
+    {
+      "path": "docs/pathfinder/evidence/copied-recovery/audit-1792350000182-90246b71.json",
+      "bytes": 15502,
+      "sha256": "ce1ef7669709e9991e83fc745ba821602d7078aa1ecfd02c75e7d8144bb0393e"
+    },
+    {
+      "path": "docs/pathfinder/evidence/copied-recovery/auth-prepare-1792346762405.json",
+      "bytes": 7473,
+      "sha256": "e0513ce902be8578f7eaf4e4bc0a4a6f36c84a48272bf70de3c5d90f3445428a"
+    },
+    {
+      "path": "docs/pathfinder/evidence/copied-recovery/auth-source-1792346855541.json",
+      "bytes": 6392,
+      "sha256": "8f079be10f8861af421fd23bb9756701b245b0e0369aa7cc2f7d276b358abcc6"
+    },
+    {
+      "path": "docs/pathfinder/evidence/copied-recovery/auth-target-1792346958450.json",
+      "bytes": 8509,
+      "sha256": "bcb5a4240c8c3735211c169aff20f4608cd5eb6732203fede6c1a4fa920323b6"
+    },
+    {
+      "path": "docs/pathfinder/evidence/copied-recovery/drill-1792346971127-2b381af3.json",
+      "bytes": 7137,
+      "sha256": "4c35c4b77166e4527a93340326865d0e05d225a44c2c934c2373d6a075c34875"
+    },
+    {
+      "path": "docs/pathfinder/evidence/copied-recovery/browser-1792349997235.json",
+      "bytes": 1629,
+      "sha256": "375f63df0a010ef02be440414534636ded88263e1790595cc88959af82a8b2e0"
+    },
+    {
+      "path": "docs/pathfinder/evidence/copied-recovery/ui-retirement-1792350020175.json",
+      "bytes": 1233,
+      "sha256": "08551c00026d978fbc55e6bfa756dc9b6ebb5a1cc3bc4d0eed09129207744a43"
+    },
+    {
+      "path": "docs/pathfinder/evidence/copied-recovery/drill-1792350020124-d40ce548.json",
+      "bytes": 8149,
+      "sha256": "08fb44158e3ef7f7f024979b8f5ac5a193b43c69aaab3c7e126e1172b84d0bba"
+    },
+    {
+      "path": "docs/pathfinder/evidence/copied-recovery/source-browser-final-1792350249313.json",
+      "bytes": 1294,
+      "sha256": "5f31efe53cc05e3d83bb46f8b4ea621a358978d53f479417b9697ee03052e1d5"
+    },
+    {
+      "path": "docs/pathfinder/evidence/copied-recovery/audit-1792350219641-c8fd4257.json",
+      "bytes": 15452,
+      "sha256": "00abc77476aa3ddf6c7b55d8427ca2845350dc79b1b7411380f57b5c10db4ec4"
+    },
+    {
+      "path": "docs/pathfinder/evidence/copied-recovery/cleanup-1792350249317.json",
+      "bytes": 2382,
+      "sha256": "7a48a137b2b1f88b0ef04ad2d9d4ea270001c56bd7bcc6cee9e58d9e9ff07b7a"
+    },
+    {
+      "path": "docs/pathfinder/evidence/worker-reuse/preservation-1792350218341-5dce53ce.json",
+      "bytes": 33827,
+      "sha256": "6411ae62c500b5456b9e1357f6ebd9c8ac7886aac72d6f1d6d9972e1e803f3df"
+    },
+    {
+      "path": "docs/pathfinder/evidence/copied-recovery/source-final.png",
+      "bytes": 80611,
+      "sha256": "8e29e5558fcd6ee6f0cca5162b008d9b8b065892aced18bfab2fb7857e3cf4e6"
+    }
+  ]
+}

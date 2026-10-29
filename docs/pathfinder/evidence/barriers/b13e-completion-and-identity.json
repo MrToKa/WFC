@@ -1,0 +1,301 @@
+{
+  "schemaVersion": "wfc.pf.b13e-completion-and-identity-checks.v1",
+  "at": "2026-10-22T07:08:37.190Z",
+  "baseline": "9685d2e99d0b4f76241c8d0d53da66d30af9b811",
+  "branch": "pf-b13e-producer-completion-local-20261022",
+  "status": "TECHNICAL_SOURCE_PASS",
+  "pins": [
+    {
+      "path": "scripts/pathfinder-local/web-image-install.mjs",
+      "bytes": 5161,
+      "sha256": "45128a7504388ffd66310f8da0d9fb49bf0342667ea9da227202d9662cd3326a"
+    },
+    {
+      "path": "server/pathfinder/barrierMultipartContext.integration.test.ts",
+      "bytes": 32270,
+      "sha256": "4f2be2a3eef9daa50de5878883f416116e8dc761adb13e88859d50a1b25398d4"
+    },
+    {
+      "path": "server/pathfinder/barrierMultipartContext.test.ts",
+      "bytes": 17867,
+      "sha256": "117bb67080441f5b9f2056883ffaeece700e67453bbf3534d24a0cb26edf55eb"
+    },
+    {
+      "path": "server/pathfinder/barrierMultipartContext.ts",
+      "bytes": 21605,
+      "sha256": "8d9ca7e38ac13af458550de30d622288923861120249e03826abf665e717217f"
+    },
+    {
+      "path": "server/pathfinder/barrierMultipartRepository.integration.test.ts",
+      "bytes": 51595,
+      "sha256": "229ac1139571ceaf2f12debacd50c3f4edc8d68a738a4c077c486f965dfd817d"
+    },
+    {
+      "path": "server/pathfinder/barrierMultipartRepository.test.ts",
+      "bytes": 9702,
+      "sha256": "a5fb946b3d40cd30937e8bccdc1f249a9c32787daea9d746254fac6f9954e2cd"
+    },
+    {
+      "path": "server/pathfinder/barrierMultipartRepository.ts",
+      "bytes": 72735,
+      "sha256": "35d38aa448991e42163865f036dc142ccb1a35be1564ce092250b949a88676d4"
+    },
+    {
+      "path": "server/pathfinder/barrierMultipartRoutes.test.ts",
+      "bytes": 18371,
+      "sha256": "483411ed6d00eca342905cfea8897559f07b1f451846993f91e4a58854464eaf"
+    },
+    {
+      "path": "server/pathfinder/barrierMultipartRoutes.ts",
+      "bytes": 12153,
+      "sha256": "6a1df0968a8e17869d57e2ce813e1303c49fc499411231f81b0fa12dedab0c02"
+    },
+    {
+      "path": "server/pathfinder/barrierMultipartSchema.ts",
+      "bytes": 8747,
+      "sha256": "dbd7645d7706ac75bac68b57ca5eb38316a0c7cd67c2abc68e8866a56c3a3d55"
+    },
+    {
+      "path": "shared/pathfinderBarrierMultipartSessions.test.ts",
+      "bytes": 24693,
+      "sha256": "caa829b026fef9a53d0e930fe7e2ec00102d2c3e354ab599630124fb87efda5f"
+    },
+    {
+      "path": "shared/pathfinderBarrierMultipartSessions.ts",
+      "bytes": 20043,
+      "sha256": "1cf106053024d7111fa485537e8d4d25f5a201c06bb60538d90b76b5d2991b16"
+    },
+    {
+      "path": "viewer-runtime/barrier-capture-errors.d.mts",
+      "bytes": 907,
+      "sha256": "76acde67a6705fd138f85cc29d8a4aadfee119dd72c28579ed9a96a0fac7a4fa"
+    },
+    {
+      "path": "viewer-runtime/barrier-capture-errors.mjs",
+      "bytes": 2956,
+      "sha256": "bef60c5884d24d7475d0e914489a92a38b67ae3e68bc9f0346303019c707a1a0"
+    },
+    {
+      "path": "viewer-runtime/barrier-capture.mjs",
+      "bytes": 36436,
+      "sha256": "e4327539ac1f3afc1e98624ed7e3fa10aa7ff53aaae8c2e3d0e22eda2c6e9bf0"
+    },
+    {
+      "path": "viewer-runtime/barrier-multipart-protocol.d.mts",
+      "bytes": 4430,
+      "sha256": "7e9501653a0cf5833b0f450551645d654e0cb68bc23a022729de3c4ee162962d"
+    },
+    {
+      "path": "viewer-runtime/barrier-multipart-protocol.mjs",
+      "bytes": 21404,
+      "sha256": "b61d21fc10691b22a1d8be24ccd5f76fd15232bc759f353328a305dafdfceee0"
+    },
+    {
+      "path": "viewer-runtime/barrier-multipart-runtime.mjs",
+      "bytes": 10778,
+      "sha256": "b9738f549eccb9dc65244a2c4f013caa9dc9e36dc86442c5f58cffa270352cd5"
+    },
+    {
+      "path": "viewer-runtime/barrier-multipart-transport.d.mts",
+      "bytes": 2831,
+      "sha256": "e456327beee4d8d57f0cdfee634f46768bb2a9731c167f26aeeb3d608f8a9ffe"
+    },
+    {
+      "path": "viewer-runtime/barrier-multipart-transport.mjs",
+      "bytes": 30682,
+      "sha256": "dd2768db4c8e0684280c31e0938cde48e2af859c5a66fd6499b9b6e1701a9976"
+    },
+    {
+      "path": "viewer-runtime/barrier-producer.d.mts",
+      "bytes": 2795,
+      "sha256": "bb6fe22a185ac5bd668751980897d926dfec586c062c20834eae735282ad9896"
+    },
+    {
+      "path": "viewer-runtime/barrier-producer.mjs",
+      "bytes": 48625,
+      "sha256": "a0e84017920ebf145cab94a6094060650c77aef76148c2bc3fad130915d265a7"
+    },
+    {
+      "path": "viewer-runtime/test/adapter.test.mjs",
+      "bytes": 31059,
+      "sha256": "de9c433df42ce6522d993a761b0d614a811903cb229e41eb5e634c2c0518fcce"
+    },
+    {
+      "path": "viewer-runtime/test/barrier-capture.test.mjs",
+      "bytes": 31948,
+      "sha256": "cf6eef93881daf62e573510a14db528d5c0d6246edc76bf920c16f5ef8755d5b"
+    },
+    {
+      "path": "viewer-runtime/test/barrier-multipart-fixture.mjs",
+      "bytes": 9884,
+      "sha256": "d0045b149ef05aceac3d88cde216174a3bb5bd1430ad77e68d20587dc56bc3b1"
+    },
+    {
+      "path": "viewer-runtime/test/barrier-multipart-protocol.test.mjs",
+      "bytes": 12033,
+      "sha256": "d79b18cb3e48d40342f5ac85e977a74b7e85dade4975f1fe178b0fe0c99bc2d6"
+    },
+    {
+      "path": "viewer-runtime/test/barrier-multipart-runtime.test.mjs",
+      "bytes": 15458,
+      "sha256": "988aca37ca718663dd3965043700a8f8c9298756c710f64120e72bbff98b3ee9"
+    },
+    {
+      "path": "viewer-runtime/test/barrier-multipart-transport.test.mjs",
+      "bytes": 24060,
+      "sha256": "e5cae192679add6bf2adc4351cf13fbc8742884ca3a33dd5e3d123ded234f944"
+    },
+    {
+      "path": "viewer-runtime/test/barrier-producer.test.mjs",
+      "bytes": 29482,
+      "sha256": "0c6b6b5c87b5e246f4f9c55a8cbf99e58f88c5a09266b46b9b8932bd0407ea5e"
+    },
+    {
+      "path": "docs/pathfinder/102-producer-completion-contract.md",
+      "bytes": 8996,
+      "sha256": "f1c9e5a090f0f67ab4a0d00e7c873cd5179bfae28c98cdd8966ecf8c12ed25ef"
+    }
+  ],
+  "checks": {
+    "shared": {
+      "status": "PASS",
+      "tests": 22
+    },
+    "serverUnits": {
+      "status": "PASS",
+      "tests": 63
+    },
+    "native": {
+      "status": "PASS",
+      "tests": 212,
+      "skipped": 0
+    },
+    "uiConsumers": {
+      "status": "PASS",
+      "tests": 143
+    },
+    "installer": {
+      "status": "PASS",
+      "tests": 16
+    },
+    "linuxSql": {
+      "status": "PASS",
+      "tests": 34,
+      "repository": 24,
+      "realCookieHttp": 10,
+      "sourceBookends": 53,
+      "helpersRemoved": true,
+      "networkRemoved": true,
+      "keyset101Scope": "Synthetic SQL metadata-only seed, real completion keyset; not 101 upload/fsync/storage-capacity proof"
+    },
+    "types": "PASS",
+    "scopedLint": "PASS",
+    "serverBuild": "PASS",
+    "frontendBuild": "PASS",
+    "independentReview": "CLEAR",
+    "actualSdk": "BLOCKED_SAVED_BROWSER_REFUSAL",
+    "actualAalborg": "BLOCKED_SAVED_BROWSER_REFUSAL",
+    "installation5191": "NOT_RUN",
+    "applicationRouterAndSchemaMount": "NOT_RUN",
+    "globalQualification": "NOT_RUN",
+    "publication": "NOT_RUN"
+  },
+  "sdkSourceWitnesses": {
+    "version": "7.130.0",
+    "viewerSha256": "2833d5c53d250f56a59b86f22491a972486b30fd90a103bce8310dcaa970fa5b",
+    "workerSha256": "9637ed11308c549b6dbd290d6270e53587122ebb5ffd7f87987ea9a8f897f46a",
+    "finding": "Legacy getBulkProperties discards needsExternalId; empty propFilter excludes externalId. Corrected getBulkProperties2 with explicit externalId-only filter."
+  },
+  "failuresRetained": [
+    "Native205/209: four adapter fixtures lacked mandatory descriptor; corrected212/212.",
+    "First typecheck: eight nullable/union narrowing diagnostics; explicit return-fail/stable-binding fix.",
+    "SQL33/34: 101 physical-upload fixture exceeded60s; replaced only that keyset fixture with bounded synthetic metadata seed; unchanged timeout."
+  ],
+  "limits": {
+    "completionProvenance": "protected-producer-reported",
+    "sdkSourceBytesVerified": false,
+    "geometryValidation": "NOT_VALIDATED",
+    "qualification": "NOT_MEASURED",
+    "authority": "none",
+    "specificUserBrowserFailureAttributed": false,
+    "wholeParentCapacity": "NOT_MEASURED"
+  },
+  "privateOperation": "6d9b964c-5161-493f-ae85-e00377e324da",
+  "evidence": [
+    {
+      "name": "shared-first.private.log",
+      "bytes": 333,
+      "sha256": "d95fd77c9a3267cf914f786a291b7e1620feba836cb2d5c1d9de93c25bd08f60"
+    },
+    {
+      "name": "server-units-final.private.log",
+      "bytes": 483,
+      "sha256": "9a165aeb025b96bbad055f0bc49cfe6d5bb873b8098553df45b6b03b1d36313f"
+    },
+    {
+      "name": "native-corrected.private.log",
+      "bytes": 21878,
+      "sha256": "0b10ce6d08882f0bf8a4837f8cdc398bbd7072b351b1d73932cddb4262ce7cb9"
+    },
+    {
+      "name": "ui-consumers-first.private.log",
+      "bytes": 534,
+      "sha256": "5fc66e46145a35c030d12910637761ff3ffde6d4b23c1c20a43326afc96bae7e"
+    },
+    {
+      "name": "web-install-tests.private.log",
+      "bytes": 1223,
+      "sha256": "a4529300ab1dc83634edaebfd514ecd83a727d758d4d216fffaf9e52e9bcbabe"
+    },
+    {
+      "name": "types-corrected.private.log",
+      "bytes": 93,
+      "sha256": "b8eb3154847ce13af5e3a7672a976c5437a052bfd30d24dd327a019180231d04"
+    },
+    {
+      "name": "lint-first.private.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "server-build.private.log",
+      "bytes": 1799,
+      "sha256": "daf51bd915f0b8c9607cba38dff973e9b0c8538a7d8e1b98bb252b538f7584f3"
+    },
+    {
+      "name": "frontend-build.private.log",
+      "bytes": 7604,
+      "sha256": "386f6531781cbed5a5be98376663cd2f59801c34f4ebee7868f97da2c313112f"
+    },
+    {
+      "name": "linux-tests-2.private.log",
+      "bytes": 3129,
+      "sha256": "2942b4d11b64935bb6ea1011f22a46d630618be31c58fd01b6e21502bc597a15"
+    },
+    {
+      "name": "linux-fixture-2.result.private.json",
+      "bytes": 8027,
+      "sha256": "d7e251995d0bf63ac1fbf58b362c5bf4b107d491a965b7733d123c799de05b87"
+    },
+    {
+      "name": "native-first.private.log",
+      "bytes": 24810,
+      "sha256": "dee3e6f6bce75dd0c84f6ed8d9e962b2173656114f12f570e177b4b3d2912785"
+    },
+    {
+      "name": "types-first.private.log",
+      "bytes": 1857,
+      "sha256": "c6f808ed46a1faa0a1f1fc0861cefe51bacb40b33bb0988b2c79b142d37673a8"
+    },
+    {
+      "name": "linux-tests-1.private.log",
+      "bytes": 5024,
+      "sha256": "950eeebaa511c7af7441c1888b2bc6a07369841f92463fdae33a41edc9bb8993"
+    },
+    {
+      "name": "linux-fixture-1.result.private.json",
+      "bytes": 8046,
+      "sha256": "8cf40d385cc6d29babcc1d42ef053a477697cc327b62ba1e0f27e782d882e1fc"
+    }
+  ]
+}

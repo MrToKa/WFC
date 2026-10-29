@@ -9,7 +9,7 @@
     "viewer:prepare": "node scripts/viewer-runtime/prepare.mjs",
     "server:dev": "tsx watch --tsconfig server/tsconfig.json server/index.ts",
     "server:start": "tsx --tsconfig server/tsconfig.json server/index.ts",
-    "server:build": "tsc -p server/tsconfig.json && node scripts/copy-model-verifier.mjs",
+    "server:build": "tsc -p server/tsconfig.json && node scripts/copy-model-verifier.mjs && node scripts/copy-pathfinder-contracts.mjs",
     "build": "npm run viewer:prepare && vite build",
     "preview": "vite preview",
     "lint": "eslint . --ext .ts,.tsx --max-warnings=0",

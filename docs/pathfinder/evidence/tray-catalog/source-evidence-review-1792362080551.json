@@ -1,0 +1,74 @@
+{
+  "schemaVersion": "wfc.pf.catalog-source-evidence-review.v1",
+  "status": "PASS",
+  "recordedAt": "2026-10-18T22:21:20.550Z",
+  "scope": "Source review plus independent public receipt consistency review; actual runtime performed only by root",
+  "sourceFiles": [
+    {
+      "path": "scripts/pathfinder-tray-catalog/source-lib.mjs",
+      "sha256": "9091da99b6624024e910367fa53254f3cdb6f4dcb94137f47487656dcb7d594d"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/transfer-lib.mjs",
+      "sha256": "4ff9970d627f55558729d5dceced362ae934edf7e6b2652e0b884ed30e5ff9e3"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/guard-io.mjs",
+      "sha256": "48d12d9df8a62e32901454096bcd94a21f1a9c3912ff139ee13726deceb9d5d1"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/preservation-lib.mjs",
+      "sha256": "d581d575ce5dbc5af3fc01b31c9858d48a8c28ce8a26a726b6afbe0b38306d0d"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/operator-lib.mjs",
+      "sha256": "039006bec4fa345a1fa62cd68189c94abf165200ef42c36acc0ba86ac2eb0722"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/diagnostics-lib.mjs",
+      "sha256": "5adbc03cb61f5c17a5cb16236f7ba32394d1b66854ad14878ca0180bc3aaacd0"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/catalog.mjs",
+      "sha256": "ee89cb58c75ad88870466b91fb427d4dde07468538be69a43ca11ea5377761f8"
+    }
+  ],
+  "reviewers": [
+    {
+      "name": "old_model_conversion_map",
+      "scope": "Source projection; guard bootstrap/bindings; operator/preservation/recovery",
+      "status": "PASS; reported material findings corrected and rechecked"
+    },
+    {
+      "name": "revision_geometry_ingestion_plan",
+      "scope": "Independent public receipts/failed rollback/copy/replay/ROverification/source hashes and no raw rows",
+      "status": "PASS; report checkpoint rewritten to actual outcomes"
+    },
+    {
+      "name": "purpose_revision_plan_review",
+      "scope": "Guard controls/strict file manifests and independently reviewed diagnostic module",
+      "status": "PASS"
+    },
+    {
+      "name": "root",
+      "scope": "Shared integration, complete source/seed bindings, production SQLSTATE22023 control, corrected readonly preflight and45table runtime audit",
+      "status": "PASS"
+    }
+  ],
+  "closedFindings": [
+    "Late transport errors and uncovered audit expectations refuse",
+    "Reviewed44.9k program uses bounded stdin bootstrap and bare-package resolution",
+    "Strict8field file manifest and original-mutation denial",
+    "Missing staged bytes refuse; COMMIT outcome saved before postchecks",
+    "Fresh source before write and complete source/seed row binding",
+    "Same-plan staging resume and missing-descriptor recovery; safe existing-file consumption",
+    "Shared-global child semantics and four-field project drawing CAS",
+    "Scalar-null JSONB operand fixed after real rollback/control; exact sameplan reconciled"
+  ],
+  "remaining": [
+    "Full project graph is not established by330tray rows",
+    "Pure material SQL collation diagnostics remainNOT_VERIFIED",
+    "Native parity and human engineering acceptance are not claimed"
+  ],
+  "mutationByReviewers": false
+}

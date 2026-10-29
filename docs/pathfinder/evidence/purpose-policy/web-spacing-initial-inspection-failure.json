@@ -1,0 +1,9 @@
+{
+  "schemaVersion": "pathfinder.purpose-policy.web-build-inspection.v1",
+  "status": "FAIL",
+  "code": "EXACT_IMAGE_REQUIRED",
+  "buildCompleted": true,
+  "runtimeMutated": false,
+  "reason": "Exact-ID inspector received the owned build tag. Reconciled that tag to its exact image ID using metadata; build was not repeated.",
+  "recordedAt": "2026-10-18T22:56:15.482Z"
+}

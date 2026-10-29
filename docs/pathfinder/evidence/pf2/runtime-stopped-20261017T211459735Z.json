@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "pathfinder.owned-runtime-stop.v1",
+  "observedAtUtc": "2026-10-17T21:14:59.7312049Z",
+  "status": "PASS",
+  "stoppedOwnedServerPid": 29636,
+  "remainingOwnedServerProcesses": 0,
+  "loopback5185Listeners": 0,
+  "remainingNativeHostProcesses": 0,
+  "temporaryBrowserTabClosed": true,
+  "stageContainersCreated": 0,
+  "existingContainersStoppedOrRestarted": 0,
+  "retainedData": "Required isolated captures, source copies, caches, build tools and evidence; both denied cleanup directories untouched",
+  "deniedCleanupRetried": false,
+  "automationStatus": "PAUSED"
+}

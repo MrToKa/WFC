@@ -1,0 +1,185 @@
+{
+  "schemaVersion": "pathfinder.ui-preservation.final-inventory.v1",
+  "status": "PASS",
+  "recordedAt": "2026-10-18T14:50:26.508Z",
+  "head": "e275dd5ee61adb339649a63cd2695dcabcec10f7",
+  "source": {
+    "caption-check.mjs": "6e5c1128aa806ba35aa1cc5c75a04d32e17395d0fc3cbc0d5d5ca2563bdcc510",
+    "caption-lib.mjs": "545a0830e8482e260dd4cef371e07e947d6550b12b01acfc68cfd38fe270b4fb",
+    "caption-lib.test.mjs": "e00e9ec808a7569b66d358b9e45faa6558facdc8b320bc6d1f214f0deff84037",
+    "capture.mjs": "d47033756bf979eb5f0f27a29b6c5c11b6d99313bdea12c985f210d50049d012",
+    "lib.mjs": "942f28ab29c961eefd594dd0838a3ed09a8cbdc08e907d285b80b7990be01ff9",
+    "lib.test.mjs": "c8909ef95e0b278b739b79a53955b5c59e8322e05ad1df0a038ba2afb5b3e819",
+    "quiesce.mjs": "59b9a8f8a99444cb746caf5f5b5575760d806d239f5406527cf45aa112305900",
+    "README.md": "9f0b9b3e5295b699ddf2a6a5796976f3c9998a9c60ef4e40f4234d1be56ef6b4",
+    "retire.mjs": "d23e35f7b02a8ff6cddd58bad94c1e6ef4ba19577a73ea2a834b5c0a867c4e90"
+  },
+  "frozenA0A3ToolBytesUnchanged": true,
+  "targetRetired": true,
+  "targetResources": {
+    "containers": [],
+    "volumes": [],
+    "networks": []
+  },
+  "containerCount": 18,
+  "containers": [
+    {
+      "id": "ffc99c7a98ffd5b9df7fc145737b6e0d9d6c9bdb36bf5ad57e1219f021e9bf5d",
+      "name": "/wfc-pathfinder-local-web-1",
+      "image": "sha256:1895a3fa33c25933024ab514ef61bd2d1568ffb33477d114541b855da65445b7",
+      "startedAt": "2026-10-18T09:53:53.783174377Z",
+      "running": true
+    },
+    {
+      "id": "3d05017ee0fc2bb0b15c1a3e0aaeac258e996d2e024006667d3a4449c40d62c0",
+      "name": "/wfc-pathfinder-local-api-1",
+      "image": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+      "startedAt": "2026-10-18T09:53:48.067931419Z",
+      "running": true
+    },
+    {
+      "id": "da6d9d618282fcc3a58b8722516f365a778c05ac34520281b0f39a4bf70c54ef",
+      "name": "/wfc-pathfinder-local-storage-ready-1",
+      "image": "sha256:ee402f8d972256c7c912349a360c321de8ce1f19238b7a7c149fb463960daa45",
+      "startedAt": "2026-10-18T09:51:49.231834855Z",
+      "running": false
+    },
+    {
+      "id": "6830635a4597dad696f1a5ced6846853cd9e1fee0f858450ad6f858e4c2e30b9",
+      "name": "/wfc-pathfinder-local-postgres-1",
+      "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+      "startedAt": "2026-10-18T02:03:12.60010978Z",
+      "running": true
+    },
+    {
+      "id": "e27a690c80957356c8a562e02b72249cf85a3d965f9a32fe596048a15f499820",
+      "name": "/wfc-pathfinder-local-minio-1",
+      "image": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+      "startedAt": "2026-10-18T09:53:46.326853695Z",
+      "running": true
+    },
+    {
+      "id": "1d5592c188a8d60c55d58a29ae0bab14ee67cae51ee00bb1822f75cd9beef99d",
+      "name": "/wfc-app-frontend-1",
+      "image": "sha256:86870eab49e4b14e81d751ba26a0b5644dfd570954041b665801155487b65b78",
+      "startedAt": "2026-10-17T12:24:23.192279537Z",
+      "running": true
+    },
+    {
+      "id": "f65cc58eea401f9c80de3be44342c3a6157f48fd6468a4d5a6b3df8ceeaac427",
+      "name": "/wfc-app-backend-1",
+      "image": "sha256:481326351dbfa8acc86afe4d2543a1b96a05d523dd95a4715928f7f25418854f",
+      "startedAt": "2026-10-17T12:24:29.337651343Z",
+      "running": true
+    },
+    {
+      "id": "1ffdec229a12d50458d6b0dc1de5b7ebf79a5f464614ccccc7ef22fef86188bb",
+      "name": "/routings-preparer-preparer-1",
+      "image": "sha256:f7bfe7434ee7e8a864452b98678339a940bb621cfccdd21ad715f591ace6ad77",
+      "startedAt": "2026-10-17T09:30:09.74632792Z",
+      "running": true
+    },
+    {
+      "id": "1d2a63a1b6710bbbfcf4663c61732ea4989ebc3229d6437d22d7ff10d265d47b",
+      "name": "/aalborg-offline-viewer-gateway-1",
+      "image": "sha256:6ff1cadaccac6e2cb4ae8b4f87e7ed6e0d1ea5fa7cd781793b5f673859cddc20",
+      "startedAt": "2026-10-16T14:08:20.484859769Z",
+      "running": true
+    },
+    {
+      "id": "31a298d2589caf6aa4ffe62aed90fb4f41ed2048ac52f940e47b4a7e2638e874",
+      "name": "/aalborg-offline-viewer-viewer-1",
+      "image": "sha256:6ff1cadaccac6e2cb4ae8b4f87e7ed6e0d1ea5fa7cd781793b5f673859cddc20",
+      "startedAt": "2026-10-16T14:08:20.493037766Z",
+      "running": true
+    },
+    {
+      "id": "966629b7cce4c9b74b2a39d5705bffded88093747dcd54d0939b56e06d9e6d02",
+      "name": "/aalborg-aps-viewer-viewer-1",
+      "image": "sha256:3afcb538328d92ea565f457b694d80872cea4f2d6d70038830bff128eee5db75",
+      "startedAt": "2026-10-16T05:18:05.048644042Z",
+      "running": false
+    },
+    {
+      "id": "5a5257297c09596752c28dc246767cedcb17fea506492bfa69b11846c1ce4e2e",
+      "name": "/niedax-gateway",
+      "image": "sha256:1ce9f99177667c70f907966e2b55e4b1fbede2ab0e9fcaaac2229a27ae12b686",
+      "startedAt": "2026-10-16T14:08:20.520293427Z",
+      "running": true
+    },
+    {
+      "id": "c1a106369b924f76df3f74eb6c80848a56041aaece45e80e11d1db746a68dbf5",
+      "name": "/niedax-backend",
+      "image": "sha256:f91ec3c3ee353af233a48b96e7e3e872ce73646de7ad28401f681de3545c68a7",
+      "startedAt": "2026-10-16T14:08:20.514865059Z",
+      "running": true
+    },
+    {
+      "id": "aa1d9cb94233c4bf375cb15acb80d2ea3465e04e0b3f6163248cccb91b316e39",
+      "name": "/niedax-migrations",
+      "image": "sha256:b2c1093ba19acc184b0cf9d84f1126536c6e5b40a22e58e4707dec381dbd265d",
+      "startedAt": "2026-10-13T10:44:08.346925904Z",
+      "running": false
+    },
+    {
+      "id": "3265e0bb1d03f23889e765c20ae81212e677bd89f79e2ec7f263bb27ec508ecb",
+      "name": "/niedax-postgres",
+      "image": "sha256:af1fcdc0950249ff31a7b72cca8f3bf2a05acde380196ce2ab5cff6355aafb0a",
+      "startedAt": "2026-10-16T14:08:20.518513019Z",
+      "running": true
+    },
+    {
+      "id": "54d0022b687a3d9af2b1937f6afc5dafcaffa40584c1e1992efb16c828a5c992",
+      "name": "/niedax-frontend",
+      "image": "sha256:88efc2b14924b52ddf902c798ff6c8183e5eca9a551e3933f2c224893e27dd81",
+      "startedAt": "2026-10-16T14:08:20.508506964Z",
+      "running": true
+    },
+    {
+      "id": "6ad45aea3b8f180629fd43f9be9f9ab4c6c1d99dbcda72612cb60a2b2e623705",
+      "name": "/wfc-minio",
+      "image": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+      "startedAt": "2026-10-17T09:48:41.528161291Z",
+      "running": true
+    },
+    {
+      "id": "2f1d30dd30411bf8b7e873b893d1a87a064cd618651d1f2646b8c5d739f72f36",
+      "name": "/wfc_app",
+      "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+      "startedAt": "2026-10-16T14:08:28.33027284Z",
+      "running": true
+    }
+  ],
+  "retainedPrivateEvidence": {
+    "directory": "pathfinder-engine/.scratch/ui-preservation-c43b7c81-a9cc-4eca-a349-ef06a6c9f338",
+    "files": 55,
+    "bytes": 3074152
+  },
+  "retainedArchive": {
+    "file": "pathfinder-engine/.scratch/path-lookup-archive-462d5a9465e8/manifest.json",
+    "manifestSha256": "8a2b1ce69a43e0371235feeef4d56e577d82e29ac1766539df33fb762b4d6c63",
+    "payloadsRehashedAtFinalInventory": false,
+    "verifiedByFreshRestore": true
+  },
+  "checks": {
+    "fourPhase": "PASS",
+    "aggregate24": "PASS",
+    "captionC0C1": "PASS",
+    "captionActualBrowser": "Parent-scoped Clear notice/drafts PASS; new-web Ghost not retested",
+    "originalControls34": "PASS; source unchanged, not rerun",
+    "captionControls5": "PASS",
+    "primaryDataAudit": "PENDING_PARENT"
+  },
+  "cleanup": {
+    "retirement": "docs/pathfinder/evidence/ui-preservation/retirement-1792334898544.json",
+    "images": "docs/pathfinder/evidence/ui-preservation/image-cleanup-1792334959364.json",
+    "logicalImageBytesSum": 294832567,
+    "physicalReclaimedBytes": null
+  },
+  "scope": {
+    "historicalLostComparison": "FAIL_NOT_RETAINED",
+    "engineeringAcceptance": "NOT_PERFORMED",
+    "source5190Writes": false,
+    "deniedChildrenRetained": 7
+  }
+}

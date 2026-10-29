@@ -1,0 +1,24 @@
+{
+  "status": "PASS",
+  "scope": "actual C# whole-union publication; Linux API PID1 process tree sampled by separate guarded helper",
+  "projectId": "58490e71-85f2-45f0-863a-434bf628b230",
+  "sessionId": "82d77d66-060e-4c76-9061-5ff84c43c70b",
+  "aggregateId": "92799907-f56b-48f9-a16f-a1b25d5fb39f",
+  "partCount": 2,
+  "counts": {
+    "objects": 515,
+    "physicalLeaves": 513,
+    "fragments": 513,
+    "vertices": 1539,
+    "triangles": 513
+  },
+  "wallMilliseconds": 1578,
+  "measurement": {
+    "intervalMilliseconds": 25,
+    "samples": 54,
+    "observedMaximumBytes": 457793536,
+    "exactPeak": false,
+    "includes": "API Node and all current descendants; shared Node worker-thread heap; serialized C# child if present"
+  },
+  "publicationReplay": "PASS"
+}

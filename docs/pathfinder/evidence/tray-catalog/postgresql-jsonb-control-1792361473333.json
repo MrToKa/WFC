@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "wfc.pf.catalog-postgresql-jsonb-control.v1",
+  "recordedAt": "2026-10-18T22:11:13.333Z",
+  "status": "PASS",
+  "scalarCode": "22023",
+  "objectResult": "{}",
+  "identity": {
+    "database": "wfc_pathfinder_local",
+    "address": "172.29.0.2",
+    "ro": "on"
+  },
+  "raw": {
+    "path": "pathfinder-engine/.scratch/tray-catalog-17cadea1-d54c-42b1-a563-2d3c514e7704/jsonb-postgresql-control-raw.private.json",
+    "bytes": 138,
+    "sha256": "4ea09a3aac23d007c99b1e005a584b0e939a88c8425f0b935f5fa71c62cae0bc"
+  }
+}

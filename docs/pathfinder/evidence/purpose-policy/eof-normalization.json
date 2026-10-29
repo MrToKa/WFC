@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "pathfinder.purpose-policy.eof-normalization.v1",
+  "status": "PASS",
+  "reason": "git diff --cached --check found four added blank EOF lines",
+  "sources": [
+    {
+      "path": "src/api/pathfinderPolicies.ts",
+      "beforeSha256": "7d75bcb6275671123846e99ce1f444807e9a87b3a6717613a2b036ba2d88ab0f",
+      "afterSha256": "06ced272e601598f9e7e2e9145e5318433aca3a41eba0d76450a2d8871e07253",
+      "transformation": "Remove surplus terminal CRLF blank lines only; retain one CRLF and every other byte"
+    },
+    {
+      "path": "src/components/RoutingPurposePolicyCard.test.tsx",
+      "beforeSha256": "b5ae62a5cef71b13b2738aa2178488a161b5ae2164a62c691667cb4652710da9",
+      "afterSha256": "58a2f404d1014feb894e297eef8ff194fcf0c7575b57ae229aa17b6fec25f11b",
+      "transformation": "Remove surplus terminal CRLF blank lines only; retain one CRLF and every other byte"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/useRoutingPurposePolicy.test.ts",
+      "beforeSha256": "3385e161743aa8dbd5a0b899c491cdb73fbccd0db8c2c896c7077c78dfe1d28f",
+      "afterSha256": "e3fda133b9da8b1a550951354c4549d49f67694aef98c6e7a4e7461d84c76809",
+      "transformation": "Remove surplus terminal CRLF blank lines only; retain one CRLF and every other byte"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/useRoutingPurposePolicy.ts",
+      "beforeSha256": "0fc120fb3f22ba28cfa2d698b072a87925089b7e117e7b9097e712656f383c81",
+      "afterSha256": "dfec7ba8fd29c9f70201a6b4ffd3794964637cc45b510343b7ab1c6204ddd2e3",
+      "transformation": "Remove surplus terminal CRLF blank lines only; retain one CRLF and every other byte"
+    }
+  ],
+  "runtimeRebuild": false,
+  "scope": "Terminal blank-line removal only; no executable or test behavior changes",
+  "observedAt": "2026-10-18T23:08:52.460Z"
+}

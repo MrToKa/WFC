@@ -1,0 +1,41 @@
+{
+  "observedAtUtc": "2026-10-18 12:14:18 UTC",
+  "localBranch": "pf-2-worker-reuse-local-20261018",
+  "localHead": "adcb55da93564571deb0a5bc11ef9921c54c0a53",
+  "cachedOriginMainComparison": {
+    "ahead": 25,
+    "behind": 0
+  },
+  "observations": [
+    {
+      "status": "fulfilled",
+      "value": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Action completed."
+          }
+        ],
+        "structuredContent": {
+          "branches": [],
+          "cursor": null
+        },
+        "isError": false
+      }
+    },
+    {
+      "status": "fulfilled",
+      "value": {
+        "chunk_id": "c476f3",
+        "wall_time_seconds": 0.8468089,
+        "exit_code": 0,
+        "original_token_count": 41,
+        "output": "e1ef20202598bb4d3d78e4772cbbb9747ec23a00\trefs/heads/main\n## pf-2-worker-reuse-local-20261018\n?? .pf0-work/\n?? .pf2-work/\nadcb55da93564571deb0a5bc11ef9921c54c0a53\n"
+      }
+    }
+  ],
+  "limits": [
+    "New worker-reuse branch unpublished; no candidate PR/review/CI is established.",
+    "Read-only live remote and connector observations, not a push/fetch."
+  ]
+}

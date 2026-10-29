@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "wfc.pf.ordinary-trace-event-source.v2",
+  "status": "PASS_SOURCE_ATOMIC_RETEST_PENDING",
+  "at": "2026-10-20T10:09:19.880Z",
+  "gitParent": "7748a61e53b934c6a6c4123976dd1696d23ddb04",
+  "files": [
+    {
+      "path": "server/pathfinder/geometryTraceRepository.ts",
+      "bytes": 32395,
+      "sha256": "b46a310bd506c38671e7951780536fb5e70ceb0e00f882356d30a487289aa919"
+    },
+    {
+      "path": "server/pathfinder/geometryTraceRepository.test.ts",
+      "bytes": 30780,
+      "sha256": "73bbf1f2905c1f3a5d6644bf77c35b77db874acb6461b808016c19a2bb4a4fa5"
+    },
+    {
+      "path": "server/pathfinder/ordinaryTraceEvent.integration.ts",
+      "bytes": 34636,
+      "sha256": "b945818f599b16c8a6aa5689dd1726275b83aa83cdd090d260b8d13bf5ac7291"
+    }
+  ],
+  "previousSourceReceipt": {
+    "path": "source1.json",
+    "sha256": "e9afa1f056b09bd06c108eeb85a8d6726a438357a6f8d484de3b068213b973e8"
+  },
+  "checks": {
+    "unchangedProductionFocusedTests": "REUSED_PASS_104_AT_SOURCE1",
+    "serverTypes": "PASS",
+    "scopedLint": "PASS",
+    "serverBuildCompiledClosure": "PASS",
+    "independentSourceReview": "PASS",
+    "privateLauncherSyntaxReview": "PASS",
+    "actualDatabaseAtomicity": "NOT_RUN_AFTER_REPAIR",
+    "runtimeDeployment": "NOT_RUN"
+  },
+  "firstActualCase": {
+    "status": "FAIL",
+    "scenario": "commit",
+    "policy": "disabled",
+    "code": "23514",
+    "phase": "synthetic ready-model metadata seed before trace publication",
+    "rawReceiptSha256": "900c0a264e399a3f9516b95e721a32cb9060f3fada9d76628c3af80e207e1d64",
+    "helperRemoved": true,
+    "databaseDropped": true
+  },
+  "repair": "Test-only shared synthetic manifest/package/fingerprint identities satisfy unchanged ready-model guard; no storage/native/human verification claimed.",
+  "engineeringAccepted": false,
+  "realApply": false
+}

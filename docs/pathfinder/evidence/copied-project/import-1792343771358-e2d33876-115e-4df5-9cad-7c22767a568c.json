@@ -1,0 +1,69 @@
+{
+  "schemaVersion": "pathfinder.copied-project.import-receipt.v1",
+  "status": "PASS",
+  "startedAt": "2026-10-18T17:14:55.414Z",
+  "engineeringAccepted": false,
+  "syntheticMarker": false,
+  "projectId": "1af0f807-7653-40ea-8391-7eea6c54e7d4",
+  "target": {
+    "owner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+    "project": "wfc-pathfinder-local-0cba87606e9b",
+    "port": 5191,
+    "apiId": "97e0ad80387c1c1e5148922356088ccbc7f77e5def61073c657b10769db09adb",
+    "apiImage": "sha256:dce12a1f5ab6311bbaf04defb7277ff0d50fee36e29e49d47234e5bf4ea405fe",
+    "pgId": "6a39e7b2d794055dccef0919cf3a99ddf60e0f3c0b5daae062cec1eb6c9b3785",
+    "pgImage": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+    "webId": "d864cc9ca17d0742277e77d4d929950ff9e5c8bd4dd940e57cb5702fe066f460",
+    "webImage": "sha256:561d51c3dd5ecb88459c17013890f9cd30089bb0760ccb9c5ff0ec3ade39f285",
+    "backendNetworkId": "3ab7652221239fe0a4c35f64be8a706aa6182633775d7aa0627fa1b54968e57d",
+    "serverAddress": "172.29.0.2",
+    "startedAt": {
+      "api": "2026-10-18T16:37:14.241777817Z",
+      "postgres": "2026-10-18T15:55:24.900140794Z",
+      "web": "2026-10-18T16:37:20.024456112Z"
+    },
+    "runtime": "pathfinder-engine/.scratch/batched-capture-runtime-20261018-1600",
+    "minioId": "56456c8675afd1458df3ae87d8df4bf31131fa1807f7468e3958f900f53a73ed",
+    "minioImage": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+    "minioStartedAt": "2026-10-18T15:55:24.907837971Z"
+  },
+  "plan": {
+    "path": "pathfinder-engine/.scratch/copied-project-seed-20261018-1710/plan.private.json",
+    "bytes": 794861,
+    "sha256": "3ac537e097ce4eec007bc2604c0c9338a9bfb0ecad81f3af70a71100b18d0b0d"
+  },
+  "seedReceipt": {
+    "path": "docs/pathfinder/evidence/copied-project/seed-1792343294599-9df304d0.json",
+    "sha256": "c3b236a265c557d79ff13774972f263a5ad28943ce32181e363a9be10abb1718"
+  },
+  "idempotencyKeySha256": "7d8ab394036ee6d53e9d72cbbaada954ea47b6887c9c6a72695efbae4c44a8f5",
+  "result": {
+    "status": "PASS",
+    "projectId": "1af0f807-7653-40ea-8391-7eea6c54e7d4",
+    "importId": "f64b152a-d3d1-40d7-b0a7-d8c9cd554023",
+    "modelVersionId": "a613151e-c370-45c5-80f3-42ae58603b9a",
+    "contentFingerprint": "b5bb4fbe666b440c73bb1ffd2ee0db01be66146f8002e4a9df8dce8521db1d34",
+    "resourceCount": 342,
+    "totalBytes": "439007803",
+    "storagePrefix": "projects/1af0f807-7653-40ea-8391-7eea6c54e7d4/versions/a613151e-c370-45c5-80f3-42ae58603b9a/",
+    "selectionRevision": "1",
+    "selectionDisposition": "selected",
+    "uploadDisposition": "single_upload_or_existing_request",
+    "syntheticMarker": false,
+    "engineeringAccepted": false
+  },
+  "operation": "normal_protected_import_and_selection",
+  "privateJournal": {
+    "directory": "pathfinder-engine/.scratch/copied-import-cec74539-2706-4833-b86b-9e3fd11d6469",
+    "intent": {
+      "path": "pathfinder-engine/.scratch/copied-import-cec74539-2706-4833-b86b-9e3fd11d6469/intent.private.json",
+      "bytes": 1892,
+      "sha256": "5bc7c593ecebca1866087ffec99b7fb661b2305e9c509dd19736bb533630f91b"
+    },
+    "events": 60,
+    "bytes": 1738911,
+    "finalSha256": "b403f1cbed03ebee1c8a65699f2657efe8778a5f508323e0e7a84aa7bf7c9df5",
+    "recordsSha256": "b1ace0a3b1b0553731a7dfed1eb3ce26be7e4183ec8828ff59e1d278f752695d"
+  },
+  "finishedAt": "2026-10-18T17:16:11.358Z"
+}

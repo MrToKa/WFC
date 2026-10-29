@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "pathfinder.session.failure-context.v1",
+  "status": "FAIL",
+  "checkedAt": "2026-10-18T13:01:39.373Z",
+  "apiId": "feb4345daa590021732d0f0d2219db793f1d1b2237f15a16f5caa9c662d024e4",
+  "image": "sha256:323f876ac757488376bcfab483934a35bb4175257a922134fa1a547f14c2227b",
+  "startedAt": "2026-10-18T12:50:14.041428401Z",
+  "finishedAt": "2026-10-18T13:00:01.043789125Z",
+  "exitCode": 1,
+  "oomKilled": false,
+  "pid": 0,
+  "postgresBackendTerminated": 438,
+  "observedLastPassingControl": "exact unique advisory owner was terminated after legitimate completed10m preview and persistent dotnet pair",
+  "failure": "Unhandled pg Client error: Connection terminated unexpectedly",
+  "stack": [
+    "node:events:505",
+    "pg/lib/client.js:136:73",
+    "pg/lib/client.js:350:10",
+    "pg/lib/client.js:154:16"
+  ],
+  "logSha256": "faece0ce334e6fec42e736f8138c73dff0bd9e1cebdcdc686888e54e8529dae7",
+  "rawLogRetained": "pathfinder-engine/.scratch/session-target-lockloss-feb4345d/api.log",
+  "source5190Operations": 0,
+  "remainingGracefulAndCrashGates": "NOT_RUN",
+  "originalReceipt": "docs/pathfinder/evidence/session/target-ops-1792328401607.json"
+}

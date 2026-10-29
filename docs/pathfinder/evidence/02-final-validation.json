@@ -1,0 +1,207 @@
+{
+  "schemaVersion": 1,
+  "observedAtUtc": "2026-10-17T20:20:36.035Z",
+  "purpose": "PF-0 documentation/example and original-environment preservation checks; not web/native parity",
+  "status": "BLOCKED",
+  "technicalStatus": "PASS",
+  "checks": [
+    {
+      "name": "all-document-json-parses",
+      "status": "PASS",
+      "details": {
+        "count": 13
+      }
+    },
+    {
+      "name": "five-required-stage-documents",
+      "status": "PASS",
+      "details": [
+        "00-baseline.md",
+        "00-specification.md",
+        "00-validation-matrix.md",
+        "00-parity-fixtures.md",
+        "00-stage-report.md"
+      ]
+    },
+    {
+      "name": "markdown-local-link-targets",
+      "status": "PASS",
+      "details": {
+        "checkedTargetCount": 47,
+        "fragmentExistenceClaimed": false,
+        "externalNetworkCheckClaimed": false
+      }
+    },
+    {
+      "name": "pinned-source-links-target-current-reference-files",
+      "status": "PASS",
+      "details": {
+        "checkedLinkCount": 12,
+        "verifiesLineBoundsOnly": true
+      }
+    },
+    {
+      "name": "illustrative-contract-invariants-not-engine-parity",
+      "status": "PASS",
+      "details": {
+        "geometricMetres": 31,
+        "designMetres": 41,
+        "engineExecutionClaimed": false
+      }
+    },
+    {
+      "name": "frozen-core-manifest-artifact-and-source-hashes",
+      "status": "PASS",
+      "details": {
+        "artifacts": 7,
+        "sourcePins": 28,
+        "coreFiles": 11,
+        "harnessFiles": 9,
+        "referenceCases": 43,
+        "repeatedEngineExecution": false
+      }
+    },
+    {
+      "name": "original-repository-head-branch-status-preserved",
+      "status": "PASS",
+      "details": [
+        {
+          "key": "originalWfc",
+          "path": "C:\\Users\\todor.chankov\\source\\WFC",
+          "head": "e1ef20202598bb4d3d78e4772cbbb9747ec23a00",
+          "branch": "main",
+          "status": []
+        },
+        {
+          "key": "referencePathFinder",
+          "path": "C:\\Users\\todor.chankov\\.codex\\.chatgpt-projects\\g-p-6ad0a317833c8191bf8e4e8c824a1056\\work\\review-pathfinder",
+          "head": "45c24bf5f433f13e102600b36f20327c77961d0a",
+          "branch": "master",
+          "status": []
+        },
+        {
+          "key": "oldPathFinder",
+          "path": "C:\\Users\\todor.chankov\\source\\repos\\MrToKa\\PathFinder",
+          "head": "35f4fb46f7762503576bdacd9668f34a1be2b0ed",
+          "branch": "master",
+          "status": [
+            "M AddinRibbon/AddinRibbon.csproj",
+            " M AddinRibbon/ClAddin.cs",
+            "?? .vscode/settings.json"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "old-pathfinder-local-file-bytes-preserved",
+      "status": "PASS",
+      "details": {
+        "files": 3
+      }
+    },
+    {
+      "name": "isolated-branch-scoped-deliveries-and-known-retained-temp",
+      "status": "PASS",
+      "details": {
+        "branch": "pf-0-contracts-baseline-20261017",
+        "changedFilesBeforeCommit": 193,
+        "retainedTemporaryRoot": ".pf0-work/core-1f723e37-f152-4a60-9b1e-46adc6c3179c",
+        "cleanupStatus": "BLOCKED",
+        "tempFilesAreNotDeliveries": true
+      }
+    },
+    {
+      "name": "existing-container-identities-images-start-state-preserved",
+      "status": "PASS",
+      "details": {
+        "count": 13,
+        "environmentRead": false,
+        "databaseContentAuditClaimed": false,
+        "newStageContainers": 0
+      }
+    },
+    {
+      "name": "owned-temporary-copy-cleanup",
+      "status": "BLOCKED",
+      "details": {
+        "status": "BLOCKED",
+        "action": "recursive Remove-Item of own temporary execution copy",
+        "reason": "Automatic approval review rejected action: blocked by policy",
+        "attempts": 1,
+        "commandExecuted": false,
+        "deletionMutations": 0,
+        "noRetry": true,
+        "target": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\.pf0-work\\core-1f723e37-f152-4a60-9b1e-46adc6c3179c",
+        "resolvedTarget": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\.pf0-work\\core-1f723e37-f152-4a60-9b1e-46adc6c3179c",
+        "verifiedParent": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\.pf0-work",
+        "runId": "1f723e37-f152-4a60-9b1e-46adc6c3179c",
+        "files": 162,
+        "directories": 51,
+        "bytes": 3586733,
+        "reparseEntries": 0,
+        "observedAt": "2026-10-17T20:16:13.4235119Z",
+        "targetRetained": true,
+        "scope": "Only own temporary execution tree; original repositories, docs, fixtures and evidence excluded",
+        "rootRetriedDeletion": false,
+        "workaroundUsed": false
+      }
+    }
+  ],
+  "jsonArtifactHashes": [
+    {
+      "path": "contracts/examples.json",
+      "bytes": 6047,
+      "sha256": "21f49bc743573450d6c9638b032a0cb4ffe9e83752425b5fcc033e15bd522f9d"
+    },
+    {
+      "path": "evidence/00-start-state.json",
+      "bytes": 5933,
+      "sha256": "ea9fd62941936a96fa560b96491b5dc6d9ee46f16ad4f17b3be6db0650bbdb75"
+    },
+    {
+      "path": "evidence/01-github-observations.json",
+      "bytes": 5804,
+      "sha256": "e497032e20a64eb2549188ec1b4f79685b5239a282047150dc170a971bf06069"
+    },
+    {
+      "path": "evidence/03-document-review.json",
+      "bytes": 2118,
+      "sha256": "377628d5e7deb26fac1a2ffec120bbb1c75c992129ffeb7a929fec02ca2752af"
+    },
+    {
+      "path": "evidence/pf-core-run-context.json",
+      "bytes": 367,
+      "sha256": "d713d57e94f8ee028d915cf9a9afa4875413fff2be82c6aa2a77952ccc2ac515"
+    },
+    {
+      "path": "evidence/pf-core-source-inventory.json",
+      "bytes": 6693,
+      "sha256": "6697ad87675ab3dbd7db65a0de70de4ecac8c85358a6b14bf80525d333592984"
+    },
+    {
+      "path": "evidence/pf-core-summary.json",
+      "bytes": 7660,
+      "sha256": "83aac7ecce734fe8f2bf61472db4e6a90c8a215517b2600533c268bd33b4ab11"
+    },
+    {
+      "path": "fixtures/pf-core-v1.expected.json",
+      "bytes": 49832,
+      "sha256": "43ea08d2e7e5ff4e56d1fe5c4435bada300a215b0da3164f5179d27ca4b23a5a"
+    },
+    {
+      "path": "fixtures/pf-core-v1.inputs.json",
+      "bytes": 223109,
+      "sha256": "1fd49428742284e30071a0b293cca0a8f5eff8b47a2aaab10f1184cf73cd7e78"
+    },
+    {
+      "path": "fixtures/pf-core-v1.manifest.json",
+      "bytes": 13592,
+      "sha256": "0c3aac68b43f5e19201037716c13e3a0b8b6cd6074ea015eaf23de8c93b26392"
+    },
+    {
+      "path": "fixtures/pf-core-v1.schema.json",
+      "bytes": 25431,
+      "sha256": "b65addd83e0e3b400246e28da6b9a0dedfcb6517008b643a0203694f2f36f759"
+    }
+  ]
+}

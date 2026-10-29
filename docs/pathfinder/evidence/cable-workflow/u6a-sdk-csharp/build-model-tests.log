@@ -1,0 +1,11 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  PathFinder.Core -> C:\Users\todor.chankov\source\WFC-pathfinder-local\pathfinder-engine\.scratch\equipment-visibility-u6a-5617da3b-234b-40ac-abae-1553bc92392f\artifacts\bin\PathFinder.Core\release\PathFinder.Core.dll
+  PathFinder.Model -> C:\Users\todor.chankov\source\WFC-pathfinder-local\pathfinder-engine\.scratch\equipment-visibility-u6a-5617da3b-234b-40ac-abae-1553bc92392f\artifacts\bin\PathFinder.Model\release\PathFinder.Model.dll
+  PathFinder.Model.Tests -> C:\Users\todor.chankov\source\WFC-pathfinder-local\pathfinder-engine\.scratch\equipment-visibility-u6a-5617da3b-234b-40ac-abae-1553bc92392f\artifacts\bin\PathFinder.Model.Tests\release\PathFinder.Model.Tests.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:00.98

@@ -1,0 +1,83 @@
+{
+  "schemaVersion": "pathfinder.lookup.audit.v1",
+  "recordedAtUtc": "2026-10-18T09:40:43.480Z",
+  "projectId": "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a",
+  "scope": "isolated database; repeatable read-only snapshot",
+  "database": {
+    "database": "wfc_pathfinder_local",
+    "address": "172.28.0.3/32",
+    "port": 5432
+  },
+  "registryRevision": "11",
+  "latestPlanningArtifact": {
+    "id": "75c61dc7-d456-45b0-9052-2a0822240350",
+    "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+    "snapshotSha256": "b47365401aaf078374607c944e22ac5100f2aa6fe4389c056fbdd963526f17ed",
+    "objectCount": 52
+  },
+  "planningArtifactList": [
+    {
+      "id": "6a04c032-707f-490c-9cc6-325a04a63250",
+      "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+      "snapshotSha256": "df1b67a0c832e9eed426d4f00741373616b4738f0520b65eb3ff3898c9fd2640",
+      "objectCount": 52
+    },
+    {
+      "id": "75c61dc7-d456-45b0-9052-2a0822240350",
+      "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+      "snapshotSha256": "b47365401aaf078374607c944e22ac5100f2aa6fe4389c056fbdd963526f17ed",
+      "objectCount": 52
+    }
+  ],
+  "planningArtifactsAndWorkflow": {
+    "settings": {
+      "count": 1,
+      "sha256": "fd028bfed36351138279cea05254d6eb0bb712f9ca8fb7501643ebbb0760ae2d"
+    },
+    "selection": {
+      "count": 1,
+      "sha256": "53c9e37c1ada39e3fadd5ba7b00f508198e6c2fc12c189c8789380d61f5e80e9"
+    },
+    "registry": {
+      "count": 1,
+      "sha256": "ad9d92d44bd97652b37a8e97a0892eebc5f9314372504b35ab950492014d0984"
+    },
+    "planningArtifacts": {
+      "count": 2,
+      "sha256": "02a92c6d9d81be7cfc775920ba1577183e0d517def13532f325f616dae720ddd"
+    },
+    "locations": {
+      "count": 3,
+      "sha256": "14b33f54e2b6ad71318f8d586280a44771456dad365cdd0fc42e2a5f0657a8e7"
+    },
+    "aliases": {
+      "count": 4,
+      "sha256": "30a41e0035f5737aa29ae112d5873efee8c6df6345dc43a19f777d5b62aacf4b"
+    },
+    "bindings": {
+      "count": 3,
+      "sha256": "2a0d7dc92b71813355eee3946ac83cca0564bd7429e6f9ebc33ed56e1c47d434"
+    },
+    "modelObjects": {
+      "count": 104,
+      "sha256": "14b7cd1d1aa7ddf23c21895279e9c83c07f9fa21935f424213369f4ab270cd56"
+    },
+    "cables": {
+      "count": 1,
+      "sha256": "7d1bf598adb6ca623113993592717b0de159747e2280f7286bbb2a8f035dde1b"
+    },
+    "proposals": {
+      "count": 5,
+      "sha256": "5a5a10d25a41e24f1f02ee473062888f6d47f55c11b791f300ff198127031e18"
+    },
+    "reviews": {
+      "count": 3,
+      "sha256": "a1121bb28f1c633a229efd78b135200368154959caa4773fa640a8157a24f909"
+    },
+    "applies": {
+      "count": 0,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    }
+  },
+  "nativeParity": "NOT_PERFORMED; no Apply or engineering acceptance asserted"
+}

@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "wfc.pf.current-full-recovery-public.v1",
+  "observedAt": "2026-10-20T12:47:13.723Z",
+  "branch": "pf-aalborg-current-full-recovery-local-20261020",
+  "deliveryParent": "d5e678dc5bcb59f1a05e803af5addec1641b1035",
+  "operatorSourceRevision": "7c0c673fd1a6aa442c4989c816d760f2626797b6",
+  "runtimeSourceRevision": "c68b4434ffadc73c7c6ca38997cfe4689aca928f",
+  "engineeringAccepted": false,
+  "nativeParity": "not-performed",
+  "status": "PASS",
+  "phase": "qualified-target-only-retirement",
+  "rawReceipt": {
+    "filename": "full-recovery1-retire1-result.private.json",
+    "bytes": 2125,
+    "sha256": "692e6847d0987aa09f5b19f98202d38750fbdcd1104b5439820f2285fd0fa45f"
+  },
+  "outsideReceipt": {
+    "filename": "full-recovery1-outside-retire1-after.private.json",
+    "bytes": 25164,
+    "sha256": "c2aaac6aec104947a61d13478a09f78b0b248c04ce7ffa9d9e6934425c8c4bef"
+  },
+  "retiredPort": 5192,
+  "ownedContainersRemaining": 0,
+  "ownedVolumesRemaining": 0,
+  "ownedNetworksRemaining": 0,
+  "portClosed": true,
+  "sourceEquality": {
+    "status": "PASS",
+    "tables": 126,
+    "changedTables": 0,
+    "qualifiedFieldSets": 0,
+    "leaseRowsExact": true
+  },
+  "source5191Retained": true,
+  "sourceRetireInvoked": false,
+  "outsideContainers": 18,
+  "outsideVolumes": 28,
+  "outsideNetworks": 14,
+  "outsidePreserved": true,
+  "originalsAnd5190Mutated": false,
+  "retainedUnqualifiedAnonymousVolume": "Historical1B/refcount0; not deleted or attributed",
+  "backupsPrivateCompanionsEvidenceRetained": true
+}

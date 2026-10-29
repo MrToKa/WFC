@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "pathfinder.delivery.scoped-content-review.v1",
+  "status": "PASS_AT_REVIEWED_SCOPE",
+  "sourceCommit": "25e49401a7eca4117bbb261208be00bc92a7b36a",
+  "recordedAtUtc": "2026-10-18T13:49:10Z",
+  "reviewer": "Independent read-only agent viewer_tab_capabilities",
+  "scope": {"files":72,"bytes":5055253,"textFiles":70,"validJsonFiles":51,"intentionalImageFiles":2,"relativeReportLinksChecked":28},
+  "checks": [
+    "Bounded literal JWT/provider-key/private-PEM/credential-URI/dump-header and quoted secret-assignment scans found no exposed credential value.",
+    "Sensitive JSON keys observed only booleans, nulls or SHA fingerprints; no private env/dump/build output in reviewed candidate paths.",
+    "Report25 explicitly separates final target post-UI FAIL_NOT_RETAINED from earlier positive driver scopes and final primary preservation."
+  ],
+  "limitations": ["Scoped review is not comprehensive proof of secret absence.","Two viewer-*.png paths contain JPEG bytes and render correctly; original screenshot bytes/hashes retained.","No code edits, tests, runtime operations or DB queries performed."]
+}

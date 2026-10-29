@@ -1,0 +1,28 @@
+import type { Buffer } from 'node:buffer';
+import type { ProducerMessage } from './producer-process.mjs';
+export const MANAGED_RUNNER_LIMITS: Readonly<{ chunkBytes: number; responseMilliseconds: number; pendingResources: number; resourceRequests: number;
+  resourceBytes: number; commands: number; queuedCommands: number; assetBytes: number; assetFiles: number; disposeMilliseconds: number; closeMilliseconds: number; joinMilliseconds: number }>;
+export type ManagedIdentity = Readonly<{ instanceId: string; projectId: string; modelVersionId: string; loadId: string; sessionId: string }>;
+export type ManagedInitialize = { kind: 'initialize'; identity: ManagedIdentity; runtimeInventorySha256: string };
+export type ManagedResourceRequest = { kind: 'resource'; method: 'GET' | 'HEAD'; path: string; range: string | null; offset: number; length: number };
+export type ManagedResourceResponse = { status: number; headers: Record<string, string>; totalBytes: number; dataBase64: string; complete: boolean };
+export type ManagedVerifiedResponse = { status: number; headers: Record<string, string>; totalBytes: number; bytes: Buffer; complete: boolean };
+export type ManagedRuntime = { files: Map<string, { bytes: Buffer; sha256: string }>; validateEnvelope(value: unknown, direction: 'parent-to-frame' | 'frame-to-parent'): any; inventorySha256: string };
+export function validateManagedIdentity(input: unknown): ManagedIdentity;
+export function validateManagedInitialize(input: unknown): ManagedInitialize;
+export function classifyManagedRequest(raw: string, identity: ManagedIdentity, origin: string, assets: ReadonlyMap<string, unknown>): { kind: 'asset'; relative: string } | { kind: 'resource'; path: string };
+export function validateManagedRange(value: unknown): string | null;
+export function validateManagedResourceResponse(input: unknown, request: ManagedResourceRequest, previous?: ManagedVerifiedResponse | null): ManagedVerifiedResponse;
+export function loadManagedRuntime(expectedSha256: string): Promise<ManagedRuntime>;
+export function validateManagedSdkInventory(files: Array<{path:string;bytes:number;sha256:string}>):{sdkFiles:number;sdkBytes:number};
+export function createManagedResourceRelay(options: { rpc(requestId: string, request: ManagedResourceRequest): Promise<unknown>; identity: ManagedIdentity;
+  origin: string; assets: ReadonlyMap<string, unknown>; signal?: AbortSignal }): {
+    readonly snapshot: Readonly<{ active: number; requests: number; bytes: number; stopped: boolean }>;
+    stop(): void; serve(req: any, res: any): Promise<void>;
+  };
+export type ManagedBrowserHandle = { validateEnvelope(value: unknown, direction: 'parent-to-frame' | 'frame-to-parent'): any;
+  initialize(identity: ManagedIdentity): Promise<unknown>; exchange(envelope: unknown): Promise<unknown>; close(): Promise<void>; snapshot(): unknown };
+export function createManagedRunner(options: { attemptId: string; emit(message: ProducerMessage): void | Promise<void>;
+  open?(input: { configuration: ManagedInitialize; rpc(requestId: string, request: ManagedResourceRequest): Promise<unknown>; signal: AbortSignal }): Promise<ManagedBrowserHandle>;
+}): { readonly snapshot: Readonly<{ state: string; pendingResources: number; queuedCommands: number; commandCount: number }>;
+  ready(): void | Promise<void>; receive(raw: unknown): void; cancel(): Promise<void>; closed: Promise<void> };

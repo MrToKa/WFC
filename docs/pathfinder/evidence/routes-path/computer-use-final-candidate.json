@@ -1,0 +1,19 @@
+{
+  "observedAtUtc": "2026-10-18T08:46:36.501Z",
+  "sourceCommit": "cb02f43000a51b4f511346d2aa666d09929570e0",
+  "apiImage": "sha256:7d216f20dfe2ec7b46f7ed9b357ea1a9171be73127d6422b673031b9971fb111",
+  "webImage": "sha256:36d9e4d6c7f8d826ded465dc4c7bf45fd61e62212e868d7e5f8430896a35307f",
+  "status": "PASS",
+  "scope": "Actual reload, outer Path Finder/two inner tabs, protected model ready, standalone saved-name Control path, default filledGhost/original trays/yellowline, Zoom to path",
+  "geometryMetres": 35.30345579516123,
+  "designMetres": 45,
+  "fromApproachMetres": 0,
+  "toApproachMetres": 0,
+  "gaps": 4,
+  "gapMetres": 0.9840583861033791,
+  "noRealApply": true,
+  "preBackup": true,
+  "image": "path-final-candidate.png",
+  "accessibility": "Browser tab: 2, Title: \"ACS App\", URL: \"http://127.0.0.1:5190/projects/105913f0-7ee4-45f2-bfd8-2c01f9be9f2a?tab=pathfinder\".\nThe following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.\nRemoved element IDs: 100-101, 153\n~\t\t\t\t\t\t\t\t61 text field (settable) Description: Path From location, Value: =PF-DEMO-NETWORK-START, ID: field-_r_f___control\n~\t\t\t\t\t\t\t\t63 pop up button (collapsed, settable) Description: Path From saved location, Value: Choose a shared location, Secondary Actions: Expand\n~\t\t\t\t\t\t\t\t69 button Use selection as From\n~\t\t\t\t\t\t\t\t78 text field (settable) Description: Path To location, Value: =PF-DEMO-NETWORK-END, ID: field-_r_k___control\n~\t\t\t\t\t\t\t\t80 pop up button (collapsed, settable) Description: Path To saved location, Value: Choose a shared location, Secondary Actions: Expand\n~\t\t\t\t\t\t\t\t86 button Use selection as To\n~\t\t\t\t\t\t\t93 pop up button (collapsed, settable) Description: Path cable type, Value: Control, Secondary Actions: Expand\n~\t\t\t\t\t\t\t99 button Calculate path\n+\t\t\t\t\t\t\t205 button Reverse path\n+\t\t\t\t\t\t\t206 text The exact standalone path is displayed. Review its route and length.\n+\t\t\t\t\t\t\t207 container Standalone path result\n+\t\t\t\t\t\t\t\t208 text Path calculation complete Original endpoints: From  =PF-DEMO-NETWORK-START ; To  =PF-DEMO-NETWORK-END .  Forward preview . Path calculated. Geometric length:  35.30345579516123  m From approach:  0  m ; To approach:  0  m Connection gaps:  4 ; total gap length:  0.9840583861033791  m\n+\t\t\t\t\t\t\t\t209 button (collapsed) Standalone route text, Secondary Actions: Expand\n+\t\t\t\t\t\t\t\t\t210 text Standalone route text\n+\t\t\t\t\t\t\t\t211 text Before percentage:  40.3034557951612  m; before rounding:  44.33380137467732  m Design length:  45  m Standalone preview only. Cable values are changed through Calculate and review below.\n~\t\t\t\t\t\t\t\t151 text Standalone path —  Complete :  1  /  1  result\nThe focused UI element is 0 AXWebArea ACS App, URL: 127.0.0.1:5190/projects/105913f0-7ee4-45f2-bfd8-2c01f9be9f2a?tab=pathfinder",
+  "fullAppearanceProof": "computer-use-corrected-appearance.json"
+}

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "wfc.pf.revision-comparison-control-receipt.v1",
+  "status": "PASS",
+  "phase": "auth-admin",
+  "phaseIntentId": "50721312-fbcd-4085-8ef2-320469e899a5",
+  "checks": [
+    {
+      "name": "Production authority checks reject the current revoked role/login",
+      "status": "PASS",
+      "scope": "actual same-client savepoint context with rollback-only demotion/revocation; no committed role change or full HTTP race claim"
+    }
+  ],
+  "beforeSha256": "f7d2ac0a03595c1a906e18ac1fa291864ed25f362fd797082d313a37ee0541b8",
+  "afterSha256": "f7d2ac0a03595c1a906e18ac1fa291864ed25f362fd797082d313a37ee0541b8",
+  "elapsedMilliseconds": 41,
+  "engineeringAccepted": false,
+  "productionComparisonPublicationTested": false,
+  "automaticApplyPerformed": false
+}

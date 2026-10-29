@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "pathfinder.drawing-positioning.candidate-review.v1",
+  "status": "SUPERSEDED_BEFORE_DEPLOYMENT",
+  "candidateReceipt": "candidate-build-1792366563063.json",
+  "runtimeUpgradeAttempted": false,
+  "apiImage": "sha256:29202b007e32673a896df731df443d7565864106430f95599d41a8a09336ca86",
+  "webImage": "sha256:38f737b49e94cdb2c008b463eb1a18e78bd1c5f35d653f7bc571cb9f5275262d",
+  "materialReviewFindings": [
+    "A mutable canvas could change during report-generation awaits without changing the committed server snapshot.",
+    "The report tray list and purpose count still came from separate navigation reads.",
+    "An extra GET after a successful settings PUT could misclassify the already committed save outcome."
+  ],
+  "requiredCorrection": "Freeze report rendering/generation through awaits, return the complete report tray list within the same server snapshot and use the verified PUT response directly; recheck affected tests and build fresh candidates.",
+  "scope": "The original build PASS is retained as build evidence only. These images were never used by a container and are not an accepted runtime delivery."
+}

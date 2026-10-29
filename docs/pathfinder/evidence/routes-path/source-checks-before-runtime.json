@@ -1,0 +1,94 @@
+{
+  "schemaVersion": "pathfinder.routes-path.source-checks.v1",
+  "recordedAtUtc": "2026-10-18T07:53:14.146Z",
+  "branch": "pf-two-tabs-local-20261018",
+  "checkedBaseCommit": "fcd8f1dc39569c430125b897c95756fac9c28a89",
+  "sourceBinding": "Coordinated working-source scoped runs; later candidate commit/source manifest binds frozen bytes. These are separate runs, not an aggregate or native acceptance.",
+  "checks": [
+    {
+      "scope": "Backend preview/preferences/boundary",
+      "passed": 25,
+      "status": "PASS"
+    },
+    {
+      "scope": "Backend matching",
+      "passed": 20,
+      "status": "PASS"
+    },
+    {
+      "scope": "Backend settings",
+      "passed": 15,
+      "status": "PASS"
+    },
+    {
+      "scope": "Root frontend API/hook/Details",
+      "passed": 24,
+      "status": "PASS",
+      "files": [
+        "src/api/pathfinder.test.ts",
+        "src/pages/ProjectDetails/hooks/usePathFinder.test.tsx",
+        "src/pages/ProjectDetails/DetailsTab.test.tsx"
+      ]
+    },
+    {
+      "scope": "Protected bridge/path/protocol",
+      "passed": 47,
+      "status": "PASS"
+    },
+    {
+      "scope": "Model capture including two actual C# process cases",
+      "passed": 19,
+      "status": "PASS"
+    },
+    {
+      "scope": "Adapter/legacy Ghost",
+      "passed": 27,
+      "status": "PASS"
+    },
+    {
+      "scope": "Viewer controller",
+      "passed": 19,
+      "status": "PASS"
+    },
+    {
+      "scope": "C# Model units/transforms/boundary/cache",
+      "passed": 94,
+      "status": "PASS",
+      "receipt": "../pf2/model-tests-20261018T072725411Z.json"
+    },
+    {
+      "scope": "ModelRunner build",
+      "status": "PASS",
+      "warnings": 0,
+      "errors": 0
+    },
+    {
+      "scope": "Runtime ownership/recovery helper boundaries",
+      "passed": 19,
+      "status": "PASS"
+    },
+    {
+      "scope": "Root 7 files/backend 12 files/Viewer targeted ESLint and server types",
+      "status": "PASS"
+    },
+    {
+      "scope": "Final PathFinder UI test suite and combined types",
+      "status": "PENDING",
+      "receipt": "See final frontend-source receipt; do not infer PASS here"
+    },
+    {
+      "scope": "New candidate live API/browser/backup/drill",
+      "status": "NOT_RUN",
+      "reason": "Not yet released at this observation"
+    }
+  ],
+  "review": {
+    "finding": "Accepted route snapshot after cancellation could desynchronize rule baseline",
+    "closingDiff": "RESOLVED by independent read-only reviewer; deferred regression added",
+    "otherActionableFindings": 0
+  },
+  "coreAndFrozenExpectationsRegenerated": false,
+  "humanAcceptance": "PENDING",
+  "nativeComparison": "NOT_PERFORMED / NOT_REQUIRED_BY_USER",
+  "credentialsRecorded": false
+}

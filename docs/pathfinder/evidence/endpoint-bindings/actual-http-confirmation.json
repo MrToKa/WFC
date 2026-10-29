@@ -1,0 +1,20 @@
+{
+  "status": "PASS",
+  "scope": "Actual normal host5191 current generated-admin endpoint API on explicitly synthetic cables/locations against retained converted diagnostic aggregate",
+  "fixedWorldConfirmations": 2,
+  "exactCommandReplays": 2,
+  "sharedUsage": {
+    "fromOccurrences": 2,
+    "toOccurrences": 2,
+    "distinctCables": 3
+  },
+  "legacyVisibleUnconfirmed": true,
+  "legacyWriteRefused": true,
+  "routingObjectNotEquipment": true,
+  "followUnsupportedWithoutEvidence": true,
+  "historyRows": 1,
+  "sourceAggregateUnchanged": "7ca536d8-29a0-4fbc-ad4e-e31bd2fd747c",
+  "noGeometryRecapture": true,
+  "engineeringAccepted": false,
+  "cableApply": "NOT_PERFORMED"
+}

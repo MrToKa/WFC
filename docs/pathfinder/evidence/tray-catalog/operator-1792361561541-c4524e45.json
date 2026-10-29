@@ -1,0 +1,760 @@
+{
+  "schemaVersion": "wfc.pf.catalog-operator-receipt.v1",
+  "status": "PASS",
+  "recordedAt": "2026-10-18T22:12:09.001Z",
+  "mode": "apply",
+  "sourceFiles": [
+    {
+      "path": "scripts/pathfinder-tray-catalog/catalog.mjs",
+      "sha256": "ee89cb58c75ad88870466b91fb427d4dde07468538be69a43ca11ea5377761f8"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/source-lib.mjs",
+      "sha256": "9091da99b6624024e910367fa53254f3cdb6f4dcb94137f47487656dcb7d594d"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/transfer-lib.mjs",
+      "sha256": "4ff9970d627f55558729d5dceced362ae934edf7e6b2652e0b884ed30e5ff9e3"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/guard-io.mjs",
+      "sha256": "48d12d9df8a62e32901454096bcd94a21f1a9c3912ff139ee13726deceb9d5d1"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/preservation-lib.mjs",
+      "sha256": "d581d575ce5dbc5af3fc01b31c9858d48a8c28ce8a26a726b6afbe0b38306d0d"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/operator-lib.mjs",
+      "sha256": "039006bec4fa345a1fa62cd68189c94abf165200ef42c36acc0ba86ac2eb0722"
+    }
+  ],
+  "work": "pathfinder-engine/.scratch/tray-catalog-17cadea1-d54c-42b1-a563-2d3c514e7704",
+  "owner": "17cadea1-d54c-42b1-a563-2d3c514e7704",
+  "sourcePreflight": {
+    "status": "PASS",
+    "phases": [
+      "before",
+      "copy",
+      "after"
+    ],
+    "projections": {
+      "project": {
+        "count": 1,
+        "sha256": "c8c0ad6c83bad68d6219959b9b65c370eaaefca86b17467b7d3914f34ecdbf92"
+      },
+      "trays": {
+        "count": 330,
+        "sha256": "a502c10114fd3ce788043cc84adddd51786896277b7954d5ab17ce45fc77e31d"
+      },
+      "cable_types": {
+        "count": 51,
+        "sha256": "e742a55d7e3ed6499aff8c436c5b39270268aeb7680e8fffd43b23f864c2cf21"
+      },
+      "cable_type_default_materials": {
+        "count": 9,
+        "sha256": "a615b3566559406ba9e9cb43ddf10534dd39cba5653d97eff105fd51f37d56be"
+      },
+      "material_cable_types": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "material_trays": {
+        "count": 15,
+        "sha256": "d0a1d49fff7daaefc7a306bbef1349006e6bc70f57d443810094f6634ad1be85"
+      },
+      "project_support_distances": {
+        "count": 14,
+        "sha256": "fa0f73e8af51f9752455e118b251dcc5e8c9076b7813c5bb569089cc11c77cfd"
+      },
+      "material_supports": {
+        "count": 5,
+        "sha256": "87824b46d0e590d2a4173e0b01c8530552b90ad1b34e56680a3403b36e38e473"
+      },
+      "material_load_curves": {
+        "count": 3,
+        "sha256": "551ed474719f2c544b5573c2e7630758eda6eec35dc4f25341b01edaf2773046"
+      },
+      "material_load_curve_points": {
+        "count": 803,
+        "sha256": "7332bd76bee952f4a0c58fb5451c6b279e1eacda0a49910ba26f3bf9c30f8aa4"
+      },
+      "material_cable_type_standard_materials": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "material_tray_standard_materials": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "material_support_standard_materials": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "material_cable_installation_materials": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "material_cable_installation_standard_materials": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "project_tray_purpose_templates": {
+        "count": 6,
+        "sha256": "b93bbfb8c32e035c0520eeae49d6f5daae6b46ed6723181f27c6f608cedc9ce0"
+      },
+      "project_files": {
+        "count": 2,
+        "sha256": "c40c8d421b529d89b4a1783f2768015c25f3d9c566a114d6c1f0503c8eff8417"
+      },
+      "project_file_versions": {
+        "count": 1,
+        "sha256": "7a8cb6f1d8d7482f5597e66fd3e1a28a437c0d28fef2d620d42dccd03e757ed9"
+      },
+      "template_files": {
+        "count": 3,
+        "sha256": "09012a9c524b9e140ee2a7771f0c76117bf2fb857cfc11158b0b879f037e055d"
+      },
+      "template_file_versions": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "files": {
+        "count": 6,
+        "sha256": "4ef116bd4c421ad1a4392b7cd889155cc755662b12af84ae9087c21a51c48bc0"
+      }
+    },
+    "sha256": "16b02722a2fe96f754d593963018e8a93524e3b71a7521cf647262a186a9b23c"
+  },
+  "databaseTransport": {
+    "path": "pathfinder-engine/.scratch/tray-catalog-17cadea1-d54c-42b1-a563-2d3c514e7704/apply-database-2a476df2-d65a-4f7c-8731-0676d385bec5-transport.private.json",
+    "bytes": 821,
+    "sha256": "6d9f9d096bd54826ae091be966a6ecda638617b08e19e5e2e2edad55e1292a50"
+  },
+  "databaseRaw": {
+    "path": "pathfinder-engine/.scratch/tray-catalog-17cadea1-d54c-42b1-a563-2d3c514e7704/apply-database-2a476df2-d65a-4f7c-8731-0676d385bec5-raw.private.json",
+    "bytes": 1190,
+    "sha256": "34f698a929ba2f165dcf352dfaea1317765c1d3f1ef90998c1d39ef51002fc7b"
+  },
+  "outcome": "TRANSPORT_OK",
+  "database": {
+    "status": "PASS",
+    "operation": "transferred",
+    "commitConfirmed": true,
+    "counts": {
+      "trays": 330,
+      "cable_types": 53,
+      "cable_type_default_materials": 9,
+      "material_cable_types": 1,
+      "material_trays": 15,
+      "project_support_distances": 14,
+      "material_supports": 5,
+      "material_load_curves": 3,
+      "material_load_curve_points": 803,
+      "material_cable_type_standard_materials": 0,
+      "material_tray_standard_materials": 0,
+      "material_support_standard_materials": 0,
+      "material_cable_installation_materials": 0,
+      "material_cable_installation_standard_materials": 0,
+      "project_tray_purpose_templates": 6,
+      "project_files": 2,
+      "project_file_versions": 1,
+      "template_files": 3,
+      "template_file_versions": 0
+    }
+  },
+  "storagePreservation": {
+    "schemaVersion": "wfc.pf.catalog-storage-preservation.v1",
+    "status": "PASS",
+    "failures": [],
+    "groups": {
+      "model": {
+        "before": 1026,
+        "after": 1026,
+        "unchanged": 1026,
+        "added": 0,
+        "invalid": 0,
+        "beforeSha256": "a3e6191e78deb6e195c7d94ed16d6b7a0a708fa179a8d4ea969a1bc4d294cdb1",
+        "afterSha256": "a3e6191e78deb6e195c7d94ed16d6b7a0a708fa179a8d4ea969a1bc4d294cdb1"
+      },
+      "project": {
+        "before": 0,
+        "after": 3,
+        "unchanged": 0,
+        "added": 3,
+        "invalid": 0,
+        "beforeSha256": "b1c75db0819767da1c3f981156e32add018da6a2abe47ea427ea433088469a5a",
+        "afterSha256": "ee8cc475198c4de6958a516850c83f1f8889b93ee07c2d9b4992892a8d843016"
+      },
+      "template": {
+        "before": 0,
+        "after": 3,
+        "unchanged": 0,
+        "added": 3,
+        "invalid": 0,
+        "beforeSha256": "e3fcae48c1a9eab988947898d5d8bc1e707924abb51e80561ea87b7ad9028fd8",
+        "afterSha256": "38466681808dd2278fc01dfcadfc4442f2205138b0f2dbe7bfe3fefa396ac6af"
+      }
+    },
+    "byteReadback": "checked-separately-per-staged-entry"
+  },
+  "operation": "transferred",
+  "plan": {
+    "path": "pathfinder-engine/.scratch/tray-catalog-17cadea1-d54c-42b1-a563-2d3c514e7704/transfer-plan.private.json",
+    "bytes": 1313111,
+    "sha256": "31dee403bcbb79a0e54c737b50224873f0df32328a839e0717c7ee155f364884"
+  },
+  "preservation": {
+    "schemaVersion": "wfc.pf.catalog-preservation-comparison.v1",
+    "status": "PASS",
+    "failures": [],
+    "tables": {
+      "projects": {
+        "before": 3,
+        "after": 3,
+        "unchanged": 2,
+        "added": 0,
+        "enriched": 1,
+        "invalid": 0,
+        "beforeSha256": "232f9237ad2d178ee761a3a6545be2900bc909c0d72af68a2d9bfd7c68ef01fe",
+        "afterSha256": "a70513c008d717f3646f737c5d4b7ad6e78ce3f1c5aef296304b31f95f9abd35"
+      },
+      "cable_types": {
+        "before": 52,
+        "after": 53,
+        "unchanged": 2,
+        "added": 1,
+        "enriched": 50,
+        "invalid": 0,
+        "beforeSha256": "e8de342171791d71b8e2eca13ec51f1cf76cbcda7299b96d1f47bb41efe87f03",
+        "afterSha256": "f1cbddfb5835958515633b645400aa5d4c55f4fd2308dc14f6be10f684207af2"
+      },
+      "cables": {
+        "before": 2143,
+        "after": 2143,
+        "unchanged": 2143,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "6f2313cec59a99969dbcbf9337604ba436c383c1be56e3501aaf18c30ed994d1",
+        "afterSha256": "6f2313cec59a99969dbcbf9337604ba436c383c1be56e3501aaf18c30ed994d1"
+      },
+      "project_model_selections": {
+        "before": 3,
+        "after": 3,
+        "unchanged": 3,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4ff827df7dc4aea7c507819993c18f578b11a1dff1fbc3b2339f8dca375bc52a",
+        "afterSha256": "4ff827df7dc4aea7c507819993c18f578b11a1dff1fbc3b2339f8dca375bc52a"
+      },
+      "model_package_identities": {
+        "before": 1,
+        "after": 1,
+        "unchanged": 1,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "d15ea4b82935b40b875a937a997c0fefe7660b8d3bd0b4895f8e51290956a023",
+        "afterSha256": "d15ea4b82935b40b875a937a997c0fefe7660b8d3bd0b4895f8e51290956a023"
+      },
+      "model_validation_reports": {
+        "before": 3,
+        "after": 3,
+        "unchanged": 3,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "29cca03333a7ee4746639fd033c31ac53188a6ede16460ee9784cce792a79761",
+        "afterSha256": "29cca03333a7ee4746639fd033c31ac53188a6ede16460ee9784cce792a79761"
+      },
+      "model_import_jobs": {
+        "before": 3,
+        "after": 3,
+        "unchanged": 3,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "a410dbe7d2e5ee6e52f348150df6e482c09f7c54b4c28431462cd18e8eccab60",
+        "afterSha256": "a410dbe7d2e5ee6e52f348150df6e482c09f7c54b4c28431462cd18e8eccab60"
+      },
+      "model_versions": {
+        "before": 3,
+        "after": 3,
+        "unchanged": 3,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "1a883308b254c07dc7b5159b0368538da0cf51f3e280e2d71470d424e3ea9e6d",
+        "afterSha256": "1a883308b254c07dc7b5159b0368538da0cf51f3e280e2d71470d424e3ea9e6d"
+      },
+      "model_content_reservations": {
+        "before": 0,
+        "after": 0,
+        "unchanged": 0,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "model_package_aliases": {
+        "before": 3,
+        "after": 3,
+        "unchanged": 3,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "fd6deaba543949d298239a6fc18dda726668068abfe534df012a88eaacdde86a",
+        "afterSha256": "fd6deaba543949d298239a6fc18dda726668068abfe534df012a88eaacdde86a"
+      },
+      "model_storage_ownership": {
+        "before": 3,
+        "after": 3,
+        "unchanged": 3,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "71062f5e5c159263e4eac096c8e305c30e78801eaed70d0c29e2b16d363420d8",
+        "afterSha256": "71062f5e5c159263e4eac096c8e305c30e78801eaed70d0c29e2b16d363420d8"
+      },
+      "pf_project_state": {
+        "before": 3,
+        "after": 3,
+        "unchanged": 3,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4bb800ef58647ee02435514ec83fdf1d0313d0f1437103ae9632a1f2acd3d96c",
+        "afterSha256": "4bb800ef58647ee02435514ec83fdf1d0313d0f1437103ae9632a1f2acd3d96c"
+      },
+      "pf_locations": {
+        "before": 1533,
+        "after": 1533,
+        "unchanged": 1533,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "681aa4ac8f25176e67997768c07697172b78d15d2a3919bb79ba011e013ab3ff",
+        "afterSha256": "681aa4ac8f25176e67997768c07697172b78d15d2a3919bb79ba011e013ab3ff"
+      },
+      "pf_location_aliases": {
+        "before": 1534,
+        "after": 1534,
+        "unchanged": 1534,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "124392ce8bb2b4500de3e6cb94e535d72b54571bda70beee5b575814e28db00c",
+        "afterSha256": "124392ce8bb2b4500de3e6cb94e535d72b54571bda70beee5b575814e28db00c"
+      },
+      "pf_artifacts": {
+        "before": 7,
+        "after": 7,
+        "unchanged": 7,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "b40d51b8111b86699e4a127c5a168afe7024260ecd8ca5213e81c9a01f05c495",
+        "afterSha256": "b40d51b8111b86699e4a127c5a168afe7024260ecd8ca5213e81c9a01f05c495"
+      },
+      "pf_model_objects": {
+        "before": 146,
+        "after": 146,
+        "unchanged": 146,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "a3aac6dc1d98ef71f77d3c341a4c12222d54d1d14fd8fa5c1ea4664217187985",
+        "afterSha256": "a3aac6dc1d98ef71f77d3c341a4c12222d54d1d14fd8fa5c1ea4664217187985"
+      },
+      "pf_location_bindings": {
+        "before": 6,
+        "after": 6,
+        "unchanged": 6,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "ec25ae19f1b5143b4d34d38f62885f7e076a5d72230984fef92ec87f0ae696f6",
+        "afterSha256": "ec25ae19f1b5143b4d34d38f62885f7e076a5d72230984fef92ec87f0ae696f6"
+      },
+      "pf_location_matches": {
+        "before": 1528,
+        "after": 1528,
+        "unchanged": 1528,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "80a1db6906c501372c5882fe29d302b4f1f5a6da2f7e6aef84f48e2c7332e71b",
+        "afterSha256": "80a1db6906c501372c5882fe29d302b4f1f5a6da2f7e6aef84f48e2c7332e71b"
+      },
+      "pf_location_events": {
+        "before": 1634,
+        "after": 1634,
+        "unchanged": 1634,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "88a1b8c28a9a5e0d64b4b8c25adca8eda530a34091fb94e4566e0650bff26b5c",
+        "afterSha256": "88a1b8c28a9a5e0d64b4b8c25adca8eda530a34091fb94e4566e0650bff26b5c"
+      },
+      "pf_jobs": {
+        "before": 44,
+        "after": 44,
+        "unchanged": 44,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "43a32d7f2593cdaf6fe0f163adebb24a32baf7eb4c2c207ef27c4503749ef5a1",
+        "afterSha256": "43a32d7f2593cdaf6fe0f163adebb24a32baf7eb4c2c207ef27c4503749ef5a1"
+      },
+      "pf_job_items": {
+        "before": 52,
+        "after": 52,
+        "unchanged": 52,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "9cd6bd0fbae1d49097eb7046d588d46df0266378c434009180a83ca1e7f5c8b5",
+        "afterSha256": "9cd6bd0fbae1d49097eb7046d588d46df0266378c434009180a83ca1e7f5c8b5"
+      },
+      "pf_proposals": {
+        "before": 47,
+        "after": 47,
+        "unchanged": 47,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "8a723faea54c4238026d2162a1e9581bdbb1c1b0902cce84e0f157d2eb01794f",
+        "afterSha256": "8a723faea54c4238026d2162a1e9581bdbb1c1b0902cce84e0f157d2eb01794f"
+      },
+      "pf_lookup_results": {
+        "before": 14,
+        "after": 14,
+        "unchanged": 14,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "5492455b2a8d16fb501d712a659cffc9448ffa92c893669183e6fc84652396e2",
+        "afterSha256": "5492455b2a8d16fb501d712a659cffc9448ffa92c893669183e6fc84652396e2"
+      },
+      "pf_synthetic_projects": {
+        "before": 1,
+        "after": 1,
+        "unchanged": 1,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "1a27c0ce92d03c850031544a20f5107af71e67e6d9a8f6d06e9321d5fbd383bb",
+        "afterSha256": "1a27c0ce92d03c850031544a20f5107af71e67e6d9a8f6d06e9321d5fbd383bb"
+      },
+      "pf_synthetic_proofs": {
+        "before": 1,
+        "after": 1,
+        "unchanged": 1,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "c7b7f41a6feaef635e2cc4d36b2da229920bf466c9d2926ff52f54c8510d860f",
+        "afterSha256": "c7b7f41a6feaef635e2cc4d36b2da229920bf466c9d2926ff52f54c8510d860f"
+      },
+      "pf_reviews": {
+        "before": 6,
+        "after": 6,
+        "unchanged": 6,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "afe947259d1e4803399efbc08bd2f9b14b37614027544e00c5b08342575311f9",
+        "afterSha256": "afe947259d1e4803399efbc08bd2f9b14b37614027544e00c5b08342575311f9"
+      },
+      "pf_apply_receipts": {
+        "before": 1,
+        "after": 1,
+        "unchanged": 1,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "6a1c5d0d628599a26faa473d31b7cc3dd8efa67a242eef3726d68b266e4e85b0",
+        "afterSha256": "6a1c5d0d628599a26faa473d31b7cc3dd8efa67a242eef3726d68b266e4e85b0"
+      },
+      "trays": {
+        "before": 0,
+        "after": 330,
+        "unchanged": 0,
+        "added": 330,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "671396f36dde40f036d2f7f5bd913b5b9e980a93a27bb97f99e8302a748bcd02"
+      },
+      "cable_type_default_materials": {
+        "before": 0,
+        "after": 9,
+        "unchanged": 0,
+        "added": 9,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "8c1185699f93f4eb729c718799e6ea3d758ce71a06f6ad5d5014241054c54eed"
+      },
+      "material_cable_types": {
+        "before": 1,
+        "after": 1,
+        "unchanged": 1,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "2af61ecb3d3842f677b3df9fd4605e45046e79316337fd56388898588ec359ca",
+        "afterSha256": "2af61ecb3d3842f677b3df9fd4605e45046e79316337fd56388898588ec359ca"
+      },
+      "material_trays": {
+        "before": 0,
+        "after": 15,
+        "unchanged": 0,
+        "added": 15,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "7ca4bf7a5dd137fbb6de252f5f45ced3772571c299cd86eaa288724f69cbd24f"
+      },
+      "project_support_distances": {
+        "before": 0,
+        "after": 14,
+        "unchanged": 0,
+        "added": 14,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "7e7eb6975e2092903ba2cad9131faf640d421938491677020ddb2ce55d604ce7"
+      },
+      "material_supports": {
+        "before": 0,
+        "after": 5,
+        "unchanged": 0,
+        "added": 5,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "d138e20e9b230dce99a8d715af23e327aecd1d7e0ab5a959ed98839cc1277de6"
+      },
+      "material_load_curves": {
+        "before": 0,
+        "after": 3,
+        "unchanged": 0,
+        "added": 3,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "1326ee700733d4208696abfa8fbc5fb777d6190f87f68d6c32b39aeb9301cd13"
+      },
+      "material_load_curve_points": {
+        "before": 0,
+        "after": 803,
+        "unchanged": 0,
+        "added": 803,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "2326b72a219a9ff6cb0d3714e277d411d0e32bc4f481e598725fc835aebe220c"
+      },
+      "material_cable_type_standard_materials": {
+        "before": 0,
+        "after": 0,
+        "unchanged": 0,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "material_tray_standard_materials": {
+        "before": 0,
+        "after": 0,
+        "unchanged": 0,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "material_support_standard_materials": {
+        "before": 0,
+        "after": 0,
+        "unchanged": 0,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "material_cable_installation_materials": {
+        "before": 0,
+        "after": 0,
+        "unchanged": 0,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "material_cable_installation_standard_materials": {
+        "before": 0,
+        "after": 0,
+        "unchanged": 0,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "project_tray_purpose_templates": {
+        "before": 0,
+        "after": 6,
+        "unchanged": 0,
+        "added": 6,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "a6bf5b8b7293851c0da3576ed1a6b3b5126b0ced87be342f5063ddebb802d9fa"
+      },
+      "project_files": {
+        "before": 0,
+        "after": 2,
+        "unchanged": 0,
+        "added": 2,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "92315e27a07a301b521ff487860f0e0ac2d50f127615bdfa20ee4a580b3161f7"
+      },
+      "project_file_versions": {
+        "before": 0,
+        "after": 1,
+        "unchanged": 0,
+        "added": 1,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "47307beedcf5351c6582ff991cc0768953baca8b9655ab702a7e5dfb24fed9f5"
+      },
+      "template_files": {
+        "before": 0,
+        "after": 3,
+        "unchanged": 0,
+        "added": 3,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "94b30dd3ba0e6440c3ac8357c3bdf4764edd13a153b73e2051243d6608fa0b1c"
+      },
+      "template_file_versions": {
+        "before": 0,
+        "after": 0,
+        "unchanged": 0,
+        "added": 0,
+        "enriched": 0,
+        "invalid": 0,
+        "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      }
+    }
+  },
+  "sourcePreservation": {
+    "status": "PASS",
+    "phases": [
+      "before",
+      "copy",
+      "after"
+    ],
+    "projections": {
+      "project": {
+        "count": 1,
+        "sha256": "c8c0ad6c83bad68d6219959b9b65c370eaaefca86b17467b7d3914f34ecdbf92"
+      },
+      "trays": {
+        "count": 330,
+        "sha256": "a502c10114fd3ce788043cc84adddd51786896277b7954d5ab17ce45fc77e31d"
+      },
+      "cable_types": {
+        "count": 51,
+        "sha256": "e742a55d7e3ed6499aff8c436c5b39270268aeb7680e8fffd43b23f864c2cf21"
+      },
+      "cable_type_default_materials": {
+        "count": 9,
+        "sha256": "a615b3566559406ba9e9cb43ddf10534dd39cba5653d97eff105fd51f37d56be"
+      },
+      "material_cable_types": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "material_trays": {
+        "count": 15,
+        "sha256": "d0a1d49fff7daaefc7a306bbef1349006e6bc70f57d443810094f6634ad1be85"
+      },
+      "project_support_distances": {
+        "count": 14,
+        "sha256": "fa0f73e8af51f9752455e118b251dcc5e8c9076b7813c5bb569089cc11c77cfd"
+      },
+      "material_supports": {
+        "count": 5,
+        "sha256": "87824b46d0e590d2a4173e0b01c8530552b90ad1b34e56680a3403b36e38e473"
+      },
+      "material_load_curves": {
+        "count": 3,
+        "sha256": "551ed474719f2c544b5573c2e7630758eda6eec35dc4f25341b01edaf2773046"
+      },
+      "material_load_curve_points": {
+        "count": 803,
+        "sha256": "7332bd76bee952f4a0c58fb5451c6b279e1eacda0a49910ba26f3bf9c30f8aa4"
+      },
+      "material_cable_type_standard_materials": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "material_tray_standard_materials": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "material_support_standard_materials": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "material_cable_installation_materials": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "material_cable_installation_standard_materials": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "project_tray_purpose_templates": {
+        "count": 6,
+        "sha256": "b93bbfb8c32e035c0520eeae49d6f5daae6b46ed6723181f27c6f608cedc9ce0"
+      },
+      "project_files": {
+        "count": 2,
+        "sha256": "c40c8d421b529d89b4a1783f2768015c25f3d9c566a114d6c1f0503c8eff8417"
+      },
+      "project_file_versions": {
+        "count": 1,
+        "sha256": "7a8cb6f1d8d7482f5597e66fd3e1a28a437c0d28fef2d620d42dccd03e757ed9"
+      },
+      "template_files": {
+        "count": 3,
+        "sha256": "09012a9c524b9e140ee2a7771f0c76117bf2fb857cfc11158b0b879f037e055d"
+      },
+      "template_file_versions": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "files": {
+        "count": 6,
+        "sha256": "4ef116bd4c421ad1a4392b7cd889155cc755662b12af84ae9087c21a51c48bc0"
+      }
+    },
+    "sha256": "16b02722a2fe96f754d593963018e8a93524e3b71a7521cf647262a186a9b23c"
+  },
+  "finishedAt": "2026-10-18T22:12:41.540Z"
+}
