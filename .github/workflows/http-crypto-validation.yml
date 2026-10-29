@@ -50,6 +50,8 @@ jobs:
         run: node --test --test-concurrency=2 viewer-runtime/test/adapter.test.mjs viewer-runtime/test/pathfinder.test.mjs
       - name: Verify tray display and assignment recovery lifecycle
         run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/pages/ProjectDetails/ProjectPreparationPanel.test.tsx src/pages/ProjectDetails/hooks/useProjectPreparation.test.tsx src/pages/ProjectDetails/hooks/usePathFinder.test.tsx src/viewer/ViewerController.test.ts
+      - name: Verify From-To matching prerequisites and recovery
+        run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/api/pathfinderModelLocationMatch.test.ts src/pages/ProjectDetails/hooks/useModelLocationMatch.test.tsx src/pages/ProjectDetails/ModelLocationMatchPanel.test.tsx
       - name: Verify tray Auto-length and manual-value approval
         run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/api/trays.test.ts src/pages/TrayDetails/TrayDetails.autoLength.test.ts src/pages/TrayDetails/components/TrayEditForm.autoLength.test.tsx server/middleware.test.ts server/models/tray.test.ts server/validators.tray.test.ts server/services/trayAutoLengthService.test.ts server/services/trayAutoLengthService.postgres.test.ts server/services/trayChangeLogService.test.ts server/routes/traysRoutes.test.ts server/routes/projectExcelImportValidation.test.ts
       - name: Check application and server types

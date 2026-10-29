@@ -54,6 +54,24 @@ describe('complete endpoint-only matching scan', () => {
   });
 });
 describe('find and assign operation ownership', () => {
+  it('keeps the Find action retryable when preparation is missing and starts no scan or assignment until a current context exists', async () => {
+    const { pf, discover, context } = setup();
+    vi.mocked(api.fetchModelLocationMatchContext).mockRejectedValueOnce(new api.ModelLocationMatchApiError(
+      'ENDPOINT_PREPARATION_REQUIRED', 409, 'refused', 'Prepare the current model in Routes before finding locations.'));
+    const { result } = renderHook(() => useModelLocationMatch({ pf, accountId: ids.account, active: true }));
+    await waitFor(() => expect(result.current.canStart).toBe(true));
+    await act(() => result.current.start());
+    expect(result.current.busy).toBe(false); expect(result.current.canStart).toBe(true); expect(result.current.pending).toBeNull();
+    expect(result.current.error).toContain('ENDPOINT_PREPARATION_REQUIRED; HTTP 409');
+    expect(discover).not.toHaveBeenCalled(); expect(pf.runProjectPreparation).not.toHaveBeenCalled();
+    expect(api.assignModelLocations).not.toHaveBeenCalled(); expect(localStorage.length).toBe(0);
+    // A separately completed preparation makes the current model context available.
+    vi.mocked(api.fetchModelLocationMatchContext).mockResolvedValueOnce(context);
+    await act(() => result.current.start());
+    expect(result.current.complete).toBe(true); expect(result.current.error).toBeNull();
+    expect(discover).toHaveBeenCalledOnce(); expect(api.assignModelLocations).toHaveBeenCalledOnce();
+    expect(result.current.canStart).toBe(true); expect(localStorage.length).toBe(0); expect(pf.calculate).not.toHaveBeenCalled();
+  });
   it('scans first, posts serialized 128-name pages with returned registry revisions, then refreshes once without calculating', async () => {
     const names = Array.from({ length: 150 }, (_, i) => `TAG-${i}`), { pf, discover } = setup(names), onChanged = vi.fn();
     const { result } = renderHook(() => useModelLocationMatch({ pf, accountId: ids.account, active: true, onChanged }));
