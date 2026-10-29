@@ -180,12 +180,58 @@ describe('simple project tray preparation', () => {
     expect(screen.getByRole('article', { name: 'Tray A105' })).toBeVisible();
     expect(screen.getAllByRole('article')).toHaveLength(1); expect(screen.queryByRole('button', { name: /Next/ })).toBeNull();
   });
-  it('uses the same check button to recover unknown work and leaves assignment disabled', () => {
+  it('names the recovery action while an earlier update is unknown and leaves assignment disabled', () => {
     const { state, pf, tray } = setup(); state.unknown = true;
     render(<ProjectPreparationPanel pf={pf} active />);
-    fireEvent.click(screen.getByRole('button', { name: 'Discover project tray candidates' }));
+    expect(screen.getByText('An earlier tray update needs checking. Use Retry tray update to continue.')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry tray update' }));
     expect(state.checkTrays).toHaveBeenCalledOnce();
     expect(screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` })).toBeDisabled();
+  });
+  it('restores assignment controls after retry reconciles an unknown update without remounting', async () => {
+    const { state, pf, tray, read } = setup(); read.mockResolvedValue({ objects: [{ objectId: 55 }] });
+    let finish!: () => void; state.checkTrays.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+    const unresolved = { ...state, unknown: true, networkReady: false,
+      error: 'The command outcome is unknown. Retry the same command before making further changes.' };
+    vi.mocked(useProjectPreparation).mockReturnValue(unresolved as unknown as ReturnType<typeof useProjectPreparation>);
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    const choose = screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` }); expect(choose).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry tray update' }));
+    vi.mocked(useProjectPreparation).mockReturnValue({ ...unresolved, busy: true, progress: 'Checking the saved tray update…' } as unknown as ReturnType<typeof useProjectPreparation>);
+    view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByRole('button', { name: 'Checking tray update…' })).toBeDisabled();
+    expect(screen.getByRole('progressbar', { name: 'Checking the saved tray update…' })).toBeVisible();
+    expect(choose).toBeDisabled(); expect(state.assignTray).not.toHaveBeenCalled(); expect(read).not.toHaveBeenCalled();
+    await act(async () => finish());
+    vi.mocked(useProjectPreparation).mockReturnValue(state as unknown as ReturnType<typeof useProjectPreparation>);
+    view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` })).toBe(choose); expect(choose).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Discover project tray candidates' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Retry tray update' })).toBeNull(); expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.click(choose); await waitFor(() => expect(state.assignTray).toHaveBeenCalledExactlyOnceWith(tray.projectTrayId, ['dbid:55']));
+    expect(state.checkTrays).toHaveBeenCalledOnce();
+  });
+  it('keeps an unresolved retry available after its busy phase while preserving the assignment gate', async () => {
+    const { state, pf, tray } = setup();
+    let finish!: () => void; state.checkTrays.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+    const unresolved = { ...state, unknown: true, networkReady: false,
+      error: 'The command outcome is unknown. Retry the same command before making further changes.' };
+    vi.mocked(useProjectPreparation).mockReturnValue(unresolved as unknown as ReturnType<typeof useProjectPreparation>);
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry tray update' }));
+    vi.mocked(useProjectPreparation).mockReturnValue({ ...unresolved, busy: true } as unknown as ReturnType<typeof useProjectPreparation>);
+    view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    const checking = screen.getByRole('button', { name: 'Checking tray update…' }); expect(checking).toBeDisabled();
+    expect(screen.getByRole('progressbar', { name: 'Checking the earlier tray update…' })).toBeVisible();
+    fireEvent.click(checking); expect(state.checkTrays).toHaveBeenCalledOnce();
+    await act(async () => finish());
+    vi.mocked(useProjectPreparation).mockReturnValue(unresolved as unknown as ReturnType<typeof useProjectPreparation>);
+    view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    const retry = screen.getByRole('button', { name: 'Retry tray update' }); expect(retry).toBeEnabled();
+    expect(screen.getByRole('alert')).toHaveTextContent('The command outcome is unknown');
+    expect(screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` })).toBeDisabled();
+    expect(screen.getByRole('button', { name: `Show tray ${tray.rawName}` })).toBeEnabled();
+    fireEvent.click(retry); expect(state.checkTrays).toHaveBeenCalledTimes(2); expect(state.assignTray).not.toHaveBeenCalled();
   });
   it('keeps failed network creation visible instead of claiming ready', () => {
     const { state, pf } = setup();
@@ -461,7 +507,7 @@ describe('project tray control readiness', () => {
     state.busy = false; view.rerender(<ProjectPreparationPanel pf={pf} active />);
     expect(screen.queryByRole('button', { name: 'Stop checking' })).toBeNull();
     expect(screen.getByText(/An earlier tray update needs checking/)).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Discover project tray candidates' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Retry tray update' })).toBeEnabled();
   });
   it.each(['loading', 'no-model', 'error', 'viewer-busy', 'status-loading', 'unknown'] as const)('explains the %s gate and preserves read-only inspection when possible', gate => {
     const { state, pf, tray } = setup();
