@@ -6,6 +6,8 @@ on:
       - 'shared/**'
       - 'server/**'
       - 'viewer-runtime/**'
+      - 'pathfinder-engine/**'
+      - 'scripts/barrier-verifier-*'
       - 'scripts/viewer-runtime/module-closure*'
       - 'scripts/copy-pathfinder-contracts.mjs'
       - 'package*.json'
@@ -15,6 +17,28 @@ on:
 permissions:
   contents: read
 jobs:
+  routing-engine:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    container: mcr.microsoft.com/dotnet/sdk:9.0-bookworm-slim
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Verify reachable endpoint alternatives with and without barriers
+        run: dotnet run --project pathfinder-engine/tests/PathFinder.Constrained.Tests --configuration Release
+      - name: Verify local approaches, capacity and inter-tray connections
+        run: |
+          dotnet run --project pathfinder-engine/tests/PathFinder.LocalConnectors.Tests --configuration Release
+          dotnet run --project pathfinder-engine/tests/PathFinder.CapacityRouting.Tests --configuration Release
+          dotnet run --project pathfinder-engine/tests/PathFinder.InterTrayManeuvers.Tests --configuration Release
+      - name: Verify obstacle geometry qualification
+        run: |
+          dotnet run --project pathfinder-engine/tests/PathFinder.BarrierVerifier.Tests --configuration Release
+          dotnet run --project pathfinder-engine/tests/PathFinder.MixedBarriers.Tests --configuration Release
   http-crypto:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -44,6 +68,10 @@ jobs:
           persist-credentials: false
       - name: Install locked dependencies
         run: npm ci --ignore-scripts
+      - name: Verify production obstacle verifier packaging
+        run: node --test scripts/barrier-verifier-packaging.test.mjs
+      - name: Verify pending barrier command recovery and actionable failures
+        run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/pages/ProjectDetails/hooks/usePathfinderBarriers.test.tsx
       - name: Verify crypto fallbacks and runtime module packaging
         run: node --test viewer-runtime/test/generate-id.test.mjs viewer-runtime/test/sha256.test.mjs viewer-runtime/test/producer-host.test.mjs viewer-runtime/test/barrier-multipart-transport.test.mjs viewer-runtime/test/bridge.test.mjs scripts/viewer-runtime/module-closure.test.mjs
       - name: Verify HTTP panel and integrity regressions
