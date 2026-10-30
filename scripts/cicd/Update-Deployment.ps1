@@ -3,7 +3,8 @@
 param(
     [Parameter(Mandatory)][string]$ConfigPath,
     [switch]$Apply,
-    [switch]$RetryFailed
+    [switch]$RetryFailed,
+    [switch]$FailIfBusy
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -13,7 +14,7 @@ $null = New-Item -ItemType Directory -Path $taskStateRoot -Force
 # One lock covers both applications, including simultaneous Task Scheduler and
 # manual invocations. A surviving pending record requires operator inspection.
 try { $taskLock = [IO.File]::Open((Join-Path $taskStateRoot 'deployment.lock'), 'OpenOrCreate', 'ReadWrite', 'None') }
-catch [IO.IOException] { Write-Output 'Another updater owns the deployment lock.'; exit 0 }
+catch [IO.IOException] { if ($FailIfBusy) { throw 'Another updater owns the lock; retry the deployment job later.' }; Write-Output 'Another updater owns the deployment lock.'; exit 0 }
 
 function Save-State([string]$Path, [hashtable]$Value) {
     $temporary = "$Path.$([guid]::NewGuid().ToString('N')).tmp"
@@ -154,7 +155,7 @@ try {
             # The hook must prevent new activity until this invocation ends.
             # Exit 75 means busy: postpone, without recording a failed release.
             & (Get-Process -Id $PID).Path -NoProfile -NonInteractive -File $app.prepareHook
-            if ($LASTEXITCODE -eq 75) { Write-Output "$($app.name): active work; update postponed."; continue }
+            if ($LASTEXITCODE -eq 75) { if ($FailIfBusy) { throw 'Active work; retry the deployment job when maintenance is available.' }; Write-Output "$($app.name): active work; update postponed."; continue }
             if ($LASTEXITCODE -ne 0) { throw 'Preparation/backup hook failed. Existing application version retained.' }
             # A backup must not change service identity or configuration.
             foreach ($service in $app.services.Keys) {
@@ -163,10 +164,17 @@ try {
                 if ($current.Id -ne $before[$service].Id) { throw 'Container changed during preparation.' }
             }
             $nonce = [guid]::NewGuid().ToString('N')
-            foreach ($service in $oldImages.Keys) { $null = Invoke-Docker -DockerArguments @('tag', $oldImages[$service], "local/cicd-rollback:$($app.name)-$service-$nonce") }
+            $oldTags = @{}
+            foreach ($service in $oldImages.Keys) {
+                $oldTags[$service] = "local/cicd-rollback:$($app.name)-$service-$nonce"
+                $null = Invoke-Docker -DockerArguments @('tag', $oldImages[$service], $oldTags[$service])
+            }
+            $previousCommit = if ($state.ContainsKey('commit')) { $state.commit } else { $null }
+            $previousVersions = if ($state.ContainsKey('workingVersions')) { @($state.workingVersions) } else { @() }
             $override = Join-Path $taskStateRoot "$($app.name).override.json"
-            $state.pending = @{ commit = $candidate.commit; oldImages = $oldImages; newImages = $candidate.images; startedAt = [DateTimeOffset]::UtcNow.ToString('o') }
+            $state.pending = @{ commit = $candidate.commit; oldImages = $oldImages; newImages = $candidate.images; rollbackTags = $oldTags; startedAt = [DateTimeOffset]::UtcNow.ToString('o') }
             Save-State $statePath $state
+            $rollbackState = $state | ConvertTo-Json -Depth 20 | ConvertFrom-Json -AsHashtable
             try {
                 # Use an unbounded Docker stop wait: never SIGKILL a writer to
                 # satisfy a deployment timeout. Task Scheduler must not kill it.
@@ -179,6 +187,16 @@ try {
                     $expectedId = [string](Invoke-Docker -DockerArguments @('image', 'inspect', '--format', '{{.Id}}', $candidate.images[$service]))
                     if ($after.Image -ne $expectedId) { throw 'Started image differs from release.' }
                 }
+                $newTags = @{}
+                foreach ($service in $candidate.images.Keys) {
+                    $newTags[$service] = "local/cicd-rollback:$($app.name)-$service-$nonce-current"
+                    $null = Invoke-Docker -DockerArguments @('tag', $candidate.images[$service], $newTags[$service])
+                }
+                # Rotate only after the complete candidate passed readiness.
+                $state.workingVersions = @(
+                    @{ commit = $candidate.commit; images = $candidate.images; tags = $newTags },
+                    @{ commit = $previousCommit; images = $oldImages; tags = $oldTags }
+                )
                 $state.commit = $candidate.commit
                 $state.previousImages = $oldImages
                 $state.updatedAt = [DateTimeOffset]::UtcNow.ToString('o')
@@ -191,10 +209,23 @@ try {
                 $null = Invoke-Docker -DockerArguments (@('stop', '--time', '-1') + @($app.services.Values))
                 Start-Version $app $oldImages $override
                 foreach ($service in $app.services.Keys) { Assert-SameMounts $before[$service] (Read-Container $app.services[$service]) }
+                $state = $rollbackState
                 $state.failedCommit = $candidate.commit
                 $state.Remove('pending')
                 Save-State $statePath $state
                 throw 'Candidate failed readiness; previous images restored and readiness verified. Inspect before retrying.'
+            }
+            # Cleanup failures must never roll back an accepted deployment.
+            # Untag only recorded updater-owned references, never prune or force.
+            foreach ($version in $previousVersions) {
+                if (-not $version.ContainsKey('tags')) { continue }
+                foreach ($service in $version.tags.Keys) {
+                    $tag = [string]$version.tags[$service]
+                    $pattern = '^local/cicd-rollback:' + [regex]::Escape("$($app.name)-$service-") + '[a-f0-9]{32}(-current)?$'
+                    if ($tag -notmatch $pattern) { Write-Warning 'Unrecognized retention tag left untouched.'; continue }
+                    try { $null = Invoke-Docker -DockerArguments @('image', 'rm', $tag) }
+                    catch { Write-Warning 'Older rollback tag could not be released; retained for local inspection.' }
+                }
             }
         } catch {
             $taskFailures += $app.name
