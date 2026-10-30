@@ -131,10 +131,13 @@ describe('calculation production boundary', () => {
     expect(calculate).not.toHaveBeenCalled(); expect(screen.getByText('Server recalculation status')).toBeVisible();
     view.rerender(<PathFinderResults pf={{ ...pf, data: { ...pf.data!, registryRevision: '2' } }} selectedCableId="cable" options={options} />);
     expect(calculate).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Calculate non-MV cables' })); expect(calculate).toHaveBeenLastCalledWith(['cable', 'low-voltage', 'instrument'], true, options);
+    fireEvent.click(screen.getByRole('button', { name: 'Calculate non-MV cables' })); expect(calculate).toHaveBeenLastCalledWith(['cable', 'low-voltage', 'instrument', 'unknown'], true, options);
     fireEvent.click(screen.getByRole('button', { name: 'Calculate selected cable' })); expect(calculate).toHaveBeenLastCalledWith(['cable'], true, options);
     view.rerender(<PathFinderResults pf={pf} selectedCableId="medium-voltage" options={options} />);
     expect(screen.getByRole('button', { name: 'Calculate selected cable' })).toBeDisabled(); expect(calculate).toHaveBeenCalledTimes(2);
+    view.rerender(<PathFinderResults pf={pf} selectedCableId="unknown" options={options} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Calculate selected cable' }));
+    expect(calculate).toHaveBeenLastCalledWith(['unknown'], true, options);
   });
   it('shows empty batch Review and Apply controls before the paged selection area', () => {
     const f = recoveryFixture(); render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={null} accountId={id(2)} options={options} />);

@@ -138,10 +138,11 @@ describe('cable endpoint commands with synthetic SQL; selection reader independe
     f.state.bindings.set(old.id, { ...changed, contentSha256: endpointBindingHash(changed) });
     const receipt = await f.save(f.command(await f.read())); expect(receipt.actorId).toBe(f.who.userId); expect(receipt.binding.binding.confirmedBy).toBe(id(999)); expect(receipt.binding.duplicate).toBe(true);
   });
-  it.each(['LV', 'Control', 'Instrumentation'])('allows named %s, never inferring category from geometry', async mto => {
-    const f = fixture(); f.settings.mto = mto; expect((await f.read()).canBind).toBe(true);
+  it.each(['LV', 'Control', 'Instrumentation', null, 'Other', ''])('assigns a named endpoint with MTO %s without changing its MTO', async mto => {
+    const f = fixture(); f.settings.mto = mto; const c = await f.read(); expect(c.canBind).toBe(true);
+    const receipt = await f.save(f.command(c)); expect(receipt.logicalName).toBe(c.logicalName); expect(f.settings.mto).toBe(mto);
   });
-  it.each([['MV', 'CABLE_ENDPOINT_MV_EXCLUDED'], [null, 'CABLE_ENDPOINT_CATEGORY_REQUIRED'], ['Other', 'CABLE_ENDPOINT_CATEGORY_REQUIRED']])('blocks category %s explicitly', async (mto, reason) => {
+  it.each([['MV', 'CABLE_ENDPOINT_MV_EXCLUDED']])('blocks category %s explicitly', async (mto, reason) => {
     const f = fixture(); f.settings.mto = mto; const c = await f.read(); expect(c.canBind).toBe(false); expect(c.reasonCodes).toContain(reason);
     await expect(f.save(f.command(c))).rejects.toMatchObject({ code: 'CABLE_ENDPOINT_UNAVAILABLE' }); expect(f.state.bindings.size).toBe(0);
   });

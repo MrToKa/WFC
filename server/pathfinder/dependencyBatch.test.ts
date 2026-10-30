@@ -100,6 +100,16 @@ beforeEach(async () => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('bulk dependency collection, mocked SQL protocol with real freeze/head/alias logic', () => {
+  it('admits missing/custom MTO by cable Purpose and still rejects a Purpose with no permitted trays',async()=>{
+    const db=fixture(3);db.state.cables[0].mto=null;db.state.cables[1].mto='Custom';db.state.cables[2].mto=null;db.state.cables[2].cable_type_purpose='Unknown';
+    const batch=await collectDependencyBatchInTransaction(db.client,{projectId,options:barrierOptions(),dependencyVersion:'pathfinder.dependencies.v8'});
+    expect(batch.items.slice(0,2).map(item=>[item.status,item.dependencies?.cableInputs.mto])).toEqual([['ready',null],['ready','Custom']]);
+    for(const item of batch.items.slice(0,2))expect(item.dependencies).toHaveProperty('cablePurposeRouting',{purpose:'Control',allowedRouteCodes:['/B001']});
+    expect(batch.items[2]).toMatchObject({dependencies:null,status:'category_required'});
+    expect(batch.items[2].message).toContain('Cable types Purpose');
+    const single=await collectDependenciesForVersion(db.client,projectId,db.state.cables[0].id,barrierOptions(),'pathfinder.dependencies.v8');
+    expect(batch.items[0].dependencies).toEqual(single.dependencies);
+  });
   it.each(['single','batch'] as const)('observes a committed type Purpose change before routing-state lock in %s collection',async mode=>{
     const db=fixture();db.state.cables[0].cable_type_purpose='Power';
     mocked.routing.mockImplementationOnce(async()=>{

@@ -15,6 +15,7 @@ import { usePathfinderInitialFillProgress } from '@/hooks/usePathfinderInitialFi
 import type { EndpointCurrentScope } from '../../../shared/pathfinderEndpointBindings';
 import type { LocationImpactCalculation } from '../../../shared/pathfinderLocationImpacts';
 import { cableWorkflowRowSchema, classifyCableWorkflow } from '../../../shared/pathfinderCableWorkflow';
+import { isPathFinderCableEligible } from '../../../shared/pathfinderCableEligibility';
 import type { usePathFinder } from '@/pages/ProjectDetails/hooks/usePathFinder';
 import type { PathFinderWorkflowDisplay, PathFinderWorkflowReview, PathFinderWorkflowCalculationPreferences } from '@/pages/ProjectDetails/PathFinderResults';
 import { pathFinderWorkflowDisplayScope } from '@/pages/ProjectDetails/PathFinderResults';
@@ -160,7 +161,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
     dwell.current = setTimeout(() => { dwell.current = null; if (callbacks.current.active && anchor.isConnected) setPreview({ row, anchor }); }, 1000);
   };
   const openCable = (row: CableWorkflowRow) => {
-    if (!enabled || row.projectId !== props.projectId || !['LV', 'Control', 'Instrumentation'].includes(row.mto ?? '')) return;
+    if (!enabled || row.projectId !== props.projectId || !isPathFinderCableEligible(row.mto)) return;
     // User activation belongs to this click, before the editor is mounted.
     const request = requestFloatingCableWindow({ title: row.cable.tag || 'Cable routing' }, popupRef.current);
     popupRef.current = request; setPopup(request); dismissPreview();
@@ -191,11 +192,12 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   const panelActive = props.active && props.pf.viewerPhase === 'ready' && Boolean(model?.modelVersionId);
   const enabled = panelActive && Boolean(readPreferences);
   const calculationEnabled = enabled && Boolean(preferences);
+  const selectedEligible = Boolean(selected && isPathFinderCableEligible(selected.mto));
   const drillThroughWalls = Boolean(selected && drillDraft?.cableId === selected.cable.id && drillDraft.checked);
   const selectedPreferences = props.getCalculationPreferences ? props.getCalculationPreferences(drillThroughWalls) : preferences;
   const calculationBlockedReason = enabled && !selectedPreferences
     ? 'You can save From/To assignments now. Configure the current route settings and barriers before calculating routing. Existing Cable list values are retained.' : null;
-  const calculation = calculationEnabled && preferences ? { preferences, timeoutMilliseconds: 120000 } : null;
+  const calculation = calculationEnabled && selectedEligible && preferences ? { preferences, timeoutMilliseconds: 120000 } : null;
   const selectedReadScope = workspaceReadScope(props);
   const previousReadScope = useRef(selectedReadScope);
   const acceptVerifiedRefresh = useCallback((row: CableWorkflowRow, state: WorkspaceState) => {
@@ -650,7 +652,8 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   }, [savedCalculation, submittedCalculation, enabled, props.projectId, props.token, selected?.cable.id, authorityLost, rememberFeedback, acceptVerifiedRefresh, deferDiagnostics, retainCalculationDiagnostics]);
   const calculateSelected = async () => {
     const row = selectedRef.current, current = callbacks.current;
-    if (!alive.current || !enabled || !current.active || calculating || submittedRef.current || !row || savedCalculationRef.current?.cableId === row.cable.id || selectedCalculationPending(row.calculation)) return;
+    if (!alive.current || !enabled || !current.active || calculating || submittedRef.current || !row
+      || !isPathFinderCableEligible(row.mto) || savedCalculationRef.current?.cableId === row.cable.id || selectedCalculationPending(row.calculation)) return;
     const attempt = Object.freeze({ epoch: ++attemptEpoch.current, owner: calculationAttemptOwner(current) });
     const selectedPreferences = current.getCalculationPreferences ? current.getCalculationPreferences(drillThroughWalls) : current.preferences;
     if (!selectedPreferences) {
@@ -850,9 +853,9 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
       preparationKey: JSON.stringify([props.pf.preparationViewerGeneration, props.pf.data?.artifacts.map(item => [item.id, item.snapshotSha256])]),
       // Endpoint-only Save requests no calculation or write authority. New
       // ready saves use the explicit automatic-ownership policy.
-      calculation, initialFill: null, automaticPairPolicy: calculationEnabled ? AUTOMATIC_PAIR_POLICY : null,
+      calculation, initialFill: null, automaticPairPolicy: calculationEnabled && selectedEligible ? AUTOMATIC_PAIR_POLICY : null,
       readSelection: props.pf.readSelection, onSaved: saved, onAuthorityLost: authorityLost,
-    }} onCalculate={enabled && !submittedCalculation && !waitingForSavedCalculation && !popupReview?.pending && selected && !selectedCalculationPending(selected.calculation) ? calculateSelected : undefined}
+    }} onCalculate={enabled && selectedEligible && !submittedCalculation && !waitingForSavedCalculation && !popupReview?.pending && selected && !selectedCalculationPending(selected.calculation) ? calculateSelected : undefined}
       calculationBlockedReason={calculationBlockedReason} onConfigureCalculation={props.onConfigureCalculation}
       drillThroughWalls={drillThroughWalls} onDrillThroughWallsChange={checked => {
         if (selected) setDrillDraft({ cableId: selected.cable.id, checked });
@@ -887,7 +890,8 @@ function CableHoverPreview({ row, anchor, onEnter, onLeave, onClose, onOpen }: {
     onPointerEnter={onEnter} onPointerLeave={onLeave} onFocus={onEnter} onBlur={onLeave} data-cable-preview="true">
     <h3 className={styles.heading}>{row.cable.tag || 'Cable preview'}</h3>
     <p>From: {row.cable.fromLocation || 'No location name'}<br />To: {row.cable.toLocation || 'No location name'}</p>
-    <p>{cableWorkflowReason(row)}</p><p>Routing: {row.cable.routing || 'Not set'}<br />Design length: {row.cable.designLength ?? 'Not set'} m</p>
+    <p>{cableWorkflowReason(row)}</p>
+    <p>Routing: {row.cable.routing || 'Not set'}<br />Design length: {row.cable.designLength ?? 'Not set'} m</p>
     <div className={styles.actions}><Button onClick={onOpen}>Open cable in separate window</Button><Button onClick={onClose}>Close preview</Button></div>
   </div></Portal>;
 }

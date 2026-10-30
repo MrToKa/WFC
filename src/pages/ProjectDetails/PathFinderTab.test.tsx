@@ -195,6 +195,10 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
     });
     expect(screen.getByRole('checkbox', { name: 'Drill through the walls' })).not.toBeChecked();
     expect(screen.getByRole('button', { name: 'Calculate non-MV cables' })).toBeDisabled();
+    expect(screen.getByText(mode === 'pending'
+      ? 'Wait for the saved barrier command to finish, or use Retry saved command in Barriers if its outcome is unknown.'
+      : mode === 'dirty' ? 'Save the obstacle selection in Barriers before calculating.'
+        : 'Configure Barriers: save the selected obstacles, or enter an Explicit empty reason and choose Declare no barriers to calculate without obstacle checks.')).toBeVisible();
     expect(current.calculate).not.toHaveBeenCalled(); expect(current.action).not.toHaveBeenCalled();
     expect(current.reviewProposal).not.toHaveBeenCalled(); expect(saveEndpointBinding).not.toHaveBeenCalled();
   });

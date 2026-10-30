@@ -21,6 +21,7 @@ import { cablePurposeSchema, cablePurposeRoutingSchema, normalizeCablePurpose, t
 import { normalizeCatalogKey, routingCatalogDiagnostics, routingRuleSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { readRoutingCatalog } from './catalog.js';
 import { readProjectCablePurposes } from './purposePolicy.js';
+import { isPathFinderCableEligible } from '../../shared/pathfinderCableEligibility.js';
 export {requireCurrentLogin} from './auth.js';
 
 export function canonicalJson(value: unknown): string {
@@ -174,8 +175,7 @@ export function freezeScopedCableDependencies(common:CommonCalculationInputs,cab
 export function freezeBarrierCableDependencies(common:BarrierCommonCalculationInputs,cable:Row,
   from:CurrentEndpointCalculationPoint|null,to:CurrentEndpointCalculationPoint|null):CollectedDependencies {
   const blocked=(status:string,message:string):CollectedDependencies=>({dependencies:null,status,message,cable});
-  if (cable.mto === 'MV') return blocked('category_required','MV cables are excluded from Path Finder calculations.');
-  if (!['LV','Control','Instrumentation'].includes(cable.mto)) return blocked('category_required','Resolve the cable category before calculation.');
+  if (!isPathFinderCableEligible(cable.mto)) return blocked('category_required','MV cables are excluded from Path Finder calculations.');
   if (!from || !to) return blocked('locations_required',`Resolve ${!from&&!to?'From and To':!from?'From':'To'} locations. Missing, ambiguous or stale locations cannot be calculated.`);
   const endpointResolution = scopedEndpointResolutionSchema.safeParse({schemaVersion:'pathfinder.endpoint-resolution.v1',matchingPolicy:'nfc-trim-uppercase-v1',
     from:{logicalKey:typeof cable.from_location==='string'?normalizeLocation(cable.from_location):'',locationId:from.locationId},

@@ -22,7 +22,7 @@ const now = Date.parse('2026-10-20T12:00:00.000Z');
 beforeEach(() => { vi.resetAllMocks(); vi.useFakeTimers(); vi.setSystemTime(now); });
 afterEach(() => { vi.useRealTimers(); });
 
-function fixture() {
+function fixture(mto: string|null = 'LV') {
   const projectId = id(1), cableId = id(2), proposalId = id(3), jobId = id(4), mandateId = id(5), impactId = id(6);
   const current = { modelVersionId: id(7), selectionRevision: '1', contentFingerprint: 'a'.repeat(64), aggregateId: id(8), artifactId: id(9), projectionSha256: 'b'.repeat(64), captureFrameId: id(10), geometryRevision: '2', traceId: id(11) };
   const mandate: InitialFillMandate = { schemaVersion: 'wfc.pf.initial-fill-mandate.v1', id: mandateId, projectId, impactId,
@@ -46,15 +46,17 @@ function fixture() {
       settings: { secondaryTrayLengthMeters: null, endConnectionLengthMeters: '1', additionalBendingPercent: '10' }, secondaryEnds: 0, replacementMeters: '0', beforeClampMeters: '5', clampAdjustmentMeters: '0', afterClampMeters: '5',
       beforePercentageMeters: '6', bendingIncrementMeters: '0.6', unroundedMeters: '6.6', ceilingIncrementMeters: '0.4', designLengthMeters: '7', gapAccounting: 'already-in-raw-geometry' } };
   const {dependencies,result}=syntheticInitialFillBarrierInputs(legacyDependencies,legacyResult);
+  dependencies.cableInputs.mto=mto;
+  if(!['MV','LV','Control','Instrumentation'].includes(mto??''))dependencies.cablePurposeRouting={purpose:'Control',allowedRouteCodes:['/A']};
   const proposal: Row = { id: proposalId, project_id: projectId, cable_id: cableId, job_id: jobId, status: 'calculated', proposal_hash: 'c'.repeat(64), dependency_hash: hash(dependencies), dependencies, result, job_state: 'complete', cancel_requested: false };
   const seal: Row = { admissionId: id(21), revisionResultSha256: 'd'.repeat(64), baselineHash: 'e'.repeat(64), engineResultSha256: hash(result), ledgerHash: hash(result.lengthLedger), dependencyHash: hash(dependencies) };
-  const itemBody = { schemaVersion: 'wfc.pf.location-impact-item.v1' as const, projectId, impactId, cableId, generation: '3', cableWriteRevision: '7', fromLogicalKey: 'FROM', toLogicalKey: 'TO', category: 'LV', eligible: true };
+  const itemBody = { schemaVersion: 'wfc.pf.location-impact-item.v1' as const, projectId, impactId, cableId, generation: '3', cableWriteRevision: '7', fromLogicalKey: 'FROM', toLogicalKey: 'TO', category: mto, eligible: true };
   const item = locationImpactItemSchema.parse({ ...itemBody, contentSha256: hash(itemBody) });
   const member: Row = { generation: '3', record_sha256: item.contentSha256, record: item,impact_sha256:mandate.impactContentSha256,
     calculation:{preferences:{secondaryDistanceMeters:dependencies.options.secondaryDistanceMeters,preferVerticalApproach:dependencies.options.preferVerticalApproach,barrierRouting:structuredClone(dependencies.options.barrierRouting)},timeoutMilliseconds:60000} };
   const keyInput = () => ({ projectId, cableId, proposalId, proposalHash: proposal.proposal_hash, mandateId, expectedCableWriteRevision: dependencies.cableWriteRevision });
   const request = { schemaVersion: 'wfc.pf.initial-fill-request.v1' as const, idempotencyKey: initialFillIdempotencyKey(keyInput()), proposalId, expectedProposalHash: proposal.proposal_hash, mandateId, expectedCableWriteRevision: dependencies.cableWriteRevision };
-  const state = { cable: { id: cableId, project_id: projectId, mto: 'LV', from_location: 'FROM', to_location: 'TO', cable_type_id: id(17), routing: null, design_length: null, install_length: '123.4500', cable_write_revision: '7', revision: 'engineering-1', tag: 'Synthetic cable', updated_at: new Date(now).toISOString() } as Row,
+  const state = { cable: { id: cableId, project_id: projectId, mto, from_location: 'FROM', to_location: 'TO', cable_type_id: id(17), routing: null, design_length: null, install_length: '123.4500', cable_write_revision: '7', revision: 'engineering-1', tag: 'Synthetic cable', updated_at: new Date(now).toISOString() } as Row,
     history: [] as Row[], receipts: [] as Row[], admin: true, loginRevoked: false, projectExists: true, proposalPresent: true, snapshotPresent: true,
     casMiss: false, historyFails: false, historyMissing: false, receiptFails: false, commitLostAck: false, beforeCommitFails: false,
     writes: 0, commits: 0, postUpdate: null as null | ((value: Row) => void), onCommit: null as null | ((count: number) => void) };
@@ -97,6 +99,12 @@ function fixture() {
 }
 
 describe('conditional initial-fill writer with synthetic transactional SQL and explicit proof adapters', () => {
+  it.each([null,'Custom MTO',''])('writes the calculated pair automatically with optional MTO %j and an explicit Cable type Purpose',async mto=>{
+    const f=fixture(mto);expect(await f.run()).toMatchObject({status:'written'});
+    expect(f.state.cable).toMatchObject({mto,routing:'/A',design_length:'7',install_length:'123.4500'});
+    expect(f.state.history).toHaveLength(1);expect(f.state.receipts).toHaveLength(1);
+    expect(f.state.receipts[0].provenance.dependencies.cableInputs.mto).toBe(mto);
+  });
   it('writes only the exact pair once with real history, separate automatic provenance and unchanged install length', async () => {
     const f = fixture(), outcome = await f.run(); expect(outcome.status).toBe('written'); expect(f.state.cable).toMatchObject({ routing: '/A', design_length: '7', install_length: '123.4500', cable_write_revision: '8', revision: 'engineering-1' });
     expect(f.state.history).toHaveLength(1); expect(f.state.receipts).toHaveLength(1); expect(f.state.history[0].cable).toEqual(f.state.cable);
@@ -119,7 +127,7 @@ describe('conditional initial-fill writer with synthetic transactional SQL and e
     const f = fixture(); Object.assign(f.state.cable, value); const before = structuredClone(f.state.cable); expect(await f.run()).toMatchObject({ status: 'review-required', receiptId: null });
     expect(f.state.cable).toEqual(before); expect(f.state.writes).toBe(0); expect(f.state.history).toHaveLength(0); expect(f.state.receipts).toHaveLength(0);
   });
-  it.each(['MV', 'Unknown'])('does not write an ineligible current %s cable even if injected engineering reads are permissive', async mto => {
+  it.each(['MV'])('does not write an ineligible current %s cable even if injected engineering reads are permissive', async mto => {
     const f = fixture(); f.state.cable.mto = mto; expect((await f.run()).status).toBe('review-required'); expect(f.state.writes).toBe(0);
   });
   it('does not turn calculation-only absence of a mandate into write authority', async () => {

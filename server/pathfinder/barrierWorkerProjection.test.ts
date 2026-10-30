@@ -120,6 +120,19 @@ function fallback(context: BarrierRuntimeContext): ProtectedResponse {
 }
 
 describe('immutable protected worker request projection', () => {
+  it.each([null,'','Custom'])('uses a Purpose-filtered engine carrier for optional MTO %s without changing frozen inputs',mto=>{
+    const dependencies=protectedDependencies(meshContext());dependencies.cableInputs.mto=mto;
+    dependencies.cablePurposeRouting={purpose:'Control',allowedRouteCodes:['/BC001']};
+    const before=structuredClone(dependencies),response=fallback(dependencies.barriers);response.effectiveCategory='LV';
+    expect(buildCableEngineRequest(dependencies,id(50),12000)).toMatchObject({category:'LV',allowedPurposeRouteCodes:['/BC001'],directSecondaryPolicy:DIRECT_SECONDARY_POLICY});
+    expect(()=>requireCableEngineStrategy(response,dependencies)).not.toThrow();
+    const forbidden=structuredClone(response);forbidden.route!.routeCodes=['/FORBIDDEN'];forbidden.route!.routeText='/FORBIDDEN';
+    expect(()=>requireCableEngineStrategy(forbidden,dependencies)).toThrowError(expect.objectContaining({code:'ENGINE_CABLE_PURPOSE_INVALID'}));
+    expect(dependencies).toEqual(before);
+    delete dependencies.cablePurposeRouting;
+    expect(buildCableEngineRequest(dependencies,id(50),12000)).toHaveProperty('category',mto);
+    expect(cableDirectSecondaryPolicy(dependencies)).toBeNull();
+  });
   it('dispatches the exact admitted context and numeric options without sending the smaller authoring intent', () => {
     const dependencies = protectedDependencies(), before = structuredClone(dependencies);
     const request = buildCableEngineRequest(dependencies, id(50), 12000), { barrierRouting: _intent, ...numeric } = dependencies.options;

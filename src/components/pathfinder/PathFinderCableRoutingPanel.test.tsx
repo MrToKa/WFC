@@ -697,12 +697,22 @@ describe('persistent nonmodal cable routing panel with atomic drafts', () => {
     expect(screen.getByRole('button', { name: 'Hide' })).toBeEnabled(); fireEvent.click(screen.getByRole('button', { name: 'Hide' }));
     expect(p.onTogglePath).toHaveBeenCalledOnce(); expect(assignment.save).not.toHaveBeenCalled(); expect(p.onCalculate).not.toHaveBeenCalled();
   });
-  it('does not invoke the hook for denied, cross-project, MV or unknown categories', () => {
+  it('does not invoke the hook for denied, cross-project or explicit MV cables', () => {
     const p = props(), view = render(<PathFinderCableRoutingPanel {...p} access={{ ...p.access, isAdmin: false }} />);
     expect(screen.queryByRole('dialog')).toBeNull(); view.rerender(<PathFinderCableRoutingPanel {...p} access={{ ...p.access, accountId: null }} />);
     view.rerender(<PathFinderCableRoutingPanel {...p} cable={{ ...p.cable!, projectId: id(99) }} />);
-    for (const mto of ['MV', null, 'Unknown']) { view.rerender(<PathFinderCableRoutingPanel {...p} cable={{ ...p.cable!, mto }} />); expect(screen.queryByRole('dialog')).toBeNull(); }
+    view.rerender(<PathFinderCableRoutingPanel {...p} cable={{ ...p.cable!, mto: 'MV' }} />); expect(screen.queryByRole('dialog')).toBeNull();
     expect(useCableEndpointPairSelection).not.toHaveBeenCalled();
+  });
+  it.each([null, '', 'Power', 'Plastic tubing'])('renders the real popup and assignment controls with optional MTO %s', mto => {
+    const p = props(); p.cable = { ...p.cable!, mto };
+    render(<PathFinderCableRoutingPanel {...p} />);
+    expect(screen.getByRole('dialog', { name: 'Cable <literal>' })).toBeVisible();
+    expect(useCableEndpointPairSelection).toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Assign From' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Assign To' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Calculate routing' })).toBeEnabled();
+    expect(assignment.save).not.toHaveBeenCalled(); expect(p.onCalculate).not.toHaveBeenCalled();
   });
   it('remounts ownership when cable/account changes and scopes its current hook to the new owner', () => {
     const p = props(), view = render(<PathFinderCableRoutingPanel {...p} />); fireEvent.click(screen.getByRole('button', { name: 'Collapse' }));

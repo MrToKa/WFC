@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isPathFinderCableEligible } from './pathfinderCableEligibility.js';
 import { canonicalPurposeJson, policyHashSchema, policyUuidSchema, policyRevisionSchema } from './pathfinderPurposePolicy.js';
 import { endpointBindingSchema, endpointBindingReceiptSchema, endpointCurrentScopeSchema, endpointLocationSchema,
   endpointLocationNameSchema, endpointObjectRefSchema, endpointPointSchema } from './pathfinderEndpointBindings.js';
@@ -39,7 +40,7 @@ export const cableEndpointContextSchema = z.object({ schemaVersion: z.literal('w
     context.addIssue({ code: 'custom', message: 'The logical endpoint retains its normalized cable name.' });
   if (value.head && (!value.location || value.head.projectId !== value.projectId || value.head.locationId !== value.location.id))
     context.addIssue({ code: 'custom', message: 'Shared endpoint evidence must belong to this project/location.' });
-  if (value.canBind && (!endpointLocationNameSchema.safeParse(value.logicalName).success || !value.current || value.reasonCodes.length !== 0 || !['LV', 'Control', 'Instrumentation'].includes(value.mto ?? '')))
+  if (value.canBind && (!endpointLocationNameSchema.safeParse(value.logicalName).success || !value.current || value.reasonCodes.length !== 0 || !isPathFinderCableEligible(value.mto)))
     context.addIssue({ code: 'custom', message: 'Bindable display context requires a named eligible cable and current preparation.' });
   if (value.automaticSelection && (!value.canBind || value.head !== null || !value.current?.traceId || value.automaticSelection.object.traceId !== value.current.traceId))
     context.addIssue({ code: 'custom', message: 'An unconfirmed automatic candidate never replaces a saved head or a different model scope.' });

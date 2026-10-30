@@ -13,6 +13,9 @@ const command = () => ({ schemaVersion: 'wfc.pf.cable-endpoint-command.v1', idem
 const unavailable = () => ({ schemaVersion: 'wfc.pf.cable-endpoint-selection.v1', projectId: id(1), current, sdkObjectId: 12, status: 'unavailable', reasonCodes: ['NOT_RETAINED'],
   object: null, pointProjectMetres: null, bounds: null, approximate: true, derivation: null });
 describe('strict cable endpoint command and display contracts', () => {
+  it.each([null, '', 'Custom MTO'])('allows endpoint binding independently of MTO %j while retaining its exact value', mto => {
+    const input = { ...context(), mto }; expect(cableEndpointContextSchema.parse(input)).toEqual(input);
+  });
   it('hashes the strict exact body and context omits only its own hash', () => {
     const c = cableEndpointContextSchema.parse(context()), write = cableEndpointCommandSchema.parse(command());
     const { contextSha256: _hash, ...body } = c; expect(cableEndpointContextHashInput(c)).toEqual(body);

@@ -4,6 +4,7 @@ import { useFloatingCablePanel, type FloatingCableWindowRequest } from '@/hooks/
 import { Button, Caption1, Checkbox, Portal, Spinner } from '@fluentui/react-components';
 import { useCableEndpointPairSelection, type CableEndpointPairSelectionAccess } from '@/hooks/useCableEndpointPairSelection';
 import type { CableWorkflowRow } from '../../../shared/pathfinderCableWorkflow';
+import { isPathFinderCableEligible } from '../../../shared/pathfinderCableEligibility';
 import { CablePopupSurface, type CablePopupSurfaceStyles } from '@/components/CablePopupSurface';
 import type { PathFinderWorkflowDisplay, PathFinderWorkflowReview } from '@/pages/ProjectDetails/PathFinderResults';
 import { PathFinderCableComparison } from './PathFinderCableComparison';
@@ -46,7 +47,7 @@ function locationObjectId(state: Endpoint, model: PathFinderCableRoutingPanelPro
 export function PathFinderCableRoutingPanel(props: PathFinderCableRoutingPanelProps) {
   const { access, cable } = props;
   if (!access.isAdmin || !access.accountId || !access.token || !access.projectId || access.projectId !== access.loadedProjectId
-    || !cable || cable.projectId !== access.projectId || !['LV', 'Control', 'Instrumentation'].includes(cable.mto ?? '')) return null;
+    || !cable || cable.projectId !== access.projectId || !isPathFinderCableEligible(cable.mto)) return null;
   const owner = JSON.stringify([access.accountId, access.projectId, access.token, access.model]);
   return <FloatingRoutingPanel key={owner} {...props} cable={cable} owner={owner} />;
 }

@@ -8,6 +8,7 @@ import type { BatchReviewCandidate } from './hooks/usePathfinderBatchReview';
 import type { BatchReviewController } from './PathFinderBatchReview';
 import { sealedCableItemApplicabilitySchema } from '../../../shared/pathfinderItemApplicability';
 import { PathFinderDirectSecondary } from './PathFinderDirectSecondary';
+import { isPathFinderCableEligible } from '../../../shared/pathfinderCableEligibility';
 
 export type PathFinderCalculationScope = { admissionId: string | null; jobId: string | null; ready: boolean; message: string | null;
   wholeJobReady?: boolean; jobStatus?: PathFinderJob['status'] | null; cancelRequested?: boolean };
@@ -27,7 +28,7 @@ const signedMetres = (value: string | number | null | undefined) => value === nu
 const label = (value: string) => value.toLowerCase().replaceAll('_', ' ');
 const model = (value: Model) => value ? `${value.id} · selection ${value.selectionRevision}` : unavailable;
 const status = (value: string) => ({ calculated: 'Ready for review', locations_required: 'Resolve locations', no_path: 'No connected path',
-  settings_required: 'Project values required', category_required: 'Cable category required', stale: 'Outdated', invalid_request: 'Review the input',
+  settings_required: 'Project values required', category_required: 'Cable type Purpose required', stale: 'Outdated', invalid_request: 'Review the input',
   deadline_exceeded: 'Calculation timed out', resource_limit: 'Calculation limit reached' }[value] ?? label(value));
 const calculationLabel = (value: { kind: string; generation: string | null }) => value.kind === 'automatic' ? `Generation ${value.generation}`
   : value.kind === 'location-impact' ? 'Shared location calculation' : 'Manual calculation';
@@ -164,7 +165,7 @@ export function PathFinderRevisionResults(props: PathFinderRevisionResultsProps)
   const candidate = (value: RevisionResultDetail['row']): BatchReviewCandidate | null => {
     const cable = props.cables?.find(item => item.id === value.cableId), output = value.result;
     if (alreadySaved(value) || !itemReady(value)) return null;
-    if (!cable || !['LV', 'Control', 'Instrumentation'].includes(cable.mto ?? '') || value.status !== 'calculated'
+    if (!cable || !isPathFinderCableEligible(cable.mto) || value.status !== 'calculated'
       || value.currentness.state !== 'current' || !output?.ledgerHash || !output.routeText || output.designLengthMeters === null) return null;
     return { cableId: value.cableId, cableWriteRevision: value.baseline.currentCable.cableWriteRevision,
       proposalId: output.proposalId, proposalHash: output.proposalHash, revisionResultHash: output.revisionResultSha256,

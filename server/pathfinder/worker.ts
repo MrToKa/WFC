@@ -37,6 +37,7 @@ import { executeCapacityRouting, capacityExclusionHint, rememberCapacityExclusio
 import { sameEndpointComputationKey } from './sameEndpointCalculationReuse.js';
 import { isCapacityNoPathResult } from './capacityClearWrite.js';
 import { isPermittedCablePurposeRoute } from '../../shared/routingCablePurposes.js';
+import { routingEngineCategory } from '../../shared/pathfinderCableEligibility.js';
 export const nextAutomaticCursor = (rows:Array<{project_id:string}>):string|null => rows.length===5 ? rows.at(-1)!.project_id : null;
 
 type Row = Record<string,any>;
@@ -47,10 +48,18 @@ function unconfirmedEngineJoin(error:unknown):boolean {
 function implementationRestartRequired(error:unknown):boolean {
   return error!==null&&typeof error==='object'&&(error as {code?:unknown}).code==='ENGINE_IMPLEMENTATION_RESTART_REQUIRED';
 }
+/** Purpose-aware snapshots retain the original MTO but need an internal engine
+ * class when that optional reporting field is empty or custom. Historical
+ * snapshots keep their exact category and strategy interpretation. */
+function cableEngineCategory(dependencies:DependencySnapshot):string|null {
+  const mto=dependencies.cableInputs.mto;
+  return 'cablePurposeRouting' in dependencies && dependencies.cablePurposeRouting
+    && !['MV','LV','Control','Instrumentation'].includes(mto??'') ? routingEngineCategory(mto) : mto;
+}
 /** The admitted engine identity, never route text or mutable UI, selects the strategy. */
 export function cableDirectSecondaryPolicy(dependencies:DependencySnapshot):typeof DIRECT_SECONDARY_POLICY|null {
-  if(dependencies.schemaVersion==='pathfinder.dependencies.v8')return ['LV','Control','Instrumentation'].includes(dependencies.cableInputs.mto??'')?DIRECT_SECONDARY_POLICY:null;
-  return directSecondaryPolicyForScope({category:dependencies.cableInputs.mto,engineIdentity:'engineIdentity' in dependencies?dependencies.engineIdentity:null});
+  if(dependencies.schemaVersion==='pathfinder.dependencies.v8')return ['LV','Control','Instrumentation'].includes(cableEngineCategory(dependencies)??'')?DIRECT_SECONDARY_POLICY:null;
+  return directSecondaryPolicyForScope({category:cableEngineCategory(dependencies),engineIdentity:'engineIdentity' in dependencies?dependencies.engineIdentity:null});
 }
 function requireCablePurposeRoute(response:EngineResponse,dependencies:DependencySnapshot):void {
   const permission='cablePurposeRouting' in dependencies?dependencies.cablePurposeRouting:undefined;
@@ -63,8 +72,8 @@ export function requireCableEngineStrategy(response:EngineResponse,dependencies:
   requireCablePurposeRoute(response,dependencies);
   if(dependencies.schemaVersion==='pathfinder.dependencies.v8')return requireBarrierEngineStrategy(response,{context:dependencies.barriers,
     ...(dependencies.barriers.schemaVersion==='wfc.pf.barrier-runtime.v2'?{qualification:dependencies.barrierQualification}:{}),
-    category:dependencies.cableInputs.mto,fromPoint:dependencies.from.point,toPoint:dependencies.to.point});
-  requireDirectSecondaryStrategy(response,{category:dependencies.cableInputs.mto,fromPoint:dependencies.from.point,toPoint:dependencies.to.point,
+    category:cableEngineCategory(dependencies),fromPoint:dependencies.from.point,toPoint:dependencies.to.point});
+  requireDirectSecondaryStrategy(response,{category:cableEngineCategory(dependencies),fromPoint:dependencies.from.point,toPoint:dependencies.to.point,
     engineIdentity:'engineIdentity' in dependencies?dependencies.engineIdentity:null});
 }
 /** A changed admission is an explicit worker refusal with no computed route or
@@ -94,7 +103,7 @@ export function buildCableEngineRequest(dependencies:DependencySnapshot,requestI
       modelVersionId:dependencies.model.id,snapshotId:dependencies.artifact.id,snapshotSha256:dependencies.artifact.sha256,
       timeoutMilliseconds,includeLengthLedger:true,barriers:dependencies.barriers,...purposePermissions,
       ...(cableDirectSecondaryPolicy(dependencies)?{directSecondaryPolicy:DIRECT_SECONDARY_POLICY}:{}),
-      category:dependencies.cableInputs.mto,from:{x:dependencies.from.point[0],y:dependencies.from.point[1],z:dependencies.from.point[2]},
+      category:cableEngineCategory(dependencies),from:{x:dependencies.from.point[0],y:dependencies.from.point[1],z:dependencies.from.point[2]},
       to:{x:dependencies.to.point[0],y:dependencies.to.point[1],z:dependencies.to.point[2]},options:numericOptions,
       projectSettings:engineProjectSettings(dependencies.settings)};
   }
@@ -105,8 +114,8 @@ export function buildCableEngineRequest(dependencies:DependencySnapshot,requestI
     ...(policy?{directSecondaryPolicy:policy}:{}),
     ...(route?{route:{success:true,lengthMeters:route.lengthMeters,fromDistanceMeters:route.fromDistanceMeters,toDistanceMeters:route.toDistanceMeters,
       fromRequiresSecondary:route.fromRequiresSecondary,toRequiresSecondary:route.toRequiresSecondary,
-      ...(policy&&retained&&'directSecondary' in retained?{directSecondary:retained.directSecondary}:{})},...(policy?{category:dependencies.cableInputs.mto}:{})}
-      :{...purposePermissions,category:dependencies.cableInputs.mto,from:{x:dependencies.from.point[0],y:dependencies.from.point[1],z:dependencies.from.point[2]},
+      ...(policy&&retained&&'directSecondary' in retained?{directSecondary:retained.directSecondary}:{})},...(policy?{category:cableEngineCategory(dependencies)}:{})}
+      :{...purposePermissions,category:cableEngineCategory(dependencies),from:{x:dependencies.from.point[0],y:dependencies.from.point[1],z:dependencies.from.point[2]},
         to:{x:dependencies.to.point[0],y:dependencies.to.point[1],z:dependencies.to.point[2]},options:dependencies.options}),
     projectSettings:engineProjectSettings(dependencies.settings)};
 }
@@ -342,7 +351,7 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,ownedEngine:Eng
             response=searched.response;computedRequest=searched.request;
           }else response = await engine.execute(request,signal);
           requireCableEngineStrategy(response,dependencies);
-          if (retainedResult && retained) response = mergeRetainedGeometryResponse(response,retainedResult,dependencies.cableInputs.mto);
+          if (retainedResult && retained) response = mergeRetainedGeometryResponse(response,retainedResult,cableEngineCategory(dependencies));
           requireCalculationLengthLedger(response,dependencies.settings);
           computedRequest??=request;computedResponse=response;
         }

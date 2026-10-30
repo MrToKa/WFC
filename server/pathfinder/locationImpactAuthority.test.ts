@@ -15,7 +15,7 @@ const sealed = <T extends { contentSha256: string }>(value: T): T => {
   const { contentSha256: _hash, ...body } = value;
   return { ...value, contentSha256: digest(body) };
 };
-function fixture() {
+function fixture(mto: string|null = 'LV') {
   const current = { modelVersionId: id(10), selectionRevision: '3', contentFingerprint: 'a'.repeat(64), aggregateId: id(11),
     artifactId: id(12), projectionSha256: 'b'.repeat(64), captureFrameId: id(13), geometryRevision: '2', traceId: id(14) };
   const record = sealed(locationImpactRecordSchema.parse({ schemaVersion: 'wfc.pf.location-impact-record.v1', id: id(1), projectId: id(2),
@@ -26,7 +26,7 @@ function fixture() {
     eligibleCableIds: [id(20), id(21)], excludedMvCableIds: [id(22)], blockedCategoryCableIds: [], createdAt: new Date(now).toISOString(), contentSha256: '0'.repeat(64) }));
   const items = record.eligibleCableIds.map(cableId => sealed(locationImpactItemSchema.parse({ schemaVersion: 'wfc.pf.location-impact-item.v1',
     projectId: record.projectId, impactId: record.id, cableId, generation: '1', cableWriteRevision: '7', fromLogicalKey: 'FROM', toLogicalKey: 'TO',
-    category: 'LV', eligible: true, contentSha256: '0'.repeat(64) })));
+    category: mto, eligible: true, contentSha256: '0'.repeat(64) })));
   const state = { linked: true, recordPresent: true, record, user: { is_admin: true, revision: record.actorAdminRevision } as Record<string, unknown> | null,
     login: { user_id: record.actorId, expires_at: record.loginExpiresAt, revoked_at: null } as Record<string, unknown> | null,
     epoch: record.installationEpoch as string | null, current: { active_model_version_id: current.modelVersionId, selection_revision: current.selectionRevision,
@@ -34,7 +34,7 @@ function fixture() {
       current_artifact_id: current.artifactId, geometry_revision: current.geometryRevision, capture_frame_id: current.captureFrameId,
       snapshot_sha256: current.projectionSha256, trace_id: current.traceId } as Record<string, unknown> | null,
     job: { requested_by: record.actorId, login_id: record.loginId, login_expires_at: record.loginExpiresAt, authority_kind: 'current-login', state: 'running', cancel_requested: false } as Record<string, unknown> | null,
-    currentTargets: new Set(record.eligibleCableIds), jobMembers: new Set(record.eligibleCableIds), liveCategories: new Map(record.eligibleCableIds.map(cableId => [cableId, 'LV' as string | null])), items,
+    currentTargets: new Set(record.eligibleCableIds), jobMembers: new Set(record.eligibleCableIds), liveCategories: new Map(record.eligibleCableIds.map(cableId => [cableId, mto])), items,
     rawItemHash: null as string | null, rawRecordHash: null as string | null, itemPayloadNull: false, existingEnrollment: false,
     dispatch: { status: 'collecting', owner_token: id(40) as string | null, lease_until: new Date(now + 60000).toISOString() as string | null, attempts: 1, due: true, reasons: [] as string[] },
     enrollmentWrites: [] as unknown[][], dispatchWrites: [] as unknown[][] };
@@ -53,7 +53,7 @@ function fixture() {
     if (sql.startsWith('SELECT requested_by')) return { rows: state.job ? [state.job] : [] };
     if (sql.startsWith('SELECT i.cable_id,i.generation')) {
       const item = state.items.find(item => state.currentTargets.has(item.cableId) && state.jobMembers.has(item.cableId)
-        && ['LV', 'Control', 'Instrumentation'].includes(state.liveCategories.get(item.cableId) ?? '') && (args[3] === null || item.cableId === args[3]));
+        && state.liveCategories.has(item.cableId) && state.liveCategories.get(item.cableId) !== 'MV' && (args[3] === null || item.cableId === args[3]));
       return { rows: item ? [{ cable_id: item.cableId, generation: item.generation, record_sha256: state.rawItemHash ?? item.contentSha256,
         record: state.itemPayloadNull ? null : item }] : [] };
     }
@@ -94,6 +94,11 @@ beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(now); });
 afterEach(() => { vi.useRealTimers(); });
 
 describe('finite scoped location impact authority, synthetic SQL protocol only', () => {
+  it.each([null,'Custom MTO',''])('retains original finite authority for optional MTO %j without changing the sealed value', async mto => {
+    const f=fixture(mto);expect(await f.read(id(20))).toMatchObject({valid:true});
+    expect(f.items[0].category).toBe(mto);
+    expect(f.query.mock.calls.find(([sql])=>sql.startsWith('SELECT i.cable_id,i.generation'))?.[0]).toContain("c.mto IS DISTINCT FROM 'MV'");
+  });
   it('keeps a current sibling eligible after a partially overlapping save supersedes only one cable', async () => {
     const f = fixture(); f.state.currentTargets.delete(id(20));
     expect(await f.read(id(20))).toMatchObject({ scope: 'location-impact', valid: false, code: 'LOCATION_IMPACT_TARGET_SUPERSEDED' });
@@ -116,7 +121,7 @@ describe('finite scoped location impact authority, synthetic SQL protocol only',
     const f = fixture(); if (kind === 'deleted') f.state.liveCategories.delete(id(20)); else f.state.liveCategories.set(id(20), 'MV');
     expect(await f.read(id(20))).toMatchObject({ valid: false, code: 'LOCATION_IMPACT_TARGET_SUPERSEDED' });
     expect(await f.read(id(21))).toMatchObject({ valid: true }); expect(await f.read()).toMatchObject({ valid: true });
-    expect(f.query.mock.calls.find(([sql]) => sql.startsWith('SELECT i.cable_id,i.generation'))?.[0]).toContain("c.mto IN('LV','Control','Instrumentation')");
+    expect(f.query.mock.calls.find(([sql]) => sql.startsWith('SELECT i.cable_id,i.generation'))?.[0]).toContain("c.mto IS DISTINCT FROM 'MV'");
   });
   it.each(['admin-removed', 'admin-revision', 'missing-user', 'revoked-login', 'wrong-login-owner', 'changed-login-expiry', 'missing-login', 'authority-expired', 'login-expired'] as const)(
     'invalidates original finite authority: %s', async kind => {
