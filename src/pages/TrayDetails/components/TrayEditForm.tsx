@@ -13,6 +13,7 @@ interface TrayEditFormProps {
   isLoadingMaterials: boolean;
   isSubmitting: boolean;
   autoLengthPending: boolean;
+  autoLengthProgress?: string | null;
   autoLengthError: string | null;
   autoLengthDisabled: boolean;
   onAutoLength: () => void;
@@ -39,6 +40,7 @@ export const TrayEditForm: React.FC<TrayEditFormProps> = ({
   isLoadingMaterials,
   isSubmitting,
   autoLengthPending,
+  autoLengthProgress,
   autoLengthError,
   autoLengthDisabled,
   onAutoLength,
@@ -159,7 +161,7 @@ export const TrayEditForm: React.FC<TrayEditFormProps> = ({
             </Button>
           </div>
           {formValues.lengthSource === 'auto' ? <p>Auto-calculated</p> : null}
-          {autoLengthPending ? <p role="status">Calculating length from tray centerlines…</p> : null}
+          {autoLengthPending ? <p role="status">{autoLengthProgress || 'Calculating length from tray centerlines…'}</p> : null}
           {autoLengthError ? <p role="alert">{autoLengthError}</p> : null}
           {autoLengthProposal ? <div>
             <p role="status">Current manual length: {autoLengthProposal.currentLengthMm ? `${autoLengthProposal.currentLengthMm} mm` : 'Empty'}. Proposed auto-length: {autoLengthProposal.proposedLengthMm} mm.

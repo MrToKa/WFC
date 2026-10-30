@@ -33,6 +33,18 @@ describe('tray auto-length form data', () => {
     expect(calculated.lengthMm).toBe('1234.567'); expect(calculated.lengthSource).toBe('auto');
     expect(buildTrayInput(calculated).input).not.toHaveProperty('approvedManualLengthMm');
   });
+  it('carries a tray-only measurement into Save and preserves its reference when reopened', () => {
+    const capture = { source: 'tray-capture' as const, modelVersionId: measurement.modelVersionId, selectionRevision: '4',
+      assignmentSha256: 'a'.repeat(64), measurementId: '10000000-0000-4000-8000-000000000004', lengthMm: 5555.125, elementCount: 2 };
+    const empty = tray(null), values = applyTrayAutoLength(toTrayFormState(empty), capture);
+    expect(requiresTrayAutoLengthApproval(toTrayFormState(empty), empty)).toBe(false);
+    expect(values.lengthMm).toBe('5555.125');
+    const { lengthMm: _length, elementCount: _count, ...reference } = capture;
+    expect(buildTrayInput(values).input.autoLengthReference).toEqual(reference);
+    const reopened = toTrayFormState({ ...empty, lengthMm: capture.lengthMm, lengthSource: 'auto', lengthCalculation: { ...capture, calculatedAt: '2026-10-30T00:00:00Z' } });
+    expect(reopened.autoLengthReference).toEqual(reference); expect(reopened.autoLengthRequested).toBe(false);
+    expect(requiresTrayAutoLengthApproval(toTrayFormState(tray(800)), tray(800))).toBe(true);
+  });
   it('requires approval for an unsaved manual value even when the saved value is empty or auto', () => {
     for (const saved of [tray(null), { ...tray(800), lengthSource: 'auto' as const }]) {
       const values = updateTrayFormField(toTrayFormState(saved), 'lengthMm', '450');
@@ -50,9 +62,9 @@ describe('tray auto-length form data', () => {
     const saved = { ...tray(1200), lengthSource: 'auto' as const, lengthCalculation: { ...measurement, lengthMm: 1200, calculatedAt: '2026-10-29T00:00:00Z' } };
     const values = toTrayFormState(saved);
     expect(values.lengthMm).toBe('1200.000'); expect(requiresTrayAutoLengthApproval(values, saved)).toBe(false);
-    expect(values.autoLengthReference?.traceId).toBe(measurement.traceId); expect(values.autoLengthRequested).toBe(false);
+    expect(values.autoLengthReference).toMatchObject({ traceId: measurement.traceId }); expect(values.autoLengthRequested).toBe(false);
     const refreshed = applyTrayAutoLength(values, measurement);
-    expect(refreshed.autoLengthRequested).toBe(true); expect(buildTrayInput(refreshed).input.autoLengthReference?.traceId).toBe(measurement.traceId);
+    expect(refreshed.autoLengthRequested).toBe(true); expect(buildTrayInput(refreshed).input.autoLengthReference).toMatchObject({ traceId: measurement.traceId });
   });
   it('saves unrelated edits to a reopened auto tray without requesting remeasurement from an old network', () => {
     const saved = { ...tray(1200), lengthSource: 'auto' as const, lengthCalculation: { ...measurement, lengthMm: 1200, calculatedAt: '2026-10-29T00:00:00Z' } };

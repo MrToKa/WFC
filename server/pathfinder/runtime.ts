@@ -38,6 +38,7 @@ import {createInitialFillProgress} from './initialFillProgress.js';
 import {createAutomaticPairDispatch} from './automaticPairDispatch.js';
 import {createAutomaticPairWriter} from './automaticPairWriter.js';
 import {createAutomaticPairProducer} from './automaticPairProducer.js';
+import { createTrayAutoLengthCaptureService } from '../services/trayAutoLengthCaptureService.js';
 
 let runtime:ReturnType<typeof createRuntime>|undefined;
 function createRuntime() {
@@ -66,10 +67,12 @@ function createRuntime() {
   const calculationGrants=createCalculationGrantRepository(pool,{afterCommand:applyCalculationGrantCommand,producerStatus:producerQualification.producerStatus});
   const viewer=getViewerRuntime(),producerResourceService=createProducerResourceService({pool});
   const producerResources={service:producerResourceService,storage:viewer.storage,run:viewer.run.bind(viewer),resource:viewer.resource.bind(viewer)};
+  const geometryEngine = createGeometryTraceEngine(worker.executePreparation);
+  const trayAutoLengths = createTrayAutoLengthCaptureService(pool, geometryEngine);
   const preparations=createPreparationService(pool,createPreparationPublisher(worker.executePreparation),{
       capacityProfile:preparationCapacityProfileSchema.parse(process.env.PF_PREPARATION_CAPACITY_PROFILE??LEGACY_PREPARATION_CAPACITY_PROFILE),
     }),
-    geometryTraces=createGeometryTraceRepository(pool,createGeometryTraceEngine(worker.executePreparation)),
+    geometryTraces=createGeometryTraceRepository(pool,geometryEngine),
     revisionComparisons=createRevisionComparisonRepository(pool);
   const preparedMaintenance=createGrantPreparedMaintenance(pool,{traces:geometryTraces,comparisons:revisionComparisons});
   const managedPreparationProducer=createManagedPreparationProducer(pool,{control:managedControl,resources:producerResourceService,preparations,traces:geometryTraces,
@@ -78,7 +81,7 @@ function createRuntime() {
     }});
   return {registry,jobs,apply,worker,recalculations,producer,grantProducer,locationImpacts,locationImpactProducer,initialFillAttempts,initialFillWriter,initialFillProducer,initialFillProgress,automaticPairDispatch,automaticPairWriter,automaticPairProducer,managedControl,producerQualification,calculationGrants,producerResources,
     preparedMaintenance,managedPreparationProducer,lookups:createPathFinderLookups(pool),previews:createPathFinderPreviews(pool),
-    preparations,geometryTraces,revisionComparisons,endpointBindings:createEndpointBindingRepository(pool,createRevisionEndpointAdapters()),modelLocationMatch:createModelLocationMatchRepository(pool)};
+    preparations,geometryTraces,trayAutoLengths,revisionComparisons,endpointBindings:createEndpointBindingRepository(pool,createRevisionEndpointAdapters()),modelLocationMatch:createModelLocationMatchRepository(pool)};
 }
 export function getPathFinderRuntime() {return runtime ??= createRuntime();}
 export async function initializePathFinderRuntime():Promise<void> {

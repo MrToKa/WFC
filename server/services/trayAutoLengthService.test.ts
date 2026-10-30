@@ -44,6 +44,7 @@ function fixture(points = [[[0, 0, 0], [3, 0, 0], [3, 4, 0]], [[100, 0, 0], [102
     geometry_revision: aggregate.geometryRevision, resolution_revision: aggregate.resolutionRevision };
   const query = vi.fn(async (sql: string, params: unknown[] = []) => {
     expect(params[0]).toBe(aggregate.projectId);
+    if (sql.includes('tray-auto-length:capture-cache')) return { rows: [] };
     if (sql.includes('tray-auto-length:publication')) { expect(params[1]).toBe(trayId); return { rows: [row] }; }
     if (sql.includes('tray-auto-length:leaves')) {
       expect(params).toEqual([aggregate.projectId, f.traceId, trayId, 3]); return { rows };
@@ -67,10 +68,10 @@ describe('current published tray centerline Auto-length', () => {
     const f = fixture();
     await expect(f.read()).resolves.toEqual({ lengthMm: 9000, elementCount: 2, modelVersionId: f.f.aggregate.modelVersionId,
       geometryRevision: '1', aggregateId: f.f.aggregate.id, traceId: f.f.traceId });
-    expect(f.query.mock.calls).toHaveLength(4);
+    expect(f.query.mock.calls).toHaveLength(5);
     expect(f.query.mock.calls.every(([sql]) => !/\b(?:INSERT|UPDATE|DELETE)\b/.test(sql))).toBe(true);
-    expect(f.query.mock.calls[2][0]).toMatch(/FOR SHARE OF sel,ver/);
-    expect(f.query.mock.calls[3][0]).toMatch(/FOR SHARE/);
+    expect(f.query.mock.calls[3][0]).toMatch(/FOR SHARE OF sel,ver/);
+    expect(f.query.mock.calls[4][0]).toMatch(/FOR SHARE/);
   });
 
   it('measures the curved source polyline instead of its chord or bounding-box size', async () => {
@@ -100,7 +101,7 @@ describe('current published tray centerline Auto-length', () => {
   it.each(['trace', 'aggregate'] as const)('gives preparation guidance when there is no current %s instead of manufacturing zero', async kind => {
     const f = fixture(); if (kind === 'trace') f.row.trace_id = null; else f.row.current_aggregate_id = '';
     await expect(f.read()).rejects.toMatchObject({ code: 'TRAY_AUTO_LENGTH_UNAVAILABLE', status: 409, message: expect.stringContaining('centerline data') });
-    expect(f.query.mock.calls).toHaveLength(1);
+    expect(f.query.mock.calls).toHaveLength(2);
   });
 
   it.each(['model', 'fingerprint', 'selection', 'health', 'tray-name'] as const)('refuses stale %s evidence', async kind => {

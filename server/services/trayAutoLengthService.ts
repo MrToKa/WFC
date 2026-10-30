@@ -4,6 +4,9 @@ import { trayAutoLengthMeasurementSchema, type TrayAutoLengthMeasurement } from 
 import { preparationAggregateSchema, preparationPlanSchema, preparationPlanHashInput, preparationResolutionSchema } from '../../shared/pathfinderPreparation.js';
 import { GEOMETRY_TRACE_DERIVATION, geometryObjectRevisionSchema, geometryObjectSummarySchema, geometryTraceManifestSchema, geometryTraceContentHashInput } from '../../shared/pathfinderGeometryTrace.js';
 import { canonicalPurposeJson, normalizeCatalogKey, policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
+import { TrayAutoLengthError } from './trayAutoLengthErrors.js';
+import { readCapturedTrayAutoLength } from './trayAutoLengthCaptureService.js';
+export { TrayAutoLengthError } from './trayAutoLengthErrors.js';
 
 type QueryClient = Pick<PoolClient, 'query'>;
 type ScopeRow = {
@@ -21,12 +24,6 @@ const prepareMessage = 'Prepare the routing network with centerline data in Path
 const staleMessage = 'The model or tray assignment changed. Prepare the current routing network, then try Auto-length again.';
 const invalidMessage = 'The saved tray centerline data is incomplete or invalid. Prepare the routing network again.';
 
-export class TrayAutoLengthError extends Error {
-  readonly status: number;
-  constructor(public readonly code: string, message: string, status = 409) {
-    super(message); this.name = 'TrayAutoLengthError'; this.status = status;
-  }
-}
 const fail = (code: string, message = invalidMessage, status = 409): never => { throw new TrayAutoLengthError(code, message, status); };
 
 /** Read the exact persisted Path Finder leaf polylines. The caller owns project
@@ -36,6 +33,8 @@ const fail = (code: string, message = invalidMessage, status = 409): never => { 
 export async function readCurrentTrayAutoLength(client: QueryClient, projectId: string, trayId: string): Promise<TrayAutoLengthMeasurement> {
   if (!policyUuidSchema.safeParse(projectId).success || !policyUuidSchema.safeParse(trayId).success)
     return fail('TRAY_AUTO_LENGTH_INVALID', invalidMessage, 400);
+  const captured = await readCapturedTrayAutoLength(client, projectId, trayId);
+  if (captured) return captured;
   const scopeRows = (await client.query<ScopeRow>(`/* tray-auto-length:publication */ SELECT tr.name AS tray_name,
     sel.active_model_version_id,sel.selection_revision::text,ver.content_fingerprint,ver.state AS model_state,ver.health AS model_health,
     p.current_aggregate_id,p.current_artifact_id,p.geometry_revision::text,p.resolution_revision::text,

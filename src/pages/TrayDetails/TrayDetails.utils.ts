@@ -42,7 +42,10 @@ export const toTrayFormState = (tray: Tray): TrayFormState => ({
   weightKgPerM: ''
 });
 
-const autoLengthReference = (measurement: TrayAutoLengthReference): TrayAutoLengthReference => ({
+const autoLengthReference = (measurement: TrayAutoLengthReference): TrayAutoLengthReference => 'source' in measurement ? {
+  source: 'tray-capture', modelVersionId: measurement.modelVersionId, selectionRevision: measurement.selectionRevision,
+  assignmentSha256: measurement.assignmentSha256, measurementId: measurement.measurementId,
+} : ({
   modelVersionId: measurement.modelVersionId,
   geometryRevision: measurement.geometryRevision,
   aggregateId: measurement.aggregateId,

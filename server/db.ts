@@ -1,4 +1,5 @@
 import { initializeStandardMaterialCategories } from './services/standardMaterialCategorySchema.js';
+import { TRAY_AUTO_LENGTH_CAPTURE_SQL } from './services/trayAutoLengthCaptureService.js';
 import { initializeMaterialIdentity } from './services/materialIdentitySchema.js';
 import { initializeMaterialChangeLog } from './services/materialChangeLogSchema.js';
 import { initializeModelRegistry } from './modelRegistry/schema.js';
@@ -901,6 +902,7 @@ export async function initializeDatabase(): Promise<void> {
       END IF;
     END $$;
   `);
+  await pool.query(TRAY_AUTO_LENGTH_CAPTURE_SQL);
 
   await pool.query(`
     ALTER TABLE trays

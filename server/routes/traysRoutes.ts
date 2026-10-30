@@ -12,13 +12,16 @@ import type { TrayRow } from '../models/tray.js';
 import { mapProjectRow } from '../models/project.js';
 import { drawingAccessTransaction } from '../pathfinder/drawingAccess.js';
 import { readProjectDrawingFreeSpace } from '../pathfinder/drawingSnapshots.js';
-import { requestPrincipal } from '../pathfinder/auth.js';
+import { requestPrincipal, principalTransaction, requireCurrentLogin } from '../pathfinder/auth.js';
 import { PathFinderError } from '../pathfinder/errors.js';
 import { projectDrawingMetricsSchema } from '../../shared/trayDrawingSnapshot.js';
 import { authenticate, requireProjectEdit, requireProjectExport } from '../middleware.js';
 import { ensureProjectExists } from '../services/projectService.js';
 import { recordTrayChanges } from '../services/trayChangeLogService.js';
 import { readCurrentTrayAutoLength, TrayAutoLengthError } from '../services/trayAutoLengthService.js';
+import { readTrayAutoLengthCaptureContext } from '../services/trayAutoLengthCaptureService.js';
+import { getPathFinderRuntime } from '../pathfinder/runtime.js';
+import { canonicalPurposeJson } from '../../shared/pathfinderPurposePolicy.js';
 import {
   excelImportError,
   getExcelRowNumber,
@@ -359,6 +362,37 @@ traysRouter.post(
   },
 );
 
+traysRouter.get('/:trayId/auto-length/capture-context', requireProjectEdit, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { projectId, trayId } = req.params;
+    const context = await principalTransaction(pool, projectId, requestPrincipal(req), client => readTrayAutoLengthCaptureContext(client, projectId, trayId));
+    res.setHeader('Cache-Control', 'private, no-store'); res.json({ context });
+  } catch (error) {
+    if (error instanceof TrayAutoLengthError || error instanceof PathFinderError) { res.status(error.status).json({ error: error.message, code: error.code }); return; }
+    res.status(500).json({ error: 'The tray assignment could not be read. Try Auto-length again.' });
+  }
+});
+
+traysRouter.post('/:trayId/auto-length/capture', requireProjectEdit, async (req: Request, res: Response): Promise<void> => {
+  const controller = new AbortController(), abort = () => controller.abort(), timer = setTimeout(abort, 140000);
+  req.once('aborted', abort);
+  try {
+    const { projectId, trayId } = req.params, who = requestPrincipal(req);
+    await principalTransaction(pool, projectId, who, async () => undefined);
+    const authorize = async (client: PoolClient) => {
+      if (!(await client.query('SELECT id FROM projects WHERE id=$1 FOR NO KEY UPDATE', [projectId])).rows.length) throw new PathFinderError('PROJECT_NOT_FOUND', 404);
+      const user = (await client.query<{ is_admin: boolean }>('SELECT is_admin FROM users WHERE id=$1 FOR SHARE', [who.userId])).rows[0];
+      if (!user?.is_admin) throw new PathFinderError('ADMIN_REQUIRED', 403);
+      await requireCurrentLogin(client, who);
+    };
+    const autoLength = await getPathFinderRuntime().trayAutoLengths.capture(projectId, trayId, req.body, authorize, controller.signal);
+    res.setHeader('Cache-Control', 'private, no-store'); res.json({ autoLength });
+  } catch (error) {
+    if (error instanceof TrayAutoLengthError || error instanceof PathFinderError) { res.status(error.status).json({ error: error.message, code: error.code }); return; }
+    res.status(controller.signal.aborted ? 503 : 500).json({ error: 'The tray measurement could not finish. Its previous length was kept. Try Auto-length again.', code: 'TRAY_AUTO_LENGTH_CAPTURE_FAILED' });
+  } finally { clearTimeout(timer); req.removeListener('aborted', abort); }
+});
+
 traysRouter.get('/:trayId/auto-length', async (req: Request, res: Response): Promise<void> => {
   const { projectId, trayId } = req.params;
   if (!projectId || !trayId) {
@@ -695,11 +729,9 @@ traysRouter.patch(
           return;
         }
         const measured = await readCurrentTrayAutoLength(client, projectId, trayId);
+        const { lengthMm: _measuredLength, elementCount: _elementCount, ...measuredReference } = measured;
         if (measured.lengthMm !== lengthMm || !autoLengthReference ||
-          measured.modelVersionId !== autoLengthReference.modelVersionId ||
-          measured.geometryRevision !== autoLengthReference.geometryRevision ||
-          measured.aggregateId !== autoLengthReference.aggregateId ||
-          measured.traceId !== autoLengthReference.traceId) {
+          canonicalPurposeJson(measuredReference) !== canonicalPurposeJson(autoLengthReference)) {
           await client.query('ROLLBACK');
           res.status(409).json({ error: 'The model or tray geometry changed after the preview. Choose Auto-length again before saving.', code: 'TRAY_AUTO_LENGTH_STALE' });
           return;

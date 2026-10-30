@@ -39,6 +39,11 @@ describe('tray auto-length controls', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Use auto-length' }));
     expect(value.onAcceptAutoLength).toHaveBeenCalledOnce(); expect(value.onSubmit).not.toHaveBeenCalled();
   });
+  it('shows the current measurement stage while the model geometry is being read', () => {
+    render(<TrayEditForm {...props()} autoLengthPending autoLengthProgress="Reading only this tray’s assigned geometry…" />);
+    expect(screen.getByRole('status')).toHaveTextContent('Reading only this tray’s assigned geometry');
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+  });
   it('shows the saved baseline when an unsaved manual value differs', () => {
     render(<TrayEditForm {...props()} autoLengthProposal={{ currentLengthMm: '950', proposedLengthMm: '1234.567', savedManualLengthMm: 800 }} />);
     expect(screen.getByRole('status')).toHaveTextContent('Current manual length: 950 mm. Proposed auto-length: 1234.567 mm. Saved manual length: 800 mm.');
