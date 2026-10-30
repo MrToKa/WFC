@@ -170,6 +170,29 @@ function preview(id: string, reverse = false): PathFinderPreview { return { id, 
 
 // Fluent's expanded sidebar makes jsdom role/style queries expensive; assertions still use their normal wait budgets.
 describe('admin PathFinder interface', { timeout: 60_000 }, () => {
+  it('keeps the camera and viewer host through Routes, Path and Path lookup changes', async () => {
+    const user = userEvent.setup(); mount();
+    const host = screen.getByTestId('pathfinder-model-host');
+    pf.clear.mockClear(); pf.cancelOperation.mockClear();
+    for (const name of ['Routes', 'Path lookup', 'Path', 'Routes', 'Path']) {
+      await user.click(screen.getByRole('tab', { name }));
+      expect(screen.getByRole('tab', { name })).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByTestId('pathfinder-model-host')).toBe(host);
+    }
+    expect(pf.cancelOperation).toHaveBeenCalled(); expect(pf.clear).toHaveBeenCalled();
+    expect(pf.clear).not.toHaveBeenCalledWith({ preserveCamera: false });
+    expect(pf.reloadViewer).not.toHaveBeenCalled(); expect(pf.zoom).not.toHaveBeenCalled();
+  });
+  it('resets the camera only for Restore view, while Clear retains the current view', async () => {
+    const user = userEvent.setup(); mount();
+    await user.click(screen.getByRole('tab', { name: 'Path' }));
+    pf.clear.mockClear();
+    await user.click(screen.getByRole('button', { name: 'Clear' }));
+    expect(pf.clear).toHaveBeenCalled(); expect(pf.clear).not.toHaveBeenCalledWith({ preserveCamera: false });
+    await user.click(screen.getByRole('button', { name: 'Restore view' }));
+    expect(pf.clear).toHaveBeenLastCalledWith({ preserveCamera: false });
+    expect(pf.reloadViewer).not.toHaveBeenCalled();
+  });
   it('keeps one independent From/To action available in Routes and Path and pauses it in lookup', async () => {
     const user = userEvent.setup(), current = proposalModel(); vi.mocked(usePathFinder).mockReturnValue(current);
     render(<PathFinderTab projectId={projectId} loadedProjectId={projectId} token="isolated-test-token" accountId={accountId} isAdmin />);
