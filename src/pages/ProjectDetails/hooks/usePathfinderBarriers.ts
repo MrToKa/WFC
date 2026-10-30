@@ -133,7 +133,9 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
       return;
     }
     update(run, { busy: false, pending: !!saved, phase: unknown ? 'unknown' : code === 'BARRIER_CAPTURE_PARTIAL' ? 'partial' : code === 'BARRIER_CONTEXT_CHANGED' ? 'stale' : 'refused',
-      error: unknown ? 'The command outcome is unknown. Its exact recovery binding is retained. Check the saved command outcome before changing this set.'
+      error: unknown ? (code === 'BARRIER_VERIFIER_NOT_CONFIGURED'
+        ? 'The server cannot verify barrier geometry. Update the API container with the barrier verifier enabled (BARRIER_VERIFIER_NOT_CONFIGURED). The saved command is still pending; inspect its outcome or close this exact command before saving a new selection. Published barriers are retained.'
+        : 'The command outcome is unknown. Its exact recovery binding is retained. Check the saved command outcome before changing this set.')
         : barrierCaptureErrorMessage(code) ?? (code === 'EXTRACTION_FAILED' || code?.startsWith('BARRIER_CAPTURE_')
           ? 'The selected barrier geometry could not be read completely. Check the selected objects or reduce the capture scope before starting a new command.'
           : error instanceof Error ? error.message : 'Barrier authoring could not be completed.') });

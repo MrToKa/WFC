@@ -3,6 +3,7 @@ WORKDIR /source
 COPY pathfinder-engine/src ./src
 COPY pathfinder-engine/tools/PathFinder.ModelRunner ./tools/PathFinder.ModelRunner
 RUN dotnet publish tools/PathFinder.ModelRunner/PathFinder.ModelRunner.csproj --configuration Release --output /engine --no-self-contained -p:UseAppHost=false
+RUN dotnet publish src/PathFinder.BarrierVerifier/PathFinder.BarrierVerifier.csproj --configuration Release --output /barrier-verifier --no-self-contained -p:UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/runtime:9.0-bookworm-slim AS tray-dotnet-runtime
 
@@ -26,7 +27,8 @@ RUN npm run build \
 FROM node:24-bookworm-slim@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5 AS api-runtime
 
 ENV NODE_ENV=production DOTNET_ROOT=/usr/share/dotnet DOTNET_CLI_TELEMETRY_OPTOUT=1 \
-    PF_ENGINE_DLL=/opt/pathfinder/PathFinder.ModelRunner.dll PF_ROOT=/var/lib/wfc/pathfinder
+    PF_ENGINE_DLL=/opt/pathfinder/PathFinder.ModelRunner.dll \
+    PF_BARRIER_VERIFIER_DLL=/opt/pathfinder/barriers/PathFinder.BarrierVerifier.dll PF_ROOT=/var/lib/wfc/pathfinder
 WORKDIR /app
 
 COPY --from=tray-dotnet-runtime /usr/share/dotnet /usr/share/dotnet
@@ -34,6 +36,7 @@ RUN apt-get update && apt-get install --no-install-recommends -y libicu72 libssl
     && rm -rf /var/lib/apt/lists/* \
     && ln -s /usr/share/dotnet/dotnet /usr/local/bin/dotnet
 COPY --from=tray-engine-build /engine /opt/pathfinder
+COPY --from=tray-engine-build /barrier-verifier /opt/pathfinder/barriers
 
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts \
@@ -41,6 +44,7 @@ RUN npm ci --omit=dev --ignore-scripts \
 
 COPY --from=build /app/server/dist ./server/dist
 COPY --from=build ["/app/Template files", "./Template files"]
+COPY scripts/barrier-verifier-container-check.mjs ./scripts/barrier-verifier-container-check.mjs
 
 RUN mkdir -p /var/lib/wfc/model-imports /var/lib/wfc/pathfinder \
     && chown node:node /var/lib/wfc/model-imports /var/lib/wfc/pathfinder \
@@ -49,6 +53,8 @@ RUN mkdir -p /var/lib/wfc/model-imports /var/lib/wfc/pathfinder \
     && node --input-type=module -e "const m = await import('./server/dist/server/vendor/routings-model-package/index.mjs'); if (typeof m.verifyPackage !== 'function' || m.DEFAULT_LIMITS.maxArchiveBytes !== 2147483648) process.exit(1);"
 
 USER node
+# Fail the image build if either deployed verifier lane or its configuration is missing.
+RUN node scripts/barrier-verifier-container-check.mjs
 EXPOSE 4000
 
 CMD ["node", "server/dist/server/index.js"]

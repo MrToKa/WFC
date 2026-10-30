@@ -65,8 +65,12 @@ namespace AddinRibbon.Routing
             budget.Check();
             if (drill)
             {
-                // Exact pinned strategy, with the same admitted category/options.
+                // Keep an existing successful route exactly. Ignoring barriers
+                // must not, however, turn the first disconnected endpoint pair
+                // into a conclusive refusal before reachable alternatives are tried.
                 var old = CalculateWithRouteCosts(eligible, from, to, category, budget.RouteCosts, options, budget.Token); budget.Check();
+                if (!old.Success && old.Message.StartsWith("Selected From tray ", StringComparison.Ordinal))
+                    return BypassedEndpointAlternatives(eligible, from, to, options, budget, old);
                 return new ConstrainedRouteEvaluation(old, ConstrainedRouteStatus.Bypassed,
                     old.Success ? "DRILLING_BYPASS" : "LEGACY_ROUTING_FAILED", old.Success, budget);
             }
@@ -105,6 +109,30 @@ namespace AddinRibbon.Routing
                 }
             if (budget.CandidatesTruncated) return budget.Failure("CANDIDATE_DOMAIN_TRUNCATED");
             return ConstrainedNoRoute(budget, "NO_CLEAR_CONNECTED_CANDIDATE_PAIR");
+        }
+
+        private static ConstrainedRouteEvaluation BypassedEndpointAlternatives(List<TraySegment> eligible,
+            RoutePoint from, RoutePoint to, RoutingOptions options, ConstrainedBudget budget, RouteResult original)
+        {
+            var fromCandidates = ConstrainedCandidates(eligible, from, null, options, budget,
+                new Dictionary<Tuple<int, double>, RouteCollisionObservation>(), false);
+            var toCandidates = ConstrainedCandidates(eligible, to, null, options, budget,
+                new Dictionary<Tuple<int, double>, RouteCollisionObservation>(), false);
+            // First retain the nearest From against each ranked To alternative,
+            // and vice versa, before spending the pair budget on interior pairs.
+            // Contacts, tolerance, category and route costs stay exactly those
+            // of the admitted tray graph. Only equipment attachment may change.
+            foreach (var pair in NearestAnchoredPairs(fromCandidates, toCandidates))
+            {
+                budget.BeginPair(); RouteConnectorPlan unusedFrom, unusedTo;
+                var route = ConstrainedPairGraph(eligible, from, to, pair.Item1, pair.Item2, null,
+                    options, budget, null, null, out unusedFrom, out unusedTo, true);
+                if (route != null) return new ConstrainedRouteEvaluation(route, ConstrainedRouteStatus.Bypassed,
+                    "DRILLING_BYPASS_ACCESSIBLE_CANDIDATE_PAIR", !budget.CandidatesTruncated, budget);
+            }
+            if (budget.CandidatesTruncated) return budget.Failure("CANDIDATE_DOMAIN_TRUNCATED");
+            return new ConstrainedRouteEvaluation(original, ConstrainedRouteStatus.Bypassed,
+                "NO_CONNECTED_CANDIDATE_PAIR", true, budget);
         }
 
         private static ConstrainedRouteEvaluation ConstrainedNoRoute(ConstrainedBudget budget, string reason)
@@ -197,7 +225,7 @@ namespace AddinRibbon.Routing
         private static RouteResult ConstrainedPairGraph(List<TraySegment> eligible, RoutePoint from, RoutePoint to, Projection first, Projection last,
             RouteCollisionQuery collision, RoutingOptions options, ConstrainedBudget budget,
             Func<RoutePoint, RouteConnectorPlan> fromPlanner, Func<RoutePoint, RouteConnectorPlan> toPlanner,
-            out RouteConnectorPlan fromPlan, out RouteConnectorPlan toPlan)
+            out RouteConnectorPlan fromPlan, out RouteConnectorPlan toPlan, bool skipBarrierChecks = false)
         {
             fromPlan = null; toPlan = null;
             int maxNodes = Math.Min(options.MaxGraphNodes, budget.Limits.MaxGraphNodes);
@@ -264,7 +292,8 @@ namespace AddinRibbon.Routing
                     long key = ((long)Math.Min(index, edge.Node) << 32) | (uint)Math.Max(index, edge.Node); RouteCollisionStatus status;
                     if (!checkedEdges.TryGetValue(key, out status))
                     {
-                        status = budget.Query(collision, nodes[index].Point, nodes[edge.Node].Point).Status;
+                        status = skipBarrierChecks ? RouteCollisionStatus.Clear
+                            : budget.Query(collision, nodes[index].Point, nodes[edge.Node].Point).Status;
                         checkedEdges.Add(key, status);
                     }
                     // Retain the existing Edge struct verbatim, including its
@@ -314,7 +343,7 @@ namespace AddinRibbon.Routing
             if (!RoutePoint.IsFinite(total)) throw new ConstrainedLimitException("NONFINITE_ROUTE_LENGTH");
             var route = new RouteResult(true, "Path calculated.", codes, segmentIds, points, total, fromDistance, toDistance,
                 fromSecondary, toSecondary, graphCost.GapCount, graphCost.GapLength);
-            return ConstrainedFinalClear(route, collision, budget) ? route : null;
+            return skipBarrierChecks || ConstrainedFinalClear(route, collision, budget) ? route : null;
         }
 
         internal static bool ConstrainedFinalClear(RouteResult route, RouteCollisionQuery collision, ConstrainedBudget budget)

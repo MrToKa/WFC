@@ -14,7 +14,7 @@ internal static class Program
     private static int Main(string[] args)
     {
         if (args.Length != 0) return 2;
-        LegacyParity(); PhysicalRoutes(); ConnectorGeometry(); DirectStrategy(); RefusalAndBudgets(); SearchReuse();
+        LegacyParity(); PhysicalRoutes(); ConnectorGeometry(); DirectStrategy(); BypassedAlternatives(); RefusalAndBudgets(); SearchReuse();
         Console.WriteLine(JsonSerializer.Serialize(new
         {
             schemaVersion = "wfc.pf.constrained-routing-checks.v1", status = failures == 0 ? "PASS" : "FAIL",
@@ -80,6 +80,73 @@ internal static class Program
         Need(!result.Route.Success, "An obstruction/uncertainty cannot produce a successful route.");
         Need(result.Status is not (ConstrainedRouteStatus.Clear or ConstrainedRouteStatus.Bypassed));
         Need(!string.IsNullOrWhiteSpace(result.Reason), "A refusal needs a diagnostic.");
+    }
+    private static void BypassedAlternatives()
+    {
+        // A connected five-tray chain and a separate closer To tray reproduce
+        // the endpoint-selection failure without using any project geometry.
+        TraySegment[] Network() => [Tray("B002", P(0), P(2)), Tray("B003", P(2), P(4)),
+            Tray("B005", P(4), P(6)), Tray("BC027", P(6), P(8)), Tray("BC028", P(8), P(10)),
+            Tray("BC024", P(9, 3), P(11, 3))];
+        var from = P(0, -1); var to = P(10, 4); var options = Options(true);
+        RouteCollisionObservation MustNotQuery(RoutePoint a, RoutePoint b, CancellationToken token) =>
+            throw new InvalidOperationException("Bypass queried a barrier.");
+        Run("barrier bypass tries the nearest reachable To after the closest tray is disconnected", () =>
+        {
+            var trays = Network(); var original = Calculator.Calculate(trays, from, to, CableCategory.Control, options);
+            Need(!original.Success); Need(original.Message.Contains("From tray /B002") && original.Message.Contains("To tray /BC024"));
+            var value = Route(trays, from, to, MustNotQuery, options, drill: true);
+            Equal(ConstrainedRouteStatus.Bypassed, value.Status); Need(value.Route.Success);
+            Equal("/B002/B003/B005/BC027/BC028/SECONDARY", value.Route.RouteText);
+            Bits(1, value.Route.FromDistanceMeters); Bits(4, value.Route.ToDistanceMeters);
+            Bits(15, value.Route.LengthMeters); Equal(0, value.Route.ConnectionGapCount);
+            Equal(0, value.CollisionQueries); Equal(0, value.FinalChecks.Count); Need(value.Blocking is null);
+            var reordered = Route(trays.Reverse().ToArray(), from, to, MustNotQuery, options, drill: true);
+            ExactRoute(value.Route, reordered.Route);
+        });
+        Run("bypass fallback retains category filtering and explicit route exclusions", () =>
+        {
+            var trays = Network();
+            trays[4] = new TraySegment("BC028", "/BC028", CableCategory.LV, [P(8), P(10)]);
+            var value = Route(trays, from, to, MustNotQuery, options, drill: true);
+            Need(value.Route.Success); Need(!value.Route.RouteCodes.Contains("/BC028"));
+            var capacity = CapacityRouting.CalculateWithLocalApproaches(Network(), ["/BC028"], from, to,
+                CableCategory.Control, MustNotQuery, options, drillThroughWalls: true).RouteEvaluation;
+            Need(capacity.Route.Success); Equal(value.Route.RouteText, capacity.Route.RouteText);
+            Equal("/B002/B003/B005/BC027/SECONDARY", capacity.Route.RouteText);
+            Equal(0, capacity.CollisionQueries); Equal(0, capacity.FinalChecks.Count);
+        });
+        Run("bypass fallback does not join disconnected trays beyond the connection tolerance", () =>
+        {
+            var value = Route([Tray("start", P(0), P(1)), Tray("end", P(3), P(4))],
+                P(0, -1), P(4, 1), MustNotQuery, Options(tolerance: .25), drill: true);
+            Need(value.Route.Success); Equal(1, value.Route.SegmentIds.Distinct().Count());
+            Equal(0, value.Route.ConnectionGapCount); Need(value.Route.FromRequiresSecondary || value.Route.ToRequiresSecondary);
+            Equal(0, value.CollisionQueries);
+        });
+        Run("bypass endpoint alternatives retain load-balanced path selection and measured length", () =>
+        {
+            var trays = Network().Append(Tray("ALT", P(2), P(2, -3), P(4, -3), P(4))).ToArray();
+            var value = CapacityRouting.CalculateWithLocalApproaches(trays, [], from, to,
+                CableCategory.Control, MustNotQuery, options, drillThroughWalls: true,
+                routeCostMultipliers: [new RouteCostMultiplier("/B003", 100)]).RouteEvaluation;
+            Need(value.Route.Success); Need(value.Route.RouteCodes.Contains("/ALT")); Need(!value.Route.RouteCodes.Contains("/B003"));
+            Bits(21, value.Route.LengthMeters); Equal(0, value.CollisionQueries); Equal(0, value.FinalChecks.Count);
+        });
+        Run("bypass alternate search reports bounded exhaustion without claiming a disconnected graph", () =>
+        {
+            var value = Route(Network(), from, to, MustNotQuery, options,
+                new ConstrainedRoutingLimits { MaxPairs = 1 }, drill: true);
+            NotSuccess(value); Equal(ConstrainedRouteStatus.SearchIncomplete, value.Status);
+            Equal("CANDIDATE_PAIR_LIMIT", value.Reason); Equal(0, value.CollisionQueries); Need(!value.SearchComplete);
+        });
+        Run("enabled barriers still check and reject blocked endpoint alternatives", () =>
+        {
+            var kernel = Kernel(Box("wall", x0: -20, x1: 20, y0: 1.8, y1: 2.2));
+            var value = Route(Network(), from, to, Query(kernel), options);
+            NotSuccess(value); Need(value.CollisionQueries > 0); Need(value.Status != ConstrainedRouteStatus.Bypassed);
+            Equal(0, value.FinalChecks.Count);
+        });
     }
     private static void ExactRoute(RouteResult expected, RouteResult observed)
     {

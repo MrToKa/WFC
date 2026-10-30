@@ -799,6 +799,20 @@ describe('administrator barrier authoring lifecycle', () => {
     await act(() => view.result.current.discardPending()); await act(() => view.result.current.save());
     expect(view.result.current.pending).toBe(true); expect(view.result.current.phase).toBe('unknown'); expect(f.publishBarriers).toHaveBeenCalledOnce();
   });
+  it('explains a missing server verifier while retaining the pending command and published barriers', async () => {
+    const f = fixture([7]), view = await mounted(f); f.readSelection.mockResolvedValue(selection(8)); await add(view);
+    const old = view.result.current.registry!.snapshot;
+    f.publishBarriers.mockRejectedValueOnce(Object.assign(new Error('private server path'), { status: 503, code: 'BARRIER_VERIFIER_NOT_CONFIGURED' }));
+    await act(() => view.result.current.save());
+    expect(view.result.current.phase).toBe('unknown'); expect(view.result.current.pending).toBe(true);
+    expect(view.result.current.error).toContain('Update the API container');
+    expect(view.result.current.error).toContain('BARRIER_VERIFIER_NOT_CONFIGURED');
+    expect(view.result.current.error).not.toContain('private server path');
+    expect(view.result.current.registry!.snapshot).toEqual(old); expect(view.result.current.canDiscard).toBe(false);
+    await act(() => view.result.current.save());
+    expect(api.beginBarrierCapture).toHaveBeenCalledOnce(); expect(f.captureBarriers).toHaveBeenCalledOnce();
+    expect(f.publishBarriers).toHaveBeenCalledOnce();
+  });
   it('retains a dispatched publication refusal as unknown without a validated exact success receipt', async () => {
     const f = fixture([7]), view = await mounted(f); f.readSelection.mockResolvedValue(selection(8)); await add(view);
     f.publishBarriers.mockRejectedValueOnce(Object.assign(new Error('Publication refused'), { status: 409, code: 'BARRIER_CAPTURE_SCOPE' }));
