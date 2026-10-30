@@ -622,7 +622,7 @@ export class ViewerController {
     this.resetRouteRequests();
     const routeGeneration = this.routeGeneration;
     this.trayDisplayGeneration = routeGeneration;
-    await this.sendAsync('CLEAR_ROUTE', { reason: 'user' }, 'ROUTE_CLEARED');
+    await this.sendAsync('CLEAR_ROUTE', { reason: 'user', preserveCamera: true }, 'ROUTE_CLEARED');
     if (this.disposed || !this.loaded || this.generation !== generation || this.modelVersionId !== modelVersionId
       || this.loadId !== loadId || this.routeGeneration !== routeGeneration) throw new DOMException('Tray display cancelled.', 'AbortError');
     this.trayDisplayGeneration = null;
@@ -818,7 +818,7 @@ export class ViewerController {
     try {
       if (this.disposed || !this.loaded) throw new Error('Model is not ready');
       const input:ModelCaptureRequest = measureSync('planningMs', () => JSON.parse(JSON.stringify(request)));
-      this.clear('selection'); const generation = this.routeGeneration;
+      this.clear('selection', { preserveCamera: true }); const generation = this.routeGeneration;
       const operation = new AbortController(); this.captureInputAbort = operation;
       const abort = () => { operation.abort(); for (const pending of [...this.pending.values()]) if (['START_MODEL_CAPTURE','READ_MODEL_CAPTURE'].includes(pending.envelope.type) && !this.disposed) this.cancel(pending.envelope.requestId); };
       options.signal?.addEventListener('abort',abort,{once:true}); if (options.signal?.aborted) abort();
@@ -913,7 +913,7 @@ export class ViewerController {
           reply = await round('READ_MODEL_CAPTURE', { captureId, index: index + 1 }, 'MODEL_CAPTURE_EVENT');
         }
         throw new Error('Model capture exceeded its bounded event budget');
-      } catch (error) { if (!this.disposed && generation === this.routeGeneration) this.clear('user'); throw deadlineExpired ? deadlineError : error; }
+      } catch (error) { if (!this.disposed && generation === this.routeGeneration) this.clear('user', { preserveCamera: true }); throw deadlineExpired ? deadlineError : error; }
       finally { window.clearTimeout(wallTimer); options.signal?.removeEventListener('abort',abort); if (this.captureInputAbort === operation) this.captureInputAbort = null; }
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') outcome = 'cancelled';
@@ -937,9 +937,9 @@ export class ViewerController {
     this.routeRequestId = null;
     this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'READ_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'SET_PATH_TRANSPARENCY', 'SHOW_LOCATION', 'SHOW_TRAY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE']);
   }
-  clear(reason: 'user' | 'empty' | 'selection' | 'model-change' | 'logout' = 'user'): string {
+  clear(reason: 'user' | 'empty' | 'selection' | 'model-change' | 'logout' = 'user', options: { preserveCamera?: boolean } = {}): string {
     this.resetRouteRequests();
-    return this.send('CLEAR_ROUTE', { reason }, 'ROUTE_CLEARED');
+    return this.send('CLEAR_ROUTE', { reason, ...(options.preserveCamera ? { preserveCamera: true } : {}) }, 'ROUTE_CLEARED');
   }
   zoom(): string {
     if (!this.routeRequestId) throw new Error('No drawable route');

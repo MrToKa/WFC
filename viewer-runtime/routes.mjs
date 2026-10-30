@@ -216,13 +216,13 @@ export function createRouteController(viewer, { signal } = {}) {
     viewer.impl.invalidate(true, true, true);
   }
 
-  function clearRoute() {
+  function clearRoute({ preserveCamera = false } = {}) {
     generation++;
     removeOverlay();
     restoreGhostContext();
     viewer.clearSelection();
     routeIds = [];
-    viewer.fitToView();
+    if (!preserveCamera) viewer.fitToView();
     viewer.impl.invalidate(true, true, true);
   }
 
@@ -230,7 +230,7 @@ export function createRouteController(viewer, { signal } = {}) {
     active();
     if (viewer.model !== model) throw visibilityUnavailable();
     generation++; // Pending route reads must not commit isolation after observation starts.
-    try { if (ghostState || routeIds.length || overlayMeshes.length || overlayResources.length) clearRoute(); }
+    try { if (ghostState || routeIds.length || overlayMeshes.length || overlayResources.length) clearRoute({ preserveCamera: true }); }
     catch (error) { baselineVisibilityUnknown = true; throw visibilityUnavailable(error); }
     // Manual Clear may already have used the historical show-all fallback.
     // Only a fresh controller can recover the missing pre-route evidence.
