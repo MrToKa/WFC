@@ -72,3 +72,19 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps: *image_steps
+  request-lan-deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.LAN_DEPLOY_REPOSITORY != ''
+    needs: [publish]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Signal the private deployment repository after complete publication
+        env:
+          GH_TOKEN: ${{ secrets.LAN_DEPLOY_TOKEN }}
+          DEPLOY_REPOSITORY: ${{ vars.LAN_DEPLOY_REPOSITORY }}
+        run: |
+          set -euo pipefail
+          [[ "$DEPLOY_REPOSITORY" =~ ^MrToKa/[A-Za-z0-9_.-]+$ ]]
+          test -n "$GH_TOKEN"
+          gh api --method POST "repos/$DEPLOY_REPOSITORY/dispatches" -f event_type=deploy-tested-applications
