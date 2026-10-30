@@ -10,6 +10,13 @@ const route = (rawRouting = '/BC1/SECONDARY/BC1') => ({ rawRouting, source: 'man
   segments: parseRouting(rawRouting).segments.map(entry => ({ ...entry, model: { state: 'found', matchCount: 1, drawable: true } })),
   ignored: parseRouting(rawRouting).ignored, drawableCount: parseRouting(rawRouting).segments.length, lineCount: 1, warnings: [] });
 
+test('appearance cleanup accepts only a boolean camera-preservation option', () => {
+  for (const payload of [{ reason: 'user' }, { reason: 'user', preserveCamera: true }, { reason: 'selection', preserveCamera: false }])
+    assert.ok(validateEnvelope(envelope('CLEAR_ROUTE', payload), 'parent-to-frame'));
+  for (const payload of [{ reason: 'user', preserveCamera: 'true' }, { reason: 'user', preserveCamera: null }, { reason: 'user', preserveCamera: true, camera: {} }])
+    assert.equal(validateEnvelope(envelope('CLEAR_ROUTE', payload), 'parent-to-frame'), null);
+});
+
 test('tray-root selection transports only 512 unique current-load IDs within the ordinary byte ceiling', () => {
   assert.ok(validateEnvelope(envelope('READ_TRAY_ROOT_SELECTION', {}), 'parent-to-frame'));
   assert.equal(validateEnvelope(envelope('READ_TRAY_ROOT_SELECTION', { objects: [] })), null);

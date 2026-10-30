@@ -344,7 +344,7 @@ describe('PathFinder protected Viewer capabilities', () => {
     const s = await trayDisplayed(), fetchCount = vi.mocked(fetch).mock.calls.length;
     let hidden = false; const hiding = s.c.hideTray().then(() => { hidden = true; });
     const command = s.send.mock.calls.find(call => call[0].type === 'CLEAR_ROUTE')![0];
-    expect(command.payload).toEqual({ reason: 'user' }); expect(hidden).toBe(false);
+    expect(command.payload).toEqual({ reason: 'user', preserveCamera: true }); expect(hidden).toBe(false);
     s.message('ROUTE_CLEARED', {}, command.requestId, { ...s.identity, loadId: generateId() });
     await Promise.resolve(); expect(hidden).toBe(false);
     s.message('ROUTE_CLEARED', {}, command.requestId, s.identity); await hiding;
@@ -753,6 +753,7 @@ describe('PathFinder protected Viewer capabilities', () => {
       if (value.type === 'CANCEL_REQUEST') s.message('REQUEST_CANCELLED', { targetRequestId: value.payload.targetRequestId, outcome: 'cancelled' }, value.requestId, s.identity);
     });
     const startedAt = Date.now(), capture = s.c.captureModel({ lookupRouteCodes: ['/BC001'], equipmentNames: [] });
+    expect(s.send.mock.calls.find(call => call[0].type === 'CLEAR_ROUTE')![0].payload).toEqual({ reason: 'selection', preserveCamera: true });
     const rejected = expect(capture).rejects.toMatchObject({ code: 'EXTRACTION_FAILED' });
     let settled = false; void capture.then(() => { settled = true; }, () => { settled = true; });
     await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'START_MODEL_CAPTURE')).toBe(true));

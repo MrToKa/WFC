@@ -303,10 +303,12 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
           pathfinder.clear(); computedPath = trayDisplay = false; legacyPath = true;
           return routes.showRoute(text, { ...options, routingBindings: bindings });
         },
-        clearRoute() {
+        clearRoute({ preserveCamera = false } = {}) {
           cancelCapture();
-          if (computedPath || trayDisplay) pathfinder.clear(); else if (legacyPath) routes.clearRoute(); else { viewer.clearSelection(); viewer.fitToView(); }
-          if (trayDisplay) viewer.fitToView();
+          // Hide and geometry preparation restore appearance at the user's
+          // current camera, including repeated cleanup after the tray is gone.
+          if (computedPath || trayDisplay) pathfinder.clear(); else if (legacyPath) routes.clearRoute({ preserveCamera }); else { viewer.clearSelection(); if (!preserveCamera) viewer.fitToView(); }
+          if (trayDisplay && !preserveCamera) viewer.fitToView();
           computedPath = legacyPath = trayDisplay = false;
         },
         fitRoute() { if (computedPath) pathfinder.fit(); else routes.fitRoute(); },

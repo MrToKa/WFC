@@ -175,6 +175,26 @@ test('tray display ghosts the background, fits every root and restores the previ
   assert.deepEqual(calls.at(-1), ['fit', undefined, undefined]);
 });
 
+test('Hide and repeated assignment cleanup restore Ghost without moving the current camera', async t => {
+  const f = sdkFixture({ trayVisibility: true }), previous = globalThis.window; globalThis.window = f.window;
+  t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
+  await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
+  const viewer = f.viewers[0]; let fits = 0;
+  viewer.fitToView = () => { fits++; viewer.camera = { position: [0, 0, 1000], target: [0, 0, 0], up: [0, 1, 0], zoom: 1 }; };
+  await handle.showTray([2]); assert.equal(fits, 1);
+  // A user can navigate after Show. Hide must keep this camera, not the
+  // pre-Show camera or the whole-model overview. No SDK camera write is needed.
+  const camera = { position: [15, 23, 31], target: [12, 20, 28], up: [0, 0, 1], zoom: 7 };
+  viewer.camera = structuredClone(camera);
+  handle.clearRoute({ preserveCamera: true });
+  handle.clearRoute({ preserveCamera: true });
+  assert.deepEqual(viewer.camera, camera); assert.equal(fits, 1);
+  assert.equal(viewer.impl.fadeMaterial.opacity, 0.4);
+  assert.deepEqual(f.model.visibilityManager.getVisibility(), [[3, false]]);
+  assert.equal(f.model.visibilityManager.defaultVisible, true);
+  handle.clearRoute(); assert.equal(fits, 2); // Explicit Clear/Restore still fits.
+});
+
 test('tray display validates the whole root set before any SDK mutation', async t => {
   const f = sdkFixture({ trayVisibility: true }), previous = globalThis.window; globalThis.window = f.window;
   t.after(() => { f.adapter.dispose(); globalThis.window = previous; });

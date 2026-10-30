@@ -23,7 +23,7 @@ function fixture(options = {}) {
     addEventListener(type, fn) { if (type === 'message') listeners.add(fn); }, removeEventListener(type, fn) { if (type === 'message') listeners.delete(fn); } };
   const facts = { clears: 0, fits: 0, finishes: 0, disposed: 0, shows: [], bindingShows: [], barrierStarts: 0, barrierReads: 0 };
   const handle = { finish() { facts.finishes++; }, prepareIndex: options.prepareIndex ?? (async () => {}),
-    clearRoute() { facts.clears++; return options.clearRoute?.(); }, fitRoute() { facts.fits++; },
+    clearRoute(clearOptions) { facts.clears++; return options.clearRoute?.(clearOptions); }, fitRoute() { facts.fits++; },
     showComputedPath(value) { facts.computedPath = structuredClone(value); },
     pickPoint: options.pickPoint ?? (async () => ({ objectId: 23, point: [1, 2, 3], derivation: 'picked-surface-point' })),
     readModelObjects: options.readModelObjects ?? (async ({ cursor, query }) => ({ cursor, nextCursor: null, complete: true, query, coordinateFrame: 'world-metres-z-up', metresPerDisplayUnit: 1, globalOffsetMetres: [0, 0, 0], objects: [] })),
@@ -445,6 +445,20 @@ test('barrier adapter replies must echo the exact requested capture UUID and par
     assert.equal(f.messages('BARRIER_CAPTURE_EVENT').length, 0); assert.equal(f.messages('ERROR').at(-1).payload.code, 'EXTRACTION_FAILED');
     assert.equal(JSON.stringify(f.sent).includes('privateGeometry'), false); f.bridge.dispose();
   }
+});
+
+test('Hide and assignment capture preserve the camera through both cleanup commands', async () => {
+  const clears = [], f = fixture({ clearRoute: options => clears.push(options) });
+  await f.loaded(); f.send('SHOW_TRAY', { sdkObjectIds: [23] }); await turn();
+  const hide = f.send('CLEAR_ROUTE', { reason: 'user', preserveCamera: true }); await turn();
+  assert.deepEqual(clears.at(-1), { preserveCamera: true });
+  assert.equal(f.messages('ROUTE_CLEARED').at(-1).requestId, hide.requestId);
+  const captureId = uuid(19);
+  f.send('START_MODEL_CAPTURE', { captureId, routeCodes: ['BC1'], allowedCategories: ['LV'], equipmentNames: [] }); await turn();
+  assert.deepEqual(clears.at(-1), { preserveCamera: true });
+  assert.equal(f.messages('MODEL_CAPTURE_EVENT').length, 1);
+  f.send('CLEAR_ROUTE', { reason: 'user' }); await turn();
+  assert.deepEqual(clears.at(-1), { preserveCamera: false }); f.bridge.dispose();
 });
 
 test('capture timing emits one bounded aggregate without identities or model values', async () => {
