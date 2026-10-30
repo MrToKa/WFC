@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { IDBFactory } from 'fake-indexeddb';
 import { cableEndpointPairCommandSchema } from '../../shared/pathfinderCableEndpointPair';
 import { cableEndpointCommandSchema } from '../../shared/pathfinderCableEndpoints';
 import { CABLE_ENDPOINT_PAIR_PENDING_PREFIX, readPendingCableEndpointPair, retainPendingCableEndpointPair,
@@ -33,9 +34,13 @@ beforeEach(() => {
     queues.set(name, task.then(() => undefined, () => undefined)); return task;
   }) } });
 });
-afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); localStorage.clear();
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); localStorage.clear();
   if (originalLocks) Object.defineProperty(navigator, 'locks', originalLocks); else Reflect.deleteProperty(navigator, 'locks'); });
 const storageKey = (current = owner) => `${CABLE_ENDPOINT_PAIR_PENDING_PREFIX}${current.accountId}:${current.projectId}`;
+function withoutWebLocks() {
+  Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined });
+  vi.stubGlobal('indexedDB', new IDBFactory());
+}
 
 describe('durable pair Save ownership and exact recovery', () => {
   it('retains both exact original contexts and explicit policy before any transport can run', async () => {
@@ -111,9 +116,10 @@ describe('durable pair Save ownership and exact recovery', () => {
     const key = `${CABLE_ENDPOINT_PENDING_PREFIX}${owner.accountId}:${owner.projectId}`; localStorage.setItem(key, 'unreadable');
     await expect(retainPendingCableEndpointPair(owner, id(9), command())).rejects.toThrow(); expect(localStorage.getItem(key)).toBe('unreadable'); expect(readPendingCableEndpointPair(owner)).toBeNull();
   });
-  it('fails closed without Web Locks or durable write/readback and never falls back to memory', async () => {
+  it('fails closed when both browser coordination APIs are unavailable and never falls back to memory', async () => {
     Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined });
-    await expect(retainPendingCableEndpointPair(owner, id(9), command())).rejects.toThrow(/Web Locks/); expect(localStorage.length).toBe(0);
+    vi.stubGlobal('indexedDB', undefined);
+    await expect(retainPendingCableEndpointPair(owner, id(9), command())).rejects.toThrow(/Allow site storage/); expect(localStorage.length).toBe(0);
   });
   it('requires durable readback and preserves storage errors without sending anything', async () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {});
@@ -127,5 +133,60 @@ describe('durable pair Save ownership and exact recovery', () => {
     const retained = await retainPendingCableEndpoint(owner, id(10), 'from', legacyCommand());
     await expect(retainPendingCableEndpointPair(owner, id(9), command())).rejects.toThrow(); await clearPendingCableEndpoint(owner, retained);
     await expect(retainPendingCableEndpointPair(owner, id(9), command())).resolves.toMatchObject({ cableId: id(9) });
+  });
+});
+
+describe('HTTP pair Save coordination without Web Locks', () => {
+  beforeEach(withoutWebLocks);
+  it('retains, verifies and clears the exact durable command with both endpoint contexts', async () => {
+    const input = command(), retained = await retainPendingCableEndpointPair(owner, id(9), input);
+    expect(readPendingCableEndpointPair(owner)?.command).toEqual(input);
+    expect(await verifyPendingCableEndpointPair(owner, retained)).toEqual(retained);
+    await clearPendingCableEndpointPair(owner, retained);
+    expect(readPendingCableEndpointPair(owner)).toBeNull();
+  });
+  it('serializes concurrent pair Saves from independent database connections', async () => {
+    const first = command(), second = { ...command(), idempotencyKey: id(99) };
+    const outcomes = await Promise.allSettled([retainPendingCableEndpointPair(owner, id(9), first), retainPendingCableEndpointPair(owner, id(10), second)]);
+    expect(outcomes.map(item => item.status)).toEqual(['fulfilled', 'rejected']);
+    expect(readPendingCableEndpointPair(owner)).toMatchObject({ cableId: id(9), command: first });
+  });
+  it.each(['pair-first', 'legacy-first'] as const)('coordinates legacy and pair Saves through the same database: %s', async order => {
+    const pair = () => retainPendingCableEndpointPair(owner, id(9), command());
+    const legacy = () => retainPendingCableEndpoint(owner, id(10), 'from', legacyCommand());
+    const outcomes = await Promise.allSettled(order === 'pair-first' ? [pair(), legacy()] : [legacy(), pair()]);
+    expect(outcomes.map(item => item.status)).toEqual(['fulfilled', 'rejected']);
+    expect(Boolean(readPendingCableEndpointPair(owner))).toBe(order === 'pair-first');
+    expect(Boolean(readPendingCableEndpoint(owner))).toBe(order === 'legacy-first');
+  });
+  it('preserves an unconfirmed Save and sends exactly its retained command on retry', async () => {
+    const retained = await retainPendingCableEndpointPair(owner, id(9), command());
+    const transport = vi.fn().mockRejectedValueOnce(new TypeError('connection lost')).mockResolvedValueOnce('confirmed');
+    await expect(transport(await verifyPendingCableEndpointPair(owner, retained))).rejects.toThrow('connection lost');
+    await expect(retainPendingCableEndpointPair(owner, id(10), { ...command(), idempotencyKey: id(99) })).rejects.toThrow(/pending/);
+    expect(readPendingCableEndpointPair(owner)).toEqual(retained);
+    await transport(await verifyPendingCableEndpointPair(owner, retained));
+    expect(transport.mock.calls[1][0]).toEqual(transport.mock.calls[0][0]);
+    await clearPendingCableEndpointPair(owner, retained); expect(readPendingCableEndpointPair(owner)).toBeNull();
+  });
+  it('refuses changed pending coordinates without erasing or replacing them', async () => {
+    const retained = await retainPendingCableEndpointPair(owner, id(9), command()), changed = structuredClone(retained);
+    const selection = changed.command.endpoints[0].command.selection;
+    if (selection.mode === 'fixed-world') selection.pointProjectMetres = [9, 8, 7];
+    const raw = JSON.stringify(changed); localStorage.setItem(storageKey(), raw);
+    await expect(verifyPendingCableEndpointPair(owner, retained)).rejects.toThrow(/changed/);
+    await expect(clearPendingCableEndpointPair(owner, retained)).rejects.toThrow(/Preserve/);
+    expect(localStorage.getItem(storageKey())).toBe(raw);
+  });
+  it('still requires durable storage readback before a command can be dispatched', async () => {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {});
+    await expect(retainPendingCableEndpointPair(owner, id(9), command())).rejects.toThrow(/retained/);
+    expect(readPendingCableEndpointPair(owner)).toBeNull();
+  });
+  it('keeps confirmed recovery data when durable removal fails', async () => {
+    const retained = await retainPendingCableEndpointPair(owner, id(9), command());
+    vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {});
+    await expect(clearPendingCableEndpointPair(owner, retained)).rejects.toThrow(/locally/);
+    expect(readPendingCableEndpointPair(owner)).toEqual(retained);
   });
 });

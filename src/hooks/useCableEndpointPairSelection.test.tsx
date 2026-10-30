@@ -1,5 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { IDBFactory } from 'fake-indexeddb';
 import type { ViewerSelection } from '../../viewer-runtime/protocol.mjs';
 import { CableEndpointApiError, fetchCableEndpointContext, fetchCableEndpointSelection, saveCableEndpoint, closePendingCableEndpoint,
   type CableEndpointContext, type CableEndpointCommand } from '@/api/pathfinderCableEndpoints';
@@ -63,10 +64,30 @@ beforeEach(() => {
       status: 'available', reasonCodes: [], object: object(sdk), pointProjectMetres: [sdk, 2, 3], bounds: { minimum: [sdk - 1, 1, 3], maximum: [sdk + 1, 3, 5] }, approximate: true, derivation: 'equipment-bottom-aabb.v1' } }));
   vi.mocked(saveCableEndpointPair).mockImplementation(async (_project, _token, _cable, command) => { saved = true; return receipt(command); });
 });
-afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); localStorage.clear(); if (originalLocks) Object.defineProperty(navigator, 'locks', originalLocks); else Reflect.deleteProperty(navigator, 'locks'); });
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); localStorage.clear(); if (originalLocks) Object.defineProperty(navigator, 'locks', originalLocks); else Reflect.deleteProperty(navigator, 'locks'); });
 async function ready(view: { result: { current: ReturnType<typeof useCableEndpointPairSelection> } }) { await waitFor(() => expect(view.result.current.from.context && view.result.current.to.context && view.result.current.storageReady && !view.result.current.busy).toBeTruthy()); }
 
 describe('one explicit From/To Save', () => {
+  it('saves newly assigned From with existing saved To and queues calculation on HTTP without Web Locks', async () => {
+    Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined });
+    vi.stubGlobal('indexedDB', new IDBFactory());
+    const originalTo = savedToContext(context(cable, 'to'));
+    vi.mocked(fetchCableEndpointContext).mockImplementation(async (_project, _token, selected, end) => end === 'to' ? savedToContext(context(selected, end)) : context(selected, end));
+    const props = access(), view = renderHook(() => useCableEndpointPairSelection(props)); await ready(view);
+    expect(view.result.current.from.context?.head).toBeNull(); expect(view.result.current.to.context?.head?.id).toBe(originalTo.head!.id);
+    await act(async () => { await view.result.current.from.selectObject(); }); expect(view.result.current.canSave).toBe(true);
+    await act(async () => { expect(await view.result.current.save('Confirm newly assigned cabinet From location')).toBe(true); });
+    expect(saveCableEndpointPair).toHaveBeenCalledOnce(); expect(saveCableEndpoint).not.toHaveBeenCalled();
+    const input = vi.mocked(saveCableEndpointPair).mock.calls[0][3];
+    expect(input.expectedContexts).toEqual({ from: 'a'.repeat(64), to: 'b'.repeat(64) }); expect(input.endpoints).toHaveLength(1);
+    expect(input.endpoints[0]).toMatchObject({ end: 'from', command: { expectedLogicalName: 'LP-001', calculation,
+      selection: { mode: 'object-derived', sdkObjectId: 55 } } });
+    expect(props.onSaved).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ end: 'from', locationImpact: expect.objectContaining({ status: 'pending' }) }), scope, calculation);
+    expect(readPendingCableEndpointPair(owner)).toBeNull(); expect(view.result.current.error).toBeNull();
+    expect(view.result.current.notice).toContain('recalculation was requested');
+    await waitFor(() => expect(view.result.current.retired).toBe(false));
+    expect(view.result.current.to.context?.head?.pointProjectMetres).toEqual(originalTo.head!.pointProjectMetres);
+  });
   it.each(['cableWriteRevision', 'registryRevision'] as const)('converges fresh %s values after Save without a manual Refresh or another Save', async revision => {
     automatic = true;
     const props = access(), view = renderHook(() => useCableEndpointPairSelection(props)); await ready(view);
