@@ -6,6 +6,7 @@ import { preparationResolutionMatchesScope, type PreparationScope, type Preparat
 import { fetchRoutingPurposePolicy, type RoutingPurposePolicy } from '@/api/pathfinderPolicies';
 import { trayDisplayTarget } from './trayDisplayTarget';
 import { formatPreparationDiagnostics } from './preparationDiagnostics';
+import { useToast } from '@/context/ToastContext';
 
 type Props = { pf: ReturnType<typeof usePathFinder>; active: boolean; onBusyChange?: (busy: boolean) => void; onNetworkReady?: (key: string) => void };
 const searchText = (text: string) => text.normalize('NFC').trim().replace(/\s+/gu, ' ').toLowerCase().replace(/^\/+/, '');
@@ -14,6 +15,8 @@ const sameModel = (left: { modelVersionId: string | null; contentFingerprint: st
 
 export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkReady }: Props) {
   const state = useProjectPreparation(pf, active);
+  const { showToast } = useToast();
+  const lastErrorToast = useRef<string | null>(null);
   const [query, setQuery] = useState('');
   const [reading, setReading] = useState<string | null>(null);
   const [display, setDisplay] = useState<{ owner: string; scope: string; trayId: string; status: 'showing' | 'shown' | 'failed' | 'hiding' | 'hide-failed' } | null>(null);
@@ -51,6 +54,17 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
     if (peek) void peek.restore().catch(() => {});
   }, [owner, displayScope]);
   const working = state.busy || Boolean(reading);
+  const errorMessage = selectionError
+    ? `${state.context?.trays.find(tray => tray.projectTrayId === selectionError.trayId)?.rawName ?? 'Tray'}: ${selectionError.message}`
+    : state.error;
+  useEffect(() => {
+    if (!errorMessage) { lastErrorToast.current = null; return; }
+    if (!active || !state.enabled || working) return;
+    const key = JSON.stringify([owner, errorMessage]);
+    if (lastErrorToast.current === key) return;
+    lastErrorToast.current = key;
+    showToast({ title: 'Tray network needs attention', body: errorMessage, intent: 'error', timeout: 15000 });
+  }, [active, state.enabled, working, owner, errorMessage, showToast]);
   useEffect(() => {
     onBusyChange?.(working);
     return () => onBusyChange?.(false);
