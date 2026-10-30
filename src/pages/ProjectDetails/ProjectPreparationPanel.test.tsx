@@ -34,6 +34,30 @@ beforeEach(() => {
 afterEach(async () => { await act(async () => {}); });
 
 describe('simple project tray preparation', () => {
+  it('explains missing permissions even when every tray has assigned objects', () => {
+    const { state, pf, tray } = setup(); state.networkReady = false; tray.policyState = 'unconfigured';
+    render(<ProjectPreparationPanel pf={pf} active />);
+    const alert = screen.getByRole('alert', { name: 'Network preparation blockers' });
+    expect(alert).toHaveTextContent('Assigned objects are saved');
+    expect(alert).toHaveTextContent('Routing permissions are missing'); expect(alert).toHaveTextContent(tray.rawName);
+    expect(screen.getByText('Assigned')).toBeVisible();
+    expect(screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` })).toBeEnabled();
+  });
+  it('shows all current plan blockers and retires old diagnostics after a policy revision', () => {
+    const { state, pf, tray } = setup(); state.networkReady = false;
+    state.session.plan.diagnostics = [{ code: 'TRAY_GEOMETRY_MISSING', projectTrayIds: [tray.projectTrayId], objectIds: [], message: 'Generic refusal' },
+      { code: 'NON_LEAF_ROUTING_GEOMETRY', projectTrayIds: [tray.projectTrayId], objectIds: [], message: 'Generic refusal' }];
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    const alert = screen.getByRole('alert', { name: 'Network preparation blockers' });
+    expect(alert).toHaveTextContent('no usable tray geometry'); expect(alert).toHaveTextContent('parent object has its own geometry');
+    state.context.scope.routingPolicyRevision = '2'; view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.queryByRole('alert', { name: 'Network preparation blockers' })).toBeNull();
+  });
+  it('does not display preparation blockers for another active model', () => {
+    const { state, pf, tray } = setup(); state.networkReady = false; tray.policyState = 'unconfigured';
+    render(<ProjectPreparationPanel pf={{ ...pf, data: { ...pf.data!, activeModel: { ...pf.data!.activeModel, modelVersionId: '22222222-2222-4222-8222-222222222223' } } }} active />);
+    expect(screen.queryByRole('alert', { name: 'Network preparation blockers' })).toBeNull();
+  });
   it('shows the project tray type and width by height in millimetres for an assigned tray', () => {
     const { pf, tray } = setup(); tray.details = { type: 'Cable ladder RA 60', widthMm: 600, heightMm: 77 };
     render(<ProjectPreparationPanel pf={pf} active />);

@@ -51,7 +51,7 @@ jobs:
       - name: Verify tray Ghost and appearance restoration
         run: node --test --test-concurrency=2 viewer-runtime/test/adapter.test.mjs viewer-runtime/test/pathfinder.test.mjs viewer-runtime/test/routes.test.mjs viewer-runtime/test/legacy-routes.test.mjs viewer-runtime/test/protocol.test.mjs
       - name: Verify tray display and assignment recovery lifecycle
-        run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/pages/ProjectDetails/ProjectPreparationPanel.test.tsx src/pages/ProjectDetails/hooks/useProjectPreparation.test.tsx src/pages/ProjectDetails/hooks/usePathFinder.test.tsx src/viewer/ViewerController.test.ts
+        run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/pages/ProjectDetails/ProjectPreparationPanel.test.tsx src/pages/ProjectDetails/preparationDiagnostics.test.ts src/pages/ProjectDetails/hooks/useProjectPreparation.test.tsx src/pages/ProjectDetails/hooks/usePathFinder.test.tsx src/viewer/ViewerController.test.ts
       - name: Verify assigned tray catalog details and frozen plans
         run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/api/pathfinderPreparation.test.ts shared/pathfinderPreparation.test.ts server/pathfinder/preparationContext.test.ts server/pathfinder/preparationPlans.test.ts server/pathfinder/preparationSessions.test.ts
       - name: Verify From-To matching prerequisites and recovery
