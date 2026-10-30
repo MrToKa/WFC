@@ -25,9 +25,9 @@ describe('exact current cable and ordered proposal comparison', () => {
     const value = input(); value.current.cable = { ...value.current.cable, routing, designLength };
     expect(compareCableValues(value).initialFill?.mode).toBe('manual-review');
   });
-  it.each(['MV', null, 'Unknown'] as const)('does not offer initial-fill eligibility for category %s', mto => {
+  it.each(['MV', null, 'Unknown'] as const)('uses explicit MV exclusion without blocking optional MTO %s', mto => {
     const value = input(); value.current = { ...value.current, mto, cable: { ...value.current.cable, routing: null, designLength: null } };
-    expect(compareCableValues(value).initialFill?.mode).toBe(mto === 'MV' ? 'excluded' : 'blocked');
+    expect(compareCableValues(value).initialFill?.mode).toBe(mto === 'MV' ? 'excluded' : 'initial-fill-candidate');
   });
   it.each(['', 'NaN', '1e3', ' 3 '])('preserves invalid or legacy decimal %j without inventing a delta or NULL', designLength => {
     const value = input(); value.current.cable.designLength = designLength; const result = compareCableValues(value);

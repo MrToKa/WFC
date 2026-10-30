@@ -17,6 +17,7 @@ import type { BarrierAdmissionIntent } from '../../../shared/pathfinderBarrierAd
 import { pathFinderWorkflowDisplayScope, type PathFinderWorkflowReview } from '@/pages/ProjectDetails/PathFinderResults';
 import { cableComparisonInputSchema } from '../../../shared/pathfinderCableComparison';
 import { barrierCalculationFixture } from '@/test/pathfinderBarrierFixtures';
+import { AUTOMATIC_PAIR_POLICY } from '../../../shared/pathfinderAutomaticPair';
 vi.mock('@/api/pathfinderCableWorkflow', () => ({ fetchPathFinderCableWorkflowDetail: vi.fn() }));
 vi.mock('@/api/pathfinder', () => ({ fetchPathFinderJob: vi.fn() }));
 vi.mock('@/api/pathfinderLocationImpacts', () => ({ fetchLocationImpacts: vi.fn() }));
@@ -1287,6 +1288,43 @@ describe('fresh initial selection and current proof handoff', () => {
 });
 
 describe('Path Finder cable popup and read-only hover', () => {
+  it.each([null, '', 'Power', 'Plastic tubing', 'Unknown'])('opens and submits a cable with optional MTO %s without modifying its metadata', async mto => {
+    const p = props(); listRow = { ...row(), mto };
+    render(<PathFinderCableWorkspace {...p} />); await openListCable(true);
+    expect(window.open).toHaveBeenCalledOnce(); expect(screen.getByRole('dialog')).toBeVisible();
+    expect(p.onSelect).toHaveBeenCalledWith(listRow);
+    expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce();
+    expect(panelProps.cable?.mto).toBe(mto); expect(panelProps.onCalculate).toBeTypeOf('function');
+    expect(panelProps.access.calculation).not.toBeNull(); expect(panelProps.access.automaticPairPolicy).toEqual(AUTOMATIC_PAIR_POLICY);
+    await act(async () => { await panelProps.onCalculate?.(); });
+    expect(p.pf.submitCalculation).toHaveBeenCalledWith([id(3)], p.preferences);
+    expect(panelProps.cable?.mto).toBe(mto);
+  });
+  it('lets the hover Open action inspect a missing-MTO cable without asking for an MTO edit', async () => {
+    vi.useFakeTimers(); const p = props(); listRow = { ...row(), mto: null };
+    render(<PathFinderCableWorkspace {...p} />);
+    act(() => listProps.onPreview?.(listRow, screen.getByText('Needs routing cable'))); act(() => vi.advanceTimersByTime(1000));
+    expect(screen.queryByRole('link', { name: 'Edit cable category' })).toBeNull();
+    await act(async () => { fireEvent.click(screen.getByText('Open cable in separate window')); });
+    expect(window.open).toHaveBeenCalledOnce(); expect(panelProps.open).toBe(true);
+    expect(panelProps.onCalculate).toBeTypeOf('function'); expect(p.pf.submitCalculation).not.toHaveBeenCalled();
+  });
+  it('keeps MV and another project outside this non-MV workspace', async () => {
+    const p = props(); listRow = { ...row(), mto: 'MV' };
+    render(<PathFinderCableWorkspace {...p} />); await openListCable();
+    expect(window.open).not.toHaveBeenCalled(); expect(p.onSelect).not.toHaveBeenCalled();
+    listRow = { ...row(), projectId: id(55) }; await openListCable();
+    expect(window.open).not.toHaveBeenCalled(); expect(p.onSelect).not.toHaveBeenCalled();
+  });
+  it('blocks a retained Calculate callback if a fresh cable read changes its MTO to excluded MV', async () => {
+    const p = props(); render(<PathFinderCableWorkspace {...p} />); await openListCable();
+    const calculate = panelProps.onCalculate!; expect(calculate).toBeTypeOf('function');
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockResolvedValueOnce({ projectId: id(1), cableId: id(3), row: { ...row(), mto: 'MV' } } as never);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Refresh selected cable' })); });
+    expect(panelProps.cable?.mto).toBe('MV'); expect(panelProps.onCalculate).toBeUndefined();
+    await act(async () => { await calculate(); });
+    expect(p.pf.submitCalculation).not.toHaveBeenCalled(); expect(p.pf.calculate).not.toHaveBeenCalled();
+  });
   it('keeps read-only hover and click-to-open while barriers leave calculation preferences unavailable', async () => {
     vi.useFakeTimers(); const p = props();
     render(<PathFinderCableWorkspace {...p} preferences={null} readPreferences={{ secondaryDistanceMeters: 2, preferVerticalApproach: true }} />);

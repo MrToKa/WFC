@@ -88,17 +88,17 @@ describe('initial-fill display decision, never write authority', () => {
   ])('does not treat unavailable or malformed current values as blank %j', value => {
     expect(classifyCableInitialFill({ mto: 'Control', ...value }).mode).toBe('blocked');
   });
-  it('excludes MV and blocks unknown categories without inventing a default', () => {
+  it('excludes explicit MV while optional or custom MTO metadata does not block a candidate', () => {
     expect(classifyCableInitialFill({ mto: 'MV', routing: null, designLength: null }).mode).toBe('excluded');
     for (const mto of [undefined, null, '', 'lv', 'Unknown', ' Control ']) {
-      expect(classifyCableCategory(mto).status).toBe('blocked');
-      expect(classifyCableInitialFill({ mto, routing: null, designLength: null }).mode).toBe('blocked');
+      expect(classifyCableCategory(mto).status).toBe('eligible');
+      expect(classifyCableInitialFill({ mto, routing: null, designLength: null }).mode).toBe('initial-fill-candidate');
     }
     expect(classifyCableCategory('Instrumentation')).toEqual({ status: 'eligible', routingCategory: 'Control', reasonCodes: [] });
   });
   it('never returns a permission or changes the current cable values', () => {
     const current = row(), before = structuredClone(current);
-    expect(classifyCableInitialFill({ mto: undefined, ...current.cable })).toEqual({ mode: 'blocked', reasonCodes: ['CABLE_CATEGORY_REQUIRED'] });
+    expect(classifyCableInitialFill({ mto: undefined, ...current.cable })).toEqual({ mode: 'initial-fill-candidate', reasonCodes: [] });
     const decision = classifyCableInitialFill({ mto: current.mto, routing: current.cable.routing, designLength: current.cable.designLength });
     expect(Object.keys(decision).sort()).toEqual(['mode', 'reasonCodes']);
     expect(current).toEqual(before); expect(current.cable.installLength).toBe('123');
@@ -183,9 +183,10 @@ describe('cable workflow status is a display projection', () => {
       .toEqual({ status: 'blocked', reasonCodes: ['CALCULATION_CURRENTNESS_UNAVAILABLE'] });
     expect(classifyCableWorkflow(row({ from: unavailable('missing') }))).toEqual({ status: 'needs-routing', reasonCodes: ['MISSING'] });
   });
-  it('cannot classify MV/unknown categories as ready even when a complete proposal is supplied', () => {
+  it('excludes MV while missing or custom MTO metadata does not override a complete proposal', () => {
     expect(classifyCableWorkflow(row({ mto: 'MV', calculation: ready() })).status).toBe('excluded');
-    expect(classifyCableWorkflow(row({ mto: 'Other', calculation: ready() })).status).toBe('blocked');
+    for (const mto of [null, '', 'Other', 'Plastic tubing'])
+      expect(classifyCableWorkflow(row({ mto, calculation: ready() })).status).toBe('ready-for-review');
   });
 });
 

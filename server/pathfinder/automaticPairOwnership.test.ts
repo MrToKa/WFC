@@ -15,6 +15,16 @@ function fixture() {
     { projectId: id(1), cableId: id(2), currentSnapshot: current }, undefined, { proof }); return { current, history, state, query, proof, run };
 }
 describe('automatic pair ownership from receipt revision and exact history', () => {
+  it.each([null,'Custom MTO',''])('recognizes fresh and proven automatic ownership independently of MTO %j',async mto=>{
+    const f=fixture();Object.assign(f.current,{mto});Object.assign(f.state.fact!.after,{mto});
+    expect(await f.run()).toMatchObject({kind:'automatic',previousReceiptId:id(3)});
+    Object.assign(f.current,{routing:null,design_length:null});f.state.receipt=false;
+    expect(await f.run()).toEqual({kind:'empty'});
+  });
+  it('keeps explicit MV outside automatic ownership',async()=>{
+    const f=fixture();f.current.mto='MV';
+    expect(await f.run()).toMatchObject({kind:'review-required',reasonCode:'AUTOMATIC_PAIR_CABLE_INVALID'});
+  });
   it('recognizes a verified capacity-clear origin while keeping manual blanking protected',async()=>{
     const f=fixture();Object.assign(f.current,{routing:null,design_length:null});Object.assign(f.state.fact!.after,{routing:null,design_length:null});
     Object.assign(f.state.fact!,{clearedForCapacity:true});f.state.provenanceVersion='pathfinder.automatic-pair-capacity-clear.v1';

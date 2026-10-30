@@ -5,6 +5,7 @@ import { MAX_PATH_POINTS } from '../../../viewer-runtime/protocol.mjs';
 import type { usePathFinder } from './hooks/usePathFinder';
 import { useRoutingsViewerStyles } from './RoutingsViewerTab.styles';
 import { PathFinderRecalculationPanel } from './PathFinderRecalculationPanel';
+import { isPathFinderCableEligible } from '../../../shared/pathfinderCableEligibility';
 import { PathFinderRevisionResults, type PathFinderCalculationScope } from './PathFinderRevisionResults';
 import { usePathfinderPendingApply } from './hooks/usePathfinderPendingApply';
 import { usePathfinderBatchReview } from './hooks/usePathfinderBatchReview';
@@ -105,13 +106,14 @@ export type PathFinderWorkflowReview = {
 };
 type Props = { pf: ReturnType<typeof usePathFinder>; selectedCableId: string | null; workflowSelection?: CableWorkflowRow | null; accountId?: string | null; active?: boolean; displayOwned?: boolean; claimViewer?: () => () => boolean; options?: PathFinderPreferences | null; onBatchBusyChange?: (busy: boolean) => void; onCableValuesChanged?: () => void;
   backgroundOptions?: PathFinderPreferences | null; readPreferences?: CableWorkflowDetailQuery | null;
+  calculationBlocker?: string | null; onConfigureCalculation?: () => void;
   workflowCalculationPreferences?: PathFinderWorkflowCalculationPreferences | null;
   workflowConfigurationReady?: boolean;
   workflowDisplayRequest?: PathFinderWorkflowDisplayRequest | null; onWorkflowDisplayChange?: (value: PathFinderWorkflowDisplay) => void;
   endpointForegroundContexts?: PathFinderEndpointForegroundContexts | null;
   onWorkflowReviewChange?: (value: PathFinderWorkflowReview | null) => void;
   onCalculationCommitted?: (value: PathFinderCalculatedItemIdentity) => void };
-const resultLabel = (status: string) => ({ calculated: 'Ready for review', model_needs_review: 'Model review required', no_path: 'No connected path', settings_required: 'Project values required', category_required: 'Cable category required', locations_required: 'Resolve locations', stale: 'Outdated', deadline_exceeded: 'Calculation timed out', resource_limit: 'Calculation limit reached', invalid_request: 'Review the input' }[status] ?? 'Review required');
+const resultLabel = (status: string) => ({ calculated: 'Ready for review', model_needs_review: 'Model review required', no_path: 'No connected path', settings_required: 'Project values required', category_required: 'Cable type Purpose required', locations_required: 'Resolve locations', stale: 'Outdated', deadline_exceeded: 'Calculation timed out', resource_limit: 'Calculation limit reached', invalid_request: 'Review the input' }[status] ?? 'Review required');
 export function pathFinderJobOutputLabel(update: NonNullable<PathFinderJob['items']>[number]['automaticUpdate']): string {
   if (!update) return 'Cable list update: not reported';
   const labels = { pending: 'waiting to save', running: 'saving', written: 'saved', 'already-written': 'already saved',
@@ -150,7 +152,7 @@ function workflowCompletionKey(row: CableWorkflowRow | null, checked: PathFinder
     ? 'selected-result-complete'
     : [calculation.jobStatus, calculation.itemApplicability ?? null];
 }
-export function PathFinderResults({ pf, selectedCableId, workflowSelection = null, workflowCalculationPreferences = null, workflowConfigurationReady, accountId, active = true, displayOwned = true, claimViewer, options, backgroundOptions, readPreferences, onBatchBusyChange, onCableValuesChanged,
+export function PathFinderResults({ pf, selectedCableId, workflowSelection = null, workflowCalculationPreferences = null, workflowConfigurationReady, accountId, active = true, displayOwned = true, claimViewer, options, backgroundOptions, readPreferences, calculationBlocker, onConfigureCalculation, onBatchBusyChange, onCableValuesChanged,
   workflowDisplayRequest, onWorkflowDisplayChange, onWorkflowReviewChange, onCalculationCommitted, endpointForegroundContexts }: Props) {
   const styles = useRoutingsViewerStyles();
   const [proposal, setProposal] = useState<PathFinderProposal | null>(null), [job, setJob] = useState<PathFinderJob | null>(null);
@@ -799,9 +801,9 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
     : checkedJobStatus && checkedJobStatus !== 'complete'
       ? `This calculation is ${checkedJobStatus}. Review and Apply require a completed calculation or this cable's individually sealed, current result. Calculate again after a failed job, or wait for the current job to finish.`
       : !proposalJob && !scopeReadiness.ready ? 'This calculation is outside the recent job list. Its current state could not be confirmed here. Check the calculation state in Cable revision results below.' : null;
-  const nonMvCableIds = (data?.cables ?? []).filter(value => ['LV', 'Control', 'Instrumentation'].includes(value.mto ?? '')).map(value => value.id);
+  const nonMvCableIds = (data?.cables ?? []).filter(value => isPathFinderCableEligible(value.mto)).map(value => value.id);
   const selectedCable = data?.cables.find(value => value.id === selectedCableId);
-  const selectedCategoryAllowed = Boolean(selectedCable && ['LV', 'Control', 'Instrumentation'].includes(selectedCable.mto ?? ''));
+  const selectedCategoryAllowed = Boolean(selectedCable && isPathFinderCableEligible(selectedCable.mto));
   reviewContext.current = JSON.stringify([ownershipKey, active, displayOwned, selectedCableId, scopeReadiness.admissionId, scopeReadiness.jobId, data?.activeModel, data?.registryRevision, settingsKey, optionsKey, selectedRevision, proposal?.id, proposal?.proposalHash, proposal?.revisionResultHash, stale, effectiveCanApply]);
   const canConfirmReview = Boolean(active && displayOwned && !reviewBusy && !pf.busy && !batch.busy && !previewLoading && !stale && pathDisplayed && effectiveCanApply && !reviewId && pendingApply.canStart);
   const canApplyReviewed = Boolean(active && displayOwned && !reviewBusy && !pf.busy && !batch.busy && !stale && reviewId && effectiveCanApply && !applied && pendingApply.canStart);
@@ -865,6 +867,7 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
     {pendingApply.error ? <Body1 role="alert">{pendingApply.error}</Body1> : null}
     {pendingApply.message ? <Body1 role="status">{pendingApply.message}</Body1> : null}
     {pf.preparationAccess ? <PathFinderRecalculationPanel {...pf.preparationAccess} accountId={accountId ?? null} active={active} preferences={backgroundOptions !== undefined ? backgroundOptions : options}
+      configurationMessage={calculationBlocker} onConfigureCalculation={onConfigureCalculation}
       contextKey={JSON.stringify([data?.activeModel, pf.preparationViewerGeneration, options])}
       onChanged={pf.refresh} onAuthorityLost={pf.cancelOperation} /> : null}
     <PathFinderBatchReview batch={batch} disabled={pf.busy || !active || !pendingApply.canStart || !historyReadiness.ready}
@@ -877,11 +880,15 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
       workflowHidden.current.hidden = false; workflowHidden.current.proposalKey = workflowProposalKey; suppressedWorkflow.current = null; setWorkflowAttempt(value => value + 1);
     }}>Reopen selected cable result</Button> : null}
     <Caption1>Calculations use the active model, shared locations, connection gap and allowances from Project Details. Instrumentation follows Control.</Caption1>
+    {options === null ? <div role="alert"><Body1>{calculationBlocker ?? 'Configure the Path settings and Barriers before calculating.'}</Body1>
+      {onConfigureCalculation ? <Button onClick={onConfigureCalculation}>Configure calculation</Button> : null}</div> : null}
+    {!data?.artifacts.length ? <Body1 role="status">Prepare the routing network in Routes: assign the trays, then choose Discover project tray candidates.</Body1> : null}
+    {Boolean(data?.cables.length) && !nonMvCableIds.length ? <Body1 role="status">Only excluded MV cables are present. Add a cable with Tag, Type, From location and To location to calculate a route.</Body1> : null}
     <div className={styles.actions}>
       <Button disabled={options === null || !data?.artifacts.length || pf.busy || !nonMvCableIds.length || nonMvCableIds.length > 10000} onClick={() => void (options ? pf.calculate(nonMvCableIds, true, options) : pf.calculate(nonMvCableIds, true))}>Calculate non-MV cables</Button>
       <Button disabled={options === null || !data?.artifacts.length || pf.busy || !selectedCableId || !selectedCategoryAllowed} onClick={() => void (options ? pf.calculate([selectedCableId!], true, options) : pf.calculate([selectedCableId!], true))}>Calculate selected cable</Button>
     </div>
-    <Caption1>Manual calculation includes LV, Control and Instrumentation only. MV and unknown categories are excluded. For cancelled results, choose a completed calculation or calculate non-MV cables again if needed.</Caption1>
+    <Caption1>Calculations require Tag, Type, From location and To location. Routing permissions use Purpose from Cable types; MTO is optional. MV cables remain excluded. For cancelled results, choose a completed calculation or calculate non-MV cables again if needed.</Caption1>
     {pf.busy ? <Spinner size="tiny" label="Saving or checking Path Finder data…" /> : null}
     {previewLoading ? <Spinner size="tiny" label="Loading the exact computed path…" /> : null}
     {notice ? <Body1 role="status">{notice}</Body1> : null}

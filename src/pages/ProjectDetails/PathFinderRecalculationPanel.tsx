@@ -6,7 +6,8 @@ import type { RecalculationCommand } from '@/api/pathfinderRecalculations';
 import { recalculationPreferencesSchema, recalculationTimeoutSchema } from '../../../shared/pathfinderRecalculation';
 import { AUTOMATIC_PAIR_POLICY } from '../../../shared/pathfinderAutomaticPair';
 
-export type RecalculationPanelProps = RecalculationAccess & { preferences: { secondaryDistanceMeters: number; preferVerticalApproach: boolean } | null | undefined };
+export type RecalculationPanelProps = RecalculationAccess & { preferences: { secondaryDistanceMeters: number; preferVerticalApproach: boolean } | null | undefined;
+  configurationMessage?: string | null; onConfigureCalculation?: () => void };
 const labels: Record<string, string> = {
   disabled: 'Disabled', awaiting_authority: 'Automatic recalculation needs enabling again', paused: 'Paused', debouncing: 'Collecting recent changes',
   collecting: 'Checking project inputs', queued: 'Queued', calculating: 'Calculating', complete: 'Complete', blocked: 'Action required', superseded: 'Newer changes pending', failed: 'Calculation failed',
@@ -16,7 +17,8 @@ export function PathFinderRecalculationPanel(props: RecalculationPanelProps) {
   if (!state.enabled) return null;
   const context = state.context;
   const frozen = state.busy || Boolean(state.pending), unavailable = !props.active || !context || frozen || state.conflict;
-  const timeoutValue = Number(timeout), validOptions = recalculationPreferencesSchema.safeParse(props.preferences).success && recalculationTimeoutSchema.safeParse(timeoutValue).success;
+  const timeoutValue = Number(timeout), validPreferences = recalculationPreferencesSchema.safeParse(props.preferences).success,
+    validTimeout = recalculationTimeoutSchema.safeParse(timeoutValue).success, validOptions = validPreferences && validTimeout;
   const send = (action: RecalculationCommand['action']) => {
     if (unavailable || !context || action === 'enable' && !validOptions) return;
     const common = { schemaVersion: 'wfc.pf.recalculation-command.v1' as const, expectedControlRevision: context.controlRevision, idempotencyKey: generateId(), reason: `Administrator requested ${action} from Path Finder.` };
@@ -81,7 +83,9 @@ export function PathFinderRecalculationPanel(props: RecalculationPanelProps) {
     </> : null}
     {!context && props.active && !state.error && !state.busy && !state.unknown ? <Spinner size="tiny" label="Loading automatic calculation status…" /> : null}
     <label>Automatic calculation timeout (ms)<input aria-label="Automatic calculation timeout (ms)" type="number" min="100" max="120000" step="100" value={timeout} disabled={frozen || !props.active} onChange={event => setTimeout(event.target.value)} style={{ width: '100%', boxSizing: 'border-box' }} /></label>
-    {!validOptions ? <Caption1>Enter valid Path preferences and a timeout from 100 to 120000 ms before enabling.</Caption1> : null}
+    {!validPreferences ? <div role="alert"><Caption1>{props.configurationMessage ?? 'Configure the Path settings and Barriers before enabling automatic recalculation.'}</Caption1>
+      {props.onConfigureCalculation ? <Button onClick={props.onConfigureCalculation}>Configure automatic calculation</Button> : null}</div> : null}
+    {!validTimeout ? <Caption1 role="alert">Enter an automatic calculation timeout from 100 to 120000 ms.</Caption1> : null}
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
       <Button disabled={unavailable || !validOptions} onClick={() => send('enable')}>Enable for 30 minutes</Button>
       <Button disabled={unavailable || !context?.enabled || context.paused} onClick={() => send('pause')}>Pause automatic recalculation</Button>

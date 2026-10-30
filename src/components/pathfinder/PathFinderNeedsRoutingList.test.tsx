@@ -24,6 +24,12 @@ function mount(options = props()) { return render(<FluentProvider theme={webLigh
 beforeEach(() => { vi.resetAllMocks(); vi.mocked(usePathFinderCableWorkflow).mockReturnValue(state()); });
 
 describe('read-only Needs routing list', () => {
+  it('explains an actual missing Purpose permission without asking for an MTO edit', () => {
+    const row = page().rows[0];
+    const message = cableWorkflowReason({ ...row, mto: null, calculation: { ...row.calculation, outcome: 'category-required' } });
+    expect(message).toContain('Purpose in Cable types'); expect(message).toContain('Project Details');
+    expect(message).not.toContain('MTO');
+  });
   it('shows compact literal tag buttons without inline endpoint, reason or technical details', () => {
     const options = { ...props(), selectedCableId: cable }; mount(options);
     const tag = screen.getByRole('button', { name: '<b>C-001</b>' });

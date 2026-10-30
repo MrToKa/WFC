@@ -1,4 +1,5 @@
 import type { PoolClient } from 'pg';
+import { isPathFinderCableEligible } from '../../shared/pathfinderCableEligibility.js';
 import { z } from 'zod';
 import { canonicalPurposeJson, policyHashSchema, policyRevisionSchema, policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { canonicalDecimalString } from '../../shared/pathfinderLengthLedger.js';
@@ -99,7 +100,7 @@ export function createInitialFillReceiptProofReader(client: Pick<PoolClient, 'qu
       const ledger = requireCalculationLengthLedger(input.result, dependencies.settings);
       if (!ledger || input.result.status !== 'calculated' || !input.result.route?.success || !input.result.design
         || dependencies.projectId !== input.projectId || dependencies.cableId !== input.cableId || dependencies.cableWriteRevision !== before.cable_write_revision
-        || !['LV', 'Control', 'Instrumentation'].includes(dependencies.cableInputs.mto ?? '') || before.mto !== dependencies.cableInputs.mto
+        || !isPathFinderCableEligible(dependencies.cableInputs.mto) || before.mto !== dependencies.cableInputs.mto
         || before.from_location !== dependencies.cableInputs.fromLocation || before.to_location !== dependencies.cableInputs.toLocation
         || before.cable_type_id !== dependencies.cableInputs.cableTypeId || provenance.proposalId !== input.proposalId
         || seal.projectId !== input.projectId || seal.cableId !== input.cableId || seal.proposalId !== input.proposalId

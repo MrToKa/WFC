@@ -93,6 +93,11 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
     ? { secondaryDistanceMeters: secondaryValue, preferVerticalApproach: preferVertical, barrierRouting } : null;
   const backgroundBarrierRouting = createBarrierAdmissionIntent(currentBarrierRegistry, false);
   const backgroundPreferences = preferences && backgroundBarrierRouting ? { ...preferences, barrierRouting: backgroundBarrierRouting } : null;
+  const calculationBlocker = !validSecondary ? 'Enter a SECONDARY trigger distance from 0 to 1,000,000 metres in Path.'
+    : barrierAuthoring.pending ? 'Wait for the saved barrier command to finish, or use Retry saved command in Barriers if its outcome is unknown.'
+      : barrierAuthoring.dirty ? 'Save the obstacle selection in Barriers before calculating.'
+        : !backgroundBarrierRouting ? 'Configure Barriers: save the selected obstacles, or enter an Explicit empty reason and choose Declare no barriers to calculate without obstacle checks.'
+          : null;
   const getCableCalculationPreferences = useCallback((drill: boolean): PathFinderPreferences | null => {
     const intent = createBarrierAdmissionIntent(currentBarrierRegistry, drill);
     return validSecondary && intent && !barrierAuthoring.dirty && !barrierAuthoring.pending
@@ -253,9 +258,9 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
           <Caption1>From saved binding: {selected.fromMatch.status}</Caption1>
           <Body1>To: {selected.toLocation || 'Not set'} — {pointLabels[endpointPoint(selected.toMatch).status]}</Body1>
           <Caption1>To saved binding: {selected.toMatch.status}</Caption1>
-          <Body1>Category: {selected.mto || 'Not set'}{selected.mto === 'Instrumentation' ? ' (uses Control rules)' : ''}</Body1>
+          <Body1>MTO: {selected.mto || 'Not set (optional)'}</Body1>
           {!selected.fromLocation?.trim() || !selected.toLocation?.trim() ? <Body1>Set an explicit From/To name before resolving a blank endpoint. <a href={`/projects/${projectId}/cables/${selected.id}`}>Edit cable endpoints</a></Body1> : null}
-          {!selected.mto || !['MV', 'LV', 'Control', 'Instrumentation'].includes(selected.mto) ? <Body1>Choose a supported category before calculation. <a href={`/projects/${projectId}/cables/${selected.id}`}>Edit cable category</a></Body1> : null}
+          <Body1>Routing permissions use Purpose from the selected Cable type. MTO is optional.</Body1>
           <div className={styles.actions}><Button disabled={pf.busy || endpointPending || !selected.fromLocation?.trim()} onClick={() => resolve('from')}>Resolve From</Button><Button disabled={pf.busy || endpointPending || !selected.toLocation?.trim()} onClick={() => resolve('to')}>Resolve To</Button></div>
         </div> : null}
         <div className={extra.form}>
@@ -277,6 +282,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
         </div>
         </details>
         <PathFinderResults pf={pf} accountId={accountId} selectedCableId={selectedCableId} workflowSelection={workflowSelection} workflowCalculationPreferences={workflowCalculationPreferences} workflowConfigurationReady={workflowConfigurationReady} onCableValuesChanged={cableValuesChanged} active={mode === 'path'} displayOwned={mode === 'path' && displayOwner === 'proposal'} claimViewer={() => claimViewer('proposal', false)} options={preferences} backgroundOptions={backgroundPreferences} readPreferences={preferences ?? readPreferences} onBatchBusyChange={setBatchBusy}
+          calculationBlocker={calculationBlocker} onConfigureCalculation={validSecondary ? configureCalculation : undefined}
           workflowDisplayRequest={workflowDisplayRequest} onWorkflowDisplayChange={workflowDisplayChanged} onWorkflowReviewChange={workflowReviewChanged}
           endpointForegroundContexts={endpointForegroundContexts}
           onCalculationCommitted={calculationCommitted} />

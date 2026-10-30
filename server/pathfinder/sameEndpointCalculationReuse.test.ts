@@ -8,11 +8,21 @@ import type { DependencySnapshot, EngineResponse } from './jobContracts.js';
 function fixture() {
   const { dependencies, result, id } = syntheticBarrierWriteInputs();
   const { calculationMode: _mode, ...response } = result;
+  response.route!.routeCodes=['/A'];
   const request = buildCableEngineRequest(dependencies, response.requestId, 60000);
   return { dependencies, response, request, id };
 }
 
 describe('bounded exact same ordered logical endpoint computation reuse', () => {
+  it.each([null,'Custom'])('reuses Purpose-authorized native geometry with optional MTO %s, preserving original fields',mto=>{
+    const f=fixture(),cache=createSameEndpointCalculationReuse();f.dependencies.cableInputs.mto=mto;
+    f.dependencies.cablePurposeRouting={purpose:'Control',allowedRouteCodes:['/A']};
+    const request=buildCableEngineRequest(f.dependencies,f.response.requestId,60000),before=structuredClone(f.dependencies);
+    expect(cache.put(f.dependencies,request,f.response)).toBe(true);
+    expect(cache.get(f.dependencies,request)).toEqual(f.response);expect(f.dependencies).toEqual(before);
+    const forbidden={...f.dependencies,cablePurposeRouting:{purpose:'Control',allowedRouteCodes:['/B']}};
+    expect(cache.put(forbidden,buildCableEngineRequest(forbidden,f.response.requestId,60000),f.response)).toBe(false);
+  });
   it('does not reuse an LV computation across independently permitted Power and VFD tray networks', () => {
     const f = fixture(), cache = createSameEndpointCalculationReuse();
     const power = { ...f.dependencies, cablePurposeRouting: { purpose:'Power', allowedRouteCodes:['/A'] } };

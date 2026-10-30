@@ -1,4 +1,5 @@
 import { collectDependencyBatchInTransaction } from './dependencyBatch.js';
+import { isPathFinderCableEligible } from '../../shared/pathfinderCableEligibility.js';
 import { defaultOptions } from './jobContracts.js';
 import { hash } from './dependencies.js';
 import { insertCalculationBatch } from './jobs.js';
@@ -18,7 +19,7 @@ export const locationImpactAdmission:LocationImpactAdapter['admitInTransaction']
   const batch=await collectDependencyBatchInTransaction(client,{projectId:input.projectId,
     options:{...defaultOptions,...preferences},cableIds:input.cableIds,
     signal:input.signal,deadline,dependencyVersion:'pathfinder.dependencies.v8'});
-  if(batch.items.some(item=>!['LV','Control','Instrumentation'].includes(item.cable.mto)))
+  if(batch.items.some(item=>!isPathFinderCableEligible(item.cable.mto)))
     throw new PathFinderError('LOCATION_IMPACT_CATEGORY_CHANGED',409);
   const automaticPairPolicy=input.automaticPair ? automaticPairPolicySchema.parse(input.automaticPair.policy) : undefined;
   const inputSha256=hash({schemaVersion:automaticPairPolicy?'wfc.pf.location-impact-admission.v2':'wfc.pf.location-impact-admission.v1',impactId:input.impactId,

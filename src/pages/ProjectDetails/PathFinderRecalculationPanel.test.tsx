@@ -19,6 +19,14 @@ function progressContext(change: Partial<RecalculationProgress> = {}, contextCha
 }
 beforeEach(() => vi.clearAllMocks());
 describe('narrow automatic recalculation panel', () => {
+  it('explains missing barrier configuration separately from a valid timeout and links to the required action', () => {
+    const state = setup(), configure = vi.fn();
+    render(<PathFinderRecalculationPanel {...props} preferences={null} configurationMessage="Save obstacles or choose Declare no barriers in Barriers." onConfigureCalculation={configure} />);
+    expect(screen.getByRole('alert')).toHaveTextContent('Save obstacles or choose Declare no barriers');
+    expect(screen.queryByText(/timeout from 100/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Configure automatic calculation' })); expect(configure).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button', { name: 'Enable for 30 minutes' })).toBeDisabled(); expect(state.command).not.toHaveBeenCalled();
+  });
   it('requires explicit finite enrollment with current preferences and never submits on mount', () => {
     const state = setup(); render(<PathFinderRecalculationPanel {...props} />); expect(state.command).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Enable for 30 minutes' }));

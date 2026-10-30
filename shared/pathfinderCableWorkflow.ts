@@ -5,6 +5,7 @@ import { policyHashSchema, policyUuidSchema } from './pathfinderPurposePolicy.js
 import { revisionCableSnapshotSchema } from './pathfinderRevisionResults.js';
 import { recalculationReasonSchema } from './pathfinderRecalculation.js';
 import { sealedCableItemApplicabilitySchema } from './pathfinderItemApplicability.js';
+import { isPathFinderCableEligible, routingEngineCategory } from './pathfinderCableEligibility.js';
 
 export const CABLE_WORKFLOW_LIMITS = Object.freeze({ pageSize: 100, maxScan: 200, cursorCharacters: 512, reasonCodes: 64 });
 export const cableWorkflowStatusSchema = z.enum(['needs-routing', 'calculating', 'ready-for-review', 'up-to-date', 'excluded', 'blocked']);
@@ -14,12 +15,10 @@ export type CableInitialFillInput = { mto: unknown; routing: unknown; designLeng
 export type CableInitialFillDecision = { mode: 'initial-fill-candidate' | 'manual-review' | 'excluded' | 'blocked'; reasonCodes: string[] };
 export type CableCategoryDecision = { status: 'eligible' | 'excluded' | 'blocked'; routingCategory: 'LV' | 'Control' | null; reasonCodes: string[] };
 
-/** Display classification only; Instrumentation uses Control without changing the stored cable category. */
+/** Display classification only; MTO never grants Purpose route permission. */
 export function classifyCableCategory(mto: unknown): CableCategoryDecision {
-  if (mto === 'MV') return { status: 'excluded', routingCategory: null, reasonCodes: ['MV_EXCLUDED'] };
-  if (mto === 'LV') return { status: 'eligible', routingCategory: 'LV', reasonCodes: [] };
-  if (mto === 'Control' || mto === 'Instrumentation') return { status: 'eligible', routingCategory: 'Control', reasonCodes: [] };
-  return { status: 'blocked', routingCategory: null, reasonCodes: ['CABLE_CATEGORY_REQUIRED'] };
+  if (!isPathFinderCableEligible(mto)) return { status: 'excluded', routingCategory: null, reasonCodes: ['MV_EXCLUDED'] };
+  return { status: 'eligible', routingCategory: routingEngineCategory(mto) as 'LV' | 'Control', reasonCodes: [] };
 }
 
 /**

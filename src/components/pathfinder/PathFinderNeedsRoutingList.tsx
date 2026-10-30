@@ -12,7 +12,7 @@ export type PathFinderNeedsRoutingListProps = Omit<PathFinderCableWorkflowAccess
   onSelect: (row: CableWorkflowRow) => void; selectedCableId?: string | null; className?: string;
 };
 const reasons: Record<string, string> = {
-  CABLE_CATEGORY_REQUIRED: 'Choose a supported cable category.', SETTINGS_REQUIRED: 'Complete the cable length settings in Project Details.',
+  CABLE_CATEGORY_REQUIRED: 'Set this cable type’s Purpose in Cable types and allow that Purpose on the appropriate trays in Project Details.', SETTINGS_REQUIRED: 'Complete the cable length settings in Project Details.',
   MODEL_REQUIRED: 'Choose and prepare the active 3D model.', CALCULATION_RESOURCE_LIMIT: 'The calculation reached a resource limit. Review the prepared network and retry.',
   CALCULATION_DEADLINE_EXCEEDED: 'The calculation timed out. Review the network and retry.', CALCULATION_FAILED: 'The calculation failed. Review its diagnostic details before retrying.',
   CALCULATION_CANCELLED: 'The calculation was cancelled. Start a new calculation when ready.', CALCULATION_QUEUED: 'This cable is waiting to be calculated.',
