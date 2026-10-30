@@ -14,6 +14,8 @@ Set-Content -LiteralPath $global:wfcTestbackup -Value 'exit 0'
 function Assert($Condition, [string]$Message) { if (-not $Condition) { throw $Message } }
 function Reset-Fixture([string]$Name) {
     $global:wfcTestevents = [Collections.Generic.List[string]]::new()
+    $global:wfcTestremovedTags = [Collections.Generic.List[string]]::new()
+    $global:wfcTestfailCleanup = $false
     $global:wfcTestrunning = $true; $global:wfcTestcurrent = $global:wfcTestoldId
     $global:wfcTestfailReadiness = $false; $global:wfcTestbadManifest = $false; $global:wfcTestpending = $false
     $global:wfcTestservice = 'api'; $global:wfcTestbadContract = $false; $global:wfcTestfailRollback = $false
@@ -47,6 +49,10 @@ function docker {
         pull { return }
         tag { return }
         image {
+            if ($arguments[1] -eq 'rm') {
+                if ($global:wfcTestfailCleanup) { throw 'Simulated tag removal failure.' }
+                $global:wfcTestremovedTags.Add([string]$arguments[2]); return
+            }
             if ($arguments -contains '{{.Id}}') { $global:wfcTestnewId } else { $global:wfcTestcommit }; return
         }
         stop { $global:wfcTestrunning = $false; return }
@@ -91,6 +97,31 @@ try {
     Assert ($global:wfcTestevents.Count -eq $count + 1) 'Current commit caused another deployment.'
     Write-Output 'PASS: successful deployment records the version and repeated runs are idempotent'
 
+    Assert ($state.workingVersions.Count -eq 2 -and $state.workingVersions[0].commit -eq $global:wfcTestcommit -and $state.workingVersions[1].images.api -eq $global:wfcTestoldId) 'Initial healthy baseline was not retained.'
+    $initialCommit = $global:wfcTestcommit
+    $global:wfcTestcommit = 'e' * 40
+    & $global:wfcTestupdater -ConfigPath $global:wfcTestconfiguration -Apply
+    $state = Get-Content -LiteralPath (Join-Path $global:wfcTestdirectory 'state/wfc.json') -Raw | ConvertFrom-Json -AsHashtable
+    Assert ($state.workingVersions.Count -eq 2 -and $state.workingVersions[0].commit -eq $global:wfcTestcommit -and $state.workingVersions[1].commit -eq $initialCommit) 'Retention did not rotate current and previous complete versions.'
+    Assert ($global:wfcTestremovedTags.Count -eq 2) 'Obsolete updater-owned tags were not released.'
+    Assert (-not $global:wfcTestevents.Contains('prune')) 'Retention performed a global prune.'
+    $global:wfcTestfailReadiness = $true
+    $global:wfcTestnewId = 'sha256:' + ('f' * 64)
+    $global:wfcTestcommit = 'f' * 40
+    try { & $global:wfcTestupdater -ConfigPath $global:wfcTestconfiguration -Apply } catch {}
+    $failedState = Get-Content -LiteralPath (Join-Path $global:wfcTestdirectory 'state/wfc.json') -Raw | ConvertFrom-Json -AsHashtable
+    Assert (($failedState.workingVersions | ConvertTo-Json -Depth 10 -Compress) -eq ($state.workingVersions | ConvertTo-Json -Depth 10 -Compress)) 'Failed release displaced a working version.'
+    Assert ($global:wfcTestremovedTags.Count -eq 2) 'Failed release cleaned retention tags.'
+    $global:wfcTestfailReadiness = $false
+    $global:wfcTestfailCleanup = $true
+    $global:wfcTestcommit = '9' * 40
+    & $global:wfcTestupdater -ConfigPath $global:wfcTestconfiguration -Apply
+    $state = Get-Content -LiteralPath (Join-Path $global:wfcTestdirectory 'state/wfc.json') -Raw | ConvertFrom-Json -AsHashtable
+    Assert ($state.commit -eq $global:wfcTestcommit -and -not $state.ContainsKey('pending')) 'Cleanup failure invalidated a healthy deployment.'
+    $global:wfcTestcommit = $initialCommit
+    $global:wfcTestnewId = 'sha256:' + ('c' * 64)
+    Write-Output 'PASS: two working versions rotate after success, survive failure, and cleanup cannot trigger rollback'
+
     Reset-Fixture 'readiness-rollback'; $global:wfcTestfailReadiness = $true
     $failed = $false
     try { & $global:wfcTestupdater -ConfigPath $global:wfcTestconfiguration -Apply } catch { $failed = $true }
@@ -127,6 +158,14 @@ try {
     Assert (-not ($global:wfcTestevents -contains 'stop')) 'Busy application was stopped.'
     Set-Content -LiteralPath $global:wfcTestbackup -Value 'exit 0'
     Write-Output 'PASS: active work postpones deployment before any container stops'
+
+    Reset-Fixture 'event-busy'
+    Set-Content -LiteralPath $global:wfcTestbackup -Value 'exit 75'
+    $failed = $false
+    try { & $global:wfcTestupdater -ConfigPath $global:wfcTestconfiguration -Apply -FailIfBusy } catch { $failed = $true }
+    Assert ($failed -and -not $global:wfcTestevents.Contains('stop')) 'Event deployment falsely reported success while busy.'
+    Set-Content -LiteralPath $global:wfcTestbackup -Value 'exit 0'
+    Write-Output 'PASS: event jobs report busy as failure so operators can rerun them'
 
     Reset-Fixture 'missing-backup'
     $config = Get-Content -LiteralPath $global:wfcTestconfiguration -Raw | ConvertFrom-Json -AsHashtable
