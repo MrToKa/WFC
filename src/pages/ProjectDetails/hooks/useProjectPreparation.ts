@@ -32,6 +32,7 @@ import {saveCaptureEvidence,GeometryTraceApiError,createGeometryTrace,fetchGeome
   type GeometryTraceCreate,type GeometryTraceManifest} from '@/api/pathfinderGeometryTrace';
 import {GEOMETRY_TRACE_DERIVATION} from '../../../../shared/pathfinderGeometryTrace';
 import {bindCompletedCaptureEvidence,type CompletedCaptureEvidence} from '../../../../viewer-runtime/capture-evidence.mjs';
+import { formatPreparationDiagnostics } from '../preparationDiagnostics';
 
 type PF = ReturnType<typeof usePathFinder>;
 type PreparationModel = { modelVersionId: string | null; contentFingerprint: string | null; selectionRevision: string };
@@ -940,7 +941,8 @@ export function useProjectPreparation(pf: PF, active: boolean) {
       session = fresh.session;
       if (!session || !sameScope(session.plan, fresh.context.scope)) throw new Error('Project routing inputs changed. Check the trays again.');
     }
-    if (session.plan.diagnostics.length > 0) throw new Error(session.plan.diagnostics[0].message);
+    if (session.plan.diagnostics.length > 0)
+      throw new Error(formatPreparationDiagnostics(session.plan.diagnostics, fresh.context.trays).map(item => item.message).join(' '));
     fresh = await collectSession({ ...fresh, session }, signal, true);
     if (!fresh.session || !fresh.session.coverage.requestedScopeComplete || fresh.session.coverage.missingPartIds.length)
       throw new Error('The tray update is incomplete. Check the trays again to continue.');

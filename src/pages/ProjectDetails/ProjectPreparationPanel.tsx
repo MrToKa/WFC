@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Body1, Button, Field, Input, Spinner, tokens } from '@fluentui/react-components';
 import type { usePathFinder } from './hooks/usePathFinder';
 import { useProjectPreparation } from './hooks/useProjectPreparation';
-import type { PreparationScope } from '../../../shared/pathfinderPreparation';
+import { preparationResolutionMatchesScope, type PreparationScope, type PreparationPlan } from '../../../shared/pathfinderPreparation';
 import { fetchRoutingPurposePolicy, type RoutingPurposePolicy } from '@/api/pathfinderPolicies';
 import { trayDisplayTarget } from './trayDisplayTarget';
+import { formatPreparationDiagnostics } from './preparationDiagnostics';
 
 type Props = { pf: ReturnType<typeof usePathFinder>; active: boolean; onBusyChange?: (busy: boolean) => void; onNetworkReady?: (key: string) => void };
 const searchText = (text: string) => text.normalize('NFC').trim().replace(/\s+/gu, ' ').toLowerCase().replace(/^\/+/, '');
@@ -74,6 +75,14 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
     && context.currentAggregate.routingPolicyRevision === context.scope.routingPolicyRevision
     && context.currentAggregate.routingPolicySha256 === context.scope.routingPolicySha256
     && context.currentAggregate.resolutionRevision === context.scope.resolutionRevision);
+  const diagnosticPlan = plan && context && (Object.keys(context.scope) as Array<keyof PreparationScope>).every(key => plan[key] === context.scope[key]) ? plan : null;
+  const currentDiagnostics: PreparationPlan['diagnostics'] = context && modelCurrent ? context.trays.flatMap(tray => {
+    if (tray.policyState === 'configured' || tray.policyState === 'excluded'
+      || context.resolutions.some(item => item.projectTrayId === tray.projectTrayId && item.mode === 'exclude' && preparationResolutionMatchesScope(item.scope, context.scope))) return [];
+    return [{ code: tray.policyState === 'unconfigured' ? 'PURPOSE_UNCONFIGURED' : 'TRAY_POLICY_INVALID', projectTrayIds: [tray.projectTrayId], objectIds: [], message: '' }];
+  }) : [];
+  const blockers = context && !saved && !working && modelCurrent
+    ? formatPreparationDiagnostics([...currentDiagnostics, ...(diagnosticPlan?.diagnostics ?? [])], context.trays) : [];
   const assigned = (trayId: string) => {
     if (!context || !modelCurrent) return false;
     const resolution = context.resolutions.find(item => item.projectTrayId === trayId && sameModel(item.scope, context.scope));
@@ -205,7 +214,10 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
     {working ? <Spinner size="tiny" label={state.progress ?? (state.unknown ? 'Checking the earlier tray update…' : 'Checking trays and preparing the network…')} style={{ marginBlock: 12 }} />
       : saved ? <p role="status">Network ready. {found} of {context!.trays.length} trays assigned{found < context!.trays.length ? `; ${context!.trays.length - found} still need a model selection` : ''}.</p>
         : <p>Check the trays to prepare the routing network automatically.</p>}
-    {state.error ? <p role="alert">{state.error}</p> : null}
+    {blockers.length ? <div role="alert" aria-label="Network preparation blockers">
+      <p>Network preparation is blocked. Assigned objects are saved; resolve these issues, then choose Discover project tray candidates again.</p>
+      <ul>{blockers.map(issue => <li key={issue.code}>{issue.message}</li>)}</ul>
+    </div> : state.error ? <p role="alert">{state.error}</p> : null}
     {state.notice && !state.error && !working && !saved ? <p role="status">{state.notice}</p> : null}
     {context ? <>
       <Field label="Search project trays" style={{ marginBlock: 12 }}>
@@ -237,6 +249,7 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
               ? permissions.value.rules.find(rule => rule.purposeKey === tray.purposeKey)?.allowedCategories.join(', ') || 'Routing permitted'
               : 'Routing permitted' : tray.policyState === 'excluded' ? 'Excluded from routing' : 'Set routing permissions in Project Details'}
           </p>
+          {blockers.filter(issue => issue.trayIds.includes(tray.projectTrayId)).map(issue => <p key={issue.code} style={{ color: tokens.colorPaletteRedForeground1, marginBlock: 8 }}>{issue.message}</p>)}
           <Button disabled={disabled || Boolean(reading) || displayPending || !modelCurrent || (!canHide && !target.objectIds.length)}
             aria-label={`${canHide ? 'Hide' : 'Show'} tray ${tray.rawName}`} onClick={() => void (canHide ? hide(tray.projectTrayId) : show(tray.projectTrayId))}
             style={{ width: '100%', whiteSpace: 'normal', marginBottom: 8 }}>
