@@ -9,7 +9,7 @@ Only `main` publishes commit-tagged images to GHCR. Both digests are recorded in
 one `deployment.json`, published last in the `deploy-<40-character-commit>`
 prerelease. A partial image publication cannot be selected by the updater.
 
-The Windows host checks the current `main` commit and its exact deployment
+In optional polling mode, the Windows host checks the current `main` commit and its exact deployment
 release every five minutes. It does not deploy an older successful build while
 newer `main` is still building or failing. WFC and Preparer publish independently.
 All connections start from the host. No inbound webhook, public port, VPN or
@@ -60,7 +60,7 @@ an HTTP 200 alone does not establish that every feature works.
 
 These instructions target the existing `wfc-api`, `wfc-web`, `wfc-postgres`,
 `wfc-minio` and `routings-preparer-preparer-1` setup. The example uses the current
-desktop address `192.168.5.55`. It must be checked on the actual host before
+desktop address `SERVER_LAN_ADDRESS`. It must be checked on the actual host before
 activation. No registration or real deployment is performed by merging this PR.
 
 1. Merge both CI changes and wait for successful `Publish tested deployment`
@@ -126,9 +126,7 @@ Compose files and Preparer launcher stay local. Review local configuration and
 launcher updates separately; an image-only deploy cannot apply newly required
 mounts, environment settings or infrastructure changes.
 
-Previous images are retained under `local/cicd-rollback:*`. Arrange a separate
-retention policy after operational acceptance; do not remove the current or
-previous version blindly. Protect the state directory and local config/hooks
+The updater retains two working version sets in `workingVersions`: current and previous. Each WFC set includes API and web; Preparer is tracked independently. After successful acceptance, only explicitly recorded older rollback tags are released. Failed candidates never rotate history. Unrelated images, GHCR tags, legacy pins and failed/interrupted attempts are not pruned, so total Docker disk usage is not capped at two images. Protect the state directory and local config/hooks
 from other users. Schedule backups independently of deployments as well.
 
 ## Failure handling
@@ -152,3 +150,57 @@ Local tests: `node --test scripts/cicd/release.test.mjs` and
 `pwsh -NoProfile -File scripts/cicd/Update-Deployment.tests.ps1`. Docker and HTTP
 are replaced by in-process fixtures in the latter. They prove transaction and
 refusal behavior, not real Docker Desktop availability or database rollback.
+
+
+## GitHub-triggered deployment (preferred instead of five-minute polling)
+
+Publication now supports an optional `request-lan-deploy` job. It sends a
+`repository_dispatch` only after the complete publication job succeeds on main.
+No deployment command runs on a public repository's self-hosted runner.
+
+1. Create a **private**, owner-controlled operations repository, e.g.
+   `MrToKa/wfc-deployment`, with default branch `main`. Put
+   `scripts/cicd/private-deploy.yml.example` there as
+   `.github/workflows/deploy.yml`. Never add PR-triggered jobs or untrusted
+   collaborators to this production execution repository.
+2. Register a repository-specific Windows x64 self-hosted runner ONLY there,
+   with label `wfc-lan-deploy`. Run it under the signed-in Docker Desktop user.
+   It makes outbound HTTPS connections to GitHub; no inbound firewall port or
+   router forwarding is needed. Protect runner files and local trusted scripts.
+3. Install the reviewed updater at
+   `D:\WFC-Deploy\trusted\Update-Deployment.ps1`, alongside the separately
+   reviewed private configuration and backup/maintenance hooks. The workflow
+   executes this fixed local path without checking out application code or
+   accepting command text, paths or images from event payloads.
+4. In each application repository, set Actions variable
+   `LAN_DEPLOY_REPOSITORY=MrToKa/wfc-deployment`, and Actions secret
+   `LAN_DEPLOY_TOKEN` to a fine-grained PAT restricted to that operations
+   repository with Contents: write (required for repository dispatch). Keep it
+   only in secrets, expire/rotate it, and avoid broad account access. The normal
+   repository `GITHUB_TOKEN` cannot dispatch into a separate repository.
+5. Complete the same GHCR login, coherent backup, maintenance coordination and
+   first controlled deployment described above. Use Run workflow in the private
+   repository for that first event-mode test. Check both source publication and
+   private deployment results; dispatch acceptance does not mean deployment
+   succeeded. Do not register the five-minute task for event-only mode. Disable
+   an already-registered polling task after the first verified event deployment.
+
+Both source events invoke the same updater, which independently revalidates the
+latest main manifests for both configured applications. Concurrent deployments
+are serialized by the private workflow and the local filesystem lock. Stale
+signals cannot inject older versions or shell commands. Intermediate main
+versions may be skipped in favor of the latest fully published main commit.
+
+A stopped runner queues jobs; GitHub queue/run limits still apply. A busy hook
+or local lock makes the event job **fail** visibly with `-FailIfBusy`, preserving
+running services. Rerun the private deployment workflow after work is idle;
+event-only mode does not automatically retry a busy deployment. A second merge
+can also trigger a later attempt. Keep optional polling only if that explicit
+reconciliation behavior is wanted. Runner offline, PAT expiration, dispatch
+failure and backup failure require operational monitoring. GitHub's finite job
+timeout may interrupt a hung stop; the pending journal then blocks unattended
+retries, as with any other interrupted deployment.
+
+References: https://docs.github.com/en/actions/reference/runners/self-hosted-runners
+and https://docs.github.com/en/actions/reference/security/secure-use
+
