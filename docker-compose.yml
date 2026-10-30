@@ -70,6 +70,7 @@ services:
       WFC_VIEWER_TRUST_PROXY: "true"
     volumes:
       - model-imports:/var/lib/wfc/model-imports
+      - pathfinder-data:/var/lib/wfc/pathfinder
     depends_on:
       postgres:
         condition: service_healthy
@@ -108,4 +109,5 @@ networks:
 
 volumes:
   model-imports:
+  pathfinder-data:
 

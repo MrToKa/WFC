@@ -150,6 +150,34 @@ describe('automatic tray length persistence', () => {
     expect(client.query).toHaveBeenLastCalledWith('COMMIT');
   });
 
+  const captureReference = { source: 'tray-capture' as const, modelVersionId: reference.modelVersionId,
+    selectionRevision: '1', assignmentSha256: 'a'.repeat(64), measurementId: reference.traceId };
+  const captureMeasurement = { ...captureReference, lengthMm: 1234.567, elementCount: 2 };
+  it('saves an independently measured tray length without any published network reference', async () => {
+    stored.length_mm = null; autoLength.read.mockResolvedValue(captureMeasurement);
+    const res = response();
+    await handler('patch', '/:trayId')(request({ lengthMm: 1234.567, lengthSource: 'auto', autoLengthReference: captureReference }), res);
+    expect(res.status).not.toHaveBeenCalled();
+    expect(stored.length_source).toBe('auto');
+    expect(stored.length_calculation).toMatchObject(captureMeasurement);
+    expect(client.query).toHaveBeenLastCalledWith('COMMIT');
+  });
+  it('keeps an existing manual length when an independent measurement has no explicit approval', async () => {
+    autoLength.read.mockResolvedValue(captureMeasurement);
+    const res = response();
+    await handler('patch', '/:trayId')(request({ lengthMm: 1234.567, lengthSource: 'auto', autoLengthReference: captureReference }), res);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'TRAY_MANUAL_LENGTH_APPROVAL_REQUIRED' }));
+    expect(stored.length_mm).toBe(3000); expect(autoLength.read).not.toHaveBeenCalled();
+  });
+  it.each(['selectionRevision', 'assignmentSha256', 'measurementId'] as const)('refuses a changed standalone %s before saving', async field => {
+    stored.length_mm = null;
+    autoLength.read.mockResolvedValue({ ...captureMeasurement, [field]: field === 'selectionRevision' ? '2' : field === 'assignmentSha256' ? 'b'.repeat(64) : reference.aggregateId });
+    const res = response();
+    await handler('patch', '/:trayId')(request({ lengthMm: 1234.567, lengthSource: 'auto', autoLengthReference: captureReference }), res);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'TRAY_AUTO_LENGTH_STALE' }));
+    expect(stored.length_mm).toBeNull(); expect(client.query).toHaveBeenLastCalledWith('ROLLBACK');
+  });
+
   it.each([undefined, 'manual'] as const)('protects a pre-existing manual length with source %s when no approval was supplied', async (source) => {
     stored.length_source = source;
     const res = response();

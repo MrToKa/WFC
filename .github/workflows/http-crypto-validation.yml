@@ -9,6 +9,8 @@ on:
       - 'scripts/viewer-runtime/module-closure*'
       - 'scripts/copy-pathfinder-contracts.mjs'
       - 'package*.json'
+      - 'Dockerfile'
+      - 'docker-compose.yml'
       - '.github/workflows/http-crypto-validation.yml'
 permissions:
   contents: read
@@ -55,7 +57,7 @@ jobs:
       - name: Verify From-To matching prerequisites and recovery
         run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/api/pathfinderModelLocationMatch.test.ts src/pages/ProjectDetails/hooks/useModelLocationMatch.test.tsx src/pages/ProjectDetails/ModelLocationMatchPanel.test.tsx
       - name: Verify tray Auto-length and manual-value approval
-        run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/api/trays.test.ts src/pages/TrayDetails/TrayDetails.autoLength.test.ts src/pages/TrayDetails/components/TrayEditForm.autoLength.test.tsx server/middleware.test.ts server/models/tray.test.ts server/validators.tray.test.ts server/services/trayAutoLengthService.test.ts server/services/trayAutoLengthService.postgres.test.ts server/services/trayChangeLogService.test.ts server/routes/traysRoutes.test.ts server/routes/projectExcelImportValidation.test.ts
+        run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/api/trays.test.ts src/viewer/trayAutoLength.test.ts src/pages/TrayDetails/TrayDetails.autoLength.test.ts src/pages/TrayDetails/components/TrayEditForm.autoLength.test.tsx server/middleware.test.ts server/models/tray.test.ts server/validators.tray.test.ts server/services/trayAutoLengthService.test.ts server/services/trayAutoLengthCaptureService.test.ts server/services/trayAutoLengthService.postgres.test.ts server/services/trayChangeLogService.test.ts server/routes/traysRoutes.test.ts server/routes/projectExcelImportValidation.test.ts
       - name: Check application and server types
         run: npm run typecheck
       - name: Build server with shared runtime dependencies

@@ -111,6 +111,21 @@ export const createApp = (): Express => {
     authorizePathFinderBody,
     express.json({ limit: '1mb' }),
   );
+  app.use(
+    /^\/api\/projects\/[0-9a-f-]{36}\/trays\/[0-9a-f-]{36}\/auto-length\/capture\/?$/i,
+    authenticate, requireAdmin,
+    async (req, res, next) => {
+      const projectId = /^\/api\/projects\/([^/]+)\//i.exec(req.originalUrl)?.[1];
+      try {
+        await principalTransaction(pool, uuid.parse(projectId), requestPrincipal(req), async () => undefined);
+        next();
+      } catch (error) {
+        const safe = error instanceof PathFinderError ? error : new PathFinderError('TRAY_AUTO_LENGTH_CAPTURE_ACCESS', 403);
+        res.status(safe.status).json({ error: safe.message, code: safe.code });
+      }
+    },
+    pathFinderBodyLimit(16 * 1024 * 1024), express.json({ limit: '16mb' }),
+  );
   app.use(express.json());
 
   app.get('/health', (_req: Request, res: Response) => {
