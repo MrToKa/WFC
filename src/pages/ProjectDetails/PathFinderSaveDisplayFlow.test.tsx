@@ -19,7 +19,9 @@ import { proposalEndpointObjectIds } from './pathFinderEndpointVisibility';
 
 const transport = vi.hoisted(() => ({ row: null as CableWorkflowRow | null, impact: null as unknown,
   realProgress: false, realRevisionResults: false, revisionAdmission: null as { id: string; jobId: string; kind: string; generation: null; createdAt: string } | null,
-  viewerPath: vi.fn(), save: vi.fn(), refresh: vi.fn(), saved: vi.fn() }));
+  viewerPath: vi.fn(), viewerClear: vi.fn(),
+  view: { camera: { position: [0, 0, 100], target: [0, 0, 0], up: [0, 1, 0] }, pathId: null as string | null },
+  save: vi.fn(), refresh: vi.fn(), saved: vi.fn() }));
 vi.mock('@/api/pathfinderCableWorkflow', () => ({ fetchPathFinderCableWorkflowDetail: vi.fn() }));
 vi.mock('@/api/pathfinder', async original => ({ ...await original<typeof import('@/api/pathfinder')>(), fetchPathFinderJob: vi.fn(),
   fetchPathFinderProposal: vi.fn(), fetchPathFinderState: vi.fn(), submitPathFinderCalculation: vi.fn(), pathFinderRequest: vi.fn() }));
@@ -28,8 +30,18 @@ vi.mock('@/viewer/ViewerController', () => ({ ViewerController: class {
   constructor(options: { onEvent: (event: { type: string; payload: Record<string, unknown> }) => void }) {
     queueMicrotask(() => options.onEvent({ type: 'MODEL_LOADED', payload: {} }));
   }
-  getLoadSnapshot = () => ({ ready: true }); dispose() {} clear() {} cancelPicking() {}
-  showComputedPath = transport.viewerPath;
+  getLoadSnapshot = () => ({ ready: true }); dispose() {} cancelPicking() {}
+  clear(reason?: string, options?: { preserveCamera?: boolean }) {
+    transport.viewerClear(reason, options); transport.view.pathId = null;
+    // Model the SDK reset that caused the regression, including when there was
+    // no active path. Clearing appearance must explicitly preserve the camera.
+    if (!options?.preserveCamera) transport.view.camera = { position: [0, 0, 100], target: [0, 0, 0], up: [0, 1, 0] };
+  }
+  async showComputedPath(path: { pathId: string }) {
+    const shown = await transport.viewerPath(path);
+    if (shown) transport.view.pathId = path.pathId;
+    return shown;
+  }
 } }));
 vi.mock('@/api/pathfinderLocationImpacts', async original => ({ ...await original<typeof import('@/api/pathfinderLocationImpacts')>(),
   fetchLocationImpacts: async () => ({ impacts: [] }), fetchLocationImpactProgress: vi.fn() }));
@@ -147,11 +159,14 @@ function Flow({ f, configuration = true }: { f: Fixture; configuration?: boolean
       onWorkflowDisplayChange={displayChanged} onWorkflowReviewChange={setReview} displayOwned claimViewer={() => () => true} />
   </>;
 }
-function LiveControllerFlow({ f }: { f: Fixture }) {
+function LiveControllerFlow({ f, previousPath = false }: { f: Fixture; previousPath?: boolean }) {
   const container = useRef<HTMLDivElement>(null);
   const controller = usePathFinder({ projectId: id(1), loadedProjectId: id(1), token: 'transport-only-token', isAdmin: true,
     container, automaticStatePolling: false });
-  return <><div ref={container} />{controller.viewerPhase === 'ready' ? <Flow f={{ ...f, pf: controller }} /> : null}</>;
+  return <><div ref={container} />{controller.viewerPhase === 'ready' ? <>
+    {previousPath ? <button onClick={() => void controller.showPath({ pathId: id(2), points: f.proposal.route!.points, objectIds: [23] })}>Show previous path</button> : null}
+    <Flow f={{ ...f, pf: controller }} />
+  </> : null}</>;
 }
 function wire(f: Fixture, persisted = false) {
   transport.row = persisted ? f.done : f.initial;
@@ -162,11 +177,43 @@ function wire(f: Fixture, persisted = false) {
   transport.save.mockResolvedValue(undefined);
 }
 beforeEach(() => { vi.resetAllMocks(); transport.realProgress = false; transport.realRevisionResults = false; transport.revisionAdmission = null;
+  transport.view.camera = { position: [0, 0, 100], target: [0, 0, 0], up: [0, 1, 0] }; transport.view.pathId = null;
   vi.mocked(proposalEndpointObjectIds).mockResolvedValue(['dbid:44', 'dbid:45']);
   sessionStorage.clear(); vi.spyOn(window, 'open').mockReturnValue(null); });
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); sessionStorage.clear(); });
 const button = (name: string) => screen.getByText(name, { selector: 'button' });
 describe('real cable popup Workspace → Results → Panel handoff with synthetic transport', () => {
+  it.each([false, true])('preserves the camera when Save invalidates a route (previous path shown: %s)', async previouslyShown => {
+    const f = fixture(true); wire(f);
+    vi.mocked(fetchPathFinderState).mockResolvedValue(f.pf.data!);
+    vi.mocked(fetchProjectModels).mockResolvedValue({ selection: { activeModelVersionId: id(8), selectionRevision: 1 },
+      versions: [{ id: id(8), health: 'healthy' }] } as never);
+    let finishProposal!: (value: PathFinderProposal) => void;
+    vi.mocked(fetchPathFinderProposal).mockImplementation(async () => transport.saved.mock.calls.length
+      ? new Promise(resolve => { finishProposal = resolve; }) : f.proposal);
+    transport.viewerPath.mockResolvedValue(true);
+    render(<LiveControllerFlow f={f} previousPath={previouslyShown} />);
+    fireEvent.click(await screen.findByText('Open test cable', { selector: 'button' }));
+    await screen.findByText('Assign From', { selector: 'button' });
+    if (previouslyShown) {
+      fireEvent.click(button('Show previous path'));
+      await waitFor(() => expect(transport.view.pathId).toBe(id(2)));
+    }
+    const closeCamera = { position: [52, -6, 9], target: [51, -6, 4], up: [0, 0, 1] };
+    transport.view.camera = structuredClone(closeCamera); transport.viewerClear.mockClear();
+    fireEvent.click(button('Assign From'));
+    await waitFor(() => expect(button('Save')).toBeEnabled()); fireEvent.click(button('Save'));
+    await waitFor(() => expect(finishProposal).toBeTypeOf('function'));
+    expect(transport.viewerClear).toHaveBeenCalled();
+    expect(transport.view.pathId).toBeNull(); expect(transport.view.camera).toEqual(closeCamera);
+    expect(button('Show')).toBeDisabled();
+    await act(async () => finishProposal(f.proposal));
+    await waitFor(() => expect(button('Show')).toBeEnabled());
+    expect(screen.getByLabelText('Cable routing')).toHaveValue('/NEW');
+    expect(transport.view.camera).toEqual(closeCamera); expect(transport.view.pathId).toBeNull();
+    for (const call of transport.viewerClear.mock.calls) expect(call).toEqual(['user', { preserveCamera: true }]);
+    expect(transport.save).toHaveBeenCalledOnce(); expect(submitPathFinderCalculation).not.toHaveBeenCalled();
+  });
   it('recovers Save display after three serialized cable reads fail while siblings finish, without another calculation', async () => {
     const f = fixture(true); wire(f);
     const bound = (locationId: string) => ({ locationId, bindingRevision: '1', locationRevision: '1', bindingId: id(60),

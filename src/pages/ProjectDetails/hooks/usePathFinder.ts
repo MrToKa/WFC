@@ -413,7 +413,12 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
   }, [isAdmin, live, update]);
   const showTray = useCallback((expected: Pick<PreparationScope, 'modelVersionId' | 'contentFingerprint' | 'selectionRevision'>, ids: number[]) => displayTray(expected, ids), [displayTray]);
   const hideTray = useCallback((expected: Pick<PreparationScope, 'modelVersionId' | 'contentFingerprint' | 'selectionRevision'>) => displayTray(expected, null), [displayTray]);
-  const clear = useCallback(() => { try { runRef.current?.viewer?.clear(); } catch { /* A terminal viewer is already closed. */ } }, []);
+  // Result invalidation, Save and tool changes clear stale appearance only.
+  // Fitting the whole model belongs to the explicit Restore view action.
+  const clear = useCallback((options: { preserveCamera?: boolean } = {}) => {
+    try { runRef.current?.viewer?.clear('user', { preserveCamera: options.preserveCamera !== false }); }
+    catch { /* A terminal viewer is already closed. */ }
+  }, []);
   return { ...visible, preparationAccess: scope, preparationViewerGeneration: visible.viewerPhase === 'ready' ? runRef.current?.generation ?? -1 : -1, runProjectPreparation, refresh: () => { if (visible.viewerPhase === 'error') setRevision(value => value + 1); else void refresh(runRef.current, true); }, refreshState: () => refresh(runRef.current, true), reloadViewer: () => setRevision(value => value + 1), action, actionWithoutRefresh, matchAll, saveLocation, uploadSnapshot, calculate, submitCalculation, readProposal, readJob, reviewProposal, prepareModel, startLookup, readLookup, startPreview, readPreview,
     pickPoint: (): Promise<PickedPoint | null> => viewerAction(viewer => viewer.pickPoint()), cancelPicking: () => runRef.current?.viewer?.cancelPicking(),
     readObjects: (query: string, cursor = 0): Promise<ViewerModelObjectsPage | null> => viewerAction(viewer => viewer.readModelObjects(cursor, query)),

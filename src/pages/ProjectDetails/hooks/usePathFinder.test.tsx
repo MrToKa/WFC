@@ -45,6 +45,19 @@ beforeEach(() => {
 
 describe('fresh popup calculation submission without Viewer appearance changes', () => {
   const mount = () => renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container, automaticStatePolling: false }));
+  it('preserves the camera when clearing stale results or cancelling a tool, and fits only on explicit restore', async () => {
+    const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
+    act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+    act(() => view.result.current.clear());
+    expect(facts.clear).toHaveBeenLastCalledWith('user', { preserveCamera: true });
+    act(() => view.result.current.cancelOperation());
+    expect(facts.clear).toHaveBeenLastCalledWith('user', { preserveCamera: true });
+    expect(facts.clear).toHaveBeenCalledTimes(2);
+    expect(facts.instances).toBe(1); expect(facts.disposed).not.toHaveBeenCalled();
+    act(() => view.result.current.clear({ preserveCamera: false }));
+    expect(facts.clear).toHaveBeenLastCalledWith('user', { preserveCamera: false });
+    expect(pathFinderRequest).not.toHaveBeenCalled(); view.unmount();
+  });
   it.each([
     ['ACCESS_CHECK_FAILED', 'could not confirm model access'],
     ['SESSION_RENEW_FAILED', 'could not renew the model session'],

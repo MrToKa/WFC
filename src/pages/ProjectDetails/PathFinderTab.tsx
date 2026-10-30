@@ -108,7 +108,8 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
     const current = ++displayGeneration.current; setDisplayOwner(owner); pf.cancelPicking(); if (clear) pf.clear();
     return () => displayGeneration.current === current;
   };
-  const restoreView = () => { claimViewer('none'); pf.cancelOperation(); setNotice(null); };
+  const clearView = () => { claimViewer('none'); pf.cancelOperation(); setNotice(null); };
+  const restoreView = () => { clearView(); pf.clear({ preserveCamera: false }); };
   const [search, setSearch] = useState(''), [onlyProblems, setOnlyProblems] = useState(false), [selectedCableId, setSelectedCableId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>(emptyDraft), [notice, setNotice] = useState<string | null>(null), [localError, setLocalError] = useState<string | null>(null);
   const [endpointPending, setEndpointPending] = useState(false);
@@ -159,7 +160,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
   useEffect(() => { setWorkflowCalculationPreferences(null); }, [projectId, accountId, token, data?.activeModel.modelVersionId, data?.activeModel.selectionRevision, pf.preparationViewerGeneration]);
   const changeMode = (next: 'routes' | 'path' | 'lookup') => {
     if (next === mode) return;
-    restoreView(); setLocalError(null); setMode(next);
+    clearView(); setLocalError(null); setMode(next);
   };
   const artifact = data?.artifacts[0];
   const locationPoints = new Map((data?.locations ?? []).map(location => [location.id, location.calculationAvailability ?? noCalculationPoint]));
@@ -194,7 +195,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
         {mode === 'path' ? <Caption1>Connection gap: {data?.settings.connectionGap ?? 'Not set'} m; SECONDARY: {data?.settings.secondaryTrayLength ?? 'Not set'} m; connection reserve: {data?.settings.endConnectionLength ?? 'Not set'} m; increase: {data?.settings.additionalBendingPercent ?? 'Not set'}%. Change these in Project Details.</Caption1> : null}
         <div style={{ display: mode === 'routes' ? 'none' : 'block' }}>
         <div className={styles.actions}>
-          <Button disabled={pf.viewerPhase !== 'ready'} onClick={restoreView}>Clear</Button>
+          <Button disabled={pf.viewerPhase !== 'ready'} onClick={clearView}>Clear</Button>
           <Button disabled={pf.viewerPhase !== 'ready'} onClick={pf.zoom}>Zoom to path</Button>
           <Button disabled={pf.viewerPhase !== 'ready'} onClick={restoreView}>Restore view</Button>
         </div>
@@ -230,9 +231,9 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
         <PathFinderRoutes pf={{ ...pf, busy: pf.busy || locationCheckBusy }} active={mode === 'routes'} onBusyChange={setNetworkCheckBusy} onNetworkReady={setBarrierRefreshKey} />
         </div>
         <div id={`${panelId}-path-panel`} role="tabpanel" aria-labelledby={`${panelId}-path-tab`} className={extra.panel} style={{ display: mode === 'path' ? 'flex' : 'none' }}>
-        <Field label="SECONDARY trigger distance (m)" hint="Approaches longer than this distance use the SECONDARY length from Project Details."><Input aria-label="SECONDARY trigger distance in metres" value={secondaryDistance} onChange={(_, value) => { restoreView(); setSecondaryDistance(value.value); }} /></Field>
+        <Field label="SECONDARY trigger distance (m)" hint="Approaches longer than this distance use the SECONDARY length from Project Details."><Input aria-label="SECONDARY trigger distance in metres" value={secondaryDistance} onChange={(_, value) => { clearView(); setSecondaryDistance(value.value); }} /></Field>
         {!validSecondary ? <Body1 role="alert">Enter a SECONDARY trigger distance from 0 to 1,000,000 metres.</Body1> : null}
-        <label><input type="checkbox" checked={preferVertical} onChange={event => { restoreView(); setPreferVertical(event.target.checked); }} />Prefer vertical approach</label>
+        <label><input type="checkbox" checked={preferVertical} onChange={event => { clearView(); setPreferVertical(event.target.checked); }} />Prefer vertical approach</label>
         <PathFinderCableWorkspace projectId={projectId} loadedProjectId={loadedProjectId} accountId={accountId ?? null} token={token} isAdmin={isAdmin}
           pf={pf} active={mode === 'path'} selectedCableId={selectedCableId} refreshKey={cableWriteRefresh} preferences={backgroundPreferences} readPreferences={backgroundPreferences ?? readPreferences} onConfigureCalculation={configureCalculation}
           getCalculationPreferences={getCableCalculationPreferences} onCalculationPreferences={setWorkflowCalculationPreferences}
@@ -241,7 +242,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
           onEndpointForegroundContexts={endpointForegroundChanged}
           onSelect={row => { setSelectedCableId(row.cable.id); setWorkflowSelection(row);
             setWorkflowCalculationPreferences(previous => previous?.cableId === row.cable.id ? previous : null); }} />
-        <details><summary>Advanced standalone path</summary><PathFinderPreview {...cablePurposes} pf={pf} active={mode === 'path'} displayOwned={mode === 'path' && displayOwner === 'standalone'} claimViewer={() => claimViewer('standalone')} options={preferences} onInputChange={restoreView} onEndpointNamesChange={() => {}} /></details>
+        <details><summary>Advanced standalone path</summary><PathFinderPreview {...cablePurposes} pf={pf} active={mode === 'path'} displayOwned={mode === 'path' && displayOwner === 'standalone'} claimViewer={() => claimViewer('standalone')} options={preferences} onInputChange={clearView} onEndpointNamesChange={() => {}} /></details>
         <details><summary>Advanced project cables and shared locations</summary>
         <Field label="Search cables"><Input aria-label="Search Path Finder cables" value={search} onChange={(_, value) => setSearch(value.value)} /></Field>
         <label><input type="checkbox" checked={onlyProblems} onChange={event => setOnlyProblems(event.target.checked)} /> Without a calculation point</label>
@@ -288,7 +289,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
           onCalculationCommitted={calculationCommitted} />
         </div>
         <div id={`${panelId}-lookup-panel`} role="tabpanel" aria-labelledby={`${panelId}-lookup-tab`} className={extra.panel} style={{ display: mode === 'lookup' ? 'flex' : 'none' }}>
-          <PathFinderLookup pf={pf} selectedCable={selected} active={mode === 'lookup'} displayOwned={mode === 'lookup' && displayOwner === 'lookup'} claimViewer={() => claimViewer('lookup')} onInputChange={restoreView} onBusyChange={setLookupBusy} />
+          <PathFinderLookup pf={pf} selectedCable={selected} active={mode === 'lookup'} displayOwned={mode === 'lookup' && displayOwner === 'lookup'} claimViewer={() => claimViewer('lookup')} onInputChange={clearView} onBusyChange={setLookupBusy} />
         </div>
       </div>
       <div className={styles.host} style={{ position: 'relative' }}>

@@ -60,6 +60,10 @@ jobs:
         run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 shared/pathfinderCableEligibility.test.ts shared/pathfinderCableWorkflow.test.ts shared/pathfinderCableComparison.test.ts src/components/pathfinder/PathFinderCableWorkspace.test.tsx src/components/pathfinder/PathFinderCableRoutingPanel.test.tsx src/components/pathfinder/PathFinderNeedsRoutingList.test.tsx src/pages/ProjectDetails/PathFinderResults.test.tsx src/pages/ProjectDetails/PathFinderRevisionResults.test.tsx src/pages/ProjectDetails/PathFinderRecalculationPanel.test.tsx
       - name: Verify endpoint Save recovery without Web Locks on HTTP
         run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/hooks/endpointPendingLock.test.ts src/hooks/cableEndpointPendingStore.test.ts src/hooks/cableEndpointPairPendingStore.test.ts src/hooks/useCableEndpointSelection.test.tsx src/hooks/useCableEndpointPairSelection.test.tsx
+      - name: Verify Save display flow and camera preservation
+        run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/pages/ProjectDetails/PathFinderSaveDisplayFlow.test.tsx
+      - name: Verify camera preservation across Path Finder tabs
+        run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/pages/ProjectDetails/PathFinderTab.test.tsx -t camera
       - name: Verify Purpose-bound calculation and route reuse
         run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 server/pathfinder/dependencies.test.ts server/pathfinder/dependencyBatch.test.ts server/pathfinder/barrierWorkerProjection.test.ts server/pathfinder/proposalApplicability.test.ts server/pathfinder/sameEndpointCalculationReuse.test.ts server/pathfinder/workerReuse.test.ts server/pathfinder/worker-retained.test.ts server/pathfinder/worker-same-endpoint-reuse.test.ts
       - name: Verify optional MTO endpoint writes and automatic updates
