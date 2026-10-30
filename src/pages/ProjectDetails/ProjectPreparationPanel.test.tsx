@@ -5,7 +5,10 @@ import { useProjectPreparation } from './hooks/useProjectPreparation';
 import { preparationFixture } from '@/test/preparationFixtures';
 import type { usePathFinder } from './hooks/usePathFinder';
 import { fetchRoutingPurposePolicy } from '@/api/pathfinderPolicies';
+import { formatPreparationDiagnostics } from './preparationDiagnostics';
 
+const { showToast } = vi.hoisted(() => ({ showToast: vi.fn() }));
+vi.mock('@/context/ToastContext', () => ({ useToast: () => ({ showToast }) }));
 vi.mock('./hooks/useProjectPreparation', () => ({ useProjectPreparation: vi.fn() }));
 vi.mock('@/api/pathfinderPolicies', () => ({ fetchRoutingPurposePolicy: vi.fn() }));
 const fixture = preparationFixture();
@@ -34,6 +37,36 @@ beforeEach(() => {
 afterEach(async () => { await act(async () => {}); });
 
 describe('simple project tray preparation', () => {
+  it('shows actionable preparation diagnostics and all affected trays in an error Snackbar', () => {
+    const { state, pf, tray } = setup(); state.networkReady = false;
+    const message = formatPreparationDiagnostics([{ code: 'PURPOSE_UNCONFIGURED', projectTrayIds: [tray.projectTrayId], objectIds: [], message: 'Resolve this scope' }], state.context.trays)[0].message;
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    vi.mocked(useProjectPreparation).mockReturnValue({ ...state, error: message } as unknown as ReturnType<typeof useProjectPreparation>);
+    view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    expect(showToast).toHaveBeenCalledExactlyOnceWith({ title: 'Tray network needs attention', body: message, intent: 'error', timeout: 15000 });
+    expect(message).toContain('Project Details'); expect(message).toContain(tray.rawName);
+    view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    expect(showToast).toHaveBeenCalledOnce();
+    vi.mocked(useProjectPreparation).mockReturnValue({ ...state, busy: true } as unknown as ReturnType<typeof useProjectPreparation>);
+    view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    vi.mocked(useProjectPreparation).mockReturnValue({ ...state, error: message } as unknown as ReturnType<typeof useProjectPreparation>);
+    view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    expect(showToast).toHaveBeenCalledTimes(2);
+  });
+  it('does not toast background errors while Routes is inactive', () => {
+    const { state, pf } = setup();
+    vi.mocked(useProjectPreparation).mockReturnValue({ ...state, error: 'Select the physical tray and try again.' } as unknown as ReturnType<typeof useProjectPreparation>);
+    render(<ProjectPreparationPanel pf={pf} active={false} />);
+    expect(showToast).not.toHaveBeenCalled();
+  });
+  it('shows a selection failure with the tray name and required action in an error Snackbar', async () => {
+    const { pf, tray } = setup();
+    render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` }));
+    await waitFor(() => expect(showToast).toHaveBeenCalledWith(expect.objectContaining({
+      body: `${tray.rawName}: Select the matching tray in the model first.`, intent: 'error',
+    })));
+  });
   it('explains missing permissions even when every tray has assigned objects', () => {
     const { state, pf, tray } = setup(); state.networkReady = false; tray.policyState = 'unconfigured';
     render(<ProjectPreparationPanel pf={pf} active />);
