@@ -478,6 +478,8 @@ describe('PathFinder protected Viewer capabilities', () => {
     });
     await expect(s.c.captureBarriers(input)).resolves.toMatchObject({ capture: { captureId: input.captureId, observation: { verification: 'unverified' } }, frameObservation: { loadId: s.identity.loadId } });
     expect(s.send.mock.calls.filter(call => call[0].type === 'READ_BARRIER_CAPTURE')).toHaveLength(2);
+    expect(s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE').map(call => call[0].payload))
+      .toEqual([{ reason: 'selection', preserveCamera: true }]);
   });
   it.each(['BARRIER_CAPTURE_FRAGMENT_LIMIT', 'BARRIER_CAPTURE_GEOMETRY_NOT_READY', 'BARRIER_CAPTURE_MODEL_CHANGED'])('preserves the exact barrier failure and only unloads a changed model: %s', async code => {
     const s = await loaded(), input = barrierRequest();
@@ -486,8 +488,25 @@ describe('PathFinder protected Viewer capabilities', () => {
       void Promise.resolve().then(() => s.message('ERROR', { code, message: 'Barrier capture failed.', retryable: false, operation: value.type }, value.requestId, s.identity));
     });
     await expect(s.c.captureBarriers(input)).rejects.toMatchObject({ code });
+    expect(s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE').map(call => call[0].payload))
+      .toEqual([{ reason: 'selection', preserveCamera: true }]);
     if (code === 'BARRIER_CAPTURE_MODEL_CHANGED') expect(s.c.getLoadSnapshot()).toBeNull();
     else expect(s.c.getLoadSnapshot()).toMatchObject({ ready: true, modelVersionId: versionId, loadId: s.identity.loadId });
+  });
+  it('cancels barrier capture without fitting the whole model or unloading it', async () => {
+    const s = await loaded(), input = barrierRequest(), controller = new AbortController();
+    s.send.mockImplementation(value => {
+      if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
+      if (value.type === 'CANCEL_REQUEST') s.message('REQUEST_CANCELLED', { targetRequestId: value.payload.targetRequestId, outcome: 'cancelled' }, value.requestId, s.identity);
+    });
+    const capture = s.c.captureBarriers(input, { signal: controller.signal }), rejected = expect(capture).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'START_BARRIER_CAPTURE')).toBe(true));
+    const command = s.send.mock.calls.find(call => call[0].type === 'START_BARRIER_CAPTURE')![0];
+    controller.abort(); await rejected;
+    expect(s.send.mock.calls.some(call => call[0].type === 'CANCEL_REQUEST' && call[0].payload.targetRequestId === command.requestId)).toBe(true);
+    expect(s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE').map(call => call[0].payload))
+      .toEqual([{ reason: 'selection', preserveCamera: true }]);
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
   });
   it('superseded barrier cleanup cannot cancel a newer capture even when the caller reuses its capture UUID', async () => {
     const s = await loaded(), input = barrierRequest(), events = barrierStream(input, s.identity.loadId);
@@ -1117,7 +1136,11 @@ describe('PathFinder protected Viewer capabilities', () => {
       if (value.type === 'SET_PATH_TRANSPARENCY') s.message('PATH_TRANSPARENCY_UPDATED', value.payload, value.requestId, s.identity);
     });
     expect((await s.c.readSelection()).objects).toEqual([]);
+    expect(s.send.mock.calls.some(call => call[0].type === 'CLEAR_ROUTE')).toBe(false);
     const routeRequestId = await s.c.showComputedPath({ pathId: generateId(), points: [[0, 0, 0]], objectIds: [] });
+    const cleared = s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE').length;
+    expect((await s.c.readSelection()).objects).toEqual([]);
+    expect(s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE')).toHaveLength(cleared);
     await s.c.setPathTransparency(40);
     expect(s.send.mock.calls.find(call => call[0].type === 'SET_PATH_TRANSPARENCY')![0].payload).toEqual({ routeRequestId, percent: 40 });
     await expect(s.c.setPathTransparency(101)).rejects.toThrow('integer');
