@@ -1,7 +1,6 @@
 import type { z } from 'zod';
 import { modelLocationMatchCandidateSchema } from '../../shared/pathfinderModelLocationMatch.js';
 import { endpointModelMatchObjectGroupSchema, normalizeEndpointLocation } from '../../shared/pathfinderEndpointBindings.js';
-import { PathFinderError } from './errors.js';
 
 type Candidate = z.infer<typeof modelLocationMatchCandidateSchema>;
 export type ModelLocationMatchCandidateGroup = Pick<Candidate, 'objectId' | 'name' | 'bounds' | 'bottomCentre'> & {
@@ -20,8 +19,6 @@ export function groupModelLocationMatchCandidates(candidates: Candidate[], logic
     const members = groups.get(groupKey) ?? []; members.push(candidate); groups.set(groupKey, members);
   }
   return [...groups.values()].map(members => {
-    if (members.length > 512) throw new PathFinderError('MODEL_LOCATION_MATCH_GROUP_LIMIT', 413,
-      'A source item has more than 512 matching model presentations. Assign this location manually.');
     members.sort((left, right) => left.objectId - right.objectId);
     const representative = members[0];
     if (members.length === 1) return { objectId: representative.objectId, name: representative.name,

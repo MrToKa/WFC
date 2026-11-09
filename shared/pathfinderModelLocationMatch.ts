@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { endpointCurrentScopeSchema, endpointLocationNameSchema, endpointModelMatchBoundsSchema, endpointModelMatchObjectIdentitySchema, endpointPointSchema, normalizeEndpointLocation } from './pathfinderEndpointBindings.js';
+import { ENDPOINT_MODEL_MATCH_OBJECT_LIMIT, endpointCurrentScopeSchema, endpointLocationNameSchema, endpointModelMatchBoundsSchema, endpointModelMatchObjectIdentitySchema, endpointPointSchema, normalizeEndpointLocation } from './pathfinderEndpointBindings.js';
 import { endpointVisibilitySchema } from './pathfinderPreparation.js';
 import { canonicalPurposeJson, policyHashSchema as hash, policyRevisionSchema as revision, policyUuidSchema as uuid } from './pathfinderPurposePolicy.js';
 
-export const MODEL_LOCATION_MATCH_LIMITS = Object.freeze({ names: 4096, pageNames: 128, candidates: 4096, bodyBytes: 1024 * 1024, responseBytes: 1024 * 1024 });
+export const MODEL_LOCATION_MATCH_LIMITS = Object.freeze({ names: 4096, pageNames: 128, candidates: ENDPOINT_MODEL_MATCH_OBJECT_LIMIT, bodyBytes: 1024 * 1024, responseBytes: 1024 * 1024 });
 const uniqueNames = (v: string[]) => new Set(v.map(normalizeEndpointLocation)).size === v.length;
 const matchName = endpointLocationNameSchema.refine(v => v.length <= 256);
 const names = z.array(matchName).max(MODEL_LOCATION_MATCH_LIMITS.names).refine(uniqueNames);
@@ -38,8 +38,7 @@ export const modelLocationMatchResultSchema = z.object({
   locationId: uuid.nullable(), bindingId: uuid.nullable(), reasonCode: z.string().regex(/^[A-Z][A-Z0-9_]{0,95}$/).nullable(),
 }).strict().refine(v => v.status === 'assigned' ? v.locationId !== null && v.bindingId !== null && v.candidateObjectIds.length === 1 && v.candidateObjectIds[0] > 0 && v.reasonCode === null
   : v.status === 'preserved' ? v.locationId !== null && v.reasonCode !== null
-    : v.reasonCode !== null && (v.status === 'missing' ? v.candidateObjectIds.length === 0 : v.status === 'ambiguous' ? v.candidateObjectIds.length > 1
-      : v.reasonCode === 'MODEL_LOCATION_MATCH_GROUP_LIMIT' ? v.candidateObjectIds.length > 512 : v.candidateObjectIds.length === 1));
+    : v.reasonCode !== null && (v.status === 'missing' ? v.candidateObjectIds.length === 0 : v.status === 'ambiguous' ? v.candidateObjectIds.length > 1 : v.candidateObjectIds.length === 1));
 export const modelLocationMatchReceiptSchema = z.object({
   schemaVersion: z.literal('wfc.pf.model-location-match-receipt.v1'), projectId: uuid, idempotencyKey: uuid, commandSha256: hash,
   registryRevision: revision, results: z.array(modelLocationMatchResultSchema).max(MODEL_LOCATION_MATCH_LIMITS.pageNames)

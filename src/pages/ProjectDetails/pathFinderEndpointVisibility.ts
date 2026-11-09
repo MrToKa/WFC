@@ -5,6 +5,7 @@ import { fetchGeometryObjectRevision } from '@/api/pathfinderGeometryTrace';
 import { fetchCableEndpointContext, type CableEndpointContext } from '@/api/pathfinderCableEndpoints';
 import { canonicalPurposeJson } from '../../../shared/pathfinderPurposePolicy';
 import { cableEndpointConfirmedDisplaySelectionSchema } from '../../../shared/pathfinderCableEndpoints';
+import { MAX_PATH_OBJECT_IDS } from '../../../viewer-runtime/protocol.mjs';
 
 export const ENDPOINT_VISIBILITY_DEADLINE_MS = 10_000;
 /** Live, already verified popup reads. This carries no Save or review authority. */
@@ -23,9 +24,9 @@ const dbId = (value: string): number | null => {
 const samePoint = (left: readonly number[], right: readonly number[]) => left.length === 3 && right.length === 3 && left.every((value, index) => value === right[index]);
 const uniqueIds = (values: readonly string[]) => [...new Set(values.filter(value => dbId(value) !== null))];
 
-/** The existing protected bridge retains its exact 512-object budget. Never truncate a route to add equipment. */
+/** Keep the full route and both logical endpoint groups within the protected display budget. */
 export function computedPathObjectIds(routeIds: readonly string[], endpointIds: readonly string[]): number[] | null {
-  const ids = uniqueIds([...routeIds, ...endpointIds]); return ids.length > 512 ? null : ids.map(value => dbId(value)!);
+  const ids = uniqueIds([...routeIds, ...endpointIds]); return ids.length > MAX_PATH_OBJECT_IDS ? null : ids.map(value => dbId(value)!);
 }
 
 function legacyEndpointObjectId(state: PathFinderState, locationId: string, bindingRevision: string, point: readonly number[]): string | null {

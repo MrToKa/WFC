@@ -6,7 +6,7 @@ import { captureSelectedBarriers } from './barrier-capture.mjs';
 import { createBarrierMultipartRuntime } from './barrier-multipart-runtime.mjs';
 import { barrierCaptureErrorMessage } from './barrier-capture-errors.mjs';
 import { createModelCaptureInputStage, isStagedModelCaptureStart, isModelCaptureInputAppend, CAPTURE_INPUT_LIMITS } from './capture-input.mjs';
-import { SDK_VERSION } from './protocol.mjs';
+import { SDK_VERSION, MAX_LOCATION_OBJECT_IDS } from './protocol.mjs';
 import { parseRoutingBindings } from './routing-bindings.mjs';
 
 const interrupted = () => new DOMException('Operation cancelled.', 'AbortError');
@@ -333,7 +333,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
         async showLocation(sdkObjectId, operationSignal, beforeCommit = async () => {}, sdkObjectIds) {
           if (!positiveObjectId(sdkObjectId)) throw safeError('LOCATION_UNAVAILABLE');
           const ids = sdkObjectIds === undefined ? [sdkObjectId] : Array.isArray(sdkObjectIds) ? [...sdkObjectIds] : [];
-          if (!ids.length || ids.length > 512 || ids[0] !== sdkObjectId || !ids.every((id, at) => positiveObjectId(id) && (at === 0 || id > ids[at - 1]))) throw safeError('LOCATION_UNAVAILABLE');
+          if (!ids.length || ids.length > MAX_LOCATION_OBJECT_IDS || ids[0] !== sdkObjectId || !ids.every((id, at) => positiveObjectId(id) && (at === 0 || id > ids[at - 1]))) throw safeError('LOCATION_UNAVAILABLE');
           const displaySignal = AbortSignal.any([signal, operationSignal].filter(Boolean));
           const currentModel = () => {
             active(displaySignal);

@@ -1,4 +1,4 @@
-import { isCanonicalPoint } from './protocol.mjs';
+import { isCanonicalPoint, MAX_PATH_OBJECT_IDS } from './protocol.mjs';
 import { PREPARATION_VIEWER_LIMITS, PREPARATION_MATCHING_POLICY, validatePreparationDiscoveryRequest, validatePreparationDiscoveryPage } from './preparation-input.mjs';
 import { modelEquipmentMatchKeys, humanScalarPropertyValues, equipmentObjectIdentity } from './equipment-names.mjs';
 import { captureDisplayVisibility, sameDisplayVisibility } from './display-visibility.mjs';
@@ -9,7 +9,7 @@ const positiveId = value => Number.isSafeInteger(value) && value > 0 && value <=
 const pause = () => new Promise(resolve => setTimeout(resolve, 0));
 const displayPoint = value => Array.isArray(value) && value.length === 3 && value.every(item => Number.isFinite(item) && Math.abs(item) <= 1e12);
 const TUBE_SIDES = 8, SEGMENTS_PER_MESH = 2000, TUBE_VERTICES = TUBE_SIDES * 2 + 2;
-const APPEARANCE_LIMITS = Object.freeze({ fragments: 1000000, materials: 4096, foregroundFragments: 8192 });
+const APPEARANCE_LIMITS = Object.freeze({ fragments: 1000000, materials: 4096, foregroundFragments: 16384 });
 // Per active model, including a conservative charge for Map/array entries and
 // UTF-16 strings. The SDK's complete-property proof is retained even when no
 // requested name matches; a refused/aborted build is never a reusable index.
@@ -204,7 +204,7 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
     active();
     const coordinates = modelCoordinates(model);
     const local = points.map(point => coordinates.toDisplay(point));
-    if (local.length < 1 || local.length > 20000 || !Array.isArray(objectIds) || objectIds.length > 512 || !objectIds.every(positiveId)) throw fail('PATH_INVALID');
+    if (local.length < 1 || local.length > 20000 || !Array.isArray(objectIds) || objectIds.length > MAX_PATH_OBJECT_IDS || !objectIds.every(positiveId)) throw fail('PATH_INVALID');
     if (!objectIds.length && (typeof model.visibilityManager?.setAllVisibility !== 'function' || typeof model.visibilityManager?.getVisibility !== 'function' || typeof model.visibilityManager?.getDefaultVisibility !== 'function' || typeof model.visibilityManager?.setVisibility !== 'function')) throw fail('SDK_UNSUPPORTED');
     const tubes = createExactPathBatches(local, 0.02 / coordinates.scale);
     clear();

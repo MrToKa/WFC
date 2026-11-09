@@ -183,6 +183,18 @@ test('grouped location reveals and fits all members only after whole-group membe
   assert.deepEqual(calls,[]);
 });
 
+test('location Show accepts every member of a complete4096-object match scope without truncation',async t=>{
+  const f=sdkFixture(),previous=globalThis.window;globalThis.window=f.window;t.after(()=>{f.adapter.dispose();globalThis.window=previous;});
+  const ids=Array.from({length:4096},(_,at)=>at+2);
+  f.tree.getNodeIndex=id=>id>=1&&id<=4097?id-1:undefined;
+  await f.adapter.initialize();const handle=await f.adapter.load({modelUrl:'http://localhost:18085/model.svf',descriptor:loadedDescriptor()});
+  const calls=[],viewer=f.viewers[0];viewer.show=members=>calls.push(['show',[...members]]);viewer.fitToView=members=>calls.push(['fit',[...members]]);
+  await handle.showLocation(2,undefined,async()=>{assert.equal(calls.length,0);},ids);
+  assert.deepEqual(calls,[['show',ids],['fit',ids]]);calls.length=0;
+  await assert.rejects(handle.showLocation(2,undefined,undefined,ids.concat(4098)),{code:'LOCATION_UNAVAILABLE'});
+  assert.deepEqual(calls,[]);
+});
+
 test('tray display ghosts the background, fits every root and restores the previous view on Clear', async t => {
   const f = sdkFixture({ trayVisibility: true }), previous = globalThis.window; globalThis.window = f.window;
   t.after(() => { f.adapter.dispose(); globalThis.window = previous; });

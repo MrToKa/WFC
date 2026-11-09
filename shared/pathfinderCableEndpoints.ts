@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { isPathFinderCableEligible } from './pathfinderCableEligibility.js';
 import { canonicalPurposeJson, policyHashSchema, policyUuidSchema, policyRevisionSchema } from './pathfinderPurposePolicy.js';
-import { endpointBindingSchema, endpointBindingReceiptSchema, endpointCurrentScopeSchema, endpointLocationSchema,
+import { ENDPOINT_MODEL_MATCH_OBJECT_LIMIT, endpointBindingSchema, endpointBindingReceiptSchema, endpointCurrentScopeSchema, endpointLocationSchema,
   endpointLocationNameSchema, endpointObjectRefSchema, endpointPointSchema } from './pathfinderEndpointBindings.js';
 import { geometryObjectSummarySchema } from './pathfinderGeometryTrace.js';
 import { recalculationReasonSchema } from './pathfinderRecalculation.js';
@@ -26,7 +26,7 @@ export const cableEndpointConfirmedSelectionSchema = cableEndpointAutomaticSelec
 /** A display hint is not retained geometry, an attachment or automatic matching authority. */
 export const cableEndpointConfirmedDisplaySelectionSchema = z.object({ source: z.literal('confirmed-display-only'), mode: z.literal('fixed-world'),
   sdkObjectId: cableEndpointSdkObjectIdSchema, name: cableEndpointDisplayObjectNameSchema.optional(), pointProjectMetres: endpointPointSchema,
-  sdkObjectIds: z.array(cableEndpointSdkObjectIdSchema).min(2).max(512).refine(ids => ids.every((id, i) => i === 0 || ids[i - 1] < id)).optional(),
+  sdkObjectIds: z.array(cableEndpointSdkObjectIdSchema).min(2).max(ENDPOINT_MODEL_MATCH_OBJECT_LIMIT).refine(ids => ids.every((id, i) => i === 0 || ids[i - 1] < id)).optional(),
   current: endpointCurrentScopeSchema, bindingId: policyUuidSchema, bindingContentSha256: policyHashSchema, commandSha256: policyHashSchema }).strict()
   .refine(value => !value.sdkObjectIds || value.sdkObjectIds[0] === value.sdkObjectId);
 export const cableEndpointContextSchema = z.object({ schemaVersion: z.literal('wfc.pf.cable-endpoint-context.v1'),

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { webcrypto } from 'node:crypto';
 import { createRuntimeBridge } from '../bridge.mjs';
-import { CHANNEL, parseRouting } from '../protocol.mjs';
+import { CHANNEL, MAX_PATH_OBJECT_IDS, parseRouting } from '../protocol.mjs';
 import { planModelCaptureInput } from '../capture-input.mjs';
 import { BARRIER_CAPTURE_ERROR_CODES, BARRIER_CAPTURE_ERROR_MESSAGES } from '../barrier-capture-errors.mjs';
 import { BARRIER_MULTIPART_PRODUCER_PROFILE } from '../barrier-multipart-protocol.mjs';
@@ -187,8 +187,9 @@ test('location display is protected and acknowledges the exact target without re
 test('location display passes every group member to the adapter and echoes its exact bounded request',async()=>{
   let target;
   const f=fixture({showLocation:async(id,_signal,beforeCommit,ids)=>{await beforeCommit();target={id,ids};}});
-  await f.loaded();const command=f.send('SHOW_LOCATION',{sdkObjectId:23,sdkObjectIds:[23,24,25]});await turn();
-  assert.deepEqual(target,{id:23,ids:[23,24,25]});
+  const ids=Array.from({length:4096},(_,at)=>at+23);
+  await f.loaded();const command=f.send('SHOW_LOCATION',{sdkObjectId:23,sdkObjectIds:ids});await turn();
+  assert.deepEqual(target,{id:23,ids});
   assert.deepEqual(f.messages('LOCATION_SHOWN').at(-1),{...command,type:'LOCATION_SHOWN'});
   assert.equal(f.messages('ERROR').length,0);f.bridge.dispose();
 });
@@ -598,6 +599,16 @@ test('HELLO uses exact target origin, forged origin/source/identity/direction/re
   const command = f.send('INIT', { locale: 'bg', expectedSdkVersion: '7.130.0' }); await turn();
   f.send(command.type, command.payload, command); await turn();
   assert.equal(f.messages('RUNTIME_READY').length, 1); f.bridge.dispose();
+});
+
+test('computed path transports a complete8704-object foreground above the ordinary envelope ceiling',async()=>{
+  const f=fixture();await f.loaded();const pathId=uuid(9801),objectIds=Array.from({length:MAX_PATH_OBJECT_IDS},(_,at)=>2147483647-at);
+  f.send('BEGIN_COMPUTED_PATH',{pathId,pointCount:1,objectIds});await turn();
+  f.send('APPEND_COMPUTED_PATH',{pathId,offset:0,points:[[1,2,3]]});await turn();
+  f.send('COMMIT_COMPUTED_PATH',{pathId});await turn();
+  assert.deepEqual(f.facts.computedPath,{objectIds,points:[[1,2,3]]});
+  assert.equal(f.messages('COMPUTED_PATH_UPDATED').at(-1).payload.phase,'displayed');
+  assert.equal(f.messages('ERROR').length,0);f.bridge.dispose();
 });
 
 test('computed path requires ordered complete bounded chunks and current cookie-bound admin permission', async () => {

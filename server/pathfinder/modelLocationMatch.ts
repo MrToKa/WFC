@@ -93,17 +93,9 @@ export function createModelLocationMatchRepository(pool: Pool) {
           const preserve = Boolean(saved?.hasLegacy || saved?.bindingId && (saved.binding?.derivation !== ENDPOINT_MODEL_MATCH_DERIVATION
             || saved.binding.status === 'confirmed' && saved.binding.locationRevision === saved.revision
               && canonicalPurposeJson(saved.binding.autoMatchEvidence?.current) === canonicalPurposeJson(snapshot.current)));
-          const rawCandidates = command.scan.candidates.filter(v => v.matchedNames.some(n => normalizeEndpointLocation(n) === normalizeEndpointLocation(name)));
-          let candidates: ReturnType<typeof groupModelLocationMatchCandidates>;
-          try { candidates = preserve ? rawCandidates : groupModelLocationMatchCandidates(rawCandidates, name); }
-          catch (error) {
-            if (!(error instanceof PathFinderError) || error.code !== 'MODEL_LOCATION_MATCH_GROUP_LIMIT') throw error;
-            // Keep the complete raw observation, but no assignable partial group.
-            // This location needs manual attention; unrelated names can finish.
-            results.push({ name, candidateObjectIds: rawCandidates.map(v => v.objectId).sort((a, b) => a - b),
-              locationId: saved?.id ?? null, bindingId: saved?.bindingId ?? null, status: 'unavailable', reasonCode: error.code });
-            continue;
-          }
+          const candidates: ReturnType<typeof groupModelLocationMatchCandidates> = preserve
+            ? command.scan.candidates.filter(v => v.matchedNames.some(n => normalizeEndpointLocation(n) === normalizeEndpointLocation(name)))
+            : groupModelLocationMatchCandidates(command.scan.candidates, name);
           const candidateObjectIds = candidates.map(v => v.objectId).sort((a, b) => a - b);
           const base = { name, candidateObjectIds, locationId: saved?.id ?? null, bindingId: saved?.bindingId ?? null };
           if (preserve) {

@@ -6,6 +6,8 @@ export const ENDPOINT_ATTACHMENT_POLICY = 'wfc.pf.endpoint-attachment-policy.v1'
 export const ENDPOINT_MATCHING_POLICY = 'nfc-trim-uppercase-v1' as const;
 export const ENDPOINT_ANCHOR_RULE = 'equipment-bottom-aabb.v1' as const;
 export const ENDPOINT_MODEL_MATCH_DERIVATION = 'matched-model-bottom-aabb.v1' as const;
+// A source item may contain every candidate in the bounded matching scan.
+export const ENDPOINT_MODEL_MATCH_OBJECT_LIMIT = 4096;
 const uuid = policyUuidSchema, revision = policyRevisionSchema, hash = policyHashSchema;
 const wellFormed = (value: string) => [...value].every(c => c.length !== 1 || c.charCodeAt(0) < 0xd800 || c.charCodeAt(0) > 0xdfff);
 const text = (maximum: number) => z.string().max(maximum).refine(v => wellFormed(v) && !/[\u0000-\u001f\u007f-\u009f]/u.test(v));
@@ -31,7 +33,7 @@ export const endpointModelMatchObjectIdentitySchema = z.object({
   sourceFile: nonempty(1024).refine(v => v === v.normalize('NFC').trim().replaceAll('\\', '/').toLowerCase()),
 }).strict();
 export const endpointModelMatchObjectGroupSchema = endpointModelMatchObjectIdentitySchema.extend({
-  objectIds: z.array(z.number().int().positive().max(2147483647)).min(2).max(512)
+  objectIds: z.array(z.number().int().positive().max(2147483647)).min(2).max(ENDPOINT_MODEL_MATCH_OBJECT_LIMIT)
     .refine(v => v.every((id, i) => i === 0 || v[i - 1] < id)),
 }).strict();
 /** An explicitly requested model-name batch observes approximate fixed points.

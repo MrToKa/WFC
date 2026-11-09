@@ -33,8 +33,10 @@ describe('source item endpoint candidate groups', () => {
     expect(groupModelLocationMatchCandidates([candidate(0, { objectIdentity: identity }), candidate(1, { objectIdentity: identity }),
       candidate(2, { objectIdentity: identity, matchedNames: ['Other'] })], '15-FT-4018').map(value => value.objectId)).toEqual([0, 1]);
   });
-  it('refuses an oversized group instead of discarding members into a false unique match', () => {
-    expect(() => groupModelLocationMatchCandidates(Array.from({ length: 513 }, (_, i) => candidate(i + 1, { objectIdentity: identity })), '15-FT-4018'))
-      .toThrow(expect.objectContaining({ code: 'MODEL_LOCATION_MATCH_GROUP_LIMIT', status: 413 }));
+  it('groups a source item containing the entire bounded raw scan without a per-item parts cap', () => {
+    const groups = groupModelLocationMatchCandidates(Array.from({ length: 4096 }, (_, i) => candidate(i + 1, { objectIdentity: identity })), '15-FT-4018');
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({ objectId: 1, bounds: { minimum: [1, 2, 3], maximum: [3, 4, 5] }, bottomCentre: [2, 3, 3] });
+    expect(groups[0].objectGroup?.objectIds).toEqual(Array.from({ length: 4096 }, (_, i) => i + 1));
   });
 });

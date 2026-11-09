@@ -95,7 +95,7 @@ jobs:
       - name: Verify endpoint Save recovery without Web Locks on HTTP
         run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/hooks/endpointPendingLock.test.ts src/hooks/cableEndpointPendingStore.test.ts src/hooks/cableEndpointPairPendingStore.test.ts src/hooks/useCableEndpointSelection.test.tsx src/hooks/useCableEndpointPairSelection.test.tsx
       - name: Verify Save display flow and camera preservation
-        run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/pages/ProjectDetails/PathFinderSaveDisplayFlow.test.tsx
+        run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/pages/ProjectDetails/PathFinderSaveDisplayFlow.test.tsx src/pages/ProjectDetails/PathFinderPreview.test.tsx
       - name: Verify camera preservation across Path Finder tabs
         run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/pages/ProjectDetails/PathFinderTab.test.tsx -t camera
       - name: Verify Purpose-bound calculation and route reuse

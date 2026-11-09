@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { modelLocationMatchAssignSchema, modelLocationMatchResultSchema } from './pathfinderModelLocationMatch.js';
+import { modelLocationMatchAssignSchema } from './pathfinderModelLocationMatch.js';
 import { endpointBindingSchema, endpointBindingWriteSchema, endpointModelMatchObjectGroupSchema, endpointModelMatchObjectIdentitySchema } from './pathfinderEndpointBindings.js';
 import { cableEndpointConfirmedDisplaySelectionSchema } from './pathfinderCableEndpoints.js';
 import { modelLocationMatchFixture } from '../server/pathfinder/modelLocationMatchFixtures.js';
@@ -26,15 +26,7 @@ describe('strict model name observations', () => {
     legacy.scan.candidates[0].objectIdentity = objectIdentity;
     expect(modelLocationMatchAssignSchema.parse(legacy)).toEqual(legacy);
   });
-  it('retains all oversized raw IDs only for a location requiring manual attention', () => {
-    const result = { name: '15-FT-4018', status: 'unavailable', candidateObjectIds: Array.from({ length: 513 }, (_, i) => i + 1),
-      locationId: null, bindingId: null, reasonCode: 'MODEL_LOCATION_MATCH_GROUP_LIMIT' };
-    expect(modelLocationMatchResultSchema.parse(result)).toEqual(result);
-    expect(modelLocationMatchResultSchema.safeParse({ ...result, candidateObjectIds: [1, 2] }).success).toBe(false);
-    expect(modelLocationMatchResultSchema.safeParse({ ...result, reasonCode: 'MODEL_LOCATION_MATCH_BOUNDS_UNAVAILABLE' }).success).toBe(false);
-    expect(modelLocationMatchResultSchema.safeParse({ ...result, status: 'assigned' }).success).toBe(false);
-  });
-  it.each([[1], [2, 1], [1, 1], [0, 1], Array.from({ length: 513 }, (_, i) => i + 1)])('rejects invalid grouped member IDs %j', objectIds => {
+  it.each([[1], [2, 1], [1, 1], [0, 1], Array.from({ length: 4097 }, (_, i) => i + 1)])('rejects invalid grouped member IDs %j', objectIds => {
     expect(endpointModelMatchObjectGroupSchema.safeParse({ ...objectIdentity, objectIds }).success).toBe(false);
   });
   it.each(['incomplete', 'omitted', 'count', 'duplicate', 'outside-page', 'point', 'half-bounds', 'zero-bounds', 'long-name', 'too-many-names'] as const)('refuses %s scans before a match write', async kind => {
@@ -76,5 +68,9 @@ describe('strict model name observations', () => {
     expect(cableEndpointConfirmedDisplaySelectionSchema.safeParse(display).success).toBe(true);
     for (const sdkObjectIds of [[100, 1], [2, 100], [1, 1]])
       expect(cableEndpointConfirmedDisplaySelectionSchema.safeParse({ ...display, sdkObjectIds }).success).toBe(false);
+    const sdkObjectIds = Array.from({ length: 4096 }, (_, i) => i + 1);
+    expect(endpointModelMatchObjectGroupSchema.safeParse({ ...objectIdentity, objectIds: sdkObjectIds }).success).toBe(true);
+    expect(cableEndpointConfirmedDisplaySelectionSchema.safeParse({ ...display, sdkObjectIds }).success).toBe(true);
+    expect(cableEndpointConfirmedDisplaySelectionSchema.safeParse({ ...display, sdkObjectIds: [...sdkObjectIds, 4097] }).success).toBe(false);
   });
 });

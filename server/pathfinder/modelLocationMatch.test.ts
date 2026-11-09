@@ -49,7 +49,7 @@ describe('standalone current-model From/To matching', () => {
     expect(result.results.filter(r => ['Alias', 'EQUIPMENT'].includes(r.name)).every(r => r.status === 'preserved')).toBe(true);
     expect(f.state.heads.get(f.locationId)).toBe(old.binding.id); expect(f.state.bindings.get(old.binding.id)?.pointProjectMetres).toEqual([9, 8, 7]);
   });
-  it('preserves a manual binding even when its newly discovered source group is oversized', async () => {
+  it('preserves a manual binding even when its newly discovered source group has more than 512 parts', async () => {
     const f = await groupedFixture(), manual = createEndpointBindingRepository(f.pool);
     const result = await manual.confirm(f.projectId, f.who, f.locationId, {
       schemaVersion: 'wfc.pf.endpoint-binding-write.v1', expectedRegistryRevision: f.state.registry, expectedLocationRevision: null, expectedHeadId: null,
@@ -102,26 +102,29 @@ describe('standalone current-model From/To matching', () => {
     expect((await f.repo.assign(f.projectId, f.who, f.input)).results[0]).toMatchObject({ status: 'unavailable', candidateObjectIds: [1],
       reasonCode: 'MODEL_LOCATION_MATCH_BOUNDS_UNAVAILABLE' });
   });
-  it.each([0, 1, 2])('keeps every oversized group member for attention while other names finish (name %i)', async nameIndex => {
+  it.each([0, 1, 2])('assigns and displays every part of a 513-member source item alongside other names (name %i)', async nameIndex => {
     const f = await groupedFixture(), first = f.input.scan.candidates[0];
     const name = f.input.names[nameIndex], objectIds = Array.from({ length: 513 }, (_, i) => i + 1000);
     f.input.scan.candidates = [...f.command().scan.candidates.filter(candidate => !candidate.matchedNames.includes(name)),
       ...objectIds.map(objectId => ({ ...first, objectId, matchedNames: [name] }))];
     const receipt = await f.repo.assign(f.projectId, f.who, f.input);
-    expect(receipt.results[nameIndex]).toMatchObject({ name, status: 'unavailable', candidateObjectIds: objectIds,
-      reasonCode: 'MODEL_LOCATION_MATCH_GROUP_LIMIT', locationId: null, bindingId: null });
-    expect(receipt.results.filter((_, i) => i !== nameIndex).every(result => result.status === 'assigned')).toBe(true);
-    expect(f.state.bindings.size).toBe(2); expect(f.state.commands.size).toBe(1);
+    expect(receipt.results[nameIndex]).toMatchObject({ name, status: 'assigned', candidateObjectIds: [1000], reasonCode: null });
+    expect(receipt.results.every(result => result.status === 'assigned')).toBe(true);
+    expect(f.state.bindings.size).toBe(3); expect(f.state.commands.size).toBe(1);
+    const locationId = f.resolved(name), location = { ...f.state.locations.get(locationId)!, aliases: [] }, head = f.state.bindings.get(f.state.heads.get(locationId)!)!;
+    expect(head.autoMatchEvidence?.objectGroup).toEqual({ ...sourceIdentity, objectIds });
+    expect(await readCableEndpointDisplay(f.client as never, { projectId: f.projectId, current: f.context.current, location, head }, () => undefined))
+      .toMatchObject({ sdkObjectId: 1000, sdkObjectIds: objectIds });
     const saved = f.state.commands.get(f.who.userId + ':' + f.input.idempotencyKey)!;
     expect((saved.request as { command: { scan: { candidates: unknown[] } } }).command.scan.candidates).toHaveLength(515);
     expect(await f.repo.assign(f.projectId, f.who, f.input)).toEqual({ ...receipt, duplicate: true });
   });
-  it('does not recover display from oversized raw group evidence', async () => {
+  it('does not recover display from evidence exceeding the whole-operation raw scan limit', async () => {
     const f = await groupedFixture(); await f.repo.assign(f.projectId, f.who, f.input);
     const locationId = f.resolved(f.name), location = { ...f.state.locations.get(locationId)!, aliases: [] }, head = structuredClone(f.state.bindings.get(f.state.heads.get(locationId)!)!);
     const saved = f.state.commands.get(f.who.userId + ':' + f.input.idempotencyKey)!;
     const request = saved.request as { command: typeof f.input }, first = request.command.scan.candidates[0];
-    request.command.scan.candidates.push(...Array.from({ length: 510 }, (_, i) => ({ ...first, objectId: i + 2000 })));
+    request.command.scan.candidates.push(...Array.from({ length: 4092 }, (_, i) => ({ ...first, objectId: i + 2000 })));
     saved.request_sha256 = endpointBindingHash(request);
     head.autoMatchEvidence!.commandSha256 = endpointBindingHash(request.command);
     head.autoMatchEvidence!.scanSha256 = endpointBindingHash(request.command.scan);

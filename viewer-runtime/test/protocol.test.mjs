@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CHANNEL, MAX_MESSAGE_BYTES, MAX_BARRIER_SELECTION_MESSAGE_BYTES, validateEnvelope, validateBootstrap, validateDescriptor, parseRouting, normalizeRoutingKey } from '../protocol.mjs';
+import { CHANNEL, MAX_MESSAGE_BYTES, MAX_BARRIER_SELECTION_MESSAGE_BYTES, MAX_LOCATION_OBJECT_IDS, MAX_PATH_OBJECT_IDS, MAX_COMPUTED_PATH_MESSAGE_BYTES, validateEnvelope, validateBootstrap, validateDescriptor, parseRouting, normalizeRoutingKey } from '../protocol.mjs';
 import { BARRIER_MULTIPART_PRODUCER_PROFILE } from '../barrier-multipart-protocol.mjs';
 
 const uuid = index => `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`;
@@ -63,10 +63,12 @@ test('location display is a single current-load ID with an exact direction-bound
 });
 
 test('grouped location display preserves the primary and strictly ordered bounded member IDs',()=>{
-  const maximum=Array.from({length:512},(_,at)=>at+1);
+  const maximum=Array.from({length:MAX_LOCATION_OBJECT_IDS},(_,at)=>2147483647-MAX_LOCATION_OBJECT_IDS+at+1);
   for(const [type,direction] of [['SHOW_LOCATION','parent-to-frame'],['LOCATION_SHOWN','frame-to-parent']]){
-    for(const sdkObjectIds of [[2],[2,3,23],maximum])assert.ok(validateEnvelope(envelope(type,{sdkObjectId:sdkObjectIds[0],sdkObjectIds}),direction));
-    for(const sdkObjectIds of [[],[3],[2,2],[3,2],[2,0],[2,-1],[2,1.5],[2,'3'],[2,2147483648],maximum.concat(513),null,2])
+    for(const sdkObjectIds of [[2],[2,3,23],maximum]){
+      const message=envelope(type,{sdkObjectId:sdkObjectIds[0],sdkObjectIds});
+      assert.ok(validateEnvelope(message,direction));assert.ok(new TextEncoder().encode(JSON.stringify(message)).byteLength<MAX_MESSAGE_BYTES);}
+    for(const sdkObjectIds of [[],[3],[2,2],[3,2],[2,0],[2,-1],[2,1.5],[2,'3'],[2,2147483648],Object.assign(Array(2),{0:2}),Array.from({length:MAX_LOCATION_OBJECT_IDS+1},(_,at)=>at+2),null,2])
       assert.equal(validateEnvelope(envelope(type,{sdkObjectId:2,sdkObjectIds})),null);
     const input=envelope(type,{sdkObjectId:2,sdkObjectIds:[2,3]}),parsed=validateEnvelope(input,direction);
     input.payload.sdkObjectIds[1]=9;assert.deepEqual(parsed.payload.sdkObjectIds,[2,3]);
@@ -86,6 +88,21 @@ test('tray display carries one bounded unique root set with a detached exact cur
     const input = envelope(type, { sdkObjectIds: [23, 24] }), parsed = validateEnvelope(input, direction);
     input.payload.sdkObjectIds[0] = 25; assert.deepEqual(parsed.payload.sdkObjectIds, [23, 24]);
   }
+});
+
+test('only a strict computed-path begin carries both complete4096-member locations and512route objects',()=>{
+  const objectIds=Array.from({length:MAX_PATH_OBJECT_IDS},(_,at)=>2147483647-at),payload={pathId:uuid(9),pointCount:1,objectIds};
+  const message=envelope('BEGIN_COMPUTED_PATH',payload),size=new TextEncoder().encode(JSON.stringify(message)).byteLength;
+  assert.ok(size>MAX_MESSAGE_BYTES);assert.ok(size<MAX_COMPUTED_PATH_MESSAGE_BYTES);
+  assert.ok(validateEnvelope(message,'parent-to-frame'));
+  assert.equal(validateEnvelope(message,'frame-to-parent'),null);
+  assert.equal(validateEnvelope({...message,modelVersionId:null,loadId:null}),null);
+  for(const invalid of [objectIds.concat(1),[...objectIds.slice(0,-1),objectIds[0]],[0],['2'],Object.assign(Array(2),{0:2})])
+    assert.equal(validateEnvelope(envelope('BEGIN_COMPUTED_PATH',{...payload,objectIds:invalid})),null);
+  for(const extra of [{token:'secret'},{unrelated:'x'.repeat(MAX_MESSAGE_BYTES)},{points:[[1,2,3]]}])
+    assert.equal(validateEnvelope(envelope('BEGIN_COMPUTED_PATH',{...payload,...extra})),null);
+  assert.equal(validateEnvelope(envelope('SHOW_LOCATION',{sdkObjectId:objectIds.at(-1),sdkObjectIds:[...objectIds].reverse()})),null);
+  assert.equal(MAX_MESSAGE_BYTES,65536);assert.equal(MAX_COMPUTED_PATH_MESSAGE_BYTES,131072);
 });
 
 test('multipart control preserves old ceilings and accepts no geometry, credentials, URLs or authority', () => {

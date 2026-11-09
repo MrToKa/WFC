@@ -258,10 +258,19 @@ describe('PathFinder protected Viewer capabilities', () => {
     expect(s.send.mock.calls.some(call => call[0].type === 'CLEAR_ROUTE')).toBe(false);
     expect(s.c.getLoadSnapshot()?.ready).toBe(true);
   });
+  it.each([513, 4096])('shows all %i parts of a source item without truncating the group', async count => {
+    const s = await loaded(), ids = Array.from({ length: count }, (_, at) => at + 23);
+    s.send.mockImplementation(value => {
+      if (value.type === 'SHOW_LOCATION') s.message('LOCATION_SHOWN', value.payload, value.requestId, s.identity);
+    });
+    await s.c.showLocation(23, ids);
+    expect(s.send.mock.calls.find(call => call[0].type === 'SHOW_LOCATION')![0].payload.sdkObjectIds).toEqual(ids);
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+  });
   it('rejects invalid location groups before checking access or sending SDK commands', async () => {
     const s = await loaded(), fetchCount = vi.mocked(fetch).mock.calls.length, sends = s.send.mock.calls.length;
     for (const ids of [[], [24], [23, 23], [23, 25, 24], [23, 0], [23, Infinity],
-      Array.from({ length: 513 }, (_, at) => 23 + at)]) await expect(s.c.showLocation(23, ids)).rejects.toThrow('Invalid location objects');
+      Array.from({ length: 4097 }, (_, at) => 23 + at)]) await expect(s.c.showLocation(23, ids)).rejects.toThrow('Invalid location objects');
     expect(vi.mocked(fetch).mock.calls).toHaveLength(fetchCount); expect(s.send.mock.calls).toHaveLength(sends);
   });
   it.each([{ sdkObjectId: 23 }, { sdkObjectId: 23, sdkObjectIds: [23, 25] }])('rejects a location acknowledgement that omits or changes group members: %j', async payload => {
@@ -971,6 +980,22 @@ describe('PathFinder protected Viewer capabilities', () => {
     expect(chunks.every(chunk => new TextEncoder().encode(JSON.stringify(chunk)).byteLength <= 65536)).toBe(true);
     expect(requestId).toBeTruthy(); expect(() => s.c.zoom()).not.toThrow();
     expect(s.send.mock.calls.at(-1)?.[0]).toMatchObject({ type: 'ZOOM_ROUTE', payload: { routeRequestId: requestId } });
+  });
+  it('retains the route and both full equipment groups in computed-path foreground', async () => {
+    const s = await loaded(); let received = 0;
+    s.send.mockImplementation(value => {
+      if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
+      const phase = value.type === 'BEGIN_COMPUTED_PATH' ? 'begun' : value.type === 'APPEND_COMPUTED_PATH' ? 'appended' : value.type === 'COMMIT_COMPUTED_PATH' ? 'displayed' : null;
+      if (phase === 'appended') received += value.payload.points.length;
+      if (phase) s.message('COMPUTED_PATH_UPDATED', { pathId: value.payload.pathId, phase, received }, value.requestId, s.identity);
+    });
+    const objectIds = Array.from({ length: 8704 }, (_, at) => 2147470000 + at);
+    await s.c.showComputedPath({ pathId: generateId(), points: [[0, 0, 0]], objectIds });
+    const command = s.send.mock.calls.find(call => call[0].type === 'BEGIN_COMPUTED_PATH')![0];
+    expect(command.payload.objectIds).toEqual(objectIds);
+    const bytes = new TextEncoder().encode(JSON.stringify(command)).byteLength;
+    expect(bytes).toBeGreaterThan(65536); expect(bytes).toBeLessThanOrEqual(131072);
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
   });
   it('keeps a large-model computed appearance commit alive past ten seconds and accepts its bounded acknowledgement', async () => {
     const s = await loaded(600_000); let received = 0;

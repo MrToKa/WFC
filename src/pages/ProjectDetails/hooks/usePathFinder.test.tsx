@@ -93,12 +93,12 @@ describe('fresh popup calculation submission without Viewer appearance changes',
     await act(async () => { expect(await view.result.current.showLocation(55)).toBe(false); });
     expect(facts.clear).not.toHaveBeenCalled(); expect(facts.transparency).not.toHaveBeenCalled(); view.unmount();
   });
-  it('shows every part of a grouped location without changing selection or the route', async () => {
+  it.each([3, 513, 4096])('shows every one of %i grouped location parts without changing selection or the route', async partCount => {
     const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
     act(() => { facts.events[0]({ type: 'MODEL_LOADED', payload: {} }); });
-    const ids = [55, 66, 77];
+    const ids = Array.from({ length: partCount }, (_, index) => 55 + index);
     await act(async () => { expect(await view.result.current.showLocation(55, ids)).toBe(true); });
-    expect(facts.showLocation).toHaveBeenCalledExactlyOnceWith(55, [55, 66, 77]);
+    expect(facts.showLocation).toHaveBeenCalledExactlyOnceWith(55, ids);
     expect(facts.showLocation.mock.calls[0][1]).not.toBe(ids);
     expect(facts.clear).not.toHaveBeenCalled(); expect(facts.readSelection).not.toHaveBeenCalled();
     expect(pathFinderRequest).not.toHaveBeenCalled(); view.unmount();
