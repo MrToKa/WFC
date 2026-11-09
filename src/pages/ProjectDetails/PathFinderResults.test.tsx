@@ -1900,7 +1900,8 @@ describe('exact pending Apply through result display resets', () => {
   it('refuses an oversized route plus endpoint union without truncating the displayed path', async () => {
     const f = recoveryFixture(), detail = { ...f.pf.data.proposals[0], route: { ...f.pf.data.proposals[0].route,
       objectIds: Array.from({ length: 512 }, (_, index) => `dbid:${index + 1}`) } };
-    f.pf.readProposal.mockResolvedValueOnce(detail); vi.mocked(proposalEndpointObjectIds).mockResolvedValue(['dbid:600']);
+    f.pf.readProposal.mockResolvedValueOnce(detail);
+    vi.mocked(proposalEndpointObjectIds).mockResolvedValue(Array.from({ length: 8193 }, (_, index) => `dbid:${index + 513}`));
     render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} accountId={id(2)} options={options} />);
     fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' }));
     expect(await screen.findByText(/This path and its From\/To objects exceed the viewer object budget/)).toBeVisible();
