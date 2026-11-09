@@ -719,7 +719,7 @@ export class ViewerController {
   async captureBarriers(request: BarrierCaptureRequest, options: { signal?: AbortSignal; isCurrent?: () => boolean } = {}) {
     if (!validateBarrierCaptureRequest(request) || this.disposed || !this.loaded) throw new Error('Barrier capture is unavailable');
     const input: BarrierCaptureRequest = JSON.parse(JSON.stringify(request));
-    this.clear('selection');
+    this.clear('selection', { preserveCamera: true });
     const generation = this.routeGeneration, { instanceId, modelVersionId, loadId } = this;
     if (!loadId || !modelVersionId || input.scope.projectId !== this.options.projectId || input.scope.modelVersionId !== modelVersionId
       || input.scope.selectionRevision !== String(this.selectionRevision)) throw new Error('Barrier capture scope changed');
