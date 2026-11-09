@@ -969,7 +969,7 @@ describe('PathFinder scope and shared-location orchestration', () => {
     await act(async () => {
       await result.current.runProjectPreparation(request.scope, async viewer => {
         const observed = await viewer.captureBarriers(request);
-        expect(Object.keys(viewer).sort()).toEqual(['assertCurrent', 'capture', 'captureBarriers', 'discover', 'publishBarriers', 'readSelection', 'readTrayRootSelection']);
+        expect(Object.keys(viewer).sort()).toEqual(['assertCurrent', 'capture', 'captureBarriers', 'discover', 'publishBarriers', 'readSelection', 'readTrayRootSelection', 'resolveTrayIdentities']);
         return viewer.publishBarriers(locationId, observed);
       });
     });
