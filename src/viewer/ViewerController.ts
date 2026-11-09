@@ -10,6 +10,7 @@ import { BARRIER_LIMITS, barrierCanonicalJson, barrierCaptureSchema } from '../.
 import { bindCompletedCaptureEvidence,verifyCompletedCaptureEvidence,type CompletedModelCaptureSummary } from '../../viewer-runtime/capture-evidence.mjs';
 import { CAPTURE_INPUT_LIMITS, planModelCaptureInput, validateModelCaptureInputAck, validateModelCaptureInputScope, type ModelCaptureInputDescriptor } from '../../viewer-runtime/capture-input.mjs';
 import { validatePreparationDiscoveryRequest, validatePreparationDiscoveryPage, type PreparationDiscoveryRequest, type PreparationDiscoveryPage } from '../../viewer-runtime/preparation-input.mjs';
+import { validateTrayIdentityRequest, validateTrayIdentityResponse, type TrayIdentityRequest, type TrayIdentityResponse } from '../../viewer-runtime/tray-identity.mjs';
 import { watchViewerLogin } from './loginLifecycle';
 import { supportedBarrierCaptureCommandSchema, supportedBarrierPublicationOutcomeSchema as barrierPublicationOutcomeSchema,
   supportedBarrierSnapshotReferenceSchema as barrierSnapshotReferenceSchema, type AnyBarrierCaptureCommand } from '../../shared/pathfinderBarrierSupported';
@@ -143,10 +144,16 @@ export class ViewerController {
         if (!pending.quietRecoverableErrors) this.emit('ERROR', { code: 'TRAY_ROOT_SELECTION_UNAVAILABLE', message: 'Reading the selected tray roots timed out. Keep the intended objects selected and try again.', retryable: true, operation: 'READ_TRAY_ROOT_SELECTION' });
         return;
       }
+      if (pending.envelope.type === 'RESOLVE_TRAY_IDENTITIES') {
+        const cancelId = this.cancel(pending.envelope.requestId), cancellation = this.pending.get(cancelId);
+        if (cancellation) { window.clearTimeout(cancellation.timer); this.pending.delete(cancelId); }
+        this.emit('ERROR', { code: 'TRAY_IDENTITY_TIMEOUT', message: 'Checking saved tray objects timed out. Check the trays again.', retryable: true, operation: pending.envelope.type });
+        return;
+      }
       this.fail(pending.envelope.type === 'LOAD_MODEL' ? 'MODEL_TIMEOUT' : 'REQUEST_TIMEOUT');
     // A discovery page may build the bounded model-wide property index (300s
     // inside the frame). Allow its terminal reply to arrive before failing load.
-    }, pending.envelope.type === 'READ_TRAY_ROOT_SELECTION' ? 15_000 : pending.envelope.type.includes('BARRIER_MULTIPART') ? 195_000 : pending.envelope.type === 'READ_PREPARATION_OBJECTS' ? 310_000 : ['START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE'].includes(pending.envelope.type) ? 125_000 : ['CLEAR_ROUTE', 'COMMIT_COMPUTED_PATH', 'SET_PATH_TRANSPARENCY', 'SHOW_LOCATION', 'SHOW_TRAY'].includes(pending.envelope.type) ? MODEL_APPEARANCE_TIMEOUT_MILLISECONDS : ['LOAD_MODEL', 'READ_MODEL_OBJECTS', 'READ_SELECTION'].includes(pending.envelope.type) ? 60_000 : pending.envelope.type === 'PICK_POINT' ? 125_000 : 10_000);
+    }, pending.envelope.type === 'READ_TRAY_ROOT_SELECTION' ? 15_000 : pending.envelope.type.includes('BARRIER_MULTIPART') ? 195_000 : ['READ_PREPARATION_OBJECTS', 'RESOLVE_TRAY_IDENTITIES'].includes(pending.envelope.type) ? 310_000 : ['START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE'].includes(pending.envelope.type) ? 125_000 : ['CLEAR_ROUTE', 'COMMIT_COMPUTED_PATH', 'SET_PATH_TRANSPARENCY', 'SHOW_LOCATION', 'SHOW_TRAY'].includes(pending.envelope.type) ? MODEL_APPEARANCE_TIMEOUT_MILLISECONDS : ['LOAD_MODEL', 'READ_MODEL_OBJECTS', 'READ_SELECTION'].includes(pending.envelope.type) ? 60_000 : pending.envelope.type === 'PICK_POINT' ? 125_000 : 10_000);
   }
 
   private send(type: string, payload: Record<string, unknown>, terminal: string, callbacks: Pick<Pending, 'resolve' | 'reject' | 'quietRecoverableErrors'> = {}): string {
@@ -557,6 +564,30 @@ export class ViewerController {
       if (!await this.checkSelection()) throw new DOMException('Project discovery cancelled.','AbortError'); current();
       return page;
     } finally { options.signal?.removeEventListener('abort',abort); }
+  }
+
+  /** Resolve saved object identities within this exact active model load. */
+  async resolveTrayIdentities(request: TrayIdentityRequest, options: { signal?: AbortSignal; isCurrent?: () => boolean } = {}): Promise<TrayIdentityResponse> {
+    if (!validateTrayIdentityRequest(request)) throw new Error('Invalid tray identity request');
+    const input: TrayIdentityRequest = structuredClone(request), generation = this.routeGeneration,
+      instanceId = this.instanceId, modelId = this.modelVersionId, loadId = this.loadId;
+    const current = () => { if (this.disposed || !this.loaded || options.signal?.aborted || options.isCurrent?.() === false
+      || generation !== this.routeGeneration || instanceId !== this.instanceId || modelId !== this.modelVersionId || loadId !== this.loadId)
+      throw new DOMException('Tray identity check cancelled.', 'AbortError'); };
+    current(); if (!await this.checkSelection()) throw new DOMException('Tray identity check cancelled.', 'AbortError'); current();
+    let requestId: string | undefined;
+    const abort = () => { if (requestId && this.pending.has(requestId) && !this.disposed) this.cancel(requestId); };
+    options.signal?.addEventListener('abort', abort, { once: true });
+    try {
+      current();
+      const reply = await new Promise<ViewerEvent>((resolve, reject) => { try { requestId = this.send('RESOLVE_TRAY_IDENTITIES', input as unknown as Record<string, unknown>, 'TRAY_IDENTITIES', { resolve, reject }); } catch (error) { reject(error); } });
+      current(); const response = reply.payload;
+      if (!validateTrayIdentityResponse(response) || response.matches.length !== input.identities.length
+        || response.matches.some((match, index) => (['externalId', 'guid', 'sourceFile'] as const).some(key => match.identity[key] !== input.identities[index][key])))
+        throw new Error('Tray identity acknowledgement mismatch');
+      if (!await this.checkSelection()) throw new DOMException('Tray identity check cancelled.', 'AbortError'); current();
+      return response;
+    } finally { options.signal?.removeEventListener('abort', abort); }
   }
 
   async readSelection(): Promise<ViewerSelection> {

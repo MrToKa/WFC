@@ -200,6 +200,24 @@ describe('server-owned routing preparation plan', () => {
     },
   );
   it('does not revive an old resolution after a routing catalog ABA', () => { const { context, input } = preparationFixture(); context.resolutions.push({ id: id(8), projectTrayId: id(10), mode: 'exclude', rootObjectIds: [], reason: 'Old exclusion', actorId: id(9), createdAt: '2026-01-01T00:00:00.000Z', scope: { ...context.scope, catalogRevision: '1' } }); expect(buildPreparationPlan(context, input).requestedScope.excludedProjectTrayIds).toEqual([]); });
+  it.each(['modelVersionId', 'contentFingerprint', 'selectionRevision'] as const)('does not silently replace a previous physical assignment with a name match after %s changes', key => {
+    const { context, input } = preparationFixture(), saved = { ...context.scope };
+    saved[key] = key === 'modelVersionId' ? id(70) : key === 'contentFingerprint' ? 'f'.repeat(64) : '999';
+    context.resolutions.push({ id: id(8), projectTrayId: id(10), mode: 'roots', rootObjectIds: ['dbid:42'],
+      reason: 'Physical object from the previous model', actorId: id(9), createdAt: '2026-01-01T00:00:00.000Z', scope: saved });
+    const plan = buildPreparationPlan(context, input);
+    expect(plan.requestedScope.trays).toEqual([]);
+    expect(plan.diagnostics).toContainEqual(expect.objectContaining({ code: 'TRAY_ROOT_MISSING', projectTrayIds: [id(10)] }));
+    const skipping = buildPreparationPlan(context, { ...input, unresolvedTrayPolicy: 'skip' });
+    expect(skipping.requestedScope.skippedTrays).toEqual([{ projectTrayId: id(10), reason: 'TRAY_ROOT_MISSING' }]);
+    expect(skipping.requestedScope.orderedPhysicalLeafIds).toEqual([]);
+  });
+  it('keeps current-model automatic name matching after a policy-only change', () => {
+    const { context, input } = preparationFixture();
+    context.resolutions.push({ id: id(8), projectTrayId: id(10), mode: 'roots', rootObjectIds: ['dbid:42'],
+      reason: 'Old policy scope', actorId: id(9), createdAt: '2026-01-01T00:00:00.000Z', scope: { ...context.scope, routingPolicyRevision: '1' } });
+    expect(buildPreparationPlan(context, input).requestedScope.trays[0].orderedRootObjectIds).toEqual(['dbid:2']);
+  });
   it('rechecks and uses differently named assigned tray objects after only cable locations change', () => {
     const { context, input } = preparationFixture();
     input.discovery.trays[0].candidateRootObjectIds = [];

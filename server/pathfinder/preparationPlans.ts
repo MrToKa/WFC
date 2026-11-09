@@ -1,11 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { canonicalPurposeJson, normalizeCatalogKey, routingCatalogDiagnostics, PURPOSE_POLICY_LIMITS } from '../../shared/pathfinderPurposePolicy.js';
-import { PREPARATION_LIMITS, preparationContextSchema, preparationPlanSchema, preparationPlanHashInput, preparationPartScopeHashInput, preparationResolutionMatchesScope, type PreparationContext, type PreparationCreate, type PreparationPlan, preparationAggregateSchema, type PreparationScope } from '../../shared/pathfinderPreparation.js';
+import { PREPARATION_LIMITS, preparationContextSchema, preparationPlanSchema, preparationPlanHashInput, preparationPartScopeHashInput, preparationResolutionMatchesScope, preparationResolutionSchema, type PreparationContext, type PreparationCreate, type PreparationPlan, preparationAggregateSchema, type PreparationScope } from '../../shared/pathfinderPreparation.js';
 import { readRoutingCatalog } from './catalog.js';
 import { readRoutingPolicyScope } from './purposePolicy.js';
 import { PathFinderError } from './errors.js';
 import { LEGACY_PREPARATION_CAPACITY_PROFILE, preparationCapacityProfileSchema, type PreparationCapacityProfile } from '../../shared/pathfinderCapacity.js';
+import { loadTrayAssignmentCarryover } from './trayAssignmentCarryover.js';
 
 export const preparationDigest = (value: unknown) => createHash('sha256').update(canonicalPurposeJson(value)).digest('hex');
 const fail = (code: string, status = 409): never => { throw new PathFinderError(code, status, 'The project preparation changed or requires a routing decision. Refresh and try again.'); };
@@ -72,10 +73,12 @@ export async function readPreparationContext(c: PoolClient, projectId: string): 
   if (endpointRows.length >= 4097) return fail('PREPARATION_ENDPOINT_LIMIT', 413);
   const endpoints = endpointRows.map(r => r.name.normalize('NFC').trim());
   const endpointNames = [...new Set(endpoints)]; if (endpointNames.length > 4096) return fail('PREPARATION_ENDPOINT_LIMIT', 413);
-  const resolutions = (await c.query<{ resolution: unknown }>('SELECT resolution FROM pf_preparation_resolutions WHERE project_id=$1 ORDER BY project_tray_id', [projectId])).rows.map(r => r.resolution);
+  const resolutions = (await c.query<{ resolution: unknown }>('SELECT resolution FROM pf_preparation_resolutions WHERE project_id=$1 ORDER BY project_tray_id', [projectId])).rows.map(r => preparationResolutionSchema.parse(r.resolution));
+  const trayAssignmentCarryover = await loadTrayAssignmentCarryover(c, projectId, scope, resolutions);
   const aggregate = state.current_aggregate_id ? (await c.query<{ manifest: unknown }>('SELECT manifest FROM pf_preparation_aggregates WHERE project_id=$1 AND id=$2', [projectId, state.current_aggregate_id])).rows[0]?.manifest ?? null : null;
   const currentAggregate=aggregate===null?null:preparationAggregateSchema.parse(aggregate);
-  return preparationContextSchema.parse({ schemaVersion: currentAggregate?.schemaVersion==='wfc.pf.geometry-aggregate.v2'?'wfc.pf.preparation-context.v2':'wfc.pf.preparation-context.v1', projectId, scope, trays, endpointNames, resolutions, diagnostics: catalog.diagnostics, currentAggregate });
+  return preparationContextSchema.parse({ schemaVersion: currentAggregate?.schemaVersion==='wfc.pf.geometry-aggregate.v2'?'wfc.pf.preparation-context.v2':'wfc.pf.preparation-context.v1', projectId, scope, trays, endpointNames, resolutions, diagnostics: catalog.diagnostics, currentAggregate,
+    ...(trayAssignmentCarryover.length ? { trayAssignmentCarryover } : {}) });
 }
 
 export function buildPreparationPlan(context: PreparationContext, input: PreparationCreate, id: string = randomUUID(), capacityProfile: PreparationCapacityProfile = LEGACY_PREPARATION_CAPACITY_PROFILE): PreparationPlan {
@@ -102,14 +105,19 @@ export function buildPreparationPlan(context: PreparationContext, input: Prepara
   const sliceObjects: Array<PreparationPlan['partPlan'][number]['objects'][number]> = [];
   for (const tray of context.trays) {
     budget();
-    const resolution = context.resolutions.find(r => r.projectTrayId === tray.projectTrayId && preparationResolutionMatchesScope(r.scope, context.scope));
+    const savedResolution = context.resolutions.find(r => r.projectTrayId === tray.projectTrayId);
+    const resolution = savedResolution && preparationResolutionMatchesScope(savedResolution.scope, context.scope) ? savedResolution : undefined;
     if (resolution?.mode === 'exclude' || tray.policyState === 'excluded') { excluded.push(tray.projectTrayId); continue; }
     if (tray.policyState !== 'configured' || !tray.purposeKey) { add(tray.policyState === 'unconfigured' ? 'PURPOSE_UNCONFIGURED' : 'TRAY_POLICY_INVALID', [tray.projectTrayId]); continue; }
     const candidates = discovery.trays.find(t => t.projectTrayId === tray.projectTrayId)!.candidateRootObjectIds;
     if (candidates.some(root => { const candidate = objects.get(root); if (!candidate) return true; const exact = normalizeCatalogKey(candidate.name); return exact !== normalizeCatalogKey(tray.rawName) && exact !== normalizeCatalogKey(tray.routeName); })) return fail('PREPARATION_EXACT_CANDIDATE_INVALID');
-    const roots = resolution?.mode === 'roots' ? resolution.rootObjectIds : candidates.length === 1 ? candidates : [];
+    // A name match in a new model is not evidence that it is the physical object
+    // assigned previously. Restore that assignment by stable identity first.
+    const awaitingModelIdentity = !resolution && savedResolution?.mode === 'roots'
+      && (['modelVersionId', 'contentFingerprint', 'selectionRevision'] as const).some(key => savedResolution.scope[key] !== context.scope[key]);
+    const roots = resolution?.mode === 'roots' ? resolution.rootObjectIds : !awaitingModelIdentity && candidates.length === 1 ? candidates : [];
     if (!roots.length) {
-      const reason = candidates.length ? 'TRAY_ROOT_AMBIGUOUS' as const : 'TRAY_ROOT_MISSING' as const;
+      const reason = !awaitingModelIdentity && candidates.length ? 'TRAY_ROOT_AMBIGUOUS' as const : 'TRAY_ROOT_MISSING' as const;
       if (input.unresolvedTrayPolicy === 'skip') { excluded.push(tray.projectTrayId); skipped.push({ projectTrayId: tray.projectTrayId, reason }); }
       else add(reason, [tray.projectTrayId], candidates);
       continue;

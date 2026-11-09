@@ -28,6 +28,7 @@ function fixture(options = {}) {
     pickPoint: options.pickPoint ?? (async () => ({ objectId: 23, point: [1, 2, 3], derivation: 'picked-surface-point' })),
     readModelObjects: options.readModelObjects ?? (async ({ cursor, query }) => ({ cursor, nextCursor: null, complete: true, query, coordinateFrame: 'world-metres-z-up', metresPerDisplayUnit: 1, globalOffsetMetres: [0, 0, 0], objects: [] })),
     readPreparationObjects: options.readPreparationObjects ?? (async request => ({schemaVersion:request.schemaVersion,mode:request.mode,names:request.names,rootObjectId:request.rootObjectId,cursor:request.cursor,matchingPolicyVersion:'wfc.pf.project-exact-candidates.v3',visibilityScope:{...preparationVisibilityScope},indexedObjectCount:1,propertyScan:null,objects:[],nextCursor:null,complete:true})),
+    resolveTrayIdentities: options.resolveTrayIdentities ?? (async request => ({ schemaVersion: 'wfc.pf.tray-identity-response.v1', matches: request.identities.map(identity => ({ identity, status: 'missing', objectIds: [] })) })),
     readSelection: options.readSelection ?? (async () => ({ coordinateFrame: 'world-metres-z-up', metresPerDisplayUnit: 1, globalOffsetMetres: [0, 0, 0], objects: [] })),
     readTrayRootSelection: options.readTrayRootSelection ?? (async (_signal, beforeCommit) => { await beforeCommit(); return { objects: [] }; }),
     setPathTransparency: options.setPathTransparency ?? (async (percent, _signal, beforeCommit) => { await beforeCommit(); facts.transparency = percent; }),
@@ -71,6 +72,53 @@ const descriptorResponse = () => Response.json({ projectId: uuid(2), modelVersio
 const multipartStatus = () => ({ intentId: uuid(9201), sessionRevision: '0', state: 'admitted', counts: { pages: 0, seals: 0, parts: 0 },
   roots: { nodes: null, fragments: null, 'geometry-ranges': null, plan: null }, qualification: 'NOT_MEASURED', geometryValidation: 'NOT_VALIDATED', authority: 'none' });
 const multipartStart = () => ({ intentId: uuid(9201), expectedSessionRevision: '0', scopeSha256: 'a'.repeat(64), profileSha256: 'b'.repeat(64), producerProfile: BARRIER_MULTIPART_PRODUCER_PROFILE });
+
+const identityRequest = () => ({ schemaVersion: 'wfc.pf.tray-identity-request.v1', identities: [{ externalId: null, guid: '7586ffbb-1d0a-5942-b687-06884123c866', sourceFile: '01-50_MSR_Kabeltassen.dwg' }] });
+
+test('tray identity matching is authorized before and after reading and preserves model appearance', async () => {
+  let calls = 0; const f = fixture({ resolveTrayIdentities: async request => { calls++; return { schemaVersion: 'wfc.pf.tray-identity-response.v1', matches: request.identities.map(identity => ({ identity, status: 'ambiguous', objectIds: [23, 24] })) }; } });
+  await f.loaded(); f.send('RESOLVE_TRAY_IDENTITIES', identityRequest()); await turn();
+  assert.equal(calls, 1); assert.equal(f.fetches.filter(value => value.url.endsWith('/pathfinder-authorization')).length, 2);
+  assert.deepEqual(f.messages('TRAY_IDENTITIES')[0].payload.matches[0].objectIds, [23, 24]);
+  assert.equal(f.facts.clears, 0); assert.equal(f.facts.fits, 0); assert.equal(f.facts.finishes, 0); f.bridge.dispose();
+});
+
+test('tray identity matching withholds IDs after authorization loss or cancellation during SDK work', async () => {
+  for (const cancel of [false, true]) {
+    const wait = deferred(); let checks = 0;
+    const f = fixture({ resolveTrayIdentities: () => wait.promise, fetchImpl: async url => url.endsWith('/pathfinder-authorization')
+      ? ++checks === 2 && !cancel ? new Response(null, { status: 403 }) : Response.json({ authorized: true, loadId: uuid(4) }) : descriptorResponse() });
+    await f.loaded(); const request = identityRequest(), command = f.send('RESOLVE_TRAY_IDENTITIES', request); await turn();
+    if (cancel) { f.send('CANCEL_REQUEST', { targetRequestId: command.requestId }); await turn(); }
+    wait.resolve({ schemaVersion: 'wfc.pf.tray-identity-response.v1', matches: request.identities.map(identity => ({ identity, status: 'unique', objectIds: [23] })) }); await turn();
+    assert.equal(f.messages('TRAY_IDENTITIES').length, 0);
+    if (!cancel) assert.equal(f.messages('ERROR').at(-1).payload.code, 'ACCESS_REVOKED');
+    f.bridge.dispose();
+  }
+});
+
+test('tray identity metadata failures are recoverable and do not reveal SDK details', async () => {
+  for (const code of ['TRAY_IDENTITY_READ_FAILED', 'TRAY_IDENTITY_SCOPE_INVALID', 'TRAY_IDENTITY_RESULT_INVALID', 'TRAY_IDENTITY_TIMEOUT', 'TRAY_IDENTITY_INDEX_LIMIT', 'TRAY_IDENTITY_ROW_LIMIT']) {
+    const f = fixture({ resolveTrayIdentities: async () => { throw Object.assign(new Error('Private GUID file path'), { code }); } });
+    await f.loaded(); f.send('RESOLVE_TRAY_IDENTITIES', identityRequest()); await turn();
+    assert.equal(f.messages('ERROR').at(-1).payload.code, code);
+    assert.ok(!f.messages('ERROR').at(-1).payload.message.includes('Private')); assert.equal(f.states.at(-1).phase, 'loaded');
+    assert.equal(f.facts.finishes, 0); f.bridge.dispose();
+  }
+});
+
+test('tray identity reads reject initial access loss, wrong identity and producer mode before SDK work', async () => {
+  for (const mode of ['denied', 'wrong-load', 'wrong-model', 'wrong-project', 'producer']) {
+    let reads = 0;
+    const f = fixture({ resourceMode: mode === 'producer' ? 'producer' : 'human',
+      ...(mode === 'denied' ? { fetchImpl: async url => url.endsWith('/pathfinder-authorization') ? new Response(null, { status: 403 }) : descriptorResponse() } : {}),
+      resolveTrayIdentities: async () => { reads++; } });
+    await f.loaded();
+    f.send('RESOLVE_TRAY_IDENTITIES', identityRequest(), mode === 'wrong-load' ? { loadId: uuid(9901) } : mode === 'wrong-model'
+      ? { modelVersionId: uuid(9902) } : mode === 'wrong-project' ? { projectId: uuid(9903) } : {});
+    await turn(); assert.equal(reads, 0); assert.equal(f.messages('TRAY_IDENTITIES').length, 0); f.bridge.dispose();
+  }
+});
 
 test('tray-root metadata reads are admin-authorized before and after SDK work and return only exact IDs', async () => {
   let reads = 0;

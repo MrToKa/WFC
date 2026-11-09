@@ -38,6 +38,12 @@ const messages = {
   PREPARATION_EQUIPMENT_PROPERTIES_INVALID: 'The model property service returned unexpected or malformed From/To discovery rows. The published preparation was kept.',
   PREPARATION_DISCOVERY_RESULT_INVALID: 'The model discovery page did not pass its format checks. The published preparation was kept.',
   SELECTION_TOO_LARGE: 'Select at most 16 model objects at a time, then add another route rule.',
+  TRAY_IDENTITY_READ_FAILED: 'The saved tray objects could not be checked in this model revision. Try checking the trays again.',
+  TRAY_IDENTITY_SCOPE_INVALID: 'The saved tray identity request could not be checked. Refresh the preparation status, then check the trays again.',
+  TRAY_IDENTITY_RESULT_INVALID: 'The saved tray identity result could not be checked. Try checking the trays again.',
+  TRAY_IDENTITY_TIMEOUT: 'Checking saved tray object identities timed out. Try checking the trays again.',
+  TRAY_IDENTITY_INDEX_LIMIT: 'Checking saved tray identities exceeded the supported model size. Review unresolved tray assignments.',
+  TRAY_IDENTITY_ROW_LIMIT: 'The saved tray identity properties exceeded the supported size. Review unresolved tray assignments.',
   TRAY_ROOT_SELECTION_TOO_LARGE: 'Select at most 512 model objects for one tray-root resolution.',
   TRAY_ROOT_SELECTION_UNAVAILABLE: 'The selected tray roots could not be read. Select objects in the active model and try again.',
   TRAY_ROOT_SELECTION_CHANGED: 'The model selection changed while it was being read. Keep the intended objects selected and try again.',
@@ -92,10 +98,11 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     // Discovery evidence may be incomplete while the rendered model is healthy.
     // Only named, allowlisted refusals stay local to this metadata operation;
     // a real SDK resource/access/model failure keeps its terminal identity.
+    const recoverableTrayIdentity = command.type === 'RESOLVE_TRAY_IDENTITIES' && code.startsWith('TRAY_IDENTITY_');
     const recoverableDiscovery = command.type === 'READ_PREPARATION_OBJECTS' && code.startsWith('PREPARATION_') && Object.hasOwn(messages, code);
-    emit(command, 'ERROR', { code, message: messages[code], retryable: recoverableCapture || recoverableLocation || recoverableTray || recoverableRootSelection || recoverableDiscovery || ['RESOURCE_FAILED', 'SESSION_EXPIRED', 'APPEARANCE_RESTORE_FAILED'].includes(code), operation: command.type });
+    emit(command, 'ERROR', { code, message: messages[code], retryable: recoverableCapture || recoverableLocation || recoverableTray || recoverableRootSelection || recoverableTrayIdentity || recoverableDiscovery || ['RESOURCE_FAILED', 'SESSION_EXPIRED', 'APPEARANCE_RESTORE_FAILED'].includes(code), operation: command.type });
     finish(command);
-    onState({ phase: recoverableCapture || recoverableLocation || recoverableTray || recoverableRootSelection || recoverableDiscovery ? phase : 'error', code, operation: command.type });
+    onState({ phase: recoverableCapture || recoverableLocation || recoverableTray || recoverableRootSelection || recoverableTrayIdentity || recoverableDiscovery ? phase : 'error', code, operation: command.type });
   }
   function releaseCapture(scope, abort = false) {
     if (!scope) return;
@@ -304,6 +311,11 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
         });
         if (!live()) return;
         if (!emit(command, 'TRAY_ROOT_SELECTION', result)) throw failure('TRAY_ROOT_SELECTION_UNAVAILABLE');
+      } else if (command.type === 'RESOLVE_TRAY_IDENTITIES') {
+        const result = await handle.resolveTrayIdentities(command.payload, signal);
+        await requirePathFinder(command, signal);
+        if (!live()) return;
+        if (!emit(command, 'TRAY_IDENTITIES', result)) throw failure('TRAY_IDENTITY_READ_FAILED');
       } else if (command.type === 'READ_MODEL_OBJECTS' || command.type === 'READ_PREPARATION_OBJECTS' || command.type === 'READ_SELECTION') {
         const result = command.type === 'READ_SELECTION' ? await handle.readSelection(signal) : command.type === 'READ_PREPARATION_OBJECTS' ? await handle.readPreparationObjects(command.payload, signal) : await handle.readModelObjects(command.payload, signal);
         // Metadata and picks may outlive an ACL change while the SDK worker runs.
@@ -433,7 +445,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
       else if (command.type !== 'DISPOSE') return;
     } else requests.set(command.requestId, { command, status: 'pending' });
     try { switch (command.type) {
-      case 'BEGIN_COMPUTED_PATH': case 'APPEND_COMPUTED_PATH': case 'COMMIT_COMPUTED_PATH': case 'PICK_POINT': case 'READ_MODEL_OBJECTS': case 'READ_PREPARATION_OBJECTS': case 'READ_SELECTION': case 'READ_TRAY_ROOT_SELECTION': case 'SHOW_LOCATION': case 'SHOW_TRAY': case 'SET_PATH_TRANSPARENCY': case 'START_MODEL_CAPTURE': case 'READ_MODEL_CAPTURE': case 'START_BARRIER_CAPTURE': case 'READ_BARRIER_CAPTURE':
+      case 'BEGIN_COMPUTED_PATH': case 'APPEND_COMPUTED_PATH': case 'COMMIT_COMPUTED_PATH': case 'PICK_POINT': case 'READ_MODEL_OBJECTS': case 'READ_PREPARATION_OBJECTS': case 'RESOLVE_TRAY_IDENTITIES': case 'READ_SELECTION': case 'READ_TRAY_ROOT_SELECTION': case 'SHOW_LOCATION': case 'SHOW_TRAY': case 'SET_PATH_TRANSPARENCY': case 'START_MODEL_CAPTURE': case 'READ_MODEL_CAPTURE': case 'START_BARRIER_CAPTURE': case 'READ_BARRIER_CAPTURE':
       case 'READ_BARRIER_MULTIPART_FRAME': case 'START_BARRIER_MULTIPART': case 'STATUS_BARRIER_MULTIPART': case 'CANCEL_BARRIER_MULTIPART': case 'RECONCILE_BARRIER_MULTIPART':
         if (phase !== 'loaded' || !handle) { error(command, failure('INVALID_STATE')); return; }
         void pathFinder(command); break;
