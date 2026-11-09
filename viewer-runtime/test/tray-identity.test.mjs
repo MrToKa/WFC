@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readTrayObjectIdentities, resolveTrayObjectIdentities, validateTrayIdentityRequest, validateTrayIdentityResponse } from '../tray-identity.mjs';
+import { readTrayObjectIdentities, resolveTrayObjectIdentities, TRAY_IDENTITY_LIMITS, validateTrayIdentityRequest, validateTrayIdentityResponse } from '../tray-identity.mjs';
 
 const G = '7586ffbb-1d0a-5942-b687-06884123c866', H = '00000000-0000-4000-8000-000000000099';
 const identity = changes => ({ externalId: null, guid: G, sourceFile: '01-50_MSR_Kabeltassen.dwg', ...changes });
@@ -8,6 +8,8 @@ const properties = (value = G, source = '01-50_MSR_Kabeltassen.dwg') => [
   { displayCategory: 'Item', displayName: 'GUID', displayValue: value },
   { displayCategory: 'Item', displayName: 'Source File', displayValue: source },
 ];
+const childProperty = objectId => ({ displayName: 'child', displayValue: objectId, displayCategory: '__child__',
+  attributeName: 'child', type: 11, units: null, hidden: 1, precision: 0 });
 function fixture(entries, mapping = {}) {
   const rows = new Map(entries), ids = [0, ...rows.keys()], calls = [];
   const tree = { getRootId: () => 0, enumNodeChildren: (_root, visit) => { for (const value of ids.slice(1)) visit(value); }, getNodeName: () => '3D-Volumenkörper' };
@@ -66,6 +68,70 @@ test('all model rows are read in bounded batches and hidden matching objects rem
   const entries = Array.from({ length: 600 }, (_, at) => [at + 1, at === 599 ? properties() : []]);
   const f = fixture(entries), match = await resolve(f);
   assert.deepEqual(match.objectIds, [600]); assert.equal(f.calls.length, 3); assert.ok(f.calls.every(batch => batch.length <= 256));
+});
+test('large SDK aggregation hierarchy does not consume the identity metadata quota', async () => {
+  const childCount = TRAY_IDENTITY_LIMITS.propertiesPerRow + 1;
+  const entries = Array.from({ length: childCount }, (_, at) => [at + 1, at === childCount - 1 ? properties() : []]);
+  const f = fixture(entries);
+  f.rows.set(0, entries.map(([objectId]) => childProperty(objectId)));
+  const match = await resolve(f);
+  assert.equal(match.status, 'unique'); assert.deepEqual(match.objectIds, [childCount]);
+  assert.equal(f.calls.length, Math.ceil((childCount + 1) / TRAY_IDENTITY_LIMITS.batch));
+});
+test('GUID and source on a large hierarchy node remain readable, including hidden metadata', async () => {
+  const props = properties().map(property => ({ ...property, hidden: 1 }));
+  const links = Array.from({ length: TRAY_IDENTITY_LIMITS.propertiesPerRow + 1 }, (_, at) => childProperty(at + 3));
+  const f = fixture([[2, [...links, ...props]]]);
+  const [seed] = await readTrayObjectIdentities(f.model, [2]);
+  assert.equal(seed.identity.guid, G); assert.equal(seed.identity.sourceFile, identity().sourceFile.toLowerCase());
+  assert.deepEqual((await resolve(f)).objectIds, [2]);
+});
+test('large hierarchy never hides duplicate GUID and source in a later batch', async () => {
+  const entries = Array.from({ length: 300 }, (_, at) => [at + 1, at === 0 || at === 299 ? properties() : []]);
+  const f = fixture(entries);
+  f.rows.set(0, Array.from({ length: TRAY_IDENTITY_LIMITS.propertiesPerRow + 1 }, (_, at) => childProperty(at + 1)));
+  const match = await resolve(f);
+  assert.equal(match.status, 'ambiguous'); assert.deepEqual(match.objectIds, [1, 300]);
+});
+test('only complete SDK structural relation shapes are exempt from the metadata quota', async () => {
+  for (const changes of [{ hidden: false }, { hidden: 0 }, { type: 20 }, { displayCategory: 'Item' },
+    { attributeName: 'GUID' }, { displayValue: '2' }, { displayValue: -1 }]) {
+    const property = { ...childProperty(2), ...changes };
+    const f = fixture([[2, Array(TRAY_IDENTITY_LIMITS.propertiesPerRow + 1).fill(property)]]);
+    await assert.rejects(() => resolve(f), error => error.code === 'TRAY_IDENTITY_ROW_LIMIT');
+  }
+  const metadata = { displayCategory: 'Item', displayName: 'Description', displayValue: 'Ordinary metadata', hidden: 1 };
+  const f = fixture([[2, Array(TRAY_IDENTITY_LIMITS.propertiesPerRow + 1).fill(metadata)]]);
+  await assert.rejects(() => readTrayObjectIdentities(f.model, [2]), error => error.code === 'TRAY_IDENTITY_ROW_LIMIT');
+});
+test('raw structural property count is budgeted before reading any oversized row entries', async () => {
+  let entryRead = false;
+  const props = new Proxy([], { get(target, key, receiver) {
+    if (key === 'length') return TRAY_IDENTITY_LIMITS.scannedProperties + 1;
+    entryRead = true; return Reflect.get(target, key, receiver);
+  } });
+  const f = fixture([[2, props]]);
+  await assert.rejects(() => resolve(f), error => error.code === 'TRAY_IDENTITY_INDEX_LIMIT');
+  assert.equal(entryRead, false);
+});
+test('large hierarchy with omitted SDK rows remains unavailable and is not cached', async () => {
+  const f = fixture([[2, properties()], [3, []]]), original = f.model.getBulkProperties;
+  f.rows.set(0, Array.from({ length: TRAY_IDENTITY_LIMITS.propertiesPerRow + 1 }, (_, at) => childProperty(at + 1)));
+  let omit = true;
+  f.model.getBulkProperties = (ids, options, yes) => original(ids, options, rows => yes(omit ? rows.filter(row => row.dbId !== 3) : rows));
+  assert.equal((await resolve(f)).status, 'unavailable');
+  const incompleteCalls = f.calls.length;
+  omit = false;
+  assert.equal((await resolve(f)).status, 'unique'); assert.ok(f.calls.length > incompleteCalls);
+});
+test('missing or malformed SDK property arrays report read failures and do not establish cached matches', async () => {
+  for (const props of [undefined, null, {}, 'unavailable']) {
+    const f = fixture([[2, properties()]]), original = f.model.getBulkProperties;
+    f.model.getBulkProperties = (ids, options, yes) => original(ids, options, rows => yes(rows.map(row => row.dbId === 2 ? { dbId: 2, properties: props } : row)));
+    await assert.rejects(() => resolve(f), error => error.code === 'TRAY_IDENTITY_READ_FAILED');
+    f.model.getBulkProperties = original;
+    assert.equal((await resolve(f)).status, 'unique');
+  }
 });
 test('conflicting GUID properties never establish a source identity', async () => {
   const f = fixture([[2, [...properties(), { displayName: 'GUID', displayValue: H }]]]);

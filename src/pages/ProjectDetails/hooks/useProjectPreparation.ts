@@ -33,6 +33,7 @@ import {saveCaptureEvidence,GeometryTraceApiError,createGeometryTrace,fetchGeome
 import {GEOMETRY_TRACE_DERIVATION} from '../../../../shared/pathfinderGeometryTrace';
 import {bindCompletedCaptureEvidence,type CompletedCaptureEvidence} from '../../../../viewer-runtime/capture-evidence.mjs';
 import { formatPreparationDiagnostics } from '../preparationDiagnostics';
+import { trayIdentityErrorMessage } from '@/viewer/trayIdentityErrors';
 import { validateTrayIdentityRequest, type TrayObjectIdentity, type TrayIdentityMatch } from '../../../../viewer-runtime/tray-identity.mjs';
 
 type PF = ReturnType<typeof usePathFinder>;
@@ -291,6 +292,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
         await operation(abort.signal);
       } catch (error) {
         if (latest.current !== identity || !mounted.current) return;
+        const trayIdentityMessage = error instanceof Error && 'code' in error ? trayIdentityErrorMessage(error.code) : null;
         if ((error instanceof PreparationApiError||error instanceof GeometryTraceApiError) && [401, 403].includes(error.status ?? 0)) {
           pending.current = null;
           latestPf.current.cancelOperation();
@@ -329,6 +331,8 @@ export function useProjectPreparation(pf: PF, active: boolean) {
             error:
               error instanceof DOMException && error.name === 'AbortError'
                 ? null
+                : trayIdentityMessage
+                  ? trayIdentityMessage
                 : reloadRequired(error)
                   ? 'Reload the protected model, then repeat discovery or Resume the frozen preparation. Committed parts are retained.'
                   : error instanceof PreparationDiscoveryError

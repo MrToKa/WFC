@@ -3,6 +3,7 @@ import { fetchPathFinderState, fetchPathFinderProposal, fetchPathFinderJob, fetc
 import { fetchProjectModels } from '@/api/projectModels';
 import { ViewerController, type ViewerEvent } from '@/viewer/ViewerController';
 import { ViewerAccessError } from '@/viewer/sessionApi';
+import { trayIdentityErrorMessage } from '@/viewer/trayIdentityErrors';
 import type { CanonicalPoint, ComputedPath, PickedPoint, ViewerModelObjectsPage, ViewerTrayRootSelection, ModelCaptureRequest } from '../../../../viewer-runtime/protocol.mjs';
 import type { PreparationDiscoveryRequest, PreparationDiscoveryPage } from '../../../../viewer-runtime/preparation-input.mjs';
 import type { PreparationScope } from '../../../../shared/pathfinderPreparation';
@@ -35,6 +36,8 @@ const fallbackMessage = (error: unknown) => error instanceof PathFinderApiError 
 
 const message = (error: unknown) => {
   if (error instanceof ViewerAccessError) {
+    const trayIdentityMessage = trayIdentityErrorMessage(error.code);
+    if (trayIdentityMessage) return trayIdentityMessage;
     if (error.code === 'TRAY_UNAVAILABLE') return 'The tray objects could not be shown in the current model. Check their assignment or reload the model.';
     if (error.code === 'TRAY_ROOT_SELECTION_UNAVAILABLE') return 'The selected model objects could not be read. The model remains loaded; try the selection again.';
     if (error.code === 'TRAY_ROOT_SELECTION_TOO_LARGE') return 'Select at most 512 model objects for this tray, then try again.';

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '@/api/pathfinderPreparation';
 import { preparationFixture, preparationIds as ids } from '@/test/preparationFixtures';
 import { useProjectPreparation } from './useProjectPreparation';
+import { ViewerAccessError } from '@/viewer/sessionApi';
 import type { usePathFinder } from './usePathFinder';
 import {completedEvidenceFixture,geometryTraceFixture} from '@/test/geometryTraceFixtures';
 import {saveCaptureEvidence,createGeometryTrace,fetchGeometryTraces,fetchGeometryTraceManifest,GeometryTraceApiError,
@@ -851,6 +852,37 @@ describe('automatic tray workflow', () => {
     await act(() => result.current.checkTrays());
     expect(api.savePreparationResolution).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled();
     expect(f.store.context.resolutions[0].id).toBe(resolutionId);
+  });
+  it('keeps assignments and the published network after unreadable identity properties, then accepts a retry', async () => {
+    const f = automaticSetup(), resolutionId = crypto.randomUUID(), oldModel = crypto.randomUUID();
+    const identity = { externalId: 'old-export-id', guid: null, sourceFile: null };
+    f.store.context.resolutions = [{ id: resolutionId, projectTrayId: ids.tray, mode: 'roots', rootObjectIds: ['dbid:23'],
+      reason: 'Old manual assignment', actorId: ids.actor, createdAt: new Date().toISOString(), scope: { ...f.context.scope, modelVersionId: oldModel } }];
+    f.store.context.trayAssignmentCarryover = [{ resolutionId, projectTrayId: ids.tray, sourceModelVersionId: oldModel,
+      roots: [{ objectId: 'dbid:23', identity }] }];
+    const existing = f.makeSession(); f.publishSession(existing);
+    const original = structuredClone(f.store.context);
+    let fail!: (error: unknown) => void;
+    const resolve = vi.fn().mockImplementationOnce(() => new Promise((_done, reject) => { fail = reject; }))
+      .mockResolvedValueOnce({ schemaVersion: 'wfc.pf.tray-identity-response.v1', matches: [{ identity, status: 'unique', objectIds: [91] }] });
+    vi.mocked(f.pf.runProjectPreparation).mockImplementation(async (_scope, operation) => operation({ assertCurrent: () => {}, resolveTrayIdentities: resolve,
+      capture: f.capture, discover: vi.fn(), readSelection: vi.fn(), readTrayRootSelection: vi.fn(), captureBarriers: vi.fn(), publishBarriers: vi.fn() }));
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.context).not.toBeNull());
+    let work!: Promise<void>; act(() => { work = result.current.checkTrays(); });
+    await waitFor(() => expect(resolve).toHaveBeenCalledOnce()); expect(result.current.busy).toBe(true);
+    await act(async () => { fail(Object.assign(new ViewerAccessError('TRAY_IDENTITY_ROW_LIMIT', 0), { message: 'Private SDK row details' })); await work; });
+    expect(result.current.busy).toBe(false); expect(result.current.unknown).toBe(false); expect(result.current.conflict).toBe(false);
+    expect(result.current.error).toContain('property limit');
+    expect(result.current.error).toContain('Saved assignments and the published network were kept');
+    expect(result.current.error).toContain('Discover project tray candidates');
+    expect(result.current.error).not.toContain('Private SDK'); expect(result.current.error).not.toContain('Refresh Path Finder');
+    expect(f.store.context).toEqual(original);
+    expect(api.savePreparationResolution).not.toHaveBeenCalled(); expect(api.createPreparation).not.toHaveBeenCalled();
+    expect(api.uploadPreparationPart).not.toHaveBeenCalled(); expect(api.mutatePreparation).not.toHaveBeenCalled();
+    expect(f.capture).not.toHaveBeenCalled(); expect(f.pf.reloadViewer).not.toHaveBeenCalled();
+    await act(() => result.current.checkTrays());
+    expect(resolve).toHaveBeenCalledTimes(2); expect(api.savePreparationResolution).toHaveBeenCalledOnce();
+    expect(f.capture).toHaveBeenCalledOnce(); expect(result.current.error).toBeNull(); expect(result.current.busy).toBe(false);
   });
   it('never renews stale manual roots without persistent identity evidence and refuses a selection read from the old model', async () => {
     const f = automaticSetup(); f.store.context.resolutions = [{ id: crypto.randomUUID(), projectTrayId: ids.tray, mode: 'roots', rootObjectIds: ['dbid:23'],

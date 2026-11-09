@@ -7,7 +7,7 @@ import { ViewerAccessError } from '@/viewer/sessionApi';
 import type { ViewerController } from '@/viewer/ViewerController';
 import { BARRIER_CAPTURE_ERROR_CODES, BARRIER_CAPTURE_ERROR_MESSAGES, barrierCaptureErrorMessage } from '../../../../viewer-runtime/barrier-capture-errors.mjs';
 
-const facts = vi.hoisted(() => ({ disposed: vi.fn(), load: vi.fn(), capture: vi.fn(), barrierCapture: vi.fn(), barrierPublish: vi.fn(), readSelection: vi.fn(), readTrayRootSelection: vi.fn(), ready: true, showLocation: vi.fn(), showTray: vi.fn(), hideTray: vi.fn(), transparency: vi.fn(), clear: vi.fn(), cancelPicking: vi.fn(), instances: 0, events: [] as ((event: { type: string; payload: Record<string, unknown> }) => void)[] }));
+const facts = vi.hoisted(() => ({ disposed: vi.fn(), load: vi.fn(), capture: vi.fn(), barrierCapture: vi.fn(), barrierPublish: vi.fn(), readSelection: vi.fn(), readTrayRootSelection: vi.fn(), resolveTrayIdentities: vi.fn(), ready: true, showLocation: vi.fn(), showTray: vi.fn(), hideTray: vi.fn(), transparency: vi.fn(), clear: vi.fn(), cancelPicking: vi.fn(), instances: 0, events: [] as ((event: { type: string; payload: Record<string, unknown> }) => void)[] }));
 vi.mock('@/api/pathfinder', async importOriginal => {
   const original = await importOriginal<typeof import('@/api/pathfinder')>();
   return { ...original, fetchPathFinderState: vi.fn(), fetchPathFinderLookupPlan: vi.fn(), fetchPathFinderProposal: vi.fn(), fetchPathFinderJob: vi.fn(), pathFinderRequest: vi.fn(), submitPathFinderCalculation: vi.fn() };
@@ -18,6 +18,7 @@ vi.mock('@/viewer/ViewerController', () => ({ ViewerController: class {
   readSelection = facts.readSelection; readTrayRootSelection = facts.readTrayRootSelection; showLocation = facts.showLocation; showTray = facts.showTray; hideTray = facts.hideTray; setPathTransparency = facts.transparency; clear = facts.clear; cancelPicking = facts.cancelPicking;
   captureModel = facts.capture; getLoadSnapshot = () => ({ ready: facts.ready });
   captureBarriers = facts.barrierCapture; publishBarriers = facts.barrierPublish;
+  resolveTrayIdentities = facts.resolveTrayIdentities;
 } }));
 const projectId = '11111111-1111-4111-8111-111111111111', modelId = '22222222-2222-4222-8222-222222222222', locationId = '33333333-3333-4333-8333-333333333333';
 const preparationModelScope = { modelVersionId: modelId, selectionRevision: '2', contentFingerprint: 'a'.repeat(64) };
@@ -32,7 +33,7 @@ function state(): PathFinderState { return { schemaVersion: 1, projectId, regist
   locations: [{ id: locationId, name: 'EQ-001', aliases: ['Equipment A'], revision: '1', binding: null }] }; }
 let container: { current: HTMLDivElement };
 beforeEach(() => {
-  vi.clearAllMocks(); facts.instances = 0; facts.events.length = 0; facts.ready = true; facts.readTrayRootSelection.mockReset(); facts.showTray.mockReset().mockResolvedValue(undefined); facts.hideTray.mockReset().mockResolvedValue(undefined); container = { current: document.createElement('div') }; document.body.append(container.current);
+  vi.clearAllMocks(); facts.instances = 0; facts.events.length = 0; facts.ready = true; facts.readTrayRootSelection.mockReset(); facts.resolveTrayIdentities.mockReset(); facts.showTray.mockReset().mockResolvedValue(undefined); facts.hideTray.mockReset().mockResolvedValue(undefined); container = { current: document.createElement('div') }; document.body.append(container.current);
   vi.mocked(fetchPathFinderState).mockResolvedValue(state()); vi.mocked(pathFinderRequest).mockResolvedValue({ locationId });
   vi.mocked(submitPathFinderCalculation).mockReset().mockResolvedValue({ kind: 'acknowledged', jobId: locationId, registryRevision: '8', duplicate: false });
   vi.mocked(fetchPathFinderProposal).mockReset(); vi.mocked(fetchPathFinderJob).mockReset();
@@ -757,6 +758,34 @@ describe('PathFinder scope and shared-location orchestration', () => {
       expect(await view.result.current.runProjectPreparation(preparationModelScope, viewer => viewer.readTrayRootSelection())).toEqual(selected);
     });
     expect(view.result.current.error).toBeNull(); expect(facts.readSelection).not.toHaveBeenCalled(); view.unmount();
+  });
+  it('explains unreadable tray identity properties without a generic Refresh and accepts a retry in the loaded model', async () => {
+    const identity = { externalId: 'stable-tray', guid: null, sourceFile: null };
+    const request = { schemaVersion: 'wfc.pf.tray-identity-request.v1' as const, identities: [identity] };
+    const response = { schemaVersion: 'wfc.pf.tray-identity-response.v1', matches: [{ identity, status: 'unique', objectIds: [91] }] };
+    const view = renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container, automaticStatePolling: false }));
+    await waitFor(() => expect(facts.instances).toBe(1));
+    act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+    facts.resolveTrayIdentities.mockImplementationOnce(async () => {
+      facts.events[0]({ type: 'ERROR', payload: { code: 'TRAY_IDENTITY_ROW_LIMIT', message: 'Private SDK row details', operation: 'RESOLVE_TRAY_IDENTITIES' } });
+      throw new ViewerAccessError('TRAY_IDENTITY_ROW_LIMIT', 0);
+    }).mockResolvedValueOnce(response);
+    await act(async () => {
+      await expect(view.result.current.runProjectPreparation(preparationModelScope, viewer => viewer.resolveTrayIdentities!(request)))
+        .rejects.toMatchObject({ code: 'TRAY_IDENTITY_ROW_LIMIT' });
+    });
+    expect(view.result.current.viewerPhase).toBe('ready'); expect(view.result.current.busy).toBe(false);
+    expect(view.result.current.error).toContain('property limit');
+    expect(view.result.current.error).toContain('model remains loaded');
+    expect(view.result.current.error).toContain('Discover project tray candidates');
+    expect(view.result.current.error).not.toContain('Refresh Path Finder');
+    expect(view.result.current.error).not.toContain('Private SDK');
+    expect(facts.disposed).not.toHaveBeenCalled();
+    await act(async () => {
+      expect(await view.result.current.runProjectPreparation(preparationModelScope, viewer => viewer.resolveTrayIdentities!(request))).toEqual(response);
+    });
+    expect(view.result.current.error).toBeNull(); expect(facts.instances).toBe(1);
+    expect(pathFinderRequest).not.toHaveBeenCalled(); expect(facts.clear).not.toHaveBeenCalled(); view.unmount();
   });
   it('preserves the terminal model explanation after a pending manual selection loses readiness', async () => {
     let finish!: (value: { objects: { objectId: number }[] }) => void;
