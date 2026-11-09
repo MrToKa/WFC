@@ -289,7 +289,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
           // authority immediately before reveal/focus, without changing a route.
           await requirePathFinder(command, signal);
           if (!live()) throw failure('INVALID_STATE');
-        });
+        }, command.payload.sdkObjectIds);
         if (!live()) return;
         if (!emit(command, 'LOCATION_SHOWN', command.payload)) throw failure('INVALID_MESSAGE');
       } else if (command.type === 'SHOW_TRAY') {

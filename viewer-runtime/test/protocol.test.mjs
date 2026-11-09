@@ -62,6 +62,17 @@ test('location display is a single current-load ID with an exact direction-bound
   }
 });
 
+test('grouped location display preserves the primary and strictly ordered bounded member IDs',()=>{
+  const maximum=Array.from({length:512},(_,at)=>at+1);
+  for(const [type,direction] of [['SHOW_LOCATION','parent-to-frame'],['LOCATION_SHOWN','frame-to-parent']]){
+    for(const sdkObjectIds of [[2],[2,3,23],maximum])assert.ok(validateEnvelope(envelope(type,{sdkObjectId:sdkObjectIds[0],sdkObjectIds}),direction));
+    for(const sdkObjectIds of [[],[3],[2,2],[3,2],[2,0],[2,-1],[2,1.5],[2,'3'],[2,2147483648],maximum.concat(513),null,2])
+      assert.equal(validateEnvelope(envelope(type,{sdkObjectId:2,sdkObjectIds})),null);
+    const input=envelope(type,{sdkObjectId:2,sdkObjectIds:[2,3]}),parsed=validateEnvelope(input,direction);
+    input.payload.sdkObjectIds[1]=9;assert.deepEqual(parsed.payload.sdkObjectIds,[2,3]);
+  }
+});
+
 test('tray display carries one bounded unique root set with a detached exact current-load acknowledgement', () => {
   const maximum = Array.from({ length: 512 }, (_, at) => at + 1);
   for (const [type, direction] of [['SHOW_TRAY', 'parent-to-frame'], ['TRAY_SHOWN', 'frame-to-parent']]) {

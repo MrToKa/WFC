@@ -5,6 +5,7 @@ import { normalizeEndpointLocation, type EndpointBinding, type EndpointCurrentSc
 import { cableEndpointConfirmedDisplaySelectionSchema, type CableEndpointContext } from '../../shared/pathfinderCableEndpoints.js';
 import { canonicalPurposeJson } from '../../shared/pathfinderPurposePolicy.js';
 import { endpointBindingHash } from './endpointBindingRepository.js';
+import { groupModelLocationMatchCandidates } from './modelLocationMatchCandidates.js';
 
 const owner = z.object({ schemaVersion: z.literal('wfc.pf.model-location-match-owner.v1'), command: modelLocationMatchAssignSchema }).strict();
 const same = (a: unknown, b: unknown) => canonicalPurposeJson(a) === canonicalPurposeJson(b);
@@ -21,7 +22,9 @@ export async function readMatchedLocationDisplay(client: PoolClient, input: { pr
   if (!request.success || !saved.success || row.kind !== 'confirm' || row.actor_id !== head.confirmedBy || row.idempotency_key !== evidence.operationId
     || row.request_sha256 !== endpointBindingHash(request.data)) return null;
   const command = request.data.command, receipt = saved.data;
-  const candidates = command.scan.candidates.filter(c => c.matchedNames.some(n => normalizeEndpointLocation(n) === evidence.logicalKey));
+  let candidates: ReturnType<typeof groupModelLocationMatchCandidates>;
+  try { candidates = groupModelLocationMatchCandidates(command.scan.candidates, evidence.logicalKey); }
+  catch { return null; }
   const result = receipt.results.find(r => normalizeEndpointLocation(r.name) === evidence.logicalKey);
   if (receipt.projectId !== projectId || receipt.idempotencyKey !== evidence.operationId || command.idempotencyKey !== evidence.operationId
     || endpointBindingHash(command) !== evidence.commandSha256 || receipt.commandSha256 !== evidence.commandSha256
@@ -29,10 +32,12 @@ export async function readMatchedLocationDisplay(client: PoolClient, input: { pr
     || !same(command.current, current) || command.scan.matchingPolicyVersion !== evidence.matchingPolicyVersion
     || command.scan.visibilityScope.contentSha256 !== evidence.visibilityScopeSha256
     || candidates.length !== 1 || candidates[0].objectId !== evidence.sdkObjectId || candidates[0].name !== evidence.objectName
+    || !same(candidates[0].objectGroup ?? null, evidence.objectGroup ?? null)
     || !same(candidates[0].bounds, evidence.bounds) || !same(candidates[0].bottomCentre, head.pointProjectMetres)
     || !result || result.status !== 'assigned' || result.locationId !== location.id || result.bindingId !== head.id
     || !same(result.candidateObjectIds, [evidence.sdkObjectId]) || BigInt(receipt.registryRevision) < BigInt(head.locationRegistryRevision)) return null;
   return cableEndpointConfirmedDisplaySelectionSchema.parse({ source: 'confirmed-display-only', mode: 'fixed-world', sdkObjectId: evidence.sdkObjectId,
+    ...(evidence.objectGroup ? { sdkObjectIds: evidence.objectGroup.objectIds } : {}),
     name: evidence.objectName, pointProjectMetres: head.pointProjectMetres, current, bindingId: head.id,
     bindingContentSha256: head.contentSha256, commandSha256: evidence.commandSha256 });
 }

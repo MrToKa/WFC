@@ -62,8 +62,8 @@ function currentDisplayScope(proposal: PathFinderProposal, state: PathFinderStat
 }
 
 /** The same exact binding predicate serves HTTP reads and verified popup reads. */
-function fixedWorldDisplayObjectId(proposal: PathFinderProposal, state: PathFinderState, evidence: PreparedDependencies,
-  end: 'from' | 'to', endpoint: BoundEndpoint, context: CableEndpointContext): string | null {
+function fixedWorldDisplayObjectIds(proposal: PathFinderProposal, state: PathFinderState, evidence: PreparedDependencies,
+  end: 'from' | 'to', endpoint: BoundEndpoint, context: CableEndpointContext): string[] {
   const active = state.activeModel, artifact = state.artifacts[0], preparation = evidence.preparation;
   const head = context.head, current = context.current, display = cableEndpointConfirmedDisplaySelectionSchema.safeParse(context.confirmedDisplaySelection);
   if (!context.canBind || context.projectId !== state.projectId || context.cableId !== proposal.cableId || context.end !== end
@@ -82,8 +82,9 @@ function fixedWorldDisplayObjectId(proposal: PathFinderProposal, state: PathFind
     || !samePoint(head.pointProjectMetres, endpoint.point) || !display.success
     || display.data.bindingId !== head.id || display.data.bindingContentSha256 !== head.contentSha256
     || canonicalPurposeJson(display.data.current) !== canonicalPurposeJson(current)
-    || !samePoint(display.data.pointProjectMetres, endpoint.point)) return null;
-  return `dbid:${display.data.sdkObjectId}`;
+    || canonicalPurposeJson(display.data.sdkObjectIds ?? null) !== canonicalPurposeJson(head.autoMatchEvidence?.objectGroup?.objectIds ?? null)
+    || !samePoint(display.data.pointProjectMetres, endpoint.point)) return [];
+  return (display.data.sdkObjectIds ?? [display.data.sdkObjectId]).map(id => `dbid:${id}`);
 }
 
 /** Reuse only exact fixed-world display identities; other bindings keep their geometry reader. */
@@ -97,8 +98,7 @@ export function proposalEndpointObjectIdsFromContexts(proposal: PathFinderPropos
     if ('kind' in endpoint || endpoint.mode !== 'fixed-world' || endpoint.sourceObjectRevisionId !== null
       || endpoint.aggregateId !== evidence.preparation.aggregateId || endpoint.captureFrameId !== evidence.preparation.captureFrameId
       || endpoint.projectionSha256 !== evidence.preparation.projectionSha256) return [];
-    const objectId = fixedWorldDisplayObjectId(proposal, state, evidence, end, endpoint, contexts[end]);
-    return objectId ? [objectId] : [];
+    return fixedWorldDisplayObjectIds(proposal, state, evidence, end, endpoint, contexts[end]);
   }));
 }
 
@@ -130,21 +130,21 @@ export async function proposalEndpointObjectIds(proposal: PathFinderProposal, st
       try {
         signal?.throwIfAborted(); controller.signal.throwIfAborted();
         if (endpoint.aggregateId !== preparation.aggregateId || endpoint.captureFrameId !== preparation.captureFrameId
-          || endpoint.projectionSha256 !== preparation.projectionSha256) return null;
+          || endpoint.projectionSha256 !== preparation.projectionSha256) return [];
         if ('kind' in endpoint) {
           if (endpoint.modelVersionId === active.modelVersionId && endpoint.artifactId === artifact.id && dbId(endpoint.sourceObjectId) !== null)
-            return endpoint.sourceObjectId;
-          return null;
+            return [endpoint.sourceObjectId];
+          return [];
         }
         // A successful explicit Assign may retain a version-local DISPLAY hint in
         // its command ledger, while its computational binding remains fixed-world.
         if (endpoint.mode === 'fixed-world' && endpoint.sourceObjectRevisionId === null && !controller.signal.aborted) {
           try {
-            const knownObjectId = contexts && fixedWorldDisplayObjectId(proposal, state, evidence, end, endpoint, contexts[end]);
-            if (knownObjectId) return knownObjectId;
+            const knownObjectIds = contexts && fixedWorldDisplayObjectIds(proposal, state, evidence, end, endpoint, contexts[end]);
+            if (knownObjectIds?.length) return knownObjectIds;
             const context = await fetchCableEndpointContext(access.projectId, access.token, proposal.cableId, end, controller.signal);
             controller.signal.throwIfAborted(); signal?.throwIfAborted();
-            return fixedWorldDisplayObjectId(proposal, state, evidence, end, endpoint, context);
+            return fixedWorldDisplayObjectIds(proposal, state, evidence, end, endpoint, context);
           } catch (error) {
             signal?.throwIfAborted();
             // An unavailable read is not evidence that this endpoint has no
@@ -153,7 +153,7 @@ export async function proposalEndpointObjectIds(proposal: PathFinderProposal, st
           }
         }
         // Manual coordinates alone never imply an equipment identity.
-        if (!endpoint.sourceObjectRevisionId || controller.signal.aborted) return null;
+        if (!endpoint.sourceObjectRevisionId || controller.signal.aborted) return [];
         try {
           const context = await fetchEndpointBinding(access.projectId, access.token, endpoint.locationId, controller.signal);
           controller.signal.throwIfAborted(); signal?.throwIfAborted();
@@ -171,21 +171,21 @@ export async function proposalEndpointObjectIds(proposal: PathFinderProposal, st
             || head.projectionSha256 !== preparation.projectionSha256 || !samePoint(head.pointProjectMetres, endpoint.point)
             || head.qualifiedProjectFrameId !== endpoint.qualifiedProjectFrameId || head.sourceDecisionId !== endpoint.migrationDecisionId
             || !head.sourceObject || head.sourceObject.objectRevisionId !== endpoint.sourceObjectRevisionId
-            || current.traceId !== null && head.sourceObject.traceId !== current.traceId) return null;
+            || current.traceId !== null && head.sourceObject.traceId !== current.traceId) return [];
           const object = await fetchGeometryObjectRevision(access.projectId, access.token, head.sourceObject.traceId, head.sourceObject.objectRevisionId, controller.signal);
           controller.signal.throwIfAborted(); signal?.throwIfAborted();
           if (object.projectId !== state.projectId || object.modelVersionId !== active.modelVersionId || object.id !== head.sourceObject.objectRevisionId
             || object.traceId !== head.sourceObject.traceId || object.aggregateId !== preparation.aggregateId
             || object.coordinates.captureFrameId !== preparation.captureFrameId || object.provenance.projectionSha256 !== preparation.projectionSha256
-            || object.provenance.contentFingerprint !== active.contentFingerprint || await digest(object) !== head.sourceObject.recordSha256) return null;
+            || object.provenance.contentFingerprint !== active.contentFingerprint || await digest(object) !== head.sourceObject.recordSha256) return [];
           controller.signal.throwIfAborted(); signal?.throwIfAborted();
           const id = dbId(object.identity.objectId);
-          if (id !== null && (object.identity.dbId === null || object.identity.dbId === id)) return object.identity.objectId;
+          if (id !== null && (object.identity.dbId === null || object.identity.dbId === id)) return [object.identity.objectId];
         } catch (error) {
           signal?.throwIfAborted();
           throw error;
         }
-        return null;
+        return [];
       } catch (error) {
         failure ??= { error }; controller.abort(error); throw error;
       }
@@ -193,6 +193,6 @@ export async function proposalEndpointObjectIds(proposal: PathFinderProposal, st
     signal?.throwIfAborted();
     if (failure) throw (failure as { error: unknown }).error;
     controller.signal.throwIfAborted();
-    return uniqueIds(reads.flatMap(read => read.status === 'fulfilled' && read.value !== null ? [read.value] : []));
+    return uniqueIds(reads.flatMap(read => read.status === 'fulfilled' ? read.value : []));
   } finally { clearTimeout(deadline); signal?.removeEventListener('abort', stop); }
 }

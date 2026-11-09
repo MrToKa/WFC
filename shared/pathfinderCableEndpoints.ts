@@ -26,7 +26,9 @@ export const cableEndpointConfirmedSelectionSchema = cableEndpointAutomaticSelec
 /** A display hint is not retained geometry, an attachment or automatic matching authority. */
 export const cableEndpointConfirmedDisplaySelectionSchema = z.object({ source: z.literal('confirmed-display-only'), mode: z.literal('fixed-world'),
   sdkObjectId: cableEndpointSdkObjectIdSchema, name: cableEndpointDisplayObjectNameSchema.optional(), pointProjectMetres: endpointPointSchema,
-  current: endpointCurrentScopeSchema, bindingId: policyUuidSchema, bindingContentSha256: policyHashSchema, commandSha256: policyHashSchema }).strict();
+  sdkObjectIds: z.array(cableEndpointSdkObjectIdSchema).min(2).max(512).refine(ids => ids.every((id, i) => i === 0 || ids[i - 1] < id)).optional(),
+  current: endpointCurrentScopeSchema, bindingId: policyUuidSchema, bindingContentSha256: policyHashSchema, commandSha256: policyHashSchema }).strict()
+  .refine(value => !value.sdkObjectIds || value.sdkObjectIds[0] === value.sdkObjectId);
 export const cableEndpointContextSchema = z.object({ schemaVersion: z.literal('wfc.pf.cable-endpoint-context.v1'),
   projectId: policyUuidSchema, cableId: policyUuidSchema, end: cableEndpointEndSchema, cableWriteRevision: policyRevisionSchema,
   logicalName, logicalKey: logicalName, mto: z.string().max(96).nullable(), canBind: z.boolean(), reasonCodes,
@@ -52,6 +54,8 @@ export const cableEndpointContextSchema = z.object({ schemaVersion: z.literal('w
     || canonicalPurposeJson(value.confirmedSelection.pointProjectMetres) !== canonicalPurposeJson(value.head.pointProjectMetres)))
     context.addIssue({ code: 'custom', message: 'Confirmed model display belongs to the exact current object-derived head.' });
   const display = value.confirmedDisplaySelection;
+  if (display && canonicalPurposeJson(display.sdkObjectIds ?? null) !== canonicalPurposeJson(value.head?.autoMatchEvidence?.objectGroup?.objectIds ?? null))
+    context.addIssue({ code: 'custom', message: 'Grouped display IDs retain the exact confirmed source-item members.' });
   if (display && (!value.canBind || !value.current || !value.head || !value.location || value.head.status !== 'confirmed'
     || value.head.mode !== 'fixed-world' || value.head.sourceObject !== null || value.head.attachment !== null
     || value.head.locationRevision !== value.location.revision || display.bindingId !== value.head.id || display.bindingContentSha256 !== value.head.contentSha256

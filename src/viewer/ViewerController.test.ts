@@ -247,6 +247,31 @@ describe('PathFinder protected Viewer capabilities', () => {
     for (const id of [0, -1, 1.5, 2147483648, NaN, Infinity]) await expect(s.c.showLocation(id)).rejects.toThrow('Invalid location object');
     expect(vi.mocked(fetch).mock.calls).toHaveLength(fetchCount); expect(s.send.mock.calls).toHaveLength(sends);
   });
+  it('shows every part of one location with a detached group and exact acknowledgement', async () => {
+    const s = await loaded(), ids = [23, 24, 25];
+    const showing = s.c.showLocation(23, ids); ids[1] = 99;
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'SHOW_LOCATION')).toBe(true));
+    const command = s.send.mock.calls.find(call => call[0].type === 'SHOW_LOCATION')![0];
+    expect(command.payload).toEqual({ sdkObjectId: 23, sdkObjectIds: [23, 24, 25] });
+    s.message('LOCATION_SHOWN', command.payload, command.requestId, s.identity);
+    await showing;
+    expect(s.send.mock.calls.some(call => call[0].type === 'CLEAR_ROUTE')).toBe(false);
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+  });
+  it('rejects invalid location groups before checking access or sending SDK commands', async () => {
+    const s = await loaded(), fetchCount = vi.mocked(fetch).mock.calls.length, sends = s.send.mock.calls.length;
+    for (const ids of [[], [24], [23, 23], [23, 25, 24], [23, 0], [23, Infinity],
+      Array.from({ length: 513 }, (_, at) => 23 + at)]) await expect(s.c.showLocation(23, ids)).rejects.toThrow('Invalid location objects');
+    expect(vi.mocked(fetch).mock.calls).toHaveLength(fetchCount); expect(s.send.mock.calls).toHaveLength(sends);
+  });
+  it.each([{ sdkObjectId: 23 }, { sdkObjectId: 23, sdkObjectIds: [23, 25] }])('rejects a location acknowledgement that omits or changes group members: %j', async payload => {
+    const s = await loaded();
+    s.send.mockImplementation(value => {
+      if (value.type === 'SHOW_LOCATION') s.message('LOCATION_SHOWN', payload, value.requestId, s.identity);
+    });
+    await expect(s.c.showLocation(23, [23, 24])).rejects.toThrow('Location acknowledgement mismatch');
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+  });
   it('location display refuses a stale model selection before sending a command', async () => {
     const s = await loaded(); vi.mocked(fetch).mockResolvedValueOnce(Response.json({ selection: { activeModelVersionId: generateId(), selectionRevision: 2 } }));
     await expect(s.c.showLocation(23)).rejects.toThrow('Model is not ready');

@@ -169,6 +169,20 @@ test('location SDK failure stays recoverable and a finished model cannot be disp
   handle.finish(); await assert.rejects(handle.showLocation(2), { code: 'MODEL_SELECTION_CHANGED' });
 });
 
+test('grouped location reveals and fits all members only after whole-group membership and authority checks',async t=>{
+  const f=sdkFixture(),previous=globalThis.window;globalThis.window=f.window;t.after(()=>{f.adapter.dispose();globalThis.window=previous;});
+  await f.adapter.initialize();const handle=await f.adapter.load({modelUrl:'http://localhost:18085/model.svf',descriptor:loadedDescriptor()});
+  const calls=[],viewer=f.viewers[0];viewer.show=ids=>calls.push(['show',[...ids]]);viewer.fitToView=ids=>calls.push(['fit',[...ids]]);
+  await handle.showLocation(2,undefined,async()=>{assert.equal(calls.length,0);},[2,3]);
+  assert.deepEqual(calls,[['show',[2,3]],['fit',[2,3]]]);
+  calls.length=0;
+  for(const ids of [[],[3],[2,2],[3,2],[2,999],[2,0],Array.from({length:513},(_,at)=>at+2)])
+    await assert.rejects(handle.showLocation(2,undefined,undefined,ids),{code:'LOCATION_UNAVAILABLE'});
+  assert.deepEqual(calls,[]);
+  await assert.rejects(handle.showLocation(2,undefined,async()=>{throw Object.assign(Error('denied'),{code:'ACCESS_REVOKED'});},[2,3]),{code:'ACCESS_REVOKED'});
+  assert.deepEqual(calls,[]);
+});
+
 test('tray display ghosts the background, fits every root and restores the previous view on Clear', async t => {
   const f = sdkFixture({ trayVisibility: true }), previous = globalThis.window; globalThis.window = f.window;
   t.after(() => { f.adapter.dispose(); globalThis.window = previous; });

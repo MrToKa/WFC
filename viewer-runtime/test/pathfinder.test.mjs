@@ -132,6 +132,39 @@ test('explicit location discovery observes canonical bottom centres without sele
  const {includeAnchors:_include,...withoutAnchors}=request;const old=await f.controller.readPreparationObjects(withoutAnchors);
  assert.equal(calls,1);assert.equal(Object.hasOwn(old,'includeAnchors'),false);assert.equal(Object.hasOwn(old.objects[0],'bounds'),false);f.controller.dispose();
 });
+
+test('property-only endpoint parts retain separate IDs and stable source identity across pages using one SDK scan',async()=>{
+ const f=fixture(),guid='7586ffbb-1d0a-5942-b687-06884123c866';let calls=0;
+ f.tree.getNodeName=id=>id===1?'MODEL':'ACPPPIPEINLINEASSET';f.tree.getNodeIndex=id=>id>=1&&id<=4?id-1:undefined;
+ f.tree.getNodeParentId=id=>id===1?0:1;f.tree.getChildCount=id=>id===1?3:0;
+ f.tree.enumNodeChildren=(id,visit)=>{if(id===1)for(const child of [2,3,4])visit(child);};f.fragments.getCount=()=>5;
+ f.tree.isNodeHidden=id=>id===4;
+ f.model.getBulkProperties=(ids,_options,yes)=>{calls++;yes(ids.map(dbId=>({dbId,properties:dbId===1?[]:[
+  {displayCategory:'AutoCAD',displayName:'Tag',displayValue:'15-FT-4018',hidden:0},
+  {displayCategory:'Element',displayName:'GUID',displayValue:`{${guid.toUpperCase()}}`},
+  {displayCategory:'Item',displayName:'Source File',displayValue:'Models\\Equipment.dwg'},
+  {displayName:'Custom alias',displayValue:'OTHER'}]})));};
+ const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['15-FT-4018'],indexNames:['15-FT-4018','OTHER'],rootObjectId:null,cursor:0,limit:1,includeAnchors:true};
+ const objects=[];let current=request;
+ for(;;){const page=await f.controller.readPreparationObjects(current);objects.push(...page.objects);assert.equal(page.propertyScan.complete,true);
+  if(page.complete)break;current={...request,cursor:page.nextCursor,visibilityScope:page.visibilityScope};}
+ assert.equal(calls,1);assert.deepEqual(objects.map(o=>o.objectId),[2,3,4]);
+ for(const object of objects)assert.deepEqual(object.objectIdentity,{guid,sourceFile:'models/equipment.dwg'});
+ assert.ok(objects[0].bounds);assert.equal(objects[2].bounds,null);assert.equal(objects[2].bottomCentre,null);
+ const alias=await f.controller.readPreparationObjects({...request,names:['OTHER'],limit:128});assert.equal(calls,1);
+ assert.deepEqual(alias.objects.map(o=>o.objectIdentity),objects.map(o=>o.objectIdentity));
+ const {includeAnchors:_include,...legacy}=request;const old=await f.controller.readPreparationObjects({...legacy,limit:128});
+ assert.equal(calls,1);assert.ok(old.objects.every(o=>!Object.hasOwn(o,'objectIdentity')));f.controller.dispose();
+});
+
+test('conflicting or missing source identities never erase matching endpoint candidates',async()=>{
+ const f=fixture(),guid='7586ffbb-1d0a-5942-b687-06884123c866';
+ f.model.getBulkProperties=(ids,_options,yes)=>yes(ids.map(dbId=>({dbId,properties:dbId===1?[]:[
+  {displayName:'Tag',displayValue:'15-FT-4018'}, {displayName:'GUID',displayCategory:'Item',displayValue:guid},
+  ...(dbId===2?[{displayName:'GUID',displayCategory:'Item',displayValue:'00000000-0000-4000-8000-000000000099'},{displayName:'Source File',displayValue:'equipment.dwg'}]:[])]})));
+ const page=await f.controller.readPreparationObjects({schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['15-FT-4018'],rootObjectId:null,cursor:0,limit:128,includeAnchors:true});
+ assert.deepEqual(page.objects.map(o=>o.objectId),[2,3]);assert.ok(page.objects.every(o=>!Object.hasOwn(o,'objectIdentity')));f.controller.dispose();
+});
 test('unavailable bounds remain an explicit unavailable candidate rather than dropping an ambiguous object',async()=>{
  const f=fixture();f.model.getBulkProperties=(ids,_options,yes)=>yes(ids.map(dbId=>({dbId,properties:dbId!==1?[{displayName:'Tag',displayValue:'P-001'}]:[]})));
  f.fragments.getWorldBounds=(id,box)=>{if(id===3)throw new Error('Geometry unavailable');box.expandByPoint({x:1,y:2,z:3});box.expandByPoint({x:2,y:3,z:4});};

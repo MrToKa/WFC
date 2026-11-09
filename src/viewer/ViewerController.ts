@@ -256,7 +256,8 @@ export class ViewerController {
     if (message.type === 'PATH_TRANSPARENCY_UPDATED' && (message.payload.routeRequestId !== pending.envelope.payload.routeRequestId || message.payload.percent !== pending.envelope.payload.percent)) {
       pending.reject?.(new Error('Path transparency acknowledgement mismatch')); return;
     }
-    if (message.type === 'LOCATION_SHOWN' && message.payload.sdkObjectId !== pending.envelope.payload.sdkObjectId) {
+    if (message.type === 'LOCATION_SHOWN' && (message.payload.sdkObjectId !== pending.envelope.payload.sdkObjectId
+      || JSON.stringify(message.payload.sdkObjectIds) !== JSON.stringify(pending.envelope.payload.sdkObjectIds))) {
       pending.reject?.(new Error('Location acknowledgement mismatch')); return;
     }
     if (message.type === 'TRAY_SHOWN' && JSON.stringify(message.payload.sdkObjectIds) !== JSON.stringify(pending.envelope.payload.sdkObjectIds)) {
@@ -606,9 +607,14 @@ export class ViewerController {
     return reply.payload as unknown as ViewerTrayRootSelection;
   }
 
-  /** Reveal and focus one object without changing selection or route ownership. */
-  async showLocation(sdkObjectId: number): Promise<void> {
+  /** Reveal one logical location and all its model parts without changing route ownership. */
+  async showLocation(sdkObjectId: number, sdkObjectIds?: number[]): Promise<void> {
     if (!Number.isSafeInteger(sdkObjectId) || sdkObjectId <= 0 || sdkObjectId > 2147483647) throw new Error('Invalid location object');
+    if (sdkObjectIds !== undefined && (!Array.isArray(sdkObjectIds) || sdkObjectIds.length === 0 || sdkObjectIds.length > 512))
+      throw new Error('Invalid location objects');
+    const ids = sdkObjectIds === undefined ? undefined : [...sdkObjectIds];
+    if (ids && (ids[0] !== sdkObjectId || !ids.every((id, at) => Number.isSafeInteger(id) && id > 0 && id <= 2147483647
+      && (at === 0 || id > ids[at - 1])))) throw new Error('Invalid location objects');
     const { instanceId, modelVersionId, loadId, selectionRevision, generation, routeGeneration } = this;
     const current = () => {
       if (this.disposed || !this.loaded || !modelVersionId || !loadId || this.instanceId !== instanceId || this.modelVersionId !== modelVersionId
@@ -618,7 +624,7 @@ export class ViewerController {
     current();
     if (!await this.checkSelection()) throw new Error('Model is not ready');
     current();
-    await this.sendAsync('SHOW_LOCATION', { sdkObjectId }, 'LOCATION_SHOWN');
+    await this.sendAsync('SHOW_LOCATION', { sdkObjectId, ...(ids ? { sdkObjectIds: ids } : {}) }, 'LOCATION_SHOWN');
     current();
   }
 

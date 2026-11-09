@@ -10,6 +10,7 @@ import type { PathFinderWorkflowDisplay, PathFinderWorkflowReview } from '@/page
 import { PathFinderCableComparison } from './PathFinderCableComparison';
 import { CableAutoCalculatedLength } from './CableAutoCalculatedLength';
 import type { PathFinderEndpointForegroundContexts } from '@/pages/ProjectDetails/pathFinderEndpointVisibility';
+import { cableEndpointConfirmedDisplaySelectionSchema } from '../../../shared/pathfinderCableEndpoints';
 
 export type PathFinderCalculationDiagnostics = {
   cableId: string; jobId: string; jobStatus: string | null;
@@ -21,7 +22,7 @@ export type PathFinderCableRoutingPanelProps = {
   requestedPopup?: FloatingCableWindowRequest | null;
   cable: CableWorkflowRow | null; open: boolean; onClose: () => void; anchor?: HTMLElement | null;
   onCalculate?: () => void | Promise<void>; onTogglePath?: () => void;
-  onShowLocation?: (sdkObjectId: number) => Promise<boolean>;
+  onShowLocation?: (sdkObjectId: number, sdkObjectIds?: number[]) => Promise<boolean>;
   onEndpointForegroundContexts?: (value: PathFinderEndpointForegroundContexts | null) => void;
   pathVisible?: boolean; pathReady?: boolean; endpointRefreshKey?: number; actionsBusy?: boolean; calculatedRouting?: string | null; calculatedDesignLength?: string | null;
   pathSource?: PathFinderWorkflowDisplay['source'];
@@ -35,13 +36,19 @@ export type PathFinderCableRoutingPanelProps = {
 };
 type Endpoint = ReturnType<typeof useCableEndpointPairSelection>['from'];
 /** Display uses live model identities only; retained labels never target a new model. */
-function locationObjectId(state: Endpoint, model: PathFinderCableRoutingPanelProps['access']['model']): number | null {
+function locationObjects(state: Endpoint, model: PathFinderCableRoutingPanelProps['access']['model']): { sdkObjectId: number; sdkObjectIds?: number[] } | null {
   const current = state.context?.current;
   if (!state.enabled || !model || !current || current.modelVersionId !== model.modelVersionId
     || current.selectionRevision !== model.selectionRevision || current.contentFingerprint !== model.contentFingerprint) return null;
   const id = state.draft ? state.draft.mode === 'object-derived' ? state.draft.sdkObjectId : state.draft.displaySdkObjectId
     : state.context?.automaticSelection?.sdkObjectId ?? state.context?.confirmedSelection?.sdkObjectId ?? state.context?.confirmedDisplaySelection?.sdkObjectId;
-  return Number.isSafeInteger(id) && Number(id) > 0 && Number(id) <= 2147483647 ? Number(id) : null;
+  if (!Number.isSafeInteger(id) || Number(id) <= 0 || Number(id) > 2147483647) return null;
+  if (!state.draft && !state.context?.automaticSelection && !state.context?.confirmedSelection) {
+    const display = cableEndpointConfirmedDisplaySelectionSchema.safeParse(state.context?.confirmedDisplaySelection);
+    if (!display.success) return null;
+    return { sdkObjectId: Number(id), ...(display.data.sdkObjectIds ? { sdkObjectIds: [...display.data.sdkObjectIds] } : {}) };
+  }
+  return { sdkObjectId: Number(id) };
 }
 /** Persistent nonmodal portal; only its own bounds intercept pointer input. */
 export function PathFinderCableRoutingPanel(props: PathFinderCableRoutingPanelProps) {
@@ -80,12 +87,13 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
   useEffect(() => { locationRequest.current = null; setLocationDisplay(null); }, [displayScope, active]);
   useEffect(() => () => { locationOwner.current.active = false; locationRequest.current = null; }, []);
   const locationWorking = locationDisplay?.scope === displayScope && locationDisplay.working;
-  const showLocation = async (end: 'from' | 'to', sdkObjectId: number) => {
+  const showLocation = async (end: 'from' | 'to', target: { sdkObjectId: number; sdkObjectIds?: number[] }) => {
     if (!onShowLocation || locationRequest.current || !locationOwner.current.active || locationOwner.current.scope !== displayScope) return;
     const request = Symbol(); locationRequest.current = request;
     setLocationDisplay({ scope: displayScope, end, working: true, error: null });
     let shown = false;
-    try { shown = await onShowLocation(sdkObjectId); } catch { /* Display errors do not change endpoint or calculation state. */ }
+    try { shown = await (target.sdkObjectIds ? onShowLocation(target.sdkObjectId, target.sdkObjectIds) : onShowLocation(target.sdkObjectId)); }
+    catch { /* Display errors do not change endpoint or calculation state. */ }
     if (locationRequest.current !== request) return;
     locationRequest.current = null;
     if (locationOwner.current.active && locationOwner.current.scope === displayScope) setLocationDisplay({ scope: displayScope, end, working: false,
@@ -195,7 +203,7 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
         : displayContext?.head ? `Saved point for ${name ?? 'this location'}` : state.error || assignment.error || assignment.retired
           ? 'Location could not be read. Refresh From/To.' : 'No model object assigned');
     const value = [objectName, point ? `X: ${point[0]} m; Y: ${point[1]} m; Z: ${point[2]} m` : ''].filter(Boolean).join('\n');
-    const objectId = assignment.retired ? null : locationObjectId(state, access.model);
+    const target = assignment.retired ? null : locationObjects(state, access.model);
     const display = locationDisplay?.scope === displayScope && locationDisplay.end === end ? locationDisplay : null;
     return <section aria-label={`${side} endpoint`} className={styles.field}>
       <h4 className={styles.heading}>{side}: {name?.trim() ? name : 'Location name is missing.'}</h4>
@@ -206,10 +214,10 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
       <div className={styles.actions}>
         <Button disabled={busy || locationWorking || Boolean(pending) || !name?.trim() || !state.canSelect}
           onClick={() => void state.selectObject()}>Assign {side}</Button>
-        <Button aria-label={`Show ${side} location`} disabled={actionsBusy || state.busy || locationWorking || objectId === null || !onShowLocation}
-          onClick={() => { if (objectId !== null) void showLocation(end, objectId); }}>Show location</Button>
+        <Button aria-label={`Show ${side} location`} disabled={actionsBusy || state.busy || locationWorking || target === null || !onShowLocation}
+          onClick={() => { if (target !== null) void showLocation(end, target); }}>Show location</Button>
       </div>
-      {objectId === null && point && !lastRead && !state.busy ? <Caption1>This location has no current model object to show. Assign an object or refresh From/To.</Caption1> : null}
+      {target === null && point && !lastRead && !state.busy ? <Caption1>This location has no current model object to show. Assign an object or refresh From/To.</Caption1> : null}
       {display?.working ? <Spinner size="tiny" label={`Showing ${side} location…`} /> : null}
       {display?.error ? <p role="alert" className={styles.note}>{display.error}</p> : null}
       {!busy && !pending && name?.trim() && !state.canSelect && !state.error ? <p className={styles.note} role="status">Prepare the current model and refresh this endpoint before assigning an object.</p> : null}

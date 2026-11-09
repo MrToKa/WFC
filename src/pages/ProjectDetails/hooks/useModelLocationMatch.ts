@@ -106,7 +106,7 @@ export async function collectModelLocationMatch(context: ModelLocationMatchConte
   if (!visibilityScope || indexedObjectCount === null || !propertyScan) throw new Error('There are no project From/To names to search.');
   return { matchingPolicyVersion: PREPARATION_MATCHING_POLICY, visibilityScope, indexedObjectCount, propertyScan, complete: true,
     candidates: [...objects.values()].map((o): Candidate => ({ objectId: o.objectId, name: o.name, matchedNames: o.matchedNames,
-      bounds: o.bounds ?? null, bottomCentre: o.bottomCentre ?? null })) };
+      bounds: o.bounds ?? null, bottomCentre: o.bottomCentre ?? null, ...(o.objectIdentity ? { objectIdentity: o.objectIdentity } : {}) })) };
 }
 export function modelLocationMatchPage(context: ModelLocationMatchContext, scan: Scan, names: string[], registryRevision: string): ModelLocationMatchAssign {
   const wanted = new Set(names.map(normalizeEndpointLocation));

@@ -24,6 +24,16 @@ export const endpointObjectRefSchema = z.object({ traceId: uuid, objectRevisionI
 export const endpointCurrentScopeSchema = z.object({ modelVersionId: uuid, selectionRevision: revision, contentFingerprint: hash, aggregateId: uuid, artifactId: uuid, projectionSha256: hash, captureFrameId: uuid, geometryRevision: revision, traceId: uuid.nullable() }).strict();
 export const endpointModelMatchBoundsSchema = z.object({ minimum: endpointPointSchema, maximum: endpointPointSchema }).strict()
   .refine(v => v.minimum.every((n, i) => n <= v.maximum[i]) && v.minimum.some((n, i) => n < v.maximum[i]));
+/** A source Item GUID is scoped to its complete source-file path. SDK node IDs
+ * remain presentation identities within this model, never cross-model keys. */
+export const endpointModelMatchObjectIdentitySchema = z.object({
+  guid: uuid,
+  sourceFile: nonempty(1024).refine(v => v === v.normalize('NFC').trim().replaceAll('\\', '/').toLowerCase()),
+}).strict();
+export const endpointModelMatchObjectGroupSchema = endpointModelMatchObjectIdentitySchema.extend({
+  objectIds: z.array(z.number().int().positive().max(2147483647)).min(2).max(512)
+    .refine(v => v.every((id, i) => i === 0 || v[i - 1] < id)),
+}).strict();
 /** An explicitly requested model-name batch observes approximate fixed points.
  * It neither claims retained mesh evidence nor follows later model revisions. */
 export const endpointModelMatchEvidenceSchema = z.object({
@@ -31,10 +41,12 @@ export const endpointModelMatchEvidenceSchema = z.object({
   operationId: uuid, commandSha256: hash, scanSha256: hash, namesSha256: hash,
   current: endpointCurrentScopeSchema, logicalKey: endpointLocationNameSchema,
   sdkObjectId: z.number().int().positive().max(2147483647), objectName: nonempty(2048),
+  objectGroup: endpointModelMatchObjectGroupSchema.optional(),
   bounds: endpointModelMatchBoundsSchema, bottomCentre: endpointPointSchema,
   matchingPolicyVersion: z.literal('wfc.pf.project-exact-candidates.v3'), visibilityScopeSha256: hash,
   approximate: z.literal(true), engineeringAccepted: z.literal(false),
 }).strict().refine(v => v.logicalKey === normalizeEndpointLocation(v.logicalKey)
+  && (!v.objectGroup || v.objectGroup.objectIds[0] === v.sdkObjectId)
   && v.bottomCentre[0] === (v.bounds.minimum[0] + v.bounds.maximum[0]) / 2
   && v.bottomCentre[1] === (v.bounds.minimum[1] + v.bounds.maximum[1]) / 2
   && v.bottomCentre[2] === v.bounds.minimum[2]);

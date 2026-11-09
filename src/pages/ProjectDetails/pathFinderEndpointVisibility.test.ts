@@ -76,6 +76,22 @@ function fixedDisplayFixture() {
   const proposal = parsePathFinderProposal({ ...f.raw, dependencies: { ...f.raw.dependencies, to: bound } });
   return { ...f, context, proposal };
 }
+function groupedFixedDisplayFixture() {
+  const f = fixedDisplayFixture(), head = f.context.head!, point = head.pointProjectMetres;
+  head.derivation = 'matched-model-bottom-aabb.v1';
+  head.autoMatchEvidence = { schemaVersion: 'wfc.pf.model-location-match-evidence.v1', operationId: key(50),
+    commandSha256: 'd'.repeat(64), scanSha256: 'e'.repeat(64), namesSha256: 'f'.repeat(64), current: f.context.current!,
+    logicalKey: f.context.logicalKey!, sdkObjectId: 901, objectName: '/Selected parent',
+    objectGroup: { guid: '7586ffbb-1d0a-5942-b687-06884123c866', sourceFile: 'plant/instruments.dwg', objectIds: [901, 902, 903] },
+    bounds: { minimum: [point[0] - 1, point[1] - 1, point[2]], maximum: [point[0] + 1, point[1] + 1, point[2] + 2] },
+    bottomCentre: [...point], matchingPolicyVersion: 'wfc.pf.project-exact-candidates.v3', visibilityScopeSha256: 'a'.repeat(64),
+    approximate: true, engineeringAccepted: false };
+  head.contentSha256 = hash(endpointBindingContentHashInput(head));
+  Object.assign(f.context.confirmedDisplaySelection!, { sdkObjectIds: [901, 902, 903], bindingContentSha256: head.contentSha256 });
+  const proposal = parsePathFinderProposal({ ...f.raw, dependencies: { ...f.raw.dependencies,
+    to: { ...f.proposal.dependencies!.to, bindingContentSha256: head.contentSha256 } } });
+  return { ...f, proposal };
+}
 beforeEach(() => vi.clearAllMocks());
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
@@ -134,6 +150,24 @@ describe('Path Finder endpoint foreground evidence', () => {
     expect(proposalEndpointObjectIdsFromContexts(f.proposal, f.state, f.access, contexts)).toEqual(['dbid:901']);
     expect(await proposalEndpointObjectIds(f.proposal, f.state, f.access, undefined, contexts)).toEqual(['dbid:74', 'dbid:901']);
     expect(fetchCableEndpointContext).not.toHaveBeenCalled(); expect(fetchEndpointBinding).not.toHaveBeenCalled(); expect(fetchGeometryObjectRevision).not.toHaveBeenCalled();
+  });
+  it('keeps every grouped source-item part visible with both cached and freshly read endpoint evidence', async () => {
+    const f = groupedFixedDisplayFixture(), contexts = { from: f.context, to: f.context }, before = structuredClone(f.context);
+    expect(proposalEndpointObjectIdsFromContexts(f.proposal, f.state, f.access, contexts)).toEqual(['dbid:901', 'dbid:902', 'dbid:903']);
+    expect(await proposalEndpointObjectIds(f.proposal, f.state, f.access, undefined, contexts)).toEqual(['dbid:74', 'dbid:901', 'dbid:902', 'dbid:903']);
+    expect(fetchCableEndpointContext).not.toHaveBeenCalled();
+    vi.mocked(fetchCableEndpointContext).mockResolvedValue(f.context);
+    expect(await proposalEndpointObjectIds(f.proposal, f.state, f.access)).toEqual(['dbid:74', 'dbid:901', 'dbid:902', 'dbid:903']);
+    expect(fetchCableEndpointContext).toHaveBeenCalledOnce(); expect(f.context).toEqual(before);
+    expect(fetchEndpointBinding).not.toHaveBeenCalled(); expect(fetchGeometryObjectRevision).not.toHaveBeenCalled();
+  });
+  it.each(['missing-part', 'other-part', 'reordered'] as const)('omits grouped display evidence with %s members', async mismatch => {
+    const f = groupedFixedDisplayFixture();
+    f.context.confirmedDisplaySelection!.sdkObjectIds = mismatch === 'missing-part' ? [901, 902]
+      : mismatch === 'other-part' ? [901, 902, 904] : [902, 901, 903];
+    expect(proposalEndpointObjectIdsFromContexts(f.proposal, f.state, f.access, { from: f.context, to: f.context })).toEqual([]);
+    vi.mocked(fetchCableEndpointContext).mockResolvedValue(f.context);
+    expect(await proposalEndpointObjectIds(f.proposal, f.state, f.access)).toEqual(['dbid:74']);
   });
   it('starts both fixed-world endpoint reads before either one finishes and retains their independent exact evidence', async () => {
     const f = fixedDisplayFixture(), finish = new Map<string, (context: CableEndpointContext) => void>();

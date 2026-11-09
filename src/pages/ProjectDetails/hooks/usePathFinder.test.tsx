@@ -93,6 +93,16 @@ describe('fresh popup calculation submission without Viewer appearance changes',
     await act(async () => { expect(await view.result.current.showLocation(55)).toBe(false); });
     expect(facts.clear).not.toHaveBeenCalled(); expect(facts.transparency).not.toHaveBeenCalled(); view.unmount();
   });
+  it('shows every part of a grouped location without changing selection or the route', async () => {
+    const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
+    act(() => { facts.events[0]({ type: 'MODEL_LOADED', payload: {} }); });
+    const ids = [55, 66, 77];
+    await act(async () => { expect(await view.result.current.showLocation(55, ids)).toBe(true); });
+    expect(facts.showLocation).toHaveBeenCalledExactlyOnceWith(55, [55, 66, 77]);
+    expect(facts.showLocation.mock.calls[0][1]).not.toBe(ids);
+    expect(facts.clear).not.toHaveBeenCalled(); expect(facts.readSelection).not.toHaveBeenCalled();
+    expect(pathFinderRequest).not.toHaveBeenCalled(); view.unmount();
+  });
   it('shows all tray roots together only in their ready model and waits for acknowledgement', async () => {
     const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
     await act(async () => { expect(await view.result.current.showTray(preparationModelScope, [55, 66])).toBe(false); });

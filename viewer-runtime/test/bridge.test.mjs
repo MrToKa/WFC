@@ -184,6 +184,15 @@ test('location display is protected and acknowledges the exact target without re
   assert.equal(f.facts.fits, 1); assert.equal(f.messages('ERROR').length, 0); f.bridge.dispose();
 });
 
+test('location display passes every group member to the adapter and echoes its exact bounded request',async()=>{
+  let target;
+  const f=fixture({showLocation:async(id,_signal,beforeCommit,ids)=>{await beforeCommit();target={id,ids};}});
+  await f.loaded();const command=f.send('SHOW_LOCATION',{sdkObjectId:23,sdkObjectIds:[23,24,25]});await turn();
+  assert.deepEqual(target,{id:23,ids:[23,24,25]});
+  assert.deepEqual(f.messages('LOCATION_SHOWN').at(-1),{...command,type:'LOCATION_SHOWN'});
+  assert.equal(f.messages('ERROR').length,0);f.bridge.dispose();
+});
+
 test('tray display retires old route ownership while the adapter controls appearance and selection', async () => {
   const f = fixture(); await f.loaded(); const pathId = uuid(9800);
   f.send('BEGIN_COMPUTED_PATH', { pathId, pointCount: 1, objectIds: [2] }); await turn();

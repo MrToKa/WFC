@@ -195,6 +195,24 @@ describe('showing the popup From/To locations without changing them', () => {
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Show To location' })); });
     expect(show.mock.calls).toEqual([[123], [444]]);
   });
+  it('shows all saved location parts together without calculating or saving again', async () => {
+    const saved = context('to', 'confirmed'), p = props();
+    assignment.to.context = { ...saved, confirmedSelection: null, confirmedDisplaySelection: { source: 'confirmed-display-only', mode: 'fixed-world',
+      sdkObjectId: 444, sdkObjectIds: [444, 445, 446], pointProjectMetres: [2, 2, 3], current: saved.current!, bindingId: saved.head!.id,
+      bindingContentSha256: saved.head!.contentSha256, commandSha256: 'e'.repeat(64) } };
+    const show = vi.fn(async () => true); render(<PathFinderCableRoutingPanel {...p} onShowLocation={show} />);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Show To location' })); });
+    expect(show).toHaveBeenCalledExactlyOnceWith(444, [444, 445, 446]);
+    expect(assignment.save).not.toHaveBeenCalled(); expect(assignment.to.selectObject).not.toHaveBeenCalled(); expect(p.onCalculate).not.toHaveBeenCalled();
+  });
+  it('does not show an invalid partial or reordered saved location group', () => {
+    const saved = context('to', 'confirmed');
+    assignment.to.context = { ...saved, confirmedSelection: null, confirmedDisplaySelection: { source: 'confirmed-display-only', mode: 'fixed-world',
+      sdkObjectId: 444, sdkObjectIds: [445, 444], pointProjectMetres: [2, 2, 3], current: saved.current!, bindingId: saved.head!.id,
+      bindingContentSha256: saved.head!.contentSha256, commandSha256: 'e'.repeat(64) } };
+    render(<PathFinderCableRoutingPanel {...props()} onShowLocation={vi.fn(async () => true)} />);
+    expect(screen.getByRole('button', { name: 'Show To location' })).toBeDisabled();
+  });
   it('does not substitute an older object for a manually entered point', () => {
     assignment.from.context = context('from', 'confirmed'); assignment.from.draftSource = 'selected';
     assignment.from.draft = { mode: 'fixed-world', point: [7, 8, 9], derivation: 'manual-world-point', displaySdkObjectId: null };

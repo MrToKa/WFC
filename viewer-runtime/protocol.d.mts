@@ -34,7 +34,7 @@ export interface ViewerDescriptor {
 export type CanonicalPoint = [number, number, number];
 export interface ComputedPath { pathId: string; points: CanonicalPoint[]; objectIds: number[] }
 /** Display-only target in the current protected model load. */
-export interface ViewerLocationTarget { sdkObjectId: number }
+export interface ViewerLocationTarget { sdkObjectId: number; sdkObjectIds?: number[] }
 export type RoutingCategory = 'MV' | 'LV' | 'Control';
 export interface ModelRouteRule { id: string; objectIds: number[]; allowedCategories: RoutingCategory[] }
 export type ModelCaptureRequest = { equipmentNames: string[] } & (

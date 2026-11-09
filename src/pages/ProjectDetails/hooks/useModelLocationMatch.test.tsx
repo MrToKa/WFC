@@ -3,7 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '@/api/pathfinderModelLocationMatch';
 import { modelMatchContext, modelMatchIds as ids, modelMatchPage, modelMatchReceipt } from '@/test/modelLocationMatchFixtures';
-import { collectModelLocationMatch, useModelLocationMatch } from './useModelLocationMatch';
+import { collectModelLocationMatch, modelLocationMatchPage, useModelLocationMatch } from './useModelLocationMatch';
 import type { ProjectPreparationViewer, usePathFinder } from './usePathFinder';
 import type { PreparationDiscoveryPage, PreparationDiscoveryRequest } from '../../../../viewer-runtime/preparation-input.mjs';
 vi.mock('@/api/pathfinderModelLocationMatch', async original => ({ ...await original<typeof api>(), fetchModelLocationMatchContext: vi.fn(), assignModelLocations: vi.fn() }));
@@ -24,6 +24,26 @@ function setup(names = ['TAG-1']) {
 beforeEach(() => { vi.clearAllMocks(); vi.stubGlobal('crypto', webcrypto); localStorage.clear(); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 describe('complete endpoint-only matching scan', () => {
+  it('retains each raw matching object and its shared identity for complete server grouping', async () => {
+    const { context, viewer, discover } = setup(['15-FT-4018']);
+    const identity = { guid: '7586ffbb-1d0a-5942-b687-06884123c866', sourceFile: 'plant/instruments.dwg' };
+    discover.mockImplementation(async request => ({ ...modelMatchPage(request, [11, 12, 13]),
+      objects: modelMatchPage(request, [11, 12, 13]).objects.map(object => ({ ...object, objectIdentity: { ...identity } })) }));
+    const scan = await collectModelLocationMatch(context, viewer, vi.fn(), new AbortController().signal);
+    expect(scan.candidates.map(object => object.objectId)).toEqual([11, 12, 13]);
+    expect(scan.candidates.map(object => object.objectIdentity)).toEqual([identity, identity, identity]);
+    const command = modelLocationMatchPage(context, scan, context.names, context.registryRevision);
+    expect(command.scan.candidates).toEqual(scan.candidates);
+    expect(api.assignModelLocations).not.toHaveBeenCalled();
+  });
+  it('rejects changed identity evidence for one SDK object between name batches', async () => {
+    const { context, viewer, discover } = setup(Array.from({ length: 129 }, (_, index) => `TAG-${index}`));
+    discover.mockImplementation(async request => ({ ...modelMatchPage(request), objects: modelMatchPage(request).objects.map(object => ({
+      ...object, objectIdentity: { guid: request.names[0] === 'TAG-0' ? '7586ffbb-1d0a-5942-b687-06884123c866' : '8586ffbb-1d0a-5942-b687-06884123c866', sourceFile: 'plant/instruments.dwg' },
+    })) }));
+    await expect(collectModelLocationMatch(context, viewer, vi.fn(), new AbortController().signal)).rejects.toThrow('changed during the complete model scan');
+    expect(api.assignModelLocations).not.toHaveBeenCalled();
+  });
   it('includes every SDK page and unavailable candidate instead of turning ambiguity into a unique match', async () => {
     const { context, viewer, discover } = setup();
     discover.mockImplementation(async request => {

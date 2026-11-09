@@ -1,6 +1,6 @@
 import { isCanonicalPoint } from './protocol.mjs';
 import { PREPARATION_VIEWER_LIMITS, PREPARATION_MATCHING_POLICY, validatePreparationDiscoveryRequest, validatePreparationDiscoveryPage } from './preparation-input.mjs';
-import { modelEquipmentMatchKeys, humanScalarPropertyValues } from './equipment-names.mjs';
+import { modelEquipmentMatchKeys, humanScalarPropertyValues, equipmentObjectIdentity } from './equipment-names.mjs';
 import { captureDisplayVisibility, sameDisplayVisibility } from './display-visibility.mjs';
 
 const fail = code => Object.assign(new Error('The requested PathFinder viewer operation could not be completed.'), { code });
@@ -353,7 +353,7 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
     if (request.cursor > ids.length) throw fail('PREPARATION_SCOPE_INVALID');
     const visibility = await captureDisplayVisibility(viewer, tree, ids, { check, pause, indexById: indexed.indexById });
     if (request.visibilityScope && !sameDisplayVisibility(request.visibilityScope, visibility.scope)) throw fail('PREPARATION_VISIBILITY_CHANGED');
-    const indexById = indexed.indexById, matching = new Map(); let propertyScan = null, candidateIndices;
+    const indexById = indexed.indexById, matching = new Map(); let propertyScan = null, candidateIndices, objectIdentities;
     const normalEquipment = value => String(value).normalize('NFC').trim().toUpperCase();
     if (request.mode === 'subtree' || request.mode === 'subtrees' || request.mode === 'ancestors') {
       const roots = request.mode === 'subtrees' ? request.rootObjectIds : [request.rootObjectId];
@@ -382,7 +382,7 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
       if (!preparationEquipment || preparationEquipment.queryKey !== queryKey) {
         const state = { promise:null, queryKey }; preparationEquipment = state;
         state.promise = (async () => {
-          const values = new Map(), requested = new Set(indexNames.map(normalEquipment)), returned = new Uint8Array(ids.length);
+          const values = new Map(), identities = new Map(), requested = new Set(indexNames.map(normalEquipment)), returned = new Uint8Array(ids.length);
           let returnedCount = 0, accountedBytes = returned.byteLength, postings = 0, scannedProperties = 0;
           const charge = bytes => { accountedBytes += bytes; if (accountedBytes > EQUIPMENT_INDEX_LIMITS.bytes) throw fail('PREPARATION_EQUIPMENT_INDEX_LIMIT'); };
           const indexValue = (raw, id, seen) => {
@@ -415,14 +415,18 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
               const humanValues = humanScalarPropertyValues(row.properties);
               if (humanValues.length > EQUIPMENT_INDEX_LIMITS.eligiblePropertiesPerRow) throw fail('PREPARATION_EQUIPMENT_ROW_LIMIT');
               for (const value of humanValues) indexValue(value, row.dbId, seen);
+              if (seen.size > 0) {
+                const identity = equipmentObjectIdentity(row.properties);
+                if (identity) { charge(192 + 2 * (identity.guid.length + identity.sourceFile.length)); identities.set(row.dbId, identity); }
+              }
             }
             await pause();
           }
           check();
-          return { values, propertyScan:{ attemptedObjectCount:ids.length, returnedObjectCount:returnedCount, omittedObjectCount:ids.length-returnedCount, complete:returnedCount===ids.length } };
+          return { values, identities, propertyScan:{ attemptedObjectCount:ids.length, returnedObjectCount:returnedCount, omittedObjectCount:ids.length-returnedCount, complete:returnedCount===ids.length } };
         })().catch(error => { if (preparationEquipment === state) preparationEquipment = undefined; throw error; });
       }
-      const data = await preparationEquipment.promise; check(); propertyScan = data.propertyScan;
+      const data = await preparationEquipment.promise; check(); propertyScan = data.propertyScan; objectIdentities = data.identities;
       for (const name of request.names) for (const id of data.values.get(normalEquipment(name)) ?? []) {
         const matched = matching.get(id) ?? []; matched.push(name); matching.set(id, matched);
       }
@@ -473,7 +477,7 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
       let hasGeometry = false; tree.enumNodeFragments(id, () => { hasGeometry = true; }, false);
       const parent = id === ids[0] ? null : tree.getNodeParentId(id);
       if (parent !== null && (!indexById.has(parent) || parent === id)) throw fail('EXTRACTION_FAILED');
-      const object = { objectId:id, parentId:parent, name:names[cursor], hasGeometry, isPhysicalLeaf:hasGeometry && tree.getChildCount(id) === 0, orderIndex:cursor, matchedNames, ...(request.includeAnchors ? eligible ? observedAnchor(id) : {bounds:null,bottomCentre:null} : {}) };
+      const object = { objectId:id, parentId:parent, name:names[cursor], hasGeometry, isPhysicalLeaf:hasGeometry && tree.getChildCount(id) === 0, orderIndex:cursor, matchedNames, ...(request.includeAnchors ? { ...(eligible ? observedAnchor(id) : {bounds:null,bottomCentre:null}), ...(objectIdentities?.has(id) ? {objectIdentity:{...objectIdentities.get(id)}} : {}) } : {}) };
       const candidate = { ...result, objects:[...result.objects, object], nextCursor:cursor+1, complete:false };
       if (new TextEncoder().encode(JSON.stringify(candidate)).length > PREPARATION_VIEWER_LIMITS.pageBytes) { if (!result.objects.length) throw fail('PREPARATION_PAGE_TOO_LARGE'); finished = false; break; }
       result.objects.push(object); if (result.objects.length >= request.limit) { cursor++; finished = iterator.next().done === true; break; }

@@ -126,7 +126,9 @@ function payload(type, value) {
     case 'TRAY_ROOT_SELECTION': return exact(value, ['objects']) && Array.isArray(value.objects) && value.objects.length <= 512
       && value.objects.every(object => exact(object, ['objectId']) && positiveId(object.objectId))
       && new Set(value.objects.map(object => object.objectId)).size === value.objects.length;
-    case 'SHOW_LOCATION': case 'LOCATION_SHOWN': return exact(value, ['sdkObjectId']) && positiveId(value.sdkObjectId);
+    case 'SHOW_LOCATION': case 'LOCATION_SHOWN': return (exact(value, ['sdkObjectId']) || exact(value, ['sdkObjectId', 'sdkObjectIds'])
+      && boundedIds(value.sdkObjectIds) && value.sdkObjectIds.length > 0 && value.sdkObjectIds[0] === value.sdkObjectId
+      && value.sdkObjectIds.every((id, at) => at === 0 || id > value.sdkObjectIds[at - 1])) && positiveId(value.sdkObjectId);
     case 'SHOW_TRAY': case 'TRAY_SHOWN': return exact(value, ['sdkObjectIds']) && Array.isArray(value.sdkObjectIds) && value.sdkObjectIds.length > 0 && value.sdkObjectIds.length <= 512 && boundedIds([...value.sdkObjectIds]);
     case 'MODEL_SELECTION': return exact(value, ['coordinateFrame', 'metresPerDisplayUnit', 'globalOffsetMetres', 'objects']) && payload('MODEL_OBJECTS', { cursor: 0, nextCursor: null, complete: true, query: '', ...value }) && new Set(value.objects.map(object => object.objectId)).size === value.objects.length;
     case 'SET_PATH_TRANSPARENCY': case 'PATH_TRANSPARENCY_UPDATED': return exact(value, ['routeRequestId', 'percent']) && isUuid(value.routeRequestId) && integer(value.percent) && value.percent <= 100;

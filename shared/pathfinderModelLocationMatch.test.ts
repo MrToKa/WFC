@@ -1,10 +1,42 @@
 import { describe, it, expect } from 'vitest';
-import { modelLocationMatchAssignSchema } from './pathfinderModelLocationMatch.js';
-import { endpointBindingSchema, endpointBindingWriteSchema } from './pathfinderEndpointBindings.js';
+import { modelLocationMatchAssignSchema, modelLocationMatchResultSchema } from './pathfinderModelLocationMatch.js';
+import { endpointBindingSchema, endpointBindingWriteSchema, endpointModelMatchObjectGroupSchema, endpointModelMatchObjectIdentitySchema } from './pathfinderEndpointBindings.js';
+import { cableEndpointConfirmedDisplaySelectionSchema } from './pathfinderCableEndpoints.js';
 import { modelLocationMatchFixture } from '../server/pathfinder/modelLocationMatchFixtures.js';
 import { endpointBindingFixture } from '../server/pathfinder/endpointBindingFixtures.js';
 
 describe('strict model name observations', () => {
+  const objectIdentity = { guid: '7586ffbb-1d0a-5942-b687-06884123c866', sourceFile: 'source/path/model.dwg' };
+  it.each(['uppercase-guid', 'invalid-guid', 'uppercase-source', 'backslash-source', 'untrimmed-source', 'missing-source', 'control-source', 'large-source'] as const)(
+    'rejects noncanonical %s identity evidence', kind => {
+      const value: Record<string, unknown> = { ...objectIdentity };
+      if (kind === 'uppercase-guid') value.guid = objectIdentity.guid.toUpperCase();
+      if (kind === 'invalid-guid') value.guid = 'not-an-item-guid';
+      if (kind === 'uppercase-source') value.sourceFile = 'SOURCE.dwg';
+      if (kind === 'backslash-source') value.sourceFile = 'source\\model.dwg';
+      if (kind === 'untrimmed-source') value.sourceFile = ' source.dwg ';
+      if (kind === 'missing-source') delete value.sourceFile;
+      if (kind === 'control-source') value.sourceFile = 'source\u0000.dwg';
+      if (kind === 'large-source') value.sourceFile = 'x'.repeat(1025);
+      expect(endpointModelMatchObjectIdentitySchema.safeParse(value).success).toBe(false);
+    });
+  it('accepts optional canonical identity while keeping legacy scans unchanged', async () => {
+    const f = await modelLocationMatchFixture(), legacy = f.command();
+    expect(modelLocationMatchAssignSchema.parse(legacy)).toEqual(legacy);
+    legacy.scan.candidates[0].objectIdentity = objectIdentity;
+    expect(modelLocationMatchAssignSchema.parse(legacy)).toEqual(legacy);
+  });
+  it('retains all oversized raw IDs only for a location requiring manual attention', () => {
+    const result = { name: '15-FT-4018', status: 'unavailable', candidateObjectIds: Array.from({ length: 513 }, (_, i) => i + 1),
+      locationId: null, bindingId: null, reasonCode: 'MODEL_LOCATION_MATCH_GROUP_LIMIT' };
+    expect(modelLocationMatchResultSchema.parse(result)).toEqual(result);
+    expect(modelLocationMatchResultSchema.safeParse({ ...result, candidateObjectIds: [1, 2] }).success).toBe(false);
+    expect(modelLocationMatchResultSchema.safeParse({ ...result, reasonCode: 'MODEL_LOCATION_MATCH_BOUNDS_UNAVAILABLE' }).success).toBe(false);
+    expect(modelLocationMatchResultSchema.safeParse({ ...result, status: 'assigned' }).success).toBe(false);
+  });
+  it.each([[1], [2, 1], [1, 1], [0, 1], Array.from({ length: 513 }, (_, i) => i + 1)])('rejects invalid grouped member IDs %j', objectIds => {
+    expect(endpointModelMatchObjectGroupSchema.safeParse({ ...objectIdentity, objectIds }).success).toBe(false);
+  });
   it.each(['incomplete', 'omitted', 'count', 'duplicate', 'outside-page', 'point', 'half-bounds', 'zero-bounds', 'long-name', 'too-many-names'] as const)('refuses %s scans before a match write', async kind => {
     const f = await modelLocationMatchFixture(), command = f.command(), candidate = command.scan.candidates[0];
     let raw: unknown = command;
@@ -32,5 +64,17 @@ describe('strict model name observations', () => {
     const manual = endpointBindingFixture().command();
     expect(endpointBindingWriteSchema.safeParse(manual).success).toBe(true);
     expect(endpointBindingWriteSchema.safeParse({ ...manual, derivation: head.derivation, autoMatchEvidence }).success).toBe(false);
+  });
+  it('requires a grouped binding and display to use their lowest member as representative', async () => {
+    const f = await modelLocationMatchFixture(); await f.repo.assign(f.projectId, f.who, f.command());
+    const head = [...f.state.bindings.values()][0], evidence = head.autoMatchEvidence!;
+    expect(endpointBindingSchema.safeParse({ ...head, autoMatchEvidence: { ...evidence, objectGroup: { ...objectIdentity, objectIds: [evidence.sdkObjectId, 100] } } }).success).toBe(true);
+    expect(endpointBindingSchema.safeParse({ ...head, autoMatchEvidence: { ...evidence, objectGroup: { ...objectIdentity, objectIds: [2, 100] } } }).success).toBe(false);
+    const display = { source: 'confirmed-display-only', mode: 'fixed-world', sdkObjectId: 1, sdkObjectIds: [1, 100],
+      pointProjectMetres: head.pointProjectMetres, current: evidence.current, bindingId: head.id, bindingContentSha256: head.contentSha256,
+      commandSha256: evidence.commandSha256 };
+    expect(cableEndpointConfirmedDisplaySelectionSchema.safeParse(display).success).toBe(true);
+    for (const sdkObjectIds of [[100, 1], [2, 100], [1, 1]])
+      expect(cableEndpointConfirmedDisplaySelectionSchema.safeParse({ ...display, sdkObjectIds }).success).toBe(false);
   });
 });
