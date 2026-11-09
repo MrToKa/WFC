@@ -1,6 +1,6 @@
 import { digestSha256 } from '../utils/sha256';
 import { generateId } from '@/utils/generateId';
-import { FRAME_PATH, MAX_PATH_POINTS, MAX_PATH_CHUNK_POINTS, isCanonicalPoint, validateEnvelope, type BridgeEnvelope, type ComputedPath, type PickedPoint, type ViewerModelObjectsPage, type ViewerSelection, type ViewerTrayRootSelection, type ModelCaptureRequest, type ModelCaptureProgress } from '../../viewer-runtime/protocol.mjs';
+import { FRAME_PATH, MAX_PATH_POINTS, MAX_PATH_CHUNK_POINTS, MAX_LOCATION_OBJECT_IDS, MAX_PATH_OBJECT_IDS, isCanonicalPoint, validateEnvelope, type BridgeEnvelope, type ComputedPath, type PickedPoint, type ViewerModelObjectsPage, type ViewerSelection, type ViewerTrayRootSelection, type ModelCaptureRequest, type ModelCaptureProgress } from '../../viewer-runtime/protocol.mjs';
 import { createModelCaptureAssembler } from '../../viewer-runtime/model-capture.mjs';
 import { createBarrierCaptureAssembler, validateBarrierCaptureRequest, validateBarrierFrameObservation, barrierFrameObservationHashInput, type BarrierCaptureRequest } from '../../viewer-runtime/barrier-capture.mjs';
 import { validateBarrierMultipartFrameRequest, validateBarrierMultipartStart, validateBarrierMultipartIntentControl,
@@ -256,7 +256,8 @@ export class ViewerController {
     if (message.type === 'PATH_TRANSPARENCY_UPDATED' && (message.payload.routeRequestId !== pending.envelope.payload.routeRequestId || message.payload.percent !== pending.envelope.payload.percent)) {
       pending.reject?.(new Error('Path transparency acknowledgement mismatch')); return;
     }
-    if (message.type === 'LOCATION_SHOWN' && message.payload.sdkObjectId !== pending.envelope.payload.sdkObjectId) {
+    if (message.type === 'LOCATION_SHOWN' && (message.payload.sdkObjectId !== pending.envelope.payload.sdkObjectId
+      || JSON.stringify(message.payload.sdkObjectIds) !== JSON.stringify(pending.envelope.payload.sdkObjectIds))) {
       pending.reject?.(new Error('Location acknowledgement mismatch')); return;
     }
     if (message.type === 'TRAY_SHOWN' && JSON.stringify(message.payload.sdkObjectIds) !== JSON.stringify(pending.envelope.payload.sdkObjectIds)) {
@@ -506,7 +507,7 @@ export class ViewerController {
   /** Render the engine's exact ordered metre points; no browser route fitting. */
   async showComputedPath(path: ComputedPath): Promise<string | null> {
     if (this.disposed || !this.loaded) throw new Error('Model is not ready');
-    if (!UUID.test(path.pathId) || !Array.isArray(path.points) || path.points.length < 1 || path.points.length > MAX_PATH_POINTS || !path.points.every(isCanonicalPoint) || !Array.isArray(path.objectIds) || path.objectIds.length > 512 || !path.objectIds.every(id => Number.isInteger(id) && id > 0 && id <= 2147483647) || new Set(path.objectIds).size !== path.objectIds.length) throw new Error('Invalid computed path');
+    if (!UUID.test(path.pathId) || !Array.isArray(path.points) || path.points.length < 1 || path.points.length > MAX_PATH_POINTS || !path.points.every(isCanonicalPoint) || !Array.isArray(path.objectIds) || path.objectIds.length > MAX_PATH_OBJECT_IDS || !path.objectIds.every(id => Number.isInteger(id) && id > 0 && id <= 2147483647) || new Set(path.objectIds).size !== path.objectIds.length) throw new Error('Invalid computed path');
     // Freeze caller-owned arrays before asynchronous selection and capability checks.
     const points = path.points.map(point => [...point]), objectIds = [...path.objectIds], pathId = path.pathId;
     this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'READ_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'SET_PATH_TRANSPARENCY', 'SHOW_LOCATION', 'SHOW_TRAY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE']);
@@ -606,9 +607,14 @@ export class ViewerController {
     return reply.payload as unknown as ViewerTrayRootSelection;
   }
 
-  /** Reveal and focus one object without changing selection or route ownership. */
-  async showLocation(sdkObjectId: number): Promise<void> {
+  /** Reveal one logical location and all its model parts without changing route ownership. */
+  async showLocation(sdkObjectId: number, sdkObjectIds?: number[]): Promise<void> {
     if (!Number.isSafeInteger(sdkObjectId) || sdkObjectId <= 0 || sdkObjectId > 2147483647) throw new Error('Invalid location object');
+    if (sdkObjectIds !== undefined && (!Array.isArray(sdkObjectIds) || sdkObjectIds.length === 0 || sdkObjectIds.length > MAX_LOCATION_OBJECT_IDS))
+      throw new Error('Invalid location objects');
+    const ids = sdkObjectIds === undefined ? undefined : [...sdkObjectIds];
+    if (ids && (ids[0] !== sdkObjectId || !ids.every((id, at) => Number.isSafeInteger(id) && id > 0 && id <= 2147483647
+      && (at === 0 || id > ids[at - 1])))) throw new Error('Invalid location objects');
     const { instanceId, modelVersionId, loadId, selectionRevision, generation, routeGeneration } = this;
     const current = () => {
       if (this.disposed || !this.loaded || !modelVersionId || !loadId || this.instanceId !== instanceId || this.modelVersionId !== modelVersionId
@@ -618,7 +624,7 @@ export class ViewerController {
     current();
     if (!await this.checkSelection()) throw new Error('Model is not ready');
     current();
-    await this.sendAsync('SHOW_LOCATION', { sdkObjectId }, 'LOCATION_SHOWN');
+    await this.sendAsync('SHOW_LOCATION', { sdkObjectId, ...(ids ? { sdkObjectIds: ids } : {}) }, 'LOCATION_SHOWN');
     current();
   }
 

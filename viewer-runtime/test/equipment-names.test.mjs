@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { EQUIPMENT_NAME_MATCHING_POLICY, modelEquipmentMatchKeys, humanScalarPropertyValues } from '../equipment-names.mjs';
+import { EQUIPMENT_NAME_MATCHING_POLICY, modelEquipmentMatchKeys, humanScalarPropertyValues, equipmentObjectIdentity } from '../equipment-names.mjs';
 
 test('equipment model keys retain exact Unicode spelling and expose only a single leading-slash alternative', () => {
   assert.equal(EQUIPMENT_NAME_MATCHING_POLICY, 'wfc.pf.equipment-model-leading-slash.v1');
@@ -42,4 +42,27 @@ test('long or multiline human descriptions stay readable without truncation or i
   const long='Description '.repeat(400),multiline='A\nB',properties=[{name:'Description',value:long},{displayName:'Notes',displayValue:multiline}];
   assert.deepEqual(humanScalarPropertyValues(properties),[long,multiline]);assert.ok(!humanScalarPropertyValues(properties).flatMap(modelEquipmentMatchKeys).includes('DESCRIPTION'));
   const canonical=Object.assign(Object.create(null),{name:'Reference',value:'P-001'});assert.deepEqual(humanScalarPropertyValues([canonical]),['P-001']);
+});
+
+test('numeric zero visibility flags are readable while true, nonzero and unknown flags remain excluded',()=>{
+  const value=hidden=>({displayName:'Tag',displayValue:'15-FT-4018',hidden});
+  assert.deepEqual(humanScalarPropertyValues([value(false),value(0),{...value(0),isHidden:0,isInternal:0}]),['15-FT-4018','15-FT-4018','15-FT-4018']);
+  for(const hidden of [true,1,2,'false','0',null])assert.deepEqual(humanScalarPropertyValues([value(hidden)]),[]);
+});
+
+test('source object identity uses unambiguous Item GUID and exact normalized full source path',()=>{
+  const guid='7586ffbb-1d0a-5942-b687-06884123c866';
+  const item={displayCategory:'Item',displayName:'GUID',displayValue:` {${guid.toUpperCase()}} `,hidden:0};
+  const source={displayCategory:'Item',displayName:'Source File',displayValue:' Models\\01-50_MSR_Kabeltassen.dwg '};
+  assert.deepEqual(equipmentObjectIdentity([item,source,{displayName:'Tag',displayValue:'15-FT-4018'}]),{guid,sourceFile:'models/01-50_msr_kabeltassen.dwg'});
+  assert.deepEqual(equipmentObjectIdentity([item,source,item,{...source,displayValue:'models/01-50_msr_kabeltassen.dwg'}]),{guid,sourceFile:'models/01-50_msr_kabeltassen.dwg'});
+  assert.deepEqual(equipmentObjectIdentity([{...item,displayCategory:'Element'},source]),{guid,sourceFile:'models/01-50_msr_kabeltassen.dwg'});
+  assert.equal(equipmentObjectIdentity([{...item,displayName:'PnPGuid'},source]),null);
+  assert.equal(equipmentObjectIdentity([{...item,displayCategory:'__child__'},source]),null);
+  for(const props of [[item],[source],[item,source,{...item,displayValue:'00000000-0000-4000-8000-000000000099'}],
+    [item,source,{...source,displayValue:'Other/01-50_MSR_Kabeltassen.dwg'}],[item,source,{...item,displayValue:'bad-guid'}],
+    [item,{...source,displayValue:''}],[item,{...source,displayValue:'x'.repeat(1025)}]])assert.equal(equipmentObjectIdentity(props),null);
+  assert.deepEqual(equipmentObjectIdentity([{...item,hidden:1},source]),{guid,sourceFile:'models/01-50_msr_kabeltassen.dwg'});
+  let reads=0;const accessor={...source};Object.defineProperty(accessor,'displayValue',{get(){reads++;return source.displayValue;}});
+  assert.equal(equipmentObjectIdentity([item,accessor]),null);assert.equal(reads,0);
 });

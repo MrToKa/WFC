@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { endpointCurrentScopeSchema, endpointLocationNameSchema, endpointModelMatchBoundsSchema, endpointPointSchema, normalizeEndpointLocation } from './pathfinderEndpointBindings.js';
+import { ENDPOINT_MODEL_MATCH_OBJECT_LIMIT, endpointCurrentScopeSchema, endpointLocationNameSchema, endpointModelMatchBoundsSchema, endpointModelMatchObjectIdentitySchema, endpointPointSchema, normalizeEndpointLocation } from './pathfinderEndpointBindings.js';
 import { endpointVisibilitySchema } from './pathfinderPreparation.js';
 import { canonicalPurposeJson, policyHashSchema as hash, policyRevisionSchema as revision, policyUuidSchema as uuid } from './pathfinderPurposePolicy.js';
 
-export const MODEL_LOCATION_MATCH_LIMITS = Object.freeze({ names: 4096, pageNames: 128, candidates: 4096, bodyBytes: 1024 * 1024, responseBytes: 1024 * 1024 });
+export const MODEL_LOCATION_MATCH_LIMITS = Object.freeze({ names: 4096, pageNames: 128, candidates: ENDPOINT_MODEL_MATCH_OBJECT_LIMIT, bodyBytes: 1024 * 1024, responseBytes: 1024 * 1024 });
 const uniqueNames = (v: string[]) => new Set(v.map(normalizeEndpointLocation)).size === v.length;
 const matchName = endpointLocationNameSchema.refine(v => v.length <= 256);
 const names = z.array(matchName).max(MODEL_LOCATION_MATCH_LIMITS.names).refine(uniqueNames);
@@ -16,6 +16,7 @@ export const modelLocationMatchCandidateSchema = z.object({
   objectId: z.number().int().nonnegative().max(2147483647), name: z.string().min(1).max(2048).regex(/^[^\u0000-\u001f\u007f-\u009f]*$/u)
     .refine(v => v.trim().length > 0 && [...v].every(c => c.length !== 1 || c.charCodeAt(0) < 0xd800 || c.charCodeAt(0) > 0xdfff)),
   matchedNames: z.array(matchName).min(1).max(MODEL_LOCATION_MATCH_LIMITS.pageNames).refine(uniqueNames),
+  objectIdentity: endpointModelMatchObjectIdentitySchema.optional(),
   bounds: endpointModelMatchBoundsSchema.nullable(), bottomCentre: endpointPointSchema.nullable(),
 }).strict().refine(v => (v.bounds === null) === (v.bottomCentre === null) && (!v.bounds || !v.bottomCentre || (
   v.bottomCentre[0] === (v.bounds.minimum[0] + v.bounds.maximum[0]) / 2

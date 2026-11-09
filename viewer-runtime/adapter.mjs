@@ -6,7 +6,7 @@ import { captureSelectedBarriers } from './barrier-capture.mjs';
 import { createBarrierMultipartRuntime } from './barrier-multipart-runtime.mjs';
 import { barrierCaptureErrorMessage } from './barrier-capture-errors.mjs';
 import { createModelCaptureInputStage, isStagedModelCaptureStart, isModelCaptureInputAppend, CAPTURE_INPUT_LIMITS } from './capture-input.mjs';
-import { SDK_VERSION } from './protocol.mjs';
+import { SDK_VERSION, MAX_LOCATION_OBJECT_IDS } from './protocol.mjs';
 import { parseRoutingBindings } from './routing-bindings.mjs';
 
 const interrupted = () => new DOMException('Operation cancelled.', 'AbortError');
@@ -330,8 +330,10 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
         },
         readSelection: pathfinder.readSelection,
         readTrayRootSelection: pathfinder.readTrayRootSelection,
-        async showLocation(sdkObjectId, operationSignal, beforeCommit = async () => {}) {
+        async showLocation(sdkObjectId, operationSignal, beforeCommit = async () => {}, sdkObjectIds) {
           if (!positiveObjectId(sdkObjectId)) throw safeError('LOCATION_UNAVAILABLE');
+          const ids = sdkObjectIds === undefined ? [sdkObjectId] : Array.isArray(sdkObjectIds) ? [...sdkObjectIds] : [];
+          if (!ids.length || ids.length > MAX_LOCATION_OBJECT_IDS || ids[0] !== sdkObjectId || !ids.every((id, at) => positiveObjectId(id) && (at === 0 || id > ids[at - 1]))) throw safeError('LOCATION_UNAVAILABLE');
           const displaySignal = AbortSignal.any([signal, operationSignal].filter(Boolean));
           const currentModel = () => {
             active(displaySignal);
@@ -340,15 +342,15 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
           currentModel();
           const tree = await locationTree(loadedModel, displaySignal);
           currentModel();
-          if (!containsLocation(tree, sdkObjectId) || typeof viewer.show !== 'function' || typeof viewer.fitToView !== 'function') throw safeError('LOCATION_UNAVAILABLE');
+          if (!ids.every(id => containsLocation(tree, id)) || typeof viewer.show !== 'function' || typeof viewer.fitToView !== 'function') throw safeError('LOCATION_UNAVAILABLE');
           await beforeCommit();
           currentModel();
           try {
             // The pinned SDK show() changes only this node's visibility. It
             // reveals it normally under route Ghost without changing selection,
             // global Ghost, route overlays or their saved appearance baseline.
-            viewer.show([sdkObjectId], loadedModel);
-            viewer.fitToView([sdkObjectId], loadedModel);
+            viewer.show(ids, loadedModel);
+            viewer.fitToView(ids, loadedModel);
           } catch { throw safeError('LOCATION_UNAVAILABLE'); }
         },
         async showTray(sdkObjectIds, operationSignal, beforeCommit = async () => {}) {

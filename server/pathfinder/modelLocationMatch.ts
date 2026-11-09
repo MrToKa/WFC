@@ -12,6 +12,7 @@ import { endpointBindingTransaction, readCurrentEndpointBindingContext, confirmM
 import type { JobPrincipal } from './jobContracts.js';
 import { PathFinderError } from './errors.js';
 import { authorizePathFinderPreflight } from './projectPreflightAuthorization.js';
+import { groupModelLocationMatchCandidates } from './modelLocationMatchCandidates.js';
 
 const digest = (v: unknown) => createHash('sha256').update(canonicalPurposeJson(v)).digest('hex');
 const fail = (code: string, status = 409): never => { throw new PathFinderError(code, status, 'Model location matching could not be completed. Refresh its context and check the reported names; keep an uncertain saved command for reconciliation.'); };
@@ -89,12 +90,15 @@ export function createModelLocationMatchRepository(pool: Pool) {
         for (const name of command.names) {
           check();
           const saved = await location(c, projectId, name, check);
-          const candidates = command.scan.candidates.filter(v => v.matchedNames.some(n => normalizeEndpointLocation(n) === normalizeEndpointLocation(name)));
+          const preserve = Boolean(saved?.hasLegacy || saved?.bindingId && (saved.binding?.derivation !== ENDPOINT_MODEL_MATCH_DERIVATION
+            || saved.binding.status === 'confirmed' && saved.binding.locationRevision === saved.revision
+              && canonicalPurposeJson(saved.binding.autoMatchEvidence?.current) === canonicalPurposeJson(snapshot.current)));
+          const candidates: ReturnType<typeof groupModelLocationMatchCandidates> = preserve
+            ? command.scan.candidates.filter(v => v.matchedNames.some(n => normalizeEndpointLocation(n) === normalizeEndpointLocation(name)))
+            : groupModelLocationMatchCandidates(command.scan.candidates, name);
           const candidateObjectIds = candidates.map(v => v.objectId).sort((a, b) => a - b);
           const base = { name, candidateObjectIds, locationId: saved?.id ?? null, bindingId: saved?.bindingId ?? null };
-          if (saved?.hasLegacy || saved?.bindingId && (saved.binding?.derivation !== ENDPOINT_MODEL_MATCH_DERIVATION
-            || saved.binding.status === 'confirmed' && saved.binding.locationRevision === saved.revision
-              && canonicalPurposeJson(saved.binding.autoMatchEvidence?.current) === canonicalPurposeJson(snapshot.current))) {
+          if (preserve) {
             results.push({ ...base, status: 'preserved', reasonCode: 'EXISTING_LOCATION_BINDING_PRESERVED' }); continue;
           }
           if (candidates.length !== 1) { results.push({ ...base, status: candidates.length ? 'ambiguous' : 'missing', reasonCode: candidates.length ? 'MODEL_LOCATION_MATCH_AMBIGUOUS' : 'MODEL_LOCATION_MATCH_MISSING' }); continue; }
@@ -104,12 +108,13 @@ export function createModelLocationMatchRepository(pool: Pool) {
           const evidence = endpointModelMatchEvidenceSchema.parse({ schemaVersion: 'wfc.pf.model-location-match-evidence.v1',
             operationId: command.idempotencyKey, commandSha256, scanSha256, namesSha256: command.namesSha256, current: snapshot.current,
             logicalKey: normalizeEndpointLocation(name), sdkObjectId: candidate.objectId, objectName: candidate.name,
+            ...(candidate.objectGroup ? { objectGroup: candidate.objectGroup } : {}),
             bounds: candidate.bounds, bottomCentre: candidate.bottomCentre, matchingPolicyVersion: command.scan.matchingPolicyVersion,
             visibilityScopeSha256: command.scan.visibilityScope.contentSha256, approximate: true, engineeringAccepted: false });
           const receipt = await confirmMatchedEndpointInTransaction(c, projectId, who, {
             locationId: saved?.id ?? randomUUID(), location: saved ? { name: saved.name, aliases: saved.aliases } : { name, aliases: [] },
             current: snapshot.current, expectedRegistryRevision: revision, expectedLocationRevision: saved?.revision ?? null, expectedHeadId: saved?.bindingId ?? null,
-            evidence, reason: 'Explicit Find and assign From/To: unique visible model-name match; approximate fixed-world bottom centre.',
+            evidence, reason: 'Explicit Find and assign From/To: unique visible source-item match; approximate fixed-world bottom centre.',
           }, signal); check();
           revision = receipt.registryRevision;
           results.push({ ...base, status: 'assigned', locationId: receipt.locationId, bindingId: receipt.binding.id, reasonCode: null });

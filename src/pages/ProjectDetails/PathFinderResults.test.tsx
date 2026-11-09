@@ -925,21 +925,21 @@ describe('selected current cable workflow result', () => {
     expect(changed.mock.calls.at(-1)?.[0]).toMatchObject({ ready: false, visible: false, routing: null });
     expect(f.pf.showPath).not.toHaveBeenCalled(); expect(f.pf.refresh).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
   });
-  it('keeps a complete 512-object route ready when optional endpoint highlighting would exceed the object budget', async () => {
+  it('shows a complete 512-object route with both complete 4096-part endpoint groups', async () => {
     const f = workflowFixture(), changed = vi.fn<(value: PathFinderWorkflowDisplay) => void>();
     f.proposal.route!.objectIds = Array.from({ length: 512 }, (_, index) => `dbid:${index + 1}`);
-    vi.mocked(proposalEndpointObjectIds).mockResolvedValue(['dbid:999']);
+    vi.mocked(proposalEndpointObjectIds).mockResolvedValue(Array.from({ length: 8192 }, (_, index) => `dbid:${index + 513}`));
     const p = { pf: asPf(f.pf), selectedCableId: id(4), workflowSelection: f.selection,
       accountId: id(2), options, onWorkflowDisplayChange: changed };
     const view = render(<PathFinderResults {...p} />);
     await waitFor(() => expect(changed.mock.calls.at(-1)?.[0].ready).toBe(true));
     view.rerender(<PathFinderResults {...p} workflowDisplayRequest={{ cableId: id(4), requestId: 1, action: 'show' }} />);
     await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points,
-      objectIds: Array.from({ length: 512 }, (_, index) => index + 1) }));
+      objectIds: Array.from({ length: 8704 }, (_, index) => index + 1) }));
   });
-  it('retains the exact route object budget when the route itself contains more than 512 objects', async () => {
+  it('retains the exact result when its objects exceed the complete protected display budget', async () => {
     const f = workflowFixture(), changed = vi.fn<(value: PathFinderWorkflowDisplay) => void>();
-    f.proposal.route!.objectIds = Array.from({ length: 513 }, (_, index) => `dbid:${index + 1}`);
+    f.proposal.route!.objectIds = Array.from({ length: 8705 }, (_, index) => `dbid:${index + 1}`);
     render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} workflowSelection={f.selection}
       accountId={id(2)} options={options} onWorkflowDisplayChange={changed} />);
     await screen.findByText(/This exact path exceeds the viewer object budget/);
@@ -1900,7 +1900,8 @@ describe('exact pending Apply through result display resets', () => {
   it('refuses an oversized route plus endpoint union without truncating the displayed path', async () => {
     const f = recoveryFixture(), detail = { ...f.pf.data.proposals[0], route: { ...f.pf.data.proposals[0].route,
       objectIds: Array.from({ length: 512 }, (_, index) => `dbid:${index + 1}`) } };
-    f.pf.readProposal.mockResolvedValueOnce(detail); vi.mocked(proposalEndpointObjectIds).mockResolvedValue(['dbid:600']);
+    f.pf.readProposal.mockResolvedValueOnce(detail);
+    vi.mocked(proposalEndpointObjectIds).mockResolvedValue(Array.from({ length: 8193 }, (_, index) => `dbid:${index + 513}`));
     render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} accountId={id(2)} options={options} />);
     fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' }));
     expect(await screen.findByText(/This path and its From\/To objects exceed the viewer object budget/)).toBeVisible();

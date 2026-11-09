@@ -42,7 +42,7 @@ test('preparation pages distinguish pagination from honest property coverage and
  for(const change of [{propertyScan:{...page.propertyScan,complete:true}},{nextCursor:1,complete:true},{objects:[{...page.objects[0],matchedNames:['OTHER']}]},{objects:Array.from({length:128},(_,i)=>({...page.objects[0],objectId:i+10,name:'界'.repeat(2048)}))}])assert.equal(validatePreparationDiscoveryPage({...page,...change}),false);
 });
 test('equipment query packs allow many exact names while tray requests retain32 and UTF8 stays bounded',()=>{
- const names=Array.from({length:1000},(_,index)=>'E'+index),equipment={...request,mode:'equipment',names};
+ const names=Array.from({length:800},(_,index)=>'E'+index),equipment={...request,mode:'equipment',names};
  assert.equal(validatePreparationDiscoveryRequest(equipment),true);assert.equal(validatePreparationDiscoveryRequest({...equipment,mode:'names'}),false);
  assert.equal(validatePreparationDiscoveryRequest({...equipment,names:Array.from({length:4097},(_,index)=>String(index))}),false);
  assert.equal(validatePreparationDiscoveryRequest({...equipment,names:Array.from({length:100},(_,index)=>'界'.repeat(100)+index)}),false);
@@ -70,6 +70,33 @@ test('explicit model-location observations require equipment scope, exact canoni
   assert.equal(validatePreparationDiscoveryPage({...page,objects:[{...page.objects[0],...bad}]}),false);
  assert.equal(validatePreparationDiscoveryPage({...page,objects:[{...page.objects[0],bounds:null,bottomCentre:null}]}),true);
  const {includeAnchors:_include,...legacy}=page;assert.equal(validatePreparationDiscoveryPage(legacy),false);
+});
+
+test('only anchored equipment observations may optionally carry complete canonical source object identity',()=>{
+ const objectIdentity={guid:'7586ffbb-1d0a-5942-b687-06884123c866',sourceFile:'models/01-50_msr_kabeltassen.dwg'};
+ const page={schemaVersion:request.schemaVersion,mode:'equipment',names:['15-FT-4018'],rootObjectId:null,cursor:0,matchingPolicyVersion:PREPARATION_MATCHING_POLICY,visibilityScope,indexedObjectCount:1,
+  propertyScan:{attemptedObjectCount:1,returnedObjectCount:1,omittedObjectCount:0,complete:true},includeAnchors:true,
+  objects:[{objectId:2,parentId:null,name:'ACPPPIPEINLINEASSET',hasGeometry:true,isPhysicalLeaf:true,orderIndex:0,matchedNames:['15-FT-4018'],bounds:null,bottomCentre:null,objectIdentity}],nextCursor:null,complete:true};
+ assert.equal(validatePreparationDiscoveryPage(page),true);assert.ok(validateEnvelope(envelope('PREPARATION_OBJECTS',page),'frame-to-parent'));
+ const {objectIdentity:_identity,...oldObject}=page.objects[0];assert.equal(validatePreparationDiscoveryPage({...page,objects:[oldObject]}),true);
+ for(const bad of [null,{}, {...objectIdentity,guid:objectIdentity.guid.toUpperCase()},{...objectIdentity,guid:objectIdentity.guid+'\n'},
+  {...objectIdentity,sourceFile:' Models/FILE.dwg '},{...objectIdentity,sourceFile:'models\\file.dwg'},{...objectIdentity,sourceFile:''},
+  {...objectIdentity,sourceFile:'x'.repeat(1025)},{...objectIdentity,extra:true}])
+  assert.equal(validatePreparationDiscoveryPage({...page,objects:[{...page.objects[0],objectIdentity:bad}]}),false);
+ const {includeAnchors:_anchors,...unanchored}=page;
+ assert.equal(validatePreparationDiscoveryPage({...unanchored,objects:[{...oldObject,objectIdentity}]}),false);
+ assert.equal(validatePreparationDiscoveryPage({...page,mode:'names',propertyScan:null}),false);
+});
+
+test('maximum CJK equipment name, source identity and echoed name universe fit one anchored 24KiB page',()=>{
+ const names=[];let index=0;while(new TextEncoder().encode(JSON.stringify([...names,'界'.repeat(30)+index])).length<=PREPARATION_VIEWER_LIMITS.equipmentNameBytes)names.push('界'.repeat(30)+index++);
+ assert.ok(names.length>32);
+ const page={schemaVersion:request.schemaVersion,mode:'equipment',names,rootObjectId:null,cursor:0,matchingPolicyVersion:PREPARATION_MATCHING_POLICY,visibilityScope,indexedObjectCount:1,
+  propertyScan:{attemptedObjectCount:1,returnedObjectCount:1,omittedObjectCount:0,complete:true},includeAnchors:true,
+  objects:[{objectId:2147483647,parentId:2147483646,name:'界'.repeat(2048),hasGeometry:true,isPhysicalLeaf:true,orderIndex:0,matchedNames:names,
+   bounds:{minimum:[-1e9,-1e9,-1e9],maximum:[1e9,1e9,1e9]},bottomCentre:[0,0,-1e9],objectIdentity:{guid:'7586ffbb-1d0a-5942-b687-06884123c866',sourceFile:'界'.repeat(1024)}}],nextCursor:null,complete:true};
+ assert.equal(validatePreparationDiscoveryPage(page),true);assert.ok(new TextEncoder().encode(JSON.stringify(page)).length<=24576);
+ assert.ok(validateEnvelope(envelope('PREPARATION_OBJECTS',page),'frame-to-parent'));
 });
 test('v3 pages require honest SDK baseline scope and one worst-case matching row still fits24KiB',()=>{
  const names=[];let index=0;while(new TextEncoder().encode(JSON.stringify([...names,'界'.repeat(30)+index])).length<=PREPARATION_VIEWER_LIMITS.equipmentNameBytes)names.push('界'.repeat(30)+index++);

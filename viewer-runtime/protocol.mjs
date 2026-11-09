@@ -17,13 +17,19 @@ export const PARENT_TYPES = Object.freeze(['INIT', 'LOAD_MODEL', 'SHOW_ROUTE', '
 export const FRAME_TYPES = Object.freeze(['HELLO', 'RUNTIME_READY', 'MODEL_PROGRESS', 'MODEL_LOADED', 'ROUTE_RESULT', 'ROUTE_CLEARED', 'ROUTE_ZOOMED', 'REQUEST_CANCELLED', 'DISPOSED', 'WARNING', 'ERROR', 'COMPUTED_PATH_UPDATED', 'POINT_PICKED', 'MODEL_OBJECTS', 'PREPARATION_OBJECTS', 'TRAY_IDENTITIES', 'MODEL_SELECTION', 'TRAY_ROOT_SELECTION', 'LOCATION_SHOWN', 'TRAY_SHOWN', 'PATH_TRANSPARENCY_UPDATED', 'MODEL_CAPTURE_EVENT', 'MODEL_CAPTURE_PROGRESS', 'MODEL_CAPTURE_INPUT_ACK', 'BARRIER_CAPTURE_EVENT', 'BARRIER_CAPTURE_PROGRESS', 'BARRIER_MULTIPART_FRAME', 'BARRIER_MULTIPART_STATUS']);
 export const MAX_PATH_POINTS = 20000;
 export const MAX_PATH_CHUNK_POINTS = 128;
+// A physical equipment item may use every raw candidate in one complete match scope.
+export const MAX_LOCATION_OBJECT_IDS = 4096;
+// Existing route foreground plus both complete equipment presentation groups.
+export const MAX_PATH_OBJECT_IDS = 512 + 2 * MAX_LOCATION_OBJECT_IDS;
+// Only a strict computed-path begin contains this bounded larger ID list.
+export const MAX_COMPUTED_PATH_MESSAGE_BYTES = 128 * 1024;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const code = value => typeof value === 'string' && /^[A-Z][A-Z0-9_]{0,79}$/.test(value);
 const text = (value, maximum = 1024) => typeof value === 'string' && value.length <= maximum && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value);
 const integer = value => Number.isSafeInteger(value) && value >= 0;
 const positiveId = value => Number.isSafeInteger(value) && value > 0 && value <= 2147483647;
 export const isCanonicalPoint = value => Array.isArray(value) && value.length === 3 && value.every(item => typeof item === 'number' && Number.isFinite(item) && Math.abs(item) <= 1e9);
-const boundedIds = value => Array.isArray(value) && value.length <= 512 && value.every(positiveId) && new Set(value).size === value.length;
+const boundedIds = (value, maximum = 512) => Array.isArray(value) && value.length <= maximum && [...value].every(positiveId) && new Set(value).size === value.length;
 const bounds = value => value === null || exact(value, ['minimum', 'maximum']) && isCanonicalPoint(value.minimum) && isCanonicalPoint(value.maximum) && value.minimum.every((item, i) => item <= value.maximum[i]);
 export const isUuid = value => typeof value === 'string' && UUID.test(value);
 const nullableUuid = value => value === null || isUuid(value);
@@ -126,7 +132,9 @@ function payload(type, value) {
     case 'TRAY_ROOT_SELECTION': return exact(value, ['objects']) && Array.isArray(value.objects) && value.objects.length <= 512
       && value.objects.every(object => exact(object, ['objectId']) && positiveId(object.objectId))
       && new Set(value.objects.map(object => object.objectId)).size === value.objects.length;
-    case 'SHOW_LOCATION': case 'LOCATION_SHOWN': return exact(value, ['sdkObjectId']) && positiveId(value.sdkObjectId);
+    case 'SHOW_LOCATION': case 'LOCATION_SHOWN': return (exact(value, ['sdkObjectId']) || exact(value, ['sdkObjectId', 'sdkObjectIds'])
+      && boundedIds(value.sdkObjectIds, MAX_LOCATION_OBJECT_IDS) && value.sdkObjectIds.length > 0 && value.sdkObjectIds[0] === value.sdkObjectId
+      && value.sdkObjectIds.every((id, at) => at === 0 || id > value.sdkObjectIds[at - 1])) && positiveId(value.sdkObjectId);
     case 'SHOW_TRAY': case 'TRAY_SHOWN': return exact(value, ['sdkObjectIds']) && Array.isArray(value.sdkObjectIds) && value.sdkObjectIds.length > 0 && value.sdkObjectIds.length <= 512 && boundedIds([...value.sdkObjectIds]);
     case 'MODEL_SELECTION': return exact(value, ['coordinateFrame', 'metresPerDisplayUnit', 'globalOffsetMetres', 'objects']) && payload('MODEL_OBJECTS', { cursor: 0, nextCursor: null, complete: true, query: '', ...value }) && new Set(value.objects.map(object => object.objectId)).size === value.objects.length;
     case 'SET_PATH_TRANSPARENCY': case 'PATH_TRANSPARENCY_UPDATED': return exact(value, ['routeRequestId', 'percent']) && isUuid(value.routeRequestId) && integer(value.percent) && value.percent <= 100;
@@ -134,7 +142,7 @@ function payload(type, value) {
     case 'MODEL_CAPTURE_INPUT_ACK': return validateModelCaptureInputAck(value);
     case 'BARRIER_CAPTURE_EVENT': case 'MODEL_CAPTURE_EVENT': return exact(value, ['captureId', 'index', 'done', 'eventJson']) && isUuid(value.captureId) && integer(value.index) && value.index < 3000 && typeof value.done === 'boolean' && text(value.eventJson, 49152) && new TextEncoder().encode(value.eventJson).byteLength <= 24576;
     case 'BARRIER_CAPTURE_PROGRESS': case 'MODEL_CAPTURE_PROGRESS': return exact(value, ['captureId', 'phase', 'loaded', 'total']) && isUuid(value.captureId) && oneOf(value.phase, ['index', 'properties', 'geometry']) && integer(value.loaded) && integer(value.total) && value.loaded <= value.total && value.total <= 1000000;
-    case 'BEGIN_COMPUTED_PATH': return exact(value, ['pathId', 'pointCount', 'objectIds']) && isUuid(value.pathId) && integer(value.pointCount) && value.pointCount >= 1 && value.pointCount <= MAX_PATH_POINTS && boundedIds(value.objectIds);
+    case 'BEGIN_COMPUTED_PATH': return exact(value, ['pathId', 'pointCount', 'objectIds']) && isUuid(value.pathId) && integer(value.pointCount) && value.pointCount >= 1 && value.pointCount <= MAX_PATH_POINTS && boundedIds(value.objectIds, MAX_PATH_OBJECT_IDS);
     case 'APPEND_COMPUTED_PATH': return exact(value, ['pathId', 'offset', 'points']) && isUuid(value.pathId) && integer(value.offset) && value.offset < MAX_PATH_POINTS && Array.isArray(value.points) && value.points.length > 0 && value.points.length <= MAX_PATH_CHUNK_POINTS && value.points.every(isCanonicalPoint);
     case 'COMMIT_COMPUTED_PATH': return exact(value, ['pathId']) && isUuid(value.pathId);
     case 'COMPUTED_PATH_UPDATED': return exact(value, ['pathId', 'phase', 'received']) && isUuid(value.pathId) && oneOf(value.phase, ['begun', 'appended', 'displayed']) && integer(value.received) && value.received <= MAX_PATH_POINTS;
@@ -178,7 +186,8 @@ export function validateEnvelope(value, direction) {
     const handshake = ['HELLO', 'INIT', 'RUNTIME_READY'].includes(value.type);
     if (handshake ? value.modelVersionId !== null : ['LOAD_MODEL', 'MODEL_PROGRESS', 'MODEL_LOADED', 'SHOW_ROUTE', 'ROUTE_RESULT', 'ZOOM_ROUTE', 'ROUTE_ZOOMED', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'COMPUTED_PATH_UPDATED', 'PICK_POINT', 'POINT_PICKED', 'READ_MODEL_OBJECTS', 'MODEL_OBJECTS', 'READ_PREPARATION_OBJECTS', 'PREPARATION_OBJECTS', 'RESOLVE_TRAY_IDENTITIES', 'TRAY_IDENTITIES', 'READ_SELECTION', 'MODEL_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'TRAY_ROOT_SELECTION', 'SHOW_LOCATION', 'LOCATION_SHOWN', 'SHOW_TRAY', 'TRAY_SHOWN', 'SET_PATH_TRANSPARENCY', 'PATH_TRANSPARENCY_UPDATED', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'MODEL_CAPTURE_EVENT', 'MODEL_CAPTURE_PROGRESS', 'MODEL_CAPTURE_INPUT_ACK'].includes(value.type) && value.modelVersionId === null) return null;
     const serialized = JSON.stringify(value);
-    const maximumBytes = value.type === 'START_BARRIER_CAPTURE' ? MAX_BARRIER_SELECTION_MESSAGE_BYTES : MAX_MESSAGE_BYTES;
+    const maximumBytes = value.type === 'START_BARRIER_CAPTURE' ? MAX_BARRIER_SELECTION_MESSAGE_BYTES
+      : value.type === 'BEGIN_COMPUTED_PATH' ? MAX_COMPUTED_PATH_MESSAGE_BYTES : MAX_MESSAGE_BYTES;
     if (new TextEncoder().encode(serialized).byteLength > maximumBytes) return null;
     return JSON.parse(serialized);
   } catch { return null; }

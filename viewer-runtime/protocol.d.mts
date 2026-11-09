@@ -5,6 +5,9 @@ export const MAX_MESSAGE_BYTES: 65536;
 export const MAX_BARRIER_SELECTION_MESSAGE_BYTES: 4194304;
 export const MAX_PATH_POINTS: 20000;
 export const MAX_PATH_CHUNK_POINTS: 128;
+export const MAX_LOCATION_OBJECT_IDS: 4096;
+export const MAX_PATH_OBJECT_IDS: 8704;
+export const MAX_COMPUTED_PATH_MESSAGE_BYTES: 131072;
 export const FRAME_PATH: '/viewer-runtime/7.130.0/index.html';
 export const PARENT_TYPES: readonly string[];
 export const FRAME_TYPES: readonly string[];
@@ -34,7 +37,7 @@ export interface ViewerDescriptor {
 export type CanonicalPoint = [number, number, number];
 export interface ComputedPath { pathId: string; points: CanonicalPoint[]; objectIds: number[] }
 /** Display-only target in the current protected model load. */
-export interface ViewerLocationTarget { sdkObjectId: number }
+export interface ViewerLocationTarget { sdkObjectId: number; sdkObjectIds?: number[] }
 export type RoutingCategory = 'MV' | 'LV' | 'Control';
 export interface ModelRouteRule { id: string; objectIds: number[]; allowedCategories: RoutingCategory[] }
 export type ModelCaptureRequest = { equipmentNames: string[] } & (

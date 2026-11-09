@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { modelCoordinates, createPathFinderController, createExactPathBatches } from '../pathfinder.mjs';
-import { CHANNEL, validateEnvelope, MAX_MESSAGE_BYTES } from '../protocol.mjs';
+import { CHANNEL, validateEnvelope, MAX_MESSAGE_BYTES, MAX_PATH_OBJECT_IDS } from '../protocol.mjs';
 
 const uuid = index => `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`;
 const envelope = (type, payload) => ({ channel: CHANNEL, protocolVersion: 1, instanceId: uuid(1), projectId: uuid(2), modelVersionId: uuid(3), loadId: uuid(4), requestId: uuid(5), type, payload });
@@ -131,6 +131,55 @@ test('explicit location discovery observes canonical bottom centres without sele
  assert.equal(f.viewer.model,f.model);assert.equal(f.viewer.isolated,undefined);
  const {includeAnchors:_include,...withoutAnchors}=request;const old=await f.controller.readPreparationObjects(withoutAnchors);
  assert.equal(calls,1);assert.equal(Object.hasOwn(old,'includeAnchors'),false);assert.equal(Object.hasOwn(old.objects[0],'bounds'),false);f.controller.dispose();
+});
+
+test('property-only endpoint parts retain separate IDs and stable source identity across pages using one SDK scan',async()=>{
+ const f=fixture(),guid='7586ffbb-1d0a-5942-b687-06884123c866';let calls=0;
+ f.tree.getNodeName=id=>id===1?'MODEL':'ACPPPIPEINLINEASSET';f.tree.getNodeIndex=id=>id>=1&&id<=4?id-1:undefined;
+ f.tree.getNodeParentId=id=>id===1?0:1;f.tree.getChildCount=id=>id===1?3:0;
+ f.tree.enumNodeChildren=(id,visit)=>{if(id===1)for(const child of [2,3,4])visit(child);};f.fragments.getCount=()=>5;
+ f.tree.isNodeHidden=id=>id===4;
+ f.model.getBulkProperties=(ids,_options,yes)=>{calls++;yes(ids.map(dbId=>({dbId,properties:dbId===1?[]:[
+  {displayCategory:'AutoCAD',displayName:'Tag',displayValue:'15-FT-4018',hidden:0},
+  {displayCategory:'Element',displayName:'GUID',displayValue:`{${guid.toUpperCase()}}`},
+  {displayCategory:'Item',displayName:'Source File',displayValue:'Models\\Equipment.dwg'},
+  {displayName:'Custom alias',displayValue:'OTHER'}]})));};
+ const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['15-FT-4018'],indexNames:['15-FT-4018','OTHER'],rootObjectId:null,cursor:0,limit:1,includeAnchors:true};
+ const objects=[];let current=request;
+ for(;;){const page=await f.controller.readPreparationObjects(current);objects.push(...page.objects);assert.equal(page.propertyScan.complete,true);
+  if(page.complete)break;current={...request,cursor:page.nextCursor,visibilityScope:page.visibilityScope};}
+ assert.equal(calls,1);assert.deepEqual(objects.map(o=>o.objectId),[2,3,4]);
+ for(const object of objects)assert.deepEqual(object.objectIdentity,{guid,sourceFile:'models/equipment.dwg'});
+ assert.ok(objects[0].bounds);assert.equal(objects[2].bounds,null);assert.equal(objects[2].bottomCentre,null);
+ const alias=await f.controller.readPreparationObjects({...request,names:['OTHER'],limit:128});assert.equal(calls,1);
+ assert.deepEqual(alias.objects.map(o=>o.objectIdentity),objects.map(o=>o.objectIdentity));
+ const {includeAnchors:_include,...legacy}=request;const old=await f.controller.readPreparationObjects({...legacy,limit:128});
+ assert.equal(calls,1);assert.ok(old.objects.every(o=>!Object.hasOwn(o,'objectIdentity')));f.controller.dispose();
+});
+
+test('tree-name endpoint matches retain source identity alongside property-name matches without a second scan',async()=>{
+ const f=fixture(),guid='7586ffbb-1d0a-5942-b687-06884123c866';let calls=0;
+ f.tree.getNodeName=id=>id===1?'MODEL':'15-FT-4018';
+ f.model.getBulkProperties=(ids,_options,yes)=>{calls++;yes(ids.map(dbId=>({dbId,properties:dbId===1?[]:[
+  {displayName:'GUID',displayValue:guid},{displayName:'Source File',displayValue:'Equipment.dwg'},
+  {displayName:'Custom equipment property',displayValue:'PROPERTY-ALIAS'}]})));};
+ const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['15-FT-4018'],indexNames:['15-FT-4018','PROPERTY-ALIAS'],rootObjectId:null,cursor:0,limit:128,includeAnchors:true};
+ const tree=await f.controller.readPreparationObjects(request),property=await f.controller.readPreparationObjects({...request,names:['PROPERTY-ALIAS']});
+ assert.equal(calls,1);assert.deepEqual(tree.objects.map(object=>object.objectId),[2,3]);
+ for(const page of [tree,property])for(const object of page.objects){
+  assert.deepEqual(object.objectIdentity,{guid,sourceFile:'equipment.dwg'});assert.ok(object.bounds);}
+ assert.deepEqual(property.objects.map(object=>object.objectId),[2,3]);
+ assert.ok(tree.objects.every(object=>object.matchedNames[0]==='15-FT-4018'));
+ assert.ok(property.objects.every(object=>object.matchedNames[0]==='PROPERTY-ALIAS'));f.controller.dispose();
+});
+
+test('conflicting or missing source identities never erase matching endpoint candidates',async()=>{
+ const f=fixture(),guid='7586ffbb-1d0a-5942-b687-06884123c866';
+ f.model.getBulkProperties=(ids,_options,yes)=>yes(ids.map(dbId=>({dbId,properties:dbId===1?[]:[
+  {displayName:'Tag',displayValue:'15-FT-4018'}, {displayName:'GUID',displayCategory:'Item',displayValue:guid},
+  ...(dbId===2?[{displayName:'GUID',displayCategory:'Item',displayValue:'00000000-0000-4000-8000-000000000099'},{displayName:'Source File',displayValue:'equipment.dwg'}]:[])]})));
+ const page=await f.controller.readPreparationObjects({schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['15-FT-4018'],rootObjectId:null,cursor:0,limit:128,includeAnchors:true});
+ assert.deepEqual(page.objects.map(o=>o.objectId),[2,3]);assert.ok(page.objects.every(o=>!Object.hasOwn(o,'objectIdentity')));f.controller.dispose();
 });
 test('unavailable bounds remain an explicit unavailable candidate rather than dropping an ambiguous object',async()=>{
  const f=fixture();f.model.getBulkProperties=(ids,_options,yes)=>yes(ids.map(dbId=>({dbId,properties:dbId!==1?[{displayName:'Tag',displayValue:'P-001'}]:[]})));
@@ -602,6 +651,19 @@ test('successive tray and endpoint parent unions retain every descendant colour 
   assert.equal(f.viewer.impl.showGhosting, false); f.controller.dispose();
 });
 
+test('computed route keeps both complete location groups and route objects opaque through transparency and cleanup',async()=>{
+  const f=fixture(),objectIds=Array.from({length:MAX_PATH_OBJECT_IDS},(_,at)=>at+1),fragmentCount=objectIds.length+1;
+  f.fragmentMaterials.clear();for(let id=0;id<fragmentCount;id++)f.fragmentMaterials.set(id,f.originalMaterial);
+  f.fragments.getCount=()=>fragmentCount;f.tree.enumNodeFragments=(id,visit)=>visit(id-1);
+  assert.throws(()=>f.controller.showPath({points:[[0,0,0]],objectIds:objectIds.concat(MAX_PATH_OBJECT_IDS+1)}),{code:'PATH_INVALID'});
+  f.controller.showPath({points:[[0,0,0],[1,2,3]],objectIds});assert.deepEqual(f.viewer.isolated,objectIds);
+  await f.controller.setTransparency(75);assert.deepEqual(f.viewer.shown,objectIds);assert.equal(f.registered.size,1);
+  for(let id=0;id<objectIds.length;id++){assert.notEqual(f.fragmentMaterials.get(id),f.originalMaterial);assert.equal(f.fragmentMaterials.get(id).opacity,1);}
+  assert.equal(f.fragmentMaterials.get(fragmentCount-1),f.originalMaterial);assert.equal(f.originalMaterial.opacity,.25);
+  f.controller.clear();for(let id=0;id<fragmentCount;id++)assert.equal(f.fragmentMaterials.get(id),f.originalMaterial);
+  assert.equal(f.originalMaterial.opacity,.8);assert.equal(f.registered.size,0);assert.ok(f.clones.every(clone=>clone.disposeCount===1));f.controller.dispose();
+});
+
 test('appearance preflight refuses foreign shared materials, unsupported APIs and all three budgets before touching the view', async () => {
   for (const configure of [
     f => { f.originalMaterial._sharedBy = [7, 8]; },
@@ -609,7 +671,7 @@ test('appearance preflight refuses foreign shared materials, unsupported APIs an
     f => { f.model.unconsolidate = undefined; },
     f => { f.fragments.getCount = () => 1000001; },
     f => { f.fragments.getCount = () => 4097; f.fragments.getMaterial = () => ({ opacity: 1, transparent: false, depthWrite: true }); },
-    f => { f.fragments.getCount = () => 8193; f.fragments.getMaterial = () => f.originalMaterial; f.tree.enumNodeFragments = (_id, visit) => { for (let id = 0; id < 8193; id++) visit(id); }; },
+    f => { f.fragments.getCount = () => 16385; f.fragments.getMaterial = () => f.originalMaterial; f.tree.enumNodeFragments = (_id, visit) => { for (let id = 0; id < 16385; id++) visit(id); }; },
   ]) {
     const f = fixture(); f.controller.showPath({ points: [[0, 0, 0]], objectIds: [2] }); configure(f);
     await assert.rejects(() => f.controller.setTransparency(75), { code: 'SDK_UNSUPPORTED' });
@@ -735,7 +797,7 @@ test('one-shot picking converts only the owned model surface hit and cancellatio
 test('new protocol payloads reject malformed, nonfinite, oversized and missing load identities', () => {
   const begin = envelope('BEGIN_COMPUTED_PATH', { pathId: uuid(6), pointCount: 2, objectIds: [2] });
   assert.ok(validateEnvelope(begin, 'parent-to-frame'));
-  for (const objectIds of [[2, 2], [0], [1.5], Array.from({ length: 513 }, (_, i) => i + 1)]) assert.equal(validateEnvelope({ ...begin, payload: { ...begin.payload, objectIds } }), null);
+  for (const objectIds of [[2, 2], [0], [1.5], Array.from({ length: MAX_PATH_OBJECT_IDS + 1 }, (_, i) => i + 1)]) assert.equal(validateEnvelope({ ...begin, payload: { ...begin.payload, objectIds } }), null);
   assert.equal(validateEnvelope({ ...begin, loadId: null, modelVersionId: null }), null);
   for (const points of [[[NaN, 0, 0]], [[0, Infinity, 0]], [[0, 0]], Array(129).fill([0, 0, 0])]) assert.equal(validateEnvelope(envelope('APPEND_COMPUTED_PATH', { pathId: uuid(6), offset: 0, points })), null);
   const chunk = envelope('APPEND_COMPUTED_PATH', { pathId: uuid(6), offset: 0, points: Array.from({ length: 128 }, () => [-1.1234567890123457e-100, -1.1234567890123457e-100, -1.1234567890123457e-100]) });

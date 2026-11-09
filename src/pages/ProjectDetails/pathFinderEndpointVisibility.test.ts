@@ -9,6 +9,7 @@ import { endpointBindingFixture, endpointIds as ids } from '@/test/endpointBindi
 import { geometryTraceFixture } from '@/test/geometryTraceFixtures';
 import { canonicalPurposeJson } from '../../../shared/pathfinderPurposePolicy';
 import { endpointBindingContentHashInput } from '../../../shared/pathfinderEndpointBindings';
+import { MAX_PATH_OBJECT_IDS } from '../../../viewer-runtime/protocol.mjs';
 import { computedPathObjectIds, previewEndpointObjectIds, proposalEndpointObjectIds, proposalEndpointObjectIdsFromContexts, ENDPOINT_VISIBILITY_DEADLINE_MS } from './pathFinderEndpointVisibility';
 
 vi.mock('@/api/pathfinderEndpointBindings', async importOriginal => ({ ...await importOriginal<typeof import('@/api/pathfinderEndpointBindings')>(), fetchEndpointBinding: vi.fn() }));
@@ -76,6 +77,23 @@ function fixedDisplayFixture() {
   const proposal = parsePathFinderProposal({ ...f.raw, dependencies: { ...f.raw.dependencies, to: bound } });
   return { ...f, context, proposal };
 }
+function groupedFixedDisplayFixture(partCount = 3) {
+  const f = fixedDisplayFixture(), head = f.context.head!, point = head.pointProjectMetres;
+  const objectIds = Array.from({ length: partCount }, (_, index) => 901 + index);
+  head.derivation = 'matched-model-bottom-aabb.v1';
+  head.autoMatchEvidence = { schemaVersion: 'wfc.pf.model-location-match-evidence.v1', operationId: key(50),
+    commandSha256: 'd'.repeat(64), scanSha256: 'e'.repeat(64), namesSha256: 'f'.repeat(64), current: f.context.current!,
+    logicalKey: f.context.logicalKey!, sdkObjectId: 901, objectName: '/Selected parent',
+    objectGroup: { guid: '7586ffbb-1d0a-5942-b687-06884123c866', sourceFile: 'plant/instruments.dwg', objectIds },
+    bounds: { minimum: [point[0] - 1, point[1] - 1, point[2]], maximum: [point[0] + 1, point[1] + 1, point[2] + 2] },
+    bottomCentre: [...point], matchingPolicyVersion: 'wfc.pf.project-exact-candidates.v3', visibilityScopeSha256: 'a'.repeat(64),
+    approximate: true, engineeringAccepted: false };
+  head.contentSha256 = hash(endpointBindingContentHashInput(head));
+  Object.assign(f.context.confirmedDisplaySelection!, { sdkObjectIds: [...objectIds], bindingContentSha256: head.contentSha256 });
+  const proposal = parsePathFinderProposal({ ...f.raw, dependencies: { ...f.raw.dependencies,
+    to: { ...f.proposal.dependencies!.to, bindingContentSha256: head.contentSha256 } } });
+  return { ...f, proposal };
+}
 beforeEach(() => vi.clearAllMocks());
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
@@ -134,6 +152,25 @@ describe('Path Finder endpoint foreground evidence', () => {
     expect(proposalEndpointObjectIdsFromContexts(f.proposal, f.state, f.access, contexts)).toEqual(['dbid:901']);
     expect(await proposalEndpointObjectIds(f.proposal, f.state, f.access, undefined, contexts)).toEqual(['dbid:74', 'dbid:901']);
     expect(fetchCableEndpointContext).not.toHaveBeenCalled(); expect(fetchEndpointBinding).not.toHaveBeenCalled(); expect(fetchGeometryObjectRevision).not.toHaveBeenCalled();
+  });
+  it.each([3, 513, 4096])('keeps every one of %i source-item parts visible with cached and freshly read endpoint evidence', async partCount => {
+    const f = groupedFixedDisplayFixture(partCount), contexts = { from: f.context, to: f.context }, before = structuredClone(f.context);
+    const objectIds = f.context.confirmedDisplaySelection!.sdkObjectIds!.map(value => `dbid:${value}`);
+    expect(proposalEndpointObjectIdsFromContexts(f.proposal, f.state, f.access, contexts)).toEqual(objectIds);
+    expect(await proposalEndpointObjectIds(f.proposal, f.state, f.access, undefined, contexts)).toEqual(['dbid:74', ...objectIds]);
+    expect(fetchCableEndpointContext).not.toHaveBeenCalled();
+    vi.mocked(fetchCableEndpointContext).mockResolvedValue(f.context);
+    expect(await proposalEndpointObjectIds(f.proposal, f.state, f.access)).toEqual(['dbid:74', ...objectIds]);
+    expect(fetchCableEndpointContext).toHaveBeenCalledOnce(); expect(f.context).toEqual(before);
+    expect(fetchEndpointBinding).not.toHaveBeenCalled(); expect(fetchGeometryObjectRevision).not.toHaveBeenCalled();
+  });
+  it.each(['missing-part', 'other-part', 'reordered'] as const)('omits grouped display evidence with %s members', async mismatch => {
+    const f = groupedFixedDisplayFixture();
+    f.context.confirmedDisplaySelection!.sdkObjectIds = mismatch === 'missing-part' ? [901, 902]
+      : mismatch === 'other-part' ? [901, 902, 904] : [902, 901, 903];
+    expect(proposalEndpointObjectIdsFromContexts(f.proposal, f.state, f.access, { from: f.context, to: f.context })).toEqual([]);
+    vi.mocked(fetchCableEndpointContext).mockResolvedValue(f.context);
+    expect(await proposalEndpointObjectIds(f.proposal, f.state, f.access)).toEqual(['dbid:74']);
   });
   it('starts both fixed-world endpoint reads before either one finishes and retains their independent exact evidence', async () => {
     const f = fixedDisplayFixture(), finish = new Map<string, (context: CableEndpointContext) => void>();
@@ -333,6 +370,10 @@ describe('Path Finder endpoint foreground evidence', () => {
     expect(computedPathObjectIds(['dbid:1', 'dbid:2', 'dbid:0', 'dbid:1\n', 'dbid:2147483648'], ['dbid:2', 'dbid:73', 'unknown'])).toEqual([1, 2, 73]);
     const route = Array.from({ length: 512 }, (_, index) => `dbid:${index + 1}`);
     expect(computedPathObjectIds(route, ['dbid:1'])?.length).toBe(512);
-    expect(computedPathObjectIds(route, ['dbid:513'])).toBeNull(); expect(route).toHaveLength(512);
+    const endpoints = Array.from({ length: 8192 }, (_, index) => `dbid:${index + 513}`);
+    const complete = computedPathObjectIds(route, endpoints);
+    expect(complete).toEqual(Array.from({ length: MAX_PATH_OBJECT_IDS }, (_, index) => index + 1));
+    expect(computedPathObjectIds(route, [...endpoints, `dbid:${MAX_PATH_OBJECT_IDS + 1}`])).toBeNull();
+    expect(route).toHaveLength(512); expect(endpoints).toHaveLength(8192);
   });
 });

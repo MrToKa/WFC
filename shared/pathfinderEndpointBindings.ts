@@ -6,6 +6,8 @@ export const ENDPOINT_ATTACHMENT_POLICY = 'wfc.pf.endpoint-attachment-policy.v1'
 export const ENDPOINT_MATCHING_POLICY = 'nfc-trim-uppercase-v1' as const;
 export const ENDPOINT_ANCHOR_RULE = 'equipment-bottom-aabb.v1' as const;
 export const ENDPOINT_MODEL_MATCH_DERIVATION = 'matched-model-bottom-aabb.v1' as const;
+// A source item may contain every candidate in the bounded matching scan.
+export const ENDPOINT_MODEL_MATCH_OBJECT_LIMIT = 4096;
 const uuid = policyUuidSchema, revision = policyRevisionSchema, hash = policyHashSchema;
 const wellFormed = (value: string) => [...value].every(c => c.length !== 1 || c.charCodeAt(0) < 0xd800 || c.charCodeAt(0) > 0xdfff);
 const text = (maximum: number) => z.string().max(maximum).refine(v => wellFormed(v) && !/[\u0000-\u001f\u007f-\u009f]/u.test(v));
@@ -24,6 +26,16 @@ export const endpointObjectRefSchema = z.object({ traceId: uuid, objectRevisionI
 export const endpointCurrentScopeSchema = z.object({ modelVersionId: uuid, selectionRevision: revision, contentFingerprint: hash, aggregateId: uuid, artifactId: uuid, projectionSha256: hash, captureFrameId: uuid, geometryRevision: revision, traceId: uuid.nullable() }).strict();
 export const endpointModelMatchBoundsSchema = z.object({ minimum: endpointPointSchema, maximum: endpointPointSchema }).strict()
   .refine(v => v.minimum.every((n, i) => n <= v.maximum[i]) && v.minimum.some((n, i) => n < v.maximum[i]));
+/** A source Item GUID is scoped to its complete source-file path. SDK node IDs
+ * remain presentation identities within this model, never cross-model keys. */
+export const endpointModelMatchObjectIdentitySchema = z.object({
+  guid: uuid,
+  sourceFile: nonempty(1024).refine(v => v === v.normalize('NFC').trim().replaceAll('\\', '/').toLowerCase()),
+}).strict();
+export const endpointModelMatchObjectGroupSchema = endpointModelMatchObjectIdentitySchema.extend({
+  objectIds: z.array(z.number().int().positive().max(2147483647)).min(2).max(ENDPOINT_MODEL_MATCH_OBJECT_LIMIT)
+    .refine(v => v.every((id, i) => i === 0 || v[i - 1] < id)),
+}).strict();
 /** An explicitly requested model-name batch observes approximate fixed points.
  * It neither claims retained mesh evidence nor follows later model revisions. */
 export const endpointModelMatchEvidenceSchema = z.object({
@@ -31,10 +43,12 @@ export const endpointModelMatchEvidenceSchema = z.object({
   operationId: uuid, commandSha256: hash, scanSha256: hash, namesSha256: hash,
   current: endpointCurrentScopeSchema, logicalKey: endpointLocationNameSchema,
   sdkObjectId: z.number().int().positive().max(2147483647), objectName: nonempty(2048),
+  objectGroup: endpointModelMatchObjectGroupSchema.optional(),
   bounds: endpointModelMatchBoundsSchema, bottomCentre: endpointPointSchema,
   matchingPolicyVersion: z.literal('wfc.pf.project-exact-candidates.v3'), visibilityScopeSha256: hash,
   approximate: z.literal(true), engineeringAccepted: z.literal(false),
 }).strict().refine(v => v.logicalKey === normalizeEndpointLocation(v.logicalKey)
+  && (!v.objectGroup || v.objectGroup.objectIds[0] === v.sdkObjectId)
   && v.bottomCentre[0] === (v.bounds.minimum[0] + v.bounds.maximum[0]) / 2
   && v.bottomCentre[1] === (v.bounds.minimum[1] + v.bounds.maximum[1]) / 2
   && v.bottomCentre[2] === v.bounds.minimum[2]);

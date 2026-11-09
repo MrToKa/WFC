@@ -1,6 +1,6 @@
-import { isCanonicalPoint } from './protocol.mjs';
+import { isCanonicalPoint, MAX_PATH_OBJECT_IDS } from './protocol.mjs';
 import { PREPARATION_VIEWER_LIMITS, PREPARATION_MATCHING_POLICY, validatePreparationDiscoveryRequest, validatePreparationDiscoveryPage } from './preparation-input.mjs';
-import { modelEquipmentMatchKeys, humanScalarPropertyValues } from './equipment-names.mjs';
+import { modelEquipmentMatchKeys, humanScalarPropertyValues, equipmentObjectIdentity } from './equipment-names.mjs';
 import { captureDisplayVisibility, sameDisplayVisibility } from './display-visibility.mjs';
 
 const fail = code => Object.assign(new Error('The requested PathFinder viewer operation could not be completed.'), { code });
@@ -9,7 +9,7 @@ const positiveId = value => Number.isSafeInteger(value) && value > 0 && value <=
 const pause = () => new Promise(resolve => setTimeout(resolve, 0));
 const displayPoint = value => Array.isArray(value) && value.length === 3 && value.every(item => Number.isFinite(item) && Math.abs(item) <= 1e12);
 const TUBE_SIDES = 8, SEGMENTS_PER_MESH = 2000, TUBE_VERTICES = TUBE_SIDES * 2 + 2;
-const APPEARANCE_LIMITS = Object.freeze({ fragments: 1000000, materials: 4096, foregroundFragments: 8192 });
+const APPEARANCE_LIMITS = Object.freeze({ fragments: 1000000, materials: 4096, foregroundFragments: 16384 });
 // Per active model, including a conservative charge for Map/array entries and
 // UTF-16 strings. The SDK's complete-property proof is retained even when no
 // requested name matches; a refused/aborted build is never a reusable index.
@@ -204,7 +204,7 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
     active();
     const coordinates = modelCoordinates(model);
     const local = points.map(point => coordinates.toDisplay(point));
-    if (local.length < 1 || local.length > 20000 || !Array.isArray(objectIds) || objectIds.length > 512 || !objectIds.every(positiveId)) throw fail('PATH_INVALID');
+    if (local.length < 1 || local.length > 20000 || !Array.isArray(objectIds) || objectIds.length > MAX_PATH_OBJECT_IDS || !objectIds.every(positiveId)) throw fail('PATH_INVALID');
     if (!objectIds.length && (typeof model.visibilityManager?.setAllVisibility !== 'function' || typeof model.visibilityManager?.getVisibility !== 'function' || typeof model.visibilityManager?.getDefaultVisibility !== 'function' || typeof model.visibilityManager?.setVisibility !== 'function')) throw fail('SDK_UNSUPPORTED');
     const tubes = createExactPathBatches(local, 0.02 / coordinates.scale);
     clear();
@@ -353,7 +353,7 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
     if (request.cursor > ids.length) throw fail('PREPARATION_SCOPE_INVALID');
     const visibility = await captureDisplayVisibility(viewer, tree, ids, { check, pause, indexById: indexed.indexById });
     if (request.visibilityScope && !sameDisplayVisibility(request.visibilityScope, visibility.scope)) throw fail('PREPARATION_VISIBILITY_CHANGED');
-    const indexById = indexed.indexById, matching = new Map(); let propertyScan = null, candidateIndices;
+    const indexById = indexed.indexById, matching = new Map(); let propertyScan = null, candidateIndices, objectIdentities;
     const normalEquipment = value => String(value).normalize('NFC').trim().toUpperCase();
     if (request.mode === 'subtree' || request.mode === 'subtrees' || request.mode === 'ancestors') {
       const roots = request.mode === 'subtrees' ? request.rootObjectIds : [request.rootObjectId];
@@ -382,7 +382,7 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
       if (!preparationEquipment || preparationEquipment.queryKey !== queryKey) {
         const state = { promise:null, queryKey }; preparationEquipment = state;
         state.promise = (async () => {
-          const values = new Map(), requested = new Set(indexNames.map(normalEquipment)), returned = new Uint8Array(ids.length);
+          const values = new Map(), identities = new Map(), requested = new Set(indexNames.map(normalEquipment)), returned = new Uint8Array(ids.length);
           let returnedCount = 0, accountedBytes = returned.byteLength, postings = 0, scannedProperties = 0;
           const charge = bytes => { accountedBytes += bytes; if (accountedBytes > EQUIPMENT_INDEX_LIMITS.bytes) throw fail('PREPARATION_EQUIPMENT_INDEX_LIMIT'); };
           const indexValue = (raw, id, seen) => {
@@ -415,14 +415,18 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
               const humanValues = humanScalarPropertyValues(row.properties);
               if (humanValues.length > EQUIPMENT_INDEX_LIMITS.eligiblePropertiesPerRow) throw fail('PREPARATION_EQUIPMENT_ROW_LIMIT');
               for (const value of humanValues) indexValue(value, row.dbId, seen);
+              if (seen.size > 0) {
+                const identity = equipmentObjectIdentity(row.properties);
+                if (identity) { charge(192 + 2 * (identity.guid.length + identity.sourceFile.length)); identities.set(row.dbId, identity); }
+              }
             }
             await pause();
           }
           check();
-          return { values, propertyScan:{ attemptedObjectCount:ids.length, returnedObjectCount:returnedCount, omittedObjectCount:ids.length-returnedCount, complete:returnedCount===ids.length } };
+          return { values, identities, propertyScan:{ attemptedObjectCount:ids.length, returnedObjectCount:returnedCount, omittedObjectCount:ids.length-returnedCount, complete:returnedCount===ids.length } };
         })().catch(error => { if (preparationEquipment === state) preparationEquipment = undefined; throw error; });
       }
-      const data = await preparationEquipment.promise; check(); propertyScan = data.propertyScan;
+      const data = await preparationEquipment.promise; check(); propertyScan = data.propertyScan; objectIdentities = data.identities;
       for (const name of request.names) for (const id of data.values.get(normalEquipment(name)) ?? []) {
         const matched = matching.get(id) ?? []; matched.push(name); matching.set(id, matched);
       }
@@ -473,7 +477,7 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
       let hasGeometry = false; tree.enumNodeFragments(id, () => { hasGeometry = true; }, false);
       const parent = id === ids[0] ? null : tree.getNodeParentId(id);
       if (parent !== null && (!indexById.has(parent) || parent === id)) throw fail('EXTRACTION_FAILED');
-      const object = { objectId:id, parentId:parent, name:names[cursor], hasGeometry, isPhysicalLeaf:hasGeometry && tree.getChildCount(id) === 0, orderIndex:cursor, matchedNames, ...(request.includeAnchors ? eligible ? observedAnchor(id) : {bounds:null,bottomCentre:null} : {}) };
+      const object = { objectId:id, parentId:parent, name:names[cursor], hasGeometry, isPhysicalLeaf:hasGeometry && tree.getChildCount(id) === 0, orderIndex:cursor, matchedNames, ...(request.includeAnchors ? { ...(eligible ? observedAnchor(id) : {bounds:null,bottomCentre:null}), ...(objectIdentities?.has(id) ? {objectIdentity:{...objectIdentities.get(id)}} : {}) } : {}) };
       const candidate = { ...result, objects:[...result.objects, object], nextCursor:cursor+1, complete:false };
       if (new TextEncoder().encode(JSON.stringify(candidate)).length > PREPARATION_VIEWER_LIMITS.pageBytes) { if (!result.objects.length) throw fail('PREPARATION_PAGE_TOO_LARGE'); finished = false; break; }
       result.objects.push(object); if (result.objects.length >= request.limit) { cursor++; finished = iterator.next().done === true; break; }

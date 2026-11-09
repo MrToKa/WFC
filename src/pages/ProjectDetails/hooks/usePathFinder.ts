@@ -428,12 +428,16 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
     pickPoint: (): Promise<PickedPoint | null> => viewerAction(viewer => viewer.pickPoint()), cancelPicking: () => runRef.current?.viewer?.cancelPicking(),
     readObjects: (query: string, cursor = 0): Promise<ViewerModelObjectsPage | null> => viewerAction(viewer => viewer.readModelObjects(cursor, query)),
     readSelection: () => viewerAction(viewer => viewer.readSelection()), readTrayRootSelection, showTray, hideTray,
-    showLocation: async (sdkObjectId: number): Promise<boolean> => (await viewerAction(async viewer => {
-      const expected = visible.data?.activeModel, run = runRef.current;
-      if (visible.viewerPhase !== 'ready' || !expected || run?.modelVersionId !== expected.modelVersionId
-        || run.selectionRevision !== expected.selectionRevision || run.contentFingerprint !== expected.contentFingerprint) return false;
-      await viewer.showLocation(sdkObjectId); return true;
-    })) === true,
+    showLocation: async (sdkObjectId: number, sdkObjectIds?: number[]): Promise<boolean> => {
+      const objectIds = sdkObjectIds ? [...sdkObjectIds] : undefined;
+      return (await viewerAction(async viewer => {
+        const expected = visible.data?.activeModel, run = runRef.current;
+        if (visible.viewerPhase !== 'ready' || !expected || run?.modelVersionId !== expected.modelVersionId
+          || run.selectionRevision !== expected.selectionRevision || run.contentFingerprint !== expected.contentFingerprint) return false;
+        if (objectIds) await viewer.showLocation(sdkObjectId, objectIds); else await viewer.showLocation(sdkObjectId);
+        return true;
+      })) === true;
+    },
     setPathTransparency: (percent: number) => viewerAction(viewer => viewer.setPathTransparency(percent)),
     cancelOperation: () => { projectPreparationCapture.current?.abort(); planningCapture.current?.abort(); lookupCapture.current?.abort(); entityReads.current.proposal?.abort(); entityReads.current.job?.abort(); for (const read of isolatedEntityReads.current) read.abort(); runRef.current?.viewer?.cancelPicking(); clear(); },
     showPath: (path: ComputedPath) => viewerAction(viewer => viewer.showComputedPath(path)), clear, zoom: () => { try { runRef.current?.viewer?.zoom(); } catch { /* No committed path. */ } } };
