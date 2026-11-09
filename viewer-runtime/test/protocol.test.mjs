@@ -10,6 +10,22 @@ const route = (rawRouting = '/BC1/SECONDARY/BC1') => ({ rawRouting, source: 'man
   segments: parseRouting(rawRouting).segments.map(entry => ({ ...entry, model: { state: 'found', matchCount: 1, drawable: true } })),
   ignored: parseRouting(rawRouting).ignored, drawableCount: parseRouting(rawRouting).segments.length, lineCount: 1, warnings: [] });
 
+test('tray identity lookup is bounded, direction-bound and always attached to one model load', () => {
+  const identity = { externalId: null, guid: '7586ffbb-1d0a-5942-b687-06884123c866', sourceFile: '01-50_MSR_Kabeltassen.dwg' };
+  const request = { schemaVersion: 'wfc.pf.tray-identity-request.v1', identities: [identity] };
+  const response = { schemaVersion: 'wfc.pf.tray-identity-response.v1', matches: [{ identity, status: 'missing', objectIds: [] }] };
+  for (const [type, payload, direction] of [['RESOLVE_TRAY_IDENTITIES', request, 'parent-to-frame'], ['TRAY_IDENTITIES', response, 'frame-to-parent']]) {
+    assert.ok(validateEnvelope(envelope(type, payload), direction));
+    assert.equal(validateEnvelope(envelope(type, payload), direction === 'parent-to-frame' ? 'frame-to-parent' : 'parent-to-frame'), null);
+    for (const overrides of [{ modelVersionId: null }, { loadId: null }, { modelVersionId: null, loadId: null }])
+      assert.equal(validateEnvelope(envelope(type, payload, overrides), direction), null);
+    assert.equal(validateEnvelope(envelope(type, { ...payload, token: 'private' }), direction), null);
+  }
+  assert.equal(validateEnvelope(envelope('RESOLVE_TRAY_IDENTITIES', { ...request, identities: [] })), null);
+  assert.equal(validateEnvelope(envelope('RESOLVE_TRAY_IDENTITIES', { ...request, identities: Array(33).fill(identity) })), null);
+  assert.equal(validateEnvelope(envelope('TRAY_IDENTITIES', { ...response, matches: [{ identity, status: 'missing', objectIds: [23] }] })), null);
+});
+
 test('appearance cleanup accepts only a boolean camera-preservation option', () => {
   for (const payload of [{ reason: 'user' }, { reason: 'user', preserveCamera: true }, { reason: 'selection', preserveCamera: false }])
     assert.ok(validateEnvelope(envelope('CLEAR_ROUTE', payload), 'parent-to-frame'));

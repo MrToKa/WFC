@@ -1,3 +1,4 @@
+import { resolveTrayObjectIdentities, validateTrayIdentityRequest } from './tray-identity.mjs';
 import { createRouteController } from './routes.mjs';
 import { createPathFinderController } from './pathfinder.mjs';
 import { captureSelectedModel } from './model-capture.mjs';
@@ -317,6 +318,15 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
         readPreparationObjects(request, operationSignal) {
           active(operationSignal); prepareForEndpointVisibility();
           return pathfinder.readPreparationObjects(request, operationSignal);
+        },
+        async resolveTrayIdentities(request, operationSignal) {
+          if (!validateTrayIdentityRequest(request)) throw safeError('TRAY_IDENTITY_READ_FAILED');
+          const identitySignal = AbortSignal.any([signal, operationSignal].filter(Boolean));
+          const check = () => { active(identitySignal); if (finished || !loadedModel || viewer.model !== loadedModel) throw safeError('MODEL_SELECTION_CHANGED'); };
+          check();
+          const matches = await resolveTrayObjectIdentities(loadedModel, request.identities, { signal: identitySignal, check });
+          check();
+          return { schemaVersion: 'wfc.pf.tray-identity-response.v1', matches };
         },
         readSelection: pathfinder.readSelection,
         readTrayRootSelection: pathfinder.readTrayRootSelection,

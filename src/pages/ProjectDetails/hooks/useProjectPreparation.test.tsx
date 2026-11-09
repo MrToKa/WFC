@@ -10,6 +10,7 @@ import {saveCaptureEvidence,createGeometryTrace,fetchGeometryTraces,fetchGeometr
 import { bindCompletedCaptureEvidence } from '../../../../viewer-runtime/capture-evidence.mjs';
 import type { PathFinderState } from '@/api/pathfinder';
 import { PREPARATION_MATCHING_POLICY } from '../../../../viewer-runtime/preparation-input.mjs';
+import { validateTrayIdentityRequest, type TrayIdentityRequest } from '../../../../viewer-runtime/tray-identity.mjs';
 import type { PreparationDiscoveryPage, PreparationDiscoveryRequest } from '../../../../viewer-runtime/preparation-input.mjs';
 import type { ProjectPreparationViewer } from './usePathFinder';
 import * as discoveryCollection from './collectPreparationDiscovery';
@@ -757,7 +758,101 @@ describe('automatic tray workflow', () => {
     expect(vi.mocked(api.savePreparationResolution).mock.calls.map(call => call[2].rootObjectIds)).toEqual([['dbid:23'], ['dbid:24']]);
     expect(f.discover.mock.calls[0][0].scope.resolutionRevision).toBe('2'); expect(result.current.notice).toBe('Tray network updated.');
   });
-  it('never renews stale manual roots across model revisions and refuses a selection read from the old model', async () => {
+  it.each([false, true])('restores a previous assignment before capturing the new revision (already prepared: %s)', async alreadyPrepared => {
+    const f = automaticSetup(), resolutionId = crypto.randomUUID(), oldModel = crypto.randomUUID();
+    const identity = { externalId: 'old-export-id', guid: '7586ffbb-1d0a-5942-b687-06884123c866', sourceFile: '01-50_MSR_Kabeltassen.dwg' };
+    f.store.context.resolutions = [{ id: resolutionId, projectTrayId: ids.tray, mode: 'roots', rootObjectIds: ['dbid:23'],
+      reason: 'Old manual assignment', actorId: ids.actor, createdAt: new Date().toISOString(), scope: { ...f.context.scope, modelVersionId: oldModel } }];
+    f.store.context.trayAssignmentCarryover = [{ resolutionId, projectTrayId: ids.tray, sourceModelVersionId: oldModel,
+      roots: [{ objectId: 'dbid:23', identity }] }];
+    if (alreadyPrepared) {
+      const session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
+    }
+    const resolve = vi.fn().mockResolvedValue({ schemaVersion: 'wfc.pf.tray-identity-response.v1', matches: [{ identity, status: 'unique', objectIds: [91] }] });
+    const run = f.pf.runProjectPreparation;
+    vi.mocked(run).mockImplementation(async (_scope, operation) => operation({ assertCurrent: () => {}, resolveTrayIdentities: resolve,
+      capture: f.capture, discover: vi.fn(), readSelection: vi.fn(), readTrayRootSelection: vi.fn(), captureBarriers: vi.fn(), publishBarriers: vi.fn() }));
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.context).not.toBeNull());
+    await act(() => result.current.checkTrays());
+    expect(resolve).toHaveBeenCalledExactlyOnceWith({ schemaVersion: 'wfc.pf.tray-identity-request.v1', identities: [identity] });
+    expect(api.savePreparationResolution).toHaveBeenCalledOnce();
+    expect(vi.mocked(api.savePreparationResolution).mock.calls[0][2]).toMatchObject({ expected: { modelVersionId: f.context.scope.modelVersionId }, rootObjectIds: ['dbid:91'] });
+    expect(f.discover.mock.calls[0][0].resolutions[0].rootObjectIds).toEqual(['dbid:91']);
+    expect(f.capture).toHaveBeenCalledOnce(); expect(result.current.notice).toContain('1 tray assignments were restored');
+  });
+  it.each([false, true])('batches cross-revision identity lookups within record and byte limits (long IDs: %s)', async longIds => {
+    const f = automaticSetup(), resolutionId = crypto.randomUUID(), oldModel = crypto.randomUUID();
+    const identities = Array.from({ length: 65 }, (_, at) => ({ externalId: `old-${at}-${longIds ? 'x'.repeat(1000) : ''}`, guid: null, sourceFile: null }));
+    const oldRoots = identities.map((_, at) => `dbid:${at + 1}`);
+    f.store.context.resolutions = [{ id: resolutionId, projectTrayId: ids.tray, mode: 'roots', rootObjectIds: oldRoots,
+      reason: 'Old manual assignment', actorId: ids.actor, createdAt: new Date().toISOString(), scope: { ...f.context.scope, modelVersionId: oldModel } }];
+    f.store.context.trayAssignmentCarryover = [{ resolutionId, projectTrayId: ids.tray, sourceModelVersionId: oldModel,
+      roots: identities.map((identity, at) => ({ objectId: oldRoots[at], identity })) }];
+    const resolve = vi.fn(async (request: TrayIdentityRequest) => ({ schemaVersion: 'wfc.pf.tray-identity-response.v1' as const,
+      matches: request.identities.map(identity => ({ identity, status: 'unique' as const, objectIds: [identities.findIndex(item => item.externalId === identity.externalId) + 100] })) }));
+    vi.mocked(f.pf.runProjectPreparation).mockImplementation(async (_scope, operation) => operation({ assertCurrent: () => {}, resolveTrayIdentities: resolve,
+      capture: f.capture, discover: vi.fn(), readSelection: vi.fn(), readTrayRootSelection: vi.fn(), captureBarriers: vi.fn(), publishBarriers: vi.fn() }));
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.context).not.toBeNull());
+    await act(() => result.current.checkTrays());
+    const requests = resolve.mock.calls.map(call => call[0]);
+    expect(requests.length).toBeGreaterThanOrEqual(3);
+    expect(requests.every(validateTrayIdentityRequest)).toBe(true);
+    expect(requests.flatMap(request => request.identities)).toEqual(identities);
+    if (longIds) expect(requests[0].identities.length).toBeLessThan(32);
+    else expect(requests.map(request => request.identities.length)).toEqual([32, 32, 1]);
+    expect(api.savePreparationResolution).toHaveBeenCalledOnce();
+    expect(vi.mocked(api.savePreparationResolution).mock.calls[0][2].rootObjectIds).toEqual(identities.map((_, at) => `dbid:${at + 100}`));
+  });
+  it('does not write a completed identity lookup after the active model changes during that lookup', async () => {
+    const f = automaticSetup(), resolutionId = crypto.randomUUID(), oldModel = crypto.randomUUID();
+    const identity = { externalId: 'old-export-id', guid: null, sourceFile: null };
+    f.store.context.resolutions = [{ id: resolutionId, projectTrayId: ids.tray, mode: 'roots', rootObjectIds: ['dbid:23'],
+      reason: 'Old manual assignment', actorId: ids.actor, createdAt: new Date().toISOString(), scope: { ...f.context.scope, modelVersionId: oldModel } }];
+    f.store.context.trayAssignmentCarryover = [{ resolutionId, projectTrayId: ids.tray, sourceModelVersionId: oldModel, roots: [{ objectId: 'dbid:23', identity }] }];
+    let finish!: () => void;
+    const resolve = vi.fn(() => new Promise<Awaited<ReturnType<NonNullable<ProjectPreparationViewer['resolveTrayIdentities']>>>>(done => {
+      finish = () => done({ schemaVersion: 'wfc.pf.tray-identity-response.v1', matches: [{ identity, status: 'unique', objectIds: [91] }] });
+    }));
+    vi.mocked(f.pf.runProjectPreparation).mockImplementation(async (_scope, operation) => operation({ assertCurrent: () => {}, resolveTrayIdentities: resolve,
+      capture: f.capture, discover: vi.fn(), readSelection: vi.fn(), readTrayRootSelection: vi.fn(), captureBarriers: vi.fn(), publishBarriers: vi.fn() }));
+    const hook = renderHook(pf => useProjectPreparation(pf, true), { initialProps: withModel(f.pf, f.context.scope) });
+    await waitFor(() => expect(hook.result.current.context).not.toBeNull());
+    let work!: Promise<void>;
+    act(() => { work = hook.result.current.checkTrays(); });
+    await waitFor(() => expect(resolve).toHaveBeenCalledOnce());
+    hook.rerender(withModel(f.pf, { ...f.context.scope, modelVersionId: crypto.randomUUID(), selectionRevision: '2' }));
+    await act(async () => { finish(); await work; });
+    expect(api.savePreparationResolution).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled();
+    expect(f.store.context.resolutions[0].id).toBe(resolutionId);
+  });
+  it('never restores only part of a multi-object assignment when a GUID is ambiguous', async () => {
+    const f = automaticSetup(), resolutionId = crypto.randomUUID(), oldModel = crypto.randomUUID();
+    const identities = [23, 24].map(n => ({ externalId: `old-${n}`, guid: null, sourceFile: null }));
+    f.store.context.resolutions = [{ id: resolutionId, projectTrayId: ids.tray, mode: 'roots', rootObjectIds: ['dbid:23', 'dbid:24'],
+      reason: 'Old manual assignment', actorId: ids.actor, createdAt: new Date().toISOString(), scope: { ...f.context.scope, modelVersionId: oldModel } }];
+    f.store.context.trayAssignmentCarryover = [{ resolutionId, projectTrayId: ids.tray, sourceModelVersionId: oldModel,
+      roots: identities.map((identity, at) => ({ objectId: `dbid:${23 + at}`, identity })) }];
+    const resolve = vi.fn().mockResolvedValue({ schemaVersion: 'wfc.pf.tray-identity-response.v1', matches: [
+      { identity: identities[0], status: 'unique', objectIds: [91] }, { identity: identities[1], status: 'ambiguous', objectIds: [92, 93] }] });
+    vi.mocked(f.pf.runProjectPreparation).mockImplementation(async (_scope, operation) => operation({ assertCurrent: () => {}, resolveTrayIdentities: resolve,
+      capture: f.capture, discover: vi.fn(), readSelection: vi.fn(), readTrayRootSelection: vi.fn(), captureBarriers: vi.fn(), publishBarriers: vi.fn() }));
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.context).not.toBeNull());
+    await act(() => result.current.checkTrays());
+    expect(api.savePreparationResolution).not.toHaveBeenCalled(); expect(result.current.notice).toContain('Could not uniquely recognise 1 assigned trays');
+  });
+  it('retains old assignments without writing when the new model identity scan is interrupted', async () => {
+    const f = automaticSetup(), resolutionId = crypto.randomUUID(), oldModel = crypto.randomUUID();
+    const identity = { externalId: 'old-export-id', guid: null, sourceFile: null };
+    f.store.context.resolutions = [{ id: resolutionId, projectTrayId: ids.tray, mode: 'roots', rootObjectIds: ['dbid:23'],
+      reason: 'Old manual assignment', actorId: ids.actor, createdAt: new Date().toISOString(), scope: { ...f.context.scope, modelVersionId: oldModel } }];
+    f.store.context.trayAssignmentCarryover = [{ resolutionId, projectTrayId: ids.tray, sourceModelVersionId: oldModel, roots: [{ objectId: 'dbid:23', identity }] }];
+    vi.mocked(f.pf.runProjectPreparation).mockRejectedValueOnce(new DOMException('Model changed', 'AbortError'));
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.context).not.toBeNull());
+    await act(() => result.current.checkTrays());
+    expect(api.savePreparationResolution).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled();
+    expect(f.store.context.resolutions[0].id).toBe(resolutionId);
+  });
+  it('never renews stale manual roots without persistent identity evidence and refuses a selection read from the old model', async () => {
     const f = automaticSetup(); f.store.context.resolutions = [{ id: crypto.randomUUID(), projectTrayId: ids.tray, mode: 'roots', rootObjectIds: ['dbid:23'],
       reason: 'Old model', actorId: ids.actor, createdAt: new Date().toISOString(), scope: { ...f.context.scope, selectionRevision: '0' } }];
     const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.context).not.toBeNull());
@@ -765,6 +860,24 @@ describe('automatic tray workflow', () => {
     f.store.context.scope.selectionRevision = '2';
     await act(() => result.current.assignTray(ids.tray, ['dbid:23']));
     expect(api.savePreparationResolution).not.toHaveBeenCalled(); expect(result.current.error).toContain('active model changed');
+  });
+  it.each([false, true])('only reuses a new-model published network when unresolved old manual assignments were skipped (skipped: %s)', async skipped => {
+    const f = automaticSetup();
+    f.store.context.resolutions = [{ id: crypto.randomUUID(), projectTrayId: ids.tray, mode: 'roots', rootObjectIds: ['dbid:23'],
+      reason: 'Old manual assignment', actorId: ids.actor, createdAt: new Date().toISOString(),
+      scope: { ...f.context.scope, modelVersionId: crypto.randomUUID() } }];
+    const session = f.makeSession();
+    if (skipped) {
+      session.plan.requestedScope.trays = [];
+      session.plan.requestedScope.skippedTrays = [{ projectTrayId: ids.tray, reason: 'TRAY_ROOT_MISSING' }];
+      session.plan.requestedScope.excludedProjectTrayIds = [ids.tray];
+    }
+    f.store.sessions.set(session.id, session); f.publishSession(session);
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.context).not.toBeNull());
+    await act(() => result.current.checkTrays());
+    expect(result.current.error).toBeNull(); expect(api.savePreparationResolution).not.toHaveBeenCalled();
+    if (skipped) { expect(api.createPreparation).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled(); }
+    else { expect(api.createPreparation).toHaveBeenCalledOnce(); expect(f.capture).toHaveBeenCalledOnce(); }
   });
   it('resumes a current skip-mode session and captures only its missing parts', async () => {
     const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.commitPart(session.id);

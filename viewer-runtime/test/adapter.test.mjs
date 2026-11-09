@@ -67,6 +67,22 @@ function sdkFixture(options = {}) {
   return { adapter, window, facts, assets, viewers, evidence, model, tree, container };
 }
 
+test('tray identity resolution reads the loaded model without moving the camera or replacing its appearance', async t => {
+  const f = sdkFixture(), identity = { externalId: 'stable-external-id', guid: null, sourceFile: null };
+  const previous = globalThis.window; globalThis.window = f.window;
+  t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
+  f.model.getExternalIdMapping = success => success({ 'stable-external-id': 2 });
+  await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
+  let fits = 0; f.viewers[0].fitToView = () => { fits++; };
+  assert.deepEqual(await handle.resolveTrayIdentities({ schemaVersion: 'wfc.pf.tray-identity-request.v1', identities: [identity] }), {
+    schemaVersion: 'wfc.pf.tray-identity-response.v1', matches: [{ identity, status: 'unique', objectIds: [2] }],
+  });
+  assert.equal(fits, 0); assert.deepEqual(f.facts.isolated, []); assert.equal(f.facts.finishes, 0);
+  const cancelled = new AbortController(); cancelled.abort();
+  await assert.rejects(handle.resolveTrayIdentities({ schemaVersion: 'wfc.pf.tray-identity-request.v1', identities: [identity] }, cancelled.signal), { name: 'AbortError' });
+  f.adapter.dispose();
+});
+
 test('SDK initialization uses pinned local assets, explicit local worker root and cookie credentials only', async () => {
   const f = sdkFixture(); await f.adapter.initialize();
   assert.equal(f.assets.length, 2);

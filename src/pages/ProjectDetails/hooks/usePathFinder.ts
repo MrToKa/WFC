@@ -14,6 +14,7 @@ export type ProjectPreparationViewer = {
   readSelection: ViewerController['readSelection'];
   readTrayRootSelection: () => ReturnType<ViewerController['readTrayRootSelection']>;
   discover: (request: PreparationDiscoveryRequest) => Promise<PreparationDiscoveryPage>;
+  resolveTrayIdentities?: (request: Parameters<ViewerController['resolveTrayIdentities']>[0]) => ReturnType<ViewerController['resolveTrayIdentities']>;
   capture: (request: ModelCaptureRequest) => ReturnType<ViewerController['captureModel']>;
   captureBarriers: (request: Parameters<ViewerController['captureBarriers']>[0]) => ReturnType<ViewerController['captureBarriers']>;
   publishBarriers: (intentId: string, observation: Parameters<ViewerController['publishBarriers']>[1], onWriteStarted?: () => void,
@@ -372,6 +373,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
         readSelection:async()=>{current();const result=await run.viewer!.readSelection();current();return result;},
         readTrayRootSelection:async()=>{current();const result=await run.viewer!.readTrayRootSelection();current();return result;},
         discover: async request => { current(); const page = await run.viewer!.discoverPreparationObjects(request, { signal: combined, isCurrent: () => { try { current(); return true; } catch { return false; } } }); current(); return page; },
+        resolveTrayIdentities: async request => { current(); const response = await run.viewer!.resolveTrayIdentities(request, { signal: combined, isCurrent: () => { try { current(); return true; } catch { return false; } } }); current(); return response; },
         capture: async request => { current(); const capture = await run.viewer!.captureModel(request, progress => captureProgress(run, () => `Collecting project geometry: ${progress.index + 1} data batches…`), { signal: combined, isCurrent: () => { try { current(); return true; } catch { return false; } } }); current(); return capture; },
         captureBarriers: async request => { current(); update(run, { viewerMessage: 'Reading selected barrier geometry…' }); const capture = await run.viewer!.captureBarriers(request, { signal: combined, isCurrent: () => { try { current(); return true; } catch { return false; } } }); current(); return capture; },
         publishBarriers: async (intentId, observation, onWriteStarted, expectedCommand) => { current(); const receipt = await (expectedCommand !== undefined

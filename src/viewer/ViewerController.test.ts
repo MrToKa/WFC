@@ -102,6 +102,41 @@ describe('PathFinder protected Viewer capabilities', () => {
     s.send.mockImplementation(() => {});
     return s;
   }
+  it('resolves unique and ambiguous saved tray identities in the exact active load without clearing the route', async () => {
+    const s = await loaded(), request = { schemaVersion: 'wfc.pf.tray-identity-request.v1' as const, identities: [
+      { externalId: null, guid: '7586ffbb-1d0a-5942-b687-06884123c866', sourceFile: '01-50_MSR_Kabeltassen.dwg' },
+      { externalId: 'other-root', guid: null, sourceFile: null },
+    ] };
+    s.send.mockImplementation(value => {
+      if (value.type === 'RESOLVE_TRAY_IDENTITIES') s.message('TRAY_IDENTITIES', { schemaVersion: 'wfc.pf.tray-identity-response.v1',
+        matches: value.payload.identities.map((identity: unknown, index: number) => ({ identity, status: index ? 'ambiguous' : 'unique', objectIds: index ? [25, 26] : [23] })) }, value.requestId, s.identity);
+    });
+    const result = await s.c.resolveTrayIdentities(request);
+    expect(result.matches.map(value => value.status)).toEqual(['unique', 'ambiguous']);
+    expect(s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE')).toHaveLength(0);
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+  });
+  it('rejects substituted tray identity replies instead of applying IDs to another saved root', async () => {
+    const s = await loaded(), request = { schemaVersion: 'wfc.pf.tray-identity-request.v1' as const, identities: [{ externalId: 'saved-root', guid: null, sourceFile: null }] };
+    s.send.mockImplementation(value => {
+      if (value.type === 'RESOLVE_TRAY_IDENTITIES') s.message('TRAY_IDENTITIES', { schemaVersion: 'wfc.pf.tray-identity-response.v1',
+        matches: [{ identity: { ...request.identities[0], externalId: 'different-root' }, status: 'unique', objectIds: [23] }] }, value.requestId, s.identity);
+    });
+    await expect(s.c.resolveTrayIdentities(request)).rejects.toThrow('acknowledgement mismatch');
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+  });
+  it('cancels a tray identity read and ignores late IDs from that request', async () => {
+    const s = await loaded(), request = { schemaVersion: 'wfc.pf.tray-identity-request.v1' as const, identities: [{ externalId: 'saved-root', guid: null, sourceFile: null }] }, controller = new AbortController();
+    let dispatched: { requestId: string } | undefined;
+    s.send.mockImplementation(value => { if (value.type === 'RESOLVE_TRAY_IDENTITIES') dispatched = value; });
+    const pending = s.c.resolveTrayIdentities(request, { signal: controller.signal });
+    await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+    if (!dispatched) { await vi.advanceTimersByTimeAsync(0); }
+    expect(dispatched).toBeDefined();
+    const rejected = expect(pending).rejects.toThrow(); controller.abort();
+    s.message('TRAY_IDENTITIES', { schemaVersion: 'wfc.pf.tray-identity-response.v1', matches: [{ identity: request.identities[0], status: 'unique', objectIds: [23] }] }, dispatched!.requestId, s.identity);
+    await rejected; expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+  });
   it('reads tray-root IDs with exact load identity and checks selection before and after without requesting rich endpoint metadata', async () => {
     const s = await loaded(), reads = vi.mocked(fetch).mock.calls.length;
     s.send.mockImplementation(value => {

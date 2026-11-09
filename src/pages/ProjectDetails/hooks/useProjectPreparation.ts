@@ -33,6 +33,7 @@ import {saveCaptureEvidence,GeometryTraceApiError,createGeometryTrace,fetchGeome
 import {GEOMETRY_TRACE_DERIVATION} from '../../../../shared/pathfinderGeometryTrace';
 import {bindCompletedCaptureEvidence,type CompletedCaptureEvidence} from '../../../../viewer-runtime/capture-evidence.mjs';
 import { formatPreparationDiagnostics } from '../preparationDiagnostics';
+import { validateTrayIdentityRequest, type TrayObjectIdentity, type TrayIdentityMatch } from '../../../../viewer-runtime/tray-identity.mjs';
 
 type PF = ReturnType<typeof usePathFinder>;
 type PreparationModel = { modelVersionId: string | null; contentFingerprint: string | null; selectionRevision: string };
@@ -892,17 +893,79 @@ export function useProjectPreparation(pf: PF, active: boolean) {
       if (!publishedNetworkMatches(fresh.context) || fresh.context.currentAggregate!.sessionId !== fresh.session?.id ||
         fresh.session.state !== 'published' || fresh.context.currentAggregate!.orderedPlanSha256 !== fresh.session.plan.orderedPlanSha256)
         throw new Error('The project trays changed while checking the network. Check them again.');
+      // Older releases could replace a stale manual assignment by a name match.
+      // Rebuild that plan so unresolved physical assignments are skipped instead.
+      if (fresh.context.resolutions.some(resolution => resolution.mode === 'roots' && !sameModel(resolution.scope, fresh.context.scope)
+        && fresh.session!.plan.requestedScope.trays.some(tray => tray.projectTrayId === resolution.projectTrayId))) return false;
       if (fresh.session.plan.requestedScope.skippedTrays?.length) await discoverTrays(fresh.context, signal);
       fresh = await ensureNetworkTrace(fresh, signal);
       update(value => ({ ...value, progress: null, notice: 'Tray network is up to date.', unknown: false }));
       latestPf.current.refresh();
       return true;
     };
-    if (await reusePublished()) return;
+    // An earlier preparation may have skipped old manual assignments before
+    // revision carryover was available. Recognise those before reusing it.
+    if (!fresh.context.trayAssignmentCarryover?.length && await reusePublished()) return;
+
+    // Cross-revision dbIds are never reused. Recover the physical assignment by
+    // its persisted GUID/external identity, then create a current audited write.
+    // The network below still captures geometry from the new model in full.
+    const carryover = fresh.context.trayAssignmentCarryover ?? [];
+    let restoredAssignments = 0;
+    const unresolvedAssignments: string[] = [];
+    const expectedModel = fresh.context.scope;
+    if (carryover.length) {
+      update(value => ({ ...value, progress: 'Recognising assigned tray objects in the new model revision…' }));
+      const identities = [...new Map(carryover.flatMap(hint => hint.roots.map(root =>
+        [canonicalPurposeJson(root.identity), root.identity] as const))).values()];
+      const matches = await latestPf.current.runProjectPreparation(expectedModel, async viewer => {
+        const found = new Map<string, TrayIdentityMatch>();
+        if (!viewer.resolveTrayIdentities) return found;
+        let checked = 0;
+        const groups: TrayObjectIdentity[][] = [];
+        for (const identity of identities) {
+          let group = groups.at(-1);
+          if (!group || !validateTrayIdentityRequest({ schemaVersion: 'wfc.pf.tray-identity-request.v1', identities: [...group, identity] })) {
+            group = []; groups.push(group);
+          }
+          if (!validateTrayIdentityRequest({ schemaVersion: 'wfc.pf.tray-identity-request.v1', identities: [identity] })) continue;
+          group.push(identity);
+        }
+        for (const group of groups.filter(group => group.length > 0)) {
+          viewer.assertCurrent();
+          const response = await viewer.resolveTrayIdentities({ schemaVersion: 'wfc.pf.tray-identity-request.v1', identities: group });
+          viewer.assertCurrent();
+          for (const match of response.matches) found.set(canonicalPurposeJson(match.identity), match);
+          checked += group.length;
+          update(value => ({ ...value, progress: `Recognising assigned tray objects (${checked} of ${identities.length})…` }));
+        }
+        return found;
+      }, signal);
+      assertCurrent(signal);
+      for (const hint of carryover) {
+        if (!sameModel(expectedModel, fresh.context.scope)) throw new Error('The active model changed while recognising tray assignments. Check the trays again.');
+        const saved = fresh.context.resolutions.find(item => item.projectTrayId === hint.projectTrayId);
+        if (!saved || saved.id !== hint.resolutionId || saved.mode !== 'roots' ||
+          saved.scope.modelVersionId !== hint.sourceModelVersionId || sameModel(saved.scope, fresh.context.scope) ||
+          canonicalPurposeJson(saved.rootObjectIds) !== canonicalPurposeJson(hint.roots.map(root => root.objectId))) continue;
+        const matched = hint.roots.map(root => matches.get(canonicalPurposeJson(root.identity)));
+        const roots = matched.flatMap(match => match?.status === 'unique' && match.objectIds.length === 1 ? [`dbid:${match.objectIds[0]}`] : []);
+        if (roots.length !== hint.roots.length || new Set(roots).size !== roots.length) {
+          unresolvedAssignments.push(fresh.context.trays.find(tray => tray.projectTrayId === hint.projectTrayId)?.rawName ?? hint.projectTrayId);
+          continue;
+        }
+        fresh = await execute({ kind: 'resolution', body: {
+          schemaVersion: 'wfc.pf.preparation-resolution.write.v1', expected: fresh.context.scope,
+          idempotencyKey: generateId(), projectTrayId: hint.projectTrayId, mode: 'roots', rootObjectIds: roots,
+          reason: `Restored the saved tray assignment from model ${hint.sourceModelVersionId} by unique persistent object identity. Geometry is captured from the current model.`,
+        } }, signal, true);
+        restoredAssignments++;
+      }
+    }
 
     // Preserve explicit physical assignments when only project routing inputs
     // changed. Each renewal is a fresh audited write with the current full CAS.
-    // A model/selection/fingerprint change never carries roots into another load.
+    // Only same-model renewals may retain dbIds directly.
     const staleRoots = fresh.context.resolutions.filter(resolution => resolution.mode === 'roots' &&
       fresh.context.trays.some(tray => tray.projectTrayId === resolution.projectTrayId) &&
       sameModel(resolution.scope, fresh.context.scope) && !preparationResolutionMatchesScope(resolution.scope, fresh.context.scope));
@@ -913,6 +976,11 @@ export function useProjectPreparation(pf: PF, active: boolean) {
         idempotencyKey: generateId(), projectTrayId: resolution.projectTrayId, mode: 'roots',
         rootObjectIds: [...resolution.rootObjectIds], reason: 'Retained the previously assigned roots in the same model after project routing inputs changed.',
       } }, signal, true);
+    }
+    if (carryover.length && await reusePublished()) {
+      if (unresolvedAssignments.length) update(value => ({ ...value,
+        notice: `Tray network is up to date. Could not uniquely recognise ${unresolvedAssignments.length} assigned trays: ${unresolvedAssignments.slice(0, 8).join(', ')}${unresolvedAssignments.length > 8 ? '…' : ''}. Review their model selections.` }));
+      return;
     }
 
     let session: PreparationSession | null = null;
@@ -954,7 +1022,9 @@ export function useProjectPreparation(pf: PF, active: boolean) {
     if (!publishedNetworkMatches(fresh.context) || fresh.session?.state !== 'published' || fresh.context.currentAggregate!.sessionId !== fresh.session.id)
       throw new Error('The tray update could not be confirmed. Check the trays again.');
     fresh = await ensureNetworkTrace(fresh, signal);
-    update(value => ({ ...value, progress: null, notice: 'Tray network updated.', unknown: false }));
+    const restorationNotice = restoredAssignments ? ` ${restoredAssignments} tray assignments were restored from the previous model revision; geometry was read from the current model.` : '';
+    const unresolvedNotice = unresolvedAssignments.length ? ` Could not uniquely recognise ${unresolvedAssignments.length} assigned trays: ${unresolvedAssignments.slice(0, 8).join(', ')}${unresolvedAssignments.length > 8 ? '…' : ''}. Review their model selections.` : '';
+    update(value => ({ ...value, progress: null, notice: `Tray network updated.${restorationNotice}${unresolvedNotice}`, unknown: false }));
   }, [assertCurrent, collectSession, discoverTrays, ensureNetworkTrace, execute, readCurrent, reconcileAutomatic, update]);
   const checkTrays = useCallback(() => {
     if (!latestActive.current) return Promise.resolve();
