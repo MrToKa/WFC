@@ -7,6 +7,10 @@ import type { ViewerController } from '@/viewer/ViewerController';
 
 type CatalogueItem = { id: string; partNumber: string; manufacturer: string; originalFilename: string; sourceSha256: string; conversionStatus: string };
 type Design = { id: string; modelVersionId: string; name: string; status: string; revision: number; activeModel: boolean };
+type Connection = {
+  id: string; sourceInstanceId: string; targetInstanceId: string;
+  sourcePortId: string; targetPortId: string;
+};
 type Instance = {
   id: string; catalogItemId: string; partNumber: string; manufacturer: string; revision: number;
   xMm: number; yMm: number; zMm: number; qx: number; qy: number; qz: number; qw: number;
@@ -51,7 +55,7 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
     targetPortName: 'start' | 'end';
     sourcePortName: 'start' | 'end';
   } | null>(null);
-  const [connectionCount, setConnectionCount] = useState(0);
+  const [connections, setConnections] = useState<Connection[]>([]);
   const [coordinates, setCoordinates] = useState<Coordinates>(empty);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -81,15 +85,15 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
     const response = await api('/designs', { signal });
     const data: { designs: Design[] } = await response.json();
     const current = data.designs.find(row => row.modelVersionId === modelVersionId && row.activeModel);
-    if (!current) { if (!signal?.aborted) { setDesignId(null); setInstances([]); setConnectionCount(0); } return; }
+    if (!current) { if (!signal?.aborted) { setDesignId(null); setInstances([]); setConnections([]); } return; }
     const listing = await api(`/designs/${current.id}/instances`, { signal });
     const details: { instances: Instance[] } = await listing.json();
     const graph = await api(`/designs/${current.id}/connections`, { signal });
-    const links: { connections: Array<{ id: string }> } = await graph.json();
+    const links: { connections: Connection[] } = await graph.json();
     if (!signal?.aborted) {
       setDesignId(current.id);
       setInstances(details.instances);
-      setConnectionCount(links.connections.length);
+      setConnections(links.connections);
     }
   }, [api, modelVersionId]);
 
@@ -244,6 +248,19 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
     } finally { setBusy(false); }
   };
 
+  const disconnect = async (connectionId: string) => {
+    if (!designId || busy) return;
+    setBusy(true); setNotice('');
+    try {
+      await api(`/designs/${designId}/connections/${connectionId}`, { method: 'DELETE' });
+      await reload();
+      setPendingSnap(null);
+      setNotice('Connector relationship removed. The component can now be repositioned.');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not disconnect components.');
+    } finally { setBusy(false); }
+  };
+
   const download = async (extension: 'materials.csv' | 'assembly.step') => {
     if (!designId || busy) return;
     setBusy(true); setNotice('');
@@ -306,13 +323,22 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
       <Button type="button" disabled={busy} onClick={() => { setEditingId(''); setPendingSnap(null); setCoordinates(empty); }}>New position</Button>
     </form>
     <div role="status" aria-live="polite"><Body1>{notice}</Body1></div>
-    <Caption1>Saved component instances: {instances.length}; saved connector relationships: {connectionCount}</Caption1>
+    <Caption1>Saved component instances: {instances.length}; saved connector relationships: {connections.length}</Caption1>
     <ul>{instances.map(instance => <li key={instance.id}>
       <Button appearance={editingId === instance.id ? 'primary' : 'subtle'}
         onClick={() => selectInstance(instance.id)} disabled={busy}>
         {instance.manufacturer} {instance.partNumber} — X {instance.xMm}, Y {instance.yMm}, Z {instance.zMm} mm
       </Button>
     </li>)}</ul>
+
+    <ul aria-label="Saved connector relationships">{connections.map(connection =>
+      <li key={connection.id}>
+        <Caption1>{connection.sourceInstanceId.slice(0, 8)} ↔ {connection.targetInstanceId.slice(0, 8)}</Caption1>
+        <Button appearance="subtle" disabled={busy} onClick={() => { void disconnect(connection.id); }}>
+          Disconnect
+        </Button>
+      </li>
+    )}</ul>
     <Button disabled={busy || !designId || !instances.length} onClick={() => { void download('assembly.step'); }}>Export STEP assembly</Button>
     <Button disabled={busy || !designId || !instances.length} onClick={() => { void download('materials.csv'); }}>Export material list (CSV)</Button>
   </section>;
