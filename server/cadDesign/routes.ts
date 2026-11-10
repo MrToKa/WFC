@@ -1,12 +1,13 @@
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { hasStepEnvelope, MAX_STEP_BYTES, csvCell } from './stepFileValidation.js';
+import { convertStepToMesh } from './converter.js';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import multer from 'multer';
 import { z } from 'zod';
 import { pool } from '../db.js';
 import { requireProjectEdit } from '../middleware.js';
-import { deleteObject, getProjectBucket, uploadObject } from '../services/objectStorageService.js';
+import { deleteObject, getObjectStream, getProjectBucket, uploadObject } from '../services/objectStorageService.js';
 
 export const cadDesignRouter = Router({ mergeParams: true });
 
@@ -66,6 +67,7 @@ cadDesignRouter.get('/catalog', safe(async (req: CadRequest, res: Response) => {
     `SELECT id, manufacturer, part_number AS "partNumber", family,
             original_filename AS "originalFilename", source_sha256 AS "sourceSha256",
             source_bytes AS "sourceBytes", conversion_status AS "conversionStatus",
+            mesh_metadata AS "meshMetadata",
             created_at AS "createdAt"
      FROM cad_catalog_items WHERE project_id=$1 ORDER BY created_at, id LIMIT 250`,
     [req.params.projectId],
@@ -100,28 +102,36 @@ cadDesignRouter.post('/catalog', requireProjectEdit, (req: CadRequest, res: Resp
   }
   const id = randomUUID();
   const key = `cad-design/projects/${projectId}/catalog/${id}/original.step`;
+  const meshKey = `cad-design/projects/${projectId}/catalog/${id}/mesh.json`;
   const name = path.basename(req.file.originalname).replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 200);
   const bucket = getProjectBucket();
   try {
-    // STEP is never interpreted or executed inside the API.
+    // Parse the untrusted CAD only inside the isolated OCCT conversion service.
+    const { bytes: meshBytes, mesh } = await convertStepToMesh(req.file.buffer);
     await uploadObject({
       bucket, objectKey: key, data: req.file.buffer, size: req.file.size,
       contentType: 'application/step',
     });
+    await uploadObject({
+      bucket, objectKey: meshKey, data: meshBytes, size: meshBytes.length,
+      contentType: 'application/json',
+    });
     const inserted = await pool.query(
       `INSERT INTO cad_catalog_items
          (id,project_id,manufacturer,part_number,family,original_filename,
-          source_sha256,source_object_key,source_bytes,created_by)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+          source_sha256,source_object_key,source_bytes,created_by,mesh_object_key,mesh_metadata,conversion_status)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'ready')
        ON CONFLICT(project_id,source_sha256) DO NOTHING RETURNING id`,
       [id, projectId, parsed.data.manufacturer, parsed.data.partNumber, parsed.data.family,
-        name, sha, key, req.file.size, req.userId ?? null],
+        name, sha, key, req.file.size, req.userId ?? null, meshKey,
+        JSON.stringify({ triangleCount: mesh.triangleCount, solidCount: mesh.solidCount,
+          boundsMm: mesh.boundsMm, units: mesh.units })],
     );
     if (inserted.rows[0]) {
-      res.status(201).json({ id, reused: false, conversionStatus: 'pending' });
+      res.status(201).json({ id, reused: false, conversionStatus: 'ready' });
       return;
     }
-    await deleteObject(bucket, key);
+    await Promise.allSettled([deleteObject(bucket, key), deleteObject(bucket, meshKey)]);
     const result = await pool.query(
       'SELECT id FROM cad_catalog_items WHERE project_id=$1 AND source_sha256=$2',
       [projectId, sha],
@@ -129,10 +139,30 @@ cadDesignRouter.post('/catalog', requireProjectEdit, (req: CadRequest, res: Resp
     if (result.rows[0]) res.status(200).json({ id: result.rows[0].id, reused: true });
     else failure(res, 409, 'CATALOG_IMPORT_CONFLICT');
   } catch (error) {
-    await deleteObject(bucket, key).catch(() => undefined);
+    await Promise.allSettled([deleteObject(bucket, key), deleteObject(bucket, meshKey)]);
     console.error('CAD catalogue import failed', error);
     failure(res, 500, 'CATALOG_IMPORT_FAILED');
   }
+}));
+
+cadDesignRouter.get('/catalog/:catalogItemId/mesh', safe(async (req: CadRequest, res: Response) => {
+  if (!uuid.safeParse(req.params.catalogItemId).success) {
+    failure(res, 400, 'INVALID_CATALOG_ITEM_ID'); return;
+  }
+  const result = await pool.query<{ mesh_object_key: string }>(
+    `SELECT mesh_object_key FROM cad_catalog_items
+       WHERE project_id=$1 AND id=$2 AND conversion_status='ready'
+         AND mesh_object_key IS NOT NULL`,
+    [req.params.projectId, req.params.catalogItemId],
+  );
+  const key = result.rows[0]?.mesh_object_key;
+  if (!key) { failure(res, 404, 'CAD_MESH_NOT_READY'); return; }
+  const stream = await getObjectStream(getProjectBucket(), key);
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  stream.on('error', () => res.destroy());
+  stream.pipe(res);
 }));
 
 cadDesignRouter.get('/designs', safe(async (req: CadRequest, res: Response) => {
