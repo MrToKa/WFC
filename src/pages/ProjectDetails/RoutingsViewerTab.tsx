@@ -24,7 +24,8 @@ export function RoutingsViewerTab({ projectId, loadedProjectId, token }: Props) 
   const searchInput = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState({ projectId, token, value: '' });
   const [sourceTab, setSourceTab] = useState({ projectId, token, value: 'manual' });
-  const mode = sourceTab.projectId === projectId && sourceTab.token === token ? sourceTab.value : 'manual';
+  const componentsOnly = import.meta.env.VITE_CAD_DESIGN_ENABLED === 'true';
+  const mode = componentsOnly ? 'components' : sourceTab.projectId === projectId && sourceTab.token === token ? sourceTab.value : 'manual';
   const routing = draft.projectId === projectId && draft.token === token ? draft.value : '';
   const height = useRoutingsViewerHeight(anchor);
   const viewer = useRoutingsViewer({ projectId, loadedProjectId, token, container });
@@ -46,12 +47,11 @@ export function RoutingsViewerTab({ projectId, loadedProjectId, token }: Props) 
   return <section ref={anchor} aria-label="Routings builder" data-testid="routings-viewer-tab">
     <div className={styles.layout} style={{ height }} data-testid="routings-layout">
       <div className={styles.controls}>
-        <TabList className={styles.sources} selectedValue={mode} aria-label="Routing source"
+        {!componentsOnly ? <TabList className={styles.sources} selectedValue={mode} aria-label="Routing source"
           onTabSelect={(_, data) => { if (data.value === 'manual' || data.value === 'cables' || data.value === 'components') setSourceTab({ projectId, token, value: data.value }); }}>
           <Tab value="manual">Manual routing</Tab>
           <Tab value="cables">Cables</Tab>
-          {import.meta.env.VITE_CAD_DESIGN_ENABLED === 'true' ? <Tab value="components">Components</Tab> : null}
-        </TabList>
+        </TabList> : null}
         <div className={styles.status} aria-live="polite" aria-atomic="true" data-testid="routings-viewer-status" data-phase={viewer.phase}>
           {loading ? <Spinner size="tiny" label={viewer.message} /> : <Body1>{viewer.message}</Body1>}
           {viewer.model ? <Caption1>Active model: {viewer.model.label}</Caption1> : null}
