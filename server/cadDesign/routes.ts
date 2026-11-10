@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
+import { hasStepEnvelope, MAX_STEP_BYTES, csvCell } from './stepFileValidation.js';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import multer from 'multer';
 import { z } from 'zod';
@@ -10,7 +11,6 @@ import { deleteObject, getProjectBucket, uploadObject } from '../services/object
 export const cadDesignRouter = Router({ mergeParams: true });
 
 // 8 MiB stays below the existing nginx generic /api/ body limit (10 MiB).
-const MAX_STEP_BYTES = 8 * 1024 * 1024;
 const upload = multer({ storage: multer.memoryStorage(), limits: {
   fileSize: MAX_STEP_BYTES, files: 1, fields: 3, parts: 4,
 } });
@@ -60,20 +60,6 @@ const failure = (res: Response, status: number, code: string): void => {
   res.status(status).json({ code });
 };
 
-const csvCell = (value: unknown): string => {
-  const raw = String(value ?? '');
-  // Neutralize spreadsheet formulas (including leading whitespace/control chars).
-  const text = /^[\s\u0000-\u001f]*[=+\-@]/u.test(raw) ? '\'' + raw : raw;
-  return '"' + text.replaceAll('"', '""') + '"';
-};
-
-function isStepFile(file: Express.Multer.File): boolean {
-  const extension = path.extname(file.originalname).toLowerCase();
-  if (!['.stp', '.step'].includes(extension) || file.size < 40 || file.size > MAX_STEP_BYTES) return false;
-  const first = file.buffer.subarray(0, 512).toString('ascii').replace(/^\uFEFF/, '').trimStart();
-  const last = file.buffer.subarray(Math.max(0, file.size - 512)).toString('ascii').trimEnd();
-  return first.startsWith('ISO-10303-21;') && /END-ISO-10303-21;\s*$/i.test(last);
-}
 
 cadDesignRouter.get('/catalog', safe(async (req: CadRequest, res: Response) => {
   const result = await pool.query(
@@ -98,7 +84,7 @@ cadDesignRouter.post('/catalog', requireProjectEdit, (req: CadRequest, res: Resp
   });
 }, safe(async (req: CadRequest, res: Response) => {
   const parsed = catalogueInput.safeParse(req.body);
-  if (!parsed.success || !req.file || !isStepFile(req.file)) {
+  if (!parsed.success || !req.file || !hasStepEnvelope(req.file.originalname, req.file.buffer)) {
     failure(res, 400, 'INVALID_STEP_FILE_OR_METADATA');
     return;
   }
