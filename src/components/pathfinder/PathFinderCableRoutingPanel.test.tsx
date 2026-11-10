@@ -205,6 +205,19 @@ describe('showing the popup From/To locations without changing them', () => {
     expect(show).toHaveBeenCalledExactlyOnceWith(444, sdkObjectIds);
     expect(assignment.save).not.toHaveBeenCalled(); expect(assignment.to.selectObject).not.toHaveBeenCalled(); expect(p.onCalculate).not.toHaveBeenCalled();
   });
+  it('enables Show From for a preserved manual point after its source item is rediscovered', async () => {
+    const saved = context('from', 'confirmed'), p = props(), sdkObjectIds = [444, 445, 446, 447, 448];
+    assignment.from.context = cableEndpointContextSchema.parse({ ...saved, confirmedSelection: null,
+      head: { ...saved.head!, mode: 'fixed-world', sourceObject: null, derivation: 'manual-world-point' },
+      confirmedDisplaySelection: { source: 'confirmed-display-only', mode: 'fixed-world', sdkObjectId: 444, sdkObjectIds,
+        preservedMatchObjectGroup: { guid: id(90), sourceFile: 'plant/instruments.dwg', objectIds: sdkObjectIds },
+        pointProjectMetres: saved.head!.pointProjectMetres, current: saved.current!, bindingId: saved.head!.id,
+        bindingContentSha256: saved.head!.contentSha256, commandSha256: 'e'.repeat(64) } });
+    const show = vi.fn(async () => true); render(<PathFinderCableRoutingPanel {...p} onShowLocation={show} />);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Show From location' })); });
+    expect(show).toHaveBeenCalledExactlyOnceWith(444, sdkObjectIds);
+    expect(p.onCalculate).not.toHaveBeenCalled(); expect(assignment.save).not.toHaveBeenCalled();
+  });
   it('does not show an invalid partial or reordered saved location group', () => {
     const saved = context('to', 'confirmed');
     assignment.to.context = { ...saved, confirmedSelection: null, confirmedDisplaySelection: { source: 'confirmed-display-only', mode: 'fixed-world',

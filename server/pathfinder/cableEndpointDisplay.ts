@@ -5,7 +5,7 @@ import { cableEndpointCommandSchema, cableEndpointEndSchema, cableEndpointReceip
   cableEndpointConfirmedDisplaySelectionSchema, type CableEndpointContext } from '../../shared/pathfinderCableEndpoints.js';
 import { type EndpointBinding, type EndpointCurrentScope } from '../../shared/pathfinderEndpointBindings.js';
 import { endpointBindingHash } from './endpointBindingRepository.js';
-import { readMatchedLocationDisplay } from './modelLocationMatchDisplay.js';
+import { readMatchedLocationDisplay, readPreservedLocationDisplay } from './modelLocationMatchDisplay.js';
 
 const ownerSchema = z.object({ schemaVersion: z.literal('wfc.pf.cable-endpoint-command-owner.v1'),
   cableId: policyUuidSchema, end: cableEndpointEndSchema, command: cableEndpointCommandSchema }).strict();
@@ -37,7 +37,7 @@ export async function readCableEndpointDisplay(client: PoolClient, input: { proj
       AND receipt#>>'{receipt,binding,binding,contentSha256}'=$4
     ORDER BY created_at DESC,actor_id DESC,idempotency_key DESC LIMIT 1 FOR SHARE`,
   [projectId, location.id, head.id, head.contentSha256])).rows;
-  check(); if (rows.length !== 1) return null;
+  check(); if (rows.length !== 1) return rows.length === 0 ? readPreservedLocationDisplay(client, input, check) : null;
   const row = rows[0], parsed = ownerSchema.safeParse(row.request), stored = storedSchema.safeParse(row.receipt);
   if (row.kind !== 'confirm' || !parsed.success || !stored.success
     || row.request_sha256 !== endpointBindingHash(parsed.data)) return null;
@@ -49,9 +49,11 @@ export async function readCableEndpointDisplay(client: PoolClient, input: { proj
     || receipt.locationId !== location.id || command.expectedLocationId !== null && command.expectedLocationId !== location.id
     || receipt.commandSha256 !== endpointBindingHash(command) || receipt.expectedContextSha256 !== command.expectedContextSha256
     || receipt.expectedCableWriteRevision !== command.expectedCableWriteRevision || !receipt.impact.cableIds.includes(request.cableId)
-    || !same(receipt.binding.binding, head) || !same(command.expectedCurrent, current)
+    || !same(receipt.binding.binding, head)
     || selection.mode !== 'fixed-world' || selection.derivation !== head.derivation || !same(selection.pointProjectMetres, head.pointProjectMetres)
-    || selection.displaySdkObjectId === null) return null;
+  ) return null;
+  if (!same(command.expectedCurrent, current) || selection.displaySdkObjectId === null)
+    return readPreservedLocationDisplay(client, input, check, { actorId: receipt.actorId, idempotencyKey: receipt.idempotencyKey });
   return cableEndpointConfirmedDisplaySelectionSchema.parse({ source: 'confirmed-display-only', mode: 'fixed-world',
     sdkObjectId: selection.displaySdkObjectId, ...(selection.displayObjectName === undefined ? {} : { name: selection.displayObjectName }),
     pointProjectMetres: head.pointProjectMetres, current, bindingId: head.id, bindingContentSha256: head.contentSha256, commandSha256: receipt.commandSha256 });

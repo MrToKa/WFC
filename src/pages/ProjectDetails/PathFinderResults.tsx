@@ -625,9 +625,10 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
         const issue = !envelope ? 'This historical path has no verifiable calculation admission. It is preview only; use Cable revision results or calculate a fresh proposal before Review and Apply.'
           : !parent ? 'The exact calculation state is unavailable. This path is preview only; reopen the selected cable result to check again.'
             : parent.cancelRequested || ['cancelled', 'failed'].includes(parent.status) ? 'This calculation was cancelled or failed. Its saved path is preview only.'
-              : savedExactDisplayReady ? 'The saved route is ready to show. Calculate routing to review a new result.'
-                : !liveCurrent ? 'The current cable proof is unavailable or changed. This path is preview only; refresh the cable list and calculate again when needed.'
-                : !wholeJobReady && !itemReady ? 'This calculation is still running and this cable has no current sealed item. Review is blocked until it is ready.' : null;
+              : acceptedDisplayReady ? 'The current route is saved in Cable list and ready to show.'
+                : savedExactDisplayReady ? 'The saved route is ready to show. Calculate routing to review a new result.'
+                  : !liveCurrent ? 'The current cable proof is unavailable or changed. This path is preview only; refresh the cable list and calculate again when needed.'
+                    : !wholeJobReady && !itemReady ? 'This calculation is still running and this cable has no current sealed item. Review is blocked until it is ready.' : null;
         const selectedScope: PathFinderCalculationScope = { admissionId: envelope?.admissionId ?? null, jobId: detail.jobId, ready: wholeJobReady || itemReady,
           wholeJobReady, jobStatus: parent?.status ?? null, cancelRequested: parent?.cancelRequested ?? false, message: issue };
         scope.current = selectedScope; setScopeReadiness(selectedScope); setProposal(detail); setNotice(issue);

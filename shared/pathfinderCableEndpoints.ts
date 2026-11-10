@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { isPathFinderCableEligible } from './pathfinderCableEligibility.js';
 import { canonicalPurposeJson, policyHashSchema, policyUuidSchema, policyRevisionSchema } from './pathfinderPurposePolicy.js';
 import { ENDPOINT_MODEL_MATCH_OBJECT_LIMIT, endpointBindingSchema, endpointBindingReceiptSchema, endpointCurrentScopeSchema, endpointLocationSchema,
-  endpointLocationNameSchema, endpointObjectRefSchema, endpointPointSchema } from './pathfinderEndpointBindings.js';
+  endpointLocationNameSchema, endpointObjectRefSchema, endpointPointSchema, endpointModelMatchObjectGroupSchema } from './pathfinderEndpointBindings.js';
 import { geometryObjectSummarySchema } from './pathfinderGeometryTrace.js';
 import { recalculationReasonSchema } from './pathfinderRecalculation.js';
 import { locationImpactCalculationSchema, locationImpactReferenceSchema } from './pathfinderLocationImpacts.js';
@@ -27,8 +27,21 @@ export const cableEndpointConfirmedSelectionSchema = cableEndpointAutomaticSelec
 export const cableEndpointConfirmedDisplaySelectionSchema = z.object({ source: z.literal('confirmed-display-only'), mode: z.literal('fixed-world'),
   sdkObjectId: cableEndpointSdkObjectIdSchema, name: cableEndpointDisplayObjectNameSchema.optional(), pointProjectMetres: endpointPointSchema,
   sdkObjectIds: z.array(cableEndpointSdkObjectIdSchema).min(2).max(ENDPOINT_MODEL_MATCH_OBJECT_LIMIT).refine(ids => ids.every((id, i) => i === 0 || ids[i - 1] < id)).optional(),
+  preservedMatchObjectGroup: endpointModelMatchObjectGroupSchema.optional(),
   current: endpointCurrentScopeSchema, bindingId: policyUuidSchema, bindingContentSha256: policyHashSchema, commandSha256: policyHashSchema }).strict()
-  .refine(value => !value.sdkObjectIds || value.sdkObjectIds[0] === value.sdkObjectId);
+  .refine(value => !value.sdkObjectIds || value.sdkObjectIds[0] === value.sdkObjectId)
+  .refine(value => !value.preservedMatchObjectGroup
+    || canonicalPurposeJson(value.sdkObjectIds ?? null) === canonicalPurposeJson(value.preservedMatchObjectGroup.objectIds));
+
+/** A complete Find/assign scan may restore presentation for a preserved manual
+ * point without changing its coordinates or making it follow the source item. */
+export function cableEndpointDisplayMatchesSourceGroup(display: z.infer<typeof cableEndpointConfirmedDisplaySelectionSchema>,
+  head: z.infer<typeof endpointBindingSchema> | null | undefined): boolean {
+  if (display.preservedMatchObjectGroup) return Boolean(head && !head.autoMatchEvidence
+    && head.derivation !== 'matched-model-bottom-aabb.v1'
+    && canonicalPurposeJson(display.sdkObjectIds ?? null) === canonicalPurposeJson(display.preservedMatchObjectGroup.objectIds));
+  return canonicalPurposeJson(display.sdkObjectIds ?? null) === canonicalPurposeJson(head?.autoMatchEvidence?.objectGroup?.objectIds ?? null);
+}
 export const cableEndpointContextSchema = z.object({ schemaVersion: z.literal('wfc.pf.cable-endpoint-context.v1'),
   projectId: policyUuidSchema, cableId: policyUuidSchema, end: cableEndpointEndSchema, cableWriteRevision: policyRevisionSchema,
   logicalName, logicalKey: logicalName, mto: z.string().max(96).nullable(), canBind: z.boolean(), reasonCodes,
@@ -54,7 +67,7 @@ export const cableEndpointContextSchema = z.object({ schemaVersion: z.literal('w
     || canonicalPurposeJson(value.confirmedSelection.pointProjectMetres) !== canonicalPurposeJson(value.head.pointProjectMetres)))
     context.addIssue({ code: 'custom', message: 'Confirmed model display belongs to the exact current object-derived head.' });
   const display = value.confirmedDisplaySelection;
-  if (display && canonicalPurposeJson(display.sdkObjectIds ?? null) !== canonicalPurposeJson(value.head?.autoMatchEvidence?.objectGroup?.objectIds ?? null))
+  if (display && !cableEndpointDisplayMatchesSourceGroup(display, value.head))
     context.addIssue({ code: 'custom', message: 'Grouped display IDs retain the exact confirmed source-item members.' });
   if (display && (!value.canBind || !value.current || !value.head || !value.location || value.head.status !== 'confirmed'
     || value.head.mode !== 'fixed-world' || value.head.sourceObject !== null || value.head.attachment !== null

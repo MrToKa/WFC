@@ -4,7 +4,7 @@ import { fetchEndpointBinding } from '@/api/pathfinderEndpointBindings';
 import { fetchGeometryObjectRevision } from '@/api/pathfinderGeometryTrace';
 import { fetchCableEndpointContext, type CableEndpointContext } from '@/api/pathfinderCableEndpoints';
 import { canonicalPurposeJson } from '../../../shared/pathfinderPurposePolicy';
-import { cableEndpointConfirmedDisplaySelectionSchema } from '../../../shared/pathfinderCableEndpoints';
+import { cableEndpointConfirmedDisplaySelectionSchema, cableEndpointDisplayMatchesSourceGroup } from '../../../shared/pathfinderCableEndpoints';
 import { MAX_PATH_OBJECT_IDS } from '../../../viewer-runtime/protocol.mjs';
 
 export const ENDPOINT_VISIBILITY_DEADLINE_MS = 10_000;
@@ -83,7 +83,7 @@ function fixedWorldDisplayObjectIds(proposal: PathFinderProposal, state: PathFin
     || !samePoint(head.pointProjectMetres, endpoint.point) || !display.success
     || display.data.bindingId !== head.id || display.data.bindingContentSha256 !== head.contentSha256
     || canonicalPurposeJson(display.data.current) !== canonicalPurposeJson(current)
-    || canonicalPurposeJson(display.data.sdkObjectIds ?? null) !== canonicalPurposeJson(head.autoMatchEvidence?.objectGroup?.objectIds ?? null)
+    || !cableEndpointDisplayMatchesSourceGroup(display.data, head)
     || !samePoint(display.data.pointProjectMetres, endpoint.point)) return [];
   return (display.data.sdkObjectIds ?? [display.data.sdkObjectId]).map(id => `dbid:${id}`);
 }

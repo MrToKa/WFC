@@ -87,6 +87,14 @@ describe('strict cable endpoint command and display contracts', () => {
       { attachment: {} }, { confirmed: true }, { approximate: true }, { mode: 'object-attached' }])
       expect(cableEndpointConfirmedDisplaySelectionSchema.safeParse({ ...hint, ...extra }).success).toBe(false);
   });
+  it('requires every preserved manual source-item member in the display proof', () => {
+    const hint = { source: 'confirmed-display-only', mode: 'fixed-world', sdkObjectId: 42, sdkObjectIds: [42, 43, 44, 45],
+      pointProjectMetres: [1, 2, 3], current, bindingId: id(9), bindingContentSha256: 'b'.repeat(64), commandSha256: 'c'.repeat(64),
+      preservedMatchObjectGroup: { guid: id(12), sourceFile: 'plant/instruments.dwg', objectIds: [42, 43, 44, 45] } };
+    expect(cableEndpointConfirmedDisplaySelectionSchema.parse(hint)).toEqual(hint);
+    for (const sdkObjectIds of [undefined, [42, 43], [42, 43, 44, 46], [43, 42, 44, 45]])
+      expect(cableEndpointConfirmedDisplaySelectionSchema.safeParse({ ...hint, sdkObjectIds }).success).toBe(false);
+  });
   it('v3 requires an explicit nullable policy while a policy cannot silently promote older commands', () => {
     const v2 = { ...command(), schemaVersion: 'wfc.pf.cable-endpoint-command.v2', calculation: null };
     expect(cableEndpointCommandSchema.safeParse({ ...v2, schemaVersion: 'wfc.pf.cable-endpoint-command.v3' }).success).toBe(false);

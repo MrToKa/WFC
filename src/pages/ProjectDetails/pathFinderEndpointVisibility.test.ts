@@ -164,6 +164,17 @@ describe('Path Finder endpoint foreground evidence', () => {
     expect(fetchCableEndpointContext).toHaveBeenCalledOnce(); expect(f.context).toEqual(before);
     expect(fetchEndpointBinding).not.toHaveBeenCalled(); expect(fetchGeometryObjectRevision).not.toHaveBeenCalled();
   });
+  it('shows every rediscovered manual endpoint part while retaining the exact saved point and route', async () => {
+    const f = fixedDisplayFixture(), before = structuredClone(f.context.head), objectIds = Array.from({ length: 17 }, (_, index) => 901 + index);
+    Object.assign(f.context.confirmedDisplaySelection!, { sdkObjectIds: objectIds,
+      preservedMatchObjectGroup: { guid: '7586ffbb-1d0a-5942-b687-06884123c866', sourceFile: 'plant/instruments.dwg', objectIds } });
+    expect(proposalEndpointObjectIdsFromContexts(f.proposal, f.state, f.access, { from: f.context, to: f.context })).toEqual(objectIds.map(id => `dbid:${id}`));
+    vi.mocked(fetchCableEndpointContext).mockResolvedValue(f.context);
+    expect(await proposalEndpointObjectIds(f.proposal, f.state, f.access)).toEqual(['dbid:74', ...objectIds.map(id => `dbid:${id}`)]);
+    expect(f.context.head).toEqual(before);
+    f.context.confirmedDisplaySelection!.sdkObjectIds = objectIds.slice(1);
+    expect(proposalEndpointObjectIdsFromContexts(f.proposal, f.state, f.access, { from: f.context, to: f.context })).toEqual([]);
+  });
   it.each(['missing-part', 'other-part', 'reordered'] as const)('omits grouped display evidence with %s members', async mismatch => {
     const f = groupedFixedDisplayFixture();
     f.context.confirmedDisplaySelection!.sdkObjectIds = mismatch === 'missing-part' ? [901, 902]
