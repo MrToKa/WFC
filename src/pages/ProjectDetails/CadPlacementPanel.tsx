@@ -92,17 +92,20 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
       for (const instance of instances) {
         if (controller.signal.aborted) return;
         try {
-          const response = await api(`/catalog/${instance.catalogItemId}/mesh`, { signal: controller.signal });
-          const mesh: unknown = await response.json();
-          if (controller.signal.aborted) return;
           const transform = {
             positionMm: { x: instance.xMm, y: instance.yMm, z: instance.zMm },
             rotation: { x: instance.qx, y: instance.qy, z: instance.qz, w: instance.qw },
           };
-          try {
-            await onMove(instance.id, transform);
-          } catch {
+          if (rendered.current.has(instance.id)) {
+            try { await onMove(instance.id, transform); }
+            catch { rendered.current.delete(instance.id); }
+          }
+          if (!rendered.current.has(instance.id)) {
+            const response = await api(`/catalog/${instance.catalogItemId}/mesh`, { signal: controller.signal });
+            const mesh: unknown = await response.json();
+            if (controller.signal.aborted) return;
             await onShow(instance.id, mesh, transform);
+            rendered.current.add(instance.id);
           }
         } catch (error) {
           if (!controller.signal.aborted) {
@@ -114,6 +117,8 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
     void display();
     return () => controller.abort();
   }, [instances, api, onShow, onMove]);
+
+  useEffect(() => { rendered.current.clear(); }, [projectId, modelVersionId, token]);
 
   const selectInstance = (id: string) => {
     const instance = instances.find(row => row.id === id);
