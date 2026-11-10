@@ -62,6 +62,7 @@ export async function initializeCadDesignSchema(pool: Pool): Promise<void> {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       UNIQUE (project_id, id),
+      UNIQUE (project_id, design_id, id, catalog_item_id),
       FOREIGN KEY (project_id, design_id) REFERENCES cad_designs(project_id, id) ON DELETE CASCADE,
       FOREIGN KEY (project_id, catalog_item_id) REFERENCES cad_catalog_items(project_id, id),
       CONSTRAINT cad_unit_quaternion CHECK (
@@ -90,16 +91,48 @@ export async function initializeCadDesignSchema(pool: Pool): Promise<void> {
       project_id UUID NOT NULL,
       design_id UUID NOT NULL,
       source_instance_id UUID NOT NULL,
+      source_catalog_item_id UUID NOT NULL,
       source_port_id UUID NOT NULL,
       target_instance_id UUID NOT NULL,
+      target_catalog_item_id UUID NOT NULL,
       target_port_id UUID NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       CHECK (source_instance_id <> target_instance_id),
       UNIQUE (project_id, source_instance_id, source_port_id),
       UNIQUE (project_id, target_instance_id, target_port_id),
       FOREIGN KEY (project_id, design_id) REFERENCES cad_designs(project_id, id) ON DELETE CASCADE,
-      FOREIGN KEY (project_id, source_instance_id) REFERENCES cad_design_instances(project_id, id) ON DELETE CASCADE,
-      FOREIGN KEY (project_id, target_instance_id) REFERENCES cad_design_instances(project_id, id) ON DELETE CASCADE
+      FOREIGN KEY (project_id, design_id, source_instance_id, source_catalog_item_id)
+        REFERENCES cad_design_instances(project_id, design_id, id, catalog_item_id) ON DELETE CASCADE,
+      FOREIGN KEY (project_id, design_id, target_instance_id, target_catalog_item_id)
+        REFERENCES cad_design_instances(project_id, design_id, id, catalog_item_id) ON DELETE CASCADE,
+      FOREIGN KEY (project_id, source_catalog_item_id, source_port_id)
+        REFERENCES cad_catalog_ports(project_id, catalog_item_id, id),
+      FOREIGN KEY (project_id, target_catalog_item_id, target_port_id)
+        REFERENCES cad_catalog_ports(project_id, catalog_item_id, id)
     );
+
+    -- The client must not pick a CAD revision number. Every persisted placement
+    -- or connection advances the export proposal revision atomically.
+    CREATE OR REPLACE FUNCTION cad_touch_design_revision() RETURNS TRIGGER
+    LANGUAGE plpgsql AS $cad$
+    DECLARE v_project UUID; v_design UUID;
+    BEGIN
+      IF TG_OP = 'DELETE' THEN v_project := OLD.project_id; v_design := OLD.design_id;
+      ELSE v_project := NEW.project_id; v_design := NEW.design_id; END IF;
+      UPDATE cad_designs SET revision=revision+1, updated_at=now()
+        WHERE project_id=v_project AND id=v_design;
+      RETURN NULL;
+    END;
+    $cad$;
+
+    DROP TRIGGER IF EXISTS cad_instance_revision_trigger ON cad_design_instances;
+    CREATE TRIGGER cad_instance_revision_trigger
+      AFTER INSERT OR UPDATE OR DELETE ON cad_design_instances
+      FOR EACH ROW EXECUTE FUNCTION cad_touch_design_revision();
+
+    DROP TRIGGER IF EXISTS cad_connection_revision_trigger ON cad_design_connections;
+    CREATE TRIGGER cad_connection_revision_trigger
+      AFTER INSERT OR UPDATE OR DELETE ON cad_design_connections
+      FOR EACH ROW EXECUTE FUNCTION cad_touch_design_revision();
   `);
 }
