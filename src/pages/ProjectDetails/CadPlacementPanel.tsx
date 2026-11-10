@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Body1, Button, Caption1, Field, Input, Spinner } from '@fluentui/react-components';
 import { getApiBaseUrl } from '@/api/http';
 import { normalizeQuaternion } from '@/viewer/componentTransforms';
+import type { ViewerController } from '@/viewer/ViewerController';
 
 type CatalogueItem = { id: string; partNumber: string; manufacturer: string; conversionStatus: string };
 type Design = { id: string; modelVersionId: string; name: string; status: string; revision: number; activeModel: boolean };
@@ -9,7 +10,8 @@ type Instance = {
   id: string; catalogItemId: string; partNumber: string; manufacturer: string; revision: number;
   xMm: number; yMm: number; zMm: number; qx: number; qy: number; qz: number; qw: number;
 };
-type Props = { projectId: string; modelVersionId: string; token: string; catalogue: CatalogueItem[] };
+type Props = { projectId: string; modelVersionId: string; token: string; catalogue: CatalogueItem[];
+  onShow: ViewerController['showCadComponent']; onMove: ViewerController['moveCadComponent']; };
 type Coordinates = { x: string; y: string; z: string; rx: string; ry: string; rz: string };
 const empty: Coordinates = { x: '0', y: '0', z: '0', rx: '0', ry: '0', rz: '0' };
 
@@ -34,7 +36,7 @@ function quaternionEuler(instance: Instance): Pick<Coordinates, 'rx' | 'ry' | 'r
   };
 }
 
-export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue }: Props) {
+export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue, onShow, onMove }: Props) {
   const [designId, setDesignId] = useState<string | null>(null);
   const [instances, setInstances] = useState<Instance[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
@@ -79,6 +81,38 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue 
     }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [reload]);
+
+  // Recreate saved CAD instances after a Viewer reload. This is a display
+  // side effect only; source STEP objects and project model remain immutable.
+  useEffect(() => {
+    if (!instances.length) return;
+    const controller = new AbortController();
+    const display = async () => {
+      for (const instance of instances) {
+        if (controller.signal.aborted) return;
+        try {
+          const response = await api(`/catalog/${instance.catalogItemId}/mesh`, { signal: controller.signal });
+          const mesh: unknown = await response.json();
+          if (controller.signal.aborted) return;
+          const transform = {
+            positionMm: { x: instance.xMm, y: instance.yMm, z: instance.zMm },
+            rotation: { x: instance.qx, y: instance.qy, z: instance.qz, w: instance.qw },
+          };
+          try {
+            await onMove(instance.id, transform);
+          } catch {
+            await onShow(instance.id, mesh, transform);
+          }
+        } catch (error) {
+          if (!controller.signal.aborted) {
+            setNotice(error instanceof Error ? `3D rendering: ${error.message}` : '3D rendering unavailable.');
+          }
+        }
+      }
+    };
+    void display();
+    return () => controller.abort();
+  }, [instances, api, onShow, onMove]);
 
   const selectInstance = (id: string) => {
     const instance = instances.find(row => row.id === id);
@@ -147,14 +181,14 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue 
       link.href = url;
       link.download = extension === 'materials.csv' ? 'Aalborg-Proposed-Cable-Trays-MTO.csv' : 'Aalborg-Proposed-Cable-Trays.step';
       document.body.append(link); link.click(); link.remove();
-      URL.revokeObjectURL(url);
+      window.setTimeout(() => URL.revokeObjectURL(url), 15000);
       setNotice(`Export prepared: ${link.download}`);
     } catch (error) { setNotice(error instanceof Error ? error.message : 'Export failed.'); }
     finally { setBusy(false); }
   };
 
   return <section aria-label="Proposed component placements">
-    <Caption1>Save numerical positions in project world millimetres. This does not yet display the CAD mesh in the Viewer; verify the coordinate frame before client delivery.</Caption1>
+    <Caption1>Saved components are drawn in the active SVF with Scene API. Enter world coordinates in millimetres; validate against reference points before client delivery. Freehand gizmo and Object Snap are not yet available.</Caption1>
     {loading ? <Spinner size="tiny" label="Reading proposal…" /> : null}
     <Field label="Catalogue component">
       <select aria-label="Catalogue component" value={selectedId} disabled={busy || !activeCatalogue.length}
