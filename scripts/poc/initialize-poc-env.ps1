@@ -22,6 +22,7 @@ $contents = @(
     'POC_MINIO_USER=wfc_poc'
     "POC_MINIO_PASSWORD=$(New-RandomHex 24)"
     "POC_JWT_SECRET=$(New-RandomHex 48)"
+    "POC_CONVERTER_TOKEN=$(New-RandomHex 32)"
 ) -join "`n"
 # Windows: restrict created secrets to the current Windows account and SYSTEM.
 [System.IO.File]::WriteAllText($envPath, $contents + "`n", (New-Object System.Text.UTF8Encoding($false)))
