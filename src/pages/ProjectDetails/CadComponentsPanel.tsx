@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Body1, Button, Caption1, Field, Input, Spinner } from '@fluentui/react-components';
 import { getApiBaseUrl } from '@/api/http';
+import { CadPlacementPanel } from './CadPlacementPanel';
 
 type CatalogueItem = {
   id: string;
@@ -88,7 +89,7 @@ export function CadComponentsPanel({ projectId, token, modelVersionId, ready }: 
       });
       if (!response.ok) throw new Error(`STEP import failed (HTTP ${response.status}).`);
       setFile(null);
-      setMessage('STEP source registered. Mesh preparation is a separate step.');
+      setMessage('STEP source imported and prepared as a 3D mesh.');
       await load();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'STEP import failed.');
@@ -123,5 +124,7 @@ export function CadComponentsPanel({ projectId, token, modelVersionId, ready }: 
           item.conversionStatus === 'pending' ? 'Awaiting mesh preparation' : 'Conversion failed'}</Caption1>
       </li>)}</ul>
     </div>
+    {scoped && projectId && token && modelVersionId ?
+      <CadPlacementPanel projectId={projectId} token={token} modelVersionId={modelVersionId} catalogue={items} /> : null}
   </section>;
 }
