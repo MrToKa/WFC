@@ -36,9 +36,11 @@ export const MATE_OPPOSING_FACE: RigidTransform = Object.freeze({
   position: Object.freeze({ x: 0, y: 0, z: 0 }), rotation: faceReverse,
 });
 
-export function getAalborgPocPorts(originalFilename: string): readonly PocPort[] {
+export function getAalborgPocPorts(originalFilename: string, sourceSha256: string): readonly PocPort[] {
   const canonical = originalFilename.trim().toUpperCase();
-  if (canonical === 'NDX_KL_60-303_F_MED_214.STEP') return straight;
-  if (canonical === 'NDX_KLBK_60-303_MED_214.STEP') return bend;
+  if (canonical === 'NDX_KL_60-303_F_MED_214.STEP' &&
+      sourceSha256 === 'd381a3f4a09559e99119e3e591137f73780d16bf832019f93b20627adc5609cd') return straight;
+  if (canonical === 'NDX_KLBK_60-303_MED_214.STEP' &&
+      sourceSha256 === '7a5cf4947a9ea5fa213ceef84ba952fe2a9a63dee752f0c23a598320802c0014') return bend;
   return [];
 }
