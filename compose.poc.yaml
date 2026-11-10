@@ -88,6 +88,7 @@ services:
       args:
         VITE_API_URL: /
         VITE_VIEWER_HARNESS: "false"
+        VITE_CAD_DESIGN_ENABLED: "true"
     restart: "no"
     ports:
       - "127.0.0.1:${POC_WEB_PORT:-5181}:80"
