@@ -38,7 +38,7 @@ beforeEach(() => {
   vi.mocked(useRoutingCables).mockImplementation(() => cables);
 });
 afterEach(() => { vi.restoreAllMocks(); });
-describe('Routings viewer controls', () => {
+describe('Routings builder controls', () => {
   it.each(['loading', 'no-model'] as const)('offers keyboard information while %s without enabling cable routing', phase => {
     const cable = { id: modelId, projectId, tag: 'Information only', routing: '/A', fromLocation: '  From\n日本語  ', toLocation: null };
     cables = { ...cables, cables: [cable], rows: [cable], snapshotGeneration: 1, hasSnapshot: true, hasActivated: true, stale: false, canActivate: true, taggedCount: 1 };
