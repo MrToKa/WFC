@@ -180,6 +180,53 @@ export class ViewerController {
     return new Promise((resolve, reject) => { try { this.send(type, payload, terminal, { resolve, reject, ...options }); } catch (error) { reject(error); } });
   }
 
+  /** Add a saved catalogue instance to the current protected 3D model. */
+  async showCadComponent(componentId: string, mesh: unknown, transform: {
+    positionMm: { x: number; y: number; z: number };
+    rotation: { x: number; y: number; z: number; w: number };
+  }): Promise<void> {
+    const scope = this.getLoadSnapshot();
+    if (!scope?.ready) throw new Error('An active model is required for CAD placement.');
+    const serialized = JSON.stringify(mesh);
+    if (!serialized || serialized.length > 16 * 1024 * 1024) throw new Error('CAD mesh exceeds viewer limit.');
+    const current = () => {
+      const now = this.getLoadSnapshot();
+      if (!now?.ready || now.instanceId !== scope.instanceId || now.modelVersionId !== scope.modelVersionId ||
+          now.loadId !== scope.loadId || now.projectId !== scope.projectId) {
+        throw new Error('The active model changed during CAD placement.');
+      }
+    };
+    try {
+      current();
+      await this.sendAsync('CAD_BEGIN', { componentId, totalChars: serialized.length, transform }, 'CAD_ACK');
+      for (let offset = 0; offset < serialized.length; offset += 12000) {
+        current();
+        const chunk = serialized.slice(offset, offset + 12000);
+        await this.sendAsync('CAD_APPEND', { componentId, offset, chunk }, 'CAD_ACK');
+      }
+      current();
+      await this.sendAsync('CAD_COMMIT', { componentId }, 'CAD_ACK');
+    } catch (error) {
+      if (this.getLoadSnapshot()?.ready) {
+        await this.sendAsync('CAD_REMOVE', { componentId }, 'CAD_ACK').catch(() => undefined);
+      }
+      throw error;
+    }
+  }
+
+  async moveCadComponent(componentId: string, transform: {
+    positionMm: { x: number; y: number; z: number };
+    rotation: { x: number; y: number; z: number; w: number };
+  }): Promise<void> {
+    if (!this.getLoadSnapshot()?.ready) throw new Error('Viewer not ready.');
+    await this.sendAsync('CAD_TRANSFORM', { componentId, transform }, 'CAD_ACK');
+  }
+
+  async removeCadComponent(componentId: string): Promise<void> {
+    if (!this.getLoadSnapshot()?.ready) return;
+    await this.sendAsync('CAD_REMOVE', { componentId }, 'CAD_ACK');
+  }
+
   private onMessage = (event: MessageEvent): void => {
     if (this.disposed || event.origin !== window.location.origin || event.source !== this.iframe.contentWindow) return;
     const message = validateEnvelope(event.data, 'frame-to-parent');
@@ -262,6 +309,21 @@ export class ViewerController {
     }
     if (message.type === 'BARRIER_CAPTURE_EVENT' && (message.payload.captureId !== pending.envelope.payload.captureId || message.payload.index !== (pending.envelope.type === 'START_BARRIER_CAPTURE' ? 0 : pending.envelope.payload.index))) {
       pending.reject?.(new Error('Barrier capture identity mismatch')); this.fail('ROUTE_RESULT_MISMATCH'); return;
+    }
+    if (message.type === 'CAD_ACK') {
+      const expected: Record<string, string> = {
+        CAD_BEGIN: 'begun', CAD_APPEND: 'appended', CAD_COMMIT: 'displayed',
+        CAD_TRANSFORM: 'moved', CAD_REMOVE: 'removed',
+      };
+      const phase = expected[pending.envelope.type];
+      const payload = pending.envelope.payload;
+      if (!phase || message.payload.componentId !== payload.componentId || message.payload.phase !== phase ||
+          (pending.envelope.type === 'CAD_BEGIN' && message.payload.received !== 0) ||
+          (pending.envelope.type === 'CAD_APPEND' &&
+           message.payload.received !== Number(payload.offset) + String(payload.chunk).length)) {
+        pending.reject?.(new Error('CAD command acknowledgement mismatch'));
+        return;
+      }
     }
     if (message.type === 'PATH_TRANSPARENCY_UPDATED' && (message.payload.routeRequestId !== pending.envelope.payload.routeRequestId || message.payload.percent !== pending.envelope.payload.percent)) {
       pending.reject?.(new Error('Path transparency acknowledgement mismatch')); return;
