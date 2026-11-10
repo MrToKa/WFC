@@ -67,7 +67,8 @@ export function RoutingsViewerTab({ projectId, loadedProjectId, token }: Props) 
             <Button type="submit" appearance="primary" disabled={!viewer.canShow}>Show route</Button>
           </div>
         </form> : mode === 'components' && import.meta.env.VITE_CAD_DESIGN_ENABLED === 'true' ?
-          <CadComponentsPanel projectId={projectId} token={token} modelVersionId={viewer.model?.id ?? null} ready={viewer.phase === 'ready'} />
+          <CadComponentsPanel projectId={projectId} token={token} modelVersionId={viewer.model?.id ?? null}
+            ready={viewer.phase === 'ready'} onShow={viewer.showCadComponent} onMove={viewer.moveCadComponent} />
           : <div className={styles.cablePanel}>
           <Field className={styles.field} label="Search cable tags">
             <Input ref={searchInput} aria-label="Search cable tags" value={cables.search} onChange={(_, data) => cables.setSearch(data.value)} />
