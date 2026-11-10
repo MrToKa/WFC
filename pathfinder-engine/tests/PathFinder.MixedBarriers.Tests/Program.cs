@@ -188,6 +188,94 @@ Run("face-contacting distinct original owners retain mismatched cap diagonals an
     Status(kernel, P(0), P(0), MixedBarrierSegmentStatus.Blocked); Status(kernel, P(0, -.5), P(0, .5), MixedBarrierSegmentStatus.Blocked);
     Status(kernel, P(-2, 2), P(2, 2), MixedBarrierSegmentStatus.Clear);
 });
+Run("identical original cap triangles of separate closed owners are retained with both solid occupancies", () => {
+    var input = OwnerContactInputs(identicalCaps: true); var kernel = Kernel(input);
+    Need(kernel.Summary.QualifiedClosedSolidComponents == 2 && kernel.Summary.OriginalSurfaceComponents == 0 && kernel.Summary.TriangleCount == 24);
+    Need(kernel.Components.All(component => component.Kind == MixedBarrierComponentKind.QualifiedClosedSolid && component.Triangles.Count == 12));
+    OriginalInputsRetained(kernel, input);
+    Status(kernel, P(-.8), P(-.2), MixedBarrierSegmentStatus.Blocked); Status(kernel, P(.2), P(.8), MixedBarrierSegmentStatus.Blocked);
+    Status(kernel, P(0), P(0), MixedBarrierSegmentStatus.Blocked); Status(kernel, P(0, -.5), P(0, .5), MixedBarrierSegmentStatus.Blocked);
+    Status(kernel, P(-2, 2), P(2, 2), MixedBarrierSegmentStatus.Clear);
+});
+Run("identical owner caps remain exact after fragment input vertex triangle and complete winding permutations", () => {
+    var input = OwnerContactInputs(identicalCaps: true); var kernel = Kernel(input);
+    Need(Kernel(input.Reverse().ToArray()).Summary.OriginalGeometrySha256 == kernel.Summary.OriginalGeometrySha256);
+    var permuted = input.Reverse().Select(fragment => {
+        int count = fragment.Vertices.Count;
+        int[] indices = fragment.TriangleIndices.Chunk(3).Reverse().SelectMany(triangle => new[] { count - 1 - triangle[0], count - 1 - triangle[2], count - 1 - triangle[1] }).ToArray();
+        return fragment with { Vertices = fragment.Vertices.Reverse().ToArray(), TriangleIndices = indices };
+    }).ToArray();
+    var changed = Kernel(permuted); Need(changed.Summary.QualifiedClosedSolidComponents == 2 && changed.Summary.OriginalSurfaceComponents == 0);
+    OriginalInputsRetained(changed, permuted);
+    Status(changed, P(-.8), P(-.2), MixedBarrierSegmentStatus.Blocked); Status(changed, P(.2), P(.8), MixedBarrierSegmentStatus.Blocked);
+    Status(changed, P(0, -.5), P(0, .5), MixedBarrierSegmentStatus.Blocked); Status(changed, P(-2, 2), P(2, 2), MixedBarrierSegmentStatus.Clear);
+    var split = input.SelectMany((fragment, at) => new[] {
+        fragment with { Source = fragment.Source with { FragmentId = at * 2 + 1 }, TriangleIndices = fragment.TriangleIndices.Take(18).ToArray() },
+        fragment with { Source = fragment.Source with { FragmentId = at * 2 + 2 }, TriangleIndices = fragment.TriangleIndices.Skip(18).ToArray() } }).ToArray();
+    var assembled = Kernel(split); Need(assembled.Summary.FragmentCount == 4 && assembled.Summary.QualifiedClosedSolidComponents == 2);
+    OriginalInputsRetained(assembled, split);
+});
+Run("duplicate original faces attribute the exact repeated owner and cannot become duplicated open surfaces", () => {
+    var input = OwnerContactInputs(identicalCaps: true);
+    var sameOwner = input.Select(fragment => fragment with { Source = fragment.Source with { OwnerObjectId = "dbid:10" } }).ToArray();
+    var duplicate = MixedBarrierKernel.Build(sameOwner);
+    Need(duplicate.Kernel is null && duplicate.Diagnostics.Single().Code == "DUPLICATE_TRIANGLE");
+    Need(duplicate.RefusalObjectIds!.SequenceEqual(new[] { "dbid:10" }));
+    var repeatedSecond = MixedBarrierKernel.Build([.. input, input[1] with { Source = input[1].Source with { FragmentId = 3 } }]);
+    Need(repeatedSecond.Kernel is null && repeatedSecond.Diagnostics.Single().Code == "DUPLICATE_TRIANGLE");
+    Need(repeatedSecond.RefusalObjectIds!.SequenceEqual(new[] { "dbid:20" }));
+    var surface = new Mesh([P(0), P(0, 1), P(0, 0, 1)], [0, 1, 2]);
+    var first = Input(surface); var second = Input(Reverse(surface), fragment: 2);
+    second = second with { Source = second.Source with { OwnerObjectId = "dbid:20" } };
+    var sheets = MixedBarrierKernel.Build([first, second]);
+    Need(sheets.Kernel is null && sheets.Diagnostics.Single().Code == "DUPLICATE_TRIANGLE");
+    Need(sheets.RefusalObjectIds!.SequenceEqual(new[] { "dbid:10", "dbid:20" }));
+    var capture = Capture(Merge(surface, Reverse(surface)), splitTriangles: true);
+    capture["fragments"]![1]!["source"]!["ownerObjectId"] = "dbid:20";
+    var receipt = MixedBarrierCaptureVerifier.Verify(Bytes(capture)).Receipt;
+    Need(receipt.Status == "refused" && receipt.Diagnostics.Single().Code == "DUPLICATE_TRIANGLE");
+    Need(receipt.Diagnostics.Single().ObjectIds!.SequenceEqual(new[] { "dbid:10", "dbid:20" }));
+    using var json = JsonDocument.Parse(MixedBarrierCaptureVerifier.ReceiptBytes(receipt));
+    Need(json.RootElement.GetProperty("diagnostics")[0].GetProperty("objectIds").EnumerateArray().Select(owner => owner.GetString()).SequenceEqual(new[] { "dbid:10", "dbid:20" }));
+});
+Run("identical cap hints cannot accept open nested coincident or self-intersecting closed bodies", () => {
+    var input = OwnerContactInputs(identicalCaps: true);
+    var open = input.ToArray(); open[0] = open[0] with { TriangleIndices = open[0].TriangleIndices.Skip(3).ToArray() };
+    var opened = MixedBarrierKernel.Build(open); Need(opened.Kernel is null && opened.Diagnostics.Single().Code == "NONMANIFOLD_EDGE");
+    var nested = MixedBarrierKernel.Build([.. input, Input(Box(-.8, -.2, -.5, .5, -.5, .5), fragment: 3)]);
+    Need(nested.Kernel is null && nested.Diagnostics.Single().Code == "NESTED_OR_AMBIGUOUS_SHELLS");
+    var coincident = input[0] with { Source = input[0].Source with { FragmentId = 3, OwnerObjectId = "dbid:30" } };
+    var overlapping = MixedBarrierKernel.Build([input[0], coincident]);
+    Need(overlapping.Kernel is null && overlapping.Diagnostics.Single().Code == "NESTED_OR_AMBIGUOUS_SHELLS");
+    var vertices = input[0].Vertices.ToArray(); vertices[0] = P(-.1, 0, 3);
+    var invalid = MixedBarrierKernel.Build([input[0] with { Vertices = vertices }, input[1]]);
+    Need(invalid.Kernel is null && invalid.Diagnostics.Single().Code == "CLOSED_SOLID_QUALIFICATION_REFUSED");
+});
+Run("identical cap witnesses remain within shared work memory and component limits", () => {
+    var input = OwnerContactInputs(identicalCaps: true); var good = MixedBarrierKernel.Build(input); Need(good.Kernel is not null);
+    var work = MixedBarrierKernel.Build(input, new() { Geometry = new() { MaximumBuildWork = good.Work - 1 } });
+    Need(work.Kernel is null && work.Work <= good.Work - 1 && work.Diagnostics.Single().Code == "WORK_LIMIT");
+    var memory = MixedBarrierKernel.Build(input, new() { Geometry = new() { MaximumEstimatedBytes = good.Kernel!.Summary.EstimatedBytes - 1 } });
+    Need(memory.Kernel is null && memory.Diagnostics.Single().Code == "ESTIMATED_MEMORY_LIMIT");
+    var components = MixedBarrierKernel.Build(input, new() { Geometry = new() { MaximumMeshes = 1 } });
+    Need(components.Kernel is null && components.Diagnostics.Single().Code == "COMPONENT_LIMIT");
+});
+Run("native mixed verifier protocols retain identical closed caps and both duplicate refusal owners", () => {
+    var closed = Capture(Merge(Box(-1, 0, -1, 1, -1, 1), Box(0, 1, -1, 1, -1, 1)), splitTriangles: true);
+    foreach (var fragment in closed["fragments"]!.AsArray().Skip(12)) fragment!["source"]!["ownerObjectId"] = "dbid:20";
+    var surface = new Mesh([P(0), P(0, 1), P(0, 0, 1)], [0, 1, 2]);
+    var sheets = Capture(Merge(surface, Reverse(surface)), splitTriangles: true);
+    sheets["fragments"]![1]!["source"]!["ownerObjectId"] = "dbid:20";
+    foreach (string mode in new[] { "--mixed-v2", "--mixed-v2-2048" }) {
+        var qualified = NativeReceipt(Bytes(closed), mode);
+        Need(qualified.GetProperty("status").GetString() == "geometry-qualified", qualified.GetRawText());
+        Need(qualified.GetProperty("evidence").GetProperty("qualifiedClosedSolidComponents").GetInt32() == 2);
+        Need(qualified.GetProperty("evidence").GetProperty("triangleCount").GetInt32() == 24);
+        var refused = NativeReceipt(Bytes(sheets), mode); Need(refused.GetProperty("status").GetString() == "refused");
+        var diagnostic = refused.GetProperty("diagnostics")[0]; Need(diagnostic.GetProperty("code").GetString() == "DUPLICATE_TRIANGLE");
+        Need(diagnostic.GetProperty("objectIds").EnumerateArray().Select(owner => owner.GetString()).SequenceEqual(new[] { "dbid:10", "dbid:20" }));
+    }
+});
 Run("owner-contact pairing assembles original owners across fragments without using fragment identity as a body", () => {
     var source = OwnerContactInputs(); var input = source.SelectMany((fragment, at) => new[] {
         fragment with { Source = fragment.Source with { FragmentId = at * 2 + 1 }, TriangleIndices = fragment.TriangleIndices.Take(18).ToArray() },
@@ -470,11 +558,35 @@ else if (args.Length != 0)
 
 bool SameBits(BarrierPoint a, BarrierPoint b) => BitConverter.DoubleToInt64Bits(a.X) == BitConverter.DoubleToInt64Bits(b.X)
     && BitConverter.DoubleToInt64Bits(a.Y) == BitConverter.DoubleToInt64Bits(b.Y) && BitConverter.DoubleToInt64Bits(a.Z) == BitConverter.DoubleToInt64Bits(b.Z);
+JsonElement NativeReceipt(byte[] input, string mode) {
+    var info = new System.Diagnostics.ProcessStartInfo("dotnet") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
+    info.ArgumentList.Add(typeof(MixedBarrierCaptureVerifier).Assembly.Location); info.ArgumentList.Add(mode);
+    using var child = System.Diagnostics.Process.Start(info) ?? throw new IOException("Native mixed verifier did not start.");
+    using var deadline = new CancellationTokenSource(30000);
+    async Task<byte[]> ReadBounded(Stream stream, int maximum) {
+        using var memory = new MemoryStream(); byte[] buffer = new byte[32768];
+        for (int count; (count = await stream.ReadAsync(buffer, deadline.Token)) != 0;) {
+            if (memory.Length + count > maximum) throw new IOException("Native mixed verifier exceeded its bounded output.");
+            memory.Write(buffer, 0, count);
+        }
+        return memory.ToArray();
+    }
+    var output = ReadBounded(child.StandardOutput.BaseStream, 65538); var error = ReadBounded(child.StandardError.BaseStream, 65536);
+    try {
+        child.StandardInput.BaseStream.WriteAsync(input, deadline.Token).AsTask().GetAwaiter().GetResult(); child.StandardInput.Close();
+        child.WaitForExitAsync(deadline.Token).GetAwaiter().GetResult(); byte[] bytes = output.GetAwaiter().GetResult();
+        Need(child.ExitCode == 0 && error.GetAwaiter().GetResult().Length == 0);
+        using var document = JsonDocument.Parse(bytes); return document.RootElement.Clone();
+    } finally {
+        if (!child.HasExited) { child.Kill(true); child.WaitForExit(); }
+        try { Task.WhenAll(output, error).GetAwaiter().GetResult(); } catch { /* Failed bounded transport stays failed. */ }
+    }
+}
 Mesh EdgeTouchingBoxes() => Merge(Box(-1, 0, -1, 0, -1, 1), Box(0, 1, 0, 1, -1, 1));
-MixedFragmentInput[] OwnerContactInputs() {
+MixedFragmentInput[] OwnerContactInputs(bool identicalCaps = false) {
     var first = Input(Box(-1, 0, -1, 1, -1, 1), fragment: 1); var mesh = Box(0, 1, -1, 1, -1, 1); var indices = mesh.Indices.ToArray();
     // Reverse the cap's diagonal while preserving every original orientation.
-    int[] cap = [0, 4, 3, 3, 4, 7]; Array.Copy(cap, 0, indices, 24, cap.Length);
+    if (!identicalCaps) { int[] cap = [0, 4, 3, 3, 4, 7]; Array.Copy(cap, 0, indices, 24, cap.Length); }
     var second = Input(mesh with { Indices = indices }, fragment: 2); second = second with { Source = second.Source with { OwnerObjectId = "dbid:20" } };
     return [first, second];
 }
