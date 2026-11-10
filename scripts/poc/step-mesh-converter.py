@@ -4,6 +4,8 @@
 Only intended for the isolated Aalborg PoC container. All coordinates are
 in the original STEP millimetres, including the local CAD origin.
 """
+import base64
+import binascii
 import hmac
 import json
 import math
@@ -12,6 +14,7 @@ import tempfile
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import cadquery as cq
+from OCP.gp import gp_Quaternion, gp_Trsf, gp_Vec
 
 MAX_INPUT_BYTES = 8 * 1024 * 1024
 MAX_TRIANGLES = 20000
@@ -71,6 +74,60 @@ def convert_step(step_path):
     }
 
 
+def assemble_step(request):
+    parts = request.get("parts") if isinstance(request, dict) else None
+    if not isinstance(parts, list) or not 1 <= len(parts) <= 32:
+        raise ValueError("Expected 1 to 32 CAD parts")
+    total_source_bytes = 0
+    with tempfile.TemporaryDirectory(prefix="wfc-cad-assembly-") as work:
+        result = cq.Assembly(name="WFC Proposed Cable Tray")
+        for index, part in enumerate(parts):
+            if not isinstance(part, dict) or set(part) != {"name", "stepBase64", "positionMm", "rotation"}:
+                raise ValueError("Invalid CAD assembly part")
+            if not isinstance(part["name"], str) or not 1 <= len(part["name"]) <= 120:
+                raise ValueError("Invalid CAD part label")
+            try:
+                original = base64.b64decode(part["stepBase64"], validate=True)
+            except (TypeError, ValueError, binascii.Error):
+                raise ValueError("Invalid encoded CAD source")
+            total_source_bytes += len(original)
+            if len(original) < 40 or total_source_bytes > 8 * 1024 * 1024:
+                raise ValueError("CAD source exceeds limit")
+            if not original.lstrip().startswith(b"ISO-10303-21;"):
+                raise ValueError("CAD source is not STEP Part-21")
+            position, rotation = part["positionMm"], part["rotation"]
+            if not isinstance(position, list) or len(position) != 3 or not all(
+                    isinstance(x, (int, float)) and math.isfinite(x) and abs(x) <= 1e9 for x in position):
+                raise ValueError("Invalid CAD position")
+            if not isinstance(rotation, list) or len(rotation) != 4 or not all(
+                    isinstance(x, (int, float)) and math.isfinite(x) and abs(x) <= 1 for x in rotation):
+                raise ValueError("Invalid CAD rotation")
+            if abs(sum(float(x)*float(x) for x in rotation) - 1) > 1e-6:
+                raise ValueError("Rotation must be a unit quaternion")
+            source_path = os.path.join(work, f"part-{index}.step")
+            with open(source_path, "wb") as stream:
+                stream.write(original)
+            solids = cq.importers.importStep(source_path).solids().vals()
+            if not solids or len(solids) > 50:
+                raise ValueError("Invalid CAD solid count")
+            transform = gp_Trsf()
+            transform.SetRotation(gp_Quaternion(*rotation))
+            transform.SetTranslationPart(gp_Vec(*position))
+            for solid_index, solid in enumerate(solids):
+                result.add(solid, name=f"part{index + 1}_solid{solid_index + 1}",
+                           loc=cq.Location(transform))
+        output_path = os.path.join(work, "assembly.step")
+        result.save(output_path, exportType="STEP")
+        if os.path.getsize(output_path) > 32 * 1024 * 1024:
+            raise ValueError("CAD assembly exceeds output limit")
+        # Reimport via the exact CAD kernel; an empty file is not an export.
+        verify = cq.importers.importStep(output_path).solids().vals()
+        if len(verify) < len(parts):
+            raise ValueError("CAD assembly readback lost solids")
+        with open(output_path, "rb") as stream:
+            return stream.read()
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, format_string, *args):
         # Avoid logging file contents, auth headers or CAD paths.
@@ -92,7 +149,7 @@ class Handler(BaseHTTPRequestHandler):
             self.respond(404, {"code": "NOT_FOUND"})
 
     def do_POST(self):
-        if self.path != "/convert":
+        if self.path not in ("/convert", "/assemble"):
             self.respond(404, {"code": "NOT_FOUND"})
             return
         actual = self.headers.get("Authorization", "")
@@ -103,11 +160,30 @@ class Handler(BaseHTTPRequestHandler):
             size = int(self.headers.get("Content-Length", "0"))
         except ValueError:
             size = -1
-        if not 40 <= size <= MAX_INPUT_BYTES:
+        limit = MAX_INPUT_BYTES if self.path == "/convert" else 12 * 1024 * 1024
+        if not 40 <= size <= limit:
             self.respond(413, {"code": "INVALID_STEP_SIZE"})
             return
         payload = self.rfile.read(size)
-        if len(payload) != size or not payload.lstrip().startswith(b"ISO-10303-21;"):
+        if len(payload) != size:
+            self.respond(422, {"code": "INCOMPLETE_CAD_INPUT"})
+            return
+        if self.path == "/assemble":
+            try:
+                source = json.loads(payload.decode("utf-8"))
+                data = assemble_step(source)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/step")
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(data)
+            except (ValueError, RuntimeError, UnicodeDecodeError, TypeError, KeyError):
+                self.respond(422, {"code": "STEP_ASSEMBLY_FAILED"})
+            except Exception:
+                self.respond(500, {"code": "ASSEMBLY_CONVERTER_FAILURE"})
+            return
+        if not payload.lstrip().startswith(b"ISO-10303-21;"):
             self.respond(422, {"code": "INVALID_STEP_ENVELOPE"})
             return
         try:
