@@ -29,7 +29,7 @@ beforeEach(() => {
     scope: { projectId, loadedProjectId: projectId, token: 'token-a' }, phase: 'ready', message: 'The model and its identifiers are ready.',
     lifecycleKey: 'test-lifecycle', model: null, checking: false, result: null, operationId: null, currentRoute: null, canShow: true, canZoom: false,
     show: vi.fn(async () => {}), showCable: vi.fn(async () => {}), retryRoute: vi.fn(async () => {}), terminateAccess: vi.fn(), invalidateCableRoute: vi.fn(),
-    clear: vi.fn(), zoom: vi.fn(), retry: vi.fn(), showCadComponent: vi.fn(async () => {}),
+    clear: vi.fn(), zoom: vi.fn(), retry: vi.fn(), showCadComponent: vi.fn(async () => {}), pickCadAnchor: vi.fn(async () => ({ objectId: 1, point: [1, 2, 3], derivation: 'picked-surface-point' as const })),
     moveCadComponent: vi.fn(async () => {}), removeCadComponent: vi.fn(async () => {}),
   };
   cables = { scope: { projectId, token: 'token-a' }, cables: [], snapshotGeneration: 0, rows: [], omittedCount: 0, taggedCount: 0, hasSnapshot: false, hasActivated: false,
