@@ -3,7 +3,7 @@ import path from 'node:path';
 import { hasStepEnvelope, MAX_STEP_BYTES, csvCell } from './stepFileValidation.js';
 import { convertStepToMesh } from './converter.js';
 import { cadPocPortSeeds } from './pocPortSeed.js';
-import { alignConnectorPorts, type RigidTransform } from '../../shared/cadTransforms.js';
+import { connectorAlignmentIsValid, type RigidTransform } from '../../shared/cadTransforms.js';
 import { MATE_OPPOSING_FACE } from '../../shared/cadPocPorts.js';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import multer from 'multer';
@@ -409,16 +409,10 @@ function worldTransform(row: PortRow): RigidTransform {
 function physicallySnapped(source: PortRow, target: PortRow): boolean {
   const sourceLocal = localRigid.parse(source.local_transform);
   const targetLocal = localRigid.parse(target.local_transform);
-  const expected = alignConnectorPorts(worldTransform(target), targetLocal, sourceLocal, MATE_OPPOSING_FACE);
-  const existing = worldTransform(source);
-  const distance = Math.hypot(
-    existing.position.x - expected.position.x,
-    existing.position.y - expected.position.y,
-    existing.position.z - expected.position.z,
+  return connectorAlignmentIsValid(
+    worldTransform(source), sourceLocal,
+    worldTransform(target), targetLocal, MATE_OPPOSING_FACE,
   );
-  const a = existing.rotation, b = expected.rotation;
-  const dot = Math.abs(a.x*b.x + a.y*b.y + a.z*b.z + a.w*b.w);
-  return distance <= 1 && dot >= Math.cos(0.1 * Math.PI / 360);
 }
 
 cadDesignRouter.get('/catalog/:catalogItemId/ports', safe(async (req: CadRequest, res: Response) => {
