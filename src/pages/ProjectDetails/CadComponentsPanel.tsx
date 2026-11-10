@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ChangeEvent, type FormEvent } fr
 import { Body1, Button, Caption1, Field, Input, Spinner } from '@fluentui/react-components';
 import { getApiBaseUrl } from '@/api/http';
 import { CadPlacementPanel } from './CadPlacementPanel';
+import type { ViewerController } from '@/viewer/ViewerController';
 
 type CatalogueItem = {
   id: string;
@@ -17,13 +18,15 @@ type Props = {
   token: string | null;
   modelVersionId: string | null;
   ready: boolean;
+  onShow: ViewerController['showCadComponent'];
+  onMove: ViewerController['moveCadComponent'];
 };
 
 type CatalogueResponse = { items: CatalogueItem[] };
 const MAX_STEP_SIZE = 8 * 1024 * 1024;
 const UUID = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i;
 
-export function CadComponentsPanel({ projectId, token, modelVersionId, ready }: Props) {
+export function CadComponentsPanel({ projectId, token, modelVersionId, ready, onShow, onMove }: Props) {
   const [items, setItems] = useState<CatalogueItem[]>([]);
   const [manufacturer, setManufacturer] = useState('Niedax');
   const [partNumber, setPartNumber] = useState('');
@@ -125,6 +128,7 @@ export function CadComponentsPanel({ projectId, token, modelVersionId, ready }: 
       </li>)}</ul>
     </div>
     {scoped && projectId && token && modelVersionId ?
-      <CadPlacementPanel projectId={projectId} token={token} modelVersionId={modelVersionId} catalogue={items} /> : null}
+      <CadPlacementPanel projectId={projectId} token={token} modelVersionId={modelVersionId} catalogue={items}
+        onShow={onShow} onMove={onMove} /> : null}
   </section>;
 }
