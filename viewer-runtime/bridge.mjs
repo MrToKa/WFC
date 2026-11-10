@@ -17,6 +17,7 @@ const messages = {
   INVALID_STATE: 'The viewer is not ready for this operation.', ROUTE_INVALID: 'The route contains invalid identifiers.',
   NO_DRAWABLE_ROUTE: 'There is no drawable route to zoom to.', SDK_UNSUPPORTED: 'The local Viewer version is not supported.',
   LOCATION_UNAVAILABLE: 'The location object could not be shown in the current model. Try again.',
+  OBJECT_GUID_UNAVAILABLE: 'The object GUID could not be read. Try again.',
   TRAY_UNAVAILABLE: 'The tray could not be shown in the current model. Check its model assignment and try again.',
   RESOURCE_FAILED: 'The model or a local resource could not be loaded.', MODEL_UNAVAILABLE: 'The selected model is unavailable.',
   SESSION_EXPIRED: 'The viewer session has expired.', ACCESS_REVOKED: 'Access to the model has been revoked.',
@@ -92,6 +93,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
       && code !== 'BARRIER_CAPTURE_MODEL_CHANGED' && (barrierCaptureErrorMessage(code) !== null || code === 'EXTRACTION_FAILED'))
       || command.type.includes('BARRIER_MULTIPART') && code.startsWith('BARRIER_MULTIPART_');
     const recoverableLocation = command.type === 'SHOW_LOCATION' && code === 'LOCATION_UNAVAILABLE';
+    const recoverableGuid = command.type === 'READ_OBJECT_GUID' && code === 'OBJECT_GUID_UNAVAILABLE';
     const recoverableTray = command.type === 'SHOW_TRAY' && code === 'TRAY_UNAVAILABLE';
     const recoverableRootSelection = command.type === 'READ_TRAY_ROOT_SELECTION'
       && ['TRAY_ROOT_SELECTION_UNAVAILABLE', 'TRAY_ROOT_SELECTION_TOO_LARGE', 'TRAY_ROOT_SELECTION_CHANGED'].includes(code);
@@ -100,9 +102,9 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     // a real SDK resource/access/model failure keeps its terminal identity.
     const recoverableTrayIdentity = command.type === 'RESOLVE_TRAY_IDENTITIES' && code.startsWith('TRAY_IDENTITY_');
     const recoverableDiscovery = command.type === 'READ_PREPARATION_OBJECTS' && code.startsWith('PREPARATION_') && Object.hasOwn(messages, code);
-    emit(command, 'ERROR', { code, message: messages[code], retryable: recoverableCapture || recoverableLocation || recoverableTray || recoverableRootSelection || recoverableTrayIdentity || recoverableDiscovery || ['RESOURCE_FAILED', 'SESSION_EXPIRED', 'APPEARANCE_RESTORE_FAILED'].includes(code), operation: command.type });
+    emit(command, 'ERROR', { code, message: messages[code], retryable: recoverableCapture || recoverableLocation || recoverableGuid || recoverableTray || recoverableRootSelection || recoverableTrayIdentity || recoverableDiscovery || ['RESOURCE_FAILED', 'SESSION_EXPIRED', 'APPEARANCE_RESTORE_FAILED'].includes(code), operation: command.type });
     finish(command);
-    onState({ phase: recoverableCapture || recoverableLocation || recoverableTray || recoverableRootSelection || recoverableTrayIdentity || recoverableDiscovery ? phase : 'error', code, operation: command.type });
+    onState({ phase: recoverableCapture || recoverableLocation || recoverableGuid || recoverableTray || recoverableRootSelection || recoverableTrayIdentity || recoverableDiscovery ? phase : 'error', code, operation: command.type });
   }
   function releaseCapture(scope, abort = false) {
     if (!scope) return;
@@ -211,6 +213,9 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     if (disposed || signal.aborted || !identityMatches(command) || phase !== 'loaded') throw failure('INVALID_STATE');
   }
   async function pathFinder(command) {
+    // Tooltip metadata must never consume the foreground operation slot or
+    // turn a burst of hovers into a terminal model failure.
+    if (command.type === 'READ_OBJECT_GUID' && capabilities.size >= 1) { error(command, failure('OBJECT_GUID_UNAVAILABLE')); return; }
     if (capabilities.size >= 2) { error(command, failure('INVALID_STATE')); return; }
     const controller = new AbortController(); capabilities.set(command.requestId, controller);
     const barrierCapture = command.type === 'START_BARRIER_CAPTURE' || command.type === 'READ_BARRIER_CAPTURE';
@@ -307,6 +312,11 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
         });
         if (!live()) return;
         if (!emit(command, 'TRAY_SHOWN', command.payload)) throw failure('INVALID_MESSAGE');
+      } else if (command.type === 'READ_OBJECT_GUID') {
+        const guid = await handle.readObjectGuid(command.payload.sdkObjectId, signal);
+        await requirePathFinder(command, signal);
+        if (!live()) return;
+        if (!emit(command, 'OBJECT_GUID', { sdkObjectId: command.payload.sdkObjectId, guid })) throw failure('INVALID_MESSAGE');
       } else if (command.type === 'READ_TRAY_ROOT_SELECTION') {
         const result = await handle.readTrayRootSelection(signal, async () => {
           await requirePathFinder(command, signal);
@@ -449,7 +459,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
       else if (command.type !== 'DISPOSE') return;
     } else requests.set(command.requestId, { command, status: 'pending' });
     try { switch (command.type) {
-      case 'BEGIN_COMPUTED_PATH': case 'APPEND_COMPUTED_PATH': case 'COMMIT_COMPUTED_PATH': case 'PICK_POINT': case 'READ_MODEL_OBJECTS': case 'READ_PREPARATION_OBJECTS': case 'RESOLVE_TRAY_IDENTITIES': case 'READ_SELECTION': case 'READ_TRAY_ROOT_SELECTION': case 'SHOW_LOCATION': case 'SHOW_TRAY': case 'SET_PATH_TRANSPARENCY': case 'START_MODEL_CAPTURE': case 'READ_MODEL_CAPTURE': case 'START_BARRIER_CAPTURE': case 'READ_BARRIER_CAPTURE':
+      case 'BEGIN_COMPUTED_PATH': case 'APPEND_COMPUTED_PATH': case 'COMMIT_COMPUTED_PATH': case 'PICK_POINT': case 'READ_MODEL_OBJECTS': case 'READ_PREPARATION_OBJECTS': case 'RESOLVE_TRAY_IDENTITIES': case 'READ_SELECTION': case 'READ_TRAY_ROOT_SELECTION': case 'READ_OBJECT_GUID': case 'SHOW_LOCATION': case 'SHOW_TRAY': case 'SET_PATH_TRANSPARENCY': case 'START_MODEL_CAPTURE': case 'READ_MODEL_CAPTURE': case 'START_BARRIER_CAPTURE': case 'READ_BARRIER_CAPTURE':
       case 'READ_BARRIER_MULTIPART_FRAME': case 'START_BARRIER_MULTIPART': case 'STATUS_BARRIER_MULTIPART': case 'CANCEL_BARRIER_MULTIPART': case 'RECONCILE_BARRIER_MULTIPART':
         if (phase !== 'loaded' || !handle) { error(command, failure('INVALID_STATE')); return; }
         void pathFinder(command); break;

@@ -894,6 +894,8 @@ describe('administrator barrier authoring lifecycle', () => {
   });
   it('removes a subset by recapturing all remaining parents rather than sending a remove mutation', async () => {
     const f = fixture([7, 8]); const view = await mounted(f); await act(() => view.result.current.removeParent(parent(7).selectionId)); expect(view.result.current.draftParents.map(p => p.dbId)).toEqual([8]);
+    for (const operation of Object.values(f.appearance)) expect(operation).not.toHaveBeenCalled();
+    expect(f.runProjectPreparation).not.toHaveBeenCalled();
     expect(api.changeBarrierRegistry).not.toHaveBeenCalled(); await act(() => view.result.current.save());
     expect(vi.mocked(api.beginBarrierCapture).mock.calls[0][2].selectedParents.map(p => p.dbId)).toEqual([8]); expect(api.changeBarrierRegistry).not.toHaveBeenCalled();
   });

@@ -1,4 +1,4 @@
-import { resolveTrayObjectIdentities, validateTrayIdentityRequest } from './tray-identity.mjs';
+import { readModelObjectGuid, resolveTrayObjectIdentities, validateTrayIdentityRequest } from './tray-identity.mjs';
 import { createRouteController } from './routes.mjs';
 import { createPathFinderController } from './pathfinder.mjs';
 import { captureSelectedModel } from './model-capture.mjs';
@@ -327,6 +327,13 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
           const matches = await resolveTrayObjectIdentities(loadedModel, request.identities, { signal: identitySignal, check });
           check();
           return { schemaVersion: 'wfc.pf.tray-identity-response.v1', matches };
+        },
+        async readObjectGuid(sdkObjectId, operationSignal) {
+          if (!positiveObjectId(sdkObjectId)) throw safeError('OBJECT_GUID_UNAVAILABLE');
+          const identitySignal = AbortSignal.any([signal, operationSignal].filter(Boolean));
+          const check = () => { active(identitySignal); if (finished || !loadedModel || viewer.model !== loadedModel) throw safeError('MODEL_SELECTION_CHANGED'); };
+          try { check(); const guid = await readModelObjectGuid(loadedModel, sdkObjectId, { signal: identitySignal, check }); check(); return guid; }
+          catch (error) { if (error?.name === 'AbortError' || error?.code === 'MODEL_SELECTION_CHANGED') throw error; throw safeError('OBJECT_GUID_UNAVAILABLE'); }
         },
         readSelection: pathfinder.readSelection,
         readTrayRootSelection: pathfinder.readTrayRootSelection,
