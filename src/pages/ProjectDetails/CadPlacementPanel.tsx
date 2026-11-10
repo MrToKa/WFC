@@ -46,6 +46,12 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
   const [snapTarget, setSnapTarget] = useState('');
   const [snapTargetPort, setSnapTargetPort] = useState('');
   const [snapSourcePort, setSnapSourcePort] = useState('');
+  const [pendingSnap, setPendingSnap] = useState<{
+    targetInstanceId: string;
+    targetPortName: 'start' | 'end';
+    sourcePortName: 'start' | 'end';
+  } | null>(null);
+  const [connectionCount, setConnectionCount] = useState(0);
   const [coordinates, setCoordinates] = useState<Coordinates>(empty);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -75,10 +81,16 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
     const response = await api('/designs', { signal });
     const data: { designs: Design[] } = await response.json();
     const current = data.designs.find(row => row.modelVersionId === modelVersionId && row.activeModel);
-    if (!current) { if (!signal?.aborted) { setDesignId(null); setInstances([]); } return; }
+    if (!current) { if (!signal?.aborted) { setDesignId(null); setInstances([]); setConnectionCount(0); } return; }
     const listing = await api(`/designs/${current.id}/instances`, { signal });
     const details: { instances: Instance[] } = await listing.json();
-    if (!signal?.aborted) { setDesignId(current.id); setInstances(details.instances); }
+    const graph = await api(`/designs/${current.id}/connections`, { signal });
+    const links: { connections: Array<{ id: string }> } = await graph.json();
+    if (!signal?.aborted) {
+      setDesignId(current.id);
+      setInstances(details.instances);
+      setConnectionCount(links.connections.length);
+    }
   }, [api, modelVersionId]);
 
   useEffect(() => {
@@ -128,6 +140,7 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
   useEffect(() => { rendered.current.clear(); }, [projectId, modelVersionId, token]);
 
   const selectInstance = (id: string) => {
+    setPendingSnap(null);
     const instance = instances.find(row => row.id === id);
     setEditingId(id);
     if (!instance) return;
@@ -155,6 +168,11 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
         qz: snapped.rotation.z, qw: snapped.rotation.w } as Instance);
       setCoordinates({ x: String(snapped.position.x), y: String(snapped.position.y),
         z: String(snapped.position.z), ...angles });
+      setPendingSnap({
+        targetInstanceId: target.id,
+        targetPortName: targetPort.id,
+        sourcePortName: sourcePort.id,
+      });
       setNotice('Connector snap calculated. Save to persist the position; fitting and clearance still need engineering verification.');
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Connector snap failed.');
@@ -188,6 +206,7 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
           rotation: eulerQuaternion(numeric[3], numeric[4], numeric[5]),
         },
       });
+      let savedId = editing?.id ?? '';
       if (editing) {
         await api(`/designs/${currentId}/instances/${editing.id}`, {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -195,10 +214,29 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
         });
         setNotice('Position saved to the current proposed design.');
       } else {
-        await api(`/designs/${currentId}/instances`, {
+        const created = await api(`/designs/${currentId}/instances`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
         });
-        setNotice('New component placement saved. Three-dimensional display is not yet connected.');
+        const payload: { id: string } = await created.json();
+        savedId = payload.id;
+        setNotice('New component placement saved. Displaying the 3D mesh…');
+      }
+      if (pendingSnap) {
+        try {
+          await api(`/designs/${currentId}/connections`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sourceInstanceId: savedId,
+              sourcePortName: pendingSnap.sourcePortName,
+              targetInstanceId: pendingSnap.targetInstanceId,
+              targetPortName: pendingSnap.targetPortName,
+            }),
+          });
+          setNotice('Component position and connector relationship saved.');
+          setPendingSnap(null);
+        } catch (error) {
+          setNotice(`Position saved, but connector relation failed: ${error instanceof Error ? error.message : 'unknown error'}`);
+        }
       }
       await reload();
     } catch (error) {
@@ -228,7 +266,7 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
     {loading ? <Spinner size="tiny" label="Reading proposal…" /> : null}
     <Field label="Catalogue component">
       <select aria-label="Catalogue component" value={selectedId} disabled={busy || !activeCatalogue.length}
-        onChange={e => { setSelectedId(e.target.value); setEditingId(''); setCoordinates(empty); }}>
+        onChange={e => { setSelectedId(e.target.value); setEditingId(''); setPendingSnap(null); setCoordinates(empty); }}>
         <option value="">Choose a prepared component</option>
         {activeCatalogue.map(item => <option key={item.id} value={item.id}>{item.manufacturer} — {item.partNumber}</option>)}
       </select>
@@ -262,13 +300,13 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
       {(['x', 'y', 'z', 'rx', 'ry', 'rz'] as const).map(axis => <Field key={axis}
         label={['x','y','z'].includes(axis) ? `${axis.toUpperCase()} (mm)` : `Rotation ${axis.slice(1).toUpperCase()} (degrees)`}>
         <Input type="number" step="any" aria-label={axis} value={coordinates[axis]}
-          disabled={busy} onChange={(_, data) => setCoordinates(old => ({ ...old, [axis]: data.value }))} />
+          disabled={busy} onChange={(_, data) => { setPendingSnap(null); setCoordinates(old => ({ ...old, [axis]: data.value })); }} />
       </Field>)}
       <Button type="submit" appearance="primary" disabled={busy || !selectedId}>{editing ? 'Update saved position' : 'Save new component'}</Button>
-      <Button type="button" disabled={busy} onClick={() => { setEditingId(''); setCoordinates(empty); }}>New position</Button>
+      <Button type="button" disabled={busy} onClick={() => { setEditingId(''); setPendingSnap(null); setCoordinates(empty); }}>New position</Button>
     </form>
     <div role="status" aria-live="polite"><Body1>{notice}</Body1></div>
-    <Caption1>Saved component instances: {instances.length}</Caption1>
+    <Caption1>Saved component instances: {instances.length}; saved connector relationships: {connectionCount}</Caption1>
     <ul>{instances.map(instance => <li key={instance.id}>
       <Button appearance={editingId === instance.id ? 'primary' : 'subtle'}
         onClick={() => selectInstance(instance.id)} disabled={busy}>
