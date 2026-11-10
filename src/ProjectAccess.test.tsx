@@ -167,7 +167,7 @@ describe('project model selection permissions', () => {
   });
 });
 
-describe('read-access Routings viewer tab', () => {
+describe('read-access Routings builder tab', () => {
   it.each([
     ['basic', false], ['technician', false], ['engineer', false], ['engineer', true],
   ] as const)('opens directly for %s with edit grant %s without loading the cable or tray tables', async (userRole, editable) => {
@@ -176,7 +176,7 @@ describe('read-access Routings viewer tab', () => {
     expect(await screen.findByText('No model is selected. Select a prepared model in Details before opening the viewer.')).toBeInTheDocument();
     const tabs = within(screen.getByRole('tablist', { name: 'Project sections' }));
     const sections = tabs.getAllByRole('tab');
-    const index = sections.indexOf(tabs.getByRole('tab', { name: 'Routings viewer' }));
+    const index = sections.indexOf(tabs.getByRole('tab', { name: 'Routings builder' }));
     expect(sections[index - 1]).toBe(tabs.getByRole('tab', { name: 'Cables list' }));
     expect(sections[index + 1]).toBe(tabs.getByRole('tab', { name: 'Trays' }));
     expect(sections[index]).toHaveAttribute('aria-selected', 'true');
@@ -189,19 +189,19 @@ describe('read-access Routings viewer tab', () => {
 
   it('follows tab URL history and removes the viewer UI when leaving the active tab', async () => {
     const router = mount(`/projects/${projectId}?tab=routings-viewer`);
-    await screen.findByRole('region', { name: 'Routings viewer' });
+    await screen.findByRole('region', { name: 'Routings builder' });
     await act(() => router.navigate(`/projects/${projectId}?tab=details`));
     await screen.findByRole('region', { name: '3D model' });
-    expect(screen.queryByRole('region', { name: 'Routings viewer' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Routings builder' })).not.toBeInTheDocument();
     await act(() => router.navigate(-1));
-    expect(await screen.findByRole('region', { name: 'Routings viewer' })).toBeInTheDocument();
+    expect(await screen.findByRole('region', { name: 'Routings builder' })).toBeInTheDocument();
     await act(() => router.navigate(1));
     await screen.findByRole('region', { name: '3D model' });
-    expect(screen.queryByRole('region', { name: 'Routings viewer' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Routings builder' })).not.toBeInTheDocument();
     expect(document.querySelector('iframe')).toBeNull();
   });
 
-  it('makes Routings viewer reachable with the existing project tab keyboard navigation', async () => {
+  it('makes Routings builder reachable with the existing project tab keyboard navigation', async () => {
     // Tabster ignores jsdom's zero-sized, parentless layout when moving focus.
     const viewport = vi.spyOn(document.body, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 1024, 768));
     const offsetParent = vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockImplementation(function (this: HTMLElement) { return this.parentElement; });
@@ -210,8 +210,8 @@ describe('read-access Routings viewer tab', () => {
     const tabs = within(await screen.findByRole('tablist', { name: 'Project sections' }));
     const cables = tabs.getByRole('tab', { name: 'Cables list' }); cables.focus();
     await userEvent.keyboard('{ArrowRight}{Enter}');
-    await waitFor(() => expect(tabs.getByRole('tab', { name: 'Routings viewer' })).toHaveAttribute('aria-selected', 'true'));
-    expect(await screen.findByRole('region', { name: 'Routings viewer' })).toBeInTheDocument();
+    await waitFor(() => expect(tabs.getByRole('tab', { name: 'Routings builder' })).toHaveAttribute('aria-selected', 'true'));
+    expect(await screen.findByRole('region', { name: 'Routings builder' })).toBeInTheDocument();
   });
 });
 
