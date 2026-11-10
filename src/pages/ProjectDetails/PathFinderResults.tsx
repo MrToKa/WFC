@@ -100,6 +100,7 @@ type Props = { pf: ReturnType<typeof usePathFinder>; selectedCableId: string | n
   calculationBlocker?: string | null; onConfigureCalculation?: () => void;
   workflowCalculationPreferences?: PathFinderWorkflowCalculationPreferences | null;
   workflowConfigurationReady?: boolean;
+  workflowRefreshRequest?: { cableId: string; requestId: number } | null;
   workflowDisplayRequest?: PathFinderWorkflowDisplayRequest | null; onWorkflowDisplayChange?: (value: PathFinderWorkflowDisplay) => void;
   endpointForegroundContexts?: PathFinderEndpointForegroundContexts | null;
   onWorkflowReviewChange?: (value: PathFinderWorkflowReview | null) => void;
@@ -142,7 +143,7 @@ function workflowCompletionKey(row: CableWorkflowRow | null, checked: PathFinder
     ? 'selected-result-complete'
     : [calculation.jobStatus, calculation.itemApplicability ?? null];
 }
-export function PathFinderResults({ pf, selectedCableId, workflowSelection = null, workflowCalculationPreferences = null, workflowConfigurationReady, accountId, active = true, displayOwned = true, claimViewer, options, readPreferences, onBatchBusyChange, onCableValuesChanged,
+export function PathFinderResults({ pf, selectedCableId, workflowSelection = null, workflowCalculationPreferences = null, workflowConfigurationReady, workflowRefreshRequest = null, accountId, active = true, displayOwned = true, claimViewer, options, readPreferences, onBatchBusyChange, onCableValuesChanged,
   workflowDisplayRequest, onWorkflowDisplayChange, onWorkflowReviewChange, onCalculationCommitted, endpointForegroundContexts }: Props) {
   const [proposal, setProposal] = useState<PathFinderProposal | null>(null);
   const [reviewId, setReviewId] = useState<string | null>(null), [pathDisplayed, setPathDisplayed] = useState(false), [applied, setApplied] = useState(false);
@@ -250,7 +251,17 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
     : ['failed', 'cancelled'].includes(observedWorkflowJob?.status ?? '') ? observedWorkflowJob!.status : null;
   const workflowReadContext = JSON.stringify([data?.registryRevision, data?.artifacts.map(item => [item.id, item.snapshotSha256])]);
   const displayVerificationScope = pathFinderWorkflowDisplayScope(pf, accountId ?? null);
-  const workflowDisplayContext = JSON.stringify([ownershipKey, active, selectedCableId, data?.activeModel, settingsKey, optionsKey, readPreferencesKey, workflowReadContext, observedWorkflowRevision, displayVerificationScope]);
+  // Explicit status refresh can return exactly the same immutable result. Give
+  // it a new bounded read cycle without replaying Show or any write command.
+  // Requests for another cable must not retire this cable's verified path.
+  const refreshOwner = JSON.stringify([ownershipKey, selectedCableId]);
+  const workflowRefresh = useRef<{ owner: string; requestId: number | null }>({ owner: refreshOwner, requestId: null });
+  if (workflowRefresh.current.owner !== refreshOwner) workflowRefresh.current = { owner: refreshOwner, requestId: null };
+  if (workflowRefreshRequest?.cableId === selectedCableId && Number.isSafeInteger(workflowRefreshRequest.requestId)
+    && workflowRefreshRequest.requestId >= 0 && workflowRefreshRequest.requestId > (workflowRefresh.current.requestId ?? -1))
+    workflowRefresh.current.requestId = workflowRefreshRequest.requestId;
+  const workflowRefreshKey = workflowRefresh.current.requestId;
+  const workflowDisplayContext = JSON.stringify([ownershipKey, active, selectedCableId, data?.activeModel, settingsKey, optionsKey, readPreferencesKey, workflowReadContext, observedWorkflowRevision, displayVerificationScope, workflowRefreshKey]);
   const workflowProposalKey = workflowTarget ? JSON.stringify([workflowTarget.calculation.jobId, workflowTarget.calculation.proposalId,
     workflowTarget.calculation.proposalHash, workflowTarget.cable.cableWriteRevision]) : null;
   const workflowHidden = useRef<{ context: string; hidden: boolean; proposalKey: string | null }>({ context: workflowDisplayContext, hidden: true, proposalKey: null });
@@ -258,7 +269,7 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
   const handledDisplayRequest = useRef(-1);
   // The hint identifies one selected result. Replacing list rows or updating
   // their progress must never silently retarget the selected proposal.
-  const selectedWorkflowIdentity = workflowTarget ? JSON.stringify([ownershipKey, active, selectedCableId, data?.activeModel, settingsKey, optionsKey, readPreferencesKey, workflowReadContext, observedWorkflowRevision, displayVerificationScope, workflowPreferencesKey, workflowAttempt,
+  const selectedWorkflowIdentity = workflowTarget ? JSON.stringify([ownershipKey, active, selectedCableId, data?.activeModel, settingsKey, optionsKey, readPreferencesKey, workflowReadContext, observedWorkflowRevision, displayVerificationScope, workflowPreferencesKey, workflowAttempt, workflowRefreshKey,
     workflowTarget.calculation.jobId, workflowTarget.calculation.proposalId, workflowTarget.calculation.proposalHash, workflowTarget.cable.cableWriteRevision]) : null;
   const workflowKey = workflowTarget ? JSON.stringify([selectedWorkflowIdentity, workflowCompletionKey(workflowTarget, proposal), observedWorkflowStop, workflowTarget.calculation.itemState,
     workflowTarget.calculation.currentness, workflowTarget.calculation.reviewable, workflowTarget.calculation.savedExactDisplay === true]) : null;

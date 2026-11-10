@@ -115,6 +115,10 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
   const [draft, setDraft] = useState<Draft>(emptyDraft), [notice, setNotice] = useState<string | null>(null), [localError, setLocalError] = useState<string | null>(null);
   const [endpointPending, setEndpointPending] = useState(false);
   const [workflowSelection, setWorkflowSelection] = useState<CableWorkflowRow | null>(null);
+  const [workflowRefreshRequest, setWorkflowRefreshRequest] = useState<{ cableId: string; requestId: number } | null>(null);
+  const workflowResultRefreshed = useCallback((cableId: string) => {
+    setWorkflowRefreshRequest(previous => ({ cableId, requestId: (previous?.requestId ?? 0) + 1 }));
+  }, []);
   const [workflowCalculationPreferences, setWorkflowCalculationPreferences] = useState<PathFinderWorkflowCalculationPreferences | null>(null);
   const workflowConfigurationReady = Boolean(getCableCalculationPreferences(workflowCalculationPreferences?.preferences.barrierRouting?.drillThroughWalls === true));
   const [workflowDisplay, setWorkflowDisplay] = useState<PathFinderWorkflowDisplay>({ cableId: null, jobId: null, proposalId: null, proposalHash: null,
@@ -241,7 +245,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
           disabled={pf.busy || locationCheckBusy || networkCheckBusy || !data?.artifacts.length}
           refreshState={pf.refreshState} onChanged={cableValuesChanged} /> : null}
         <PathFinderCableWorkspace projectId={projectId} loadedProjectId={loadedProjectId} accountId={accountId ?? null} token={token} isAdmin={isAdmin}
-          pf={pf} active={mode === 'path'} selectedCableId={selectedCableId} refreshKey={cableWriteRefresh} preferences={backgroundPreferences} readPreferences={backgroundPreferences ?? readPreferences} onConfigureCalculation={configureCalculation}
+          pf={pf} active={mode === 'path'} selectedCableId={selectedCableId} refreshKey={cableWriteRefresh} preferences={backgroundPreferences} readPreferences={backgroundPreferences ?? readPreferences} onConfigureCalculation={configureCalculation} onResultRefresh={workflowResultRefreshed}
           getCalculationPreferences={getCableCalculationPreferences} onCalculationPreferences={setWorkflowCalculationPreferences}
           display={workflowDisplay} review={popupReview} onCalculationStart={workflowCalculationStarted} onTogglePath={cableId => setWorkflowDisplayRequest(previous => ({ cableId, requestId: (previous?.requestId ?? 0) + 1,
             action: workflowDisplay.cableId === cableId && workflowDisplay.visible ? 'hide' : 'show' }))}
@@ -288,7 +292,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
           />
         </div>
         </details>
-        <PathFinderResults pf={pf} accountId={accountId} selectedCableId={selectedCableId} workflowSelection={workflowSelection} workflowCalculationPreferences={workflowCalculationPreferences} workflowConfigurationReady={workflowConfigurationReady} onCableValuesChanged={cableValuesChanged} active={mode === 'path'} displayOwned={mode === 'path' && displayOwner === 'proposal'} claimViewer={() => claimViewer('proposal', false)} options={preferences} backgroundOptions={backgroundPreferences} readPreferences={preferences ?? readPreferences} onBatchBusyChange={setBatchBusy}
+        <PathFinderResults pf={pf} accountId={accountId} selectedCableId={selectedCableId} workflowSelection={workflowSelection} workflowRefreshRequest={workflowRefreshRequest} workflowCalculationPreferences={workflowCalculationPreferences} workflowConfigurationReady={workflowConfigurationReady} onCableValuesChanged={cableValuesChanged} active={mode === 'path'} displayOwned={mode === 'path' && displayOwner === 'proposal'} claimViewer={() => claimViewer('proposal', false)} options={preferences} backgroundOptions={backgroundPreferences} readPreferences={preferences ?? readPreferences} onBatchBusyChange={setBatchBusy}
           calculationBlocker={calculationBlocker} onConfigureCalculation={validSecondary ? configureCalculation : undefined}
           workflowDisplayRequest={workflowDisplayRequest} onWorkflowDisplayChange={workflowDisplayChanged} onWorkflowReviewChange={workflowReviewChanged}
           endpointForegroundContexts={endpointForegroundContexts}
