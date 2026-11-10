@@ -16,7 +16,7 @@ type Instance = {
   xMm: number; yMm: number; zMm: number; qx: number; qy: number; qz: number; qw: number;
 };
 type Props = { projectId: string; modelVersionId: string; token: string; catalogue: CatalogueItem[];
-  onShow: ViewerController['showCadComponent']; onMove: ViewerController['moveCadComponent']; };
+  onPick: ViewerController['pickPoint']; onShow: ViewerController['showCadComponent']; onMove: ViewerController['moveCadComponent']; };
 type Coordinates = { x: string; y: string; z: string; rx: string; ry: string; rz: string };
 const empty: Coordinates = { x: '0', y: '0', z: '0', rx: '0', ry: '0', rz: '0' };
 
@@ -41,7 +41,7 @@ function quaternionEuler(instance: Instance): Pick<Coordinates, 'rx' | 'ry' | 'r
   };
 }
 
-export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue, onShow, onMove }: Props) {
+export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue, onPick, onShow, onMove }: Props) {
   const rendered = useRef(new Set<string>());
   const [designId, setDesignId] = useState<string | null>(null);
   const [instances, setInstances] = useState<Instance[]>([]);
@@ -153,6 +153,23 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
       x: String(instance.xMm), y: String(instance.yMm), z: String(instance.zMm),
       ...quaternionEuler(instance),
     });
+  };
+
+  const pickPosition = async () => {
+    if (busy) return;
+    setBusy(true); setNotice('Click a surface on the active Aalborg model.');
+    try {
+      const selection = await onPick();
+      const [x, y, z] = selection.point;
+      if (![x, y, z].every(Number.isFinite)) throw new Error('Selected point is not finite.');
+      setPendingSnap(null);
+      setCoordinates(old => ({ ...old,
+        x: String(x * 1000), y: String(y * 1000), z: String(z * 1000),
+      }));
+      setNotice('Model point selected. Adjust XYZ or rotation, then Save.');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not pick a model point.');
+    } finally { setBusy(false); }
   };
 
   const snap = () => {
@@ -313,6 +330,9 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
         Snap to connector
       </Button>
     </section> : null}
+    <Button type="button" disabled={busy || !selectedId} onClick={() => { void pickPosition(); }}>
+      Pick position in 3D model
+    </Button>
     <form onSubmit={event => { void save(event); }} aria-label="Save component position">
       {(['x', 'y', 'z', 'rx', 'ry', 'rz'] as const).map(axis => <Field key={axis}
         label={['x','y','z'].includes(axis) ? `${axis.toUpperCase()} (mm)` : `Rotation ${axis.slice(1).toUpperCase()} (degrees)`}>
