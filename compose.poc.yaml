@@ -42,6 +42,7 @@ services:
     stop_grace_period: 45s
     environment:
       NODE_ENV: production
+      WFC_CAD_DESIGN_ENABLED: "true"
       API_HOST: 0.0.0.0
       API_PORT: 4000
       DATABASE_URL: postgresql://wfc_poc:${POC_POSTGRES_PASSWORD}@postgres:5432/wfc_poc
