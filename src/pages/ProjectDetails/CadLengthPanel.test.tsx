@@ -2,6 +2,7 @@ import { FluentProvider, webLightTheme } from '@fluentui/react-components';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CadPlacementPanel } from './CadPlacementPanel';
+import { rotateVector } from '../../../shared/cadTransforms';
 
 const projectId = '00000000-0000-4000-8000-000000000001';
 const modelVersionId = '00000000-0000-4000-8000-000000000002';
@@ -40,6 +41,40 @@ function mount(existing = false, connected = false, kind = 'straight') {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('straight component length', () => {
+  it.each([['center', -650, 1050], ['end', -1400, 1800]] as const)('holds the %s pivot fixed while rotating local y', async (pivot, x, z) => {
+    const { request } = mount(true);
+    fireEvent.click(await screen.findByRole('button', { name: /STRAIGHT-300 · 1500 mm — X/ }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Rotation point' }), { target: { value: pivot } });
+    fireEvent.click(screen.getByRole('button', { name: 'Local y +' }));
+    fireEvent.submit(screen.getByRole('form', { name: 'Save component position' }));
+    await waitFor(() => expect(request.mock.calls.some(([, init]) => init?.method === 'PATCH')).toBe(true));
+    const call = request.mock.calls.find(([, init]) => init?.method === 'PATCH');
+    const saved = JSON.parse(String(call?.[1]?.body));
+    expect(saved.transform.positionMm.x).toBeCloseTo(x);
+    expect(saved.transform.positionMm.y).toBeCloseTo(200);
+    expect(saved.transform.positionMm.z).toBeCloseTo(z);
+    expect(rotateVector({ x: 0, y: 0, z: 1 }, saved.transform.rotation).x).toBeCloseTo(1);
+  });
+  it('rotates about the local axis and saves vertical without moving the insertion point', async () => {
+    const { request } = mount(true);
+    fireEvent.click(await screen.findByRole('button', { name: /STRAIGHT-300 · 1500 mm — X/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Local x +' }));
+    expect(screen.getByRole('spinbutton', { name: 'rx' })).toHaveValue(90);
+    fireEvent.click(screen.getByRole('button', { name: 'Vertical (model Z)' }));
+    fireEvent.submit(screen.getByRole('form', { name: 'Save component position' }));
+    await waitFor(() => expect(request.mock.calls.some(([, init]) => init?.method === 'PATCH')).toBe(true));
+    const call = request.mock.calls.find(([, init]) => init?.method === 'PATCH');
+    const saved = JSON.parse(String(call?.[1]?.body));
+    expect(saved.transform.positionMm).toEqual({ x: 100, y: 200, z: 300 });
+    expect(rotateVector({ x: 0, y: 0, z: 1 }, saved.transform.rotation)).toEqual({ x: 0, y: 0, z: 1 });
+  });
+  it('locks local rotation while connected', async () => {
+    mount(true, true);
+    fireEvent.click(await screen.findByRole('button', { name: /STRAIGHT-300 · 1500 mm — X/ }));
+    expect(screen.getByRole('button', { name: 'Local x +' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Vertical (model Z)' })).toBeDisabled();
+    expect(screen.getByRole('spinbutton', { name: 'rx' })).toBeDisabled();
+  });
   it('saves a 1500 mm new instance and reads its cut mesh instead of the full stock mesh', async () => {
     const { request, onShow } = mount();
     fireEvent.change(screen.getByRole('combobox', { name: 'Catalogue component' }), { target: { value: catalogId } });

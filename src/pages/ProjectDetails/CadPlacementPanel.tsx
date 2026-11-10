@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Body1, Button, Caption1, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, Spinner } from '@fluentui/react-components';
 import { getApiBaseUrl } from '@/api/http';
-import { normalizeQuaternion, alignConnectorPorts } from '@/viewer/componentTransforms';
+import { alignConnectorPorts } from '@/viewer/componentTransforms';
+import { eulerDegreesToQuaternion, quaternionToEulerDegrees, rotateAboutLocalAxis, orientAboutLocalPivot } from '../../../shared/cadRotation';
 import { MATE_OPPOSING_FACE } from '@/viewer/pocConnectorCatalog';
 import { supportsStraightCut, getInstanceCadPorts } from '../../../shared/cadLengths';
 import type { ViewerController } from '@/viewer/ViewerController';
@@ -23,25 +24,14 @@ type Props = { projectId: string; modelVersionId: string; token: string; catalog
 type Coordinates = { x: string; y: string; z: string; rx: string; ry: string; rz: string };
 const empty: Coordinates = { x: '0', y: '0', z: '0', rx: '0', ry: '0', rz: '0' };
 
-function eulerQuaternion(rx: number, ry: number, rz: number) {
-  const a = rx * Math.PI / 360, b = ry * Math.PI / 360, c = rz * Math.PI / 360;
-  const [sa, ca, sb, cb, sc, cc] = [Math.sin(a), Math.cos(a), Math.sin(b), Math.cos(b), Math.sin(c), Math.cos(c)];
-  return normalizeQuaternion({
-    x: sa * cb * cc - ca * sb * sc,
-    y: ca * sb * cc + sa * cb * sc,
-    z: ca * cb * sc - sa * sb * cc,
-    w: ca * cb * cc + sa * sb * sc,
-  });
+function rotationFields(q: { x: number; y: number; z: number; w: number }): Pick<Coordinates, 'rx' | 'ry' | 'rz'> {
+  const angles = quaternionToEulerDegrees(q);
+  const display = (value: number) => String(Number(value.toFixed(10)));
+  return { rx: display(angles.rx), ry: display(angles.ry), rz: display(angles.rz) };
 }
 
 function quaternionEuler(instance: Instance): Pick<Coordinates, 'rx' | 'ry' | 'rz'> {
-  const { qx: x, qy: y, qz: z, qw: w } = instance;
-  const pitch = Math.asin(Math.max(-1, Math.min(1, 2 * (w * y - z * x))));
-  return {
-    rx: String(180 / Math.PI * Math.atan2(2 * (w * x + y * z), 1 - 2 * (x * x + y * y))),
-    ry: String(180 / Math.PI * pitch),
-    rz: String(180 / Math.PI * Math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z))),
-  };
+  return rotationFields({ x: instance.qx, y: instance.qy, z: instance.qz, w: instance.qw });
 }
 
 export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue, onPick, onShow, onMove, onFocus, onRemove }: Props) {
@@ -66,6 +56,9 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
   const [coordinates, setCoordinates] = useState<Coordinates>(empty);
   const [lengthMm, setLengthMm] = useState('6000');
   const [moveStepMm, setMoveStepMm] = useState('50');
+  const [rotateStepDegrees, setRotateStepDegrees] = useState('90');
+  const [rotationPivot, setRotationPivot] = useState<'start' | 'center' | 'end'>('start');
+  const [meshCenter, setMeshCenter] = useState<{ catalogId: string; point: { x: number; y: number; z: number } } | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState('');
@@ -78,6 +71,12 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
   const selectedLength = canSetLength && validLength && Number(lengthMm) !== 6000 ? Number(lengthMm) : null;
   const editingConnected = Boolean(editing && connections.some(row => row.sourceInstanceId === editing.id || row.targetInstanceId === editing.id));
   const sourcePorts = getInstanceCadPorts(chosenPart?.originalFilename ?? '', chosenPart?.sourceSha256 ?? '', selectedLength);
+  const startPivot = sourcePorts.find(port => port.id === 'start')?.local.position;
+  const endPivot = sourcePorts.find(port => port.id === 'end')?.local.position;
+  const centerPivot = canSetLength && startPivot && endPivot
+    ? { x: (startPivot.x + endPivot.x) / 2, y: (startPivot.y + endPivot.y) / 2, z: (startPivot.z + endPivot.z) / 2 }
+    : meshCenter?.catalogId === selectedId ? meshCenter.point : undefined;
+  const pivotPoint = rotationPivot === 'start' ? startPivot : rotationPivot === 'end' ? endPivot : centerPivot;
   const target = instances.find(instance => instance.id === snapTarget);
   const targetPorts = getInstanceCadPorts(catalogue.find(item => item.id === target?.catalogItemId)?.originalFilename ?? '', catalogue.find(item => item.id === target?.catalogItemId)?.sourceSha256 ?? '', target?.lengthMm ?? null);
 
@@ -94,6 +93,20 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
     }
     return response;
   }, [base, token]);
+
+  useEffect(() => {
+    if (!selectedId || canSetLength) return;
+    const controller = new AbortController();
+    void api(`/catalog/${selectedId}/mesh`, { signal: controller.signal }).then(response => response.json()).then(mesh => {
+      const bounds = mesh.boundsMm;
+      if (!controller.signal.aborted && bounds?.min?.length === 3 && bounds?.max?.length === 3 &&
+          [...bounds.min, ...bounds.max].every(Number.isFinite)) {
+        setMeshCenter({ catalogId: selectedId, point: { x: (bounds.min[0] + bounds.max[0]) / 2,
+          y: (bounds.min[1] + bounds.max[1]) / 2, z: (bounds.min[2] + bounds.max[2]) / 2 } });
+      }
+    }).catch(() => { /* Unavailable geometry keeps the centre pivot disabled. */ });
+    return () => controller.abort();
+  }, [api, selectedId, canSetLength]);
 
   const reload = useCallback(async (signal?: AbortSignal) => {
     const response = await api('/designs', { signal });
@@ -208,6 +221,27 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
     setNotice(`Moved ${axis.toUpperCase()} by ${direction * step} mm. Save to persist.`);
   };
 
+  const orient = (rotation: { x: number; y: number; z: number; w: number }) => {
+    if (!pivotPoint) throw new Error('Choose an available rotation point.');
+    const result = orientAboutLocalPivot({ position: { x: Number(coordinates.x), y: Number(coordinates.y), z: Number(coordinates.z) },
+      rotation: eulerDegreesToQuaternion(Number(coordinates.rx), Number(coordinates.ry), Number(coordinates.rz)) }, rotation, pivotPoint);
+    setCoordinates({ x: String(result.position.x), y: String(result.position.y), z: String(result.position.z), ...rotationFields(result.rotation) });
+    setPendingSnap(null);
+  };
+
+  const rotateLocal = (axis: 'x' | 'y' | 'z', direction: -1 | 1) => {
+    if (editingConnected || busy || !selectedId || !pivotPoint) return;
+    const step = Number(rotateStepDegrees);
+    if (!Number.isFinite(step) || step <= 0 || step > 360) {
+      setNotice('Enter a rotation step greater than 0 and at most 360 degrees.'); return;
+    }
+    try {
+      const q = eulerDegreesToQuaternion(Number(coordinates.rx), Number(coordinates.ry), Number(coordinates.rz));
+      orient(rotateAboutLocalAxis(q, axis, direction * step));
+      setNotice(`Rotated around local ${axis} at ${rotationPivot} by ${direction * step} degrees. Save to apply in 3D.`);
+    } catch { setNotice('Enter finite rotation angles.'); }
+  };
+
   const pickPosition = async () => {
     if (busy) return;
     setBusy(true); setNotice('Click a surface on the active Aalborg model.');
@@ -279,7 +313,7 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
         ...(canSetLength ? { lengthMm: selectedLength } : {}),
         transform: {
           positionMm: { x: numeric[0], y: numeric[1], z: numeric[2] },
-          rotation: eulerQuaternion(numeric[3], numeric[4], numeric[5]),
+          rotation: eulerDegreesToQuaternion(numeric[3], numeric[4], numeric[5]),
         },
       });
       let savedId = editing?.id ?? '';
@@ -432,7 +466,32 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
         <Button type="button" disabled={busy} onClick={() => nudge(axis, 1)}>{axis.toUpperCase()} +</Button>
       </div>)}
     </div>
+    <section aria-label="Local axis rotation controls">
+      <Caption1>X/Y/Z move in model space. Local x/y/z rotate about the selected point, which stays fixed. Save to apply in 3D.</Caption1>
+      <Field label="Rotation point">
+        <select aria-label="Rotation point" value={rotationPivot} disabled={busy || editingConnected}
+          onChange={event => setRotationPivot(event.target.value as 'start' | 'center' | 'end')}>
+          <option value="start" disabled={!startPivot}>Start</option>
+          <option value="center" disabled={!centerPivot}>Center</option>
+          <option value="end" disabled={!endPivot}>End</option>
+        </select>
+      </Field>
+      {editingConnected ? <Caption1>Disconnect this component before rotating it.</Caption1> : null}
+      <Field label="Rotation step (degrees)">
+        <Input type="number" min="0.1" max="360" step="any" aria-label="Rotation step degrees"
+          value={rotateStepDegrees} disabled={busy || editingConnected} onChange={(_, data) => setRotateStepDegrees(data.value)} />
+      </Field>
+      {(['x','y','z'] as const).map(axis => <div key={axis}>
+        <Button type="button" disabled={busy || editingConnected || !selectedId || !pivotPoint} onClick={() => rotateLocal(axis, -1)}>Local {axis} −</Button>
+        <Button type="button" disabled={busy || editingConnected || !selectedId || !pivotPoint} onClick={() => rotateLocal(axis, 1)}>Local {axis} +</Button>
+      </div>)}
+      {canSetLength ? <Button type="button" disabled={busy || editingConnected || !pivotPoint} onClick={() => {
+        try { orient({ x: 0, y: 0, z: 0, w: 1 }); } catch { setNotice('Enter finite coordinates and rotation angles.'); return; }
+        setNotice('Straight length aligned vertically with model Z. Save to apply in 3D.');
+      }}>Vertical (model Z)</Button> : null}
+    </section>
     <form onSubmit={event => { void save(event); }} aria-label="Save component position">
+      <Caption1>Orientation values show the resulting model XYZ angles. Use Local x/y/z and Rotation step above to rotate about the selected point.</Caption1>
       <Field label="Length (mm)" validationState={canSetLength && !validLength ? 'error' : 'none'}
         validationMessage={canSetLength && !validLength ? 'Enter 1–6000 mm.' : undefined}
         hint={editingConnected && canSetLength ? 'Disconnect this component before changing its length.' :
@@ -443,9 +502,10 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
           onChange={(_, data) => { setLengthMm(data.value); setPendingSnap(null); }} />
       </Field>
       {(['x', 'y', 'z', 'rx', 'ry', 'rz'] as const).map(axis => <Field key={axis}
-        label={['x','y','z'].includes(axis) ? `${axis.toUpperCase()} (mm)` : `Rotation ${axis.slice(1).toUpperCase()} (degrees)`}>
+        label={['x','y','z'].includes(axis) ? `${axis.toUpperCase()} (mm)` : `Orientation ${axis.slice(1).toUpperCase()} (degrees)`}>
         <Input type="number" step="any" aria-label={axis} value={coordinates[axis]}
-          disabled={busy} onChange={(_, data) => { setPendingSnap(null); setCoordinates(old => ({ ...old, [axis]: data.value })); }} />
+          readOnly={axis.startsWith('r')}
+          disabled={busy || (editingConnected && axis.startsWith('r'))} onChange={(_, data) => { setPendingSnap(null); setCoordinates(old => ({ ...old, [axis]: data.value })); }} />
       </Field>)}
       <Button type="submit" appearance="primary" disabled={busy || !selectedId}>{editing ? 'Update saved position' : 'Save new component'}</Button>
       <Button type="button" disabled={busy} onClick={() => { setEditingId(''); setPendingSnap(null); setCoordinates(empty); }}>New position</Button>
