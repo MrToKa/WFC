@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Body1, Button, Tab, TabList, TabValue, Title3 } from '@fluentui/react-components';
+import { Body1, Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Tab, TabList, TabValue, Title3 } from '@fluentui/react-components';
+import type { MaterialTray } from '@/api/client';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
@@ -57,6 +58,8 @@ export const Materials = () => {
   const [pageSizes, setPageSizes] = useState<Record<string, number>>(returnState?.pageSizes ?? {});
   const isAdmin = Boolean(user?.isAdmin);
   const componentsEnabled = import.meta.env.VITE_CAD_DESIGN_ENABLED === 'true';
+  const [stepTray, setStepTray] = useState<MaterialTray | null>(null);
+  const [stepBusy, setStepBusy] = useState(false);
   const requestedTab = parseMaterialsTab(searchParams.get('tab'));
   const selectedTab =
     requestedTab === 'components' && !componentsEnabled ? 'cableTypes' : requestedTab;
@@ -467,6 +470,7 @@ export const Materials = () => {
               }
               onDelete={traysHook.handleTrayDelete}
               onAssignLoadCurve={traysHook.openTrayLoadCurveDialog}
+              onStep={componentsEnabled ? setStepTray : undefined}
               token={token}
               page={traysHook.trayPage}
               totalPages={trayTotalPages}
@@ -704,6 +708,16 @@ export const Materials = () => {
         onClose={supportsHook.closeSupportDialog}
         dialogActionsClassName={styles.dialogActions}
       />
+      <Dialog open={Boolean(stepTray && componentsEnabled)} onOpenChange={(_, data) => { if (!data.open && !stepBusy) setStepTray(null); }}>
+        <DialogSurface><DialogBody>
+          <DialogTitle>STEP file — {stepTray?.manufacturer} {stepTray?.type}</DialogTitle>
+          <DialogContent>
+            {stepTray && componentsEnabled ? <MaterialComponentsSection key={`${stepTray.id}:${token}`} token={token} isAdmin={isAdmin}
+              materialTrayId={stepTray.id} onBusyChange={setStepBusy} /> : null}
+          </DialogContent>
+          <DialogActions><Button disabled={stepBusy} onClick={() => setStepTray(null)}>Close</Button></DialogActions>
+        </DialogBody></DialogSurface>
+      </Dialog>
       <LoadCurveDialog
         open={loadCurvesHook.isLoadCurveDialogOpen}
         mode={loadCurvesHook.loadCurveDialogMode}

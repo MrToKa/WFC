@@ -18,6 +18,7 @@ type TraysTableProps = {
   onEdit: (tray: MaterialTray) => void;
   onDelete: (tray: MaterialTray) => void;
   onAssignLoadCurve: (tray: MaterialTray) => void;
+  onStep?: (tray: MaterialTray) => void;
   token: string | null;
   page: number;
   totalPages: number;
@@ -52,6 +53,7 @@ export const TraysTable = ({
   onEdit,
   onDelete,
   onAssignLoadCurve,
+  onStep,
   token,
   page,
   totalPages,
@@ -145,6 +147,9 @@ export const TraysTable = ({
                       <Button size="small" onClick={() => onDetails(tray)}>
                         Details
                       </Button>
+                      {onStep ? <Button size="small" onClick={() => onStep(tray)} disabled={isBusy || isSubmitting}>
+                        STEP file
+                      </Button> : null}
                       {isAdmin ? (
                         <>
                           <Button

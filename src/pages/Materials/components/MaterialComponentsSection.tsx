@@ -66,9 +66,13 @@ async function catalogueRequest<T>(
 export function MaterialComponentsSection({
   token,
   isAdmin,
+  materialTrayId,
+  onBusyChange,
 }: {
   token: string | null;
   isAdmin: boolean;
+  materialTrayId?: string;
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const styles = useStyles();
   const [families, setFamilies] = useState<Family[]>([]);
@@ -92,6 +96,7 @@ export function MaterialComponentsSection({
   const fileInput = useRef<HTMLInputElement>(null);
   const assetLoad = useRef<AbortController | null>(null);
   const selected = components.find((component) => component.id === selectedId);
+  useEffect(() => { onBusyChange?.(busy); }, [busy, onBusyChange]);
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
@@ -105,6 +110,7 @@ export function MaterialComponentsSection({
         if (signal?.aborted) return;
         setFamilies(familyResult.families);
         setComponents(componentResult.components);
+        if (materialTrayId) setSelectedId(componentResult.components.find(component => component.materialTrayId === materialTrayId)?.id ?? '');
       } catch (caught) {
         if (!signal?.aborted)
           setError(caught instanceof Error ? caught.message : 'Cannot load components.');
@@ -112,7 +118,7 @@ export function MaterialComponentsSection({
         if (!signal?.aborted) setLoading(false);
       }
     },
-    [token],
+    [token, materialTrayId],
   );
 
   useEffect(() => {
@@ -262,10 +268,10 @@ export function MaterialComponentsSection({
 
   return (
     <section className={styles.root} aria-label="Materials components">
-      <Title3>Product components and STEP</Title3>
+      <Title3>{materialTrayId ? 'Tray STEP file' : 'Product components and STEP'}</Title3>
       <Body1>
-        Each straight, bend, tee or fitting has its own part number within a product family.
-        Routings builder uses these shared Materials components.
+        {materialTrayId ? 'Add a STEP file or upload a replacement as a new revision. Existing placed parts retain their original revision.' :
+          'Each straight, bend, tee or fitting has its own part number within a product family. Routings builder uses these shared Materials components.'}
       </Body1>
       {loading ? <Spinner size="tiny" label="Loading components" /> : null}
       {error ? <div role="alert">{error}</div> : null}
@@ -279,9 +285,9 @@ export function MaterialComponentsSection({
           void load();
         }}
       >
-        Refresh components
+        {materialTrayId ? 'Refresh STEP files' : 'Refresh components'}
       </Button>
-      {isAdmin ? (
+      {isAdmin && !materialTrayId ? (
         <>
           <form className={styles.form} aria-label="Create product family" onSubmit={createFamily}>
             <Field label="Family manufacturer">
@@ -384,6 +390,7 @@ export function MaterialComponentsSection({
           </form>
         </>
       ) : null}
+      {!materialTrayId ? <>
       <Field label="Filter product family">
         <Select
           aria-label="Filter product family"
@@ -432,10 +439,11 @@ export function MaterialComponentsSection({
       {!visible.length && !loading ? (
         <Body1>No components match. Add real catalogue parts with independent part numbers.</Body1>
       ) : null}
+      </> : null}
       {selected ? (
         <section className={styles.root} aria-label="Component STEP revisions">
           <Title3>{selected.partNumber} — STEP revisions</Title3>
-          {selected.materialTrayId ? (
+          {selected.materialTrayId && !materialTrayId ? (
             <Link to={`/materials/trays/${selected.materialTrayId}`}>
               Open straight tray material, image and load curve
             </Link>
@@ -463,7 +471,7 @@ export function MaterialComponentsSection({
                 Up to 8 MiB. A new revision preserves previous STEP files and project references.
               </Caption1>
               <Button type="submit" disabled={busy || !token || !file}>
-                {busy ? 'Saving…' : 'Upload STEP revision'}
+                {busy ? 'Saving…' : materialTrayId ? assets.length ? 'Upload replacement STEP' : 'Add STEP file' : 'Upload STEP revision'}
               </Button>
             </form>
           ) : null}
@@ -485,7 +493,7 @@ export function MaterialComponentsSection({
           {!assets.length ? <Body1>No STEP revisions for this component.</Body1> : null}
         </section>
       ) : (
-        <Body1>Select a component to view its STEP revisions.</Body1>
+        <Body1>{materialTrayId ? loading ? 'Loading tray STEP files…' : 'The linked catalogue component is unavailable. Refresh and try again.' : 'Select a component to view its STEP revisions.'}</Body1>
       )}
     </section>
   );
