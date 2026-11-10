@@ -8,3 +8,5 @@ export function validateTrayIdentityRequest(value: unknown): value is TrayIdenti
 export function validateTrayIdentityResponse(value: unknown): value is TrayIdentityResponse;
 export function readTrayObjectIdentities(model: object, objectIds: number[], options?: TrayIdentityOptions): Promise<Array<{ objectId: number; identity: TrayObjectIdentity }>>;
 export function resolveTrayObjectIdentities(model: object, identities: TrayObjectIdentity[], options?: TrayIdentityOptions): Promise<TrayIdentityMatch[]>;
+
+export function readModelObjectGuid(model: object, objectId: number, options?: TrayIdentityOptions): Promise<string | null>;

@@ -428,6 +428,16 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
     pickPoint: (): Promise<PickedPoint | null> => viewerAction(viewer => viewer.pickPoint()), cancelPicking: () => runRef.current?.viewer?.cancelPicking(),
     readObjects: (query: string, cursor = 0): Promise<ViewerModelObjectsPage | null> => viewerAction(viewer => viewer.readModelObjects(cursor, query)),
     readSelection: () => viewerAction(viewer => viewer.readSelection()), readTrayRootSelection, showTray, hideTray,
+    readObjectGuid: async (sdkObjectId: number): Promise<string | null> => {
+      const run = runRef.current;
+      if (!run || !live(run) || latestView.current.viewerPhase !== 'ready' || latestView.current.busy || !run.viewer
+        || projectPreparationCapture.current || planningCapture.current || lookupCapture.current) return null;
+      const viewer = run.viewer, generation = run.generation;
+      try {
+        const guid = await viewer.readObjectGuid(sdkObjectId);
+        return live(run) && run.viewer === viewer && run.generation === generation && latestView.current.viewerPhase === 'ready' ? guid : null;
+      } catch { return null; }
+    },
     showLocation: async (sdkObjectId: number, sdkObjectIds?: number[]): Promise<boolean> => {
       const objectIds = sdkObjectIds ? [...sdkObjectIds] : undefined;
       return (await viewerAction(async viewer => {

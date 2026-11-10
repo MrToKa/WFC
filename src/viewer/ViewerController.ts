@@ -136,6 +136,11 @@ export class ViewerController {
         this.emit('ERROR', { code: tray ? 'TRAY_UNAVAILABLE' : 'LOCATION_UNAVAILABLE', message: tray ? 'The tray could not be shown. Try again.' : 'The location could not be shown. Try again.', retryable: true, operation: pending.envelope.type });
         return;
       }
+      if (pending.envelope.type === 'READ_OBJECT_GUID') {
+        const cancelId = this.cancel(pending.envelope.requestId), cancellation = this.pending.get(cancelId);
+        if (cancellation) { window.clearTimeout(cancellation.timer); this.pending.delete(cancelId); }
+        return;
+      }
       if (pending.envelope.type === 'READ_TRAY_ROOT_SELECTION') {
         const cancelId = this.cancel(pending.envelope.requestId), cancellation = this.pending.get(cancelId);
         // A lost metadata reply or cleanup ACK does not unload the current
@@ -219,7 +224,7 @@ export class ViewerController {
       pending.reject?.(new ViewerAccessError(String(message.payload.code), 0));
       if (pending.envelope.type === 'LOAD_MODEL' || ['SESSION_EXPIRED', 'ACCESS_REVOKED', 'MODEL_SELECTION_CHANGED', 'BARRIER_CAPTURE_MODEL_CHANGED', 'MODEL_UNAVAILABLE', 'RESOURCE_FAILED'].includes(String(message.payload.code))) {
         this.fail(String(message.payload.code));
-      } else if (!(pending.envelope.type === 'READ_TRAY_ROOT_SELECTION' && pending.quietRecoverableErrors)) this.emit('ERROR', message.payload, message.requestId, identity);
+      } else if (!(['READ_TRAY_ROOT_SELECTION', 'READ_OBJECT_GUID'].includes(pending.envelope.type) && pending.quietRecoverableErrors)) this.emit('ERROR', message.payload, message.requestId, identity);
       return;
     }
     if (message.type === 'RUNTIME_READY') {
@@ -600,6 +605,17 @@ export class ViewerController {
       if (!await this.checkSelection()) throw new DOMException('Tray identity check cancelled.', 'AbortError'); current();
       return response;
     } finally { options.signal?.removeEventListener('abort', abort); }
+  }
+
+  async readObjectGuid(sdkObjectId: number): Promise<string | null> {
+    if (!Number.isSafeInteger(sdkObjectId) || sdkObjectId <= 0 || sdkObjectId > 2147483647) throw new Error('Invalid object');
+    const load = this.getLoadSnapshot();
+    const current = () => { const now = this.getLoadSnapshot(); return !!load?.ready && !!now?.ready && now.instanceId === load.instanceId
+      && now.loadId === load.loadId && now.modelVersionId === load.modelVersionId && now.selectionRevision === load.selectionRevision; };
+    if (!current() || !await this.checkSelection() || !current()) throw new Error('Model is not ready');
+    const reply = await this.sendAsync('READ_OBJECT_GUID', { sdkObjectId }, 'OBJECT_GUID', { quietRecoverableErrors: true });
+    if (!current() || reply.payload.sdkObjectId !== sdkObjectId) throw new Error('Object GUID context changed');
+    return reply.payload.guid as string | null;
   }
 
   async readSelection(): Promise<ViewerSelection> {

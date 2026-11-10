@@ -30,6 +30,7 @@ function fixture(options = {}) {
     readPreparationObjects: options.readPreparationObjects ?? (async request => ({schemaVersion:request.schemaVersion,mode:request.mode,names:request.names,rootObjectId:request.rootObjectId,cursor:request.cursor,matchingPolicyVersion:'wfc.pf.project-exact-candidates.v3',visibilityScope:{...preparationVisibilityScope},indexedObjectCount:1,propertyScan:null,objects:[],nextCursor:null,complete:true})),
     resolveTrayIdentities: options.resolveTrayIdentities ?? (async request => ({ schemaVersion: 'wfc.pf.tray-identity-response.v1', matches: request.identities.map(identity => ({ identity, status: 'missing', objectIds: [] })) })),
     readSelection: options.readSelection ?? (async () => ({ coordinateFrame: 'world-metres-z-up', metresPerDisplayUnit: 1, globalOffsetMetres: [0, 0, 0], objects: [] })),
+    readObjectGuid: options.readObjectGuid ?? (async () => null),
     readTrayRootSelection: options.readTrayRootSelection ?? (async (_signal, beforeCommit) => { await beforeCommit(); return { objects: [] }; }),
     setPathTransparency: options.setPathTransparency ?? (async (percent, _signal, beforeCommit) => { await beforeCommit(); facts.transparency = percent; }),
     showLocation: options.showLocation ?? (async (sdkObjectId, _signal, beforeCommit) => { await beforeCommit(); facts.location = sdkObjectId; }),
@@ -1094,4 +1095,52 @@ test('a saturated command registry still admits replay-safe CANCEL and terminal 
   assert.equal(f.messages('DISPOSED')[0].requestId, dispose.requestId); assert.equal(f.messages('DISPOSED').length, 1);
   assert.equal(f.facts.disposed, 1); assert.equal(f.listeners.size, 0); assert.ok(f.facts.finishes > 0);
   assert.equal(f.messages('MODEL_LOADED').length, 0); assert.equal(f.bridge.getState().requests, 4096);
+});
+
+
+test('passive object GUID reads authorize before and after metadata without changing appearance', async () => {
+  const reads = [], guid = '7586ffbb-1d0a-5942-b687-06884123c866';
+  const f = fixture({ readObjectGuid: async (id, signal) => { assert.equal(signal.aborted, false); reads.push(id); return guid; } });
+  await f.loaded(); const before = f.fetches.length;
+  const command = f.send('READ_OBJECT_GUID', { sdkObjectId: 29713 }); await turn();
+  assert.deepEqual(f.messages('OBJECT_GUID').at(-1)?.payload, { sdkObjectId: 29713, guid });
+  assert.equal(f.messages('OBJECT_GUID').at(-1)?.requestId, command.requestId);
+  assert.deepEqual(reads, [29713]);
+  assert.equal(f.fetches.slice(before).filter(x => x.url.endsWith('/pathfinder-authorization')).length, 2);
+  assert.equal(f.messages('ERROR').length, 0);
+  assert.equal(f.messages('ROUTE_CLEARED').length, 0);
+});
+test('unavailable GUID properties stay recoverable and a later read can succeed', async () => {
+  let fail = true;
+  const f = fixture({ readObjectGuid: async () => { if (fail) throw Object.assign(new Error('metadata unavailable'), { code: 'OBJECT_GUID_UNAVAILABLE' }); return null; } });
+  await f.loaded(); f.send('READ_OBJECT_GUID', { sdkObjectId: 29713 }); await turn();
+  assert.equal(f.messages('ERROR').at(-1)?.payload.code, 'OBJECT_GUID_UNAVAILABLE');
+  assert.equal(f.states.at(-1).phase, 'loaded');
+  fail = false; f.send('READ_OBJECT_GUID', { sdkObjectId: 29713 }); await turn();
+  assert.equal(f.messages('OBJECT_GUID').at(-1)?.payload.guid, null);
+});
+
+
+test('rapid GUID hovers retain a foreground slot and capacity refusals never unload the model', async () => {
+  const wait = deferred(), reads = [];
+  const f = fixture({ readObjectGuid: async id => { reads.push(id); await wait.promise; return null; } });
+  await f.loaded(); const first = f.send('READ_OBJECT_GUID', { sdkObjectId: 29713 }); await turn();
+  const second = f.send('READ_OBJECT_GUID', { sdkObjectId: 29714 }); await turn();
+  const third = f.send('READ_OBJECT_GUID', { sdkObjectId: 29715 }); await turn();
+  assert.deepEqual(reads, [29713]);
+  for (const request of [second, third]) assert.equal(f.messages('ERROR').find(x => x.requestId === request.requestId)?.payload.code, 'OBJECT_GUID_UNAVAILABLE');
+  assert.equal(f.states.at(-1).phase, 'loaded');
+  wait.resolve(); await turn();
+  assert.equal(f.messages('OBJECT_GUID').at(-1)?.requestId, first.requestId);
+  assert.equal(f.states.at(-1).phase, 'loaded');
+});
+test('a GUID hover while two foreground capabilities are pending remains a local refusal', async () => {
+  const wait = deferred();
+  const f = fixture({ readTrayRootSelection: async (_signal, beforeCommit) => { await wait.promise; await beforeCommit(); return { objects: [] }; } });
+  await f.loaded(); f.send('READ_TRAY_ROOT_SELECTION', {}); f.send('READ_TRAY_ROOT_SELECTION', {}); await turn();
+  const guid = f.send('READ_OBJECT_GUID', { sdkObjectId: 29713 }); await turn();
+  assert.equal(f.messages('ERROR').find(x => x.requestId === guid.requestId)?.payload.code, 'OBJECT_GUID_UNAVAILABLE');
+  assert.equal(f.states.at(-1).phase, 'loaded');
+  wait.resolve(); await turn();
+  assert.equal(f.messages('TRAY_ROOT_SELECTION').length, 2);
 });

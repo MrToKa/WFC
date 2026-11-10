@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readTrayObjectIdentities, resolveTrayObjectIdentities, TRAY_IDENTITY_LIMITS, validateTrayIdentityRequest, validateTrayIdentityResponse } from '../tray-identity.mjs';
+import { readModelObjectGuid, readTrayObjectIdentities, resolveTrayObjectIdentities, TRAY_IDENTITY_LIMITS, validateTrayIdentityRequest, validateTrayIdentityResponse } from '../tray-identity.mjs';
 
 const G = '7586ffbb-1d0a-5942-b687-06884123c866', H = '00000000-0000-4000-8000-000000000099';
 const identity = changes => ({ externalId: null, guid: G, sourceFile: '01-50_MSR_Kabeltassen.dwg', ...changes });
@@ -199,4 +199,17 @@ test('strict request and result envelopes retain bounded IDs and ambiguity seman
   assert.equal(validateTrayIdentityResponse(result), true);
   assert.equal(validateTrayIdentityResponse({ ...result, matches: [{ ...result.matches[0], status: 'ambiguous' }] }), false);
   assert.equal(validateTrayIdentityResponse({ ...result, matches: [{ ...result.matches[0], objectIds: [-1] }] }), false);
+});
+
+
+test('passive GUID reads only the requested properties without tree, external index or appearance changes', async () => {
+  const f = fixture([[29713, properties()]]);
+  f.model.getObjectTree = () => { throw new Error('No model scan'); };
+  f.model.getExternalIdMapping = () => { throw new Error('No external scan'); };
+  assert.equal(await readModelObjectGuid(f.model, 29713), G);
+  assert.deepEqual(f.calls, [[29713]]);
+  f.rows.set(29713, [...properties(), { displayName: 'GUID', displayValue: H }]);
+  assert.equal(await readModelObjectGuid(f.model, 29713), null);
+  f.rows.set(29713, []); assert.equal(await readModelObjectGuid(f.model, 29713), null);
+  await assert.rejects(readModelObjectGuid(f.model, -1), { code: 'TRAY_IDENTITY_SCOPE_INVALID' });
 });

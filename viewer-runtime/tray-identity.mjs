@@ -108,6 +108,13 @@ async function propertyRows(model, ids, options, check, budget) {
     found.set(objectId, propertyIdentity(props, count, check)); }
   return found;
 }
+/** One passive tooltip read; never builds the model-wide identity inventory. */
+export async function readModelObjectGuid(model, objectId, options = {}) {
+  if (!id(objectId)) throw fail('TRAY_IDENTITY_SCOPE_INVALID');
+  const check = operation(options), rows = await propertyRows(model, [objectId], options, check,
+    { remaining: TRAY_IDENTITY_LIMITS.scannedProperties });
+  check(); return rows.get(objectId)?.guid ?? null;
+}
 export async function readTrayObjectIdentities(model, objectIds, options = {}) {
   if (!Array.isArray(objectIds) || objectIds.length > 512 || !objectIds.every(id) || new Set(objectIds).size !== objectIds.length) throw fail('TRAY_IDENTITY_SCOPE_INVALID');
   const check = operation(options), index = await inventory(model, options, check), found = new Map(), budget = { remaining: TRAY_IDENTITY_LIMITS.scannedProperties };

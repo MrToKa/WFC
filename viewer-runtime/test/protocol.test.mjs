@@ -252,3 +252,17 @@ test('progress rejects fabricated invalid totals and descriptor pins the complet
   assert.deepEqual(validateDescriptor(descriptor, identity), descriptor);
   for (const change of [{ loadId: uuid(99) }, { entrypoint: 'https://example.com/0.svf' }, { sdkVersion: '7.131.0' }, { jwt: 'secret' }, { resourceCount: 0 }, { totalBytes: 8589934593 }]) assert.equal(validateDescriptor({ ...descriptor, ...change }, identity), null);
 });
+
+
+test('passive object GUID messages are bounded, directional and bound to the current model load', () => {
+  const request = { sdkObjectId: 29713 }, reply = { ...request, guid: '7586ffbb-1d0a-5942-b687-06884123c866' };
+  assert.ok(validateEnvelope(envelope('READ_OBJECT_GUID', request), 'parent-to-frame'));
+  assert.ok(validateEnvelope(envelope('OBJECT_GUID', reply), 'frame-to-parent'));
+  assert.ok(validateEnvelope(envelope('OBJECT_GUID', { ...reply, guid: null }), 'frame-to-parent'));
+  assert.equal(validateEnvelope(envelope('OBJECT_GUID', reply), 'parent-to-frame'), null);
+  assert.equal(validateEnvelope(envelope('READ_OBJECT_GUID', request), 'frame-to-parent'), null);
+  for (const sdkObjectId of [-1, 0, 0.1, 2147483648, '29713']) assert.equal(validateEnvelope(envelope('READ_OBJECT_GUID', { sdkObjectId })), null);
+  for (const guid of ['dbid:29713', 'not-guid', 3]) assert.equal(validateEnvelope(envelope('OBJECT_GUID', { ...reply, guid })), null);
+  assert.equal(validateEnvelope(envelope('READ_OBJECT_GUID', request, { modelVersionId: null, loadId: null })), null);
+  assert.equal(validateEnvelope(envelope('OBJECT_GUID', reply, { modelVersionId: null, loadId: null })), null);
+});

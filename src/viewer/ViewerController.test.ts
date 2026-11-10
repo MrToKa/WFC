@@ -93,6 +93,28 @@ describe('PathFinder protected Viewer capabilities', () => {
     s.message('MODEL_LOADED', { sdkVersion: '7.130.0', format: 'svf', nodeIndexReady: true }, command.requestId, identity);
     return { ...s, identity };
   }
+  it('reads one object GUID quietly without changing route or selection and rejects substituted object IDs', async () => {
+    const s = await loaded(), guid = '7586ffbb-1d0a-5942-b687-06884123c866';
+    s.send.mockImplementation(value => {
+      if (value.type === 'READ_OBJECT_GUID') s.message('OBJECT_GUID', { sdkObjectId: value.payload.sdkObjectId, guid }, value.requestId, s.identity);
+    });
+    for (const id of [-1, 0, 0.1, 2147483648]) await expect(s.c.readObjectGuid(id)).rejects.toThrow('Invalid object');
+    expect(s.send.mock.calls.some(call => call[0].type === 'READ_OBJECT_GUID')).toBe(false);
+    expect(await s.c.readObjectGuid(29713)).toBe(guid);
+    expect(s.send.mock.calls.some(call => ['CLEAR_ROUTE', 'SHOW_LOCATION', 'SHOW_TRAY', 'READ_SELECTION'].includes(call[0].type))).toBe(false);
+    s.send.mockImplementation(value => {
+      if (value.type === 'READ_OBJECT_GUID') s.message('OBJECT_GUID', { sdkObjectId: 999, guid }, value.requestId, s.identity);
+    });
+    await expect(s.c.readObjectGuid(29713)).rejects.toThrow('Object GUID context changed');
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+  });
+  it('keeps GUID tooltip timeouts local without unloading the model', async () => {
+    const s = await loaded(), read = s.c.readObjectGuid(29713), failed = expect(read).rejects.toThrow();
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'READ_OBJECT_GUID')).toBe(true));
+    await vi.advanceTimersByTimeAsync(10001); await failed;
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+    expect(s.events.filter(e => e.type === 'ERROR')).toHaveLength(0);
+  });
   async function trayDisplayed() {
     const s = await loaded();
     s.send.mockImplementation(value => {
