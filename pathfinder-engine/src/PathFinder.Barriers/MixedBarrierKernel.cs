@@ -30,7 +30,8 @@ public sealed record MixedBarrierBuildLimits
     public int MaximumParents { get; init; } = 128;
     public BarrierLimits Geometry { get; init; } = new();
 }
-public sealed record MixedBarrierBuildResult(BarrierBuildStatus Status, MixedBarrierKernel? Kernel, IReadOnlyList<BarrierDiagnostic> Diagnostics, long Work);
+public sealed record MixedBarrierBuildResult(BarrierBuildStatus Status, MixedBarrierKernel? Kernel, IReadOnlyList<BarrierDiagnostic> Diagnostics, long Work,
+    IReadOnlyList<string>? RefusalObjectIds = null);
 public sealed record MixedBarrierQueryLimits
 {
     public long MaximumWork { get; init; } = 2_000_000;
@@ -213,7 +214,18 @@ public sealed class MixedBarrierKernel
             {
                 budget.Check(); var qualified = BarrierCollisionKernel.Build(closed, geometry with { MaximumBuildWork = budget.RemainingWork, MaximumBuildMilliseconds = budget.RemainingMilliseconds }, cancellationToken);
                 budget.Spend(qualified.Work);
-                if (qualified.Status != BarrierBuildStatus.Ready || qualified.Kernel is null) Refuse("CLOSED_SOLID_QUALIFICATION_REFUSED", "Independent unchanged closed-solid qualification refused: " + string.Join("; ", qualified.Diagnostics.Take(4).Select(value => value.Code)));
+                if (qualified.Status != BarrierBuildStatus.Ready || qualified.Kernel is null)
+                {
+                    // The closed verifier identifies the exact failed component.
+                    // Attribute only that component's original owners. A global
+                    // resource failure has no such witness and names no object.
+                    var failedId = qualified.Diagnostics.Count == 1 ? qualified.Diagnostics[0].BarrierId : null;
+                    var failed = failedId is null ? null : components.Find(component => component.Id == failedId);
+                    var owners = failed?.Triangles.Select(triangle => triangle.Source.OwnerObjectId).Distinct(StringComparer.Ordinal)
+                        .Take(17).Order(StringComparer.Ordinal).ToArray();
+                    Refuse("CLOSED_SOLID_QUALIFICATION_REFUSED", "Independent unchanged closed-solid qualification refused: "
+                        + string.Join("; ", qualified.Diagnostics.Take(4).Select(value => value.Code)), owners is { Length: > 0 and <= 16 } ? Array.AsReadOnly(owners) : null);
+                }
             }
             string sourceHash = SourceHash(components, fragments, budget);
             var summary = new MixedBarrierSummary(components.Count, surfaceCount, closed.Count, fragments.Count, vertexCount, triangleCount, sourceHash,
@@ -226,11 +238,11 @@ public sealed class MixedBarrierKernel
                 else { if (edge.Second >= 0) Refuse("NONMANIFOLD_EDGE", "More than two original triangles share an exactly welded edge."); if (edge.Direction == direction) Refuse("INCONSISTENT_WINDING", "Adjacent original faces have inconsistent winding; no orientation repair was attempted."); edges[key] = edge with { Second = index }; }
             }
         }
-        catch (MixedRefusal error) { return new(BarrierBuildStatus.Refused, null, Array.AsReadOnly(new[] { new BarrierDiagnostic(error.Code, error.Message) }), budget.Work); }
+        catch (MixedRefusal error) { return new(BarrierBuildStatus.Refused, null, Array.AsReadOnly(new[] { new BarrierDiagnostic(error.Code, error.Message) }), budget.Work, error.ObjectIds); }
         catch (InvalidOperationException error) when (error.InnerException is MixedRefusal)
         {
             var refusal = (MixedRefusal)error.InnerException;
-            return new(BarrierBuildStatus.Refused, null, Array.AsReadOnly(new[] { new BarrierDiagnostic(refusal.Code, refusal.Message) }), budget.Work);
+            return new(BarrierBuildStatus.Refused, null, Array.AsReadOnly(new[] { new BarrierDiagnostic(refusal.Code, refusal.Message) }), budget.Work, refusal.ObjectIds);
         }
         catch (InvalidOperationException error) when (error.InnerException is OperationCanceledException)
         { System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(error.InnerException).Throw(); throw; }
@@ -336,8 +348,9 @@ public sealed class MixedBarrierKernel
         foreach (var component in components) { budget.Spend(); Text(component.Id); Text(component.Kind.ToString()); Number(component.Triangles.Length); foreach (var t in component.Triangles) { budget.Spend(); Number(t.Source.FragmentId); Number(t.LocalTriangleIndex); Number(t.OriginalVertexA); Number(t.OriginalVertexB); Number(t.OriginalVertexC); Point(t.A); Point(t.B); Point(t.C); } }
         return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
     }
-    [System.Diagnostics.CodeAnalysis.DoesNotReturn] private static void Refuse(string code, string reason) => throw new MixedRefusal(code, reason);
-    private sealed class MixedRefusal(string code, string reason) : Exception(reason) { internal string Code { get; } = code; }
+    [System.Diagnostics.CodeAnalysis.DoesNotReturn] private static void Refuse(string code, string reason, IReadOnlyList<string>? objectIds = null) => throw new MixedRefusal(code, reason, objectIds);
+    private sealed class MixedRefusal(string code, string reason, IReadOnlyList<string>? objectIds) : Exception(reason)
+    { internal string Code { get; } = code; internal IReadOnlyList<string>? ObjectIds { get; } = objectIds; }
     private sealed class MixedBudget(long maximum, int milliseconds, CancellationToken token)
     {
         private readonly long started = Stopwatch.GetTimestamp(); internal long Work { get; private set; }

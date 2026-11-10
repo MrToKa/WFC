@@ -736,7 +736,7 @@ export class ViewerController {
   async captureBarriers(request: BarrierCaptureRequest, options: { signal?: AbortSignal; isCurrent?: () => boolean } = {}) {
     if (!validateBarrierCaptureRequest(request) || this.disposed || !this.loaded) throw new Error('Barrier capture is unavailable');
     const input: BarrierCaptureRequest = JSON.parse(JSON.stringify(request));
-    this.clear('selection', { preserveCamera: true });
+    this.clear('selection', { preserveCamera: true, preserveSelection: true });
     const generation = this.routeGeneration, { instanceId, modelVersionId, loadId } = this;
     if (!loadId || !modelVersionId || input.scope.projectId !== this.options.projectId || input.scope.modelVersionId !== modelVersionId
       || input.scope.selectionRevision !== String(this.selectionRevision)) throw new Error('Barrier capture scope changed');
@@ -985,9 +985,9 @@ export class ViewerController {
     this.routeRequestId = null;
     this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'READ_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'SET_PATH_TRANSPARENCY', 'SHOW_LOCATION', 'SHOW_TRAY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE']);
   }
-  clear(reason: 'user' | 'empty' | 'selection' | 'model-change' | 'logout' = 'user', options: { preserveCamera?: boolean } = {}): string {
+  clear(reason: 'user' | 'empty' | 'selection' | 'model-change' | 'logout' = 'user', options: { preserveCamera?: boolean; preserveSelection?: boolean } = {}): string {
     this.resetRouteRequests();
-    return this.send('CLEAR_ROUTE', { reason, ...(options.preserveCamera ? { preserveCamera: true } : {}) }, 'ROUTE_CLEARED');
+    return this.send('CLEAR_ROUTE', { reason, ...(options.preserveCamera ? { preserveCamera: true } : {}), ...(options.preserveSelection ? { preserveSelection: true } : {}) }, 'ROUTE_CLEARED');
   }
   zoom(): string {
     if (!this.routeRequestId) throw new Error('No drawable route');

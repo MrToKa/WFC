@@ -135,6 +135,20 @@ Run("actual Aalborg2772 retains every triangle and bit while both reconnecting o
 Run("a self-intersecting closed candidate cannot downgrade into a surface", () => {
     var box = Box(); var vertices = box.Vertices.ToArray(); vertices[6] = P(.1, 0, -3); Refused(Capture(box with { Vertices = vertices }), code: "CLOSED_SOLID_QUALIFICATION_REFUSED");
 });
+Run("closed-solid refusal attributes only the witnessed original component owners", () => {
+    var box = Box(); var vertices = box.Vertices.ToArray(); vertices[6] = P(.1, 0, -3); var invalid = box with { Vertices = vertices };
+    var first = Input(Transform(Box(), p => p with { X = p.X + 20 }), fragment: 1);
+    var second = Input(invalid, fragment: 2); second = second with { Source = second.Source with { OwnerObjectId = "dbid:20" } };
+    var built = MixedBarrierKernel.Build([first, second]);
+    Need(built.Status == BarrierBuildStatus.Refused && built.Diagnostics.Single().Code == "CLOSED_SOLID_QUALIFICATION_REFUSED");
+    Need(built.RefusalObjectIds is not null && built.RefusalObjectIds.SequenceEqual(new[] { "dbid:20" }));
+    var receipt = MixedBarrierCaptureVerifier.Verify(Bytes(Capture(invalid))).Receipt;
+    Need(receipt.Status == "refused" && receipt.Diagnostics.Single().ObjectIds!.SequenceEqual(new[] { "dbid:10" }));
+    using var json = JsonDocument.Parse(MixedBarrierCaptureVerifier.ReceiptBytes(receipt));
+    Need(json.RootElement.GetProperty("diagnostics")[0].GetProperty("objectIds")[0].GetString() == "dbid:10");
+    var global = MixedBarrierKernel.Build([first, second], new() { Geometry = new() { MaximumBuildWork = 1 } });
+    Need(global.Status == BarrierBuildStatus.Refused && global.RefusalObjectIds is null);
+});
 Run("split fragments and overlapping selected parents preserve exact source ownership and original indices", () => {
     var result = Ready(Capture(Wall(), splitTriangles: true, sharedParents: true)); var triangles = result.Qualified!.Components.Single().Triangles;
     Need(triangles.Count == 2 && triangles[0].Source.FragmentId == 1 && triangles[1].Source.FragmentId == 2);

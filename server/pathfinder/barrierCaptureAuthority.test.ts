@@ -104,10 +104,20 @@ describe('explicit original-surface policy qualification dispatch', () => {
     await expect(f.adapters.qualifyCapture(f.input, new AbortController().signal)).rejects.toMatchObject({ code: 'BARRIER_VERIFIER_CAPTURE_MISMATCH' });
   });
   it('binds a mixed logical refusal to the exact same protected capture and full frame without converting operational errors', async () => {
-    const f = mixedFixture(); f.executeMixed.mockRejectedValueOnce(new BarrierGeometryRefusal(f.input.captureSha256, f.state.implementationSha256));
+    const f = mixedFixture(), diagnostics = [{ code: 'CLOSED_SOLID_QUALIFICATION_REFUSED',
+      message: 'Independent unchanged closed-solid qualification refused: ill_conditioned_geometry', objectIds: ['dbid:10'] }];
+    f.executeMixed.mockRejectedValueOnce(new BarrierGeometryRefusal(f.input.captureSha256, f.state.implementationSha256, 'mixed-v2-2048', diagnostics));
     await f.adapters.currentScope(f.client, f.scope.projectId);
-    await expect(f.adapters.qualifyCapture(f.input, new AbortController().signal)).rejects.toMatchObject({ captureSha256: f.input.captureSha256, frameSha256: f.frame.contentSha256 });
+    await expect(f.adapters.qualifyCapture(f.input, new AbortController().signal)).rejects.toMatchObject({ captureSha256: f.input.captureSha256,
+      frameSha256: f.frame.contentSha256, diagnostics });
     expect(f.execute).not.toHaveBeenCalled();
+  });
+  it('refuses native diagnostic source identities outside the exact hashed capture', async () => {
+    const f = mixedFixture();
+    f.executeMixed.mockRejectedValueOnce(new BarrierGeometryRefusal(f.input.captureSha256, f.state.implementationSha256, 'mixed-v2-2048',
+      [{ code: 'CLOSED_SOLID_QUALIFICATION_REFUSED', message: 'Native failure', objectIds: ['dbid:999'] }]));
+    await f.adapters.currentScope(f.client, f.scope.projectId);
+    await expect(f.adapters.qualifyCapture(f.input, new AbortController().signal)).rejects.toMatchObject({ code: 'BARRIER_VERIFIER_CAPTURE_MISMATCH' });
   });
 });
 

@@ -109,7 +109,7 @@ describe.runIf(Boolean(testDll) && process.platform === 'linux')('PF-B2 actual L
     const rejected = runBarrierVerifier(openBytes, new AbortController().signal);
     await expect(rejected).rejects.toBeInstanceOf(BarrierGeometryRefusal);
     await expect(rejected).rejects.toMatchObject({ code: 'BARRIER_GEOMETRY_REFUSED', captureSha256: sha256(openBytes),
-      implementationSha256: expect.stringMatching(/^[a-f0-9]{64}$/) });
+      implementationSha256: expect.stringMatching(/^[a-f0-9]{64}$/), diagnostics: [{ code: 'OPEN_SHELL', message: 'Fragments do not form exactly welded closed shells.' }] });
     // A joined logical refusal releases the bounded lane for another invocation.
     expect((await runBarrierVerifier(bytes, new AbortController().signal)).result.status).toBe('geometry-qualified');
   }, 30000);

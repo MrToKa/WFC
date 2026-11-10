@@ -189,9 +189,10 @@ public static class BarrierCaptureVerifier
     }
 }
 
-internal sealed class VerifierRefusal(string code, string message) : Exception(message)
+internal sealed class VerifierRefusal(string code, string message, IReadOnlyList<string>? objectIds = null) : Exception(message)
 {
     internal string Code { get; } = code;
+    internal IReadOnlyList<string>? ObjectIds { get; } = objectIds;
 }
 internal sealed class VerifierBudget(long maximum, int milliseconds, CancellationToken token)
 {

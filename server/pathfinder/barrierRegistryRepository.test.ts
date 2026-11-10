@@ -367,6 +367,21 @@ describe('barrier immutable registry and trusted qualification boundary', () => 
     expect(await f.repository.readCaptureOutcome(id(1), f.who, intent.id, f.outcomeQuery(intent))).toMatchObject({ outcome: 'not-published', duplicate: true });
     expect(f.adapters.qualifyCapture).toHaveBeenCalledOnce(); expect(f.durable.snapshots.size).toBe(0);
   });
+  it('persists safe native refusal reasons and source witnesses without changing the existing good head or replay', async () => {
+    const f = fixture(), old = await f.repository.command(id(1), f.who, f.empty());
+    const { intent } = await f.repository.begin(id(1), f.who, { ...f.command, expectedRegistryRevision: '1' });
+    f.controls.qualifyError = new BarrierCaptureQualificationRefusal(barrierBytesHash(f.bytes(intent)), 'f'.repeat(64), '9'.repeat(64),
+      [{ code: 'CLOSED_SOLID_QUALIFICATION_REFUSED', message: 'Independent unchanged closed-solid qualification refused: ill_conditioned_geometry', objectIds: ['dbid:10'] },
+        { code: 'WORK_LIMIT', message: '/private/native/path and stderr detail' }]);
+    const refusal = await f.repository.publish(id(1), f.who, intent.id, f.bytes(intent));
+    expect(refusal).toMatchObject({ outcome: 'not-published', diagnostics: [
+      { code: 'CLOSED_SOLID_QUALIFICATION_REFUSED', message: 'A closed component failed independent solid verification. Verification reason: ill_conditioned_geometry.', objectIds: ['dbid:10'] },
+      { code: 'WORK_LIMIT', message: 'Geometry verification exhausted its work limit.' }] });
+    expect(f.durable.head?.snapshot_id).toBe(old.snapshot.snapshotId); expect(f.durable.snapshots.size).toBe(1);
+    expect(JSON.stringify(refusal)).not.toMatch(/private|stderr/);
+    expect(await f.repository.readCaptureOutcome(id(1), f.who, intent.id, f.outcomeQuery(intent))).toEqual({ ...refusal, duplicate: true });
+    expect(f.adapters.qualifyCapture).toHaveBeenCalledOnce();
+  });
   it.each(['token', 'deadline', 'clear-result'] as const)('does not mint refusal proof when its owned lease %s fails', async kind => {
     const f = fixture(), { intent } = await f.repository.begin(id(1), f.who, f.command); f.controls.qualifyError = f.refusal(intent);
     f.controls.duringQualify = () => {

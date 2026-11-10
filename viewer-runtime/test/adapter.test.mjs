@@ -237,6 +237,30 @@ test('Hide and repeated assignment cleanup restore Ghost without moving the curr
   handle.clearRoute(); assert.equal(fits, 2); // Explicit Clear/Restore still fits.
 });
 
+test('capture cleanup preserves selected objects with no display, a tray or a legacy route while user Clear still deselects', async () => {
+  for (const display of ['none', 'tray', 'legacy']) {
+    const f = sdkFixture({ trayVisibility: true }), previous = globalThis.window; globalThis.window = f.window;
+    try {
+      await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
+      const viewer = f.viewers[0];
+      if (display === 'tray') await handle.showTray([2]);
+      if (display === 'legacy') await handle.showRoute('BC1');
+      let selectedIds = [2, 3], fits = 0;
+      viewer.clearSelection = () => { selectedIds = []; };
+      viewer.fitToView = () => { fits++; };
+      handle.clearRoute({ preserveCamera: true, preserveSelection: true });
+      assert.deepEqual(selectedIds, [2, 3], display); assert.equal(fits, 0, display);
+      assert.equal(viewer.impl.fadeMaterial.opacity, 0.4, display);
+      assert.equal(f.model.visibilityManager.defaultVisible, true, display);
+      assert.deepEqual(f.model.visibilityManager.getVisibility(), [[3, false]], display);
+      handle.clearRoute({ preserveCamera: true, preserveSelection: true });
+      assert.deepEqual(selectedIds, [2, 3], 'Repeated capture cleanup retains selection');
+      handle.clearRoute();
+      assert.deepEqual(selectedIds, [], 'Explicit user Clear still deselects'); assert.equal(fits, 1, display);
+    } finally { f.adapter.dispose(); globalThis.window = previous; }
+  }
+});
+
 test('tray display validates the whole root set before any SDK mutation', async t => {
   const f = sdkFixture({ trayVisibility: true }), previous = globalThis.window; globalThis.window = f.window;
   t.after(() => { f.adapter.dispose(); globalThis.window = previous; });

@@ -199,6 +199,8 @@ describe('durable exact barrier publication outcomes', () => {
     });
     await act(() => view.result.current.save());
     expect(view.result.current.phase).toBe('refused'); expect(view.result.current.pending).toBe(false);
+    expect(view.result.current.error).toContain('No detailed verification reason was recorded');
+    expect(view.result.current.error).not.toContain('Change the selection');
     expect(view.result.current.registry?.snapshot).toEqual(previous); expect(await readPendingBarrierCommand(sessionStorage, scope.projectId)).toBeNull();
     expect(view.result.current.canAuthor).toBe(true); expect(view.result.current.draftParents).toEqual(savedDraft);
     const firstKey = vi.mocked(api.beginBarrierCapture).mock.calls[0]?.[2].idempotencyKey;
@@ -211,6 +213,43 @@ describe('durable exact barrier publication outcomes', () => {
     expect(vi.mocked(api.beginBarrierCapture).mock.calls[1]?.[2].selectedParents).toMatchObject([{ kind: 'floor', dbId: 174115 }]);
     expect(api.changeBarrierRegistry).not.toHaveBeenCalled(); expect(api.getBarrierCaptureOutcome).not.toHaveBeenCalled();
     for (const action of Object.values(f.appearance)) expect(action).not.toHaveBeenCalled();
+  });
+  it.each([
+    { code: 'NONMANIFOLD_EDGE' as const, message: 'More than two captured triangles share an edge.', objectIds: ['dbid:29711'], action: 'Check the reported geometry' },
+    { code: 'WORK_LIMIT' as const, message: 'Geometry verification exhausted its work limit.', action: 'check the verifier limits' },
+    { code: 'CLOSED_SOLID_QUALIFICATION_REFUSED' as const, message: 'A closed component failed independent solid verification. Verification reason: resource_limit.', action: 'check the verifier limits' },
+    { code: 'KERNEL_QUALIFICATION_REFUSED' as const, message: 'A closed component failed independent solid verification. Verification reason: deadline_exceeded.', action: 'check the verifier limits' },
+  ])('shows the exact capture refusal reason and distinguishes geometry from verifier budgets ($code)', async diagnostic => {
+    const f = fixture([8]), view = await mounted(f); await add(view); const previous = f.getRegistry().snapshot;
+    f.publishBarriers.mockImplementationOnce(async () => {
+      const retained = await readPendingBarrierCommand(sessionStorage, scope.projectId);
+      if (retained?.kind !== 'publication') throw Error('Publication was not retained before PUT');
+      const detail = { code: diagnostic.code, message: diagnostic.message, ...('objectIds' in diagnostic ? { objectIds: diagnostic.objectIds } : {}) };
+      return { ...refusal(retained), diagnostics: [detail] };
+    });
+    await act(() => view.result.current.save());
+    expect(view.result.current.error).toContain(diagnostic.message);
+    expect(view.result.current.error).toContain(diagnostic.code);
+    expect(view.result.current.error).toContain(diagnostic.action);
+    if ('objectIds' in diagnostic) expect(view.result.current.error).toContain('Object: dbid:29711');
+    expect(view.result.current.registry?.snapshot).toEqual(previous);
+    expect(view.result.current.pending).toBe(false); expect(view.result.current.canAuthor).toBe(true);
+    expect(await readPendingBarrierCommand(sessionStorage, scope.projectId)).toBeNull();
+  });
+  it('retains the detailed native refusal when inspecting a restored command without resubmitting it', async () => {
+    const f = fixture(), first = await mounted(f); await add(first); f.publishBarriers.mockRejectedValueOnce(Error('lost acknowledgement'));
+    await act(() => first.result.current.save()); const retained = await readPendingBarrierCommand(sessionStorage, scope.projectId);
+    if (retained?.kind !== 'publication') throw Error('Missing retained fixture'); first.unmount();
+    const changed = { ...f.options, pf: { ...f.pf, preparationViewerGeneration: 2, viewerPhase: 'loading' as const } };
+    const second = renderHook(() => usePathfinderBarriers(changed)); await waitFor(() => expect(second.result.current.canRetry).toBe(true));
+    const response = await recoveryResponse(retained, 'geometry-refused');
+    if (response.outcome !== 'geometry-refused') throw Error('Missing refusal fixture');
+    response.refusal.diagnostics = [{ code: 'DUPLICATE_TRIANGLE', message: 'The captured geometry contains coincident or repeated triangles.', objectIds: ['dbid:29711'] }];
+    vi.mocked(api.getBarrierCommandRecovery).mockResolvedValueOnce(response);
+    await act(() => second.result.current.inspect());
+    expect(second.result.current.message).toContain('DUPLICATE_TRIANGLE'); expect(second.result.current.message).toContain('Object: dbid:29711');
+    expect(second.result.current.pending).toBe(false); expect(f.publishBarriers).toHaveBeenCalledOnce();
+    expect(api.beginBarrierCapture).toHaveBeenCalledOnce(); expect(await readPendingBarrierCommand(sessionStorage, scope.projectId)).toBeNull();
   });
   it('restores an unknown publication after reload and settles by exact GET while the Viewer is unavailable without re-PUT', async () => {
     const f = fixture(), first = await mounted(f); await add(first); f.publishBarriers.mockRejectedValueOnce(Error('lost acknowledgement'));

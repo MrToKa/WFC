@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { barrierSnapshotReferenceSchema } from './pathfinderBarriers.js';
 import { policyHashSchema, policyUuidSchema } from './pathfinderPurposePolicy.js';
+import { barrierRefusalDiagnosticsSchema } from './pathfinderBarrierDiagnostics.js';
 
 // Preserve the existing successful publication wire representation exactly.
 export const barrierPublicationReceiptSchema = z.object({ schemaVersion: z.literal('wfc.pf.barrier-publication-receipt.v1'),
@@ -11,7 +12,7 @@ export const barrierPublicationReceiptSchema = z.object({ schemaVersion: z.liter
 export const barrierPublicationRefusalReceiptSchema = z.object({ schemaVersion: z.literal('wfc.pf.barrier-publication-refusal.v1'),
   outcome: z.literal('not-published'), intentId: policyUuidSchema, commandSha256: policyHashSchema,
   captureSha256: policyHashSchema, frameSha256: policyHashSchema, implementationSha256: policyHashSchema,
-  reasonCode: z.literal('BARRIER_GEOMETRY_REFUSED'), duplicate: z.boolean() }).strict();
+  reasonCode: z.literal('BARRIER_GEOMETRY_REFUSED'), duplicate: z.boolean(), diagnostics: barrierRefusalDiagnosticsSchema.optional() }).strict();
 
 // Caller hashes select an exact historical read; they never mint a receipt.
 export const barrierCaptureOutcomeQuerySchema = z.object({ commandSha256: policyHashSchema,

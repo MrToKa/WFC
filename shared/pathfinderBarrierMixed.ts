@@ -5,6 +5,7 @@ import { BARRIER_RUNTIME_PROFILE, barrierRouteHashInput } from './pathfinderBarr
 import { barrierEngineIdentityBodySchema } from './pathfinderEngineIdentity.js';
 import { directSecondaryDecisionSchema } from './pathfinderDirectSecondary.js';
 import { policyHashSchema as hash, policyRevisionSchema as revision, policyUuidSchema as uuid } from './pathfinderPurposePolicy.js';
+import { barrierNativeDiagnosticSchema } from './pathfinderBarrierDiagnostics.js';
 
 /** Additive explicit lane. A v1 capture observation is input, never a v2 policy. */
 export const MIXED_BARRIER_POLICY = 'wfc.pf.original-surfaces-and-qualified-solids.v2' as const;
@@ -82,7 +83,7 @@ export const mixedBarrierVerifierEvidenceSchema = z.object({ captureId: uuid, sc
 });
 export const mixedBarrierVerifierReceiptSchema = z.object({ schemaVersion: z.literal('wfc.pf.barrier-mixed-verification-result.v2'),
   producerVersion: z.literal(MIXED_BARRIER_VERIFIER_VERSION), status: z.enum(['geometry-qualified', 'refused']), captureSha256: hash.nullable(),
-  evidence: mixedBarrierVerifierEvidenceSchema.nullable(), diagnostics: z.array(z.object({ code: text.refine(value => value.length <= 96), message: z.string().max(2048) }).strict()).max(64),
+  evidence: mixedBarrierVerifierEvidenceSchema.nullable(), diagnostics: z.array(barrierNativeDiagnosticSchema).max(64),
 }).strict().superRefine((value, context) => {
   if (value.status === 'geometry-qualified' ? value.captureSha256 === null || value.evidence === null : value.evidence !== null)
     issue(context, 'Qualified and refused receipts retain distinct exact evidence.');

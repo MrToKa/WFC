@@ -75,7 +75,7 @@ jobs:
           node --test viewer-runtime/test/tray-identity.test.mjs
           npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 server/pathfinder/trayAssignmentCarryover.test.ts server/pathfinder/preparationPlans.test.ts shared/pathfinderPreparation.test.ts
       - name: Verify pending barrier command recovery and actionable failures
-        run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/pages/ProjectDetails/hooks/usePathfinderBarriers.test.tsx
+        run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/pages/ProjectDetails/hooks/usePathfinderBarriers.test.tsx shared/pathfinderBarrierDiagnostics.test.ts server/pathfinder/barrierCaptureAuthority.test.ts server/pathfinder/barrierRegistryRepository.test.ts
       - name: Verify crypto fallbacks and runtime module packaging
         run: node --test viewer-runtime/test/generate-id.test.mjs viewer-runtime/test/sha256.test.mjs viewer-runtime/test/producer-host.test.mjs viewer-runtime/test/barrier-multipart-transport.test.mjs viewer-runtime/test/bridge.test.mjs scripts/viewer-runtime/module-closure.test.mjs
       - name: Verify HTTP panel and integrity regressions
