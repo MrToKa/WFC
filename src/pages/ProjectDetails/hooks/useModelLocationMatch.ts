@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { canonicalPurposeJson, parsePurposeJson, policyUuidSchema } from '../../../../shared/pathfinderPurposePolicy';
 import { normalizeEndpointLocation } from '../../../../shared/pathfinderEndpointBindings';
 import { MODEL_LOCATION_MATCH_LIMITS, modelLocationMatchAssignSchema, type ModelLocationMatchResult } from '../../../../shared/pathfinderModelLocationMatch';
-import { preparationEquipmentNameBatches } from '../../../../shared/collectPreparationDiscovery';
+import { preparationEquipmentIndexBatches, preparationEquipmentNameBatches } from '../../../../shared/collectPreparationDiscovery';
 import {
   PREPARATION_MATCHING_POLICY, PREPARATION_VIEWER_LIMITS, validatePreparationDiscoveryPage,
   type PreparationDiscoveryObject, type PreparationDiscoveryRequest, type PreparationEndpointVisibility,
@@ -59,20 +59,24 @@ export async function collectModelLocationMatch(context: ModelLocationMatchConte
   let visibilityScope: PreparationEndpointVisibility | undefined;
   let indexedObjectCount: number | null = null;
   let propertyScan: Scan['propertyScan'] | null = null;
-  const encodedNames = new TextEncoder().encode(JSON.stringify(context.names)).byteLength;
-  const indexNames = encodedNames <= PREPARATION_VIEWER_LIMITS.equipmentIndexNameBytes ? context.names : undefined;
   let completed = 0;
-  for (const group of preparationEquipmentNameBatches(context.names)) {
+  const batches = preparationEquipmentIndexBatches(context.names)
+    .flatMap(indexNames => preparationEquipmentNameBatches(indexNames).map(group => ({ indexNames, group })));
+  for (const { indexNames, group } of batches) {
     for (let start = 0; start < group.length; start += MODEL_LOCATION_MATCH_LIMITS.pageNames) {
       const names = group.slice(start, start + MODEL_LOCATION_MATCH_LIMITS.pageNames);
       let cursor = 0;
       for (;;) {
         viewer.assertCurrent(); if (signal.aborted) throw interrupted();
-        progress(`Finding From/To locations: ${completed} of ${context.names.length} names checked; reading model page ${cursor}.`);
+        progress(`Finding From/To locations: ${completed} of ${context.names.length} names checked. Reading model properties and matching objects…`);
         const request: PreparationDiscoveryRequest = { schemaVersion: 'wfc.pf.viewer-discovery.v1', mode: 'equipment', names,
           rootObjectId: null, cursor, limit: PREPARATION_VIEWER_LIMITS.pageObjects, includeAnchors: true,
-          ...(visibilityScope ? { visibilityScope } : {}), ...(indexNames ? { indexNames } : {}) };
-        const page = await viewer.discover(request); viewer.assertCurrent(); if (signal.aborted) throw interrupted();
+          ...(visibilityScope ? { visibilityScope } : {}), indexNames };
+        const page = await viewer.discover(request, value => {
+          if (signal.aborted) return;
+          viewer.assertCurrent();
+          progress(`Reading model properties: ${value.loaded} of ${value.total} objects checked. From/To names: ${completed} of ${context.names.length} checked; assignments start after the complete search.`);
+        }); viewer.assertCurrent(); if (signal.aborted) throw interrupted();
         if (!validatePreparationDiscoveryPage(page) || page.mode !== 'equipment' || page.rootObjectId !== null || page.cursor !== cursor
           || page.includeAnchors !== true || page.matchingPolicyVersion !== PREPARATION_MATCHING_POLICY
           || canonicalPurposeJson(page.names) !== canonicalPurposeJson(names) || !page.propertyScan?.complete

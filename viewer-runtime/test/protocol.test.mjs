@@ -10,6 +10,18 @@ const route = (rawRouting = '/BC1/SECONDARY/BC1') => ({ rawRouting, source: 'man
   segments: parseRouting(rawRouting).segments.map(entry => ({ ...entry, model: { state: 'found', matchCount: 1, drawable: true } })),
   ignored: parseRouting(rawRouting).ignored, drawableCount: parseRouting(rawRouting).segments.length, lineCount: 1, warnings: [] });
 
+test('preparation property progress is bounded cosmetic data tied to one current model load', () => {
+  for (const payload of [{ phase: 'properties', loaded: 0, total: 172818 }, { phase: 'properties', loaded: 1000000, total: 1000000 }]) {
+    assert.ok(validateEnvelope(envelope('PREPARATION_PROGRESS', payload), 'frame-to-parent'));
+    assert.equal(validateEnvelope(envelope('PREPARATION_PROGRESS', payload), 'parent-to-frame'), null);
+    assert.equal(validateEnvelope(envelope('PREPARATION_PROGRESS', payload, { modelVersionId: null, loadId: null })), null);
+    assert.equal(validateEnvelope(envelope('PREPARATION_OBJECTS', payload)), null);
+  }
+  const progress = { phase: 'properties', loaded: 512, total: 172818 };
+  for (const change of [{ loaded: -1 }, { loaded: 0.5 }, { loaded: 172819 }, { total: 1000001 }, { total: NaN }, { total: '172818' }, { phase: 'complete' }, { complete: true }, { objectId: 23 }])
+    assert.equal(validateEnvelope(envelope('PREPARATION_PROGRESS', { ...progress, ...change })), null);
+});
+
 test('tray identity lookup is bounded, direction-bound and always attached to one model load', () => {
   const identity = { externalId: null, guid: '7586ffbb-1d0a-5942-b687-06884123c866', sourceFile: '01-50_MSR_Kabeltassen.dwg' };
   const request = { schemaVersion: 'wfc.pf.tray-identity-request.v1', identities: [identity] };

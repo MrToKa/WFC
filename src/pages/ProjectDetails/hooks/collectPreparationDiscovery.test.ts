@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { collectPreparationDiscovery } from './collectPreparationDiscovery';
-import { preparationEquipmentNameBatches, PreparationDiscoveryError } from '../../../../shared/collectPreparationDiscovery';
-import { PREPARATION_MATCHING_POLICY, PREPARATION_VIEWER_LIMITS } from '../../../../viewer-runtime/preparation-input.mjs';
+import { preparationEquipmentIndexBatches, preparationEquipmentNameBatches, PreparationDiscoveryError } from '../../../../shared/collectPreparationDiscovery';
+import { PREPARATION_MATCHING_POLICY, PREPARATION_VIEWER_LIMITS, validatePreparationDiscoveryRequest } from '../../../../viewer-runtime/preparation-input.mjs';
 import { preparationFixture, preparationIds as ids } from '../../../test/preparationFixtures';
 import type { ProjectPreparationViewer } from './usePathFinder';
 import type {
@@ -187,7 +187,7 @@ describe('complete exact preparation discovery', () => {
   it('packs all1527 exact endpoint names into a few UTF8-bounded query scopes without truncating candidates',async()=>{
     const {context}=preparationFixture(),io=viewer();context.trays=[];
     context.endpointNames=Array.from({length:1527},(_,index)=>`=F1=SECTION${String(index).padStart(4,'0')}=EQ001`);
-    const groups=preparationEquipmentNameBatches(context.endpointNames);expect(groups.length).toBeGreaterThan(1);expect(groups.length).toBeLessThan(10);
+    const groups=preparationEquipmentIndexBatches(context.endpointNames).flatMap(preparationEquipmentNameBatches);expect(groups.length).toBeGreaterThan(1);expect(groups.length).toBeLessThan(10);
     expect(groups.flat()).toEqual(context.endpointNames);for(const group of groups)expect(new TextEncoder().encode(JSON.stringify(group)).length).toBeLessThanOrEqual(PREPARATION_VIEWER_LIMITS.equipmentNameBytes);
     const result=await collectPreparationDiscovery(context,io),requests=io.discover.mock.calls.map(([request])=>request).filter(request=>request.mode==='equipment');
     expect(requests).toHaveLength(groups.length);expect(requests.flatMap(request=>request.names)).toEqual(context.endpointNames);
@@ -208,13 +208,48 @@ describe('complete exact preparation discovery', () => {
     expect(result.endpointCandidates.map(item => item.name)).toEqual(context.endpointNames);
     expect(result.endpointCandidates.every(item => item.objectIds.join() === 'dbid:9')).toBe(true);
   });
-  it('retains the original per-query indexing fallback when the full project-name universe exceeds 32KiB', async () => {
+  it('reuses bounded index universes instead of rescanning the model for each query above 32KiB', async () => {
     const { context } = preparationFixture(), io = viewer(); context.trays = [];
     context.endpointNames = Array.from({ length: 400 }, (_, index) => `=${'X'.repeat(100)}${index}`);
     expect(new TextEncoder().encode(JSON.stringify(context.endpointNames)).length).toBeGreaterThan(PREPARATION_VIEWER_LIMITS.equipmentIndexNameBytes);
+    const universes = preparationEquipmentIndexBatches(context.endpointNames);
+    expect(universes).toHaveLength(2);
     const result = await collectPreparationDiscovery(context, io);
-    expect(io.discover.mock.calls.every(([request]) => !('indexNames' in request))).toBe(true);
+    const requests = io.discover.mock.calls.map(([request]) => request).filter(request => request.mode === 'equipment');
+    expect(requests.map(request => request.names)).toEqual(universes.flatMap(preparationEquipmentNameBatches));
+    expect(new Set(requests.map(request => JSON.stringify(request.indexNames))).size).toBe(universes.length);
+    expect(requests).toHaveLength(8);
+    for (const request of requests) {
+      expect(universes).toContainEqual(request.indexNames);
+      expect(validatePreparationDiscoveryRequest(request)).toBe(true);
+      expect(request.names.every(name => request.indexNames!.includes(name))).toBe(true);
+    }
+    expect(requests.flatMap(request => request.names)).toEqual(context.endpointNames);
     expect(result.endpointCandidates).toHaveLength(400); expect(result.complete).toBe(true);
+  });
+  it('packs the exact index byte boundary without increasing the request envelope or dropping names', () => {
+    const first = Array.from({ length: 126 }, (_, index) => `${'A'.repeat(251)}${String(index).padStart(5, '0')}`);
+    first.push('B'.repeat(130));
+    expect(new TextEncoder().encode(JSON.stringify(first)).length).toBe(PREPARATION_VIEWER_LIMITS.equipmentIndexNameBytes);
+    const names = [...first, 'TAIL'], groups = preparationEquipmentIndexBatches(names);
+    expect(groups).toEqual([first, ['TAIL']]);
+    for (const group of groups) expect(validatePreparationDiscoveryRequest({ schemaVersion: 'wfc.pf.viewer-discovery.v1', mode: 'equipment',
+      names: [group[0]], indexNames: group, rootObjectId: null, cursor: 0, limit: 1 })).toBe(true);
+  });
+  it('keeps escaped UTF8 index groups maximal and validates the complete scope before partitioning', () => {
+    const names = Array.from({ length: 500 }, (_, index) => `界${'"\\'.repeat(30)}${index}`), groups = preparationEquipmentIndexBatches(names);
+    expect(groups.flat()).toEqual(names); expect(groups.length).toBeGreaterThan(1);
+    for (const [index, group] of groups.entries()) {
+      expect(new TextEncoder().encode(JSON.stringify(group)).length).toBeLessThanOrEqual(PREPARATION_VIEWER_LIMITS.equipmentIndexNameBytes);
+      expect(group.length).toBeLessThanOrEqual(PREPARATION_VIEWER_LIMITS.equipmentNames);
+      if (index < groups.length - 1) expect(new TextEncoder().encode(JSON.stringify([...group, groups[index + 1][0]])).length)
+        .toBeGreaterThan(PREPARATION_VIEWER_LIMITS.equipmentIndexNameBytes);
+    }
+    expect(preparationEquipmentIndexBatches([])).toEqual([]);
+    expect(preparationEquipmentIndexBatches(Array.from({ length: 4096 }, (_, index) => `E${index}`)).flat()).toHaveLength(4096);
+    expect(() => preparationEquipmentIndexBatches(['DUPLICATE', 'DUPLICATE'])).toThrow('exact discovery scope');
+    expect(() => preparationEquipmentIndexBatches(['X'.repeat(257)])).toThrow('protected discovery limits');
+    expect(() => preparationEquipmentIndexBatches(Array.from({ length: 4097 }, (_, index) => `E${index}`))).toThrow('exact discovery scope');
   });
   it('counts escaped and multibyte name bytes exactly rather than assuming32 names or UTF16 size',()=>{
     const names=Array.from({length:200},(_,index)=>`界${'"\\'.repeat(30)}${index}`),groups=preparationEquipmentNameBatches(names);

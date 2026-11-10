@@ -19,6 +19,12 @@ const names = (values,equipment=false,maximumBytes=PREPARATION_VIEWER_LIMITS.equ
 export function validatePreparationVisibilityScope(value) {
   return exact(value,['schemaVersion','basis','contentSha256'])&&value.schemaVersion==='wfc.pf.sdk-display-visibility.v1'&&value.basis==='sdk-display-before-pf-appearance'&&hash(value.contentSha256);
 }
+/** Cosmetic progress only. Complete coverage still requires a discovery page. */
+export function validatePreparationDiscoveryProgress(value) {
+  return exact(value, ['phase', 'loaded', 'total']) && value.phase === 'properties'
+    && integer(value.loaded, PREPARATION_VIEWER_LIMITS.indexedObjects)
+    && integer(value.total, PREPARATION_VIEWER_LIMITS.indexedObjects) && value.loaded <= value.total;
+}
 const withVisibility = (value,fields,key) => exact(value,fields)||Object.hasOwn(value??{},key)&&exact(value,[...fields,key])&&validatePreparationVisibilityScope(value[key]);
 export function validatePreparationDiscoveryRequest(value) {
   const indexed = record(value) && Object.hasOwn(value, 'indexNames');

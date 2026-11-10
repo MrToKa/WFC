@@ -58,22 +58,30 @@ function preserveDiscoveryFailure(error: unknown): boolean {
       'RESOURCE_FAILED', 'BARRIER_CAPTURE_MODEL_CHANGED', 'AUTHENTICATION_REQUIRED', 'LOGIN_REVOKED'].includes(String(code));
 }
 
-/** Bound both echoed request names and one fully matching object inside 24KiB.
- * Keep query-scoped exact names; never retain the model's unrelated properties.
- */
-export function preparationEquipmentNameBatches(names: readonly string[]): string[][] {
+function equipmentNameBatches(names: readonly string[], maximumBytes: number): string[][] {
   if(names.length>PREPARATION_VIEWER_LIMITS.equipmentNames||new Set(names).size!==names.length)throw new Error('Project endpoint names exceed the supported exact discovery scope.');
   const groups:string[][]=[],encoder=new TextEncoder();let group:string[]=[],bytes=2;
   for(const name of names){
     if(!validatePreparationDiscoveryRequest({schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:[name],rootObjectId:null,cursor:0,limit:1}))
       throw new Error('A project endpoint name is outside the protected discovery limits.');
     const size=encoder.encode(JSON.stringify(name)).length;
-    if(group.length&&(group.length>=PREPARATION_VIEWER_LIMITS.equipmentNames||bytes+1+size>PREPARATION_VIEWER_LIMITS.equipmentNameBytes)){
+    if(group.length&&(group.length>=PREPARATION_VIEWER_LIMITS.equipmentNames||bytes+1+size>maximumBytes)){
       groups.push(group);group=[];bytes=2;
     }
     bytes+=size+(group.length?1:0);group.push(name);
   }
   if(group.length)groups.push(group);return groups;
+}
+/** Bound both echoed query names and one fully matching object inside 24KiB.
+ * Keep query-scoped exact names; never retain the model's unrelated properties.
+ */
+export function preparationEquipmentNameBatches(names: readonly string[]): string[][] {
+  return equipmentNameBatches(names, PREPARATION_VIEWER_LIMITS.equipmentNameBytes);
+}
+/** Reuse one complete property index across narrow query pages, even when all
+ * project names cannot fit together in the existing bounded index request. */
+export function preparationEquipmentIndexBatches(names: readonly string[]): string[][] {
+  return equipmentNameBatches(names, PREPARATION_VIEWER_LIMITS.equipmentIndexNameBytes);
 }
 
 /** Exact complete pagination; no candidate, scope or policy is inferred from a first match. */
@@ -93,15 +101,6 @@ export async function collectPreparationDiscovery<T extends PreparationDiscovery
   let inventoryCount: number | null = null,
     equipmentProof: PreparationDiscovery['propertyScan'] = null;
   let visibilityScope:PreparationEndpointVisibility|null=null;
-  // The query batch still fits its existing 8KiB/24KiB request-response scope.
-  // A bounded shared name universe lets the viewer index project properties
-  // once across those batches; larger universes retain the existing fallback.
-  const equipmentIndexNames = context.endpointNames.length > 0
-    && context.endpointNames.length <= PREPARATION_VIEWER_LIMITS.equipmentNames
-    && new TextEncoder().encode(JSON.stringify(context.endpointNames)).length <= PREPARATION_VIEWER_LIMITS.equipmentIndexNameBytes
-    && validatePreparationDiscoveryRequest({ schemaVersion: 'wfc.pf.viewer-discovery.v1', mode: 'equipment',
-      names: [context.endpointNames[0]], indexNames: context.endpointNames, rootObjectId: null, cursor: 0, limit: 1 })
-    ? context.endpointNames : undefined;
   const add = (object: PreparationDiscoveryObject) => {
     const prior = objects.get(object.objectId);
     const { matchedNames: _matched, ...identity } = object;
@@ -129,6 +128,7 @@ export async function collectPreparationDiscovery<T extends PreparationDiscovery
     rootObjectId: number | null,
     consume: (page: PreparationDiscoveryPage) => void,
     rootObjectIds?: number[],
+    equipmentIndexNames?: string[],
   ) => {
     let cursor = 0;
     let pages = 0;
@@ -239,7 +239,9 @@ export async function collectPreparationDiscovery<T extends PreparationDiscovery
   let endpointOffset=0;
   stage = { stage: 'endpoint-property-search', mode: 'equipment', rootObjectId: null, cursor: 0, queryNameCount: 0,
     completedUnits: 0, totalUnits: context.endpointNames.length, trayNames: [] };
-  for (const batch of preparationEquipmentNameBatches(options.skipEquipment ? [] : context.endpointNames)) {
+  const endpointBatches = preparationEquipmentIndexBatches(options.skipEquipment ? [] : context.endpointNames)
+    .flatMap(indexNames => preparationEquipmentNameBatches(indexNames).map(batch => ({ batch, indexNames })));
+  for (const { batch, indexNames } of endpointBatches) {
     stage = { ...stage, completedUnits: endpointOffset };
     progress(
       `Searching From/To properties: ${endpointOffset} of ${context.endpointNames.length} project endpoint names checked; starting the next ${batch.length}.`,
@@ -260,7 +262,7 @@ export async function collectPreparationDiscovery<T extends PreparationDiscovery
             throw new Error('The model returned an endpoint outside the requested names.');
           endpointMatches.get(name)!.push(object.objectId);
         }
-    });
+    }, undefined, indexNames);
     endpointOffset+=batch.length;
     progress(`Searching From/To properties: ${endpointOffset} of ${context.endpointNames.length} project endpoint names checked.`);
   }

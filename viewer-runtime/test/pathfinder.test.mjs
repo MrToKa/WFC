@@ -122,6 +122,83 @@ test('preparation property discovery retains every property-only candidate and e
   assert.equal(calls,1);assert.equal(first.propertyScan.complete,!omitted);assert.equal(first.propertyScan.omittedObjectCount,omitted?1:0);assert.deepEqual([...first.objects,...(second?.objects??[])].map(x=>x.objectId),omitted?[2]:[2,3]);f.controller.dispose();
  }
 });
+
+function equipmentScanFixture(count = 1536) {
+ const f = fixture();
+ f.tree.getNodeName = id => `Object-${id}`;
+ f.tree.enumNodeChildren = (id, visit) => { if (id === 1) for (let child = 2; child <= count; child++) if (visit(child)) break; };
+ f.tree.getChildCount = id => id === 1 ? count - 1 : 0;
+ return f;
+}
+const equipmentScanRequest = { schemaVersion: 'wfc.pf.viewer-discovery.v1', mode: 'equipment', names: ['MATCH'], rootObjectId: null, cursor: 0, limit: 128 };
+
+test('equipment progress reports bounded live object counts without converting omitted coverage into success', async t => {
+ const f = equipmentScanFixture(1025), progress = []; let now = 0, calls = 0;
+ t.mock.method(performance, 'now', () => now);
+ f.model.getBulkProperties = (ids, _options, yes) => {
+  calls++; now += 250; yes(ids.filter(id => id !== 1025).map(dbId => ({ dbId, properties: [] })));
+ };
+ const page = await f.controller.readPreparationObjects(equipmentScanRequest, undefined, value => progress.push(value));
+ assert.deepEqual(progress, [0, 512, 1024, 1025].map(loaded => ({ phase: 'properties', loaded, total: 1025 })));
+ assert.equal(calls, 3); assert.equal(page.propertyScan.complete, false); assert.equal(page.propertyScan.omittedObjectCount, 1);
+ const cached = [];
+ await f.controller.readPreparationObjects(equipmentScanRequest, undefined, value => cached.push(value));
+ assert.equal(calls, 3); assert.deepEqual(cached, [{ phase: 'properties', loaded: 1025, total: 1025 }]); f.controller.dispose();
+});
+
+test('equipment progress is throttled while final property coverage is always reported', async t => {
+ const f = equipmentScanFixture(), progress = []; let now = 0;
+ t.mock.method(performance, 'now', () => now);
+ f.model.getBulkProperties = (ids, _options, yes) => { now += 80; yes(ids.map(dbId => ({ dbId, properties: [] }))); };
+ await f.controller.readPreparationObjects(equipmentScanRequest, undefined, value => progress.push(value));
+ assert.deepEqual(progress, [{ phase: 'properties', loaded: 0, total: 1536 }, { phase: 'properties', loaded: 1536, total: 1536 }]); f.controller.dispose();
+});
+
+test('fast cached SDK batches do not require one throttleable timer per512 properties', async t => {
+ const f = equipmentScanFixture(), original = globalThis.setTimeout; let yields = 0, calls = 0;
+ t.mock.method(performance, 'now', () => 0);
+ t.mock.method(globalThis, 'setTimeout', (callback, milliseconds, ...args) => { if (milliseconds === 0) yields++; return original(callback, milliseconds, ...args); });
+ f.model.getBulkProperties = (ids, _options, yes) => { calls++; yes(ids.map(dbId => ({ dbId, properties: [] }))); };
+ const page = await f.controller.readPreparationObjects(equipmentScanRequest);
+ assert.equal(calls, 3); assert.equal(page.propertyScan.complete, true);
+ assert.equal(yields, 1, 'only the existing initial inventory yield is needed for a fast scan'); f.controller.dispose();
+});
+
+test('slow asynchronous SDK replies do not spend the synchronous row-work yield budget', async t => {
+ const f = equipmentScanFixture(), original = globalThis.setTimeout; let now = 0, yields = 0, calls = 0;
+ t.mock.method(performance, 'now', () => now);
+ t.mock.method(globalThis, 'setTimeout', (callback, milliseconds, ...args) => { if (milliseconds === 0) yields++; return original(callback, milliseconds, ...args); });
+ f.model.getBulkProperties = (ids, _options, yes) => {
+  calls++; setImmediate(() => { now += 1000; yes(ids.map(dbId => ({ dbId, properties: [] }))); });
+ };
+ const page = await f.controller.readPreparationObjects(equipmentScanRequest);
+ assert.equal(calls, 3); assert.equal(page.propertyScan.complete, true);
+ assert.equal(yields, 1, 'three slow worker replies need no additional per-batch timers'); f.controller.dispose();
+});
+
+test('synchronous row work yields within a cached batch so cancellation can stop it before the next SDK call', async t => {
+ const f = equipmentScanFixture(), abort = new AbortController(), original = globalThis.setTimeout; let tick = 0, calls = 0, stoppedDuringRows = false;
+ t.mock.method(performance, 'now', () => tick++ * 4);
+ t.mock.method(globalThis, 'setTimeout', (callback, milliseconds, ...args) => {
+  if (milliseconds === 0 && calls === 1) return original(() => { stoppedDuringRows = true; abort.abort(); callback(); }, milliseconds, ...args);
+  return original(callback, milliseconds, ...args);
+ });
+ f.model.getBulkProperties = (ids, _options, yes) => { calls++; yes(ids.map(dbId => ({ dbId, properties: [] }))); };
+ await assert.rejects(() => f.controller.readPreparationObjects(equipmentScanRequest, abort.signal), { name: 'AbortError' });
+ assert.equal(stoppedDuringRows, true); assert.equal(calls, 1); f.controller.dispose();
+});
+
+test('cancelling after property progress discards its unfinished index and sends no late success', async t => {
+ const f = equipmentScanFixture(), abort = new AbortController(), progress = []; let now = 0, calls = 0;
+ t.mock.method(performance, 'now', () => now);
+ f.model.getBulkProperties = (ids, _options, yes) => { calls++; now += 250; yes(ids.map(dbId => ({ dbId, properties: [] }))); };
+ await assert.rejects(() => f.controller.readPreparationObjects(equipmentScanRequest, abort.signal, value => {
+  progress.push(value); if (value.loaded === 512) abort.abort();
+ }), { name: 'AbortError' });
+ assert.equal(calls, 1); assert.deepEqual(progress.map(value => value.loaded), [0, 512]);
+ const recovered = await f.controller.readPreparationObjects(equipmentScanRequest);
+ assert.equal(calls, 4); assert.equal(recovered.propertyScan.complete, true); f.controller.dispose();
+});
 test('explicit location discovery observes canonical bottom centres without selecting or reloading the model',async()=>{
  const f=fixture();let calls=0;f.model.getBulkProperties=(ids,_options,yes)=>{calls++;yes(ids.map(dbId=>({dbId,properties:dbId===2?[{displayName:'Tag',displayValue:'/2149004__0e'}]:[]})));};
  const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['/2149004__0e'],rootObjectId:null,cursor:0,limit:128,includeAnchors:true};

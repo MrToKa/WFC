@@ -5,7 +5,7 @@ import { ViewerController, type ViewerEvent } from '@/viewer/ViewerController';
 import { ViewerAccessError } from '@/viewer/sessionApi';
 import { trayIdentityErrorMessage } from '@/viewer/trayIdentityErrors';
 import type { CanonicalPoint, ComputedPath, PickedPoint, ViewerModelObjectsPage, ViewerTrayRootSelection, ModelCaptureRequest } from '../../../../viewer-runtime/protocol.mjs';
-import type { PreparationDiscoveryRequest, PreparationDiscoveryPage } from '../../../../viewer-runtime/preparation-input.mjs';
+import type { PreparationDiscoveryRequest, PreparationDiscoveryPage, PreparationDiscoveryProgress } from '../../../../viewer-runtime/preparation-input.mjs';
 import type { PreparationScope } from '../../../../shared/pathfinderPreparation';
 import { pathFinderRequestDeadline } from '@/api/pathfinderRequestDeadline';
 import { barrierCaptureErrorMessage } from '../../../../viewer-runtime/barrier-capture-errors.mjs';
@@ -14,7 +14,7 @@ import { AUTOMATIC_PAIR_POLICY } from '../../../../shared/pathfinderAutomaticPai
 export type ProjectPreparationViewer = {
   readSelection: ViewerController['readSelection'];
   readTrayRootSelection: () => ReturnType<ViewerController['readTrayRootSelection']>;
-  discover: (request: PreparationDiscoveryRequest) => Promise<PreparationDiscoveryPage>;
+  discover: (request: PreparationDiscoveryRequest, onProgress?: (progress: PreparationDiscoveryProgress) => void) => Promise<PreparationDiscoveryPage>;
   resolveTrayIdentities?: (request: Parameters<ViewerController['resolveTrayIdentities']>[0]) => ReturnType<ViewerController['resolveTrayIdentities']>;
   capture: (request: ModelCaptureRequest) => ReturnType<ViewerController['captureModel']>;
   captureBarriers: (request: Parameters<ViewerController['captureBarriers']>[0]) => ReturnType<ViewerController['captureBarriers']>;
@@ -375,7 +375,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
       const value = await operation({ assertCurrent: current,
         readSelection:async()=>{current();const result=await run.viewer!.readSelection();current();return result;},
         readTrayRootSelection:async()=>{current();const result=await run.viewer!.readTrayRootSelection();current();return result;},
-        discover: async request => { current(); const page = await run.viewer!.discoverPreparationObjects(request, { signal: combined, isCurrent: () => { try { current(); return true; } catch { return false; } } }); current(); return page; },
+        discover: async (request, onProgress) => { current(); const page = await run.viewer!.discoverPreparationObjects(request, { signal: combined, onProgress, isCurrent: () => { try { current(); return true; } catch { return false; } } }); current(); return page; },
         resolveTrayIdentities: async request => { current(); const response = await run.viewer!.resolveTrayIdentities(request, { signal: combined, isCurrent: () => { try { current(); return true; } catch { return false; } } }); current(); return response; },
         capture: async request => { current(); const capture = await run.viewer!.captureModel(request, progress => captureProgress(run, () => `Collecting project geometry: ${progress.index + 1} data batches…`), { signal: combined, isCurrent: () => { try { current(); return true; } catch { return false; } } }); current(); return capture; },
         captureBarriers: async request => { current(); update(run, { viewerMessage: 'Reading selected barrier geometry…' }); const capture = await run.viewer!.captureBarriers(request, { signal: combined, isCurrent: () => { try { current(); return true; } catch { return false; } } }); current(); return capture; },

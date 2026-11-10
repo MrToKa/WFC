@@ -315,9 +315,9 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
         fitRoute() { if (computedPath) pathfinder.fit(); else routes.fitRoute(); },
         showComputedPath(value) { if (legacyPath) routes.clearRoute(); legacyPath = false; const result = pathfinder.showPath(value); computedPath = true; trayDisplay = false; return result; },
         readModelObjects: pathfinder.readObjects,
-        readPreparationObjects(request, operationSignal) {
+        readPreparationObjects(request, operationSignal, onProgress) {
           active(operationSignal); prepareForEndpointVisibility();
-          return pathfinder.readPreparationObjects(request, operationSignal);
+          return pathfinder.readPreparationObjects(request, operationSignal, onProgress);
         },
         async resolveTrayIdentities(request, operationSignal) {
           if (!validateTrayIdentityRequest(request)) throw safeError('TRAY_IDENTITY_READ_FAILED');
