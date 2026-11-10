@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { Router, type Request, type Response } from 'express';
+import { Router, type NextFunction, type Request, type Response } from 'express';
 import multer from 'multer';
 import { z } from 'zod';
 import { pool } from '../db.js';
@@ -50,6 +50,12 @@ const updateInput = z.object({
 
 type CadRequest = Request<{projectId: string; designId?: string; instanceId?: string}>;
 
+// Express 4 does not automatically forward rejected async handler promises.
+const safe = (handler: (req: CadRequest, res: Response) => Promise<void>) =>
+  (req: CadRequest, res: Response, next: NextFunction): void => {
+    void handler(req, res).catch(next);
+  };
+
 const failure = (res: Response, status: number, code: string): void => {
   res.status(status).json({ code });
 };
@@ -69,7 +75,7 @@ function isStepFile(file: Express.Multer.File): boolean {
   return first.startsWith('ISO-10303-21;') && /END-ISO-10303-21;\s*$/i.test(last);
 }
 
-cadDesignRouter.get('/catalog', async (req: CadRequest, res: Response) => {
+cadDesignRouter.get('/catalog', safe(async (req: CadRequest, res: Response) => {
   const result = await pool.query(
     `SELECT id, manufacturer, part_number AS "partNumber", family,
             original_filename AS "originalFilename", source_sha256 AS "sourceSha256",
@@ -80,7 +86,7 @@ cadDesignRouter.get('/catalog', async (req: CadRequest, res: Response) => {
   );
   res.setHeader('Cache-Control', 'private, no-store');
   res.json({ items: result.rows });
-});
+}));
 
 cadDesignRouter.post('/catalog', requireProjectEdit, (req: CadRequest, res: Response, next) => {
   upload.single('file')(req, res, (error: unknown) => {
@@ -90,7 +96,7 @@ cadDesignRouter.post('/catalog', requireProjectEdit, (req: CadRequest, res: Resp
     }
     next();
   });
-}, async (req: CadRequest, res: Response) => {
+}, safe(async (req: CadRequest, res: Response) => {
   const parsed = catalogueInput.safeParse(req.body);
   if (!parsed.success || !req.file || !isStepFile(req.file)) {
     failure(res, 400, 'INVALID_STEP_FILE_OR_METADATA');
@@ -141,9 +147,9 @@ cadDesignRouter.post('/catalog', requireProjectEdit, (req: CadRequest, res: Resp
     console.error('CAD catalogue import failed', error);
     failure(res, 500, 'CATALOG_IMPORT_FAILED');
   }
-});
+}));
 
-cadDesignRouter.get('/designs', async (req: CadRequest, res: Response) => {
+cadDesignRouter.get('/designs', safe(async (req: CadRequest, res: Response) => {
   const result = await pool.query(
     `SELECT d.id, d.model_version_id AS "modelVersionId", d.name, d.status,
             d.revision, s.active_model_version_id=d.model_version_id AS "activeModel",
@@ -155,9 +161,9 @@ cadDesignRouter.get('/designs', async (req: CadRequest, res: Response) => {
   );
   res.setHeader('Cache-Control', 'private, no-store');
   res.json({ designs: result.rows });
-});
+}));
 
-cadDesignRouter.post('/designs', requireProjectEdit, async (req: CadRequest, res: Response) => {
+cadDesignRouter.post('/designs', requireProjectEdit, safe(async (req: CadRequest, res: Response) => {
   const parsed = designInput.safeParse(req.body);
   if (!parsed.success) { failure(res, 400, 'INVALID_CAD_DESIGN'); return; }
   const { projectId } = req.params;
@@ -183,9 +189,9 @@ cadDesignRouter.post('/designs', requireProjectEdit, async (req: CadRequest, res
   );
   if (existing.rows[0]) res.status(200).json({ id: existing.rows[0].id, created: false });
   else failure(res, 409, 'ACTIVE_MODEL_REQUIRED');
-});
+}));
 
-cadDesignRouter.get('/designs/:designId/instances', async (req: CadRequest, res: Response) => {
+cadDesignRouter.get('/designs/:designId/instances', safe(async (req: CadRequest, res: Response) => {
   if (!uuid.safeParse(req.params.designId).success) {
     failure(res, 400, 'INVALID_DESIGN_ID'); return;
   }
@@ -203,9 +209,9 @@ cadDesignRouter.get('/designs/:designId/instances', async (req: CadRequest, res:
   );
   res.setHeader('Cache-Control', 'private, no-store');
   res.json({ instances: result.rows });
-});
+}));
 
-cadDesignRouter.post('/designs/:designId/instances', requireProjectEdit, async (req: CadRequest, res: Response) => {
+cadDesignRouter.post('/designs/:designId/instances', requireProjectEdit, safe(async (req: CadRequest, res: Response) => {
   if (!uuid.safeParse(req.params.designId).success) {
     failure(res, 400, 'INVALID_DESIGN_ID'); return;
   }
@@ -232,9 +238,9 @@ cadDesignRouter.post('/designs/:designId/instances', requireProjectEdit, async (
   );
   if (!result.rows[0]) { failure(res, 409, 'DESIGN_OR_MODEL_NOT_EDITABLE'); return; }
   res.status(201).json(result.rows[0]);
-});
+}));
 
-cadDesignRouter.patch('/designs/:designId/instances/:instanceId', requireProjectEdit, async (req: CadRequest, res: Response) => {
+cadDesignRouter.patch('/designs/:designId/instances/:instanceId', requireProjectEdit, safe(async (req: CadRequest, res: Response) => {
   if (!uuid.safeParse(req.params.designId).success || !uuid.safeParse(req.params.instanceId).success) {
     failure(res, 400, 'INVALID_INSTANCE_ID'); return;
   }
@@ -258,9 +264,9 @@ cadDesignRouter.patch('/designs/:designId/instances/:instanceId', requireProject
   );
   if (!result.rows[0]) { failure(res, 409, 'STALE_OR_INACTIVE_INSTANCE'); return; }
   res.json(result.rows[0]);
-});
+}));
 
-cadDesignRouter.get('/designs/:designId/materials.csv', async (req: CadRequest, res: Response) => {
+cadDesignRouter.get('/designs/:designId/materials.csv', safe(async (req: CadRequest, res: Response) => {
   if (!uuid.safeParse(req.params.designId).success) {
     failure(res, 400, 'INVALID_DESIGN_ID'); return;
   }
@@ -282,4 +288,4 @@ cadDesignRouter.get('/designs/:designId/materials.csv', async (req: CadRequest, 
   res.setHeader('Content-Disposition', 'attachment; filename="wfc-proposed-tray-mto.csv"');
   res.setHeader('Cache-Control', 'private, no-store');
   res.send('\uFEFF' + lines.join('\r\n') + '\r\n');
-});
+}));
