@@ -5,6 +5,8 @@ import http from 'node:http';
 import { createApp } from './app.js';
 import { config } from './config.js';
 import { initializeDatabase } from './db.js';
+import { initializeCadDesignSchema } from './cadDesign/schema.js';
+import { pool } from './db.js';
 import { initializeObjectStorage } from './services/objectStorageService.js';
 import { initializeModelRegistry, stopModelRegistry } from './modelRegistry/runtime.js';
 import { stopViewerSessions } from './viewerSessions/runtime.js';
@@ -50,6 +52,8 @@ const startServer = async (): Promise<void> => {
     await initializeDatabase();
     await initializeObjectStorage();
     await initializeModelRegistry();
+    // Explicit PoC gate: production must not run these additive migrations by default.
+    if (process.env.WFC_CAD_DESIGN_ENABLED === 'true') await initializeCadDesignSchema(pool);
     await initializePathFinderRuntime();
     if (config.https.enabled) {
       const resolvePath = (value: string): string =>
