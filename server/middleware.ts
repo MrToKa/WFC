@@ -157,6 +157,8 @@ export async function requireCatalogAccess(req: Request, res: Response, next: Ne
 }
 
 const engineerReadPaths = [
+  // Read-only designer endpoints remain subject to project assignment checks.
+  /^\/cad-design(?:\/.*)?$/i,
   ...basicProjectReadPaths,
   ...technicianFileReadPaths,
   ...technicianExportPaths,
