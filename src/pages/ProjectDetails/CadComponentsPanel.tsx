@@ -10,6 +10,7 @@ type CatalogueItem = {
   partNumber: string;
   family: string;
   originalFilename: string;
+  sourceSha256: string;
   conversionStatus: 'pending' | 'ready' | 'failed';
 };
 
