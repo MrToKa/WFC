@@ -282,18 +282,17 @@ describe('real cable popup Workspace → Results → Panel handoff with syntheti
     expect(transport.save).toHaveBeenCalledOnce(); expect(submitPathFinderCalculation).not.toHaveBeenCalled();
     expect(pathFinderRequest).not.toHaveBeenCalled(); expect(transport.refresh).toHaveBeenCalledTimes(automaticRefreshes);
   });
-  it('isolates Save display hydration from the real revision panel automatic read when the new job is absent from the broad state', async () => {
+  it('hydrates Save display without mounting a competing revision history reader when the new job is absent from broad state', async () => {
     const f = fixture(true); wire(f); transport.realRevisionResults = true;
     f.pf.data!.jobs = [];
     vi.mocked(fetchPathFinderState).mockResolvedValue(f.pf.data!);
     vi.mocked(fetchProjectModels).mockResolvedValue({ selection: { activeModelVersionId: id(8), selectionRevision: 1 },
       versions: [{ id: id(8), health: 'healthy' }] } as never);
     vi.mocked(fetchPathFinderProposal).mockResolvedValue(f.proposal);
-    let finishDisplay!: (value: PathFinderJob) => void, finishHistory!: (value: PathFinderJob) => void;
+    let finishDisplay!: (value: PathFinderJob) => void;
     vi.mocked(fetchPathFinderJob).mockResolvedValue(f.parent)
       .mockResolvedValueOnce({ ...f.parent, items: [{ cableId: id(4), state: 'complete', status: 'calculated', message: null }] } as never)
-      .mockImplementationOnce(() => new Promise(resolve => { finishDisplay = resolve; }))
-      .mockImplementationOnce(() => new Promise(resolve => { finishHistory = resolve; }));
+      .mockImplementationOnce(() => new Promise(resolve => { finishDisplay = resolve; }));
     transport.viewerPath.mockResolvedValue(true);
     const view = render(<LiveControllerFlow f={f} />);
     fireEvent.click(await screen.findByText('Open test cable', { selector: 'button' }));
@@ -304,14 +303,14 @@ describe('real cable popup Workspace → Results → Panel handoff with syntheti
     expect(displaySignal.aborted).toBe(false); expect(button('Show')).toBeDisabled();
     transport.revisionAdmission = { id: id(81), jobId: id(7), kind: 'location-impact', generation: null, createdAt: f.parent.createdAt };
     view.rerender(<LiveControllerFlow f={f} />);
-    await waitFor(() => expect(fetchPathFinderJob).toHaveBeenCalledTimes(3));
+    expect(fetchPathFinderJob).toHaveBeenCalledTimes(2);
     expect(displaySignal.aborted).toBe(false);
-    await act(async () => { finishDisplay(f.parent); finishHistory(f.parent); });
+    await act(async () => { finishDisplay(f.parent); });
     await waitFor(() => expect(button('Show')).toBeEnabled());
     expect(screen.getByLabelText('Cable routing')).toHaveValue('/NEW');
     fireEvent.click(button('Show'));
     await waitFor(() => expect(transport.viewerPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23, 44, 45] }));
-    expect(fetchPathFinderJob).toHaveBeenCalledTimes(3); expect(submitPathFinderCalculation).not.toHaveBeenCalled(); expect(pathFinderRequest).not.toHaveBeenCalled();
+    expect(fetchPathFinderJob).toHaveBeenCalledTimes(2); expect(submitPathFinderCalculation).not.toHaveBeenCalled(); expect(pathFinderRequest).not.toHaveBeenCalled();
     // Startup, acknowledged Save state and settled optional diagnostics only;
     // the user never refreshes or submits another calculation to enable Show.
     expect(fetchPathFinderState).toHaveBeenCalledTimes(3); expect(transport.save).toHaveBeenCalledOnce();

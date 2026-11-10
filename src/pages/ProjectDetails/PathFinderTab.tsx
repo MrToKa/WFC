@@ -6,6 +6,7 @@ import { ModelLocationMatchPanel } from './ModelLocationMatchPanel';
 import { useRoutingsViewerHeight } from './hooks/useRoutingsViewerHeight';
 import { useRoutingsViewerStyles } from './RoutingsViewerTab.styles';
 import { PathFinderResults } from './PathFinderResults';
+import { PathFinderRecalculateAll } from './PathFinderRecalculateAll';
 import { PathFinderLookup } from './PathFinderLookup';
 import { PathFinderRoutes } from './PathFinderRoutes';
 import { PathFinderPreview } from './PathFinderPreview';
@@ -234,6 +235,11 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
         <Field label="SECONDARY trigger distance (m)" hint="Approaches longer than this distance use the SECONDARY length from Project Details."><Input aria-label="SECONDARY trigger distance in metres" value={secondaryDistance} onChange={(_, value) => { clearView(); setSecondaryDistance(value.value); }} /></Field>
         {!validSecondary ? <Body1 role="alert">Enter a SECONDARY trigger distance from 0 to 1,000,000 metres.</Body1> : null}
         <label><input type="checkbox" checked={preferVertical} onChange={event => { clearView(); setPreferVertical(event.target.checked); }} />Prefer vertical approach</label>
+        {projectId && accountId && token ? <PathFinderRecalculateAll projectId={projectId} accountId={accountId} token={token}
+          modelKey={JSON.stringify(data?.activeModel)} preferences={backgroundPreferences}
+          blocker={calculationBlocker ?? (!data?.artifacts.length ? 'Prepare the tray network in Routes before recalculating all cables.' : null)}
+          disabled={pf.busy || locationCheckBusy || networkCheckBusy || !data?.artifacts.length}
+          refreshState={pf.refreshState} onChanged={cableValuesChanged} /> : null}
         <PathFinderCableWorkspace projectId={projectId} loadedProjectId={loadedProjectId} accountId={accountId ?? null} token={token} isAdmin={isAdmin}
           pf={pf} active={mode === 'path'} selectedCableId={selectedCableId} refreshKey={cableWriteRefresh} preferences={backgroundPreferences} readPreferences={backgroundPreferences ?? readPreferences} onConfigureCalculation={configureCalculation}
           getCalculationPreferences={getCableCalculationPreferences} onCalculationPreferences={setWorkflowCalculationPreferences}

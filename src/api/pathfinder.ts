@@ -179,10 +179,20 @@ export async function pathFinderRequest(projectId: string, token: string, path: 
  * not prove that the job failed to commit. This function never retries. */
 export async function submitPathFinderCalculation(projectId: string, token: string, body: unknown,
   options: { signal?: AbortSignal; isCurrent?: () => boolean } = {}): Promise<PathFinderCalculationSubmission> {
+  return submitCalculation(projectId, token, body, options, false);
+}
+/** Admit the whole project once. Omitted cableIds means the server reads the
+ * complete list, independently of the visible search/page. Never retries POST. */
+export async function submitAllPathFinderCalculations(projectId: string, token: string, body: unknown,
+  options: { signal?: AbortSignal; isCurrent?: () => boolean } = {}): Promise<PathFinderCalculationSubmission> {
+  return submitCalculation(projectId, token, body, options, true);
+}
+async function submitCalculation(projectId: string, token: string, body: unknown,
+  options: { signal?: AbortSignal; isCurrent?: () => boolean }, allCables: boolean): Promise<PathFinderCalculationSubmission> {
   let encoded: string;
   try {
     if (!uuid.safeParse(projectId).success || !token) return { kind: 'not-submitted', code: 'INVALID_REQUEST' };
-    const parsed = popupCalculationRequestSchema.safeParse(body);
+    const parsed = (allCables ? popupCalculationRequestSchema.omit({ cableIds: true }) : popupCalculationRequestSchema).safeParse(body);
     if (!parsed.success || parsed.data.options.barrierRouting.scope.projectId !== projectId) return { kind: 'not-submitted', code: 'INVALID_REQUEST' };
     encoded = JSON.stringify(parsed.data);
     if (options.signal?.aborted) return { kind: 'not-submitted', code: 'CALCULATION_CANCELLED' };
