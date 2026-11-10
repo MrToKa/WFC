@@ -5,7 +5,7 @@ import { normalizeQuaternion, alignConnectorPorts } from '@/viewer/componentTran
 import { getAalborgPocPorts, MATE_OPPOSING_FACE } from '@/viewer/pocConnectorCatalog';
 import type { ViewerController } from '@/viewer/ViewerController';
 
-type CatalogueItem = { id: string; partNumber: string; manufacturer: string; originalFilename: string; conversionStatus: string };
+type CatalogueItem = { id: string; partNumber: string; manufacturer: string; originalFilename: string; sourceSha256: string; conversionStatus: string };
 type Design = { id: string; modelVersionId: string; name: string; status: string; revision: number; activeModel: boolean };
 type Instance = {
   id: string; catalogItemId: string; partNumber: string; manufacturer: string; revision: number;
@@ -53,9 +53,9 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
   const base = `${getApiBaseUrl()}/api/projects/${projectId}/cad-design`;
   const activeCatalogue = catalogue.filter(item => item.conversionStatus === 'ready');
   const editing = instances.find(instance => instance.id === editingId);
-  const sourcePorts = getAalborgPocPorts(catalogue.find(item => item.id === selectedId)?.originalFilename ?? '');
+  const sourcePorts = getAalborgPocPorts(catalogue.find(item => item.id === selectedId)?.originalFilename ?? '', catalogue.find(item => item.id === selectedId)?.sourceSha256 ?? '');
   const target = instances.find(instance => instance.id === snapTarget);
-  const targetPorts = getAalborgPocPorts(catalogue.find(item => item.id === target?.catalogItemId)?.originalFilename ?? '');
+  const targetPorts = getAalborgPocPorts(catalogue.find(item => item.id === target?.catalogItemId)?.originalFilename ?? '', catalogue.find(item => item.id === target?.catalogItemId)?.sourceSha256 ?? '');
 
   const api = useCallback(async (path: string, init: RequestInit = {}) => {
     const response = await fetch(`${base}${path}`, {
