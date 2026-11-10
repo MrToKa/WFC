@@ -4,14 +4,14 @@ import { getAalborgPocPorts, MATE_OPPOSING_FACE } from './pocConnectorCatalog';
 
 describe('verified-geometry Aalborg PoC connector anchors', () => {
   it('exposes exactly two end faces for each supplied STEP and no others', () => {
-    expect(getAalborgPocPorts('NDX_KL_60-303_F_MED_214.step')).toHaveLength(2);
-    expect(getAalborgPocPorts('NDX_KLBK_60-303_MED_214.step')).toHaveLength(2);
-    expect(getAalborgPocPorts('different.step')).toHaveLength(0);
+    expect(getAalborgPocPorts('NDX_KL_60-303_F_MED_214.step', 'd381a3f4a09559e99119e3e591137f73780d16bf832019f93b20627adc5609cd')).toHaveLength(2);
+    expect(getAalborgPocPorts('NDX_KLBK_60-303_MED_214.step', '7a5cf4947a9ea5fa213ceef84ba952fe2a9a63dee752f0c23a598320802c0014')).toHaveLength(2);
+    expect(getAalborgPocPorts('different.step', 'invalid')).toHaveLength(0);
   });
 
   it('aligns the straight ladder to the bend end port in world mm', () => {
-    const target = getAalborgPocPorts('NDX_KLBK_60-303_MED_214.step')[0];
-    const source = getAalborgPocPorts('NDX_KL_60-303_F_MED_214.step')[0];
+    const target = getAalborgPocPorts('NDX_KLBK_60-303_MED_214.step', '7a5cf4947a9ea5fa213ceef84ba952fe2a9a63dee752f0c23a598320802c0014')[0];
+    const source = getAalborgPocPorts('NDX_KL_60-303_F_MED_214.step', 'd381a3f4a09559e99119e3e591137f73780d16bf832019f93b20627adc5609cd')[0];
     const sourceWorld = alignConnectorPorts(IDENTITY_TRANSFORM, target.local, source.local, MATE_OPPOSING_FACE);
     const from = composeTransform(sourceWorld, source.local).position;
     const to = target.local.position;
