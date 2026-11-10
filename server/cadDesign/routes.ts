@@ -372,6 +372,16 @@ cadDesignRouter.get('/designs/:designId/assembly.step', safe(async (req: CadRequ
   if (result.rows.length > 32) { failure(res, 413, 'CAD_EXPORT_PART_LIMIT'); return; }
   const { exportStepAssembly } = await import('./stepAssemblyClient.js');
   const output = await exportStepAssembly(result.rows);
+  // A client deliverable must be tied to one coherent saved design revision.
+  // If another user edited the assembly during CAD generation, refuse the
+  // stale export rather than returning misleading solids and metadata.
+  const revision = await pool.query<{ revision: number }>(
+    'SELECT revision FROM cad_designs WHERE project_id=$1 AND id=$2',
+    [projectId, designId],
+  );
+  if (!revision.rows[0] || revision.rows[0].revision !== design.rows[0].revision) {
+    failure(res, 409, 'DESIGN_CHANGED_DURING_EXPORT'); return;
+  }
   res.setHeader('Content-Type', 'application/step');
   res.setHeader('Content-Disposition', 'attachment; filename="wfc-proposed-cable-trays.step"');
   res.setHeader('Cache-Control', 'private, no-store');
