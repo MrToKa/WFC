@@ -1344,7 +1344,7 @@ export const ProjectDetails = () => {
         <Tab value="details">Details</Tab>
         <Tab value="cables">Cable types</Tab>
         <Tab value="cable-list">Cables list</Tab>
-        <Tab value="routings-viewer">Routings viewer</Tab>
+        <Tab value="routings-viewer">Routings builder</Tab>
         {user?.isAdmin ? <Tab value="pathfinder">Path Finder</Tab> : null}
         <Tab value="trays">Trays</Tab>
         {canViewAll ? <Tab value="cable-report">Cables MTOs</Tab> : null}
