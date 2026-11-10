@@ -103,3 +103,29 @@ export function alignConnectorPorts(
     invertTransform(sourcePortLocal),
   );
 }
+
+
+/**
+ * Verify two saved catalogue ports still form the specified connection.
+ * Equivalent quaternions q and -q represent the same orientation.
+ */
+export function connectorAlignmentIsValid(
+  sourceWorld: RigidTransform,
+  sourcePort: RigidTransform,
+  targetWorld: RigidTransform,
+  targetPort: RigidTransform,
+  mating: RigidTransform,
+  maxGapMm = 1,
+  maxAngleDegrees = 0.1,
+): boolean {
+  const intended = alignConnectorPorts(targetWorld, targetPort, sourcePort, mating);
+  const source = normalizeQuaternion(sourceWorld.rotation);
+  const desired = normalizeQuaternion(intended.rotation);
+  const gap = Math.hypot(
+    sourceWorld.position.x - intended.position.x,
+    sourceWorld.position.y - intended.position.y,
+    sourceWorld.position.z - intended.position.z,
+  );
+  const dot = Math.abs(source.x * desired.x + source.y * desired.y + source.z * desired.z + source.w * desired.w);
+  return gap <= maxGapMm && dot >= Math.cos(maxAngleDegrees * Math.PI / 360);
+}
