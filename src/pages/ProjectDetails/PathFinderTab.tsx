@@ -7,6 +7,7 @@ import { useRoutingsViewerHeight } from './hooks/useRoutingsViewerHeight';
 import { useRoutingsViewerStyles } from './RoutingsViewerTab.styles';
 import { PathFinderResults } from './PathFinderResults';
 import { PathFinderRecalculateAll } from './PathFinderRecalculateAll';
+import { PathFinderRecalculationPanel } from './PathFinderRecalculationPanel';
 import { PathFinderLookup } from './PathFinderLookup';
 import { PathFinderRoutes } from './PathFinderRoutes';
 import { PathFinderPreview } from './PathFinderPreview';
@@ -244,6 +245,11 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
           blocker={calculationBlocker ?? (!data?.artifacts.length ? 'Prepare the tray network in Routes before recalculating all cables.' : null)}
           disabled={pf.busy || locationCheckBusy || networkCheckBusy || !data?.artifacts.length}
           refreshState={pf.refreshState} onChanged={cableValuesChanged} /> : null}
+        {/* Keep command recovery active across viewer tool changes; its busy state stays local. */}
+        <PathFinderRecalculationPanel projectId={projectId} loadedProjectId={loadedProjectId} accountId={accountId ?? null} token={token} isAdmin={isAdmin}
+          active={active} contextKey={JSON.stringify([data?.activeModel.modelVersionId, data?.activeModel.selectionRevision, data?.activeModel.contentFingerprint])}
+          preferences={backgroundPreferences} configurationMessage={calculationBlocker} onConfigureCalculation={validSecondary ? configureCalculation : undefined}
+          onChanged={cableValuesChanged} onAuthorityLost={cableValuesChanged} />
         <PathFinderCableWorkspace projectId={projectId} loadedProjectId={loadedProjectId} accountId={accountId ?? null} token={token} isAdmin={isAdmin}
           pf={pf} active={mode === 'path'} selectedCableId={selectedCableId} refreshKey={cableWriteRefresh} preferences={backgroundPreferences} readPreferences={backgroundPreferences ?? readPreferences} onConfigureCalculation={configureCalculation} onResultRefresh={workflowResultRefreshed}
           getCalculationPreferences={getCableCalculationPreferences} onCalculationPreferences={setWorkflowCalculationPreferences}

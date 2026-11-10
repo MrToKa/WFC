@@ -66,7 +66,10 @@ vi.mock('./PathFinderBarriersPanel', async () => {
     return null;
   } };
 });
-vi.mock('./PathFinderRecalculationPanel', () => ({ PathFinderRecalculationPanel: () => null }));
+const automaticCapture = vi.hoisted(() => ({ render: vi.fn() }));
+vi.mock('./PathFinderRecalculationPanel', () => ({ PathFinderRecalculationPanel: (props: import('./PathFinderRecalculationPanel').RecalculationPanelProps) => {
+  automaticCapture.render(props); return <section aria-label="Automatic recalculation"><button>Enable for 30 minutes</button></section>;
+} }));
 const trayPreparationCapture = vi.hoisted(() => ({ render: vi.fn() }));
 vi.mock('./ProjectPreparationPanel', () => ({ ProjectPreparationPanel: (props: Parameters<typeof import('./ProjectPreparationPanel').ProjectPreparationPanel>[0]) => {
   trayPreparationCapture.render(props); return null;
@@ -148,6 +151,24 @@ function preview(id: string, reverse = false): PathFinderPreview { return { id, 
 
 // Fluent's expanded sidebar makes jsdom role/style queries expensive; assertions still use their normal wait budgets.
 describe('admin PathFinder interface', { timeout: 60_000 }, () => {
+  it('restores continuous automatic recalculation alongside the one-shot pass without blocking the popup or resetting on tab changes', async () => {
+    const user = userEvent.setup(), current = { ...proposalModel(), data: { ...pf.data, artifacts: [artifact()] } };
+    vi.mocked(usePathFinder).mockReturnValue(current);
+    render(<PathFinderTab projectId={projectId} loadedProjectId={projectId} token="isolated-test-token" accountId={accountId} isAdmin />);
+    expect(screen.getByRole('button', { name: 'Enable for 30 minutes' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Recalculate all the cables' })).toBeEnabled();
+    const automatic = automaticCapture.render.mock.calls.at(-1)![0];
+    expect(automatic).toMatchObject({ projectId, loadedProjectId: projectId, accountId, token: 'isolated-test-token', isAdmin: true, active: true,
+      preferences: { secondaryDistanceMeters: 2, preferVerticalApproach: true, barrierRouting: { drillThroughWalls: false } } });
+    act(() => automatic.onChanged());
+    expect(workspaceCapture.render.mock.calls.at(-1)![0]).toMatchObject({ refreshKey: 1, pf: { busy: false } });
+    expect(current.refresh).not.toHaveBeenCalled(); expect(current.reloadViewer).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('tab', { name: 'Routes' }));
+    expect(automaticCapture.render.mock.calls.at(-1)![0]).toMatchObject({ active: true, contextKey: automatic.contextKey });
+    await user.click(screen.getByRole('tab', { name: 'Path' }));
+    expect(screen.getByRole('button', { name: 'Enable for 30 minutes' })).toBeEnabled();
+    expect(submitAllPathFinderCalculations).not.toHaveBeenCalled(); expect(current.calculate).not.toHaveBeenCalled();
+  });
   it('keeps the camera and viewer host through Routes, Path and Path lookup changes', async () => {
     const user = userEvent.setup(); mount();
     const host = screen.getByTestId('pathfinder-model-host');
@@ -196,6 +217,7 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
     });
     expect(screen.getByRole('checkbox', { name: 'Drill through the walls' })).not.toBeChecked();
     expect(screen.getByRole('button', { name: 'Recalculate all the cables' })).toBeDisabled();
+    expect(automaticCapture.render.mock.calls.at(-1)![0]).toMatchObject({ preferences: null, configurationMessage: expect.any(String) });
     expect(screen.getByText(mode === 'pending'
       ? 'Wait for the saved barrier command to finish, or use Retry saved command in Barriers if its outcome is unknown.'
       : mode === 'dirty' ? 'Save the obstacle selection in Barriers before calculating.'
