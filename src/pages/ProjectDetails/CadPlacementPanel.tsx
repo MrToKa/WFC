@@ -37,6 +37,7 @@ function quaternionEuler(instance: Instance): Pick<Coordinates, 'rx' | 'ry' | 'r
 }
 
 export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue, onShow, onMove }: Props) {
+  const rendered = useRef(new Set<string>());
   const [designId, setDesignId] = useState<string | null>(null);
   const [instances, setInstances] = useState<Instance[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
