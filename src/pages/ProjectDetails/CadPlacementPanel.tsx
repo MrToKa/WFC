@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Body1, Button, Caption1, Field, Input, Spinner } from '@fluentui/react-components';
 import { getApiBaseUrl } from '@/api/http';
-import { normalizeQuaternion } from '@/viewer/componentTransforms';
+import { normalizeQuaternion, alignConnectorPorts } from '@/viewer/componentTransforms';
+import { getAalborgPocPorts, MATE_OPPOSING_FACE } from '@/viewer/pocConnectorCatalog';
 import type { ViewerController } from '@/viewer/ViewerController';
 
-type CatalogueItem = { id: string; partNumber: string; manufacturer: string; conversionStatus: string };
+type CatalogueItem = { id: string; partNumber: string; manufacturer: string; originalFilename: string; conversionStatus: string };
 type Design = { id: string; modelVersionId: string; name: string; status: string; revision: number; activeModel: boolean };
 type Instance = {
   id: string; catalogItemId: string; partNumber: string; manufacturer: string; revision: number;
@@ -42,6 +43,9 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
   const [instances, setInstances] = useState<Instance[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
   const [editingId, setEditingId] = useState<string>('');
+  const [snapTarget, setSnapTarget] = useState('');
+  const [snapTargetPort, setSnapTargetPort] = useState('');
+  const [snapSourcePort, setSnapSourcePort] = useState('');
   const [coordinates, setCoordinates] = useState<Coordinates>(empty);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -49,6 +53,9 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
   const base = `${getApiBaseUrl()}/api/projects/${projectId}/cad-design`;
   const activeCatalogue = catalogue.filter(item => item.conversionStatus === 'ready');
   const editing = instances.find(instance => instance.id === editingId);
+  const sourcePorts = getAalborgPocPorts(catalogue.find(item => item.id === selectedId)?.originalFilename ?? '');
+  const target = instances.find(instance => instance.id === snapTarget);
+  const targetPorts = getAalborgPocPorts(catalogue.find(item => item.id === target?.catalogItemId)?.originalFilename ?? '');
 
   const api = useCallback(async (path: string, init: RequestInit = {}) => {
     const response = await fetch(`${base}${path}`, {
@@ -131,6 +138,29 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
     });
   };
 
+  const snap = () => {
+    if (!target || target.id === editingId) { setNotice('Select another saved component as the snap target.'); return; }
+    const sourcePort = sourcePorts.find(port => port.id === snapSourcePort);
+    const targetPort = targetPorts.find(port => port.id === snapTargetPort);
+    if (!sourcePort || !targetPort || sourcePort.profile !== targetPort.profile) {
+      setNotice('Choose compatible and verified source/target connection ports.'); return;
+    }
+    try {
+      const snapped = alignConnectorPorts(
+        { position: { x: target.xMm, y: target.yMm, z: target.zMm },
+          rotation: { x: target.qx, y: target.qy, z: target.qz, w: target.qw } },
+        targetPort.local, sourcePort.local, MATE_OPPOSING_FACE,
+      );
+      const angles = quaternionEuler({ qx: snapped.rotation.x, qy: snapped.rotation.y,
+        qz: snapped.rotation.z, qw: snapped.rotation.w } as Instance);
+      setCoordinates({ x: String(snapped.position.x), y: String(snapped.position.y),
+        z: String(snapped.position.z), ...angles });
+      setNotice('Connector snap calculated. Save to persist the position; fitting and clearance still need engineering verification.');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Connector snap failed.');
+    }
+  };
+
   const save = async (event: FormEvent) => {
     event.preventDefault();
     const numeric = [coordinates.x, coordinates.y, coordinates.z, coordinates.rx, coordinates.ry, coordinates.rz].map(Number);
@@ -203,6 +233,31 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
         {activeCatalogue.map(item => <option key={item.id} value={item.id}>{item.manufacturer} — {item.partNumber}</option>)}
       </select>
     </Field>
+    {sourcePorts.length ? <section aria-label="Connector snap">
+      <Caption1>PoC connector snap — measured from the two supplied STEP files; no certified splice plate clearance.</Caption1>
+      <Field label="Snap to placed component">
+        <select aria-label="Snap target" value={snapTarget} onChange={event => { setSnapTarget(event.target.value); setSnapTargetPort(''); }} disabled={busy}>
+          <option value="">Choose target</option>
+          {instances.filter(instance => instance.id !== editingId).map(instance =>
+            <option key={instance.id} value={instance.id}>{instance.manufacturer} {instance.partNumber} — {instance.id.slice(0, 8)}</option>)}
+        </select>
+      </Field>
+      <Field label="Target connector">
+        <select aria-label="Target connector" value={snapTargetPort} onChange={event => setSnapTargetPort(event.target.value)} disabled={busy}>
+          <option value="">Choose port</option>
+          {targetPorts.map(port => <option key={port.id} value={port.id}>{port.label}</option>)}
+        </select>
+      </Field>
+      <Field label="New component connector">
+        <select aria-label="Source connector" value={snapSourcePort} onChange={event => setSnapSourcePort(event.target.value)} disabled={busy}>
+          <option value="">Choose port</option>
+          {sourcePorts.map(port => <option key={port.id} value={port.id}>{port.label}</option>)}
+        </select>
+      </Field>
+      <Button type="button" disabled={busy || !target || !snapTargetPort || !snapSourcePort} onClick={snap}>
+        Snap to connector
+      </Button>
+    </section> : null}
     <form onSubmit={event => { void save(event); }} aria-label="Save component position">
       {(['x', 'y', 'z', 'rx', 'ry', 'rz'] as const).map(axis => <Field key={axis}
         label={['x','y','z'].includes(axis) ? `${axis.toUpperCase()} (mm)` : `Rotation ${axis.slice(1).toUpperCase()} (degrees)`}>
