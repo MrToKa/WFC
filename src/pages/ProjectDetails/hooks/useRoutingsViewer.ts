@@ -227,6 +227,21 @@ export function useRoutingsViewer({ projectId, loadedProjectId, token, container
     if (run) { run.closed = true; cancelAttempt(run); run.metadata.abort(); run.controller?.dispose('reload'); }
     setState(initial(scope)); setRetryId(value => value + 1);
   }, [scope, cancelAttempt]);
+  const showCadComponent = useCallback(async (...args: Parameters<ViewerController['showCadComponent']>): Promise<void> => {
+    const run = runRef.current;
+    if (!run || run.scope !== scope || !current(run) || !run.controller?.getLoadSnapshot()?.ready) throw new Error('Active model unavailable.');
+    await run.controller.showCadComponent(...args);
+  }, [scope, current]);
+  const moveCadComponent = useCallback(async (...args: Parameters<ViewerController['moveCadComponent']>): Promise<void> => {
+    const run = runRef.current;
+    if (!run || run.scope !== scope || !current(run) || !run.controller?.getLoadSnapshot()?.ready) throw new Error('Active model unavailable.');
+    await run.controller.moveCadComponent(...args);
+  }, [scope, current]);
+  const removeCadComponent = useCallback(async (...args: Parameters<ViewerController['removeCadComponent']>): Promise<void> => {
+    const run = runRef.current;
+    if (!run || run.scope !== scope || !current(run) || !run.controller?.getLoadSnapshot()?.ready) return;
+    await run.controller.removeCadComponent(...args);
+  }, [scope, current]);
   const visible = state.scope === scope ? state : initial(scope);
-  return { ...visible, show, showCable, invalidateCableRoute, retryRoute, terminateAccess, clear, zoom, retry, canShow: visible.phase === 'ready', canZoom: visible.phase === 'ready' && !visible.checking && Boolean(visible.result && visible.result.drawableCount > 0 && visible.result.lineCount > 0) };
+  return { ...visible, show, showCable, showCadComponent, moveCadComponent, removeCadComponent, invalidateCableRoute, retryRoute, terminateAccess, clear, zoom, retry, canShow: visible.phase === 'ready', canZoom: visible.phase === 'ready' && !visible.checking && Boolean(visible.result && visible.result.drawableCount > 0 && visible.result.lineCount > 0) };
 }
