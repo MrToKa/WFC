@@ -1,9 +1,12 @@
 # Separate CAD process for the isolated PoC; never install OCCT in WFC API.
 FROM python:3.11-slim-bookworm
+RUN apt-get update && apt-get install --no-install-recommends -y libgl1 libxrender1 libxext6 libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir 'cadquery==2.6.1'
 RUN useradd --uid 10001 --create-home cadworker
 WORKDIR /app
 COPY scripts/poc/step-mesh-converter.py /app/converter.py
+COPY scripts/poc/smoke-converter.py /app/smoke.py
 USER 10001
 ENV PYTHONUNBUFFERED=1 TMPDIR=/tmp
 EXPOSE 8090
