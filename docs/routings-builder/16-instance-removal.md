@@ -14,18 +14,18 @@ model-scoped CAD_REMOVE command. A renderer failure is reported separately from 
 successful database deletion so the user can reload the view without retrying a deletion.
 
 API: DELETE `/api/projects/:projectId/cad-design/designs/:designId/instances/:instanceId`,
-strict JSON `{expectedRevision}`, success204. Project edit permission, UUIDs, proposed
+strict JSON `{expectedRevision}`, success 204. Project edit permission, UUIDs, proposed
 status, active healthy model and instance revision are checked. The transaction locks
 the design/model selection and instance before deletion. Existing FK cascades remove
 its relationships and existing triggers advance the proposal revision. Concurrent or
-stale edits are refused with409; missing instances return404. No schema change is needed.
+stale edits are refused with 409; missing instances return 404. No schema change is needed.
 
-Verified locally2026-11-10: TypeScript, full lint, real API/web Docker builds and51
+Verified locally 2026-11-10: TypeScript, full lint, real API/web Docker builds and 51
 focused API/UI/routing tests passed. This includes cancellation, successful removal,
-stale revision rejection, renderer cleanup failure and15 backend HTTP tests.
+stale revision rejection, renderer cleanup failure and 15 backend HTTP tests.
 
 Real browser validation opened the selected temporary part's confirmation dialog and
 cancelled without a write. Real deployed API validation deleted two newly created,
 owned temporary instances, including their mutual connection. The eight other current
 instances, their connections and catalogue references compared unchanged. No source
-5180 services/data or main checkout were changed. PoC5181 was updated independently.
+5180 services/data or main checkout were changed. PoC 5181 was updated independently.
