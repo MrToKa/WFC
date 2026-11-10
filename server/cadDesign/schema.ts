@@ -22,11 +22,16 @@ export async function initializeCadDesignSchema(pool: Pool): Promise<void> {
       conversion_status TEXT NOT NULL DEFAULT 'pending'
         CHECK (conversion_status IN ('pending', 'ready', 'failed')),
       created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+      material_tray_cad_asset_id UUID REFERENCES material_tray_cad_assets(id) ON DELETE RESTRICT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       CHECK (conversion_status <> 'ready' OR (mesh_object_key IS NOT NULL AND mesh_metadata IS NOT NULL)),
       UNIQUE (project_id, source_sha256),
       UNIQUE (project_id, id)
     );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS cad_catalog_project_material_asset
+      ON cad_catalog_items(project_id,material_tray_cad_asset_id)
+      WHERE material_tray_cad_asset_id IS NOT NULL;
 
     CREATE TABLE IF NOT EXISTS cad_designs (
       id UUID PRIMARY KEY,
