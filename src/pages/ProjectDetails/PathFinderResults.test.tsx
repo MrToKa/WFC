@@ -458,20 +458,60 @@ describe('selected current cable workflow result', () => {
     expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce(); expect(f.pf.calculate).not.toHaveBeenCalled();
     expect(f.pf.reviewProposal).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
   });
-  it.each(['routing', 'length', 'cancelled', 'failed'] as const)('does not use an accepted receipt as display readiness when its current %s proof differs', async changedField => {
+  it.each(['routing', 'length'] as const)('does not use an accepted receipt as display readiness when its current %s proof differs', async changedField => {
     const f = workflowFixture(), changed = vi.fn<(value: PathFinderWorkflowDisplay) => void>();
     f.proposal.stale = true; f.proposal.canApply = false;
     f.live.row.cable = { ...f.live.row.cable, routing: '/BC1', designLength: '7', cableWriteRevision: '10' };
     f.live.row.calculation = { ...f.live.row.calculation, reviewable: false, acceptedMatchesCurrent: true };
     if (changedField === 'routing') f.live.row.cable.routing = '/OTHER';
     if (changedField === 'length') f.live.row.cable.designLength = '8';
-    if (changedField === 'cancelled' || changedField === 'failed') f.pf.readJob.mockResolvedValue({ ...f.parent, status: changedField, cancelRequested: changedField === 'cancelled' });
     render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} workflowSelection={f.live.row} accountId={id(2)} options={options}
       onWorkflowDisplayChange={changed} workflowDisplayRequest={{ cableId: id(4), requestId: 1, action: 'show' }} />);
     await waitFor(() => expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce());
     await act(async () => {});
     expect(changed.mock.calls.at(-1)?.[0]).toMatchObject({ ready: false, visible: false, routing: null });
     expect(f.pf.showPath).not.toHaveBeenCalled(); expect(f.pf.reviewProposal).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
+  });
+  it.each([{ status: 'cancelled', cancelRequested: false }, { status: 'failed', cancelRequested: false },
+    { status: 'running', cancelRequested: true }] as const)('shows an independently saved current item after its background parent stops (%j)', async stop => {
+    const f = workflowFixture(), changed = vi.fn<(value: PathFinderWorkflowDisplay) => void>(), review = vi.fn<(value: PathFinderWorkflowReview | null) => void>();
+    f.proposal.stale = true; f.proposal.canApply = false;
+    f.live.row.cable = { ...f.live.row.cable, routing: '/BC1', designLength: '7', cableWriteRevision: '10' };
+    f.live.row.calculation = { ...f.live.row.calculation, jobStatus: stop.status, reviewable: false, acceptedMatchesCurrent: true };
+    f.pf.data.cables[0].cableWriteRevision = '10'; f.pf.readJob.mockResolvedValue({ ...f.parent, ...stop });
+    const p = { pf: asPf({ ...f.pf, data: { ...f.pf.data, jobs: [{ ...f.parent, ...stop }] } }), selectedCableId: id(4),
+      workflowSelection: f.live.row, accountId: id(2), options, onWorkflowDisplayChange: changed, onWorkflowReviewChange: review };
+    const view = render(<PathFinderResults {...p} />);
+    await waitFor(() => expect(changed.mock.calls.at(-1)?.[0]).toMatchObject({ ready: true, visible: false, routing: '/BC1' }));
+    view.rerender(<PathFinderResults {...p} workflowDisplayRequest={{ cableId: id(4), requestId: 1, action: 'show' }} />);
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23] }));
+    expect(review.mock.calls.at(-1)?.[0]).toMatchObject({ canReview: false, canApply: false });
+    expect(f.pf.calculate).not.toHaveBeenCalled(); expect(f.pf.reviewProposal).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
+  });
+  it.each([true, false])('freshly verifies an accepted cached path after a parent stop before retaining Show (receipt remains current: %s)', async remainsCurrent => {
+    const f = workflowFixture('running'), changed = vi.fn<(value: PathFinderWorkflowDisplay) => void>();
+    f.proposal.stale = true; f.proposal.canApply = false;
+    f.live.row.cable = { ...f.live.row.cable, routing: '/BC1', designLength: '7', cableWriteRevision: '10' };
+    f.live.row.calculation = { ...f.live.row.calculation, reviewable: false, acceptedMatchesCurrent: true };
+    f.pf.data.cables[0].cableWriteRevision = '10';
+    const p = { pf: asPf(f.pf), selectedCableId: id(4), workflowSelection: f.live.row, accountId: id(2), options,
+      onWorkflowDisplayChange: changed };
+    const view = render(<PathFinderResults {...p} />);
+    await waitFor(() => expect(changed.mock.calls.at(-1)?.[0].ready).toBe(true));
+    let finish!: (value: typeof f.live) => void;
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    f.pf.readJob.mockResolvedValue({ ...f.parent, status: 'failed' });
+    view.rerender(<PathFinderResults {...p} pf={asPf({ ...f.pf, data: { ...f.pf.data, jobs: [{ ...f.parent, status: 'failed' }] } })} />);
+    await waitFor(() => expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledTimes(2));
+    expect(changed.mock.calls.at(-1)?.[0].ready).toBe(false); expect(f.pf.showPath).not.toHaveBeenCalled();
+    const fresh = { ...f.live, row: { ...f.live.row, calculation: { ...f.live.row.calculation, jobStatus: 'failed' as const,
+      acceptedMatchesCurrent: remainsCurrent, currentness: remainsCurrent ? 'current' as const : 'changed' as const } } };
+    await act(async () => finish(fresh));
+    await waitFor(() => {
+      expect(changed.mock.calls.at(-1)?.[0].ready).toBe(remainsCurrent);
+      expect(changed.mock.calls.at(-1)?.[0].checking).not.toBe(true);
+    });
+    expect(f.pf.reviewProposal).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
   });
   it.each(['complete', 'running'] as const)('reads the saved selected result concurrently under its immutable policy while the parent is %s', async status => {
     const f = workflowFixture(status), changed = vi.fn<(value: PathFinderWorkflowDisplay) => void>();

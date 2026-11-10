@@ -297,10 +297,10 @@ describe('bounded cable diagnostics, mocked SQL protocol and explicit proof/auth
     const value=await f.repo.detail(projectId,who,id(1000),{});
     expect(mocks.accepted).not.toHaveBeenCalled();expect(value.row.calculation.acceptedMatchesCurrent).toBe(false);
   });
-  it('excludes MV, preserves unknown categories and refuses oversized fields before projection', async () => {
+  it('excludes MV, keeps optional MTO values eligible and refuses oversized fields before projection', async () => {
     const f = fixture(3); f.state.cables[0].mto = 'MV'; f.state.cables[1].mto = 'Unknown';
     const result = await f.repo.page(projectId, who, { filter: 'all' });
-    expect(result.rows.map(value => value.cable.id)).toEqual([id(1001), id(1002)]); expect(classifyCableWorkflow(result.rows[0]).status).toBe('blocked');
+    expect(result.rows.map(value => value.cable.id)).toEqual([id(1001), id(1002)]); expect(classifyCableWorkflow(result.rows[0]).status).toBe('needs-routing');
     f.state.cables[1].input_oversize = true; await expect(f.repo.page(projectId, who, {})).rejects.toMatchObject({ code: 'WORKFLOW_CABLE_INPUT_LIMIT' });
     const sql = f.query.mock.calls.find(([text]) => text.includes('cable-workflow:candidates'))![0]; expect(sql).toContain('CASE WHEN octet_length'); expect(sql).toContain('LIMIT 201');
   });

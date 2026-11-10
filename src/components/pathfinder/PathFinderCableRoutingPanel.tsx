@@ -342,8 +342,8 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
                 <pre className={styles.note} style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{cable.cable.routing ?? 'No routing stored'}</pre>
                 <p role="status" className={styles.note}>An exact current proposal comparison is not available yet. Refresh this cable or configure routing and calculate a new result before Review and Apply.</p>
               </section>}
-        {currentReview?.comparisonError ? <p role="alert" className={styles.note}>{currentReview.comparisonError}</p> : null}
-        {currentReview?.message ? <p role="status" className={styles.note}>{currentReview.message}</p> : null}
+        {!pairSaved && currentReview?.comparisonError ? <p role="alert" className={styles.note}>{currentReview.comparisonError}</p> : null}
+        {!pairSaved && currentReview?.message ? <p role="status" className={styles.note}>{currentReview.message}</p> : null}
         {currentReview?.reviewed ? <p role="status" className={styles.note}>Review confirmed for this exact proposal. Apply updates routing and design length together.</p> : null}
         {currentReview?.applied ? <p role="status" className={styles.note}>The matching Apply receipt is confirmed. Cable list values have been updated.</p> : null}
         {!pairSaved && !automaticWriting ? <div className={styles.actions}>

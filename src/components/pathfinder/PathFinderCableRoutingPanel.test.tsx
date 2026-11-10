@@ -267,6 +267,18 @@ describe('persistent nonmodal cable routing panel with atomic drafts', () => {
     expect(screen.queryByRole('button',{name:'Review proposed routing'})).toBeNull();
     expect(screen.queryByRole('button',{name:'Apply reviewed routing'})).toBeNull();
   });
+  it.each(['failed', 'cancelled'] as const)('does not call a verified saved cable outdated because its parent is %s', status => {
+    const p = props(); p.cable!.cable.routing = '/SAVED'; p.cable!.cable.designLength = '27';
+    p.cable!.calculation = { ...p.cable!.calculation, jobId: id(79), jobStatus: status, itemState: 'complete',
+      outcome: 'calculated', currentness: 'current', proposalId: id(80), proposalHash: 'b'.repeat(64), acceptedMatchesCurrent: true };
+    const review = { ...reviewController(p), canReview: false, message: 'This result is outdated. Calculate routing again.',
+      comparisonError: 'The batch is no longer available for review.' };
+    render(<PathFinderCableRoutingPanel {...p} review={review} pathReady calculatedRouting="/SAVED" calculatedDesignLength="27" />);
+    expect(screen.getByRole('button', { name: 'Show' })).toBeEnabled();
+    expect(screen.getByText('Routing and length saved')).toBeVisible();
+    expect(screen.queryByText(review.message)).toBeNull(); expect(screen.queryByText(review.comparisonError)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Apply reviewed routing' })).toBeNull();
+  });
   it('shows automatic pair write progress without offering Review or Apply during that write', () => {
     const p=props(); p.cable!.calculation.automaticUpdate={status:'running',receiptId:null,reasonCode:null};
     render(<PathFinderCableRoutingPanel {...p} calculationPending />);

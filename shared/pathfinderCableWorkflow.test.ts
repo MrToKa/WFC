@@ -170,8 +170,26 @@ describe('cable workflow status is a display projection', () => {
   it('requires explicit current accepted-result evidence for up-to-date rather than the presence of old values', () => {
     const input = row({ cable: { ...row().cable, routing: '/EXISTING', designLength: '20' } });
     expect(classifyCableWorkflow(input).status).toBe('needs-routing');
-    expect(classifyCableWorkflow({ ...input, calculation: calculation({ currentness: 'current', acceptedMatchesCurrent: true }) }).status).toBe('up-to-date');
-    expect(classifyCableWorkflow(row({ calculation: calculation({ currentness: 'current', acceptedMatchesCurrent: true }) })).status).toBe('blocked');
+    expect(classifyCableWorkflow({ ...input, calculation: { ...ready(), reviewable: false, acceptedMatchesCurrent: true } }).status).toBe('up-to-date');
+    expect(classifyCableWorkflow(row({ calculation: { ...ready(), reviewable: false, acceptedMatchesCurrent: true } })).status).toBe('blocked');
+  });
+  it.each(['cancelled', 'failed'] as const)('keeps an independently saved completed cable up to date after background parent %s', jobStatus => {
+    const input = row({ cable: { ...row().cable, routing: '/SAVED', designLength: '27' },
+      calculation: { ...ready(), jobStatus, reviewable: false, acceptedMatchesCurrent: true } });
+    const parsed = cableWorkflowRowSchema.parse(input);
+    expect(classifyCableWorkflow(parsed)).toEqual({ status: 'up-to-date', reasonCodes: [] });
+    expect(parsed.calculation.reviewable).toBe(false);
+    expect(classifyCableWorkflow({ ...parsed, calculation: { ...parsed.calculation, acceptedMatchesCurrent: false } }).status).toBe('blocked');
+  });
+  it.each([
+    { itemState: 'waiting', outcome: 'not-evaluated' }, { itemState: 'running', outcome: 'not-evaluated' },
+    { itemState: 'blocked', outcome: 'failed' }, { outcome: 'no-path' }, { currentness: 'changed' },
+    { proposalId: null, proposalHash: null },
+  ] as const)('rejects accepted saved evidence inconsistent with its exact completed item: %j', patch => {
+    const input = row({ cable: { ...row().cable, routing: '/SAVED', designLength: '27' },
+      calculation: { ...ready(), jobStatus: 'failed', reviewable: false, acceptedMatchesCurrent: true, ...patch } });
+    expect(cableWorkflowRowSchema.safeParse(input).success).toBe(false);
+    expect(classifyCableWorkflow(input).status).toBe('blocked');
   });
   it('keeps no-path, stale, cancellation and failed jobs distinguishable from missing endpoints', () => {
     for (const [outcome, reason] of [['no-path', 'NO_PATH'], ['stale', 'CALCULATION_STALE']] as const)

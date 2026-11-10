@@ -44,7 +44,7 @@ function currentAcceptedDisplayRow(proposal: PathFinderProposal, row: CableWorkf
   const value = parsed.data, calculation = value.calculation, envelope = result.data;
   if (value.projectId !== proposal.projectId || value.cable.id !== proposal.cableId || calculation.jobId !== proposal.jobId
     || calculation.proposalId !== proposal.id || calculation.proposalHash !== proposal.proposalHash
-    || calculation.jobStatus !== 'complete' || calculation.itemState !== 'complete' || calculation.outcome !== 'calculated'
+    || calculation.itemState !== 'complete' || calculation.outcome !== 'calculated'
     || calculation.currentness !== 'current' || !calculation.acceptedMatchesCurrent
     || envelope.projectId !== proposal.projectId || envelope.cableId !== proposal.cableId || envelope.jobId !== proposal.jobId
     || envelope.proposalId !== proposal.id || envelope.proposalHash !== proposal.proposalHash
@@ -275,7 +275,7 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
     workflowTarget.calculation.currentness, workflowTarget.calculation.reviewable, workflowTarget.calculation.savedExactDisplay === true]) : null;
   // A retained proposal is useful history, but it cannot stand in for a newer
   // calculation while its exact metadata and endpoint foreground are loading.
-  const displayReady = Boolean(active && !observedWorkflowStop && workflowKey && workflowDisplayProof?.key === workflowKey && proposal && workflowTarget
+  const displayReady = Boolean(active && (!observedWorkflowStop || workflowDisplayProof?.accepted) && workflowKey && workflowDisplayProof?.key === workflowKey && proposal && workflowTarget
     && workflowDisplayProof.proposalId === proposal.id && workflowDisplayProof.proposalHash === proposal.proposalHash
     && workflowProposalRead?.key === workflowKey && workflowProposalRead.scope === displayVerificationScope
     && workflowProposalRead.row.calculation.itemState === 'complete'
@@ -402,7 +402,7 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
     setWorkflowProposalRead(null);
     setWorkflowCheck({ key: workflowKey, checking: true, message: 'Checking this cable’s calculated path for Show…' });
     adoptScope({ admissionId: null, jobId: target.calculation.jobId, ready: false, message: 'Checking the selected cable calculation…' }, true);
-    if (observedWorkflowStop) {
+    if (observedWorkflowStop && !target.calculation.acceptedMatchesCurrent) {
       setPreviewLoading(false);
       const message = 'This calculation was cancelled or failed. Its saved path is preview only.';
       setNotice(message); setWorkflowCheck({ key: workflowKey, checking: false, message });
@@ -525,11 +525,13 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
             || live.row.cable.routing !== detail.route.routeText || live.row.cable.designLength === null) return false;
           try { return canonicalDecimalString(live.row.cable.designLength) === canonicalDecimalString(detail.design.designLengthMeters); } catch { return false; }
         })();
-        const wholeJobReady = Boolean(envelope && parent?.status === 'complete' && !parent.cancelRequested && liveCurrent);
-        const itemReady = Boolean(envelope && parent && ['queued', 'running'].includes(parent.status) && !parent.cancelRequested && liveCurrent
+        const wholeJobReady = Boolean(!observedWorkflowStop && envelope && parent?.status === 'complete' && !parent.cancelRequested && liveCurrent);
+        const itemReady = Boolean(!observedWorkflowStop && envelope && parent && ['queued', 'running'].includes(parent.status) && !parent.cancelRequested && liveCurrent
           && hasExactItemApplicability(detail, access.projectId));
-        const acceptedDisplayReady = Boolean(envelope && acceptedDisplayCurrent && parent && !parent.cancelRequested
-          && ['complete', 'queued', 'running'].includes(parent.status));
+        // A confirmed write belongs to this exact cable item. A later batch
+        // stop cannot undo it, but fresh live receipt/identity/value evidence
+        // is still required; this exception grants no Review/Apply authority.
+        const acceptedDisplayReady = Boolean(envelope && acceptedDisplayCurrent && parent);
         // A separate server proof permits inspection of the already saved exact
         // geometry after an implementation update. It never renews currentness,
         // calculation scope, Review or Apply authority.
@@ -542,8 +544,8 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
           })());
         const issue = !envelope ? 'This historical path has no verifiable calculation admission. It is preview only; use Cable revision results or calculate a fresh proposal before Review and Apply.'
           : !parent ? 'The exact calculation state is unavailable. This path is preview only; reopen the selected cable result to check again.'
-            : parent.cancelRequested || ['cancelled', 'failed'].includes(parent.status) ? 'This calculation was cancelled or failed. Its saved path is preview only.'
-              : acceptedDisplayReady ? 'The current route is saved in Cable list and ready to show.'
+            : acceptedDisplayReady ? 'The current route is saved in Cable list and ready to show.'
+              : parent.cancelRequested || ['cancelled', 'failed'].includes(parent.status) ? 'This calculation was cancelled or failed. Its saved path is preview only.'
                 : savedExactDisplayReady ? 'The saved route is ready to show. Calculate routing to review a new result.'
                   : !liveCurrent ? 'The current cable proof is unavailable or changed. This path is preview only; refresh the cable list and calculate again when needed.'
                     : !wholeJobReady && !itemReady ? 'This calculation is still running and this cable has no current sealed item. Review is blocked until it is ready.' : null;
