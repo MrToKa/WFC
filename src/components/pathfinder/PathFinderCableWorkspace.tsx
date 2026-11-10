@@ -351,7 +351,10 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   useEffect(() => {
     if (lastExternalRefresh.current === props.refreshKey) return;
     if (!props.active) return;
-    lastExternalRefresh.current = props.refreshKey; refreshDiagnostics(true);
+    lastExternalRefresh.current = props.refreshKey;
+    // Find/assign can restore display identity without changing coordinates,
+    // the binding head or the Cable list revision. Refresh the open endpoints too.
+    setEndpointRefreshKey(value => value + 1); refreshDiagnostics(true);
   }, [props.active, props.refreshKey, refreshDiagnostics]);
   useEffect(() => {
     if (!props.active) read.current?.abort();

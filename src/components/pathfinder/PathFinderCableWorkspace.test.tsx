@@ -974,6 +974,18 @@ describe('owned cable routing workspace composition (mocked reads and child UI)'
     expect(p.pf.refresh).not.toHaveBeenCalled(); view.rerender(<PathFinderCableWorkspace {...p} refreshKey={1} />);
     expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce();
   });
+  it('refreshes open endpoint display after Find/assign even when the cable and binding revisions stay unchanged', async () => {
+    const p = props(), view = render(<PathFinderCableWorkspace {...p} refreshKey={0} />); await openListCable();
+    const cable = panelProps.cable;
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockResolvedValue({ projectId: id(1), cableId: cable!.cable.id, row: cable } as never);
+    expect(panelProps.endpointRefreshKey).toBe(0);
+    view.rerender(<PathFinderCableWorkspace {...p} refreshKey={1} />);
+    await waitFor(() => expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce());
+    expect(panelProps.endpointRefreshKey).toBe(1); expect(panelProps.cable).toEqual(cable);
+    view.rerender(<PathFinderCableWorkspace {...p} refreshKey={1} />);
+    expect(panelProps.endpointRefreshKey).toBe(1);
+    expect(p.pf.submitCalculation).not.toHaveBeenCalled(); expect(p.pf.calculate).not.toHaveBeenCalled();
+  });
   it('defers a confirmed Apply refresh received while inactive until the same workspace resumes', async () => {
     const p = props(), view = render(<PathFinderCableWorkspace {...p} refreshKey={0} />); await openListCable();
     view.rerender(<PathFinderCableWorkspace {...p} refreshKey={1} active={false} />); expect(fetchPathFinderCableWorkflowDetail).not.toHaveBeenCalled();

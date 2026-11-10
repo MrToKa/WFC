@@ -483,7 +483,7 @@ describe('selected current cable workflow result', () => {
     await waitFor(() => expect(changed.mock.calls.at(-1)?.[0]).toMatchObject({ ready: false, routing: null, verifiedRow: null, verifiedScope: null }));
     expect(f.pf.showPath).not.toHaveBeenCalled(); expect(f.pf.reviewProposal).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
   });
-  it('keeps a receipt-proven own-write result displayable after its cable revision advances without renewing Review or Apply', async () => {
+  it('labels a receipt-proven own-write result ready after its cable revision advances without renewing Review or Apply', async () => {
     const f = workflowFixture(), changed = vi.fn<(value: PathFinderWorkflowDisplay) => void>(), review = vi.fn<(value: PathFinderWorkflowReview | null) => void>();
     f.proposal.stale = true; f.proposal.canApply = false;
     f.live.row.cable = { ...f.live.row.cable, routing: '/BC1', designLength: '7.000', cableWriteRevision: '10' };
@@ -493,6 +493,8 @@ describe('selected current cable workflow result', () => {
       onWorkflowDisplayChange: changed, onWorkflowReviewChange: review };
     const view = render(<PathFinderResults {...props} />);
     await waitFor(() => expect(changed.mock.calls.at(-1)?.[0]).toMatchObject({ ready: true, visible: false, jobId: id(7), proposalId: id(3), routing: '/BC1', designLength: '7' }));
+    expect(screen.getByText('The current route is saved in Cable list and ready to show.')).toBeVisible();
+    expect(screen.queryByText(/The current cable proof is unavailable or changed/)).toBeNull();
     expect(review.mock.calls.at(-1)?.[0]).toMatchObject({ canReview: false, canApply: false, message: expect.stringContaining('already saved in Cable list') });
     view.rerender(<PathFinderResults {...props} workflowDisplayRequest={{ cableId: id(4), requestId: 1, action: 'show' }} />);
     await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23] }));

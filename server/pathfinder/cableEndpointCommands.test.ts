@@ -25,6 +25,7 @@ function fixture() {
   const original = f.client.query;
   const query = vi.fn(async (sql: string, args: unknown[] = []) => {
     if (sql.startsWith('BEGIN ISOLATION')) return original('BEGIN');
+    if (sql.startsWith('/* model-location-match:preserved-display */')) return { rows: [] };
     if (sql.startsWith('/* cable-endpoint:')) {
       f.queries.push(sql); f.parameters.push(args); const p = args as string[];
       if (sql.startsWith('/* cable-endpoint:cable */')) { const c = f.state.cables.find(c => c.id === p[1]); return { rows: c && !settings.missing ? [{ ...c, cable_write_revision: settings.cableRevision, mto: settings.mto, oversized: settings.oversized }] : [] }; }
