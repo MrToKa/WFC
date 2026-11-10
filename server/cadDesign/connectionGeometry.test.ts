@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { alignConnectorPorts, connectorAlignmentIsValid, IDENTITY_TRANSFORM } from '../../shared/cadTransforms.js';
+import { alignConnectorPorts, connectorAlignmentIsValid, composeTransform, IDENTITY_TRANSFORM } from '../../shared/cadTransforms.js';
 import { getAalborgPocPorts, MATE_OPPOSING_FACE } from '../../shared/cadPocPorts.js';
 
 const straight = getAalborgPocPorts(
@@ -30,9 +30,12 @@ describe('authoritative snap tolerance for saved project components', () => {
     expect(connectorAlignmentIsValid(equivalent,straight[0].local,target,bend[0].local,MATE_OPPOSING_FACE)).toBe(true);
   });
   it('rejects a two-degree misrotation', () => {
-    const rotated = { ...source, rotation: {x: 0,y:0,z:0,w:1} };
-    // Rotations are not necessarily identity for this source; validate a
-    // deliberately distinct non-coincident orientation rather than a guessed axis.
+    const rot2deg = { position: { x:0, y:0, z:0 }, rotation: {
+      x:0, y:0, z:Math.sin(Math.PI / 180), w:Math.cos(Math.PI / 180),
+    } };
+    const rotated = { ...source, rotation: composeTransform(
+      { position: {x:0,y:0,z:0}, rotation: source.rotation }, rot2deg,
+    ).rotation };
     expect(connectorAlignmentIsValid(rotated,straight[0].local,target,bend[0].local,MATE_OPPOSING_FACE)).toBe(false);
   });
   it('refuses unverified same-name STEP variants', () => {
