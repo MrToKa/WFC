@@ -1,0 +1,54 @@
+name: Aalborg Routings Builder PoC Validation
+
+on:
+  push:
+    branches:
+      - feature/aalborg-step-routings-builder-poc-20261110
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aalborg-routings-poc-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typescript-and-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      DATABASE_URL: postgresql://example:example@127.0.0.1:5432/unused_test
+      JWT_SECRET: intentionally-nonproduction-ci-only
+      MINIO_ACCESS_KEY: synthetic-ci-only
+      MINIO_SECRET_KEY: synthetic-ci-only
+    steps:
+      - name: Checkout exact PoC source
+        uses: actions/checkout@v4
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Typecheck frontend and server
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Focused CAD tests
+        run: npx vitest run --maxWorkers=1 --minWorkers=1 src/viewer/componentTransforms.test.ts server/cadDesign/stepFileValidation.test.ts server/middleware.test.ts src/pages/ProjectDetails/RoutingsViewerTab.test.tsx src/ProjectAccess.test.tsx
+      - name: Compile frontend
+        run: npm run build
+      - name: Compile server
+        run: npm run server:build
+      - name: Python converter syntax
+        run: python -m py_compile scripts/poc/step-mesh-converter.py
+      - name: Validate isolated Compose syntax
+        env:
+          POC_POSTGRES_PASSWORD: synthetic-ci-123456789012345678901234
+          POC_MINIO_USER: wfc_poc
+          POC_MINIO_PASSWORD: synthetic-ci-123456789012345678901234
+          POC_JWT_SECRET: synthetic-ci-123456789012345678901234
+          POC_CONVERTER_TOKEN: synthetic-ci-123456789012345678901234
+        run: docker compose -f compose.poc.yaml -p wfc-aalborg-poc config --quiet
