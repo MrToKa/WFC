@@ -22,11 +22,47 @@ MAX_OUTPUT_BYTES = 16 * 1024 * 1024
 TOKEN = os.environ.get("POC_CONVERTER_TOKEN", "")
 
 
-def convert_step(step_path):
+def cut_straight_solids(solids, length_mm):
+    """Cut the known local-Z 6000 mm stock; never scale its profile or rungs."""
+    if isinstance(length_mm, bool) or not isinstance(length_mm, (int, float)) or not 0 < length_mm <= 6000 or not math.isfinite(length_mm):
+        raise ValueError("Cut length must be finite and greater than zero, up to 6000 mm")
+    if not solids or len(solids) > 100:
+        raise ValueError("Invalid straight solid count")
+    boxes = [solid.BoundingBox() for solid in solids]
+    bounds = [min(box.xmin for box in boxes), min(box.ymin for box in boxes),
+              min(box.zmin for box in boxes), max(box.xmax for box in boxes),
+              max(box.ymax for box in boxes), max(box.zmax for box in boxes)]
+    if not all(math.isfinite(value) and abs(value) <= 1e9 for value in bounds) or abs(bounds[2]) > 0.001 or abs(bounds[5] - 6000) > 0.001:
+        raise ValueError("Cutting requires the original local-Z 0..6000 mm straight stock")
+    if not all(solid.isValid() and solid.Volume() > 1e-9 for solid in solids):
+        raise ValueError("Invalid source B-Rep")
+    if length_mm == 6000:
+        return list(solids)
+    # All X/Y source geometry remains inside the cutting box. Its only effective
+    # cut plane is Z=length, leaving the original Z=0 start and rung pitch intact.
+    cutter = cq.Solid.makeBox(bounds[3] - bounds[0] + 2, bounds[4] - bounds[1] + 2,
+                             float(length_mm), cq.Vector(bounds[0] - 1, bounds[1] - 1, 0))
+    result = []
+    for solid in solids:
+        for cut in solid.intersect(cutter).Solids():
+            if not cut.isValid() or cut.Volume() <= 1e-9:
+                raise ValueError("Cut produced an invalid solid")
+            result.append(cut)
+    if not result or len(result) > 100:
+        raise ValueError("Cut produced no usable solids or exceeded the body limit")
+    cut_boxes = [solid.BoundingBox() for solid in result]
+    if abs(min(box.zmin for box in cut_boxes)) > 0.001 or abs(max(box.zmax for box in cut_boxes) - length_mm) > 0.001:
+        raise ValueError("Cut B-Rep does not match the requested straight length")
+    return result
+
+
+def convert_step(step_path, cut_length_mm=None):
     assembly = cq.importers.importStep(step_path)
     solids = assembly.solids().vals()
     if not solids or len(solids) > 100:
         raise ValueError("STEP file must contain between 1 and 100 solid bodies")
+    if cut_length_mm is not None:
+        solids = cut_straight_solids(solids, cut_length_mm)
 
     positions, normals, indices = [], [], []
     lo = [float("inf")] * 3
@@ -82,7 +118,8 @@ def assemble_step(request):
     with tempfile.TemporaryDirectory(prefix="wfc-cad-assembly-") as work:
         result = cq.Assembly(name="WFC Proposed Cable Tray")
         for index, part in enumerate(parts):
-            if not isinstance(part, dict) or set(part) != {"name", "stepBase64", "positionMm", "rotation"}:
+            required = {"name", "stepBase64", "positionMm", "rotation"}
+            if not isinstance(part, dict) or not required.issubset(part) or set(part) - required - {"cutLengthMm"}:
                 raise ValueError("Invalid CAD assembly part")
             if not isinstance(part["name"], str) or not 1 <= len(part["name"]) <= 120:
                 raise ValueError("Invalid CAD part label")
@@ -110,6 +147,8 @@ def assemble_step(request):
             solids = cq.importers.importStep(source_path).solids().vals()
             if not solids or len(solids) > 50:
                 raise ValueError("Invalid CAD solid count")
+            if "cutLengthMm" in part:
+                solids = cut_straight_solids(solids, part["cutLengthMm"])
             transform = gp_Trsf()
             transform.SetRotation(gp_Quaternion(*rotation))
             transform.SetTranslationPart(gp_Vec(*position))
@@ -191,7 +230,11 @@ class Handler(BaseHTTPRequestHandler):
                 filepath = os.path.join(work, "source.step")
                 with open(filepath, "wb") as stream:
                     stream.write(payload)
-                result = convert_step(filepath)
+                cut_headers = self.headers.get_all("X-WFC-Cut-Length-Mm") or []
+                if len(cut_headers) > 1:
+                    raise ValueError("Duplicate cut length header")
+                cut_length = float(cut_headers[0]) if cut_headers else None
+                result = convert_step(filepath, cut_length)
             encoded = json.dumps(result, separators=(",", ":"), allow_nan=False).encode("utf-8")
             if len(encoded) > MAX_OUTPUT_BYTES:
                 self.respond(413, {"code": "MESH_TOO_LARGE"})

@@ -106,6 +106,7 @@ export async function initializeCadDesignSchema(pool: Pool): Promise<void> {
       qy DOUBLE PRECISION NOT NULL CHECK (qy BETWEEN -1 AND 1),
       qz DOUBLE PRECISION NOT NULL CHECK (qz BETWEEN -1 AND 1),
       qw DOUBLE PRECISION NOT NULL CHECK (qw BETWEEN -1 AND 1),
+      cut_length_mm DOUBLE PRECISION CHECK (cut_length_mm BETWEEN 1 AND 6000),
       revision INTEGER NOT NULL DEFAULT 1 CHECK (revision > 0),
       created_by UUID REFERENCES users(id) ON DELETE SET NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -118,6 +119,31 @@ export async function initializeCadDesignSchema(pool: Pool): Promise<void> {
         qx*qx + qy*qy + qz*qz + qw*qw BETWEEN 0.999999 AND 1.000001
       )
     );
+
+    ALTER TABLE cad_design_instances ADD COLUMN IF NOT EXISTS cut_length_mm
+      DOUBLE PRECISION CHECK (cut_length_mm BETWEEN 1 AND 6000);
+
+    -- A cut is a proposal parameter, never a mutation of the manufacturer asset.
+    CREATE OR REPLACE FUNCTION cad_validate_instance_cut() RETURNS TRIGGER
+    LANGUAGE plpgsql AS $cad$
+    BEGIN
+      IF NEW.cut_length_mm IS NOT NULL AND NOT EXISTS (
+        SELECT 1 FROM cad_catalog_items c
+          JOIN material_component_cad_assets a ON a.id=c.material_component_cad_asset_id
+          JOIN material_components p ON p.id=a.component_id
+        WHERE c.project_id=NEW.project_id AND c.id=NEW.catalog_item_id
+          AND p.component_kind='straight'
+          AND upper(trim(c.original_filename))='NDX_KL_60-303_F_MED_214.STEP'
+          AND c.source_sha256='d381a3f4a09559e99119e3e591137f73780d16bf832019f93b20627adc5609cd'
+      ) THEN
+        RAISE EXCEPTION 'Cut length is unsupported for this CAD component' USING ERRCODE='23514';
+      END IF;
+      RETURN NEW;
+    END;
+    $cad$;
+    DROP TRIGGER IF EXISTS cad_validate_instance_cut ON cad_design_instances;
+    CREATE TRIGGER cad_validate_instance_cut BEFORE INSERT OR UPDATE OF cut_length_mm,catalog_item_id
+      ON cad_design_instances FOR EACH ROW EXECUTE FUNCTION cad_validate_instance_cut();
 
     CREATE INDEX IF NOT EXISTS cad_design_instances_design_idx
       ON cad_design_instances(project_id, design_id, created_at, id);
@@ -165,9 +191,9 @@ export async function initializeCadDesignSchema(pool: Pool): Promise<void> {
     CREATE OR REPLACE FUNCTION cad_reject_connected_instance_move() RETURNS TRIGGER
     LANGUAGE plpgsql AS $cad$
     BEGIN
-      IF (OLD.x_mm,OLD.y_mm,OLD.z_mm,OLD.qx,OLD.qy,OLD.qz,OLD.qw)
+      IF (OLD.x_mm,OLD.y_mm,OLD.z_mm,OLD.qx,OLD.qy,OLD.qz,OLD.qw,OLD.cut_length_mm)
           IS DISTINCT FROM
-         (NEW.x_mm,NEW.y_mm,NEW.z_mm,NEW.qx,NEW.qy,NEW.qz,NEW.qw)
+         (NEW.x_mm,NEW.y_mm,NEW.z_mm,NEW.qx,NEW.qy,NEW.qz,NEW.qw,NEW.cut_length_mm)
          AND EXISTS (
            SELECT 1 FROM cad_design_connections c
             WHERE c.project_id=OLD.project_id AND c.design_id=OLD.design_id
@@ -183,7 +209,7 @@ export async function initializeCadDesignSchema(pool: Pool): Promise<void> {
 
     DROP TRIGGER IF EXISTS cad_block_move_of_connected_instance ON cad_design_instances;
     CREATE TRIGGER cad_block_move_of_connected_instance
-      BEFORE UPDATE OF x_mm,y_mm,z_mm,qx,qy,qz,qw ON cad_design_instances
+      BEFORE UPDATE OF x_mm,y_mm,z_mm,qx,qy,qz,qw,cut_length_mm ON cad_design_instances
       FOR EACH ROW EXECUTE FUNCTION cad_reject_connected_instance_move();
 
     -- The client must not pick a CAD revision number. Every persisted placement

@@ -5,11 +5,12 @@ type CadPlacement = {
   source_object_key: string;
   x_mm: number; y_mm: number; z_mm: number;
   qx: number; qy: number; qz: number; qw: number;
+  cut_length_mm?: number | null;
 };
 const MAX_INPUT_BYTES = 8 * 1024 * 1024;
 const MAX_OUTPUT_BYTES = 32 * 1024 * 1024;
 
-async function readBoundedSource(key: string): Promise<Buffer> {
+export async function readBoundedSource(key: string): Promise<Buffer> {
   const source = await getObjectStream(getProjectBucket(), key);
   const chunks: Buffer[] = [];
   let size = 0;
@@ -40,6 +41,7 @@ export async function exportStepAssembly(parts: CadPlacement[]): Promise<Buffer>
   }
   const requestParts: Array<{
     name: string; stepBase64: string; positionMm: [number,number,number]; rotation: [number,number,number,number];
+    cutLengthMm?: number;
   }> = [];
   let total = 0;
   for (const part of parts) {
@@ -51,6 +53,7 @@ export async function exportStepAssembly(parts: CadPlacement[]): Promise<Buffer>
       stepBase64: bytes.toString('base64'),
       positionMm: [part.x_mm, part.y_mm, part.z_mm],
       rotation: [part.qx, part.qy, part.qz, part.qw],
+      ...(part.cut_length_mm != null ? { cutLengthMm: part.cut_length_mm } : {}),
     });
   }
   const payload = Buffer.from(JSON.stringify({ parts: requestParts }), 'utf8');

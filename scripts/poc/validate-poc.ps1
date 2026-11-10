@@ -29,7 +29,7 @@ try {
         npx vitest run --maxWorkers=1 --minWorkers=1 --testTimeout=15000 src/viewer/ViewerController.test.ts src/viewer/componentTransforms.test.ts src/viewer/pocConnectorCatalog.test.ts server/cadDesign/stepFileValidation.test.ts server/cadDesign/connectionGeometry.test.ts server/middleware.test.ts src/pages/ProjectDetails/RoutingsViewerTab.test.tsx src/ProjectAccess.test.tsx
     }
     Invoke-Checked 'Materials and pinned CAD revision tests' {
-        npx vitest run --maxWorkers=1 --minWorkers=1 --testTimeout=15000 server/materialCad server/cadDesign/isolation.test.ts server/cadDesign/catalogReferences.test.ts server/cadDesign/instanceDeletion.test.ts src/pages/Materials/components/MaterialComponentsSection.test.tsx src/pages/ProjectDetails/CadComponentsPanel.test.tsx src/pages/ProjectDetails/CadPlacementPanel.test.tsx
+        npx vitest run --maxWorkers=1 --minWorkers=1 --testTimeout=15000 server/materialCad server/cadDesign/isolation.test.ts server/cadDesign/catalogReferences.test.ts server/cadDesign/instanceDeletion.test.ts server/cadDesign/lengths.test.ts server/cadDesign/lengthConverter.test.ts src/pages/Materials/components/MaterialComponentsSection.test.tsx src/pages/ProjectDetails/CadComponentsPanel.test.tsx src/pages/ProjectDetails/CadPlacementPanel.test.tsx src/pages/ProjectDetails/CadLengthPanel.test.tsx
     }
     Invoke-Checked 'Complete Materials navigation, filtering and return-state' {
         npx vitest run --maxWorkers=1 --minWorkers=1 --testTimeout=15000 src/pages/Materials.test.tsx

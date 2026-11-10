@@ -30,7 +30,10 @@ export function parseConvertedMesh(payload: unknown): CadMesh {
   return parsed;
 }
 
-export async function convertStepToMesh(source: Buffer): Promise<{ bytes: Buffer; mesh: CadMesh }> {
+export async function convertStepToMesh(source: Buffer, options: { lengthMm?: number | null } = {}): Promise<{ bytes: Buffer; mesh: CadMesh }> {
+  if (options.lengthMm != null && (!Number.isFinite(options.lengthMm) || options.lengthMm < 1 || options.lengthMm > 6000)) {
+    throw new Error('Cut length must be between 1 and 6000 mm.');
+  }
   const endpoint = process.env.WFC_CAD_CONVERTER_URL;
   const token = process.env.POC_CONVERTER_TOKEN;
   if (!endpoint || !token || token.length < 32) {
@@ -47,6 +50,7 @@ export async function convertStepToMesh(source: Buffer): Promise<{ bytes: Buffer
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/step',
+      ...(options.lengthMm != null ? { 'X-WFC-Cut-Length-Mm': String(options.lengthMm) } : {}),
     },
     body: new Uint8Array(source),
     signal: AbortSignal.timeout(120_000),

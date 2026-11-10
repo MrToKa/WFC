@@ -10,6 +10,7 @@ type CatalogueItem = {
   originalFilename: string; sourceSha256: string;
   conversionStatus: 'pending' | 'ready' | 'failed';
   materialAssetId: string | null; cadRevision: number | null;
+  componentKind?: string;
 };
 type Props = {
   projectId: string | null; token: string | null; modelVersionId: string | null; ready: boolean;

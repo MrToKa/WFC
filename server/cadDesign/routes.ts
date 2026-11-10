@@ -3,6 +3,9 @@ import { csvCell } from './stepFileValidation.js';
 import { cadPocPortSeeds } from './pocPortSeed.js';
 import { connectorAlignmentIsValid, type RigidTransform } from '../../shared/cadTransforms.js';
 import { MATE_OPPOSING_FACE } from '../../shared/cadPocPorts.js';
+import { getInstanceCadPorts, normalizeCutLengthMm, supportsStraightCut } from '../../shared/cadLengths.js';
+import { convertStepToMesh } from './converter.js';
+import { readBoundedSource } from './stepAssemblyClient.js';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { pool } from '../db.js';
@@ -35,10 +38,12 @@ const designInput = z.object({
 const instanceInput = z.object({
   catalogItemId: uuid,
   transform,
+  lengthMm: z.number().finite().min(1).max(6000).nullable().optional(),
 }).strict();
 const updateInput = z.object({
   expectedRevision: z.number().int().positive(),
   transform,
+  lengthMm: z.number().finite().min(1).max(6000).nullable().optional(),
 }).strict();
 const deleteInput = z.object({ expectedRevision: z.number().int().positive().max(Number.MAX_SAFE_INTEGER) }).strict();
 
@@ -64,7 +69,9 @@ cadDesignRouter.get('/catalog', safe(async (req: CadRequest, res: Response) => {
             created_at AS "createdAt",
             material_component_cad_asset_id AS "materialAssetId",
             (SELECT revision FROM material_component_cad_assets a
-              WHERE a.id=cad_catalog_items.material_component_cad_asset_id) AS "cadRevision"
+              WHERE a.id=cad_catalog_items.material_component_cad_asset_id) AS "cadRevision",
+            (SELECT p.component_kind FROM material_component_cad_assets a JOIN material_components p ON p.id=a.component_id
+              WHERE a.id=cad_catalog_items.material_component_cad_asset_id) AS "componentKind"
      FROM cad_catalog_items WHERE project_id=$1 ORDER BY created_at, id`,
     [req.params.projectId],
   );
@@ -208,20 +215,55 @@ cadDesignRouter.get('/designs/:designId/instances', safe(async (req: CadRequest,
   const result = await pool.query(
     `SELECT i.id, i.catalog_item_id AS "catalogItemId", i.revision,
             i.x_mm AS "xMm", i.y_mm AS "yMm", i.z_mm AS "zMm",
-            i.qx, i.qy, i.qz, i.qw,
+            i.qx, i.qy, i.qz, i.qw, i.cut_length_mm AS "lengthMm",
+            c.original_filename AS "originalFilename",c.source_sha256 AS "sourceSha256",
             c.manufacturer, c.part_number AS "partNumber", c.family,
             c.conversion_status AS "conversionStatus",
             c.material_component_cad_asset_id AS "materialAssetId",
-            a.revision AS "cadRevision", a.component_id AS "componentId"
+            a.revision AS "cadRevision", a.component_id AS "componentId",p.component_kind AS "componentKind"
        FROM cad_design_instances i
        JOIN cad_designs d ON d.project_id=i.project_id AND d.id=i.design_id
        JOIN cad_catalog_items c ON c.project_id=i.project_id AND c.id=i.catalog_item_id
        LEFT JOIN material_component_cad_assets a ON a.id=c.material_component_cad_asset_id
+       LEFT JOIN material_components p ON p.id=a.component_id
       WHERE i.project_id=$1 AND d.id=$2 ORDER BY i.created_at, i.id LIMIT 500`,
     [req.params.projectId, req.params.designId],
   );
   res.setHeader('Cache-Control', 'private, no-store');
   res.json({ instances: result.rows });
+}));
+
+// Derived display geometry is tied to one scoped saved instance and its pinned source.
+// It never overwrites the global manufacturer mesh or source STEP revision.
+cadDesignRouter.get('/designs/:designId/instances/:instanceId/mesh', safe(async (req, res) => {
+  if (![req.params.designId, req.params.instanceId].every(value => uuid.safeParse(value).success)) {
+    failure(res, 400, 'INVALID_INSTANCE_ID'); return;
+  }
+  const result = await pool.query<{ cut_length_mm: number | null; original_filename: string; source_sha256: string;
+    source_object_key: string; mesh_object_key: string; component_kind: string }>(
+    `SELECT i.cut_length_mm,c.original_filename,c.source_sha256,c.source_object_key,c.mesh_object_key,p.component_kind
+       FROM cad_design_instances i
+       JOIN cad_catalog_items c ON c.project_id=i.project_id AND c.id=i.catalog_item_id
+       JOIN material_component_cad_assets a ON a.id=c.material_component_cad_asset_id
+       JOIN material_components p ON p.id=a.component_id
+      WHERE i.project_id=$1 AND i.design_id=$2 AND i.id=$3 AND c.conversion_status='ready'`,
+    [req.params.projectId,req.params.designId,req.params.instanceId],
+  );
+  const row = result.rows[0];
+  if (!row) { failure(res, 404, 'INSTANCE_NOT_FOUND'); return; }
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  if (row.cut_length_mm == null) {
+    const stream = await getObjectStream(getProjectBucket(),row.mesh_object_key);
+    stream.on('error', () => res.destroy()); stream.pipe(res); return;
+  }
+  if (row.component_kind !== 'straight' || !supportsStraightCut(row.original_filename,row.source_sha256)) {
+    failure(res, 422, 'CUT_LENGTH_UNSUPPORTED'); return;
+  }
+  const source = await readBoundedSource(row.source_object_key);
+  const converted = await convertStepToMesh(source,{ lengthMm: row.cut_length_mm });
+  res.send(converted.bytes);
 }));
 
 cadDesignRouter.post('/designs/:designId/instances', requireProjectEdit, safe(async (req: CadRequest, res: Response) => {
@@ -232,11 +274,24 @@ cadDesignRouter.post('/designs/:designId/instances', requireProjectEdit, safe(as
   if (!parsed.success) { failure(res, 400, 'INVALID_INSTANCE'); return; }
   const { projectId, designId } = req.params;
   const { catalogItemId, transform: t } = parsed.data;
+  const lengthMm = normalizeCutLengthMm(parsed.data.lengthMm);
+  if (parsed.data.lengthMm != null) {
+    const source = await pool.query<{ original_filename: string; source_sha256: string; component_kind: string }>(
+      `SELECT c.original_filename,c.source_sha256,p.component_kind FROM cad_catalog_items c
+         JOIN material_component_cad_assets a ON a.id=c.material_component_cad_asset_id
+         JOIN material_components p ON p.id=a.component_id WHERE c.project_id=$1 AND c.id=$2`,
+      [projectId,catalogItemId],
+    );
+    const part = source.rows[0];
+    if (!part || part.component_kind !== 'straight' || !supportsStraightCut(part.original_filename,part.source_sha256)) {
+      failure(res, 422, 'CUT_LENGTH_UNSUPPORTED'); return;
+    }
+  }
   const id = randomUUID();
   const result = await pool.query(
     `INSERT INTO cad_design_instances
-      (id,project_id,design_id,catalog_item_id,x_mm,y_mm,z_mm,qx,qy,qz,qw,created_by)
-     SELECT $1,d.project_id,d.id,c.id,$5,$6,$7,$8,$9,$10,$11,$12
+      (id,project_id,design_id,catalog_item_id,x_mm,y_mm,z_mm,qx,qy,qz,qw,created_by,cut_length_mm)
+     SELECT $1,d.project_id,d.id,c.id,$5,$6,$7,$8,$9,$10,$11,$12,$13
        FROM cad_designs d
        JOIN project_model_selections s ON s.project_id=d.project_id AND s.active_model_version_id=d.model_version_id
        JOIN model_versions v ON v.project_id=d.project_id AND v.id=d.model_version_id
@@ -248,7 +303,7 @@ cadDesignRouter.post('/designs/:designId/instances', requireProjectEdit, safe(as
     [id, projectId, designId, catalogItemId,
       t.positionMm.x, t.positionMm.y, t.positionMm.z,
       t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w,
-      req.userId ?? null],
+      req.userId ?? null,lengthMm],
   );
   if (!result.rows[0]) { failure(res, 409, 'DESIGN_OR_MODEL_NOT_EDITABLE'); return; }
   res.status(201).json(result.rows[0]);
@@ -261,9 +316,25 @@ cadDesignRouter.patch('/designs/:designId/instances/:instanceId', requireProject
   const parsed = updateInput.safeParse(req.body);
   if (!parsed.success) { failure(res, 400, 'INVALID_INSTANCE'); return; }
   const t = parsed.data.transform;
+  const hasLength = Object.hasOwn(parsed.data,'lengthMm');
+  const lengthMm = normalizeCutLengthMm(parsed.data.lengthMm);
+  if (parsed.data.lengthMm != null) {
+    const source = await pool.query<{ original_filename: string; source_sha256: string; component_kind: string }>(
+      `SELECT c.original_filename,c.source_sha256,p.component_kind FROM cad_design_instances i
+         JOIN cad_catalog_items c ON c.project_id=i.project_id AND c.id=i.catalog_item_id
+         JOIN material_component_cad_assets a ON a.id=c.material_component_cad_asset_id
+         JOIN material_components p ON p.id=a.component_id WHERE i.project_id=$1 AND i.design_id=$2 AND i.id=$3`,
+      [req.params.projectId,req.params.designId,req.params.instanceId],
+    );
+    const part = source.rows[0];
+    if (!part || part.component_kind !== 'straight' || !supportsStraightCut(part.original_filename,part.source_sha256)) {
+      failure(res, 422, 'CUT_LENGTH_UNSUPPORTED'); return;
+    }
+  }
   const result = await pool.query(
     `UPDATE cad_design_instances i
         SET x_mm=$5, y_mm=$6, z_mm=$7, qx=$8, qy=$9, qz=$10, qw=$11,
+            cut_length_mm=CASE WHEN $12::boolean THEN $13::double precision ELSE i.cut_length_mm END,
             revision=i.revision+1, updated_at=now()
        FROM cad_designs d
        JOIN project_model_selections s ON s.project_id=d.project_id AND s.active_model_version_id=d.model_version_id
@@ -279,7 +350,7 @@ cadDesignRouter.patch('/designs/:designId/instances/:instanceId', requireProject
     RETURNING i.id, i.revision`,
     [req.params.projectId, req.params.designId, req.params.instanceId,
       parsed.data.expectedRevision, t.positionMm.x, t.positionMm.y, t.positionMm.z,
-      t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w],
+      t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w,hasLength,lengthMm],
   );
   if (!result.rows[0]) { failure(res, 409, 'STALE_OR_INACTIVE_INSTANCE'); return; }
   res.json(result.rows[0]);
@@ -345,20 +416,25 @@ cadDesignRouter.get('/designs/:designId/materials.csv', safe(async (req: CadRequ
     `SELECT c.manufacturer, c.part_number, c.family, c.source_sha256,
             c.material_component_cad_asset_id AS asset_id, a.revision AS cad_revision,
             p.component_kind,
+            CASE WHEN p.component_kind='straight'
+              AND upper(c.original_filename)='NDX_KL_60-303_F_MED_214.STEP'
+              AND c.source_sha256='d381a3f4a09559e99119e3e591137f73780d16bf832019f93b20627adc5609cd'
+              THEN COALESCE(i.cut_length_mm,6000) ELSE NULL END AS length_mm,
             COUNT(i.id)::int AS quantity
        FROM cad_design_instances i
        JOIN cad_catalog_items c ON c.project_id=i.project_id AND c.id=i.catalog_item_id
        LEFT JOIN material_component_cad_assets a ON a.id=c.material_component_cad_asset_id
        LEFT JOIN material_components p ON p.id=a.component_id
       WHERE i.project_id=$1 AND i.design_id=$2
-      GROUP BY c.id, a.revision, p.component_kind
-      ORDER BY c.manufacturer, c.part_number`,
+      GROUP BY c.id, a.revision, p.component_kind, i.cut_length_mm
+      ORDER BY c.manufacturer, c.part_number, i.cut_length_mm NULLS LAST`,
     [req.params.projectId, req.params.designId],
   );
   const lines = [
-    ['Manufacturer','Part number','Family','Component type','CAD asset','CAD revision','Source SHA-256','Quantity'].map(csvCell).join(','),
+    ['Manufacturer','Part number','Family','Component type','CAD asset','CAD revision','Source SHA-256','Quantity','Length (mm)','Total length (m)'].map(csvCell).join(','),
     ...rows.rows.map(row => [row.manufacturer,row.part_number,row.family,row.component_kind ?? '',
-      row.asset_id ?? '',row.cad_revision ?? '',row.source_sha256,row.quantity].map(csvCell).join(',')),
+      row.asset_id ?? '',row.cad_revision ?? '',row.source_sha256,row.quantity,
+      row.length_mm ?? '',row.length_mm == null ? '' : Number((row.length_mm * row.quantity / 1000).toFixed(6))].map(csvCell).join(',')),
   ];
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', 'attachment; filename="wfc-proposed-tray-mto.csv"');
@@ -378,11 +454,11 @@ cadDesignRouter.get('/designs/:designId/assembly.step', safe(async (req: CadRequ
   );
   if (!design.rows[0]) { failure(res, 404, 'CAD_DESIGN_NOT_FOUND'); return; }
   const result = await pool.query<{
-    original_filename: string; source_object_key: string;
+    original_filename: string; source_object_key: string; cut_length_mm: number | null;
     x_mm: number; y_mm: number; z_mm: number;
     qx: number; qy: number; qz: number; qw: number;
   }>(
-    `SELECT c.original_filename, c.source_object_key,
+    `SELECT c.original_filename, c.source_object_key, i.cut_length_mm,
             i.x_mm, i.y_mm, i.z_mm, i.qx, i.qy, i.qz, i.qw
        FROM cad_design_instances i
        JOIN cad_catalog_items c ON c.project_id=i.project_id AND c.id=i.catalog_item_id
@@ -420,6 +496,8 @@ type PortRow = {
   x_mm: number; y_mm: number; z_mm: number;
   qx: number; qy: number; qz: number; qw: number;
   port_id: string; port_type: string; local_transform: unknown;
+  port_name: string; cut_length_mm: number | null;
+  original_filename: string; source_sha256: string;
 };
 
 const connectionInput = z.object({
@@ -439,11 +517,14 @@ function worldTransform(row: PortRow): RigidTransform {
 }
 
 function physicallySnapped(source: PortRow, target: PortRow): boolean {
-  const sourceLocal = localRigid.parse(source.local_transform);
-  const targetLocal = localRigid.parse(target.local_transform);
+  const local = (row: PortRow) => row.cut_length_mm == null ? row.local_transform :
+    getInstanceCadPorts(row.original_filename,row.source_sha256,row.cut_length_mm).find(port => port.id === row.port_name)?.local;
+  const sourceLocal = localRigid.safeParse(local(source));
+  const targetLocal = localRigid.safeParse(local(target));
+  if (!sourceLocal.success || !targetLocal.success) return false;
   return connectorAlignmentIsValid(
-    worldTransform(source), sourceLocal,
-    worldTransform(target), targetLocal, MATE_OPPOSING_FACE,
+    worldTransform(source), sourceLocal.data,
+    worldTransform(target), targetLocal.data, MATE_OPPOSING_FACE,
   );
 }
 
@@ -498,8 +579,10 @@ cadDesignRouter.post('/designs/:designId/connections', requireProjectEdit, safe(
       const result = await client.query<PortRow>(
         `SELECT i.id AS instance_id, i.catalog_item_id,
                 i.x_mm, i.y_mm, i.z_mm, i.qx, i.qy, i.qz, i.qw,
-                p.id AS port_id, p.port_type, p.local_transform
+                p.id AS port_id, p.name AS port_name, p.port_type, p.local_transform,
+                i.cut_length_mm, c.original_filename, c.source_sha256
            FROM cad_design_instances i
+           JOIN cad_catalog_items c ON c.project_id=i.project_id AND c.id=i.catalog_item_id
            JOIN cad_catalog_ports p ON p.project_id=i.project_id
              AND p.catalog_item_id=i.catalog_item_id AND p.name=$4
           WHERE i.project_id=$1 AND i.design_id=$2 AND i.id=$3 FOR UPDATE OF i`,

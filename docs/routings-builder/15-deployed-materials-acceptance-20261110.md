@@ -125,6 +125,26 @@ read-only to verify exact bounds again. Bootstrap with
 hash and reuses the dedicated existing PoC project/version. Run only the dedicated
 Compose file/project; no source service needs to stop.
 
+## Straight length follow-up
+
+Routings builder now provides **Length (mm)** for the approved 6000 mm straight
+STEP. Select the saved row, enter 1–6000 mm and press **Save changes**. A connected
+piece requires **Disconnect** first; snap and reconnect after resizing. New pieces
+can receive their length before saving. Enter 6000 to restore the full stock piece.
+The field stays disabled for fittings and unapproved source files.
+
+This is an exact CAD cut, with profile and rung spacing preserved. It does not
+stretch the source model. The saved piece carries the length; Materials SKU,
+manufacturer STEP bytes, revision and the other placed pieces remain unchanged.
+The displayed mesh, end connector, exported STEP and MTO use the saved cut length.
+See [the instance/API contract](12-materials-components-catalog.md#instance-cut-length)
+for the precise source hash, bounds, migration and backward compatibility rules.
+
+The focused CI and local validation lists include `lengths.test.ts`,
+`lengthConverter.test.ts` and `CadLengthPanel.test.tsx`. The acceptance results above
+describe the earlier full-stock placement; they do not by themselves verify this
+subsequent length feature against the deployed Viewer.
+
 ## Acceptance boundary
 
 This completes software acceptance for the requested Materials/SKU/STEP integration
@@ -132,3 +152,14 @@ and the two supplied-part PoC. It does not certify engineering fit, structural c
 or collision clearance. Verified snap ports currently cover only the two supplied
 SHA-pinned samples. Arbitrary fitting connector definitions, a freehand mouse gizmo and
 true 2D DWG section export are not implemented by this Materials increment.
+
+### Deployed length verification — 2026-11-10
+
+- Rebuilt and updated only PoC API, web and converter on port 5181. Startup applied the additive instance-length migration successfully.
+- Actual API created a temporary 1500 mm straight; mesh bounds were `[-150,0,0]`–`[150,60,1500]`. PATCH to 1000 mm returned an updated 1000 mm mesh.
+- 7000 mm was refused with HTTP 400; connecting a second temporary straight at the cut endpoint succeeded; resizing the connected instance returned HTTP 409.
+- STEP export produced 5,324,882 bytes. Independent worker re-import found both temporary BReps valid and each exactly 300 × 60 × 1500 mm. MTO included the cut length.
+- Only the two temporary placements were removed after verification. Existing user placements were preserved.
+- Browser confirmed the enabled Length (mm) field with 1500 and an end connector at Z=1500. Screenshot: local `.data/length-field-1500.jpg`.
+- 80 backend CAD tests and 11 placement/length UI tests passed. Converter smoke passed with preserved rung spacing. Frontend/server images built successfully.
+- Original WFC containers retained their 16:26:41 UTC start times and zero restarts; main was not modified.

@@ -2,10 +2,11 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Body1, Button, Caption1, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, Spinner } from '@fluentui/react-components';
 import { getApiBaseUrl } from '@/api/http';
 import { normalizeQuaternion, alignConnectorPorts } from '@/viewer/componentTransforms';
-import { getAalborgPocPorts, MATE_OPPOSING_FACE } from '@/viewer/pocConnectorCatalog';
+import { MATE_OPPOSING_FACE } from '@/viewer/pocConnectorCatalog';
+import { supportsStraightCut, getInstanceCadPorts } from '../../../shared/cadLengths';
 import type { ViewerController } from '@/viewer/ViewerController';
 
-type CatalogueItem = { id: string; partNumber: string; manufacturer: string; originalFilename: string; sourceSha256: string; conversionStatus: string; materialAssetId?: string | null; cadRevision?: number | null };
+type CatalogueItem = { id: string; partNumber: string; manufacturer: string; originalFilename: string; sourceSha256: string; conversionStatus: string; componentKind?: string; materialAssetId?: string | null; cadRevision?: number | null };
 type Design = { id: string; modelVersionId: string; name: string; status: string; revision: number; activeModel: boolean };
 type Connection = {
   id: string; sourceInstanceId: string; targetInstanceId: string;
@@ -14,6 +15,7 @@ type Connection = {
 type Instance = {
   id: string; catalogItemId: string; partNumber: string; manufacturer: string; revision: number;
   xMm: number; yMm: number; zMm: number; qx: number; qy: number; qz: number; qw: number;
+  lengthMm?: number | null;
 };
 type Props = { projectId: string; modelVersionId: string; token: string; catalogue: CatalogueItem[];
   onPick: ViewerController['pickPoint']; onShow: ViewerController['showCadComponent']; onMove: ViewerController['moveCadComponent'];
@@ -44,6 +46,7 @@ function quaternionEuler(instance: Instance): Pick<Coordinates, 'rx' | 'ry' | 'r
 
 export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue, onPick, onShow, onMove, onFocus, onRemove }: Props) {
   const rendered = useRef(new Set<string>());
+  const renderedLengths = useRef(new Map<string, number | null>());
   const [displayedIds, setDisplayedIds] = useState<string[]>([]);
   const [displaying, setDisplaying] = useState(false);
   const [designId, setDesignId] = useState<string | null>(null);
@@ -61,6 +64,7 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
   } | null>(null);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [coordinates, setCoordinates] = useState<Coordinates>(empty);
+  const [lengthMm, setLengthMm] = useState('6000');
   const [moveStepMm, setMoveStepMm] = useState('50');
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -68,9 +72,14 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
   const base = `${getApiBaseUrl()}/api/projects/${projectId}/cad-design`;
   const activeCatalogue = catalogue.filter(item => item.conversionStatus === 'ready' && item.materialAssetId);
   const editing = instances.find(instance => instance.id === editingId);
-  const sourcePorts = getAalborgPocPorts(catalogue.find(item => item.id === selectedId)?.originalFilename ?? '', catalogue.find(item => item.id === selectedId)?.sourceSha256 ?? '');
+  const chosenPart = catalogue.find(item => item.id === selectedId);
+  const canSetLength = chosenPart?.componentKind === 'straight' && supportsStraightCut(chosenPart.originalFilename, chosenPart.sourceSha256);
+  const validLength = Number.isFinite(Number(lengthMm)) && Number(lengthMm) >= 1 && Number(lengthMm) <= 6000;
+  const selectedLength = canSetLength && validLength && Number(lengthMm) !== 6000 ? Number(lengthMm) : null;
+  const editingConnected = Boolean(editing && connections.some(row => row.sourceInstanceId === editing.id || row.targetInstanceId === editing.id));
+  const sourcePorts = getInstanceCadPorts(chosenPart?.originalFilename ?? '', chosenPart?.sourceSha256 ?? '', selectedLength);
   const target = instances.find(instance => instance.id === snapTarget);
-  const targetPorts = getAalborgPocPorts(catalogue.find(item => item.id === target?.catalogItemId)?.originalFilename ?? '', catalogue.find(item => item.id === target?.catalogItemId)?.sourceSha256 ?? '');
+  const targetPorts = getInstanceCadPorts(catalogue.find(item => item.id === target?.catalogItemId)?.originalFilename ?? '', catalogue.find(item => item.id === target?.catalogItemId)?.sourceSha256 ?? '', target?.lengthMm ?? null);
 
   const api = useCallback(async (path: string, init: RequestInit = {}) => {
     const response = await fetch(`${base}${path}`, {
@@ -114,7 +123,7 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
   // Recreate saved CAD instances after a Viewer reload. This is a display
   // side effect only; source STEP objects and project model remain immutable.
   useEffect(() => {
-    if (!instances.length) { setDisplayedIds([]); setDisplaying(false); return; }
+    if (!instances.length || !designId) { setDisplayedIds([]); setDisplaying(false); return; }
     const controller = new AbortController();
     const confirmed: string[] = [];
     setDisplayedIds([]);
@@ -127,16 +136,22 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
             positionMm: { x: instance.xMm, y: instance.yMm, z: instance.zMm },
             rotation: { x: instance.qx, y: instance.qy, z: instance.qz, w: instance.qw },
           };
+          if (rendered.current.has(instance.id) && renderedLengths.current.get(instance.id) !== (instance.lengthMm ?? null)) {
+            rendered.current.delete(instance.id);
+          }
           if (rendered.current.has(instance.id)) {
             try { await onMove(instance.id, transform); }
             catch { rendered.current.delete(instance.id); }
           }
           if (!rendered.current.has(instance.id)) {
-            const response = await api(`/catalog/${instance.catalogItemId}/mesh`, { signal: controller.signal });
+            const meshPath = instance.lengthMm != null
+              ? `/designs/${designId}/instances/${instance.id}/mesh` : `/catalog/${instance.catalogItemId}/mesh`;
+            const response = await api(meshPath, { signal: controller.signal });
             const mesh: unknown = await response.json();
             if (controller.signal.aborted) return;
             await onShow(instance.id, mesh, transform);
             rendered.current.add(instance.id);
+            renderedLengths.current.set(instance.id, instance.lengthMm ?? null);
           }
           if (!controller.signal.aborted) {
             confirmed.push(instance.id);
@@ -152,9 +167,9 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
     };
     void display().finally(() => { if (!controller.signal.aborted) setDisplaying(false); });
     return () => controller.abort();
-  }, [instances, api, onShow, onMove]);
+  }, [instances, designId, api, onShow, onMove]);
 
-  useEffect(() => { rendered.current.clear(); setDisplayedIds([]); }, [projectId, modelVersionId, token]);
+  useEffect(() => { rendered.current.clear(); renderedLengths.current.clear(); setDisplayedIds([]); }, [projectId, modelVersionId, token]);
 
   const focusSelected = async () => {
     if (!onFocus || !editingId || busy || displaying || !displayedIds.includes(editingId)) return;
@@ -173,6 +188,7 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
     setEditingId(id);
     if (!instance) return;
     setSelectedId(instance.catalogItemId);
+    setLengthMm(String(instance.lengthMm ?? 6000));
     setCoordinates({
       x: String(instance.xMm), y: String(instance.yMm), z: String(instance.zMm),
       ...quaternionEuler(instance),
@@ -239,6 +255,7 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
 
   const save = async (event: FormEvent) => {
     event.preventDefault();
+    if (canSetLength && !validLength) { setNotice('Enter a length from 1 to 6000 mm.'); return; }
     const numeric = [coordinates.x, coordinates.y, coordinates.z, coordinates.rx, coordinates.ry, coordinates.rz].map(Number);
     if (numeric.some(value => !Number.isFinite(value)) || numeric.slice(0, 3).some(value => Math.abs(value) > 1e9)) {
       setNotice('All coordinates must be finite and within the project millimetre range.'); return;
@@ -259,6 +276,7 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
       }
       const body = JSON.stringify({
         catalogItemId: selectedId,
+        ...(canSetLength ? { lengthMm: selectedLength } : {}),
         transform: {
           positionMm: { x: numeric[0], y: numeric[1], z: numeric[2] },
           rotation: eulerQuaternion(numeric[3], numeric[4], numeric[5]),
@@ -268,7 +286,8 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
       if (editing) {
         await api(`/designs/${currentId}/instances/${editing.id}`, {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ expectedRevision: editing.revision, transform: JSON.parse(body).transform }),
+          body: JSON.stringify({ expectedRevision: editing.revision, transform: JSON.parse(body).transform,
+            ...(canSetLength ? { lengthMm: selectedLength } : {}) }),
         });
         setNotice('Position saved to the current proposed design.');
       } else {
@@ -325,6 +344,7 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
         body: JSON.stringify({ expectedRevision: candidate.revision }),
       });
       rendered.current.delete(candidate.id);
+      renderedLengths.current.delete(candidate.id);
       setDisplayedIds(ids => ids.filter(id => id !== candidate.id));
       setInstances(rows => rows.filter(row => row.id !== candidate.id));
       setConnections(rows => rows.filter(row => row.sourceInstanceId !== candidate.id && row.targetInstanceId !== candidate.id));
@@ -369,7 +389,7 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
     {loading ? <Spinner size="tiny" label="Reading proposal…" /> : null}
     <Field label="Catalogue component">
       <select aria-label="Catalogue component" value={selectedId} disabled={busy || !activeCatalogue.length}
-        onChange={e => { setSelectedId(e.target.value); setEditingId(''); setPendingSnap(null); setCoordinates(empty); }}>
+        onChange={e => { setSelectedId(e.target.value); setEditingId(''); setLengthMm('6000'); setPendingSnap(null); setCoordinates(empty); }}>
         <option value="">Choose a prepared component</option>
         {activeCatalogue.map(item => <option key={item.id} value={item.id}>{item.manufacturer} — {item.partNumber} · CAD revision {item.cadRevision}</option>)}
       </select>
@@ -413,6 +433,15 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
       </div>)}
     </div>
     <form onSubmit={event => { void save(event); }} aria-label="Save component position">
+      <Field label="Length (mm)" validationState={canSetLength && !validLength ? 'error' : 'none'}
+        validationMessage={canSetLength && !validLength ? 'Enter 1–6000 mm.' : undefined}
+        hint={editingConnected && canSetLength ? 'Disconnect this component before changing its length.' :
+          canSetLength ? 'Original piece: 6000 mm. Shorter pieces are cut without stretching the profile or rungs.' :
+            'Choose a prepared straight component to set a cut length. Fittings keep their original dimensions.'}>
+        <Input aria-label="Length (mm)" type="number" min={1} max={6000} step="any" value={canSetLength ? lengthMm : ''}
+          disabled={busy || !canSetLength || editingConnected} placeholder="Original STEP"
+          onChange={(_, data) => { setLengthMm(data.value); setPendingSnap(null); }} />
+      </Field>
       {(['x', 'y', 'z', 'rx', 'ry', 'rz'] as const).map(axis => <Field key={axis}
         label={['x','y','z'].includes(axis) ? `${axis.toUpperCase()} (mm)` : `Rotation ${axis.slice(1).toUpperCase()} (degrees)`}>
         <Input type="number" step="any" aria-label={axis} value={coordinates[axis]}
@@ -445,7 +474,7 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
     <ul>{instances.map(instance => <li key={instance.id}>
       <Button appearance={editingId === instance.id ? 'primary' : 'subtle'}
         onClick={() => selectInstance(instance.id)} disabled={busy}>
-        {instance.manufacturer} {instance.partNumber} — X {instance.xMm}, Y {instance.yMm}, Z {instance.zMm} mm
+        {instance.manufacturer} {instance.partNumber}{instance.lengthMm != null ? ` · ${instance.lengthMm} mm` : ''} — X {instance.xMm}, Y {instance.yMm}, Z {instance.zMm} mm
       </Button>
     </li>)}</ul>
 
