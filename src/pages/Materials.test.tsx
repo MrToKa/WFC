@@ -129,6 +129,35 @@ const Navigation = () => {
 };
 
 describe('Materials category navigation', () => {
+  it.each([false, true])('gates Components and its direct URL when enabled=%s', async (enabled) => {
+    vi.stubEnv('VITE_CAD_DESIGN_ENABLED', String(enabled));
+    try {
+      await act(async () => {
+        render(
+          <FluentProvider theme={webLightTheme}>
+            <MemoryRouter initialEntries={['/materials?tab=components']}>
+              <Materials />
+            </MemoryRouter>
+          </FluentProvider>,
+        );
+      });
+      if (enabled) {
+        expect(screen.getByRole('tab', { name: 'Components' })).toHaveAttribute(
+          'aria-selected',
+          'true',
+        );
+        expect(screen.getByRole('tabpanel', { name: 'Components' })).toBeInTheDocument();
+      } else {
+        expect(screen.queryByRole('tab', { name: 'Components' })).not.toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: 'Cable types' })).toHaveAttribute(
+          'aria-selected',
+          'true',
+        );
+      }
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
   it('keeps the selected tab in sync with navigation and preserves other query parameters', async () => {
     render(
       <FluentProvider theme={webLightTheme}>

@@ -28,8 +28,14 @@ try {
     Invoke-Checked 'CAD and Viewer focused unit tests' {
         npx vitest run --maxWorkers=1 --minWorkers=1 src/viewer/componentTransforms.test.ts src/viewer/pocConnectorCatalog.test.ts server/cadDesign/stepFileValidation.test.ts server/cadDesign/connectionGeometry.test.ts server/middleware.test.ts src/pages/ProjectDetails/RoutingsViewerTab.test.tsx src/ProjectAccess.test.tsx
     }
+    Invoke-Checked 'Materials and pinned CAD revision tests' {
+        npx vitest run --maxWorkers=1 --minWorkers=1 --testTimeout=15000 server/materialCad server/cadDesign/isolation.test.ts server/cadDesign/catalogReferences.test.ts src/pages/Materials/components/MaterialComponentsSection.test.tsx src/pages/ProjectDetails/CadComponentsPanel.test.tsx
+    }
+    Invoke-Checked 'Materials navigation and feature flag' {
+        npx vitest run --maxWorkers=1 --minWorkers=1 --testTimeout=15000 src/pages/Materials.test.tsx -t 'Materials category navigation'
+    }
     Invoke-Checked 'Strict protected Viewer CAD protocol tests' {
-        node --test viewer-runtime/test/cad-protocol.node-test.mjs
+        node --test scripts/viewer-runtime/module-closure.test.mjs viewer-runtime/test/cad-protocol.node-test.mjs viewer-runtime/test/cad-scene.node-test.mjs
     }
     Invoke-Checked 'Build frontend' { npm run build }
     Invoke-Checked 'Build backend' { npm run server:build }

@@ -30,6 +30,7 @@ import { CableTypesTab } from './ProjectDetails/CableTypesTab';
 import { CableTypeDialog } from './ProjectDetails/CableTypeDialog';
 import { useProjectDetailsStyles } from './ProjectDetails.styles';
 import { MATERIAL_DETAILS_CAPABILITIES } from './Materials/materialCapabilities';
+import { MaterialComponentsSection } from './Materials/components/MaterialComponentsSection';
 
 type MaterialsListState = {
   path: string;
@@ -55,7 +56,10 @@ export const Materials = () => {
   const [restorePhase, setRestorePhase] = useState(returnState ? 'filters' : 'done');
   const [pageSizes, setPageSizes] = useState<Record<string, number>>(returnState?.pageSizes ?? {});
   const isAdmin = Boolean(user?.isAdmin);
-  const selectedTab = parseMaterialsTab(searchParams.get('tab'));
+  const componentsEnabled = import.meta.env.VITE_CAD_DESIGN_ENABLED === 'true';
+  const requestedTab = parseMaterialsTab(searchParams.get('tab'));
+  const selectedTab =
+    requestedTab === 'components' && !componentsEnabled ? 'cableTypes' : requestedTab;
 
   const numberFormatter = useMemo(
     () =>
@@ -294,13 +298,15 @@ export const Materials = () => {
   };
   const selectedTabLabel =
     selectedCatalog?.label ??
-    (selectedTab === 'trays'
-      ? 'Trays'
-      : selectedTab === 'supports'
-        ? 'Supports'
-        : selectedTab === 'loadCurves'
-          ? 'Load curves'
-          : 'Cable types');
+    (selectedTab === 'components'
+      ? 'Components'
+      : selectedTab === 'trays'
+        ? 'Trays'
+        : selectedTab === 'supports'
+          ? 'Supports'
+          : selectedTab === 'loadCurves'
+            ? 'Load curves'
+            : 'Cable types');
 
   return (
     <section className={styles.root} aria-labelledby="materials-heading">
@@ -326,10 +332,13 @@ export const Materials = () => {
         <Tab value="instrumentInstallationMaterials">Instruments installation materials</Tab>
         <Tab value="supports">Supports</Tab>
         <Tab value="loadCurves">Load curves</Tab>
+        {componentsEnabled ? <Tab value="components">Components</Tab> : null}
       </TabList>
 
       <div className={styles.tabPanel} role="tabpanel" aria-label={selectedTabLabel}>
-        {selectedCatalog && catalogHook ? (
+        {selectedTab === 'components' ? (
+          <MaterialComponentsSection token={token} isAdmin={isAdmin} />
+        ) : selectedCatalog && catalogHook ? (
           <CableInstallationMaterialsTab
             pageSize={pageSizes[selectedTab] ?? 10}
             onPageSizeChange={handlePageSizeChange}

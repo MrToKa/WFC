@@ -10,12 +10,12 @@ export async function initializeCadDesignSchema(pool: Pool): Promise<void> {
     CREATE TABLE IF NOT EXISTS cad_catalog_items (
       id UUID PRIMARY KEY,
       project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-      manufacturer TEXT NOT NULL CHECK (length(trim(manufacturer)) BETWEEN 1 AND 100),
-      part_number TEXT NOT NULL CHECK (length(trim(part_number)) BETWEEN 1 AND 160),
-      family TEXT NOT NULL CHECK (length(trim(family)) BETWEEN 1 AND 100),
+      manufacturer TEXT NOT NULL CHECK (length(trim(manufacturer)) BETWEEN 1 AND 200),
+      part_number TEXT NOT NULL CHECK (length(trim(part_number)) BETWEEN 1 AND 200),
+      family TEXT NOT NULL CHECK (length(trim(family)) BETWEEN 1 AND 240),
       original_filename TEXT NOT NULL,
       source_sha256 TEXT NOT NULL CHECK (source_sha256 ~ '^[0-9a-f]{64}$'),
-      source_object_key TEXT NOT NULL UNIQUE,
+      source_object_key TEXT NOT NULL,
       source_bytes BIGINT NOT NULL CHECK (source_bytes BETWEEN 1 AND 52428800),
       mesh_object_key TEXT,
       mesh_metadata JSONB,
@@ -23,15 +23,59 @@ export async function initializeCadDesignSchema(pool: Pool): Promise<void> {
         CHECK (conversion_status IN ('pending', 'ready', 'failed')),
       created_by UUID REFERENCES users(id) ON DELETE SET NULL,
       material_tray_cad_asset_id UUID REFERENCES material_tray_cad_assets(id) ON DELETE RESTRICT,
+      material_component_cad_asset_id UUID REFERENCES material_component_cad_assets(id) ON DELETE RESTRICT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       CHECK (conversion_status <> 'ready' OR (mesh_object_key IS NOT NULL AND mesh_metadata IS NOT NULL)),
-      UNIQUE (project_id, source_sha256),
       UNIQUE (project_id, id)
     );
+
+    -- CREATE TABLE IF NOT EXISTS does not migrate an existing PoC database.
+    -- Install columns before indexes, preserving all old project instances.
+    ALTER TABLE cad_catalog_items ADD COLUMN IF NOT EXISTS material_tray_cad_asset_id
+      UUID REFERENCES material_tray_cad_assets(id) ON DELETE RESTRICT;
+    ALTER TABLE cad_catalog_items ADD COLUMN IF NOT EXISTS material_component_cad_asset_id
+      UUID REFERENCES material_component_cad_assets(id) ON DELETE RESTRICT;
+    ALTER TABLE cad_catalog_items DROP CONSTRAINT IF EXISTS cad_catalog_items_manufacturer_check;
+    ALTER TABLE cad_catalog_items ADD CONSTRAINT cad_catalog_items_manufacturer_check
+      CHECK (length(trim(manufacturer)) BETWEEN 1 AND 200);
+    ALTER TABLE cad_catalog_items DROP CONSTRAINT IF EXISTS cad_catalog_items_part_number_check;
+    ALTER TABLE cad_catalog_items ADD CONSTRAINT cad_catalog_items_part_number_check
+      CHECK (length(trim(part_number)) BETWEEN 1 AND 200);
+    ALTER TABLE cad_catalog_items DROP CONSTRAINT IF EXISTS cad_catalog_items_family_check;
+    ALTER TABLE cad_catalog_items ADD CONSTRAINT cad_catalog_items_family_check
+      CHECK (length(trim(family)) BETWEEN 1 AND 240);
+    UPDATE cad_catalog_items c SET material_component_cad_asset_id=c.material_tray_cad_asset_id
+      WHERE c.material_component_cad_asset_id IS NULL AND c.material_tray_cad_asset_id IS NOT NULL
+        AND EXISTS (SELECT 1 FROM material_component_cad_assets a WHERE a.id=c.material_tray_cad_asset_id);
+
+    -- Distinct SKUs may intentionally share CAD bytes. Global revision references
+    -- also share source keys between projects; byte identity is not SKU identity.
+    ALTER TABLE cad_catalog_items DROP CONSTRAINT IF EXISTS cad_catalog_items_source_object_key_key;
+    ALTER TABLE cad_catalog_items DROP CONSTRAINT IF EXISTS cad_catalog_items_project_id_source_sha256_key;
+    CREATE UNIQUE INDEX IF NOT EXISTS cad_catalog_legacy_project_source
+      ON cad_catalog_items(project_id,source_sha256) WHERE material_component_cad_asset_id IS NULL;
 
     CREATE UNIQUE INDEX IF NOT EXISTS cad_catalog_project_material_asset
       ON cad_catalog_items(project_id,material_tray_cad_asset_id)
       WHERE material_tray_cad_asset_id IS NOT NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS cad_catalog_project_component_asset
+      ON cad_catalog_items(project_id,material_component_cad_asset_id)
+      WHERE material_component_cad_asset_id IS NOT NULL;
+
+    -- A pin can never be retargeted to a newer product revision. New revisions
+    -- create new references and placements; existing designs retain their source.
+    CREATE OR REPLACE FUNCTION cad_keep_catalog_reference_immutable() RETURNS TRIGGER
+    LANGUAGE plpgsql AS $cad$
+    BEGIN
+      IF OLD.material_component_cad_asset_id IS NOT NULL AND NEW IS DISTINCT FROM OLD THEN
+        RAISE EXCEPTION 'A Materials CAD revision reference is immutable' USING ERRCODE='23514';
+      END IF;
+      RETURN NEW;
+    END;
+    $cad$;
+    DROP TRIGGER IF EXISTS cad_catalog_immutable_reference ON cad_catalog_items;
+    CREATE TRIGGER cad_catalog_immutable_reference BEFORE UPDATE ON cad_catalog_items
+      FOR EACH ROW EXECUTE FUNCTION cad_keep_catalog_reference_immutable();
 
     CREATE TABLE IF NOT EXISTS cad_designs (
       id UUID PRIMARY KEY,

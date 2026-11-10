@@ -5,7 +5,7 @@ import { normalizeQuaternion, alignConnectorPorts } from '@/viewer/componentTran
 import { getAalborgPocPorts, MATE_OPPOSING_FACE } from '@/viewer/pocConnectorCatalog';
 import type { ViewerController } from '@/viewer/ViewerController';
 
-type CatalogueItem = { id: string; partNumber: string; manufacturer: string; originalFilename: string; sourceSha256: string; conversionStatus: string };
+type CatalogueItem = { id: string; partNumber: string; manufacturer: string; originalFilename: string; sourceSha256: string; conversionStatus: string; materialAssetId?: string | null; cadRevision?: number | null };
 type Design = { id: string; modelVersionId: string; name: string; status: string; revision: number; activeModel: boolean };
 type Connection = {
   id: string; sourceInstanceId: string; targetInstanceId: string;
@@ -62,7 +62,7 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState('');
   const base = `${getApiBaseUrl()}/api/projects/${projectId}/cad-design`;
-  const activeCatalogue = catalogue.filter(item => item.conversionStatus === 'ready');
+  const activeCatalogue = catalogue.filter(item => item.conversionStatus === 'ready' && item.materialAssetId);
   const editing = instances.find(instance => instance.id === editingId);
   const sourcePorts = getAalborgPocPorts(catalogue.find(item => item.id === selectedId)?.originalFilename ?? '', catalogue.find(item => item.id === selectedId)?.sourceSha256 ?? '');
   const target = instances.find(instance => instance.id === snapTarget);
@@ -316,7 +316,7 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
       <select aria-label="Catalogue component" value={selectedId} disabled={busy || !activeCatalogue.length}
         onChange={e => { setSelectedId(e.target.value); setEditingId(''); setPendingSnap(null); setCoordinates(empty); }}>
         <option value="">Choose a prepared component</option>
-        {activeCatalogue.map(item => <option key={item.id} value={item.id}>{item.manufacturer} — {item.partNumber}</option>)}
+        {activeCatalogue.map(item => <option key={item.id} value={item.id}>{item.manufacturer} — {item.partNumber} · CAD revision {item.cadRevision}</option>)}
       </select>
     </Field>
     {sourcePorts.length ? <section aria-label="Connector snap">

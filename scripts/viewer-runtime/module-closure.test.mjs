@@ -9,6 +9,8 @@ test('the actual deployed first-party graph includes every transitive module', a
   assert.ok(RUNTIME_FILES.includes('preparation-input.mjs'));
   assert.ok(RUNTIME_FILES.includes('display-visibility.mjs'));
   assert.ok(RUNTIME_FILES.includes('barrier-capture-errors.mjs'));
+  assert.ok(RUNTIME_FILES.includes('cad-scene.mjs'));
+  await assert.rejects(validateRuntimeModuleClosure(RUNTIME_FILES.filter(name => name !== 'cad-scene.mjs'), name => fs.readFile(new URL(name, source), 'utf8')), /VIEWER_RUNTIME_MODULE_MISSING/);
   for (const name of ['barrier-plan.mjs', 'barrier-multipart-protocol.mjs', 'barrier-multipart-transport.mjs', 'barrier-producer.mjs', 'barrier-packed-geometry.mjs', 'barrier-multipart-runtime.mjs']) {
     assert.ok(RUNTIME_FILES.includes(name));
     await assert.rejects(validateRuntimeModuleClosure(RUNTIME_FILES.filter(item => item !== name), module => fs.readFile(new URL(module, source), 'utf8')), /VIEWER_RUNTIME_MODULE_MISSING/);

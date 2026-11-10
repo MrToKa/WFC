@@ -1,29 +1,18 @@
-import { createHash, randomUUID } from 'node:crypto';
-import path from 'node:path';
-import { hasStepEnvelope, MAX_STEP_BYTES, csvCell } from './stepFileValidation.js';
-import { convertStepToMesh } from './converter.js';
+import { randomUUID } from 'node:crypto';
+import { csvCell } from './stepFileValidation.js';
 import { cadPocPortSeeds } from './pocPortSeed.js';
 import { connectorAlignmentIsValid, type RigidTransform } from '../../shared/cadTransforms.js';
 import { MATE_OPPOSING_FACE } from '../../shared/cadPocPorts.js';
 import { Router, type NextFunction, type Request, type Response } from 'express';
-import multer from 'multer';
 import { z } from 'zod';
 import { pool } from '../db.js';
 import { requireProjectEdit } from '../middleware.js';
-import { deleteObject, getObjectStream, getProjectBucket, uploadObject } from '../services/objectStorageService.js';
+import { getObjectStream, getProjectBucket } from '../services/objectStorageService.js';
 
 export const cadDesignRouter = Router({ mergeParams: true });
 
-// 8 MiB stays below the existing nginx generic /api/ body limit (10 MiB).
-const upload = multer({ storage: multer.memoryStorage(), limits: {
-  fileSize: MAX_STEP_BYTES, files: 1, fields: 3, parts: 4,
-} });
 const uuid = z.string().uuid();
-const catalogueInput = z.object({
-  manufacturer: z.string().trim().min(1).max(100),
-  partNumber: z.string().trim().min(1).max(160),
-  family: z.string().trim().min(1).max(100),
-}).strict();
+const catalogueInput = z.object({ assetId: uuid }).strict();
 const position = z.object({
   x: z.number().finite().min(-1e9).max(1e9),
   y: z.number().finite().min(-1e9).max(1e9),
@@ -71,111 +60,82 @@ cadDesignRouter.get('/catalog', safe(async (req: CadRequest, res: Response) => {
             original_filename AS "originalFilename", source_sha256 AS "sourceSha256",
             source_bytes AS "sourceBytes", conversion_status AS "conversionStatus",
             mesh_metadata AS "meshMetadata",
-            created_at AS "createdAt"
-     FROM cad_catalog_items WHERE project_id=$1 ORDER BY created_at, id LIMIT 250`,
+            created_at AS "createdAt",
+            material_component_cad_asset_id AS "materialAssetId",
+            (SELECT revision FROM material_component_cad_assets a
+              WHERE a.id=cad_catalog_items.material_component_cad_asset_id) AS "cadRevision"
+     FROM cad_catalog_items WHERE project_id=$1 ORDER BY created_at, id`,
     [req.params.projectId],
   );
   res.setHeader('Cache-Control', 'private, no-store');
   res.json({ items: result.rows });
 }));
 
-cadDesignRouter.post('/catalog', requireProjectEdit, (req: CadRequest, res: Response, next) => {
-  upload.single('file')(req, res, (error: unknown) => {
-    if (error) {
-      failure(res, error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE' ? 413 : 400, 'INVALID_STEP_UPLOAD');
-      return;
-    }
-    next();
-  });
-}, safe(async (req: CadRequest, res: Response) => {
+// A project stores an immutable reference to a Materials CAD revision. Product
+// master data and source bytes can only be authored in the global Materials API.
+cadDesignRouter.post('/catalog', requireProjectEdit, safe(async (req: CadRequest, res: Response) => {
   const parsed = catalogueInput.safeParse(req.body);
-  if (!parsed.success || !req.file || !hasStepEnvelope(req.file.originalname, req.file.buffer)) {
-    failure(res, 400, 'INVALID_STEP_FILE_OR_METADATA');
-    return;
-  }
+  if (!parsed.success) { failure(res, 400, 'MATERIAL_CAD_ASSET_REQUIRED'); return; }
   const projectId = req.params.projectId;
-  const sha = createHash('sha256').update(req.file.buffer).digest('hex');
-  const verifiedFilename = path.basename(req.file.originalname).replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 200);
-  // This release is a deliberately restricted two-part Aalborg POC: refuse
-  // unknown CAD geometry rather than inventing mm units or connector frames.
-  if (cadPocPortSeeds(verifiedFilename, sha).length !== 2) {
-    failure(res, 422, 'STEP_SOURCE_NOT_APPROVED_FOR_POC');
-    return;
-  }
-  const existing = await pool.query(
-    'SELECT id FROM cad_catalog_items WHERE project_id=$1 AND source_sha256=$2',
-    [projectId, sha],
-  );
-  if (existing.rows[0]) {
-    res.status(200).json({ id: existing.rows[0].id, reused: true });
-    return;
-  }
-  const id = randomUUID();
-  const key = `cad-design/projects/${projectId}/catalog/${id}/original.step`;
-  const meshKey = `cad-design/projects/${projectId}/catalog/${id}/mesh.json`;
-  const name = path.basename(req.file.originalname).replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 200);
-  const bucket = getProjectBucket();
+  const assetId = parsed.data.assetId;
+  const client = await pool.connect();
   try {
-    // Parse the untrusted CAD only inside the isolated OCCT conversion service.
-    const { bytes: meshBytes, mesh } = await convertStepToMesh(req.file.buffer);
-    await uploadObject({
-      bucket, objectKey: key, data: req.file.buffer, size: req.file.size,
-      contentType: 'application/step',
-    });
-    await uploadObject({
-      bucket, objectKey: meshKey, data: meshBytes, size: meshBytes.length,
-      contentType: 'application/json',
-    });
-    const client = await pool.connect();
-    let created = false;
-    try {
-      await client.query('BEGIN');
-      const inserted = await client.query(
-        `INSERT INTO cad_catalog_items
-           (id,project_id,manufacturer,part_number,family,original_filename,
-            source_sha256,source_object_key,source_bytes,created_by,mesh_object_key,mesh_metadata,conversion_status)
-         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'ready')
-         ON CONFLICT(project_id,source_sha256) DO NOTHING RETURNING id`,
-        [id, projectId, parsed.data.manufacturer, parsed.data.partNumber, parsed.data.family,
-          name, sha, key, req.file.size, req.userId ?? null, meshKey,
-          JSON.stringify({ triangleCount: mesh.triangleCount, solidCount: mesh.solidCount,
-            boundsMm: mesh.boundsMm, units: mesh.units })],
-      );
-      if (inserted.rows[0]) {
-        for (const port of cadPocPortSeeds(name, sha)) {
-          await client.query(
-            `INSERT INTO cad_catalog_ports
-              (id,project_id,catalog_item_id,name,port_type,local_transform)
-             VALUES($1,$2,$3,$4,$5,$6::jsonb)`,
-            [randomUUID(), projectId, id, port.name, port.portType,
-              JSON.stringify(port.localTransform)],
-          );
-        }
-        created = true;
+    await client.query('BEGIN');
+    const asset = await client.query<{
+      original_filename: string; source_sha256: string;
+    }>(
+      `SELECT a.original_filename,a.source_sha256
+         FROM material_component_cad_assets a
+         JOIN material_components c ON c.id=a.component_id
+         JOIN material_product_families f ON f.id=c.family_id
+        WHERE a.id=$1 AND a.active FOR SHARE OF a`,
+      [assetId],
+    );
+    if (!asset.rows[0]) {
+      await client.query('ROLLBACK'); failure(res, 404, 'ACTIVE_MATERIAL_CAD_ASSET_NOT_FOUND'); return;
+    }
+    const id = randomUUID();
+    const inserted = await client.query(
+      `INSERT INTO cad_catalog_items
+        (id,project_id,manufacturer,part_number,family,original_filename,
+         source_sha256,source_object_key,source_bytes,created_by,mesh_object_key,
+         mesh_metadata,conversion_status,material_component_cad_asset_id)
+       SELECT $1,$2,f.manufacturer,c.part_number,f.name,a.original_filename,
+              a.source_sha256,a.source_object_key,a.source_bytes,$4,a.mesh_object_key,
+              a.mesh_metadata,'ready',a.id
+         FROM material_component_cad_assets a
+         JOIN material_components c ON c.id=a.component_id
+         JOIN material_product_families f ON f.id=c.family_id
+        WHERE a.id=$3 AND a.active
+       ON CONFLICT (project_id,material_component_cad_asset_id)
+         WHERE material_component_cad_asset_id IS NOT NULL DO NOTHING RETURNING id`,
+      [id, projectId, assetId, req.userId ?? null],
+    );
+    if (inserted.rows[0]) {
+      // Unknown parts remain placeable, but receive no fabricated connector frames.
+      for (const port of cadPocPortSeeds(asset.rows[0].original_filename, asset.rows[0].source_sha256)) {
+        await client.query(
+          `INSERT INTO cad_catalog_ports
+             (id,project_id,catalog_item_id,name,port_type,local_transform)
+           VALUES($1,$2,$3,$4,$5,$6::jsonb)`,
+          [randomUUID(), projectId, id, port.name, port.portType, JSON.stringify(port.localTransform)],
+        );
       }
       await client.query('COMMIT');
-    } catch (error) {
-      await client.query('ROLLBACK').catch(() => undefined);
-      throw error;
-    } finally {
-      client.release();
-    }
-    if (created) {
-      res.status(201).json({ id, reused: false, conversionStatus: 'ready' });
+      res.status(201).json({ id, assetId, reused: false, conversionStatus: 'ready' });
       return;
     }
-    await Promise.allSettled([deleteObject(bucket, key), deleteObject(bucket, meshKey)]);
-    const result = await pool.query(
-      'SELECT id FROM cad_catalog_items WHERE project_id=$1 AND source_sha256=$2',
-      [projectId, sha],
+    const existing = await client.query(
+      'SELECT id FROM cad_catalog_items WHERE project_id=$1 AND material_component_cad_asset_id=$2',
+      [projectId, assetId],
     );
-    if (result.rows[0]) res.status(200).json({ id: result.rows[0].id, reused: true });
-    else failure(res, 409, 'CATALOG_IMPORT_CONFLICT');
+    await client.query('COMMIT');
+    if (existing.rows[0]) res.json({ id: existing.rows[0].id, assetId, reused: true });
+    else failure(res, 409, 'CATALOG_REFERENCE_CONFLICT');
   } catch (error) {
-    await Promise.allSettled([deleteObject(bucket, key), deleteObject(bucket, meshKey)]);
-    console.error('CAD catalogue import failed', error);
-    failure(res, 500, 'CATALOG_IMPORT_FAILED');
-  }
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally { client.release(); }
 }));
 
 cadDesignRouter.get('/catalog/:catalogItemId/mesh', safe(async (req: CadRequest, res: Response) => {
@@ -249,10 +209,13 @@ cadDesignRouter.get('/designs/:designId/instances', safe(async (req: CadRequest,
             i.x_mm AS "xMm", i.y_mm AS "yMm", i.z_mm AS "zMm",
             i.qx, i.qy, i.qz, i.qw,
             c.manufacturer, c.part_number AS "partNumber", c.family,
-            c.conversion_status AS "conversionStatus"
+            c.conversion_status AS "conversionStatus",
+            c.material_component_cad_asset_id AS "materialAssetId",
+            a.revision AS "cadRevision", a.component_id AS "componentId"
        FROM cad_design_instances i
        JOIN cad_designs d ON d.project_id=i.project_id AND d.id=i.design_id
        JOIN cad_catalog_items c ON c.project_id=i.project_id AND c.id=i.catalog_item_id
+       LEFT JOIN material_component_cad_assets a ON a.id=c.material_component_cad_asset_id
       WHERE i.project_id=$1 AND d.id=$2 ORDER BY i.created_at, i.id LIMIT 500`,
     [req.params.projectId, req.params.designId],
   );
@@ -279,6 +242,7 @@ cadDesignRouter.post('/designs/:designId/instances', requireProjectEdit, safe(as
        JOIN cad_catalog_items c ON c.project_id=d.project_id AND c.id=$4
       WHERE d.project_id=$2 AND d.id=$3 AND d.status='proposed'
         AND v.state='ready' AND v.health='healthy'
+        AND c.conversion_status='ready' AND c.material_component_cad_asset_id IS NOT NULL
      RETURNING id, revision`,
     [id, projectId, designId, catalogItemId,
       t.positionMm.x, t.positionMm.y, t.positionMm.z,
@@ -326,17 +290,22 @@ cadDesignRouter.get('/designs/:designId/materials.csv', safe(async (req: CadRequ
   }
   const rows = await pool.query(
     `SELECT c.manufacturer, c.part_number, c.family, c.source_sha256,
+            c.material_component_cad_asset_id AS asset_id, a.revision AS cad_revision,
+            p.component_kind,
             COUNT(i.id)::int AS quantity
        FROM cad_design_instances i
        JOIN cad_catalog_items c ON c.project_id=i.project_id AND c.id=i.catalog_item_id
+       LEFT JOIN material_component_cad_assets a ON a.id=c.material_component_cad_asset_id
+       LEFT JOIN material_components p ON p.id=a.component_id
       WHERE i.project_id=$1 AND i.design_id=$2
-      GROUP BY c.id, c.manufacturer, c.part_number, c.family, c.source_sha256
+      GROUP BY c.id, a.revision, p.component_kind
       ORDER BY c.manufacturer, c.part_number`,
     [req.params.projectId, req.params.designId],
   );
   const lines = [
-    ['Manufacturer','Part number','Family','Source SHA-256','Quantity'].map(csvCell).join(','),
-    ...rows.rows.map(row => [row.manufacturer,row.part_number,row.family,row.source_sha256,row.quantity].map(csvCell).join(',')),
+    ['Manufacturer','Part number','Family','Component type','CAD asset','CAD revision','Source SHA-256','Quantity'].map(csvCell).join(','),
+    ...rows.rows.map(row => [row.manufacturer,row.part_number,row.family,row.component_kind ?? '',
+      row.asset_id ?? '',row.cad_revision ?? '',row.source_sha256,row.quantity].map(csvCell).join(',')),
   ];
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', 'attachment; filename="wfc-proposed-tray-mto.csv"');

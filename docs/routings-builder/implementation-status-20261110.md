@@ -2,7 +2,7 @@
 
 **Status: CODE-INTEGRATED / NOT DEPLOYED / NOT END-TO-END ACCEPTED.**
 
-Work is exclusively on `feature/aalborg-step-routings-builder-poc-20261110`. Original `main`, production-like WFC on localhost:5180, `wfc_app` PostgreSQL and `wfc-minio` are unchanged. The assistant has **no access to the user's Windows Docker Engine**. All validations claimed below distinguish a verified local CAD feasibility check from authored but unexecuted GitHub code.
+Work is exclusively on `feature/aalborg-step-routings-builder-poc-20261110`. Original `main`, production-like WFC on localhost:5180, `wfc_app` PostgreSQL and `wfc-minio` are unchanged. The continuation now has local Docker access for disposable tests. See [Materials catalogue continuation](12-materials-components-catalog.md) and [local validation evidence](13-materials-validation-20261110.md); older stage notes below describe the preceding checkpoint.
 
 ## Acceptance gates by implementation stage
 
@@ -63,7 +63,7 @@ Work is exclusively on `feature/aalborg-step-routings-builder-poc-20261110`. Ori
 
 ## Known limitations / stop conditions
 
-- No direct Windows Docker access from this ChatGPT chat; creating GitHub code is not proof of local deployment.
+- Local Docker access was verified during the Materials continuation; disposable database/worker tests are distinct from application deployment.
 - Automatic mesh display depends on the Scene API runtime behavior under the pinned Viewer 7.130.0. Dynamic model coexistence and coordinate offset must be visually tested.
 - The interactive mouse gizmo (draggable axis handles) is **not implemented**; pick point, numeric input and axis nudges are.
 - Snap currently supports these two verified assets, not arbitrary Niedax catalogs; exact manufacturer connectors, spacing/clearances and collision checking are unverified.

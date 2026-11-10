@@ -6,9 +6,14 @@ import { ThemeProvider } from '@/app/ThemeProvider';
 import { AuthProvider } from '@/context/AuthContext';
 import { ToastProvider } from '@/context/ToastContext';
 import { routes } from '@/routes/router';
+import { createHash } from 'node:crypto';
+import { canonicalPurposeJson } from '../shared/pathfinderPurposePolicy';
+import { DEFAULT_DRAWING_MODES } from '../shared/pathfinderDrawingPolicy';
+import { drawingInputHashInput, drawingSettingsHashInput, drawingContentHashInput } from '../shared/trayDrawingSnapshot';
 
 const projectId = '00000000-0000-4000-8000-000000000003';
 const otherProjectId = '00000000-0000-4000-8000-000000000004';
+const trayId = '00000000-0000-4000-8000-000000000005';
 configure({ asyncUtilTimeout: 10000 });
 const basicUser = {
   id: '00000000-0000-4000-8000-000000000002',
@@ -36,9 +41,35 @@ const project = {
   supportDistances: {},
   supportDistanceOverrides: {},
   trayPurposeTemplates: {},
-  cableLayout: {},
+  cableLayout: { cableSpacing: null, considerBundleSpacingAsFree: null, minFreeSpacePercent: null,
+    maxFreeSpacePercent: null, mv: null, power: null, vfd: null, control: null, customBundleRanges: null },
   createdAt: '2026-01-01',
   updatedAt: '2026-01-01',
+};
+const tray = {
+  id: trayId, projectId, name: 'TRAY-1', type: null, purpose: null,
+  widthMm: 300, heightMm: 60, lengthMm: 1000, includeGroundingCable: false, groundingCableTypeId: null,
+  createdAt: '2026-01-01', updatedAt: '2026-01-01',
+};
+const fixtureHash = (value: unknown) => createHash('sha256').update(canonicalPurposeJson(value)).digest('hex');
+// Tray details now consume one authenticated, hash-verified drawing snapshot.
+// Keep these inputs coherent so permission tests exercise the real API boundary.
+const drawingSnapshotFixture = (canEdit: boolean) => {
+  const data = { project, tray, reportTrays: [tray], cables: [], trayCables: [],
+    materialTrays: [], materialSupports: [], cableTypes: [], loadCurves: [] };
+  const override = { revision: '0', value: null };
+  const sourceSha256 = 'a'.repeat(64);
+  const layout = { schemaVersion: 'wfc.tray-drawing-layout.v1', algorithmVersion: 'wfc-tray-placement-v2',
+    widthPx: 300, heightPx: 60, commands: [], summary: null, diagnostics: [], placements: [] };
+  const snapshot = { schemaVersion: 'pathfinder.tray-drawing-snapshot.v1' as const, projectId, projectTrayId: trayId,
+    snapshotId: trayId, catalogRevision: '1', drawingPolicyRevision: '0', drawingInputRevision: '1',
+    layoutAlgorithmVersion: 'wfc-tray-placement-v2' as const, contentSha256: '0'.repeat(64), purposeKey: null,
+    categoryModes: { ...DEFAULT_DRAWING_MODES }, legacySidePolicyVersion: 'wfc-tray-sides-v1' as const,
+    settingsSha256: fixtureHash(drawingSettingsHashInput(override, DEFAULT_DRAWING_MODES)),
+    inputSha256: fixtureHash(drawingInputHashInput(data, sourceSha256)), orderedCableIds: [], state: 'ready' as const, diagnostics: [] };
+  snapshot.contentSha256 = fixtureHash(drawingContentHashInput(snapshot, layout));
+  return { schemaVersion: 'pathfinder.tray-drawing-response.v1', snapshot, data, override, sourceSha256,
+    permissions: { canEdit }, layout };
 };
 let role: 'basic' | 'technician' | 'engineer' = 'basic';
 let projectEditable = false;
@@ -69,7 +100,8 @@ beforeEach(() => {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: string, options?: RequestInit) => {
-      const path = new URL(input).pathname;
+      const url = new URL(input);
+      const path = url.pathname;
       requests.push(path);
       if (options?.method && !['GET', 'HEAD'].includes(options.method)) mutations.push({ path, method: options.method, body: options.body });
       if (path === '/api/auth/register')
@@ -108,16 +140,17 @@ beforeEach(() => {
         cableType: { id: 'type-id', projectId, name: 'Type A', updatedAt: '2026-01-01' },
         materialCableType: null, defaultMaterials: [], cableCount: 0,
       });
-      if (path.endsWith('/trays/tray-id')) return json({ tray: {
-        id: 'tray-id', projectId, name: 'TRAY-1', type: null, purpose: null,
-        widthMm: 300, heightMm: 60, lengthMm: 1000, includeGroundingCable: false,
-        createdAt: '2026-01-01', updatedAt: '2026-01-01',
-      } });
+      if (path.endsWith(`/trays/${trayId}/drawing-snapshot`)) return json(drawingSnapshotFixture(projectEditable));
+      if (path.endsWith(`/trays/${trayId}`)) return json({ tray });
       if (path.endsWith('/files')) return json({ files: [] });
       if (path.endsWith('/export')) return new Response('excel');
       if (path.endsWith('/cables')) return json({ cables: [] });
       if (path.endsWith('/cable-types')) return json({ cableTypes: [] });
-      if (path.endsWith('/trays')) return json({ trays: [] });
+      if (path.endsWith('/trays')) return json(url.searchParams.get('drawingMetrics') === '1' ? {
+        project: { ...project, id: path.split('/')[3] }, trays: [], freeSpaceByTrayId: {}, provenance: [],
+        revisions: { catalogRevision: '1', drawingPolicyRevision: '0', drawingInputRevision: '1' },
+        layoutAlgorithmVersion: 'wfc-tray-placement-v2',
+      } : { trays: [] });
       if (path.endsWith('/roxtec')) return json({ entries: [] });
       if (path.endsWith('/roxtec/1'))
         return json({
@@ -362,7 +395,7 @@ describe('Technician navigation and export controls', () => {
   it.each([
     ['/cables/cable-id', 'Cable 1 - CABLE-1'],
     ['/cable-types/type-id', 'Cable type - Type A'],
-    ['/trays/tray-id', 'TRAY-1'],
+    [`/trays/${trayId}`, 'TRAY-1'],
   ])('opens %s details without editing or catalog requests', async (suffix, title) => {
     mount('/projects/' + projectId + suffix);
     expect((await screen.findAllByText(title)).length).toBeGreaterThan(0);

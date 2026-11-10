@@ -13,6 +13,7 @@ import { initializeModelRegistry, stopModelRegistry } from './modelRegistry/runt
 import { stopViewerSessions } from './viewerSessions/runtime.js';
 import { viewerHttpPolicy } from './viewerSessions/http.js';
 import { initializePathFinderRuntime, stopPathFinderRuntime } from './pathfinder/runtime.js';
+import { assertCadPocIsolation } from './cadDesign/isolation.js';
 
 const app = createApp();
 if (viewerHttpPolicy().allowInsecureLanHttp) {
@@ -50,6 +51,8 @@ function startListening(server: http.Server | https.Server, protocol: string): v
 
 const startServer = async (): Promise<void> => {
   try {
+    // Fail before any ordinary WFC schema/storage initialization can write.
+    assertCadPocIsolation(process.env);
     await initializeDatabase();
     await initializeObjectStorage();
     await initializeModelRegistry();
