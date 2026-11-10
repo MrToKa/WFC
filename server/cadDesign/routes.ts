@@ -95,6 +95,13 @@ cadDesignRouter.post('/catalog', requireProjectEdit, (req: CadRequest, res: Resp
   }
   const projectId = req.params.projectId;
   const sha = createHash('sha256').update(req.file.buffer).digest('hex');
+  const verifiedFilename = path.basename(req.file.originalname).replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 200);
+  // This release is a deliberately restricted two-part Aalborg POC: refuse
+  // unknown CAD geometry rather than inventing mm units or connector frames.
+  if (cadPocPortSeeds(verifiedFilename, sha).length !== 2) {
+    failure(res, 422, 'STEP_SOURCE_NOT_APPROVED_FOR_POC');
+    return;
+  }
   const existing = await pool.query(
     'SELECT id FROM cad_catalog_items WHERE project_id=$1 AND source_sha256=$2',
     [projectId, sha],
