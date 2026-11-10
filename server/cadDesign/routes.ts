@@ -305,3 +305,39 @@ cadDesignRouter.get('/designs/:designId/materials.csv', safe(async (req: CadRequ
   res.setHeader('Cache-Control', 'private, no-store');
   res.send('\uFEFF' + lines.join('\r\n') + '\r\n');
 }));
+
+cadDesignRouter.get('/designs/:designId/assembly.step', safe(async (req: CadRequest, res: Response) => {
+  if (!uuid.safeParse(req.params.designId).success) {
+    failure(res, 400, 'INVALID_DESIGN_ID'); return;
+  }
+  const { projectId, designId } = req.params;
+  const design = await pool.query<{ model_version_id: string; name: string; revision: number }>(
+    `SELECT model_version_id, name, revision
+       FROM cad_designs WHERE project_id=$1 AND id=$2`,
+    [projectId, designId],
+  );
+  if (!design.rows[0]) { failure(res, 404, 'CAD_DESIGN_NOT_FOUND'); return; }
+  const result = await pool.query<{
+    original_filename: string; source_object_key: string;
+    x_mm: number; y_mm: number; z_mm: number;
+    qx: number; qy: number; qz: number; qw: number;
+  }>(
+    `SELECT c.original_filename, c.source_object_key,
+            i.x_mm, i.y_mm, i.z_mm, i.qx, i.qy, i.qz, i.qw
+       FROM cad_design_instances i
+       JOIN cad_catalog_items c ON c.project_id=i.project_id AND c.id=i.catalog_item_id
+      WHERE i.project_id=$1 AND i.design_id=$2
+      ORDER BY i.created_at, i.id LIMIT 33`,
+    [projectId, designId],
+  );
+  if (!result.rows.length) { failure(res, 409, 'EMPTY_CAD_DESIGN'); return; }
+  if (result.rows.length > 32) { failure(res, 413, 'CAD_EXPORT_PART_LIMIT'); return; }
+  const { exportStepAssembly } = await import('./stepAssemblyClient.js');
+  const output = await exportStepAssembly(result.rows);
+  res.setHeader('Content-Type', 'application/step');
+  res.setHeader('Content-Disposition', 'attachment; filename="wfc-proposed-cable-trays.step"');
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.setHeader('X-WFC-Source-Model-Version', design.rows[0].model_version_id);
+  res.setHeader('X-WFC-Design-Revision', String(design.rows[0].revision));
+  res.send(output);
+}));
