@@ -44,6 +44,8 @@ jobs:
         run: npm run server:build
       - name: Protected CAD protocol contracts
         run: node --test viewer-runtime/test/cad-protocol.node-test.mjs
+      - name: Dynamic CAD Scene API isolation and transform tests
+        run: node --test viewer-runtime/test/cad-scene.node-test.mjs
       - name: Python converter syntax
         run: python -m py_compile scripts/poc/step-mesh-converter.py
       - name: Build isolated CAD kernel image
