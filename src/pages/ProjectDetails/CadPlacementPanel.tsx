@@ -57,6 +57,7 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
   } | null>(null);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [coordinates, setCoordinates] = useState<Coordinates>(empty);
+  const [moveStepMm, setMoveStepMm] = useState('50');
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState('');
@@ -153,6 +154,19 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
       x: String(instance.xMm), y: String(instance.yMm), z: String(instance.zMm),
       ...quaternionEuler(instance),
     });
+  };
+
+  const nudge = (axis: 'x' | 'y' | 'z', direction: -1 | 1) => {
+    const step = Number(moveStepMm);
+    const current = Number(coordinates[axis]);
+    if (!Number.isFinite(step) || step <= 0 || step > 10000 || !Number.isFinite(current) ||
+        Math.abs(current + direction * step) > 1e9) {
+      setNotice('Choose a step between 0 and 10000 mm within the model coordinate range.');
+      return;
+    }
+    setPendingSnap(null);
+    setCoordinates(old => ({ ...old, [axis]: String(current + direction * step) }));
+    setNotice(`Moved ${axis.toUpperCase()} by ${direction * step} mm. Save to persist.`);
   };
 
   const pickPosition = async () => {
@@ -333,6 +347,16 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
     <Button type="button" disabled={busy || !selectedId} onClick={() => { void pickPosition(); }}>
       Pick position in 3D model
     </Button>
+    <div aria-label="Axis movement controls">
+      <Field label="Move step (mm)">
+        <Input type="number" min="0.1" max="10000" step="any" aria-label="Move step mm"
+          value={moveStepMm} disabled={busy} onChange={(_, data) => setMoveStepMm(data.value)} />
+      </Field>
+      {(['x','y','z'] as const).map(axis => <div key={axis}>
+        <Button type="button" disabled={busy} onClick={() => nudge(axis, -1)}>{axis.toUpperCase()} −</Button>
+        <Button type="button" disabled={busy} onClick={() => nudge(axis, 1)}>{axis.toUpperCase()} +</Button>
+      </div>)}
+    </div>
     <form onSubmit={event => { void save(event); }} aria-label="Save component position">
       {(['x', 'y', 'z', 'rx', 'ry', 'rz'] as const).map(axis => <Field key={axis}
         label={['x','y','z'].includes(axis) ? `${axis.toUpperCase()} (mm)` : `Rotation ${axis.slice(1).toUpperCase()} (degrees)`}>
