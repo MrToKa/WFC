@@ -186,7 +186,7 @@ export class ViewerController {
     rotation: { x: number; y: number; z: number; w: number };
   }): Promise<void> {
     const scope = this.getLoadSnapshot();
-    if (!scope?.ready) throw new Error('An active model is required for CAD placement.');
+    if (!scope?.ready || !await this.checkSelection()) throw new Error('An authorized active model is required for CAD placement.');
     const serialized = JSON.stringify(mesh);
     if (!serialized || serialized.length > 16 * 1024 * 1024) throw new Error('CAD mesh exceeds viewer limit.');
     const current = () => {
@@ -218,12 +218,12 @@ export class ViewerController {
     positionMm: { x: number; y: number; z: number };
     rotation: { x: number; y: number; z: number; w: number };
   }): Promise<void> {
-    if (!this.getLoadSnapshot()?.ready) throw new Error('Viewer not ready.');
+    if (!this.getLoadSnapshot()?.ready || !await this.checkSelection()) throw new Error('Viewer model access changed.');
     await this.sendAsync('CAD_TRANSFORM', { componentId, transform }, 'CAD_ACK');
   }
 
   async removeCadComponent(componentId: string): Promise<void> {
-    if (!this.getLoadSnapshot()?.ready) return;
+    if (!this.getLoadSnapshot()?.ready || !await this.checkSelection()) return;
     await this.sendAsync('CAD_REMOVE', { componentId }, 'CAD_ACK');
   }
 
