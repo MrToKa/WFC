@@ -636,7 +636,9 @@ describe('selected current cable workflow result', () => {
     render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} workflowSelection={f.selection}
       accountId={id(2)} options={options} onWorkflowDisplayChange={changed} />);
     await waitFor(() => expect(proposalEndpointObjectIds).toHaveBeenCalledOnce());
-    expect(changed.mock.calls.at(-1)?.[0]).toMatchObject({ ready: true, visible: false, routing: '/BC1', designLength: '7' });
+    // Starting the endpoint read precedes the independent route proof commit.
+    // Wait for that commit while keeping the endpoint promise unresolved.
+    await waitFor(() => expect(changed.mock.calls.at(-1)?.[0]).toMatchObject({ ready: true, visible: false, routing: '/BC1', designLength: '7' }));
     expect(f.live.row.cable.routing).toBe('/LIVE-CURRENT');
     expect(f.pf.showPath).not.toHaveBeenCalled();
     await act(async () => finish(['dbid:44', 'dbid:45']));
