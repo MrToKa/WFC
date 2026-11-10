@@ -37,11 +37,13 @@ jobs:
       - name: Lint
         run: npm run lint
       - name: Focused CAD tests
-        run: npx vitest run --maxWorkers=1 --minWorkers=1 src/viewer/componentTransforms.test.ts server/cadDesign/stepFileValidation.test.ts server/middleware.test.ts src/pages/ProjectDetails/RoutingsViewerTab.test.tsx src/ProjectAccess.test.tsx
+        run: npx vitest run --maxWorkers=1 --minWorkers=1 src/viewer/componentTransforms.test.ts server/cadDesign/stepFileValidation.test.ts server/cadDesign/connectionGeometry.test.ts src/viewer/pocConnectorCatalog.test.ts server/middleware.test.ts src/pages/ProjectDetails/RoutingsViewerTab.test.tsx src/ProjectAccess.test.tsx
       - name: Compile frontend
         run: npm run build
       - name: Compile server
         run: npm run server:build
+      - name: Protected CAD protocol contracts
+        run: node --test viewer-runtime/test/cad-protocol.node-test.mjs
       - name: Python converter syntax
         run: python -m py_compile scripts/poc/step-mesh-converter.py
       - name: Validate isolated Compose syntax
