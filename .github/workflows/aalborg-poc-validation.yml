@@ -46,6 +46,10 @@ jobs:
         run: node --test viewer-runtime/test/cad-protocol.node-test.mjs
       - name: Python converter syntax
         run: python -m py_compile scripts/poc/step-mesh-converter.py
+      - name: Build isolated CAD kernel image
+        run: docker build -f Dockerfile.poc-converter -t wfc-aalborg-cad-test:ci .
+      - name: Test exact CAD assembly in isolated worker
+        run: docker run --rm --pull never --network none --read-only --tmpfs /tmp:size=64m --memory=1g --cpus=2 --entrypoint python wfc-aalborg-cad-test:ci /app/smoke.py
       - name: Validate isolated Compose syntax
         env:
           POC_POSTGRES_PASSWORD: synthetic-ci-123456789012345678901234
