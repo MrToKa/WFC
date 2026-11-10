@@ -62,7 +62,9 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
   }
 
   function add(componentId, mesh, transform) {
-    if (registry.has(componentId)) throw new Error('The CAD instance already exists.');
+    // Rehydration after switching tabs may reuse the same component UUID.
+    // Replace only this dynamic instance, never mutate the client SVF.
+    if (registry.has(componentId)) remove(componentId);
     validateMesh(mesh);
     const instances = ensureScene();
     const geometry = new scene.BufferGeometry();
