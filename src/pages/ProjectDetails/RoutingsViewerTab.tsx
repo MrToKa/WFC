@@ -68,7 +68,7 @@ export function RoutingsViewerTab({ projectId, loadedProjectId, token }: Props) 
           </div>
         </form> : mode === 'components' && import.meta.env.VITE_CAD_DESIGN_ENABLED === 'true' ?
           <CadComponentsPanel projectId={projectId} token={token} modelVersionId={viewer.model?.id ?? null}
-            ready={viewer.phase === 'ready'} onPick={viewer.pickCadAnchor} onShow={viewer.showCadComponent} onMove={viewer.moveCadComponent} onFocus={viewer.focusCadComponent} />
+            ready={viewer.phase === 'ready'} onPick={viewer.pickCadAnchor} onShow={viewer.showCadComponent} onMove={viewer.moveCadComponent} onFocus={viewer.focusCadComponent} onRemove={viewer.removeCadComponent} />
           : <div className={styles.cablePanel}>
           <Field className={styles.field} label="Search cable tags">
             <Input ref={searchInput} aria-label="Search cable tags" value={cables.search} onChange={(_, data) => cables.setSearch(data.value)} />

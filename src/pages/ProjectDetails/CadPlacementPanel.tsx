@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { Body1, Button, Caption1, Field, Input, Spinner } from '@fluentui/react-components';
+import { Body1, Button, Caption1, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, Spinner } from '@fluentui/react-components';
 import { getApiBaseUrl } from '@/api/http';
 import { normalizeQuaternion, alignConnectorPorts } from '@/viewer/componentTransforms';
 import { getAalborgPocPorts, MATE_OPPOSING_FACE } from '@/viewer/pocConnectorCatalog';
@@ -17,7 +17,7 @@ type Instance = {
 };
 type Props = { projectId: string; modelVersionId: string; token: string; catalogue: CatalogueItem[];
   onPick: ViewerController['pickPoint']; onShow: ViewerController['showCadComponent']; onMove: ViewerController['moveCadComponent'];
-  onFocus?: ViewerController['focusCadComponent']; };
+  onFocus?: ViewerController['focusCadComponent']; onRemove?: ViewerController['removeCadComponent']; };
 type Coordinates = { x: string; y: string; z: string; rx: string; ry: string; rz: string };
 const empty: Coordinates = { x: '0', y: '0', z: '0', rx: '0', ry: '0', rz: '0' };
 
@@ -42,7 +42,7 @@ function quaternionEuler(instance: Instance): Pick<Coordinates, 'rx' | 'ry' | 'r
   };
 }
 
-export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue, onPick, onShow, onMove, onFocus }: Props) {
+export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue, onPick, onShow, onMove, onFocus, onRemove }: Props) {
   const rendered = useRef(new Set<string>());
   const [displayedIds, setDisplayedIds] = useState<string[]>([]);
   const [displaying, setDisplaying] = useState(false);
@@ -50,6 +50,7 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
   const [instances, setInstances] = useState<Instance[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
   const [editingId, setEditingId] = useState<string>('');
+  const [removeCandidate, setRemoveCandidate] = useState<Instance | null>(null);
   const [snapTarget, setSnapTarget] = useState('');
   const [snapTargetPort, setSnapTargetPort] = useState('');
   const [snapSourcePort, setSnapSourcePort] = useState('');
@@ -314,6 +315,38 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
     } finally { setBusy(false); }
   };
 
+  const removeSelected = async () => {
+    if (!removeCandidate || !designId || !onRemove || busy || displaying) return;
+    const candidate = removeCandidate;
+    setBusy(true); setNotice('');
+    try {
+      await api(`/designs/${designId}/instances/${candidate.id}`, {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expectedRevision: candidate.revision }),
+      });
+      rendered.current.delete(candidate.id);
+      setDisplayedIds(ids => ids.filter(id => id !== candidate.id));
+      setInstances(rows => rows.filter(row => row.id !== candidate.id));
+      setConnections(rows => rows.filter(row => row.sourceInstanceId !== candidate.id && row.targetInstanceId !== candidate.id));
+      setEditingId(''); setSelectedId(''); setCoordinates(empty); setPendingSnap(null);
+      setSnapTarget(''); setSnapTargetPort(''); setSnapSourcePort(''); setRemoveCandidate(null);
+      try {
+        await onRemove(candidate.id);
+        setNotice('Component and its connector relationships removed from this proposal.');
+      } catch {
+        setNotice('Component removed from the proposal. Reload the 3D view to clear its remaining display.');
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message === 'STALE_INSTANCE') {
+        setRemoveCandidate(null);
+        await reload().catch(() => {});
+        setNotice('This component changed. Select it again before removing it.');
+      } else {
+        setNotice(error instanceof Error ? error.message : 'Could not remove the component.');
+      }
+    } finally { setBusy(false); }
+  };
+
   const download = async (extension: 'materials.csv' | 'assembly.step') => {
     if (!designId || busy) return;
     setBusy(true); setNotice('');
@@ -393,6 +426,22 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
     <div><Caption1>{displaying ? 'Displaying saved components…' : `${displayedIds.filter(id => instances.some(instance => instance.id === id)).length} of ${instances.length} saved components ready in 3D`}</Caption1></div>
     <Button type="button" disabled={busy || displaying || !onFocus || !editing || !displayedIds.includes(editingId)}
       onClick={() => { void focusSelected(); }}>Zoom to selected component</Button>
+    <Button type="button" disabled={busy || displaying || !onRemove || !editing || !designId}
+      onClick={() => { if (editing) setRemoveCandidate({ ...editing }); }}>Remove selected component</Button>
+    <Dialog open={removeCandidate !== null} onOpenChange={(_, data) => { if (!busy && !data.open) setRemoveCandidate(null); }}>
+      <DialogSurface><DialogBody>
+        <DialogTitle>Remove component from proposal?</DialogTitle>
+        <DialogContent>
+          <Body1>{removeCandidate?.partNumber} and its connector relationships will be removed from this proposal.</Body1>
+          {removeCandidate ? <p>X {removeCandidate.xMm}, Y {removeCandidate.yMm}, Z {removeCandidate.zMm} mm</p> : null}
+          <p>The Materials product and its STEP revisions remain available.</p>
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={busy} onClick={() => setRemoveCandidate(null)}>Cancel</Button>
+          <Button appearance="primary" disabled={busy || displaying} onClick={() => { void removeSelected(); }}>Remove component</Button>
+        </DialogActions>
+      </DialogBody></DialogSurface>
+    </Dialog>
     <ul>{instances.map(instance => <li key={instance.id}>
       <Button appearance={editingId === instance.id ? 'primary' : 'subtle'}
         onClick={() => selectInstance(instance.id)} disabled={busy}>

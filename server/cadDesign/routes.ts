@@ -40,6 +40,7 @@ const updateInput = z.object({
   expectedRevision: z.number().int().positive(),
   transform,
 }).strict();
+const deleteInput = z.object({ expectedRevision: z.number().int().positive().max(Number.MAX_SAFE_INTEGER) }).strict();
 
 type CadRequest = Request<{projectId: string; catalogItemId?: string; designId?: string; instanceId?: string; connectionId?: string}>;
 
@@ -282,6 +283,58 @@ cadDesignRouter.patch('/designs/:designId/instances/:instanceId', requireProject
   );
   if (!result.rows[0]) { failure(res, 409, 'STALE_OR_INACTIVE_INSTANCE'); return; }
   res.json(result.rows[0]);
+}));
+
+cadDesignRouter.delete('/designs/:designId/instances/:instanceId', requireProjectEdit, safe(async (req: CadRequest, res: Response) => {
+  const { projectId, designId, instanceId } = req.params;
+  if (![projectId, designId, instanceId].every(value => uuid.safeParse(value).success)) {
+    failure(res, 400, 'INVALID_INSTANCE_ID'); return;
+  }
+  const parsed = deleteInput.safeParse(req.body);
+  if (!parsed.success) { failure(res, 400, 'INVALID_INSTANCE_REVISION'); return; }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Match the design-first ordering used by connector operations. Keep the
+    // selected model healthy/active through the deletion transaction as well.
+    const design = await client.query(
+      `SELECT d.id FROM cad_designs d
+         JOIN project_model_selections s ON s.project_id=d.project_id AND s.active_model_version_id=d.model_version_id
+         JOIN model_versions v ON v.project_id=d.project_id AND v.id=d.model_version_id
+        WHERE d.project_id=$1 AND d.id=$2 AND d.status='proposed'
+          AND v.state='ready' AND v.health='healthy'
+        FOR UPDATE OF d FOR SHARE OF s,v`,
+      [projectId, designId],
+    );
+    if (!design.rows[0]) { await client.query('ROLLBACK'); failure(res, 409, 'INACTIVE_DESIGN'); return; }
+    const current = await client.query<{ id: string; revision: number }>(
+      'SELECT id,revision FROM cad_design_instances WHERE project_id=$1 AND design_id=$2 AND id=$3 FOR UPDATE',
+      [projectId, designId, instanceId],
+    );
+    if (!current.rows[0]) { await client.query('ROLLBACK'); failure(res, 404, 'INSTANCE_NOT_FOUND'); return; }
+    if (current.rows[0].revision !== parsed.data.expectedRevision) {
+      await client.query('ROLLBACK'); failure(res, 409, 'STALE_INSTANCE'); return;
+    }
+    // Connector FKs cascade only relationships belonging to this instance.
+    // Existing triggers advance the proposal revision within this transaction.
+    // The Materials product, pinned CAD asset, project reference and source SVF
+    // are intentionally retained for reuse by other instances/designs.
+    const deleted = await client.query(
+      'DELETE FROM cad_design_instances WHERE project_id=$1 AND design_id=$2 AND id=$3 AND revision=$4 RETURNING id',
+      [projectId, designId, instanceId, parsed.data.expectedRevision],
+    );
+    if (!deleted.rows[0]) { await client.query('ROLLBACK'); failure(res, 409, 'STALE_INSTANCE'); return; }
+    await client.query('COMMIT');
+    res.status(204).send();
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    const code = (error as { code?: string })?.code;
+    // A simultaneous position edit takes an instance lock before its revision
+    // trigger touches the design; PostgreSQL may resolve that inversion here.
+    // Report a retryable conflict instead of implying that deletion succeeded.
+    if (code === '40P01' || code === '40001') { failure(res, 409, 'CAD_DESIGN_CONFLICT'); return; }
+    throw error;
+  } finally { client.release(); }
 }));
 
 cadDesignRouter.get('/designs/:designId/materials.csv', safe(async (req: CadRequest, res: Response) => {

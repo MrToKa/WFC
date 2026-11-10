@@ -51,7 +51,7 @@ jobs:
       - name: Focused CAD tests
         run: npx vitest run --maxWorkers=1 --minWorkers=1 --testTimeout=15000 src/viewer/ViewerController.test.ts src/viewer/componentTransforms.test.ts server/cadDesign/stepFileValidation.test.ts server/cadDesign/connectionGeometry.test.ts src/viewer/pocConnectorCatalog.test.ts server/middleware.test.ts src/pages/ProjectDetails/RoutingsViewerTab.test.tsx src/ProjectAccess.test.tsx
       - name: Materials catalogue and pinned revision regression tests
-        run: npx vitest run --maxWorkers=1 --minWorkers=1 --testTimeout=15000 server/materialCad server/cadDesign/isolation.test.ts server/cadDesign/catalogReferences.test.ts src/pages/Materials/components/MaterialComponentsSection.test.tsx src/pages/ProjectDetails/CadComponentsPanel.test.tsx src/pages/ProjectDetails/CadPlacementPanel.test.tsx
+        run: npx vitest run --maxWorkers=1 --minWorkers=1 --testTimeout=15000 server/materialCad server/cadDesign/isolation.test.ts server/cadDesign/catalogReferences.test.ts server/cadDesign/instanceDeletion.test.ts src/pages/Materials/components/MaterialComponentsSection.test.tsx src/pages/ProjectDetails/CadComponentsPanel.test.tsx src/pages/ProjectDetails/CadPlacementPanel.test.tsx
       - name: Complete Materials navigation, filters and return-state regression
         run: npx vitest run --maxWorkers=1 --minWorkers=1 --testTimeout=15000 src/pages/Materials.test.tsx
       - name: Isolated catalogue snapshot guards
