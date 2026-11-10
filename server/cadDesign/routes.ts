@@ -49,7 +49,7 @@ const updateInput = z.object({
   transform,
 }).strict();
 
-type CadRequest = Request<{projectId: string; designId?: string; instanceId?: string}>;
+type CadRequest = Request<{projectId: string; catalogItemId?: string; designId?: string; instanceId?: string}>;
 
 // Express 4 does not automatically forward rejected async handler promises.
 const safe = (handler: (req: CadRequest, res: Response) => Promise<void>) =>
