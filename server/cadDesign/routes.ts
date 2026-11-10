@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { hasStepEnvelope, MAX_STEP_BYTES, csvCell } from './stepFileValidation.js';
 import { convertStepToMesh } from './converter.js';
+import { cadPocPortSeeds } from './pocPortSeed.js';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import multer from 'multer';
 import { z } from 'zod';
@@ -116,18 +117,41 @@ cadDesignRouter.post('/catalog', requireProjectEdit, (req: CadRequest, res: Resp
       bucket, objectKey: meshKey, data: meshBytes, size: meshBytes.length,
       contentType: 'application/json',
     });
-    const inserted = await pool.query(
-      `INSERT INTO cad_catalog_items
-         (id,project_id,manufacturer,part_number,family,original_filename,
-          source_sha256,source_object_key,source_bytes,created_by,mesh_object_key,mesh_metadata,conversion_status)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'ready')
-       ON CONFLICT(project_id,source_sha256) DO NOTHING RETURNING id`,
-      [id, projectId, parsed.data.manufacturer, parsed.data.partNumber, parsed.data.family,
-        name, sha, key, req.file.size, req.userId ?? null, meshKey,
-        JSON.stringify({ triangleCount: mesh.triangleCount, solidCount: mesh.solidCount,
-          boundsMm: mesh.boundsMm, units: mesh.units })],
-    );
-    if (inserted.rows[0]) {
+    const client = await pool.connect();
+    let created = false;
+    try {
+      await client.query('BEGIN');
+      const inserted = await client.query(
+        `INSERT INTO cad_catalog_items
+           (id,project_id,manufacturer,part_number,family,original_filename,
+            source_sha256,source_object_key,source_bytes,created_by,mesh_object_key,mesh_metadata,conversion_status)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'ready')
+         ON CONFLICT(project_id,source_sha256) DO NOTHING RETURNING id`,
+        [id, projectId, parsed.data.manufacturer, parsed.data.partNumber, parsed.data.family,
+          name, sha, key, req.file.size, req.userId ?? null, meshKey,
+          JSON.stringify({ triangleCount: mesh.triangleCount, solidCount: mesh.solidCount,
+            boundsMm: mesh.boundsMm, units: mesh.units })],
+      );
+      if (inserted.rows[0]) {
+        for (const port of cadPocPortSeeds(name, sha)) {
+          await client.query(
+            `INSERT INTO cad_catalog_ports
+              (id,project_id,catalog_item_id,name,port_type,local_transform)
+             VALUES($1,$2,$3,$4,$5,$6::jsonb)`,
+            [randomUUID(), projectId, id, port.name, port.portType,
+              JSON.stringify(port.localTransform)],
+          );
+        }
+        created = true;
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+    if (created) {
       res.status(201).json({ id, reused: false, conversionStatus: 'ready' });
       return;
     }
