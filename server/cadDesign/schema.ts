@@ -18,10 +18,12 @@ export async function initializeCadDesignSchema(pool: Pool): Promise<void> {
       source_object_key TEXT NOT NULL UNIQUE,
       source_bytes BIGINT NOT NULL CHECK (source_bytes BETWEEN 1 AND 52428800),
       mesh_object_key TEXT,
+      mesh_metadata JSONB,
       conversion_status TEXT NOT NULL DEFAULT 'pending'
         CHECK (conversion_status IN ('pending', 'ready', 'failed')),
       created_by UUID REFERENCES users(id) ON DELETE SET NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      CHECK (conversion_status <> 'ready' OR (mesh_object_key IS NOT NULL AND mesh_metadata IS NOT NULL)),
       UNIQUE (project_id, source_sha256),
       UNIQUE (project_id, id)
     );
