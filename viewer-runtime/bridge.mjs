@@ -317,7 +317,8 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
         if (!live()) return;
         if (!emit(command, 'TRAY_IDENTITIES', result)) throw failure('TRAY_IDENTITY_READ_FAILED');
       } else if (command.type === 'READ_MODEL_OBJECTS' || command.type === 'READ_PREPARATION_OBJECTS' || command.type === 'READ_SELECTION') {
-        const result = command.type === 'READ_SELECTION' ? await handle.readSelection(signal) : command.type === 'READ_PREPARATION_OBJECTS' ? await handle.readPreparationObjects(command.payload, signal) : await handle.readModelObjects(command.payload, signal);
+        const progress = value => { if (live()) emit(command, 'PREPARATION_PROGRESS', value); };
+        const result = command.type === 'READ_SELECTION' ? await handle.readSelection(signal) : command.type === 'READ_PREPARATION_OBJECTS' ? await handle.readPreparationObjects(command.payload, signal, progress) : await handle.readModelObjects(command.payload, signal);
         // Metadata and picks may outlive an ACL change while the SDK worker runs.
         await requirePathFinder(command, signal);
         if (!live()) return;

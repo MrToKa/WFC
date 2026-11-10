@@ -9,14 +9,14 @@ import type { BarrierFrameObservation } from '../../viewer-runtime/barrier-captu
 import { BARRIER_LIMITS, barrierCanonicalJson, barrierCaptureSchema } from '../../shared/pathfinderBarriers';
 import { bindCompletedCaptureEvidence,verifyCompletedCaptureEvidence,type CompletedModelCaptureSummary } from '../../viewer-runtime/capture-evidence.mjs';
 import { CAPTURE_INPUT_LIMITS, planModelCaptureInput, validateModelCaptureInputAck, validateModelCaptureInputScope, type ModelCaptureInputDescriptor } from '../../viewer-runtime/capture-input.mjs';
-import { validatePreparationDiscoveryRequest, validatePreparationDiscoveryPage, type PreparationDiscoveryRequest, type PreparationDiscoveryPage } from '../../viewer-runtime/preparation-input.mjs';
+import { validatePreparationDiscoveryRequest, validatePreparationDiscoveryPage, type PreparationDiscoveryRequest, type PreparationDiscoveryPage, type PreparationDiscoveryProgress } from '../../viewer-runtime/preparation-input.mjs';
 import { validateTrayIdentityRequest, validateTrayIdentityResponse, type TrayIdentityRequest, type TrayIdentityResponse } from '../../viewer-runtime/tray-identity.mjs';
 import { watchViewerLogin } from './loginLifecycle';
 import { supportedBarrierCaptureCommandSchema, supportedBarrierPublicationOutcomeSchema as barrierPublicationOutcomeSchema,
   supportedBarrierSnapshotReferenceSchema as barrierSnapshotReferenceSchema, type AnyBarrierCaptureCommand } from '../../shared/pathfinderBarrierSupported';
 import { sessionBase, viewerRequest, ViewerAccessError, type ViewerSession, type ModelSelection } from './sessionApi';
 
-type Pending = { envelope: BridgeEnvelope; terminal: string; timer: number; resolve?: (event: ViewerEvent) => void; reject?: (error: Error) => void; quietRecoverableErrors?: boolean };
+type Pending = { envelope: BridgeEnvelope; terminal: string; timer: number; resolve?: (event: ViewerEvent) => void; reject?: (error: Error) => void; quietRecoverableErrors?: boolean; discoveryProgress?: (progress: PreparationDiscoveryProgress) => void };
 type LifecycleScope = Readonly<{
   generation: number; session: ViewerSession; modelVersionId: string | null; loadId: string | null;
   selectionRevision: number | null; deadline: number; signal: AbortSignal;
@@ -156,7 +156,7 @@ export class ViewerController {
     }, pending.envelope.type === 'READ_TRAY_ROOT_SELECTION' ? 15_000 : pending.envelope.type.includes('BARRIER_MULTIPART') ? 195_000 : ['READ_PREPARATION_OBJECTS', 'RESOLVE_TRAY_IDENTITIES'].includes(pending.envelope.type) ? 310_000 : ['START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE'].includes(pending.envelope.type) ? 125_000 : ['CLEAR_ROUTE', 'COMMIT_COMPUTED_PATH', 'SET_PATH_TRANSPARENCY', 'SHOW_LOCATION', 'SHOW_TRAY'].includes(pending.envelope.type) ? MODEL_APPEARANCE_TIMEOUT_MILLISECONDS : ['LOAD_MODEL', 'READ_MODEL_OBJECTS', 'READ_SELECTION'].includes(pending.envelope.type) ? 60_000 : pending.envelope.type === 'PICK_POINT' ? 125_000 : 10_000);
   }
 
-  private send(type: string, payload: Record<string, unknown>, terminal: string, callbacks: Pick<Pending, 'resolve' | 'reject' | 'quietRecoverableErrors'> = {}): string {
+  private send(type: string, payload: Record<string, unknown>, terminal: string, callbacks: Pick<Pending, 'resolve' | 'reject' | 'quietRecoverableErrors' | 'discoveryProgress'> = {}): string {
     if (this.disposed) throw new Error('Viewer disposed');
     const envelope = {
       channel: 'wfc-routings-viewer', protocolVersion: 1, instanceId: this.instanceId,
@@ -199,6 +199,11 @@ export class ViewerController {
       this.arm(pending);
       this.emit(message.type, message.payload, message.requestId, identity);
       return;
+    }
+    if (message.type === 'PREPARATION_PROGRESS' && pending.envelope.type === 'READ_PREPARATION_OBJECTS' && pending.envelope.payload.mode === 'equipment') {
+      // Cosmetic progress belongs to this exact live request. It neither settles
+      // discovery nor extends its fixed deadline.
+      pending.discoveryProgress?.(message.payload as unknown as PreparationDiscoveryProgress); return;
     }
     if (message.type === 'MODEL_CAPTURE_PROGRESS' && ['START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE'].includes(pending.envelope.type) && message.payload.captureId === pending.envelope.payload.captureId) {
       this.arm(pending); this.emit(message.type, message.payload, message.requestId, identity); return;
@@ -545,17 +550,23 @@ export class ViewerController {
     return reply.payload as unknown as ViewerModelObjectsPage;
   }
 
-  async discoverPreparationObjects(request: PreparationDiscoveryRequest, options: {signal?:AbortSignal;isCurrent?:()=>boolean} = {}): Promise<PreparationDiscoveryPage> {
+  async discoverPreparationObjects(request: PreparationDiscoveryRequest, options: {signal?:AbortSignal;isCurrent?:()=>boolean;onProgress?:(progress:PreparationDiscoveryProgress)=>void} = {}): Promise<PreparationDiscoveryPage> {
     if (!validatePreparationDiscoveryRequest(request)) throw new Error('Invalid project discovery scope');
     const input:PreparationDiscoveryRequest = JSON.parse(JSON.stringify(request)), generation = this.routeGeneration, instanceId = this.instanceId, modelId = this.modelVersionId, loadId = this.loadId;
     const current = () => { if (this.disposed || !this.loaded || options.signal?.aborted || options.isCurrent?.() === false || generation !== this.routeGeneration || instanceId !== this.instanceId || modelId !== this.modelVersionId || loadId !== this.loadId) throw new DOMException('Project discovery cancelled.','AbortError'); };
     current(); if (!await this.checkSelection()) throw new DOMException('Project discovery cancelled.','AbortError'); current();
     let requestId:string|undefined;
     const abort = () => { if (requestId && this.pending.has(requestId) && !this.disposed) this.cancel(requestId); };
+    let lastProgress: PreparationDiscoveryProgress | undefined;
+    const discoveryProgress = (progress: PreparationDiscoveryProgress) => {
+      try { current(); } catch { return; }
+      if (lastProgress && (lastProgress.total !== progress.total || progress.loaded < lastProgress.loaded)) return;
+      lastProgress = { ...progress }; options.onProgress?.({ ...progress });
+    };
     options.signal?.addEventListener('abort',abort,{once:true});
     try {
       current();
-      const reply = await new Promise<ViewerEvent>((resolve,reject) => { try { requestId = this.send('READ_PREPARATION_OBJECTS', input as unknown as Record<string,unknown>, 'PREPARATION_OBJECTS',{resolve,reject}); } catch(error) { reject(error); } });
+      const reply = await new Promise<ViewerEvent>((resolve,reject) => { try { requestId = this.send('READ_PREPARATION_OBJECTS', input as unknown as Record<string,unknown>, 'PREPARATION_OBJECTS',{resolve,reject,discoveryProgress}); } catch(error) { reject(error); } });
       current();
       const page = reply.payload;
       if (!validatePreparationDiscoveryPage(page) || page.mode !== input.mode || page.rootObjectId !== input.rootObjectId || page.cursor !== input.cursor || JSON.stringify(page.names) !== JSON.stringify(input.names) || page.objects.length > input.limit

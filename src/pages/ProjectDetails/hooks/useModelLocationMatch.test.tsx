@@ -5,14 +5,14 @@ import * as api from '@/api/pathfinderModelLocationMatch';
 import { modelMatchContext, modelMatchIds as ids, modelMatchPage, modelMatchReceipt } from '@/test/modelLocationMatchFixtures';
 import { collectModelLocationMatch, modelLocationMatchPage, useModelLocationMatch } from './useModelLocationMatch';
 import type { ProjectPreparationViewer, usePathFinder } from './usePathFinder';
-import type { PreparationDiscoveryPage, PreparationDiscoveryRequest } from '../../../../viewer-runtime/preparation-input.mjs';
+import { PREPARATION_VIEWER_LIMITS, validatePreparationDiscoveryRequest, type PreparationDiscoveryPage, type PreparationDiscoveryRequest, type PreparationDiscoveryProgress } from '../../../../viewer-runtime/preparation-input.mjs';
 vi.mock('@/api/pathfinderModelLocationMatch', async original => ({ ...await original<typeof api>(), fetchModelLocationMatchContext: vi.fn(), assignModelLocations: vi.fn() }));
 function setup(names = ['TAG-1']) {
   const context = modelMatchContext(names);
   vi.mocked(api.fetchModelLocationMatchContext).mockResolvedValue(context);
   let revision = 7;
   vi.mocked(api.assignModelLocations).mockImplementation(async (_project, _token, body) => modelMatchReceipt(body, String(++revision)));
-  const discover = vi.fn(async (request: PreparationDiscoveryRequest) => modelMatchPage(request));
+  const discover = vi.fn(async (request: PreparationDiscoveryRequest, _onProgress?: (progress: PreparationDiscoveryProgress) => void) => modelMatchPage(request));
   const viewer = { assertCurrent: vi.fn(), discover } as unknown as ProjectPreparationViewer;
   const pf = { preparationAccess: { projectId: ids.project, loadedProjectId: ids.project, token: 'token', isAdmin: true },
     preparationViewerGeneration: 1, data: { activeModel: context.current }, viewerPhase: 'ready', busy: false, refresh: vi.fn(),
@@ -24,6 +24,43 @@ function setup(names = ['TAG-1']) {
 beforeEach(() => { vi.clearAllMocks(); vi.stubGlobal('crypto', webcrypto); localStorage.clear(); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 describe('complete endpoint-only matching scan', () => {
+  it('reuses bounded model indexes for long project names instead of scanning again for every query page', async () => {
+    const names = Array.from({ length: 1091 }, (_, index) => `TAG-${index}-${'X'.repeat(70)}`);
+    const { context, viewer, discover } = setup(names);
+    discover.mockImplementation(async request => modelMatchPage(request, []));
+    const scan = await collectModelLocationMatch(context, viewer, vi.fn(), new AbortController().signal);
+    const requests = discover.mock.calls.map(([request]) => request);
+    expect(requests.flatMap(request => request.names)).toEqual(names);
+    expect(requests.every(request => validatePreparationDiscoveryRequest(request) && request.indexNames?.length
+      && new TextEncoder().encode(JSON.stringify(request.indexNames)).byteLength <= PREPARATION_VIEWER_LIMITS.equipmentIndexNameBytes)).toBe(true);
+    const indexKeys = requests.map(request => JSON.stringify(request.indexNames));
+    expect(new Set(indexKeys).size).toBe(3);
+    expect(requests.length).toBeGreaterThan(12);
+    expect(indexKeys.filter((key, index) => index === 0 || indexKeys[index - 1] !== key)).toHaveLength(3);
+    expect(scan.complete).toBe(true); expect(api.assignModelLocations).not.toHaveBeenCalled();
+  });
+  it('reports first-page property progress without treating it as completed names or a saved assignment', async () => {
+    const { context, viewer, discover } = setup(), progress = vi.fn(), abort = new AbortController();
+    let finish!: (page: PreparationDiscoveryPage) => void;
+    let report!: (value: PreparationDiscoveryProgress) => void;
+    discover.mockImplementation((_request, onProgress) => {
+      report = onProgress!;
+      report({ phase: 'properties', loaded: 512, total: 172818 });
+      return new Promise(resolve => { finish = resolve; });
+    });
+    const collecting = collectModelLocationMatch(context, viewer, progress, abort.signal);
+    expect(progress).toHaveBeenLastCalledWith(expect.stringContaining('512 of 172818 objects checked'));
+    expect(progress.mock.lastCall?.[0]).toContain('0 of 1 checked; assignments start after the complete search');
+    report({ phase: 'properties', loaded: 1024, total: 172818 });
+    expect(progress).toHaveBeenLastCalledWith(expect.stringContaining('1024 of 172818'));
+    expect(api.assignModelLocations).not.toHaveBeenCalled();
+    abort.abort(); const count = progress.mock.calls.length;
+    report({ phase: 'properties', loaded: 172818, total: 172818 });
+    expect(progress).toHaveBeenCalledTimes(count);
+    finish(modelMatchPage(discover.mock.calls[0][0]));
+    await expect(collecting).rejects.toMatchObject({ name: 'AbortError' });
+    expect(api.assignModelLocations).not.toHaveBeenCalled();
+  });
   it('retains each raw matching object and its shared identity for complete server grouping', async () => {
     const { context, viewer, discover } = setup(['15-FT-4018']);
     const identity = { guid: '7586ffbb-1d0a-5942-b687-06884123c866', sourceFile: 'plant/instruments.dwg' };

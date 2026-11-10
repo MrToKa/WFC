@@ -344,7 +344,7 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
     }).catch(error => { externalPromise = undefined; throw error; });
     return externalPromise;
   }
-  async function readPreparationObjects(input, operationSignal) {
+  async function readPreparationObjects(input, operationSignal, onProgress = () => {}) {
     if (!validatePreparationDiscoveryRequest(input)) throw fail('PREPARATION_SCOPE_INVALID');
     prepareForVisibilityObservation();
     const request = JSON.parse(JSON.stringify(input)), started = Date.now();
@@ -374,6 +374,13 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
       }
       candidateIndices = preparationSubtree.indices;
     } else if (request.mode === 'equipment') {
+      let lastProgressAt = -Infinity, lastProgressLoaded = -1;
+      const progress = (loaded, force = false) => {
+        check(); const now = performance.now();
+        if (lastProgressLoaded === loaded || !force && now - lastProgressAt < 250) return;
+        lastProgressAt = now; lastProgressLoaded = loaded;
+        onProgress({ phase: 'properties', loaded, total: ids.length }); check();
+      };
       // Retain matching postings only for this bounded project name universe.
       // Small query pages still echo/filter only their own names, and reobserve
       // live visibility before returning any cached property candidates.
@@ -382,8 +389,10 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
       if (!preparationEquipment || preparationEquipment.queryKey !== queryKey) {
         const state = { promise:null, queryKey }; preparationEquipment = state;
         state.promise = (async () => {
+          progress(0, true);
           const values = new Map(), identities = new Map(), requested = new Set(indexNames.map(normalEquipment)), returned = new Uint8Array(ids.length);
           let returnedCount = 0, accountedBytes = returned.byteLength, postings = 0, scannedProperties = 0;
+          let rowWorkMilliseconds = 0;
           const charge = bytes => { accountedBytes += bytes; if (accountedBytes > EQUIPMENT_INDEX_LIMITS.bytes) throw fail('PREPARATION_EQUIPMENT_INDEX_LIMIT'); };
           const indexValue = (raw, id, seen) => {
             const text = String(raw ?? '');
@@ -405,7 +414,9 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
             const rows = await callback((yes, no) => model.getBulkProperties(batch, { ignoreHidden:false, needsExternalId:false }, yes, no), operationSignal, 45000,
               { timeout:'PREPARATION_EQUIPMENT_PROPERTIES_TIMEOUT', failed:'PREPARATION_EQUIPMENT_PROPERTIES_FAILED' }); check();
             if (!Array.isArray(rows) || rows.length > batch.length) throw fail('PREPARATION_EQUIPMENT_PROPERTIES_INVALID');
+            let rowWorkStartedAt = performance.now();
             for (const row of rows) {
+              check();
               if (!row || !allowed.has(row.dbId) || returned[indexById.get(row.dbId)] || !Array.isArray(row.properties)) throw fail('PREPARATION_EQUIPMENT_PROPERTIES_INVALID');
               if (row.properties.length > EQUIPMENT_INDEX_LIMITS.rawPropertiesPerRow) throw fail('PREPARATION_EQUIPMENT_ROW_LIMIT');
               scannedProperties += row.properties.length;
@@ -419,14 +430,23 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
                 const identity = equipmentObjectIdentity(row.properties);
                 if (identity) { charge(192 + 2 * (identity.guid.length + identity.sourceFile.length)); identities.set(row.dbId, identity); }
               }
+              // Count synchronous row work across batches, excluding time spent
+              // awaiting the SDK worker (which already yields). Cached replies
+              // still yield after16ms without a timer for every512 IDs.
+              const rowWorkFinishedAt = performance.now();
+              rowWorkMilliseconds += rowWorkFinishedAt - rowWorkStartedAt;
+              if (rowWorkMilliseconds >= 16) {
+                await pause(); check(); rowWorkMilliseconds = 0; rowWorkStartedAt = performance.now();
+              } else rowWorkStartedAt = rowWorkFinishedAt;
             }
-            await pause();
+            progress(Math.min(start + batch.length, ids.length), start + batch.length === ids.length);
           }
           check();
           return { values, identities, propertyScan:{ attemptedObjectCount:ids.length, returnedObjectCount:returnedCount, omittedObjectCount:ids.length-returnedCount, complete:returnedCount===ids.length } };
         })().catch(error => { if (preparationEquipment === state) preparationEquipment = undefined; throw error; });
       }
       const data = await preparationEquipment.promise; check(); propertyScan = data.propertyScan; objectIdentities = data.identities;
+      progress(ids.length, true);
       for (const name of request.names) for (const id of data.values.get(normalEquipment(name)) ?? []) {
         const matched = matching.get(id) ?? []; matched.push(name); matching.set(id, matched);
       }

@@ -553,6 +553,32 @@ test('preparation exact discovery is current-admin authorized before and after S
  }
 });
 
+test('preparation progress keeps the exact live command identity and stops after cancellation or completion', async () => {
+  const request = { schemaVersion: 'wfc.pf.viewer-discovery.v1', mode: 'equipment', names: ['EQ'], rootObjectId: null, cursor: 0, limit: 128 };
+  for (const cancelled of [false, true]) {
+    const waiting = deferred(); let report;
+    const f = fixture({ readPreparationObjects: async (_request, _signal, progress) => {
+      report = progress; progress({ phase: 'properties', loaded: 0, total: 1000 }); return waiting.promise;
+    } });
+    await f.loaded(); const command = f.send('READ_PREPARATION_OBJECTS', request); await turn();
+    assert.equal(f.messages('PREPARATION_PROGRESS').length, 1);
+    const first = f.messages('PREPARATION_PROGRESS')[0];
+    for (const key of ['requestId', 'instanceId', 'projectId', 'modelVersionId', 'loadId']) assert.equal(first[key], command[key]);
+    assert.equal(f.messages('PREPARATION_OBJECTS').length, 0);
+    report({ phase: 'properties', loaded: 512, total: 1000 });
+    assert.equal(f.messages('PREPARATION_PROGRESS').length, 2);
+    if (cancelled) f.send('CANCEL_REQUEST', { targetRequestId: command.requestId });
+    waiting.resolve({ schemaVersion: request.schemaVersion, mode: request.mode, names: request.names, rootObjectId: null, cursor: 0,
+      matchingPolicyVersion: 'wfc.pf.project-exact-candidates.v3', visibilityScope: { ...preparationVisibilityScope }, indexedObjectCount: 1000,
+      propertyScan: { attemptedObjectCount: 1000, returnedObjectCount: 999, omittedObjectCount: 1, complete: false }, objects: [], nextCursor: null, complete: true });
+    await turn(); report({ phase: 'properties', loaded: 1000, total: 1000 });
+    assert.equal(f.messages('PREPARATION_PROGRESS').length, 2);
+    assert.equal(f.messages('PREPARATION_OBJECTS').length, cancelled ? 0 : 1);
+    if (!cancelled) assert.equal(f.messages('PREPARATION_OBJECTS')[0].payload.propertyScan.complete, false);
+    f.bridge.dispose();
+  }
+});
+
 test('equipment discovery preserves bounded failure codes without SDK details and permits a later authorized retry',async()=>{
  for(const code of ['PREPARATION_VISIBILITY_UNAVAILABLE','PREPARATION_VISIBILITY_CHANGED',
   'PREPARATION_EQUIPMENT_PROPERTIES_TIMEOUT','PREPARATION_EQUIPMENT_PROPERTIES_FAILED','PREPARATION_DISCOVERY_DEADLINE',

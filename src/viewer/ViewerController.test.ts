@@ -825,14 +825,33 @@ describe('PathFinder protected Viewer capabilities', () => {
     const rejected=expect(reading).rejects.toMatchObject({name:'AbortError'});await vi.waitFor(()=>expect(s.send.mock.calls.some(call=>call[0].type==='READ_PREPARATION_OBJECTS')).toBe(true));abort.abort();await rejected;expect(s.send.mock.calls.some(call=>call[0].type==='CANCEL_REQUEST')).toBe(true);
     const captureAbort=new AbortController(),capturing=s.c.captureModel({routeCodes:['BC001'],allowedCategories:['Control'],equipmentNames:[]},()=>{},{signal:captureAbort.signal});const captureRejected=expect(capturing).rejects.toMatchObject({name:'AbortError'});await vi.waitFor(()=>expect(s.send.mock.calls.some(call=>call[0].type==='START_MODEL_CAPTURE')).toBe(true));captureAbort.abort();await captureRejected;
   });
-  it('allows the frame discovery budget and still terminates a stalled discovery',async()=>{
-    const s=await loaded(600_000),reading=s.c.discoverPreparationObjects({schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['TAG-001'],rootObjectId:null,cursor:0,limit:128});
+  it('delivers only current request property progress without completing discovery or extending its deadline',async()=>{
+    const s=await loaded(600_000),onProgress=vi.fn(),reading=s.c.discoverPreparationObjects({schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['TAG-001'],rootObjectId:null,cursor:0,limit:128},{onProgress});
     const rejected=expect(reading).rejects.toThrow('Viewer request timed out');
     await vi.waitFor(()=>expect(s.send.mock.calls.some(call=>call[0].type==='READ_PREPARATION_OBJECTS')).toBe(true));
+    const command=s.send.mock.calls.find(([value])=>value.type==='READ_PREPARATION_OBJECTS')![0];
+    const report=(loaded:number,total=1000)=>s.message('PREPARATION_PROGRESS',{phase:'properties',loaded,total},command.requestId,s.identity);
+    s.message('PREPARATION_PROGRESS',{phase:'properties',loaded:100,total:1000},generateId(),s.identity);
+    s.message('PREPARATION_PROGRESS',{phase:'properties',loaded:100,total:1000},command.requestId,{...s.identity,loadId:generateId()});
+    expect(onProgress).not.toHaveBeenCalled();
+    report(512); report(2); report(513,2000); report(1001); report(-1);
+    expect(onProgress).toHaveBeenCalledExactlyOnceWith({phase:'properties',loaded:512,total:1000});
     await vi.advanceTimersByTimeAsync(300_001);
+    report(1000); expect(onProgress).toHaveBeenCalledTimes(2);
     expect(s.events.some(event=>event.type==='ERROR'&&event.payload.code==='REQUEST_TIMEOUT')).toBe(false);
     await vi.advanceTimersByTimeAsync(10_000);await rejected;
     expect(s.events.some(event=>event.type==='ERROR'&&event.payload.code==='REQUEST_TIMEOUT')).toBe(true);
+    report(1000); expect(onProgress).toHaveBeenCalledTimes(2);
+  });
+  it('ignores discovery progress after cancellation even before the cancellation acknowledgement',async()=>{
+    const s=await loaded(),abort=new AbortController(),onProgress=vi.fn();
+    const reading=s.c.discoverPreparationObjects({schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['TAG-001'],rootObjectId:null,cursor:0,limit:128},{signal:abort.signal,onProgress});
+    const rejected=expect(reading).rejects.toMatchObject({name:'AbortError'});
+    await vi.waitFor(()=>expect(s.send.mock.calls.some(call=>call[0].type==='READ_PREPARATION_OBJECTS')).toBe(true));
+    const command=s.send.mock.calls.find(([value])=>value.type==='READ_PREPARATION_OBJECTS')![0];
+    abort.abort();
+    s.message('PREPARATION_PROGRESS',{phase:'properties',loaded:1000,total:1000},command.requestId,s.identity);
+    expect(onProgress).not.toHaveBeenCalled(); await rejected;
   });
   it('ends capture at its absolute 315s wall deadline despite continuous progress keepalives', async () => {
     const timing = vi.fn(), s = await loaded(600_000, timing);
