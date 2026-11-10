@@ -82,9 +82,8 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
   function update(componentId, transform) {
     const id = registry.get(componentId);
     if (id === undefined || !dynamicModel) throw new Error('Unknown CAD instance.');
-    if (!dynamicModel.getInstances().setTransformWorld(id, matrix(transform))) {
-      throw new Error('The Viewer could not update this component transform.');
-    }
+    // Autodesk does not guarantee a boolean return value for this mutation.
+    dynamicModel.getInstances().setTransformWorld(id, matrix(transform));
     viewer.refresh(true);
   }
 
