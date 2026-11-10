@@ -135,6 +135,11 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
       // for translucent surfaces, including when WebGPU was previously saved.
       // Initializer locks feature flags, so choose the renderer before it runs.
       viewing.FeatureFlags.set(viewing.PublicFeatureFlags.WebGPU, false);
+      // Scene API needs to be selected before Viewer Initializer. Existing
+      // SVF routing remains on WebGL; dynamic CAD geometry is created lazily.
+      if (viewing.PublicFeatureFlags.SceneAPI) {
+        viewing.FeatureFlags.set(viewing.PublicFeatureFlags.SceneAPI, true);
+      }
       await new Promise((resolve, reject) => {
         let settled = false;
         const abort = () => finish(interrupted());
