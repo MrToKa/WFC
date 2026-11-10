@@ -13,8 +13,8 @@ export const MAX_MESSAGE_BYTES = 65536;
 // Geometry still arrives through the existing small capture events.
 export const MAX_BARRIER_SELECTION_MESSAGE_BYTES = 4 * 1024 ** 2;
 export const FRAME_PATH = '/viewer-runtime/7.130.0/index.html';
-export const PARENT_TYPES = Object.freeze(['INIT', 'LOAD_MODEL', 'SHOW_ROUTE', 'CLEAR_ROUTE', 'ZOOM_ROUTE', 'CANCEL_REQUEST', 'DISPOSE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'READ_MODEL_OBJECTS', 'READ_PREPARATION_OBJECTS', 'RESOLVE_TRAY_IDENTITIES', 'READ_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'READ_OBJECT_GUID', 'SHOW_LOCATION', 'SHOW_TRAY', 'SET_PATH_TRANSPARENCY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE', 'READ_BARRIER_MULTIPART_FRAME', 'START_BARRIER_MULTIPART', 'STATUS_BARRIER_MULTIPART', 'CANCEL_BARRIER_MULTIPART', 'RECONCILE_BARRIER_MULTIPART']);
-export const FRAME_TYPES = Object.freeze(['HELLO', 'RUNTIME_READY', 'MODEL_PROGRESS', 'MODEL_LOADED', 'ROUTE_RESULT', 'ROUTE_CLEARED', 'ROUTE_ZOOMED', 'REQUEST_CANCELLED', 'DISPOSED', 'WARNING', 'ERROR', 'COMPUTED_PATH_UPDATED', 'POINT_PICKED', 'MODEL_OBJECTS', 'PREPARATION_OBJECTS', 'PREPARATION_PROGRESS', 'TRAY_IDENTITIES', 'MODEL_SELECTION', 'TRAY_ROOT_SELECTION', 'OBJECT_GUID', 'LOCATION_SHOWN', 'TRAY_SHOWN', 'PATH_TRANSPARENCY_UPDATED', 'MODEL_CAPTURE_EVENT', 'MODEL_CAPTURE_PROGRESS', 'MODEL_CAPTURE_INPUT_ACK', 'BARRIER_CAPTURE_EVENT', 'BARRIER_CAPTURE_PROGRESS', 'BARRIER_MULTIPART_FRAME', 'BARRIER_MULTIPART_STATUS']);
+export const PARENT_TYPES = Object.freeze(['INIT', 'LOAD_MODEL', 'SHOW_ROUTE', 'CLEAR_ROUTE', 'ZOOM_ROUTE', 'CANCEL_REQUEST', 'DISPOSE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'READ_MODEL_OBJECTS', 'READ_PREPARATION_OBJECTS', 'RESOLVE_TRAY_IDENTITIES', 'READ_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'READ_OBJECT_GUID', 'SHOW_LOCATION', 'SHOW_TRAY', 'SET_PATH_TRANSPARENCY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE', 'READ_BARRIER_MULTIPART_FRAME', 'START_BARRIER_MULTIPART', 'STATUS_BARRIER_MULTIPART', 'CANCEL_BARRIER_MULTIPART', 'RECONCILE_BARRIER_MULTIPART', 'CAD_BEGIN', 'CAD_APPEND', 'CAD_COMMIT', 'CAD_TRANSFORM', 'CAD_REMOVE']);
+export const FRAME_TYPES = Object.freeze(['HELLO', 'RUNTIME_READY', 'MODEL_PROGRESS', 'MODEL_LOADED', 'ROUTE_RESULT', 'ROUTE_CLEARED', 'ROUTE_ZOOMED', 'REQUEST_CANCELLED', 'DISPOSED', 'WARNING', 'ERROR', 'COMPUTED_PATH_UPDATED', 'POINT_PICKED', 'MODEL_OBJECTS', 'PREPARATION_OBJECTS', 'PREPARATION_PROGRESS', 'TRAY_IDENTITIES', 'MODEL_SELECTION', 'TRAY_ROOT_SELECTION', 'OBJECT_GUID', 'LOCATION_SHOWN', 'TRAY_SHOWN', 'PATH_TRANSPARENCY_UPDATED', 'MODEL_CAPTURE_EVENT', 'MODEL_CAPTURE_PROGRESS', 'MODEL_CAPTURE_INPUT_ACK', 'BARRIER_CAPTURE_EVENT', 'BARRIER_CAPTURE_PROGRESS', 'BARRIER_MULTIPART_FRAME', 'BARRIER_MULTIPART_STATUS', 'CAD_ACK']);
 export const MAX_PATH_POINTS = 20000;
 export const MAX_PATH_CHUNK_POINTS = 128;
 // A physical equipment item may use every raw candidate in one complete match scope.
@@ -113,8 +113,25 @@ function routeResult(value) {
   return value.drawableCount === value.segments.filter(entry => entry.model.drawable).length && (value.drawableCount > 0 || value.lineCount === 0);
 }
 
+const cadCoordinate = v => Number.isFinite(v) && Math.abs(v) <= 1e9;
+const cadTransform = t => exact(t, ['positionMm', 'rotation']) &&
+  exact(t.positionMm, ['x', 'y', 'z']) && Object.values(t.positionMm).every(cadCoordinate) &&
+  exact(t.rotation, ['x', 'y', 'z', 'w']) && Object.values(t.rotation).every(v => Number.isFinite(v) && Math.abs(v) <= 1) &&
+  Math.abs(Object.values(t.rotation).reduce((sum, v) => sum + v * v, 0) - 1) <= 1e-6;
+const cadComponent = v => isUuid(v.componentId);
+
 function payload(type, value) {
   switch (type) {
+    case 'CAD_BEGIN': return exact(value, ['componentId', 'totalChars', 'transform']) &&
+      cadComponent(value) && integer(value.totalChars) && value.totalChars > 0 && value.totalChars <= 16 * 1024 * 1024 && cadTransform(value.transform);
+    case 'CAD_APPEND': return exact(value, ['componentId', 'offset', 'chunk']) &&
+      cadComponent(value) && integer(value.offset) && value.offset < 16 * 1024 * 1024 &&
+      typeof value.chunk === 'string' && value.chunk.length > 0 && value.chunk.length <= 12000;
+    case 'CAD_COMMIT': case 'CAD_REMOVE': return exact(value, ['componentId']) && cadComponent(value);
+    case 'CAD_TRANSFORM': return exact(value, ['componentId', 'transform']) && cadComponent(value) && cadTransform(value.transform);
+    case 'CAD_ACK': return exact(value, ['componentId', 'phase', 'received']) && cadComponent(value) &&
+      oneOf(value.phase, ['begun', 'appended', 'displayed', 'moved', 'removed']) &&
+      integer(value.received) && value.received <= 16 * 1024 * 1024;
     case 'READ_BARRIER_MULTIPART_FRAME': return validateBarrierMultipartFrameRequest(value);
     case 'BARRIER_MULTIPART_FRAME': return validateBarrierMultipartFramePayload(value);
     case 'START_BARRIER_MULTIPART': return validateBarrierMultipartStart(value);
@@ -189,7 +206,7 @@ export function validateEnvelope(value, direction) {
       || value.type === 'BARRIER_MULTIPART_FRAME' && (value.payload.frameObservation.projectId !== value.projectId
         || value.payload.frameObservation.modelVersionId !== value.modelVersionId || value.payload.frameObservation.loadId !== value.loadId))) return null;
     const handshake = ['HELLO', 'INIT', 'RUNTIME_READY'].includes(value.type);
-    if (handshake ? value.modelVersionId !== null : ['LOAD_MODEL', 'MODEL_PROGRESS', 'MODEL_LOADED', 'SHOW_ROUTE', 'ROUTE_RESULT', 'ZOOM_ROUTE', 'ROUTE_ZOOMED', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'COMPUTED_PATH_UPDATED', 'PICK_POINT', 'POINT_PICKED', 'READ_MODEL_OBJECTS', 'MODEL_OBJECTS', 'READ_PREPARATION_OBJECTS', 'PREPARATION_OBJECTS', 'PREPARATION_PROGRESS', 'RESOLVE_TRAY_IDENTITIES', 'TRAY_IDENTITIES', 'READ_SELECTION', 'MODEL_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'TRAY_ROOT_SELECTION', 'READ_OBJECT_GUID', 'OBJECT_GUID', 'SHOW_LOCATION', 'LOCATION_SHOWN', 'SHOW_TRAY', 'TRAY_SHOWN', 'SET_PATH_TRANSPARENCY', 'PATH_TRANSPARENCY_UPDATED', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'MODEL_CAPTURE_EVENT', 'MODEL_CAPTURE_PROGRESS', 'MODEL_CAPTURE_INPUT_ACK'].includes(value.type) && value.modelVersionId === null) return null;
+    if (handshake ? value.modelVersionId !== null : ['LOAD_MODEL', 'MODEL_PROGRESS', 'MODEL_LOADED', 'SHOW_ROUTE', 'ROUTE_RESULT', 'ZOOM_ROUTE', 'ROUTE_ZOOMED', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'COMPUTED_PATH_UPDATED', 'PICK_POINT', 'POINT_PICKED', 'READ_MODEL_OBJECTS', 'MODEL_OBJECTS', 'READ_PREPARATION_OBJECTS', 'PREPARATION_OBJECTS', 'PREPARATION_PROGRESS', 'RESOLVE_TRAY_IDENTITIES', 'TRAY_IDENTITIES', 'READ_SELECTION', 'MODEL_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'TRAY_ROOT_SELECTION', 'READ_OBJECT_GUID', 'OBJECT_GUID', 'SHOW_LOCATION', 'LOCATION_SHOWN', 'SHOW_TRAY', 'TRAY_SHOWN', 'SET_PATH_TRANSPARENCY', 'PATH_TRANSPARENCY_UPDATED', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'MODEL_CAPTURE_EVENT', 'MODEL_CAPTURE_PROGRESS', 'MODEL_CAPTURE_INPUT_ACK', 'CAD_BEGIN', 'CAD_APPEND', 'CAD_COMMIT', 'CAD_TRANSFORM', 'CAD_REMOVE', 'CAD_ACK'].includes(value.type) && value.modelVersionId === null) return null;
     const serialized = JSON.stringify(value);
     const maximumBytes = value.type === 'START_BARRIER_CAPTURE' ? MAX_BARRIER_SELECTION_MESSAGE_BYTES
       : value.type === 'BEGIN_COMPUTED_PATH' ? MAX_COMPUTED_PATH_MESSAGE_BYTES : MAX_MESSAGE_BYTES;
