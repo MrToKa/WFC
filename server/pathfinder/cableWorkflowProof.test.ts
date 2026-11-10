@@ -338,6 +338,17 @@ describe('cable workflow positive result evidence (synthetic boundaries)', () =>
 });
 
 describe('receipt-backed current accepted cable display', () => {
+  it.each(['failed', 'cancelled'] as const)('retains an exact saved automatic result after its background parent is %s without restoring review authority', async status => {
+    const f = protectedAcceptedFixture();
+    f.raw.job_state = status; f.raw.cancel_requested = status === 'cancelled';
+    f.receipt.provenance.schemaVersion = 'pathfinder.automatic-pair.v1';
+    proof.automaticPair.mockResolvedValue({ before: f.receipt.before_snapshot, after: f.receipt.after_snapshot });
+    const expected = { jobId, proposalId, proposalHash: f.raw.proposal_hash };
+    const current = { ...f.dependencies, cableWriteRevision: afterRevision };
+    expect(await f.reader.accepted(f.cable, async () => current, expected)).toBe(true);
+    expect(await f.reader.reviewable(cableId, jobId, proposalId, f.dependencies)).toMatchObject({ reviewable: false });
+    expect(await f.reader.accepted(f.cable, async () => ({ ...current, options: { ...current.options, secondaryDistanceMeters: 99 } }), expected)).toBe(false);
+  });
   it('binds protected own-write evidence to the exact displayed job/proposal/hash tuple',async()=>{
     const f=protectedAcceptedFixture(),currentForOptions=vi.fn(async()=>({...f.dependencies,cableWriteRevision:afterRevision}));
     expect(await f.reader.accepted(f.cable,currentForOptions,{jobId,proposalId,proposalHash:f.raw.proposal_hash})).toBe(true);
