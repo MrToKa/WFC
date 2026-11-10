@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchPathFinderState, fetchPathFinderProposal, fetchPathFinderLookup, fetchPathFinderLookupPlan, fetchPathFinderPreview, pathFinderRequest, parsePathFinderProposal, submitPathFinderCalculation } from './pathfinder';
+import { fetchPathFinderState, fetchPathFinderProposal, fetchPathFinderLookup, fetchPathFinderLookupPlan, fetchPathFinderPreview, pathFinderRequest, parsePathFinderProposal, submitPathFinderCalculation, submitAllPathFinderCalculations } from './pathfinder';
 import { createHash } from 'node:crypto';
 import { ENGINE_IDENTITY_POLICY_VERSIONS, ENGINE_IDENTITY_VERSION, engineIdentityCanonicalBody } from '../../shared/pathfinderEngineIdentity';
 import { notEvaluatedCalculationAvailability } from '../../shared/pathfinderCalculationAvailability';
@@ -33,6 +33,22 @@ function popupCalculationBody() {
     expectedRegistryRevision: '0', expectedSnapshot: null, drillThroughWalls: true } } };
 }
 describe('popup calculation transport phase evidence', () => {
+  it('admits the whole cable list without a search/page filter and retains forced automatic output policy', async () => {
+    const { cableIds: _ids, ...body } = popupCalculationBody();
+    const automaticPairPolicy = { schemaVersion: 'wfc.pf.automatic-pair-policy.v1', mode: 'when-both-empty-or-unchanged-automatic' };
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ jobId: modelId, registryRevision: '10', duplicate: false }, { status: 202 }));
+    expect(await submitAllPathFinderCalculations(projectId, 'token', { ...body, automaticPairPolicy })).toMatchObject({ kind: 'acknowledged', jobId: modelId });
+    expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toEqual({ ...body, automaticPairPolicy });
+    expect(await submitAllPathFinderCalculations(projectId, 'token', popupCalculationBody())).toEqual({ kind: 'not-submitted', code: 'INVALID_REQUEST' });
+    expect(await submitPathFinderCalculation(projectId, 'token', body)).toEqual({ kind: 'not-submitted', code: 'INVALID_REQUEST' });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+  it('never automatically repeats an uncertain whole-project POST', async () => {
+    const { cableIds: _ids, ...body } = popupCalculationBody();
+    const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Disconnected'));
+    expect(await submitAllPathFinderCalculations(projectId, 'token', body)).toMatchObject({ kind: 'unknown' });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
   it('carries explicit automatic-pair policy outside mathematical options without upgrading an omitted legacy body', async () => {
     const automaticPairPolicy = { schemaVersion: 'wfc.pf.automatic-pair-policy.v1', mode: 'when-both-empty-or-unchanged-automatic' };
     const body = { ...popupCalculationBody(), automaticPairPolicy }, accepted = { jobId: modelId, registryRevision: '10', duplicate: false };
