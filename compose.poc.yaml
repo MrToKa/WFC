@@ -31,6 +31,32 @@ services:
       - poc-minio:/data
     networks: [poc]
 
+  cad-converter:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: Dockerfile.poc-converter
+    image: wfc-aalborg-poc-cad-converter:dev
+    restart: "no"
+    read_only: true
+    user: "10001:10001"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 128
+    mem_limit: 1g
+    cpus: 2.0
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    environment:
+      POC_CONVERTER_TOKEN: ${POC_CONVERTER_TOKEN:?Generate .env.poc}
+      PYTHONUNBUFFERED: "1"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+    networks: [poc]
+
   api:
     profiles: ["app"]
     image: wfc-aalborg-poc-api:dev
@@ -43,6 +69,8 @@ services:
     environment:
       NODE_ENV: production
       WFC_CAD_DESIGN_ENABLED: "true"
+      WFC_CAD_CONVERTER_URL: http://cad-converter:8090/convert
+      POC_CONVERTER_TOKEN: ${POC_CONVERTER_TOKEN:?Generate .env.poc}
       API_HOST: 0.0.0.0
       API_PORT: 4000
       DATABASE_URL: postgresql://wfc_poc:${POC_POSTGRES_PASSWORD}@postgres:5432/wfc_poc
@@ -70,6 +98,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_started
+      cad-converter:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
