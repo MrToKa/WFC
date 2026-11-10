@@ -114,7 +114,9 @@ public sealed class MixedBarrierKernel
             fragments.Sort((a, b) => { budget.Spend(); return a.Source.FragmentId.CompareTo(b.Source.FragmentId); });
             double effectiveTolerance = Math.Max(geometry.NumericToleranceMeters, 64 * Geometry.MachineEpsilon * magnitude);
             var weld = new Dictionary<BarrierPoint, int>(); var points = new List<BarrierPoint>();
-            var triangles = new List<Original>(); var edges = new Dictionary<(int, int), Edge>(); var unique = new HashSet<(int, int, int)>();
+            var triangles = new List<Original>(); var edges = new Dictionary<(int, int), Edge>(); var unique = new Dictionary<(int, int, int), int>();
+            Dictionary<(int First, string Owner), int>? coincidentOwners = null;
+            List<(int First, int Second)>? coincidentFaces = null; long coincidentAdditionalBytes = 0;
             bool hasOverfullEdge = false;
             foreach (var fragment in fragments)
             {
@@ -130,7 +132,23 @@ public sealed class MixedBarrierKernel
                     if (!double.IsFinite(longest) || longest <= effectiveTolerance || primitive.Normal.Length / longest <= effectiveTolerance) Refuse("DEGENERATE_TRIANGLE", "An original triangle is degenerate or below the supported numerical resolution.");
                     // Conditioning is resolved only after topology identifies an original surface or closed solid.
                     int x = Math.Min(a, Math.Min(b, c)), z = Math.Max(a, Math.Max(b, c)), y = a + b + c - x - z;
-                    if (!unique.Add((x, y, z))) Refuse("DUPLICATE_TRIANGLE", "Coincident original triangles are ambiguous and are not deduplicated.");
+                    if (unique.TryGetValue((x, y, z), out int first))
+                    {
+                        string owner = original.Source.OwnerObjectId;
+                        if (triangles[first].Value.Source.OwnerObjectId == owner)
+                            Duplicate(first, original, "Coincident original triangles from the same owner are ambiguous and are not deduplicated.");
+                        // Exact cap faces of separate original bodies may coincide.
+                        // Keep every original triangle; ownership is only a hint
+                        // until partitioning and the unchanged closed verifier pass.
+                        coincidentAdditionalBytes = checked(4096L + ((coincidentFaces?.Count ?? 0) + 1L) * 192L);
+                        Estimate(vertexCount, triangleCount, fragments.Count, geometry, largeSelection,
+                            parentMemberships, allParents.Count, additionalBytes: coincidentAdditionalBytes);
+                        coincidentOwners ??= new(); coincidentFaces ??= new();
+                        if (!coincidentOwners.TryAdd((first, owner), triangles.Count))
+                            Duplicate(coincidentOwners[(first, owner)], original, "Coincident original triangles from the same owner are ambiguous and are not deduplicated.");
+                        coincidentFaces.Add((first, triangles.Count));
+                    }
+                    else unique.Add((x, y, z), triangles.Count);
                     int index = triangles.Count; triangles.Add(new(original, a, b, c)); AddEdge(a, b, index); AddEdge(b, c, index); AddEdge(c, a, index);
                 }
             }
@@ -159,13 +177,13 @@ public sealed class MixedBarrierKernel
                 }
             }
             var boundary = new bool[componentIds.Count]; foreach (var edge in edges.Values) { budget.Spend(); if (edge.Second < 0) boundary[componentOf[edge.First]] = true; }
-            bool[]? separatedClosed = null; long partitionAdditionalBytes = 0;
+            bool[]? separatedClosed = null; long partitionAdditionalBytes = coincidentAdditionalBytes;
             if (hasOverfullEdge)
             {
                 // This extra lane never lowers a failed solid to a surface. Its
                 // local edge maps are linear in the original triangle count;
                 // account for them before allocation, under the existing cap.
-                partitionAdditionalBytes = checked(4096L + componentIds.Count * 16L + triangles.Count * 3L * 96L);
+                partitionAdditionalBytes = checked(partitionAdditionalBytes + 4096L + componentIds.Count * 16L + triangles.Count * 3L * 96L);
                 Estimate(vertexCount, triangleCount, fragments.Count, geometry, largeSelection,
                     parentMemberships, allParents.Count, componentIds.Count, partitionAdditionalBytes);
                 MarkAffectedComponents();
@@ -264,6 +282,15 @@ public sealed class MixedBarrierKernel
                     }
                     return true;
                 }
+            }
+            if (coincidentFaces is not null) foreach (var pair in coincidentFaces)
+            {
+                budget.Spend(); int first = componentOf[pair.First], second = componentOf[pair.Second];
+                // Repeated surface faces and faces in one component remain
+                // ambiguous. Only separate, independently closed candidates may
+                // reach full solid qualification with their original cap faces.
+                if (first == second || boundary[first] || boundary[second])
+                    Duplicate(pair.First, triangles[pair.Second].Value, "Coincident original triangles were not separated into independently closed original bodies; nothing was deduplicated.");
             }
             // Original surfaces may contain separate face fans that touch only
             // at an original point, including fans reconnected elsewhere in the
@@ -370,6 +397,12 @@ public sealed class MixedBarrierKernel
                 if (!edges.TryGetValue(key, out var edge)) edges.Add(key, new(index, -1, direction));
                 else if (edge.Second < 0) edges[key] = edge with { Second = index, Inconsistent = edge.Direction == direction };
                 else { edges[key] = edge with { Overfull = true }; hasOverfullEdge = true; }
+            }
+            void Duplicate(int first, MixedOriginalTriangle second, string reason)
+            {
+                string[] owners = new[] { triangles[first].Value.Source.OwnerObjectId, second.Source.OwnerObjectId }
+                    .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+                Refuse("DUPLICATE_TRIANGLE", reason, Array.AsReadOnly(owners));
             }
         }
         catch (MixedRefusal error) { return new(BarrierBuildStatus.Refused, null, Array.AsReadOnly(new[] { new BarrierDiagnostic(error.Code, error.Message) }), budget.Work, error.ObjectIds); }

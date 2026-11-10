@@ -7,12 +7,14 @@ internal static partial class Program
 {
     // Independent synthetic counterpart of adjacent CAD panels whose shared
     // end faces have opposite diagonals. No customer capture is published here.
-    private static Stored StoreOwnerContact(string root)
+    private static Stored StoreOwnerContact(string root, bool identicalCaps = false)
     {
         var stored = Store(root, Fixtures.Box(-1, 0, -1, 1, -1, 1));
         var second = Fixtures.Box(0, 1, -1, 1, -1, 1);
-        int[] oppositeDiagonal = [4, 7, 3, 4, 3, 0];
-        oppositeDiagonal.CopyTo(second.Indices, 24);
+        if (!identicalCaps) {
+            int[] oppositeDiagonal = [4, 7, 3, 4, 3, 0];
+            oppositeDiagonal.CopyTo(second.Indices, 24);
+        }
         var capture = stored.Capture;
         var parent = capture["selectedParents"]![0]!.DeepClone().AsObject();
         string selectionId = Fixtures.FreshId();
@@ -52,8 +54,11 @@ internal static partial class Program
     }
     private static async Task OwnerContactTransport(string runner, string root)
     {
-        await Check("actual runner retains face-touching owner solids with opposite cap diagonals and blocks both interiors", async () => {
-            var stored = StoreOwnerContact(root); var evidence = stored.Qualified!.Receipt.Evidence!;
+        foreach (bool identicalCaps in new[] { false, true })
+        await Check(identicalCaps
+            ? "actual runner retains identical cap triangles of separate closed owners and blocks both interiors and the shared cap"
+            : "actual runner retains face-touching owner solids with opposite cap diagonals and blocks both interiors", async () => {
+            var stored = StoreOwnerContact(root, identicalCaps); var evidence = stored.Qualified!.Receipt.Evidence!;
             Equal(24, evidence.TriangleCount); Equal(2, evidence.FragmentCount);
             foreach (var sample in new[] { (X: -.5, Component: 0), (X: .5, Component: 1), (X: 0d, Component: -1) }) {
                 var request = Fixtures.Request(root, [(10, 13, 0, .1)]);
@@ -68,6 +73,16 @@ internal static partial class Program
             var clear = Fixtures.Request(root, [(-3, 3, 2, .1)]);
             clear["from"] = Fixtures.Point(-2, 2); clear["to"] = Fixtures.Point(2, 2);
             Successful(await OneShot(runner, root, Protected(clear, stored.Context)), stored.Context, stored);
+            if (identicalCaps) {
+                using var session = await Session.Start(runner, root);
+                Successful(await session.Query(Protected(clear, stored.Context)), stored.Context, stored);
+                var blocked = Fixtures.Request(root, [(10, 13, 0, .1)]);
+                blocked["from"] = Fixtures.Point(0, -.2); blocked["to"] = Fixtures.Point(0, .2);
+                blocked["directSecondaryPolicy"] = "nearest-eligible-tray-or.v1";
+                Refused(await session.Query(Protected(blocked, stored.Context)));
+                Successful(await session.Query(Protected(clear, stored.Context)), stored.Context, stored);
+                await session.Finish();
+            }
         });
     }
 }

@@ -54,3 +54,33 @@ This verifies the retained original geometry and collision behavior offline.
 It does not publish a new barrier set on the remote installation. Rebuild the
 remote API image, then save the unchanged selection there to create its new
 publication.
+
+## Identically triangulated contact faces
+
+The global duplicate-triangle guard also rejected separate closed panels when
+their shared caps used the same diagonal. These are retained faces from two
+different source owners, rather than a duplicate copy of one owner's triangle.
+
+The guard now keeps a bounded witness for each cross-owner coincident face.
+Every original triangle, index, coordinate, winding and owner remains intact.
+The existing topology partition must put each witnessed pair in distinct closed
+components. Both components must then pass full solid qualification. Repeated
+faces within one owner, repeated open sheets, nested/coincident bodies and failed
+closed solids remain refused. No failed solid becomes an open surface.
+
+Duplicate refusals include the exact implicated owner IDs. The same source and
+membership hash domains remain valid; actual verifier and routing module digests
+change with the implementation. Existing accepted evidence has pinned hash
+regressions, and retained publications are not rewritten.
+
+Tests cover identical caps, input and winding permutations, both interiors and
+the shared face, clear exterior segments, invalid geometry, refusal attribution,
+resource limits, native verifier receipts, and one-shot and warm-session routing.
+Local verification passed 72 mathematical/native checks including the exact prior
+GVL244 capture, 84 full runner checks, and 241 server, contract and barrier-panel
+tests. The runner built with no warnings or errors.
+
+This synthetic regression establishes the shared-cap defect. It does not prove
+the cause of a later GVL244 `DUPLICATE_TRIANGLE` screenshot or of the independent
+`self_intersection` refusal for `dbid:29673`. Those require their own exact retained
+capture bytes. A valid opening alone is not a reason to refuse a barrier.
