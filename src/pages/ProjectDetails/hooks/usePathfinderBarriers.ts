@@ -21,7 +21,7 @@ export type BarrierAuthoringState = { registry: BarrierRegistry | null; dirty: b
 export type BarrierAuthoringOptions = {
   projectId: string | null; loadedProjectId: string | null; token: string | null; isAdmin: boolean;
   refreshKey?: string | null;
-  pf: Pick<ReturnType<typeof usePathFinder>, 'data' | 'viewerPhase' | 'preparationViewerGeneration' | 'readSelection' | 'runProjectPreparation' | 'busy' | 'showLocation' | 'readObjectGuid'>;
+  pf: Pick<ReturnType<typeof usePathFinder>, 'data' | 'viewerPhase' | 'preparationViewerGeneration' | 'readSelection' | 'runProjectPreparation' | 'busy' | 'showLocation' | 'showTray' | 'hideTray' | 'readObjectGuid'>;
 };
 type CaptureCommand = Parameters<typeof beginBarrierCapture>[2];
 type EmptyCommand = Extract<Parameters<typeof changeBarrierRegistry>[2], { action: 'declare-empty' }>;
