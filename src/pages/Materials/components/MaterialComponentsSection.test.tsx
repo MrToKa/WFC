@@ -56,6 +56,43 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('Materials components', () => {
+  it('confirms removal, preserves revision history, and restores the same asset', async () => {
+    let active = true;
+    const onAssetsChange = vi.fn();
+    fetchMock.mockImplementation(async (url: string, options: RequestInit = {}) => {
+      if (options.method === 'DELETE') { active = false; return { ok: true, status: 204 }; }
+      if (url.endsWith('/activate')) { active = true; return { ok: true, json: async () => ({ id: 'asset-1', active: true }) }; }
+      return { ok: true, json: async () => url.endsWith('/families') ? { families: [family] }
+        : url.endsWith('/cad-assets') ? { assets: [{ id: 'asset-1', revision: 1, originalFilename: 'straight.step', sourceSha256: 'a'.repeat(64), sourceBytes: 200, active }] }
+          : { components: [straight] } };
+    });
+    render(<MemoryRouter><FluentProvider theme={webLightTheme}><MaterialComponentsSection token="catalogue-token" isAdmin materialTrayId="tray-1" onAssetsChange={onAssetsChange} /></FluentProvider></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove current STEP' }, { timeout: 10000 }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove current STEP' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove STEP', exact: true }));
+    await waitFor(() => expect(screen.getByText('No STEP', { exact: true })).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Download revision 1' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add STEP file' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Restore revision 1' }));
+    await waitFor(() => expect(screen.getByText('STEP attached', { exact: true })).toBeInTheDocument());
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/straight-1/cad-assets/asset-1/activate'), expect.objectContaining({ method: 'POST', body: JSON.stringify({ expectedActiveAssetId: null }) }));
+    expect(onAssetsChange).toHaveBeenCalledTimes(2);
+  });
+  it('retains the current file and reports a concurrent lifecycle failure', async () => {
+    fetchMock.mockImplementation(async (url: string, options: RequestInit = {}) => options.method === 'DELETE'
+      ? { ok: false, status: 409, json: async () => ({ code: 'MATERIAL_CAD_ALREADY_INACTIVE' }) }
+      : { ok: true, json: async () => url.endsWith('/families') ? { families: [family] }
+        : url.endsWith('/cad-assets') ? { assets: [{ id: 'asset-1', revision: 1, originalFilename: 'straight.step', sourceSha256: 'a'.repeat(64), sourceBytes: 200, active: true }] }
+          : { components: [straight] } });
+    renderSection();
+    fireEvent.click(await screen.findByRole('button', { name: /KL-300 · Straight ladder/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove current STEP' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove STEP', exact: true }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('MATERIAL_CAD_ALREADY_INACTIVE');
+    expect(screen.getByText('STEP attached', { exact: true })).toBeInTheDocument();
+  });
   it('opens the tray-linked canonical component without offering other SKUs or catalogue creation', async () => {
     const otherTray = {
       ...straight,

@@ -1,6 +1,20 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Body1, Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Tab, TabList, TabValue, Title3 } from '@fluentui/react-components';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Body1,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
+  Tab,
+  TabList,
+  TabValue,
+  Title3,
+} from '@fluentui/react-components';
 import type { MaterialTray } from '@/api/client';
+import { getApiBaseUrl } from '@/api/http';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
@@ -63,6 +77,62 @@ export const Materials = () => {
   const requestedTab = parseMaterialsTab(searchParams.get('tab'));
   const selectedTab =
     requestedTab === 'components' && !componentsEnabled ? 'cableTypes' : requestedTab;
+  const [stepRevisions, setStepRevisions] = useState<Record<string, number>>({});
+  const [stepStatus, setStepStatus] = useState<'ready' | 'loading' | 'error'>('loading');
+  const stepStatusRequest = useRef(0);
+  const refreshStepStatus = useCallback(
+    async (signal?: AbortSignal) => {
+      const request = ++stepStatusRequest.current;
+      if (!componentsEnabled || selectedTab !== 'trays') return;
+      setStepStatus('loading');
+      if (!token) {
+        setStepStatus('error');
+        return;
+      }
+      try {
+        const response = await fetch(`${getApiBaseUrl()}/api/materials/components`, {
+          signal,
+          headers: { Authorization: `Bearer ${token}` },
+          credentials: 'same-origin',
+          redirect: 'error',
+          cache: 'no-store',
+        });
+        if (!response.ok) throw new Error('STEP status unavailable');
+        const data: {
+          components: {
+            materialTrayId: string | null;
+            latestRevision: number | null;
+            latestAssetId: string | null;
+          }[];
+        } = await response.json();
+        const revisions: Record<string, number> = {};
+        for (const component of data.components) {
+          if (
+            component.materialTrayId &&
+            component.latestAssetId &&
+            component.latestRevision != null
+          )
+            revisions[component.materialTrayId] = component.latestRevision;
+        }
+        if (!signal?.aborted && request === stepStatusRequest.current) {
+          setStepRevisions(revisions);
+          setStepStatus('ready');
+        }
+      } catch {
+        if (!signal?.aborted && request === stepStatusRequest.current) setStepStatus('error');
+      }
+    },
+    [componentsEnabled, selectedTab, token],
+  );
+  useEffect(() => {
+    const controller = new AbortController();
+    void refreshStepStatus(controller.signal);
+    return () => controller.abort();
+  }, [refreshStepStatus]);
+  const closeStepDialog = () => {
+    setStepTray(null);
+    void refreshStepStatus();
+  };
 
   const numberFormatter = useMemo(
     () =>
@@ -402,7 +472,10 @@ export const Materials = () => {
           <>
             <div className={styles.actionsRow}>
               <Button
-                onClick={() => traysHook.loadTrays(traysHook.trayPage, { silent: true })}
+                onClick={() => {
+                  void traysHook.loadTrays(traysHook.trayPage, { silent: true });
+                  void refreshStepStatus();
+                }}
                 disabled={traysHook.isRefreshingTrays}
               >
                 {traysHook.isRefreshingTrays ? 'Refreshing...' : 'Refresh'}
@@ -471,6 +544,8 @@ export const Materials = () => {
               onDelete={traysHook.handleTrayDelete}
               onAssignLoadCurve={traysHook.openTrayLoadCurveDialog}
               onStep={componentsEnabled ? setStepTray : undefined}
+              stepRevisions={stepRevisions}
+              stepStatus={componentsEnabled ? stepStatus : undefined}
               token={token}
               page={traysHook.trayPage}
               totalPages={trayTotalPages}
@@ -708,15 +783,38 @@ export const Materials = () => {
         onClose={supportsHook.closeSupportDialog}
         dialogActionsClassName={styles.dialogActions}
       />
-      <Dialog open={Boolean(stepTray && componentsEnabled)} onOpenChange={(_, data) => { if (!data.open && !stepBusy) setStepTray(null); }}>
-        <DialogSurface><DialogBody>
-          <DialogTitle>STEP file — {stepTray?.manufacturer} {stepTray?.type}</DialogTitle>
-          <DialogContent>
-            {stepTray && componentsEnabled ? <MaterialComponentsSection key={`${stepTray.id}:${token}`} token={token} isAdmin={isAdmin}
-              materialTrayId={stepTray.id} onBusyChange={setStepBusy} /> : null}
-          </DialogContent>
-          <DialogActions><Button disabled={stepBusy} onClick={() => setStepTray(null)}>Close</Button></DialogActions>
-        </DialogBody></DialogSurface>
+      <Dialog
+        open={Boolean(stepTray && componentsEnabled)}
+        onOpenChange={(_, data) => {
+          if (!data.open && !stepBusy) closeStepDialog();
+        }}
+      >
+        <DialogSurface>
+          <DialogBody>
+            <DialogTitle>
+              STEP file — {stepTray?.manufacturer} {stepTray?.type}
+            </DialogTitle>
+            <DialogContent>
+              {stepTray && componentsEnabled ? (
+                <MaterialComponentsSection
+                  key={`${stepTray.id}:${token}`}
+                  token={token}
+                  isAdmin={isAdmin}
+                  materialTrayId={stepTray.id}
+                  onBusyChange={setStepBusy}
+                  onAssetsChange={() => {
+                    void refreshStepStatus();
+                  }}
+                />
+              ) : null}
+            </DialogContent>
+            <DialogActions>
+              <Button disabled={stepBusy} onClick={closeStepDialog}>
+                Close
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
       </Dialog>
       <LoadCurveDialog
         open={loadCurvesHook.isLoadCurveDialogOpen}

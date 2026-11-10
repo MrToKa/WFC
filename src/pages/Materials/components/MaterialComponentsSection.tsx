@@ -3,6 +3,7 @@ import {
   Body1,
   Button,
   Caption1,
+  Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle,
   Field,
   Input,
   Select,
@@ -12,6 +13,7 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import { Link } from 'react-router-dom';
+import { TrayStepStatus } from './TrayStepStatus';
 import { getApiBaseUrl } from '@/api/http';
 import {
   materialComponentKinds as kinds,
@@ -60,7 +62,7 @@ async function catalogueRequest<T>(
         : `Request failed (HTTP ${response.status}).`,
     );
   }
-  return response.json() as Promise<T>;
+  return response.status === 204 ? undefined as T : response.json() as Promise<T>;
 }
 
 export function MaterialComponentsSection({
@@ -68,17 +70,22 @@ export function MaterialComponentsSection({
   isAdmin,
   materialTrayId,
   onBusyChange,
+  onAssetsChange,
 }: {
   token: string | null;
   isAdmin: boolean;
   materialTrayId?: string;
   onBusyChange?: (busy: boolean) => void;
+  onAssetsChange?: () => void;
 }) {
   const styles = useStyles();
   const [families, setFamilies] = useState<Family[]>([]);
   const [components, setComponents] = useState<Component[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [assetsLoading, setAssetsLoading] = useState(false);
+  const [assetsError, setAssetsError] = useState(false);
+  const [removeCandidate, setRemoveCandidate] = useState<Asset | null>(null);
   const [filter, setFilter] = useState('');
   const [search, setSearch] = useState('');
   const [manufacturer, setManufacturer] = useState('');
@@ -124,6 +131,8 @@ export function MaterialComponentsSection({
   useEffect(() => {
     setSelectedId('');
     setAssets([]);
+    setAssetsError(false);
+    setRemoveCandidate(null);
     setComponents([]);
     setFamilies([]);
     const controller = new AbortController();
@@ -132,12 +141,17 @@ export function MaterialComponentsSection({
   }, [load]);
 
   useEffect(() => {
+    assetLoad.current?.abort();
     setAssets([]);
+    setAssetsError(false);
+    setAssetsLoading(false);
+    setRemoveCandidate(null);
     setFile(null);
     if (fileInput.current) fileInput.current.value = '';
     if (!selectedId || !token) return;
     const controller = new AbortController();
     assetLoad.current = controller;
+    setAssetsLoading(true);
     void catalogueRequest<{ assets: Asset[] }>(token, `/${selectedId}/cad-assets`, {
       signal: controller.signal,
     })
@@ -146,8 +160,10 @@ export function MaterialComponentsSection({
       })
       .catch((caught) => {
         if (!controller.signal.aborted)
+          setAssetsError(true);
+        if (!controller.signal.aborted)
           setError(caught instanceof Error ? caught.message : 'Cannot load CAD revisions.');
-      });
+      }).finally(() => { if (!controller.signal.aborted) setAssetsLoading(false); });
     return () => controller.abort();
   }, [selectedId, token]);
 
@@ -227,10 +243,29 @@ export function MaterialComponentsSection({
         `/${selectedId}/cad-assets`,
       );
       setAssets(result.assets);
+      setAssetsError(false);
+      setAssetsLoading(false);
       setFile(null);
       if (fileInput.current) fileInput.current.value = '';
       await load();
+      onAssetsChange?.();
       setMessage('STEP revision saved. Existing project placements keep their pinned revision.');
+    });
+  };
+  const changeAsset = (asset: Asset, remove: boolean) => {
+    const componentId = selectedId;
+    const currentAssetId = assets.find(item => item.active)?.id ?? null;
+    void mutate(async () => {
+      assetLoad.current?.abort();
+      await catalogueRequest(token!, `/${componentId}/cad-assets/${asset.id}${remove ? '' : '/activate'}`, remove
+        ? { method: 'DELETE' }
+        : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expectedActiveAssetId: currentAssetId }) });
+      setRemoveCandidate(null);
+      const history = await catalogueRequest<{ assets: Asset[] }>(token!, `/${componentId}/cad-assets`);
+      setAssets(history.assets); setAssetsError(false); setAssetsLoading(false);
+      await load(); onAssetsChange?.();
+      setMessage(remove ? 'Current STEP removed from the catalogue selection. Revision history and existing placements are preserved.' :
+        'STEP revision restored for new placements. Existing placements retain their pinned revision.');
     });
   };
   const download = async (asset: Asset) => {
@@ -283,6 +318,16 @@ export function MaterialComponentsSection({
         onClick={() => {
           setError('');
           void load();
+          if (selectedId && token) {
+            assetLoad.current?.abort();
+            const controller = new AbortController();
+            assetLoad.current = controller;
+            setAssetsLoading(true);
+            void catalogueRequest<{ assets: Asset[] }>(token, `/${selectedId}/cad-assets`, { signal: controller.signal })
+              .then(result => { if (!controller.signal.aborted) { setAssets(result.assets); setAssetsError(false); } })
+              .catch(caught => { if (!controller.signal.aborted) { setAssetsError(true); setError(caught instanceof Error ? caught.message : 'Cannot load CAD revisions.'); } })
+              .finally(() => { if (!controller.signal.aborted) setAssetsLoading(false); });
+          }
         }}
       >
         {materialTrayId ? 'Refresh STEP files' : 'Refresh components'}
@@ -443,6 +488,8 @@ export function MaterialComponentsSection({
       {selected ? (
         <section className={styles.root} aria-label="Component STEP revisions">
           <Title3>{selected.partNumber} — STEP revisions</Title3>
+          <TrayStepStatus status={assetsLoading ? 'loading' : assetsError ? 'error' : assets.some(asset => asset.active) ? 'attached' : 'missing'}
+            revision={assets.find(asset => asset.active)?.revision} />
           {selected.materialTrayId && !materialTrayId ? (
             <Link to={`/materials/trays/${selected.materialTrayId}`}>
               Open straight tray material, image and load curve
@@ -471,7 +518,7 @@ export function MaterialComponentsSection({
                 Up to 8 MiB. A new revision preserves previous STEP files and project references.
               </Caption1>
               <Button type="submit" disabled={busy || !token || !file}>
-                {busy ? 'Saving…' : materialTrayId ? assets.length ? 'Upload replacement STEP' : 'Add STEP file' : 'Upload STEP revision'}
+                {busy ? 'Saving…' : materialTrayId ? assets.some(asset => asset.active) ? 'Upload replacement STEP' : 'Add STEP file' : 'Upload STEP revision'}
               </Button>
             </form>
           ) : null}
@@ -487,14 +534,26 @@ export function MaterialComponentsSection({
                 <Button onClick={() => void download(asset)}>
                   Download revision {asset.revision}
                 </Button>
+                {isAdmin ? asset.active ? <Button disabled={busy || assetsLoading || assetsError} onClick={() => setRemoveCandidate(asset)}>Remove current STEP</Button> :
+                  <Button disabled={busy || assetsLoading || assetsError} onClick={() => changeAsset(asset, false)}>Restore revision {asset.revision}</Button> : null}
               </li>
             ))}
           </ul>
-          {!assets.length ? <Body1>No STEP revisions for this component.</Body1> : null}
+          {!assets.length && !assetsLoading && !assetsError ? <Body1>No STEP revisions for this component.</Body1> : null}
         </section>
       ) : (
         <Body1>{materialTrayId ? loading ? 'Loading tray STEP files…' : 'The linked catalogue component is unavailable. Refresh and try again.' : 'Select a component to view its STEP revisions.'}</Body1>
       )}
+      <Dialog open={Boolean(removeCandidate)} onOpenChange={(_, data) => { if (!data.open && !busy) setRemoveCandidate(null); }}>
+        <DialogSurface><DialogBody>
+          <DialogTitle>Remove current STEP?</DialogTitle>
+          <DialogContent>{removeCandidate?.originalFilename}<p>The tray will have no current STEP for new placements. Existing placements and all revision files are preserved. You can restore this revision later.</p></DialogContent>
+          <DialogActions>
+            <Button disabled={busy} onClick={() => setRemoveCandidate(null)}>Cancel</Button>
+            <Button appearance="primary" disabled={busy} onClick={() => { if (removeCandidate) changeAsset(removeCandidate, true); }}>Remove STEP</Button>
+          </DialogActions>
+        </DialogBody></DialogSurface>
+      </Dialog>
     </section>
   );
 }

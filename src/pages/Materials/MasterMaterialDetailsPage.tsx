@@ -31,6 +31,7 @@ import { StandardMaterialDialog } from './components/StandardMaterialDialog';
 import { MaterialEditDialog } from './components/MaterialEditDialog';
 import { StandardMaterialsSection } from './components/StandardMaterialsSection';
 import { MaterialChangeLogSection } from './components/MaterialChangeLogSection';
+import { MaterialComponentsSection } from './components/MaterialComponentsSection';
 import { MATERIAL_DETAILS_CAPABILITIES, materialsBackPath } from './materialCapabilities';
 
 type MasterMaterialDetailsPageProps<T extends StandardMaterialOwner> = {
@@ -275,6 +276,14 @@ export const MasterMaterialDetailsPage = <T extends StandardMaterialOwner>({
         onRefresh={() => void loadDetails(true)}
         refreshing={refreshing}
       >
+        {category === 'tray' && import.meta.env.VITE_CAD_DESIGN_ENABLED === 'true' ? (
+          <MaterialComponentsSection
+            key={`${ownerId}:${token}`}
+            materialTrayId={ownerId}
+            token={token}
+            isAdmin={isAdmin}
+          />
+        ) : null}
         <StandardMaterialsSection
           items={details.standardMaterials}
           isAdmin={isAdmin}

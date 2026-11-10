@@ -153,6 +153,55 @@ materialComponentsRouter.post('/:componentId/cad-assets', requireAdmin, (req, re
     throw error;
   }
 }));
+// Removing the current STEP retires it from new catalogue selections. Historical
+// downloads and project instances retain their immutable revision and source.
+materialComponentsRouter.delete('/:componentId/cad-assets/:assetId', requireAdmin, safe(async (req, res) => {
+  const { componentId, assetId } = req.params;
+  if (!uuid.safeParse(componentId).success || !uuid.safeParse(assetId).success) { bad(res, 'INVALID_MATERIAL_CAD_ID'); return; }
+  const status = await withMaterialTransaction(async client => {
+    // Same lock order as publication: serialize retirement, activation and upload.
+    const component = await client.query('SELECT id FROM material_components WHERE id=$1 FOR UPDATE', [componentId]);
+    if (!component.rows[0]) return 'missing-component' as const;
+    const asset = await client.query<{ id: string; active: boolean }>(
+      'SELECT id,active FROM material_component_cad_assets WHERE component_id=$1 AND id=$2 FOR UPDATE', [componentId,assetId]);
+    if (!asset.rows[0]) return 'missing-asset' as const;
+    if (!asset.rows[0].active) return 'inactive' as const;
+    await client.query('UPDATE material_component_cad_assets SET active=FALSE WHERE component_id=$1 AND id=$2 AND active', [componentId,assetId]);
+    return 'retired' as const;
+  });
+  if (status === 'missing-component') { bad(res, 'MATERIAL_COMPONENT_NOT_FOUND', 404); return; }
+  if (status === 'missing-asset') { bad(res, 'MATERIAL_CAD_NOT_FOUND', 404); return; }
+  if (status === 'inactive') { bad(res, 'MATERIAL_CAD_ALREADY_INACTIVE', 409); return; }
+  res.status(204).send();
+}));
+
+const activationInput = z.object({ expectedActiveAssetId: uuid.nullable() }).strict();
+materialComponentsRouter.post('/:componentId/cad-assets/:assetId/activate', requireAdmin, safe(async (req, res) => {
+  const { componentId, assetId } = req.params;
+  if (!uuid.safeParse(componentId).success || !uuid.safeParse(assetId).success) { bad(res, 'INVALID_MATERIAL_CAD_ID'); return; }
+  const parsed = activationInput.safeParse(req.body);
+  if (!parsed.success) { bad(res, 'INVALID_CAD_ACTIVATION'); return; }
+  const status = await withMaterialTransaction(async client => {
+    const component = await client.query('SELECT id FROM material_components WHERE id=$1 FOR UPDATE', [componentId]);
+    if (!component.rows[0]) return 'missing-component' as const;
+    const target = await client.query('SELECT id FROM material_component_cad_assets WHERE component_id=$1 AND id=$2 FOR UPDATE', [componentId,assetId]);
+    if (!target.rows[0]) return 'missing-asset' as const;
+    const current = await client.query<{ id: string }>(
+      'SELECT id FROM material_component_cad_assets WHERE component_id=$1 AND active FOR UPDATE', [componentId]);
+    const activeId = current.rows[0]?.id ?? null;
+    if (activeId !== parsed.data.expectedActiveAssetId) return 'stale' as const;
+    if (activeId === assetId) return 'active' as const;
+    // Deactivate before activation to respect the one-active-revision constraint.
+    await client.query('UPDATE material_component_cad_assets SET active=FALSE WHERE component_id=$1 AND active', [componentId]);
+    await client.query('UPDATE material_component_cad_assets SET active=TRUE WHERE component_id=$1 AND id=$2', [componentId,assetId]);
+    return 'active' as const;
+  });
+  if (status === 'missing-component') { bad(res, 'MATERIAL_COMPONENT_NOT_FOUND', 404); return; }
+  if (status === 'missing-asset') { bad(res, 'MATERIAL_CAD_NOT_FOUND', 404); return; }
+  if (status === 'stale') { bad(res, 'MATERIAL_CAD_ACTIVE_CHANGED', 409); return; }
+  res.json({ id: assetId, active: true });
+}));
+
 materialComponentsRouter.get('/:componentId/cad-assets/:assetId/download', safe(async (req, res) => {
   if (!uuid.safeParse(req.params.componentId).success || !uuid.safeParse(req.params.assetId).success) { bad(res, 'INVALID_MATERIAL_CAD_ID'); return; }
   const result = await pool.query<{ source_object_key: string }>('SELECT source_object_key FROM material_component_cad_assets WHERE component_id=$1 AND id=$2', [req.params.componentId,req.params.assetId]);

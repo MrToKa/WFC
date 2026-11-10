@@ -1,6 +1,7 @@
 import { Body1, Button, Caption1, Spinner, mergeClasses } from '@fluentui/react-components';
 import { MaterialTray } from '@/api/client';
 import { TemplateImagePreview } from './TemplateImagePreview';
+import { TrayStepStatus } from './TrayStepStatus';
 import { TablePagination } from '../../ProjectDetails/TablePagination';
 import type { FilterableTableSectionStyles } from '../../ProjectDetails.styles';
 
@@ -19,6 +20,8 @@ type TraysTableProps = {
   onDelete: (tray: MaterialTray) => void;
   onAssignLoadCurve: (tray: MaterialTray) => void;
   onStep?: (tray: MaterialTray) => void;
+  stepRevisions?: Record<string, number>;
+  stepStatus?: 'ready' | 'loading' | 'error';
   token: string | null;
   page: number;
   totalPages: number;
@@ -54,6 +57,8 @@ export const TraysTable = ({
   onDelete,
   onAssignLoadCurve,
   onStep,
+  stepRevisions,
+  stepStatus,
   token,
   page,
   totalPages,
@@ -106,6 +111,7 @@ export const TraysTable = ({
                 Weight [kg/m]
               </th>
               <th className={styles.tableHeadCell}>Load curve</th>
+              {stepStatus ? <th className={styles.tableHeadCell}>STEP</th> : null}
               <th className={styles.tableHeadCell}>Minimum order</th>
               <th className={styles.tableHeadCell}>Packaging</th>
               <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>Price</th>
@@ -135,6 +141,20 @@ export const TraysTable = ({
                   <td className={styles.tableCell}>
                     {tray.loadCurveName ?? 'No load curve assigned'}
                   </td>
+                  {stepStatus ? (
+                    <td className={styles.tableCell}>
+                      <TrayStepStatus
+                        status={
+                          stepStatus === 'ready'
+                            ? stepRevisions?.[tray.id] != null
+                              ? 'attached'
+                              : 'missing'
+                            : stepStatus
+                        }
+                        revision={stepRevisions?.[tray.id]}
+                      />
+                    </td>
+                  ) : null}
                   <td className={styles.tableCell}>
                     {tray.minimumOrderQuantity} {tray.orderMeasurement}
                   </td>
@@ -147,9 +167,15 @@ export const TraysTable = ({
                       <Button size="small" onClick={() => onDetails(tray)}>
                         Details
                       </Button>
-                      {onStep ? <Button size="small" onClick={() => onStep(tray)} disabled={isBusy || isSubmitting}>
-                        STEP file
-                      </Button> : null}
+                      {onStep ? (
+                        <Button
+                          size="small"
+                          onClick={() => onStep(tray)}
+                          disabled={isBusy || isSubmitting}
+                        >
+                          STEP file
+                        </Button>
+                      ) : null}
                       {isAdmin ? (
                         <>
                           <Button
