@@ -1,0 +1,105 @@
+# WFC Aalborg STEP builder — isolated proof-of-concept stack.
+# ALWAYS: docker compose --env-file .env.poc -f compose.poc.yaml -p wfc-aalborg-poc ...
+# No existing WFC container names, data mounts, networks, or host storage ports are reused.
+name: wfc-aalborg-poc
+
+services:
+  postgres:
+    image: ${POC_POSTGRES_IMAGE:-postgres:18}
+    restart: "no"
+    environment:
+      POSTGRES_USER: wfc_poc
+      POSTGRES_PASSWORD: ${POC_POSTGRES_PASSWORD:?Generate .env.poc with scripts/poc/initialize-poc-env.ps1}
+      POSTGRES_DB: wfc_poc
+    volumes:
+      - poc-postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wfc_poc -d wfc_poc"]
+      interval: 5s
+      timeout: 5s
+      retries: 25
+    networks: [poc]
+
+  minio:
+    image: ${POC_MINIO_IMAGE:-minio/minio:latest}
+    restart: "no"
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: ${POC_MINIO_USER:?Generate .env.poc}
+      MINIO_ROOT_PASSWORD: ${POC_MINIO_PASSWORD:?Generate .env.poc}
+    volumes:
+      - poc-minio:/data
+    networks: [poc]
+
+  api:
+    profiles: ["app"]
+    image: wfc-aalborg-poc-api:dev
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: api-runtime
+    restart: "no"
+    stop_grace_period: 45s
+    environment:
+      NODE_ENV: production
+      API_HOST: 0.0.0.0
+      API_PORT: 4000
+      DATABASE_URL: postgresql://wfc_poc:${POC_POSTGRES_PASSWORD}@postgres:5432/wfc_poc
+      JWT_SECRET: ${POC_JWT_SECRET:?Generate .env.poc}
+      CLIENT_ORIGIN: http://127.0.0.1:5181,http://localhost:5181
+      BCRYPT_ROUNDS: 12
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_ACCESS_KEY: ${POC_MINIO_USER}
+      MINIO_SECRET_KEY: ${POC_MINIO_PASSWORD}
+      MINIO_USE_SSL: "false"
+      MINIO_BUCKET_PROJECTS: wfc-project-files
+      MINIO_BUCKET_TEMPLATES: wfc-template-files
+      WFC_MODEL_BUCKET: wfc-models
+      WFC_MODEL_IMPORT_ROOT: /var/lib/wfc/model-imports
+      WFC_VIEWER_ALLOWED_ORIGINS: http://127.0.0.1:5181,http://localhost:5181
+      WFC_VIEWER_ALLOW_HTTP_LOOPBACK: "true"
+      WFC_VIEWER_ALLOW_INSECURE_LAN_HTTP: "false"
+      WFC_VIEWER_TRUST_PROXY: "true"
+    volumes:
+      - poc-model-imports:/var/lib/wfc/model-imports
+      - poc-pathfinder-data:/var/lib/wfc/pathfinder
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+    networks: [poc]
+
+  web:
+    profiles: ["app"]
+    image: wfc-aalborg-poc-web:dev
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: web-runtime
+      args:
+        VITE_API_URL: /
+        VITE_VIEWER_HARNESS: "false"
+    restart: "no"
+    ports:
+      - "127.0.0.1:${POC_WEB_PORT:-5181}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [poc]
+
+networks:
+  poc: {}
+
+volumes:
+  poc-postgres: {}
+  poc-minio: {}
+  poc-model-imports: {}
+  poc-pathfinder-data: {}
