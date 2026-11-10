@@ -52,7 +52,7 @@ const updateInput = z.object({
   transform,
 }).strict();
 
-type CadRequest = Request<{projectId: string; catalogItemId?: string; designId?: string; instanceId?: string}>;
+type CadRequest = Request<{projectId: string; catalogItemId?: string; designId?: string; instanceId?: string; connectionId?: string}>;
 
 // Express 4 does not automatically forward rejected async handler promises.
 const safe = (handler: (req: CadRequest, res: Response) => Promise<void>) =>
@@ -299,6 +299,11 @@ cadDesignRouter.patch('/designs/:designId/instances/:instanceId', requireProject
       WHERE i.project_id=$1 AND i.design_id=$2 AND i.id=$3
         AND i.revision=$4 AND d.project_id=i.project_id AND d.id=i.design_id
         AND d.status='proposed' AND v.state='ready' AND v.health='healthy'
+        AND NOT EXISTS (
+          SELECT 1 FROM cad_design_connections cc
+          WHERE cc.project_id=i.project_id AND cc.design_id=i.design_id
+            AND (cc.source_instance_id=i.id OR cc.target_instance_id=i.id)
+        )
     RETURNING i.id, i.revision`,
     [req.params.projectId, req.params.designId, req.params.instanceId,
       parsed.data.expectedRevision, t.positionMm.x, t.positionMm.y, t.positionMm.z,
@@ -523,4 +528,35 @@ cadDesignRouter.post('/designs/:designId/connections', requireProjectEdit, safe(
   } finally {
     client.release();
   }
+}));
+
+
+cadDesignRouter.delete('/designs/:designId/connections/:connectionId', requireProjectEdit, safe(async (req: CadRequest, res: Response) => {
+  const { projectId, designId, connectionId } = req.params;
+  if (!uuid.safeParse(designId).success || !uuid.safeParse(connectionId).success) {
+    failure(res, 400, 'INVALID_CONNECTION_ID'); return;
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const design = await client.query(
+      `SELECT d.id FROM cad_designs d
+         JOIN project_model_selections s ON s.project_id=d.project_id AND s.active_model_version_id=d.model_version_id
+         JOIN model_versions v ON v.project_id=d.project_id AND v.id=d.model_version_id
+        WHERE d.project_id=$1 AND d.id=$2 AND d.status='proposed'
+          AND v.state='ready' AND v.health='healthy' FOR UPDATE OF d`,
+      [projectId, designId],
+    );
+    if (!design.rows[0]) { await client.query('ROLLBACK'); failure(res, 409, 'INACTIVE_DESIGN'); return; }
+    const removed = await client.query(
+      'DELETE FROM cad_design_connections WHERE project_id=$1 AND design_id=$2 AND id=$3 RETURNING id',
+      [projectId, designId, connectionId],
+    );
+    if (!removed.rows[0]) { await client.query('ROLLBACK'); failure(res, 404, 'CONNECTION_NOT_FOUND'); return; }
+    await client.query('COMMIT');
+    res.status(204).send();
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally { client.release(); }
 }));
