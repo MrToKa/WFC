@@ -16,10 +16,12 @@ internal static partial class Program
     { try { await action(); Checks.Add(new { name, status = "PASS", detail = "" }); } catch (Exception error) { failures++; Checks.Add(new { name, status = "FAIL", detail = error.GetType().Name + ": " + error.Message }); } }
     private static async Task<int> Main(string[] args)
     {
-        if (args is not ["--runner", var runner, "--work-root", var work] || !Path.IsPathFullyQualified(runner) || !File.Exists(runner)
+        bool edgePartitionOnly = args.Length == 5 && args[4] == "--edge-partition-only";
+        var invocation = edgePartitionOnly ? args[..4] : args;
+        if (invocation is not ["--runner", var runner, "--work-root", var work] || !Path.IsPathFullyQualified(runner) || !File.Exists(runner)
             || !Path.IsPathFullyQualified(work) || File.Exists(work) || Directory.Exists(work)) return 2;
         Directory.CreateDirectory(work);
-        try { await Transport(runner, work); }
+        try { if (edgePartitionOnly) await EdgePartitionTransport(runner, work); else await Transport(runner, work); }
         catch (Exception error) { failures++; Checks.Add(new { name = "mixed-runtime-fixture", status = "FAIL", detail = error.GetType().Name + ": " + error.Message }); }
         Console.WriteLine(JsonSerializer.Serialize(new { status = failures == 0 ? "PASS" : "FAIL", passed = Checks.Count - failures, failed = failures, checks = Checks,
             scope = "Private independent synthetic mixed one-shot/session transport; no live SDK/frame, own-terminal or global catalog authority" }));
@@ -80,6 +82,7 @@ internal static partial class Program
         var floor = Store(root, Fixtures.Transform(Wall(), p => Fixtures.P(p.Y, p.Z, p.X)));
         var floorOpening = Store(root, Fixtures.Transform(Ring(), p => Fixtures.P(p.Y, p.Z, p.X)));
         var solid = Store(root, Fixtures.Box(-4, 4, -4, 4, -4, 4)); var empty = Store(root, null);
+        await EdgePartitionTransport(runner, root);
         await Check("one-shot original open wall blocks crossing tray edges", async () => Refused(await OneShot(runner, root, Protected(baseline, wall.Context))));
         await Check("protected publication hash differs from pure hash while exact original opening remains clear", async () => {
             Need(opening.Manifest["geometry"]!["verification"]!["verificationSha256"]!.GetValue<string>() != opening.Qualified!.Receipt.Evidence!.VerificationSha256);
@@ -166,5 +169,26 @@ internal static partial class Program
         await MeasuredFitProfileTransport(runner, root);
         await LargeSelectionTransport(runner, root);
         await CapacityTransport(runner, root);
+    }
+    private static async Task EdgePartitionTransport(string runner, string root)
+    {
+        await Check("actual runner requalifies edge-touching original solids and preserves both blocked interiors and clear separation", async () => {
+            var first = Fixtures.Box(-1, 0, -1, 0, -1, 1); var second = Fixtures.Box(0, 1, 0, 1, -1, 1);
+            var mesh = new Fixtures.Mesh(first.Vertices.Concat(second.Vertices).ToArray(), first.Indices.Concat(second.Indices.Select(index => index + first.Vertices.Length)).ToArray());
+            var stored = Store(root, mesh); var evidence = stored.Qualified!.Receipt.Evidence!;
+            Need(evidence.QualifiedClosedSolidComponents == 2 && evidence.OriginalSurfaceComponents == 0 && evidence.TriangleCount == 24);
+            int ordinal = 0;
+            foreach (var point in new[] { (From: -.8, To: -.2), (From: .2, To: .8) }) {
+                var request = Fixtures.Request(root, [(10, 13, 0, .1)]);
+                request["from"] = Fixtures.Point(point.From, point.From); request["to"] = Fixtures.Point(point.To, point.To);
+                request["directSecondaryPolicy"] = "nearest-eligible-tray-or.v1";
+                var value = await OneShot(runner, root, Protected(request, stored.Context)); Refused(value);
+                var direct = Execution(value).GetProperty("directSecondary").GetProperty("directCheck"); Equal("blocked", direct.GetProperty("status").GetString());
+                var blocking = direct.GetProperty("blocking"); Equal("qualified-closed-solid", blocking.GetProperty("kind").GetString());
+                Equal(evidence.ComponentMemberships[ordinal++].SourceMembershipSha256, blocking.GetProperty("sourceMembershipSha256").GetString());
+            }
+            var clear = Fixtures.Request(root, [(-3, 3, 2, .1)]); clear["from"] = Fixtures.Point(-2, 2); clear["to"] = Fixtures.Point(2, 2);
+            Successful(await OneShot(runner, root, Protected(clear, stored.Context)), stored.Context, stored);
+        });
     }
 }

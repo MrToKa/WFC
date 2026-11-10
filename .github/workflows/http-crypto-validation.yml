@@ -39,6 +39,10 @@ jobs:
         run: |
           dotnet run --project pathfinder-engine/tests/PathFinder.BarrierVerifier.Tests --configuration Release
           dotnet run --project pathfinder-engine/tests/PathFinder.MixedBarriers.Tests --configuration Release
+      - name: Verify retained mixed barriers through the actual routing process
+        run: |
+          dotnet build pathfinder-engine/tools/PathFinder.ModelRunner/PathFinder.ModelRunner.csproj --configuration Release
+          dotnet run --project pathfinder-engine/tests/PathFinder.MixedBarrierRuntime.Tests --configuration Release -- --runner "$GITHUB_WORKSPACE/pathfinder-engine/tools/PathFinder.ModelRunner/bin/Release/net9.0/PathFinder.ModelRunner.dll" --work-root "$RUNNER_TEMP/barrier-edge-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --edge-partition-only
   http-crypto:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
