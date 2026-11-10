@@ -42,7 +42,7 @@ export function RoutingsViewerTab({ projectId, loadedProjectId, token }: Props) 
     : cables.cables.length === 0 ? 'empty' : cables.taggedCount === 0 ? 'untagged' : cables.rows.length === 0 ? 'no-match' : 'ready';
   const retryRoute = () => void viewer.retryRoute(viewer.currentRoute?.source === 'cable' ? cables.getSelectedForRetry() : undefined);
   const retryViewer = () => { viewer.retry(); if (cables.hasActivated) void cables.refresh(); };
-  return <section ref={anchor} aria-label="Routings viewer" data-testid="routings-viewer-tab">
+  return <section ref={anchor} aria-label="Routings builder" data-testid="routings-viewer-tab">
     <div className={styles.layout} style={{ height }} data-testid="routings-layout">
       <div className={styles.controls}>
         <TabList className={styles.sources} selectedValue={mode} aria-label="Routing source"
