@@ -6,6 +6,7 @@ import { useRoutingsViewerHeight } from './hooks/useRoutingsViewerHeight';
 import { useRoutingCables } from './hooks/useRoutingCables';
 import { useCableInformationPanel } from './hooks/useCableInformationPanel';
 import { CableInformationPanel } from './CableInformationPanel';
+import { CadComponentsPanel } from './CadComponentsPanel';
 import { useRoutingsViewerStyles } from './RoutingsViewerTab.styles';
 
 const summaries: Record<RouteCheckResult['status'], string> = {
@@ -46,9 +47,10 @@ export function RoutingsViewerTab({ projectId, loadedProjectId, token }: Props) 
     <div className={styles.layout} style={{ height }} data-testid="routings-layout">
       <div className={styles.controls}>
         <TabList className={styles.sources} selectedValue={mode} aria-label="Routing source"
-          onTabSelect={(_, data) => { if (data.value === 'manual' || data.value === 'cables') setSourceTab({ projectId, token, value: data.value }); }}>
+          onTabSelect={(_, data) => { if (data.value === 'manual' || data.value === 'cables' || data.value === 'components') setSourceTab({ projectId, token, value: data.value }); }}>
           <Tab value="manual">Manual routing</Tab>
           <Tab value="cables">Cables</Tab>
+          {import.meta.env.VITE_CAD_DESIGN_ENABLED === 'true' ? <Tab value="components">Components</Tab> : null}
         </TabList>
         <div className={styles.status} aria-live="polite" aria-atomic="true" data-testid="routings-viewer-status" data-phase={viewer.phase}>
           {loading ? <Spinner size="tiny" label={viewer.message} /> : <Body1>{viewer.message}</Body1>}
@@ -64,7 +66,9 @@ export function RoutingsViewerTab({ projectId, loadedProjectId, token }: Props) 
           <div className={styles.actions}>
             <Button type="submit" appearance="primary" disabled={!viewer.canShow}>Show route</Button>
           </div>
-        </form> : <div className={styles.cablePanel}>
+        </form> : mode === 'components' && import.meta.env.VITE_CAD_DESIGN_ENABLED === 'true' ?
+          <CadComponentsPanel projectId={projectId} token={token} modelVersionId={viewer.model?.id ?? null} ready={viewer.phase === 'ready'} />
+          : <div className={styles.cablePanel}>
           <Field className={styles.field} label="Search cable tags">
             <Input ref={searchInput} aria-label="Search cable tags" value={cables.search} onChange={(_, data) => cables.setSearch(data.value)} />
           </Field>
