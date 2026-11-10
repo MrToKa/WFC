@@ -3,6 +3,8 @@ import path from 'node:path';
 import { hasStepEnvelope, MAX_STEP_BYTES, csvCell } from './stepFileValidation.js';
 import { convertStepToMesh } from './converter.js';
 import { cadPocPortSeeds } from './pocPortSeed.js';
+import { alignConnectorPorts, type RigidTransform } from '../../shared/cadTransforms.js';
+import { MATE_OPPOSING_FACE } from '../../shared/cadPocPorts.js';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import multer from 'multer';
 import { z } from 'zod';
@@ -364,4 +366,161 @@ cadDesignRouter.get('/designs/:designId/assembly.step', safe(async (req: CadRequ
   res.setHeader('X-WFC-Source-Model-Version', design.rows[0].model_version_id);
   res.setHeader('X-WFC-Design-Revision', String(design.rows[0].revision));
   res.send(output);
+}));
+
+
+/** Saved CAD connection graph: only compatible port pairs physically coincident now. */
+type PortRow = {
+  instance_id: string;
+  catalog_item_id: string;
+  x_mm: number; y_mm: number; z_mm: number;
+  qx: number; qy: number; qz: number; qw: number;
+  port_id: string; port_type: string; local_transform: unknown;
+};
+
+const connectionInput = z.object({
+  sourceInstanceId: uuid,
+  sourcePortName: z.enum(['start', 'end']),
+  targetInstanceId: uuid,
+  targetPortName: z.enum(['start', 'end']),
+}).strict().refine(value => value.sourceInstanceId !== value.targetInstanceId, 'Two different components are required.');
+
+const localRigid = z.object({ position, rotation: quaternion }).strict();
+
+function worldTransform(row: PortRow): RigidTransform {
+  return {
+    position: { x: row.x_mm, y: row.y_mm, z: row.z_mm },
+    rotation: { x: row.qx, y: row.qy, z: row.qz, w: row.qw },
+  };
+}
+
+function physicallySnapped(source: PortRow, target: PortRow): boolean {
+  const sourceLocal = localRigid.parse(source.local_transform);
+  const targetLocal = localRigid.parse(target.local_transform);
+  const expected = alignConnectorPorts(worldTransform(target), targetLocal, sourceLocal, MATE_OPPOSING_FACE);
+  const existing = worldTransform(source);
+  const distance = Math.hypot(
+    existing.position.x - expected.position.x,
+    existing.position.y - expected.position.y,
+    existing.position.z - expected.position.z,
+  );
+  const a = existing.rotation, b = expected.rotation;
+  const dot = Math.abs(a.x*b.x + a.y*b.y + a.z*b.z + a.w*b.w);
+  return distance <= 1 && dot >= Math.cos(0.1 * Math.PI / 360);
+}
+
+cadDesignRouter.get('/catalog/:catalogItemId/ports', safe(async (req: CadRequest, res: Response) => {
+  if (!uuid.safeParse(req.params.catalogItemId).success) { failure(res, 400, 'INVALID_CATALOG_ITEM_ID'); return; }
+  const rows = await pool.query(
+    `SELECT id, name, port_type AS "portType", local_transform AS "localTransform"
+       FROM cad_catalog_ports
+      WHERE project_id=$1 AND catalog_item_id=$2 ORDER BY name`,
+    [req.params.projectId, req.params.catalogItemId],
+  );
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.json({ ports: rows.rows });
+}));
+
+cadDesignRouter.get('/designs/:designId/connections', safe(async (req: CadRequest, res: Response) => {
+  if (!uuid.safeParse(req.params.designId).success) { failure(res, 400, 'INVALID_DESIGN_ID'); return; }
+  const rows = await pool.query(
+    `SELECT c.id, c.source_instance_id AS "sourceInstanceId",
+            c.source_port_id AS "sourcePortId",
+            c.target_instance_id AS "targetInstanceId",
+            c.target_port_id AS "targetPortId", c.created_at AS "createdAt"
+       FROM cad_design_connections c
+      WHERE c.project_id=$1 AND c.design_id=$2 ORDER BY c.created_at, c.id LIMIT 500`,
+    [req.params.projectId, req.params.designId],
+  );
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.json({ connections: rows.rows });
+}));
+
+cadDesignRouter.post('/designs/:designId/connections', requireProjectEdit, safe(async (req: CadRequest, res: Response) => {
+  const { projectId, designId } = req.params;
+  if (!uuid.safeParse(designId).success) { failure(res, 400, 'INVALID_DESIGN_ID'); return; }
+  const parsed = connectionInput.safeParse(req.body);
+  if (!parsed.success) { failure(res, 400, 'INVALID_CONNECTION'); return; }
+  const input = parsed.data;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Lock the owning design to serialize join operations for this assembly.
+    const design = await client.query(
+      `SELECT d.id FROM cad_designs d
+        JOIN project_model_selections s ON s.project_id=d.project_id
+           AND s.active_model_version_id=d.model_version_id
+        JOIN model_versions v ON v.project_id=d.project_id AND v.id=d.model_version_id
+        WHERE d.project_id=$1 AND d.id=$2 AND d.status='proposed'
+          AND v.state='ready' AND v.health='healthy' FOR UPDATE OF d`,
+      [projectId, designId],
+    );
+    if (!design.rows[0]) { await client.query('ROLLBACK'); failure(res, 409, 'INACTIVE_DESIGN'); return; }
+    const queryPort = async (instanceId: string, portName: string): Promise<PortRow | undefined> => {
+      const result = await client.query<PortRow>(
+        `SELECT i.id AS instance_id, i.catalog_item_id,
+                i.x_mm, i.y_mm, i.z_mm, i.qx, i.qy, i.qz, i.qw,
+                p.id AS port_id, p.port_type, p.local_transform
+           FROM cad_design_instances i
+           JOIN cad_catalog_ports p ON p.project_id=i.project_id
+             AND p.catalog_item_id=i.catalog_item_id AND p.name=$4
+          WHERE i.project_id=$1 AND i.design_id=$2 AND i.id=$3 FOR UPDATE OF i`,
+        [projectId, designId, instanceId, portName],
+      );
+      return result.rows[0];
+    };
+    // Stable ID ordering avoids cross-request row lock inversion.
+    const lookups = [
+      [input.sourceInstanceId, input.sourcePortName],
+      [input.targetInstanceId, input.targetPortName],
+    ].sort((a, b) => a[0].localeCompare(b[0]));
+    const found = new Map<string, PortRow>();
+    for (const [instanceId, portName] of lookups) {
+      const row = await queryPort(instanceId, portName);
+      if (row) found.set(instanceId, row);
+    }
+    const source = found.get(input.sourceInstanceId);
+    const target = found.get(input.targetInstanceId);
+    if (!source || !target || source.port_type !== target.port_type ||
+        !physicallySnapped(source, target)) {
+      await client.query('ROLLBACK');
+      failure(res, 409, 'INCOMPATIBLE_OR_UNALIGNED_PORTS'); return;
+    }
+    const occupied = await client.query<{ id: string; source_instance_id: string; source_port_id: string; target_instance_id: string; target_port_id: string }>(
+      `SELECT id,source_instance_id,source_port_id,target_instance_id,target_port_id
+         FROM cad_design_connections
+        WHERE project_id=$1 AND design_id=$2 AND (
+          (source_instance_id=$3 AND source_port_id=$4) OR
+          (target_instance_id=$3 AND target_port_id=$4) OR
+          (source_instance_id=$5 AND source_port_id=$6) OR
+          (target_instance_id=$5 AND target_port_id=$6))`,
+      [projectId, designId, source.instance_id, source.port_id, target.instance_id, target.port_id],
+    );
+    if (occupied.rows.length) {
+      const match = occupied.rows.find(row =>
+        row.source_instance_id === source.instance_id && row.source_port_id === source.port_id &&
+        row.target_instance_id === target.instance_id && row.target_port_id === target.port_id);
+      await client.query('COMMIT');
+      if (occupied.rows.length === 1 && match) res.status(200).json({ id: match.id, reused: true });
+      else failure(res, 409, 'CONNECTION_PORT_ALREADY_OCCUPIED');
+      return;
+    }
+    const id = randomUUID();
+    await client.query(
+      `INSERT INTO cad_design_connections(
+         id,project_id,design_id,
+         source_instance_id,source_catalog_item_id,source_port_id,
+         target_instance_id,target_catalog_item_id,target_port_id)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [id, projectId, designId, source.instance_id, source.catalog_item_id, source.port_id,
+        target.instance_id, target.catalog_item_id, target.port_id],
+    );
+    await client.query('COMMIT');
+    res.status(201).json({ id, reused: false });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
 }));
