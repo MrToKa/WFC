@@ -157,8 +157,9 @@ export async function requireCatalogAccess(req: Request, res: Response, next: Ne
 }
 
 const engineerReadPaths = [
-  // Read-only designer endpoints remain subject to project assignment checks.
-  /^\/cad-design(?:\/.*)?$/i,
+  // CAD design remains assignment-gated even for engineer GET requests.
+  // The per-project canEditProject check, not the global engineer-read allowlist,
+  // must authorize every catalogue and instance read.
   ...basicProjectReadPaths,
   ...technicianFileReadPaths,
   ...technicianExportPaths,
