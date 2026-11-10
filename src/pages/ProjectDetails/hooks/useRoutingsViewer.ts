@@ -133,7 +133,14 @@ export function useRoutingsViewer({ projectId, loadedProjectId, token, container
             }
             if (!attempt.event) attempt.event = event;
             combine(run, attempt);
-          } else if (event.type === 'ERROR') fail(run, String(event.payload.code));
+          } else if (event.type === 'ERROR') {
+            // A failed dynamic CAD overlay is recoverable and must not retire the
+            // healthy client SVF or break Manual routing / Cables.
+            if (String(event.payload.code) === 'CAD_COMPONENT_FAILED' &&
+                String(event.payload.operation).startsWith('CAD_')) {
+              update(run, { message: 'The client model is ready; a CAD component could not be displayed.' });
+            } else fail(run, String(event.payload.code));
+          }
         };
         run.controller = new ViewerController({ container: container.current!, projectId: scope.projectId, token: scope.token, onEvent });
       } catch (error) {
