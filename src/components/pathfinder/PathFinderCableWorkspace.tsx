@@ -40,6 +40,7 @@ export type PathFinderCableWorkspaceProps = Access & { pf: ReturnType<typeof use
   display?: PathFinderWorkflowDisplay; onTogglePath?: (cableId: string) => void; review?: PathFinderWorkflowReview | null;
   onEndpointForegroundContexts?: (value: PathFinderEndpointForegroundContexts | null) => void;
   onCalculationStart?: (cableId: string) => void; onConfigureCalculation?: () => void;
+  onResultRefresh?: (cableId: string) => void;
   getCalculationPreferences?: (drillThroughWalls: boolean) => PathFinderPreferences | null;
   onCalculationPreferences?: (value: PathFinderWorkflowCalculationPreferences) => void };
 type Impact = { id: string; current: EndpointCurrentScope; calculation: LocationImpactCalculation | null; originCableId: string | null };
@@ -120,6 +121,9 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   const [impact, setImpact] = useState<Impact | null>(null), [revision, setRevision] = useState(0), [notice, setNotice] = useState<string | null>(null);
   const [calculating, setCalculating] = useState(false);
   const [refreshingSelected, setRefreshingSelected] = useState(false), [selectedReadError, setSelectedReadError] = useState<string | null>(null);
+  const [refreshingState, setRefreshingState] = useState(false);
+  const manualRefresh = useRef<AbortController | null>(null);
+  const metadataCommit = useRef<{ ticket: AbortController; scope: string; resolve: () => void } | null>(null);
   const [drillDraft, setDrillDraft] = useState<{ cableId: string; checked: boolean } | null>(null);
   const [calculationFeedback, setCalculationFeedback] = useState<CalculationFeedback | null>(null);
   const attemptEpoch = useRef(0);
@@ -165,6 +169,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
     // User activation belongs to this click, before the editor is mounted.
     const request = requestFloatingCableWindow({ title: row.cable.tag || 'Cable routing' }, popupRef.current);
     popupRef.current = request; setPopup(request); dismissPreview();
+    manualRefresh.current?.abort(); manualRefresh.current = null; setRefreshingState(false);
     diagnosticsEpoch.current++; settledDiagnosticsRef.current = null; protectedDiagnostics.current = null; setSettledDiagnostics(null);
     read.current?.abort(); setRefreshingSelected(false);
     if (selectedRef.current?.cable.id !== row.cable.id) setSelectedReadError(null);
@@ -258,7 +263,12 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
         jobId: savedImpact.jobId!, preferences: structuredClone(savedWatch.preferences) });
       if ((retryResult || JSON.stringify(row) !== JSON.stringify(detail.row))
         && (savedWatch?.cableId !== row.cable.id || savedJobMatches && calculationFinished(detail.row.calculation))
-        && !automaticUpdatePending(detail.row.calculation)) current.onSelect(detail.row);
+        && !automaticUpdatePending(detail.row.calculation)) {
+        current.onSelect(detail.row);
+        // A fresh successful GET is an explicit request to hydrate the same
+        // immutable result again, even if none of its identity fields changed.
+        if (retryResult) current.onResultRefresh?.(row.cable.id);
+      }
       const submitted = submittedRef.current, observed = detail.row.calculation;
       if (submitted?.cableId === row.cable.id && submitted.jobId !== null && observed.jobId === submitted.jobId
         && calculationFinished(observed)
@@ -293,6 +303,39 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
     } }
     finally { if (read.current === ticket) { read.current = null; if (alive.current) setRefreshingSelected(false); } }
   }, [rememberSubmission, rememberFeedback, authorityLost, deferDiagnostics]);
+  const refreshCableStatus = useCallback(async () => {
+    const current = callbacks.current, row = selectedRef.current;
+    if (!alive.current || !current.active || !row || manualRefresh.current) return;
+    const owner = calculationWatchOwner(current), model = modelScope(current), ticket = new AbortController();
+    manualRefresh.current = ticket; setRefreshingState(true);
+    // Refresh model/preparation metadata before checking the selected row.
+    // Background impact progress has no authority over this read and must not
+    // be awaited here. No calculation or replacement write is submitted.
+    try {
+      const deadline = Date.now() + 30_000;
+      try {
+        const state = await readWithinCalculationBudget(ticket.signal, deadline, () => backgroundStateRefresh());
+        if (state && state.projectId === current.projectId && activeModelScope(state.activeModel) === model) {
+          const nextScope = workspaceReadScope(current, state);
+          // The state GET can resolve before React has committed its new
+          // preparation snapshot. Starting the row GET sooner lets that commit
+          // abort it as an old-scope read. Wait for the actual rendered scope.
+          if (previousReadScope.current !== nextScope)
+            await readWithinCalculationBudget(ticket.signal, deadline, () => new Promise<void>(resolve => {
+              metadataCommit.current = { ticket, scope: nextScope, resolve };
+            }));
+        }
+      }
+      catch { /* The exact reader still checks authority and currentness. */ }
+      if (!alive.current || ticket.signal.aborted || !callbacks.current.active || selectedRef.current?.cable.id !== row.cable.id
+        || calculationWatchOwner(callbacks.current) !== owner || modelScope(callbacks.current) !== model) return;
+      await refreshSelected(true);
+    } finally {
+      if (metadataCommit.current?.ticket === ticket) metadataCommit.current = null;
+      if (manualRefresh.current === ticket) { manualRefresh.current = null; if (alive.current) setRefreshingState(false); }
+    }
+  }, [backgroundStateRefresh, refreshSelected]);
+  useEffect(() => () => { manualRefresh.current?.abort(); }, []);
   const refreshDiagnostics = useCallback((forceSelected = false) => {
     // Owned calculations already have a bounded selected-item watcher. Progress
     // notifications must not race it with expensive full cable/list reads while
@@ -322,6 +365,10 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
       setSelectedReadError(null); return;
     }
     if (selectedRef.current) setSelectedReadError('The current model or route settings changed. Refresh this cable before reviewing or applying its result.');
+  }, [selectedReadScope]);
+  useEffect(() => {
+    const pending = metadataCommit.current;
+    if (pending?.scope === selectedReadScope) { metadataCommit.current = null; pending.resolve(); }
   }, [selectedReadScope]);
   // A same-model Viewer reload remounts this owner while Tab retains the user's
   // selected ID. Restore its current row by GET, never an old display payload or
@@ -836,7 +883,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
       : selectedStatus?.status === 'ready-for-review' && !displayMatches ? 'Checking the calculated result' : selectedStatus?.status === 'up-to-date' ? 'Updated in Cable list'
       : selectedStatus?.status === 'ready-for-review' ? 'Ready for review; existing values remain until Apply' : selectedStatus?.status === 'calculating' ? 'Recalculating' : 'Needs routing or attention'}.</p> : null}
     {selected && !open ? <Button onClick={() => openCable(selected)}>Open selected cable</Button> : null}
-    {selected ? <Button disabled={!panelActive || refreshingSelected} onClick={() => { setRevision(value => value + 1); void refreshSelected(true); void progress.refresh(); void writes.refresh(); }}>Refresh selected cable</Button> : null}
+    {selected ? <Button disabled={!panelActive || refreshingSelected || refreshingState} onClick={() => { setRevision(value => value + 1); void refreshCableStatus(); void progress.refresh(); void writes.refresh(); }}>Refresh selected cable</Button> : null}
     {impact ? <section aria-label="Affected cable progress">
       <h4>Shared location progress</h4>
       {progress.impact ? <p role="status">{progress.impact.status === 'complete' ? 'Calculation complete' : progress.impact.status.replaceAll('-', ' ')}: {progress.impact.completed} / {progress.impact.total} affected cables.</p> : <p>Reading affected calculation…</p>}
@@ -867,7 +914,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
       calculationDiagnostics={!selectedReadError && calculationDiagnostics?.owner === calculationWatchOwner(props)
         && calculationDiagnostics.model === modelScope(props) && calculationDiagnostics.value.cableId === selected?.cable.id
         && calculationDiagnostics.value.jobId === selected?.calculation.jobId ? calculationDiagnostics.value : null}
-      onRefresh={async () => { await progress.refresh(); await refreshSelected(true); }} refreshing={refreshingSelected} refreshError={selectedReadError}
+      onRefresh={() => { void progress.refresh(); return refreshCableStatus(); }} refreshing={refreshingSelected || refreshingState} refreshError={selectedReadError}
       onTogglePath={selected && props.onTogglePath ? () => props.onTogglePath?.(selected.cable.id) : undefined}
       onShowLocation={props.pf.viewerPhase === 'ready' ? props.pf.showLocation : undefined}
       onEndpointForegroundContexts={props.onEndpointForegroundContexts}

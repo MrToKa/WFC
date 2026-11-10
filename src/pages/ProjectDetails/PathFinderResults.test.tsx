@@ -908,6 +908,60 @@ describe('selected current cable workflow result', () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(60_000); }); expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledTimes(7);
     expect(f.pf.refresh).not.toHaveBeenCalled(); expect(f.pf.calculate).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
   });
+  it('rechecks an unchanged exact result after explicit status refresh without replaying Show or a write', async () => {
+    vi.useFakeTimers(); const f = workflowFixture();
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockRejectedValue({ status: 503 });
+    const props = { pf: asPf(f.pf), selectedCableId: id(4), workflowSelection: f.selection, accountId: id(2), options,
+      workflowDisplayRequest: { cableId: id(4), requestId: 1, action: 'show' as const } };
+    const view = render(<PathFinderResults {...props} />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(20_000); });
+    expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledTimes(7);
+    expect(display).toMatchObject({ ready: false, checking: false, message: expect.stringContaining('after bounded automatic retries') });
+
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockResolvedValue(f.live);
+    const workflowRefreshRequest = { cableId: id(4), requestId: 1 };
+    view.rerender(<PathFinderResults {...props} workflowSelection={structuredClone(f.selection)} workflowRefreshRequest={workflowRefreshRequest} />);
+    await act(async () => {});
+    expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledTimes(8);
+    expect(fetchPathFinderCableWorkflowDetail).toHaveBeenLastCalledWith(id(1), 'current-private-token', id(4), options, expect.any(AbortSignal));
+    expect(f.pf.readProposal).toHaveBeenCalledTimes(8); expect(f.pf.readJob).toHaveBeenCalledTimes(8);
+    expect(display).toMatchObject({ cableId: id(4), jobId: id(7), proposalId: id(3), proposalHash: f.proposal.proposalHash,
+      ready: true, visible: false, verifiedRow: f.live.row });
+    expect(f.pf.showPath).not.toHaveBeenCalled(); expect(popup?.canReview).toBe(false);
+
+    // Repeating the same refresh event cannot create another verification or
+    // reuse the earlier Show request when the result eventually becomes ready.
+    view.rerender(<PathFinderResults {...props} workflowSelection={{ ...f.selection }} workflowRefreshRequest={{ ...workflowRefreshRequest }} />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledTimes(8); expect(f.pf.showPath).not.toHaveBeenCalled();
+    view.rerender(<PathFinderResults {...props} workflowRefreshRequest={workflowRefreshRequest}
+      workflowDisplayRequest={{ ...props.workflowDisplayRequest, requestId: 2 }} />);
+    await act(async () => {});
+    expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23] });
+    expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledTimes(8);
+    expect(f.pf.calculate).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled(); expect(f.pf.reviewProposal).not.toHaveBeenCalled();
+  });
+  it('keeps the selected verified route when another cable or an older request is refreshed', async () => {
+    const f = workflowFixture(), workflowRefreshRequest = { cableId: id(4), requestId: 3 };
+    const props = { pf: asPf(f.pf), selectedCableId: id(4), workflowSelection: f.selection, accountId: id(2), options,
+      workflowDisplayRequest: { cableId: id(4), requestId: 1, action: 'show' as const } };
+    const view = render(<PathFinderResults {...props} workflowRefreshRequest={workflowRefreshRequest} />);
+    await waitFor(() => expect(display).toMatchObject({ ready: true, visible: true }));
+    expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce(); expect(f.pf.showPath).toHaveBeenCalledOnce();
+
+    for (const request of [{ cableId: id(99), requestId: 4 }, { cableId: id(4), requestId: 2 }, { cableId: id(4), requestId: NaN }]) {
+      view.rerender(<PathFinderResults {...props} workflowSelection={{ ...f.selection }} workflowRefreshRequest={request} />);
+      await act(async () => {});
+      expect(display).toMatchObject({ ready: true, visible: true });
+      expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce(); expect(f.pf.showPath).toHaveBeenCalledOnce();
+      expect(f.pf.clear).not.toHaveBeenCalled();
+    }
+    view.rerender(<PathFinderResults {...props} workflowRefreshRequest={{ cableId: id(4), requestId: 4 }} />);
+    await waitFor(() => expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(display).toMatchObject({ ready: true, visible: false }));
+    expect(f.pf.showPath).toHaveBeenCalledOnce();
+    expect(f.pf.calculate).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled(); expect(f.pf.reviewProposal).not.toHaveBeenCalled();
+  });
   it('aborts a hanging result GET at the overall 30-second deadline and publishes its terminal reason', async () => {
     vi.useFakeTimers(); const f = workflowFixture(), changed = vi.fn<(value: PathFinderWorkflowDisplay) => void>();
     vi.mocked(fetchPathFinderCableWorkflowDetail).mockImplementation(() => new Promise(() => {}));

@@ -69,6 +69,42 @@ async function openListCable(preserveReads = false) {
   await act(async () => { fireEvent.click(screen.getByText('Needs routing cable')); });
   if (!preserveReads) vi.mocked(fetchPathFinderCableWorkflowDetail).mockClear();
 }
+describe('explicit cable status recovery', () => {
+  it('refreshes metadata and retries the same selected result without waiting for background progress', async () => {
+    const p = props(), refreshed = vi.fn(), started = vi.fn();
+    const progress = vi.fn(() => new Promise<void>(() => {}));
+    vi.mocked(usePathfinderLocationImpactProgress).mockReturnValue({ impact: null, error: null, refresh: progress } as never);
+    render(<PathFinderCableWorkspace {...p} onResultRefresh={refreshed} onCalculationStart={started} />);
+    await openListCable(); vi.mocked(p.onSelect).mockClear();
+    await act(async () => { await panelProps.onRefresh?.(); });
+    expect(progress).toHaveBeenCalledOnce(); expect(p.pf.refreshState).toHaveBeenCalledOnce();
+    expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce();
+    expect(p.pf.refreshState).toHaveBeenCalledBefore(vi.mocked(fetchPathFinderCableWorkflowDetail));
+    expect(p.onSelect).toHaveBeenCalledOnce(); expect(refreshed).toHaveBeenCalledExactlyOnceWith(id(3));
+    expect(started).toHaveBeenCalledExactlyOnceWith(id(3)); expect(panelProps.refreshing).toBe(false);
+    expect(p.pf.submitCalculation).not.toHaveBeenCalled(); expect(p.pf.calculate).not.toHaveBeenCalled();
+  });
+  it('immediately marks Refresh busy while metadata is being read and ignores a late refresh after selecting another cable', async () => {
+    const p = props(), refreshed = vi.fn(); let finish!: (value: typeof p.pf.data) => void;
+    vi.mocked(p.pf.refreshState).mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    render(<PathFinderCableWorkspace {...p} onResultRefresh={refreshed} />); await openListCable();
+    let pending!: Promise<void>;
+    act(() => { pending = panelProps.onRefresh!() as Promise<void>; });
+    expect(panelProps.refreshing).toBe(true); expect(fetchPathFinderCableWorkflowDetail).not.toHaveBeenCalled();
+    listRow = { ...row(), cable: { ...row().cable, id: id(44) } };
+    await act(async () => { listProps.onSelect(listRow); });
+    const reads = vi.mocked(fetchPathFinderCableWorkflowDetail).mock.calls.length;
+    await act(async () => { finish(p.pf.data); await pending; });
+    expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledTimes(reads); expect(refreshed).not.toHaveBeenCalled();
+  });
+  it('does not emit a successful result refresh when the selected read fails', async () => {
+    const p = props(), refreshed = vi.fn(); render(<PathFinderCableWorkspace {...p} onResultRefresh={refreshed} />);
+    await openListCable(); vi.mocked(fetchPathFinderCableWorkflowDetail).mockRejectedValue(new TypeError('Network temporarily unavailable'));
+    await act(async () => { await panelProps.onRefresh?.(); });
+    expect(refreshed).not.toHaveBeenCalled(); expect(panelProps.refreshError).toContain('could not be refreshed');
+    expect(panelProps.refreshing).toBe(false); expect(p.pf.submitCalculation).not.toHaveBeenCalled();
+  });
+});
 beforeEach(() => {
   vi.resetAllMocks(); vi.spyOn(window, 'open').mockReturnValue(null); listRow = row(); vi.mocked(fetchLocationImpacts).mockResolvedValue({ impacts: [] } as never);
   vi.mocked(fetchPathFinderCableWorkflowDetail).mockResolvedValue({ projectId: id(1), cableId: id(3), row: row() } as never);
