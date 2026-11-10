@@ -513,7 +513,7 @@ describe('PathFinder protected Viewer capabilities', () => {
     await expect(s.c.captureBarriers(input)).resolves.toMatchObject({ capture: { captureId: input.captureId, observation: { verification: 'unverified' } }, frameObservation: { loadId: s.identity.loadId } });
     expect(s.send.mock.calls.filter(call => call[0].type === 'READ_BARRIER_CAPTURE')).toHaveLength(2);
     expect(s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE').map(call => call[0].payload))
-      .toEqual([{ reason: 'selection', preserveCamera: true }]);
+      .toEqual([{ reason: 'selection', preserveCamera: true, preserveSelection: true }]);
   });
   it.each(['BARRIER_CAPTURE_FRAGMENT_LIMIT', 'BARRIER_CAPTURE_GEOMETRY_NOT_READY', 'BARRIER_CAPTURE_MODEL_CHANGED'])('preserves the exact barrier failure and only unloads a changed model: %s', async code => {
     const s = await loaded(), input = barrierRequest();
@@ -523,7 +523,7 @@ describe('PathFinder protected Viewer capabilities', () => {
     });
     await expect(s.c.captureBarriers(input)).rejects.toMatchObject({ code });
     expect(s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE').map(call => call[0].payload))
-      .toEqual([{ reason: 'selection', preserveCamera: true }]);
+      .toEqual([{ reason: 'selection', preserveCamera: true, preserveSelection: true }]);
     if (code === 'BARRIER_CAPTURE_MODEL_CHANGED') expect(s.c.getLoadSnapshot()).toBeNull();
     else expect(s.c.getLoadSnapshot()).toMatchObject({ ready: true, modelVersionId: versionId, loadId: s.identity.loadId });
   });
@@ -539,7 +539,7 @@ describe('PathFinder protected Viewer capabilities', () => {
     controller.abort(); await rejected;
     expect(s.send.mock.calls.some(call => call[0].type === 'CANCEL_REQUEST' && call[0].payload.targetRequestId === command.requestId)).toBe(true);
     expect(s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE').map(call => call[0].payload))
-      .toEqual([{ reason: 'selection', preserveCamera: true }]);
+      .toEqual([{ reason: 'selection', preserveCamera: true, preserveSelection: true }]);
     expect(s.c.getLoadSnapshot()?.ready).toBe(true);
   });
   it('superseded barrier cleanup cannot cancel a newer capture even when the caller reuses its capture UUID', async () => {

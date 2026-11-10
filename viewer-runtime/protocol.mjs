@@ -156,7 +156,9 @@ function payload(type, value) {
     case 'RUNTIME_READY': return exact(value, ['sdkVersion']) && value.sdkVersion === SDK_VERSION;
     case 'LOAD_MODEL': return exact(value, ['sessionId']) && isUuid(value.sessionId);
     case 'SHOW_ROUTE': return exact(value, ['rawRouting', 'source', 'cableId']) && typeof value.rawRouting === 'string' && value.rawRouting.length <= 8000 && source(value);
-    case 'CLEAR_ROUTE': return (exact(value, ['reason']) || exact(value, ['reason', 'preserveCamera']) && typeof value.preserveCamera === 'boolean') && oneOf(value.reason, ['user', 'empty', 'selection', 'model-change', 'logout']);
+    case 'CLEAR_ROUTE': return (exact(value, ['reason']) || exact(value, ['reason', 'preserveCamera']) || exact(value, ['reason', 'preserveSelection']) || exact(value, ['reason', 'preserveCamera', 'preserveSelection']))
+      && (!Object.hasOwn(value, 'preserveCamera') || typeof value.preserveCamera === 'boolean')
+      && (!Object.hasOwn(value, 'preserveSelection') || typeof value.preserveSelection === 'boolean') && oneOf(value.reason, ['user', 'empty', 'selection', 'model-change', 'logout']);
     case 'ZOOM_ROUTE': case 'ROUTE_ZOOMED': return exact(value, ['routeRequestId']) && isUuid(value.routeRequestId);
     case 'CANCEL_REQUEST': return exact(value, ['targetRequestId']) && isUuid(value.targetRequestId);
     case 'REQUEST_CANCELLED': return exact(value, ['targetRequestId', 'outcome']) && isUuid(value.targetRequestId) && oneOf(value.outcome, ['cancelled', 'already-finished', 'unknown']);

@@ -9,6 +9,8 @@ import { supportedBarrierSnapshotReference, type AnyBarrierRegistry as BarrierRe
 import type { usePathFinder, ProjectPreparationViewer } from './usePathFinder';
 import { barrierCaptureErrorMessage } from '../../../../viewer-runtime/barrier-capture-errors.mjs';
 import { barrierFrameObservationHashInput, validateBarrierFrameObservation } from '../../../../viewer-runtime/barrier-capture.mjs';
+import type { BarrierPublicationRefusalReceipt } from '../../../../shared/pathfinderBarrierOutcomes';
+import { barrierRefusalMessage } from '../barrierRefusalMessage';
 import { barrierPendingHash, clearPendingBarrierCommand, createBarrierCommandSentinel, matchBarrierCaptureOutcome,
   createPendingBarrierRecoveryTarget, matchPendingBarrierCommandRecovery,
   readPendingBarrierCommand, retainPendingBarrierCommand, sealPendingBarrierCommand, type BarrierPendingCommand } from './barrierPendingPublication';
@@ -264,7 +266,7 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
         message: outcome.outcome === 'closed'
           ? 'This exact command was closed. The actual published barrier set was refreshed and kept. You may edit the selection and save a new command.'
           : outcome.outcome === 'geometry-refused'
-            ? 'The exact capture was refused. The actual published barrier set was refreshed and kept. You may change the selection and save a new command.'
+            ? barrierRefusalMessage(outcome.refusal)
             : 'The exact publication is confirmed and the actual published barrier set was refreshed. Current calculation readiness is checked separately.' });
     } catch (error) {
       report(run, error, saved);
@@ -328,7 +330,7 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
       const sentinel = saved.retention ?? await createBarrierCommandSentinel(saved.type === 'capture' ? 'capture-intent' : 'empty', saved.command, saved.command.scope, access.token!);
       current(run); signal.throwIfAborted();
       let confirmedReference: BarrierRegistry['snapshot'] = null;
-      let terminalRefused = false;
+      let terminalRefusal: BarrierPublicationRefusalReceipt | null = null;
       const send = async <T,>(invoke: () => Promise<T>, exactCommandResponse: boolean): Promise<T> => {
         const alreadyUnknown = saved.writeStarted;
         // Durable write/readback precedes every POST. Failure here prevents
@@ -399,7 +401,7 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
           if (result.schemaVersion === 'wfc.pf.barrier-publication-refusal.v1') {
             if (!matchBarrierCaptureOutcome(retained, result)) throw new Error('Barrier refusal is not terminal.');
             clearPendingBarrierCommand(sessionStorage, retained); saved.retention = undefined; saved.writeStarted = false; pending.current = null;
-            terminalRefused = true; return;
+            terminalRefusal = result; return;
           }
           if ((saved.command.schemaVersion === 'wfc.pf.barrier-capture-command.v2') !== (result.schemaVersion === 'wfc.pf.barrier-publication-receipt.v2')
             || result.snapshot.snapshotId !== saved.intent.snapshotId
@@ -410,8 +412,8 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
         }
       }, signal);
       signal.throwIfAborted(); current(run);
-      if (terminalRefused) {
-        update(run, { busy: false, pending: false, phase: 'refused', error: 'The exact barrier capture was refused by geometry verification. The previously published barrier set was kept. Change the selection before saving a new command.' });
+      if (terminalRefusal) {
+        update(run, { busy: false, pending: false, phase: 'refused', error: barrierRefusalMessage(terminalRefusal) });
         return;
       }
       const found = await read(run, signal); current(run);

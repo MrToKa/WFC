@@ -38,10 +38,14 @@ test('tray identity lookup is bounded, direction-bound and always attached to on
   assert.equal(validateEnvelope(envelope('TRAY_IDENTITIES', { ...response, matches: [{ identity, status: 'missing', objectIds: [23] }] })), null);
 });
 
-test('appearance cleanup accepts only a boolean camera-preservation option', () => {
-  for (const payload of [{ reason: 'user' }, { reason: 'user', preserveCamera: true }, { reason: 'selection', preserveCamera: false }])
+test('appearance cleanup accepts only boolean camera and selection preservation options', () => {
+  for (const payload of [{ reason: 'user' }, { reason: 'user', preserveCamera: true }, { reason: 'selection', preserveCamera: false },
+    { reason: 'selection', preserveSelection: true }, { reason: 'user', preserveSelection: false },
+    { reason: 'selection', preserveCamera: true, preserveSelection: true }, { reason: 'user', preserveCamera: false, preserveSelection: false }])
     assert.ok(validateEnvelope(envelope('CLEAR_ROUTE', payload), 'parent-to-frame'));
-  for (const payload of [{ reason: 'user', preserveCamera: 'true' }, { reason: 'user', preserveCamera: null }, { reason: 'user', preserveCamera: true, camera: {} }])
+  for (const payload of [{ reason: 'user', preserveCamera: 'true' }, { reason: 'user', preserveCamera: null }, { reason: 'user', preserveCamera: true, camera: {} },
+    { reason: 'selection', preserveSelection: 'true' }, { reason: 'selection', preserveSelection: null },
+    { reason: 'selection', preserveCamera: true, preserveSelection: 1 }, { reason: 'selection', preserveSelection: true, selectedIds: [23] }])
     assert.equal(validateEnvelope(envelope('CLEAR_ROUTE', payload), 'parent-to-frame'), null);
 });
 

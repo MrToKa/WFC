@@ -384,6 +384,69 @@ test('cancelled large barrier starts preserve in-flight scope and suppress late 
   assert.equal(f.messages('REQUEST_CANCELLED').at(-1).payload.outcome, 'already-finished'); f.bridge.dispose();
 });
 
+test('barrier completion, extraction refusal and cancellation preserve selection while explicit Clear still deselects', async () => {
+  for (const outcome of ['complete', 'start-refusal', 'read-refusal', 'cancel-start', 'cancel-read']) {
+    let selectedIds = [23, 24]; const gate = deferred();
+    const f = fixture({
+      clearRoute: options => { if (!options?.preserveSelection) selectedIds = []; },
+      startBarrierCapture: async ({ captureId }) => {
+        if (outcome === 'start-refusal') throw Object.assign(Error('unavailable geometry'), { code: 'BARRIER_CAPTURE_GEOMETRY_NOT_RESIDENT' });
+        if (outcome === 'cancel-start') await gate.promise;
+        return { captureId, index: 0, done: false, eventJson: '{}' };
+      },
+      readBarrierCapture: async ({ captureId, index }) => {
+        if (outcome === 'read-refusal') throw Object.assign(Error('unavailable geometry'), { code: 'BARRIER_CAPTURE_GEOMETRY_BECAME_UNAVAILABLE' });
+        if (outcome === 'cancel-read') await gate.promise;
+        return { captureId, index, done: true, eventJson: '{}' };
+      },
+    });
+    try {
+      await f.loaded(); const input = barrierRequest();
+      f.send('CLEAR_ROUTE', { reason: 'selection', preserveCamera: true, preserveSelection: true }); await turn();
+      let command = f.send('START_BARRIER_CAPTURE', input); await turn();
+      assert.deepEqual(selectedIds, [23, 24], outcome);
+      if (['complete', 'read-refusal', 'cancel-read'].includes(outcome)) {
+        command = f.send('READ_BARRIER_CAPTURE', { captureId: input.captureId, index: 1 }); await turn();
+      }
+      if (outcome.startsWith('cancel-')) {
+        f.send('CANCEL_REQUEST', { targetRequestId: command.requestId }); await turn(); gate.resolve(); await turn();
+        assert.equal(f.messages('REQUEST_CANCELLED').at(-1).payload.outcome, 'cancelled');
+      }
+      assert.deepEqual(selectedIds, [23, 24], outcome);
+      if (outcome === 'complete') assert.equal(f.messages('BARRIER_CAPTURE_EVENT').at(-1).payload.done, true);
+      if (outcome.endsWith('refusal')) assert.ok(f.messages('ERROR').at(-1).payload.code.startsWith('BARRIER_CAPTURE_GEOMETRY_'));
+      f.send('CLEAR_ROUTE', { reason: 'user', preserveCamera: true }); await turn();
+      assert.deepEqual(selectedIds, [], 'Explicit user Clear still deselects');
+    } finally { gate.resolve(); f.bridge.dispose(); }
+  }
+});
+
+test('barrier deadline cleanup retains selection and suppresses a late SDK reply', async t => {
+  let selectedIds = [23, 24]; const gate = deferred();
+  const f = fixture({ clearRoute: options => { if (!options?.preserveSelection) selectedIds = []; },
+    startBarrierCapture: async ({ captureId }) => { await gate.promise; return { captureId, index: 0, done: false, eventJson: '{}' }; } });
+  t.after(() => f.bridge.dispose()); await f.loaded(); t.mock.timers.enable({ apis: ['setTimeout'] });
+  f.send('START_BARRIER_CAPTURE', barrierRequest()); await turn();
+  t.mock.timers.tick(300000); await turn();
+  assert.equal(f.messages('ERROR').at(-1).payload.code, 'BARRIER_CAPTURE_DEADLINE'); assert.deepEqual(selectedIds, [23, 24]);
+  gate.resolve(); await turn(); assert.equal(f.messages('BARRIER_CAPTURE_EVENT').length, 0); assert.deepEqual(selectedIds, [23, 24]);
+});
+
+test('replacement barrier capture keeps selection when the old SDK operation settles', async () => {
+  let selectedIds = [23, 24], starts = 0; const gate = deferred();
+  const f = fixture({ clearRoute: options => { if (!options?.preserveSelection) selectedIds = []; },
+    startBarrierCapture: async ({ captureId }) => { if (++starts === 1) await gate.promise; return { captureId, index: 0, done: false, eventJson: '{}' }; } });
+  try {
+    await f.loaded(); const first = barrierRequest(), replacement = { ...barrierRequest(), captureId: uuid(9199) };
+    f.send('START_BARRIER_CAPTURE', first); await turn(); f.send('START_BARRIER_CAPTURE', replacement); await turn();
+    gate.resolve(); await turn();
+    assert.deepEqual(selectedIds, [23, 24]);
+    assert.deepEqual(f.messages('BARRIER_CAPTURE_EVENT').map(event => event.payload.captureId), [replacement.captureId]);
+    f.send('READ_BARRIER_CAPTURE', { captureId: replacement.captureId, index: 1 }); await turn();
+    assert.equal(f.messages('BARRIER_CAPTURE_EVENT').at(-1).payload.done, true); assert.deepEqual(selectedIds, [23, 24]);
+  } finally { gate.resolve(); f.bridge.dispose(); }
+});
+
 test('recoverable barrier diagnostics retain the loaded footer and session without transporting raw errors', async () => {
   for (const code of BARRIER_CAPTURE_ERROR_CODES.filter(value => value !== 'BARRIER_CAPTURE_MODEL_CHANGED')) {
     const f = fixture({ startBarrierCapture: async () => { throw Object.assign(Error('private model geometry'), { code }); } });

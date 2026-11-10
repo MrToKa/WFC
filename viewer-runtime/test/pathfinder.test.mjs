@@ -437,6 +437,17 @@ test('exact ordered path is rendered without fitting; filled Ghost and all origi
   assert.equal(f.viewer.impl.fadeMaterial.opacity, 0.15); assert.equal(f.viewer.impl.fadeMaterial.variants[0].opacity, 0.3); assert.equal(f.viewer.impl.showGhosting, false); f.controller.dispose();
 });
 
+test('capture cleanup restores a computed path while retaining the selected objects', () => {
+  const f = fixture(); f.controller.showPath({ points: [[1000, -2000, 3], [1001, -2000, 3]], objectIds: [2] });
+  let selectedIds = [2, 3]; f.viewer.clearSelection = () => { selectedIds = []; };
+  const overlay = f.meshes[0];
+  f.controller.clear({ preserveSelection: true });
+  assert.deepEqual(selectedIds, [2, 3]); assert.equal(f.meshes.length, 0);
+  assert.equal(overlay.geometry.disposed, true); assert.equal(overlay.material.disposed, true);
+  assert.equal(f.viewer.impl.fadeMaterial.opacity, 0.15); assert.equal(f.viewer.impl.showGhosting, false);
+  f.controller.clear(); assert.deepEqual(selectedIds, []); f.controller.dispose();
+});
+
 test('tray focus ghosts only the background without a cable overlay and switching trays keeps the original baseline', () => {
   const f = fixture(), visibility = f.model.visibilityManager, prior = structuredClone({ defaultVisible: visibility.defaultVisible, states: visibility.states });
   f.viewer.isolate = ids => { f.viewer.isolated = [...ids]; visibility.defaultVisible = false; visibility.states = ids.map(id => [id, true]); };

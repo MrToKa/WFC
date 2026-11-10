@@ -9,6 +9,7 @@ import { MIXED_BARRIER_COLLISION_VERSION, mixedBarrierVerifierReceiptSchema,
 import { policyHashSchema, policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { parsePolicyJson } from './policyJson.js';
 import { PathFinderError } from './errors.js';
+import { barrierNativeDiagnosticSchema, type BarrierNativeDiagnostic } from '../../shared/pathfinderBarrierDiagnostics.js';
 
 export const barrierVerifierResultSchema = z.object({
   schemaVersion: z.literal('wfc.pf.barrier-verification-result.v1'), producerVersion: z.literal('wfc.pf.barrier-verifier.v1'),
@@ -21,7 +22,7 @@ export const barrierVerifierResultSchema = z.object({
     topology: z.literal('qualified-closed-consistent-two-manifold'), selfIntersection: z.literal('bounded-verification-passed'),
     numericToleranceMetres: z.number().finite().min(1e-9).max(1e-3), coverage: z.literal('provided-fragments-only'),
     sdkCoverageVerified: z.literal(false), engineeringAccepted: z.literal(false),
-  }).strict().nullable(), diagnostics: z.array(z.object({ code: z.string().min(1).max(96), message: z.string().max(2048) }).strict()).max(64),
+  }).strict().nullable(), diagnostics: z.array(barrierNativeDiagnosticSchema).max(64),
 }).strict();
 export type BarrierVerifierResult = z.infer<typeof barrierVerifierResultSchema>;
 type VerifierMode = 'closed-v1' | 'mixed-v2' | 'mixed-v2-2048';
@@ -31,11 +32,14 @@ const refuse = (code: string): never => { throw new PathFinderError(code, 503, '
 export class BarrierGeometryRefusal extends PathFinderError {
   readonly captureSha256: string;
   readonly implementationSha256: string;
-  constructor(captureSha256: string, implementationSha256: string, mode: VerifierMode = 'closed-v1') {
+  readonly diagnostics: readonly BarrierNativeDiagnostic[];
+  constructor(captureSha256: string, implementationSha256: string, mode: VerifierMode = 'closed-v1', diagnostics: readonly BarrierNativeDiagnostic[] = []) {
     super('BARRIER_GEOMETRY_REFUSED', 503, mode === 'closed-v1' ? 'The selected geometry did not qualify as supported closed obstacles.'
       : 'The selected geometry did not qualify as supported original surfaces and closed obstacles.');
     this.captureSha256 = policyHashSchema.parse(captureSha256);
     this.implementationSha256 = policyHashSchema.parse(implementationSha256);
+    this.diagnostics = Object.freeze(z.array(barrierNativeDiagnosticSchema).max(64).parse(diagnostics)
+      .map(value => Object.freeze({ ...value, ...(value.objectIds ? { objectIds: [...value.objectIds] } : {}) })));
   }
 }
 const digest = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
@@ -127,7 +131,7 @@ async function runVerifierMode(bytes: Buffer, signal: AbortSignal, mode: Verifie
     signal.throwIfAborted();
     const result = (mode === 'closed-v1' ? barrierVerifierResultSchema : mixedBarrierVerifierReceiptSchema).parse(parsePolicyJson(resultBytes, { maxBytes: maximumReceiptBytes }));
     if (await implementation(dll, mode) !== before || result.captureSha256 !== digest(bytes)) return refuse('BARRIER_VERIFIER_CHANGED');
-    if (result.status === 'refused' && result.evidence === null) throw new BarrierGeometryRefusal(digest(bytes), before, mode);
+    if (result.status === 'refused' && result.evidence === null) throw new BarrierGeometryRefusal(digest(bytes), before, mode, result.diagnostics);
     if (result.status !== 'geometry-qualified' || !result.evidence) return refuse('BARRIER_VERIFIER_RESULT_INVALID');
     return { result, implementationSha256: before };
   } finally { if (processJoined) running = false; }

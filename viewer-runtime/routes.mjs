@@ -216,11 +216,11 @@ export function createRouteController(viewer, { signal } = {}) {
     viewer.impl.invalidate(true, true, true);
   }
 
-  function clearRoute({ preserveCamera = false } = {}) {
+  function clearRoute({ preserveCamera = false, preserveSelection = false } = {}) {
     generation++;
     removeOverlay();
     restoreGhostContext();
-    viewer.clearSelection();
+    if (!preserveSelection) viewer.clearSelection();
     routeIds = [];
     if (!preserveCamera) viewer.fitToView();
     viewer.impl.invalidate(true, true, true);

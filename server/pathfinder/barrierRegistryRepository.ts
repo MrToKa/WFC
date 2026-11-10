@@ -23,6 +23,7 @@ import { assertLoginNotExpired, requireCurrentLogin } from './auth.js';
 import type { JobPrincipal } from './jobContracts.js';
 import { PathFinderError } from './errors.js';
 import { parsePolicyJson } from './policyJson.js';
+import { barrierNativeDiagnosticSchema, safeBarrierRefusalDiagnostics, type BarrierNativeDiagnostic } from '../../shared/pathfinderBarrierDiagnostics.js';
 import { barrierBytesHash, barrierValueHash, encodeBarrierJson, readBarrierBytes, storeBarrierBytes, type BarrierBlob } from './barrierStorage.js';
 import { barrierPublicationRefusalReceiptSchema,
   barrierCaptureOutcomeQuerySchema, barrierPublishedOutcomeSchema,
@@ -43,10 +44,13 @@ export class BarrierCaptureQualificationRefusal extends Error {
   readonly captureSha256: string;
   readonly frameSha256: string;
   readonly implementationSha256: string;
-  constructor(captureSha256: string, frameSha256: string, implementationSha256: string) {
+  readonly diagnostics: readonly BarrierNativeDiagnostic[];
+  constructor(captureSha256: string, frameSha256: string, implementationSha256: string, diagnostics: readonly BarrierNativeDiagnostic[] = []) {
     super('The exact protected barrier capture did not qualify as supported barrier geometry.');
     this.captureSha256 = policyHashSchema.parse(captureSha256); this.frameSha256 = policyHashSchema.parse(frameSha256);
     this.implementationSha256 = policyHashSchema.parse(implementationSha256);
+    this.diagnostics = Object.freeze(z.array(barrierNativeDiagnosticSchema).max(64).parse(diagnostics)
+      .map(value => Object.freeze({ ...value, ...(value.objectIds ? { objectIds: [...value.objectIds] } : {}) })));
   }
 }
 export type BarrierRegistryAdapters = {
@@ -458,9 +462,11 @@ export function createBarrierRegistryRepository(pool: Pool, adapters: BarrierReg
           await readBarrierBytes(projectId, intent.id, captureBlob, BARRIER_LIMITS.captureBytes);
           if (deadline <= Date.now()) return fail('BARRIER_CAPTURE_LEASE_CHANGED');
           refusalLeaseDeadline = deadline;
+          const diagnostics = safeBarrierRefusalDiagnostics(error.diagnostics);
           const refusal = barrierPublicationRefusalReceiptSchema.parse({ schemaVersion: 'wfc.pf.barrier-publication-refusal.v1', outcome: 'not-published',
             intentId: intent.id, commandSha256: barrierValueHash(intent.command), captureSha256, frameSha256,
-            implementationSha256: error.implementationSha256, reasonCode: 'BARRIER_GEOMETRY_REFUSED', duplicate: false });
+            implementationSha256: error.implementationSha256, reasonCode: 'BARRIER_GEOMETRY_REFUSED', duplicate: false,
+            ...(diagnostics.length ? { diagnostics } : {}) });
           await saveReceipt(client, projectId, who, intent.command, refusal);
           const cleared = await client.query('UPDATE pf_barrier_capture_intents SET lease_token=NULL,lease_expires_at=NULL WHERE project_id=$1 AND id=$2 AND lease_token=$3 RETURNING id', [projectId, intentId, token]);
           if (cleared.rows.length !== 1 || cleared.rows[0].id !== intentId) return fail('BARRIER_CAPTURE_LEASE_CHANGED');

@@ -127,6 +127,9 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     try { return await work(); }
     finally { timing[phase + 'Milliseconds'] = Math.min(3_600_000, timing[phase + 'Milliseconds'] + elapsed(started)); timing[pending]--; }
   }
+  function captureClearOptions(scope) {
+    return { preserveCamera: true, ...(scope.kind === 'barrier' ? { preserveSelection: true } : {}) };
+  }
   function beginCapture(command) {
     const scope = { captureId: command.payload.captureId, kind: command.type === 'START_BARRIER_CAPTURE' ? 'barrier' : 'model', startedAt: Date.now(), controller: new AbortController(), installed: false, closed: false, timer: null,
       timing: { commandCount: 0, authorizationCalls: 0, authorizationMilliseconds: 0, adapterCalls: 0, adapterMilliseconds: 0, pendingAuthorizationCalls: 0, pendingAdapterCalls: 0 } };
@@ -134,7 +137,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
       const owned = captureScope === scope;
       for (const entry of requests.values()) if (entry.captureScope === scope && entry.status === 'pending') error(entry.command, failure(scope.kind === 'barrier' ? 'BARRIER_CAPTURE_DEADLINE' : 'EXTRACTION_FAILED'));
       releaseCapture(scope, true);
-      if (owned) { try { handle?.clearRoute({ preserveCamera: true }); } catch { /* Deadline remains terminal; cleanup details are not transported. */ } }
+      if (owned) { try { handle?.clearRoute(captureClearOptions(scope)); } catch { /* Deadline remains terminal; cleanup details are not transported. */ } }
     }, CAPTURE_INPUT_LIMITS.milliseconds);
     return scope;
   }
@@ -229,7 +232,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
         // unchanged 4,096-command replay budget, leaving room for cleanup.
         if (captureStart && requests.size > 1091) throw failure('CAPTURE_RELOAD_REQUIRED');
         if (barrierCapture && command.type === 'START_BARRIER_CAPTURE' && command.payload.scope.contentFingerprint !== loadedDescriptor.contentFingerprint) throw failure('MODEL_SELECTION_CHANGED');
-        if (captureStart) { stopRoute(command.requestId, true, { preserveCamera: true }); captureScope = ownedCapture; ownedCapture.installed = true; ownedCapture.kind = barrierCapture ? 'barrier' : 'model'; }
+        if (captureStart) { stopRoute(command.requestId, true, captureClearOptions(ownedCapture)); captureScope = ownedCapture; ownedCapture.installed = true; ownedCapture.kind = barrierCapture ? 'barrier' : 'model'; }
         if (ownedCapture.kind !== (barrierCapture ? 'barrier' : 'model')) throw failure('EXTRACTION_FAILED');
         const progress = value => { if (live()) emit(command, barrierCapture ? 'BARRIER_CAPTURE_PROGRESS' : 'MODEL_CAPTURE_PROGRESS', { captureId: command.payload.captureId, ...value }); };
         const result = await measuredCapture(ownedCapture, 'adapter', () => barrierCapture
@@ -336,7 +339,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
         const owned = captureScope === ownedCapture;
         releaseCapture(ownedCapture, true);
         if (owned) {
-          try { handle?.clearRoute({ preserveCamera: true }); }
+          try { handle?.clearRoute(captureClearOptions(ownedCapture)); }
           catch {
             // Preserve the request's extraction/authority failure. Restoration
             // is secondary and must not disguise it as a broken model load.
@@ -467,7 +470,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
         if (phase !== 'loaded' || !handle) { error(command, failure('INVALID_STATE')); return; }
         void show(command); break;
       case 'CLEAR_ROUTE':
-        stopRoute(undefined, true, { preserveCamera: command.payload.preserveCamera === true }); finish(command); emit(command, 'ROUTE_CLEARED', {}); break;
+        stopRoute(undefined, true, { preserveCamera: command.payload.preserveCamera === true, ...(command.payload.preserveSelection === true ? { preserveSelection: true } : {}) }); finish(command); emit(command, 'ROUTE_CLEARED', {}); break;
       case 'ZOOM_ROUTE':
         if (phase !== 'loaded' || !routeHasLine || command.payload.routeRequestId !== routeRequest?.requestId) { error(command, failure('NO_DRAWABLE_ROUTE')); return; }
         handle.fitRoute(); finish(command); emit(command, 'ROUTE_ZOOMED', command.payload); break;
@@ -479,7 +482,11 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
           if (entry.command === current) { stopLoad(); phase = 'initialized'; }
           else if (entry.command === routeRequest) stopRoute();
           else if (entry.command === initCommand) { initController?.abort(); initCommand = undefined; phase = 'hello'; }
-          else if (capabilities.has(entry.command.requestId)) { capabilities.get(entry.command.requestId).abort(); if (entry.command.type.includes('COMPUTED_PATH') || entry.command.type.includes('MODEL_CAPTURE') || entry.command.type.includes('BARRIER_CAPTURE')) stopRoute(undefined, true, { preserveCamera: entry.command.type.includes('CAPTURE') }); }
+          else if (capabilities.has(entry.command.requestId)) {
+            capabilities.get(entry.command.requestId).abort();
+            if (entry.command.type.includes('COMPUTED_PATH') || entry.command.type.includes('MODEL_CAPTURE') || entry.command.type.includes('BARRIER_CAPTURE'))
+              stopRoute(undefined, true, { preserveCamera: entry.command.type.includes('CAPTURE'), ...(entry.command.type.includes('BARRIER_CAPTURE') ? { preserveSelection: true } : {}) });
+          }
         }
         finish(command); emit(command, 'REQUEST_CANCELLED', { targetRequestId: command.payload.targetRequestId, outcome }); break;
       }

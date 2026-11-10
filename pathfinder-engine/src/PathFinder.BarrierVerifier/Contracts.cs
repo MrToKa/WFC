@@ -16,7 +16,8 @@ public sealed record BarrierVerifierLimits
 }
 public sealed record BarrierVerifierScope(string ProjectId, string ModelVersionId, string ContentFingerprint,
     string SelectionRevision, string CaptureFrameId, string CaptureFrameSha256, string CoordinateFrame);
-public sealed record BarrierVerifierDiagnostic(string Code, string Message);
+public sealed record BarrierVerifierDiagnostic(string Code, string Message,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? ObjectIds = null);
 public sealed record BarrierVerifierEvidence(string CaptureId, BarrierVerifierScope Scope, int ComputationalMeshes,
     int FragmentCount, int VertexCount, int TriangleCount, string DecompositionSha256, string VerificationSha256,
     double NumericToleranceMetres)

@@ -68,8 +68,14 @@ export function barrierCaptureAdapters(context?: BarrierViewerContext,
       try { executed = mixed ? await executeMixed(input.captureBytes, signal) : await execute(input.captureBytes, signal); }
       catch (error) {
         signal.throwIfAborted();
-        if (error instanceof BarrierGeometryRefusal && error.captureSha256 === input.captureSha256)
-          throw new BarrierCaptureQualificationRefusal(error.captureSha256, hash(barrierFrameObservationHashInput(frozen.frame)), error.implementationSha256);
+        if (error instanceof BarrierGeometryRefusal && error.captureSha256 === input.captureSha256) {
+          const owners = new Set(capture.fragments.map(fragment => fragment.source.ownerObjectId));
+          const diagnostics = error.diagnostics.map(diagnostic => {
+            if (diagnostic.objectIds?.some(objectId => !owners.has(objectId))) return fail('BARRIER_VERIFIER_CAPTURE_MISMATCH');
+            return diagnostic;
+          });
+          throw new BarrierCaptureQualificationRefusal(error.captureSha256, hash(barrierFrameObservationHashInput(frozen.frame)), error.implementationSha256, diagnostics);
+        }
         throw error;
       }
       signal.throwIfAborted(); const { result, implementationSha256 } = executed;
