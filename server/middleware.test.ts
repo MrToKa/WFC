@@ -117,3 +117,43 @@ describe('tray Auto-length read access', () => {
     }
   });
 });
+
+
+describe('CAD designer project assignment permissions', () => {
+  const projectId = '00000000-0000-4000-8000-000000000001';
+  const baseRequest = { userId: 'engineer', role: 'engineer', params: { projectId }, method: 'GET', path: '/cad-design/catalog' };
+
+  it('does not allow an engineer to read another project CAD catalogue', async () => {
+    mocks.query.mockResolvedValue({ rows: [] });
+    const response = responseStub(), next = vi.fn();
+    await requireProjectAccess(baseRequest as unknown as Request, response, next);
+    expect(response.status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('allows an explicitly assigned engineer to read the CAD catalogue', async () => {
+    mocks.query.mockResolvedValue({ rows: [{ assigned: 1 }] });
+    const response = responseStub(), next = vi.fn();
+    await requireProjectAccess(baseRequest as unknown as Request, response, next);
+    expect(next).toHaveBeenCalledOnce();
+    expect(response.status).not.toHaveBeenCalled();
+  });
+
+  it('denies an unassigned engineer the CAD materials export', async () => {
+    mocks.query.mockResolvedValue({ rows: [] });
+    const response = responseStub(), next = vi.fn();
+    await requireProjectAccess({ ...baseRequest, path: '/cad-design/designs/00000000-0000-4000-8000-000000000099/materials.csv' } as unknown as Request, response, next);
+    expect(response.status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('denies basic/technician CAD read even if project-assigned', async () => {
+    mocks.query.mockResolvedValue({ rows: [{ assigned: 1 }] });
+    for (const role of ['basic', 'technician'] as const) {
+      const response = responseStub(), next = vi.fn();
+      await requireProjectAccess({ ...baseRequest, role } as unknown as Request, response, next);
+      expect(response.status).toHaveBeenCalledWith(403);
+      expect(next).not.toHaveBeenCalled();
+    }
+  });
+});
