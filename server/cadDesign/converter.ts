@@ -64,13 +64,20 @@ export async function convertStepToMesh(source: Buffer): Promise<{ bytes: Buffer
   const chunks: Uint8Array[] = [];
   let size = 0;
   if (!result.body) throw new Error('The geometry converter returned no body.');
-  for await (const chunk of result.body) {
-    size += chunk.byteLength;
-    if (size > MAX_MESH_BYTES) {
-      await result.body.cancel().catch(() => undefined);
-      throw new Error('The geometry converter exceeded its output budget.');
+  const reader = result.body.getReader();
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_MESH_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        throw new Error('The geometry converter exceeded its output budget.');
+      }
+      chunks.push(value);
     }
-    chunks.push(chunk);
+  } finally {
+    reader.releaseLock();
   }
   if (size !== statedLength) throw new Error('The geometry converter response was incomplete.');
   const bytes = Buffer.concat(chunks.map(chunk => Buffer.from(chunk)), size);
