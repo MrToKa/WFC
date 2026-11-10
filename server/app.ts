@@ -13,6 +13,7 @@ import {
 } from './routes/materialInstrumentsRoutes.js';
 import { materialTrayInstallationMaterialsRouter } from './routes/materialTrayInstallationMaterialsRoutes.js';
 import { materialsRouter } from './routes/materialsRoutes.js';
+import { materialTrayCadRouter } from './materialCad/routes.js';
 import { projectsRouter } from './routes/projectsRoutes.js';
 import { templateFilesRouter } from './routes/templateFilesRoutes.js';
 import { userRouter } from './routes/userRoutes.js';
@@ -146,6 +147,9 @@ export const createApp = (): Express => {
     materialInstrumentInstallationMaterialsRouter,
   );
   app.use('/api/materials/cable-types', materialCableTypesRouter);
+  if (process.env.WFC_CAD_DESIGN_ENABLED === 'true') {
+    app.use('/api/materials/trays', materialTrayCadRouter);
+  }
   app.use('/api/materials', materialsRouter);
   app.use('/api/templates', templateFilesRouter);
   app.use('/api/projects', projectsRouter);
