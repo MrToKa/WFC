@@ -1,6 +1,7 @@
 import { readModelObjectGuid, resolveTrayObjectIdentities, validateTrayIdentityRequest } from './tray-identity.mjs';
 import { createRouteController } from './routes.mjs';
 import { createPathFinderController } from './pathfinder.mjs';
+import { createCadSceneController } from './cad-scene.mjs';
 import { captureSelectedModel } from './model-capture.mjs';
 import { captureSelectedBarriers } from './barrier-capture.mjs';
 import { createBarrierMultipartRuntime } from './barrier-multipart-runtime.mjs';
@@ -170,7 +171,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
       },
     });
     let finished = false, routes, pathfinder, observer, geometryLoaded = false, nodeIndexReady = false, nodeCount = 0;
-    let capture, multipart;
+    let capture, multipart, cadScene;
     const cancelCapture = () => { if (!capture) return; const old = capture; capture = undefined; clearTimeout(old.deadline); old.controller.abort(); if (old.iterator) void old.iterator.return().catch(() => {}); };
     const runtimeError = () => { if (!finished) onRuntimeError(safeError()); };
     const finish = () => {
@@ -179,6 +180,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
       signal?.removeEventListener('abort', finish);
       cancelCapture();
       multipart?.dispose();
+      cadScene?.dispose();
       observer?.disconnect();
       if (viewing.ERROR_EVENT) viewer.removeEventListener(viewing.ERROR_EVENT, runtimeError);
       routes?.dispose();
@@ -281,8 +283,16 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
         } catch (error) { if (capture === state) cancelCapture(); throw error?.name === 'AbortError' ? error : safeError('EXTRACTION_FAILED'); }
         finally { state.reading = false; operationSignal?.removeEventListener('abort', abort); }
       }
+      const ensureCadScene = () => {
+        if (finished || !loadedModel || viewer.model !== loadedModel) throw safeError('MODEL_SELECTION_CHANGED');
+        if (!cadScene) cadScene = createCadSceneController(viewer, { window, sourceModel: loadedModel });
+        return cadScene;
+      };
       const handle = {
         finish,
+        cadAdd: (componentId, mesh, transform) => ensureCadScene().add(componentId, mesh, transform),
+        cadUpdate: (componentId, transform) => ensureCadScene().update(componentId, transform),
+        cadRemove: componentId => cadScene?.remove(componentId),
         readBarrierMultipartFrame: (request, operationSignal) => multipart.readFrame(request, operationSignal),
         startBarrierMultipart: (request, transport, operationSignal) => multipart.start(request, transport, operationSignal),
         statusBarrierMultipart: request => multipart.status(request),
