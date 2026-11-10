@@ -1,6 +1,6 @@
 #requires -Version 5.1
 [CmdletBinding()]
-param([switch]$CheckCompose = $true)
+param([switch]$CheckCompose = $true, [switch]$CheckConverter = $true)
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $expected = 'feature/aalborg-step-routings-builder-poc-20261110'
@@ -43,7 +43,16 @@ try {
             docker compose --env-file .env.poc -f compose.poc.yaml -p wfc-aalborg-poc config --quiet
         }
     }
-    Write-Host 'All requested local static validation checks PASSED.' -ForegroundColor Green
+    if ($CheckConverter) {
+        # New PoC-tagged image only. This does not stop or restart WFC services.
+        Invoke-Checked 'Build isolated CAD converter image' {
+            docker build -f Dockerfile.poc-converter -t wfc-aalborg-cad-test:local .
+        }
+        Invoke-Checked 'Run offline CAD two-solid export/readback smoke test' {
+            docker run --rm --pull never --network none --read-only --tmpfs /tmp:size=64m --memory=1g --cpus=2 --entrypoint python wfc-aalborg-cad-test:local /app/smoke.py
+        }
+    }
+    Write-Host 'All requested local static/worker validation checks PASSED.' -ForegroundColor Green
     Write-Host 'This does NOT prove Aalborg model restore, STEP import or Viewer scene rendering.'
 } finally {
     Pop-Location
