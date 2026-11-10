@@ -1,0 +1,10 @@
+# Separate CAD process for the isolated PoC; never install OCCT in WFC API.
+FROM python:3.11-slim-bookworm
+RUN pip install --no-cache-dir 'cadquery==2.6.1'
+RUN useradd --uid 10001 --create-home cadworker
+WORKDIR /app
+COPY scripts/poc/step-mesh-converter.py /app/converter.py
+USER 10001
+ENV PYTHONUNBUFFERED=1 TMPDIR=/tmp
+EXPOSE 8090
+CMD ["python", "-u", "/app/converter.py"]
