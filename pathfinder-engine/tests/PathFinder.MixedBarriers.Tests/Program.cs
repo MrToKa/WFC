@@ -112,6 +112,12 @@ Run("independently closed bodies touching along an exact edge keep both occupanc
     Status(kernel, P(-2, -.5), P(.5, -.5), MixedBarrierSegmentStatus.Blocked);
     Status(kernel, P(-.1, .1), P(.1, -.1), MixedBarrierSegmentStatus.Blocked);
     Status(kernel, P(-2, 2), P(2, 2), MixedBarrierSegmentStatus.Clear);
+    // Pinned from the pre-owner-contact native closure's successful cut lane.
+    Need(result.Receipt.CaptureSha256 == "4d85a4aea221ffd7d686fcdc160769f7a180be6bdf8626eccb8a1ae1b684f797");
+    Need(result.Receipt.Evidence.OriginalGeometrySha256 == "067f1b934b2797ed608546a8a5f8efb8088f0a7c4c190136be7589791efb8f40");
+    Need(result.Receipt.Evidence.VerificationSha256 == "5769e29f16c78d4c9d4f0ce92feb9a7ae156757d0dafe08a25d6203fa255c903");
+    Need(result.Receipt.Evidence.ComponentMemberships.Select(component => component.SourceMembershipSha256).SequenceEqual(new[] {
+        "db46bb8a7b5c42f965e8086d06fff69f0c4b27c3f3b4c729b76a2423d929a174", "5c8121dab58b8dcabdfaf2afe1e25c31d522d84698407d77d3a5d1b533f15c69" }));
 });
 Run("overfull-edge partition waits for all faces even when the first two have the same direction", () => {
     var capture = Capture(EdgeTouchingBoxes(), splitTriangles: true, sharedParents: true); var fragments = capture["fragments"]!.AsArray();
@@ -172,6 +178,55 @@ Run("edge partition consumes the existing shared work memory and component budge
     var shared = input.Select(fragment => fragment with { Source = fragment.Source with { ParentSelectionIds = parents } }).ToArray();
     var combined = MixedBarrierKernel.Build(shared, new() { MaximumParents = 2048, Geometry = new() { MaximumMeshes = 2048, MaximumEstimatedBytes = 110000 } });
     Need(combined.Status == BarrierBuildStatus.Refused && combined.Kernel is null && combined.Diagnostics.Single().Code == "ESTIMATED_MEMORY_LIMIT");
+});
+Run("face-contacting distinct original owners retain mismatched cap diagonals and both independently proved occupancies", () => {
+    var input = OwnerContactInputs(); var kernel = Kernel(input);
+    Need(kernel.Summary.QualifiedClosedSolidComponents == 2 && kernel.Summary.OriginalSurfaceComponents == 0 && kernel.Summary.TriangleCount == 24);
+    Need(kernel.Components.All(component => component.Kind == MixedBarrierComponentKind.QualifiedClosedSolid && component.Triangles.Count == 12));
+    OriginalInputsRetained(kernel, input);
+    Status(kernel, P(-.8), P(-.2), MixedBarrierSegmentStatus.Blocked); Status(kernel, P(.2), P(.8), MixedBarrierSegmentStatus.Blocked);
+    Status(kernel, P(0), P(0), MixedBarrierSegmentStatus.Blocked); Status(kernel, P(0, -.5), P(0, .5), MixedBarrierSegmentStatus.Blocked);
+    Status(kernel, P(-2, 2), P(2, 2), MixedBarrierSegmentStatus.Clear);
+});
+Run("owner-contact pairing assembles original owners across fragments without using fragment identity as a body", () => {
+    var source = OwnerContactInputs(); var input = source.SelectMany((fragment, at) => new[] {
+        fragment with { Source = fragment.Source with { FragmentId = at * 2 + 1 }, TriangleIndices = fragment.TriangleIndices.Take(18).ToArray() },
+        fragment with { Source = fragment.Source with { FragmentId = at * 2 + 2 }, TriangleIndices = fragment.TriangleIndices.Skip(18).ToArray() } }).ToArray();
+    var kernel = Kernel(input); Need(kernel.Summary.FragmentCount == 4 && kernel.Summary.QualifiedClosedSolidComponents == 2 && kernel.Summary.OriginalSurfaceComponents == 0);
+    OriginalInputsRetained(kernel, input); Need(kernel.Components.All(component => component.Triangles.Select(triangle => triangle.Source.FragmentId).Distinct().Count() == 2));
+});
+Run("owner-contact hints cannot accept one-plus-three same-direction same-owner or opened assemblies", () => {
+    var directions = new[] { 1, -1, 1, -1 }; var owners = new[] { "dbid:10", "dbid:10", "dbid:10", "dbid:20" };
+    var tips = new[] { P(1), P(0, 1), P(-1), P(0, -1) };
+    MixedFragmentInput[] Sheets(int[] winding, string[] identity) => tips.Select((tip, at) => {
+        var mesh = new Mesh([P(0, 0, -1), P(0, 0, 1), tip], winding[at] == 1 ? [0, 1, 2] : [1, 0, 2]);
+        var fragment = Input(mesh, at + 1); return fragment with { Source = fragment.Source with { OwnerObjectId = identity[at] } };
+    }).ToArray();
+    void RefuseInputs(MixedFragmentInput[] input) { var result = MixedBarrierKernel.Build(input); Need(result.Kernel is null && result.Diagnostics.Single().Code == "NONMANIFOLD_EDGE"); }
+    RefuseInputs(Sheets(directions, owners));
+    RefuseInputs(Sheets([1, 1, -1, -1], ["dbid:10", "dbid:10", "dbid:20", "dbid:20"]));
+    var sameOwner = OwnerContactInputs().Select(fragment => fragment with { Source = fragment.Source with { OwnerObjectId = "dbid:10" } }).ToArray(); RefuseInputs(sameOwner);
+    var opened = OwnerContactInputs(); opened[0] = opened[0] with { TriangleIndices = opened[0].TriangleIndices.Take(6).Concat(opened[0].TriangleIndices.Skip(9)).ToArray() }; RefuseInputs(opened);
+});
+Run("owner-contact fallback retains unchanged solid nested and duplicate qualification", () => {
+    var input = OwnerContactInputs(); var vertices = input[0].Vertices.ToArray(); vertices[0] = P(-.1, 0, 3);
+    var invalid = MixedBarrierKernel.Build([input[0] with { Vertices = vertices }, input[1]]);
+    Need(invalid.Kernel is null && invalid.Diagnostics.Single().Code == "CLOSED_SOLID_QUALIFICATION_REFUSED");
+    var duplicate = MixedBarrierKernel.Build([.. input, input[0] with { Source = input[0].Source with { FragmentId = 3 } }]);
+    Need(duplicate.Kernel is null && duplicate.Diagnostics.Single().Code == "DUPLICATE_TRIANGLE");
+    var nested = MixedBarrierKernel.Build([.. input, Input(Box(-.8, -.2, -.5, .5, -.5, .5), fragment: 3)]);
+    Need(nested.Kernel is null && nested.Diagnostics.Single().Code == "NESTED_OR_AMBIGUOUS_SHELLS");
+});
+Run("owner-contact fallback uses one cumulative work and memory budget", () => {
+    var input = OwnerContactInputs(); var good = MixedBarrierKernel.Build(input); Need(good.Kernel is not null);
+    var work = MixedBarrierKernel.Build(input, new() { Geometry = new() { MaximumBuildWork = good.Work - 1 } });
+    Need(work.Kernel is null && work.Work <= good.Work - 1 && work.Diagnostics.Single().Code == "WORK_LIMIT");
+    var memory = MixedBarrierKernel.Build(input, new() { Geometry = new() { MaximumEstimatedBytes = 50000 } });
+    Need(memory.Kernel is null && memory.Diagnostics.Single().Code == "ESTIMATED_MEMORY_LIMIT" && good.Kernel!.Summary.EstimatedBytes > 50000);
+    var parents = Enumerable.Range(0, 128).Select(at => Id(201 + at)).ToArray();
+    var shared = input.Select(fragment => fragment with { Source = fragment.Source with { ParentSelectionIds = parents } }).ToArray();
+    var combined = MixedBarrierKernel.Build(shared, new() { MaximumParents = 2048, Geometry = new() { MaximumMeshes = 2048, MaximumEstimatedBytes = 120000 } });
+    Need(combined.Kernel is null && combined.Diagnostics.Single().Code == "ESTIMATED_MEMORY_LIMIT");
 });
 Run("point-contact original surfaces retain both fans and block either lobe and their shared point", () => {
     var bowtie = new Mesh([P(0), P(0, 1), P(0, 0, 1), P(0, -1), P(0, 0, -1)], [0, 1, 2, 0, 3, 4]);
@@ -336,7 +391,50 @@ Run("new result flags component union and serialized receipt identify only provi
     Need(!evidence.SdkCoverageVerified && !evidence.SdkSourceBytesVerified && !evidence.CurrentFrameVerified && !evidence.EngineeringAccepted && evidence.Authority == "none");
     Need(json.RootElement.GetProperty("evidence").GetProperty("componentMemberships").GetArrayLength() == 2); json.Dispose();
 });
-if (args.Length != 0)
+if (args.Length != 0 && args[0] == "--retained-owner-contact")
+{
+    if (args.Length != 2 || !Path.IsPathFullyQualified(args[1])) throw new ArgumentException("Only an absolute pinned owner-contact capture fixture is supported.");
+    Run("exact retained owner-contact capture preserves every original and independently verifies all seven closed solids", () => {
+        const string expectedHash = "8b6c06116a1ce5f5d4589d7350105cadb72301062fa0fea062b86999fad48ac6";
+        Need(new FileInfo(args[1]).Length == 63293); byte[] bytes = File.ReadAllBytes(args[1]); Need(BarrierCaptureVerifier.Hash(bytes) == expectedHash);
+        var result = MixedBarrierCaptureVerifier.Verify(bytes); Need(result.Qualified is not null && result.Receipt.Evidence is not null, JsonSerializer.Serialize(result.Receipt));
+        var evidence = result.Receipt.Evidence!; var kernel = result.Qualified!.Kernel;
+        Need(evidence.FragmentCount == 7 && evidence.VertexCount == 852 && evidence.TriangleCount == 756 && evidence.QualifiedClosedSolidComponents == 7 && evidence.OriginalSurfaceComponents == 0);
+        using var document = JsonDocument.Parse(bytes); var capture = document.RootElement;
+        var fragments = capture.GetProperty("fragments").EnumerateArray().ToDictionary(fragment => fragment.GetProperty("source").GetProperty("fragmentId").GetInt32());
+        Need(fragments.Keys.Order().SequenceEqual(new[] { 109, 113, 136, 1686, 1688, 1708, 2683 }));
+        var triangles = result.Qualified.Components.SelectMany(component => component.Triangles).ToArray();
+        Need(triangles.Length == 756 && triangles.Select(triangle => (triangle.Source.FragmentId, triangle.LocalTriangleIndex)).Distinct().Count() == 756);
+        foreach (var triangle in triangles) {
+            var fragment = fragments[triangle.Source.FragmentId]; var source = fragment.GetProperty("source"); var indices = fragment.GetProperty("triangleIndices"); var vertices = fragment.GetProperty("verticesMetres");
+            Need(triangle.Source.OwnerObjectId == source.GetProperty("ownerObjectId").GetString());
+            Need(triangle.Source.ParentSelectionIds.SequenceEqual(source.GetProperty("parentSelectionIds").EnumerateArray().Select(parent => parent.GetString()!).Order(StringComparer.Ordinal)));
+            Need(triangle.Source.SourceUnits == source.GetProperty("sourceUnits").GetString() && BitConverter.DoubleToInt64Bits(triangle.Source.MetresPerSourceUnit) == BitConverter.DoubleToInt64Bits(source.GetProperty("metresPerSourceUnit").GetDouble()));
+            Need(triangle.Source.SourceToWorldBits.SequenceEqual(source.GetProperty("sourceToWorldMetres").EnumerateArray().Select(value => BitConverter.DoubleToInt64Bits(value.GetDouble()))));
+            int[] original = [triangle.OriginalVertexA, triangle.OriginalVertexB, triangle.OriginalVertexC]; BarrierPoint[] points = [triangle.A, triangle.B, triangle.C];
+            for (int at = 0; at < 3; at++) {
+                Need(original[at] == indices[triangle.LocalTriangleIndex * 3 + at].GetInt32()); var point = vertices[original[at]];
+                Need(SameBits(points[at], P(point[0].GetDouble(), point[1].GetDouble(), point[2].GetDouble())));
+            }
+        }
+        Need(evidence.ComponentMemberships.Sum(member => member.TriangleCount) == 756 && evidence.ComponentMemberships.SelectMany(member => member.FragmentIds).Distinct().Count() == 7);
+        Need(evidence.ComponentMemberships.All(member => member.FragmentIds.Count == 1) && evidence.ComponentMemberships.SelectMany(member => member.FragmentIds).Count() == 7);
+        var parents = capture.GetProperty("selectedParents").EnumerateArray().Select(parent => parent.GetProperty("selectionId").GetString()!).Order(StringComparer.Ordinal);
+        Need(evidence.ComponentMemberships.SelectMany(member => member.ParentSelectionIds).Distinct().Order(StringComparer.Ordinal).SequenceEqual(parents));
+        foreach (string owner in new[] { "dbid:29713", "dbid:29711" }) {
+            var body = kernel.Components.Single(component => component.Triangles.All(triangle => triangle.Source.OwnerObjectId == owner));
+            Need(body.Kind == MixedBarrierComponentKind.QualifiedClosedSolid && body.Triangles.Count == 12);
+            var vertices = body.Triangles.SelectMany(triangle => new[] { triangle.A, triangle.B, triangle.C }).Distinct().ToArray(); Need(vertices.Length == 8);
+            var centre = P(vertices.Average(point => point.X), vertices.Average(point => point.Y), vertices.Average(point => point.Z));
+            Status(kernel, centre with { Y = centre.Y - .1 }, centre with { Y = centre.Y + .1 }, MixedBarrierSegmentStatus.Blocked);
+            Status(kernel, centre, centre, MixedBarrierSegmentStatus.Blocked);
+            Status(kernel, centre with { Z = centre.Z - .1 }, centre with { Z = centre.Z + .1 }, MixedBarrierSegmentStatus.Blocked);
+        }
+        Status(kernel, P(-5, -5, -5), P(-4, -4, -4), MixedBarrierSegmentStatus.Clear);
+        Need(BarrierCaptureVerifier.Hash(File.ReadAllBytes(args[1])) == expectedHash);
+    });
+}
+else if (args.Length != 0)
 {
     if (args.Length != 2 || args[0] != "--retained-capture" || !Path.IsPathFullyQualified(args[1])) throw new ArgumentException("Only the explicit pinned retained-capture fixture is supported.");
     Run("exact retained27 capture qualifies with complete original ownership indices bits and component membership", () => {
@@ -373,6 +471,23 @@ if (args.Length != 0)
 bool SameBits(BarrierPoint a, BarrierPoint b) => BitConverter.DoubleToInt64Bits(a.X) == BitConverter.DoubleToInt64Bits(b.X)
     && BitConverter.DoubleToInt64Bits(a.Y) == BitConverter.DoubleToInt64Bits(b.Y) && BitConverter.DoubleToInt64Bits(a.Z) == BitConverter.DoubleToInt64Bits(b.Z);
 Mesh EdgeTouchingBoxes() => Merge(Box(-1, 0, -1, 0, -1, 1), Box(0, 1, 0, 1, -1, 1));
+MixedFragmentInput[] OwnerContactInputs() {
+    var first = Input(Box(-1, 0, -1, 1, -1, 1), fragment: 1); var mesh = Box(0, 1, -1, 1, -1, 1); var indices = mesh.Indices.ToArray();
+    // Reverse the cap's diagonal while preserving every original orientation.
+    int[] cap = [0, 4, 3, 3, 4, 7]; Array.Copy(cap, 0, indices, 24, cap.Length);
+    var second = Input(mesh with { Indices = indices }, fragment: 2); second = second with { Source = second.Source with { OwnerObjectId = "dbid:20" } };
+    return [first, second];
+}
+void OriginalInputsRetained(MixedBarrierKernel kernel, IReadOnlyList<MixedFragmentInput> input) {
+    var triangles = kernel.Components.SelectMany(component => component.Triangles).ToDictionary(triangle => (triangle.Source.FragmentId, triangle.LocalTriangleIndex));
+    Need(triangles.Count == input.Sum(fragment => fragment.TriangleIndices.Count / 3));
+    foreach (var fragment in input) for (int at = 0; at < fragment.TriangleIndices.Count; at += 3) {
+        var triangle = triangles[(fragment.Source.FragmentId, at / 3)];
+        Need(triangle.Source.OwnerObjectId == fragment.Source.OwnerObjectId && triangle.Source.ParentSelectionIds.SequenceEqual(fragment.Source.ParentSelectionIds));
+        Need(triangle.OriginalVertexA == fragment.TriangleIndices[at] && triangle.OriginalVertexB == fragment.TriangleIndices[at + 1] && triangle.OriginalVertexC == fragment.TriangleIndices[at + 2]);
+        Need(SameBits(triangle.A, fragment.Vertices[triangle.OriginalVertexA]) && SameBits(triangle.B, fragment.Vertices[triangle.OriginalVertexB]) && SameBits(triangle.C, fragment.Vertices[triangle.OriginalVertexC]));
+    }
+}
 void OriginalMeshRetained(MixedBarrierKernel kernel, Mesh mesh) {
     var triangles = kernel.Components.SelectMany(c => c.Triangles).OrderBy(t => t.LocalTriangleIndex).ToArray(); Need(triangles.Length == mesh.Indices.Length / 3);
     for (int at = 0; at < triangles.Length; at++) {
