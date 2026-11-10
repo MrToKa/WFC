@@ -93,6 +93,25 @@ describe('PathFinder protected Viewer capabilities', () => {
     s.message('MODEL_LOADED', { sdkVersion: '7.130.0', format: 'svf', nodeIndexReady: true }, command.requestId, identity);
     return { ...s, identity };
   }
+  it('focuses a CAD component only through a current-model acknowledged command', async () => {
+    const s = await loaded();
+    const componentId = generateId();
+    const focused = s.c.focusCadComponent(componentId);
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'CAD_FOCUS')).toBe(true));
+    const command = s.send.mock.calls.find(call => call[0].type === 'CAD_FOCUS')![0];
+    expect(command.payload).toEqual({ componentId });
+    expect(command.modelVersionId).toBe(versionId);
+    expect(command.loadId).toBe(s.identity.loadId);
+    s.message('CAD_ACK', { componentId, phase: 'focused', received: 0 }, command.requestId, s.identity);
+    await expect(focused).resolves.toBeUndefined();
+  });
+
+  it('refuses CAD focus before an authorized model is ready', async () => {
+    const s = setup();
+    await expect(s.c.focusCadComponent(generateId())).rejects.toThrow('Viewer model access changed');
+    expect(s.send.mock.calls.some(call => call[0].type === 'CAD_FOCUS')).toBe(false);
+  });
+
   it('reads one object GUID quietly without changing route or selection and rejects substituted object IDs', async () => {
     const s = await loaded(), guid = '7586ffbb-1d0a-5942-b687-06884123c866';
     s.send.mockImplementation(value => {

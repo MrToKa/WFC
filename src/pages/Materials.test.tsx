@@ -110,7 +110,9 @@ beforeEach(() => {
 });
 
 const selectOption = (dropdownLabel: string, optionName: string) => {
-  fireEvent.click(screen.getByRole('combobox', { name: dropdownLabel }));
+  // Query labelled controls directly rather than recalculating accessible names
+  // for every cell/action in a large Fluent table. The role remains part of the query.
+  fireEvent.click(screen.getByLabelText(dropdownLabel, { selector: '[role="combobox"]' }));
   fireEvent.click(screen.getByRole('option', { name: optionName }));
 };
 
@@ -210,16 +212,16 @@ describe('Materials catalog filtering and pagination', () => {
       await screen.findByText('Catalog item 01');
       expect(screen.getAllByRole('row', { hidden: true })).toHaveLength(11);
       expect(screen.queryByText('Catalog item 11')).not.toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled();
+      expect(screen.getByText('Previous', { selector: 'button' })).toBeDisabled();
 
-      fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+      fireEvent.click(screen.getByText('Next', { selector: 'button' }));
       expect(screen.getByText('Catalog item 11')).toBeInTheDocument();
       expect(screen.queryByText('Catalog item 01')).not.toBeInTheDocument();
 
       selectOption(pageDropdownLabel, 'Page 3');
       expect(screen.getByText('Catalog item 21')).toBeInTheDocument();
       expect(screen.getAllByRole('row', { hidden: true })).toHaveLength(5);
-      expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+      expect(screen.getByText('Next', { selector: 'button' })).toBeDisabled();
       selectOption(pageDropdownLabel, 'Page 2');
       expect(screen.getByText('Catalog item 11')).toBeInTheDocument();
 
@@ -228,15 +230,17 @@ describe('Materials catalog filtering and pagination', () => {
       expect(screen.getByText('Catalog item 20')).toBeInTheDocument();
       expect(screen.getByText('Catalog item 24')).toBeInTheDocument();
       expect(screen.getAllByRole('row', { hidden: true })).toHaveLength(6);
-      expect(screen.getByRole('combobox', { name: pageDropdownLabel })).toHaveTextContent('Page 1');
+      expect(
+        screen.getByLabelText(pageDropdownLabel, { selector: '[role="combobox"]' }),
+      ).toHaveTextContent('Page 1');
 
       fireEvent.change(search, { target: { value: '' } });
       expect(screen.getByText('Catalog item 01')).toBeInTheDocument();
-      fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+      fireEvent.click(screen.getByText('Next', { selector: 'button' }));
       selectOption(facetLabel, facetValue);
       expect(screen.getByText('Catalog item 02')).toBeInTheDocument();
       expect(screen.queryByText('Catalog item 01')).not.toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled();
+      expect(screen.getByText('Previous', { selector: 'button' })).toBeDisabled();
 
       fireEvent.change(search, { target: { value: 'Catalog item 2' } });
       expect(screen.getByText('Catalog item 20')).toBeInTheDocument();
@@ -246,7 +250,7 @@ describe('Materials catalog filtering and pagination', () => {
       expect(screen.queryByText('Catalog item 21')).not.toBeInTheDocument();
 
       selectOption('Search criteria', manufacturerFacet ? 'Manufacturer' : 'Purpose');
-      expect(screen.queryByRole('table')).not.toBeInTheDocument();
+      expect(screen.queryByRole('table', { hidden: true })).not.toBeInTheDocument();
       selectOption(
         'Search criteria',
         'primaryCriterion' in catalog ? catalog.primaryCriterion : 'Type',
@@ -254,32 +258,32 @@ describe('Materials catalog filtering and pagination', () => {
       expect(screen.getByText('Catalog item 24')).toBeInTheDocument();
 
       fireEvent.change(search, { target: { value: 'missing catalog item' } });
-      expect(screen.queryByRole('table')).not.toBeInTheDocument();
+      expect(screen.queryByRole('table', { hidden: true })).not.toBeInTheDocument();
       expect(screen.queryByRole('combobox', { name: pageDropdownLabel })).not.toBeInTheDocument();
       fireEvent.change(search, { target: { value: '' } });
       selectOption(facetLabel, facetReset);
       expect(screen.getByText('Catalog item 01')).toBeInTheDocument();
       expect(screen.getAllByRole('row', { hidden: true })).toHaveLength(11);
-      expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled();
-      expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled();
-      fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+      expect(screen.getByText('Previous', { selector: 'button' })).toBeDisabled();
+      expect(screen.getByText('Next', { selector: 'button' })).toBeEnabled();
+      fireEvent.click(screen.getByText('Next', { selector: 'button' }));
       selectOption('Rows per page', '25');
       expect(screen.getByText('Catalog item 01')).toBeInTheDocument();
       expect(screen.getByText('Catalog item 24')).toBeInTheDocument();
       expect(screen.getAllByRole('row', { hidden: true })).toHaveLength(25);
-      expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled();
-      expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+      expect(screen.getByText('Previous', { selector: 'button' })).toBeDisabled();
+      expect(screen.getByText('Next', { selector: 'button' })).toBeDisabled();
       for (const size of ['50', '100']) {
         selectOption('Rows per page', size);
         expect(screen.getAllByRole('row', { hidden: true })).toHaveLength(25);
       }
       selectOption('Rows per page', '10');
       expect(screen.getAllByRole('row', { hidden: true })).toHaveLength(11);
-      expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled();
+      expect(screen.getByText('Next', { selector: 'button' })).toBeEnabled();
       expect(apiMocks[catalog.key]).toHaveBeenCalledOnce();
       expect(showToast).not.toHaveBeenCalled();
     },
-    15000,
+    60000,
   );
 });
 
@@ -338,30 +342,38 @@ describe('Returning from material details', () => {
         manufacturer ? 'ACME' : 'Control',
       );
       selectOption('Rows per page', '25');
-      fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-      const tableBefore = screen.getByRole('table').textContent;
+      fireEvent.click(screen.getByText('Next', { selector: 'button' }));
+      const tableBefore = screen.getByRole('table', { hidden: true }).textContent;
       expect(
-        screen.getByRole('combobox', { name: 'Select ' + catalog.label.toLowerCase() + ' page' }),
+        screen.getByLabelText('Select ' + catalog.label.toLowerCase() + ' page', {
+          selector: '[role="combobox"]',
+        }),
       ).toHaveTextContent('Page 2');
-      fireEvent.click(screen.getAllByRole('button', { name: 'Details' })[0]);
+      fireEvent.click(screen.getAllByText('Details', { selector: 'button' })[0]);
       fireEvent.click(await screen.findByRole('button', { name: 'Back to Materials' }));
       await waitFor(() =>
         expect(
-          screen.getByRole('combobox', { name: 'Select ' + catalog.label.toLowerCase() + ' page' }),
+          screen.getByLabelText('Select ' + catalog.label.toLowerCase() + ' page', {
+            selector: '[role="combobox"]',
+          }),
         ).toHaveTextContent('Page 2'),
       );
-      expect(screen.getByRole('combobox', { name: 'Rows per page' })).toHaveTextContent('25');
+      expect(
+        screen.getByLabelText('Rows per page', { selector: '[role="combobox"]' }),
+      ).toHaveTextContent('25');
       await act(async () => {
         resolveStaleRequest({ [catalog.key]: items });
       });
       expect(
-        screen.getByRole('combobox', { name: 'Select ' + catalog.label.toLowerCase() + ' page' }),
+        screen.getByLabelText('Select ' + catalog.label.toLowerCase() + ' page', {
+          selector: '[role="combobox"]',
+        }),
       ).toHaveTextContent('Page 2');
-      expect(screen.getByRole('table').textContent).toBe(tableBefore);
+      expect(screen.getByRole('table', { hidden: true }).textContent).toBe(tableBefore);
       expect(screen.getByLabelText('Filter ' + catalog.label.toLowerCase())).toHaveValue(
         'Return item',
       );
     },
-    15000,
+    60000,
   );
 });

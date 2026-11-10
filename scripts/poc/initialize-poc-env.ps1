@@ -1,9 +1,12 @@
 #requires -Version 5.1
 [CmdletBinding()]
 param(
-    [string]$Repository = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+    [string]$Repository
 )
 $ErrorActionPreference = 'Stop'
+if (-not $Repository) {
+    $Repository = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+}
 $envPath = Join-Path $Repository '.env.poc'
 if (Test-Path -LiteralPath $envPath) {
     throw "Refusing to overwrite an existing .env.poc. Inspect it before continuing."

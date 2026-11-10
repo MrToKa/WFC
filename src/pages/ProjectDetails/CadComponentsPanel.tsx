@@ -14,10 +14,11 @@ type CatalogueItem = {
 type Props = {
   projectId: string | null; token: string | null; modelVersionId: string | null; ready: boolean;
   onPick: ViewerController['pickPoint']; onShow: ViewerController['showCadComponent']; onMove: ViewerController['moveCadComponent'];
+  onFocus?: ViewerController['focusCadComponent'];
 };
 const UUID = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i;
 
-export function CadComponentsPanel({ projectId, token, modelVersionId, ready, onPick, onShow, onMove }: Props) {
+export function CadComponentsPanel({ projectId, token, modelVersionId, ready, onPick, onShow, onMove, onFocus }: Props) {
   const generation = useRef(0);
   const [items, setItems] = useState<CatalogueItem[]>([]);
   const [components, setComponents] = useState<MaterialComponent[]>([]);
@@ -134,6 +135,6 @@ export function CadComponentsPanel({ projectId, token, modelVersionId, ready, on
       </li>)}</ul>
     </div>
     {scoped && projectId && token && modelVersionId ? <CadPlacementPanel key={`${projectId}:${modelVersionId}:${token}`}
-      projectId={projectId} token={token} modelVersionId={modelVersionId} catalogue={items} onPick={onPick} onShow={onShow} onMove={onMove} /> : null}
+      projectId={projectId} token={token} modelVersionId={modelVersionId} catalogue={items} onPick={onPick} onShow={onShow} onMove={onMove} onFocus={onFocus} /> : null}
   </section>;
 }

@@ -1,6 +1,8 @@
 # Aalborg Niedax STEP Routings Builder — implementation checkpoint, 2026-11-10
 
-**Status: CODE-INTEGRATED / NOT DEPLOYED / NOT END-TO-END ACCEPTED.**
+**Current status: ISOLATED POC DEPLOYED ON 5181 / MATERIALS AND TWO-PART STEP ACCEPTANCE VERIFIED.**
+
+See [deployed acceptance report](15-deployed-materials-acceptance-20261110.md). The stage notes below retain the earlier checkpoint history; remaining engineering/snap/DWG limits are stated in the current report.
 
 Work is exclusively on `feature/aalborg-step-routings-builder-poc-20261110`. Original `main`, production-like WFC on localhost:5180, `wfc_app` PostgreSQL and `wfc-minio` are unchanged. The continuation now has local Docker access for disposable tests. See [Materials catalogue continuation](12-materials-components-catalog.md) and [local validation evidence](13-materials-validation-20261110.md); older stage notes below describe the preceding checkpoint.
 

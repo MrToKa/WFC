@@ -52,9 +52,13 @@ function fixture() {
     model: sourceModel,
     shown: [],
     hidden: [],
+    unloaded: [],
+    focused: [],
     refreshCount: 0,
     showModel(model) { this.shown.push(model); },
     hideModel(id) { this.hidden.push(id); },
+    unloadModel(model) { this.unloaded.push(model); },
+    fitToView(ids, model) { this.focused.push({ ids, model }); },
     refresh() { this.refreshCount++; },
   };
   const window = { Autodesk: { Viewing: {
@@ -102,8 +106,20 @@ test('updating and removing CAD instances does not touch source model', () => {
   scene.remove('straight');
   assert.equal(f.viewer.shown[0].instances.records.size, 0);
   scene.dispose();
-  assert.deepEqual(f.viewer.hidden, [99]);
+  assert.deepEqual(f.viewer.unloaded, [f.viewer.shown[0]]);
+  assert.deepEqual(f.viewer.hidden, []);
   assert.equal(f.viewer.model, f.sourceModel);
+});
+
+test('disposal unloads the owned dynamic model exactly once and never the source model', () => {
+  const f = fixture();
+  const scene = createCadSceneController(f.viewer, { window: f.window, sourceModel: f.sourceModel });
+  scene.add('straight', f.mesh, f.transform);
+  scene.dispose();
+  scene.dispose();
+  assert.deepEqual(f.viewer.unloaded, [f.viewer.shown[0]]);
+  assert.ok(!f.viewer.unloaded.includes(f.sourceModel));
+  assert.throws(() => scene.add('after-dispose', f.mesh, f.transform), /disposed/);
 });
 
 test('malformed CAD geometry refuses to render', () => {
@@ -113,10 +129,26 @@ test('malformed CAD geometry refuses to render', () => {
   assert.equal(f.viewer.shown.length, 0);
 });
 
+test('focus resolves only the owned CAD instance and model, never source SVF IDs', () => {
+  const f = fixture();
+  const scene = createCadSceneController(f.viewer, { window: f.window, sourceModel: f.sourceModel });
+  scene.add('straight', f.mesh, f.transform);
+  scene.add('bend', f.mesh, f.transform);
+  scene.focus('bend');
+  assert.deepEqual(f.viewer.focused, [{ ids: [1], model: f.viewer.shown[0] }]);
+  assert.equal(f.viewer.model, f.sourceModel);
+  assert.throws(() => scene.focus('foreign'), /Unknown CAD/);
+  scene.remove('bend');
+  assert.throws(() => scene.focus('bend'), /Unknown CAD/);
+  scene.dispose();
+  assert.throws(() => scene.focus('straight'), /Unknown CAD/);
+  assert.equal(f.viewer.focused.length, 1);
+});
+
 test('dynamic model cannot take ownership of the source model identity', () => {
   const f = fixture();
   f.viewer.showModel = function (model) { this.model = model; this.shown.push(model); };
   const scene = createCadSceneController(f.viewer, { window: f.window, sourceModel: f.sourceModel });
   assert.throws(() => scene.add('tray', f.mesh, f.transform), /identity/);
-  assert.deepEqual(f.viewer.hidden, [99]);
+  assert.deepEqual(f.viewer.unloaded, [f.viewer.shown[0]]);
 });

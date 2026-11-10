@@ -227,6 +227,11 @@ export class ViewerController {
     await this.sendAsync('CAD_REMOVE', { componentId }, 'CAD_ACK');
   }
 
+  async focusCadComponent(componentId: string): Promise<void> {
+    if (!this.getLoadSnapshot()?.ready || !await this.checkSelection()) throw new Error('Viewer model access changed.');
+    await this.sendAsync('CAD_FOCUS', { componentId }, 'CAD_ACK');
+  }
+
   private onMessage = (event: MessageEvent): void => {
     if (this.disposed || event.origin !== window.location.origin || event.source !== this.iframe.contentWindow) return;
     const message = validateEnvelope(event.data, 'frame-to-parent');
@@ -313,7 +318,7 @@ export class ViewerController {
     if (message.type === 'CAD_ACK') {
       const expected: Record<string, string> = {
         CAD_BEGIN: 'begun', CAD_APPEND: 'appended', CAD_COMMIT: 'displayed',
-        CAD_TRANSFORM: 'moved', CAD_REMOVE: 'removed',
+        CAD_TRANSFORM: 'moved', CAD_REMOVE: 'removed', CAD_FOCUS: 'focused',
       };
       const phase = expected[pending.envelope.type];
       const payload = pending.envelope.payload;

@@ -19,6 +19,19 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
   const registry = new Map();
   let disposed = false;
 
+  function releaseDynamicModel() {
+    if (!dynamicModel) return;
+    const owned = dynamicModel;
+    dynamicModel = null;
+    // hideModel retains the model and GPU resources in the hidden-model queue.
+    // Unload only the model created by this controller, never the client SVF.
+    try { viewer.unloadModel(owned); }
+    catch {
+      // Adapter teardown immediately calls viewer.finish(), which completes cleanup.
+      try { viewer.hideModel(owned.id); } catch { /* Best effort during teardown */ }
+    }
+  }
+
   function ensureScene() {
     if (disposed) throw new Error('CAD scene is disposed.');
     if (!dynamicModel) {
@@ -26,8 +39,7 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
       viewer.showModel(dynamicModel);
       // Preserve the client model as the authoritative WFC active model.
       if (viewer.model !== sourceModel) {
-        try { viewer.hideModel(dynamicModel.id); } catch { /* Best effort */ }
-        dynamicModel = null;
+        releaseDynamicModel();
         throw new Error('The dynamic model changed the client model identity.');
       }
     }
@@ -97,15 +109,20 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
     viewer.refresh(true);
   }
 
+  function focus(componentId) {
+    const id = registry.get(componentId);
+    if (disposed || id === undefined || !dynamicModel) throw new Error('Unknown CAD instance.');
+    // For a dynamic model without an object tree the SDK resolves this owned
+    // instance ID as its fragment ID. Never accept caller-supplied SVF IDs.
+    viewer.fitToView([id], dynamicModel);
+  }
+
   return {
-    add, update, remove,
+    add, update, remove, focus,
     dispose() {
       disposed = true;
       registry.clear();
-      if (dynamicModel) {
-        try { viewer.hideModel(dynamicModel.id); } catch { /* Viewer finish handles cleanup */ }
-        dynamicModel = null;
-      }
+      releaseDynamicModel();
     },
   };
 }

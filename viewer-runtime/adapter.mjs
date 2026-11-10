@@ -298,6 +298,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
         cadAdd: (componentId, mesh, transform) => ensureCadScene().add(componentId, mesh, transform),
         cadUpdate: (componentId, transform) => ensureCadScene().update(componentId, transform),
         cadRemove: componentId => cadScene?.remove(componentId),
+        cadFocus: componentId => ensureCadScene().focus(componentId),
         readBarrierMultipartFrame: (request, operationSignal) => multipart.readFrame(request, operationSignal),
         startBarrierMultipart: (request, transport, operationSignal) => multipart.start(request, transport, operationSignal),
         statusBarrierMultipart: request => multipart.status(request),

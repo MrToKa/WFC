@@ -42,3 +42,11 @@ test('CAD operations never bypass iframe command direction', () => {
     ...transform, rotation: { x: 0, y: 0, z: 0, w: 0 },
   }}), 'parent-to-frame'), null);
 });
+
+test('CAD focus accepts only a current-model component UUID and returns a focused acknowledgement', () => {
+  assert.ok(validateEnvelope(parent('CAD_FOCUS', { componentId }), 'parent-to-frame'));
+  assert.equal(validateEnvelope(parent('CAD_FOCUS', { componentId }), 'frame-to-parent'), null);
+  assert.equal(validateEnvelope(parent('CAD_FOCUS', { componentId, objectId: 42 }), 'parent-to-frame'), null);
+  assert.equal(validateEnvelope(parent('CAD_FOCUS', { componentId }, { modelVersionId: null, loadId: null }), 'parent-to-frame'), null);
+  assert.ok(validateEnvelope(parent('CAD_ACK', { componentId, phase: 'focused', received: 0 }), 'frame-to-parent'));
+});

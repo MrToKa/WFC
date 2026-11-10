@@ -16,7 +16,8 @@ type Instance = {
   xMm: number; yMm: number; zMm: number; qx: number; qy: number; qz: number; qw: number;
 };
 type Props = { projectId: string; modelVersionId: string; token: string; catalogue: CatalogueItem[];
-  onPick: ViewerController['pickPoint']; onShow: ViewerController['showCadComponent']; onMove: ViewerController['moveCadComponent']; };
+  onPick: ViewerController['pickPoint']; onShow: ViewerController['showCadComponent']; onMove: ViewerController['moveCadComponent'];
+  onFocus?: ViewerController['focusCadComponent']; };
 type Coordinates = { x: string; y: string; z: string; rx: string; ry: string; rz: string };
 const empty: Coordinates = { x: '0', y: '0', z: '0', rx: '0', ry: '0', rz: '0' };
 
@@ -41,8 +42,10 @@ function quaternionEuler(instance: Instance): Pick<Coordinates, 'rx' | 'ry' | 'r
   };
 }
 
-export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue, onPick, onShow, onMove }: Props) {
+export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue, onPick, onShow, onMove, onFocus }: Props) {
   const rendered = useRef(new Set<string>());
+  const [displayedIds, setDisplayedIds] = useState<string[]>([]);
+  const [displaying, setDisplaying] = useState(false);
   const [designId, setDesignId] = useState<string | null>(null);
   const [instances, setInstances] = useState<Instance[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
@@ -110,8 +113,11 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
   // Recreate saved CAD instances after a Viewer reload. This is a display
   // side effect only; source STEP objects and project model remain immutable.
   useEffect(() => {
-    if (!instances.length) return;
+    if (!instances.length) { setDisplayedIds([]); setDisplaying(false); return; }
     const controller = new AbortController();
+    const confirmed: string[] = [];
+    setDisplayedIds([]);
+    setDisplaying(true);
     const display = async () => {
       for (const instance of instances) {
         if (controller.signal.aborted) return;
@@ -131,6 +137,11 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
             await onShow(instance.id, mesh, transform);
             rendered.current.add(instance.id);
           }
+          if (!controller.signal.aborted) {
+            confirmed.push(instance.id);
+            setDisplayedIds([...confirmed]);
+            setNotice(previous => previous.includes('Displaying the 3D mesh') ? 'Component saved and displayed in 3D.' : previous);
+          }
         } catch (error) {
           if (!controller.signal.aborted) {
             setNotice(error instanceof Error ? `3D rendering: ${error.message}` : '3D rendering unavailable.');
@@ -138,11 +149,22 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
         }
       }
     };
-    void display();
+    void display().finally(() => { if (!controller.signal.aborted) setDisplaying(false); });
     return () => controller.abort();
   }, [instances, api, onShow, onMove]);
 
-  useEffect(() => { rendered.current.clear(); }, [projectId, modelVersionId, token]);
+  useEffect(() => { rendered.current.clear(); setDisplayedIds([]); }, [projectId, modelVersionId, token]);
+
+  const focusSelected = async () => {
+    if (!onFocus || !editingId || busy || displaying || !displayedIds.includes(editingId)) return;
+    setBusy(true);
+    try {
+      await onFocus(editingId);
+      setNotice('Camera focused on the selected saved component.');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not focus the selected component.');
+    } finally { setBusy(false); }
+  };
 
   const selectInstance = (id: string) => {
     setPendingSnap(null);
@@ -310,7 +332,7 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
   };
 
   return <section aria-label="Proposed component placements">
-    <Caption1>Saved components are drawn in the active SVF with Scene API. Enter world coordinates in millimetres; validate against reference points before client delivery. Freehand gizmo and Object Snap are not yet available.</Caption1>
+    <Caption1>Saved parts appear in the current 3D model. Coordinates use millimetres. Use point picking, coordinates or connector snap to position parts, and check them against reference points before delivery.</Caption1>
     {loading ? <Spinner size="tiny" label="Reading proposal…" /> : null}
     <Field label="Catalogue component">
       <select aria-label="Catalogue component" value={selectedId} disabled={busy || !activeCatalogue.length}
@@ -368,6 +390,9 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
     </form>
     <div role="status" aria-live="polite"><Body1>{notice}</Body1></div>
     <Caption1>Saved component instances: {instances.length}; saved connector relationships: {connections.length}</Caption1>
+    <div><Caption1>{displaying ? 'Displaying saved components…' : `${displayedIds.filter(id => instances.some(instance => instance.id === id)).length} of ${instances.length} saved components ready in 3D`}</Caption1></div>
+    <Button type="button" disabled={busy || displaying || !onFocus || !editing || !displayedIds.includes(editingId)}
+      onClick={() => { void focusSelected(); }}>Zoom to selected component</Button>
     <ul>{instances.map(instance => <li key={instance.id}>
       <Button appearance={editingId === instance.id ? 'primary' : 'subtle'}
         onClick={() => selectInstance(instance.id)} disabled={busy}>
