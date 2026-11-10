@@ -21,7 +21,7 @@ internal static partial class Program
         if (invocation is not ["--runner", var runner, "--work-root", var work] || !Path.IsPathFullyQualified(runner) || !File.Exists(runner)
             || !Path.IsPathFullyQualified(work) || File.Exists(work) || Directory.Exists(work)) return 2;
         Directory.CreateDirectory(work);
-        try { if (edgePartitionOnly) { await EdgePartitionTransport(runner, work); await OwnerContactTransport(runner, work); } else await Transport(runner, work); }
+        try { if (edgePartitionOnly) { await EdgePartitionTransport(runner, work); await OwnerContactTransport(runner, work); await CutFloorIncidenceTransport(runner, work); } else await Transport(runner, work); }
         catch (Exception error) { failures++; Checks.Add(new { name = "mixed-runtime-fixture", status = "FAIL", detail = error.GetType().Name + ": " + error.Message }); }
         Console.WriteLine(JsonSerializer.Serialize(new { status = failures == 0 ? "PASS" : "FAIL", passed = Checks.Count - failures, failed = failures, checks = Checks,
             scope = "Private independent synthetic mixed one-shot/session transport; no live SDK/frame, own-terminal or global catalog authority" }));
@@ -84,6 +84,7 @@ internal static partial class Program
         var solid = Store(root, Fixtures.Box(-4, 4, -4, 4, -4, 4)); var empty = Store(root, null);
         await EdgePartitionTransport(runner, root);
         await OwnerContactTransport(runner, root);
+        await CutFloorIncidenceTransport(runner, root);
         await Check("one-shot original open wall blocks crossing tray edges", async () => Refused(await OneShot(runner, root, Protected(baseline, wall.Context))));
         await Check("protected publication hash differs from pure hash while exact original opening remains clear", async () => {
             Need(opening.Manifest["geometry"]!["verification"]!["verificationSha256"]!.GetValue<string>() != opening.Qualified!.Receipt.Evidence!.VerificationSha256);

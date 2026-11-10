@@ -8,5 +8,6 @@
     <ProjectReference Include="../../src/PathFinder.Model/PathFinder.Model.csproj" />
     <ProjectReference Include="../../src/PathFinder.BarrierVerifier/PathFinder.BarrierVerifier.csproj" />
     <Compile Include="../PathFinder.BarrierRuntime.Tests/Fixtures.cs" Link="LegacyFixtureDefinitions.cs" />
+    <Compile Include="../PathFinder.MixedBarriers.Tests/CutFloorIncidenceFixture.cs" Link="CutFloorIncidenceFixture.cs" />
   </ItemGroup>
 </Project>
