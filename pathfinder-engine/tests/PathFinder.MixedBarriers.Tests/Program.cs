@@ -69,6 +69,68 @@ Run("actual qualified closed tunnel preserves its opening and blocks surrounding
     Status(result.Qualified!.Kernel, P(-1), P(1), MixedBarrierSegmentStatus.Clear); Status(result.Qualified.Kernel, P(.1), P(.1), MixedBarrierSegmentStatus.Clear);
     Status(result.Qualified.Kernel, P(-1, 1), P(1, 1), MixedBarrierSegmentStatus.Blocked); Status(result.Qualified.Kernel, P(.1, 1), P(.1, 1), MixedBarrierSegmentStatus.Blocked);
 });
+Run("exact cut floor29669 cap incidence qualifies without altering its opening or any original source", () => {
+    var input = CutFloorInput(); var mesh = CutFloorIncidenceFixture.Gvl24429669();
+    Need(mesh.Vertices.Length == 82 && mesh.Indices.Length == 204);
+    var kernel = Kernel(input);
+    Need(kernel.Summary.FragmentCount == 1 && kernel.Summary.VertexCount == 82 && kernel.Summary.TriangleCount == 68
+        && kernel.Summary.QualifiedClosedSolidComponents == 1 && kernel.Summary.OriginalSurfaceComponents == 0);
+    OriginalInputsRetained(kernel, [input]);
+    foreach (var triangle in kernel.Components.Single().Triangles) {
+        Need(triangle.Source.OwnerObjectId == "dbid:29669" && triangle.Source.FragmentId == 1961);
+        Need(triangle.Source.SourceSha256 == input.Source.SourceSha256 && triangle.Source.TransformSha256 == input.Source.TransformSha256);
+        Need(triangle.Source.SourceUnits == "mm" && BitConverter.DoubleToInt64Bits(triangle.Source.MetresPerSourceUnit) == BitConverter.DoubleToInt64Bits(.001));
+        Need(triangle.Source.SourceToWorldBits.SequenceEqual(input.Source.SourceToWorldBits));
+    }
+    CutFloorQueries(kernel);
+    var legacy = BarrierCollisionKernel.Build([new("cut-floor29669", mesh.Vertices, mesh.Indices)]);
+    Need(legacy.Status == BarrierBuildStatus.Ready && legacy.Kernel is not null, JsonSerializer.Serialize(legacy.Diagnostics));
+    Need(legacy.Kernel!.CheckSegment(P(2.7, 72.1, 19.8), P(2.7, 72.1, 20.2)).Status == BarrierSegmentStatus.Clear);
+    Need(legacy.Kernel.CheckSegment(P(1, 72.2, 19.8), P(1, 72.2, 20.2)).Status == BarrierSegmentStatus.Blocked);
+});
+Run("cut floor exact vertex incidence survives vertex triangle cyclic winding and fragment permutations", () => {
+    var input = CutFloorInput(); int count = input.Vertices.Count;
+    var reversed = input with { Vertices = input.Vertices.Reverse().ToArray(),
+        TriangleIndices = input.TriangleIndices.Chunk(3).Reverse().SelectMany(t => new[] { count - 1 - t[0], count - 1 - t[2], count - 1 - t[1] }).ToArray() };
+    var cyclic = input with { TriangleIndices = input.TriangleIndices.Chunk(3).SelectMany(t => new[] { t[1], t[2], t[0] }).ToArray() };
+    foreach (var variant in new[] { reversed, cyclic }) {
+        var kernel = Kernel(variant); Need(kernel.Summary.QualifiedClosedSolidComponents == 1 && kernel.Summary.OriginalSurfaceComponents == 0);
+        OriginalInputsRetained(kernel, [variant]); CutFloorQueries(kernel);
+    }
+    var split = new[] {
+        input with { Source = input.Source with { FragmentId = 1961 }, TriangleIndices = input.TriangleIndices.Take(102).ToArray() },
+        input with { Source = input.Source with { FragmentId = 1962 }, TriangleIndices = input.TriangleIndices.Skip(102).ToArray() }
+    };
+    var assembled = Kernel(split.Reverse().ToArray());
+    Need(assembled.Summary.FragmentCount == 2 && assembled.Summary.TriangleCount == 68 && assembled.Summary.QualifiedClosedSolidComponents == 1);
+    OriginalInputsRetained(assembled, split); CutFloorQueries(assembled);
+});
+Run("cut floor exact incidence remains qualified through both native mixed verifier protocols", () => {
+    var capture = Capture(CutFloorIncidenceFixture.Gvl24429669()); capture["selectedParents"]![0]!["kind"] = "floor";
+    foreach (string mode in new[] { "--mixed-v2", "--mixed-v2-2048" }) {
+        var receipt = NativeReceipt(Bytes(capture), mode);
+        Need(receipt.GetProperty("status").GetString() == "geometry-qualified", receipt.GetRawText());
+        var evidence = receipt.GetProperty("evidence");
+        Need(evidence.GetProperty("triangleCount").GetInt32() == 68 && evidence.GetProperty("qualifiedClosedSolidComponents").GetInt32() == 1
+            && evidence.GetProperty("originalSurfaceComponents").GetInt32() == 0);
+    }
+});
+Run("exact endpoint incidence does not accept actual self crossings coplanar overlap or topology defects", () => {
+    var box = Box();
+    foreach (var moved in new[] { P(.1, 0, -3), P(.1, -3, 2) }) {
+        var vertices = box.Vertices.ToArray(); vertices[6] = moved;
+        var result = MixedBarrierKernel.Build([Input(box with { Vertices = vertices })]);
+        Need(result.Kernel is null && result.Diagnostics.Single().Code == "CLOSED_SOLID_QUALIFICATION_REFUSED");
+    }
+    var floor = CutFloorInput();
+    var repeated = MixedBarrierKernel.Build([floor with { TriangleIndices = floor.TriangleIndices.Concat(floor.TriangleIndices.Take(3)).ToArray() }]);
+    Need(repeated.Kernel is null && repeated.Diagnostics.Single().Code == "DUPLICATE_TRIANGLE");
+    var pinched = MixedBarrierKernel.Build([Input(Merge(Box(-1, 0, -1, 0, -1, 0), Box(0, 1, 0, 1, 0, 1)))]);
+    Need(pinched.Kernel is null && pinched.Diagnostics.Single().Code == "NONMANIFOLD_VERTEX");
+    // Nonincident near-contact still uses the original numeric contact guard.
+    var contact = OriginalTriangleSurfaceContact.Check(P(5e-8, .2, .2), P(5e-8, .3, .2), P(0), P(0, 1), P(0, 0, 1));
+    Need(contact.Status == OriginalTriangleContactStatus.Contact);
+});
 Run("mixed surface and solid both participate in global contact and solid occupancy", () => {
     var kernel = Kernel(Input(Wall(), 1), Input(Box(5, 6, -1, 1, -1, 1), 2)); Need(kernel.Summary.OriginalSurfaceComponents == 1 && kernel.Summary.QualifiedClosedSolidComponents == 1);
     Status(kernel, P(-1), P(1), MixedBarrierSegmentStatus.Blocked); Status(kernel, P(4), P(7), MixedBarrierSegmentStatus.Blocked);
@@ -558,6 +620,19 @@ else if (args.Length != 0)
 
 bool SameBits(BarrierPoint a, BarrierPoint b) => BitConverter.DoubleToInt64Bits(a.X) == BitConverter.DoubleToInt64Bits(b.X)
     && BitConverter.DoubleToInt64Bits(a.Y) == BitConverter.DoubleToInt64Bits(b.Y) && BitConverter.DoubleToInt64Bits(a.Z) == BitConverter.DoubleToInt64Bits(b.Z);
+MixedFragmentInput CutFloorInput() {
+    var input = MixedFixtures.Input(CutFloorIncidenceFixture.Gvl24429669(), 1961);
+    return input with { Source = input.Source with { OwnerObjectId = "dbid:29669", SourceUnits = "mm", MetresPerSourceUnit = .001,
+        TransformSha256 = "c3e78a01ed1603e4b137d8c5353baef8788ff6c9c0f20d26e99bb1735b1ce090",
+        SourceToWorldBits = CutFloorIncidenceFixture.SourceToWorldMetres().Select(BitConverter.DoubleToInt64Bits).ToArray() } };
+}
+void CutFloorQueries(MixedBarrierKernel kernel) {
+    Status(kernel, P(2.7, 72.1, 19.8), P(2.7, 72.1, 20.2), MixedBarrierSegmentStatus.Clear);
+    Status(kernel, P(1, 72.2, 19.8), P(1, 72.2, 20.2), MixedBarrierSegmentStatus.Blocked);
+    Status(kernel, P(1, 72.2, 19.9985), P(1, 72.2, 19.9985), MixedBarrierSegmentStatus.Blocked);
+    var vertex = CutFloorIncidenceFixture.Gvl24429669().Vertices[3];
+    Status(kernel, vertex, vertex, MixedBarrierSegmentStatus.Blocked);
+}
 JsonElement NativeReceipt(byte[] input, string mode) {
     var info = new System.Diagnostics.ProcessStartInfo("dotnet") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
     info.ArgumentList.Add(typeof(MixedBarrierCaptureVerifier).Assembly.Location); info.ArgumentList.Add(mode);

@@ -37,6 +37,7 @@ jobs:
           dotnet run --project pathfinder-engine/tests/PathFinder.InterTrayManeuvers.Tests --configuration Release
       - name: Verify obstacle geometry qualification
         run: |
+          dotnet run --project pathfinder-engine/tests/PathFinder.Barriers.Tests --configuration Release
           dotnet run --project pathfinder-engine/tests/PathFinder.BarrierVerifier.Tests --configuration Release
           dotnet run --project pathfinder-engine/tests/PathFinder.MixedBarriers.Tests --configuration Release
       - name: Verify retained mixed barriers through the actual routing process

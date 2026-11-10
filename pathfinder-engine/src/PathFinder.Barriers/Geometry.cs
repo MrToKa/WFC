@@ -118,7 +118,13 @@ internal static class Geometry
         if ((a - closestA).SquaredLength <= squaredTolerance) yield return new(a, closestA);
         if ((b - closestB).SquaredLength <= squaredTolerance) yield return new(b, closestB);
         var normal = triangle.Normal;
-        double first = V.Dot(a - triangle.A, normal), last = V.Dot(b - triangle.A, normal);
+        // A supplied triangle vertex lies exactly on its own plane. Recomputing
+        // that incidence with a dot product can leave a cancellation residual;
+        // a nearly coplanar edge then amplifies it into a phantom interior hit.
+        // Preserve exact incidence only: no snapping, tolerance change or repair.
+        bool IsVertex(V point) => point == triangle.A || point == triangle.B || point == triangle.C;
+        double first = IsVertex(a) ? 0 : V.Dot(a - triangle.A, normal);
+        double last = IsVertex(b) ? 0 : V.Dot(b - triangle.A, normal);
         double divisor = first - last;
         if (divisor != 0)
         {
