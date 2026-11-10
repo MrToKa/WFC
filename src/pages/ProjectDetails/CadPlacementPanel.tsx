@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Body1, Button, Caption1, Field, Input, Spinner } from '@fluentui/react-components';
 import { getApiBaseUrl } from '@/api/http';
 import { normalizeQuaternion } from '@/viewer/componentTransforms';
