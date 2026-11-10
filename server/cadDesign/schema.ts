@@ -111,6 +111,32 @@ export async function initializeCadDesignSchema(pool: Pool): Promise<void> {
         REFERENCES cad_catalog_ports(project_id, catalog_item_id, id)
     );
 
+    -- A saved relationship cannot silently become geometrically invalid.
+    -- Client must explicitly disconnect the component before moving it.
+    CREATE OR REPLACE FUNCTION cad_reject_connected_instance_move() RETURNS TRIGGER
+    LANGUAGE plpgsql AS $cad$
+    BEGIN
+      IF (OLD.x_mm,OLD.y_mm,OLD.z_mm,OLD.qx,OLD.qy,OLD.qz,OLD.qw)
+          IS DISTINCT FROM
+         (NEW.x_mm,NEW.y_mm,NEW.z_mm,NEW.qx,NEW.qy,NEW.qz,NEW.qw)
+         AND EXISTS (
+           SELECT 1 FROM cad_design_connections c
+            WHERE c.project_id=OLD.project_id AND c.design_id=OLD.design_id
+              AND (c.source_instance_id=OLD.id OR c.target_instance_id=OLD.id)
+         )
+      THEN
+        RAISE EXCEPTION 'Disconnect CAD ports before moving the component'
+          USING ERRCODE='23514';
+      END IF;
+      RETURN NEW;
+    END;
+    $cad$;
+
+    DROP TRIGGER IF EXISTS cad_block_move_of_connected_instance ON cad_design_instances;
+    CREATE TRIGGER cad_block_move_of_connected_instance
+      BEFORE UPDATE OF x_mm,y_mm,z_mm,qx,qy,qz,qw ON cad_design_instances
+      FOR EACH ROW EXECUTE FUNCTION cad_reject_connected_instance_move();
+
     -- The client must not pick a CAD revision number. Every persisted placement
     -- or connection advances the export proposal revision atomically.
     CREATE OR REPLACE FUNCTION cad_touch_design_revision() RETURNS TRIGGER
