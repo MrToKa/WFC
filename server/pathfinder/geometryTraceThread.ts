@@ -1,3 +1,4 @@
+import { MAX_PREPARATION_BLOB_BYTES } from '../../shared/pathfinderCapacity.js';
 import { isMainThread, parentPort, workerData } from 'node:worker_threads';
 import { z } from 'zod';
 import { policyUuidSchema as uuid, policyHashSchema as hash, canonicalPurposeJson } from '../../shared/pathfinderPurposePolicy.js';
@@ -10,7 +11,7 @@ import { parsePolicyJson } from './policyJson.js';
 import { snapshotSchema } from './contracts.js';
 import { validateCompletedCaptureEvidence, verifyCompletedCaptureEvidence } from '../../viewer-runtime/capture-evidence.mjs';
 
-const blob = z.object({ payloadRef: uuid, sha256: hash, bytes: z.number().int().positive().max(256 * 1024 ** 2) }).strict();
+const blob = z.object({ payloadRef: uuid, sha256: hash, bytes: z.number().int().positive().max(MAX_PREPARATION_BLOB_BYTES) }).strict();
 const page = blob.extend({ rowCount: z.number().int().positive().max(100), firstIndex: z.number().int().nonnegative().max(1_000_000) });
 const lockBuffer = z.instanceof(SharedArrayBuffer).refine(v => v.byteLength === 4);
 export const geometryTraceThreadInputSchema = z.object({ schemaVersion: z.literal('wfc.pf.geometry-trace-thread.v1'), requestId: uuid, projectId: uuid, sessionId: uuid, traceId: uuid, exportId: uuid, frozenBlob: blob.refine(v => v.bytes <= GEOMETRY_TRACE_LIMITS.frozenBytes), exportReference: fittedTraceReferenceSchema.optional(), storageLockBuffer: lockBuffer }).strict();

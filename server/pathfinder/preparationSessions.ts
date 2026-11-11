@@ -9,11 +9,26 @@ import { calculationGrantProvenanceSchema, type CalculationGrantProvenance } fro
 import { PathFinderError } from './errors.js';
 import { readPreparationContext, readPreparationState, equalPreparationScope, buildPreparationPlan, preparationDigest } from './preparationPlans.js';
 import { storePreparationBlob, readPreparationBlob, encodePreparationPayload } from './preparationStorage.js';
-import { LEGACY_PREPARATION_CAPACITY_PROFILE, LARGE_PREPARATION_CAPACITY_PROFILE, preparationCapacity, preparationCapacityProfileSchema, type PreparationCapacityProfile } from '../../shared/pathfinderCapacity.js';
+import { LEGACY_PREPARATION_CAPACITY_PROFILE, preparationCapacity, preparationCapacityProfileSchema, type PreparationCapacityProfile } from '../../shared/pathfinderCapacity.js';
 import { preparationPlanSchema, preparationPlanHashInput } from '../../shared/pathfinderPreparation.js';
 import type { PreparationUnionParts } from './preparationUnionTask.js';
 
-const fail = (code: string, status = 409): never => { throw new PathFinderError(code, status, 'Project preparation requires a refresh or an explicit routing decision.'); };
+const preparationFailureMessages: Record<string, string> = {
+  PREPARATION_SCOPE_STALE: 'The model, tray settings, assignments or From/To locations changed, or the preparation session expired. Saved assignments and committed parts are retained. Refresh preparation status and discover the trays again for the current scope.',
+  PREPARATION_PLAN_UNRESOLVED: 'The preparation plan has unresolved diagnostics. Resolve the listed trays or routing permissions, then discover the trays again. Saved assignments and committed parts are retained.',
+  PREPARATION_PART_SCOPE: 'This geometry part does not match the frozen preparation plan or active model. Refresh preparation status before continuing; committed parts are retained.',
+  PREPARATION_STATE_CONFLICT: 'The preparation session changed or cannot accept this operation. Refresh preparation status and inspect the retained session before retrying.',
+  PREPARATION_PARTS_INCOMPLETE: 'Some planned geometry parts have not been committed. Resume collection of the missing parts before publishing; committed parts are retained.',
+  PREPARATION_SESSION_NOT_FOUND: 'This preparation session is no longer available. Refresh preparation status and discover the trays again.',
+  PREPARATION_SESSION_RETENTION_LIMIT: 'The retained preparation session limit was reached. Ask the server administrator to check preparation storage before starting another session; the published network is unchanged.',
+  PREPARATION_VALIDATION_IN_PROGRESS: 'This preparation is still being verified. Wait and check the same session; committed parts are retained.',
+  PREPARATION_VALIDATION_BUSY: 'Another verification is already running for this preparation. Check the current session before submitting another publication.',
+  PREPARATION_PART_VALIDATOR_REQUIRED: 'The server geometry verification service is unavailable. Restore the preparation service and retry the retained session.',
+  PREPARATION_TRAY_NOT_FOUND: 'This tray is no longer in the current project catalog. Refresh preparation status before assigning its model objects.',
+};
+const fail = (code: string, status = 409, message = preparationFailureMessages[code] ?? `Preparation could not complete (${code}). Refresh preparation status and inspect this session before retrying; the published network is unchanged.`): never => { throw new PathFinderError(code, status, message); };
+const inputLimit = (limitBytes: number): never => fail('PREPARATION_VALIDATION_INPUT_LIMIT', 413,
+  `The captured geometry exceeds this preparation's ${limitBytes / 1024 ** 2} MiB calculation limit. Saved assignments and committed parts are retained; the published network is unchanged. Reduce the captured tray geometry or ask the server administrator to configure a larger preparation capacity, then start a new preparation.`);
 const terminal = new Set(['published', 'failed', 'cancelled', 'stale']);
 const partBlob = (part: PreparationPart) => ({ payloadRef: part.payloadRef, sha256: part.payloadSha256, bytes: part.payloadBytes });
 const partReceipt = (part: PreparationPart, sessionRevision: string, duplicate: boolean) => preparationPartReceiptSchema.parse({schemaVersion: part.schemaVersion === 'wfc.pf.preparation-part.v2' ? 'wfc.pf.preparation-part-receipt.v2' : 'wfc.pf.preparation-part-receipt.v1',part,sessionRevision,duplicate});
@@ -192,7 +207,7 @@ export function createPreparationService(pool: Pool, adapters: PreparationAdapte
         if (!adapters.validatePart) return fail('PREPARATION_PART_VALIDATOR_REQUIRED', 503);
         if (payload.objects.length > PREPARATION_LIMITS.closurePerPart || payload.model.projectId !== projectId || payload.model.modelVersionId !== row.plan.modelVersionId || payload.model.contentSha256 !== row.plan.contentFingerprint) return fail('PREPARATION_PART_SCOPE');
         const stagedBytes = (await sessionView(c, row)).parts.reduce((sum, part) => sum + part.payloadBytes, 0);
-        if (!prior && stagedBytes + encodePreparationPayload(payload).length > preparationCapacity(row.plan.limitsProfile).validationInputBytes) return fail('PREPARATION_VALIDATION_INPUT_LIMIT', 413);
+        if (!prior && stagedBytes + encodePreparationPayload(payload).length > preparationCapacity(row.plan.limitsProfile).validationInputBytes) return inputLimit(preparationCapacity(row.plan.limitsProfile).validationInputBytes);
         return { admitted: { part, plan: row.plan, payload, revision: row.revision } };
       });
       if ('replay' in admission && admission.replay) return admission.replay;
@@ -203,7 +218,7 @@ export function createPreparationService(pool: Pool, adapters: PreparationAdapte
         const prior = (await c.query<{ receipt: unknown }>('SELECT receipt FROM pf_preparation_parts WHERE session_id=$1 AND part_id=$2', [id, partId])).rows[0];
         if (prior) { const part = preparationPartSchema.parse(prior.receipt); if (part.payloadSha256 !== blob.sha256 || part.payloadBytes !== blob.bytes) return fail('PART_IDENTITY_CONFLICT'); await readPreparationBlob(projectId, id, partBlob(part)); return partReceipt(part,row.revision,true); }
         if (!['planned', 'collecting'].includes(row.state)) return fail('PREPARATION_STATE_CONFLICT');
-        if ((await sessionView(c, row)).parts.reduce((sum, part) => sum + part.payloadBytes, 0) + blob.bytes > preparationCapacity(row.plan.limitsProfile).validationInputBytes) return fail('PREPARATION_VALIDATION_INPUT_LIMIT', 413);
+        if ((await sessionView(c, row)).parts.reduce((sum, part) => sum + part.payloadBytes, 0) + blob.bytes > preparationCapacity(row.plan.limitsProfile).validationInputBytes) return inputLimit(preparationCapacity(row.plan.limitsProfile).validationInputBytes);
         const payload = admitted.payload, counts = { objects: payload.objects.length, physicalLeaves: payload.objects.filter(o => o.geometryRole === 'routing-leaf').length, fragments: 0, vertices: 0, triangles: 0 };
         for (const object of payload.objects) for (const fragment of object.fragments) { counts.fragments++; counts.vertices += fragment.vertices.length; counts.triangles += fragment.triangleIndices.length / 3; }
         const part = preparationPartSchema.parse({ schemaVersion: isGrantPrincipal(who)?'wfc.pf.preparation-part.v2':'wfc.pf.preparation-part.v1', sessionId: id, partId, partIndex: admitted.part.partIndex, sessionPlanSha256: row.plan.orderedPlanSha256, modelVersionId: row.plan.modelVersionId, contentFingerprint: row.plan.contentFingerprint, coordinateFrameId: row.plan.coordinateFrameId, scopeSha256: admitted.part.scopeSha256, payloadEncoding: 'pathfinder.model.snapshot.v1-json-utf8', payloadRef: blob.payloadRef, payloadSha256: blob.sha256, payloadBytes: blob.bytes, counts, coverage: { partScopeComplete: true, missingObjectIds: [], ambiguousObjectIds: [] }, producer: { level: isGrantPrincipal(who)?'B':'A', adapterVersion: payload.capture.adapterVersion, sourceKind: payload.capture.sourceKind, ...(isGrantPrincipal(who)?{grant:grantProvenance(who)}:{}) }, completedAt: new Date().toISOString() });
@@ -225,7 +240,7 @@ export function createPreparationService(pool: Pool, adapters: PreparationAdapte
         if (terminal.has(row.state) || !retry && row.revision !== command.expectedSessionRevision) return fail('PREPARATION_STATE_CONFLICT');
         if (row.state === 'validating' && row.validation_expires_at && new Date(row.validation_expires_at).getTime() > Date.now()) return fail(retry ? 'PREPARATION_VALIDATION_IN_PROGRESS' : 'PREPARATION_VALIDATION_BUSY', retry ? 503 : 409);
         const session = await sessionView(c, row); if (!session.coverage.requestedScopeComplete) return fail('PREPARATION_PARTS_INCOMPLETE');
-        if (session.parts.reduce((sum, part) => sum + part.payloadBytes, 0) > preparationCapacity(session.plan.limitsProfile).validationInputBytes) return fail('PREPARATION_VALIDATION_INPUT_LIMIT', 413);
+        if (session.parts.reduce((sum, part) => sum + part.payloadBytes, 0) > preparationCapacity(session.plan.limitsProfile).validationInputBytes) return inputLimit(preparationCapacity(session.plan.limitsProfile).validationInputBytes);
         const token = randomUUID(); await transition(c, row, who, 'validating', retry ? 'validation-recovery' : command.reason);
         const expiresAt = new Date(Date.now() + PREPARATION_LIMITS.validationMilliseconds + 10000);
         await c.query('UPDATE pf_preparation_sessions SET validation_token=$2,validation_key=$3,validation_sha256=$4,validation_expires_at=$5,validation_command=$6,validation_actor_id=$7,validation_login_id=$8,validation_grant_provenance=$9 WHERE id=$1', [id, token, command.idempotencyKey, sha, expiresAt, command, who.userId, who.loginId ?? null, isGrantPrincipal(who)?grantProvenance(who):null]);
@@ -240,7 +255,7 @@ export function createPreparationService(pool: Pool, adapters: PreparationAdapte
       let finalPublicationStarted = false;
       try {
         let parts: PreparationUnionParts;
-        if (session.plan.limitsProfile === LARGE_PREPARATION_CAPACITY_PROFILE) {
+        if (session.plan.limitsProfile !== LEGACY_PREPARATION_CAPACITY_PROFILE) {
           // Only immutable server receipts cross the thread boundary. The worker
           // repeats byte/hash, strict schema and frozen coverage validation while
           // loading each fixed project/session reference; no geometry is cloned
@@ -255,7 +270,7 @@ export function createPreparationService(pool: Pool, adapters: PreparationAdapte
           parts = inlineParts;
         }
         const validation = validationSchema.parse(await adapters.validateUnion(session.plan, parts, controller.signal)); controller.signal.throwIfAborted();
-        if (validation.projection.bytes > preparationCapacity(session.plan.limitsProfile).projectionInputBytes) return fail('PREPARATION_VALIDATION_INPUT_LIMIT', 413);
+        if (validation.projection.bytes > preparationCapacity(session.plan.limitsProfile).projectionInputBytes) return inputLimit(preparationCapacity(session.plan.limitsProfile).projectionInputBytes);
         finalPublicationStarted = true;
         return await preparationTransaction(pool, projectId, who, async c => {
           const replay = await priorCommand(c, projectId, who, command.idempotencyKey, 'publish', sha); if (replay) return preparationPublicationSchema.parse({ ...replay as object, duplicate: true });

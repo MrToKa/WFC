@@ -1,3 +1,4 @@
+import { MAX_PREPARATION_BLOB_BYTES, preparationCapacity, EXTENDED_PREPARATION_CAPACITY_PROFILE } from '../../shared/pathfinderCapacity.js';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { policyHashSchema, policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
@@ -31,16 +32,16 @@ export const preparedUnionResponseSchema = z.object({
   }).strict(),
 }).strict();
 const publicationSchema = z.object({ snapshotId: policyUuidSchema,
-  sha256: policyHashSchema, bytes: z.number().int().positive().max(PREPARATION_LIMITS.unionBytes) }).strict();
+  sha256: policyHashSchema, bytes: z.number().int().positive().max(MAX_PREPARATION_BLOB_BYTES) }).strict();
 const refuse = (code: string): never => { throw new PathFinderError(code, 409); };
 
 async function verifiedPublicationSnapshot(plan: PreparationPlan, validation: PreparationValidation, owned: z.infer<typeof publicationSchema>) {
   // Authenticate every immutable representation, but do not retain three full
   // buffers or a second full Zod graph across the publication transaction.
   const bytes = await (async () => {
-    await readPreparationBlob(plan.projectId, plan.id, validation.traceIndex, PREPARATION_LIMITS.unionBytes);
-    const cache = await readSnapshot(owned.snapshotId, owned.sha256);
-    const projection = await readPreparationBlob(plan.projectId, plan.id, validation.projection, PREPARATION_LIMITS.unionBytes);
+    await readPreparationBlob(plan.projectId, plan.id, validation.traceIndex, plan.limitsProfile === EXTENDED_PREPARATION_CAPACITY_PROFILE ? MAX_PREPARATION_BLOB_BYTES : PREPARATION_LIMITS.unionBytes);
+    const cache = await readSnapshot(owned.snapshotId, owned.sha256, plan.limitsProfile);
+    const projection = await readPreparationBlob(plan.projectId, plan.id, validation.projection, preparationCapacity(plan.limitsProfile).projectionInputBytes);
     if (!cache.equals(projection)) return refuse('PREPARATION_PROJECTION_INTEGRITY');
     return cache;
   })();

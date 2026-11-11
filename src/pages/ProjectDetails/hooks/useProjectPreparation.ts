@@ -1057,7 +1057,32 @@ export function useProjectPreparation(pf: PF, active: boolean) {
     }
     if (session.plan.diagnostics.length > 0)
       throw new Error(formatPreparationDiagnostics(session.plan.diagnostics, fresh.context.trays).map(item => item.message).join(' '));
-    fresh = await collectSession({ ...fresh, session }, signal, true);
+    try {
+      fresh = await collectSession({ ...fresh, session }, signal, true);
+    } catch (error) {
+      const refusedPart = pending.current;
+      if (error instanceof PreparationApiError && error.code === 'PREPARATION_VALIDATION_INPUT_LIMIT'
+        && error.status === 413 && error.outcome === 'refused' && refusedPart?.kind === 'part'
+        && refusedPart.sessionId === session.id && refusedPart.body.sessionPlanSha256 === session.plan.orderedPlanSha256) {
+        // A frozen capacity cannot grow on replay. Retire only the exact,
+        // definitively refused collection so the next explicit Discover can
+        // obtain a fresh server capacity profile. Never cancel an uncertain write.
+        pending.current = null;
+        let checked: CurrentPreparation;
+        try { checked = await readCurrent(signal, session.id); }
+        catch { throw error; }
+        const retained = checked.session;
+        if (retained?.id === session.id && retained.projectId === session.projectId
+          && retained.plan.orderedPlanSha256 === session.plan.orderedPlanSha256
+          && ['planned', 'collecting'].includes(retained.state)) {
+          await execute({ kind: 'cancel', sessionId: retained.id, body: {
+            schemaVersion: 'wfc.pf.preparation-mutation.v1', expectedSessionRevision: retained.sessionRevision,
+            idempotencyKey: generateId(), reason: 'Retire this frozen preparation after its geometry capacity was definitively exceeded; retain the published network.',
+          } }, signal);
+        }
+      }
+      throw error;
+    }
     if (!fresh.session || !fresh.session.coverage.requestedScopeComplete || fresh.session.coverage.missingPartIds.length)
       throw new Error('The tray update is incomplete. Check the trays again to continue.');
     update(value => ({ ...value, progress: 'Finishing the tray update…' }));
@@ -1105,9 +1130,10 @@ export function useProjectPreparation(pf: PF, active: boolean) {
           reason: 'Assigned from the current model selection.',
         } }, signal, true);
       }
-      await prepareTrays(signal, fresh);
+      update(value => ({ ...value, progress: null,
+        notice: 'Tray assignment saved. Choose Discover project tray candidates to update the routing network.' }));
     });
-  }, [execute, operate, prepareTrays, readCurrent, reconcileAutomatic, update]);
+  }, [execute, operate, readCurrent, reconcileAutomatic, update]);
   const currentModel = pf.data?.activeModel;
   const staleModelDisplay = Boolean(currentModel && state.context && !sameModel(state.context.scope, currentModel));
   const view = state.identity === identity && enabled

@@ -1,3 +1,4 @@
+import { MAX_PREPARATION_BLOB_BYTES } from '../../shared/pathfinderCapacity.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -104,7 +105,7 @@ async function storeBlob(projectId: string, sessionId: string, blobId: string, v
 }
 /** Preserve exact server-produced UTF-8 output bytes; the caller separately validates its strict DTO. */
 export async function storePreparationBytes(projectId: string, sessionId: string, blobId: string, value: Buffer, limit = PREPARATION_LIMITS.partBytes): Promise<PreparationBlob> {
-  if (!Buffer.isBuffer(value) || !Number.isSafeInteger(limit) || limit <= 0 || limit > PREPARATION_LIMITS.unionBytes || value.length === 0 || value.length > limit) throw new PathFinderError('PREPARATION_BLOB_LIMIT', 413);
+  if (!Buffer.isBuffer(value) || !Number.isSafeInteger(limit) || limit <= 0 || limit > MAX_PREPARATION_BLOB_BYTES || value.length === 0 || value.length > limit) throw new PathFinderError('PREPARATION_BLOB_LIMIT', 413);
   const bytes = Buffer.from(value);
   return serialize(() => storeBytes(projectId, sessionId, blobId, bytes, limit));
 }

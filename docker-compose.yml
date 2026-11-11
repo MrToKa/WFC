@@ -68,6 +68,9 @@ services:
       WFC_VIEWER_ALLOW_HTTP_LOOPBACK: "true"
       WFC_VIEWER_ALLOW_INSECURE_LAN_HTTP: ${WFC_VIEWER_ALLOW_INSECURE_LAN_HTTP:-false}
       WFC_VIEWER_TRUST_PROXY: "true"
+      # Aalborg's complete tray capture exceeds the legacy 32 MiB envelope.
+      # Keep the project geometry input ceiling explicit in the normal installation.
+      PF_PREPARATION_CAPACITY_PROFILE: ${PF_PREPARATION_CAPACITY_PROFILE:-wfc.pf.bounded-512m-capture-and-model.v3}
     volumes:
       - model-imports:/var/lib/wfc/model-imports
       - pathfinder-data:/var/lib/wfc/pathfinder

@@ -10,7 +10,7 @@ import type {ComputationalSnapshot} from './contracts.js';
 import {createPreparationUnionRunner,type PreparationUnionParts,type PreparationUnionThread} from './preparationUnionWorker.js';
 import {buildPreparationPlan} from './preparationPlans.js';
 import {preparationUnionPolicy} from './preparationUnionTask.js';
-import {LEGACY_PREPARATION_CAPACITY_PROFILE,LARGE_PREPARATION_CAPACITY_PROFILE} from '../../shared/pathfinderCapacity.js';
+import {LEGACY_PREPARATION_CAPACITY_PROFILE,LARGE_PREPARATION_CAPACITY_PROFILE,EXTENDED_PREPARATION_CAPACITY_PROFILE} from '../../shared/pathfinderCapacity.js';
 const uuid=(n:number)=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const scope={modelVersionId:uuid(20),contentFingerprint:'a'.repeat(64),selectionRevision:'1',catalogRevision:'1',routingContentSha256:'b'.repeat(64),routingPolicyRevision:'1',routingPolicySha256:'c'.repeat(64),locationRegistryRevision:'1',resolutionRevision:'0'};
 const context=preparationContextSchema.parse({schemaVersion:'wfc.pf.preparation-context.v1',projectId:uuid(10),scope,trays:[{projectTrayId:uuid(30),rawName:'/B001',purposeKey:'LV',routeName:'/B001',allowedCategories:['LV'],policyState:'configured',diagnosticCodes:[]}],endpointNames:[],resolutions:[],diagnostics:[],currentAggregate:null});
@@ -53,11 +53,11 @@ describe('bounded off-thread preparation union lifecycle',()=>{
   expect(read).not.toHaveBeenCalled();expect(f.options.resourceLimits).toEqual({maxOldGenerationSizeMb:512});expect(f.options.execArgv).toEqual([]);
   expect(f.options.workerData.storageLockBuffer).toBeInstanceOf(SharedArrayBuffer);f.worker.emit('message',f.result());expect(f.release).not.toHaveBeenCalled();f.join();await expect(done).resolves.toEqual(f.result().result);expect(f.release).toHaveBeenCalledExactlyOnceWith(99);
  });
- it('admits reference metadata above 32MiB only for a freshly hashed larger frozen plan',async()=>{
+ it.each([LARGE_PREPARATION_CAPACITY_PROFILE,EXTENDED_PREPARATION_CAPACITY_PROFILE])('admits reference metadata above 32MiB only for a freshly hashed frozen %s',async profile=>{
   const f=fixture(),refs=references();refs[0].reference.bytes=32*1024**2+1;
   await expect(f.run(plan,refs,new AbortController().signal)).rejects.toMatchObject({code:'PREPARATION_UNION_LIMIT'});expect(f.spawn).not.toHaveBeenCalled();
   await expect(f.run({...plan,limitsProfile:LARGE_PREPARATION_CAPACITY_PROFILE},refs,new AbortController().signal)).rejects.toMatchObject({code:'PREPARATION_UNION_LIMIT'});expect(f.spawn).not.toHaveBeenCalled();
-  const large=rehash({...plan,limitsProfile:LARGE_PREPARATION_CAPACITY_PROFILE}),done=f.run(large,refs,new AbortController().signal);await turn();expect(f.options.workerData.schemaVersion).toBe('wfc.pf.preparation-union-task.v2');expect(f.options.workerData.plan).toBe(large);
+  const large=rehash({...plan,limitsProfile:profile}),done=f.run(large,refs,new AbortController().signal);await turn();expect(f.options.workerData.schemaVersion).toBe('wfc.pf.preparation-union-task.v2');expect(f.options.workerData.plan).toBe(large);
   f.worker.emit('message',f.result());f.join();await done;
  });
  it('refuses mixed input, arbitrary paths, foreign part IDs and invalid reference metadata before resolving a worker',async()=>{

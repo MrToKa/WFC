@@ -1,3 +1,4 @@
+import { MAX_PREPARATION_BLOB_BYTES, EXTENDED_PREPARATION_CAPACITY_PROFILE, type PreparationCapacityProfile } from '../../shared/pathfinderCapacity.js';
 import { isMainThread, parentPort, workerData } from 'node:worker_threads';
 import { z } from 'zod';
 import { canonicalPurposeJson, policyUuidSchema, policyHashSchema } from '../../shared/pathfinderPurposePolicy.js';
@@ -11,7 +12,7 @@ import { createHash } from 'node:crypto';
 
 // stagedInputBytes retains the historical default; each frozen plan supplies the effective input bound.
 export const preparationUnionPolicy=Object.freeze({stagedInputBytes:PREPARATION_LIMITS.validationInputBytes,oldGenerationMiB:512,milliseconds:120000,rssBytes:2*1024**3,rssIntervalMilliseconds:100,joinMilliseconds:10000});
-const blob=z.object({schemaVersion:z.string().min(1).max(256),payloadRef:policyUuidSchema,sha256:policyHashSchema,bytes:z.number().int().positive().max(PREPARATION_LIMITS.unionBytes)}).strict();
+const blob=z.object({schemaVersion:z.string().min(1).max(256),payloadRef:policyUuidSchema,sha256:policyHashSchema,bytes:z.number().int().positive().max(MAX_PREPARATION_BLOB_BYTES)}).strict();
 export const preparationUnionResultSchema=z.object({snapshotId:policyUuidSchema,projection:blob.extend({schemaVersion:z.literal('pathfinder.model.snapshot.v1')}),traceIndex:blob.extend({schemaVersion:z.literal('wfc.pf.preparation-trace-index.v1')}),counts:preparationCountsSchema}).strict().refine(value=>value.snapshotId===value.projection.payloadRef&&value.traceIndex.payloadRef!==value.snapshotId&&value.counts.physicalLeaves>0);
 export type PreparationUnionResult=z.infer<typeof preparationUnionResultSchema>;
 const inlinePart=z.object({partId:policyUuidSchema,payload:z.unknown()}).strict().refine(value=>Object.hasOwn(value,'payload'));
@@ -32,10 +33,10 @@ type Blob={payloadRef:string;sha256:string;bytes:number};
 export type PreparationUnionPartReference=Blob;
 export type PreparationUnionParts={partId:string;payload:ComputationalSnapshot}[]|{partId:string;reference:PreparationUnionPartReference}[];
 export interface PreparationUnionTaskStorage {
- storeSnapshot:(id:string,value:unknown)=>Promise<Stored>;
+ storeSnapshot:(id:string,value:unknown,profile?:PreparationCapacityProfile)=>Promise<Stored>;
  storePreparationBlob:(projectId:string,sessionId:string,id:string,value:unknown,limit:number)=>Promise<Blob>;
  readPreparationBlob?:(projectId:string,sessionId:string,reference:PreparationUnionPartReference,limit:number)=>Promise<Buffer>;
- storeSnapshotBytes?:(id:string,value:Buffer)=>Promise<Stored>;
+ storeSnapshotBytes?:(id:string,value:Buffer,profile?:PreparationCapacityProfile)=>Promise<Stored>;
  storePreparationBytes?:(projectId:string,sessionId:string,id:string,value:Buffer,limit:number)=>Promise<Blob>;
 }
 
@@ -117,14 +118,14 @@ export async function executePreparationUnionTask(input:PreparationUnionTaskInpu
  if(storage.storePreparationBytes&&storage.storeSnapshotBytes){
   const bytes=Buffer.from(JSON.stringify(snapshot));if(!bytes.length||bytes.length>limit)throw new Error('PREPARATION_UNION_LIMIT');
   projection=await storage.storePreparationBytes(input.plan.projectId,input.plan.id,input.snapshotId,bytes,limit);
-  saved=await storage.storeSnapshotBytes(input.snapshotId,bytes);
+  saved=await storage.storeSnapshotBytes(input.snapshotId,bytes,...(input.plan.limitsProfile===EXTENDED_PREPARATION_CAPACITY_PROFILE?[input.plan.limitsProfile] as const:[]));
  }else{
   projection=await storage.storePreparationBlob(input.plan.projectId,input.plan.id,input.snapshotId,snapshot,limit);
-  saved=await storage.storeSnapshot(input.snapshotId,snapshot);
+  saved=await storage.storeSnapshot(input.snapshotId,snapshot,...(input.plan.limitsProfile===EXTENDED_PREPARATION_CAPACITY_PROFILE?[input.plan.limitsProfile] as const:[]));
  }
  if(saved.sha256!==projection.sha256||saved.bytes!==projection.bytes)throw new Error('PREPARATION_UNION_STORAGE');
  const {randomUUID}=await import('node:crypto');
- const trace=await storage.storePreparationBlob(input.plan.projectId,input.plan.id,randomUUID(),merged.traceIndex,PREPARATION_LIMITS.unionBytes);
+ const trace=await storage.storePreparationBlob(input.plan.projectId,input.plan.id,randomUUID(),merged.traceIndex,input.plan.limitsProfile===EXTENDED_PREPARATION_CAPACITY_PROFILE?MAX_PREPARATION_BLOB_BYTES:PREPARATION_LIMITS.unionBytes);
  return preparationUnionResultSchema.parse({snapshotId:input.snapshotId,projection:{schemaVersion:snapshot.schemaVersion,...projection},traceIndex:{schemaVersion:merged.traceIndex.schemaVersion,...trace},counts:merged.counts});
 }
 

@@ -616,3 +616,45 @@ test('adapter binds published roots to the loaded descriptor identity before rou
   assert.equal(result.segments[0].count, 1); assert.equal(result.segments[0].mapped, true); assert.equal(result.segments[0].drawable, false);
   assert.deepEqual(f.facts.isolated.at(-1), [2, 3]);
 });
+
+test('production adapter packs events, retains lookahead, completes once and cancels a partial batch', async t => {
+  // Replace only the SDK event generator; run the production adapter transport
+  // state machine unchanged against deterministic, escaped event-sized input.
+  const sourceUrl = new URL('../adapter.mjs', import.meta.url);
+  const source = readFileSync(sourceUrl, 'utf8').replace("import { captureSelectedModel } from './model-capture.mjs';", 'const captureSelectedModel = (...args) => globalThis.__batchCaptureFixture(...args);')
+    .replace(/from '(\.\/[^']+)'/g, (_match, specifier) => 'from ' + JSON.stringify(new URL(specifier, sourceUrl).href));
+  const runtimeSource = source.replaceAll('import.meta.url', JSON.stringify(sourceUrl.href));
+  const { createViewerAdapter: createBatchAdapter } = await import('data:text/javascript;base64,' + Buffer.from(runtimeSource).toString('base64'));
+  const previous = globalThis.__batchCaptureFixture;
+  t.after(() => { globalThis.__batchCaptureFixture = previous; });
+  const f = sdkFixture(); f.adapter.dispose();
+  const adapter = createBatchAdapter({ window: f.window, container: f.container });
+  t.after(() => adapter.dispose());
+  let produced = 0, abortDuringRead = null;
+  globalThis.__batchCaptureFixture = async function* (_viewer, request) {
+    for (let index = 0; index < 8; index++) {
+      produced++;
+      if (abortDuringRead && index === 2) abortDuringRead.abort();
+      yield { captureId: request.captureId, type: index === 7 ? 'complete' : 'geometry', index, data: 'x'.repeat(16300) + String.fromCharCode(34, 92) };
+    }
+  };
+  await adapter.initialize();
+  const handle = await adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
+  const captureId = '66666666-6666-4666-8666-666666666666';
+  const start = () => handle.startModelCapture({ captureId, lookupRouteCodes: ['/BC1'], equipmentNames: [] });
+  const first = await start(); assert.equal(JSON.parse(first.eventJson).index, 0);
+  const batch = await handle.readModelCapture({ captureId, index: 1, maxEvents: 32 });
+  assert.deepEqual(batch.eventJsons.map(text => JSON.parse(text).index), [1, 2, 3]);
+  assert.equal(batch.done, false); assert.equal(produced, 5, 'fourth event is retained as lookahead');
+  const next = await handle.readModelCapture({ captureId, index: 4, maxEvents: 32 });
+  assert.deepEqual(next.eventJsons.map(text => JSON.parse(text).index), [4, 5, 6]);
+  const final = await handle.readModelCapture({ captureId, index: 7, maxEvents: 32 });
+  assert.equal(final.done, true); assert.equal(JSON.parse(final.eventJsons[0]).type, 'complete');
+  assert.equal(produced, 8, 'lookahead is emitted once without regenerating it');
+  await assert.rejects(handle.readModelCapture({ captureId, index: 8, maxEvents: 32 }), { code: 'EXTRACTION_FAILED' });
+  await start(); handle.clearRoute();
+  await assert.rejects(handle.readModelCapture({ captureId, index: 1, maxEvents: 32 }), { code: 'EXTRACTION_FAILED' });
+  await start(); abortDuringRead = new AbortController();
+  await assert.rejects(handle.readModelCapture({ captureId, index: 1, maxEvents: 32 }, abortDuringRead.signal), { name: 'AbortError' });
+  await assert.rejects(handle.readModelCapture({ captureId, index: 1, maxEvents: 32 }), { code: 'EXTRACTION_FAILED' });
+});

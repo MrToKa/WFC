@@ -273,3 +273,14 @@ test('typed model capture errors accept only safe numeric context on allowlisted
   for(const change of [{objectId:'dbid:123'}, {fragmentId:-1}, {objectId:2147483648}, {privateSdkMessage:'secret'}, {code:'EXTRACTION_FAILED'}])
     assert.equal(validateEnvelope(envelope('ERROR',{...payload,...change}),'frame-to-parent'),null);
 });
+
+test('model capture batches preserve per-event and whole-envelope limits and legacy messages', () => {
+  const base = { captureId: uuid(9), index: 0, done: false };
+  assert.ok(validateEnvelope(envelope('READ_MODEL_CAPTURE', { captureId: uuid(9), index: 0, maxEvents: 32 })));
+  for (const maxEvents of [0, 33, 1.5]) assert.equal(validateEnvelope(envelope('READ_MODEL_CAPTURE', { captureId: uuid(9), index: 0, maxEvents })), null);
+  assert.ok(validateEnvelope(envelope('MODEL_CAPTURE_EVENT', { ...base, eventJson: '{}' })));
+  assert.ok(validateEnvelope(envelope('MODEL_CAPTURE_EVENT', { ...base, eventJsons: ['{}', '{}'] })));
+  for (const eventJsons of [[], Array(33).fill('{}'), ['x'.repeat(24577)], Array(3).fill('x'.repeat(24576))])
+    assert.equal(validateEnvelope(envelope('MODEL_CAPTURE_EVENT', { ...base, eventJsons })), null);
+  assert.equal(validateEnvelope(envelope('MODEL_CAPTURE_EVENT', { ...base, index: 2999, eventJsons: ['{}', '{}'] })), null);
+});

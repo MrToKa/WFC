@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {LEGACY_CAPACITY_PROFILE,LARGE_CAPACITY_PROFILE,localCapacityProfile,assertCapacityEnvironment,capacityProfileTransition} from './capacity-environment.mjs';
+import {LEGACY_CAPACITY_PROFILE,LARGE_CAPACITY_PROFILE,EXTENDED_CAPACITY_PROFILE,localCapacityProfile,assertCapacityEnvironment,capacityProfileTransition} from './capacity-environment.mjs';
 test('local preparation capacity defaults preserve legacy without requiring an environment key',()=>{
   assert.equal(localCapacityProfile(undefined),LEGACY_CAPACITY_PROFILE);
   assert.doesNotThrow(()=>assertCapacityEnvironment({},undefined));
@@ -52,4 +52,13 @@ test('invalid local capacity values cannot silently widen an environment or beco
     assert.throws(()=>localCapacityProfile(value),/PF_CAPACITY_CONFIG_INVALID/);
     assert.throws(()=>assertCapacityEnvironment({PF_PREPARATION_CAPACITY_PROFILE:value},undefined),/PF_CAPACITY_CONFIG_INVALID/);
   }
+});
+
+test('512MiB profile requires an explicit binding and API recreation without changing older defaults',()=>{
+ assert.equal(localCapacityProfile(EXTENDED_CAPACITY_PROFILE),EXTENDED_CAPACITY_PROFILE);
+ assert.doesNotThrow(()=>assertCapacityEnvironment({PF_PREPARATION_CAPACITY_PROFILE:EXTENDED_CAPACITY_PROFILE},EXTENDED_CAPACITY_PROFILE));
+ assert.throws(()=>assertCapacityEnvironment({},EXTENDED_CAPACITY_PROFILE),/PF_CAPACITY_CONFIG_INVALID/);
+ assert.throws(()=>assertCapacityEnvironment({PF_PREPARATION_CAPACITY_PROFILE:EXTENDED_CAPACITY_PROFILE},LARGE_CAPACITY_PROFILE),/PF_CAPACITY_CONFIG_INVALID/);
+ assert.throws(()=>capacityProfileTransition(LARGE_CAPACITY_PROFILE,EXTENDED_CAPACITY_PROFILE,true),/PF_CAPACITY_REQUIRES_API_RECREATE/);
+ assert.deepEqual(capacityProfileTransition(LARGE_CAPACITY_PROFILE,EXTENDED_CAPACITY_PROFILE,false),{profile:EXTENDED_CAPACITY_PROFILE,changed:true});
 });
