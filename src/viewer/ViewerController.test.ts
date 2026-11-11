@@ -34,10 +34,10 @@ function setup(token = 'login-a', onCaptureTiming?: ViewerOptions['onCaptureTimi
     } }));
   };
   const hello = () => message('HELLO', { supportedProtocolVersions: [1], sdkVersion: '7.130.0' });
-  const ready = () => {
+  const ready = (modelCaptureBatch = false) => {
     hello();
     const init = send.mock.calls[0][0];
-    message('RUNTIME_READY', { sdkVersion: '7.130.0' }, init.requestId);
+    message('RUNTIME_READY', { sdkVersion: '7.130.0', ...(modelCaptureBatch ? { modelCaptureBatch: true } : {}) }, init.requestId);
   };
   return { c, events, send, message, hello, ready };
 }
@@ -74,8 +74,8 @@ const barrierPublicationReceipt = (input: BarrierCaptureRequest) => ({ schemaVer
   snapshot: { snapshotId: '77777777-7777-4777-8777-777777777777', scope: structuredClone(input.scope), registryRevision: '1', contentSha256: 'e'.repeat(64), mode: 'mesh-set' }, duplicate: false });
 
 describe('PathFinder protected Viewer capabilities', () => {
-  async function loaded(sessionDuration = 300_000, onCaptureTiming?: ViewerOptions['onCaptureTiming']) {
-    const s = setup('login-a', onCaptureTiming); s.ready();
+  async function loaded(sessionDuration = 300_000, onCaptureTiming?: ViewerOptions['onCaptureTiming'], modelCaptureBatch = false) {
+    const s = setup('login-a', onCaptureTiming); s.ready(modelCaptureBatch);
     let session: Record<string, unknown>;
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, options) => {
       if (options?.method === 'DELETE') return new Response(null, { status: 204 });
@@ -925,6 +925,22 @@ describe('PathFinder protected Viewer capabilities', () => {
     await vi.advanceTimersByTimeAsync(124_000); expect(settled).toBe(false);
     await vi.advanceTimersByTimeAsync(1_001); await rejected;
     expect(s.events.some(event => event.type === 'ERROR' && event.payload.code === 'REQUEST_TIMEOUT')).toBe(true);
+  });
+  it('assembles every negotiated batch event in order with one read and the unchanged final selection check', async () => {
+    const timing = vi.fn(), s = await loaded(600_000, timing, true), accepted: unknown[] = [];
+    vi.spyOn(captureRuntime, 'createModelCaptureAssembler').mockImplementation(() => ({ accept: value => { accepted.push(value); }, finish: () => ({ synthetic: true }), summary: () => ({}) }));
+    s.send.mockImplementation(value => {
+      if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
+      if (value.type === 'START_MODEL_CAPTURE') s.message('MODEL_CAPTURE_EVENT', { captureId: value.payload.captureId, index: 0, done: false, eventJson: JSON.stringify({ type: 'metadata' }) }, value.requestId, s.identity);
+      if (value.type === 'READ_MODEL_CAPTURE') {
+        expect(value.payload).toMatchObject({ index: 1, maxEvents: 32 });
+        s.message('MODEL_CAPTURE_EVENT', { captureId: value.payload.captureId, index: 1, done: true, eventJsons: [JSON.stringify({ type: 'geometry' }), JSON.stringify({ type: 'complete' })] }, value.requestId, s.identity);
+      }
+    });
+    await expect(s.c.captureModel({ lookupRouteCodes: ['/BC001'], equipmentNames: [] })).resolves.toMatchObject({ snapshot: { synthetic: true } });
+    expect(accepted).toEqual([{ type: 'metadata' }, { type: 'geometry' }, { type: 'complete' }]);
+    expect(timing.mock.calls[0][0]).toMatchObject({ roundCount: 2, eventCount: 3, outcome: 'completed' });
+    expect(s.send.mock.calls.filter(([value]) => value.type === 'READ_MODEL_CAPTURE')).toHaveLength(1);
   });
   it('removes the wall timer after successful capture without cancelling a later idle model', async () => {
     const s = await loaded(600_000);

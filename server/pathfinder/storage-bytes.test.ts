@@ -2,18 +2,19 @@
 import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
-const state=vi.hoisted(()=>({files:new Map<string,Buffer>(),dirs:new Set<string>(),syncs:[] as string[],failSync:false}));
+const state=vi.hoisted(()=>({files:new Map<string,Buffer>(),dirs:new Set<string>(),syncs:[] as string[],failSync:false,statSize:undefined as number|undefined}));
 vi.mock('node:fs/promises',()=>({default:{
   mkdir:async(p:string)=>{const fresh=!state.dirs.has(p);state.dirs.add(p);return fresh?p:undefined;},
   realpath:async(p:string)=>p,
-  lstat:async(p:string)=>({isFile:()=>state.files.has(p),isSymbolicLink:()=>false,nlink:1,size:state.files.get(p)?.length??0}),
+  lstat:async(p:string)=>({isFile:()=>state.files.has(p),isSymbolicLink:()=>false,nlink:1,size:state.statSize??state.files.get(p)?.length??0}),
   open:async(p:string,mode:string)=>{if(mode==='wx'&&state.files.has(p))throw Object.assign(Error('exists'),{code:'EEXIST'});return{writeFile:async(bytes:Buffer)=>{state.files.set(p,Buffer.from(bytes));},sync:async()=>{state.syncs.push(p);if(state.failSync&&mode==='wx')throw Error('uncertain fsync');},close:async()=>{}};},
   link:async(source:string,target:string)=>{if(state.files.has(target))throw Object.assign(Error('exists'),{code:'EEXIST'});state.files.set(target,Buffer.from(state.files.get(source)!));},
   unlink:async(p:string)=>{state.files.delete(p);},readFile:async(p:string)=>Buffer.from(state.files.get(p)!),
 }}));
+import { EXTENDED_PREPARATION_CAPACITY_PROFILE, LEGACY_PREPARATION_CAPACITY_PROFILE, LARGE_PREPARATION_CAPACITY_PROFILE } from '../../shared/pathfinderCapacity.js';
 import {storeSnapshot,storeSnapshotBytes,readSnapshot} from './storage.js';
 const id=(n:number)=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
-beforeEach(()=>{state.files.clear();state.dirs.clear();state.syncs=[];state.failSync=false;vi.stubEnv('PF_ROOT',path.resolve('owned-snapshot-byte-fixture'));});
+beforeEach(()=>{state.files.clear();state.dirs.clear();state.syncs=[];state.failSync=false;state.statSize=undefined;vi.stubEnv('PF_ROOT',path.resolve('owned-snapshot-byte-fixture'));});
 afterEach(()=>vi.unstubAllEnvs());
 describe('exact immutable prepared snapshot cache bytes',()=>{
   it('preserves exact bytes and freezes the caller buffer before awaiting filesystem work',async()=>{
@@ -43,4 +44,28 @@ describe('exact immutable prepared snapshot cache bytes',()=>{
     for(const value of [null,Buffer.alloc(0),oversized])await expect(storeSnapshotBytes(id(1),value as Buffer)).rejects.toMatchObject({code:'SNAPSHOT_BUDGET'});
     await expect(storeSnapshotBytes('../foreign',Buffer.from('{}'))).rejects.toBeDefined();expect(state.files.size).toBe(0);
   });
+});
+
+describe('profile-specific snapshot capacity',()=>{
+ it('reads hash-authenticated extended artifacts without requiring mutable caller settings',async()=>{
+  const receipt=await storeSnapshotBytes(id(1),Buffer.from('{}'),EXTENDED_PREPARATION_CAPACITY_PROFILE);
+  // Simulate large immutable file metadata without allocating a large test buffer.
+  state.statSize=256*1024**2+1;
+  expect((await readSnapshot(id(1),receipt.sha256)).toString()).toBe('{}');
+  expect((await readSnapshot(id(1),receipt.sha256,EXTENDED_PREPARATION_CAPACITY_PROFILE)).toString()).toBe('{}');
+  for(const profile of [LEGACY_PREPARATION_CAPACITY_PROFILE,LARGE_PREPARATION_CAPACITY_PROFILE])
+   await expect(readSnapshot(id(1),receipt.sha256,profile)).rejects.toMatchObject({code:'ARTIFACT_INTEGRITY'});
+  await expect(readSnapshot(id(1),'0'.repeat(64))).rejects.toMatchObject({code:'ARTIFACT_INTEGRITY'});
+  state.statSize=512*1024**2+1;
+  await expect(readSnapshot(id(1),receipt.sha256)).rejects.toMatchObject({code:'ARTIFACT_INTEGRITY'});
+ });
+ it('keeps legacy writes bounded and refuses unknown profile or extended overflow before copying',async()=>{
+  const oversized=Buffer.from('{}');Object.defineProperty(oversized,'length',{value:256*1024**2+1});
+  for(const profile of [undefined,LEGACY_PREPARATION_CAPACITY_PROFILE,LARGE_PREPARATION_CAPACITY_PROFILE])
+   await expect(storeSnapshotBytes(id(1),oversized,profile)).rejects.toMatchObject({code:'SNAPSHOT_BUDGET'});
+  const overflow=Buffer.from('{}');Object.defineProperty(overflow,'length',{value:512*1024**2+1});
+  await expect(storeSnapshotBytes(id(1),overflow,EXTENDED_PREPARATION_CAPACITY_PROFILE)).rejects.toMatchObject({code:'SNAPSHOT_BUDGET'});
+  await expect(storeSnapshotBytes(id(1),Buffer.from('{}'),'unbounded' as never)).rejects.toBeDefined();
+  expect(state.files.size).toBe(0);
+ });
 });

@@ -63,6 +63,7 @@ export class ViewerController {
   iframe: HTMLIFrameElement;
   private disposed = false;
   private ready = false;
+  private modelCaptureBatch = false;
   private loaded = false;
   private helloSeen = false;
   private generation = 0;
@@ -230,6 +231,7 @@ export class ViewerController {
     if (message.type === 'RUNTIME_READY') {
       window.clearTimeout(this.handshakeTimer);
       this.ready = true;
+      this.modelCaptureBatch = message.payload.modelCaptureBatch === true;
       if (this.queuedLoad) {
         const queued = this.queuedLoad;
         this.queuedLoad = null;
@@ -257,7 +259,8 @@ export class ViewerController {
       }
       if (expectedPhase === 'displayed') this.routeRequestId = message.requestId;
     }
-    if (message.type === 'MODEL_CAPTURE_EVENT' && (message.payload.captureId !== pending.envelope.payload.captureId || message.payload.index !== (pending.envelope.type === 'START_MODEL_CAPTURE' ? 0 : pending.envelope.payload.index))) {
+    if (message.type === 'MODEL_CAPTURE_EVENT' && (message.payload.captureId !== pending.envelope.payload.captureId || message.payload.index !== (pending.envelope.type === 'START_MODEL_CAPTURE' ? 0 : pending.envelope.payload.index)
+      || Array.isArray(message.payload.eventJsons) && (!this.modelCaptureBatch || typeof pending.envelope.payload.maxEvents !== 'number' || message.payload.eventJsons.length > pending.envelope.payload.maxEvents))) {
       pending.reject?.(new Error('Model capture identity mismatch')); this.fail('ROUTE_RESULT_MISMATCH'); return;
     }
     if (message.type === 'BARRIER_CAPTURE_EVENT' && (message.payload.captureId !== pending.envelope.payload.captureId || message.payload.index !== (pending.envelope.type === 'START_BARRIER_CAPTURE' ? 0 : pending.envelope.payload.index))) {
@@ -921,6 +924,7 @@ export class ViewerController {
           try { const value = await bounded(() => this.sendAsync(type, payload, terminal)); current(); return value; }
           finally { const duration = elapsed(start); timing.roundWaitMs += duration; timing.maxRoundWaitMs = Math.max(timing.maxRoundWaitMs, duration); }
         };
+        const readPayload = (index: number) => ({ captureId, index, ...(this.modelCaptureBatch ? { maxEvents: 32 } : {}) });
         let reply: ViewerEvent;
         if (input.lookupRouteCodes) reply = await round('START_MODEL_CAPTURE', { captureId, ...input }, 'MODEL_CAPTURE_EVENT');
         else {
@@ -938,16 +942,18 @@ export class ViewerController {
             acknowledged(await round('READ_MODEL_CAPTURE', { ...chunk }, 'MODEL_CAPTURE_INPUT_ACK'), chunk.equipmentOffset + chunk.equipmentNames.length);
             onProgress({ index: responses - 1, type: 'input' });
           }
-          reply = await round('READ_MODEL_CAPTURE', { captureId, index: 0 }, 'MODEL_CAPTURE_EVENT');
+          reply = await round('READ_MODEL_CAPTURE', readPayload(0), 'MODEL_CAPTURE_EVENT');
         }
         const assembler = createModelCaptureAssembler({ eventLimit: 3000 - (descriptor ? 1 + descriptor.chunkCount : 0) });
+        let packetOffset = 0;
         for (let index = 0; index < 3000; index++) {
           current();
-          const event: unknown = measureSync('assemblyMs', () => { const value: unknown = JSON.parse(String(reply.payload.eventJson)); assembler.accept(value); return value; });
+          const packet = Array.isArray(reply.payload.eventJsons) ? reply.payload.eventJsons : [reply.payload.eventJson];
+          const event: unknown = measureSync('assemblyMs', () => { const value: unknown = JSON.parse(String(packet[packetOffset++])); assembler.accept(value); return value; });
           timing.eventCount++;
           const eventRecord = event as Record<string, unknown>;
           onProgress({ index, type: String(eventRecord.type), ...(typeof eventRecord.objectCount === 'number' ? { objectCount: eventRecord.objectCount } : {}) });
-          if (reply.payload.done === true) {
+          if (reply.payload.done === true && packetOffset === packet.length) {
             if (eventRecord.type !== 'complete') throw new Error('Model capture ended without a complete receipt');
             const { snapshot, summary } = measureSync('assemblyMs', () => {
               const snapshot = assembler.finish(), summary = assembler.summary();
@@ -974,7 +980,10 @@ export class ViewerController {
             return { snapshot, summary };
           }
           if (eventRecord.type === 'complete') throw new Error('Model capture completion mismatch');
-          reply = await round('READ_MODEL_CAPTURE', { captureId, index: index + 1 }, 'MODEL_CAPTURE_EVENT');
+          if (packetOffset === packet.length) {
+            reply = await round('READ_MODEL_CAPTURE', readPayload(index + 1), 'MODEL_CAPTURE_EVENT');
+            packetOffset = 0;
+          }
         }
         throw new Error('Model capture exceeded its bounded event budget');
       } catch (error) { if (!this.disposed && generation === this.routeGeneration) this.clear('user', { preserveCamera: true }); throw deadlineExpired ? deadlineError : error; }

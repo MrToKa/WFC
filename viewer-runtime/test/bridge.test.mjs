@@ -1153,3 +1153,20 @@ test('typed model capture failure preserves numeric context without forwarding S
   assert.equal(payload.retryable,true);assert.equal(JSON.stringify(payload).includes('PRIVATE'),false);assert.equal(Object.hasOwn(payload,'privatePath'),false);
   assert.notEqual(f.states.at(-1).phase,'error');f.bridge.dispose();
 });
+
+test('batched model capture still checks authority before and after each packet and discards a revoked packet', async () => {
+  let revoked = false;
+  const f = fixture({ readModelCapture: async ({ captureId, index, maxEvents }) => {
+    assert.equal(maxEvents, 32); revoked = true;
+    return { captureId, index, done: true, eventJsons: ['{}', '{}'] };
+  }, fetchImpl: async url => url.endsWith('/pathfinder-authorization')
+    ? revoked ? new Response('', { status: 403 }) : Response.json({ authorized: true, loadId: uuid(4) })
+    : Response.json({ projectId: uuid(2), modelVersionId: uuid(3), loadId: uuid(4), contentFingerprint: 'b'.repeat(64), supportProfile: 'svf-local-7.130.0-v1', format: 'svf', sdkVersion: '7.130.0', entrypoint: 'resources/output/0/0.svf', resourceCount: 1, totalBytes: 1 }) });
+  await f.loaded(); const captureId = uuid(118);
+  f.send('START_MODEL_CAPTURE', { captureId, routeCodes: ['BC1'], allowedCategories: ['LV'], equipmentNames: [] }); await turn();
+  assert.equal(f.messages('MODEL_CAPTURE_EVENT').length, 1);
+  f.send('READ_MODEL_CAPTURE', { captureId, index: 1, maxEvents: 32 }); await turn();
+  assert.equal(f.fetches.filter(value => value.url.endsWith('/pathfinder-authorization')).length, 4);
+  assert.equal(f.messages('MODEL_CAPTURE_EVENT').length, 1);
+  assert.equal(f.messages('ERROR').at(-1).payload.code, 'ACCESS_REVOKED'); f.bridge.dispose();
+});

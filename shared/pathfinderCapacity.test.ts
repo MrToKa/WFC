@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PREPARATION_LIMITS } from './pathfinderPreparation.js';
 import {
   LEGACY_PREPARATION_CAPACITY_PROFILE,
-  LARGE_PREPARATION_CAPACITY_PROFILE,
+  LARGE_PREPARATION_CAPACITY_PROFILE, EXTENDED_PREPARATION_CAPACITY_PROFILE,
   preparationCapacity,
   preparationCapacityProfileSchema,
   type PreparationCapacityProfile,
@@ -19,12 +19,12 @@ describe('versioned preparation input capacity', () => {
   });
 
   it('returns immutable stable profiles, with no client-adjustable numeric fields', () => {
-    for (const profile of [LEGACY_PREPARATION_CAPACITY_PROFILE, LARGE_PREPARATION_CAPACITY_PROFILE]) {
+    for (const profile of [LEGACY_PREPARATION_CAPACITY_PROFILE, LARGE_PREPARATION_CAPACITY_PROFILE, EXTENDED_PREPARATION_CAPACITY_PROFILE]) {
       const capacity = preparationCapacity(profile);
       expect(Object.isFrozen(capacity)).toBe(true);
       expect(preparationCapacity(profile)).toBe(capacity);
       expect(Reflect.set(capacity, 'validationInputBytes', Infinity)).toBe(false);
-      expect(capacity.validationInputBytes).toBe(profile === LEGACY_PREPARATION_CAPACITY_PROFILE ? 32 * 1024 ** 2 : 128 * 1024 ** 2);
+      expect(capacity.validationInputBytes).toBe(profile === LEGACY_PREPARATION_CAPACITY_PROFILE ? 32 * 1024 ** 2 : profile === LARGE_PREPARATION_CAPACITY_PROFILE ? 128 * 1024 ** 2 : 512 * 1024 ** 2);
     }
   });
 

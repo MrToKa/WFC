@@ -1,4 +1,5 @@
 import { modelCaptureErrorMessage, modelCaptureErrorContext } from './model-capture-errors.mjs';
+import { MODEL_CAPTURE_BATCH_EVENTS, MODEL_CAPTURE_BATCH_BYTES, capturePacketBytes } from './capture-batch.mjs';
 import { readModelObjectGuid, resolveTrayObjectIdentities, validateTrayIdentityRequest } from './tray-identity.mjs';
 import { createRouteController } from './routes.mjs';
 import { createPathFinderController } from './pathfinder.mjs';
@@ -230,7 +231,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
       const loadedModel = viewer.model;
       multipart = createBarrierMultipartRuntime(viewer, { descriptor, signal, isCurrent: () => !finished && viewer.model != null });
       let computedPath = false, legacyPath = false, trayDisplay = false;
-      async function captureEvent(captureId, index, operationSignal, onProgress) {
+      async function captureEvent(captureId, index, operationSignal, onProgress, maxEvents = 1) {
         if (!capture || capture.id !== captureId || capture.index !== index || capture.reading) throw safeError('EXTRACTION_FAILED');
         const currentCapture = capture; currentCapture.reading = true; currentCapture.onProgress = onProgress;
         const abort = () => currentCapture.controller.abort();
@@ -243,12 +244,23 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
             if (!currentCapture.stage?.ready || index !== 0) throw safeError('EXTRACTION_FAILED');
             currentCapture.iterator = captureIterator(currentCapture, currentCapture.stage.request(), currentCapture.stage.remainingResponses);
           }
-          const next = await currentCapture.iterator.next(); active(operationSignal);
-          if (capture !== currentCapture || next.done || !next.value || next.value.captureId !== captureId) throw safeError('EXTRACTION_FAILED');
-          const eventJson = JSON.stringify(next.value, (_key, value) => { if (typeof value === 'number' && !Number.isFinite(value)) throw safeError('EXTRACTION_FAILED'); return value; });
-          const done = next.value.type === 'complete'; currentCapture.index++; currentCapture.responses++;
-          if (done) cancelCapture();
-          return { captureId, index, done, eventJson };
+          if (!Number.isSafeInteger(maxEvents) || maxEvents < 1 || maxEvents > MODEL_CAPTURE_BATCH_EVENTS || currentCapture.kind === 'barrier' && maxEvents !== 1) throw safeError('EXTRACTION_FAILED');
+          const eventJsons = []; let done = false;
+          while (eventJsons.length < maxEvents) {
+            active(operationSignal); active(currentCapture.controller.signal);
+            if (Date.now() - currentCapture.startedAt > CAPTURE_INPUT_LIMITS.milliseconds || currentCapture.responses >= CAPTURE_INPUT_LIMITS.responses) throw safeError('EXTRACTION_FAILED');
+            const next = currentCapture.pendingEvent ?? await currentCapture.iterator.next(); active(operationSignal); active(currentCapture.controller.signal);
+            if (capture !== currentCapture || next.done || !next.value || next.value.captureId !== captureId) throw safeError('EXTRACTION_FAILED');
+            const eventJson = JSON.stringify(next.value, (_key, value) => { if (typeof value === 'number' && !Number.isFinite(value)) throw safeError('EXTRACTION_FAILED'); return value; });
+            done = next.value.type === 'complete';
+            if (maxEvents > 1 && capturePacketBytes({ captureId, index, done, eventJsons: [...eventJsons, eventJson] }) > MODEL_CAPTURE_BATCH_BYTES) {
+              if (!eventJsons.length) throw safeError('EXTRACTION_FAILED');
+              currentCapture.pendingEvent = next; done = false; break;
+            }
+            currentCapture.pendingEvent = null; eventJsons.push(eventJson); currentCapture.index++; currentCapture.responses++;
+            if (done) { cancelCapture(); break; }
+          }
+          return maxEvents === 1 ? { captureId, index, done, eventJson: eventJsons[0] } : { captureId, index, done, eventJsons };
         } catch (error) {
           if (capture === currentCapture) cancelCapture();
           if (currentCapture.kind !== 'barrier' && modelCaptureErrorMessage(error?.code)) throw Object.assign(safeError(error.code), modelCaptureErrorContext(error));
@@ -413,7 +425,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
             if (!capture || capture.id !== request.captureId || !capture.stage) throw safeError('EXTRACTION_FAILED');
             return inputAck(capture, request, operationSignal);
           }
-          return captureEvent(request.captureId, request.index, operationSignal, onProgress);
+          return captureEvent(request.captureId, request.index, operationSignal, onProgress, request.maxEvents ?? 1);
         },
         async startBarrierCapture(request, operationSignal, onProgress, { startedAt = Date.now() } = {}) {
           cancelCapture(); active(operationSignal);

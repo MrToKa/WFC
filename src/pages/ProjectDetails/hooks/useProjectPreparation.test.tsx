@@ -741,15 +741,25 @@ describe('automatic tray workflow', () => {
     expect(f.capture).toHaveBeenCalledOnce(); expect(api.mutatePreparation).toHaveBeenCalledOnce(); expect(f.discover).toHaveBeenCalledTimes(2);
     expect(result.current.session?.plan.requestedScope.skippedTrays).toEqual(f.store.skippedTrays);
   });
-  it('immediately saves a selected tray against fresh scope and updates the network without another save action', async () => {
+  it('saves a selected tray without preparing the network until Discover is explicitly requested', async () => {
     const f = automaticSetup(); const { result } = renderHook(() => useProjectPreparation(f.pf, true));
     await waitFor(() => expect(result.current.context).not.toBeNull()); await act(() => result.current.assignTray(ids.tray, ['dbid:23', 'dbid:24']));
     expect(api.savePreparationResolution).toHaveBeenCalledWith(ids.project, 'login', expect.objectContaining({ projectTrayId: ids.tray,
       mode: 'roots', rootObjectIds: ['dbid:23', 'dbid:24'], expected: f.context.scope, reason: 'Assigned from the current model selection.' }), expect.any(AbortSignal));
+    expect(api.createPreparation).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled(); expect(api.mutatePreparation).not.toHaveBeenCalled();
+    expect(result.current.notice).toBe('Tray assignment saved. Choose Discover project tray candidates to update the routing network.');
+    expect(result.current.context?.resolutions[0].rootObjectIds).toEqual(['dbid:23', 'dbid:24']);
+    expect(result.current.canMutate).toBe(true); expect(result.current.networkReady).toBe(false);
+    await act(() => result.current.checkTrays());
     expect(api.createPreparation).toHaveBeenCalledWith(ids.project, 'login', expect.objectContaining({ expected: expect.objectContaining({ resolutionRevision: '1' }) }), expect.any(AbortSignal));
-    expect(result.current.notice).toBe('Tray network updated.'); expect(result.current.context?.resolutions[0].rootObjectIds).toEqual(['dbid:23', 'dbid:24']);
+    expect(result.current.notice).toBe('Tray network updated.');
+    const published = f.store.context.currentAggregate;
+    await act(() => result.current.assignTray(ids.tray, ['dbid:25']));
+    expect(api.createPreparation).toHaveBeenCalledOnce(); expect(f.capture).toHaveBeenCalledOnce();
+    expect(f.store.context.currentAggregate).toBe(published); expect(result.current.networkReady).toBe(false);
+    expect(result.current.canMutate).toBe(true);
   });
-  it('reconciles a committed assignment with its exact key and continues preparation against the fresh revision', async () => {
+  it('reconciles a committed assignment with its exact key without starting network preparation', async () => {
     const f = automaticSetup(), save = vi.mocked(api.savePreparationResolution).getMockImplementation()!;
     let receipt: Awaited<ReturnType<typeof api.savePreparationResolution>>;
     vi.mocked(api.savePreparationResolution).mockImplementationOnce(async (...args) => {
@@ -759,10 +769,9 @@ describe('automatic tray workflow', () => {
     await act(() => result.current.assignTray(ids.tray, ['dbid:23']));
     const calls = vi.mocked(api.savePreparationResolution).mock.calls;
     expect(calls).toHaveLength(2); expect(calls[1][2]).toBe(calls[0][2]);
-    expect(api.createPreparation).toHaveBeenCalledWith(ids.project, 'login', expect.objectContaining({ expected: expect.objectContaining({ resolutionRevision: '1' }) }), expect.any(AbortSignal));
-    expect(f.capture).toHaveBeenCalledOnce(); expect(api.mutatePreparation).toHaveBeenCalledOnce();
+    expect(api.createPreparation).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled(); expect(api.mutatePreparation).not.toHaveBeenCalled();
     expect(result.current.context?.scope.resolutionRevision).toBe('1'); expect(result.current.unknown).toBe(false);
-    expect(result.current.canMutate).toBe(true); expect(result.current.networkReady).toBe(true);
+    expect(result.current.canMutate).toBe(true); expect(result.current.networkReady).toBe(false);
   });
   it('replays an actual database-busy unknown response with the exact saved assignment', async () => {
     const f = automaticSetup();
@@ -772,7 +781,7 @@ describe('automatic tray workflow', () => {
     const calls = vi.mocked(api.savePreparationResolution).mock.calls;
     expect(calls).toHaveLength(2); expect(calls[1][2]).toBe(calls[0][2]);
     expect(result.current.context?.scope.resolutionRevision).toBe('1'); expect(result.current.unknown).toBe(false);
-    expect(result.current.canMutate).toBe(true); expect(result.current.networkReady).toBe(true); expect(f.pf.reloadViewer).not.toHaveBeenCalled();
+    expect(result.current.canMutate).toBe(true); expect(result.current.networkReady).toBe(false); expect(f.pf.reloadViewer).not.toHaveBeenCalled();
   });
   it('does not retry a definite validation refusal or leave assignments locked after refreshing scope', async () => {
     const f = automaticSetup();
@@ -952,6 +961,52 @@ describe('automatic tray workflow', () => {
     await act(() => result.current.checkTrays());
     expect(api.createPreparation).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled(); expect(api.uploadPreparationPart).not.toHaveBeenCalled();
     expect(api.mutatePreparation).toHaveBeenCalledOnce(); expect(result.current.notice).toBe('Tray network updated.');
+  });
+  it('retires only a verified capacity-refused collection and creates a fresh plan on the next explicit check', async () => {
+    const f = automaticSetup(), old = f.makeSession(); f.store.sessions.set(old.id, old);
+    const capacityError = new api.PreparationApiError('PREPARATION_VALIDATION_INPUT_LIMIT', 413, 'Geometry exceeds the frozen 32 MiB limit.', 'refused');
+    vi.mocked(api.uploadPreparationPart).mockRejectedValueOnce(capacityError);
+    vi.mocked(api.mutatePreparation).mockImplementation(async (_project, _token, sessionId, operation, command) => {
+      const current = f.store.sessions.get(sessionId)!;
+      if (operation === 'publish') return f.publishSession(current);
+      expect(sessionId).toBe(old.id); expect(command.expectedSessionRevision).toBe(current.sessionRevision);
+      const cancelled = { ...current, state: 'cancelled' as const, sessionRevision: '2' };
+      f.store.sessions.set(sessionId, cancelled); return cancelled;
+    });
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true));
+    await waitFor(() => expect(result.current.context).not.toBeNull());
+    await act(() => result.current.checkTrays());
+    expect(result.current.error).toBe(capacityError.message); expect(result.current.unknown).toBe(false);
+    expect(f.store.sessions.get(old.id)?.state).toBe('cancelled');
+    expect(api.uploadPreparationPart).toHaveBeenCalledOnce(); expect(api.createPreparation).not.toHaveBeenCalled();
+    expect(api.mutatePreparation).toHaveBeenCalledOnce();
+    expect(vi.mocked(api.fetchPreparationSession).mock.invocationCallOrder.some(order =>
+      order > vi.mocked(api.uploadPreparationPart).mock.invocationCallOrder[0]
+      && order < vi.mocked(api.mutatePreparation).mock.invocationCallOrder[0])).toBe(true);
+    await act(() => result.current.checkTrays());
+    expect(api.createPreparation).toHaveBeenCalledOnce(); expect(result.current.session?.id).not.toBe(old.id);
+    expect(api.uploadPreparationPart).toHaveBeenCalledTimes(2); expect(result.current.notice).toBe('Tray network updated.');
+  });
+  it('never cancels a capacity response with an unknown outcome', async () => {
+    const f = automaticSetup();
+    vi.mocked(api.uploadPreparationPart).mockRejectedValue(new api.PreparationApiError('PREPARATION_VALIDATION_INPUT_LIMIT', 413, 'Outcome unknown', 'unknown'));
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true));
+    await waitFor(() => expect(result.current.context).not.toBeNull());
+    await act(() => result.current.checkTrays());
+    expect(result.current.unknown).toBe(true); expect(api.mutatePreparation).not.toHaveBeenCalled();
+    expect(api.createPreparation).toHaveBeenCalledOnce();
+  });
+  it('retains an uncertain capacity-retirement cancellation without replaying it or starting another preparation', async () => {
+    const f = automaticSetup();
+    vi.mocked(api.uploadPreparationPart).mockRejectedValueOnce(new api.PreparationApiError('PREPARATION_VALIDATION_INPUT_LIMIT', 413, 'Capacity refused', 'refused'));
+    vi.mocked(api.mutatePreparation).mockRejectedValueOnce(new api.PreparationApiError('NETWORK_ERROR', null, 'Cancellation outcome unknown', 'unknown'));
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true));
+    await waitFor(() => expect(result.current.context).not.toBeNull());
+    await act(() => result.current.checkTrays());
+    expect(result.current.unknown).toBe(true); expect(api.mutatePreparation).toHaveBeenCalledOnce();
+    expect(vi.mocked(api.mutatePreparation).mock.calls[0][3]).toBe('cancel');
+    expect(api.createPreparation).toHaveBeenCalledOnce(); expect(api.uploadPreparationPart).toHaveBeenCalledOnce();
+    expect(f.store.context.currentAggregate).toBeNull();
   });
   it('replaces an expired frozen session with a fresh skip-mode plan', async () => {
     const f = automaticSetup(), expired = f.makeSession(); expired.createdAt = '2026-10-19T00:00:00Z'; f.store.sessions.set(expired.id, expired);

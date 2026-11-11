@@ -473,7 +473,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
         void adapter.initialize({ signal: AbortSignal.any([lifetime.signal, initController.signal]) }).then(() => {
           if (disposed || initCommand !== command || requests.get(command.requestId)?.status !== 'pending') return;
           phase = 'initialized'; finish(command);
-          emit(command, 'RUNTIME_READY', { sdkVersion: SDK_VERSION }); onState({ phase });
+          emit(command, 'RUNTIME_READY', { sdkVersion: SDK_VERSION, modelCaptureBatch: true }); onState({ phase });
         }).catch(cause => { if (!disposed && initCommand === command && requests.get(command.requestId)?.status === 'pending') { phase = 'hello'; error(command, cause); } });
         break;
       case 'LOAD_MODEL':

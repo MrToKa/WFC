@@ -20,7 +20,7 @@ import { createPreparationService, preparationTransaction, PREPARATION_SQL_BOUND
 import { PathFinderError } from './errors.js';
 import type { ComputationalSnapshot } from './contracts.js';
 import type { PreparationCreate, PreparationContext, PreparationPlan } from '../../shared/pathfinderPreparation.js';
-import { LEGACY_PREPARATION_CAPACITY_PROFILE, LARGE_PREPARATION_CAPACITY_PROFILE, type PreparationCapacityProfile } from '../../shared/pathfinderCapacity.js';
+import { LEGACY_PREPARATION_CAPACITY_PROFILE, LARGE_PREPARATION_CAPACITY_PROFILE, EXTENDED_PREPARATION_CAPACITY_PROFILE, type PreparationCapacityProfile } from '../../shared/pathfinderCapacity.js';
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const who = { userId: id(8), loginId: id(9), loginExpiresAt: Date.now() + 600000 };
 const client = { query: vi.fn(async (sql: string, p: any[] = []) => {
@@ -160,14 +160,17 @@ describe('durable whole-network preparation lifecycle with mocked transactions a
     await expect(service(LARGE_PREPARATION_CAPACITY_PROFILE).get(id(1), who, session.id)).rejects.toMatchObject({ code: 'PREPARATION_PLAN_INTEGRITY' });
     expect(adapters.validateUnion).not.toHaveBeenCalled(); expect(fake.aggregates).toHaveLength(0);
   });
-  it.each([LEGACY_PREPARATION_CAPACITY_PROFILE, LARGE_PREPARATION_CAPACITY_PROFILE])('uses frozen %s for cumulative upload admission across multiple planned parts', async profile => {
+  it.each([LEGACY_PREPARATION_CAPACITY_PROFILE, LARGE_PREPARATION_CAPACITY_PROFILE, EXTENDED_PREPARATION_CAPACITY_PROFILE])('uses frozen %s for cumulative upload admission across multiple planned parts', async profile => {
     // Mocked receipt byte accounting exercises admission; this is not a real large-model memory claim.
     const { s, session, part } = await multipartCollected(profile);
     fake.parts.get(part.partId).payloadBytes = 32 * 1024 ** 2;
     const next = session.plan.partPlan[1];
     const uploading = s.upload(id(1), who, session.id, next.partId, session.plan.orderedPlanSha256, payload(id(1)));
     if (profile === LEGACY_PREPARATION_CAPACITY_PROFILE) {
-      await expect(uploading).rejects.toMatchObject({ code: 'PREPARATION_VALIDATION_INPUT_LIMIT', status: 413 });
+      await expect(uploading).rejects.toMatchObject({
+        code: 'PREPARATION_VALIDATION_INPUT_LIMIT', status: 413,
+        message: expect.stringMatching(/32 MiB calculation limit\..*committed parts are retained.*published network is unchanged/),
+      });
       expect(fake.parts.size).toBe(1); expect(fake.blobs.size).toBe(1);
     } else {
       expect((await uploading).part.partId).toBe(next.partId);
