@@ -79,6 +79,8 @@ type UseTraysSectionResult = {
   traysLoading: boolean;
   traysRefreshing: boolean;
   traysError: string | null;
+  trayMetricsLoading: boolean;
+  trayMetricsError: string | null;
   traysImporting: boolean;
   traysExporting: boolean;
   traysGettingTemplate: boolean;
@@ -127,6 +129,8 @@ export const useTraysSection = ({
   const [metricsScope, setMetricsScope] = useState(readScope);
   const [trays, setTrays] = useState<Tray[]>([]);
   const [freeSpaceByTrayId, setFreeSpaceByTrayId] = useState<Record<string, number | null>>({});
+  const [trayMetricsLoading, setTrayMetricsLoading] = useState(false);
+  const [trayMetricsError, setTrayMetricsError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -225,6 +229,8 @@ export const useTraysSection = ({
     async ({ showSpinner = true }: { showSpinner?: boolean } = {}) => {
       const request = ++latestRequest.current;
       setFreeSpaceByTrayId({});
+      setTrayMetricsLoading(false);
+      setTrayMetricsError(null);
       if (!projectId) {
         setTrays([]);
         setIsLoading(false);
@@ -241,12 +247,26 @@ export const useTraysSection = ({
       setError(null);
 
       try {
-        const response = await fetchTrays(projectId, { drawingMetrics: true, token: readToken ?? exportToken ?? token ?? undefined });
+        const accessToken = readToken ?? exportToken ?? token ?? undefined;
+        const response = await fetchTrays(projectId, { token: accessToken });
         if (request !== latestRequest.current || latestReadScope.current !== readScope) return;
         setTrays(sortTrays(response.trays));
-        setMetricsScope(readScope);
-        setFreeSpaceByTrayId(response.freeSpaceByTrayId ?? {});
         setPage(1);
+        setTrayMetricsLoading(true);
+        // Layout metrics enrich the list; their budget must not block opening trays.
+        void (async () => {
+          try {
+            const metrics = await fetchTrays(projectId, { drawingMetrics: true, token: accessToken });
+            if (request !== latestRequest.current || latestReadScope.current !== readScope) return;
+            setMetricsScope(readScope);
+            setFreeSpaceByTrayId(metrics.freeSpaceByTrayId ?? {});
+          } catch {
+            if (request !== latestRequest.current || latestReadScope.current !== readScope) return;
+            setTrayMetricsError('Free-space percentages could not be calculated. You can still open and edit trays. Choose Refresh to retry.');
+          } finally {
+            if (request === latestRequest.current && latestReadScope.current === readScope) setTrayMetricsLoading(false);
+          }
+        })();
       } catch (err) {
         if (request !== latestRequest.current || latestReadScope.current !== readScope) return;
         console.error('Failed to load trays', err);
@@ -639,6 +659,8 @@ export const useTraysSection = ({
     traysLoading: isLoading,
     traysRefreshing: isRefreshing,
     traysError: error,
+    trayMetricsLoading,
+    trayMetricsError,
     traysImporting: isImporting,
     traysExporting: isExporting,
     traysGettingTemplate: isGettingTemplate,

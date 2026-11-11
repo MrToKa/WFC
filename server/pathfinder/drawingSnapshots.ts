@@ -54,33 +54,41 @@ export async function initializeDrawingSnapshotSchema(pool: Pool): Promise<void>
   catch (error) { await c.query('ROLLBACK').catch(() => undefined); throw error; } finally { c.release(); }
 }
 
-async function collectDrawingSources(c: PoolClient, projectId: string, trayId: string) {
-  const projectRow = await ensureProjectExists(projectId, c);
+// Request-local only: never share drawing inputs across authority/state transactions.
+type DrawingSourceCache = Map<string, unknown>;
+async function reuseDrawingSource<T>(cache: DrawingSourceCache | undefined, key: string, read: () => Promise<T>): Promise<T> {
+  if (cache?.has(key)) return cache.get(key) as T;
+  const value = await read();
+  cache?.set(key, value);
+  return value;
+}
+async function collectDrawingSources(c: PoolClient, projectId: string, trayId: string, cache?: DrawingSourceCache) {
+  const projectRow = await reuseDrawingSource(cache, 'project-row', () => ensureProjectExists(projectId, c));
   if (!projectRow) return fail('PROJECT_NOT_FOUND', 404);
   const trayRow = (await c.query<TrayRow>('SELECT * FROM trays WHERE project_id=$1 AND id=$2', [projectId, trayId])).rows[0];
   if (!trayRow) return fail('TRAY_NOT_FOUND', 404, 'The tray is unavailable.');
-  const project = mapProjectRow(projectRow), tray = mapTrayRow(trayRow);
-  const projectTrays = (await c.query<TrayRow>('SELECT * FROM trays WHERE project_id=$1 ORDER BY name,id LIMIT 100001', [projectId])).rows;
+  const project = await reuseDrawingSource(cache, 'project', async () => mapProjectRow(projectRow)), tray = mapTrayRow(trayRow);
+  const projectTrays = await reuseDrawingSource(cache, 'tray-rows', async () => (await c.query<TrayRow>('SELECT * FROM trays WHERE project_id=$1 ORDER BY name,id LIMIT 100001', [projectId])).rows);
   if (projectTrays.length > 100000) return fail('DRAWING_INPUT_LIMIT', 413);
-  const reportTrays = projectTrays.map(mapTrayRow);
-  const rows = (await c.query<CableWithTypeRow>(`SELECT c.*,ct.name AS type_name,ct.purpose AS type_purpose,ct.diameter_mm AS type_diameter_mm,ct.weight_kg_per_m AS type_weight_kg_per_m
-    FROM cables c JOIN cable_types ct ON ct.id=c.cable_type_id AND ct.project_id=c.project_id WHERE c.project_id=$1 ORDER BY c.cable_id,c.id LIMIT 100001`, [projectId])).rows;
+  const reportTrays = await reuseDrawingSource(cache, 'report-trays', async () => projectTrays.map(mapTrayRow));
+  const rows = await reuseDrawingSource(cache, 'cable-rows', async () => (await c.query<CableWithTypeRow>(`SELECT c.*,ct.name AS type_name,ct.purpose AS type_purpose,ct.diameter_mm AS type_diameter_mm,ct.weight_kg_per_m AS type_weight_kg_per_m
+    FROM cables c JOIN cable_types ct ON ct.id=c.cable_type_id AND ct.project_id=c.project_id WHERE c.project_id=$1 ORDER BY c.cable_id,c.id LIMIT 100001`, [projectId])).rows);
   if (rows.length > 100000) return fail('DRAWING_INPUT_LIMIT', 413);
-  const cables = rows.map(mapCableRow), trayCables = cables.filter(v => drawingRoutingContainsTray(v.routing, tray.name));
-  const materials = (await c.query<MaterialTrayRow>(`SELECT m.*,l.name AS load_curve_name FROM material_trays m LEFT JOIN material_load_curves l ON l.id=m.load_curve_id
-    WHERE lower(trim(m.tray_type))=lower(trim($1)) ORDER BY m.id LIMIT 2`, [tray.type ?? ''])).rows;
+  const cables = await reuseDrawingSource(cache, 'cables', async () => rows.map(mapCableRow)), trayCables = cables.filter(v => drawingRoutingContainsTray(v.routing, tray.name));
+  const materials = await reuseDrawingSource(cache, `material-rows:${tray.type ?? ''}`, async () => (await c.query<MaterialTrayRow>(`SELECT m.*,l.name AS load_curve_name FROM material_trays m LEFT JOIN material_load_curves l ON l.id=m.load_curve_id
+    WHERE lower(trim(m.tray_type))=lower(trim($1)) ORDER BY m.id LIMIT 2`, [tray.type ?? ''])).rows);
   if (materials.length > 1) return fail('DRAWING_MATERIAL_AMBIGUOUS', 409, 'Resolve duplicate material tray types before drawing.');
   // Selected source metadata only; image downloads retain their existing authorization.
-  const materialTrays = materials.map(mapMaterialTrayRow);
-  const typeRows = (await c.query<CableTypeRow>('SELECT * FROM cable_types WHERE project_id=$1 ORDER BY name,id LIMIT 100001', [projectId])).rows;
-  const supportRows = (await c.query<MaterialSupportRow>('SELECT s.* FROM material_supports s WHERE s.id IN(SELECT support_id FROM project_support_distances WHERE project_id=$1) ORDER BY s.id LIMIT 10001', [projectId])).rows;
+  const materialTrays = await reuseDrawingSource(cache, `materials:${tray.type ?? ''}`, async () => materials.map(mapMaterialTrayRow));
+  const typeRows = await reuseDrawingSource(cache, 'type-rows', async () => (await c.query<CableTypeRow>('SELECT * FROM cable_types WHERE project_id=$1 ORDER BY name,id LIMIT 100001', [projectId])).rows);
+  const supportRows = await reuseDrawingSource(cache, 'support-rows', async () => (await c.query<MaterialSupportRow>('SELECT s.* FROM material_supports s WHERE s.id IN(SELECT support_id FROM project_support_distances WHERE project_id=$1) ORDER BY s.id LIMIT 10001', [projectId])).rows);
   if (typeRows.length > 100000 || supportRows.length > 10000) return fail('DRAWING_INPUT_LIMIT', 413);
   const curveId = materials[0]?.load_curve_id;
-  const curveRows = curveId ? (await c.query<MaterialLoadCurveRow>('SELECT * FROM material_load_curves WHERE id=$1', [curveId])).rows : [];
-  const points = curveId ? (await c.query<MaterialLoadCurvePointRow>('SELECT * FROM material_load_curve_points WHERE load_curve_id=$1 ORDER BY point_order,id LIMIT 100001', [curveId])).rows : [];
+  const curveRows = await reuseDrawingSource(cache, `curve-rows:${curveId ?? ''}`, async () => curveId ? (await c.query<MaterialLoadCurveRow>('SELECT * FROM material_load_curves WHERE id=$1', [curveId])).rows : []);
+  const points = await reuseDrawingSource(cache, `curve-points:${curveId ?? ''}`, async () => curveId ? (await c.query<MaterialLoadCurvePointRow>('SELECT * FROM material_load_curve_points WHERE load_curve_id=$1 ORDER BY point_order,id LIMIT 100001', [curveId])).rows : []);
   if (points.length > 100000) return fail('DRAWING_INPUT_LIMIT', 413);
-  const cableTypes = typeRows.map(mapCableTypeRow), materialSupports = supportRows.map(v => ({ ...mapMaterialSupportRow(v), imageTemplateId: null, imageTemplateFileName: null, imageTemplateContentType: null }));
-  const loadCurves = curveRows.map(row => mapMaterialLoadCurveRow(row, points.map(mapMaterialLoadCurvePointRow)));
+  const cableTypes = await reuseDrawingSource(cache, 'cable-types', async () => typeRows.map(mapCableTypeRow)), materialSupports = await reuseDrawingSource(cache, 'supports', async () => supportRows.map(v => ({ ...mapMaterialSupportRow(v), imageTemplateId: null, imageTemplateFileName: null, imageTemplateContentType: null })));
+  const loadCurves = await reuseDrawingSource(cache, `curves:${curveId ?? ''}`, async () => curveRows.map(row => mapMaterialLoadCurveRow(row, points.map(mapMaterialLoadCurvePointRow))));
   // Exact source rows bind report inputs too. Generated output files are excluded unless
   // explicitly referenced as a source/template, which makes them source dependencies again.
   const sources = (await c.query<{ facts: unknown }>(`SELECT jsonb_build_object(
@@ -169,10 +177,11 @@ export async function readProjectDrawingFreeSpace(c: PoolClient, projectId: stri
   const deadline = Date.now() + 30000, freeSpaceByTrayId: Record<string, number | null> = {};
   const provenance: Array<{ trayId: string; layoutSha256: string; inputSha256: string; state: string }> = [];
   const trays = [];
+  const sourceCache: DrawingSourceCache = new Map();
   let project: TrayDrawingResponse['data']['project'] | undefined, commands = 0, memberships = 0;
   for (const row of ids) {
     if (Date.now() > deadline) return fail('DRAWING_EXPORT_DEADLINE', 413, 'The export exceeded its calculation budget. Use a smaller tray set.');
-    const captured = await collectDrawingSources(c, projectId, row.id), data = trayDrawingDataSchema.parse(captured.data);
+    const captured = await collectDrawingSources(c, projectId, row.id, sourceCache), data = trayDrawingDataSchema.parse(captured.data);
     project ??= data.project; trays.push(data.tray);
     const overrideRow = (await c.query<{ value: unknown }>('SELECT value FROM pf_tray_drawing_settings WHERE project_id=$1 AND tray_id=$2', [projectId, row.id])).rows[0];
     const value = trayDrawingOverrideSchema.shape.value.parse(overrideRow?.value ?? null);

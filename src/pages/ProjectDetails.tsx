@@ -267,6 +267,8 @@ export const ProjectDetails = () => {
     traysLoading,
     traysRefreshing,
     traysError,
+    trayMetricsLoading,
+    trayMetricsError,
     freeSpaceByTrayId: serverTrayFreeSpaceById,
     traysImporting,
     traysExporting,
@@ -1469,6 +1471,8 @@ export const ProjectDetails = () => {
           onSearchCriteriaChange={setTraysSearchCriteria}
           error={traysError}
           isLoading={traysLoading}
+          metricsLoading={trayMetricsLoading}
+          metricsError={trayMetricsError}
           items={pagedTrays}
           pendingId={pendingTrayId}
           freeSpaceByTrayId={trayFreeSpaceById}
