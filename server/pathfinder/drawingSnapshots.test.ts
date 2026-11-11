@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PoolClient } from 'pg';
-import { readTrayDrawingSnapshot, saveTrayDrawingSettings, assertCurrentDrawingSnapshot } from './drawingSnapshots.js';
+import { readTrayDrawingSnapshot, saveTrayDrawingSettings, assertCurrentDrawingSnapshot, readProjectDrawingFreeSpace } from './drawingSnapshots.js';
 import { ensureProjectExists } from '../services/projectService.js';
 import { readPurposePolicyState } from './policySchema.js';
 import { readDrawingPolicy } from './drawingPolicy.js';
@@ -38,7 +38,7 @@ function fixture() {
   const query = vi.fn(async (sql: string, values: any[] = []) => {
     calls.push({ sql, values });
     if (sql === 'SELECT * FROM trays WHERE project_id=$1 ORDER BY name,id LIMIT 100001') return { rows: reportTrays };
-    if (sql.startsWith('SELECT * FROM trays')) return { rows: [tray] };
+    if (sql.startsWith('SELECT * FROM trays')) return { rows: reportTrays.filter(t => t.id === values[1]) };
     if (sql.startsWith('SELECT c.*,ct.name')) return { rows: cables };
     if (sql.startsWith('SELECT m.*,l.name')) return { rows: materials };
     if (sql.startsWith('SELECT * FROM cable_types')) return { rows: cableTypes };
@@ -51,7 +51,8 @@ function fixture() {
     if (sql.startsWith('SELECT count(*)::text')) return { rows: [{ count: String(snapshots.size) }] };
     if (sql.startsWith('INSERT INTO pf_tray_drawing_snapshots')) { snapshots.set(values[3], { id: values[0], payload: structuredClone(values[4]), source_facts: structuredClone(values[5]) }); return { rows: [] }; }
     if (sql.startsWith('SELECT request_sha256,request_body')) return { rows: history.has(values[3]) ? [history.get(values[3])] : [] };
-    if (sql.startsWith('SELECT id FROM trays')) return { rows: [{ id: trayId }] };
+    if (sql.startsWith('SELECT id FROM trays')) return { rows: reportTrays.filter(t => !values[1] || t.id === values[1]).map(t => ({ id: t.id })) };
+    if (sql.startsWith('SELECT value FROM pf_tray_drawing_settings')) return { rows: [{ value: settings.value }] };
     if (sql.startsWith('INSERT INTO pf_tray_drawing_settings(')) { settings.revision = values[2]; settings.value = values[3]; return { rows: [] }; }
     if (sql.startsWith('SELECT pf_catalog_bump')) { state.drawingInputRevision = String(BigInt(state.drawingInputRevision) + 1n); return { rows: [] }; }
     if (sql.startsWith('INSERT INTO pf_tray_drawing_settings_history')) { history.set(values[5], { request_sha256: values[6], request_body: values[7] }); return { rows: [] }; }
@@ -86,4 +87,37 @@ describe('server per-tray settings CAS and replay', () => {
   it('ordinary read authority cannot save local layout settings', async () => { const x = fixture(); await expect(saveTrayDrawingSettings(x.client, projectId, trayId, who, command(), reader)).rejects.toMatchObject({ code: 'DRAWING_EDIT_REQUIRED', status: 403 }); expect(x.calls).toEqual([]); });
   it('stale input or override revision refuses without changing shared settings', async () => { const x = fixture(); await expect(saveTrayDrawingSettings(x.client, projectId, trayId, who, { ...command(), expectedDrawingInputRevision: '2' }, authority)).rejects.toMatchObject({ code: 'DRAWING_SETTINGS_STALE' }); expect(x.settings.revision).toBe('0'); expect(x.history.size).toBe(0); });
   it('saves one revision and replays without another write or routing change', async () => { const x = fixture(); const first = await saveTrayDrawingSettings(x.client, projectId, trayId, who, command(), authority); expect(first.override.revision).toBe('1'); expect(x.state.drawingInputRevision).toBe('4'); expect(x.state.routingPolicyRevision).toBe('9'); const replay = await saveTrayDrawingSettings(x.client, projectId, trayId, who, command(), authority); expect(replay.snapshot.snapshotId).toBe(first.snapshot.snapshotId); expect(x.history.size).toBe(1); expect(x.state.drawingInputRevision).toBe('4'); await expect(saveTrayDrawingSettings(x.client, projectId, trayId, who, { ...command(), value: null }, authority)).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' }); });
+});
+
+
+describe('project drawing metrics request-local source reuse', () => {
+  it('reads shared inputs once while preserving each tray input identity and memberships', async () => {
+    const x = fixture();
+    const second = { ...x.tray, id: id(70), name: 'SECOND' };
+    x.reportTrays.push(second);
+    const firstSnapshot = await x.read();
+    const secondSnapshot = await readTrayDrawingSnapshot(x.client, projectId, second.id, authority);
+    x.calls.length = 0;
+    vi.mocked(ensureProjectExists).mockClear();
+    const result = await readProjectDrawingFreeSpace(x.client, projectId);
+    expect(result.trays.map(t => t.id)).toEqual([trayId, second.id]);
+    expect(result.provenance.map(p => p.inputSha256)).toEqual([firstSnapshot.snapshot.inputSha256, secondSnapshot.snapshot.inputSha256]);
+    expect(ensureProjectExists).toHaveBeenCalledTimes(1);
+    for (const prefix of ['SELECT c.*,ct.name', 'SELECT * FROM cable_types', 'SELECT s.* FROM material_supports', 'SELECT m.*,l.name']) {
+      expect(x.calls.filter(call => call.sql.startsWith(prefix))).toHaveLength(1);
+    }
+    expect(x.calls.filter(call => call.sql === 'SELECT * FROM trays WHERE project_id=$1 ORDER BY name,id LIMIT 100001')).toHaveLength(1);
+    expect(x.calls.filter(call => call.sql.startsWith('SELECT jsonb_build_object'))).toHaveLength(2);
+    const inputs = vi.mocked(computeTrayDrawing).mock.calls.slice(-2).map(call => call[0]);
+    expect(inputs[0].cablesOnTray.map(c => c.id)).toEqual([cableId]);
+    expect(inputs[1].cablesOnTray).toEqual([]);
+  });
+  it('does not reuse project data in a later request after a cable changes', async () => {
+    const x = fixture();
+    const first = await readProjectDrawingFreeSpace(x.client, projectId);
+    x.cables[0].diameterMm = 12;
+    const second = await readProjectDrawingFreeSpace(x.client, projectId);
+    expect(second.provenance[0].inputSha256).not.toBe(first.provenance[0].inputSha256);
+    expect(x.calls.filter(call => call.sql.startsWith('SELECT c.*,ct.name'))).toHaveLength(2);
+  });
 });
