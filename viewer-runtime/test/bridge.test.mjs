@@ -64,6 +64,23 @@ function fixture(options = {}) {
   return { bridge, send, sent, messages, init, loaded, facts, fetches, loads, states, listeners, window, handle };
 }
 
+test('CAD color dispatches only for the current loaded model and acknowledges the same component', async () => {
+  const f = fixture();
+  const colors = [];
+  f.handle.cadColor = (id, color) => colors.push({ id, color });
+  await f.loaded();
+  const command = f.send('CAD_COLOR', { componentId: uuid(801), color: '#12aBef' });
+  await turn();
+  assert.deepEqual(colors, [{ id: uuid(801), color: '#12aBef' }]);
+  const ack = f.messages('CAD_ACK').find(value => value.requestId === command.requestId);
+  assert.deepEqual(ack.payload, { componentId: uuid(801), phase: 'colored', received: 0 });
+  f.send('CAD_COLOR', { componentId: uuid(801), color: '#abcdef' }, { loadId: uuid(999) });
+  f.send('CAD_COLOR', { componentId: uuid(801), color: 'red' });
+  await turn();
+  assert.equal(colors.length, 1);
+  f.bridge.dispose();
+});
+
 const barrierRequest = () => ({ captureId: uuid(9100), scope: { projectId: uuid(2), modelVersionId: uuid(3), contentFingerprint: 'b'.repeat(64),
   selectionRevision: '12', captureFrameId: uuid(9101), captureFrameSha256: 'd'.repeat(64), coordinateFrame: 'canonical-world-metres' }, selectedParents: [{
   selectionId: uuid(9102), kind: 'wall', objectId: 'dbid:23', dbId: 23, externalId: null, name: 'Selected wall', identityBasis: 'version-local-only', inclusion: 'own-and-all-descendant-fragments' }] });

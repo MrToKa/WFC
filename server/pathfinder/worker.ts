@@ -96,12 +96,13 @@ function retainedStrategyCompatible(response:EngineResponse,dependencies:Depende
 export function buildCableEngineRequest(dependencies:DependencySnapshot,requestId:string,timeoutMilliseconds:number,retained?:EngineResponse):EngineInvocation {
   const purposeRouting = 'cablePurposeRouting' in dependencies ? dependencies.cablePurposeRouting : undefined;
   const purposePermissions = purposeRouting ? { allowedPurposeRouteCodes:purposeRouting.allowedRouteCodes } : {};
+  const overlay = dependencies.routing.cadOverlay ? {cadOverlay:dependencies.routing.cadOverlay} : {};
   if(dependencies.schemaVersion==='pathfinder.dependencies.v8'){
     if(retained)throw new PathFinderError('ENGINE_RETAINED_GEOMETRY_INVALID',502,'Protected routing requires a fresh complete route and barrier proof.');
     const {barrierRouting:_intent,...numericOptions}=dependencies.options;
     return {schemaVersion:'pathfinder.model.runner.v2',requestId,operation:'calculate',projectId:dependencies.projectId,
       modelVersionId:dependencies.model.id,snapshotId:dependencies.artifact.id,snapshotSha256:dependencies.artifact.sha256,
-      timeoutMilliseconds,includeLengthLedger:true,barriers:dependencies.barriers,...purposePermissions,
+      timeoutMilliseconds,includeLengthLedger:true,barriers:dependencies.barriers,...purposePermissions,...overlay,
       ...(cableDirectSecondaryPolicy(dependencies)?{directSecondaryPolicy:DIRECT_SECONDARY_POLICY}:{}),
       category:cableEngineCategory(dependencies),from:{x:dependencies.from.point[0],y:dependencies.from.point[1],z:dependencies.from.point[2]},
       to:{x:dependencies.to.point[0],y:dependencies.to.point[1],z:dependencies.to.point[2]},options:numericOptions,
@@ -110,7 +111,7 @@ export function buildCableEngineRequest(dependencies:DependencySnapshot,requestI
   const policy=cableDirectSecondaryPolicy(dependencies),route=retained?.route;
   if(retained&&!retainedStrategyCompatible(retained,dependencies))throw new PathFinderError('ENGINE_RETAINED_GEOMETRY_INVALID',502,'The retained calculation strategy is unavailable or incompatible; calculate a fresh route.');
   return {schemaVersion:'pathfinder.model.runner.v1',requestId,operation:route?'design':'calculate',projectId:dependencies.projectId,
-    modelVersionId:dependencies.model.id,snapshotId:dependencies.artifact.id,snapshotSha256:dependencies.artifact.sha256,timeoutMilliseconds,includeLengthLedger:true,
+    modelVersionId:dependencies.model.id,snapshotId:dependencies.artifact.id,snapshotSha256:dependencies.artifact.sha256,timeoutMilliseconds,includeLengthLedger:true,...overlay,
     ...(policy?{directSecondaryPolicy:policy}:{}),
     ...(route?{route:{success:true,lengthMeters:route.lengthMeters,fromDistanceMeters:route.fromDistanceMeters,toDistanceMeters:route.toDistanceMeters,
       fromRequiresSecondary:route.fromRequiresSecondary,toRequiresSecondary:route.toRequiresSecondary,

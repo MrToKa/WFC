@@ -232,6 +232,12 @@ export class ViewerController {
     await this.sendAsync('CAD_FOCUS', { componentId }, 'CAD_ACK');
   }
 
+  async setCadComponentColor(componentId: string, color: string): Promise<void> {
+    if (!/^#[0-9a-fA-F]{6}$/.test(color)) throw new Error('Choose a six-digit hexadecimal color.');
+    if (!this.getLoadSnapshot()?.ready || !await this.checkSelection()) throw new Error('Viewer model access changed.');
+    await this.sendAsync('CAD_COLOR', { componentId, color }, 'CAD_ACK');
+  }
+
   private onMessage = (event: MessageEvent): void => {
     if (this.disposed || event.origin !== window.location.origin || event.source !== this.iframe.contentWindow) return;
     const message = validateEnvelope(event.data, 'frame-to-parent');
@@ -318,7 +324,7 @@ export class ViewerController {
     if (message.type === 'CAD_ACK') {
       const expected: Record<string, string> = {
         CAD_BEGIN: 'begun', CAD_APPEND: 'appended', CAD_COMMIT: 'displayed',
-        CAD_TRANSFORM: 'moved', CAD_REMOVE: 'removed', CAD_FOCUS: 'focused',
+        CAD_TRANSFORM: 'moved', CAD_REMOVE: 'removed', CAD_FOCUS: 'focused', CAD_COLOR: 'colored',
       };
       const phase = expected[pending.envelope.type];
       const payload = pending.envelope.payload;

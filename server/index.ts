@@ -6,6 +6,7 @@ import { createApp } from './app.js';
 import { config } from './config.js';
 import { initializeDatabase } from './db.js';
 import { initializeCadDesignSchema } from './cadDesign/schema.js';
+import { initializeCadRouteGroupsSchema } from './cadDesign/routeGroupsSchema.js';
 import { initializeMaterialTrayCadSchema } from './materialCad/schema.js';
 import { pool } from './db.js';
 import { initializeObjectStorage } from './services/objectStorageService.js';
@@ -60,6 +61,7 @@ const startServer = async (): Promise<void> => {
     if (process.env.WFC_CAD_DESIGN_ENABLED === 'true') {
       await initializeMaterialTrayCadSchema(pool);
       await initializeCadDesignSchema(pool);
+      await initializeCadRouteGroupsSchema(pool);
     }
     await initializePathFinderRuntime();
     if (config.https.enabled) {

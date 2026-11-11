@@ -30,7 +30,7 @@ beforeEach(() => {
     lifecycleKey: 'test-lifecycle', model: null, checking: false, result: null, operationId: null, currentRoute: null, canShow: true, canZoom: false,
     show: vi.fn(async () => {}), showCable: vi.fn(async () => {}), retryRoute: vi.fn(async () => {}), terminateAccess: vi.fn(), invalidateCableRoute: vi.fn(),
     clear: vi.fn(), zoom: vi.fn(), retry: vi.fn(), showCadComponent: vi.fn(async () => {}), pickCadAnchor: vi.fn(async () => ({ objectId: 1, point: [1, 2, 3] as [number, number, number], derivation: 'picked-surface-point' as const })),
-    moveCadComponent: vi.fn(async () => {}), removeCadComponent: vi.fn(async () => {}), focusCadComponent: vi.fn(async () => {}),
+    moveCadComponent: vi.fn(async () => {}), setCadComponentColor: vi.fn(async () => {}), removeCadComponent: vi.fn(async () => {}), focusCadComponent: vi.fn(async () => {}),
   };
   cables = { scope: { projectId, token: 'token-a' }, cables: [], snapshotGeneration: 0, rows: [], omittedCount: 0, taggedCount: 0, hasSnapshot: false, hasActivated: false,
     loading: false, refreshing: false, stale: true, error: null, search: '', selectedCableId: null, selectedCable: null, selectedHidden: false, notice: null, canActivate: false,

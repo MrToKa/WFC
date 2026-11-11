@@ -71,7 +71,7 @@ describe('Materials components', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'Remove current STEP' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Remove STEP', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove STEP' }));
     await waitFor(() => expect(screen.getByText('No STEP', { exact: true })).toBeInTheDocument());
     expect(screen.getByRole('button', { name: 'Download revision 1' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add STEP file' })).toBeDisabled();
@@ -89,7 +89,7 @@ describe('Materials components', () => {
     renderSection();
     fireEvent.click(await screen.findByRole('button', { name: /KL-300 · Straight ladder/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'Remove current STEP' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Remove STEP', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove STEP' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('MATERIAL_CAD_ALREADY_INACTIVE');
     expect(screen.getByText('STEP attached', { exact: true })).toBeInTheDocument();
   });

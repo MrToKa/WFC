@@ -25,6 +25,16 @@ try {
     Invoke-Checked 'Locked npm installation' { npm ci }
     Invoke-Checked 'Frontend/server TypeScript' { npm run typecheck }
     Invoke-Checked 'Lint' { npm run lint }
+    Invoke-Checked 'Build routing engine with CAD network overlays' {
+        dotnet build pathfinder-engine/tools/PathFinder.ModelRunner --configuration Release
+    }
+    Invoke-Checked 'Actual CAD overlay routing and saved route groups' {
+        $previousCadRunner = $env:PF_MODEL_RUNNER_DLL
+        try {
+            $env:PF_MODEL_RUNNER_DLL = Join-Path $repo 'pathfinder-engine/tools/PathFinder.ModelRunner/bin/Release/net9.0/PathFinder.ModelRunner.dll'
+            npx vitest run --maxWorkers=1 --minWorkers=1 --testTimeout=45000 server/pathfinder/cadOverlay.engine.test.ts server/cadDesign/routeGroups.test.ts server/cadDesign/routePublication.test.ts server/cadDesign/routePublication.http.test.ts server/cadDesign/routeAlignment.test.ts server/pathfinder/cadOverlay.test.ts src/pages/ProjectDetails/CadRoutesPanel.test.tsx
+        } finally { $env:PF_MODEL_RUNNER_DLL = $previousCadRunner }
+    }
     Invoke-Checked 'CAD and Viewer focused unit tests' {
         npx vitest run --maxWorkers=1 --minWorkers=1 --testTimeout=15000 src/viewer/ViewerController.test.ts src/viewer/componentTransforms.test.ts src/viewer/pocConnectorCatalog.test.ts server/cadDesign/stepFileValidation.test.ts server/cadDesign/connectionGeometry.test.ts server/middleware.test.ts src/pages/ProjectDetails/RoutingsViewerTab.test.tsx src/ProjectAccess.test.tsx
     }

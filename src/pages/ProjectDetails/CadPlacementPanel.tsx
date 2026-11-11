@@ -6,6 +6,7 @@ import { eulerDegreesToQuaternion, quaternionToEulerDegrees, rotateAboutLocalAxi
 import { MATE_OPPOSING_FACE } from '@/viewer/pocConnectorCatalog';
 import { supportsStraightCut, getInstanceCadPorts } from '../../../shared/cadLengths';
 import type { ViewerController } from '@/viewer/ViewerController';
+import { CadRoutesPanel } from './CadRoutesPanel';
 
 type CatalogueItem = { id: string; partNumber: string; manufacturer: string; originalFilename: string; sourceSha256: string; conversionStatus: string; componentKind?: string; materialAssetId?: string | null; cadRevision?: number | null };
 type Design = { id: string; modelVersionId: string; name: string; status: string; revision: number; activeModel: boolean };
@@ -20,7 +21,8 @@ type Instance = {
 };
 type Props = { projectId: string; modelVersionId: string; token: string; catalogue: CatalogueItem[];
   onPick: ViewerController['pickPoint']; onShow: ViewerController['showCadComponent']; onMove: ViewerController['moveCadComponent'];
-  onFocus?: ViewerController['focusCadComponent']; onRemove?: ViewerController['removeCadComponent']; };
+  onFocus?: ViewerController['focusCadComponent']; onRemove?: ViewerController['removeCadComponent'];
+  onColor?: ViewerController['setCadComponentColor']; };
 type Coordinates = { x: string; y: string; z: string; rx: string; ry: string; rz: string };
 const empty: Coordinates = { x: '0', y: '0', z: '0', rx: '0', ry: '0', rz: '0' };
 
@@ -34,7 +36,7 @@ function quaternionEuler(instance: Instance): Pick<Coordinates, 'rx' | 'ry' | 'r
   return rotationFields({ x: instance.qx, y: instance.qy, z: instance.qz, w: instance.qw });
 }
 
-export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue, onPick, onShow, onMove, onFocus, onRemove }: Props) {
+export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue, onPick, onShow, onMove, onFocus, onRemove, onColor }: Props) {
   const rendered = useRef(new Set<string>());
   const renderedLengths = useRef(new Map<string, number | null>());
   const [displayedIds, setDisplayedIds] = useState<string[]>([]);
@@ -538,6 +540,10 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
       </Button>
     </li>)}</ul>
 
+    {designId && onColor ? <CadRoutesPanel projectId={projectId} designId={designId} token={token}
+      instances={instances} displayedIds={displayedIds} onColor={onColor} onGeometryChanged={async () => {
+        setEditingId(''); setPendingSnap(null); setCoordinates(empty); await reload();
+      }} /> : null}
     <ul aria-label="Saved connector relationships">{connections.map(connection =>
       <li key={connection.id}>
         <Caption1>{connection.sourceInstanceId.slice(0, 8)} ↔ {connection.targetInstanceId.slice(0, 8)}</Caption1>

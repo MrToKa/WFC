@@ -12,6 +12,8 @@ export const FRAME_PATH: '/viewer-runtime/7.130.0/index.html';
 export const PARENT_TYPES: readonly string[];
 export const FRAME_TYPES: readonly string[];
 export type BridgeDirection = 'parent-to-frame' | 'frame-to-parent';
+/** Color applies only to a registered CAD instance in the owned dynamic model. */
+export interface CadColorPayload { componentId: string; color: string }
 export interface BridgeEnvelope {
   channel: typeof CHANNEL; protocolVersion: 1; instanceId: string; projectId: string;
   modelVersionId: string | null; loadId: string | null; requestId: string;

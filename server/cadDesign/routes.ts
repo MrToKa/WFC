@@ -11,8 +11,14 @@ import { z } from 'zod';
 import { pool } from '../db.js';
 import { requireProjectEdit } from '../middleware.js';
 import { getObjectStream, getProjectBucket } from '../services/objectStorageService.js';
+import { cadRouteGroupsRouter } from './routeGroupsRoutes.js';
+import { cadRoutePublicationRouter } from './routePublication.js';
+import { cadRouteAlignmentRouter } from './routeAlignment.js';
 
 export const cadDesignRouter = Router({ mergeParams: true });
+cadDesignRouter.use(cadRouteGroupsRouter);
+cadDesignRouter.use(cadRoutePublicationRouter);
+cadDesignRouter.use(cadRouteAlignmentRouter);
 
 const uuid = z.string().uuid();
 const catalogueInput = z.object({ assetId: uuid }).strict();
@@ -52,7 +58,13 @@ type CadRequest = Request<{projectId: string; catalogItemId?: string; designId?:
 // Express 4 does not automatically forward rejected async handler promises.
 const safe = (handler: (req: CadRequest, res: Response) => Promise<void>) =>
   (req: CadRequest, res: Response, next: NextFunction): void => {
-    void handler(req, res).catch(next);
+    void handler(req, res).catch((error: unknown) => {
+      const code = (error as { code?: string })?.code;
+      if (code === '23503' || code === '23001') { res.status(409).json({ code: 'CAD_INSTANCE_GROUPED', error: 'Remove the component from its saved route before deleting it.' }); return; }
+      if (code === '23514') { res.status(409).json({ code: 'CAD_INSTANCE_LOCKED', error: 'Withdraw the published route or disconnect the component before changing it.' }); return; }
+      if (code === '40P01' || code === '40001') { res.status(409).json({ code: 'CAD_DESIGN_CONFLICT', error: 'The design changed concurrently. Refresh and retry.' }); return; }
+      next(error);
+    });
   };
 
 const failure = (res: Response, status: number, code: string): void => {

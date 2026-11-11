@@ -11,7 +11,7 @@ class FakeGeometry {
 class FakeAttribute {
   constructor(values, itemSize) { this.values = values; this.itemSize = itemSize; }
 }
-class FakeMaterial {
+class FakeUnlitMaterial {
   constructor(options) { this.options = options; }
 }
 class FakeVector3 {
@@ -35,6 +35,10 @@ class FakeInstances {
   setTransformWorld(id, matrix) {
     if (!this.records.has(id)) throw new Error('unknown instance');
     this.records.get(id).transform = matrix;
+  }
+  setMaterial(id, material) {
+    if (!this.records.has(id)) throw new Error('unknown instance');
+    this.records.get(id).material = material;
   }
 }
 class FakeModel {
@@ -62,7 +66,7 @@ function fixture() {
     refresh() { this.refreshCount++; },
   };
   const window = { Autodesk: { Viewing: {
-    Scene: { BufferGeometry: FakeGeometry, BufferAttribute: FakeAttribute, StandardMaterial: FakeMaterial, Side: { Double: 'double' } },
+    Scene: { BufferGeometry: FakeGeometry, BufferAttribute: FakeAttribute, UnlitMaterial: FakeUnlitMaterial, Side: { Double: 'double' } },
     Math: { Matrix4: FakeMatrix4, Vector3: FakeVector3, Quaternion: FakeQuaternion },
     Model: FakeModel,
   } } };
@@ -91,6 +95,9 @@ test('dynamic STEP mesh uses world-mm to model-unit conversion without mutating 
   assert.deepEqual([saved.transform.scale.x, saved.transform.scale.y, saved.transform.scale.z], [0.001, 0.001, 0.001]);
   assert.deepEqual([...saved.geometry.indices], [0, 1, 2]);
   assert.equal(saved.geometry.attributes.position.itemSize, 3);
+  assert.ok(saved.material instanceof FakeUnlitMaterial);
+  assert.deepEqual(saved.material.options, { color: 0xd9ab33, side: 'double', opacity: 1,
+    transparent: false, depthTest: true, depthWrite: true, fog: false });
   assert.ok(f.viewer.refreshCount > 0);
 });
 
@@ -183,4 +190,46 @@ test('dynamic model cannot take ownership of the source model identity', () => {
   const scene = createCadSceneController(f.viewer, { window: f.window, sourceModel: f.sourceModel });
   assert.throws(() => scene.add('tray', f.mesh, f.transform), /identity/);
   assert.deepEqual(f.viewer.unloaded, [f.viewer.shown[0]]);
+});
+
+test('CAD color affects only the owned instance and survives movement and replacement geometry', () => {
+  const f = fixture();
+  const scene = createCadSceneController(f.viewer, { window: f.window, sourceModel: f.sourceModel });
+  scene.add('colored', f.mesh, f.transform);
+  scene.add('neighbor', f.mesh, f.transform);
+  const records = f.viewer.shown[0].instances.records;
+  const [colored, neighbor] = [...records.values()];
+  const geometry = colored.geometry;
+  const transform = colored.transform;
+  const neighborMaterial = neighbor.material;
+  scene.setColor('colored', '#12aBef');
+  assert.equal(colored.material.options.color, 0x12abef);
+  assert.ok(colored.material instanceof FakeUnlitMaterial);
+  assert.deepEqual(colored.material.options, { color: 0x12abef, side: 'double', opacity: 1,
+    transparent: false, depthTest: true, depthWrite: true, fog: false });
+  assert.equal(colored.geometry, geometry);
+  assert.equal(colored.transform, transform);
+  assert.equal(neighbor.material, neighborMaterial);
+  scene.update('colored', { ...f.transform, positionMm: { x: 100000, y: 200000, z: 300000 } });
+  assert.equal(colored.material.options.color, 0x12abef);
+  scene.add('colored', { ...f.mesh, positions: f.mesh.positions.map(v => v / 2) }, f.transform);
+  assert.equal([...records.values()].find(item => item !== neighbor).material.options.color, 0x12abef);
+  assert.equal(f.viewer.model, f.sourceModel);
+  scene.remove('colored');
+  scene.add('colored', f.mesh, f.transform);
+  assert.equal([...records.values()].find(item => item !== neighbor).material.options.color, 0xd9ab33);
+  scene.dispose();
+});
+
+test('CAD color rejects foreign instances, malformed values and disposed scenes', () => {
+  const f = fixture();
+  const scene = createCadSceneController(f.viewer, { window: f.window, sourceModel: f.sourceModel });
+  scene.add('owned', f.mesh, f.transform);
+  for (const value of ['red', '#abc', '#1234567', '123456', '#gg0000', null, 123])
+    assert.throws(() => scene.setColor('owned', value), /Invalid CAD color/);
+  assert.throws(() => scene.setColor('source-svf-id', '#123456'), /Unknown CAD instance/);
+  assert.equal([...f.viewer.shown[0].instances.records.values()][0].material.options.color, 0xd9ab33);
+  scene.dispose();
+  assert.throws(() => scene.setColor('owned', '#123456'), /Unknown CAD instance/);
+  assert.equal(f.viewer.model, f.sourceModel);
 });

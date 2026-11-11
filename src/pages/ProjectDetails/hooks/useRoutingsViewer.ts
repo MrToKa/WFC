@@ -261,6 +261,11 @@ export function useRoutingsViewer({ projectId, loadedProjectId, token, container
     if (!run || run.scope !== scope || !current(run) || !run.controller?.getLoadSnapshot()?.ready) throw new Error('Active model unavailable.');
     await run.controller.focusCadComponent(componentId);
   }, [scope, current]);
+  const setCadComponentColor = useCallback(async (...args: Parameters<ViewerController['setCadComponentColor']>): Promise<void> => {
+    const run = runRef.current;
+    if (!run || run.scope !== scope || !current(run) || !run.controller?.getLoadSnapshot()?.ready) throw new Error('Active model unavailable.');
+    await run.controller.setCadComponentColor(...args);
+  }, [scope, current]);
   const visible = state.scope === scope ? state : initial(scope);
-  return { ...visible, show, showCable, pickCadAnchor, showCadComponent, moveCadComponent, removeCadComponent, focusCadComponent, invalidateCableRoute, retryRoute, terminateAccess, clear, zoom, retry, canShow: visible.phase === 'ready', canZoom: visible.phase === 'ready' && !visible.checking && Boolean(visible.result && visible.result.drawableCount > 0 && visible.result.lineCount > 0) };
+  return { ...visible, show, showCable, pickCadAnchor, showCadComponent, moveCadComponent, removeCadComponent, focusCadComponent, setCadComponentColor, invalidateCableRoute, retryRoute, terminateAccess, clear, zoom, retry, canShow: visible.phase === 'ready', canZoom: visible.phase === 'ready' && !visible.checking && Boolean(visible.result && visible.result.drawableCount > 0 && visible.result.lineCount > 0) };
 }

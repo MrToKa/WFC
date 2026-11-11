@@ -50,3 +50,14 @@ test('CAD focus accepts only a current-model component UUID and returns a focuse
   assert.equal(validateEnvelope(parent('CAD_FOCUS', { componentId }, { modelVersionId: null, loadId: null }), 'parent-to-frame'), null);
   assert.ok(validateEnvelope(parent('CAD_ACK', { componentId, phase: 'focused', received: 0 }), 'frame-to-parent'));
 });
+
+test('CAD color accepts only owned UUID commands, exact hex and a model-scoped colored acknowledgement', () => {
+  assert.ok(validateEnvelope(parent('CAD_COLOR', { componentId, color: '#12aBef' }), 'parent-to-frame'));
+  for (const color of ['red', '#123', '#1234567', '123456', '#gg0000', null, 123])
+    assert.equal(validateEnvelope(parent('CAD_COLOR', { componentId, color }), 'parent-to-frame'), null);
+  assert.equal(validateEnvelope(parent('CAD_COLOR', { componentId: 42, color: '#123456' }), 'parent-to-frame'), null);
+  assert.equal(validateEnvelope(parent('CAD_COLOR', { componentId, color: '#123456', objectId: 42 }), 'parent-to-frame'), null);
+  assert.equal(validateEnvelope(parent('CAD_COLOR', { componentId, color: '#123456' }), 'frame-to-parent'), null);
+  assert.equal(validateEnvelope(parent('CAD_COLOR', { componentId, color: '#123456' }, { modelVersionId: null, loadId: null }), 'parent-to-frame'), null);
+  assert.ok(validateEnvelope(parent('CAD_ACK', { componentId, phase: 'colored', received: 0 }), 'frame-to-parent'));
+});

@@ -46,7 +46,8 @@ export function geometryHash(dependencies: DependencySnapshot): string {
       ...(Object.hasOwn(dependencies,'barrierQualification')?{barrierQualification:dependencies.barrierQualification}:{})} : {}),
     ...('cablePurposeRouting' in dependencies && dependencies.cablePurposeRouting ? {cablePurposeRouting:dependencies.cablePurposeRouting} : {}),
     routing:routing && {catalogRevision:routing.catalogRevision,routingContentSha256:routing.routingContentSha256,
-      routingPolicyRevision:routing.routingPolicyRevision,routingPolicySha256:routing.routingPolicySha256}});
+      routingPolicyRevision:routing.routingPolicyRevision,routingPolicySha256:routing.routingPolicySha256,
+      ...(routing.cadOverlay ? {cadOverlay:routing.cadOverlay} : {})}});
 }
 type Row = Record<string,any>;
 export type CollectedDependencies = {dependencies:DependencySnapshot|null;status:string;message:string;cable:Row};

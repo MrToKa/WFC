@@ -112,6 +112,27 @@ describe('PathFinder protected Viewer capabilities', () => {
     expect(s.send.mock.calls.some(call => call[0].type === 'CAD_FOCUS')).toBe(false);
   });
 
+  it('colors only through an acknowledged current-model CAD command', async () => {
+    const s = await loaded();
+    const componentId = generateId();
+    const colored = s.c.setCadComponentColor(componentId, '#12aBef');
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'CAD_COLOR')).toBe(true));
+    const command = s.send.mock.calls.find(call => call[0].type === 'CAD_COLOR')![0];
+    expect(command.payload).toEqual({ componentId, color: '#12aBef' });
+    expect(command.modelVersionId).toBe(versionId);
+    expect(command.loadId).toBe(s.identity.loadId);
+    s.message('CAD_ACK', { componentId, phase: 'colored', received: 0 }, command.requestId, s.identity);
+    await expect(colored).resolves.toBeUndefined();
+  });
+
+  it('rejects invalid color and unavailable model access before sending CAD color', async () => {
+    const s = setup();
+    for (const color of ['red', '#123', '#1234567', '123456', '#zz0000'])
+      await expect(s.c.setCadComponentColor(generateId(), color)).rejects.toThrow('hexadecimal color');
+    await expect(s.c.setCadComponentColor(generateId(), '#123456')).rejects.toThrow('Viewer model access changed');
+    expect(s.send.mock.calls.some(call => call[0].type === 'CAD_COLOR')).toBe(false);
+  });
+
   it('reads one object GUID quietly without changing route or selection and rejects substituted object IDs', async () => {
     const s = await loaded(), guid = '7586ffbb-1d0a-5942-b687-06884123c866';
     s.send.mockImplementation(value => {

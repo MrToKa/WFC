@@ -147,7 +147,7 @@ internal static partial class Program
         var cacheRoot = SafeChild(root, "cache", create: true);
         var preparationClock = Stopwatch.StartNew();
         var execution = PrepareSnapshot(input, cacheRoot, request, token, session);
-        var prepared = execution.Prepared; var model = execution.Model; var lookupScope = execution.LookupScope;
+        var prepared = MergeCadOverlay(execution.Prepared, request, token); var model = execution.Model; var lookupScope = execution.LookupScope;
         using var graphPreparation = request.Operation == "calculate"
             ? session is null
                 ? new GraphPreparationRuntime().Begin(cacheRoot, prepared.Key, request.RequestId, preparationClock.Elapsed.TotalMilliseconds, token)
@@ -522,6 +522,8 @@ internal sealed record Request
     public required string ModelVersionId { get; init; }
     public string? SnapshotId { get; init; }
     public string? SnapshotSha256 { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public CadOverlayEnvelope? CadOverlay { get; init; }
     public required int TimeoutMilliseconds { get; init; }
     public string? Category { get; init; }
     public PointInput? From { get; init; }
