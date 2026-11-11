@@ -127,20 +127,33 @@ describe('proposed instance length API', () => {
     expect(converter.convertStepToMesh).not.toHaveBeenCalled();
   });
   it('keeps MTO quantity groups separate by cut length and includes measured total length', async () => {
-    db.query.mockResolvedValue({ rows: [{ manufacturer: 'NDX', part_number: 'KL', family: 'KL', component_kind: 'straight', source_sha256: STRAIGHT_SOURCE_SHA256, quantity: 2, length_mm: 2500 }] });
+    const part={id:instance,revision:1,catalog_item_id:catalog,catalog_id:catalog,manufacturer:'NDX',part_number:'KL',family:'KL',component_kind:'straight',
+      source_sha256:STRAIGHT_SOURCE_SHA256,original_filename:filename,source_object_key:'canonical/source.step',material_asset_id:catalog,cad_revision:1,cut_length_mm:2500,
+      x_mm:0,y_mm:0,z_mm:0,qx:0,qy:0,qz:0,qw:1};
+    const parts=[part,{...part,id:'00000000-0000-4000-8000-000000000005'}];
+    const client={query:vi.fn(async(sql:string)=>{
+      if(sql.startsWith('SELECT model_version_id,revision'))return {rows:[{model_version_id:catalog,revision:4}]};
+      if(sql.startsWith('SELECT id FROM cad_design_instances'))return {rows:parts.map(row=>({id:row.id}))};
+      if(sql.startsWith('SELECT i.id,i.revision'))return {rows:parts};return {rows:[]};
+    }),release:vi.fn()};db.connect.mockResolvedValue(client);
     const response = await fetch(`${base}/materials.csv`);
     const csv = await response.text();
     expect(csv).toContain('"Length (mm)","Total length (m)"');
     expect(csv).toContain(',"2","2500","5"');
-    expect(db.query.mock.calls[0][0]).toContain('GROUP BY c.id, a.revision, p.component_kind, i.cut_length_mm');
+    expect(client.query).toHaveBeenCalledWith(expect.stringContaining('i.id=ANY($3::uuid[])'),expect.any(Array));
   });
   it('forwards saved cut lengths in STEP export without changing the pinned part source', async () => {
-    const part = { original_filename: filename, source_object_key: 'canonical/source.step', cut_length_mm: 2500, x_mm: 0, y_mm: 0, z_mm: 0, qx: 0, qy: 0, qz: 0, qw: 1 };
-    db.query.mockResolvedValueOnce({ rows: [{ model_version_id: catalog, revision: 4 }] }).mockResolvedValueOnce({ rows: [part] }).mockResolvedValueOnce({ rows: [{ revision: 4 }] });
+    const part = {id:instance,revision:1,catalog_item_id:catalog,catalog_id:catalog,manufacturer:'NDX',part_number:'KL',family:'KL',material_asset_id:catalog,cad_revision:1,component_kind:'straight',source_sha256:STRAIGHT_SOURCE_SHA256,
+      original_filename: filename, source_object_key: 'canonical/source.step', cut_length_mm: 2500, x_mm: 0, y_mm: 0, z_mm: 0, qx: 0, qy: 0, qz: 0, qw: 1 };
+    const client={query:vi.fn(async(sql:string)=>{
+      if(sql.startsWith('SELECT model_version_id,revision'))return {rows:[{model_version_id:catalog,revision:4}]};
+      if(sql.startsWith('SELECT id FROM cad_design_instances'))return {rows:[{id:instance}]};
+      if(sql.startsWith('SELECT i.id,i.revision'))return {rows:[part]};return {rows:[]};
+    }),release:vi.fn()};db.connect.mockResolvedValue(client);
     assembly.exportStepAssembly.mockResolvedValue(Buffer.from('ISO-10303-21;'));
     expect((await fetch(`${base}/assembly.step`)).status).toBe(200);
     expect(assembly.exportStepAssembly).toHaveBeenCalledWith([part]);
-    expect(db.query.mock.calls[1][0]).toContain('i.cut_length_mm');
+    expect(client.query).toHaveBeenCalledWith(expect.stringContaining('i.cut_length_mm'),expect.any(Array));
   });
   it.each([[2500, 201], [6000, 409]])('checks saved connectors at the shortened end rather than source Z=%s', async (targetZ, status) => {
     const targetId = '00000000-0000-4000-8000-000000000005';

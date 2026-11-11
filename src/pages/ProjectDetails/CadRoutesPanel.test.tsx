@@ -77,6 +77,47 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('complete CAD routes', () => {
+  it('does not submit stale automatic draft IDs that are outside the current unassigned component scope', async () => {
+    let routes: CadRouteGroup[] = [];
+    fetchMock.mockImplementation(async (url: string, options: RequestInit = {}) => {
+      if (options.method === 'POST') {
+        const route = { ...draft, name: 'TRAY-01', instanceIds: [id(1)] };
+        routes = [route];
+        return { ok: true, json: async () => ({ route }) };
+      }
+      return {
+        ok: true,
+        json: async () => (url.endsWith('/auto-attachments') ? autoResult : { routes }),
+      };
+    });
+    const panel = (draftIds: string[]) => (
+      <FluentProvider theme={webLightTheme}>
+        <CadRoutesPanel
+          projectId={id(50)}
+          designId={id(51)}
+          token="cad-token"
+          instances={instances}
+          displayedIds={displayedIds}
+          onColor={onColor}
+          memberScopeIds={[id(1)]}
+          newDraftInstanceIds={draftIds}
+          creationActive
+          onNewRoute={vi.fn()}
+        />
+      </FluentProvider>
+    );
+    const view = render(panel([]));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Save complete route' })).toBeEnabled(),
+    );
+    view.rerender(panel([id(1), id(2)]));
+    await waitFor(() => expect(screen.getByLabelText(`Include component ${id(1)}`)).toBeChecked());
+    expect(screen.queryByLabelText(`Include component ${id(2)}`)).not.toBeInTheDocument();
+    fields();
+    fireEvent.click(screen.getByRole('button', { name: 'Save complete route' }));
+    await screen.findByText('Route saved. Its colour is applied to all member components.');
+    expect(JSON.parse(writes()[0][1].body).instanceIds).toEqual([id(1)]);
+  });
   it('adds a saved route to the Trays list without a prepared network or endpoint attachment', async () => {
     const geometryChanged = vi.fn(async () => {});
     const traysChanged = vi.fn(async () => {});

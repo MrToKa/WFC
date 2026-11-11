@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { pool } from '../db.js';
 import { requireProjectEdit } from '../middleware.js';
 import { getObjectStream, getProjectBucket } from '../services/objectStorageService.js';
+import { assertCadExportCurrent, cadExportFilename, cadMaterialRows, CadExportError, parseCadExportScope, readCadExportSnapshot, type CadExportSnapshot } from './scopedExports.js';
 import { cadRouteGroupsRouter } from './routeGroupsRoutes.js';
 import { cadRoutePublicationRouter } from './routePublication.js';
 import { cadRouteAlignmentRouter } from './routeAlignment.js';
@@ -424,83 +425,51 @@ cadDesignRouter.delete('/designs/:designId/instances/:instanceId', requireProjec
   } finally { client.release(); }
 }));
 
-cadDesignRouter.get('/designs/:designId/materials.csv', safe(async (req: CadRequest, res: Response) => {
+const safeCadExport=(work:(req:CadRequest,res:Response)=>Promise<void>)=>safe(async(req,res)=>{
+  try{await work(req,res);}catch(error){
+    if(error instanceof CadExportError){res.status(error.status).json({code:error.code,message:error.message});return;}
+    throw error;
+  }
+});
+function cadExportHeaders(res:Response,snapshot:CadExportSnapshot,format:'step'|'csv') {
+  res.setHeader('Content-Type',format==='step'?'application/step':'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition',`attachment; filename="${cadExportFilename(snapshot,format)}"`);
+  res.setHeader('Cache-Control','private, no-store');
+  res.setHeader('X-Content-Type-Options','nosniff');
+  res.setHeader('X-WFC-Source-Model-Version',snapshot.modelVersionId);
+  res.setHeader('X-WFC-Design-Revision',String(snapshot.designRevision));
+  res.setHeader('X-WFC-Export-Scope',snapshot.route?'route':'proposal');
+  if(snapshot.route){res.setHeader('X-WFC-Route-Id',snapshot.route.id);res.setHeader('X-WFC-Route-Revision',String(snapshot.route.revision));}
+}
+cadDesignRouter.get('/designs/:designId/materials.csv', safeCadExport(async (req: CadRequest, res: Response) => {
   if (!uuid.safeParse(req.params.designId).success) {
     failure(res, 400, 'INVALID_DESIGN_ID'); return;
   }
-  const rows = await pool.query(
-    `SELECT c.manufacturer, c.part_number, c.family, c.source_sha256,
-            c.material_component_cad_asset_id AS asset_id, a.revision AS cad_revision,
-            p.component_kind,
-            CASE WHEN p.component_kind='straight'
-              AND upper(c.original_filename)='NDX_KL_60-303_F_MED_214.STEP'
-              AND c.source_sha256='d381a3f4a09559e99119e3e591137f73780d16bf832019f93b20627adc5609cd'
-              THEN COALESCE(i.cut_length_mm,6000) ELSE NULL END AS length_mm,
-            COUNT(i.id)::int AS quantity
-       FROM cad_design_instances i
-       JOIN cad_catalog_items c ON c.project_id=i.project_id AND c.id=i.catalog_item_id
-       LEFT JOIN material_component_cad_assets a ON a.id=c.material_component_cad_asset_id
-       LEFT JOIN material_components p ON p.id=a.component_id
-      WHERE i.project_id=$1 AND i.design_id=$2
-      GROUP BY c.id, a.revision, p.component_kind, i.cut_length_mm
-      ORDER BY c.manufacturer, c.part_number, i.cut_length_mm NULLS LAST`,
-    [req.params.projectId, req.params.designId],
-  );
+  const routeId=parseCadExportScope(req.query);
+  const snapshot=await readCadExportSnapshot(pool,req.params.projectId,req.params.designId!,routeId);
   const lines = [
     ['Manufacturer','Part number','Family','Component type','CAD asset','CAD revision','Source SHA-256','Quantity','Length (mm)','Total length (m)'].map(csvCell).join(','),
-    ...rows.rows.map(row => [row.manufacturer,row.part_number,row.family,row.component_kind ?? '',
-      row.asset_id ?? '',row.cad_revision ?? '',row.source_sha256,row.quantity,
-      row.length_mm ?? '',row.length_mm == null ? '' : Number((row.length_mm * row.quantity / 1000).toFixed(6))].map(csvCell).join(',')),
+    ...cadMaterialRows(snapshot.parts).map(({part,quantity,lengthMm}) => [part.manufacturer,part.part_number,part.family,part.component_kind ?? '',
+      part.material_asset_id ?? '',part.cad_revision ?? '',part.source_sha256,quantity,
+      lengthMm ?? '',lengthMm == null ? '' : Number((lengthMm * quantity / 1000).toFixed(6))].map(csvCell).join(',')),
   ];
-  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', 'attachment; filename="wfc-proposed-tray-mto.csv"');
-  res.setHeader('Cache-Control', 'private, no-store');
+  cadExportHeaders(res,snapshot,'csv');
   res.send('\uFEFF' + lines.join('\r\n') + '\r\n');
 }));
 
-cadDesignRouter.get('/designs/:designId/assembly.step', safe(async (req: CadRequest, res: Response) => {
+cadDesignRouter.get('/designs/:designId/assembly.step', safeCadExport(async (req: CadRequest, res: Response) => {
   if (!uuid.safeParse(req.params.designId).success) {
     failure(res, 400, 'INVALID_DESIGN_ID'); return;
   }
-  const { projectId, designId } = req.params;
-  const design = await pool.query<{ model_version_id: string; name: string; revision: number }>(
-    `SELECT model_version_id, name, revision
-       FROM cad_designs WHERE project_id=$1 AND id=$2`,
-    [projectId, designId],
-  );
-  if (!design.rows[0]) { failure(res, 404, 'CAD_DESIGN_NOT_FOUND'); return; }
-  const result = await pool.query<{
-    original_filename: string; source_object_key: string; cut_length_mm: number | null;
-    x_mm: number; y_mm: number; z_mm: number;
-    qx: number; qy: number; qz: number; qw: number;
-  }>(
-    `SELECT c.original_filename, c.source_object_key, i.cut_length_mm,
-            i.x_mm, i.y_mm, i.z_mm, i.qx, i.qy, i.qz, i.qw
-       FROM cad_design_instances i
-       JOIN cad_catalog_items c ON c.project_id=i.project_id AND c.id=i.catalog_item_id
-      WHERE i.project_id=$1 AND i.design_id=$2
-      ORDER BY i.created_at, i.id LIMIT 33`,
-    [projectId, designId],
-  );
-  if (!result.rows.length) { failure(res, 409, 'EMPTY_CAD_DESIGN'); return; }
-  if (result.rows.length > 32) { failure(res, 413, 'CAD_EXPORT_PART_LIMIT'); return; }
+  const routeId=parseCadExportScope(req.query);
+  const snapshot=await readCadExportSnapshot(pool,req.params.projectId,req.params.designId!,routeId,32);
   const { exportStepAssembly } = await import('./stepAssemblyClient.js');
-  const output = await exportStepAssembly(result.rows);
+  const output = await exportStepAssembly(snapshot.parts);
   // A client deliverable must be tied to one coherent saved design revision.
   // If another user edited the assembly during CAD generation, refuse the
   // stale export rather than returning misleading solids and metadata.
-  const revision = await pool.query<{ revision: number }>(
-    'SELECT revision FROM cad_designs WHERE project_id=$1 AND id=$2',
-    [projectId, designId],
-  );
-  if (!revision.rows[0] || revision.rows[0].revision !== design.rows[0].revision) {
-    failure(res, 409, 'DESIGN_CHANGED_DURING_EXPORT'); return;
-  }
-  res.setHeader('Content-Type', 'application/step');
-  res.setHeader('Content-Disposition', 'attachment; filename="wfc-proposed-cable-trays.step"');
-  res.setHeader('Cache-Control', 'private, no-store');
-  res.setHeader('X-WFC-Source-Model-Version', design.rows[0].model_version_id);
-  res.setHeader('X-WFC-Design-Revision', String(design.rows[0].revision));
+  await assertCadExportCurrent(pool,snapshot);
+  cadExportHeaders(res,snapshot,'step');
   res.send(output);
 }));
 
