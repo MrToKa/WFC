@@ -1,3 +1,4 @@
+import { modelCaptureErrorMessage } from './model-capture-errors.mjs';
 import { isStagedModelCaptureStart, isModelCaptureInputAppend, validateModelCaptureInputAck } from './capture-input.mjs';
 import { validatePreparationDiscoveryRequest, validatePreparationDiscoveryPage, validatePreparationDiscoveryProgress, validatePreparationSlice } from './preparation-input.mjs';
 import { validateTrayIdentityRequest, validateTrayIdentityResponse } from './tray-identity.mjs';
@@ -170,7 +171,7 @@ function payload(type, value) {
     case 'MODEL_LOADED': return exact(value, ['sdkVersion', 'format', 'nodeIndexReady']) && value.sdkVersion === SDK_VERSION && value.format === 'svf' && value.nodeIndexReady === true;
     case 'ROUTE_RESULT': return routeResult(value);
     case 'WARNING': return warning(value);
-    case 'ERROR': return exact(value, ['code', 'message', 'retryable', 'operation']) && code(value.code) && text(value.message) && typeof value.retryable === 'boolean' && typeof value.operation === 'string' && /^[A-Z_]{1,64}$/.test(value.operation);
+    case 'ERROR': return (exact(value, ['code', 'message', 'retryable', 'operation']) || modelCaptureErrorMessage(value?.code) !== null && exact(value, ['code', 'message', 'retryable', 'operation', ...(['objectId', 'fragmentId'].filter(key => Object.hasOwn(value, key)))]) && ['objectId', 'fragmentId'].every(key => !Object.hasOwn(value, key) || integer(value[key]) && value[key] <= 2147483647)) && code(value.code) && text(value.message) && typeof value.retryable === 'boolean' && typeof value.operation === 'string' && /^[A-Z_]{1,64}$/.test(value.operation);
     default: return false;
   }
 }

@@ -959,7 +959,8 @@ describe('automatic tray workflow', () => {
     await act(() => result.current.checkTrays());
     expect(api.createPreparation).toHaveBeenCalledOnce(); expect(result.current.session?.id).not.toBe(expired.id); expect(result.current.notice).toBe('Tray network updated.');
   });
-  it.each(['ready', 'error', 'no-model'] as const)('handles viewer renewal to %s after a loading data gap without losing committed parts', async phase => {
+  it.each(['CAPTURE_RELOAD_REQUIRED', 'MODEL_CAPTURE_GEOMETRY_NOT_RESIDENT'].flatMap(code =>
+    (['ready', 'error', 'no-model'] as const).map(phase => ({ code, phase }))))('handles viewer renewal to $phase after $code without losing committed parts', async ({ phase, code }) => {
     const f = automaticSetup(); let pf: ReturnType<typeof usePathFinder> = withModel(f.pf, f.store.context.scope); const readyData = pf.data;
     const parts = Array.from({ length: 4 }, (_, partIndex) => ({ ...structuredClone(f.session.plan.partPlan[0]),
       partId: partIndex === 0 ? ids.part : crypto.randomUUID(), partIndex }));
@@ -986,7 +987,7 @@ describe('automatic tray workflow', () => {
     let budgetExpired = false;
     f.capture.mockImplementation(async request => {
       if (request.preparationSlice.partId === parts[1].partId && !budgetExpired) {
-        budgetExpired = true; throw Object.assign(Error('Renew the viewer budget'), { code: 'CAPTURE_RELOAD_REQUIRED' });
+        budgetExpired = true; throw Object.assign(Error('Renew the viewer budget'), { code });
       }
       return { snapshot: { synthetic: true }, summary: {} };
     });
@@ -1009,6 +1010,24 @@ describe('automatic tray workflow', () => {
     expect(api.createPreparation).toHaveBeenCalledOnce(); expect(api.uploadPreparationPart).toHaveBeenCalledTimes(4); expect(api.mutatePreparation).toHaveBeenCalledOnce();
     expect(f.capture.mock.calls.map(([request]) => request.preparationSlice.partId)).toEqual([parts[0].partId, parts[1].partId,
       parts[1].partId, parts[2].partId, parts[3].partId]);
+  });
+  it('reports the exact capture part and safe object context without retrying malformed geometry or locking assignments', async () => {
+    const f = automaticSetup();
+    f.capture.mockRejectedValue(Object.assign(Error('PRIVATE SDK PAYLOAD'), {
+      code: 'MODEL_CAPTURE_INVALID_GEOMETRY', objectId: 427077, fragmentId: 11,
+    }));
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true));
+    await waitFor(() => expect(result.current.context).not.toBeNull());
+    await act(() => result.current.checkTrays());
+    expect(result.current.error).toContain('part 1 of 1');
+    expect(result.current.error).toContain('dbid:427077');
+    expect(result.current.error).toContain('Fragment: 11');
+    expect(result.current.error).toContain('MODEL_CAPTURE_INVALID_GEOMETRY');
+    expect(result.current.error).not.toContain('PRIVATE SDK PAYLOAD');
+    expect(result.current.busy).toBe(false); expect(result.current.unknown).toBe(false);
+    expect(result.current.canMutate).toBe(true);
+    expect(f.pf.reloadViewer).not.toHaveBeenCalled();
+    expect(api.uploadPreparationPart).not.toHaveBeenCalled(); expect(api.mutatePreparation).not.toHaveBeenCalled();
   });
   it('automatically reconciles an unknown part upload with the exact original payload before publishing and never recaptures it', async () => {
     const f = automaticSetup(); vi.mocked(api.uploadPreparationPart).mockImplementationOnce(async (_project, _token, sessionId) => {

@@ -1,3 +1,4 @@
+import { modelCaptureErrorMessage, modelCaptureErrorContext } from './model-capture-errors.mjs';
 import { readModelObjectGuid, resolveTrayObjectIdentities, validateTrayIdentityRequest } from './tray-identity.mjs';
 import { createRouteController } from './routes.mjs';
 import { createPathFinderController } from './pathfinder.mjs';
@@ -11,7 +12,7 @@ import { parseRoutingBindings } from './routing-bindings.mjs';
 
 const interrupted = () => new DOMException('Operation cancelled.', 'AbortError');
 const active = signal => { if (signal?.aborted) throw interrupted(); };
-const safeError = (code = 'RESOURCE_FAILED') => Object.assign(new Error(barrierCaptureErrorMessage(code) ?? 'The local model or one of its resources could not be read.'), { code });
+const safeError = (code = 'RESOURCE_FAILED') => Object.assign(new Error(barrierCaptureErrorMessage(code) ?? modelCaptureErrorMessage(code) ?? 'The local model or one of its resources could not be read.'), { code });
 const positiveObjectId = id => Number.isSafeInteger(id) && id > 0 && id <= 2147483647;
 
 async function locationTree(model, signal) {
@@ -236,8 +237,8 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
         operationSignal?.addEventListener('abort', abort, { once: true });
         try {
           active(operationSignal); active(currentCapture.controller.signal);
-          if (Date.now() - currentCapture.startedAt > CAPTURE_INPUT_LIMITS.milliseconds) throw safeError(currentCapture.kind === 'barrier' ? 'BARRIER_CAPTURE_DEADLINE' : 'EXTRACTION_FAILED');
-          if (currentCapture.responses >= CAPTURE_INPUT_LIMITS.responses) throw safeError(currentCapture.kind === 'barrier' ? 'BARRIER_CAPTURE_PAYLOAD_LIMIT' : 'EXTRACTION_FAILED');
+          if (Date.now() - currentCapture.startedAt > CAPTURE_INPUT_LIMITS.milliseconds) throw safeError(currentCapture.kind === 'barrier' ? 'BARRIER_CAPTURE_DEADLINE' : 'MODEL_CAPTURE_DEADLINE');
+          if (currentCapture.responses >= CAPTURE_INPUT_LIMITS.responses) throw safeError(currentCapture.kind === 'barrier' ? 'BARRIER_CAPTURE_PAYLOAD_LIMIT' : 'MODEL_CAPTURE_PAYLOAD_LIMIT');
           if (!currentCapture.iterator) {
             if (!currentCapture.stage?.ready || index !== 0) throw safeError('EXTRACTION_FAILED');
             currentCapture.iterator = captureIterator(currentCapture, currentCapture.stage.request(), currentCapture.stage.remainingResponses);
@@ -250,9 +251,10 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
           return { captureId, index, done, eventJson };
         } catch (error) {
           if (capture === currentCapture) cancelCapture();
+          if (currentCapture.kind !== 'barrier' && modelCaptureErrorMessage(error?.code)) throw Object.assign(safeError(error.code), modelCaptureErrorContext(error));
           throw error?.name === 'AbortError' ? error : safeError(currentCapture.kind === 'barrier'
             ? barrierCaptureErrorMessage(error?.code) ? error.code : 'EXTRACTION_FAILED'
-            : error?.code === 'LOOKUP_GEOMETRY_NOT_FOUND' ? 'LOOKUP_GEOMETRY_NOT_FOUND' : 'EXTRACTION_FAILED');
+            : error?.code === 'LOOKUP_GEOMETRY_NOT_FOUND' ? 'LOOKUP_GEOMETRY_NOT_FOUND' : modelCaptureErrorMessage(error?.code) ? error.code : 'EXTRACTION_FAILED');
         }
         finally { currentCapture.reading = false; operationSignal?.removeEventListener('abort', abort); }
       }

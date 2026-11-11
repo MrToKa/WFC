@@ -974,6 +974,14 @@ describe('PathFinder protected Viewer capabilities', () => {
     expect(values).toHaveLength(1); expect(values[0]).toMatchObject({ outcome: 'refused', roundCount: 1, eventCount: 0 });
     expect(JSON.stringify(values)).not.toContain('PRIVATE');
   });
+  it('retains only validated object and fragment context for a typed capture refusal', async () => {
+    const s = await loaded(600_000);
+    s.send.mockImplementation(value => {
+      if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
+      if (value.type === 'START_MODEL_CAPTURE') s.message('ERROR', { code: 'MODEL_CAPTURE_GEOMETRY_NOT_RESIDENT', message: 'Mesh unavailable', retryable: true, operation: 'START_MODEL_CAPTURE', objectId: 29713, fragmentId: 7 }, value.requestId, s.identity);
+    });
+    await expect(s.c.captureModel({ lookupRouteCodes: ['/BC1'], equipmentNames: [] })).rejects.toMatchObject({ code: 'MODEL_CAPTURE_GEOMETRY_NOT_RESIDENT', objectId: 29713, fragmentId: 7 });
+  });
   it('reports cancellation once even after a late capture reply', async () => {
     const timing = vi.fn(), s = await loaded(600_000, timing), abort = new AbortController();
     s.send.mockImplementation(value => { if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity); });

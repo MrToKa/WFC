@@ -1,3 +1,4 @@
+import { MODEL_CAPTURE_ERROR_MESSAGES, modelCaptureErrorMessage, modelCaptureErrorContext } from './model-capture-errors.mjs';
 import { CHANNEL, PROTOCOL_VERSION, SDK_VERSION, validateEnvelope, validateDescriptor, parseRouting } from './protocol.mjs';
 import { generateId } from './generate-id.mjs';
 import { isStagedModelCaptureStart, isModelCaptureInputAppend, CAPTURE_INPUT_LIMITS } from './capture-input.mjs';
@@ -14,6 +15,7 @@ const messages = {
   BARRIER_MULTIPART_JOIN_REQUIRED: 'The previous barrier producer has not confirmed it stopped.',
   BARRIER_MULTIPART_CONTROL_LIMIT: 'This Viewer has reached its observation control budget. Cancel or reconcile the retained capture before reloading.',
   ...BARRIER_CAPTURE_ERROR_MESSAGES,
+  ...MODEL_CAPTURE_ERROR_MESSAGES,
   INVALID_STATE: 'The viewer is not ready for this operation.', ROUTE_INVALID: 'The route contains invalid identifiers.',
   NO_DRAWABLE_ROUTE: 'There is no drawable route to zoom to.', SDK_UNSUPPORTED: 'The local Viewer version is not supported.',
   LOCATION_UNAVAILABLE: 'The location object could not be shown in the current model. Try again.',
@@ -92,6 +94,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     const recoverableCapture = (['START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE'].includes(command.type)
       && code !== 'BARRIER_CAPTURE_MODEL_CHANGED' && (barrierCaptureErrorMessage(code) !== null || code === 'EXTRACTION_FAILED'))
       || command.type.includes('BARRIER_MULTIPART') && code.startsWith('BARRIER_MULTIPART_');
+    const recoverableModelCapture = ['START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE'].includes(command.type) && modelCaptureErrorMessage(code) !== null && code !== 'MODEL_CAPTURE_MODEL_CHANGED';
     const recoverableLocation = command.type === 'SHOW_LOCATION' && code === 'LOCATION_UNAVAILABLE';
     const recoverableGuid = command.type === 'READ_OBJECT_GUID' && code === 'OBJECT_GUID_UNAVAILABLE';
     const recoverableTray = command.type === 'SHOW_TRAY' && code === 'TRAY_UNAVAILABLE';
@@ -102,9 +105,9 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     // a real SDK resource/access/model failure keeps its terminal identity.
     const recoverableTrayIdentity = command.type === 'RESOLVE_TRAY_IDENTITIES' && code.startsWith('TRAY_IDENTITY_');
     const recoverableDiscovery = command.type === 'READ_PREPARATION_OBJECTS' && code.startsWith('PREPARATION_') && Object.hasOwn(messages, code);
-    emit(command, 'ERROR', { code, message: messages[code], retryable: recoverableCapture || recoverableLocation || recoverableGuid || recoverableTray || recoverableRootSelection || recoverableTrayIdentity || recoverableDiscovery || ['RESOURCE_FAILED', 'SESSION_EXPIRED', 'APPEARANCE_RESTORE_FAILED'].includes(code), operation: command.type });
+    emit(command, 'ERROR', { code, message: messages[code], retryable: recoverableModelCapture || recoverableCapture || recoverableLocation || recoverableGuid || recoverableTray || recoverableRootSelection || recoverableTrayIdentity || recoverableDiscovery || ['RESOURCE_FAILED', 'SESSION_EXPIRED', 'APPEARANCE_RESTORE_FAILED'].includes(code), operation: command.type, ...(modelCaptureErrorMessage(code) ? modelCaptureErrorContext(cause) : {}) });
     finish(command);
-    onState({ phase: recoverableCapture || recoverableLocation || recoverableGuid || recoverableTray || recoverableRootSelection || recoverableTrayIdentity || recoverableDiscovery ? phase : 'error', code, operation: command.type });
+    onState({ phase: recoverableModelCapture || recoverableCapture || recoverableLocation || recoverableGuid || recoverableTray || recoverableRootSelection || recoverableTrayIdentity || recoverableDiscovery ? phase : 'error', code, operation: command.type });
   }
   function releaseCapture(scope, abort = false) {
     if (!scope) return;

@@ -266,3 +266,10 @@ test('passive object GUID messages are bounded, directional and bound to the cur
   assert.equal(validateEnvelope(envelope('READ_OBJECT_GUID', request, { modelVersionId: null, loadId: null })), null);
   assert.equal(validateEnvelope(envelope('OBJECT_GUID', reply, { modelVersionId: null, loadId: null })), null);
 });
+
+test('typed model capture errors accept only safe numeric context on allowlisted codes', () => {
+  const payload={code:'MODEL_CAPTURE_GEOMETRY_NOT_RESIDENT', message:'Safe diagnostic',retryable:true,operation:'READ_MODEL_CAPTURE',objectId:123,fragmentId:0};
+  assert.ok(validateEnvelope(envelope('ERROR',payload),'frame-to-parent'));
+  for(const change of [{objectId:'dbid:123'}, {fragmentId:-1}, {objectId:2147483648}, {privateSdkMessage:'secret'}, {code:'EXTRACTION_FAILED'}])
+    assert.equal(validateEnvelope(envelope('ERROR',{...payload,...change}),'frame-to-parent'),null);
+});

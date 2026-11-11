@@ -221,8 +221,8 @@ export class ViewerController {
     window.clearTimeout(pending.timer);
     this.pending.delete(message.requestId);
     if (message.type === 'ERROR') {
-      pending.reject?.(new ViewerAccessError(String(message.payload.code), 0));
-      if (pending.envelope.type === 'LOAD_MODEL' || ['SESSION_EXPIRED', 'ACCESS_REVOKED', 'MODEL_SELECTION_CHANGED', 'BARRIER_CAPTURE_MODEL_CHANGED', 'MODEL_UNAVAILABLE', 'RESOURCE_FAILED'].includes(String(message.payload.code))) {
+      pending.reject?.(new ViewerAccessError(String(message.payload.code), 0, typeof message.payload.objectId === 'number' ? message.payload.objectId : undefined, typeof message.payload.fragmentId === 'number' ? message.payload.fragmentId : undefined));
+      if (pending.envelope.type === 'LOAD_MODEL' || ['SESSION_EXPIRED', 'ACCESS_REVOKED', 'MODEL_SELECTION_CHANGED', 'BARRIER_CAPTURE_MODEL_CHANGED', 'MODEL_CAPTURE_MODEL_CHANGED', 'MODEL_UNAVAILABLE', 'RESOURCE_FAILED'].includes(String(message.payload.code))) {
         this.fail(String(message.payload.code));
       } else if (!(['READ_TRAY_ROOT_SELECTION', 'READ_OBJECT_GUID'].includes(pending.envelope.type) && pending.quietRecoverableErrors)) this.emit('ERROR', message.payload, message.requestId, identity);
       return;
