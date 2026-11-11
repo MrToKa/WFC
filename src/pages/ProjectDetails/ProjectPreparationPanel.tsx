@@ -248,7 +248,10 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
           const hiding = currentDisplay?.trayId === tray.projectTrayId && currentDisplay.status === 'hiding';
           const canHide = currentDisplay?.trayId === tray.projectTrayId && ['shown', 'hiding', 'hide-failed'].includes(currentDisplay.status);
           return <article key={tray.projectTrayId} aria-label={`Tray ${tray.rawName}`}
-          style={{ border: `1px solid ${tokens.colorNeutralStroke2}`, borderRadius: 6, padding: 12, minWidth: 0, overflowWrap: 'anywhere' }}>
+          style={{ border: `1px solid ${isAssigned ? tokens.colorNeutralStroke2 : tokens.colorPaletteYellowBorder2}`,
+            backgroundColor: isAssigned ? undefined : tokens.colorPaletteYellowBackground1,
+            color: isAssigned ? undefined : tokens.colorPaletteYellowForeground2,
+            borderRadius: 6, padding: 12, minWidth: 0, overflowWrap: 'anywhere' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
             <h4 style={{ margin: '0 0 8px' }}>{tray.rawName}</h4>
             <span>{isAssigned ? 'Assigned' : 'Not assigned'}</span>
