@@ -1,5 +1,5 @@
 import { FluentProvider, webLightTheme } from '@fluentui/react-components';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CadRouteGroup } from '../../../shared/cadRouteGroups';
 import { CadRoutesPanel } from './CadRoutesPanel';
@@ -34,7 +34,11 @@ const fetchMock = vi.fn();
 const onColor = vi.fn(async (_id: string, _color: string) => {});
 const writes = () =>
   fetchMock.mock.calls.filter(([, options]) => ['POST', 'PATCH'].includes(options?.method));
-function show(onGeometryChanged?: () => Promise<void>, onConnectionsChanged?: () => Promise<void>) {
+function show(
+  onGeometryChanged?: () => Promise<void>,
+  onConnectionsChanged?: () => Promise<void>,
+  onTraysChanged?: () => Promise<void>,
+) {
   return render(
     <FluentProvider theme={webLightTheme}>
       <CadRoutesPanel
@@ -46,13 +50,13 @@ function show(onGeometryChanged?: () => Promise<void>, onConnectionsChanged?: ()
         onColor={onColor}
         onGeometryChanged={onGeometryChanged}
         onConnectionsChanged={onConnectionsChanged}
+        onTraysChanged={onTraysChanged}
       />
     </FluentProvider>,
   );
 }
-function fields(tag = 'tray-01') {
-  fireEvent.change(screen.getByLabelText('Route name'), { target: { value: 'Main riser' } });
-  fireEvent.change(screen.getByLabelText('Route tag'), { target: { value: tag } });
+function fields(name = 'tray-01') {
+  fireEvent.change(screen.getByLabelText('Route name'), { target: { value: name } });
   fireEvent.change(screen.getByLabelText('Route purpose'), { target: { value: draft.purpose } });
   fireEvent.change(screen.getByRole('textbox', { name: 'Route colour hex' }), {
     target: { value: '#16a34a' },
@@ -73,6 +77,112 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('complete CAD routes', () => {
+  it('adds a saved route to the Trays list without a prepared network or endpoint attachment', async () => {
+    const geometryChanged = vi.fn(async () => {});
+    const traysChanged = vi.fn(async () => {});
+    let completeExport!: (value: unknown) => void;
+    fetchMock.mockImplementation(async (url: string, options: RequestInit = {}) => {
+      if (url.endsWith('/trays-list') && options.method === 'POST')
+        return new Promise((resolve) => {
+          completeExport = resolve;
+        });
+      return {
+        ok: true,
+        json: async () =>
+          url.endsWith('/auto-attachments')
+            ? {
+                status: 'network-required',
+                attachments: [],
+                diagnostics: { message: 'No prepared Path Finder network is available.' },
+              }
+            : { routes: [draft] },
+      };
+    });
+    show(geometryChanged, undefined, traysChanged);
+    fireEvent.click(await screen.findByRole('button', { name: /Main riser/ }));
+    expect(
+      await screen.findByText('No prepared Path Finder network is available.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add to routing network' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Add to trays list/i })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: /Add to trays list/i }));
+    await waitFor(() => expect(writes()).toHaveLength(1));
+    expect(screen.getByRole('button', { name: /Add to trays list/i })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: /Add to trays list/i }));
+    expect(writes()).toHaveLength(1);
+    await act(async () =>
+      completeExport({
+        ok: true,
+        json: async () => ({ projectTrayId: id(70), lengthMm: 2680.25, reused: false }),
+      }),
+    );
+    expect(writes()[0][0]).toMatch(new RegExp(`/routes/${draft.id}/trays-list$`));
+    expect(JSON.parse(writes()[0][1].body)).toEqual({ expectedRevision: 7 });
+    expect(writes()[0][1].headers).toEqual(
+      expect.objectContaining({ Authorization: 'Bearer cad-token' }),
+    );
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/Trays list/i));
+    expect(screen.getByRole('status')).toHaveTextContent('Centreline length: 2.680 m.');
+    expect(
+      screen.queryByRole('button', { name: 'Withdraw from routing network' }),
+    ).not.toBeInTheDocument();
+    expect(geometryChanged).not.toHaveBeenCalled();
+    expect(traysChanged).toHaveBeenCalledOnce();
+    expect(
+      fetchMock.mock.calls.some(([url]) => /\/publish$|\/align$|\/instances\//.test(url)),
+    ).toBe(false);
+  });
+
+  it('requires pending name or membership changes to be saved before copying the route to the Trays list', async () => {
+    catalogue([draft]);
+    show();
+    fireEvent.click(await screen.findByRole('button', { name: /Main riser/ }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Add to trays list/i })).toBeEnabled(),
+    );
+    fireEvent.change(screen.getByLabelText('Route name'), { target: { value: 'R-102' } });
+    expect(screen.getByRole('button', { name: /Add to trays list/i })).toBeDisabled();
+    expect(writes()).toHaveLength(0);
+  });
+
+  it('reports a stale Trays list export without pretending that the route was copied or published', async () => {
+    fetchMock.mockImplementation(async (url: string, options: RequestInit = {}) =>
+      options.method === 'POST'
+        ? {
+            ok: false,
+            status: 409,
+            json: async () => ({
+              code: 'STALE_CAD_ROUTE',
+              message: 'The route changed before the Trays list could be updated.',
+            }),
+          }
+        : {
+            ok: true,
+            json: async () =>
+              url.endsWith('/auto-attachments')
+                ? { status: 'network-required', attachments: [] }
+                : { routes: [draft] },
+          },
+    );
+    show();
+    fireEvent.click(await screen.findByRole('button', { name: /Main riser/ }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Add to trays list/i })).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Add to trays list/i }));
+    expect(
+      await screen.findByText('The route changed before the Trays list could be updated.'),
+    ).toBeInTheDocument();
+    expect(writes()).toHaveLength(1);
+    expect(screen.getByRole('button', { name: /Add to trays list/i })).toBeEnabled();
+    expect(
+      screen.getByRole('button', { name: /Main riser · 2 components · draft/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Withdraw from routing network' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('shows a saved installation transition and its routing length even before an existing network is available', async () => {
     const geometryChanged = vi.fn(async () => {});
     fetchMock.mockImplementation(async (url: string) => ({
@@ -98,7 +208,7 @@ describe('complete CAD routes', () => {
           : { routes: [draft] },
     }));
     show(geometryChanged);
-    fireEvent.click(await screen.findByRole('button', { name: /TRAY-01 — Main riser/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Main riser/ }));
     expect(
       await screen.findByRole('list', { name: 'Installation routing transitions' }),
     ).toHaveTextContent('Component 1 end → component 3 start: 180 mm routing transition');
@@ -147,7 +257,7 @@ describe('complete CAD routes', () => {
       };
     });
     show(undefined, connectionsChanged);
-    fireEvent.click(await screen.findByRole('button', { name: /TRAY-01 — Main riser/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Main riser/ }));
     expect(
       await screen.findByText('The saved parts need one internal connector relationship.'),
     ).toBeInTheDocument();
@@ -202,11 +312,11 @@ describe('complete CAD routes', () => {
               : { routes: [draft, other] },
       }));
       show();
-      fireEvent.click(await screen.findByRole('button', { name: /TRAY-01 — Main riser/ }));
+      fireEvent.click(await screen.findByRole('button', { name: /Main riser/ }));
       await waitFor(() =>
         expect(screen.getByRole('button', { name: 'Add to routing network' })).toBeEnabled(),
       );
-      fireEvent.click(screen.getByRole('button', { name: /OTHER-02 — Other run/ }));
+      fireEvent.click(screen.getByRole('button', { name: /Other run/ }));
       expect(await screen.findByText(diagnostic)).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Add to routing network' })).toBeDisabled();
       expect(
@@ -228,7 +338,7 @@ describe('complete CAD routes', () => {
       return { ok: true, json: async () => ({ routes }) };
     });
     show();
-    fireEvent.click(await screen.findByRole('button', { name: /TRAY-01 — Main riser/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Main riser/ }));
     expect(screen.getByLabelText('Route name')).toBeDisabled();
     fireEvent.change(screen.getByRole('textbox', { name: 'Route colour hex' }), {
       target: { value: '#3b82f6' },
@@ -266,7 +376,7 @@ describe('complete CAD routes', () => {
       };
     });
     show(geometryChanged);
-    fireEvent.click(await screen.findByRole('button', { name: /TRAY-01 — Main riser/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Main riser/ }));
     await waitFor(() =>
       expect(
         screen.getByRole('button', { name: 'Align whole route to network point' }),
@@ -286,13 +396,13 @@ describe('complete CAD routes', () => {
     });
     expect(await screen.findByText(/Whole route aligned and saved/)).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /TRAY-01 — Main riser · 2 components · draft/ }),
+      screen.getByRole('button', { name: /Main riser · 2 components · draft/ }),
     ).toBeInTheDocument();
   });
   it('requires unsaved member or name changes to be saved before network publication', async () => {
     catalogue([draft]);
     show();
-    fireEvent.click(await screen.findByRole('button', { name: /TRAY-01 — Main riser/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Main riser/ }));
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Add to routing network' })).toBeEnabled(),
     );
@@ -300,12 +410,12 @@ describe('complete CAD routes', () => {
     expect(screen.getByRole('button', { name: 'Add to routing network' })).toBeDisabled();
     expect(writes()).toHaveLength(0);
   });
-  it('saves selected members with independent name, tag, purpose and color, then applies color only to displayed members', async () => {
+  it('saves selected members with one canonical route name, purpose and color, then applies color only to displayed members', async () => {
     let routes: CadRouteGroup[] = [];
     fetchMock.mockImplementation(async (url: string, options: RequestInit = {}) => {
       if (options.method === 'POST') {
-        routes = [draft];
-        return { ok: true, json: async () => ({ route: draft }) };
+        routes = [{ ...draft, name: 'TRAY-01' }];
+        return { ok: true, json: async () => ({ route: routes[0] }) };
       }
       return {
         ok: true,
@@ -317,6 +427,8 @@ describe('complete CAD routes', () => {
       expect(screen.getByRole('button', { name: 'Save complete route' })).toBeEnabled(),
     );
     fields();
+    expect(screen.getByLabelText('Route name')).toHaveValue('TRAY-01');
+    expect(screen.queryByLabelText('Route tag')).not.toBeInTheDocument();
     fireEvent.click(screen.getByLabelText(`Include component ${id(1)}`));
     fireEvent.click(screen.getByLabelText(`Include component ${id(3)}`));
     fireEvent.click(screen.getByRole('button', { name: 'Save complete route' }));
@@ -329,8 +441,7 @@ describe('complete CAD routes', () => {
       expect.objectContaining({ Authorization: 'Bearer cad-token' }),
     );
     expect(JSON.parse(writes()[0][1].body)).toEqual({
-      name: 'Main riser',
-      tag: 'TRAY-01',
+      name: 'TRAY-01',
       purpose: draft.purpose,
       color: '#16A34A',
       instanceIds: [id(1), id(3)],
@@ -338,38 +449,38 @@ describe('complete CAD routes', () => {
     await waitFor(() => expect(onColor).toHaveBeenCalledWith(id(1), '#16A34A'));
     expect(onColor).not.toHaveBeenCalledWith(id(3), expect.any(String));
     expect(
-      screen.getByRole('button', { name: /TRAY-01 — Main riser · 2 components · draft/ }),
+      screen.getByRole('button', { name: /TRAY-01 · 2 components · draft/ }),
     ).toBeInTheDocument();
   });
 
   it('restores a saved route color on load and prevents taking members from another route', async () => {
     catalogue([draft]);
     show();
-    await screen.findByRole('button', { name: /TRAY-01 — Main riser/ });
+    await screen.findByRole('button', { name: /Main riser/ });
     await waitFor(() => expect(onColor).toHaveBeenCalledWith(id(1), '#16A34A'));
     expect(onColor).toHaveBeenCalledWith(id(2), '#D9AB33');
     expect(onColor).not.toHaveBeenCalledWith(id(3), expect.any(String));
     expect(screen.getByLabelText(`Include component ${id(1)}`)).toBeDisabled();
     expect(screen.getByLabelText(`Include component ${id(2)}`)).toBeEnabled();
-    fireEvent.click(screen.getByRole('button', { name: /TRAY-01 — Main riser/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Main riser/ }));
     expect(screen.getByLabelText(`Include component ${id(1)}`)).toBeEnabled();
     expect(screen.getByLabelText(`Include component ${id(1)}`)).toBeChecked();
     fireEvent.click(screen.getByRole('button', { name: 'New route' }));
     expect(screen.getByLabelText(`Include component ${id(1)}`)).toBeDisabled();
   });
 
-  it.each(['invalid tag', 'empty members'])(
+  it.each(['invalid name', 'empty members'])(
     'rejects %s without a write request',
     async (reason) => {
       show();
       await waitFor(() =>
         expect(screen.getByRole('button', { name: 'Save complete route' })).toBeEnabled(),
       );
-      fields(reason === 'invalid tag' ? 'NOT A TAG' : 'TRAY-01');
-      if (reason === 'invalid tag')
+      fields(reason === 'invalid name' ? 'NOT A NAME' : 'TRAY-01');
+      if (reason === 'invalid name')
         fireEvent.click(screen.getByLabelText(`Include component ${id(1)}`));
       fireEvent.click(screen.getByRole('button', { name: 'Save complete route' }));
-      expect(await screen.findByText(/Enter a name, a unique tag/)).toBeInTheDocument();
+      expect(screen.getByRole('status')).toHaveTextContent(/name|component/i);
       expect(writes()).toHaveLength(0);
     },
   );
@@ -387,7 +498,7 @@ describe('complete CAD routes', () => {
       };
     });
     show();
-    fireEvent.click(await screen.findByRole('button', { name: /TRAY-01 — Main riser/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Main riser/ }));
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Add to routing network' })).toBeEnabled(),
     );
@@ -431,7 +542,7 @@ describe('complete CAD routes', () => {
           },
     );
     show();
-    fireEvent.click(await screen.findByRole('button', { name: /TRAY-01 — Main riser/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Main riser/ }));
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Add to routing network' })).toBeEnabled(),
     );
@@ -443,7 +554,7 @@ describe('complete CAD routes', () => {
     ).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add to routing network' })).toBeEnabled();
     expect(
-      screen.getByRole('button', { name: /TRAY-01 — Main riser · 2 components · draft/ }),
+      screen.getByRole('button', { name: /Main riser · 2 components · draft/ }),
     ).toBeInTheDocument();
   });
 });

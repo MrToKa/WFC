@@ -140,7 +140,7 @@ export async function groupRawInputs(client:PoolClient,projectId:string,designId
     JOIN material_component_cad_assets a ON a.id=c.material_component_cad_asset_id
     JOIN material_components p ON p.id=a.component_id
     LEFT JOIN material_trays mt ON mt.id=p.material_tray_id
-    WHERE m.project_id=$1 AND m.design_id=$2 AND m.route_group_id=$3 ORDER BY i.id FOR SHARE OF i`,[projectId,designId,routeId])).rows;
+    WHERE m.project_id=$1 AND m.design_id=$2 AND m.route_group_id=$3 ORDER BY i.created_at,i.id FOR SHARE OF i`,[projectId,designId,routeId])).rows;
   // The canonical joins must not turn a mixed legacy group into a smaller,
   // apparently valid route. Every scoped member needs the same source proof.
   const membership=(await client.query<{member_count:number}>(`SELECT COUNT(*)::int AS member_count FROM cad_route_group_members
@@ -205,6 +205,10 @@ cadRoutePublicationRouter.post(`${prefix}/publish`,requireAdmin,safe(async(req,r
     if(group.revision!==parsed.data.expectedRevision)return refuse('STALE_CAD_ROUTE','The route changed. Refresh and retry.');
     if(group.status!=='draft')return refuse('CAD_ROUTE_PUBLISHED','Withdraw the route before publishing another revision.');
     const material=resolveCadRouteMaterial(instances);
+    const {compatibleCadTrayExport}=await import('./routeTrayExports.js');
+    const trayExport=await compatibleCadTrayExport(client,projectId,designId,group,instances,chain,transitions);
+    if(trayExport&&normalizeCatalogKey(group.name).replace(/^\/+|\/+$/g,'').trim().toUpperCase()!==group.tag)
+      return refuse('CAD_ROUTE_TRAY_NAME_TAG_MISMATCH','This legacy route name differs from its routing identifier. Rename the route to one identifier and refresh its Trays row before publishing.');
     const model=(await client.query<{model_version_id:string}>('SELECT model_version_id FROM cad_designs WHERE project_id=$1 AND id=$2',[projectId,designId])).rows[0];
     const {artifact,options,routing,segmentCount}=await networkOptions(client,projectId,model.model_version_id);
     const rules=(await client.query<{allowed_categories:string[]}>(`SELECT r.allowed_categories FROM pf_routing_purpose_rules r JOIN pf_catalog_purpose_incarnations i
@@ -221,7 +225,7 @@ cadRoutePublicationRouter.post(`${prefix}/publish`,requireAdmin,safe(async(req,r
       validateCadAttachment(source,target.port);
       selectedPorts.push(source);
     }
-    if((await client.query("SELECT id FROM trays WHERE project_id=$1 AND upper(btrim(btrim(btrim(name),'/')))=$2",[projectId,group.tag])).rows.length)
+    if((await client.query("SELECT id FROM trays WHERE project_id=$1 AND upper(btrim(btrim(btrim(name),'/')))=$2 AND ($3::uuid IS NULL OR id<>$3)",[projectId,group.tag,trayExport?.row.id??null])).rows.length)
       return refuse('CAD_ROUTE_TAG_CONFLICT','A project tray already uses this route tag.');
     // As in preparationPlans.ts, current policy values are cable purposes,
     // not engine classes. Per-calculation allowedRouteCodes enforces purpose.
@@ -231,8 +235,9 @@ cadRoutePublicationRouter.post(`${prefix}/publish`,requireAdmin,safe(async(req,r
     const previous=routing.cadOverlay?cadOverlayPayloadSchema.parse(JSON.parse(Buffer.from(routing.cadOverlay.payloadBase64,'base64').toString('utf8'))).segments:[];
     const verifiedOverlay=encodeCadOverlay({...overlay,segments:[...previous,...overlay.segments]});
     const fingerprint=createHash('sha256').update(canonicalPurposeJson({group:{id:group.id,revision:group.revision,tag:group.tag,purpose:group.purpose},material,routing,transitions,
+      trayExport:trayExport?{trayId:trayExport.row.id,sourceSha256:trayExport.sourceSha256,projection:trayExport.projection}:null,
       artifactId:artifact.id,verifiedOverlay,sources:instances.map(row=>({id:row.id,revision:row.revision,assetId:row.material_asset_id,sha256:row.source_sha256,lengthMm:row.cut_length_mm}))})).digest('hex');
-    return {group,chain,instances,transitions,material,artifact,overlay,verifiedOverlay,modelId:model.model_version_id,expectedSegments:segmentCount+previous.length+1,fingerprint};
+    return {group,chain,instances,transitions,material,trayExport,artifact,overlay,verifiedOverlay,modelId:model.model_version_id,expectedSegments:segmentCount+previous.length+1,fingerprint};
   };
   // Release all database locks while the private worker validates geometry.
   // A running calculation may itself need the project mutex to finish.
@@ -248,12 +253,15 @@ cadRoutePublicationRouter.post(`${prefix}/publish`,requireAdmin,safe(async(req,r
     const current=await freeze(client);
     if(current.fingerprint!==frozen.fingerprint)return refuse('CAD_ROUTE_CHANGED_DURING_PROOF','The network or route changed during verification. Refresh and publish again.');
     const {projectId,designId,routeId}=req.params;
-    const {group,chain,instances,transitions,material,artifact,overlay}=current;
-    const trayId=randomUUID();
-    const traySnapshot={id:trayId,name:group.tag,purpose:normalizeCatalogKey(group.purpose),...material,lengthMm:chain.lengthMetres*1000};
-    const inserted=await client.query<TrayRow>('INSERT INTO trays(id,project_id,name,purpose,tray_type,width_mm,height_mm,length_mm) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',[trayId,projectId,traySnapshot.name,traySnapshot.purpose,material.trayType,material.widthMm,material.heightMm,traySnapshot.lengthMm]);
-    await recordTrayChanges(client,req.userId!,null,inserted.rows[0]);
-    const publication={schemaVersion:'wfc.cad.route-publication.v1',baseArtifactId:artifact.id,overlay,traySnapshot,attachments:parsed.data.attachments,
+    const {group,chain,instances,transitions,material,trayExport,artifact,overlay}=current;
+    const trayId=trayExport?.row.id??randomUUID();
+    const traySnapshot={id:trayId,name:trayExport?.row.name??group.tag,purpose:trayExport?.row.purpose??normalizeCatalogKey(group.purpose),...material,lengthMm:chain.lengthMetres*1000};
+    if(!trayExport){
+      const inserted=await client.query<TrayRow>('INSERT INTO trays(id,project_id,name,purpose,tray_type,width_mm,height_mm,length_mm) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',[trayId,projectId,traySnapshot.name,traySnapshot.purpose,material.trayType,material.widthMm,material.heightMm,traySnapshot.lengthMm]);
+      await recordTrayChanges(client,req.userId!,null,inserted.rows[0]);
+    }
+    const publication={schemaVersion:'wfc.cad.route-publication.v1',baseArtifactId:artifact.id,overlay,traySnapshot,trayInBaseCatalog:Boolean(trayExport),
+      trayExportSourceSha256:trayExport?.sourceSha256??null,attachments:parsed.data.attachments,
       routingTransitions:transitions.map(link=>({id:link.id,kind:link.kind,sourceInstanceId:link.source_instance_id,sourcePortName:link.source_name,
         targetInstanceId:link.target_instance_id,targetPortName:link.target_name,
         pointsMetres:[routePort(chain.instances.get(link.source_instance_id)!,link.source_name).pointMetres,routePort(chain.instances.get(link.target_instance_id)!,link.target_name).pointMetres]})),
@@ -277,9 +285,11 @@ cadRoutePublicationRouter.post(`${prefix}/withdraw`,requireAdmin,safe(async(req,
     if ((await client.query(`SELECT c.id FROM cables c WHERE c.project_id=$1 AND EXISTS(
       SELECT 1 FROM regexp_split_to_table(upper(COALESCE(c.routing,'')),'/') AS part(value) WHERE btrim(part.value)=$2) LIMIT 1`,[projectId,group.tag])).rows.length)
       return refuse('CAD_ROUTE_IN_USE','Cables currently use this route. Reassign or recalculate their routing before withdrawing it.');
+    const trayExport=(await client.query<{tray_id:string}>('SELECT tray_id FROM cad_route_tray_exports WHERE project_id=$1 AND design_id=$2 AND route_group_id=$3 FOR SHARE',[projectId,designId,routeId])).rows[0];
+    if(trayExport&&trayExport.tray_id!==group.project_tray_id)return refuse('CAD_ROUTE_TRAY_EXPORT_INTEGRITY','The saved Trays link differs from this publication. Refresh before withdrawing.');
     await client.query(`UPDATE cad_route_groups SET status='draft',project_tray_id=NULL,publication=publication || jsonb_build_object('withdrawnAt',now()),revision=revision+1,updated_at=now()
       WHERE project_id=$1 AND design_id=$2 AND id=$3`,[projectId,designId,routeId]);
-    await client.query('DELETE FROM trays WHERE project_id=$1 AND id=$2',[projectId,group.project_tray_id]);
+    if(!trayExport)await client.query('DELETE FROM trays WHERE project_id=$1 AND id=$2',[projectId,group.project_tray_id]);
     await readRoutingPolicyScope(client,projectId);
     return {id:routeId,status:'draft',revision:group.revision+1};
   });res.json(result);

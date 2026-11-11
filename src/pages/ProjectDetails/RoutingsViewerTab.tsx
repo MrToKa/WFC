@@ -15,9 +15,9 @@ const summaries: Record<RouteCheckResult['status'], string> = {
   none: 'No drawable route was found in the model.', empty: 'Enter a route.',
   invalid: 'The route is invalid. Check the identifiers and input limits.',
 };
-type Props = { projectId: string | null; loadedProjectId: string | null; token: string | null };
+type Props = { projectId: string | null; loadedProjectId: string | null; token: string | null; onTraysChanged?: () => Promise<void> };
 
-export function RoutingsViewerTab({ projectId, loadedProjectId, token }: Props) {
+export function RoutingsViewerTab({ projectId, loadedProjectId, token, onTraysChanged }: Props) {
   const styles = useRoutingsViewerStyles();
   const anchor = useRef<HTMLElement>(null);
   const container = useRef<HTMLDivElement>(null);
@@ -68,7 +68,7 @@ export function RoutingsViewerTab({ projectId, loadedProjectId, token }: Props) 
           </div>
         </form> : mode === 'components' && import.meta.env.VITE_CAD_DESIGN_ENABLED === 'true' ?
           <CadComponentsPanel projectId={projectId} token={token} modelVersionId={viewer.model?.id ?? null}
-            ready={viewer.phase === 'ready'} onPick={viewer.pickCadAnchor} onShow={viewer.showCadComponent} onMove={viewer.moveCadComponent} onFocus={viewer.focusCadComponent} onRemove={viewer.removeCadComponent} onColor={viewer.setCadComponentColor} />
+            ready={viewer.phase === 'ready'} onPick={viewer.pickCadAnchor} onShow={viewer.showCadComponent} onMove={viewer.moveCadComponent} onFocus={viewer.focusCadComponent} onRemove={viewer.removeCadComponent} onColor={viewer.setCadComponentColor} onTraysChanged={onTraysChanged} />
           : <div className={styles.cablePanel}>
           <Field className={styles.field} label="Search cable tags">
             <Input ref={searchInput} aria-label="Search cable tags" value={cables.search} onChange={(_, data) => cables.setSearch(data.value)} />

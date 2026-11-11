@@ -27,6 +27,9 @@ export async function readCadOverlay(client: PoolClient, projectId: string, arti
   const retired=groups.rows.filter(row=>row.status==='draft'&&(row.publication as {baseArtifactId?:string})?.baseArtifactId===artifactId);
   if(!active.length&&!retired.length)return null;
   const owned = active.map(row => row.project_tray_id!);
+  // A previously exported list row was part of the frozen base catalogue.
+  // Only rows created by this publication are an additive catalogue delta.
+  const additions=active.filter(row=>(row.publication as {trayInBaseCatalog?:boolean})?.trayInBaseCatalog!==true).map(row=>row.project_tray_id!);
   const actualTrays = (await client.query<{id:string;name:string;purpose:string|null;tray_type:string|null;width_mm:string|number|null;height_mm:string|number|null;length_mm:string|number|null}>(
     'SELECT id::text,name,purpose,tray_type,width_mm,height_mm,length_mm FROM trays WHERE project_id=$1 AND id=ANY($2::uuid[]) ORDER BY id FOR SHARE',[projectId,owned])).rows;
   for (const group of active) {
@@ -37,7 +40,7 @@ export async function readCadOverlay(client: PoolClient, projectId: string, arti
       throw new PathFinderError('CAD_ROUTE_CATALOG_CHANGED',409,'A published CAD route catalog row changed. Withdraw and republish it before calculating.');
   }
   const source = await client.query<{id:string;name:string;purpose:string|null}>(
-    'SELECT id::text,name,purpose FROM trays WHERE project_id=$1 AND NOT(id=ANY($2::uuid[])) ORDER BY id',[projectId,owned]);
+    'SELECT id::text,name,purpose FROM trays WHERE project_id=$1 AND NOT(id=ANY($2::uuid[])) ORDER BY id',[projectId,additions]);
   const base = projectRoutingCatalogRows(source.rows);
   if (prepared.routingPolicyRevision !== current.routingPolicyRevision || prepared.routingPolicySha256 !== current.routingPolicySha256 ||
       digest(catalogRoutingHashInput(projectId,base.rows,base.diagnostics)) !== prepared.routingContentSha256)

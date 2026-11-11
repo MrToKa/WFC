@@ -2,7 +2,7 @@
 import express from 'express';
 import type { Server } from 'node:http';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cadRouteGroupInputSchema } from '../../shared/cadRouteGroups.js';
+import { cadRouteGroupInputSchema, cadRouteGroupUpdateSchema } from '../../shared/cadRouteGroups.js';
 import { cadRouteGroupsRouter } from './routeGroupsRoutes.js';
 
 const mocks = vi.hoisted(() => ({ connect: vi.fn(), query: vi.fn(), release: vi.fn() }));
@@ -50,8 +50,8 @@ const normalQuery = async (sql: string) => {
   if (sql.startsWith('SELECT d.id')) return { rows: [{ id: designId }] };
   return { rows: [] };
 };
-const configurePublished = (instanceIds = [instanceId]) => {
-  let saved = { ...route,status: 'published',projectTrayId: projectId,instanceIds };
+const configurePublished = (instanceIds = [instanceId],identity = {name:route.name,tag:route.tag}) => {
+  let saved = { ...route,...identity,status: 'published',projectTrayId: projectId,instanceIds };
   const fallback = mocks.query.getMockImplementation()!;
   mocks.query.mockImplementation(async (sql: string,values?: unknown[]) => {
     if (sql.startsWith('SELECT revision,status')) return {rows:[{revision:saved.revision,status:'published',project_tray_id:projectId}]};
@@ -64,6 +64,18 @@ const configurePublished = (instanceIds = [instanceId]) => {
   });
 };
 describe('CAD route authoring contract', () => {
+  it('uses one canonical uppercase route name without requiring a separate tag', () => {
+    const { tag: _legacyTag,...nameOnly } = body;
+    expect(cadRouteGroupInputSchema.parse({...nameOnly,name:'  bc182  '})).toEqual({
+      ...nameOnly,name:'BC182',tag:'BC182',color:'#AABBCC',
+    });
+    expect(cadRouteGroupUpdateSchema.parse({...nameOnly,name:'bc182',expectedRevision:7}))
+      .toMatchObject({name:'BC182',tag:'BC182',expectedRevision:7});
+    for (const name of ['Descriptive route name','/BC182','SECONDARY','bc/182','bc:182','BC182?'])
+      expect(cadRouteGroupInputSchema.safeParse({...nameOnly,name}).success).toBe(false);
+    // Existing clients and groups retain their explicit legacy tag contract.
+    expect(cadRouteGroupInputSchema.parse(body)).toMatchObject({name:'New route',tag:'R-101'});
+  });
   it('normalizes tag and color while bounding distinct scoped members', () => {
     expect(cadRouteGroupInputSchema.parse(body)).toMatchObject({ tag: 'R-101',color: '#AABBCC' });
     for (const invalid of [
@@ -101,6 +113,41 @@ describe('CAD route authoring contract', () => {
   });
 });
 describe('CAD route membership and transaction fencing', () => {
+  it('creates a name-only route with identical canonical name and internal tag', async () => {
+    const base = await start();
+    const {tag: _legacyTag,...nameOnly} = body;
+    const fallback = mocks.query.getMockImplementation()!;
+    mocks.query.mockImplementation(async (sql:string,values?:unknown[]) => sql.startsWith('SELECT g.id')
+      ? {rows:[{...route,name:'BC182',tag:'BC182'}]} : fallback(sql,values));
+    const response = await mutate(base,'POST',{...nameOnly,name:'bc182'});
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({route:{...route,name:'BC182',tag:'BC182'}});
+    const insertion = mocks.query.mock.calls.find(([sql]) => sql.startsWith('INSERT INTO cad_route_groups'));
+    expect(insertion?.[1].slice(3,5)).toEqual(['BC182','BC182']);
+  });
+  it('rejects a conflicting canonical name through the existing project tag uniqueness guard', async () => {
+    const base = await start();
+    const {tag: _legacyTag,...nameOnly} = body;
+    const fallback = mocks.query.getMockImplementation()!;
+    mocks.query.mockImplementation(async (sql:string,values?:unknown[]) => {
+      if (sql.startsWith('INSERT INTO cad_route_groups')) throw Object.assign(new Error('duplicate canonical route'),{code:'23505'});
+      return fallback(sql,values);
+    });
+    const response = await mutate(base,'POST',{...nameOnly,name:'bc182'});
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({code:'CAD_ROUTE_TAG_OR_MEMBER_CONFLICT'});
+    const insertion = mocks.query.mock.calls.find(([sql]) => sql.startsWith('INSERT INTO cad_route_groups'));
+    expect(insertion?.[1].slice(3,5)).toEqual(['BC182','BC182']);
+    expect(mocks.query.mock.calls.at(-1)?.[0]).toBe('ROLLBACK');
+  });
+  it('rejects a non-identifier name-only request before touching existing route data', async () => {
+    const base = await start();
+    const {tag: _legacyTag,...nameOnly} = body;
+    const response = await mutate(base,'POST',nameOnly);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({code:'INVALID_CAD_ROUTE'});
+    expect(mocks.connect).not.toHaveBeenCalled();
+  });
   it('creates a normalized draft group and its members in one transaction', async () => {
     const base = await start();
     const response = await mutate(base,'POST',body);
@@ -195,6 +242,15 @@ describe('CAD route membership and transaction fencing', () => {
     expect(mocks.query.mock.calls.find(([sql]) => /(?:INSERT INTO|DELETE FROM) cad_route_group_members|UPDATE trays|UPDATE cad_route_groups SET (?:name|publication)/.test(sql))).toBeUndefined();
     expect(mocks.query.mock.calls.at(-1)?.[0]).toBe('COMMIT');
   });
+  it('recolors a canonical published route using its name alone', async () => {
+    const base = await start();
+    configurePublished([instanceId],{name:'BC182',tag:'BC182'});
+    const {tag: _legacyTag,...nameOnly} = body;
+    const response = await mutate(base,'PATCH',{...nameOnly,name:'bc182',color:'#102030',expectedRevision:1},`/${groupId}`);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({route:{...route,name:'BC182',tag:'BC182',color:'#102030',revision:2,status:'published',projectTrayId:projectId}});
+    expect(mocks.query.mock.calls.find(([sql]) => sql.startsWith('DELETE FROM cad_route_group_members'))).toBeUndefined();
+  });
   it.each([
     {name:'Renamed published route'},
     {tag:'R-OTHER'},
@@ -247,6 +303,31 @@ describe('CAD route membership and transaction fencing', () => {
     expect(deletion?.[1]).toEqual([projectId,designId,groupId,1]);
     expect(deletion?.[0]).toContain("status='draft'");
     expect(mocks.query.mock.calls.at(-1)?.[0]).toBe('COMMIT');
+  });
+  it('rolls back a deferred export ownership conflict at DELETE commit and keeps the route readable', async () => {
+    const base = await start();
+    const fallback = mocks.query.getMockImplementation()!;
+    let refuseDeleteCommit = true;
+    mocks.query.mockImplementation(async (sql:string,values?:unknown[]) => {
+      if (sql === 'COMMIT' && refuseDeleteCommit) {
+        refuseDeleteCommit = false;
+        throw Object.assign(new Error('Exported tray still references the source group'),{
+          code:'23503',constraint:'cad_route_tray_exports_project_id_design_id_route_group_id_fkey',
+        });
+      }
+      return fallback(sql,values);
+    });
+    const response = await mutate(base,'DELETE',{expectedRevision:1},`/${groupId}`);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      code:'CAD_ROUTE_TRAY_EXPORT_EXISTS',
+      message:'Remove the linked entry from the Trays list before removing this route group.',
+    });
+    expect(mocks.query.mock.calls.slice(-2).map(([sql]) => sql)).toEqual(['COMMIT','ROLLBACK']);
+    expect(mocks.release).toHaveBeenCalledOnce();
+    const retained = await fetch(base);
+    expect(retained.status).toBe(200);
+    expect(await retained.json()).toEqual({routes:[route]});
   });
 });
 

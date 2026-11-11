@@ -1356,7 +1356,7 @@ export const ProjectDetails = () => {
       </TabList>
 
       {selectedTab === 'routings-viewer' ? (
-        <RoutingsViewerTab projectId={projectId ?? null} loadedProjectId={project.id} token={token} />
+        <RoutingsViewerTab projectId={projectId ?? null} loadedProjectId={project.id} token={token} onTraysChanged={() => reloadTrays({ showSpinner: false })} />
       ) : null}
       {selectedTab === 'pathfinder' && user?.isAdmin ? (
         <PathFinderTab key={projectId} projectId={projectId ?? null} loadedProjectId={project.id} token={token} isAdmin={Boolean(user.isAdmin)} accountId={user.id} />

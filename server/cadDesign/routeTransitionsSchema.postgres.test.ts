@@ -7,12 +7,14 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { initializeCadDesignSchema } from './schema.js';
 import { initializeCadRouteGroupsSchema } from './routeGroupsSchema.js';
 import { initializeCadRouteTransitionsSchema } from './routeTransitionsSchema.js';
+import { initializeCadRouteTrayExportsSchema } from './routeTrayExportsSchema.js';
 
 // Opt in explicitly: this creates only a new, isolated, disposable PostgreSQL
 // container. It never reads an application connection string or mounts data.
 const postgres = process.env.WFC_CAD_TRANSITIONS_POSTGRES_TESTS === '1' ? describe : describe.skip;
 const container = `wfc-cad-transition-pg-${randomUUID()}`;
 let started = false;
+let trayExportInitializationSql = '';
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const docker = (args: string[], input?: string) =>
   execFileSync('docker', args, {
@@ -61,6 +63,10 @@ const fixture = `
 `;
 const published = `INSERT INTO trays(id,project_id,name) VALUES('${id(40)}','${id(1)}','Test');
   UPDATE cad_route_groups SET status='published',project_tray_id='${id(40)}',publication='{}' WHERE id='${id(4)}';`;
+const trayExport = (group = 4, tray = 40, project = 1, design = 3) =>
+  `INSERT INTO cad_route_tray_exports(project_id,design_id,route_group_id,tray_id,source_sha256,source_proof,projection)
+   VALUES('${id(project)}','${id(design)}','${id(group)}','${id(tray)}','${'b'.repeat(64)}','{"fixture":"isolated-pg"}','{"name":"Test"}');`;
+const exported = `INSERT INTO trays(id,project_id,name) VALUES('${id(40)}','${id(1)}','Test'); ${trayExport()}`;
 const assertSql = (condition: string) =>
   `DO $assert$ BEGIN IF NOT (${condition}) THEN RAISE EXCEPTION 'Transition lifecycle assertion failed'; END IF; END; $assert$;`;
 const rejected = (
@@ -116,6 +122,10 @@ postgres('installation transition migration and lifecycle in isolated PostgreSQL
     await initializeCadRouteGroupsSchema(pool);
     await initializeCadRouteTransitionsSchema(pool);
     await initializeCadRouteTransitionsSchema(pool);
+    const exportStart = statements.length;
+    await initializeCadRouteTrayExportsSchema(pool);
+    trayExportInitializationSql = statements.slice(exportStart).join('\n;\n');
+    await initializeCadRouteTrayExportsSchema(pool);
     psql(statements.join('\n;\n'));
   }, 30000);
   afterAll(() => {
@@ -216,5 +226,77 @@ postgres('installation transition migration and lifecycle in isolated PostgreSQL
       ${assertSql('(SELECT count(*) FROM cad_route_transition_links)=0')}
       ${assertSql('(SELECT count(*) FROM cad_design_instances)=0')}
       ${assertSql(`(SELECT count(*) FROM projects WHERE id='${id(99)}')=1`)}`);
+  });
+  it('initializes ordinary tray export ownership repeatedly without changing its retained proof or source group', () => {
+    run(`${exported} ${trayExportInitializationSql}
+      ${assertSql(`(SELECT count(*) FROM cad_route_tray_exports WHERE route_group_id='${id(4)}')=1`)}
+      ${assertSql(`(SELECT source_proof FROM cad_route_tray_exports WHERE route_group_id='${id(4)}')='{"fixture":"isolated-pg"}'::jsonb`)}
+      ${assertSql(`(SELECT count(*) FROM cad_route_groups WHERE id='${id(4)}')=1`)}`);
+  });
+  it('rejects foreign project, design and ordinary tray references in export ownership', () => {
+    run(`INSERT INTO trays(id,project_id,name) VALUES('${id(40)}','${id(1)}','Test'),('${id(42)}','${id(99)}','Other project');
+      SET CONSTRAINTS ALL IMMEDIATE;
+      ${rejected(trayExport(4, 42), 'foreign_key_violation')}
+      ${rejected(trayExport(4, 42, 99), 'foreign_key_violation')}
+      ${rejected(trayExport(4, 40, 1, 97), 'foreign_key_violation')}
+      ${assertSql('(SELECT count(*) FROM cad_route_tray_exports)=0')}`);
+  });
+  it('allows only one exported tray per source group and one source group per ordinary tray', () => {
+    run(`${exported}
+      INSERT INTO trays(id,project_id,name) VALUES('${id(41)}','${id(1)}','Second tray');
+      INSERT INTO cad_route_groups(id,project_id,design_id,name,tag,color,purpose)
+        VALUES('${id(51)}','${id(1)}','${id(3)}','Other route','OTHER','#16A34A','Control');
+      ${rejected(trayExport(4, 41), 'unique_violation')}
+      ${rejected(trayExport(51, 40), 'unique_violation')}
+      ${assertSql('(SELECT count(*) FROM cad_route_tray_exports)=1')}`);
+  });
+  it('keeps export source hashes and proof/projection payloads bounded to valid identities and objects', () => {
+    run(`${exported}
+      ${rejected("UPDATE cad_route_tray_exports SET source_sha256='not-a-source-hash';")}
+      ${rejected("UPDATE cad_route_tray_exports SET source_proof='[]';")}
+      ${rejected("UPDATE cad_route_tray_exports SET projection='null';")}
+      ${assertSql('(SELECT count(*) FROM cad_route_tray_exports)=1')}`);
+  });
+  it('removes only export ownership when the user deletes the ordinary tray', () => {
+    run(`${exported} DELETE FROM trays WHERE id='${id(40)}';
+      ${assertSql('(SELECT count(*) FROM cad_route_tray_exports)=0')}
+      ${assertSql(`(SELECT count(*) FROM cad_route_groups WHERE id='${id(4)}')=1`)}
+      ${assertSql('(SELECT count(*) FROM cad_design_instances)=4')}
+      ${assertSql('(SELECT count(*) FROM cad_route_transition_links)=1')}`);
+  });
+  it('refuses standalone source-group deletion until the ordinary exported tray is deleted', () => {
+    psql(`BEGIN; ${fixture} ${exported} COMMIT;`);
+    try {
+      // The source FK is intentionally deferred for project teardown. Test a
+      // real standalone commit boundary, rather than flushing it in a DO block.
+      expect(() => psql(`DELETE FROM cad_route_groups WHERE id='${id(4)}';`)).toThrow(/foreign key constraint/);
+      psql(`${assertSql('(SELECT count(*) FROM cad_route_tray_exports)=1')}
+        ${assertSql(`(SELECT count(*) FROM cad_route_groups WHERE id='${id(4)}')=1`)}
+        ${assertSql('(SELECT count(*) FROM cad_route_transition_links)=1')}
+        DELETE FROM trays WHERE id='${id(40)}';
+        DELETE FROM cad_route_groups WHERE id='${id(4)}';
+        ${assertSql('(SELECT count(*) FROM cad_route_tray_exports)=0')}
+        ${assertSql('(SELECT count(*) FROM cad_route_transition_links)=0')}
+        ${assertSql('(SELECT count(*) FROM cad_design_instances)=4')}`);
+    } finally {
+      psql(`DELETE FROM projects WHERE id IN ('${id(1)}','${id(99)}');`);
+    }
+  });
+  it('cascades project deletion through published and ordinary export ownership while preserving another project export', () => {
+    run(`${published} ${trayExport()}
+      INSERT INTO model_versions(project_id,id) VALUES('${id(99)}','${id(92)}');
+      INSERT INTO cad_designs(id,project_id,model_version_id,name) VALUES('${id(93)}','${id(99)}','${id(92)}','Other project');
+      INSERT INTO cad_route_groups(id,project_id,design_id,name,tag,color,purpose)
+        VALUES('${id(94)}','${id(99)}','${id(93)}','Other export','OTHER','#16A34A','Control');
+      INSERT INTO trays(id,project_id,name) VALUES('${id(95)}','${id(99)}','Other export');
+      ${trayExport(94, 95, 99, 93)}
+      DELETE FROM projects WHERE id='${id(1)}'; SET CONSTRAINTS ALL IMMEDIATE;
+      ${assertSql(`(SELECT count(*) FROM cad_route_tray_exports WHERE project_id='${id(1)}')=0`)}
+      ${assertSql(`(SELECT count(*) FROM trays WHERE project_id='${id(1)}')=0`)}
+      ${assertSql(`(SELECT count(*) FROM cad_route_groups WHERE project_id='${id(1)}')=0`)}
+      ${assertSql(`(SELECT count(*) FROM cad_route_transition_links WHERE project_id='${id(1)}')=0`)}
+      ${assertSql(`(SELECT count(*) FROM cad_route_tray_exports WHERE project_id='${id(99)}' AND tray_id='${id(95)}')=1`)}
+      ${assertSql(`(SELECT count(*) FROM trays WHERE id='${id(95)}')=1`)}
+      ${assertSql(`(SELECT count(*) FROM cad_route_groups WHERE id='${id(94)}')=1`)}`);
   });
 });

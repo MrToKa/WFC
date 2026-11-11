@@ -22,7 +22,7 @@ type Instance = {
 type Props = { projectId: string; modelVersionId: string; token: string; catalogue: CatalogueItem[];
   onPick: ViewerController['pickPoint']; onShow: ViewerController['showCadComponent']; onMove: ViewerController['moveCadComponent'];
   onFocus?: ViewerController['focusCadComponent']; onRemove?: ViewerController['removeCadComponent'];
-  onColor?: ViewerController['setCadComponentColor']; };
+  onColor?: ViewerController['setCadComponentColor']; onTraysChanged?: () => Promise<void>; };
 type Coordinates = { x: string; y: string; z: string; rx: string; ry: string; rz: string };
 const empty: Coordinates = { x: '0', y: '0', z: '0', rx: '0', ry: '0', rz: '0' };
 
@@ -36,7 +36,7 @@ function quaternionEuler(instance: Instance): Pick<Coordinates, 'rx' | 'ry' | 'r
   return rotationFields({ x: instance.qx, y: instance.qy, z: instance.qz, w: instance.qw });
 }
 
-export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue, onPick, onShow, onMove, onFocus, onRemove, onColor }: Props) {
+export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue, onPick, onShow, onMove, onFocus, onRemove, onColor, onTraysChanged }: Props) {
   const rendered = useRef(new Set<string>());
   const renderedLengths = useRef(new Map<string, number | null>());
   const [displayedIds, setDisplayedIds] = useState<string[]>([]);
@@ -541,7 +541,7 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
     </li>)}</ul>
 
     {designId && onColor ? <CadRoutesPanel projectId={projectId} designId={designId} token={token}
-      instances={instances} displayedIds={displayedIds} onColor={onColor} onConnectionsChanged={async () => { await reload(); }} onGeometryChanged={async () => {
+      instances={instances} displayedIds={displayedIds} onColor={onColor} onTraysChanged={onTraysChanged} onConnectionsChanged={async () => { await reload(); }} onGeometryChanged={async () => {
         setEditingId(''); setPendingSnap(null); setCoordinates(empty); await reload();
       }} /> : null}
     <ul aria-label="Saved connector relationships">{connections.map(connection =>

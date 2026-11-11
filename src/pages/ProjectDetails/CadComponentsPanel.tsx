@@ -16,12 +16,12 @@ type Props = {
   projectId: string | null; token: string | null; modelVersionId: string | null; ready: boolean;
   onPick: ViewerController['pickPoint']; onShow: ViewerController['showCadComponent']; onMove: ViewerController['moveCadComponent'];
   onFocus?: ViewerController['focusCadComponent'];
-  onColor?: ViewerController['setCadComponentColor'];
+  onColor?: ViewerController['setCadComponentColor']; onTraysChanged?: () => Promise<void>;
   onRemove?: ViewerController['removeCadComponent'];
 };
 const UUID = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i;
 
-export function CadComponentsPanel({ projectId, token, modelVersionId, ready, onPick, onShow, onMove, onFocus, onRemove, onColor }: Props) {
+export function CadComponentsPanel({ projectId, token, modelVersionId, ready, onPick, onShow, onMove, onFocus, onRemove, onColor, onTraysChanged }: Props) {
   const generation = useRef(0);
   const [items, setItems] = useState<CatalogueItem[]>([]);
   const [components, setComponents] = useState<MaterialComponent[]>([]);
@@ -138,6 +138,6 @@ export function CadComponentsPanel({ projectId, token, modelVersionId, ready, on
       </li>)}</ul>
     </div>
     {scoped && projectId && token && modelVersionId ? <CadPlacementPanel key={`${projectId}:${modelVersionId}:${token}`}
-      projectId={projectId} token={token} modelVersionId={modelVersionId} catalogue={items} onPick={onPick} onShow={onShow} onMove={onMove} onFocus={onFocus} onRemove={onRemove} onColor={onColor} /> : null}
+      projectId={projectId} token={token} modelVersionId={modelVersionId} catalogue={items} onPick={onPick} onShow={onShow} onMove={onMove} onFocus={onFocus} onRemove={onRemove} onColor={onColor} onTraysChanged={onTraysChanged} /> : null}
   </section>;
 }

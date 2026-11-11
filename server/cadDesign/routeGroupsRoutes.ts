@@ -17,6 +17,9 @@ const safe = (handler: (req: Request, res: Response) => Promise<void>) =>
       if (error instanceof RouteGroupError) { res.status(error.status).json({ code: error.code }); return; }
       const code = (error as { code?: string })?.code;
       if (code === '23505') { res.status(409).json({ code: 'CAD_ROUTE_TAG_OR_MEMBER_CONFLICT' }); return; }
+      if (code === '23503' && (error as { constraint?: string }).constraint?.startsWith('cad_route_tray_exports')) {
+        res.status(409).json({ code: 'CAD_ROUTE_TRAY_EXPORT_EXISTS', message: 'Remove the linked entry from the Trays list before removing this route group.' }); return;
+      }
       if (code === '23503') { res.status(409).json({ code: 'CAD_ROUTE_MEMBERSHIP_CONFLICT' }); return; }
       if (code === '40P01' || code === '40001') { res.status(409).json({ code: 'CAD_DESIGN_CONFLICT' }); return; }
       next(error);

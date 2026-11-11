@@ -32,7 +32,7 @@ try {
         $previousCadRunner = $env:PF_MODEL_RUNNER_DLL
         try {
             $env:PF_MODEL_RUNNER_DLL = Join-Path $repo 'pathfinder-engine/tools/PathFinder.ModelRunner/bin/Release/net9.0/PathFinder.ModelRunner.dll'
-            npx vitest run --maxWorkers=1 --minWorkers=1 --testTimeout=45000 server/pathfinder/cadOverlay.engine.test.ts server/cadDesign/routeGroups.test.ts server/cadDesign/routePublication.test.ts server/cadDesign/routePublication.http.test.ts server/cadDesign/routeAlignment.test.ts server/cadDesign/routeAutoConnections.test.ts server/pathfinder/cadOverlay.test.ts src/pages/ProjectDetails/CadRoutesPanel.test.tsx
+            npx vitest run --maxWorkers=1 --minWorkers=1 --testTimeout=45000 server/pathfinder/cadOverlay.engine.test.ts server/cadDesign/routeGroups.test.ts server/cadDesign/routePublication.test.ts server/cadDesign/routePublication.http.test.ts server/cadDesign/routeAlignment.test.ts server/cadDesign/routeAutoConnections.test.ts server/cadDesign/routeTrayExports.test.ts server/models/tray.test.ts server/validators.tray.test.ts src/pages/TrayDetails/TrayDetails.autoLength.test.ts server/pathfinder/cadOverlay.test.ts src/pages/ProjectDetails/CadRoutesPanel.test.tsx
         } finally { $env:PF_MODEL_RUNNER_DLL = $previousCadRunner }
     }
     if ($CheckTransitionSchema) {

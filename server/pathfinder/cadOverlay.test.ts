@@ -61,4 +61,22 @@ describe('immutable CAD overlay and additive base-network scope',()=>{
     const db=fake([{...group(),status:'draft',project_tray_id:null}],source,[]);
     expect(await readCadOverlay(db as unknown as PoolClient,projectId,artifactId,sha,modelVersionId,prepared,current)).toBe('retired-base-proof');
   });
+  it('keeps a previously exported row inside the prepared base catalogue during publication and withdrawal',async()=>{
+    vi.stubEnv('WFC_CAD_DESIGN_ENABLED','true');
+    const included=[...source,{id:actual.id,name:actual.name,purpose:actual.purpose}],base=projectRoutingCatalogRows(included);
+    const scope={...prepared,routingContentSha256:createHash('sha256').update(canonicalPurposeJson(catalogRoutingHashInput(projectId,base.rows,base.diagnostics))).digest('hex')};
+    const publication={baseArtifactId:artifactId,overlay:payload,traySnapshot,trayInBaseCatalog:true};
+    const active=fake([group(publication)],included);
+    expect(await readCadOverlay(active as unknown as PoolClient,projectId,artifactId,sha,modelVersionId,scope,scope)).toEqual(encodeCadOverlay(payload));
+    expect(active.query.mock.calls[2][1]).toEqual([projectId,[]]);
+    const retired=fake([{...group(publication),status:'draft',project_tray_id:null}],included,[]);
+    expect(await readCadOverlay(retired as unknown as PoolClient,projectId,artifactId,sha,modelVersionId,scope,scope)).toBe('retired-base-proof');
+  });
+  it('requires fresh preparation when a publication-created row is later exported and retained on withdrawal',async()=>{
+    vi.stubEnv('WFC_CAD_DESIGN_ENABLED','true');
+    const publication={baseArtifactId:artifactId,overlay:payload,traySnapshot,trayInBaseCatalog:false};
+    const retained=[...source,{id:actual.id,name:actual.name,purpose:actual.purpose}];
+    await expect(readCadOverlay(fake([{...group(publication),status:'draft',project_tray_id:null}],retained,[]) as unknown as PoolClient,
+      projectId,artifactId,sha,modelVersionId,prepared,current)).rejects.toMatchObject({code:'ROUTING_PREPARATION_REQUIRED'});
+  });
 });

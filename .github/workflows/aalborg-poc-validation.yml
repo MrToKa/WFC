@@ -55,7 +55,7 @@ jobs:
           PF_MODEL_RUNNER_DLL: ${{ github.workspace }}/pathfinder-engine/tools/PathFinder.ModelRunner/bin/Release/net9.0/PathFinder.ModelRunner.dll
         run: npx vitest run --maxWorkers=1 --minWorkers=1 --testTimeout=45000 server/pathfinder/cadOverlay.engine.test.ts
       - name: CAD route groups and network publication
-        run: npx vitest run --maxWorkers=1 --minWorkers=1 --testTimeout=15000 server/cadDesign/routeGroups.test.ts server/cadDesign/routePublication.test.ts server/cadDesign/routePublication.http.test.ts server/cadDesign/routeAlignment.test.ts server/cadDesign/routeAutoConnections.test.ts server/pathfinder/cadOverlay.test.ts src/pages/ProjectDetails/CadRoutesPanel.test.tsx
+        run: npx vitest run --maxWorkers=1 --minWorkers=1 --testTimeout=15000 server/cadDesign/routeGroups.test.ts server/cadDesign/routePublication.test.ts server/cadDesign/routePublication.http.test.ts server/cadDesign/routeAlignment.test.ts server/cadDesign/routeAutoConnections.test.ts server/cadDesign/routeTrayExports.test.ts server/models/tray.test.ts server/validators.tray.test.ts src/pages/TrayDetails/TrayDetails.autoLength.test.ts server/pathfinder/cadOverlay.test.ts src/pages/ProjectDetails/CadRoutesPanel.test.tsx
       - name: Isolated installation transition migration and lifecycle
         env:
           WFC_CAD_TRANSITIONS_POSTGRES_TESTS: '1'

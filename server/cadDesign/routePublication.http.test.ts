@@ -8,7 +8,9 @@ import { buildGeometryTrace } from '../pathfinder/geometryTraceBuilder.js';
 import { geometryTraceFixture } from '../pathfinder/geometryTraceFixtures.js';
 import { PathFinderError } from '../pathfinder/errors.js';
 import type { RoutingScope } from '../pathfinder/routingScope.js';
-import { cadRoutePublicationRouter, type PublicationInstance } from './routePublication.js';
+import { buildCadChain, cadRoutePublicationRouter, type PublicationInstance } from './routePublication.js';
+import { cadTrayProjection, deriveCadTrayExport } from './routeTrayExports.js';
+import type { TrayRow } from '../models/tray.js';
 
 const mocks = vi.hoisted(() => ({
   connect: vi.fn(),
@@ -122,7 +124,8 @@ const attachment = {
   targetPortIndex: 0,
 };
 const publishBody = { expectedRevision: 7, attachments: [attachment] };
-let currentGroup: typeof draft | typeof published;
+let currentGroup: Omit<typeof draft,'publication'|'project_tray_id'> & {publication:unknown;project_tray_id:string|null};
+let exportLink:Record<string,unknown>|undefined,exportedTray:TrayRow|undefined;
 let inUse: boolean, admin: boolean, currentAdmin: boolean, revoked: boolean;
 let memberCount: number;
 let server: Server | undefined;
@@ -167,11 +170,22 @@ const mutations = () =>
   mocks.query.mock.calls.filter(([text]) =>
     /^(INSERT INTO trays|UPDATE cad_route_groups|DELETE FROM trays)/.test(text),
   );
+function seedListExport(sourceInstance=instance){
+  currentGroup={...draft,name:draft.tag};
+  const derived=deriveCadTrayExport(projectId,designId,currentGroup,[sourceInstance],buildCadChain([sourceInstance],[]));
+  exportedTray={id:trayId,project_id:projectId,name:currentGroup.name,purpose:currentGroup.purpose,tray_type:instance.part_number,
+    width_mm:300,height_mm:60,length_mm:1500,length_source:'auto',length_calculation:{source:'cad-route',designId,routeId,routeRevision:7,
+      centerlineSha256:derived.centerlineSha256,lengthMm:1500,elementCount:1,calculatedAt:'2026-11-11T00:00:00.000Z'},
+    include_grounding_cable:false,grounding_cable_type_id:null,created_at:'2026-11-11T00:00:00.000Z',updated_at:'2026-11-11T00:00:00.000Z'};
+  exportLink={project_id:projectId,design_id:designId,route_group_id:routeId,tray_id:trayId,source_sha256:derived.sourceSha256,
+    source_proof:{source:derived.source,capturedRouteRevision:7},projection:cadTrayProjection(exportedTray)};
+}
 
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.timeline.length = 0;
   currentGroup = draft;
+  exportLink=undefined;exportedTray=undefined;
   inUse = false;
   admin = true;
   currentAdmin = true;
@@ -197,6 +211,9 @@ beforeEach(() => {
       };
     if (text.startsWith('SELECT d.id')) return { rows: [{ id: designId }] };
     if (text.startsWith('SELECT * FROM cad_route_groups')) return { rows: [currentGroup] };
+    if (text.startsWith('SELECT * FROM cad_route_tray_exports')) return {rows:exportLink?[exportLink]:[]};
+    if (text.startsWith('SELECT tray_id FROM cad_route_tray_exports')) return {rows:exportLink?[{tray_id:exportLink.tray_id}]:[]};
+    if (text.startsWith('SELECT * FROM trays')) return {rows:exportedTray&&values[0]===projectId&&values[1]===exportedTray.id?[exportedTray]:[]};
     if (text.startsWith('SELECT i.*,c.original_filename')) return { rows: [instance] };
     if (text.startsWith('SELECT COUNT(*)::int AS member_count'))
       return { rows: [{ member_count: memberCount }] };
@@ -255,6 +272,29 @@ afterEach(async () => {
 });
 
 describe('CAD publication HTTP authorization and refusal', () => {
+  it('reuses its compatible list-first row rather than creating a duplicate and pins its projection in publication',async()=>{
+    seedListExport();const response=await post(await start(),'publish',publishBody);
+    expect(response.status).toBe(200);expect(await response.json()).toMatchObject({projectTrayId:trayId,status:'published'});
+    expect(sql('INSERT INTO trays')).toBeUndefined();expect(mocks.audit).not.toHaveBeenCalled();
+    expect(sql('SELECT id FROM trays')?.[1]).toEqual([projectId,draft.tag,trayId]);
+    const publication=JSON.parse(String(sql('UPDATE cad_route_groups')?.[1][4]));
+    expect(publication).toMatchObject({trayInBaseCatalog:true,trayExportSourceSha256:exportLink!.source_sha256,traySnapshot:{id:trayId,name:draft.tag}});
+    expect(sql('SELECT i.*,c.original_filename')?.[0]).toContain('ORDER BY i.created_at,i.id');
+  });
+  it('requires an explicit list refresh for changed CAD source and preserves manually edited rows',async()=>{
+    seedListExport({...instance,revision:instance.revision-1});
+    const base=await start();let response=await post(base,'publish',publishBody);
+    expect(response.status).toBe(409);expect(await response.json()).toMatchObject({code:'CAD_ROUTE_TRAY_EXPORT_STALE'});
+    expect(mocks.execute).not.toHaveBeenCalled();expect(mutations()).toEqual([]);
+    seedListExport();exportedTray!.name='MANUAL-EDIT';response=await post(base,'publish',publishBody);
+    expect(response.status).toBe(409);expect(await response.json()).toMatchObject({code:'CAD_ROUTE_TRAY_EDITED'});expect(mutations()).toEqual([]);
+  });
+  it.each([true,false])('retains an exported row on withdrawal whether it existed in the prepared base (%s)',async trayInBaseCatalog=>{
+    seedListExport();currentGroup={...currentGroup,status:'published',revision:8,project_tray_id:trayId,publication:{baseArtifactId:artifactId,trayInBaseCatalog}};
+    const response=await post(await start(),'withdraw',{expectedRevision:8});
+    expect(response.status).toBe(200);expect(sql('DELETE FROM trays')).toBeUndefined();
+    expect(sql('UPDATE cad_route_groups')).toBeDefined();expect(exportedTray!.id).toBe(trayId);expect(mocks.policy).toHaveBeenCalled();
+  });
   it.each(['publish', 'attachment-options'])(
     'rejects mixed canonical and legacy members before %s can silently use a subset',
     async (action) => {
