@@ -42,6 +42,7 @@ import type {
 } from '@/api/types';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
+import { useProjectTrayPurposes } from '@/hooks/useProjectTrayPurposes';
 import {
   getProjectPlaceholders,
   setProjectPlaceholders,
@@ -785,6 +786,7 @@ export const TrayDetails = () => {
   const canonicalProjectId = project?.id ?? projectId ?? null;
 
   const [isEditing, setIsEditing] = useState<boolean>(false);
+  const projectTrayPurposes = useProjectTrayPurposes(projectId, token, isEditing);
   const { materialTrays, isLoadingMaterials, materialsError, findMaterialTrayByType } =
     useMaterialData(isEditing ? projectId : undefined, isEditing && canReadCatalogs(user));
 
@@ -3029,6 +3031,9 @@ export const TrayDetails = () => {
       {/* Tray Details Section */}
       {isEditing ? (
         <TrayEditForm
+          purposeOptions={projectTrayPurposes.purposes.map(purpose => purpose.name)}
+          purposeOptionsLoading={projectTrayPurposes.loading}
+          purposeOptionsError={projectTrayPurposes.error}
           formValues={formValues}
           formErrors={formErrors}
           materialsError={materialsError}

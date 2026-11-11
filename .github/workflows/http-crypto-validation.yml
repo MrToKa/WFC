@@ -75,6 +75,8 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Verify production obstacle verifier packaging
         run: node --test scripts/barrier-verifier-packaging.test.mjs
+      - name: Verify project tray purpose catalogs and template preservation
+        run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/hooks/useProjectTrayPurposes.test.ts src/pages/ProjectDetails/hooks/useProjectDetailsData.test.ts src/pages/ProjectDetails/TrayPurposeControls.test.tsx src/pages/ProjectDetails/TrayDialog.test.tsx src/pages/ProjectDetails/DetailsTab.test.tsx server/services/projectTrayPurposeService.test.ts server/services/projectTrayPurposeService.postgres.test.ts server/routes/projectTrayPurposesRoutes.test.ts
       - name: Verify persistent tray identities across model revisions
         run: |
           node --test viewer-runtime/test/tray-identity.test.mjs

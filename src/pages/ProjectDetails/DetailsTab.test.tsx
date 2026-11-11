@@ -265,3 +265,22 @@ describe('DetailsTab tray report templates', () => {
     expect(screen.queryByText('Tray report templates')).not.toBeInTheDocument();
   });
 });
+
+describe('project purpose catalog management in Details', () => {
+  function CatalogDetails({ empty = false, busy = false }: { empty?: boolean; busy?: boolean }) {
+    const styles = useProjectDetailsStyles();
+    return <FluentProvider theme={webLightTheme}><DetailsTab {...fixture} styles={styles}
+      trayTemplateRows={empty ? [] : fixture.trayTemplateRows}
+      purposeManagement={{ busy, error: null, counts: {}, create: vi.fn(), rename: vi.fn(), remove: vi.fn() }}
+      onTrayTemplateChange={vi.fn(async () => {})} /></FluentProvider>;
+  }
+  it('provides purpose creation even before the project has its first tray', () => {
+    render(<CatalogDetails empty />);
+    expect(screen.getByLabelText('New tray purpose')).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Add purpose' })).toBeDisabled();
+  });
+  it('blocks full-map template changes during an atomic purpose rename', () => {
+    render(<CatalogDetails busy />);
+    for (const select of screen.getAllByRole('combobox', { name: /Tray report template for/ })) expect(select).toBeDisabled();
+  });
+});

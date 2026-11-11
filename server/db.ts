@@ -1,3 +1,4 @@
+import { initializeProjectTrayPurposeSchema } from './services/projectTrayPurposeService.js';
 import { initializeStandardMaterialCategories } from './services/standardMaterialCategorySchema.js';
 import { TRAY_AUTO_LENGTH_CAPTURE_SQL } from './services/trayAutoLengthCaptureService.js';
 import { initializeMaterialIdentity } from './services/materialIdentitySchema.js';
@@ -2340,6 +2341,7 @@ export async function initializeDatabase(): Promise<void> {
   await initializeModelRegistry(pool);
   await initializeViewerSessions(pool);
   await initializePathFinder(pool);
+  await initializeProjectTrayPurposeSchema(pool);
 }
 
 export async function shutdownDatabase(): Promise<void> {
