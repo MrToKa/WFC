@@ -1144,3 +1144,12 @@ test('a GUID hover while two foreground capabilities are pending remains a local
   wait.resolve(); await turn();
   assert.equal(f.messages('TRAY_ROOT_SELECTION').length, 2);
 });
+
+test('typed model capture failure preserves numeric context without forwarding SDK text or failing rendered model', async () => {
+  const f=fixture({startModelCapture:async()=>{throw Object.assign(Error('PRIVATE-SDK-MESSAGE'),{code:'MODEL_CAPTURE_GEOMETRY_NOT_RESIDENT',objectId:29713,fragmentId:7,privatePath:'secret'});}});
+  await f.loaded();f.send('START_MODEL_CAPTURE',{captureId:uuid(901),routeCodes:['BC1'],allowedCategories:['LV'],equipmentNames:[]});await turn();
+  const payload=f.messages('ERROR').at(-1).payload;
+  assert.equal(payload.code,'MODEL_CAPTURE_GEOMETRY_NOT_RESIDENT');assert.equal(payload.objectId,29713);assert.equal(payload.fragmentId,7);
+  assert.equal(payload.retryable,true);assert.equal(JSON.stringify(payload).includes('PRIVATE'),false);assert.equal(Object.hasOwn(payload,'privatePath'),false);
+  assert.notEqual(f.states.at(-1).phase,'error');f.bridge.dispose();
+});

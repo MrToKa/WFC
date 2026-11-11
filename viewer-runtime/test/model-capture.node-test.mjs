@@ -363,3 +363,15 @@ test('legacy, selected-boundary and independent lookup SDK captures cross the st
     }
   }
 });
+
+// Failed selected leaves must stay visible as typed diagnostics, never be skipped.
+test('resident geometry refusal retains safe selected object and fragment identifiers', async () => {
+  const f = fixture(); f.model.getFragmentList().getGeometry = () => null;
+  await assert.rejects(async () => { for await (const _ of captureSelectedModel({model:f.model}, preparationRequest())) {} },
+    error => error.code === 'MODEL_CAPTURE_GEOMETRY_NOT_RESIDENT' && error.objectId === 3 && Number.isSafeInteger(error.fragmentId));
+});
+test('malformed triangle diagnostics retain selected context and refuse the complete snapshot', async () => {
+  const f = fixture({indices:[0,1,999]});
+  await assert.rejects(async () => { for await (const _ of captureSelectedModel({model:f.model}, preparationRequest())) {} },
+    error => error.code === 'MODEL_CAPTURE_INVALID_GEOMETRY' && error.objectId === 3 && Number.isSafeInteger(error.fragmentId));
+});

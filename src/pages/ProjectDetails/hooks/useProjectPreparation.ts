@@ -27,6 +27,7 @@ import { PREPARATION_LIMITS, preparationResolutionMatchesScope } from '../../../
 import { preparationCaptureRequest } from '../../../../shared/preparationMerge';
 import { collectPreparationDiscovery } from './collectPreparationDiscovery';
 import { PreparationDiscoveryError } from '../../../../shared/collectPreparationDiscovery';
+import { modelCaptureErrorMessage, modelCaptureErrorContext } from '../../../../viewer-runtime/model-capture-errors.mjs';
 import type { usePathFinder } from './usePathFinder';
 import {saveCaptureEvidence,GeometryTraceApiError,createGeometryTrace,fetchGeometryTraces,fetchGeometryTraceManifest,
   type GeometryTraceCreate,type GeometryTraceManifest} from '@/api/pathfinderGeometryTrace';
@@ -118,8 +119,25 @@ const reloadRequired = (error: unknown) =>
     error &&
       typeof error === 'object' &&
       'code' in error &&
-      error.code === 'CAPTURE_RELOAD_REQUIRED',
+      (error.code === 'CAPTURE_RELOAD_REQUIRED' || error.code === 'MODEL_CAPTURE_GEOMETRY_NOT_RESIDENT'),
   );
+class PreparationPartCaptureError extends Error {
+  readonly code: string;
+  readonly objectId?: number;
+  readonly fragmentId?: number;
+  constructor(cause: unknown, partIndex: number, partCount: number) {
+    const code = cause && typeof cause === 'object' && 'code' in cause && typeof cause.code === 'string' ? cause.code : 'EXTRACTION_FAILED';
+    const context = modelCaptureErrorContext(cause);
+    const detail = modelCaptureErrorMessage(code) ?? 'The viewer could not read this part completely.';
+    super(`Tray geometry capture stopped at part ${partIndex + 1} of ${partCount}. ${detail}` +
+      (context.objectId !== undefined ? ` Object: dbid:${context.objectId}.` : '') +
+      (context.fragmentId !== undefined ? ` Fragment: ${context.fragmentId}.` : '') +
+      ` (${code}). Committed parts are retained. Choose Discover project tray candidates to resume the missing parts.`);
+    this.code = code;
+    this.objectId = context.objectId;
+    this.fragmentId = context.fragmentId;
+  }
+}
 class PreparationDisplayScopeError extends Error {}
 const automaticRecoveryDelays = [250, 750] as const;
 const recoverableReceipt = (error: unknown) =>
@@ -333,6 +351,8 @@ export function useProjectPreparation(pf: PF, active: boolean) {
                 ? null
                 : trayIdentityMessage
                   ? trayIdentityMessage
+                : error instanceof PreparationPartCaptureError
+                  ? error.message
                 : reloadRequired(error)
                   ? 'Reload the protected model, then repeat discovery or Resume the frozen preparation. Committed parts are retained.'
                   : error instanceof PreparationDiscoveryError
@@ -652,7 +672,11 @@ export function useProjectPreparation(pf: PF, active: boolean) {
                   }));
                   const capture = await viewer.capture(
                     preparationCaptureRequest(session!.plan, part.partId),
-                  );
+                  ).catch(error => {
+                    if (error?.name === 'AbortError') throw error;
+                    if (!modelCaptureErrorMessage(error?.code) && error?.code !== 'EXTRACTION_FAILED' && error?.code !== 'CAPTURE_RELOAD_REQUIRED') throw error;
+                    throw new PreparationPartCaptureError(error, part.partIndex, session!.plan.partPlan.length);
+                  });
                   viewer.assertCurrent();
                   assertCurrent(signal);
                   fresh = await execute(
