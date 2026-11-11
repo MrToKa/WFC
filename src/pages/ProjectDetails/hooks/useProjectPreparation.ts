@@ -362,8 +362,10 @@ export function useProjectPreparation(pf: PF, active: boolean) {
     [enabled, identity, readCurrent, update],
   );
   const execute = useCallback(
-    async (command: Pending, signal: AbortSignal, automatic = false) => {
+    async (command: Pending, signal: AbortSignal, automatic = false, expectedPublicationPlan?: string) => {
       assertCurrent(signal);
+      const publicationPlan = expectedPublicationPlan ?? (command.kind === 'publish' && stateRef.current.session?.id === command.sessionId
+        ? stateRef.current.session.plan.orderedPlanSha256 : null);
       pending.current = command;
       update((value) => ({ ...value, unknown: false }));
       let sessionId: string | undefined;
@@ -433,11 +435,27 @@ export function useProjectPreparation(pf: PF, active: boolean) {
         try { await invoke(attemptCommand); break; }
         catch (error) {
           assertCurrent(signal);
-          const saved = pending.current;
+          const saved: Pending | null = pending.current;
           // A committed part can advance ownership to its evidence command.
           // Replay that exact evidence, never recapture or upload the part again.
           const ownsSaved = saved === attemptCommand || (attemptCommand.kind === 'part' && saved?.kind === 'evidence'
             && saved.sessionId === attemptCommand.sessionId && saved.partId === attemptCommand.partId);
+          // Publication validation can durably refuse a session before the error
+          // response is lost. Check that exact session before replaying a write.
+          if (saved?.kind === 'publish' && ownsSaved && publicationPlan && recoverableReceipt(error)) {
+            let checked: PreparationSession | null = null;
+            try { checked = await fetchPreparationSession(access.projectId!, access.token!, saved.sessionId, signal); }
+            catch { /* An unavailable status read cannot resolve an uncertain write. */ }
+            assertCurrent(signal);
+            if (pending.current === saved && checked && checked.id === saved.sessionId && checked.projectId === access.projectId
+              && checked.plan.orderedPlanSha256 === publicationPlan && checked.state === 'failed'
+              && checked.publishedAggregateId === null && checked.failure) {
+              pending.current = null;
+              update(value => ({ ...value, session: checked, unknown: false }));
+              throw new PreparationApiError(checked.failure.code, 422,
+                `Tray network was not published: ${checked.failure.message} (${checked.failure.code}). Assigned objects are retained. Correct the reported issue, then discover again.`, 'refused');
+            }
+          }
           if (!automatic || !saved || !ownsSaved || attempt >= automaticRecoveryDelays.length || !recoverableReceipt(error)) throw error;
           attemptCommand = saved;
           const label = saved.kind === 'trace' ? 'Tray network saved. Confirming its final check'
@@ -1022,7 +1040,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
     fresh = await execute({ kind: 'publish', sessionId: fresh.session.id, body: {
       schemaVersion: 'wfc.pf.preparation-mutation.v1', expectedSessionRevision: fresh.session.sessionRevision,
       idempotencyKey: generateId(), reason: 'Update the project tray network from the current model.',
-    } }, signal, true);
+    } }, signal, true, fresh.session.plan.orderedPlanSha256);
     if (!publishedNetworkMatches(fresh.context) || fresh.session?.state !== 'published' || fresh.context.currentAggregate!.sessionId !== fresh.session.id)
       throw new Error('The tray update could not be confirmed. Check the trays again.');
     fresh = await ensureNetworkTrace(fresh, signal);

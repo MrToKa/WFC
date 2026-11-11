@@ -554,6 +554,41 @@ describe('project preparation lifecycle', () => {
 
 describe('automatic tray workflow', () => {
   afterEach(() => vi.restoreAllMocks());
+  it.each(['collecting', 'different-plan', 'published-id'] as const)('retains an unknown publish lock for %s evidence', async mode => {
+    const f = automaticSetup();
+    vi.mocked(api.mutatePreparation).mockImplementation(async (_project, _token, id) => {
+      const session = f.store.sessions.get(id)!;
+      f.store.sessions.set(id, { ...session, state: mode === 'collecting' ? 'collecting' : 'failed', recovery: null,
+        publishedAggregateId: mode === 'published-id' ? crypto.randomUUID() : null,
+        plan: mode === 'different-plan' ? { ...session.plan, orderedPlanSha256: 'f'.repeat(64) } : session.plan,
+        failure: { code: 'GEOMETRY_INVALID', message: 'Tray geometry is invalid' } });
+      throw new api.PreparationApiError('PREPARATION_OUTCOME_UNKNOWN', 500, 'Unknown', 'unknown');
+    });
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true));
+    await waitFor(() => expect(result.current.context).not.toBeNull());
+    await act(() => result.current.checkTrays());
+    expect(result.current.unknown).toBe(true); expect(result.current.canMutate).toBe(false);
+    const calls = vi.mocked(api.mutatePreparation).mock.calls;
+    expect(calls).toHaveLength(3); expect(calls.every(call => call[4] === calls[0][4])).toBe(true);
+  });
+  it('unlocks assignments when an unknown publish response has an exact durable failed session', async () => {
+    const f = automaticSetup();
+    vi.mocked(api.mutatePreparation).mockImplementation(async (_project, _token, id) => {
+      const session = f.store.sessions.get(id)!;
+      f.store.sessions.set(id, { ...session, state: 'failed', recovery: null, publishedAggregateId: null,
+        failure: { code: 'GEOMETRY_INVALID', message: 'Tray geometry is invalid' } });
+      throw new api.PreparationApiError('PREPARATION_OUTCOME_UNKNOWN', 500, 'Unknown', 'unknown');
+    });
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true));
+    await waitFor(() => expect(result.current.context).not.toBeNull());
+    await act(() => result.current.checkTrays());
+    expect(api.mutatePreparation).toHaveBeenCalledOnce();
+    expect(result.current.unknown).toBe(false); expect(result.current.canMutate).toBe(true);
+    expect(result.current.error).toContain('GEOMETRY_INVALID');
+    expect(result.current.error).toContain('discover again');
+    expect(f.pf.reloadViewer).not.toHaveBeenCalled();
+  });
+
   it('finishes a newly published aggregate with verified frame evidence before reporting ready', async () => {
     const f = automaticSetup(); const { result } = renderHook(() => useProjectPreparation(f.pf, true));
     await waitFor(() => expect(result.current.context).not.toBeNull());
