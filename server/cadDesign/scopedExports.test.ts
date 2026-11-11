@@ -105,10 +105,24 @@ describe('route-scoped and complete-proposal CAD deliverables',()=>{
     expect((await get('step',`?routeId=${routeA}`)).status).toBe(200);expect(mocks.assembly.mock.calls[0][0]).toHaveLength(2);
   });
   it('fails explicitly when the complete proposal exceeds the kernel part limit while a smaller selected route remains exportable',async()=>{
-    state.parts=Array.from({length:33},(_,index)=>part(index+10,`SKU-${index}`,index+100));
+    state.parts=Array.from({length:129},(_,index)=>part(index+10,`SKU-${index}`,index+100));
     const all=await get('step');expect(all.status).toBe(413);expect(await all.json()).toMatchObject({code:'CAD_EXPORT_PART_LIMIT'});expect(mocks.assembly).not.toHaveBeenCalled();
     expect((await get('step',`?routeId=${routeA}`)).status).toBe(200);expect(mocks.assembly.mock.calls[0][0]).toHaveLength(2);
-    const csv=await get('csv');expect(csv.status).toBe(200);expect((await csv.text()).split('\r\n').filter(Boolean)).toHaveLength(34);
+    const csv=await get('csv');expect(csv.status).toBe(200);expect((await csv.text()).split('\r\n').filter(Boolean)).toHaveLength(130);
+  });
+  it.each(['proposal','route'])('accepts exactly 128 %s parts through both pre- and post-generation checks',async scope=>{
+    state.parts=Array.from({length:128},(_,index)=>part(index+10,'REPEATED-SKU',100));
+    state.routes[0].members=state.parts.map(row=>row.id);
+    const response=await get('step',scope==='route'?`?routeId=${routeA}`:'');expect(response.status).toBe(200);
+    expect(mocks.assembly.mock.calls[0][0]).toHaveLength(128);expect(clients).toHaveLength(2);
+  });
+  it('rejects 129 selected route members before conversion and a 129th addition during conversion as stale',async()=>{
+    state.parts=Array.from({length:129},(_,index)=>part(index+10,'SKU',100));state.routes[0].members=state.parts.map(row=>row.id);
+    expect((await get('step',`?routeId=${routeA}`)).status).toBe(413);expect(mocks.assembly).not.toHaveBeenCalled();
+    state.parts.pop();state.routes[0].members.pop();mocks.assembly.mockImplementation(async()=>{
+      const added=part(999,'SKU',100);state.parts.push(added);state.routes[0].members.push(added.id);return Buffer.from('ISO-10303-21;');
+    });
+    const response=await get('step',`?routeId=${routeA}`);expect(response.status).toBe(409);expect(await response.json()).toMatchObject({code:'DESIGN_CHANGED_DURING_EXPORT'});
   });
   it.each(['design','route','membership','placement'])('rejects a %s change during isolated STEP conversion',async changed=>{
     mocks.assembly.mockImplementation(async()=>{

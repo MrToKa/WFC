@@ -55,8 +55,45 @@ describe('isolated CAD converter length contracts', () => {
     const body = JSON.parse(Buffer.from(request.body).toString('utf8'));
     expect(body.parts[0].cutLengthMm).toBe(2500);
     expect(body.parts[1]).not.toHaveProperty('cutLengthMm');
-    expect(body.parts[0].stepBase64).toBe(source.toString('base64'));
-    expect(body.parts[1].stepBase64).toBe(source.toString('base64'));
+    expect(body.sources).toHaveLength(1);
+    expect(body.sources[0].stepBase64).toBe(source.toString('base64'));
+    expect(body.parts[0].sourceId).toBe(body.sources[0].id);
+    expect(body.parts[1].sourceId).toBe(body.sources[0].id);
+    expect(body.parts[0]).not.toHaveProperty('stepBase64');
+    expect(storage.getObjectStream).toHaveBeenCalledOnce();
     expect(storage.getObjectStream).toHaveBeenCalledWith('bucket','immutable/source.step');
+  });
+  it('sends 128 placements of a representative-size repeated source once within the unchanged byte budget',async()=>{
+    const source=Buffer.alloc(823845,32);source.write('ISO-10303-21;');
+    storage.getObjectStream.mockImplementation(async()=>Readable.from([source]));
+    const output='ISO-10303-21;\n'+' '.repeat(120);
+    fetchMock.mockResolvedValue(new Response(output,{headers:{'Content-Type':'application/step','Content-Length':String(output.length)}}));
+    const common={original_filename:'stock.step',source_object_key:'immutable/source.step',x_mm:0,y_mm:0,z_mm:0,qx:0,qy:0,qz:0,qw:1};
+    await exportStepAssembly(Array.from({length:128},(_,index)=>({...common,x_mm:index*1000})));
+    const body=JSON.parse(Buffer.from(fetchMock.mock.calls[0][1].body).toString('utf8'));
+    expect(body.parts).toHaveLength(128);expect(body.sources).toHaveLength(1);expect(storage.getObjectStream).toHaveBeenCalledOnce();
+    expect(Buffer.byteLength(JSON.stringify(body))).toBeLessThan(2*1024*1024);
+    expect(body.parts[127].positionMm).toEqual([127000,0,0]);
+  });
+  it('rejects 129 assembly placements before source reads or network access',async()=>{
+    const common={original_filename:'stock.step',source_object_key:'immutable/source.step',x_mm:0,y_mm:0,z_mm:0,qx:0,qy:0,qz:0,qw:1};
+    await expect(exportStepAssembly(Array.from({length:129},()=>({...common})))).rejects.toThrow('1 to 128');
+    expect(storage.getObjectStream).not.toHaveBeenCalled();expect(fetchMock).not.toHaveBeenCalled();
+  });
+  it('deduplicates identical bytes across different pinned object keys',async()=>{
+    const source=Buffer.from('ISO-10303-21;'+' '.repeat(100));storage.getObjectStream.mockImplementation(async()=>Readable.from([source]));
+    const output='ISO-10303-21;'+' '.repeat(120);fetchMock.mockResolvedValue(new Response(output,{headers:{'Content-Type':'application/step','Content-Length':String(output.length)}}));
+    const common={original_filename:'stock.step',source_object_key:'source-a',x_mm:0,y_mm:0,z_mm:0,qx:0,qy:0,qz:0,qw:1};
+    await exportStepAssembly([common,{...common,source_object_key:'source-b'}]);
+    const body=JSON.parse(Buffer.from(fetchMock.mock.calls[0][1].body).toString('utf8'));
+    expect(body.sources).toHaveLength(1);expect(body.parts[0].sourceId).toBe(body.parts[1].sourceId);expect(storage.getObjectStream).toHaveBeenCalledTimes(2);
+  });
+  it('keeps the unique-source 8 MiB cap and rejects a mismatched pinned source hash',async()=>{
+    const common={original_filename:'stock.step',source_object_key:'source-a',x_mm:0,y_mm:0,z_mm:0,qx:0,qy:0,qz:0,qw:1};
+    storage.getObjectStream.mockImplementation(async(_bucket:string,key:string)=>Readable.from([Buffer.alloc(4*1024*1024+1,key==='source-a'?65:66)]));
+    await expect(exportStepAssembly([common,{...common,source_object_key:'source-b'}])).rejects.toThrow('unique source');
+    expect(fetchMock).not.toHaveBeenCalled();
+    storage.getObjectStream.mockImplementation(async()=>Readable.from([Buffer.from('original bytes')]));
+    await expect(exportStepAssembly([{...common,source_sha256:'0'.repeat(64)}])).rejects.toThrow('pinned STEP source hash');expect(fetchMock).not.toHaveBeenCalled();
   });
 });

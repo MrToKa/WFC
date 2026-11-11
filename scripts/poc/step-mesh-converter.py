@@ -7,6 +7,7 @@ in the original STEP millimetres, including the local CAD origin.
 import base64
 import binascii
 import hmac
+import hashlib
 import json
 import math
 import os
@@ -17,6 +18,7 @@ import cadquery as cq
 from OCP.gp import gp_Quaternion, gp_Trsf, gp_Vec
 
 MAX_INPUT_BYTES = 8 * 1024 * 1024
+MAX_ASSEMBLY_PARTS = 128
 MAX_TRIANGLES = 20000
 MAX_OUTPUT_BYTES = 16 * 1024 * 1024
 TOKEN = os.environ.get("POC_CONVERTER_TOKEN", "")
@@ -112,26 +114,59 @@ def convert_step(step_path, cut_length_mm=None):
 
 def assemble_step(request):
     parts = request.get("parts") if isinstance(request, dict) else None
-    if not isinstance(parts, list) or not 1 <= len(parts) <= 32:
-        raise ValueError("Expected 1 to 32 CAD parts")
+    if not isinstance(parts, list) or not 1 <= len(parts) <= MAX_ASSEMBLY_PARTS:
+        raise ValueError(f"Expected 1 to {MAX_ASSEMBLY_PARTS} CAD parts")
+    if set(request) - {"parts", "sources"}:
+        raise ValueError("Invalid CAD assembly request")
     total_source_bytes = 0
+    source_bytes = {}
+
+    def retain_source(encoded, claimed_id=None):
+        nonlocal total_source_bytes
+        try:
+            original = base64.b64decode(encoded, validate=True)
+        except (TypeError, ValueError, binascii.Error):
+            raise ValueError("Invalid encoded CAD source")
+        if len(original) < 40 or not original.lstrip().startswith(b"ISO-10303-21;"):
+            raise ValueError("CAD source is not STEP Part-21")
+        source_id = hashlib.sha256(original).hexdigest()
+        if claimed_id is not None and claimed_id != source_id:
+            raise ValueError("CAD source bank hash differs")
+        if source_id not in source_bytes:
+            total_source_bytes += len(original)
+            if total_source_bytes > MAX_INPUT_BYTES:
+                raise ValueError("Unique CAD source exceeds limit")
+            source_bytes[source_id] = original
+        return source_id
+
+    bank = request.get("sources")
+    if "sources" in request:
+        if not isinstance(bank, list) or not 1 <= len(bank) <= MAX_ASSEMBLY_PARTS:
+            raise ValueError("Invalid CAD source bank")
+        for item in bank:
+            if not isinstance(item, dict) or set(item) != {"id", "stepBase64"} or not isinstance(item["id"], str):
+                raise ValueError("Invalid CAD source bank entry")
+            if item["id"] in source_bytes:
+                raise ValueError("Duplicate CAD source bank identity")
+            retain_source(item["stepBase64"], item["id"])
     with tempfile.TemporaryDirectory(prefix="wfc-cad-assembly-") as work:
         result = cq.Assembly(name="WFC Proposed Cable Tray")
+        imported = {}
+        cut_cache = {}
         for index, part in enumerate(parts):
-            required = {"name", "stepBase64", "positionMm", "rotation"}
-            if not isinstance(part, dict) or not required.issubset(part) or set(part) - required - {"cutLengthMm"}:
+            required = {"name", "positionMm", "rotation"}
+            if not isinstance(part, dict) or not required.issubset(part) or set(part) - required - {"stepBase64", "sourceId", "cutLengthMm"}:
                 raise ValueError("Invalid CAD assembly part")
+            if ("sourceId" in part) == ("stepBase64" in part):
+                raise ValueError("Choose exactly one CAD source reference")
             if not isinstance(part["name"], str) or not 1 <= len(part["name"]) <= 120:
                 raise ValueError("Invalid CAD part label")
-            try:
-                original = base64.b64decode(part["stepBase64"], validate=True)
-            except (TypeError, ValueError, binascii.Error):
-                raise ValueError("Invalid encoded CAD source")
-            total_source_bytes += len(original)
-            if len(original) < 40 or total_source_bytes > 8 * 1024 * 1024:
-                raise ValueError("CAD source exceeds limit")
-            if not original.lstrip().startswith(b"ISO-10303-21;"):
-                raise ValueError("CAD source is not STEP Part-21")
+            if "sourceId" in part:
+                source_id = part["sourceId"]
+                if not isinstance(source_id, str) or source_id not in source_bytes:
+                    raise ValueError("Unknown CAD source reference")
+            else:
+                source_id = retain_source(part["stepBase64"])
             position, rotation = part["positionMm"], part["rotation"]
             if not isinstance(position, list) or len(position) != 3 or not all(
                     isinstance(x, (int, float)) and math.isfinite(x) and abs(x) <= 1e9 for x in position):
@@ -141,14 +176,22 @@ def assemble_step(request):
                 raise ValueError("Invalid CAD rotation")
             if abs(sum(float(x)*float(x) for x in rotation) - 1) > 1e-6:
                 raise ValueError("Rotation must be a unit quaternion")
-            source_path = os.path.join(work, f"part-{index}.step")
-            with open(source_path, "wb") as stream:
-                stream.write(original)
-            solids = cq.importers.importStep(source_path).solids().vals()
-            if not solids or len(solids) > 50:
-                raise ValueError("Invalid CAD solid count")
+            if source_id not in imported:
+                source_path = os.path.join(work, f"source-{source_id}.step")
+                with open(source_path, "wb") as stream:
+                    stream.write(source_bytes[source_id])
+                imported[source_id] = cq.importers.importStep(source_path).solids().vals()
+                if not imported[source_id] or len(imported[source_id]) > 50:
+                    raise ValueError("Invalid CAD solid count")
+            solids = imported[source_id]
             if "cutLengthMm" in part:
-                solids = cut_straight_solids(solids, part["cutLengthMm"])
+                length = part["cutLengthMm"]
+                if isinstance(length, bool) or not isinstance(length, (int, float)) or not math.isfinite(length) or not 0 < length <= 6000:
+                    raise ValueError("Invalid CAD cut length")
+                cache_key = (source_id, float(length))
+                if cache_key not in cut_cache:
+                    cut_cache[cache_key] = cut_straight_solids(solids, length)
+                solids = cut_cache[cache_key]
             transform = gp_Trsf()
             transform.SetRotation(gp_Quaternion(*rotation))
             transform.SetTranslationPart(gp_Vec(*position))

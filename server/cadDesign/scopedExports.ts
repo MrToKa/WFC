@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { Pool } from 'pg';
 import { z } from 'zod';
 import { supportsStraightCut } from '../../shared/cadLengths.js';
+import { MAX_STEP_ASSEMBLY_PARTS } from '../../shared/cadExportLimits.js';
 
 export class CadExportError extends Error {
   constructor(readonly code:string,readonly status:number,message=code){super(message);}
@@ -41,7 +42,7 @@ export async function readCadExportSnapshot(pool:Pick<Pool,'connect'>,projectId:
       (await client.query<{id:string}>('SELECT id FROM cad_design_instances WHERE project_id=$1 AND design_id=$2 ORDER BY created_at,id LIMIT 10001',[projectId,designId])).rows.map(row=>row.id);
     if(!ids.length)throw new CadExportError(routeId?'EMPTY_CAD_ROUTE':'EMPTY_CAD_DESIGN',409);
     if(ids.length>10000)throw new CadExportError('CAD_EXPORT_INSTANCE_LIMIT',413);
-    if(maxParts!==undefined&&ids.length>maxParts)throw new CadExportError('CAD_EXPORT_PART_LIMIT',413,'STEP assembly export supports at most 32 selected components.');
+    if(maxParts!==undefined&&ids.length>maxParts)throw new CadExportError('CAD_EXPORT_PART_LIMIT',413,`STEP assembly export supports at most ${MAX_STEP_ASSEMBLY_PARTS} selected components.`);
     const parts=(await client.query<CadExportPart>(`SELECT i.id,i.revision,i.catalog_item_id,c.id AS catalog_id,
       c.manufacturer,c.part_number,c.family,c.original_filename,c.source_sha256,c.source_object_key,
       c.material_component_cad_asset_id AS material_asset_id,a.revision AS cad_revision,p.component_kind,
@@ -61,7 +62,7 @@ export async function readCadExportSnapshot(pool:Pick<Pool,'connect'>,projectId:
 }
 export async function assertCadExportCurrent(pool:Pick<Pool,'connect'>,snapshot:CadExportSnapshot):Promise<void> {
   let current:CadExportSnapshot;
-  try{current=await readCadExportSnapshot(pool,snapshot.projectId,snapshot.designId,snapshot.route?.id,32);}
+  try{current=await readCadExportSnapshot(pool,snapshot.projectId,snapshot.designId,snapshot.route?.id,MAX_STEP_ASSEMBLY_PARTS);}
   catch(error){if(error instanceof CadExportError)throw new CadExportError('DESIGN_CHANGED_DURING_EXPORT',409);throw error;}
   if(current.fingerprint!==snapshot.fingerprint)throw new CadExportError('DESIGN_CHANGED_DURING_EXPORT',409);
 }

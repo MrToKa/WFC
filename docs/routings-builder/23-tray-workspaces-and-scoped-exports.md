@@ -24,7 +24,7 @@ Omit routeId to export the complete saved proposal. Invalid or repeated route se
 
 The server captures a coherent read-only snapshot of the scoped design, group, members, source files, revisions, cut lengths and transforms. CSV quantities are derived from those captured instances. STEP generation retains the isolated kernel and exact straight cutting, then checks saved source state again before delivering the output. Route names are sanitized only for download filenames. Snapshot revision and scope headers identify the actual export.
 
-STEP retains the existing safety limit of 32 component placements per assembly and bounded source/output sizes. Exceeding it returns an explicit error without silently omitting parts. CSV remains available for larger saved scopes. Materials and source STEP files are not changed by export. Installation routing transitions contribute no invented STEP fitting or material SKU.
+STEP retains the existing safety limit of 128 component placements per assembly and bounded source/output sizes. Exceeding it returns an explicit error without silently omitting parts. CSV remains available for larger saved scopes. Materials and source STEP files are not changed by export. Installation routing transitions contribute no invented STEP fitting or material SKU.
 
 ## Validation
 

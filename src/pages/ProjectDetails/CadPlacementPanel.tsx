@@ -1,3 +1,4 @@
+import { MAX_STEP_ASSEMBLY_PARTS } from '../../../shared/cadExportLimits';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   Body1,
@@ -776,9 +777,9 @@ export function CadPlacementPanel({
       return;
     const route = scope === 'selected' ? selectedRoute : null;
     const count = route ? route.instanceIds.length : instances.length;
-    if (extension === 'assembly.step' && count > 32) {
+    if (extension === 'assembly.step' && count > MAX_STEP_ASSEMBLY_PARTS) {
       setNotice(
-        'STEP export supports at most 32 saved components. Select a smaller route; all components can still be exported as a materials list.',
+        `STEP export supports at most ${MAX_STEP_ASSEMBLY_PARTS} saved components. Select a smaller route; all components can still be exported as a materials list.`,
       );
       return;
     }

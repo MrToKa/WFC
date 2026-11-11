@@ -2,6 +2,7 @@
 """Offline CAD worker smoke test using generated, non-proprietary STEP solids."""
 import base64
 import http.client
+import hashlib
 import json
 import os
 import tempfile
@@ -137,12 +138,39 @@ def main():
         assert max(b.xmax for b in bounds) > 400
         assert max(b.ymax for b in bounds) > 900
         assert max(b.zmax for b in bounds) > 1900
+        # Exercise the assembly count boundary with generated, non-proprietary
+        # solids inside the unchanged input/output/memory budgets.
+        source_id = hashlib.sha256(original).hexdigest()
+        boundary_parts = [{"name": f"box-{index + 1}", "sourceId": source_id,
+                           "positionMm": [index * 200, 0, 0], "rotation": [0, 0, 0, 1]}
+                          for index in range(128)]
+        assert len(original) <= converter.MAX_INPUT_BYTES
+        boundary_request = {"sources": [{"id": source_id, "stepBase64": encoded}],
+                            "parts": boundary_parts}
+        boundary_result = assemble_step(boundary_request)
+        boundary_path = os.path.join(work, "assembly-128.step")
+        with open(boundary_path, "wb") as stream:
+            stream.write(boundary_result)
+        boundary_solids = cq.importers.importStep(boundary_path).solids().vals()
+        assert len(boundary_solids) == 128
+        assert abs(sum(s.Volume() for s in boundary_solids) - 128 * 100 * 50 * 20) < 0.001
+        assert abs(max(s.BoundingBox().xmax for s in boundary_solids) - (127 * 200 + 50)) < 0.001
+        try:
+            assemble_step({**boundary_request, "parts": boundary_parts + [boundary_parts[0]]})
+        except ValueError as error:
+            assert "128" in str(error)
+        else:
+            raise AssertionError("129 assembly parts were accepted")
         cut_report = check_cut_stock(work)
         print(json.dumps({
             "status": "PASS", "sourceSolids": 1,
             "meshTriangles": mesh["triangleCount"],
             "exportedSolids": len(solids), "bytes": len(result),
             "straightCut": cut_report,
+            "assemblyPartLimit": {"accepted": 128, "rejected": 129,
+                                  "readbackSolids": len(boundary_solids),
+                                  "uniqueSourceBytes": len(original),
+                                  "outputBytes": len(boundary_result)},
         }))
 
 

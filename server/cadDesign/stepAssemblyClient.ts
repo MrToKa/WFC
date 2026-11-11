@@ -1,8 +1,11 @@
 import { getObjectStream, getProjectBucket } from '../services/objectStorageService.js';
+import { MAX_STEP_ASSEMBLY_PARTS } from '../../shared/cadExportLimits.js';
+import { createHash } from 'node:crypto';
 
 type CadPlacement = {
   original_filename: string;
   source_object_key: string;
+  source_sha256?: string;
   x_mm: number; y_mm: number; z_mm: number;
   qx: number; qy: number; qz: number; qw: number;
   cut_length_mm?: number | null;
@@ -27,8 +30,8 @@ export async function readBoundedSource(key: string): Promise<Buffer> {
 }
 
 export async function exportStepAssembly(parts: CadPlacement[]): Promise<Buffer> {
-  if (!Array.isArray(parts) || parts.length < 1 || parts.length > 32) {
-    throw new Error('A STEP assembly must contain 1 to 32 placed components.');
+  if (!Array.isArray(parts) || parts.length < 1 || parts.length > MAX_STEP_ASSEMBLY_PARTS) {
+    throw new Error(`A STEP assembly must contain 1 to ${MAX_STEP_ASSEMBLY_PARTS} placed components.`);
   }
   const token = process.env.POC_CONVERTER_TOKEN;
   const rawUrl = process.env.WFC_CAD_CONVERTER_URL;
@@ -40,23 +43,34 @@ export async function exportStepAssembly(parts: CadPlacement[]): Promise<Buffer>
     throw new Error('Invalid isolated CAD converter endpoint.');
   }
   const requestParts: Array<{
-    name: string; stepBase64: string; positionMm: [number,number,number]; rotation: [number,number,number,number];
+    name: string; sourceId: string; positionMm: [number,number,number]; rotation: [number,number,number,number];
     cutLengthMm?: number;
   }> = [];
+  const objectSources=new Map<string,string>(),sources=new Map<string,string>();
   let total = 0;
   for (const part of parts) {
-    const bytes = await readBoundedSource(part.source_object_key);
-    total += bytes.length;
-    if (total > MAX_INPUT_BYTES) throw new Error('The STEP assembly source exceeds its limit.');
+    let sourceId=objectSources.get(part.source_object_key);
+    if(!sourceId){
+      const bytes=await readBoundedSource(part.source_object_key);
+      sourceId=createHash('sha256').update(bytes).digest('hex');
+      if(!sources.has(sourceId)){
+        total+=bytes.length;
+        if(total>MAX_INPUT_BYTES)throw new Error('The STEP assembly unique source exceeds its limit.');
+        sources.set(sourceId,bytes.toString('base64'));
+      }
+      objectSources.set(part.source_object_key,sourceId);
+    }
+    if(part.source_sha256!==undefined&&part.source_sha256!==sourceId)
+      throw new Error('The pinned STEP source hash differs from its stored bytes.');
     requestParts.push({
       name: part.original_filename.slice(0, 120),
-      stepBase64: bytes.toString('base64'),
+      sourceId,
       positionMm: [part.x_mm, part.y_mm, part.z_mm],
       rotation: [part.qx, part.qy, part.qz, part.qw],
       ...(part.cut_length_mm != null ? { cutLengthMm: part.cut_length_mm } : {}),
     });
   }
-  const payload = Buffer.from(JSON.stringify({ parts: requestParts }), 'utf8');
+  const payload = Buffer.from(JSON.stringify({sources:[...sources].map(([id,stepBase64])=>({id,stepBase64})),parts:requestParts}), 'utf8');
   if (payload.byteLength > 12 * 1024 * 1024) throw new Error('The STEP assembly request is too large.');
   const result = await fetch(new URL('/assemble', parsed), {
     method: 'POST',
