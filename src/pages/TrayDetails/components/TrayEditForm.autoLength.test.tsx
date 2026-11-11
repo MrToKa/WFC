@@ -18,6 +18,22 @@ const props = (): ComponentProps<typeof TrayEditForm> => ({
 });
 
 describe('tray auto-length controls', () => {
+  it('offers project purposes while preserving a selected legacy purpose', () => {
+    const value = props();
+    render(<TrayEditForm {...value} formValues={{ ...value.formValues, purpose: 'Legacy purpose' }} purposeOptions={['Project purpose']} />);
+    fireEvent.click(screen.getByRole('combobox', { name: 'Purpose' }));
+    expect(screen.getByRole('option', { name: 'Project purpose' })).toBeVisible();
+    expect(screen.getByRole('option', { name: 'Legacy purpose' })).toBeVisible();
+    expect(screen.queryByRole('option', { name: 'Medium voltage cable tray' })).toBeNull();
+    fireEvent.click(screen.getByRole('option', { name: 'Project purpose' }));
+    expect(value.onPurposeSelect).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ optionValue: 'Project purpose' }));
+  });
+  it('explains how to populate an empty project purpose catalog without global defaults', () => {
+    render(<TrayEditForm {...props()} />);
+    expect(screen.getByText('Add tray purposes in Project Details → Tray report templates.')).toBeVisible();
+    fireEvent.click(screen.getByRole('combobox', { name: 'Purpose' }));
+    expect(screen.queryByRole('option')).toBeNull();
+  });
   it('calculates through a separate button without submitting or replacing the manual length', () => {
     const value = props(); render(<TrayEditForm {...value} />);
     fireEvent.click(screen.getByRole('button', { name: 'Auto-length' }));

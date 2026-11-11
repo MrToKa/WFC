@@ -1,3 +1,4 @@
+import { AddTrayPurpose, TrayPurposeNameEditor, type TrayPurposeManagement } from './TrayPurposeControls';
 import { ChangeLogTable } from '@/components/ChangeLogTable';
 import { useId } from 'react';
 import {
@@ -79,6 +80,8 @@ type FormattedDates = {
 } | null;
 
 type DetailsTabProps = {
+  purposeManagement?: TrayPurposeManagement;
+  purposeRevision?: number;
   canExport?: boolean;
   styles: ProjectDetailsStyles;
   project: Project;
@@ -109,6 +112,8 @@ type DetailsTabProps = {
 };
 
 export const DetailsTab = ({
+  purposeManagement,
+  purposeRevision = 0,
   canExport = false,
   styles,
   project,
@@ -166,6 +171,7 @@ export const DetailsTab = ({
         canEdit={Boolean(isAdmin && modelToken && project.id === modelProjectId)}
       />
       <CablePositioningCard
+        key={`positioning:${project.id}:${purposeRevision}`}
         className={styles.panel}
         projectId={modelProjectId}
         loadedProjectId={project.id}
@@ -174,6 +180,7 @@ export const DetailsTab = ({
         onSaved={onDrawingPolicySaved}
       />
       <RoutingPurposePolicyCard
+        key={`routing:${project.id}:${purposeRevision}`}
         className={styles.panel}
         projectId={modelProjectId}
         loadedProjectId={project.id}
@@ -785,6 +792,7 @@ export const DetailsTab = ({
 
       {isAdmin ? <div className={styles.panel}>
         <Caption1>Tray report templates</Caption1>
+        {purposeManagement ? <AddTrayPurpose management={purposeManagement} disabled={!canEditTrayTemplates || isSavingTrayTemplate || Boolean(purposeManagement?.busy)} /> : null}
         {trayTemplateRows.length === 0 ? (
           <Body1>No tray purposes found for this project.</Body1>
         ) : (
@@ -813,7 +821,7 @@ export const DetailsTab = ({
                     return (
                       <tr key={row.purpose}>
                         <td className={styles.tableCell}>
-                          <Body1>{row.label}</Body1>
+                          {purposeManagement ? <TrayPurposeNameEditor name={row.purpose} management={purposeManagement} disabled={!canEditTrayTemplates || isSavingTrayTemplate || Boolean(purposeManagement?.busy)} /> : <Body1>{row.label}</Body1>}
                           {!row.selectedFileAvailable && row.selectedFileId ? (
                             <Caption1 className={styles.errorText}>
                               The selected file is no longer attached to this project.
@@ -826,7 +834,7 @@ export const DetailsTab = ({
                             placeholder="Select template"
                             selectedOptions={[selectedOptionValue]}
                             value={selectedLabel}
-                            disabled={!canEditTrayTemplates || isSavingTrayTemplate}
+                            disabled={!canEditTrayTemplates || isSavingTrayTemplate || Boolean(purposeManagement?.busy)}
                             onOptionSelect={(_, data) => {
                               const optionValue = data.optionValue;
                               if (!optionValue) {

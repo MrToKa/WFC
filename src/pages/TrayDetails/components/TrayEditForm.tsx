@@ -2,7 +2,6 @@ import React, { ChangeEvent, FormEvent } from 'react';
 import { Body1, Button, Field, Input, Dropdown, Option, Combobox } from '@fluentui/react-components';
 import { MaterialTray } from '../../../api/client';
 import { TrayFormState, TrayFormErrors } from '../TrayDetails.types';
-import { TRAY_PURPOSE_OPTIONS } from '@/constants/trayPurposeOptions';
 
 interface TrayEditFormProps {
   formValues: TrayFormState;
@@ -20,6 +19,9 @@ interface TrayEditFormProps {
   autoLengthProposal: { currentLengthMm: string; proposedLengthMm: string; savedManualLengthMm?: number } | null;
   onAcceptAutoLength: () => void;
   materialTrays: MaterialTray[];
+  purposeOptions?: string[];
+  purposeOptionsLoading?: boolean;
+  purposeOptionsError?: string | null;
   onFieldChange: (field: keyof TrayFormState) => (
     _event: ChangeEvent<HTMLInputElement>,
     data: { value: string }
@@ -47,6 +49,9 @@ export const TrayEditForm: React.FC<TrayEditFormProps> = ({
   autoLengthProposal,
   onAcceptAutoLength,
   materialTrays,
+  purposeOptions = [],
+  purposeOptionsLoading = false,
+  purposeOptionsError = null,
   onFieldChange,
   onTypeSelect,
   onPurposeSelect,
@@ -54,9 +59,10 @@ export const TrayEditForm: React.FC<TrayEditFormProps> = ({
   onCancel,
   styles
 }) => {
-  const hasCustomPurposeOption =
-    formValues.purpose.trim() !== '' &&
-    !TRAY_PURPOSE_OPTIONS.some((purpose) => purpose === formValues.purpose);
+  const availablePurposes = Array.from(new Set([
+    ...purposeOptions,
+    ...(formValues.purpose.trim() ? [formValues.purpose] : [])
+  ]));
 
   return (
     <form className={styles.grid} onSubmit={onSubmit}>
@@ -111,6 +117,9 @@ export const TrayEditForm: React.FC<TrayEditFormProps> = ({
         label="Purpose"
         validationState={formErrors.purpose ? 'error' : undefined}
         validationMessage={formErrors.purpose}
+        hint={purposeOptionsError || (purposeOptionsLoading
+          ? 'Loading project tray purposes…'
+          : purposeOptions.length === 0 ? 'Add tray purposes in Project Details → Tray report templates.' : undefined)}
       >
         <Combobox
           placeholder="Select purpose"
@@ -119,16 +128,11 @@ export const TrayEditForm: React.FC<TrayEditFormProps> = ({
           onOptionSelect={onPurposeSelect}
           freeform={false}
         >
-          {TRAY_PURPOSE_OPTIONS.map((purpose) => (
+          {availablePurposes.map((purpose) => (
             <Option key={purpose} value={purpose}>
               {purpose}
             </Option>
           ))}
-          {hasCustomPurposeOption ? (
-            <Option key="custom-purpose" value={formValues.purpose}>
-              {formValues.purpose}
-            </Option>
-          ) : null}
         </Combobox>
       </Field>
       <Field

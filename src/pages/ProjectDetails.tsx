@@ -1,3 +1,5 @@
+import { useProjectTrayPurposes } from '@/hooks/useProjectTrayPurposes';
+import { projectTrayPurposesRequest } from '@/api/projectTrayPurposes';
 import { TRAY_REPORT_VARIABLES } from './TrayDetails/trayReportVariables';
 import { canEditProject, canExportChangeLogs, canReadCatalogs } from '@/utils/permissions';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -90,6 +92,12 @@ export const ProjectDetails = () => {
   const { project, projectLoading, projectError, formattedDates, reloadProject } =
     useProjectDetailsData({ projectId, token });
   const canEdit = canEditProject(user, project, projectId);
+  const trayPurposes = useProjectTrayPurposes(projectId, token);
+  const [purposeBusy, setPurposeBusy] = useState(false);
+  const [purposeError, setPurposeError] = useState<string | null>(null);
+  const [purposeRevision, setPurposeRevision] = useState(0);
+  const purposeScope = useRef(JSON.stringify([projectId, token]));
+  purposeScope.current = JSON.stringify([projectId, token]);
   const canViewAll = canReadCatalogs(user);
   const routingTabRequested = searchParams.get('tab') === 'routings-viewer' || searchParams.get('tab') === 'pathfinder' && Boolean(user?.isAdmin);
   const { materialTrays } = useMaterialData(routingTabRequested ? undefined : projectId, canViewAll && !routingTabRequested);
@@ -339,6 +347,9 @@ export const ProjectDetails = () => {
     [projectFiles],
   );
 
+  const trayPurposeAssignments = JSON.stringify(trays.map(tray => [tray.id, tray.purpose]));
+  useEffect(() => { void trayPurposes.refresh(); }, [trayPurposeAssignments, trayPurposes.refresh]);
+
   const effectiveTrayTemplates: Record<string, ProjectTrayPurposeTemplate> =
     trayTemplateOverrides ?? project?.trayPurposeTemplates ?? {};
 
@@ -359,6 +370,8 @@ export const ProjectDetails = () => {
       purposeMap.set(trimmed, trimmed);
     });
 
+    trayPurposes.purposes.forEach(({ name }) => purposeMap.set(name, name));
+    Object.keys(effectiveTrayTemplates).forEach(name => purposeMap.set(name, name));
     if (purposeMap.size === 0) {
       return [];
     }
@@ -379,7 +392,7 @@ export const ProjectDetails = () => {
           selectedFileAvailable,
         };
       });
-  }, [effectiveTrayTemplates, project, trays, wordFileOptions]);
+  }, [effectiveTrayTemplates, project, trays, wordFileOptions, trayPurposes.purposes]);
 
   const connectionGapField = useProjectNumericField({
     project,
@@ -1193,19 +1206,49 @@ export const ProjectDetails = () => {
 
   useEffect(() => {
     trayTemplateSaveOperation.current = null;
+    setPurposeBusy(false); setPurposeError(null);
     setTrayTemplateSaving({});
     setTrayTemplateErrors({});
     setTrayTemplateOverrides(null);
     return () => {
       trayTemplateSaveOperation.current = null;
     };
-  }, [projectId]);
+  }, [projectId, token]);
 
   useEffect(() => {
     if (!trayTemplateSaveOperation.current) {
       setTrayTemplateOverrides(project?.trayPurposeTemplates ?? null);
     }
   }, [project?.id, project?.trayPurposeTemplates]);
+
+  const handlePurposeMutation = useCallback(async (method: 'POST' | 'PATCH' | 'DELETE', name: string, nextName?: string) => {
+    if (!projectId || !token || !canEdit || project?.id !== projectId || trayTemplateSaveOperation.current) return false;
+    const operation = {};
+    const requestedProject = JSON.stringify([projectId, token]);
+    trayTemplateSaveOperation.current = operation;
+    setPurposeBusy(true); setPurposeError(null);
+    let saved = false;
+    try {
+      await projectTrayPurposesRequest(projectId, token, method, { name, ...(nextName ? { nextName } : {}) });
+      saved = true;
+      if (purposeScope.current !== requestedProject || trayTemplateSaveOperation.current !== operation) return false;
+      setTrayTemplateOverrides(null);
+      await Promise.all([reloadProject({ showSpinner: false }), reloadTrays({ showSpinner: false }), trayPurposes.refresh()]);
+      if (purposeScope.current !== requestedProject || trayTemplateSaveOperation.current !== operation) return false;
+      setPurposeRevision(value => value + 1);
+      showToast({ intent: 'success', title: 'Tray purposes updated' });
+      return true;
+    } catch (error) {
+      if (purposeScope.current === requestedProject && trayTemplateSaveOperation.current === operation) {
+        const message = error instanceof Error ? error.message : 'Tray purpose could not be saved.';
+        setPurposeError(message);
+        showToast({ intent: 'error', title: saved ? 'Purpose saved; refresh the project' : 'Tray purpose not updated', body: message });
+      }
+      return saved;
+    } finally {
+      if (trayTemplateSaveOperation.current === operation) { trayTemplateSaveOperation.current = null; setPurposeBusy(false); }
+    }
+  }, [projectId, token, canEdit, project?.id, reloadProject, reloadTrays, trayPurposes.refresh, showToast]);
 
   const handleTrayTemplateChange = useCallback(
     async (purpose: string, nextFileId: string | null) => {
@@ -1381,6 +1424,15 @@ export const ProjectDetails = () => {
           customBundleRanges={customBundleRangesController}
           numericFields={numericFields}
           supportDistanceOverrides={supportDistanceOverrideFields}
+          purposeRevision={purposeRevision}
+          purposeManagement={{
+            busy: purposeBusy || trayPurposes.loading,
+            error: purposeError || trayPurposes.error,
+            counts: Object.fromEntries(trayPurposes.purposes.map(item => [item.name, item.trayCount])),
+            create: name => handlePurposeMutation('POST', name),
+            rename: (name, nextName) => handlePurposeMutation('PATCH', name, nextName),
+            remove: name => handlePurposeMutation('DELETE', name),
+          }}
           trayTemplateRows={trayTemplateRows}
           trayTemplateOptions={wordFileOptions}
           trayTemplateSaving={trayTemplateSaving}
@@ -1639,6 +1691,9 @@ export const ProjectDetails = () => {
       </Button>
 
       <TrayDialog
+        purposeOptions={trayPurposes.purposes.map(item => item.name)}
+        purposeOptionsLoading={trayPurposes.loading}
+        purposeOptionsError={trayPurposes.error}
         styles={styles}
         open={trayDialog.open}
         mode={trayDialog.mode}

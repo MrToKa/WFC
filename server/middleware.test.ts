@@ -117,3 +117,21 @@ describe('tray Auto-length read access', () => {
     }
   });
 });
+
+describe('project tray purpose catalog access', () => {
+  const projectId = '00000000-0000-4000-8000-000000000001';
+  it.each(['basic', 'technician', 'engineer'] as const)('allows assigned %s catalog reads', async role => {
+    mocks.query.mockResolvedValue({ rows: [{ exists: 1 }] });
+    const res = responseStub(), next = vi.fn();
+    await requireProjectAccess({ userId: 'reader', role, params: { projectId }, method: 'GET', path: '/tray-purposes' } as unknown as Request, res, next);
+    expect(next).toHaveBeenCalledOnce();
+  });
+  it('does not grant catalog writes to a basic reader', async () => {
+    mocks.query.mockResolvedValue({ rows: [{ exists: 1 }] });
+    for (const method of ['POST', 'PATCH', 'DELETE']) {
+      const res = responseStub(), next = vi.fn();
+      await requireProjectAccess({ userId: 'reader', role: 'basic', params: { projectId }, method, path: '/tray-purposes' } as unknown as Request, res, next);
+      expect(res.status).toHaveBeenCalledWith(403); expect(next).not.toHaveBeenCalled();
+    }
+  });
+});

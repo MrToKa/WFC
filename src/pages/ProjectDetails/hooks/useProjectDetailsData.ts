@@ -12,7 +12,7 @@ type UseProjectDetailsDataResult = {
   projectLoading: boolean;
   projectError: string | null;
   formattedDates: { created: string; updated: string } | null;
-  reloadProject: () => Promise<void>;
+  reloadProject: (options?: { showSpinner?: boolean }) => Promise<void>;
 };
 
 export const useProjectDetailsData = ({
@@ -26,7 +26,7 @@ export const useProjectDetailsData = ({
   const identity = useMemo(() => ({ projectId, token }), [projectId, token]);
   const [settledIdentity, setSettledIdentity] = useState<typeof identity | null>(null);
 
-  const loadProject = useCallback(async () => {
+  const loadProject = useCallback(async (options?: { showSpinner?: boolean }) => {
     const request = ++latestRequest.current;
     if (!projectId || token === null || token === '') {
       setError(!projectId ? 'Project not found.' : 'Sign in to view this project.');
@@ -36,7 +36,7 @@ export const useProjectDetailsData = ({
       return;
     }
 
-    setIsLoading(true);
+    if (options?.showSpinner !== false) setIsLoading(true);
     setError(null);
 
     try {
@@ -52,8 +52,8 @@ export const useProjectDetailsData = ({
             ? 'Project not found.'
             : err.message
           : 'Failed to load project.';
-      setError(message);
-      setProject(null);
+      if (options?.showSpinner !== false) { setError(message); setProject(null); }
+      else throw err;
     } finally {
       if (request === latestRequest.current) {
         setIsLoading(false);
