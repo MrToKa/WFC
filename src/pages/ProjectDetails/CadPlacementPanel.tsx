@@ -541,7 +541,7 @@ export function CadPlacementPanel({ projectId, modelVersionId, token, catalogue,
     </li>)}</ul>
 
     {designId && onColor ? <CadRoutesPanel projectId={projectId} designId={designId} token={token}
-      instances={instances} displayedIds={displayedIds} onColor={onColor} onGeometryChanged={async () => {
+      instances={instances} displayedIds={displayedIds} onColor={onColor} onConnectionsChanged={async () => { await reload(); }} onGeometryChanged={async () => {
         setEditingId(''); setPendingSnap(null); setCoordinates(empty); await reload();
       }} /> : null}
     <ul aria-label="Saved connector relationships">{connections.map(connection =>

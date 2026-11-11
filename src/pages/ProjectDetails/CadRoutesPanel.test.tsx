@@ -25,26 +25,16 @@ const draft: CadRouteGroup = {
   instanceIds: [id(1), id(3)],
   projectTrayId: null,
 };
-const attachmentOptions = {
-  endpoints: [
-    { instanceId: id(1), portName: 'start', pointMetres: [1, 0, 0] },
-    { instanceId: id(3), portName: 'end', pointMetres: [3, 0, 0] },
-  ],
-  options: [
-    {
-      objectRevisionId: id(20),
-      objectId: 'dbid:42',
-      portIndex: 1,
-      pointMetres: [1, 0, 0],
-      routeCode: 'EXISTING-01',
-    },
-  ],
-};
+const automaticAttachments = [
+  { instanceId: id(1), portName: 'start', targetObjectRevisionId: id(20), targetPortIndex: 1 },
+  { instanceId: id(3), portName: 'end', targetObjectRevisionId: id(21), targetPortIndex: 0 },
+];
+const autoResult = { status: 'aligned', attachments: automaticAttachments };
 const fetchMock = vi.fn();
 const onColor = vi.fn(async (_id: string, _color: string) => {});
 const writes = () =>
   fetchMock.mock.calls.filter(([, options]) => ['POST', 'PATCH'].includes(options?.method));
-function show(onGeometryChanged?: () => Promise<void>) {
+function show(onGeometryChanged?: () => Promise<void>, onConnectionsChanged?: () => Promise<void>) {
   return render(
     <FluentProvider theme={webLightTheme}>
       <CadRoutesPanel
@@ -55,6 +45,7 @@ function show(onGeometryChanged?: () => Promise<void>) {
         displayedIds={displayedIds}
         onColor={onColor}
         onGeometryChanged={onGeometryChanged}
+        onConnectionsChanged={onConnectionsChanged}
       />
     </FluentProvider>,
   );
@@ -63,12 +54,14 @@ function fields(tag = 'tray-01') {
   fireEvent.change(screen.getByLabelText('Route name'), { target: { value: 'Main riser' } });
   fireEvent.change(screen.getByLabelText('Route tag'), { target: { value: tag } });
   fireEvent.change(screen.getByLabelText('Route purpose'), { target: { value: draft.purpose } });
-  fireEvent.change(screen.getByRole('textbox', { name: 'Route colour hex' }), { target: { value: '#16a34a' } });
+  fireEvent.change(screen.getByRole('textbox', { name: 'Route colour hex' }), {
+    target: { value: '#16a34a' },
+  });
 }
 function catalogue(routes: CadRouteGroup[]) {
   fetchMock.mockImplementation(async (url: string) => ({
     ok: true,
-    json: async () => (url.endsWith('/attachment-options') ? attachmentOptions : { routes }),
+    json: async () => (url.endsWith('/auto-attachments') ? autoResult : { routes }),
   }));
 }
 beforeEach(() => {
@@ -80,45 +73,229 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('complete CAD routes', () => {
+  it('shows a saved installation transition and its routing length even before an existing network is available', async () => {
+    const geometryChanged = vi.fn(async () => {});
+    fetchMock.mockImplementation(async (url: string) => ({
+      ok: true,
+      json: async () =>
+        url.endsWith('/auto-attachments')
+          ? {
+              status: 'network-required',
+              attachments: [],
+              diagnostics: {
+                message: 'Prepare the existing routing network first.',
+                logicalTransitions: [
+                  {
+                    sourceInstanceId: id(1),
+                    sourcePortName: 'end',
+                    targetInstanceId: id(3),
+                    targetPortName: 'start',
+                    gapMm: 180,
+                  },
+                ],
+              },
+            }
+          : { routes: [draft] },
+    }));
+    show(geometryChanged);
+    fireEvent.click(await screen.findByRole('button', { name: /TRAY-01 — Main riser/ }));
+    expect(
+      await screen.findByRole('list', { name: 'Installation routing transitions' }),
+    ).toHaveTextContent('Component 1 end → component 3 start: 180 mm routing transition');
+    expect(screen.getByText('Prepare the existing routing network first.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add to routing network' })).toBeDisabled();
+    expect(geometryChanged).not.toHaveBeenCalled();
+    expect(writes()).toHaveLength(0);
+  });
+  it('reads incomplete topology without writing, then auto-connects at the saved revision and refreshes the parent graph', async () => {
+    let routes = [draft];
+    let connected = false;
+    const connectionsChanged = vi.fn(async () => {});
+    fetchMock.mockImplementation(async (url: string, options: RequestInit = {}) => {
+      if (url.endsWith('/auto-connect') && options.method === 'POST') {
+        connected = true;
+        routes = [{ ...draft, revision: 8 }];
+        return {
+          ok: true,
+          json: async () => ({ id: draft.id, revision: 8, connectionsCreated: 1, connected: true }),
+        };
+      }
+      return {
+        ok: true,
+        json: async () =>
+          url.endsWith('/auto-attachments')
+            ? connected
+              ? autoResult
+              : {
+                  status: 'incomplete',
+                  attachments: [],
+                  diagnostics: {
+                    message: 'The saved parts need one internal connector relationship.',
+                    nearestGaps: [
+                      {
+                        sourceInstanceId: id(1),
+                        sourcePortName: 'end',
+                        targetInstanceId: id(3),
+                        targetPortName: 'start',
+                        gapMm: 0.2,
+                        aligned: true,
+                      },
+                    ],
+                  },
+                }
+            : { routes },
+      };
+    });
+    show(undefined, connectionsChanged);
+    fireEvent.click(await screen.findByRole('button', { name: /TRAY-01 — Main riser/ }));
+    expect(
+      await screen.findByText('The saved parts need one internal connector relationship.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add to routing network' })).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Align whole route to network point' }),
+    ).toBeDisabled();
+    expect(writes()).toHaveLength(0);
+    expect(screen.queryByLabelText('Route end 1')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-select connection points' }));
+    await waitFor(() => expect(connectionsChanged).toHaveBeenCalledOnce());
+    expect(
+      await screen.findByText(
+        /1 component connections and 0 routing transitions saved automatically/,
+      ),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Add to routing network' })).toBeEnabled(),
+    );
+    expect(writes()).toHaveLength(1);
+    expect(writes()[0][0]).toMatch(new RegExp(`/routes/${draft.id}/auto-connect$`));
+    expect(JSON.parse(writes()[0][1].body)).toEqual({ expectedRevision: 7 });
+    expect(
+      fetchMock.mock.calls.filter(([url]) => url.endsWith('/auto-attachments')).length,
+    ).toBeGreaterThanOrEqual(2);
+    expect(
+      fetchMock.mock.calls.some(
+        ([url, options]) =>
+          /\/instances\//.test(url) && ['PATCH', 'POST'].includes(options?.method),
+      ),
+    ).toBe(false);
+  });
+
+  it.each(['network-required', 'ambiguous', 'unavailable'])(
+    'clears a previous automatic match and refuses publication when the next route is %s',
+    async (status) => {
+      const other = {
+        ...draft,
+        id: id(11),
+        tag: 'OTHER-02',
+        name: 'Other run',
+        instanceIds: [id(2)],
+      };
+      const diagnostic = `Automatic connection refused: ${status}.`;
+      fetchMock.mockImplementation(async (url: string) => ({
+        ok: true,
+        json: async () =>
+          url.endsWith(`/${draft.id}/auto-attachments`)
+            ? autoResult
+            : url.endsWith('/auto-attachments')
+              ? { status, attachments: [], diagnostics: { message: diagnostic } }
+              : { routes: [draft, other] },
+      }));
+      show();
+      fireEvent.click(await screen.findByRole('button', { name: /TRAY-01 — Main riser/ }));
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Add to routing network' })).toBeEnabled(),
+      );
+      fireEvent.click(screen.getByRole('button', { name: /OTHER-02 — Other run/ }));
+      expect(await screen.findByText(diagnostic)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Add to routing network' })).toBeDisabled();
+      expect(
+        screen.getByRole('button', { name: 'Align whole route to network point' }),
+      ).toBeDisabled();
+      expect(screen.queryByLabelText('Route end 1')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Network point 1')).not.toBeInTheDocument();
+      expect(writes()).toHaveLength(0);
+    },
+  );
+
   it('changes a published route colour without withdrawing or altering its members', async () => {
     let routes: CadRouteGroup[] = [{ ...draft, status: 'published', projectTrayId: id(70) }];
     fetchMock.mockImplementation(async (_url: string, options: RequestInit = {}) => {
-      if (options.method === 'PATCH') { routes = [{ ...routes[0], color: '#3B82F6', revision: 8 }]; return { ok: true, json: async () => ({ route: routes[0] }) }; }
+      if (options.method === 'PATCH') {
+        routes = [{ ...routes[0], color: '#3B82F6', revision: 8 }];
+        return { ok: true, json: async () => ({ route: routes[0] }) };
+      }
       return { ok: true, json: async () => ({ routes }) };
     });
-    show(); fireEvent.click(await screen.findByRole('button', { name: /TRAY-01 — Main riser/ }));
+    show();
+    fireEvent.click(await screen.findByRole('button', { name: /TRAY-01 — Main riser/ }));
     expect(screen.getByLabelText('Route name')).toBeDisabled();
-    fireEvent.change(screen.getByRole('textbox', { name: 'Route colour hex' }), { target: { value: '#3b82f6' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Route colour hex' }), {
+      target: { value: '#3b82f6' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Save route changes' }));
     await waitFor(() => expect(writes()).toHaveLength(1));
     expect(writes()[0][1].method).toBe('PATCH');
-    expect(JSON.parse(writes()[0][1].body)).toEqual({ name: draft.name, tag: draft.tag, color: '#3B82F6', purpose: draft.purpose, instanceIds: draft.instanceIds, expectedRevision: 7 });
+    expect(JSON.parse(writes()[0][1].body)).toEqual({
+      name: draft.name,
+      tag: draft.tag,
+      color: '#3B82F6',
+      purpose: draft.purpose,
+      instanceIds: draft.instanceIds,
+      expectedRevision: 7,
+    });
     await waitFor(() => expect(onColor).toHaveBeenCalledWith(id(1), '#3B82F6'));
-    expect(screen.getByRole('button', { name: 'Withdraw from routing network' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Withdraw from routing network' }),
+    ).toBeInTheDocument();
   });
   it('aligns the entire saved group and refreshes geometry before publication', async () => {
     let routes = [draft];
     const geometryChanged = vi.fn(async () => {});
     fetchMock.mockImplementation(async (url: string, options: RequestInit = {}) => {
-      if (options.method === 'POST') { routes = [{ ...draft, revision: 8 }]; return { ok: true, json: async () => ({ id: draft.id, revision: 8 }) }; }
-      return { ok: true, json: async () => url.endsWith('/attachment-options') ? attachmentOptions : { routes } };
+      if (options.method === 'POST') {
+        routes = [{ ...draft, revision: 8 }];
+        return { ok: true, json: async () => ({ id: draft.id, revision: 8 }) };
+      }
+      return {
+        ok: true,
+        json: async () =>
+          url.endsWith('/auto-attachments')
+            ? { ...autoResult, status: routes[0].revision === 7 ? 'alignment-required' : 'aligned' }
+            : { routes },
+      };
     });
     show(geometryChanged);
     fireEvent.click(await screen.findByRole('button', { name: /TRAY-01 — Main riser/ }));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Add to routing network' })).toBeEnabled());
-    fireEvent.change(screen.getByLabelText('Route end 1'), { target: { value: `${id(1)}/start` } });
-    fireEvent.change(screen.getByLabelText('Network point 1'), { target: { value: `${id(20)}/1` } });
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Align whole route to network point' }),
+      ).toBeEnabled(),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Align whole route to network point' }));
     await waitFor(() => expect(geometryChanged).toHaveBeenCalledOnce());
     expect(writes()[0][0]).toMatch(/\/align$/);
-    expect(JSON.parse(writes()[0][1].body)).toEqual({ expectedRevision: 7, attachment: { instanceId: id(1), portName: 'start', targetObjectRevisionId: id(20), targetPortIndex: 1 } });
+    expect(JSON.parse(writes()[0][1].body)).toEqual({
+      expectedRevision: 7,
+      attachment: {
+        instanceId: id(1),
+        portName: 'start',
+        targetObjectRevisionId: id(20),
+        targetPortIndex: 1,
+      },
+    });
     expect(await screen.findByText(/Whole route aligned and saved/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /TRAY-01 — Main riser · 2 components · draft/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /TRAY-01 — Main riser · 2 components · draft/ }),
+    ).toBeInTheDocument();
   });
   it('requires unsaved member or name changes to be saved before network publication', async () => {
-    catalogue([draft]); show();
+    catalogue([draft]);
+    show();
     fireEvent.click(await screen.findByRole('button', { name: /TRAY-01 — Main riser/ }));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Add to routing network' })).toBeEnabled());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Add to routing network' })).toBeEnabled(),
+    );
     fireEvent.change(screen.getByLabelText('Route name'), { target: { value: 'New name' } });
     expect(screen.getByRole('button', { name: 'Add to routing network' })).toBeDisabled();
     expect(writes()).toHaveLength(0);
@@ -132,7 +309,7 @@ describe('complete CAD routes', () => {
       }
       return {
         ok: true,
-        json: async () => (url.endsWith('/attachment-options') ? attachmentOptions : { routes }),
+        json: async () => (url.endsWith('/auto-attachments') ? autoResult : { routes }),
       };
     });
     show();
@@ -197,7 +374,7 @@ describe('complete CAD routes', () => {
     },
   );
 
-  it('requires a network attachment and publishes the chosen verified end with its expected revision', async () => {
+  it('publishes all automatically selected network ends with the expected revision and no manual port dropdowns', async () => {
     let saved = draft;
     fetchMock.mockImplementation(async (url: string, options: RequestInit = {}) => {
       if (url.endsWith('/publish') && options.method === 'POST') {
@@ -206,8 +383,7 @@ describe('complete CAD routes', () => {
       }
       return {
         ok: true,
-        json: async () =>
-          url.endsWith('/attachment-options') ? attachmentOptions : { routes: [saved] },
+        json: async () => (url.endsWith('/auto-attachments') ? autoResult : { routes: [saved] }),
       };
     });
     show();
@@ -215,31 +391,28 @@ describe('complete CAD routes', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Add to routing network' })).toBeEnabled(),
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Add to routing network' }));
-    expect(
-      await screen.findByText(
-        'Choose at least one route end and an existing network connection point.',
-      ),
-    ).toBeInTheDocument();
     expect(writes()).toHaveLength(0);
-    fireEvent.change(screen.getByLabelText('Route end 1'), { target: { value: `${id(1)}/start` } });
-    fireEvent.change(screen.getByLabelText('Network point 1'), {
-      target: { value: `${id(20)}/1` },
-    });
+    expect(screen.queryByLabelText('Route end 1')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Network point 1')).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/auto-attachments$/),
+      expect.objectContaining({
+        cache: 'no-store',
+        headers: expect.objectContaining({ Authorization: 'Bearer cad-token' }),
+      }),
+    );
+    expect(
+      fetchMock.mock.calls
+        .filter(([url]) => url.endsWith('/auto-attachments'))
+        .every(([, options]) => !options.method || options.method === 'GET'),
+    ).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Add to routing network' }));
     expect(await screen.findByText('Route added to the routing network.')).toBeInTheDocument();
     expect(writes()).toHaveLength(1);
     expect(writes()[0][0]).toMatch(new RegExp(`/routes/${draft.id}/publish$`));
     expect(JSON.parse(writes()[0][1].body)).toEqual({
       expectedRevision: 7,
-      attachments: [
-        {
-          instanceId: id(1),
-          portName: 'start',
-          targetObjectRevisionId: id(20),
-          targetPortIndex: 1,
-        },
-      ],
+      attachments: automaticAttachments,
     });
     expect(
       await screen.findByRole('button', { name: 'Withdraw from routing network' }),
@@ -254,7 +427,7 @@ describe('complete CAD routes', () => {
         : {
             ok: true,
             json: async () =>
-              url.endsWith('/attachment-options') ? attachmentOptions : { routes: [draft] },
+              url.endsWith('/auto-attachments') ? autoResult : { routes: [draft] },
           },
     );
     show();
@@ -262,10 +435,6 @@ describe('complete CAD routes', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Add to routing network' })).toBeEnabled(),
     );
-    fireEvent.change(screen.getByLabelText('Route end 1'), { target: { value: `${id(1)}/start` } });
-    fireEvent.change(screen.getByLabelText('Network point 1'), {
-      target: { value: `${id(20)}/1` },
-    });
     fireEvent.click(screen.getByRole('button', { name: 'Add to routing network' }));
     expect(await screen.findByText('STALE_CAD_ROUTE')).toBeInTheDocument();
     expect(screen.queryByText('Route added to the routing network.')).not.toBeInTheDocument();

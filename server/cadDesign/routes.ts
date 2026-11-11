@@ -14,11 +14,13 @@ import { getObjectStream, getProjectBucket } from '../services/objectStorageServ
 import { cadRouteGroupsRouter } from './routeGroupsRoutes.js';
 import { cadRoutePublicationRouter } from './routePublication.js';
 import { cadRouteAlignmentRouter } from './routeAlignment.js';
+import { cadRouteAutoConnectionsRouter } from './routeAutoConnections.js';
 
 export const cadDesignRouter = Router({ mergeParams: true });
 cadDesignRouter.use(cadRouteGroupsRouter);
 cadDesignRouter.use(cadRoutePublicationRouter);
 cadDesignRouter.use(cadRouteAlignmentRouter);
+cadDesignRouter.use(cadRouteAutoConnectionsRouter);
 
 const uuid = z.string().uuid();
 const catalogueInput = z.object({ assetId: uuid }).strict();

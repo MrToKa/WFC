@@ -154,6 +154,25 @@ describe('CAD route membership and transaction fencing', () => {
     expect(update?.[0]).toContain('revision=$4');
     expect(update?.[1].slice(0,4)).toEqual([projectId,designId,groupId,1]);
   });
+  it('preserves membership anchors and their cascading transition links when saving draft metadata', async () => {
+    const base = await start();
+    const response = await mutate(base,'PATCH',{
+      ...body,name:'Updated display name',color:'#102030',purpose:'Updated purpose',expectedRevision:1,
+    },`/${groupId}`);
+    expect(response.status).toBe(200);
+    // PostgreSQL must not DELETE then recreate retained memberships: even a
+    // transactionally identical final set would have lost their transition FKs.
+    const deletion = mocks.query.mock.calls.find(([sql]) => sql.startsWith('DELETE FROM cad_route_group_members'));
+    expect(deletion?.[0]).toContain('AND NOT (instance_id=ANY($4::uuid[]))');
+    expect(deletion?.[1]).toEqual([projectId,designId,groupId,[instanceId]]);
+    const insertion = mocks.query.mock.calls.find(([sql]) => sql.startsWith('INSERT INTO cad_route_group_members'));
+    expect(insertion?.[0]).toContain('ON CONFLICT (route_group_id,instance_id) DO NOTHING');
+    expect(insertion?.[1]).toEqual([projectId,designId,groupId,[instanceId]]);
+    // The explicit conflict target must not mask a cross-group assignment race
+    // on the separate UNIQUE(project_id,instance_id) ownership constraint.
+    expect(insertion?.[0]).not.toMatch(/ON CONFLICT\s+DO NOTHING/);
+    expect(mocks.query.mock.calls.at(-1)?.[0]).toBe('COMMIT');
+  });
   it('rejects a stale revision before modifying metadata or membership', async () => {
     const base = await start();
     const response = await mutate(base,'PATCH',{...body,expectedRevision:2},`/${groupId}`);

@@ -124,6 +124,7 @@ const attachment = {
 const publishBody = { expectedRevision: 7, attachments: [attachment] };
 let currentGroup: typeof draft | typeof published;
 let inUse: boolean, admin: boolean, currentAdmin: boolean, revoked: boolean;
+let memberCount: number;
 let server: Server | undefined;
 let client: { query: typeof mocks.query; release: typeof mocks.release };
 
@@ -175,6 +176,7 @@ beforeEach(() => {
   admin = true;
   currentAdmin = true;
   revoked = false;
+  memberCount = 1;
   client = { query: mocks.query, release: mocks.release };
   mocks.connect.mockResolvedValue(client);
   mocks.adminQuery.mockResolvedValue({ rows: [{ is_admin: true }] });
@@ -196,6 +198,8 @@ beforeEach(() => {
     if (text.startsWith('SELECT d.id')) return { rows: [{ id: designId }] };
     if (text.startsWith('SELECT * FROM cad_route_groups')) return { rows: [currentGroup] };
     if (text.startsWith('SELECT i.*,c.original_filename')) return { rows: [instance] };
+    if (text.startsWith('SELECT COUNT(*)::int AS member_count'))
+      return { rows: [{ member_count: memberCount }] };
     if (text.startsWith('SELECT cc.source_instance_id')) return { rows: [] };
     if (text.startsWith('SELECT model_version_id'))
       return { rows: [{ model_version_id: modelId }] };
@@ -251,6 +255,30 @@ afterEach(async () => {
 });
 
 describe('CAD publication HTTP authorization and refusal', () => {
+  it.each(['publish', 'attachment-options'])(
+    'rejects mixed canonical and legacy members before %s can silently use a subset',
+    async (action) => {
+      memberCount = 2; // The canonical source join returns one member; another legacy member has no asset link.
+      const base = await start();
+      const response =
+        action === 'publish'
+          ? await post(base, action, publishBody)
+          : await fetch(`${base}/${action}`, { headers: { 'x-test-login': 'yes' } });
+      expect(response.status).toBe(409);
+      expect(await response.json()).toMatchObject({ code: 'CAD_ROUTE_UNSUPPORTED_GEOMETRY' });
+      expect(sql('SELECT COUNT(*)::int AS member_count')?.[1]).toEqual([
+        projectId,
+        designId,
+        routeId,
+      ]);
+      expect(sql('SELECT cc.source_instance_id')).toBeUndefined();
+      expect(mocks.artifact).not.toHaveBeenCalled();
+      expect(mocks.prepared).not.toHaveBeenCalled();
+      expect(mocks.execute).not.toHaveBeenCalled();
+      expect(mutations()).toEqual([]);
+      expect(mocks.query.mock.calls.at(-1)?.[0]).toBe('ROLLBACK');
+    },
+  );
   it('requires real administrator middleware for publish, withdrawal and attachment choices', async () => {
     const base = await start();
     expect((await post(base, 'publish', publishBody, false)).status).toBe(401);

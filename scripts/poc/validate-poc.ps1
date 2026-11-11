@@ -1,6 +1,6 @@
 #requires -Version 5.1
 [CmdletBinding()]
-param([switch]$CheckCompose = $true, [switch]$CheckConverter = $true)
+param([switch]$CheckCompose = $true, [switch]$CheckConverter = $true, [switch]$CheckTransitionSchema = $true)
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $expected = 'feature/aalborg-step-routings-builder-poc-20261110'
@@ -32,8 +32,18 @@ try {
         $previousCadRunner = $env:PF_MODEL_RUNNER_DLL
         try {
             $env:PF_MODEL_RUNNER_DLL = Join-Path $repo 'pathfinder-engine/tools/PathFinder.ModelRunner/bin/Release/net9.0/PathFinder.ModelRunner.dll'
-            npx vitest run --maxWorkers=1 --minWorkers=1 --testTimeout=45000 server/pathfinder/cadOverlay.engine.test.ts server/cadDesign/routeGroups.test.ts server/cadDesign/routePublication.test.ts server/cadDesign/routePublication.http.test.ts server/cadDesign/routeAlignment.test.ts server/pathfinder/cadOverlay.test.ts src/pages/ProjectDetails/CadRoutesPanel.test.tsx
+            npx vitest run --maxWorkers=1 --minWorkers=1 --testTimeout=45000 server/pathfinder/cadOverlay.engine.test.ts server/cadDesign/routeGroups.test.ts server/cadDesign/routePublication.test.ts server/cadDesign/routePublication.http.test.ts server/cadDesign/routeAlignment.test.ts server/cadDesign/routeAutoConnections.test.ts server/pathfinder/cadOverlay.test.ts src/pages/ProjectDetails/CadRoutesPanel.test.tsx
         } finally { $env:PF_MODEL_RUNNER_DLL = $previousCadRunner }
+    }
+    if ($CheckTransitionSchema) {
+        Invoke-Checked 'Prepare disposable transition schema database image' { docker pull postgres:16-alpine }
+        Invoke-Checked 'Isolated transition schema migration and lifecycle' {
+            $previousTransitionTests = $env:WFC_CAD_TRANSITIONS_POSTGRES_TESTS
+            try {
+                $env:WFC_CAD_TRANSITIONS_POSTGRES_TESTS = '1'
+                npx vitest run --maxWorkers=1 --minWorkers=1 --testTimeout=30000 server/cadDesign/routeTransitionsSchema.postgres.test.ts
+            } finally { $env:WFC_CAD_TRANSITIONS_POSTGRES_TESTS = $previousTransitionTests }
+        }
     }
     Invoke-Checked 'CAD and Viewer focused unit tests' {
         npx vitest run --maxWorkers=1 --minWorkers=1 --testTimeout=15000 src/viewer/ViewerController.test.ts src/viewer/componentTransforms.test.ts src/viewer/pocConnectorCatalog.test.ts server/cadDesign/stepFileValidation.test.ts server/cadDesign/connectionGeometry.test.ts server/middleware.test.ts src/pages/ProjectDetails/RoutingsViewerTab.test.tsx src/ProjectAccess.test.tsx

@@ -65,9 +65,13 @@ async function validateMembers(client: PoolClient, projectId: string, designId: 
   if (assignments.rows[0]) throw new RouteGroupError('CAD_INSTANCE_ALREADY_GROUPED');
 }
 async function replaceMembers(client: PoolClient, projectId: string, designId: string, routeId: string, ids: string[]): Promise<void> {
-  await client.query('DELETE FROM cad_route_group_members WHERE project_id=$1 AND design_id=$2 AND route_group_id=$3',[projectId,designId,routeId]);
+  // Keep retained membership rows intact: installation transitions reference
+  // them with cascading FKs and must survive ordinary route metadata edits.
+  await client.query(`DELETE FROM cad_route_group_members
+    WHERE project_id=$1 AND design_id=$2 AND route_group_id=$3 AND NOT (instance_id=ANY($4::uuid[]))`,[projectId,designId,routeId,ids]);
   await client.query(`INSERT INTO cad_route_group_members(project_id,design_id,route_group_id,instance_id)
-    SELECT $1::uuid,$2::uuid,$3::uuid,value FROM unnest($4::uuid[]) AS value`,[projectId,designId,routeId,ids]);
+    SELECT $1::uuid,$2::uuid,$3::uuid,value FROM unnest($4::uuid[]) AS value
+    ON CONFLICT (route_group_id,instance_id) DO NOTHING`,[projectId,designId,routeId,ids]);
 }
 const touchDesign = (client: PoolClient, projectId: string, designId: string) => client.query('UPDATE cad_designs SET revision=revision+1,updated_at=now() WHERE project_id=$1 AND id=$2',[projectId,designId]);
 

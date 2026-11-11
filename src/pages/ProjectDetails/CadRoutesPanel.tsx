@@ -6,12 +6,15 @@ import { cadRouteGroupInputSchema, type CadRouteGroup } from '../../../shared/ca
 
 type Instance = { id: string; partNumber: string; revision: number; xMm: number; yMm: number; zMm: number };
 type Props = { projectId: string; designId: string; token: string; instances: Instance[]; displayedIds: string[];
-  onColor: (id: string, color: string) => Promise<void>; onGeometryChanged?: () => Promise<void> };
-type AttachmentOptions = { options: { objectRevisionId: string; objectId: string; portIndex: number; pointMetres: number[]; routeCode: string }[];
-  endpoints: { instanceId: string; portName: 'start' | 'end'; pointMetres: number[] }[] };
+  onColor: (id: string, color: string) => Promise<void>; onGeometryChanged?: () => Promise<void>; onConnectionsChanged?: () => Promise<void> };
+type AutoAttachment = { instanceId: string; portName: 'start' | 'end'; targetObjectRevisionId: string; targetPortIndex: number;
+  targetRouteCode?: string; targetPointMetres?: number[]; gapMm?: number };
+type AutomaticPoints = { status: 'incomplete' | 'network-required' | 'aligned' | 'alignment-required' | 'ambiguous' | 'unavailable';
+  attachments: AutoAttachment[]; diagnostics?: { message?: string; logicalTransitions?: { sourceInstanceId: string; sourcePortName: string; targetInstanceId: string; targetPortName: string; gapMm: number }[]; nearestGaps?: { sourceInstanceId: string; sourcePortName: string;
+    targetInstanceId: string; targetPortName: string; gapMm: number; aligned: boolean; orientationAligned?: boolean }[] } };
 const empty = { name: '', tag: '', color: '#3B82F6', purpose: '' };
 
-export function CadRoutesPanel({ projectId, designId, token, instances, displayedIds, onColor, onGeometryChanged }: Props) {
+export function CadRoutesPanel({ projectId, designId, token, instances, displayedIds, onColor, onGeometryChanged, onConnectionsChanged }: Props) {
   const [routes, setRoutes] = useState<CadRouteGroup[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [fields, setFields] = useState(empty);
@@ -20,11 +23,13 @@ export function CadRoutesPanel({ projectId, designId, token, instances, displaye
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [removeCandidate, setRemoveCandidate] = useState<CadRouteGroup | null>(null);
-  const [attachmentOptions, setAttachmentOptions] = useState<AttachmentOptions | null>(null);
+  const [automaticPoints, setAutomaticPoints] = useState<AutomaticPoints | null>(null);
+  const [automaticLoading, setAutomaticLoading] = useState(false);
   const [attachmentMessage, setAttachmentMessage] = useState('');
-  const [attachmentPairs, setAttachmentPairs] = useState([{ endpoint: '', target: '' }, { endpoint: '', target: '' }]);
   const colors = useRef(new Map<string, string>());
   const selected = routes.find(route => route.id === selectedId);
+  const geometryKey = instances.filter(instance => selected?.instanceIds.includes(instance.id)).map(instance => `${instance.id}:${instance.revision}`).join(',');
+  const pointsReady = Boolean(automaticPoints?.attachments.length && ['aligned', 'alignment-required'].includes(automaticPoints.status));
   const unsavedChanges = Boolean(selected && (selected.name !== fields.name.trim() || selected.tag !== fields.tag.trim().toUpperCase() ||
     selected.color !== fields.color.toUpperCase() || selected.purpose !== fields.purpose.trim() ||
     JSON.stringify([...selected.instanceIds].sort()) !== JSON.stringify([...members].sort())));
@@ -47,15 +52,17 @@ export function CadRoutesPanel({ projectId, designId, token, instances, displaye
     return () => controller.abort();
   }, [reload]);
   useEffect(() => {
-    setAttachmentOptions(null); setAttachmentMessage(''); setAttachmentPairs([{ endpoint: '', target: '' }, { endpoint: '', target: '' }]);
+    setAutomaticPoints(null); setAttachmentMessage(''); setAutomaticLoading(false);
     if (!selected || selected.status !== 'draft') return;
     const controller = new AbortController();
-    void request(`/${selected.id}/attachment-options`, { signal: controller.signal }).then(response => response.json()).then(data => {
-      if (!Array.isArray(data.options) || !Array.isArray(data.endpoints)) throw new Error('Network connection options are unavailable.');
-      if (!controller.signal.aborted) setAttachmentOptions(data);
-    }).catch(error => { if (!controller.signal.aborted) setAttachmentMessage(error.message); });
+    setAutomaticLoading(true);
+    void request(`/${selected.id}/auto-attachments`, { signal: controller.signal }).then(response => response.json()).then(data => {
+      if (!Array.isArray(data.attachments) || typeof data.status !== 'string') throw new Error('Automatic connection points are unavailable.');
+      if (!controller.signal.aborted) setAutomaticPoints(data);
+    }).catch(error => { if (!controller.signal.aborted) setAttachmentMessage(error.message); })
+      .finally(() => { if (!controller.signal.aborted) setAutomaticLoading(false); });
     return () => controller.abort();
-  }, [request, selected]);
+  }, [request, selected, geometryKey]);
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -85,20 +92,25 @@ export function CadRoutesPanel({ projectId, designId, token, instances, displaye
   };
   const networkAction = async (action: 'publish' | 'withdraw' | 'align') => {
     if (!selected || busy) return;
-    const attachments = attachmentPairs.filter(pair => pair.endpoint && pair.target).map(pair => {
-      const [instanceId, portName] = pair.endpoint.split('/');
-      const [targetObjectRevisionId, portIndex] = pair.target.split('/');
-      return { instanceId, portName, targetObjectRevisionId, targetPortIndex: Number(portIndex) };
-    });
-    if (action !== 'withdraw' && !attachments.length) { setMessage('Choose at least one route end and an existing network connection point.'); return; }
+    const attachments = (automaticPoints?.attachments ?? []).map(({ instanceId, portName, targetObjectRevisionId, targetPortIndex }) => ({ instanceId, portName, targetObjectRevisionId, targetPortIndex }));
+    if (action !== 'withdraw' && !pointsReady) { setMessage('Find compatible automatic connection points before continuing.'); return; }
     setBusy(true); setMessage('');
     try {
       await request(`/${selected.id}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expectedRevision: selected.revision,
         ...(action === 'publish' ? { attachments } : action === 'align' ? { attachment: attachments[0] } : {}) }) });
       if (action === 'align') await onGeometryChanged?.();
       await reload(); setMessage(action === 'publish' ? 'Route added to the routing network.' : action === 'align'
-        ? 'Whole route aligned and saved. Its internal connections, lengths and STEP revisions are preserved. Select the network connection again to publish.' : 'Route withdrawn from the routing network.');
+        ? 'Whole route aligned and saved. Its internal connections, lengths and STEP revisions are preserved. Connection points are selected automatically again.' : 'Route withdrawn from the routing network.');
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Network publication failed.'); }
+    finally { setBusy(false); }
+  };
+  const autoConnect = async () => {
+    if (!selected || busy || unsavedChanges) return; setBusy(true); setMessage('');
+    try {
+      const result = await (await request(`/${selected.id}/auto-connect`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expectedRevision: selected.revision }) })).json();
+      await onConnectionsChanged?.(); await reload();
+      setMessage(`${result.connectionsCreated ?? 0} component connections and ${result.routingTransitionsCreated ?? 0} routing transitions saved automatically. ${result.connected ? 'The route is connected. Checking network connection points.' : 'Some ends need review: no unique nearby connection was found.'}`);
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'Cannot find automatic connections.'); }
     finally { setBusy(false); }
   };
   const removeGroup = async () => {
@@ -136,37 +148,38 @@ export function CadRoutesPanel({ projectId, designId, token, instances, displaye
         <Input aria-label="Route colour hex" value={fields.color} maxLength={7} placeholder="#3B82F6" disabled={busy}
           onChange={(_, data) => setFields(old => ({ ...old, color: data.value.toUpperCase() }))} />
       </Field>
-      <fieldset disabled={busy || selected?.status === 'published'}><legend>Route components</legend>{instances.map(instance => {
+      <fieldset disabled={busy || selected?.status === 'published'}><legend>Route components</legend>{instances.map((instance, index) => {
         const other = routes.find(route => route.id !== selectedId && route.instanceIds.includes(instance.id));
         return <label key={instance.id} style={{ display: 'block' }}><input type="checkbox" aria-label={`Include component ${instance.id}`} checked={members.includes(instance.id)} disabled={Boolean(other)}
           onChange={event => setMembers(old => event.target.checked ? [...old, instance.id] : old.filter(id => id !== instance.id))} />
-          {instance.partNumber} · X {Math.round(instance.xMm)}, Y {Math.round(instance.yMm)}, Z {Math.round(instance.zMm)} mm{other ? ` (${other.tag})` : ''}
+          Component {index + 1}: {instance.partNumber} · X {Math.round(instance.xMm)}, Y {Math.round(instance.yMm)}, Z {Math.round(instance.zMm)} mm{other ? ` (${other.tag})` : ''}
         </label>;
       })}</fieldset>
       <Button type="submit" appearance="primary" disabled={busy || loading || selected?.status === 'published' && selected.color === fields.color}>{selected ? 'Save route changes' : 'Save complete route'}</Button>
       <Button type="button" disabled={busy} onClick={() => { setSelectedId(''); setFields(empty); setMembers([]); setMessage(''); }}>New route</Button>
     </form>
     {selected?.status === 'draft' ? <fieldset disabled={busy}><legend>Connections to existing routing network</legend>
-      <Caption1>Connect one or both ends to verified network points. The end positions must coincide before publication.</Caption1>
+      <Caption1>Route ends and compatible network points are detected automatically. Nearby installation transitions can connect differently oriented ends without moving components; their distance counts towards routing length.</Caption1>
+      <Button disabled={busy || unsavedChanges || automaticLoading} onClick={() => { void autoConnect(); }}>Auto-select connection points</Button>
+      {automaticLoading ? <Spinner size="tiny" label="Finding connection points…" /> : null}
       {attachmentMessage ? <p>{attachmentMessage}</p> : null}
-      {attachmentPairs.map((pair, index) => <div key={index}>
-        <Field label={`Route end ${index + 1}`}><select aria-label={`Route end ${index + 1}`} value={pair.endpoint} onChange={event => setAttachmentPairs(old => old.map((value, row) => row === index ? { ...value, endpoint: event.target.value } : value))}>
-          <option value="">Choose route end{index === 1 ? ' (optional)' : ''}</option>{attachmentOptions?.endpoints.map(endpoint => <option key={`${endpoint.instanceId}/${endpoint.portName}`} value={`${endpoint.instanceId}/${endpoint.portName}`}>
-            {instances.find(instance => instance.id === endpoint.instanceId)?.partNumber} · {endpoint.instanceId.slice(0, 8)} · {endpoint.portName}
-          </option>)}
-        </select></Field>
-        <Field label={`Network point ${index + 1}`}><select aria-label={`Network point ${index + 1}`} value={pair.target} onChange={event => setAttachmentPairs(old => old.map((value, row) => row === index ? { ...value, target: event.target.value } : value))}>
-          <option value="">Choose existing network point</option>{attachmentOptions?.options.map(option => <option key={`${option.objectRevisionId}/${option.portIndex}`} value={`${option.objectRevisionId}/${option.portIndex}`}>
-            {option.routeCode} · {option.objectId} · end {option.portIndex + 1} · {option.pointMetres.join(', ')} m
-          </option>)}
-        </select></Field>
-      </div>)}
-      <Button disabled={!attachmentOptions || unsavedChanges || !attachmentPairs[0].endpoint || !attachmentPairs[0].target} onClick={() => { void networkAction('align'); }}>
+      {automaticPoints?.diagnostics?.message ? <p>{automaticPoints.diagnostics.message}</p> : null}
+      {automaticPoints?.attachments.length ? <ul aria-label="Automatically selected network connections">{automaticPoints.attachments.map((attachment, index) => <li key={index}>
+        Component {instances.findIndex(instance => instance.id === attachment.instanceId) + 1} {attachment.portName} → {attachment.targetRouteCode ?? 'Existing network point'}
+        {attachment.gapMm != null ? ` · ${Math.round(attachment.gapMm)} mm` : ''}
+      </li>)}</ul> : null}
+      {automaticPoints?.diagnostics?.logicalTransitions?.length ? <ul aria-label="Installation routing transitions">{automaticPoints.diagnostics.logicalTransitions.map((link, index) => <li key={index}>
+        Component {instances.findIndex(instance => instance.id === link.sourceInstanceId) + 1} {link.sourcePortName} → component {instances.findIndex(instance => instance.id === link.targetInstanceId) + 1} {link.targetPortName}: {Math.round(link.gapMm)} mm routing transition
+      </li>)}</ul> : null}
+      {automaticPoints?.diagnostics?.nearestGaps?.length ? <ul aria-label="Component connection gaps">{automaticPoints.diagnostics.nearestGaps.slice(0, 4).map((gap, index) => <li key={index}>
+        Component {instances.findIndex(instance => instance.id === gap.sourceInstanceId) + 1} {gap.sourcePortName} → component {instances.findIndex(instance => instance.id === gap.targetInstanceId) + 1} {gap.targetPortName}: {Math.round(gap.gapMm)} mm{gap.orientationAligned === false ? ' · orientation differs' : ''}
+      </li>)}</ul> : null}
+      <Button disabled={busy || automaticLoading || !pointsReady || unsavedChanges} onClick={() => { void networkAction('align'); }}>
         Align whole route to network point
       </Button>
     </fieldset> : null}
     {unsavedChanges ? <Caption1>Save route changes before continuing.</Caption1> : null}
-    {selected ? <Button disabled={busy || selected.status === 'draft' && (!attachmentOptions || unsavedChanges)} onClick={() => { void networkAction(selected.status === 'published' ? 'withdraw' : 'publish'); }}>{selected.status === 'published' ? 'Withdraw from routing network' : 'Add to routing network'}</Button> : null}
+    {selected ? <Button disabled={busy || selected.status === 'draft' && (!pointsReady || automaticLoading || unsavedChanges)} onClick={() => { void networkAction(selected.status === 'published' ? 'withdraw' : 'publish'); }}>{selected.status === 'published' ? 'Withdraw from routing network' : 'Add to routing network'}</Button> : null}
     {selected?.status === 'draft' ? <Button disabled={busy} onClick={() => setRemoveCandidate(selected)}>Remove route group</Button> : null}
     <Dialog open={Boolean(removeCandidate)} onOpenChange={(_, data) => { if (!data.open && !busy) setRemoveCandidate(null); }}>
       <DialogSurface><DialogBody><DialogTitle>Remove route group?</DialogTitle>

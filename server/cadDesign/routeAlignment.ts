@@ -20,6 +20,7 @@ import {
   validateCadAttachment,
   PublicationError,
   type PublicationInstance,
+  type PublicationTransition,
 } from './routePublication.js';
 
 const uuid = z.string().uuid();
@@ -180,7 +181,12 @@ cadRouteAlignmentRouter.post(
         );
       const result = await publicationTransaction(req, async (client) => {
         const { projectId, designId, routeId } = req.params;
-        const { group, chain, instances } = await groupInputs(client, projectId, designId, routeId);
+        const { group, chain, instances, transitions } = await groupInputs(
+          client,
+          projectId,
+          designId,
+          routeId,
+        );
         if (group.revision !== parsed.data.expectedRevision)
           return refuse('STALE_CAD_ROUTE', 'The route changed. Refresh before aligning.');
         if (group.status !== 'draft')
@@ -222,8 +228,32 @@ cadRouteAlignmentRouter.post(
             [projectId, designId, memberIds],
           )
         ).rows;
+        const logicalLinks = (
+          await client.query<PublicationTransition>(
+            `SELECT id,kind,source_instance_id,target_instance_id,
+          source_port_name AS source_name,target_port_name AS target_name FROM cad_route_transition_links
+          WHERE project_id=$1 AND design_id=$2 AND route_group_id=$3 ORDER BY id FOR UPDATE`,
+            [projectId, designId, routeId],
+          )
+        ).rows;
+        const topology = (rows: PublicationTransition[]) =>
+          JSON.stringify(
+            rows.map((row) => [
+              row.id,
+              row.source_instance_id,
+              row.source_name,
+              row.target_instance_id,
+              row.target_name,
+              row.kind,
+            ]),
+          );
+        if (topology(logicalLinks) !== topology(transitions))
+          return refuse(
+            'CAD_DESIGN_CONFLICT',
+            'The route installation transitions changed. Refresh and retry.',
+          );
         if (
-          links.length !== instances.length - 1 ||
+          links.length + logicalLinks.length !== instances.length - 1 ||
           links.some(
             (link) =>
               !memberIds.includes(link.source_instance_id) ||
@@ -234,6 +264,9 @@ cadRouteAlignmentRouter.post(
             'CAD_ROUTE_CROSS_GROUP_CONNECTION',
             'All saved connections must remain inside this route.',
           );
+        // Logical installation joints store endpoint identities only. The same
+        // rigid delta preserves their measured gap and bend angle; keep those
+        // rows intact while their world geometry is derived from the new poses.
         // Existing move guards remain active. Temporarily remove only these
         // locked internal links and restore their exact identities in one commit.
         if (links.length) {
@@ -298,12 +331,10 @@ cadRouteAlignmentRouter.post(
         return;
       }
       if (error instanceof RangeError) {
-        res
-          .status(422)
-          .json({
-            code: 'CAD_ROUTE_ALIGNMENT_OUT_OF_BOUNDS',
-            message: 'The aligned route would exceed the supported model coordinates.',
-          });
+        res.status(422).json({
+          code: 'CAD_ROUTE_ALIGNMENT_OUT_OF_BOUNDS',
+          message: 'The aligned route would exceed the supported model coordinates.',
+        });
         return;
       }
       next(error);

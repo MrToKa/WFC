@@ -12,7 +12,11 @@ import { MATE_OPPOSING_FACE } from '../../shared/cadPocPorts.js';
 import { geometryObjectRevisionSchema } from '../../shared/pathfinderGeometryTrace.js';
 import { buildGeometryTrace } from '../pathfinder/geometryTraceBuilder.js';
 import { geometryTraceFixture } from '../pathfinder/geometryTraceFixtures.js';
-import type { PublicationInstance } from './routePublication.js';
+import {
+  buildCadChain,
+  type PublicationInstance,
+  type PublicationTransition,
+} from './routePublication.js';
 import {
   cadNetworkPortTransform,
   computeCadRouteAlignment,
@@ -214,6 +218,7 @@ describe('whole-route rigid alignment geometry', () => {
 type State = {
   members: PublicationInstance[];
   links: (typeof connection)[];
+  transitions: PublicationTransition[];
   group: {
     id: string;
     name: string;
@@ -226,10 +231,12 @@ type State = {
   };
 };
 let state: State, snapshot: State | null, failRestore: boolean, failUpdate: boolean, admin: boolean;
+let memberCountOverride: number | undefined;
 let server: Server | undefined;
 const original = (): State => ({
   members: structuredClone(members),
   links: [structuredClone(connection)],
+  transitions: [],
   group: {
     id: groupId,
     name: 'Riser',
@@ -252,6 +259,7 @@ beforeEach(() => {
   failRestore = false;
   failUpdate = false;
   admin = true;
+  memberCountOverride = undefined;
   mocks.admin.mockImplementation(async () => ({ rows: [{ is_admin: admin }] }));
   mocks.connect.mockResolvedValue({ query: mocks.query, release: mocks.release });
   mocks.artifact.mockResolvedValue({ id: id(30), snapshot_sha256: 'a'.repeat(64) });
@@ -277,6 +285,8 @@ beforeEach(() => {
       return { rows: values[1] === designId ? [{ id: designId }] : [] };
     if (text.startsWith('SELECT * FROM cad_route_groups'))
       return { rows: values[2] === groupId ? [structuredClone(state.group)] : [] };
+    if (text.toLowerCase().includes('member_count') && text.includes('cad_route_group_members'))
+      return { rows: [{ member_count: memberCountOverride ?? state.members.length }] };
     if (text.startsWith('SELECT i.*,c.original_filename'))
       return { rows: structuredClone(state.members) };
     if (text.startsWith('SELECT cc.source_instance_id'))
@@ -293,6 +303,8 @@ beforeEach(() => {
     if (text.startsWith('SELECT o.record')) return { rows: [{ record }] };
     if (text.startsWith('SELECT * FROM cad_design_connections'))
       return { rows: structuredClone(state.links) };
+    if (text.includes('FROM cad_route_transition_links'))
+      return { rows: structuredClone(state.transitions) };
     if (text.startsWith('DELETE FROM cad_design_connections')) {
       const rows = state.links.map((link) => ({ id: link.id }));
       state.links = [];
@@ -377,6 +389,51 @@ const post = (base: string, payload: unknown = body, login = true) =>
   });
 
 describe('whole-route alignment HTTP transaction', () => {
+  it('refuses mixed legacy membership instead of aligning only the canonical subset', async () => {
+    memberCountOverride = state.members.length + 1;
+    const response = await post(await start());
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: 'CAD_ROUTE_UNSUPPORTED_GEOMETRY' });
+    expect(state).toEqual(original());
+    expect(mutations()).toHaveLength(0);
+    expect(mocks.query.mock.calls.at(-1)?.[0]).toBe('ROLLBACK');
+  });
+  it('rigidly aligns a logical 180 mm ninety-degree installation joint without rewriting its topology or length', async () => {
+    state.links = [];
+    state.members[1] = { ...second, x_mm: 180, qy: Math.SQRT1_2, qw: Math.SQRT1_2 };
+    state.transitions = [
+      {
+        id: id(35),
+        kind: 'routing-transition',
+        source_instance_id: first.id,
+        source_name: 'end',
+        target_instance_id: second.id,
+        target_name: 'start',
+      },
+    ];
+    const before = buildCadChain(state.members, [], state.transitions);
+    const savedLinks = structuredClone(state.transitions);
+    const response = await post(await start());
+    expect(response.status).toBe(200);
+    expect(state.transitions).toEqual(savedLinks);
+    const after = buildCadChain(state.members, [], state.transitions);
+    expect(after.lengthMetres).toBeCloseTo(before.lengthMetres, 10);
+    expect(after.lengthMetres).toBeCloseTo(2.68, 10);
+    expect(state.members[0].x_mm).toBeCloseTo(5000);
+    expect(state.members[1].x_mm).toBeCloseTo(6500);
+    expect(state.members[1].z_mm).toBeCloseTo(6820);
+    expect(
+      mocks.query.mock.calls.some(([text]) =>
+        /^(INSERT INTO|DELETE FROM|UPDATE) cad_route_transition_links/.test(text),
+      ),
+    ).toBe(false);
+    expect(
+      mocks.query.mock.calls.some(([text]) =>
+        /^(INSERT INTO|DELETE FROM) cad_design_connections/.test(text),
+      ),
+    ).toBe(false);
+    expect(mocks.query.mock.calls.at(-1)?.[0]).toBe('COMMIT');
+  });
   it('preserves connection identities, pins and lengths while moving every scoped member in one commit', async () => {
     const response = await post(await start());
     expect(response.status).toBe(200);

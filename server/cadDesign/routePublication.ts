@@ -32,6 +32,8 @@ export type PublicationInstance = {id:string;catalog_item_id:string;material_ass
   original_filename:string;source_sha256:string;component_kind:string;cut_length_mm:number|null;
   x_mm:number;y_mm:number;z_mm:number;qx:number;qy:number;qz:number;qw:number};
 export type PublicationConnection = {source_instance_id:string;target_instance_id:string;source_name:string;target_name:string};
+export type PublicationTransition = PublicationConnection & {id?:string;kind:'routing-transition'};
+export const MAX_CAD_TRANSITION_GAP_MM=300;
 type Group = {id:string;name:string;tag:string;purpose:string;status:string;revision:number;project_tray_id:string|null;publication:unknown};
 export class PublicationError extends Error {
   constructor(readonly code:string, message:string, readonly status=409, readonly diagnostics?:unknown) {super(message);}
@@ -88,23 +90,30 @@ export function resolveCadRouteMaterial(instances:PublicationInstance[]) {
     return refuse('CAD_ROUTE_MATERIAL_PROFILE_CHANGED','The straight Materials identity or dimensions no longer match the pinned 300 × 60 mm source. Select its current catalog reference.');
   return {trayType:material.part_number,widthMm:300,heightMm:60};
 }
-export function buildCadChain(instances:PublicationInstance[],connections:PublicationConnection[]) {
+export function buildCadChain(instances:PublicationInstance[],connections:PublicationConnection[],transitions:PublicationTransition[]=[]) {
   if (!instances.length||instances.length>32) return refuse('CAD_ROUTE_PART_LIMIT','A published route must contain 1–32 verified components.');
   const rows=new Map(instances.map(row=>[row.id,row]));
   const used=new Set<string>();const adjacency=new Map<string,Array<{other:string;name:string;otherName:string}>>();
   for (const row of instances) {ports(row);adjacency.set(row.id,[]);}
-  for (const connection of connections) {
+  const edges=[...connections.map(connection=>({...connection,kind:'physical' as const})),...transitions];
+  for (const connection of edges) {
     const source=rows.get(connection.source_instance_id),target=rows.get(connection.target_instance_id);
     if (!source||!target) return refuse('CAD_ROUTE_CROSS_GROUP_CONNECTION','All connected components must belong to this route group.');
     const a=ports(source).find(p=>p.id===connection.source_name),b=ports(target).find(p=>p.id===connection.target_name);
-    if (!a||!b||!connectorAlignmentIsValid(world(source),a.local,world(target),b.local,MATE_OPPOSING_FACE))
+    if (!a||!b)
+      return refuse('CAD_ROUTE_INVALID_PORT','The saved route references an unsupported endpoint.');
+    if(connection.kind==='routing-transition'){
+      const gapMm=distance(metres(a.world.position),metres(b.world.position))*1000;
+      if(gapMm>MAX_CAD_TRANSITION_GAP_MM+1e-6)
+        return refuse('CAD_ROUTE_TRANSITION_TOO_LONG','A logical routing transition exceeds the verified profile installation zone.',409,{gapMm,maximumGapMm:MAX_CAD_TRANSITION_GAP_MM});
+    } else if (!connectorAlignmentIsValid(world(source),a.local,world(target),b.local,MATE_OPPOSING_FACE))
       return refuse('CAD_ROUTE_CONNECTION_NOT_ALIGNED','Saved component ports are no longer aligned. Reconnect them before publishing.');
     for (const key of [`${source.id}:${a.id}`,`${target.id}:${b.id}`]) {if(used.has(key))return refuse('CAD_ROUTE_NOT_CHAIN','A route port cannot have multiple connections.');used.add(key);}
     adjacency.get(source.id)!.push({other:target.id,name:a.id,otherName:b.id});
     adjacency.get(target.id)!.push({other:source.id,name:b.id,otherName:a.id});
   }
   const endpoints=instances.flatMap(row=>ports(row).filter(p=>!used.has(`${row.id}:${p.id}`)).map(p=>({instanceId:row.id,portName:p.id,pointMetres:metres(p.world.position)})));
-  if (connections.length!==instances.length-1||endpoints.length!==2||[...adjacency.values()].some(edges=>edges.length>2))
+  if (edges.length!==instances.length-1||endpoints.length!==2||[...adjacency.values()].some(edges=>edges.length>2))
     return refuse('CAD_ROUTE_NOT_CHAIN','The group must be one connected open chain. Snap and connect every component first.');
   const points:Point[]=[];const visited=new Set<string>();let cursor=endpoints[0].instanceId,entry=endpoints[0].portName;
   while (!visited.has(cursor)) {
@@ -120,7 +129,7 @@ export function buildCadChain(instances:PublicationInstance[],connections:Public
   return {endpoints,points,lengthMetres,instances:rows};
 }
 
-export async function groupInputs(client:PoolClient,projectId:string,designId:string,routeId:string) {
+export async function groupRawInputs(client:PoolClient,projectId:string,designId:string,routeId:string) {
   const group=(await client.query<Group>('SELECT * FROM cad_route_groups WHERE project_id=$1 AND design_id=$2 AND id=$3 FOR UPDATE',[projectId,designId,routeId])).rows[0];
   if (!group) return refuse('CAD_ROUTE_NOT_FOUND','Route group not found.',404);
   const instances=(await client.query<PublicationInstance>(`SELECT i.*,c.original_filename,c.source_sha256,c.part_number,
@@ -132,11 +141,23 @@ export async function groupInputs(client:PoolClient,projectId:string,designId:st
     JOIN material_components p ON p.id=a.component_id
     LEFT JOIN material_trays mt ON mt.id=p.material_tray_id
     WHERE m.project_id=$1 AND m.design_id=$2 AND m.route_group_id=$3 ORDER BY i.id FOR SHARE OF i`,[projectId,designId,routeId])).rows;
+  // The canonical joins must not turn a mixed legacy group into a smaller,
+  // apparently valid route. Every scoped member needs the same source proof.
+  const membership=(await client.query<{member_count:number}>(`SELECT COUNT(*)::int AS member_count FROM cad_route_group_members
+    WHERE project_id=$1 AND design_id=$2 AND route_group_id=$3`,[projectId,designId,routeId])).rows[0];
+  if(!membership||membership.member_count!==instances.length)
+    return refuse('CAD_ROUTE_UNSUPPORTED_GEOMETRY','Every route member must reference a verified Materials CAD revision. Legacy or unbacked members cannot be omitted.');
   const ids=instances.map(row=>row.id);
   const connections=(await client.query<PublicationConnection>(`SELECT cc.source_instance_id,cc.target_instance_id,s.name AS source_name,t.name AS target_name
     FROM cad_design_connections cc JOIN cad_catalog_ports s ON s.id=cc.source_port_id JOIN cad_catalog_ports t ON t.id=cc.target_port_id
     WHERE cc.project_id=$1 AND cc.design_id=$2 AND (cc.source_instance_id=ANY($3::uuid[]) OR cc.target_instance_id=ANY($3::uuid[]))`,[projectId,designId,ids])).rows;
-  return {group,chain:buildCadChain(instances,connections),instances};
+  const transitions=(await client.query<PublicationTransition>(`SELECT id,kind,source_instance_id,target_instance_id,source_port_name AS source_name,target_port_name AS target_name
+    FROM cad_route_transition_links WHERE project_id=$1 AND design_id=$2 AND route_group_id=$3 ORDER BY id FOR SHARE`,[projectId,designId,routeId])).rows;
+  return {group,instances,connections,transitions};
+}
+export async function groupInputs(client:PoolClient,projectId:string,designId:string,routeId:string) {
+  const {group,instances,connections,transitions}=await groupRawInputs(client,projectId,designId,routeId);
+  return {group,chain:buildCadChain(instances,connections,transitions),instances,transitions};
 }
 export async function publicationTransaction<T>(req:Request,work:(client:PoolClient)=>Promise<T>) {
   const {projectId,designId,routeId}=req.params;
@@ -180,7 +201,7 @@ cadRoutePublicationRouter.post(`${prefix}/publish`,requireAdmin,safe(async(req,r
   const parsed=publishInput.safeParse(req.body);if(!parsed.success)return refuse('INVALID_CAD_ROUTE_PUBLICATION','Select at least one endpoint and an existing network port.',400);
   const freeze=async(client:PoolClient)=>{
     const {projectId,designId,routeId}=req.params;
-    const {group,chain,instances}=await groupInputs(client,projectId,designId,routeId);
+    const {group,chain,instances,transitions}=await groupInputs(client,projectId,designId,routeId);
     if(group.revision!==parsed.data.expectedRevision)return refuse('STALE_CAD_ROUTE','The route changed. Refresh and retry.');
     if(group.status!=='draft')return refuse('CAD_ROUTE_PUBLISHED','Withdraw the route before publishing another revision.');
     const material=resolveCadRouteMaterial(instances);
@@ -209,9 +230,9 @@ cadRoutePublicationRouter.post(`${prefix}/publish`,requireAdmin,safe(async(req,r
     const overlay=cadOverlayPayloadSchema.parse({schemaVersion:'wfc.pf.cad-overlay-payload.v1',projectId,modelVersionId:model.model_version_id,baseSnapshotSha256:artifact.snapshot_sha256,segments:[segment]});
     const previous=routing.cadOverlay?cadOverlayPayloadSchema.parse(JSON.parse(Buffer.from(routing.cadOverlay.payloadBase64,'base64').toString('utf8'))).segments:[];
     const verifiedOverlay=encodeCadOverlay({...overlay,segments:[...previous,...overlay.segments]});
-    const fingerprint=createHash('sha256').update(canonicalPurposeJson({group:{id:group.id,revision:group.revision,tag:group.tag,purpose:group.purpose},material,routing,
+    const fingerprint=createHash('sha256').update(canonicalPurposeJson({group:{id:group.id,revision:group.revision,tag:group.tag,purpose:group.purpose},material,routing,transitions,
       artifactId:artifact.id,verifiedOverlay,sources:instances.map(row=>({id:row.id,revision:row.revision,assetId:row.material_asset_id,sha256:row.source_sha256,lengthMm:row.cut_length_mm}))})).digest('hex');
-    return {group,chain,instances,material,artifact,overlay,verifiedOverlay,modelId:model.model_version_id,expectedSegments:segmentCount+previous.length+1,fingerprint};
+    return {group,chain,instances,transitions,material,artifact,overlay,verifiedOverlay,modelId:model.model_version_id,expectedSegments:segmentCount+previous.length+1,fingerprint};
   };
   // Release all database locks while the private worker validates geometry.
   // A running calculation may itself need the project mutex to finish.
@@ -227,12 +248,15 @@ cadRoutePublicationRouter.post(`${prefix}/publish`,requireAdmin,safe(async(req,r
     const current=await freeze(client);
     if(current.fingerprint!==frozen.fingerprint)return refuse('CAD_ROUTE_CHANGED_DURING_PROOF','The network or route changed during verification. Refresh and publish again.');
     const {projectId,designId,routeId}=req.params;
-    const {group,chain,instances,material,artifact,overlay}=current;
+    const {group,chain,instances,transitions,material,artifact,overlay}=current;
     const trayId=randomUUID();
     const traySnapshot={id:trayId,name:group.tag,purpose:normalizeCatalogKey(group.purpose),...material,lengthMm:chain.lengthMetres*1000};
     const inserted=await client.query<TrayRow>('INSERT INTO trays(id,project_id,name,purpose,tray_type,width_mm,height_mm,length_mm) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',[trayId,projectId,traySnapshot.name,traySnapshot.purpose,material.trayType,material.widthMm,material.heightMm,traySnapshot.lengthMm]);
     await recordTrayChanges(client,req.userId!,null,inserted.rows[0]);
     const publication={schemaVersion:'wfc.cad.route-publication.v1',baseArtifactId:artifact.id,overlay,traySnapshot,attachments:parsed.data.attachments,
+      routingTransitions:transitions.map(link=>({id:link.id,kind:link.kind,sourceInstanceId:link.source_instance_id,sourcePortName:link.source_name,
+        targetInstanceId:link.target_instance_id,targetPortName:link.target_name,
+        pointsMetres:[routePort(chain.instances.get(link.source_instance_id)!,link.source_name).pointMetres,routePort(chain.instances.get(link.target_instance_id)!,link.target_name).pointMetres]})),
       sources:instances.map(row=>({instanceId:row.id,instanceRevision:row.revision,catalogItemId:row.catalog_item_id,assetId:row.material_asset_id,sha256:row.source_sha256,lengthMm:row.cut_length_mm})),publishedAt:new Date().toISOString()};
     await client.query(`UPDATE cad_route_groups SET status='published',project_tray_id=$4,publication=$5::jsonb,revision=revision+1,updated_at=now()
       WHERE project_id=$1 AND design_id=$2 AND id=$3`,[projectId,designId,routeId,trayId,JSON.stringify(publication)]);

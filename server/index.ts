@@ -7,6 +7,7 @@ import { config } from './config.js';
 import { initializeDatabase } from './db.js';
 import { initializeCadDesignSchema } from './cadDesign/schema.js';
 import { initializeCadRouteGroupsSchema } from './cadDesign/routeGroupsSchema.js';
+import { initializeCadRouteTransitionsSchema } from './cadDesign/routeTransitionsSchema.js';
 import { initializeMaterialTrayCadSchema } from './materialCad/schema.js';
 import { pool } from './db.js';
 import { initializeObjectStorage } from './services/objectStorageService.js';
@@ -62,6 +63,7 @@ const startServer = async (): Promise<void> => {
       await initializeMaterialTrayCadSchema(pool);
       await initializeCadDesignSchema(pool);
       await initializeCadRouteGroupsSchema(pool);
+      await initializeCadRouteTransitionsSchema(pool);
     }
     await initializePathFinderRuntime();
     if (config.https.enabled) {
