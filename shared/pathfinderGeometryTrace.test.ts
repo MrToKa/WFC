@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fittedTraceExportSchema, fittedTraceReferenceSchema, geometryTraceCreateSchema, GEOMETRY_TRACE_DERIVATION, GEOMETRY_TRACE_LIMITS, type FittedTraceExport } from './pathfinderGeometryTrace.js';
+import { fittedTraceExportSchema, fittedTraceReferenceSchema, geometryTraceCreateSchema, geometryTraceRuntimeSchema, GEOMETRY_TRACE_DERIVATION, GEOMETRY_TRACE_LIMITS, type FittedTraceExport } from './pathfinderGeometryTrace.js';
 
 const id = (n: number) => `d2000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const digest = 'a'.repeat(64);
@@ -59,5 +59,16 @@ describe('fitted trace immutable producer contract', () => {
   it('requires a versioned server-owned creation command with no actor/path/approval fields', () => {
     const command = { schemaVersion: 'wfc.pf.geometry-trace-create.v1', aggregateId: id(3), expectedProjectionSha256: digest, derivationVersion: GEOMETRY_TRACE_DERIVATION, idempotencyKey: id(4) };
     expect(geometryTraceCreateSchema.safeParse(command).success).toBe(true); for (const extra of [{ actorId: id(9) }, { path: '/private' }, { engineeringAccepted: true }]) expect(geometryTraceCreateSchema.safeParse({ ...command, ...extra }).success).toBe(false);
+  });
+  it('binds new commands to an exact runtime while preserving the strict legacy command shape', () => {
+    const legacy = { schemaVersion: 'wfc.pf.geometry-trace-create.v1', aggregateId: id(3), expectedProjectionSha256: digest, derivationVersion: GEOMETRY_TRACE_DERIVATION, idempotencyKey: id(4) };
+    const current = { ...legacy, schemaVersion: 'wfc.pf.geometry-trace-create.v2', expectedRuntimeFingerprintSha256: 'b'.repeat(64) };
+    expect(geometryTraceCreateSchema.parse(legacy)).toEqual(legacy); expect(geometryTraceCreateSchema.parse(current)).toEqual(current);
+    expect(geometryTraceCreateSchema.safeParse({ ...current, expectedRuntimeFingerprintSha256: undefined }).success).toBe(false);
+    expect(geometryTraceCreateSchema.safeParse({ ...legacy, expectedRuntimeFingerprintSha256: digest }).success).toBe(false);
+    expect(geometryTraceCreateSchema.safeParse({ ...current, runtimeFingerprint: {} }).success).toBe(false);
+    const runtime = { schemaVersion: 'wfc.pf.geometry-trace-runtime.v1', runtimeFingerprint: { ...fixture().engine, derivationSha256: digest }, runtimeFingerprintSha256: digest };
+    expect(geometryTraceRuntimeSchema.parse(runtime)).toEqual(runtime);
+    expect(geometryTraceRuntimeSchema.safeParse({ ...runtime, actorId: id(9) }).success).toBe(false);
   });
 });

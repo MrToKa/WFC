@@ -41,7 +41,7 @@ function fixture() {
     if (sql === 'BEGIN') { checkpoint = structuredClone(durable); return { rows: [] }; }
     if (sql === 'ROLLBACK') { if (checkpoint) durable = checkpoint; checkpoint = null; return { rows: [] }; }
     if (sql === 'COMMIT') { checkpoint = null; if (controls.commitUnknown) { controls.commitUnknown = false; throw Error('lost acknowledgement'); } return { rows: [] }; }
-    if (sql.startsWith('SET LOCAL') || sql.startsWith('INSERT INTO viewer_login_bindings')) return { rows: [] };
+    if (sql.startsWith('SET LOCAL') || sql.startsWith('SET TRANSACTION') || sql.startsWith('INSERT INTO viewer_login_bindings')) return { rows: [] };
     if (sql.includes('barrier:command-fence')) return { rows: [durable.closures.get(`${values[0]}/${values[1]}`)].filter(Boolean) };
     if (sql.includes('barrier:recovery-receipts')) return { rows: [...durable.receipts.values()].filter(row => row.project_id === values[0] && row.request_sha256 === values[1]).slice(0, 2) };
     if (sql.includes('barrier:recovery-intents')) return { rows: [...durable.intents.values()].filter(row => row.project_id === values[0] && row.request_sha256 === values[1]).slice(0, 2).map(row => ({ ...row, allocation_is_null: row.allocation === null,
@@ -534,6 +534,60 @@ describe('barrier immutable registry and trusted qualification boundary', () => 
 });
 
 describe('barrier transaction and additive schema boundaries', () => {
+  it.each(['authorize', 'registry', 'history', 'snapshot', 'outcome', 'recovery'] as const)
+    ('reads %s in one coherent snapshot without publication or intent mutation locks', async kind => {
+      const f = fixture(), { intent } = await f.repository.begin(id(1), f.who, f.command);
+      const receipt = await f.repository.publish(id(1), f.who, intent.id, f.bytes(intent));
+      if ('outcome' in receipt) throw Error('Expected synthetic published snapshot.');
+      f.calls.length = 0; f.adapters.currentScope.mockClear();
+      if (kind === 'authorize') await f.repository.authorize(id(1), f.who);
+      if (kind === 'registry') expect((await f.repository.get(id(1), f.who)).state).toBe('ready');
+      if (kind === 'history') expect((await f.repository.list(id(1), f.who)).snapshots).toHaveLength(1);
+      if (kind === 'snapshot') expect((await f.repository.getSnapshot(id(1), f.who, receipt.snapshot.snapshotId)).snapshotId).toBe(receipt.snapshot.snapshotId);
+      if (kind === 'outcome') expect((await f.repository.readCaptureOutcome(id(1), f.who, intent.id, f.outcomeQuery(intent)))?.outcome).toBe('published');
+      if (kind === 'recovery') expect((await f.repository.readCommandRecovery(id(1), f.who, recoveryTarget(f, f.command, { intent, publication: true }))).outcome).toBe('published');
+      expect(f.calls).toContain('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+      expect(f.calls).toContain('SELECT id FROM projects WHERE id=$1 FOR KEY SHARE');
+      expect(f.calls.join('\n')).not.toMatch(/FOR UPDATE|FOR NO KEY UPDATE/);
+      expect(f.calls).toContain('SELECT is_admin FROM users WHERE id=$1 FOR SHARE');
+      expect(f.calls).toContain('SELECT user_id,expires_at,revoked_at FROM viewer_login_bindings WHERE login_id=$1 FOR SHARE');
+      expect(f.calls.at(-1)).toBe('COMMIT');
+      if (kind === 'registry') expect(f.adapters.currentScope).toHaveBeenCalledWith(expect.anything(), id(1), { snapshot: true });
+      else expect(f.adapters.currentScope).not.toHaveBeenCalled();
+    });
+  it('reads a retained geometry refusal without locking its capture intent for mutation', async () => {
+    const f = fixture(), { intent } = await f.repository.begin(id(1), f.who, f.command);
+    f.controls.qualifyError = f.refusal(intent);
+    await f.repository.publish(id(1), f.who, intent.id, f.bytes(intent)); f.calls.length = 0;
+    expect(await f.repository.readCaptureOutcome(id(1), f.who, intent.id, f.outcomeQuery(intent))).toMatchObject({ outcome: 'not-published', duplicate: true });
+    expect(f.calls.filter(sql => sql.startsWith('SELECT id,actor_id'))).toHaveLength(2);
+    expect(f.calls.join('\n')).not.toContain('FOR UPDATE');
+  });
+  it('keeps mutation transactions and barrier-head locks exclusive', async () => {
+    const f = fixture(); await f.repository.begin(id(1), f.who, f.command);
+    expect(f.calls).toContain('SELECT id FROM projects WHERE id=$1 FOR NO KEY UPDATE');
+    expect(f.calls).toContain('SELECT revision::text,snapshot_id FROM pf_barrier_heads WHERE project_id=$1 FOR UPDATE');
+    expect(f.calls).not.toContain('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+    expect(f.adapters.currentScope).toHaveBeenCalledWith(expect.anything(), id(1), {});
+  });
+  it.each(['role', 'login'] as const)('retains current %s checks for snapshot readers', async kind => {
+    const f = fixture(); if (kind === 'role') f.controls.admin = false; else f.controls.revoked = true;
+    await expect(f.repository.list(id(1), f.who)).rejects.toMatchObject({ code: kind === 'role' ? 'ADMIN_REQUIRED' : 'LOGIN_REVOKED' });
+    expect(f.calls).not.toContain('COMMIT'); expect(f.calls.at(-1)).toBe('ROLLBACK');
+    expect(f.calls.some(sql => sql.startsWith('SELECT id,storage_intent_id'))).toBe(false);
+  });
+  it('refuses expiry at the end of a snapshot operation before COMMIT', async () => {
+    const f = fixture();
+    await expect(barrierRegistryTransaction(f.pool, id(1), f.who, async () => { f.who.loginExpiresAt = Date.now() - 1; }, undefined, undefined, { snapshot: true }))
+      .rejects.toMatchObject({ code: 'LOGIN_EXPIRED' });
+    expect(f.calls).not.toContain('COMMIT'); expect(f.calls.at(-1)).toBe('ROLLBACK');
+  });
+  it('maps a snapshot authority serialization conflict to bounded database busy', async () => {
+    const f = fixture(), failure = Object.assign(new Error('concurrent authority update'), { code: '40001' });
+    await expect(barrierRegistryTransaction(f.pool, id(1), f.who, async () => { throw failure; }, undefined, undefined, { snapshot: true }))
+      .rejects.toMatchObject({ code: 'BARRIER_DATABASE_BUSY', status: 503 });
+    expect(f.calls.at(-1)).toBe('ROLLBACK'); expect(f.release).toHaveBeenCalledExactlyOnceWith(undefined);
+  });
   it('retains SQL current-authority locks, conservative triggers and no cable mutation', () => {
     expect(BARRIER_REGISTRY_SQL).toContain('FOREIGN KEY(project_id,model_version_id)');
     expect(BARRIER_REGISTRY_SQL).toContain('Barrier capture allocation is immutable');

@@ -130,7 +130,7 @@ function AdminBarriersPanel(props: PathFinderBarriersPanelProps) {
       {saved ? <>
         <Caption1>{saved.status === 'current' ? 'The published selection matches the current model and frame.'
           : saved.status === 'recapture-required' ? 'This saved selection belongs to another model or frame. Select current objects and save a new capture; the old geometry is not ready for calculation.'
-            : 'Last saved selection for reference. Current readiness is unavailable; prepare or refresh the model before changing this set.'}</Caption1>
+            : 'Last saved selection for reference. Current readiness is unavailable.'}</Caption1>
         {saved.manifest.selectedParents.length ? <ul className={styles.list} aria-label="Saved barrier parents">{saved.manifest.selectedParents.map(parent => <li className={styles.item} key={objectScope + parent.selectionId}>
           <BarrierObject parent={parent} pf={props.pf} displayBusy={displayBusy} shown={displayObject === parent.dbId} onHide={hideObject} onShow={showObject} current={isCurrentScope(saved.manifest.scope)} disabled={disabled} />
         </li>)}</ul> : saved.manifest.geometry.mode === 'explicit-empty' ? <Caption1>Published empty declaration: {saved.manifest.geometry.reason}</Caption1> : null}
@@ -150,12 +150,12 @@ function AdminBarriersPanel(props: PathFinderBarriersPanelProps) {
     <Caption1>{state.draftParents.length} / {BARRIER_LIMITS.selectedParents} selected parent objects{selectionSaved ? '' : ' in this draft'}. Repeated objects are added once; overlapping parent geometry is qualified during publication.</Caption1>
     {state.draftParents.length ? <ul className={styles.list} aria-label="Selected barrier parents">{state.draftParents.map(parent => <li className={styles.item} key={objectScope + parent.selectionId}>
       <BarrierObject parent={parent} pf={props.pf} displayBusy={displayBusy} shown={displayObject === parent.dbId} onHide={hideObject} onShow={showObject} current={isCurrentScope(state.registry?.scope)} disabled={disabled} remove={() => state.removeParent(parent.selectionId)} />
-    </li>)}</ul> : <Caption1>No barrier parents selected. This does not declare that the model has no barriers.</Caption1>}
-    {state.draftParents.length ? <Button appearance={selectionSaved ? 'secondary' : 'primary'} disabled={disabled || selectionSaved} onClick={() => void state.save()}>{saveLabel}</Button> : <>
+    </li>)}</ul> : <Caption1>{state.registry ? 'No barrier parents selected. This does not declare that the model has no barriers.' : 'The current barrier selection is unavailable until the model frame can be verified.'}</Caption1>}
+    {state.draftParents.length ? <Button appearance={selectionSaved ? 'secondary' : 'primary'} disabled={disabled || selectionSaved} onClick={() => void state.save()}>{saveLabel}</Button> : state.registry ? <>
       <Field label="Explicit empty reason"><Textarea aria-label="Explicit empty reason" value={state.emptyReason} maxLength={2048} disabled={disabled} onChange={(_, data) => state.setEmptyReason(data.value)} /></Field>
       <Button appearance={selectionSaved ? 'secondary' : 'primary'} disabled={disabled || selectionSaved || !state.emptyReason.trim()} onClick={() => void state.save()}>{selectionSaved ? 'Barrier set saved' : state.phase === 'publishing' ? 'Saving barrier set…' : 'Declare no barriers'}</Button>
       <Caption1>This explicitly registers an empty selected scope. It does not certify that the model contains no walls or other obstacles.</Caption1>
-    </>}
+    </> : null}
     {selectionSaved ? <Caption1 aria-live="polite">{state.draftParents.length ? `${state.draftParents.length} selected ${state.draftParents.length === 1 ? 'object is' : 'objects are'} saved. Add or remove objects to change this set.` : 'The empty barrier declaration is saved.'}</Caption1> : null}
     <div className={styles.row}>
       <Button disabled={state.busy || props.pf.busy} onClick={() => void state.refresh()}>Refresh barriers</Button>

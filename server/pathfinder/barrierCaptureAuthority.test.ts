@@ -130,6 +130,11 @@ describe('current server model and common barrier frame authority', () => {
     expect(f.query.mock.calls[1][0]).toContain('SELECT DISTINCT ON');
     expect(f.query.mock.calls[1][0]).toContain('CASE WHEN octet_length(record::text)<=$3 THEN record ELSE NULL END');
   });
+  it('forwards explicit snapshot reads without publication row locks while retaining protected Viewer authority', async () => {
+    const f = fixture(); expect(await f.adapters.currentScope(f.client, f.scope.projectId, { snapshot: true })).toEqual(f.scope);
+    expect(f.query.mock.calls.find(([sql]) => sql.includes('barrier:current-scope'))![0]).not.toContain('FOR SHARE');
+    expect(f.query.mock.calls.find(([sql]) => sql.includes('barrier:viewer-context'))![0]).toContain('FOR SHARE');
+  });
   it.each(['missing', 'duplicate'] as const)('refuses %s authoritative model rows', async kind => {
     const f = fixture(); f.state.rows = kind === 'missing' ? [] : [f.row, structuredClone(f.row)];
     await expect(currentBarrierScope(f.client, f.scope.projectId)).rejects.toMatchObject({ code: 'BARRIER_CURRENT_FRAME_UNAVAILABLE' });

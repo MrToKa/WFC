@@ -5,6 +5,7 @@ import {
   geometryObjectRevisionSchema,
   geometryTraceContentHashInput,
   geometryTraceSummarySchema,
+  geometryTraceRuntimeSchema,
   GEOMETRY_TRACE_DERIVATION,
   GEOMETRY_SIGNATURE_POLICY,
 } from '../../shared/pathfinderGeometryTrace.js';
@@ -257,4 +258,9 @@ export function geometryTraceFixture() {
     objects: [summary],
   };
   return { manifest, record, list, page };
+}
+export function geometryTraceRuntimeFixture(derivationSha256 = 'a'.repeat(64)) {
+  const runtimeFingerprint = { ...geometryTraceFixture().manifest.runtimeFingerprint, derivationSha256 };
+  return geometryTraceRuntimeSchema.parse({ schemaVersion: 'wfc.pf.geometry-trace-runtime.v1', runtimeFingerprint,
+    runtimeFingerprintSha256: sha(runtimeFingerprint) });
 }

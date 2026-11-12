@@ -19,6 +19,7 @@ const blob = z.object({ payloadRef: uuid, sha256: hash, bytes: z.number().int().
 const timestamp = z.string().datetime().refine(v => v.endsWith('Z'));
 export const fittedTraceEngineSchema = z.object({ version: short, runnerSha256: hash, modelModuleSha256: hash, coreModuleSha256: hash, adapterModuleSha256: hash }).strict();
 export const geometryRuntimeFingerprintSchema = fittedTraceEngineSchema.extend({ derivationSha256: hash }).strict();
+export const geometryTraceRuntimeSchema = z.object({ schemaVersion: z.literal('wfc.pf.geometry-trace-runtime.v1'), runtimeFingerprint: geometryRuntimeFingerprintSchema, runtimeFingerprintSha256: hash }).strict();
 export const fittedTraceCountsSchema = z.object({ objects: count, segments: count, diagnostics: count, points: count, ports: count }).strict();
 export const fittedTracePortSchema = z.object({ pointMetres: geometryPointSchema, outward: geometryPointSchema, u: geometryPointSchema, v: geometryPointSchema, widthMetres: z.number().finite().positive(), heightMetres: z.number().finite().positive() }).strict().refine(p => { const dot = (a: number[], b: number[]) => a.reduce((n, v, i) => n + v * b[i], 0); return [p.outward, p.u, p.v].every(a => Math.abs(dot(a, a) - 1) <= 1e-6) && Math.abs(dot(p.outward, p.u)) <= 1e-6 && Math.abs(dot(p.outward, p.v)) <= 1e-6 && Math.abs(dot(p.u, p.v)) <= 1e-6; });
 export const fittedTraceSegmentSchema = z.object({ orderIndex: count, objectId: short, name: text, routeCode: text, allowedCategoryMask: z.number().int().min(0).max(7), connectionsAtEndsOnly: z.boolean(), pointsMetres: z.array(geometryPointSchema).min(2).max(5_000_000), ports: z.array(fittedTracePortSchema).max(2), connectionSurfaceCount: z.number().int().min(0).max(2), geometricLengthMetres: z.number().finite().nonnegative(), geometricLengthRoundTrip: short.refine(v => /^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$/.exec(v)?.[0] === v && Number.isFinite(Number(v)) && Number(v) >= 0), fitStatus: z.literal('unknown') }).strict();
@@ -28,7 +29,9 @@ export const fittedTraceExportSchema = z.object({ schemaVersion: z.literal('wfc.
   if (v.segments.some(s => s.connectionSurfaceCount !== 0 && s.connectionSurfaceCount !== (s.connectionsAtEndsOnly ? 2 : 1) || s.ports.some(p => ![s.pointsMetres[0], s.pointsMetres[s.pointsMetres.length - 1]].some(point => Math.hypot(...point.map((v, i) => v - p.pointMetres[i])) <= 1e-6)))) c.addIssue({ code: 'custom', message: 'Fitted port/surface closure differs.' });
 });
 export const fittedTraceReferenceSchema = z.object({ schemaVersion: z.literal('wfc.pf.fitted-trace-reference.v1'), exportId: uuid, sha256: hash, bytes: z.number().int().positive().max(GEOMETRY_TRACE_LIMITS.exportBytes), counts: fittedTraceCountsSchema, engine: fittedTraceEngineSchema, rulesSha256: hash, snapshotSha256: hash, preparedKey: hash }).strict();
-export const geometryTraceCreateSchema = z.object({ schemaVersion: z.literal('wfc.pf.geometry-trace-create.v1'), aggregateId: uuid, expectedProjectionSha256: hash, derivationVersion: z.literal(GEOMETRY_TRACE_DERIVATION), idempotencyKey: uuid }).strict();
+export const geometryTraceCreateV1Schema = z.object({ schemaVersion: z.literal('wfc.pf.geometry-trace-create.v1'), aggregateId: uuid, expectedProjectionSha256: hash, derivationVersion: z.literal(GEOMETRY_TRACE_DERIVATION), idempotencyKey: uuid }).strict();
+export const geometryTraceCreateV2Schema = geometryTraceCreateV1Schema.extend({ schemaVersion: z.literal('wfc.pf.geometry-trace-create.v2'), expectedRuntimeFingerprintSha256: hash }).strict();
+export const geometryTraceCreateSchema = z.discriminatedUnion('schemaVersion', [geometryTraceCreateV1Schema, geometryTraceCreateV2Schema]);
 const routing = z.object({ catalogRevision: revision, routingContentSha256: hash, routingPolicyRevision: revision, routingPolicySha256: hash }).strict();
 export const declaredLengthObservationSchema = z.object({ projectTrayId: uuid, valueMm: z.string().max(1024).nullable(), status: z.enum(['valid', 'missing', 'invalid']), observedAt: timestamp, sourceRevision: z.string().max(256).nullable(), source: z.literal('trays.length_mm::text') }).strict();
 export const geometryObjectRevisionV1Schema = z.object({
@@ -60,7 +63,9 @@ export const geometryTraceCanonicalJson = canonicalPurposeJson;
 export type FittedTraceExport = z.infer<typeof fittedTraceExportSchema>;
 export type FittedTraceReference = z.infer<typeof fittedTraceReferenceSchema>;
 export type GeometryRuntimeFingerprint = z.infer<typeof geometryRuntimeFingerprintSchema>;
+export type GeometryTraceRuntime = z.infer<typeof geometryTraceRuntimeSchema>;
 export type GeometryTraceCreate = z.infer<typeof geometryTraceCreateSchema>;
+export type GeometryTraceCreateV2 = z.infer<typeof geometryTraceCreateV2Schema>;
 export type GeometryObjectRevision = z.infer<typeof geometryObjectRevisionSchema>;
 export type GeometryObjectSummary = z.infer<typeof geometryObjectSummarySchema>;
 export type GeometryTraceManifest = z.infer<typeof geometryTraceManifestSchema>;

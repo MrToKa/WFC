@@ -2,6 +2,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   fetchGeometryTraces,
+  fetchGeometryTraceRuntime,
+  buildGeometryTraceCommand,
   fetchGeometryTraceManifest,
   fetchGeometryObjectRevision,
   fetchCaptureEvidence,
@@ -9,10 +11,51 @@ import {
   GeometryTraceApiError,
   GEOMETRY_TRACE_REQUEST_TIMEOUT_MS,
 } from './pathfinderGeometryTrace';
-import { geometryTraceFixture, completedEvidenceFixture } from '@/test/geometryTraceFixtures';
+import { geometryTraceFixture, geometryTraceRuntimeFixture, completedEvidenceFixture } from '@/test/geometryTraceFixtures';
 import { preparationIds as ids } from '@/test/preparationFixtures';
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 describe('fixed strict traceability transport', () => {
+  it('verifies the authorized runtime fingerprint and refuses an altered digest', async () => {
+    const runtime = geometryTraceRuntimeFixture(), fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(runtime)))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ...runtime, runtimeFingerprintSha256: 'f'.repeat(64) })));
+    vi.stubGlobal('fetch', fetch);
+    await expect(fetchGeometryTraceRuntime(ids.project, 'token')).resolves.toEqual(runtime);
+    expect(fetch.mock.calls[0][0]).toMatch(/\/geometry-traces\/runtime$/);
+    expect(fetch.mock.calls[0][1]).toMatchObject({ method: 'GET', cache: 'no-store', headers: { Authorization: 'Bearer token' } });
+    await expect(fetchGeometryTraceRuntime(ids.project, 'token')).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+  });
+  it('uses one deterministic command per runtime and sends both current and retained legacy bodies exactly', async () => {
+    const { manifest } = geometryTraceFixture(), firstRuntime = geometryTraceRuntimeFixture(), nextRuntime = geometryTraceRuntimeFixture('b'.repeat(64));
+    const first = await buildGeometryTraceCommand(ids.project, manifest.aggregateId, manifest.projection.sha256, firstRuntime.runtimeFingerprintSha256);
+    expect(await buildGeometryTraceCommand(ids.project, manifest.aggregateId, manifest.projection.sha256, firstRuntime.runtimeFingerprintSha256)).toEqual(first);
+    const next = await buildGeometryTraceCommand(ids.project, manifest.aggregateId, manifest.projection.sha256, nextRuntime.runtimeFingerprintSha256);
+    expect(next.idempotencyKey).not.toBe(first.idempotencyKey); expect(next.expectedRuntimeFingerprintSha256).toBe(nextRuntime.runtimeFingerprintSha256);
+    const legacy = { schemaVersion: 'wfc.pf.geometry-trace-create.v1' as const, aggregateId: manifest.aggregateId, expectedProjectionSha256: manifest.projection.sha256,
+      derivationVersion: manifest.derivationVersion, idempotencyKey: ids.actor };
+    const receipt = { schemaVersion: 'wfc.pf.geometry-trace-receipt.v1', trace: manifest, duplicate: true };
+    const fetch = vi.fn().mockImplementation(async () => new Response(JSON.stringify(receipt))); vi.stubGlobal('fetch', fetch);
+    await createGeometryTrace(ids.project, 'token', first); await createGeometryTrace(ids.project, 'token', legacy);
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual(first); expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual(legacy);
+    await expect(createGeometryTrace(ids.project, 'token', next)).rejects.toMatchObject({ code: 'INVALID_RESPONSE', outcome: 'unknown' });
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+  it('retains a verified successful POST receipt when presentation is aborted during runtime digest verification', async () => {
+    const { manifest } = geometryTraceFixture(), runtime = geometryTraceRuntimeFixture(), controller = new AbortController();
+    const command = await buildGeometryTraceCommand(ids.project, manifest.aggregateId, manifest.projection.sha256, runtime.runtimeFingerprintSha256);
+    const receipt = { schemaVersion: 'wfc.pf.geometry-trace-receipt.v1', trace: manifest, duplicate: false };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(receipt))));
+    const realDigest = globalThis.crypto.subtle.digest.bind(globalThis.crypto.subtle);
+    let calls = 0;
+    const digest = vi.fn<typeof realDigest>(async (algorithm, data) => {
+      const result = await realDigest(algorithm, data);
+      if (++calls === 2) controller.abort(new DOMException('Active model changed.', 'AbortError'));
+      return result;
+    });
+    vi.stubGlobal('crypto', { subtle: { digest } });
+    await expect(createGeometryTrace(ids.project, 'token', command, controller.signal)).resolves.toEqual(receipt);
+    expect(controller.signal.aborted).toBe(true); expect(digest).toHaveBeenCalledTimes(2);
+  });
   it('reads bounded summaries and exact object/manifest identities through fixed paths', async () => {
     const { manifest, list, record } = geometryTraceFixture(),
       fetch = vi

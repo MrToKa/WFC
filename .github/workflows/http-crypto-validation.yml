@@ -38,17 +38,25 @@ jobs:
           --health-retries 20
     env:
       WFC_PREPARATION_CONTENTION_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55446/wfc_preparation_contention_test
+      WFC_BARRIER_CONTENTION_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55446/wfc_barrier_contention_test
+      WFC_GEOMETRY_TRACE_RUNTIME_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55446/wfc_geometry_trace_runtime_test
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-      - name: Verify preparation publication and concurrent status reads with PostgreSQL
+      - name: Create dedicated barrier contention database
+        run: docker exec "${{ job.services.postgres.id }}" createdb --username=postgres wfc_barrier_contention_test
+      - name: Create dedicated trace runtime database
+        run: docker exec "${{ job.services.postgres.id }}" createdb --username=postgres wfc_geometry_trace_runtime_test
+      - name: Verify preparation, barrier reads and trace runtime migration with PostgreSQL
         run: >-
           docker run --rm --network host
           -e WFC_PREPARATION_CONTENTION_TEST_DATABASE_URL
+          -e WFC_BARRIER_CONTENTION_TEST_DATABASE_URL
+          -e WFC_GEOMETRY_TRACE_RUNTIME_TEST_DATABASE_URL
           -v "$GITHUB_WORKSPACE:/app" -w /app
           node@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5
-          sh -c 'npm ci --ignore-scripts && npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false server/pathfinder/preparationContention.postgres.test.ts'
+          sh -c 'npm ci --ignore-scripts && npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false server/pathfinder/preparationContention.postgres.test.ts server/pathfinder/barrierRegistryContention.postgres.test.ts server/pathfinder/geometryTraceRuntime.postgres.test.ts'
   routing-engine:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -132,7 +140,7 @@ jobs:
       - name: Verify assigned tray catalog details and frozen plans
         run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/api/pathfinderPreparation.test.ts shared/pathfinderPreparation.test.ts server/pathfinder/preparationContext.test.ts server/pathfinder/preparationPlans.test.ts server/pathfinder/preparationSessions.test.ts
       - name: Verify atomic preparation publication and exact command recovery
-        run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 server/pathfinder/geometryTraceRepository.test.ts server/pathfinder/preparationRoutes.test.ts
+        run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 server/pathfinder/geometryTraceRepository.test.ts server/pathfinder/geometryTraceRoutes.test.ts server/pathfinder/preparationRoutes.test.ts shared/pathfinderGeometryTrace.test.ts src/api/pathfinderGeometryTrace.test.ts src/pages/ProjectDetails/hooks/useGeometryTrace.test.tsx
       - name: Verify From-To matching prerequisites and recovery
         run: |
           node --test viewer-runtime/test/equipment-names.test.mjs viewer-runtime/test/preparation-input.test.mjs

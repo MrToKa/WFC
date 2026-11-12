@@ -18,9 +18,10 @@ export const barrierFrameProjectionSchema = z.object({
 export const barrierFrameProjectionHash = (value: unknown) => hash(barrierFrameProjectionSchema.parse(value));
 const unavailable = (): never => { throw new PathFinderError('BARRIER_CURRENT_FRAME_UNAVAILABLE', 409, 'Prepare a current model with consistent coordinate-frame evidence before capturing barriers.'); };
 
-/** Called under the registry's project/admin/login transaction. Current selection,
- * aggregate and trace rows remain locked through publication. No caller-supplied frame authority. */
-export async function currentBarrierScope(client: PoolClient, projectId: string): Promise<BarrierModelScope> {
+/** Called under the registry's project/admin/login transaction. Mutations retain
+ * selection/aggregate/trace locks through publication; snapshot callers must own
+ * a REPEATABLE READ transaction. No caller-supplied frame authority. */
+export async function currentBarrierScope(client: PoolClient, projectId: string, options: { snapshot?: boolean } = {}): Promise<BarrierModelScope> {
   const rows = (await client.query<{ model_version_id: string; selection_revision: string; content_fingerprint: string;
     state: string; health: string; aggregate: unknown; trace: unknown; artifact_id: string; snapshot_sha256: string }>(`/* barrier:current-scope */
     SELECT s.active_model_version_id AS model_version_id,s.selection_revision::text,v.content_fingerprint,v.state,v.health,
@@ -32,7 +33,7 @@ export async function currentBarrierScope(client: PoolClient, projectId: string)
     JOIN pf_artifacts f ON f.project_id=p.project_id AND f.id=p.current_artifact_id AND f.model_version_id=s.active_model_version_id
     JOIN pf_geometry_trace_sets t ON t.project_id=a.project_id AND t.aggregate_id=a.id
     WHERE s.project_id=$1 AND octet_length(a.manifest::text)<=16777216 AND octet_length(t.manifest::text)<=262144
-    LIMIT 2 FOR SHARE OF s,v,p,a,f,t`, [projectId])).rows;
+    LIMIT 2${options.snapshot ? '' : ' FOR SHARE OF s,v,p,a,f,t'}`, [projectId])).rows;
   if (rows.length !== 1) return unavailable();
   const row = rows[0], aggregate = preparationAggregateSchema.safeParse(row.aggregate), trace = geometryTraceManifestSchema.safeParse(row.trace);
   if (!aggregate.success || !trace.success || row.state !== 'ready' || row.health !== 'healthy') return unavailable();

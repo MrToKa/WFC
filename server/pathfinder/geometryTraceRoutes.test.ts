@@ -8,10 +8,10 @@ import { createGeometryTraceRouter, sendGeometryTraceError, CAPTURE_EVIDENCE_TRA
 import type { GeometryTraceRepository } from './geometryTraceRepository.js';
 import { GEOMETRY_TRACE_LIMITS, GEOMETRY_TRACE_DERIVATION } from '../../shared/pathfinderGeometryTrace.js';
 import { PathFinderError } from './errors.js';
-const mocks = vi.hoisted(() => ({ verify: vi.fn(), authorize: vi.fn(), create: vi.fn(), get: vi.fn(), list: vi.fn(), objects: vi.fn(), object: vi.fn(), diagnostics: vi.fn(), evidenceGet: vi.fn(), evidencePut: vi.fn() }));
+const mocks = vi.hoisted(() => ({ verify: vi.fn(), authorize: vi.fn(), runtime: vi.fn(), create: vi.fn(), get: vi.fn(), list: vi.fn(), objects: vi.fn(), object: vi.fn(), diagnostics: vi.fn(), evidenceGet: vi.fn(), evidencePut: vi.fn() }));
 vi.mock('../auth.js', () => ({ verifyAccessToken: mocks.verify }));
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
-beforeEach(() => { vi.resetAllMocks(); mocks.verify.mockReturnValue({ sub: id(1), jti: id(2), exp: Math.floor(Date.now() / 1000) + 3600 }); for (const key of ['authorize', 'create', 'get', 'list', 'objects', 'object', 'diagnostics', 'evidenceGet', 'evidencePut'] as const) mocks[key].mockResolvedValue({ synthetic: key }); });
+beforeEach(() => { vi.resetAllMocks(); mocks.verify.mockReturnValue({ sub: id(1), jti: id(2), exp: Math.floor(Date.now() / 1000) + 3600 }); for (const key of ['authorize', 'runtime', 'create', 'get', 'list', 'objects', 'object', 'diagnostics', 'evidenceGet', 'evidencePut'] as const) mocks[key].mockResolvedValue({ synthetic: key }); });
 function request({ url = '/geometry-traces', method = 'GET', token = 'Bearer synthetic', length, type = 'application/json', body, query = {} }: { url?: string; method?: string; token?: string | null; length?: string; type?: string; body?: string; query?: Record<string, string> } = {}) {
   const bytes = body === undefined ? null : Buffer.from(body), headers: Record<string, string> = { 'content-type': type }; if (token !== null) headers.authorization = token; if (length !== undefined) headers['content-length'] = length; else if (bytes) headers['content-length'] = String(bytes.length);
   const req = Object.assign(bytes ? Readable.from([bytes]) : { on: vi.fn(), once: vi.fn(), read: vi.fn(() => { throw Error('Body must remain unread'); }) }, { url, originalUrl: url, baseUrl: '', path: url, method, params: { projectId: id(1) }, query, headers, header: (key: string) => headers[key.toLowerCase()] });
@@ -21,6 +21,21 @@ function request({ url = '/geometry-traces', method = 'GET', token = 'Bearer syn
   return { req, res, run };
 }
 describe('geometry trace route admission without network listener', () => {
+  it('returns the authorized current runtime without accepting caller runtime or scope fields', async () => {
+    const r = request({ url: '/geometry-traces/runtime' }); await r.run();
+    expect(r.res.statusCode).toBe(200); expect(mocks.runtime).toHaveBeenCalledExactlyOnceWith(id(1), expect.objectContaining({ userId: id(1), loginId: id(2) }));
+    expect(r.res.json).toHaveBeenCalledWith({ synthetic: 'runtime' }); expect(mocks.list).not.toHaveBeenCalled();
+    mocks.runtime.mockClear(); const invalid = request({ url: '/geometry-traces/runtime', query: { runtimeFingerprintSha256: 'a'.repeat(64) } });
+    await invalid.run(); expect(invalid.res.statusCode).toBe(400); expect(mocks.runtime).not.toHaveBeenCalled();
+  });
+  it('forwards a strict runtime-bound v2 command and refuses a missing runtime binding', async () => {
+    const command = { schemaVersion: 'wfc.pf.geometry-trace-create.v2', aggregateId: id(3), expectedProjectionSha256: 'a'.repeat(64), expectedRuntimeFingerprintSha256: 'b'.repeat(64), derivationVersion: GEOMETRY_TRACE_DERIVATION, idempotencyKey: id(4) };
+    const r = request({ method: 'POST', body: JSON.stringify(command) }); await r.run();
+    expect(r.res.statusCode).toBe(200); expect(mocks.create).toHaveBeenCalledWith(id(1), expect.any(Object), command, expect.any(AbortSignal));
+    mocks.create.mockClear(); const { expectedRuntimeFingerprintSha256: _binding, ...unbound } = command;
+    const invalid = request({ method: 'POST', body: JSON.stringify(unbound) }); await invalid.run();
+    expect(invalid.res.statusCode).toBe(400); expect(mocks.create).not.toHaveBeenCalled();
+  });
   it('requires current authority and returns private no-store historical reads', async () => { const r = request(); await r.run(); expect(mocks.authorize).toHaveBeenCalledExactlyOnceWith(id(1), expect.objectContaining({ userId: id(1), loginId: id(2) })); expect(mocks.list).toHaveBeenCalled(); expect(r.res.setHeader).toHaveBeenCalledWith('Cache-Control', 'private, no-store'); });
   it('does not swallow other protected PF routes', async () => { const r = request({ url: '/preparations/context' }); await r.run(); expect(mocks.authorize).not.toHaveBeenCalled(); expect(r.res.json).not.toHaveBeenCalled(); });
   it.each([null, 'Bearer broken'] as const)('refuses unauthenticated body before reading or exposing project data (%s)', async token => { if (token) mocks.verify.mockImplementation(() => { throw Error('badJWT'); }); const r = request({ method: 'POST', token, length: String(GEOMETRY_TRACE_LIMITS.controlBytes + 1) }); await r.run(); expect(r.res.statusCode).toBe(401); expect(mocks.authorize).not.toHaveBeenCalled(); expect(r.req.on).not.toHaveBeenCalled(); });

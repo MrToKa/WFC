@@ -221,7 +221,8 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
     expect(screen.getByText(mode === 'pending'
       ? 'Wait for the saved barrier command to finish, or use Retry saved command in Barriers if its outcome is unknown.'
       : mode === 'dirty' ? 'Save the obstacle selection in Barriers before calculating.'
-        : 'Configure Barriers: save the selected obstacles, or enter an Explicit empty reason and choose Declare no barriers to calculate without obstacle checks.')).toBeVisible();
+        : mode === 'missing' ? 'Check the current model and saved selection in Barriers before calculating.'
+          : 'Configure Barriers: save the selected obstacles, or enter an Explicit empty reason and choose Declare no barriers to calculate without obstacle checks.')).toBeVisible();
     expect(current.calculate).not.toHaveBeenCalled(); expect(current.action).not.toHaveBeenCalled();
     expect(current.reviewProposal).not.toHaveBeenCalled(); expect(saveEndpointBinding).not.toHaveBeenCalled();
   });
@@ -424,10 +425,26 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
   });
   it('refreshes obstacles when automatic network verification completes without changing the model', async () => {
     const user = userEvent.setup(); mount(); await user.click(screen.getByRole('tab', { name: 'Routes' }));
-    expect(barrierComposition.render.mock.lastCall![0].refreshKey).toBeNull();
+    expect(JSON.parse(barrierComposition.render.mock.lastCall![0].refreshKey)).toEqual([null, 0]);
     act(() => trayPreparationCapture.render.mock.lastCall![0].onNetworkReady('aggregate-2:verified-trace'));
-    expect(barrierComposition.render.mock.lastCall![0].refreshKey).toBe('aggregate-2:verified-trace');
+    expect(JSON.parse(barrierComposition.render.mock.lastCall![0].refreshKey)).toEqual(['aggregate-2:verified-trace', 0]);
     expect(pf.prepareModel).not.toHaveBeenCalled(); expect(pf.uploadSnapshot).not.toHaveBeenCalled();
+  });
+  it('rereads barriers on every explicit Path Finder refresh with unchanged model and artifact metadata', async () => {
+    barrierComposition.mode = 'missing';
+    const user = userEvent.setup(), current = { ...proposalModel(), data: { ...pf.data, artifacts: [artifact()] } };
+    vi.mocked(usePathFinder).mockReturnValue(current); mount();
+    const data = current.data;
+    act(() => trayPreparationCapture.render.mock.lastCall![0].onNetworkReady('verified-network'));
+    expect(JSON.parse(barrierComposition.render.mock.lastCall![0].refreshKey)).toEqual(['verified-network', 0]);
+    await user.click(screen.getByRole('button', { name: 'Refresh Path Finder' }));
+    expect(JSON.parse(barrierComposition.render.mock.lastCall![0].refreshKey)).toEqual(['verified-network', 1]);
+    await user.click(screen.getByRole('button', { name: 'Refresh Path Finder' }));
+    expect(JSON.parse(barrierComposition.render.mock.lastCall![0].refreshKey)).toEqual(['verified-network', 2]);
+    expect(current.refresh).toHaveBeenCalledTimes(2); expect(current.data).toBe(data);
+    expect(workspaceCapture.render.mock.lastCall![0].preferences).toBeNull();
+    expect(current.prepareModel).not.toHaveBeenCalled(); expect(current.uploadSnapshot).not.toHaveBeenCalled();
+    expect(current.runProjectPreparation).not.toHaveBeenCalled(); expect(current.calculate).not.toHaveBeenCalled();
   });
   it('links blank endpoints to existing cable editing without inventing location names', async () => {
     const user = userEvent.setup(); vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, cables: [{ ...pf.data.cables[0], fromLocation: null, toLocation: '' }] } }); mount();
@@ -667,7 +684,7 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
     const user = userEvent.setup(); mount(); await user.click(screen.getByRole('button', { name: /=CABLE-1/ }));
     await user.click(screen.getByRole('tab', { name: 'Routes' }));
     await act(async () => trayPreparationCapture.render.mock.lastCall![0].onNetworkReady('new-preparation-proof'));
-    expect(barrierComposition.render.mock.lastCall![0].refreshKey).toBe('new-preparation-proof');
+    expect(JSON.parse(barrierComposition.render.mock.lastCall![0].refreshKey)).toEqual(['new-preparation-proof', 0]);
     await user.click(screen.getByRole('tab', { name: 'Path' }));
     expect(workspaceCapture.render.mock.lastCall![0].selectedCableId).toBe(pf.data.cables[0].id);
     expect(screen.getByText('Selected: =CABLE-1')).toBeVisible(); expect(pf.calculate).not.toHaveBeenCalled();
