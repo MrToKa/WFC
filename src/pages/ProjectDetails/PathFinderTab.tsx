@@ -74,6 +74,9 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
   const [mode, setMode] = useState<'routes' | 'path' | 'lookup'>('path');
   const [networkCheckBusy, setNetworkCheckBusy] = useState(false), [locationCheckBusy, setLocationCheckBusy] = useState(false);
   const [barrierRefreshKey, setBarrierRefreshKey] = useState<string | null>(null);
+  const [barrierRefreshRevision, setBarrierRefreshRevision] = useState(0);
+  const barrierReadKey = JSON.stringify([barrierRefreshKey, barrierRefreshRevision]);
+  const refreshPathFinder = () => { pf.refresh(); setBarrierRefreshRevision(value => value + 1); };
   const [lookupBusy, setLookupBusy] = useState(false);
   const displayGeneration = useRef(0), [displayOwner, setDisplayOwner] = useState<'none' | 'proposal' | 'lookup' | 'standalone'>('none');
   const [secondaryDistance, setSecondaryDistance] = useState('2'), [preferVertical, setPreferVertical] = useState(true), [transparency, setTransparency] = useState('75');
@@ -98,7 +101,8 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
   const calculationBlocker = !validSecondary ? 'Enter a SECONDARY trigger distance from 0 to 1,000,000 metres in Path.'
     : barrierAuthoring.pending ? 'Wait for the saved barrier command to finish, or use Retry saved command in Barriers if its outcome is unknown.'
       : barrierAuthoring.dirty ? 'Save the obstacle selection in Barriers before calculating.'
-        : !backgroundBarrierRouting ? 'Configure Barriers: save the selected obstacles, or enter an Explicit empty reason and choose Declare no barriers to calculate without obstacle checks.'
+        : !currentBarrierRegistry ? 'Check the current model and saved selection in Barriers before calculating.'
+          : !backgroundBarrierRouting ? 'Configure Barriers: save the selected obstacles, or enter an Explicit empty reason and choose Declare no barriers to calculate without obstacle checks.'
           : null;
   const getCableCalculationPreferences = useCallback((drill: boolean): PathFinderPreferences | null => {
     const intent = createBarrierAdmissionIntent(currentBarrierRegistry, drill);
@@ -192,7 +196,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
         <div role="status" aria-live="polite" data-testid="pathfinder-status" data-phase={pf.viewerPhase}>
           {pf.loading || pf.viewerPhase === 'loading' ? <Spinner size="tiny" label={pf.viewerMessage} /> : <Body1>{pf.viewerMessage}</Body1>}
         </div>
-        {mode !== 'routes' || pf.viewerPhase !== 'ready' ? <div className={styles.actions}><Button disabled={pf.busy} onClick={pf.refresh}>Refresh Path Finder</Button><Button disabled={pf.busy} onClick={pf.reloadViewer}>Reload model</Button></div> : null}
+        {mode !== 'routes' || pf.viewerPhase !== 'ready' ? <div className={styles.actions}><Button disabled={pf.busy} onClick={refreshPathFinder}>Refresh Path Finder</Button><Button disabled={pf.busy} onClick={pf.reloadViewer}>Reload model</Button></div> : null}
         {pf.error || localError ? <Body1 role="alert" className={styles.error}>{localError ?? pf.error}</Body1> : null}
         {notice ? <Body1 role="status">{notice}</Body1> : null}
         <div className={extra.warning} data-testid="pathfinder-readiness" style={{ display: mode === 'routes' ? 'none' : undefined }}>
@@ -206,7 +210,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
           <Button disabled={pf.viewerPhase !== 'ready'} onClick={restoreView}>Restore view</Button>
         </div>
         <div ref={barrierConfiguration} tabIndex={-1} role="region" aria-label="Routing barrier configuration">
-          <PathFinderBarriersPanel projectId={projectId} loadedProjectId={loadedProjectId} token={token} isAdmin={isAdmin} pf={pf} onStateChange={barrierStateChanged} refreshKey={barrierRefreshKey} />
+          <PathFinderBarriersPanel projectId={projectId} loadedProjectId={loadedProjectId} token={token} isAdmin={isAdmin} pf={pf} onStateChange={barrierStateChanged} refreshKey={barrierReadKey} />
         </div>
         <Checkbox label="Drill through the walls" checked={drillThroughWalls} disabled={pf.busy || barrierAuthoring.pending || !currentBarrierRegistry}
           onChange={(_, value) => setDrillDraft({ owner: barrierOwner, checked: value.checked === true })} />

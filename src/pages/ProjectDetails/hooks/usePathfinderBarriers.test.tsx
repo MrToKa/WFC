@@ -524,6 +524,9 @@ describe('saved barrier selection persistence and historical display', () => {
     await waitFor(() => expect(view.result.current.saved).toEqual({ manifest: published, status: 'unavailable' }));
     expect(api.getLatestBarrierSnapshot).toHaveBeenCalledExactlyOnceWith(id(1), 'synthetic-login', expect.any(AbortSignal));
     expect(view.result.current.registry).toBeNull(); expect(view.result.current.draftParents).toEqual([]); expect(view.result.current.canAuthor).toBe(false);
+    expect(view.result.current.error).toContain('Open Routes and choose Discover project tray candidates');
+    expect(view.result.current.error).not.toContain('BARRIER_CURRENT_FRAME_UNAVAILABLE');
+    expect(view.result.current.message).toContain('Saved obstacles are retained for reference');
     await act(() => view.result.current.addSelection()); await act(() => view.result.current.save());
     expect(f.runProjectPreparation).not.toHaveBeenCalled(); expect(api.beginBarrierCapture).not.toHaveBeenCalled(); expect(api.changeBarrierRegistry).not.toHaveBeenCalled();
   });
@@ -591,6 +594,28 @@ describe('saved barrier selection persistence and historical display', () => {
 });
 
 describe('barrier readiness after project preparation', () => {
+  it.each(['ready', 'missing-frame'] as const)('rechecks unchanged preparation metadata after explicit refresh and keeps authority %s', async outcome => {
+    const f = fixture([7]), options = { ...preparedOptions(f.options, 800), refreshKey: JSON.stringify(['verified-network', 0]) };
+    vi.mocked(api.getBarrierRegistry).mockRejectedValueOnce(frameUnavailable());
+    const view = renderHook((props: Options) => usePathfinderBarriers(props), { initialProps: options });
+    await waitFor(() => expect(view.result.current.message).toBe('No saved barrier snapshot was found.'));
+    expect(view.result.current.canAuthor).toBe(false); expect(view.result.current.registry).toBeNull();
+    if (outcome === 'missing-frame') vi.mocked(api.getBarrierRegistry).mockRejectedValueOnce(frameUnavailable());
+    view.rerender({ ...options, refreshKey: JSON.stringify(['verified-network', 1]) });
+    expect(view.result.current.registry).toBeNull();
+    await waitFor(() => expect(api.getBarrierRegistry).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(view.result.current.busy).toBe(false));
+    if (outcome === 'ready') {
+      expect(view.result.current.canAuthor).toBe(true); expect(view.result.current.registry?.state).toBe('ready');
+      expect(view.result.current.saved?.status).toBe('current'); expect(view.result.current.error).toBeNull();
+    } else {
+      expect(view.result.current.canAuthor).toBe(false); expect(view.result.current.registry).toBeNull();
+      expect(view.result.current.saved).toBeNull(); expect(view.result.current.draftParents).toEqual([]);
+      expect(view.result.current.error).toContain('Open Routes and choose Discover project tray candidates');
+    }
+    expect(api.beginBarrierCapture).not.toHaveBeenCalled(); expect(api.changeBarrierRegistry).not.toHaveBeenCalled();
+    expect(f.runProjectPreparation).not.toHaveBeenCalled(); expect(f.captureBarriers).not.toHaveBeenCalled();
+  });
   it('rereads a cold missing frame when trace readiness changes with the same model and artifact', async () => {
     const f = fixture([7]), options = preparedOptions(f.options, 800), published = manifest(f.getRegistry());
     vi.mocked(api.getBarrierRegistry).mockRejectedValueOnce(frameUnavailable());

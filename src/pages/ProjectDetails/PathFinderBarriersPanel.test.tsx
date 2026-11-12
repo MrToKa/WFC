@@ -194,7 +194,11 @@ describe('administrator barrier authoring panel', () => {
     expect(saved.getByText('Saved civil source group')).toBeVisible(); expect(saved.getByText(/Current readiness is unavailable/)).toBeVisible();
     expect(saved.getByText(/Snapshot/)).toHaveTextContent(`Model ${id(2)}. Frame ${id(3)}`);
     expect(screen.getByRole('button', { name: 'Add selected objects' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Declare no barriers' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Declare no barriers' })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Explicit empty reason' })).toBeNull();
+    expect(screen.getByText('The current barrier selection is unavailable until the model frame can be verified.')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh barriers' })); expect(f.state.refresh).toHaveBeenCalledOnce();
+    expect(f.state.save).not.toHaveBeenCalled();
   });
   it('labels Add as unsaved and keeps a changed draft distinct from the saved obstacle list', () => {
     const f = fixture(); f.state.saved = { manifest: savedManifest(), status: 'current' };

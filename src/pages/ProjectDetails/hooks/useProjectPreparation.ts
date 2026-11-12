@@ -1,4 +1,3 @@
-import { digestSha256 } from '../../../utils/sha256';
 import { generateId } from '@/utils/generateId';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -29,7 +28,7 @@ import { collectPreparationDiscovery } from './collectPreparationDiscovery';
 import { PreparationDiscoveryError } from '../../../../shared/collectPreparationDiscovery';
 import { modelCaptureErrorMessage, modelCaptureErrorContext } from '../../../../viewer-runtime/model-capture-errors.mjs';
 import type { usePathFinder } from './usePathFinder';
-import {saveCaptureEvidence,GeometryTraceApiError,createGeometryTrace,fetchGeometryTraces,fetchGeometryTraceManifest,
+import {saveCaptureEvidence,GeometryTraceApiError,createGeometryTrace,fetchGeometryTraces,fetchGeometryTraceManifest,fetchGeometryTraceRuntime,buildGeometryTraceCommand,
   type GeometryTraceCreate,type GeometryTraceManifest} from '@/api/pathfinderGeometryTrace';
 import {GEOMETRY_TRACE_DERIVATION} from '../../../../shared/pathfinderGeometryTrace';
 import {bindCompletedCaptureEvidence,type CompletedCaptureEvidence} from '../../../../viewer-runtime/capture-evidence.mjs';
@@ -101,17 +100,6 @@ const traceCommandMatches = (context: PreparationContext, command: GeometryTrace
   publishedNetworkMatches(context) && context.currentAggregate!.id === command.aggregateId &&
   context.currentAggregate!.projection.sha256 === command.expectedProjectionSha256 &&
   command.derivationVersion === GEOMETRY_TRACE_DERIVATION;
-// The same explicit derivation command survives an interrupted tab or server
-// restart. Server-side aggregate/derivation uniqueness still owns its result.
-async function networkTraceCommand(context: PreparationContext): Promise<GeometryTraceCreate> {
-  const aggregate = context.currentAggregate!;
-  const bytes = new TextEncoder().encode(canonicalPurposeJson({ schemaVersion: 'wfc.pf.automatic-network-trace-key.v1',
-    projectId: context.projectId, aggregateId: aggregate.id, projectionSha256: aggregate.projection.sha256, derivationVersion: GEOMETRY_TRACE_DERIVATION }));
-  const hex = [...new Uint8Array(await digestSha256(bytes))].map(value => value.toString(16).padStart(2, '0')).join('');
-  return { schemaVersion: 'wfc.pf.geometry-trace-create.v1', aggregateId: aggregate.id,
-    expectedProjectionSha256: aggregate.projection.sha256, derivationVersion: GEOMETRY_TRACE_DERIVATION,
-    idempotencyKey: `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}` };
-}
 const resumableTraySession = (session: PreparationSession, context: PreparationContext) =>
   session.schemaVersion === 'wfc.pf.preparation-session.v1' && ['planned', 'collecting'].includes(session.state) &&
   session.projectId === context.projectId && sameScope(session.plan, context.scope) && session.plan.diagnostics.length === 0 &&
@@ -348,7 +336,8 @@ export function useProjectPreparation(pf: PF, active: boolean) {
             ...value,
             unknown: true,
             error:
-              'The command outcome is unknown. Retry the same command before making further changes.',
+              'The command outcome is unknown. Retry the same command before making further changes.'
+                + (error instanceof GeometryTraceApiError ? ` (${error.code})` : ''),
           }));
         else {
           let refreshedRefusal = false;
@@ -378,6 +367,10 @@ export function useProjectPreparation(pf: PF, active: boolean) {
                     ? `${error.message} The published network is unchanged. Review this discovery stage before trying again.`
                   : error instanceof Error && 'code' in error && error.code === 'EXTRACTION_FAILED'
                     ? 'Model extraction stopped. The viewer did not report a specific cause. Committed parts are retained.'
+                  : error instanceof GeometryTraceApiError
+                    ? error.code === 'GEOMETRY_TRACE_DERIVATION_CHANGED' && error.outcome === 'refused'
+                      ? 'The geometry trace runtime changed. This command was refused. Choose Discover project tray candidates again to start a new command for the current runtime. (GEOMETRY_TRACE_DERIVATION_CHANGED)'
+                      : `${error.message} (${error.code})`
                   : error instanceof Error
                     ? error.message
                     : 'Project preparation could not be completed.',
@@ -976,13 +969,16 @@ export function useProjectPreparation(pf: PF, active: boolean) {
     if (!publishedNetworkMatches(fresh.context)) throw new Error('The project network changed. Check the trays again.');
     if (networkTraceMatches(fresh.context, fresh.networkTrace)) return fresh;
     update(value => ({ ...value, progress: 'Finishing the tray network…', networkTrace: null }));
-    const aggregateId = fresh.context.currentAggregate!.id, command = await networkTraceCommand(fresh.context);
+    const runtime = await fetchGeometryTraceRuntime(access.projectId!, access.token!, signal);
+    assertCurrent(signal);
+    const aggregate = fresh.context.currentAggregate!, aggregateId = aggregate.id;
+    const command = await buildGeometryTraceCommand(fresh.context.projectId, aggregateId, aggregate.projection.sha256, runtime.runtimeFingerprintSha256);
     assertCurrent(signal);
     const verified = await execute({ kind: 'trace', body: command, preparation: fresh }, signal, true);
     if (verified.context.currentAggregate?.id !== aggregateId || !networkTraceMatches(verified.context, verified.networkTrace))
       throw new Error('The model frame could not be confirmed for the current network. Check the trays again.');
     return verified;
-  }, [assertCurrent, execute, update]);
+  }, [access?.projectId, access?.token, assertCurrent, execute, update]);
   const prepareTrays = useCallback(async (signal: AbortSignal, starting?: CurrentPreparation) => {
     let fresh = starting ?? await readCurrent(signal, null);
     assertCurrent(signal);

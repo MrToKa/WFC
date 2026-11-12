@@ -49,8 +49,8 @@ export function barrierCaptureAdapters(context?: BarrierViewerContext,
       return frozen.frame.contentSha256;
     },
     assertBeforeCommit() { if (frozen && (!Number.isFinite(viewerDeadline) || Date.now() >= viewerDeadline)) fail('BARRIER_CAPTURE_VIEWER_EXPIRED'); },
-    async currentScope(client, projectId) {
-      const scope = await currentBarrierScope(client, projectId);
+    async currentScope(client, projectId, options) {
+      const scope = await currentBarrierScope(client, projectId, options);
       if (frozen) viewerDeadline = await lockViewer(client, projectId, scope, frozen);
       return scope;
     },

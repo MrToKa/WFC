@@ -138,7 +138,9 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
       error: unknown ? (code === 'BARRIER_VERIFIER_NOT_CONFIGURED'
         ? 'The server cannot verify barrier geometry. Update the API container with the barrier verifier enabled (BARRIER_VERIFIER_NOT_CONFIGURED). The saved command is still pending; inspect its outcome or close this exact command before saving a new selection. Published barriers are retained.'
         : 'The command outcome is unknown. Its exact recovery binding is retained. Check the saved command outcome before changing this set.')
-        : barrierCaptureErrorMessage(code) ?? (code === 'EXTRACTION_FAILED' || code?.startsWith('BARRIER_CAPTURE_')
+        : code === 'BARRIER_CURRENT_FRAME_UNAVAILABLE'
+          ? 'The current model frame must be prepared before changing barriers. Open Routes and choose Discover project tray candidates. When the network is ready, refresh barriers.'
+          : barrierCaptureErrorMessage(code) ?? (code === 'EXTRACTION_FAILED' || code?.startsWith('BARRIER_CAPTURE_')
           ? 'The selected barrier geometry could not be read completely. Check the selected objects or reduce the capture scope before starting a new command.'
           : error instanceof Error ? error.message : 'Barrier authoring could not be completed.') });
   }, [current, update]);
@@ -178,8 +180,8 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
           const savedManifest = await getLatestBarrierSnapshot(access.projectId!, access.token!, signal);
           signal.throwIfAborted(); currentRead(run, expected);
           update(run, { saved: savedManifest ? { manifest: savedManifest, status: 'unavailable' } : null,
-            message: savedManifest ? 'Saved obstacles were restored for reference. Prepare the current model before checking or recapturing this set.'
-              : 'No saved barrier snapshot was found. Current barrier readiness is unavailable.' });
+            message: savedManifest ? 'Saved obstacles are retained for reference. Their current readiness has not been verified.'
+              : 'No saved barrier snapshot was found.' });
         } catch (historyError) {
           if (latest.current.readKey === expected || errorStatus(historyError) === 401 || errorStatus(historyError) === 403)
             report(run, historyError, pending.current);

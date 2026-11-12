@@ -5,8 +5,8 @@ import { preparationFixture, preparationIds as ids } from '@/test/preparationFix
 import { useProjectPreparation } from './useProjectPreparation';
 import { ViewerAccessError } from '@/viewer/sessionApi';
 import type { usePathFinder } from './usePathFinder';
-import {completedEvidenceFixture,geometryTraceFixture} from '@/test/geometryTraceFixtures';
-import {saveCaptureEvidence,createGeometryTrace,fetchGeometryTraces,fetchGeometryTraceManifest,GeometryTraceApiError,
+import {completedEvidenceFixture,geometryTraceFixture,geometryTraceRuntimeFixture} from '@/test/geometryTraceFixtures';
+import {saveCaptureEvidence,createGeometryTrace,fetchGeometryTraces,fetchGeometryTraceManifest,fetchGeometryTraceRuntime,GeometryTraceApiError,
   type GeometryTraceManifest} from '@/api/pathfinderGeometryTrace';
 import { bindCompletedCaptureEvidence } from '../../../../viewer-runtime/capture-evidence.mjs';
 import type { PathFinderState } from '@/api/pathfinder';
@@ -21,7 +21,7 @@ vi.mock('../../../../viewer-runtime/capture-evidence.mjs', async original => {
   const actual = await original<typeof import('../../../../viewer-runtime/capture-evidence.mjs')>();
   return { ...actual, bindCompletedCaptureEvidence: vi.fn(actual.bindCompletedCaptureEvidence) };
 });
-vi.mock('@/api/pathfinderGeometryTrace',async original=>({...await original<typeof import('@/api/pathfinderGeometryTrace')>(),saveCaptureEvidence:vi.fn(),createGeometryTrace:vi.fn(),fetchGeometryTraces:vi.fn(),fetchGeometryTraceManifest:vi.fn()}));
+vi.mock('@/api/pathfinderGeometryTrace',async original=>({...await original<typeof import('@/api/pathfinderGeometryTrace')>(),saveCaptureEvidence:vi.fn(),createGeometryTrace:vi.fn(),fetchGeometryTraces:vi.fn(),fetchGeometryTraceManifest:vi.fn(),fetchGeometryTraceRuntime:vi.fn()}));
 vi.mock('@/api/pathfinderPreparation', async (original) => ({
   ...(await original<typeof api>()),
   fetchPreparationContext: vi.fn(),
@@ -34,6 +34,7 @@ vi.mock('@/api/pathfinderPreparation', async (original) => ({
 }));
 function setup() {
   const fixture = preparationFixture();
+  vi.mocked(fetchGeometryTraceRuntime).mockResolvedValue(geometryTraceRuntimeFixture());
   vi.mocked(fetchGeometryTraces).mockImplementation(async (projectId, _token, offset = 0) => ({ schemaVersion: 'wfc.pf.geometry-trace-list.v1', projectId, offset, nextOffset: null, traces: [] }));
   vi.mocked(fetchGeometryTraceManifest).mockRejectedValue(new GeometryTraceApiError('GEOMETRY_TRACE_NOT_FOUND', 404, 'No trace', 'refused'));
   vi.mocked(createGeometryTrace).mockRejectedValue(new Error('Unexpected trace creation'));
@@ -85,6 +86,7 @@ function automaticSetup() {
   const fixture = setup();
   const store = { context: structuredClone(fixture.context), sessions: new Map<string, PreparationSession>(),
     traces: new Map<string, GeometryTraceManifest>(),
+    runtime: geometryTraceRuntimeFixture(),
     skippedTrays: [] as Array<{projectTrayId:string;reason:'TRAY_ROOT_MISSING'|'TRAY_ROOT_AMBIGUOUS'}> };
   const discovery: PreparationDiscovery = {
     schemaVersion: 'wfc.pf.discovery-report.v1', modelVersionId: store.context.scope.modelVersionId,
@@ -168,7 +170,9 @@ function automaticSetup() {
     geometryRevision: aggregate.geometryRevision, captureFrameId: aggregate.coordinateFrameId,
     projection: { payloadRef: aggregate.projection.payloadRef, sha256: aggregate.projection.sha256, bytes: aggregate.projection.bytes },
     counts: { ...geometryTraceFixture().manifest.counts, objects: aggregate.counts.objects, segments: aggregate.counts.physicalLeaves },
+    runtimeFingerprint: structuredClone(store.runtime.runtimeFingerprint),
   });
+  vi.mocked(fetchGeometryTraceRuntime).mockImplementation(async () => structuredClone(store.runtime));
   vi.mocked(fetchGeometryTraces).mockImplementation(async (projectId, _token, offset = 0) => ({ schemaVersion: 'wfc.pf.geometry-trace-list.v1',
     projectId, offset, nextOffset: null, traces: [...store.traces.values()].map(({ id, projectId, modelVersionId, aggregateId, geometryRevision, derivationVersion, counts, contentSha256, createdAt }) =>
       ({ id, projectId, modelVersionId, aggregateId, geometryRevision, derivationVersion, counts, contentSha256, createdAt })) }));
@@ -596,9 +600,10 @@ describe('automatic tray workflow', () => {
     await act(() => result.current.checkTrays());
     expect(createGeometryTrace).toHaveBeenCalledOnce();
     expect(createGeometryTrace).toHaveBeenCalledWith(ids.project, 'login', expect.objectContaining({
-      schemaVersion: 'wfc.pf.geometry-trace-create.v1', aggregateId: f.store.context.currentAggregate!.id,
+      schemaVersion: 'wfc.pf.geometry-trace-create.v2', aggregateId: f.store.context.currentAggregate!.id,
       expectedProjectionSha256: f.store.context.currentAggregate!.projection.sha256,
       derivationVersion: 'wfc.pf.geometry-trace-derivation.v1',
+      expectedRuntimeFingerprintSha256: geometryTraceRuntimeFixture().runtimeFingerprintSha256,
     }), expect.any(AbortSignal));
     expect(vi.mocked(createGeometryTrace).mock.invocationCallOrder[0]).toBeGreaterThan(vi.mocked(api.mutatePreparation).mock.invocationCallOrder[0]);
     expect(result.current.networkReady).toBe(true); expect(result.current.networkReadinessKey).toContain(f.store.traces.get(f.store.context.currentAggregate!.id)!.id);
@@ -616,17 +621,57 @@ describe('automatic tray workflow', () => {
     expect(api.createPreparation).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled(); expect(api.mutatePreparation).not.toHaveBeenCalled();
     expect(f.store.context.currentAggregate).toEqual(aggregate);
   });
+  it('starts a distinct runtime command only on the next explicit Discover after a definite generation refusal', async () => {
+    const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
+    vi.mocked(createGeometryTrace).mockRejectedValueOnce(new GeometryTraceApiError('GEOMETRY_TRACE_DERIVATION_CHANGED', 409, 'Evidence changed', 'refused'));
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.context).not.toBeNull());
+    await act(() => result.current.checkTrays());
+    const previous = vi.mocked(createGeometryTrace).mock.calls[0][2];
+    expect(result.current.unknown).toBe(false); expect(result.current.networkReady).toBe(false); expect(result.current.canMutate).toBe(true);
+    expect(result.current.error).toContain('GEOMETRY_TRACE_DERIVATION_CHANGED'); expect(result.current.error).toContain('Discover project tray candidates again');
+    expect(createGeometryTrace).toHaveBeenCalledOnce(); expect(fetchGeometryTraceRuntime).toHaveBeenCalledOnce();
+    f.store.runtime = geometryTraceRuntimeFixture('b'.repeat(64));
+    await act(() => result.current.checkTrays());
+    const current = vi.mocked(createGeometryTrace).mock.calls[1][2];
+    expect(current.idempotencyKey).not.toBe(previous.idempotencyKey);
+    expect(current).toMatchObject({ schemaVersion: 'wfc.pf.geometry-trace-create.v2', expectedRuntimeFingerprintSha256: f.store.runtime.runtimeFingerprintSha256 });
+    expect(result.current.networkReady).toBe(true); expect(result.current.error).toBeNull();
+    expect(fetchGeometryTraceRuntime).toHaveBeenCalledTimes(2); expect(api.createPreparation).not.toHaveBeenCalled();
+    expect(f.capture).not.toHaveBeenCalled(); expect(api.mutatePreparation).not.toHaveBeenCalled();
+  });
+  it('retains the exact pending trace command across a runtime change until explicit reconciliation settles it', async () => {
+    const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
+    const lost = new GeometryTraceApiError('REQUEST_TIMEOUT', null, 'Lost frame receipt', 'unknown');
+    vi.mocked(createGeometryTrace).mockRejectedValueOnce(lost).mockRejectedValueOnce(lost).mockRejectedValueOnce(lost)
+      .mockRejectedValueOnce(new GeometryTraceApiError('GEOMETRY_TRACE_DERIVATION_CHANGED', 409, 'Evidence changed', 'refused'));
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.context).not.toBeNull());
+    await act(() => result.current.checkTrays());
+    const original = vi.mocked(createGeometryTrace).mock.calls[0][2];
+    expect(result.current.unknown).toBe(true); expect(fetchGeometryTraceRuntime).toHaveBeenCalledOnce();
+    f.store.runtime = geometryTraceRuntimeFixture('b'.repeat(64));
+    await act(() => result.current.checkTrays());
+    expect(vi.mocked(createGeometryTrace).mock.calls).toHaveLength(4);
+    expect(vi.mocked(createGeometryTrace).mock.calls.every(call => call[2] === original)).toBe(true);
+    expect(fetchGeometryTraceRuntime).toHaveBeenCalledOnce(); expect(result.current.unknown).toBe(false); expect(result.current.networkReady).toBe(false);
+    expect(result.current.error).toContain('GEOMETRY_TRACE_DERIVATION_CHANGED');
+    await act(() => result.current.checkTrays());
+    expect(vi.mocked(createGeometryTrace).mock.calls[4][2].idempotencyKey).not.toBe(original.idempotencyKey);
+    expect(fetchGeometryTraceRuntime).toHaveBeenCalledTimes(2); expect(result.current.networkReady).toBe(true);
+    expect(api.createPreparation).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled(); expect(api.mutatePreparation).not.toHaveBeenCalled();
+  });
   it('verifies an existing trace on initial load and reuses it across endpoint registry changes', async () => {
     const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
     const trace = f.makeTrace(); f.store.traces.set(trace.aggregateId, trace);
     const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.networkReady).toBe(true));
     const key = result.current.networkReadinessKey;
     expect(fetchGeometryTraceManifest).toHaveBeenCalledWith(ids.project, 'login', trace.id, expect.any(AbortSignal));
-    expect(createGeometryTrace).not.toHaveBeenCalled();
+    expect(createGeometryTrace).not.toHaveBeenCalled(); expect(fetchGeometryTraceRuntime).not.toHaveBeenCalled();
+    f.store.runtime = geometryTraceRuntimeFixture('b'.repeat(64));
     f.store.context.scope.locationRegistryRevision = '99';
     await act(() => result.current.checkTrays());
     expect(result.current.networkReady).toBe(true); expect(result.current.networkReadinessKey).toBe(key);
-    expect(createGeometryTrace).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled();
+    expect(createGeometryTrace).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled(); expect(fetchGeometryTraceRuntime).not.toHaveBeenCalled();
+    expect(result.current.networkTrace?.runtimeFingerprint).toEqual(trace.runtimeFingerprint);
     f.store.context.scope.routingPolicyRevision = '99'; await act(() => result.current.refresh());
     expect(result.current.networkReady).toBe(false); expect(result.current.networkReadinessKey).toBeNull();
   });
@@ -862,7 +907,7 @@ describe('automatic tray workflow', () => {
     vi.mocked(createGeometryTrace).mockRejectedValueOnce(new GeometryTraceApiError('GEOMETRY_TRACE_BUILD_INVALID', 409, 'Frame derivation refused', 'refused'));
     const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.context).not.toBeNull());
     await act(() => result.current.checkTrays());
-    expect(result.current.error).toBe('Frame derivation refused'); expect(result.current.unknown).toBe(false);
+    expect(result.current.error).toBe('Frame derivation refused (GEOMETRY_TRACE_BUILD_INVALID)'); expect(result.current.unknown).toBe(false);
     expect(result.current.conflict).toBe(false); expect(result.current.canMutate).toBe(true); expect(createGeometryTrace).toHaveBeenCalledOnce();
     expect(result.current.networkReady).toBe(false); expect(result.current.networkReadinessKey).toBeNull();
     expect(result.current.notice ?? '').not.toMatch(/up to date|network updated/i);

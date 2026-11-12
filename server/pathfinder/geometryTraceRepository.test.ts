@@ -30,6 +30,8 @@ function fixture() {
     if (sql.startsWith('SELECT is_admin')) return { rows: state.user ? [{ is_admin: state.admin }] : [] };
     if (sql.startsWith('SELECT user_id,expires_at')) return { rows: [{ user_id: who.userId, expires_at: new Date(who.loginExpiresAt), revoked_at: state.revoked ? new Date() : null }] };
     if (sql.startsWith('SELECT request_sha256')) return { rows: state.receipt ? [{ request_sha256: geometryTraceHash(command), request: command, receipt: { schemaVersion: 'wfc.pf.geometry-trace-receipt.v1', trace: built.manifest, duplicate: false } }] : [] };
+    if (sql.includes('/* geometry-trace:admission */')) return { rows: [] };
+    if (sql.includes('/* geometry-trace:published-generation */') || sql.includes('/* geometry-trace:existing-generation */')) return { rows: [] };
     if (sql.includes('/* geometry-trace:aggregate */')) return { rows: [{ manifest: f.aggregate, plan: f.plan, snapshot_sha256: f.aggregate.projection.sha256, snapshot_bytes: String(f.aggregate.projection.bytes), model_version_id: f.aggregate.modelVersionId }] };
     if (sql.startsWith('SELECT id,input_sha256')) return { rows: state.completeIntent ? [{ id: f.traceId, input_sha256: geometryTraceHash({ aggregate: f.aggregate, derivationVersion: command.derivationVersion, fingerprint: f.runtimeFingerprint }), frozen: { traceId: f.traceId, exportId: f.fitted.exportId, fittedBlobId: f.fittedBlob.payloadRef, recordsBlobId: f.recordsBlobId, frozenBlobId: id(5), aggregate: f.aggregate, plan: f.plan, runtimeFingerprint: f.runtimeFingerprint, declaredLengths: f.declaredLengths, evidence: [], createdAt: f.createdAt, createdBy: f.createdBy }, state: 'complete', lease_token: id(4), lease_expires_at: new Date(0) }] : [] };
     if (sql.startsWith('INSERT INTO pf_geometry_trace_receipts')) return { rows: [] };
@@ -48,9 +50,10 @@ function fixture() {
 function publicationFixture(){
   const f=geometryTraceFixture();f.fitted.diagnostics=['Synthetic publication diagnostic'];f.fitted.counts.diagnostics=1;
   const who={userId:f.createdBy,loginId:id(201),loginExpiresAt:Date.now()+60000},command={schemaVersion:'wfc.pf.geometry-trace-create.v1' as const,aggregateId:f.aggregate.id,expectedProjectionSha256:f.aggregate.projection.sha256,derivationVersion:GEOMETRY_TRACE_DERIVATION,idempotencyKey:id(202)};
-  type Intent={id:string;input_sha256:string;frozen:unknown;state:string;lease_token:string;lease_expires_at:Date};
+  type Intent={id:string;input_sha256:string;frozen:unknown;state:string;lease_token:string;lease_expires_at:Date;admission_protocol:string};
   type Receipt={request_sha256:string;request:unknown;receipt:unknown};
-  const empty=()=>({intents:new Map<string,Intent>(),receipts:new Map<string,Receipt>(),traces:new Map<string,GeometryTraceManifest>(),dirty:[] as unknown[][],objects:0,diagnostics:0});
+  type Admission={request_sha256:string;request:unknown;intent_id:string;input_sha256:string};
+  const empty=()=>({intents:new Map<string,Intent>(),admissions:new Map<string,Admission>(),receipts:new Map<string,Receipt>(),traces:new Map<string,GeometryTraceManifest>(),dirty:[] as unknown[][],objects:0,diagnostics:0});
   let durable=empty(),working=empty(),transactionNumber=0,transactionOpen=false;
   const controls={scope:{current_aggregate_id:f.aggregate.id,current_artifact_id:f.aggregate.artifactId,geometry_revision:f.aggregate.geometryRevision,resolution_revision:f.aggregate.resolutionRevision,active_model_version_id:f.aggregate.modelVersionId,selection_revision:f.aggregate.selectionRevision,content_fingerprint:f.aggregate.contentFingerprint,state:'ready',health:'healthy'} as Record<string,unknown>|null,routing:{catalogRevision:f.aggregate.catalogRevision,routingContentSha256:f.aggregate.routingContentSha256,routingPolicyRevision:f.aggregate.routingPolicyRevision,routingPolicySha256:f.aggregate.routingPolicySha256},scopeError:null as Error|null,dirtyError:null as Error|null,finalAdmin:true,finalRevoked:false,finalCommitUnknown:false,concurrentReceipt:false,leaseChanged:false,onDirty:()=>{},onWorker:()=>{}};
   transport.routingScope.mockImplementation(async()=>controls.routing);
@@ -68,14 +71,19 @@ function publicationFixture(){
     if(sql.startsWith('SELECT is_admin'))return{rows:[{is_admin:transactionNumber<3||controls.finalAdmin}]};
     if(sql.startsWith('SELECT user_id,expires_at'))return{rows:[{user_id:who.userId,expires_at:new Date(who.loginExpiresAt),revoked_at:transactionNumber>=3&&controls.finalRevoked?new Date():null}]};
     if(sql.startsWith('SELECT request_sha256')){const previous=working.receipts.get(String(params[2]));return{rows:previous?[previous]:[]};}
+    if(sql.includes('/* geometry-trace:admission */')){const previous=working.admissions.get(String(params[2]));return{rows:previous?[previous]:[]};}
+    if(sql.includes('/* geometry-trace:published-generation */'))return{rows:[...working.traces.values()].map(trace=>({id:trace.id}))};
+    if(sql.includes('/* geometry-trace:existing-generation */'))return{rows:[...working.intents.values()].map(intent=>({id:intent.id}))};
+    if(sql.startsWith('INSERT INTO pf_geometry_trace_admissions')){working.admissions.set(String(params[2]),{request_sha256:String(params[3]),request:params[4],intent_id:String(params[5]),input_sha256:String(params[6])});return{rows:[]};}
     if(sql.includes('/* geometry-trace:aggregate */'))return{rows:[{manifest:f.aggregate,plan:f.plan,snapshot_sha256:f.aggregate.projection.sha256,snapshot_bytes:String(f.aggregate.projection.bytes),model_version_id:f.aggregate.modelVersionId}]};
     if(sql.startsWith('SELECT id,input_sha256')){
-      const values=sql.includes('aggregate_id=$2')?[...working.intents.values()]:[working.intents.get(String(params[1]))].filter((value):value is Intent=>Boolean(value));
+      const values=sql.includes('aggregate_id=$2')?[...working.intents.values()].filter(value=>sql.includes('input_sha256=$4')?value.input_sha256===params[3]:value.admission_protocol==='legacy-v1'):[working.intents.get(String(params[1]))].filter((value):value is Intent=>Boolean(value));
       return{rows:values.map(value=>controls.leaseChanged&&transactionNumber>=3?{...value,lease_token:id(999)}:value)};
     }
     if(sql.startsWith('SELECT id::text,length_mm::text'))return{rows:f.declaredLengths.map(value=>({id:value.projectTrayId,value:value.valueMm,source_revision:value.sourceRevision}))};
     if(sql.startsWith('SELECT part_id,receipt'))return{rows:[]};
-    if(sql.startsWith('INSERT INTO pf_geometry_trace_intents')){working.intents.set(String(params[0]),{id:String(params[0]),input_sha256:String(params[4]),frozen:params[5],state:'pending',lease_token:String(params[6]),lease_expires_at:params[7] as Date});return{rows:[]};}
+    if(sql.startsWith('INSERT INTO pf_geometry_trace_intents')){working.intents.set(String(params[0]),{id:String(params[0]),input_sha256:String(params[4]),frozen:params[5],state:'pending',lease_token:String(params[6]),lease_expires_at:params[7] as Date,admission_protocol:String(params[9])});return{rows:[]};}
+    if(sql.startsWith('UPDATE pf_geometry_trace_intents SET lease_token=')){const intent=working.intents.get(String(params[1]))!;intent.lease_token=String(params[2]);intent.lease_expires_at=params[3] as Date;return{rows:[]};}
     if(sql.startsWith('INSERT INTO pf_geometry_trace_sets')){working.traces.set(String(params[0]),params[5] as GeometryTraceManifest);return{rows:[]};}
     if(sql.startsWith('INSERT INTO pf_geometry_object_revisions')){working.objects+=(JSON.parse(String(params[2])) as unknown[]).length;return{rows:[]};}
     if(sql.startsWith('INSERT INTO pf_geometry_trace_diagnostics')){working.diagnostics+=(JSON.parse(String(params[2])) as unknown[]).length;return{rows:[]};}
@@ -108,6 +116,15 @@ function publicationFixture(){
 
 describe('current authority and immutable geometry trace repository', () => {
   it('holds project/user/login in established order and checks final expiry before COMMIT', async () => { const f = fixture(); await f.repo.authorize(f.f.aggregate.projectId, f.who); expect(f.queries.findIndex(q => q.startsWith('SELECT id FROM projects'))).toBeLessThan(f.queries.findIndex(q => q.startsWith('SELECT is_admin'))); expect(f.queries.some(q => q.includes('users') && q.includes('FOR SHARE'))).toBe(true); expect(f.queries.some(q => q.includes('viewer_login_bindings') && q.includes('FOR SHARE'))).toBe(true); expect(f.queries.at(-1)).toBe('COMMIT'); expect(f.release).toHaveBeenCalledTimes(1); });
+  it('returns the validated current runtime digest under coherent authority locks', async () => {
+    const f = fixture(); expect(await f.repo.runtime(f.f.aggregate.projectId, f.who)).toEqual({ schemaVersion: 'wfc.pf.geometry-trace-runtime.v1',
+      runtimeFingerprint: f.f.runtimeFingerprint, runtimeFingerprintSha256: geometryTraceHash(f.f.runtimeFingerprint) });
+    expect(f.queries).toContain('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ'); expect(f.queries.at(-1)).toBe('COMMIT');
+  });
+  it('refuses runtime disclosure before reading its fingerprint when current authority is absent', async () => {
+    const f = fixture(); f.state.admin = false; await expect(f.repo.runtime(f.f.aggregate.projectId, f.who)).rejects.toMatchObject({ code: 'ADMIN_REQUIRED' });
+    expect(f.adapters.getRuntimeFingerprint).not.toHaveBeenCalled();
+  });
   it.each(['nonadmin', 'missing-user', 'revoked-login'] as const)('refuses %s before disclosing nonexistent project', async kind => { const f = fixture(); f.state.exists = false; if (kind === 'nonadmin') f.state.admin = false; if (kind === 'missing-user') f.state.user = false; if (kind === 'revoked-login') f.state.revoked = true; await expect(f.repo.get(f.f.aggregate.projectId, f.who, f.f.traceId)).rejects.toMatchObject({ status: kind === 'nonadmin' ? 403 : 401 }); expect(f.queries).not.toContain('COMMIT'); expect(f.queries.at(-1)).toBe('ROLLBACK'); expect(f.queries.some(q => q.startsWith('SELECT manifest'))).toBe(false); });
   it('current denial precedes malformed command parsing and runtime fingerprint access', async () => { const f = fixture(); f.state.admin = false; await expect(f.repo.create(f.f.aggregate.projectId, f.who, { actor: 'forged' })).rejects.toMatchObject({ status: 403 }); expect(f.adapters.getRuntimeFingerprint).not.toHaveBeenCalled(); });
   it('an expiry during the operation prevents commit', async () => { const f = fixture(); await expect(geometryTraceTransaction(f.pool, f.f.aggregate.projectId, f.who, async () => { f.who.loginExpiresAt = Date.now() - 1; })).rejects.toMatchObject({ code: 'LOGIN_EXPIRED' }); expect(f.queries).not.toContain('COMMIT'); });
@@ -121,6 +138,100 @@ describe('current authority and immutable geometry trace repository', () => {
   it('refuses a tampered record instead of returning a valid-looking object', async () => { const f = fixture(); f.state.tamper = true; await expect(f.repo.object(f.f.aggregate.projectId, f.who, f.f.traceId, f.built.records[0].id)).rejects.toMatchObject({ code: 'GEOMETRY_TRACE_RECORD_INTEGRITY' }); });
   it('bounds connection admission and returns a late client to its pool', async () => { vi.useFakeTimers(); const f = fixture(); let finish!: (value: typeof f.client) => void; const delayed = { connect: () => new Promise(resolve => { finish = resolve; }) } as unknown as Pool; const p = geometryTraceTransaction(delayed, f.f.aggregate.projectId, f.who, async () => undefined), rejected = expect(p).rejects.toMatchObject({ code: 'GEOMETRY_TRACE_DATABASE_BUSY', status: 503 }); await vi.advanceTimersByTimeAsync(5000); await rejected; finish(f.client); await Promise.resolve(); expect(f.release).toHaveBeenCalledTimes(1); expect(f.query).not.toHaveBeenCalled(); });
   it.each(['rollback', 'commit'] as const)('discards schema initializer connections with uncertain %s acknowledgement', async phase => { const release = vi.fn(), query = vi.fn(async (sql: string) => { if (phase === 'rollback' && sql.startsWith('SELECT pg_advisory')) throw Error('migration failure'); if (sql === (phase === 'rollback' ? 'ROLLBACK' : 'COMMIT')) throw Error('transport failure'); return { rows: [] }; }), pool = { connect: async () => ({ query, release }) } as unknown as Pool; await expect(initializeGeometryTraceSchema(pool)).rejects.toThrow(); expect(release).toHaveBeenCalledExactlyOnceWith(true); });
+});
+
+function runtimeCommand(f: ReturnType<typeof publicationFixture>, fingerprint = f.f.runtimeFingerprint, key = id(310)) {
+  return { ...f.command, schemaVersion: 'wfc.pf.geometry-trace-create.v2' as const,
+    expectedRuntimeFingerprintSha256: geometryTraceHash(fingerprint), idempotencyKey: key };
+}
+async function interruptTrace(f: ReturnType<typeof publicationFixture>, command: unknown = f.command) {
+  f.controls.onWorker = () => { throw new Error('synthetic deployment interruption'); };
+  await expect(f.create(f.who, command)).rejects.toThrow('synthetic deployment interruption');
+  f.controls.onWorker = () => undefined;
+  expect(f.durable.traces.size).toBe(0); expect(f.durable.receipts.size).toBe(0);
+}
+
+describe('runtime-bound trace generations and immutable command admission', () => {
+  it('publishes a current-runtime generation beside an untouched old pending legacy intent', async () => {
+    const f = publicationFixture(); await interruptTrace(f);
+    const previous = structuredClone([...f.durable.intents.values()][0]);
+    const current = { ...f.f.runtimeFingerprint, derivationSha256: '0'.repeat(64) }; f.adapters.getRuntimeFingerprint.mockResolvedValue(current);
+    await expect(f.create()).rejects.toMatchObject({ code: 'GEOMETRY_TRACE_DERIVATION_CHANGED' });
+    const command = runtimeCommand(f, current), published = await f.create(f.who, command);
+    expect(published.duplicate).toBe(false); expect(published.trace.runtimeFingerprint).toEqual(current);
+    expect(f.durable.intents.size).toBe(2); expect(f.durable.intents.get(previous.id)).toEqual(previous);
+    expect(f.durable.traces.size).toBe(1); expect(f.durable.admissions.get(command.idempotencyKey)?.intent_id).toBe(published.trace.id);
+    await expect(f.create()).rejects.toMatchObject({ code: 'GEOMETRY_TRACE_DERIVATION_CHANGED' });
+    expect((await f.create(f.who, command)).duplicate).toBe(true); expect(f.durable.traces.size).toBe(1);
+  });
+  it('keeps an old exact v2 command bound to its original runtime and intent after a new generation publishes', async () => {
+    const f = publicationFixture(), old = runtimeCommand(f); await interruptTrace(f, old);
+    const admission = structuredClone(f.durable.admissions.get(old.idempotencyKey));
+    const current = { ...f.f.runtimeFingerprint, derivationSha256: '1'.repeat(64) }; f.adapters.getRuntimeFingerprint.mockResolvedValue(current);
+    const next = runtimeCommand(f, current, id(311)); await f.create(f.who, next);
+    await expect(f.create(f.who, old)).rejects.toMatchObject({ code: 'GEOMETRY_TRACE_DERIVATION_CHANGED' });
+    await expect(f.create(f.who, { ...next, idempotencyKey: old.idempotencyKey })).rejects.toMatchObject({ code: 'GEOMETRY_TRACE_IDEMPOTENCY_CONFLICT' });
+    expect(f.durable.admissions.get(old.idempotencyKey)).toEqual(admission);
+    expect(f.durable.receipts.has(old.idempotencyKey)).toBe(false); expect(f.durable.traces.size).toBe(1);
+  });
+  it('does not let an unbound legacy command attach to a newer runtime-bound intent', async () => {
+    const f = publicationFixture(), command = runtimeCommand(f); await interruptTrace(f, command);
+    await expect(f.create()).rejects.toMatchObject({ code: 'GEOMETRY_TRACE_DERIVATION_CHANGED' });
+    expect(f.durable.intents.size).toBe(1); expect(f.durable.admissions.size).toBe(1);
+  });
+  it('refuses a schema downgrade under a key already admitted with a runtime binding', async () => {
+    const f = publicationFixture(); await interruptTrace(f);
+    [...f.durable.intents.values()][0].lease_expires_at = new Date(0);
+    const command = runtimeCommand(f); await interruptTrace(f, command);
+    [...f.durable.intents.values()][0].lease_expires_at = new Date(0);
+    await expect(f.create(f.who, { ...f.command, idempotencyKey: command.idempotencyKey })).rejects.toMatchObject({ code: 'GEOMETRY_TRACE_IDEMPOTENCY_CONFLICT' });
+    expect(f.durable.traces.size).toBe(0); expect(f.durable.admissions.get(command.idempotencyKey)?.request).toEqual(command);
+  });
+  it('keeps same-generation lease exclusion across exact and different v2 command keys', async () => {
+    const f = publicationFixture(), command = runtimeCommand(f); await interruptTrace(f, command);
+    await expect(f.create(f.who, command)).rejects.toMatchObject({ code: 'GEOMETRY_TRACE_IN_PROGRESS' });
+    await expect(f.create(f.who, { ...command, idempotencyKey: id(312) })).rejects.toMatchObject({ code: 'GEOMETRY_TRACE_IN_PROGRESS' });
+    expect(f.durable.intents.size).toBe(1); expect(f.durable.admissions.size).toBe(1);
+  });
+  it('renews only the exact expired generation and keeps its frozen admission immutable', async () => {
+    const f = publicationFixture(), command = runtimeCommand(f); await interruptTrace(f, command);
+    const pending = [...f.durable.intents.values()][0], oldToken = pending.lease_token, frozen = structuredClone(pending.frozen);
+    pending.lease_expires_at = new Date(0);
+    const receipt = await f.create(f.who, command);
+    expect(f.durable.intents.size).toBe(1); expect(f.durable.intents.get(receipt.trace.id)?.lease_token).not.toBe(oldToken);
+    expect(f.durable.intents.get(receipt.trace.id)?.frozen).toEqual(frozen); expect(f.durable.admissions.size).toBe(1);
+  });
+  it('refuses a broken retained admission rather than selecting another current intent', async () => {
+    const f = publicationFixture(), command = runtimeCommand(f); await interruptTrace(f, command);
+    f.durable.admissions.get(command.idempotencyKey)!.intent_id = id(999);
+    await expect(f.create(f.who, command)).rejects.toMatchObject({ code: 'GEOMETRY_TRACE_ADMISSION_INTEGRITY' });
+    expect(f.durable.intents.size).toBe(1); expect(f.durable.traces.size).toBe(0);
+  });
+  it('keeps completed historical manifests readable and never publishes a replacement runtime set', async () => {
+    const f = publicationFixture(), first = await f.create(), before = structuredClone(f.durable.traces);
+    const current = { ...f.f.runtimeFingerprint, derivationSha256: '2'.repeat(64) }; f.adapters.getRuntimeFingerprint.mockResolvedValue(current);
+    await expect(f.create(f.who, runtimeCommand(f, current))).rejects.toMatchObject({ code: 'GEOMETRY_TRACE_DERIVATION_CHANGED' });
+    expect(await f.repo.get(f.f.aggregate.projectId, f.who, first.trace.id)).toEqual(first.trace);
+    expect(f.durable.traces).toEqual(before); expect(f.durable.intents.size).toBe(1); expect(f.durable.admissions.size).toBe(0);
+  });
+  it.each(['role', 'login', 'lease', 'scope', 'runtime'] as const)('retains final %s fencing for a runtime-bound publication', async fence => {
+    const f = publicationFixture(), command = runtimeCommand(f);
+    f.controls.onWorker = () => {
+      if (fence === 'role') f.controls.finalAdmin = false;
+      if (fence === 'login') f.controls.finalRevoked = true;
+      if (fence === 'lease') f.controls.leaseChanged = true;
+      if (fence === 'scope') f.controls.scope!.current_aggregate_id = id(999);
+      if (fence === 'runtime') f.adapters.getRuntimeFingerprint.mockResolvedValue({ ...f.f.runtimeFingerprint, derivationSha256: '3'.repeat(64) });
+    };
+    const expected = { role: 'ADMIN_REQUIRED', login: 'LOGIN_REVOKED', lease: 'GEOMETRY_TRACE_LEASE_CHANGED', scope: 'PREPARATION_SCOPE_STALE', runtime: 'GEOMETRY_TRACE_DERIVATION_CHANGED' }[fence];
+    await expect(f.create(f.who, command)).rejects.toMatchObject({ code: expected });
+    expect(f.durable.traces.size).toBe(0); expect(f.durable.receipts.size).toBe(0); expect(f.durable.admissions.size).toBe(1);
+  });
+  it('rechecks the runtime after final SQL writes and rolls back a changed implementation', async () => {
+    const f = publicationFixture(); f.controls.onDirty = () => f.adapters.getRuntimeFingerprint.mockResolvedValue({ ...f.f.runtimeFingerprint, derivationSha256: '4'.repeat(64) });
+    await expect(f.create(f.who, runtimeCommand(f))).rejects.toMatchObject({ code: 'GEOMETRY_TRACE_DERIVATION_CHANGED' });
+    expect(f.durable.traces.size).toBe(0); expect(f.durable.receipts.size).toBe(0); expect(f.durable.dirty).toEqual([]);
+  });
 });
 
 describe('ordinary new trace publication recalculation event',()=>{
