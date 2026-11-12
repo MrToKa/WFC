@@ -29,17 +29,19 @@ export function preparationFrameId(projectId: string, modelId: string, fingerpri
   const hex = preparationDigest({ schemaVersion: 'wfc.pf.canonical-frame-identity.v1', projectId, modelId, fingerprint });
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 }
-export async function readPreparationState(c: PoolClient, projectId: string) {
-  await c.query('INSERT INTO pf_project_preparations(project_id) VALUES($1) ON CONFLICT(project_id) DO NOTHING', [projectId]);
-  return (await c.query<{ geometry_revision: string; resolution_revision: string; current_aggregate_id: string | null; current_artifact_id: string | null }>('SELECT geometry_revision::text,resolution_revision::text,current_aggregate_id,current_artifact_id FROM pf_project_preparations WHERE project_id=$1 FOR UPDATE', [projectId])).rows[0];
+export async function readPreparationState(c: PoolClient, projectId: string, options:{lock?:boolean}={}) {
+  const lock=options.lock??true;
+  if(lock)await c.query('INSERT INTO pf_project_preparations(project_id) VALUES($1) ON CONFLICT(project_id) DO NOTHING', [projectId]);
+  return (await c.query<{ geometry_revision: string; resolution_revision: string; current_aggregate_id: string | null; current_artifact_id: string | null }>(`SELECT geometry_revision::text,resolution_revision::text,current_aggregate_id,current_artifact_id FROM pf_project_preparations WHERE project_id=$1${lock?' FOR UPDATE':''}`, [projectId])).rows[0]??{geometry_revision:'0',resolution_revision:'0',current_aggregate_id:null,current_artifact_id:null};
 }
-/** Cheap routing-only reads; never requests drawing catalogue proofs or facts. */
-export async function readPreparationContext(c: PoolClient, projectId: string): Promise<PreparationContext> {
-  const model = (await c.query<{ active_model_version_id: string | null; selection_revision: string; content_fingerprint: string | null; state: string; health: string }>(`SELECT s.active_model_version_id,s.selection_revision::text,v.content_fingerprint,v.state,v.health FROM project_model_selections s LEFT JOIN model_versions v ON v.id=s.active_model_version_id AND v.project_id=s.project_id WHERE s.project_id=$1 FOR SHARE OF s`, [projectId])).rows[0];
+/** Snapshot callers must use REPEATABLE READ; writers retain their existing row fences. */
+export async function readPreparationContext(c: PoolClient, projectId: string, options:{snapshot?:boolean}={}): Promise<PreparationContext> {
+  const lock=!options.snapshot;
+  const model = (await c.query<{ active_model_version_id: string | null; selection_revision: string; content_fingerprint: string | null; state: string; health: string }>(`SELECT s.active_model_version_id,s.selection_revision::text,v.content_fingerprint,v.state,v.health FROM project_model_selections s LEFT JOIN model_versions v ON v.id=s.active_model_version_id AND v.project_id=s.project_id WHERE s.project_id=$1${lock?' FOR SHARE OF s':''}`, [projectId])).rows[0];
   if (!model?.active_model_version_id || model.state !== 'ready' || model.health !== 'healthy' || !model.content_fingerprint) return fail('MODEL_UNAVAILABLE');
-  const currentModel = (await c.query<{ state: string; health: string; content_fingerprint: string }>('SELECT state,health,content_fingerprint FROM model_versions WHERE project_id=$1 AND id=$2 FOR SHARE', [projectId, model.active_model_version_id])).rows[0];
+  const currentModel = (await c.query<{ state: string; health: string; content_fingerprint: string }>(`SELECT state,health,content_fingerprint FROM model_versions WHERE project_id=$1 AND id=$2${lock?' FOR SHARE':''}`, [projectId, model.active_model_version_id])).rows[0];
   if (!currentModel || currentModel.state !== 'ready' || currentModel.health !== 'healthy' || currentModel.content_fingerprint !== model.content_fingerprint) return fail('MODEL_UNAVAILABLE');
-  const catalog = await readRoutingCatalog(c, projectId), routing = await readRoutingPolicyScope(c, projectId);
+  const catalog = await readRoutingCatalog(c, projectId,{lock}), routing = await readRoutingPolicyScope(c, projectId,{lock});
   // Current display facts are intentionally separate from the routing catalog's
   // null dimension placeholders, immutable plans and drawing proof budgets.
   const detailRows = (await c.query<{ id: string; tray_type: unknown; width_mm: unknown; height_mm: unknown }>(
@@ -47,8 +49,8 @@ export async function readPreparationContext(c: PoolClient, projectId: string): 
   if (detailRows.length > PURPOSE_POLICY_LIMITS.catalogRows) return fail('PREPARATION_TRAY_DETAILS_LIMIT', 413);
   const detailsById = new Map(detailRows.map(row => [row.id, { type: presentationType(row.tray_type),
     widthMm: presentationMillimetres(row.width_mm), heightMm: presentationMillimetres(row.height_mm) }]));
-  const state = await readPreparationState(c, projectId);
-  const registry = (await c.query<{ revision: string }>('SELECT registry_revision::text AS revision FROM pf_project_state WHERE project_id=$1 FOR UPDATE', [projectId])).rows[0];
+  const state = await readPreparationState(c, projectId,{lock});
+  const registry = (await c.query<{ revision: string }>(`SELECT registry_revision::text AS revision FROM pf_project_state WHERE project_id=$1${lock?' FOR UPDATE':''}`, [projectId])).rows[0];
   if (!registry) return fail('PREPARATION_REGISTRY_REQUIRED');
   const scope: PreparationScope = { modelVersionId: model.active_model_version_id, contentFingerprint: model.content_fingerprint, selectionRevision: model.selection_revision, ...routing, locationRegistryRevision: registry.revision, resolutionRevision: state.resolution_revision };
   const rules = (await c.query<{ purpose_key: string; allowed_categories: unknown }>(`SELECT r.purpose_key,r.allowed_categories FROM pf_routing_purpose_rules r JOIN pf_catalog_purpose_incarnations i ON i.project_id=r.project_id AND i.purpose_key=r.purpose_key AND i.incarnation_id=r.purpose_incarnation_id WHERE r.project_id=$1 AND i.active AND i.row_count>0 ORDER BY r.purpose_key COLLATE "C"`, [projectId])).rows;

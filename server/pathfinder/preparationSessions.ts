@@ -7,6 +7,7 @@ import { snapshotSchema, type ComputationalSnapshot } from './contracts.js';
 import { operationTransaction, isGrantPrincipal, requireHumanPrincipal, requireGrantModelScope, grantProvenance, type OperationPrincipal } from './operationAuthority.js';
 import { calculationGrantProvenanceSchema, type CalculationGrantProvenance } from '../../shared/pathfinderCalculationGrant.js';
 import { PathFinderError } from './errors.js';
+import { principalTransaction } from './auth.js';
 import { readPreparationContext, readPreparationState, equalPreparationScope, buildPreparationPlan, preparationDigest } from './preparationPlans.js';
 import { storePreparationBlob, readPreparationBlob, encodePreparationPayload } from './preparationStorage.js';
 import { LEGACY_PREPARATION_CAPACITY_PROFILE, preparationCapacity, preparationCapacityProfileSchema, type PreparationCapacityProfile } from '../../shared/pathfinderCapacity.js';
@@ -39,7 +40,7 @@ export const PREPARATION_SQL_BOUNDS = Object.freeze({ acquisitionMilliseconds: 5
 function preparationAborted(signal?: AbortSignal) {
   if (signal?.aborted) throw new PathFinderError('PREPARATION_VALIDATION_CANCELLED', 409, 'Preparation validation stopped before publication. Inspect the retained session before retrying.');
 }
-export async function preparationTransaction<T>(pool: Pool, projectId: string, who: OperationPrincipal, operation: (client: PoolClient) => Promise<T>, signal?: AbortSignal): Promise<T> {
+export async function preparationTransaction<T>(pool: Pool, projectId: string, who: OperationPrincipal, operation: (client: PoolClient) => Promise<T>, signal?: AbortSignal, options:{snapshot?:boolean}={}): Promise<T> {
   preparationAborted(signal);
   let commitStarted = false;
   const boundedPool = { connect: async () => {
@@ -65,12 +66,16 @@ export async function preparationTransaction<T>(pool: Pool, projectId: string, w
     return wrapper;
   } } as Pool;
   try {
-    return await operationTransaction(boundedPool, projectId, who, 'prepare', async client => {
+    const checkedOperation=async(client:PoolClient)=>{
       preparationAborted(signal); const value = await operation(client); preparationAborted(signal); return value;
-    });
+    };
+    return options.snapshot&&!isGrantPrincipal(who)
+      ?await principalTransaction(boundedPool,projectId,who,checkedOperation,{snapshot:true})
+      :await operationTransaction(boundedPool, projectId, who, 'prepare', checkedOperation);
   } catch (error) {
     if (commitStarted) throw new PathFinderError('PREPARATION_COMMIT_OUTCOME_UNKNOWN', 503, 'The publication commit could not be confirmed. Keep the same command and reconcile its session.');
-    if (['55P03', '57014'].includes((error as { code?: string } | null)?.code ?? '')) throw new PathFinderError('PREPARATION_DATABASE_BUSY', 503, 'The preparation database deadline was reached. Keep the same command and reconcile its session.');
+    const code = (error as { code?: string } | null)?.code;
+    if (code === '55P03' || code === '57014' || (code === '40001' && options.snapshot && !isGrantPrincipal(who))) throw new PathFinderError('PREPARATION_DATABASE_BUSY', 503, 'The preparation database deadline was reached. Keep the same command and reconcile its session.');
     throw error;
   }
 }
@@ -95,9 +100,9 @@ export async function initializePreparationSchema(pool: Pool) {
     await c.query('COMMIT'); } catch (error) { await c.query('ROLLBACK').catch(() => undefined); throw error; } finally { c.release(); }
 }
 type SessionRow = { grant_provenance: CalculationGrantProvenance | null; validation_grant_provenance: CalculationGrantProvenance | null; id: string; project_id: string; plan: PreparationPlan; state: PreparationSession['state']; revision: string; actor_id: string; login_id: string; created_at: Date; updated_at: Date; failure: unknown; published_aggregate_id: string | null; validation_token: string | null; validation_key: string | null; validation_sha256: string | null; validation_expires_at: Date | null; validation_command: unknown; validation_actor_id: string | null; validation_login_id: string | null };
-async function sessionRow(c: PoolClient, projectId: string, id: string): Promise<SessionRow> {
+async function sessionRow(c: PoolClient, projectId: string, id: string,options:{lock?:boolean}={}): Promise<SessionRow> {
   policyUuidSchema.parse(id);
-  const row = (await c.query<SessionRow>('SELECT *,revision::text FROM pf_preparation_sessions WHERE project_id=$1 AND id=$2 FOR UPDATE', [projectId, id])).rows[0]; if (!row) return fail('PREPARATION_SESSION_NOT_FOUND', 404);
+  const row = (await c.query<SessionRow>(`SELECT *,revision::text FROM pf_preparation_sessions WHERE project_id=$1 AND id=$2${options.lock===false?'':' FOR UPDATE'}`, [projectId, id])).rows[0]; if (!row) return fail('PREPARATION_SESSION_NOT_FOUND', 404);
   const plan = preparationPlanSchema.parse(row.plan);
   if (plan.id !== row.id || plan.projectId !== row.project_id || preparationDigest(preparationPlanHashInput(plan)) !== plan.orderedPlanSha256) return fail('PREPARATION_PLAN_INTEGRITY');
   return { ...row, plan };
@@ -153,9 +158,9 @@ export function createPreparationService(pool: Pool, adapters: PreparationAdapte
     if (result.stale) return fail('PREPARATION_SCOPE_STALE'); return result.value;
   };
   return {
-    context: (projectId: string, who: OperationPrincipal) => preparationTransaction(pool, projectId, who, c => readPreparationContext(c, projectId)),
-    index: (projectId: string, who: OperationPrincipal) => preparationTransaction(pool, projectId, who, async c => preparationIndexSchema.parse({ schemaVersion: 'wfc.pf.preparation-index.v1', sessions: (await c.query(`SELECT s.id,s.state,s.revision::text AS "sessionRevision",s.created_at AS "createdAt",x.idempotency_key AS "idempotencyKey" FROM pf_preparation_sessions s JOIN pf_preparation_commands x ON x.project_id=s.project_id AND x.kind='create' AND x.receipt->>'sessionId'=s.id::text WHERE s.project_id=$1 ORDER BY s.created_at DESC,s.id DESC LIMIT 20`, [projectId])).rows.map(r => ({ ...r, createdAt: new Date(r.createdAt).toISOString() })) })),
-    get: (projectId: string, who: OperationPrincipal, id: string) => preparationTransaction(pool, projectId, who, async c => sessionView(c, await sessionRow(c, projectId, id))),
+    context: (projectId: string, who: OperationPrincipal) => preparationTransaction(pool, projectId, who, c => readPreparationContext(c, projectId,{snapshot:!isGrantPrincipal(who)}),undefined,{snapshot:true}),
+    index: (projectId: string, who: OperationPrincipal) => preparationTransaction(pool, projectId, who, async c => preparationIndexSchema.parse({ schemaVersion: 'wfc.pf.preparation-index.v1', sessions: (await c.query(`SELECT s.id,s.state,s.revision::text AS "sessionRevision",s.created_at AS "createdAt",x.idempotency_key AS "idempotencyKey" FROM pf_preparation_sessions s JOIN pf_preparation_commands x ON x.project_id=s.project_id AND x.kind='create' AND x.receipt->>'sessionId'=s.id::text WHERE s.project_id=$1 ORDER BY s.created_at DESC,s.id DESC LIMIT 20`, [projectId])).rows.map(r => ({ ...r, createdAt: new Date(r.createdAt).toISOString() })) }),undefined,{snapshot:true}),
+    get: (projectId: string, who: OperationPrincipal, id: string) => preparationTransaction(pool, projectId, who, async c => sessionView(c, await sessionRow(c, projectId, id,{lock:isGrantPrincipal(who)})),undefined,{snapshot:true}),
     async create(projectId: string, who: OperationPrincipal, raw: unknown) {
       const input = preparationCreateSchema.parse(raw), sha = preparationDigest(input);
       return preparationTransaction(pool, projectId, who, async c => {

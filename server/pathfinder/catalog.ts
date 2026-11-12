@@ -53,15 +53,15 @@ export function projectRoutingCatalogRows(source:Array<Pick<CatalogSourceTray,'i
     include_grounding_cable:false,grounding_cable_type_id:null,use_trefoil_clamps:false,trefoil_clamp_spacing_mm:null})));
 }
 /** Same routing identity as the full proof, without its independent drawing budgets. */
-export async function readRoutingCatalog(client:PoolClient,projectId:string):Promise<RoutingCatalogScope&{rows:CatalogRow[];diagnostics:CatalogDiagnostic[]}> {
-  const state=await readPurposePolicyState(client,projectId,{lock:true});
+export async function readRoutingCatalog(client:PoolClient,projectId:string,options:{lock?:boolean}={}):Promise<RoutingCatalogScope&{rows:CatalogRow[];diagnostics:CatalogDiagnostic[]}> {
+  const state=await readPurposePolicyState(client,projectId,{lock:options.lock??true});
   const source=await client.query<Pick<CatalogSourceTray,'id'|'name'|'purpose'>>('SELECT id::text,name,purpose FROM trays WHERE project_id=$1 ORDER BY id LIMIT 100001',[projectId]);
   const projection=projectRoutingCatalogRows(source.rows);
   return {catalogRevision:state.catalogRevision,routingContentSha256:hash(catalogRoutingHashInput(projectId,projection.rows,projection.diagnostics)),...projection};
 }
-/** State-row locking is required: normal READ COMMITTED queries could otherwise mix a revision and newer rows. */
-export async function readRoutingCatalogScope(client:PoolClient,projectId:string):Promise<RoutingCatalogScope> {
-  const projection=await readRoutingCatalog(client,projectId);
+/** Use state locking or an enclosing REPEATABLE READ snapshot to keep revisions and rows coherent. */
+export async function readRoutingCatalogScope(client:PoolClient,projectId:string,options:{lock?:boolean}={}):Promise<RoutingCatalogScope> {
+  const projection=await readRoutingCatalog(client,projectId,options);
   return {catalogRevision:projection.catalogRevision,routingContentSha256:projection.routingContentSha256};
 }
 

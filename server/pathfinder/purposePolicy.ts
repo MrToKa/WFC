@@ -116,9 +116,9 @@ export async function readProjectCablePurposes(client: PoolClient, projectId: st
 }
 
 /** Caller holds its project mutex; the catalog state lock fences direct SQL changes until commit. */
-export async function readRoutingPolicyScope(client: PoolClient, projectId: string): Promise<RoutingPolicyScope> {
-  const state = await readPurposePolicyState(client, projectId, { lock: true });
-  const catalog = await readRoutingCatalogScope(client, projectId), rules = await activeRules(client, projectId), purposes = await readProjectCablePurposes(client, projectId);
+export async function readRoutingPolicyScope(client: PoolClient, projectId: string, options:{lock?:boolean}={}): Promise<RoutingPolicyScope> {
+  const state = await readPurposePolicyState(client, projectId, { lock: options.lock??true });
+  const catalog = await readRoutingCatalogScope(client, projectId,options), rules = await activeRules(client, projectId), purposes = await readProjectCablePurposes(client, projectId);
   if (state.catalogRevision !== catalog.catalogRevision) throw new PurposePolicyError('CATALOG_REVISION_CONFLICT', 409, 'The tray catalog changed. Refresh and prepare it again.', revisions(state));
   return { catalogRevision: state.catalogRevision, routingContentSha256: catalog.routingContentSha256, routingPolicyRevision: state.routingPolicyRevision,
     routingPolicySha256: digest({ schemaVersion: 'pathfinder.routing-purpose-policy-content.v2', projectId, rules, cablePurposes:purposes.cablePurposes }) };
