@@ -10,11 +10,12 @@ import {canonicalPurposeJson} from '../../shared/pathfinderPurposePolicy.js';
 import type {GeometryTraceWorkerInput} from './geometryTraceWorker.js';
 import type {GeometryTraceManifest} from '../../shared/pathfinderGeometryTrace.js';
 import type {OperationPrincipal,GrantOperationPrincipal} from './operationAuthority.js';
-const transport=vi.hoisted(()=>({read:vi.fn(),store:vi.fn(),worker:vi.fn(),allowance:vi.fn(),discard:vi.fn(),grant:vi.fn()}));
+const transport=vi.hoisted(()=>({read:vi.fn(),store:vi.fn(),worker:vi.fn(),allowance:vi.fn(),discard:vi.fn(),grant:vi.fn(),routingScope:vi.fn()}));
 vi.mock('./preparationStorage.js',()=>({readPreparationBlob:transport.read,storePreparationBlob:transport.store,storePreparationBytes:vi.fn()}));
 vi.mock('./geometryTraceWorker.js',()=>({runGeometryTraceWorker:transport.worker,runGeometryEvidenceWorker:vi.fn()}));
 vi.mock('./geometryTraceStorage.js',()=>({withFittedExportAllowance:transport.allowance,discardAdoptedFittedExportReference:transport.discard}));
 vi.mock('./calculationAuthority.js',async importOriginal=>({...await importOriginal<typeof import('./calculationAuthority.js')>(),grantTransaction:(...args:unknown[])=>transport.grant(...args)}));
+vi.mock('./purposePolicy.js',async importOriginal=>({...await importOriginal<typeof import('./purposePolicy.js')>(),readRoutingPolicyScope:(...args:unknown[])=>transport.routingScope(...args)}));
 const id = (n: number) => `e1000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 afterEach(() => {vi.useRealTimers();vi.clearAllMocks();});
 function fixture() {
@@ -24,7 +25,7 @@ function fixture() {
   const query = vi.fn(async (sql: string, params: unknown[] = []): Promise<{ rows: Record<string, unknown>[] }> => { queries.push(sql); parameters.push(params);
     if (sql === 'COMMIT' && state.commitFails) throw Error('private socket/SQL detail');
     if (sql === 'ROLLBACK' && state.rollbackFails) throw Error('private rollback transport detail');
-    if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(sql) || sql.startsWith('SET LOCAL') || sql.startsWith('INSERT INTO viewer_login_bindings')) return { rows: [] };
+    if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(sql) || sql.startsWith('SET LOCAL') || sql.startsWith('SET TRANSACTION') || sql.startsWith('INSERT INTO viewer_login_bindings')) return { rows: [] };
     if (sql.startsWith('SELECT id FROM projects')) return { rows: state.exists ? [{ id: f.aggregate.projectId }] : [] };
     if (sql.startsWith('SELECT is_admin')) return { rows: state.user ? [{ is_admin: state.admin }] : [] };
     if (sql.startsWith('SELECT user_id,expires_at')) return { rows: [{ user_id: who.userId, expires_at: new Date(who.loginExpiresAt), revoked_at: state.revoked ? new Date() : null }] };
@@ -50,17 +51,19 @@ function publicationFixture(){
   type Intent={id:string;input_sha256:string;frozen:unknown;state:string;lease_token:string;lease_expires_at:Date};
   type Receipt={request_sha256:string;request:unknown;receipt:unknown};
   const empty=()=>({intents:new Map<string,Intent>(),receipts:new Map<string,Receipt>(),traces:new Map<string,GeometryTraceManifest>(),dirty:[] as unknown[][],objects:0,diagnostics:0});
-  let durable=empty(),working=empty(),transactionNumber=0;
-  const controls={scope:{current_aggregate_id:f.aggregate.id,current_artifact_id:f.aggregate.artifactId,geometry_revision:f.aggregate.geometryRevision,active_model_version_id:f.aggregate.modelVersionId,selection_revision:f.aggregate.selectionRevision,content_fingerprint:f.aggregate.contentFingerprint,state:'ready',health:'healthy'} as Record<string,unknown>|null,scopeError:null as Error|null,dirtyError:null as Error|null,finalAdmin:true,finalRevoked:false,finalCommitUnknown:false,concurrentReceipt:false,leaseChanged:false,onDirty:()=>{},onWorker:()=>{}};
+  let durable=empty(),working=empty(),transactionNumber=0,transactionOpen=false;
+  const controls={scope:{current_aggregate_id:f.aggregate.id,current_artifact_id:f.aggregate.artifactId,geometry_revision:f.aggregate.geometryRevision,resolution_revision:f.aggregate.resolutionRevision,active_model_version_id:f.aggregate.modelVersionId,selection_revision:f.aggregate.selectionRevision,content_fingerprint:f.aggregate.contentFingerprint,state:'ready',health:'healthy'} as Record<string,unknown>|null,routing:{catalogRevision:f.aggregate.catalogRevision,routingContentSha256:f.aggregate.routingContentSha256,routingPolicyRevision:f.aggregate.routingPolicyRevision,routingPolicySha256:f.aggregate.routingPolicySha256},scopeError:null as Error|null,dirtyError:null as Error|null,finalAdmin:true,finalRevoked:false,finalCommitUnknown:false,concurrentReceipt:false,leaseChanged:false,onDirty:()=>{},onWorker:()=>{}};
+  transport.routingScope.mockImplementation(async()=>controls.routing);
+  const blobReads:{payloadRef:string;transaction:number;transactionOpen:boolean;queryCount:number}[]=[];
   const bytes=new Map<string,Buffer>(),queries:{sql:string;params:unknown[];transaction:number;client:unknown}[]=[],release=vi.fn((_discard?:boolean)=>undefined);
   let manifest:GeometryTraceManifest|undefined;
   const put=(payloadRef:string,value:unknown)=>{const valueBytes=Buffer.from(canonicalPurposeJson(value));bytes.set(payloadRef,valueBytes);return{payloadRef,sha256:geometryTraceBytesHash(valueBytes),bytes:valueBytes.length};};
   const query=vi.fn(async(sql:string,params:unknown[]=[]):Promise<{rows:Record<string,unknown>[]}>=>{
     queries.push({sql,params,transaction:transactionNumber,client});
-    if(sql==='BEGIN'){transactionNumber++;working=structuredClone(durable);return{rows:[]};}
-    if(sql==='COMMIT'){durable=structuredClone(working);if(transactionNumber===3&&controls.finalCommitUnknown){controls.finalCommitUnknown=false;throw Error('lost final commit acknowledgement');}return{rows:[]};}
-    if(sql==='ROLLBACK'){working=structuredClone(durable);return{rows:[]};}
-    if(sql.startsWith('SET LOCAL')||sql.startsWith('INSERT INTO viewer_login_bindings'))return{rows:[]};
+    if(sql==='BEGIN'){transactionNumber++;transactionOpen=true;working=structuredClone(durable);return{rows:[]};}
+    if(sql==='COMMIT'){transactionOpen=false;durable=structuredClone(working);if(transactionNumber===3&&controls.finalCommitUnknown){controls.finalCommitUnknown=false;throw Error('lost final commit acknowledgement');}return{rows:[]};}
+    if(sql==='ROLLBACK'){transactionOpen=false;working=structuredClone(durable);return{rows:[]};}
+    if(sql.startsWith('SET LOCAL')||sql.startsWith('SET TRANSACTION')||sql.startsWith('INSERT INTO viewer_login_bindings'))return{rows:[]};
     if(sql.startsWith('SELECT id FROM projects'))return{rows:[{id:f.aggregate.projectId}]};
     if(sql.startsWith('SELECT is_admin'))return{rows:[{is_admin:transactionNumber<3||controls.finalAdmin}]};
     if(sql.startsWith('SELECT user_id,expires_at'))return{rows:[{user_id:who.userId,expires_at:new Date(who.loginExpiresAt),revoked_at:transactionNumber>=3&&controls.finalRevoked?new Date():null}]};
@@ -85,7 +88,7 @@ function publicationFixture(){
   });
   const client={query,release},pool={connect:vi.fn(async()=>client)} as unknown as Pool;
   transport.store.mockImplementation(async(projectId:string,sessionId:string,payloadRef:string,value:unknown,limit:number)=>{expect([projectId,sessionId]).toEqual([f.aggregate.projectId,f.aggregate.sessionId]);const ref=put(payloadRef,value);expect(ref.bytes).toBeLessThanOrEqual(limit);return ref;});
-  transport.read.mockImplementation(async(projectId:string,sessionId:string,ref:{payloadRef:string;sha256:string;bytes:number},limit:number)=>{expect([projectId,sessionId]).toEqual([f.aggregate.projectId,f.aggregate.sessionId]);const value=bytes.get(ref.payloadRef);if(!value||value.length!==ref.bytes||value.length>limit||geometryTraceBytesHash(value)!==ref.sha256)throw Error('test blob integrity');return Buffer.from(value);});
+  transport.read.mockImplementation(async(projectId:string,sessionId:string,ref:{payloadRef:string;sha256:string;bytes:number},limit:number)=>{blobReads.push({payloadRef:ref.payloadRef,transaction:transactionNumber,transactionOpen,queryCount:queries.length});expect([projectId,sessionId]).toEqual([f.aggregate.projectId,f.aggregate.sessionId]);const value=bytes.get(ref.payloadRef);if(!value||value.length!==ref.bytes||value.length>limit||geometryTraceBytesHash(value)!==ref.sha256)throw Error('test blob integrity');return Buffer.from(value);});
   transport.allowance.mockImplementation(async(_exportId:string,action:(existing:boolean)=>Promise<unknown>)=>action(false));transport.discard.mockResolvedValue(undefined);
   transport.worker.mockImplementation(async(input:GeometryTraceWorkerInput)=>{
     const frozen=geometryTraceFrozenSchema.parse(JSON.parse(bytes.get(input.frozenBlob.payloadRef)!.toString('utf8'))),fitted={...f.fitted,exportId:frozen.exportId},fittedBlob=put(frozen.fittedBlobId,fitted),built=buildGeometryTrace({...f,...frozen,fitted,fittedBlob});manifest=built.manifest;
@@ -100,7 +103,7 @@ function publicationFixture(){
   const adapters={getRuntimeFingerprint:vi.fn(async()=>f.runtimeFingerprint),exportFittedTrace:vi.fn(async(input:{exportId:string})=>({schemaVersion:'wfc.pf.fitted-trace-reference.v1' as const,exportId:input.exportId,sha256:'a'.repeat(64),bytes:32,counts:f.fitted.counts,engine:f.fitted.engine,rulesSha256:f.fitted.rulesSha256,snapshotSha256:f.fitted.snapshotSha256,preparedKey:f.fitted.preparedKey}))};
   const repo=createGeometryTraceRepository(pool,adapters),create=(principal:OperationPrincipal=who,raw:unknown=command,signal?:AbortSignal)=>repo.create(f.aggregate.projectId,principal,raw,signal);
   const grant:GrantOperationPrincipal={kind:'calculation-grant',userId:who.userId,authority:{kind:'calculation-grant',projectId:f.aggregate.projectId,grantId:id(290),grantRevision:'1',grantEpoch:'1',installationEpoch:id(291),issuerId:who.userId,issuerAdminRevision:'1',leaseId:id(292),ownerToken:'a'.repeat(64),leaseExpiresAt:new Date(Date.now()+60000).toISOString(),operation:'trace',modelVersionId:f.aggregate.modelVersionId,selectionRevision:f.aggregate.selectionRevision,contentFingerprint:f.aggregate.contentFingerprint}};
-  return{f,who,command,controls,queries,query,client,pool,release,adapters,repo,create,grant,get durable(){return durable;},get manifest(){return manifest;}};
+  return{f,who,command,controls,queries,query,client,pool,release,adapters,repo,create,grant,blobReads,get durable(){return durable;},get manifest(){return manifest;}};
 }
 
 describe('current authority and immutable geometry trace repository', () => {
@@ -124,20 +127,29 @@ describe('ordinary new trace publication recalculation event',()=>{
   const dirtySql='SELECT pf_recalculation_dirty($1,$2,$3,$4)';
   it('marks exactly one current healthy ordinary trace after its receipt on the same client as the last SQL mutation',async()=>{
     const f=publicationFixture(),receipt=await f.create();expect(receipt.duplicate).toBe(false);expect(f.durable.dirty).toEqual([[f.f.aggregate.projectId,'geometry','GEOMETRY_TRACE_PUBLISHED',receipt.trace.id+':'+receipt.trace.contentSha256]]);expect(Buffer.byteLength(String(f.durable.dirty[0][3]))).toBe(101);
-    const calls=f.queries,dirty=calls.findIndex(call=>call.sql===dirtySql),receiptIndex=calls.findIndex(call=>call.sql.startsWith('INSERT INTO pf_geometry_trace_receipts')),complete=calls.findIndex(call=>call.sql.startsWith('UPDATE pf_geometry_trace_intents SET state=')),scope=calls.findIndex(call=>call.sql.includes('geometry-trace:ordinary-current'));
-    expect(complete).toBeLessThan(receiptIndex);expect(receiptIndex).toBeLessThan(scope);expect(scope).toBeLessThan(dirty);expect(calls[scope].params).toEqual([f.f.aggregate.projectId]);expect(calls[scope].sql).toContain('FOR SHARE OF p,s,v');expect(calls[dirty].client).toBe(f.client);expect(calls[dirty].transaction).toBe(3);expect(calls.slice(dirty+1).map(call=>call.sql)).toEqual(['COMMIT']);expect(f.durable.objects).toBe(3);expect(f.durable.diagnostics).toBe(1);expect(f.durable.receipts.size).toBe(1);
+    const calls=f.queries,dirty=calls.findIndex(call=>call.sql===dirtySql),receiptIndex=calls.findIndex(call=>call.sql.startsWith('INSERT INTO pf_geometry_trace_receipts')),complete=calls.findIndex(call=>call.sql.startsWith('UPDATE pf_geometry_trace_intents SET state=')),scope=calls.findIndex(call=>call.sql.includes('geometry-trace:ordinary-current')),insert=calls.findIndex(call=>call.sql.startsWith('INSERT INTO pf_geometry_trace_sets'));
+    expect(scope).toBeLessThan(insert);expect(insert).toBeLessThan(complete);expect(complete).toBeLessThan(receiptIndex);expect(receiptIndex).toBeLessThan(dirty);expect(calls[scope].params).toEqual([f.f.aggregate.projectId]);expect(calls[scope].sql).toContain('FOR SHARE OF p,s,v');expect(calls[dirty].client).toBe(f.client);expect(calls[dirty].transaction).toBe(3);expect(calls.slice(dirty+1).map(call=>call.sql)).toEqual(['COMMIT']);expect(f.durable.objects).toBe(3);expect(f.durable.diagnostics).toBe(1);expect(f.durable.receipts.size).toBe(1);
     expect(calls.some(call=>/UPDATE cables|UPDATE pf_recalculation_state|calculation_grant/.test(call.sql))).toBe(false);
   });
   it.each([
-    ['current_aggregate_id',id(999)],['current_artifact_id',id(999)],['geometry_revision','2'],['active_model_version_id',id(999)],['selection_revision','2'],['content_fingerprint','0'.repeat(64)],['state','processing'],['health','unhealthy'],['missing',null],
-  ])('retains a historical publication but emits nothing for current scope mismatch %s',async(field,value)=>{
-    const f=publicationFixture();if(field==='missing')f.controls.scope=null;else f.controls.scope![String(field)]=value;const receipt=await f.create();expect(receipt.duplicate).toBe(false);expect(f.durable.traces.size).toBe(1);expect(f.durable.receipts.size).toBe(1);expect(f.durable.dirty).toEqual([]);expect(f.queries.some(call=>call.sql===dirtySql)).toBe(false);
+    ['current_aggregate_id',id(999)],['current_artifact_id',id(999)],['geometry_revision','999'],['resolution_revision','999'],['active_model_version_id',id(999)],['selection_revision','999'],['content_fingerprint','0'.repeat(64)],['state','processing'],['health','unhealthy'],['missing',null],
+  ])('refuses new publication before insertion when current %s changes during worker execution',async(field,value)=>{
+    const f=publicationFixture();f.controls.onWorker=()=>{if(field==='missing')f.controls.scope=null;else f.controls.scope![String(field)]=value;};await expect(f.create()).rejects.toMatchObject({code:'PREPARATION_SCOPE_STALE'});expect(f.durable.traces.size).toBe(0);expect(f.durable.receipts.size).toBe(0);expect(f.durable.dirty).toEqual([]);expect(f.queries.some(call=>call.sql.startsWith('INSERT INTO pf_geometry_trace_sets')||call.sql===dirtySql)).toBe(false);
+  });
+  it.each(['catalogRevision','routingContentSha256','routingPolicyRevision','routingPolicySha256'] as const)('refuses changed routing %s before the first publication insert',async field=>{
+    const f=publicationFixture();f.controls.onWorker=()=>{f.controls.routing[field]=field.endsWith('Sha256')?'0'.repeat(64):'999';};await expect(f.create()).rejects.toMatchObject({code:'PREPARATION_SCOPE_STALE'});expect(f.durable.traces.size).toBe(0);expect(f.durable.receipts.size).toBe(0);expect(f.durable.dirty).toEqual([]);expect(f.queries.some(call=>call.sql.startsWith('INSERT INTO pf_geometry_trace_sets'))).toBe(false);
+  });
+  it('allows a location-registry-only change while retaining the tray network publication fence',async()=>{
+    const f=publicationFixture();f.controls.onWorker=()=>{f.controls.scope!.registry_revision='999';};const receipt=await f.create();expect(receipt.duplicate).toBe(false);expect(f.durable.traces.size).toBe(1);expect(f.durable.receipts.size).toBe(1);expect(f.durable.dirty).toHaveLength(1);expect(f.queries.find(call=>call.sql.includes('geometry-trace:ordinary-current'))!.sql).not.toContain('pf_project_state');
+  });
+  it('stages every manifest, fitted, object, index and diagnostic blob before opening the final SQL transaction',async()=>{
+    const f=publicationFixture(),receipt=await f.create(),finalBegin=f.queries.findIndex(call=>call.sql==='BEGIN'&&call.transaction===2);expect(finalBegin).toBeGreaterThan(0);expect(f.blobReads).toHaveLength(5);expect(f.blobReads.map(read=>read.payloadRef)).toEqual(expect.arrayContaining([id(282),receipt.trace.fittedTrace.payloadRef,receipt.trace.objectRecords.payloadRef,id(280),id(281)]));for(const read of f.blobReads){expect(read.transactionOpen).toBe(false);expect(read.transaction).toBe(2);expect(read.queryCount).toBeLessThanOrEqual(finalBegin);}
   });
   it('skips the entire ordinary scope read and event for a new grant publication',async()=>{
     const f=publicationFixture(),receipt=await f.create(f.grant);expect(receipt.duplicate).toBe(false);expect(f.durable.traces.size).toBe(1);expect(f.durable.dirty).toEqual([]);expect(f.queries.some(call=>call.sql.includes('geometry-trace:ordinary-current')||call.sql===dirtySql)).toBe(false);expect(transport.grant).toHaveBeenCalledTimes(3);
   });
   it('never emits again on exact replay or completed derivation reuse under a new command key',async()=>{
-    const f=publicationFixture(),first=await f.create(),scopeReads=()=>f.queries.filter(call=>call.sql.includes('geometry-trace:ordinary-current')).length;
+    const f=publicationFixture(),first=await f.create(),scopeReads=()=>f.queries.filter(call=>call.sql.includes('geometry-trace:ordinary-current')).length;f.controls.scope!.current_aggregate_id=id(999);f.controls.routing.routingPolicyRevision='999';
     expect((await f.create()).duplicate).toBe(true);expect((await f.create(f.who,{...f.command,idempotencyKey:id(203)})).duplicate).toBe(true);expect(f.durable.dirty).toHaveLength(1);expect(scopeReads()).toBe(1);expect(transport.worker).toHaveBeenCalledTimes(1);expect(f.durable.traces.size).toBe(1);expect(f.durable.receipts.size).toBe(2);expect(f.durable.dirty[0][3]).toBe(first.trace.id+':'+first.trace.contentSha256);
   });
   it('does not emit from final-transaction receipt replay after a concurrent publication',async()=>{

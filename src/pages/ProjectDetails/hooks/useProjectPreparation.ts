@@ -45,7 +45,7 @@ type Pending =
   | { kind: 'resolution'; body: PreparationResolutionWrite }
   | { kind: 'part'; sessionId: string; partId: string; body: PreparationPartUpload;completedEvidence?:CompletedCaptureEvidence }
   | {kind:'evidence';sessionId:string;partId:string;body:{sessionPlanSha256:string;payloadSha256:string;evidence:CompletedCaptureEvidence}}
-  | { kind: 'trace'; body: GeometryTraceCreate }
+  | { kind: 'trace'; body: GeometryTraceCreate; preparation: CurrentPreparation; invalidated?: true }
   | { kind: 'publish' | 'cancel'; sessionId: string; body: PreparationMutation };
 type State = {
   identity: string;
@@ -97,6 +97,10 @@ const networkTraceMatches = (context: PreparationContext, trace: GeometryTraceMa
     && trace.projection.bytes === aggregate.projection.bytes && trace.counts.objects === aggregate.counts.objects
     && trace.counts.segments === aggregate.counts.physicalLeaves);
 };
+const traceCommandMatches = (context: PreparationContext, command: GeometryTraceCreate) =>
+  publishedNetworkMatches(context) && context.currentAggregate!.id === command.aggregateId &&
+  context.currentAggregate!.projection.sha256 === command.expectedProjectionSha256 &&
+  command.derivationVersion === GEOMETRY_TRACE_DERIVATION;
 // The same explicit derivation command survives an interrupted tab or server
 // restart. Server-side aggregate/derivation uniqueness still owns its result.
 async function networkTraceCommand(context: PreparationContext): Promise<GeometryTraceCreate> {
@@ -258,6 +262,14 @@ export function useProjectPreparation(pf: PF, active: boolean) {
             'The active model changed. Refresh Path Finder and preparation before continuing.');
       };
       assertModelScope();
+      const pendingTrace = pending.current;
+      if (pendingTrace?.kind === 'trace' && !traceCommandMatches(context, pendingTrace.body)) {
+        // Invalidate readiness, not reconciliation of the exact saved write.
+        // Its immutable historical receipt may still confirm the outcome;
+        // an uncommitted stale write is refused by the server's commit fence.
+        pendingTrace.invalidated = true;
+        update(value => ({ ...value, context, index, networkTrace: null }));
+      }
       const displayed = stateRef.current.session;
       const displayedCurrent = displayed && sameModel(displayed.plan, context.scope) ? displayed.id : undefined;
       const id = sessionId === null ? undefined : sessionId ?? context.currentAggregate?.sessionId ?? displayedCurrent ?? index.sessions[0]?.id;
@@ -271,6 +283,12 @@ export function useProjectPreparation(pf: PF, active: boolean) {
       catch (error) { update(value => ({ ...value, context, index, session, networkTrace: null })); throw error; }
       assertCurrent(signal);
       assertModelScope();
+      // A verified manifest is the durable result of this aggregate/derivation
+      // command. Reconcile only that exact command, never an unrelated write.
+      const saved = pending.current;
+      const reconciledTrace = saved?.kind === 'trace' && traceCommandMatches(context, saved.body) &&
+        networkTraceMatches(context, networkTrace);
+      if (reconciledTrace) pending.current = null;
       if (session?.schemaVersion === 'wfc.pf.preparation-session.v1' && session.state === 'validating' && session.recovery &&
         sameScope(session.plan, context.scope) && !pending.current) {
         pending.current = {
@@ -294,6 +312,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
         loading: false,
         conflict: false,
         error: null,
+        ...(reconciledTrace ? { unknown: false, progress: null, notice: 'Tray network is ready for routing calculations.' } : {}),
       }));
       return { context, index, session, networkTrace };
     },
@@ -389,6 +408,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
       pending.current = command;
       update((value) => ({ ...value, unknown: false }));
       let sessionId: string | undefined;
+      let confirmedTrace: CurrentPreparation | null = null;
       const invoke = async (command: Pending) => { switch (command.kind) {
         case 'create': {
           const session = await createPreparation(
@@ -430,11 +450,30 @@ export function useProjectPreparation(pf: PF, active: boolean) {
           update((value) => ({ ...value, progress: automatic ? 'Continuing the tray update…' : 'Saving the exact pending capture evidence. Committed geometry is retained.' }));
           await saveCaptureEvidence(access.projectId!,access.token!,command.sessionId,command.partId,command.body.sessionPlanSha256,command.body.payloadSha256,command.body.evidence,signal);sessionId=command.sessionId;break;
         case 'trace': {
+          // Replay is restricted to this exact command even if the displayed
+          // scope changed. A historical receipt confirms the write, not that
+          // its old scope is ready for today's routing calculations.
           const receipt = await createGeometryTrace(access.projectId!, access.token!, command.body, signal);
-          assertCurrent(signal);
-          if (receipt.trace.projectId !== access.projectId || receipt.trace.aggregateId !== command.body.aggregateId
-            || receipt.trace.projection.sha256 !== command.body.expectedProjectionSha256)
+          if (receipt.trace.projectId !== access.projectId || !traceCommandMatches(command.preparation.context, command.body)
+            || !networkTraceMatches(command.preparation.context, receipt.trace))
             throw new GeometryTraceApiError('INVALID_RESPONSE', null, 'The network frame result could not be verified. Check the trays again.', 'unknown');
+          // Model changes can abort presentation while an in-flight write still
+          // returns its valid receipt. Its outcome is known even when that old
+          // model must no longer be displayed as ready.
+          assertCurrent();
+          if (pending.current === command) {
+            pending.current = null;
+            update(value => ({ ...value, unknown: false }));
+          }
+          assertCurrent(signal);
+          // The API has already checked the manifest schema and content digest.
+          // A new trace is checked against the current scope by the server at
+          // commit. Keep its exact receipt without another contended status read.
+          // A duplicate may be historical: its write is confirmed, but readiness
+          // still requires the fresh context/manifest read below.
+          const model = latestPf.current.data?.activeModel;
+          if (!receipt.duplicate && !command.invalidated && (!model || sameModel(model, command.preparation.context.scope)))
+            confirmedTrace = { ...command.preparation, networkTrace: receipt.trace };
           break;
         }
         case 'publish':
@@ -460,6 +499,20 @@ export function useProjectPreparation(pf: PF, active: boolean) {
           // Replay that exact evidence, never recapture or upload the part again.
           const ownsSaved = saved === attemptCommand || (attemptCommand.kind === 'part' && saved?.kind === 'evidence'
             && saved.sessionId === attemptCommand.sessionId && saved.partId === attemptCommand.partId);
+          if (saved?.kind === 'trace' && ownsSaved && recoverableReceipt(error)) {
+            let checked: CurrentPreparation | null = null;
+            try { checked = await readCurrent(signal); }
+            catch (readError) {
+              // Scope/access changes are authoritative. Other read failures do
+              // not establish an uncertain command's outcome; keep its binding.
+              if (readError instanceof PreparationDisplayScopeError ||
+                (readError instanceof PreparationApiError || readError instanceof GeometryTraceApiError) &&
+                [401, 403].includes(readError.status ?? 0)) throw readError;
+            }
+            assertCurrent(signal);
+            if (checked && traceCommandMatches(checked.context, saved.body) && networkTraceMatches(checked.context, checked.networkTrace))
+              return checked;
+          }
           // Publication validation can durably refuse a session before the error
           // response is lost. Check that exact session before replaying a write.
           if (saved?.kind === 'publish' && ownsSaved && publicationPlan && recoverableReceipt(error)) {
@@ -484,6 +537,14 @@ export function useProjectPreparation(pf: PF, active: boolean) {
           await waitForRecovery(automaticRecoveryDelays[attempt], signal);
           assertCurrent(signal);
         }
+      }
+      if (confirmedTrace) {
+        assertCurrent(signal);
+        pending.current = null;
+        const verified = confirmedTrace as CurrentPreparation;
+        update(value => ({ ...value, ...verified, unknown: false, conflict: false, error: null, progress: null,
+          notice: 'Tray network is ready for routing calculations.' }));
+        return verified;
       }
       // A confirmed mutation remains confirmed even if the subsequent status read fails.
       assertCurrent();
@@ -917,7 +978,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
     update(value => ({ ...value, progress: 'Finishing the tray network…', networkTrace: null }));
     const aggregateId = fresh.context.currentAggregate!.id, command = await networkTraceCommand(fresh.context);
     assertCurrent(signal);
-    const verified = await execute({ kind: 'trace', body: command }, signal, true);
+    const verified = await execute({ kind: 'trace', body: command, preparation: fresh }, signal, true);
     if (verified.context.currentAggregate?.id !== aggregateId || !networkTraceMatches(verified.context, verified.networkTrace))
       throw new Error('The model frame could not be confirmed for the current network. Check the trays again.');
     return verified;

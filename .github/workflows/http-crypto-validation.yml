@@ -19,6 +19,36 @@ on:
 permissions:
   contents: read
 jobs:
+  preparation-contention:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: wfc_preparation_contention_test
+        ports:
+          - 55446:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d wfc_preparation_contention_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      WFC_PREPARATION_CONTENTION_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55446/wfc_preparation_contention_test
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Verify preparation publication and concurrent status reads with PostgreSQL
+        run: >-
+          docker run --rm --network host
+          -e WFC_PREPARATION_CONTENTION_TEST_DATABASE_URL
+          -v "$GITHUB_WORKSPACE:/app" -w /app
+          node@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5
+          sh -c 'npm ci --ignore-scripts && npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false server/pathfinder/preparationContention.postgres.test.ts'
   routing-engine:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -101,6 +131,8 @@ jobs:
         run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/pages/ProjectDetails/ProjectPreparationPanel.test.tsx src/pages/ProjectDetails/preparationDiagnostics.test.ts src/pages/ProjectDetails/hooks/useProjectPreparation.test.tsx src/pages/ProjectDetails/hooks/usePathFinder.test.tsx src/viewer/ViewerController.test.ts
       - name: Verify assigned tray catalog details and frozen plans
         run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/api/pathfinderPreparation.test.ts shared/pathfinderPreparation.test.ts server/pathfinder/preparationContext.test.ts server/pathfinder/preparationPlans.test.ts server/pathfinder/preparationSessions.test.ts
+      - name: Verify atomic preparation publication and exact command recovery
+        run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 server/pathfinder/geometryTraceRepository.test.ts server/pathfinder/preparationRoutes.test.ts
       - name: Verify From-To matching prerequisites and recovery
         run: |
           node --test viewer-runtime/test/equipment-names.test.mjs viewer-runtime/test/preparation-input.test.mjs

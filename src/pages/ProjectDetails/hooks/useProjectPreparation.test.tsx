@@ -630,23 +630,188 @@ describe('automatic tray workflow', () => {
     f.store.context.scope.routingPolicyRevision = '99'; await act(() => result.current.refresh());
     expect(result.current.networkReady).toBe(false); expect(result.current.networkReadinessKey).toBeNull();
   });
-  it('automatically replays a lost frame receipt and restores selection controls without recapturing or republishing', async () => {
+  it('keeps a verified final receipt ready without optional status reads that can reach the database deadline', async () => {
+    const f = automaticSetup();
+    vi.mocked(createGeometryTrace).mockImplementationOnce(async (project, token, command) => {
+      const receipt = await f.createTrace(project, token, command);
+      vi.mocked(api.fetchPreparationContext).mockRejectedValue(new api.PreparationApiError(
+        'PREPARATION_DATABASE_BUSY', 503, 'The preparation database deadline was reached.', 'unknown'));
+      vi.mocked(fetchGeometryTraces).mockRejectedValue(new GeometryTraceApiError(
+        'REQUEST_TIMEOUT', null, 'The optional trace read timed out.', 'unknown'));
+      return receipt;
+    });
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true));
+    await waitFor(() => expect(result.current.context).not.toBeNull());
+    await act(() => result.current.checkTrays());
+    expect(createGeometryTrace).toHaveBeenCalledOnce(); expect(result.current.error).toBeNull();
+    expect(result.current.unknown).toBe(false); expect(result.current.networkReady).toBe(true);
+    expect(result.current.canMutate).toBe(true); expect(result.current.session?.state).toBe('published');
+    expect(result.current.notice).toBe('Tray network updated.');
+    const finalWrite = vi.mocked(createGeometryTrace).mock.invocationCallOrder[0];
+    expect(vi.mocked(api.fetchPreparationContext).mock.invocationCallOrder.every(order => order < finalWrite)).toBe(true);
+    expect(vi.mocked(fetchGeometryTraces).mock.invocationCallOrder.every(order => order < finalWrite)).toBe(true);
+  });
+  it.each(['routingPolicyRevision', 'catalogRevision', 'resolutionRevision'] as const)(
+    'does not make an historical duplicate receipt ready after %s changes', async revision => {
+      const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
+      vi.mocked(createGeometryTrace).mockImplementationOnce(async (project, token, command) => {
+        const receipt = await f.createTrace(project, token, command);
+        Object.assign(f.store.context.scope, { [revision]: '99' });
+        return { ...receipt, duplicate: true };
+      });
+      const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.context).not.toBeNull());
+      await act(() => result.current.checkTrays());
+      expect(createGeometryTrace).toHaveBeenCalledOnce(); expect(result.current.unknown).toBe(false);
+      expect(result.current.networkReady).toBe(false); expect(result.current.networkReadinessKey).toBeNull();
+      expect(result.current.canMutate).toBe(true); expect(result.current.context?.scope).toEqual(f.store.context.scope);
+      expect(f.capture).not.toHaveBeenCalled(); expect(api.mutatePreparation).not.toHaveBeenCalled();
+    },
+  );
+  it('keeps a duplicate frame write confirmed when fresh status hits its deadline and refreshes it without replay', async () => {
+    const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
+    const readContext = vi.mocked(api.fetchPreparationContext).getMockImplementation()!;
+    vi.mocked(createGeometryTrace).mockImplementationOnce(async (project, token, command) => {
+      const receipt = await f.createTrace(project, token, command);
+      vi.mocked(api.fetchPreparationContext).mockRejectedValue(new api.PreparationApiError(
+        'PREPARATION_DATABASE_BUSY', 503, 'The preparation database deadline was reached.', 'unknown'));
+      return { ...receipt, duplicate: true };
+    });
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.context).not.toBeNull());
+    await act(() => result.current.checkTrays());
+    expect(createGeometryTrace).toHaveBeenCalledOnce(); expect(result.current.unknown).toBe(false);
+    expect(result.current.networkReady).toBe(false); expect(result.current.canMutate).toBe(true);
+    expect(result.current.error).toContain('database deadline');
+    await act(() => result.current.retry()); expect(createGeometryTrace).toHaveBeenCalledOnce();
+    vi.mocked(api.fetchPreparationContext).mockImplementation(readContext);
+    await act(() => result.current.refresh());
+    expect(result.current.networkReady).toBe(true); expect(result.current.unknown).toBe(false);
+    expect(createGeometryTrace).toHaveBeenCalledOnce(); expect(f.capture).not.toHaveBeenCalled();
+  });
+  it('reconciles a lost final frame receipt from its verified manifest without another write', async () => {
     const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
     vi.mocked(createGeometryTrace).mockImplementationOnce(async (project, token, command) => {
       await f.createTrace(project, token, command); throw new GeometryTraceApiError('REQUEST_TIMEOUT', null, 'Lost frame receipt', 'unknown');
     });
     const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.context).not.toBeNull());
     await act(() => result.current.checkTrays());
-    const command = vi.mocked(createGeometryTrace).mock.calls[0][2];
-    expect(createGeometryTrace).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(createGeometryTrace).mock.calls[1][2]).toBe(command);
+    expect(createGeometryTrace).toHaveBeenCalledOnce();
+    expect(fetchGeometryTraceManifest).toHaveBeenCalledWith(ids.project, 'login',
+      f.store.traces.get(f.store.context.currentAggregate!.id)!.id, expect.any(AbortSignal));
     expect(result.current.unknown).toBe(false); expect(result.current.networkReady).toBe(true); expect(result.current.canMutate).toBe(true);
     expect(api.createPreparation).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled(); expect(api.mutatePreparation).not.toHaveBeenCalled();
   });
-  it('bounds unknown receipt recovery and lets an explicit retry unlock the existing model', async () => {
+  it('retries only the exact final command when its receipt and preparation status are temporarily unavailable', async () => {
+    const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
+    vi.mocked(createGeometryTrace).mockImplementationOnce(async (project, token, command) => {
+      await f.createTrace(project, token, command);
+      vi.mocked(api.fetchPreparationContext).mockRejectedValueOnce(new api.PreparationApiError(
+        'PREPARATION_DATABASE_BUSY', 503, 'The preparation database deadline was reached.', 'unknown'));
+      throw new GeometryTraceApiError('REQUEST_TIMEOUT', null, 'Lost frame receipt', 'unknown');
+    });
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.context).not.toBeNull());
+    await act(() => result.current.checkTrays());
+    const calls = vi.mocked(createGeometryTrace).mock.calls;
+    expect(calls).toHaveLength(2); expect(calls[1][2]).toBe(calls[0][2]);
+    expect(result.current.unknown).toBe(false); expect(result.current.networkReady).toBe(true); expect(result.current.canMutate).toBe(true);
+    expect(api.createPreparation).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled(); expect(api.mutatePreparation).not.toHaveBeenCalled();
+  });
+  it.each(['model', 'session', 'capture-frame', 'projection', 'object-count', 'derivation'] as const)(
+    'does not mark the network ready from a mismatched %s final receipt', async kind => {
+      const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
+      vi.mocked(createGeometryTrace).mockImplementation(async () => {
+        const trace = f.makeTrace();
+        if (kind === 'model') trace.modelVersionId = crypto.randomUUID();
+        if (kind === 'session') trace.sessionId = crypto.randomUUID();
+        if (kind === 'capture-frame') trace.captureFrameId = crypto.randomUUID();
+        if (kind === 'projection') trace.projection.sha256 = 'f'.repeat(64);
+        if (kind === 'object-count') trace.counts.objects++;
+        if (kind === 'derivation') Object.assign(trace, { derivationVersion: 'unrecognised-derivation' });
+        return { schemaVersion: 'wfc.pf.geometry-trace-receipt.v1', duplicate: false, trace };
+      });
+      const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.context).not.toBeNull());
+      await act(() => result.current.checkTrays());
+      expect(result.current.networkReady).toBe(false); expect(result.current.networkReadinessKey).toBeNull();
+      expect(result.current.unknown).toBe(true); expect(result.current.canMutate).toBe(false);
+      expect(createGeometryTrace).toHaveBeenCalledTimes(3); expect(f.capture).not.toHaveBeenCalled();
+    },
+  );
+  it('confirms an exact historical final command after the routing scope changes without restoring old readiness', async () => {
+    const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
+    vi.mocked(createGeometryTrace).mockImplementationOnce(async (project, token, command) => {
+      await f.createTrace(project, token, command);
+      f.store.context.scope.routingPolicyRevision = '2';
+      throw new GeometryTraceApiError('REQUEST_TIMEOUT', null, 'Lost frame receipt', 'unknown');
+    });
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.context).not.toBeNull());
+    await act(() => result.current.checkTrays());
+    const calls = vi.mocked(createGeometryTrace).mock.calls;
+    expect(calls).toHaveLength(2); expect(calls[1][2]).toBe(calls[0][2]);
+    expect(result.current.networkReady).toBe(false); expect(result.current.networkReadinessKey).toBeNull();
+    expect(result.current.unknown).toBe(false); expect(result.current.conflict).toBe(false); expect(result.current.canMutate).toBe(true);
+    expect(result.current.context?.scope.routingPolicyRevision).toBe('2');
+    expect(f.capture).not.toHaveBeenCalled(); expect(api.createPreparation).not.toHaveBeenCalled(); expect(api.mutatePreparation).not.toHaveBeenCalled();
+  });
+  it('allows an explicit exact receipt retry after bounded recovery observed a changed scope', async () => {
     const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
     const lost = async (project: string, token: string, command: Parameters<typeof createGeometryTrace>[2]) => {
-      await f.createTrace(project, token, command); throw new GeometryTraceApiError('REQUEST_TIMEOUT', null, 'Lost frame receipt', 'unknown');
+      await f.createTrace(project, token, command);
+      f.store.context.scope.routingPolicyRevision = '2';
+      throw new GeometryTraceApiError('REQUEST_TIMEOUT', null, 'Lost frame receipt', 'unknown');
+    };
+    vi.mocked(createGeometryTrace).mockImplementationOnce(lost).mockImplementationOnce(lost).mockImplementationOnce(lost);
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.context).not.toBeNull());
+    await act(() => result.current.checkTrays());
+    expect(createGeometryTrace).toHaveBeenCalledTimes(3); expect(result.current.unknown).toBe(true);
+    expect(result.current.canMutate).toBe(false); expect(result.current.networkReady).toBe(false);
+    await act(() => result.current.refresh());
+    expect(createGeometryTrace).toHaveBeenCalledTimes(3); expect(result.current.unknown).toBe(true);
+    await act(() => result.current.retry());
+    const calls = vi.mocked(createGeometryTrace).mock.calls;
+    expect(calls).toHaveLength(4); expect(calls.every(call => call[2] === calls[0][2])).toBe(true);
+    expect(result.current.unknown).toBe(false); expect(result.current.conflict).toBe(false); expect(result.current.canMutate).toBe(true);
+    expect(result.current.networkReady).toBe(false); expect(result.current.networkReadinessKey).toBeNull();
+    expect(result.current.context?.scope.routingPolicyRevision).toBe('2');
+    expect(f.capture).not.toHaveBeenCalled(); expect(api.createPreparation).not.toHaveBeenCalled(); expect(api.mutatePreparation).not.toHaveBeenCalled();
+  });
+  it('unlocks a stale uncommitted exact final command when its replay is definitively refused', async () => {
+    const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
+    vi.mocked(createGeometryTrace).mockImplementationOnce(async () => {
+      f.store.context.scope.routingPolicyRevision = '2';
+      throw new GeometryTraceApiError('REQUEST_TIMEOUT', null, 'Lost frame receipt', 'unknown');
+    }).mockRejectedValueOnce(new GeometryTraceApiError('PREPARATION_SCOPE_STALE', 409,
+      'Routing permissions changed while the network was being prepared. Discover the project trays again.', 'refused'));
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.context).not.toBeNull());
+    await act(() => result.current.checkTrays());
+    const calls = vi.mocked(createGeometryTrace).mock.calls;
+    expect(calls).toHaveLength(2); expect(calls[1][2]).toBe(calls[0][2]);
+    expect(result.current.unknown).toBe(false); expect(result.current.conflict).toBe(false); expect(result.current.canMutate).toBe(true);
+    expect(result.current.error).toContain('Routing permissions changed'); expect(result.current.networkReady).toBe(false);
+    expect(f.store.traces.size).toBe(0); expect(f.capture).not.toHaveBeenCalled();
+    expect(api.createPreparation).not.toHaveBeenCalled(); expect(api.mutatePreparation).not.toHaveBeenCalled();
+  });
+  it('confirms a final receipt without marking it ready after the active model changes while its write is in flight', async () => {
+    const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
+    let finish!: () => void;
+    vi.mocked(createGeometryTrace).mockImplementationOnce((project, token, command) => new Promise(done => {
+      finish = async () => done(await f.createTrace(project, token, command));
+    }));
+    const hook = renderHook(pf => useProjectPreparation(pf, true), { initialProps: withModel(f.pf, f.context.scope) });
+    await waitFor(() => expect(hook.result.current.context).not.toBeNull());
+    let work!: Promise<void>; act(() => { work = hook.result.current.checkTrays(); });
+    await waitFor(() => expect(finish).toBeDefined());
+    hook.rerender(withModel(f.pf, { ...f.context.scope, modelVersionId: crypto.randomUUID(), selectionRevision: '2' }));
+    await act(async () => { finish(); await work; });
+    expect(hook.result.current.networkReady).toBe(false); expect(hook.result.current.networkReadinessKey).toBeNull();
+    expect(hook.result.current.unknown).toBe(false);
+    expect(createGeometryTrace).toHaveBeenCalledOnce(); expect(f.capture).not.toHaveBeenCalled();
+  });
+  it('bounds unknown receipt recovery and lets a matching refresh unlock without another final write', async () => {
+    const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
+    const listTraces = vi.mocked(fetchGeometryTraces).getMockImplementation()!;
+    const lost = async (project: string, token: string, command: Parameters<typeof createGeometryTrace>[2]) => {
+      await f.createTrace(project, token, command);
+      vi.mocked(fetchGeometryTraces).mockRejectedValue(new GeometryTraceApiError('REQUEST_TIMEOUT', null, 'Readback unavailable', 'unknown'));
+      throw new GeometryTraceApiError('REQUEST_TIMEOUT', null, 'Lost frame receipt', 'unknown');
     };
     vi.mocked(createGeometryTrace).mockImplementationOnce(lost).mockImplementationOnce(lost).mockImplementationOnce(lost);
     const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.context).not.toBeNull());
@@ -656,9 +821,11 @@ describe('automatic tray workflow', () => {
     const command = vi.mocked(createGeometryTrace).mock.calls[0][2];
     expect(vi.mocked(createGeometryTrace).mock.calls.every(call => call[2] === command)).toBe(true);
     await act(() => result.current.refresh()); expect(result.current.unknown).toBe(true);
-    await act(() => result.current.retry());
-    expect(vi.mocked(createGeometryTrace).mock.calls[3][2]).toBe(command);
+    vi.mocked(fetchGeometryTraces).mockImplementation(listTraces);
+    await act(() => result.current.refresh());
+    expect(createGeometryTrace).toHaveBeenCalledTimes(3);
     expect(result.current.unknown).toBe(false); expect(result.current.canMutate).toBe(true); expect(result.current.networkReady).toBe(true);
+    expect(result.current.notice).toBe('Tray network is ready for routing calculations.');
     expect(f.pf.reloadViewer).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled(); expect(api.mutatePreparation).not.toHaveBeenCalled();
   });
   it('reconstructs the same frame command after remount when its previous receipt is unknown', async () => {
