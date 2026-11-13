@@ -450,3 +450,44 @@ test('native integration matches the pinned SDK public panel, property-set and s
   ])
     assert.ok(sdk.includes(contract), contract);
 });
+
+test('native group aggregation retains each section saved world coordinates and canonical dimensions', async () => {
+  const f = fixture();
+  const first = { metadata, route, positionMm: { x: -100.125, y: 0, z: 340000 } };
+  const second = {
+    metadata: { ...metadata, instanceId: id(4) },
+    route,
+    positionMm: { x: 2500, y: 20.123456, z: 340000 },
+  };
+  f.sections.set(10, {
+    members: [
+      { objectId: 0, section: first },
+      { objectId: 1, section: second },
+    ],
+  });
+  f.select([{ model: f.own, selection: [10] }]);
+  await turn();
+  const map = f.viewer.rendered.at(-1).value.map;
+  for (const axis of ['X', 'Y', 'Z']) {
+    const rows = map['Position in model/Placement origin ' + axis];
+    assert.deepEqual(
+      rows.map((row) => row.displayValue),
+      [first.positionMm[axis.toLowerCase()], second.positionMm[axis.toLowerCase()]],
+    );
+    assert.ok(rows.every((row) => row.units === 'mm' && row.type === 3 && row.precision === 3));
+  }
+  assert.deepEqual(
+    map['CAD section/Actual length'].map((row) => row.displayValue),
+    [3750, 3750],
+  );
+  assert.deepEqual(
+    map['CAD section/Purpose'].map((row) => row.displayValue),
+    [route.purpose, route.purpose],
+  );
+  f.select([{ model: f.source, selection: [0] }]);
+  await turn();
+  assert.deepEqual(Object.keys(f.viewer.rendered.at(-1).value.map), [
+    '__selected_dbIds__',
+    'Source/Tag',
+  ]);
+});

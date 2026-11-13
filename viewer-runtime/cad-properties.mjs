@@ -62,7 +62,7 @@ export function validateCadProperties(componentId, metadata, route) {
   );
 }
 
-export function cadPropertyRows(metadata, route, dbId) {
+export function cadPropertyRows(metadata, route, dbId, positionMm) {
   const row = (displayName, value, category = 'CAD section', units = null) => ({
     displayName,
     displayValue: value == null ? 'Unknown' : value,
@@ -83,6 +83,23 @@ export function cadPropertyRows(metadata, route, dbId) {
     row('Part number', metadata.partNumber),
     row('Manufacturer', metadata.manufacturer),
     row('Purpose', metadata.purpose),
+    ...(positionMm
+      ? [
+          ...['X', 'Y', 'Z'].map((axis) =>
+            row(
+              'Placement origin ' + axis,
+              positionMm[axis.toLowerCase()],
+              'Position in model',
+              'mm',
+            ),
+          ),
+          row(
+            'Reference point',
+            'STEP local origin in model coordinates; not the bounding box centre.',
+            'Position in model',
+          ),
+        ]
+      : []),
     row('Instance ID', metadata.instanceId, 'Identity'),
     row('Route', route.name, 'Identity'),
     row('Route ID', route.id, 'Identity'),
@@ -162,9 +179,12 @@ export function installCadPropertyPanel(viewer, av, lookup) {
         this.propertyNodeId = id;
         super.setPropertiesIntoUI({
           name: section.metadata.name,
-          properties: cadPropertyRows(section.metadata, section.route, id).filter(
-            (row) => row.displayName !== 'Name',
-          ),
+          properties: cadPropertyRows(
+            section.metadata,
+            section.route,
+            id,
+            section.positionMm,
+          ).filter((row) => row.displayName !== 'Name'),
         });
         this.layoutAfterCadRender(generation);
         return;
@@ -182,7 +202,12 @@ export function installCadPropertyPanel(viewer, av, lookup) {
         const map = { __selected_dbIds__: own.map((entry) => entry.id) };
         for (const { id, section } of own) {
           if (!section) continue;
-          for (const row of cadPropertyRows(section.metadata, section.route, id)) {
+          for (const row of cadPropertyRows(
+            section.metadata,
+            section.route,
+            id,
+            section.positionMm,
+          )) {
             const key = row.displayCategory
               ? `${row.displayCategory}/${row.displayName}`
               : row.displayName;

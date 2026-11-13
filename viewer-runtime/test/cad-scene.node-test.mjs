@@ -494,3 +494,107 @@ test('CAD color rejects foreign instances, malformed values and disposed scenes'
   assert.throws(() => scene.setColor('owned', '#123456'), /Unknown CAD instance/);
   assert.equal(f.viewer.model, f.sourceModel);
 });
+
+test('native saved world coordinates follow add, move, metadata refresh and geometry replacement without source offsets', () => {
+  const f = fixture();
+  let panel = { isVisible: () => true, uninitialize() {} };
+  class NativePanel {
+    constructor(viewer) {
+      this.viewer = viewer;
+      this.visible = true;
+      this.currentSelections = viewer.getAggregateSelection();
+    }
+    isVisible() {
+      return this.visible;
+    }
+    setVisible(value) {
+      this.visible = value;
+      this.requestProperties();
+    }
+    requestProperties() {
+      if (this.visible && this.currentSelections.length)
+        this.requestAggregatedNodeProperties(this.currentSelections);
+    }
+    setPropertiesIntoUI(result) {
+      this.result = result;
+    }
+    onPropError() {
+      this.result = null;
+    }
+    uninitialize() {}
+  }
+  f.viewer.getExtension = () => ({
+    getPanel: () => panel,
+    setPanel: (next) => {
+      panel = next;
+      return true;
+    },
+    setDefaultPanel() {},
+  });
+  f.viewer.addEventListener = () => {};
+  f.viewer.removeEventListener = () => {};
+  f.window.Autodesk.Viewing.Extensions = { ViewerPropertyPanel: NativePanel };
+  f.window.Autodesk.Viewing.PropertySet = class {};
+  const componentId = '00000000-0000-4000-8000-000000000001';
+  const metadata = {
+    instanceId: componentId,
+    name: 'BC182 / section 1',
+    actualLengthMm: 3750,
+    widthMm: 300,
+    heightMm: 60,
+    partNumber: 'KL 60.303 F',
+    manufacturer: 'Niedax',
+    purpose: 'LV',
+    componentKind: 'straight',
+    cadAssetId: null,
+    cadRevision: 1,
+  };
+  const route = { id: '00000000-0000-4000-8000-000000000002', name: 'BC182', purpose: 'LV' };
+  const scene = createCadSceneController(f.viewer, {
+    window: f.window,
+    sourceModel: f.sourceModel,
+  });
+  scene.add(componentId, f.mesh, f.transform);
+  scene.focus(componentId);
+  scene.setProperties(componentId, metadata, route);
+  const coordinates = () =>
+    panel.result.properties
+      .filter(
+        (row) =>
+          row.displayCategory === 'Position in model' && row.displayName !== 'Reference point',
+      )
+      .map((row) => [row.displayName, row.displayValue, row.units]);
+  assert.deepEqual(coordinates(), [
+    ['Placement origin X', 125000, 'mm'],
+    ['Placement origin Y', 220000, 'mm'],
+    ['Placement origin Z', 340000, 'mm'],
+  ]);
+  const moved = {
+    ...f.transform,
+    positionMm: { x: -123.456789, y: 0, z: 987654.321 },
+    rotation: { x: 0.5, y: 0.5, z: -0.5, w: 0.5 },
+  };
+  scene.update(componentId, moved);
+  moved.positionMm.x = 999;
+  assert.deepEqual(coordinates(), [
+    ['Placement origin X', -123.456789, 'mm'],
+    ['Placement origin Y', 0, 'mm'],
+    ['Placement origin Z', 987654.321, 'mm'],
+  ]);
+  scene.setProperties(componentId, metadata, route);
+  assert.equal(coordinates()[0][1], -123.456789);
+  scene.add(componentId, f.mesh, { ...f.transform, positionMm: { x: 1, y: 2, z: 3 } });
+  panel.currentSelections = f.viewer.getAggregateSelection();
+  scene.setProperties(componentId, metadata, route);
+  assert.deepEqual(coordinates(), [
+    ['Placement origin X', 1, 'mm'],
+    ['Placement origin Y', 2, 'mm'],
+    ['Placement origin Z', 3, 'mm'],
+  ]);
+  assert.equal(
+    panel.result.properties.find((row) => row.displayName === 'Actual length').displayValue,
+    3750,
+  );
+  assert.equal(f.viewer.model, f.sourceModel);
+  scene.dispose();
+});

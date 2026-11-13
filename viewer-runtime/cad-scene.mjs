@@ -27,6 +27,7 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
   const registry = new Map();
   const colors = new Map();
   const properties = new Map();
+  const positions = new Map();
   let propertyPanel;
   let tree;
   let disposed = false;
@@ -139,8 +140,10 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
     if (instanceId < 0) throw new Error('The Viewer rejected CAD geometry.');
     registry.set(componentId, instanceId);
     if (savedColor != null) colors.set(componentId, savedColor);
-    if (savedProperties) properties.set(componentId, savedProperties);
-    tree.upsert(componentId, instanceId, savedProperties);
+    positions.set(componentId, { ...transform.positionMm });
+    if (savedProperties)
+      properties.set(componentId, { ...savedProperties, positionMm: positions.get(componentId) });
+    tree.upsert(componentId, instanceId, properties.get(componentId));
     restoreOwnedSelection(selection);
     viewer.refresh(true);
   }
@@ -150,6 +153,12 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
     if (id === undefined || !dynamicModel) throw new Error('Unknown CAD instance.');
     // Autodesk does not guarantee a boolean return value for this mutation.
     dynamicModel.getInstances().setTransformWorld(id, matrix(transform));
+    // Retain the saved world anchor, before model offset/unit conversion.
+    positions.set(componentId, { ...transform.positionMm });
+    const section = properties.get(componentId);
+    if (section)
+      properties.set(componentId, { ...section, positionMm: positions.get(componentId) });
+    propertyPanel?.refresh();
     viewer.refresh(true);
   }
 
@@ -194,6 +203,7 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
     registry.delete(componentId);
     colors.delete(componentId);
     properties.delete(componentId);
+    positions.delete(componentId);
     tree.remove(componentId, keepIdentity);
     if (!keepIdentity) restoreOwnedSelection(selection);
     propertyPanel?.refresh();
@@ -232,6 +242,7 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
     properties.set(componentId, {
       metadata: structuredClone(metadata),
       route: structuredClone(route),
+      positionMm: positions.get(componentId),
     });
     tree.setProperties(componentId, properties.get(componentId));
     if (!propertyPanel)
@@ -254,6 +265,7 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
       registry.clear();
       colors.clear();
       properties.clear();
+      positions.clear();
       propertyPanel?.dispose();
       propertyPanel = undefined;
       tree?.dispose();
