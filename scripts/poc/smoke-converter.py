@@ -5,6 +5,7 @@ import http.client
 import hashlib
 import json
 import os
+import re
 import tempfile
 import threading
 from http.server import HTTPServer
@@ -140,6 +141,42 @@ def check_section_metadata(work, encoded, source_id):
     assert result.count(b"MANIFOLD_SOLID_BREP(") == 1, "Repeated sections lost geometry sharing"
     assert b"GENERAL_PROPERTY_ASSOCIATION" in result and b"LENGTH_MEASURE" in result
     assert b"\\X2\\" in result and b"SI_UNIT(.MILLI.,.METRE.)" in result
+    # Independently inspect conventional identity and UDA ownership, including
+    # each geometry occurrence without contaminating the shared definition.
+    text = result.decode("utf8")
+    records, start, quoted, index = {}, 0, False, 0
+    while index < len(text):
+        if text[index] == "'":
+            if quoted and index + 1 < len(text) and text[index + 1] == "'":
+                index += 2
+                continue
+            quoted = not quoted
+        if text[index] == ";" and not quoted:
+            match = re.fullmatch(r"#(\d+)\s*=\s*(.*)", text[start:index].strip(), re.S)
+            if match:
+                records[int(match[1])] = match[2]
+            start = index + 1
+        index += 1
+    owners = {}
+    for entity in records.values():
+        match = re.fullmatch(r"PROPERTY_DEFINITION\('([^']+)',\$,#(\d+)\)", entity)
+        if match:
+            owners.setdefault(int(match[2]), set()).add(match[1])
+    sections = {owner: keys for owner, keys in owners.items() if "InstanceId" in keys}
+    required = {"Name", "ActualLengthMm", "WidthMm", "HeightMm", "PartNumber", "Manufacturer", "Purpose", "InstanceId"}
+    assert len(sections) == 128 * 3
+    assert all(required <= keys for keys in sections.values())
+    assert sum(records[owner].startswith("PRODUCT_DEFINITION(") for owner in sections) == 128
+    assert sum(records[owner].startswith("NEXT_ASSEMBLY_USAGE_OCCURRENCE(") for owner in sections) == 256
+    for index, identity in enumerate(expected):
+        label = f"BC18{index % 2 + 2} - KL 60.303 F - 20 mm [section {index + 1}]"
+        assert re.search(r"NEXT_ASSEMBLY_USAGE_OCCURRENCE\(\s*'" + re.escape(label) + "',", text)
+        assert re.search(r"NEXT_ASSEMBLY_USAGE_OCCURRENCE\(\s*'" + re.escape(label + " - geometry") + "',", text)
+        assert not re.search(r"NEXT_ASSEMBLY_USAGE_OCCURRENCE\(\s*'" + re.escape(identity) + "',", text)
+    assert re.search(r"NEXT_ASSEMBLY_USAGE_OCCURRENCE\(\s*'BC182',", text)
+    assert len(re.findall(r"PRODUCT\('KL 60\.303 F',", text)) == 128
+    assert text.count("PRODUCT('Cable tray geometry','Cable tray geometry'") == 1
+    assert "BC182 - KL 60.303 F - 20 mm" in text and "BC183 - KL 60.303 F - 20 mm" in text
     assert len(cq.importers.importStep(path).solids().vals()) == 128
     reader = STEPCAFControl_Reader()
     reader.SetNameMode(True)
@@ -183,6 +220,22 @@ def check_section_metadata(work, encoded, source_id):
     for i in range(1, roots.Length() + 1):
         read(roots.Value(i), 0)
     assert len(found) == 128 and len(set(found.values())) == 2
+    # Legacy groups may share their display name while retaining distinct tags.
+    duplicate_routes = []
+    for part in parts[:2]:
+        name = "SAME NAME / " + part["metadata"]["instanceId"]
+        duplicate_routes.append({**part, "name": name,
+                                 "metadata": {**part["metadata"], "name": name},
+                                 "route": {**part["route"], "name": "SAME NAME"}})
+    collision = assemble_step({"sources": [{"id": source_id, "stepBase64": encoded}], "parts": duplicate_routes}).decode("utf8")
+    for index in (1, 2):
+        assert re.search(r"NEXT_ASSEMBLY_USAGE_OCCURRENCE\(\s*'SAME NAME \[route " + str(index) + r"\]',", collision)
+    reserved = {**parts[2], "route": {**parts[2]["route"], "id": "10000000-0000-4000-8000-000000000003",
+                                    "name": "SAME NAME [route 1]"}}
+    collision = assemble_step({"sources": [{"id": source_id, "stepBase64": encoded}],
+                               "parts": duplicate_routes + [reserved]}).decode("utf8")
+    for index in (1, 2, 3):
+        assert len(re.findall(r"NEXT_ASSEMBLY_USAGE_OCCURRENCE\(\s*'SAME NAME \[route " + str(index) + r"\]',", collision)) == 1
     # Validation must reject identity collisions and inconsistent route details.
     for bad in [parts[:1] + [parts[0]],
                 [parts[0], {**parts[2], "route": {**parts[2]["route"], "purpose": "different"}}],
@@ -194,7 +247,10 @@ def check_section_metadata(work, encoded, source_id):
         else:
             raise AssertionError("Invalid section metadata accepted")
     return {"sections": len(found), "routes": 2, "sharedGeometryDefinitions": 1,
-            "outputBytes": len(result), "nativePropertiesReadback": True, "unicodeAndQuotes": True}
+            "outputBytes": len(result), "nativePropertiesReadback": True, "unicodeAndQuotes": True,
+            "conventionalSkuAndReadableNames": True, "sectionDefinitionOwners": 128,
+            "sectionAndGeometryOccurrenceOwners": 256, "sharedGeometryIdentityFree": True,
+            "duplicateRouteNamesDisambiguated": True}
 
 
 def main():

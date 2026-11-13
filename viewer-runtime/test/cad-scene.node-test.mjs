@@ -2,38 +2,65 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import fs from 'node:fs';
 import { createCadSceneController } from '../cad-scene.mjs';
+import {
+  nativeTreeSdk,
+  nativeSetObjectTree,
+  nativeSetDbId,
+  nativeFragmentIds,
+} from './sdk-object-tree-fixture.mjs';
 
 class FakeGeometry {
   attributes = {};
   indices = null;
-  setAttribute(name, value) { this.attributes[name] = value; }
-  setIndices(value) { this.indices = value; }
+  setAttribute(name, value) {
+    this.attributes[name] = value;
+  }
+  setIndices(value) {
+    this.indices = value;
+  }
 }
 class FakeAttribute {
-  constructor(values, itemSize) { this.values = values; this.itemSize = itemSize; }
+  constructor(values, itemSize) {
+    this.values = values;
+    this.itemSize = itemSize;
+  }
 }
 class FakeUnlitMaterial {
-  constructor(options) { this.options = options; }
+  constructor(options) {
+    this.options = options;
+  }
 }
 class FakeVector3 {
-  constructor(x, y, z) { Object.assign(this, { x, y, z }); }
+  constructor(x, y, z) {
+    Object.assign(this, { x, y, z });
+  }
 }
 class FakeQuaternion {
-  constructor(x, y, z, w) { Object.assign(this, { x, y, z, w }); }
+  constructor(x, y, z, w) {
+    Object.assign(this, { x, y, z, w });
+  }
 }
 class FakeMatrix4 {
-  compose(translation, rotation, scale) { Object.assign(this, { translation, rotation, scale }); return this; }
+  compose(translation, rotation, scale) {
+    Object.assign(this, { translation, rotation, scale });
+    return this;
+  }
 }
 class FakeInstances {
   nextId = 0;
   records = new Map();
+  fragments = { length: 0, fragId2dbId: [] };
+  setDbId = nativeSetDbId;
+  _dbIdToInstanceIds = nativeFragmentIds;
   add(geometry, material, transform, bounds, dbId) {
     const id = this.nextId++;
     this.records.set(id, { geometry, material, transform, dbId });
     return id;
   }
-  remove(id) { this.records.delete(id); }
-  setDbId(id, dbId) { this.records.get(id).dbId = dbId; }
+  remove(id) {
+    this.records.delete(id);
+    this.setDbId(id, 0);
+  }
   setTransformWorld(id, matrix) {
     if (!this.records.has(id)) throw new Error('unknown instance');
     this.records.get(id).transform = matrix;
@@ -46,7 +73,30 @@ class FakeInstances {
 class FakeModel {
   instances = new FakeInstances();
   id = 99;
-  getInstances() { return this.instances; }
+  data = { loadOptions: {} };
+  events = [];
+  getInstances() {
+    return this.instances;
+  }
+  getData() {
+    return this.data;
+  }
+  getObjectTree() {
+    return this.data.instanceTree;
+  }
+  setObjectTree = nativeSetObjectTree;
+  _dispatchEvent(event) {
+    this.events.push(event);
+  }
+  isLoadDone() {
+    return true;
+  }
+  isInitialized() {
+    return true;
+  }
+  setVisibility(id, visible) {
+    this.instances.records.get(id).visible = visible;
+  }
 }
 function fixture() {
   const sourceModel = {
@@ -64,25 +114,60 @@ function fixture() {
     currentSelection: [],
     refreshCount: 0,
     menus: new Map(),
-    registerContextMenuCallback(name, callback) { this.menus.set(name, callback); },
-    unregisterContextMenuCallback(name) { this.menus.delete(name); },
-    getAggregateSelection() { return []; },
-    showModel(model) { this.shown.push(model); },
-    hideModel(id) { this.hidden.push(id); },
-    unloadModel(model) { this.unloaded.push(model); },
-    fitToView(ids, model) { this.focused.push({ ids, model }); },
-    select(ids, model) { this.selected.push({ ids, model }); this.currentSelection = [{ model, selection: ids }]; },
-    getAggregateSelection() { return this.currentSelection; },
-    setAggregateSelection(rows) { this.currentSelection = rows.filter(row => row.selection.length); },
-    refresh() { this.refreshCount++; },
+    registerContextMenuCallback(name, callback) {
+      this.menus.set(name, callback);
+    },
+    unregisterContextMenuCallback(name) {
+      this.menus.delete(name);
+    },
+    getAggregateSelection() {
+      return [];
+    },
+    showModel(model) {
+      this.shown.push(model);
+    },
+    hideModel(id) {
+      this.hidden.push(id);
+    },
+    unloadModel(model) {
+      this.unloaded.push(model);
+    },
+    fitToView(ids, model) {
+      this.focused.push({ ids, model });
+    },
+    select(ids, model) {
+      this.selected.push({ ids, model });
+      this.currentSelection = [{ model, selection: ids }];
+    },
+    getAggregateSelection() {
+      return this.currentSelection;
+    },
+    setAggregateSelection(rows) {
+      this.currentSelection = rows.filter((row) => row.selection.length);
+    },
+    refresh() {
+      this.refreshCount++;
+    },
   };
-  const window = { Autodesk: { Viewing: {
-    Scene: { BufferGeometry: FakeGeometry, BufferAttribute: FakeAttribute, UnlitMaterial: FakeUnlitMaterial, Side: { Double: 'double' } },
-    Math: { Matrix4: FakeMatrix4, Vector3: FakeVector3, Quaternion: FakeQuaternion },
-    Model: FakeModel,
-  } } };
+  const window = {
+    Autodesk: {
+      Viewing: {
+        Scene: {
+          BufferGeometry: FakeGeometry,
+          BufferAttribute: FakeAttribute,
+          UnlitMaterial: FakeUnlitMaterial,
+          Side: { Double: 'double' },
+        },
+        Math: { Matrix4: FakeMatrix4, Vector3: FakeVector3, Quaternion: FakeQuaternion },
+        Model: FakeModel,
+        ObjectTreeBuilder: nativeTreeSdk.ObjectTreeBuilder,
+      },
+    },
+  };
   const mesh = {
-    schemaVersion: 1, units: 'mm', triangleCount: 1,
+    schemaVersion: 1,
+    units: 'mm',
+    triangleCount: 1,
     positions: [0, 0, 0, 300, 0, 0, 0, 60, 0],
     normals: [0, 0, 1, 0, 0, 1, 0, 0, 1],
     indices: [0, 1, 2],
@@ -96,25 +181,44 @@ function fixture() {
 
 test('dynamic STEP mesh uses world-mm to model-unit conversion without mutating the source SVF', () => {
   const f = fixture();
-  const scene = createCadSceneController(f.viewer, { window: f.window, sourceModel: f.sourceModel });
+  const scene = createCadSceneController(f.viewer, {
+    window: f.window,
+    sourceModel: f.sourceModel,
+  });
   scene.add('tray-1', f.mesh, f.transform);
   assert.equal(f.viewer.model, f.sourceModel);
   assert.equal(f.viewer.shown.length, 1);
   const saved = [...f.viewer.shown[0].instances.records.values()][0];
   assert.ok(saved);
-  assert.deepEqual([saved.transform.translation.x, saved.transform.translation.y, saved.transform.translation.z], [25, 20, 40]);
-  assert.deepEqual([saved.transform.scale.x, saved.transform.scale.y, saved.transform.scale.z], [0.001, 0.001, 0.001]);
+  assert.deepEqual(
+    [saved.transform.translation.x, saved.transform.translation.y, saved.transform.translation.z],
+    [25, 20, 40],
+  );
+  assert.deepEqual(
+    [saved.transform.scale.x, saved.transform.scale.y, saved.transform.scale.z],
+    [0.001, 0.001, 0.001],
+  );
   assert.deepEqual([...saved.geometry.indices], [0, 1, 2]);
   assert.equal(saved.geometry.attributes.position.itemSize, 3);
   assert.ok(saved.material instanceof FakeUnlitMaterial);
-  assert.deepEqual(saved.material.options, { color: 0xd9ab33, side: 'double', opacity: 1,
-    transparent: false, depthTest: true, depthWrite: true, fog: false });
+  assert.deepEqual(saved.material.options, {
+    color: 0xd9ab33,
+    side: 'double',
+    opacity: 1,
+    transparent: false,
+    depthTest: true,
+    depthWrite: true,
+    fog: false,
+  });
   assert.ok(f.viewer.refreshCount > 0);
 });
 
 test('updating and removing CAD instances does not touch source model', () => {
   const f = fixture();
-  const scene = createCadSceneController(f.viewer, { window: f.window, sourceModel: f.sourceModel });
+  const scene = createCadSceneController(f.viewer, {
+    window: f.window,
+    sourceModel: f.sourceModel,
+  });
   scene.add('straight', f.mesh, f.transform);
   scene.update('straight', { ...f.transform, positionMm: { x: 100000, y: 200000, z: 300000 } });
   const [rendered] = [...f.viewer.shown[0].instances.records.values()];
@@ -131,7 +235,10 @@ test('updating and removing CAD instances does not touch source model', () => {
 
 test('rotation update forwards the complete quaternion without moving the anchor or changing mesh dimensions', () => {
   const f = fixture();
-  const scene = createCadSceneController(f.viewer, { window: f.window, sourceModel: f.sourceModel });
+  const scene = createCadSceneController(f.viewer, {
+    window: f.window,
+    sourceModel: f.sourceModel,
+  });
   scene.add('rotating', f.mesh, f.transform);
   scene.add('stationary', f.mesh, f.transform);
   const [rendered, stationary] = [...f.viewer.shown[0].instances.records.values()];
@@ -163,7 +270,10 @@ test('rotation update forwards the complete quaternion without moving the anchor
 
 test('disposal unloads the owned dynamic model exactly once and never the source model', () => {
   const f = fixture();
-  const scene = createCadSceneController(f.viewer, { window: f.window, sourceModel: f.sourceModel });
+  const scene = createCadSceneController(f.viewer, {
+    window: f.window,
+    sourceModel: f.sourceModel,
+  });
   scene.add('straight', f.mesh, f.transform);
   scene.dispose();
   scene.dispose();
@@ -174,19 +284,30 @@ test('disposal unloads the owned dynamic model exactly once and never the source
 
 test('malformed CAD geometry refuses to render', () => {
   const f = fixture();
-  const scene = createCadSceneController(f.viewer, { window: f.window, sourceModel: f.sourceModel });
-  assert.throws(() => scene.add('broken', { ...f.mesh, indices: [0, 1, -1] }, f.transform), /invalid|limits/);
+  const scene = createCadSceneController(f.viewer, {
+    window: f.window,
+    sourceModel: f.sourceModel,
+  });
+  assert.throws(
+    () => scene.add('broken', { ...f.mesh, indices: [0, 1, -1] }, f.transform),
+    /invalid|limits/,
+  );
   assert.equal(f.viewer.shown.length, 0);
 });
 
 test('focus resolves only the owned CAD instance and model, never source SVF IDs', () => {
   const f = fixture();
-  const scene = createCadSceneController(f.viewer, { window: f.window, sourceModel: f.sourceModel });
+  const scene = createCadSceneController(f.viewer, {
+    window: f.window,
+    sourceModel: f.sourceModel,
+  });
   scene.add('straight', f.mesh, f.transform);
   scene.add('bend', f.mesh, f.transform);
   scene.focus('bend');
-  assert.deepEqual(f.viewer.focused, [{ ids: [1], model: f.viewer.shown[0] }]);
-  assert.deepEqual(f.viewer.selected, [{ ids: [1], model: f.viewer.shown[0] }]);
+  const owned = f.viewer.shown[0],
+    objectId = owned.instances.fragments.fragId2dbId[1];
+  assert.deepEqual(f.viewer.focused, [{ ids: [objectId], model: owned }]);
+  assert.deepEqual(f.viewer.selected, [{ ids: [objectId], model: owned }]);
   assert.equal(f.viewer.model, f.sourceModel);
   assert.throws(() => scene.focus('foreign'), /Unknown CAD/);
   scene.remove('bend');
@@ -196,36 +317,54 @@ test('focus resolves only the owned CAD instance and model, never source SVF IDs
   assert.equal(f.viewer.focused.length, 1);
 });
 
-test('object IDs remain equal to actual fragments for first-zero selection and replacement', () => {
-  const f = fixture(), scene = createCadSceneController(f.viewer, { window: f.window, sourceModel: f.sourceModel });
+test('real tree resolves first fragment zero and preserves its leaf identity across replacement', () => {
+  const f = fixture(),
+    scene = createCadSceneController(f.viewer, { window: f.window, sourceModel: f.sourceModel });
   scene.add('first', f.mesh, f.transform);
   const model = f.viewer.shown[0];
-  assert.equal(model.instances.records.get(0).dbId, 0);
+  const objectId = model.instances.fragments.fragId2dbId[0];
+  assert.ok(objectId > 0);
   scene.focus('first');
-  assert.deepEqual(f.viewer.focused.at(-1), { ids: [0], model });
-  assert.deepEqual(f.viewer.selected.at(-1), { ids: [0], model });
+  assert.deepEqual(f.viewer.focused.at(-1), { ids: [objectId], model });
+  assert.deepEqual(f.viewer.selected.at(-1), { ids: [objectId], model });
   scene.add('first', f.mesh, f.transform);
-  assert.equal(model.instances.records.get(1).dbId, 1);
-  assert.deepEqual(f.viewer.currentSelection, [{ model, selection: [1] }]);
+  assert.equal(model.instances.fragments.fragId2dbId[1], objectId);
+  assert.deepEqual(f.viewer.currentSelection, [{ model, selection: [objectId] }]);
   model.getData = () => ({ fragments: { dbId2fragId: { 1: 1 } } });
   scene.focus('first');
-  assert.deepEqual(f.viewer.focused.at(-1), { ids: [1], model });
-  assert.deepEqual(f.viewer.selected.at(-1), { ids: [1], model });
+  assert.deepEqual(f.viewer.focused.at(-1), { ids: [objectId], model });
+  assert.deepEqual(f.viewer.selected.at(-1), { ids: [objectId], model });
   scene.remove('first');
   assert.equal(model.instances.records.size, 0);
 });
 test('removing a selected fragment preserves source and other CAD selection and prevents ID-reuse selection', () => {
-  const f = fixture(), scene = createCadSceneController(f.viewer, { window: f.window, sourceModel: f.sourceModel });
-  scene.add('first', f.mesh, f.transform); scene.add('other', f.mesh, f.transform);
+  const f = fixture(),
+    scene = createCadSceneController(f.viewer, { window: f.window, sourceModel: f.sourceModel });
+  scene.add('first', f.mesh, f.transform);
+  scene.add('other', f.mesh, f.transform);
   const model = f.viewer.shown[0];
-  f.viewer.currentSelection = [{ model: f.sourceModel, selection: [91] }, { model, selection: [0, 1] }];
+  const firstId = model.instances.fragments.fragId2dbId[0],
+    otherId = model.instances.fragments.fragId2dbId[1];
+  f.viewer.currentSelection = [
+    { model: f.sourceModel, selection: [91] },
+    { model, selection: [firstId, otherId] },
+  ];
   scene.remove('first');
-  assert.deepEqual(f.viewer.currentSelection, [{ model: f.sourceModel, selection: [91] }, { model, selection: [1] }]);
+  assert.deepEqual(f.viewer.currentSelection, [
+    { model: f.sourceModel, selection: [91] },
+    { model, selection: [otherId] },
+  ]);
   model.instances.nextId = 0;
   scene.add('different-component', f.mesh, f.transform);
-  assert.deepEqual(f.viewer.currentSelection, [{ model: f.sourceModel, selection: [91] }, { model, selection: [1] }]);
+  assert.deepEqual(f.viewer.currentSelection, [
+    { model: f.sourceModel, selection: [91] },
+    { model, selection: [otherId] },
+  ]);
   scene.add('other', f.mesh, f.transform);
-  assert.deepEqual(f.viewer.currentSelection, [{ model: f.sourceModel, selection: [91] }, { model, selection: [1] }]);
+  assert.deepEqual(f.viewer.currentSelection, [
+    { model: f.sourceModel, selection: [91] },
+    { model, selection: [otherId] },
+  ]);
 });
 
 test('actual pinned SDK public selection retains fragment zero while its event drops only zero', () => {
@@ -234,32 +373,70 @@ test('actual pinned SDK public selection retains fragment zero while its event d
     const start = sdk.indexOf(signature, after);
     assert.ok(start >= 0, signature);
     const open = sdk.indexOf('{', start);
-    let depth = 1, end = open + 1;
-    for (; depth; end++) { if (sdk[end] === '{') depth++; else if (sdk[end] === '}') depth--; }
+    let depth = 1,
+      end = open + 1;
+    for (; depth; end++) {
+      if (sdk[end] === '{') depth++;
+      else if (sdk[end] === '}') depth--;
+    }
     return sdk.slice(start, end);
   }
-  const read = Function('return ({' + method('getSelection(){', sdk.indexOf('class mk')) + '}).getSelection')();
-  const raw = Function('return ({' + method('getAggregateSelection(){', sdk.indexOf('class vk')) + '}).getAggregateSelection')();
-  const source = { selector: { selectedObjectIds: { 91: 1 }, getSelection: read, getObjectTree: () => null } };
-  const owned = { selector: { selectedObjectIds: { 0: 1, 2: 1 }, getSelection: read, getObjectTree: () => null } };
-  assert.deepEqual(raw.call({ _models: [source, owned] }), [{ model: source, selection: [91] }, { model: owned, selection: [0, 2] }]);
-  const emit = Function('dg','ug','return ({' + method('_fireAggregateSelectionChangedEvent(e)') + '})._fireAggregateSelectionChangedEvent')('selection','aggregate');
+  const read = Function(
+    'return ({' + method('getSelection(){', sdk.indexOf('class mk')) + '}).getSelection',
+  )();
+  const raw = Function(
+    'return ({' +
+      method('getAggregateSelection(){', sdk.indexOf('class vk')) +
+      '}).getAggregateSelection',
+  )();
+  const source = {
+    selector: { selectedObjectIds: { 91: 1 }, getSelection: read, getObjectTree: () => null },
+  };
+  const owned = {
+    selector: { selectedObjectIds: { 0: 1, 2: 1 }, getSelection: read, getObjectTree: () => null },
+  };
+  assert.deepEqual(raw.call({ _models: [source, owned] }), [
+    { model: source, selection: [91] },
+    { model: owned, selection: [0, 2] },
+  ]);
+  const emit = Function(
+    'dg',
+    'ug',
+    'return ({' +
+      method('_fireAggregateSelectionChangedEvent(e)') +
+      '})._fireAggregateSelectionChangedEvent',
+  )('selection', 'aggregate');
   const events = [];
-  emit.call({ _models: [source, owned], _viewer: { api: { dispatchEvent: event => events.push(event) } } });
-  assert.deepEqual(events.at(-1).selections.map(row => row.dbIdArray), [[91], [2]]);
+  emit.call({
+    _models: [source, owned],
+    _viewer: { api: { dispatchEvent: (event) => events.push(event) } },
+  });
+  assert.deepEqual(
+    events.at(-1).selections.map((row) => row.dbIdArray),
+    [[91], [2]],
+  );
 });
 
 test('dynamic model cannot take ownership of the source model identity', () => {
   const f = fixture();
-  f.viewer.showModel = function (model) { this.model = model; this.shown.push(model); };
-  const scene = createCadSceneController(f.viewer, { window: f.window, sourceModel: f.sourceModel });
+  f.viewer.showModel = function (model) {
+    this.model = model;
+    this.shown.push(model);
+  };
+  const scene = createCadSceneController(f.viewer, {
+    window: f.window,
+    sourceModel: f.sourceModel,
+  });
   assert.throws(() => scene.add('tray', f.mesh, f.transform), /identity/);
   assert.deepEqual(f.viewer.unloaded, [f.viewer.shown[0]]);
 });
 
 test('CAD color affects only the owned instance and survives movement and replacement geometry', () => {
   const f = fixture();
-  const scene = createCadSceneController(f.viewer, { window: f.window, sourceModel: f.sourceModel });
+  const scene = createCadSceneController(f.viewer, {
+    window: f.window,
+    sourceModel: f.sourceModel,
+  });
   scene.add('colored', f.mesh, f.transform);
   scene.add('neighbor', f.mesh, f.transform);
   const records = f.viewer.shown[0].instances.records;
@@ -270,30 +447,49 @@ test('CAD color affects only the owned instance and survives movement and replac
   scene.setColor('colored', '#12aBef');
   assert.equal(colored.material.options.color, 0x12abef);
   assert.ok(colored.material instanceof FakeUnlitMaterial);
-  assert.deepEqual(colored.material.options, { color: 0x12abef, side: 'double', opacity: 1,
-    transparent: false, depthTest: true, depthWrite: true, fog: false });
+  assert.deepEqual(colored.material.options, {
+    color: 0x12abef,
+    side: 'double',
+    opacity: 1,
+    transparent: false,
+    depthTest: true,
+    depthWrite: true,
+    fog: false,
+  });
   assert.equal(colored.geometry, geometry);
   assert.equal(colored.transform, transform);
   assert.equal(neighbor.material, neighborMaterial);
   scene.update('colored', { ...f.transform, positionMm: { x: 100000, y: 200000, z: 300000 } });
   assert.equal(colored.material.options.color, 0x12abef);
-  scene.add('colored', { ...f.mesh, positions: f.mesh.positions.map(v => v / 2) }, f.transform);
-  assert.equal([...records.values()].find(item => item !== neighbor).material.options.color, 0x12abef);
+  scene.add('colored', { ...f.mesh, positions: f.mesh.positions.map((v) => v / 2) }, f.transform);
+  assert.equal(
+    [...records.values()].find((item) => item !== neighbor).material.options.color,
+    0x12abef,
+  );
   assert.equal(f.viewer.model, f.sourceModel);
   scene.remove('colored');
   scene.add('colored', f.mesh, f.transform);
-  assert.equal([...records.values()].find(item => item !== neighbor).material.options.color, 0xd9ab33);
+  assert.equal(
+    [...records.values()].find((item) => item !== neighbor).material.options.color,
+    0xd9ab33,
+  );
   scene.dispose();
 });
 
 test('CAD color rejects foreign instances, malformed values and disposed scenes', () => {
   const f = fixture();
-  const scene = createCadSceneController(f.viewer, { window: f.window, sourceModel: f.sourceModel });
+  const scene = createCadSceneController(f.viewer, {
+    window: f.window,
+    sourceModel: f.sourceModel,
+  });
   scene.add('owned', f.mesh, f.transform);
   for (const value of ['red', '#abc', '#1234567', '123456', '#gg0000', null, 123])
     assert.throws(() => scene.setColor('owned', value), /Invalid CAD color/);
   assert.throws(() => scene.setColor('source-svf-id', '#123456'), /Unknown CAD instance/);
-  assert.equal([...f.viewer.shown[0].instances.records.values()][0].material.options.color, 0xd9ab33);
+  assert.equal(
+    [...f.viewer.shown[0].instances.records.values()][0].material.options.color,
+    0xd9ab33,
+  );
   scene.dispose();
   assert.throws(() => scene.setColor('owned', '#123456'), /Unknown CAD instance/);
   assert.equal(f.viewer.model, f.sourceModel);

@@ -102,11 +102,29 @@ export function installCadPropertyPanel(viewer, av, lookup) {
   if (!manager?.setPanel || !NativePanel || !av.PropertySet)
     throw new Error('The native CAD Properties panel is unavailable.');
   class CadPropertyPanel extends NativePanel {
+    sectionEntries(selection) {
+      const result = new Map();
+      for (const id of selection.selection ?? []) {
+        const value = lookup(selection.model, id);
+        if (value?.members)
+          for (const member of value.members)
+            result.set(member.objectId, { id: member.objectId, section: member.section });
+        else result.set(id, { id, section: value });
+      }
+      return [...result.values()];
+    }
     normalizeOwnedZeroSelection() {
       const selected = this.viewer?.getAggregateSelection();
-      if (!Array.isArray(selected) || !selected.some(row => row.selection?.includes(0) && lookup(row.model, 0) !== undefined)) return false;
+      if (
+        !Array.isArray(selected) ||
+        !selected.some((row) => row.selection?.includes(0) && lookup(row.model, 0) !== undefined)
+      )
+        return false;
       // The SDK's public getter retains 0; only its aggregate event omits it.
-      this.currentSelections = selected.map(row => ({ model: row.model, selection: [...row.selection] }));
+      this.currentSelections = selected.map((row) => ({
+        model: row.model,
+        selection: [...row.selection],
+      }));
       this.currentModel = selected[0].model;
       this.currentNodeIds = [...selected[0].selection];
       return true;
@@ -136,13 +154,7 @@ export function installCadPropertyPanel(viewer, av, lookup) {
       const selections = Array.isArray(input) ? input : [input];
       this.cadGeneration = (this.cadGeneration ?? 0) + 1;
       const generation = this.cadGeneration;
-      const entries = selections.flatMap((selection) =>
-        (selection.selection ?? []).map((id) => ({
-          id,
-          selection,
-          section: lookup(selection.model, id),
-        })),
-      );
+      const entries = selections.flatMap((selection) => this.sectionEntries(selection));
       this.cadActive = entries.some((entry) => entry.section !== undefined);
 
       if (entries.length === 1 && entries[0].section) {
@@ -162,11 +174,8 @@ export function installCadPropertyPanel(viewer, av, lookup) {
         return;
       }
       const pending = selections.map((selection) => {
-        const own = (selection.selection ?? []).map((id) => ({
-          id,
-          section: lookup(selection.model, id),
-        }));
-        if (!own.some((entry) => entry.section !== undefined))
+        const own = this.sectionEntries(selection);
+        if (!(selection.selection ?? []).some((id) => lookup(selection.model, id) !== undefined))
           return selection.model.getPropertySetAsync(selection.selection, {
             needsExternalId: selection.model.getData()?.loadOptions?.needsExternalId,
           });
@@ -243,7 +252,8 @@ export function installCadPropertyPanel(viewer, av, lookup) {
   // Registered after native manager/panel listeners. Restore auto-open only
   // after a real selection event; a user explicitly closing the panel stays closed.
   const rescueZeroSelection = () => {
-    if (panel.normalizeOwnedZeroSelection() && viewer.prefs.get('openPropertiesOnSelect')) panel.setVisible(true);
+    if (panel.normalizeOwnedZeroSelection() && viewer.prefs.get('openPropertiesOnSelect'))
+      panel.setVisible(true);
   };
   viewer.addEventListener(av.AGGREGATE_SELECTION_CHANGED_EVENT, rescueZeroSelection);
   panel.setVisible(visible);

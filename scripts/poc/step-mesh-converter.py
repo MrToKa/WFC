@@ -180,7 +180,8 @@ def write_metadata_step(assembly, output_path, properties):
     from OCP.StepRepr import (StepRepr_PropertyDefinition, StepRepr_PropertyDefinitionRepresentation,
         StepRepr_Representation, StepRepr_RepresentationContext, StepRepr_DescriptiveRepresentationItem,
         StepRepr_CharacterizedDefinition, StepRepr_HArray1OfRepresentationItem,
-        StepRepr_RepresentedDefinition, StepRepr_MeasureRepresentationItem)
+        StepRepr_RepresentedDefinition, StepRepr_MeasureRepresentationItem,
+        StepRepr_NextAssemblyUsageOccurrence)
 
     # Encode Unicode explicitly using Part-21 X2/X4 escapes. Escape a literal
     # backslash too, so user text cannot accidentally introduce STEP directives.
@@ -202,8 +203,21 @@ def write_metadata_step(assembly, output_path, properties):
     unit = StepBasic_Unit()
     unit.SetValue(millimetre)
     attached = set()
+    definitions = {}
+    occurrences = []
+
+    def display_name(values):
+        if not values.get("InstanceId"):
+            return values["Name"]
+        length = values.get("ActualLengthMm")
+        return " - ".join(str(value) for value in
+                          [values["RouteName"], values["PartNumber"],
+                           f"{length:.12g} mm" if length is not None else "length unknown"])
+
     for index in range(1, model.NbEntities() + 1):
         product = model.Value(index)
+        if isinstance(product, StepRepr_NextAssemblyUsageOccurrence):
+            occurrences.append(product)
         if not isinstance(product, StepBasic_ProductDefinition):
             continue
         product_name = product.Formation().OfProduct().Name().ToCString()
@@ -211,11 +225,25 @@ def write_metadata_step(assembly, output_path, properties):
             continue
         values = properties[product_name]
         attached.add(product_name)
-        product.Formation().OfProduct().SetName(string(values["Name"]))
-        product.Formation().OfProduct().SetId(string(values.get("InstanceId") or values.get("RouteId") or product_name))
+        definitions[index] = values
+
+    # Resolve relationship targets before replacing the writer's internal names.
+    occurrence_values = []
+    for occurrence in occurrences:
+        parent_name = occurrence.RelatingProductDefinition().Formation().OfProduct().Name().ToCString()
+        child_name = occurrence.RelatedProductDefinition().Formation().OfProduct().Name().ToCString()
+        occurrence_values.append((occurrence, properties.get(parent_name), properties.get(child_name)))
+    for number, values in definitions.items():
+        product = model.Value(number)
+        product.Formation().OfProduct().SetName(string(display_name(values)))
+        # PRODUCT.id is the conventional part number in many CAD importers.
+        # Instance identity belongs in InstanceId, independently of shared SKU.
+        product.Formation().OfProduct().SetId(string(values.get("PartNumber") or values["Name"]))
+
+    def attach(target_entity, values):
         for key, value in values.items():
             target = StepRepr_CharacterizedDefinition()
-            target.SetValue(product)
+            target.SetValue(target_entity)
             definition = StepRepr_PropertyDefinition()
             definition.Init(string(key), False, string(""), target)
             if isinstance(value, (int, float)) and key in {"ActualLengthMm", "WidthMm", "HeightMm"}:
@@ -244,6 +272,51 @@ def write_metadata_step(assembly, output_path, properties):
             general_link.Init(string(""), string(""), general, definition)
             model.AddWithRefs(association)
             model.AddWithRefs(general_link)
+
+    for number, values in definitions.items():
+        attach(model.Value(number), values)
+    section_numbers = {identity: index + 1 for index, identity in enumerate(sorted(
+        values["InstanceId"] for values in definitions.values() if values.get("InstanceId")))}
+    route_labels = {}
+    for values in definitions.values():
+        if not values.get("InstanceId"):
+            route_labels.setdefault(display_name(values), []).append(values.get("RouteId") or "unassigned")
+    route_occurrence_ids = {}
+    used_route_labels = set(route_labels)
+    for label, identities in sorted(route_labels.items()):
+        for index, identity in enumerate(sorted(identities)):
+            candidate = label
+            suffix = index + 1
+            if len(identities) > 1:
+                candidate = f"{label} [route {suffix}]"
+                while candidate in used_route_labels:
+                    suffix += 1
+                    candidate = f"{label} [route {suffix}]"
+            route_occurrence_ids[identity] = candidate
+            used_route_labels.add(candidate)
+    for occurrence, parent, child in occurrence_values:
+        values = child or parent
+        if values is None:
+            continue
+        is_geometry = child is None
+        occurrence.SetName(string(display_name(values) + (" - geometry" if is_geometry else "")))
+        # Autodesk's observed tree uses NAUO.id ahead of PRODUCT.name. Keep
+        # that field readable; full persistent identity remains in the UDA.
+        identity = display_name(values)
+        if values.get("InstanceId"):
+            identity += " [section " + str(section_numbers[values["InstanceId"]]) + "]"
+        else:
+            identity = route_occurrence_ids[values.get("RouteId") or "unassigned"]
+        occurrence.SetId(string(identity + (" - geometry" if is_geometry else "")))
+        # CAx-IF UDA permits product_definition_relationship (NAUO) targets.
+        # Put occurrence properties on the relationship, never on a shared B-Rep.
+        attach(occurrence, values)
+        if is_geometry:
+            product = occurrence.RelatedProductDefinition().Formation().OfProduct()
+            # A geometry definition can be reused by differently labelled SKUs;
+            # the owning occurrence carries its correct SKU and instance data.
+            product.SetId(string("Cable tray geometry"))
+            product.SetName(string("Cable tray geometry"))
     if attached != set(properties) or writer.Write(output_path) != IFSelect_ReturnStatus.IFSelect_RetDone:
         raise ValueError("STEP metadata write failed")
 
