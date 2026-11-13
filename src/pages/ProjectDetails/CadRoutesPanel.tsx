@@ -113,6 +113,8 @@ export function CadRoutesPanel({
   const [selectedId, setSelectedId] = useState('');
   const [fields, setFields] = useState(empty);
   const [members, setMembers] = useState<string[]>([]);
+  const memberSelectionEpoch = useRef(0);
+  const selectedMembershipRoute = useRef('');
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
@@ -147,19 +149,28 @@ export function CadRoutesPanel({
     onBusyChange?.(busy);
   }, [busy, onBusyChange]);
   useEffect(() => {
+    memberSelectionEpoch.current++;
+    selectedMembershipRoute.current = '';
     setSelectedId('');
     setFields(empty);
     setMembers([]);
     setMessage('');
   }, [resetKey]);
   useEffect(() => {
-    if (!selectedId && newDraftInstanceIds)
-      setMembers((old) => [
-        ...new Set([
-          ...old.filter((id) => !memberScopeIds || memberScopeIds.includes(id)),
-          ...newDraftInstanceIds.filter((id) => !memberScopeIds || memberScopeIds.includes(id)),
-        ]),
-      ]);
+    if (!selectedId && newDraftInstanceIds) {
+      const epoch = memberSelectionEpoch.current;
+      setMembers((old) => {
+        // React can replay this draft updater after a saved route is selected.
+        // A later selection must retain its authoritative saved membership.
+        if (selectedMembershipRoute.current || epoch !== memberSelectionEpoch.current) return old;
+        return [
+          ...new Set([
+            ...old.filter((id) => !memberScopeIds || memberScopeIds.includes(id)),
+            ...newDraftInstanceIds.filter((id) => !memberScopeIds || memberScopeIds.includes(id)),
+          ]),
+        ];
+      });
+    }
   }, [selectedId, newDraftInstanceIds, memberScopeIds]);
   const base = `${getApiBaseUrl()}/api/projects/${projectId}/cad-design/designs/${designId}/routes`;
   const request = useCallback(
@@ -188,6 +199,8 @@ export function CadRoutesPanel({
     [request],
   );
   useEffect(() => {
+    memberSelectionEpoch.current++;
+    selectedMembershipRoute.current = '';
     const controller = new AbortController();
     setRoutes([]);
     setSelectedId('');
@@ -251,6 +264,8 @@ export function CadRoutesPanel({
     };
   }, [routes, instances, displayedIds, onColor]);
   const edit = (route: CadRouteGroup) => {
+    memberSelectionEpoch.current++;
+    selectedMembershipRoute.current = route.id;
     setSelectedId(route.id);
     setFields({ name: route.name, color: route.color, purpose: route.purpose });
     setMembers(route.instanceIds);
@@ -405,6 +420,8 @@ export function CadRoutesPanel({
         body: JSON.stringify({ expectedRevision: removeCandidate.revision }),
       });
       setRemoveCandidate(null);
+      memberSelectionEpoch.current++;
+      selectedMembershipRoute.current = '';
       setSelectedId('');
       setFields(empty);
       setMembers([]);
@@ -433,6 +450,8 @@ export function CadRoutesPanel({
             void reload()
               .then(async () => {
                 await onMetadataChanged?.();
+                memberSelectionEpoch.current++;
+                selectedMembershipRoute.current = '';
                 setSelectedId('');
                 setFields(empty);
                 setMembers([]);
@@ -578,6 +597,8 @@ export function CadRoutesPanel({
                 type="button"
                 disabled={busy}
                 onClick={() => {
+                  memberSelectionEpoch.current++;
+                  selectedMembershipRoute.current = '';
                   setSelectedId('');
                   setFields(empty);
                   setMembers([]);

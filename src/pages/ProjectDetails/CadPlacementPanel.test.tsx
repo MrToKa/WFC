@@ -264,6 +264,10 @@ function mountScoped(holdFirstExport = false, withMetadata = false) {
   const downloads: string[] = [];
   let finishExport: ((response: unknown) => void) | undefined;
   const exportResponse = { ok: true, blob: async () => new Blob(['test export']) };
+  const jsonResponse = (data: unknown) => {
+    const snapshot = structuredClone(data);
+    return { ok: true, json: async () => structuredClone(snapshot) };
+  };
   const request = vi.fn(async (url: string, options: RequestInit = {}) => {
     if (/\/(assembly\.step|materials\.csv)(?:\?|$)/.test(url)) {
       if (holdFirstExport) {
@@ -287,13 +291,13 @@ function mountScoped(holdFirstExport = false, withMetadata = false) {
           zMm: input.transform.positionMm.z,
         },
       ];
-      return { ok: true, json: async () => ({ id: newId }) };
+      return jsonResponse({ id: newId });
     }
     if (url.includes('/routes/') && options.method === 'PATCH') {
       const route = groups.find((row) => url.endsWith('/' + row.id));
       if (!route) throw new Error('Unknown test route');
       Object.assign(route, JSON.parse(String(options.body)), { revision: route.revision + 1 });
-      return { ok: true, json: async () => ({ route }) };
+      return jsonResponse({ route });
     }
     if (url.endsWith('/routes') && options.method === 'POST') {
       const input = JSON.parse(String(options.body));
@@ -304,50 +308,48 @@ function mountScoped(holdFirstExport = false, withMetadata = false) {
         tag: input.name,
       };
       groups.push(route);
-      return { ok: true, json: async () => ({ route }) };
+      return jsonResponse({ route });
     }
-    return {
-      ok: true,
-      json: async () =>
-        url.endsWith('/designs')
-          ? { designs: [{ id: designId, modelVersionId, activeModel: true, status: 'proposed' }] }
-          : url.endsWith('/instances')
-            ? {
-                instances: rows.map((row) => {
-                  if (!withMetadata) return row;
-                  const group = groups.find((group) => group.instanceIds.includes(row.id));
-                  const route = {
-                    id: group?.id ?? null,
-                    name: group?.name ?? 'Unassigned components',
-                    purpose: group?.purpose ?? null,
-                  };
-                  return {
-                    ...row,
-                    route,
-                    metadata: {
-                      instanceId: row.id,
-                      name: route.name + ' / ' + row.id,
-                      actualLengthMm: 6000,
-                      widthMm: 300,
-                      heightMm: 60,
-                      partNumber: row.partNumber,
-                      manufacturer: row.manufacturer,
-                      purpose: route.purpose,
-                      componentKind: 'straight',
-                      cadAssetId: catalogId,
-                      cadRevision: 1,
-                    },
-                  };
-                }),
-              }
-            : url.endsWith('/connections')
-              ? { connections: [] }
-              : url.endsWith('/routes')
-                ? { routes: groups }
-                : url.endsWith('/auto-attachments')
-                  ? { status: 'network-required', attachments: [] }
-                  : { schemaVersion: 1, units: 'mm' },
-    };
+    return jsonResponse(
+      url.endsWith('/designs')
+        ? { designs: [{ id: designId, modelVersionId, activeModel: true, status: 'proposed' }] }
+        : url.endsWith('/instances')
+          ? {
+              instances: rows.map((row) => {
+                if (!withMetadata) return row;
+                const group = groups.find((group) => group.instanceIds.includes(row.id));
+                const route = {
+                  id: group?.id ?? null,
+                  name: group?.name ?? 'Unassigned components',
+                  purpose: group?.purpose ?? null,
+                };
+                return {
+                  ...row,
+                  route,
+                  metadata: {
+                    instanceId: row.id,
+                    name: route.name + ' / ' + row.id,
+                    actualLengthMm: 6000,
+                    widthMm: 300,
+                    heightMm: 60,
+                    partNumber: row.partNumber,
+                    manufacturer: row.manufacturer,
+                    purpose: route.purpose,
+                    componentKind: 'straight',
+                    cadAssetId: catalogId,
+                    cadRevision: 1,
+                  },
+                };
+              }),
+            }
+          : url.endsWith('/connections')
+            ? { connections: [] }
+            : url.endsWith('/routes')
+              ? { routes: groups }
+              : url.endsWith('/auto-attachments')
+                ? { status: 'network-required', attachments: [] }
+                : { schemaVersion: 1, units: 'mm' },
+    );
   });
   vi.stubGlobal('fetch', request);
   const NativeURL = URL;
@@ -435,6 +437,8 @@ describe('saved route component scope and exports', { timeout: 20000 }, () => {
       expect.objectContaining({ widthMm: 300, heightMm: 60, purpose: 'Low voltage cable tray' }),
       expect.objectContaining({ name: 'A-ROUTE' }),
     ]);
+    // Select immediately after metadata delivery, while initial draft effects
+    // can still be pending. They must not erase the saved route's membership.
     fireEvent.click(await screen.findByRole('button', { name: /A-ROUTE · 1 components/ }));
     await waitFor(() =>
       expect(screen.getByLabelText('Include component ' + instanceId)).toBeChecked(),
@@ -444,6 +448,12 @@ describe('saved route component scope and exports', { timeout: 20000 }, () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save route changes' }));
     await screen.findByText('Route saved. Its colour is applied to all member components.');
+    const saved = fixture.request.mock.calls.find(
+      ([url, options]) => url.endsWith(`/routes/${fixture.routeA}`) && options?.method === 'PATCH',
+    );
+    expect(JSON.parse(String(saved?.[1]?.body))).toEqual(
+      expect.objectContaining({ instanceIds: [instanceId], purpose: 'Medium voltage cable tray' }),
+    );
     await waitFor(() =>
       expect(
         fixture.onProperties.mock.calls.some(
