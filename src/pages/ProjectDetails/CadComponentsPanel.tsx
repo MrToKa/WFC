@@ -27,6 +27,7 @@ type Props = {
   onMove: ViewerController['moveCadComponent'];
   onFocus?: ViewerController['focusCadComponent'];
   onColor?: ViewerController['setCadComponentColor'];
+  onProperties?: ViewerController['setCadComponentProperties'];
   onTraysChanged?: () => Promise<void>;
   onRemove?: ViewerController['removeCadComponent'];
 };
@@ -43,6 +44,7 @@ export function CadComponentsPanel({
   onFocus,
   onRemove,
   onColor,
+  onProperties,
   onTraysChanged,
 }: Props) {
   const generation = useRef(0);
@@ -316,6 +318,7 @@ export function CadComponentsPanel({
           onFocus={onFocus}
           onRemove={onRemove}
           onColor={onColor}
+          onProperties={onProperties}
           onTraysChanged={onTraysChanged}
           newTrayMode={newTrayMode}
           newTrayEpoch={newTrayEpoch}

@@ -1,4 +1,5 @@
 import { modelCoordinates } from './pathfinder.mjs';
+import { installCadPropertyPanel, validateCadProperties } from './cad-properties.mjs';
 
 /**
  * Dynamic Scene API model layered over the currently loaded client SVF.
@@ -18,6 +19,8 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
   let dynamicModel = null;
   const registry = new Map();
   const colors = new Map();
+  const properties = new Map();
+  let propertyPanel;
   let disposed = false;
 
   function cadMaterial(color) {
@@ -88,6 +91,9 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
     // Rehydration after switching tabs may reuse the same component UUID.
     // Replace only this dynamic instance, never mutate the client SVF.
     const savedColor = colors.get(componentId);
+    const savedProperties = properties.get(componentId);
+    const previousId = registry.get(componentId);
+    const restoreSelection = previousId !== undefined && viewer.getAggregateSelection?.().some(row => row.model === dynamicModel && row.selection.includes(previousId));
     if (registry.has(componentId)) remove(componentId);
     validateMesh(mesh);
     const instances = ensureScene();
@@ -99,8 +105,17 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
     const material = cadMaterial(savedColor == null ? 0xd9ab33 : Number.parseInt(savedColor.slice(1), 16));
     const instanceId = instances.add(geometry, material, matrix(transform));
     if (instanceId < 0) throw new Error('The Viewer rejected CAD geometry.');
+    // Match native object/fragment identities; the panel rescues SDK event 0.
+    instances.setDbId(instanceId, instanceId);
     registry.set(componentId, instanceId);
     if (savedColor != null) colors.set(componentId, savedColor);
+    if (savedProperties) properties.set(componentId, savedProperties);
+    if (restoreSelection) {
+      const selected = viewer.getAggregateSelection();
+      const own = selected.find(row => row.model === dynamicModel);
+      viewer.setAggregateSelection([...selected.filter(row => row.model !== dynamicModel),
+        { model: dynamicModel, selection: [...(own?.selection ?? []), instanceId] }]);
+    }
     viewer.refresh(true);
   }
 
@@ -115,9 +130,16 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
   function remove(componentId) {
     const id = registry.get(componentId);
     if (id === undefined || !dynamicModel) return;
+    // Clear only this real instance before the SDK releases/reuses its ID.
+    const selected = viewer.getAggregateSelection?.();
+    if (selected?.some(row => row.model === dynamicModel && row.selection.includes(id)))
+      viewer.setAggregateSelection(selected.map(row => row.model !== dynamicModel ? row :
+        ({ model: dynamicModel, selection: row.selection.filter(value => value !== id) })));
     dynamicModel.getInstances().remove(id);
     registry.delete(componentId);
     colors.delete(componentId);
+    properties.delete(componentId);
+    propertyPanel?.refresh();
     viewer.refresh(true);
   }
 
@@ -139,14 +161,30 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
     // For a dynamic model without an object tree the SDK resolves this owned
     // instance ID as its fragment ID. Never accept caller-supplied SVF IDs.
     viewer.fitToView([id], dynamicModel);
+    viewer.select?.([id], dynamicModel);
+  }
+
+  function setProperties(componentId, metadata, route) {
+    if (disposed || !registry.has(componentId) || !dynamicModel) throw new Error('Unknown CAD instance.');
+    if (!validateCadProperties(componentId, metadata, route)) throw new Error('Invalid CAD properties.');
+    properties.set(componentId, { metadata: structuredClone(metadata), route: structuredClone(route) });
+    if (!propertyPanel) propertyPanel = installCadPropertyPanel(viewer, av, (model, instanceId) => {
+      if (model !== dynamicModel) return undefined;
+      for (const [uuid, sdkId] of registry) if (sdkId === instanceId) return properties.get(uuid) ?? null;
+      return null;
+    });
+    propertyPanel.refresh();
   }
 
   return {
-    add, update, remove, focus, setColor,
+    add, update, remove, focus, setColor, setProperties,
     dispose() {
       disposed = true;
       registry.clear();
       colors.clear();
+      properties.clear();
+      propertyPanel?.dispose();
+      propertyPanel = undefined;
       releaseDynamicModel();
     },
   };

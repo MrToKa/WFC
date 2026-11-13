@@ -1,3 +1,4 @@
+import { validateCadProperties, type CadSectionMetadata, type CadSectionRoute } from '../../viewer-runtime/cad-properties.mjs';
 import { digestSha256 } from '../utils/sha256';
 import { generateId } from '@/utils/generateId';
 import { FRAME_PATH, MAX_PATH_POINTS, MAX_PATH_CHUNK_POINTS, MAX_LOCATION_OBJECT_IDS, MAX_PATH_OBJECT_IDS, isCanonicalPoint, validateEnvelope, type BridgeEnvelope, type ComputedPath, type PickedPoint, type ViewerModelObjectsPage, type ViewerSelection, type ViewerTrayRootSelection, type ModelCaptureRequest, type ModelCaptureProgress } from '../../viewer-runtime/protocol.mjs';
@@ -238,6 +239,13 @@ export class ViewerController {
     await this.sendAsync('CAD_COLOR', { componentId, color }, 'CAD_ACK');
   }
 
+  async setCadComponentProperties(componentId: string, metadata: CadSectionMetadata, route: CadSectionRoute): Promise<void> {
+    if (!validateCadProperties(componentId, metadata, route)) throw new Error('Invalid CAD section properties.');
+    const payload = structuredClone({ componentId, metadata, route });
+    if (!this.getLoadSnapshot()?.ready || !await this.checkSelection()) throw new Error('Viewer model access changed.');
+    await this.sendAsync('CAD_PROPERTIES', payload, 'CAD_ACK');
+  }
+
   private onMessage = (event: MessageEvent): void => {
     if (this.disposed || event.origin !== window.location.origin || event.source !== this.iframe.contentWindow) return;
     const message = validateEnvelope(event.data, 'frame-to-parent');
@@ -324,7 +332,7 @@ export class ViewerController {
     if (message.type === 'CAD_ACK') {
       const expected: Record<string, string> = {
         CAD_BEGIN: 'begun', CAD_APPEND: 'appended', CAD_COMMIT: 'displayed',
-        CAD_TRANSFORM: 'moved', CAD_REMOVE: 'removed', CAD_FOCUS: 'focused', CAD_COLOR: 'colored',
+        CAD_TRANSFORM: 'moved', CAD_REMOVE: 'removed', CAD_FOCUS: 'focused', CAD_COLOR: 'colored', CAD_PROPERTIES: 'properties',
       };
       const phase = expected[pending.envelope.type];
       const payload = pending.envelope.payload;

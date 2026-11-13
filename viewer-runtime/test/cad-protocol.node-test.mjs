@@ -8,6 +8,8 @@ const modelVersionId = '33333333-3333-4333-8333-333333333333';
 const loadId = '44444444-4444-4444-8444-444444444444';
 const requestId = '55555555-5555-4555-8555-555555555555';
 const componentId = '66666666-6666-4666-8666-666666666666';
+const metadata = { instanceId: componentId, name: `BC182 / ${componentId}`, actualLengthMm: 3750, widthMm: 300, heightMm: 60, partNumber: 'KL 60.303 F', manufacturer: 'Niedax', purpose: 'LV', componentKind: 'straight', cadAssetId: null, cadRevision: 1 };
+const route = { id: projectId, name: 'BC182', purpose: 'LV' };
 const identity = {
   channel: CHANNEL, protocolVersion: PROTOCOL_VERSION, instanceId, projectId,
   modelVersionId, loadId, requestId,
@@ -60,4 +62,13 @@ test('CAD color accepts only owned UUID commands, exact hex and a model-scoped c
   assert.equal(validateEnvelope(parent('CAD_COLOR', { componentId, color: '#123456' }), 'frame-to-parent'), null);
   assert.equal(validateEnvelope(parent('CAD_COLOR', { componentId, color: '#123456' }, { modelVersionId: null, loadId: null }), 'parent-to-frame'), null);
   assert.ok(validateEnvelope(parent('CAD_ACK', { componentId, phase: 'colored', received: 0 }), 'frame-to-parent'));
+});
+
+test('CAD properties require exact canonical identity, bounded values and current model direction', () => {
+  assert.ok(validateEnvelope(parent('CAD_PROPERTIES', { componentId, metadata, route }), 'parent-to-frame'));
+  assert.equal(validateEnvelope(parent('CAD_PROPERTIES', { componentId, metadata: { ...metadata, instanceId: projectId }, route }), 'parent-to-frame'), null);
+  assert.equal(validateEnvelope(parent('CAD_PROPERTIES', { componentId, metadata, route, objectId: 42 }), 'parent-to-frame'), null);
+  assert.equal(validateEnvelope(parent('CAD_PROPERTIES', { componentId, metadata, route }), 'frame-to-parent'), null);
+  assert.equal(validateEnvelope(parent('CAD_PROPERTIES', { componentId, metadata, route }, { modelVersionId: null, loadId: null }), 'parent-to-frame'), null);
+  assert.ok(validateEnvelope(parent('CAD_ACK', { componentId, phase: 'properties', received: 0 }), 'frame-to-parent'));
 });

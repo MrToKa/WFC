@@ -85,20 +85,26 @@ export async function readCadExportSnapshot(pool:Pick<Pool,'connect'>,projectId:
 export function cadAssemblyParts(snapshot:CadExportSnapshot) {
   const routes=new Map(snapshot.routes.map(route=>[route.id,route]));
   const membership=new Map(snapshot.memberships.map(row=>[row.instance_id,row.route_group_id]));
-  const dimension=(value:number|null|undefined)=>typeof value==='number'&&Number.isFinite(value)&&value>0?value:null;
-  return snapshot.parts.map(part=>{
-    const group=routes.get(membership.get(part.id)??'');
-    const route:CadSectionRoute={id:group?.id??null,name:group?.name??'Unassigned components',purpose:group?.purpose??null};
-    let actualLengthMm:number|null=null;
-    if(part.component_kind==='straight'&&supportsStraightCut(part.original_filename,part.source_sha256))actualLengthMm=part.cut_length_mm??6000;
-    else if(part.component_kind==='bend'&&part.cut_length_mm==null&&getAalborgPocPorts(part.original_filename,part.source_sha256).length&&
-      part.original_filename.trim().toUpperCase()==='NDX_KLBK_60-303_MED_214.STEP')actualLengthMm=290+650*Math.PI/2;
-    const metadata:CadSectionMetadata={instanceId:part.id,name:`${route.name} / ${part.id}`,actualLengthMm,
-      widthMm:dimension(part.width_mm),heightMm:dimension(part.height_mm),partNumber:part.part_number,manufacturer:part.manufacturer,
-      purpose:route.purpose,componentKind:part.component_kind,cadAssetId:part.material_asset_id,cadRevision:part.cad_revision};
-    return {...part,metadata,route};
-  });
+  return snapshot.parts.map(part=>({...part,...cadSectionProperties(part,routes.get(membership.get(part.id)??''))}));
 }
+type CadSectionSource=Pick<CadExportPart,'id'|'component_kind'|'original_filename'|'source_sha256'|'cut_length_mm'|'width_mm'|'height_mm'|
+  'part_number'|'manufacturer'|'material_asset_id'|'cad_revision'>;
+
+/** Shared by STEP delivery and the native viewer; dimensions stay in catalogue-local axes. */
+export function cadSectionProperties(part:CadSectionSource,group?:Pick<CadExportRoute,'id'|'name'|'purpose'>|null) {
+  const dimension=(value:number|null|undefined)=>typeof value==='number'&&Number.isFinite(value)&&value>0?value:null;
+  const route:CadSectionRoute={id:group?.id??null,name:group?.name??'Unassigned components',purpose:group?.purpose??null};
+  let actualLengthMm:number|null=null;
+  if(part.component_kind==='straight'&&supportsStraightCut(part.original_filename,part.source_sha256))actualLengthMm=dimension(part.cut_length_mm??6000);
+  else if(part.component_kind==='bend'&&part.cut_length_mm==null&&getAalborgPocPorts(part.original_filename,part.source_sha256).length&&
+    part.original_filename.trim().toUpperCase()==='NDX_KLBK_60-303_MED_214.STEP')actualLengthMm=290+650*Math.PI/2;
+  const metadata:CadSectionMetadata={instanceId:part.id,name:`${route.name} / ${part.id}`,actualLengthMm,
+    widthMm:dimension(part.width_mm),heightMm:dimension(part.height_mm),partNumber:part.part_number,manufacturer:part.manufacturer,
+    purpose:route.purpose,componentKind:part.component_kind??null,cadAssetId:part.material_asset_id??null,
+    cadRevision:Number.isInteger(part.cad_revision)&&dimension(part.cad_revision)!==null?part.cad_revision:null};
+  return {metadata,route};
+}
+
 export async function assertCadExportCurrent(pool:Pick<Pool,'connect'>,snapshot:CadExportSnapshot):Promise<void> {
   let current:CadExportSnapshot;
   try{current=await readCadExportSnapshot(pool,snapshot.projectId,snapshot.designId,snapshot.route?.id,MAX_STEP_ASSEMBLY_PARTS);}

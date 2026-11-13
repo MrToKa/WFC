@@ -125,6 +125,28 @@ describe('PathFinder protected Viewer capabilities', () => {
     await expect(colored).resolves.toBeUndefined();
   });
 
+  it('pins canonical CAD properties before asynchronous access checks and waits for their acknowledgement', async () => {
+    const s = await loaded(), componentId = generateId();
+    const metadata = { instanceId: componentId, name: 'BC182 / ' + componentId, actualLengthMm: 3750, widthMm: 300, heightMm: 60, partNumber: 'KL', manufacturer: 'Niedax', purpose: 'LV', componentKind: 'straight', cadAssetId: null, cadRevision: 1 };
+    const route = { id: generateId(), name: 'BC182', purpose: 'LV' };
+    const sent = s.c.setCadComponentProperties(componentId, metadata, route);
+    metadata.name = 'Caller changed it';
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'CAD_PROPERTIES')).toBe(true));
+    const command = s.send.mock.calls.find(call => call[0].type === 'CAD_PROPERTIES')![0];
+    expect(command.payload).toEqual({ componentId, metadata: { ...metadata, name: 'BC182 / ' + componentId }, route });
+    expect(command.modelVersionId).toBe(versionId);
+    expect(command.loadId).toBe(s.identity.loadId);
+    s.message('CAD_ACK', { componentId, phase: 'properties', received: 0 }, command.requestId, s.identity);
+    await expect(sent).resolves.toBeUndefined();
+  });
+
+  it('refuses invalid CAD properties before sending a command', async () => {
+    const s = setup(), componentId = generateId();
+    const metadata = { instanceId: componentId, name: 'BC182 / ' + componentId, actualLengthMm: NaN, widthMm: 300, heightMm: 60, partNumber: 'KL', manufacturer: 'Niedax', purpose: null, componentKind: 'straight', cadAssetId: null, cadRevision: 1 };
+    await expect(s.c.setCadComponentProperties(componentId, metadata, { id: null, name: 'Unassigned', purpose: null })).rejects.toThrow('Invalid CAD section properties');
+    expect(s.send.mock.calls.some(call => call[0].type === 'CAD_PROPERTIES')).toBe(false);
+  });
+
   it('rejects invalid color and unavailable model access before sending CAD color', async () => {
     const s = setup();
     for (const color of ['red', '#123', '#1234567', '123456', '#zz0000'])

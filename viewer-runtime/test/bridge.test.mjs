@@ -1161,3 +1161,20 @@ test('a GUID hover while two foreground capabilities are pending remains a local
   wait.resolve(); await turn();
   assert.equal(f.messages('TRAY_ROOT_SELECTION').length, 2);
 });
+
+test('canonical CAD properties reach only the current owned component and acknowledge after completion', async () => {
+  const f = fixture(), calls = [], componentId = uuid(801);
+  const metadata = { instanceId: componentId, name: 'BC182 / ' + componentId, actualLengthMm: 3750, widthMm: 300, heightMm: 60, partNumber: 'KL', manufacturer: 'Niedax', purpose: 'LV', componentKind: 'straight', cadAssetId: null, cadRevision: 1 };
+  const route = { id: uuid(802), name: 'BC182', purpose: 'LV' };
+  const pending = deferred();
+  f.handle.cadProperties = async (...args) => { calls.push(args); await pending.promise; };
+  await f.loaded();
+  const command = f.send('CAD_PROPERTIES', { componentId, metadata, route }); await turn();
+  assert.deepEqual(calls, [[componentId, metadata, route]]);
+  assert.equal(f.messages('CAD_ACK').some(value => value.requestId === command.requestId), false);
+  pending.resolve(); await turn();
+  assert.deepEqual(f.messages('CAD_ACK').find(value => value.requestId === command.requestId)?.payload, { componentId, phase: 'properties', received: 0 });
+  f.send('CAD_PROPERTIES', { componentId, metadata, route }, { loadId: uuid(999) });
+  await turn(); assert.equal(calls.length, 1);
+  f.bridge.dispose();
+});

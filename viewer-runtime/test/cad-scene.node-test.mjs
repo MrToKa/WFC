@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import fs from 'node:fs';
 import { createCadSceneController } from '../cad-scene.mjs';
 
 class FakeGeometry {
@@ -26,12 +27,13 @@ class FakeMatrix4 {
 class FakeInstances {
   nextId = 0;
   records = new Map();
-  add(geometry, material, transform) {
+  add(geometry, material, transform, bounds, dbId) {
     const id = this.nextId++;
-    this.records.set(id, { geometry, material, transform });
+    this.records.set(id, { geometry, material, transform, dbId });
     return id;
   }
   remove(id) { this.records.delete(id); }
+  setDbId(id, dbId) { this.records.get(id).dbId = dbId; }
   setTransformWorld(id, matrix) {
     if (!this.records.has(id)) throw new Error('unknown instance');
     this.records.get(id).transform = matrix;
@@ -58,11 +60,20 @@ function fixture() {
     hidden: [],
     unloaded: [],
     focused: [],
+    selected: [],
+    currentSelection: [],
     refreshCount: 0,
+    menus: new Map(),
+    registerContextMenuCallback(name, callback) { this.menus.set(name, callback); },
+    unregisterContextMenuCallback(name) { this.menus.delete(name); },
+    getAggregateSelection() { return []; },
     showModel(model) { this.shown.push(model); },
     hideModel(id) { this.hidden.push(id); },
     unloadModel(model) { this.unloaded.push(model); },
     fitToView(ids, model) { this.focused.push({ ids, model }); },
+    select(ids, model) { this.selected.push({ ids, model }); this.currentSelection = [{ model, selection: ids }]; },
+    getAggregateSelection() { return this.currentSelection; },
+    setAggregateSelection(rows) { this.currentSelection = rows.filter(row => row.selection.length); },
     refresh() { this.refreshCount++; },
   };
   const window = { Autodesk: { Viewing: {
@@ -175,6 +186,7 @@ test('focus resolves only the owned CAD instance and model, never source SVF IDs
   scene.add('bend', f.mesh, f.transform);
   scene.focus('bend');
   assert.deepEqual(f.viewer.focused, [{ ids: [1], model: f.viewer.shown[0] }]);
+  assert.deepEqual(f.viewer.selected, [{ ids: [1], model: f.viewer.shown[0] }]);
   assert.equal(f.viewer.model, f.sourceModel);
   assert.throws(() => scene.focus('foreign'), /Unknown CAD/);
   scene.remove('bend');
@@ -182,6 +194,59 @@ test('focus resolves only the owned CAD instance and model, never source SVF IDs
   scene.dispose();
   assert.throws(() => scene.focus('straight'), /Unknown CAD/);
   assert.equal(f.viewer.focused.length, 1);
+});
+
+test('object IDs remain equal to actual fragments for first-zero selection and replacement', () => {
+  const f = fixture(), scene = createCadSceneController(f.viewer, { window: f.window, sourceModel: f.sourceModel });
+  scene.add('first', f.mesh, f.transform);
+  const model = f.viewer.shown[0];
+  assert.equal(model.instances.records.get(0).dbId, 0);
+  scene.focus('first');
+  assert.deepEqual(f.viewer.focused.at(-1), { ids: [0], model });
+  assert.deepEqual(f.viewer.selected.at(-1), { ids: [0], model });
+  scene.add('first', f.mesh, f.transform);
+  assert.equal(model.instances.records.get(1).dbId, 1);
+  assert.deepEqual(f.viewer.currentSelection, [{ model, selection: [1] }]);
+  model.getData = () => ({ fragments: { dbId2fragId: { 1: 1 } } });
+  scene.focus('first');
+  assert.deepEqual(f.viewer.focused.at(-1), { ids: [1], model });
+  assert.deepEqual(f.viewer.selected.at(-1), { ids: [1], model });
+  scene.remove('first');
+  assert.equal(model.instances.records.size, 0);
+});
+test('removing a selected fragment preserves source and other CAD selection and prevents ID-reuse selection', () => {
+  const f = fixture(), scene = createCadSceneController(f.viewer, { window: f.window, sourceModel: f.sourceModel });
+  scene.add('first', f.mesh, f.transform); scene.add('other', f.mesh, f.transform);
+  const model = f.viewer.shown[0];
+  f.viewer.currentSelection = [{ model: f.sourceModel, selection: [91] }, { model, selection: [0, 1] }];
+  scene.remove('first');
+  assert.deepEqual(f.viewer.currentSelection, [{ model: f.sourceModel, selection: [91] }, { model, selection: [1] }]);
+  model.instances.nextId = 0;
+  scene.add('different-component', f.mesh, f.transform);
+  assert.deepEqual(f.viewer.currentSelection, [{ model: f.sourceModel, selection: [91] }, { model, selection: [1] }]);
+  scene.add('other', f.mesh, f.transform);
+  assert.deepEqual(f.viewer.currentSelection, [{ model: f.sourceModel, selection: [91] }, { model, selection: [1] }]);
+});
+
+test('actual pinned SDK public selection retains fragment zero while its event drops only zero', () => {
+  const sdk = fs.readFileSync(new URL('../sdk/7.130.0/viewer3D.min.js', import.meta.url), 'utf8');
+  function method(signature, after = 0) {
+    const start = sdk.indexOf(signature, after);
+    assert.ok(start >= 0, signature);
+    const open = sdk.indexOf('{', start);
+    let depth = 1, end = open + 1;
+    for (; depth; end++) { if (sdk[end] === '{') depth++; else if (sdk[end] === '}') depth--; }
+    return sdk.slice(start, end);
+  }
+  const read = Function('return ({' + method('getSelection(){', sdk.indexOf('class mk')) + '}).getSelection')();
+  const raw = Function('return ({' + method('getAggregateSelection(){', sdk.indexOf('class vk')) + '}).getAggregateSelection')();
+  const source = { selector: { selectedObjectIds: { 91: 1 }, getSelection: read, getObjectTree: () => null } };
+  const owned = { selector: { selectedObjectIds: { 0: 1, 2: 1 }, getSelection: read, getObjectTree: () => null } };
+  assert.deepEqual(raw.call({ _models: [source, owned] }), [{ model: source, selection: [91] }, { model: owned, selection: [0, 2] }]);
+  const emit = Function('dg','ug','return ({' + method('_fireAggregateSelectionChangedEvent(e)') + '})._fireAggregateSelectionChangedEvent')('selection','aggregate');
+  const events = [];
+  emit.call({ _models: [source, owned], _viewer: { api: { dispatchEvent: event => events.push(event) } } });
+  assert.deepEqual(events.at(-1).selections.map(row => row.dbIdArray), [[91], [2]]);
 });
 
 test('dynamic model cannot take ownership of the source model identity', () => {

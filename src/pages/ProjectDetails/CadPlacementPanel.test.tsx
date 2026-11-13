@@ -1,6 +1,6 @@
 import { FluentProvider, webLightTheme } from '@fluentui/react-components';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { useCallback, useState } from 'react';
+import { useCallback, useState, type ComponentProps } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CadPlacementPanel } from './CadPlacementPanel';
 
@@ -209,7 +209,7 @@ describe('removing a proposed CAD component', { timeout: 20000 }, () => {
   });
 });
 
-function mountScoped(holdFirstExport = false) {
+function mountScoped(holdFirstExport = false, withMetadata = false) {
   const secondId = '00000000-0000-4000-8000-000000000006';
   const freeId = '00000000-0000-4000-8000-000000000007';
   const newId = '00000000-0000-4000-8000-000000000008';
@@ -256,6 +256,9 @@ function mountScoped(holdFirstExport = false) {
   const onShow = vi.fn(async () => {}),
     onRemove = vi.fn(async () => {}),
     onColor = vi.fn(async () => {});
+  const onProperties = vi.fn<NonNullable<ComponentProps<typeof CadPlacementPanel>['onProperties']>>(
+    async () => {},
+  );
   const onMove = vi.fn(async () => {}),
     onPick = vi.fn();
   const downloads: string[] = [];
@@ -286,6 +289,12 @@ function mountScoped(holdFirstExport = false) {
       ];
       return { ok: true, json: async () => ({ id: newId }) };
     }
+    if (url.includes('/routes/') && options.method === 'PATCH') {
+      const route = groups.find((row) => url.endsWith('/' + row.id));
+      if (!route) throw new Error('Unknown test route');
+      Object.assign(route, JSON.parse(String(options.body)), { revision: route.revision + 1 });
+      return { ok: true, json: async () => ({ route }) };
+    }
     if (url.endsWith('/routes') && options.method === 'POST') {
       const input = JSON.parse(String(options.body));
       const route = {
@@ -303,7 +312,34 @@ function mountScoped(holdFirstExport = false) {
         url.endsWith('/designs')
           ? { designs: [{ id: designId, modelVersionId, activeModel: true, status: 'proposed' }] }
           : url.endsWith('/instances')
-            ? { instances: rows }
+            ? {
+                instances: rows.map((row) => {
+                  if (!withMetadata) return row;
+                  const group = groups.find((group) => group.instanceIds.includes(row.id));
+                  const route = {
+                    id: group?.id ?? null,
+                    name: group?.name ?? 'Unassigned components',
+                    purpose: group?.purpose ?? null,
+                  };
+                  return {
+                    ...row,
+                    route,
+                    metadata: {
+                      instanceId: row.id,
+                      name: route.name + ' / ' + row.id,
+                      actualLengthMm: 6000,
+                      widthMm: 300,
+                      heightMm: 60,
+                      partNumber: row.partNumber,
+                      manufacturer: row.manufacturer,
+                      purpose: route.purpose,
+                      componentKind: 'straight',
+                      cadAssetId: catalogId,
+                      cadRevision: 1,
+                    },
+                  };
+                }),
+              }
             : url.endsWith('/connections')
               ? { connections: [] }
               : url.endsWith('/routes')
@@ -362,6 +398,7 @@ function mountScoped(holdFirstExport = false) {
           onMove={onMove}
           onRemove={onRemove}
           onColor={onColor}
+          onProperties={withMetadata ? onProperties : undefined}
           newTrayMode={newTrayMode}
           newTrayEpoch={epoch}
           onNewTray={open}
@@ -376,6 +413,7 @@ function mountScoped(holdFirstExport = false) {
     request,
     onShow,
     onRemove,
+    onProperties,
     downloads,
     routeA,
     routeB,
@@ -389,6 +427,34 @@ function mountScoped(holdFirstExport = false) {
 }
 
 describe('saved route component scope and exports', { timeout: 20000 }, () => {
+  it('refreshes canonical properties after a route Purpose edit without recreating saved geometry', async () => {
+    const fixture = mountScoped(false, true);
+    await waitFor(() => expect(fixture.onProperties).toHaveBeenCalledTimes(3));
+    expect(fixture.onProperties.mock.calls[0]).toEqual([
+      instanceId,
+      expect.objectContaining({ widthMm: 300, heightMm: 60, purpose: 'Low voltage cable tray' }),
+      expect.objectContaining({ name: 'A-ROUTE' }),
+    ]);
+    fireEvent.click(await screen.findByRole('button', { name: /A-ROUTE · 1 components/ }));
+    await waitFor(() =>
+      expect(screen.getByLabelText('Include component ' + instanceId)).toBeChecked(),
+    );
+    fireEvent.change(screen.getByLabelText('Route purpose'), {
+      target: { value: 'Medium voltage cable tray' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save route changes' }));
+    await screen.findByText('Route saved. Its colour is applied to all member components.');
+    await waitFor(() =>
+      expect(
+        fixture.onProperties.mock.calls.some(
+          (call) => call[0] === instanceId && call[1].purpose === 'Medium voltage cable tray',
+        ),
+      ).toBe(true),
+    );
+    expect(fixture.onShow).toHaveBeenCalledTimes(3);
+    await act(async () => {});
+  });
+
   it('filters the component list by route while keeping every saved mesh in the scene and exact editor coordinates', async () => {
     const fixture = mountScoped();
     await waitFor(() => expect(fixture.onShow).toHaveBeenCalledTimes(3));
@@ -463,6 +529,9 @@ describe('saved route component scope and exports', { timeout: 20000 }, () => {
     await waitFor(() => expect(fixture.onShow).toHaveBeenCalledTimes(3));
     expect(screen.getByRole('button', { name: 'Export selected tray STEP' })).toBeDisabled();
     fireEvent.click(await screen.findByRole('button', { name: /A-ROUTE · 1 components/ }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Export selected tray STEP' })).toBeEnabled(),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Export selected tray STEP' }));
     await waitFor(() =>
       expect(

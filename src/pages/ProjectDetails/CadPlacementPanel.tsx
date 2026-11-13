@@ -1,3 +1,7 @@
+import type {
+  CadSectionMetadata,
+  CadSectionRoute,
+} from '../../../viewer-runtime/cad-properties.mjs';
 import { MAX_STEP_ASSEMBLY_PARTS } from '../../../shared/cadExportLimits';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
@@ -55,6 +59,8 @@ type Connection = {
   targetPortId: string;
 };
 type Instance = {
+  metadata?: CadSectionMetadata;
+  route?: CadSectionRoute;
   id: string;
   catalogItemId: string;
   partNumber: string;
@@ -80,6 +86,7 @@ type Props = {
   onFocus?: ViewerController['focusCadComponent'];
   onRemove?: ViewerController['removeCadComponent'];
   onColor?: ViewerController['setCadComponentColor'];
+  onProperties?: ViewerController['setCadComponentProperties'];
   onTraysChanged?: () => Promise<void>;
   newTrayMode?: boolean;
   newTrayEpoch?: number;
@@ -118,6 +125,7 @@ export function CadPlacementPanel({
   onFocus,
   onRemove,
   onColor,
+  onProperties,
   onTraysChanged,
   newTrayMode,
   newTrayEpoch = 0,
@@ -388,6 +396,8 @@ export function CadPlacementPanel({
             rendered.current.add(instance.id);
             renderedLengths.current.set(instance.id, instance.lengthMm ?? null);
           }
+          if (!controller.signal.aborted && onProperties && instance.metadata && instance.route)
+            await onProperties(instance.id, instance.metadata, instance.route);
           if (!controller.signal.aborted) {
             confirmed.push(instance.id);
             setDisplayedIds([...confirmed]);
@@ -412,7 +422,7 @@ export function CadPlacementPanel({
       if (!controller.signal.aborted) setDisplaying(false);
     });
     return () => controller.abort();
-  }, [instances, designId, api, onShow, onMove]);
+  }, [instances, designId, api, onShow, onMove, onProperties]);
 
   useEffect(() => {
     rendered.current.clear();
@@ -728,7 +738,7 @@ export function CadPlacementPanel({
       renderedLengths.current.delete(candidate.id);
       setDisplayedIds((ids) => ids.filter((id) => id !== candidate.id));
       setInstances((rows) => rows.filter((row) => row.id !== candidate.id));
-      setNewDraftInstanceIds(ids => ids.filter(id => id !== candidate.id));
+      setNewDraftInstanceIds((ids) => ids.filter((id) => id !== candidate.id));
       setConnections((rows) =>
         rows.filter(
           (row) => row.sourceInstanceId !== candidate.id && row.targetInstanceId !== candidate.id,
@@ -1217,6 +1227,9 @@ export function CadPlacementPanel({
           token={token}
           onSelectionChange={selectRoute}
           onRoutesChange={setRouteGroups}
+          onMetadataChanged={async () => {
+            await reload();
+          }}
           onDirtyChange={setRouteDirty}
           onBusyChange={setRouteBusy}
           resetKey={newTrayEpoch}

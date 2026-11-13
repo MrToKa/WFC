@@ -300,6 +300,10 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
         cadRemove: componentId => cadScene?.remove(componentId),
         cadFocus: componentId => ensureCadScene().focus(componentId),
         cadColor: (componentId, color) => ensureCadScene().setColor(componentId, color),
+        async cadProperties(componentId, metadata, route) {
+          if (!viewer.getExtension('Autodesk.PropertiesManager')) await viewer.loadExtension('Autodesk.PropertiesManager');
+          ensureCadScene().setProperties(componentId, metadata, route);
+        },
         readBarrierMultipartFrame: (request, operationSignal) => multipart.readFrame(request, operationSignal),
         startBarrierMultipart: (request, transport, operationSignal) => multipart.start(request, transport, operationSignal),
         statusBarrierMultipart: request => multipart.status(request),

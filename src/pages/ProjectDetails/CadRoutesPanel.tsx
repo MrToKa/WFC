@@ -33,6 +33,7 @@ type Props = {
   displayedIds: string[];
   onColor: (id: string, color: string) => Promise<void>;
   onTraysChanged?: () => Promise<void>;
+  onMetadataChanged?: () => Promise<void>;
   onGeometryChanged?: () => Promise<void>;
   onConnectionsChanged?: () => Promise<void>;
   onSelectionChange?: (route: CadRouteGroup | null) => void;
@@ -96,6 +97,7 @@ export function CadRoutesPanel({
   onGeometryChanged,
   onConnectionsChanged,
   onTraysChanged,
+  onMetadataChanged,
   onSelectionChange,
   onRoutesChange,
   onDirtyChange,
@@ -294,6 +296,7 @@ export function CadRoutesPanel({
       ).json();
       await reload();
       edit(data.route);
+      await onMetadataChanged?.();
       setMessage('Route saved. Its colour is applied to all member components.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Cannot save route.');
@@ -407,6 +410,7 @@ export function CadRoutesPanel({
       setMembers([]);
       onSelectionChange?.(null);
       await reload();
+      await onMetadataChanged?.();
       setMessage('Route group removed. Its individual components remain in the proposal.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Cannot remove route group.');
@@ -427,7 +431,8 @@ export function CadRoutesPanel({
           onClick={() => {
             setBusy(true);
             void reload()
-              .then(() => {
+              .then(async () => {
+                await onMetadataChanged?.();
                 setSelectedId('');
                 setFields(empty);
                 setMembers([]);

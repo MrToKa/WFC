@@ -12,7 +12,7 @@ import { pool } from '../db.js';
 import { requireProjectEdit } from '../middleware.js';
 import { getObjectStream, getProjectBucket } from '../services/objectStorageService.js';
 import { MAX_STEP_ASSEMBLY_PARTS } from '../../shared/cadExportLimits.js';
-import { assertCadExportCurrent, cadAssemblyParts, cadExportFilename, cadMaterialRows, CadExportError, parseCadExportScope, readCadExportSnapshot, type CadExportSnapshot } from './scopedExports.js';
+import { assertCadExportCurrent, cadAssemblyParts, cadSectionProperties, cadExportFilename, cadMaterialRows, CadExportError, parseCadExportScope, readCadExportSnapshot, type CadExportSnapshot } from './scopedExports.js';
 import { cadRouteGroupsRouter } from './routeGroupsRoutes.js';
 import { cadRoutePublicationRouter } from './routePublication.js';
 import { cadRouteAlignmentRouter } from './routeAlignment.js';
@@ -230,7 +230,11 @@ cadDesignRouter.get('/designs/:designId/instances', safe(async (req: CadRequest,
   if (!uuid.safeParse(req.params.designId).success) {
     failure(res, 400, 'INVALID_DESIGN_ID'); return;
   }
-  const result = await pool.query(
+  const result = await pool.query<{
+    id:string;originalFilename:string;sourceSha256:string;manufacturer:string;partNumber:string;lengthMm:number|null;
+    materialAssetId:string|null;cadRevision:number|null;componentKind:string|null;
+    _widthMm:number|null;_heightMm:number|null;_routeId:string|null;_routeName:string|null;_routePurpose:string|null;
+  }>(
     `SELECT i.id, i.catalog_item_id AS "catalogItemId", i.revision,
             i.x_mm AS "xMm", i.y_mm AS "yMm", i.z_mm AS "zMm",
             i.qx, i.qy, i.qz, i.qw, i.cut_length_mm AS "lengthMm",
@@ -238,17 +242,27 @@ cadDesignRouter.get('/designs/:designId/instances', safe(async (req: CadRequest,
             c.manufacturer, c.part_number AS "partNumber", c.family,
             c.conversion_status AS "conversionStatus",
             c.material_component_cad_asset_id AS "materialAssetId",
-            a.revision AS "cadRevision", a.component_id AS "componentId",p.component_kind AS "componentKind"
+            a.revision AS "cadRevision", a.component_id AS "componentId",p.component_kind AS "componentKind",
+            COALESCE(p.width_mm,t.width_mm) AS "_widthMm",COALESCE(p.height_mm,t.height_mm) AS "_heightMm",
+            g.id AS "_routeId",g.name AS "_routeName",g.purpose AS "_routePurpose"
        FROM cad_design_instances i
        JOIN cad_designs d ON d.project_id=i.project_id AND d.id=i.design_id
        JOIN cad_catalog_items c ON c.project_id=i.project_id AND c.id=i.catalog_item_id
        LEFT JOIN material_component_cad_assets a ON a.id=c.material_component_cad_asset_id
        LEFT JOIN material_components p ON p.id=a.component_id
+       LEFT JOIN material_trays t ON t.id=p.material_tray_id
+       LEFT JOIN cad_route_group_members m ON m.project_id=i.project_id AND m.design_id=i.design_id AND m.instance_id=i.id
+       LEFT JOIN cad_route_groups g ON g.project_id=m.project_id AND g.design_id=m.design_id AND g.id=m.route_group_id
       WHERE i.project_id=$1 AND d.id=$2 ORDER BY i.created_at, i.id LIMIT 500`,
     [req.params.projectId, req.params.designId],
   );
   res.setHeader('Cache-Control', 'private, no-store');
-  res.json({ instances: result.rows });
+  res.json({ instances: result.rows.map(({_widthMm,_heightMm,_routeId,_routeName,_routePurpose,...row})=>({
+    ...row,...cadSectionProperties({id:row.id,component_kind:row.componentKind,original_filename:row.originalFilename,source_sha256:row.sourceSha256,
+      cut_length_mm:row.lengthMm,width_mm:_widthMm,height_mm:_heightMm,part_number:row.partNumber,manufacturer:row.manufacturer,
+      material_asset_id:row.materialAssetId,cad_revision:row.cadRevision},
+    _routeId&&_routeName?{id:_routeId,name:_routeName,purpose:_routePurpose}:null),
+  })) });
 }));
 
 // Derived display geometry is tied to one scoped saved instance and its pinned source.
