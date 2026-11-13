@@ -12,6 +12,7 @@ import json
 import math
 import os
 import tempfile
+import uuid
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import cadquery as cq
@@ -112,6 +113,141 @@ def convert_step(step_path, cut_length_mm=None):
     }
 
 
+def section_properties(part):
+    """Validate optional occurrence metadata; legacy geometry requests remain valid."""
+    metadata, route = part.get("metadata"), part.get("route")
+    if metadata is None and route is None:
+        return None
+    keys = {"instanceId", "name", "actualLengthMm", "widthMm", "heightMm", "partNumber",
+            "manufacturer", "purpose", "componentKind", "cadAssetId", "cadRevision"}
+    if not isinstance(metadata, dict) or set(metadata) != keys or not isinstance(route, dict) or set(route) != {"id", "name", "purpose"}:
+        raise ValueError("Invalid CAD section metadata")
+
+    def text(value, limit, nullable=False):
+        if value is None and nullable:
+            return
+        if not isinstance(value, str) or not 1 <= len(value) <= limit or any(ord(c) < 32 or 127 <= ord(c) < 160 for c in value):
+            raise ValueError("Invalid CAD metadata text")
+
+    def identity(value, nullable=False):
+        if value is None and nullable:
+            return
+        try:
+            if not isinstance(value, str) or str(uuid.UUID(value)) != value.lower():
+                raise ValueError()
+        except (ValueError, AttributeError):
+            raise ValueError("Invalid CAD metadata identity")
+
+    identity(metadata["instanceId"])
+    identity(metadata["cadAssetId"], True)
+    identity(route["id"], True)
+    for key, limit, nullable in [("name", 512, False), ("partNumber", 200, False),
+                                  ("manufacturer", 200, False), ("purpose", 500, True),
+                                  ("componentKind", 80, True)]:
+        text(metadata[key], limit, nullable)
+    text(route["name"], 200)
+    text(route["purpose"], 500, True)
+    if metadata["name"] != part["name"]:
+        raise ValueError("CAD section names differ")
+    for key in ("actualLengthMm", "widthMm", "heightMm"):
+        value = metadata[key]
+        if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 < value <= 1e6):
+            raise ValueError("Invalid CAD metadata dimension")
+    revision = metadata["cadRevision"]
+    if revision is not None and (isinstance(revision, bool) or not isinstance(revision, int) or not 1 <= revision <= 2147483647):
+        raise ValueError("Invalid CAD metadata revision")
+    return {"Name": metadata["name"], "ActualLengthMm": metadata["actualLengthMm"],
+            "WidthMm": metadata["widthMm"], "HeightMm": metadata["heightMm"],
+            "PartNumber": metadata["partNumber"], "Manufacturer": metadata["manufacturer"],
+            "Purpose": metadata["purpose"], "InstanceId": metadata["instanceId"],
+            "RouteId": route["id"], "RouteName": route["name"],
+            "ComponentKind": metadata["componentKind"], "CadAssetId": metadata["cadAssetId"],
+            "CadRevision": revision}
+
+
+def write_metadata_step(assembly, output_path, properties):
+    """CAx-IF UDA product attributes on unique section wrappers, never shared B-Reps."""
+    from cadquery.occ_impl.assembly import toCAF
+    from OCP.STEPCAFControl import STEPCAFControl_Writer
+    from OCP.STEPControl import STEPControl_StepModelType
+    from OCP.XSControl import XSControl_WorkSession
+    from OCP.TCollection import TCollection_HAsciiString
+    from OCP.Interface import Interface_Static
+    from OCP.IFSelect import IFSelect_ReturnStatus
+    from OCP.StepBasic import (StepBasic_ProductDefinition, StepBasic_GeneralProperty,
+        StepBasic_GeneralPropertyAssociation, StepBasic_SiUnitAndLengthUnit,
+        StepBasic_SiPrefix, StepBasic_SiUnitName, StepBasic_Unit, StepBasic_MeasureValueMember)
+    from OCP.StepRepr import (StepRepr_PropertyDefinition, StepRepr_PropertyDefinitionRepresentation,
+        StepRepr_Representation, StepRepr_RepresentationContext, StepRepr_DescriptiveRepresentationItem,
+        StepRepr_CharacterizedDefinition, StepRepr_HArray1OfRepresentationItem,
+        StepRepr_RepresentedDefinition, StepRepr_MeasureRepresentationItem)
+
+    # Encode Unicode explicitly using Part-21 X2/X4 escapes. Escape a literal
+    # backslash too, so user text cannot accidentally introduce STEP directives.
+    def string(value):
+        encoded = "".join(c if 32 <= ord(c) < 127 and c != "\\" else
+                          "\\X2\\" + c.encode("utf-16-be").hex().upper() + "\\X0\\"
+                          for c in value)
+        return TCollection_HAsciiString(encoded)
+
+    _, document = toCAF(assembly, True)
+    writer = STEPCAFControl_Writer(XSControl_WorkSession(), False)
+    writer.SetNameMode(True)
+    writer.SetPropsMode(True)
+    if not Interface_Static.SetCVal_s("write.step.schema", "AP242DIS") or not writer.Transfer(document, STEPControl_StepModelType.STEPControl_AsIs):
+        raise ValueError("STEP metadata transfer failed")
+    model = writer.Writer().Model()
+    millimetre = StepBasic_SiUnitAndLengthUnit()
+    millimetre.Init(True, StepBasic_SiPrefix.StepBasic_spMilli, StepBasic_SiUnitName.StepBasic_sunMetre)
+    unit = StepBasic_Unit()
+    unit.SetValue(millimetre)
+    attached = set()
+    for index in range(1, model.NbEntities() + 1):
+        product = model.Value(index)
+        if not isinstance(product, StepBasic_ProductDefinition):
+            continue
+        product_name = product.Formation().OfProduct().Name().ToCString()
+        if product_name not in properties:
+            continue
+        values = properties[product_name]
+        attached.add(product_name)
+        product.Formation().OfProduct().SetName(string(values["Name"]))
+        product.Formation().OfProduct().SetId(string(values.get("InstanceId") or values.get("RouteId") or product_name))
+        for key, value in values.items():
+            target = StepRepr_CharacterizedDefinition()
+            target.SetValue(product)
+            definition = StepRepr_PropertyDefinition()
+            definition.Init(string(key), False, string(""), target)
+            if isinstance(value, (int, float)) and key in {"ActualLengthMm", "WidthMm", "HeightMm"}:
+                measure = StepBasic_MeasureValueMember()
+                measure.SetName("LENGTH_MEASURE")
+                measure.SetReal(float(value))
+                item = StepRepr_MeasureRepresentationItem()
+                item.Init(string(key), measure, unit)
+            else:
+                item = StepRepr_DescriptiveRepresentationItem()
+                # Unknown values remain explicitly unknown, never zero lengths.
+                item.Init(string(key), string("unknown" if value is None else str(value)))
+            items = StepRepr_HArray1OfRepresentationItem(1, 1)
+            items.SetValue(1, item)
+            context = StepRepr_RepresentationContext()
+            context.Init(string(""), string(""))
+            representation = StepRepr_Representation()
+            representation.Init(string(""), items, context)
+            represented = StepRepr_RepresentedDefinition()
+            represented.SetValue(definition)
+            association = StepRepr_PropertyDefinitionRepresentation()
+            association.Init(represented, representation)
+            general = StepBasic_GeneralProperty()
+            general.Init(string(key), string(key), False, string(""))
+            general_link = StepBasic_GeneralPropertyAssociation()
+            general_link.Init(string(""), string(""), general, definition)
+            model.AddWithRefs(association)
+            model.AddWithRefs(general_link)
+    if attached != set(properties) or writer.Write(output_path) != IFSelect_ReturnStatus.IFSelect_RetDone:
+        raise ValueError("STEP metadata write failed")
+
+
 def assemble_step(request):
     parts = request.get("parts") if isinstance(request, dict) else None
     if not isinstance(parts, list) or not 1 <= len(parts) <= MAX_ASSEMBLY_PARTS:
@@ -153,14 +289,19 @@ def assemble_step(request):
         result = cq.Assembly(name="WFC Proposed Cable Tray")
         imported = {}
         cut_cache = {}
+        geometry_cache = {}
+        routes = {}
+        properties = {}
+        instance_ids = set()
         for index, part in enumerate(parts):
             required = {"name", "positionMm", "rotation"}
-            if not isinstance(part, dict) or not required.issubset(part) or set(part) - required - {"stepBase64", "sourceId", "cutLengthMm"}:
+            if not isinstance(part, dict) or not required.issubset(part) or set(part) - required - {"stepBase64", "sourceId", "cutLengthMm", "metadata", "route"}:
                 raise ValueError("Invalid CAD assembly part")
             if ("sourceId" in part) == ("stepBase64" in part):
                 raise ValueError("Choose exactly one CAD source reference")
-            if not isinstance(part["name"], str) or not 1 <= len(part["name"]) <= 120:
+            if not isinstance(part["name"], str) or not 1 <= len(part["name"]) <= 512:
                 raise ValueError("Invalid CAD part label")
+            values = section_properties(part)
             if "sourceId" in part:
                 source_id = part["sourceId"]
                 if not isinstance(source_id, str) or source_id not in source_bytes:
@@ -184,6 +325,7 @@ def assemble_step(request):
                 if not imported[source_id] or len(imported[source_id]) > 50:
                     raise ValueError("Invalid CAD solid count")
             solids = imported[source_id]
+            cache_key = (source_id, None)
             if "cutLengthMm" in part:
                 length = part["cutLengthMm"]
                 if isinstance(length, bool) or not isinstance(length, (int, float)) or not math.isfinite(length) or not 0 < length <= 6000:
@@ -195,11 +337,35 @@ def assemble_step(request):
             transform = gp_Trsf()
             transform.SetRotation(gp_Quaternion(*rotation))
             transform.SetTranslationPart(gp_Vec(*position))
-            for solid_index, solid in enumerate(solids):
-                result.add(solid, name=f"part{index + 1}_solid{solid_index + 1}",
-                           loc=cq.Location(transform))
+            if values is None:
+                for solid_index, solid in enumerate(solids):
+                    result.add(solid, name=f"part{index + 1}_solid{solid_index + 1}", loc=cq.Location(transform))
+            else:
+                identity = values["InstanceId"]
+                if identity in instance_ids:
+                    raise ValueError("Duplicate CAD instance identity")
+                instance_ids.add(identity)
+                route = part["route"]
+                route_key = route["id"] or "unassigned"
+                if route_key not in routes:
+                    route_assembly = cq.Assembly(name="route_" + route_key)
+                    routes[route_key] = (route, route_assembly)
+                    properties[route_assembly.name] = {"Name": route["name"], "RouteId": route["id"], "Purpose": route["purpose"]}
+                elif routes[route_key][0] != route:
+                    raise ValueError("Conflicting CAD route metadata")
+                if cache_key not in geometry_cache:
+                    geometry_cache[cache_key] = cq.Compound.makeCompound(solids)
+                section = cq.Assembly(name="section_" + identity)
+                section.add(geometry_cache[cache_key], name="geometry")
+                routes[route_key][1].add(section, loc=cq.Location(transform))
+                properties[section.name] = values
+        for _, route_assembly in routes.values():
+            result.add(route_assembly)
         output_path = os.path.join(work, "assembly.step")
-        result.save(output_path, exportType="STEP")
+        if properties:
+            write_metadata_step(result, output_path, properties)
+        else:
+            result.save(output_path, exportType="STEP")
         if os.path.getsize(output_path) > 32 * 1024 * 1024:
             raise ValueError("CAD assembly exceeds output limit")
         # Reimport via the exact CAD kernel; an empty file is not an export.

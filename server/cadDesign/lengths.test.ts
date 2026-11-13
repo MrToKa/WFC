@@ -152,7 +152,7 @@ describe('proposed instance length API', () => {
     }),release:vi.fn()};db.connect.mockResolvedValue(client);
     assembly.exportStepAssembly.mockResolvedValue(Buffer.from('ISO-10303-21;'));
     expect((await fetch(`${base}/assembly.step`)).status).toBe(200);
-    expect(assembly.exportStepAssembly).toHaveBeenCalledWith([part]);
+    expect(assembly.exportStepAssembly).toHaveBeenCalledWith([expect.objectContaining({...part,metadata:expect.objectContaining({instanceId:part.id,actualLengthMm:2500})})]);
     expect(client.query).toHaveBeenCalledWith(expect.stringContaining('i.cut_length_mm'),expect.any(Array));
   });
   it.each([[2500, 201], [6000, 409]])('checks saved connectors at the shortened end rather than source Z=%s', async (targetZ, status) => {

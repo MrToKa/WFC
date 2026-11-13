@@ -75,6 +75,22 @@ describe('isolated CAD converter length contracts', () => {
     expect(Buffer.byteLength(JSON.stringify(body))).toBeLessThan(2*1024*1024);
     expect(body.parts[127].positionMm).toEqual([127000,0,0]);
   });
+  it('preserves distinct occurrence metadata and route identity while deduplicating geometry',async()=>{
+    const source=Buffer.from('original STEP');storage.getObjectStream.mockImplementation(async()=>Readable.from([source]));
+    const output='ISO-10303-21;\n'+' '.repeat(120);
+    fetchMock.mockResolvedValue(new Response(output,{headers:{'Content-Type':'application/step','Content-Length':String(output.length)}}));
+    const common={original_filename:'source.step',source_object_key:'immutable/source.step',x_mm:0,y_mm:0,z_mm:0,qx:0,qy:0,qz:0,qw:1};
+    const route={id:'00000000-0000-4000-8000-000000000001',name:'BC182',purpose:'LV'};
+    const metadata={instanceId:'00000000-0000-4000-8000-000000000002',name:'First section',actualLengthMm:1500,widthMm:300,heightMm:60,
+      partNumber:'KL60.303F',manufacturer:'Niedax',purpose:'LV',componentKind:'straight',cadAssetId:null,cadRevision:null};
+    const unknown={...metadata,instanceId:'00000000-0000-4000-8000-000000000003',name:'Second section',actualLengthMm:null,widthMm:null,heightMm:null,purpose:null};
+    await exportStepAssembly([{...common,metadata,route},{...common,metadata:unknown,route:{id:null,name:'Unassigned components',purpose:null}}]);
+    const body=JSON.parse(Buffer.from(fetchMock.mock.calls[0][1].body).toString('utf8'));
+    expect(body.sources).toHaveLength(1);expect(storage.getObjectStream).toHaveBeenCalledOnce();
+    expect(body.parts[0]).toMatchObject({name:metadata.name,metadata,route});
+    expect(body.parts[1].metadata).toEqual(unknown);expect(body.parts[1].route).toEqual({id:null,name:'Unassigned components',purpose:null});
+    expect(body.parts[0].sourceId).toBe(body.parts[1].sourceId);
+  });
   it('rejects 129 assembly placements before source reads or network access',async()=>{
     const common={original_filename:'stock.step',source_object_key:'immutable/source.step',x_mm:0,y_mm:0,z_mm:0,qx:0,qy:0,qz:0,qw:1};
     await expect(exportStepAssembly(Array.from({length:129},()=>({...common})))).rejects.toThrow('1 to 128');

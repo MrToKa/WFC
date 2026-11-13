@@ -109,6 +109,94 @@ def check_cut_stock(work):
             "rungPitchPreserved": True, "cutSolids": len(exported), "httpCutChecks": 6}
 
 
+def check_section_metadata(work, encoded, source_id):
+    from OCP.STEPCAFControl import STEPCAFControl_Reader
+    from OCP.TCollection import TCollection_ExtendedString
+    from OCP.TDocStd import TDocStd_Document
+    from OCP.XCAFApp import XCAFApp_Application
+    from OCP.XCAFDoc import XCAFDoc_DocumentTool
+    from OCP.TDF import TDF_LabelSequence, TDF_Label
+    from OCP.IFSelect import IFSelect_ReturnStatus
+    parts = []
+    expected = {}
+    for index in range(128):
+        identity = f"00000000-0000-4000-8000-{index + 1:012d}"
+        route_id = f"10000000-0000-4000-8000-{index % 2 + 1:012d}"
+        route = {"id": route_id, "name": f"BC18{index % 2 + 2}", "purpose": "Route purpose"}
+        name = route["name"] + " / " + identity
+        purpose = "Cable's трасета \\ literal 😀" if index % 2 == 0 else "Control – управление"
+        metadata = {"instanceId": identity, "name": name, "actualLengthMm": 20,
+                    "widthMm": 300, "heightMm": None, "partNumber": "KL 60.303 F",
+                    "manufacturer": "Niedax 'Demo'", "purpose": purpose,
+                    "componentKind": "straight", "cadAssetId": None, "cadRevision": 3}
+        parts.append({"name": name, "sourceId": source_id, "positionMm": [index * 200, 0, 0],
+                      "rotation": [0, 0, 0, 1], "metadata": metadata, "route": route})
+        expected[identity] = metadata
+    result = assemble_step({"sources": [{"id": source_id, "stepBase64": encoded}], "parts": parts})
+    path = os.path.join(work, "metadata-128.step")
+    with open(path, "wb") as stream:
+        stream.write(result)
+    assert len(result) < 32 * 1024 * 1024
+    assert result.count(b"MANIFOLD_SOLID_BREP(") == 1, "Repeated sections lost geometry sharing"
+    assert b"GENERAL_PROPERTY_ASSOCIATION" in result and b"LENGTH_MEASURE" in result
+    assert b"\\X2\\" in result and b"SI_UNIT(.MILLI.,.METRE.)" in result
+    assert len(cq.importers.importStep(path).solids().vals()) == 128
+    reader = STEPCAFControl_Reader()
+    reader.SetNameMode(True)
+    reader.SetMetaMode(True)
+    assert reader.ReadFile(path) == IFSelect_ReturnStatus.IFSelect_RetDone
+    document = TDocStd_Document(TCollection_ExtendedString("BinXCAF"))
+    XCAFApp_Application.GetApplication_s().InitDocument(document)
+    assert reader.Transfer(document)
+    tool = XCAFDoc_DocumentTool.ShapeTool_s(document.Main())
+    roots = TDF_LabelSequence()
+    tool.GetFreeShapes(roots)
+    found = {}
+
+    def read(label, depth):
+        data = tool.GetNamedProperties(label, False)
+        if data is not None and data.HasString(TCollection_ExtendedString("InstanceId")):
+            def string(key):
+                value = data.GetString(TCollection_ExtendedString(key)).ToExtString()
+                # OCCT 7.9 fillAttributes uses SetString(char*) rather than UTF8
+                # decoding. Normalize that reader defect, never the STEP values.
+                try:
+                    return value.encode("latin1").decode("utf8")
+                except (UnicodeEncodeError, UnicodeDecodeError):
+                    return value
+            identity = string("InstanceId")
+            assert depth == 2 and identity not in found
+            wanted = expected[identity]
+            for key, value in {"Name": wanted["name"], "Purpose": wanted["purpose"],
+                               "PartNumber": wanted["partNumber"], "Manufacturer": wanted["manufacturer"],
+                               "HeightMm": "unknown", "CadRevision": "3"}.items():
+                assert string(key) == value, (identity, key, string(key), value)
+            assert data.GetReal(TCollection_ExtendedString("ActualLengthMm")) == 20
+            assert data.GetReal(TCollection_ExtendedString("WidthMm")) == 300
+            found[identity] = string("RouteId")
+        children = TDF_LabelSequence()
+        tool.GetComponents_s(label, children)
+        for i in range(1, children.Length() + 1):
+            reference = TDF_Label()
+            assert tool.GetReferredShape_s(children.Value(i), reference)
+            read(reference, depth + 1)
+    for i in range(1, roots.Length() + 1):
+        read(roots.Value(i), 0)
+    assert len(found) == 128 and len(set(found.values())) == 2
+    # Validation must reject identity collisions and inconsistent route details.
+    for bad in [parts[:1] + [parts[0]],
+                [parts[0], {**parts[2], "route": {**parts[2]["route"], "purpose": "different"}}],
+                [{**parts[0], "metadata": {**parts[0]["metadata"], "widthMm": -1}}]]:
+        try:
+            assemble_step({"sources": [{"id": source_id, "stepBase64": encoded}], "parts": bad})
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Invalid section metadata accepted")
+    return {"sections": len(found), "routes": 2, "sharedGeometryDefinitions": 1,
+            "outputBytes": len(result), "nativePropertiesReadback": True, "unicodeAndQuotes": True}
+
+
 def main():
     with tempfile.TemporaryDirectory() as work:
         source = os.path.join(work, "box.step")
@@ -162,11 +250,13 @@ def main():
         else:
             raise AssertionError("129 assembly parts were accepted")
         cut_report = check_cut_stock(work)
+        metadata_report = check_section_metadata(work, encoded, source_id)
         print(json.dumps({
             "status": "PASS", "sourceSolids": 1,
             "meshTriangles": mesh["triangleCount"],
             "exportedSolids": len(solids), "bytes": len(result),
             "straightCut": cut_report,
+            "sectionMetadata": metadata_report,
             "assemblyPartLimit": {"accepted": 128, "rejected": 129,
                                   "readbackSolids": len(boundary_solids),
                                   "uniqueSourceBytes": len(original),

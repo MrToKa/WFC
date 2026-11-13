@@ -12,7 +12,7 @@ import { pool } from '../db.js';
 import { requireProjectEdit } from '../middleware.js';
 import { getObjectStream, getProjectBucket } from '../services/objectStorageService.js';
 import { MAX_STEP_ASSEMBLY_PARTS } from '../../shared/cadExportLimits.js';
-import { assertCadExportCurrent, cadExportFilename, cadMaterialRows, CadExportError, parseCadExportScope, readCadExportSnapshot, type CadExportSnapshot } from './scopedExports.js';
+import { assertCadExportCurrent, cadAssemblyParts, cadExportFilename, cadMaterialRows, CadExportError, parseCadExportScope, readCadExportSnapshot, type CadExportSnapshot } from './scopedExports.js';
 import { cadRouteGroupsRouter } from './routeGroupsRoutes.js';
 import { cadRoutePublicationRouter } from './routePublication.js';
 import { cadRouteAlignmentRouter } from './routeAlignment.js';
@@ -465,7 +465,7 @@ cadDesignRouter.get('/designs/:designId/assembly.step', safeCadExport(async (req
   const routeId=parseCadExportScope(req.query);
   const snapshot=await readCadExportSnapshot(pool,req.params.projectId,req.params.designId!,routeId,MAX_STEP_ASSEMBLY_PARTS);
   const { exportStepAssembly } = await import('./stepAssemblyClient.js');
-  const output = await exportStepAssembly(snapshot.parts);
+  const output = await exportStepAssembly(cadAssemblyParts(snapshot));
   // A client deliverable must be tied to one coherent saved design revision.
   // If another user edited the assembly during CAD generation, refuse the
   // stale export rather than returning misleading solids and metadata.

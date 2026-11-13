@@ -1,8 +1,11 @@
 import { getObjectStream, getProjectBucket } from '../services/objectStorageService.js';
 import { MAX_STEP_ASSEMBLY_PARTS } from '../../shared/cadExportLimits.js';
 import { createHash } from 'node:crypto';
+import type { CadSectionMetadata, CadSectionRoute } from './scopedExports.js';
 
 type CadPlacement = {
+  metadata?: CadSectionMetadata;
+  route?: CadSectionRoute;
   original_filename: string;
   source_object_key: string;
   source_sha256?: string;
@@ -44,7 +47,7 @@ export async function exportStepAssembly(parts: CadPlacement[]): Promise<Buffer>
   }
   const requestParts: Array<{
     name: string; sourceId: string; positionMm: [number,number,number]; rotation: [number,number,number,number];
-    cutLengthMm?: number;
+    cutLengthMm?: number;metadata?:CadSectionMetadata;route?:CadSectionRoute;
   }> = [];
   const objectSources=new Map<string,string>(),sources=new Map<string,string>();
   let total = 0;
@@ -63,7 +66,9 @@ export async function exportStepAssembly(parts: CadPlacement[]): Promise<Buffer>
     if(part.source_sha256!==undefined&&part.source_sha256!==sourceId)
       throw new Error('The pinned STEP source hash differs from its stored bytes.');
     requestParts.push({
-      name: part.original_filename.slice(0, 120),
+      name: (part.metadata?.name??part.original_filename).slice(0, 240),
+      ...(part.metadata?{metadata:part.metadata}:{}),
+      ...(part.route?{route:part.route}:{}),
       sourceId,
       positionMm: [part.x_mm, part.y_mm, part.z_mm],
       rotation: [part.qx, part.qy, part.qz, part.qw],

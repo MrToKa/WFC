@@ -3,7 +3,7 @@ import express from 'express';
 import type { Server } from 'node:http';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { STRAIGHT_SOURCE_SHA256 } from '../../shared/cadLengths.js';
-import type { CadExportPart } from './scopedExports.js';
+import { cadAssemblyParts, readCadExportSnapshot, type CadExportPart } from './scopedExports.js';
 
 const mocks=vi.hoisted(()=>({query:vi.fn(),connect:vi.fn(),assembly:vi.fn(),source:vi.fn()}));
 vi.mock('../db.js',()=>({pool:{query:mocks.query,connect:mocks.connect}}));
@@ -16,9 +16,9 @@ const id=(n:number)=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const projectId=id(1),designId=id(2),modelId=id(3),routeA=id(4),routeB=id(5);
 const part=(n:number,sku:string,category=100,length:number|null=1500):CadExportPart=>({id:id(n),revision:2,catalog_item_id:id(category),catalog_id:id(category),
   manufacturer:'Niedax',part_number:sku,family:'Ladder',original_filename:'NDX_KL_60-303_F_MED_214.step',source_sha256:STRAIGHT_SOURCE_SHA256,
-  source_object_key:`immutable/${category}.step`,material_asset_id:id(category+100),cad_revision:3,component_kind:'straight',cut_length_mm:length,
+  source_object_key:`immutable/${category}.step`,material_asset_id:id(category+100),cad_revision:3,component_kind:'straight',cut_length_mm:length,width_mm:300,height_mm:60,
   x_mm:n*100,y_mm:-n*20,z_mm:n*30,qx:0,qy:0,qz:0,qw:1});
-type State={exists:boolean;revision:number;routes:Array<{id:string;name:string;revision:number;members:string[]}>;parts:CadExportPart[]};
+type State={exists:boolean;revision:number;routes:Array<{id:string;name:string;revision:number;purpose?:string|null;members:string[]}>;parts:CadExportPart[]};
 let state:State,mutateDuringRead:(()=>void)|undefined;
 let server:Server,base:string;
 const clients:Array<{query:ReturnType<typeof vi.fn>;release:ReturnType<typeof vi.fn>}>=[];
@@ -40,9 +40,11 @@ beforeEach(()=>{
     const query=vi.fn(async(sql:string,values:unknown[]=[])=>{
       if(sql.startsWith('BEGIN')){frozen=structuredClone(state);return {rows:[]};}
       if(sql.startsWith('SELECT model_version_id,revision FROM cad_designs'))return {rows:frozen.exists&&values[0]===projectId&&values[1]===designId?[{model_version_id:modelId,revision:frozen.revision}]:[]};
-      if(sql.startsWith('SELECT id,name,revision FROM cad_route_groups')){
-        const route=frozen.routes.find(row=>row.id===values[2]);return {rows:values[0]===projectId&&values[1]===designId&&route?[{id:route.id,name:route.name,revision:route.revision}]:[]};
+      if(sql.startsWith('SELECT id,name,revision,purpose FROM cad_route_groups')){
+        if(values.length===2)return {rows:frozen.routes.map(({id,name,revision,purpose})=>({id,name,revision,purpose:purpose??null}))};
+        const route=frozen.routes.find(row=>row.id===values[2]);return {rows:values[0]===projectId&&values[1]===designId&&route?[{id:route.id,name:route.name,revision:route.revision,purpose:route.purpose??null}]:[]};
       }
+      if(sql.startsWith('SELECT route_group_id,instance_id'))return {rows:frozen.routes.filter(row=>values.length===2||row.id===values[2]).flatMap(row=>row.members.map(instance_id=>({route_group_id:row.id,instance_id})))};
       if(sql.startsWith('SELECT instance_id FROM cad_route_group_members'))return {rows:frozen.routes.find(row=>row.id===values[2])?.members.map(instance_id=>({instance_id}))??[]};
       if(sql.startsWith('SELECT id FROM cad_design_instances'))return {rows:frozen.parts.map(row=>({id:row.id}))};
       if(sql.startsWith('SELECT i.id,i.revision,i.catalog_item_id')){
@@ -58,7 +60,7 @@ const get=(format:'step'|'csv',query='')=>fetch(`${base}/${format==='step'?'asse
 describe('route-scoped and complete-proposal CAD deliverables',()=>{
   it('exports only authoritative members of the selected route with pinned lengths, assets and saved transforms',async()=>{
     const response=await get('step',`?routeId=${routeA}`);expect(response.status).toBe(200);
-    expect(mocks.assembly).toHaveBeenCalledWith(state.parts.slice(0,2));
+    expect(mocks.assembly.mock.calls[0][0]).toMatchObject(state.parts.slice(0,2));
     expect(mocks.assembly.mock.calls[0][0].map((row:CadExportPart)=>row.cut_length_mm)).toEqual([1500,2000]);
     expect(response.headers.get('x-wfc-export-scope')).toBe('route');expect(response.headers.get('x-wfc-route-id')).toBe(routeA);
     expect(response.headers.get('x-wfc-route-revision')).toBe('3');expect(response.headers.get('x-wfc-design-revision')).toBe('11');
@@ -68,7 +70,7 @@ describe('route-scoped and complete-proposal CAD deliverables',()=>{
   });
   it('keeps a second route isolated and includes both routes plus unassigned pieces when scope is omitted',async()=>{
     expect((await get('step',`?routeId=${routeB}`)).status).toBe(200);expect(mocks.assembly.mock.calls[0][0].map((row:CadExportPart)=>row.id)).toEqual([id(12)]);
-    mocks.assembly.mockClear();const all=await get('step');expect(all.status).toBe(200);expect(mocks.assembly).toHaveBeenCalledWith(state.parts);
+    mocks.assembly.mockClear();const all=await get('step');expect(all.status).toBe(200);expect(mocks.assembly.mock.calls[0][0]).toMatchObject(state.parts);
     expect(all.headers.get('x-wfc-export-scope')).toBe('proposal');expect(all.headers.get('x-wfc-route-id')).toBeNull();
     expect(all.headers.get('content-disposition')).toContain('wfc-proposed-cable-trays.step');
   });
@@ -112,7 +114,7 @@ describe('route-scoped and complete-proposal CAD deliverables',()=>{
   });
   it.each(['proposal','route'])('accepts exactly 128 %s parts through both pre- and post-generation checks',async scope=>{
     state.parts=Array.from({length:128},(_,index)=>part(index+10,'REPEATED-SKU',100));
-    state.routes[0].members=state.parts.map(row=>row.id);
+    state.routes[0].members=state.parts.map(row=>row.id);state.routes[1].members=[];
     const response=await get('step',scope==='route'?`?routeId=${routeA}`:'');expect(response.status).toBe(200);
     expect(mocks.assembly.mock.calls[0][0]).toHaveLength(128);expect(clients).toHaveLength(2);
   });
@@ -133,6 +135,35 @@ describe('route-scoped and complete-proposal CAD deliverables',()=>{
       return Buffer.from('ISO-10303-21;');
     });
     const response=await get('step',`?routeId=${routeA}`);expect(response.status).toBe(409);expect(await response.json()).toMatchObject({code:'DESIGN_CHANGED_DURING_EXPORT'});
+  });
+  it.each(['name','purpose','membership','dimensions'])('pins all-proposal %s metadata even without a design revision change',async changed=>{
+    mocks.assembly.mockImplementation(async()=>{
+      if(changed==='name')state.routes[1].name='RENAMED';
+      if(changed==='purpose')state.routes[1].purpose='LV';
+      if(changed==='membership')state.routes[1].members=[];
+      if(changed==='dimensions')state.parts[0].width_mm=400;
+      return Buffer.from('ISO-10303-21;');
+    });
+    const response=await get('step');expect(response.status).toBe(409);expect(await response.json()).toMatchObject({code:'DESIGN_CHANGED_DURING_EXPORT'});
+  });
+  it('derives independent instance properties, route groups and explicit unknowns from the frozen source',async()=>{
+    state.routes[0].purpose='LV';state.parts[1].cut_length_mm=null;
+    state.parts[2]={...state.parts[2],component_kind:'bend',original_filename:'NDX_KLBK_60-303_MED_214.step',source_sha256:'7a5cf4947a9ea5fa213ceef84ba952fe2a9a63dee752f0c23a598320802c0014',cut_length_mm:null};
+    state.parts[3].component_kind=null;state.parts[3].width_mm=null;state.parts[3].height_mm=null;
+    const parts=cadAssemblyParts(await readCadExportSnapshot({connect:mocks.connect} as never,projectId,designId));
+    expect(parts[0].metadata).toMatchObject({instanceId:id(10),name:'BC182 / '+id(10),actualLengthMm:1500,widthMm:300,heightMm:60,partNumber:'SKU-A',manufacturer:'Niedax',purpose:'LV'});
+    expect(parts[1].metadata.actualLengthMm).toBe(6000);expect(parts[1].metadata.instanceId).not.toBe(parts[0].metadata.instanceId);
+    expect(parts[2].metadata.actualLengthMm).toBeCloseTo(290+650*Math.PI/2,9);
+    expect(parts[2].route).toMatchObject({id:routeB,name:'OTHER'});
+    expect(parts[3].route).toEqual({id:null,name:'Unassigned components',purpose:null});
+    expect(parts[3].metadata).toMatchObject({actualLengthMm:null,widthMm:null,heightMm:null,purpose:null});
+  });
+  it('rejects inconsistent or duplicated full-proposal route membership rather than assigning arbitrary groups',async()=>{
+    state.routes[1].members.push(id(10));
+    expect((await get('step')).status).toBe(409);expect(mocks.assembly).not.toHaveBeenCalled();
+    state.routes[1].members=[id(999)];
+    const response=await get('step');expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({code:'CAD_EXPORT_MEMBERSHIP_UNAVAILABLE'});
   });
   it('uses one coherent read snapshot for CSV even if another edit commits while material rows are read',async()=>{
     mutateDuringRead=()=>{state.revision++;state.routes[0].revision++;state.routes[0].members=[id(13)];};
