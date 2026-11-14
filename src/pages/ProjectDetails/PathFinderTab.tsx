@@ -223,7 +223,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
         /></details>
         </div>
         <div style={{ display: mode === 'lookup' ? 'none' : 'block' }}>
-          <ModelLocationMatchPanel pf={{ ...pf, busy: pf.busy || networkCheckBusy }} accountId={accountId ?? null} active={mode !== 'lookup'} onChanged={cableValuesChanged} onBusyChange={setLocationCheckBusy} />
+          <ModelLocationMatchPanel pf={{ ...pf, busy: pf.busy || networkCheckBusy }} accountId={accountId ?? null} active={mode !== 'lookup'} refreshRevision={barrierRefreshRevision} onChanged={cableValuesChanged} onBusyChange={setLocationCheckBusy} />
         </div>
         <TabList aria-label="Path Finder tools" selectedValue={mode} onTabSelect={(_, value) => changeMode(value.value as 'routes' | 'path' | 'lookup')}>
           <Tab id={`${panelId}-routes-tab`} value="routes" aria-controls={`${panelId}-routes-panel`}>Routes</Tab>

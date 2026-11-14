@@ -21,6 +21,7 @@ import type { BarrierDependencySnapshot, EngineResponse } from './jobContracts.j
 import { readVerifiedSameEndpointCurrent, type VerifiedSameEndpointCurrent } from './verifiedSameEndpointReuse.js';
 import { isCapacityNoPathResult, automaticPairCapacityClearTransition, readCurrentCapacityClearEvidence, capacityClearItemApplicable,
   validCapacityClearEvidence, readCurrentPositiveCapacity, type CapacityClearEvidence } from './capacityClearWrite.js';
+import { automaticPairBaselineSnapshot, automaticPairMaterialBaselineCurrent, automaticPairMaterialObservation } from './automaticPairSnapshot.js';
 
 type Row = Record<string, any>;
 const fail = (code: string, status = 409): never => { throw new PathFinderError(code, status, 'Automatic routing and Design length update was refused; current values are retained.'); };
@@ -39,6 +40,12 @@ export function createAutomaticPairWriter(pool: Pool, adapters: AutomaticPairWri
   const collect = adapters.collect ?? collectDependenciesForVersion, barrierFence = adapters.barrierFence ?? requireCurrentBarrierWriteScope,
     sealResult = adapters.seal ?? verifyRevisionResultForProposal, proof = adapters.proof ?? readAutomaticPairReceiptProof,
     mandateFence = adapters.mandateFence ?? requireCurrentAutomaticPairMandate, ownership = adapters.ownership ?? readAutomaticPairOwnership;
+  const observationTime = async (client: PoolClient, m: AutomaticPairMandate): Promise<string> => {
+    if (!m.baselinePolicy) return new Date().toISOString();
+    const time = (await client.query<{ observed_at: string }>(`/* automatic-pair:observation-time */ SELECT
+      to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS observed_at`)).rows[0]?.observed_at;
+    return typeof time === 'string' ? time : fail('AUTOMATIC_PAIR_OBSERVATION_REQUIRED');
+  };
   async function load(client: PoolClient, claim: AutomaticPairRecoveryKey) {
     const mandate = await readAutomaticPairMandate(client, claim); if (!mandate) return fail('AUTOMATIC_PAIR_MANDATE_REQUIRED');
     const rows = (await client.query<Row>(`/* automatic-pair:result */ SELECT p.id,p.job_id,p.cable_id,p.proposal_hash,p.dependency_hash,p.status,p.dependencies,p.result,
@@ -131,7 +138,9 @@ export function createAutomaticPairWriter(pool: Pool, adapters: AutomaticPairWri
       const before = (await client.query<Row>(`/* automatic-pair:write-baseline */ SELECT CASE WHEN octet_length(to_jsonb(c)::text)<=65536
         THEN to_jsonb(c)||jsonb_build_object('design_length',c.design_length::text,'install_length',c.install_length::text,'cable_write_revision',c.cable_write_revision::text) ELSE NULL END AS value
         FROM cables c WHERE c.project_id=$1 AND c.id=$2 FOR UPDATE`, [m.projectId, m.cableId])).rows[0]?.value;
-      if (!before || automaticPairHash(before) !== m.baselineSha256) return { status: 'review-required', receiptId: null, code: 'AUTOMATIC_PAIR_BASELINE_CHANGED' };
+      if (!before || automaticPairHash(automaticPairBaselineSnapshot(before, m.baselinePolicy)) !== m.baselineSha256
+        || !automaticPairMaterialBaselineCurrent(m.baselinePolicy, before, await observationTime(client, m)))
+        return { status: 'review-required', receiptId: null, code: 'AUTOMATIC_PAIR_BASELINE_CHANGED' };
       const owned = await ownership(client, { projectId: m.projectId, cableId: m.cableId, currentSnapshot: before }, () => signal?.throwIfAborted());
       if (owned.kind === 'review-required' || !sameAutomaticPairValue(owned, m.ownership)) return { status: 'review-required', receiptId: null, code: 'AUTOMATIC_PAIR_OWNERSHIP_CHANGED' };
       if (capacityClear) {
@@ -146,7 +155,7 @@ export function createAutomaticPairWriter(pool: Pool, adapters: AutomaticPairWri
       if(verified)await currentScope();await fence(client, claim); await mandateFence(client, m); signal?.throwIfAborted();
       await client.query("SELECT set_config('wfc.pathfinder_apply','1',true)");
       const nextRouting = capacityClear ? null : result.route!.routeText, nextDesign = capacityClear ? null : result.design!.designLengthMeters;
-      const after = (await client.query<Row>(`/* automatic-pair:write */ UPDATE cables c SET routing=$3,design_length=$4,updated_at=NOW()
+      const after = (await client.query<Row>(`/* automatic-pair:write */ UPDATE cables c SET routing=$3,design_length=$4,updated_at=clock_timestamp()
         WHERE c.project_id=$1 AND c.id=$2 AND c.cable_write_revision=$5 AND c.routing IS NOT DISTINCT FROM $6::text AND c.design_length IS NOT DISTINCT FROM $7::numeric
         RETURNING to_jsonb(c)||jsonb_build_object('design_length',c.design_length::text,'install_length',c.install_length::text,'cable_write_revision',c.cable_write_revision::text) AS value`,
       [m.projectId, m.cableId, nextRouting, nextDesign, m.cableWriteRevision, before.routing, before.design_length])).rows[0]?.value;
@@ -159,16 +168,20 @@ export function createAutomaticPairWriter(pool: Pool, adapters: AutomaticPairWri
       const histories = (await client.query<Row>(`/* automatic-pair:write-history */ SELECT *,design_length::text,install_length::text
         FROM cable_versions WHERE cable_id=$1 AND id=$2 AND version_number=$3`, [m.cableId, history.id, history.version])).rows;
       if (histories.length !== 1 || !automaticPairHistoryMatches(histories[0], after, m.actorId)) return fail('AUTOMATIC_PAIR_HISTORY_INTEGRITY');
+      const authorizedAt = await observationTime(client, m), materialObservation = automaticPairMaterialObservation(m.baselinePolicy, before, after, authorizedAt);
+      if (materialObservation === null) return fail('AUTOMATIC_PAIR_WRITE_INTEGRITY');
       const provenanceBody = { engineeringAccepted: false, nativeParity: 'not-performed', request, mandate: m, dependencies,
+        ...(materialObservation ? { materialObservation } : {}),
         revisionResult: { admissionId: seal.admissionId, revisionResultSha256: seal.revisionResultSha256, baselineHash: seal.baselineHash,
-          engineResultSha256: seal.engineResultSha256, ledgerHash: seal.ledgerHash, dependencyHash: seal.dependencyHash }, history, authorizedAt: new Date().toISOString() };
+          engineResultSha256: seal.engineResultSha256, ledgerHash: seal.ledgerHash, dependencyHash: seal.dependencyHash }, history, authorizedAt };
       const provenance = capacityClear
         ? automaticPairCapacityClearProvenanceSchema.parse({ ...provenanceBody, schemaVersion: 'pathfinder.automatic-pair-capacity-clear.v1',
           validationMethod: 'automatic-owned-capacity-clear', capacityEvidence })
         : automaticPairProvenanceSchema.parse({ ...provenanceBody, schemaVersion: 'pathfinder.automatic-pair.v1', validationMethod: 'automatic-owned-pair', barrierEvidence });
-      if (Buffer.byteLength(canonicalPurposeJson({ before, after, provenance })) > AUTOMATIC_PAIR_LIMITS.receiptBytes) return fail('AUTOMATIC_PAIR_RECEIPT_LIMIT', 413);
+      const recordedBefore = automaticPairBaselineSnapshot(before, m.baselinePolicy), recordedAfter = automaticPairBaselineSnapshot(after, m.baselinePolicy);
+      if (Buffer.byteLength(canonicalPurposeJson({ before: recordedBefore, after: recordedAfter, provenance })) > AUTOMATIC_PAIR_LIMITS.receiptBytes) return fail('AUTOMATIC_PAIR_RECEIPT_LIMIT', 413);
       const receiptId = randomUUID(); await client.query(`INSERT INTO pf_apply_receipts(id,project_id,actor_id,idempotency_key,payload_hash,proposal_id,cable_id,before_snapshot,after_snapshot,provenance)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, [receiptId, m.projectId, m.actorId, request.idempotencyKey, automaticPairHash(request), p.id, m.cableId, before, after, provenance]);
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, [receiptId, m.projectId, m.actorId, request.idempotencyKey, automaticPairHash(request), p.id, m.cableId, recordedBefore, recordedAfter, provenance]);
       await currentScope(); await fence(client, claim); await mandateFence(client, m); signal?.throwIfAborted();
       return { status: 'written', receiptId };
     }, signal);

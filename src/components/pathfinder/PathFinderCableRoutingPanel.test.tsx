@@ -267,6 +267,20 @@ describe('persistent nonmodal cable routing panel with atomic drafts', () => {
     expect(screen.queryByRole('button',{name:'Review proposed routing'})).toBeNull();
     expect(screen.queryByRole('button',{name:'Apply reviewed routing'})).toBeNull();
   });
+  it('shows independently verified stored values as saved while retaining a later failed calculation diagnostic',()=>{
+    const p=props();p.cable!.cable.routing='/SAVED';p.cable!.cable.designLength='58';
+    p.cable!.calculation={...p.cable!.calculation,jobId:id(99),jobStatus:'failed',itemState:'blocked',outcome:'failed',currentness:'unavailable',reasonCodes:['CALCULATION_FAILED']};
+    p.cable!.savedRoute={receiptId:id(90),jobId:id(79),proposalId:id(80),proposalHash:'b'.repeat(64),currentness:'current'};
+    render(<PathFinderCableRoutingPanel {...p} pathReady calculatedRouting="/SAVED" calculatedDesignLength="58"
+      calculationDiagnostics={{cableId:id(3),jobId:id(99),jobStatus:'failed',itemState:'blocked',itemStatus:'failed',itemMessage:'The later attempt exceeded its routing limit.',jobFailure:null,readError:null}} />);
+    expect(screen.getByRole('button',{name:'Show'})).toBeEnabled();
+    expect(screen.getByText('Routing and length saved')).toBeVisible();
+    expect(screen.getByText('Routing and Design length match the verified result in Cable list.')).toBeVisible();
+    expect(screen.getByText('Calculation stopped: The later attempt exceeded its routing limit.')).toBeVisible();
+    expect(screen.queryByRole('button',{name:'Review proposed routing'})).toBeNull();
+    expect(screen.queryByRole('button',{name:'Apply reviewed routing'})).toBeNull();
+    expect(p.onCalculate).not.toHaveBeenCalled();
+  });
   it.each(['failed', 'cancelled'] as const)('does not call a verified saved cable outdated because its parent is %s', status => {
     const p = props(); p.cable!.cable.routing = '/SAVED'; p.cable!.cable.designLength = '27';
     p.cable!.calculation = { ...p.cable!.calculation, jobId: id(79), jobStatus: status, itemState: 'complete',

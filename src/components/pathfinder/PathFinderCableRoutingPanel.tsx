@@ -144,7 +144,7 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
     && cable.calculation.proposalHash === null && !cable.calculation.reviewable && !cable.calculation.acceptedMatchesCurrent;
   const calculationMessage = preparationUpdated ? calculationFeedback?.currentAttempt ? calculationFeedback.message
     : 'Network ready. Calculate routing to create a current route.' : stoppedMessage;
-  const pairSaved = cable.calculation.acceptedMatchesCurrent && !calculationPending && !unsaved;
+  const pairSaved = (cable.calculation.acceptedMatchesCurrent || cable.savedRoute?.currentness === 'current') && !calculationPending && !unsaved;
   // Stored Cable list values remain useful on first open even when no current
   // proposal can be drawn. They supply text only, never Show or review authority.
   const hasCalculatedRouting = typeof calculatedRouting === 'string' && calculatedRouting.trim().length > 0;

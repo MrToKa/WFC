@@ -338,6 +338,11 @@ describe('cable workflow positive result evidence (synthetic boundaries)', () =>
 });
 
 describe('receipt-backed current accepted cable display', () => {
+  it('requires the exact latest receipt identity for an independently selected stored route',async()=>{
+    const f=protectedAcceptedFixture(),fresh=async()=>({...f.dependencies,cableWriteRevision:afterRevision});
+    expect(await f.reader.accepted(f.cable,fresh,{jobId,proposalId,proposalHash:f.raw.proposal_hash,receiptId:f.receipt.id})).toBe(true);
+    expect(await f.reader.accepted(f.cable,fresh,{jobId,proposalId,proposalHash:f.raw.proposal_hash,receiptId:id(99)})).toBe(false);
+  });
   it.each(['failed', 'cancelled'] as const)('retains an exact saved automatic result after its background parent is %s without restoring review authority', async status => {
     const f = protectedAcceptedFixture();
     f.raw.job_state = status; f.raw.cancel_requested = status === 'cancelled';

@@ -53,6 +53,7 @@ function currentAcceptedDisplayRow(proposal: PathFinderProposal, row: CableWorkf
     || value.cable.designLength === null) return false;
   try { return canonicalDecimalString(value.cable.designLength) === canonicalDecimalString(proposal.design.designLengthMeters); } catch { return false; }
 }
+const workflowDisplayIdentity = (row: CableWorkflowRow) => row.savedRoute ?? row.calculation;
 function matchingEndpointForeground(value: PathFinderEndpointForegroundContexts | null | undefined,
   pf: ReturnType<typeof usePathFinder>, accountId: string | null | undefined, cableId: string) {
   const access = pf.preparationAccess, model = pf.data?.activeModel;
@@ -228,10 +229,11 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
   useEffect(() => { setComparison(value => value?.owner === comparisonOwner ? value : null); }, [comparisonOwner]);
   const workflowRow = cableWorkflowRowSchema.safeParse(workflowSelection);
   const workflowTarget = workflowRow.success && workflowRow.data.projectId === pf.preparationAccess?.projectId && workflowRow.data.cable.id === selectedCableId
-    && workflowRow.data.calculation.outcome === 'calculated' && workflowRow.data.calculation.proposalId && workflowRow.data.calculation.proposalHash && workflowRow.data.calculation.jobId
+    && (workflowRow.data.savedRoute || workflowRow.data.calculation.outcome === 'calculated' && workflowRow.data.calculation.proposalId && workflowRow.data.calculation.proposalHash && workflowRow.data.calculation.jobId)
     ? workflowRow.data : null;
+  const workflowTargetIdentity = workflowTarget ? workflowDisplayIdentity(workflowTarget) : null;
   const workflowExpectedPreferences = workflowCalculationPreferences?.cableId === workflowTarget?.cable.id
-    && workflowCalculationPreferences?.jobId === workflowTarget?.calculation.jobId ? workflowCalculationPreferences?.preferences : undefined;
+    && workflowCalculationPreferences?.jobId === workflowTargetIdentity?.jobId ? workflowCalculationPreferences?.preferences : undefined;
   // An acknowledged immutable request identifies a policy; it does not make a
   // dirty, pending or unavailable current barrier configuration ready.
   const workflowConfigurationAvailable = workflowConfigurationReady ?? (options !== null);
@@ -246,7 +248,7 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
   const observedWorkflowRevision = selectedWorkflowRevision && /^(0|[1-9][0-9]*)$/.test(selectedWorkflowRevision)
     && (!globalWorkflowRevision || /^(0|[1-9][0-9]*)$/.test(globalWorkflowRevision) && BigInt(selectedWorkflowRevision) > BigInt(globalWorkflowRevision))
     ? selectedWorkflowRevision : globalWorkflowRevision;
-  const observedWorkflowJob = data?.jobs.find(value => value.id === workflowTarget?.calculation.jobId && value.projectId === workflowTarget.projectId);
+  const observedWorkflowJob = data?.jobs.find(value => value.id === workflowTargetIdentity?.jobId && value.projectId === workflowTarget?.projectId);
   const observedWorkflowStop = observedWorkflowJob?.cancelRequested ? 'cancel-requested'
     : ['failed', 'cancelled'].includes(observedWorkflowJob?.status ?? '') ? observedWorkflowJob!.status : null;
   const workflowReadContext = JSON.stringify([data?.registryRevision, data?.artifacts.map(item => [item.id, item.snapshotSha256])]);
@@ -262,15 +264,15 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
     workflowRefresh.current.requestId = workflowRefreshRequest.requestId;
   const workflowRefreshKey = workflowRefresh.current.requestId;
   const workflowDisplayContext = JSON.stringify([ownershipKey, active, selectedCableId, data?.activeModel, settingsKey, optionsKey, readPreferencesKey, workflowReadContext, observedWorkflowRevision, displayVerificationScope, workflowRefreshKey]);
-  const workflowProposalKey = workflowTarget ? JSON.stringify([workflowTarget.calculation.jobId, workflowTarget.calculation.proposalId,
-    workflowTarget.calculation.proposalHash, workflowTarget.cable.cableWriteRevision]) : null;
+  const workflowProposalKey = workflowTarget ? JSON.stringify([workflowTargetIdentity?.jobId, workflowTargetIdentity?.proposalId,
+    workflowTargetIdentity?.proposalHash, workflowTarget.cable.cableWriteRevision, workflowTarget.savedRoute?.receiptId]) : null;
   const workflowHidden = useRef<{ context: string; hidden: boolean; proposalKey: string | null }>({ context: workflowDisplayContext, hidden: true, proposalKey: null });
   if (workflowHidden.current.context !== workflowDisplayContext) workflowHidden.current = { context: workflowDisplayContext, hidden: true, proposalKey: null };
   const handledDisplayRequest = useRef(-1);
   // The hint identifies one selected result. Replacing list rows or updating
   // their progress must never silently retarget the selected proposal.
   const selectedWorkflowIdentity = workflowTarget ? JSON.stringify([ownershipKey, active, selectedCableId, data?.activeModel, settingsKey, optionsKey, readPreferencesKey, workflowReadContext, observedWorkflowRevision, displayVerificationScope, workflowPreferencesKey, workflowAttempt, workflowRefreshKey,
-    workflowTarget.calculation.jobId, workflowTarget.calculation.proposalId, workflowTarget.calculation.proposalHash, workflowTarget.cable.cableWriteRevision]) : null;
+    workflowTargetIdentity?.jobId, workflowTargetIdentity?.proposalId, workflowTargetIdentity?.proposalHash, workflowTarget.cable.cableWriteRevision, workflowTarget.savedRoute]) : null;
   const workflowKey = workflowTarget ? JSON.stringify([selectedWorkflowIdentity, workflowCompletionKey(workflowTarget, proposal), observedWorkflowStop, workflowTarget.calculation.itemState,
     workflowTarget.calculation.currentness, workflowTarget.calculation.reviewable, workflowTarget.calculation.savedExactDisplay === true]) : null;
   // A retained proposal is useful history, but it cannot stand in for a newer
@@ -278,13 +280,13 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
   const displayReady = Boolean(active && (!observedWorkflowStop || workflowDisplayProof?.accepted) && workflowKey && workflowDisplayProof?.key === workflowKey && proposal && workflowTarget
     && workflowDisplayProof.proposalId === proposal.id && workflowDisplayProof.proposalHash === proposal.proposalHash
     && workflowProposalRead?.key === workflowKey && workflowProposalRead.scope === displayVerificationScope
-    && workflowProposalRead.row.calculation.itemState === 'complete'
+    && (workflowProposalRead.row.savedRoute || workflowProposalRead.row.calculation.itemState === 'complete')
     && (workflowDisplayProof.source === 'current-calculation' && workflowProposalRead.source === 'current-calculation'
-      && workflowProposalRead.row.calculation.currentness === 'current'
+      && (workflowProposalRead.row.savedRoute?.currentness === 'current' || workflowProposalRead.row.calculation.currentness === 'current')
       || workflowDisplayProof.source === 'saved-exact' && workflowProposalRead.source === 'saved-exact'
-        && workflowProposalRead.row.calculation.savedExactDisplay === true && workflowProposalRead.row.calculation.jobStatus === 'complete')
-    && workflowTarget.calculation.jobId === proposal.jobId && workflowTarget.calculation.proposalId === proposal.id
-    && workflowTarget.calculation.proposalHash === proposal.proposalHash);
+        && (workflowProposalRead.row.savedRoute?.currentness === 'saved-exact' || workflowProposalRead.row.calculation.savedExactDisplay === true && workflowProposalRead.row.calculation.jobStatus === 'complete'))
+    && workflowTargetIdentity?.jobId === proposal.jobId && workflowTargetIdentity.proposalId === proposal.id
+    && workflowTargetIdentity.proposalHash === proposal.proposalHash);
   const proposalCableId = proposal?.cableId ?? null, proposalJobId = proposal?.jobId ?? null,
     proposalId = proposal?.id ?? null, proposalHash = proposal?.proposalHash ?? null;
   // The exact proposal text is already useful while its display foreground is
@@ -292,8 +294,8 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
   const selectedProposalRead = Boolean(active && workflowKey && workflowProposalRead?.key === workflowKey && proposal
     && workflowProposalRead.scope === displayVerificationScope
     && workflowProposalRead.proposalId === proposal.id && workflowProposalRead.proposalHash === proposal.proposalHash
-    && workflowTarget?.calculation.jobId === proposal.jobId && workflowTarget.calculation.proposalId === proposal.id
-    && workflowTarget.calculation.proposalHash === proposal.proposalHash);
+    && workflowTargetIdentity?.jobId === proposal.jobId && workflowTargetIdentity.proposalId === proposal.id
+    && workflowTargetIdentity.proposalHash === proposal.proposalHash);
   const proposalRouting = selectedProposalRead ? proposal?.route?.routeText ?? null : null;
   const proposalDesignLength = selectedProposalRead && proposal?.design?.designLengthMeters !== undefined ? String(proposal.design.designLengthMeters) : null;
   const verifiedRow = selectedProposalRead ? workflowProposalRead?.row ?? null : null;
@@ -301,9 +303,9 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
   const displaySource = selectedProposalRead ? workflowProposalRead?.source ?? null : null;
   const displayCheck = active && !displayReady && workflowCheck?.key === workflowKey ? workflowCheck : null;
   const displayCableId = displayCheck ? workflowTarget?.cable.id ?? proposalCableId : proposalCableId;
-  const displayJobId = displayCheck ? workflowTarget?.calculation.jobId ?? proposalJobId : proposalJobId;
-  const displayProposalId = displayCheck ? workflowTarget?.calculation.proposalId ?? proposalId : proposalId;
-  const displayProposalHash = displayCheck ? workflowTarget?.calculation.proposalHash ?? proposalHash : proposalHash;
+  const displayJobId = displayCheck ? workflowTargetIdentity?.jobId ?? proposalJobId : proposalJobId;
+  const displayProposalId = displayCheck ? workflowTargetIdentity?.proposalId ?? proposalId : proposalId;
+  const displayProposalHash = displayCheck ? workflowTargetIdentity?.proposalHash ?? proposalHash : proposalHash;
   useEffect(() => { onWorkflowDisplayChange?.({ cableId: displayCableId, jobId: displayJobId, proposalId: displayProposalId, proposalHash: displayProposalHash,
     ready: displayReady, visible: displayReady && active && displayOwned && pathDisplayed, routing: proposalRouting, designLength: proposalDesignLength,
     source: displaySource, verifiedRow, verifiedScope, ...(displayCheck ? { checking: displayCheck.checking, message: displayCheck.message } : {}) }); },
@@ -395,14 +397,14 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
     if (!workflowKey || !target || !active || !accountId || !initial.pf.data || !access?.isAdmin || !access.projectId || access.projectId !== access.loadedProjectId || !access.token) {
       if (workflowScope.current) retireWorkflow(); return;
     }
-    const projectId = access.projectId, token = access.token;
+    const projectId = access.projectId, token = access.token, targetIdentity = workflowDisplayIdentity(target);
     workflowScope.current = workflowKey; setWorkflowScopeOwner(workflowKey);
     verifiedWorkflowPath.current = null;
     setWorkflowDisplayProof(null);
     setWorkflowProposalRead(null);
     setWorkflowCheck({ key: workflowKey, checking: true, message: 'Checking this cable’s calculated path for Show…' });
-    adoptScope({ admissionId: null, jobId: target.calculation.jobId, ready: false, message: 'Checking the selected cable calculation…' }, true);
-    if (observedWorkflowStop && !target.calculation.acceptedMatchesCurrent) {
+    adoptScope({ admissionId: null, jobId: targetIdentity.jobId, ready: false, message: 'Checking the selected cable calculation…' }, true);
+    if (observedWorkflowStop && !target.calculation.acceptedMatchesCurrent && target.savedRoute?.currentness !== 'current') {
       setPreviewLoading(false);
       const message = 'This calculation was cancelled or failed. Its saved path is preview only.';
       setNotice(message); setWorkflowCheck({ key: workflowKey, checking: false, message });
@@ -446,7 +448,7 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
         const expectedPreferences = initial.expectedPreferences;
         const earlyPreferences = expectedPreferences ?? null;
         const reads = [
-          initial.pf.readProposal(target.calculation.proposalId!, controller.signal), initial.pf.readJob(target.calculation.jobId!, controller.signal),
+          initial.pf.readProposal(targetIdentity.proposalId!, controller.signal), initial.pf.readJob(targetIdentity.jobId!, controller.signal),
           earlyPreferences ? fetchPathFinderCableWorkflowDetail(projectId, token, target.cable.id, earlyPreferences, controller.signal) : Promise.resolve(null),
         ] as const;
         // Handle every rejection immediately, while letting the exact proposal
@@ -458,8 +460,8 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
         const detail = proposalRead.value;
         if (!current()) return;
         if (!detail) throw new Error('WORKFLOW_READ_UNAVAILABLE');
-        if (detail.id !== target.calculation.proposalId || detail.proposalHash !== target.calculation.proposalHash || detail.projectId !== target.projectId
-          || detail.cableId !== target.cable.id || detail.jobId !== target.calculation.jobId) throw new Error('WORKFLOW_PROPOSAL_SCOPE_CHANGED');
+        if (detail.id !== targetIdentity.proposalId || detail.proposalHash !== targetIdentity.proposalHash || detail.projectId !== target.projectId
+          || detail.cableId !== target.cable.id || detail.jobId !== targetIdentity.jobId) throw new Error('WORKFLOW_PROPOSAL_SCOPE_CHANGED');
         const parsedEnvelope = revisionResultEnvelopeSchema.safeParse(detail.revisionResult), envelope = parsedEnvelope.success ? parsedEnvelope.data : null;
         if (detail.revisionResult && (!envelope || envelope.projectId !== detail.projectId || envelope.cableId !== detail.cableId || envelope.jobId !== detail.jobId
           || envelope.proposalId !== detail.id || envelope.proposalHash !== detail.proposalHash || envelope.revisionResultSha256 !== detail.revisionResultHash
@@ -509,7 +511,9 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
         const live = cableRead.status === 'fulfilled' ? cableRead.value : null;
         if (live && (live.projectId !== detail.projectId || live.cableId !== detail.cableId || live.row.projectId !== detail.projectId || live.row.cable.id !== detail.cableId))
           throw new Error('WORKFLOW_CURRENT_RESULT_CHANGED');
-        if (live && (live.row.calculation.jobId !== detail.jobId || live.row.calculation.proposalId !== detail.id || live.row.calculation.proposalHash !== detail.proposalHash))
+        const liveIdentity = live ? workflowDisplayIdentity(live.row) : null;
+        if (live && (liveIdentity?.jobId !== detail.jobId || liveIdentity.proposalId !== detail.id || liveIdentity.proposalHash !== detail.proposalHash
+          || target.savedRoute && live.row.savedRoute?.receiptId !== target.savedRoute.receiptId))
           throw verificationPending('The selected result and the current cable record have not converged. Checking this same result again…');
         if (live && globalWorkflowRevision && /^(0|[1-9][0-9]*)$/.test(globalWorkflowRevision)
           && BigInt(globalWorkflowRevision) > BigInt(live.row.cable.cableWriteRevision))
@@ -521,7 +525,7 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
         // tuple. Its own receipt may advance the cable revision; that permits
         // display of the accepted path without renewing Review/Apply authority.
         const acceptedDisplayCurrent = (() => {
-          if (!live || !currentCalculatedItem || !live.row.calculation.acceptedMatchesCurrent || !detail.route?.success || !detail.design
+          if (!live || !(live.row.savedRoute?.currentness === 'current' || currentCalculatedItem && live.row.calculation.acceptedMatchesCurrent) || !detail.route?.success || !detail.design
             || live.row.cable.routing !== detail.route.routeText || live.row.cable.designLength === null) return false;
           try { return canonicalDecimalString(live.row.cable.designLength) === canonicalDecimalString(detail.design.designLengthMeters); } catch { return false; }
         })();
@@ -535,9 +539,9 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
         // A separate server proof permits inspection of the already saved exact
         // geometry after an implementation update. It never renews currentness,
         // calculation scope, Review or Apply authority.
-        const savedExactDisplayReady = Boolean(envelope && live?.row.calculation.savedExactDisplay === true
+        const savedExactDisplayReady = Boolean(envelope && live && (live.row.savedRoute?.currentness === 'saved-exact' || live.row.calculation.savedExactDisplay === true
           && live.row.calculation.itemState === 'complete' && live.row.calculation.outcome === 'calculated'
-          && live.row.calculation.jobStatus === 'complete' && parent?.status === 'complete' && !parent.cancelRequested
+          && live.row.calculation.jobStatus === 'complete') && parent?.status === 'complete' && !parent.cancelRequested
           && detail.route?.success && detail.design && live.row.cable.routing === detail.route.routeText
           && live.row.cable.designLength !== null && (() => {
             try { return canonicalDecimalString(live.row.cable.designLength) === canonicalDecimalString(detail.design.designLengthMeters); } catch { return false; }
@@ -564,7 +568,7 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
           acceptedRow: live && currentAcceptedDisplayRow(detail, live.row) ? live.row : null });
         // Route geometry has its own exact calculation evidence. Optional
         // equipment highlighting must not delay a drawable checked route.
-        if (!live || !savedExactDisplayReady && (!currentCalculatedItem || (!liveCurrent && !acceptedDisplayReady))) {
+        if (!live || !savedExactDisplayReady && !acceptedDisplayReady && (!currentCalculatedItem || !liveCurrent)) {
           if (envelope && parent && !parent.cancelRequested && !['failed', 'cancelled'].includes(parent.status) && !detail.compatibilityIssue
             && (!live || live.row.calculation.currentness === 'unavailable' || ['waiting', 'running'].includes(live.row.calculation.itemState ?? '')
               || ['pending', 'running', 'unknown'].includes(live.row.calculation.automaticUpdate?.status ?? '')))
@@ -582,7 +586,7 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
         const routeObjectIds = computedPathObjectIds(detail.route.objectIds, []);
         if (!routeObjectIds) { stopCheck('This exact path exceeds the viewer object budget. The result is retained without truncation.'); return; }
         if (endpointAuthorityFailure !== null) throw endpointAuthorityFailure;
-        const displaySource = currentCalculatedItem && (liveCurrent || acceptedDisplayReady) ? 'current-calculation' : 'saved-exact';
+        const displaySource = acceptedDisplayReady || currentCalculatedItem && liveCurrent ? 'current-calculation' : 'saved-exact';
         const availableEndpoints = settledEndpoints as PromiseSettledResult<string[]> | null;
         const knownContexts = matchingEndpointForeground(latest.endpointForegroundContexts, latest.pf, accountId, detail.cableId);
         const knownEndpoints = knownContexts && latest.pf.data
@@ -693,13 +697,13 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
     && scopeReadiness.jobStatus === 'complete' && scopeReadiness.admissionId === proposal.revisionResult?.admissionId
     && proposal.jobId === scopeReadiness.jobId && proposalDisplayModelCurrent(proposal, data)
     && currentAcceptedDisplayRow(proposal, ownedComparison?.acceptedRow));
-  const effectiveCanApply = Boolean(!savedCurrentResult && comparisonReady && protectedResult && proposal && proposal.status === 'calculated' && scopeReadiness.admissionId && proposal.jobId === scopeReadiness.jobId && !calculationCancelled
+  const effectiveCanApply = Boolean(!workflowTarget?.savedRoute && !savedCurrentResult && comparisonReady && protectedResult && proposal && proposal.status === 'calculated' && scopeReadiness.admissionId && proposal.jobId === scopeReadiness.jobId && !calculationCancelled
     && (!workflowScopeOwner || scopeReadiness.ready)
     && !calculationFailed && !knownLiveRevisionMismatch && (wholeJobReady && (!checkedJobStatus || checkedJobStatus === 'complete') || sealedItemReady) && preferencesMatch && !stale && !proposal.compatibilityIssue
     && proposal.canApply && !(summary && summary.proposalHash === proposal.proposalHash && !summary.canApply));
   const projectionCallback = useRef(onCalculationCommitted); projectionCallback.current = onCalculationCommitted;
   const lastProjection = useRef('');
-  const completedSelectedItem = Boolean(active && accountId && selectedCableId && proposal?.cableId === selectedCableId && protectedResult
+  const completedSelectedItem = Boolean(!workflowTarget?.savedRoute && active && accountId && selectedCableId && proposal?.cableId === selectedCableId && protectedResult
     && (proposal?.provenance?.engineIdentity?.schemaVersion === 'wfc.pf.engine-identity.v2' && proposal.barriers?.schemaVersion === 'wfc.pf.barrier-execution.v1'
       || proposal?.provenance?.engineIdentity?.schemaVersion === 'wfc.pf.engine-identity.v3' && proposal.barriers?.schemaVersion === 'wfc.pf.barrier-execution.v2')
     && proposal.status === 'calculated' && proposal.route?.success && proposal.design && proposal.revisionResultHash

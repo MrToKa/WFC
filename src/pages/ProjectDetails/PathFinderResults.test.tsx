@@ -258,6 +258,34 @@ function workflowFixture(status: 'complete' | 'running' = 'complete') {
   return { pf, proposal, live, parent, selection: live.row };
 }
 describe('selected current cable workflow result', () => {
+  it.each(['current','saved-exact'] as const)('draws the exact %s stored route independently of a later failed attempt without renewing write authority',async currentness=>{
+    const f=workflowFixture(),changed=vi.fn<(value:PathFinderWorkflowDisplay)=>void>(),review=vi.fn<(value:PathFinderWorkflowReview|null)=>void>();
+    f.proposal.stale=true;
+    f.live.row.cable={...f.live.row.cable,routing:'/BC1',designLength:'7',cableWriteRevision:'10'};
+    f.live.row.calculation={...liveCableDetail().row.calculation,jobId:id(99),jobStatus:'failed',itemState:'blocked',outcome:'failed',currentness:'unavailable',reasonCodes:['CALCULATION_FAILED']};
+    f.live.row.savedRoute={receiptId:id(90),jobId:id(7),proposalId:id(3),proposalHash:f.proposal.proposalHash,currentness};
+    const view=render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} workflowSelection={f.live.row} accountId={id(2)} options={options}
+      onWorkflowDisplayChange={changed} onWorkflowReviewChange={review} />);
+    await waitFor(()=>expect(changed.mock.calls.at(-1)?.[0]).toMatchObject({ready:true,jobId:id(7),proposalId:id(3),source:currentness==='current'?'current-calculation':'saved-exact',routing:'/BC1'}));
+    expect(f.pf.readJob).toHaveBeenCalledWith(id(7),expect.any(AbortSignal));expect(f.pf.readProposal).toHaveBeenCalledWith(id(3),expect.any(AbortSignal));
+    expect(changed.mock.calls.at(-1)?.[0].verifiedRow?.calculation).toMatchObject({jobId:id(99),jobStatus:'failed',outcome:'failed',reviewable:false,acceptedMatchesCurrent:false});
+    expect(review.mock.calls.at(-1)?.[0]).toMatchObject({canReview:false,canApply:false});
+    view.rerender(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} workflowSelection={f.live.row} accountId={id(2)} options={options}
+      onWorkflowDisplayChange={changed} onWorkflowReviewChange={review} workflowDisplayRequest={{cableId:id(4),requestId:1,action:'show'}} />);
+    await waitFor(()=>expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({pathId:id(3),points:f.proposal.route!.points,objectIds:[23]}));
+    expect(f.pf.reviewProposal).not.toHaveBeenCalled();expect(f.pf.action).not.toHaveBeenCalled();expect(f.pf.calculate).not.toHaveBeenCalled();
+  });
+  it('retires stored geometry when its latest receipt identity changes during the live read',async()=>{
+    const f=workflowFixture(),changed=vi.fn<(value:PathFinderWorkflowDisplay)=>void>();
+    f.live.row.cable={...f.live.row.cable,routing:'/BC1',designLength:'7',cableWriteRevision:'10'};
+    f.live.row.calculation={...liveCableDetail().row.calculation,jobId:id(99),jobStatus:'failed',itemState:'blocked',outcome:'failed',currentness:'unavailable'};
+    f.live.row.savedRoute={receiptId:id(90),jobId:id(7),proposalId:id(3),proposalHash:f.proposal.proposalHash,currentness:'current'};
+    const selected=structuredClone(f.live.row);f.live.row.savedRoute.receiptId=id(91);
+    render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} workflowSelection={selected} accountId={id(2)} options={options}
+      onWorkflowDisplayChange={changed} workflowDisplayRequest={{cableId:id(4),requestId:1,action:'show'}} />);
+    await waitFor(()=>expect(changed.mock.calls.at(-1)?.[0].message).toContain('Retrying the exact result'));
+    expect(changed.mock.calls.at(-1)?.[0].ready).toBe(false);expect(f.pf.showPath).not.toHaveBeenCalled();
+  });
   it('qualifies only read-only saved exact display after an engine update while current review remains blocked', async () => {
     const f = workflowFixture(), changed = vi.fn<(value: PathFinderWorkflowDisplay) => void>(), review = vi.fn<(value: PathFinderWorkflowReview | null) => void>();
     f.proposal.stale = true; f.proposal.canApply = false;

@@ -1,9 +1,10 @@
 import { webcrypto } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { assignModelLocations, fetchModelLocationMatchContext, isModelLocationMatchBusy, ModelLocationMatchApiError } from './pathfinderModelLocationMatch';
+import { assignModelLocations, fetchModelLocationMatchContext, fetchModelLocationMatchSummary, isModelLocationMatchBusy, ModelLocationMatchApiError } from './pathfinderModelLocationMatch';
 import { modelMatchContext, modelMatchIds as ids, modelMatchReceipt } from '@/test/modelLocationMatchFixtures';
 import type { ModelLocationMatchAssign } from '../../shared/pathfinderModelLocationMatch';
 import { fetchPathFinderState } from './pathfinder';
+import { modelLocationMatchCounts, type ModelLocationMatchSummary } from '../../shared/pathfinderModelLocationMatch';
 const command = (): ModelLocationMatchAssign => ({ schemaVersion: 'wfc.pf.model-location-match-assign.v1', current: modelMatchContext().current,
   namesSha256: modelMatchContext().namesSha256, expectedRegistryRevision: '7', idempotencyKey: ids.frame, names: ['TAG-1'],
   scan: { matchingPolicyVersion: 'wfc.pf.project-exact-candidates.v3', visibilityScope: { schemaVersion: 'wfc.pf.sdk-display-visibility.v1',
@@ -13,6 +14,27 @@ const command = (): ModelLocationMatchAssign => ({ schemaVersion: 'wfc.pf.model-
 beforeEach(() => { vi.stubGlobal('crypto', webcrypto); vi.stubGlobal('fetch', vi.fn()); });
 afterEach(() => vi.unstubAllGlobals());
 describe('independent model location matching transport', () => {
+  it('reads persisted results without submitting a matching command', async () => {
+    const results = modelMatchReceipt(command()).results;
+    const summary: ModelLocationMatchSummary = { schemaVersion: 'wfc.pf.model-location-match-summary.v1', context: modelMatchContext(),
+      results, counts: modelLocationMatchCounts(results), complete: true };
+    vi.mocked(fetch).mockResolvedValue(Response.json(summary));
+    expect(await fetchModelLocationMatchSummary(ids.project, 'token')).toEqual(summary);
+    expect(fetch).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('/locations/model-match/summary'), expect.objectContaining({ method: 'GET', cache: 'no-store', headers: { Authorization: 'Bearer token' } }));
+  });
+  it.each(['project', 'namesHash', 'counts', 'complete', 'duplicate', 'foreignName'] as const)('rejects an inconsistent saved summary (%s)', async kind => {
+    const results = modelMatchReceipt(command()).results;
+    const summary: ModelLocationMatchSummary = { schemaVersion: 'wfc.pf.model-location-match-summary.v1', context: modelMatchContext(),
+      results, counts: modelLocationMatchCounts(results), complete: true };
+    if (kind === 'project') summary.context.projectId = ids.model;
+    if (kind === 'namesHash') summary.context.namesSha256 = '0'.repeat(64);
+    if (kind === 'counts') summary.counts.assigned++;
+    if (kind === 'complete') summary.complete = false;
+    if (kind === 'duplicate') summary.results.push(summary.results[0]);
+    if (kind === 'foreignName') summary.results[0].name = 'FOREIGN-TAG';
+    vi.mocked(fetch).mockResolvedValue(Response.json(summary));
+    await expect(fetchModelLocationMatchSummary(ids.project, 'token')).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+  });
   it.each(['PREFLIGHT_DATABASE_BUSY', 'ENDPOINT_DATABASE_BUSY', 'WORKFLOW_DATABASE_BUSY'])('identifies only typed503 %s as a bounded replay candidate', code => {
     expect(isModelLocationMatchBusy(new ModelLocationMatchApiError(code, 503, 'unknown', 'Busy.'))).toBe(true);
     expect(isModelLocationMatchBusy(new ModelLocationMatchApiError(code, 409, 'refused', 'Refused.'))).toBe(false);

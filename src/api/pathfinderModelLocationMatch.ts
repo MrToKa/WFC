@@ -5,10 +5,10 @@ import { canonicalPurposeJson, parsePurposeJson, policyUuidSchema } from '../../
 import { endpointBindingErrorSchema, normalizeEndpointLocation } from '../../shared/pathfinderEndpointBindings';
 import {
   MODEL_LOCATION_MATCH_LIMITS, modelLocationMatchContextSchema, modelLocationMatchAssignSchema,
-  modelLocationMatchReceiptSchema, modelLocationMatchNamesHashInput,
-  type ModelLocationMatchContext, type ModelLocationMatchAssign, type ModelLocationMatchReceipt,
+  modelLocationMatchReceiptSchema, modelLocationMatchSummarySchema, modelLocationMatchNamesHashInput,
+  type ModelLocationMatchContext, type ModelLocationMatchAssign, type ModelLocationMatchReceipt, type ModelLocationMatchSummary,
 } from '../../shared/pathfinderModelLocationMatch';
-export type { ModelLocationMatchContext, ModelLocationMatchAssign, ModelLocationMatchReceipt, ModelLocationMatchResult } from '../../shared/pathfinderModelLocationMatch';
+export type { ModelLocationMatchContext, ModelLocationMatchAssign, ModelLocationMatchReceipt, ModelLocationMatchResult, ModelLocationMatchSummary } from '../../shared/pathfinderModelLocationMatch';
 
 export class ModelLocationMatchApiError extends Error {
   constructor(public readonly code: string, public readonly status: number | null,
@@ -23,7 +23,7 @@ export async function modelLocationMatchHash(value: unknown): Promise<string> {
   return Array.from(new Uint8Array(bytes), n => n.toString(16).padStart(2, '0')).join('');
 }
 const invalid = (): never => { throw new ModelLocationMatchApiError('INVALID_RESPONSE', null, 'unknown', 'The location matching response could not be verified. Retain any pending assignment and check its status.'); };
-async function request(projectId: string, token: string, command?: ModelLocationMatchAssign, signal?: AbortSignal): Promise<unknown> {
+async function request(projectId: string, token: string, command?: ModelLocationMatchAssign, signal?: AbortSignal, summary = false): Promise<unknown> {
   if (!policyUuidSchema.safeParse(projectId).success || !token || token.length > 16384)
     throw new ModelLocationMatchApiError('INVALID_REQUEST', 400, 'refused', 'Use the current administrator project.');
   const encoded = command === undefined ? undefined : JSON.stringify(modelLocationMatchAssignSchema.parse(command));
@@ -32,7 +32,7 @@ async function request(projectId: string, token: string, command?: ModelLocation
   const deadline = pathFinderRequestDeadline(signal, 30_000, () => new ModelLocationMatchApiError('REQUEST_TIMEOUT', null, 'unknown', 'The location matching request timed out. Retry the same pending assignment before starting again.'));
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
   try {
-    const response = await deadline.wait(() => fetch(`${getApiBaseUrl()}/api/projects/${projectId}/pathfinder/locations/model-match/${command ? 'assign' : 'context'}`, {
+    const response = await deadline.wait(() => fetch(`${getApiBaseUrl()}/api/projects/${projectId}/pathfinder/locations/model-match/${command ? 'assign' : summary ? 'summary' : 'context'}`, {
       method: command ? 'POST' : 'GET', signal: deadline.signal, cache: 'no-store', redirect: 'error', credentials: 'same-origin',
       headers: { Authorization: `Bearer ${token}`, ...(encoded === undefined ? {} : { 'Content-Type': 'application/json' }) },
       ...(encoded === undefined ? {} : { body: encoded }),
@@ -65,6 +65,12 @@ export async function fetchModelLocationMatchContext(projectId: string, token: s
   const parsed = modelLocationMatchContextSchema.safeParse(await request(projectId, token, undefined, signal));
   if (!parsed.success || parsed.data.projectId !== projectId
     || await modelLocationMatchHash(modelLocationMatchNamesHashInput(parsed.data.names)) !== parsed.data.namesSha256) return invalid();
+  return parsed.data;
+}
+export async function fetchModelLocationMatchSummary(projectId: string, token: string, signal?: AbortSignal): Promise<ModelLocationMatchSummary> {
+  const parsed = modelLocationMatchSummarySchema.safeParse(await request(projectId, token, undefined, signal, true));
+  if (!parsed.success || parsed.data.context.projectId !== projectId
+    || await modelLocationMatchHash(modelLocationMatchNamesHashInput(parsed.data.context.names)) !== parsed.data.context.namesSha256) return invalid();
   return parsed.data;
 }
 export async function assignModelLocations(projectId: string, token: string, command: ModelLocationMatchAssign, signal?: AbortSignal): Promise<ModelLocationMatchReceipt> {

@@ -2,6 +2,7 @@ import { endpointBindingFixture, endpointFixtureId as id } from './endpointBindi
 import { createModelLocationMatchRepository } from './modelLocationMatch.js';
 import type { ModelLocationMatchAssign } from '../../shared/pathfinderModelLocationMatch.js';
 import { normalizeEndpointLocation } from '../../shared/pathfinderEndpointBindings.js';
+import { canonicalPurposeJson } from '../../shared/pathfinderPurposePolicy.js';
 
 /** Synthetic SQL protocol fixture; production PostgreSQL remains a separate qualification. */
 export async function modelLocationMatchFixture() {
@@ -17,6 +18,25 @@ export async function modelLocationMatchFixture() {
     }
     if (sql.startsWith('/* model-location-match:aliases */')) return { rows: [...f.state.aliases.values()].filter(a => a.location_id === p[1]) };
     if (sql.startsWith('/* model-location-match:head */')) return { rows: f.state.bindings.has(p[1]) ? [{ record: f.state.bindings.get(p[1]) }] : [] };
+    if (sql.startsWith('/* model-location-match:summary-index */')) {
+      const latest = new Map<string, Record<string, unknown>>();
+      for (const [key, saved] of [...f.state.commands].reverse()) {
+        const request = saved.request as { schemaVersion: string; command?: ModelLocationMatchAssign };
+        if (saved.kind !== 'confirm' || request.schemaVersion !== 'wfc.pf.model-location-match-owner.v1' || !request.command
+          || canonicalPurposeJson(request.command.current) !== canonicalPurposeJson(args[1]) || request.command.namesSha256 !== p[2]) continue;
+        const receipt = saved.receipt as { schemaVersion: string; results: { name: string }[] };
+        if (receipt.schemaVersion !== 'wfc.pf.model-location-match-receipt.v1') continue;
+        const [actor_id, idempotency_key] = key.split(':');
+        for (const result of receipt.results) if (!latest.has(result.name)) latest.set(result.name, { actor_id, idempotency_key, name: result.name,
+          request_bytes: Buffer.byteLength(JSON.stringify(saved.request)), receipt_bytes: Buffer.byteLength(JSON.stringify(saved.receipt)) });
+      }
+      const offset = Number(args[3] ?? 0);
+      return { rows: [...latest.values()].slice(offset, offset + 4097) };
+    }
+    if (sql.startsWith('/* model-location-match:summary-command */')) {
+      const saved = f.state.commands.get(p[1] + ':' + p[2]);
+      return { rows: saved ? [{ ...saved, actor_id: p[1], idempotency_key: p[2] }] : [] };
+    }
     if (sql.startsWith('/* model-location-match:replay */')) return { rows: f.state.commands.has(p[1] + ':' + p[2]) ? [f.state.commands.get(p[1] + ':' + p[2])!] : [] };
     if (sql.startsWith('/* model-location-match:store */')) {
       f.state.commands.set(p[1] + ':' + p[2], { kind: 'confirm', request_sha256: p[3], request: args[4], receipt: args[5] }); return { rows: [] };

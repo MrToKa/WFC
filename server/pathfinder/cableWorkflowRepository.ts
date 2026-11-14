@@ -7,7 +7,7 @@ import { cableWorkflowQuerySchema, cableWorkflowDetailQuerySchema, cableWorkflow
   parseCableWorkflowHttpQuery, parseCableWorkflowDetailHttpQuery,
   type CableWorkflowQuery, type CableWorkflowDetailQuery } from '../../shared/pathfinderCableWorkflowQueries.js';
 import { calculationAvailabilitySchema, notEvaluatedCalculationAvailability, type CalculationAvailability } from '../../shared/pathfinderCalculationAvailability.js';
-import { canonicalPurposeJson, policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
+import { canonicalPurposeJson, policyHashSchema, policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { defaultOptions, optionsSchema, type JobPrincipal, type DependencySnapshot } from './jobContracts.js';
 import { collectCommonCalculationInputs, collectBarrierCommonCalculationInputs, freezeCableDependenciesForVersion, createCablePurposeRoutingReader, readLinkedCableTypePurposes, hash, type CommonCalculationCollection, type BarrierCommonCalculationCollection } from './dependencies.js';
 import { sameSupportedBarrierAdmissionIntent as sameBarrierAdmissionIntent } from '../../shared/pathfinderBarrierSupported.js';
@@ -208,7 +208,26 @@ async function readRows(client: PoolClient, projectId: string, candidates: Data[
       && jobStatus === 'complete' && itemState === 'complete' && status === 'calculated' && meta?.cancel_requested === false
       && meta.job_id && meta.proposal_id && meta.proposal_hash
       && await proof.savedExactDisplay(cableSnapshot, fresh, { jobId: meta.job_id, proposalId: meta.proposal_id, proposalHash: meta.proposal_hash })); check();
+    let savedRoute: CableWorkflowRow['savedRoute'];
+    // A later terminal failure describes the attempt, not the already-written
+    // route. Keep its diagnostics and qualify the latest receipt independently.
+    if (acceptedIds.has(cable.id) && meta?.job_id && ['complete', 'failed', 'cancelled'].includes(jobStatus ?? '')
+      && !['waiting', 'running'].includes(itemState ?? '') && status !== 'calculated'
+      && !['pending', 'running', 'unknown'].includes(meta.automatic_update_status ?? '')
+      && from.availability.pointAvailable && to.availability.pointAvailable && cableSnapshot.routing?.trim() && cableSnapshot.designLength !== null) {
+      const retained = (await client.query<Data>(`/* cable-workflow:saved-route-identity */ SELECT r.id AS receipt_id,p.job_id,p.id AS proposal_id,p.proposal_hash
+        FROM (SELECT id,proposal_id FROM pf_apply_receipts WHERE project_id=$1 AND cable_id=$2 ORDER BY applied_at DESC,id DESC LIMIT 1) r
+        LEFT JOIN pf_proposals p ON p.project_id=$1 AND p.cable_id=$2 AND p.id=r.proposal_id`, [projectId, cable.id])).rows[0]; check();
+      if (retained && policyUuidSchema.safeParse(retained.receipt_id).success && policyUuidSchema.safeParse(retained.job_id).success
+        && policyUuidSchema.safeParse(retained.proposal_id).success && policyHashSchema.safeParse(retained.proposal_hash).success) {
+        const identity = { receiptId: retained.receipt_id, jobId: retained.job_id, proposalId: retained.proposal_id, proposalHash: retained.proposal_hash };
+        if (await proof.accepted(cableSnapshot, fresh, identity)) savedRoute = { ...identity, currentness: 'current' };
+        else if (await proof.savedExactDisplay(cableSnapshot, fresh, identity)) savedRoute = { ...identity, currentness: 'saved-exact' };
+        check();
+      }
+    }
     return cableWorkflowRowSchema.parse({ projectId, cable: cableSnapshot, mto: cable.mto, from: from.availability, to: to.availability,
+      ...(savedRoute ? { savedRoute } : {}),
       calculation: { jobId: jobStatus && meta ? meta.job_id : null, jobStatus, itemState: jobStatus ? itemState : null, outcome: status,
         // Historical item/job tables retain status and free-form text, not a structured error code. Never parse private messages into codes.
         reasonCodes: [...new Set(reasons)].slice(0, CABLE_WORKFLOW_LIMITS.reasonCodes), errorCode: null, currentness,

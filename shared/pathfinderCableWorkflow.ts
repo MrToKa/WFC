@@ -110,13 +110,21 @@ export const cableWorkflowRowSchema = z.object({
   from: calculationAvailabilitySchema,
   to: calculationAvailabilitySchema,
   calculation: cableWorkflowCalculationSchema,
+  /** Receipt-proven stored geometry, independent of a later unsuccessful attempt. Never grants Review/Apply authority. */
+  savedRoute: z.object({ receiptId: policyUuidSchema, jobId: policyUuidSchema, proposalId: policyUuidSchema,
+    proposalHash: policyHashSchema, currentness: z.enum(['current', 'saved-exact']) }).strict().optional(),
 }).strict().superRefine((value, context) => {
   if(value.calculation.itemApplicability && (value.calculation.itemApplicability.projectId!==value.projectId||value.calculation.itemApplicability.cableId!==value.cable.id))
     context.addIssue({code:'custom',message:'Sealed item evidence belongs to the exact project and cable.'});
-  if ((value.calculation.reviewable || value.calculation.acceptedMatchesCurrent || value.calculation.savedExactDisplay) && (!value.from.pointAvailable || !value.to.pointAvailable))
+  if ((value.calculation.reviewable || value.calculation.acceptedMatchesCurrent || value.calculation.savedExactDisplay || value.savedRoute) && (!value.from.pointAvailable || !value.to.pointAvailable))
     context.addIssue({ code: 'custom', message: 'Current results require evaluated available endpoint evidence.' });
-  if ((value.calculation.acceptedMatchesCurrent || value.calculation.savedExactDisplay) && (!value.cable.routing?.trim() || value.cable.designLength === null))
+  if ((value.calculation.acceptedMatchesCurrent || value.calculation.savedExactDisplay || value.savedRoute) && (!value.cable.routing?.trim() || value.cable.designLength === null))
     context.addIssue({ code: 'custom', message: 'Up-to-date evidence requires both current cable values to be present.' });
+  if (value.savedRoute && (!value.calculation.jobId || !['complete', 'failed', 'cancelled'].includes(value.calculation.jobStatus ?? '')
+    || ['waiting', 'running'].includes(value.calculation.itemState ?? '') || value.calculation.outcome === 'calculated'
+    || ['pending', 'running', 'unknown'].includes(value.calculation.automaticUpdate?.status ?? '')
+    || value.calculation.reviewable || value.calculation.acceptedMatchesCurrent || value.calculation.savedExactDisplay))
+    context.addIssue({ code: 'custom', message: 'A separate stored route preserves a terminal unsuccessful attempt without calculation authority.' });
 });
 /**
  * A bounded filtered scan may return zero matches with a continuation cursor.
@@ -160,7 +168,7 @@ export function classifyCableWorkflow(input: unknown): CableWorkflowDecision {
   // A later failure or cancellation of background siblings does not undo this
   // cable's independently verified saved result. This is display classification
   // only; the separate Review/Apply gates still retain their own job authority.
-  if (calculation.acceptedMatchesCurrent) return { status: 'up-to-date', reasonCodes: reasons() };
+  if (calculation.acceptedMatchesCurrent || row.savedRoute?.currentness === 'current') return { status: 'up-to-date', reasonCodes: reasons() };
   if (calculation.jobStatus === 'cancelled' || calculation.jobStatus === 'failed')
     return { status: 'blocked', reasonCodes: reasons(calculation.jobStatus === 'cancelled' ? 'CALCULATION_CANCELLED' : 'CALCULATION_FAILED') };
   const activeJob = calculation.jobStatus === 'queued' || calculation.jobStatus === 'running';

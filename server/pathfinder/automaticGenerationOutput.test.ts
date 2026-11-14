@@ -16,8 +16,9 @@ async function fixture() {
   const source: Extract<AutomaticPairSource, { kind: 'automatic-generation' }> = { kind: 'automatic-generation', generation: x.db.state.desired_generation,
     controlRevision: x.db.state.control_revision, authorityEpoch: x.db.state.authority_epoch, authorization };
   const dependencies = { schemaVersion: 'pathfinder.dependencies.v8', projectId: f.projectId, cableId: f.actorId, cableWriteRevision: '7' };
-  const cables = new Map([[f.actorId, { id: f.actorId, project_id: f.projectId, cable_write_revision: '7', mto: 'LV', routing: null as string | null, design_length: null }],
-    [other, { id: other, project_id: f.projectId, cable_write_revision: '7', mto: 'LV', routing: '/MANUAL', design_length: null }]]);
+  const materialState = { materials_initialized: false, materials_customized: false, updated_at: new Date(Date.now() - 1000).toISOString() };
+  const cables = new Map([[f.actorId, { id: f.actorId, project_id: f.projectId, cable_write_revision: '7', mto: 'LV', routing: null as string | null, design_length: null, ...materialState }],
+    [other, { id: other, project_id: f.projectId, cable_write_revision: '7', mto: 'LV', routing: '/MANUAL', design_length: null, ...materialState }]]);
   const mandates: AutomaticPairMandate[] = [], original = x.query.getMockImplementation()!;
   const enrollment = { generation: source.generation, control_revision: source.controlRevision, authority_epoch: source.authorityEpoch,
     actor_id: x.who.userId, login_id: x.who.loginId, automatic_pair_authority: authorization };

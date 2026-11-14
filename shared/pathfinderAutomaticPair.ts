@@ -27,6 +27,15 @@ export const automaticPairOwnershipSchema = z.discriminatedUnion('kind', [
     afterCableWriteRevision: revision, history: automaticPairHistorySchema }).strict(),
 ]);
 export type AutomaticPairOwnership = z.infer<typeof automaticPairOwnershipSchema>;
+export const automaticPairMaterialStateSchema = z.object({ initialized: z.boolean(), customized: z.boolean(),
+  updatedAt: z.string().min(1).max(40) }).strict();
+export type AutomaticPairMaterialState = z.infer<typeof automaticPairMaterialStateSchema>;
+/** New mandates explicitly distinguish engineering snapshots from incidental
+ * default-material initialization. Historical full-row mandates stay unchanged. */
+export const automaticPairBaselinePolicySchema = z.object({ schemaVersion: z.literal('wfc.pf.automatic-pair-engineering-snapshot.v1'),
+  materials: automaticPairMaterialStateSchema }).strict();
+export const automaticPairMaterialObservationSchema = z.object({ schemaVersion: z.literal('wfc.pf.automatic-pair-material-observation.v1'),
+  before: automaticPairMaterialStateSchema, after: automaticPairMaterialStateSchema }).strict();
 export const automaticPairSourceSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('explicit-job') }).strict(),
   z.object({ kind: z.literal('location-impact'), impactId: uuid, createdAt: timestamp, authorityExpiresAt: timestamp }).strict(),
@@ -39,6 +48,7 @@ export const automaticPairMandateSchema = z.object({ schemaVersion: z.literal('w
   loginExpiresAt: timestamp, authorityExpiresAt: timestamp, installationEpoch: uuid, createdAt: timestamp,
   policy: automaticPairPolicySchema, source: automaticPairSourceSchema, requestSha256: hash,
   dependencyHash: hash, cableWriteRevision: revision, baselineSha256: hash, ownership: automaticPairOwnershipSchema, contentSha256: hash,
+  baselinePolicy: automaticPairBaselinePolicySchema.optional(),
 }).strict().superRefine((value, ctx) => {
   const created = Date.parse(value.createdAt), expiry = Date.parse(value.authorityExpiresAt);
   if (expiry <= created || expiry > Date.parse(value.loginExpiresAt) || expiry - created > AUTOMATIC_PAIR_LIMITS.authorityMilliseconds
@@ -63,12 +73,13 @@ export const automaticPairProvenanceSchema = z.object({ schemaVersion: z.literal
   request: automaticPairWriteRequestSchema, mandate: automaticPairMandateSchema, dependencies: z.unknown(), barrierEvidence: z.unknown(),
   revisionResult: z.object({ admissionId: uuid, revisionResultSha256: hash, baselineHash: hash, engineResultSha256: hash,
     ledgerHash: hash, dependencyHash: hash }).strict(), history: automaticPairHistorySchema,
-  authorizedAt: timestamp }).strict().superRefine((value, ctx) => {
+  authorizedAt: timestamp, materialObservation: automaticPairMaterialObservationSchema.optional() }).strict().superRefine((value, ctx) => {
   const r = value.request, m = value.mandate;
   if (r.mandateId !== m.id || r.mandateSha256 !== m.contentSha256 || r.projectId !== m.projectId || r.jobId !== m.jobId
     || r.cableId !== m.cableId || r.expectedCableWriteRevision !== m.cableWriteRevision
     || Date.parse(value.authorizedAt) < Date.parse(m.createdAt) || Date.parse(value.authorizedAt) >= Date.parse(m.authorityExpiresAt)
-    || value.revisionResult.dependencyHash !== m.dependencyHash)
+    || value.revisionResult.dependencyHash !== m.dependencyHash
+    || Boolean(m.baselinePolicy) !== Boolean(value.materialObservation))
     ctx.addIssue({ code: 'custom', message: 'The automatic write retains its exact original mandate and result.' });
 });
 export type AutomaticPairProvenance = z.infer<typeof automaticPairProvenanceSchema>;
@@ -78,6 +89,7 @@ export const automaticPairCapacityClearProvenanceSchema = z.object({
   schemaVersion: z.literal('pathfinder.automatic-pair-capacity-clear.v1'),
   validationMethod: z.literal('automatic-owned-capacity-clear'), engineeringAccepted: z.literal(false), nativeParity: z.literal('not-performed'),
   request: automaticPairWriteRequestSchema, mandate: automaticPairMandateSchema, dependencies: z.unknown(), capacityEvidence: z.unknown(),
+  materialObservation: automaticPairMaterialObservationSchema.optional(),
   revisionResult: z.object({ admissionId: uuid, revisionResultSha256: hash, baselineHash: hash, engineResultSha256: hash,
     ledgerHash: z.null(), dependencyHash: hash }).strict(), history: automaticPairHistorySchema, authorizedAt: timestamp,
 }).strict().superRefine((value, ctx) => {
@@ -85,7 +97,8 @@ export const automaticPairCapacityClearProvenanceSchema = z.object({
   if (m.ownership.kind !== 'automatic' || r.mandateId !== m.id || r.mandateSha256 !== m.contentSha256 || r.projectId !== m.projectId
     || r.jobId !== m.jobId || r.cableId !== m.cableId || r.expectedCableWriteRevision !== m.cableWriteRevision
     || Date.parse(value.authorizedAt) < Date.parse(m.createdAt) || Date.parse(value.authorizedAt) >= Date.parse(m.authorityExpiresAt)
-    || value.revisionResult.dependencyHash !== m.dependencyHash)
+    || value.revisionResult.dependencyHash !== m.dependencyHash
+    || Boolean(m.baselinePolicy) !== Boolean(value.materialObservation))
     ctx.addIssue({ code: 'custom', message: 'Capacity clearing requires the exact current automatic pair mandate and failed search.' });
 });
 export const automaticPairStatuses = ['pending', 'running', 'written', 'already-written', 'review-required', 'stale', 'authority-expired', 'refused', 'unknown'] as const;

@@ -6,10 +6,13 @@ import { modelMatchContext, modelMatchIds as ids, modelMatchPage, modelMatchRece
 import { collectModelLocationMatch, modelLocationMatchPage, useModelLocationMatch } from './useModelLocationMatch';
 import type { ProjectPreparationViewer, usePathFinder } from './usePathFinder';
 import { PREPARATION_VIEWER_LIMITS, validatePreparationDiscoveryRequest, type PreparationDiscoveryPage, type PreparationDiscoveryRequest, type PreparationDiscoveryProgress } from '../../../../viewer-runtime/preparation-input.mjs';
-vi.mock('@/api/pathfinderModelLocationMatch', async original => ({ ...await original<typeof api>(), fetchModelLocationMatchContext: vi.fn(), assignModelLocations: vi.fn() }));
+import { modelLocationMatchCounts } from '../../../../shared/pathfinderModelLocationMatch';
+vi.mock('@/api/pathfinderModelLocationMatch', async original => ({ ...await original<typeof api>(), fetchModelLocationMatchContext: vi.fn(), fetchModelLocationMatchSummary: vi.fn(), assignModelLocations: vi.fn() }));
 function setup(names = ['TAG-1']) {
   const context = modelMatchContext(names);
   vi.mocked(api.fetchModelLocationMatchContext).mockResolvedValue(context);
+  vi.mocked(api.fetchModelLocationMatchSummary).mockResolvedValue({ schemaVersion: 'wfc.pf.model-location-match-summary.v1', context,
+    results: [], counts: modelLocationMatchCounts([]), complete: names.length === 0 });
   let revision = 7;
   vi.mocked(api.assignModelLocations).mockImplementation(async (_project, _token, body) => modelMatchReceipt(body, String(++revision)));
   const discover = vi.fn(async (request: PreparationDiscoveryRequest, _onProgress?: (progress: PreparationDiscoveryProgress) => void) => modelMatchPage(request));
@@ -23,6 +26,115 @@ function setup(names = ['TAG-1']) {
 }
 beforeEach(() => { vi.clearAllMocks(); vi.stubGlobal('crypto', webcrypto); localStorage.clear(); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+describe('saved matching results on reopening', () => {
+  it('refreshes idle saved counts on an explicit refresh without changing the model owner', async () => {
+    const { pf, context, discover } = setup();
+    const saved = { name: 'TAG-1', status: 'assigned' as const, candidateObjectIds: [1], locationId: ids.location, bindingId: ids.binding, reasonCode: null };
+    vi.mocked(api.fetchModelLocationMatchSummary).mockResolvedValueOnce({ schemaVersion: 'wfc.pf.model-location-match-summary.v1', context,
+      results: [saved], counts: modelLocationMatchCounts([saved]), complete: true });
+    const { result, rerender } = renderHook(({ refreshRevision }) => useModelLocationMatch({ pf, accountId: ids.account, active: true, refreshRevision }), { initialProps: { refreshRevision: 0 } });
+    await waitFor(() => expect(result.current.complete).toBe(true)); const owner = result.current.owner;
+    const changed = modelMatchContext(['NEW-FROM', 'NEW-TO']);
+    vi.mocked(api.fetchModelLocationMatchSummary).mockResolvedValue({ schemaVersion: 'wfc.pf.model-location-match-summary.v1', context: changed,
+      results: [], counts: modelLocationMatchCounts([]), complete: false });
+    rerender({ refreshRevision: 1 });
+    await waitFor(() => expect(result.current.totalNames).toBe(2));
+    expect(result.current.owner).toBe(owner); expect(result.current.results).toEqual([]); expect(result.current.complete).toBe(false);
+    expect(api.fetchModelLocationMatchSummary).toHaveBeenCalledTimes(2); expect(api.assignModelLocations).not.toHaveBeenCalled(); expect(discover).not.toHaveBeenCalled();
+  });
+  it.each(['names', 'registry', 'artifact'] as const)('refreshes saved counts after observed %s changes without a model-owner reset', async changed => {
+    const { pf } = setup();
+    const { result, rerender } = renderHook(({ revision }) => useModelLocationMatch({ pf: { ...pf, data: { ...pf.data!,
+      registryRevision: changed === 'registry' && revision ? '8' : '7',
+      cables: changed === 'names' && revision ? [{ fromLocation: 'NEW-TAG', toLocation: null }] : [],
+      artifacts: changed === 'artifact' && revision ? [{ id: ids.aggregate, snapshotSha256: 'b'.repeat(64) }] : [],
+    } as typeof pf.data }, accountId: ids.account, active: true }), { initialProps: { revision: 0 } });
+    await waitFor(() => expect(result.current.canStart).toBe(true)); const owner = result.current.owner;
+    rerender({ revision: 1 }); await waitFor(() => expect(api.fetchModelLocationMatchSummary).toHaveBeenCalledTimes(2));
+    expect(result.current.owner).toBe(owner); expect(api.assignModelLocations).not.toHaveBeenCalled();
+  });
+  it('defers summary refresh until an active exact assignment finishes without cancelling or replacing it', async () => {
+    const names = Array.from({ length: 150 }, (_, i) => `TAG-${i}`), { pf, context } = setup(names);
+    let finish!: (receipt: ReturnType<typeof modelMatchReceipt>) => void;
+    vi.mocked(api.assignModelLocations).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const { result, rerender } = renderHook(({ refreshRevision }) => useModelLocationMatch({ pf, accountId: ids.account, active: true, refreshRevision }), { initialProps: { refreshRevision: 0 } });
+    await waitFor(() => expect(result.current.canStart).toBe(true)); let work!: Promise<void>;
+    act(() => { work = result.current.start(); }); await waitFor(() => expect(api.assignModelLocations).toHaveBeenCalledTimes(1));
+    const body = vi.mocked(api.assignModelLocations).mock.calls[0][2];
+    const saved = names.map(name => ({ name, status: 'assigned' as const, candidateObjectIds: [1], locationId: ids.location, bindingId: ids.binding, reasonCode: null }));
+    vi.mocked(api.fetchModelLocationMatchSummary).mockResolvedValue({ schemaVersion: 'wfc.pf.model-location-match-summary.v1', context,
+      results: saved, counts: modelLocationMatchCounts(saved), complete: true });
+    rerender({ refreshRevision: 1 });
+    expect(api.fetchModelLocationMatchSummary).toHaveBeenCalledTimes(1); expect(result.current.busy).toBe(true);
+    await act(async () => { finish(modelMatchReceipt(body)); await work; });
+    await waitFor(() => expect(result.current.summaryLoading).toBe(false));
+    expect(api.fetchModelLocationMatchSummary).toHaveBeenCalledTimes(2); expect(api.assignModelLocations).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(api.assignModelLocations).mock.calls[0][2]).toEqual(body);
+    expect(result.current.complete).toBe(true); expect(result.current.results).toHaveLength(150); expect(result.current.pending).toBeNull();
+  });
+  it('ignores an earlier idle summary when another refresh overtakes its response', async () => {
+    const { pf, context } = setup();
+    const { result, rerender } = renderHook(({ refreshRevision }) => useModelLocationMatch({ pf, accountId: ids.account, active: true, refreshRevision }), { initialProps: { refreshRevision: 0 } });
+    await waitFor(() => expect(result.current.canStart).toBe(true)); let finish!: (value: api.ModelLocationMatchSummary) => void;
+    vi.mocked(api.fetchModelLocationMatchSummary).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    rerender({ refreshRevision: 1 }); await waitFor(() => expect(finish).toBeTypeOf('function'));
+    const latest = modelMatchContext(['LATEST-FROM', 'LATEST-TO']);
+    vi.mocked(api.fetchModelLocationMatchSummary).mockResolvedValue({ schemaVersion: 'wfc.pf.model-location-match-summary.v1', context: latest,
+      results: [], counts: modelLocationMatchCounts([]), complete: false });
+    rerender({ refreshRevision: 2 }); await waitFor(() => expect(result.current.totalNames).toBe(2));
+    await act(async () => finish({ schemaVersion: 'wfc.pf.model-location-match-summary.v1', context, results: [], counts: modelLocationMatchCounts([]), complete: false }));
+    expect(result.current.totalNames).toBe(2); expect(result.current.results).toEqual([]); expect(api.assignModelLocations).not.toHaveBeenCalled();
+  });
+  it('clears a previous summary-read failure when an explicit idle refresh succeeds', async () => {
+    const { pf } = setup(); vi.mocked(api.fetchModelLocationMatchSummary).mockRejectedValueOnce(new TypeError('Temporary read failure'));
+    const { result, rerender } = renderHook(({ refreshRevision }) => useModelLocationMatch({ pf, accountId: ids.account, active: true, refreshRevision }), { initialProps: { refreshRevision: 0 } });
+    await waitFor(() => expect(result.current.error).toContain('Saved From/To matching results could not be loaded.'));
+    rerender({ refreshRevision: 1 }); await waitFor(() => expect(result.current.summaryLoading).toBe(false));
+    expect(result.current.error).toBeNull(); expect(result.current.totalNames).toBe(1); expect(api.assignModelLocations).not.toHaveBeenCalled();
+  });
+  it('restores a finished matching summary after remount without scanning or writing again', async () => {
+    const { pf, context, discover } = setup(['ONE', 'TWO']);
+    const first = renderHook(() => useModelLocationMatch({ pf, accountId: ids.account, active: true }));
+    await waitFor(() => expect(first.result.current.canStart).toBe(true)); await act(() => first.result.current.start());
+    const saved = first.result.current.results;
+    expect(saved).toHaveLength(2); first.unmount();
+    vi.mocked(api.fetchModelLocationMatchSummary).mockResolvedValue({ schemaVersion: 'wfc.pf.model-location-match-summary.v1', context,
+      results: saved, counts: modelLocationMatchCounts(saved), complete: true });
+    const second = renderHook(() => useModelLocationMatch({ pf, accountId: ids.account, active: true }));
+    await waitFor(() => expect(second.result.current.summaryLoading).toBe(false));
+    expect(second.result.current.results).toEqual(saved); expect(second.result.current.totalNames).toBe(2);
+    expect(second.result.current.complete).toBe(true); expect(discover).toHaveBeenCalledTimes(1); expect(api.assignModelLocations).toHaveBeenCalledTimes(1);
+    expect(localStorage.length).toBe(0);
+  });
+  it('shows partial saved coverage without treating the unconfirmed remainder as searched or assigned', async () => {
+    const { pf, context, discover } = setup(['ONE', 'TWO', 'THREE']);
+    const result = { name: 'ONE', status: 'assigned' as const, candidateObjectIds: [1], locationId: ids.location, bindingId: ids.binding, reasonCode: null };
+    vi.mocked(api.fetchModelLocationMatchSummary).mockResolvedValue({ schemaVersion: 'wfc.pf.model-location-match-summary.v1', context,
+      results: [result], counts: modelLocationMatchCounts([result]), complete: false });
+    const hook = renderHook(() => useModelLocationMatch({ pf, accountId: ids.account, active: true }));
+    await waitFor(() => expect(hook.result.current.canStart).toBe(true));
+    expect(hook.result.current).toMatchObject({ totalNames: 3, results: [result], complete: false });
+    expect(discover).not.toHaveBeenCalled(); expect(api.assignModelLocations).not.toHaveBeenCalled();
+  });
+  it('rejects restored results for a model different from the loaded project model', async () => {
+    const { pf, context } = setup();
+    vi.mocked(api.fetchModelLocationMatchSummary).mockResolvedValue({ schemaVersion: 'wfc.pf.model-location-match-summary.v1',
+      context: { ...context, current: { ...context.current, modelVersionId: ids.binding } }, results: [], counts: modelLocationMatchCounts([]), complete: false });
+    const { result } = renderHook(() => useModelLocationMatch({ pf, accountId: ids.account, active: true }));
+    await waitFor(() => expect(result.current.summaryLoading).toBe(false));
+    expect(result.current.results).toEqual([]); expect(result.current.error).toContain('active model changed');
+  });
+  it('does not let a late summary from the previous account overwrite the current account', async () => {
+    const { pf, context } = setup(); let finish!: (value: api.ModelLocationMatchSummary) => void;
+    vi.mocked(api.fetchModelLocationMatchSummary).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const { result, rerender } = renderHook(({ accountId }) => useModelLocationMatch({ pf, accountId, active: true }), { initialProps: { accountId: ids.account } });
+    rerender({ accountId: ids.binding }); await waitFor(() => expect(result.current.summaryLoading).toBe(false));
+    const saved = { name: 'TAG-1', status: 'assigned' as const, candidateObjectIds: [1], locationId: ids.location, bindingId: ids.binding, reasonCode: null };
+    await act(async () => finish({ schemaVersion: 'wfc.pf.model-location-match-summary.v1', context, results: [saved], counts: modelLocationMatchCounts([saved]), complete: true }));
+    expect(result.current.results).toEqual([]); expect(result.current.complete).toBe(false);
+  });
+});
 describe('complete endpoint-only matching scan', () => {
   it('reuses bounded model indexes for long project names instead of scanning again for every query page', async () => {
     const names = Array.from({ length: 1091 }, (_, index) => `TAG-${index}-${'X'.repeat(70)}`);

@@ -200,7 +200,16 @@ export function createGeometryTraceRepository(pool: Pool, adapters: GeometryTrac
         await discardAdoptedFittedExportReference(validated.transientExport).catch(() => undefined); return receipt;
       }); return result;
     } catch (error) {
-      const reconciled = await readTx(projectId, who, c => prior(c, projectId, who, command.idempotencyKey, command)).catch(() => null); if (reconciled) return reconciled; throw error;
+      const reconciled = await readTx(projectId, who, c => prior(c, projectId, who, command.idempotencyKey, command)).catch(() => null); if (reconciled) return reconciled;
+      // A stopped worker can be retried against the same frozen input immediately.
+      // Keep an unjoined worker quarantined; the token also fences a newer owner.
+      if (!(error && typeof error === 'object' && 'code' in error && error.code === 'GEOMETRY_TRACE_JOIN_UNCONFIRMED')) {
+        await tx(projectId, who, c => c.query(
+          "UPDATE pf_geometry_trace_intents SET lease_expires_at=clock_timestamp() WHERE project_id=$1 AND id=$2 AND lease_token=$3 AND state='pending'",
+          [projectId, frozen.traceId, token],
+        )).catch(() => undefined);
+      }
+      throw error;
     } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
   }
   const objects = (projectId: string, who: OperationPrincipal, traceId: string, options: { offset?: number; limit?: number } = {}) => readTx(projectId, who, async c => { const { offset, limit } = pageOptions(options), manifest = await manifestRow(c, projectId, traceId), rows = (await c.query<{ summary: unknown }>('SELECT summary FROM pf_geometry_object_revisions WHERE project_id=$1 AND trace_id=$2 ORDER BY order_index LIMIT $3 OFFSET $4', [projectId, traceId, limit, offset])).rows; return geometryObjectPageSchema.parse({ schemaVersion: 'wfc.pf.geometry-object-page.v1', projectId, traceId, contentSha256: manifest.contentSha256, offset, limit, total: manifest.counts.objects, nextOffset: offset + rows.length < manifest.counts.objects ? offset + rows.length : null, objects: rows.map(r => r.summary) }); });

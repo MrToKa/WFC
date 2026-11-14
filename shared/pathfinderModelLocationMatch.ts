@@ -44,9 +44,28 @@ export const modelLocationMatchReceiptSchema = z.object({
   registryRevision: revision, results: z.array(modelLocationMatchResultSchema).max(MODEL_LOCATION_MATCH_LIMITS.pageNames)
     .refine(v => uniqueNames(v.map(r => r.name))), duplicate: z.boolean(),
 }).strict();
+/** Counts describe saved matching receipts, not current engineering acceptance. */
+export function modelLocationMatchCounts(results: ModelLocationMatchResult[]) {
+  return {
+    searched: results.length,
+    found: results.filter(result => result.candidateObjectIds.length > 0).length,
+    assigned: results.filter(result => result.status === 'assigned').length,
+    preserved: results.filter(result => result.status === 'preserved').length,
+    manualAttention: results.filter(result => !['assigned', 'preserved'].includes(result.status)).length,
+  };
+}
+export const modelLocationMatchSummarySchema = z.object({
+  schemaVersion: z.literal('wfc.pf.model-location-match-summary.v1'), context: modelLocationMatchContextSchema,
+  results: z.array(modelLocationMatchResultSchema).max(MODEL_LOCATION_MATCH_LIMITS.names).refine(value => uniqueNames(value.map(result => result.name))),
+  counts: z.object({ searched: count, found: count, assigned: count, preserved: count, manualAttention: count }).strict(),
+  complete: z.boolean(),
+}).strict().refine(value => value.results.every(result => value.context.names.some(name => normalizeEndpointLocation(name) === normalizeEndpointLocation(result.name)))
+  && canonicalPurposeJson(value.counts) === canonicalPurposeJson(modelLocationMatchCounts(value.results))
+  && value.complete === (value.results.length === value.context.names.length));
 export const modelLocationMatchNamesHashInput = (value: string[]) => [...value].map(normalizeEndpointLocation).sort();
 export const modelLocationMatchCanonicalJson = canonicalPurposeJson;
 export type ModelLocationMatchContext = z.infer<typeof modelLocationMatchContextSchema>;
 export type ModelLocationMatchAssign = z.infer<typeof modelLocationMatchAssignSchema>;
 export type ModelLocationMatchReceipt = z.infer<typeof modelLocationMatchReceiptSchema>;
 export type ModelLocationMatchResult = z.infer<typeof modelLocationMatchResultSchema>;
+export type ModelLocationMatchSummary = z.infer<typeof modelLocationMatchSummarySchema>;

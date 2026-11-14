@@ -81,6 +81,11 @@ function withModel(pf: ReturnType<typeof usePathFinder>, scope: ReturnType<typeo
     cables: [], locations: [], artifacts: [], jobs: [], proposals: [] };
   return { ...pf, data };
 }
+function withNetworkArtifact(pf: ReturnType<typeof usePathFinder>, context: PreparationContext) {
+  const current = withModel(pf, context.scope), aggregate = context.currentAggregate;
+  return { ...current, data: { ...current.data!, artifacts: aggregate ? [{ id: aggregate.artifactId, modelVersionId: aggregate.modelVersionId,
+    snapshotSha256: aggregate.projection.sha256 } as PathFinderState['artifacts'][number]] : [] } };
+}
 
 function automaticSetup() {
   const fixture = setup();
@@ -596,6 +601,7 @@ describe('automatic tray workflow', () => {
   it('finishes a newly published aggregate with verified frame evidence before reporting ready', async () => {
     const f = automaticSetup(); const { result } = renderHook(() => useProjectPreparation(f.pf, true));
     await waitFor(() => expect(result.current.context).not.toBeNull());
+    expect(result.current.networkStorageStatus).toBe('missing');
     expect(result.current.networkReady).toBe(false); expect(result.current.networkReadinessKey).toBeNull();
     await act(() => result.current.checkTrays());
     expect(createGeometryTrace).toHaveBeenCalledOnce();
@@ -613,6 +619,7 @@ describe('automatic tray workflow', () => {
     const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
     const aggregate = structuredClone(f.store.context.currentAggregate);
     const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.context).not.toBeNull());
+    expect(result.current.networkStorageStatus).toBe('stored-current');
     expect(result.current.networkReady).toBe(false); expect(createGeometryTrace).not.toHaveBeenCalled();
     await act(() => result.current.checkTrays()); const key = result.current.networkReadinessKey;
     expect(result.current.networkReady).toBe(true); expect(key).not.toBeNull();
@@ -620,6 +627,70 @@ describe('automatic tray workflow', () => {
     expect(result.current.networkReadinessKey).toBe(key); expect(createGeometryTrace).toHaveBeenCalledOnce();
     expect(api.createPreparation).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled(); expect(api.mutatePreparation).not.toHaveBeenCalled();
     expect(f.store.context.currentAggregate).toEqual(aggregate);
+  });
+  it('shows durable database storage while a saved network is still being verified on reopening', async () => {
+    const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
+    const trace = f.makeTrace(); f.store.traces.set(trace.aggregateId, trace);
+    let finish!: (trace: GeometryTraceManifest) => void;
+    vi.mocked(fetchGeometryTraceManifest).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true));
+    await waitFor(() => expect(fetchGeometryTraceManifest).toHaveBeenCalledOnce());
+    expect(result.current.networkStorageStatus).toBe('stored-current'); expect(result.current.context!.currentAggregate).toEqual(f.store.context.currentAggregate);
+    expect(result.current.loading).toBe(true); expect(result.current.networkReady).toBe(false); expect(result.current.networkReadinessKey).toBeNull();
+    await act(async () => finish(trace));
+    expect(result.current.networkReady).toBe(true); expect(result.current.networkStorageStatus).toBe('stored-current');
+    expect(createGeometryTrace).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled(); expect(api.mutatePreparation).not.toHaveBeenCalled();
+  });
+  it('restores a verified saved network after remount without capturing or publishing it again', async () => {
+    const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
+    const trace = f.makeTrace(); f.store.traces.set(trace.aggregateId, trace);
+    const first = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(first.result.current.networkReady).toBe(true));
+    const key = first.result.current.networkReadinessKey; first.unmount();
+    const second = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(second.result.current.networkReady).toBe(true));
+    expect(second.result.current.networkStorageStatus).toBe('stored-current'); expect(second.result.current.networkReadinessKey).toBe(key);
+    expect(api.createPreparation).not.toHaveBeenCalled(); expect(api.mutatePreparation).not.toHaveBeenCalled();
+    expect(createGeometryTrace).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled(); expect(f.pf.runProjectPreparation).not.toHaveBeenCalled();
+  });
+  it('invalidates the old ready trace when Path Finder observes a new current artifact and verifies the saved replacement', async () => {
+    const f = automaticSetup(), firstSession = f.makeSession(); f.store.sessions.set(firstSession.id, firstSession); f.publishSession(firstSession);
+    const firstTrace = f.makeTrace(); f.store.traces.set(firstTrace.aggregateId, firstTrace);
+    let pf = withNetworkArtifact(f.pf, f.store.context);
+    const { result, rerender } = renderHook(() => useProjectPreparation(pf, true)); await waitFor(() => expect(result.current.networkReady).toBe(true));
+    const secondSession = f.makeSession(); f.store.sessions.set(secondSession.id, secondSession); f.publishSession(secondSession);
+    const secondTrace = f.makeTrace(); f.store.traces.set(secondTrace.aggregateId, secondTrace);
+    pf = withNetworkArtifact(f.pf, f.store.context); rerender();
+    expect(result.current.networkReady).toBe(false); expect(result.current.networkReadinessKey).toBeNull();
+    await waitFor(() => expect(result.current.networkReady).toBe(true));
+    expect(result.current.context!.currentAggregate!.artifactId).toBe(f.store.context.currentAggregate!.artifactId);
+    expect(result.current.networkReadinessKey).toContain(secondTrace.id); expect(api.fetchPreparationContext).toHaveBeenCalledTimes(2);
+    expect(api.createPreparation).not.toHaveBeenCalled(); expect(api.mutatePreparation).not.toHaveBeenCalled(); expect(createGeometryTrace).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled();
+  });
+  it('retains saved readiness on location-only Path Finder refreshes with the same planning artifact', async () => {
+    const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
+    const trace = f.makeTrace(); f.store.traces.set(trace.aggregateId, trace);
+    let pf = withNetworkArtifact(f.pf, f.store.context);
+    const { result, rerender } = renderHook(() => useProjectPreparation(pf, true)); await waitFor(() => expect(result.current.networkReady).toBe(true));
+    const key = result.current.networkReadinessKey, reads = vi.mocked(api.fetchPreparationContext).mock.calls.length;
+    f.store.context.scope.locationRegistryRevision = '99'; f.store.context.endpointNames = ['NEW-FROM', 'NEW-TO'];
+    pf = withNetworkArtifact(f.pf, f.store.context); rerender(); await act(async () => {});
+    expect(result.current.networkReady).toBe(true); expect(result.current.networkReadinessKey).toBe(key);
+    expect(api.fetchPreparationContext).toHaveBeenCalledTimes(reads); expect(createGeometryTrace).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled();
+  });
+  it('does not restore an old ready network from a late read after observing a replacement artifact', async () => {
+    const f = automaticSetup(), firstSession = f.makeSession(); f.store.sessions.set(firstSession.id, firstSession); f.publishSession(firstSession);
+    const firstTrace = f.makeTrace(); f.store.traces.set(firstTrace.aggregateId, firstTrace);
+    const oldContext = structuredClone(f.store.context); let pf = withNetworkArtifact(f.pf, oldContext);
+    const { result, rerender } = renderHook(() => useProjectPreparation(pf, true)); await waitFor(() => expect(result.current.networkReady).toBe(true));
+    let finish!: (context: PreparationContext) => void;
+    vi.mocked(api.fetchPreparationContext).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    let reading!: Promise<void>; act(() => { reading = result.current.refresh(); }); await waitFor(() => expect(finish).toBeTypeOf('function'));
+    const secondSession = f.makeSession(); f.store.sessions.set(secondSession.id, secondSession); f.publishSession(secondSession);
+    const secondTrace = f.makeTrace(); f.store.traces.set(secondTrace.aggregateId, secondTrace);
+    pf = withNetworkArtifact(f.pf, f.store.context); rerender(); expect(result.current.networkReady).toBe(false);
+    await act(async () => { finish(oldContext); await reading; });
+    await waitFor(() => expect(result.current.networkReadinessKey).toContain(secondTrace.id));
+    expect(result.current.networkReady).toBe(true); expect(result.current.networkTrace?.id).not.toBe(firstTrace.id);
+    expect(api.fetchPreparationContext).toHaveBeenCalledTimes(3); expect(createGeometryTrace).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled();
   });
   it('starts a distinct runtime command only on the next explicit Discover after a definite generation refusal', async () => {
     const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
@@ -663,17 +734,19 @@ describe('automatic tray workflow', () => {
     const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
     const trace = f.makeTrace(); f.store.traces.set(trace.aggregateId, trace);
     const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.networkReady).toBe(true));
+    expect(result.current.networkStorageStatus).toBe('stored-current');
     const key = result.current.networkReadinessKey;
     expect(fetchGeometryTraceManifest).toHaveBeenCalledWith(ids.project, 'login', trace.id, expect.any(AbortSignal));
     expect(createGeometryTrace).not.toHaveBeenCalled(); expect(fetchGeometryTraceRuntime).not.toHaveBeenCalled();
     f.store.runtime = geometryTraceRuntimeFixture('b'.repeat(64));
-    f.store.context.scope.locationRegistryRevision = '99';
+    f.store.context.scope.locationRegistryRevision = '99'; f.store.context.endpointNames = ['NEW-FROM', 'NEW-TO'];
     await act(() => result.current.checkTrays());
-    expect(result.current.networkReady).toBe(true); expect(result.current.networkReadinessKey).toBe(key);
+    expect(result.current.networkReady).toBe(true); expect(result.current.networkStorageStatus).toBe('stored-current'); expect(result.current.networkReadinessKey).toBe(key);
     expect(createGeometryTrace).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled(); expect(fetchGeometryTraceRuntime).not.toHaveBeenCalled();
+    expect(api.createPreparation).not.toHaveBeenCalled(); expect(api.mutatePreparation).not.toHaveBeenCalled();
     expect(result.current.networkTrace?.runtimeFingerprint).toEqual(trace.runtimeFingerprint);
     f.store.context.scope.routingPolicyRevision = '99'; await act(() => result.current.refresh());
-    expect(result.current.networkReady).toBe(false); expect(result.current.networkReadinessKey).toBeNull();
+    expect(result.current.networkReady).toBe(false); expect(result.current.networkReadinessKey).toBeNull(); expect(result.current.networkStorageStatus).toBe('stored-needs-update');
   });
   it('keeps a verified final receipt ready without optional status reads that can reach the database deadline', async () => {
     const f = automaticSetup();

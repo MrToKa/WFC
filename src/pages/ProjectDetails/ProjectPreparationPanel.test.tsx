@@ -14,7 +14,7 @@ vi.mock('@/api/pathfinderPolicies', () => ({ fetchRoutingPurposePolicy: vi.fn() 
 const fixture = preparationFixture();
 function setup() {
   const state = { enabled: true, loading: false, busy: false, unknown: false, conflict: false, error: null, notice: null, progress: null,
-    context: structuredClone(fixture.context), session: structuredClone(fixture.session), discovery: null, networkReady: true, networkReadinessKey: 'verified-network-trace',
+    context: structuredClone(fixture.context), session: structuredClone(fixture.session), discovery: null, networkReady: true, networkStorageStatus: 'missing' as ReturnType<typeof useProjectPreparation>['networkStorageStatus'], networkReadinessKey: 'verified-network-trace',
     checkTrays: vi.fn(async () => {}), assignTray: vi.fn(async () => {}), freezePlan: vi.fn(), collect: vi.fn(), publish: vi.fn(), pause: vi.fn(), cancel: vi.fn() };
   const read = vi.fn(async () => ({ objects: [] as Array<{objectId: number}> }));
   const readMetadata = vi.fn<() => Promise<{ objects: Array<{objectId:number;parentId:number|null}> } | null>>(async () => {
@@ -182,7 +182,7 @@ describe('simple project tray preparation', () => {
     await waitFor(() => expect(state.assignTray).toHaveBeenCalledExactlyOnceWith(tray.projectTrayId, ['dbid:55']));
     expect(readMetadata).not.toHaveBeenCalled();
   });
-  it('keeps the assignment busy until its network update finishes', async () => {
+  it('keeps assignment saving busy without claiming to update the routing network', async () => {
     const { state, pf, tray, read } = setup(); read.mockResolvedValue({ objects: [{ objectId: 55 }] });
     let finish!: () => void;
     state.assignTray.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
@@ -190,6 +190,9 @@ describe('simple project tray preparation', () => {
     const choose = screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` });
     fireEvent.click(choose); await waitFor(() => expect(state.assignTray).toHaveBeenCalledOnce());
     expect(choose).toBeDisabled(); expect(screen.getByRole('button', { name: 'Discover project tray candidates' })).toBeDisabled();
+    expect(screen.getByText('Saving the selected tray assignment…')).toBeVisible();
+    expect(screen.queryByText(/Saving the selected tray and updating the network/)).toBeNull();
+    expect(state.checkTrays).not.toHaveBeenCalled();
     await act(async () => finish()); expect(choose).toBeEnabled();
   });
   it('explains an empty selection without saving an empty assignment', async () => {
@@ -234,35 +237,79 @@ describe('simple project tray preparation', () => {
     state.context.trays.push(extra);
     state.context.currentAggregate = { ...state.context.scope, sessionId: state.session.id } as typeof state.context.currentAggregate;
     render(<ProjectPreparationPanel pf={pf} active />);
-    expect(screen.getByRole('status')).toHaveTextContent('Network ready. 1 of 2 trays assigned; 1 still need a model selection.');
+    expect(screen.getByRole('status')).toHaveTextContent('Network saved in the database. Ready for routing calculations. 1 of 2 trays assigned; 1 still need a model selection.');
     expect(screen.getByRole('button', { name: 'Discover project tray candidates' })).toBeEnabled();
   });
   it('waits for the verified frame proof before showing ready or refreshing obstacles', () => {
     const { state, pf } = setup(), ready = vi.fn();
     state.context.currentAggregate = { ...state.context.scope } as typeof state.context.currentAggregate;
-    state.networkReady = false;
+    state.networkReady = false; state.networkStorageStatus = 'stored-current'; state.loading = true; state.busy = true;
     const view = render(<ProjectPreparationPanel pf={pf} active onNetworkReady={ready} />);
-    expect(screen.queryByText(/Network ready/)).toBeNull(); expect(ready).not.toHaveBeenCalled();
-    state.networkReady = true;
+    expect(screen.getByText('Network saved in the database. Checking readiness for routing calculations…')).toBeVisible();
+    expect(screen.queryByText(/Ready for routing calculations\./)).toBeNull(); expect(ready).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Check the trays to prepare the routing network/)).toBeNull();
+    state.networkReady = true; state.loading = false; state.busy = false;
     view.rerender(<ProjectPreparationPanel pf={pf} active onNetworkReady={ready} />);
-    expect(screen.getByRole('status')).toHaveTextContent('Network ready.');
+    expect(screen.getByRole('status')).toHaveTextContent('Network saved in the database. Ready for routing calculations.');
+    expect(screen.getByText('Reopening the project and changing From/To locations reuse the saved network.')).toBeVisible();
     expect(ready).toHaveBeenCalledExactlyOnceWith('verified-network-trace');
     view.rerender(<ProjectPreparationPanel pf={pf} active onNetworkReady={ready} />);
     expect(ready).toHaveBeenCalledTimes(1);
   });
+  it('shows a saved network that still needs verification without claiming readiness or requiring a rebuild', () => {
+    const { state, pf } = setup(); state.context.currentAggregate = { ...state.context.scope } as typeof state.context.currentAggregate;
+    state.networkReady = false; state.networkStorageStatus = 'stored-current';
+    render(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByRole('status')).toHaveTextContent('Network saved in the database. Readiness still needs verification.');
+    expect(screen.queryByText(/Ready for routing calculations\./)).toBeNull();
+    expect(screen.queryByText(/No routing network is saved|prepare the routing network automatically/)).toBeNull();
+    expect(state.checkTrays).not.toHaveBeenCalled();
+  });
+  it.each(['loading', 'missing', 'unavailable'] as const)('distinguishes %s database status without claiming a ready network', status => {
+    const { state, pf } = setup();
+    vi.mocked(useProjectPreparation).mockReturnValue({ ...state, context: null, networkReady: false, networkStorageStatus: status } as unknown as ReturnType<typeof useProjectPreparation>);
+    render(<ProjectPreparationPanel pf={pf} active />);
+    const expected = status === 'loading' ? 'Checking the database for a saved routing network…'
+      : status === 'missing' ? 'No routing network is saved in the database.' : 'Saved network status is unavailable.';
+    expect(screen.getByRole('status')).toHaveTextContent(expected);
+    expect(screen.queryByText(/Ready for routing calculations\./)).toBeNull();
+    if (status !== 'missing') expect(screen.queryByText(/No routing network is saved/)).toBeNull();
+    expect(state.checkTrays).not.toHaveBeenCalled();
+  });
+  it.each(['model', 'routing-policy', 'tray-assignment'] as const)('distinguishes a saved network with changed %s from a missing network', changed => {
+    const { state, pf } = setup(); state.context.currentAggregate = { ...state.context.scope } as typeof state.context.currentAggregate;
+    if (changed === 'model') state.context.currentAggregate!.contentFingerprint = 'd'.repeat(64);
+    if (changed === 'routing-policy') state.context.scope.routingPolicyRevision = '99';
+    if (changed === 'tray-assignment') state.context.scope.resolutionRevision = '99';
+    state.networkReady = false; state.networkStorageStatus = 'stored-needs-update';
+    render(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByRole('status')).toHaveTextContent('A routing network is saved in the database. The model, tray data or routing settings have changed.');
+    expect(screen.getByRole('status')).toHaveTextContent('Choose Discover project tray candidates to update it.');
+    expect(screen.queryByText(/Ready for routing calculations\.|No routing network is saved/)).toBeNull();
+  });
+  it('keeps a verified saved network ready after reopening without invoking network preparation', () => {
+    const { state, pf } = setup(); state.context.currentAggregate = { ...state.context.scope } as typeof state.context.currentAggregate;
+    state.networkStorageStatus = 'stored-current';
+    const first = render(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByRole('status')).toHaveTextContent('Ready for routing calculations.'); first.unmount();
+    render(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByRole('status')).toHaveTextContent('Network saved in the database. Ready for routing calculations.');
+    expect(screen.getByText('Reopening the project and changing From/To locations reuse the saved network.')).toBeVisible();
+    expect(state.checkTrays).not.toHaveBeenCalled(); expect(state.assignTray).not.toHaveBeenCalled();
+  });
   it('does not show ready for an aggregate from a different model or mapping revision', () => {
     const { state, pf } = setup();
     state.context.currentAggregate = { ...state.context.scope, resolutionRevision: '99' } as typeof state.context.currentAggregate;
-    render(<ProjectPreparationPanel pf={pf} active />); expect(screen.queryByText(/Network ready/)).toBeNull();
+    render(<ProjectPreparationPanel pf={pf} active />); expect(screen.queryByText(/Ready for routing calculations\./)).toBeNull();
   });
   it('does not retain ready or assigned labels when the Viewer switches to another model', () => {
     const { state, pf } = setup();
     state.context.currentAggregate = { ...state.context.scope } as typeof state.context.currentAggregate;
     const view = render(<ProjectPreparationPanel pf={pf} active />);
-    expect(screen.getByRole('status')).toHaveTextContent('Network ready.');
+    expect(screen.getByRole('status')).toHaveTextContent('Network saved in the database. Ready for routing calculations.');
     const changed = { ...pf, data: { ...pf.data!, activeModel: { ...pf.data!.activeModel, contentFingerprint: 'e'.repeat(64) } } };
     view.rerender(<ProjectPreparationPanel pf={changed} active />);
-    expect(screen.queryByText(/Network ready/)).toBeNull(); expect(screen.getByText('Not assigned')).toBeVisible();
+    expect(screen.queryByText(/Ready for routing calculations\./)).toBeNull(); expect(screen.getByText('Not assigned')).toBeVisible();
   });
   it('searches all trays without requiring pagination controls', () => {
     const { state, pf, tray } = setup();
@@ -329,7 +376,7 @@ describe('simple project tray preparation', () => {
     const { state, pf } = setup();
     vi.mocked(useProjectPreparation).mockReturnValue({ ...state, error: 'The model could not be read. Try checking the trays again.' } as unknown as ReturnType<typeof useProjectPreparation>);
     render(<ProjectPreparationPanel pf={pf} active />);
-    expect(screen.getByRole('alert')).toHaveTextContent('model could not be read'); expect(screen.queryByText(/Network ready/)).toBeNull();
+    expect(screen.getByRole('alert')).toHaveTextContent('model could not be read'); expect(screen.queryByText(/Ready for routing calculations\./)).toBeNull();
   });
 });
 

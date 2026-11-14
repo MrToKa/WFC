@@ -1,5 +1,5 @@
 import { generateId } from '@/utils/generateId';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { canonicalPurposeJson, parsePurposeJson, policyUuidSchema } from '../../../../shared/pathfinderPurposePolicy';
 import { normalizeEndpointLocation } from '../../../../shared/pathfinderEndpointBindings';
 import { MODEL_LOCATION_MATCH_LIMITS, modelLocationMatchAssignSchema, type ModelLocationMatchResult } from '../../../../shared/pathfinderModelLocationMatch';
@@ -9,7 +9,7 @@ import {
   type PreparationDiscoveryObject, type PreparationDiscoveryRequest, type PreparationEndpointVisibility,
 } from '../../../../viewer-runtime/preparation-input.mjs';
 import {
-  assignModelLocations, fetchModelLocationMatchContext, modelLocationMatchHash, ModelLocationMatchApiError, isModelLocationMatchBusy,
+  assignModelLocations, fetchModelLocationMatchContext, fetchModelLocationMatchSummary, modelLocationMatchHash, ModelLocationMatchApiError, isModelLocationMatchBusy,
   type ModelLocationMatchAssign, type ModelLocationMatchContext, type ModelLocationMatchReceipt,
 } from '@/api/pathfinderModelLocationMatch';
 import type { usePathFinder, ProjectPreparationViewer } from './usePathFinder';
@@ -21,10 +21,10 @@ type Pending = { schemaVersion: 'wfc.pf.model-location-match-pending.v1'; projec
 type Continuation = { owner: string; context: ModelLocationMatchContext; scan: Scan; offset: number; revision: string; results: ModelLocationMatchResult[] };
 type State = { owner: string; storageReady: boolean; busy: boolean; phase: 'idle' | 'context' | 'finding' | 'assigning';
   progress: string | null; error: string | null; notice: string | null; pending: Pending | null;
-  results: ModelLocationMatchResult[]; totalNames: number; complete: boolean };
-type Access = { pf: PF; accountId: string | null; active: boolean; onChanged?: () => void };
+  results: ModelLocationMatchResult[]; totalNames: number; complete: boolean; summaryLoading: boolean };
+type Access = { pf: PF; accountId: string | null; active: boolean; refreshRevision?: number; onChanged?: () => void };
 const prefix = 'wfc.pf.model-location-match.pending.v1:';
-const initial = (owner: string): State => ({ owner, storageReady: false, busy: false, phase: 'idle', progress: null, error: null, notice: null, pending: null, results: [], totalNames: 0, complete: false });
+const initial = (owner: string): State => ({ owner, storageReady: false, busy: false, phase: 'idle', progress: null, error: null, notice: null, pending: null, results: [], totalNames: 0, complete: false, summaryLoading: false });
 const interrupted = () => new DOMException('Model location matching was cancelled or changed.', 'AbortError');
 const keyFor = (projectId: string, accountId: string) => prefix + accountId + ':' + projectId;
 function message(error: unknown) {
@@ -131,27 +131,51 @@ async function stored(projectId: string, accountId: string): Promise<Pending | n
   if (await modelLocationMatchHash(command) !== value.commandSha256) throw new Error('Pending location assignment storage could not be verified. Preserve it for recovery.');
   return { ...value, command };
 }
-export function useModelLocationMatch({ pf, accountId, active, onChanged }: Access) {
+export function useModelLocationMatch({ pf, accountId, active, refreshRevision = 0, onChanged }: Access) {
   const access = pf.preparationAccess;
   const projectId = access?.projectId ?? null, token = access?.token ?? null;
   const allowed = Boolean(access?.isAdmin && projectId && projectId === access.loadedProjectId && token && policyUuidSchema.safeParse(accountId).success);
   const owner = JSON.stringify([projectId, access?.loadedProjectId, accountId, token, access?.isAdmin,
     pf.data?.activeModel.modelVersionId, pf.data?.activeModel.selectionRevision, pf.data?.activeModel.contentFingerprint, pf.preparationViewerGeneration]);
+  const summaryKey = useMemo(() => JSON.stringify([owner, refreshRevision, pf.data?.registryRevision,
+    [...new Set((pf.data?.cables ?? []).flatMap(cable => [cable.fromLocation, cable.toLocation])
+      .filter((name): name is string => typeof name === 'string' && name.trim().length > 0).map(normalizeEndpointLocation))].sort(),
+    (pf.data?.artifacts ?? []).map(artifact => [artifact.id, artifact.snapshotSha256])]),
+  [owner, refreshRevision, pf.data?.registryRevision, pf.data?.cables, pf.data?.artifacts]);
   const [state, setState] = useState<State>(() => initial(owner));
   const current = state.owner === owner ? state : initial(owner);
   const data = useRef(current); data.current = current;
   const latest = useRef({ owner, allowed, active, pf, onChanged }); latest.current = { owner, allowed, active, pf, onChanged };
   const mounted = useRef(true), operation = useRef<AbortController | null>(null);
   const continuation = useRef<Continuation | null>(null);
+  const lastSummaryKey = useRef<string | null>(null);
   const live = useCallback(() => mounted.current && latest.current.owner === owner && latest.current.allowed, [owner]);
   const update = useCallback((change: Partial<State>) => { if (live()) setState(previous => ({ ...(previous.owner === owner ? previous : initial(owner)), ...change })); }, [live, owner]);
   useEffect(() => {
-    mounted.current = true; let closed = false; operation.current?.abort(); operation.current = null; continuation.current = null; setState(initial(owner));
+    mounted.current = true; let closed = false; lastSummaryKey.current = null;
+    operation.current?.abort(); operation.current = null; continuation.current = null; setState({ ...initial(owner), summaryLoading: allowed });
     if (allowed) void stored(projectId!, accountId!).then(pending => { if (!closed) update({ storageReady: true, pending,
       notice: pending ? 'A location assignment is unconfirmed. Retry the same saved assignment before starting again.' : null }); })
       .catch(error => { if (!closed) update({ storageReady: false, error: message(error) }); });
     return () => { closed = true; operation.current?.abort(); };
   }, [owner, allowed, projectId, accountId, update]);
+  useEffect(() => {
+    if (!allowed || current.busy || operation.current || pf.busy || lastSummaryKey.current === summaryKey) return;
+    let closed = false, settled = false; const summaryAbort = new AbortController();
+    lastSummaryKey.current = summaryKey;
+    update({ summaryLoading: true, results: [], totalNames: 0, complete: false, progress: null,
+      ...(!data.current.pending ? { notice: null } : {}) });
+    void fetchModelLocationMatchSummary(projectId!, token!, summaryAbort.signal).then(summary => {
+      if (closed) return;
+      if (!sameModel(summary.context, latest.current.pf)) {
+        update({ error: 'The active model changed. Refresh the current model to view saved From/To matching results.' }); return;
+      }
+      update({ results: summary.results, totalNames: summary.context.names.length, complete: summary.complete,
+        error: data.current.error?.startsWith('Saved From/To matching results could not be loaded.') ? null : data.current.error });
+    }).catch(error => { if (!closed) update({ error: `Saved From/To matching results could not be loaded. ${message(error)}` }); })
+      .finally(() => { settled = true; if (!closed) update({ summaryLoading: false }); });
+    return () => { closed = true; summaryAbort.abort(); if (!settled && lastSummaryKey.current === summaryKey) lastSummaryKey.current = null; };
+  }, [allowed, current.busy, pf.busy, projectId, token, summaryKey, update]);
   useEffect(() => { if (!active) operation.current?.abort(); }, [active]);
   useEffect(() => () => { mounted.current = false; operation.current?.abort(); }, []);
   const retain = useCallback(async (command: ModelLocationMatchAssign) => {
@@ -168,7 +192,7 @@ export function useModelLocationMatch({ pf, accountId, active, onChanged }: Acce
     localStorage.removeItem(keyFor(projectId!, accountId!)); update({ pending: null });
   }, [projectId, accountId, update]);
   const run = useCallback(async (retry: boolean) => {
-    if (!live() || !latest.current.active || operation.current || !data.current.storageReady || !retry && data.current.pending) return;
+    if (!live() || !latest.current.active || operation.current || !data.current.storageReady || data.current.summaryLoading || !retry && data.current.pending) return;
     const abort = new AbortController(); operation.current = abort;
     let hadUnknownAttempt = false;
     update({ busy: true, error: null, notice: null, complete: false, ...(retry ? {} : { results: [], totalNames: 0 }) });
@@ -268,6 +292,6 @@ export function useModelLocationMatch({ pf, accountId, active, onChanged }: Acce
       update({ busy: false, phase: 'idle' });
     }
   }, [live, update, projectId, token, accountId, clear, retain, owner]);
-  return { ...current, allowed, canStart: allowed && active && current.storageReady && !current.busy && !current.pending && pf.viewerPhase === 'ready' && !pf.busy,
+  return { ...current, allowed, canStart: allowed && active && current.storageReady && !current.summaryLoading && !current.busy && !current.pending && pf.viewerPhase === 'ready' && !pf.busy,
     start: () => run(false), retry: () => run(true), cancel: () => operation.current?.abort() };
 }

@@ -1264,6 +1264,33 @@ describe('fresh initial selection and current proof handoff', () => {
     expect(panelProps.cable?.calculation).toMatchObject({ currentness: 'changed', reviewable: false, acceptedMatchesCurrent: false });
     expect(p.pf.submitCalculation).not.toHaveBeenCalled(); expect(p.pf.calculate).not.toHaveBeenCalled();
   });
+  it.each(['current','saved-exact'] as const)('shows the receipt-qualified %s route while retaining a different later failed calculation',async currentness=>{
+    const p=props(),saved=calculatedRow();
+    saved.calculation={...row().calculation,jobId:id(99),jobStatus:'failed',itemState:'blocked',outcome:'failed',currentness:'unavailable',reasonCodes:['CALCULATION_FAILED']};
+    saved.cable={...saved.cable,routing:'/SAVED',designLength:'58'};
+    saved.savedRoute={receiptId:id(90),jobId:id(70),proposalId:id(80),proposalHash:'f'.repeat(64),currentness};listRow=saved;
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockReset().mockResolvedValue({projectId:id(1),cableId:id(3),row:saved} as never);
+    render(<PathFinderCableWorkspace {...p} display={{cableId:id(3),jobId:id(70),proposalId:id(80),proposalHash:'f'.repeat(64),
+      ready:true,visible:false,source:currentness==='current'?'current-calculation':'saved-exact',routing:'/SAVED',designLength:'58',verifiedRow:saved,
+      verifiedScope:pathFinderWorkflowDisplayScope(p.pf,p.accountId)}} />);
+    await openListCable();expect(panelProps.pathReady).toBe(true);expect(panelProps.calculatedRouting).toBe('/SAVED');
+    expect(panelProps.cable?.calculation).toMatchObject({jobId:id(99),jobStatus:'failed',reviewable:false,acceptedMatchesCurrent:false});
+    expect(panelProps.review).toBeNull();expect(p.pf.submitCalculation).not.toHaveBeenCalled();expect(p.pf.calculate).not.toHaveBeenCalled();
+  });
+  it.each(['receipt','tuple','revision','scope','qualification'] as const)('refuses independent stored geometry after its %s evidence changes',async kind=>{
+    const p=props(),saved=calculatedRow();saved.calculation={...row().calculation,jobId:id(99),jobStatus:'failed',itemState:'blocked',outcome:'failed',currentness:'unavailable'};
+    saved.cable={...saved.cable,routing:'/SAVED',designLength:'58'};
+    saved.savedRoute={receiptId:id(90),jobId:id(70),proposalId:id(80),proposalHash:'f'.repeat(64),currentness:'current'};listRow=saved;
+    const verified=structuredClone(saved);
+    if(kind==='receipt')verified.savedRoute!.receiptId=id(91);
+    if(kind==='tuple')verified.savedRoute!.proposalId=id(81);
+    if(kind==='revision')verified.cable.cableWriteRevision='3';
+    if(kind==='qualification')delete verified.savedRoute;
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockReset().mockResolvedValue({projectId:id(1),cableId:id(3),row:saved} as never);
+    render(<PathFinderCableWorkspace {...p} display={{cableId:id(3),jobId:id(70),proposalId:id(80),proposalHash:'f'.repeat(64),ready:true,visible:true,
+      source:'current-calculation',routing:'/SAVED',designLength:'58',verifiedRow:verified,verifiedScope:kind==='scope'?'other':pathFinderWorkflowDisplayScope(p.pf,p.accountId)}} />);
+    await openListCable();expect(panelProps.pathReady).toBe(false);expect(panelProps.pathVisible).toBe(false);expect(panelProps.calculatedRouting).toBeUndefined();
+  });
   it.each(['source', 'qualification', 'scope', 'tuple', 'older-row'] as const)('refuses saved display with invalid %s evidence', async kind => {
     const p = props(), saved = calculatedRow(); saved.calculation = { ...saved.calculation, currentness: 'changed', reviewable: false,
       acceptedMatchesCurrent: false, savedExactDisplay: true }; listRow = saved;

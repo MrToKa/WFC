@@ -39,6 +39,11 @@ import { validateTrayIdentityRequest, type TrayObjectIdentity, type TrayIdentity
 type PF = ReturnType<typeof usePathFinder>;
 type PreparationModel = { modelVersionId: string | null; contentFingerprint: string | null; selectionRevision: string };
 type CurrentPreparation = { context: PreparationContext; index: PreparationIndex; session: PreparationSession | null; networkTrace: GeometryTraceManifest | null };
+type NetworkArtifactObservation = { key: string; id: string | null; sha256: string | null };
+const matchesObservedArtifact = (context: PreparationContext, observed: NetworkArtifactObservation) =>
+  (context.currentAggregate?.artifactId ?? null) === observed.id && (context.currentAggregate?.projection.sha256 ?? null) === observed.sha256;
+export type PreparationNetworkStorageStatus =
+  'loading' | 'missing' | 'stored-current' | 'stored-needs-update' | 'unavailable';
 type Pending =
   | { kind: 'create'; body: PreparationCreate }
   | { kind: 'resolution'; body: PreparationResolutionWrite }
@@ -174,6 +179,14 @@ export function useProjectPreparation(pf: PF, active: boolean) {
     ? completeModelKey.current.key : reportedModelKey;
   const latestModelKey = useRef(modelKey); latestModelKey.current = modelKey;
   const displayModelKey = useRef(modelKey);
+  // PF state exposes the current planning artifact, not endpoint bindings.
+  // A viewer renewal can briefly hide PF data; that is not a new artifact.
+  const artifact = pf.data?.artifacts?.[0];
+  const observedArtifact = Array.isArray(pf.data?.artifacts) ? { id: artifact?.id ?? null, sha256: artifact?.snapshotSha256 ?? null,
+    key: JSON.stringify([artifact?.id ?? null, artifact?.snapshotSha256 ?? null]) } : null;
+  const artifactKey = observedArtifact?.key ?? null;
+  const latestArtifact = useRef(observedArtifact); if (observedArtifact) latestArtifact.current = observedArtifact;
+  const displayArtifactKey = useRef(artifactKey), requiredArtifact = useRef<NetworkArtifactObservation | null>(null);
   const mounted = useRef(true),
     currentAbort = useRef<AbortController | null>(null),
     busyRef = useRef(false),
@@ -248,8 +261,19 @@ export function useProjectPreparation(pf: PF, active: boolean) {
             model.contentFingerprint !== context.scope.contentFingerprint))
           throw new PreparationDisplayScopeError(
             'The active model changed. Refresh Path Finder and preparation before continuing.');
+        const required = requiredArtifact.current;
+        if (required && latestArtifact.current?.key === required.key) {
+          if (!matchesObservedArtifact(context, required)) throw new PreparationDisplayScopeError(
+            'The saved routing network changed. Refresh preparation to check its current readiness.');
+          requiredArtifact.current = null;
+        }
       };
       assertModelScope();
+      // The published aggregate is durable database evidence. Surface it before
+      // loading the session and its trace; calculation readiness still requires
+      // the separately verified trace below.
+      update(value => ({ ...value, context, index,
+        networkTrace: networkTraceMatches(context, value.networkTrace) ? value.networkTrace : null }));
       const pendingTrace = pending.current;
       if (pendingTrace?.kind === 'trace' && !traceCommandMatches(context, pendingTrace.body)) {
         // Invalidate readiness, not reconciliation of the exact saved write.
@@ -572,6 +596,8 @@ export function useProjectPreparation(pf: PF, active: boolean) {
     busyRef.current = false;
     currentAbort.current?.abort();
     initialReadIdentity.current = null;
+    requiredArtifact.current = null;
+    displayArtifactKey.current = latestArtifact.current?.key ?? null;
     setState(initial(identity));
     return () => {
       mounted.current = false;
@@ -581,6 +607,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
   useEffect(() => {
     if (displayModelKey.current === modelKey) return;
     displayModelKey.current = modelKey;
+    requiredArtifact.current = null;
     if (protectedRun.current) currentAbort.current?.abort();
     initialReadIdentity.current = null;
     // Retire presentation evidence, retaining any exact uncertain write for the
@@ -589,13 +616,24 @@ export function useProjectPreparation(pf: PF, active: boolean) {
       unknown: Boolean(pending.current) || value.unknown, conflict: false, error: null }));
   }, [modelKey, update]);
   useEffect(() => {
+    if (artifactKey === null || displayArtifactKey.current === artifactKey) return;
+    displayArtifactKey.current = artifactKey;
+    const observed = latestArtifact.current;
+    if (!observed || stateRef.current.context && matchesObservedArtifact(stateRef.current.context, observed)) return;
+    requiredArtifact.current = observed;
+    initialReadIdentity.current = null;
+    if (protectedRun.current) currentAbort.current?.abort();
+    update(value => ({ ...value, context: null, session: null, discovery: null, networkTrace: null, notice: null, progress: null,
+      unknown: Boolean(pending.current) || value.unknown, conflict: false, error: null }));
+  }, [artifactKey, update]);
+  useEffect(() => {
     if (!enabled || !active || busyRef.current || initialReadIdentity.current === identity) return;
     initialReadIdentity.current = identity;
     void operate(async (signal) => {
       update((value) => ({ ...value, loading: true }));
       await readCurrent(signal);
     });
-  }, [active, enabled, identity, modelKey, operate, readCurrent, state.busy, update]);
+  }, [active, enabled, identity, modelKey, artifactKey, operate, readCurrent, state.busy, update]);
   useEffect(() => {
     if (!active && protectedRun.current) currentAbort.current?.abort();
   }, [active]);
@@ -1193,11 +1231,17 @@ export function useProjectPreparation(pf: PF, active: boolean) {
   }, [execute, operate, readCurrent, reconcileAutomatic, update]);
   const currentModel = pf.data?.activeModel;
   const staleModelDisplay = Boolean(currentModel && state.context && !sameModel(state.context.scope, currentModel));
+  const staleArtifactDisplay = Boolean(observedArtifact && state.context &&
+    (displayArtifactKey.current !== artifactKey || requiredArtifact.current?.key === artifactKey) && !matchesObservedArtifact(state.context, observedArtifact));
   const view = state.identity === identity && enabled
-    ? staleModelDisplay ? { ...state, context: null, session: null, discovery: null, notice: null, progress: null } : state
+    ? staleModelDisplay || staleArtifactDisplay ? { ...state, context: null, session: null, discovery: null, networkTrace: null, notice: null, progress: null } : state
     : initial(identity);
   const canMutate = enabled && active && !view.busy && !view.unknown && !view.conflict;
   const networkReady = Boolean(!view.unknown && !view.conflict && view.context && networkTraceMatches(view.context, view.networkTrace));
+  const networkStorageStatus: PreparationNetworkStorageStatus = !view.context
+    ? view.error ? 'unavailable' : 'loading'
+    : !view.context.currentAggregate ? 'missing'
+      : publishedNetworkMatches(view.context) ? 'stored-current' : 'stored-needs-update';
   const networkReadinessKey = networkReady ? canonicalPurposeJson({ projectId: view.context!.projectId,
     aggregateId: view.context!.currentAggregate!.id, artifactId: view.context!.currentAggregate!.artifactId,
     geometryRevision: view.context!.currentAggregate!.geometryRevision, projection: view.context!.currentAggregate!.projection,
@@ -1205,6 +1249,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
   return {
     ...view,
     networkReady,
+    networkStorageStatus,
     networkReadinessKey,
     enabled,
     canMutate,

@@ -3,7 +3,8 @@ import type { PoolClient } from 'pg';
 import { canonicalPurposeJson, policyRevisionSchema, policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { canonicalDecimalString } from '../../shared/pathfinderLengthLedger.js';
 import { AUTOMATIC_PAIR_LIMITS, automaticPairHistorySchema, automaticPairMandateSchema, automaticPairMandateHashInput,
-  automaticPairProvenanceSchema, automaticPairCapacityClearProvenanceSchema, type AutomaticPairHistory, type AutomaticPairWriteRequest } from '../../shared/pathfinderAutomaticPair.js';
+  automaticPairProvenanceSchema, automaticPairCapacityClearProvenanceSchema, type AutomaticPairHistory, type AutomaticPairWriteRequest,
+  type AutomaticPairMaterialState } from '../../shared/pathfinderAutomaticPair.js';
 import { initialFillProvenanceSchema } from '../../shared/pathfinderInitialFill.js';
 import { hash } from './dependencies.js';
 import { readInitialFillReceiptProof } from './initialFillReceiptProof.js';
@@ -13,6 +14,7 @@ import { requireCalculationLengthLedger } from './lengthLedger.js';
 import { designLengthCompatibilityIssue, routeCompatibilityIssue, type DependencySnapshot, type EngineResponse } from './jobContracts.js';
 import { PathFinderError } from './errors.js';
 import { automaticPairCapacityClearTransition, validCapacityClearEvidence } from './capacityClearWrite.js';
+import { continuesAutomaticSnapshot, automaticPairObservedSnapshot, validAutomaticPairMaterialObservation } from './automaticPairSnapshot.js';
 
 type Row = Record<string, any>;
 export const automaticPairHash = (value: unknown): string => createHash('sha256').update(canonicalPurposeJson(value)).digest('hex');
@@ -25,32 +27,6 @@ export const automaticPairDecimalEqual = (a: unknown, b: unknown): boolean => {
   try { return typeof a === 'string' && typeof b === 'string' && canonicalDecimalString(a) === canonicalDecimalString(b); } catch { return false; }
 };
 const same = (a: unknown, b: unknown) => canonicalPurposeJson(a) === canonicalPurposeJson(b);
-/** PostgreSQL snapshots retain microseconds; Date.parse alone loses the last
- * three digits and cannot enforce the lineage's exact timestamp bounds. */
-function snapshotTimestamp(value: unknown): bigint | null {
-  if (typeof value !== 'string' || value.length > 40) return null;
-  const parts = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,6}))?(Z|[+-]\d{2}:\d{2})$/.exec(value);
-  if (!parts) return null;
-  const milliseconds = Date.parse(parts[1] + 'Z');
-  if (!Number.isFinite(milliseconds) || new Date(milliseconds).toISOString().slice(0, 19) !== parts[1]) return null;
-  const zone = parts[3], hours = zone === 'Z' ? 0 : Number(zone.slice(1, 3)), minutes = zone === 'Z' ? 0 : Number(zone.slice(4));
-  if (hours > 23 || minutes > 59) return null;
-  const offset = BigInt((hours * 60 + minutes) * (zone[0] === '-' ? -1 : 1));
-  return BigInt(milliseconds) * 1000n + BigInt((parts[2] ?? '').padEnd(6, '0')) - offset * 60_000_000n;
-}
-/** Default material initialization/synchronization touches its nonengineering
- * flag and timestamp, including true-to-true synchronization without a cable
- * revision. Keep all other values and receipt/hash/history lineage exact. */
-function continuesAutomaticSnapshot(previous: Row, before: Row, authorizedAt: string): boolean {
-  if (same(previous, before)) return true;
-  if (typeof previous.materials_initialized !== 'boolean' || before.materials_initialized !== true
-    || previous.materials_customized !== false || before.materials_customized !== false
-    || typeof previous.updated_at !== 'string' || typeof before.updated_at !== 'string'
-    || !same(Object.keys(previous).sort(), Object.keys(before).sort())) return false;
-  const from = snapshotTimestamp(previous.updated_at), to = snapshotTimestamp(before.updated_at), limit = snapshotTimestamp(authorizedAt);
-  return from !== null && to !== null && limit !== null && from <= to && to <= limit
-    && Object.keys(previous).every(key => key === 'materials_initialized' || key === 'updated_at' || same(previous[key], before[key]));
-}
 export function automaticPairOwnTransition(projectId: string, cableId: string, before: Row, after: Row): boolean {
   try {
     const allowed = new Set(['routing', 'design_length', 'updated_at', 'cable_write_revision']);
@@ -70,7 +46,8 @@ export function automaticPairHistoryMatches(row: Row, after: Row, actorId: strin
     && historyFields.every(key => Object.hasOwn(after, key) && Object.hasOwn(row, key) && same(scalar(row[key]), scalar(after[key])))
     && ['design_length', 'install_length'].every(key => after[key] === null ? row[key] === null : automaticPairDecimalEqual(String(row[key]), after[key]));
 }
-export type AutomaticPairReceiptFact = { receiptId: string; receiptSha256: string; originReceiptId: string; before: Row; after: Row; history: AutomaticPairHistory; clearedForCapacity?: true };
+export type AutomaticPairReceiptFact = { receiptId: string; receiptSha256: string; originReceiptId: string; before: Row; after: Row; history: AutomaticPairHistory;
+  afterMaterialState?: AutomaticPairMaterialState; clearedForCapacity?: true };
 export type AutomaticPairProofAdapters = { seal?: typeof verifyRevisionResultForProposal; initialProof?: typeof readInitialFillReceiptProof };
 /** Bounded historical proof. No current authority is acquired or renewed. */
 export function createAutomaticPairReceiptProofReader(client: PoolClient, check: () => void = () => undefined, adapters: AutomaticPairProofAdapters = {}) {
@@ -102,7 +79,7 @@ export function createAutomaticPairReceiptProofReader(client: PoolClient, check:
         : after.routing !== result.route?.routeText || !automaticPairDecimalEqual(after.design_length, result.design?.designLengthMeters))) return null;
     const seal = await (adapters.seal ?? verifyRevisionResultForProposal)(client, { projectId, proposalId: r.proposal_id,
       dependencies, result, proposalHash: r.proposal_hash }); check(); if (!seal) return null;
-    let originReceiptId: string, history: AutomaticPairHistory;
+    let originReceiptId: string, history: AutomaticPairHistory, afterMaterialState: AutomaticPairMaterialState | undefined;
     const initial = initialFillProvenanceSchema.safeParse(r.provenance);
     if (initial.success && !clear.success) {
       if (!await (adapters.initialProof ?? readInitialFillReceiptProof)(client, { projectId, cableId, receiptId, proposalId: r.proposal_id,
@@ -117,19 +94,23 @@ export function createAutomaticPairReceiptProofReader(client: PoolClient, check:
       if (automaticPairHash(automaticPairMandateHashInput(m)) !== m.contentSha256 || p.request.proposalId !== r.proposal_id
         || idempotencyKey !== automaticPairIdempotencyKey(requestBody) || idempotencyKey !== r.idempotency_key || automaticPairHash(p.request) !== r.payload_hash || m.actorId !== r.actor_id
         || m.baselineSha256 !== automaticPairHash(before) || !same(p.dependencies, dependencies)
+        || !validAutomaticPairMaterialObservation(m.baselinePolicy, before, after, p.materialObservation, p.authorizedAt)
         || (p.schemaVersion === 'pathfinder.automatic-pair-capacity-clear.v1'
           ? !validCapacityClearEvidence(dependencies as any, result, p.capacityEvidence) || seal.ledgerHash !== null
           : !same(p.barrierEvidence, requireBarrierWriteEvidence(dependencies, result)) || !requireCalculationLengthLedger(result, dependencies.settings))
         || p.revisionResult.revisionResultSha256 !== seal.revisionResultSha256 || p.revisionResult.admissionId !== seal.admissionId
         || p.revisionResult.baselineHash !== seal.baselineHash || p.revisionResult.engineResultSha256 !== seal.engineResultSha256
         || p.revisionResult.ledgerHash !== seal.ledgerHash || p.revisionResult.dependencyHash !== seal.dependencyHash) return null;
+      afterMaterialState = p.materialObservation?.after;
       const stored = await query(`/* automatic-pair:historical-mandate */ SELECT record,record_sha256 FROM pf_automatic_pair_mandates
         WHERE project_id=$1 AND job_id=$2 AND cable_id=$3 AND id=$4`, [projectId, m.jobId, cableId, m.id]);
       if (stored.length !== 1 || !same(automaticPairMandateSchema.parse(stored[0].record), m) || stored[0].record_sha256 !== m.contentSha256) return null;
       if (m.ownership.kind === 'automatic') {
         const previous = await read(projectId, cableId, m.ownership.previousReceiptId, next);
         if (!previous || previous.receiptSha256 !== m.ownership.previousReceiptSha256 || previous.originReceiptId !== m.ownership.originReceiptId
-          || previous.after.cable_write_revision !== before.cable_write_revision || !continuesAutomaticSnapshot(previous.after, before, p.authorizedAt)
+          || previous.after.cable_write_revision !== before.cable_write_revision
+          || !continuesAutomaticSnapshot(automaticPairObservedSnapshot(previous.after, previous.afterMaterialState),
+            automaticPairObservedSnapshot(before, p.materialObservation?.before), p.authorizedAt)
           || !same(previous.history, m.ownership.history)) return null;
         originReceiptId = previous.originReceiptId;
       } else {
@@ -143,7 +124,7 @@ export function createAutomaticPairReceiptProofReader(client: PoolClient, check:
     }
     return { receiptId, receiptSha256: automaticPairHash({ id: r.id, projectId, cableId, actorId: r.actor_id,
       idempotencyKey: r.idempotency_key, payloadHash: r.payload_hash, proposalId: r.proposal_id, before, after, provenance: r.provenance }), originReceiptId, before, after, history,
-      ...(clear.success ? { clearedForCapacity: true as const } : {}) };
+      ...(afterMaterialState ? { afterMaterialState } : {}), ...(clear.success ? { clearedForCapacity: true as const } : {}) };
   }
   return async (input: { projectId: string; cableId: string; receiptId: string }): Promise<AutomaticPairReceiptFact | null> => {
     for (const id of Object.values(input)) policyUuidSchema.parse(id); const key = canonicalPurposeJson(input);

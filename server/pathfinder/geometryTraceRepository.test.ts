@@ -84,6 +84,7 @@ function publicationFixture(){
     if(sql.startsWith('SELECT part_id,receipt'))return{rows:[]};
     if(sql.startsWith('INSERT INTO pf_geometry_trace_intents')){working.intents.set(String(params[0]),{id:String(params[0]),input_sha256:String(params[4]),frozen:params[5],state:'pending',lease_token:String(params[6]),lease_expires_at:params[7] as Date,admission_protocol:String(params[9])});return{rows:[]};}
     if(sql.startsWith('UPDATE pf_geometry_trace_intents SET lease_token=')){const intent=working.intents.get(String(params[1]))!;intent.lease_token=String(params[2]);intent.lease_expires_at=params[3] as Date;return{rows:[]};}
+    if(sql.startsWith('UPDATE pf_geometry_trace_intents SET lease_expires_at=')){const intent=working.intents.get(String(params[1]));if(intent?.state==='pending'&&intent.lease_token===params[2])intent.lease_expires_at=new Date(0);return{rows:[]};}
     if(sql.startsWith('INSERT INTO pf_geometry_trace_sets')){working.traces.set(String(params[0]),params[5] as GeometryTraceManifest);return{rows:[]};}
     if(sql.startsWith('INSERT INTO pf_geometry_object_revisions')){working.objects+=(JSON.parse(String(params[2])) as unknown[]).length;return{rows:[]};}
     if(sql.startsWith('INSERT INTO pf_geometry_trace_diagnostics')){working.diagnostics+=(JSON.parse(String(params[2])) as unknown[]).length;return{rows:[]};}
@@ -145,11 +146,42 @@ function runtimeCommand(f: ReturnType<typeof publicationFixture>, fingerprint = 
     expectedRuntimeFingerprintSha256: geometryTraceHash(fingerprint), idempotencyKey: key };
 }
 async function interruptTrace(f: ReturnType<typeof publicationFixture>, command: unknown = f.command) {
-  f.controls.onWorker = () => { throw new Error('synthetic deployment interruption'); };
+  f.controls.onWorker = () => { throw Object.assign(new Error('synthetic deployment interruption'), { code: 'GEOMETRY_TRACE_JOIN_UNCONFIRMED' }); };
   await expect(f.create(f.who, command)).rejects.toThrow('synthetic deployment interruption');
   f.controls.onWorker = () => undefined;
   expect(f.durable.traces.size).toBe(0); expect(f.durable.receipts.size).toBe(0);
 }
+
+describe('stopped trace owner recovery', () => {
+  it('retries a stopped worker immediately using the same frozen input and a new owner', async () => {
+    const f = publicationFixture(); f.controls.onWorker = () => { throw Error('worker stopped'); };
+    await expect(f.create()).rejects.toThrow('worker stopped');
+    const previous = structuredClone([...f.durable.intents.values()][0]);
+    expect(previous.lease_expires_at.getTime()).toBeLessThanOrEqual(Date.now());
+    f.controls.onWorker = () => undefined;
+    const result = await f.create(); const current = f.durable.intents.get(previous.id)!;
+    expect(result.trace.id).toBe(previous.id); expect(current.frozen).toEqual(previous.frozen);
+    expect(current.input_sha256).toBe(previous.input_sha256); expect(current.lease_token).not.toBe(previous.lease_token);
+    expect(f.durable.intents.size).toBe(1); expect(f.durable.traces.size).toBe(1);
+  });
+  it('releases an owner when export fails before the worker starts', async () => {
+    const f = publicationFixture(); f.adapters.exportFittedTrace.mockRejectedValueOnce(Error('export stopped'));
+    await expect(f.create()).rejects.toThrow('export stopped');
+    expect([...f.durable.intents.values()][0].lease_expires_at.getTime()).toBeLessThanOrEqual(Date.now());
+    await expect(f.create()).resolves.toMatchObject({ duplicate: false }); expect(f.durable.intents.size).toBe(1);
+  });
+  it('does not release a newer owner while cleaning up an older failed worker', async () => {
+    const f = publicationFixture(), later = new Date(Date.now() + 120000);
+    f.controls.onWorker = () => { const intent = [...f.durable.intents.values()][0]; intent.lease_token = id(999); intent.lease_expires_at = later; throw Error('old owner stopped'); };
+    await expect(f.create()).rejects.toThrow('old owner stopped');
+    expect([...f.durable.intents.values()][0]).toMatchObject({ lease_token: id(999), lease_expires_at: later, state: 'pending' });
+  });
+  it('retains quarantine when worker termination could not be confirmed', async () => {
+    const f = publicationFixture(); await interruptTrace(f);
+    expect([...f.durable.intents.values()][0].lease_expires_at.getTime()).toBeGreaterThan(Date.now());
+    await expect(f.create()).rejects.toMatchObject({ code: 'GEOMETRY_TRACE_IN_PROGRESS' });
+  });
+});
 
 describe('runtime-bound trace generations and immutable command admission', () => {
   it('publishes a current-runtime generation beside an untouched old pending legacy intent', async () => {

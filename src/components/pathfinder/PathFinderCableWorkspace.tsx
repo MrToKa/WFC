@@ -52,9 +52,10 @@ type SettledDiagnostics = { owner: string; model: string; cableId: string; jobId
 type CalculationDiagnosticSnapshot = { owner: string; model: string; value: PathFinderCalculationDiagnostics };
 const displayCandidate = (calculation: CableWorkflowRow['calculation']) => calculation.outcome === 'calculated'
   && calculation.currentness === 'current' && calculation.itemState === 'complete' && calculation.proposalId !== null && calculation.proposalHash !== null;
-const savedDisplayCandidate = (calculation: CableWorkflowRow['calculation']) => calculation.savedExactDisplay === true
-  && calculation.outcome === 'calculated' && calculation.itemState === 'complete' && calculation.jobStatus === 'complete'
-  && calculation.proposalId !== null && calculation.proposalHash !== null;
+const displayIdentity = (row: CableWorkflowRow) => row.savedRoute ?? row.calculation;
+const savedDisplayCandidate = (row: CableWorkflowRow) => row.savedRoute?.currentness === 'saved-exact'
+  || row.calculation.savedExactDisplay === true && row.calculation.outcome === 'calculated' && row.calculation.itemState === 'complete'
+    && row.calculation.jobStatus === 'complete' && row.calculation.proposalId !== null && row.calculation.proposalHash !== null;
 const MAX_RETAINED_CALCULATION_ATTEMPTS = 128;
 // Charge a status/detail round once. Its terminal read, state refresh and exact
 // recheck must still finish on the last allowed round. Recovery remains GET-only.
@@ -753,17 +754,20 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   };
   const parsedVerifiedRow = cableWorkflowRowSchema.safeParse(props.display?.verifiedRow);
   const verifiedRow = parsedVerifiedRow.success ? parsedVerifiedRow.data : null;
+  const selectedIdentity = selected ? displayIdentity(selected) : null;
+  const verifiedIdentity = verifiedRow ? displayIdentity(verifiedRow) : null;
   const observedRevision = props.pf.data?.cables?.find(row => row.id === selected?.cable.id)?.cableWriteRevision;
   const verifiedRowMatches = Boolean(props.active && enabled && selected && verifiedRow && !submittedCalculation && !savedCalculation && !refreshingSelected && !selectedReadError
     && previousReadScope.current === selectedReadScope && props.display?.verifiedScope === pathFinderWorkflowDisplayScope(props.pf, props.accountId)
     && props.display?.cableId === selected.cable.id && verifiedRow.projectId === props.projectId && verifiedRow.cable.id === selected.cable.id
-    && props.display.jobId === selected.calculation.jobId && props.display.proposalId === selected.calculation.proposalId
-    && props.display.proposalHash === selected.calculation.proposalHash && verifiedRow.calculation.jobId === props.display.jobId
-    && verifiedRow.calculation.proposalId === props.display.proposalId && verifiedRow.calculation.proposalHash === props.display.proposalHash
-    && (props.display.source !== 'saved-exact' && displayCandidate(verifiedRow.calculation)
-      || props.display.source === 'saved-exact' && savedDisplayCandidate(verifiedRow.calculation))
+    && verifiedRow.savedRoute?.receiptId === selected.savedRoute?.receiptId
+    && props.display.jobId === selectedIdentity?.jobId && props.display.proposalId === selectedIdentity?.proposalId
+    && props.display.proposalHash === selectedIdentity?.proposalHash && verifiedIdentity?.jobId === props.display.jobId
+    && verifiedIdentity.proposalId === props.display.proposalId && verifiedIdentity.proposalHash === props.display.proposalHash
+    && (props.display.source !== 'saved-exact' && (verifiedRow.savedRoute?.currentness === 'current' || displayCandidate(verifiedRow.calculation))
+      || props.display.source === 'saved-exact' && savedDisplayCandidate(verifiedRow))
     && !automaticUpdatePending(verifiedRow.calculation)
-    && !['failed', 'cancelled'].includes(verifiedRow.calculation.jobStatus ?? '')
+    && (verifiedRow.savedRoute || !['failed', 'cancelled'].includes(verifiedRow.calculation.jobStatus ?? ''))
     && BigInt(verifiedRow.cable.cableWriteRevision) >= BigInt(selected.cable.cableWriteRevision)
     && (observedRevision === undefined || BigInt(verifiedRow.cable.cableWriteRevision) >= BigInt(observedRevision)));
   const displayedSelection = verifiedRowMatches ? verifiedRow! : selected;
@@ -840,24 +844,25 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   // proof. The next-calculation draft cannot change that review policy.
   const popupReview = matchedReview;
   const selectedCalculation = displayedSelection?.calculation;
+  const displayedIdentity = displayedSelection ? displayIdentity(displayedSelection) : null;
   const displaySourceMatches = Boolean(selected && props.display?.cableId === selected.cable.id
     && props.display.verifiedScope === pathFinderWorkflowDisplayScope(props.pf, props.accountId)
     && (!props.display.verifiedRow || verifiedRowMatches)
-    && props.display.jobId === selectedCalculation?.jobId && props.display.proposalId === selectedCalculation?.proposalId
-    && props.display.proposalHash === selectedCalculation?.proposalHash
-    && (props.display.source !== 'saved-exact' && selectedCalculation?.currentness === 'current'
-      || props.display.source === 'saved-exact' && verifiedRowMatches && selectedCalculation && savedDisplayCandidate(selectedCalculation))
+    && props.display.jobId === displayedIdentity?.jobId && props.display.proposalId === displayedIdentity?.proposalId
+    && props.display.proposalHash === displayedIdentity?.proposalHash
+    && (props.display.source !== 'saved-exact' && (displayedSelection?.savedRoute?.currentness === 'current' && verifiedRowMatches || selectedCalculation?.currentness === 'current')
+      || props.display.source === 'saved-exact' && verifiedRowMatches && displayedSelection && savedDisplayCandidate(displayedSelection))
     && !submittedCalculation && !(displayedSelection && automaticUpdatePending(displayedSelection.calculation)) && savedCalculation?.cableId !== selected.cable.id && !refreshingSelected && !selectedReadError);
   const displayMatches = displaySourceMatches && Boolean(props.display?.ready);
   // Exact proposal text can be read before its viewer foreground is ready.
   // Show still requires the complete verified display payload above.
-  const displayTextMatches = displaySourceMatches && selectedCalculation?.outcome === 'calculated' && selectedCalculation.itemState === 'complete'
-    && !['failed', 'cancelled'].includes(selectedCalculation.jobStatus ?? '')
+  const displayTextMatches = displaySourceMatches && (displayedSelection?.savedRoute || selectedCalculation?.outcome === 'calculated' && selectedCalculation.itemState === 'complete'
+    && !['failed', 'cancelled'].includes(selectedCalculation.jobStatus ?? ''))
     && (Boolean(props.display?.ready) || typeof props.display?.routing === 'string');
   const waitingForSavedCalculation = savedCalculation?.cableId === selected?.cable.id && Boolean(savedCalculation);
   const displayCheckFeedback = !displayMatches && !waitingForSavedCalculation && !submittedCalculation && selected
-    && props.display?.cableId === selected.cable.id && props.display.jobId === selected.calculation.jobId
-    && props.display.proposalId === selected.calculation.proposalId && props.display.proposalHash === selected.calculation.proposalHash
+    && props.display?.cableId === selected.cable.id && props.display.jobId === selectedIdentity?.jobId
+    && props.display.proposalId === selectedIdentity?.proposalId && props.display.proposalHash === selectedIdentity?.proposalHash
     && props.display.message ? { cableId: selected.cable.id, working: props.display.checking === true, message: props.display.message } : null;
   const selectedFeedback = calculationFeedback?.cableId === selected?.cable.id ? calculationFeedback : null;
   const currentFeedback = selectedFeedback ? { cableId: selectedFeedback.cableId, working: selectedFeedback.working,

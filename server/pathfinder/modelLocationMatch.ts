@@ -13,6 +13,7 @@ import type { JobPrincipal } from './jobContracts.js';
 import { PathFinderError } from './errors.js';
 import { authorizePathFinderPreflight } from './projectPreflightAuthorization.js';
 import { groupModelLocationMatchCandidates } from './modelLocationMatchCandidates.js';
+import { readModelLocationMatchSummary } from './modelLocationMatchSummary.js';
 
 const digest = (v: unknown) => createHash('sha256').update(canonicalPurposeJson(v)).digest('hex');
 const fail = (code: string, status = 409): never => { throw new PathFinderError(code, status, 'Model location matching could not be completed. Refresh its context and check the reported names; keep an uncertain saved command for reconciliation.'); };
@@ -61,6 +62,9 @@ export function createModelLocationMatchRepository(pool: Pool) {
     authorize(projectId: string, who: JobPrincipal) { return authorizePathFinderPreflight(pool, projectId, who); },
     context(projectId: string, who: JobPrincipal, signal?: AbortSignal) {
       return cableWorkflowReadTransaction(pool, projectId, who, (c, check) => context(c, projectId, check), signal);
+    },
+    summary(projectId: string, who: JobPrincipal, signal?: AbortSignal) {
+      return cableWorkflowReadTransaction(pool, projectId, who, async (c, check) => readModelLocationMatchSummary(c, await context(c, projectId, check), check), signal);
     },
     assign(projectId: string, who: JobPrincipal, raw: unknown, signal?: AbortSignal) {
       policyUuidSchema.parse(projectId);

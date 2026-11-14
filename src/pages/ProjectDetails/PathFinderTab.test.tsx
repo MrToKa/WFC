@@ -437,10 +437,13 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
     const data = current.data;
     act(() => trayPreparationCapture.render.mock.lastCall![0].onNetworkReady('verified-network'));
     expect(JSON.parse(barrierComposition.render.mock.lastCall![0].refreshKey)).toEqual(['verified-network', 0]);
+    expect(modelMatchCapture.render.mock.lastCall![0].refreshRevision).toBe(0);
     await user.click(screen.getByRole('button', { name: 'Refresh Path Finder' }));
     expect(JSON.parse(barrierComposition.render.mock.lastCall![0].refreshKey)).toEqual(['verified-network', 1]);
+    expect(modelMatchCapture.render.mock.lastCall![0].refreshRevision).toBe(1);
     await user.click(screen.getByRole('button', { name: 'Refresh Path Finder' }));
     expect(JSON.parse(barrierComposition.render.mock.lastCall![0].refreshKey)).toEqual(['verified-network', 2]);
+    expect(modelMatchCapture.render.mock.lastCall![0].refreshRevision).toBe(2);
     expect(current.refresh).toHaveBeenCalledTimes(2); expect(current.data).toBe(data);
     expect(workspaceCapture.render.mock.lastCall![0].preferences).toBeNull();
     expect(current.prepareModel).not.toHaveBeenCalled(); expect(current.uploadSnapshot).not.toHaveBeenCalled();

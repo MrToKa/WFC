@@ -106,6 +106,25 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
     return Boolean(plan?.requestedScope.trays.some(item => item.projectTrayId === trayId && item.orderedRootObjectIds.length));
   };
   const found = context?.trays.filter(tray => assigned(tray.projectTrayId)).length ?? 0;
+  const networkStatus = (() => {
+    if (saved) return `Network saved in the database. Ready for routing calculations. ${found} of ${context!.trays.length} trays assigned${found < context!.trays.length ? `; ${context!.trays.length - found} still need a model selection` : ''}.`;
+    switch (state.networkStorageStatus) {
+      case 'stored-current':
+        if (!modelCurrent) return 'A routing network is saved in the database. Load the matching project model to check readiness.';
+        if (pf.viewerPhase !== 'ready') return 'Network saved in the database. Load the current model before checking readiness for routing calculations.';
+        if (state.loading || working) return 'Network saved in the database. Checking readiness for routing calculations…';
+        if (state.unknown) return 'Network saved in the database. The earlier update needs checking before routing calculations. Choose Retry tray update.';
+        return 'Network saved in the database. Readiness still needs verification. Choose Discover project tray candidates to finish checking the saved network.';
+      case 'stored-needs-update':
+        return 'A routing network is saved in the database. The model, tray data or routing settings have changed. Choose Discover project tray candidates to update it.';
+      case 'missing':
+        return 'No routing network is saved in the database. Choose Discover project tray candidates to prepare it.';
+      case 'unavailable':
+        return 'Saved network status is unavailable. Refresh the project to check it.';
+      default:
+        return 'Checking the database for a saved routing network…';
+    }
+  })();
   const filtered = context?.trays.filter(tray => !query.trim() || [tray.rawName, tray.routeName, tray.purposeKey ?? '']
     .some(value => searchText(value).includes(searchText(query))))
     .sort((a, b) => a.rawName.localeCompare(b.rawName, undefined, { numeric: true, sensitivity: 'base' })) ?? [];
@@ -117,8 +136,8 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
         : pf.viewerPhase !== 'ready' ? 'The model is not ready. Reload it to continue.'
           : pf.busy ? 'The model is busy. Wait for the current operation to finish.'
             : state.loading ? 'Reading the current tray status…'
-              : state.busy ? state.unknown ? 'Checking the earlier tray update. You can stop this check.' : 'Checking project trays. You can stop this check.'
-                : reading ? 'Saving the selected tray and updating the network…'
+              : reading ? 'Saving the selected tray assignment…'
+                : state.busy ? state.unknown ? 'Checking the earlier tray update. You can stop this check.' : 'Checking project trays. You can stop this check.'
                   : displayPending ? display?.status === 'hiding' ? 'Restoring the normal model view…' : 'Showing the tray in the model…'
                     : state.unknown ? 'An earlier tray update needs checking. Use Retry tray update to continue.' : null;
   const show = async (trayId: string) => {
@@ -225,9 +244,10 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
     </Button>
     {state.busy ? <Button onClick={state.pause} style={{ marginLeft: 8 }}>Stop checking</Button> : null}
     {disabledReason ? <p>{disabledReason}</p> : null}
-    {working ? <Spinner size="tiny" label={state.progress ?? (state.unknown ? 'Checking the earlier tray update…' : 'Checking trays and preparing the network…')} style={{ marginBlock: 12 }} />
-      : saved ? <p role="status">Network ready. {found} of {context!.trays.length} trays assigned{found < context!.trays.length ? `; ${context!.trays.length - found} still need a model selection` : ''}.</p>
-        : <p>Check the trays to prepare the routing network automatically.</p>}
+    {working ? <Spinner size="tiny" label={state.progress ?? (reading ? 'Reading and saving the selected tray…'
+      : state.loading ? 'Checking saved network readiness…' : state.unknown ? 'Checking the earlier tray update…' : 'Checking trays and preparing the network…')} style={{ marginBlock: 12 }} /> : null}
+    <p role="status">{networkStatus}</p>
+    {state.networkStorageStatus === 'stored-current' && modelCurrent ? <p>Reopening the project and changing From/To locations reuse the saved network.</p> : null}
     {blockers.length ? <div role="alert" aria-label="Network preparation blockers">
       <p>Network preparation is blocked. Assigned objects are saved; resolve these issues, then choose Discover project tray candidates again.</p>
       <ul>{blockers.map(issue => <li key={issue.code}>{issue.message}</li>)}</ul>

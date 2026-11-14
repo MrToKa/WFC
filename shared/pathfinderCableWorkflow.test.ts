@@ -42,6 +42,29 @@ describe('separate exact saved display capability',()=>{
   });
 });
 
+describe('receipt-qualified stored route independent of latest attempt',()=>{
+  const saved=():CableWorkflowRow=>row({cable:{...row().cable,routing:'/SAVED',designLength:'58'},
+    calculation:calculation({jobId:id(30),jobStatus:'failed',itemState:'blocked',outcome:'failed',currentness:'unavailable',reasonCodes:['CALCULATION_FAILED']}),
+    savedRoute:{receiptId:id(40),jobId:id(20),proposalId:id(21),proposalHash:'a'.repeat(64),currentness:'current'}});
+  it('classifies proven current cable values without replacing the failed latest calculation',()=>{
+    const value=cableWorkflowRowSchema.parse(saved());
+    expect(value.calculation).toMatchObject({jobId:id(30),jobStatus:'failed',reviewable:false,acceptedMatchesCurrent:false});
+    expect(classifyCableWorkflow(value)).toEqual({status:'up-to-date',reasonCodes:['CALCULATION_FAILED']});
+    expect(cableWorkflowRowSchema.parse({...value,savedRoute:{...value.savedRoute,currentness:'saved-exact'}}).calculation).toEqual(value.calculation);
+  });
+  it.each([{jobStatus:'running',itemState:'waiting',outcome:'not-evaluated'},
+    {jobStatus:'complete',itemState:'complete',outcome:'calculated',proposalId:id(21),proposalHash:'a'.repeat(64)}] as const)('refuses stored-route fallback over active or calculated work (%j)',patch=>{
+    const value=saved();expect(cableWorkflowRowSchema.safeParse({...value,calculation:{...value.calculation,...patch}}).success).toBe(false);
+  });
+  it('requires exact stored identity, available endpoints and nonblank stored values',()=>{
+    const value=saved();
+    for(const savedRoute of [{...value.savedRoute,proposalHash:'invalid'},{...value.savedRoute,receiptId:null}])expect(cableWorkflowRowSchema.safeParse({...value,savedRoute}).success).toBe(false);
+    expect(cableWorkflowRowSchema.safeParse({...value,from:unavailable('missing')}).success).toBe(false);
+    expect(cableWorkflowRowSchema.safeParse({...value,cable:{...value.cable,routing:null}}).success).toBe(false);
+    expect(cableWorkflowRowSchema.safeParse({...value,calculation:{...value.calculation,automaticUpdate:{status:'pending',receiptId:null,reasonCode:null}}}).success).toBe(false);
+  });
+});
+
 describe('explicit sealed v7 item display evidence',()=>{
   const proof=()=>({schemaVersion:'wfc.pf.sealed-cable-applicability.v1' as const,dependencyVersion:'pathfinder.dependencies.v7' as const,
     projectId:id(1),jobId:id(20),cableId:id(10),proposalId:id(21),dependencyHash:'b'.repeat(64),scope:'sealed-cable-item' as const});

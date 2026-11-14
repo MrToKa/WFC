@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Pool, PoolClient } from 'pg';
 import { AUTOMATIC_PAIR_POLICY, automaticPairMandateHashInput, automaticPairProvenanceSchema, automaticPairCapacityClearProvenanceSchema, type AutomaticPairMandate } from '../../shared/pathfinderAutomaticPair.js';
 import { syntheticBarrierWriteInputs } from './barrierWriteFixtures.js';
-import { automaticPairHash } from './automaticPairReceiptProof.js';
+import { automaticPairHash, createAutomaticPairReceiptProofReader } from './automaticPairReceiptProof.js';
+import { automaticPairBaselineSnapshot, automaticPairMaterialState } from './automaticPairSnapshot.js';
 import { automaticPairIdempotencyKey, createAutomaticPairWriter } from './automaticPairWriter.js';
 import { schedulerTransaction } from './schedulerTransaction.js';
 import { createVerifiedSameEndpointReuse, type VerifiedSameEndpointReuse } from './verifiedSameEndpointReuse.js';
@@ -11,9 +12,10 @@ import { buildCableEngineRequest } from './worker.js';
 import type { BarrierCommonCalculationCollection } from './dependencies.js';
 import { automaticPairFailureOutcome } from './automaticPairProducer.js';
 import type { readCurrentPositiveCapacity } from './capacityClearWrite.js';
+import { readAutomaticPairOwnership } from './automaticPairOwnership.js';
 
 type Row = Record<string, any>;
-function fixture(options:{reuse?:VerifiedSameEndpointReuse;cableId?:string;capacityClear?:boolean;positiveCapacity?:boolean}={}) {
+function fixture(options:{reuse?:VerifiedSameEndpointReuse;cableId?:string;capacityClear?:boolean;positiveCapacity?:boolean;sequence?:number}={}) {
   const { dependencies, result, id } = syntheticBarrierWriteInputs();
   if(options.cableId)dependencies.cableId=options.cableId;
   if(options.capacityClear||options.positiveCapacity)
@@ -26,17 +28,19 @@ function fixture(options:{reuse?:VerifiedSameEndpointReuse;cableId?:string;capac
     if(result.schemaVersion==='pathfinder.model.response.v3')Object.assign(result.barriers,{proof:null,qualification:null,directSecondary:null,
       connectors:{from:null,to:null},diagnostics:{...result.barriers.diagnostics,status:'blocked'}});
   }
-  const now = Date.now(), historyId = id(81), projectId = dependencies.projectId, cableId = dependencies.cableId, jobId = id(4), actorId = id(13);
+  const now = Date.now(), offset = (options.sequence ?? 0) * 100, historyId = id(81 + offset), projectId = dependencies.projectId,
+    cableId = dependencies.cableId, jobId = id(4 + offset), actorId = id(13);
   const baseline: Row = { id: cableId, project_id: projectId, cable_id: 1, mto: 'LV', from_location: 'FROM', to_location: 'TO', cable_type_id: id(17),
     routing: '/OLD', design_length: '10', install_length: '99', cable_write_revision: '7', revision: '1', tag: 'Cable', delivery: null,
-    pull_date: null, connected_from: null, connected_to: null, tested: null, updated_at: new Date(now - 1000).toISOString() };
+    pull_date: null, connected_from: null, connected_to: null, tested: null, materials_initialized: false, materials_customized: false,
+    updated_at: new Date(now - 1000).toISOString() };
   const owned = { kind: 'automatic' as const, originReceiptId: id(60), previousReceiptId: id(60), previousReceiptSha256: 'a'.repeat(64), afterCableWriteRevision: '7', history: { id: id(61), version: '3' } };
-  const draft: AutomaticPairMandate = { schemaVersion: 'wfc.pf.automatic-pair-mandate.v1', id: id(5), projectId, jobId, cableId, actorId,
+  const draft: AutomaticPairMandate = { schemaVersion: 'wfc.pf.automatic-pair-mandate.v1', id: id(5 + offset), projectId, jobId, cableId, actorId,
     actorAdminRevision: '2', loginId: id(14), loginExpiresAt: new Date(now + 60000).toISOString(), authorityExpiresAt: new Date(now + 30000).toISOString(),
     installationEpoch: id(15), createdAt: new Date(now - 500).toISOString(), policy: AUTOMATIC_PAIR_POLICY, source: { kind: 'explicit-job' },
     requestSha256: 'b'.repeat(64), dependencyHash: automaticPairHash(dependencies), cableWriteRevision: '7', baselineSha256: automaticPairHash(baseline), ownership: owned, contentSha256: '0'.repeat(64) };
   const mandate = { ...draft, contentSha256: automaticPairHash(automaticPairMandateHashInput(draft)) };
-  const p: Row = { id: id(3), job_id: jobId, cable_id: cableId, proposal_hash: 'c'.repeat(64), dependency_hash: automaticPairHash(dependencies), status: options.capacityClear?'no_path':'calculated', dependencies, result,
+  const p: Row = { id: id(3 + offset), job_id: jobId, cable_id: cableId, proposal_hash: 'c'.repeat(64), dependency_hash: automaticPairHash(dependencies), status: options.capacityClear?'no_path':'calculated', dependencies, result,
     job_state: 'complete', cancel_requested: false, request_hash: mandate.requestSha256, item_state: 'complete', item_status: options.capacityClear?'no_path':'calculated' };
   const seal: Row = { projectId, cableId, jobId, admissionId: id(21), revisionResultSha256: 'd'.repeat(64), baselineHash: 'e'.repeat(64),
     engineResultSha256: automaticPairHash(result), ledgerHash: options.capacityClear?null:automaticPairHash(result.lengthLedger), dependencyHash: automaticPairHash(dependencies) };
@@ -57,6 +61,7 @@ function fixture(options:{reuse?:VerifiedSameEndpointReuse;cableId?:string;capac
     if (sql.includes('automatic-pair:result')) return { rows: [p] };
     if (sql.includes('automatic-pair:recovery-fence')) return { rows: [state.recovery] };
     if (sql.includes('existing-receipt')) return { rows: state.receipts.filter(r => r.idempotency_key === args[2]) };
+    if (sql.includes('automatic-pair:observation-time')) return { rows: [{ observed_at: new Date().toISOString() }] };
     if (sql.includes('write-baseline')) return { rows: [{ value: structuredClone(state.cable) }] };
     if (sql.includes('automatic-pair:write */')) {
       state.writes++; if (state.casMiss) return { rows: [] };
@@ -88,7 +93,119 @@ function fixture(options:{reuse?:VerifiedSameEndpointReuse;cableId?:string;capac
   return { state, baseline, mandate, p, seal, dependencies, result, owned, collect, ownership, mandateFence, barrierFence, snapshot, proof, applicability, fence, history, query, release,
     capacityEvidence,clearApplicability,currentPositiveCapacity,client:{query} as unknown as PoolClient,run: () => writer.apply(claim, fence), inspect: () => schedulerTransaction(pool, client => writer.inspectInTransaction(client, claim)) };
 }
+function engineeringAdmission(f: ReturnType<typeof fixture>, empty = false) {
+  if (empty) {
+    Object.assign(f.baseline, { routing: null, design_length: null }); Object.assign(f.state.cable, { routing: null, design_length: null });
+    f.mandate.ownership = { kind: 'empty' }; f.ownership.mockResolvedValue({ kind: 'empty' } as never);
+  }
+  f.mandate.baselinePolicy = { schemaVersion: 'wfc.pf.automatic-pair-engineering-snapshot.v1', materials: automaticPairMaterialState(f.baseline)! };
+  f.mandate.baselineSha256 = automaticPairHash(automaticPairBaselineSnapshot(f.baseline, f.mandate.baselinePolicy));
+  f.mandate.contentSha256 = automaticPairHash(automaticPairMandateHashInput(f.mandate));
+}
+function historicalWriterProof(fixtures: ReturnType<typeof fixture>[]) {
+  const source = (proposalId: string) => fixtures.find(f => f.p.id === proposalId)!;
+  const receipts = () => fixtures.flatMap(f => f.state.receipts);
+  const histories = () => fixtures.flatMap(f => f.state.history);
+  const query = vi.fn(async (sql: string, args: any[] = []) => {
+    if (sql.includes('automatic-pair:receipt-proof')) {
+      const r = receipts().find(r => r.id === args[2]); if (!r) return { rows: [] };
+      const f = source(r.proposal_id);
+      return { rows: [{ ...r, dependencies: f.dependencies, result: f.result, proposal_hash: f.p.proposal_hash,
+        dependency_hash: f.p.dependency_hash, job_id: f.p.job_id, status: f.p.status }] };
+    }
+    if (sql.includes('automatic-pair:historical-mandate')) {
+      const m = fixtures.find(f => f.mandate.id === args[3])?.mandate;
+      return { rows: m ? [{ record: m, record_sha256: m.contentSha256 }] : [] };
+    }
+    if (sql.includes('automatic-pair:recorded-history')) return { rows: histories().filter(h => h.id === args[1]).map(h => ({ ...h, version: '4' })) };
+    if (sql.includes('automatic-pair:latest-receipt')) return { rows: receipts().slice(-1).map(r => ({ id: r.id, provenance_version: r.provenance.schemaVersion })) };
+    if (sql.includes('automatic-pair:latest-history')) return { rows: histories().slice(-1).map(h => ({ ...h, version: '4' })) };
+    throw Error(sql);
+  });
+  const client = { query } as unknown as PoolClient;
+  const read = () => createAutomaticPairReceiptProofReader(client, undefined, { seal: vi.fn(async (_client, input) => source(input.proposalId).seal) as any });
+  return { client, read, query };
+}
 describe('automatic pair exact sealed write with transactional synthetic SQL', () => {
+  it.each([false, true])('saves a newly admitted empty pair after default material initialization, already initialized=%s', async initialized => {
+    const f = fixture(); f.baseline.materials_initialized = initialized; f.state.cable.materials_initialized = initialized;
+    engineeringAdmission(f, true);
+    const admitted = structuredClone(f.mandate);
+    Object.assign(f.state.cable, { materials_initialized: true, updated_at: new Date(Date.now() - 1).toISOString() });
+    expect(await f.run()).toMatchObject({ status: 'written' });
+    expect(f.state.cable).toMatchObject({ routing: '/A', design_length: '7', materials_initialized: true, materials_customized: false });
+    const receipt = f.state.receipts[0], p = automaticPairProvenanceSchema.parse(receipt.provenance);
+    expect(p.mandate).toEqual(admitted); expect(p.mandate.baselineSha256).toBe(automaticPairHash(receipt.before_snapshot));
+    expect(receipt.before_snapshot).not.toHaveProperty('updated_at'); expect(receipt.before_snapshot).not.toHaveProperty('materials_initialized');
+    expect(p.materialObservation?.before).toMatchObject({ initialized: true, customized: false });
+    expect(await historicalWriterProof([f]).read()({ projectId: f.mandate.projectId, cableId: f.mandate.cableId, receiptId: receipt.id }))
+      .toMatchObject({ receiptId: receipt.id, after: { routing: '/A', design_length: '7' }, afterMaterialState: { initialized: true } });
+  });
+  it.each(['routing', 'length', 'revision', 'history', 'customization', 'reset flag', 'uninitialized timestamp', 'reverse timestamp', 'future timestamp', 'unknown field'] as const)(
+    'retains the pair when the admitted engineering snapshot or material observation has an intervening %s change', async kind => {
+      const f = fixture(); engineeringAdmission(f);
+      if (kind === 'routing') f.state.cable.routing = '/MANUAL'; if (kind === 'length') f.state.cable.design_length = '11';
+      if (kind === 'revision') f.state.cable.cable_write_revision = '8';
+      if (kind === 'history') f.ownership.mockResolvedValue({ kind: 'review-required', reasonCode: 'AUTOMATIC_PAIR_HISTORY_CHANGED' } as never);
+      if (kind === 'customization') f.state.cable.materials_customized = true;
+      if (kind === 'reset flag') { f.mandate.baselinePolicy!.materials.initialized = true; f.state.cable.materials_initialized = false;
+        f.mandate.contentSha256 = automaticPairHash(automaticPairMandateHashInput(f.mandate)); }
+      if (kind === 'uninitialized timestamp') f.state.cable.updated_at = new Date().toISOString();
+      if (kind === 'reverse timestamp' || kind === 'future timestamp') Object.assign(f.state.cable, { materials_initialized: true,
+        updated_at: new Date(Date.now() + (kind === 'reverse timestamp' ? -2000 : 60000)).toISOString() });
+      if (kind === 'unknown field') f.state.cable.unrecognized_business_field = 'changed';
+      expect(await f.run()).toMatchObject({ status: 'review-required' }); expect(f.state.writes).toBe(0); expect(f.state.receipts).toHaveLength(0);
+    });
+  it('uses ordered database microseconds for material observations instead of the application millisecond clock', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-11-13T15:54:00.123Z'));
+    try {
+      const f = fixture(); engineeringAdmission(f, true);
+      Object.assign(f.state.cable, { materials_initialized: true, updated_at: '2026-11-13T15:54:00.123200Z' });
+      f.state.mutate = after => { after.updated_at = '2026-11-13T15:54:00.123456Z'; };
+      const query = f.query.getMockImplementation()!;
+      f.query.mockImplementation(async (sql, args = []) => sql.includes('automatic-pair:observation-time')
+        ? { rows: [{ observed_at: '2026-11-13T15:54:00.123999Z' }] } : query(sql, args));
+      expect(await f.run()).toMatchObject({ status: 'written' });
+      expect(f.state.receipts[0].provenance.authorizedAt).toBe('2026-11-13T15:54:00.123999Z');
+      expect(await historicalWriterProof([f]).read()({ projectId: f.mandate.projectId, cableId: f.mandate.cableId, receiptId: f.state.receipts[0].id }))
+        .toMatchObject({ afterMaterialState: { updatedAt: '2026-11-13T15:54:00.123456Z' } });
+    } finally { vi.useRealTimers(); }
+  });
+  it('retains strict full-row behavior for an already-admitted historical mandate', async () => {
+    const f = fixture(); Object.assign(f.state.cable, { materials_initialized: true, updated_at: new Date().toISOString() });
+    expect(await f.run()).toMatchObject({ status: 'review-required', code: 'AUTOMATIC_PAIR_BASELINE_CHANGED' }); expect(f.state.writes).toBe(0);
+  });
+  it.each([false, true])('retains exact receipt lineage and replay after two writes separated by default-material synchronization, projected origin=%s', async projectedOrigin => {
+    const first = fixture(); engineeringAdmission(first, true);
+    if (projectedOrigin) Object.assign(first.state.cable, { materials_initialized: true, updated_at: new Date(Date.now() - 1).toISOString() });
+    else { delete first.mandate.baselinePolicy; first.mandate.baselineSha256 = automaticPairHash(first.baseline);
+      first.mandate.contentSha256 = automaticPairHash(automaticPairMandateHashInput(first.mandate)); }
+    expect(await first.run()).toMatchObject({ status: 'written' });
+    const second = fixture({ sequence: 1 }), proof = historicalWriterProof([first, second]);
+    const firstReceipt = first.state.receipts[0], origin = (await proof.read()({ projectId: first.mandate.projectId,
+      cableId: first.mandate.cableId, receiptId: firstReceipt.id }))!;
+    expect(origin).not.toBeNull(); Object.assign(second.baseline, first.state.cable); second.state.cable = structuredClone(second.baseline);
+    const owned = { kind: 'automatic' as const, originReceiptId: origin.originReceiptId, previousReceiptId: origin.receiptId,
+      previousReceiptSha256: origin.receiptSha256, afterCableWriteRevision: origin.after.cable_write_revision, history: origin.history };
+    Object.assign(second.dependencies, { cableWriteRevision: origin.after.cable_write_revision });
+    Object.assign(second.mandate, { cableWriteRevision: origin.after.cable_write_revision, dependencyHash: automaticPairHash(second.dependencies), ownership: owned });
+    second.p.dependency_hash = second.mandate.dependencyHash; second.seal.dependencyHash = second.mandate.dependencyHash;
+    second.collect.mockResolvedValue({ dependencies: second.dependencies, cable: { cable_write_revision: second.mandate.cableWriteRevision } });
+    second.ownership.mockImplementation(async () => readAutomaticPairOwnership(proof.client, { projectId: second.mandate.projectId,
+      cableId: second.mandate.cableId, currentSnapshot: second.state.cable }, undefined, { proof: proof.read() }) as never);
+    engineeringAdmission(second);
+    Object.assign(second.state.cable, { materials_initialized: true, updated_at: new Date().toISOString() });
+    expect(await second.run()).toMatchObject({ status: 'written' });
+    const receipt = second.state.receipts[0], reloaded = await proof.read()({ projectId: second.mandate.projectId,
+      cableId: second.mandate.cableId, receiptId: receipt.id });
+    expect(reloaded).toMatchObject({ originReceiptId: firstReceipt.id, receiptId: receipt.id, after: { cable_write_revision: '9', routing: '/A' } });
+    expect(second.mandate.baselineSha256).toBe(automaticPairHash(receipt.before_snapshot));
+    second.proof.mockImplementation(async () => proof.read()({ projectId: second.mandate.projectId, cableId: second.mandate.cableId, receiptId: receipt.id }) as never);
+    second.mandateFence.mockRejectedValue(Error('Expired authority is not required for receipt reconciliation'));
+    expect(await second.run()).toEqual({ status: 'already-written', receiptId: receipt.id }); expect(second.state.writes).toBe(1);
+    first.state.history[0].change_source = 'manual';
+    expect(await proof.read()({ projectId: second.mandate.projectId, cableId: second.mandate.cableId, receiptId: receipt.id })).toBeNull();
+  });
   it.each(['empty','automatic'] as const)('writes %s pairs from a new automatic-generation source while the batch is still running',async kind=>{
     const f=fixture(),m=f.mandate;
     if(kind==='empty'){

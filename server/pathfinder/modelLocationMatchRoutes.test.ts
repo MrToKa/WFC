@@ -7,11 +7,11 @@ import type { ModelLocationMatchRepository } from './modelLocationMatch.js';
 import { PathFinderError } from './errors.js';
 import { MODEL_LOCATION_MATCH_LIMITS } from '../../shared/pathfinderModelLocationMatch.js';
 import { modelLocationMatchFixture } from './modelLocationMatchFixtures.js';
-const mocks = vi.hoisted(() => ({ verify: vi.fn(), authorize: vi.fn(), context: vi.fn(), assign: vi.fn() }));
+const mocks = vi.hoisted(() => ({ verify: vi.fn(), authorize: vi.fn(), context: vi.fn(), summary: vi.fn(), assign: vi.fn() }));
 vi.mock('../auth.js', () => ({ verifyAccessToken: mocks.verify }));
 const id = 'ed000000-0000-4000-8000-000000000001';
 beforeEach(() => { vi.resetAllMocks(); mocks.verify.mockReturnValue({ sub: id, jti: id, exp: Math.floor(Date.now() / 1000) + 3600 });
-  mocks.authorize.mockResolvedValue(undefined); mocks.context.mockResolvedValue({ synthetic: true }); mocks.assign.mockResolvedValue({ synthetic: true }); });
+  mocks.authorize.mockResolvedValue(undefined); mocks.context.mockResolvedValue({ synthetic: true }); mocks.summary.mockResolvedValue({ synthetic: true }); mocks.assign.mockResolvedValue({ synthetic: true }); });
 function request({ url = '/locations/model-match/context', method = 'GET', token = 'Bearer synthetic', length, type = 'application/json', encoding, body, query = {} }:
   { url?: string; method?: string; token?: string | null; length?: string; type?: string; encoding?: string; body?: string; query?: Record<string, string> } = {}) {
   const bytes = body === undefined ? null : Buffer.from(body), headers: Record<string, string> = { 'content-type': type };
@@ -27,6 +27,13 @@ function request({ url = '/locations/model-match/context', method = 'GET', token
   return { req, res, run };
 }
 describe('bounded model location matching admission', () => {
+  it('reads saved results under current administrator authority without accepting a caller-selected model or name scope', async () => {
+    const r = request({ url: '/locations/model-match/summary' }); await r.run();
+    expect(mocks.summary).toHaveBeenCalledExactlyOnceWith(id, expect.objectContaining({ userId: id }), expect.any(AbortSignal));
+    expect(mocks.assign).not.toHaveBeenCalled(); expect(r.res.setHeader).toHaveBeenCalledWith('Cache-Control', 'private, no-store');
+    const injected = request({ url: '/locations/model-match/summary', query: { namesSha256: 'injected' } }); await injected.run();
+    expect(injected.res.statusCode).toBe(400); expect(mocks.summary).toHaveBeenCalledTimes(1);
+  });
   it('serves only exact current context and passes other feature paths', async () => {
     const r = request(); await r.run(); expect(mocks.context).toHaveBeenCalledWith(id, expect.objectContaining({ userId: id }), expect.any(AbortSignal));
     expect(r.res.setHeader).toHaveBeenCalledWith('Cache-Control', 'private, no-store');
