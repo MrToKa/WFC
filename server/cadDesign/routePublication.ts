@@ -18,12 +18,14 @@ import { recordTrayChanges } from '../services/trayChangeLogService.js';
 import type { TrayRow } from '../models/tray.js';
 import { encodeCadOverlay } from '../pathfinder/cadOverlay.js';
 import { PathFinderError } from '../pathfinder/errors.js';
+import { markRecalculationDirty } from '../pathfinder/recalculationSchema.js';
 
 export const cadRoutePublicationRouter = Router({ mergeParams:true });
 const uuid = z.string().uuid();
 const revision = z.number().int().positive();
 const attachmentInput = z.object({instanceId:uuid,portName:z.enum(['start','end']),targetObjectRevisionId:uuid,targetPortIndex:z.number().int().min(0).max(1)}).strict();
-const publishInput = z.object({expectedRevision:revision,attachments:z.array(attachmentInput).min(1).max(2)}).strict();
+const attachedPublishInput=z.object({expectedRevision:revision,attachments:z.array(attachmentInput).min(1).max(2)}).strict();
+const publishInput=z.union([z.object({schemaVersion:z.literal('wfc.cad.route-publication.write.v3'),expectedRevision:revision}).strict(),attachedPublishInput,z.object({schemaVersion:z.literal('wfc.cad.route-publication.write.v2'),mode:z.literal('independent'),expectedRevision:revision,attachments:z.array(attachmentInput).length(0)}).strict()]);
 const withdrawInput = z.object({expectedRevision:revision}).strict();
 type Point = [number,number,number];
 export type PublicationInstance = {id:string;catalog_item_id:string;material_asset_id:string;revision:number;
@@ -169,7 +171,7 @@ export async function publicationTransaction<T>(req:Request,work:(client:PoolCli
     return work(client);
   });
 }
-export async function networkOptions(client:PoolClient,projectId:string,modelId:string) {
+export async function networkOptions(client:PoolClient,projectId:string,modelId:string,requirePorts=true) {
   const artifact=await latestArtifact(client,projectId,modelId);
   if(!artifact)return refuse('CAD_ROUTE_NETWORK_REQUIRED','Prepare the existing Path Finder network first.');
   const routing=await requirePreparedRoutingScope(client,projectId,artifact.id);
@@ -184,7 +186,7 @@ export async function networkOptions(client:PoolClient,projectId:string,modelId:
     return fitted&&/^\/[A-Z0-9][A-Z0-9_.-]*$/.test(fitted.routeCode)&&fitted.routeCode!=='/SECONDARY'
       ? fitted.ports.map((port,portIndex)=>({objectRevisionId:record.id,objectId:record.identity.objectId,portIndex,pointMetres:port.pointMetres,routeCode:fitted.routeCode,port})):[];
   });
-  if(!options.length)return refuse('CAD_ROUTE_NETWORK_PORTS_REQUIRED','The current network has no verified physical ports available for attachment.');
+  if(requirePorts&&!options.length)return refuse('CAD_ROUTE_NETWORK_PORTS_REQUIRED','The current network has no verified physical ports available for attachment.');
   return {artifact,options,routing,segmentCount:records.filter(row=>geometryObjectRevisionSchema.parse(row.record).geometry.fitted!==null).length};
 }
 const prefix='/designs/:designId/routes/:routeId';
@@ -198,7 +200,9 @@ cadRoutePublicationRouter.get(`${prefix}/attachment-options`,requireAdmin,safe(a
   res.setHeader('Cache-Control','private, no-store');res.json(result);
 }));
 cadRoutePublicationRouter.post(`${prefix}/publish`,requireAdmin,safe(async(req,res)=>{
-  const parsed=publishInput.safeParse(req.body);if(!parsed.success)return refuse('INVALID_CAD_ROUTE_PUBLICATION','Select at least one endpoint and an existing network port.',400);
+  const parsed=publishInput.safeParse(req.body);if(!parsed.success)return refuse('INVALID_CAD_ROUTE_PUBLICATION','Save the route and use its current revision before adding it to the routing network.',400);
+  const attachments='attachments' in parsed.data?parsed.data.attachments:[];
+  const requiresAttachment=attachments.length>0;
   const freeze=async(client:PoolClient)=>{
     const {projectId,designId,routeId}=req.params;
     const {group,chain,instances,transitions}=await groupInputs(client,projectId,designId,routeId);
@@ -210,30 +214,31 @@ cadRoutePublicationRouter.post(`${prefix}/publish`,requireAdmin,safe(async(req,r
     if(trayExport&&normalizeCatalogKey(group.name).replace(/^\/+|\/+$/g,'').trim().toUpperCase()!==group.tag)
       return refuse('CAD_ROUTE_TRAY_NAME_TAG_MISMATCH','This legacy route name differs from its routing identifier. Rename the route to one identifier and refresh its Trays row before publishing.');
     const model=(await client.query<{model_version_id:string}>('SELECT model_version_id FROM cad_designs WHERE project_id=$1 AND id=$2',[projectId,designId])).rows[0];
-    const {artifact,options,routing,segmentCount}=await networkOptions(client,projectId,model.model_version_id);
+    const {artifact,options,routing,segmentCount}=await networkOptions(client,projectId,model.model_version_id,requiresAttachment);
     const rules=(await client.query<{allowed_categories:string[]}>(`SELECT r.allowed_categories FROM pf_routing_purpose_rules r JOIN pf_catalog_purpose_incarnations i
       ON i.project_id=r.project_id AND i.purpose_key=r.purpose_key AND i.incarnation_id=r.purpose_incarnation_id
       WHERE r.project_id=$1 AND r.purpose_key=$2 AND i.active AND i.row_count>0`,[projectId,normalizeCatalogKey(group.purpose)])).rows[0];
     if(!rules?.allowed_categories.length)return refuse('CAD_ROUTE_PURPOSE_REQUIRED','Choose an existing configured routing purpose before publishing.');
-    const unique=new Set<string>();const selectedPorts=[];
-    for(const attachment of parsed.data.attachments){
+    const unique=new Set<string>();
+    for(const attachment of attachments){
       const endpoint=chain.endpoints.find(end=>end.instanceId===attachment.instanceId&&end.portName===attachment.portName);
       const target=options.find(option=>option.objectRevisionId===attachment.targetObjectRevisionId&&option.portIndex===attachment.targetPortIndex);
       if(!endpoint||!target)return refuse('CAD_ROUTE_ATTACHMENT_STALE','Refresh attachment choices from the current network.');
       const key=`${endpoint.instanceId}:${endpoint.portName}`;if(unique.has(key))return refuse('CAD_ROUTE_DUPLICATE_ATTACHMENT','Each route end can be attached once.');unique.add(key);
       const source=routePort(chain.instances.get(endpoint.instanceId)!,endpoint.portName);
       validateCadAttachment(source,target.port);
-      selectedPorts.push(source);
     }
     if((await client.query("SELECT id FROM trays WHERE project_id=$1 AND upper(btrim(btrim(btrim(name),'/')))=$2 AND ($3::uuid IS NULL OR id<>$3)",[projectId,group.tag,trayExport?.row.id??null])).rows.length)
       return refuse('CAD_ROUTE_TAG_CONFLICT','A project tray already uses this route tag.');
     // As in preparationPlans.ts, current policy values are cable purposes,
     // not engine classes. Per-calculation allowedRouteCodes enforces purpose.
     const mask=7;
-    const segment:CadOverlaySegment={id:`cad:${group.id}`,name:`/${group.tag}`,allowedCategoryMask:mask,pointsMetres:chain.points,ports:selectedPorts};
-    const overlay=cadOverlayPayloadSchema.parse({schemaVersion:'wfc.pf.cad-overlay-payload.v1',projectId,modelVersionId:model.model_version_id,baseSnapshotSha256:artifact.snapshot_sha256,segments:[segment]});
+    const segment:CadOverlaySegment={id:`cad:${group.id}`,name:`/${group.tag}`,allowedCategoryMask:mask,pointsMetres:chain.points,
+      ports:chain.endpoints.map(endpoint=>routePort(chain.instances.get(endpoint.instanceId)!,endpoint.portName))};
+    const overlay=cadOverlayPayloadSchema.parse({schemaVersion:'wfc.pf.cad-overlay-payload.v3',projectId,modelVersionId:model.model_version_id,baseSnapshotSha256:artifact.snapshot_sha256,segments:[segment]});
     const previous=routing.cadOverlay?cadOverlayPayloadSchema.parse(JSON.parse(Buffer.from(routing.cadOverlay.payloadBase64,'base64').toString('utf8'))).segments:[];
-    const verifiedOverlay=encodeCadOverlay({...overlay,segments:[...previous,...overlay.segments]});
+    const compositeSegments=[...previous,...overlay.segments];
+    const verifiedOverlay=encodeCadOverlay({...overlay,segments:compositeSegments});
     const fingerprint=createHash('sha256').update(canonicalPurposeJson({group:{id:group.id,revision:group.revision,tag:group.tag,purpose:group.purpose},material,routing,transitions,
       trayExport:trayExport?{trayId:trayExport.row.id,sourceSha256:trayExport.sourceSha256,projection:trayExport.projection}:null,
       artifactId:artifact.id,verifiedOverlay,sources:instances.map(row=>({id:row.id,revision:row.revision,assetId:row.material_asset_id,sha256:row.source_sha256,lengthMm:row.cut_length_mm}))})).digest('hex');
@@ -261,15 +266,16 @@ cadRoutePublicationRouter.post(`${prefix}/publish`,requireAdmin,safe(async(req,r
       await recordTrayChanges(client,req.userId!,null,inserted.rows[0]);
     }
     const publication={schemaVersion:'wfc.cad.route-publication.v1',baseArtifactId:artifact.id,overlay,traySnapshot,trayInBaseCatalog:Boolean(trayExport),
-      trayExportSourceSha256:trayExport?.sourceSha256??null,attachments:parsed.data.attachments,
+      trayExportSourceSha256:trayExport?.sourceSha256??null,attachments,
       routingTransitions:transitions.map(link=>({id:link.id,kind:link.kind,sourceInstanceId:link.source_instance_id,sourcePortName:link.source_name,
         targetInstanceId:link.target_instance_id,targetPortName:link.target_name,
         pointsMetres:[routePort(chain.instances.get(link.source_instance_id)!,link.source_name).pointMetres,routePort(chain.instances.get(link.target_instance_id)!,link.target_name).pointMetres]})),
-      sources:instances.map(row=>({instanceId:row.id,instanceRevision:row.revision,catalogItemId:row.catalog_item_id,assetId:row.material_asset_id,sha256:row.source_sha256,lengthMm:row.cut_length_mm})),publishedAt:new Date().toISOString()};
+      mode:'automatic',sources:instances.map(row=>({instanceId:row.id,instanceRevision:row.revision,catalogItemId:row.catalog_item_id,assetId:row.material_asset_id,sha256:row.source_sha256,lengthMm:row.cut_length_mm})),publishedAt:new Date().toISOString()};
     await client.query(`UPDATE cad_route_groups SET status='published',project_tray_id=$4,publication=$5::jsonb,revision=revision+1,updated_at=now()
       WHERE project_id=$1 AND design_id=$2 AND id=$3`,[projectId,designId,routeId,trayId,JSON.stringify(publication)]);
     // Validate the exact composite scope before committing a claim of usability.
     await requirePreparedRoutingScope(client,projectId,artifact.id);
+    await markRecalculationDirty(client,{projectId,domain:'geometry',reason:'CAD_ROUTE_PUBLISHED',sourceRevision:`${routeId}:${group.revision+1}`});
     return {id:routeId,status:'published',revision:group.revision+1,projectTrayId:trayId,lengthMetres:chain.lengthMetres};
   });
   res.json(result);
@@ -291,6 +297,7 @@ cadRoutePublicationRouter.post(`${prefix}/withdraw`,requireAdmin,safe(async(req,
       WHERE project_id=$1 AND design_id=$2 AND id=$3`,[projectId,designId,routeId]);
     if(!trayExport)await client.query('DELETE FROM trays WHERE project_id=$1 AND id=$2',[projectId,group.project_tray_id]);
     await readRoutingPolicyScope(client,projectId);
+    await markRecalculationDirty(client,{projectId,domain:'geometry',reason:'CAD_ROUTE_WITHDRAWN',sourceRevision:`${routeId}:${group.revision+1}`});
     return {id:routeId,status:'draft',revision:group.revision+1};
   });res.json(result);
 }));

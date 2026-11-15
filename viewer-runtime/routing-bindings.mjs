@@ -12,8 +12,9 @@ const root = value => typeof value === 'string' && /^dbid:(?:0|[1-9][0-9]*)$/.te
 /** Descriptor shape stays closed and unchanged; server authorization pins the
  * session selection revision, and the frame pins its first value per load.
  */
-export function parseRoutingBindings(value, descriptor, selectionRevision) {
+export function parseRoutingBindings(value, descriptor, selectionRevision, requestedKeys) {
   try {
+    const requested = requestedKeys === undefined ? null : new Set(requestedKeys);
     if (!exact(value, ['schemaVersion', 'modelVersionId', 'contentFingerprint', 'selectionRevision', 'aggregateId', 'bindings']) ||
         value.schemaVersion !== 'wfc.viewer.routing-bindings.v1' || !uuid(value.modelVersionId) ||
         value.modelVersionId !== descriptor?.modelVersionId || value.contentFingerprint !== descriptor?.contentFingerprint ||
@@ -25,7 +26,7 @@ export function parseRoutingBindings(value, descriptor, selectionRevision) {
     for (const binding of value.bindings) {
       if (!exact(binding, ['routeName', 'rootObjectIds']) || typeof binding.routeName !== 'string' ||
           !/^\/[A-Z0-9][A-Z0-9_.-]*$/.test(binding.routeName) || binding.routeName.length > 500 || binding.routeName === '/SECONDARY' ||
-          routes.has(binding.routeName) || !array(binding.rootObjectIds) || !binding.rootObjectIds.length) return null;
+          routes.has(binding.routeName) || requested && !requested.has(binding.routeName.slice(1)) || !array(binding.rootObjectIds) || !binding.rootObjectIds.length) return null;
       routes.add(binding.routeName);
       for (const id of binding.rootObjectIds) {
         if (!root(id) || roots.has(id) || roots.size >= ROUTING_BINDINGS_LIMITS.roots) return null;

@@ -201,6 +201,7 @@ namespace AddinRibbon.Routing
                     if ((i & 127) == 0) token.ThrowIfCancellationRequested(); var piece = pieces[i];
                     writer.Write(piece.Segment); GraphPreparationCache.WritePoint(writer, piece.Start); GraphPreparationCache.WritePoint(writer, piece.End);
                     writer.Write(piece.Along); writer.Write(piece.Length); writer.Write(piece.EndsOnly); writer.Write(piece.HasStartPort); writer.Write(piece.HasEndPort);
+                    writer.Write(piece.Independent);
                     writer.Write(piece.Bounds.MinX); writer.Write(piece.Bounds.MinY); writer.Write(piece.Bounds.MinZ); writer.Write(piece.Bounds.MaxX); writer.Write(piece.Bounds.MaxY); writer.Write(piece.Bounds.MaxZ);
                     writer.Write(piece.VerifiedPorts.Count);
                     foreach (var port in piece.VerifiedPorts)

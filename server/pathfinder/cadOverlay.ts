@@ -16,6 +16,15 @@ export function encodeCadOverlay(value: unknown): CadOverlayEnvelope {
   return cadOverlayEnvelopeSchema.parse({schemaVersion:'wfc.pf.cad-overlay.v1',sha256:createHash('sha256').update(bytes).digest('hex'),payloadBase64:bytes.toString('base64')});
 }
 
+/** A current computational view, never a rewrite of sealed publication bytes.
+ * Historical v1/v2 envelopes remain readable by their original native policy. */
+export function automaticCadOverlayView(value:unknown){
+  const parsed=cadOverlayPayloadSchema.parse(value);
+  return cadOverlayPayloadSchema.parse({...parsed,schemaVersion:'wfc.pf.cad-overlay-payload.v3',segments:parsed.segments.map(segment=>{
+    const {independent:_historicalIsolation,...automatic}=segment;return automatic;
+  })});
+}
+
 /** Additive provenance: the old immutable artifact is never restamped with new tokens.
  * Every non-CAD catalog row must still have the exact originally prepared projection. */
 export async function readCadOverlay(client: PoolClient, projectId: string, artifactId: string,
@@ -50,11 +59,11 @@ export async function readCadOverlay(client: PoolClient, projectId: string, arti
   for (const row of [...active,...retired]) {
     const publication = row.publication as {baseArtifactId?:string;overlay?:unknown};
     if (publication?.baseArtifactId !== artifactId) throw new PathFinderError('CAD_ROUTE_BASE_CHANGED',409,'Withdraw and republish CAD routes against the current prepared network.');
-    const payload = cadOverlayPayloadSchema.parse(publication.overlay);
+    const payload = automaticCadOverlayView(publication.overlay);
     if (payload.projectId!==projectId || payload.modelVersionId!==modelVersionId || payload.baseSnapshotSha256!==snapshotSha256)
       throw new PathFinderError('CAD_ROUTE_BASE_CHANGED',409);
     if(row.status==='published')segments.push(...payload.segments);
   }
   if(!segments.length)return 'retired-base-proof';
-  return encodeCadOverlay({schemaVersion:'wfc.pf.cad-overlay-payload.v1',projectId,modelVersionId,baseSnapshotSha256:snapshotSha256,segments});
+  return encodeCadOverlay({schemaVersion:'wfc.pf.cad-overlay-payload.v3',projectId,modelVersionId,baseSnapshotSha256:snapshotSha256,segments});
 }

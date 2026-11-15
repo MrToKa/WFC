@@ -27,8 +27,8 @@ internal static class Program
             Run("Parallel overlapping centreline contacts avoid artificial detours", ParallelOverlap);
             Run("Physical bend ports retain all curve vertices and interior object attachment", PhysicalBendPorts);
             Run("Port-only segments retain port projections, gaps and paired curves", PortContacts);
-            Run("One connection gap wins over two shorter gaps and a shorter cable", ConnectionGapCountPreference);
-            Run("Equal connection counts choose the smallest summed gap distance", ConnectionGapDistancePreference);
+            Run("Shorter physical cable wins over a longer one-gap corridor", ConnectionGapCountPreference);
+            Run("Shorter physical cable wins over a smaller summed gap distance", ConnectionGapDistancePreference);
             Run("Tied gap count and gap distance choose the shortest cable", ConnectionGapLengthTiebreaker);
             Run("Continuous contact, tray travel and endpoint legs do not count as gaps", ContinuousConnectionGapMetrics);
             Run("Connection gap metrics survive Reverse and repeated requests", ConnectionGapRepeatability);
@@ -368,11 +368,11 @@ internal static class Program
         Near(24, oneOnly.LengthMeters, "The one-gap alternative has a five-metre outward and return detour.");
         Near(14, twoOnly.LengthMeters, "The two-gap alternative follows the shorter straight corridor.");
         var chosen = GapRoute(GapNetwork(longer, shorter));
-        Assert(chosen.Success && chosen.SegmentIds.Contains("z-one-first") && !chosen.SegmentIds.Any(id => id.StartsWith("a-two")),
-            "One gap must win even when it has a greater total gap distance and a longer cable.");
-        Assert(chosen.ConnectionGapCount == 1, "The preferred path must report its actual one gap.");
-        Near(0.2, chosen.ConnectionGapLengthMeters, "Preferred one-gap distance.");
-        Near(24, chosen.LengthMeters, "Gap-count priority must not secretly retain the shorter cable path.");
+        Assert(chosen.Success && chosen.SegmentIds.Contains("a-two-first") && !chosen.SegmentIds.Contains("z-one-first"),
+            "The shorter admissible cable must win despite its additional connection gap.");
+        Assert(chosen.ConnectionGapCount == 2, "The selected path must report both actual gaps.");
+        Near(0.1, chosen.ConnectionGapLengthMeters, "Selected two-gap distance.");
+        Near(14, chosen.LengthMeters, "Physical cable length is the primary objective.");
     }
 
     private static void ConnectionGapDistancePreference()
@@ -388,11 +388,11 @@ internal static class Program
         Near(24, lowOnly.LengthMeters, "Smaller total gaps require the longer tray corridor.");
         Near(14, highOnly.LengthMeters, "Larger total gaps permit the shorter tray corridor.");
         var chosen = GapRoute(GapNetwork(lowerTotal, higherTotal));
-        Assert(chosen.Success && chosen.SegmentIds.Contains("z-low-total-middle") && !chosen.SegmentIds.Any(id => id.StartsWith("a-high-total")),
-            "Equal gap counts must compare the sum of all gap distances before cable length or the smallest individual gap.");
+        Assert(chosen.Success && chosen.SegmentIds.Contains("a-high-total-middle") && !chosen.SegmentIds.Contains("z-low-total-middle"),
+            "A smaller sum of gaps cannot displace the shorter admissible cable.");
         Assert(chosen.ConnectionGapCount == 2, "Preferred path gap count.");
-        Near(0.1, chosen.ConnectionGapLengthMeters, "Preferred path total gap distance.");
-        Near(24, chosen.LengthMeters, "Smaller total gap distance outranks the shorter cable route.");
+        Near(0.23, chosen.ConnectionGapLengthMeters, "Selected path total gap distance remains measured.");
+        Near(14, chosen.LengthMeters, "Physical cable length outranks total gap distance.");
     }
 
     private static void ConnectionGapLengthTiebreaker()
@@ -441,9 +441,9 @@ internal static class Program
         var from = P(-2, -3); var to = P(12, -1);
         var baseline = GapRoute(trays, from, to);
         Assert(baseline.Success && baseline.FromRequiresSecondary && !baseline.ToRequiresSecondary, "The fixture has one secondary attachment leg.");
-        Assert(baseline.ConnectionGapCount == 1, "Only the selected cross-tray gap counts.");
-        Near(0.2, baseline.ConnectionGapLengthMeters, "Attachment distances are excluded from the gap sum.");
-        Near(28, baseline.LengthMeters, "Both attachment lengths remain in the total.");
+        Assert(baseline.ConnectionGapCount == 2, "Only the selected cross-tray gaps count.");
+        Near(0.1, baseline.ConnectionGapLengthMeters, "Attachment distances are excluded from the gap sum.");
+        Near(18, baseline.LengthMeters, "Both attachment lengths remain in the shortest total.");
         var reverse = baseline.Reverse();
         Assert(reverse.ConnectionGapCount == baseline.ConnectionGapCount && reverse.ConnectionGapLengthMeters == baseline.ConnectionGapLengthMeters,
             "Reverse must preserve both gap metrics.");

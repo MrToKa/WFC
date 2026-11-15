@@ -11,6 +11,8 @@ import { pathFinderRequestDeadline } from '@/api/pathfinderRequestDeadline';
 import { barrierCaptureErrorMessage } from '../../../../viewer-runtime/barrier-capture-errors.mjs';
 import { AUTOMATIC_PAIR_POLICY } from '../../../../shared/pathfinderAutomaticPair';
 import { requalifyStaleCableEndpoints, hasPendingEndpointRequalification } from '@/api/pathfinderEndpointRequalification';
+import { createStoredRouteDisplay, type StoredRouteDisplay } from '@/viewer/storedRouteDisplay';
+import type { RouteCheckResult } from '@/viewer/routeValidation';
 
 export type ProjectPreparationViewer = {
   readSelection: ViewerController['readSelection'];
@@ -26,7 +28,7 @@ export type ProjectPreparationViewer = {
 
 type Options = { projectId: string | null; loadedProjectId: string | null; token: string | null; isAdmin: boolean; container: RefObject<HTMLDivElement | null>; automaticStatePolling?: boolean };
 type View = { data: PathFinderState | null; loading: boolean; busy: boolean; error: string | null; viewerPhase: 'loading' | 'ready' | 'no-model' | 'error'; viewerMessage: string };
-type Run = { closed: boolean; abort: AbortController; viewer: ViewerController | null; modelVersionId: string | null; selectionRevision: string | null; contentFingerprint: string | null; generation: number; captureProgressAt: number | null; stateRead: Promise<PathFinderState | null> | null };
+type Run = { closed: boolean; abort: AbortController; viewer: ViewerController | null; storedRoute: StoredRouteDisplay | null; modelVersionId: string | null; selectionRevision: string | null; contentFingerprint: string | null; generation: number; captureProgressAt: number | null; stateRead: Promise<PathFinderState | null> | null };
 // Cosmetic text only. Capture protocol, geometry assembly and terminal/auth
 // updates retain their original delivery; dropping progress needs no timer.
 const CAPTURE_PROGRESS_INTERVAL_MILLISECONDS = 1000;
@@ -112,7 +114,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
     finally { if (run.stateRead === pending) run.stateRead = null; }
   }, [accessFailure, isAdmin, live, projectId, token, update]);
   useEffect(() => {
-    const run: Run = { closed: false, abort: new AbortController(), viewer: null, modelVersionId: null, selectionRevision: null, contentFingerprint:null, generation: revision, captureProgressAt: null, stateRead: null };
+    const run: Run = { closed: false, abort: new AbortController(), viewer: null, storedRoute: null, modelVersionId: null, selectionRevision: null, contentFingerprint:null, generation: revision, captureProgressAt: null, stateRead: null };
     runRef.current = run; dataRef.current = null; renderedScope.current = scope; setView(initial);
     if (!projectId || !token || !isAdmin || projectId !== loadedProjectId || !container.current) {
       update(run, { loading: false, viewerPhase: 'error', viewerMessage: 'Current administrator project access is required.', error: 'Path Finder is available only to administrators.' });
@@ -129,6 +131,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
         if (!model || model.health !== 'healthy' || models.selection.activeModelVersionId !== run.modelVersionId || String(models.selection.selectionRevision) !== run.selectionRevision) throw new Error('Active model unavailable');
         const onEvent = (event: ViewerEvent) => {
           if (!live(run)) return;
+          run.storedRoute?.onEvent(event);
           if (event.type === 'RUNTIME_READY' && run.modelVersionId) void run.viewer?.load(run.modelVersionId);
           if (event.type === 'MODEL_LOADING') update(run, { viewerPhase: 'loading', viewerMessage: 'Loading the protected model…' });
           if (event.type === 'MODEL_LOADED') update(run, { viewerPhase: 'ready', viewerMessage: 'The active model is ready.' });
@@ -143,9 +146,19 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
         };
         run.viewer = new ViewerController({ container: container.current!, projectId, token, onEvent,
           onCaptureTiming: timing => { console.debug('WFC capture host timing', timing); } });
+        const viewer = run.viewer;
+        run.storedRoute = createStoredRouteDisplay({ viewer, projectId, token,
+          isCurrent: () => {
+            const model = dataRef.current?.activeModel;
+            return live(run) && run.viewer === viewer && latestView.current.viewerPhase === 'ready'
+              && model?.modelVersionId === run.modelVersionId && model.selectionRevision === run.selectionRevision
+              && model.contentFingerprint === run.contentFingerprint;
+          },
+          onAccessFailure: error => accessFailure(run, new PathFinderApiError(error.code, error.status ?? 403)),
+        });
       } catch (error) { if (live(run)) { accessFailure(run, error); update(run, { loading: false, viewerPhase: 'error', viewerMessage: 'The active model is unavailable. Refresh to check again.', error: message(error) }); } }
     })();
-    return () => { run.closed = true; run.abort.abort(); run.viewer?.dispose('unmount'); };
+    return () => { run.storedRoute?.cancel(); run.closed = true; run.abort.abort(); run.viewer?.dispose('unmount'); };
   }, [accessFailure, captureProgress, container, isAdmin, live, loadedProjectId, projectId, refresh, revision, scope, token, update]);
   const perform = useCallback(async <T,>(operation: (data: PathFinderState, run: Run) => Promise<T>, options: { refresh?: boolean } = {}): Promise<T | null> => {
     const run = runRef.current, data = dataRef.current;
@@ -431,7 +444,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
       if (busy()) return false;
       ++trayDisplaySequence.current;
     }
-    try { if (objectIds === null) await viewer.hideTray(); else await viewer.showTray(objectIds); return current(); }
+    try { run.storedRoute?.clear(); if (objectIds === null) await viewer.hideTray(); else await viewer.showTray(objectIds); return current(); }
     catch (error) { if (current() && !(error instanceof DOMException && error.name === 'AbortError')) update(run, { error: message(error) }); return false; }
   }, [isAdmin, live, update]);
   const showTray = useCallback((expected: Pick<PreparationScope, 'modelVersionId' | 'contentFingerprint' | 'selectionRevision'>, ids: number[]) => displayTray(expected, ids), [displayTray]);
@@ -439,9 +452,17 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
   // Result invalidation, Save and tool changes clear stale appearance only.
   // Fitting the whole model belongs to the explicit Restore view action.
   const clear = useCallback((options: { preserveCamera?: boolean } = {}) => {
+    runRef.current?.storedRoute?.cancel();
     try { runRef.current?.viewer?.clear('user', { preserveCamera: options.preserveCamera !== false }); }
     catch { /* A terminal viewer is already closed. */ }
   }, []);
+  const showStoredRoute = useCallback((rawRouting: string, cableId: string, options: {signal?:AbortSignal} = {}): Promise<RouteCheckResult | null> => {
+    const run = runRef.current;
+    if (!run || !live(run) || !isAdmin || latestView.current.busy || projectPreparationCapture.current || planningCapture.current || lookupCapture.current)
+      return Promise.resolve(null);
+    return run.storedRoute?.show(rawRouting, cableId, options) ?? Promise.resolve(null);
+  }, [isAdmin, live]);
+  const clearStoredRoute = useCallback(() => { runRef.current?.storedRoute?.clear(); }, []);
   return { ...visible, preparationAccess: scope, preparationViewerGeneration: visible.viewerPhase === 'ready' ? runRef.current?.generation ?? -1 : -1, runProjectPreparation, refresh: () => { if (visible.viewerPhase === 'error') setRevision(value => value + 1); else void refresh(runRef.current, true); }, refreshState: () => refresh(runRef.current, true), reloadViewer: () => setRevision(value => value + 1), action, actionWithoutRefresh, matchAll, saveLocation, uploadSnapshot, calculate, submitCalculation, readProposal, readJob, reviewProposal, prepareModel, startLookup, readLookup, startPreview, readPreview,
     pickPoint: (): Promise<PickedPoint | null> => viewerAction(viewer => viewer.pickPoint()), cancelPicking: () => runRef.current?.viewer?.cancelPicking(),
     readObjects: (query: string, cursor = 0): Promise<ViewerModelObjectsPage | null> => viewerAction(viewer => viewer.readModelObjects(cursor, query)),
@@ -457,6 +478,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
       } catch { return null; }
     },
     showLocation: async (sdkObjectId: number, sdkObjectIds?: number[]): Promise<boolean> => {
+      runRef.current?.storedRoute?.clear();
       const objectIds = sdkObjectIds ? [...sdkObjectIds] : undefined;
       return (await viewerAction(async viewer => {
         const expected = visible.data?.activeModel, run = runRef.current;
@@ -467,6 +489,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
       })) === true;
     },
     showLocationPoint: async (point: CanonicalPoint, expected: Pick<PreparationScope, 'modelVersionId' | 'selectionRevision' | 'contentFingerprint'>): Promise<boolean> => {
+      runRef.current?.storedRoute?.clear();
       const target = { ...expected }, savedPoint = [...point] as CanonicalPoint;
       return (await viewerAction(async viewer => {
         const run = runRef.current;
@@ -484,5 +507,6 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
     },
     setPathTransparency: (percent: number) => viewerAction(viewer => viewer.setPathTransparency(percent)),
     cancelOperation: () => { projectPreparationCapture.current?.abort(); planningCapture.current?.abort(); lookupCapture.current?.abort(); entityReads.current.proposal?.abort(); entityReads.current.job?.abort(); for (const read of isolatedEntityReads.current) read.abort(); runRef.current?.viewer?.cancelPicking(); clear(); },
-    showPath: (path: ComputedPath) => viewerAction(viewer => viewer.showComputedPath(path)), clear, zoom: () => { try { runRef.current?.viewer?.zoom(); } catch { /* No committed path. */ } } };
+    showStoredRoute, clearStoredRoute,
+    showPath: (path: ComputedPath) => { runRef.current?.storedRoute?.clear(); return viewerAction(viewer => viewer.showComputedPath(path)); }, clear, zoom: () => { try { runRef.current?.viewer?.zoom(); } catch { /* No committed path. */ } } };
 }

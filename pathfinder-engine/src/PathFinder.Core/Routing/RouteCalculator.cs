@@ -86,13 +86,13 @@ namespace AddinRibbon.Routing
                     if (!RoutePoint.IsFinite(length))
                         return RouteResult.Failure("The selected tray geometry contains a length outside the supported coordinate range.");
                     if (length > 0) pieces.Add(new Piece(segmentIndex, start, end, along, length,
-                        tray.ConnectionsAtEndsOnly, pieces.Count == pieceOffset, tray.VerifiedPorts, tray.ConnectionSurfaces));
+                        tray.ConnectionsAtEndsOnly, pieces.Count == pieceOffset, tray.VerifiedPorts, tray.ConnectionSurfaces, tray.Independent));
                     vertices.Add(new Vertex(along, start));
                     along += length;
                 }
                 if (pieces.Count == pieceOffset)
                     pieces.Add(new Piece(segmentIndex, tray.Points[0], tray.Points[0], 0, 0,
-                        tray.ConnectionsAtEndsOnly, true, tray.VerifiedPorts, tray.ConnectionSurfaces));
+                        tray.ConnectionsAtEndsOnly, true, tray.VerifiedPorts, tray.ConnectionSurfaces, tray.Independent));
                 var lastPiece = pieces[pieces.Count - 1];
                 lastPiece.SetEndPort();
                 pieces[pieces.Count - 1] = lastPiece;
@@ -586,17 +586,18 @@ namespace AddinRibbon.Routing
             internal readonly RoutePoint Start, End;
             internal readonly double Along, Length;
             internal Bounds Bounds;
-            internal readonly bool EndsOnly, HasStartPort;
+            internal readonly bool EndsOnly, HasStartPort, Independent;
             internal readonly IReadOnlyList<RouteConnectionPort> VerifiedPorts;
             internal readonly IReadOnlyList<TrayMeshClearance> Surfaces;
             internal bool HasEndPort;
             internal Piece(int segment, RoutePoint start, RoutePoint end, double along, double length,
                 bool endsOnly, bool hasStartPort, IReadOnlyList<RouteConnectionPort> verifiedPorts,
-                IReadOnlyList<TrayMeshClearance> surfaces)
+                IReadOnlyList<TrayMeshClearance> surfaces, bool independent)
             {
                 Segment = segment; Start = start; End = end; Along = along; Length = length;
                 Bounds = new Bounds(start, end);
                 EndsOnly = endsOnly; HasStartPort = hasStartPort; HasEndPort = false;
+                Independent = independent;
                 VerifiedPorts = verifiedPorts;
                 Surfaces = surfaces;
                 if (surfaces.Count != 0 && (!endsOnly || hasStartPort))
@@ -650,6 +651,10 @@ namespace AddinRibbon.Routing
 
             internal bool AddContact(Piece first, Piece last, double firstFraction, double lastFraction, double tolerance)
             {
+                // A declared standalone chain is a separate graph component even
+                // at a coincident, compatible physical port. Its own ordered
+                // centreline edges and equipment approaches are still admitted.
+                if (first.Segment != last.Segment && (first.Independent || last.Independent)) return true;
                 var firstPoint = RoutePoint.Interpolate(first.Start, first.End, firstFraction);
                 var lastPoint = RoutePoint.Interpolate(last.Start, last.End, lastFraction);
                 double distance = firstPoint.DistanceTo(lastPoint);
@@ -899,10 +904,14 @@ namespace AddinRibbon.Routing
             }
             public int CompareTo(PathCost other)
             {
+                // Connection tolerance and collision checks decide admissibility.
+                // Among admissible paths minimize actual cable geometry first;
+                // fewer/measured-smaller gaps only resolve an equal length.
+                int physical = PhysicalLength.CompareTo(other.PhysicalLength);
+                if (physical != 0) return physical;
                 int count = GapCount.CompareTo(other.GapCount);
                 if (count != 0) return count;
-                int gaps = GapRank.CompareTo(other.GapRank);
-                return gaps != 0 ? gaps : PhysicalLength.CompareTo(other.PhysicalLength);
+                return GapRank.CompareTo(other.GapRank);
             }
         }
 

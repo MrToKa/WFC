@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
+import { cadDesignEnabled } from '../cadDesign/configuration.js';
 import { canonicalPurposeJson, normalizeCatalogKey, routingCatalogDiagnostics, PURPOSE_POLICY_LIMITS } from '../../shared/pathfinderPurposePolicy.js';
 import { PREPARATION_LIMITS, preparationContextSchema, preparationPlanSchema, preparationPlanHashInput, preparationPartScopeHashInput, preparationResolutionMatchesScope, preparationResolutionSchema, type PreparationContext, type PreparationCreate, type PreparationPlan, preparationAggregateSchema, type PreparationScope } from '../../shared/pathfinderPreparation.js';
 import { readRoutingCatalog } from './catalog.js';
@@ -44,11 +45,18 @@ export async function readPreparationContext(c: PoolClient, projectId: string, o
   const catalog = await readRoutingCatalog(c, projectId,{lock}), routing = await readRoutingPolicyScope(c, projectId,{lock});
   // Current display facts are intentionally separate from the routing catalog's
   // null dimension placeholders, immutable plans and drawing proof budgets.
-  const detailRows = (await c.query<{ id: string; tray_type: unknown; width_mm: unknown; height_mm: unknown }>(
-    '/* preparation-tray-details */ SELECT id::text,tray_type,width_mm::text,height_mm::text FROM trays WHERE project_id=$1 ORDER BY id LIMIT 100001', [projectId])).rows;
+  const detailRows = (await c.query<{ id: string; tray_type: unknown; width_mm: unknown; height_mm: unknown; cad_geometry?:boolean }>(
+    cadDesignEnabled()?`/* preparation-tray-details */ SELECT t.id::text,t.tray_type,t.width_mm::text,t.height_mm::text,
+      EXISTS(SELECT 1 FROM cad_route_tray_exports e JOIN cad_designs d ON d.project_id=e.project_id AND d.id=e.design_id
+        JOIN cad_route_groups g ON g.project_id=e.project_id AND g.design_id=e.design_id AND g.id=e.route_group_id
+        WHERE e.project_id=t.project_id AND e.tray_id=t.id AND d.model_version_id=$2 AND d.status='proposed') AS cad_geometry
+      FROM trays t WHERE t.project_id=$1 ORDER BY t.id LIMIT 100001`:
+      '/* preparation-tray-details */ SELECT id::text,tray_type,width_mm::text,height_mm::text FROM trays WHERE project_id=$1 ORDER BY id LIMIT 100001',
+      cadDesignEnabled()?[projectId,model.active_model_version_id]:[projectId])).rows;
   if (detailRows.length > PURPOSE_POLICY_LIMITS.catalogRows) return fail('PREPARATION_TRAY_DETAILS_LIMIT', 413);
   const detailsById = new Map(detailRows.map(row => [row.id, { type: presentationType(row.tray_type),
     widthMm: presentationMillimetres(row.width_mm), heightMm: presentationMillimetres(row.height_mm) }]));
+  const cadTrayIds=new Set(detailRows.filter(row=>row.cad_geometry===true).map(row=>row.id));
   const state = await readPreparationState(c, projectId,{lock});
   const registry = (await c.query<{ revision: string }>(`SELECT registry_revision::text AS revision FROM pf_project_state WHERE project_id=$1${lock?' FOR UPDATE':''}`, [projectId])).rows[0];
   if (!registry) return fail('PREPARATION_REGISTRY_REQUIRED');
@@ -68,7 +76,8 @@ export async function readPreparationContext(c: PoolClient, projectId: string, o
     const allowedCategories: Array<'MV' | 'LV' | 'Control'> | undefined = rule
       ? Array.isArray(rule.allowed_categories) && rule.allowed_categories.length ? ['MV', 'LV', 'Control'] : [] : undefined;
     return { projectTrayId: row.projectTrayId, rawName: row.rawName, purposeKey: row.purposeKey, routeName, allowedCategories: allowedCategories ?? [], policyState: codes.length ? 'invalid' as const : !rule ? 'unconfigured' as const : allowedCategories?.length ? 'configured' as const : 'excluded' as const, diagnosticCodes: codes,
-      details: detailsById.get(row.projectTrayId) ?? { type: null, widthMm: null, heightMm: null } };
+      details: detailsById.get(row.projectTrayId) ?? { type: null, widthMm: null, heightMm: null },
+      ...(cadTrayIds.has(row.projectTrayId)?{geometrySource:'saved-cad-route' as const}:{}) };
   });
   for (const ids of codeNames.values()) if (ids.length > 1) for (const tray of trays) if (ids.includes(tray.projectTrayId)) { tray.diagnosticCodes.push('ROUTE_CODE_COLLISION'); tray.policyState = 'invalid'; }
   const endpointRows = (await c.query<{ name: string }>(`SELECT DISTINCT value COLLATE "C" AS name FROM cables c CROSS JOIN LATERAL(VALUES(c.from_location),(c.to_location)) e(value) WHERE c.project_id=$1 AND value IS NOT NULL AND btrim(value)<>'' ORDER BY name LIMIT 4097`, [projectId])).rows;
@@ -103,7 +112,7 @@ export function buildPreparationPlan(context: PreparationContext, input: Prepara
   for (const object of discovery.objects) parentChain(object.objectId);
   const trayIds = new Set(context.trays.map(t => t.projectTrayId));
   if (discovery.trays.length !== context.trays.length || discovery.trays.some(t => !trayIds.has(t.projectTrayId))) return fail('PREPARATION_DISCOVERY_TRAYS');
-  const excluded: string[] = [], skipped: NonNullable<PreparationPlan['requestedScope']['skippedTrays']> = [], trays: PreparationPlan['requestedScope']['trays'] = [], leafOwners = new Map<string, { trayId: string; root: string }>();
+  const excluded: string[] = [], deferredCadTrayIds:string[]=[], skipped: NonNullable<PreparationPlan['requestedScope']['skippedTrays']> = [], trays: PreparationPlan['requestedScope']['trays'] = [], leafOwners = new Map<string, { trayId: string; root: string }>();
   const sliceObjects: Array<PreparationPlan['partPlan'][number]['objects'][number]> = [];
   for (const tray of context.trays) {
     budget();
@@ -111,6 +120,9 @@ export function buildPreparationPlan(context: PreparationContext, input: Prepara
     const resolution = savedResolution && preparationResolutionMatchesScope(savedResolution.scope, context.scope) ? savedResolution : undefined;
     if (resolution?.mode === 'exclude' || tray.policyState === 'excluded') { excluded.push(tray.projectTrayId); continue; }
     if (tray.policyState !== 'configured' || !tray.purposeKey) { add(tray.policyState === 'unconfigured' ? 'PURPOSE_UNCONFIGURED' : 'TRAY_POLICY_INVALID', [tray.projectTrayId]); continue; }
+    // Saved CAD centerlines enter through verified publication, never an SDK
+    // name match. Keep their catalog dependency while capturing only base trays.
+    if(tray.geometrySource==='saved-cad-route'){excluded.push(tray.projectTrayId);deferredCadTrayIds.push(tray.projectTrayId);continue;}
     const candidates = discovery.trays.find(t => t.projectTrayId === tray.projectTrayId)!.candidateRootObjectIds;
     if (candidates.some(root => { const candidate = objects.get(root); if (!candidate) return true; const exact = normalizeCatalogKey(candidate.name); return exact !== normalizeCatalogKey(tray.rawName) && exact !== normalizeCatalogKey(tray.routeName); })) return fail('PREPARATION_EXACT_CANDIDATE_INVALID');
     // A name match in a new model is not evidence that it is the physical object
@@ -179,7 +191,7 @@ export function buildPreparationPlan(context: PreparationContext, input: Prepara
   if (!physicalLeaves.length) diagnostics.push({ code: 'NO_AUTHORIZED_ROUTING_GEOMETRY', projectTrayIds: [], objectIds: [], message: 'No usable tray geometry was found. Assign model objects to at least one configured tray, then check the trays again.' });
   const endpointEvidence = (endpointsRequested ? context.endpointNames : []).map(name => { const candidateObjectIds = [...(discovery.endpointCandidates.find(e => e.name === name)?.objectIds ?? [])].sort((a, b) => order.get(a)! - order.get(b)!); return { name, candidateObjectIds, status: candidateObjectIds.length === 0 ? 'missing' as const : candidateObjectIds.length === 1 ? 'unique_candidate' as const : 'ambiguous' as const }; });
   // Keep the current names as scope dependencies without inventing search evidence.
-  const requestedScope = { scopeKind: endpointsRequested ? 'server-requested-project-routing-and-endpoints' as const : 'server-requested-project-routing-only' as const, wholePlantGeometry: false as const, ...(input.unresolvedTrayPolicy === 'skip' ? { unresolvedTrayPolicy: 'skip' as const, skippedTrays: skipped } : {}), ...(discovery.visibilityScope ? { endpointVisibility: discovery.visibilityScope } : {}), ...(discovery.endpointScope ? { endpointScope: discovery.endpointScope } : {}), trays, endpointNames: context.endpointNames, endpointEvidence, excludedProjectTrayIds: excluded, orderedPhysicalLeafIds: physicalLeaves, orderedEquipmentObjectIds: equipmentIds, scopeSha256: '0'.repeat(64) };
+  const requestedScope = { scopeKind: endpointsRequested ? 'server-requested-project-routing-and-endpoints' as const : 'server-requested-project-routing-only' as const, wholePlantGeometry: false as const, ...(deferredCadTrayIds.length?{deferredCadTrayIds}:{}), ...(input.unresolvedTrayPolicy === 'skip' ? { unresolvedTrayPolicy: 'skip' as const, skippedTrays: skipped } : {}), ...(discovery.visibilityScope ? { endpointVisibility: discovery.visibilityScope } : {}), ...(discovery.endpointScope ? { endpointScope: discovery.endpointScope } : {}), trays, endpointNames: context.endpointNames, endpointEvidence, excludedProjectTrayIds: excluded, orderedPhysicalLeafIds: physicalLeaves, orderedEquipmentObjectIds: equipmentIds, scopeSha256: '0'.repeat(64) };
   const { scopeSha256: _scopeHash, ...scopeInput } = requestedScope;
   requestedScope.scopeSha256 = preparationDigest(scopeInput);
   const partial = { schemaVersion: 'wfc.pf.preparation-plan.v1' as const, id, projectId: context.projectId, ...context.scope, coordinateFrameId: preparationFrameId(context.projectId, context.scope.modelVersionId, context.scope.contentFingerprint), matchingPolicyVersion: discovery.matchingPolicyVersion, partitionAlgorithmVersion: 'wfc.pf.ordered-partition.v1' as const, limitsProfile, requestedScope, partPlan, objectManifest: ordered, objectOrder: ordered.map(o => toDbId(o.objectId)), diagnostics, orderedPlanSha256: '0'.repeat(64) };

@@ -1,0 +1,15 @@
+# Physical shortest admissible routing
+
+For Aalborg cable `000610bb-94a5-4807-907e-ac068271f7f6` (`=L3=JL1+1=WDB1`), old automatic routing returned 121 m while the ordered manual sequence calculated 117 m. Root cause: PathCost ranked gap count, quantized gap distance, then physical length. WeightedPathCost also ranked gaps first, then soft balancing before physical length.
+
+Only two production cost comparators changed: physical length is first in both. Soft balancing ranks exact physical ties only, followed by deterministic gap tie breakers. Edge generation, project connection gap, barriers, purpose eligibility and hard capacity exclusions are unchanged. Persisted graph recipes contain geometry/contact structure, not cost/path results, so they are safely reused under fresh engine identity. Endpoint-pair enumeration remains the existing bounded strategy; this change is not a proof of a global optimum over every conceivable endpoint approach.
+
+Actual same-input replay: old weighted and unweighted 121 m; diagnostic selection-length-first weighted 115 m versus unweighted 109 m; final physical-first with all original 330 weights 109 m. No hard exclusions were present. Final path raw length 89.1685430682 m, 29 measured gaps totalling 19.16453 m under the existing 1 m connection gap. All 171 path segments clear against active registered barrier snapshot revision 7, drilling false. Independent polyline sum agrees within 2.84e-14 m; no repeated exact physical points/edges or zero legs. Repeated route names are separate physical portions.
+
+Formula: ceil((89.1685430682 - 2.1758035716 + 7 + 5) * 1.10) = 109 m. Fresh ordered-manual replay with the final engine improves its own historical 117 m result to 111 m (raw 90.7308375137). The stored protected Design value remains 107 m; no route or Design Apply was performed.
+
+331/331 Release checks pass across Regression 113, Constrained 96, Capacity 16, GraphReuse 42, InterTray 33 and ManualOrdered 31. Release dense performance 11028 ms under unchanged 15000 ms limit; Debug exceeded that limit. Native runtime was frozen before build; subsequent edits changed obsolete gap-priority expectations only.
+
+Same API `224cfdee76e8d61e2ad736812b6e65050d6811d0a0fd4d5555b5a7ba2cabded4` and web `4c51ebf6f3cf75bdee932c22b0c450490958d23edb84bd6fd053bb7a29e46315` deployed to 5180/5181 with preserved environment/storage/rollback. Root pressed normal Calculate routing in the built-in browser on 5181, without Apply/Save or automatic enrollment. Fresh job `7a59f012-7f90-47ee-bf75-09b5087537a6` and proposal `cd358714-b24d-4801-912f-85a2cb6699ee` produced 109 m, current engine `6b39cc16…`, revision-7 barriers clear 171/171, drill false. The read-only automatic length record references this proposal. Stored manual route, Design 107, write revision 0 and routing control stayed unchanged; only existing panel bookkeeping updated the cable timestamp.
+
+Evidence: `D:/WFC-Test/validation/automatic-connectivity-20261115/aalborg-ui-calculation-proof.json`, `aalborg-shortest-path-replay.md`, `shortest-final-validation.json`; rollout and screenshot under `D:/WFC-Test/validation/native-shortest-path-20261115/`.

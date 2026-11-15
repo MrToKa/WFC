@@ -130,11 +130,11 @@ export function createViewerSessionService(options: { pool: Pool; clock?: () => 
       return unwrap(result);
     },
     async authorizeResource(input: ResourceIdentity): Promise<AuthorizedViewerResource> { return unwrap(await transaction(client => authorize(client,input))); },
-    async routingBindings(input: ResourceIdentity) {
+    async routingBindings(input: ResourceIdentity,routeCodes?:readonly string[]) {
       return transaction(async client => {
         const current = unwrap(await authorize(client,input));
         const result = await readViewerRoutingBindings(client, { projectId: current.session.projectId,
-          modelVersionId: current.session.modelVersionId, contentFingerprint: current.version.contentFingerprint });
+          modelVersionId: current.session.modelVersionId, contentFingerprint: current.version.contentFingerprint,...(routeCodes?{routeCodes}:{}) });
         // This read grants the ordinary model-view projection only. Recheck the
         // live session/selection/login/assignment before its transaction commits.
         const checked = unwrap(await authorize(client,input));

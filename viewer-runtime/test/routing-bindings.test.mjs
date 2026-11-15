@@ -9,6 +9,12 @@ const response = (bindings = [{ routeName: '/A105', rootObjectIds: ['dbid:2', 'd
   aggregateId: '33333333-3333-4333-8333-333333333333', bindings,
 });
 
+test('scoped responses accept only requested exact route keys',()=>{
+  assert.ok(parseRoutingBindings(response(),descriptor,'12',['A105']));
+  assert.equal(parseRoutingBindings(response(),descriptor,'12',['OTHER']),null);
+  assert.equal(parseRoutingBindings(response(),descriptor,'12',[]),null);
+});
+
 test('a detached frozen response retains one logical project route with several exact roots', () => {
   const input = response(), parsed = parseRoutingBindings(input, descriptor, '12');
   assert.deepEqual(parsed, input); assert.notEqual(parsed, input);

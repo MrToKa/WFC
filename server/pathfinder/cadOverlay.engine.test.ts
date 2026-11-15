@@ -89,4 +89,67 @@ describe('actual C# base-network plus immutable CAD overlay',()=>{
       expect(result.route?.success??false).toBe(false);
     }
   },40000);
+  it('routes both endpoints on an actual 1200 mm standalone CAD segment with its own native identity',async()=>{
+    const independent={...payload(),schemaVersion:'wfc.pf.cad-overlay-payload.v2',segments:[{...payload().segments[0],independent:true,
+      pointsMetres:[[10,3,.5],[11.2,3,.5]],ports:[{...port(10,-1),pointMetres:[10,3,.5]},{...port(11.2,1),pointMetres:[11.2,3,.5]}]}]};
+    const result=await calculate({...request(),from:{x:10,y:3,z:.5},to:{x:11.2,y:3,z:.5},cadOverlay:encodeCadOverlay(independent)});
+    expect(result.status).toBe('calculated');expect(result.route?.segmentIds).toEqual([cadId]);
+    expect(result.route?.routeCodes).toEqual(['/CAD001']);expect(result.route?.lengthMeters).toBeCloseTo(1.2,12);
+    expect(result.lengthLedger?.raw.lengthMeters).toBeCloseTo(1.2,12);expect(result.design?.designLengthMeters).toBe('2');
+  },40000);
+  it('cannot silently bridge original components through an independent CAD route at coincident real ports',async()=>{
+    const standalone=encodeCadOverlay({...payload(),schemaVersion:'wfc.pf.cad-overlay-payload.v2',segments:[{...payload().segments[0],independent:true}]});
+    const result=await calculate({...request(),cadOverlay:standalone});
+    expect(result.route?.success??false).toBe(false);
+    const attached=await calculate({...request(),cadOverlay:encodeCadOverlay(payload())});
+    expect(attached.route?.success).toBe(true);expect(attached.route?.segmentIds).toContain(cadId);
+  },40000);
+  it('materializes a standalone composite in the actual native preparation proof',async()=>{
+    const cadOverlay=encodeCadOverlay({...payload(),schemaVersion:'wfc.pf.cad-overlay-payload.v2',segments:[{...payload().segments[0],independent:true}]});
+    const result=await prepareProof({schemaVersion:'pathfinder.model.runner.v1',requestId:randomUUID(),operation:'prepare',projectId,modelVersionId,
+      snapshotId,snapshotSha256:sha,timeoutMilliseconds:30000,cadOverlay});
+    expect(result.status).toBe('prepared');expect(result.prepared).toMatchObject({segmentCount:3});
+  },40000);
+  it('native validation itself rejects disguised or incomplete standalone semantics before graph use',async()=>{
+    const rawEnvelope=(value:unknown)=>{const bytes=Buffer.from(JSON.stringify(value));return {schemaVersion:'wfc.pf.cad-overlay.v1',
+      sha256:createHash('sha256').update(bytes).digest('hex'),payloadBase64:bytes.toString('base64')};};
+    for(const value of [{...payload(),segments:[{...payload().segments[0],independent:true}]},
+      {...payload(),schemaVersion:'wfc.pf.cad-overlay-payload.v2',segments:[{...payload().segments[0],independent:true,ports:[port(10,-1)]}]},
+      {...payload(),schemaVersion:'wfc.pf.cad-overlay-payload.v2',segments:[{...payload().segments[0],independent:false}]}]){
+      const result=await calculate({...request(),cadOverlay:rawEnvelope(value)});
+      expect(result.status).toBe('invalid_request');expect(result.route?.success??false).toBe(false);
+    }
+  },40000);
+  it('automatic v3 forms the actual CAD/base component at the project gap and changes it when gap changes',async()=>{
+    const automatic={...payload(),schemaVersion:'wfc.pf.cad-overlay-payload.v3',segments:[{...payload().segments[0],
+      pointsMetres:[[10.25,0,.5],[10.5,0,.5]],ports:[port(10.25,-1),port(10.5,1)]}]};
+    const cadOverlay=encodeCadOverlay(automatic),options={...request().options,connectionToleranceMeters:.25};
+    const within=await calculate({...request(),options,cadOverlay});
+    expect(within.status).toBe('calculated');expect(within.route?.segmentIds).toContain(cadId);
+    expect(within.route?.routeCodes).toContain('/CAD001');expect(within.route?.lengthMeters).toBeCloseTo(20.5,12);
+    expect(within.route?.connectionGapCount).toBe(1);expect(within.route?.connectionGapLengthMeters).toBe(.25);
+    expect(within.lengthLedger?.raw.lengthMeters).toBeCloseTo(20.5,12);
+    const beyond=await calculate({...request(),options:{...options,connectionToleranceMeters:.25-Number.EPSILON},cadOverlay});
+    expect(beyond.route?.success??false).toBe(false);
+    expect(preparedKey(within)).toBe(preparedKey(beyond)); // The graph key must additionally bind the actual query gap.
+    const again=await calculate({...request(),options,cadOverlay});
+    expect(again.route).toEqual(within.route);
+  },40000);
+  it('automatic v3 leaves distant CAD consumers on their own 1200 mm component without isolation mode',async()=>{
+    const automatic={...payload(),schemaVersion:'wfc.pf.cad-overlay-payload.v3',segments:[{...payload().segments[0],
+      pointsMetres:[[10,3,.5],[11.2,3,.5]],ports:[{...port(10,-1),pointMetres:[10,3,.5]},{...port(11.2,1),pointMetres:[11.2,3,.5]}]}]};
+    const result=await calculate({...request(),from:{x:10,y:3,z:.5},to:{x:11.2,y:3,z:.5},cadOverlay:encodeCadOverlay(automatic)});
+    expect(result.status).toBe('calculated');expect(result.route?.segmentIds).toEqual([cadId]);
+    expect(result.route?.lengthMeters).toBeCloseTo(1.2,12);expect(result.route?.connectionGapCount).toBe(0);
+  },40000);
+  it('new automatic policy cannot masquerade as a historical isolated payload',async()=>{
+    const old=encodeCadOverlay({...payload(),schemaVersion:'wfc.pf.cad-overlay-payload.v2',segments:[{...payload().segments[0],independent:true}]});
+    const current=encodeCadOverlay({...payload(),schemaVersion:'wfc.pf.cad-overlay-payload.v3'});
+    const historical=await calculate({...request(),cadOverlay:old}),automatic=await calculate({...request(),cadOverlay:current});
+    expect(historical.route?.success??false).toBe(false);expect(automatic.route?.success).toBe(true);
+    expect(preparedKey(automatic)).not.toBe(preparedKey(historical));expect(old.sha256).not.toBe(current.sha256);
+    const bytes=Buffer.from(JSON.stringify({...payload(),schemaVersion:'wfc.pf.cad-overlay-payload.v3',segments:[{...payload().segments[0],independent:true}]}));
+    const refused=await calculate({...request(),cadOverlay:{schemaVersion:'wfc.pf.cad-overlay.v1',sha256:createHash('sha256').update(bytes).digest('hex'),payloadBase64:bytes.toString('base64')}});
+    expect(refused.status).toBe('invalid_request');
+  },40000);
 });

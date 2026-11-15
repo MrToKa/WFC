@@ -14,8 +14,8 @@ internal static class VerifiedPortTests
         run("Wrong measured normals or sections cannot prove continuous contact", IncompatiblePorts);
         run("An interior junction cannot borrow verified endpoint continuity", InteriorJunction);
         run("Compatible physical ports fifteen millimetres apart remain a gap", PhysicalGap);
-        run("Multiple proven mesh seams beat a shorter physical shortcut", ProvenBranch);
-        run("Nanometre gap-sum noise ties ranking while real micrometre differences remain decisive", GapRankingPrecision);
+        run("Physical shortest route may use an admitted gap instead of a longer proven-seam loop", ProvenBranch);
+        run("Gap ranking precision cannot displace a physically shorter route", GapRankingPrecision);
     }
 
     private static RoutePoint P(double x, double y = 0, double z = 0) { return new RoutePoint(x, y, z); }
@@ -97,12 +97,15 @@ internal static class VerifiedPortTests
             Port(P(1), -1), Port(P(4 + MeshSeam - .015), 1));
         var trays = new[] { start, longBranch, tail, shortcut };
         var route = Calculate(trays, P(0), P(5));
-        Metrics(route, 0, 0, 11);
-        Assert(route.SegmentIds.SequenceEqual(new[] { "start", "proven-loop", "tail" }),
-            "The route skipped proved physical pieces to take the shorter genuine gap.");
+        // The equal-length route can use the proven loop's final physical port
+        // without travelling around that loop, reducing its measured gap by the
+        // original seven-micrometre seam. The actual polyline still measures 5m.
+        Metrics(route, 1, .015 - MeshSeam, 5);
+        Assert(route.SegmentIds.SequenceEqual(new[] { "start", "physical-shortcut", "proven-loop", "tail" }),
+            "A proven-seam loop must not displace the shorter route through its admitted physical gap.");
         Metrics(Calculate(new[] { start, shortcut, tail }, P(0), P(5)), 1, .015, 5);
         var reverse = Calculate(trays, P(5), P(0));
-        Metrics(reverse, 0, 0, 11);
+        Metrics(reverse, 1, .015 - MeshSeam, 5);
         Assert(reverse.RouteText == route.Reverse().RouteText, "Proven-seam branch preference changed when reversed.");
     }
     private static void GapRankingPrecision()
@@ -118,14 +121,14 @@ internal static class VerifiedPortTests
             var shortFirst = Tray("z-short-first", "/C015", new[] { P(1), P(2) });
             var shortLast = Tray("z-short-last", "/C016", new[] { P(2 + lowGap + difference), P(4) });
             var trays = new[] { start, tail, longFirst, longLast, shortFirst, shortLast };
-            bool preferShort = difference < RouteCalculator.GapRankingResolutionMeters;
+            bool preferShort = true;
             double actualSelectedGap = preferShort ? lowGap + difference : lowGap;
             foreach (var enumeration in new[] { trays, trays.Reverse().ToArray() })
             {
                 var route = Calculate(enumeration, P(0), P(5));
                 Assert(route.Success && route.ConnectionGapCount == 1, "The isolated alternatives each have exactly one gap.");
                 Assert(route.SegmentIds.Contains(preferShort ? "z-short-first" : "a-long-first"),
-                    "Gap ranking either amplified nineteen-nanometre noise or ignored a real two-micrometre difference.");
+                    "Quantized or real gap differences displaced the physically shorter corridor.");
                 Assert(!route.SegmentIds.Contains(preferShort ? "a-long-first" : "z-short-first"), "A shortcut crossed the isolated alternatives.");
                 Assert(Math.Abs(route.ConnectionGapLengthMeters-actualSelectedGap)<1e-12,
                     "Reported physical gap distance was rounded to its ranking resolution.");

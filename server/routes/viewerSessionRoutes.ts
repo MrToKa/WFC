@@ -7,6 +7,7 @@ import { requireViewerOrigin, resourceManifestPath, resourceRange, validateViewe
 import { getViewerRuntime, type ViewerRuntime } from '../viewerSessions/runtime.js';
 import { viewerUuid } from '../viewerSessions/service.js';
 import type { ResourceIdentity, ViewerPrincipal, ViewerSessionDto } from '../viewerSessions/types.js';
+import {parseRoutingBindingQuery} from '../viewerSessions/routingBindings.js';
 
 function privateHeaders(res: Response): void {
   res.setHeader('Cache-Control','private, no-store');
@@ -84,7 +85,8 @@ export function createViewerSessionRouter(options: { runtime?: ViewerRuntime; po
       }
       const match = /^\/api\/projects\/([^/]+)\/model-versions\/([^/]+)\/viewer-sessions(?:\/([^/]+)(?:\/(renew|descriptor|resources|pathfinder-authorization|routing-bindings)(?:\/(.*))?)?)?\/?$/.exec(raw);
       if (!match) throw new ViewerSessionError('RESOURCE_NOT_FOUND',404);
-      validateViewerQuery(req.originalUrl,match[4] === 'resources' && ['GET','HEAD'].includes(req.method)
+      const routeCodes=match[4]==='routing-bindings'?parseRoutingBindingQuery(req.originalUrl):undefined;
+      if(match[4]!=='routing-bindings')validateViewerQuery(req.originalUrl,match[4] === 'resources' && ['GET','HEAD'].includes(req.method)
         ? `${secure ? 'https' : 'http'}://${req.header('host')}` : undefined);
       const projectId = viewerUuid(match[1]),modelVersionId = viewerUuid(match[2]);
       if (!match[3]) {
@@ -120,7 +122,7 @@ export function createViewerSessionRouter(options: { runtime?: ViewerRuntime; po
       }
       if (match[4] === 'routing-bindings') {
         if (match[5]) throw new ViewerSessionError('RESOURCE_NOT_FOUND',404);
-        json(req,res,await runtime.service.routingBindings(identity));
+        json(req,res,await (routeCodes===undefined?runtime.service.routingBindings(identity):runtime.service.routingBindings(identity,routeCodes)));
         return;
       }
       const authorized = await runtime.service.authorizeResource(identity);

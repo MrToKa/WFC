@@ -39,6 +39,14 @@ beforeEach(() => {
 afterEach(async () => { await act(async () => {}); });
 
 describe('simple project tray preparation', () => {
+  it('explains saved CAD geometry without requesting a fake model object assignment',()=>{
+    const {state,pf}=setup();
+    state.context.trays.push({...state.context.trays[0],projectTrayId:'10000000-0000-4000-8000-000000000099',rawName:'CAD001',routeName:'/CAD001',geometrySource:'saved-cad-route'});
+    render(<ProjectPreparationPanel pf={pf} active/>);
+    expect(screen.getByText('Saved CAD geometry')).toBeVisible();
+    expect(screen.getByText(/CAD routes use their saved STEP geometry/)).toHaveTextContent('CAD001');
+    expect(screen.getByRole('button',{name:'Use current model selection for CAD001'})).toBeDisabled();
+  });
   it('offers an explicit frame finish action independently of recapturing the network', () => {
     const { state, pf } = setup(); state.canFinishNetwork = true; state.networkReady = false;
     render(<ProjectPreparationPanel pf={pf} active />);

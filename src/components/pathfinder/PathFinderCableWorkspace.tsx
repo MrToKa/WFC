@@ -9,6 +9,7 @@ import { AUTOMATIC_PAIR_POLICY } from '../../../shared/pathfinderAutomaticPair';
 import { sameSupportedBarrierAdmissionIntent as sameBarrierAdmissionIntent } from '../../../shared/pathfinderBarrierSupported';
 import { fetchPathFinderCableWorkflowDetail, type CableWorkflowDetailQuery, type CableWorkflowRow } from '@/api/pathfinderCableWorkflow';
 import { fetchLocationImpacts, type LocationImpactSummary } from '@/api/pathfinderLocationImpacts';
+import { fetchCableRows } from '@/api/cables';
 import type { CableEndpointReceipt } from '@/api/pathfinderCableEndpoints';
 import { usePathfinderLocationImpactProgress } from '@/hooks/usePathfinderLocationImpactProgress';
 import { usePathfinderInitialFillProgress } from '@/hooks/usePathfinderInitialFillProgress';
@@ -134,6 +135,12 @@ export function PathFinderCableWorkspace(props: PathFinderCableWorkspaceProps) {
 function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }) {
   const [selected, setSelected] = useState<CableWorkflowRow | null>(null), [open, setOpen] = useState(false);
   const selectedRef = useRef(selected); selectedRef.current = selected;
+  const [storedDisplay,setStoredDisplay]=useState<{owner:string;working:boolean;visible:boolean;message:string}|null>(null);
+  const storedDisplayAbort=useRef<AbortController|null>(null);
+  const storedDisplayVisible=useRef(false);storedDisplayVisible.current=storedDisplay?.visible===true;
+  const storedDisplayOwner=JSON.stringify([props.accountId,props.projectId,props.token,props.active,props.pf.preparationViewerGeneration,props.pf.data?.activeModel,selected?.cable.id,selected?.cable.cableWriteRevision,selected?.cable.routing]);
+  const storedDisplayLive=useRef(storedDisplayOwner);storedDisplayLive.current=storedDisplayOwner;
+  useEffect(()=>{setStoredDisplay(null);return()=>{storedDisplayAbort.current?.abort();storedDisplayAbort.current=null;if(storedDisplayVisible.current)props.pf.clearStoredRoute?.();};},[storedDisplayOwner]);
   const verifiedRefreshScope = useRef<{ scope: string; cableId: string; jobId: string | null; proposalId: string | null; proposalHash: string | null } | null>(null);
   const [impact, setImpact] = useState<Impact | null>(null), [revision, setRevision] = useState(0), [notice, setNotice] = useState<string | null>(null);
   const [calculating, setCalculating] = useState(false);
@@ -872,6 +879,34 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
       || props.display.source === 'saved-exact' && verifiedRowMatches && displayedSelection && savedDisplayCandidate(displayedSelection))
     && !submittedCalculation && !(displayedSelection && automaticUpdatePending(displayedSelection.calculation)) && savedCalculation?.cableId !== selected.cable.id && !refreshingSelected && !selectedReadError);
   const displayMatches = displaySourceMatches && Boolean(props.display?.ready);
+  const currentStoredRouting=selected?.cable.routing?.trim()?selected.cable.routing:null;
+  const preferStoredRoute=Boolean(typeof props.pf.showStoredRoute==='function'&&currentStoredRouting&&(!displayMatches||props.display?.routing!==currentStoredRouting));
+  const storedDisplayReady=Boolean(props.active&&open&&currentStoredRouting&&props.pf.viewerPhase==='ready'&&!refreshingSelected&&!selectedReadError&&!props.pf.busy);
+  const ownedStoredDisplay=storedDisplay?.owner===storedDisplayOwner?storedDisplay:null;
+  const toggleStoredRoute=async()=>{
+    const projectId=props.projectId;
+    if(!projectId||!selected||!currentStoredRouting||!storedDisplayReady)return;
+    if(ownedStoredDisplay?.visible){storedDisplayAbort.current?.abort();props.pf.clearStoredRoute();setStoredDisplay(null);return;}
+    const owner=storedDisplayOwner,cableId=selected.cable.id,routing=currentStoredRouting,revision=selected.cable.cableWriteRevision;
+    const ticket=new AbortController();storedDisplayAbort.current?.abort();storedDisplayAbort.current=ticket;
+    const live=()=>!ticket.signal.aborted&&storedDisplayLive.current===owner;
+    setStoredDisplay({owner,working:true,visible:false,message:'Checking the current saved cable route…'});
+    try{
+      const latest=(await fetchCableRows(projectId,[cableId])).cables.find(cable=>cable.id===cableId);
+      if(!live())return;
+      if(!latest||latest.projectId!==projectId||latest.routing!==routing||String(latest.cableWriteRevision??'')!==String(revision??''))throw Error('The saved route changed. Refresh cable status before showing it.');
+      const result=await props.pf.showStoredRoute(routing,cableId,{signal:ticket.signal});
+      if(!live())return;
+      if(!result){setStoredDisplay({owner,working:false,visible:false,message:'The model display changed. Try Show again when the current model is ready.'});return;}
+      const missingProject=result.segments.filter(segment=>segment.project.state==='missing').map(segment=>segment.token);
+      const missingModel=result.segments.filter(segment=>segment.model.state==='missing').map(segment=>segment.token);
+      const ambiguous=result.segments.filter(segment=>segment.project.state==='ambiguous'||segment.model.state==='ambiguous').map(segment=>segment.token);
+      const visible=result.drawableCount>0;
+      const details=[missingProject.length?`Not in Trays: ${missingProject.join(', ')}.`:'',missingModel.length?`Not in the current model: ${missingModel.join(', ')}.`:'',ambiguous.length?`Multiple matches: ${ambiguous.join(', ')}.`:'',result.databaseCheck==='unavailable'?'The project Trays list could not be checked.':''].filter(Boolean).join(' ');
+      setStoredDisplay({owner,working:false,visible,message:`${visible?'Saved cable route shown using current model trays.':'No drawable trays were found for the saved cable route.'} ${details} This view is approximate; it does not validate barriers or recalculate the saved length.`});
+    }catch(error){if(live())setStoredDisplay({owner,working:false,visible:false,message:error instanceof Error?error.message:'The saved cable route could not be shown.'});}
+    finally{if(storedDisplayAbort.current===ticket)storedDisplayAbort.current=null;}
+  };
   // Exact proposal text can be read before its viewer foreground is ready.
   // Show still requires the complete verified display payload above.
   const displayTextMatches = displaySourceMatches && (displayedSelection?.savedRoute || selectedCalculation?.outcome === 'calculated' && selectedCalculation.itemState === 'complete'
@@ -939,12 +974,13 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
         && calculationDiagnostics.model === modelScope(props) && calculationDiagnostics.value.cableId === selected?.cable.id
         && calculationDiagnostics.value.jobId === selected?.calculation.jobId ? calculationDiagnostics.value : null}
       onRefresh={() => { void progress.refresh(); return refreshCableStatus(); }} refreshing={refreshingSelected || refreshingState} refreshError={selectedReadError}
-      onTogglePath={selected && props.onTogglePath ? () => props.onTogglePath?.(selected.cable.id) : undefined}
+      onTogglePath={preferStoredRoute?()=>void toggleStoredRoute():selected && props.onTogglePath ? () => props.onTogglePath?.(selected.cable.id) : undefined}
       onShowLocation={props.pf.viewerPhase === 'ready' ? props.pf.showLocation : undefined}
       onShowLocationPoint={props.pf.viewerPhase === 'ready' ? props.pf.showLocationPoint : undefined}
       onEndpointForegroundContexts={props.onEndpointForegroundContexts}
-      pathVisible={displayMatches && props.display?.visible}
-      pathReady={displayMatches} pathSource={displayTextMatches ? props.display?.source : null} endpointRefreshKey={endpointRefreshKey}
+      pathVisible={preferStoredRoute?Boolean(ownedStoredDisplay?.visible):Boolean(displayMatches && props.display?.visible)}
+      pathReady={preferStoredRoute?storedDisplayReady:displayMatches} pathSource={displayTextMatches ? props.display?.source : null} endpointRefreshKey={endpointRefreshKey}
+      storedRouteSelected={preferStoredRoute} storedRouteWorking={ownedStoredDisplay?.working} storedRouteMessage={ownedStoredDisplay?.message}
       calculatedRouting={displayTextMatches ? props.display?.routing : undefined}
       calculatedDesignLength={displayTextMatches ? props.display?.designLength : undefined}
       review={popupReview}

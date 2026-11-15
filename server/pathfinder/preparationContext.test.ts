@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PoolClient } from 'pg';
 const mocks = vi.hoisted(() => ({ catalog: vi.fn(), routing: vi.fn() }));
 vi.mock('./catalog.js', () => ({ readRoutingCatalog: mocks.catalog }));
@@ -7,7 +7,7 @@ import { readPreparationContext, buildPreparationPlan, preparationDigest } from 
 import { preparationContextSchema, preparationPlanHashInput, type PreparationCreate } from '../../shared/pathfinderPreparation.js';
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 let endpointRows: { name: string }[], currentModel: { state: string; health: string; content_fingerprint: string } | null;
-let detailRows: Array<{ id: string; tray_type: unknown; width_mm: unknown; height_mm: unknown }>;
+let detailRows: Array<{ id: string; tray_type: unknown; width_mm: unknown; height_mm: unknown;cad_geometry?:boolean }>;
 const query = vi.fn(async (sql: string, _params?: unknown[]) => {
   if (sql.startsWith('SELECT s.active_model_version_id')) return { rows: [{ active_model_version_id: id(2), selection_revision: '1', content_fingerprint: 'a'.repeat(64), state: 'ready', health: 'healthy' }] };
   if (sql.startsWith('SELECT state,health,content_fingerprint')) return { rows: currentModel ? [currentModel] : [] };
@@ -22,6 +22,22 @@ const query = vi.fn(async (sql: string, _params?: unknown[]) => {
 });
 beforeEach(() => { vi.clearAllMocks(); endpointRows = [{ name: ' Equipment ' }]; currentModel = { state: 'ready', health: 'healthy', content_fingerprint: 'a'.repeat(64) }; detailRows = [{ id: id(10), tray_type: 'Ladder', width_mm: '300.5', height_mm: '60' }]; mocks.catalog.mockResolvedValue({ catalogRevision: '2', routingContentSha256: 'b'.repeat(64), rows: [{ projectTrayId: id(10), rawName: '/B001', rawPurpose: 'LV', purposeKey: 'LV' }], diagnostics: [] }); mocks.routing.mockResolvedValue({ catalogRevision: '2', routingContentSha256: 'b'.repeat(64), routingPolicyRevision: '3', routingPolicySha256: 'c'.repeat(64) }); });
 describe('routing-only current preparation context from mocked SQL', () => {
+  afterEach(()=>vi.unstubAllEnvs());
+  it('retains ordinary preparation when CAD is explicitly disabled and its tables are absent',async()=>{
+    vi.stubEnv('WFC_CAD_DESIGN_ENABLED','false');
+    const context=await readPreparationContext({query} as unknown as PoolClient,id(1));
+    expect(context.trays[0]).not.toHaveProperty('geometrySource');
+    const read=query.mock.calls.find(([sql])=>sql.startsWith('/* preparation-tray-details */'))!;
+    expect(read[0]).not.toContain('cad_');expect(read[1]).toEqual([id(1)]);
+  });
+  it('marks only server-owned CAD exports for the current selected model as deferred geometry',async()=>{
+    detailRows=[{id:id(10),tray_type:'KL',width_mm:'300',height_mm:'60',cad_geometry:true}];
+    const context=await readPreparationContext({query} as unknown as PoolClient,id(1));
+    expect(context.trays[0].geometrySource).toBe('saved-cad-route');
+    const read=query.mock.calls.find(([sql])=>sql.startsWith('/* preparation-tray-details */'))!;
+    expect(read[1]).toEqual([id(1),id(2)]);
+    expect(read[0]).toContain('e.project_id=t.project_id AND e.tray_id=t.id AND d.model_version_id=$2');
+  });
   it('holds model selection and version facts FOR SHARE and preserves only routing dependencies', async () => { const context = await readPreparationContext({ query } as unknown as PoolClient, id(1)); expect(query.mock.calls.some(([sql]) => sql.includes('FOR SHARE OF s'))).toBe(true); expect(query.mock.calls.some(([sql]) => sql.startsWith('SELECT state,health,content_fingerprint') && sql.endsWith('FOR SHARE'))).toBe(true); expect(context.endpointNames).toEqual(['Equipment']); expect(context.scope).not.toHaveProperty('drawingInputRevision'); expect(query.mock.calls.some(([sql]) => sql.includes('pf_catalog_snapshots'))).toBe(false); });
   it.each(['missing', 'health', 'fingerprint'] as const)('refuses %s model-version change between selection read and version lock', async kind => { if (kind === 'missing') currentModel = null; else if (kind === 'health') currentModel!.health = 'unavailable'; else currentModel!.content_fingerprint = 'e'.repeat(64); await expect(readPreparationContext({ query } as unknown as PoolClient, id(1))).rejects.toMatchObject({ code: 'MODEL_UNAVAILABLE' }); });
   it('refuses a potentially truncated 4097 raw-row prefix before trim/NFC collapse', async () => { endpointRows = Array.from({ length: 4097 }, (_v, n) => ({ name: 'Equipment' + ' '.repeat(n) })); await expect(readPreparationContext({ query } as unknown as PoolClient, id(1))).rejects.toMatchObject({ code: 'PREPARATION_ENDPOINT_LIMIT', status: 413 }); });
@@ -37,7 +53,7 @@ describe('routing-only current preparation context from mocked SQL', () => {
       [id(11), { type: 'Perforated tray', widthMm: 150, heightMm: 40.25 }],
     ]);
     const calls = query.mock.calls.filter(([sql]) => sql.startsWith('/* preparation-tray-details */'));
-    expect(calls).toHaveLength(1); expect(calls[0][0]).toContain('WHERE project_id=$1 ORDER BY id LIMIT 100001'); expect(calls[0][1]).toEqual([id(1)]);
+    expect(calls).toHaveLength(1); expect(calls[0][0]).toContain('WHERE t.project_id=$1 ORDER BY t.id LIMIT 100001'); expect(calls[0][1]).toEqual([id(1),id(2)]);
     expect(query.mock.calls.some(([sql]) => /pf_catalog_snapshots|material_trays|drawingFacts/.test(sql))).toBe(false);
   });
   it.each([undefined, null, '', '-1', 'NaN', 'Infinity', '12\n', Number.NaN, Number.POSITIVE_INFINITY, -1])('keeps malformed or missing presentation dimensions unavailable (%s)', async invalid => {

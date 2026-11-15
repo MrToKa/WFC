@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS pf_recalculation_state (
 );
 ALTER TABLE pf_recalculation_state ADD COLUMN IF NOT EXISTS engine_unavailable_code text CHECK(engine_unavailable_code~'^[A-Z][A-Z0-9_]{0,95}$');
 ALTER TABLE pf_recalculation_state ADD COLUMN IF NOT EXISTS automatic_pair_authority jsonb CHECK(automatic_pair_authority IS NULL OR octet_length(automatic_pair_authority::text)<=8192);
+ALTER TABLE pf_recalculation_state ADD COLUMN IF NOT EXISTS cad_connectivity_policy text CHECK(cad_connectivity_policy IS NULL OR octet_length(cad_connectivity_policy)<=128);
 INSERT INTO pf_recalculation_state(project_id) SELECT id FROM projects ON CONFLICT DO NOTHING;
 CREATE TABLE IF NOT EXISTS pf_recalculation_claims (
  project_id uuid PRIMARY KEY REFERENCES pf_recalculation_state(project_id) ON DELETE CASCADE,

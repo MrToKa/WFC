@@ -252,7 +252,7 @@ internal static class Program
         {
             var cache = new GraphPreparationCache(); var weights = new[] { new RouteCostMultiplier("/BC100", 10) };
             Func<RouteResult> weighted = () => Calculator.CalculateLoadBalanced(Diamond, P(0), P(10), CableCategory.Control, weights, Options());
-            var expected = Without(weighted); Need(expected.Success && expected.RouteCodes.Contains("/BC200")); Equal(20d, expected.LengthMeters);
+            var expected = Without(weighted); Need(expected.Success && expected.RouteCodes.Contains("/BC100")); Equal(10d, expected.LengthMeters);
             using (var cold = cache.BeginRequest(Identity)) Exact(expected, weighted());
             ExactAt(cache, Diamond, P(0), P(10));
             using (var warm = cache.BeginRequest(Identity)) { Exact(expected, weighted()); Need(warm.Diagnostics.BasisMemoryHits > 0); }

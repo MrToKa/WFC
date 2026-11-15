@@ -129,13 +129,13 @@ export class ViewerController {
         this.emit('ERROR', { code: 'BARRIER_MULTIPART_RECONCILE_REQUIRED', message: 'Barrier control timed out. Check the retained capture status before trying another command.', retryable: true, operation: pending.envelope.type });
         return;
       }
-      if (['SHOW_LOCATION', 'SHOW_LOCATION_POINT'].includes(pending.envelope.type) || pending.envelope.type === 'SHOW_TRAY') {
+      if (['SHOW_LOCATION', 'SHOW_LOCATION_POINT', 'SHOW_ROUTE'].includes(pending.envelope.type) || pending.envelope.type === 'SHOW_TRAY') {
         const cancelId = this.cancel(pending.envelope.requestId), cancellation = this.pending.get(cancelId);
         // Cancellation is best-effort cleanup after a display timeout. A lost
         // cleanup ACK must not turn this recoverable failure into model loss.
         if (cancellation) { window.clearTimeout(cancellation.timer); this.pending.delete(cancelId); }
-        const tray = pending.envelope.type === 'SHOW_TRAY';
-        this.emit('ERROR', { code: tray ? 'TRAY_UNAVAILABLE' : 'LOCATION_UNAVAILABLE', message: tray ? 'The tray could not be shown. Try again.' : 'The location could not be shown. Try again.', retryable: true, operation: pending.envelope.type });
+        const tray = pending.envelope.type === 'SHOW_TRAY', route = pending.envelope.type === 'SHOW_ROUTE';
+        this.emit('ERROR', { code: route ? 'ROUTE_UNAVAILABLE' : tray ? 'TRAY_UNAVAILABLE' : 'LOCATION_UNAVAILABLE', message: route ? 'The saved route could not be displayed. Try again.' : tray ? 'The tray could not be shown. Try again.' : 'The location could not be shown. Try again.', retryable: true, operation: pending.envelope.type }, pending.envelope.requestId);
         return;
       }
       if (pending.envelope.type === 'READ_OBJECT_GUID') {

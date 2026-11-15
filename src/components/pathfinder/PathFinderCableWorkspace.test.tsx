@@ -7,6 +7,7 @@ import type { PathFinderCableRoutingPanelProps } from './PathFinderCableRoutingP
 import { fetchPathFinderCableWorkflowDetail } from '@/api/pathfinderCableWorkflow';
 import { fetchPathFinderJob } from '@/api/pathfinder';
 import { fetchLocationImpacts } from '@/api/pathfinderLocationImpacts';
+import { fetchCableRows } from '@/api/cables';
 import { usePathfinderLocationImpactProgress } from '@/hooks/usePathfinderLocationImpactProgress';
 import { usePathfinderInitialFillProgress } from '@/hooks/usePathfinderInitialFillProgress';
 import { cableWorkflowRowSchema, type CableWorkflowRow } from '../../../shared/pathfinderCableWorkflow';
@@ -21,6 +22,7 @@ import { AUTOMATIC_PAIR_POLICY } from '../../../shared/pathfinderAutomaticPair';
 vi.mock('@/api/pathfinderCableWorkflow', () => ({ fetchPathFinderCableWorkflowDetail: vi.fn() }));
 vi.mock('@/api/pathfinder', () => ({ fetchPathFinderJob: vi.fn() }));
 vi.mock('@/api/pathfinderLocationImpacts', () => ({ fetchLocationImpacts: vi.fn() }));
+vi.mock('@/api/cables',()=>({fetchCableRows:vi.fn()}));
 vi.mock('@/hooks/usePathfinderLocationImpactProgress', () => ({ usePathfinderLocationImpactProgress: vi.fn() }));
 vi.mock('@/hooks/usePathfinderInitialFillProgress', () => ({ usePathfinderInitialFillProgress: vi.fn() }));
 let listProps: PathFinderNeedsRoutingListProps, panelProps: PathFinderCableRoutingPanelProps, listRow: CableWorkflowRow;
@@ -70,6 +72,25 @@ async function openListCable(preserveReads = false) {
   if (!preserveReads) vi.mocked(fetchPathFinderCableWorkflowDetail).mockClear();
 }
 describe('explicit cable status recovery', () => {
+  it('shows the current saved route without a current automatic result or a calculation',async()=>{
+    listRow.cable.routing='/MANUAL';listRow.cable.designLength='107';
+    const p=props(),show=vi.fn(async()=>({segments:[{token:'/MANUAL',project:{state:'exists'},model:{state:'found'}}],drawableCount:1,lineCount:1,databaseCheck:'available',warnings:[]}));
+    p.pf.showStoredRoute=show as never;p.pf.clearStoredRoute=vi.fn();
+    vi.mocked(fetchCableRows).mockResolvedValue({cables:[{id:listRow.cable.id,projectId:p.projectId,routing:'/MANUAL',cableWriteRevision:listRow.cable.cableWriteRevision}]}as never);
+    render(<PathFinderCableWorkspace {...p}/>);await openListCable();
+    expect(panelProps.storedRouteSelected).toBe(true);expect(panelProps.pathReady).toBe(true);
+    await act(async()=>{await panelProps.onTogglePath?.();});
+    await waitFor(()=>expect(show).toHaveBeenCalledWith('/MANUAL',id(3),expect.objectContaining({signal:expect.any(AbortSignal)})));
+    expect(panelProps.pathVisible).toBe(true);expect(panelProps.storedRouteMessage).toContain('does not validate barriers');
+    expect(p.pf.submitCalculation).not.toHaveBeenCalled();
+  });
+  it('refuses a changed saved routing rather than drawing the stale row',async()=>{
+    listRow.cable.routing='/MANUAL';const p=props(),show=vi.fn();p.pf.showStoredRoute=show;
+    vi.mocked(fetchCableRows).mockResolvedValue({cables:[{id:listRow.cable.id,projectId:p.projectId,routing:'/CHANGED',cableWriteRevision:listRow.cable.cableWriteRevision}]}as never);
+    render(<PathFinderCableWorkspace {...p}/>);await openListCable();await act(async()=>{await panelProps.onTogglePath?.();});
+    await waitFor(()=>expect(panelProps.storedRouteMessage).toContain('saved route changed'));
+    expect(show).not.toHaveBeenCalled();expect(p.pf.submitCalculation).not.toHaveBeenCalled();
+  });
   it('refreshes metadata and retries the same selected result without waiting for background progress', async () => {
     const p = props(), refreshed = vi.fn(), started = vi.fn();
     const progress = vi.fn(() => new Promise<void>(() => {}));

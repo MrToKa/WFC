@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { canonicalPurposeJson, catalogRoutingHashInput } from '../../shared/pathfinderPurposePolicy.js';
-import { encodeCadOverlay, readCadOverlay } from './cadOverlay.js';
+import { automaticCadOverlayView, encodeCadOverlay, readCadOverlay } from './cadOverlay.js';
 import { projectRoutingCatalogRows } from './catalog.js';
 import { equalRoutingScope } from './routingScope.js';
 
@@ -24,6 +24,15 @@ const group=(publication:unknown={baseArtifactId:artifactId,overlay:payload,tray
 const fake=(rows:unknown[],base=source,trays=[actual])=>({query:vi.fn().mockResolvedValueOnce({rows}).mockResolvedValueOnce({rows:trays}).mockResolvedValueOnce({rows:base})});
 afterEach(()=>vi.unstubAllEnvs());
 describe('immutable CAD overlay and additive base-network scope',()=>{
+  it('derives automatic v3 for an old independent publication without changing the sealed source',async()=>{
+    vi.stubEnv('WFC_CAD_DESIGN_ENABLED','true');
+    const segment=payload.segments[0],independent={...payload,schemaVersion:'wfc.pf.cad-overlay-payload.v2',segments:[{...segment,independent:true,ports:[...segment.ports,{...segment.ports[0],pointMetres:[0,0,1],outward:[0,0,1]}]}]};
+    const db=fake([group({baseArtifactId:artifactId,overlay:independent,traySnapshot})]);
+    const result=await readCadOverlay(db as unknown as PoolClient,projectId,artifactId,sha,modelVersionId,prepared,current);
+    expect(result).toEqual(encodeCadOverlay(automaticCadOverlayView(independent)));
+    expect(independent.segments[0].independent).toBe(true);expect(independent.schemaVersion).toBe('wfc.pf.cad-overlay-payload.v2');
+    expect(result).not.toEqual(encodeCadOverlay(independent));
+  });
   it('makes bytes, hash, and orientation/length changes part of the immutable envelope',()=>{
     const first=encodeCadOverlay(payload),second=encodeCadOverlay({...payload,segments:[{...payload.segments[0],pointsMetres:[[0,0,0],[0,0,2]]}]});
     expect(first.sha256).not.toBe(second.sha256);
@@ -38,7 +47,7 @@ describe('immutable CAD overlay and additive base-network scope',()=>{
   });
   it('accepts only the exact base catalog plus separately pinned CAD rows',async()=>{
     vi.stubEnv('WFC_CAD_DESIGN_ENABLED','true');const db=fake([group()]);
-    expect(await readCadOverlay(db as unknown as PoolClient,projectId,artifactId,sha,modelVersionId,prepared,current)).toEqual(encodeCadOverlay(payload));
+    expect(await readCadOverlay(db as unknown as PoolClient,projectId,artifactId,sha,modelVersionId,prepared,current)).toEqual(encodeCadOverlay(automaticCadOverlayView(payload)));
     expect(db.query.mock.calls[1][1]).toEqual([projectId,[traySnapshot.id]]);
   });
   it('rejects unrelated base network changes and routing policy revisions',async()=>{
@@ -67,7 +76,7 @@ describe('immutable CAD overlay and additive base-network scope',()=>{
     const scope={...prepared,routingContentSha256:createHash('sha256').update(canonicalPurposeJson(catalogRoutingHashInput(projectId,base.rows,base.diagnostics))).digest('hex')};
     const publication={baseArtifactId:artifactId,overlay:payload,traySnapshot,trayInBaseCatalog:true};
     const active=fake([group(publication)],included);
-    expect(await readCadOverlay(active as unknown as PoolClient,projectId,artifactId,sha,modelVersionId,scope,scope)).toEqual(encodeCadOverlay(payload));
+    expect(await readCadOverlay(active as unknown as PoolClient,projectId,artifactId,sha,modelVersionId,scope,scope)).toEqual(encodeCadOverlay(automaticCadOverlayView(payload)));
     expect(active.query.mock.calls[2][1]).toEqual([projectId,[]]);
     const retired=fake([{...group(publication),status:'draft',project_tray_id:null}],included,[]);
     expect(await readCadOverlay(retired as unknown as PoolClient,projectId,artifactId,sha,modelVersionId,scope,scope)).toBe('retired-base-proof');

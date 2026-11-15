@@ -329,7 +329,7 @@ export function CadRoutesPanel({
         targetPortIndex,
       }),
     );
-    if (action !== 'withdraw' && !pointsReady) {
+    if (action === 'align' && !pointsReady) {
       setMessage('Find compatible automatic connection points before continuing.');
       return;
     }
@@ -342,13 +342,14 @@ export function CadRoutesPanel({
         body: JSON.stringify({
           expectedRevision: selected.revision,
           ...(action === 'publish'
-            ? { attachments }
+            ? { schemaVersion: 'wfc.cad.route-publication.write.v3' }
             : action === 'align'
               ? { attachment: attachments[0] }
               : {}),
         }),
       });
       if (action === 'align') await onGeometryChanged?.();
+      if (action === 'publish' || action === 'withdraw') await onTraysChanged?.();
       await reload();
       setMessage(
         action === 'publish'
@@ -621,9 +622,21 @@ export function CadRoutesPanel({
             Add to trays list
           </Button>
         ) : null}
+        {selected ? (
+          <Caption1>
+            Routes can be separate or connect to nearby trays using the project connection gap.
+            Cable routing checks the current purposes and registered barriers.
+          </Caption1>
+        ) : null}
+        {selected?.status === 'draft' ? (
+          <Caption1>
+            Prepare the current network after adding this route to Trays, then add it to the routing
+            network. Its saved STEP centerline becomes available for automatic cable routing.
+          </Caption1>
+        ) : null}
         {selected?.status === 'draft' ? (
           <fieldset disabled={busy}>
-            <legend>Connections to existing routing network</legend>
+            <legend>Optional alignment with the existing routing network</legend>
             <Caption1>
               Route ends and compatible network points are detected automatically. Nearby
               installation transitions can connect differently oriented ends without moving
@@ -694,10 +707,7 @@ export function CadRoutesPanel({
         {unsavedChanges ? <Caption1>Save route changes before continuing.</Caption1> : null}
         {selected ? (
           <Button
-            disabled={
-              busy ||
-              (selected.status === 'draft' && (!pointsReady || automaticLoading || unsavedChanges))
-            }
+            disabled={busy || (selected.status === 'draft' && unsavedChanges)}
             onClick={() => {
               void networkAction(selected.status === 'published' ? 'withdraw' : 'publish');
             }}

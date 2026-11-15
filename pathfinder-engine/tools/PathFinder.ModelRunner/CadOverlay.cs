@@ -19,7 +19,8 @@ internal static partial class Program
             throw new ArgumentException("CAD routing overlay hash differs.");
         using var document = JsonDocument.Parse(bytes);
         var root = document.RootElement;
-        if (root.GetProperty("schemaVersion").GetString() != "wfc.pf.cad-overlay-payload.v1"
+        string? payloadVersion = root.GetProperty("schemaVersion").GetString();
+        if (payloadVersion is not ("wfc.pf.cad-overlay-payload.v1" or "wfc.pf.cad-overlay-payload.v2" or "wfc.pf.cad-overlay-payload.v3")
             || root.GetProperty("projectId").GetString() != request.ProjectId
             || root.GetProperty("modelVersionId").GetString() != request.ModelVersionId
             || root.GetProperty("baseSnapshotSha256").GetString() != request.SnapshotSha256)
@@ -36,6 +37,10 @@ internal static partial class Program
                 || !ids.Add(id) || !Regex.IsMatch(name, "^/[A-Z0-9][A-Z0-9_.-]{0,199}$") || name == "/SECONDARY" || mask is < 1 or > 7)
                 throw new ArgumentException("Invalid CAD overlay identity or permissions.");
             var points = row.GetProperty("pointsMetres"); var ports = row.GetProperty("ports");
+            bool independent = row.TryGetProperty("independent", out var independentValue);
+            if (independent && (independentValue.ValueKind != JsonValueKind.True
+                || payloadVersion != "wfc.pf.cad-overlay-payload.v2" || ports.GetArrayLength() != 2))
+                throw new ArgumentException("Independent CAD routing requires a version 2 payload and both physical ports.");
             if (points.GetArrayLength() is < 2 or > 16385 || ports.GetArrayLength() is < 1 or > 2)
                 throw new ArgumentException("Invalid CAD routing centerline or ports.");
             var line = points.EnumerateArray().Select(CadPoint).ToArray();
@@ -45,7 +50,7 @@ internal static partial class Program
             foreach (var port in ends)
                 if (Math.Min(CadDistance(port.Point, line[0]), CadDistance(port.Point, line[^1])) > 0.001)
                     throw new ArgumentException("CAD port is not on a published chain endpoint.");
-            segments.Add(new TraySegment(id, name, (CableCategory)mask, line, true, ends));
+            segments.Add(new TraySegment(id, name, (CableCategory)mask, line, true, ends, null, independent));
         }
         string key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("wfc.pf.cad-composite.v1\n" + prepared.Key + "\n" + envelope.Sha256))).ToLowerInvariant();
         return prepared with { Key = key, Segments = segments };

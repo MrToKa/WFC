@@ -245,11 +245,11 @@ namespace AddinRibbon.Routing
                     budget.Charge(1); var start = tray.Points[part]; var end = tray.Points[part + 1]; double length = start.DistanceTo(end);
                     if (!RoutePoint.IsFinite(length)) throw new ConstrainedLimitException("NONFINITE_TRAY_LENGTH");
                     if (length > 0) pieces.Add(new Piece(segmentIndex, start, end, along, length,
-                        tray.ConnectionsAtEndsOnly, pieces.Count == pieceOffset, tray.VerifiedPorts, tray.ConnectionSurfaces));
+                        tray.ConnectionsAtEndsOnly, pieces.Count == pieceOffset, tray.VerifiedPorts, tray.ConnectionSurfaces, tray.Independent));
                     vertices.Add(new Vertex(along, start)); along += length;
                 }
                 if (pieces.Count == pieceOffset) pieces.Add(new Piece(segmentIndex, tray.Points[0], tray.Points[0], 0, 0,
-                    tray.ConnectionsAtEndsOnly, true, tray.VerifiedPorts, tray.ConnectionSurfaces));
+                    tray.ConnectionsAtEndsOnly, true, tray.VerifiedPorts, tray.ConnectionSurfaces, tray.Independent));
                 var lastPiece = pieces[pieces.Count - 1]; lastPiece.SetEndPort(); pieces[pieces.Count - 1] = lastPiece;
                 vertices.Add(new Vertex(along, tray.Points[tray.Points.Count - 1]));
                 if (first.Segment == segmentIndex) vertices.Add(new Vertex(first.Along, first.Point));

@@ -105,9 +105,11 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
     if (matches) return matches.length === 1;
     return Boolean(plan?.requestedScope.trays.some(item => item.projectTrayId === trayId && item.orderedRootObjectIds.length));
   };
-  const found = context?.trays.filter(tray => assigned(tray.projectTrayId)).length ?? 0;
+  const modelTrays=context?.trays.filter(tray=>tray.geometrySource!=='saved-cad-route')??[];
+  const cadTrays=context?.trays.filter(tray=>tray.geometrySource==='saved-cad-route')??[];
+  const found = modelTrays.filter(tray => assigned(tray.projectTrayId)).length;
   const networkStatus = (() => {
-    if (saved) return `Network saved in the database. Ready for routing calculations. ${found} of ${context!.trays.length} trays assigned${found < context!.trays.length ? `; ${context!.trays.length - found} still need a model selection` : ''}.`;
+    if (saved) return `Network saved in the database. Ready for routing calculations. ${found} of ${modelTrays.length} trays assigned${found < modelTrays.length ? `; ${modelTrays.length - found} still need a model selection` : ''}.`;
     switch (state.networkStorageStatus) {
       case 'stored-current':
         if (!modelCurrent) return 'A routing network is saved in the database. Load the matching project model to check readiness.';
@@ -251,6 +253,7 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
       {state.unknown ? state.busy ? 'Checking tray update…' : 'Retry tray update' : 'Discover project tray candidates'}
     </Button>
     <p>Discover checks the project Trays records against model names and Properties, then saves unique matches. Generate network builds from the assigned trays.</p>
+    {cadTrays.length?<p>CAD routes use their saved STEP geometry and need no model object assignment: {cadTrays.map(tray=>tray.rawName).join(', ')}. Network generation prepares the model trays; add the saved CAD routes to the routing network from Draw trays afterwards.</p>:null}
     {state.busy ? <Button onClick={state.pause} style={{ marginLeft: 8 }}>Stop checking</Button> : null}
     {disabledReason ? <p>{disabledReason}</p> : null}
     {working ? <Spinner size="tiny" label={state.progress ?? (reading ? 'Reading and saving the selected tray…'
@@ -275,7 +278,7 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
         {filtered.map(tray => {
           const isAssigned = assigned(tray.projectTrayId);
           const target = trayDisplayTarget({ trayId: tray.projectTrayId, context, plan, discovery });
-          const unavailable = !modelCurrent ? 'Load the matching model before showing this tray.' : target.message;
+          const unavailable = tray.geometrySource==='saved-cad-route'?'Use Draw trays to show or publish this saved CAD route. No model object assignment is needed.':!modelCurrent ? 'Load the matching model before showing this tray.' : target.message;
           const showing = currentDisplay?.trayId === tray.projectTrayId && currentDisplay.status === 'showing';
           const hiding = currentDisplay?.trayId === tray.projectTrayId && currentDisplay.status === 'hiding';
           const canHide = currentDisplay?.trayId === tray.projectTrayId && ['shown', 'hiding', 'hide-failed'].includes(currentDisplay.status);
@@ -286,7 +289,7 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
             borderRadius: 6, padding: 12, minWidth: 0, overflowWrap: 'anywhere' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
             <h4 style={{ margin: '0 0 8px' }}>{tray.rawName}</h4>
-            <span>{isAssigned ? 'Assigned' : 'Not assigned'}</span>
+            <span>{tray.geometrySource==='saved-cad-route'?'Saved CAD geometry':isAssigned ? 'Assigned' : 'Not assigned'}</span>
           </div>
           {isAssigned ? <dl style={{ display: 'grid', gridTemplateColumns: 'max-content minmax(0, 1fr)', gap: '4px 8px', margin: '0 0 12px' }}>
             <dt>Type</dt><dd style={{ margin: 0 }}>{tray.details ? tray.details.type || 'Not specified' : 'Not available'}</dd>
@@ -313,7 +316,7 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
             Hide
           </Button> : null}
           {currentDisplay?.trayId === tray.projectTrayId && currentDisplay.status === 'hide-failed' ? <p role="alert">The normal model view could not be restored. Check the model and select Hide to try again.</p> : null}
-          <Button disabled={writeDisabled || !modelCurrent || state.unknown} aria-label={`Use current model selection for ${tray.rawName}`}
+          <Button disabled={writeDisabled || !modelCurrent || state.unknown || tray.geometrySource==='saved-cad-route'} aria-label={`Use current model selection for ${tray.rawName}`}
             onClick={() => void assign(tray.projectTrayId)} style={{ width: '100%', whiteSpace: 'normal' }}>
             {reading === tray.projectTrayId ? 'Assigning tray…' : 'Use current model selection'}
           </Button>

@@ -15,6 +15,8 @@ internal static class Program
     {
         if (args.Length != 0) return 2;
         LegacyParity(); PhysicalRoutes(); ConnectorGeometry(); DirectStrategy(); BypassedAlternatives(); RefusalAndBudgets(); SearchReuse();
+        IndependentNetworkChecks.Run(Run);
+        ShortestAdmissibleChecks.Run(Run);
         Console.WriteLine(JsonSerializer.Serialize(new
         {
             schemaVersion = "wfc.pf.constrained-routing-checks.v1", status = failures == 0 ? "PASS" : "FAIL",
@@ -124,14 +126,14 @@ internal static class Program
             Equal(0, value.Route.ConnectionGapCount); Need(value.Route.FromRequiresSecondary || value.Route.ToRequiresSecondary);
             Equal(0, value.CollisionQueries);
         });
-        Run("bypass endpoint alternatives retain load-balanced path selection and measured length", () =>
+        Run("bypass endpoint alternatives retain physical-first selection despite soft weights", () =>
         {
             var trays = Network().Append(Tray("ALT", P(2), P(2, -3), P(4, -3), P(4))).ToArray();
             var value = CapacityRouting.CalculateWithLocalApproaches(trays, [], from, to,
                 CableCategory.Control, MustNotQuery, options, drillThroughWalls: true,
                 routeCostMultipliers: [new RouteCostMultiplier("/B003", 100)]).RouteEvaluation;
-            Need(value.Route.Success); Need(value.Route.RouteCodes.Contains("/ALT")); Need(!value.Route.RouteCodes.Contains("/B003"));
-            Bits(21, value.Route.LengthMeters); Equal(0, value.CollisionQueries); Equal(0, value.FinalChecks.Count);
+            Need(value.Route.Success); Need(value.Route.RouteCodes.Contains("/B003")); Need(!value.Route.RouteCodes.Contains("/ALT"));
+            Bits(15, value.Route.LengthMeters); Equal(0, value.CollisionQueries); Equal(0, value.FinalChecks.Count);
         });
         Run("bypass alternate search reports bounded exhaustion without claiming a disconnected graph", () =>
         {
@@ -380,13 +382,13 @@ internal static class Program
             Need(legacy.Success, "Legacy fixture is disconnected."); var value = Route(item.Trays, item.From, item.To, FarQuery(), item.Options);
             Equal(ConstrainedRouteStatus.Clear, value.Status); Equal(1, value.PairAttempts); ExactRoute(legacy, value.Route);
         });
-        Run("remaining edges retain gap-count priority over shorter physical length", () =>
+        Run("remaining admissible edges choose physical length before gap count", () =>
         {
             var trays = new[] { Port("00-from", [P(-2), P(0)]), Port("99-to", [P(10), P(12)]),
                 Port("z-one-first", [P(0), P(0, 5), P(3, 5)]), Port("z-one-last", [P(3.2, 5), P(10, 5), P(10)]),
                 Port("a-two-first", [P(0), P(3)]), Port("a-two-middle", [P(3.05), P(7)]), Port("a-two-last", [P(7.05), P(10)]) };
             var legacy = Calculator.Calculate(trays, P(-2), P(12), CableCategory.Control, Options());
-            Need(legacy.Success && legacy.ConnectionGapCount == 1 && legacy.SegmentIds.Contains("z-one-first"));
+            Need(legacy.Success && legacy.ConnectionGapCount == 2 && legacy.SegmentIds.Contains("a-two-first") && legacy.LengthMeters == 14);
             ExactRoute(legacy, Route(trays, P(-2), P(12), FarQuery()).Route);
         });
         Run("equal-cost tie retains ordinal node order across input permutations", () =>

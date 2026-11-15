@@ -21,6 +21,8 @@ const messages = {
   LOCATION_UNAVAILABLE: 'The location object could not be shown in the current model. Try again.',
   OBJECT_GUID_UNAVAILABLE: 'The object GUID could not be read. Try again.',
   TRAY_UNAVAILABLE: 'The tray could not be shown in the current model. Check its model assignment and try again.',
+  ROUTE_UNAVAILABLE: 'The saved route could not be displayed. The model remains loaded; check the route identifiers and try again.',
+  ROUTING_BINDINGS_LIMIT: 'This route has too many mapped model roots to display within its limit. Show fewer tray identifiers.',
   RESOURCE_FAILED: 'The model or a local resource could not be loaded.', MODEL_UNAVAILABLE: 'The selected model is unavailable.',
   SESSION_EXPIRED: 'The viewer session has expired.', ACCESS_REVOKED: 'Access to the model has been revoked.',
   MODEL_SELECTION_CHANGED: 'The selected model has changed.', INVALID_MESSAGE: 'The response does not match the requested model.',
@@ -101,6 +103,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     const recoverableGuid = command.type === 'READ_OBJECT_GUID' && code === 'OBJECT_GUID_UNAVAILABLE';
     const recoverableCad = command.type.startsWith('CAD_') && code === 'CAD_COMPONENT_FAILED';
     const recoverableTray = command.type === 'SHOW_TRAY' && code === 'TRAY_UNAVAILABLE';
+    const recoverableRoute = command.type === 'SHOW_ROUTE' && ['ROUTE_UNAVAILABLE','ROUTE_INVALID','ROUTING_BINDINGS_INVALID','ROUTING_BINDINGS_LIMIT'].includes(code);
     const recoverableRootSelection = command.type === 'READ_TRAY_ROOT_SELECTION'
       && ['TRAY_ROOT_SELECTION_UNAVAILABLE', 'TRAY_ROOT_SELECTION_TOO_LARGE', 'TRAY_ROOT_SELECTION_CHANGED'].includes(code);
     // Discovery evidence may be incomplete while the rendered model is healthy.
@@ -108,9 +111,9 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     // a real SDK resource/access/model failure keeps its terminal identity.
     const recoverableTrayIdentity = command.type === 'RESOLVE_TRAY_IDENTITIES' && code.startsWith('TRAY_IDENTITY_');
     const recoverableDiscovery = command.type === 'READ_PREPARATION_OBJECTS' && code.startsWith('PREPARATION_') && Object.hasOwn(messages, code);
-    emit(command, 'ERROR', { code, message: messages[code], retryable: recoverableCad || recoverableModelCapture || recoverableCapture || recoverableLocation || recoverableGuid || recoverableTray || recoverableRootSelection || recoverableTrayIdentity || recoverableDiscovery || ['RESOURCE_FAILED', 'SESSION_EXPIRED', 'APPEARANCE_RESTORE_FAILED'].includes(code), operation: command.type, ...(modelCaptureErrorMessage(code) ? modelCaptureErrorContext(cause) : {}) });
+    emit(command, 'ERROR', { code, message: messages[code], retryable: recoverableRoute || recoverableCad || recoverableModelCapture || recoverableCapture || recoverableLocation || recoverableGuid || recoverableTray || recoverableRootSelection || recoverableTrayIdentity || recoverableDiscovery || ['RESOURCE_FAILED', 'SESSION_EXPIRED', 'APPEARANCE_RESTORE_FAILED'].includes(code), operation: command.type, ...(modelCaptureErrorMessage(code) ? modelCaptureErrorContext(cause) : {}) });
     finish(command);
-    onState({ phase: recoverableCad || recoverableModelCapture || recoverableCapture || recoverableLocation || recoverableGuid || recoverableTray || recoverableRootSelection || recoverableTrayIdentity || recoverableDiscovery ? phase : 'error', code, operation: command.type });
+    onState({ phase: recoverableRoute || recoverableCad || recoverableModelCapture || recoverableCapture || recoverableLocation || recoverableGuid || recoverableTray || recoverableRootSelection || recoverableTrayIdentity || recoverableDiscovery ? phase : 'error', code, operation: command.type });
   }
   function releaseCapture(scope, abort = false) {
     if (!scope) return;
@@ -420,12 +423,25 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     const signal = AbortSignal.any([lifetime.signal, loadController.signal, controller.signal]);
     try {
       const parsed = parseRouting(command.payload.rawRouting);
+      if (!parsed.segments.length) {
+        const result = { ...command.payload, segments: [], ignored: parsed.ignored, drawableCount: 0, lineCount: 0, warnings: [] };
+        if (!emit(command, 'ROUTE_RESULT', result)) throw failure('ROUTE_INVALID');
+        finish(command); return;
+      }
       const base = new URL(`/api/projects/${bootstrap.projectId}/model-versions/${command.modelVersionId}/${sessionFamily}/${current.payload.sessionId}/`, origin);
-      const response = await fetchImpl(new URL('routing-bindings', base).href,
+      const requestedKeys = [...new Set(parsed.segments.map(segment => segment.key))];
+      const bindingsUrl = new URL('routing-bindings', base);
+      bindingsUrl.searchParams.set('routeCodes', JSON.stringify(requestedKeys));
+      if (requestedKeys.length > 100 || requestedKeys.some(key => key.length > 500)
+        || new TextEncoder().encode(bindingsUrl.search).length > 8 * 1024) throw failure('ROUTE_UNAVAILABLE');
+      const response = await fetchImpl(bindingsUrl.href,
         { signal, credentials: 'same-origin', cache: 'no-store', mode: 'same-origin', redirect: 'error' });
-      if (!response.ok) throw failure(httpCode(response.status));
-      const bindings = parseRoutingBindings(await responseJson(response, ROUTING_BINDINGS_LIMITS.bytes), loadedDescriptor, routingSelectionRevision);
-      if (!bindings) throw failure('INVALID_MESSAGE');
+      if (!response.ok) throw failure([413,414].includes(response.status) ? 'ROUTING_BINDINGS_LIMIT' : httpCode(response.status));
+      let bindingValue;
+      try { bindingValue = await responseJson(response, ROUTING_BINDINGS_LIMITS.bytes); }
+      catch (cause) { if (cause?.code === 'INVALID_MESSAGE') throw failure('ROUTING_BINDINGS_INVALID'); throw cause; }
+      const bindings = parseRoutingBindings(bindingValue, loadedDescriptor, routingSelectionRevision, requestedKeys);
+      if (!bindings) throw failure('ROUTING_BINDINGS_INVALID');
       if (disposed || signal.aborted || routeRequest !== ticket || !identityMatches(command)) return;
       routingSelectionRevision = bindings.selectionRevision;
       const result = parsed.segments.length ? await handle.showRoute(command.payload.rawRouting, { routingBindings: bindings }) : { segments: [], drawableCount: 0, lineCount: 0, warnings: [], diagnostics: { connectors: [] } };
@@ -452,6 +468,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
       if (disposed || routeRequest !== ticket || !identityMatches(command)) return;
       routeHasLine = false;
       try { handle?.clearRoute(); } catch (cleanup) { cause = cleanup; }
+      if (!cause?.code) cause = failure('ROUTE_UNAVAILABLE');
       error(command, cause);
     }
   }

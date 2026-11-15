@@ -144,7 +144,7 @@ describe('complete CAD routes', () => {
     expect(
       await screen.findByText('No prepared Path Finder network is available.'),
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Add to routing network' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Add to routing network' })).toBeEnabled();
     expect(screen.getByRole('button', { name: /Add to trays list/i })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: /Add to trays list/i }));
     await waitFor(() => expect(writes()).toHaveLength(1));
@@ -254,7 +254,7 @@ describe('complete CAD routes', () => {
       await screen.findByRole('list', { name: 'Installation routing transitions' }),
     ).toHaveTextContent('Component 1 end → component 3 start: 180 mm routing transition');
     expect(screen.getByText('Prepare the existing routing network first.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Add to routing network' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Add to routing network' })).toBeEnabled();
     expect(geometryChanged).not.toHaveBeenCalled();
     expect(writes()).toHaveLength(0);
   });
@@ -302,7 +302,7 @@ describe('complete CAD routes', () => {
     expect(
       await screen.findByText('The saved parts need one internal connector relationship.'),
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Add to routing network' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Add to routing network' })).toBeEnabled();
     expect(
       screen.getByRole('button', { name: 'Align whole route to network point' }),
     ).toBeDisabled();
@@ -333,7 +333,7 @@ describe('complete CAD routes', () => {
   });
 
   it.each(['network-required', 'ambiguous', 'unavailable'])(
-    'clears a previous automatic match and refuses publication when the next route is %s',
+    'clears stale optional alignment matches while allowing automatic publication when the next route is %s',
     async (status) => {
       const other = {
         ...draft,
@@ -359,7 +359,7 @@ describe('complete CAD routes', () => {
       );
       fireEvent.click(screen.getByRole('button', { name: /Other run/ }));
       expect(await screen.findByText(diagnostic)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Add to routing network' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Add to routing network' })).toBeEnabled();
       expect(
         screen.getByRole('button', { name: 'Align whole route to network point' }),
       ).toBeDisabled();
@@ -526,7 +526,7 @@ describe('complete CAD routes', () => {
     },
   );
 
-  it('publishes all automatically selected network ends with the expected revision and no manual port dropdowns', async () => {
+  it('publishes saved geometry automatically without submitting optional alignment attachments', async () => {
     let saved = draft;
     fetchMock.mockImplementation(async (url: string, options: RequestInit = {}) => {
       if (url.endsWith('/publish') && options.method === 'POST') {
@@ -564,12 +564,51 @@ describe('complete CAD routes', () => {
     expect(writes()[0][0]).toMatch(new RegExp(`/routes/${draft.id}/publish$`));
     expect(JSON.parse(writes()[0][1].body)).toEqual({
       expectedRevision: 7,
-      attachments: automaticAttachments,
+      schemaVersion: 'wfc.cad.route-publication.write.v3',
     });
     expect(
       await screen.findByRole('button', { name: 'Withdraw from routing network' }),
     ).toBeInTheDocument();
     expect(screen.getByLabelText('Route name')).toBeDisabled();
+  });
+
+  it('publishes a routable component automatically when no compatible base connection exists', async () => {
+    let saved = draft;
+    fetchMock.mockImplementation(async (url: string, options: RequestInit = {}) => {
+      if (url.endsWith('/publish') && options.method === 'POST') {
+        saved = {
+          ...draft,
+          status: 'published',
+          revision: 8,
+          projectTrayId: id(30),
+          networkMode: 'automatic',
+        };
+        return { ok: true, json: async () => ({ route: saved }) };
+      }
+      return {
+        ok: true,
+        json: async () =>
+          url.endsWith('/auto-attachments')
+            ? { status: 'no-compatible-points', attachments: [] }
+            : { routes: [saved] },
+      };
+    });
+    const refreshed = vi.fn(async () => {});
+    show(undefined, undefined, refreshed);
+    fireEvent.click(await screen.findByRole('button', { name: /Main riser/ }));
+    expect(screen.queryByRole('checkbox', { name: /Independent route/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add to routing network' })).toBeEnabled();
+    expect(screen.queryByText('Connections to existing routing network')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Add to routing network' }));
+    expect(await screen.findByText('Route added to the routing network.')).toBeInTheDocument();
+    expect(JSON.parse(writes()[0][1].body)).toEqual({
+      schemaVersion: 'wfc.cad.route-publication.write.v3',
+      expectedRevision: 7,
+    });
+    expect(refreshed).toHaveBeenCalledOnce();
+    expect(
+      screen.getByText(/Routes can be separate or connect to nearby trays/),
+    ).toBeInTheDocument();
   });
 
   it('reports a stale publication refusal and keeps the saved route in draft', async () => {

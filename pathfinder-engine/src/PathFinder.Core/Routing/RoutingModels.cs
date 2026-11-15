@@ -81,6 +81,8 @@ namespace AddinRibbon.Routing
         public IReadOnlyList<RoutePoint> Points { get; private set; }
         /// <summary>Cross-tray connections use only the physical first/last ports; object projection may use the interior.</summary>
         public bool ConnectionsAtEndsOnly { get; private set; }
+        /// <summary>A separately published CAD chain cannot borrow proximity connections to another tray.</summary>
+        public bool Independent { get; private set; }
         public IReadOnlyList<RouteConnectionPort> VerifiedPorts { get; private set; }
         /// <summary>Measured mesh surfaces: one clipped straight body or two bend end sections.</summary>
         public IReadOnlyList<TrayMeshClearance> ConnectionSurfaces { get; private set; }
@@ -99,6 +101,11 @@ namespace AddinRibbon.Routing
         public TraySegment(string id, string name, CableCategory allowedCategories,
             IEnumerable<RoutePoint> points, bool connectionsAtEndsOnly, IEnumerable<RouteConnectionPort> verifiedPorts,
             IEnumerable<TrayMeshClearance> connectionSurfaces)
+            : this(id, name, allowedCategories, points, connectionsAtEndsOnly, verifiedPorts, connectionSurfaces, false) { }
+
+        public TraySegment(string id, string name, CableCategory allowedCategories,
+            IEnumerable<RoutePoint> points, bool connectionsAtEndsOnly, IEnumerable<RouteConnectionPort> verifiedPorts,
+            IEnumerable<TrayMeshClearance> connectionSurfaces, bool independent)
         {
             if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("A tray needs a stable identifier.", "id");
             if (points == null) throw new ArgumentNullException("points");
@@ -112,6 +119,7 @@ namespace AddinRibbon.Routing
             AllowedCategories = allowedCategories;
             Points = new ReadOnlyCollection<RoutePoint>(copy);
             ConnectionsAtEndsOnly = connectionsAtEndsOnly;
+            Independent = independent;
             var ports = (verifiedPorts ?? Enumerable.Empty<RouteConnectionPort>()).ToArray();
             if (ports.Length > 2 || ports.Any(p => p == null ||
                 (p.Point.DistanceTo(copy[0]) > 1e-6 && p.Point.DistanceTo(copy[copy.Length - 1]) > 1e-6)))

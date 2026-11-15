@@ -15,6 +15,19 @@ export function preparationFixture() {
   return { context, input };
 }
 describe('server-owned routing preparation plan', () => {
+  it('defers saved CAD geometry without an SDK root or arbitrary unresolved skip',()=>{
+    const {context,input}=preparationFixture();
+    context.trays.push({...context.trays[0],projectTrayId:id(11),rawName:'CAD001',routeName:'/CAD001',geometrySource:'saved-cad-route'});
+    input.discovery.trays.push({projectTrayId:id(11),candidateRootObjectIds:[]});
+    const plan=buildPreparationPlan(context,input);
+    expect(plan.diagnostics).toEqual([]);
+    expect(plan.requestedScope.deferredCadTrayIds).toEqual([id(11)]);
+    expect(plan.requestedScope.excludedProjectTrayIds).toEqual([id(11)]);
+    expect(plan.requestedScope.trays.map(t=>t.projectTrayId)).toEqual([id(10)]);
+    expect(plan.requestedScope.orderedPhysicalLeafIds).toEqual(['dbid:3']);
+    expect(plan.requestedScope.skippedTrays).toBeUndefined();
+    expect(preparationPlanSchema.safeParse({...plan,requestedScope:{...plan.requestedScope,deferredCadTrayIds:[id(10)]}}).success).toBe(false);
+  });
   it('assigned-only generation freezes complete tray coverage without searching names or endpoints', async () => {
     const { context, input } = preparationFixture(); context.endpointNames = ['Equipment'];
     context.resolutions=[{id:id(71),projectTrayId:id(10),mode:'roots',rootObjectIds:['dbid:2'],reason:'Saved tray assignment',actorId:id(72),createdAt:'2026-10-27T00:00:00Z',scope:{...context.scope}}];

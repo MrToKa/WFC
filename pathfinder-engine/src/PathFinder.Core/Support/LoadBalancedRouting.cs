@@ -113,13 +113,13 @@ namespace AddinRibbon.Routing
                     if (!RoutePoint.IsFinite(length))
                         return RouteResult.Failure("The selected tray geometry contains a length outside the supported coordinate range.");
                     if (length > 0) pieces.Add(new Piece(segmentIndex, start, end, along, length,
-                        tray.ConnectionsAtEndsOnly, pieces.Count == pieceOffset, tray.VerifiedPorts, tray.ConnectionSurfaces));
+                        tray.ConnectionsAtEndsOnly, pieces.Count == pieceOffset, tray.VerifiedPorts, tray.ConnectionSurfaces, tray.Independent));
                     vertices.Add(new Vertex(along, start));
                     along += length;
                 }
                 if (pieces.Count == pieceOffset)
                     pieces.Add(new Piece(segmentIndex, tray.Points[0], tray.Points[0], 0, 0,
-                        tray.ConnectionsAtEndsOnly, true, tray.VerifiedPorts, tray.ConnectionSurfaces));
+                        tray.ConnectionsAtEndsOnly, true, tray.VerifiedPorts, tray.ConnectionSurfaces, tray.Independent));
                 var lastPiece = pieces[pieces.Count - 1];
                 lastPiece.SetEndPort();
                 pieces[pieces.Count - 1] = lastPiece;
@@ -197,10 +197,12 @@ namespace AddinRibbon.Routing
             { return new WeightedPathCost(Physical.Add(edge), SelectionLength + edge.Length * multiplier); }
             public int CompareTo(WeightedPathCost other)
             {
-                int compared = Physical.GapCount.CompareTo(other.Physical.GapCount);
-                if (compared == 0) compared = Physical.GapRank.CompareTo(other.Physical.GapRank);
+                // Balancing is a soft preference between equally short physical
+                // paths. Hard route/capacity eligibility is applied separately.
+                int compared = Physical.PhysicalLength.CompareTo(other.Physical.PhysicalLength);
                 if (compared == 0) compared = SelectionLength.CompareTo(other.SelectionLength);
-                return compared != 0 ? compared : Physical.PhysicalLength.CompareTo(other.Physical.PhysicalLength);
+                if (compared == 0) compared = Physical.GapCount.CompareTo(other.Physical.GapCount);
+                return compared != 0 ? compared : Physical.GapRank.CompareTo(other.Physical.GapRank);
             }
         }
 

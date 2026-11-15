@@ -292,7 +292,7 @@ internal static class Program
 
     private static void SelectedGraph()
     {
-        Run("weighted opening candidate may replace a physically shorter but more loaded clear incumbent", () =>
+        Run("weighted opening candidate cannot replace a physically shorter clear incumbent", () =>
         {
             using var probe = new Probe();
             var nodeType = typeof(RouteCalculator).GetNestedType("Node", BindingFlags.NonPublic)!;
@@ -315,8 +315,8 @@ internal static class Program
             RouteCollisionQuery query = (_,_,_) => Observation(RouteCollisionStatus.Clear,0);
             object?[] args = [nodes,0,1,blocked,query,probe.Budget,4L,new List<int>{0,2,3,1},incumbentCost,null,null];
             var path = (IList)Invoke(typeof(RouteCalculator).GetMethod("OpeningFallback",Static)!,null,args)!;
-            Need(path.Cast<int>().SequenceEqual([0,1]));
-            Need((double)costType.GetField("PhysicalLength",Private)!.GetValue(args[9])! > .4);
+            Need(path.Cast<int>().SequenceEqual([0,2,3,1]));
+            Equal(.4, (double)costType.GetField("PhysicalLength",Private)!.GetValue(args[9])!);
             Equal(1,((IDictionary)args[10]!).Count); Equal(1,probe.Attempts);
         });
         Run("lazy selected edge cost increase reruns Dijkstra and preserves measured gap semantics", () =>

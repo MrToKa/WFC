@@ -56,6 +56,14 @@ async function loaded(duration = 300_000, absoluteDuration = 1_800_000) {
 }
 
 describe('Viewer lifecycle transient recovery', () => {
+  it('a saved route timeout cancels only the route and preserves the healthy model',async()=>{
+    const s=await loaded(),before=s.controller.getLoadSnapshot();
+    const id=await s.controller.showRoute('/BC001','manual',null);
+    await vi.advanceTimersByTimeAsync(10_001);
+    expect(s.controller.getLoadSnapshot()).toEqual(before);expect(s.terminal()).toHaveLength(0);
+    expect(s.events.some(event=>event.type==='ERROR'&&event.payload.code==='ROUTE_UNAVAILABLE'&&event.requestId===id)).toBe(true);
+    expect(s.send.mock.calls.some(call=>call[0].type==='CANCEL_REQUEST'&&call[0].payload.targetRequestId===id)).toBe(true);
+  });
   it.each([408, 429, 500, 503, 'network'] as const)('rechecks selection after %s without recreating the iframe or granting a command early', async failure => {
     const s = await loaded(), original = s.controller.getLoadSnapshot(), count = s.selectionCalls().length;
     if (failure === 'network') s.fetch.mockRejectedValueOnce(new TypeError('Network unavailable'));

@@ -5,7 +5,7 @@ import { buildPreparationPlan, preparationDigest } from '../pathfinder/preparati
 import { projectRoutingCatalogRows } from '../pathfinder/catalog.js';
 import { catalogRoutingHashInput } from '../../shared/pathfinderPurposePolicy.js';
 import { preparationContextSchema, preparationCreateSchema, preparationPlanHashInput } from '../../shared/pathfinderPreparation.js';
-import { readViewerRoutingBindings } from './routingBindings.js';
+import { parseRoutingBindingQuery,readViewerRoutingBindings } from './routingBindings.js';
 
 const id = (n: number) => `11000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 function fixture(options: { mappings?: number; roots?: number; longNames?: boolean } = {}) {
@@ -52,11 +52,11 @@ function fixture(options: { mappings?: number; roots?: number; longNames?: boole
     routing_scope: { catalogRevision: scope.catalogRevision, routingContentSha256: scope.routingContentSha256, routingPolicyRevision: scope.routingPolicyRevision, routingPolicySha256: scope.routingPolicySha256 }, publication_proof: true };
   const parts = plan.partPlan.map(part => ({ part_id: part.partId, part_index: part.partIndex, plan_sha256: plan.orderedPlanSha256, payload_sha256: 'e'.repeat(64) }));
   const policy = { catalog_revision: '1', routing_policy_revision: '1' }, preparation = { current_aggregate_id: aggregate.id, current_artifact_id: aggregate.artifactId, geometry_revision: '1', resolution_revision: '1' };
-  const query = vi.fn(async (sql: string) => {
+  const query = vi.fn(async (sql: string,params?:unknown[]) => {
     if (sql.includes('viewer-routing-bindings:publication')) return { rows: [row] };
     if (sql.includes('viewer-routing-bindings:catalog')) return { rows: source };
     if (sql.includes('viewer-routing-bindings:parts')) return { rows: parts };
-    if (sql.includes('viewer-routing-bindings:decisions')) return { rows: decisions.map(resolution => ({ resolution })) };
+    if (sql.includes('viewer-routing-bindings:decisions')) return { rows: decisions.filter(resolution=>(params?.[1] as string[]).includes(resolution.id)).map(resolution => ({ resolution })) };
     if (sql.includes('viewer-routing-bindings:policy-fence')) return { rows: [policy] };
     if (sql.includes('viewer-routing-bindings:preparation-fence')) return { rows: [preparation] };
     throw new Error('Unexpected query');
@@ -67,6 +67,28 @@ function fixture(options: { mappings?: number; roots?: number; longNames?: boole
 }
 
 describe('ordinary Viewer published routing bindings', () => {
+  it('returns exact requested bindings from a larger project without weakening publication proof or response bounds',async()=>{
+    const f=fixture({mappings:129});
+    const result=await readViewerRoutingBindings(f.client,{...f.input,routeCodes:['A105']});
+    expect(result.bindings.map(binding=>binding.routeName)).toEqual(['/A105']);
+    expect(f.query.mock.calls.some(([sql])=>sql.includes('viewer-routing-bindings:parts'))).toBe(true);
+    expect(f.query.mock.calls.some(([sql])=>sql.includes('viewer-routing-bindings:policy-fence'))).toBe(true);
+    const unknown=fixture({mappings:129});expect((await readViewerRoutingBindings(unknown.client,{...unknown.input,routeCodes:['A1050','A,B']})).bindings).toEqual([]);
+    const broken=fixture({mappings:129});broken.parts[0].payload_sha256='0'.repeat(64);
+    await expect(readViewerRoutingBindings(broken.client,{...broken.input,routeCodes:['A105']})).rejects.toMatchObject({code:'ROUTING_BINDINGS_INVALID'});
+  });
+  it('preserves root and byte caps for the requested subset instead of truncating it',async()=>{
+    const f=fixture({roots:513});await expect(readViewerRoutingBindings(f.client,{...f.input,routeCodes:['A105']})).rejects.toMatchObject({code:'ROUTING_BINDINGS_LIMIT'});
+  });
+  it('parses one bounded canonical JSON route-code query without splitting commas or accepting overrides',()=>{
+    const base='/viewer/routing-bindings';expect(parseRoutingBindingQuery(base)).toBeUndefined();
+    expect(parseRoutingBindingQuery(base+'?'+new URLSearchParams({routeCodes:JSON.stringify(['A105','A,B'])}))).toEqual(['A105','A,B']);
+    for(const value of ['',JSON.stringify([]),JSON.stringify(['a105']),JSON.stringify(['/A105']),JSON.stringify(['A105','A105']),JSON.stringify(['SECONDARY']),JSON.stringify(Array.from({length:101},(_,i)=>'A'+i)),JSON.stringify({rootIds:['dbid:1']})])
+      expect(()=>parseRoutingBindingQuery(base+'?'+new URLSearchParams({routeCodes:value}))).toThrow();
+    expect(()=>parseRoutingBindingQuery(base+'?routeCodes=%5B%22A105%22%5D&routeCodes=%5B%22A106%22%5D')).toThrow();
+    expect(()=>parseRoutingBindingQuery(base+'?routeCodes=%5B%22A105%22%5D&domain=x')).toThrow();
+    expect(()=>parseRoutingBindingQuery(base+'?routeCodes='+encodeURIComponent(JSON.stringify(['A'.repeat(9000)])))).toThrow();
+  });
   it('projects only explicit immutable ownership and preserves the project route without fuzzy suffix changes', async () => {
     const f = fixture(), result = await readViewerRoutingBindings(f.client, f.input);
     expect(result).toEqual({ schemaVersion: 'wfc.viewer.routing-bindings.v1', modelVersionId: f.input.modelVersionId, contentFingerprint: f.input.contentFingerprint, selectionRevision: '1', aggregateId: f.aggregate.id,

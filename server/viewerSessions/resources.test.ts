@@ -129,6 +129,17 @@ describe('protected resources through the actual HTTP and full-hash storage boun
     vi.mocked(f.service.routingBindings).mockRejectedValueOnce(new ViewerSessionError('ACCESS_REVOKED',403));
     const denied=await fetch(url,{headers:f.headers});expect(denied.status).toBe(403);expect(await denied.json()).toMatchObject({code:'ACCESS_REVOKED'});expect(f.reads()).toBe(0);
   });
+  it('passes only a canonical bounded route-code filter through the protected session endpoint',async()=>{
+    const f=await fixture(),url=`${f.origin}${f.base}/${f.session.sessionId}/routing-bindings`;
+    const response=await fetch(url+'?'+new URLSearchParams({routeCodes:JSON.stringify(['A105','A,B'])}),{headers:f.headers});
+    expect(response.status).toBe(200);
+    expect(f.service.routingBindings).toHaveBeenCalledWith({projectId:f.session.projectId,modelVersionId:f.session.modelVersionId,sessionId:f.session.sessionId,cookieSecret:f.headers.Cookie.slice('wfc_viewer_session='.length)},['A105','A,B']);
+    vi.mocked(f.service.routingBindings).mockClear();
+    for(const query of ['routeCodes=',new URLSearchParams({routeCodes:'[]'}).toString(),'routeCodes=%5B%22A105%22%5D&routeCodes=%5B%22A106%22%5D','routeCodes[x]=A105']){
+      expect((await fetch(url+'?'+query,{headers:f.headers})).status).toBe(400);
+    }
+    expect(f.service.routingBindings).not.toHaveBeenCalled();expect(f.service.authorizeResource).not.toHaveBeenCalled();
+  });
   it('serves raw gzip bytes, truthful HEAD and ranges from a fully verified handle each time',async () => {
     const f=await fixture();
     const full=await fetch(f.origin+f.path,{headers:f.headers});

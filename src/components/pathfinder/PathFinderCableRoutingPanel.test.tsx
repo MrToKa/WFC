@@ -259,6 +259,15 @@ describe('showing the popup From/To locations without changing them', () => {
 });
 
 describe('persistent nonmodal cable routing panel with atomic drafts', () => {
+  it('keeps saved manual routing and 107m primary when automatic routing is different at 121m',()=>{
+    const p=props(),show=vi.fn();p.cable!.cable.routing='/MANUAL/B111/B122';p.cable!.cable.designLength='107';
+    render(<PathFinderCableRoutingPanel {...p} storedRouteSelected pathReady calculatedRouting="/AUTO/B112/SECONDARY" calculatedDesignLength="121" onTogglePath={show}/>);
+    expect(screen.getByRole('textbox',{name:'Cable routing'})).toHaveValue('/MANUAL/B111/B122');
+    expect(screen.getByText(/Cable list design length: 107 m/)).toBeVisible();
+    expect(screen.getByRole('textbox',{name:'Automatically calculated routing'})).toHaveValue('/AUTO/B112/SECONDARY');
+    expect(screen.getByText(/Automatically calculated design length: 121 m/)).toBeVisible();
+    fireEvent.click(screen.getByRole('button',{name:'Show'}));expect(show).toHaveBeenCalledOnce();
+  });
   it('requires no Review or Apply when exact current cable values are already confirmed', () => {
     const p=props(); p.cable!.cable.routing='/SAVED'; p.cable!.cable.designLength='58';
     p.cable!.calculation.acceptedMatchesCurrent=true; p.cable!.calculation.currentness='current';

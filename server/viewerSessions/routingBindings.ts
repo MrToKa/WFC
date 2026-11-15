@@ -16,12 +16,28 @@ const digest = (value: unknown) => createHash('sha256').update(canonicalPurposeJ
 const corrupt = (): never => { throw new ViewerSessionError('ROUTING_BINDINGS_INVALID', 409); };
 const limit = (): never => { throw new ViewerSessionError('ROUTING_BINDINGS_LIMIT', 413); };
 const same = (left: unknown, right: unknown) => canonicalPurposeJson(left) === canonicalPurposeJson(right);
+export function validateRoutingBindingCodes(value:unknown):readonly string[]{
+  if(!Array.isArray(value)||value.length<1||value.length>100)throw new ViewerSessionError('INVALID_VIEWER_REQUEST');
+  const seen=new Set<string>();
+  for(const code of value){let key:string;try{key=normalizeRoutingKey(code);}catch{throw new ViewerSessionError('INVALID_VIEWER_REQUEST');}
+    if(typeof code!=='string'||code.length>500||code!==key||key==='SECONDARY'||seen.has(key))throw new ViewerSessionError('INVALID_VIEWER_REQUEST');seen.add(key);}
+  return [...seen];
+}
+export function parseRoutingBindingQuery(originalUrl:string):readonly string[]|undefined{
+  const query=new URL(originalUrl,'http://viewer.invalid').search;
+  if(!query)return undefined;
+  if(Buffer.byteLength(query)>8192)throw new ViewerSessionError('INVALID_VIEWER_REQUEST');
+  const params=new URLSearchParams(query);if([...params.keys()].some(key=>key!=='routeCodes')||params.getAll('routeCodes').length!==1)throw new ViewerSessionError('INVALID_VIEWER_REQUEST');
+  let value:unknown;try{value=JSON.parse(params.get('routeCodes')!);}catch{throw new ViewerSessionError('INVALID_VIEWER_REQUEST');}
+  return validateRoutingBindingCodes(value);
+}
 
 /** Ordinary model-view projection only. This reader never initializes PF state,
  * mutates a resolution, or exposes administrator planning/engineering records.
  * The caller owns fresh viewer-session authorization before and after the read.
  */
-export async function readViewerRoutingBindings(client: PoolClient, input: { projectId: string; modelVersionId: string; contentFingerprint: string }): Promise<ViewerRoutingBindings> {
+export async function readViewerRoutingBindings(client: PoolClient, input: { projectId: string; modelVersionId: string; contentFingerprint: string;routeCodes?:readonly string[] }): Promise<ViewerRoutingBindings> {
+  const requested=input.routeCodes===undefined?null:new Set(validateRoutingBindingCodes(input.routeCodes));
   const row = (await client.query<Row>(`/* viewer-routing-bindings:publication */ SELECT
     sel.active_model_version_id,sel.selection_revision::text,ver.content_fingerprint,
     p.current_aggregate_id,p.current_artifact_id,p.geometry_revision::text,p.resolution_revision::text,
@@ -83,7 +99,7 @@ export async function readViewerRoutingBindings(client: PoolClient, input: { pro
   if (digest(catalogRoutingHashInput(input.projectId, catalog.rows, catalog.diagnostics)) !== plan.routingContentSha256) return empty();
   const currentTrays = new Map(catalog.rows.map(tray => [tray.projectTrayId, tray]));
   const manifest = new Map(plan.objectManifest.map(object => [object.objectId, object]));
-  const allRoots = new Map<string, string>(), keys = new Set<string>(), explicit = plan.requestedScope.trays.filter(tray => tray.ownershipDecisionId !== null);
+  const allRoots = new Map<string, string>(), keys = new Set<string>(), explicit = plan.requestedScope.trays.filter(tray => tray.ownershipDecisionId !== null&&(!requested||requested.has(normalizeRoutingKey(tray.routeName))));
   if (explicit.length > ROUTING_BINDING_LIMITS.mappings || explicit.reduce((count, tray) => count + tray.orderedRootObjectIds.length, 0) > ROUTING_BINDING_LIMITS.roots) return limit();
   const bindings: ViewerRoutingBindings['bindings'] = []; let roots = 0;
   for (const tray of plan.requestedScope.trays) {
@@ -97,7 +113,7 @@ export async function readViewerRoutingBindings(client: PoolClient, input: { pro
       if (!object || object.parentId === null || allRoots.has(root)) return corrupt();
       allRoots.set(root, tray.projectTrayId);
     }
-    if (tray.ownershipDecisionId !== null) {
+    if (tray.ownershipDecisionId !== null&&(!requested||requested.has(key))) {
       roots += tray.orderedRootObjectIds.length; if (roots > ROUTING_BINDING_LIMITS.roots) return limit();
       bindings.push({ routeName: tray.routeName, rootObjectIds: [...tray.orderedRootObjectIds] });
     }

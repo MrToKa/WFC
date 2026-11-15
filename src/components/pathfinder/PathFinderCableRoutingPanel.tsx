@@ -29,6 +29,7 @@ export type PathFinderCableRoutingPanelProps = {
   onEndpointForegroundContexts?: (value: PathFinderEndpointForegroundContexts | null) => void;
   pathVisible?: boolean; pathReady?: boolean; endpointRefreshKey?: number; actionsBusy?: boolean; calculatedRouting?: string | null; calculatedDesignLength?: string | null;
   pathSource?: PathFinderWorkflowDisplay['source'];
+  storedRouteSelected?:boolean;storedRouteWorking?:boolean;storedRouteMessage?:string;
   review?: PathFinderWorkflowReview | null; calculationPending?: boolean;
   calculationBlockedReason?: string | null; onConfigureCalculation?: () => void;
   drillThroughWalls?: boolean; onDrillThroughWallsChange?: (checked: boolean) => void;
@@ -81,7 +82,7 @@ function FloatingRoutingPanel(props: PathFinderCableRoutingPanelProps & { cable:
 function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalculate, onTogglePath, onShowLocation, onShowLocationPoint, pathVisible = false,
   pathReady = false, pathSource = null, endpointRefreshKey = 0, actionsBusy = false, calculatedRouting, calculatedDesignLength, review, calculationPending = false, calculationBlockedReason = null,
   onConfigureCalculation, drillThroughWalls = false, onDrillThroughWallsChange, submittedDrillThroughWalls, calculationFeedback, calculationDiagnostics,
-  onRefresh, refreshing = false, refreshError = null, onEndpointForegroundContexts,
+  onRefresh, refreshing = false, refreshError = null, onEndpointForegroundContexts,storedRouteSelected=false,storedRouteWorking=false,storedRouteMessage,
   floating }: PathFinderCableRoutingPanelProps & { cable: CableWorkflowRow; floating: ReturnType<typeof useFloatingCablePanel> }) {
   const title = useId(), panel = floating.panelRef;
   const [collapsed, setCollapsed] = useState(false), previousOpen = useRef(false), focusReturn = useRef<HTMLElement | null>(null);
@@ -162,15 +163,15 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
   const calculationMessage = preparationUpdated ? calculationFeedback?.currentAttempt ? calculationFeedback.message
     : 'Network ready. Calculate routing to create a current route.' : stoppedMessage;
   const pairSaved = (cable.calculation.acceptedMatchesCurrent || cable.savedRoute?.currentness === 'current') && !calculationPending && !unsaved;
-  // Stored Cable list values remain useful on first open even when no current
-  // proposal can be drawn. They supply text only, never Show or review authority.
+  // Stored routes have a separate read-only current-model display. They never
+  // supply calculation, barrier acceptance or review authority.
   const hasCalculatedRouting = typeof calculatedRouting === 'string' && calculatedRouting.trim().length > 0;
   const usingSavedExactPath = pathSource === 'saved-exact' && hasCalculatedRouting && !calculationPending && !unsaved;
   const storedRouting = cable.cable.routing?.trim() ? cable.cable.routing : null;
-  const showingStoredRouting = !hasCalculatedRouting && storedRouting !== null;
-  const previousStoredRouting = showingStoredRouting && (calculationPending || unsaved || Boolean(calculationFeedback)
+  const showingStoredRouting = (storedRouteSelected||!hasCalculatedRouting) && storedRouting !== null;
+  const previousStoredRouting = !storedRouteSelected&&showingStoredRouting && (calculationPending || unsaved || Boolean(calculationFeedback)
     || calculatedRouting !== undefined);
-  const routingHeading = usingSavedExactPath ? 'Cable list routing' : hasCalculatedRouting || !showingStoredRouting ? 'Calculated routing'
+  const routingHeading = storedRouteSelected?'Cable list routing':usingSavedExactPath ? 'Cable list routing' : hasCalculatedRouting || !showingStoredRouting ? 'Calculated routing'
     : previousStoredRouting ? 'Previous Cable list routing' : 'Cable list routing';
   const automaticWriting = ['pending','running','unknown'].includes(cable.calculation.automaticUpdate?.status??'');
   const automaticRecoveryRequired = !pairSaved && cable.calculation.automaticUpdate?.status==='unknown'
@@ -277,14 +278,15 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
       {endpoint('from', from, styles)}{endpoint('to', to, styles)}
       <section className={styles.field} aria-label="Cable routing actions">
         <h4 className={styles.heading}>{routingHeading}</h4>
-        <textarea aria-label="Cable routing" className={styles.value} readOnly value={hasCalculatedRouting ? calculatedRouting : storedRouting ?? ''} placeholder={calculationPending ? 'Calculating this cable’s new route…' : 'No routing saved in Cable list'} rows={3} />
+        <textarea aria-label="Cable routing" className={styles.value} readOnly value={storedRouteSelected?storedRouting??'':hasCalculatedRouting ? calculatedRouting : storedRouting ?? ''} placeholder={calculationPending ? 'Calculating this cable’s new route…' : 'No routing saved in Cable list'} rows={3} />
         {showingStoredRouting ? <>
           <p className={styles.note}>{previousStoredRouting ? 'Previous Cable list' : 'Cable list'} design length: {cable.cable.designLength === null ? 'Not set' : cable.cable.designLength === '' ? 'Empty stored value' : `${cable.cable.designLength} m`}</p>
-          <Caption1>{previousStoredRouting ? calculationPending
+          <Caption1>{storedRouteSelected?'Show inspects the saved cable route using current model trays. It does not validate barriers or recalculate its length.':previousStoredRouting ? calculationPending
             ? 'Previously saved route. The new calculated route will appear here when it is available.'
             : 'Previously saved route. Refresh cable status or calculate routing to check the current result.'
             : 'Saved Cable list route. Show requires a current calculated path for these locations, the active model and obstacles.'}</Caption1>
         </> : calculatedDesignLength !== undefined ? <p className={styles.note}>{usingSavedExactPath ? 'Cable list' : 'Calculated'} design length: {calculatedDesignLength ?? 'Not available'} m</p> : null}
+        {storedRouteSelected&&hasCalculatedRouting?<section aria-label="Automatic routing result"><h4>Automatically calculated routing</h4><textarea aria-label="Automatically calculated routing" className={styles.value} readOnly value={calculatedRouting} rows={3}/><p className={styles.note}>Automatically calculated design length: {calculatedDesignLength??'Not available'} m. Show displays the saved Cable list route above.</p></section>:null}
         {usingSavedExactPath ? <Caption1>Saved route. Show displays its saved path without recalculating.</Caption1> : null}
         {onDrillThroughWallsChange ? <>
           <Checkbox label="Drill through the walls" checked={drillThroughWalls}
@@ -311,12 +313,13 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
         </details> : null}
         <div className={styles.actions}>
           <Button disabled={busy || Boolean(pending) || Boolean(legacyRecovery) || Boolean(currentReview?.pending) || unsaved || endpointReadUnavailable || calculationPending || !onCalculate} onClick={() => void onCalculate?.()}>Calculate routing</Button>
-          <Button disabled={busy || !onTogglePath || !pathVisible && (!pathReady || unsaved || calculationPending || refreshing || Boolean(refreshError) || endpointReadUnavailable || savedExactPending)} aria-pressed={pathVisible} onClick={onTogglePath}>{pathVisible ? 'Hide' : 'Show'}</Button>
+          <Button disabled={busy || storedRouteWorking || !onTogglePath || !pathVisible && (!pathReady || refreshing || Boolean(refreshError) || !storedRouteSelected&&(unsaved || calculationPending || endpointReadUnavailable || savedExactPending))} aria-pressed={pathVisible} onClick={onTogglePath}>{storedRouteWorking?'Showing saved route…':pathVisible ? 'Hide' : 'Show'}</Button>
           <Button appearance="primary" disabled={busy || Boolean(pending) || !assignment.canSave} onClick={() => void assignment.save('Confirm cable From/To model assignments.')}>Save</Button>
         </div>
         {calculationBlockedReason ? <p role="status" className={styles.note}>{calculationBlockedReason}</p> : null}
         {calculationBlockedReason && onConfigureCalculation ? <Button disabled={busy} onClick={onConfigureCalculation}>Configure routing</Button> : null}
-        {!calculationPending && !pathReady && cable.calculation.outcome === 'calculated' ? <p role="status" className={styles.note}>{refreshing
+        {storedRouteMessage?<p role="status" className={styles.note}>{storedRouteMessage}</p>:null}
+        {!storedRouteSelected&&!calculationPending && !pathReady && cable.calculation.outcome === 'calculated' ? <p role="status" className={styles.note}>{refreshing
           ? 'Loading the saved calculation for Show…'
           : cable.calculation.currentness !== 'current'
             ? 'Show needs a current path for the active model, locations and obstacles. Calculate routing to update it.'

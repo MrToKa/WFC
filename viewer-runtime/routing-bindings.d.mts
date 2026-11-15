@@ -4,4 +4,4 @@ export type RoutingBindings = Readonly<{
   bindings: ReadonlyArray<Readonly<{ routeName: string; rootObjectIds: ReadonlyArray<string> }>>;
 }>;
 export const ROUTING_BINDINGS_LIMITS: Readonly<{ maps: 128; roots: 512; bytes: number }>;
-export function parseRoutingBindings(value: unknown, descriptor: { modelVersionId: string; contentFingerprint: string }, selectionRevision?: string): RoutingBindings | null;
+export function parseRoutingBindings(value: unknown, descriptor: { modelVersionId: string; contentFingerprint: string }, selectionRevision?: string, requestedKeys?: readonly string[]): RoutingBindings | null;

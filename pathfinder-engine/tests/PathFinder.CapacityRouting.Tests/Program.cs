@@ -75,12 +75,12 @@ internal static class Program
                 CableCategory.Control, Clear, Options(), new ConstrainedRoutingLimits { MaxInputTrays = 1 });
             Need(!value.RouteEvaluation.Route.Success && value.RouteEvaluation.Reason == "INPUT_TRAY_LIMIT");
         });
-        Test("load balancing chooses a longer underloaded branch without blocking either branch", () => {
+        Test("soft load balancing cannot displace the physically shortest admissible branch", () => {
             var route = new RouteCalculator().CalculateLoadBalanced(Diamond, P(0), P(10), CableCategory.Control,
                 [new("/BC100", 10)], Options());
-            Need(route.Success && route.RouteCodes.Contains("/BC200") && !route.RouteCodes.Contains("/BC100"));
-            var actual = Route(CapacityRouting.Filter(Diamond, ["/BC100"]));
-            Need(route.LengthMeters == actual.LengthMeters && route.LengthMeters == 20, "Selection cost leaked into physical length.");
+            Need(route.Success && route.RouteCodes.Contains("/BC100") && !route.RouteCodes.Contains("/BC200"));
+            var actual = Route(Diamond);
+            Need(route.LengthMeters == actual.LengthMeters && route.LengthMeters == 10, "Soft weights displaced physical distance.");
             Need(route.PathPoints.SequenceEqual(actual.PathPoints));
         });
         Test("omitted empty and all-unit weights retain the full original result", () => {
@@ -98,7 +98,7 @@ internal static class Program
             var value = CapacityRouting.CalculateSecondaryWithLocalApproaches(Diamond, [], P(0), P(10), CableCategory.Control,
                 Clear, Options(), interTrayManeuvers:true, routeCostMultipliers: [new("/BC100", 10)]);
             var evaluated = value.LocalApproaches.RouteEvaluation;
-            Need(evaluated.Route.Success && evaluated.Route.RouteCodes.Contains("/BC200") && evaluated.Route.LengthMeters == 20);
+            Need(evaluated.Route.Success && evaluated.Route.RouteCodes.Contains("/BC100") && evaluated.Route.LengthMeters == 10);
             Need(evaluated.FinalChecks.Count == evaluated.Route.PathPoints.Count - 1);
             Need(evaluated.FinalChecks.All(check => check.Observation.Status == RouteCollisionStatus.Clear));
             Need(!value.SecondaryEvaluation.DistanceQualified);
@@ -117,7 +117,7 @@ internal static class Program
             var weights = new[] { new RouteCostMultiplier("/BC100", 10) };
             var first = new RouteCalculator().CalculateLoadBalanced(network, P(0), P(10), CableCategory.Control, weights, Options());
             var other = new RouteCalculator().CalculateLoadBalanced(network, P(0,-5), P(10), CableCategory.Control, weights, Options());
-            Need(first.Success && other.Success && first.RouteCodes.Contains("/BC200") && other.RouteCodes.Contains("/BC200"));
+            Need(first.Success && other.Success && first.RouteCodes.Contains("/BC100") && other.RouteCodes.Contains("/BC100"));
             Need(!first.RouteCodes.Contains("/C003") && other.RouteCodes.Contains("/C003"));
             Need(other.PathPoints[0].Equals(P(0,-5)) && other.LengthMeters == first.LengthMeters + 5);
         });
@@ -125,14 +125,14 @@ internal static class Program
             var forbidden = new TraySegment("forbidden", "/BC999", CableCategory.LV, [P(1), P(9)]);
             var route = new RouteCalculator().CalculateLoadBalanced(Diamond.Append(forbidden), P(0), P(10), CableCategory.Control,
                 [new("/BC100", 10)], Options());
-            Need(route.Success && route.RouteCodes.Contains("/BC200") && !route.RouteCodes.Contains("/BC999"));
+            Need(route.Success && route.RouteCodes.Contains("/BC100") && !route.RouteCodes.Contains("/BC999"));
             var drilled = CapacityRouting.CalculateWithLocalApproaches(Diamond, [], P(0), P(10), CableCategory.Control,
                 (_,_,_) => throw new InvalidOperationException("Drilling called the oracle."), Options(), drillThroughWalls:true,
                 routeCostMultipliers:[new("/BC100", 10)]);
-            Need(drilled.RouteEvaluation.Route.RouteText == route.RouteText && drilled.RouteEvaluation.Route.LengthMeters == 20);
+            Need(drilled.RouteEvaluation.Route.RouteText == route.RouteText && drilled.RouteEvaluation.Route.LengthMeters == 10);
             Need(drilled.RouteEvaluation.CollisionQueries == 0);
         });
-        Test("weights retain original direct-secondary decision and original gap precedence", () => {
+        Test("weights retain direct-secondary admission and physical priority over gap metrics", () => {
             var far = new[] { Tray("/BC001", P(0,10), P(10,10)) };
             var value = CapacityRouting.CalculateSecondaryWithLocalApproaches(far, [], P(0), P(1), CableCategory.Control,
                 Clear, Options(), routeCostMultipliers: [new("/BC001", 1000)]);

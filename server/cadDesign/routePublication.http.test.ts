@@ -272,6 +272,19 @@ afterEach(async () => {
 });
 
 describe('CAD publication HTTP authorization and refusal', () => {
+  it('publishes an automatic component with genuine STEP ports without requiring an existing base attachment',async()=>{
+    seedListExport();
+    const original=mocks.query.getMockImplementation()!;
+    mocks.query.mockImplementation(async(text:string,values:unknown[]=[])=>text.startsWith('SELECT o.record')?{rows:[{record:{...record,geometry:{...record.geometry,fitted:{...record.geometry.fitted!,ports:[]}}}}]}:original(text,values));
+    const response=await post(await start(),'publish',{schemaVersion:'wfc.cad.route-publication.write.v3',expectedRevision:7});
+    expect(response.status).toBe(200);
+    const publication=JSON.parse(String(sql('UPDATE cad_route_groups')?.[1][4]));
+    expect(publication).toMatchObject({mode:'automatic',attachments:[],overlay:{schemaVersion:'wfc.pf.cad-overlay-payload.v3',segments:[{id:`cad:${routeId}`,name:'/CAD-01'}]}});
+    expect(publication.overlay.segments[0].ports.map((p:{pointMetres:number[]})=>p.pointMetres)).toEqual([[0,.03,0],[0,.03,1.5]]);
+    const proof=JSON.parse(Buffer.from(mocks.execute.mock.calls[0][0].cadOverlay.payloadBase64,'base64').toString('utf8'));
+    expect(proof).toEqual(publication.overlay);expect(publication.overlay.segments[0]).not.toHaveProperty('independent');
+    expect(sql('SELECT pf_recalculation_dirty')?.[1]).toEqual([projectId,'geometry','CAD_ROUTE_PUBLISHED',`${routeId}:8`]);
+  });
   it('reuses its compatible list-first row rather than creating a duplicate and pins its projection in publication',async()=>{
     seedListExport();const response=await post(await start(),'publish',publishBody);
     expect(response.status).toBe(200);expect(await response.json()).toMatchObject({projectTrayId:trayId,status:'published'});
@@ -280,6 +293,7 @@ describe('CAD publication HTTP authorization and refusal', () => {
     const publication=JSON.parse(String(sql('UPDATE cad_route_groups')?.[1][4]));
     expect(publication).toMatchObject({trayInBaseCatalog:true,trayExportSourceSha256:exportLink!.source_sha256,traySnapshot:{id:trayId,name:draft.tag}});
     expect(sql('SELECT i.*,c.original_filename')?.[0]).toContain('ORDER BY i.created_at,i.id');
+    expect(sql('SELECT pf_recalculation_dirty')?.[1]).toEqual([projectId,'geometry','CAD_ROUTE_PUBLISHED',`${routeId}:8`]);
   });
   it('requires an explicit list refresh for changed CAD source and preserves manually edited rows',async()=>{
     seedListExport({...instance,revision:instance.revision-1});
@@ -294,6 +308,7 @@ describe('CAD publication HTTP authorization and refusal', () => {
     const response=await post(await start(),'withdraw',{expectedRevision:8});
     expect(response.status).toBe(200);expect(sql('DELETE FROM trays')).toBeUndefined();
     expect(sql('UPDATE cad_route_groups')).toBeDefined();expect(exportedTray!.id).toBe(trayId);expect(mocks.policy).toHaveBeenCalled();
+    expect(sql('SELECT pf_recalculation_dirty')?.[1]).toEqual([projectId,'geometry','CAD_ROUTE_WITHDRAWN',`${routeId}:9`]);
   });
   it.each(['publish', 'attachment-options'])(
     'rejects mixed canonical and legacy members before %s can silently use a subset',
@@ -333,6 +348,7 @@ describe('CAD publication HTTP authorization and refusal', () => {
   it.each([
     { ...publishBody, force: true },
     { ...publishBody, attachments: [] },
+    {schemaVersion:'wfc.cad.route-publication.write.v2',mode:'independent',expectedRevision:7,attachments:[attachment]},
     { ...publishBody, attachments: [{ ...attachment, pointMetres: [0, 0, 0] }] },
   ])('rejects an invalid strict publication body before opening a transaction', async (body) => {
     const response = await post(await start(), 'publish', body);
@@ -384,10 +400,25 @@ describe('CAD publication HTTP authorization and refusal', () => {
     expect(mocks.query.mock.calls.at(-1)?.[0]).toBe('COMMIT');
     expect(mocks.connect).toHaveBeenCalledOnce();
     expect(mocks.release).toHaveBeenCalledOnce();
+    expect(sql('SELECT pf_recalculation_dirty')).toBeUndefined();
   });
 });
 
 describe('CAD publication atomic SQL mutations', () => {
+  it('rolls back publication if automatic recalculation cannot record the overlay change',async()=>{
+    seedListExport();
+    const original=mocks.query.getMockImplementation()!;
+    mocks.query.mockImplementation(async(text:string,values:unknown[]=[])=>{
+      if(text.startsWith('SELECT pf_recalculation_dirty'))throw new Error('dirty event unavailable');
+      return original(text,values);
+    });
+    const response=await post(await start(),'publish',publishBody);
+    expect(response.status).toBe(500);
+    expect(sql('UPDATE cad_route_groups')).toBeDefined();
+    expect(mocks.timeline.at(-1)).toBe('ROLLBACK');
+    // The read-only freeze committed; the mutation transaction did not.
+    expect(mocks.timeline.filter(text=>text==='COMMIT')).toHaveLength(1);
+  });
   it('pins source revisions and actual material type only after composite proof, then validates scope before commit', async () => {
     const response = await post(await start(), 'publish', publishBody);
     expect(response.status).toBe(200);
@@ -469,6 +500,7 @@ describe('CAD publication atomic SQL mutations', () => {
     expect(mocks.timeline.lastIndexOf('prepared-scope')).toBeGreaterThan(
       mocks.timeline.indexOf(update[0]),
     );
+    expect(mocks.timeline.findIndex(text=>text.startsWith('SELECT pf_recalculation_dirty'))).toBeGreaterThan(mocks.timeline.lastIndexOf('prepared-scope'));
     expect(mocks.timeline.at(-1)).toBe('COMMIT');
     expect(mocks.prepared).toHaveBeenCalledTimes(3);
     for (const args of mocks.prepared.mock.calls)
