@@ -7,6 +7,7 @@ import { defaultOptions } from './jobContracts.js';
 import { endpointBindingFixture } from '../../shared/pathfinderEndpointFixtures.js';
 import { MIXED_BARRIER_POLICY } from '../../shared/pathfinderBarrierMixed.js';
 import { supportedBarrierAdmissionIntentSchema } from '../../shared/pathfinderBarrierSupported.js';
+import { PathFinderError } from './errors.js';
 
 const mocks = vi.hoisted(() => ({ tx: vi.fn(), common: vi.fn(), barrierCommon: vi.fn(), heads: vi.fn(), automatic: vi.fn(), verified: vi.fn(), reviewable: vi.fn(), accepted: vi.fn(), savedExactDisplay: vi.fn() }));
 vi.mock('./cableWorkflowRead.js', () => ({ cableWorkflowReadTransaction: mocks.tx }));
@@ -160,6 +161,37 @@ describe('bounded cable diagnostics, mocked SQL protocol and explicit proof/auth
     const value=await f.repo.detail(projectId,who,id(1000),{barrierRouting:structuredClone(intent)});
     expect(value.row.calculation).toMatchObject({currentness:'current',reviewable:true});
     expect(mocks.reviewable.mock.calls[0][3]).toMatchObject({options});expect(mocks.barrierCommon).toHaveBeenCalledOnce();expect(mocks.common).not.toHaveBeenCalled();
+  });
+  it.each([
+    ['same-options','BARRIER_CALCULATION_STORAGE_INVALID'],['recorded-tolerance','BARRIER_CALCULATION_STORAGE_INVALID'],
+    ['same-options','BARRIER_BLOB_MISSING'],['recorded-tolerance','BARRIER_BLOB_MISSING'],
+  ] as const)('retains saved cable fields with an explicit missing-barrier diagnostic for %s / %s',async(kind,reasonCode)=>{
+    const f=fixture(),intent=mixedIntent(),options={...defaultOptions,
+      connectionToleranceMeters:kind==='recorded-tolerance'?2:defaultOptions.connectionToleranceMeters,barrierRouting:intent};
+    f.state.hasReceipt=true;f.state.cables[0].routing='/SAVED' as never;f.state.cables[0].design_length='58' as never;
+    f.state.metadata.set(id(1000),meta(0,{job_status:'complete',item_state:'complete',proposal_status:'calculated',proposal_id:id(30),proposal_hash:'f'.repeat(64)}));
+    mocks.barrierCommon.mockRejectedValue(new PathFinderError(reasonCode,409));
+    mocks.verified.mockResolvedValue({dependencies:{schemaVersion:'pathfinder.dependencies.v8',options}});
+    mocks.accepted.mockImplementation(async(_cable,fresh)=>Boolean(await fresh(options,'pathfinder.dependencies.v8')));
+    const detail=await f.repo.detail(projectId,who,id(1000),{barrierRouting:intent});
+    expect(detail.row.cable).toMatchObject({routing:'/SAVED',designLength:'58',installLength:'123',cableWriteRevision:'7'});
+    expect(detail.row.calculation).toMatchObject({outcome:'calculated',currentness:'unavailable',reviewable:false,acceptedMatchesCurrent:false,
+      reasonCodes:expect.arrayContaining([reasonCode])});
+    expect(detail.row.savedRoute).toBeUndefined();expect(detail.row.calculation.savedExactDisplay).toBeUndefined();
+    expect(mocks.savedExactDisplay).not.toHaveBeenCalled();
+    expect(mocks.barrierCommon).toHaveBeenCalledTimes(kind==='recorded-tolerance'?2:1);
+    expect(f.query.mock.calls.every(([sql])=>!/\b(?:INSERT|UPDATE|DELETE)\b/i.test(sql))).toBe(true);
+    const page=await f.repo.page(projectId,who,{barrierRouting:intent});
+    expect(page.rows).toEqual([detail.row]);expect(classifyCableWorkflow(page.rows[0]).status).toBe('blocked');
+  });
+  it.each([
+    new PathFinderError('BARRIER_STORAGE_BUSY',503),new PathFinderError('BARRIER_CALCULATION_DEADLINE',503),
+    new PathFinderError('ADMIN_REQUIRED',403),new PathFinderError('LOGIN_REVOKED',401),
+    new PathFinderError('BARRIER_BLOB_INTEGRITY',500),Object.assign(new Error('Unclassified I/O failure'),{code:'EIO'}),
+  ])('does not disguise transient, authority or unexpected common-read failure as readable history (%s)',async error=>{
+    const f=fixture();mocks.barrierCommon.mockRejectedValue(error);
+    await expect(f.repo.detail(projectId,who,id(1000),{barrierRouting:mixedIntent()})).rejects.toBe(error);
+    expect(mocks.reviewable).not.toHaveBeenCalled();expect(mocks.accepted).not.toHaveBeenCalled();
   });
   it.each(['legacy-lane','registry-generation','frame','drilling'] as const)('does not mark mixed preferences current after an exchanged %s',async field=>{
     const f=fixture(),intent=mixedIntent(),recorded=structuredClone(intent);

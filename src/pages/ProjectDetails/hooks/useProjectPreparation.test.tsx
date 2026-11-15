@@ -29,6 +29,7 @@ vi.mock('@/api/pathfinderPreparation', async (original) => ({
   fetchPreparationSession: vi.fn(),
   createPreparation: vi.fn(),
   savePreparationResolution: vi.fn(),
+  saveTrayMatches: vi.fn(),
   uploadPreparationPart: vi.fn(),
   mutatePreparation: vi.fn(),
 }));
@@ -52,6 +53,10 @@ function setup() {
     ],
   });
   vi.mocked(api.fetchPreparationSession).mockResolvedValue(fixture.session);
+  vi.mocked(api.saveTrayMatches).mockResolvedValue({ schemaVersion: 'wfc.pf.preparation-tray-matches-receipt.v1',
+    idempotencyKey: ids.login, commandSha256: 'd'.repeat(64),
+    resolutionRevision: fixture.context.scope.resolutionRevision, results: [{ projectTrayId: ids.tray, status: 'assigned', rootObjectIds: ['dbid:1'] }],
+    counts: { assigned: 1, kept: 0, missing: 0, ambiguous: 0 }, duplicate: false });
   const pf = {
     preparationAccess: {
       projectId: ids.project,
@@ -169,6 +174,20 @@ function automaticSetup() {
       resolutions: [...store.context.resolutions.filter(saved => saved.projectTrayId !== input.projectTrayId), resolution] };
     return { schemaVersion: 'wfc.pf.preparation-resolution-receipt.v1', resolutionRevision: revision, resolution, duplicate: false };
   });
+  vi.mocked(api.saveTrayMatches).mockImplementation(async (_project, _token, input) => {
+    const results: api.PreparationTrayMatchesReceipt['results'] = input.matches.map(match => ({ projectTrayId: match.projectTrayId,
+      rootObjectIds: [...match.rootObjectIds], status: store.context.resolutions.some(saved => saved.projectTrayId === match.projectTrayId)
+        ? 'kept' : match.rootObjectIds.length === 1 ? 'assigned' : match.rootObjectIds.length ? 'ambiguous' : 'missing' }));
+    const counts = { assigned: 0, kept: 0, missing: 0, ambiguous: 0 };
+    for (const result of results) {
+      counts[result.status]++;
+      if (result.status === 'assigned') store.context.resolutions.push({ id: crypto.randomUUID(), projectTrayId: result.projectTrayId,
+        mode: 'roots', rootObjectIds: [...result.rootObjectIds], reason: 'Automatically matched project tray', actorId: ids.actor,
+        createdAt: new Date().toISOString(), scope: { ...input.expected } });
+    }
+    if (counts.assigned) store.context.scope.resolutionRevision = String(BigInt(store.context.scope.resolutionRevision) + BigInt(counts.assigned));
+    return { schemaVersion: 'wfc.pf.preparation-tray-matches-receipt.v1', idempotencyKey: input.idempotencyKey, commandSha256: 'd'.repeat(64), resolutionRevision: store.context.scope.resolutionRevision, results, counts, duplicate: false };
+  });
   const makeTrace = (aggregate = store.context.currentAggregate!): GeometryTraceManifest => ({
     ...structuredClone(geometryTraceFixture().manifest), id: crypto.randomUUID(), projectId: aggregate.projectId,
     aggregateId: aggregate.id, modelVersionId: aggregate.modelVersionId, sessionId: aggregate.sessionId,
@@ -203,7 +222,8 @@ describe('project preparation lifecycle', () => {
       schemaVersion: 'wfc.pf.viewer-discovery.v1', mode: request.mode, rootObjectId: request.rootObjectId,
       names: request.names, cursor: request.cursor, matchingPolicyVersion: PREPARATION_MATCHING_POLICY,
       visibilityScope: { schemaVersion: 'wfc.pf.sdk-display-visibility.v1', basis: 'sdk-display-before-pf-appearance', contentSha256: 'a'.repeat(64) },
-      indexedObjectCount: 1, propertyScan: null, nextCursor: null, complete: true,
+      indexedObjectCount: 1, ...(request.includeProperties ? { includeProperties: true } : {}),
+      propertyScan: request.includeProperties ? { attemptedObjectCount: 1, returnedObjectCount: 1, omittedObjectCount: 0, complete: true } : null, nextCursor: null, complete: true,
       objects: [{ objectId: 1, parentId: null, name: 'Tray 01', hasGeometry: true, isPhysicalLeaf: true, orderIndex: 0,
         matchedNames: request.mode === 'names' ? ['Tray 01'] : [] }],
     }));
@@ -211,19 +231,22 @@ describe('project preparation lifecycle', () => {
     const { result } = renderHook(() => useProjectPreparation(pf, true));
     await waitFor(() => expect(result.current.context).not.toBeNull()); await act(() => result.current.discover());
     expect(result.current.discovery?.complete).toBe(true);
-    expect(discover.mock.calls.every(([request]) => request.mode === 'names' || request.mode === 'subtree')).toBe(true);
+    expect(discover.mock.calls.every(([request]) => request.mode === 'names' && request.includeProperties === true)).toBe(true);
     expect(result.current.discovery?.propertyScan).toBeNull();
-    expect(result.current.notice).toContain('From/To locations are searched separately');
+    expect(result.current.notice).toContain('Tray matching finished');
+    expect(api.saveTrayMatches).toHaveBeenCalledOnce(); expect(api.createPreparation).not.toHaveBeenCalled();
+    expect(api.uploadPreparationPart).not.toHaveBeenCalled(); expect(api.mutatePreparation).not.toHaveBeenCalled();
   });
   it('clears an earlier discovery on a failed new attempt, retains its precise last stage, and never freezes partial evidence', async () => {
     const { pf, context, session } = setup(); let fail = false;
     const io: ProjectPreparationViewer = { assertCurrent: () => {}, readSelection: vi.fn(), readTrayRootSelection: vi.fn(),
       capture: vi.fn(), captureBarriers: vi.fn(), publishBarriers: vi.fn(), discover: vi.fn(async (request: PreparationDiscoveryRequest): Promise<PreparationDiscoveryPage> => {
-        if (fail && request.mode === 'subtree') throw Object.assign(new Error('No SDK detail'), { code: 'EXTRACTION_FAILED' });
+        if (fail && request.mode === 'names') throw Object.assign(new Error('No SDK detail'), { code: 'EXTRACTION_FAILED' });
         return { schemaVersion: 'wfc.pf.viewer-discovery.v1', mode: request.mode, rootObjectId: request.rootObjectId,
           names: request.names, cursor: request.cursor, matchingPolicyVersion: PREPARATION_MATCHING_POLICY,
           visibilityScope: { schemaVersion: 'wfc.pf.sdk-display-visibility.v1', basis: 'sdk-display-before-pf-appearance', contentSha256: 'a'.repeat(64) },
-          indexedObjectCount: 1, propertyScan: null, nextCursor: null, complete: true,
+          indexedObjectCount: 1, ...(request.includeProperties ? { includeProperties: true } : {}),
+          propertyScan: request.includeProperties ? { attemptedObjectCount: 1, returnedObjectCount: 1, omittedObjectCount: 0, complete: true } : null, nextCursor: null, complete: true,
           objects: [{ objectId: 1, parentId: null, name: 'Tray 01', hasGeometry: true, isPhysicalLeaf: true, orderIndex: 0,
             matchedNames: request.mode === 'names' ? ['Tray 01'] : [] }] };
       }) };
@@ -231,13 +254,32 @@ describe('project preparation lifecycle', () => {
     const { result } = renderHook(() => useProjectPreparation(pf, true));
     await waitFor(() => expect(result.current.context).not.toBeNull()); await act(() => result.current.discover());
     expect(result.current.discovery?.complete).toBe(true); fail = true; await act(() => result.current.discover());
-    expect(result.current.discovery).toBeNull(); expect(result.current.progress).toContain('0 of 1 distinct roots completed');
-    expect(result.current.error).toContain('Tray-root discovery stopped at dbid:1 (Tray 01)');
+    expect(result.current.discovery).toBeNull(); expect(result.current.progress).toContain('Searching');
+    expect(result.current.error).toContain('Tray-name discovery stopped');
     expect(result.current.error).toContain('EXTRACTION_FAILED'); expect(result.current.error).toContain('published network is unchanged');
     expect(result.current.error).not.toContain('safety limits'); expect(result.current.context).toEqual(context); expect(result.current.session).toEqual(session);
     expect(result.current.busy).toBe(false); expect(result.current.unknown).toBe(false);
     await act(() => result.current.freezePlan());
     expect(api.createPreparation).not.toHaveBeenCalled(); expect(api.uploadPreparationPart).not.toHaveBeenCalled(); expect(api.mutatePreparation).not.toHaveBeenCalled();
+  });
+  it('waits for model loading, checks again after reload and only exposes a persistent read error', async () => {
+    const { pf } = setup();
+    const loading = { ...pf, viewerPhase: 'loading' as const };
+    const hook = renderHook(({ current }) => useProjectPreparation(current, true), { initialProps: { current: loading as typeof pf } });
+    expect(api.fetchPreparationContext).not.toHaveBeenCalled();
+    vi.mocked(api.fetchPreparationContext).mockRejectedValueOnce(new Error('Database deadline reached'));
+    hook.rerender({ current: pf });
+    await waitFor(() => expect(hook.result.current.error).toBe('Database deadline reached'));
+    hook.rerender({ current: loading });
+    expect(hook.result.current.error).toBeNull();
+    expect(api.fetchPreparationContext).toHaveBeenCalledTimes(1);
+    hook.rerender({ current: pf });
+    expect(hook.result.current.error).toBeNull();
+    await waitFor(() => expect(api.fetchPreparationContext).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(hook.result.current.busy).toBe(false));
+    expect(hook.result.current.error).toBeNull();
+    expect(api.createPreparation).not.toHaveBeenCalled();
+    expect(api.mutatePreparation).not.toHaveBeenCalled();
   });
   it('defers cold hidden controls until first Routes activation, then retains loaded controls across switches without 3D readiness', async () => {
     const { pf, context } = setup(), cold = { ...pf, viewerPhase: 'error' as const };
@@ -563,6 +605,173 @@ describe('project preparation lifecycle', () => {
 
 describe('automatic tray workflow', () => {
   afterEach(() => vi.restoreAllMocks());
+  it('generates and saves a network only after the explicit generation action', async () => {
+    const f = automaticSetup(), { result } = renderHook(() => useProjectPreparation(f.pf, true));
+    await waitFor(() => expect(result.current.context).not.toBeNull());
+    expect(api.createPreparation).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled();
+    await act(() => result.current.discover());
+    expect(api.saveTrayMatches).toHaveBeenCalledOnce(); expect(f.store.context.resolutions).toHaveLength(1);
+    expect(api.createPreparation).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled(); expect(createGeometryTrace).not.toHaveBeenCalled();
+    await act(() => result.current.generateNetwork());
+    expect(api.createPreparation).toHaveBeenCalledOnce(); expect(f.capture).toHaveBeenCalledOnce();
+    expect(api.mutatePreparation).toHaveBeenCalledOnce(); expect(createGeometryTrace).toHaveBeenCalledOnce();
+    expect(f.discover.mock.calls.at(-1)?.[3]).toEqual({ skipEquipment: true, assignedOnly: true });
+    expect(api.saveTrayMatches).toHaveBeenCalledOnce();
+    expect(result.current.networkReady).toBe(true); expect(result.current.generatingNetwork).toBe(false);
+  });
+  it('requires persisted tray assignments before generation and never substitutes automatic matching', async () => {
+    const f = automaticSetup(), { result } = renderHook(() => useProjectPreparation(f.pf, true));
+    await waitFor(() => expect(result.current.context).not.toBeNull());
+    await act(() => result.current.generateNetwork());
+    expect(result.current.error).toContain('No project trays are assigned');
+    expect(f.discover).not.toHaveBeenCalled(); expect(api.saveTrayMatches).not.toHaveBeenCalled();
+    expect(api.createPreparation).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled();
+  });
+  it('matches and saves project trays even when an unrelated old network file is missing', async () => {
+    const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
+    const aggregateId = f.store.context.currentAggregate!.id, trace = f.makeTrace(); f.store.traces.set(trace.aggregateId, trace);
+    vi.mocked(fetchGeometryTraceManifest).mockRejectedValue(new GeometryTraceApiError('PREPARATION_SNAPSHOT_MISSING', 409, 'Old network file missing', 'refused'));
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true));
+    await waitFor(() => expect(result.current.error).toContain('PREPARATION_SNAPSHOT_MISSING'));
+    const reads = vi.mocked(fetchGeometryTraceManifest).mock.calls.length;
+    await act(() => result.current.discover());
+    expect(api.saveTrayMatches).toHaveBeenCalledOnce(); expect(result.current.context?.resolutions).toHaveLength(1);
+    expect(result.current.error).toBeNull(); expect(result.current.networkReady).toBe(false);
+    expect(fetchGeometryTraceManifest).toHaveBeenCalledTimes(reads);
+    expect(f.store.context.currentAggregate!.id).toBe(aggregateId); expect(f.store.sessions.size).toBe(1);
+    expect(api.createPreparation).not.toHaveBeenCalled(); expect(api.uploadPreparationPart).not.toHaveBeenCalled();
+    expect(api.mutatePreparation).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled(); expect(createGeometryTrace).not.toHaveBeenCalled();
+  });
+  it('forwards logical GUID and source groups during matching without capturing or publishing a network', async () => {
+    const f = automaticSetup();
+    f.discovery.trays[0] = { ...f.discovery.trays[0], candidateRootObjectIds: ['dbid:1', 'dbid:2'],
+      candidateRootGroups: [{ rootObjectIds: ['dbid:1', 'dbid:2'], identity: { guid: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', sourceFile: 'project/model.nwd' } }] };
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.context).not.toBeNull());
+    await act(() => result.current.discover());
+    expect(api.saveTrayMatches).toHaveBeenCalledWith(ids.project, 'login', expect.objectContaining({ matches: [{ projectTrayId: ids.tray,
+      rootObjectIds: ['dbid:1', 'dbid:2'], candidateRootGroups: f.discovery.trays[0].candidateRootGroups }] }), expect.any(AbortSignal));
+    expect(api.createPreparation).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled(); expect(createGeometryTrace).not.toHaveBeenCalled();
+  });
+  it('retries only an unknown matching command and never proceeds to network generation', async () => {
+    const f = automaticSetup(), saved = vi.mocked(api.saveTrayMatches).getMockImplementation()!;
+    vi.mocked(api.saveTrayMatches).mockImplementation(async (project, token, command, signal) => {
+      await saved(project, token, command, signal); throw new api.PreparationApiError('PREPARATION_OUTCOME_UNKNOWN', 500, 'Lost match receipt', 'unknown');
+    });
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.context).not.toBeNull());
+    await act(() => result.current.discover()); expect(result.current.unknown).toBe(true);
+    const original = vi.mocked(api.saveTrayMatches).mock.calls[0][2];
+    vi.mocked(api.saveTrayMatches).mockImplementation(saved);
+    await act(() => result.current.checkTrays());
+    expect(vi.mocked(api.saveTrayMatches).mock.calls.every(call => call[2] === original)).toBe(true);
+    expect(result.current.unknown).toBe(false); expect(result.current.trayMatchCounts).not.toBeNull();
+    expect(api.createPreparation).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled(); expect(createGeometryTrace).not.toHaveBeenCalled();
+  });
+  it('regenerates a saved network with a fresh session while retaining manual tray assignments', async () => {
+    const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
+    f.store.context.resolutions = [{ id: crypto.randomUUID(), projectTrayId: ids.tray, mode: 'roots', rootObjectIds: ['dbid:1'],
+      reason: 'Saved manual tray assignment', actorId: ids.actor, createdAt: session.createdAt, scope: { ...f.store.context.scope } }];
+    const old = structuredClone(f.store.context.currentAggregate!), trace = f.makeTrace(); f.store.traces.set(trace.aggregateId, trace);
+    const assignments = structuredClone(f.store.context.resolutions);
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.networkReady).toBe(true));
+    await act(() => result.current.generateNetwork());
+    expect(api.createPreparation).toHaveBeenCalledOnce(); expect(f.capture).toHaveBeenCalledOnce();
+    expect(result.current.context?.currentAggregate?.id).not.toBe(old.id);
+    expect(result.current.context?.currentAggregate?.sessionId).not.toBe(old.sessionId);
+    expect(f.store.context.resolutions).toEqual(assignments); expect(api.savePreparationResolution).not.toHaveBeenCalled();
+    expect(result.current.networkReady).toBe(true);
+  });
+  it('regenerates despite a missing old projection throughout create, capture and publication reads', async () => {
+    const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
+    f.store.context.resolutions = [{ id: crypto.randomUUID(), projectTrayId: ids.tray, mode: 'roots', rootObjectIds: ['dbid:1'],
+      reason: 'Saved manual tray assignment', actorId: ids.actor, createdAt: session.createdAt, scope: { ...f.store.context.scope } }];
+    const old = structuredClone(f.store.context.currentAggregate!), trace = f.makeTrace(); f.store.traces.set(trace.aggregateId, trace);
+    const read = vi.mocked(fetchGeometryTraceManifest).getMockImplementation()!;
+    vi.mocked(fetchGeometryTraceManifest).mockImplementation(async (...args) => {
+      if (args[2] === trace.id) throw new GeometryTraceApiError('PREPARATION_SNAPSHOT_MISSING', 409, 'The previous network file is missing.', 'refused');
+      return read(...args);
+    });
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.error).toContain('PREPARATION_SNAPSHOT_MISSING'));
+    await act(() => result.current.generateNetwork());
+    expect(vi.mocked(fetchGeometryTraceManifest).mock.calls.filter(call => call[2] === trace.id).length).toBeGreaterThan(2);
+    expect(api.createPreparation).toHaveBeenCalledOnce(); expect(f.capture).toHaveBeenCalledOnce();
+    expect(result.current.context?.currentAggregate?.id).not.toBe(old.id); expect(result.current.networkReady).toBe(true);
+    expect(result.current.error).toBeNull(); expect(result.current.unknown).toBe(false);
+  });
+  it('resumes the same explicit generation session after a paused capture', async () => {
+    const f = automaticSetup(); f.capture.mockRejectedValueOnce(new DOMException('Paused', 'AbortError'));
+    f.store.context.resolutions = [{ id: crypto.randomUUID(), projectTrayId: ids.tray, mode: 'roots', rootObjectIds: ['dbid:1'],
+      reason: 'Saved manual tray assignment', actorId: ids.actor, createdAt: new Date().toISOString(), scope: { ...f.store.context.scope } }];
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.context).not.toBeNull());
+    await act(() => result.current.generateNetwork());
+    const sessionId = result.current.session!.id;
+    expect(result.current.generationPaused).toBe(true); expect(result.current.networkReady).toBe(false);
+    await act(() => result.current.generateNetwork());
+    expect(api.createPreparation).toHaveBeenCalledOnce(); expect(result.current.context?.currentAggregate?.sessionId).toBe(sessionId);
+    expect(result.current.networkReady).toBe(true); expect(result.current.generationPaused).toBe(false);
+  });
+  it('does not bypass projection integrity errors when explicit generation is requested', async () => {
+    const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
+    const trace = f.makeTrace(); f.store.traces.set(trace.aggregateId, trace);
+    vi.mocked(fetchGeometryTraceManifest).mockRejectedValue(new GeometryTraceApiError('ARTIFACT_INTEGRITY', 409, 'The saved projection failed integrity.', 'refused'));
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.error).toContain('ARTIFACT_INTEGRITY'));
+    await act(() => result.current.generateNetwork());
+    expect(result.current.networkReady).toBe(false); expect(result.current.error).toContain('ARTIFACT_INTEGRITY');
+    expect(api.createPreparation).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled();
+  });
+  it('keeps an unknown generation on its exact create command before resuming the same session', async () => {
+    const f = automaticSetup();
+    f.store.context.resolutions = [{ id: crypto.randomUUID(), projectTrayId: ids.tray, mode: 'roots', rootObjectIds: ['dbid:1'],
+      reason: 'Saved manual tray assignment', actorId: ids.actor, createdAt: new Date().toISOString(), scope: { ...f.store.context.scope } }];
+    vi.mocked(api.createPreparation).mockImplementation(async (project, token, input) => {
+      await f.create(project, token, input); throw new api.PreparationApiError('PREPARATION_OUTCOME_UNKNOWN', 500, 'Lost create receipt', 'unknown');
+    });
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.context).not.toBeNull());
+    await act(() => result.current.generateNetwork()); expect(result.current.unknown).toBe(true);
+    const calls = vi.mocked(api.createPreparation).mock.calls.length, original = vi.mocked(api.createPreparation).mock.calls[0][2];
+    await act(() => result.current.generateNetwork()); expect(api.createPreparation).toHaveBeenCalledTimes(calls);
+    vi.mocked(api.createPreparation).mockImplementation(f.create);
+    await act(() => result.current.checkTrays());
+    expect(vi.mocked(api.createPreparation).mock.calls.every(call => call[2].idempotencyKey === original.idempotencyKey)).toBe(true);
+    expect(f.store.sessions.size).toBe(1); expect(result.current.networkReady).toBe(true); expect(result.current.unknown).toBe(false);
+  });
+  it('finishes a persisted published network after remount without recapturing or publishing geometry', async () => {
+    const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
+    const aggregate = structuredClone(f.store.context.currentAggregate!);
+    const first = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(first.result.current.context).not.toBeNull()); first.unmount();
+    const second = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(second.result.current.canFinishNetwork).toBe(true));
+    await act(() => second.result.current.finishNetwork());
+    expect(second.result.current.networkReady).toBe(true); expect(f.store.context.currentAggregate).toEqual(aggregate);
+    expect(api.createPreparation).not.toHaveBeenCalled(); expect(api.mutatePreparation).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled();
+    expect(createGeometryTrace).toHaveBeenCalledOnce(); expect(vi.mocked(createGeometryTrace).mock.calls[0][2].aggregateId).toBe(aggregate.id);
+  });
+  it('settles the exact old runtime command before explicitly finishing the same newly published aggregate', async () => {
+    const f = automaticSetup();
+    f.store.context.resolutions = [{ id: crypto.randomUUID(), projectTrayId: ids.tray, mode: 'roots', rootObjectIds: ['dbid:1'],
+      reason: 'Saved assignment', actorId: ids.actor, createdAt: new Date().toISOString(), scope: { ...f.store.context.scope } }];
+    const lost = new GeometryTraceApiError('GEOMETRY_TRACE_WORKER_FAILED', 503, 'Worker stopped', 'unknown');
+    vi.mocked(createGeometryTrace).mockRejectedValueOnce(lost).mockRejectedValueOnce(lost).mockRejectedValueOnce(lost)
+      .mockRejectedValueOnce(new GeometryTraceApiError('GEOMETRY_TRACE_DERIVATION_CHANGED', 409, 'Original runtime changed', 'refused'));
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.context).not.toBeNull());
+    await act(() => result.current.generateNetwork()); expect(result.current.unknown).toBe(true);
+    const aggregate = structuredClone(f.store.context.currentAggregate!), original = vi.mocked(createGeometryTrace).mock.calls[0][2];
+    await act(() => result.current.finishNetwork()); expect(createGeometryTrace).toHaveBeenCalledTimes(3);
+    f.store.runtime = geometryTraceRuntimeFixture('b'.repeat(64)); await act(() => result.current.checkTrays());
+    expect(result.current.unknown).toBe(false); expect(vi.mocked(createGeometryTrace).mock.calls.slice(0, 4).every(call => call[2] === original)).toBe(true);
+    await act(() => result.current.finishNetwork());
+    const replacement = vi.mocked(createGeometryTrace).mock.calls[4][2];
+    expect(replacement.idempotencyKey).not.toBe(original.idempotencyKey); expect(replacement.aggregateId).toBe(aggregate.id);
+    expect(replacement).toMatchObject({ expectedRuntimeFingerprintSha256: f.store.runtime.runtimeFingerprintSha256 });
+    expect(f.store.context.currentAggregate).toEqual(aggregate); expect(result.current.networkReady).toBe(true);
+    expect(api.createPreparation).toHaveBeenCalledOnce(); expect(api.mutatePreparation).toHaveBeenCalledOnce(); expect(f.capture).toHaveBeenCalledOnce();
+  });
+  it('does not finish geometry from a mismatched published session plan', async () => {
+    const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
+    const saved = f.store.sessions.get(session.id)!; f.store.sessions.set(session.id, { ...saved, plan: { ...saved.plan, orderedPlanSha256: 'f'.repeat(64) } });
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.context).not.toBeNull());
+    await act(() => result.current.finishNetwork());
+    expect(result.current.error).toContain('does not match the current preparation'); expect(createGeometryTrace).not.toHaveBeenCalled();
+    expect(api.createPreparation).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled();
+  });
   it.each(['collecting', 'different-plan', 'published-id'] as const)('retains an unknown publish lock for %s evidence', async mode => {
     const f = automaticSetup();
     vi.mocked(api.mutatePreparation).mockImplementation(async (_project, _token, id) => {
@@ -594,7 +803,7 @@ describe('automatic tray workflow', () => {
     expect(api.mutatePreparation).toHaveBeenCalledOnce();
     expect(result.current.unknown).toBe(false); expect(result.current.canMutate).toBe(true);
     expect(result.current.error).toContain('GEOMETRY_INVALID');
-    expect(result.current.error).toContain('discover again');
+    expect(result.current.error).toContain('choose Generate network or Regenerate network');
     expect(f.pf.reloadViewer).not.toHaveBeenCalled();
   });
 
@@ -699,7 +908,7 @@ describe('automatic tray workflow', () => {
     await act(() => result.current.checkTrays());
     const previous = vi.mocked(createGeometryTrace).mock.calls[0][2];
     expect(result.current.unknown).toBe(false); expect(result.current.networkReady).toBe(false); expect(result.current.canMutate).toBe(true);
-    expect(result.current.error).toContain('GEOMETRY_TRACE_DERIVATION_CHANGED'); expect(result.current.error).toContain('Discover project tray candidates again');
+    expect(result.current.error).toContain('GEOMETRY_TRACE_DERIVATION_CHANGED'); expect(result.current.error).toContain('Generate network or Regenerate network');
     expect(createGeometryTrace).toHaveBeenCalledOnce(); expect(fetchGeometryTraceRuntime).toHaveBeenCalledOnce();
     f.store.runtime = geometryTraceRuntimeFixture('b'.repeat(64));
     await act(() => result.current.checkTrays());
@@ -736,7 +945,7 @@ describe('automatic tray workflow', () => {
     const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.networkReady).toBe(true));
     expect(result.current.networkStorageStatus).toBe('stored-current');
     const key = result.current.networkReadinessKey;
-    expect(fetchGeometryTraceManifest).toHaveBeenCalledWith(ids.project, 'login', trace.id, expect.any(AbortSignal));
+    expect(fetchGeometryTraceManifest).toHaveBeenCalledWith(ids.project, 'login', trace.id, expect.any(AbortSignal), { requireProjection: true });
     expect(createGeometryTrace).not.toHaveBeenCalled(); expect(fetchGeometryTraceRuntime).not.toHaveBeenCalled();
     f.store.runtime = geometryTraceRuntimeFixture('b'.repeat(64));
     f.store.context.scope.locationRegistryRevision = '99'; f.store.context.endpointNames = ['NEW-FROM', 'NEW-TO'];
@@ -814,7 +1023,7 @@ describe('automatic tray workflow', () => {
     await act(() => result.current.checkTrays());
     expect(createGeometryTrace).toHaveBeenCalledOnce();
     expect(fetchGeometryTraceManifest).toHaveBeenCalledWith(ids.project, 'login',
-      f.store.traces.get(f.store.context.currentAggregate!.id)!.id, expect.any(AbortSignal));
+      f.store.traces.get(f.store.context.currentAggregate!.id)!.id, expect.any(AbortSignal), { requireProjection: true });
     expect(result.current.unknown).toBe(false); expect(result.current.networkReady).toBe(true); expect(result.current.canMutate).toBe(true);
     expect(api.createPreparation).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled(); expect(api.mutatePreparation).not.toHaveBeenCalled();
   });
@@ -958,6 +1167,21 @@ describe('automatic tray workflow', () => {
     expect(vi.mocked(createGeometryTrace).mock.calls[3][2]).toEqual(command);
     expect(second.result.current.networkReady).toBe(true); expect(f.capture).not.toHaveBeenCalled();
   });
+  it('retains published assignments but never reports a missing restored projection ready', async () => {
+    const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
+    const trace = f.makeTrace(); f.store.traces.set(trace.aggregateId, trace);
+    const before = structuredClone(f.store.context);
+    vi.mocked(fetchGeometryTraceManifest).mockRejectedValue(new GeometryTraceApiError('PREPARATION_SNAPSHOT_MISSING', 409,
+      'The saved routing network file is missing. Restore the Path Finder files from the matching backup.', 'refused'));
+    const { result } = renderHook(() => useProjectPreparation(f.pf, true)); await waitFor(() => expect(result.current.error).not.toBeNull());
+    expect(result.current.error).toContain('PREPARATION_SNAPSHOT_MISSING');
+    expect(result.current.context).toEqual(before); expect(result.current.session?.state).toBe('published');
+    expect(result.current.networkReady).toBe(false); expect(result.current.networkReadinessKey).toBeNull();
+    expect(result.current.networkTrace).toBeNull(); expect(result.current.unknown).toBe(false);
+    expect(fetchGeometryTraceManifest).toHaveBeenCalledWith(ids.project, 'login', trace.id, expect.any(AbortSignal), { requireProjection: true });
+    expect(api.createPreparation).not.toHaveBeenCalled(); expect(api.mutatePreparation).not.toHaveBeenCalled();
+    expect(createGeometryTrace).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled();
+  });
   it.each(['model', 'session', 'capture-frame', 'projection', 'object-count', 'manifest-hash'] as const)(
     'does not mark the network ready from a mismatched %s trace', async kind => {
       const f = automaticSetup(), session = f.makeSession(); f.store.sessions.set(session.id, session); f.publishSession(session);
@@ -1026,16 +1250,16 @@ describe('automatic tray workflow', () => {
     expect(f.capture).toHaveBeenCalledOnce(); expect(api.mutatePreparation).toHaveBeenCalledOnce(); expect(f.discover).toHaveBeenCalledTimes(2);
     expect(result.current.session?.plan.requestedScope.skippedTrays).toEqual(f.store.skippedTrays);
   });
-  it('saves a selected tray without preparing the network until Discover is explicitly requested', async () => {
+  it('saves a selected tray without preparing the network until Generate is explicitly requested', async () => {
     const f = automaticSetup(); const { result } = renderHook(() => useProjectPreparation(f.pf, true));
     await waitFor(() => expect(result.current.context).not.toBeNull()); await act(() => result.current.assignTray(ids.tray, ['dbid:23', 'dbid:24']));
     expect(api.savePreparationResolution).toHaveBeenCalledWith(ids.project, 'login', expect.objectContaining({ projectTrayId: ids.tray,
       mode: 'roots', rootObjectIds: ['dbid:23', 'dbid:24'], expected: f.context.scope, reason: 'Assigned from the current model selection.' }), expect.any(AbortSignal));
     expect(api.createPreparation).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled(); expect(api.mutatePreparation).not.toHaveBeenCalled();
-    expect(result.current.notice).toBe('Tray assignment saved. Choose Discover project tray candidates to update the routing network.');
+    expect(result.current.notice).toBe('Tray assignment saved. Choose Generate network or Regenerate network to update the routing network.');
     expect(result.current.context?.resolutions[0].rootObjectIds).toEqual(['dbid:23', 'dbid:24']);
     expect(result.current.canMutate).toBe(true); expect(result.current.networkReady).toBe(false);
-    await act(() => result.current.checkTrays());
+    await act(() => result.current.generateNetwork());
     expect(api.createPreparation).toHaveBeenCalledWith(ids.project, 'login', expect.objectContaining({ expected: expect.objectContaining({ resolutionRevision: '1' }) }), expect.any(AbortSignal));
     expect(result.current.notice).toBe('Tray network updated.');
     const published = f.store.context.currentAggregate;
@@ -1203,7 +1427,7 @@ describe('automatic tray workflow', () => {
     expect(result.current.busy).toBe(false); expect(result.current.unknown).toBe(false); expect(result.current.conflict).toBe(false);
     expect(result.current.error).toContain('property limit');
     expect(result.current.error).toContain('Saved assignments and the published network were kept');
-    expect(result.current.error).toContain('Discover project tray candidates');
+    expect(result.current.error).toContain('Generate network or Regenerate network');
     expect(result.current.error).not.toContain('Private SDK'); expect(result.current.error).not.toContain('Refresh Path Finder');
     expect(f.store.context).toEqual(original);
     expect(api.savePreparationResolution).not.toHaveBeenCalled(); expect(api.createPreparation).not.toHaveBeenCalled();

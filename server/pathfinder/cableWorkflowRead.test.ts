@@ -36,7 +36,7 @@ describe('SELECT-only cable workflow read ownership', () => {
     expect(await cableWorkflowReadTransaction(db.pool, projectId, db.who, operation)).toBe(value);
     expect(db.calls[0].sql).toContain('BEGIN ISOLATION LEVEL REPEATABLE READ');
     expect(db.calls[1].sql).toContain("lock_timeout='1000ms'"); expect(db.calls[1].sql).toContain("statement_timeout='3000ms'");
-    expect(db.calls[2]).toEqual({ sql: 'SELECT id FROM projects WHERE id=$1 FOR NO KEY UPDATE', values: [projectId] });
+    expect(db.calls[2]).toEqual({ sql: 'SELECT id FROM projects WHERE id=$1 FOR SHARE', values: [projectId] });
     expect(db.calls[3]).toEqual({ sql: 'SELECT is_admin FROM users WHERE id=$1 FOR SHARE', values: [db.who.userId] });
     expect(db.calls[4]).toEqual({ sql: 'SELECT user_id,expires_at,revoked_at FROM viewer_login_bindings WHERE login_id=$1 FOR SHARE', values: [db.who.loginId] });
     expect(db.calls.at(-1)?.sql).toBe('COMMIT'); expect(db.calls.map(call => call.sql).join('\n')).not.toMatch(/\b(?:INSERT|UPDATE\s+\w+\s+SET|DELETE|CREATE|ALTER|TRUNCATE)\b/i);

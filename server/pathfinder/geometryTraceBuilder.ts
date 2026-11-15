@@ -3,7 +3,8 @@ import { canonicalPurposeJson } from '../../shared/pathfinderPurposePolicy.js';
 import { geometryObjectRevisionSchema, geometryObjectComputationalHashInput, geometryTraceManifestSchema, geometryTraceContentHashInput, fittedTraceExportSchema, geometryRuntimeFingerprintSchema, declaredLengthObservationSchema, GEOMETRY_SIGNATURE_POLICY, GEOMETRY_TRACE_DERIVATION, GEOMETRY_TRACE_LIMITS, type GeometryRuntimeFingerprint, type GeometryObjectRevision, type GeometryObjectSummary, type DeclaredLengthObservation } from '../../shared/pathfinderGeometryTrace.js';
 import { preparationAggregateSchema, preparationPlanSchema, type PreparationAggregate, type PreparationPlan } from '../../shared/pathfinderPreparation.js';
 import type { PreparationTraceIndex } from '../../shared/preparationMerge.js';
-import { snapshotSchema } from './contracts.js';
+import { snapshotSchema, type ComputationalSnapshot } from './contracts.js';
+import { parseOwnedPreparationSnapshot } from './ownedPreparationSnapshot.js';
 import { PathFinderError } from './errors.js';
 import { z } from 'zod';
 
@@ -16,7 +17,15 @@ const blobSchema = z.object({ payloadRef: z.string().uuid(), sha256: z.string().
 export const geometryTraceFrozenSchema = z.object({ traceId: z.string().uuid(), exportId: z.string().uuid(), fittedBlobId: z.string().uuid(), recordsBlobId: z.string().uuid(), frozenBlobId: z.string().uuid(), aggregate: preparationAggregateSchema, plan: preparationPlanSchema, runtimeFingerprint: geometryRuntimeFingerprintSchema, declaredLengths: z.array(declaredLengthObservationSchema).max(100000), evidence: z.array(z.object({ partId: z.string().uuid(), blob: blobSchema }).strict()).max(4096), createdAt: z.string().datetime(), createdBy: z.string().uuid() }).strict();
 export type GeometryTraceBuildInput = { traceId: string; recordsBlobId: string; aggregate: PreparationAggregate; plan: PreparationPlan; snapshot: unknown; traceIndex: PreparationTraceIndex; fitted: unknown; fittedBlob: Blob; runtimeFingerprint: GeometryRuntimeFingerprint; evidence: { partId: string; blob: Blob }[]; declaredLengths: DeclaredLengthObservation[]; createdAt: string; createdBy: string };
 export function buildGeometryTrace(raw: GeometryTraceBuildInput) {
-  const started = performance.now(), aggregate = preparationAggregateSchema.parse(raw.aggregate), plan = preparationPlanSchema.parse(raw.plan), snapshot = snapshotSchema.parse(raw.snapshot), fitted = fittedTraceExportSchema.parse(raw.fitted);
+  return buildParsedGeometryTrace(raw, value => snapshotSchema.parse(value));
+}
+/** Worker-only ownership transfer: raw.snapshot must be freshly decoded and
+ * private to this task. The public builder above remains non-mutating. */
+export function buildGeometryTraceFromOwnedSnapshot(raw: GeometryTraceBuildInput) {
+  return buildParsedGeometryTrace(raw, parseOwnedPreparationSnapshot);
+}
+function buildParsedGeometryTrace(raw: GeometryTraceBuildInput, parseSnapshot: (value: unknown) => ComputationalSnapshot) {
+  const started = performance.now(), aggregate = preparationAggregateSchema.parse(raw.aggregate), plan = preparationPlanSchema.parse(raw.plan), snapshot = parseSnapshot(raw.snapshot), fitted = fittedTraceExportSchema.parse(raw.fitted);
   if (aggregate.projectId !== plan.projectId || aggregate.sessionId !== plan.id || aggregate.orderedPlanSha256 !== plan.orderedPlanSha256 || aggregate.projection.sha256 !== fitted.snapshotSha256 || snapshot.model.projectId !== aggregate.projectId || snapshot.model.modelVersionId !== aggregate.modelVersionId || snapshot.model.contentSha256 !== aggregate.contentFingerprint || fitted.projectId !== aggregate.projectId || fitted.modelVersionId !== aggregate.modelVersionId || fitted.contentFingerprint !== aggregate.contentFingerprint || fitted.objects.length !== snapshot.objects.length || fitted.segments.length !== aggregate.counts.physicalLeaves || raw.traceIndex.sessionId !== plan.id || raw.traceIndex.coordinateFrameId !== aggregate.coordinateFrameId || raw.traceIndex.objects.length !== snapshot.objects.length) return refuse('GEOMETRY_TRACE_INPUT_MISMATCH');
   if (new Set(raw.evidence.map(e => e.partId)).size !== raw.evidence.length || raw.evidence.some(e => !aggregate.partReferences.some(p => p.partId === e.partId))) return refuse('GEOMETRY_TRACE_EVIDENCE_SCOPE');
   const projectionRef = { payloadRef: aggregate.projection.payloadRef, sha256: aggregate.projection.sha256, bytes: aggregate.projection.bytes };

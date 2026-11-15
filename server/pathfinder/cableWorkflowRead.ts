@@ -30,7 +30,9 @@ export async function cableWorkflowReadTransaction<T>(pool: Pool, projectId: str
     clearTimeout(acquisitionTimer); check();
     await query('BEGIN ISOLATION LEVEL REPEATABLE READ');
     await query("SET LOCAL lock_timeout='1000ms';SET LOCAL statement_timeout='3000ms';SET LOCAL idle_in_transaction_session_timeout='15000ms'");
-    const exists = (await query('SELECT id FROM projects WHERE id=$1 FOR NO KEY UPDATE', [projectId])).rows.length === 1;
+    // Readers share the project fence; writers still require the incompatible
+    // NO KEY UPDATE lock. Independent status panels must not serialize each other.
+    const exists = (await query('SELECT id FROM projects WHERE id=$1 FOR SHARE', [projectId])).rows.length === 1;
     const user = (await query('SELECT is_admin FROM users WHERE id=$1 FOR SHARE', [who.userId])).rows[0] as { is_admin: boolean } | undefined;
     if (!user) return fail('LOGIN_REVOKED', 401); if (!user.is_admin) return fail('ADMIN_REQUIRED', 403);
     const login = (await query('SELECT user_id,expires_at,revoked_at FROM viewer_login_bindings WHERE login_id=$1 FOR SHARE', [who.loginId])).rows[0] as

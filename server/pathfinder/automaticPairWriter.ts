@@ -144,7 +144,7 @@ export function createAutomaticPairWriter(pool: Pool, adapters: AutomaticPairWri
       const owned = await ownership(client, { projectId: m.projectId, cableId: m.cableId, currentSnapshot: before }, () => signal?.throwIfAborted());
       if (owned.kind === 'review-required' || !sameAutomaticPairValue(owned, m.ownership)) return { status: 'review-required', receiptId: null, code: 'AUTOMATIC_PAIR_OWNERSHIP_CHANGED' };
       if (capacityClear) {
-        if (owned.kind !== 'automatic') return { status: 'refused', receiptId: null, code: 'AUTOMATIC_PAIR_EMPTY_NO_PATH' };
+        if (owned.kind !== 'automatic' && owned.kind !== 'policy') return { status: 'refused', receiptId: null, code: 'AUTOMATIC_PAIR_EMPTY_NO_PATH' };
         capacityEvidence = await currentCapacity();
         if (!validCapacityClearEvidence(dependencies, p.result, capacityEvidence))
           return { status: 'stale', receiptId: null, code: 'AUTOMATIC_PAIR_CAPACITY_CHANGED' };

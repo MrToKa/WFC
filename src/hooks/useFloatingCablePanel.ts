@@ -201,7 +201,8 @@ export function useFloatingCablePanel({ open, title, scopeKey, width = 420, pref
   const panelStyle: CSSProperties = detached
     ? { position: 'relative', inset: 'auto', width: '100%', minWidth: 0, minHeight: '100vh', maxWidth: 'none', maxHeight: 'none', margin: 0, overflow: 'visible' }
     : { position: 'fixed', ...(position ? { left: position.left, top: position.top, right: 'auto' } : { right: 16, top: Math.max(8, Math.min(preferredTop, window.innerHeight - 104)) }),
-      width, maxWidth: 'calc(100vw - 16px)', minWidth: 0, maxHeight: 'calc(100vh - 16px)', overflow: 'auto' };
+      width, maxWidth: 'calc(100vw - 16px)', minWidth: 0,
+      maxHeight: `calc(100vh - ${position?.top ?? Math.max(8, Math.min(preferredTop, window.innerHeight - 104))}px - 8px)`, overflow: 'auto' };
   return { panelRef, portalTarget: detached ? child!.target : null, isPoppedOut: detached, panelStyle,
     dragHandleProps: { tabIndex: detached ? -1 : 0, role: 'group', 'aria-label': 'Move cable panel. Use arrow keys to move and Home to reset.',
       style: { cursor: detached ? 'default' : 'move', touchAction: 'none' } as CSSProperties,

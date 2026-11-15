@@ -225,7 +225,8 @@ namespace AddinRibbon.Routing
         private static RouteResult ConstrainedPairGraph(List<TraySegment> eligible, RoutePoint from, RoutePoint to, Projection first, Projection last,
             RouteCollisionQuery collision, RoutingOptions options, ConstrainedBudget budget,
             Func<RoutePoint, RouteConnectorPlan> fromPlanner, Func<RoutePoint, RouteConnectorPlan> toPlanner,
-            out RouteConnectorPlan fromPlan, out RouteConnectorPlan toPlan, bool skipBarrierChecks = false)
+            out RouteConnectorPlan fromPlan, out RouteConnectorPlan toPlan, bool skipBarrierChecks = false,
+            IReadOnlyList<string> manualOrderedCodes = null)
         {
             fromPlan = null; toPlan = null;
             int maxNodes = Math.Min(options.MaxGraphNodes, budget.Limits.MaxGraphNodes);
@@ -310,13 +311,20 @@ namespace AddinRibbon.Routing
                 if (retained < edges.Count) edges.RemoveRange(retained, edges.Count - retained);
             }
             budget.Charge(nodes.Count + directedEdges); PathCost graphCost;
-            var path = SelectPath(nodes, firstNode, lastNode, budget.Token, eligible, budget.RouteCosts, out graphCost); budget.Check();
+            var path = manualOrderedCodes == null
+                ? SelectPath(nodes, firstNode, lastNode, budget.Token, eligible, budget.RouteCosts, out graphCost)
+                : ManualOrderedPath(nodes, eligible, manualOrderedCodes, firstNode, lastNode, budget, out graphCost);
+            budget.Check();
             Dictionary<long, InterTrayOpeningPlan> repairs = null;
             budget.RouteInterTrayImprovementLimited = false;
             if (blocked != null && blocked.Count != 0)
             {
                 budget.RouteCostTrays = eligible;
-                path = OpeningFallback(nodes, firstNode, lastNode, blocked, collision, budget, directedEdges, path, graphCost, out graphCost, out repairs);
+                if (manualOrderedCodes == null)
+                    path = OpeningFallback(nodes, firstNode, lastNode, blocked, collision, budget, directedEdges, path, graphCost, out graphCost, out repairs);
+                else
+                    path = OpeningFallbackWithSelector(nodes, firstNode, lastNode, blocked, collision, budget, directedEdges, path, graphCost, out graphCost, out repairs,
+                        delegate(out PathCost selectedCost) { return ManualOrderedPath(nodes, eligible, manualOrderedCodes, firstNode, lastNode, budget, out selectedCost); });
             }
             if (path == null) return null;
             budget.RouteUsedInterTrayManeuver = false;

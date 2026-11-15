@@ -76,6 +76,12 @@ describe('fixed strict traceability transport', () => {
       new RegExp(`/geometry-traces/${manifest.id}/objects/${record.id}$`),
     );
   });
+  it('requests authenticated projection availability only for network readiness reads', async () => {
+    const { manifest } = geometryTraceFixture(), fetch = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(manifest)));
+    vi.stubGlobal('fetch', fetch);
+    await expect(fetchGeometryTraceManifest(ids.project, 'token', manifest.id, undefined, { requireProjection: true })).resolves.toEqual(manifest);
+    expect(fetch.mock.calls[0][0]).toMatch(new RegExp(`/geometry-traces/${manifest.id}/manifest\\?requireProjection=true$`));
+  });
   it('refuses newline identities, duplicate JSON and altered immutable manifest bytes', async () => {
     const { manifest } = geometryTraceFixture(),
       fetch = vi

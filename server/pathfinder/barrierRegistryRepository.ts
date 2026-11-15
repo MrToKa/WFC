@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
+import { barrierAuthoringRecoverySchema } from '../../shared/pathfinderBarrierAuthoring.js';
 import { z } from 'zod';
 import {
   BARRIER_LIMITS, BARRIER_SNAPSHOT_VERSION, barrierCanonicalJson, barrierCaptureCommandSchema, barrierCaptureSchema,
@@ -198,9 +199,15 @@ async function snapshotRow(client: PoolClient, projectId: string, id: string): P
   const row = (await client.query<SnapshotRow>('SELECT id,storage_intent_id,manifest_blob,manifest FROM pf_barrier_snapshots WHERE project_id=$1 AND id=$2', [projectId, policyUuidSchema.parse(id)])).rows[0];
   if (!row) return fail('BARRIER_SNAPSHOT_NOT_FOUND', 404); return row;
 }
-async function checkedSnapshot(projectId: string, row: SnapshotRow): Promise<BarrierSnapshot> {
+function snapshotMetadata(projectId: string, row: SnapshotRow): BarrierSnapshot {
   const value = supportedBarrierSnapshotSchema.parse(row.manifest), blob = blobSchema.parse(row.manifest_blob);
   if (value.snapshotId !== row.id || value.scope.projectId !== projectId || !verifySupportedBarrierSnapshot(value, text => barrierBytesHash(Buffer.from(text)))) return fail('BARRIER_SNAPSHOT_INTEGRITY');
+  const encoded = encodeBarrierJson(value, BARRIER_LIMITS.manifestBytes);
+  if (blob.bytes !== encoded.length || blob.sha256 !== barrierBytesHash(encoded)) return fail('BARRIER_SNAPSHOT_INTEGRITY');
+  return value;
+}
+async function checkedSnapshot(projectId: string, row: SnapshotRow): Promise<BarrierSnapshot> {
+  const value = snapshotMetadata(projectId, row), blob = blobSchema.parse(row.manifest_blob);
   const bytes = await readBarrierBytes(projectId, row.storage_intent_id, blob, BARRIER_LIMITS.manifestBytes);
   if (!bytes.equals(encodeBarrierJson(value, BARRIER_LIMITS.manifestBytes))) return fail('BARRIER_SNAPSHOT_INTEGRITY'); return value;
 }
@@ -227,6 +234,20 @@ export function createBarrierRegistryRepository(pool: Pool, adapters: BarrierReg
       selectedParents: manifest.selectedParents, snapshot: reference(manifest), reasonCodes: matches ? [] : ['BARRIER_MODEL_SCOPE_CHANGED'] });
   });
   const getSnapshot = (projectId: string, who: JobPrincipal, snapshotId: string) => readTx(projectId, who, async client => checkedSnapshot(projectId, await snapshotRow(client, projectId, snapshotId)));
+  // A missing immutable file must block routing, but it must not permanently
+  // prevent the administrator from capturing an explicit replacement set.
+  const authoringRecovery = (projectId: string, who: JobPrincipal) => readTx(projectId, who, async client => {
+    const scope = await current(client, projectId, undefined, { snapshot: true }), state = await head(client, projectId, { snapshot: true });
+    if (!state.snapshot_id) return fail('BARRIER_RECOVERY_NOT_REQUIRED');
+    const row = await snapshotRow(client, projectId, state.snapshot_id), manifest = snapshotMetadata(projectId, row);
+    try { await checkedSnapshot(projectId, row); return fail('BARRIER_RECOVERY_NOT_REQUIRED'); }
+    catch (error) { if (!(error instanceof PathFinderError) || error.code !== 'BARRIER_BLOB_MISSING') throw error; }
+    const registry = supportedBarrierRegistrySchema.parse({ ...(manifest.schemaVersion === 'wfc.pf.barrier-snapshot.v2'
+      ? { schemaVersion: 'wfc.pf.barrier-registry.v2', geometryPolicy: MIXED_BARRIER_POLICY } : { schemaVersion: 'wfc.pf.barrier-registry.v1' }),
+      scope, registryRevision: state.revision, state: 'stale', selectedParents: manifest.selectedParents,
+      snapshot: reference(manifest), reasonCodes: ['BARRIER_BLOB_MISSING'] });
+    return barrierAuthoringRecoverySchema.parse({ schemaVersion: 'wfc.pf.barrier-authoring-recovery.v1', registry, savedManifest: manifest, geometryAvailable: false });
+  });
   type RecoveryIntentRow = IntentRow & { idempotency_key: string; allocation_is_null: boolean };
   type RecoveryReceiptRow = { actor_id: string; idempotency_key: string; request_sha256: string; request: unknown; receipt: unknown };
   async function recoveryFacts(client: PoolClient, projectId: string, target: BarrierCommandRecoveryTarget): Promise<{
@@ -557,7 +578,7 @@ export function createBarrierRegistryRepository(pool: Pool, adapters: BarrierReg
       await saveReceipt(client, projectId, who, request, receipt); return receipt;
     }, signal);
   }
-  return { authorize, get, list, getSnapshot, readCaptureOutcome, readCommandRecovery, closeCommand, begin, publish, command };
+  return { authorize, get, list, getSnapshot, authoringRecovery, readCaptureOutcome, readCommandRecovery, closeCommand, begin, publish, command };
 }
 export type BarrierRegistryRepository = ReturnType<typeof createBarrierRegistryRepository>;
 export type { BarrierRegistry };

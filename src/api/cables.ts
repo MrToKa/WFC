@@ -1,4 +1,5 @@
 import { request, ApiError, getApiBaseUrl, uploadExcelFile } from './http';
+import type { CableRoutingImportOptions, CableRoutingImportSummary } from '../../shared/cableRoutingImport';
 import type { CableListColumnId } from './cableListPreferences';
 import type {
   CableType,
@@ -240,6 +241,15 @@ export async function fetchCables(projectId: string): Promise<{ cables: Cable[] 
   return request<{ cables: Cable[] }>(`/api/projects/${projectId}/cables`);
 }
 
+/** Read actual business values for a visible page, never a calculated proposal. */
+export async function fetchCableRows(projectId: string, ids: readonly string[]): Promise<{ cables: Cable[] }> {
+  const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+  const normalized = ids.map(id => id.toLowerCase());
+  if (!uuid.test(projectId) || ids.length < 1 || ids.length > 100 || normalized.some(id => !uuid.test(id)) || new Set(normalized).size !== ids.length)
+    throw new ApiError(400, 'Choose between 1 and 100 distinct cable records.');
+  return request<{ cables: Cable[] }>(`/api/projects/${projectId}/cables?${new URLSearchParams({ ids: normalized.join(',') })}`);
+}
+
 export async function fetchCableReportSummary(
   projectId: string,
   options?: {
@@ -407,9 +417,14 @@ export async function importCables(
   token: string,
   projectId: string,
   file: File,
-): Promise<{ summary: CableImportSummary; cables: Cable[] }> {
+  options: CableRoutingImportOptions = {},
+): Promise<{ summary: CableRoutingImportSummary; cables: Cable[]; preview?: boolean; revisionDigest?: string }> {
+  const params = new URLSearchParams();
+  if (options.protectRouting) params.set('protectRouting', 'true');
+  if (options.preview) params.set('preview', 'true');
+  if (options.expectedRevisionDigest) params.set('expectedRevisionDigest', options.expectedRevisionDigest);
   return uploadExcelFile(
-    `/api/projects/${projectId}/cables/import`,
+    `/api/projects/${projectId}/cables/import${params.size ? `?${params}` : ''}`,
     token,
     file,
     'Failed to import cables',

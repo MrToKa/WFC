@@ -134,6 +134,12 @@ public sealed class BarrierCollisionKernel
     }
 
     public BarrierSegmentResult CheckSegment(BarrierPoint from, BarrierPoint to, CancellationToken token = default)
+        => CheckSegmentCore(from, to, null, null, token);
+
+    public BarrierSegmentResult CheckRouteSegment(BarrierPoint from, BarrierPoint to, BarrierPoint terminalFrom, BarrierPoint terminalTo, CancellationToken token = default)
+        => CheckSegmentCore(from, to, terminalFrom, terminalTo, token);
+
+    private BarrierSegmentResult CheckSegmentCore(BarrierPoint from, BarrierPoint to, BarrierPoint? terminalFrom, BarrierPoint? terminalTo, CancellationToken token)
     {
         token.ThrowIfCancellationRequested(); var budget = new Budget(limits.MaximumQueryWork, limits.MaximumQueryMilliseconds, token);
         var first = new V(from); var last = new V(to);
@@ -142,6 +148,7 @@ public sealed class BarrierCollisionKernel
         try
         {
             var bounds = Box.Of(first, last); var stack = new Stack<int>(); stack.Push(0);
+            var firstBoundary = new HashSet<int>(); var lastBoundary = new HashSet<int>();
             // Queries farther from the origin can demand a larger binary64 guard.
             double queryMagnitude = Math.Max(Math.Max(Math.Abs(first.X), Math.Max(Math.Abs(first.Y), Math.Abs(first.Z))),
                 Math.Max(Math.Abs(last.X), Math.Max(Math.Abs(last.Y), Math.Abs(last.Z))));
@@ -164,21 +171,28 @@ public sealed class BarrierCollisionKernel
                         return new(BarrierSegmentStatus.Indeterminate, solids[triangle.Solid].Id,
                             "Segment/triangle arithmetic is too poorly conditioned for the numeric tolerance; no clear certificate was produced.", budget.Work);
                     }
-                    if (Geometry.Touches(first, last, triangle, guard))
+                    var terminal = TerminalSurfaceContact.Check(first, last, triangle, guard, terminalFrom, terminalTo, budget.Spend, token);
+                    if (terminal.Contact && !terminal.Allowed)
                     {
                         budget.Checkpoint();
                         return new(BarrierSegmentStatus.Blocked, solids[triangle.Solid].Id, "The cable centreline touches or crosses the selected solid surface within numeric tolerance.", budget.Work);
                     }
+                    if (terminal.FirstBoundary) firstBoundary.Add(triangle.Solid);
+                    if (terminal.LastBoundary) lastBoundary.Add(triangle.Solid);
                 }
             }
             // Crossing tests alone cannot find a segment wholly inside a solid.
             // A topologically qualified oriented closed shell permits a complete
             // solid-angle winding sum, including the void of an actual tunnel.
-            foreach (var solid in solids)
+            for (int solidIndex = 0; solidIndex < solids.Length; solidIndex++)
             {
+                var solid = solids[solidIndex];
                 budget.Spend();
-                foreach (var point in first == last ? new[] { first } : new[] { first, last })
+                var midpoint = first + (last - first) * .5;
+                foreach (var point in first == last ? new[] { first } : firstBoundary.Contains(solidIndex) || lastBoundary.Contains(solidIndex)
+                    ? new[] { first, last, midpoint } : new[] { first, last })
                 {
+                    if (point == first && firstBoundary.Contains(solidIndex) || point == last && lastBoundary.Contains(solidIndex)) continue;
                     if (!solid.Bounds.Contains(point, guard)) continue;
                     double sum = 0, correction = 0;
                     for (var offset = 0; offset < solid.Count; offset++)

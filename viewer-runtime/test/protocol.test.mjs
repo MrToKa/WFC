@@ -284,3 +284,14 @@ test('model capture batches preserve per-event and whole-envelope limits and leg
     assert.equal(validateEnvelope(envelope('MODEL_CAPTURE_EVENT', { ...base, eventJsons })), null);
   assert.equal(validateEnvelope(envelope('MODEL_CAPTURE_EVENT', { ...base, index: 2999, eventJsons: ['{}', '{}'] })), null);
 });
+
+test('saved project point display is finite, exact, direction-bound and tied to a model load', () => {
+  for (const [type, direction] of [['SHOW_LOCATION_POINT', 'parent-to-frame'], ['LOCATION_POINT_SHOWN', 'frame-to-parent']]) {
+    const payload = { pointProjectMetres: [1.25, -2.5, 3] };
+    assert.ok(validateEnvelope(envelope(type, payload), direction));
+    assert.equal(validateEnvelope(envelope(type, payload), direction === 'parent-to-frame' ? 'frame-to-parent' : 'parent-to-frame'), null);
+    for (const change of [{ modelVersionId: null }, { loadId: null }]) assert.equal(validateEnvelope(envelope(type, payload, change)), null);
+    for (const invalid of [{ pointProjectMetres: [NaN, 2, 3] }, { pointProjectMetres: [1e9 + 1, 2, 3] }, { pointProjectMetres: [1, 2] }, { ...payload, sdkObjectId: 23 }, { ...payload, extra: true }])
+      assert.equal(validateEnvelope(envelope(type, invalid)), null);
+  }
+});

@@ -6,9 +6,9 @@ import { recalculationReasonSchema } from './pathfinderRecalculation.js';
 
 export const CABLE_WORKFLOW_READ_LIMITS = Object.freeze({ responseBytes: 8 * 1024 ** 2, searchCharacters: 256, deadlineMilliseconds: 15_000 });
 const cursor = z.string().min(1).max(CABLE_WORKFLOW_LIMITS.cursorCharacters).regex(/^[A-Za-z0-9_-]+$(?![\s\S])/);
-const search = z.string().max(CABLE_WORKFLOW_READ_LIMITS.searchCharacters).refine(value => !/[\u0000-\u001f\u007f-\u009f]/u.test(value)
-  && [...value].every(character => character.length !== 1 || character.charCodeAt(0) < 0xd800 || character.charCodeAt(0) > 0xdfff))
-  .transform(value => value.normalize('NFC').trim());
+const search = z.string().max(CABLE_WORKFLOW_READ_LIMITS.searchCharacters).transform(value => value.normalize('NFC').trim())
+  .refine(value => !/[\u0000-\u001f\u007f-\u009f]/u.test(value)
+    && [...value].every(character => character.length !== 1 || character.charCodeAt(0) < 0xd800 || character.charCodeAt(0) > 0xdfff));
 const preferences = {
   secondaryDistanceMeters: z.number().finite().min(0).max(1_000_000).default(2),
   preferVerticalApproach: z.boolean().default(true),

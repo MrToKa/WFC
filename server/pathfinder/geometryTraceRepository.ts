@@ -4,12 +4,14 @@ import { z } from 'zod';
 import { canonicalPurposeJson, policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { geometryTraceCreateSchema, geometryTraceRuntimeSchema, geometryTraceManifestSchema, geometryTraceReceiptSchema, geometryObjectRevisionSchema, geometryObjectPageSchema, geometryTraceListSchema, geometryTraceSummarySchema, geometryTraceDiagnosticsPageSchema, geometryRuntimeFingerprintSchema, declaredLengthObservationSchema, captureEvidenceUploadSchema, captureEvidenceReceiptSchema, GEOMETRY_TRACE_LIMITS, type GeometryRuntimeFingerprint, type FittedTraceReference, type GeometryTraceManifest } from '../../shared/pathfinderGeometryTrace.js';
 import { preparationAggregateSchema, preparationPlanSchema, preparationPartSchema } from '../../shared/pathfinderPreparation.js';
+import { preparationCapacity } from '../../shared/pathfinderCapacity.js';
 import { validateCompletedCaptureEvidence, verifyCompletedCaptureEvidence, canonicalCaptureEvidenceJson } from '../../viewer-runtime/capture-evidence.mjs';
 import { assertLoginNotExpired, requireCurrentLogin } from './auth.js';
 import type { OperationPrincipal } from './operationAuthority.js';
 import { isGrantPrincipal, operationTransaction, requireGrantModelScope,grantProvenance } from './operationAuthority.js';
 import { PathFinderError } from './errors.js';
 import { readPreparationBlob, storePreparationBlob, storePreparationBytes } from './preparationStorage.js';
+import { readSnapshot } from './storage.js';
 import { geometryTraceFrozenSchema, geometryTraceHash, geometryTraceBytesHash } from './geometryTraceBuilder.js';
 import { withFittedExportAllowance, discardAdoptedFittedExportReference } from './geometryTraceStorage.js';
 import { runGeometryTraceWorker, runGeometryEvidenceWorker } from './geometryTraceWorker.js';
@@ -18,6 +20,20 @@ import { markRecalculationDirty } from './recalculationSchema.js';
 import { readRoutingPolicyScope } from './purposePolicy.js';
 
 const fail = (code: string, status = 409): never => { throw new PathFinderError(code, status, 'Geometry trace evidence is unavailable or changed. Keep the same command to reconcile an uncertain operation.'); };
+/** Outside SQL and before export. Return no bytes: the authenticated projection
+ * buffer belongs only to this check, never the frozen intent or worker input. */
+async function requireTraceProjection(frozen: z.infer<typeof geometryTraceFrozenSchema>): Promise<void> {
+  const projection = frozen.aggregate.projection;
+  if (projection.bytes > preparationCapacity(frozen.plan.limitsProfile).projectionInputBytes) return fail('GEOMETRY_TRACE_BUILD_LIMIT', 413);
+  let bytes: Buffer;
+  try { bytes = await readSnapshot(projection.payloadRef, projection.sha256, frozen.plan.limitsProfile); }
+  catch (error) {
+    if (['ENOENT', 'ENOTDIR'].includes((error as NodeJS.ErrnoException)?.code ?? ''))
+      throw new PathFinderError('PREPARATION_SNAPSHOT_MISSING', 409, 'The saved routing network file is missing. Choose Regenerate network in Routes to capture it from the current model. Saved assignments and cable results are retained.');
+    throw error;
+  }
+  if (bytes.length !== projection.bytes) return fail('ARTIFACT_INTEGRITY');
+}
 export type GeometryTraceAdapters = { getRuntimeFingerprint: () => Promise<GeometryRuntimeFingerprint>; exportFittedTrace: (input: { projectId: string; modelVersionId: string; snapshotId: string; snapshotSha256: string; exportId: string; maxBytes: number }, signal: AbortSignal) => Promise<FittedTraceReference> };
 export const GEOMETRY_TRACE_SQL_BOUNDS = Object.freeze({ acquisitionMilliseconds: 5000, lockMilliseconds: 3000, statementMilliseconds: 15000, idleMilliseconds: 30000 });
 async function connectBounded(pool: Pool): Promise<PoolClient> { let expired = false, timer: ReturnType<typeof setTimeout> | undefined; const pending = pool.connect().then(c => { if (expired) { c.release(); return fail('GEOMETRY_TRACE_DATABASE_BUSY', 503); } return c; }); try { return await Promise.race([pending, new Promise<never>((_, reject) => { timer = setTimeout(() => { expired = true; reject(new PathFinderError('GEOMETRY_TRACE_DATABASE_BUSY', 503)); }, GEOMETRY_TRACE_SQL_BOUNDS.acquisitionMilliseconds); })]); } finally { if (timer) clearTimeout(timer); } }
@@ -90,7 +106,20 @@ export function createGeometryTraceRepository(pool: Pool, adapters: GeometryTrac
     return geometryTraceRuntimeSchema.parse({ schemaVersion: 'wfc.pf.geometry-trace-runtime.v1', runtimeFingerprint,
       runtimeFingerprintSha256: geometryTraceHash(runtimeFingerprint) });
   });
-  const get = (projectId: string, who: OperationPrincipal, traceId: string) => readTx(projectId, who, c => manifestRow(c, projectId, traceId));
+  const get = (projectId: string, who: OperationPrincipal, traceId: string, options: { requireProjection?: true } = {}) => readTx(projectId, who, async c => {
+    const manifest = await manifestRow(c, projectId, traceId);
+    if (options.requireProjection) {
+      let bytes: Buffer;
+      try { bytes = await readSnapshot(manifest.projection.payloadRef, manifest.projection.sha256); }
+      catch (error) {
+        if (['ENOENT', 'ENOTDIR'].includes((error as NodeJS.ErrnoException)?.code ?? ''))
+          throw new PathFinderError('PREPARATION_SNAPSHOT_MISSING', 409, 'The saved routing network file is missing from this installation. Restore the Path Finder files from the matching backup, or choose Regenerate network in Routes to build it from the current model. Your assignments and saved results are retained.');
+        throw error;
+      }
+      if (bytes.length !== manifest.projection.bytes) return fail('ARTIFACT_INTEGRITY');
+    }
+    return manifest;
+  });
   async function create(projectId: string, who: OperationPrincipal, raw: unknown, signal?: AbortSignal) {
     await authorize(projectId, who); const command = geometryTraceCreateSchema.parse(raw), fingerprint = geometryRuntimeFingerprintSchema.parse(await adapters.getRuntimeFingerprint());
     const admitted = await tx(projectId, who, async c => {
@@ -132,6 +161,8 @@ export function createGeometryTraceRepository(pool: Pool, adapters: GeometryTrac
     if ('replay' in admitted) return geometryTraceReceiptSchema.parse(admitted.replay);
     const { frozen, token } = admitted, controller = new AbortController(), abort = () => controller.abort(); signal?.addEventListener('abort', abort, { once: true }); if (signal?.aborted) abort(); const timer = setTimeout(abort, 140000);
     try {
+      await requireTraceProjection(frozen);
+      controller.signal.throwIfAborted();
       const result = await withFittedExportAllowance(frozen.exportId, async existing => {
         controller.signal.throwIfAborted();
         const reference = existing ? undefined : await adapters.exportFittedTrace({ projectId, modelVersionId: frozen.aggregate.modelVersionId, snapshotId: frozen.aggregate.projection.payloadRef, snapshotSha256: frozen.aggregate.projection.sha256, exportId: frozen.exportId, maxBytes: GEOMETRY_TRACE_LIMITS.exportBytes }, controller.signal);

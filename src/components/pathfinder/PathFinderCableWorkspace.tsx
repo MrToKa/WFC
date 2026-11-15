@@ -20,6 +20,7 @@ import type { usePathFinder } from '@/pages/ProjectDetails/hooks/usePathFinder';
 import type { PathFinderWorkflowDisplay, PathFinderWorkflowReview, PathFinderWorkflowCalculationPreferences } from '@/pages/ProjectDetails/PathFinderResults';
 import { pathFinderWorkflowDisplayScope } from '@/pages/ProjectDetails/PathFinderResults';
 import { policyUuidSchema } from '../../../shared/pathfinderPurposePolicy';
+import { canonicalDecimalString } from '../../../shared/pathfinderLengthLedger';
 import { cableWorkflowReason, PathFinderNeedsRoutingList } from './PathFinderNeedsRoutingList';
 import { PathFinderCableRoutingPanel, type PathFinderCalculationDiagnostics } from './PathFinderCableRoutingPanel';
 import type { PathFinderEndpointForegroundContexts } from '@/pages/ProjectDetails/pathFinderEndpointVisibility';
@@ -52,6 +53,14 @@ type SettledDiagnostics = { owner: string; model: string; cableId: string; jobId
 type CalculationDiagnosticSnapshot = { owner: string; model: string; value: PathFinderCalculationDiagnostics };
 const displayCandidate = (calculation: CableWorkflowRow['calculation']) => calculation.outcome === 'calculated'
   && calculation.currentness === 'current' && calculation.itemState === 'complete' && calculation.proposalId !== null && calculation.proposalHash !== null;
+/** A later batch stop cannot revoke an exact, already saved cable item.
+ * The Results owner still supplies the verified read-only display handoff. */
+function acceptedStoppedDisplay(row: CableWorkflowRow, display: PathFinderWorkflowDisplay | null | undefined) {
+  if (!display?.ready || display.source !== 'current-calculation' || !displayCandidate(row.calculation)
+    || !row.calculation.acceptedMatchesCurrent || !['failed', 'cancelled'].includes(row.calculation.jobStatus ?? '')
+    || row.cable.routing !== display.routing || row.cable.designLength === null || display.designLength === null) return false;
+  try { return canonicalDecimalString(row.cable.designLength) === canonicalDecimalString(display.designLength); } catch { return false; }
+}
 const displayIdentity = (row: CableWorkflowRow) => row.savedRoute ?? row.calculation;
 const savedDisplayCandidate = (row: CableWorkflowRow) => row.savedRoute?.currentness === 'saved-exact'
   || row.calculation.savedExactDisplay === true && row.calculation.outcome === 'calculated' && row.calculation.itemState === 'complete'
@@ -767,7 +776,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
     && (props.display.source !== 'saved-exact' && (verifiedRow.savedRoute?.currentness === 'current' || displayCandidate(verifiedRow.calculation))
       || props.display.source === 'saved-exact' && savedDisplayCandidate(verifiedRow))
     && !automaticUpdatePending(verifiedRow.calculation)
-    && (verifiedRow.savedRoute || !['failed', 'cancelled'].includes(verifiedRow.calculation.jobStatus ?? ''))
+    && (verifiedRow.savedRoute || !['failed', 'cancelled'].includes(verifiedRow.calculation.jobStatus ?? '') || acceptedStoppedDisplay(verifiedRow, props.display))
     && BigInt(verifiedRow.cable.cableWriteRevision) >= BigInt(selected.cable.cableWriteRevision)
     && (observedRevision === undefined || BigInt(verifiedRow.cable.cableWriteRevision) >= BigInt(observedRevision)));
   const displayedSelection = verifiedRowMatches ? verifiedRow! : selected;
@@ -848,6 +857,8 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   const displaySourceMatches = Boolean(selected && props.display?.cableId === selected.cable.id
     && props.display.verifiedScope === pathFinderWorkflowDisplayScope(props.pf, props.accountId)
     && (!props.display.verifiedRow || verifiedRowMatches)
+    && (displayedSelection?.savedRoute || !['failed', 'cancelled'].includes(selectedCalculation?.jobStatus ?? '')
+      || verifiedRowMatches && displayedSelection && acceptedStoppedDisplay(displayedSelection, props.display))
     && props.display.jobId === displayedIdentity?.jobId && props.display.proposalId === displayedIdentity?.proposalId
     && props.display.proposalHash === displayedIdentity?.proposalHash
     && (props.display.source !== 'saved-exact' && (displayedSelection?.savedRoute?.currentness === 'current' && verifiedRowMatches || selectedCalculation?.currentness === 'current')
@@ -857,7 +868,8 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   // Exact proposal text can be read before its viewer foreground is ready.
   // Show still requires the complete verified display payload above.
   const displayTextMatches = displaySourceMatches && (displayedSelection?.savedRoute || selectedCalculation?.outcome === 'calculated' && selectedCalculation.itemState === 'complete'
-    && !['failed', 'cancelled'].includes(selectedCalculation.jobStatus ?? ''))
+    && (!['failed', 'cancelled'].includes(selectedCalculation.jobStatus ?? '')
+      || verifiedRowMatches && displayedSelection && acceptedStoppedDisplay(displayedSelection, props.display)))
     && (Boolean(props.display?.ready) || typeof props.display?.routing === 'string');
   const waitingForSavedCalculation = savedCalculation?.cableId === selected?.cable.id && Boolean(savedCalculation);
   const displayCheckFeedback = !displayMatches && !waitingForSavedCalculation && !submittedCalculation && selected
@@ -871,7 +883,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
     currentFeedback.working = false;
     currentFeedback.message = selected?.calculation.acceptedMatchesCurrent
       ? 'The current route and Design length are saved in Cable list. Use Show to inspect this result.'
-      : 'The current route is ready. Manually changed cable values are retained; compare them, then Review and Apply.';
+      : 'The calculated route is ready. Protected cable values remain unchanged; manage routing protection in Cable details.';
   }
   const preparationUpdated = selected?.calculation.outcome === 'stale' && selected.calculation.currentness === 'changed'
     && selected.calculation.reasonCodes.includes('ROUTING_PREPARATION_UPDATED');
@@ -922,6 +934,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
       onRefresh={() => { void progress.refresh(); return refreshCableStatus(); }} refreshing={refreshingSelected || refreshingState} refreshError={selectedReadError}
       onTogglePath={selected && props.onTogglePath ? () => props.onTogglePath?.(selected.cable.id) : undefined}
       onShowLocation={props.pf.viewerPhase === 'ready' ? props.pf.showLocation : undefined}
+      onShowLocationPoint={props.pf.viewerPhase === 'ready' ? props.pf.showLocationPoint : undefined}
       onEndpointForegroundContexts={props.onEndpointForegroundContexts}
       pathVisible={displayMatches && props.display?.visible}
       pathReady={displayMatches} pathSource={displayTextMatches ? props.display?.source : null} endpointRefreshKey={endpointRefreshKey}

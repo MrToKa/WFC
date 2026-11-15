@@ -2,6 +2,9 @@ import { digestSha256 } from '../utils/sha256';
 import { z } from 'zod';
 import { getApiBaseUrl } from './http';
 import { pathFinderRequestDeadline, discardPathFinderBody, releasePathFinderReader } from './pathfinderRequestDeadline';
+import { preparationTrayMatchesWriteSchema, preparationTrayMatchesReceiptSchema,
+  type PreparationTrayMatchesWrite, type PreparationTrayMatchesReceipt } from '../../shared/pathfinderTrayMatches';
+export type { PreparationTrayMatchesWrite, PreparationTrayMatchesReceipt };
 import {
   parsePurposeJson,
   policyUuidSchema,
@@ -50,7 +53,7 @@ export class PreparationApiError extends Error {
   }
 }
 type Endpoint =
-  | { kind: 'context' | 'index' | 'create' | 'resolution' }
+  | { kind: 'context' | 'index' | 'create' | 'resolution' | 'tray-matches' }
   | { kind: 'session' | 'publish' | 'cancel'; sessionId: string }
   | { kind: 'part'; sessionId: string; partId: string };
 /** Server validation is120s; allow bounded upload, admission and commit/response margin. */
@@ -88,6 +91,10 @@ async function request(
       break;
     case 'resolution':
       suffix = '/resolutions';
+      method = 'POST';
+      break;
+    case 'tray-matches':
+      suffix = '/tray-matches';
       method = 'POST';
       break;
     case 'session':
@@ -310,6 +317,17 @@ export async function savePreparationResolution(
     await request(projectId, token, { kind: 'resolution' }, body.data, signal),
   );
   return result.success ? result.data : invalid();
+}
+export async function saveTrayMatches(projectId:string,token:string,input:PreparationTrayMatchesWrite,signal?:AbortSignal):Promise<PreparationTrayMatchesReceipt> {
+  const body=preparationTrayMatchesWriteSchema.safeParse(input);
+  if(!body.success)throw new PreparationApiError('INVALID_REQUEST',400,'Finish discovering all project trays before saving their assignments.','refused');
+  const result=preparationTrayMatchesReceiptSchema.safeParse(await request(projectId,token,{kind:'tray-matches'},body.data,signal));
+  const requested=new Map(body.data.matches.map(match=>[match.projectTrayId,match]));
+  if(!result.success || result.data.idempotencyKey!==body.data.idempotencyKey || result.data.commandSha256!==await sha(body.data)
+    || result.data.results.length!==body.data.matches.length || result.data.results.some(value=>{
+      const match=requested.get(value.projectTrayId);return !match || value.status==='assigned'&&canonicalPurposeJson(value.rootObjectIds)!==canonicalPurposeJson(match.rootObjectIds);
+    }))return invalid();
+  return result.data;
 }
 export async function uploadPreparationPart(
   projectId: string,

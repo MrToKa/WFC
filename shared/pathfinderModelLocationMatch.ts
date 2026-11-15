@@ -10,7 +10,7 @@ const names = z.array(matchName).max(MODEL_LOCATION_MATCH_LIMITS.names).refine(u
 const count = z.number().int().nonnegative().max(1_000_000);
 export const modelLocationMatchContextSchema = z.object({
   schemaVersion: z.literal('wfc.pf.model-location-match-context.v1'), projectId: uuid, current: endpointCurrentScopeSchema,
-  registryRevision: revision, names, namesSha256: hash,
+  registryRevision: revision, names, namesSha256: hash, crossModelNames: names.optional(),
 }).strict();
 export const modelLocationMatchCandidateSchema = z.object({
   objectId: z.number().int().nonnegative().max(2147483647), name: z.string().min(1).max(2048).regex(/^[^\u0000-\u001f\u007f-\u009f]*$/u)

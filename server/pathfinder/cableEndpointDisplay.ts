@@ -6,6 +6,7 @@ import { cableEndpointCommandSchema, cableEndpointEndSchema, cableEndpointReceip
 import { type EndpointBinding, type EndpointCurrentScope } from '../../shared/pathfinderEndpointBindings.js';
 import { endpointBindingHash } from './endpointBindingRepository.js';
 import { readMatchedLocationDisplay, readPreservedLocationDisplay } from './modelLocationMatchDisplay.js';
+import { readNumericalLocationMatchDisplay } from './numericalLocationMatchDisplay.js';
 
 const ownerSchema = z.object({ schemaVersion: z.literal('wfc.pf.cable-endpoint-command-owner.v1'),
   cableId: policyUuidSchema, end: cableEndpointEndSchema, command: cableEndpointCommandSchema }).strict();
@@ -24,7 +25,7 @@ export async function readCableEndpointDisplay(client: PoolClient, input: { proj
     || head.captureFrameId !== current.captureFrameId || head.projectionSha256 !== current.projectionSha256
     || endpointBindingHash(headBody) !== contentSha256) return null;
   check();
-  if (head.derivation === 'matched-model-bottom-aabb.v1') return readMatchedLocationDisplay(client, input, check);
+  if (['matched-model-bottom-aabb.v1', 'matched-model-centre-fallback.v1'].includes(head.derivation)) return readMatchedLocationDisplay(client, input, check);
   // Select the last successful per-end command, including an explicit null hint.
   // Outer pair receipts and closure records never qualify. Transfer is byte bounded.
   const rows = (await client.query<Row>(`/* cable-endpoint:display-command */ SELECT actor_id,idempotency_key,kind,request_sha256,
@@ -37,7 +38,10 @@ export async function readCableEndpointDisplay(client: PoolClient, input: { proj
       AND receipt#>>'{receipt,binding,binding,contentSha256}'=$4
     ORDER BY created_at DESC,actor_id DESC,idempotency_key DESC LIMIT 1 FOR SHARE`,
   [projectId, location.id, head.id, head.contentSha256])).rows;
-  check(); if (rows.length !== 1) return rows.length === 0 ? readPreservedLocationDisplay(client, input, check) : null;
+  check(); if (rows.length !== 1) {
+    if(rows.length!==0)return null;
+    return await readPreservedLocationDisplay(client,input,check) ?? readNumericalLocationMatchDisplay(client,input,check);
+  }
   const row = rows[0], parsed = ownerSchema.safeParse(row.request), stored = storedSchema.safeParse(row.receipt);
   if (row.kind !== 'confirm' || !parsed.success || !stored.success
     || row.request_sha256 !== endpointBindingHash(parsed.data)) return null;

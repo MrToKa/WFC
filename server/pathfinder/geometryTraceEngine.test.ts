@@ -14,7 +14,7 @@ function fixture() {
   const root = path.resolve('pathfinder-engine/.scratch/mock-only-geometry-trace-identity');
   const files = new Map<string, Buffer>();
   for (const name of ['PathFinder.ModelRunner.dll', 'PathFinder.Model.dll', 'PathFinder.Core.dll', 'PathFinder.Adapter.dll']) files.set(path.join(root, name), Buffer.from('synthetic module ' + name));
-  const derivations = ['./geometryTraceEngine.js', './geometryTraceBuilder.js', './geometryTraceRepository.js', './geometryTraceStorage.js', './geometryTraceWorker.js', './geometryTraceThread.js', './preparationStorage.js', './contracts.js', './matching.js', './policyJson.js', '../../shared/pathfinderGeometryTrace.js', '../../shared/pathfinderPreparation.js', '../../shared/pathfinderCapacity.js', '../../shared/preparationMerge.js', '../../shared/pathfinderPurposePolicy.js', '../../viewer-runtime/capture-evidence.mjs'];
+  const derivations = ['./geometryTraceEngine.js', './geometryTraceBuilder.js', './geometryTraceRepository.js', './geometryTraceStorage.js', './geometryTraceWorker.js', './geometryTraceThread.js', './ownedPreparationSnapshot.js', './preparationStorage.js', './contracts.js', './matching.js', './policyJson.js', '../../shared/pathfinderGeometryTrace.js', '../../shared/pathfinderPreparation.js', '../../shared/pathfinderCapacity.js', '../../shared/preparationMerge.js', '../../shared/pathfinderPurposePolicy.js', '../../viewer-runtime/capture-evidence.mjs'];
   const directories = new Set<string>();
   for (const name of derivations) files.set(fileURLToPath(new URL(name, import.meta.url)), Buffer.from('synthetic derivation ' + name));
   for (const filename of files.keys()) for (let current = path.dirname(filename); ; current = path.dirname(current)) { directories.add(current); if (path.dirname(current) === current) break; }
@@ -34,6 +34,12 @@ function fixture() {
 afterEach(() => { vi.clearAllMocks(); vi.unstubAllEnvs(); });
 
 describe('geometry trace fingerprint capacity dependency', () => {
+  it('changes derivation identity when the owned snapshot validator changes', async () => {
+    const f = fixture(), before = await geometryTraceRuntimeFingerprint(), filename = fileURLToPath(new URL('./ownedPreparationSnapshot.js', import.meta.url));
+    expect(fs.readFile).toHaveBeenCalledWith(filename);
+    f.files.set(filename, Buffer.from('replacement strict owned snapshot parser'));
+    const after = await geometryTraceRuntimeFingerprint(); expect(after.derivationSha256).not.toBe(before.derivationSha256);
+  });
   it('changes derivation identity when only the capacity helper changes under identical engine modules', async () => {
     const f = fixture(), before = await geometryTraceRuntimeFingerprint();
     expect(fs.readFile).toHaveBeenCalledWith(f.capacity);

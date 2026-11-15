@@ -17,10 +17,12 @@ internal static partial class Program
         catch (BarrierQualificationException error) { return MixedBarrierFailure(request, context, "no_path", "BARRIER_QUALIFICATION_REFUSED", error.Message); }
         var category = request.Category is "Control" or "Instrumentation" ? CableCategory.Control : CableCategory.LV;
         bool bypass = context.Drill || context.Mode == "explicit-empty";
+        var terminalFrom = Point(request.From); var terminalTo = Point(request.To);
         RouteCollisionQuery oracle = (first, last, cancellation) =>
         {
             if (barriers.Qualified is null) throw new InvalidOperationException("Qualified barrier collision data unavailable.");
-            var observation = barriers.Qualified.Kernel.CheckSegment(new(first.X, first.Y, first.Z), new(last.X, last.Y, last.Z), cancellationToken: cancellation);
+            var observation = barriers.Qualified.Kernel.CheckRouteSegment(new(first.X, first.Y, first.Z), new(last.X, last.Y, last.Z),
+                new(terminalFrom.X, terminalFrom.Y, terminalFrom.Z), new(terminalTo.X, terminalTo.Y, terminalTo.Z), cancellationToken: cancellation);
             return new(observation.Status == MixedBarrierSegmentStatus.Clear ? RouteCollisionStatus.Clear
                 : observation.Status == MixedBarrierSegmentStatus.Blocked ? RouteCollisionStatus.Blocked : RouteCollisionStatus.Indeterminate,
                 observation.Witness?.ComponentId, observation.Reason, observation.Work);
@@ -28,7 +30,11 @@ internal static partial class Program
         ConstrainedSecondaryEvaluation? secondary = null; LocalApproachRouteEvaluation local;
         var localOptions = context.NearestAnchoredSearch ? new LocalConnectorOptions { UseNearestAnchoredSearch = true } : null;
         var purposeTrays = PurposeRouting.Filter(prepared.Segments, request.AllowedPurposeRouteCodes, token);
-        if (request.DirectSecondaryPolicy is not null)
+        if (request.ManualRouteConstraint is { } manual)
+            local = new RouteCalculator().CalculateManualOrdered(CapacityRouting.Filter(purposeTrays, request.ExcludedRouteCodes, token),
+                manual.RouteText, Point(request.From), Point(request.To), category, oracle, options,
+                localOptions: localOptions, drillThroughWalls: bypass, cancellationToken: token, interTrayManeuvers: context.InterTrayManeuvers);
+        else if (request.DirectSecondaryPolicy is not null)
         {
             var calculated = CapacityRouting.CalculateSecondaryWithLocalApproaches(purposeTrays, request.ExcludedRouteCodes,
                 Point(request.From), Point(request.To), category, oracle, options, localOptions: localOptions, drillThroughWalls: bypass,

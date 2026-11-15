@@ -19,6 +19,7 @@ import { formatNumeric, isWordDocument } from './ProjectDetails.utils';
 import { CableReportTab } from './ProjectDetails/CableReportTab';
 import { CableDialog, type CableDialogField } from './ProjectDetails/CableDialog';
 import { CableListTab } from './ProjectDetails/CableListTab';
+import { CableImportDialog } from './ProjectDetails/CableImportDialog';
 import { CableTypeDialog } from './ProjectDetails/CableTypeDialog';
 import { CableTypesTab } from './ProjectDetails/CableTypesTab';
 import { DetailsTab } from './ProjectDetails/DetailsTab';
@@ -179,6 +180,7 @@ export const ProjectDetails = () => {
     openEditCableDialog,
     handleDeleteCable,
     handleImportCables,
+    cableImportDialog,
     handleExportCables,
     handleGetCablesTemplate,
     handleCableDraftChange,
@@ -194,6 +196,7 @@ export const ProjectDetails = () => {
     setFilterCriteria: setCableFilterCriteria,
     cableDialog,
   } = useCableListSection({
+    active: selectedTab === 'cable-list',
     projectId: tableProjectId,
     project,
     token: canEdit && tableProjectId ? token : null,
@@ -225,6 +228,7 @@ export const ProjectDetails = () => {
       'routing',
       'delivery',
       'designLength',
+      'installLength', 'pullDate', 'connectedFrom', 'connectedTo', 'tested',
     ];
   })();
 
@@ -1726,6 +1730,7 @@ export const ProjectDetails = () => {
         onDismiss={cableTypeDialog.reset}
       />
 
+      <CableImportDialog {...cableImportDialog} />
       <CableDialog
         styles={styles}
         open={cableDialog.open}

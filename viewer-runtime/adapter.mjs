@@ -3,6 +3,7 @@ import { MODEL_CAPTURE_BATCH_EVENTS, MODEL_CAPTURE_BATCH_BYTES, capturePacketByt
 import { readModelObjectGuid, resolveTrayObjectIdentities, validateTrayIdentityRequest } from './tray-identity.mjs';
 import { createRouteController } from './routes.mjs';
 import { createPathFinderController } from './pathfinder.mjs';
+import { createLocationPointController } from './location-point.mjs';
 import { captureSelectedModel } from './model-capture.mjs';
 import { captureSelectedBarriers } from './barrier-capture.mjs';
 import { createBarrierMultipartRuntime } from './barrier-multipart-runtime.mjs';
@@ -171,7 +172,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
         clickCtrl: { onObject: ['toggleVisibility'] },
       },
     });
-    let finished = false, routes, pathfinder, observer, geometryLoaded = false, nodeIndexReady = false, nodeCount = 0;
+    let finished = false, routes, pathfinder, locationPoint, observer, geometryLoaded = false, nodeIndexReady = false, nodeCount = 0;
     let capture, multipart;
     const cancelCapture = () => { if (!capture) return; const old = capture; capture = undefined; clearTimeout(old.deadline); old.controller.abort(); if (old.iterator) void old.iterator.return().catch(() => {}); };
     const runtimeError = () => { if (!finished) onRuntimeError(safeError()); };
@@ -184,6 +185,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
       observer?.disconnect();
       if (viewing.ERROR_EVENT) viewer.removeEventListener(viewing.ERROR_EVENT, runtimeError);
       routes?.dispose();
+      locationPoint?.dispose();
       pathfinder?.dispose();
       viewer.finish();
       container.replaceChildren();
@@ -228,6 +230,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
       if (viewing.ERROR_EVENT) viewer.addEventListener(viewing.ERROR_EVENT, runtimeError);
       routes = createRouteController(viewer, { signal });
       pathfinder = createPathFinderController(viewer, { window, signal });
+      locationPoint = createLocationPointController(viewer, { window, signal });
       const loadedModel = viewer.model;
       multipart = createBarrierMultipartRuntime(viewer, { descriptor, signal, isCurrent: () => !finished && viewer.model != null });
       let computedPath = false, legacyPath = false, trayDisplay = false;
@@ -351,6 +354,16 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
         },
         readSelection: pathfinder.readSelection,
         readTrayRootSelection: pathfinder.readTrayRootSelection,
+        async showLocationPoint(point, operationSignal, beforeCommit = async () => {}) {
+          const displaySignal = AbortSignal.any([signal, operationSignal].filter(Boolean));
+          const check = () => {
+            active(displaySignal);
+            if (finished || !loadedModel || viewer.model !== loadedModel) throw safeError('MODEL_SELECTION_CHANGED');
+          };
+          check(); await beforeCommit(); check();
+          try { locationPoint.show(point); }
+          catch (error) { if (error?.name === 'AbortError' || error?.code === 'MODEL_SELECTION_CHANGED') throw error; throw safeError('LOCATION_UNAVAILABLE'); }
+        },
         async showLocation(sdkObjectId, operationSignal, beforeCommit = async () => {}, sdkObjectIds) {
           if (!positiveObjectId(sdkObjectId)) throw safeError('LOCATION_UNAVAILABLE');
           const ids = sdkObjectIds === undefined ? [sdkObjectId] : Array.isArray(sdkObjectIds) ? [...sdkObjectIds] : [];
@@ -372,6 +385,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
             // global Ghost, route overlays or their saved appearance baseline.
             viewer.show(ids, loadedModel);
             viewer.fitToView(ids, loadedModel);
+            locationPoint.clear();
           } catch { throw safeError('LOCATION_UNAVAILABLE'); }
         },
         async showTray(sdkObjectIds, operationSignal, beforeCommit = async () => {}) {

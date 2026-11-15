@@ -417,12 +417,21 @@ public sealed class MixedBarrierKernel
         catch (OverflowException) { return new(BarrierBuildStatus.Refused, null, Array.AsReadOnly(new[] { new BarrierDiagnostic("RESOURCE_LIMIT", "Geometry arithmetic/count overflowed its bound.") }), budget.Work); }
     }
     public MixedBarrierSegmentResult CheckSegment(BarrierPoint from, BarrierPoint to, MixedBarrierQueryLimits? limits = null, CancellationToken cancellationToken = default)
+        => CheckSegmentCore(from, to, null, null, limits, cancellationToken);
+
+    public MixedBarrierSegmentResult CheckRouteSegment(BarrierPoint from, BarrierPoint to, BarrierPoint terminalFrom, BarrierPoint terminalTo,
+        MixedBarrierQueryLimits? limits = null, CancellationToken cancellationToken = default)
+        => CheckSegmentCore(from, to, terminalFrom, terminalTo, limits, cancellationToken);
+
+    private MixedBarrierSegmentResult CheckSegmentCore(BarrierPoint from, BarrierPoint to, BarrierPoint? terminalFrom, BarrierPoint? terminalTo,
+        MixedBarrierQueryLimits? limits, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested(); limits ??= new() { MaximumWork = maximumQueryWork, MaximumMilliseconds = maximumQueryMilliseconds }; var budget = new MixedBudget(limits.MaximumWork, limits.MaximumMilliseconds, cancellationToken);
         if (limits.MaximumWork is < 1 or > 2_000_000 || limits.MaximumWork > maximumQueryWork || limits.MaximumMilliseconds is < 1 or > 10_000 || limits.MaximumMilliseconds > maximumQueryMilliseconds || !Valid(from, 1e9) || !Valid(to, 1e9)) return new(MixedBarrierSegmentStatus.Indeterminate, "INVALID_QUERY", 0);
         try
         {
             double guard = Math.Max(tolerance, 64 * Geometry.MachineEpsilon * Math.Max(Magnitude(from), Magnitude(to))); var first = new V(from); var last = new V(to);
+            var firstBoundary = new HashSet<string>(); var lastBoundary = new HashSet<string>();
             // Every component participates in contact. A closed-solid label may
             // add containment, never remove any original surface triangle.
             foreach (var component in components)
@@ -442,14 +451,24 @@ public sealed class MixedBarrierKernel
                         }
                         return Result(MixedBarrierSegmentStatus.Indeterminate, "TRIANGLE_ARITHMETIC_UNCERTAINTY");
                     }
-                    if (contact.Status == OriginalTriangleContactStatus.Contact) return Result(MixedBarrierSegmentStatus.Blocked, "ORIGINAL_TRIANGLE_CONTACT", new(component.Id, component.Kind, "surface-contact", triangle));
+                    if (contact.Status == OriginalTriangleContactStatus.Contact)
+                    {
+                        var terminal = TerminalSurfaceContact.Check(first, last, Primitive(triangle), guard, terminalFrom, terminalTo, budget.Spend, cancellationToken);
+                        if (!terminal.Contact) return Result(MixedBarrierSegmentStatus.Indeterminate, "TERMINAL_CONTACT_ARITHMETIC_UNCERTAINTY");
+                        if (!terminal.Allowed) return Result(MixedBarrierSegmentStatus.Blocked, "ORIGINAL_TRIANGLE_CONTACT", new(component.Id, component.Kind, "surface-contact", triangle));
+                        if (terminal.FirstBoundary) firstBoundary.Add(component.Id);
+                        if (terminal.LastBoundary) lastBoundary.Add(component.Id);
+                    }
                 }
             }
             foreach (var component in components)
             {
                 budget.Spend(); if (component.Kind != MixedBarrierComponentKind.QualifiedClosedSolid) continue;
-                foreach (var point in first == last ? new[] { first } : new[] { first, last })
+                var midpoint = first + (last - first) * .5;
+                foreach (var point in first == last ? new[] { first } : firstBoundary.Contains(component.Id) || lastBoundary.Contains(component.Id)
+                    ? new[] { first, last, midpoint } : new[] { first, last })
                 {
+                    if (point == first && firstBoundary.Contains(component.Id) || point == last && lastBoundary.Contains(component.Id)) continue;
                     if (!component.Bounds.Contains(new(point.X, point.Y, point.Z), guard)) continue;
                     double sum = 0, correction = 0;
                     foreach (var original in component.Triangles)
@@ -464,7 +483,8 @@ public sealed class MixedBarrierKernel
                     if (winding > .5) return Result(MixedBarrierSegmentStatus.Blocked, "QUALIFIED_CLOSED_SOLID_OCCUPANCY", new(component.Id, component.Kind, "qualified-solid-occupancy", null));
                 }
             }
-            return Result(MixedBarrierSegmentStatus.Clear, "CLEAR_OF_PROVIDED_MIXED_GEOMETRY");
+            return Result(MixedBarrierSegmentStatus.Clear, firstBoundary.Count + lastBoundary.Count > 0
+                ? "CLEAR_EXCEPT_ACTUAL_TERMINAL_BOUNDARY_CONTACT" : "CLEAR_OF_PROVIDED_MIXED_GEOMETRY");
         }
         catch (MixedRefusal error) { return new(MixedBarrierSegmentStatus.Indeterminate, error.Code, budget.Work); }
         catch (GeometryUncertaintyException) { return new(MixedBarrierSegmentStatus.Indeterminate, "ARITHMETIC_UNCERTAINTY", budget.Work); }

@@ -1,6 +1,6 @@
 import { generateId } from '@/utils/generateId';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { beginBarrierCapture, changeBarrierRegistry, getBarrierRegistry, getBarrierSnapshot, getLatestBarrierSnapshot,
+import { beginBarrierCapture, changeBarrierRegistry, getBarrierRegistry, getBarrierAuthoringRecovery, getBarrierSnapshot, getLatestBarrierSnapshot,
   getBarrierCommandRecovery, closeBarrierCommand } from '@/api/pathfinderBarriers';
 import { BARRIER_LIMITS, barrierCanonicalJson, barrierCaptureSchema, barrierSelectedParentSchema, type BarrierCapture } from '../../../../shared/pathfinderBarriers';
 import { MIXED_BARRIER_POLICY, mixedBarrierCaptureCommandSchema as barrierCaptureCommandSchema,
@@ -105,11 +105,18 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
     const { options: access, readKey: expected } = latest.current;
     run.requestedReadKey = expected;
     try {
-      const registry = await getBarrierRegistry(access.projectId!, access.token!, signal); signal.throwIfAborted(); currentRead(run, expected); requireScope(registry, requireViewer);
-      const manifest = registry.snapshot ? await getBarrierSnapshot(access.projectId!, access.token!, registry.snapshot.snapshotId, signal) : null;
+      let registry: BarrierRegistry, recovery: Awaited<ReturnType<typeof getBarrierAuthoringRecovery>> | null = null;
+      try { registry = await getBarrierRegistry(access.projectId!, access.token!, signal); }
+      catch (error) {
+        if (errorCode(error) !== 'BARRIER_BLOB_MISSING') throw error;
+        recovery = await getBarrierAuthoringRecovery(access.projectId!, access.token!, signal);
+        registry = recovery.registry;
+      }
+      signal.throwIfAborted(); currentRead(run, expected); requireScope(registry, requireViewer);
+      const manifest = recovery ? recovery.savedManifest : registry.snapshot ? await getBarrierSnapshot(access.projectId!, access.token!, registry.snapshot.snapshotId, signal) : null;
       signal.throwIfAborted(); currentRead(run, expected);
       if (manifest && !manifestMatches(registry, manifest)) throw failure('The published barrier manifest changed. Refresh barriers.', 'BARRIER_CONTEXT_CHANGED');
-      return { registry, manifest, readKey: expected };
+      return { registry, manifest, readKey: expected, missingGeometry: Boolean(recovery) };
     } catch (error) {
       if (errorStatus(error) !== 401 && errorStatus(error) !== 403) currentRead(run, expected);
       throw error;
@@ -137,9 +144,13 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
     update(run, { busy: false, pending: !!saved, phase: unknown ? 'unknown' : code === 'BARRIER_CAPTURE_PARTIAL' ? 'partial' : code === 'BARRIER_CONTEXT_CHANGED' ? 'stale' : 'refused',
       error: unknown ? (code === 'BARRIER_VERIFIER_NOT_CONFIGURED'
         ? 'The server cannot verify barrier geometry. Update the API container with the barrier verifier enabled (BARRIER_VERIFIER_NOT_CONFIGURED). The saved command is still pending; inspect its outcome or close this exact command before saving a new selection. Published barriers are retained.'
+        : code === 'BARRIER_BLOB_MISSING'
+          ? 'Saved barrier geometry files are missing from this environment. The command outcome is still unknown and its exact recovery binding is retained. Restore the matching Path Finder files, then inspect the saved command outcome. No replacement will be submitted.'
         : 'The command outcome is unknown. Its exact recovery binding is retained. Check the saved command outcome before changing this set.')
+        : code === 'BARRIER_BLOB_MISSING'
+          ? 'Saved barrier geometry files are missing from this environment. Restore the matching Path Finder files, then refresh barriers. The saved selection has not been replaced.'
         : code === 'BARRIER_CURRENT_FRAME_UNAVAILABLE'
-          ? 'The current model frame must be prepared before changing barriers. Open Routes and choose Discover project tray candidates. When the network is ready, refresh barriers.'
+          ? 'The current model frame must be prepared before changing barriers. Open Routes and choose Generate network or Regenerate network. When the network is ready, refresh barriers.'
           : barrierCaptureErrorMessage(code) ?? (code === 'EXTRACTION_FAILED' || code?.startsWith('BARRIER_CAPTURE_')
           ? 'The selected barrier geometry could not be read completely. Check the selected objects or reduce the capture scope before starting a new command.'
           : error instanceof Error ? error.message : 'Barrier authoring could not be completed.') });
@@ -161,12 +172,15 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
       const changedScope = keepDraft && previous.draftBase && (!same(previous.draftBase.scope, found.registry.scope)
         || previous.draftBase.registryRevision !== found.registry.registryRevision);
       const oldFrame = found.registry.state === 'stale';
-      update(run, { ...found, saved: found.manifest ? { manifest: found.manifest, status: oldFrame ? 'recapture-required' : 'current' } : null,
-        ...(!keepDraft ? { draftParents: oldFrame ? [] : found.registry.selectedParents, changed: false,
+      const sameSourceModel = found.manifest?.scope.modelVersionId === found.registry.scope.modelVersionId
+        && found.manifest.scope.contentFingerprint === found.registry.scope.contentFingerprint;
+      update(run, { ...found, saved: found.manifest ? { manifest: found.manifest, status: found.missingGeometry ? 'unavailable' : oldFrame ? 'recapture-required' : 'current' } : null,
+        ...(!keepDraft ? { draftParents: found.missingGeometry && sameSourceModel ? found.registry.selectedParents : oldFrame ? [] : found.registry.selectedParents, changed: found.missingGeometry && sameSourceModel && found.registry.selectedParents.length > 0,
           draftBase: { scope: found.registry.scope, registryRevision: found.registry.registryRevision } } : {}),
         phase: pending.current ? pending.current.writeStarted ? 'unknown' : previous.phase === 'partial' ? 'partial' : 'refused'
           : changedScope ? 'stale' : found.registry.state === 'ready' ? 'ready' : found.registry.state === 'partial' ? 'partial' : 'idle',
         message: pending.current ? 'A saved command still needs reconciliation. Refresh does not submit or replace it.'
+          : found.missingGeometry ? 'The saved barrier geometry files are missing. The saved selection is retained. Add or change objects, then Save barrier set to capture a replacement. Routing remains blocked until the new set is saved.'
           : oldFrame ? 'The published set belongs to another model frame. Select current-model objects and save a new set; old object identifiers cannot be reused automatically.' : null, error: null });
     } catch (error) {
       if (latest.current.readKey !== expected && errorStatus(error) !== 401 && errorStatus(error) !== 403) return;
@@ -286,7 +300,7 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
     const signal = AbortSignal.any([run.abort.signal, controller.signal]); update(run, { busy: true, error: null });
     try {
       requireScope(base.registry);
-      const before = await getBarrierRegistry(latest.current.options.projectId!, latest.current.options.token!, signal); signal.throwIfAborted(); current(run); requireScope(before);
+      const before = (await read(run, signal)).registry; signal.throwIfAborted(); current(run); requireScope(before);
       if (before.registryRevision !== base.registry.registryRevision || !same(before.scope, base.registry.scope))
         throw failure('Barrier scope changed before reading the selection. Discard the draft and refresh.', 'BARRIER_CONTEXT_CHANGED');
       const selection = await latest.current.options.pf.runProjectPreparation(base.registry.scope, viewer => viewer.readSelection(), signal); current(run);
@@ -302,19 +316,19 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
         draft.push(parent); known.add(objectId);
       }
       if (draft.length > BARRIER_LIMITS.selectedParents) throw new Error(`At most ${BARRIER_LIMITS.selectedParents} unique parent objects can be registered.`);
-      const after = await getBarrierRegistry(latest.current.options.projectId!, latest.current.options.token!, signal); signal.throwIfAborted(); current(run); requireScope(after);
+      const after = (await read(run, signal)).registry; signal.throwIfAborted(); current(run); requireScope(after);
       if (after.registryRevision !== before.registryRevision || !same(after.scope, before.scope))
         throw failure('Barrier scope changed while reading the selection. Discard the draft and refresh.', 'BARRIER_CONTEXT_CHANGED');
-      current(run); update(run, { draftParents: draft, changed: !same(draft, base.registry.selectedParents),
+      current(run); update(run, { draftParents: draft, changed: (base.registry.reasonCodes.includes('BARRIER_BLOB_MISSING') && draft.length > 0) || !same(draft, base.registry.selectedParents),
         phase: 'idle', message: 'Draft updated. Save barrier set to capture every remaining parent and its descendant fragments.' });
     } catch (error) { report(run, error, null); }
     finally { if (context.current === run) { locked.current = false; operation.current = null; update(run, { busy: false }); } }
-  }, [current, enabled, key, kind, report, requireScope, update]);
+  }, [current, enabled, key, kind, read, report, requireScope, update]);
   const removeParent = useCallback((selectionId: string) => {
     const run = context.current, base = viewRef.current;
     if (!enabled || !run || locked.current || denied.current || pending.current || base.key !== key || base.readKey !== latest.current.readKey || !base.registry || base.phase === 'stale') return;
     const draft = base.draftParents.filter(parent => parent.selectionId !== selectionId);
-    update(run, { draftParents: draft, changed: !same(draft, base.registry.selectedParents), error: null,
+    update(run, { draftParents: draft, changed: (base.registry.reasonCodes.includes('BARRIER_BLOB_MISSING') && draft.length > 0) || !same(draft, base.registry.selectedParents), error: null,
       message: draft.length ? 'Removal is a draft. Saving recaptures every remaining parent; the published set stays unchanged until success.'
         : 'To remove the last barrier, enter a reason and explicitly declare no barriers.' });
   }, [enabled, key, update]);
@@ -348,7 +362,7 @@ export function usePathfinderBarriers(options: BarrierAuthoringOptions) {
       };
       await access.pf.runProjectPreparation(saved.command.scope, async viewer => {
         viewer.assertCurrent(); current(run);
-        const before = await getBarrierRegistry(access.projectId!, access.token!, signal); signal.throwIfAborted(); current(run); requireScope(before);
+        const before = (await read(run, signal)).registry; signal.throwIfAborted(); current(run); requireScope(before);
         if (!same(before.scope, saved.command.scope)) throw failure('The prepared model frame changed. The saved command cannot be replayed.', 'BARRIER_CONTEXT_CHANGED');
         // Retries submit the same command/key even if its successful commit advanced the head.
         if (saved.type === 'empty') {

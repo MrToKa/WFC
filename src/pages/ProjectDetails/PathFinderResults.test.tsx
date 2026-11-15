@@ -976,6 +976,23 @@ describe('selected current cable workflow result', () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(60_000); }); expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledTimes(7);
     expect(f.pf.refresh).not.toHaveBeenCalled(); expect(f.pf.calculate).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
   });
+  it.each([
+    ['row','BARRIER_CALCULATION_STORAGE_INVALID'],['row','BARRIER_BLOB_MISSING'],
+    ['refusal','BARRIER_CALCULATION_STORAGE_INVALID'],['refusal','BARRIER_BLOB_MISSING'],
+  ] as const)('stops an explicit missing-obstacle %s / %s without retrying or submitting another calculation',async(source,code)=>{
+    vi.useFakeTimers();const f=workflowFixture();
+    f.live.row.calculation={...f.live.row.calculation,currentness:'unavailable',reviewable:false,acceptedMatchesCurrent:false,reasonCodes:[code]};
+    if(source==='row')vi.mocked(fetchPathFinderCableWorkflowDetail).mockResolvedValue(f.live);
+    else vi.mocked(fetchPathFinderCableWorkflowDetail).mockRejectedValue({status:409,code});
+    render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} workflowSelection={f.selection} accountId={id(2)} options={options} />);
+    await act(async()=>{});
+    expect(display).toMatchObject({ready:false,checking:false,message:expect.stringContaining('registered obstacle geometry is missing or could not be verified')});
+    expect(display?.message).toContain('Saved cable values are retained');expect(popup?.canReview).toBe(false);expect(popup?.canApply).toBe(false);
+    await act(async()=>{await vi.advanceTimersByTimeAsync(60_000);});
+    expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce();expect(f.pf.readProposal).toHaveBeenCalledOnce();
+    expect(f.pf.readJob).toHaveBeenCalledOnce();expect(f.pf.showPath).not.toHaveBeenCalled();expect(f.pf.calculate).not.toHaveBeenCalled();
+    expect(f.pf.action).not.toHaveBeenCalled();expect(f.pf.reviewProposal).not.toHaveBeenCalled();
+  });
   it('rechecks an unchanged exact result after explicit status refresh without replaying Show or a write', async () => {
     vi.useFakeTimers(); const f = workflowFixture();
     vi.mocked(fetchPathFinderCableWorkflowDetail).mockRejectedValue({ status: 503 });

@@ -31,7 +31,7 @@ describe('narrow automatic recalculation panel', () => {
     const state = setup(); render(<PathFinderRecalculationPanel {...props} />); expect(state.command).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Enable for 30 minutes' }));
     expect(state.command).toHaveBeenCalledWith(expect.objectContaining({ schemaVersion: 'wfc.pf.recalculation-command.v2', action: 'enable', expectedControlRevision: '4', preferences: props.preferences, timeoutMilliseconds: 60000, idempotencyKey: expect.any(String), automaticPairPolicy: AUTOMATIC_PAIR_POLICY }));
-    expect(screen.getByText(/Manually edited cable values still require Review and Apply/)).toBeVisible();
+    expect(screen.getByText(/Protected routes remain unchanged/)).toBeVisible();
     expect(screen.getByText(/separate Background model recalculation setting calculates proposals only/)).toBeVisible();
     expect(screen.getByText(/Resume and Retry keep the original end time/)).toBeVisible();
   });
@@ -59,7 +59,7 @@ describe('narrow automatic recalculation panel', () => {
     expect(screen.getByRole('button', { name: 'Enable for 30 minutes' })).toBeEnabled();
     vi.mocked(usePathfinderRecalculations).mockReturnValue({ ...state, context: { ...f.enabled, automaticPairPolicy: { ...AUTOMATIC_PAIR_POLICY } } });
     view.rerender(<PathFinderRecalculationPanel {...props} />);
-    expect(screen.getByText(/Saved Cable list policy: update empty or unchanged automatic/)).toBeVisible();
+    expect(screen.getByText(/Saved Cable list policy: update unprotected cables/)).toBeVisible();
     expect(screen.queryByText(/Automatic Cable list updates are off/)).not.toBeInTheDocument();
     expect(state.command).not.toHaveBeenCalled();
   });
@@ -157,7 +157,7 @@ describe('narrow automatic recalculation panel', () => {
     render(<PathFinderRecalculationPanel {...props} />);
     expect(screen.getByText('Calculations finished. Some results need attention.')).toBeVisible();
     expect(screen.getByText('Calculated routes: 350. Saved in Cable list: 340.')).toBeVisible();
-    expect(screen.getByText('Review and Apply required: 2.')).toBeVisible(); expect(screen.getByText('Automatic saving refused: 3.')).toBeVisible();
+    expect(screen.getByText('Protected or requiring review: 2.')).toBeVisible(); expect(screen.getByText('Automatic saving refused: 3.')).toBeVisible();
     expect(screen.getByText('Other outcomes needing attention: 10.')).toBeVisible(); expect(screen.queryByText('Complete')).not.toBeInTheDocument();
   });
 });

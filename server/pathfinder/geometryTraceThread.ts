@@ -5,7 +5,7 @@ import { policyUuidSchema as uuid, policyHashSchema as hash, canonicalPurposeJso
 import { GEOMETRY_TRACE_LIMITS, fittedTraceReferenceSchema, geometryTraceManifestSchema } from '../../shared/pathfinderGeometryTrace.js';
 import { preparationCapacity } from '../../shared/pathfinderCapacity.js';
 import { preparationPlanHashInput } from '../../shared/pathfinderPreparation.js';
-import { buildGeometryTrace, geometryTraceFrozenSchema, geometryTraceHash, objectRevisionId } from './geometryTraceBuilder.js';
+import { buildGeometryTraceFromOwnedSnapshot, geometryTraceFrozenSchema, geometryTraceHash, objectRevisionId } from './geometryTraceBuilder.js';
 import type { PreparationTraceIndex } from '../../shared/preparationMerge.js';
 import { parsePolicyJson } from './policyJson.js';
 import { snapshotSchema } from './contracts.js';
@@ -42,7 +42,7 @@ export async function executeGeometryTraceThread(input: GeometryTraceThreadInput
   const snapshot = parsePolicyJson(await read(frozen.aggregate.projection, projectionInputBytes), { maxBytes: projectionInputBytes });
   const traceIndex = traceIndexSchema.parse(parsePolicyJson(await read(frozen.aggregate.traceIndex, 16 * 1024 ** 2), { maxBytes: 16 * 1024 ** 2 })) as PreparationTraceIndex;
   for (const e of frozen.evidence) await read(e.blob, GEOMETRY_TRACE_LIMITS.evidenceBytes);
-  const built = buildGeometryTrace({ ...frozen, snapshot, traceIndex, fitted: exported.payload, fittedBlob });
+  const built = buildGeometryTraceFromOwnedSnapshot({ ...frozen, snapshot, traceIndex, fitted: exported.payload, fittedBlob });
   const store = (id: string, value: unknown, limit: number) => storage.storePreparationBlob(input.projectId, input.sessionId, id, value, limit);
   const objectRecords = await store(frozen.recordsBlobId, built.records, 32 * 1024 ** 2);
   if (canonicalPurposeJson(objectRecords) !== canonicalPurposeJson(built.manifest.objectRecords)) throw Error('GEOMETRY_TRACE_BUILD_INVALID');

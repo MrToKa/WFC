@@ -10,7 +10,9 @@ import {canonicalPurposeJson} from '../../shared/pathfinderPurposePolicy.js';
 import type {GeometryTraceWorkerInput} from './geometryTraceWorker.js';
 import type {GeometryTraceManifest} from '../../shared/pathfinderGeometryTrace.js';
 import type {OperationPrincipal,GrantOperationPrincipal} from './operationAuthority.js';
-const transport=vi.hoisted(()=>({read:vi.fn(),store:vi.fn(),worker:vi.fn(),allowance:vi.fn(),discard:vi.fn(),grant:vi.fn(),routingScope:vi.fn()}));
+import { PathFinderError } from './errors.js';
+const transport=vi.hoisted(()=>({read:vi.fn(),store:vi.fn(),snapshot:vi.fn(),worker:vi.fn(),allowance:vi.fn(),discard:vi.fn(),grant:vi.fn(),routingScope:vi.fn()}));
+vi.mock('./storage.js',()=>({readSnapshot:transport.snapshot}));
 vi.mock('./preparationStorage.js',()=>({readPreparationBlob:transport.read,storePreparationBlob:transport.store,storePreparationBytes:vi.fn()}));
 vi.mock('./geometryTraceWorker.js',()=>({runGeometryTraceWorker:transport.worker,runGeometryEvidenceWorker:vi.fn()}));
 vi.mock('./geometryTraceStorage.js',()=>({withFittedExportAllowance:transport.allowance,discardAdoptedFittedExportReference:transport.discard}));
@@ -20,6 +22,7 @@ const id = (n: number) => `e1000000-0000-4000-8000-${String(n).padStart(12, '0')
 afterEach(() => {vi.useRealTimers();vi.clearAllMocks();});
 function fixture() {
   const f = geometryTraceFixture(), built = buildGeometryTrace(f), who = { userId: f.createdBy, loginId: id(1), loginExpiresAt: Date.now() + 60000 }, command = { schemaVersion: 'wfc.pf.geometry-trace-create.v1', aggregateId: f.aggregate.id, expectedProjectionSha256: f.aggregate.projection.sha256, derivationVersion: GEOMETRY_TRACE_DERIVATION, idempotencyKey: id(2) };
+  transport.snapshot.mockResolvedValue(Buffer.alloc(f.aggregate.projection.bytes));
   const state = { exists: true, admin: true, user: true, revoked: false, receipt: true, tamper: false, commitFails: false, rollbackFails: false, completeIntent: false, changedFingerprint: false };
   const queries: string[] = [], parameters: unknown[][] = [];
   const query = vi.fn(async (sql: string, params: unknown[] = []): Promise<{ rows: Record<string, unknown>[] }> => { queries.push(sql); parameters.push(params);
@@ -49,6 +52,7 @@ function fixture() {
 /** Mocked transaction model only; root separately proves database atomicity. */
 function publicationFixture(){
   const f=geometryTraceFixture();f.fitted.diagnostics=['Synthetic publication diagnostic'];f.fitted.counts.diagnostics=1;
+  transport.snapshot.mockResolvedValue(Buffer.alloc(f.aggregate.projection.bytes));
   const who={userId:f.createdBy,loginId:id(201),loginExpiresAt:Date.now()+60000},command={schemaVersion:'wfc.pf.geometry-trace-create.v1' as const,aggregateId:f.aggregate.id,expectedProjectionSha256:f.aggregate.projection.sha256,derivationVersion:GEOMETRY_TRACE_DERIVATION,idempotencyKey:id(202)};
   type Intent={id:string;input_sha256:string;frozen:unknown;state:string;lease_token:string;lease_expires_at:Date;admission_protocol:string};
   type Receipt={request_sha256:string;request:unknown;receipt:unknown};
@@ -116,6 +120,27 @@ function publicationFixture(){
 }
 
 describe('current authority and immutable geometry trace repository', () => {
+  it('verifies the frozen projection outside SQL before starting export or worker construction', async () => {
+    const f = publicationFixture();
+    transport.snapshot.mockImplementationOnce(async () => {
+      expect(f.queries.at(-1)?.sql).toBe('COMMIT'); expect(f.adapters.exportFittedTrace).not.toHaveBeenCalled();
+      return Buffer.alloc(f.f.aggregate.projection.bytes);
+    });
+    await f.create();
+    expect(transport.snapshot).toHaveBeenCalledExactlyOnceWith(f.f.aggregate.projection.payloadRef, f.f.aggregate.projection.sha256, f.f.plan.limitsProfile);
+    expect(transport.snapshot.mock.invocationCallOrder[0]).toBeLessThan(f.adapters.exportFittedTrace.mock.invocationCallOrder[0]);
+  });
+  it.each(['ENOENT', 'ENOTDIR'])('refuses a missing %s projection before export without publishing trace evidence', async code => {
+    const f = publicationFixture(); transport.snapshot.mockRejectedValueOnce(Object.assign(Error('private missing filename'), { code }));
+    await expect(f.create()).rejects.toMatchObject({ code: 'PREPARATION_SNAPSHOT_MISSING', status: 409, message: expect.stringContaining('Regenerate network') });
+    expect(f.adapters.exportFittedTrace).not.toHaveBeenCalled(); expect(transport.worker).not.toHaveBeenCalled();
+    expect(f.durable.traces.size).toBe(0); expect(f.durable.receipts.size).toBe(0);
+  });
+  it.each(['ARTIFACT_INTEGRITY', 'EACCES'])('preserves projection %s failures without converting them to missing files', async code => {
+    const f = publicationFixture(), error = code === 'EACCES' ? Object.assign(Error('private access'), { code }) : new PathFinderError(code, 409);
+    transport.snapshot.mockRejectedValueOnce(error); await expect(f.create()).rejects.toBe(error);
+    expect(f.adapters.exportFittedTrace).not.toHaveBeenCalled(); expect(f.durable.traces.size).toBe(0);
+  });
   it('holds project/user/login in established order and checks final expiry before COMMIT', async () => { const f = fixture(); await f.repo.authorize(f.f.aggregate.projectId, f.who); expect(f.queries.findIndex(q => q.startsWith('SELECT id FROM projects'))).toBeLessThan(f.queries.findIndex(q => q.startsWith('SELECT is_admin'))); expect(f.queries.some(q => q.includes('users') && q.includes('FOR SHARE'))).toBe(true); expect(f.queries.some(q => q.includes('viewer_login_bindings') && q.includes('FOR SHARE'))).toBe(true); expect(f.queries.at(-1)).toBe('COMMIT'); expect(f.release).toHaveBeenCalledTimes(1); });
   it('returns the validated current runtime digest under coherent authority locks', async () => {
     const f = fixture(); expect(await f.repo.runtime(f.f.aggregate.projectId, f.who)).toEqual({ schemaVersion: 'wfc.pf.geometry-trace-runtime.v1',
@@ -133,6 +158,30 @@ describe('current authority and immutable geometry trace repository', () => {
   it('discards a connection when rollback acknowledgement fails while preserving the operation failure', async () => { const f = fixture(); f.state.rollbackFails = true; await expect(geometryTraceTransaction(f.pool, f.f.aggregate.projectId, f.who, async () => { throw Error('original operation failure'); })).rejects.toThrow('original operation failure'); expect(f.queries.at(-1)).toBe('ROLLBACK'); expect(f.release).toHaveBeenCalledExactlyOnceWith(true); });
   it('returns a confirmed rollback connection normally to its pool', async () => { const f = fixture(); await expect(geometryTraceTransaction(f.pool, f.f.aggregate.projectId, f.who, async () => { throw Error('operation failure'); })).rejects.toThrow('operation failure'); expect(f.release).toHaveBeenCalledExactlyOnceWith(undefined); });
   it('reconciles exact historical receipt without reading current selection/policy/registry or reexporting', async () => { const f = fixture(); const receipt = await f.repo.create(f.f.aggregate.projectId, f.who, f.command); expect(receipt.duplicate).toBe(true); expect(receipt.trace.id).toBe(f.f.traceId); expect(f.adapters.exportFittedTrace).not.toHaveBeenCalled(); expect(f.queries.join('\n')).not.toMatch(/project_model_selections|pf_project_state|pf_purpose_project_state|UPDATE cables/); });
+  it('keeps historical metadata readable while requiring authenticated projection bytes for network readiness', async () => {
+    const f = fixture(), projection = f.built.manifest.projection;
+    await expect(f.repo.get(f.f.aggregate.projectId, f.who, f.f.traceId)).resolves.toEqual(f.built.manifest);
+    expect(transport.snapshot).not.toHaveBeenCalled();
+    transport.snapshot.mockResolvedValueOnce(Buffer.alloc(projection.bytes));
+    await expect(f.repo.get(f.f.aggregate.projectId, f.who, f.f.traceId, { requireProjection: true })).resolves.toEqual(f.built.manifest);
+    expect(transport.snapshot).toHaveBeenCalledExactlyOnceWith(projection.payloadRef, projection.sha256);
+    expect(f.queries.join('\n')).not.toMatch(/UPDATE|DELETE|INSERT INTO pf_/);
+  });
+  it.each(['ENOENT', 'ENOTDIR'])('reports missing projection storage explicitly for %s without losing the historical manifest', async code => {
+    const f = fixture(); transport.snapshot.mockRejectedValueOnce(Object.assign(Error('private path'), { code }));
+    await expect(f.repo.get(f.f.aggregate.projectId, f.who, f.f.traceId, { requireProjection: true })).rejects.toMatchObject({ code: 'PREPARATION_SNAPSHOT_MISSING', status: 409, message: expect.stringContaining('Restore the Path Finder files') });
+    expect(f.queries.at(-1)).toBe('ROLLBACK');
+    await expect(f.repo.get(f.f.aggregate.projectId, f.who, f.f.traceId)).resolves.toEqual(f.built.manifest);
+  });
+  it.each(['ARTIFACT_INTEGRITY', 'UNSAFE_PATHFINDER_STORAGE', 'EACCES'])('preserves %s failures instead of misdiagnosing missing storage', async code => {
+    const f = fixture(), error = code === 'EACCES' ? Object.assign(Error('access denied'), { code }) : new PathFinderError(code, 409);
+    transport.snapshot.mockRejectedValueOnce(error);
+    await expect(f.repo.get(f.f.aggregate.projectId, f.who, f.f.traceId, { requireProjection: true })).rejects.toBe(error);
+  });
+  it('rejects a projection whose verified byte count differs from the immutable manifest', async () => {
+    const f = fixture(); transport.snapshot.mockResolvedValueOnce(Buffer.alloc(f.built.manifest.projection.bytes + 1));
+    await expect(f.repo.get(f.f.aggregate.projectId, f.who, f.f.traceId, { requireProjection: true })).rejects.toMatchObject({ code: 'ARTIFACT_INTEGRITY', status: 409 });
+  });
   it('rejects same-key changed command and changed binary under same derivation version', async () => { const f = fixture(); await expect(f.repo.create(f.f.aggregate.projectId, f.who, { ...f.command, expectedProjectionSha256: '0'.repeat(64) })).rejects.toMatchObject({ code: 'GEOMETRY_TRACE_IDEMPOTENCY_CONFLICT' }); f.state.changedFingerprint = true; await expect(f.repo.create(f.f.aggregate.projectId, f.who, f.command)).rejects.toMatchObject({ code: 'GEOMETRY_TRACE_DERIVATION_CHANGED' }); await expect(f.repo.get(f.f.aggregate.projectId, f.who, f.f.traceId)).resolves.toMatchObject({ id: f.f.traceId }); });
   it('a new command reuses complete aggregate/derivation set without another trace/index/export', async () => { const f = fixture(); f.state.receipt = false; f.state.completeIntent = true; const value = await f.repo.create(f.f.aggregate.projectId, f.who, f.command); expect(value.duplicate).toBe(true); expect(f.queries.filter(q => q.startsWith('INSERT INTO pf_geometry_trace_receipts'))).toHaveLength(1); expect(f.queries.join('\n')).not.toMatch(/INSERT INTO pf_geometry_trace_sets|INSERT INTO pf_geometry_object_revisions|UPDATE pf_project/); expect(f.adapters.exportFittedTrace).not.toHaveBeenCalled(); });
   it('projects strict nonempty list summaries and paged detail/diagnostics from the same manifest', async () => { const f = fixture(), list = await f.repo.list(f.f.aggregate.projectId, f.who); expect(list.traces[0]).not.toHaveProperty('diagnostics'); expect(list.traces[0].contentSha256).toBe(f.built.manifest.contentSha256); const page = await f.repo.objects(f.f.aggregate.projectId, f.who, f.f.traceId); expect(page.total).toBe(3); expect(page.contentSha256).toBe(list.traces[0].contentSha256); const warnings = await f.repo.diagnostics(f.f.aggregate.projectId, f.who, f.f.traceId, { limit: 100 }); expect(warnings.total).toBe(2051); expect(warnings.items).toHaveLength(100); expect(warnings.nextOffset).toBe(100); await expect(f.repo.object(f.f.aggregate.projectId, f.who, f.f.traceId, f.built.records[0].id)).resolves.toEqual(f.built.records[0]); });

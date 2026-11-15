@@ -133,6 +133,25 @@ describe('cable endpoint commands with synthetic SQL; selection reader independe
     expect(receipt.binding.binding.confirmedBy).toBe(f.who.userId); expect(receipt.impact).toEqual({ fromOccurrences: 2, toOccurrences: 2, distinctCables: 2, cableIds: [id(10), id(11)] });
     expect(f.state.locations.size).toBe(1); expect(f.state.locations.get(f.locationId)?.name).toBe('Equipment'); expect(f.state.registry).toBe('5');
   });
+  it('changes one shared location once and targets every referencing cable across both ends', async () => {
+    const f = fixture();
+    await endpointBindingTransaction(f.pool, f.projectId, f.who, client => confirmEndpointBindingChangeInTransaction(client, f.projectId, f.who, f.locationId, f.legacyCommand()));
+    const many = Array.from({ length: 250 }, (_, index) => ({ id: id(1000 + index),
+      from_location: index % 2 ? 'Alias' : 'OTHER', to_location: index % 2 ? 'equipment' : 'EQUIPMENT' }));
+    f.state.cables.push(...many);
+    const context = await f.read(), base = f.command(context);
+    const command = { ...base, schemaVersion: 'wfc.pf.cable-endpoint-command.v4' as const,
+      selection: { ...base.selection, mode: 'fixed-world' as const, pointProjectMetres: [8, 9, 10] as [number, number, number], derivation: 'manual-world-point' as const, displaySdkObjectId: null },
+      calculation: calculationFor(f.projectId, context.current!), initialFill: null, automaticPairPolicy: null };
+    const receipt = await f.save(command);
+    const affected = [id(10), id(11), ...many.map(cable => cable.id)].sort();
+    expect(receipt.impact.cableIds).toEqual(affected); expect(receipt.impact.distinctCables).toBe(252);
+    expect(mocks.append).toHaveBeenCalledExactlyOnceWith(f.client, expect.objectContaining({ affectedCableIds: affected }), expect.any(Function));
+    expect(f.state.locations.size).toBe(1);
+    for (const [cable, end] of [[id(10), 'from'], [id(11), 'to'], [id(1000), 'to'], [id(1001), 'from']] as const)
+      expect((await f.read(cable, end)).head?.pointProjectMetres).toEqual([8, 9, 10]);
+    expect(receipt.impact.cableIds).not.toContain(id(12));
+  });
   it('keeps command actor distinct from a no-op binding historical confirmer', async () => {
     const f = fixture(), first = await f.save(f.command(await f.read())), old = f.state.bindings.get(first.binding.binding.id)!;
     const { contentSha256: _hash, ...body } = old, changed = { ...body, confirmedBy: id(999) };

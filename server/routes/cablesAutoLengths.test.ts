@@ -33,12 +33,33 @@ const view = (length = 72): AutoLengthView => ({
   autoLengthBarrierStatus: 'clear', autoLengthMatchesLatestRequest: true,
 });
 const request = (body?: unknown) => ({ params: { projectId: PROJECT, cableId: CABLE }, body, query: {},
-  userId: 'ordinary-editor', userRole: 'engineer' } as unknown as Request);
+  userId: '00000000-0000-4000-8000-000000000005',loginId:'00000000-0000-4000-8000-000000000006',loginExpiresAt:Date.now()+3600000,
+  userRole: 'engineer' } as unknown as Request);
 
 beforeEach(() => { vi.clearAllMocks(); database.query.mockResolvedValue({ rows: [cable()] });
   auto.read.mockResolvedValue(new Map([[CABLE, view()]])); });
 
 describe('ordinary cable API Auto read model', () => {
+  it('reads only the bounded requested project cable rows and their actual business values', async () => {
+    database.query.mockResolvedValue({ rows: [cable(CABLE, 122), cable(SECOND, 68)] });
+    const req = request(); req.query = { ids: `${CABLE},${SECOND}` }; const res = respond();
+    await handler('/', 'get')(req, res as unknown as Response);
+    expect(database.query).toHaveBeenCalledWith(expect.stringContaining('AND c.id = ANY($2::uuid[])'), [PROJECT, [CABLE, SECOND]]);
+    expect(auto.read).toHaveBeenCalledWith(database, PROJECT, [CABLE, SECOND]);
+    expect(res.json).toHaveBeenCalledWith({ cables: [
+      expect.objectContaining({ id: CABLE, routing: '/SYNTHETIC', designLength: 122 }),
+      expect.objectContaining({ id: SECOND, routing: '/SYNTHETIC', designLength: 68 }),
+    ] });
+  });
+
+  it.each(['', 'not-a-uuid', `${CABLE},${CABLE}`, [CABLE], { id: CABLE },
+    Array.from({ length: 101 }, (_, n) => `00000000-0000-4000-8000-${n.toString(16).padStart(12, '0')}`).join(','),
+  ])('refuses malformed or unbounded live-row selectors before database access (%j)', async ids => {
+    const req = request(); req.query = { ids } as Request['query']; const res = respond();
+    await handler('/', 'get')(req, res as unknown as Response);
+    expect(res.status).toHaveBeenCalledWith(400); expect(database.query).not.toHaveBeenCalled(); expect(auto.read).not.toHaveBeenCalled();
+  });
+
   it('adds bounded server read-model fields without PF/model authority or replacing editable Design', async () => {
     database.query.mockResolvedValue({ rows: [cable(), cable(SECOND)] });
     const res = respond(); await handler('/', 'get')(request(), res as unknown as Response);
@@ -89,6 +110,7 @@ describe('ordinary cable API Auto read model', () => {
   });
 
   it('exports the selected Auto value independently from editable Design', async () => {
+    database.query.mockImplementation(async(sql:string)=>({rows:sql.includes('cable-routing:views')?[]:[cable()]}));
     const res = { ...respond(), setHeader: vi.fn(), send: vi.fn() };
     const req = { ...request(), query: { columns: 'tag,autoCalculatedLength,designLength' } };
     await handler('/export', 'get')(req as unknown as Request, res as unknown as Response);
@@ -112,8 +134,10 @@ describe('ordinary cable API Auto read model', () => {
     const worksheet = XLSX.utils.aoa_to_sheet([['Cable Id', 'Design Length [m]', 'Auto calculated length [m]'], [1, 41, 999]]);
     const workbook = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(workbook, worksheet, 'Cables');
     const current = cable(), updated = cable(CABLE, 41), client = { query: vi.fn(), release: vi.fn() };
-    database.connect.mockResolvedValue(client); database.query.mockResolvedValue({ rows: [updated] });
+    database.connect.mockResolvedValue(client); database.query.mockImplementation(async(sql:string)=>({rows:sql.includes('cable-routing:views')?[]:[updated]}));
     client.query.mockImplementation(async (sql: string, values?: unknown[]) => {
+      if(sql.includes('cable-routing:views'))return{rows:[]};
+      if(sql.includes('cable-routing:control'))return{rows:[{revision:'1',manual_revision:'1',manual_routing:'/SYNTHETIC',manual_protected:true,execution_locked:true,execution_routing:'/SYNTHETIC'}]};
       if (sql.includes('FROM cables c')) return { rows: [current] };
       if (/UPDATE cables\s+SET/.test(sql)) { expect(values).toEqual([41, CABLE]); expect(sql).not.toMatch(/auto_|pf_auto/); }
       if (sql.includes('MAX(version_number)')) return { rows: [{ version: 1 }] };
@@ -122,6 +146,9 @@ describe('ordinary cable API Auto read model', () => {
       return { rows: [], rowCount: 1 };
     });
     const req = { ...request(), file: { originalname: 'synthetic.xlsx', buffer: XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) } };
+    const preview=respond();await handler('/import','post')({...req,query:{preview:'true'}} as unknown as Request,preview as unknown as Response);
+    expect(preview.status).not.toHaveBeenCalled();expect(preview.json.mock.calls[0][0]).toMatchObject({preview:true,revisionDigest:expect.stringMatching(/^[a-f0-9]{64}$/)});
+    req.query={expectedRevisionDigest:preview.json.mock.calls[0][0].revisionDigest};
     const res = respond(); await handler('/import', 'post')(req as unknown as Request, res as unknown as Response);
     expect(client.query).toHaveBeenCalledWith('COMMIT'); expect(res.status).not.toHaveBeenCalled();
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({

@@ -24,6 +24,21 @@ function mount(options = props()) { return render(<FluentProvider theme={webLigh
 beforeEach(() => { vi.resetAllMocks(); vi.mocked(usePathFinderCableWorkflow).mockReturnValue(state()); });
 
 describe('read-only Needs routing list', () => {
+  it('submits canonical pasted tags and can search again after correcting invalid text without reload', () => {
+    const current = state(); vi.mocked(usePathFinderCableWorkflow).mockReturnValue(current); mount();
+    const input = screen.getByLabelText('Search tags, From or To');
+    fireEvent.change(input, { target: { value: '\t-WG-3050-1\t' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Search cables' }));
+    expect(input).toHaveValue('-WG-3050-1');
+    expect(vi.mocked(usePathFinderCableWorkflow).mock.calls.at(-1)?.[0].query?.search).toBe('-WG-3050-1');
+    fireEvent.change(input, { target: { value: '-WG-\t3050-1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Search cables' }));
+    expect(vi.mocked(usePathFinderCableWorkflow).mock.calls.at(-1)?.[0].query?.search).toBe('-WG-\t3050-1');
+    fireEvent.change(input, { target: { value: '-WG-3050-1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Search cables' }));
+    expect(vi.mocked(usePathFinderCableWorkflow).mock.calls.at(-1)?.[0].query?.search).toBe('-WG-3050-1');
+    expect(current.refresh).not.toHaveBeenCalled();
+  });
   it('explains an actual missing Purpose permission without asking for an MTO edit', () => {
     const row = page().rows[0];
     const message = cableWorkflowReason({ ...row, mto: null, calculation: { ...row.calculation, outcome: 'category-required' } });
@@ -51,7 +66,7 @@ describe('read-only Needs routing list', () => {
   it('submits literal search and state/preferences to the owned hook without writes', () => {
     mount(); fireEvent.change(screen.getByLabelText('Search tags, From or To'), { target: { value: '  Å_10%\\  ' } });
     fireEvent.click(screen.getByRole('button', { name: 'Search cables' }));
-    expect(vi.mocked(usePathFinderCableWorkflow).mock.calls.at(-1)?.[0].query).toMatchObject({ filter: 'needs-routing', search: '  Å_10%\\  ', secondaryDistanceMeters: 2, preferVerticalApproach: true, limit: 100 });
+    expect(vi.mocked(usePathFinderCableWorkflow).mock.calls.at(-1)?.[0].query).toMatchObject({ filter: 'needs-routing', search: 'Å_10%\\', secondaryDistanceMeters: 2, preferVerticalApproach: true, limit: 100 });
     fireEvent.change(screen.getByLabelText('Cable state'), { target: { value: 'ready-for-review' } });
     expect(vi.mocked(usePathFinderCableWorkflow).mock.calls.at(-1)?.[0].query?.filter).toBe('ready-for-review');
   });

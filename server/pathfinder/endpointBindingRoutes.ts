@@ -2,7 +2,7 @@ import express, { Router, type Request, type Response, type NextFunction } from 
 import type { Pool } from 'pg';
 import { z } from 'zod';
 import { policyUuidSchema, policyRevisionSchema } from '../../shared/pathfinderPurposePolicy.js';
-import { ENDPOINT_BINDING_LIMITS, endpointBindingErrorSchema, endpointBindingWriteSchema, endpointMigrationWriteSchema, endpointMigrationConfirmSchema } from '../../shared/pathfinderEndpointBindings.js';
+import { ENDPOINT_BINDING_LIMITS, endpointBindingErrorSchema, endpointBindingWriteSchema, endpointMigrationWriteSchema, endpointMigrationConfirmSchema, endpointRequalifySchema } from '../../shared/pathfinderEndpointBindings.js';
 import { verifyAccessToken } from '../auth.js';
 import { requestPrincipal } from './auth.js';
 import { PathFinderError } from './errors.js';
@@ -45,6 +45,7 @@ export function createEndpointBindingRouter(_pool: Pool, repository: EndpointBin
   router.get('/locations/:locationId/binding-history', async (req, res) => { try { const options = z.object({ beforeRevision: policyRevisionSchema.optional(), limit: limit.optional() }).strict().parse(req.query); res.json(await repository.history(project(req), requestPrincipal(req), location(req), options)); } catch (error) { sendEndpointBindingError(res, error); } });
   router.put('/locations/:locationId/endpoint-binding', raw, mutate((req, signal) => repository.confirm(project(req), requestPrincipal(req), location(req), endpointBindingWriteSchema.parse(body(req)), signal)));
   router.post('/endpoint-bindings/migrations', raw, mutate((req, signal) => repository.migrate(project(req), requestPrincipal(req), endpointMigrationWriteSchema.parse(body(req)), signal)));
+  router.post('/endpoint-bindings/requalify', raw, mutate((req, signal) => repository.requalify(project(req), requestPrincipal(req), endpointRequalifySchema.parse(body(req)), signal)));
   router.post('/endpoint-bindings/migrations/:decisionId/confirm', raw, mutate((req, signal) => repository.confirmMigration(project(req), requestPrincipal(req), policyUuidSchema.parse(req.params.decisionId), endpointMigrationConfirmSchema.parse(body(req)), signal)));
   router.use((_req, res) => sendEndpointBindingError(res, new PathFinderError('ENDPOINT_METHOD_UNSUPPORTED', 405)));
   router.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => sendEndpointBindingError(res, error)); return router;

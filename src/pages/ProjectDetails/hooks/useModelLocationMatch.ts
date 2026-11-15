@@ -9,7 +9,7 @@ import {
   type PreparationDiscoveryObject, type PreparationDiscoveryRequest, type PreparationEndpointVisibility,
 } from '../../../../viewer-runtime/preparation-input.mjs';
 import {
-  assignModelLocations, fetchModelLocationMatchContext, fetchModelLocationMatchSummary, modelLocationMatchHash, ModelLocationMatchApiError, isModelLocationMatchBusy,
+  assignModelLocations, fetchModelLocationMatchSummary, modelLocationMatchHash, ModelLocationMatchApiError, isModelLocationMatchBusy,
   type ModelLocationMatchAssign, type ModelLocationMatchContext, type ModelLocationMatchReceipt,
 } from '@/api/pathfinderModelLocationMatch';
 import type { usePathFinder, ProjectPreparationViewer } from './usePathFinder';
@@ -18,7 +18,7 @@ type PF = ReturnType<typeof usePathFinder>;
 type Candidate = ModelLocationMatchAssign['scan']['candidates'][number];
 type Scan = ModelLocationMatchAssign['scan'];
 type Pending = { schemaVersion: 'wfc.pf.model-location-match-pending.v1'; projectId: string; accountId: string; command: ModelLocationMatchAssign; commandSha256: string };
-type Continuation = { owner: string; context: ModelLocationMatchContext; scan: Scan; offset: number; revision: string; results: ModelLocationMatchResult[] };
+type Continuation = { owner: string; context: ModelLocationMatchContext; names: string[]; scan: Scan; offset: number; revision: string; results: ModelLocationMatchResult[] };
 type State = { owner: string; storageReady: boolean; busy: boolean; phase: 'idle' | 'context' | 'finding' | 'assigning';
   progress: string | null; error: string | null; notice: string | null; pending: Pending | null;
   results: ModelLocationMatchResult[]; totalNames: number; complete: boolean; summaryLoading: boolean };
@@ -49,7 +49,7 @@ function matchesPending(value: Continuation | null, pending: Pending, owner: str
   return Boolean(value && value.owner === owner && value.context.namesSha256 === pending.command.namesSha256
     && value.revision === pending.command.expectedRegistryRevision
     && canonicalPurposeJson(value.context.current) === canonicalPurposeJson(pending.command.current)
-    && canonicalPurposeJson(value.context.names.slice(value.offset, value.offset + pending.command.names.length)) === canonicalPurposeJson(pending.command.names));
+    && canonicalPurposeJson(value.names.slice(value.offset, value.offset + pending.command.names.length)) === canonicalPurposeJson(pending.command.names));
 }
 
 /** Endpoint-only discovery. Every requested name and SDK page contributes before any assignment. */
@@ -163,9 +163,21 @@ export function useModelLocationMatch({ pf, accountId, active, refreshRevision =
     if (!allowed || current.busy || operation.current || pf.busy || lastSummaryKey.current === summaryKey) return;
     let closed = false, settled = false; const summaryAbort = new AbortController();
     lastSummaryKey.current = summaryKey;
-    update({ summaryLoading: true, results: [], totalNames: 0, complete: false, progress: null,
+    update({ summaryLoading: true, progress: null,
       ...(!data.current.pending ? { notice: null } : {}) });
-    void fetchModelLocationMatchSummary(projectId!, token!, summaryAbort.signal).then(summary => {
+    const readSummary = async () => {
+      const delays = [750, 2000];
+      for (let attempt = 0; ; attempt++) {
+        try { return await fetchModelLocationMatchSummary(projectId!, token!, summaryAbort.signal); }
+        catch (error) {
+          if (closed || !isModelLocationMatchBusy(error) || attempt >= delays.length) throw error;
+          update({ progress: `The database is temporarily busy. Retrying saved location status ${attempt + 1} of ${delays.length}…`,
+            error: data.current.error?.startsWith('Saved From/To matching results could not be loaded.') ? null : data.current.error });
+          await pause(delays[attempt], summaryAbort.signal);
+        }
+      }
+    };
+    void readSummary().then(summary => {
       if (closed) return;
       if (!sameModel(summary.context, latest.current.pf)) {
         update({ error: 'The active model changed. Refresh the current model to view saved From/To matching results.' }); return;
@@ -173,7 +185,7 @@ export function useModelLocationMatch({ pf, accountId, active, refreshRevision =
       update({ results: summary.results, totalNames: summary.context.names.length, complete: summary.complete,
         error: data.current.error?.startsWith('Saved From/To matching results could not be loaded.') ? null : data.current.error });
     }).catch(error => { if (!closed) update({ error: `Saved From/To matching results could not be loaded. ${message(error)}` }); })
-      .finally(() => { settled = true; if (!closed) update({ summaryLoading: false }); });
+      .finally(() => { settled = true; if (!closed) update({ summaryLoading: false, progress: null }); });
     return () => { closed = true; summaryAbort.abort(); if (!settled && lastSummaryKey.current === summaryKey) lastSummaryKey.current = null; };
   }, [allowed, current.busy, pf.busy, projectId, token, summaryKey, update]);
   useEffect(() => { if (!active) operation.current?.abort(); }, [active]);
@@ -207,7 +219,7 @@ export function useModelLocationMatch({ pf, accountId, active, refreshRevision =
           if (error instanceof ModelLocationMatchApiError && error.outcome === 'unknown') hadUnknownAttempt = true;
           if (!isModelLocationMatchBusy(error) || attempt >= delays.length) throw error;
           const saved = continuation.current;
-          const progress = saved?.owner === owner ? `${saved.offset} of ${saved.context.names.length} names confirmed. ` : '';
+          const progress = saved?.owner === owner ? `${saved.results.length} of ${saved.context.names.length} names confirmed. ` : '';
           update({ progress: `${progress}Project busy (${error.code}; HTTP ${error.status}). Retrying the same saved assignment ${attempt + 1} of ${delays.length}…` });
           await pause(delays[attempt], abort.signal);
         }
@@ -217,19 +229,19 @@ export function useModelLocationMatch({ pf, accountId, active, refreshRevision =
       assertCurrent(); await clear(pending); assertCurrent();
       saved.revision = receipt.registryRevision; saved.offset += pending.command.names.length; saved.results.push(...receipt.results);
       update({ results: [...saved.results], totalNames: saved.context.names.length,
-        progress: `From/To locations: ${saved.offset} of ${saved.context.names.length} checked and saved.` });
+        progress: `From/To locations: ${saved.results.length} of ${saved.context.names.length} checked and saved.` });
     };
     const finishPages = async (saved: Continuation, viewer: ProjectPreparationViewer) => {
-      while (saved.offset < saved.context.names.length) {
+      while (saved.offset < saved.names.length) {
         assertCurrent(); viewer.assertCurrent();
-        let count = Math.min(MODEL_LOCATION_MATCH_LIMITS.pageNames, saved.context.names.length - saved.offset);
-        let command = modelLocationMatchPage(saved.context, saved.scan, saved.context.names.slice(saved.offset, saved.offset + count), saved.revision);
+        let count = Math.min(MODEL_LOCATION_MATCH_LIMITS.pageNames, saved.names.length - saved.offset);
+        let command = modelLocationMatchPage(saved.context, saved.scan, saved.names.slice(saved.offset, saved.offset + count), saved.revision);
         while (new TextEncoder().encode(JSON.stringify(command)).byteLength > MODEL_LOCATION_MATCH_LIMITS.bodyBytes && count > 1) {
-          count = Math.ceil(count / 2); command = modelLocationMatchPage(saved.context, saved.scan, saved.context.names.slice(saved.offset, saved.offset + count), saved.revision);
+          count = Math.ceil(count / 2); command = modelLocationMatchPage(saved.context, saved.scan, saved.names.slice(saved.offset, saved.offset + count), saved.revision);
         }
         if (new TextEncoder().encode(JSON.stringify(command)).byteLength > MODEL_LOCATION_MATCH_LIMITS.bodyBytes)
           throw new Error('One location has too many matching candidates to assign safely. Existing locations are retained.');
-        update({ phase: 'assigning', progress: `Assigning From/To locations: ${saved.offset} of ${saved.context.names.length} checked…` });
+        update({ phase: 'assigning', progress: `Assigning From/To locations: ${saved.results.length} of ${saved.context.names.length} checked…` });
         const pending = await retain(command); assertCurrent(); viewer.assertCurrent();
         const receipt = await sendExact(pending); viewer.assertCurrent(); await accept(saved, pending, receipt);
       }
@@ -239,14 +251,25 @@ export function useModelLocationMatch({ pf, accountId, active, refreshRevision =
     const fresh = async () => {
       continuation.current = null;
       update({ phase: 'context', results: [], totalNames: 0, progress: 'Reading current project From/To names…' });
-      const context = await fetchModelLocationMatchContext(projectId!, token!, abort.signal); assertCurrent();
+      // Read committed shared locations again before scanning. A reload, a new
+      // cable or a manual change must not rescan every known model object.
+      const summary = await fetchModelLocationMatchSummary(projectId!, token!, abort.signal); assertCurrent();
+      const context = summary.context;
       if (!sameModel(context, latest.current.pf)) throw new Error('The active model changed. Load the current model before finding locations.');
-      update({ totalNames: context.names.length });
+      const crossModelNames=new Set((context.crossModelNames??[]).map(normalizeEndpointLocation));
+      const retained = summary.results.filter(result => !crossModelNames.has(normalizeEndpointLocation(result.name)) && (result.status === 'assigned' || result.status === 'preserved'));
+      const known = new Set(retained.map(result => normalizeEndpointLocation(result.name)));
+      const names = context.names.filter(name => !known.has(normalizeEndpointLocation(name)));
+      update({ totalNames: context.names.length, results: retained });
       if (!context.names.length) { update({ complete: true, notice: 'There are no From/To names in this project.' }); return; }
+      if (!names.length) {
+        update({ complete: true, notice: 'Saved From/To locations are current for this model. No model search was needed.' });
+        return;
+      }
       await latest.current.pf.runProjectPreparation(context.current, async viewer => {
         update({ phase: 'finding' });
-        const scan = await collectModelLocationMatch(context, viewer, progress => update({ progress }), abort.signal); assertCurrent();
-        const saved: Continuation = { owner, context, scan, offset: 0, revision: context.registryRevision, results: [] };
+        const scan = await collectModelLocationMatch({ ...context, names }, viewer, progress => update({ progress }), abort.signal); assertCurrent();
+        const saved: Continuation = { owner, context, names, scan, offset: 0, revision: context.registryRevision, results: retained };
         continuation.current = saved; await finishPages(saved, viewer);
       }, abort.signal);
     };
@@ -264,7 +287,7 @@ export function useModelLocationMatch({ pf, accountId, active, refreshRevision =
         } else {
           const receipt = await sendExact(pending); await clear(pending); assertCurrent();
           update({ results: receipt.results, totalNames: receipt.results.length,
-            notice: 'The saved assignment is confirmed. Reading the complete current model again to continue the project’s remaining locations.' });
+            notice: 'The saved assignment is confirmed. Checking saved locations before searching the remaining names.' });
           await fresh();
         }
       } else await fresh();

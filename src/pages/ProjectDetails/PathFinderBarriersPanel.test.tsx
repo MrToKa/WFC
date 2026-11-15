@@ -196,7 +196,7 @@ describe('administrator barrier authoring panel', () => {
     expect(screen.getByRole('button', { name: 'Add selected objects' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Declare no barriers' })).toBeNull();
     expect(screen.queryByRole('textbox', { name: 'Explicit empty reason' })).toBeNull();
-    expect(screen.getByText('The current barrier selection is unavailable until the model frame can be verified.')).toBeVisible();
+    expect(screen.getByText('The current barrier selection is unavailable until its saved data and model frame can be verified.')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Refresh barriers' })); expect(f.state.refresh).toHaveBeenCalledOnce();
     expect(f.state.save).not.toHaveBeenCalled();
   });

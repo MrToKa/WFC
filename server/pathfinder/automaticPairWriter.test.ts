@@ -107,6 +107,7 @@ function historicalWriterProof(fixtures: ReturnType<typeof fixture>[]) {
   const receipts = () => fixtures.flatMap(f => f.state.receipts);
   const histories = () => fixtures.flatMap(f => f.state.history);
   const query = vi.fn(async (sql: string, args: any[] = []) => {
+    if (sql.includes('cable-routing:control')) return { rows: [] };
     if (sql.includes('automatic-pair:receipt-proof')) {
       const r = receipts().find(r => r.id === args[2]); if (!r) return { rows: [] };
       const f = source(r.proposal_id);
@@ -381,6 +382,13 @@ describe('automatic pair exact sealed write with transactional synthetic SQL', (
   it('protects a newer same-value manual history even when values match', async () => {
     const f = fixture(); f.ownership.mockResolvedValue({ kind: 'review-required', reasonCode: 'MANUAL' } as never);
     expect(await f.run()).toMatchObject({ status: 'review-required' }); expect(f.state.writes).toBe(0);
+  });
+  it.each([false,true])('fences the authoritative policy revision at the final writer, changed=%s',async changed=>{
+    const f=fixture();f.mandate.ownership={kind:'policy',controlRevision:'3'};
+    f.mandate.contentSha256=automaticPairHash(automaticPairMandateHashInput(f.mandate));
+    f.ownership.mockResolvedValue({kind:'policy',controlRevision:changed?'4':'3'} as never);
+    expect(await f.run()).toMatchObject({status:changed?'review-required':'written'});
+    expect(f.state.writes).toBe(changed?0:1);
   });
   it.each(['history', 'receipt', 'wrong route', 'unrelated write', 'CAS'] as const)('rolls back the pair after %s failure', async kind => {
     const f = fixture(); if (kind === 'history') f.state.historyFailed = true; if (kind === 'receipt') f.state.receiptFailed = true;

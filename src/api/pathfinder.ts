@@ -9,6 +9,7 @@ import { directSecondaryDecisionSchema, directSecondaryRouteIssue, type DirectSe
 import { revisionResultEnvelopeSchema } from '../../shared/pathfinderRevisionResults';
 import { calculationAvailabilitySchema } from '../../shared/pathfinderCalculationAvailability';
 import { calculationSubmissionRefusalSchema } from '../../shared/pathfinderCalculationSubmission';
+import { ENDPOINT_MODEL_MATCH_DERIVATION, ENDPOINT_MODEL_CENTRE_DERIVATION } from '../../shared/pathfinderEndpointBindings';
 import { automaticPairPolicySchema, automaticPairStatuses } from '../../shared/pathfinderAutomaticPair';
 import { recalculationReasonSchema } from '../../shared/pathfinderRecalculation';
 import { sealedCableItemApplicabilitySchema } from '../../shared/pathfinderItemApplicability';
@@ -22,7 +23,7 @@ const match = z.object({ status: z.enum(['matched', 'missing', 'ambiguous', 'sta
 const location = z.object({ id: uuid, name: z.string(), aliases: z.array(z.string()), revision,
   calculationAvailability: calculationAvailabilitySchema.optional(),
   matching: z.object({ status: z.enum(['missing', 'ambiguous', 'unverified']), candidateObjectIds: z.array(z.string()) }).optional(),
-  binding: z.object({ modelVersionId: uuid, revision, point, objectId: z.string().nullable(), externalId: z.string().nullable(), source: z.enum(['manual', 'automatic']), status: z.enum(['confirmed', 'stale']), derivation: z.enum(['manual-world-point', 'picked-surface-point', 'equipment-bottom-aabb', 'matched-model-bottom-aabb.v1']).optional(), coordinateFrame: z.literal('canonical-world-metres').optional() }).nullable() });
+  binding: z.object({ modelVersionId: uuid, revision, point, objectId: z.string().nullable(), externalId: z.string().nullable(), source: z.enum(['manual', 'automatic']), status: z.enum(['confirmed', 'stale']), derivation: z.enum(['manual-world-point', 'picked-surface-point', 'equipment-bottom-aabb', ENDPOINT_MODEL_MATCH_DERIVATION, ENDPOINT_MODEL_CENTRE_DERIVATION]).optional(), coordinateFrame: z.literal('canonical-world-metres').optional() }).nullable() });
 const numeric = z.union([z.string(), z.number().finite()]).nullable();
 const jobSchema = z.object({ id: uuid, projectId: uuid, kind: z.enum(['calculate', 'lookup', 'preview']).optional(), status: z.enum(['queued', 'running', 'complete', 'cancelled', 'failed']), total: z.number().int().nonnegative(), completed: z.number().int().nonnegative(), cancelRequested: z.boolean(), failure: z.string().nullable(), attempts: z.number().int().nonnegative(), createdAt: z.string(), updatedAt: z.string() });
 const jobAutomaticUpdateSchema = z.object({ status: z.enum(automaticPairStatuses), receiptId: uuid.nullable(), reasonCode: recalculationReasonSchema.nullable() }).strict()

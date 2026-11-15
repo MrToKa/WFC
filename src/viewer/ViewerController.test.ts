@@ -243,6 +243,48 @@ describe('PathFinder protected Viewer capabilities', () => {
     s.message('TRAY_ROOT_SELECTION', { objects: [{ objectId: 23 }] }, command.requestId, s.identity);
     expect(s.c.getLoadSnapshot()?.ready).toBe(true);
   });
+
+it('saved point display detaches input and accepts only the exact current-load acknowledgement without clearing route', async () => {
+  const s = await loaded(), point: [number, number, number] = [1, 2, 3];
+  const showing = s.c.showLocationPoint(point); point[0] = 99;
+  await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'SHOW_LOCATION_POINT')).toBe(true));
+  const command = s.send.mock.calls.find(call => call[0].type === 'SHOW_LOCATION_POINT')![0];
+  expect(command.payload).toEqual({ pointProjectMetres: [1, 2, 3] });
+  s.message('LOCATION_POINT_SHOWN', command.payload, command.requestId, s.identity); await showing;
+  expect(s.send.mock.calls.some(call => ['SHOW_LOCATION', 'CLEAR_ROUTE', 'READ_SELECTION'].includes(call[0].type))).toBe(false);
+});
+it('saved point display refuses invalid input and mismatched acknowledgements', async () => {
+  const s = await loaded(), before = s.send.mock.calls.length;
+  for (const point of [[NaN, 2, 3], [1e9 + 1, 2, 3], [1, 2]]) await expect(s.c.showLocationPoint(point as [number, number, number])).rejects.toThrow('Invalid location point');
+  expect(s.send.mock.calls).toHaveLength(before);
+  const showing = s.c.showLocationPoint([1, 2, 3]); const rejected = expect(showing).rejects.toThrow('Location point acknowledgement mismatch');
+  await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'SHOW_LOCATION_POINT')).toBe(true));
+  const command = s.send.mock.calls.find(call => call[0].type === 'SHOW_LOCATION_POINT')![0];
+  s.message('LOCATION_POINT_SHOWN', { pointProjectMetres: [1, 2, 4] }, command.requestId, s.identity); await rejected;
+});
+
+it('saved point display ignores another load, cancels on Clear and ignores its late acknowledgement', async () => {
+  const s = await loaded(), showing = s.c.showLocationPoint([1, 2, 3]), rejected = expect(showing).rejects.toMatchObject({ name: 'AbortError' });
+  await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'SHOW_LOCATION_POINT')).toBe(true));
+  const command = s.send.mock.calls.find(call => call[0].type === 'SHOW_LOCATION_POINT')![0];
+  s.message('LOCATION_POINT_SHOWN', command.payload, command.requestId, { ...s.identity, loadId: generateId() });
+  expect(s.events.some(event => event.type === 'LOCATION_POINT_SHOWN')).toBe(false);
+  const cleared = s.c.clear(); await rejected; s.message('ROUTE_CLEARED', {}, cleared, s.identity);
+  s.message('LOCATION_POINT_SHOWN', command.payload, command.requestId, s.identity);
+  expect(s.events.some(event => event.type === 'LOCATION_POINT_SHOWN')).toBe(false); expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+});
+it('a recoverable saved-point refusal or timeout keeps the ready model', async () => {
+  const s = await loaded(600_000); s.send.mockImplementation(value => {
+    if (value.type === 'SHOW_LOCATION_POINT') s.message('ERROR', { code: 'LOCATION_UNAVAILABLE', message: 'Location unavailable', retryable: true, operation: 'SHOW_LOCATION_POINT' }, value.requestId, s.identity);
+  });
+  await expect(s.c.showLocationPoint([1, 2, 3])).rejects.toMatchObject({ code: 'LOCATION_UNAVAILABLE' });
+  expect(s.c.getLoadSnapshot()?.ready).toBe(true); s.send.mockReset();
+  const showing = s.c.showLocationPoint([1, 2, 3]).catch(error => error);
+  await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'SHOW_LOCATION_POINT')).toBe(true));
+  await vi.advanceTimersByTimeAsync(60_001); expect(await showing).toBeInstanceOf(Error);
+  await vi.advanceTimersByTimeAsync(10_001); expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+});
+
   it('location display waits for the exact acknowledgement and preserves committed route ownership', async () => {
     const s = await loaded(); let received = 0;
     s.send.mockImplementation(value => {
@@ -847,8 +889,8 @@ describe('PathFinder protected Viewer capabilities', () => {
     const rejected=expect(reading).rejects.toMatchObject({name:'AbortError'});await vi.waitFor(()=>expect(s.send.mock.calls.some(call=>call[0].type==='READ_PREPARATION_OBJECTS')).toBe(true));abort.abort();await rejected;expect(s.send.mock.calls.some(call=>call[0].type==='CANCEL_REQUEST')).toBe(true);
     const captureAbort=new AbortController(),capturing=s.c.captureModel({routeCodes:['BC001'],allowedCategories:['Control'],equipmentNames:[]},()=>{},{signal:captureAbort.signal});const captureRejected=expect(capturing).rejects.toMatchObject({name:'AbortError'});await vi.waitFor(()=>expect(s.send.mock.calls.some(call=>call[0].type==='START_MODEL_CAPTURE')).toBe(true));captureAbort.abort();await captureRejected;
   });
-  it('delivers only current request property progress without completing discovery or extending its deadline',async()=>{
-    const s=await loaded(600_000),onProgress=vi.fn(),reading=s.c.discoverPreparationObjects({schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['TAG-001'],rootObjectId:null,cursor:0,limit:128},{onProgress});
+  it.each(['equipment','names'] as const)('delivers only current %s property progress without completing discovery or extending its deadline',async mode=>{
+    const s=await loaded(600_000),onProgress=vi.fn(),reading=s.c.discoverPreparationObjects({schemaVersion:'wfc.pf.viewer-discovery.v1',mode,names:['TAG-001'],rootObjectId:null,cursor:0,limit:128,...(mode==='names'?{includeProperties:true as const}:{})},{onProgress});
     const rejected=expect(reading).rejects.toThrow('Viewer request timed out');
     await vi.waitFor(()=>expect(s.send.mock.calls.some(call=>call[0].type==='READ_PREPARATION_OBJECTS')).toBe(true));
     const command=s.send.mock.calls.find(([value])=>value.type==='READ_PREPARATION_OBJECTS')![0];
@@ -865,9 +907,9 @@ describe('PathFinder protected Viewer capabilities', () => {
     expect(s.events.some(event=>event.type==='ERROR'&&event.payload.code==='REQUEST_TIMEOUT')).toBe(true);
     report(1000); expect(onProgress).toHaveBeenCalledTimes(2);
   });
-  it('ignores discovery progress after cancellation even before the cancellation acknowledgement',async()=>{
+  it.each(['equipment','names'] as const)('ignores %s discovery progress after cancellation even before the cancellation acknowledgement',async mode=>{
     const s=await loaded(),abort=new AbortController(),onProgress=vi.fn();
-    const reading=s.c.discoverPreparationObjects({schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['TAG-001'],rootObjectId:null,cursor:0,limit:128},{signal:abort.signal,onProgress});
+    const reading=s.c.discoverPreparationObjects({schemaVersion:'wfc.pf.viewer-discovery.v1',mode,names:['TAG-001'],rootObjectId:null,cursor:0,limit:128,...(mode==='names'?{includeProperties:true as const}:{})},{signal:abort.signal,onProgress});
     const rejected=expect(reading).rejects.toMatchObject({name:'AbortError'});
     await vi.waitFor(()=>expect(s.send.mock.calls.some(call=>call[0].type==='READ_PREPARATION_OBJECTS')).toBe(true));
     const command=s.send.mock.calls.find(([value])=>value.type==='READ_PREPARATION_OBJECTS')![0];

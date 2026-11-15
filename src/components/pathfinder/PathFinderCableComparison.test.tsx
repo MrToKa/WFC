@@ -36,7 +36,7 @@ describe('read-only exact cable comparison', () => {
   it.each(['0', ''])('retains defined length %j when routing is blank', designLength => {
     const value = input(); value.current.cable = { ...value.current.cable, routing: null, designLength };
     render(<PathFinderCableComparison input={value} />);
-    expect(screen.getByText('Existing or partial cable values are retained until explicit human Review and Apply.')).toBeVisible();
+    expect(screen.getByText('Existing values remain while this proposal is reviewed. Protected routes cannot be replaced; manage protection in Cable details.')).toBeVisible();
     expect(screen.queryByText(/Both current fields are empty/)).toBeNull();
     if (designLength === '') expect(screen.getByText('Design length: Empty string — a defined stored value')).toBeVisible();
   });

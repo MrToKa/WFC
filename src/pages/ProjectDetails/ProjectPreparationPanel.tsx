@@ -59,12 +59,12 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
     : state.error;
   useEffect(() => {
     if (!errorMessage) { lastErrorToast.current = null; return; }
-    if (!active || !state.enabled || working) return;
+    if (!active || !state.enabled || working || state.loading || pf.viewerPhase === 'loading') return;
     const key = JSON.stringify([owner, errorMessage]);
     if (lastErrorToast.current === key) return;
     lastErrorToast.current = key;
     showToast({ title: 'Tray network needs attention', body: errorMessage, intent: 'error', timeout: 15000 });
-  }, [active, state.enabled, working, owner, errorMessage, showToast]);
+  }, [active, state.enabled, state.loading, pf.viewerPhase, working, owner, errorMessage, showToast]);
   useEffect(() => {
     onBusyChange?.(working);
     return () => onBusyChange?.(false);
@@ -114,11 +114,12 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
         if (pf.viewerPhase !== 'ready') return 'Network saved in the database. Load the current model before checking readiness for routing calculations.';
         if (state.loading || working) return 'Network saved in the database. Checking readiness for routing calculations…';
         if (state.unknown) return 'Network saved in the database. The earlier update needs checking before routing calculations. Choose Retry tray update.';
-        return 'Network saved in the database. Readiness still needs verification. Choose Discover project tray candidates to finish checking the saved network.';
+        if (state.canFinishNetwork) return 'Network saved in the database. Choose Finish network preparation to verify and complete its frame using the saved geometry.';
+        return 'Network saved in the database. Readiness still needs verification. Choose Regenerate network to rebuild it from the current model.';
       case 'stored-needs-update':
-        return 'A routing network is saved in the database. The model, tray data or routing settings have changed. Choose Discover project tray candidates to update it.';
+        return 'A routing network is saved in the database. The model, tray data or routing settings have changed. Choose Regenerate network to update it.';
       case 'missing':
-        return 'No routing network is saved in the database. Choose Discover project tray candidates to prepare it.';
+        return 'No routing network is saved in the database. Choose Generate network to prepare it.';
       case 'unavailable':
         return 'Saved network status is unavailable. Refresh the project to check it.';
       default:
@@ -239,20 +240,31 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
     }
   };
   return <section aria-label="Project tray preparation">
-    <Button appearance="primary" disabled={writeDisabled} onClick={() => void state.checkTrays()}>
+    <Button appearance="primary" disabled={writeDisabled || state.unknown} onClick={() => void state.generateNetwork()}>
+      {state.generatingNetwork ? 'Generating network…' : state.generationPaused ? 'Resume network generation' : context?.currentAggregate ? 'Regenerate network' : 'Generate network'}
+    </Button>
+    {state.canFinishNetwork ? <Button disabled={writeDisabled || state.unknown} onClick={() => void state.finishNetwork()} style={{ marginLeft: 8 }}>
+      Finish network preparation
+    </Button> : null}
+    <p>Build and save the routing network from the current model using the saved tray assignments. Cable routes are calculated separately.</p>
+    <Button disabled={writeDisabled} onClick={() => void (state.unknown ? state.checkTrays() : state.discover())}>
       {state.unknown ? state.busy ? 'Checking tray update…' : 'Retry tray update' : 'Discover project tray candidates'}
     </Button>
+    <p>Discover checks the project Trays records against model names and Properties, then saves unique matches. Generate network builds from the assigned trays.</p>
     {state.busy ? <Button onClick={state.pause} style={{ marginLeft: 8 }}>Stop checking</Button> : null}
     {disabledReason ? <p>{disabledReason}</p> : null}
     {working ? <Spinner size="tiny" label={state.progress ?? (reading ? 'Reading and saving the selected tray…'
       : state.loading ? 'Checking saved network readiness…' : state.unknown ? 'Checking the earlier tray update…' : 'Checking trays and preparing the network…')} style={{ marginBlock: 12 }} /> : null}
+    {context && modelCurrent && state.trayMatchCounts ? <p role="status" aria-label="Tray matching results">
+      Last tray matching — assigned: {state.trayMatchCounts.assigned}; kept: {state.trayMatchCounts.kept}; not found: {state.trayMatchCounts.missing}; multiple matches: {state.trayMatchCounts.ambiguous}.
+    </p> : null}
     <p role="status">{networkStatus}</p>
     {state.networkStorageStatus === 'stored-current' && modelCurrent ? <p>Reopening the project and changing From/To locations reuse the saved network.</p> : null}
     {blockers.length ? <div role="alert" aria-label="Network preparation blockers">
-      <p>Network preparation is blocked. Assigned objects are saved; resolve these issues, then choose Discover project tray candidates again.</p>
+      <p>Network preparation is blocked. Assigned objects are saved; resolve these issues, then choose Generate network or Regenerate network.</p>
       <ul>{blockers.map(issue => <li key={issue.code}>{issue.message}</li>)}</ul>
-    </div> : state.error ? <p role="alert">{state.error}</p> : null}
-    {state.notice && !state.error && !working && !saved ? <p role="status">{state.notice}</p> : null}
+    </div> : state.error && pf.viewerPhase !== 'loading' && !state.loading && !working ? <p role="alert">{state.error}</p> : null}
+    {state.notice && !state.error && !working && !saved && !(state.trayMatchCounts && state.notice.startsWith('Tray matching finished.')) ? <p role="status">{state.notice}</p> : null}
     {context ? <>
       <Field label="Search project trays" style={{ marginBlock: 12 }}>
         <Input type="search" aria-label="Search project trays" placeholder="Tray name or purpose" value={query}

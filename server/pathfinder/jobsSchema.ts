@@ -72,6 +72,9 @@ export async function initializePathFinderJobs(pool: Pool): Promise<void> {
       -- A deleted live cable is a missing-current state, not permission to erase
       -- its engineering audit. Job/project ownership and proposal receipt FKs
       -- remain; project deletion can still cascade the complete project scope.
+      -- Retain job items too: their immutable output mandates belong to the
+      -- historical admission and must not be deleted by a live-cable cascade.
+      ALTER TABLE pf_job_items DROP CONSTRAINT IF EXISTS pf_job_items_project_id_cable_id_fkey;
       ALTER TABLE pf_proposals DROP CONSTRAINT IF EXISTS pf_proposals_project_id_cable_id_fkey;
       ALTER TABLE pf_apply_receipts DROP CONSTRAINT IF EXISTS pf_apply_receipts_project_id_cable_id_fkey;
       ALTER TABLE pf_reviews ADD COLUMN IF NOT EXISTS validation_method TEXT NOT NULL DEFAULT 'legacy-unclassified'

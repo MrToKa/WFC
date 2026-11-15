@@ -85,6 +85,16 @@ function retryableVerificationRead(error: unknown) {
   return error instanceof TypeError || error instanceof DOMException && error.name === 'TimeoutError'
     || error instanceof Error && error.message === 'WORKFLOW_READ_UNAVAILABLE';
 }
+function terminalBarrierVerificationIssue(reasonCodes: readonly string[]): string | null {
+  const retained = ' Saved cable values are retained. Restore or refresh the registered obstacles before checking this route again.';
+  if (reasonCodes.some(code => ['BARRIER_CALCULATION_STORAGE_INVALID', 'BARRIER_BLOB_MISSING', 'BARRIER_BLOB_INTEGRITY'].includes(code)))
+    return 'The registered obstacle geometry is missing or could not be verified.' + retained;
+  if (reasonCodes.includes('BARRIER_CURRENT_FRAME_UNAVAILABLE'))
+    return 'The model coordinate frame could not be verified.' + retained;
+  if (reasonCodes.some(code => ['BARRIER_CALCULATION_SCOPE_CHANGED', 'BARRIER_CONTEXT_CHANGED', 'BARRIER_READY_SNAPSHOT_REQUIRED'].includes(code)))
+    return 'The registered obstacles no longer match this calculation.' + retained;
+  return null;
+}
 /** One display-only bridge to the existing owned review/recovery controller.
  * The popup never implements a second writer or creates a replacement command. */
 export type PathFinderWorkflowReview = {
@@ -505,6 +515,9 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
         if (cableRead.status === 'rejected') {
           const error = cableRead.reason as { status?: unknown }; if (error?.status === 401 || error?.status === 403) throw cableRead.reason;
           if (retryableVerificationRead(cableRead.reason)) throw cableRead.reason;
+          const refusal = cableRead.reason as { status?: unknown; code?: unknown };
+          const message = refusal?.status === 409 && typeof refusal.code === 'string' ? terminalBarrierVerificationIssue([refusal.code]) : null;
+          if (message) { stopCheck(message); return; }
         }
         const parent = parentRead.status === 'fulfilled' && parentRead.value?.projectId === detail.projectId && parentRead.value.id === detail.jobId ? parentRead.value : null;
         if (!parent && !displayRequested) throw new Error('WORKFLOW_READ_UNAVAILABLE');
@@ -546,13 +559,14 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
           && live.row.cable.designLength !== null && (() => {
             try { return canonicalDecimalString(live.row.cable.designLength) === canonicalDecimalString(detail.design.designLengthMeters); } catch { return false; }
           })());
+        const barrierIssue = terminalBarrierVerificationIssue(live?.row.calculation.reasonCodes ?? []);
         const issue = !envelope ? 'This historical path has no verifiable calculation admission. It is preview only; use Cable revision results or calculate a fresh proposal before Review and Apply.'
           : !parent ? 'The exact calculation state is unavailable. This path is preview only; reopen the selected cable result to check again.'
             : acceptedDisplayReady ? 'The current route is saved in Cable list and ready to show.'
               : parent.cancelRequested || ['cancelled', 'failed'].includes(parent.status) ? 'This calculation was cancelled or failed. Its saved path is preview only.'
                 : savedExactDisplayReady ? 'The saved route is ready to show. Calculate routing to review a new result.'
-                  : !liveCurrent ? 'The current cable proof is unavailable or changed. This path is preview only; refresh the cable list and calculate again when needed.'
-                    : !wholeJobReady && !itemReady ? 'This calculation is still running and this cable has no current sealed item. Review is blocked until it is ready.' : null;
+                  : barrierIssue ?? (!liveCurrent ? 'The current cable proof is unavailable or changed. This path is preview only; refresh the cable list and calculate again when needed.'
+                    : !wholeJobReady && !itemReady ? 'This calculation is still running and this cable has no current sealed item. Review is blocked until it is ready.' : null);
         const selectedScope: PathFinderCalculationScope = { admissionId: envelope?.admissionId ?? null, jobId: detail.jobId, ready: wholeJobReady || itemReady,
           wholeJobReady, jobStatus: parent?.status ?? null, cancelRequested: parent?.cancelRequested ?? false, message: issue };
         scope.current = selectedScope; setScopeReadiness(selectedScope); setProposal(detail); setNotice(issue);
@@ -569,7 +583,7 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
         // Route geometry has its own exact calculation evidence. Optional
         // equipment highlighting must not delay a drawable checked route.
         if (!live || !savedExactDisplayReady && !acceptedDisplayReady && (!currentCalculatedItem || !liveCurrent)) {
-          if (envelope && parent && !parent.cancelRequested && !['failed', 'cancelled'].includes(parent.status) && !detail.compatibilityIssue
+          if (!barrierIssue && envelope && parent && !parent.cancelRequested && !['failed', 'cancelled'].includes(parent.status) && !detail.compatibilityIssue
             && (!live || live.row.calculation.currentness === 'unavailable' || ['waiting', 'running'].includes(live.row.calculation.itemState ?? '')
               || ['pending', 'running', 'unknown'].includes(live.row.calculation.automaticUpdate?.status ?? '')))
             throw verificationPending('The calculated path is saved, but its current cable proof is still becoming available. Checking again automatically…');

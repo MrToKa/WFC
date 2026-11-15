@@ -8,7 +8,7 @@ describe('tray identity error instructions', () => {
       const message = trayIdentityErrorMessage(code);
       expect(message).toContain('model remains loaded');
       expect(message).toContain('Saved assignments and the published network were kept');
-      expect(message).toContain('Discover project tray candidates');
+      expect(message).toContain('Generate network');
       expect(message).not.toContain('Refresh Path Finder');
       expect(message).not.toContain(code);
     });

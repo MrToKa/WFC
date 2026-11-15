@@ -354,7 +354,8 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
     const visibility = await captureDisplayVisibility(viewer, tree, ids, { check, pause, indexById: indexed.indexById });
     if (request.visibilityScope && !sameDisplayVisibility(request.visibilityScope, visibility.scope)) throw fail('PREPARATION_VISIBILITY_CHANGED');
     const indexById = indexed.indexById, matching = new Map(); let propertyScan = null, candidateIndices, objectIdentities;
-    const normalEquipment = value => String(value).normalize('NFC').trim().toUpperCase();
+    const trayProperties = request.mode === 'names' && request.includeProperties === true;
+    const normalEquipment = value => request.mode === 'names' ? String(value).normalize('NFC').trim() : String(value).normalize('NFC').trim().toUpperCase();
     if (request.mode === 'subtree' || request.mode === 'subtrees' || request.mode === 'ancestors') {
       const roots = request.mode === 'subtrees' ? request.rootObjectIds : [request.rootObjectId];
       if (!roots.every(id => indexById.has(id))) throw fail('PREPARATION_SCOPE_INVALID');
@@ -373,7 +374,7 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
         preparationSubtree = { queryKey, indices:[...selected].map(id => indexById.get(id)).sort((a,b) => a-b) };
       }
       candidateIndices = preparationSubtree.indices;
-    } else if (request.mode === 'equipment') {
+    } else if (request.mode === 'equipment' || trayProperties) {
       let lastProgressAt = -Infinity, lastProgressLoaded = -1;
       const progress = (loaded, force = false) => {
         check(); const now = performance.now();
@@ -385,7 +386,7 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
       // Small query pages still echo/filter only their own names, and reobserve
       // live visibility before returning any cached property candidates.
       const indexNames = request.indexNames ?? request.names;
-      const queryKey = JSON.stringify(indexNames.map(normalEquipment));
+      const queryKey = JSON.stringify([request.mode, indexNames.map(normalEquipment)]);
       if (!preparationEquipment || preparationEquipment.queryKey !== queryKey) {
         const state = { promise:null, queryKey }; preparationEquipment = state;
         state.promise = (async () => {
@@ -396,7 +397,7 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
           const charge = bytes => { accountedBytes += bytes; if (accountedBytes > EQUIPMENT_INDEX_LIMITS.bytes) throw fail('PREPARATION_EQUIPMENT_INDEX_LIMIT'); };
           const indexValue = (raw, id, seen) => {
             const text = String(raw ?? '');
-            for (const key of modelEquipmentMatchKeys(text)) {
+            for (const key of trayProperties ? [normalEquipment(text)] : modelEquipmentMatchKeys(text)) {
               if (!requested.has(key) || seen.has(key)) continue;
               if (text.length > EQUIPMENT_INDEX_LIMITS.valueCharacters) throw fail('PREPARATION_EQUIPMENT_ROW_LIMIT');
               seen.add(key);
@@ -409,9 +410,13 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
               charge(16); matches.push(id);
             }
           };
+          // The pinned SDK's legacy method drops needsExternalId and loads the
+          // entire external-ID file when no property filter is supplied.
+          const readBulkProperties = typeof model.getBulkProperties2 === 'function' ? model.getBulkProperties2 : model.getBulkProperties;
+          if (typeof readBulkProperties !== 'function') throw fail('PREPARATION_EQUIPMENT_PROPERTIES_FAILED');
           for (let start = 0; start < ids.length; start += 512) {
             check(); const batch = ids.slice(start, start + 512), allowed = new Set(batch);
-            const rows = await callback((yes, no) => model.getBulkProperties(batch, { ignoreHidden:false, needsExternalId:false }, yes, no), operationSignal, 45000,
+            const rows = await callback((yes, no) => readBulkProperties.call(model, batch, { ignoreHidden:false, needsExternalId:false }, yes, no), operationSignal, 45000,
               { timeout:'PREPARATION_EQUIPMENT_PROPERTIES_TIMEOUT', failed:'PREPARATION_EQUIPMENT_PROPERTIES_FAILED' }); check();
             if (!Array.isArray(rows) || rows.length > batch.length) throw fail('PREPARATION_EQUIPMENT_PROPERTIES_INVALID');
             let rowWorkStartedAt = performance.now();
@@ -452,7 +457,7 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
       }
       candidateIndices = [...matching.keys()].map(id => indexById.get(id)).sort((a,b)=>a-b);
     }
-    const result = { schemaVersion:'wfc.pf.viewer-discovery.v1', mode:request.mode, names:request.names, rootObjectId:request.rootObjectId, cursor:request.cursor, matchingPolicyVersion:PREPARATION_MATCHING_POLICY, visibilityScope:visibility.scope, indexedObjectCount:ids.length, propertyScan, objects:[], nextCursor:null, complete:true, ...(request.mode === 'subtrees' ? {rootObjectIds:[...request.rootObjectIds]} : {}), ...(request.includeAnchors ? {includeAnchors:true} : {}) };
+    const result = { schemaVersion:'wfc.pf.viewer-discovery.v1', mode:request.mode, names:request.names, rootObjectId:request.rootObjectId, cursor:request.cursor, matchingPolicyVersion:PREPARATION_MATCHING_POLICY, visibilityScope:visibility.scope, indexedObjectCount:ids.length, propertyScan, objects:[], nextCursor:null, complete:true, ...(request.mode === 'subtrees' ? {rootObjectIds:[...request.rootObjectIds]} : {}), ...(request.includeAnchors ? {includeAnchors:true} : {}), ...(trayProperties ? {includeProperties:true} : {}) };
     // An explicit location search observes approximate display bounds only.
     // It never creates an object-derived/native geometry qualification.
     const coordinates = request.includeAnchors ? modelCoordinates(model) : null;
@@ -486,7 +491,7 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
       const index = next.value;
       cursor = index; check(); const id = ids[cursor];
       let matchedNames = [];
-      if (request.mode === 'equipment') matchedNames = matching.get(id) ?? [];
+      if (request.mode === 'equipment' || trayProperties) matchedNames = matching.get(id) ?? [];
       else if (request.mode === 'names') { const normalized = names[cursor].normalize('NFC').trim(); if (exactNames.has(normalized)) matchedNames = [normalized]; }
       if (request.mode === 'names' && matchedNames.length === 0) { if (cursor % 8192 === 0) await pause(); continue; }
       const eligible = request.mode !== 'equipment' || visibility.equipmentEligibility(id);
@@ -497,7 +502,7 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
       let hasGeometry = false; tree.enumNodeFragments(id, () => { hasGeometry = true; }, false);
       const parent = id === ids[0] ? null : tree.getNodeParentId(id);
       if (parent !== null && (!indexById.has(parent) || parent === id)) throw fail('EXTRACTION_FAILED');
-      const object = { objectId:id, parentId:parent, name:names[cursor], hasGeometry, isPhysicalLeaf:hasGeometry && tree.getChildCount(id) === 0, orderIndex:cursor, matchedNames, ...(request.includeAnchors ? { ...(eligible ? observedAnchor(id) : {bounds:null,bottomCentre:null}), ...(objectIdentities?.has(id) ? {objectIdentity:{...objectIdentities.get(id)}} : {}) } : {}) };
+      const object = { objectId:id, parentId:parent, name:names[cursor], hasGeometry, isPhysicalLeaf:hasGeometry && tree.getChildCount(id) === 0, orderIndex:cursor, matchedNames, ...(request.includeAnchors ? { ...(eligible ? observedAnchor(id) : {bounds:null,bottomCentre:null}) } : {}), ...((request.includeAnchors || trayProperties) && objectIdentities?.has(id) ? {objectIdentity:{...objectIdentities.get(id)}} : {}) };
       const candidate = { ...result, objects:[...result.objects, object], nextCursor:cursor+1, complete:false };
       if (new TextEncoder().encode(JSON.stringify(candidate)).length > PREPARATION_VIEWER_LIMITS.pageBytes) { if (!result.objects.length) throw fail('PREPARATION_PAGE_TOO_LARGE'); finished = false; break; }
       result.objects.push(object); if (result.objects.length >= request.limit) { cursor++; finished = iterator.next().done === true; break; }

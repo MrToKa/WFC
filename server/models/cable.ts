@@ -1,3 +1,4 @@
+import type { CableRoutingReadView } from '../../shared/cableRoutingView.js';
 import type { AutoLengthView } from '../../shared/pathfinderAutoLength.js';
 import { toNumberOrNull } from './cableType.js';
 
@@ -67,7 +68,7 @@ export type PublicCable = {
 
 /** Ordinary cable routes add this separate read-only projection. The generic
  * business mapper also serves immutable drawing inputs and retains its shape. */
-export type PublicCableWithAutoLength = PublicCable & AutoLengthView;
+export type PublicCableWithAutoLength = PublicCable & AutoLengthView & Partial<CableRoutingReadView>;
 
 const toIsoString = (value: Date | string): string =>
   typeof value === 'string' ? value : value.toISOString();

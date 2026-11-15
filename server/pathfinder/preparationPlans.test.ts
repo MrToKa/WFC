@@ -15,8 +15,9 @@ export function preparationFixture() {
   return { context, input };
 }
 describe('server-owned routing preparation plan', () => {
-  it('explicit tray-only discovery freezes complete tray coverage without claiming endpoint discovery', async () => {
+  it('assigned-only generation freezes complete tray coverage without searching names or endpoints', async () => {
     const { context, input } = preparationFixture(); context.endpointNames = ['Equipment'];
+    context.resolutions=[{id:id(71),projectTrayId:id(10),mode:'roots',rootObjectIds:['dbid:2'],reason:'Saved tray assignment',actorId:id(72),createdAt:'2026-10-27T00:00:00Z',scope:{...context.scope}}];
     const visibilityScope = { schemaVersion: 'wfc.pf.sdk-display-visibility.v1' as const, basis: 'sdk-display-before-pf-appearance' as const, contentSha256: 'd'.repeat(64) };
     const discover = vi.fn(async (request: Parameters<Parameters<typeof collectPreparationDiscovery>[1]['discover']>[0]) => {
       if (request.mode !== 'names' && request.mode !== 'subtree') throw Error('Unexpected endpoint search in tray-only discovery');
@@ -27,7 +28,8 @@ describe('server-owned routing preparation plan', () => {
         objects: source.map(value => ({ ...value, objectId: Number(value.objectId.slice(5)), parentId: value.parentId === null ? null : Number(value.parentId.slice(5)),
           orderIndex: value.orderIndex - 1, matchedNames: request.mode === 'names' ? request.names : [] })) };
     });
-    const discovery = await collectPreparationDiscovery(context, { discover, assertCurrent: vi.fn() }, undefined, { skipEquipment: true });
+    const discovery = await collectPreparationDiscovery(context, { discover, assertCurrent: vi.fn() }, undefined, { skipEquipment: true, assignedOnly: true });
+    expect(discover.mock.calls.every(([request])=>request.mode==='subtree')).toBe(true);
     const plan = buildPreparationPlan(context, { ...input, discovery });
     expect(plan.diagnostics).toEqual([]);
     expect(plan.requestedScope).toMatchObject({ scopeKind: 'server-requested-project-routing-only', endpointScope: {

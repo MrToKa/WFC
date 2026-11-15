@@ -75,9 +75,13 @@ function OwnedCableWorkflowList(props: PathFinderNeedsRoutingListProps) {
   const page = workflow.page;
   const searching = search.normalize('NFC').trim().length > 0;
   const submitSearch = () => {
-    if (searchDraft.normalize('NFC').trim() === search.normalize('NFC').trim()) {
+    const canonicalSearch = searchDraft.normalize('NFC').trim();
+    setSearchDraft(canonicalSearch);
+    // Compare to the stored query itself so an older noncanonical rejected
+    // search can be replaced instead of refreshing a disabled reader forever.
+    if (canonicalSearch === search) {
       if (!workflow.busy) workflow.refresh();
-    } else setSearch(searchDraft);
+    } else setSearch(canonicalSearch);
   };
   return <section className={`${styles.root}${props.className ? ` ${props.className}` : ''}`} aria-label="Cable routing diagnostics" aria-busy={workflow.busy}>
     <h3>Path Finder cables</h3>

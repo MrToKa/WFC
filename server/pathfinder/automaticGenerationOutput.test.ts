@@ -33,6 +33,7 @@ async function fixture() {
       authority_kind: 'current-login', state: 'queued', cancel_requested: false, request_hash: 'a'.repeat(64) }], rowCount: 1 };
     if (sql.includes('automatic-pair:admitted-item')) return { rows: [{ dependencies: { ...dependencies, cableId: args[2] } }], rowCount: 1 };
     if (sql.includes('automatic-pair:cable-baseline')) return { rows: [{ value: cables.get(args[1]) }], rowCount: 1 };
+    if (sql.includes('cable-routing:control')) { const cable=cables.get(args[1]); return {rows:cable?[{revision:'1',manual_revision:'1',manual_routing:cable.routing,manual_protected:Boolean(cable.routing),execution_locked:false,execution_routing:null}]:[],rowCount:cable?1:0}; }
     if (sql.includes('automatic-pair:latest-receipt')) return { rows: [], rowCount: 0 };
     if (sql.includes('automatic-pair:mandate')) { const m = mandates.find(m => m.cableId === args[2]); return { rows: m ? [{ record: m, record_sha256: m.contentSha256,
       project_id: m.projectId, job_id: m.jobId, cable_id: m.cableId, id: m.id, actor_id: m.actorId, login_id: m.loginId }] : [], rowCount: m ? 1 : 0 }; }

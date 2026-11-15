@@ -1,11 +1,28 @@
 import { describe, expect, it } from 'vitest';
-import { buildGeometryTrace, geometryTraceHash } from './geometryTraceBuilder.js';
+import { buildGeometryTrace, buildGeometryTraceFromOwnedSnapshot, geometryTraceHash } from './geometryTraceBuilder.js';
 import { geometryTraceFixture as fixture } from './geometryTraceFixtures.js';
 import { geometryObjectComputationalHashInput, geometryObjectRevisionSchema } from '../../shared/pathfinderGeometryTrace.js';
 const id = (n: number) => `d1000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const hash = (hex: string) => hex.repeat(64);
 
 describe('immutable geometry trace built from synthetic retained producer evidence', () => {
+  it('produces identical records, geometry hashes and manifest from the private owned worker path', () => {
+    const input = fixture(), before = structuredClone(input), expected = buildGeometryTrace(input), owned = structuredClone(input);
+    const actual = buildGeometryTraceFromOwnedSnapshot(owned);
+    expect(actual).toEqual(expected); expect(input).toEqual(before);
+    expect(owned.snapshot.objects).toEqual(before.snapshot.objects.map(() => undefined));
+    expect(owned.plan).toEqual(before.plan); expect(owned.fitted).toEqual(before.fitted);
+  });
+  it.each(['unknown', 'nonfinite', 'bounds', 'identity', 'envelope'] as const)('keeps strict %s snapshot rejection in the owned worker path', kind => {
+    const input = fixture();
+    if (kind === 'unknown') Object.assign(input.snapshot, { unexpected: true });
+    if (kind === 'nonfinite') input.snapshot.objects[0].fragments[0].vertices[0][0] = Infinity;
+    if (kind === 'bounds') input.snapshot.objects[0].bounds.minimum[0] = 100;
+    if (kind === 'identity') input.snapshot.model.projectId = id(99);
+    if (kind === 'envelope') Object.assign(input.snapshot.capture, { endpointVisibility: { schemaVersion: 'unsupported' } });
+    expect(() => buildGeometryTrace(input)).toThrow();
+    expect(() => buildGeometryTraceFromOwnedSnapshot(structuredClone(input))).toThrow();
+  });
   it('preserves complete C# axes, ordered ports, exact length strings and source order without mutating inputs', () => {
     const input = fixture(), before = structuredClone(input), built = buildGeometryTrace(input);
     expect(input).toEqual(before); expect(built.summaries.map(o => o.objectId)).toEqual(['dbid:9', 'dbid:2', 'dbid:5']);

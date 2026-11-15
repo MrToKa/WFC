@@ -48,7 +48,7 @@ beforeEach(()=>{
   mocks.applicability.mockResolvedValue({applicable:true,evidence:null});
 });
 describe('retained v8 proposal history after publication or capture changes',()=>{
-  it.each(['BARRIER_CALCULATION_SCOPE_CHANGED','BARRIER_CALCULATION_STORAGE_INVALID','BARRIER_BLOB_INTEGRITY','BARRIER_CURRENT_FRAME_UNAVAILABLE'])('keeps exact sealed output readable but non-applicable for %s',async code=>{
+  it.each(['BARRIER_CALCULATION_SCOPE_CHANGED','BARRIER_CALCULATION_STORAGE_INVALID','BARRIER_BLOB_MISSING','BARRIER_BLOB_INTEGRITY','BARRIER_CURRENT_FRAME_UNAVAILABLE'])('keeps exact sealed output readable but non-applicable for %s',async code=>{
     mocks.collect.mockRejectedValue(new PathFinderError(code,409));const db=database(),before=structuredClone(db.proposal);
     const value=await proposalDto(db.client,db.proposal,true);
     expect(value).toMatchObject({id:proposalId,cableId,stale:true,canApply:false,proposalHash:'a'.repeat(64),revisionResultHash:'c'.repeat(64)});

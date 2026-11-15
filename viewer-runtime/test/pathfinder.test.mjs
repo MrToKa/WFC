@@ -70,6 +70,55 @@ test('tray-name discovery normalizes an unmatched model name once per ID rather 
   assert.deepEqual(page.objects.map(object=>object.objectId),[2]);assert.deepEqual(page.objects[0].matchedNames,['MATCH']);assert.equal(unmatchedNormalizations,2);
  }finally{String.prototype.normalize=original;f.controller.dispose();}
 });
+
+test('tray Properties discovery matches exact tree or arbitrary readable scalar values and retains GUID/source pieces without geometry capture',async()=>{
+ const f=fixture(),guid='7586ffbb-1d0a-5942-b687-06884123c866';let calls=0;
+ f.tree.getNodeName=id=>id===1?'TREE-TRAY':'Imported part '+id;
+ f.model.getBulkProperties=(ids,_options,success)=>{calls++;success(ids.map(dbId=>({dbId,properties:dbId===1?[]:[
+  {displayName:'Custom tray designation',displayValue:' TRAY-001 '},
+  {displayName:'Numeric custom',displayValue:42},{displayName:'Boolean custom',displayValue:true},
+  {displayName:'Private',displayValue:'SECRET',hidden:true},{displayCategory:'__child__',displayValue:'INTERNAL'},
+  {displayName:'GUID',displayValue:`{${guid.toUpperCase()}}`},{displayName:'Source File',displayValue:'Models\\Trays.dwg'},
+ ]})));};
+ f.fragments.getWorldBounds=()=>{throw Error('Discover must not capture geometry bounds');};
+ const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'names',names:['TREE-TRAY','TRAY-001'],indexNames:['TREE-TRAY','TRAY-001','42','true','tray-001','SECRET','INTERNAL'],includeProperties:true,rootObjectId:null,cursor:0,limit:1};
+ const objects=[];let page;
+ do{page=await f.controller.readPreparationObjects({...request,cursor:page?.nextCursor??0});objects.push(...page.objects);}while(page.nextCursor!==null);
+ assert.deepEqual(objects.map(object=>object.objectId),[1,2,3]);
+ assert.deepEqual(objects.slice(1).map(object=>object.objectIdentity),[{guid,sourceFile:'models/trays.dwg'},{guid,sourceFile:'models/trays.dwg'}]);
+ assert.ok(objects.every(object=>!Object.hasOwn(object,'bounds')));assert.equal(page.propertyScan.complete,true);
+ const scalar=await f.controller.readPreparationObjects({...request,names:['42','true','tray-001','SECRET','INTERNAL'],limit:128});
+ assert.deepEqual(scalar.objects.map(object=>object.matchedNames),[['42','true'],['42','true']]);assert.equal(calls,1);f.controller.dispose();
+});
+
+test('tray Properties discovery exposes omitted SDK rows instead of claiming complete absence',async()=>{
+ const f=fixture();f.model.getBulkProperties=(_ids,_options,success)=>success([{dbId:2,properties:[{displayName:'Tag',displayValue:'TRAY-001'}]}]);
+ const page=await f.controller.readPreparationObjects({schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'names',names:['TRAY-001'],includeProperties:true,rootObjectId:null,cursor:0,limit:128});
+ assert.deepEqual(page.objects.map(object=>object.objectId),[2]);assert.deepEqual(page.propertyScan,{attemptedObjectCount:3,returnedObjectCount:1,omittedObjectCount:2,complete:false});f.controller.dispose();
+});
+
+for(const v2 of [true,false])test(`complete Properties discovery ${v2?'prefers SDKgetBulkProperties2':'retains the legacybulk fallback'} without per-object reads`,async()=>{
+ const f=fixture();let bulkCalls=0,legacyCalls=0;
+ const read=function(ids,options,success){assert.equal(this,f.model);assert.deepEqual(options,{ignoreHidden:false,needsExternalId:false});bulkCalls++;success(ids.map(dbId=>({dbId,properties:dbId===2?[{displayName:'Any tag',displayValue:'TRAY-001'}]:[]})));};
+ f.model.getBulkProperties=(...args)=>{legacyCalls++;if(v2)throw Error('Legacy wrapper would load external IDs');return read.call(f.model,...args);};
+ if(v2)f.model.getBulkProperties2=read;
+ f.model.getProperties=()=>{throw Error('A per-objectfallback must not run');};
+ const result=await f.controller.readPreparationObjects({schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'names',names:['TRAY-001'],includeProperties:true,rootObjectId:null,cursor:0,limit:128});
+ assert.deepEqual(result.objects.map(object=>object.objectId),[2]);assert.equal(result.propertyScan.complete,true);assert.equal(bulkCalls,1);assert.equal(legacyCalls,v2?0:1);f.controller.dispose();
+});
+
+for(const ownIdentity of [true,false])test(`V2 tray Properties discovery ${ownIdentity?'groups only own GUID/source metadata without external IDs':'does not promote incidental external IDs into logical identity'}`,async()=>{
+ const f=fixture(),guid='7586ffbb-1d0a-5942-b687-06884123c866';
+ f.model.getBulkProperties=()=>{throw Error('V2 must not use the legacy wrapper');};
+ f.model.getBulkProperties2=(ids,options,success)=>{assert.equal(options.needsExternalId,false);success(ids.map(dbId=>({dbId,
+  ...(!ownIdentity?{externalId:guid}:{}),properties:dbId===1?[]:[{displayName:'Tag',displayValue:'TRAY-001'},
+   ...(ownIdentity?[{displayName:'GUID',displayValue:guid},{displayName:'Source File',displayValue:'Models/Trays.dwg'}]:[])]})));};
+ const result=await f.controller.readPreparationObjects({schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'names',names:['TRAY-001'],includeProperties:true,rootObjectId:null,cursor:0,limit:128});
+ assert.deepEqual(result.objects.map(object=>object.objectId),[2,3]);
+ if(ownIdentity)for(const object of result.objects)assert.deepEqual(object.objectIdentity,{guid,sourceFile:'models/trays.dwg'});
+ else assert.ok(result.objects.every(object=>!Object.hasOwn(object,'objectIdentity')));
+ f.controller.dispose();
+});
 test('preparation subtree and endpoint-ancestor modes preserve full hierarchy and distinguish physical leaves',async()=>{
  const f=fixture();f.tree.getChildCount=id=>id===1?2:0;f.tree.enumNodeChildren=(id,fn)=>{if(id===1){fn(2);fn(3);}};
  const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'subtree',names:[],rootObjectId:2,cursor:0,limit:128};

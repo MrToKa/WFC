@@ -15,6 +15,20 @@ test('preparation exact discovery transport rejects unknown fields, versions, na
  for(const mode of ['subtree','ancestors'])assert.equal(validatePreparationDiscoveryRequest({...request,mode,names:[],rootObjectId:0}),true);
 });
 
+test('tray Properties mode requires explicit scope and complete-shape property evidence without endpoint anchors',()=>{
+ const properties={...request,includeProperties:true,indexNames:['TRAY-001','TRAY-002']};
+ assert.equal(validatePreparationDiscoveryRequest(properties),true);assert.ok(validateEnvelope(envelope('READ_PREPARATION_OBJECTS',properties),'parent-to-frame'));
+ for(const changed of [{mode:'equipment'},{includeProperties:false},{includeProperties:'true'},{names:['FOREIGN']},{includeAnchors:true}])
+  assert.equal(validatePreparationDiscoveryRequest({...properties,...changed}),false);
+ const objectIdentity={guid:uuid(10),sourceFile:'models/trays.dwg'};
+ const page={schemaVersion:request.schemaVersion,mode:'names',includeProperties:true,names:request.names,rootObjectId:null,cursor:0,matchingPolicyVersion:PREPARATION_MATCHING_POLICY,visibilityScope,indexedObjectCount:3,
+  propertyScan:{attemptedObjectCount:3,returnedObjectCount:3,omittedObjectCount:0,complete:true},objects:[{objectId:2,parentId:1,name:'Imported object',hasGeometry:true,isPhysicalLeaf:true,orderIndex:1,matchedNames:request.names,objectIdentity}],nextCursor:null,complete:true};
+ assert.equal(validatePreparationDiscoveryPage(page),true);assert.ok(validateEnvelope(envelope('PREPARATION_OBJECTS',page),'frame-to-parent'));
+ for(const changed of [{propertyScan:null},{includeProperties:false},{objects:[{...page.objects[0],bounds:null,bottomCentre:null}]},
+  {objects:[{...page.objects[0],objectIdentity:{...objectIdentity,sourceFile:' Models\\Trays.dwg '}}]}])
+  assert.equal(validatePreparationDiscoveryPage({...page,...changed}),false);
+});
+
 test('batched subtree requests are a closed nonempty union of at most32 unique current-tree IDs',()=>{
  const batched={...request,mode:'subtrees',names:[],rootObjectIds:[0,2,3]};
  assert.equal(validatePreparationDiscoveryRequest(batched),true);assert.ok(validateEnvelope(envelope('READ_PREPARATION_OBJECTS',batched),'parent-to-frame'));

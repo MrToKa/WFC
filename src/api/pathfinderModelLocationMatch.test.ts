@@ -58,7 +58,7 @@ describe('independent model location matching transport', () => {
     expect(error).toBeInstanceOf(ModelLocationMatchApiError);
     expect(error).toMatchObject({ code: 'ENDPOINT_PREPARATION_REQUIRED', status: 409, outcome: 'refused' });
     expect(error.message).toContain('no valid published routing preparation');
-    expect(error.message).toContain('In Routes, choose Discover project tray candidates or Retry tray update');
+    expect(error.message).toContain('In Routes, choose Generate network or Regenerate network');
     expect(error.message).toContain('retry Find and assign From/To');
     expect(error.message).toContain('No location assignment was submitted.');
     expect(error.message).not.toContain('administrator access');
@@ -70,7 +70,7 @@ describe('independent model location matching transport', () => {
     const error = await assignModelLocations(ids.project, 'token', body).catch(error => error);
     expect(error).toMatchObject({ code: 'ENDPOINT_PREPARATION_REQUIRED', status: 409, outcome: 'refused' });
     expect(error.message).toContain('no valid published routing preparation');
-    expect(error.message).toContain('Discover project tray candidates or Retry tray update');
+    expect(error.message).toContain('Generate network or Regenerate network');
     expect(error.message).toContain('Existing locations are kept. Preserve and reconcile any pending assignment');
     expect(error.message).not.toContain('No location assignment was submitted');
     expect(JSON.stringify(body)).toBe(before);

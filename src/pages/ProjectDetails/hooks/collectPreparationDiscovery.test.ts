@@ -7,6 +7,7 @@ import type { ProjectPreparationViewer } from './usePathFinder';
 import type {
   PreparationDiscoveryPage,
   PreparationDiscoveryRequest,
+  PreparationDiscoveryProgress,
 } from '../../../../viewer-runtime/preparation-input.mjs';
 const visibilityScope={schemaVersion:'wfc.pf.sdk-display-visibility.v1' as const,basis:'sdk-display-before-pf-appearance' as const,contentSha256:'a'.repeat(64)};
 function viewer(
@@ -29,7 +30,7 @@ function viewer(
     matchedNames,
   });
   const discover = vi.fn(
-    async (request: PreparationDiscoveryRequest): Promise<PreparationDiscoveryPage> => {
+    async (request: PreparationDiscoveryRequest, _onProgress?: (value: PreparationDiscoveryProgress) => void): Promise<PreparationDiscoveryPage> => {
       let objects: PreparationDiscoveryPage['objects'] = [],
         nextCursor: number | null = null;
       if (request.mode === 'names') {
@@ -58,15 +59,16 @@ function viewer(
         ...(request.rootObjectIds ? { rootObjectIds: [...request.rootObjectIds] } : {}),
         cursor: request.cursor,
         matchingPolicyVersion: PREPARATION_MATCHING_POLICY,
+        ...(request.includeProperties ? { includeProperties: true as const } : {}),
         visibilityScope,
         indexedObjectCount: 10,
         propertyScan:
-          request.mode === 'equipment'
+          request.mode === 'equipment' || request.includeProperties
             ? {
                 attemptedObjectCount: 10,
-                returnedObjectCount: options.incomplete ? 9 : 10,
-                omittedObjectCount: options.incomplete ? 1 : 0,
-                complete: !options.incomplete,
+                returnedObjectCount: request.mode === 'equipment' && options.incomplete ? 9 : 10,
+                omittedObjectCount: request.mode === 'equipment' && options.incomplete ? 1 : 0,
+                complete: request.mode !== 'equipment' || !options.incomplete,
               }
             : null,
         objects,
@@ -88,10 +90,63 @@ function viewer(
   };
 }
 describe('complete exact preparation discovery', () => {
+  it('shows scoped tray Properties progress while rejecting regressed, invalid and late cosmetic reports',async()=>{
+    const {context}=preparationFixture(),io=viewer(),original=io.discover.getMockImplementation()!,progress=vi.fn();
+    let late:((value:PreparationDiscoveryProgress)=>void)|undefined;
+    io.discover.mockImplementation(async(request,onProgress)=>{
+      if(request.mode==='names'&&request.cursor===0){late=onProgress;onProgress?.({phase:'properties',loaded:2,total:10});
+        onProgress?.({phase:'properties',loaded:1,total:10});onProgress?.({phase:'properties',loaded:3,total:11});
+        onProgress?.({phase:'properties',loaded:11,total:10});}
+      return original(request);
+    });
+    const report=await collectPreparationDiscovery(context,io,progress,{skipEquipment:true});
+    expect(report.complete).toBe(true);
+    expect(progress.mock.calls.filter(([message])=>message.startsWith('Reading model Properties'))).toEqual([['Reading model Properties for project trays: 2 of 10 objects checked.']]);
+    const count=progress.mock.calls.length;late?.({phase:'properties',loaded:10,total:10});expect(progress).toHaveBeenCalledTimes(count);
+  });
+  it('generates capture discovery only from current persisted roots without searching names or Properties', async () => {
+    const {context}=preparationFixture(), io=viewer(); context.endpointNames=['EQ-01'];
+    context.resolutions=[{id:ids.session,projectTrayId:ids.tray,mode:'roots',rootObjectIds:['dbid:1'],reason:'Saved assignment',actorId:ids.actor,createdAt:'2026-10-27T00:00:00Z',scope:{...context.scope}}];
+    const report=await collectPreparationDiscovery(context,io,()=>{},{assignedOnly:true});
+    expect(io.discover.mock.calls.map(([request])=>request.mode)).toEqual(['subtree']);
+    expect(io.discover).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({rootObjectId:1,names:[]}));
+    expect(report.objects.map(object=>object.objectId)).toEqual(['dbid:1','dbid:2']);
+    expect(report.trays).toEqual([{projectTrayId:ids.tray,candidateRootObjectIds:[]}]);
+    expect(report.endpointCandidates).toEqual([]); expect(report.endpointScope?.mode).toBe('not-requested');
+    expect(io.capture).not.toHaveBeenCalled();
+  });
+  it('does not rediscover replacements when persisted assignments are missing or belong to another model', async () => {
+    const {context}=preparationFixture(),io=viewer();
+    context.resolutions=[{id:ids.session,projectTrayId:ids.tray,mode:'roots',rootObjectIds:['dbid:1'],reason:'Older assignment',actorId:ids.actor,createdAt:'2026-10-27T00:00:00Z',scope:{...context.scope,selectionRevision:'0'}}];
+    await expect(collectPreparationDiscovery(context,io,()=>{},{assignedOnly:true})).rejects.toThrow('No current tray assignments');
+    expect(io.discover).not.toHaveBeenCalled();
+  });
+  it('refuses a missing persisted root even if a descendant was returned during assigned-only coverage',async()=>{
+    const {context}=preparationFixture(),io=viewer(),original=io.discover.getMockImplementation()!;
+    context.resolutions=[{id:ids.session,projectTrayId:ids.tray,mode:'roots',rootObjectIds:['dbid:1'],reason:'Saved assignment',actorId:ids.actor,createdAt:'2026-10-27T00:00:00Z',scope:{...context.scope}}];
+    io.discover.mockImplementation(async request=>{const page=await original(request);return {...page,objects:page.objects.filter(object=>object.objectId!==1)};});
+    await expect(collectPreparationDiscovery(context,io,()=>{},{assignedOnly:true})).rejects.toThrow('did not return every requested tray root');
+  });
+  it.each([false,true])('retains all raw roots and groups only the same GUID and source file (foreign source %s)',async foreignSource=>{
+    const {context}=preparationFixture(),io=viewer(),original=io.discover.getMockImplementation()!;
+    const identity={guid:'7586ffbb-1d0a-5942-b687-06884123c866',sourceFile:'plant/trays.dwg'};
+    io.discover.mockImplementation(async request=>{const page=await original(request);return request.mode==='names'?{...page,objects:page.objects.map(object=>({...object,objectIdentity:{...identity,sourceFile:foreignSource&&object.objectId===3?'other/trays.dwg':identity.sourceFile}}))}:page;});
+    const report=await collectPreparationDiscovery(context,io,()=>{},{skipEquipment:true});
+    expect(report.trays[0].candidateRootObjectIds).toEqual(['dbid:1','dbid:3']);
+    expect(report.trays[0].candidateRootGroups).toEqual(foreignSource?
+      [{rootObjectIds:['dbid:1'],identity},{rootObjectIds:['dbid:3'],identity:{...identity,sourceFile:'other/trays.dwg'}}]:
+      [{rootObjectIds:['dbid:1','dbid:3'],identity}]);
+    expect(report.objects.every(object=>!('objectIdentity' in object))).toBe(true);
+  });
+  it('refuses incomplete tray Properties coverage before returning automatic assignments',async()=>{
+    const {context}=preparationFixture(),io=viewer(),original=io.discover.getMockImplementation()!;
+    io.discover.mockImplementation(async request=>{const page=await original(request);return {...page,propertyScan:{attemptedObjectCount:10,returnedObjectCount:9,omittedObjectCount:1,complete:false}};});
+    await expect(collectPreparationDiscovery(context,io,()=>{},{skipEquipment:true})).rejects.toThrow('did not report complete model coverage');
+  });
   it('manual tray-only discovery never calls the From/To property scanner and retains every project tray', async () => {
     const {context}=preparationFixture(),io=viewer();context.endpointNames=['EQ-01'];
     const result=await collectPreparationDiscovery(context,io,()=>{},{skipEquipment:true});
-    expect(io.discover.mock.calls.every(([request])=>request.mode==='names'||request.mode==='subtree'||request.mode==='subtrees')).toBe(true);
+    expect(io.discover.mock.calls.every(([request])=>request.mode==='names'&&request.includeProperties===true)).toBe(true);
     expect(result.trays).toHaveLength(context.trays.length);expect(result.complete).toBe(true);expect(result.propertyScan).toBeNull();
     expect(result.endpointCandidates).toEqual([]);
     expect(result.endpointScope).toEqual({ schemaVersion: 'wfc.pf.endpoint-discovery-scope.v1', mode: 'not-requested' });
@@ -146,8 +201,9 @@ describe('complete exact preparation discovery', () => {
     const io = viewer();
     io.discover.mockImplementation(async request => ({ schemaVersion: 'wfc.pf.viewer-discovery.v1', mode: request.mode,
       rootObjectId: request.rootObjectId, names: request.names, cursor: request.cursor, matchingPolicyVersion: PREPARATION_MATCHING_POLICY,
+      ...(request.includeProperties ? { includeProperties: true as const } : {}),
       ...(request.rootObjectIds ? { rootObjectIds: [...request.rootObjectIds] } : {}),
-      visibilityScope, indexedObjectCount: 328, propertyScan: null, nextCursor: null, complete: true,
+      visibilityScope, indexedObjectCount: 328, propertyScan: request.includeProperties ? {attemptedObjectCount:328,returnedObjectCount:328,omittedObjectCount:0,complete:true} : null, nextCursor: null, complete: true,
       objects: objects.filter(object => request.mode === 'names' ? request.names.includes(object.name) : request.rootObjectIds?.includes(object.objectId) ?? object.objectId === request.rootObjectId)
         .map(object => ({ ...object, matchedNames: request.mode === 'names' ? [object.name] : [] })) }));
     const result = await collectPreparationDiscovery(context, io, progress);
@@ -320,9 +376,10 @@ describe('complete exact preparation discovery', () => {
           ...(request.rootObjectIds ? { rootObjectIds: [...request.rootObjectIds] } : {}),
           cursor: request.cursor,
           matchingPolicyVersion: PREPARATION_MATCHING_POLICY,
+          ...(request.includeProperties ? { includeProperties: true as const } : {}),
           visibilityScope,
           indexedObjectCount: records.length,
-          propertyScan: null,
+          propertyScan: request.includeProperties ? {attemptedObjectCount:records.length,returnedObjectCount:records.length,omittedObjectCount:0,complete:true} : null,
           objects: records
             .filter((record) =>
               request.mode === 'names'
@@ -348,6 +405,7 @@ describe('complete exact preparation discovery', () => {
       });
       expect(discover).toHaveBeenCalledWith(
         expect.objectContaining({ mode: 'names', names: ['R-010', '/R-010'] }),
+        expect.any(Function),
       );
       expect(result.trays[0].candidateRootObjectIds).toEqual(
         both ? ['dbid:4', 'dbid:3'] : ['dbid:4'],
@@ -414,7 +472,9 @@ describe('complete exact preparation discovery', () => {
       io = viewer();
     const result = await collectPreparationDiscovery(context, io);
     expect(result.trays).toEqual([
-      { projectTrayId: ids.tray, candidateRootObjectIds: ['dbid:1', 'dbid:3'] },
+      { projectTrayId: ids.tray, candidateRootObjectIds: ['dbid:1', 'dbid:3'], candidateRootGroups: [
+        {rootObjectIds:['dbid:1'],identity:null},{rootObjectIds:['dbid:3'],identity:null},
+      ] },
     ]);
     expect(result.objects.map((value) => value.objectId)).toEqual(['dbid:1', 'dbid:2', 'dbid:3']);
     expect(result.complete).toBe(true);

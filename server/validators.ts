@@ -468,8 +468,17 @@ export const updateStandardMaterialSchema = createStandardMaterialSchema
 const cableStringField = z.string().trim().max(500).optional();
 const cableMtoField = z.enum(CABLE_MTO_VALUES).nullable().optional();
 
+const cableRoutingField = z.string().trim().max(16384).refine(value => !/[\u0000-\u001f\u007f-\u009f]/u.test(value), { message:'Routing cannot contain control characters' }).nullable().optional();
+const cableDateField = z.string().trim().refine(value => {
+  if (!value) return true;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(value + 'T00:00:00.000Z');
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0,10) === value && value >= '1900-01-01';
+}, {message:'Use a valid calendar date (YYYY-MM-DD)'}).nullable().optional();
+
 export const createCableSchema = z
   .object({
+    manualRoutingProtected: z.boolean().optional(),
     cableId: z.number().int().min(0).max(2_147_483_647),
     revision: z.string().trim().max(500).optional(),
     mto: cableMtoField,
@@ -477,47 +486,23 @@ export const createCableSchema = z
     cableTypeId: z.string().trim().uuid(),
     fromLocation: cableStringField,
     toLocation: cableStringField,
-    routing: z.string().trim().max(8000).optional(),
+    routing: cableRoutingField,
     delivery: cableStringField,
     designLength: z.number().int().min(0).max(1_000_000).nullable().optional(),
     installLength: z.number().int().min(0).max(1_000_000).nullable().optional(),
-    pullDate: z
-      .string()
-      .trim()
-      .refine((value) => value === '' || !Number.isNaN(Date.parse(value)), {
-        message: 'Invalid date',
-      })
-      .nullable()
-      .optional(),
-    connectedFrom: z
-      .string()
-      .trim()
-      .refine((value) => value === '' || !Number.isNaN(Date.parse(value)), {
-        message: 'Invalid date',
-      })
-      .nullable()
-      .optional(),
-    connectedTo: z
-      .string()
-      .trim()
-      .refine((value) => value === '' || !Number.isNaN(Date.parse(value)), {
-        message: 'Invalid date',
-      })
-      .nullable()
-      .optional(),
-    tested: z
-      .string()
-      .trim()
-      .refine((value) => value === '' || !Number.isNaN(Date.parse(value)), {
-        message: 'Invalid date',
-      })
-      .nullable()
-      .optional(),
+    pullDate: cableDateField,
+    connectedFrom: cableDateField,
+    connectedTo: cableDateField,
+    tested: cableDateField,
   })
   .strict();
 
 export const updateCableSchema = z
   .object({
+    manualRoutingProtected: z.boolean().optional(),
+    expectedCableWriteRevision: z.string().regex(/^(0|[1-9][0-9]*)$/).optional(),
+    expectedRoutingControlRevision: z.string().regex(/^[1-9][0-9]*$/).optional(),
+    executionUnlockReason: z.string().trim().min(1).max(1000).optional(),
     cableId: z.number().int().min(0).max(2_147_483_647).optional(),
     revision: z.string().trim().max(500).optional(),
     mto: cableMtoField,
@@ -525,46 +510,19 @@ export const updateCableSchema = z
     cableTypeId: z.string().trim().uuid().optional(),
     fromLocation: cableStringField,
     toLocation: cableStringField,
-    routing: z.string().trim().max(8000).optional(),
+    routing: cableRoutingField,
     delivery: cableStringField,
     designLength: z.number().int().min(0).max(1_000_000).nullable().optional(),
     installLength: z.number().int().min(0).max(1_000_000).nullable().optional(),
-    pullDate: z
-      .string()
-      .trim()
-      .refine((value) => value === '' || !Number.isNaN(Date.parse(value)), {
-        message: 'Invalid date',
-      })
-      .nullable()
-      .optional(),
-    connectedFrom: z
-      .string()
-      .trim()
-      .refine((value) => value === '' || !Number.isNaN(Date.parse(value)), {
-        message: 'Invalid date',
-      })
-      .nullable()
-      .optional(),
-    connectedTo: z
-      .string()
-      .trim()
-      .refine((value) => value === '' || !Number.isNaN(Date.parse(value)), {
-        message: 'Invalid date',
-      })
-      .nullable()
-      .optional(),
-    tested: z
-      .string()
-      .trim()
-      .refine((value) => value === '' || !Number.isNaN(Date.parse(value)), {
-        message: 'Invalid date',
-      })
-      .nullable()
-      .optional(),
+    pullDate: cableDateField,
+    connectedFrom: cableDateField,
+    connectedTo: cableDateField,
+    tested: cableDateField,
   })
   .strict()
   .refine(
     (value) =>
+      value.manualRoutingProtected !== undefined || value.executionUnlockReason !== undefined ||
       value.cableId !== undefined ||
       value.revision !== undefined ||
       value.mto !== undefined ||

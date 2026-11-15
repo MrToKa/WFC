@@ -56,12 +56,13 @@ function fixture(mto: string|null = 'LV') {
     calculation:{preferences:{secondaryDistanceMeters:dependencies.options.secondaryDistanceMeters,preferVerticalApproach:dependencies.options.preferVerticalApproach,barrierRouting:structuredClone(dependencies.options.barrierRouting)},timeoutMilliseconds:60000} };
   const keyInput = () => ({ projectId, cableId, proposalId, proposalHash: proposal.proposal_hash, mandateId, expectedCableWriteRevision: dependencies.cableWriteRevision });
   const request = { schemaVersion: 'wfc.pf.initial-fill-request.v1' as const, idempotencyKey: initialFillIdempotencyKey(keyInput()), proposalId, expectedProposalHash: proposal.proposal_hash, mandateId, expectedCableWriteRevision: dependencies.cableWriteRevision };
-  const state = { cable: { id: cableId, project_id: projectId, mto, from_location: 'FROM', to_location: 'TO', cable_type_id: id(17), routing: null, design_length: null, install_length: '123.4500', cable_write_revision: '7', revision: 'engineering-1', tag: 'Synthetic cable', updated_at: new Date(now).toISOString() } as Row,
+  const state = { control:null as Row|null, cable: { id: cableId, project_id: projectId, mto, from_location: 'FROM', to_location: 'TO', cable_type_id: id(17), routing: null, design_length: null, install_length: '123.4500', cable_write_revision: '7', revision: 'engineering-1', tag: 'Synthetic cable', updated_at: new Date(now).toISOString() } as Row,
     history: [] as Row[], receipts: [] as Row[], admin: true, loginRevoked: false, projectExists: true, proposalPresent: true, snapshotPresent: true,
     casMiss: false, historyFails: false, historyMissing: false, receiptFails: false, commitLostAck: false, beforeCommitFails: false,
     writes: 0, commits: 0, postUpdate: null as null | ((value: Row) => void), onCommit: null as null | ((count: number) => void) };
   let backup: Pick<typeof state, 'cable' | 'history' | 'receipts'> | null = null;
   const query = vi.fn(async (sql: string, args: any[] = []) => {
+    if(sql.includes('cable-routing:control'))return {rows:state.control?[state.control]:[]};
     if (sql === 'BEGIN') { backup = structuredClone({ cable: state.cable, history: state.history, receipts: state.receipts }); return { rows: [] }; }
     if (sql === 'COMMIT') {
       state.commits++; if (state.beforeCommitFails && state.commits === 2) throw Error('Synthetic commit transport failure before durability.');
@@ -99,6 +100,11 @@ function fixture(mto: string|null = 'LV') {
 }
 
 describe('conditional initial-fill writer with synthetic transactional SQL and explicit proof adapters', () => {
+  it.each(['manual','execution'] as const)('does not write through persisted %s protection',async kind=>{
+    const f=fixture();f.state.cable.install_length=null;
+    f.state.control={revision:'1',manual_revision:'1',manual_routing:kind==='manual'?'/M':null,manual_protected:kind==='manual',execution_locked:kind==='execution',execution_routing:null};
+    await expect(f.run()).rejects.toMatchObject({code:'ROUTING_PROTECTED'});expect(f.state.writes).toBe(0);expect(f.state.receipts).toHaveLength(0);
+  });
   it.each([null,'Custom MTO',''])('writes the calculated pair automatically with optional MTO %j and an explicit Cable type Purpose',async mto=>{
     const f=fixture(mto);expect(await f.run()).toMatchObject({status:'written'});
     expect(f.state.cable).toMatchObject({mto,routing:'/A',design_length:'7',install_length:'123.4500'});

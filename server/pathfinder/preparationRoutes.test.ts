@@ -8,11 +8,11 @@ import type { PreparationService } from './preparationSessions.js';
 import { PREPARATION_LIMITS } from '../../shared/pathfinderPreparation.js';
 import { PathFinderError } from './errors.js';
 import { PreparationMergeError } from '../../shared/preparationMerge.js';
-const mocks = vi.hoisted(() => ({ authorize: vi.fn(), verify: vi.fn(), create: vi.fn(), context: vi.fn(), index: vi.fn(), get: vi.fn(), upload: vi.fn(), resolve: vi.fn(), publish: vi.fn(), cancel: vi.fn() }));
+const mocks = vi.hoisted(() => ({ authorize: vi.fn(), verify: vi.fn(), create: vi.fn(), context: vi.fn(), index: vi.fn(), get: vi.fn(), upload: vi.fn(), resolve: vi.fn(), trayMatches:vi.fn(), publish: vi.fn(), cancel: vi.fn() }));
 vi.mock('../auth.js', () => ({ verifyAccessToken: mocks.verify }));
 vi.mock('./auth.js', () => ({ principalTransaction: mocks.authorize, requestPrincipal: (req: any) => ({ userId: req.userId, loginId: req.loginId, loginExpiresAt: req.loginExpiresAt }) }));
 const projectId = '10000000-0000-4000-8000-000000000001', sessionId = '10000000-0000-4000-8000-000000000002', partId = '10000000-0000-4000-8000-000000000003';
-beforeEach(() => { vi.resetAllMocks(); mocks.verify.mockReturnValue({ sub: projectId, jti: sessionId, exp: Math.floor(Date.now() / 1000) + 3600 }); mocks.authorize.mockImplementation(async (_p, _id, _who, operation) => operation({})); for (const key of ['create', 'context', 'index', 'get', 'upload', 'resolve', 'publish', 'cancel'] as const) mocks[key].mockResolvedValue({ synthetic: key }); });
+beforeEach(() => { vi.resetAllMocks(); mocks.verify.mockReturnValue({ sub: projectId, jti: sessionId, exp: Math.floor(Date.now() / 1000) + 3600 }); mocks.authorize.mockImplementation(async (_p, _id, _who, operation) => operation({})); for (const key of ['create', 'context', 'index', 'get', 'upload', 'resolve', 'trayMatches', 'publish', 'cancel'] as const) mocks[key].mockResolvedValue({ synthetic: key }); });
 function request({ url = '/context', method = 'GET', token = 'Bearer synthetic', length, type = 'application/json', body, query = {} }: { url?: string; method?: string; token?: string | null; length?: string; type?: string; body?: string; query?: Record<string, string> } = {}) {
   const bytes = body === undefined ? null : Buffer.from(body), headers: Record<string, string> = { 'content-type': type }; if (token !== null) headers.authorization = token; if (length !== undefined) headers['content-length'] = length; else if (bytes) headers['content-length'] = String(bytes.length);
   const req: any = bytes ? Readable.from([bytes]) : { on: vi.fn(), once: vi.fn(), read: vi.fn(() => { throw Error('Body must remain unread'); }) };
@@ -23,6 +23,11 @@ function request({ url = '/context', method = 'GET', token = 'Bearer synthetic',
   return { req, res, run };
 }
 describe('preparation API admission without HTTP listener', () => {
+  it('dispatches tray discovery persistence separately from creating or publishing a network',async()=>{
+    const value={synthetic:'bounded tray matches'};const x=request({url:'/tray-matches',method:'POST',body:JSON.stringify(value)});await x.run();
+    expect(x.res.statusCode).toBe(200);expect(mocks.trayMatches).toHaveBeenCalledWith(projectId,expect.objectContaining({userId:projectId}),value);
+    expect(mocks.create).not.toHaveBeenCalled();expect(mocks.publish).not.toHaveBeenCalled();expect(mocks.upload).not.toHaveBeenCalled();
+  });
   it('delegates exact server context after current authority without parsing a body', async () => { const x = request(); await x.run(); expect(x.res.statusCode).toBe(200); expect(mocks.authorize).toHaveBeenCalledTimes(1); expect(mocks.context).toHaveBeenCalledWith(projectId, expect.objectContaining({ userId: projectId, loginId: sessionId })); expect(x.res.setHeader).toHaveBeenCalledWith('Cache-Control', 'private, no-store'); });
   it('rejects anonymous oversized upload before authorization or body listeners', async () => { const x = request({ url: `/${sessionId}/parts/${partId}`, method: 'PUT', token: null, length: String(PREPARATION_PART_TRANSPORT_BYTES + 1) }); await x.run(); expect(x.res.statusCode).toBe(401); expect(mocks.authorize).not.toHaveBeenCalled(); expect(x.req.on).not.toHaveBeenCalled(); });
   it('current admin denial precedes declared body size and reveals no session revision', async () => { mocks.authorize.mockRejectedValue(new PathFinderError('ADMIN_REQUIRED', 403)); const x = request({ method: 'POST', url: '/', length: String(PREPARATION_LIMITS.controlBytes + 1) }); await x.run(); expect(x.res.statusCode).toBe(403); expect(x.req.on).not.toHaveBeenCalled(); expect(x.res.json.mock.calls[0][0].currentSessionRevision).toBe(null); });

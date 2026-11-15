@@ -10,6 +10,7 @@ import type { PreparationScope } from '../../../../shared/pathfinderPreparation'
 import { pathFinderRequestDeadline } from '@/api/pathfinderRequestDeadline';
 import { barrierCaptureErrorMessage } from '../../../../viewer-runtime/barrier-capture-errors.mjs';
 import { AUTOMATIC_PAIR_POLICY } from '../../../../shared/pathfinderAutomaticPair';
+import { requalifyStaleCableEndpoints, hasPendingEndpointRequalification } from '@/api/pathfinderEndpointRequalification';
 
 export type ProjectPreparationViewer = {
   readSelection: ViewerController['readSelection'];
@@ -198,13 +199,30 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
       let frozenPreferences: PathFinderPreferences, frozenCableIds: string[];
       try { frozenPreferences = structuredClone(preferences); frozenCableIds = [...cableIds]; }
       catch { return { kind: 'not-submitted', code: 'INVALID_REQUEST' }; }
-      const data = await refresh(run, true);
+      let data = await refresh(run, true);
       if (!data) return { kind: 'not-submitted', code: 'CALCULATION_PREFLIGHT_FAILED' };
       const barrierScope = frozenPreferences.barrierRouting?.scope;
       if (!live(run) || !matchesModel(data) || projectPreparationCapture.current || !barrierScope || barrierScope.projectId !== projectId
         || barrierScope.modelVersionId !== data.activeModel.modelVersionId || barrierScope.selectionRevision !== data.activeModel.selectionRevision
         || barrierScope.contentFingerprint !== data.activeModel.contentFingerprint)
         return { kind: 'not-submitted', code: 'CALCULATION_CONTEXT_CHANGED' };
+      let requalified = false;
+      for (const cableId of frozenCableIds) {
+        const cable = data.cables.find(value => value.id === cableId);
+        if (cable?.fromMatch.status !== 'stale' && cable?.toMatch.status !== 'stale'
+          && !await hasPendingEndpointRequalification(projectId, token, cableId)) continue;
+        try { requalified = await requalifyStaleCableEndpoints(projectId, token, cableId, model, run.abort.signal) || requalified; }
+        catch {
+          return { kind: 'not-submitted', code: 'ENDPOINT_REQUALIFICATION_UNCONFIRMED' };
+        }
+        if (!live(run) || projectPreparationCapture.current || popupSubmission.current !== ticket)
+          return { kind: 'not-submitted', code: 'CALCULATION_CONTEXT_CHANGED' };
+      }
+      if (requalified) {
+        data = await refresh(run, true);
+        if (!data || !live(run) || !matchesModel(data) || popupSubmission.current !== ticket || projectPreparationCapture.current)
+          return { kind: 'not-submitted', code: 'CALCULATION_CONTEXT_CHANGED' };
+      }
       const result = await submitPathFinderCalculation(projectId, token, { cableIds: frozenCableIds, expectedRegistryRevision: data.registryRevision, force: true,
         automaticPairPolicy: AUTOMATIC_PAIR_POLICY,
         options: { connectionToleranceMeters: Number(data.settings.connectionGap), sampleSpacingMeters: 0.125,
@@ -446,6 +464,22 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
           || run.selectionRevision !== expected.selectionRevision || run.contentFingerprint !== expected.contentFingerprint) return false;
         if (objectIds) await viewer.showLocation(sdkObjectId, objectIds); else await viewer.showLocation(sdkObjectId);
         return true;
+      })) === true;
+    },
+    showLocationPoint: async (point: CanonicalPoint, expected: Pick<PreparationScope, 'modelVersionId' | 'selectionRevision' | 'contentFingerprint'>): Promise<boolean> => {
+      const target = { ...expected }, savedPoint = [...point] as CanonicalPoint;
+      return (await viewerAction(async viewer => {
+        const run = runRef.current;
+        const current = () => {
+          const model = dataRef.current?.activeModel;
+          return Boolean(run && live(run) && run.viewer === viewer && latestView.current.viewerPhase === 'ready'
+            && run.modelVersionId === target.modelVersionId && run.selectionRevision === target.selectionRevision
+            && run.contentFingerprint === target.contentFingerprint && model?.modelVersionId === target.modelVersionId
+            && model.selectionRevision === target.selectionRevision && model.contentFingerprint === target.contentFingerprint);
+        };
+        if (!current()) return false;
+        await viewer.showLocationPoint(savedPoint);
+        return current();
       })) === true;
     },
     setPathTransparency: (percent: number) => viewerAction(viewer => viewer.setPathTransparency(percent)),

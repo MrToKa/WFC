@@ -106,6 +106,8 @@ export const cableWorkflowCalculationSchema = z.object({
 export const cableWorkflowRowSchema = z.object({
   projectId: policyUuidSchema,
   cable: revisionCableSnapshotSchema,
+  /** Current labels for presentation only; excluded from immutable calculation snapshots. */
+  displayMetadata: z.object({ typeName: z.string().max(4096).nullable(), purpose: z.string().max(4096).nullable() }).strict().optional(),
   mto: z.string().max(96).nullable(),
   from: calculationAvailabilitySchema,
   to: calculationAvailabilitySchema,

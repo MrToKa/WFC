@@ -49,7 +49,7 @@ export function PathFinderRecalculationPanel(props: RecalculationPanelProps) {
     : context.status === 'complete' ? 'Calculation finished. Detailed saving status is unavailable.' : labels[context.status] ?? context.status : null;
   return <section aria-label="Automatic recalculation" style={{ display: 'grid', gap: 8, minWidth: 0, overflowWrap: 'anywhere' }}>
     <h4>Automatic recalculation</h4>
-    <Caption1>Enable for 30 minutes using this administrator login. Empty Routing and Design length fields, or unchanged values previously saved automatically by Path Finder, update automatically. Manually edited cable values still require Review and Apply.</Caption1>
+    <Caption1>Enable for 30 minutes using this administrator login. Current calculated routes update cables without manual or execution protection. Protected routes remain unchanged; their automatic results are retained separately.</Caption1>
     <Caption1>The separate Background model recalculation setting calculates proposals only.</Caption1>
     <Caption1>Resume and Retry keep the original end time for automatic Cable list updates. Enable again starts a new period of up to 30 minutes.</Caption1>
     {context ? <>
@@ -63,7 +63,7 @@ export function PathFinderRecalculationPanel(props: RecalculationPanelProps) {
         {stopped && !processing && !saving && progressLabel ? <p role="status">{progressLabel}</p> : null}
         {!working && (processing || saving) ? <Caption1>Progress is retained. Processing and automatic saving are not currently active.</Caption1> : null}
         {progress.saving > 0 ? <p>Waiting for saving or confirmation: {progress.saving}.</p> : null}
-        {progress.reviewRequired > 0 ? <p>Review and Apply required: {progress.reviewRequired}.</p> : null}
+        {progress.reviewRequired > 0 ? <p>Protected or requiring review: {progress.reviewRequired}.</p> : null}
         {progress.refused > 0 ? <p>Automatic saving refused: {progress.refused}.</p> : null}
         {progress.authorityExpired > 0 ? <p>Automatic saving period ended before saving: {progress.authorityExpired}.</p> : null}
         {progress.stale > 0 ? <p>Results no longer current: {progress.stale}.</p> : null}
@@ -76,7 +76,7 @@ export function PathFinderRecalculationPanel(props: RecalculationPanelProps) {
       {context.authority ? <Caption1>{expired ? 'Previous enablement ended at ' : 'Enabled until '}{context.authority.expiresAt}{context.authority.currentLogin ? ' with this login.' : ' with another login; this does not grant this account authority.'}</Caption1> : <Caption1>No current login enablement.</Caption1>}
       {context.preferences ? <Caption1>Saved SECONDARY trigger: {context.preferences.secondaryDistanceMeters} m; vertical approach {context.preferences.preferVerticalApproach ? 'preferred' : 'not preferred'}. Timeout: {context.timeoutMilliseconds} ms.</Caption1> : null}
       {context.enabled ? <Caption1>{context.automaticPairPolicy
-        ? 'Saved Cable list policy: update empty or unchanged automatic Routing and Design length values. Manually edited values are kept for Review and Apply.'
+        ? 'Saved Cable list policy: update unprotected cables. Manual and execution protection retain the used route.'
         : 'Automatic Cable list updates are off. Choose Enable for 30 minutes again before resuming or retrying with automatic updates.'}</Caption1> : null}
       {differentPreferences ? <Caption1>The Path values differ from the saved automatic preferences. Enable again to use the current values.</Caption1> : null}
       {context.reasonCodes.length ? <ul aria-label="Recalculation reasons">{context.reasonCodes.map(reason => <li key={reason}>{reason.toLowerCase().replaceAll('_', ' ')}</li>)}</ul> : null}

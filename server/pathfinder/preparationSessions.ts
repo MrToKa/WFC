@@ -13,6 +13,8 @@ import { storePreparationBlob, readPreparationBlob, encodePreparationPayload } f
 import { LEGACY_PREPARATION_CAPACITY_PROFILE, preparationCapacity, preparationCapacityProfileSchema, type PreparationCapacityProfile } from '../../shared/pathfinderCapacity.js';
 import { preparationPlanSchema, preparationPlanHashInput } from '../../shared/pathfinderPreparation.js';
 import type { PreparationUnionParts } from './preparationUnionTask.js';
+import { preparationTrayMatchesWriteSchema, preparationTrayMatchesReceiptSchema } from '../../shared/pathfinderTrayMatches.js';
+import { planPreparationTrayMatches } from './preparationTrayMatches.js';
 
 const preparationFailureMessages: Record<string, string> = {
   PREPARATION_SCOPE_STALE: 'The model, tray settings, assignments or From/To locations changed, or the preparation session expired. Saved assignments and committed parts are retained. Refresh preparation status and discover the trays again for the current scope.',
@@ -187,6 +189,39 @@ export function createPreparationService(pool: Pool, adapters: PreparationAdapte
         await c.query('UPDATE pf_project_preparations SET resolution_revision=$2 WHERE project_id=$1', [projectId, revision]);
         await c.query('INSERT INTO pf_preparation_resolution_events(id,project_id,actor_id,login_id,revision,request,before_value,after_value) VALUES($1,$2,$3,$4,$5,$6,$7,$8)', [randomUUID(), projectId, who.userId, who.loginId, revision, input, before, resolution]);
         const receipt = preparationResolutionReceiptSchema.parse({ schemaVersion: 'wfc.pf.preparation-resolution-receipt.v1', resolutionRevision: revision, resolution, duplicate: false }); await commandReceipt(c, projectId, who, input.idempotencyKey, 'resolve', sha, receipt); return receipt;
+      });
+    },
+    async trayMatches(projectId: string, who: OperationPrincipal, raw: unknown) {
+      requireHumanPrincipal(who);
+      const input = preparationTrayMatchesWriteSchema.parse(raw), sha = preparationDigest(input);
+      return preparationTransaction(pool,projectId,who,async c => {
+        const replay = await priorCommand(c,projectId,who,input.idempotencyKey,'tray-matches',sha);
+        if (replay) return preparationTrayMatchesReceiptSchema.parse({...replay as object,duplicate:true});
+        const context = await readPreparationContext(c,projectId);
+        if (!equalPreparationScope(context.scope,input.expected)) return fail('PREPARATION_SCOPE_STALE');
+        const results = planPreparationTrayMatches(context,input);
+        const matchesById=new Map(input.matches.map(match=>[match.projectTrayId,match]));
+        let revision = context.scope.resolutionRevision;
+        for (const result of results) if (result.status === 'assigned') {
+          revision=nextRevision(revision);
+          const resolution=preparationResolutionSchema.parse({id:randomUUID(),projectTrayId:result.projectTrayId,mode:'roots',
+            rootObjectIds:result.rootObjectIds,reason:'Automatically assigned by complete project tray discovery using model names and scalar properties.',
+            actorId:who.userId,createdAt:new Date().toISOString(),scope:input.expected});
+          await c.query('INSERT INTO pf_preparation_resolutions(project_id,project_tray_id,resolution) VALUES($1,$2,$3)',[projectId,result.projectTrayId,resolution]);
+          // Keep per-tray evidence bounded: the full batch is stored once in its
+          // immutable command hash/receipt, never repeated in every audit row.
+          const evidence={schemaVersion:input.schemaVersion,idempotencyKey:input.idempotencyKey,commandSha256:sha,
+            expected:input.expected,matchingPolicyVersion:input.matchingPolicyVersion,complete:true,match:matchesById.get(result.projectTrayId)};
+          await c.query('INSERT INTO pf_preparation_resolution_events(id,project_id,actor_id,login_id,revision,request,before_value,after_value) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',
+            [randomUUID(),projectId,who.userId,who.loginId,revision,evidence,null,resolution]);
+        }
+        if (revision!==context.scope.resolutionRevision)
+          await c.query('UPDATE pf_project_preparations SET resolution_revision=$2 WHERE project_id=$1',[projectId,revision]);
+        const counts={assigned:0,kept:0,missing:0,ambiguous:0};for(const result of results)counts[result.status]++;
+        const receipt=preparationTrayMatchesReceiptSchema.parse({schemaVersion:'wfc.pf.preparation-tray-matches-receipt.v1',idempotencyKey:input.idempotencyKey,
+          commandSha256:sha,resolutionRevision:revision,results,counts,duplicate:false});
+        await commandReceipt(c,projectId,who,input.idempotencyKey,'tray-matches',sha,receipt);
+        return receipt;
       });
     },
     async upload(projectId: string, who: OperationPrincipal, id: string, partId: string, planSha: string, raw: unknown) {

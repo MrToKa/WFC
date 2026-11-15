@@ -8,13 +8,24 @@ const id = (n: number) => `ba000000-0000-4000-8000-${String(n).padStart(12, '0')
 function fixture() {
   const current = { id: id(2), project_id: id(1), routing: '/A', design_length: '7.00', cable_write_revision: '8', mto: 'LV' };
   const history = { id: id(5), version: '4' }, fact = { receiptId: id(3), receiptSha256: 'a'.repeat(64), originReceiptId: id(4), before: {}, after: { ...current }, history };
-  const state = { receipt: true,provenanceVersion:undefined as string|undefined, latest: { ...history, change_source: 'pathfinder' }, fact: fact as typeof fact | null };
-  const query = vi.fn(async (sql: string) => { if (sql.includes('latest-receipt')) return { rows: state.receipt ? [{ id: id(3),provenance_version:state.provenanceVersion }] : [] };
+  const state = { control: null as Record<string, unknown> | null, receipt: true,provenanceVersion:undefined as string|undefined, latest: { ...history, change_source: 'pathfinder' }, fact: fact as typeof fact | null };
+  const query = vi.fn(async (sql: string) => { if(sql.includes('cable-routing:control'))return { rows:state.control?[state.control]:[] }; if (sql.includes('latest-receipt')) return { rows: state.receipt ? [{ id: id(3),provenance_version:state.provenanceVersion }] : [] };
     if (sql.includes('latest-history')) return { rows: [state.latest] }; throw Error(sql); });
   const proof = vi.fn(async () => state.fact), run = () => readAutomaticPairOwnership({ query } as unknown as PoolClient,
     { projectId: id(1), cableId: id(2), currentSnapshot: current }, undefined, { proof }); return { current, history, state, query, proof, run };
 }
 describe('automatic pair ownership from receipt revision and exact history', () => {
+  it('uses the persisted unprotected policy after unrelated edits and imports without historical inference',async()=>{
+    const f=fixture();f.state.control={revision:'3',manual_routing:null,manual_protected:false,execution_locked:false,execution_routing:null};
+    f.current.cable_write_revision='99';f.state.latest.change_source='import';f.state.receipt=false;
+    expect(await f.run()).toEqual({kind:'policy',controlRevision:'3'});
+    expect(f.proof).not.toHaveBeenCalled();expect(f.query).toHaveBeenCalledTimes(1);
+  });
+  it.each(['manual','execution'] as const)('honors persisted %s protection before receipt history',async kind=>{
+    const f=fixture();f.state.control={revision:'3',manual_routing:'/A',manual_protected:kind==='manual',execution_locked:kind==='execution',execution_routing:kind==='execution'?'/A':null};
+    expect(await f.run()).toMatchObject({kind:'review-required',reasonCode:kind==='manual'?'ROUTING_MANUAL_PROTECTED':'ROUTING_EXECUTION_PROTECTED'});
+    expect(f.proof).not.toHaveBeenCalled();
+  });
   it.each([null,'Custom MTO',''])('recognizes fresh and proven automatic ownership independently of MTO %j',async mto=>{
     const f=fixture();Object.assign(f.current,{mto});Object.assign(f.state.fact!.after,{mto});
     expect(await f.run()).toMatchObject({kind:'automatic',previousReceiptId:id(3)});

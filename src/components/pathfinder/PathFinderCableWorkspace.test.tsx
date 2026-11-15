@@ -1095,7 +1095,7 @@ describe('owned cable routing workspace composition (mocked reads and child UI)'
     expect(panelProps.pathReady).toBe(false); expect(panelProps.calculatedRouting).toBe('/NEW'); expect(panelProps.calculatedDesignLength).toBe('61');
     await act(async () => { view.rerender(<PathFinderCableWorkspace {...p} display={{ ...replacement, ready: true }} onCalculationStart={started} onTogglePath={toggle} />); });
     expect(panelProps.pathReady).toBe(true); expect(panelProps.calculatedRouting).toBe('/NEW');
-    expect(panelProps.calculationFeedback?.message).toContain('current route is ready');
+    expect(panelProps.calculationFeedback?.message).toContain('calculated route is ready');
     act(() => panelProps.onTogglePath?.()); expect(toggle).toHaveBeenCalledExactlyOnceWith(id(3));
     expect(p.pf.submitCalculation).not.toHaveBeenCalled(); expect(p.pf.calculate).not.toHaveBeenCalled();
   });
@@ -1251,6 +1251,41 @@ describe('fresh initial selection and current proof handoff', () => {
     expect(p.onSelect).toHaveBeenCalledExactlyOnceWith(listRow); expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce();
     expect(p.pf.submitCalculation).not.toHaveBeenCalled(); expect(p.pf.calculate).not.toHaveBeenCalled();
   });
+
+  it.each(['failed', 'cancelled'] as const)('shows the exact already saved current item after its parent is %s without granting writes', async status => {
+    const p = props(), saved = calculatedRow();
+    saved.calculation = { ...saved.calculation, jobStatus: status, reviewable: false, acceptedMatchesCurrent: true };
+    saved.cable = { ...saved.cable, routing: '/SAVED', designLength: '58.000', cableWriteRevision: '5' }; listRow = saved;
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockReset().mockResolvedValue({ projectId: id(1), cableId: id(3), row: saved } as never);
+    const display = { cableId: id(3), jobId: id(70), proposalId: id(80), proposalHash: 'f'.repeat(64), ready: true, visible: true,
+      source: 'current-calculation' as const, routing: '/SAVED', designLength: '58', verifiedRow: structuredClone(saved),
+      verifiedScope: pathFinderWorkflowDisplayScope(p.pf, p.accountId) };
+    render(<PathFinderCableWorkspace {...p} display={display} />); await openListCable();
+    expect(panelProps.pathReady).toBe(true); expect(panelProps.pathVisible).toBe(true); expect(panelProps.calculatedRouting).toBe('/SAVED');
+    expect(panelProps.calculatedDesignLength).toBe('58'); expect(panelProps.pathSource).toBe('current-calculation');
+    expect(panelProps.cable?.calculation).toMatchObject({ jobStatus: status, acceptedMatchesCurrent: true, reviewable: false });
+    expect(panelProps.review).toBeNull(); expect(p.pf.submitCalculation).not.toHaveBeenCalled(); expect(p.pf.calculate).not.toHaveBeenCalled();
+  });
+  it.each(['receipt', 'routing', 'length', 'tuple', 'scope', 'revision', 'currentness', 'source', 'missing verified row'] as const)(
+    'refuses a stopped saved item whose %s proof differs', async kind => {
+      const p = props(), saved = calculatedRow();
+      saved.calculation = { ...saved.calculation, jobStatus: 'failed', reviewable: false, acceptedMatchesCurrent: true };
+      saved.cable = { ...saved.cable, routing: '/SAVED', designLength: '58', cableWriteRevision: '5' }; listRow = saved;
+      const verified = structuredClone(saved);
+      if (kind === 'receipt') verified.calculation.acceptedMatchesCurrent = false;
+      if (kind === 'routing') verified.cable.routing = '/CHANGED';
+      if (kind === 'length') verified.cable.designLength = '59';
+      if (kind === 'tuple') verified.calculation.proposalId = id(99);
+      if (kind === 'revision') verified.cable.cableWriteRevision = '4';
+      if (kind === 'currentness') { verified.calculation.currentness = 'changed'; verified.calculation.acceptedMatchesCurrent = false; }
+      vi.mocked(fetchPathFinderCableWorkflowDetail).mockReset().mockResolvedValue({ projectId: id(1), cableId: id(3), row: saved } as never);
+      render(<PathFinderCableWorkspace {...p} display={{ cableId: id(3), jobId: id(70), proposalId: id(80), proposalHash: 'f'.repeat(64), ready: true, visible: true,
+        source: kind === 'source' ? undefined : 'current-calculation', routing: '/SAVED', designLength: '58',
+        verifiedRow: kind === 'missing verified row' ? undefined : verified,
+        verifiedScope: kind === 'scope' ? 'other' : pathFinderWorkflowDisplayScope(p.pf, p.accountId) }} />);
+      await openListCable(); expect(panelProps.pathReady).toBe(false); expect(panelProps.pathVisible).toBe(false);
+      expect(panelProps.calculatedRouting).toBeUndefined(); expect(p.pf.submitCalculation).not.toHaveBeenCalled(); expect(p.pf.calculate).not.toHaveBeenCalled();
+    });
   it('uses separately qualified saved display without promoting its calculation authority', async () => {
     const p = props(), saved = calculatedRow(); saved.calculation = { ...saved.calculation, currentness: 'changed', reviewable: false,
       acceptedMatchesCurrent: false, savedExactDisplay: true }; saved.cable = { ...saved.cable, routing: '/SAVED', designLength: '58' };

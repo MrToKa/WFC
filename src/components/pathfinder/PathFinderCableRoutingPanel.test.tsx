@@ -844,3 +844,38 @@ describe('Path Finder detached window integration', () => {
     expect(screen.getByRole('button', { name: 'Open in separate window' })).toBeEnabled();
   });
 });
+
+describe('saved coordinate-only location display', () => {
+  function savedPoint() {
+    const base = context('from', 'confirmed');
+    return cableEndpointContextSchema.parse({ ...base, confirmedSelection: null, head: { ...base.head!, mode: 'fixed-world',
+      derivation: 'manual-world-point', sourceObject: null, attachment: null } });
+  }
+  it('shows the saved point without inventing an SDK ID, selection, Save or calculation', async () => {
+    assignment.from.context = savedPoint(); const p = props(), showPoint = vi.fn(async () => true), showObject = vi.fn();
+    render(<PathFinderCableRoutingPanel {...p} onShowLocation={showObject} onShowLocationPoint={showPoint} />);
+    expect(screen.getByText('Saved project point; no linked model object.')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Show From location' })).toBeEnabled();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Show From location' })); });
+    expect(showPoint).toHaveBeenCalledExactlyOnceWith([1, 2, 3], assignment.from.context.current);
+    expect(screen.getByText('Saved project point shown; no linked model object.')).toBeVisible();
+    expect(showObject).not.toHaveBeenCalled(); expect(p.onCalculate).not.toHaveBeenCalled(); expect(assignment.save).not.toHaveBeenCalled();
+  });
+  it.each(['model', 'fingerprint', 'selection', 'frame', 'artifact', 'aggregate', 'projection', 'revision', 'stale', 'retired', 'read error', 'retained'])('refuses a %s saved point', change => {
+    assignment.from.context = savedPoint(); const p = props(), c = assignment.from.context;
+    if (change === 'model') c.head!.modelVersionId = id(99);
+    if (change === 'fingerprint') c.current!.contentFingerprint = 'b'.repeat(64);
+    if (change === 'selection') c.current!.selectionRevision = '99';
+    if (change === 'frame') c.head!.captureFrameId = id(99);
+    if (change === 'artifact') c.head!.artifactId = id(99);
+    if (change === 'aggregate') c.head!.aggregateId = id(99);
+    if (change === 'projection') c.head!.projectionSha256 = 'b'.repeat(64);
+    if (change === 'revision') c.location!.revision = '999';
+    if (change === 'stale') c.head!.status = 'stale';
+    if (change === 'retired') assignment.retired = true;
+    if (change === 'read error') assignment.from.error = 'Read unavailable';
+    const view = render(<PathFinderCableRoutingPanel {...p} onShowLocationPoint={vi.fn(async () => true)} />);
+    if (change === 'retained') { assignment.from.context = null; view.rerender(<PathFinderCableRoutingPanel {...p} onShowLocationPoint={vi.fn(async () => true)} />); }
+    expect(screen.getByRole('button', { name: 'Show From location' })).toBeDisabled();
+  });
+});

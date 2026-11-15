@@ -1,0 +1,19 @@
+# Stage3 accepted Design length delta —2026-11-15
+
+The user explicitly answered: update Design length from the manual-route calculation if the cable is not yet executed. This supersedes the previous Stage3 direction to keep every user Design length unchanged. It does not change installed length, dates, stored route text or execution priority. Continue automatically under the original implementation authorization.
+
+## Actual previous evidence
+Stages2–3 reports document611 passing backend checks, current-authority/generation/owner/dependency fencing, full manual native calculations, immutable compact read projection and typed API. Live IAB on isolated5181 confirmed WG4022 protected manual /BC067/BC056/SECONDARY→21m with current148 parents/revision47, drillingfalse. Business route/write revision remained5. A dedicated unprotected fixture calculated and autosaved that route+Design21 via the explicit automatic policy without humanApply. Mixed workbook preview/partial conflict/real dates/colors passed. Live fixtureB has manual /DOES_NOT_EXIST and retained old derived21 markedinvalid; Design length is null. It is the acceptance target for correcting the route after the new build.
+
+## Implementation responsibility and rules
+Backend worker owns the new guarded Design writer, manual worker commit integration, causal schema/identity and tests. UI worker owns Details explanation plus bounded visible-pending list reads. Parent owns deployment/browser fixtures, final reports and plan; preserve all other concurrent and prior edits.
+
+Publish Design length ONLY with a successful exact verified manual result when that raw manual route is currently selected/protected, its effective business route matches, and there is no sticky execution lock or current execution fact (positive installed length or any date). Unused retained manual references and executed cables still receive a separate calculated comparison length. Do not infer permission from old import history. Retain invalid manual text/old length with stale or invalid status; never substitute a free Auto route.
+
+In the same final transaction and current project/cable/control locks, recheck all existing authority, manual revision/generation/owner, full input/engine/barrier/purpose/capacity proofs, then store derived immutable result and an actual Design-only update plus normal pathfinder cable version/audit. Do not write Routing, installed length or dates. A same-valued length creates no extra cable version. Suppress self-generated automatic recalculation using the existing apply-origin transaction flag. A concurrent manual edit or execution report must prevent stale Design publication.
+
+Verify actual PostgreSQL valid Design publication, new native27m/10m results, no duplicate history, execution/latch/each date/installed-length refusal with comparison retained, unusedmanual no Design write, stale owner/changed inputs and execution race. Retain existing automatic writer and immutable result regressions; server typecheck/lint/build. Update stage3 report and stage6 prompt from actual results, signal runtime freeze for API rebuild.
+
+UI acceptance: pending/stale completion updates Design on Details and visible list without page reload, dirty inline drafts and page/filter are retained, lower revisions and retired project/token responses are discarded, authority-required legacy rows do not cause repeated full-list reads. Stop bounded polling after completion or deadline; never submit another calculation from a read loop. Test these behaviors, then signal web source freeze.
+
+Parent final gate: rebuild and deploy only5181 after both deltas pass; correct live fixtureB back to /BC067/BC056/SECONDARY via IAB, observe Design length automatically becoming21; check execution-protectedA remains21. Recheck clear/fallback/unlock, export and cleanup only owned fixtures. Record exact scope and any remaining gap honestly.

@@ -38,7 +38,15 @@ import { sameEndpointComputationKey } from './sameEndpointCalculationReuse.js';
 import { isCapacityNoPathResult } from './capacityClearWrite.js';
 import { isPermittedCablePurposeRoute } from '../../shared/routingCablePurposes.js';
 import { routingEngineCategory } from '../../shared/pathfinderCableEligibility.js';
+import { blockedEquipmentSides, readEquipmentCentreCandidates, probeEquipmentCentreFallback, appendEquipmentCentreProbe,
+  retireCentreSupersededJob, type CentreFallbackProbe } from './equipmentCentreFallback.js';
 export const nextAutomaticCursor = (rows:Array<{project_id:string}>):string|null => rows.length===5 ? rows.at(-1)!.project_id : null;
+/** Successful geometry follows the same capacity settlement rule everywhere.
+ * Unknown drawing/category data stays a diagnostic warning; only an assessed
+ * blocked route prevents publication or a verified centre source assignment. */
+export function calculatedRouteCapacityBlocked(assessment:Pick<ReturnType<TrayCapacityRoutingContext['evaluate']>,'blockedRouteCodes'>):boolean{
+  return assessment.blockedRouteCodes.length>0;
+}
 
 type Row = Record<string,any>;
 /** A failed join is an ownership failure, never a normal per-cable engine result. */
@@ -372,9 +380,39 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,ownedEngine:Eng
         }else response = {schemaVersion:'pathfinder.model.response.v1',requestId,status:error instanceof PathFinderError && error.code === 'ENGINE_DEADLINE' ? 'deadline_exceeded' : 'invalid_request',message:safe,engineeringAccepted:false};
       }
       signal.throwIfAborted();
+      let centreProbe:CentreFallbackProbe|null=null;
+      // A calculation grant does not authorize source-location changes. Only a
+      // current human automatic enrollment can perform this bounded machine action.
+      if(!isGrantPrincipal(execution.principal)&&blockedEquipmentSides(response).length&&dependencies.schemaVersion==='pathfinder.dependencies.v8'){
+        try{
+          const candidates=await authorized(async client=>{
+            await fencedJob(client,job);
+            const authority=await readRecalculationJobAuthority(client,{projectId:job.project_id,jobId:job.id,cableId:item.cable_id,lock:true});
+            if(!authority.enrolled||!authority.valid)return [];
+            const current=await collectDependenciesForVersion(client,job.project_id,item.cable_id,dependencies.options,dependencies.schemaVersion,true);
+            if(!current.dependencies||hash(current.dependencies)!==hash(dependencies))return [];
+            return readEquipmentCentreCandidates(client,dependencies,blockedEquipmentSides(response),signal);
+          });
+          centreProbe=await probeEquipmentCentreFallback({dependencies,failedResult:response,candidates,signal,
+            request:(trial,id)=>weightedRequest(buildCableEngineRequest(trial,id,job.timeout_ms)),
+            validate:(result,trial)=>{requireCableEngineStrategy(result,trial);requireCalculationLengthLedger(result,trial.settings);},
+            execute:async(request,trial)=>{
+              if(!capacity)return {request,response:await engine.execute(request,signal)};
+              return executeCapacityRouting({request,context:capacity,signal,execute:engine.execute.bind(engine),
+                validate:value=>{requireCableEngineStrategy(value,trial);requireCalculationLengthLedger(value,trial.settings);}});
+            }});
+        }catch(error){
+          if(unconfirmedEngineJoin(error)||implementationRestartRequired(error))throw error;
+          signal.throwIfAborted();
+          // A failed or unavailable probe never replaces the admitted failure or
+          // saves a source point. Normal failure diagnostics remain available.
+          centreProbe=null;
+        }
+      }
       const finalIdentity=sharedCurrent?undefined:dependencies.schemaVersion==='pathfinder.dependencies.v8'
         ?await(dependencies.barriers.schemaVersion==='wfc.pf.barrier-runtime.v2'?mixedBarrierCalculationEngineIdentity({force:true}):barrierCalculationEngineIdentity({force:true}))
         :await calculationEngineIdentity({force:true});
+      let centreHeadsAppended=false;
       await authorized(async client => {
         await fencedJob(client,job);
         if(['pathfinder.dependencies.v7','pathfinder.dependencies.v8'].includes(dependencies.schemaVersion)&&await retireSupersededCableItem(client,job,item.cable_id))return;
@@ -398,7 +436,7 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,ownedEngine:Eng
           else{
             const checked=latestCapacity.evaluate(noCapacity?response.trayCapacity.excludedRouteCodes:response.route!.routeCodes);
             capacityChanged=noCapacity?Boolean(checked.policyIssue||checked.unavailableRouteCodes.length
-              ||hash([...checked.blockedRouteCodes].sort())!==hash([...response.trayCapacity.excludedRouteCodes].sort())):checked.blockedRouteCodes.length>0;
+              ||hash([...checked.blockedRouteCodes].sort())!==hash([...response.trayCapacity.excludedRouteCodes].sort())):calculatedRouteCapacityBlocked(checked);
             if(!capacityChanged){
               const observation={...response.trayCapacity,...checked,outcome:noCapacity?'no-capacity' as const:checked.unavailableRouteCodes.length||checked.policyIssue?'unavailable' as const
                 :!latestCapacity.policy.enabled?'balanced' as const:response.trayCapacity.excludedRouteCodes.length?'rerouted' as const:'fits' as const};
@@ -448,7 +486,36 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,ownedEngine:Eng
         await requireEnrollmentAuthority(client,{projectId:job.project_id,jobId:job.id,cableId:item.cable_id});
         if(inserted.rows[0]?.id&&!stale&&exact.status==='calculated'&&computedRequest&&computedResponse)
           sourceToken=await reuse.prepareSource(client,dependencies,computedRequest,computedResponse,signal);
+        if(centreProbe&&!stale&&inserted.rows[0]?.id&&!isGrantPrincipal(execution.principal)&&dependencies.schemaVersion==='pathfinder.dependencies.v8'){
+          // The failure above stays immutable. Successful probe geometry belongs
+          // only to the machine receipt; new heads force normal fresh admission.
+          if(capacity){
+            const latest=await readTrayCapacityRouting(client,{projectId:job.project_id,jobId:job.id,cableId:item.cable_id});
+            if(!latest)return;
+            const checked=latest.evaluate(centreProbe.trialResult.route!.routeCodes);
+            if(calculatedRouteCapacityBlocked(checked))return;
+          }
+          await requireCurrentBarrierWriteScope(client,dependencies,{signal});
+          await fencedJob(client,job);
+          await requireEnrollmentAuthority(client,{projectId:job.project_id,jobId:job.id,cableId:item.cable_id});
+          const finite=(await client.query<{expires_at:Date|string}>(`/* centre-fallback:finite-authority */ SELECT
+            LEAST(e.authority_expires_at,s.authority_expires_at,j.login_expires_at) AS expires_at
+            FROM pf_recalculation_enrollments e JOIN pf_recalculation_state s USING(project_id)
+            JOIN pf_jobs j ON j.project_id=e.project_id AND j.id=e.job_id
+            WHERE e.project_id=$1 AND e.job_id=$2 AND e.generation=s.desired_generation AND e.authority_epoch=s.authority_epoch
+              AND s.enabled AND NOT s.paused FOR SHARE OF e,s,j`,[job.project_id,job.id])).rows[0];
+          const finiteDeadline=finite?new Date(finite.expires_at).getTime():NaN;
+          if(!Number.isFinite(finiteDeadline)||finiteDeadline<=Date.now())return;
+          await appendEquipmentCentreProbe(client,{projectId:job.project_id,jobId:job.id,cableId:item.cable_id,
+            principal:execution.principal,probe:centreProbe,finiteDeadline,signal});
+          await retireCentreSupersededJob(client,{projectId:job.project_id,jobId:job.id,ownerToken:job.owner_token});
+          if(Date.now()>=finiteDeadline)throw new PathFinderError('AUTOMATIC_AUTHORITY_EXPIRED',409);
+          centreHeadsAppended=true;
+        }
       },'settlement');
+      // Already retired atomically with the heads; no post-commit race with the
+      // heartbeat or the generation invalidated by our own successful mutation.
+      if(centreHeadsAppended)return;
       // A lost COMMIT acknowledgement, cancellation, stale scope or failed
       // completion must not seed reusable work from an unconfirmed source.
       if(sourceToken&&!signal.aborted)reuse.commitSource(sourceToken);
@@ -484,10 +551,12 @@ export function createPathFinderWorker(pool:Pool,_jobs:PathFinderJobs,engineFact
   sharedReuse?:VerifiedSameEndpointReuse) {
   const controller = new AbortController(); let work:Promise<void>|undefined,fatalStop:unknown,unavailableCode:string|undefined;
   const preparation = createPreparationEngineLane();
+  const manualRouting = createPreparationEngineLane(true);
   return {
     start():void {
       if (work) return;
       preparation.activate();
+      manualRouting.activate();
       work = (async () => {
         while (!controller.signal.aborted) {
           let owner:PoolClient|undefined,releaseOwner=true,discardOwner=false;
@@ -555,6 +624,7 @@ export function createPathFinderWorker(pool:Pool,_jobs:PathFinderJobs,engineFact
               let preparationLast=false;
               while (!controller.signal.aborted) {
                 if (!preparationLast && await preparation.runNext(engine!,controller.signal)) {preparationLast=true;continue;}
+                if (!preparationLast && await manualRouting.runNext(engine!,controller.signal)) {preparationLast=true;continue;}
                 preparationLast=false;
                 const job = await claimCalculationSlice(pool);
                 if (job) await executeJob(pool,job,controller.signal,engine!,reuse);
@@ -573,17 +643,21 @@ export function createPathFinderWorker(pool:Pool,_jobs:PathFinderJobs,engineFact
           } catch(error) {if (!controller.signal.aborted) {console.error('PathFinder worker temporarily unavailable.'); await delay(5000,undefined,{signal:controller.signal}).catch(() => undefined);}}
           finally {await release();}
         }
-      })().finally(() => preparation.close());
+      })().finally(() => {preparation.close();manualRouting.close();});
     },
     executePreparation(request:EngineInvocation,signal:AbortSignal):Promise<EngineResponse> {
       if (!work || controller.signal.aborted) return Promise.reject(new PathFinderError('PREPARATION_WORKER_UNAVAILABLE',503));
       return preparation.enqueue(request,signal);
+    },
+    executeManualRoute(request:EngineInvocation,signal:AbortSignal):Promise<EngineResponse> {
+      if (!work || controller.signal.aborted) return Promise.reject(new PathFinderError('PREPARATION_WORKER_UNAVAILABLE',503));
+      return manualRouting.enqueue(request,signal);
     },
     get failureCode():string|null {
       if(!fatalStop)return unavailableCode??null;
       const code=(fatalStop as {code?:unknown}).code;
       return typeof code==='string'&&/^[A-Z][A-Z0-9_]{0,95}$/.test(code)?code:'WORKER_FATAL';
     },
-    async stop():Promise<void> {controller.abort();preparation.close(); await work;if(fatalStop)throw fatalStop;},
+    async stop():Promise<void> {controller.abort();preparation.close();manualRouting.close(); await work;if(fatalStop)throw fatalStop;},
   };
 }

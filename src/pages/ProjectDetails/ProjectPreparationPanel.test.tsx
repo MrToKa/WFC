@@ -13,9 +13,11 @@ vi.mock('./hooks/useProjectPreparation', () => ({ useProjectPreparation: vi.fn()
 vi.mock('@/api/pathfinderPolicies', () => ({ fetchRoutingPurposePolicy: vi.fn() }));
 const fixture = preparationFixture();
 function setup() {
-  const state = { enabled: true, loading: false, busy: false, unknown: false, conflict: false, error: null, notice: null, progress: null,
+  const state = { enabled: true, loading: false, busy: false, unknown: false, conflict: false, error: null as string | null, notice: null, progress: null,
     context: structuredClone(fixture.context), session: structuredClone(fixture.session), discovery: null, networkReady: true, networkStorageStatus: 'missing' as ReturnType<typeof useProjectPreparation>['networkStorageStatus'], networkReadinessKey: 'verified-network-trace',
-    checkTrays: vi.fn(async () => {}), assignTray: vi.fn(async () => {}), freezePlan: vi.fn(), collect: vi.fn(), publish: vi.fn(), pause: vi.fn(), cancel: vi.fn() };
+    checkTrays: vi.fn(async () => {}), discover: vi.fn(async () => {}), generateNetwork: vi.fn(async () => {}), finishNetwork: vi.fn(async () => {}), canFinishNetwork: false, generatingNetwork: false, generationPaused: false,
+    trayMatchCounts: null as ReturnType<typeof useProjectPreparation>['trayMatchCounts'],
+    assignTray: vi.fn(async () => {}), freezePlan: vi.fn(), collect: vi.fn(), publish: vi.fn(), pause: vi.fn(), cancel: vi.fn() };
   const read = vi.fn(async () => ({ objects: [] as Array<{objectId: number}> }));
   const readMetadata = vi.fn<() => Promise<{ objects: Array<{objectId:number;parentId:number|null}> } | null>>(async () => {
     const selected = await read.mock.results.at(-1)?.value;
@@ -37,6 +39,42 @@ beforeEach(() => {
 afterEach(async () => { await act(async () => {}); });
 
 describe('simple project tray preparation', () => {
+  it('offers an explicit frame finish action independently of recapturing the network', () => {
+    const { state, pf } = setup(); state.canFinishNetwork = true; state.networkReady = false;
+    render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: 'Finish network preparation' }));
+    expect(state.finishNetwork).toHaveBeenCalledOnce(); expect(state.generateNetwork).not.toHaveBeenCalled(); expect(state.discover).not.toHaveBeenCalled();
+  });
+  it('keeps matching counts visible when the saved network remains ready without generating again', () => {
+    const { state, pf } = setup(); state.context.currentAggregate = { ...state.context.scope } as typeof state.context.currentAggregate;
+    state.networkStorageStatus = 'stored-current'; state.trayMatchCounts = { assigned: 0, kept: 91, missing: 0, ambiguous: 0 };
+    render(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByRole('status', { name: 'Tray matching results' })).toHaveTextContent('assigned: 0; kept: 91; not found: 0; multiple matches: 0');
+    expect(screen.getByText(/Network saved in the database\. Ready for routing calculations\./)).toBeVisible();
+    expect(state.generateNetwork).not.toHaveBeenCalled(); expect(state.discover).not.toHaveBeenCalled();
+  });
+  it('offers explicit generation and regeneration using the current model without starting on open', () => {
+    const { state, pf } = setup(); state.networkReady = false;
+    const page = render(<ProjectPreparationPanel pf={pf} active />);
+    expect(state.generateNetwork).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Generate network' }));
+    expect(state.generateNetwork).toHaveBeenCalledOnce(); expect(state.checkTrays).not.toHaveBeenCalled();
+    state.context.currentAggregate = { ...state.context.scope } as typeof state.context.currentAggregate;
+    state.networkStorageStatus = 'stored-current'; state.error = 'The saved routing network file is missing.';
+    page.rerender(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: 'Regenerate network' }));
+    expect(state.generateNetwork).toHaveBeenCalledTimes(2); expect(state.assignTray).not.toHaveBeenCalled();
+  });
+  it('shows generation progress and requires exact command retry before starting another network', () => {
+    const { state, pf } = setup(); state.busy = true; state.generatingNetwork = true;
+    const page = render(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByRole('button', { name: 'Generating network…' })).toBeDisabled();
+    state.busy = false; state.generatingNetwork = false; state.unknown = true;
+    page.rerender(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByRole('button', { name: 'Generate network' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Retry tray update' })).toBeEnabled();
+    expect(state.generateNetwork).not.toHaveBeenCalled();
+  });
   it('shows actionable preparation diagnostics and all affected trays in an error Snackbar', () => {
     const { state, pf, tray } = setup(); state.networkReady = false;
     const message = formatPreparationDiagnostics([{ code: 'PURPOSE_UNCONFIGURED', projectTrayIds: [tray.projectTrayId], objectIds: [], message: 'Resolve this scope' }], state.context.trays)[0].message;
@@ -52,6 +90,21 @@ describe('simple project tray preparation', () => {
     vi.mocked(useProjectPreparation).mockReturnValue({ ...state, error: message } as unknown as ReturnType<typeof useProjectPreparation>);
     view.rerender(<ProjectPreparationPanel pf={pf} active />);
     expect(showToast).toHaveBeenCalledTimes(2);
+  });
+  it('defers loading errors and reports only the error remaining after the status check', () => {
+    const { state, pf } = setup();
+    state.error = 'The preparation database deadline was reached.';
+    const view = render(<ProjectPreparationPanel pf={{ ...pf, viewerPhase: 'loading' }} active />);
+    expect(showToast).not.toHaveBeenCalled();
+    expect(screen.queryByText(state.error)).not.toBeInTheDocument();
+    state.loading = true;
+    view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    expect(showToast).not.toHaveBeenCalled();
+    state.loading = false;
+    view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    expect(showToast).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ body: state.error }));
+    view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    expect(showToast).toHaveBeenCalledOnce();
   });
   it('does not toast background errors while Routes is inactive', () => {
     const { state, pf } = setup();
@@ -126,9 +179,10 @@ describe('simple project tray preparation', () => {
     view.rerender(<ProjectPreparationPanel pf={changedPf} active />);
     expect(screen.queryByText('Cable ladder RA 60')).toBeNull(); expect(screen.queryByText('600 × 77 mm')).toBeNull();
   });
-  it('has one network action plus show and immediate selection on each tray', () => {
+  it('offers generation and candidate checking plus show and immediate selection on each tray', () => {
     const { state, pf, tray } = setup(); render(<ProjectPreparationPanel pf={pf} active />);
-    expect(screen.getAllByRole('button')).toHaveLength(3);
+    expect(screen.getAllByRole('button')).toHaveLength(4);
+    expect(screen.getByRole('button', { name: 'Generate network' })).toBeEnabled();
     expect(screen.getByText('Purpose and routing permission')).toBeVisible();
     expect(screen.getByRole('button', { name: `Show tray ${tray.rawName}` })).toBeVisible();
     expect(screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` })).toBeVisible();
@@ -136,7 +190,7 @@ describe('simple project tray preparation', () => {
       'Collect geometry', 'Save prepared network', 'Resolution reason', 'Exact candidates and coverage', 'Audited manual resolution'])
       expect(screen.queryByText(text)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Discover project tray candidates' }));
-    expect(state.checkTrays).toHaveBeenCalledOnce();
+    expect(state.discover).toHaveBeenCalledOnce(); expect(state.checkTrays).not.toHaveBeenCalled(); expect(state.generateNetwork).not.toHaveBeenCalled();
     expect(state.freezePlan).not.toHaveBeenCalled(); expect(state.collect).not.toHaveBeenCalled(); expect(state.publish).not.toHaveBeenCalled();
   });
   it('assigns the fresh model selection immediately with no separate save', async () => {
@@ -284,7 +338,7 @@ describe('simple project tray preparation', () => {
     state.networkReady = false; state.networkStorageStatus = 'stored-needs-update';
     render(<ProjectPreparationPanel pf={pf} active />);
     expect(screen.getByRole('status')).toHaveTextContent('A routing network is saved in the database. The model, tray data or routing settings have changed.');
-    expect(screen.getByRole('status')).toHaveTextContent('Choose Discover project tray candidates to update it.');
+    expect(screen.getByRole('status')).toHaveTextContent('Choose Regenerate network to update it.');
     expect(screen.queryByText(/Ready for routing calculations\.|No routing network is saved/)).toBeNull();
   });
   it('keeps a verified saved network ready after reopening without invoking network preparation', () => {

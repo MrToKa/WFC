@@ -1,5 +1,6 @@
 import { digestSha256 } from '../utils/sha256';
 import { z } from 'zod';
+import { barrierAuthoringRecoverySchema } from '../../shared/pathfinderBarrierAuthoring';
 import { getApiBaseUrl } from './http';
 import { BARRIER_LIMITS, barrierCanonicalJson } from '../../shared/pathfinderBarriers';
 import { supportedBarrierCaptureCommandSchema as barrierCaptureCommandSchema, supportedBarrierRegistryCommandSchema as barrierRegistryCommandSchema,
@@ -53,6 +54,16 @@ async function request(projectId: string, token: string, suffix: string, body?: 
 }
 export async function getBarrierRegistry(projectId: string, token: string, signal?: AbortSignal): Promise<BarrierRegistry> {
   return barrierRegistrySchema.parse(await request(projectId, token, '', undefined, signal));
+}
+/** Missing-file recovery for authoring only; never calculation readiness. */
+export async function getBarrierAuthoringRecovery(projectId: string, token: string, signal?: AbortSignal) {
+  const value = barrierAuthoringRecoverySchema.parse(await request(projectId, token, '/authoring', undefined, signal));
+  if (value.registry.scope.projectId !== projectId) throw requestError('BARRIER_RESPONSE_INVALID');
+  const manifest = value.savedManifest;
+  const digest = [...new Uint8Array(await digestSha256(new TextEncoder().encode(barrierCanonicalJson(barrierSnapshotHashInput(manifest)))))]
+    .map(value => value.toString(16).padStart(2, '0')).join('');
+  if (digest !== manifest.contentSha256) throw requestError('BARRIER_RESPONSE_INVALID');
+  return value;
 }
 /** Read only an immutable server manifest; no geometry or inferred readiness is accepted here. */
 export async function getBarrierSnapshot(projectId: string, token: string, snapshotId: string, signal?: AbortSignal): Promise<BarrierSnapshot> {

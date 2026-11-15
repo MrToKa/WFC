@@ -14,6 +14,7 @@ import { PathFinderError } from './errors.js';
 import { authorizePathFinderPreflight } from './projectPreflightAuthorization.js';
 import { groupModelLocationMatchCandidates } from './modelLocationMatchCandidates.js';
 import { readModelLocationMatchSummary } from './modelLocationMatchSummary.js';
+import {evaluateCrossModelEndpointMatch} from './crossModelEndpointMatch.js';
 
 const digest = (v: unknown) => createHash('sha256').update(canonicalPurposeJson(v)).digest('hex');
 const fail = (code: string, status = 409): never => { throw new PathFinderError(code, status, 'Model location matching could not be completed. Refresh its context and check the reported names; keep an uncertain saved command for reconciliation.'); };
@@ -34,8 +35,11 @@ async function context(c: PoolClient, projectId: string, check: () => void): Pro
     const key = normalizeEndpointLocation(name); if (!byKey.has(key)) byKey.set(key, name);
   }
   const names = [...byKey.values()];
+  const oldModels=(await c.query<{normalized_alias:string}>(`/* model-location-match:cross-model-names */ SELECT a.normalized_alias FROM pf_location_aliases a JOIN pf_endpoint_binding_heads h ON h.project_id=a.project_id AND h.location_id=a.location_id JOIN pf_endpoint_binding_revisions b ON b.project_id=h.project_id AND b.id=h.binding_id WHERE a.project_id=$1 AND b.model_version_id<>$2 AND b.record->>'status'='confirmed' AND a.normalized_alias=ANY($3::text[]) ORDER BY a.normalized_alias LIMIT 4097`,[projectId,current.modelVersionId,[...byKey.keys()]])).rows;check();
+  if(oldModels.length>MODEL_LOCATION_MATCH_LIMITS.names)return fail('MODEL_LOCATION_MATCH_NAME_LIMIT',413);
+  const oldKeys=new Set(oldModels.map(r=>r.normalized_alias)),crossModelNames=names.filter(n=>oldKeys.has(normalizeEndpointLocation(n)));
   return modelLocationMatchContextSchema.parse({ schemaVersion: 'wfc.pf.model-location-match-context.v1', projectId, current,
-    registryRevision: registry.revision, names, namesSha256: digest(modelLocationMatchNamesHashInput(names)) });
+    registryRevision: registry.revision, names, ...(crossModelNames.length?{crossModelNames}:{}), namesSha256: digest(modelLocationMatchNamesHashInput(names)) });
 }
 
 async function location(c: PoolClient, projectId: string, name: string, check: () => void) {
@@ -94,7 +98,8 @@ export function createModelLocationMatchRepository(pool: Pool) {
         for (const name of command.names) {
           check();
           const saved = await location(c, projectId, name, check);
-          const preserve = Boolean(saved?.hasLegacy || saved?.bindingId && (saved.binding?.derivation !== ENDPOINT_MODEL_MATCH_DERIVATION
+          const crossModel = Boolean(saved?.binding?.status==='confirmed' && saved.binding.modelVersionId!==snapshot.current.modelVersionId);
+          const preserve = Boolean(!crossModel && saved?.hasLegacy || !crossModel && saved?.bindingId && (saved.binding?.derivation !== ENDPOINT_MODEL_MATCH_DERIVATION
             || saved.binding.status === 'confirmed' && saved.binding.locationRevision === saved.revision
               && canonicalPurposeJson(saved.binding.autoMatchEvidence?.current) === canonicalPurposeJson(snapshot.current)));
           const candidates: ReturnType<typeof groupModelLocationMatchCandidates> = preserve
@@ -106,6 +111,19 @@ export function createModelLocationMatchRepository(pool: Pool) {
             results.push({ ...base, status: 'preserved', reasonCode: 'EXISTING_LOCATION_BINDING_PRESERVED' }); continue;
           }
           if (candidates.length !== 1) { results.push({ ...base, status: candidates.length ? 'ambiguous' : 'missing', reasonCode: candidates.length ? 'MODEL_LOCATION_MATCH_AMBIGUOUS' : 'MODEL_LOCATION_MATCH_MISSING' }); continue; }
+          if(crossModel){
+            if(saved!.binding!.derivation==='matched-model-centre-fallback.v1'){
+              const prior=saved!.binding!,original=prior.centreFallbackEvidence!.current;
+              const priorCurrent={...original,modelVersionId:prior.modelVersionId,aggregateId:prior.aggregateId,artifactId:prior.artifactId,
+                projectionSha256:prior.projectionSha256,captureFrameId:prior.captureFrameId,traceId:prior.sameModelReuse?.targetTraceId??original.traceId};
+              const {readMatchedLocationDisplay}=await import('./modelLocationMatchDisplay.js');
+              if(!await readMatchedLocationDisplay(c,{projectId,current:priorCurrent,location:{id:saved!.id,name:saved!.name,aliases:saved!.aliases,revision:saved!.revision},head:prior},check)){
+                results.push({...base,status:'unavailable',reasonCode:'MODEL_LOCATION_CENTRE_SOURCE_UNVERIFIED'});continue;
+              }
+            }
+            const decision=evaluateCrossModelEndpointMatch({previous:saved!.binding,locationRevision:saved!.revision,currentModelVersionId:snapshot.current.modelVersionId,logicalName:name,candidates:command.scan.candidates});
+            if(!decision.accepted){results.push({...base,status:'unavailable',reasonCode:decision.reasonCode});continue;}
+          }
           const candidate = candidates[0];
           if (candidate.objectId === 0) { results.push({ ...base, status: 'unavailable', reasonCode: 'MODEL_LOCATION_MATCH_UNSUPPORTED_MODEL_OBJECT' }); continue; }
           if (!candidate.bounds || !candidate.bottomCentre) { results.push({ ...base, status: 'unavailable', reasonCode: 'MODEL_LOCATION_MATCH_BOUNDS_UNAVAILABLE' }); continue; }
@@ -118,7 +136,7 @@ export function createModelLocationMatchRepository(pool: Pool) {
           const receipt = await confirmMatchedEndpointInTransaction(c, projectId, who, {
             locationId: saved?.id ?? randomUUID(), location: saved ? { name: saved.name, aliases: saved.aliases } : { name, aliases: [] },
             current: snapshot.current, expectedRegistryRevision: revision, expectedLocationRevision: saved?.revision ?? null, expectedHeadId: saved?.bindingId ?? null,
-            evidence, reason: 'Explicit Find and assign From/To: unique visible source-item match; approximate fixed-world bottom centre.',
+            ...(crossModel?{crossModelCandidates:command.scan.candidates}:{}), evidence, reason: 'Explicit Find and assign From/To: unique visible source-item match; approximate fixed-world bottom centre.',
           }, signal); check();
           revision = receipt.registryRevision;
           results.push({ ...base, status: 'assigned', locationId: receipt.locationId, bindingId: receipt.binding.id, reasonCode: null });

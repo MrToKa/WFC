@@ -2,7 +2,6 @@ import { endpointBindingFixture, endpointFixtureId as id } from './endpointBindi
 import { createModelLocationMatchRepository } from './modelLocationMatch.js';
 import type { ModelLocationMatchAssign } from '../../shared/pathfinderModelLocationMatch.js';
 import { normalizeEndpointLocation } from '../../shared/pathfinderEndpointBindings.js';
-import { canonicalPurposeJson } from '../../shared/pathfinderPurposePolicy.js';
 
 /** Synthetic SQL protocol fixture; production PostgreSQL remains a separate qualification. */
 export async function modelLocationMatchFixture() {
@@ -10,6 +9,7 @@ export async function modelLocationMatchFixture() {
   f.query.mockImplementation(async (sql: string, args: unknown[] = []) => {
     const p = args as string[];
     if (sql.startsWith('BEGIN ISOLATION')) return original('BEGIN', args);
+    if (sql.startsWith('/* model-location-match:cross-model-names */')) return {rows:[...f.state.aliases.values()].filter(a=>{const b=f.state.bindings.get(f.state.heads.get(a.location_id)??'');return b?.status==='confirmed'&&b.modelVersionId!==p[1]&&(args[2] as string[]).includes(a.normalized_alias);}).map(a=>({normalized_alias:a.normalized_alias}))};
     if (sql.startsWith('/* model-location-match:registry */')) return { rows: [{ revision: f.state.registry }] };
     if (sql.startsWith('/* model-location-match:names */')) return { rows: [...new Set(f.state.cables.flatMap(c => [c.from_location, c.to_location]).filter((n): n is string => n !== null && n.trim() !== ''))].sort().map(name => ({ name })) };
     if (sql.startsWith('/* model-location-match:location */')) {
@@ -23,7 +23,7 @@ export async function modelLocationMatchFixture() {
       for (const [key, saved] of [...f.state.commands].reverse()) {
         const request = saved.request as { schemaVersion: string; command?: ModelLocationMatchAssign };
         if (saved.kind !== 'confirm' || request.schemaVersion !== 'wfc.pf.model-location-match-owner.v1' || !request.command
-          || canonicalPurposeJson(request.command.current) !== canonicalPurposeJson(args[1]) || request.command.namesSha256 !== p[2]) continue;
+          || request.command.current.modelVersionId !== p[1] || request.command.current.contentFingerprint !== p[2]) continue;
         const receipt = saved.receipt as { schemaVersion: string; results: { name: string }[] };
         if (receipt.schemaVersion !== 'wfc.pf.model-location-match-receipt.v1') continue;
         const [actor_id, idempotency_key] = key.split(':');
@@ -36,6 +36,15 @@ export async function modelLocationMatchFixture() {
     if (sql.startsWith('/* model-location-match:summary-command */')) {
       const saved = f.state.commands.get(p[1] + ':' + p[2]);
       return { rows: saved ? [{ ...saved, actor_id: p[1], idempotency_key: p[2] }] : [] };
+    }
+    if (sql.startsWith('/* model-location-match:summary-heads */')) {
+      const names = args[1] as string[];
+      return { rows: [...f.state.aliases.values()].filter(alias => names.includes(alias.normalized_alias)).map(alias => {
+        const location = f.state.locations.get(alias.location_id)!, bindingId = f.state.heads.get(location.id), binding = bindingId ? f.state.bindings.get(bindingId) : null;
+        return { normalized_alias: alias.normalized_alias, location_id: location.id, location_revision: location.revision,
+          binding_id: bindingId ?? null, record_sha256: binding?.contentSha256 ?? null, record: binding ?? null, total_bytes: '0',
+          has_legacy: f.state.legacy?.model_version_id === args[2] };
+      }) };
     }
     if (sql.startsWith('/* model-location-match:replay */')) return { rows: f.state.commands.has(p[1] + ':' + p[2]) ? [f.state.commands.get(p[1] + ':' + p[2])!] : [] };
     if (sql.startsWith('/* model-location-match:store */')) {

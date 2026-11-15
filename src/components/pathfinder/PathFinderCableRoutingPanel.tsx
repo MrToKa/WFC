@@ -11,6 +11,8 @@ import { PathFinderCableComparison } from './PathFinderCableComparison';
 import { CableAutoCalculatedLength } from './CableAutoCalculatedLength';
 import type { PathFinderEndpointForegroundContexts } from '@/pages/ProjectDetails/pathFinderEndpointVisibility';
 import { cableEndpointConfirmedDisplaySelectionSchema } from '../../../shared/pathfinderCableEndpoints';
+import type { CanonicalPoint } from '../../../viewer-runtime/protocol.mjs';
+import { endpointPointSchema, type EndpointCurrentScope } from '../../../shared/pathfinderEndpointBindings';
 
 export type PathFinderCalculationDiagnostics = {
   cableId: string; jobId: string; jobStatus: string | null;
@@ -23,6 +25,7 @@ export type PathFinderCableRoutingPanelProps = {
   cable: CableWorkflowRow | null; open: boolean; onClose: () => void; anchor?: HTMLElement | null;
   onCalculate?: () => void | Promise<void>; onTogglePath?: () => void;
   onShowLocation?: (sdkObjectId: number, sdkObjectIds?: number[]) => Promise<boolean>;
+  onShowLocationPoint?: (point: CanonicalPoint, current: EndpointCurrentScope) => Promise<boolean>;
   onEndpointForegroundContexts?: (value: PathFinderEndpointForegroundContexts | null) => void;
   pathVisible?: boolean; pathReady?: boolean; endpointRefreshKey?: number; actionsBusy?: boolean; calculatedRouting?: string | null; calculatedDesignLength?: string | null;
   pathSource?: PathFinderWorkflowDisplay['source'];
@@ -50,6 +53,18 @@ function locationObjects(state: Endpoint, model: PathFinderCableRoutingPanelProp
   }
   return { sdkObjectId: Number(id) };
 }
+/** A saved coordinate can be displayed without claiming any object identity. */
+function locationPoint(state: Endpoint, model: PathFinderCableRoutingPanelProps['access']['model']) {
+  const context = state.context, current = context?.current, head = context?.head;
+  if (!state.enabled || state.draft || state.error || !context?.canBind || !model || !current || !head || !context.location
+    || head.status !== 'confirmed' || head.mode !== 'fixed-world' || head.sourceObject !== null || head.attachment !== null
+    || head.locationRevision !== context.location.revision || head.modelVersionId !== current.modelVersionId
+    || head.artifactId !== current.artifactId || head.aggregateId !== current.aggregateId || head.projectionSha256 !== current.projectionSha256
+    || head.captureFrameId !== current.captureFrameId || current.modelVersionId !== model.modelVersionId
+    || current.selectionRevision !== model.selectionRevision || current.contentFingerprint !== model.contentFingerprint
+    || !endpointPointSchema.safeParse(head.pointProjectMetres).success) return null;
+  return { pointProjectMetres: [...head.pointProjectMetres] as CanonicalPoint, current: { ...current } };
+}
 /** Persistent nonmodal portal; only its own bounds intercept pointer input. */
 export function PathFinderCableRoutingPanel(props: PathFinderCableRoutingPanelProps) {
   const { access, cable } = props;
@@ -63,7 +78,7 @@ function FloatingRoutingPanel(props: PathFinderCableRoutingPanelProps & { cable:
     scopeKey: props.owner, width: 416, preferredTop: 80, requestedPopup: props.requestedPopup });
   return <OwnedCableRoutingPanel key={props.cable.cable.id} {...props} floating={floating} />;
 }
-function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalculate, onTogglePath, onShowLocation, pathVisible = false,
+function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalculate, onTogglePath, onShowLocation, onShowLocationPoint, pathVisible = false,
   pathReady = false, pathSource = null, endpointRefreshKey = 0, actionsBusy = false, calculatedRouting, calculatedDesignLength, review, calculationPending = false, calculationBlockedReason = null,
   onConfigureCalculation, drillThroughWalls = false, onDrillThroughWallsChange, submittedDrillThroughWalls, calculationFeedback, calculationDiagnostics,
   onRefresh, refreshing = false, refreshError = null, onEndpointForegroundContexts,
@@ -81,22 +96,24 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
   // endpoint. Keep that old display; it never supplies Save or review authority.
   const displayScope = JSON.stringify([access.accountId, access.projectId, access.token, access.model, access.preparationKey,
     cable.cable.id, cable.cable.fromLocation, cable.cable.toLocation]);
-  const [locationDisplay, setLocationDisplay] = useState<{ scope: string; end: 'from' | 'to'; working: boolean; error: string | null } | null>(null);
+  const [locationDisplay, setLocationDisplay] = useState<{ scope: string; end: 'from' | 'to'; working: boolean; error: string | null; pointShown?: boolean } | null>(null);
   const locationOwner = useRef({ scope: displayScope, active }); locationOwner.current = { scope: displayScope, active };
   const locationRequest = useRef<symbol | null>(null);
   useEffect(() => { locationRequest.current = null; setLocationDisplay(null); }, [displayScope, active]);
   useEffect(() => () => { locationOwner.current.active = false; locationRequest.current = null; }, []);
   const locationWorking = locationDisplay?.scope === displayScope && locationDisplay.working;
-  const showLocation = async (end: 'from' | 'to', target: { sdkObjectId: number; sdkObjectIds?: number[] }) => {
-    if (!onShowLocation || locationRequest.current || !locationOwner.current.active || locationOwner.current.scope !== displayScope) return;
+  const showLocation = async (end: 'from' | 'to', target: { sdkObjectId: number; sdkObjectIds?: number[] } | NonNullable<ReturnType<typeof locationPoint>>) => {
+    if (('pointProjectMetres' in target ? !onShowLocationPoint : !onShowLocation) || locationRequest.current || !locationOwner.current.active || locationOwner.current.scope !== displayScope) return;
     const request = Symbol(); locationRequest.current = request;
     setLocationDisplay({ scope: displayScope, end, working: true, error: null });
     let shown = false;
-    try { shown = await (target.sdkObjectIds ? onShowLocation(target.sdkObjectId, target.sdkObjectIds) : onShowLocation(target.sdkObjectId)); }
+    try { shown = 'pointProjectMetres' in target ? await onShowLocationPoint!(target.pointProjectMetres, target.current)
+      : await (target.sdkObjectIds ? onShowLocation!(target.sdkObjectId, target.sdkObjectIds) : onShowLocation!(target.sdkObjectId)); }
     catch { /* Display errors do not change endpoint or calculation state. */ }
     if (locationRequest.current !== request) return;
     locationRequest.current = null;
     if (locationOwner.current.active && locationOwner.current.scope === displayScope) setLocationDisplay({ scope: displayScope, end, working: false,
+      pointShown: shown && 'pointProjectMetres' in target,
       error: shown ? null : 'This location could not be shown. Check that the current model is loaded, then try again.' });
   };
   const retained = useRef<{ scope: string; from: Endpoint['context']; to: Endpoint['context'] }>({ scope: displayScope, from: null, to: null });
@@ -203,7 +220,9 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
         : displayContext?.head ? `Saved point for ${name ?? 'this location'}` : state.error || assignment.error || assignment.retired
           ? 'Location could not be read. Refresh From/To.' : 'No model object assigned');
     const value = [objectName, point ? `X: ${point[0]} m; Y: ${point[1]} m; Z: ${point[2]} m` : ''].filter(Boolean).join('\n');
-    const target = assignment.retired ? null : locationObjects(state, access.model);
+    const objectTarget = assignment.retired ? null : locationObjects(state, access.model);
+    const pointTarget = objectTarget || assignment.retired || assignment.error || pending || legacyRecovery ? null : locationPoint(state, access.model);
+    const target = objectTarget ?? pointTarget;
     const display = locationDisplay?.scope === displayScope && locationDisplay.end === end ? locationDisplay : null;
     return <section aria-label={`${side} endpoint`} className={styles.field}>
       <h4 className={styles.heading}>{side}: {name?.trim() ? name : 'Location name is missing.'}</h4>
@@ -214,9 +233,10 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
       <div className={styles.actions}>
         <Button disabled={busy || locationWorking || Boolean(pending) || !name?.trim() || !state.canSelect}
           onClick={() => void state.selectObject()}>Assign {side}</Button>
-        <Button aria-label={`Show ${side} location`} disabled={actionsBusy || state.busy || locationWorking || target === null || !onShowLocation}
+        <Button aria-label={`Show ${side} location`} disabled={actionsBusy || state.busy || locationWorking || target === null || (pointTarget ? !onShowLocationPoint : !onShowLocation)}
           onClick={() => { if (target !== null) void showLocation(end, target); }}>Show location</Button>
       </div>
+      {pointTarget ? <Caption1 role="status">{display?.pointShown ? 'Saved project point shown; no linked model object.' : 'Saved project point; no linked model object.'}</Caption1> : null}
       {target === null && point && !lastRead && !state.busy ? <Caption1>This location has no current model object to show. Assign an object or refresh From/To.</Caption1> : null}
       {display?.working ? <Spinner size="tiny" label={`Showing ${side} location…`} /> : null}
       {display?.error ? <p role="alert" className={styles.note}>{display.error}</p> : null}
@@ -229,6 +249,8 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
   const content = <CablePopupSurface targetDocument={floating.portalTarget?.ownerDocument}>{styles => <div ref={panel} className={styles.panel} style={floating.panelStyle} role="dialog" aria-modal="false" aria-labelledby={title}
     tabIndex={-1} data-cable-id={cable.cable.id} data-collapsed={String(collapsed)} onClick={event => event.stopPropagation()}>
     <div {...floating.dragHandleProps}><h3 id={title} className={styles.heading}>{cable.cable.tag?.trim() ? cable.cable.tag : 'Cable routing'}</h3></div>
+    <p className={styles.note} aria-label="Cable type">Type: {cable.displayMetadata?.typeName?.trim() || '—'}</p>
+    <p className={styles.note} aria-label="Cable purpose">Purpose: {cable.displayMetadata?.purpose?.trim() || '—'}</p>
     <div className={styles.actions}><Button onClick={floating.isPoppedOut ? floating.returnToPage : floating.openInWindow}>{floating.isPoppedOut ? 'Return to page' : 'Open in separate window'}</Button>
       {!floating.isPoppedOut ? <Button onClick={floating.resetPosition}>Reset position</Button> : null}</div>
     {floating.notice ? <p role="status" className={styles.note}>{floating.notice}</p> : null}
@@ -305,17 +327,18 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
         {unsaved ? <p className={styles.note}>{endpointOnlySave
           ? 'Save the assigned From/To locations now. Configure the current route settings and barriers before calculating routing.'
           : 'Save the assigned endpoints before calculating routing.'}</p> : null}
-        {!unsaved && !busy && !pending && !legacyRecovery && !assignment.error ? <p className={styles.note}>No From/To changes to save. Save confirms endpoint assignments. Manually changed cable values require Review and Apply.</p> : null}
+        {!unsaved && !busy && !pending && !legacyRecovery && !assignment.error ? <p className={styles.note}>No From/To changes to save. Save confirms endpoint assignments. Manual and execution protection retain the used route.</p> : null}
         {assignment.busy ? <Spinner size="tiny" label="Checking or saving endpoints…" /> : null}
         {assignment.error ? <p role="alert" className={styles.note}>{assignment.error}</p> : null}
         {assignment.notice ? <p role="status" className={styles.note}>{assignment.notice}</p> : null}
         <p className={styles.note}>{endpointOnlySave
           ? 'Save confirms the shared locations. It does not calculate routing or update Cable list values. After configuring the current barriers, submit a new calculation.'
           : access.automaticPairPolicy
-            ? 'Save recalculates this cable first, then other cables sharing its locations. Empty Routing and Design length fields, or unchanged values previously written automatically by Path Finder, update automatically. Manually changed cables require Review and Apply.'
-            : 'Save recalculates affected cables. Routing and design length fill automatically only when both are empty. Existing values require Review and Apply.'}</p>
+            ? 'Save recalculates this cable first, then other cables sharing its locations. Current results update unprotected cables. Protected routes remain unchanged.'
+            : 'Save recalculates affected cables. Unprotected values can update under the current automatic policy. Manual and execution protection retain the used route.'}</p>
       </section>
       <section className={styles.field} aria-label="Review and Apply cable routing">
+        <a href={`/projects/${access.projectId}/cables/${cable.cable.id}`}>Edit route and protection in Cable details</a>
         <h4 className={styles.heading}>{pairSaved ? 'Routing and length saved' : automaticStopped ? 'Cable list update not saved' : usingSavedExactPath ? 'Routing and length saved' : automaticRecoveryRequired ? 'Cable update needs confirmation' : automaticWriting ? 'Updating cable values' : 'Review and Apply'}</h4>
         {currentReview?.recordedDrillThroughWalls !== null && currentReview?.recordedDrillThroughWalls !== undefined ? <p className={styles.note}>Recorded result: Drill through the walls {currentReview.recordedDrillThroughWalls ? 'enabled' : 'disabled'}. This setting belongs to the exact calculated proposal.</p> : null}
         {currentReview?.autoLength || currentReview?.autoLengthLoading || currentReview?.autoLengthError ? <section aria-label="Automatic length from Cable list">
@@ -330,7 +353,7 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
             : usingSavedExactPath ? 'The saved route and Design length are available for viewing. Calculate routing to review a new result.'
             : automaticRecoveryRequired ? 'The automatic cable update could not be confirmed. Use Refresh cable status to check the exact saved receipt. No replacement calculation or write will be submitted.'
             : automaticWriting ? 'The calculation is complete. Waiting for the automatic Routing and Design length update to be confirmed.'
-            : 'Manually changed Cable list values are retained. Compare them with the calculated proposal, inspect its path with Show, then review and Apply it.'}</p>
+            : 'Compare the current route with the calculated proposal and inspect its path with Show. Applying a result also respects manual and execution protection.'}</p>
         {automaticStopped && automaticUpdate?.reasonCode ? <p role="alert" className={styles.note}>Update reason: {automaticUpdate.reasonCode.toLowerCase().replaceAll('_', ' ')}.</p> : null}
         {pairSaved ? <p role="status" className={styles.note}>Routing and Design length match the verified result in Cable list.</p>
           : calculationPending ? <p role="status" className={styles.note}>Waiting for this cable’s new calculation and any automatic cable update. Earlier proposals cannot be approved here.</p>
@@ -362,5 +385,8 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
       </details>
     </>}
   </div>}</CablePopupSurface>;
-  return floating.portalTarget ? createPortal(content, floating.portalTarget) : <Portal>{content}</Portal>;
+  return floating.portalTarget ? <>
+    <Button onClick={floating.returnToPage}>Return cable panel to page</Button>
+    {createPortal(content, floating.portalTarget)}
+  </> : <Portal>{content}</Portal>;
 }

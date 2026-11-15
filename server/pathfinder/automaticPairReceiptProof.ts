@@ -114,7 +114,7 @@ export function createAutomaticPairReceiptProofReader(client: PoolClient, check:
           || !same(previous.history, m.ownership.history)) return null;
         originReceiptId = previous.originReceiptId;
       } else {
-        if (before.design_length !== null || before.routing !== null && (typeof before.routing !== 'string' || before.routing.trim() !== '')) return null;
+        if (m.ownership.kind !== 'policy' && (before.design_length !== null || before.routing !== null && (typeof before.routing !== 'string' || before.routing.trim() !== ''))) return null;
         originReceiptId = receiptId;
       }
       const histories = await query(`/* automatic-pair:recorded-history */ SELECT *,design_length::text,install_length::text,version_number::text AS version

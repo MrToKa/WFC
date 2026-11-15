@@ -12,6 +12,8 @@ import { readLocationImpactJobAuthority } from './locationImpactRepository.js';
 import { automaticGenerationAuthorizationSchema, type AutomaticGenerationAuthorization, type AutomaticPairPolicy, type AutomaticPairSource } from '../../shared/pathfinderAutomaticPair.js';
 import { activeAutomaticGenerationAuthorization } from './automaticGenerationOutput.js';
 import { authorizePathFinderPreflight } from './projectPreflightAuthorization.js';
+import { requalifyAutomaticEndpointBindingsInTransaction } from './endpointBindingRequalification.js';
+import {recoverCrossModelEndpointsInTransaction} from './crossModelEndpointRecovery.js';
 
 type Row = Record<string, any>;
 const hash = (value: unknown): string => createHash('sha256').update(canonicalPurposeJson(value)).digest('hex');
@@ -282,6 +284,18 @@ export function createRecalculationRepository(pool:Pool,adapter:RecalculationJob
       try{return await recalculationTransaction(pool,claim.projectId,claim.principal,async c=>{
         const prior=(await c.query<Row>('SELECT job_id FROM pf_recalculation_enrollments WHERE project_id=$1 AND generation=$2',[claim.projectId,claim.generation])).rows[0];
         if(prior)return {status:'duplicate' as const,generation:claim.generation,jobId:prior.job_id};
+        // Check the finite original claim before any recovery writes. Project
+        // ownership is already locked; keep scheduler row locks for admission LAST.
+        const recoveryState=await state(c,claim.projectId),recoveryClaim=(await c.query<Row>('SELECT *,generation::text,control_revision::text,authority_epoch::text FROM pf_recalculation_claims WHERE project_id=$1',[claim.projectId])).rows[0];
+        if(recoveryState.desired_generation!==claim.generation||recoveryState.control_revision!==claim.controlRevision||recoveryState.authority_epoch!==claim.authorityEpoch)return {status:'superseded' as const,generation:claim.generation,jobId:null};
+        if(!recoveryClaim||recoveryClaim.claim_id!==claim.claimId||recoveryClaim.owner_token!==claim.ownerToken||recoveryClaim.generation!==claim.generation||recoveryClaim.authority_epoch!==claim.authorityEpoch||new Date(recoveryClaim.lease_until).getTime()<=Date.now())return fail('RECALCULATION_CLAIM_FENCED');
+        if(!recoveryState.enabled||recoveryState.paused||recoveryState.actor_id!==claim.principal.userId||recoveryState.login_id!==claim.principal.loginId||new Date(recoveryState.authority_expires_at).getTime()<=Date.now())return fail('AUTOMATIC_ENROLLMENT_REVOKED');
+        if(recoveryState.engine_unavailable_code)return fail('ENGINE_IDENTITY_UNAVAILABLE');
+        if(hash(recoveryState.preferences)!==hash(recalculationPreferencesSchema.parse(claim.preferences))||recoveryState.timeout_ms!==claim.timeoutMilliseconds||recoveryClaim.control_revision!==claim.controlRevision)return fail('RECALCULATION_CLAIM_INPUT_MISMATCH');
+        if(hash(activeAutomaticGenerationAuthorization(recoveryState))!==hash(claim.automaticPairAuthorization??null))return fail('AUTOMATIC_OUTPUT_AUTHORITY_CHANGED');
+        const recovered=await requalifyAutomaticEndpointBindingsInTransaction(c,claim.projectId,claim.principal,signal)+await recoverCrossModelEndpointsInTransaction(c,claim.projectId,claim.principal,signal);
+        if(new Date(recoveryState.authority_expires_at).getTime()<=Date.now())return fail('AUTOMATIC_AUTHORITY_EXPIRED');
+        if(recovered>0)return {status:'superseded' as const,generation:claim.generation,jobId:null};
         let guarded=false,guardState:Row|undefined;
         const beforeInsert=async()=>{
           if(guarded)return fail('RECALCULATION_ADAPTER_GUARD_REUSED',500);signal.throwIfAborted();assertLoginNotExpired(claim.principal);

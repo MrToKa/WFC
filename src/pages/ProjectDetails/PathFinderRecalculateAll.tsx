@@ -125,7 +125,7 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
   return <section aria-label="Recalculate all cables">
     <Button appearance="primary" disabled={disabled || !preferences || submitting || running || unknown} onClick={() => void start()}>Recalculate all the cables</Button>
     <Caption1 block>Recalculates the complete cable list in the background. You can continue working with the open cable.</Caption1>
-    <Caption1 block>Empty or previously automatic Routing and Design length update automatically. Manual changes require Review and Apply. Cables with missing locations or unsupported purposes are skipped; MV is excluded.</Caption1>
+    <Caption1 block>Current Routing and Design length update automatically for unprotected cables. Protected routes remain unchanged; automatic results are retained separately. Cables with missing locations or unsupported purposes are skipped; MV is excluded.</Caption1>
     {blocker ? <Caption1 block>{blocker}</Caption1> : null}
     <div role="status" aria-live="polite">
       {submitting ? <Spinner size="tiny" label="Starting background recalculation…" /> : running ? <Spinner size="tiny" label={job?.status === 'complete' ? 'Saving calculated routes…' : 'Recalculating cables in the background…'} /> : job ? <Caption1 block>{job.status === 'complete' ? 'Background recalculation finished.' : `Background recalculation ${job.status}.`}</Caption1> : null}

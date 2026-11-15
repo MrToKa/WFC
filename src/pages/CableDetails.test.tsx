@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, expect, it, onTestFinished, vi } from 'vitest';
 import {
+  ApiError,
   createCableMaterial,
   deleteCableMaterial,
   fetchCableDetails,
@@ -19,6 +20,7 @@ import {
   type CableVersion,
 } from '@/api/client';
 import { CableDetails } from './CableDetails';
+import { emptyRoutingControl } from '../../shared/cableRoutingControl';
 
 const { showToast } = vi.hoisted(() => ({ showToast: vi.fn() }));
 
@@ -143,42 +145,281 @@ beforeEach(() => {
 });
 
 it('displays the checked PF length independently of Design and never falls back to a tray estimate', async () => {
-  const checked = { ...cable, tag: 'PF cable', routing: '/TRAY-01', designLength: 25, autoCalculatedLength: 54,
-    autoLengthStatus: 'calculated' as const, autoLengthCalculatedAt: '2026-10-21T12:00:00Z',
-    autoLengthBarrierStatus: 'clear' as const, autoLengthMatchesLatestRequest: true };
-  vi.mocked(fetchCableDetails).mockResolvedValue({ cable: checked, materialCableType: null, cableTypeDefaultMaterials: [], cableMaterials: [] });
+  const checked = {
+    ...cable,
+    tag: 'PF cable',
+    routing: '/TRAY-01',
+    designLength: 25,
+    autoCalculatedLength: 54,
+    autoLengthStatus: 'calculated' as const,
+    autoLengthCalculatedAt: '2026-10-21T12:00:00Z',
+    autoLengthBarrierStatus: 'clear' as const,
+    autoLengthMatchesLatestRequest: true,
+  };
+  vi.mocked(fetchCableDetails).mockResolvedValue({
+    cable: checked,
+    materialCableType: null,
+    cableTypeDefaultMaterials: [],
+    cableMaterials: [],
+  });
   renderDetails();
   const auto = await screen.findByRole('region', { name: 'Path Finder automatic length' });
-  expect(within(auto).getByText('54')).toBeVisible(); expect(screen.getByText('25')).toBeVisible();
-  expect(within(auto).queryByRole('spinbutton')).toBeNull(); expect(fetchTrays).not.toHaveBeenCalled();
-  vi.mocked(fetchCableDetails).mockResolvedValue({ cable: { ...cable, routing: '/TRAY-01', designLength: 25 }, materialCableType: null, cableTypeDefaultMaterials: [], cableMaterials: [] });
+  expect(within(auto).getByText('54')).toBeVisible();
+  expect(screen.getByText('25')).toBeVisible();
+  expect(within(auto).queryByRole('spinbutton')).toBeNull();
+  expect(fetchTrays).not.toHaveBeenCalled();
+  vi.mocked(fetchCableDetails).mockResolvedValue({
+    cable: { ...cable, routing: '/TRAY-01', designLength: 25 },
+    materialCableType: null,
+    cableTypeDefaultMaterials: [],
+    cableMaterials: [],
+  });
   fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
   // Refresh briefly replaces this page with its loading state. Read the newly
   // mounted projection instead of retaining the now-detached previous section.
   await screen.findByText('No checked Path Finder length yet.');
   const refreshedAuto = screen.getByRole('region', { name: 'Path Finder automatic length' });
-  expect(within(refreshedAuto).queryByText('25')).toBeNull(); expect(fetchTrays).not.toHaveBeenCalled();
+  expect(within(refreshedAuto).queryByText('25')).toBeNull();
+  expect(fetchTrays).not.toHaveBeenCalled();
 });
 
 it('preserves the PF Auto value as read-only when a user edits Design length without submitting projection fields', async () => {
-  const user = userEvent.setup(), checked = { ...cable, tag: 'PF cable', designLength: 25, autoCalculatedLength: 54,
-    autoLengthStatus: 'calculated' as const, autoLengthCalculatedAt: '2026-10-21T12:00:00Z',
-    autoLengthBarrierStatus: 'clear' as const, autoLengthMatchesLatestRequest: true };
-  const response = { cable: checked, materialCableType: null, cableTypeDefaultMaterials: [], cableMaterials: [] };
-  vi.mocked(fetchCableDetails).mockResolvedValueOnce(response).mockResolvedValue({ ...response, cable: { ...checked, designLength: 30 } });
+  const user = userEvent.setup(),
+    checked = {
+      ...cable,
+      tag: 'PF cable',
+      designLength: 25,
+      autoCalculatedLength: 54,
+      autoLengthStatus: 'calculated' as const,
+      autoLengthCalculatedAt: '2026-10-21T12:00:00Z',
+      autoLengthBarrierStatus: 'clear' as const,
+      autoLengthMatchesLatestRequest: true,
+    };
+  const response = {
+    cable: checked,
+    materialCableType: null,
+    cableTypeDefaultMaterials: [],
+    cableMaterials: [],
+  };
+  vi.mocked(fetchCableDetails)
+    .mockResolvedValueOnce(response)
+    .mockResolvedValue({ ...response, cable: { ...checked, designLength: 30 } });
   vi.mocked(updateCable).mockResolvedValue({ cable: { ...checked, designLength: 30 } });
-  renderDetails(); await user.click(await screen.findByRole('button', { name: 'Edit' }));
-  const dialog = await screen.findByRole('dialog', { name: 'Edit cable' }), design = within(dialog).getByRole('spinbutton', { name: 'Design length [m]' });
+  renderDetails();
+  await user.click(await screen.findByRole('button', { name: 'Edit' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Edit cable' }),
+    design = within(dialog).getByRole('spinbutton', { name: 'Design length [m]' });
   expect(within(dialog).queryByLabelText('Auto calculated length [m]')).toBeNull();
-  fireEvent.change(design, { target: { value: '30' } }); await user.click(within(dialog).getByRole('button', { name: 'Save changes' }));
+  fireEvent.change(design, { target: { value: '30' } });
+  await user.click(within(dialog).getByRole('button', { name: 'Save changes' }));
   await waitFor(() => expect(updateCable).toHaveBeenCalledOnce());
   const input = vi.mocked(updateCable).mock.calls[0][3];
-  expect(input.designLength).toBe(30); expect(Object.keys(input).some(key => key.startsWith('auto'))).toBe(false);
+  expect(input.designLength).toBe(30);
+  expect(Object.keys(input).some((key) => key.startsWith('auto'))).toBe(false);
   await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Edit cable' })).toBeNull());
   expect(screen.getByText('30')).toBeVisible();
   const auto = await screen.findByRole('region', { name: 'Path Finder automatic length' });
   expect(within(auto).getByText('54')).toBeVisible();
 });
+
+it('edits the manual route and execution dates without copying the calculated route into manual intent', async () => {
+  const checked: Cable = {
+    ...cable,
+    tag: '-WG-4022',
+    routing: '/AUTO',
+    autoCalculatedRouting: '/AUTO',
+    autoRoutingStatus: 'calculated',
+    routingControl: emptyRoutingControl(),
+    routingControlRevision: '4',
+    cableWriteRevision: '9',
+  };
+  vi.mocked(fetchCableDetails).mockResolvedValue({
+    cable: checked,
+    materialCableType: null,
+    cableTypeDefaultMaterials: [],
+    cableMaterials: [],
+  });
+  vi.mocked(updateCable).mockResolvedValue({ cable: checked });
+  renderDetails();
+  const automatic = await screen.findByLabelText('Automatically calculated route');
+  expect(automatic).toHaveValue('/AUTO');
+  expect(automatic).toHaveAttribute('readonly');
+  fireEvent.click(screen.getByRole('button', { name: 'Edit routing and execution' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Edit cable' });
+  const route = within(dialog).getByRole('textbox', { name: 'Routing' });
+  const protect = within(dialog).getByRole('checkbox', { name: 'Manually assigned route — keep' });
+  expect(route).toHaveValue('');
+  expect(protect).not.toBeChecked();
+  fireEvent.change(route, { target: { value: '/BC182/BC183' } });
+  expect(protect).toBeChecked();
+  fireEvent.click(protect);
+  expect(protect).not.toBeChecked();
+  fireEvent.change(route, { target: { value: '/BC182/BC184' } });
+  expect(protect).toBeChecked();
+  fireEvent.change(route, { target: { value: '' } });
+  expect(protect).not.toBeChecked();
+  fireEvent.change(route, { target: { value: '/BC182/BC183' } });
+  fireEvent.change(within(dialog).getByRole('spinbutton', { name: 'Install length [m]' }), {
+    target: { value: '27' },
+  });
+  for (const label of ['Pull date', 'Connected From', 'Connected To', 'Cable tested'])
+    fireEvent.change(within(dialog).getByLabelText(label), { target: { value: '2026-11-15' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }));
+  await waitFor(() => expect(updateCable).toHaveBeenCalledOnce());
+  expect(vi.mocked(updateCable).mock.calls[0][3]).toMatchObject({
+    routing: '/BC182/BC183',
+    manualRoutingProtected: true,
+    expectedRoutingControlRevision: '4',
+    expectedCableWriteRevision: '9',
+    installLength: 27,
+    pullDate: '2026-11-15',
+    connectedFrom: '2026-11-15',
+    connectedTo: '2026-11-15',
+    tested: '2026-11-15',
+  });
+  expect(vi.mocked(updateCable).mock.calls[0][3]).not.toHaveProperty('autoCalculatedRouting');
+});
+
+it('keeps a refused execution-protected route edit open and names the cable and protecting fields', async () => {
+  const checked: Cable = {
+    ...cable,
+    tag: '-WG-4022',
+    routing: '/BC182',
+    pullDate: '2026-11-15',
+    connectedFrom: '2026-11-16',
+    routingControl: {
+      ...emptyRoutingControl(),
+      manualRouting: '/BC182',
+      manualProtected: true,
+      executionLocked: true,
+      executionRouting: '/BC182',
+    },
+  };
+  vi.mocked(fetchCableDetails).mockResolvedValue({
+    cable: checked,
+    materialCableType: null,
+    cableTypeDefaultMaterials: [],
+    cableMaterials: [],
+  });
+  vi.mocked(updateCable).mockRejectedValue(
+    new ApiError(409, 'PULL_DATE_RECORDED;CONNECTED_FROM_RECORDED'),
+  );
+  renderDetails();
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit routing and execution' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Edit cable' });
+  expect(within(dialog).getByLabelText('Execution unlock reason')).toBeVisible();
+  fireEvent.change(within(dialog).getByRole('textbox', { name: 'Routing' }), {
+    target: { value: '' },
+  });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }));
+  await waitFor(() =>
+    expect(showToast).toHaveBeenCalledWith({
+      intent: 'error',
+      title: 'Failed to save cable',
+      body: '-WG-4022: route protected by Pull date, Connected From. No changes were saved.',
+    }),
+  );
+  expect(dialog).toBeInTheDocument();
+  expect(within(dialog).getByRole('textbox', { name: 'Routing' })).toHaveValue('');
+  expect(screen.getByLabelText('Routing: /BC182')).toHaveTextContent('/BC182');
+});
+
+it.each(['pending', 'stale'] as const)(
+  'refreshes a %s manual length until the completed result is displayed',
+  async (status) => {
+    const checked: Cable = {
+      ...cable,
+      tag: '-WG-4022',
+      routing: '/BC182',
+      manualRouteLength: 5,
+      designLength: 13,
+      manualRouteLengthStatus: status,
+      routingControlRevision: '4',
+      cableWriteRevision: '9',
+    };
+    const response = {
+      cable: checked,
+      materialCableType: null,
+      cableTypeDefaultMaterials: [],
+      cableMaterials: [],
+    };
+    vi.mocked(fetchCableDetails)
+      .mockResolvedValueOnce(response)
+      .mockResolvedValueOnce({
+        ...response,
+        cable: {
+          ...checked,
+          manualRouteLength: 3,
+          manualRouteLengthStatus: 'calculated',
+          cableWriteRevision: '8',
+        },
+      })
+      .mockResolvedValue({
+        ...response,
+        cable: {
+          ...checked,
+          manualRouteLength: 21,
+          designLength: 21,
+          manualRouteLengthStatus: 'calculated',
+          cableWriteRevision: '10',
+        },
+      });
+    renderDetails();
+    expect(
+      await screen.findByText(`Manual route length is ${status}. Earlier length is not current.`),
+    ).toBeVisible();
+    await waitFor(() => expect(fetchCableDetails).toHaveBeenCalledTimes(2), { timeout: 3000 });
+    expect(
+      screen.getByText(`Manual route length is ${status}. Earlier length is not current.`),
+    ).toBeVisible();
+    await screen.findByText('Calculated from the saved manual route.', {}, { timeout: 4000 });
+    expect(screen.getByText('Design length [m]').parentElement).toHaveTextContent('21');
+    expect(screen.getByText('Calculated manual route length [m]').parentElement).toHaveTextContent(
+      '21',
+    );
+    expect(fetchCableDetails).toHaveBeenCalledTimes(3);
+  },
+);
+
+it.each([false, true])(
+  'explains the manual Design update rule with execution protection=%s',
+  async (executionLocked) => {
+    const checked: Cable = {
+      ...cable,
+      routing: '/MANUAL',
+      designLength: executionLocked ? 13 : 21,
+      manualRouteLength: 21,
+      manualRouteLengthStatus: 'calculated',
+      routingControl: {
+        ...emptyRoutingControl(),
+        manualRouting: '/MANUAL',
+        manualProtected: true,
+        executionLocked,
+        executionRouting: executionLocked ? '/MANUAL' : null,
+      },
+    };
+    vi.mocked(fetchCableDetails).mockResolvedValue({
+      cable: checked,
+      materialCableType: null,
+      cableTypeDefaultMaterials: [],
+      cableMaterials: [],
+    });
+    renderDetails();
+    expect(
+      await screen.findByText(
+        executionLocked
+          ? 'Execution protection keeps Design length unchanged.'
+          : 'A successful check of the used protected manual route updates Design length automatically.',
+      ),
+    ).toBeVisible();
+    expect(screen.getByText('Design length [m]').parentElement).toHaveTextContent(
+      executionLocked ? '13' : '21',
+    );
+    expect(screen.getByText('Calculated manual route length [m]').parentElement).toHaveTextContent(
+      '21',
+    );
+  },
+);
 
 it('selects a catalog material in a wide dialog, opens its editor and saves its quantity', async () => {
   const user = userEvent.setup();

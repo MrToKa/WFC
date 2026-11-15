@@ -147,10 +147,24 @@ namespace AddinRibbon.Routing
 
         private static long DirectedOpeningKey(int from, int to) { return ((long)from << 32) | (uint)to; }
 
+        // The manual lane supplies its ordered product-state search on every
+        // lazy repair iteration. An absent selector retains the pinned free
+        // routing selection and comparison arithmetic exactly.
+        private delegate List<int> OpeningPathSelector(out PathCost cost);
+
         private static List<int> OpeningFallback(List<Node> nodes, int first, int last,
             Dictionary<int, List<BlockedInterTrayEdge>> blocked, RouteCollisionQuery collision, ConstrainedBudget budget,
             long directedEdges, List<int> incumbent, PathCost incumbentCost,
             out PathCost cost, out Dictionary<long, InterTrayOpeningPlan> repairs)
+        {
+            return OpeningFallbackWithSelector(nodes, first, last, blocked, collision, budget, directedEdges, incumbent, incumbentCost,
+                out cost, out repairs, null);
+        }
+
+        private static List<int> OpeningFallbackWithSelector(List<Node> nodes, int first, int last,
+            Dictionary<int, List<BlockedInterTrayEdge>> blocked, RouteCollisionQuery collision, ConstrainedBudget budget,
+            long directedEdges, List<int> incumbent, PathCost incumbentCost,
+            out PathCost cost, out Dictionary<long, InterTrayOpeningPlan> repairs, OpeningPathSelector select)
         {
             repairs = new Dictionary<long, InterTrayOpeningPlan>(); var pending = new HashSet<long>();
             // Merge backwards in place. RetainedBefore refers to the unchanged
@@ -172,14 +186,16 @@ namespace AddinRibbon.Routing
             while (true)
             {
                 budget.Charge(nodes.Count + directedEdges);
-                var path = SelectPath(nodes, first, last, budget.Token, budget.RouteCostTrays, budget.RouteCosts, out cost); budget.Check();
+                var path = select == null
+                    ? SelectPath(nodes, first, last, budget.Token, budget.RouteCostTrays, budget.RouteCosts, out cost)
+                    : select(out cost); budget.Check();
                 if (budget.RouteCosts != null && path != null && incumbent != null)
                     budget.Charge(2L * nodes.Count + 2L * directedEdges);
                 // Only a strictly cheaper verified candidate may displace the
                 // original clear graph. Equal costs retain its exact path and
                 // adjacency tie choice; unknown chords are lower bounds only.
-                if (incumbent != null && (path == null || CompareSelectedPaths(nodes, path, cost, incumbent, incumbentCost,
-                    budget.RouteCostTrays, budget.RouteCosts, budget.Token) >= 0))
+                if (incumbent != null && (path == null || (select == null ? CompareSelectedPaths(nodes, path, cost, incumbent, incumbentCost,
+                    budget.RouteCostTrays, budget.RouteCosts, budget.Token) : cost.CompareTo(incumbentCost)) >= 0))
                 { cost = incumbentCost; return incumbent; }
                 if (path == null) return null;
                 bool changed = false;

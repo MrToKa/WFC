@@ -311,6 +311,16 @@ export type CableFormState = {
   routing: string;
   delivery: string;
   designLength: string;
+  installLength?: string;
+  pullDate?: string;
+  connectedFrom?: string;
+  connectedTo?: string;
+  tested?: string;
+  manualRoutingProtected?: string;
+  executionLocked?: string;
+  executionUnlockReason?: string;
+  expectedCableWriteRevision?: string;
+  expectedRoutingControlRevision?: string;
 };
 
 export type CableFormErrors = Partial<Record<keyof CableFormState, string>> & {
@@ -328,6 +338,13 @@ export const emptyCableForm: CableFormState = {
   routing: '',
   delivery: '',
   designLength: '',
+  installLength: '',
+  pullDate: '',
+  connectedFrom: '',
+  connectedTo: '',
+  tested: '',
+  manualRoutingProtected: 'false',
+  executionUnlockReason: '',
 };
 
 export const toCableFormState = (cable: Cable): CableFormState => ({
@@ -338,10 +355,37 @@ export const toCableFormState = (cable: Cable): CableFormState => ({
   cableTypeId: cable.cableTypeId,
   fromLocation: cable.fromLocation ?? '',
   toLocation: cable.toLocation ?? '',
-  routing: cable.routing ?? '',
+  routing: cable.routingControl
+    ? (cable.routingControl.manualRouting ?? '')
+    : (cable.routing ?? ''),
   delivery: cable.delivery ?? '',
   designLength: cable.designLength !== null ? String(cable.designLength) : '',
+  installLength: cable.installLength != null ? String(cable.installLength) : '',
+  pullDate: cable.pullDate?.slice(0, 10) ?? '',
+  connectedFrom: cable.connectedFrom?.slice(0, 10) ?? '',
+  connectedTo: cable.connectedTo?.slice(0, 10) ?? '',
+  tested: cable.tested?.slice(0, 10) ?? '',
+  manualRoutingProtected: String(cable.routingControl?.manualProtected ?? Boolean(cable.routing)),
+  executionLocked: String(cable.routingControl?.executionLocked ?? false),
+  executionUnlockReason: '',
+  expectedCableWriteRevision: cable.cableWriteRevision,
+  expectedRoutingControlRevision: cable.routingControlRevision,
 });
+
+/** Shared by Details, edit dialogs and inline edits: typing a route expresses manual intent. */
+export function changeCableFormField(
+  values: CableFormState,
+  field: keyof CableFormState,
+  value: string,
+): CableFormState {
+  return {
+    ...values,
+    [field]: value,
+    ...(field === 'routing' && value !== values.routing
+      ? { manualRoutingProtected: String(Boolean(value.trim())) }
+      : {}),
+  };
+}
 
 export const parseCableFormErrors = (payload: ApiErrorPayload): CableFormErrors => {
   if (typeof payload === 'string') {
@@ -435,6 +479,39 @@ export const buildCableInput = (
     }
   } else {
     input.designLength = null;
+  }
+
+  if (values.manualRoutingProtected !== undefined)
+    input.manualRoutingProtected =
+      values.manualRoutingProtected === 'true' && Boolean(values.routing.trim());
+  if (values.expectedCableWriteRevision)
+    input.expectedCableWriteRevision = values.expectedCableWriteRevision;
+  if (values.expectedRoutingControlRevision)
+    input.expectedRoutingControlRevision = values.expectedRoutingControlRevision;
+  if (values.executionUnlockReason?.trim())
+    input.executionUnlockReason = values.executionUnlockReason.trim();
+  if (values.installLength !== undefined) {
+    const text = values.installLength.trim(),
+      length = text ? Number(text) : null;
+    if (length !== null && (!Number.isFinite(length) || !Number.isInteger(length) || length < 0))
+      errors.installLength = 'Install length must be a non-negative integer';
+    else input.installLength = length;
+  }
+  for (const field of ['pullDate', 'connectedFrom', 'connectedTo', 'tested'] as const) {
+    if (values[field] === undefined) continue;
+    const text = values[field]!.trim();
+    if (!text) {
+      input[field] = null;
+      continue;
+    }
+    const parsed = new Date(`${text}T00:00:00.000Z`);
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(text) ||
+      !Number.isFinite(parsed.getTime()) ||
+      parsed.toISOString().slice(0, 10) !== text
+    )
+      errors[field] = 'Enter a valid date';
+    else input[field] = text;
   }
 
   return { input, errors };

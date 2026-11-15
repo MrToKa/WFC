@@ -33,6 +33,7 @@ function fixture(options = {}) {
     readObjectGuid: options.readObjectGuid ?? (async () => null),
     readTrayRootSelection: options.readTrayRootSelection ?? (async (_signal, beforeCommit) => { await beforeCommit(); return { objects: [] }; }),
     setPathTransparency: options.setPathTransparency ?? (async (percent, _signal, beforeCommit) => { await beforeCommit(); facts.transparency = percent; }),
+    showLocationPoint: options.showLocationPoint ?? (async (point, _signal, beforeCommit) => { await beforeCommit(); facts.locationPoint = point; }),
     showLocation: options.showLocation ?? (async (sdkObjectId, _signal, beforeCommit) => { await beforeCommit(); facts.location = sdkObjectId; }),
     showTray: options.showTray ?? (async (sdkObjectIds, _signal, beforeCommit) => { await beforeCommit(); facts.tray = [...sdkObjectIds]; }),
     startModelCapture: options.startModelCapture ?? (async ({ captureId }) => ({ captureId, index: 0, done: false, eventJson: JSON.stringify({ type: 'metadata', captureId }) })),
@@ -1169,4 +1170,29 @@ test('batched model capture still checks authority before and after each packet 
   assert.equal(f.fetches.filter(value => value.url.endsWith('/pathfinder-authorization')).length, 4);
   assert.equal(f.messages('MODEL_CAPTURE_EVENT').length, 1);
   assert.equal(f.messages('ERROR').at(-1).payload.code, 'ACCESS_REVOKED'); f.bridge.dispose();
+});
+
+test('saved point display rechecks authorization and leaves committed route ownership intact', async () => {
+  let shown, authorized = 0;
+  const f = fixture({ showLocationPoint: async (point, _signal, beforeCommit) => { await beforeCommit(); authorized++; shown = point; } });
+  await f.loaded();
+  const priorClears = f.facts.clears;
+  const command = f.send('SHOW_LOCATION_POINT', { pointProjectMetres: [1, 2, 3] }); await turn();
+  assert.deepEqual(shown, [1, 2, 3]); assert.equal(authorized, 1); assert.equal(f.facts.clears, priorClears);
+  assert.ok(f.sent.some(({ value }) => value.type === 'LOCATION_POINT_SHOWN' && value.requestId === command.requestId));
+  f.bridge.dispose();
+});
+
+test('saved point display cannot commit after authorization loss, cancellation or load replacement', async () => {
+  for (const mode of ['denied', 'cancel', 'load']) {
+    const wait = deferred(); let checks = 0, displayed = 0;
+    const f = fixture({ showLocationPoint: async (_point, signal, beforeCommit) => { await wait.promise; if (signal.aborted) throw new DOMException('cancelled', 'AbortError'); await beforeCommit(); displayed++; },
+      fetchImpl: async url => url.endsWith('/pathfinder-authorization')
+        ? ++checks === 2 && mode === 'denied' ? new Response(null, { status: 403 }) : Response.json({ authorized: true, loadId: uuid(4) }) : descriptorResponse() });
+    await f.loaded(); const command = f.send('SHOW_LOCATION_POINT', { pointProjectMetres: [1, 2, 3] }); await turn();
+    if (mode === 'cancel') f.send('CANCEL_REQUEST', { targetRequestId: command.requestId });
+    if (mode === 'load') f.send('LOAD_MODEL', { sessionId: uuid(6) }, { loadId: uuid(9903) });
+    await turn(); wait.resolve(); await turn();
+    assert.equal(displayed, 0); assert.equal(f.messages('LOCATION_POINT_SHOWN').length, 0); f.bridge.dispose();
+  }
 });

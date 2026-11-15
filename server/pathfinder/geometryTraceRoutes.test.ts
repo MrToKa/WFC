@@ -21,6 +21,17 @@ function request({ url = '/geometry-traces', method = 'GET', token = 'Bearer syn
   return { req, res, run };
 }
 describe('geometry trace route admission without network listener', () => {
+  it('opts network readiness into projection validation while preserving metadata-only reads', async () => {
+    const normal = request({ url: `/geometry-traces/${id(3)}/manifest` }); await normal.run();
+    expect(mocks.get).toHaveBeenLastCalledWith(id(1), expect.any(Object), id(3), {});
+    const readiness = request({ url: `/geometry-traces/${id(3)}/manifest`, query: { requireProjection: 'true' } }); await readiness.run();
+    expect(readiness.res.statusCode).toBe(200);
+    expect(mocks.get).toHaveBeenLastCalledWith(id(1), expect.any(Object), id(3), { requireProjection: true });
+  });
+  it.each([{ requireProjection: 'false' }, { requireProjection: 'true\n' }, { requireProjection: '1' }, { requireProjection: 'true', path: '/private' }] as Record<string, string>[])('rejects ambiguous projection validation query %j', async query => {
+    const r = request({ url: `/geometry-traces/${id(3)}/manifest`, query }); await r.run();
+    expect(r.res.statusCode).toBe(400); expect(mocks.get).not.toHaveBeenCalled();
+  });
   it('returns the authorized current runtime without accepting caller runtime or scope fields', async () => {
     const r = request({ url: '/geometry-traces/runtime' }); await r.run();
     expect(r.res.statusCode).toBe(200); expect(mocks.runtime).toHaveBeenCalledExactlyOnceWith(id(1), expect.objectContaining({ userId: id(1), loginId: id(2) }));

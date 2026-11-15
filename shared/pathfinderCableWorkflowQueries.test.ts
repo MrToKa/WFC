@@ -45,8 +45,16 @@ describe('bounded literal cable workflow queries', () => {
   it.each([{ limit: '0' }, { limit: '101' }, { limit: '01' }, { limit: 1 }, { limit: ['1'] },
     { secondaryDistanceMeters: 'Infinity' }, { secondaryDistanceMeters: '1e6' }, { secondaryDistanceMeters: '-1' },
     { secondaryDistanceMeters: '1000001' }, { preferVerticalApproach: '1' }, { search: 'x'.repeat(257) },
-    { search: '\ud800' }, { search: 'x\n' }, { filter: 'excluded' }, { cursor: 'a=' }, { actorId: 'caller' }])('refuses malformed/extra query fields %j', value => {
+    { search: '\ud800' }, { search: 'x\ny' }, { filter: 'excluded' }, { cursor: 'a=' }, { actorId: 'caller' }])('refuses malformed/extra query fields %j', value => {
     expect(() => parseCableWorkflowHttpQuery(value)).toThrow();
+  });
+  it.each(['\t-WG-3050-1\t', '\n-WG-3050-1\r\n', '  -WG-3050-1\u00a0'])('normalizes pasted outer whitespace before validating search %j', search => {
+    expect(cableWorkflowQuerySchema.parse({ search, filter: 'all' }).search).toBe('-WG-3050-1');
+    expect(parseCableWorkflowHttpQuery({ search, filter: 'all' }).search).toBe('-WG-3050-1');
+  });
+  it.each(['-WG-\t3050-1', '-WG-\n3050-1', '-WG-\u00003050-1'])('keeps embedded control characters rejected %j', search => {
+    expect(cableWorkflowQuerySchema.safeParse({ search }).success).toBe(false);
+    expect(() => parseCableWorkflowHttpQuery({ search })).toThrow();
   });
   it('binds every normalized query input while keeping the cursor outside its hash', () => {
     const query = cableWorkflowQuerySchema.parse({}), input = cableWorkflowQueryHashInput(query);

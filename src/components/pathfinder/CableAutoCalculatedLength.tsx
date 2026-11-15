@@ -33,6 +33,6 @@ export function CableAutoCalculatedLength({ value, compact = false }: Props) {
     {view.autoLengthCalculatedAt ? <Caption1>Calculated: <time dateTime={view.autoLengthCalculatedAt}>{view.autoLengthCalculatedAt}</time></Caption1> : null}
     {view.autoLengthBarrierStatus === 'bypassed' ? <Caption1>Calculated with Drill through the walls enabled.</Caption1> : null}
     {view.autoLengthBarrierStatus === 'no-barriers-declared' ? <Caption1>No barriers were declared for this calculation.</Caption1> : null}
-    {!compact ? <Caption1>Routing and Design length follow the separate Save and Review → Apply decisions. Installed length is preserved.</Caption1> : null}
+    {!compact ? <Caption1>Automatic results are shown separately from the used route. Manual and execution protection retain cable values. Installed length is preserved.</Caption1> : null}
   </section>;
 }

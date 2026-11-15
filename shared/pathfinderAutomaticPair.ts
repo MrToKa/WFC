@@ -22,6 +22,7 @@ export const AUTOMATIC_PAIR_POLICY: Readonly<AutomaticPairPolicy> = Object.freez
 export const automaticPairHistorySchema = z.object({ id: uuid, version: revision }).strict();
 export type AutomaticPairHistory = z.infer<typeof automaticPairHistorySchema>;
 export const automaticPairOwnershipSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('policy'), controlRevision: revision }).strict(),
   z.object({ kind: z.literal('empty') }).strict(),
   z.object({ kind: z.literal('automatic'), originReceiptId: uuid, previousReceiptId: uuid, previousReceiptSha256: hash,
     afterCableWriteRevision: revision, history: automaticPairHistorySchema }).strict(),
@@ -94,7 +95,7 @@ export const automaticPairCapacityClearProvenanceSchema = z.object({
     ledgerHash: z.null(), dependencyHash: hash }).strict(), history: automaticPairHistorySchema, authorizedAt: timestamp,
 }).strict().superRefine((value, ctx) => {
   const r = value.request, m = value.mandate;
-  if (m.ownership.kind !== 'automatic' || r.mandateId !== m.id || r.mandateSha256 !== m.contentSha256 || r.projectId !== m.projectId
+  if (!['automatic','policy'].includes(m.ownership.kind) || r.mandateId !== m.id || r.mandateSha256 !== m.contentSha256 || r.projectId !== m.projectId
     || r.jobId !== m.jobId || r.cableId !== m.cableId || r.expectedCableWriteRevision !== m.cableWriteRevision
     || Date.parse(value.authorizedAt) < Date.parse(m.createdAt) || Date.parse(value.authorizedAt) >= Date.parse(m.authorityExpiresAt)
     || value.revisionResult.dependencyHash !== m.dependencyHash

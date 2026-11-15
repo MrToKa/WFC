@@ -1,4 +1,6 @@
 import type { Pool } from 'pg';
+import { initializeCableRoutingControlSchema } from './cableRoutingControlSchema.js';
+import { initializeManualRoutingSchema } from './manualRoutingSchema.js';
 import { CABLE_ENDPOINT_SELECTION_INDEX_SQL } from './cableEndpointSelectionSchema.js';
 import { initializeLocationImpactSchema } from './locationImpactSchema.js';
 import { initializeInitialFillMandateSchema } from './initialFillMandateSchema.js';
@@ -152,4 +154,6 @@ export async function initializePathFinder(pool: Pool): Promise<void> {
   await initializeInitialFillAttemptSchema(pool);
   await initializeApplyRecoverySchema(pool);
   await initializeAutomaticPairSchema(pool);
+  await initializeCableRoutingControlSchema(pool);
+  await initializeManualRoutingSchema(pool);
 }

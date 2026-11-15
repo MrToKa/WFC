@@ -64,6 +64,13 @@ function fixture() {
   return { blank, receipts, histories, mandates, query, add, read, initialProof, input: (receiptId: string) => ({ projectId, cableId, receiptId }), id };
 }
 describe('historical automatic pair receipt lineage proof', () => {
+  it.each([false,true])('recognizes a sealed policy-controlled write from a nonblank baseline, capacity clear=%s',async capacityClear=>{
+    const f=fixture(),before={...f.blank,routing:'/PREVIOUS_AUTO',design_length:'20'};
+    const root=f.add(1,before,{kind:'policy',controlRevision:'7'},capacityClear);
+    expect(await f.read()(f.input(root.row.id))).toMatchObject({receiptId:root.row.id,originReceiptId:root.row.id,after:root.after});
+    root.row.provenance.mandate.ownership.controlRevision='8';
+    expect(await f.read()(f.input(root.row.id))).toBeNull();
+  });
   it('retains automatic ownership through an audited capacity clear and a later refill',async()=>{
     const f=fixture(),root=f.add(1,f.blank),origin=(await f.read()(f.input(root.row.id)))!;
     const cleared=f.add(2,root.after,{kind:'automatic',originReceiptId:origin.originReceiptId,previousReceiptId:origin.receiptId,

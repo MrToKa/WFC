@@ -2,20 +2,22 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { usePathFinder } from './usePathFinder';
 import { fetchPathFinderState, fetchPathFinderLookupPlan, fetchPathFinderProposal, fetchPathFinderJob, pathFinderRequest, submitPathFinderCalculation, PathFinderApiError, type PathFinderState, type PathFinderProposal, type PathFinderPreferences } from '@/api/pathfinder';
+import { requalifyStaleCableEndpoints, hasPendingEndpointRequalification } from '@/api/pathfinderEndpointRequalification';
 import { fetchProjectModels } from '@/api/projectModels';
 import { ViewerAccessError } from '@/viewer/sessionApi';
 import type { ViewerController } from '@/viewer/ViewerController';
 import { BARRIER_CAPTURE_ERROR_CODES, BARRIER_CAPTURE_ERROR_MESSAGES, barrierCaptureErrorMessage } from '../../../../viewer-runtime/barrier-capture-errors.mjs';
 
-const facts = vi.hoisted(() => ({ disposed: vi.fn(), load: vi.fn(), capture: vi.fn(), barrierCapture: vi.fn(), barrierPublish: vi.fn(), readSelection: vi.fn(), readTrayRootSelection: vi.fn(), resolveTrayIdentities: vi.fn(), ready: true, showLocation: vi.fn(), showTray: vi.fn(), hideTray: vi.fn(), transparency: vi.fn(), clear: vi.fn(), cancelPicking: vi.fn(), instances: 0, events: [] as ((event: { type: string; payload: Record<string, unknown> }) => void)[] }));
+const facts = vi.hoisted(() => ({ disposed: vi.fn(), load: vi.fn(), capture: vi.fn(), barrierCapture: vi.fn(), barrierPublish: vi.fn(), readSelection: vi.fn(), readTrayRootSelection: vi.fn(), resolveTrayIdentities: vi.fn(), ready: true, showLocationPoint: vi.fn(), showLocation: vi.fn(), showTray: vi.fn(), hideTray: vi.fn(), transparency: vi.fn(), clear: vi.fn(), cancelPicking: vi.fn(), instances: 0, events: [] as ((event: { type: string; payload: Record<string, unknown> }) => void)[] }));
 vi.mock('@/api/pathfinder', async importOriginal => {
   const original = await importOriginal<typeof import('@/api/pathfinder')>();
   return { ...original, fetchPathFinderState: vi.fn(), fetchPathFinderLookupPlan: vi.fn(), fetchPathFinderProposal: vi.fn(), fetchPathFinderJob: vi.fn(), pathFinderRequest: vi.fn(), submitPathFinderCalculation: vi.fn() };
 });
+vi.mock('@/api/pathfinderEndpointRequalification', () => ({ requalifyStaleCableEndpoints: vi.fn(), hasPendingEndpointRequalification: vi.fn() }));
 vi.mock('@/api/projectModels', () => ({ fetchProjectModels: vi.fn() }));
 vi.mock('@/viewer/ViewerController', () => ({ ViewerController: class {
   constructor(options: { onEvent: (event: { type: string; payload: Record<string, unknown> }) => void }) { facts.instances++; facts.events.push(options.onEvent); } dispose = facts.disposed; load = facts.load;
-  readSelection = facts.readSelection; readTrayRootSelection = facts.readTrayRootSelection; showLocation = facts.showLocation; showTray = facts.showTray; hideTray = facts.hideTray; setPathTransparency = facts.transparency; clear = facts.clear; cancelPicking = facts.cancelPicking;
+  readSelection = facts.readSelection; readTrayRootSelection = facts.readTrayRootSelection; showLocation = facts.showLocation; showLocationPoint = facts.showLocationPoint; showTray = facts.showTray; hideTray = facts.hideTray; setPathTransparency = facts.transparency; clear = facts.clear; cancelPicking = facts.cancelPicking;
   captureModel = facts.capture; getLoadSnapshot = () => ({ ready: facts.ready });
   captureBarriers = facts.barrierCapture; publishBarriers = facts.barrierPublish;
   resolveTrayIdentities = facts.resolveTrayIdentities;
@@ -33,7 +35,7 @@ function state(): PathFinderState { return { schemaVersion: 1, projectId, regist
   locations: [{ id: locationId, name: 'EQ-001', aliases: ['Equipment A'], revision: '1', binding: null }] }; }
 let container: { current: HTMLDivElement };
 beforeEach(() => {
-  vi.clearAllMocks(); facts.instances = 0; facts.events.length = 0; facts.ready = true; facts.readTrayRootSelection.mockReset(); facts.resolveTrayIdentities.mockReset(); facts.showTray.mockReset().mockResolvedValue(undefined); facts.hideTray.mockReset().mockResolvedValue(undefined); container = { current: document.createElement('div') }; document.body.append(container.current);
+  vi.clearAllMocks(); sessionStorage.clear(); vi.mocked(requalifyStaleCableEndpoints).mockResolvedValue(true); vi.mocked(hasPendingEndpointRequalification).mockResolvedValue(false); facts.instances = 0; facts.events.length = 0; facts.ready = true; facts.readTrayRootSelection.mockReset(); facts.resolveTrayIdentities.mockReset(); facts.showTray.mockReset().mockResolvedValue(undefined); facts.hideTray.mockReset().mockResolvedValue(undefined); container = { current: document.createElement('div') }; document.body.append(container.current);
   vi.mocked(fetchPathFinderState).mockResolvedValue(state()); vi.mocked(pathFinderRequest).mockResolvedValue({ locationId });
   vi.mocked(submitPathFinderCalculation).mockReset().mockResolvedValue({ kind: 'acknowledged', jobId: locationId, registryRevision: '8', duplicate: false });
   vi.mocked(fetchPathFinderProposal).mockReset(); vi.mocked(fetchPathFinderJob).mockReset();
@@ -253,6 +255,25 @@ describe('fresh popup calculation submission without Viewer appearance changes',
   const preferences = (): PathFinderPreferences => ({ secondaryDistanceMeters: 2, preferVerticalApproach: true,
     barrierRouting: { schemaVersion: 'wfc.pf.barrier-admission-intent.v1', scope: barrierRequest().scope,
       expectedRegistryRevision: '0', expectedSnapshot: null, drillThroughWalls: true } });
+  it('requalifies stale saved endpoints before one calculation and preserves the frozen barrier policy', async () => {
+    const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
+    const stale = state(); stale.cables = [{ id: locationId, fromMatch: { status: 'stale' }, toMatch: { status: 'matched' } }] as PathFinderState['cables'];
+    vi.mocked(fetchPathFinderState).mockResolvedValueOnce(stale).mockResolvedValueOnce({ ...state(), registryRevision: '9' });
+    const request = preferences(); request.barrierRouting!.drillThroughWalls = false;
+    await act(async () => { expect((await view.result.current.submitCalculation([locationId], request)).kind).toBe('acknowledged'); });
+    expect(requalifyStaleCableEndpoints).toHaveBeenCalledExactlyOnceWith(projectId, 'token', locationId, stale.activeModel, expect.any(AbortSignal));
+    expect(submitPathFinderCalculation).toHaveBeenCalledExactlyOnceWith(projectId, 'token', expect.objectContaining({ expectedRegistryRevision: '9', options: expect.objectContaining({ barrierRouting: request.barrierRouting }) }), expect.anything());
+    expect(vi.mocked(requalifyStaleCableEndpoints).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(submitPathFinderCalculation).mock.invocationCallOrder[0]);
+    view.unmount();
+  });
+  it('submits no calculation when saved endpoint requalification is unconfirmed', async () => {
+    const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
+    const stale = state(); stale.cables = [{ id: locationId, fromMatch: { status: 'stale' }, toMatch: { status: 'matched' } }] as PathFinderState['cables'];
+    vi.mocked(fetchPathFinderState).mockResolvedValueOnce(stale);
+    vi.mocked(requalifyStaleCableEndpoints).mockRejectedValueOnce(new Error('Lost acknowledgement'));
+    await act(async () => { expect(await view.result.current.submitCalculation([locationId], preferences())).toEqual({ kind: 'not-submitted', code: 'ENDPOINT_REQUALIFICATION_UNCONFIRMED' }); });
+    expect(submitPathFinderCalculation).not.toHaveBeenCalled(); view.unmount();
+  });
   it('refreshes a changed endpoint registry once before the sole POST and keeps the same Viewer', async () => {
     const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
     vi.mocked(fetchPathFinderState).mockResolvedValueOnce({ ...state(), registryRevision: '8', settings: { ...state().settings, revision: '2', connectionGap: '0.250' } });
@@ -787,7 +808,7 @@ describe('PathFinder scope and shared-location orchestration', () => {
     expect(view.result.current.viewerPhase).toBe('ready'); expect(view.result.current.busy).toBe(false);
     expect(view.result.current.error).toContain('property limit');
     expect(view.result.current.error).toContain('model remains loaded');
-    expect(view.result.current.error).toContain('Discover project tray candidates');
+    expect(view.result.current.error).toContain('Generate network or Regenerate network');
     expect(view.result.current.error).not.toContain('Refresh Path Finder');
     expect(view.result.current.error).not.toContain('Private SDK');
     expect(facts.disposed).not.toHaveBeenCalled();
@@ -1047,4 +1068,17 @@ describe('PathFinder scope and shared-location orchestration', () => {
     await act(async () => { expect(await result.current.readSelection()).toEqual(selected); await result.current.setPathTransparency(75); result.current.cancelOperation(); });
     expect(facts.readSelection).toHaveBeenCalledOnce(); expect(facts.transparency).toHaveBeenCalledWith(75); expect(facts.cancelPicking).toHaveBeenCalledOnce(); expect(facts.clear).toHaveBeenCalledOnce(); expect(facts.instances).toBe(1);
   });
+});
+
+it('shows a saved project point only in its current ready model without route or location writes', async () => {
+  const view = renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container, automaticStatePolling: false })); await waitFor(() => expect(facts.instances).toBe(1));
+  await act(async () => { expect(await view.result.current.showLocationPoint([1, 2, 3], preparationModelScope)).toBe(false); });
+  expect(facts.showLocationPoint).not.toHaveBeenCalled();
+  act(() => { facts.events[0]({ type: 'MODEL_LOADED', payload: {} }); });
+  await act(async () => { expect(await view.result.current.showLocationPoint([1, 2, 3], { ...preparationModelScope, contentFingerprint: 'b'.repeat(64) })).toBe(false); });
+  expect(facts.showLocationPoint).not.toHaveBeenCalled();
+  await act(async () => { expect(await view.result.current.showLocationPoint([1, 2, 3], preparationModelScope)).toBe(true); });
+  expect(facts.showLocationPoint).toHaveBeenCalledExactlyOnceWith([1, 2, 3]);
+  expect(facts.showLocation).not.toHaveBeenCalled(); expect(facts.clear).not.toHaveBeenCalled(); expect(facts.readSelection).not.toHaveBeenCalled();
+  expect(pathFinderRequest).not.toHaveBeenCalled(); view.unmount();
 });

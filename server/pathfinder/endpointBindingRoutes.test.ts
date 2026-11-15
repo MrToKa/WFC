@@ -8,7 +8,7 @@ import { createEndpointBindingRouter, sendEndpointBindingError } from './endpoin
 import type { EndpointBindingRepository } from './endpointBindingRepository.js';
 import { ENDPOINT_BINDING_LIMITS } from '../../shared/pathfinderEndpointBindings.js';
 import { PathFinderError } from './errors.js';
-const mocks = vi.hoisted(() => ({ verify: vi.fn(), authorize: vi.fn(), context: vi.fn(), list: vi.fn(), history: vi.fn(), confirm: vi.fn(), migrate: vi.fn(), confirmMigration: vi.fn() }));
+const mocks = vi.hoisted(() => ({ verify: vi.fn(), authorize: vi.fn(), context: vi.fn(), list: vi.fn(), history: vi.fn(), confirm: vi.fn(), migrate: vi.fn(), confirmMigration: vi.fn(), requalify: vi.fn() }));
 vi.mock('../auth.js', () => ({ verifyAccessToken: mocks.verify }));
 const id = (n: number) => `ef000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const command = () => ({ schemaVersion: 'wfc.pf.endpoint-binding-write.v1', expectedRegistryRevision: '1', expectedLocationRevision: null, expectedHeadId: null, expectedSelectionRevision: '1', modelVersionId: id(3), aggregateId: id(4), projectionSha256: 'a'.repeat(64), captureFrameId: id(5), idempotencyKey: id(6), reason: 'Synthetic confirmation', location: { name: 'Equipment', aliases: ['Alias'] }, mode: 'fixed-world', pointProjectMetres: [1, 2, 3], derivation: 'manual-world-point', provenanceObject: null });
@@ -21,6 +21,17 @@ function request({ url = '/endpoint-bindings', method = 'GET', token = 'Bearer s
   return { req, res, run };
 }
 describe('endpoint admission through in-memory Express router, without network listener', () => {
+  it('admits only the explicit bounded cable requalification command and rejects caller-supplied frame authority', async () => {
+    const input = { schemaVersion: 'wfc.pf.endpoint-requalify.v1', cableId: id(70), idempotencyKey: id(71), expectedCurrent: {
+      modelVersionId: id(3), selectionRevision: '1', contentFingerprint: 'a'.repeat(64), aggregateId: id(4), artifactId: id(5),
+      projectionSha256: 'b'.repeat(64), captureFrameId: id(6), geometryRevision: '2', traceId: id(7) } };
+    mocks.requalify.mockResolvedValue({ synthetic: 'requalified' });
+    const accepted = request({ url: '/endpoint-bindings/requalify', method: 'POST', body: JSON.stringify(input) });
+    await accepted.run();
+    expect(mocks.requalify).toHaveBeenCalledExactlyOnceWith(id(1), expect.objectContaining({ userId: id(1) }), input, expect.any(AbortSignal));
+    const refused = request({ url: '/endpoint-bindings/requalify', method: 'POST', body: JSON.stringify({ ...input, frameProjectionSha256: 'c'.repeat(64) }) });
+    await refused.run(); expect(refused.res.statusCode).toBe(400); expect(mocks.requalify).toHaveBeenCalledOnce();
+  });
   it('checks current authority for a private list and passes other PF routes through', async () => { const r = request(); await r.run(); expect(mocks.authorize).toHaveBeenCalledExactlyOnceWith(id(1), expect.objectContaining({ userId: id(1), loginId: id(2) })); expect(mocks.list).toHaveBeenCalled(); expect(r.res.setHeader).toHaveBeenCalledWith('Cache-Control', 'private, no-store'); const other = request({ url: '/preparations/context' }); await other.run(); expect(other.res.json).not.toHaveBeenCalled(); });
   it.each([null, 'Bearer broken'] as const)('denies unauthenticated oversize save before body reads (%s)', async token => { if (token) mocks.verify.mockImplementation(() => { throw Error('bad signature'); }); const r = request({ url: `/locations/${id(8)}/endpoint-binding`, method: 'PUT', token, length: String(ENDPOINT_BINDING_LIMITS.controlBytes + 1) }); await r.run(); expect(r.res.statusCode).toBe(401); expect(r.req.on).not.toHaveBeenCalled(); expect(mocks.authorize).not.toHaveBeenCalled(); });
   it('role revocation wins over body limits and current project disclosure', async () => { mocks.authorize.mockRejectedValue(new PathFinderError('ADMIN_REQUIRED', 403)); const r = request({ url: `/locations/${id(8)}/endpoint-binding`, method: 'PUT', length: '9999999' }); await r.run(); expect(r.res.statusCode).toBe(403); expect(r.req.on).not.toHaveBeenCalled(); });

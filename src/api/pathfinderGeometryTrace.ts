@@ -56,7 +56,7 @@ type Endpoint =
   | { kind: 'list'; offset: number }
   | { kind: 'runtime' }
   | { kind: 'create' }
-  | { kind: 'manifest'; traceId: string }
+  | { kind: 'manifest'; traceId: string; requireProjection?: true }
   | { kind: 'objects' | 'diagnostics'; traceId: string; offset: number }
   | { kind: 'object'; traceId: string; objectRevisionId: string }
   | { kind: 'evidence' | 'read-evidence'; sessionId: string; partId: string };
@@ -99,6 +99,7 @@ async function request(
       break;
     case 'manifest':
       suffix += `/${endpoint.traceId}/manifest`;
+      if (endpoint.requireProjection) suffix += '?requireProjection=true';
       break;
     case 'objects':
     case 'diagnostics':
@@ -232,9 +233,10 @@ export async function fetchGeometryTraceManifest(
   token: string,
   traceId: string,
   signal?: AbortSignal,
+  options: { requireProjection?: true } = {},
 ) {
   return verifyManifest(
-    await request(projectId, token, { kind: 'manifest', traceId }, undefined, signal),
+    await request(projectId, token, { kind: 'manifest', traceId, requireProjection: options.requireProjection }, undefined, signal),
     projectId,
     traceId,
   );

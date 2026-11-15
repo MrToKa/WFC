@@ -72,13 +72,61 @@ describe('persisted current-model matching summary', () => {
       counts: { searched: 3, found: 2, assigned: 0, preserved: 0, manualAttention: 3 },
       results: [{ status: 'unavailable' }, { status: 'ambiguous' }, { status: 'missing' }] });
   });
-  it.each(['model', 'names'] as const)('excludes old results when the current %s scope changes', async kind => {
+  it('reuses existing names when new cables introduce another location', async () => {
     const f = await modelLocationMatchFixture(); await f.repo.assign(f.projectId, f.who, f.command());
-    if (kind === 'model') f.state.selectedRevision = '2';
-    else f.state.cables.push({ id: id(20), from_location: 'NEW-TAG', to_location: null });
+    f.state.cables.push({ id: id(20), from_location: 'NEW-TAG', to_location: null });
+    const summary = await f.repo.summary(f.projectId, f.who);
+    expect(summary.results).toHaveLength(3); expect(summary.complete).toBe(false);
+    expect(summary.counts).toMatchObject({ searched: 3, assigned: 3 });
+  });
+  it('keeps model observations across selection and preparation frame changes without rewriting their authority', async () => {
+    const f = await modelLocationMatchFixture(); await f.repo.assign(f.projectId, f.who, f.command());
+    const before = structuredClone(f.state.bindings), original = f.query.getMockImplementation()!;
+    f.state.selectedRevision = '2';
+    f.query.mockImplementation(async (sql, args) => {
+      const result = await original(sql, args);
+      // Replace only the scope read used by summary, while retaining genuine
+      // immutable commands and head records from the earlier publication.
+      if (sql.startsWith('SELECT p.current_aggregate_id')) return { rows: result.rows.map(row => ({ ...row,
+        current_aggregate_id: id(880), manifest: { ...(row.manifest as object), id: id(880) } })) };
+      if (sql.startsWith('SELECT id,manifest FROM pf_geometry_trace_sets')) return { rows: [] };
+      return result;
+    });
+    expect(await f.repo.summary(f.projectId, f.who)).toMatchObject({ complete: true, counts: { searched: 3, assigned: 3 },
+      context: { current: { selectionRevision: '2', aggregateId: id(880) } } });
+    expect(f.state.bindings).toEqual(before);
+  });
+  it('excludes all saved observations after model content changes', async () => {
+    const f = await modelLocationMatchFixture(); await f.repo.assign(f.projectId, f.who, f.command());
+    const original = f.query.getMockImplementation()!;
+    f.query.mockImplementation(async (sql, args) => {
+      const result = await original(sql, args);
+      if (sql.startsWith('SELECT state,health,content_fingerprint')) return { rows: result.rows.map(row => ({ ...row, content_fingerprint: 'f'.repeat(64) })) };
+      if (sql.startsWith('SELECT p.current_aggregate_id')) return { rows: result.rows.map(row => ({ ...row, manifest: { ...(row.manifest as object), contentFingerprint: 'f'.repeat(64) } })) };
+      if (sql.startsWith('SELECT id,manifest FROM pf_geometry_trace_sets')) return { rows: [] };
+      return result;
+    });
+    // Live heads belong to the old model version; a real content replacement
+    // uses a new immutable model version as well.
+    f.f.aggregate.modelVersionId = id(881);
     const summary = await f.repo.summary(f.projectId, f.who);
     expect(summary.results).toEqual([]); expect(summary.complete).toBe(false);
-    expect(summary.counts).toEqual({ searched: 0, found: 0, assigned: 0, preserved: 0, manualAttention: 0 });
+  });
+  it('uses a manual replacement head and invalidates only a separately stale location', async () => {
+    const f = await modelLocationMatchFixture(); await f.repo.assign(f.projectId, f.who, f.command());
+    const [first, second] = f.context.names, locationId = f.resolved(first), old = f.state.bindings.get(f.state.heads.get(locationId)!)!;
+    const { contentSha256: _sha, autoMatchEvidence: _evidence, ...body } = { ...old, id: id(882), locationRevision: '2', bindingRevision: '2', derivation: 'manual-world-point' as const,
+      pointProjectMetres: [9, 8, 7] as [number, number, number] };
+    const binding = { ...body, contentSha256: endpointBindingHash(body) };
+    f.state.locations.get(locationId)!.revision = '2'; f.state.heads.set(locationId, binding.id); f.state.bindings.set(binding.id, binding);
+    f.state.locations.get(f.resolved(second))!.revision = '2';
+    const before = structuredClone(f.state.bindings), summary = await f.repo.summary(f.projectId, f.who);
+    expect(summary.results.find(result => result.name === first)).toMatchObject({ status: 'preserved', bindingId: binding.id });
+    expect(summary.results.some(result => result.name === second)).toBe(false);
+    expect(summary.results).toHaveLength(2); expect(f.state.bindings).toEqual(before);
+    // The shared manual head is still available without a model-search receipt.
+    f.state.commands.clear();
+    expect((await f.repo.summary(f.projectId, f.who)).results.find(result => result.name === first)).toMatchObject({ status: 'preserved', bindingId: binding.id });
   });
   it('retains the same logical name scope after case changes and displays the current project spelling', async () => {
     const f = await modelLocationMatchFixture(); await f.repo.assign(f.projectId, f.who, f.command());
@@ -89,6 +137,15 @@ describe('persisted current-model matching summary', () => {
     const summary = await f.repo.summary(f.projectId, f.who);
     expect(summary.complete).toBe(true); expect(summary.counts.searched).toBe(3);
     expect(summary.results.map(result => result.name)).toEqual(summary.context.names);
+  });
+  it('preserves a same-model legacy shared location without a matching receipt and retires it for another model', async () => {
+    const f = await modelLocationMatchFixture(); await f.repo.assign(f.projectId, f.who, f.command());
+    const name = f.context.names[0], locationId = f.resolved(name);
+    f.state.heads.delete(locationId); f.state.commands.clear();
+    f.state.legacy = { model_version_id: f.context.current.modelVersionId, revision: '1', point: [1, 2, 3], object_id: null, derivation: 'manual-world-point' };
+    expect((await f.repo.summary(f.projectId, f.who)).results.find(result => result.name === name)).toMatchObject({ status: 'preserved', locationId, bindingId: null });
+    f.state.legacy.model_version_id = id(899);
+    expect((await f.repo.summary(f.projectId, f.who)).results.some(result => result.name === name)).toBe(false);
   });
   it('restores all 4096 logical names across metadata pages after newer receipts use case-only spelling variants', async () => {
     const f = await modelLocationMatchFixture(), template = f.command();

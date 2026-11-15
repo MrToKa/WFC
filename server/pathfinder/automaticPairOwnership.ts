@@ -1,4 +1,6 @@
 import type { PoolClient } from 'pg';
+import { readCableRoutingControl, cableExecutionFacts } from './cableRoutingControlRepository.js';
+import { automaticRoutingWriteAllowed, executionRoutingReasons } from '../../shared/cableRoutingControl.js';
 import { policyRevisionSchema, policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { type AutomaticPairOwnership } from '../../shared/pathfinderAutomaticPair.js';
 import { classifyCableCategory } from '../../shared/pathfinderCableWorkflow.js';
@@ -8,14 +10,20 @@ import { PathFinderError } from './errors.js';
 type Row = Record<string, any>;
 export type AutomaticPairOwnershipDecision = AutomaticPairOwnership | { kind: 'review-required'; reasonCode: string };
 export type AutomaticPairOwnershipAdapters = { proof?: (input: { projectId: string; cableId: string; receiptId: string }) => Promise<AutomaticPairReceiptFact | null> };
-/** Caller owns the current cable lock. Revision and audit identity are required,
- * so equal restored values never infer automatic ownership. */
+/** Caller owns the current cable lock. Migrated controls are authoritative;
+ * immutable receipt inference remains only for historical rows without controls. */
 export async function readAutomaticPairOwnership(client: PoolClient, input: { projectId: string; cableId: string; currentSnapshot: Row },
   check: () => void = () => undefined, adapters: AutomaticPairOwnershipAdapters = {}): Promise<AutomaticPairOwnershipDecision> {
   policyUuidSchema.parse(input.projectId); policyUuidSchema.parse(input.cableId); check(); const c = input.currentSnapshot;
   const refuse = (reasonCode: string): AutomaticPairOwnershipDecision => ({ kind: 'review-required', reasonCode });
   if (!c || c.id !== input.cableId || c.project_id !== input.projectId || !policyRevisionSchema.safeParse(c.cable_write_revision).success
     || classifyCableCategory(c.mto).status !== 'eligible') return refuse('AUTOMATIC_PAIR_CABLE_INVALID');
+  const control = await readCableRoutingControl(client, input.projectId, input.cableId, true); check();
+  if (control) {
+    if (!automaticRoutingWriteAllowed(control.control, cableExecutionFacts(c)))
+      return refuse(executionRoutingReasons(cableExecutionFacts(c), control.control.executionLocked).length ? 'ROUTING_EXECUTION_PROTECTED' : 'ROUTING_MANUAL_PROTECTED');
+    return { kind: 'policy', controlRevision: control.revision };
+  }
   const receipts = (await client.query<Row>(`/* automatic-pair:latest-receipt */ SELECT id,provenance->>'schemaVersion' AS provenance_version FROM pf_apply_receipts
     WHERE project_id=$1 AND cable_id=$2 ORDER BY applied_at DESC,id DESC LIMIT 1`, [input.projectId, input.cableId])).rows; check();
   const blank = c.design_length === null && (c.routing === null || typeof c.routing === 'string' && c.routing.trim() === '');

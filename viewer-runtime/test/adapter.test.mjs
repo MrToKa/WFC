@@ -658,3 +658,27 @@ test('production adapter packs events, retains lookahead, completes once and can
   await assert.rejects(handle.readModelCapture({ captureId, index: 1, maxEvents: 32 }, abortDuringRead.signal), { name: 'AbortError' });
   await assert.rejects(handle.readModelCapture({ captureId, index: 1, maxEvents: 32 }), { code: 'EXTRACTION_FAILED' });
 });
+
+test('saved point focus rechecks load and authorization, then actual-object Show clears only the point marker', async t => {
+  const f = sdkFixture(), previous = globalThis.window; globalThis.window = f.window;
+  t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
+  class Vector3 { constructor(...values) { this.set(...values); } set(...values) { this.values = values; } }
+  class Box3 { points = []; expandByPoint(point) { this.points.push(point.values); } }
+  class Disposable { dispose() { this.disposed = true; } }
+  class Mesh { constructor(geometry, material) { Object.assign(this, { geometry, material, position: new Vector3() }); } }
+  Object.assign(f.window.THREE, { Vector3, Box3, SphereGeometry: Disposable, MeshBasicMaterial: Disposable, Mesh });
+  Object.assign(f.model, { getUnitScale: () => 0.001, getUpVector: () => [0, 0, 1], getGlobalOffset: () => [1000, 2000, 3000] });
+  await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
+  const viewer = f.viewers[0], meshes = [], fits = []; viewer.navigation = { fitBounds: (_animated, box) => fits.push(box) };
+  viewer.overlays.addMesh = mesh => meshes.push(mesh); viewer.overlays.removeMesh = mesh => meshes.splice(meshes.indexOf(mesh), 1);
+  for (const method of ['clearSelection', 'isolate', 'setGhosting']) viewer[method] = () => { throw Error('Must preserve ' + method); };
+  await assert.rejects(handle.showLocationPoint([1, 2, 3], undefined, async () => { throw Object.assign(Error('denied'), { code: 'ACCESS_REVOKED' }); }), { code: 'ACCESS_REVOKED' });
+  assert.equal(meshes.length, 0); assert.equal(fits.length, 0);
+  await handle.showLocationPoint([1.004, 2.005, 3.006], undefined, async () => { assert.equal(meshes.length, 0); });
+  assert.ok(meshes[0].position.values.every((n, i) => Math.abs(n - [4, 5, 6][i]) < 1e-9));
+  const first = meshes[0]; viewer.show = () => {}; await handle.showLocation(2);
+  assert.equal(meshes.length, 0); assert.equal(first.geometry.disposed, true);
+  await handle.showLocationPoint([1, 2, 3]); const last = meshes[0]; handle.finish();
+  assert.equal(meshes.length, 0); assert.equal(last.material.disposed, true);
+  await assert.rejects(handle.showLocationPoint([1, 2, 3]), { code: 'MODEL_SELECTION_CHANGED' });
+});

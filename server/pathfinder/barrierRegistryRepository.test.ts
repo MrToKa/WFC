@@ -4,6 +4,7 @@ import { BARRIER_CAPTURE_VERSION, BARRIER_LIMITS, barrierCanonicalJson, type Bar
 import { MIXED_BARRIER_POLICY } from '../../shared/pathfinderBarrierMixed.js';
 import { barrierCommandRecoveryTargetSchema, matchBarrierCommandRecovery } from '../../shared/pathfinderBarrierRecovery.js';
 import type { JobPrincipal } from './jobContracts.js';
+import { PathFinderError } from './errors.js';
 const storage = vi.hoisted(() => ({ blobs: new Map<string, Buffer>(), fail: false }));
 vi.mock('./barrierStorage.js', async importOriginal => {
   const actual = await importOriginal<typeof import('./barrierStorage.js')>();
@@ -16,6 +17,7 @@ vi.mock('./barrierStorage.js', async importOriginal => {
     }),
     readBarrierBytes: vi.fn(async (project: string, intent: string, ref: { blobId: string; sha256: string; bytes: number }) => {
       const value = storage.blobs.get(`${project}/${intent}/${ref.blobId}`);
+      if (!value) throw new PathFinderError('BARRIER_BLOB_MISSING', 409);
       if (!value || value.length !== ref.bytes || actual.barrierBytesHash(value) !== ref.sha256) throw Error('blob integrity'); return Buffer.from(value);
     }),
   };
@@ -114,6 +116,27 @@ function recoveryTarget(f: ReturnType<typeof fixture>, command: unknown, options
       captureSha256: barrierBytesHash(f.bytes(options.intent!)), frameSha256: 'f'.repeat(64), loadId: id(99) } : { kind: 'capture-intent', knownIntent }) });
 }
 describe('exact hash recovery with synthetic transaction/storage boundary', () => {
+  it('recovers authoring metadata for a missing file while keeping routing unavailable and the head unchanged', async () => {
+    const f = fixture();
+    await f.repository.command(id(1), f.who, f.empty());
+    const before = structuredClone(f.durable);
+    storage.blobs.clear();
+    await expect(f.repository.get(id(1), f.who)).rejects.toMatchObject({ code: 'BARRIER_BLOB_MISSING' });
+    const recovered = await f.repository.authoringRecovery(id(1), f.who);
+    expect(recovered.registry.registryRevision).toBe(before.head!.revision);
+    expect(recovered.registry.snapshot?.snapshotId).toBe(before.head!.snapshot_id);
+    expect(recovered.registry.state).toBe('stale'); expect(recovered.geometryAvailable).toBe(false);
+    expect(f.durable).toEqual(before); expect(f.adapters.qualifyCapture).not.toHaveBeenCalled();
+    await expect(f.repository.get(id(1), f.who)).rejects.toMatchObject({ code: 'BARRIER_BLOB_MISSING' });
+  });
+  it('does not offer recovery for available geometry or corrupted database metadata', async () => {
+    const f = fixture(); await f.repository.command(id(1), f.who, f.empty());
+    await expect(f.repository.authoringRecovery(id(1), f.who)).rejects.toMatchObject({ code: 'BARRIER_RECOVERY_NOT_REQUIRED' });
+    storage.blobs.clear();
+    const row = [...f.durable.snapshots.values()][0];
+    (row.manifest_blob as { sha256: string }).sha256 = 'f'.repeat(64);
+    await expect(f.repository.authoringRecovery(id(1), f.who)).rejects.toMatchObject({ code: 'BARRIER_SNAPSHOT_INTEGRITY' });
+  });
   it('keeps absent inspection nonterminal and does not call Viewer/current-scope qualification', async () => {
     const f = fixture(), target = recoveryTarget(f, f.command), before = structuredClone(f.durable);
     const value = await f.repository.readCommandRecovery(id(1), f.who, target);

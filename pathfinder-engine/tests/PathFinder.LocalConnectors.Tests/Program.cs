@@ -14,7 +14,7 @@ internal static class Program
     {
         if (args.Length != 0) return 2;
         var elapsed = Stopwatch.StartNew();
-        Standalone(); Integrated(); NearestAnchoredSearch(); LegacyAndSecondary(); BudgetsAndRefusals(); elapsed.Stop();
+        Standalone(); Integrated(); EndpointOccupancyDiagnostics(); NearestAnchoredSearch(); LegacyAndSecondary(); BudgetsAndRefusals(); elapsed.Stop();
         Console.WriteLine(JsonSerializer.Serialize(new
         {
             schemaVersion = "wfc.pf.local-connectors-checks.v1", status = failures == 0 ? "PASS" : "FAIL",
@@ -32,6 +32,28 @@ internal static class Program
         catch (Exception error) { failures++; Checks.Add(new { name, status = "FAIL", detail = error.GetType().Name + ": " + error.Message }); }
     }
     private static void Need(bool value, string detail = "Synthetic assertion failed.") { if (!value) throw new InvalidOperationException(detail); }
+    private static void EndpointOccupancyDiagnostics()
+    {
+        foreach (var example in new[] {
+            (RouteCollisionStatus.Blocked, RouteCollisionStatus.Clear, "FROM_ENDPOINT_IN_BARRIER"),
+            (RouteCollisionStatus.Clear, RouteCollisionStatus.Blocked, "TO_ENDPOINT_IN_BARRIER"),
+            (RouteCollisionStatus.Blocked, RouteCollisionStatus.Blocked, "BOTH_ENDPOINTS_IN_BARRIER"),
+            (RouteCollisionStatus.Blocked, RouteCollisionStatus.Indeterminate, "ENDPOINT_IN_BARRIER"),
+            (RouteCollisionStatus.Indeterminate, RouteCollisionStatus.Blocked, "ENDPOINT_IN_BARRIER") })
+            Run("automatic endpoint diagnostic preserves exact side evidence " + example, () => {
+                var from = P(0); var to = P(6); var observedFrom = false; var observedTo = false;
+                RouteCollisionQuery oracle = (a, b, _) => {
+                    var status = RouteCollisionStatus.Blocked;
+                    if (Same(a, b) && Same(a, from)) { observedFrom = true; status = example.Item1; }
+                    else if (Same(a, b) && Same(a, to)) { observedTo = true; status = example.Item2; }
+                    else if (Same(a, b)) status = RouteCollisionStatus.Clear;
+                    return new(status, null, "Synthetic exact occupancy observation.", 1);
+                };
+                var value = Route([Tray("A", P(1), P(5))], from, to, oracle).RouteEvaluation;
+                Need(!value.Route.Success && observedFrom && observedTo, value.Reason);
+                Equal(example.Item3, value.Reason);
+            });
+    }
     private static void Equal<T>(T expected, T actual) => Need(EqualityComparer<T>.Default.Equals(expected, actual), $"Expected {expected}; observed {actual}.");
     private static void Bits(double expected, double actual) => Equal(BitConverter.DoubleToInt64Bits(expected), BitConverter.DoubleToInt64Bits(actual));
     private static void Reject<T>(Action body) where T : Exception

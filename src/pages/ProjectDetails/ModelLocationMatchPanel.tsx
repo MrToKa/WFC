@@ -17,16 +17,17 @@ export function ModelLocationMatchPanel(props: Props) {
   if (!match.allowed) return null;
   return <section aria-label="Find and assign model locations" style={{ marginBlock: 12 }}>
     <h3>From/To locations</h3>
+    <p>Locations are saved and shared by all cables using the same From/To name. Finding locations keeps current assignments and checks missing names and assignments from an older model. A unique matching object within 25 cm of the previous location is assigned automatically. A manual change updates the shared location.</p>
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBlock: 8 }}>
       <Button appearance="primary" disabled={!match.canStart} onClick={() => void match.start()}>Find and assign From/To</Button>
       {match.busy ? <Button onClick={match.cancel}>Cancel finding locations</Button> : null}
       {match.pending ? <Button disabled={match.busy || match.summaryLoading || !props.active || !match.storageReady} onClick={() => void match.retry()}>Retry saved location assignment</Button> : null}
     </div>
     {match.busy ? <Spinner size="tiny" label={match.progress ?? 'Finding project From/To locations…'} /> : null}
-    {match.summaryLoading ? <Spinner size="tiny" label="Reading saved From/To matching results…" /> : null}
+    {match.summaryLoading ? <Spinner size="tiny" label={match.progress ?? 'Reading saved From/To matching results…'} /> : null}
     {match.error ? <p role="alert">{match.error}</p> : null}
     {match.notice ? <p role="status">{match.notice}</p> : null}
-    {!match.busy && match.progress && !match.complete ? <Caption1>Last progress: {match.progress}</Caption1> : null}
+    {!match.busy && !match.summaryLoading && match.progress && !match.complete ? <Caption1>Last progress: {match.progress}</Caption1> : null}
     {match.totalNames > 0 ? <p role="status">
       Searched: {summary.searched} of {match.totalNames}; found in model: {summary.found}; assigned: {summary.assigned}; kept: {summary.preserved}; manual attention: {summary.manualAttention}.
     </p> : null}
