@@ -6,9 +6,14 @@ import { ThemeProvider } from '@/app/ThemeProvider';
 import { AuthProvider } from '@/context/AuthContext';
 import { ToastProvider } from '@/context/ToastContext';
 import { routes } from '@/routes/router';
+import { createHash } from 'node:crypto';
+import { canonicalPurposeJson } from '../shared/pathfinderPurposePolicy';
+import { DEFAULT_DRAWING_MODES } from '../shared/pathfinderDrawingPolicy';
+import { drawingInputHashInput, drawingSettingsHashInput, drawingContentHashInput } from '../shared/trayDrawingSnapshot';
 
 const projectId = '00000000-0000-4000-8000-000000000003';
 const otherProjectId = '00000000-0000-4000-8000-000000000004';
+const trayId = '00000000-0000-4000-8000-000000000005';
 configure({ asyncUtilTimeout: 10000 });
 const basicUser = {
   id: '00000000-0000-4000-8000-000000000002',
@@ -36,9 +41,35 @@ const project = {
   supportDistances: {},
   supportDistanceOverrides: {},
   trayPurposeTemplates: {},
-  cableLayout: {},
+  cableLayout: { cableSpacing: null, considerBundleSpacingAsFree: null, minFreeSpacePercent: null,
+    maxFreeSpacePercent: null, mv: null, power: null, vfd: null, control: null, customBundleRanges: null },
   createdAt: '2026-01-01',
   updatedAt: '2026-01-01',
+};
+const tray = {
+  id: trayId, projectId, name: 'TRAY-1', type: null, purpose: null,
+  widthMm: 300, heightMm: 60, lengthMm: 1000, includeGroundingCable: false, groundingCableTypeId: null,
+  createdAt: '2026-01-01', updatedAt: '2026-01-01',
+};
+const fixtureHash = (value: unknown) => createHash('sha256').update(canonicalPurposeJson(value)).digest('hex');
+// Tray details now consume one authenticated, hash-verified drawing snapshot.
+// Keep these inputs coherent so permission tests exercise the real API boundary.
+const drawingSnapshotFixture = (canEdit: boolean) => {
+  const data = { project, tray, reportTrays: [tray], cables: [], trayCables: [],
+    materialTrays: [], materialSupports: [], cableTypes: [], loadCurves: [] };
+  const override = { revision: '0', value: null };
+  const sourceSha256 = 'a'.repeat(64);
+  const layout = { schemaVersion: 'wfc.tray-drawing-layout.v1', algorithmVersion: 'wfc-tray-placement-v2',
+    widthPx: 300, heightPx: 60, commands: [], summary: null, diagnostics: [], placements: [] };
+  const snapshot = { schemaVersion: 'pathfinder.tray-drawing-snapshot.v1' as const, projectId, projectTrayId: trayId,
+    snapshotId: trayId, catalogRevision: '1', drawingPolicyRevision: '0', drawingInputRevision: '1',
+    layoutAlgorithmVersion: 'wfc-tray-placement-v2' as const, contentSha256: '0'.repeat(64), purposeKey: null,
+    categoryModes: { ...DEFAULT_DRAWING_MODES }, legacySidePolicyVersion: 'wfc-tray-sides-v1' as const,
+    settingsSha256: fixtureHash(drawingSettingsHashInput(override, DEFAULT_DRAWING_MODES)),
+    inputSha256: fixtureHash(drawingInputHashInput(data, sourceSha256)), orderedCableIds: [], state: 'ready' as const, diagnostics: [] };
+  snapshot.contentSha256 = fixtureHash(drawingContentHashInput(snapshot, layout));
+  return { schemaVersion: 'pathfinder.tray-drawing-response.v1', snapshot, data, override, sourceSha256,
+    permissions: { canEdit }, layout };
 };
 let role: 'basic' | 'technician' | 'engineer' = 'basic';
 let projectEditable = false;
@@ -69,7 +100,8 @@ beforeEach(() => {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: string, options?: RequestInit) => {
-      const path = new URL(input).pathname;
+      const url = new URL(input);
+      const path = url.pathname;
       requests.push(path);
       if (options?.method && !['GET', 'HEAD'].includes(options.method)) mutations.push({ path, method: options.method, body: options.body });
       if (path === '/api/auth/register')
@@ -108,16 +140,17 @@ beforeEach(() => {
         cableType: { id: 'type-id', projectId, name: 'Type A', updatedAt: '2026-01-01' },
         materialCableType: null, defaultMaterials: [], cableCount: 0,
       });
-      if (path.endsWith('/trays/tray-id')) return json({ tray: {
-        id: 'tray-id', projectId, name: 'TRAY-1', type: null, purpose: null,
-        widthMm: 300, heightMm: 60, lengthMm: 1000, includeGroundingCable: false,
-        createdAt: '2026-01-01', updatedAt: '2026-01-01',
-      } });
+      if (path.endsWith(`/trays/${trayId}/drawing-snapshot`)) return json(drawingSnapshotFixture(projectEditable));
+      if (path.endsWith(`/trays/${trayId}`)) return json({ tray });
       if (path.endsWith('/files')) return json({ files: [] });
       if (path.endsWith('/export')) return new Response('excel');
       if (path.endsWith('/cables')) return json({ cables: [] });
       if (path.endsWith('/cable-types')) return json({ cableTypes: [] });
-      if (path.endsWith('/trays')) return json({ trays: [] });
+      if (path.endsWith('/trays')) return json(url.searchParams.get('drawingMetrics') === '1' ? {
+        project: { ...project, id: path.split('/')[3] }, trays: [], freeSpaceByTrayId: {}, provenance: [],
+        revisions: { catalogRevision: '1', drawingPolicyRevision: '0', drawingInputRevision: '1' },
+        layoutAlgorithmVersion: 'wfc-tray-placement-v2',
+      } : { trays: [] });
       if (path.endsWith('/roxtec')) return json({ entries: [] });
       if (path.endsWith('/roxtec/1'))
         return json({
@@ -167,7 +200,7 @@ describe('project model selection permissions', () => {
   });
 });
 
-describe('read-access Routings viewer tab', () => {
+describe('read-access Routings builder tab', () => {
   it.each([
     ['basic', false], ['technician', false], ['engineer', false], ['engineer', true],
   ] as const)('opens directly for %s with edit grant %s without loading the cable or tray tables', async (userRole, editable) => {
@@ -176,7 +209,7 @@ describe('read-access Routings viewer tab', () => {
     expect(await screen.findByText('No model is selected. Select a prepared model in Details before opening the viewer.')).toBeInTheDocument();
     const tabs = within(screen.getByRole('tablist', { name: 'Project sections' }));
     const sections = tabs.getAllByRole('tab');
-    const index = sections.indexOf(tabs.getByRole('tab', { name: 'Routings viewer' }));
+    const index = sections.indexOf(tabs.getByRole('tab', { name: 'Routings builder' }));
     expect(sections[index - 1]).toBe(tabs.getByRole('tab', { name: 'Cables list' }));
     expect(sections[index + 1]).toBe(tabs.getByRole('tab', { name: 'Trays' }));
     expect(sections[index]).toHaveAttribute('aria-selected', 'true');
@@ -189,19 +222,19 @@ describe('read-access Routings viewer tab', () => {
 
   it('follows tab URL history and removes the viewer UI when leaving the active tab', async () => {
     const router = mount(`/projects/${projectId}?tab=routings-viewer`);
-    await screen.findByRole('region', { name: 'Routings viewer' });
+    await screen.findByRole('region', { name: 'Routings builder' });
     await act(() => router.navigate(`/projects/${projectId}?tab=details`));
     await screen.findByRole('region', { name: '3D model' });
-    expect(screen.queryByRole('region', { name: 'Routings viewer' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Routings builder' })).not.toBeInTheDocument();
     await act(() => router.navigate(-1));
-    expect(await screen.findByRole('region', { name: 'Routings viewer' })).toBeInTheDocument();
+    expect(await screen.findByRole('region', { name: 'Routings builder' })).toBeInTheDocument();
     await act(() => router.navigate(1));
     await screen.findByRole('region', { name: '3D model' });
-    expect(screen.queryByRole('region', { name: 'Routings viewer' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Routings builder' })).not.toBeInTheDocument();
     expect(document.querySelector('iframe')).toBeNull();
   });
 
-  it('makes Routings viewer reachable with the existing project tab keyboard navigation', async () => {
+  it('makes Routings builder reachable with the existing project tab keyboard navigation', async () => {
     // Tabster ignores jsdom's zero-sized, parentless layout when moving focus.
     const viewport = vi.spyOn(document.body, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 1024, 768));
     const offsetParent = vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockImplementation(function (this: HTMLElement) { return this.parentElement; });
@@ -210,8 +243,8 @@ describe('read-access Routings viewer tab', () => {
     const tabs = within(await screen.findByRole('tablist', { name: 'Project sections' }));
     const cables = tabs.getByRole('tab', { name: 'Cables list' }); cables.focus();
     await userEvent.keyboard('{ArrowRight}{Enter}');
-    await waitFor(() => expect(tabs.getByRole('tab', { name: 'Routings viewer' })).toHaveAttribute('aria-selected', 'true'));
-    expect(await screen.findByRole('region', { name: 'Routings viewer' })).toBeInTheDocument();
+    await waitFor(() => expect(tabs.getByRole('tab', { name: 'Routings builder' })).toHaveAttribute('aria-selected', 'true'));
+    expect(await screen.findByRole('region', { name: 'Routings builder' })).toBeInTheDocument();
   });
 });
 
@@ -362,7 +395,7 @@ describe('Technician navigation and export controls', () => {
   it.each([
     ['/cables/cable-id', 'Cable 1 - CABLE-1'],
     ['/cable-types/type-id', 'Cable type - Type A'],
-    ['/trays/tray-id', 'TRAY-1'],
+    [`/trays/${trayId}`, 'TRAY-1'],
   ])('opens %s details without editing or catalog requests', async (suffix, title) => {
     mount('/projects/' + projectId + suffix);
     expect((await screen.findAllByText(title)).length).toBeGreaterThan(0);

@@ -93,6 +93,107 @@ describe('PathFinder protected Viewer capabilities', () => {
     s.message('MODEL_LOADED', { sdkVersion: '7.130.0', format: 'svf', nodeIndexReady: true }, command.requestId, identity);
     return { ...s, identity };
   }
+
+  it('never cleans up an old CAD upload in a replacement model with the same component ID', async () => {
+    const s = await loaded(), componentId = generateId();
+    const transform = { positionMm: { x: 1, y: 2, z: 3 }, rotation: { x: 0, y: 0, z: 0, w: 1 } };
+    s.send.mockImplementation(value => {
+      if (value.type === 'CAD_BEGIN') s.message('CAD_ACK', { componentId, phase: 'begun', received: 0 }, value.requestId, s.identity);
+    });
+    const showing = s.c.showCadComponent(componentId, { source: 'saved mesh' }, transform);
+    const rejected = expect(showing).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'CAD_APPEND')).toBe(true));
+    const oldAppend = s.send.mock.calls.find(call => call[0].type === 'CAD_APPEND')![0];
+    // Observe the captured load as replaced and ready before the old promise's
+    // cancellation continuation runs, matching a fast replacement/load race.
+    const loading = s.c.load(versionId), nextSend = vi.spyOn(s.c.iframe.contentWindow!, 'postMessage');
+    s.hello(); const init = nextSend.mock.calls[0][0]; s.message('RUNTIME_READY', { sdkVersion: '7.130.0' }, init.requestId);
+    await loading;
+    const nextLoad = nextSend.mock.calls.find(call => call[0].type === 'LOAD_MODEL')![0];
+    const nextIdentity = { modelVersionId: versionId, loadId: nextLoad.loadId };
+    s.message('MODEL_LOADED', { sdkVersion: '7.130.0', format: 'svf', nodeIndexReady: true }, nextLoad.requestId, nextIdentity);
+    s.message('CAD_ACK', { componentId, phase: 'appended', received: oldAppend.payload.chunk.length }, oldAppend.requestId, s.identity);
+    await rejected; expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+    expect(nextSend.mock.calls.some(call => call[0].type === 'CAD_REMOVE')).toBe(false);
+    expect(s.send.mock.calls.some(call => call[0].type === 'CAD_COMMIT')).toBe(false);
+  });
+  it('cleans up failed CAD placement only in the same load and cancels pending upload on dispose', async () => {
+    const s = await loaded(), componentId = generateId();
+    const transform = { positionMm: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0, w: 1 } };
+    s.send.mockImplementation(value => {
+      if (value.type === 'CAD_BEGIN') s.message('CAD_ACK', { componentId, phase: 'begun', received: 0 }, value.requestId, s.identity);
+      if (value.type === 'CAD_APPEND') s.message('ERROR', { code: 'CAD_GEOMETRY_INVALID', message: 'Invalid geometry', retryable: true, operation: 'CAD_APPEND' }, value.requestId, s.identity);
+      if (value.type === 'CAD_REMOVE') s.message('CAD_ACK', { componentId, phase: 'removed', received: 0 }, value.requestId, s.identity);
+    });
+    await expect(s.c.showCadComponent(componentId, {}, transform)).rejects.toMatchObject({ code: 'CAD_GEOMETRY_INVALID' });
+    expect(s.send.mock.calls.filter(call => call[0].type === 'CAD_REMOVE')).toHaveLength(1);
+    s.send.mockReset(); const showing = s.c.showCadComponent(componentId, {}, transform), rejected = expect(showing).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'CAD_BEGIN')).toBe(true));
+    s.c.dispose(); await rejected;
+    expect(s.send.mock.calls.some(call => call[0].type === 'CAD_REMOVE')).toBe(false);
+  });
+  it('focuses a CAD component only through a current-model acknowledged command', async () => {
+    const s = await loaded();
+    const componentId = generateId();
+    const focused = s.c.focusCadComponent(componentId);
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'CAD_FOCUS')).toBe(true));
+    const command = s.send.mock.calls.find(call => call[0].type === 'CAD_FOCUS')![0];
+    expect(command.payload).toEqual({ componentId });
+    expect(command.modelVersionId).toBe(versionId);
+    expect(command.loadId).toBe(s.identity.loadId);
+    s.message('CAD_ACK', { componentId, phase: 'focused', received: 0 }, command.requestId, s.identity);
+    await expect(focused).resolves.toBeUndefined();
+  });
+
+  it('refuses CAD focus before an authorized model is ready', async () => {
+    const s = setup();
+    await expect(s.c.focusCadComponent(generateId())).rejects.toThrow('Viewer model access changed');
+    expect(s.send.mock.calls.some(call => call[0].type === 'CAD_FOCUS')).toBe(false);
+  });
+
+  it('colors only through an acknowledged current-model CAD command', async () => {
+    const s = await loaded();
+    const componentId = generateId();
+    const colored = s.c.setCadComponentColor(componentId, '#12aBef');
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'CAD_COLOR')).toBe(true));
+    const command = s.send.mock.calls.find(call => call[0].type === 'CAD_COLOR')![0];
+    expect(command.payload).toEqual({ componentId, color: '#12aBef' });
+    expect(command.modelVersionId).toBe(versionId);
+    expect(command.loadId).toBe(s.identity.loadId);
+    s.message('CAD_ACK', { componentId, phase: 'colored', received: 0 }, command.requestId, s.identity);
+    await expect(colored).resolves.toBeUndefined();
+  });
+
+  it('pins canonical CAD properties before asynchronous access checks and waits for their acknowledgement', async () => {
+    const s = await loaded(), componentId = generateId();
+    const metadata = { instanceId: componentId, name: 'BC182 / ' + componentId, actualLengthMm: 3750, widthMm: 300, heightMm: 60, partNumber: 'KL', manufacturer: 'Niedax', purpose: 'LV', componentKind: 'straight', cadAssetId: null, cadRevision: 1 };
+    const route = { id: generateId(), name: 'BC182', purpose: 'LV' };
+    const sent = s.c.setCadComponentProperties(componentId, metadata, route);
+    metadata.name = 'Caller changed it';
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'CAD_PROPERTIES')).toBe(true));
+    const command = s.send.mock.calls.find(call => call[0].type === 'CAD_PROPERTIES')![0];
+    expect(command.payload).toEqual({ componentId, metadata: { ...metadata, name: 'BC182 / ' + componentId }, route });
+    expect(command.modelVersionId).toBe(versionId);
+    expect(command.loadId).toBe(s.identity.loadId);
+    s.message('CAD_ACK', { componentId, phase: 'properties', received: 0 }, command.requestId, s.identity);
+    await expect(sent).resolves.toBeUndefined();
+  });
+
+  it('refuses invalid CAD properties before sending a command', async () => {
+    const s = setup(), componentId = generateId();
+    const metadata = { instanceId: componentId, name: 'BC182 / ' + componentId, actualLengthMm: NaN, widthMm: 300, heightMm: 60, partNumber: 'KL', manufacturer: 'Niedax', purpose: null, componentKind: 'straight', cadAssetId: null, cadRevision: 1 };
+    await expect(s.c.setCadComponentProperties(componentId, metadata, { id: null, name: 'Unassigned', purpose: null })).rejects.toThrow('Invalid CAD section properties');
+    expect(s.send.mock.calls.some(call => call[0].type === 'CAD_PROPERTIES')).toBe(false);
+  });
+
+  it('rejects invalid color and unavailable model access before sending CAD color', async () => {
+    const s = setup();
+    for (const color of ['red', '#123', '#1234567', '123456', '#zz0000'])
+      await expect(s.c.setCadComponentColor(generateId(), color)).rejects.toThrow('hexadecimal color');
+    await expect(s.c.setCadComponentColor(generateId(), '#123456')).rejects.toThrow('Viewer model access changed');
+    expect(s.send.mock.calls.some(call => call[0].type === 'CAD_COLOR')).toBe(false);
+  });
+
   it('reads one object GUID quietly without changing route or selection and rejects substituted object IDs', async () => {
     const s = await loaded(), guid = '7586ffbb-1d0a-5942-b687-06884123c866';
     s.send.mockImplementation(value => {

@@ -133,7 +133,14 @@ export function useRoutingsViewer({ projectId, loadedProjectId, token, container
             }
             if (!attempt.event) attempt.event = event;
             combine(run, attempt);
-          } else if (event.type === 'ERROR') fail(run, String(event.payload.code));
+          } else if (event.type === 'ERROR') {
+            // A failed dynamic CAD overlay is recoverable and must not retire the
+            // healthy client SVF or break Manual routing / Cables.
+            if (String(event.payload.code) === 'CAD_COMPONENT_FAILED' &&
+                String(event.payload.operation).startsWith('CAD_')) {
+              update(run, { message: 'The client model is ready; a CAD component could not be displayed.' });
+            } else fail(run, String(event.payload.code));
+          }
         };
         run.controller = new ViewerController({ container: container.current!, projectId: scope.projectId, token: scope.token, onEvent });
       } catch (error) {
@@ -227,6 +234,43 @@ export function useRoutingsViewer({ projectId, loadedProjectId, token, container
     if (run) { run.closed = true; cancelAttempt(run); run.metadata.abort(); run.controller?.dispose('reload'); }
     setState(initial(scope)); setRetryId(value => value + 1);
   }, [scope, cancelAttempt]);
+  const pickCadAnchor = useCallback(async (): ReturnType<ViewerController['pickPoint']> => {
+    const run = runRef.current;
+    if (!run || run.scope !== scope || !current(run) || !run.controller?.getLoadSnapshot()?.ready) {
+      throw new Error('Active model unavailable for point selection.');
+    }
+    return run.controller.pickPoint();
+  }, [scope, current]);
+  const showCadComponent = useCallback(async (...args: Parameters<ViewerController['showCadComponent']>): Promise<void> => {
+    const run = runRef.current;
+    if (!run || run.scope !== scope || !current(run) || !run.controller?.getLoadSnapshot()?.ready) throw new Error('Active model unavailable.');
+    await run.controller.showCadComponent(...args);
+  }, [scope, current]);
+  const moveCadComponent = useCallback(async (...args: Parameters<ViewerController['moveCadComponent']>): Promise<void> => {
+    const run = runRef.current;
+    if (!run || run.scope !== scope || !current(run) || !run.controller?.getLoadSnapshot()?.ready) throw new Error('Active model unavailable.');
+    await run.controller.moveCadComponent(...args);
+  }, [scope, current]);
+  const removeCadComponent = useCallback(async (...args: Parameters<ViewerController['removeCadComponent']>): Promise<void> => {
+    const run = runRef.current;
+    if (!run || run.scope !== scope || !current(run) || !run.controller?.getLoadSnapshot()?.ready) return;
+    await run.controller.removeCadComponent(...args);
+  }, [scope, current]);
+  const focusCadComponent = useCallback(async (componentId: string): Promise<void> => {
+    const run = runRef.current;
+    if (!run || run.scope !== scope || !current(run) || !run.controller?.getLoadSnapshot()?.ready) throw new Error('Active model unavailable.');
+    await run.controller.focusCadComponent(componentId);
+  }, [scope, current]);
+  const setCadComponentColor = useCallback(async (...args: Parameters<ViewerController['setCadComponentColor']>): Promise<void> => {
+    const run = runRef.current;
+    if (!run || run.scope !== scope || !current(run) || !run.controller?.getLoadSnapshot()?.ready) throw new Error('Active model unavailable.');
+    await run.controller.setCadComponentColor(...args);
+  }, [scope, current]);
+  const setCadComponentProperties = useCallback(async (...args: Parameters<ViewerController['setCadComponentProperties']>): Promise<void> => {
+    const run = runRef.current;
+    if (!run || run.scope !== scope || !current(run) || !run.controller?.getLoadSnapshot()?.ready) throw new Error('Active model unavailable.');
+    await run.controller.setCadComponentProperties(...args);
+  }, [scope, current]);
   const visible = state.scope === scope ? state : initial(scope);
-  return { ...visible, show, showCable, invalidateCableRoute, retryRoute, terminateAccess, clear, zoom, retry, canShow: visible.phase === 'ready', canZoom: visible.phase === 'ready' && !visible.checking && Boolean(visible.result && visible.result.drawableCount > 0 && visible.result.lineCount > 0) };
+  return { ...visible, show, showCable, pickCadAnchor, showCadComponent, moveCadComponent, removeCadComponent, focusCadComponent, setCadComponentColor, setCadComponentProperties, invalidateCableRoute, retryRoute, terminateAccess, clear, zoom, retry, canShow: visible.phase === 'ready', canZoom: visible.phase === 'ready' && !visible.checking && Boolean(visible.result && visible.result.drawableCount > 0 && visible.result.lineCount > 0) };
 }

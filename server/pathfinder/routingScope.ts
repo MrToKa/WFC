@@ -11,11 +11,13 @@ import { verifySupportedBarrierEngineIdentity as verifyBarrierEngineIdentity,
   verifySupportedBarrierRuntimeContext as verifyBarrierRuntimeContext, sameSupportedBarrierAdmissionIntent as sameBarrierAdmissionIntent } from '../../shared/pathfinderBarrierSupported.js';
 import { MIXED_BARRIER_POLICY, mixedBarrierVerifierEvidenceSchema } from '../../shared/pathfinderBarrierMixed.js';
 import { barrierCanonicalJson } from '../../shared/pathfinderBarriers.js';
+import { cadOverlayEnvelopeSchema } from '../../shared/pathfinderCadOverlay.js';
 
 /** This projection deliberately cannot carry drawing or private full-source facts. */
 export const routingScopeSchema = z.object({
   catalogRevision: policyRevisionSchema, routingContentSha256: policyHashSchema,
   routingPolicyRevision: policyRevisionSchema, routingPolicySha256: policyHashSchema,
+  cadOverlay: cadOverlayEnvelopeSchema.optional(),
 }).strict();
 export type RoutingScope = z.infer<typeof routingScopeSchema>;
 
@@ -39,7 +41,8 @@ export async function initializeArtifactRoutingScope(client: PoolClient): Promis
 
 export function equalRoutingScope(a: RoutingScope, b: RoutingScope): boolean {
   return a.catalogRevision === b.catalogRevision && a.routingContentSha256 === b.routingContentSha256
-    && a.routingPolicyRevision === b.routingPolicyRevision && a.routingPolicySha256 === b.routingPolicySha256;
+    && a.routingPolicyRevision === b.routingPolicyRevision && a.routingPolicySha256 === b.routingPolicySha256
+    && (a.cadOverlay?.sha256??null)===(b.cadOverlay?.sha256??null);
 }
 
 /** Called under the normal project mutex; current policy locks stay held until commit. */
@@ -49,9 +52,20 @@ export async function requirePreparedRoutingScope(client: PoolClient, projectId:
     'SELECT producer_version,routing_scope FROM pf_artifact_routing_scopes WHERE project_id=$1 AND artifact_id=$2 FOR SHARE',
     [projectId, artifactId])).rows[0];
   const prepared = routingScopeSchema.safeParse(row?.routing_scope);
-  if (!row || row.producer_version !== 'pathfinder.catalog-preparation.v1' || !prepared.success || !equalRoutingScope(current, prepared.data))
+  if (!row || row.producer_version !== 'pathfinder.catalog-preparation.v1' || !prepared.success || prepared.data.cadOverlay)
     throw new PathFinderError('ROUTING_PREPARATION_REQUIRED', 409,
       'Prepare the project network against the current tray catalog and routing permissions before calculating. Existing diagnostic snapshots remain available for Path lookup.');
+  if (process.env.WFC_CAD_DESIGN_ENABLED === 'true') {
+    const artifact = (await client.query<{snapshot_sha256:string;model_version_id:string}>(
+      'SELECT snapshot_sha256,model_version_id FROM pf_artifacts WHERE project_id=$1 AND id=$2',[projectId,artifactId])).rows[0];
+    if (!artifact) throw new PathFinderError('PREPARATION_CURRENT_INTEGRITY',409);
+    const { readCadOverlay } = await import('./cadOverlay.js');
+    const cadOverlay = await readCadOverlay(client,projectId,artifactId,artifact.snapshot_sha256,artifact.model_version_id,prepared.data,current);
+    if (cadOverlay==='retired-base-proof') return current;
+    if (cadOverlay) return {...current,cadOverlay};
+  }
+  if (!equalRoutingScope(current,prepared.data))
+    throw new PathFinderError('ROUTING_PREPARATION_REQUIRED',409,'Prepare the project network against the current tray catalog and routing permissions before calculating.');
   return current;
 }
 

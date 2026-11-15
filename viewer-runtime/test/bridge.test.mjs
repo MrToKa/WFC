@@ -65,6 +65,23 @@ function fixture(options = {}) {
   return { bridge, send, sent, messages, init, loaded, facts, fetches, loads, states, listeners, window, handle };
 }
 
+test('CAD color dispatches only for the current loaded model and acknowledges the same component', async () => {
+  const f = fixture();
+  const colors = [];
+  f.handle.cadColor = (id, color) => colors.push({ id, color });
+  await f.loaded();
+  const command = f.send('CAD_COLOR', { componentId: uuid(801), color: '#12aBef' });
+  await turn();
+  assert.deepEqual(colors, [{ id: uuid(801), color: '#12aBef' }]);
+  const ack = f.messages('CAD_ACK').find(value => value.requestId === command.requestId);
+  assert.deepEqual(ack.payload, { componentId: uuid(801), phase: 'colored', received: 0 });
+  f.send('CAD_COLOR', { componentId: uuid(801), color: '#abcdef' }, { loadId: uuid(999) });
+  f.send('CAD_COLOR', { componentId: uuid(801), color: 'red' });
+  await turn();
+  assert.equal(colors.length, 1);
+  f.bridge.dispose();
+});
+
 const barrierRequest = () => ({ captureId: uuid(9100), scope: { projectId: uuid(2), modelVersionId: uuid(3), contentFingerprint: 'b'.repeat(64),
   selectionRevision: '12', captureFrameId: uuid(9101), captureFrameSha256: 'd'.repeat(64), coordinateFrame: 'canonical-world-metres' }, selectedParents: [{
   selectionId: uuid(9102), kind: 'wall', objectId: 'dbid:23', dbId: 23, externalId: null, name: 'Selected wall', identityBasis: 'version-local-only', inclusion: 'own-and-all-descendant-fragments' }] });
@@ -1195,4 +1212,21 @@ test('saved point display cannot commit after authorization loss, cancellation o
     await turn(); wait.resolve(); await turn();
     assert.equal(displayed, 0); assert.equal(f.messages('LOCATION_POINT_SHOWN').length, 0); f.bridge.dispose();
   }
+});
+
+test('canonical CAD properties reach only the current owned component and acknowledge after completion', async () => {
+  const f = fixture(), calls = [], componentId = uuid(801);
+  const metadata = { instanceId: componentId, name: 'BC182 / ' + componentId, actualLengthMm: 3750, widthMm: 300, heightMm: 60, partNumber: 'KL', manufacturer: 'Niedax', purpose: 'LV', componentKind: 'straight', cadAssetId: null, cadRevision: 1 };
+  const route = { id: uuid(802), name: 'BC182', purpose: 'LV' };
+  const pending = deferred();
+  f.handle.cadProperties = async (...args) => { calls.push(args); await pending.promise; };
+  await f.loaded();
+  const command = f.send('CAD_PROPERTIES', { componentId, metadata, route }); await turn();
+  assert.deepEqual(calls, [[componentId, metadata, route]]);
+  assert.equal(f.messages('CAD_ACK').some(value => value.requestId === command.requestId), false);
+  pending.resolve(); await turn();
+  assert.deepEqual(f.messages('CAD_ACK').find(value => value.requestId === command.requestId)?.payload, { componentId, phase: 'properties', received: 0 });
+  f.send('CAD_PROPERTIES', { componentId, metadata, route }, { loadId: uuid(999) });
+  await turn(); assert.equal(calls.length, 1);
+  f.bridge.dispose();
 });

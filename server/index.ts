@@ -5,11 +5,18 @@ import http from 'node:http';
 import { createApp } from './app.js';
 import { config } from './config.js';
 import { initializeDatabase } from './db.js';
+import { initializeCadDesignSchema } from './cadDesign/schema.js';
+import { initializeCadRouteGroupsSchema } from './cadDesign/routeGroupsSchema.js';
+import { initializeCadRouteTransitionsSchema } from './cadDesign/routeTransitionsSchema.js';
+import { initializeCadRouteTrayExportsSchema } from './cadDesign/routeTrayExportsSchema.js';
+import { initializeMaterialTrayCadSchema } from './materialCad/schema.js';
+import { pool } from './db.js';
 import { initializeObjectStorage } from './services/objectStorageService.js';
 import { initializeModelRegistry, stopModelRegistry } from './modelRegistry/runtime.js';
 import { stopViewerSessions } from './viewerSessions/runtime.js';
 import { viewerHttpPolicy } from './viewerSessions/http.js';
 import { initializePathFinderRuntime, stopPathFinderRuntime } from './pathfinder/runtime.js';
+import { assertCadPocIsolation } from './cadDesign/isolation.js';
 
 const app = createApp();
 if (viewerHttpPolicy().allowInsecureLanHttp) {
@@ -47,9 +54,19 @@ function startListening(server: http.Server | https.Server, protocol: string): v
 
 const startServer = async (): Promise<void> => {
   try {
+    // Fail before any ordinary WFC schema/storage initialization can write.
+    assertCadPocIsolation(process.env);
     await initializeDatabase();
     await initializeObjectStorage();
     await initializeModelRegistry();
+    // Explicit PoC gate: production must not run these additive migrations by default.
+    if (process.env.WFC_CAD_DESIGN_ENABLED === 'true') {
+      await initializeMaterialTrayCadSchema(pool);
+      await initializeCadDesignSchema(pool);
+      await initializeCadRouteGroupsSchema(pool);
+      await initializeCadRouteTransitionsSchema(pool);
+      await initializeCadRouteTrayExportsSchema(pool);
+    }
     await initializePathFinderRuntime();
     if (config.https.enabled) {
       const resolvePath = (value: string): string =>

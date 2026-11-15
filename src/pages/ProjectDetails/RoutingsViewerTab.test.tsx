@@ -29,7 +29,8 @@ beforeEach(() => {
     scope: { projectId, loadedProjectId: projectId, token: 'token-a' }, phase: 'ready', message: 'The model and its identifiers are ready.',
     lifecycleKey: 'test-lifecycle', model: null, checking: false, result: null, operationId: null, currentRoute: null, canShow: true, canZoom: false,
     show: vi.fn(async () => {}), showCable: vi.fn(async () => {}), retryRoute: vi.fn(async () => {}), terminateAccess: vi.fn(), invalidateCableRoute: vi.fn(),
-    clear: vi.fn(), zoom: vi.fn(), retry: vi.fn(),
+    clear: vi.fn(), zoom: vi.fn(), retry: vi.fn(), showCadComponent: vi.fn(async () => {}), pickCadAnchor: vi.fn(async () => ({ objectId: 1, point: [1, 2, 3] as [number, number, number], derivation: 'picked-surface-point' as const })),
+    moveCadComponent: vi.fn(async () => {}), setCadComponentProperties: vi.fn(async () => {}), setCadComponentColor: vi.fn(async () => {}), removeCadComponent: vi.fn(async () => {}), focusCadComponent: vi.fn(async () => {}),
   };
   cables = { scope: { projectId, token: 'token-a' }, cables: [], snapshotGeneration: 0, rows: [], omittedCount: 0, taggedCount: 0, hasSnapshot: false, hasActivated: false,
     loading: false, refreshing: false, stale: true, error: null, search: '', selectedCableId: null, selectedCable: null, selectedHidden: false, notice: null, canActivate: false,
@@ -38,7 +39,7 @@ beforeEach(() => {
   vi.mocked(useRoutingCables).mockImplementation(() => cables);
 });
 afterEach(() => { vi.restoreAllMocks(); });
-describe('Routings viewer controls', () => {
+describe('Routings builder controls', () => {
   it.each(['loading', 'no-model'] as const)('offers keyboard information while %s without enabling cable routing', phase => {
     const cable = { id: modelId, projectId, tag: 'Information only', routing: '/A', fromLocation: '  From\n日本語  ', toLocation: null };
     cables = { ...cables, cables: [cable], rows: [cable], snapshotGeneration: 1, hasSnapshot: true, hasActivated: true, stale: false, canActivate: true, taggedCount: 1 };

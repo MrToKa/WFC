@@ -4,6 +4,7 @@ import { readModelObjectGuid, resolveTrayObjectIdentities, validateTrayIdentityR
 import { createRouteController } from './routes.mjs';
 import { createPathFinderController } from './pathfinder.mjs';
 import { createLocationPointController } from './location-point.mjs';
+import { createCadSceneController } from './cad-scene.mjs';
 import { captureSelectedModel } from './model-capture.mjs';
 import { captureSelectedBarriers } from './barrier-capture.mjs';
 import { createBarrierMultipartRuntime } from './barrier-multipart-runtime.mjs';
@@ -137,6 +138,11 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
       // for translucent surfaces, including when WebGPU was previously saved.
       // Initializer locks feature flags, so choose the renderer before it runs.
       viewing.FeatureFlags.set(viewing.PublicFeatureFlags.WebGPU, false);
+      // Scene API needs to be selected before Viewer Initializer. Existing
+      // SVF routing remains on WebGL; dynamic CAD geometry is created lazily.
+      if (viewing.PublicFeatureFlags.SceneAPI) {
+        viewing.FeatureFlags.set(viewing.PublicFeatureFlags.SceneAPI, true);
+      }
       await new Promise((resolve, reject) => {
         let settled = false;
         const abort = () => finish(interrupted());
@@ -173,7 +179,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
       },
     });
     let finished = false, routes, pathfinder, locationPoint, observer, geometryLoaded = false, nodeIndexReady = false, nodeCount = 0;
-    let capture, multipart;
+    let capture, multipart, cadScene;
     const cancelCapture = () => { if (!capture) return; const old = capture; capture = undefined; clearTimeout(old.deadline); old.controller.abort(); if (old.iterator) void old.iterator.return().catch(() => {}); };
     const runtimeError = () => { if (!finished) onRuntimeError(safeError()); };
     const finish = () => {
@@ -182,6 +188,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
       signal?.removeEventListener('abort', finish);
       cancelCapture();
       multipart?.dispose();
+      cadScene?.dispose();
       observer?.disconnect();
       if (viewing.ERROR_EVENT) viewer.removeEventListener(viewing.ERROR_EVENT, runtimeError);
       routes?.dispose();
@@ -298,8 +305,22 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
         } catch (error) { if (capture === state) cancelCapture(); throw error?.name === 'AbortError' ? error : safeError('EXTRACTION_FAILED'); }
         finally { state.reading = false; operationSignal?.removeEventListener('abort', abort); }
       }
+      const ensureCadScene = () => {
+        if (finished || !loadedModel || viewer.model !== loadedModel) throw safeError('MODEL_SELECTION_CHANGED');
+        if (!cadScene) cadScene = createCadSceneController(viewer, { window, sourceModel: loadedModel });
+        return cadScene;
+      };
       const handle = {
         finish,
+        cadAdd: (componentId, mesh, transform) => ensureCadScene().add(componentId, mesh, transform),
+        cadUpdate: (componentId, transform) => ensureCadScene().update(componentId, transform),
+        cadRemove: componentId => cadScene?.remove(componentId),
+        cadFocus: componentId => ensureCadScene().focus(componentId),
+        cadColor: (componentId, color) => ensureCadScene().setColor(componentId, color),
+        async cadProperties(componentId, metadata, route) {
+          if (!viewer.getExtension('Autodesk.PropertiesManager')) await viewer.loadExtension('Autodesk.PropertiesManager');
+          ensureCadScene().setProperties(componentId, metadata, route);
+        },
         readBarrierMultipartFrame: (request, operationSignal) => multipart.readFrame(request, operationSignal),
         startBarrierMultipart: (request, transport, operationSignal) => multipart.start(request, transport, operationSignal),
         statusBarrierMultipart: request => multipart.status(request),

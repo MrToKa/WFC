@@ -52,6 +52,7 @@ const messages = {
   TRAY_ROOT_SELECTION_CHANGED: 'The model selection changed while it was being read. Keep the intended objects selected and try again.',
   APPEARANCE_RESTORE_FAILED: 'Some viewer appearance could not be restored. Press Clear again, or reload the model.',
   ROUTING_BINDINGS_INVALID: 'The published tray-root mapping is invalid for this loaded model. Refresh the model or preparation.',
+  CAD_COMPONENT_FAILED: 'The CAD component could not be displayed or moved. Retry the component without reloading the client model.',
 };
 const failure = code => Object.assign(new Error(messages[code] ?? messages.RESOURCE_FAILED), { code });
 const httpCode = status => status === 401 || status === 410 ? 'SESSION_EXPIRED' : status === 403 ? 'ACCESS_REVOKED' : status === 409 ? 'MODEL_SELECTION_CHANGED' : status === 503 ? 'MODEL_UNAVAILABLE' : 'RESOURCE_FAILED';
@@ -66,6 +67,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
   let computed, captureScope;
   let loadedDescriptor, routingSelectionRevision, routeController;
   const capabilities = new Map();
+  const cadBuffers = new Map();
   const lifetime = new AbortController();
   const identityMatches = command => command.modelVersionId === (current?.modelVersionId ?? null) && command.loadId === (current?.loadId ?? null);
   function emit(command, type, payload) {
@@ -97,6 +99,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     const recoverableModelCapture = ['START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE'].includes(command.type) && modelCaptureErrorMessage(code) !== null && code !== 'MODEL_CAPTURE_MODEL_CHANGED';
     const recoverableLocation = ['SHOW_LOCATION', 'SHOW_LOCATION_POINT'].includes(command.type) && code === 'LOCATION_UNAVAILABLE';
     const recoverableGuid = command.type === 'READ_OBJECT_GUID' && code === 'OBJECT_GUID_UNAVAILABLE';
+    const recoverableCad = command.type.startsWith('CAD_') && code === 'CAD_COMPONENT_FAILED';
     const recoverableTray = command.type === 'SHOW_TRAY' && code === 'TRAY_UNAVAILABLE';
     const recoverableRootSelection = command.type === 'READ_TRAY_ROOT_SELECTION'
       && ['TRAY_ROOT_SELECTION_UNAVAILABLE', 'TRAY_ROOT_SELECTION_TOO_LARGE', 'TRAY_ROOT_SELECTION_CHANGED'].includes(code);
@@ -105,9 +108,9 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     // a real SDK resource/access/model failure keeps its terminal identity.
     const recoverableTrayIdentity = command.type === 'RESOLVE_TRAY_IDENTITIES' && code.startsWith('TRAY_IDENTITY_');
     const recoverableDiscovery = command.type === 'READ_PREPARATION_OBJECTS' && code.startsWith('PREPARATION_') && Object.hasOwn(messages, code);
-    emit(command, 'ERROR', { code, message: messages[code], retryable: recoverableModelCapture || recoverableCapture || recoverableLocation || recoverableGuid || recoverableTray || recoverableRootSelection || recoverableTrayIdentity || recoverableDiscovery || ['RESOURCE_FAILED', 'SESSION_EXPIRED', 'APPEARANCE_RESTORE_FAILED'].includes(code), operation: command.type, ...(modelCaptureErrorMessage(code) ? modelCaptureErrorContext(cause) : {}) });
+    emit(command, 'ERROR', { code, message: messages[code], retryable: recoverableCad || recoverableModelCapture || recoverableCapture || recoverableLocation || recoverableGuid || recoverableTray || recoverableRootSelection || recoverableTrayIdentity || recoverableDiscovery || ['RESOURCE_FAILED', 'SESSION_EXPIRED', 'APPEARANCE_RESTORE_FAILED'].includes(code), operation: command.type, ...(modelCaptureErrorMessage(code) ? modelCaptureErrorContext(cause) : {}) });
     finish(command);
-    onState({ phase: recoverableModelCapture || recoverableCapture || recoverableLocation || recoverableGuid || recoverableTray || recoverableRootSelection || recoverableTrayIdentity || recoverableDiscovery ? phase : 'error', code, operation: command.type });
+    onState({ phase: recoverableCad || recoverableModelCapture || recoverableCapture || recoverableLocation || recoverableGuid || recoverableTray || recoverableRootSelection || recoverableTrayIdentity || recoverableDiscovery ? phase : 'error', code, operation: command.type });
   }
   function releaseCapture(scope, abort = false) {
     if (!scope) return;
@@ -194,6 +197,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     if (clearAppearance) handle?.clearRoute(clearOptions);
   }
   function stopLoad() {
+    cadBuffers.clear();
     releaseCapture(captureScope, true);
     if (current) { const entry = requests.get(current.requestId); if (entry?.status === 'pending') entry.status = 'cancelled'; }
     loadController?.abort();
@@ -451,6 +455,60 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
       error(command, cause);
     }
   }
+  async function cadCommand(command) {
+    try {
+      if (!handle || phase !== 'loaded' || !identityMatches(command)) throw failure('INVALID_STATE');
+      const { componentId } = command.payload;
+      let received = 0, phaseResult = 'removed';
+      switch (command.type) {
+        case 'CAD_BEGIN': {
+          if (cadBuffers.size >= 2 || cadBuffers.has(componentId)) throw failure('CAD_COMPONENT_FAILED');
+          cadBuffers.set(componentId, { parts: [], total: command.payload.totalChars,
+            received: 0, transform: command.payload.transform });
+          phaseResult = 'begun'; break;
+        }
+        case 'CAD_APPEND': {
+          const buffer = cadBuffers.get(componentId);
+          if (!buffer || command.payload.offset !== buffer.received ||
+              buffer.received + command.payload.chunk.length > buffer.total) throw failure('CAD_COMPONENT_FAILED');
+          buffer.parts.push(command.payload.chunk);
+          buffer.received += command.payload.chunk.length;
+          received = buffer.received; phaseResult = 'appended'; break;
+        }
+        case 'CAD_COMMIT': {
+          const buffer = cadBuffers.get(componentId);
+          if (!buffer || buffer.received !== buffer.total) throw failure('CAD_COMPONENT_FAILED');
+          cadBuffers.delete(componentId);
+          const mesh = JSON.parse(buffer.parts.join(''));
+          handle.cadAdd(componentId, mesh, buffer.transform);
+          received = buffer.received; phaseResult = 'displayed'; break;
+        }
+        case 'CAD_TRANSFORM':
+          handle.cadUpdate(componentId, command.payload.transform);
+          phaseResult = 'moved'; break;
+        case 'CAD_FOCUS':
+          handle.cadFocus(componentId);
+          phaseResult = 'focused'; break;
+        case 'CAD_PROPERTIES':
+          await handle.cadProperties(componentId, command.payload.metadata, command.payload.route);
+          if (!handle || phase !== 'loaded' || !identityMatches(command)) throw failure('MODEL_SELECTION_CHANGED');
+          phaseResult = 'properties'; break;
+        case 'CAD_COLOR':
+          handle.cadColor(componentId, command.payload.color);
+          phaseResult = 'colored'; break;
+        case 'CAD_REMOVE':
+          cadBuffers.delete(componentId);
+          handle.cadRemove(componentId);
+          phaseResult = 'removed'; break;
+        default: throw failure('CAD_COMPONENT_FAILED');
+      }
+      finish(command);
+      emit(command, 'CAD_ACK', { componentId, phase: phaseResult, received });
+    } catch (cause) {
+      if (command.payload?.componentId) cadBuffers.delete(command.payload.componentId);
+      error(command, cause?.code === 'MODEL_SELECTION_CHANGED' ? cause : failure('CAD_COMPONENT_FAILED'));
+    }
+  }
   function receive(event) {
     if (disposed || event.origin !== origin || event.source !== window.parent) return;
     const command = validateEnvelope(event.data, 'parent-to-frame');
@@ -473,6 +531,9 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
       case 'READ_BARRIER_MULTIPART_FRAME': case 'START_BARRIER_MULTIPART': case 'STATUS_BARRIER_MULTIPART': case 'CANCEL_BARRIER_MULTIPART': case 'RECONCILE_BARRIER_MULTIPART':
         if (phase !== 'loaded' || !handle) { error(command, failure('INVALID_STATE')); return; }
         void pathFinder(command); break;
+      case 'CAD_BEGIN': case 'CAD_APPEND': case 'CAD_COMMIT': case 'CAD_TRANSFORM': case 'CAD_REMOVE': case 'CAD_FOCUS': case 'CAD_COLOR': case 'CAD_PROPERTIES':
+        if (phase !== 'loaded' || !handle) { error(command, failure('INVALID_STATE')); return; }
+        cadCommand(command); break;
       case 'INIT':
         if (phase !== 'hello') { error(command, failure('INVALID_STATE')); return; }
         phase = 'initializing';

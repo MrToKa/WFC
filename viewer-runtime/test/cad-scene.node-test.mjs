@@ -1,0 +1,600 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import fs from 'node:fs';
+import { createCadSceneController } from '../cad-scene.mjs';
+import {
+  nativeTreeSdk,
+  nativeSetObjectTree,
+  nativeSetDbId,
+  nativeFragmentIds,
+} from './sdk-object-tree-fixture.mjs';
+
+class FakeGeometry {
+  attributes = {};
+  indices = null;
+  setAttribute(name, value) {
+    this.attributes[name] = value;
+  }
+  setIndices(value) {
+    this.indices = value;
+  }
+}
+class FakeAttribute {
+  constructor(values, itemSize) {
+    this.values = values;
+    this.itemSize = itemSize;
+  }
+}
+class FakeUnlitMaterial {
+  constructor(options) {
+    this.options = options;
+  }
+}
+class FakeVector3 {
+  constructor(x, y, z) {
+    Object.assign(this, { x, y, z });
+  }
+}
+class FakeQuaternion {
+  constructor(x, y, z, w) {
+    Object.assign(this, { x, y, z, w });
+  }
+}
+class FakeMatrix4 {
+  compose(translation, rotation, scale) {
+    Object.assign(this, { translation, rotation, scale });
+    return this;
+  }
+}
+class FakeInstances {
+  nextId = 0;
+  records = new Map();
+  fragments = { length: 0, fragId2dbId: [] };
+  setDbId = nativeSetDbId;
+  _dbIdToInstanceIds = nativeFragmentIds;
+  add(geometry, material, transform, bounds, dbId) {
+    const id = this.nextId++;
+    this.records.set(id, { geometry, material, transform, dbId });
+    return id;
+  }
+  remove(id) {
+    this.records.delete(id);
+    this.setDbId(id, 0);
+  }
+  setTransformWorld(id, matrix) {
+    if (!this.records.has(id)) throw new Error('unknown instance');
+    this.records.get(id).transform = matrix;
+  }
+  setMaterial(id, material) {
+    if (!this.records.has(id)) throw new Error('unknown instance');
+    this.records.get(id).material = material;
+  }
+}
+class FakeModel {
+  instances = new FakeInstances();
+  id = 99;
+  data = { loadOptions: {} };
+  events = [];
+  getInstances() {
+    return this.instances;
+  }
+  getData() {
+    return this.data;
+  }
+  getObjectTree() {
+    return this.data.instanceTree;
+  }
+  setObjectTree = nativeSetObjectTree;
+  _dispatchEvent(event) {
+    this.events.push(event);
+  }
+  isLoadDone() {
+    return true;
+  }
+  isInitialized() {
+    return true;
+  }
+  setVisibility(id, visible) {
+    this.instances.records.get(id).visible = visible;
+  }
+}
+function fixture() {
+  const sourceModel = {
+    getUnitScale: () => 1,
+    getUpVector: () => [0, 0, 1],
+    getGlobalOffset: () => [100, 200, 300],
+  };
+  const viewer = {
+    model: sourceModel,
+    shown: [],
+    hidden: [],
+    unloaded: [],
+    focused: [],
+    selected: [],
+    currentSelection: [],
+    refreshCount: 0,
+    menus: new Map(),
+    registerContextMenuCallback(name, callback) {
+      this.menus.set(name, callback);
+    },
+    unregisterContextMenuCallback(name) {
+      this.menus.delete(name);
+    },
+    getAggregateSelection() {
+      return [];
+    },
+    showModel(model) {
+      this.shown.push(model);
+    },
+    hideModel(id) {
+      this.hidden.push(id);
+    },
+    unloadModel(model) {
+      this.unloaded.push(model);
+    },
+    fitToView(ids, model) {
+      this.focused.push({ ids, model });
+    },
+    select(ids, model) {
+      this.selected.push({ ids, model });
+      this.currentSelection = [{ model, selection: ids }];
+    },
+    getAggregateSelection() {
+      return this.currentSelection;
+    },
+    setAggregateSelection(rows) {
+      this.currentSelection = rows.filter((row) => row.selection.length);
+    },
+    refresh() {
+      this.refreshCount++;
+    },
+  };
+  const window = {
+    Autodesk: {
+      Viewing: {
+        Scene: {
+          BufferGeometry: FakeGeometry,
+          BufferAttribute: FakeAttribute,
+          UnlitMaterial: FakeUnlitMaterial,
+          Side: { Double: 'double' },
+        },
+        Math: { Matrix4: FakeMatrix4, Vector3: FakeVector3, Quaternion: FakeQuaternion },
+        Model: FakeModel,
+        ObjectTreeBuilder: nativeTreeSdk.ObjectTreeBuilder,
+      },
+    },
+  };
+  const mesh = {
+    schemaVersion: 1,
+    units: 'mm',
+    triangleCount: 1,
+    positions: [0, 0, 0, 300, 0, 0, 0, 60, 0],
+    normals: [0, 0, 1, 0, 0, 1, 0, 0, 1],
+    indices: [0, 1, 2],
+  };
+  const transform = {
+    positionMm: { x: 125000, y: 220000, z: 340000 },
+    rotation: { x: 0, y: 0, z: 0, w: 1 },
+  };
+  return { sourceModel, viewer, window, mesh, transform };
+}
+
+test('dynamic STEP mesh uses world-mm to model-unit conversion without mutating the source SVF', () => {
+  const f = fixture();
+  const scene = createCadSceneController(f.viewer, {
+    window: f.window,
+    sourceModel: f.sourceModel,
+  });
+  scene.add('tray-1', f.mesh, f.transform);
+  assert.equal(f.viewer.model, f.sourceModel);
+  assert.equal(f.viewer.shown.length, 1);
+  const saved = [...f.viewer.shown[0].instances.records.values()][0];
+  assert.ok(saved);
+  assert.deepEqual(
+    [saved.transform.translation.x, saved.transform.translation.y, saved.transform.translation.z],
+    [25, 20, 40],
+  );
+  assert.deepEqual(
+    [saved.transform.scale.x, saved.transform.scale.y, saved.transform.scale.z],
+    [0.001, 0.001, 0.001],
+  );
+  assert.deepEqual([...saved.geometry.indices], [0, 1, 2]);
+  assert.equal(saved.geometry.attributes.position.itemSize, 3);
+  assert.ok(saved.material instanceof FakeUnlitMaterial);
+  assert.deepEqual(saved.material.options, {
+    color: 0xd9ab33,
+    side: 'double',
+    opacity: 1,
+    transparent: false,
+    depthTest: true,
+    depthWrite: true,
+    fog: false,
+  });
+  assert.ok(f.viewer.refreshCount > 0);
+});
+
+test('updating and removing CAD instances does not touch source model', () => {
+  const f = fixture();
+  const scene = createCadSceneController(f.viewer, {
+    window: f.window,
+    sourceModel: f.sourceModel,
+  });
+  scene.add('straight', f.mesh, f.transform);
+  scene.update('straight', { ...f.transform, positionMm: { x: 100000, y: 200000, z: 300000 } });
+  const [rendered] = [...f.viewer.shown[0].instances.records.values()];
+  assert.equal(rendered.transform.translation.x, 0);
+  assert.equal(rendered.transform.translation.y, 0);
+  assert.equal(rendered.transform.translation.z, 0);
+  scene.remove('straight');
+  assert.equal(f.viewer.shown[0].instances.records.size, 0);
+  scene.dispose();
+  assert.deepEqual(f.viewer.unloaded, [f.viewer.shown[0]]);
+  assert.deepEqual(f.viewer.hidden, []);
+  assert.equal(f.viewer.model, f.sourceModel);
+});
+
+test('rotation update forwards the complete quaternion without moving the anchor or changing mesh dimensions', () => {
+  const f = fixture();
+  const scene = createCadSceneController(f.viewer, {
+    window: f.window,
+    sourceModel: f.sourceModel,
+  });
+  scene.add('rotating', f.mesh, f.transform);
+  scene.add('stationary', f.mesh, f.transform);
+  const [rendered, stationary] = [...f.viewer.shown[0].instances.records.values()];
+  const geometry = rendered.geometry;
+  const positions = [...geometry.attributes.position.values];
+  const normals = [...geometry.attributes.normal.values];
+  const indices = [...geometry.indices];
+  const anchor = { ...rendered.transform.translation };
+  const scale = { ...rendered.transform.scale };
+  const stationaryTransform = stationary.transform;
+  const refreshBefore = f.viewer.refreshCount;
+  // World XYZ angles (90, 90, 0): every quaternion component matters.
+  const rotation = { x: 0.5, y: 0.5, z: -0.5, w: 0.5 };
+  const transform = { ...f.transform, rotation };
+  scene.update('rotating', transform);
+  assert.deepEqual({ ...rendered.transform.rotation }, rotation);
+  assert.deepEqual({ ...rendered.transform.translation }, anchor);
+  assert.deepEqual({ ...rendered.transform.scale }, scale);
+  assert.equal(rendered.geometry, geometry);
+  assert.deepEqual([...geometry.attributes.position.values], positions);
+  assert.deepEqual([...geometry.attributes.normal.values], normals);
+  assert.deepEqual([...geometry.indices], indices);
+  assert.equal(stationary.transform, stationaryTransform);
+  assert.deepEqual(transform, { ...f.transform, rotation: { x: 0.5, y: 0.5, z: -0.5, w: 0.5 } });
+  assert.equal(f.viewer.refreshCount, refreshBefore + 1);
+  assert.equal(f.viewer.model, f.sourceModel);
+  scene.dispose();
+});
+
+test('disposal unloads the owned dynamic model exactly once and never the source model', () => {
+  const f = fixture();
+  const scene = createCadSceneController(f.viewer, {
+    window: f.window,
+    sourceModel: f.sourceModel,
+  });
+  scene.add('straight', f.mesh, f.transform);
+  scene.dispose();
+  scene.dispose();
+  assert.deepEqual(f.viewer.unloaded, [f.viewer.shown[0]]);
+  assert.ok(!f.viewer.unloaded.includes(f.sourceModel));
+  assert.throws(() => scene.add('after-dispose', f.mesh, f.transform), /disposed/);
+});
+
+test('malformed CAD geometry refuses to render', () => {
+  const f = fixture();
+  const scene = createCadSceneController(f.viewer, {
+    window: f.window,
+    sourceModel: f.sourceModel,
+  });
+  assert.throws(
+    () => scene.add('broken', { ...f.mesh, indices: [0, 1, -1] }, f.transform),
+    /invalid|limits/,
+  );
+  assert.equal(f.viewer.shown.length, 0);
+});
+
+test('focus resolves only the owned CAD instance and model, never source SVF IDs', () => {
+  const f = fixture();
+  const scene = createCadSceneController(f.viewer, {
+    window: f.window,
+    sourceModel: f.sourceModel,
+  });
+  scene.add('straight', f.mesh, f.transform);
+  scene.add('bend', f.mesh, f.transform);
+  scene.focus('bend');
+  const owned = f.viewer.shown[0],
+    objectId = owned.instances.fragments.fragId2dbId[1];
+  assert.deepEqual(f.viewer.focused, [{ ids: [objectId], model: owned }]);
+  assert.deepEqual(f.viewer.selected, [{ ids: [objectId], model: owned }]);
+  assert.equal(f.viewer.model, f.sourceModel);
+  assert.throws(() => scene.focus('foreign'), /Unknown CAD/);
+  scene.remove('bend');
+  assert.throws(() => scene.focus('bend'), /Unknown CAD/);
+  scene.dispose();
+  assert.throws(() => scene.focus('straight'), /Unknown CAD/);
+  assert.equal(f.viewer.focused.length, 1);
+});
+
+test('real tree resolves first fragment zero and preserves its leaf identity across replacement', () => {
+  const f = fixture(),
+    scene = createCadSceneController(f.viewer, { window: f.window, sourceModel: f.sourceModel });
+  scene.add('first', f.mesh, f.transform);
+  const model = f.viewer.shown[0];
+  const objectId = model.instances.fragments.fragId2dbId[0];
+  assert.ok(objectId > 0);
+  scene.focus('first');
+  assert.deepEqual(f.viewer.focused.at(-1), { ids: [objectId], model });
+  assert.deepEqual(f.viewer.selected.at(-1), { ids: [objectId], model });
+  scene.add('first', f.mesh, f.transform);
+  assert.equal(model.instances.fragments.fragId2dbId[1], objectId);
+  assert.deepEqual(f.viewer.currentSelection, [{ model, selection: [objectId] }]);
+  model.getData = () => ({ fragments: { dbId2fragId: { 1: 1 } } });
+  scene.focus('first');
+  assert.deepEqual(f.viewer.focused.at(-1), { ids: [objectId], model });
+  assert.deepEqual(f.viewer.selected.at(-1), { ids: [objectId], model });
+  scene.remove('first');
+  assert.equal(model.instances.records.size, 0);
+});
+test('removing a selected fragment preserves source and other CAD selection and prevents ID-reuse selection', () => {
+  const f = fixture(),
+    scene = createCadSceneController(f.viewer, { window: f.window, sourceModel: f.sourceModel });
+  scene.add('first', f.mesh, f.transform);
+  scene.add('other', f.mesh, f.transform);
+  const model = f.viewer.shown[0];
+  const firstId = model.instances.fragments.fragId2dbId[0],
+    otherId = model.instances.fragments.fragId2dbId[1];
+  f.viewer.currentSelection = [
+    { model: f.sourceModel, selection: [91] },
+    { model, selection: [firstId, otherId] },
+  ];
+  scene.remove('first');
+  assert.deepEqual(f.viewer.currentSelection, [
+    { model: f.sourceModel, selection: [91] },
+    { model, selection: [otherId] },
+  ]);
+  model.instances.nextId = 0;
+  scene.add('different-component', f.mesh, f.transform);
+  assert.deepEqual(f.viewer.currentSelection, [
+    { model: f.sourceModel, selection: [91] },
+    { model, selection: [otherId] },
+  ]);
+  scene.add('other', f.mesh, f.transform);
+  assert.deepEqual(f.viewer.currentSelection, [
+    { model: f.sourceModel, selection: [91] },
+    { model, selection: [otherId] },
+  ]);
+});
+
+test('actual pinned SDK public selection retains fragment zero while its event drops only zero', () => {
+  const sdk = fs.readFileSync(new URL('../sdk/7.130.0/viewer3D.min.js', import.meta.url), 'utf8');
+  function method(signature, after = 0) {
+    const start = sdk.indexOf(signature, after);
+    assert.ok(start >= 0, signature);
+    const open = sdk.indexOf('{', start);
+    let depth = 1,
+      end = open + 1;
+    for (; depth; end++) {
+      if (sdk[end] === '{') depth++;
+      else if (sdk[end] === '}') depth--;
+    }
+    return sdk.slice(start, end);
+  }
+  const read = Function(
+    'return ({' + method('getSelection(){', sdk.indexOf('class mk')) + '}).getSelection',
+  )();
+  const raw = Function(
+    'return ({' +
+      method('getAggregateSelection(){', sdk.indexOf('class vk')) +
+      '}).getAggregateSelection',
+  )();
+  const source = {
+    selector: { selectedObjectIds: { 91: 1 }, getSelection: read, getObjectTree: () => null },
+  };
+  const owned = {
+    selector: { selectedObjectIds: { 0: 1, 2: 1 }, getSelection: read, getObjectTree: () => null },
+  };
+  assert.deepEqual(raw.call({ _models: [source, owned] }), [
+    { model: source, selection: [91] },
+    { model: owned, selection: [0, 2] },
+  ]);
+  const emit = Function(
+    'dg',
+    'ug',
+    'return ({' +
+      method('_fireAggregateSelectionChangedEvent(e)') +
+      '})._fireAggregateSelectionChangedEvent',
+  )('selection', 'aggregate');
+  const events = [];
+  emit.call({
+    _models: [source, owned],
+    _viewer: { api: { dispatchEvent: (event) => events.push(event) } },
+  });
+  assert.deepEqual(
+    events.at(-1).selections.map((row) => row.dbIdArray),
+    [[91], [2]],
+  );
+});
+
+test('dynamic model cannot take ownership of the source model identity', () => {
+  const f = fixture();
+  f.viewer.showModel = function (model) {
+    this.model = model;
+    this.shown.push(model);
+  };
+  const scene = createCadSceneController(f.viewer, {
+    window: f.window,
+    sourceModel: f.sourceModel,
+  });
+  assert.throws(() => scene.add('tray', f.mesh, f.transform), /identity/);
+  assert.deepEqual(f.viewer.unloaded, [f.viewer.shown[0]]);
+});
+
+test('CAD color affects only the owned instance and survives movement and replacement geometry', () => {
+  const f = fixture();
+  const scene = createCadSceneController(f.viewer, {
+    window: f.window,
+    sourceModel: f.sourceModel,
+  });
+  scene.add('colored', f.mesh, f.transform);
+  scene.add('neighbor', f.mesh, f.transform);
+  const records = f.viewer.shown[0].instances.records;
+  const [colored, neighbor] = [...records.values()];
+  const geometry = colored.geometry;
+  const transform = colored.transform;
+  const neighborMaterial = neighbor.material;
+  scene.setColor('colored', '#12aBef');
+  assert.equal(colored.material.options.color, 0x12abef);
+  assert.ok(colored.material instanceof FakeUnlitMaterial);
+  assert.deepEqual(colored.material.options, {
+    color: 0x12abef,
+    side: 'double',
+    opacity: 1,
+    transparent: false,
+    depthTest: true,
+    depthWrite: true,
+    fog: false,
+  });
+  assert.equal(colored.geometry, geometry);
+  assert.equal(colored.transform, transform);
+  assert.equal(neighbor.material, neighborMaterial);
+  scene.update('colored', { ...f.transform, positionMm: { x: 100000, y: 200000, z: 300000 } });
+  assert.equal(colored.material.options.color, 0x12abef);
+  scene.add('colored', { ...f.mesh, positions: f.mesh.positions.map((v) => v / 2) }, f.transform);
+  assert.equal(
+    [...records.values()].find((item) => item !== neighbor).material.options.color,
+    0x12abef,
+  );
+  assert.equal(f.viewer.model, f.sourceModel);
+  scene.remove('colored');
+  scene.add('colored', f.mesh, f.transform);
+  assert.equal(
+    [...records.values()].find((item) => item !== neighbor).material.options.color,
+    0xd9ab33,
+  );
+  scene.dispose();
+});
+
+test('CAD color rejects foreign instances, malformed values and disposed scenes', () => {
+  const f = fixture();
+  const scene = createCadSceneController(f.viewer, {
+    window: f.window,
+    sourceModel: f.sourceModel,
+  });
+  scene.add('owned', f.mesh, f.transform);
+  for (const value of ['red', '#abc', '#1234567', '123456', '#gg0000', null, 123])
+    assert.throws(() => scene.setColor('owned', value), /Invalid CAD color/);
+  assert.throws(() => scene.setColor('source-svf-id', '#123456'), /Unknown CAD instance/);
+  assert.equal(
+    [...f.viewer.shown[0].instances.records.values()][0].material.options.color,
+    0xd9ab33,
+  );
+  scene.dispose();
+  assert.throws(() => scene.setColor('owned', '#123456'), /Unknown CAD instance/);
+  assert.equal(f.viewer.model, f.sourceModel);
+});
+
+test('native saved world coordinates follow add, move, metadata refresh and geometry replacement without source offsets', () => {
+  const f = fixture();
+  let panel = { isVisible: () => true, uninitialize() {} };
+  class NativePanel {
+    constructor(viewer) {
+      this.viewer = viewer;
+      this.visible = true;
+      this.currentSelections = viewer.getAggregateSelection();
+    }
+    isVisible() {
+      return this.visible;
+    }
+    setVisible(value) {
+      this.visible = value;
+      this.requestProperties();
+    }
+    requestProperties() {
+      if (this.visible && this.currentSelections.length)
+        this.requestAggregatedNodeProperties(this.currentSelections);
+    }
+    setPropertiesIntoUI(result) {
+      this.result = result;
+    }
+    onPropError() {
+      this.result = null;
+    }
+    uninitialize() {}
+  }
+  f.viewer.getExtension = () => ({
+    getPanel: () => panel,
+    setPanel: (next) => {
+      panel = next;
+      return true;
+    },
+    setDefaultPanel() {},
+  });
+  f.viewer.addEventListener = () => {};
+  f.viewer.removeEventListener = () => {};
+  f.window.Autodesk.Viewing.Extensions = { ViewerPropertyPanel: NativePanel };
+  f.window.Autodesk.Viewing.PropertySet = class {};
+  const componentId = '00000000-0000-4000-8000-000000000001';
+  const metadata = {
+    instanceId: componentId,
+    name: 'BC182 / section 1',
+    actualLengthMm: 3750,
+    widthMm: 300,
+    heightMm: 60,
+    partNumber: 'KL 60.303 F',
+    manufacturer: 'Niedax',
+    purpose: 'LV',
+    componentKind: 'straight',
+    cadAssetId: null,
+    cadRevision: 1,
+  };
+  const route = { id: '00000000-0000-4000-8000-000000000002', name: 'BC182', purpose: 'LV' };
+  const scene = createCadSceneController(f.viewer, {
+    window: f.window,
+    sourceModel: f.sourceModel,
+  });
+  scene.add(componentId, f.mesh, f.transform);
+  scene.focus(componentId);
+  scene.setProperties(componentId, metadata, route);
+  const coordinates = () =>
+    panel.result.properties
+      .filter(
+        (row) =>
+          row.displayCategory === 'Position in model' && row.displayName !== 'Reference point',
+      )
+      .map((row) => [row.displayName, row.displayValue, row.units]);
+  assert.deepEqual(coordinates(), [
+    ['Placement origin X', 125000, 'mm'],
+    ['Placement origin Y', 220000, 'mm'],
+    ['Placement origin Z', 340000, 'mm'],
+  ]);
+  const moved = {
+    ...f.transform,
+    positionMm: { x: -123.456789, y: 0, z: 987654.321 },
+    rotation: { x: 0.5, y: 0.5, z: -0.5, w: 0.5 },
+  };
+  scene.update(componentId, moved);
+  moved.positionMm.x = 999;
+  assert.deepEqual(coordinates(), [
+    ['Placement origin X', -123.456789, 'mm'],
+    ['Placement origin Y', 0, 'mm'],
+    ['Placement origin Z', 987654.321, 'mm'],
+  ]);
+  scene.setProperties(componentId, metadata, route);
+  assert.equal(coordinates()[0][1], -123.456789);
+  scene.add(componentId, f.mesh, { ...f.transform, positionMm: { x: 1, y: 2, z: 3 } });
+  panel.currentSelections = f.viewer.getAggregateSelection();
+  scene.setProperties(componentId, metadata, route);
+  assert.deepEqual(coordinates(), [
+    ['Placement origin X', 1, 'mm'],
+    ['Placement origin Y', 2, 'mm'],
+    ['Placement origin Z', 3, 'mm'],
+  ]);
+  assert.equal(
+    panel.result.properties.find((row) => row.displayName === 'Actual length').displayValue,
+    3750,
+  );
+  assert.equal(f.viewer.model, f.sourceModel);
+  scene.dispose();
+});

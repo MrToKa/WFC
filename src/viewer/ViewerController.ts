@@ -1,3 +1,4 @@
+import { validateCadProperties, type CadSectionMetadata, type CadSectionRoute } from '../../viewer-runtime/cad-properties.mjs';
 import { digestSha256 } from '../utils/sha256';
 import { generateId } from '@/utils/generateId';
 import { FRAME_PATH, MAX_PATH_POINTS, MAX_PATH_CHUNK_POINTS, MAX_LOCATION_OBJECT_IDS, MAX_PATH_OBJECT_IDS, isCanonicalPoint, validateEnvelope, type BridgeEnvelope, type ComputedPath, type CanonicalPoint, type PickedPoint, type ViewerModelObjectsPage, type ViewerSelection, type ViewerTrayRootSelection, type ModelCaptureRequest, type ModelCaptureProgress } from '../../viewer-runtime/protocol.mjs';
@@ -181,6 +182,75 @@ export class ViewerController {
     return new Promise((resolve, reject) => { try { this.send(type, payload, terminal, { resolve, reject, ...options }); } catch (error) { reject(error); } });
   }
 
+  /** Add a saved catalogue instance to the current protected 3D model. */
+  async showCadComponent(componentId: string, mesh: unknown, transform: {
+    positionMm: { x: number; y: number; z: number };
+    rotation: { x: number; y: number; z: number; w: number };
+  }): Promise<void> {
+    const scope = this.getLoadSnapshot();
+    if (!scope?.ready || !await this.checkSelection()) throw new Error('An authorized active model is required for CAD placement.');
+    const serialized = JSON.stringify(mesh);
+    if (!serialized || serialized.length > 16 * 1024 * 1024) throw new Error('CAD mesh exceeds viewer limit.');
+    const ownsLoad = () => {
+      const now = this.getLoadSnapshot();
+      return Boolean(now?.ready && now.instanceId === scope.instanceId && now.modelVersionId === scope.modelVersionId
+        && now.loadId === scope.loadId && now.projectId === scope.projectId && now.selectionRevision === scope.selectionRevision);
+    };
+    const current = () => {
+      if (!ownsLoad()) throw new Error('The active model changed during CAD placement.');
+    };
+    try {
+      current();
+      await this.sendAsync('CAD_BEGIN', { componentId, totalChars: serialized.length, transform }, 'CAD_ACK');
+      for (let offset = 0; offset < serialized.length; offset += 12000) {
+        current();
+        const chunk = serialized.slice(offset, offset + 12000);
+        await this.sendAsync('CAD_APPEND', { componentId, offset, chunk }, 'CAD_ACK');
+      }
+      current();
+      await this.sendAsync('CAD_COMMIT', { componentId }, 'CAD_ACK');
+      current();
+    } catch (error) {
+      // An old multipart upload may settle after a fresh model is ready. Its
+      // cleanup belongs only to its captured load, even if the same ID is reused.
+      if (ownsLoad()) {
+        await this.sendAsync('CAD_REMOVE', { componentId }, 'CAD_ACK').catch(() => undefined);
+      }
+      throw error;
+    }
+  }
+
+  async moveCadComponent(componentId: string, transform: {
+    positionMm: { x: number; y: number; z: number };
+    rotation: { x: number; y: number; z: number; w: number };
+  }): Promise<void> {
+    if (!this.getLoadSnapshot()?.ready || !await this.checkSelection()) throw new Error('Viewer model access changed.');
+    await this.sendAsync('CAD_TRANSFORM', { componentId, transform }, 'CAD_ACK');
+  }
+
+  async removeCadComponent(componentId: string): Promise<void> {
+    if (!this.getLoadSnapshot()?.ready || !await this.checkSelection()) return;
+    await this.sendAsync('CAD_REMOVE', { componentId }, 'CAD_ACK');
+  }
+
+  async focusCadComponent(componentId: string): Promise<void> {
+    if (!this.getLoadSnapshot()?.ready || !await this.checkSelection()) throw new Error('Viewer model access changed.');
+    await this.sendAsync('CAD_FOCUS', { componentId }, 'CAD_ACK');
+  }
+
+  async setCadComponentColor(componentId: string, color: string): Promise<void> {
+    if (!/^#[0-9a-fA-F]{6}$/.test(color)) throw new Error('Choose a six-digit hexadecimal color.');
+    if (!this.getLoadSnapshot()?.ready || !await this.checkSelection()) throw new Error('Viewer model access changed.');
+    await this.sendAsync('CAD_COLOR', { componentId, color }, 'CAD_ACK');
+  }
+
+  async setCadComponentProperties(componentId: string, metadata: CadSectionMetadata, route: CadSectionRoute): Promise<void> {
+    if (!validateCadProperties(componentId, metadata, route)) throw new Error('Invalid CAD section properties.');
+    const payload = structuredClone({ componentId, metadata, route });
+    if (!this.getLoadSnapshot()?.ready || !await this.checkSelection()) throw new Error('Viewer model access changed.');
+    await this.sendAsync('CAD_PROPERTIES', payload, 'CAD_ACK');
+  }
+
   private onMessage = (event: MessageEvent): void => {
     if (this.disposed || event.origin !== window.location.origin || event.source !== this.iframe.contentWindow) return;
     const message = validateEnvelope(event.data, 'frame-to-parent');
@@ -266,6 +336,21 @@ export class ViewerController {
     }
     if (message.type === 'BARRIER_CAPTURE_EVENT' && (message.payload.captureId !== pending.envelope.payload.captureId || message.payload.index !== (pending.envelope.type === 'START_BARRIER_CAPTURE' ? 0 : pending.envelope.payload.index))) {
       pending.reject?.(new Error('Barrier capture identity mismatch')); this.fail('ROUTE_RESULT_MISMATCH'); return;
+    }
+    if (message.type === 'CAD_ACK') {
+      const expected: Record<string, string> = {
+        CAD_BEGIN: 'begun', CAD_APPEND: 'appended', CAD_COMMIT: 'displayed',
+        CAD_TRANSFORM: 'moved', CAD_REMOVE: 'removed', CAD_FOCUS: 'focused', CAD_COLOR: 'colored', CAD_PROPERTIES: 'properties',
+      };
+      const phase = expected[pending.envelope.type];
+      const payload = pending.envelope.payload;
+      if (!phase || message.payload.componentId !== payload.componentId || message.payload.phase !== phase ||
+          (pending.envelope.type === 'CAD_BEGIN' && message.payload.received !== 0) ||
+          (pending.envelope.type === 'CAD_APPEND' &&
+           message.payload.received !== Number(payload.offset) + String(payload.chunk).length)) {
+        pending.reject?.(new Error('CAD command acknowledgement mismatch'));
+        return;
+      }
     }
     if (message.type === 'PATH_TRANSPARENCY_UPDATED' && (message.payload.routeRequestId !== pending.envelope.payload.routeRequestId || message.payload.percent !== pending.envelope.payload.percent)) {
       pending.reject?.(new Error('Path transparency acknowledgement mismatch')); return;
