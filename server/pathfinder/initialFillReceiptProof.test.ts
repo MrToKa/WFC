@@ -33,7 +33,7 @@ function mixedIdentity(){
     runtimeProfile:MIXED_BARRIER_RUNTIME_PROFILE.schemaVersion,geometryPolicy:MIXED_BARRIER_POLICY}});
   return mixedBarrierEngineIdentitySchema.parse({...body,contentSha256:hash(body)});
 }
-async function fixture(protectedCalculation: boolean|'mixed' = false) {
+async function fixture(protectedCalculation: boolean|'mixed' = false, mto: string|null = 'LV') {
   const f = endpointBindingFixture(), originalBinding = f.command(), projectId = f.f.aggregate.projectId, cableId = id(10), proposalId = id(200), jobId = id(201);
   const binding = await f.repo.confirm(projectId, f.who, f.locationId, originalBinding), current = (await readCurrentEndpointBindingContext(f.client as never, projectId))!;
   const scope = { projectId, modelVersionId: current.modelVersionId, selectionRevision: current.selectionRevision, contentFingerprint: current.contentFingerprint,
@@ -74,7 +74,8 @@ async function fixture(protectedCalculation: boolean|'mixed' = false) {
     artifact: { id: current.artifactId, sha256: current.projectionSha256 }, preparation: { aggregateId: current.aggregateId,
       geometryRevision: current.geometryRevision, captureFrameId: current.captureFrameId, projectionSha256: current.projectionSha256 },
     routing: { catalogRevision: '2', routingContentSha256: 'a'.repeat(64), routingPolicyRevision: '3', routingPolicySha256: 'b'.repeat(64) },
-    cableInputs: { fromLocation: 'EQUIPMENT', toLocation: 'TO', mto: 'LV', cableTypeId: id(206) },
+    cableInputs: { fromLocation: 'EQUIPMENT', toLocation: 'TO', mto, cableTypeId: id(206) },
+    ...(!['MV','LV','Control','Instrumentation'].includes(mto??'')?{cablePurposeRouting:{purpose:'Control',allowedRouteCodes:['/A']}}:{}),
     settings: { revision: '2', connectionGap: '1', secondaryTrayLength: null, endConnectionLength: '1', additionalBendingPercent: '10' },
     options: { ...defaultOptions, secondaryDistanceMeters: 2, preferVerticalApproach: true }, from: endpoint(binding.locationId), to: endpoint(id(207)),
     endpointResolution: { schemaVersion: 'pathfinder.endpoint-resolution.v1', matchingPolicy: 'nfc-trim-uppercase-v1',
@@ -123,7 +124,7 @@ async function fixture(protectedCalculation: boolean|'mixed' = false) {
       rawLengthMeters: 5, designLengthMeters: '7', unroundedMeters: '6.6', delta: { rawLengthMeters: null, designLengthMeters: null, unroundedMeters: null, baseline: 'unavailable' }, reasonCodes: [] },
     comparisonRef: null, observedEvents: [], lengthLedger: ledger, physicalChangeProven: false, createdAt: new Date(now).toISOString(), revisionResultSha256: 'd'.repeat(64) });
   const item = signed(locationImpactItemSchema.parse({ schemaVersion: 'wfc.pf.location-impact-item.v1', projectId, impactId: impact.id, cableId,
-    generation: '2', cableWriteRevision: '7', fromLogicalKey: 'EQUIPMENT', toLogicalKey: 'TO', category: 'LV', eligible: true, contentSha256: '0'.repeat(64) }));
+    generation: '2', cableWriteRevision: '7', fromLogicalKey: 'EQUIPMENT', toLogicalKey: 'TO', category: mto, eligible: true, contentSha256: '0'.repeat(64) }));
   const key = initialFillIdempotencyKey({ projectId, cableId, proposalId, proposalHash, mandateId: mandate.id, expectedCableWriteRevision: '7' });
   const request = { schemaVersion: 'wfc.pf.initial-fill-request.v1' as const, idempotencyKey: key, proposalId, expectedProposalHash: proposalHash, mandateId: mandate.id, expectedCableWriteRevision: '7' };
   const provenance = initialFillProvenanceSchema.parse({ schemaVersion: protectedCalculation ? 'pathfinder.initial-fill.v2' : 'pathfinder.initial-fill.v1', validationMethod: 'automatic-initial-fill', nativeParity: 'not-performed',
@@ -131,7 +132,7 @@ async function fixture(protectedCalculation: boolean|'mixed' = false) {
     ...(protectedCalculation ? { barrierEvidence: readBarrierWriteEvidence(dependencies, result) } : {}),
     revisionResult: { admissionId: seal.admissionId, revisionResultSha256: seal.revisionResultSha256, baselineHash, engineResultSha256: seal.engineResultSha256, ledgerHash: seal.ledgerHash, dependencyHash: seal.dependencyHash },
     authorized: { actorId: mandate.actorId, loginId: mandate.loginId, installationEpoch: mandate.installationEpoch, targetGeneration: item.generation, authorizedAt: new Date(now + 1000).toISOString() } });
-  const before = { id: cableId, project_id: projectId, mto: 'LV', from_location: 'EQUIPMENT', to_location: 'TO', cable_type_id: id(206), routing: ' \t\n\u00a0',
+  const before = { id: cableId, project_id: projectId, mto, from_location: 'EQUIPMENT', to_location: 'TO', cable_type_id: id(206), routing: ' \t\n\u00a0',
     design_length: null, install_length: '3.1250', cable_write_revision: '7', revision: 'engineering-1', tag: 'Cable', updated_at: new Date(now).toISOString() };
   const after = { ...before, routing: result.route!.routeText, design_length: '7.0000', cable_write_revision: '8', updated_at: new Date(now + 1000).toISOString() };
   const saved = cableEndpointReceiptSchema.parse({ schemaVersion: 'wfc.pf.cable-endpoint-receipt.v1', projectId, actorId: f.who.userId, cableId, end: 'from', logicalName: 'EQUIPMENT',
@@ -164,6 +165,11 @@ beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(now); });
 afterEach(() => { vi.useRealTimers(); });
 
 describe('historical conditional initial-fill receipt chain with synthetic SQL and a caller-verified seal', () => {
+  it.each([null, 'Custom MTO', ''])('recognizes a complete initial-fill receipt with exact MTO %j without requiring a category label', async mto => {
+    const f=await fixture(true,mto);expect(await f.run()).toBe(true);
+    expect(f.dependencies.cableInputs.mto).toBe(mto);expect(f.before.mto).toBe(mto);expect(f.item.category).toBe(mto);
+    f.input.before={...f.before,mto:'Changed MTO'};expect(await f.run()).toBe(false);
+  });
   it('recognizes exact mixed initial-fill evidence after the original login expires without live geometry/currentness access',async()=>{
     const f=await fixture('mixed');vi.setSystemTime(now+86400000);
     expect(f.provenance.schemaVersion).toBe('pathfinder.initial-fill.v2');

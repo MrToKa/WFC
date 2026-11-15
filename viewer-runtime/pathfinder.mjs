@@ -1,6 +1,6 @@
-import { isCanonicalPoint } from './protocol.mjs';
+import { isCanonicalPoint, MAX_PATH_OBJECT_IDS } from './protocol.mjs';
 import { PREPARATION_VIEWER_LIMITS, PREPARATION_MATCHING_POLICY, validatePreparationDiscoveryRequest, validatePreparationDiscoveryPage } from './preparation-input.mjs';
-import { modelEquipmentMatchKeys, humanScalarPropertyValues } from './equipment-names.mjs';
+import { modelEquipmentMatchKeys, humanScalarPropertyValues, equipmentObjectIdentity } from './equipment-names.mjs';
 import { captureDisplayVisibility, sameDisplayVisibility } from './display-visibility.mjs';
 
 const fail = code => Object.assign(new Error('The requested PathFinder viewer operation could not be completed.'), { code });
@@ -9,7 +9,7 @@ const positiveId = value => Number.isSafeInteger(value) && value > 0 && value <=
 const pause = () => new Promise(resolve => setTimeout(resolve, 0));
 const displayPoint = value => Array.isArray(value) && value.length === 3 && value.every(item => Number.isFinite(item) && Math.abs(item) <= 1e12);
 const TUBE_SIDES = 8, SEGMENTS_PER_MESH = 2000, TUBE_VERTICES = TUBE_SIDES * 2 + 2;
-const APPEARANCE_LIMITS = Object.freeze({ fragments: 1000000, materials: 4096, foregroundFragments: 8192 });
+const APPEARANCE_LIMITS = Object.freeze({ fragments: 1000000, materials: 4096, foregroundFragments: 16384 });
 // Per active model, including a conservative charge for Map/array entries and
 // UTF-16 strings. The SDK's complete-property proof is retained even when no
 // requested name matches; a refused/aborted build is never a reusable index.
@@ -152,7 +152,7 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
     for (const state of pendingCloneCleanup) { if (restoreState(state)) pendingCloneCleanup.delete(state); else failed = true; }
     if (failed) { recoveryRequired = true; throw restoreFailure(appearance?.lastRestoreError ?? [...pendingCloneCleanup][0]?.lastRestoreError); }
   }
-  function clear() {
+  function clear({ preserveSelection = false } = {}) {
     viewGeneration++; transparencyOperation++;
     let failed = false, firstError;
     const attempt = work => { try { work(); return true; } catch (error) { failed = true; firstError ??= error; return false; } };
@@ -169,7 +169,8 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
       if (!prior.passRestored && attempt(() => { if (typeof prior.pass === 'boolean') viewer.impl.toggleGhosting(prior.pass); })) prior.passRestored = true;
       if (prior.visibilityRestored && !prior.materials.size && prior.preferenceRestored && prior.passRestored) ghost = undefined;
     }
-    attempt(() => viewer.clearSelection()); attempt(() => viewer.impl.invalidate(true, true, true));
+    if (!preserveSelection) attempt(() => viewer.clearSelection());
+    attempt(() => viewer.impl.invalidate(true, true, true));
     recoveryRequired = failed;
     if (failed) throw restoreFailure(firstError);
   }
@@ -180,11 +181,30 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
     if (baselineVisibilityUnknown) throw fail('PREPARATION_VISIBILITY_UNAVAILABLE');
     if (ghost || appearance || pendingCloneCleanup.size || recoveryRequired || overlays.length || geometries.length || bounds || material || sceneActive) clear();
   }
+  function showTray(objectIds) {
+    active();
+    if (!Array.isArray(objectIds) || !objectIds.length || objectIds.length > 512 || ![...objectIds].every(positiveId) || new Set(objectIds).size !== objectIds.length) throw fail('TRAY_UNAVAILABLE');
+    const visibility = model.visibilityManager;
+    if (typeof visibility?.getDefaultVisibility !== 'function' || typeof visibility?.getVisibility !== 'function' || typeof visibility?.setVisibility !== 'function'
+      || typeof viewer.isolate !== 'function' || typeof viewer.setGhosting !== 'function' || typeof viewer.impl?.toggleGhosting !== 'function') throw fail('SDK_UNSUPPORTED');
+    // Share the route appearance baseline, but draw no cable line or marker.
+    // Isolating the tray leaves its roots solid and draws the remaining model in Ghost.
+    clear({ preserveSelection: true });
+    try {
+      captureGhost(); viewer.isolate([...objectIds], model);
+      viewer.setGhosting(true); captureGhost(); viewer.impl.toggleGhosting(true);
+      viewer.impl.invalidate(true, true, true);
+    } catch (error) {
+      try { clear({ preserveSelection: true }); }
+      catch (cleanup) { throw restoreFailure(cleanup); }
+      throw error;
+    }
+  }
   function showPath({ points, objectIds }) {
     active();
     const coordinates = modelCoordinates(model);
     const local = points.map(point => coordinates.toDisplay(point));
-    if (local.length < 1 || local.length > 20000 || !Array.isArray(objectIds) || objectIds.length > 512 || !objectIds.every(positiveId)) throw fail('PATH_INVALID');
+    if (local.length < 1 || local.length > 20000 || !Array.isArray(objectIds) || objectIds.length > MAX_PATH_OBJECT_IDS || !objectIds.every(positiveId)) throw fail('PATH_INVALID');
     if (!objectIds.length && (typeof model.visibilityManager?.setAllVisibility !== 'function' || typeof model.visibilityManager?.getVisibility !== 'function' || typeof model.visibilityManager?.getDefaultVisibility !== 'function' || typeof model.visibilityManager?.setVisibility !== 'function')) throw fail('SDK_UNSUPPORTED');
     const tubes = createExactPathBatches(local, 0.02 / coordinates.scale);
     clear();
@@ -324,7 +344,7 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
     }).catch(error => { externalPromise = undefined; throw error; });
     return externalPromise;
   }
-  async function readPreparationObjects(input, operationSignal) {
+  async function readPreparationObjects(input, operationSignal, onProgress = () => {}) {
     if (!validatePreparationDiscoveryRequest(input)) throw fail('PREPARATION_SCOPE_INVALID');
     prepareForVisibilityObservation();
     const request = JSON.parse(JSON.stringify(input)), started = Date.now();
@@ -333,8 +353,9 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
     if (request.cursor > ids.length) throw fail('PREPARATION_SCOPE_INVALID');
     const visibility = await captureDisplayVisibility(viewer, tree, ids, { check, pause, indexById: indexed.indexById });
     if (request.visibilityScope && !sameDisplayVisibility(request.visibilityScope, visibility.scope)) throw fail('PREPARATION_VISIBILITY_CHANGED');
-    const indexById = indexed.indexById, matching = new Map(); let propertyScan = null, candidateIndices;
-    const normalEquipment = value => String(value).normalize('NFC').trim().toUpperCase();
+    const indexById = indexed.indexById, matching = new Map(); let propertyScan = null, candidateIndices, objectIdentities;
+    const trayProperties = request.mode === 'names' && request.includeProperties === true;
+    const normalEquipment = value => request.mode === 'names' ? String(value).normalize('NFC').trim() : String(value).normalize('NFC').trim().toUpperCase();
     if (request.mode === 'subtree' || request.mode === 'subtrees' || request.mode === 'ancestors') {
       const roots = request.mode === 'subtrees' ? request.rootObjectIds : [request.rootObjectId];
       if (!roots.every(id => indexById.has(id))) throw fail('PREPARATION_SCOPE_INVALID');
@@ -353,21 +374,30 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
         preparationSubtree = { queryKey, indices:[...selected].map(id => indexById.get(id)).sort((a,b) => a-b) };
       }
       candidateIndices = preparationSubtree.indices;
-    } else if (request.mode === 'equipment') {
+    } else if (request.mode === 'equipment' || trayProperties) {
+      let lastProgressAt = -Infinity, lastProgressLoaded = -1;
+      const progress = (loaded, force = false) => {
+        check(); const now = performance.now();
+        if (lastProgressLoaded === loaded || !force && now - lastProgressAt < 250) return;
+        lastProgressAt = now; lastProgressLoaded = loaded;
+        onProgress({ phase: 'properties', loaded, total: ids.length }); check();
+      };
       // Retain matching postings only for this bounded project name universe.
       // Small query pages still echo/filter only their own names, and reobserve
       // live visibility before returning any cached property candidates.
       const indexNames = request.indexNames ?? request.names;
-      const queryKey = JSON.stringify(indexNames.map(normalEquipment));
+      const queryKey = JSON.stringify([request.mode, indexNames.map(normalEquipment)]);
       if (!preparationEquipment || preparationEquipment.queryKey !== queryKey) {
         const state = { promise:null, queryKey }; preparationEquipment = state;
         state.promise = (async () => {
-          const values = new Map(), requested = new Set(indexNames.map(normalEquipment)), returned = new Uint8Array(ids.length);
+          progress(0, true);
+          const values = new Map(), identities = new Map(), requested = new Set(indexNames.map(normalEquipment)), returned = new Uint8Array(ids.length);
           let returnedCount = 0, accountedBytes = returned.byteLength, postings = 0, scannedProperties = 0;
+          let rowWorkMilliseconds = 0;
           const charge = bytes => { accountedBytes += bytes; if (accountedBytes > EQUIPMENT_INDEX_LIMITS.bytes) throw fail('PREPARATION_EQUIPMENT_INDEX_LIMIT'); };
           const indexValue = (raw, id, seen) => {
             const text = String(raw ?? '');
-            for (const key of modelEquipmentMatchKeys(text)) {
+            for (const key of trayProperties ? [normalEquipment(text)] : modelEquipmentMatchKeys(text)) {
               if (!requested.has(key) || seen.has(key)) continue;
               if (text.length > EQUIPMENT_INDEX_LIMITS.valueCharacters) throw fail('PREPARATION_EQUIPMENT_ROW_LIMIT');
               seen.add(key);
@@ -380,12 +410,18 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
               charge(16); matches.push(id);
             }
           };
+          // The pinned SDK's legacy method drops needsExternalId and loads the
+          // entire external-ID file when no property filter is supplied.
+          const readBulkProperties = typeof model.getBulkProperties2 === 'function' ? model.getBulkProperties2 : model.getBulkProperties;
+          if (typeof readBulkProperties !== 'function') throw fail('PREPARATION_EQUIPMENT_PROPERTIES_FAILED');
           for (let start = 0; start < ids.length; start += 512) {
             check(); const batch = ids.slice(start, start + 512), allowed = new Set(batch);
-            const rows = await callback((yes, no) => model.getBulkProperties(batch, { ignoreHidden:false, needsExternalId:false }, yes, no), operationSignal, 45000,
+            const rows = await callback((yes, no) => readBulkProperties.call(model, batch, { ignoreHidden:false, needsExternalId:false }, yes, no), operationSignal, 45000,
               { timeout:'PREPARATION_EQUIPMENT_PROPERTIES_TIMEOUT', failed:'PREPARATION_EQUIPMENT_PROPERTIES_FAILED' }); check();
             if (!Array.isArray(rows) || rows.length > batch.length) throw fail('PREPARATION_EQUIPMENT_PROPERTIES_INVALID');
+            let rowWorkStartedAt = performance.now();
             for (const row of rows) {
+              check();
               if (!row || !allowed.has(row.dbId) || returned[indexById.get(row.dbId)] || !Array.isArray(row.properties)) throw fail('PREPARATION_EQUIPMENT_PROPERTIES_INVALID');
               if (row.properties.length > EQUIPMENT_INDEX_LIMITS.rawPropertiesPerRow) throw fail('PREPARATION_EQUIPMENT_ROW_LIMIT');
               scannedProperties += row.properties.length;
@@ -395,20 +431,33 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
               const humanValues = humanScalarPropertyValues(row.properties);
               if (humanValues.length > EQUIPMENT_INDEX_LIMITS.eligiblePropertiesPerRow) throw fail('PREPARATION_EQUIPMENT_ROW_LIMIT');
               for (const value of humanValues) indexValue(value, row.dbId, seen);
+              if (seen.size > 0) {
+                const identity = equipmentObjectIdentity(row.properties);
+                if (identity) { charge(192 + 2 * (identity.guid.length + identity.sourceFile.length)); identities.set(row.dbId, identity); }
+              }
+              // Count synchronous row work across batches, excluding time spent
+              // awaiting the SDK worker (which already yields). Cached replies
+              // still yield after16ms without a timer for every512 IDs.
+              const rowWorkFinishedAt = performance.now();
+              rowWorkMilliseconds += rowWorkFinishedAt - rowWorkStartedAt;
+              if (rowWorkMilliseconds >= 16) {
+                await pause(); check(); rowWorkMilliseconds = 0; rowWorkStartedAt = performance.now();
+              } else rowWorkStartedAt = rowWorkFinishedAt;
             }
-            await pause();
+            progress(Math.min(start + batch.length, ids.length), start + batch.length === ids.length);
           }
           check();
-          return { values, propertyScan:{ attemptedObjectCount:ids.length, returnedObjectCount:returnedCount, omittedObjectCount:ids.length-returnedCount, complete:returnedCount===ids.length } };
+          return { values, identities, propertyScan:{ attemptedObjectCount:ids.length, returnedObjectCount:returnedCount, omittedObjectCount:ids.length-returnedCount, complete:returnedCount===ids.length } };
         })().catch(error => { if (preparationEquipment === state) preparationEquipment = undefined; throw error; });
       }
-      const data = await preparationEquipment.promise; check(); propertyScan = data.propertyScan;
+      const data = await preparationEquipment.promise; check(); propertyScan = data.propertyScan; objectIdentities = data.identities;
+      progress(ids.length, true);
       for (const name of request.names) for (const id of data.values.get(normalEquipment(name)) ?? []) {
         const matched = matching.get(id) ?? []; matched.push(name); matching.set(id, matched);
       }
       candidateIndices = [...matching.keys()].map(id => indexById.get(id)).sort((a,b)=>a-b);
     }
-    const result = { schemaVersion:'wfc.pf.viewer-discovery.v1', mode:request.mode, names:request.names, rootObjectId:request.rootObjectId, cursor:request.cursor, matchingPolicyVersion:PREPARATION_MATCHING_POLICY, visibilityScope:visibility.scope, indexedObjectCount:ids.length, propertyScan, objects:[], nextCursor:null, complete:true, ...(request.mode === 'subtrees' ? {rootObjectIds:[...request.rootObjectIds]} : {}), ...(request.includeAnchors ? {includeAnchors:true} : {}) };
+    const result = { schemaVersion:'wfc.pf.viewer-discovery.v1', mode:request.mode, names:request.names, rootObjectId:request.rootObjectId, cursor:request.cursor, matchingPolicyVersion:PREPARATION_MATCHING_POLICY, visibilityScope:visibility.scope, indexedObjectCount:ids.length, propertyScan, objects:[], nextCursor:null, complete:true, ...(request.mode === 'subtrees' ? {rootObjectIds:[...request.rootObjectIds]} : {}), ...(request.includeAnchors ? {includeAnchors:true} : {}), ...(trayProperties ? {includeProperties:true} : {}) };
     // An explicit location search observes approximate display bounds only.
     // It never creates an object-derived/native geometry qualification.
     const coordinates = request.includeAnchors ? modelCoordinates(model) : null;
@@ -442,7 +491,7 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
       const index = next.value;
       cursor = index; check(); const id = ids[cursor];
       let matchedNames = [];
-      if (request.mode === 'equipment') matchedNames = matching.get(id) ?? [];
+      if (request.mode === 'equipment' || trayProperties) matchedNames = matching.get(id) ?? [];
       else if (request.mode === 'names') { const normalized = names[cursor].normalize('NFC').trim(); if (exactNames.has(normalized)) matchedNames = [normalized]; }
       if (request.mode === 'names' && matchedNames.length === 0) { if (cursor % 8192 === 0) await pause(); continue; }
       const eligible = request.mode !== 'equipment' || visibility.equipmentEligibility(id);
@@ -453,7 +502,7 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
       let hasGeometry = false; tree.enumNodeFragments(id, () => { hasGeometry = true; }, false);
       const parent = id === ids[0] ? null : tree.getNodeParentId(id);
       if (parent !== null && (!indexById.has(parent) || parent === id)) throw fail('EXTRACTION_FAILED');
-      const object = { objectId:id, parentId:parent, name:names[cursor], hasGeometry, isPhysicalLeaf:hasGeometry && tree.getChildCount(id) === 0, orderIndex:cursor, matchedNames, ...(request.includeAnchors ? eligible ? observedAnchor(id) : {bounds:null,bottomCentre:null} : {}) };
+      const object = { objectId:id, parentId:parent, name:names[cursor], hasGeometry, isPhysicalLeaf:hasGeometry && tree.getChildCount(id) === 0, orderIndex:cursor, matchedNames, ...(request.includeAnchors ? { ...(eligible ? observedAnchor(id) : {bounds:null,bottomCentre:null}) } : {}), ...((request.includeAnchors || trayProperties) && objectIdentities?.has(id) ? {objectIdentity:{...objectIdentities.get(id)}} : {}) };
       const candidate = { ...result, objects:[...result.objects, object], nextCursor:cursor+1, complete:false };
       if (new TextEncoder().encode(JSON.stringify(candidate)).length > PREPARATION_VIEWER_LIMITS.pageBytes) { if (!result.objects.length) throw fail('PREPARATION_PAGE_TOO_LARGE'); finished = false; break; }
       result.objects.push(object); if (result.objects.length >= request.limit) { cursor++; finished = iterator.next().done === true; break; }
@@ -584,5 +633,5 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
       signal?.addEventListener('abort', abort, { once: true }); operationSignal?.addEventListener('abort', abort, { once: true });
     });
   }
-  return { showPath, fit, clear, prepareForVisibilityObservation, readObjects, readPreparationObjects, readSelection, readTrayRootSelection, setTransparency, pickPoint, dispose() { if (disposed) return; pick?.cancel(); try { clear(); } catch (error) { if (error?.code !== 'APPEARANCE_RESTORE_FAILED') throw error; /* The adapter still finishes the SDK viewer; attached materials remain owned by that SDK teardown. */ } finally { disposed = true; inventoryPromise = externalPromise = preparationEquipment = preparationSubtree = undefined; } } };
+  return { showPath, showTray, fit, clear, prepareForVisibilityObservation, readObjects, readPreparationObjects, readSelection, readTrayRootSelection, setTransparency, pickPoint, dispose() { if (disposed) return; pick?.cancel(); try { clear(); } catch (error) { if (error?.code !== 'APPEARANCE_RESTORE_FAILED') throw error; /* The adapter still finishes the SDK viewer; attached materials remain owned by that SDK teardown. */ } finally { disposed = true; inventoryPromise = externalPromise = preparationEquipment = preparationSubtree = undefined; } } };
 }

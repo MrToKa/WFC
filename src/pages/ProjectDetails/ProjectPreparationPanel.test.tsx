@@ -5,24 +5,30 @@ import { useProjectPreparation } from './hooks/useProjectPreparation';
 import { preparationFixture } from '@/test/preparationFixtures';
 import type { usePathFinder } from './hooks/usePathFinder';
 import { fetchRoutingPurposePolicy } from '@/api/pathfinderPolicies';
+import { formatPreparationDiagnostics } from './preparationDiagnostics';
 
+const { showToast } = vi.hoisted(() => ({ showToast: vi.fn() }));
+vi.mock('@/context/ToastContext', () => ({ useToast: () => ({ showToast }) }));
 vi.mock('./hooks/useProjectPreparation', () => ({ useProjectPreparation: vi.fn() }));
 vi.mock('@/api/pathfinderPolicies', () => ({ fetchRoutingPurposePolicy: vi.fn() }));
 const fixture = preparationFixture();
 function setup() {
-  const state = { enabled: true, loading: false, busy: false, unknown: false, conflict: false, error: null, notice: null, progress: null,
-    context: structuredClone(fixture.context), session: structuredClone(fixture.session), discovery: null, networkReady: true, networkReadinessKey: 'verified-network-trace',
-    checkTrays: vi.fn(async () => {}), assignTray: vi.fn(async () => {}), freezePlan: vi.fn(), collect: vi.fn(), publish: vi.fn(), pause: vi.fn(), cancel: vi.fn() };
+  const state = { enabled: true, loading: false, busy: false, unknown: false, conflict: false, error: null as string | null, notice: null, progress: null,
+    context: structuredClone(fixture.context), session: structuredClone(fixture.session), discovery: null, networkReady: true, networkStorageStatus: 'missing' as ReturnType<typeof useProjectPreparation>['networkStorageStatus'], networkReadinessKey: 'verified-network-trace',
+    checkTrays: vi.fn(async () => {}), discover: vi.fn(async () => {}), generateNetwork: vi.fn(async () => {}), finishNetwork: vi.fn(async () => {}), canFinishNetwork: false, generatingNetwork: false, generationPaused: false,
+    trayMatchCounts: null as ReturnType<typeof useProjectPreparation>['trayMatchCounts'],
+    assignTray: vi.fn(async () => {}), freezePlan: vi.fn(), collect: vi.fn(), publish: vi.fn(), pause: vi.fn(), cancel: vi.fn() };
   const read = vi.fn(async () => ({ objects: [] as Array<{objectId: number}> }));
   const readMetadata = vi.fn<() => Promise<{ objects: Array<{objectId:number;parentId:number|null}> } | null>>(async () => {
     const selected = await read.mock.results.at(-1)?.value;
     return { objects: (selected?.objects ?? []).map((object: {objectId: number}) => ({ objectId: object.objectId, parentId: 20 })) };
   });
   const showTray = vi.fn(async () => true);
+  const hideTray = vi.fn(async () => true);
   const pf = { preparationAccess: { projectId: state.context.projectId, token: 'test-token' }, data: { activeModel: { ...state.context.scope } }, preparationViewerGeneration: 1, viewerPhase: 'ready', busy: false,
-    showTray, runProjectPreparation: vi.fn(async (_scope, operation) => operation({ readTrayRootSelection: read, readSelection: readMetadata })) } as unknown as ReturnType<typeof usePathFinder>;
+    showTray, hideTray, runProjectPreparation: vi.fn(async (_scope, operation) => operation({ readTrayRootSelection: read, readSelection: readMetadata })) } as unknown as ReturnType<typeof usePathFinder>;
   vi.mocked(useProjectPreparation).mockReturnValue(state as unknown as ReturnType<typeof useProjectPreparation>);
-  return { state, pf, read, readMetadata, showTray, tray: state.context.trays[0] };
+  return { state, pf, read, readMetadata, showTray, hideTray, tray: state.context.trays[0] };
 }
 beforeEach(() => {
   vi.clearAllMocks();
@@ -33,9 +39,150 @@ beforeEach(() => {
 afterEach(async () => { await act(async () => {}); });
 
 describe('simple project tray preparation', () => {
-  it('has one network action plus show and immediate selection on each tray', () => {
+  it('offers an explicit frame finish action independently of recapturing the network', () => {
+    const { state, pf } = setup(); state.canFinishNetwork = true; state.networkReady = false;
+    render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: 'Finish network preparation' }));
+    expect(state.finishNetwork).toHaveBeenCalledOnce(); expect(state.generateNetwork).not.toHaveBeenCalled(); expect(state.discover).not.toHaveBeenCalled();
+  });
+  it('keeps matching counts visible when the saved network remains ready without generating again', () => {
+    const { state, pf } = setup(); state.context.currentAggregate = { ...state.context.scope } as typeof state.context.currentAggregate;
+    state.networkStorageStatus = 'stored-current'; state.trayMatchCounts = { assigned: 0, kept: 91, missing: 0, ambiguous: 0 };
+    render(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByRole('status', { name: 'Tray matching results' })).toHaveTextContent('assigned: 0; kept: 91; not found: 0; multiple matches: 0');
+    expect(screen.getByText(/Network saved in the database\. Ready for routing calculations\./)).toBeVisible();
+    expect(state.generateNetwork).not.toHaveBeenCalled(); expect(state.discover).not.toHaveBeenCalled();
+  });
+  it('offers explicit generation and regeneration using the current model without starting on open', () => {
+    const { state, pf } = setup(); state.networkReady = false;
+    const page = render(<ProjectPreparationPanel pf={pf} active />);
+    expect(state.generateNetwork).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Generate network' }));
+    expect(state.generateNetwork).toHaveBeenCalledOnce(); expect(state.checkTrays).not.toHaveBeenCalled();
+    state.context.currentAggregate = { ...state.context.scope } as typeof state.context.currentAggregate;
+    state.networkStorageStatus = 'stored-current'; state.error = 'The saved routing network file is missing.';
+    page.rerender(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: 'Regenerate network' }));
+    expect(state.generateNetwork).toHaveBeenCalledTimes(2); expect(state.assignTray).not.toHaveBeenCalled();
+  });
+  it('shows generation progress and requires exact command retry before starting another network', () => {
+    const { state, pf } = setup(); state.busy = true; state.generatingNetwork = true;
+    const page = render(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByRole('button', { name: 'Generating network…' })).toBeDisabled();
+    state.busy = false; state.generatingNetwork = false; state.unknown = true;
+    page.rerender(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByRole('button', { name: 'Generate network' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Retry tray update' })).toBeEnabled();
+    expect(state.generateNetwork).not.toHaveBeenCalled();
+  });
+  it('shows actionable preparation diagnostics and all affected trays in an error Snackbar', () => {
+    const { state, pf, tray } = setup(); state.networkReady = false;
+    const message = formatPreparationDiagnostics([{ code: 'PURPOSE_UNCONFIGURED', projectTrayIds: [tray.projectTrayId], objectIds: [], message: 'Resolve this scope' }], state.context.trays)[0].message;
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    vi.mocked(useProjectPreparation).mockReturnValue({ ...state, error: message } as unknown as ReturnType<typeof useProjectPreparation>);
+    view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    expect(showToast).toHaveBeenCalledExactlyOnceWith({ title: 'Tray network needs attention', body: message, intent: 'error', timeout: 15000 });
+    expect(message).toContain('Project Details'); expect(message).toContain(tray.rawName);
+    view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    expect(showToast).toHaveBeenCalledOnce();
+    vi.mocked(useProjectPreparation).mockReturnValue({ ...state, busy: true } as unknown as ReturnType<typeof useProjectPreparation>);
+    view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    vi.mocked(useProjectPreparation).mockReturnValue({ ...state, error: message } as unknown as ReturnType<typeof useProjectPreparation>);
+    view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    expect(showToast).toHaveBeenCalledTimes(2);
+  });
+  it('defers loading errors and reports only the error remaining after the status check', () => {
+    const { state, pf } = setup();
+    state.error = 'The preparation database deadline was reached.';
+    const view = render(<ProjectPreparationPanel pf={{ ...pf, viewerPhase: 'loading' }} active />);
+    expect(showToast).not.toHaveBeenCalled();
+    expect(screen.queryByText(state.error)).not.toBeInTheDocument();
+    state.loading = true;
+    view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    expect(showToast).not.toHaveBeenCalled();
+    state.loading = false;
+    view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    expect(showToast).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ body: state.error }));
+    view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    expect(showToast).toHaveBeenCalledOnce();
+  });
+  it('does not toast background errors while Routes is inactive', () => {
+    const { state, pf } = setup();
+    vi.mocked(useProjectPreparation).mockReturnValue({ ...state, error: 'Select the physical tray and try again.' } as unknown as ReturnType<typeof useProjectPreparation>);
+    render(<ProjectPreparationPanel pf={pf} active={false} />);
+    expect(showToast).not.toHaveBeenCalled();
+  });
+  it('shows a selection failure with the tray name and required action in an error Snackbar', async () => {
+    const { pf, tray } = setup();
+    render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` }));
+    await waitFor(() => expect(showToast).toHaveBeenCalledWith(expect.objectContaining({
+      body: `${tray.rawName}: Select the matching tray in the model first.`, intent: 'error',
+    })));
+  });
+  it('explains missing permissions even when every tray has assigned objects', () => {
+    const { state, pf, tray } = setup(); state.networkReady = false; tray.policyState = 'unconfigured';
+    render(<ProjectPreparationPanel pf={pf} active />);
+    const alert = screen.getByRole('alert', { name: 'Network preparation blockers' });
+    expect(alert).toHaveTextContent('Assigned objects are saved');
+    expect(alert).toHaveTextContent('Routing permissions are missing'); expect(alert).toHaveTextContent(tray.rawName);
+    expect(screen.getByText('Assigned')).toBeVisible();
+    expect(screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` })).toBeEnabled();
+  });
+  it('shows all current plan blockers and retires old diagnostics after a policy revision', () => {
+    const { state, pf, tray } = setup(); state.networkReady = false;
+    state.session.plan.diagnostics = [{ code: 'TRAY_GEOMETRY_MISSING', projectTrayIds: [tray.projectTrayId], objectIds: [], message: 'Generic refusal' },
+      { code: 'NON_LEAF_ROUTING_GEOMETRY', projectTrayIds: [tray.projectTrayId], objectIds: [], message: 'Generic refusal' }];
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    const alert = screen.getByRole('alert', { name: 'Network preparation blockers' });
+    expect(alert).toHaveTextContent('no usable tray geometry'); expect(alert).toHaveTextContent('parent object has its own geometry');
+    state.context.scope.routingPolicyRevision = '2'; view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.queryByRole('alert', { name: 'Network preparation blockers' })).toBeNull();
+  });
+  it('does not display preparation blockers for another active model', () => {
+    const { state, pf, tray } = setup(); state.networkReady = false; tray.policyState = 'unconfigured';
+    render(<ProjectPreparationPanel pf={{ ...pf, data: { ...pf.data!, activeModel: { ...pf.data!.activeModel, modelVersionId: '22222222-2222-4222-8222-222222222223' } } }} active />);
+    expect(screen.queryByRole('alert', { name: 'Network preparation blockers' })).toBeNull();
+  });
+  it('shows the project tray type and width by height in millimetres for an assigned tray', () => {
+    const { pf, tray } = setup(); tray.details = { type: 'Cable ladder RA 60', widthMm: 600, heightMm: 77 };
+    render(<ProjectPreparationPanel pf={pf} active />);
+    const card = within(screen.getByRole('article', { name: `Tray ${tray.rawName}` }));
+    expect(card.getByText('Assigned')).toBeVisible(); expect(card.getByText('Type')).toBeVisible();
+    expect(card.getByText('Cable ladder RA 60')).toBeVisible(); expect(card.getByText('Width × height')).toBeVisible();
+    expect(card.getByText('600 × 77 mm')).toBeVisible();
+  });
+  it('preserves fractional and zero dimensions while showing missing values without inventing zero', () => {
+    const { pf, tray } = setup(); tray.details = { type: null, widthMm: 600.125, heightMm: 0 };
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByText('Not specified')).toBeVisible(); expect(screen.getByText('600.125 × 0 mm')).toBeVisible();
+    tray.details = { type: null, widthMm: null, heightMm: 77 }; view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByText('— × 77 mm')).toBeVisible(); expect(screen.queryByText('0 × 77 mm')).toBeNull();
+  });
+  it('keeps an older context without tray details usable without claiming a type or dimension', () => {
+    const { pf, tray } = setup(); delete tray.details;
+    render(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByText('Not available')).toBeVisible(); expect(screen.getByText('— × — mm')).toBeVisible();
+    expect(screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` })).toBeEnabled();
+  });
+  it('reveals details after assignment and retires them when the current model changes', () => {
+    const { pf, state, tray } = setup(); tray.details = { type: 'Cable ladder RA 60', widthMm: 600, heightMm: 77 };
+    const resolution = { id: 'tray-decision', projectTrayId: tray.projectTrayId, mode: 'exclude' as const, rootObjectIds: [],
+      scope: { ...state.context.scope }, reason: 'Selection pending', actorId: 'admin', createdAt: '2026-10-29T00:00:00Z' };
+    state.context.resolutions = [resolution];
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByText('Not assigned')).toBeVisible(); expect(screen.queryByText('Cable ladder RA 60')).toBeNull();
+    state.context.resolutions = [{ ...resolution, mode: 'roots', rootObjectIds: ['dbid:23'] }];
+    view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByText('600 × 77 mm')).toBeVisible();
+    const changedPf = { ...pf, data: { ...pf.data!, activeModel: { ...pf.data!.activeModel, modelVersionId: '22222222-2222-4222-8222-222222222223' } } };
+    view.rerender(<ProjectPreparationPanel pf={changedPf} active />);
+    expect(screen.queryByText('Cable ladder RA 60')).toBeNull(); expect(screen.queryByText('600 × 77 mm')).toBeNull();
+  });
+  it('offers generation and candidate checking plus show and immediate selection on each tray', () => {
     const { state, pf, tray } = setup(); render(<ProjectPreparationPanel pf={pf} active />);
-    expect(screen.getAllByRole('button')).toHaveLength(3);
+    expect(screen.getAllByRole('button')).toHaveLength(4);
+    expect(screen.getByRole('button', { name: 'Generate network' })).toBeEnabled();
     expect(screen.getByText('Purpose and routing permission')).toBeVisible();
     expect(screen.getByRole('button', { name: `Show tray ${tray.rawName}` })).toBeVisible();
     expect(screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` })).toBeVisible();
@@ -43,7 +190,7 @@ describe('simple project tray preparation', () => {
       'Collect geometry', 'Save prepared network', 'Resolution reason', 'Exact candidates and coverage', 'Audited manual resolution'])
       expect(screen.queryByText(text)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Discover project tray candidates' }));
-    expect(state.checkTrays).toHaveBeenCalledOnce();
+    expect(state.discover).toHaveBeenCalledOnce(); expect(state.checkTrays).not.toHaveBeenCalled(); expect(state.generateNetwork).not.toHaveBeenCalled();
     expect(state.freezePlan).not.toHaveBeenCalled(); expect(state.collect).not.toHaveBeenCalled(); expect(state.publish).not.toHaveBeenCalled();
   });
   it('assigns the fresh model selection immediately with no separate save', async () => {
@@ -89,7 +236,7 @@ describe('simple project tray preparation', () => {
     await waitFor(() => expect(state.assignTray).toHaveBeenCalledExactlyOnceWith(tray.projectTrayId, ['dbid:55']));
     expect(readMetadata).not.toHaveBeenCalled();
   });
-  it('keeps the assignment busy until its network update finishes', async () => {
+  it('keeps assignment saving busy without claiming to update the routing network', async () => {
     const { state, pf, tray, read } = setup(); read.mockResolvedValue({ objects: [{ objectId: 55 }] });
     let finish!: () => void;
     state.assignTray.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
@@ -97,6 +244,9 @@ describe('simple project tray preparation', () => {
     const choose = screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` });
     fireEvent.click(choose); await waitFor(() => expect(state.assignTray).toHaveBeenCalledOnce());
     expect(choose).toBeDisabled(); expect(screen.getByRole('button', { name: 'Discover project tray candidates' })).toBeDisabled();
+    expect(screen.getByText('Saving the selected tray assignment…')).toBeVisible();
+    expect(screen.queryByText(/Saving the selected tray and updating the network/)).toBeNull();
+    expect(state.checkTrays).not.toHaveBeenCalled();
     await act(async () => finish()); expect(choose).toBeEnabled();
   });
   it('explains an empty selection without saving an empty assignment', async () => {
@@ -141,35 +291,79 @@ describe('simple project tray preparation', () => {
     state.context.trays.push(extra);
     state.context.currentAggregate = { ...state.context.scope, sessionId: state.session.id } as typeof state.context.currentAggregate;
     render(<ProjectPreparationPanel pf={pf} active />);
-    expect(screen.getByRole('status')).toHaveTextContent('Network ready. 1 of 2 trays assigned; 1 still need a model selection.');
+    expect(screen.getByRole('status')).toHaveTextContent('Network saved in the database. Ready for routing calculations. 1 of 2 trays assigned; 1 still need a model selection.');
     expect(screen.getByRole('button', { name: 'Discover project tray candidates' })).toBeEnabled();
   });
   it('waits for the verified frame proof before showing ready or refreshing obstacles', () => {
     const { state, pf } = setup(), ready = vi.fn();
     state.context.currentAggregate = { ...state.context.scope } as typeof state.context.currentAggregate;
-    state.networkReady = false;
+    state.networkReady = false; state.networkStorageStatus = 'stored-current'; state.loading = true; state.busy = true;
     const view = render(<ProjectPreparationPanel pf={pf} active onNetworkReady={ready} />);
-    expect(screen.queryByText(/Network ready/)).toBeNull(); expect(ready).not.toHaveBeenCalled();
-    state.networkReady = true;
+    expect(screen.getByText('Network saved in the database. Checking readiness for routing calculations…')).toBeVisible();
+    expect(screen.queryByText(/Ready for routing calculations\./)).toBeNull(); expect(ready).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Check the trays to prepare the routing network/)).toBeNull();
+    state.networkReady = true; state.loading = false; state.busy = false;
     view.rerender(<ProjectPreparationPanel pf={pf} active onNetworkReady={ready} />);
-    expect(screen.getByRole('status')).toHaveTextContent('Network ready.');
+    expect(screen.getByRole('status')).toHaveTextContent('Network saved in the database. Ready for routing calculations.');
+    expect(screen.getByText('Reopening the project and changing From/To locations reuse the saved network.')).toBeVisible();
     expect(ready).toHaveBeenCalledExactlyOnceWith('verified-network-trace');
     view.rerender(<ProjectPreparationPanel pf={pf} active onNetworkReady={ready} />);
     expect(ready).toHaveBeenCalledTimes(1);
   });
+  it('shows a saved network that still needs verification without claiming readiness or requiring a rebuild', () => {
+    const { state, pf } = setup(); state.context.currentAggregate = { ...state.context.scope } as typeof state.context.currentAggregate;
+    state.networkReady = false; state.networkStorageStatus = 'stored-current';
+    render(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByRole('status')).toHaveTextContent('Network saved in the database. Readiness still needs verification.');
+    expect(screen.queryByText(/Ready for routing calculations\./)).toBeNull();
+    expect(screen.queryByText(/No routing network is saved|prepare the routing network automatically/)).toBeNull();
+    expect(state.checkTrays).not.toHaveBeenCalled();
+  });
+  it.each(['loading', 'missing', 'unavailable'] as const)('distinguishes %s database status without claiming a ready network', status => {
+    const { state, pf } = setup();
+    vi.mocked(useProjectPreparation).mockReturnValue({ ...state, context: null, networkReady: false, networkStorageStatus: status } as unknown as ReturnType<typeof useProjectPreparation>);
+    render(<ProjectPreparationPanel pf={pf} active />);
+    const expected = status === 'loading' ? 'Checking the database for a saved routing network…'
+      : status === 'missing' ? 'No routing network is saved in the database.' : 'Saved network status is unavailable.';
+    expect(screen.getByRole('status')).toHaveTextContent(expected);
+    expect(screen.queryByText(/Ready for routing calculations\./)).toBeNull();
+    if (status !== 'missing') expect(screen.queryByText(/No routing network is saved/)).toBeNull();
+    expect(state.checkTrays).not.toHaveBeenCalled();
+  });
+  it.each(['model', 'routing-policy', 'tray-assignment'] as const)('distinguishes a saved network with changed %s from a missing network', changed => {
+    const { state, pf } = setup(); state.context.currentAggregate = { ...state.context.scope } as typeof state.context.currentAggregate;
+    if (changed === 'model') state.context.currentAggregate!.contentFingerprint = 'd'.repeat(64);
+    if (changed === 'routing-policy') state.context.scope.routingPolicyRevision = '99';
+    if (changed === 'tray-assignment') state.context.scope.resolutionRevision = '99';
+    state.networkReady = false; state.networkStorageStatus = 'stored-needs-update';
+    render(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByRole('status')).toHaveTextContent('A routing network is saved in the database. The model, tray data or routing settings have changed.');
+    expect(screen.getByRole('status')).toHaveTextContent('Choose Regenerate network to update it.');
+    expect(screen.queryByText(/Ready for routing calculations\.|No routing network is saved/)).toBeNull();
+  });
+  it('keeps a verified saved network ready after reopening without invoking network preparation', () => {
+    const { state, pf } = setup(); state.context.currentAggregate = { ...state.context.scope } as typeof state.context.currentAggregate;
+    state.networkStorageStatus = 'stored-current';
+    const first = render(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByRole('status')).toHaveTextContent('Ready for routing calculations.'); first.unmount();
+    render(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByRole('status')).toHaveTextContent('Network saved in the database. Ready for routing calculations.');
+    expect(screen.getByText('Reopening the project and changing From/To locations reuse the saved network.')).toBeVisible();
+    expect(state.checkTrays).not.toHaveBeenCalled(); expect(state.assignTray).not.toHaveBeenCalled();
+  });
   it('does not show ready for an aggregate from a different model or mapping revision', () => {
     const { state, pf } = setup();
     state.context.currentAggregate = { ...state.context.scope, resolutionRevision: '99' } as typeof state.context.currentAggregate;
-    render(<ProjectPreparationPanel pf={pf} active />); expect(screen.queryByText(/Network ready/)).toBeNull();
+    render(<ProjectPreparationPanel pf={pf} active />); expect(screen.queryByText(/Ready for routing calculations\./)).toBeNull();
   });
   it('does not retain ready or assigned labels when the Viewer switches to another model', () => {
     const { state, pf } = setup();
     state.context.currentAggregate = { ...state.context.scope } as typeof state.context.currentAggregate;
     const view = render(<ProjectPreparationPanel pf={pf} active />);
-    expect(screen.getByRole('status')).toHaveTextContent('Network ready.');
+    expect(screen.getByRole('status')).toHaveTextContent('Network saved in the database. Ready for routing calculations.');
     const changed = { ...pf, data: { ...pf.data!, activeModel: { ...pf.data!.activeModel, contentFingerprint: 'e'.repeat(64) } } };
     view.rerender(<ProjectPreparationPanel pf={changed} active />);
-    expect(screen.queryByText(/Network ready/)).toBeNull(); expect(screen.getByText('Not assigned')).toBeVisible();
+    expect(screen.queryByText(/Ready for routing calculations\./)).toBeNull(); expect(screen.getByText('Not assigned')).toBeVisible();
   });
   it('searches all trays without requiring pagination controls', () => {
     const { state, pf, tray } = setup();
@@ -179,26 +373,73 @@ describe('simple project tray preparation', () => {
     expect(screen.getByRole('article', { name: 'Tray A105' })).toBeVisible();
     expect(screen.getAllByRole('article')).toHaveLength(1); expect(screen.queryByRole('button', { name: /Next/ })).toBeNull();
   });
-  it('uses the same check button to recover unknown work and leaves assignment disabled', () => {
+  it('names the recovery action while an earlier update is unknown and leaves assignment disabled', () => {
     const { state, pf, tray } = setup(); state.unknown = true;
     render(<ProjectPreparationPanel pf={pf} active />);
-    fireEvent.click(screen.getByRole('button', { name: 'Discover project tray candidates' }));
+    expect(screen.getByText('An earlier tray update needs checking. Use Retry tray update to continue.')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry tray update' }));
     expect(state.checkTrays).toHaveBeenCalledOnce();
     expect(screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` })).toBeDisabled();
+  });
+  it('restores assignment controls after retry reconciles an unknown update without remounting', async () => {
+    const { state, pf, tray, read } = setup(); read.mockResolvedValue({ objects: [{ objectId: 55 }] });
+    let finish!: () => void; state.checkTrays.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+    const unresolved = { ...state, unknown: true, networkReady: false,
+      error: 'The command outcome is unknown. Retry the same command before making further changes.' };
+    vi.mocked(useProjectPreparation).mockReturnValue(unresolved as unknown as ReturnType<typeof useProjectPreparation>);
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    const choose = screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` }); expect(choose).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry tray update' }));
+    vi.mocked(useProjectPreparation).mockReturnValue({ ...unresolved, busy: true, progress: 'Checking the saved tray update…' } as unknown as ReturnType<typeof useProjectPreparation>);
+    view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByRole('button', { name: 'Checking tray update…' })).toBeDisabled();
+    expect(screen.getByRole('progressbar', { name: 'Checking the saved tray update…' })).toBeVisible();
+    expect(choose).toBeDisabled(); expect(state.assignTray).not.toHaveBeenCalled(); expect(read).not.toHaveBeenCalled();
+    await act(async () => finish());
+    vi.mocked(useProjectPreparation).mockReturnValue(state as unknown as ReturnType<typeof useProjectPreparation>);
+    view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    expect(screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` })).toBe(choose); expect(choose).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Discover project tray candidates' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Retry tray update' })).toBeNull(); expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.click(choose); await waitFor(() => expect(state.assignTray).toHaveBeenCalledExactlyOnceWith(tray.projectTrayId, ['dbid:55']));
+    expect(state.checkTrays).toHaveBeenCalledOnce();
+  });
+  it('keeps an unresolved retry available after its busy phase while preserving the assignment gate', async () => {
+    const { state, pf, tray } = setup();
+    let finish!: () => void; state.checkTrays.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+    const unresolved = { ...state, unknown: true, networkReady: false,
+      error: 'The command outcome is unknown. Retry the same command before making further changes.' };
+    vi.mocked(useProjectPreparation).mockReturnValue(unresolved as unknown as ReturnType<typeof useProjectPreparation>);
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry tray update' }));
+    vi.mocked(useProjectPreparation).mockReturnValue({ ...unresolved, busy: true } as unknown as ReturnType<typeof useProjectPreparation>);
+    view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    const checking = screen.getByRole('button', { name: 'Checking tray update…' }); expect(checking).toBeDisabled();
+    expect(screen.getByRole('progressbar', { name: 'Checking the earlier tray update…' })).toBeVisible();
+    fireEvent.click(checking); expect(state.checkTrays).toHaveBeenCalledOnce();
+    await act(async () => finish());
+    vi.mocked(useProjectPreparation).mockReturnValue(unresolved as unknown as ReturnType<typeof useProjectPreparation>);
+    view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    const retry = screen.getByRole('button', { name: 'Retry tray update' }); expect(retry).toBeEnabled();
+    expect(screen.getByRole('alert')).toHaveTextContent('The command outcome is unknown');
+    expect(screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` })).toBeDisabled();
+    expect(screen.getByRole('button', { name: `Show tray ${tray.rawName}` })).toBeEnabled();
+    fireEvent.click(retry); expect(state.checkTrays).toHaveBeenCalledTimes(2); expect(state.assignTray).not.toHaveBeenCalled();
   });
   it('keeps failed network creation visible instead of claiming ready', () => {
     const { state, pf } = setup();
     vi.mocked(useProjectPreparation).mockReturnValue({ ...state, error: 'The model could not be read. Try checking the trays again.' } as unknown as ReturnType<typeof useProjectPreparation>);
     render(<ProjectPreparationPanel pf={pf} active />);
-    expect(screen.getByRole('alert')).toHaveTextContent('model could not be read'); expect(screen.queryByText(/Network ready/)).toBeNull();
+    expect(screen.getByRole('alert')).toHaveTextContent('model could not be read'); expect(screen.queryByText(/Ready for routing calculations\./)).toBeNull();
   });
 });
 
 describe('project tray inspection', () => {
-  it('waits for the display acknowledgement without changing assignments or creating global busy feedback', async () => {
-    const { state, pf, tray, showTray, read, readMetadata } = setup(), busy = vi.fn();
+  it('waits for show and hide acknowledgements without changing assignments or creating global busy feedback', async () => {
+    const { state, pf, tray, showTray, hideTray, read, readMetadata } = setup(), busy = vi.fn();
     let finish!: (shown: boolean) => void; showTray.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
-    render(<ProjectPreparationPanel pf={pf} active onBusyChange={busy} />);
+    let finishHide!: (hidden: boolean) => void; hideTray.mockImplementationOnce(() => new Promise(resolve => { finishHide = resolve; }));
+    const view = render(<ProjectPreparationPanel pf={pf} active onBusyChange={busy} />);
     const show = screen.getByRole('button', { name: `Show tray ${tray.rawName}` });
     fireEvent.click(show);
     expect(showTray).toHaveBeenCalledExactlyOnceWith(state.context.scope, [1]);
@@ -209,9 +450,23 @@ describe('project tray inspection', () => {
     expect(busy.mock.calls.every(([value]) => value === false)).toBe(true);
     await act(async () => finish(true));
     expect(screen.getByText('Tray shown in model.')).toBeVisible(); expect(show).toBeEnabled();
+    const hide = screen.getByRole('button', { name: `Hide tray ${tray.rawName}` }); expect(hide).toHaveTextContent(/^Hide$/);
     expect(screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` })).toBeEnabled();
+    fireEvent.click(hide);
+    expect(hideTray).toHaveBeenCalledExactlyOnceWith(state.context.scope);
+    expect(hide).toHaveTextContent('Hiding tray…'); expect(hide).toBeDisabled();
+    expect(screen.getByRole('button', { name: `Hide tray ${tray.rawName}` })).toBe(hide);
+    expect(screen.queryByRole('button', { name: `Show tray ${tray.rawName}` })).toBeNull();
+    expect(screen.getByRole('button', { name: `Use current model selection for ${tray.rawName}` })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Discover project tray candidates' })).toBeDisabled();
+    await act(async () => finishHide(true));
+    expect(screen.getByRole('button', { name: `Show tray ${tray.rawName}` })).toHaveTextContent('Show tray');
+    expect(screen.queryByText('Tray shown in model.')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Discover project tray candidates' })).toBeEnabled();
+    expect(busy.mock.calls.every(([value]) => value === false)).toBe(true);
     expect(state.assignTray).not.toHaveBeenCalled(); expect(state.checkTrays).not.toHaveBeenCalled();
     expect(read).not.toHaveBeenCalled(); expect(readMetadata).not.toHaveBeenCalled(); expect(pf.runProjectPreparation).not.toHaveBeenCalled();
+    view.unmount(); expect(hideTray).toHaveBeenCalledTimes(1);
   });
   it('shows every manually assigned root before frozen or automatic roots', async () => {
     const { state, pf, tray, showTray } = setup();
@@ -221,6 +476,66 @@ describe('project tray inspection', () => {
     fireEvent.click(screen.getByRole('button', { name: `Show tray ${tray.rawName}` }));
     await waitFor(() => expect(screen.getByText('Tray shown in model.')).toBeVisible());
     expect(showTray).toHaveBeenCalledExactlyOnceWith(state.context.scope, [99, 55]); expect(state.assignTray).not.toHaveBeenCalled();
+  });
+  it('moves the Hide action to the last tray shown and blocks switching while hide is pending', async () => {
+    const { state, pf, tray, showTray, hideTray } = setup();
+    const nextTray = { ...tray, projectTrayId: '85000000-0000-4000-8000-000000000001', rawName: 'A120' };
+    state.context.trays.push(nextTray);
+    state.context.resolutions = [{ id: 'second-tray', projectTrayId: nextTray.projectTrayId, mode: 'roots', rootObjectIds: ['dbid:55'],
+      scope: { ...state.context.scope }, reason: 'Assigned physical tray', actorId: 'admin', createdAt: '2026-10-27T00:00:00Z' }];
+    let finishHide!: (hidden: boolean) => void; hideTray.mockImplementationOnce(() => new Promise(resolve => { finishHide = resolve; }));
+    render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: `Show tray ${tray.rawName}` }));
+    await screen.findByRole('button', { name: `Hide tray ${tray.rawName}` });
+    fireEvent.click(screen.getByRole('button', { name: `Show tray ${nextTray.rawName}` }));
+    const hide = await screen.findByRole('button', { name: `Hide tray ${nextTray.rawName}` });
+    expect(screen.getByRole('button', { name: `Show tray ${tray.rawName}` })).toBeEnabled();
+    expect(showTray).toHaveBeenNthCalledWith(1, state.context.scope, [1]);
+    expect(showTray).toHaveBeenNthCalledWith(2, state.context.scope, [55]);
+    expect(hideTray).not.toHaveBeenCalled();
+    fireEvent.click(hide);
+    expect(screen.getByRole('button', { name: `Show tray ${tray.rawName}` })).toBeDisabled();
+    await act(async () => finishHide(true));
+    expect(screen.getAllByRole('button', { name: /^Show tray / })).toHaveLength(2);
+    expect(hideTray).toHaveBeenCalledExactlyOnceWith(state.context.scope);
+    expect(state.assignTray).not.toHaveBeenCalled(); expect(state.checkTrays).not.toHaveBeenCalled();
+  });
+  it.each(['refused', 'error'] as const)('preserves the shown tray’s Hide action when the next display is %s', async outcome => {
+    const { state, pf, tray, showTray, hideTray } = setup();
+    const nextTray = { ...tray, projectTrayId: '85000000-0000-4000-8000-000000000001', rawName: 'A120' };
+    state.context.trays.push(nextTray);
+    state.context.resolutions = [{ id: 'second-tray', projectTrayId: nextTray.projectTrayId, mode: 'roots', rootObjectIds: ['dbid:55'],
+      scope: { ...state.context.scope }, reason: 'Assigned physical tray', actorId: 'admin', createdAt: '2026-10-27T00:00:00Z' }];
+    showTray.mockResolvedValueOnce(true);
+    if (outcome === 'refused') showTray.mockResolvedValueOnce(false); else showTray.mockRejectedValueOnce(new Error('Viewer preflight failed'));
+    render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: `Show tray ${tray.rawName}` }));
+    await screen.findByRole('button', { name: `Hide tray ${tray.rawName}` });
+    fireEvent.click(screen.getByRole('button', { name: `Show tray ${nextTray.rawName}` }));
+    const nextCard = screen.getByRole('article', { name: `Tray ${nextTray.rawName}` });
+    expect(await within(nextCard).findByRole('alert')).toHaveTextContent('The tray could not be shown.');
+    const hide = screen.getByRole('button', { name: `Hide tray ${tray.rawName}` }); expect(hide).toBeEnabled();
+    expect(within(screen.getByRole('article', { name: `Tray ${tray.rawName}` })).getByText('Tray shown in model.')).toBeVisible();
+    expect(within(nextCard).getByRole('button', { name: `Show tray ${nextTray.rawName}` })).toBeEnabled();
+    expect(hideTray).not.toHaveBeenCalled(); fireEvent.click(hide);
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /^Show tray / })).toHaveLength(2));
+    expect(hideTray).toHaveBeenCalledExactlyOnceWith(state.context.scope);
+    expect(screen.queryByText('Tray shown in model.')).toBeNull();
+    expect(state.assignTray).not.toHaveBeenCalled(); expect(state.checkTrays).not.toHaveBeenCalled();
+  });
+  it.each(['refused', 'error'] as const)('keeps a %s hide retryable without claiming the normal view was restored', async outcome => {
+    const { state, pf, tray, hideTray } = setup();
+    if (outcome === 'refused') hideTray.mockResolvedValueOnce(false); else hideTray.mockRejectedValueOnce(new Error('Viewer failure'));
+    render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: `Show tray ${tray.rawName}` }));
+    const hide = await screen.findByRole('button', { name: `Hide tray ${tray.rawName}` }); fireEvent.click(hide);
+    expect(await screen.findByRole('alert')).toHaveTextContent('The normal model view could not be restored. Check the model and select Hide to try again.');
+    expect(hide).toBeEnabled(); expect(hide).toHaveTextContent(/^Hide$/);
+    expect(screen.queryByRole('button', { name: `Show tray ${tray.rawName}` })).toBeNull();
+    fireEvent.click(hide);
+    expect(await screen.findByRole('button', { name: `Show tray ${tray.rawName}` })).toBeEnabled();
+    expect(screen.queryByRole('alert')).toBeNull(); expect(hideTray).toHaveBeenCalledTimes(2);
+    expect(state.assignTray).not.toHaveBeenCalled(); expect(state.checkTrays).not.toHaveBeenCalled();
   });
   it('can inspect ambiguous candidates during a read-only status check without ready-network or mutation authority', async () => {
     const { state, pf, tray, showTray } = setup(); state.busy = true; state.loading = true; state.unknown = true; state.conflict = true; state.networkReady = false;
@@ -252,6 +567,28 @@ describe('project tray inspection', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('The tray could not be shown.');
     expect(screen.queryByText('Tray shown in model.')).toBeNull(); expect(show).toBeEnabled(); expect(state.assignTray).not.toHaveBeenCalled();
   });
+  it.each(['refused', 'error'] as const)('allows Hide recovery after an initial %s show while keeping Show retryable', async outcome => {
+    const { state, pf, tray, showTray, hideTray } = setup();
+    if (outcome === 'refused') showTray.mockResolvedValueOnce(false); else showTray.mockRejectedValueOnce(new Error('Tray appearance rollback failed'));
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: `Show tray ${tray.rawName}` }));
+    await screen.findByRole('alert');
+    expect(screen.getByRole('button', { name: `Show tray ${tray.rawName}` })).toBeEnabled();
+    const hide = screen.getByRole('button', { name: `Hide tray ${tray.rawName}` }); expect(hide).toBeEnabled();
+    expect(screen.queryByText('Tray shown in model.')).toBeNull(); fireEvent.click(hide);
+    await waitFor(() => expect(screen.queryByRole('button', { name: `Hide tray ${tray.rawName}` })).toBeNull());
+    expect(screen.getByRole('button', { name: `Show tray ${tray.rawName}` })).toBeEnabled();
+    expect(screen.queryByRole('alert')).toBeNull(); expect(hideTray).toHaveBeenCalledExactlyOnceWith(state.context.scope);
+    expect(state.assignTray).not.toHaveBeenCalled(); expect(state.checkTrays).not.toHaveBeenCalled();
+    view.unmount(); expect(hideTray).toHaveBeenCalledTimes(1);
+  });
+  it.each(['refused', 'error'] as const)('retains cleanup ownership after an initial %s show', async outcome => {
+    const { state, pf, tray, showTray, hideTray } = setup();
+    if (outcome === 'refused') showTray.mockResolvedValueOnce(false); else showTray.mockRejectedValueOnce(new Error('Tray appearance rollback failed'));
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: `Show tray ${tray.rawName}` })); await screen.findByRole('alert');
+    view.unmount(); expect(hideTray).toHaveBeenCalledExactlyOnceWith(state.context.scope);
+  });
   it.each(['generation', 'model', 'access', 'inactive', 'scope'] as const)('ignores a late display acknowledgement after a %s change', async change => {
     const { state, pf, tray, showTray } = setup(); let finish!: (shown: boolean) => void;
     showTray.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
@@ -271,6 +608,87 @@ describe('project tray inspection', () => {
       expect(await screen.findByText('Tray shown in model.')).toBeVisible(); expect(showTray).toHaveBeenCalledTimes(2);
     }
   });
+  it.each(['generation', 'model', 'access', 'inactive', 'scope'] as const)('ignores a late hide failure after a %s change', async change => {
+    const { state, pf, tray, hideTray } = setup(); let finish!: (hidden: boolean) => void;
+    hideTray.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: `Show tray ${tray.rawName}` }));
+    fireEvent.click(await screen.findByRole('button', { name: `Hide tray ${tray.rawName}` }));
+    const next = change === 'generation' ? { ...pf, preparationViewerGeneration: 2 }
+      : change === 'model' ? { ...pf, data: { ...pf.data!, activeModel: { ...pf.data!.activeModel, contentFingerprint: 'e'.repeat(64) } } }
+        : change === 'access' ? { ...pf, preparationAccess: { ...pf.preparationAccess, token: 'new-login' } } : pf;
+    if (change === 'scope') vi.mocked(useProjectPreparation).mockReturnValue({ ...state,
+      context: { ...state.context, scope: { ...state.context.scope, routingPolicyRevision: '9' } } } as unknown as ReturnType<typeof useProjectPreparation>);
+    view.rerender(<ProjectPreparationPanel pf={next} active={change !== 'inactive'} />);
+    await act(async () => finish(false));
+    expect(screen.getByRole('button', { name: `Show tray ${tray.rawName}` })).toHaveTextContent('Show tray');
+    expect(screen.queryByRole('button', { name: `Hide tray ${tray.rawName}` })).toBeNull();
+    expect(screen.queryByText(/could not be restored/)).toBeNull();
+    expect(screen.queryByText('Tray shown in model.')).toBeNull();
+  });
+  it('does not clear a newer tray display when a previous scope finishes hiding', async () => {
+    const { state, pf, tray, showTray, hideTray } = setup(); let finish!: (hidden: boolean) => void;
+    hideTray.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: `Show tray ${tray.rawName}` }));
+    fireEvent.click(await screen.findByRole('button', { name: `Hide tray ${tray.rawName}` }));
+    const changedScope = { ...state.context.scope, routingPolicyRevision: '9' };
+    vi.mocked(useProjectPreparation).mockReturnValue({ ...state,
+      context: { ...state.context, scope: changedScope } } as unknown as ReturnType<typeof useProjectPreparation>);
+    view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    const show = screen.getByRole('button', { name: `Show tray ${tray.rawName}` }); expect(show).toBeEnabled(); fireEvent.click(show);
+    await screen.findByRole('button', { name: `Hide tray ${tray.rawName}` });
+    await act(async () => finish(true));
+    expect(screen.getByRole('button', { name: `Hide tray ${tray.rawName}` })).toBeEnabled();
+    expect(screen.getByText('Tray shown in model.')).toBeVisible();
+    expect(showTray).toHaveBeenNthCalledWith(2, changedScope, [1]);
+    expect(hideTray).toHaveBeenCalledExactlyOnceWith(state.context.scope);
+  });
+  it.each([
+    ['shown', 'leave'], ['pending', 'leave'], ['shown', 'unmount'], ['pending', 'unmount'],
+  ] as const)('restores this panel’s %s peek on %s without reviving late feedback', async (phase, exit) => {
+    const { state, pf, tray, showTray, hideTray } = setup(); let finish!: (shown: boolean) => void;
+    if (phase === 'pending') showTray.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: `Show tray ${tray.rawName}` }));
+    if (phase === 'shown') await screen.findByRole('button', { name: `Hide tray ${tray.rawName}` });
+    if (exit === 'leave') view.rerender(<ProjectPreparationPanel pf={pf} active={false} />); else view.unmount();
+    expect(hideTray).toHaveBeenCalledExactlyOnceWith(state.context.scope);
+    if (phase === 'pending') await act(async () => finish(true));
+    expect(screen.queryByText('Tray shown in model.')).toBeNull();
+    expect(screen.queryByRole('button', { name: `Hide tray ${tray.rawName}` })).toBeNull();
+    view.unmount(); expect(hideTray).toHaveBeenCalledTimes(1);
+  });
+  it('releases the previous scope before allowing a new tray peek', async () => {
+    const { state, pf, tray, showTray, hideTray } = setup();
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: `Show tray ${tray.rawName}` }));
+    await screen.findByRole('button', { name: `Hide tray ${tray.rawName}` });
+    const changedScope = { ...state.context.scope, routingPolicyRevision: '9' };
+    vi.mocked(useProjectPreparation).mockReturnValue({ ...state,
+      context: { ...state.context, scope: changedScope } } as unknown as ReturnType<typeof useProjectPreparation>);
+    view.rerender(<ProjectPreparationPanel pf={pf} active />);
+    expect(hideTray).toHaveBeenCalledExactlyOnceWith(state.context.scope);
+    fireEvent.click(screen.getByRole('button', { name: `Show tray ${tray.rawName}` }));
+    await screen.findByRole('button', { name: `Hide tray ${tray.rawName}` });
+    expect(showTray).toHaveBeenNthCalledWith(2, changedScope, [1]);
+    view.unmount(); expect(hideTray).toHaveBeenNthCalledWith(2, changedScope);
+  });
+  it('handles a rejected cleanup without leaving stale tray feedback', async () => {
+    const { pf, tray, hideTray } = setup(); hideTray.mockRejectedValueOnce(new Error('Viewer closed'));
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    fireEvent.click(screen.getByRole('button', { name: `Show tray ${tray.rawName}` }));
+    await screen.findByRole('button', { name: `Hide tray ${tray.rawName}` });
+    view.rerender(<ProjectPreparationPanel pf={pf} active={false} />);
+    await act(async () => {});
+    expect(screen.queryByText('Tray shown in model.')).toBeNull(); expect(screen.queryByRole('alert')).toBeNull();
+    expect(hideTray).toHaveBeenCalledTimes(1);
+  });
+  it('does not clear another model display when this panel has not attempted a peek', () => {
+    const { pf, hideTray } = setup();
+    const view = render(<ProjectPreparationPanel pf={pf} active />);
+    view.unmount(); expect(hideTray).not.toHaveBeenCalled();
+  });
 });
 
 describe('project tray control readiness', () => {
@@ -282,7 +700,7 @@ describe('project tray control readiness', () => {
     state.busy = false; view.rerender(<ProjectPreparationPanel pf={pf} active />);
     expect(screen.queryByRole('button', { name: 'Stop checking' })).toBeNull();
     expect(screen.getByText(/An earlier tray update needs checking/)).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Discover project tray candidates' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Retry tray update' })).toBeEnabled();
   });
   it.each(['loading', 'no-model', 'error', 'viewer-busy', 'status-loading', 'unknown'] as const)('explains the %s gate and preserves read-only inspection when possible', gate => {
     const { state, pf, tray } = setup();

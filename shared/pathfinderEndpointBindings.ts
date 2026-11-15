@@ -6,6 +6,9 @@ export const ENDPOINT_ATTACHMENT_POLICY = 'wfc.pf.endpoint-attachment-policy.v1'
 export const ENDPOINT_MATCHING_POLICY = 'nfc-trim-uppercase-v1' as const;
 export const ENDPOINT_ANCHOR_RULE = 'equipment-bottom-aabb.v1' as const;
 export const ENDPOINT_MODEL_MATCH_DERIVATION = 'matched-model-bottom-aabb.v1' as const;
+export const ENDPOINT_MODEL_CENTRE_DERIVATION = 'matched-model-centre-fallback.v1' as const;
+// A source item may contain every candidate in the bounded matching scan.
+export const ENDPOINT_MODEL_MATCH_OBJECT_LIMIT = 4096;
 const uuid = policyUuidSchema, revision = policyRevisionSchema, hash = policyHashSchema;
 const wellFormed = (value: string) => [...value].every(c => c.length !== 1 || c.charCodeAt(0) < 0xd800 || c.charCodeAt(0) > 0xdfff);
 const text = (maximum: number) => z.string().max(maximum).refine(v => wellFormed(v) && !/[\u0000-\u001f\u007f-\u009f]/u.test(v));
@@ -24,6 +27,16 @@ export const endpointObjectRefSchema = z.object({ traceId: uuid, objectRevisionI
 export const endpointCurrentScopeSchema = z.object({ modelVersionId: uuid, selectionRevision: revision, contentFingerprint: hash, aggregateId: uuid, artifactId: uuid, projectionSha256: hash, captureFrameId: uuid, geometryRevision: revision, traceId: uuid.nullable() }).strict();
 export const endpointModelMatchBoundsSchema = z.object({ minimum: endpointPointSchema, maximum: endpointPointSchema }).strict()
   .refine(v => v.minimum.every((n, i) => n <= v.maximum[i]) && v.minimum.some((n, i) => n < v.maximum[i]));
+/** A source Item GUID is scoped to its complete source-file path. SDK node IDs
+ * remain presentation identities within this model, never cross-model keys. */
+export const endpointModelMatchObjectIdentitySchema = z.object({
+  guid: uuid,
+  sourceFile: nonempty(1024).refine(v => v === v.normalize('NFC').trim().replaceAll('\\', '/').toLowerCase()),
+}).strict();
+export const endpointModelMatchObjectGroupSchema = endpointModelMatchObjectIdentitySchema.extend({
+  objectIds: z.array(z.number().int().positive().max(2147483647)).min(2).max(ENDPOINT_MODEL_MATCH_OBJECT_LIMIT)
+    .refine(v => v.every((id, i) => i === 0 || v[i - 1] < id)),
+}).strict();
 /** An explicitly requested model-name batch observes approximate fixed points.
  * It neither claims retained mesh evidence nor follows later model revisions. */
 export const endpointModelMatchEvidenceSchema = z.object({
@@ -31,41 +44,76 @@ export const endpointModelMatchEvidenceSchema = z.object({
   operationId: uuid, commandSha256: hash, scanSha256: hash, namesSha256: hash,
   current: endpointCurrentScopeSchema, logicalKey: endpointLocationNameSchema,
   sdkObjectId: z.number().int().positive().max(2147483647), objectName: nonempty(2048),
+  objectGroup: endpointModelMatchObjectGroupSchema.optional(),
   bounds: endpointModelMatchBoundsSchema, bottomCentre: endpointPointSchema,
   matchingPolicyVersion: z.literal('wfc.pf.project-exact-candidates.v3'), visibilityScopeSha256: hash,
   approximate: z.literal(true), engineeringAccepted: z.literal(false),
 }).strict().refine(v => v.logicalKey === normalizeEndpointLocation(v.logicalKey)
+  && (!v.objectGroup || v.objectGroup.objectIds[0] === v.sdkObjectId)
   && v.bottomCentre[0] === (v.bounds.minimum[0] + v.bounds.maximum[0]) / 2
   && v.bottomCentre[1] === (v.bounds.minimum[1] + v.bounds.maximum[1]) / 2
   && v.bottomCentre[2] === v.bounds.minimum[2]);
 export const endpointLocationSchema = z.object({ id: uuid, name: endpointLocationNameSchema, aliases, revision }).strict().refine(v => !v.aliases.some(a => normalizeEndpointLocation(a) === normalizeEndpointLocation(v.name)));
+/** Machine observation, not a claimed electrical connector or human acceptance. */
+export const endpointCentreFallbackEvidenceSchema = z.object({
+  schemaVersion: z.literal('wfc.pf.endpoint-centre-fallback.v1'),
+  sourceBindingId: uuid, sourceBindingSha256: hash, commandId: uuid, actorId: uuid, current: endpointCurrentScopeSchema,
+  sourceJobId: uuid, sourceCableId: uuid, sourceDependencySha256: hash,
+  side: z.enum(['from', 'to']),
+  failedRequestId: uuid, failedResultSha256: hash, trialRequestId: uuid,
+  trialRequestSha256: hash, trialResultSha256: hash, barrierProofSha256: hash,
+  policy: z.literal('blocked-automatic-bottom-to-same-bounds-centre.v1'),
+  approximate: z.literal(true), engineeringAccepted: z.literal(false), authority: z.literal('machine-derived-under-current-human-job'),
+}).strict();
 export const endpointReadinessSchema = z.object({ status: endpointStatusSchema, calculationReady: z.boolean(), reasonCodes: codes }).strict().refine(v => !v.calculationReady || v.status === 'confirmed' && v.reasonCodes.length === 0);
 export const endpointUsageSchema = z.object({ fromOccurrences: z.number().int().nonnegative().max(10_000_000), toOccurrences: z.number().int().nonnegative().max(10_000_000), distinctCables: z.number().int().nonnegative().max(10_000_000) }).strict();
 export const endpointCapabilitySchema = z.object({ mode: endpointModeSchema, supported: z.boolean(), reasonCodes: codes }).strict().refine(v => v.supported ? v.reasonCodes.length === 0 : v.reasonCodes.length > 0);
 export const endpointAttachmentSchema = z.object({ evidenceId: uuid, evidenceSha256: hash, logicalObjectId: uuid, localPointMetres: endpointPointSchema, connectorId: nonempty(500).nullable(), sourceShapeSha256: hash, sourcePlacementSha256: hash, transformPolicyVersion: z.literal(ENDPOINT_ATTACHMENT_POLICY), frameDecisionId: uuid }).strict();
 const attachment = endpointAttachmentSchema;
+export const endpointSameModelReuseSchema = z.object({
+  schemaVersion: z.literal('wfc.pf.endpoint-same-model-reuse.v1'),
+  sourceBindingId: uuid, sourceBindingSha256: hash, originalBindingId: uuid, originalBindingSha256: hash,
+  sourceAggregateId: uuid, sourceArtifactId: uuid, sourceProjectionSha256: hash, sourceCaptureFrameId: uuid,
+  modelVersionId: uuid, contentFingerprint: hash, frameProjectionSha256: hash,
+  sourceTraceId: uuid, sourceTraceContentSha256: hash, targetTraceId: uuid, targetTraceContentSha256: hash,
+  requalifiedBy: uuid, requalifiedAt: timestamp,
+}).strict();
+export const endpointRequalifySchema = z.object({ schemaVersion: z.literal('wfc.pf.endpoint-requalify.v1'),
+  cableId: uuid, idempotencyKey: uuid, expectedCurrent: endpointCurrentScopeSchema }).strict();
+export const endpointRequalifyReceiptSchema = z.object({ schemaVersion: z.literal('wfc.pf.endpoint-requalify-receipt.v1'),
+  projectId: uuid, cableId: uuid, idempotencyKey: uuid, commandSha256: hash,
+  updatedLocationIds: z.array(uuid).max(2).refine(value => new Set(value).size === value.length), duplicate: z.boolean() }).strict();
 const bindingFields = {
   schemaVersion: z.literal('wfc.pf.endpoint-binding.v1'), id: uuid, projectId: uuid, locationId: uuid,
   locationRevision: revision, bindingRevision: revision, locationRegistryRevision: revision,
   modelVersionId: uuid, aggregateId: uuid, artifactId: uuid, projectionSha256: hash, captureFrameId: uuid, qualifiedProjectFrameId: uuid.nullable(),
   status: endpointStatusSchema, mode: endpointModeSchema, pointProjectMetres: endpointPointSchema,
-  derivation: z.enum(['manual-world-point', 'picked-surface-point', ENDPOINT_ANCHOR_RULE, ENDPOINT_MODEL_MATCH_DERIVATION, 'qualified-local-point.v1', 'durable-connector.v1']),
+  derivation: z.enum(['manual-world-point', 'picked-surface-point', ENDPOINT_ANCHOR_RULE, ENDPOINT_MODEL_MATCH_DERIVATION, ENDPOINT_MODEL_CENTRE_DERIVATION, 'qualified-local-point.v1', 'durable-connector.v1']),
   autoMatchEvidence: endpointModelMatchEvidenceSchema.optional(),
+  centreFallbackEvidence: endpointCentreFallbackEvidenceSchema.optional(),
+  sameModelReuse: endpointSameModelReuseSchema.optional(),
   sourceObject: endpointObjectRefSchema.nullable(), attachment: attachment.nullable(), sourceDecisionId: uuid.nullable(), supersedesBindingId: uuid.nullable(), legacyObservationId: uuid.nullable(),
   priorPointProjectMetres: endpointPointSchema.nullable(), priorCaptureFrameId: uuid.nullable(), displacementBasis: z.enum(['none', 'same-capture-frame', 'unverified-frames']), displacementVectorMetres: endpointDisplacementVectorSchema.nullable(), displacementMetres: z.number().finite().nonnegative().nullable(),
   confirmedBy: uuid.nullable(), confirmedAt: timestamp.nullable(), reason: nonempty(ENDPOINT_BINDING_LIMITS.reason), contentSha256: hash,
 };
 export const endpointBindingSchema = z.object(bindingFields).strict().superRefine((v, ctx) => {
   if (v.status === 'confirmed' && (!v.confirmedBy || !v.confirmedAt)) ctx.addIssue({ code: 'custom', message: 'Confirmed bindings retain the confirming principal and time.' });
-  if (v.mode === 'fixed-world' && (v.attachment !== null || !['manual-world-point', 'picked-surface-point', ENDPOINT_MODEL_MATCH_DERIVATION].includes(v.derivation))) ctx.addIssue({ code: 'custom', message: 'Fixed points do not follow an object.' });
-  if (v.derivation === ENDPOINT_MODEL_MATCH_DERIVATION) {
-    const e = v.autoMatchEvidence, c = e?.current;
+  if (v.mode === 'fixed-world' && (v.attachment !== null || !['manual-world-point', 'picked-surface-point', ENDPOINT_MODEL_MATCH_DERIVATION, ENDPOINT_MODEL_CENTRE_DERIVATION].includes(v.derivation))) ctx.addIssue({ code: 'custom', message: 'Fixed points do not follow an object.' });
+  if (v.derivation === ENDPOINT_MODEL_MATCH_DERIVATION || v.derivation === ENDPOINT_MODEL_CENTRE_DERIVATION) {
+    const e = v.autoMatchEvidence, c = v.derivation === ENDPOINT_MODEL_CENTRE_DERIVATION ? v.centreFallbackEvidence?.current : e?.current;
     if (!e || !c || v.mode !== 'fixed-world' || v.sourceObject !== null || v.attachment !== null || v.sourceDecisionId !== null
-      || v.qualifiedProjectFrameId !== null || c.modelVersionId !== v.modelVersionId || c.aggregateId !== v.aggregateId
-      || c.artifactId !== v.artifactId || c.projectionSha256 !== v.projectionSha256 || c.captureFrameId !== v.captureFrameId
-      || canonicalPurposeJson(e.bottomCentre) !== canonicalPurposeJson(v.pointProjectMetres))
+      || v.qualifiedProjectFrameId !== null || c.modelVersionId !== v.modelVersionId
+      || (!v.sameModelReuse && (c.aggregateId !== v.aggregateId || c.artifactId !== v.artifactId || c.projectionSha256 !== v.projectionSha256 || c.captureFrameId !== v.captureFrameId))
+      || (v.sameModelReuse && c.contentFingerprint !== v.sameModelReuse.contentFingerprint)
+      || canonicalPurposeJson(v.derivation === ENDPOINT_MODEL_CENTRE_DERIVATION
+        ? e.bounds.minimum.map((n, i) => (n + e.bounds.maximum[i]) / 2) : e.bottomCentre) !== canonicalPurposeJson(v.pointProjectMetres))
       ctx.addIssue({ code: 'custom', message: 'A matched fixed point requires its own complete current model observation.' });
   } else if (v.autoMatchEvidence !== undefined) ctx.addIssue({ code: 'custom', message: 'Only a matched fixed point carries model-match observation evidence.' });
+  if ((v.derivation === ENDPOINT_MODEL_CENTRE_DERIVATION) !== (v.centreFallbackEvidence !== undefined))
+    ctx.addIssue({ code: 'custom', message: 'A centre fallback retains its distinct machine proof.' });
+  if (v.sameModelReuse && (v.mode !== 'fixed-world' || v.sourceObject !== null || v.attachment !== null || v.sourceDecisionId !== null
+    || v.sameModelReuse.modelVersionId !== v.modelVersionId || v.sameModelReuse.sourceBindingId !== v.supersedesBindingId))
+    ctx.addIssue({ code: 'custom', message: 'Same-model reuse retains only an unchanged fixed point with its prior binding proof.' });
   if (v.mode === 'object-derived' && (!v.sourceObject || v.attachment !== null || v.derivation !== ENDPOINT_ANCHOR_RULE)) ctx.addIssue({ code: 'custom', message: 'Derived anchors require exact immutable object evidence.' });
   if (v.mode === 'object-attached' && (!v.sourceObject || !v.attachment || !v.qualifiedProjectFrameId || !['qualified-local-point.v1', 'durable-connector.v1'].includes(v.derivation))) ctx.addIssue({ code: 'custom', message: 'Attachments require separately qualified frame and identity evidence.' });
   if (v.mode === 'object-attached' && v.attachment && (v.derivation === 'durable-connector.v1') !== (v.attachment.connectorId !== null)) ctx.addIssue({ code: 'custom', message: 'Connector derivation and durable connector evidence must agree.' });

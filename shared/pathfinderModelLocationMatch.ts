@@ -1,21 +1,22 @@
 import { z } from 'zod';
-import { endpointCurrentScopeSchema, endpointLocationNameSchema, endpointModelMatchBoundsSchema, endpointPointSchema, normalizeEndpointLocation } from './pathfinderEndpointBindings.js';
+import { ENDPOINT_MODEL_MATCH_OBJECT_LIMIT, endpointCurrentScopeSchema, endpointLocationNameSchema, endpointModelMatchBoundsSchema, endpointModelMatchObjectIdentitySchema, endpointPointSchema, normalizeEndpointLocation } from './pathfinderEndpointBindings.js';
 import { endpointVisibilitySchema } from './pathfinderPreparation.js';
 import { canonicalPurposeJson, policyHashSchema as hash, policyRevisionSchema as revision, policyUuidSchema as uuid } from './pathfinderPurposePolicy.js';
 
-export const MODEL_LOCATION_MATCH_LIMITS = Object.freeze({ names: 4096, pageNames: 128, candidates: 4096, bodyBytes: 1024 * 1024, responseBytes: 1024 * 1024 });
+export const MODEL_LOCATION_MATCH_LIMITS = Object.freeze({ names: 4096, pageNames: 128, candidates: ENDPOINT_MODEL_MATCH_OBJECT_LIMIT, bodyBytes: 1024 * 1024, responseBytes: 1024 * 1024 });
 const uniqueNames = (v: string[]) => new Set(v.map(normalizeEndpointLocation)).size === v.length;
 const matchName = endpointLocationNameSchema.refine(v => v.length <= 256);
 const names = z.array(matchName).max(MODEL_LOCATION_MATCH_LIMITS.names).refine(uniqueNames);
 const count = z.number().int().nonnegative().max(1_000_000);
 export const modelLocationMatchContextSchema = z.object({
   schemaVersion: z.literal('wfc.pf.model-location-match-context.v1'), projectId: uuid, current: endpointCurrentScopeSchema,
-  registryRevision: revision, names, namesSha256: hash,
+  registryRevision: revision, names, namesSha256: hash, crossModelNames: names.optional(),
 }).strict();
 export const modelLocationMatchCandidateSchema = z.object({
   objectId: z.number().int().nonnegative().max(2147483647), name: z.string().min(1).max(2048).regex(/^[^\u0000-\u001f\u007f-\u009f]*$/u)
     .refine(v => v.trim().length > 0 && [...v].every(c => c.length !== 1 || c.charCodeAt(0) < 0xd800 || c.charCodeAt(0) > 0xdfff)),
   matchedNames: z.array(matchName).min(1).max(MODEL_LOCATION_MATCH_LIMITS.pageNames).refine(uniqueNames),
+  objectIdentity: endpointModelMatchObjectIdentitySchema.optional(),
   bounds: endpointModelMatchBoundsSchema.nullable(), bottomCentre: endpointPointSchema.nullable(),
 }).strict().refine(v => (v.bounds === null) === (v.bottomCentre === null) && (!v.bounds || !v.bottomCentre || (
   v.bottomCentre[0] === (v.bounds.minimum[0] + v.bounds.maximum[0]) / 2
@@ -43,9 +44,28 @@ export const modelLocationMatchReceiptSchema = z.object({
   registryRevision: revision, results: z.array(modelLocationMatchResultSchema).max(MODEL_LOCATION_MATCH_LIMITS.pageNames)
     .refine(v => uniqueNames(v.map(r => r.name))), duplicate: z.boolean(),
 }).strict();
+/** Counts describe saved matching receipts, not current engineering acceptance. */
+export function modelLocationMatchCounts(results: ModelLocationMatchResult[]) {
+  return {
+    searched: results.length,
+    found: results.filter(result => result.candidateObjectIds.length > 0).length,
+    assigned: results.filter(result => result.status === 'assigned').length,
+    preserved: results.filter(result => result.status === 'preserved').length,
+    manualAttention: results.filter(result => !['assigned', 'preserved'].includes(result.status)).length,
+  };
+}
+export const modelLocationMatchSummarySchema = z.object({
+  schemaVersion: z.literal('wfc.pf.model-location-match-summary.v1'), context: modelLocationMatchContextSchema,
+  results: z.array(modelLocationMatchResultSchema).max(MODEL_LOCATION_MATCH_LIMITS.names).refine(value => uniqueNames(value.map(result => result.name))),
+  counts: z.object({ searched: count, found: count, assigned: count, preserved: count, manualAttention: count }).strict(),
+  complete: z.boolean(),
+}).strict().refine(value => value.results.every(result => value.context.names.some(name => normalizeEndpointLocation(name) === normalizeEndpointLocation(result.name)))
+  && canonicalPurposeJson(value.counts) === canonicalPurposeJson(modelLocationMatchCounts(value.results))
+  && value.complete === (value.results.length === value.context.names.length));
 export const modelLocationMatchNamesHashInput = (value: string[]) => [...value].map(normalizeEndpointLocation).sort();
 export const modelLocationMatchCanonicalJson = canonicalPurposeJson;
 export type ModelLocationMatchContext = z.infer<typeof modelLocationMatchContextSchema>;
 export type ModelLocationMatchAssign = z.infer<typeof modelLocationMatchAssignSchema>;
 export type ModelLocationMatchReceipt = z.infer<typeof modelLocationMatchReceiptSchema>;
 export type ModelLocationMatchResult = z.infer<typeof modelLocationMatchResultSchema>;
+export type ModelLocationMatchSummary = z.infer<typeof modelLocationMatchSummarySchema>;

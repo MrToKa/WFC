@@ -1,3 +1,4 @@
+import { projectTrayPurposesRouter } from './projectTrayPurposesRoutes.js';
 import { randomUUID } from 'crypto';
 import type { Request, Response } from 'express';
 import { Router } from 'express';
@@ -1004,6 +1005,7 @@ projectsRouter.use('/:projectId', modelRegistryRouter);
 projectsRouter.use('/:projectId/pathfinder', pathfinderRouter);
 projectsRouter.use('/:projectId/cables', cablesRouter);
 projectsRouter.use('/:projectId/roxtec', roxtecEntriesRouter);
+projectsRouter.use('/:projectId/tray-purposes', projectTrayPurposesRouter);
 projectsRouter.use('/:projectId/trays', traysRouter);
 projectsRouter.use('/:projectId/tray-data', projectTrayDataRouter);
 projectsRouter.use('/:projectId/files', projectFilesRouter);

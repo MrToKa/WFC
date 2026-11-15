@@ -34,10 +34,10 @@ function setup(token = 'login-a', onCaptureTiming?: ViewerOptions['onCaptureTimi
     } }));
   };
   const hello = () => message('HELLO', { supportedProtocolVersions: [1], sdkVersion: '7.130.0' });
-  const ready = () => {
+  const ready = (modelCaptureBatch = false) => {
     hello();
     const init = send.mock.calls[0][0];
-    message('RUNTIME_READY', { sdkVersion: '7.130.0' }, init.requestId);
+    message('RUNTIME_READY', { sdkVersion: '7.130.0', ...(modelCaptureBatch ? { modelCaptureBatch: true } : {}) }, init.requestId);
   };
   return { c, events, send, message, hello, ready };
 }
@@ -74,8 +74,8 @@ const barrierPublicationReceipt = (input: BarrierCaptureRequest) => ({ schemaVer
   snapshot: { snapshotId: '77777777-7777-4777-8777-777777777777', scope: structuredClone(input.scope), registryRevision: '1', contentSha256: 'e'.repeat(64), mode: 'mesh-set' }, duplicate: false });
 
 describe('PathFinder protected Viewer capabilities', () => {
-  async function loaded(sessionDuration = 300_000, onCaptureTiming?: ViewerOptions['onCaptureTiming']) {
-    const s = setup('login-a', onCaptureTiming); s.ready();
+  async function loaded(sessionDuration = 300_000, onCaptureTiming?: ViewerOptions['onCaptureTiming'], modelCaptureBatch = false) {
+    const s = setup('login-a', onCaptureTiming); s.ready(modelCaptureBatch);
     let session: Record<string, unknown>;
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, options) => {
       if (options?.method === 'DELETE') return new Response(null, { status: 204 });
@@ -93,6 +93,72 @@ describe('PathFinder protected Viewer capabilities', () => {
     s.message('MODEL_LOADED', { sdkVersion: '7.130.0', format: 'svf', nodeIndexReady: true }, command.requestId, identity);
     return { ...s, identity };
   }
+  it('reads one object GUID quietly without changing route or selection and rejects substituted object IDs', async () => {
+    const s = await loaded(), guid = '7586ffbb-1d0a-5942-b687-06884123c866';
+    s.send.mockImplementation(value => {
+      if (value.type === 'READ_OBJECT_GUID') s.message('OBJECT_GUID', { sdkObjectId: value.payload.sdkObjectId, guid }, value.requestId, s.identity);
+    });
+    for (const id of [-1, 0, 0.1, 2147483648]) await expect(s.c.readObjectGuid(id)).rejects.toThrow('Invalid object');
+    expect(s.send.mock.calls.some(call => call[0].type === 'READ_OBJECT_GUID')).toBe(false);
+    expect(await s.c.readObjectGuid(29713)).toBe(guid);
+    expect(s.send.mock.calls.some(call => ['CLEAR_ROUTE', 'SHOW_LOCATION', 'SHOW_TRAY', 'READ_SELECTION'].includes(call[0].type))).toBe(false);
+    s.send.mockImplementation(value => {
+      if (value.type === 'READ_OBJECT_GUID') s.message('OBJECT_GUID', { sdkObjectId: 999, guid }, value.requestId, s.identity);
+    });
+    await expect(s.c.readObjectGuid(29713)).rejects.toThrow('Object GUID context changed');
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+  });
+  it('keeps GUID tooltip timeouts local without unloading the model', async () => {
+    const s = await loaded(), read = s.c.readObjectGuid(29713), failed = expect(read).rejects.toThrow();
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'READ_OBJECT_GUID')).toBe(true));
+    await vi.advanceTimersByTimeAsync(10001); await failed;
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+    expect(s.events.filter(e => e.type === 'ERROR')).toHaveLength(0);
+  });
+  async function trayDisplayed() {
+    const s = await loaded();
+    s.send.mockImplementation(value => {
+      if (value.type === 'SHOW_TRAY') s.message('TRAY_SHOWN', { sdkObjectIds: value.payload.sdkObjectIds }, value.requestId, s.identity);
+    });
+    await s.c.showTray([23, 24]);
+    s.send.mockImplementation(() => {});
+    return s;
+  }
+  it('resolves unique and ambiguous saved tray identities in the exact active load without clearing the route', async () => {
+    const s = await loaded(), request = { schemaVersion: 'wfc.pf.tray-identity-request.v1' as const, identities: [
+      { externalId: null, guid: '7586ffbb-1d0a-5942-b687-06884123c866', sourceFile: '01-50_MSR_Kabeltassen.dwg' },
+      { externalId: 'other-root', guid: null, sourceFile: null },
+    ] };
+    s.send.mockImplementation(value => {
+      if (value.type === 'RESOLVE_TRAY_IDENTITIES') s.message('TRAY_IDENTITIES', { schemaVersion: 'wfc.pf.tray-identity-response.v1',
+        matches: value.payload.identities.map((identity: unknown, index: number) => ({ identity, status: index ? 'ambiguous' : 'unique', objectIds: index ? [25, 26] : [23] })) }, value.requestId, s.identity);
+    });
+    const result = await s.c.resolveTrayIdentities(request);
+    expect(result.matches.map(value => value.status)).toEqual(['unique', 'ambiguous']);
+    expect(s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE')).toHaveLength(0);
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+  });
+  it('rejects substituted tray identity replies instead of applying IDs to another saved root', async () => {
+    const s = await loaded(), request = { schemaVersion: 'wfc.pf.tray-identity-request.v1' as const, identities: [{ externalId: 'saved-root', guid: null, sourceFile: null }] };
+    s.send.mockImplementation(value => {
+      if (value.type === 'RESOLVE_TRAY_IDENTITIES') s.message('TRAY_IDENTITIES', { schemaVersion: 'wfc.pf.tray-identity-response.v1',
+        matches: [{ identity: { ...request.identities[0], externalId: 'different-root' }, status: 'unique', objectIds: [23] }] }, value.requestId, s.identity);
+    });
+    await expect(s.c.resolveTrayIdentities(request)).rejects.toThrow('acknowledgement mismatch');
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+  });
+  it('cancels a tray identity read and ignores late IDs from that request', async () => {
+    const s = await loaded(), request = { schemaVersion: 'wfc.pf.tray-identity-request.v1' as const, identities: [{ externalId: 'saved-root', guid: null, sourceFile: null }] }, controller = new AbortController();
+    let dispatched: { requestId: string } | undefined;
+    s.send.mockImplementation(value => { if (value.type === 'RESOLVE_TRAY_IDENTITIES') dispatched = value; });
+    const pending = s.c.resolveTrayIdentities(request, { signal: controller.signal });
+    await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+    if (!dispatched) { await vi.advanceTimersByTimeAsync(0); }
+    expect(dispatched).toBeDefined();
+    const rejected = expect(pending).rejects.toThrow(); controller.abort();
+    s.message('TRAY_IDENTITIES', { schemaVersion: 'wfc.pf.tray-identity-response.v1', matches: [{ identity: request.identities[0], status: 'unique', objectIds: [23] }] }, dispatched!.requestId, s.identity);
+    await rejected; expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+  });
   it('reads tray-root IDs with exact load identity and checks selection before and after without requesting rich endpoint metadata', async () => {
     const s = await loaded(), reads = vi.mocked(fetch).mock.calls.length;
     s.send.mockImplementation(value => {
@@ -177,6 +243,48 @@ describe('PathFinder protected Viewer capabilities', () => {
     s.message('TRAY_ROOT_SELECTION', { objects: [{ objectId: 23 }] }, command.requestId, s.identity);
     expect(s.c.getLoadSnapshot()?.ready).toBe(true);
   });
+
+it('saved point display detaches input and accepts only the exact current-load acknowledgement without clearing route', async () => {
+  const s = await loaded(), point: [number, number, number] = [1, 2, 3];
+  const showing = s.c.showLocationPoint(point); point[0] = 99;
+  await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'SHOW_LOCATION_POINT')).toBe(true));
+  const command = s.send.mock.calls.find(call => call[0].type === 'SHOW_LOCATION_POINT')![0];
+  expect(command.payload).toEqual({ pointProjectMetres: [1, 2, 3] });
+  s.message('LOCATION_POINT_SHOWN', command.payload, command.requestId, s.identity); await showing;
+  expect(s.send.mock.calls.some(call => ['SHOW_LOCATION', 'CLEAR_ROUTE', 'READ_SELECTION'].includes(call[0].type))).toBe(false);
+});
+it('saved point display refuses invalid input and mismatched acknowledgements', async () => {
+  const s = await loaded(), before = s.send.mock.calls.length;
+  for (const point of [[NaN, 2, 3], [1e9 + 1, 2, 3], [1, 2]]) await expect(s.c.showLocationPoint(point as [number, number, number])).rejects.toThrow('Invalid location point');
+  expect(s.send.mock.calls).toHaveLength(before);
+  const showing = s.c.showLocationPoint([1, 2, 3]); const rejected = expect(showing).rejects.toThrow('Location point acknowledgement mismatch');
+  await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'SHOW_LOCATION_POINT')).toBe(true));
+  const command = s.send.mock.calls.find(call => call[0].type === 'SHOW_LOCATION_POINT')![0];
+  s.message('LOCATION_POINT_SHOWN', { pointProjectMetres: [1, 2, 4] }, command.requestId, s.identity); await rejected;
+});
+
+it('saved point display ignores another load, cancels on Clear and ignores its late acknowledgement', async () => {
+  const s = await loaded(), showing = s.c.showLocationPoint([1, 2, 3]), rejected = expect(showing).rejects.toMatchObject({ name: 'AbortError' });
+  await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'SHOW_LOCATION_POINT')).toBe(true));
+  const command = s.send.mock.calls.find(call => call[0].type === 'SHOW_LOCATION_POINT')![0];
+  s.message('LOCATION_POINT_SHOWN', command.payload, command.requestId, { ...s.identity, loadId: generateId() });
+  expect(s.events.some(event => event.type === 'LOCATION_POINT_SHOWN')).toBe(false);
+  const cleared = s.c.clear(); await rejected; s.message('ROUTE_CLEARED', {}, cleared, s.identity);
+  s.message('LOCATION_POINT_SHOWN', command.payload, command.requestId, s.identity);
+  expect(s.events.some(event => event.type === 'LOCATION_POINT_SHOWN')).toBe(false); expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+});
+it('a recoverable saved-point refusal or timeout keeps the ready model', async () => {
+  const s = await loaded(600_000); s.send.mockImplementation(value => {
+    if (value.type === 'SHOW_LOCATION_POINT') s.message('ERROR', { code: 'LOCATION_UNAVAILABLE', message: 'Location unavailable', retryable: true, operation: 'SHOW_LOCATION_POINT' }, value.requestId, s.identity);
+  });
+  await expect(s.c.showLocationPoint([1, 2, 3])).rejects.toMatchObject({ code: 'LOCATION_UNAVAILABLE' });
+  expect(s.c.getLoadSnapshot()?.ready).toBe(true); s.send.mockReset();
+  const showing = s.c.showLocationPoint([1, 2, 3]).catch(error => error);
+  await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'SHOW_LOCATION_POINT')).toBe(true));
+  await vi.advanceTimersByTimeAsync(60_001); expect(await showing).toBeInstanceOf(Error);
+  await vi.advanceTimersByTimeAsync(10_001); expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+});
+
   it('location display waits for the exact acknowledgement and preserves committed route ownership', async () => {
     const s = await loaded(); let received = 0;
     s.send.mockImplementation(value => {
@@ -202,6 +310,40 @@ describe('PathFinder protected Viewer capabilities', () => {
     const s = await loaded(), fetchCount = vi.mocked(fetch).mock.calls.length, sends = s.send.mock.calls.length;
     for (const id of [0, -1, 1.5, 2147483648, NaN, Infinity]) await expect(s.c.showLocation(id)).rejects.toThrow('Invalid location object');
     expect(vi.mocked(fetch).mock.calls).toHaveLength(fetchCount); expect(s.send.mock.calls).toHaveLength(sends);
+  });
+  it('shows every part of one location with a detached group and exact acknowledgement', async () => {
+    const s = await loaded(), ids = [23, 24, 25];
+    const showing = s.c.showLocation(23, ids); ids[1] = 99;
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'SHOW_LOCATION')).toBe(true));
+    const command = s.send.mock.calls.find(call => call[0].type === 'SHOW_LOCATION')![0];
+    expect(command.payload).toEqual({ sdkObjectId: 23, sdkObjectIds: [23, 24, 25] });
+    s.message('LOCATION_SHOWN', command.payload, command.requestId, s.identity);
+    await showing;
+    expect(s.send.mock.calls.some(call => call[0].type === 'CLEAR_ROUTE')).toBe(false);
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+  });
+  it.each([513, 4096])('shows all %i parts of a source item without truncating the group', async count => {
+    const s = await loaded(), ids = Array.from({ length: count }, (_, at) => at + 23);
+    s.send.mockImplementation(value => {
+      if (value.type === 'SHOW_LOCATION') s.message('LOCATION_SHOWN', value.payload, value.requestId, s.identity);
+    });
+    await s.c.showLocation(23, ids);
+    expect(s.send.mock.calls.find(call => call[0].type === 'SHOW_LOCATION')![0].payload.sdkObjectIds).toEqual(ids);
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+  });
+  it('rejects invalid location groups before checking access or sending SDK commands', async () => {
+    const s = await loaded(), fetchCount = vi.mocked(fetch).mock.calls.length, sends = s.send.mock.calls.length;
+    for (const ids of [[], [24], [23, 23], [23, 25, 24], [23, 0], [23, Infinity],
+      Array.from({ length: 4097 }, (_, at) => 23 + at)]) await expect(s.c.showLocation(23, ids)).rejects.toThrow('Invalid location objects');
+    expect(vi.mocked(fetch).mock.calls).toHaveLength(fetchCount); expect(s.send.mock.calls).toHaveLength(sends);
+  });
+  it.each([{ sdkObjectId: 23 }, { sdkObjectId: 23, sdkObjectIds: [23, 25] }])('rejects a location acknowledgement that omits or changes group members: %j', async payload => {
+    const s = await loaded();
+    s.send.mockImplementation(value => {
+      if (value.type === 'SHOW_LOCATION') s.message('LOCATION_SHOWN', payload, value.requestId, s.identity);
+    });
+    await expect(s.c.showLocation(23, [23, 24])).rejects.toThrow('Location acknowledgement mismatch');
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
   });
   it('location display refuses a stale model selection before sending a command', async () => {
     const s = await loaded(); vi.mocked(fetch).mockResolvedValueOnce(Response.json({ selection: { activeModelVersionId: generateId(), selectionRevision: 2 } }));
@@ -242,7 +384,7 @@ describe('PathFinder protected Viewer capabilities', () => {
     s.message('LOCATION_SHOWN', { sdkObjectId: 23 }, command.requestId, s.identity);
     expect(s.events.some(event => event.type === 'LOCATION_SHOWN')).toBe(false); expect(s.c.getLoadSnapshot()?.ready).toBe(true);
   });
-  it('tray display freezes all roots, awaits its exact current-load acknowledgement and preserves the committed route', async () => {
+  it('tray display freezes all roots, awaits its exact current-load acknowledgement and retires the previous route display', async () => {
     const s = await loaded(); let received = 0;
     s.send.mockImplementation(value => {
       if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
@@ -250,7 +392,7 @@ describe('PathFinder protected Viewer capabilities', () => {
       if (phase === 'appended') received += value.payload.points.length;
       if (phase) s.message('COMPUTED_PATH_UPDATED', { pathId: value.payload.pathId, phase, received }, value.requestId, s.identity);
     });
-    const routeRequestId = await s.c.showComputedPath({ pathId: generateId(), points: [[0, 0, 0]], objectIds: [23] });
+    await s.c.showComputedPath({ pathId: generateId(), points: [[0, 0, 0]], objectIds: [23] });
     const clearCount = s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE').length;
     const ids = [23, 24]; let shown = false; const showing = s.c.showTray(ids).then(() => { shown = true; }); ids[0] = 25;
     await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'SHOW_TRAY')).toBe(true));
@@ -261,7 +403,8 @@ describe('PathFinder protected Viewer capabilities', () => {
     s.message('TRAY_SHOWN', { sdkObjectIds: [23, 24] }, command.requestId, s.identity);
     await showing; expect(shown).toBe(true);
     expect(s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE')).toHaveLength(clearCount);
-    s.c.zoom(); expect(s.send.mock.calls.at(-1)?.[0]).toMatchObject({ type: 'ZOOM_ROUTE', payload: { routeRequestId } });
+    expect(() => s.c.zoom()).toThrow('No drawable route');
+    await expect(s.c.setPathTransparency(75)).rejects.toThrow('No drawable route');
   });
   it('tray display rejects empty, invalid, duplicated and oversized root sets before checking access or sending commands', async () => {
     const s = await loaded(), fetchCount = vi.mocked(fetch).mock.calls.length, sends = s.send.mock.calls.length;
@@ -309,6 +452,88 @@ describe('PathFinder protected Viewer capabilities', () => {
     s.message('TRAY_SHOWN', { sdkObjectIds: [23, 24] }, command.requestId, s.identity);
     expect(s.events.some(event => event.type === 'TRAY_SHOWN')).toBe(false); expect(s.c.getLoadSnapshot()?.ready).toBe(true);
   });
+  it('tray inspection cancels a pending computed commit so its late receipt cannot restore route ownership', async () => {
+    const s = await loaded(); let received = 0;
+    s.send.mockImplementation(value => {
+      if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
+      const phase = value.type === 'BEGIN_COMPUTED_PATH' ? 'begun' : value.type === 'APPEND_COMPUTED_PATH' ? 'appended' : null;
+      if (phase === 'appended') received += value.payload.points.length;
+      if (phase) s.message('COMPUTED_PATH_UPDATED', { pathId: value.payload.pathId, phase, received }, value.requestId, s.identity);
+    });
+    const computing = s.c.showComputedPath({ pathId: generateId(), points: [[0, 0, 0]], objectIds: [23] });
+    const rejected = expect(computing).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'COMMIT_COMPUTED_PATH')).toBe(true));
+    const commit = s.send.mock.calls.find(call => call[0].type === 'COMMIT_COMPUTED_PATH')![0];
+    const showing = s.c.showTray([23, 24]);
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'SHOW_TRAY')).toBe(true));
+    await rejected;
+    s.message('COMPUTED_PATH_UPDATED', { pathId: commit.payload.pathId, phase: 'displayed', received }, commit.requestId, s.identity);
+    const tray = s.send.mock.calls.find(call => call[0].type === 'SHOW_TRAY')![0];
+    s.message('TRAY_SHOWN', { sdkObjectIds: [23, 24] }, tray.requestId, s.identity); await showing;
+    expect(s.events.some(event => event.type === 'COMPUTED_PATH_UPDATED' && event.payload.phase === 'displayed')).toBe(false);
+    expect(() => s.c.zoom()).toThrow('No drawable route'); expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+  });
+  it('hiding a tray waits for the exact clear acknowledgement without starting any server write', async () => {
+    const s = await trayDisplayed(), fetchCount = vi.mocked(fetch).mock.calls.length;
+    let hidden = false; const hiding = s.c.hideTray().then(() => { hidden = true; });
+    const command = s.send.mock.calls.find(call => call[0].type === 'CLEAR_ROUTE')![0];
+    expect(command.payload).toEqual({ reason: 'user', preserveCamera: true }); expect(hidden).toBe(false);
+    s.message('ROUTE_CLEARED', {}, command.requestId, { ...s.identity, loadId: generateId() });
+    await Promise.resolve(); expect(hidden).toBe(false);
+    s.message('ROUTE_CLEARED', {}, command.requestId, s.identity); await hiding;
+    expect(hidden).toBe(true); expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+    expect(vi.mocked(fetch).mock.calls).toHaveLength(fetchCount); expect(() => s.c.zoom()).toThrow('No drawable route');
+  });
+  it('a newer clear cancels tray hiding and the old acknowledgement cannot finish it', async () => {
+    const s = await trayDisplayed(), hiding = s.c.hideTray(), rejected = expect(hiding).rejects.toMatchObject({ name: 'AbortError' });
+    const old = s.send.mock.calls.find(call => call[0].type === 'CLEAR_ROUTE')![0];
+    const current = s.c.clear(); await rejected;
+    const count = s.events.filter(event => event.type === 'ROUTE_CLEARED').length;
+    s.message('ROUTE_CLEARED', {}, old.requestId, s.identity);
+    expect(s.events.filter(event => event.type === 'ROUTE_CLEARED')).toHaveLength(count);
+    s.message('ROUTE_CLEARED', {}, current, s.identity);
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+  });
+  it.each(['reload', 'logout'] as const)('cancels an in-flight tray hide on %s and ignores its late receipt', async reason => {
+    const s = await trayDisplayed(), hiding = s.c.hideTray(), rejected = expect(hiding).rejects.toMatchObject({ name: 'AbortError' });
+    const command = s.send.mock.calls.find(call => call[0].type === 'CLEAR_ROUTE')![0];
+    const reloading = reason === 'reload' ? s.c.load(versionId) : null;
+    if (reason === 'logout') invalidateViewerLogin('login-a');
+    await rejected;
+    const count = s.events.filter(event => event.type === 'ROUTE_CLEARED').length;
+    s.message('ROUTE_CLEARED', {}, command.requestId, s.identity);
+    expect(s.events.filter(event => event.type === 'ROUTE_CLEARED')).toHaveLength(count);
+    expect(s.c.getLoadSnapshot()?.ready).not.toBe(true);
+    s.c.dispose(); await reloading;
+  });
+  it('keeps a failed tray restore retryable and only completes after a successful clear receipt', async () => {
+    const s = await trayDisplayed();
+    s.send.mockImplementation(value => {
+      if (value.type === 'CLEAR_ROUTE') s.message('ERROR', { code: 'APPEARANCE_RESTORE_FAILED', message: 'Restore incomplete', retryable: true, operation: 'CLEAR_ROUTE' }, value.requestId, s.identity);
+    });
+    await expect(s.c.hideTray()).rejects.toMatchObject({ code: 'APPEARANCE_RESTORE_FAILED' });
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+    s.send.mockImplementation(value => { if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity); });
+    const previous = s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE').length;
+    await expect(s.c.hideTray()).resolves.toBeUndefined();
+    expect(s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE')).toHaveLength(previous + 1);
+  });
+  it.each(['computed route', 'explicit clear'] as const)('late tray cleanup does not clear a newer %s', async replacement => {
+    const s = await trayDisplayed(); let received = 0;
+    s.send.mockImplementation(value => {
+      if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
+      const phase = value.type === 'BEGIN_COMPUTED_PATH' ? 'begun' : value.type === 'APPEND_COMPUTED_PATH' ? 'appended' : value.type === 'COMMIT_COMPUTED_PATH' ? 'displayed' : null;
+      if (phase === 'appended') received += value.payload.points.length;
+      if (phase) s.message('COMPUTED_PATH_UPDATED', { pathId: value.payload.pathId, phase, received }, value.requestId, s.identity);
+    });
+    const routeRequestId = replacement === 'computed route'
+      ? await s.c.showComputedPath({ pathId: generateId(), points: [[0, 0, 0]], objectIds: [23] }) : null;
+    if (replacement === 'explicit clear') s.c.clear();
+    const count = s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE').length;
+    await expect(s.c.hideTray()).resolves.toBeUndefined();
+    expect(s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE')).toHaveLength(count);
+    if (routeRequestId) { s.c.zoom(); expect(s.send.mock.calls.at(-1)?.[0]).toMatchObject({ type: 'ZOOM_ROUTE', payload: { routeRequestId } }); }
+  });
   it('small multipart controls retain exact intent identity and leave model appearance alone', async () => {
     const s = await loaded(), intentId = generateId();
     const start = { intentId, expectedSessionRevision: '0', scopeSha256: 'a'.repeat(64), profileSha256: 'b'.repeat(64), producerProfile: BARRIER_MULTIPART_PRODUCER_PROFILE };
@@ -351,6 +576,8 @@ describe('PathFinder protected Viewer capabilities', () => {
     });
     await expect(s.c.captureBarriers(input)).resolves.toMatchObject({ capture: { captureId: input.captureId, observation: { verification: 'unverified' } }, frameObservation: { loadId: s.identity.loadId } });
     expect(s.send.mock.calls.filter(call => call[0].type === 'READ_BARRIER_CAPTURE')).toHaveLength(2);
+    expect(s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE').map(call => call[0].payload))
+      .toEqual([{ reason: 'selection', preserveCamera: true, preserveSelection: true }]);
   });
   it.each(['BARRIER_CAPTURE_FRAGMENT_LIMIT', 'BARRIER_CAPTURE_GEOMETRY_NOT_READY', 'BARRIER_CAPTURE_MODEL_CHANGED'])('preserves the exact barrier failure and only unloads a changed model: %s', async code => {
     const s = await loaded(), input = barrierRequest();
@@ -359,8 +586,25 @@ describe('PathFinder protected Viewer capabilities', () => {
       void Promise.resolve().then(() => s.message('ERROR', { code, message: 'Barrier capture failed.', retryable: false, operation: value.type }, value.requestId, s.identity));
     });
     await expect(s.c.captureBarriers(input)).rejects.toMatchObject({ code });
+    expect(s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE').map(call => call[0].payload))
+      .toEqual([{ reason: 'selection', preserveCamera: true, preserveSelection: true }]);
     if (code === 'BARRIER_CAPTURE_MODEL_CHANGED') expect(s.c.getLoadSnapshot()).toBeNull();
     else expect(s.c.getLoadSnapshot()).toMatchObject({ ready: true, modelVersionId: versionId, loadId: s.identity.loadId });
+  });
+  it('cancels barrier capture without fitting the whole model or unloading it', async () => {
+    const s = await loaded(), input = barrierRequest(), controller = new AbortController();
+    s.send.mockImplementation(value => {
+      if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
+      if (value.type === 'CANCEL_REQUEST') s.message('REQUEST_CANCELLED', { targetRequestId: value.payload.targetRequestId, outcome: 'cancelled' }, value.requestId, s.identity);
+    });
+    const capture = s.c.captureBarriers(input, { signal: controller.signal }), rejected = expect(capture).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'START_BARRIER_CAPTURE')).toBe(true));
+    const command = s.send.mock.calls.find(call => call[0].type === 'START_BARRIER_CAPTURE')![0];
+    controller.abort(); await rejected;
+    expect(s.send.mock.calls.some(call => call[0].type === 'CANCEL_REQUEST' && call[0].payload.targetRequestId === command.requestId)).toBe(true);
+    expect(s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE').map(call => call[0].payload))
+      .toEqual([{ reason: 'selection', preserveCamera: true, preserveSelection: true }]);
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
   });
   it('superseded barrier cleanup cannot cancel a newer capture even when the caller reuses its capture UUID', async () => {
     const s = await loaded(), input = barrierRequest(), events = barrierStream(input, s.identity.loadId);
@@ -645,14 +889,33 @@ describe('PathFinder protected Viewer capabilities', () => {
     const rejected=expect(reading).rejects.toMatchObject({name:'AbortError'});await vi.waitFor(()=>expect(s.send.mock.calls.some(call=>call[0].type==='READ_PREPARATION_OBJECTS')).toBe(true));abort.abort();await rejected;expect(s.send.mock.calls.some(call=>call[0].type==='CANCEL_REQUEST')).toBe(true);
     const captureAbort=new AbortController(),capturing=s.c.captureModel({routeCodes:['BC001'],allowedCategories:['Control'],equipmentNames:[]},()=>{},{signal:captureAbort.signal});const captureRejected=expect(capturing).rejects.toMatchObject({name:'AbortError'});await vi.waitFor(()=>expect(s.send.mock.calls.some(call=>call[0].type==='START_MODEL_CAPTURE')).toBe(true));captureAbort.abort();await captureRejected;
   });
-  it('allows the frame discovery budget and still terminates a stalled discovery',async()=>{
-    const s=await loaded(600_000),reading=s.c.discoverPreparationObjects({schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['TAG-001'],rootObjectId:null,cursor:0,limit:128});
+  it.each(['equipment','names'] as const)('delivers only current %s property progress without completing discovery or extending its deadline',async mode=>{
+    const s=await loaded(600_000),onProgress=vi.fn(),reading=s.c.discoverPreparationObjects({schemaVersion:'wfc.pf.viewer-discovery.v1',mode,names:['TAG-001'],rootObjectId:null,cursor:0,limit:128,...(mode==='names'?{includeProperties:true as const}:{})},{onProgress});
     const rejected=expect(reading).rejects.toThrow('Viewer request timed out');
     await vi.waitFor(()=>expect(s.send.mock.calls.some(call=>call[0].type==='READ_PREPARATION_OBJECTS')).toBe(true));
+    const command=s.send.mock.calls.find(([value])=>value.type==='READ_PREPARATION_OBJECTS')![0];
+    const report=(loaded:number,total=1000)=>s.message('PREPARATION_PROGRESS',{phase:'properties',loaded,total},command.requestId,s.identity);
+    s.message('PREPARATION_PROGRESS',{phase:'properties',loaded:100,total:1000},generateId(),s.identity);
+    s.message('PREPARATION_PROGRESS',{phase:'properties',loaded:100,total:1000},command.requestId,{...s.identity,loadId:generateId()});
+    expect(onProgress).not.toHaveBeenCalled();
+    report(512); report(2); report(513,2000); report(1001); report(-1);
+    expect(onProgress).toHaveBeenCalledExactlyOnceWith({phase:'properties',loaded:512,total:1000});
     await vi.advanceTimersByTimeAsync(300_001);
+    report(1000); expect(onProgress).toHaveBeenCalledTimes(2);
     expect(s.events.some(event=>event.type==='ERROR'&&event.payload.code==='REQUEST_TIMEOUT')).toBe(false);
     await vi.advanceTimersByTimeAsync(10_000);await rejected;
     expect(s.events.some(event=>event.type==='ERROR'&&event.payload.code==='REQUEST_TIMEOUT')).toBe(true);
+    report(1000); expect(onProgress).toHaveBeenCalledTimes(2);
+  });
+  it.each(['equipment','names'] as const)('ignores %s discovery progress after cancellation even before the cancellation acknowledgement',async mode=>{
+    const s=await loaded(),abort=new AbortController(),onProgress=vi.fn();
+    const reading=s.c.discoverPreparationObjects({schemaVersion:'wfc.pf.viewer-discovery.v1',mode,names:['TAG-001'],rootObjectId:null,cursor:0,limit:128,...(mode==='names'?{includeProperties:true as const}:{})},{signal:abort.signal,onProgress});
+    const rejected=expect(reading).rejects.toMatchObject({name:'AbortError'});
+    await vi.waitFor(()=>expect(s.send.mock.calls.some(call=>call[0].type==='READ_PREPARATION_OBJECTS')).toBe(true));
+    const command=s.send.mock.calls.find(([value])=>value.type==='READ_PREPARATION_OBJECTS')![0];
+    abort.abort();
+    s.message('PREPARATION_PROGRESS',{phase:'properties',loaded:1000,total:1000},command.requestId,s.identity);
+    expect(onProgress).not.toHaveBeenCalled(); await rejected;
   });
   it('ends capture at its absolute 315s wall deadline despite continuous progress keepalives', async () => {
     const timing = vi.fn(), s = await loaded(600_000, timing);
@@ -661,6 +924,7 @@ describe('PathFinder protected Viewer capabilities', () => {
       if (value.type === 'CANCEL_REQUEST') s.message('REQUEST_CANCELLED', { targetRequestId: value.payload.targetRequestId, outcome: 'cancelled' }, value.requestId, s.identity);
     });
     const startedAt = Date.now(), capture = s.c.captureModel({ lookupRouteCodes: ['/BC001'], equipmentNames: [] });
+    expect(s.send.mock.calls.find(call => call[0].type === 'CLEAR_ROUTE')![0].payload).toEqual({ reason: 'selection', preserveCamera: true });
     const rejected = expect(capture).rejects.toMatchObject({ code: 'EXTRACTION_FAILED' });
     let settled = false; void capture.then(() => { settled = true; }, () => { settled = true; });
     await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'START_MODEL_CAPTURE')).toBe(true));
@@ -703,6 +967,22 @@ describe('PathFinder protected Viewer capabilities', () => {
     await vi.advanceTimersByTimeAsync(124_000); expect(settled).toBe(false);
     await vi.advanceTimersByTimeAsync(1_001); await rejected;
     expect(s.events.some(event => event.type === 'ERROR' && event.payload.code === 'REQUEST_TIMEOUT')).toBe(true);
+  });
+  it('assembles every negotiated batch event in order with one read and the unchanged final selection check', async () => {
+    const timing = vi.fn(), s = await loaded(600_000, timing, true), accepted: unknown[] = [];
+    vi.spyOn(captureRuntime, 'createModelCaptureAssembler').mockImplementation(() => ({ accept: value => { accepted.push(value); }, finish: () => ({ synthetic: true }), summary: () => ({}) }));
+    s.send.mockImplementation(value => {
+      if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
+      if (value.type === 'START_MODEL_CAPTURE') s.message('MODEL_CAPTURE_EVENT', { captureId: value.payload.captureId, index: 0, done: false, eventJson: JSON.stringify({ type: 'metadata' }) }, value.requestId, s.identity);
+      if (value.type === 'READ_MODEL_CAPTURE') {
+        expect(value.payload).toMatchObject({ index: 1, maxEvents: 32 });
+        s.message('MODEL_CAPTURE_EVENT', { captureId: value.payload.captureId, index: 1, done: true, eventJsons: [JSON.stringify({ type: 'geometry' }), JSON.stringify({ type: 'complete' })] }, value.requestId, s.identity);
+      }
+    });
+    await expect(s.c.captureModel({ lookupRouteCodes: ['/BC001'], equipmentNames: [] })).resolves.toMatchObject({ snapshot: { synthetic: true } });
+    expect(accepted).toEqual([{ type: 'metadata' }, { type: 'geometry' }, { type: 'complete' }]);
+    expect(timing.mock.calls[0][0]).toMatchObject({ roundCount: 2, eventCount: 3, outcome: 'completed' });
+    expect(s.send.mock.calls.filter(([value]) => value.type === 'READ_MODEL_CAPTURE')).toHaveLength(1);
   });
   it('removes the wall timer after successful capture without cancelling a later idle model', async () => {
     const s = await loaded(600_000);
@@ -752,6 +1032,14 @@ describe('PathFinder protected Viewer capabilities', () => {
     expect(values).toHaveLength(1); expect(values[0]).toMatchObject({ outcome: 'refused', roundCount: 1, eventCount: 0 });
     expect(JSON.stringify(values)).not.toContain('PRIVATE');
   });
+  it('retains only validated object and fragment context for a typed capture refusal', async () => {
+    const s = await loaded(600_000);
+    s.send.mockImplementation(value => {
+      if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
+      if (value.type === 'START_MODEL_CAPTURE') s.message('ERROR', { code: 'MODEL_CAPTURE_GEOMETRY_NOT_RESIDENT', message: 'Mesh unavailable', retryable: true, operation: 'START_MODEL_CAPTURE', objectId: 29713, fragmentId: 7 }, value.requestId, s.identity);
+    });
+    await expect(s.c.captureModel({ lookupRouteCodes: ['/BC1'], equipmentNames: [] })).rejects.toMatchObject({ code: 'MODEL_CAPTURE_GEOMETRY_NOT_RESIDENT', objectId: 29713, fragmentId: 7 });
+  });
   it('reports cancellation once even after a late capture reply', async () => {
     const timing = vi.fn(), s = await loaded(600_000, timing), abort = new AbortController();
     s.send.mockImplementation(value => { if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity); });
@@ -799,6 +1087,22 @@ describe('PathFinder protected Viewer capabilities', () => {
     expect(chunks.every(chunk => new TextEncoder().encode(JSON.stringify(chunk)).byteLength <= 65536)).toBe(true);
     expect(requestId).toBeTruthy(); expect(() => s.c.zoom()).not.toThrow();
     expect(s.send.mock.calls.at(-1)?.[0]).toMatchObject({ type: 'ZOOM_ROUTE', payload: { routeRequestId: requestId } });
+  });
+  it('retains the route and both full equipment groups in computed-path foreground', async () => {
+    const s = await loaded(); let received = 0;
+    s.send.mockImplementation(value => {
+      if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
+      const phase = value.type === 'BEGIN_COMPUTED_PATH' ? 'begun' : value.type === 'APPEND_COMPUTED_PATH' ? 'appended' : value.type === 'COMMIT_COMPUTED_PATH' ? 'displayed' : null;
+      if (phase === 'appended') received += value.payload.points.length;
+      if (phase) s.message('COMPUTED_PATH_UPDATED', { pathId: value.payload.pathId, phase, received }, value.requestId, s.identity);
+    });
+    const objectIds = Array.from({ length: 8704 }, (_, at) => 2147470000 + at);
+    await s.c.showComputedPath({ pathId: generateId(), points: [[0, 0, 0]], objectIds });
+    const command = s.send.mock.calls.find(call => call[0].type === 'BEGIN_COMPUTED_PATH')![0];
+    expect(command.payload.objectIds).toEqual(objectIds);
+    const bytes = new TextEncoder().encode(JSON.stringify(command)).byteLength;
+    expect(bytes).toBeGreaterThan(65536); expect(bytes).toBeLessThanOrEqual(131072);
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
   });
   it('keeps a large-model computed appearance commit alive past ten seconds and accepts its bounded acknowledgement', async () => {
     const s = await loaded(600_000); let received = 0;
@@ -989,7 +1293,11 @@ describe('PathFinder protected Viewer capabilities', () => {
       if (value.type === 'SET_PATH_TRANSPARENCY') s.message('PATH_TRANSPARENCY_UPDATED', value.payload, value.requestId, s.identity);
     });
     expect((await s.c.readSelection()).objects).toEqual([]);
+    expect(s.send.mock.calls.some(call => call[0].type === 'CLEAR_ROUTE')).toBe(false);
     const routeRequestId = await s.c.showComputedPath({ pathId: generateId(), points: [[0, 0, 0]], objectIds: [] });
+    const cleared = s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE').length;
+    expect((await s.c.readSelection()).objects).toEqual([]);
+    expect(s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE')).toHaveLength(cleared);
     await s.c.setPathTransparency(40);
     expect(s.send.mock.calls.find(call => call[0].type === 'SET_PATH_TRANSPARENCY')![0].payload).toEqual({ routeRequestId, percent: 40 });
     await expect(s.c.setPathTransparency(101)).rejects.toThrow('integer');

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CHANNEL, MAX_MESSAGE_BYTES, MAX_BARRIER_SELECTION_MESSAGE_BYTES, validateEnvelope, validateBootstrap, validateDescriptor, parseRouting, normalizeRoutingKey } from '../protocol.mjs';
+import { CHANNEL, MAX_MESSAGE_BYTES, MAX_BARRIER_SELECTION_MESSAGE_BYTES, MAX_LOCATION_OBJECT_IDS, MAX_PATH_OBJECT_IDS, MAX_COMPUTED_PATH_MESSAGE_BYTES, validateEnvelope, validateBootstrap, validateDescriptor, parseRouting, normalizeRoutingKey } from '../protocol.mjs';
 import { BARRIER_MULTIPART_PRODUCER_PROFILE } from '../barrier-multipart-protocol.mjs';
 
 const uuid = index => `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`;
@@ -9,6 +9,45 @@ const envelope = (type, payload, overrides = {}) => ({ channel: CHANNEL, protoco
 const route = (rawRouting = '/BC1/SECONDARY/BC1') => ({ rawRouting, source: 'manual', cableId: null,
   segments: parseRouting(rawRouting).segments.map(entry => ({ ...entry, model: { state: 'found', matchCount: 1, drawable: true } })),
   ignored: parseRouting(rawRouting).ignored, drawableCount: parseRouting(rawRouting).segments.length, lineCount: 1, warnings: [] });
+
+test('preparation property progress is bounded cosmetic data tied to one current model load', () => {
+  for (const payload of [{ phase: 'properties', loaded: 0, total: 172818 }, { phase: 'properties', loaded: 1000000, total: 1000000 }]) {
+    assert.ok(validateEnvelope(envelope('PREPARATION_PROGRESS', payload), 'frame-to-parent'));
+    assert.equal(validateEnvelope(envelope('PREPARATION_PROGRESS', payload), 'parent-to-frame'), null);
+    assert.equal(validateEnvelope(envelope('PREPARATION_PROGRESS', payload, { modelVersionId: null, loadId: null })), null);
+    assert.equal(validateEnvelope(envelope('PREPARATION_OBJECTS', payload)), null);
+  }
+  const progress = { phase: 'properties', loaded: 512, total: 172818 };
+  for (const change of [{ loaded: -1 }, { loaded: 0.5 }, { loaded: 172819 }, { total: 1000001 }, { total: NaN }, { total: '172818' }, { phase: 'complete' }, { complete: true }, { objectId: 23 }])
+    assert.equal(validateEnvelope(envelope('PREPARATION_PROGRESS', { ...progress, ...change })), null);
+});
+
+test('tray identity lookup is bounded, direction-bound and always attached to one model load', () => {
+  const identity = { externalId: null, guid: '7586ffbb-1d0a-5942-b687-06884123c866', sourceFile: '01-50_MSR_Kabeltassen.dwg' };
+  const request = { schemaVersion: 'wfc.pf.tray-identity-request.v1', identities: [identity] };
+  const response = { schemaVersion: 'wfc.pf.tray-identity-response.v1', matches: [{ identity, status: 'missing', objectIds: [] }] };
+  for (const [type, payload, direction] of [['RESOLVE_TRAY_IDENTITIES', request, 'parent-to-frame'], ['TRAY_IDENTITIES', response, 'frame-to-parent']]) {
+    assert.ok(validateEnvelope(envelope(type, payload), direction));
+    assert.equal(validateEnvelope(envelope(type, payload), direction === 'parent-to-frame' ? 'frame-to-parent' : 'parent-to-frame'), null);
+    for (const overrides of [{ modelVersionId: null }, { loadId: null }, { modelVersionId: null, loadId: null }])
+      assert.equal(validateEnvelope(envelope(type, payload, overrides), direction), null);
+    assert.equal(validateEnvelope(envelope(type, { ...payload, token: 'private' }), direction), null);
+  }
+  assert.equal(validateEnvelope(envelope('RESOLVE_TRAY_IDENTITIES', { ...request, identities: [] })), null);
+  assert.equal(validateEnvelope(envelope('RESOLVE_TRAY_IDENTITIES', { ...request, identities: Array(33).fill(identity) })), null);
+  assert.equal(validateEnvelope(envelope('TRAY_IDENTITIES', { ...response, matches: [{ identity, status: 'missing', objectIds: [23] }] })), null);
+});
+
+test('appearance cleanup accepts only boolean camera and selection preservation options', () => {
+  for (const payload of [{ reason: 'user' }, { reason: 'user', preserveCamera: true }, { reason: 'selection', preserveCamera: false },
+    { reason: 'selection', preserveSelection: true }, { reason: 'user', preserveSelection: false },
+    { reason: 'selection', preserveCamera: true, preserveSelection: true }, { reason: 'user', preserveCamera: false, preserveSelection: false }])
+    assert.ok(validateEnvelope(envelope('CLEAR_ROUTE', payload), 'parent-to-frame'));
+  for (const payload of [{ reason: 'user', preserveCamera: 'true' }, { reason: 'user', preserveCamera: null }, { reason: 'user', preserveCamera: true, camera: {} },
+    { reason: 'selection', preserveSelection: 'true' }, { reason: 'selection', preserveSelection: null },
+    { reason: 'selection', preserveCamera: true, preserveSelection: 1 }, { reason: 'selection', preserveSelection: true, selectedIds: [23] }])
+    assert.equal(validateEnvelope(envelope('CLEAR_ROUTE', payload), 'parent-to-frame'), null);
+});
 
 test('tray-root selection transports only 512 unique current-load IDs within the ordinary byte ceiling', () => {
   assert.ok(validateEnvelope(envelope('READ_TRAY_ROOT_SELECTION', {}), 'parent-to-frame'));
@@ -39,6 +78,19 @@ test('location display is a single current-load ID with an exact direction-bound
   }
 });
 
+test('grouped location display preserves the primary and strictly ordered bounded member IDs',()=>{
+  const maximum=Array.from({length:MAX_LOCATION_OBJECT_IDS},(_,at)=>2147483647-MAX_LOCATION_OBJECT_IDS+at+1);
+  for(const [type,direction] of [['SHOW_LOCATION','parent-to-frame'],['LOCATION_SHOWN','frame-to-parent']]){
+    for(const sdkObjectIds of [[2],[2,3,23],maximum]){
+      const message=envelope(type,{sdkObjectId:sdkObjectIds[0],sdkObjectIds});
+      assert.ok(validateEnvelope(message,direction));assert.ok(new TextEncoder().encode(JSON.stringify(message)).byteLength<MAX_MESSAGE_BYTES);}
+    for(const sdkObjectIds of [[],[3],[2,2],[3,2],[2,0],[2,-1],[2,1.5],[2,'3'],[2,2147483648],Object.assign(Array(2),{0:2}),Array.from({length:MAX_LOCATION_OBJECT_IDS+1},(_,at)=>at+2),null,2])
+      assert.equal(validateEnvelope(envelope(type,{sdkObjectId:2,sdkObjectIds})),null);
+    const input=envelope(type,{sdkObjectId:2,sdkObjectIds:[2,3]}),parsed=validateEnvelope(input,direction);
+    input.payload.sdkObjectIds[1]=9;assert.deepEqual(parsed.payload.sdkObjectIds,[2,3]);
+  }
+});
+
 test('tray display carries one bounded unique root set with a detached exact current-load acknowledgement', () => {
   const maximum = Array.from({ length: 512 }, (_, at) => at + 1);
   for (const [type, direction] of [['SHOW_TRAY', 'parent-to-frame'], ['TRAY_SHOWN', 'frame-to-parent']]) {
@@ -52,6 +104,21 @@ test('tray display carries one bounded unique root set with a detached exact cur
     const input = envelope(type, { sdkObjectIds: [23, 24] }), parsed = validateEnvelope(input, direction);
     input.payload.sdkObjectIds[0] = 25; assert.deepEqual(parsed.payload.sdkObjectIds, [23, 24]);
   }
+});
+
+test('only a strict computed-path begin carries both complete4096-member locations and512route objects',()=>{
+  const objectIds=Array.from({length:MAX_PATH_OBJECT_IDS},(_,at)=>2147483647-at),payload={pathId:uuid(9),pointCount:1,objectIds};
+  const message=envelope('BEGIN_COMPUTED_PATH',payload),size=new TextEncoder().encode(JSON.stringify(message)).byteLength;
+  assert.ok(size>MAX_MESSAGE_BYTES);assert.ok(size<MAX_COMPUTED_PATH_MESSAGE_BYTES);
+  assert.ok(validateEnvelope(message,'parent-to-frame'));
+  assert.equal(validateEnvelope(message,'frame-to-parent'),null);
+  assert.equal(validateEnvelope({...message,modelVersionId:null,loadId:null}),null);
+  for(const invalid of [objectIds.concat(1),[...objectIds.slice(0,-1),objectIds[0]],[0],['2'],Object.assign(Array(2),{0:2})])
+    assert.equal(validateEnvelope(envelope('BEGIN_COMPUTED_PATH',{...payload,objectIds:invalid})),null);
+  for(const extra of [{token:'secret'},{unrelated:'x'.repeat(MAX_MESSAGE_BYTES)},{points:[[1,2,3]]}])
+    assert.equal(validateEnvelope(envelope('BEGIN_COMPUTED_PATH',{...payload,...extra})),null);
+  assert.equal(validateEnvelope(envelope('SHOW_LOCATION',{sdkObjectId:objectIds.at(-1),sdkObjectIds:[...objectIds].reverse()})),null);
+  assert.equal(MAX_MESSAGE_BYTES,65536);assert.equal(MAX_COMPUTED_PATH_MESSAGE_BYTES,131072);
 });
 
 test('multipart control preserves old ceilings and accepts no geometry, credentials, URLs or authority', () => {
@@ -184,4 +251,47 @@ test('progress rejects fabricated invalid totals and descriptor pins the complet
   const descriptor = { projectId: uuid(2), modelVersionId: uuid(3), loadId: uuid(4), contentFingerprint: 'b'.repeat(64), supportProfile: 'svf-local-7.130.0-v1', format: 'svf', sdkVersion: '7.130.0', entrypoint: 'resources/output/0/0.svf', resourceCount: 342, totalBytes: 439007803 };
   assert.deepEqual(validateDescriptor(descriptor, identity), descriptor);
   for (const change of [{ loadId: uuid(99) }, { entrypoint: 'https://example.com/0.svf' }, { sdkVersion: '7.131.0' }, { jwt: 'secret' }, { resourceCount: 0 }, { totalBytes: 8589934593 }]) assert.equal(validateDescriptor({ ...descriptor, ...change }, identity), null);
+});
+
+
+test('passive object GUID messages are bounded, directional and bound to the current model load', () => {
+  const request = { sdkObjectId: 29713 }, reply = { ...request, guid: '7586ffbb-1d0a-5942-b687-06884123c866' };
+  assert.ok(validateEnvelope(envelope('READ_OBJECT_GUID', request), 'parent-to-frame'));
+  assert.ok(validateEnvelope(envelope('OBJECT_GUID', reply), 'frame-to-parent'));
+  assert.ok(validateEnvelope(envelope('OBJECT_GUID', { ...reply, guid: null }), 'frame-to-parent'));
+  assert.equal(validateEnvelope(envelope('OBJECT_GUID', reply), 'parent-to-frame'), null);
+  assert.equal(validateEnvelope(envelope('READ_OBJECT_GUID', request), 'frame-to-parent'), null);
+  for (const sdkObjectId of [-1, 0, 0.1, 2147483648, '29713']) assert.equal(validateEnvelope(envelope('READ_OBJECT_GUID', { sdkObjectId })), null);
+  for (const guid of ['dbid:29713', 'not-guid', 3]) assert.equal(validateEnvelope(envelope('OBJECT_GUID', { ...reply, guid })), null);
+  assert.equal(validateEnvelope(envelope('READ_OBJECT_GUID', request, { modelVersionId: null, loadId: null })), null);
+  assert.equal(validateEnvelope(envelope('OBJECT_GUID', reply, { modelVersionId: null, loadId: null })), null);
+});
+
+test('typed model capture errors accept only safe numeric context on allowlisted codes', () => {
+  const payload={code:'MODEL_CAPTURE_GEOMETRY_NOT_RESIDENT', message:'Safe diagnostic',retryable:true,operation:'READ_MODEL_CAPTURE',objectId:123,fragmentId:0};
+  assert.ok(validateEnvelope(envelope('ERROR',payload),'frame-to-parent'));
+  for(const change of [{objectId:'dbid:123'}, {fragmentId:-1}, {objectId:2147483648}, {privateSdkMessage:'secret'}, {code:'EXTRACTION_FAILED'}])
+    assert.equal(validateEnvelope(envelope('ERROR',{...payload,...change}),'frame-to-parent'),null);
+});
+
+test('model capture batches preserve per-event and whole-envelope limits and legacy messages', () => {
+  const base = { captureId: uuid(9), index: 0, done: false };
+  assert.ok(validateEnvelope(envelope('READ_MODEL_CAPTURE', { captureId: uuid(9), index: 0, maxEvents: 32 })));
+  for (const maxEvents of [0, 33, 1.5]) assert.equal(validateEnvelope(envelope('READ_MODEL_CAPTURE', { captureId: uuid(9), index: 0, maxEvents })), null);
+  assert.ok(validateEnvelope(envelope('MODEL_CAPTURE_EVENT', { ...base, eventJson: '{}' })));
+  assert.ok(validateEnvelope(envelope('MODEL_CAPTURE_EVENT', { ...base, eventJsons: ['{}', '{}'] })));
+  for (const eventJsons of [[], Array(33).fill('{}'), ['x'.repeat(24577)], Array(3).fill('x'.repeat(24576))])
+    assert.equal(validateEnvelope(envelope('MODEL_CAPTURE_EVENT', { ...base, eventJsons })), null);
+  assert.equal(validateEnvelope(envelope('MODEL_CAPTURE_EVENT', { ...base, index: 2999, eventJsons: ['{}', '{}'] })), null);
+});
+
+test('saved project point display is finite, exact, direction-bound and tied to a model load', () => {
+  for (const [type, direction] of [['SHOW_LOCATION_POINT', 'parent-to-frame'], ['LOCATION_POINT_SHOWN', 'frame-to-parent']]) {
+    const payload = { pointProjectMetres: [1.25, -2.5, 3] };
+    assert.ok(validateEnvelope(envelope(type, payload), direction));
+    assert.equal(validateEnvelope(envelope(type, payload), direction === 'parent-to-frame' ? 'frame-to-parent' : 'parent-to-frame'), null);
+    for (const change of [{ modelVersionId: null }, { loadId: null }]) assert.equal(validateEnvelope(envelope(type, payload, change)), null);
+    for (const invalid of [{ pointProjectMetres: [NaN, 2, 3] }, { pointProjectMetres: [1e9 + 1, 2, 3] }, { pointProjectMetres: [1, 2] }, { ...payload, sdkObjectId: 23 }, { ...payload, extra: true }])
+      assert.equal(validateEnvelope(envelope(type, invalid)), null);
+  }
 });

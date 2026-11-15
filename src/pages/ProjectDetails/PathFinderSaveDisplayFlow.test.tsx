@@ -19,7 +19,9 @@ import { proposalEndpointObjectIds } from './pathFinderEndpointVisibility';
 
 const transport = vi.hoisted(() => ({ row: null as CableWorkflowRow | null, impact: null as unknown,
   realProgress: false, realRevisionResults: false, revisionAdmission: null as { id: string; jobId: string; kind: string; generation: null; createdAt: string } | null,
-  viewerPath: vi.fn(), save: vi.fn(), refresh: vi.fn(), saved: vi.fn() }));
+  viewerPath: vi.fn(), viewerClear: vi.fn(),
+  view: { camera: { position: [0, 0, 100], target: [0, 0, 0], up: [0, 1, 0] }, pathId: null as string | null },
+  save: vi.fn(), refresh: vi.fn(), saved: vi.fn() }));
 vi.mock('@/api/pathfinderCableWorkflow', () => ({ fetchPathFinderCableWorkflowDetail: vi.fn() }));
 vi.mock('@/api/pathfinder', async original => ({ ...await original<typeof import('@/api/pathfinder')>(), fetchPathFinderJob: vi.fn(),
   fetchPathFinderProposal: vi.fn(), fetchPathFinderState: vi.fn(), submitPathFinderCalculation: vi.fn(), pathFinderRequest: vi.fn() }));
@@ -28,8 +30,18 @@ vi.mock('@/viewer/ViewerController', () => ({ ViewerController: class {
   constructor(options: { onEvent: (event: { type: string; payload: Record<string, unknown> }) => void }) {
     queueMicrotask(() => options.onEvent({ type: 'MODEL_LOADED', payload: {} }));
   }
-  getLoadSnapshot = () => ({ ready: true }); dispose() {} clear() {} cancelPicking() {}
-  showComputedPath = transport.viewerPath;
+  getLoadSnapshot = () => ({ ready: true }); dispose() {} cancelPicking() {}
+  clear(reason?: string, options?: { preserveCamera?: boolean }) {
+    transport.viewerClear(reason, options); transport.view.pathId = null;
+    // Model the SDK reset that caused the regression, including when there was
+    // no active path. Clearing appearance must explicitly preserve the camera.
+    if (!options?.preserveCamera) transport.view.camera = { position: [0, 0, 100], target: [0, 0, 0], up: [0, 1, 0] };
+  }
+  async showComputedPath(path: { pathId: string }) {
+    const shown = await transport.viewerPath(path);
+    if (shown) transport.view.pathId = path.pathId;
+    return shown;
+  }
 } }));
 vi.mock('@/api/pathfinderLocationImpacts', async original => ({ ...await original<typeof import('@/api/pathfinderLocationImpacts')>(),
   fetchLocationImpacts: async () => ({ impacts: [] }), fetchLocationImpactProgress: vi.fn() }));
@@ -130,6 +142,8 @@ function Flow({ f, configuration = true }: { f: Fixture; configuration?: boolean
   const [display, setDisplay] = useState(emptyDisplay), [review, setReview] = useState<PathFinderWorkflowReview | null>(null);
   const [preferences, setPreferences] = useState<PathFinderWorkflowCalculationPreferences | null>(null);
   const [request, setRequest] = useState<PathFinderWorkflowDisplayRequest | null>(null);
+  const [refreshRequest, setRefreshRequest] = useState<{ cableId: string; requestId: number } | null>(null);
+  const refreshed = useCallback((cableId: string) => setRefreshRequest(previous => ({ cableId, requestId: (previous?.requestId ?? 0) + 1 })), []);
   const modelId = f.pf.data?.activeModel.modelVersionId;
   useEffect(() => { setSelected(null); setDisplay(emptyDisplay); }, [modelId]);
   const receive = useCallback((row: CableWorkflowRow) => { setSelected(row); setSelectedId(row.cable.id); }, []);
@@ -139,19 +153,22 @@ function Flow({ f, configuration = true }: { f: Fixture; configuration?: boolean
   return <>
     <PathFinderCableWorkspace projectId={id(1)} loadedProjectId={id(1)} accountId={id(2)} token="transport-only-token" isAdmin active pf={f.pf}
       preferences={configuration ? f.preferences : null} readPreferences={configuration ? f.preferences : { secondaryDistanceMeters: 17, preferVerticalApproach: false }}
-      selectedCableId={selectedId} onSelect={receive} onCalculationStart={started} onCalculationPreferences={setPreferences} display={display} review={review}
+      selectedCableId={selectedId} onSelect={receive} onCalculationStart={started} onResultRefresh={refreshed} onCalculationPreferences={setPreferences} display={display} review={review}
       onTogglePath={cableId => setRequest(previous => ({ cableId, requestId: (previous?.requestId ?? 0) + 1, action: display.visible ? 'hide' : 'show' }))} />
-    <PathFinderResults pf={f.pf} selectedCableId={selectedId} workflowSelection={selected} accountId={id(2)}
+    <PathFinderResults pf={f.pf} selectedCableId={selectedId} workflowSelection={selected} workflowRefreshRequest={refreshRequest} accountId={id(2)}
       options={configuration ? f.preferences : null} readPreferences={configuration ? f.preferences : { secondaryDistanceMeters: 17, preferVerticalApproach: false }}
       workflowConfigurationReady={configuration} workflowCalculationPreferences={preferences} workflowDisplayRequest={request}
       onWorkflowDisplayChange={displayChanged} onWorkflowReviewChange={setReview} displayOwned claimViewer={() => () => true} />
   </>;
 }
-function LiveControllerFlow({ f }: { f: Fixture }) {
+function LiveControllerFlow({ f, previousPath = false }: { f: Fixture; previousPath?: boolean }) {
   const container = useRef<HTMLDivElement>(null);
   const controller = usePathFinder({ projectId: id(1), loadedProjectId: id(1), token: 'transport-only-token', isAdmin: true,
     container, automaticStatePolling: false });
-  return <><div ref={container} />{controller.viewerPhase === 'ready' ? <Flow f={{ ...f, pf: controller }} /> : null}</>;
+  return <><div ref={container} />{controller.viewerPhase === 'ready' ? <>
+    {previousPath ? <button onClick={() => void controller.showPath({ pathId: id(2), points: f.proposal.route!.points, objectIds: [23] })}>Show previous path</button> : null}
+    <Flow f={{ ...f, pf: controller }} />
+  </> : null}</>;
 }
 function wire(f: Fixture, persisted = false) {
   transport.row = persisted ? f.done : f.initial;
@@ -162,11 +179,85 @@ function wire(f: Fixture, persisted = false) {
   transport.save.mockResolvedValue(undefined);
 }
 beforeEach(() => { vi.resetAllMocks(); transport.realProgress = false; transport.realRevisionResults = false; transport.revisionAdmission = null;
+  transport.view.camera = { position: [0, 0, 100], target: [0, 0, 0], up: [0, 1, 0] }; transport.view.pathId = null;
   vi.mocked(proposalEndpointObjectIds).mockResolvedValue(['dbid:44', 'dbid:45']);
   sessionStorage.clear(); vi.spyOn(window, 'open').mockReturnValue(null); });
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); sessionStorage.clear(); });
 const button = (name: string) => screen.getByText(name, { selector: 'button' });
 describe('real cable popup Workspace → Results → Panel handoff with synthetic transport', () => {
+  it('restores Show for the identical saved result after exhausted reads through Refresh alone', async () => {
+    vi.useFakeTimers(); const f = fixture(true); wire(f, true);
+    vi.mocked(f.pf.readProposal).mockResolvedValue(null);
+    render(<Flow f={f} />);
+    await act(async () => { fireEvent.click(button('Open test cable')); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(25_000); });
+    expect(screen.getByText(/after bounded automatic retries/)).toBeVisible();
+    expect(button('Show')).toBeDisabled();
+    const oldProposalReads = vi.mocked(f.pf.readProposal).mock.calls.length;
+    vi.mocked(f.pf.readProposal).mockResolvedValue(f.proposal);
+    // The selected-row GET returns the same job/proposal/hash/write revision.
+    // Null + restored selection updates may be batched into a single render.
+    await act(async () => { fireEvent.click(button('Refresh cable status')); });
+    expect(vi.mocked(f.pf.readProposal).mock.calls.length).toBeGreaterThan(oldProposalReads);
+    expect(button('Show')).toBeEnabled();
+    expect(screen.getByLabelText('Cable routing')).toHaveValue('/NEW');
+    expect(f.pf.refreshState).toHaveBeenCalledOnce(); expect(f.pf.showPath).not.toHaveBeenCalled();
+    await act(async () => { fireEvent.click(button('Show')); });
+    expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23, 44, 45] });
+    expect(f.pf.submitCalculation).not.toHaveBeenCalled(); expect(f.pf.calculate).not.toHaveBeenCalled();
+    expect(f.pf.action).not.toHaveBeenCalled(); expect(transport.save).not.toHaveBeenCalled();
+  });
+  it('refreshes an old preparation snapshot before hydrating the saved route without Calculate', async () => {
+    const f = fixture(true); wire(f, true); const fresh = f.pf.data!;
+    fresh.artifacts = [{ ...fresh.artifacts[0], modelVersionId: id(8), snapshotSha256: 'd'.repeat(64) }];
+    f.proposal.dependencies = { projectId: fresh.projectId, model: { id: fresh.activeModel.modelVersionId,
+      selectionRevision: fresh.activeModel.selectionRevision, contentFingerprint: fresh.activeModel.contentFingerprint },
+      artifact: { id: fresh.artifacts[0].id, sha256: fresh.artifacts[0].snapshotSha256 } } as NonNullable<PathFinderProposal['dependencies']>;
+    const outdated = { ...fresh, artifacts: [{ ...fresh.artifacts[0], id: id(99) }] };
+    function MetadataFlow() {
+      const [data, setData] = useState(outdated);
+      const refreshState = useCallback(async () => { setData(fresh); return fresh; }, []);
+      return <Flow f={{ ...f, pf: { ...f.pf, data, refreshState } }} />;
+    }
+    render(<MetadataFlow />); fireEvent.click(button('Open test cable'));
+    await screen.findByText('The model preparation for this result is still refreshing. Refresh cable status before showing its path.');
+    expect(button('Show')).toBeDisabled();
+    await act(async () => { fireEvent.click(button('Refresh cable status')); });
+    await waitFor(() => expect(button('Show')).toBeEnabled());
+    expect(screen.getByLabelText('Cable routing')).toHaveValue('/NEW'); expect(f.pf.showPath).not.toHaveBeenCalled();
+    expect(f.pf.calculate).not.toHaveBeenCalled(); expect(f.pf.submitCalculation).not.toHaveBeenCalled();
+  });
+  it.each([false, true])('preserves the camera when Save invalidates a route (previous path shown: %s)', async previouslyShown => {
+    const f = fixture(true); wire(f);
+    vi.mocked(fetchPathFinderState).mockResolvedValue(f.pf.data!);
+    vi.mocked(fetchProjectModels).mockResolvedValue({ selection: { activeModelVersionId: id(8), selectionRevision: 1 },
+      versions: [{ id: id(8), health: 'healthy' }] } as never);
+    let finishProposal!: (value: PathFinderProposal) => void;
+    vi.mocked(fetchPathFinderProposal).mockImplementation(async () => transport.saved.mock.calls.length
+      ? new Promise(resolve => { finishProposal = resolve; }) : f.proposal);
+    transport.viewerPath.mockResolvedValue(true);
+    render(<LiveControllerFlow f={f} previousPath={previouslyShown} />);
+    fireEvent.click(await screen.findByText('Open test cable', { selector: 'button' }));
+    await screen.findByText('Assign From', { selector: 'button' });
+    if (previouslyShown) {
+      fireEvent.click(button('Show previous path'));
+      await waitFor(() => expect(transport.view.pathId).toBe(id(2)));
+    }
+    const closeCamera = { position: [52, -6, 9], target: [51, -6, 4], up: [0, 0, 1] };
+    transport.view.camera = structuredClone(closeCamera); transport.viewerClear.mockClear();
+    fireEvent.click(button('Assign From'));
+    await waitFor(() => expect(button('Save')).toBeEnabled()); fireEvent.click(button('Save'));
+    await waitFor(() => expect(finishProposal).toBeTypeOf('function'));
+    expect(transport.viewerClear).toHaveBeenCalled();
+    expect(transport.view.pathId).toBeNull(); expect(transport.view.camera).toEqual(closeCamera);
+    expect(button('Show')).toBeDisabled();
+    await act(async () => finishProposal(f.proposal));
+    await waitFor(() => expect(button('Show')).toBeEnabled());
+    expect(screen.getByLabelText('Cable routing')).toHaveValue('/NEW');
+    expect(transport.view.camera).toEqual(closeCamera); expect(transport.view.pathId).toBeNull();
+    for (const call of transport.viewerClear.mock.calls) expect(call).toEqual(['user', { preserveCamera: true }]);
+    expect(transport.save).toHaveBeenCalledOnce(); expect(submitPathFinderCalculation).not.toHaveBeenCalled();
+  });
   it('recovers Save display after three serialized cable reads fail while siblings finish, without another calculation', async () => {
     const f = fixture(true); wire(f);
     const bound = (locationId: string) => ({ locationId, bindingRevision: '1', locationRevision: '1', bindingId: id(60),
@@ -235,18 +326,17 @@ describe('real cable popup Workspace → Results → Panel handoff with syntheti
     expect(transport.save).toHaveBeenCalledOnce(); expect(submitPathFinderCalculation).not.toHaveBeenCalled();
     expect(pathFinderRequest).not.toHaveBeenCalled(); expect(transport.refresh).toHaveBeenCalledTimes(automaticRefreshes);
   });
-  it('isolates Save display hydration from the real revision panel automatic read when the new job is absent from the broad state', async () => {
+  it('hydrates Save display without mounting a competing revision history reader when the new job is absent from broad state', async () => {
     const f = fixture(true); wire(f); transport.realRevisionResults = true;
     f.pf.data!.jobs = [];
     vi.mocked(fetchPathFinderState).mockResolvedValue(f.pf.data!);
     vi.mocked(fetchProjectModels).mockResolvedValue({ selection: { activeModelVersionId: id(8), selectionRevision: 1 },
       versions: [{ id: id(8), health: 'healthy' }] } as never);
     vi.mocked(fetchPathFinderProposal).mockResolvedValue(f.proposal);
-    let finishDisplay!: (value: PathFinderJob) => void, finishHistory!: (value: PathFinderJob) => void;
+    let finishDisplay!: (value: PathFinderJob) => void;
     vi.mocked(fetchPathFinderJob).mockResolvedValue(f.parent)
       .mockResolvedValueOnce({ ...f.parent, items: [{ cableId: id(4), state: 'complete', status: 'calculated', message: null }] } as never)
-      .mockImplementationOnce(() => new Promise(resolve => { finishDisplay = resolve; }))
-      .mockImplementationOnce(() => new Promise(resolve => { finishHistory = resolve; }));
+      .mockImplementationOnce(() => new Promise(resolve => { finishDisplay = resolve; }));
     transport.viewerPath.mockResolvedValue(true);
     const view = render(<LiveControllerFlow f={f} />);
     fireEvent.click(await screen.findByText('Open test cable', { selector: 'button' }));
@@ -257,14 +347,14 @@ describe('real cable popup Workspace → Results → Panel handoff with syntheti
     expect(displaySignal.aborted).toBe(false); expect(button('Show')).toBeDisabled();
     transport.revisionAdmission = { id: id(81), jobId: id(7), kind: 'location-impact', generation: null, createdAt: f.parent.createdAt };
     view.rerender(<LiveControllerFlow f={f} />);
-    await waitFor(() => expect(fetchPathFinderJob).toHaveBeenCalledTimes(3));
+    expect(fetchPathFinderJob).toHaveBeenCalledTimes(2);
     expect(displaySignal.aborted).toBe(false);
-    await act(async () => { finishDisplay(f.parent); finishHistory(f.parent); });
+    await act(async () => { finishDisplay(f.parent); });
     await waitFor(() => expect(button('Show')).toBeEnabled());
     expect(screen.getByLabelText('Cable routing')).toHaveValue('/NEW');
     fireEvent.click(button('Show'));
     await waitFor(() => expect(transport.viewerPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23, 44, 45] }));
-    expect(fetchPathFinderJob).toHaveBeenCalledTimes(3); expect(submitPathFinderCalculation).not.toHaveBeenCalled(); expect(pathFinderRequest).not.toHaveBeenCalled();
+    expect(fetchPathFinderJob).toHaveBeenCalledTimes(2); expect(submitPathFinderCalculation).not.toHaveBeenCalled(); expect(pathFinderRequest).not.toHaveBeenCalled();
     // Startup, acknowledged Save state and settled optional diagnostics only;
     // the user never refreshes or submits another calculation to enable Show.
     expect(fetchPathFinderState).toHaveBeenCalledTimes(3); expect(transport.save).toHaveBeenCalledOnce();

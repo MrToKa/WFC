@@ -11,6 +11,13 @@ const item = () => ({ schemaVersion: 'wfc.pf.location-impact-item.v1', projectId
   fromLogicalKey: 'EQUIPMENT', toLogicalKey: 'OTHER', category: 'LV', eligible: true, contentSha256: 'f'.repeat(64) });
 const barrierIntent=(drillThroughWalls=false)=>{const scope={projectId:id(1),modelVersionId:current.modelVersionId,contentFingerprint:current.contentFingerprint,selectionRevision:current.selectionRevision,captureFrameId:current.captureFrameId,captureFrameSha256:'b'.repeat(64),coordinateFrame:'canonical-world-metres' as const};return{schemaVersion:'wfc.pf.barrier-admission-intent.v1' as const,scope,expectedRegistryRevision:'4',expectedSnapshot:{snapshotId:id(14),scope,registryRevision:'4',contentSha256:'c'.repeat(64),mode:'explicit-empty' as const},drillThroughWalls};};
 describe('scoped impact contracts', () => {
+  it.each([null, '', 'Custom MTO'])('allows new eligible impact items with MTO %j and preserves historical blocked items', category => {
+    for (const eligible of [true, false]) {
+      const input = { ...item(), category, eligible }; expect(locationImpactItemSchema.parse(input)).toEqual(input);
+    }
+    expect(locationImpactItemSchema.safeParse({ ...item(), category: 'MV', eligible: true }).success).toBe(false);
+    expect(locationImpactItemSchema.safeParse({ ...item(), category: 'LV', eligible: false }).success).toBe(false);
+  });
   it('keeps v1/v2 historical authority unchanged and requires exact explicit v3 automatic policy or null',()=>{
     const legacy=record(),policy={schemaVersion:'wfc.pf.automatic-pair-policy.v1',mode:'when-both-empty-or-unchanged-automatic'};
     const v2={...legacy,schemaVersion:'wfc.pf.location-impact-record.v2',originCableId:id(21)},v3={...v2,schemaVersion:'wfc.pf.location-impact-record.v3',automaticPairPolicy:policy};

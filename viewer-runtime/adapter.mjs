@@ -1,16 +1,20 @@
+import { modelCaptureErrorMessage, modelCaptureErrorContext } from './model-capture-errors.mjs';
+import { MODEL_CAPTURE_BATCH_EVENTS, MODEL_CAPTURE_BATCH_BYTES, capturePacketBytes } from './capture-batch.mjs';
+import { readModelObjectGuid, resolveTrayObjectIdentities, validateTrayIdentityRequest } from './tray-identity.mjs';
 import { createRouteController } from './routes.mjs';
 import { createPathFinderController } from './pathfinder.mjs';
+import { createLocationPointController } from './location-point.mjs';
 import { captureSelectedModel } from './model-capture.mjs';
 import { captureSelectedBarriers } from './barrier-capture.mjs';
 import { createBarrierMultipartRuntime } from './barrier-multipart-runtime.mjs';
 import { barrierCaptureErrorMessage } from './barrier-capture-errors.mjs';
 import { createModelCaptureInputStage, isStagedModelCaptureStart, isModelCaptureInputAppend, CAPTURE_INPUT_LIMITS } from './capture-input.mjs';
-import { SDK_VERSION } from './protocol.mjs';
+import { SDK_VERSION, MAX_LOCATION_OBJECT_IDS } from './protocol.mjs';
 import { parseRoutingBindings } from './routing-bindings.mjs';
 
 const interrupted = () => new DOMException('Operation cancelled.', 'AbortError');
 const active = signal => { if (signal?.aborted) throw interrupted(); };
-const safeError = (code = 'RESOURCE_FAILED') => Object.assign(new Error(barrierCaptureErrorMessage(code) ?? 'The local model or one of its resources could not be read.'), { code });
+const safeError = (code = 'RESOURCE_FAILED') => Object.assign(new Error(barrierCaptureErrorMessage(code) ?? modelCaptureErrorMessage(code) ?? 'The local model or one of its resources could not be read.'), { code });
 const positiveObjectId = id => Number.isSafeInteger(id) && id > 0 && id <= 2147483647;
 
 async function locationTree(model, signal) {
@@ -168,7 +172,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
         clickCtrl: { onObject: ['toggleVisibility'] },
       },
     });
-    let finished = false, routes, pathfinder, observer, geometryLoaded = false, nodeIndexReady = false, nodeCount = 0;
+    let finished = false, routes, pathfinder, locationPoint, observer, geometryLoaded = false, nodeIndexReady = false, nodeCount = 0;
     let capture, multipart;
     const cancelCapture = () => { if (!capture) return; const old = capture; capture = undefined; clearTimeout(old.deadline); old.controller.abort(); if (old.iterator) void old.iterator.return().catch(() => {}); };
     const runtimeError = () => { if (!finished) onRuntimeError(safeError()); };
@@ -181,6 +185,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
       observer?.disconnect();
       if (viewing.ERROR_EVENT) viewer.removeEventListener(viewing.ERROR_EVENT, runtimeError);
       routes?.dispose();
+      locationPoint?.dispose();
       pathfinder?.dispose();
       viewer.finish();
       container.replaceChildren();
@@ -225,33 +230,46 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
       if (viewing.ERROR_EVENT) viewer.addEventListener(viewing.ERROR_EVENT, runtimeError);
       routes = createRouteController(viewer, { signal });
       pathfinder = createPathFinderController(viewer, { window, signal });
+      locationPoint = createLocationPointController(viewer, { window, signal });
       const loadedModel = viewer.model;
       multipart = createBarrierMultipartRuntime(viewer, { descriptor, signal, isCurrent: () => !finished && viewer.model != null });
-      let computedPath = false, legacyPath = false;
-      async function captureEvent(captureId, index, operationSignal, onProgress) {
+      let computedPath = false, legacyPath = false, trayDisplay = false;
+      async function captureEvent(captureId, index, operationSignal, onProgress, maxEvents = 1) {
         if (!capture || capture.id !== captureId || capture.index !== index || capture.reading) throw safeError('EXTRACTION_FAILED');
         const currentCapture = capture; currentCapture.reading = true; currentCapture.onProgress = onProgress;
         const abort = () => currentCapture.controller.abort();
         operationSignal?.addEventListener('abort', abort, { once: true });
         try {
           active(operationSignal); active(currentCapture.controller.signal);
-          if (Date.now() - currentCapture.startedAt > CAPTURE_INPUT_LIMITS.milliseconds) throw safeError(currentCapture.kind === 'barrier' ? 'BARRIER_CAPTURE_DEADLINE' : 'EXTRACTION_FAILED');
-          if (currentCapture.responses >= CAPTURE_INPUT_LIMITS.responses) throw safeError(currentCapture.kind === 'barrier' ? 'BARRIER_CAPTURE_PAYLOAD_LIMIT' : 'EXTRACTION_FAILED');
+          if (Date.now() - currentCapture.startedAt > CAPTURE_INPUT_LIMITS.milliseconds) throw safeError(currentCapture.kind === 'barrier' ? 'BARRIER_CAPTURE_DEADLINE' : 'MODEL_CAPTURE_DEADLINE');
+          if (currentCapture.responses >= CAPTURE_INPUT_LIMITS.responses) throw safeError(currentCapture.kind === 'barrier' ? 'BARRIER_CAPTURE_PAYLOAD_LIMIT' : 'MODEL_CAPTURE_PAYLOAD_LIMIT');
           if (!currentCapture.iterator) {
             if (!currentCapture.stage?.ready || index !== 0) throw safeError('EXTRACTION_FAILED');
             currentCapture.iterator = captureIterator(currentCapture, currentCapture.stage.request(), currentCapture.stage.remainingResponses);
           }
-          const next = await currentCapture.iterator.next(); active(operationSignal);
-          if (capture !== currentCapture || next.done || !next.value || next.value.captureId !== captureId) throw safeError('EXTRACTION_FAILED');
-          const eventJson = JSON.stringify(next.value, (_key, value) => { if (typeof value === 'number' && !Number.isFinite(value)) throw safeError('EXTRACTION_FAILED'); return value; });
-          const done = next.value.type === 'complete'; currentCapture.index++; currentCapture.responses++;
-          if (done) cancelCapture();
-          return { captureId, index, done, eventJson };
+          if (!Number.isSafeInteger(maxEvents) || maxEvents < 1 || maxEvents > MODEL_CAPTURE_BATCH_EVENTS || currentCapture.kind === 'barrier' && maxEvents !== 1) throw safeError('EXTRACTION_FAILED');
+          const eventJsons = []; let done = false;
+          while (eventJsons.length < maxEvents) {
+            active(operationSignal); active(currentCapture.controller.signal);
+            if (Date.now() - currentCapture.startedAt > CAPTURE_INPUT_LIMITS.milliseconds || currentCapture.responses >= CAPTURE_INPUT_LIMITS.responses) throw safeError('EXTRACTION_FAILED');
+            const next = currentCapture.pendingEvent ?? await currentCapture.iterator.next(); active(operationSignal); active(currentCapture.controller.signal);
+            if (capture !== currentCapture || next.done || !next.value || next.value.captureId !== captureId) throw safeError('EXTRACTION_FAILED');
+            const eventJson = JSON.stringify(next.value, (_key, value) => { if (typeof value === 'number' && !Number.isFinite(value)) throw safeError('EXTRACTION_FAILED'); return value; });
+            done = next.value.type === 'complete';
+            if (maxEvents > 1 && capturePacketBytes({ captureId, index, done, eventJsons: [...eventJsons, eventJson] }) > MODEL_CAPTURE_BATCH_BYTES) {
+              if (!eventJsons.length) throw safeError('EXTRACTION_FAILED');
+              currentCapture.pendingEvent = next; done = false; break;
+            }
+            currentCapture.pendingEvent = null; eventJsons.push(eventJson); currentCapture.index++; currentCapture.responses++;
+            if (done) { cancelCapture(); break; }
+          }
+          return maxEvents === 1 ? { captureId, index, done, eventJson: eventJsons[0] } : { captureId, index, done, eventJsons };
         } catch (error) {
           if (capture === currentCapture) cancelCapture();
+          if (currentCapture.kind !== 'barrier' && modelCaptureErrorMessage(error?.code)) throw Object.assign(safeError(error.code), modelCaptureErrorContext(error));
           throw error?.name === 'AbortError' ? error : safeError(currentCapture.kind === 'barrier'
             ? barrierCaptureErrorMessage(error?.code) ? error.code : 'EXTRACTION_FAILED'
-            : error?.code === 'LOOKUP_GEOMETRY_NOT_FOUND' ? 'LOOKUP_GEOMETRY_NOT_FOUND' : 'EXTRACTION_FAILED');
+            : error?.code === 'LOOKUP_GEOMETRY_NOT_FOUND' ? 'LOOKUP_GEOMETRY_NOT_FOUND' : modelCaptureErrorMessage(error?.code) ? error.code : 'EXTRACTION_FAILED');
         }
         finally { currentCapture.reading = false; operationSignal?.removeEventListener('abort', abort); }
       }
@@ -266,7 +284,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
         // Restore only our route appearance. Ghost/isolation must not become an
         // automatic endpoint exclusion, and a failed restoration must refuse.
         routes.prepareForVisibilityObservation(); legacyPath = false;
-        pathfinder.prepareForVisibilityObservation(); computedPath = false;
+        pathfinder.prepareForVisibilityObservation(); computedPath = trayDisplay = false;
       }
       async function inputAck(state, request, operationSignal) {
         if (capture !== state || state.reading || state.iterator) throw safeError('EXTRACTION_FAILED');
@@ -300,25 +318,56 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
         showRoute(text, options = {}) {
           const bindings = options.routingBindings === undefined ? undefined : parseRoutingBindings(options.routingBindings, descriptor);
           if (options.routingBindings !== undefined && !bindings) throw safeError('ROUTING_BINDINGS_INVALID');
-          pathfinder.clear(); computedPath = false; legacyPath = true;
+          pathfinder.clear(); computedPath = trayDisplay = false; legacyPath = true;
           return routes.showRoute(text, { ...options, routingBindings: bindings });
         },
-        clearRoute() {
+        clearRoute({ preserveCamera = false, preserveSelection = false } = {}) {
           cancelCapture();
-          if (computedPath) pathfinder.clear(); else if (legacyPath) routes.clearRoute(); else { viewer.clearSelection(); viewer.fitToView(); }
-          computedPath = legacyPath = false;
+          // Hide and geometry preparation restore appearance at the user's
+          // current camera, including repeated cleanup after the tray is gone.
+          if (computedPath || trayDisplay) pathfinder.clear({ preserveSelection }); else if (legacyPath) routes.clearRoute({ preserveCamera, preserveSelection }); else { if (!preserveSelection) viewer.clearSelection(); if (!preserveCamera) viewer.fitToView(); }
+          if (trayDisplay && !preserveCamera) viewer.fitToView();
+          computedPath = legacyPath = trayDisplay = false;
         },
         fitRoute() { if (computedPath) pathfinder.fit(); else routes.fitRoute(); },
-        showComputedPath(value) { if (legacyPath) routes.clearRoute(); legacyPath = false; const result = pathfinder.showPath(value); computedPath = true; return result; },
+        showComputedPath(value) { if (legacyPath) routes.clearRoute(); legacyPath = false; const result = pathfinder.showPath(value); computedPath = true; trayDisplay = false; return result; },
         readModelObjects: pathfinder.readObjects,
-        readPreparationObjects(request, operationSignal) {
+        readPreparationObjects(request, operationSignal, onProgress) {
           active(operationSignal); prepareForEndpointVisibility();
-          return pathfinder.readPreparationObjects(request, operationSignal);
+          return pathfinder.readPreparationObjects(request, operationSignal, onProgress);
+        },
+        async resolveTrayIdentities(request, operationSignal) {
+          if (!validateTrayIdentityRequest(request)) throw safeError('TRAY_IDENTITY_READ_FAILED');
+          const identitySignal = AbortSignal.any([signal, operationSignal].filter(Boolean));
+          const check = () => { active(identitySignal); if (finished || !loadedModel || viewer.model !== loadedModel) throw safeError('MODEL_SELECTION_CHANGED'); };
+          check();
+          const matches = await resolveTrayObjectIdentities(loadedModel, request.identities, { signal: identitySignal, check });
+          check();
+          return { schemaVersion: 'wfc.pf.tray-identity-response.v1', matches };
+        },
+        async readObjectGuid(sdkObjectId, operationSignal) {
+          if (!positiveObjectId(sdkObjectId)) throw safeError('OBJECT_GUID_UNAVAILABLE');
+          const identitySignal = AbortSignal.any([signal, operationSignal].filter(Boolean));
+          const check = () => { active(identitySignal); if (finished || !loadedModel || viewer.model !== loadedModel) throw safeError('MODEL_SELECTION_CHANGED'); };
+          try { check(); const guid = await readModelObjectGuid(loadedModel, sdkObjectId, { signal: identitySignal, check }); check(); return guid; }
+          catch (error) { if (error?.name === 'AbortError' || error?.code === 'MODEL_SELECTION_CHANGED') throw error; throw safeError('OBJECT_GUID_UNAVAILABLE'); }
         },
         readSelection: pathfinder.readSelection,
         readTrayRootSelection: pathfinder.readTrayRootSelection,
-        async showLocation(sdkObjectId, operationSignal, beforeCommit = async () => {}) {
+        async showLocationPoint(point, operationSignal, beforeCommit = async () => {}) {
+          const displaySignal = AbortSignal.any([signal, operationSignal].filter(Boolean));
+          const check = () => {
+            active(displaySignal);
+            if (finished || !loadedModel || viewer.model !== loadedModel) throw safeError('MODEL_SELECTION_CHANGED');
+          };
+          check(); await beforeCommit(); check();
+          try { locationPoint.show(point); }
+          catch (error) { if (error?.name === 'AbortError' || error?.code === 'MODEL_SELECTION_CHANGED') throw error; throw safeError('LOCATION_UNAVAILABLE'); }
+        },
+        async showLocation(sdkObjectId, operationSignal, beforeCommit = async () => {}, sdkObjectIds) {
           if (!positiveObjectId(sdkObjectId)) throw safeError('LOCATION_UNAVAILABLE');
+          const ids = sdkObjectIds === undefined ? [sdkObjectId] : Array.isArray(sdkObjectIds) ? [...sdkObjectIds] : [];
+          if (!ids.length || ids.length > MAX_LOCATION_OBJECT_IDS || ids[0] !== sdkObjectId || !ids.every((id, at) => positiveObjectId(id) && (at === 0 || id > ids[at - 1]))) throw safeError('LOCATION_UNAVAILABLE');
           const displaySignal = AbortSignal.any([signal, operationSignal].filter(Boolean));
           const currentModel = () => {
             active(displaySignal);
@@ -327,15 +376,16 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
           currentModel();
           const tree = await locationTree(loadedModel, displaySignal);
           currentModel();
-          if (!containsLocation(tree, sdkObjectId) || typeof viewer.show !== 'function' || typeof viewer.fitToView !== 'function') throw safeError('LOCATION_UNAVAILABLE');
+          if (!ids.every(id => containsLocation(tree, id)) || typeof viewer.show !== 'function' || typeof viewer.fitToView !== 'function') throw safeError('LOCATION_UNAVAILABLE');
           await beforeCommit();
           currentModel();
           try {
             // The pinned SDK show() changes only this node's visibility. It
             // reveals it normally under route Ghost without changing selection,
             // global Ghost, route overlays or their saved appearance baseline.
-            viewer.show([sdkObjectId], loadedModel);
-            viewer.fitToView([sdkObjectId], loadedModel);
+            viewer.show(ids, loadedModel);
+            viewer.fitToView(ids, loadedModel);
+            locationPoint.clear();
           } catch { throw safeError('LOCATION_UNAVAILABLE'); }
         },
         async showTray(sdkObjectIds, operationSignal, beforeCommit = async () => {}) {
@@ -352,15 +402,19 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
           try { tree = await locationTree(loadedModel, displaySignal); }
           catch (error) { if (error?.code === 'LOCATION_UNAVAILABLE') throw safeError('TRAY_UNAVAILABLE'); throw error; }
           currentModel();
-          if (!ids.every(id => containsLocation(tree, id)) || typeof viewer.show !== 'function' || typeof viewer.fitToView !== 'function') throw safeError('TRAY_UNAVAILABLE');
+          if (!ids.every(id => containsLocation(tree, id)) || typeof viewer.fitToView !== 'function') throw safeError('TRAY_UNAVAILABLE');
           await beforeCommit();
           currentModel();
           try {
-            // Reveal all resolved roots together, preserving the user's current
-            // selection and any route overlays, Ghost or appearance baseline.
-            viewer.show(ids, loadedModel);
+            if (legacyPath) { routes.clearRoute(); legacyPath = false; }
+            trayDisplay = true;
+            pathfinder.showTray(ids); computedPath = false;
             viewer.fitToView(ids, loadedModel);
-          } catch { throw safeError('TRAY_UNAVAILABLE'); }
+          } catch {
+            try { pathfinder.clear({ preserveSelection: true }); computedPath = trayDisplay = false; }
+            catch { throw safeError('APPEARANCE_RESTORE_FAILED'); }
+            throw safeError('TRAY_UNAVAILABLE');
+          }
         },
         setPathTransparency: pathfinder.setTransparency,
         pickPoint: pathfinder.pickPoint,
@@ -385,7 +439,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
             if (!capture || capture.id !== request.captureId || !capture.stage) throw safeError('EXTRACTION_FAILED');
             return inputAck(capture, request, operationSignal);
           }
-          return captureEvent(request.captureId, request.index, operationSignal, onProgress);
+          return captureEvent(request.captureId, request.index, operationSignal, onProgress, request.maxEvents ?? 1);
         },
         async startBarrierCapture(request, operationSignal, onProgress, { startedAt = Date.now() } = {}) {
           cancelCapture(); active(operationSignal);

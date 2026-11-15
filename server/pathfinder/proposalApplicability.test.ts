@@ -75,6 +75,12 @@ function barrierFixture(jobState = 'running') {
 }
 
 describe('version-specific sealed cable applicability with mocked SQL and scoped authority', () => {
+  it.each([null,'Custom'])('admits a sealed Purpose-authorized route with optional MTO %s and refuses a forbidden tray',async mto=>{
+    const f=barrierFixture();f.dependencies.cableInputs.mto=mto;f.dependencies.cablePurposeRouting={purpose:'Control',allowedRouteCodes:['/A']};f.reseal();
+    const before=structuredClone(f.dependencies);expect((await f.run()).applicable).toBe(true);expect(f.dependencies).toEqual(before);
+    f.dependencies.cablePurposeRouting.allowedRouteCodes=['/B'];f.reseal();expect((await f.run()).applicable).toBe(false);
+    delete f.dependencies.cablePurposeRouting;f.reseal();expect((await f.run()).applicable).toBe(false);
+  });
   it.each(['explicit-job','automatic-generation','location-impact'] as const)('admits one exact sealed item only through the current %s output mandate while siblings run',async kind=>{
     const f=barrierFixture('running');authority.mockResolvedValue(null);
     const mandate={projectId,jobId,cableId,dependencyHash:f.input.dependencyHash,source:{kind}} as AutomaticPairMandate;

@@ -40,6 +40,8 @@ type TraysTabProps = {
   onSearchCriteriaChange: (value: TraySearchCriteria) => void;
   error: string | null;
   isLoading: boolean;
+  metricsLoading?: boolean;
+  metricsError?: string | null;
   items: Tray[];
   pendingId: string | null;
   freeSpaceByTrayId: Record<string, number | null>;
@@ -78,6 +80,8 @@ export const TraysTab = ({
   onSearchCriteriaChange,
   error,
   isLoading,
+  metricsLoading = false,
+  metricsError = null,
   items,
   pendingId,
   freeSpaceByTrayId,
@@ -180,6 +184,9 @@ export const TraysTab = ({
     </div>
 
     {error ? <Body1 className={styles.errorText}>{error}</Body1> : null}
+
+    {metricsLoading ? <div role="status"><Spinner size="tiny" label="Calculating free-space percentages... Trays are available below." /></div> : null}
+    {metricsError ? <Body1 role="status">{metricsError}</Body1> : null}
 
     {isLoading ? (
       <Spinner label="Loading trays..." />

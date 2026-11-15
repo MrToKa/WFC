@@ -33,6 +33,10 @@ import { useAuth } from '@/context/AuthContext';
 import { useCableListColumns } from './hooks/useCableListColumns';
 import { CableListColumnsDialog } from './CableListColumnsDialog';
 import { CableAutoCalculatedLength } from '@/components/pathfinder/CableAutoCalculatedLength';
+import {
+  CableRoutingValue,
+  routingCellAppearance,
+} from '@/components/pathfinder/CableRoutingValue';
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 import { CABLE_LIST_PAGE_SIZE_OPTIONS, type CableFormState } from '../ProjectDetails.forms';
@@ -69,7 +73,14 @@ type CableListTabProps = {
   onDraftChange: (cableId: string, field: keyof CableFormState, value: string) => void;
   onTextFieldBlur: (
     cable: Cable,
-    field: 'revision' | 'tag' | 'fromLocation' | 'toLocation' | 'routing' | 'delivery' | 'designLength',
+    field:
+      | 'revision'
+      | 'tag'
+      | 'fromLocation'
+      | 'toLocation'
+      | 'routing'
+      | 'delivery'
+      | 'designLength',
   ) => void;
   onInlineMtoChange: (cable: Cable, nextMto: string) => void;
   onInlineCableTypeChange: (cable: Cable, nextCableTypeId: string) => void;
@@ -285,7 +296,11 @@ export const CableListTab = ({
                   <th
                     key={id}
                     className={
-                      id === 'designLength' || id === 'autoCalculatedLength' || id === 'diameterMm' || id === 'weightKgPerM'
+                      id === 'designLength' ||
+                      id === 'autoCalculatedLength' ||
+                      id === 'installLength' ||
+                      id === 'diameterMm' ||
+                      id === 'weightKgPerM'
                         ? `${styles.tableHeadCell} ${styles.numericCell}`
                         : styles.tableHeadCell
                     }
@@ -444,7 +459,7 @@ export const CableListTab = ({
                       </td>
                     ) : null}
                     {visibleColumns.has('routing') ? (
-                      <td className={styles.tableCell}>
+                      <td className={styles.tableCell} style={routingCellAppearance(cable)}>
                         {isInlineEditable && draft ? (
                           <Input
                             size="small"
@@ -455,7 +470,7 @@ export const CableListTab = ({
                             aria-label="Routing"
                           />
                         ) : (
-                          (cable.routing ?? '-')
+                          <CableRoutingValue cable={cable} />
                         )}
                       </td>
                     ) : null}
@@ -502,6 +517,23 @@ export const CableListTab = ({
                         )}
                       </td>
                     ) : null}
+                    {visibleColumns.has('installLength') ? (
+                      <td className={`${styles.tableCell} ${styles.numericCell}`}>
+                        {cable.installLength ?? '-'}
+                      </td>
+                    ) : null}
+                    {(['pullDate', 'connectedFrom', 'connectedTo', 'tested'] as const).map(
+                      (field) =>
+                        visibleColumns.has(field) ? (
+                          <td key={field} className={styles.tableCell}>
+                            {cable[field] ? (
+                              <time dateTime={cable[field]!}>{cable[field]!.slice(0, 10)}</time>
+                            ) : (
+                              '-'
+                            )}
+                          </td>
+                        ) : null,
+                    )}
                     {showActions ? (
                       <td className={styles.tableCell}>
                         <div className={styles.actionsCell}>
@@ -560,11 +592,7 @@ export const CableListTab = ({
             dropdownAriaLabel="Select cable list page"
           />
         ) : null}
-        <Field
-          className={styles.rowsPerPageField}
-          label="Rows per page"
-          orientation="horizontal"
-        >
+        <Field className={styles.rowsPerPageField} label="Rows per page" orientation="horizontal">
           <Dropdown
             className={styles.paginationDropdown}
             size="small"

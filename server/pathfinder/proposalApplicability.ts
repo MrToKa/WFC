@@ -8,6 +8,8 @@ import { requireVersionedCalculationScope } from './routingScope.js';
 import { engineResponseSchema, type BarrierDependencySnapshot } from './jobContracts.js';
 import type { AutomaticPairMandate } from '../../shared/pathfinderAutomaticPair.js';
 import { requireCurrentAutomaticPairMandate } from './automaticPairMandates.js';
+import { routingEngineCategory } from '../../shared/pathfinderCableEligibility.js';
+import { isPermittedCablePurposeRoute } from '../../shared/routingCablePurposes.js';
 
 type Seal = { projectId: string; jobId: string; cableId: string; proposalId: string; dependencyHash: string;
   proposalHash?: string; engineResultSha256?: string; baselineHash?: string };
@@ -90,8 +92,11 @@ async function readBarrierProposalApplicability(client: PoolClient, input: Propo
     if (calculationMode !== 'calculate') return no;
     const response = engineResponseSchema.parse(body);
     if (response.status !== 'calculated' || !response.route?.success || !response.design) return no;
+    if (dependencies.cablePurposeRouting && (response.route.routeText !== response.route.routeCodes.join('')
+      || !isPermittedCablePurposeRoute(response.route.routeCodes,dependencies.cablePurposeRouting.allowedRouteCodes))) return no;
     requireBarrierEngineStrategy(response, { context: dependencies.barriers,
-      ...(dependencies.barriers.schemaVersion==='wfc.pf.barrier-runtime.v2'?{qualification:dependencies.barrierQualification}:{}), category: dependencies.cableInputs.mto,
+      ...(dependencies.barriers.schemaVersion==='wfc.pf.barrier-runtime.v2'?{qualification:dependencies.barrierQualification}:{}),
+      category: dependencies.cablePurposeRouting ? routingEngineCategory(dependencies.cableInputs.mto) : dependencies.cableInputs.mto,
       fromPoint: dependencies.from.point, toPoint: dependencies.to.point });
   } catch { return no; }
   if (automaticMandate) {

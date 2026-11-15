@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { modelCoordinates, createPathFinderController, createExactPathBatches } from '../pathfinder.mjs';
-import { CHANNEL, validateEnvelope, MAX_MESSAGE_BYTES } from '../protocol.mjs';
+import { CHANNEL, validateEnvelope, MAX_MESSAGE_BYTES, MAX_PATH_OBJECT_IDS } from '../protocol.mjs';
 
 const uuid = index => `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`;
 const envelope = (type, payload) => ({ channel: CHANNEL, protocolVersion: 1, instanceId: uuid(1), projectId: uuid(2), modelVersionId: uuid(3), loadId: uuid(4), requestId: uuid(5), type, payload });
@@ -70,6 +70,55 @@ test('tray-name discovery normalizes an unmatched model name once per ID rather 
   assert.deepEqual(page.objects.map(object=>object.objectId),[2]);assert.deepEqual(page.objects[0].matchedNames,['MATCH']);assert.equal(unmatchedNormalizations,2);
  }finally{String.prototype.normalize=original;f.controller.dispose();}
 });
+
+test('tray Properties discovery matches exact tree or arbitrary readable scalar values and retains GUID/source pieces without geometry capture',async()=>{
+ const f=fixture(),guid='7586ffbb-1d0a-5942-b687-06884123c866';let calls=0;
+ f.tree.getNodeName=id=>id===1?'TREE-TRAY':'Imported part '+id;
+ f.model.getBulkProperties=(ids,_options,success)=>{calls++;success(ids.map(dbId=>({dbId,properties:dbId===1?[]:[
+  {displayName:'Custom tray designation',displayValue:' TRAY-001 '},
+  {displayName:'Numeric custom',displayValue:42},{displayName:'Boolean custom',displayValue:true},
+  {displayName:'Private',displayValue:'SECRET',hidden:true},{displayCategory:'__child__',displayValue:'INTERNAL'},
+  {displayName:'GUID',displayValue:`{${guid.toUpperCase()}}`},{displayName:'Source File',displayValue:'Models\\Trays.dwg'},
+ ]})));};
+ f.fragments.getWorldBounds=()=>{throw Error('Discover must not capture geometry bounds');};
+ const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'names',names:['TREE-TRAY','TRAY-001'],indexNames:['TREE-TRAY','TRAY-001','42','true','tray-001','SECRET','INTERNAL'],includeProperties:true,rootObjectId:null,cursor:0,limit:1};
+ const objects=[];let page;
+ do{page=await f.controller.readPreparationObjects({...request,cursor:page?.nextCursor??0});objects.push(...page.objects);}while(page.nextCursor!==null);
+ assert.deepEqual(objects.map(object=>object.objectId),[1,2,3]);
+ assert.deepEqual(objects.slice(1).map(object=>object.objectIdentity),[{guid,sourceFile:'models/trays.dwg'},{guid,sourceFile:'models/trays.dwg'}]);
+ assert.ok(objects.every(object=>!Object.hasOwn(object,'bounds')));assert.equal(page.propertyScan.complete,true);
+ const scalar=await f.controller.readPreparationObjects({...request,names:['42','true','tray-001','SECRET','INTERNAL'],limit:128});
+ assert.deepEqual(scalar.objects.map(object=>object.matchedNames),[['42','true'],['42','true']]);assert.equal(calls,1);f.controller.dispose();
+});
+
+test('tray Properties discovery exposes omitted SDK rows instead of claiming complete absence',async()=>{
+ const f=fixture();f.model.getBulkProperties=(_ids,_options,success)=>success([{dbId:2,properties:[{displayName:'Tag',displayValue:'TRAY-001'}]}]);
+ const page=await f.controller.readPreparationObjects({schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'names',names:['TRAY-001'],includeProperties:true,rootObjectId:null,cursor:0,limit:128});
+ assert.deepEqual(page.objects.map(object=>object.objectId),[2]);assert.deepEqual(page.propertyScan,{attemptedObjectCount:3,returnedObjectCount:1,omittedObjectCount:2,complete:false});f.controller.dispose();
+});
+
+for(const v2 of [true,false])test(`complete Properties discovery ${v2?'prefers SDKgetBulkProperties2':'retains the legacybulk fallback'} without per-object reads`,async()=>{
+ const f=fixture();let bulkCalls=0,legacyCalls=0;
+ const read=function(ids,options,success){assert.equal(this,f.model);assert.deepEqual(options,{ignoreHidden:false,needsExternalId:false});bulkCalls++;success(ids.map(dbId=>({dbId,properties:dbId===2?[{displayName:'Any tag',displayValue:'TRAY-001'}]:[]})));};
+ f.model.getBulkProperties=(...args)=>{legacyCalls++;if(v2)throw Error('Legacy wrapper would load external IDs');return read.call(f.model,...args);};
+ if(v2)f.model.getBulkProperties2=read;
+ f.model.getProperties=()=>{throw Error('A per-objectfallback must not run');};
+ const result=await f.controller.readPreparationObjects({schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'names',names:['TRAY-001'],includeProperties:true,rootObjectId:null,cursor:0,limit:128});
+ assert.deepEqual(result.objects.map(object=>object.objectId),[2]);assert.equal(result.propertyScan.complete,true);assert.equal(bulkCalls,1);assert.equal(legacyCalls,v2?0:1);f.controller.dispose();
+});
+
+for(const ownIdentity of [true,false])test(`V2 tray Properties discovery ${ownIdentity?'groups only own GUID/source metadata without external IDs':'does not promote incidental external IDs into logical identity'}`,async()=>{
+ const f=fixture(),guid='7586ffbb-1d0a-5942-b687-06884123c866';
+ f.model.getBulkProperties=()=>{throw Error('V2 must not use the legacy wrapper');};
+ f.model.getBulkProperties2=(ids,options,success)=>{assert.equal(options.needsExternalId,false);success(ids.map(dbId=>({dbId,
+  ...(!ownIdentity?{externalId:guid}:{}),properties:dbId===1?[]:[{displayName:'Tag',displayValue:'TRAY-001'},
+   ...(ownIdentity?[{displayName:'GUID',displayValue:guid},{displayName:'Source File',displayValue:'Models/Trays.dwg'}]:[])]})));};
+ const result=await f.controller.readPreparationObjects({schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'names',names:['TRAY-001'],includeProperties:true,rootObjectId:null,cursor:0,limit:128});
+ assert.deepEqual(result.objects.map(object=>object.objectId),[2,3]);
+ if(ownIdentity)for(const object of result.objects)assert.deepEqual(object.objectIdentity,{guid,sourceFile:'models/trays.dwg'});
+ else assert.ok(result.objects.every(object=>!Object.hasOwn(object,'objectIdentity')));
+ f.controller.dispose();
+});
 test('preparation subtree and endpoint-ancestor modes preserve full hierarchy and distinguish physical leaves',async()=>{
  const f=fixture();f.tree.getChildCount=id=>id===1?2:0;f.tree.enumNodeChildren=(id,fn)=>{if(id===1){fn(2);fn(3);}};
  const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'subtree',names:[],rootObjectId:2,cursor:0,limit:128};
@@ -122,6 +171,83 @@ test('preparation property discovery retains every property-only candidate and e
   assert.equal(calls,1);assert.equal(first.propertyScan.complete,!omitted);assert.equal(first.propertyScan.omittedObjectCount,omitted?1:0);assert.deepEqual([...first.objects,...(second?.objects??[])].map(x=>x.objectId),omitted?[2]:[2,3]);f.controller.dispose();
  }
 });
+
+function equipmentScanFixture(count = 1536) {
+ const f = fixture();
+ f.tree.getNodeName = id => `Object-${id}`;
+ f.tree.enumNodeChildren = (id, visit) => { if (id === 1) for (let child = 2; child <= count; child++) if (visit(child)) break; };
+ f.tree.getChildCount = id => id === 1 ? count - 1 : 0;
+ return f;
+}
+const equipmentScanRequest = { schemaVersion: 'wfc.pf.viewer-discovery.v1', mode: 'equipment', names: ['MATCH'], rootObjectId: null, cursor: 0, limit: 128 };
+
+test('equipment progress reports bounded live object counts without converting omitted coverage into success', async t => {
+ const f = equipmentScanFixture(1025), progress = []; let now = 0, calls = 0;
+ t.mock.method(performance, 'now', () => now);
+ f.model.getBulkProperties = (ids, _options, yes) => {
+  calls++; now += 250; yes(ids.filter(id => id !== 1025).map(dbId => ({ dbId, properties: [] })));
+ };
+ const page = await f.controller.readPreparationObjects(equipmentScanRequest, undefined, value => progress.push(value));
+ assert.deepEqual(progress, [0, 512, 1024, 1025].map(loaded => ({ phase: 'properties', loaded, total: 1025 })));
+ assert.equal(calls, 3); assert.equal(page.propertyScan.complete, false); assert.equal(page.propertyScan.omittedObjectCount, 1);
+ const cached = [];
+ await f.controller.readPreparationObjects(equipmentScanRequest, undefined, value => cached.push(value));
+ assert.equal(calls, 3); assert.deepEqual(cached, [{ phase: 'properties', loaded: 1025, total: 1025 }]); f.controller.dispose();
+});
+
+test('equipment progress is throttled while final property coverage is always reported', async t => {
+ const f = equipmentScanFixture(), progress = []; let now = 0;
+ t.mock.method(performance, 'now', () => now);
+ f.model.getBulkProperties = (ids, _options, yes) => { now += 80; yes(ids.map(dbId => ({ dbId, properties: [] }))); };
+ await f.controller.readPreparationObjects(equipmentScanRequest, undefined, value => progress.push(value));
+ assert.deepEqual(progress, [{ phase: 'properties', loaded: 0, total: 1536 }, { phase: 'properties', loaded: 1536, total: 1536 }]); f.controller.dispose();
+});
+
+test('fast cached SDK batches do not require one throttleable timer per512 properties', async t => {
+ const f = equipmentScanFixture(), original = globalThis.setTimeout; let yields = 0, calls = 0;
+ t.mock.method(performance, 'now', () => 0);
+ t.mock.method(globalThis, 'setTimeout', (callback, milliseconds, ...args) => { if (milliseconds === 0) yields++; return original(callback, milliseconds, ...args); });
+ f.model.getBulkProperties = (ids, _options, yes) => { calls++; yes(ids.map(dbId => ({ dbId, properties: [] }))); };
+ const page = await f.controller.readPreparationObjects(equipmentScanRequest);
+ assert.equal(calls, 3); assert.equal(page.propertyScan.complete, true);
+ assert.equal(yields, 1, 'only the existing initial inventory yield is needed for a fast scan'); f.controller.dispose();
+});
+
+test('slow asynchronous SDK replies do not spend the synchronous row-work yield budget', async t => {
+ const f = equipmentScanFixture(), original = globalThis.setTimeout; let now = 0, yields = 0, calls = 0;
+ t.mock.method(performance, 'now', () => now);
+ t.mock.method(globalThis, 'setTimeout', (callback, milliseconds, ...args) => { if (milliseconds === 0) yields++; return original(callback, milliseconds, ...args); });
+ f.model.getBulkProperties = (ids, _options, yes) => {
+  calls++; setImmediate(() => { now += 1000; yes(ids.map(dbId => ({ dbId, properties: [] }))); });
+ };
+ const page = await f.controller.readPreparationObjects(equipmentScanRequest);
+ assert.equal(calls, 3); assert.equal(page.propertyScan.complete, true);
+ assert.equal(yields, 1, 'three slow worker replies need no additional per-batch timers'); f.controller.dispose();
+});
+
+test('synchronous row work yields within a cached batch so cancellation can stop it before the next SDK call', async t => {
+ const f = equipmentScanFixture(), abort = new AbortController(), original = globalThis.setTimeout; let tick = 0, calls = 0, stoppedDuringRows = false;
+ t.mock.method(performance, 'now', () => tick++ * 4);
+ t.mock.method(globalThis, 'setTimeout', (callback, milliseconds, ...args) => {
+  if (milliseconds === 0 && calls === 1) return original(() => { stoppedDuringRows = true; abort.abort(); callback(); }, milliseconds, ...args);
+  return original(callback, milliseconds, ...args);
+ });
+ f.model.getBulkProperties = (ids, _options, yes) => { calls++; yes(ids.map(dbId => ({ dbId, properties: [] }))); };
+ await assert.rejects(() => f.controller.readPreparationObjects(equipmentScanRequest, abort.signal), { name: 'AbortError' });
+ assert.equal(stoppedDuringRows, true); assert.equal(calls, 1); f.controller.dispose();
+});
+
+test('cancelling after property progress discards its unfinished index and sends no late success', async t => {
+ const f = equipmentScanFixture(), abort = new AbortController(), progress = []; let now = 0, calls = 0;
+ t.mock.method(performance, 'now', () => now);
+ f.model.getBulkProperties = (ids, _options, yes) => { calls++; now += 250; yes(ids.map(dbId => ({ dbId, properties: [] }))); };
+ await assert.rejects(() => f.controller.readPreparationObjects(equipmentScanRequest, abort.signal, value => {
+  progress.push(value); if (value.loaded === 512) abort.abort();
+ }), { name: 'AbortError' });
+ assert.equal(calls, 1); assert.deepEqual(progress.map(value => value.loaded), [0, 512]);
+ const recovered = await f.controller.readPreparationObjects(equipmentScanRequest);
+ assert.equal(calls, 4); assert.equal(recovered.propertyScan.complete, true); f.controller.dispose();
+});
 test('explicit location discovery observes canonical bottom centres without selecting or reloading the model',async()=>{
  const f=fixture();let calls=0;f.model.getBulkProperties=(ids,_options,yes)=>{calls++;yes(ids.map(dbId=>({dbId,properties:dbId===2?[{displayName:'Tag',displayValue:'/2149004__0e'}]:[]})));};
  const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['/2149004__0e'],rootObjectId:null,cursor:0,limit:128,includeAnchors:true};
@@ -131,6 +257,55 @@ test('explicit location discovery observes canonical bottom centres without sele
  assert.equal(f.viewer.model,f.model);assert.equal(f.viewer.isolated,undefined);
  const {includeAnchors:_include,...withoutAnchors}=request;const old=await f.controller.readPreparationObjects(withoutAnchors);
  assert.equal(calls,1);assert.equal(Object.hasOwn(old,'includeAnchors'),false);assert.equal(Object.hasOwn(old.objects[0],'bounds'),false);f.controller.dispose();
+});
+
+test('property-only endpoint parts retain separate IDs and stable source identity across pages using one SDK scan',async()=>{
+ const f=fixture(),guid='7586ffbb-1d0a-5942-b687-06884123c866';let calls=0;
+ f.tree.getNodeName=id=>id===1?'MODEL':'ACPPPIPEINLINEASSET';f.tree.getNodeIndex=id=>id>=1&&id<=4?id-1:undefined;
+ f.tree.getNodeParentId=id=>id===1?0:1;f.tree.getChildCount=id=>id===1?3:0;
+ f.tree.enumNodeChildren=(id,visit)=>{if(id===1)for(const child of [2,3,4])visit(child);};f.fragments.getCount=()=>5;
+ f.tree.isNodeHidden=id=>id===4;
+ f.model.getBulkProperties=(ids,_options,yes)=>{calls++;yes(ids.map(dbId=>({dbId,properties:dbId===1?[]:[
+  {displayCategory:'AutoCAD',displayName:'Tag',displayValue:'15-FT-4018',hidden:0},
+  {displayCategory:'Element',displayName:'GUID',displayValue:`{${guid.toUpperCase()}}`},
+  {displayCategory:'Item',displayName:'Source File',displayValue:'Models\\Equipment.dwg'},
+  {displayName:'Custom alias',displayValue:'OTHER'}]})));};
+ const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['15-FT-4018'],indexNames:['15-FT-4018','OTHER'],rootObjectId:null,cursor:0,limit:1,includeAnchors:true};
+ const objects=[];let current=request;
+ for(;;){const page=await f.controller.readPreparationObjects(current);objects.push(...page.objects);assert.equal(page.propertyScan.complete,true);
+  if(page.complete)break;current={...request,cursor:page.nextCursor,visibilityScope:page.visibilityScope};}
+ assert.equal(calls,1);assert.deepEqual(objects.map(o=>o.objectId),[2,3,4]);
+ for(const object of objects)assert.deepEqual(object.objectIdentity,{guid,sourceFile:'models/equipment.dwg'});
+ assert.ok(objects[0].bounds);assert.equal(objects[2].bounds,null);assert.equal(objects[2].bottomCentre,null);
+ const alias=await f.controller.readPreparationObjects({...request,names:['OTHER'],limit:128});assert.equal(calls,1);
+ assert.deepEqual(alias.objects.map(o=>o.objectIdentity),objects.map(o=>o.objectIdentity));
+ const {includeAnchors:_include,...legacy}=request;const old=await f.controller.readPreparationObjects({...legacy,limit:128});
+ assert.equal(calls,1);assert.ok(old.objects.every(o=>!Object.hasOwn(o,'objectIdentity')));f.controller.dispose();
+});
+
+test('tree-name endpoint matches retain source identity alongside property-name matches without a second scan',async()=>{
+ const f=fixture(),guid='7586ffbb-1d0a-5942-b687-06884123c866';let calls=0;
+ f.tree.getNodeName=id=>id===1?'MODEL':'15-FT-4018';
+ f.model.getBulkProperties=(ids,_options,yes)=>{calls++;yes(ids.map(dbId=>({dbId,properties:dbId===1?[]:[
+  {displayName:'GUID',displayValue:guid},{displayName:'Source File',displayValue:'Equipment.dwg'},
+  {displayName:'Custom equipment property',displayValue:'PROPERTY-ALIAS'}]})));};
+ const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['15-FT-4018'],indexNames:['15-FT-4018','PROPERTY-ALIAS'],rootObjectId:null,cursor:0,limit:128,includeAnchors:true};
+ const tree=await f.controller.readPreparationObjects(request),property=await f.controller.readPreparationObjects({...request,names:['PROPERTY-ALIAS']});
+ assert.equal(calls,1);assert.deepEqual(tree.objects.map(object=>object.objectId),[2,3]);
+ for(const page of [tree,property])for(const object of page.objects){
+  assert.deepEqual(object.objectIdentity,{guid,sourceFile:'equipment.dwg'});assert.ok(object.bounds);}
+ assert.deepEqual(property.objects.map(object=>object.objectId),[2,3]);
+ assert.ok(tree.objects.every(object=>object.matchedNames[0]==='15-FT-4018'));
+ assert.ok(property.objects.every(object=>object.matchedNames[0]==='PROPERTY-ALIAS'));f.controller.dispose();
+});
+
+test('conflicting or missing source identities never erase matching endpoint candidates',async()=>{
+ const f=fixture(),guid='7586ffbb-1d0a-5942-b687-06884123c866';
+ f.model.getBulkProperties=(ids,_options,yes)=>yes(ids.map(dbId=>({dbId,properties:dbId===1?[]:[
+  {displayName:'Tag',displayValue:'15-FT-4018'}, {displayName:'GUID',displayCategory:'Item',displayValue:guid},
+  ...(dbId===2?[{displayName:'GUID',displayCategory:'Item',displayValue:'00000000-0000-4000-8000-000000000099'},{displayName:'Source File',displayValue:'equipment.dwg'}]:[])]})));
+ const page=await f.controller.readPreparationObjects({schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['15-FT-4018'],rootObjectId:null,cursor:0,limit:128,includeAnchors:true});
+ assert.deepEqual(page.objects.map(o=>o.objectId),[2,3]);assert.ok(page.objects.every(o=>!Object.hasOwn(o,'objectIdentity')));f.controller.dispose();
 });
 test('unavailable bounds remain an explicit unavailable candidate rather than dropping an ambiguous object',async()=>{
  const f=fixture();f.model.getBulkProperties=(ids,_options,yes)=>yes(ids.map(dbId=>({dbId,properties:dbId!==1?[{displayName:'Tag',displayValue:'P-001'}]:[]})));
@@ -309,6 +484,69 @@ test('exact ordered path is rendered without fitting; filled Ghost and all origi
   const resource = f.meshes[0]; f.controller.clear(); assert.equal(f.meshes.length, 0);
   assert.equal(resource.geometry.disposed, true); assert.equal(resource.material.disposed, true);
   assert.equal(f.viewer.impl.fadeMaterial.opacity, 0.15); assert.equal(f.viewer.impl.fadeMaterial.variants[0].opacity, 0.3); assert.equal(f.viewer.impl.showGhosting, false); f.controller.dispose();
+});
+
+test('capture cleanup restores a computed path while retaining the selected objects', () => {
+  const f = fixture(); f.controller.showPath({ points: [[1000, -2000, 3], [1001, -2000, 3]], objectIds: [2] });
+  let selectedIds = [2, 3]; f.viewer.clearSelection = () => { selectedIds = []; };
+  const overlay = f.meshes[0];
+  f.controller.clear({ preserveSelection: true });
+  assert.deepEqual(selectedIds, [2, 3]); assert.equal(f.meshes.length, 0);
+  assert.equal(overlay.geometry.disposed, true); assert.equal(overlay.material.disposed, true);
+  assert.equal(f.viewer.impl.fadeMaterial.opacity, 0.15); assert.equal(f.viewer.impl.showGhosting, false);
+  f.controller.clear(); assert.deepEqual(selectedIds, []); f.controller.dispose();
+});
+
+test('tray focus ghosts only the background without a cable overlay and switching trays keeps the original baseline', () => {
+  const f = fixture(), visibility = f.model.visibilityManager, prior = structuredClone({ defaultVisible: visibility.defaultVisible, states: visibility.states });
+  f.viewer.isolate = ids => { f.viewer.isolated = [...ids]; visibility.defaultVisible = false; visibility.states = ids.map(id => [id, true]); };
+  f.viewer.clearSelection = () => { throw Error('Tray focus must preserve the current selection.'); };
+  for (const method of ['addScene', 'addMesh']) f.viewer.overlays[method] = () => { throw Error('Tray focus must not allocate a cable overlay.'); };
+  const ids = [2]; f.controller.showTray(ids); ids[0] = 3;
+  assert.deepEqual(f.viewer.isolated, [2]); assert.equal(f.meshes.length, 0); assert.equal(f.clones.length, 0); assert.equal(f.registered.size, 0);
+  assert.equal(f.originalMaterial.opacity, 0.8); assert.equal(f.viewer.impl.fadeMaterial.opacity, 0.025); assert.equal(f.viewer.impl.fadeMaterial.variants[0].opacity, 0.025);
+  assert.equal(f.viewer.preference, true); assert.equal(f.viewer.impl.showGhosting, true); assert.equal(f.viewer.fittedBounds, undefined);
+  f.controller.showTray([3]); assert.deepEqual(f.viewer.isolated, [3]); assert.deepEqual(visibility.states, [[3, true]]);
+  f.viewer.clearSelection = () => {}; f.controller.clear();
+  assert.deepEqual({ defaultVisible: visibility.defaultVisible, states: visibility.states }, prior);
+  assert.equal(f.viewer.preference, false); assert.equal(f.viewer.impl.showGhosting, false); assert.equal(f.viewer.impl.fadeMaterial.opacity, 0.15); assert.equal(f.viewer.impl.fadeMaterial.variants[0].opacity, 0.3);
+  f.controller.clear(); f.controller.dispose();
+});
+
+test('computed path and tray focus replace each other without retaining overlays or losing prior visibility', () => {
+  const f = fixture(), visibility = f.model.visibilityManager;
+  f.viewer.isolate = ids => { f.viewer.isolated = [...ids]; visibility.defaultVisible = false; visibility.states = ids.map(id => [id, true]); };
+  const points = [[4, 5, 6], [8, 9, 10]].map(point => modelCoordinates(f.model).toCanonical(point));
+  f.controller.showPath({ points, objectIds: [2] }); const oldOverlay = f.meshes[0];
+  f.controller.showTray([3]); assert.equal(f.meshes.length, 0); assert.equal(oldOverlay.geometry.disposed, true); assert.equal(oldOverlay.material.disposed, true);
+  assert.deepEqual(f.viewer.isolated, [3]); assert.equal(f.viewer.impl.fadeMaterial.opacity, 0.025);
+  f.controller.showPath({ points, objectIds: [2] }); assert.equal(f.meshes.length, 1); assert.deepEqual(f.viewer.isolated, [2]);
+  f.controller.clear(); assert.equal(f.meshes.length, 0); assert.equal(visibility.defaultVisible, true); assert.deepEqual(visibility.states, [[3, false]]);
+  assert.equal(f.viewer.impl.fadeMaterial.opacity, 0.15); f.controller.dispose();
+});
+
+test('invalid or unsupported tray focus preserves an existing computed path without partial appearance changes', () => {
+  const f = fixture(); f.controller.showPath({ points: [[1000, -2000, 3]], objectIds: [2] });
+  const overlay = f.meshes[0], isolated = f.viewer.isolated;
+  for (const ids of [null, [], [0], [-1], ['2'], [2, 2], Array(1), Array.from({ length: 513 }, (_, index) => index + 1)])
+    assert.throws(() => f.controller.showTray(ids), { code: 'TRAY_UNAVAILABLE' });
+  const restore = f.model.visibilityManager.setVisibility; delete f.model.visibilityManager.setVisibility;
+  assert.throws(() => f.controller.showTray([3]), { code: 'SDK_UNSUPPORTED' });
+  assert.equal(f.meshes[0], overlay); assert.equal(overlay.geometry.disposed, undefined); assert.equal(f.viewer.isolated, isolated); assert.equal(f.viewer.impl.fadeMaterial.opacity, 0.025);
+  f.model.visibilityManager.setVisibility = restore; f.controller.dispose();
+});
+
+test('tray focus rolls back a failed SDK mutation and retains failed restoration for a later Clear', () => {
+  const f = fixture(), visibility = f.model.visibilityManager, isolate = f.viewer.isolate;
+  f.viewer.isolate = () => { visibility.defaultVisible = false; throw Error('SDK isolate failed.'); };
+  assert.throws(() => f.controller.showTray([2]), /SDK isolate failed/);
+  assert.equal(visibility.defaultVisible, true); assert.deepEqual(visibility.states, [[3, false]]); assert.equal(f.viewer.impl.fadeMaterial.opacity, 0.15);
+  f.viewer.isolate = isolate; f.controller.showTray([3]);
+  const restore = visibility.setVisibility; visibility.setVisibility = () => { throw Error('SDK restore failed.'); };
+  assert.throws(() => f.controller.clear(), { code: 'APPEARANCE_RESTORE_FAILED' });
+  assert.throws(() => f.controller.showTray([2]), { code: 'APPEARANCE_RESTORE_FAILED' });
+  visibility.setVisibility = restore; f.controller.clear(); assert.equal(visibility.defaultVisible, true); assert.deepEqual(visibility.states, [[3, false]]);
+  assert.equal(f.viewer.impl.fadeMaterial.opacity, 0.15); f.controller.dispose();
 });
 
 test('merged yellow tubes retain exact segment axes, vertical/reversed order and a bounded Uint16 draw budget', () => {
@@ -550,6 +788,19 @@ test('successive tray and endpoint parent unions retain every descendant colour 
   assert.equal(f.viewer.impl.showGhosting, false); f.controller.dispose();
 });
 
+test('computed route keeps both complete location groups and route objects opaque through transparency and cleanup',async()=>{
+  const f=fixture(),objectIds=Array.from({length:MAX_PATH_OBJECT_IDS},(_,at)=>at+1),fragmentCount=objectIds.length+1;
+  f.fragmentMaterials.clear();for(let id=0;id<fragmentCount;id++)f.fragmentMaterials.set(id,f.originalMaterial);
+  f.fragments.getCount=()=>fragmentCount;f.tree.enumNodeFragments=(id,visit)=>visit(id-1);
+  assert.throws(()=>f.controller.showPath({points:[[0,0,0]],objectIds:objectIds.concat(MAX_PATH_OBJECT_IDS+1)}),{code:'PATH_INVALID'});
+  f.controller.showPath({points:[[0,0,0],[1,2,3]],objectIds});assert.deepEqual(f.viewer.isolated,objectIds);
+  await f.controller.setTransparency(75);assert.deepEqual(f.viewer.shown,objectIds);assert.equal(f.registered.size,1);
+  for(let id=0;id<objectIds.length;id++){assert.notEqual(f.fragmentMaterials.get(id),f.originalMaterial);assert.equal(f.fragmentMaterials.get(id).opacity,1);}
+  assert.equal(f.fragmentMaterials.get(fragmentCount-1),f.originalMaterial);assert.equal(f.originalMaterial.opacity,.25);
+  f.controller.clear();for(let id=0;id<fragmentCount;id++)assert.equal(f.fragmentMaterials.get(id),f.originalMaterial);
+  assert.equal(f.originalMaterial.opacity,.8);assert.equal(f.registered.size,0);assert.ok(f.clones.every(clone=>clone.disposeCount===1));f.controller.dispose();
+});
+
 test('appearance preflight refuses foreign shared materials, unsupported APIs and all three budgets before touching the view', async () => {
   for (const configure of [
     f => { f.originalMaterial._sharedBy = [7, 8]; },
@@ -557,7 +808,7 @@ test('appearance preflight refuses foreign shared materials, unsupported APIs an
     f => { f.model.unconsolidate = undefined; },
     f => { f.fragments.getCount = () => 1000001; },
     f => { f.fragments.getCount = () => 4097; f.fragments.getMaterial = () => ({ opacity: 1, transparent: false, depthWrite: true }); },
-    f => { f.fragments.getCount = () => 8193; f.fragments.getMaterial = () => f.originalMaterial; f.tree.enumNodeFragments = (_id, visit) => { for (let id = 0; id < 8193; id++) visit(id); }; },
+    f => { f.fragments.getCount = () => 16385; f.fragments.getMaterial = () => f.originalMaterial; f.tree.enumNodeFragments = (_id, visit) => { for (let id = 0; id < 16385; id++) visit(id); }; },
   ]) {
     const f = fixture(); f.controller.showPath({ points: [[0, 0, 0]], objectIds: [2] }); configure(f);
     await assert.rejects(() => f.controller.setTransparency(75), { code: 'SDK_UNSUPPORTED' });
@@ -683,7 +934,7 @@ test('one-shot picking converts only the owned model surface hit and cancellatio
 test('new protocol payloads reject malformed, nonfinite, oversized and missing load identities', () => {
   const begin = envelope('BEGIN_COMPUTED_PATH', { pathId: uuid(6), pointCount: 2, objectIds: [2] });
   assert.ok(validateEnvelope(begin, 'parent-to-frame'));
-  for (const objectIds of [[2, 2], [0], [1.5], Array.from({ length: 513 }, (_, i) => i + 1)]) assert.equal(validateEnvelope({ ...begin, payload: { ...begin.payload, objectIds } }), null);
+  for (const objectIds of [[2, 2], [0], [1.5], Array.from({ length: MAX_PATH_OBJECT_IDS + 1 }, (_, i) => i + 1)]) assert.equal(validateEnvelope({ ...begin, payload: { ...begin.payload, objectIds } }), null);
   assert.equal(validateEnvelope({ ...begin, loadId: null, modelVersionId: null }), null);
   for (const points of [[[NaN, 0, 0]], [[0, Infinity, 0]], [[0, 0]], Array(129).fill([0, 0, 0])]) assert.equal(validateEnvelope(envelope('APPEND_COMPUTED_PATH', { pathId: uuid(6), offset: 0, points })), null);
   const chunk = envelope('APPEND_COMPUTED_PATH', { pathId: uuid(6), offset: 0, points: Array.from({ length: 128 }, () => [-1.1234567890123457e-100, -1.1234567890123457e-100, -1.1234567890123457e-100]) });

@@ -1,6 +1,7 @@
 import type { ProjectChangeLogEntry } from './project';
 import type { MaterialCableType } from './material';
 import type { FileUploader } from './user';
+import type { CableRoutingReadView } from '../../../shared/cableRoutingView';
 import type { AutoLengthView } from '../../../shared/pathfinderAutoLength';
 
 export const CABLE_MTO_OPTIONS = ['MV', 'LV', 'Instrumentation', 'Control'] as const;
@@ -48,7 +49,7 @@ export type Cable = {
   tested: string | null;
   createdAt: string;
   updatedAt: string;
-} & Partial<Readonly<AutoLengthView>>;
+} & Partial<Readonly<AutoLengthView>> & Partial<Readonly<CableRoutingReadView>>;
 
 export type CableVersionChangeType = 'create' | 'update';
 
@@ -92,6 +93,10 @@ export type CableTypeInput = {
 };
 
 export type CableInput = {
+  manualRoutingProtected?: boolean;
+  expectedCableWriteRevision?: string;
+  expectedRoutingControlRevision?: string;
+  executionUnlockReason?: string;
   cableId: number;
   revision?: string | null;
   mto?: CableMtoOption | null;

@@ -44,6 +44,7 @@ export function createModelLocationMatchRouter(repository: ModelLocationMatchRep
     finally { res.removeListener('close', closed); }
   };
   router.get('/locations/model-match/context', action((req, signal) => repository.context(project(req), requestPrincipal(req), signal)));
+  router.get('/locations/model-match/summary', action((req, signal) => repository.summary(project(req), requestPrincipal(req), signal)));
   router.post('/locations/model-match/assign', express.raw({ type: () => true, limit: MODEL_LOCATION_MATCH_LIMITS.bodyBytes, inflate: false }), action((req, signal) => {
     if (!Buffer.isBuffer(req.body)) throw new PathFinderError('INVALID_ENDPOINT_BINDING_REQUEST', 400);
     const command = modelLocationMatchAssignSchema.parse(parsePolicyJson(req.body, { maxBytes: MODEL_LOCATION_MATCH_LIMITS.bodyBytes }));

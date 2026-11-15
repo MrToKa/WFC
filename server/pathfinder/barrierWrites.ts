@@ -1,4 +1,5 @@
 import type { PoolClient } from 'pg';
+import { isPathFinderCableEligible, routingEngineCategory } from '../../shared/pathfinderCableEligibility.js';
 import { supportedBarrierWriteEvidenceSchema as barrierWriteEvidenceSchema,type AnyBarrierWriteEvidence as BarrierWriteEvidence,
   type AnyBarrierEngineIdentity as BarrierEngineIdentity,supportedBarrierAdmissionIntentSchema as barrierAdmissionIntentSchema } from '../../shared/pathfinderBarrierSupported.js';
 import { MIXED_BARRIER_POLICY,mixedBarrierVerifierEvidenceSchema } from '../../shared/pathfinderBarrierMixed.js';
@@ -22,7 +23,9 @@ export function readBarrierWriteEvidence(rawDependencies:unknown,rawResult:unkno
     const body=object(rawDependencies),retained=object(rawResult);
     if(body?.schemaVersion!=='pathfinder.dependencies.v8'||!retained||retained.calculationMode!=='calculate')return null;
     const dependencies=body as unknown as BarrierDependencySnapshot;
-    if(!['LV','Control','Instrumentation'].includes(dependencies.cableInputs?.mto??''))return null;
+    if(!dependencies.cableInputs||!isPathFinderCableEligible(dependencies.cableInputs.mto))return null;
+    const mto=dependencies.cableInputs.mto;
+    const category=dependencies.cablePurposeRouting&&!['MV','LV','Control','Instrumentation'].includes(mto??'')?routingEngineCategory(mto):mto;
     requireVersionedCalculationScope(dependencies);
     const mixed=dependencies.barriers.schemaVersion==='wfc.pf.barrier-runtime.v2';
     const hasQualification=Object.prototype.hasOwnProperty.call(body,'barrierQualification');
@@ -32,7 +35,7 @@ export function readBarrierWriteEvidence(rawDependencies:unknown,rawResult:unkno
     if(response.schemaVersion!=='pathfinder.model.response.v3'||response.status!=='calculated'||!response.route?.success||!response.design
       ||!['clear','bypassed','no-barriers-declared'].includes(response.barriers.diagnostics.status)||!response.barriers.proof)return null;
     requireBarrierEngineStrategy(response,{context:dependencies.barriers,...(mixed?{qualification:dependencies.barrierQualification}:{}),
-      category:dependencies.cableInputs.mto,fromPoint:dependencies.from.point,toPoint:dependencies.to.point});
+      category,fromPoint:dependencies.from.point,toPoint:dependencies.to.point});
     if(!requireCalculationLengthLedger(response,dependencies.settings))return null;
     const context=dependencies.barriers;
     return barrierWriteEvidenceSchema.parse({schemaVersion:mixed?'wfc.pf.barrier-write-evidence.v2':'wfc.pf.barrier-write-evidence.v1',

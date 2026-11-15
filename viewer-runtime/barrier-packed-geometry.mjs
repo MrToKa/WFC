@@ -1,3 +1,4 @@
+import { digestSha256 } from './sha256.mjs';
 // Local bounded encoding only. Neither these bytes nor their hashes grant collision authority.
 import { BARRIER_MULTIPART_PLANNER_PROFILE as P, barrierPlanHash } from './barrier-plan.mjs';
 import { BARRIER_MULTIPART_PRODUCER_PROFILE } from './barrier-multipart-protocol.mjs';
@@ -155,7 +156,7 @@ export async function encodeBarrierPackedPart({ descriptor: input, expectedRange
   expectedValid(expected, descriptor); const observation = detachedFrame(frameInput);
   need(validateBarrierFrameObservation(observation) && observation.contentSha256 === descriptor.frameSha256, 'BARRIER_PACKED_FRAME');
   const digest = async bytes => { check(signal); need(bytes instanceof Uint8Array && bytes.byteLength <= chunkBytes); const copy = bytes.slice();
-    const result = await abortable(() => sha256 ? sha256(copy) : globalThis.crypto.subtle.digest('SHA-256', copy).then(v => [...new Uint8Array(v)].map(n => n.toString(16).padStart(2, '0')).join('')), signal);
+    const result = await abortable(() => sha256 ? sha256(copy) : digestSha256(copy).then(v => [...new Uint8Array(v)].map(n => n.toString(16).padStart(2, '0')).join('')), signal);
     check(signal); need(hash(result)); return result; };
   const { contentSha256, ...frameBody } = observation;
   need(await digest(utf8.encode(barrierCanonicalJson(frameBody))) === contentSha256, 'BARRIER_PACKED_FRAME');

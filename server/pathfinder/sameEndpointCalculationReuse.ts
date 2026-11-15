@@ -5,6 +5,8 @@ import { engineResponseSchema, type BarrierDependencySnapshot, type DependencySn
 import { requireVersionedCalculationScope } from './routingScope.js';
 import { requireBarrierEngineStrategy } from './barrierStrategy.js';
 import { requireCalculationLengthLedger } from './lengthLedger.js';
+import { routingEngineCategory } from '../../shared/pathfinderCableEligibility.js';
+import { isPermittedCablePurposeRoute } from '../../shared/routingCablePurposes.js';
 
 type Limits = { entries: number; totalBytes: number; entryBytes: number; milliseconds: number };
 /** Small, ephemeral computation reuse only. No result, authority or login is persisted. */
@@ -37,9 +39,12 @@ function validatedResponse(dependencies: BarrierDependencySnapshot, raw: unknown
     const response = engineResponseSchema.parse(raw);
     if (response.schemaVersion !== 'pathfinder.model.response.v3' || response.status !== 'calculated'
       || !response.route?.success || !response.design || !response.lengthLedger) return null;
+    if (dependencies.cablePurposeRouting && (response.route.routeText !== response.route.routeCodes.join('')
+      || !isPermittedCablePurposeRoute(response.route.routeCodes,dependencies.cablePurposeRouting.allowedRouteCodes))) return null;
     requireBarrierEngineStrategy(response, { context: dependencies.barriers,
       ...(Object.hasOwn(dependencies, 'barrierQualification') ? { qualification: dependencies.barrierQualification } : {}),
-      category: dependencies.cableInputs.mto, fromPoint: dependencies.from.point, toPoint: dependencies.to.point });
+      category: dependencies.cablePurposeRouting ? routingEngineCategory(dependencies.cableInputs.mto) : dependencies.cableInputs.mto,
+      fromPoint: dependencies.from.point, toPoint: dependencies.to.point });
     requireCalculationLengthLedger(response, dependencies.settings);
     return response;
   } catch { return null; }

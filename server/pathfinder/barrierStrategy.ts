@@ -8,6 +8,7 @@ import { directSecondaryRouteIssue } from '../../shared/pathfinderDirectSecondar
 import type { EngineResponse } from './jobContracts.js';
 import { barrierBytesHash } from './barrierStorage.js';
 import { PathFinderError } from './errors.js';
+import { manualPhysicalCodes, manualRouteConstraintSchema, type ManualRouteConstraint } from './manualRoutingContracts.js';
 
 const digest = (text: string) => barrierBytesHash(Buffer.from(text));
 const fail = (): never => { throw new PathFinderError('ENGINE_BARRIER_STRATEGY_INVALID',502,
@@ -22,7 +23,10 @@ const sameEndpoint = (actual: [number,number,number], expected: [number,number,n
 /** Explicit version pair and exact input binding. A legacy error/result cannot
  * silently become an obstacle-aware result. No JavaScript collision/length math. */
 export function requireBarrierEngineStrategy(response: EngineResponse, input: { context: BarrierRuntimeContext; qualification?: MixedBarrierVerifierEvidence | null; category: string | null;
-  fromPoint: [number,number,number]; toPoint: [number,number,number]; reverse?: boolean }): void {
+  fromPoint: [number,number,number]; toPoint: [number,number,number]; reverse?: boolean; manualRouteConstraint?: ManualRouteConstraint }): void {
+  const manual = input.manualRouteConstraint ? manualRouteConstraintSchema.parse(input.manualRouteConstraint) : null;
+  const manualCodes = manual ? manualPhysicalCodes(manual.routeText) : null;
+  if (manual && input.reverse) return fail();
   if (response.schemaVersion !== 'pathfinder.model.response.v3' || !verifySupportedBarrierRuntimeContext(input.context,digest)) return fail();
   const parsed = supportedBarrierExecutionSchema.safeParse(response.barriers);
   if (!parsed.success || barrierCanonicalJson(parsed.data.context) !== barrierCanonicalJson(input.context)) return fail();
@@ -58,7 +62,13 @@ export function requireBarrierEngineStrategy(response: EngineResponse, input: { 
       ||!sameEndpoint([points.at(-1)!.x,points.at(-1)!.y,points.at(-1)!.z],to))return fail();
   }
   const decision = execution.directSecondary;
-  if (['LV','Control'].includes(expectedCategory ?? '') && !decision) return fail();
+  if (manual && decision) return fail();
+  if (!manual && ['LV','Control'].includes(expectedCategory ?? '') && !decision) return fail();
+  if (manualCodes && response.route?.success) {
+    if (response.route.routeText !== response.route.routeCodes.join('')
+      || response.route.routeCodes.some(code=>!/^\/[A-Z0-9][A-Z0-9_.-]{0,254}$/.test(code))
+      || barrierCanonicalJson(manualPhysicalCodes(response.route.routeText,true)) !== barrierCanonicalJson(manualCodes)) return fail();
+  }
   if (decision) {
     if (!decision.distanceDecision.fromPoint.every((value,at) => value === from[at])
       || !decision.distanceDecision.toPoint.every((value,at) => value === to[at])) return fail();

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { isPathFinderCableEligible } from '../../shared/pathfinderCableEligibility.js';
 import type { Pool, PoolClient } from 'pg';
 import { canonicalPurposeJson, policyHashSchema, policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { LOCATION_IMPACT_LIMITS, locationImpactCalculationSchema, locationImpactItemSchema, locationImpactPageQuerySchema,
@@ -69,7 +70,7 @@ export async function appendLocationImpactInTransaction(client: PoolClient, inpu
     if (rows.length !== ids.length || rows.some((row, index) => row.id !== ids[index] || row.oversized)) return fail('LOCATION_IMPACT_CABLE_SCOPE');
     for (const row of rows) { bytes += Buffer.byteLength(canonicalPurposeJson(row)); if (bytes > LOCATION_IMPACT_LIMITS.collectionBytes) return fail('LOCATION_IMPACT_INPUT_LIMIT', 413); cables.push(row); }
   }
-  const eligible = cables.filter(row => ['LV', 'Control', 'Instrumentation'].includes(row.mto)), eligibleIds = new Set(eligible.map(row => row.id)), mv = cables.filter(row => row.mto === 'MV'), unknown = cables.filter(row => row.mto !== 'MV' && !eligibleIds.has(row.id));
+  const eligible = cables.filter(row => isPathFinderCableEligible(row.mto)), eligibleIds = new Set(eligible.map(row => row.id)), mv = cables.filter(row => row.mto === 'MV'), unknown = cables.filter(row => row.mto !== 'MV' && !eligibleIds.has(row.id));
   if (originCableId !== undefined && !eligibleIds.has(originCableId)) return fail('LOCATION_IMPACT_ORIGIN_SCOPE');
   const now = new Date(), id = randomUUID(), draft = locationImpactRecordSchema.parse({
     ...(automaticPairPolicy !== undefined ? {schemaVersion:'wfc.pf.location-impact-record.v3',originCableId,automaticPairPolicy}
@@ -146,7 +147,7 @@ export async function readLocationImpactJobAuthority(client: Pick<PoolClient, 'q
     FROM pf_location_impact_items i JOIN pf_location_impact_targets t ON t.project_id=i.project_id AND t.cable_id=i.cable_id AND t.impact_id=i.impact_id AND t.generation=i.generation
     JOIN pf_job_items j ON j.project_id=i.project_id AND j.job_id=$2 AND j.cable_id=i.cable_id
     JOIN cables c ON c.project_id=i.project_id AND c.id=i.cable_id
-    WHERE i.project_id=$1 AND i.impact_id=$3 AND i.eligible AND c.mto IN('LV','Control','Instrumentation') AND ($4::uuid IS NULL OR i.cable_id=$4) ORDER BY i.cable_id LIMIT 1${input.lock ? ' FOR SHARE OF i,t,j,c' : ''}`,
+    WHERE i.project_id=$1 AND i.impact_id=$3 AND i.eligible AND c.mto IS DISTINCT FROM 'MV' AND ($4::uuid IS NULL OR i.cable_id=$4) ORDER BY i.cable_id LIMIT 1${input.lock ? ' FOR SHARE OF i,t,j,c' : ''}`,
     [input.projectId, input.jobId, record.id, input.cableId ?? null])).rows[0];
   if (!item) return { ...base, valid: false, code: 'LOCATION_IMPACT_TARGET_SUPERSEDED' };
   const parsed = locationImpactItemSchema.safeParse(item.record);
@@ -184,7 +185,7 @@ export async function readLocationImpactPriority(client: Pick<PoolClient, 'query
     WHERE c.project_id=$1 AND c.id=$2`,[input.projectId,record.originCableId])).rows[0];
   const priority={originCableId:record.originCableId,waitForOrigin:false};
   // A deleted or newly ineligible origin has no remaining calculation to wait for.
-  if(!current||!['LV','Control','Instrumentation'].includes(current.mto))return priority;
+  if(!current||!isPathFinderCableEligible(current.mto))return priority;
   if(!current.impact_id||!current.dispatch_status)return fail('LOCATION_IMPACT_ORIGIN_INTEGRITY');
   if(current.item_state==='complete'||current.item_state==='blocked')return priority;
   if(['failed','cancelled'].includes(current.job_state))return priority;
@@ -231,7 +232,7 @@ export function createLocationImpactRepository(pool: Pool, adapter: LocationImpa
       const targets = (await client.query<{ cable_id: string }>(`SELECT i.cable_id FROM pf_location_impact_items i JOIN pf_location_impact_targets t
         ON t.project_id=i.project_id AND t.cable_id=i.cable_id AND t.impact_id=i.impact_id AND t.generation=i.generation
         JOIN cables c ON c.project_id=i.project_id AND c.id=i.cable_id
-        WHERE i.project_id=$1 AND i.impact_id=$2 AND i.eligible AND c.mto IN('LV','Control','Instrumentation') ORDER BY i.cable_id LIMIT 10001`, [claim.projectId, claim.impactId])).rows.map(row => row.cable_id);
+        WHERE i.project_id=$1 AND i.impact_id=$2 AND i.eligible AND c.mto IS DISTINCT FROM 'MV' ORDER BY i.cable_id LIMIT 10001`, [claim.projectId, claim.impactId])).rows.map(row => row.cable_id);
       const eligibleIds = new Set(record.eligibleCableIds);
       if (targets.length > LOCATION_IMPACT_LIMITS.cables || !targets.every(id => eligibleIds.has(id))) return fail('LOCATION_IMPACT_TARGET_INTEGRITY');
       let guarded = false;
@@ -272,7 +273,7 @@ export function createLocationImpactRepository(pool: Pool, adapter: LocationImpa
 
   async function summary(client: PoolClient, raw: Row, check: () => void) {
     const record = verifiedRecord(raw); check(); const issue = await authority(client, record), state = (await client.query<Row>(`SELECT d.status,d.reason_codes,d.admitted_at,d.updated_at,e.job_id,e.total,e.ready_cables,e.blocked_cables,
-      j.state AS job_state,j.cancel_requested,j.completed,(SELECT count(*)::int FROM pf_location_impact_items i JOIN pf_location_impact_targets t ON t.project_id=i.project_id AND t.cable_id=i.cable_id AND t.impact_id=i.impact_id AND t.generation=i.generation JOIN cables c ON c.project_id=i.project_id AND c.id=i.cable_id WHERE i.project_id=d.project_id AND i.impact_id=d.impact_id AND i.eligible AND c.mto IN('LV','Control','Instrumentation')) AS current_targets
+      j.state AS job_state,j.cancel_requested,j.completed,(SELECT count(*)::int FROM pf_location_impact_items i JOIN pf_location_impact_targets t ON t.project_id=i.project_id AND t.cable_id=i.cable_id AND t.impact_id=i.impact_id AND t.generation=i.generation JOIN cables c ON c.project_id=i.project_id AND c.id=i.cable_id WHERE i.project_id=d.project_id AND i.impact_id=d.impact_id AND i.eligible AND c.mto IS DISTINCT FROM 'MV') AS current_targets
       FROM pf_location_impact_dispatch d LEFT JOIN pf_location_impact_enrollments e ON e.project_id=d.project_id AND e.impact_id=d.impact_id
       LEFT JOIN pf_jobs j ON j.project_id=e.project_id AND j.id=e.job_id WHERE d.project_id=$1 AND d.impact_id=$2`, [record.projectId, record.id])).rows[0];
     if (!state) return fail('LOCATION_IMPACT_INTEGRITY'); let status = state.status;

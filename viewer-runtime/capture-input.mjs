@@ -1,3 +1,4 @@
+import { digestSha256 } from './sha256.mjs';
 // Shared pure input contract. No SDK globals or asynchronous work during import.
 import { validatePreparationSlice } from './preparation-input.mjs';
 export const CAPTURE_INPUT_LIMITS = Object.freeze({ names: 4096, namesPerChunk: 256, chunks: 16, bytes: 1024 ** 2, messageBytes: 65536, responses: 3000, milliseconds: 300000 });
@@ -57,7 +58,7 @@ export function isModelCaptureInputAppend(value) {
 export function validateModelCaptureInputAck(value) {
   return exact(value, ['captureId', 'phase', 'receivedNameCount', 'scopeSha256', 'equipmentNamesSha256']) && UUID.test(value.captureId ?? '') && integer(value.receivedNameCount, CAPTURE_INPUT_LIMITS.names) && (value.phase === 'receiving' ? value.scopeSha256 === null && value.equipmentNamesSha256 === null : value.phase === 'ready' && HASH.test(value.scopeSha256 ?? '') && HASH.test(value.equipmentNamesSha256 ?? ''));
 }
-const digest = async (data, signal, current, startedAt) => { active(signal, current, startedAt); const result = Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', data))).map(v => v.toString(16).padStart(2, '0')).join(''); active(signal, current, startedAt); return result; };
+const digest = async (data, signal, current, startedAt) => { active(signal, current, startedAt); const result = Array.from(new Uint8Array(await digestSha256(data))).map(v => v.toString(16).padStart(2, '0')).join(''); active(signal, current, startedAt); return result; };
 
 export async function planModelCaptureInput(request, { captureId, envelopeIdentity, signal } = {}) {
   const input = normalizeModelCapturePlanningInput(request), startedAt = Date.now(); // Detach before the first await.

@@ -16,8 +16,9 @@ async function fixture() {
   const source: Extract<AutomaticPairSource, { kind: 'automatic-generation' }> = { kind: 'automatic-generation', generation: x.db.state.desired_generation,
     controlRevision: x.db.state.control_revision, authorityEpoch: x.db.state.authority_epoch, authorization };
   const dependencies = { schemaVersion: 'pathfinder.dependencies.v8', projectId: f.projectId, cableId: f.actorId, cableWriteRevision: '7' };
-  const cables = new Map([[f.actorId, { id: f.actorId, project_id: f.projectId, cable_write_revision: '7', mto: 'LV', routing: null as string | null, design_length: null }],
-    [other, { id: other, project_id: f.projectId, cable_write_revision: '7', mto: 'LV', routing: '/MANUAL', design_length: null }]]);
+  const materialState = { materials_initialized: false, materials_customized: false, updated_at: new Date(Date.now() - 1000).toISOString() };
+  const cables = new Map([[f.actorId, { id: f.actorId, project_id: f.projectId, cable_write_revision: '7', mto: 'LV', routing: null as string | null, design_length: null, ...materialState }],
+    [other, { id: other, project_id: f.projectId, cable_write_revision: '7', mto: 'LV', routing: '/MANUAL', design_length: null, ...materialState }]]);
   const mandates: AutomaticPairMandate[] = [], original = x.query.getMockImplementation()!;
   const enrollment = { generation: source.generation, control_revision: source.controlRevision, authority_epoch: source.authorityEpoch,
     actor_id: x.who.userId, login_id: x.who.loginId, automatic_pair_authority: authorization };
@@ -32,6 +33,7 @@ async function fixture() {
       authority_kind: 'current-login', state: 'queued', cancel_requested: false, request_hash: 'a'.repeat(64) }], rowCount: 1 };
     if (sql.includes('automatic-pair:admitted-item')) return { rows: [{ dependencies: { ...dependencies, cableId: args[2] } }], rowCount: 1 };
     if (sql.includes('automatic-pair:cable-baseline')) return { rows: [{ value: cables.get(args[1]) }], rowCount: 1 };
+    if (sql.includes('cable-routing:control')) { const cable=cables.get(args[1]); return {rows:cable?[{revision:'1',manual_revision:'1',manual_routing:cable.routing,manual_protected:Boolean(cable.routing),execution_locked:false,execution_routing:null}]:[],rowCount:cable?1:0}; }
     if (sql.includes('automatic-pair:latest-receipt')) return { rows: [], rowCount: 0 };
     if (sql.includes('automatic-pair:mandate')) { const m = mandates.find(m => m.cableId === args[2]); return { rows: m ? [{ record: m, record_sha256: m.contentSha256,
       project_id: m.projectId, job_id: m.jobId, cable_id: m.cableId, id: m.id, actor_id: m.actorId, login_id: m.loginId }] : [], rowCount: m ? 1 : 0 }; }

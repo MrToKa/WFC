@@ -13,6 +13,9 @@ const command = () => ({ schemaVersion: 'wfc.pf.cable-endpoint-command.v1', idem
 const unavailable = () => ({ schemaVersion: 'wfc.pf.cable-endpoint-selection.v1', projectId: id(1), current, sdkObjectId: 12, status: 'unavailable', reasonCodes: ['NOT_RETAINED'],
   object: null, pointProjectMetres: null, bounds: null, approximate: true, derivation: null });
 describe('strict cable endpoint command and display contracts', () => {
+  it.each([null, '', 'Custom MTO'])('allows endpoint binding independently of MTO %j while retaining its exact value', mto => {
+    const input = { ...context(), mto }; expect(cableEndpointContextSchema.parse(input)).toEqual(input);
+  });
   it('hashes the strict exact body and context omits only its own hash', () => {
     const c = cableEndpointContextSchema.parse(context()), write = cableEndpointCommandSchema.parse(command());
     const { contextSha256: _hash, ...body } = c; expect(cableEndpointContextHashInput(c)).toEqual(body);
@@ -83,6 +86,14 @@ describe('strict cable endpoint command and display contracts', () => {
     for (const extra of [{ object: { traceId: id(7), objectRevisionId: id(10), recordSha256: 'a'.repeat(64) } },
       { attachment: {} }, { confirmed: true }, { approximate: true }, { mode: 'object-attached' }])
       expect(cableEndpointConfirmedDisplaySelectionSchema.safeParse({ ...hint, ...extra }).success).toBe(false);
+  });
+  it('requires every preserved manual source-item member in the display proof', () => {
+    const hint = { source: 'confirmed-display-only', mode: 'fixed-world', sdkObjectId: 42, sdkObjectIds: [42, 43, 44, 45],
+      pointProjectMetres: [1, 2, 3], current, bindingId: id(9), bindingContentSha256: 'b'.repeat(64), commandSha256: 'c'.repeat(64),
+      preservedMatchObjectGroup: { guid: id(12), sourceFile: 'plant/instruments.dwg', objectIds: [42, 43, 44, 45] } };
+    expect(cableEndpointConfirmedDisplaySelectionSchema.parse(hint)).toEqual(hint);
+    for (const sdkObjectIds of [undefined, [42, 43], [42, 43, 44, 46], [43, 42, 44, 45]])
+      expect(cableEndpointConfirmedDisplaySelectionSchema.safeParse({ ...hint, sdkObjectIds }).success).toBe(false);
   });
   it('v3 requires an explicit nullable policy while a policy cannot silently promote older commands', () => {
     const v2 = { ...command(), schemaVersion: 'wfc.pf.cable-endpoint-command.v2', calculation: null };

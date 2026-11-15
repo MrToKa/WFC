@@ -12,7 +12,7 @@ export type PathFinderNeedsRoutingListProps = Omit<PathFinderCableWorkflowAccess
   onSelect: (row: CableWorkflowRow) => void; selectedCableId?: string | null; className?: string;
 };
 const reasons: Record<string, string> = {
-  CABLE_CATEGORY_REQUIRED: 'Choose a supported cable category.', SETTINGS_REQUIRED: 'Complete the cable length settings in Project Details.',
+  CABLE_CATEGORY_REQUIRED: 'Set this cable type’s Purpose in Cable types and allow that Purpose on the appropriate trays in Project Details.', SETTINGS_REQUIRED: 'Complete the cable length settings in Project Details.',
   MODEL_REQUIRED: 'Choose and prepare the active 3D model.', CALCULATION_RESOURCE_LIMIT: 'The calculation reached a resource limit. Review the prepared network and retry.',
   CALCULATION_DEADLINE_EXCEEDED: 'The calculation timed out. Review the network and retry.', CALCULATION_FAILED: 'The calculation failed. Review its diagnostic details before retrying.',
   CALCULATION_CANCELLED: 'The calculation was cancelled. Start a new calculation when ready.', CALCULATION_QUEUED: 'This cable is waiting to be calculated.',
@@ -75,9 +75,13 @@ function OwnedCableWorkflowList(props: PathFinderNeedsRoutingListProps) {
   const page = workflow.page;
   const searching = search.normalize('NFC').trim().length > 0;
   const submitSearch = () => {
-    if (searchDraft.normalize('NFC').trim() === search.normalize('NFC').trim()) {
+    const canonicalSearch = searchDraft.normalize('NFC').trim();
+    setSearchDraft(canonicalSearch);
+    // Compare to the stored query itself so an older noncanonical rejected
+    // search can be replaced instead of refreshing a disabled reader forever.
+    if (canonicalSearch === search) {
       if (!workflow.busy) workflow.refresh();
-    } else setSearch(searchDraft);
+    } else setSearch(canonicalSearch);
   };
   return <section className={`${styles.root}${props.className ? ` ${props.className}` : ''}`} aria-label="Cable routing diagnostics" aria-busy={workflow.busy}>
     <h3>Path Finder cables</h3>

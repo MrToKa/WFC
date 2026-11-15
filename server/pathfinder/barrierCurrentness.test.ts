@@ -6,7 +6,7 @@ import { PathFinderError } from './errors.js';
 describe('explicit barrier currentness refusal classification', () => {
   it.each([
     ['BARRIER_CALCULATION_SCOPE_CHANGED',409],['BARRIER_CONTEXT_CHANGED',409],['BARRIER_CURRENT_FRAME_UNAVAILABLE',409],
-    ['BARRIER_CALCULATION_STORAGE_INVALID',409],['BARRIER_BLOB_INTEGRITY',409],['BARRIER_READY_SNAPSHOT_REQUIRED',409],
+    ['BARRIER_CALCULATION_STORAGE_INVALID',409],['BARRIER_BLOB_MISSING',409],['BARRIER_BLOB_INTEGRITY',409],['BARRIER_READY_SNAPSHOT_REQUIRED',409],
     ['BARRIER_CALCULATION_DEADLINE',503],['BARRIER_STORAGE_BUSY',503],
   ] as const)('classifies only the exact %s/%s typed refusal', (code,status) => {
     expect(isExpectedBarrierCurrentnessError(new PathFinderError(code,status))).toBe(true);

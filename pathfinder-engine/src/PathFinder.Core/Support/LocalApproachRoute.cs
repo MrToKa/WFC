@@ -6,6 +6,16 @@ namespace AddinRibbon.Routing
 {
     public sealed partial class RouteCalculator
     {
+        // Preserve the result of the existing exact occupancy queries. A
+        // caller may only change a definitively blocked terminal; uncertainty
+        // about the opposite terminal keeps the historical generic refusal.
+        private static string EndpointOccupancyReason(RouteCollisionStatus from, RouteCollisionStatus to)
+        {
+            if (from == RouteCollisionStatus.Blocked && to == RouteCollisionStatus.Blocked) return "BOTH_ENDPOINTS_IN_BARRIER";
+            if (from == RouteCollisionStatus.Blocked && to == RouteCollisionStatus.Clear) return "FROM_ENDPOINT_IN_BARRIER";
+            if (from == RouteCollisionStatus.Clear && to == RouteCollisionStatus.Blocked) return "TO_ENDPOINT_IN_BARRIER";
+            return "ENDPOINT_IN_BARRIER";
+        }
         public LocalApproachRouteEvaluation CalculateConstrainedWithLocalApproaches(IEnumerable<TraySegment> trays, RoutePoint from, RoutePoint to,
             CableCategory category, RouteCollisionQuery collision, RoutingOptions options = null, ConstrainedRoutingLimits limits = null,
             LocalConnectorOptions localOptions = null, bool drillThroughWalls = false, CancellationToken cancellationToken = default(CancellationToken))
@@ -85,7 +95,7 @@ namespace AddinRibbon.Routing
             var fromOccupancy = context.Query(collision, from, from); var toOccupancy = context.Query(collision, to, to);
             if (fromOccupancy.Status == RouteCollisionStatus.Blocked || toOccupancy.Status == RouteCollisionStatus.Blocked)
                 return LocalResult(new ConstrainedRouteEvaluation(RouteResult.Failure("A cable endpoint lies in registered barrier material."),
-                    ConstrainedRouteStatus.Blocked, "ENDPOINT_IN_BARRIER", true, budget), context);
+                    ConstrainedRouteStatus.Blocked, EndpointOccupancyReason(fromOccupancy.Status, toOccupancy.Status), true, budget), context);
             if (fromOccupancy.Status != RouteCollisionStatus.Clear || toOccupancy.Status != RouteCollisionStatus.Clear)
                 return LocalResult(new ConstrainedRouteEvaluation(RouteResult.Failure("Cable endpoint occupancy could not be verified."),
                     ConstrainedRouteStatus.Indeterminate, "ENDPOINT_OCCUPANCY_INDETERMINATE", false, budget), context);

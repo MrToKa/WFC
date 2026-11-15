@@ -19,6 +19,17 @@ function fixture() {
 }
 const turn = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
 describe('bounded geometry worker lifecycle', () => {
+  it('reports explicit worker OOM as a definite resource refusal only after the worker joins', async () => {
+    const f = fixture(), p = f.run(input, new AbortController().signal), rejected = expect(p).rejects.toMatchObject({ code: 'GEOMETRY_TRACE_MEMORY_LIMIT', status: 413 });
+    await turn(); f.thread.emit('error', Object.assign(Error('private heap diagnostics'), { code: 'ERR_WORKER_OUT_OF_MEMORY' }));
+    expect(f.release).not.toHaveBeenCalled(); f.join(); await rejected;
+    expect(f.release).toHaveBeenCalledExactlyOnceWith(77);
+  });
+  it('does not infer OOM from a generic error message or discard an unconfirmed join', async () => {
+    const f = fixture(), p = f.run(input, new AbortController().signal), rejected = expect(p).rejects.toMatchObject({ code: 'GEOMETRY_TRACE_WORKER_FAILED', status: 503 });
+    await turn(); f.thread.emit('error', Error('out of memory mentioned by unrelated failure'));
+    expect(f.release).not.toHaveBeenCalled(); f.join(); await rejected;
+  });
   it('passes only fixed refs/shared lock with512MiB heap and resolves only after joined termination', async () => { const f = fixture(), p = f.run(input, new AbortController().signal); await turn(); expect(f.options.execArgv).toEqual([]); expect(f.options.resourceLimits).toEqual({ maxOldGenerationSizeMb: 512 }); expect(f.options.workerData).not.toHaveProperty('snapshot'); expect(f.options.workerData.storageLockBuffer).toBeInstanceOf(SharedArrayBuffer); f.thread.emit('message', f.result()); await turn(); expect(f.release).not.toHaveBeenCalled(); f.join(); await expect(p).resolves.toEqual(f.result().result); expect(f.release).toHaveBeenCalledExactlyOnceWith(77); });
   it.each(['request', 'export', 'extra', 'duplicate', 'hash'] as const)('refuses %s protocol changes before releasing owner', async kind => { const f = fixture(), p = f.run(input, new AbortController().signal), rejected = expect(p).rejects.toMatchObject({ code: 'GEOMETRY_TRACE_WORKER_PROTOCOL' }); await turn(); const message = f.result(); if (kind === 'request') message.requestId = id(80); if (kind === 'export') message.result.transientExport.exportId = id(80); if (kind === 'extra') Object.assign(message, { privatePayload: true }); if (kind === 'hash') message.result.manifest.sha256 += '\n'; f.thread.emit('message', message); if (kind === 'duplicate') f.thread.emit('message', message); expect(f.release).not.toHaveBeenCalled(); f.join(); await rejected; });
   it('cancels and keeps admission occupied until join', async () => { const f = fixture(), abort = new AbortController(), p = f.run(input, abort.signal), rejected = expect(p).rejects.toMatchObject({ name: 'AbortError' }); await turn(); abort.abort(); await expect(f.run(input, new AbortController().signal)).rejects.toMatchObject({ code: 'GEOMETRY_TRACE_WORKER_BUSY' }); f.join(); await rejected; });

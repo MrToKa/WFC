@@ -59,7 +59,7 @@ beforeEach(() => {
   vi.mocked(fetchCableEndpointSelection).mockImplementation(async (_project, _token, current) => evidence(current));
   vi.mocked(saveCableEndpoint).mockImplementation(async (_project, _token, selectedCable, end, input) => receipt(input, selectedCable, end));
 });
-afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); localStorage.clear(); if (originalLocks) Object.defineProperty(navigator, 'locks', originalLocks); else Reflect.deleteProperty(navigator, 'locks'); });
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); localStorage.clear(); if (originalLocks) Object.defineProperty(navigator, 'locks', originalLocks); else Reflect.deleteProperty(navigator, 'locks'); });
 
 describe('persistent owned cable endpoint selection', () => {
   it('returns the verified context from a read-only refresh and classifies a bounded timeout without saving', async () => {
@@ -401,12 +401,13 @@ describe('persistent owned cable endpoint selection', () => {
     view.rerender({ ...props, token: 'other', accountId: id(99) }); expect(view.result.current.pending).toBeNull(); expect(readPendingCableEndpoint(owner)).not.toBeNull();
     view.rerender({ ...props, token: 'fresh-current-login' }); await waitFor(() => expect(view.result.current.canRetry).toBe(true)); expect(view.result.current.pending?.accountId).toBe(actor);
   });
-  it('does not dispatch if durable storage/Web Locks are unavailable or the confirmation reason is empty', async () => {
+  it('does not dispatch if both browser coordination APIs are unavailable or the confirmation reason is empty', async () => {
     const view = renderHook(() => useCableEndpointSelection(access())); await waitFor(() => expect(view.result.current.canSelect).toBe(true));
     act(() => { view.result.current.setFixedPoint([1, 2, 3]); });
     await act(async () => { expect(await view.result.current.save('   ')).toBe(false); }); expect(view.result.current.error).toContain('confirmation reason');
     Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined });
-    await act(async () => { expect(await view.result.current.save('Explicit point')).toBe(false); }); expect(saveCableEndpoint).not.toHaveBeenCalled(); expect(readPendingCableEndpoint(owner)).toBeNull(); expect(view.result.current.error).toContain('Web Locks');
+    vi.stubGlobal('indexedDB', undefined);
+    await act(async () => { expect(await view.result.current.save('Explicit point')).toBe(false); }); expect(saveCableEndpoint).not.toHaveBeenCalled(); expect(readPendingCableEndpoint(owner)).toBeNull(); expect(view.result.current.error).toContain('Allow site storage');
   });
   it('never labels a confirmed save unknown when its following lightweight refresh fails', async () => {
     vi.mocked(fetchCableEndpointContext).mockResolvedValueOnce(context()).mockRejectedValueOnce(new Error('Read unavailable'));

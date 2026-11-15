@@ -190,6 +190,15 @@ describe('administrator cable revision inspection', () => {
       jobs={[{ ...completeJob(), status: 'running' }]} />);
     expect(screen.getByRole('checkbox', { name: 'Select C-001 for review' })).toBeDisabled(); expect(batch.select).not.toHaveBeenCalled();
   });
+  it.each([null, '', 'Power', 'Plastic tubing'])('allows a current sealed result with optional MTO %s to be selected for review', mto => {
+    const { f, state } = setup(), row = sealedRow(f.page.rows[0]);
+    vi.mocked(usePathfinderRevisionResults).mockReturnValue({ ...state, page: { ...f.page, rows: [row] }, detail: { ...f.detail, row } });
+    const batch = { entries: [], busy: false, select: vi.fn(), clearSelection: vi.fn() } as unknown as NonNullable<PathFinderRevisionResultsProps['batch']>;
+    render(<PathFinderRevisionResults {...props()} batch={batch} cables={[{ id: row.cableId, mto }] as PathFinderRevisionResultsProps['cables']}
+      jobs={[{ ...completeJob(), status: 'running' }]} />);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select C-001 for review' }));
+    expect(batch.select).toHaveBeenCalledWith(expect.objectContaining({ cableId: row.cableId }), true);
+  });
   it('labels a shared location scope without inventing an automatic generation', () => {
     const { state } = setup();
     const admission = { ...state.admission!, kind: 'location-impact' as const, generation: null };

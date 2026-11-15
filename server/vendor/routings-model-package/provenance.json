@@ -7,10 +7,10 @@
     "fileCount": 24,
     "totalBytes": 216308
   },
-  "runtimeInventorySha256": "140b5c914eb38f916e6410914d868c7083c888eefaa17011d645a29d7d57ec79",
+  "runtimeInventorySha256": "96a852b4e476f16132b8ec457012a970d0fc39c6575354c06714c4f454fd71bf",
   "fileCount": 12,
-  "totalBytes": 105418,
-  "policy": "The listed runtime files are unchanged copies. WFC owns this provenance file and index.d.mts; no SDK or Preparer runtime is distributed.",
+  "totalBytes": 119983,
+  "policy": "The listed runtime files are unchanged copies of the pinned upstreamRevision. upstreamInventory identifies the original historical snapshot. WFC owns this provenance file and index.d.mts; no SDK or Preparer runtime is distributed.",
   "files": [
     {
       "path": "index.mjs",
@@ -39,8 +39,8 @@
     },
     {
       "path": "lib/manifest.mjs",
-      "bytes": 8773,
-      "sha256": "0e258ebd8fba309fa51cb4c5733c589a5addfd7e809d299fa47a42285ae07fc5"
+      "bytes": 8818,
+      "sha256": "a75698486f0231179c16350f5eb427a9e46a17f765ca8360c8861a2b6a82fd93"
     },
     {
       "path": "lib/pack.mjs",
@@ -49,13 +49,13 @@
     },
     {
       "path": "lib/paths.mjs",
-      "bytes": 4060,
-      "sha256": "2b8643eb1c0c74cac595c0e0a285bc680081cc06cdd7518e72c67dec110d905e"
+      "bytes": 4377,
+      "sha256": "45744319a8e094015b027843573360ef7ca71a1f3831308fa782a4a75a846bfb"
     },
     {
       "path": "lib/profile.mjs",
-      "bytes": 29899,
-      "sha256": "8929f28333f83a65e4715bf1e835bf079d30f3e67c70722293a3f46e92f153a4"
+      "bytes": 44102,
+      "sha256": "9b6c019c45cbe1e731fb2c46a7c4b2cee8913d04943693148e8203b3aca68d3d"
     },
     {
       "path": "lib/verify.mjs",
@@ -72,5 +72,10 @@
       "bytes": 289,
       "sha256": "2c12fb61b0ffdbbba55fa8dafe44efa2975d8c5b54eb09f7418a564c6499c370"
     }
-  ]
+  ],
+  "upstreamRevision": {
+    "repository": "MrToKa/routings-model-preparer",
+    "path": "routings-model-package",
+    "commit": "268937281033ae849a43d832d7580d0fc79e0140"
+  }
 }

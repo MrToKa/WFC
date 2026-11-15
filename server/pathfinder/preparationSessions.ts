@@ -7,13 +7,31 @@ import { snapshotSchema, type ComputationalSnapshot } from './contracts.js';
 import { operationTransaction, isGrantPrincipal, requireHumanPrincipal, requireGrantModelScope, grantProvenance, type OperationPrincipal } from './operationAuthority.js';
 import { calculationGrantProvenanceSchema, type CalculationGrantProvenance } from '../../shared/pathfinderCalculationGrant.js';
 import { PathFinderError } from './errors.js';
+import { principalTransaction } from './auth.js';
 import { readPreparationContext, readPreparationState, equalPreparationScope, buildPreparationPlan, preparationDigest } from './preparationPlans.js';
 import { storePreparationBlob, readPreparationBlob, encodePreparationPayload } from './preparationStorage.js';
-import { LEGACY_PREPARATION_CAPACITY_PROFILE, LARGE_PREPARATION_CAPACITY_PROFILE, preparationCapacity, preparationCapacityProfileSchema, type PreparationCapacityProfile } from '../../shared/pathfinderCapacity.js';
+import { LEGACY_PREPARATION_CAPACITY_PROFILE, preparationCapacity, preparationCapacityProfileSchema, type PreparationCapacityProfile } from '../../shared/pathfinderCapacity.js';
 import { preparationPlanSchema, preparationPlanHashInput } from '../../shared/pathfinderPreparation.js';
 import type { PreparationUnionParts } from './preparationUnionTask.js';
+import { preparationTrayMatchesWriteSchema, preparationTrayMatchesReceiptSchema } from '../../shared/pathfinderTrayMatches.js';
+import { planPreparationTrayMatches } from './preparationTrayMatches.js';
 
-const fail = (code: string, status = 409): never => { throw new PathFinderError(code, status, 'Project preparation requires a refresh or an explicit routing decision.'); };
+const preparationFailureMessages: Record<string, string> = {
+  PREPARATION_SCOPE_STALE: 'The model, tray settings, assignments or From/To locations changed, or the preparation session expired. Saved assignments and committed parts are retained. Refresh preparation status and discover the trays again for the current scope.',
+  PREPARATION_PLAN_UNRESOLVED: 'The preparation plan has unresolved diagnostics. Resolve the listed trays or routing permissions, then discover the trays again. Saved assignments and committed parts are retained.',
+  PREPARATION_PART_SCOPE: 'This geometry part does not match the frozen preparation plan or active model. Refresh preparation status before continuing; committed parts are retained.',
+  PREPARATION_STATE_CONFLICT: 'The preparation session changed or cannot accept this operation. Refresh preparation status and inspect the retained session before retrying.',
+  PREPARATION_PARTS_INCOMPLETE: 'Some planned geometry parts have not been committed. Resume collection of the missing parts before publishing; committed parts are retained.',
+  PREPARATION_SESSION_NOT_FOUND: 'This preparation session is no longer available. Refresh preparation status and discover the trays again.',
+  PREPARATION_SESSION_RETENTION_LIMIT: 'The retained preparation session limit was reached. Ask the server administrator to check preparation storage before starting another session; the published network is unchanged.',
+  PREPARATION_VALIDATION_IN_PROGRESS: 'This preparation is still being verified. Wait and check the same session; committed parts are retained.',
+  PREPARATION_VALIDATION_BUSY: 'Another verification is already running for this preparation. Check the current session before submitting another publication.',
+  PREPARATION_PART_VALIDATOR_REQUIRED: 'The server geometry verification service is unavailable. Restore the preparation service and retry the retained session.',
+  PREPARATION_TRAY_NOT_FOUND: 'This tray is no longer in the current project catalog. Refresh preparation status before assigning its model objects.',
+};
+const fail = (code: string, status = 409, message = preparationFailureMessages[code] ?? `Preparation could not complete (${code}). Refresh preparation status and inspect this session before retrying; the published network is unchanged.`): never => { throw new PathFinderError(code, status, message); };
+const inputLimit = (limitBytes: number): never => fail('PREPARATION_VALIDATION_INPUT_LIMIT', 413,
+  `The captured geometry exceeds this preparation's ${limitBytes / 1024 ** 2} MiB calculation limit. Saved assignments and committed parts are retained; the published network is unchanged. Reduce the captured tray geometry or ask the server administrator to configure a larger preparation capacity, then start a new preparation.`);
 const terminal = new Set(['published', 'failed', 'cancelled', 'stale']);
 const partBlob = (part: PreparationPart) => ({ payloadRef: part.payloadRef, sha256: part.payloadSha256, bytes: part.payloadBytes });
 const partReceipt = (part: PreparationPart, sessionRevision: string, duplicate: boolean) => preparationPartReceiptSchema.parse({schemaVersion: part.schemaVersion === 'wfc.pf.preparation-part.v2' ? 'wfc.pf.preparation-part-receipt.v2' : 'wfc.pf.preparation-part-receipt.v1',part,sessionRevision,duplicate});
@@ -24,7 +42,7 @@ export const PREPARATION_SQL_BOUNDS = Object.freeze({ acquisitionMilliseconds: 5
 function preparationAborted(signal?: AbortSignal) {
   if (signal?.aborted) throw new PathFinderError('PREPARATION_VALIDATION_CANCELLED', 409, 'Preparation validation stopped before publication. Inspect the retained session before retrying.');
 }
-export async function preparationTransaction<T>(pool: Pool, projectId: string, who: OperationPrincipal, operation: (client: PoolClient) => Promise<T>, signal?: AbortSignal): Promise<T> {
+export async function preparationTransaction<T>(pool: Pool, projectId: string, who: OperationPrincipal, operation: (client: PoolClient) => Promise<T>, signal?: AbortSignal, options:{snapshot?:boolean}={}): Promise<T> {
   preparationAborted(signal);
   let commitStarted = false;
   const boundedPool = { connect: async () => {
@@ -50,12 +68,16 @@ export async function preparationTransaction<T>(pool: Pool, projectId: string, w
     return wrapper;
   } } as Pool;
   try {
-    return await operationTransaction(boundedPool, projectId, who, 'prepare', async client => {
+    const checkedOperation=async(client:PoolClient)=>{
       preparationAborted(signal); const value = await operation(client); preparationAborted(signal); return value;
-    });
+    };
+    return options.snapshot&&!isGrantPrincipal(who)
+      ?await principalTransaction(boundedPool,projectId,who,checkedOperation,{snapshot:true})
+      :await operationTransaction(boundedPool, projectId, who, 'prepare', checkedOperation);
   } catch (error) {
     if (commitStarted) throw new PathFinderError('PREPARATION_COMMIT_OUTCOME_UNKNOWN', 503, 'The publication commit could not be confirmed. Keep the same command and reconcile its session.');
-    if (['55P03', '57014'].includes((error as { code?: string } | null)?.code ?? '')) throw new PathFinderError('PREPARATION_DATABASE_BUSY', 503, 'The preparation database deadline was reached. Keep the same command and reconcile its session.');
+    const code = (error as { code?: string } | null)?.code;
+    if (code === '55P03' || code === '57014' || (code === '40001' && options.snapshot && !isGrantPrincipal(who))) throw new PathFinderError('PREPARATION_DATABASE_BUSY', 503, 'The preparation database deadline was reached. Keep the same command and reconcile its session.');
     throw error;
   }
 }
@@ -80,9 +102,9 @@ export async function initializePreparationSchema(pool: Pool) {
     await c.query('COMMIT'); } catch (error) { await c.query('ROLLBACK').catch(() => undefined); throw error; } finally { c.release(); }
 }
 type SessionRow = { grant_provenance: CalculationGrantProvenance | null; validation_grant_provenance: CalculationGrantProvenance | null; id: string; project_id: string; plan: PreparationPlan; state: PreparationSession['state']; revision: string; actor_id: string; login_id: string; created_at: Date; updated_at: Date; failure: unknown; published_aggregate_id: string | null; validation_token: string | null; validation_key: string | null; validation_sha256: string | null; validation_expires_at: Date | null; validation_command: unknown; validation_actor_id: string | null; validation_login_id: string | null };
-async function sessionRow(c: PoolClient, projectId: string, id: string): Promise<SessionRow> {
+async function sessionRow(c: PoolClient, projectId: string, id: string,options:{lock?:boolean}={}): Promise<SessionRow> {
   policyUuidSchema.parse(id);
-  const row = (await c.query<SessionRow>('SELECT *,revision::text FROM pf_preparation_sessions WHERE project_id=$1 AND id=$2 FOR UPDATE', [projectId, id])).rows[0]; if (!row) return fail('PREPARATION_SESSION_NOT_FOUND', 404);
+  const row = (await c.query<SessionRow>(`SELECT *,revision::text FROM pf_preparation_sessions WHERE project_id=$1 AND id=$2${options.lock===false?'':' FOR UPDATE'}`, [projectId, id])).rows[0]; if (!row) return fail('PREPARATION_SESSION_NOT_FOUND', 404);
   const plan = preparationPlanSchema.parse(row.plan);
   if (plan.id !== row.id || plan.projectId !== row.project_id || preparationDigest(preparationPlanHashInput(plan)) !== plan.orderedPlanSha256) return fail('PREPARATION_PLAN_INTEGRITY');
   return { ...row, plan };
@@ -138,9 +160,9 @@ export function createPreparationService(pool: Pool, adapters: PreparationAdapte
     if (result.stale) return fail('PREPARATION_SCOPE_STALE'); return result.value;
   };
   return {
-    context: (projectId: string, who: OperationPrincipal) => preparationTransaction(pool, projectId, who, c => readPreparationContext(c, projectId)),
-    index: (projectId: string, who: OperationPrincipal) => preparationTransaction(pool, projectId, who, async c => preparationIndexSchema.parse({ schemaVersion: 'wfc.pf.preparation-index.v1', sessions: (await c.query(`SELECT s.id,s.state,s.revision::text AS "sessionRevision",s.created_at AS "createdAt",x.idempotency_key AS "idempotencyKey" FROM pf_preparation_sessions s JOIN pf_preparation_commands x ON x.project_id=s.project_id AND x.kind='create' AND x.receipt->>'sessionId'=s.id::text WHERE s.project_id=$1 ORDER BY s.created_at DESC,s.id DESC LIMIT 20`, [projectId])).rows.map(r => ({ ...r, createdAt: new Date(r.createdAt).toISOString() })) })),
-    get: (projectId: string, who: OperationPrincipal, id: string) => preparationTransaction(pool, projectId, who, async c => sessionView(c, await sessionRow(c, projectId, id))),
+    context: (projectId: string, who: OperationPrincipal) => preparationTransaction(pool, projectId, who, c => readPreparationContext(c, projectId,{snapshot:!isGrantPrincipal(who)}),undefined,{snapshot:true}),
+    index: (projectId: string, who: OperationPrincipal) => preparationTransaction(pool, projectId, who, async c => preparationIndexSchema.parse({ schemaVersion: 'wfc.pf.preparation-index.v1', sessions: (await c.query(`SELECT s.id,s.state,s.revision::text AS "sessionRevision",s.created_at AS "createdAt",x.idempotency_key AS "idempotencyKey" FROM pf_preparation_sessions s JOIN pf_preparation_commands x ON x.project_id=s.project_id AND x.kind='create' AND x.receipt->>'sessionId'=s.id::text WHERE s.project_id=$1 ORDER BY s.created_at DESC,s.id DESC LIMIT 20`, [projectId])).rows.map(r => ({ ...r, createdAt: new Date(r.createdAt).toISOString() })) }),undefined,{snapshot:true}),
+    get: (projectId: string, who: OperationPrincipal, id: string) => preparationTransaction(pool, projectId, who, async c => sessionView(c, await sessionRow(c, projectId, id,{lock:isGrantPrincipal(who)})),undefined,{snapshot:true}),
     async create(projectId: string, who: OperationPrincipal, raw: unknown) {
       const input = preparationCreateSchema.parse(raw), sha = preparationDigest(input);
       return preparationTransaction(pool, projectId, who, async c => {
@@ -169,6 +191,39 @@ export function createPreparationService(pool: Pool, adapters: PreparationAdapte
         const receipt = preparationResolutionReceiptSchema.parse({ schemaVersion: 'wfc.pf.preparation-resolution-receipt.v1', resolutionRevision: revision, resolution, duplicate: false }); await commandReceipt(c, projectId, who, input.idempotencyKey, 'resolve', sha, receipt); return receipt;
       });
     },
+    async trayMatches(projectId: string, who: OperationPrincipal, raw: unknown) {
+      requireHumanPrincipal(who);
+      const input = preparationTrayMatchesWriteSchema.parse(raw), sha = preparationDigest(input);
+      return preparationTransaction(pool,projectId,who,async c => {
+        const replay = await priorCommand(c,projectId,who,input.idempotencyKey,'tray-matches',sha);
+        if (replay) return preparationTrayMatchesReceiptSchema.parse({...replay as object,duplicate:true});
+        const context = await readPreparationContext(c,projectId);
+        if (!equalPreparationScope(context.scope,input.expected)) return fail('PREPARATION_SCOPE_STALE');
+        const results = planPreparationTrayMatches(context,input);
+        const matchesById=new Map(input.matches.map(match=>[match.projectTrayId,match]));
+        let revision = context.scope.resolutionRevision;
+        for (const result of results) if (result.status === 'assigned') {
+          revision=nextRevision(revision);
+          const resolution=preparationResolutionSchema.parse({id:randomUUID(),projectTrayId:result.projectTrayId,mode:'roots',
+            rootObjectIds:result.rootObjectIds,reason:'Automatically assigned by complete project tray discovery using model names and scalar properties.',
+            actorId:who.userId,createdAt:new Date().toISOString(),scope:input.expected});
+          await c.query('INSERT INTO pf_preparation_resolutions(project_id,project_tray_id,resolution) VALUES($1,$2,$3)',[projectId,result.projectTrayId,resolution]);
+          // Keep per-tray evidence bounded: the full batch is stored once in its
+          // immutable command hash/receipt, never repeated in every audit row.
+          const evidence={schemaVersion:input.schemaVersion,idempotencyKey:input.idempotencyKey,commandSha256:sha,
+            expected:input.expected,matchingPolicyVersion:input.matchingPolicyVersion,complete:true,match:matchesById.get(result.projectTrayId)};
+          await c.query('INSERT INTO pf_preparation_resolution_events(id,project_id,actor_id,login_id,revision,request,before_value,after_value) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',
+            [randomUUID(),projectId,who.userId,who.loginId,revision,evidence,null,resolution]);
+        }
+        if (revision!==context.scope.resolutionRevision)
+          await c.query('UPDATE pf_project_preparations SET resolution_revision=$2 WHERE project_id=$1',[projectId,revision]);
+        const counts={assigned:0,kept:0,missing:0,ambiguous:0};for(const result of results)counts[result.status]++;
+        const receipt=preparationTrayMatchesReceiptSchema.parse({schemaVersion:'wfc.pf.preparation-tray-matches-receipt.v1',idempotencyKey:input.idempotencyKey,
+          commandSha256:sha,resolutionRevision:revision,results,counts,duplicate:false});
+        await commandReceipt(c,projectId,who,input.idempotencyKey,'tray-matches',sha,receipt);
+        return receipt;
+      });
+    },
     async upload(projectId: string, who: OperationPrincipal, id: string, partId: string, planSha: string, raw: unknown) {
       policyUuidSchema.parse(partId);
       // Stage outside SQL; immutable orphan files remain owned and can be reconciled after uncertainty.
@@ -192,7 +247,7 @@ export function createPreparationService(pool: Pool, adapters: PreparationAdapte
         if (!adapters.validatePart) return fail('PREPARATION_PART_VALIDATOR_REQUIRED', 503);
         if (payload.objects.length > PREPARATION_LIMITS.closurePerPart || payload.model.projectId !== projectId || payload.model.modelVersionId !== row.plan.modelVersionId || payload.model.contentSha256 !== row.plan.contentFingerprint) return fail('PREPARATION_PART_SCOPE');
         const stagedBytes = (await sessionView(c, row)).parts.reduce((sum, part) => sum + part.payloadBytes, 0);
-        if (!prior && stagedBytes + encodePreparationPayload(payload).length > preparationCapacity(row.plan.limitsProfile).validationInputBytes) return fail('PREPARATION_VALIDATION_INPUT_LIMIT', 413);
+        if (!prior && stagedBytes + encodePreparationPayload(payload).length > preparationCapacity(row.plan.limitsProfile).validationInputBytes) return inputLimit(preparationCapacity(row.plan.limitsProfile).validationInputBytes);
         return { admitted: { part, plan: row.plan, payload, revision: row.revision } };
       });
       if ('replay' in admission && admission.replay) return admission.replay;
@@ -203,7 +258,7 @@ export function createPreparationService(pool: Pool, adapters: PreparationAdapte
         const prior = (await c.query<{ receipt: unknown }>('SELECT receipt FROM pf_preparation_parts WHERE session_id=$1 AND part_id=$2', [id, partId])).rows[0];
         if (prior) { const part = preparationPartSchema.parse(prior.receipt); if (part.payloadSha256 !== blob.sha256 || part.payloadBytes !== blob.bytes) return fail('PART_IDENTITY_CONFLICT'); await readPreparationBlob(projectId, id, partBlob(part)); return partReceipt(part,row.revision,true); }
         if (!['planned', 'collecting'].includes(row.state)) return fail('PREPARATION_STATE_CONFLICT');
-        if ((await sessionView(c, row)).parts.reduce((sum, part) => sum + part.payloadBytes, 0) + blob.bytes > preparationCapacity(row.plan.limitsProfile).validationInputBytes) return fail('PREPARATION_VALIDATION_INPUT_LIMIT', 413);
+        if ((await sessionView(c, row)).parts.reduce((sum, part) => sum + part.payloadBytes, 0) + blob.bytes > preparationCapacity(row.plan.limitsProfile).validationInputBytes) return inputLimit(preparationCapacity(row.plan.limitsProfile).validationInputBytes);
         const payload = admitted.payload, counts = { objects: payload.objects.length, physicalLeaves: payload.objects.filter(o => o.geometryRole === 'routing-leaf').length, fragments: 0, vertices: 0, triangles: 0 };
         for (const object of payload.objects) for (const fragment of object.fragments) { counts.fragments++; counts.vertices += fragment.vertices.length; counts.triangles += fragment.triangleIndices.length / 3; }
         const part = preparationPartSchema.parse({ schemaVersion: isGrantPrincipal(who)?'wfc.pf.preparation-part.v2':'wfc.pf.preparation-part.v1', sessionId: id, partId, partIndex: admitted.part.partIndex, sessionPlanSha256: row.plan.orderedPlanSha256, modelVersionId: row.plan.modelVersionId, contentFingerprint: row.plan.contentFingerprint, coordinateFrameId: row.plan.coordinateFrameId, scopeSha256: admitted.part.scopeSha256, payloadEncoding: 'pathfinder.model.snapshot.v1-json-utf8', payloadRef: blob.payloadRef, payloadSha256: blob.sha256, payloadBytes: blob.bytes, counts, coverage: { partScopeComplete: true, missingObjectIds: [], ambiguousObjectIds: [] }, producer: { level: isGrantPrincipal(who)?'B':'A', adapterVersion: payload.capture.adapterVersion, sourceKind: payload.capture.sourceKind, ...(isGrantPrincipal(who)?{grant:grantProvenance(who)}:{}) }, completedAt: new Date().toISOString() });
@@ -225,7 +280,7 @@ export function createPreparationService(pool: Pool, adapters: PreparationAdapte
         if (terminal.has(row.state) || !retry && row.revision !== command.expectedSessionRevision) return fail('PREPARATION_STATE_CONFLICT');
         if (row.state === 'validating' && row.validation_expires_at && new Date(row.validation_expires_at).getTime() > Date.now()) return fail(retry ? 'PREPARATION_VALIDATION_IN_PROGRESS' : 'PREPARATION_VALIDATION_BUSY', retry ? 503 : 409);
         const session = await sessionView(c, row); if (!session.coverage.requestedScopeComplete) return fail('PREPARATION_PARTS_INCOMPLETE');
-        if (session.parts.reduce((sum, part) => sum + part.payloadBytes, 0) > preparationCapacity(session.plan.limitsProfile).validationInputBytes) return fail('PREPARATION_VALIDATION_INPUT_LIMIT', 413);
+        if (session.parts.reduce((sum, part) => sum + part.payloadBytes, 0) > preparationCapacity(session.plan.limitsProfile).validationInputBytes) return inputLimit(preparationCapacity(session.plan.limitsProfile).validationInputBytes);
         const token = randomUUID(); await transition(c, row, who, 'validating', retry ? 'validation-recovery' : command.reason);
         const expiresAt = new Date(Date.now() + PREPARATION_LIMITS.validationMilliseconds + 10000);
         await c.query('UPDATE pf_preparation_sessions SET validation_token=$2,validation_key=$3,validation_sha256=$4,validation_expires_at=$5,validation_command=$6,validation_actor_id=$7,validation_login_id=$8,validation_grant_provenance=$9 WHERE id=$1', [id, token, command.idempotencyKey, sha, expiresAt, command, who.userId, who.loginId ?? null, isGrantPrincipal(who)?grantProvenance(who):null]);
@@ -240,7 +295,7 @@ export function createPreparationService(pool: Pool, adapters: PreparationAdapte
       let finalPublicationStarted = false;
       try {
         let parts: PreparationUnionParts;
-        if (session.plan.limitsProfile === LARGE_PREPARATION_CAPACITY_PROFILE) {
+        if (session.plan.limitsProfile !== LEGACY_PREPARATION_CAPACITY_PROFILE) {
           // Only immutable server receipts cross the thread boundary. The worker
           // repeats byte/hash, strict schema and frozen coverage validation while
           // loading each fixed project/session reference; no geometry is cloned
@@ -255,7 +310,7 @@ export function createPreparationService(pool: Pool, adapters: PreparationAdapte
           parts = inlineParts;
         }
         const validation = validationSchema.parse(await adapters.validateUnion(session.plan, parts, controller.signal)); controller.signal.throwIfAborted();
-        if (validation.projection.bytes > preparationCapacity(session.plan.limitsProfile).projectionInputBytes) return fail('PREPARATION_VALIDATION_INPUT_LIMIT', 413);
+        if (validation.projection.bytes > preparationCapacity(session.plan.limitsProfile).projectionInputBytes) return inputLimit(preparationCapacity(session.plan.limitsProfile).projectionInputBytes);
         finalPublicationStarted = true;
         return await preparationTransaction(pool, projectId, who, async c => {
           const replay = await priorCommand(c, projectId, who, command.idempotencyKey, 'publish', sha); if (replay) return preparationPublicationSchema.parse({ ...replay as object, duplicate: true });

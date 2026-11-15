@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { IDBFactory } from 'fake-indexeddb';
 import { cableEndpointCommandSchema } from '../../shared/pathfinderCableEndpoints';
 import { CABLE_ENDPOINT_PENDING_PREFIX, readPendingCableEndpoint, retainPendingCableEndpoint, verifyPendingCableEndpoint, clearPendingCableEndpoint } from './cableEndpointPendingStore';
 
@@ -15,7 +16,7 @@ beforeEach(() => {
     const task = queue.then(() => { options.signal?.throwIfAborted(); return work({} as Lock); }); queue = task.then(() => undefined, () => undefined); return task;
   }) } });
 });
-afterEach(() => { vi.restoreAllMocks(); localStorage.clear(); if (originalLocks) Object.defineProperty(navigator, 'locks', originalLocks); else Reflect.deleteProperty(navigator, 'locks'); });
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); localStorage.clear(); if (originalLocks) Object.defineProperty(navigator, 'locks', originalLocks); else Reflect.deleteProperty(navigator, 'locks'); });
 
 describe('Web-Locked durable endpoint commands', () => {
   it('retains the exact strict body and ownership before dispatch, with no token field', async () => {
@@ -48,9 +49,17 @@ describe('Web-Locked durable endpoint commands', () => {
     const retained = await retainPendingCableEndpoint(owner, id(9), 'to', command()); await clearPendingCableEndpoint(owner, retained);
     expect(readPendingCableEndpoint(owner)).toBeNull(); await expect(clearPendingCableEndpoint(owner, retained)).rejects.toThrow();
   });
-  it('fails closed when Web Locks or durable storage are unavailable', async () => {
+  it('fails closed when neither browser coordination API is available', async () => {
     Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined });
-    await expect(retainPendingCableEndpoint(owner, id(9), 'from', command())).rejects.toThrow(/Web Locks/); expect(localStorage.length).toBe(0);
+    vi.stubGlobal('indexedDB', undefined);
+    await expect(retainPendingCableEndpoint(owner, id(9), 'from', command())).rejects.toThrow(/Allow site storage/); expect(localStorage.length).toBe(0);
+  });
+  it('retains and clears a legacy endpoint command on HTTP without Web Locks', async () => {
+    Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined });
+    vi.stubGlobal('indexedDB', new IDBFactory());
+    const retained = await retainPendingCableEndpoint(owner, id(9), 'from', command());
+    expect(await verifyPendingCableEndpoint(owner, retained)).toEqual(retained);
+    await clearPendingCableEndpoint(owner, retained); expect(readPendingCableEndpoint(owner)).toBeNull();
   });
   it('does not replace malformed, oversized or foreign data found under the owned key', async () => {
     const storageKey = `${CABLE_ENDPOINT_PENDING_PREFIX}${owner.accountId}:${owner.projectId}`;

@@ -225,18 +225,40 @@ describe('project data loading', () => {
     expect(result.current.tray).toBeNull();
     await waitFor(() => expect(result.current.isLoading).toBe(false));
   });
-  it('clears shared metrics during refresh and hides them immediately when read authority changes', async () => {
-    mocks.trays.mockResolvedValue({ trays: [tray('metric')], freeSpaceByTrayId: { metric: 42 } });
+  it('opens trays while metrics are pending and keeps them available after a metric deadline', async () => {
+    let rejectMetrics!: (reason: Error) => void;
+    const pending = new Promise((_, reject) => { rejectMetrics = reject; });
+    mocks.trays.mockImplementation((_id, options) => options.drawingMetrics ? pending : Promise.resolve({ trays: [tray('Aalborg')] }));
+    const { result } = renderHook(() => useTraysSection({ projectId: 'project-1', project: project('project-1'), token: null, showToast: vi.fn() }));
+    await waitFor(() => expect(result.current.traysLoading).toBe(false));
+    expect(result.current.trays[0].id).toBe('Aalborg');
+    expect(result.current.trayMetricsLoading).toBe(true);
+    await act(async () => rejectMetrics(new Error('DRAWING_EXPORT_DEADLINE')));
+    expect(result.current.trays[0].id).toBe('Aalborg');
+    expect(result.current.traysError).toBeNull();
+    expect(result.current.trayMetricsLoading).toBe(false);
+    expect(result.current.trayMetricsError).toContain('still open and edit');
+    expect(result.current.freeSpaceByTrayId).toEqual({});
+  });
+
+  it('clears metrics on refresh and ignores metric responses from an earlier read authority', async () => {
+    const oldMetrics = deferred<{ trays: Tray[]; freeSpaceByTrayId: Record<string, number> }>();
+    let metricReads = 0;
+    mocks.trays.mockImplementation((_id, options) => {
+      if (!options.drawingMetrics) return Promise.resolve({ trays: [tray('metric')] });
+      metricReads++;
+      return metricReads === 2 ? oldMetrics.promise : Promise.resolve({ trays: [], freeSpaceByTrayId: { metric: options.token === 'two' ? 45 : 42 } });
+    });
     const hook = renderHook(({ readToken }) => useTraysSection({ projectId: 'project-1', project: project('project-1'), token: null, readToken, showToast: vi.fn() }), { initialProps: { readToken: 'one' } });
     await waitFor(() => expect(hook.result.current.freeSpaceByTrayId).toEqual({ metric: 42 }));
-    expect(mocks.trays).toHaveBeenLastCalledWith('project-1', { drawingMetrics: true, token: 'one' });
-    const failure = deferred<{ trays: Tray[] }>(); mocks.trays.mockReturnValueOnce(failure.promise);
-    let refresh!: Promise<void>; act(() => { refresh = hook.result.current.reloadTrays(); });
-    expect(hook.result.current.freeSpaceByTrayId).toEqual({});
-    await act(async () => { failure.resolve({ trays: [] }); await refresh; });
-    mocks.trays.mockResolvedValue({ trays: [tray('metric')], freeSpaceByTrayId: { metric: 45 } });
+    expect(mocks.trays).toHaveBeenCalledWith('project-1', { token: 'one' });
     await act(() => hook.result.current.reloadTrays());
-    hook.rerender({ readToken: 'two' }); expect(hook.result.current.freeSpaceByTrayId).toEqual({});
+    expect(hook.result.current.freeSpaceByTrayId).toEqual({});
+    hook.rerender({ readToken: 'two' });
+    expect(hook.result.current.freeSpaceByTrayId).toEqual({});
     await waitFor(() => expect(hook.result.current.freeSpaceByTrayId).toEqual({ metric: 45 }));
+    await act(async () => oldMetrics.resolve({ trays: [tray('old')], freeSpaceByTrayId: { metric: 99 } }));
+    expect(hook.result.current.freeSpaceByTrayId).toEqual({ metric: 45 });
+    expect(hook.result.current.trays[0].id).toBe('metric');
   });
 });

@@ -17,17 +17,23 @@ internal static partial class Program
         catch (BarrierQualificationException error) { return BarrierFailure(request, context, "no_path", "BARRIER_QUALIFICATION_REFUSED", error.Message); }
         var category = request.Category is "Control" or "Instrumentation" ? CableCategory.Control : CableCategory.LV;
         bool bypass = context.Drill || context.Mode == "explicit-empty";
+        var terminalFrom = Point(request.From); var terminalTo = Point(request.To);
         RouteCollisionQuery oracle = (first, last, cancellation) =>
         {
             if (barriers.Qualified is null) throw new InvalidOperationException("Qualified barrier collision data unavailable.");
-            var observation = barriers.Qualified.Kernel.CheckSegment(new(first.X, first.Y, first.Z), new(last.X, last.Y, last.Z), cancellation);
+            var observation = barriers.Qualified.Kernel.CheckRouteSegment(new(first.X, first.Y, first.Z), new(last.X, last.Y, last.Z),
+                new(terminalFrom.X, terminalFrom.Y, terminalFrom.Z), new(terminalTo.X, terminalTo.Y, terminalTo.Z), cancellation);
             return new(observation.Status == BarrierSegmentStatus.Clear ? RouteCollisionStatus.Clear
                 : observation.Status == BarrierSegmentStatus.Blocked ? RouteCollisionStatus.Blocked : RouteCollisionStatus.Indeterminate,
                 observation.BarrierId, observation.Reason, observation.Work);
         };
         ConstrainedSecondaryEvaluation? secondary = null; LocalApproachRouteEvaluation local;
         var purposeTrays = PurposeRouting.Filter(prepared.Segments, request.AllowedPurposeRouteCodes, token);
-        if (request.DirectSecondaryPolicy is not null)
+        if (request.ManualRouteConstraint is { } manual)
+            local = new RouteCalculator().CalculateManualOrdered(CapacityRouting.Filter(purposeTrays, request.ExcludedRouteCodes, token),
+                manual.RouteText, Point(request.From), Point(request.To), category, oracle, options,
+                drillThroughWalls: bypass, cancellationToken: token);
+        else if (request.DirectSecondaryPolicy is not null)
         {
             var calculated = CapacityRouting.CalculateSecondaryWithLocalApproaches(purposeTrays, request.ExcludedRouteCodes, Point(request.From), Point(request.To), category,
                 oracle, options, drillThroughWalls: bypass, cancellationToken: token, finalReverse: request.Reverse,
@@ -128,6 +134,7 @@ internal static partial class Program
         "SEARCH_WORK_LIMIT" or "CANDIDATE_PAIR_LIMIT" or "COLLISION_QUERY_LIMIT" or "ORACLE_WORK_ACCOUNTING_OVERFLOW"
             or "INPUT_TRAY_LIMIT" or "INPUT_IDENTITY_LIMIT" or "INPUT_PIECE_LIMIT" or "GRAPH_NODE_LIMIT" or "GRAPH_CONNECTION_LIMIT"
             or "GRAPH_CANDIDATE_LIMIT" or "LOCAL_PLAN_OR_EDGE_LIMIT" or "LOCAL_EDGE_CHECK_LIMIT" or "LOCAL_QUEUE_LIMIT" => "resource_limit",
+        "MANUAL_ROUTE_STATE_LIMIT" => "resource_limit",
         _ => "no_path"
     };
     private static bool SameBits(RoutePoint left, RoutePoint right) => BitConverter.DoubleToInt64Bits(left.X) == BitConverter.DoubleToInt64Bits(right.X)

@@ -12,7 +12,7 @@ describe('read-only Path Finder length', () => {
     expect(screen.getByText('54')).toBeVisible(); expect(screen.getByText('Checked Path Finder result. Read-only.')).toBeVisible();
     expect(screen.getByText(successful.autoLengthCalculatedAt!)).toHaveAttribute('datetime', successful.autoLengthCalculatedAt);
     expect(screen.queryByRole('textbox')).toBeNull(); expect(screen.queryByRole('spinbutton')).toBeNull(); expect(screen.queryByRole('button')).toBeNull();
-    expect(screen.getByText(/Routing and Design length follow the separate Save and Review/)).toBeVisible();
+    expect(screen.getByText(/Automatic results are shown separately from the used route/)).toBeVisible();
   });
   it.each(['pending', 'blocked', 'failed', 'cancelled', 'stale', 'unavailable', 'last-successful'] as const)(
     'keeps the last successful value and explains %s without representing it as a new result', status => {

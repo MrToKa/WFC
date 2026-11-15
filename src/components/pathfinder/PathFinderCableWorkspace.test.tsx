@@ -17,6 +17,7 @@ import type { BarrierAdmissionIntent } from '../../../shared/pathfinderBarrierAd
 import { pathFinderWorkflowDisplayScope, type PathFinderWorkflowReview } from '@/pages/ProjectDetails/PathFinderResults';
 import { cableComparisonInputSchema } from '../../../shared/pathfinderCableComparison';
 import { barrierCalculationFixture } from '@/test/pathfinderBarrierFixtures';
+import { AUTOMATIC_PAIR_POLICY } from '../../../shared/pathfinderAutomaticPair';
 vi.mock('@/api/pathfinderCableWorkflow', () => ({ fetchPathFinderCableWorkflowDetail: vi.fn() }));
 vi.mock('@/api/pathfinder', () => ({ fetchPathFinderJob: vi.fn() }));
 vi.mock('@/api/pathfinderLocationImpacts', () => ({ fetchLocationImpacts: vi.fn() }));
@@ -68,6 +69,42 @@ async function openListCable(preserveReads = false) {
   await act(async () => { fireEvent.click(screen.getByText('Needs routing cable')); });
   if (!preserveReads) vi.mocked(fetchPathFinderCableWorkflowDetail).mockClear();
 }
+describe('explicit cable status recovery', () => {
+  it('refreshes metadata and retries the same selected result without waiting for background progress', async () => {
+    const p = props(), refreshed = vi.fn(), started = vi.fn();
+    const progress = vi.fn(() => new Promise<void>(() => {}));
+    vi.mocked(usePathfinderLocationImpactProgress).mockReturnValue({ impact: null, error: null, refresh: progress } as never);
+    render(<PathFinderCableWorkspace {...p} onResultRefresh={refreshed} onCalculationStart={started} />);
+    await openListCable(); vi.mocked(p.onSelect).mockClear();
+    await act(async () => { await panelProps.onRefresh?.(); });
+    expect(progress).toHaveBeenCalledOnce(); expect(p.pf.refreshState).toHaveBeenCalledOnce();
+    expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce();
+    expect(p.pf.refreshState).toHaveBeenCalledBefore(vi.mocked(fetchPathFinderCableWorkflowDetail));
+    expect(p.onSelect).toHaveBeenCalledOnce(); expect(refreshed).toHaveBeenCalledExactlyOnceWith(id(3));
+    expect(started).toHaveBeenCalledExactlyOnceWith(id(3)); expect(panelProps.refreshing).toBe(false);
+    expect(p.pf.submitCalculation).not.toHaveBeenCalled(); expect(p.pf.calculate).not.toHaveBeenCalled();
+  });
+  it('immediately marks Refresh busy while metadata is being read and ignores a late refresh after selecting another cable', async () => {
+    const p = props(), refreshed = vi.fn(); let finish!: (value: typeof p.pf.data) => void;
+    vi.mocked(p.pf.refreshState).mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    render(<PathFinderCableWorkspace {...p} onResultRefresh={refreshed} />); await openListCable();
+    let pending!: Promise<void>;
+    act(() => { pending = panelProps.onRefresh!() as Promise<void>; });
+    expect(panelProps.refreshing).toBe(true); expect(fetchPathFinderCableWorkflowDetail).not.toHaveBeenCalled();
+    listRow = { ...row(), cable: { ...row().cable, id: id(44) } };
+    await act(async () => { listProps.onSelect(listRow); });
+    const reads = vi.mocked(fetchPathFinderCableWorkflowDetail).mock.calls.length;
+    await act(async () => { finish(p.pf.data); await pending; });
+    expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledTimes(reads); expect(refreshed).not.toHaveBeenCalled();
+  });
+  it('does not emit a successful result refresh when the selected read fails', async () => {
+    const p = props(), refreshed = vi.fn(); render(<PathFinderCableWorkspace {...p} onResultRefresh={refreshed} />);
+    await openListCable(); vi.mocked(fetchPathFinderCableWorkflowDetail).mockRejectedValue(new TypeError('Network temporarily unavailable'));
+    await act(async () => { await panelProps.onRefresh?.(); });
+    expect(refreshed).not.toHaveBeenCalled(); expect(panelProps.refreshError).toContain('could not be refreshed');
+    expect(panelProps.refreshing).toBe(false); expect(p.pf.submitCalculation).not.toHaveBeenCalled();
+  });
+});
 beforeEach(() => {
   vi.resetAllMocks(); vi.spyOn(window, 'open').mockReturnValue(null); listRow = row(); vi.mocked(fetchLocationImpacts).mockResolvedValue({ impacts: [] } as never);
   vi.mocked(fetchPathFinderCableWorkflowDetail).mockResolvedValue({ projectId: id(1), cableId: id(3), row: row() } as never);
@@ -973,6 +1010,18 @@ describe('owned cable routing workspace composition (mocked reads and child UI)'
     expect(p.pf.refresh).not.toHaveBeenCalled(); view.rerender(<PathFinderCableWorkspace {...p} refreshKey={1} />);
     expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce();
   });
+  it('refreshes open endpoint display after Find/assign even when the cable and binding revisions stay unchanged', async () => {
+    const p = props(), view = render(<PathFinderCableWorkspace {...p} refreshKey={0} />); await openListCable();
+    const cable = panelProps.cable;
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockResolvedValue({ projectId: id(1), cableId: cable!.cable.id, row: cable } as never);
+    expect(panelProps.endpointRefreshKey).toBe(0);
+    view.rerender(<PathFinderCableWorkspace {...p} refreshKey={1} />);
+    await waitFor(() => expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce());
+    expect(panelProps.endpointRefreshKey).toBe(1); expect(panelProps.cable).toEqual(cable);
+    view.rerender(<PathFinderCableWorkspace {...p} refreshKey={1} />);
+    expect(panelProps.endpointRefreshKey).toBe(1);
+    expect(p.pf.submitCalculation).not.toHaveBeenCalled(); expect(p.pf.calculate).not.toHaveBeenCalled();
+  });
   it('defers a confirmed Apply refresh received while inactive until the same workspace resumes', async () => {
     const p = props(), view = render(<PathFinderCableWorkspace {...p} refreshKey={0} />); await openListCable();
     view.rerender(<PathFinderCableWorkspace {...p} refreshKey={1} active={false} />); expect(fetchPathFinderCableWorkflowDetail).not.toHaveBeenCalled();
@@ -1046,7 +1095,7 @@ describe('owned cable routing workspace composition (mocked reads and child UI)'
     expect(panelProps.pathReady).toBe(false); expect(panelProps.calculatedRouting).toBe('/NEW'); expect(panelProps.calculatedDesignLength).toBe('61');
     await act(async () => { view.rerender(<PathFinderCableWorkspace {...p} display={{ ...replacement, ready: true }} onCalculationStart={started} onTogglePath={toggle} />); });
     expect(panelProps.pathReady).toBe(true); expect(panelProps.calculatedRouting).toBe('/NEW');
-    expect(panelProps.calculationFeedback?.message).toContain('current route is ready');
+    expect(panelProps.calculationFeedback?.message).toContain('calculated route is ready');
     act(() => panelProps.onTogglePath?.()); expect(toggle).toHaveBeenCalledExactlyOnceWith(id(3));
     expect(p.pf.submitCalculation).not.toHaveBeenCalled(); expect(p.pf.calculate).not.toHaveBeenCalled();
   });
@@ -1202,6 +1251,41 @@ describe('fresh initial selection and current proof handoff', () => {
     expect(p.onSelect).toHaveBeenCalledExactlyOnceWith(listRow); expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce();
     expect(p.pf.submitCalculation).not.toHaveBeenCalled(); expect(p.pf.calculate).not.toHaveBeenCalled();
   });
+
+  it.each(['failed', 'cancelled'] as const)('shows the exact already saved current item after its parent is %s without granting writes', async status => {
+    const p = props(), saved = calculatedRow();
+    saved.calculation = { ...saved.calculation, jobStatus: status, reviewable: false, acceptedMatchesCurrent: true };
+    saved.cable = { ...saved.cable, routing: '/SAVED', designLength: '58.000', cableWriteRevision: '5' }; listRow = saved;
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockReset().mockResolvedValue({ projectId: id(1), cableId: id(3), row: saved } as never);
+    const display = { cableId: id(3), jobId: id(70), proposalId: id(80), proposalHash: 'f'.repeat(64), ready: true, visible: true,
+      source: 'current-calculation' as const, routing: '/SAVED', designLength: '58', verifiedRow: structuredClone(saved),
+      verifiedScope: pathFinderWorkflowDisplayScope(p.pf, p.accountId) };
+    render(<PathFinderCableWorkspace {...p} display={display} />); await openListCable();
+    expect(panelProps.pathReady).toBe(true); expect(panelProps.pathVisible).toBe(true); expect(panelProps.calculatedRouting).toBe('/SAVED');
+    expect(panelProps.calculatedDesignLength).toBe('58'); expect(panelProps.pathSource).toBe('current-calculation');
+    expect(panelProps.cable?.calculation).toMatchObject({ jobStatus: status, acceptedMatchesCurrent: true, reviewable: false });
+    expect(panelProps.review).toBeNull(); expect(p.pf.submitCalculation).not.toHaveBeenCalled(); expect(p.pf.calculate).not.toHaveBeenCalled();
+  });
+  it.each(['receipt', 'routing', 'length', 'tuple', 'scope', 'revision', 'currentness', 'source', 'missing verified row'] as const)(
+    'refuses a stopped saved item whose %s proof differs', async kind => {
+      const p = props(), saved = calculatedRow();
+      saved.calculation = { ...saved.calculation, jobStatus: 'failed', reviewable: false, acceptedMatchesCurrent: true };
+      saved.cable = { ...saved.cable, routing: '/SAVED', designLength: '58', cableWriteRevision: '5' }; listRow = saved;
+      const verified = structuredClone(saved);
+      if (kind === 'receipt') verified.calculation.acceptedMatchesCurrent = false;
+      if (kind === 'routing') verified.cable.routing = '/CHANGED';
+      if (kind === 'length') verified.cable.designLength = '59';
+      if (kind === 'tuple') verified.calculation.proposalId = id(99);
+      if (kind === 'revision') verified.cable.cableWriteRevision = '4';
+      if (kind === 'currentness') { verified.calculation.currentness = 'changed'; verified.calculation.acceptedMatchesCurrent = false; }
+      vi.mocked(fetchPathFinderCableWorkflowDetail).mockReset().mockResolvedValue({ projectId: id(1), cableId: id(3), row: saved } as never);
+      render(<PathFinderCableWorkspace {...p} display={{ cableId: id(3), jobId: id(70), proposalId: id(80), proposalHash: 'f'.repeat(64), ready: true, visible: true,
+        source: kind === 'source' ? undefined : 'current-calculation', routing: '/SAVED', designLength: '58',
+        verifiedRow: kind === 'missing verified row' ? undefined : verified,
+        verifiedScope: kind === 'scope' ? 'other' : pathFinderWorkflowDisplayScope(p.pf, p.accountId) }} />);
+      await openListCable(); expect(panelProps.pathReady).toBe(false); expect(panelProps.pathVisible).toBe(false);
+      expect(panelProps.calculatedRouting).toBeUndefined(); expect(p.pf.submitCalculation).not.toHaveBeenCalled(); expect(p.pf.calculate).not.toHaveBeenCalled();
+    });
   it('uses separately qualified saved display without promoting its calculation authority', async () => {
     const p = props(), saved = calculatedRow(); saved.calculation = { ...saved.calculation, currentness: 'changed', reviewable: false,
       acceptedMatchesCurrent: false, savedExactDisplay: true }; saved.cable = { ...saved.cable, routing: '/SAVED', designLength: '58' };
@@ -1214,6 +1298,33 @@ describe('fresh initial selection and current proof handoff', () => {
     expect(panelProps.calculatedRouting).toBe('/SAVED');
     expect(panelProps.cable?.calculation).toMatchObject({ currentness: 'changed', reviewable: false, acceptedMatchesCurrent: false });
     expect(p.pf.submitCalculation).not.toHaveBeenCalled(); expect(p.pf.calculate).not.toHaveBeenCalled();
+  });
+  it.each(['current','saved-exact'] as const)('shows the receipt-qualified %s route while retaining a different later failed calculation',async currentness=>{
+    const p=props(),saved=calculatedRow();
+    saved.calculation={...row().calculation,jobId:id(99),jobStatus:'failed',itemState:'blocked',outcome:'failed',currentness:'unavailable',reasonCodes:['CALCULATION_FAILED']};
+    saved.cable={...saved.cable,routing:'/SAVED',designLength:'58'};
+    saved.savedRoute={receiptId:id(90),jobId:id(70),proposalId:id(80),proposalHash:'f'.repeat(64),currentness};listRow=saved;
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockReset().mockResolvedValue({projectId:id(1),cableId:id(3),row:saved} as never);
+    render(<PathFinderCableWorkspace {...p} display={{cableId:id(3),jobId:id(70),proposalId:id(80),proposalHash:'f'.repeat(64),
+      ready:true,visible:false,source:currentness==='current'?'current-calculation':'saved-exact',routing:'/SAVED',designLength:'58',verifiedRow:saved,
+      verifiedScope:pathFinderWorkflowDisplayScope(p.pf,p.accountId)}} />);
+    await openListCable();expect(panelProps.pathReady).toBe(true);expect(panelProps.calculatedRouting).toBe('/SAVED');
+    expect(panelProps.cable?.calculation).toMatchObject({jobId:id(99),jobStatus:'failed',reviewable:false,acceptedMatchesCurrent:false});
+    expect(panelProps.review).toBeNull();expect(p.pf.submitCalculation).not.toHaveBeenCalled();expect(p.pf.calculate).not.toHaveBeenCalled();
+  });
+  it.each(['receipt','tuple','revision','scope','qualification'] as const)('refuses independent stored geometry after its %s evidence changes',async kind=>{
+    const p=props(),saved=calculatedRow();saved.calculation={...row().calculation,jobId:id(99),jobStatus:'failed',itemState:'blocked',outcome:'failed',currentness:'unavailable'};
+    saved.cable={...saved.cable,routing:'/SAVED',designLength:'58'};
+    saved.savedRoute={receiptId:id(90),jobId:id(70),proposalId:id(80),proposalHash:'f'.repeat(64),currentness:'current'};listRow=saved;
+    const verified=structuredClone(saved);
+    if(kind==='receipt')verified.savedRoute!.receiptId=id(91);
+    if(kind==='tuple')verified.savedRoute!.proposalId=id(81);
+    if(kind==='revision')verified.cable.cableWriteRevision='3';
+    if(kind==='qualification')delete verified.savedRoute;
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockReset().mockResolvedValue({projectId:id(1),cableId:id(3),row:saved} as never);
+    render(<PathFinderCableWorkspace {...p} display={{cableId:id(3),jobId:id(70),proposalId:id(80),proposalHash:'f'.repeat(64),ready:true,visible:true,
+      source:'current-calculation',routing:'/SAVED',designLength:'58',verifiedRow:verified,verifiedScope:kind==='scope'?'other':pathFinderWorkflowDisplayScope(p.pf,p.accountId)}} />);
+    await openListCable();expect(panelProps.pathReady).toBe(false);expect(panelProps.pathVisible).toBe(false);expect(panelProps.calculatedRouting).toBeUndefined();
   });
   it.each(['source', 'qualification', 'scope', 'tuple', 'older-row'] as const)('refuses saved display with invalid %s evidence', async kind => {
     const p = props(), saved = calculatedRow(); saved.calculation = { ...saved.calculation, currentness: 'changed', reviewable: false,
@@ -1287,6 +1398,43 @@ describe('fresh initial selection and current proof handoff', () => {
 });
 
 describe('Path Finder cable popup and read-only hover', () => {
+  it.each([null, '', 'Power', 'Plastic tubing', 'Unknown'])('opens and submits a cable with optional MTO %s without modifying its metadata', async mto => {
+    const p = props(); listRow = { ...row(), mto };
+    render(<PathFinderCableWorkspace {...p} />); await openListCable(true);
+    expect(window.open).toHaveBeenCalledOnce(); expect(screen.getByRole('dialog')).toBeVisible();
+    expect(p.onSelect).toHaveBeenCalledWith(listRow);
+    expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce();
+    expect(panelProps.cable?.mto).toBe(mto); expect(panelProps.onCalculate).toBeTypeOf('function');
+    expect(panelProps.access.calculation).not.toBeNull(); expect(panelProps.access.automaticPairPolicy).toEqual(AUTOMATIC_PAIR_POLICY);
+    await act(async () => { await panelProps.onCalculate?.(); });
+    expect(p.pf.submitCalculation).toHaveBeenCalledWith([id(3)], p.preferences);
+    expect(panelProps.cable?.mto).toBe(mto);
+  });
+  it('lets the hover Open action inspect a missing-MTO cable without asking for an MTO edit', async () => {
+    vi.useFakeTimers(); const p = props(); listRow = { ...row(), mto: null };
+    render(<PathFinderCableWorkspace {...p} />);
+    act(() => listProps.onPreview?.(listRow, screen.getByText('Needs routing cable'))); act(() => vi.advanceTimersByTime(1000));
+    expect(screen.queryByRole('link', { name: 'Edit cable category' })).toBeNull();
+    await act(async () => { fireEvent.click(screen.getByText('Open cable in separate window')); });
+    expect(window.open).toHaveBeenCalledOnce(); expect(panelProps.open).toBe(true);
+    expect(panelProps.onCalculate).toBeTypeOf('function'); expect(p.pf.submitCalculation).not.toHaveBeenCalled();
+  });
+  it('keeps MV and another project outside this non-MV workspace', async () => {
+    const p = props(); listRow = { ...row(), mto: 'MV' };
+    render(<PathFinderCableWorkspace {...p} />); await openListCable();
+    expect(window.open).not.toHaveBeenCalled(); expect(p.onSelect).not.toHaveBeenCalled();
+    listRow = { ...row(), projectId: id(55) }; await openListCable();
+    expect(window.open).not.toHaveBeenCalled(); expect(p.onSelect).not.toHaveBeenCalled();
+  });
+  it('blocks a retained Calculate callback if a fresh cable read changes its MTO to excluded MV', async () => {
+    const p = props(); render(<PathFinderCableWorkspace {...p} />); await openListCable();
+    const calculate = panelProps.onCalculate!; expect(calculate).toBeTypeOf('function');
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockResolvedValueOnce({ projectId: id(1), cableId: id(3), row: { ...row(), mto: 'MV' } } as never);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Refresh selected cable' })); });
+    expect(panelProps.cable?.mto).toBe('MV'); expect(panelProps.onCalculate).toBeUndefined();
+    await act(async () => { await calculate(); });
+    expect(p.pf.submitCalculation).not.toHaveBeenCalled(); expect(p.pf.calculate).not.toHaveBeenCalled();
+  });
   it('keeps read-only hover and click-to-open while barriers leave calculation preferences unavailable', async () => {
     vi.useFakeTimers(); const p = props();
     render(<PathFinderCableWorkspace {...p} preferences={null} readPreferences={{ secondaryDistanceMeters: 2, preferVerticalApproach: true }} />);

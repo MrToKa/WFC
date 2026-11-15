@@ -30,9 +30,16 @@ const errors: Record<string, string> = {
   PROJECT_NOT_FOUND: 'This project is no longer available.',
   MODEL_SELECTION_CHANGED: 'The active model selection changed. Retry to load the current selection.',
   MODEL_UNAVAILABLE: 'The active model is unavailable. Retry to check its availability.',
+  VIEWER_ORIGIN_DENIED: 'The 3D viewer is not enabled for this server address. Check the server\'s viewer address settings, then retry. (VIEWER_ORIGIN_DENIED)',
   ROUTE_RESULT_MISMATCH: 'The route response did not match the current check. Retry to reload the model.',
   METADATA_FAILED: 'Project model information could not be read. Retry to check the current active model.',
 };
+// Show only public, known failure codes; never echo arbitrary server/frame error text.
+const loadFailureCodes = new Set(['RUNTIME_TIMEOUT', 'MODEL_TIMEOUT', 'REQUEST_TIMEOUT', 'SESSION_FAILED',
+  'SESSION_RENEW_FAILED', 'ACCESS_CHECK_FAILED', 'RESOURCE_FAILED', 'RESOURCE_NOT_FOUND', 'VIEWER_BUSY',
+  'VIEWER_STOPPED', 'STORAGE_EXHAUSTED', 'VIEWER_FAILURE', 'INVALID_VIEWER_REQUEST']);
+const loadFailureMessage = (code: string): string => errors[code] ??
+  `The protected model could not be loaded. Retry to check the active model and your access.${loadFailureCodes.has(code) ? ` (${code})` : ''}`;
 const identityMatches = (event: ViewerEvent, load: Load): boolean => Boolean(event.identity &&
   event.identity.protocolVersion === 1 && event.identity.instanceId === load.instanceId && event.identity.projectId === load.projectId &&
   event.identity.modelVersionId === load.modelVersionId && event.identity.loadId === load.loadId);
@@ -65,7 +72,7 @@ export function useRoutingsViewer({ projectId, loadedProjectId, token, container
     const phase = ['LOGIN_REFRESH_REQUIRED', 'AUTH_REQUIRED'].includes(code) || status === 401 ? 'login-required'
       : ['ACCESS_REVOKED', 'ACCESS_DENIED', 'PROJECT_NOT_FOUND'].includes(code) || status === 403 || status === 404 ? 'access-denied'
         : code === 'MODEL_UNAVAILABLE' ? 'unavailable' : 'error';
-    update(run, { lifecycleKey: null, phase, checking: false, result: null, operationId: null, currentRoute: null, message: errors[code] ?? 'The protected model could not be loaded. Retry to check the active model and your access.' });
+    update(run, { lifecycleKey: null, phase, checking: false, result: null, operationId: null, currentRoute: null, message: loadFailureMessage(code) });
     run.closed = true;
   }, [cancelAttempt, current, update]);
   const combine = useCallback((run: Run, attempt: Attempt) => {

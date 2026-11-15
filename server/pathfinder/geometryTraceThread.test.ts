@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { geometryTraceFixture } from './geometryTraceFixtures.js';
 import { canonicalPurposeJson } from '../../shared/pathfinderPurposePolicy.js';
-import { LARGE_PREPARATION_CAPACITY_PROFILE, LEGACY_PREPARATION_CAPACITY_PROFILE, preparationCapacity } from '../../shared/pathfinderCapacity.js';
+import { EXTENDED_PREPARATION_CAPACITY_PROFILE, LARGE_PREPARATION_CAPACITY_PROFILE, LEGACY_PREPARATION_CAPACITY_PROFILE, preparationCapacity } from '../../shared/pathfinderCapacity.js';
 import { preparationPlanHashInput } from '../../shared/pathfinderPreparation.js';
 import { geometryTraceBytesHash, geometryTraceHash } from './geometryTraceBuilder.js';
 import { executeGeometryTraceThread, executeGeometryEvidenceThread, geometryTraceThreadInputSchema, type GeometryTraceThreadStorage, type GeometryTraceThreadInput } from './geometryTraceThread.js';
@@ -29,6 +29,13 @@ describe('off-thread geometry trace task', () => {
 
 describe('trace projection capacity is selected only by the frozen plan', () => {
   const freeze = (f: ReturnType<typeof fixture>) => { f.input.frozenBlob = f.put(f.frozen.frozenBlobId, f.frozen); };
+  it('reads a freshly hashed 512MiB profile using its frozen capacity without allocating a large payload', async () => {
+    const f=fixture(); f.frozen.plan.limitsProfile=EXTENDED_PREPARATION_CAPACITY_PROFILE;
+    f.frozen.plan.orderedPlanSha256=geometryTraceHash(preparationPlanHashInput(f.frozen.plan));
+    f.frozen.aggregate.orderedPlanSha256=f.frozen.plan.orderedPlanSha256; freeze(f);
+    await executeGeometryTraceThread(f.input,f.storage);
+    expect(f.storage.readPreparationBlob).toHaveBeenCalledWith(f.input.projectId,f.input.sessionId,f.frozen.aggregate.projection,512*1024**2);
+  });
   const selectLargeProfile = (f: ReturnType<typeof fixture>) => {
     f.frozen.plan.limitsProfile = LARGE_PREPARATION_CAPACITY_PROFILE;
     f.frozen.plan.orderedPlanSha256 = geometryTraceHash(preparationPlanHashInput(f.frozen.plan));

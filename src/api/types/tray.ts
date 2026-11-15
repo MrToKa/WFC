@@ -1,4 +1,7 @@
 import type { ProjectChangeLogEntry } from './project';
+import type { TrayAutoLengthReference, TrayLengthCalculation, TrayLengthSource } from '../../../shared/trayAutoLength';
+
+export type { TrayAutoLengthMeasurement, TrayAutoLengthReference, TrayLengthCalculation, TrayLengthSource } from '../../../shared/trayAutoLength';
 
 export type Tray = {
   changeLog?: ProjectChangeLogEntry[];
@@ -10,6 +13,8 @@ export type Tray = {
   widthMm: number | null;
   heightMm: number | null;
   lengthMm: number | null;
+  lengthSource?: TrayLengthSource;
+  lengthCalculation?: TrayLengthCalculation | null;
   includeGroundingCable: boolean;
   groundingCableTypeId: string | null;
   useTrefoilClamps?: boolean;
@@ -25,6 +30,9 @@ export type TrayInput = {
   widthMm?: number | null;
   heightMm?: number | null;
   lengthMm?: number | null;
+  lengthSource?: TrayLengthSource;
+  autoLengthReference?: TrayAutoLengthReference;
+  approvedManualLengthMm?: number;
   includeGroundingCable?: boolean;
   groundingCableTypeId?: string | null;
   useTrefoilClamps?: boolean;

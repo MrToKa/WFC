@@ -1,3 +1,4 @@
+import { digestSha256 } from '../utils/sha256';
 import { getApiBaseUrl } from './http';
 import { canonicalPurposeJson, parsePurposeJson, policyUuidSchema, policyErrorSchema } from '../../shared/pathfinderPurposePolicy';
 import { drawingErrorSchema } from '../../shared/pathfinderDrawingPolicy';
@@ -29,7 +30,7 @@ async function request(projectId: string, trayId: string, token: string, kind: '
   return value;
 }
 async function hash(value: unknown): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalPurposeJson(value)));
+  const digest = await digestSha256(new TextEncoder().encode(canonicalPurposeJson(value)));
   return [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, '0')).join('');
 }
 export async function verifyTrayDrawingResponse(value: unknown, projectId: string, trayId: string): Promise<TrayDrawingResponse> {

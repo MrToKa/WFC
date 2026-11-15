@@ -1,3 +1,4 @@
+import { digestSha256 } from './sha256.mjs';
 // Pure completed-observation contract. No SDK, DOM, storage or network access.
 export const CAPTURE_EVIDENCE_LIMITS = Object.freeze({
   bytes: 4 * 1024 ** 2,
@@ -213,9 +214,7 @@ export async function completedCaptureEvidenceHash(value) {
   const { sha256: _sha, ...input } = value;
   return [
     ...new Uint8Array(
-      await globalThis.crypto.subtle.digest(
-        'SHA-256',
-        new TextEncoder().encode(canonicalCaptureEvidenceJson(input)),
+      await digestSha256(new TextEncoder().encode(canonicalCaptureEvidenceJson(input)),
       ),
     ),
   ]

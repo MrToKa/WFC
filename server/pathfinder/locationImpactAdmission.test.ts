@@ -97,7 +97,12 @@ describe('targeted location impact admission (real adapter, mocked batch/inserti
     const f=fixture(true);expect(await locationImpactAdmission(f.client,f.input)).toMatchObject({jobId:id(5),readyCables:0,blockedCables:1,reasonCodes:['LOCATIONS_REQUIRED']});
     expect(seams.insert).toHaveBeenCalledOnce();
   });
-  it.each(['MV','Unknown',null])('refuses category %s before creating an admission',async mto=>{
+  it.each(['Unknown',null,''])('admits the exact scoped calculation without requiring MTO %j',async mto=>{
+    const f=fixture();f.batch.items[0].cable.mto=mto as string;
+    expect(await locationImpactAdmission(f.client,f.input)).toMatchObject({jobId:id(5),readyCables:1,total:1});
+    expect(seams.insert).toHaveBeenCalledOnce();expect(f.batch.items[0].cable.mto).toBe(mto);
+  });
+  it.each(['MV'])('refuses category %s before creating an admission',async mto=>{
     const f=fixture();f.batch.items[0].cable.mto=mto as string;
     await expect(locationImpactAdmission(f.client,f.input)).rejects.toMatchObject({code:'LOCATION_IMPACT_CATEGORY_CHANGED'});expect(seams.insert).not.toHaveBeenCalled();
   });

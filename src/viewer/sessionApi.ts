@@ -5,7 +5,7 @@ export type ViewerSession = {
 export type ModelSelection = Pick<import('../api/projectModels').ProjectModelSelection, 'activeModelVersionId' | 'selectionRevision'>;
 
 export class ViewerAccessError extends Error {
-  constructor(public readonly code: string, public readonly status: number) { super(code); }
+  constructor(public readonly code: string, public readonly status: number, public readonly objectId?: number, public readonly fragmentId?: number) { super(code); }
 }
 
 export function sessionBase(projectId: string, modelVersionId: string, sessionId?: string): string {

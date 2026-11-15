@@ -3,17 +3,20 @@ import { fetchPathFinderState, fetchPathFinderProposal, fetchPathFinderJob, fetc
 import { fetchProjectModels } from '@/api/projectModels';
 import { ViewerController, type ViewerEvent } from '@/viewer/ViewerController';
 import { ViewerAccessError } from '@/viewer/sessionApi';
+import { trayIdentityErrorMessage } from '@/viewer/trayIdentityErrors';
 import type { CanonicalPoint, ComputedPath, PickedPoint, ViewerModelObjectsPage, ViewerTrayRootSelection, ModelCaptureRequest } from '../../../../viewer-runtime/protocol.mjs';
-import type { PreparationDiscoveryRequest, PreparationDiscoveryPage } from '../../../../viewer-runtime/preparation-input.mjs';
+import type { PreparationDiscoveryRequest, PreparationDiscoveryPage, PreparationDiscoveryProgress } from '../../../../viewer-runtime/preparation-input.mjs';
 import type { PreparationScope } from '../../../../shared/pathfinderPreparation';
 import { pathFinderRequestDeadline } from '@/api/pathfinderRequestDeadline';
 import { barrierCaptureErrorMessage } from '../../../../viewer-runtime/barrier-capture-errors.mjs';
 import { AUTOMATIC_PAIR_POLICY } from '../../../../shared/pathfinderAutomaticPair';
+import { requalifyStaleCableEndpoints, hasPendingEndpointRequalification } from '@/api/pathfinderEndpointRequalification';
 
 export type ProjectPreparationViewer = {
   readSelection: ViewerController['readSelection'];
   readTrayRootSelection: () => ReturnType<ViewerController['readTrayRootSelection']>;
-  discover: (request: PreparationDiscoveryRequest) => Promise<PreparationDiscoveryPage>;
+  discover: (request: PreparationDiscoveryRequest, onProgress?: (progress: PreparationDiscoveryProgress) => void) => Promise<PreparationDiscoveryPage>;
+  resolveTrayIdentities?: (request: Parameters<ViewerController['resolveTrayIdentities']>[0]) => ReturnType<ViewerController['resolveTrayIdentities']>;
   capture: (request: ModelCaptureRequest) => ReturnType<ViewerController['captureModel']>;
   captureBarriers: (request: Parameters<ViewerController['captureBarriers']>[0]) => ReturnType<ViewerController['captureBarriers']>;
   publishBarriers: (intentId: string, observation: Parameters<ViewerController['publishBarriers']>[1], onWriteStarted?: () => void,
@@ -34,6 +37,8 @@ const fallbackMessage = (error: unknown) => error instanceof PathFinderApiError 
 
 const message = (error: unknown) => {
   if (error instanceof ViewerAccessError) {
+    const trayIdentityMessage = trayIdentityErrorMessage(error.code);
+    if (trayIdentityMessage) return trayIdentityMessage;
     if (error.code === 'TRAY_UNAVAILABLE') return 'The tray objects could not be shown in the current model. Check their assignment or reload the model.';
     if (error.code === 'TRAY_ROOT_SELECTION_UNAVAILABLE') return 'The selected model objects could not be read. The model remains loaded; try the selection again.';
     if (error.code === 'TRAY_ROOT_SELECTION_TOO_LARGE') return 'Select at most 512 model objects for this tray, then try again.';
@@ -64,6 +69,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
   const entityReads = useRef<{ proposal: AbortController | null; job: AbortController | null }>({ proposal: null, job: null });
   const isolatedEntityReads = useRef(new Set<AbortController>());
   const popupSubmission = useRef<object | null>(null);
+  const trayDisplaySequence = useRef(0);
   const [revision, setRevision] = useState(0), [view, setView] = useState<View>(initial);
   const latestView = useRef(view); latestView.current = view;
   const live = useCallback((run: Run) => !run.closed && runRef.current === run && latest.current === scope, [scope]);
@@ -193,13 +199,30 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
       let frozenPreferences: PathFinderPreferences, frozenCableIds: string[];
       try { frozenPreferences = structuredClone(preferences); frozenCableIds = [...cableIds]; }
       catch { return { kind: 'not-submitted', code: 'INVALID_REQUEST' }; }
-      const data = await refresh(run, true);
+      let data = await refresh(run, true);
       if (!data) return { kind: 'not-submitted', code: 'CALCULATION_PREFLIGHT_FAILED' };
       const barrierScope = frozenPreferences.barrierRouting?.scope;
       if (!live(run) || !matchesModel(data) || projectPreparationCapture.current || !barrierScope || barrierScope.projectId !== projectId
         || barrierScope.modelVersionId !== data.activeModel.modelVersionId || barrierScope.selectionRevision !== data.activeModel.selectionRevision
         || barrierScope.contentFingerprint !== data.activeModel.contentFingerprint)
         return { kind: 'not-submitted', code: 'CALCULATION_CONTEXT_CHANGED' };
+      let requalified = false;
+      for (const cableId of frozenCableIds) {
+        const cable = data.cables.find(value => value.id === cableId);
+        if (cable?.fromMatch.status !== 'stale' && cable?.toMatch.status !== 'stale'
+          && !await hasPendingEndpointRequalification(projectId, token, cableId)) continue;
+        try { requalified = await requalifyStaleCableEndpoints(projectId, token, cableId, model, run.abort.signal) || requalified; }
+        catch {
+          return { kind: 'not-submitted', code: 'ENDPOINT_REQUALIFICATION_UNCONFIRMED' };
+        }
+        if (!live(run) || projectPreparationCapture.current || popupSubmission.current !== ticket)
+          return { kind: 'not-submitted', code: 'CALCULATION_CONTEXT_CHANGED' };
+      }
+      if (requalified) {
+        data = await refresh(run, true);
+        if (!data || !live(run) || !matchesModel(data) || popupSubmission.current !== ticket || projectPreparationCapture.current)
+          return { kind: 'not-submitted', code: 'CALCULATION_CONTEXT_CHANGED' };
+      }
       const result = await submitPathFinderCalculation(projectId, token, { cableIds: frozenCableIds, expectedRegistryRevision: data.registryRevision, force: true,
         automaticPairPolicy: AUTOMATIC_PAIR_POLICY,
         options: { connectionToleranceMeters: Number(data.settings.connectionGap), sampleSpacingMeters: 0.125,
@@ -370,7 +393,8 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
       const value = await operation({ assertCurrent: current,
         readSelection:async()=>{current();const result=await run.viewer!.readSelection();current();return result;},
         readTrayRootSelection:async()=>{current();const result=await run.viewer!.readTrayRootSelection();current();return result;},
-        discover: async request => { current(); const page = await run.viewer!.discoverPreparationObjects(request, { signal: combined, isCurrent: () => { try { current(); return true; } catch { return false; } } }); current(); return page; },
+        discover: async (request, onProgress) => { current(); const page = await run.viewer!.discoverPreparationObjects(request, { signal: combined, onProgress, isCurrent: () => { try { current(); return true; } catch { return false; } } }); current(); return page; },
+        resolveTrayIdentities: async request => { current(); const response = await run.viewer!.resolveTrayIdentities(request, { signal: combined, isCurrent: () => { try { current(); return true; } catch { return false; } } }); current(); return response; },
         capture: async request => { current(); const capture = await run.viewer!.captureModel(request, progress => captureProgress(run, () => `Collecting project geometry: ${progress.index + 1} data batches…`), { signal: combined, isCurrent: () => { try { current(); return true; } catch { return false; } } }); current(); return capture; },
         captureBarriers: async request => { current(); update(run, { viewerMessage: 'Reading selected barrier geometry…' }); const capture = await run.viewer!.captureBarriers(request, { signal: combined, isCurrent: () => { try { current(); return true; } catch { return false; } } }); current(); return capture; },
         publishBarriers: async (intentId, observation, onWriteStarted, expectedCommand) => { current(); const receipt = await (expectedCommand !== undefined
@@ -386,8 +410,8 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
     }
   }, [captureProgress, isAdmin, live, update]);
   const visible = renderedScope.current === scope ? view : initial;
-  const showTray = useCallback(async (expected: Pick<PreparationScope, 'modelVersionId' | 'contentFingerprint' | 'selectionRevision'>, ids: number[]): Promise<boolean> => {
-    const target = { ...expected }, objectIds = [...ids], run = runRef.current;
+  const displayTray = useCallback(async (expected: Pick<PreparationScope, 'modelVersionId' | 'contentFingerprint' | 'selectionRevision'>, ids: number[] | null): Promise<boolean> => {
+    const target = { ...expected }, objectIds = ids === null ? null : [...ids], run = runRef.current;
     if (!run || !isAdmin || !run.viewer) return false;
     const viewer = run.viewer, generation = run.generation;
     const current = () => {
@@ -396,21 +420,68 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
         && run.modelVersionId === target.modelVersionId && run.selectionRevision === target.selectionRevision && run.contentFingerprint === target.contentFingerprint
         && model?.modelVersionId === target.modelVersionId && model.selectionRevision === target.selectionRevision && model.contentFingerprint === target.contentFingerprint;
     };
-    if (!current() || latestView.current.busy || projectPreparationCapture.current || planningCapture.current || lookupCapture.current) return false;
-    try { await viewer.showTray(objectIds); return current(); }
+    const busy = () => latestView.current.busy || projectPreparationCapture.current || planningCapture.current || lookupCapture.current;
+    if (!current()) return false;
+    if (objectIds === null) {
+      const sequence = trayDisplaySequence.current;
+      // Panel cleanup must restore its appearance without interrupting an active capture.
+      while (current() && busy()) await new Promise<void>(resolve => window.setTimeout(resolve, 50));
+      if (!current() || trayDisplaySequence.current !== sequence) return false;
+    } else {
+      if (busy()) return false;
+      ++trayDisplaySequence.current;
+    }
+    try { if (objectIds === null) await viewer.hideTray(); else await viewer.showTray(objectIds); return current(); }
     catch (error) { if (current() && !(error instanceof DOMException && error.name === 'AbortError')) update(run, { error: message(error) }); return false; }
   }, [isAdmin, live, update]);
-  const clear = useCallback(() => { try { runRef.current?.viewer?.clear(); } catch { /* A terminal viewer is already closed. */ } }, []);
+  const showTray = useCallback((expected: Pick<PreparationScope, 'modelVersionId' | 'contentFingerprint' | 'selectionRevision'>, ids: number[]) => displayTray(expected, ids), [displayTray]);
+  const hideTray = useCallback((expected: Pick<PreparationScope, 'modelVersionId' | 'contentFingerprint' | 'selectionRevision'>) => displayTray(expected, null), [displayTray]);
+  // Result invalidation, Save and tool changes clear stale appearance only.
+  // Fitting the whole model belongs to the explicit Restore view action.
+  const clear = useCallback((options: { preserveCamera?: boolean } = {}) => {
+    try { runRef.current?.viewer?.clear('user', { preserveCamera: options.preserveCamera !== false }); }
+    catch { /* A terminal viewer is already closed. */ }
+  }, []);
   return { ...visible, preparationAccess: scope, preparationViewerGeneration: visible.viewerPhase === 'ready' ? runRef.current?.generation ?? -1 : -1, runProjectPreparation, refresh: () => { if (visible.viewerPhase === 'error') setRevision(value => value + 1); else void refresh(runRef.current, true); }, refreshState: () => refresh(runRef.current, true), reloadViewer: () => setRevision(value => value + 1), action, actionWithoutRefresh, matchAll, saveLocation, uploadSnapshot, calculate, submitCalculation, readProposal, readJob, reviewProposal, prepareModel, startLookup, readLookup, startPreview, readPreview,
     pickPoint: (): Promise<PickedPoint | null> => viewerAction(viewer => viewer.pickPoint()), cancelPicking: () => runRef.current?.viewer?.cancelPicking(),
     readObjects: (query: string, cursor = 0): Promise<ViewerModelObjectsPage | null> => viewerAction(viewer => viewer.readModelObjects(cursor, query)),
-    readSelection: () => viewerAction(viewer => viewer.readSelection()), readTrayRootSelection, showTray,
-    showLocation: async (sdkObjectId: number): Promise<boolean> => (await viewerAction(async viewer => {
-      const expected = visible.data?.activeModel, run = runRef.current;
-      if (visible.viewerPhase !== 'ready' || !expected || run?.modelVersionId !== expected.modelVersionId
-        || run.selectionRevision !== expected.selectionRevision || run.contentFingerprint !== expected.contentFingerprint) return false;
-      await viewer.showLocation(sdkObjectId); return true;
-    })) === true,
+    readSelection: () => viewerAction(viewer => viewer.readSelection()), readTrayRootSelection, showTray, hideTray,
+    readObjectGuid: async (sdkObjectId: number): Promise<string | null> => {
+      const run = runRef.current;
+      if (!run || !live(run) || latestView.current.viewerPhase !== 'ready' || latestView.current.busy || !run.viewer
+        || projectPreparationCapture.current || planningCapture.current || lookupCapture.current) return null;
+      const viewer = run.viewer, generation = run.generation;
+      try {
+        const guid = await viewer.readObjectGuid(sdkObjectId);
+        return live(run) && run.viewer === viewer && run.generation === generation && latestView.current.viewerPhase === 'ready' ? guid : null;
+      } catch { return null; }
+    },
+    showLocation: async (sdkObjectId: number, sdkObjectIds?: number[]): Promise<boolean> => {
+      const objectIds = sdkObjectIds ? [...sdkObjectIds] : undefined;
+      return (await viewerAction(async viewer => {
+        const expected = visible.data?.activeModel, run = runRef.current;
+        if (visible.viewerPhase !== 'ready' || !expected || run?.modelVersionId !== expected.modelVersionId
+          || run.selectionRevision !== expected.selectionRevision || run.contentFingerprint !== expected.contentFingerprint) return false;
+        if (objectIds) await viewer.showLocation(sdkObjectId, objectIds); else await viewer.showLocation(sdkObjectId);
+        return true;
+      })) === true;
+    },
+    showLocationPoint: async (point: CanonicalPoint, expected: Pick<PreparationScope, 'modelVersionId' | 'selectionRevision' | 'contentFingerprint'>): Promise<boolean> => {
+      const target = { ...expected }, savedPoint = [...point] as CanonicalPoint;
+      return (await viewerAction(async viewer => {
+        const run = runRef.current;
+        const current = () => {
+          const model = dataRef.current?.activeModel;
+          return Boolean(run && live(run) && run.viewer === viewer && latestView.current.viewerPhase === 'ready'
+            && run.modelVersionId === target.modelVersionId && run.selectionRevision === target.selectionRevision
+            && run.contentFingerprint === target.contentFingerprint && model?.modelVersionId === target.modelVersionId
+            && model.selectionRevision === target.selectionRevision && model.contentFingerprint === target.contentFingerprint);
+        };
+        if (!current()) return false;
+        await viewer.showLocationPoint(savedPoint);
+        return current();
+      })) === true;
+    },
     setPathTransparency: (percent: number) => viewerAction(viewer => viewer.setPathTransparency(percent)),
     cancelOperation: () => { projectPreparationCapture.current?.abort(); planningCapture.current?.abort(); lookupCapture.current?.abort(); entityReads.current.proposal?.abort(); entityReads.current.job?.abort(); for (const read of isolatedEntityReads.current) read.abort(); runRef.current?.viewer?.cancelPicking(); clear(); },
     showPath: (path: ComputedPath) => viewerAction(viewer => viewer.showComputedPath(path)), clear, zoom: () => { try { runRef.current?.viewer?.zoom(); } catch { /* No committed path. */ } } };

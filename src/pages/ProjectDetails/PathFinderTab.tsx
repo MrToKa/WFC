@@ -6,6 +6,8 @@ import { ModelLocationMatchPanel } from './ModelLocationMatchPanel';
 import { useRoutingsViewerHeight } from './hooks/useRoutingsViewerHeight';
 import { useRoutingsViewerStyles } from './RoutingsViewerTab.styles';
 import { PathFinderResults } from './PathFinderResults';
+import { PathFinderRecalculateAll } from './PathFinderRecalculateAll';
+import { PathFinderRecalculationPanel } from './PathFinderRecalculationPanel';
 import { PathFinderLookup } from './PathFinderLookup';
 import { PathFinderRoutes } from './PathFinderRoutes';
 import { PathFinderPreview } from './PathFinderPreview';
@@ -72,6 +74,9 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
   const [mode, setMode] = useState<'routes' | 'path' | 'lookup'>('path');
   const [networkCheckBusy, setNetworkCheckBusy] = useState(false), [locationCheckBusy, setLocationCheckBusy] = useState(false);
   const [barrierRefreshKey, setBarrierRefreshKey] = useState<string | null>(null);
+  const [barrierRefreshRevision, setBarrierRefreshRevision] = useState(0);
+  const barrierReadKey = JSON.stringify([barrierRefreshKey, barrierRefreshRevision]);
+  const refreshPathFinder = () => { pf.refresh(); setBarrierRefreshRevision(value => value + 1); };
   const [lookupBusy, setLookupBusy] = useState(false);
   const displayGeneration = useRef(0), [displayOwner, setDisplayOwner] = useState<'none' | 'proposal' | 'lookup' | 'standalone'>('none');
   const [secondaryDistance, setSecondaryDistance] = useState('2'), [preferVertical, setPreferVertical] = useState(true), [transparency, setTransparency] = useState('75');
@@ -93,6 +98,12 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
     ? { secondaryDistanceMeters: secondaryValue, preferVerticalApproach: preferVertical, barrierRouting } : null;
   const backgroundBarrierRouting = createBarrierAdmissionIntent(currentBarrierRegistry, false);
   const backgroundPreferences = preferences && backgroundBarrierRouting ? { ...preferences, barrierRouting: backgroundBarrierRouting } : null;
+  const calculationBlocker = !validSecondary ? 'Enter a SECONDARY trigger distance from 0 to 1,000,000 metres in Path.'
+    : barrierAuthoring.pending ? 'Wait for the saved barrier command to finish, or use Retry saved command in Barriers if its outcome is unknown.'
+      : barrierAuthoring.dirty ? 'Save the obstacle selection in Barriers before calculating.'
+        : !currentBarrierRegistry ? 'Check the current model and saved selection in Barriers before calculating.'
+          : !backgroundBarrierRouting ? 'Configure Barriers: save the selected obstacles, or enter an Explicit empty reason and choose Declare no barriers to calculate without obstacle checks.'
+          : null;
   const getCableCalculationPreferences = useCallback((drill: boolean): PathFinderPreferences | null => {
     const intent = createBarrierAdmissionIntent(currentBarrierRegistry, drill);
     return validSecondary && intent && !barrierAuthoring.dirty && !barrierAuthoring.pending
@@ -103,11 +114,16 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
     const current = ++displayGeneration.current; setDisplayOwner(owner); pf.cancelPicking(); if (clear) pf.clear();
     return () => displayGeneration.current === current;
   };
-  const restoreView = () => { claimViewer('none'); pf.cancelOperation(); setNotice(null); };
+  const clearView = () => { claimViewer('none'); pf.cancelOperation(); setNotice(null); };
+  const restoreView = () => { clearView(); pf.clear({ preserveCamera: false }); };
   const [search, setSearch] = useState(''), [onlyProblems, setOnlyProblems] = useState(false), [selectedCableId, setSelectedCableId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>(emptyDraft), [notice, setNotice] = useState<string | null>(null), [localError, setLocalError] = useState<string | null>(null);
   const [endpointPending, setEndpointPending] = useState(false);
   const [workflowSelection, setWorkflowSelection] = useState<CableWorkflowRow | null>(null);
+  const [workflowRefreshRequest, setWorkflowRefreshRequest] = useState<{ cableId: string; requestId: number } | null>(null);
+  const workflowResultRefreshed = useCallback((cableId: string) => {
+    setWorkflowRefreshRequest(previous => ({ cableId, requestId: (previous?.requestId ?? 0) + 1 }));
+  }, []);
   const [workflowCalculationPreferences, setWorkflowCalculationPreferences] = useState<PathFinderWorkflowCalculationPreferences | null>(null);
   const workflowConfigurationReady = Boolean(getCableCalculationPreferences(workflowCalculationPreferences?.preferences.barrierRouting?.drillThroughWalls === true));
   const [workflowDisplay, setWorkflowDisplay] = useState<PathFinderWorkflowDisplay>({ cableId: null, jobId: null, proposalId: null, proposalHash: null,
@@ -154,7 +170,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
   useEffect(() => { setWorkflowCalculationPreferences(null); }, [projectId, accountId, token, data?.activeModel.modelVersionId, data?.activeModel.selectionRevision, pf.preparationViewerGeneration]);
   const changeMode = (next: 'routes' | 'path' | 'lookup') => {
     if (next === mode) return;
-    restoreView(); setLocalError(null); setMode(next);
+    clearView(); setLocalError(null); setMode(next);
   };
   const artifact = data?.artifacts[0];
   const locationPoints = new Map((data?.locations ?? []).map(location => [location.id, location.calculationAvailability ?? noCalculationPoint]));
@@ -180,21 +196,21 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
         <div role="status" aria-live="polite" data-testid="pathfinder-status" data-phase={pf.viewerPhase}>
           {pf.loading || pf.viewerPhase === 'loading' ? <Spinner size="tiny" label={pf.viewerMessage} /> : <Body1>{pf.viewerMessage}</Body1>}
         </div>
-        {mode !== 'routes' || pf.viewerPhase !== 'ready' ? <div className={styles.actions}><Button disabled={pf.busy} onClick={pf.refresh}>Refresh Path Finder</Button><Button disabled={pf.busy} onClick={pf.reloadViewer}>Reload model</Button></div> : null}
+        {mode !== 'routes' || pf.viewerPhase !== 'ready' ? <div className={styles.actions}><Button disabled={pf.busy} onClick={refreshPathFinder}>Refresh Path Finder</Button><Button disabled={pf.busy} onClick={pf.reloadViewer}>Reload model</Button></div> : null}
         {pf.error || localError ? <Body1 role="alert" className={styles.error}>{localError ?? pf.error}</Body1> : null}
         {notice ? <Body1 role="status">{notice}</Body1> : null}
         <div className={extra.warning} data-testid="pathfinder-readiness" style={{ display: mode === 'routes' ? 'none' : undefined }}>
-          {mode === 'lookup' ? <><Body1>Path lookup reads the ordered route geometry from the active model. Routes preparation and category drafts are independent.</Body1><Caption1>This tool does not change cable endpoints, routes or lengths.</Caption1></> : <><Body1>{artifact ? `Model snapshot: ${artifact.objectCount.toLocaleString()} objects.` : 'Check project trays in Routes to prepare the routing network.'}</Body1><Caption1>After you assign a shared endpoint, successful current results can fill cables with both routing and design length empty. Existing or partially filled values require Review and Apply.</Caption1></>}
+          {mode === 'lookup' ? <><Body1>Path lookup reads the ordered route geometry from the active model. Routes preparation and category drafts are independent.</Body1><Caption1>This tool does not change cable endpoints, routes or lengths.</Caption1></> : <><Body1>{artifact ? `Model snapshot: ${artifact.objectCount.toLocaleString()} objects.` : 'Check project trays in Routes to prepare the routing network.'}</Body1><Caption1>Shared endpoints are saved for this model. Current automatic results can update unprotected cables; manual and execution protection retain the used route.</Caption1></>}
         </div>
         {mode === 'path' ? <Caption1>Connection gap: {data?.settings.connectionGap ?? 'Not set'} m; SECONDARY: {data?.settings.secondaryTrayLength ?? 'Not set'} m; connection reserve: {data?.settings.endConnectionLength ?? 'Not set'} m; increase: {data?.settings.additionalBendingPercent ?? 'Not set'}%. Change these in Project Details.</Caption1> : null}
         <div style={{ display: mode === 'routes' ? 'none' : 'block' }}>
         <div className={styles.actions}>
-          <Button disabled={pf.viewerPhase !== 'ready'} onClick={restoreView}>Clear</Button>
+          <Button disabled={pf.viewerPhase !== 'ready'} onClick={clearView}>Clear</Button>
           <Button disabled={pf.viewerPhase !== 'ready'} onClick={pf.zoom}>Zoom to path</Button>
           <Button disabled={pf.viewerPhase !== 'ready'} onClick={restoreView}>Restore view</Button>
         </div>
         <div ref={barrierConfiguration} tabIndex={-1} role="region" aria-label="Routing barrier configuration">
-          <PathFinderBarriersPanel projectId={projectId} loadedProjectId={loadedProjectId} token={token} isAdmin={isAdmin} pf={pf} onStateChange={barrierStateChanged} refreshKey={barrierRefreshKey} />
+          <PathFinderBarriersPanel projectId={projectId} loadedProjectId={loadedProjectId} token={token} isAdmin={isAdmin} pf={pf} onStateChange={barrierStateChanged} refreshKey={barrierReadKey} />
         </div>
         <Checkbox label="Drill through the walls" checked={drillThroughWalls} disabled={pf.busy || barrierAuthoring.pending || !currentBarrierRegistry}
           onChange={(_, value) => setDrillDraft({ owner: barrierOwner, checked: value.checked === true })} />
@@ -207,7 +223,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
         /></details>
         </div>
         <div style={{ display: mode === 'lookup' ? 'none' : 'block' }}>
-          <ModelLocationMatchPanel pf={{ ...pf, busy: pf.busy || networkCheckBusy }} accountId={accountId ?? null} active={mode !== 'lookup'} onChanged={cableValuesChanged} onBusyChange={setLocationCheckBusy} />
+          <ModelLocationMatchPanel pf={{ ...pf, busy: pf.busy || networkCheckBusy }} accountId={accountId ?? null} active={mode !== 'lookup'} refreshRevision={barrierRefreshRevision} onChanged={cableValuesChanged} onBusyChange={setLocationCheckBusy} />
         </div>
         <TabList aria-label="Path Finder tools" selectedValue={mode} onTabSelect={(_, value) => changeMode(value.value as 'routes' | 'path' | 'lookup')}>
           <Tab id={`${panelId}-routes-tab`} value="routes" aria-controls={`${panelId}-routes-panel`}>Routes</Tab>
@@ -225,18 +241,28 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
         <PathFinderRoutes pf={{ ...pf, busy: pf.busy || locationCheckBusy }} active={mode === 'routes'} onBusyChange={setNetworkCheckBusy} onNetworkReady={setBarrierRefreshKey} />
         </div>
         <div id={`${panelId}-path-panel`} role="tabpanel" aria-labelledby={`${panelId}-path-tab`} className={extra.panel} style={{ display: mode === 'path' ? 'flex' : 'none' }}>
-        <Field label="SECONDARY trigger distance (m)" hint="Approaches longer than this distance use the SECONDARY length from Project Details."><Input aria-label="SECONDARY trigger distance in metres" value={secondaryDistance} onChange={(_, value) => { restoreView(); setSecondaryDistance(value.value); }} /></Field>
+        <Field label="SECONDARY trigger distance (m)" hint="Approaches longer than this distance use the SECONDARY length from Project Details."><Input aria-label="SECONDARY trigger distance in metres" value={secondaryDistance} onChange={(_, value) => { clearView(); setSecondaryDistance(value.value); }} /></Field>
         {!validSecondary ? <Body1 role="alert">Enter a SECONDARY trigger distance from 0 to 1,000,000 metres.</Body1> : null}
-        <label><input type="checkbox" checked={preferVertical} onChange={event => { restoreView(); setPreferVertical(event.target.checked); }} />Prefer vertical approach</label>
+        <label><input type="checkbox" checked={preferVertical} onChange={event => { clearView(); setPreferVertical(event.target.checked); }} />Prefer vertical approach</label>
+        {projectId && accountId && token ? <PathFinderRecalculateAll projectId={projectId} accountId={accountId} token={token}
+          modelKey={JSON.stringify(data?.activeModel)} preferences={backgroundPreferences}
+          blocker={calculationBlocker ?? (!data?.artifacts.length ? 'Prepare the tray network in Routes before recalculating all cables.' : null)}
+          disabled={pf.busy || locationCheckBusy || networkCheckBusy || !data?.artifacts.length}
+          refreshState={pf.refreshState} onChanged={cableValuesChanged} /> : null}
+        {/* Keep command recovery active across viewer tool changes; its busy state stays local. */}
+        <PathFinderRecalculationPanel projectId={projectId} loadedProjectId={loadedProjectId} accountId={accountId ?? null} token={token} isAdmin={isAdmin}
+          active={active} contextKey={JSON.stringify([data?.activeModel.modelVersionId, data?.activeModel.selectionRevision, data?.activeModel.contentFingerprint])}
+          preferences={backgroundPreferences} configurationMessage={calculationBlocker} onConfigureCalculation={validSecondary ? configureCalculation : undefined}
+          onChanged={cableValuesChanged} onAuthorityLost={cableValuesChanged} />
         <PathFinderCableWorkspace projectId={projectId} loadedProjectId={loadedProjectId} accountId={accountId ?? null} token={token} isAdmin={isAdmin}
-          pf={pf} active={mode === 'path'} selectedCableId={selectedCableId} refreshKey={cableWriteRefresh} preferences={backgroundPreferences} readPreferences={backgroundPreferences ?? readPreferences} onConfigureCalculation={configureCalculation}
+          pf={pf} active={mode === 'path'} selectedCableId={selectedCableId} refreshKey={cableWriteRefresh} preferences={backgroundPreferences} readPreferences={backgroundPreferences ?? readPreferences} onConfigureCalculation={configureCalculation} onResultRefresh={workflowResultRefreshed}
           getCalculationPreferences={getCableCalculationPreferences} onCalculationPreferences={setWorkflowCalculationPreferences}
           display={workflowDisplay} review={popupReview} onCalculationStart={workflowCalculationStarted} onTogglePath={cableId => setWorkflowDisplayRequest(previous => ({ cableId, requestId: (previous?.requestId ?? 0) + 1,
             action: workflowDisplay.cableId === cableId && workflowDisplay.visible ? 'hide' : 'show' }))}
           onEndpointForegroundContexts={endpointForegroundChanged}
           onSelect={row => { setSelectedCableId(row.cable.id); setWorkflowSelection(row);
             setWorkflowCalculationPreferences(previous => previous?.cableId === row.cable.id ? previous : null); }} />
-        <details><summary>Advanced standalone path</summary><PathFinderPreview {...cablePurposes} pf={pf} active={mode === 'path'} displayOwned={mode === 'path' && displayOwner === 'standalone'} claimViewer={() => claimViewer('standalone')} options={preferences} onInputChange={restoreView} onEndpointNamesChange={() => {}} /></details>
+        <details><summary>Advanced standalone path</summary><PathFinderPreview {...cablePurposes} pf={pf} active={mode === 'path'} displayOwned={mode === 'path' && displayOwner === 'standalone'} claimViewer={() => claimViewer('standalone')} options={preferences} onInputChange={clearView} onEndpointNamesChange={() => {}} /></details>
         <details><summary>Advanced project cables and shared locations</summary>
         <Field label="Search cables"><Input aria-label="Search Path Finder cables" value={search} onChange={(_, value) => setSearch(value.value)} /></Field>
         <label><input type="checkbox" checked={onlyProblems} onChange={event => setOnlyProblems(event.target.checked)} /> Without a calculation point</label>
@@ -253,9 +279,9 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
           <Caption1>From saved binding: {selected.fromMatch.status}</Caption1>
           <Body1>To: {selected.toLocation || 'Not set'} — {pointLabels[endpointPoint(selected.toMatch).status]}</Body1>
           <Caption1>To saved binding: {selected.toMatch.status}</Caption1>
-          <Body1>Category: {selected.mto || 'Not set'}{selected.mto === 'Instrumentation' ? ' (uses Control rules)' : ''}</Body1>
+          <Body1>MTO: {selected.mto || 'Not set (optional)'}</Body1>
           {!selected.fromLocation?.trim() || !selected.toLocation?.trim() ? <Body1>Set an explicit From/To name before resolving a blank endpoint. <a href={`/projects/${projectId}/cables/${selected.id}`}>Edit cable endpoints</a></Body1> : null}
-          {!selected.mto || !['MV', 'LV', 'Control', 'Instrumentation'].includes(selected.mto) ? <Body1>Choose a supported category before calculation. <a href={`/projects/${projectId}/cables/${selected.id}`}>Edit cable category</a></Body1> : null}
+          <Body1>Routing permissions use Purpose from the selected Cable type. MTO is optional.</Body1>
           <div className={styles.actions}><Button disabled={pf.busy || endpointPending || !selected.fromLocation?.trim()} onClick={() => resolve('from')}>Resolve From</Button><Button disabled={pf.busy || endpointPending || !selected.toLocation?.trim()} onClick={() => resolve('to')}>Resolve To</Button></div>
         </div> : null}
         <div className={extra.form}>
@@ -276,13 +302,14 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
           />
         </div>
         </details>
-        <PathFinderResults pf={pf} accountId={accountId} selectedCableId={selectedCableId} workflowSelection={workflowSelection} workflowCalculationPreferences={workflowCalculationPreferences} workflowConfigurationReady={workflowConfigurationReady} onCableValuesChanged={cableValuesChanged} active={mode === 'path'} displayOwned={mode === 'path' && displayOwner === 'proposal'} claimViewer={() => claimViewer('proposal', false)} options={preferences} backgroundOptions={backgroundPreferences} readPreferences={preferences ?? readPreferences} onBatchBusyChange={setBatchBusy}
+        <PathFinderResults pf={pf} accountId={accountId} selectedCableId={selectedCableId} workflowSelection={workflowSelection} workflowRefreshRequest={workflowRefreshRequest} workflowCalculationPreferences={workflowCalculationPreferences} workflowConfigurationReady={workflowConfigurationReady} onCableValuesChanged={cableValuesChanged} active={mode === 'path'} displayOwned={mode === 'path' && displayOwner === 'proposal'} claimViewer={() => claimViewer('proposal', false)} options={preferences} backgroundOptions={backgroundPreferences} readPreferences={preferences ?? readPreferences} onBatchBusyChange={setBatchBusy}
+          calculationBlocker={calculationBlocker} onConfigureCalculation={validSecondary ? configureCalculation : undefined}
           workflowDisplayRequest={workflowDisplayRequest} onWorkflowDisplayChange={workflowDisplayChanged} onWorkflowReviewChange={workflowReviewChanged}
           endpointForegroundContexts={endpointForegroundContexts}
           onCalculationCommitted={calculationCommitted} />
         </div>
         <div id={`${panelId}-lookup-panel`} role="tabpanel" aria-labelledby={`${panelId}-lookup-tab`} className={extra.panel} style={{ display: mode === 'lookup' ? 'flex' : 'none' }}>
-          <PathFinderLookup pf={pf} selectedCable={selected} active={mode === 'lookup'} displayOwned={mode === 'lookup' && displayOwner === 'lookup'} claimViewer={() => claimViewer('lookup')} onInputChange={restoreView} onBusyChange={setLookupBusy} />
+          <PathFinderLookup pf={pf} selectedCable={selected} active={mode === 'lookup'} displayOwned={mode === 'lookup' && displayOwner === 'lookup'} claimViewer={() => claimViewer('lookup')} onInputChange={clearView} onBusyChange={setLookupBusy} />
         </div>
       </div>
       <div className={styles.host} style={{ position: 'relative' }}>

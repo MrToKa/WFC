@@ -14,11 +14,25 @@ export const CABLE_LIST_COLUMNS = [
   { id: 'delivery', label: 'Delivery' },
   { id: 'autoCalculatedLength', label: 'Auto calculated length [m]' },
   { id: 'designLength', label: 'Design length [m]' },
+  { id: 'installLength', label: 'Install length [m]' },
+  { id: 'pullDate', label: 'Pull date' },
+  { id: 'connectedFrom', label: 'Connected From' },
+  { id: 'connectedTo', label: 'Connected To' },
+  { id: 'tested', label: 'Cable tested' },
   { id: 'actions', label: 'Actions' },
 ] as const;
 
 export type CableListColumnId = (typeof CABLE_LIST_COLUMNS)[number]['id'];
-export const DEFAULT_CABLE_LIST_COLUMNS = CABLE_LIST_COLUMNS.map(({ id }) => id);
+const executionColumns = new Set<CableListColumnId>([
+  'installLength',
+  'pullDate',
+  'connectedFrom',
+  'connectedTo',
+  'tested',
+]);
+export const DEFAULT_CABLE_LIST_COLUMNS = CABLE_LIST_COLUMNS.filter(
+  ({ id }) => !executionColumns.has(id),
+).map(({ id }) => id);
 
 type CableListPreferences = { columns: CableListColumnId[] };
 const endpoint = '/api/users/me/cable-list-columns';

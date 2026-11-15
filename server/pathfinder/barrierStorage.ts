@@ -123,5 +123,12 @@ export function encodeBarrierJson(value: unknown, limit = BARRIER_LIMITS.meshBlo
 export async function readBarrierBytes(projectId: string, intentId: string, expected: BarrierBlob, limit = BARRIER_LIMITS.meshBlobBytes): Promise<Buffer> {
   checkLimit(limit); policyUuidSchema.parse(projectId); policyUuidSchema.parse(intentId); policyUuidSchema.parse(expected.blobId); policyHashSchema.parse(expected.sha256);
   if (!Number.isSafeInteger(expected.bytes) || expected.bytes <= 0 || expected.bytes > limit) return fail();
-  return serialize(async () => readFile(path.join(await directory(projectId, intentId), expected.blobId + '.json'), expected, limit));
+  return serialize(async () => {
+    try { return await readFile(path.join(await directory(projectId, intentId), expected.blobId + '.json'), expected, limit); }
+    catch (error) {
+      if (['ENOENT', 'ENOTDIR'].includes((error as NodeJS.ErrnoException).code ?? ''))
+        throw new PathFinderError('BARRIER_BLOB_MISSING', 409, 'Saved barrier geometry files are missing from storage. Restore the matching Path Finder files before refreshing barriers.');
+      throw error;
+    }
+  });
 }

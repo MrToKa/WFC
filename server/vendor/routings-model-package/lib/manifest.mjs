@@ -85,7 +85,7 @@ export function validateManifest(manifest, { limits = DEFAULT_LIMITS } = {}) {
     exactObject(resource, resourceFields, location);
     validateResourcePath(resource.path);
     if (forbiddenExtension.test(resource.path)) fail('EXECUTABLE_CONTENT', 'Executable resources are forbidden.', { path: resource.path });
-    if (!allowedExtension.test(resource.path)) fail('UNSUPPORTED_PROFILE', 'Unknown resource suffix for the fixed v1 profile.', { path: resource.path });
+    if (!allowedExtension.test(resource.path) && !/[.](?:png|jpe?g)$/i.test(resource.path)) fail('UNSUPPORTED_PROFILE', 'Unknown resource suffix for the fixed v1 profile.', { path: resource.path });
     bytes(resource.bytes, checkedLimits.maxFileBytes, `${location}.bytes`);
     sha(resource.sha256, `${location}.sha256`);
     total += resource.bytes;

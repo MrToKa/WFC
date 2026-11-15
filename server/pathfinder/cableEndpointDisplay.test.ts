@@ -23,7 +23,7 @@ async function fixture() {
     impact: { fromOccurrences: 1, toOccurrences: 1, distinctCables: 2, cableIds: [id(10), id(11)] }, duplicate: false });
   const row = { actor_id: proof.actorId, idempotency_key: proof.idempotencyKey, kind: 'confirm', request_sha256: endpointBindingHash(request),
     request, receipt: { schemaVersion: 'wfc.pf.cable-endpoint-stored.v1', status: 'saved', receipt: proof } };
-  const query = vi.fn(async () => ({ rows: [row] })), client = { query } as unknown as PoolClient;
+  const query = vi.fn(async (sql: string) => ({ rows: sql.includes('preserved-display') ? [] : [row] })), client = { query } as unknown as PoolClient;
   const check = vi.fn(), input = { projectId, head, current, location }, read = () => readCableEndpointDisplay(client, input, check);
   const rehash = () => { row.request_sha256 = endpointBindingHash(request); proof.commandSha256 = endpointBindingHash(command); };
   return { ...f, input, command, request, proof, row, query, check, read, rehash };
@@ -55,7 +55,8 @@ describe('fixed-world endpoint command display recovery', () => {
   });
   it('uses an explicit newest null display hint as a clear and does not search older commands', async () => {
     const f = await fixture(); if (f.command.selection.mode !== 'fixed-world') throw Error('fixture');
-    f.command.selection.displaySdkObjectId = null; f.rehash(); expect(await f.read()).toBe(null); expect(f.query).toHaveBeenCalledOnce();
+    f.command.selection.displaySdkObjectId = null; f.rehash(); expect(await f.read()).toBe(null); expect(f.query).toHaveBeenCalledTimes(2);
+    expect(f.query.mock.calls[1][0]).toContain('preserved-display');
   });
   it.each(['request-hash', 'command-hash', 'actor', 'key', 'end', 'cable', 'logical-name', 'head', 'point', 'model', 'selection', 'fingerprint', 'frame', 'aggregate', 'artifact', 'trace', 'oversize', 'pair', 'closed'])(
     'omits invalid %s ledger evidence without fallback or attachment promotion', async field => {

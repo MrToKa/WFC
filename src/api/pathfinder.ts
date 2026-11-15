@@ -9,6 +9,7 @@ import { directSecondaryDecisionSchema, directSecondaryRouteIssue, type DirectSe
 import { revisionResultEnvelopeSchema } from '../../shared/pathfinderRevisionResults';
 import { calculationAvailabilitySchema } from '../../shared/pathfinderCalculationAvailability';
 import { calculationSubmissionRefusalSchema } from '../../shared/pathfinderCalculationSubmission';
+import { ENDPOINT_MODEL_MATCH_DERIVATION, ENDPOINT_MODEL_CENTRE_DERIVATION } from '../../shared/pathfinderEndpointBindings';
 import { automaticPairPolicySchema, automaticPairStatuses } from '../../shared/pathfinderAutomaticPair';
 import { recalculationReasonSchema } from '../../shared/pathfinderRecalculation';
 import { sealedCableItemApplicabilitySchema } from '../../shared/pathfinderItemApplicability';
@@ -22,7 +23,7 @@ const match = z.object({ status: z.enum(['matched', 'missing', 'ambiguous', 'sta
 const location = z.object({ id: uuid, name: z.string(), aliases: z.array(z.string()), revision,
   calculationAvailability: calculationAvailabilitySchema.optional(),
   matching: z.object({ status: z.enum(['missing', 'ambiguous', 'unverified']), candidateObjectIds: z.array(z.string()) }).optional(),
-  binding: z.object({ modelVersionId: uuid, revision, point, objectId: z.string().nullable(), externalId: z.string().nullable(), source: z.enum(['manual', 'automatic']), status: z.enum(['confirmed', 'stale']), derivation: z.enum(['manual-world-point', 'picked-surface-point', 'equipment-bottom-aabb', 'matched-model-bottom-aabb.v1']).optional(), coordinateFrame: z.literal('canonical-world-metres').optional() }).nullable() });
+  binding: z.object({ modelVersionId: uuid, revision, point, objectId: z.string().nullable(), externalId: z.string().nullable(), source: z.enum(['manual', 'automatic']), status: z.enum(['confirmed', 'stale']), derivation: z.enum(['manual-world-point', 'picked-surface-point', 'equipment-bottom-aabb', ENDPOINT_MODEL_MATCH_DERIVATION, ENDPOINT_MODEL_CENTRE_DERIVATION]).optional(), coordinateFrame: z.literal('canonical-world-metres').optional() }).nullable() });
 const numeric = z.union([z.string(), z.number().finite()]).nullable();
 const jobSchema = z.object({ id: uuid, projectId: uuid, kind: z.enum(['calculate', 'lookup', 'preview']).optional(), status: z.enum(['queued', 'running', 'complete', 'cancelled', 'failed']), total: z.number().int().nonnegative(), completed: z.number().int().nonnegative(), cancelRequested: z.boolean(), failure: z.string().nullable(), attempts: z.number().int().nonnegative(), createdAt: z.string(), updatedAt: z.string() });
 const jobAutomaticUpdateSchema = z.object({ status: z.enum(automaticPairStatuses), receiptId: uuid.nullable(), reasonCode: recalculationReasonSchema.nullable() }).strict()
@@ -179,10 +180,20 @@ export async function pathFinderRequest(projectId: string, token: string, path: 
  * not prove that the job failed to commit. This function never retries. */
 export async function submitPathFinderCalculation(projectId: string, token: string, body: unknown,
   options: { signal?: AbortSignal; isCurrent?: () => boolean } = {}): Promise<PathFinderCalculationSubmission> {
+  return submitCalculation(projectId, token, body, options, false);
+}
+/** Admit the whole project once. Omitted cableIds means the server reads the
+ * complete list, independently of the visible search/page. Never retries POST. */
+export async function submitAllPathFinderCalculations(projectId: string, token: string, body: unknown,
+  options: { signal?: AbortSignal; isCurrent?: () => boolean } = {}): Promise<PathFinderCalculationSubmission> {
+  return submitCalculation(projectId, token, body, options, true);
+}
+async function submitCalculation(projectId: string, token: string, body: unknown,
+  options: { signal?: AbortSignal; isCurrent?: () => boolean }, allCables: boolean): Promise<PathFinderCalculationSubmission> {
   let encoded: string;
   try {
     if (!uuid.safeParse(projectId).success || !token) return { kind: 'not-submitted', code: 'INVALID_REQUEST' };
-    const parsed = popupCalculationRequestSchema.safeParse(body);
+    const parsed = (allCables ? popupCalculationRequestSchema.omit({ cableIds: true }) : popupCalculationRequestSchema).safeParse(body);
     if (!parsed.success || parsed.data.options.barrierRouting.scope.projectId !== projectId) return { kind: 'not-submitted', code: 'INVALID_REQUEST' };
     encoded = JSON.stringify(parsed.data);
     if (options.signal?.aborted) return { kind: 'not-submitted', code: 'CALCULATION_CANCELLED' };

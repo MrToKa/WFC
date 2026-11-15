@@ -1,3 +1,4 @@
+import { digestSha256 } from '../../../utils/sha256';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchRecalculationContext, sendRecalculationCommand, RecalculationsApiError, type RecalculationContext, type RecalculationCommand } from '@/api/pathfinderRecalculations';
 import { z } from 'zod';
@@ -27,7 +28,7 @@ const storedIntentSchema = z.object({ version: z.literal(1), projectId: policyUu
   tokenEpoch: z.string().regex(/^[a-f0-9]{64}(?![\s\S])/), savedAt: z.number().int().nonnegative(), command: recalculationCommandSchema }).strict();
 const removeIntent = () => { try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* Recovery remains in memory when browser storage is unavailable. */ } };
 async function tokenEpoch(token: string): Promise<string> {
-  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token)))].map(v => v.toString(16).padStart(2, '0')).join('');
+  return [...new Uint8Array(await digestSha256(new TextEncoder().encode(token)))].map(v => v.toString(16).padStart(2, '0')).join('');
 }
 function freezeCommand(body: RecalculationCommand): RecalculationCommand {
   const copy = structuredClone(body);

@@ -11,7 +11,10 @@ function fixture() {
   const registry: BarrierRegistry = { schemaVersion: 'wfc.pf.barrier-registry.v1', scope: { projectId: id(1), modelVersionId: id(2), contentFingerprint: 'a'.repeat(64), selectionRevision: '1', captureFrameId: id(3), captureFrameSha256: 'b'.repeat(64), coordinateFrame: 'canonical-world-metres' }, registryRevision: '1', state: 'unconfigured', selectedParents: [], snapshot: null, reasonCodes: ['NO_BARRIER_SCOPE_CONFIGURED'] };
   const state = { registry: registry as BarrierRegistry | null, manifest: null, saved: null as ReturnType<typeof usePathfinderBarriers>['saved'], draftParents: [] as BarrierRegistry['selectedParents'], kind: 'wall' as const, setKind: vi.fn(), emptyReason: '', setEmptyReason: vi.fn(), phase: 'idle', message: null, error: null, busy: false, dirty: false, pending: false, canAuthor: true, canRetry: true, canInspect: true, canClose: true, canDiscard: true,
     refresh: vi.fn(), addSelection: vi.fn(), removeParent: vi.fn(), save: vi.fn(), retry: vi.fn(), inspect: vi.fn(), close: vi.fn(), cancel: vi.fn(), discardPending: vi.fn() };
-  const props: PathFinderBarriersPanelProps = { projectId: id(1), loadedProjectId: id(1), token: 'synthetic-login', isAdmin: true, pf: { busy: false } as PathFinderBarriersPanelProps['pf'], onStateChange: vi.fn() };
+  const props: PathFinderBarriersPanelProps = { projectId: id(1), loadedProjectId: id(1), token: 'synthetic-login', isAdmin: true, pf: { busy: false,
+    data: { activeModel: { modelVersionId: id(2), selectionRevision: '1', contentFingerprint: 'a'.repeat(64) } }, viewerPhase: 'ready', preparationViewerGeneration: 1,
+    showLocation: vi.fn(), showTray: vi.fn().mockResolvedValue(true), hideTray: vi.fn().mockResolvedValue(true), readObjectGuid: vi.fn().mockResolvedValue('74196d6f-dd71-59a4-8cbb-cde0bb2121cd'),
+  } as unknown as PathFinderBarriersPanelProps['pf'], onStateChange: vi.fn() };
   const install = () => vi.mocked(usePathfinderBarriers).mockReturnValue(state as unknown as ReturnType<typeof usePathfinderBarriers>); install();
   return { state, props, install };
 }
@@ -39,6 +42,93 @@ function installSavedSelection(f: ReturnType<typeof fixture>, manifest = savedMa
 }
 
 describe('administrator barrier authoring panel', () => {
+  it('shows a current barrier directly and removes only its draft entry without another viewer action', async () => {
+    const f = fixture(); installSavedSelection(f); render(<PathFinderBarriersPanel {...f.props} />);
+    const draft = within(screen.getByRole('list', { name: 'Selected barrier parents' }));
+    fireEvent.click(draft.getByRole('button', { name: 'Show Saved civil source group' }));
+    await waitFor(() => expect(f.props.pf.showTray).toHaveBeenCalledExactlyOnceWith(f.props.pf.data!.activeModel, [18]));
+    await waitFor(() => expect(draft.getByRole('button', { name: 'Remove Saved civil source group' })).toBeEnabled());
+    fireEvent.click(draft.getByRole('button', { name: 'Remove Saved civil source group' }));
+    expect(f.state.removeParent).toHaveBeenCalledExactlyOnceWith(id(8));
+    expect(f.props.pf.showTray).toHaveBeenCalledTimes(1); expect(f.state.save).not.toHaveBeenCalled();
+  });
+  it('restores Ghost with Hide and keeps Hide accessible after removing the shown draft', async () => {
+    const f = fixture(); installSavedSelection(f); const view = render(<PathFinderBarriersPanel {...f.props} />);
+    fireEvent.click(within(screen.getByRole('list', { name: 'Selected barrier parents' })).getByRole('button', { name: 'Show Saved civil source group' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Hide' })).toBeEnabled());
+    expect(within(screen.getByRole('list', { name: 'Selected barrier parents' })).getByRole('button', { name: 'Hide Saved civil source group' })).toBeEnabled();
+    f.state.draftParents = []; f.install(); view.rerender(<PathFinderBarriersPanel {...f.props} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Hide' }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Hide' })).toBeNull());
+    expect(f.props.pf.hideTray).toHaveBeenCalledExactlyOnceWith(f.props.pf.data!.activeModel);
+    expect(f.props.pf.showLocation).not.toHaveBeenCalled();
+  });
+  it.each(['refused', 'thrown'])('retains Hide for retry after restoration is %s', async outcome => {
+    const f = fixture(); installSavedSelection(f); render(<PathFinderBarriersPanel {...f.props} />);
+    if(outcome === 'refused') vi.mocked(f.props.pf.hideTray).mockResolvedValueOnce(false);
+    else vi.mocked(f.props.pf.hideTray).mockRejectedValueOnce(new Error('viewer failure'));
+    fireEvent.click(within(screen.getByRole('list', { name: 'Selected barrier parents' })).getByRole('button', { name: 'Show Saved civil source group' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Hide' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Hide' }));
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Try Hide again'));
+    fireEvent.click(screen.getByRole('button', { name: 'Hide' }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Hide' })).toBeNull());
+    expect(f.props.pf.hideTray).toHaveBeenCalledTimes(2);
+  });
+  it('shares a display lock and restores on scope change without reviving a late Show', async () => {
+    const f = fixture(); installSavedSelection(f); let finish!: (shown: boolean) => void;
+    vi.mocked(f.props.pf.showTray).mockImplementationOnce(() => new Promise(resolve => { finish=resolve; }));
+    const view=render(<PathFinderBarriersPanel {...f.props} />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Show Saved civil source group' })[0]);
+    for(const button of screen.getAllByRole('button', { name: 'Show Saved civil source group' })) expect(button).toBeDisabled();
+    const scope={...f.props.pf.data!.activeModel}; f.props.pf.preparationViewerGeneration=2;
+    view.rerender(<PathFinderBarriersPanel {...f.props} />);
+    await waitFor(() => expect(f.props.pf.hideTray).toHaveBeenCalledExactlyOnceWith(scope));
+    finish(true); await waitFor(() => expect(f.props.pf.hideTray).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole('button', { name: 'Hide' })).toBeNull();
+    view.unmount(); expect(f.props.pf.hideTray).toHaveBeenCalledTimes(2);
+  });
+  it('cleans a Show that succeeds only after unmount without leaving Ghost behind', async () => {
+    const f = fixture(); installSavedSelection(f); let finish!: (shown:boolean) => void;
+    vi.mocked(f.props.pf.showTray).mockImplementationOnce(() => new Promise(resolve => {finish=resolve;}));
+    const view=render(<PathFinderBarriersPanel {...f.props} />);
+    fireEvent.click(screen.getAllByRole('button', {name:'Show Saved civil source group'})[0]); view.unmount();
+    expect(f.props.pf.hideTray).toHaveBeenCalledTimes(1); finish(true);
+    await waitFor(() => expect(f.props.pf.hideTray).toHaveBeenCalledTimes(2));
+  });
+  it('loads the actual GUID lazily on hover and reuses it without changing selection', async () => {
+    const user = userEvent.setup(), f = fixture(); installSavedSelection(f); render(<PathFinderBarriersPanel {...f.props} />);
+    const name = within(screen.getByRole('list', { name: 'Selected barrier parents' })).getByText('Saved civil source group');
+    expect(f.props.pf.readObjectGuid).not.toHaveBeenCalled();
+    await user.hover(name);
+    await waitFor(() => expect(screen.getByRole('tooltip')).toHaveTextContent('GUID: 74196d6f-dd71-59a4-8cbb-cde0bb2121cd'));
+    await user.unhover(name); await user.hover(name);
+    expect(f.props.pf.readObjectGuid).toHaveBeenCalledExactlyOnceWith(18);
+    expect(f.props.pf.showTray).not.toHaveBeenCalled();
+  });
+  it('never shows or reads a saved object ID from an older model revision', async () => {
+    const f = fixture(); installSavedSelection(f); f.props.pf.data!.activeModel.modelVersionId = id(99);
+    render(<PathFinderBarriersPanel {...f.props} />);
+    for (const button of screen.getAllByRole('button', { name: 'Show Saved civil source group' })) expect(button).toBeDisabled();
+    await userEvent.hover(screen.getAllByText('Saved civil source group')[0]);
+    expect(f.props.pf.readObjectGuid).not.toHaveBeenCalled(); expect(f.props.pf.showTray).not.toHaveBeenCalled();
+  });
+  it('keeps Remove available and allows Show retry when an object cannot be displayed', async () => {
+    const f = fixture(); installSavedSelection(f); vi.mocked(f.props.pf.showTray).mockResolvedValue(false);
+    render(<PathFinderBarriersPanel {...f.props} />);
+    const draft = within(screen.getByRole('list', { name: 'Selected barrier parents' }));
+    fireEvent.click(draft.getByRole('button', { name: 'Show Saved civil source group' }));
+    await waitFor(() => expect(draft.getByRole('alert')).toHaveTextContent('The object could not be shown'));
+    expect(draft.getByRole('button', { name: 'Remove Saved civil source group' })).toBeEnabled();
+    expect(draft.getByRole('button', { name: 'Show Saved civil source group' })).toBeEnabled();
+  });
+  it('does not present a version-local object ID as a GUID when GUID metadata is absent', async () => {
+    const f = fixture(); installSavedSelection(f); vi.mocked(f.props.pf.readObjectGuid).mockResolvedValue(null);
+    render(<PathFinderBarriersPanel {...f.props} />);
+    const name = within(screen.getByRole('list', { name: 'Selected barrier parents' })).getByText('Saved civil source group');
+    await userEvent.hover(name);
+    await waitFor(() => expect(screen.getByRole('tooltip')).toHaveTextContent('GUID is not available for this object.'));
+  });
   it('confirms a verified saved selection next to its disabled Save action and enables it again after a change', () => {
     const f = fixture(); installSavedSelection(f);
     const view = render(<PathFinderBarriersPanel {...f.props} />);
@@ -104,7 +194,11 @@ describe('administrator barrier authoring panel', () => {
     expect(saved.getByText('Saved civil source group')).toBeVisible(); expect(saved.getByText(/Current readiness is unavailable/)).toBeVisible();
     expect(saved.getByText(/Snapshot/)).toHaveTextContent(`Model ${id(2)}. Frame ${id(3)}`);
     expect(screen.getByRole('button', { name: 'Add selected objects' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Declare no barriers' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Declare no barriers' })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Explicit empty reason' })).toBeNull();
+    expect(screen.getByText('The current barrier selection is unavailable until its saved data and model frame can be verified.')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh barriers' })); expect(f.state.refresh).toHaveBeenCalledOnce();
+    expect(f.state.save).not.toHaveBeenCalled();
   });
   it('labels Add as unsaved and keeps a changed draft distinct from the saved obstacle list', () => {
     const f = fixture(); f.state.saved = { manifest: savedManifest(), status: 'current' };

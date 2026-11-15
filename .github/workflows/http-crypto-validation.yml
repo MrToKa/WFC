@@ -1,0 +1,168 @@
+name: Validate viewer and tray workflows
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'shared/**'
+      - 'server/**'
+      - 'viewer-runtime/**'
+      - 'pathfinder-engine/**'
+      - 'scripts/barrier-verifier-*'
+      - 'scripts/viewer-runtime/module-closure*'
+      - 'scripts/copy-pathfinder-contracts.mjs'
+      - 'package*.json'
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - 'docker/*.conf'
+      - 'scripts/tests/nginx-preparation-streaming.test.mjs'
+      - '.github/workflows/http-crypto-validation.yml'
+permissions:
+  contents: read
+jobs:
+  preparation-contention:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: wfc_preparation_contention_test
+        ports:
+          - 55446:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d wfc_preparation_contention_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      WFC_PREPARATION_CONTENTION_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55446/wfc_preparation_contention_test
+      WFC_BARRIER_CONTENTION_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55446/wfc_barrier_contention_test
+      WFC_GEOMETRY_TRACE_RUNTIME_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55446/wfc_geometry_trace_runtime_test
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Create dedicated barrier contention database
+        run: docker exec "${{ job.services.postgres.id }}" createdb --username=postgres wfc_barrier_contention_test
+      - name: Create dedicated trace runtime database
+        run: docker exec "${{ job.services.postgres.id }}" createdb --username=postgres wfc_geometry_trace_runtime_test
+      - name: Verify preparation, barrier reads and trace runtime migration with PostgreSQL
+        run: >-
+          docker run --rm --network host
+          -e WFC_PREPARATION_CONTENTION_TEST_DATABASE_URL
+          -e WFC_BARRIER_CONTENTION_TEST_DATABASE_URL
+          -e WFC_GEOMETRY_TRACE_RUNTIME_TEST_DATABASE_URL
+          -v "$GITHUB_WORKSPACE:/app" -w /app
+          node@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5
+          sh -c 'npm ci --ignore-scripts && npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false server/pathfinder/preparationContention.postgres.test.ts server/pathfinder/barrierRegistryContention.postgres.test.ts server/pathfinder/geometryTraceRuntime.postgres.test.ts'
+  routing-engine:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    container: mcr.microsoft.com/dotnet/sdk:9.0-bookworm-slim
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Verify reachable endpoint alternatives with and without barriers
+        run: dotnet run --project pathfinder-engine/tests/PathFinder.Constrained.Tests --configuration Release
+      - name: Verify local approaches, capacity and inter-tray connections
+        run: |
+          dotnet run --project pathfinder-engine/tests/PathFinder.LocalConnectors.Tests --configuration Release
+          dotnet run --project pathfinder-engine/tests/PathFinder.CapacityRouting.Tests --configuration Release
+          dotnet run --project pathfinder-engine/tests/PathFinder.InterTrayManeuvers.Tests --configuration Release
+      - name: Verify obstacle geometry qualification
+        run: |
+          dotnet run --project pathfinder-engine/tests/PathFinder.Barriers.Tests --configuration Release
+          dotnet run --project pathfinder-engine/tests/PathFinder.BarrierVerifier.Tests --configuration Release
+          dotnet run --project pathfinder-engine/tests/PathFinder.MixedBarriers.Tests --configuration Release
+      - name: Verify retained mixed barriers through the actual routing process
+        run: |
+          dotnet build pathfinder-engine/tools/PathFinder.ModelRunner/PathFinder.ModelRunner.csproj --configuration Release
+          dotnet run --project pathfinder-engine/tests/PathFinder.MixedBarrierRuntime.Tests --configuration Release -- --runner "$GITHUB_WORKSPACE/pathfinder-engine/tools/PathFinder.ModelRunner/bin/Release/net9.0/PathFinder.ModelRunner.dll" --work-root "$RUNNER_TEMP/barrier-edge-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --edge-partition-only
+  http-crypto:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    container: node@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: wfc_tray_auto_length_test
+        options: >-
+          --health-cmd "pg_isready -U postgres -d wfc_tray_auto_length_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      VITE_API_URL: http://127.0.0.1:1
+      WFC_TRAY_LENGTH_TEST_DATABASE_URL: postgresql://postgres:postgres@postgres:5432/wfc_tray_auto_length_test
+      DATABASE_URL: postgresql://unit:unit@127.0.0.1:1/unit
+      JWT_SECRET: unit-only-secret-never-used-in-production
+      MINIO_ACCESS_KEY: unit
+      MINIO_SECRET_KEY: unit-only
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Verify production obstacle verifier packaging
+        run: node --test scripts/barrier-verifier-packaging.test.mjs
+      - name: Verify production preparation streaming routes
+        run: node --test scripts/tests/nginx-preparation-streaming.test.mjs
+      - name: Verify bounded capture batches and preparation capacity
+        run: |
+          node --test viewer-runtime/test/protocol.test.mjs viewer-runtime/test/adapter.test.mjs viewer-runtime/test/bridge.test.mjs viewer-runtime/test/capture-batch.test.mjs scripts/viewer-runtime/module-closure.test.mjs scripts/pathfinder-local/capacity-environment.test.mjs
+          npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 shared/pathfinderCapacity.test.ts server/pathfinder/policyJson.test.ts server/pathfinder/preparationUnionTask.test.ts server/pathfinder/preparationUnionWorker.test.ts server/pathfinder/geometryTraceThread.test.ts server/pathfinder/storage-bytes.test.ts server/pathfinder/preparationPublisher.test.ts
+      - name: Verify project tray purpose catalogs and template preservation
+        run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/hooks/useProjectTrayPurposes.test.ts src/pages/ProjectDetails/hooks/useProjectDetailsData.test.ts src/pages/ProjectDetails/TrayPurposeControls.test.tsx src/pages/ProjectDetails/TrayDialog.test.tsx src/pages/ProjectDetails/DetailsTab.test.tsx server/services/projectTrayPurposeService.test.ts server/services/projectTrayPurposeService.postgres.test.ts server/routes/projectTrayPurposesRoutes.test.ts
+      - name: Verify persistent tray identities across model revisions
+        run: |
+          node --test viewer-runtime/test/tray-identity.test.mjs
+          npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 server/pathfinder/trayAssignmentCarryover.test.ts server/pathfinder/preparationPlans.test.ts shared/pathfinderPreparation.test.ts
+      - name: Verify pending barrier command recovery and actionable failures
+        run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/pages/ProjectDetails/PathFinderBarriersPanel.test.tsx src/pages/ProjectDetails/hooks/usePathfinderBarriers.test.tsx shared/pathfinderBarrierDiagnostics.test.ts server/pathfinder/barrierCaptureAuthority.test.ts server/pathfinder/barrierRegistryRepository.test.ts
+      - name: Verify crypto fallbacks and runtime module packaging
+        run: node --test viewer-runtime/test/generate-id.test.mjs viewer-runtime/test/sha256.test.mjs viewer-runtime/test/producer-host.test.mjs viewer-runtime/test/barrier-multipart-transport.test.mjs viewer-runtime/test/bridge.test.mjs scripts/viewer-runtime/module-closure.test.mjs
+      - name: Verify HTTP panel and integrity regressions
+        run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/api/httpCryptoCompatibility.test.ts src/pages/ProjectDetails/EndpointBindingPanel.test.tsx src/pages/ProjectDetails/hooks/useRoutingsViewer.test.ts
+      - name: Verify tray Ghost and appearance restoration
+        run: node --test --test-concurrency=2 viewer-runtime/test/adapter.test.mjs viewer-runtime/test/pathfinder.test.mjs viewer-runtime/test/routes.test.mjs viewer-runtime/test/legacy-routes.test.mjs viewer-runtime/test/protocol.test.mjs
+      - name: Verify tray display and assignment recovery lifecycle
+        run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/pages/ProjectDetails/ProjectPreparationPanel.test.tsx src/pages/ProjectDetails/preparationDiagnostics.test.ts src/pages/ProjectDetails/hooks/useProjectPreparation.test.tsx src/pages/ProjectDetails/hooks/usePathFinder.test.tsx src/viewer/ViewerController.test.ts
+      - name: Verify assigned tray catalog details and frozen plans
+        run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/api/pathfinderPreparation.test.ts shared/pathfinderPreparation.test.ts server/pathfinder/preparationContext.test.ts server/pathfinder/preparationPlans.test.ts server/pathfinder/preparationSessions.test.ts
+      - name: Verify atomic preparation publication and exact command recovery
+        run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 server/pathfinder/geometryTraceRepository.test.ts server/pathfinder/geometryTraceRoutes.test.ts server/pathfinder/preparationRoutes.test.ts shared/pathfinderGeometryTrace.test.ts src/api/pathfinderGeometryTrace.test.ts src/pages/ProjectDetails/hooks/useGeometryTrace.test.tsx
+      - name: Verify From-To matching prerequisites and recovery
+        run: |
+          node --test viewer-runtime/test/equipment-names.test.mjs viewer-runtime/test/preparation-input.test.mjs
+          npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/api/pathfinderModelLocationMatch.test.ts src/pages/ProjectDetails/hooks/useModelLocationMatch.test.tsx src/pages/ProjectDetails/hooks/collectPreparationDiscovery.test.ts src/pages/ProjectDetails/ModelLocationMatchPanel.test.tsx server/pathfinder/modelLocationMatchCandidates.test.ts server/pathfinder/modelLocationMatch.test.ts shared/pathfinderModelLocationMatch.test.ts src/pages/ProjectDetails/pathFinderEndpointVisibility.test.ts
+          npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 server/pathfinder/cableEndpointDisplay.test.ts server/pathfinder/preservedLocationDisplay.test.ts server/pathfinder/preservedLocationDisplay.postgres.test.ts
+      - name: Verify optional MTO and cable controls
+        run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 shared/pathfinderCableEligibility.test.ts shared/pathfinderCableWorkflow.test.ts shared/pathfinderCableComparison.test.ts src/components/pathfinder/PathFinderCableWorkspace.test.tsx src/components/pathfinder/PathFinderCableRoutingPanel.test.tsx src/components/pathfinder/PathFinderNeedsRoutingList.test.tsx src/pages/ProjectDetails/PathFinderResults.test.tsx src/pages/ProjectDetails/PathFinderRevisionResults.test.tsx src/pages/ProjectDetails/PathFinderRecalculationPanel.test.tsx src/pages/ProjectDetails/PathFinderRecalculateAll.test.tsx src/api/pathfinder.test.ts server/pathfinder/jobs-scoped-match.test.ts server/pathfinder/workerSchedulingPriority.test.ts
+      - name: Verify endpoint Save recovery without Web Locks on HTTP
+        run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/hooks/endpointPendingLock.test.ts src/hooks/cableEndpointPendingStore.test.ts src/hooks/cableEndpointPairPendingStore.test.ts src/hooks/useCableEndpointSelection.test.tsx src/hooks/useCableEndpointPairSelection.test.tsx
+      - name: Verify Save display flow and camera preservation
+        run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/pages/ProjectDetails/PathFinderSaveDisplayFlow.test.tsx src/pages/ProjectDetails/PathFinderPreview.test.tsx
+      - name: Verify Path Finder composition, background controls and camera preservation
+        run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/pages/ProjectDetails/PathFinderTab.test.tsx
+      - name: Verify Purpose-bound calculation and route reuse
+        run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 server/pathfinder/dependencies.test.ts server/pathfinder/dependencyBatch.test.ts server/pathfinder/barrierWorkerProjection.test.ts server/pathfinder/proposalApplicability.test.ts server/pathfinder/sameEndpointCalculationReuse.test.ts server/pathfinder/workerReuse.test.ts server/pathfinder/worker-retained.test.ts server/pathfinder/worker-same-endpoint-reuse.test.ts
+      - name: Verify optional MTO endpoint writes and automatic updates
+        run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 shared/pathfinderCableEndpoints.test.ts shared/pathfinderLocationImpacts.test.ts server/pathfinder/cableEndpointCommands.test.ts server/pathfinder/automaticPairOwnership.test.ts server/pathfinder/barrierWrites.test.ts server/pathfinder/initialFillReceiptProof.test.ts server/pathfinder/initialFillWriter.test.ts server/pathfinder/locationImpactAdmission.test.ts server/pathfinder/locationImpactRepository.test.ts server/pathfinder/locationImpactAuthority.test.ts server/pathfinder/locationImpactPriority.test.ts
+      - name: Verify tray Auto-length and manual-value approval
+        run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/api/trays.test.ts src/viewer/trayAutoLength.test.ts src/pages/TrayDetails/TrayDetails.autoLength.test.ts src/pages/TrayDetails/components/TrayEditForm.autoLength.test.tsx server/middleware.test.ts server/models/tray.test.ts server/validators.tray.test.ts server/services/trayAutoLengthService.test.ts server/services/trayAutoLengthCaptureService.test.ts server/services/trayAutoLengthService.postgres.test.ts server/services/trayChangeLogService.test.ts server/routes/traysRoutes.test.ts server/routes/projectExcelImportValidation.test.ts
+      - name: Verify tray lists remain available while drawing metrics load
+        run: npm test -- --run --pool=threads --maxWorkers=1 --fileParallelism=false --testTimeout=20000 src/pages/ProjectDetails/hooks/useProjectDataRequests.test.tsx server/pathfinder/drawingSnapshots.test.ts server/pathfinder/drawingSnapshotRoutes.test.ts
+      - name: Check application and server types
+        run: npm run typecheck
+      - name: Build server with shared runtime dependencies
+        run: npm run server:build

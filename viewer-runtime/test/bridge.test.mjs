@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { webcrypto } from 'node:crypto';
 import { createRuntimeBridge } from '../bridge.mjs';
-import { CHANNEL, parseRouting } from '../protocol.mjs';
+import { CHANNEL, MAX_PATH_OBJECT_IDS, parseRouting } from '../protocol.mjs';
 import { planModelCaptureInput } from '../capture-input.mjs';
 import { BARRIER_CAPTURE_ERROR_CODES, BARRIER_CAPTURE_ERROR_MESSAGES } from '../barrier-capture-errors.mjs';
 import { BARRIER_MULTIPART_PRODUCER_PROFILE } from '../barrier-multipart-protocol.mjs';
@@ -23,14 +23,17 @@ function fixture(options = {}) {
     addEventListener(type, fn) { if (type === 'message') listeners.add(fn); }, removeEventListener(type, fn) { if (type === 'message') listeners.delete(fn); } };
   const facts = { clears: 0, fits: 0, finishes: 0, disposed: 0, shows: [], bindingShows: [], barrierStarts: 0, barrierReads: 0 };
   const handle = { finish() { facts.finishes++; }, prepareIndex: options.prepareIndex ?? (async () => {}),
-    clearRoute() { facts.clears++; return options.clearRoute?.(); }, fitRoute() { facts.fits++; },
+    clearRoute(clearOptions) { facts.clears++; return options.clearRoute?.(clearOptions); }, fitRoute() { facts.fits++; },
     showComputedPath(value) { facts.computedPath = structuredClone(value); },
     pickPoint: options.pickPoint ?? (async () => ({ objectId: 23, point: [1, 2, 3], derivation: 'picked-surface-point' })),
     readModelObjects: options.readModelObjects ?? (async ({ cursor, query }) => ({ cursor, nextCursor: null, complete: true, query, coordinateFrame: 'world-metres-z-up', metresPerDisplayUnit: 1, globalOffsetMetres: [0, 0, 0], objects: [] })),
     readPreparationObjects: options.readPreparationObjects ?? (async request => ({schemaVersion:request.schemaVersion,mode:request.mode,names:request.names,rootObjectId:request.rootObjectId,cursor:request.cursor,matchingPolicyVersion:'wfc.pf.project-exact-candidates.v3',visibilityScope:{...preparationVisibilityScope},indexedObjectCount:1,propertyScan:null,objects:[],nextCursor:null,complete:true})),
+    resolveTrayIdentities: options.resolveTrayIdentities ?? (async request => ({ schemaVersion: 'wfc.pf.tray-identity-response.v1', matches: request.identities.map(identity => ({ identity, status: 'missing', objectIds: [] })) })),
     readSelection: options.readSelection ?? (async () => ({ coordinateFrame: 'world-metres-z-up', metresPerDisplayUnit: 1, globalOffsetMetres: [0, 0, 0], objects: [] })),
+    readObjectGuid: options.readObjectGuid ?? (async () => null),
     readTrayRootSelection: options.readTrayRootSelection ?? (async (_signal, beforeCommit) => { await beforeCommit(); return { objects: [] }; }),
     setPathTransparency: options.setPathTransparency ?? (async (percent, _signal, beforeCommit) => { await beforeCommit(); facts.transparency = percent; }),
+    showLocationPoint: options.showLocationPoint ?? (async (point, _signal, beforeCommit) => { await beforeCommit(); facts.locationPoint = point; }),
     showLocation: options.showLocation ?? (async (sdkObjectId, _signal, beforeCommit) => { await beforeCommit(); facts.location = sdkObjectId; }),
     showTray: options.showTray ?? (async (sdkObjectIds, _signal, beforeCommit) => { await beforeCommit(); facts.tray = [...sdkObjectIds]; }),
     startModelCapture: options.startModelCapture ?? (async ({ captureId }) => ({ captureId, index: 0, done: false, eventJson: JSON.stringify({ type: 'metadata', captureId }) })),
@@ -71,6 +74,53 @@ const descriptorResponse = () => Response.json({ projectId: uuid(2), modelVersio
 const multipartStatus = () => ({ intentId: uuid(9201), sessionRevision: '0', state: 'admitted', counts: { pages: 0, seals: 0, parts: 0 },
   roots: { nodes: null, fragments: null, 'geometry-ranges': null, plan: null }, qualification: 'NOT_MEASURED', geometryValidation: 'NOT_VALIDATED', authority: 'none' });
 const multipartStart = () => ({ intentId: uuid(9201), expectedSessionRevision: '0', scopeSha256: 'a'.repeat(64), profileSha256: 'b'.repeat(64), producerProfile: BARRIER_MULTIPART_PRODUCER_PROFILE });
+
+const identityRequest = () => ({ schemaVersion: 'wfc.pf.tray-identity-request.v1', identities: [{ externalId: null, guid: '7586ffbb-1d0a-5942-b687-06884123c866', sourceFile: '01-50_MSR_Kabeltassen.dwg' }] });
+
+test('tray identity matching is authorized before and after reading and preserves model appearance', async () => {
+  let calls = 0; const f = fixture({ resolveTrayIdentities: async request => { calls++; return { schemaVersion: 'wfc.pf.tray-identity-response.v1', matches: request.identities.map(identity => ({ identity, status: 'ambiguous', objectIds: [23, 24] })) }; } });
+  await f.loaded(); f.send('RESOLVE_TRAY_IDENTITIES', identityRequest()); await turn();
+  assert.equal(calls, 1); assert.equal(f.fetches.filter(value => value.url.endsWith('/pathfinder-authorization')).length, 2);
+  assert.deepEqual(f.messages('TRAY_IDENTITIES')[0].payload.matches[0].objectIds, [23, 24]);
+  assert.equal(f.facts.clears, 0); assert.equal(f.facts.fits, 0); assert.equal(f.facts.finishes, 0); f.bridge.dispose();
+});
+
+test('tray identity matching withholds IDs after authorization loss or cancellation during SDK work', async () => {
+  for (const cancel of [false, true]) {
+    const wait = deferred(); let checks = 0;
+    const f = fixture({ resolveTrayIdentities: () => wait.promise, fetchImpl: async url => url.endsWith('/pathfinder-authorization')
+      ? ++checks === 2 && !cancel ? new Response(null, { status: 403 }) : Response.json({ authorized: true, loadId: uuid(4) }) : descriptorResponse() });
+    await f.loaded(); const request = identityRequest(), command = f.send('RESOLVE_TRAY_IDENTITIES', request); await turn();
+    if (cancel) { f.send('CANCEL_REQUEST', { targetRequestId: command.requestId }); await turn(); }
+    wait.resolve({ schemaVersion: 'wfc.pf.tray-identity-response.v1', matches: request.identities.map(identity => ({ identity, status: 'unique', objectIds: [23] })) }); await turn();
+    assert.equal(f.messages('TRAY_IDENTITIES').length, 0);
+    if (!cancel) assert.equal(f.messages('ERROR').at(-1).payload.code, 'ACCESS_REVOKED');
+    f.bridge.dispose();
+  }
+});
+
+test('tray identity metadata failures are recoverable and do not reveal SDK details', async () => {
+  for (const code of ['TRAY_IDENTITY_READ_FAILED', 'TRAY_IDENTITY_SCOPE_INVALID', 'TRAY_IDENTITY_RESULT_INVALID', 'TRAY_IDENTITY_TIMEOUT', 'TRAY_IDENTITY_INDEX_LIMIT', 'TRAY_IDENTITY_ROW_LIMIT']) {
+    const f = fixture({ resolveTrayIdentities: async () => { throw Object.assign(new Error('Private GUID file path'), { code }); } });
+    await f.loaded(); f.send('RESOLVE_TRAY_IDENTITIES', identityRequest()); await turn();
+    assert.equal(f.messages('ERROR').at(-1).payload.code, code);
+    assert.ok(!f.messages('ERROR').at(-1).payload.message.includes('Private')); assert.equal(f.states.at(-1).phase, 'loaded');
+    assert.equal(f.facts.finishes, 0); f.bridge.dispose();
+  }
+});
+
+test('tray identity reads reject initial access loss, wrong identity and producer mode before SDK work', async () => {
+  for (const mode of ['denied', 'wrong-load', 'wrong-model', 'wrong-project', 'producer']) {
+    let reads = 0;
+    const f = fixture({ resourceMode: mode === 'producer' ? 'producer' : 'human',
+      ...(mode === 'denied' ? { fetchImpl: async url => url.endsWith('/pathfinder-authorization') ? new Response(null, { status: 403 }) : descriptorResponse() } : {}),
+      resolveTrayIdentities: async () => { reads++; } });
+    await f.loaded();
+    f.send('RESOLVE_TRAY_IDENTITIES', identityRequest(), mode === 'wrong-load' ? { loadId: uuid(9901) } : mode === 'wrong-model'
+      ? { modelVersionId: uuid(9902) } : mode === 'wrong-project' ? { projectId: uuid(9903) } : {});
+    await turn(); assert.equal(reads, 0); assert.equal(f.messages('TRAY_IDENTITIES').length, 0); f.bridge.dispose();
+  }
+});
 
 test('tray-root metadata reads are admin-authorized before and after SDK work and return only exact IDs', async () => {
   let reads = 0;
@@ -136,7 +186,17 @@ test('location display is protected and acknowledges the exact target without re
   assert.equal(f.facts.fits, 1); assert.equal(f.messages('ERROR').length, 0); f.bridge.dispose();
 });
 
-test('tray display is protected and acknowledges all roots without retiring the committed route', async () => {
+test('location display passes every group member to the adapter and echoes its exact bounded request',async()=>{
+  let target;
+  const f=fixture({showLocation:async(id,_signal,beforeCommit,ids)=>{await beforeCommit();target={id,ids};}});
+  const ids=Array.from({length:4096},(_,at)=>at+23);
+  await f.loaded();const command=f.send('SHOW_LOCATION',{sdkObjectId:23,sdkObjectIds:ids});await turn();
+  assert.deepEqual(target,{id:23,ids});
+  assert.deepEqual(f.messages('LOCATION_SHOWN').at(-1),{...command,type:'LOCATION_SHOWN'});
+  assert.equal(f.messages('ERROR').length,0);f.bridge.dispose();
+});
+
+test('tray display retires old route ownership while the adapter controls appearance and selection', async () => {
   const f = fixture(); await f.loaded(); const pathId = uuid(9800);
   f.send('BEGIN_COMPUTED_PATH', { pathId, pointCount: 1, objectIds: [2] }); await turn();
   f.send('APPEND_COMPUTED_PATH', { pathId, offset: 0, points: [[1, 2, 3]] }); await turn();
@@ -147,7 +207,10 @@ test('tray display is protected and acknowledges all roots without retiring the 
   assert.deepEqual(f.messages('TRAY_SHOWN').at(-1), { ...command, type: 'TRAY_SHOWN' });
   assert.equal(f.fetches.filter(x => x.url.endsWith('/pathfinder-authorization')).length, authorizations + 2);
   f.send('ZOOM_ROUTE', { routeRequestId: committed.requestId }); await turn();
-  assert.equal(f.facts.fits, 1); assert.equal(f.messages('ERROR').length, 0); f.bridge.dispose();
+  assert.equal(f.facts.fits, 0); assert.equal(f.messages('ERROR').at(-1).payload.code, 'NO_DRAWABLE_ROUTE');
+  const hidden = f.send('CLEAR_ROUTE', { reason: 'user' }); await turn();
+  assert.deepEqual(f.messages('ROUTE_CLEARED').at(-1), { ...hidden, type: 'ROUTE_CLEARED', payload: {} });
+  assert.equal(f.facts.clears, clears + 1); f.bridge.dispose();
 });
 
 test('tray authorization is rechecked immediately before reveal after asynchronous preparation', async () => {
@@ -323,6 +386,69 @@ test('cancelled large barrier starts preserve in-flight scope and suppress late 
   assert.equal(f.messages('REQUEST_CANCELLED').at(-1).payload.outcome, 'already-finished'); f.bridge.dispose();
 });
 
+test('barrier completion, extraction refusal and cancellation preserve selection while explicit Clear still deselects', async () => {
+  for (const outcome of ['complete', 'start-refusal', 'read-refusal', 'cancel-start', 'cancel-read']) {
+    let selectedIds = [23, 24]; const gate = deferred();
+    const f = fixture({
+      clearRoute: options => { if (!options?.preserveSelection) selectedIds = []; },
+      startBarrierCapture: async ({ captureId }) => {
+        if (outcome === 'start-refusal') throw Object.assign(Error('unavailable geometry'), { code: 'BARRIER_CAPTURE_GEOMETRY_NOT_RESIDENT' });
+        if (outcome === 'cancel-start') await gate.promise;
+        return { captureId, index: 0, done: false, eventJson: '{}' };
+      },
+      readBarrierCapture: async ({ captureId, index }) => {
+        if (outcome === 'read-refusal') throw Object.assign(Error('unavailable geometry'), { code: 'BARRIER_CAPTURE_GEOMETRY_BECAME_UNAVAILABLE' });
+        if (outcome === 'cancel-read') await gate.promise;
+        return { captureId, index, done: true, eventJson: '{}' };
+      },
+    });
+    try {
+      await f.loaded(); const input = barrierRequest();
+      f.send('CLEAR_ROUTE', { reason: 'selection', preserveCamera: true, preserveSelection: true }); await turn();
+      let command = f.send('START_BARRIER_CAPTURE', input); await turn();
+      assert.deepEqual(selectedIds, [23, 24], outcome);
+      if (['complete', 'read-refusal', 'cancel-read'].includes(outcome)) {
+        command = f.send('READ_BARRIER_CAPTURE', { captureId: input.captureId, index: 1 }); await turn();
+      }
+      if (outcome.startsWith('cancel-')) {
+        f.send('CANCEL_REQUEST', { targetRequestId: command.requestId }); await turn(); gate.resolve(); await turn();
+        assert.equal(f.messages('REQUEST_CANCELLED').at(-1).payload.outcome, 'cancelled');
+      }
+      assert.deepEqual(selectedIds, [23, 24], outcome);
+      if (outcome === 'complete') assert.equal(f.messages('BARRIER_CAPTURE_EVENT').at(-1).payload.done, true);
+      if (outcome.endsWith('refusal')) assert.ok(f.messages('ERROR').at(-1).payload.code.startsWith('BARRIER_CAPTURE_GEOMETRY_'));
+      f.send('CLEAR_ROUTE', { reason: 'user', preserveCamera: true }); await turn();
+      assert.deepEqual(selectedIds, [], 'Explicit user Clear still deselects');
+    } finally { gate.resolve(); f.bridge.dispose(); }
+  }
+});
+
+test('barrier deadline cleanup retains selection and suppresses a late SDK reply', async t => {
+  let selectedIds = [23, 24]; const gate = deferred();
+  const f = fixture({ clearRoute: options => { if (!options?.preserveSelection) selectedIds = []; },
+    startBarrierCapture: async ({ captureId }) => { await gate.promise; return { captureId, index: 0, done: false, eventJson: '{}' }; } });
+  t.after(() => f.bridge.dispose()); await f.loaded(); t.mock.timers.enable({ apis: ['setTimeout'] });
+  f.send('START_BARRIER_CAPTURE', barrierRequest()); await turn();
+  t.mock.timers.tick(300000); await turn();
+  assert.equal(f.messages('ERROR').at(-1).payload.code, 'BARRIER_CAPTURE_DEADLINE'); assert.deepEqual(selectedIds, [23, 24]);
+  gate.resolve(); await turn(); assert.equal(f.messages('BARRIER_CAPTURE_EVENT').length, 0); assert.deepEqual(selectedIds, [23, 24]);
+});
+
+test('replacement barrier capture keeps selection when the old SDK operation settles', async () => {
+  let selectedIds = [23, 24], starts = 0; const gate = deferred();
+  const f = fixture({ clearRoute: options => { if (!options?.preserveSelection) selectedIds = []; },
+    startBarrierCapture: async ({ captureId }) => { if (++starts === 1) await gate.promise; return { captureId, index: 0, done: false, eventJson: '{}' }; } });
+  try {
+    await f.loaded(); const first = barrierRequest(), replacement = { ...barrierRequest(), captureId: uuid(9199) };
+    f.send('START_BARRIER_CAPTURE', first); await turn(); f.send('START_BARRIER_CAPTURE', replacement); await turn();
+    gate.resolve(); await turn();
+    assert.deepEqual(selectedIds, [23, 24]);
+    assert.deepEqual(f.messages('BARRIER_CAPTURE_EVENT').map(event => event.payload.captureId), [replacement.captureId]);
+    f.send('READ_BARRIER_CAPTURE', { captureId: replacement.captureId, index: 1 }); await turn();
+    assert.equal(f.messages('BARRIER_CAPTURE_EVENT').at(-1).payload.done, true); assert.deepEqual(selectedIds, [23, 24]);
+  } finally { gate.resolve(); f.bridge.dispose(); }
+});
+
 test('recoverable barrier diagnostics retain the loaded footer and session without transporting raw errors', async () => {
   for (const code of BARRIER_CAPTURE_ERROR_CODES.filter(value => value !== 'BARRIER_CAPTURE_MODEL_CHANGED')) {
     const f = fixture({ startBarrierCapture: async () => { throw Object.assign(Error('private model geometry'), { code }); } });
@@ -444,6 +570,20 @@ test('barrier adapter replies must echo the exact requested capture UUID and par
   }
 });
 
+test('Hide and assignment capture preserve the camera through both cleanup commands', async () => {
+  const clears = [], f = fixture({ clearRoute: options => clears.push(options) });
+  await f.loaded(); f.send('SHOW_TRAY', { sdkObjectIds: [23] }); await turn();
+  const hide = f.send('CLEAR_ROUTE', { reason: 'user', preserveCamera: true }); await turn();
+  assert.deepEqual(clears.at(-1), { preserveCamera: true });
+  assert.equal(f.messages('ROUTE_CLEARED').at(-1).requestId, hide.requestId);
+  const captureId = uuid(19);
+  f.send('START_MODEL_CAPTURE', { captureId, routeCodes: ['BC1'], allowedCategories: ['LV'], equipmentNames: [] }); await turn();
+  assert.deepEqual(clears.at(-1), { preserveCamera: true });
+  assert.equal(f.messages('MODEL_CAPTURE_EVENT').length, 1);
+  f.send('CLEAR_ROUTE', { reason: 'user' }); await turn();
+  assert.deepEqual(clears.at(-1), { preserveCamera: false }); f.bridge.dispose();
+});
+
 test('capture timing emits one bounded aggregate without identities or model values', async () => {
   const f = fixture(), observations = [];
   f.window.console = { debug: (...value) => observations.push(value) };
@@ -476,6 +616,32 @@ test('preparation exact discovery is current-admin authorized before and after S
   waiting.resolve({schemaVersion:request.schemaVersion,mode:'names',names:request.names,rootObjectId:null,cursor:0,matchingPolicyVersion:'wfc.pf.project-exact-candidates.v3',visibilityScope:{...preparationVisibilityScope},indexedObjectCount:1,propertyScan:null,objects:[],nextCursor:null,complete:true});await turn();
   assert.equal(f.messages('PREPARATION_OBJECTS').length,cancel?0:1);if(!cancel){assert.equal(f.messages('PREPARATION_OBJECTS')[0].payload.matchingPolicyVersion,'wfc.pf.project-exact-candidates.v3');assert.deepEqual(f.messages('PREPARATION_OBJECTS')[0].payload.visibilityScope,request.visibilityScope);}const auth=f.fetches.filter(value=>value.url.endsWith('/pathfinder-authorization'));assert.equal(auth.length,2);if(cancel)assert.equal(auth.at(-1).init.signal.aborted,true);f.bridge.dispose();
  }
+});
+
+test('preparation progress keeps the exact live command identity and stops after cancellation or completion', async () => {
+  const request = { schemaVersion: 'wfc.pf.viewer-discovery.v1', mode: 'equipment', names: ['EQ'], rootObjectId: null, cursor: 0, limit: 128 };
+  for (const cancelled of [false, true]) {
+    const waiting = deferred(); let report;
+    const f = fixture({ readPreparationObjects: async (_request, _signal, progress) => {
+      report = progress; progress({ phase: 'properties', loaded: 0, total: 1000 }); return waiting.promise;
+    } });
+    await f.loaded(); const command = f.send('READ_PREPARATION_OBJECTS', request); await turn();
+    assert.equal(f.messages('PREPARATION_PROGRESS').length, 1);
+    const first = f.messages('PREPARATION_PROGRESS')[0];
+    for (const key of ['requestId', 'instanceId', 'projectId', 'modelVersionId', 'loadId']) assert.equal(first[key], command[key]);
+    assert.equal(f.messages('PREPARATION_OBJECTS').length, 0);
+    report({ phase: 'properties', loaded: 512, total: 1000 });
+    assert.equal(f.messages('PREPARATION_PROGRESS').length, 2);
+    if (cancelled) f.send('CANCEL_REQUEST', { targetRequestId: command.requestId });
+    waiting.resolve({ schemaVersion: request.schemaVersion, mode: request.mode, names: request.names, rootObjectId: null, cursor: 0,
+      matchingPolicyVersion: 'wfc.pf.project-exact-candidates.v3', visibilityScope: { ...preparationVisibilityScope }, indexedObjectCount: 1000,
+      propertyScan: { attemptedObjectCount: 1000, returnedObjectCount: 999, omittedObjectCount: 1, complete: false }, objects: [], nextCursor: null, complete: true });
+    await turn(); report({ phase: 'properties', loaded: 1000, total: 1000 });
+    assert.equal(f.messages('PREPARATION_PROGRESS').length, 2);
+    assert.equal(f.messages('PREPARATION_OBJECTS').length, cancelled ? 0 : 1);
+    if (!cancelled) assert.equal(f.messages('PREPARATION_OBJECTS')[0].payload.propertyScan.complete, false);
+    f.bridge.dispose();
+  }
 });
 
 test('equipment discovery preserves bounded failure codes without SDK details and permits a later authorized retry',async()=>{
@@ -524,6 +690,16 @@ test('HELLO uses exact target origin, forged origin/source/identity/direction/re
   const command = f.send('INIT', { locale: 'bg', expectedSdkVersion: '7.130.0' }); await turn();
   f.send(command.type, command.payload, command); await turn();
   assert.equal(f.messages('RUNTIME_READY').length, 1); f.bridge.dispose();
+});
+
+test('computed path transports a complete8704-object foreground above the ordinary envelope ceiling',async()=>{
+  const f=fixture();await f.loaded();const pathId=uuid(9801),objectIds=Array.from({length:MAX_PATH_OBJECT_IDS},(_,at)=>2147483647-at);
+  f.send('BEGIN_COMPUTED_PATH',{pathId,pointCount:1,objectIds});await turn();
+  f.send('APPEND_COMPUTED_PATH',{pathId,offset:0,points:[[1,2,3]]});await turn();
+  f.send('COMMIT_COMPUTED_PATH',{pathId});await turn();
+  assert.deepEqual(f.facts.computedPath,{objectIds,points:[[1,2,3]]});
+  assert.equal(f.messages('COMPUTED_PATH_UPDATED').at(-1).payload.phase,'displayed');
+  assert.equal(f.messages('ERROR').length,0);f.bridge.dispose();
 });
 
 test('computed path requires ordered complete bounded chunks and current cookie-bound admin permission', async () => {
@@ -920,4 +1096,103 @@ test('a saturated command registry still admits replay-safe CANCEL and terminal 
   assert.equal(f.messages('DISPOSED')[0].requestId, dispose.requestId); assert.equal(f.messages('DISPOSED').length, 1);
   assert.equal(f.facts.disposed, 1); assert.equal(f.listeners.size, 0); assert.ok(f.facts.finishes > 0);
   assert.equal(f.messages('MODEL_LOADED').length, 0); assert.equal(f.bridge.getState().requests, 4096);
+});
+
+
+test('passive object GUID reads authorize before and after metadata without changing appearance', async () => {
+  const reads = [], guid = '7586ffbb-1d0a-5942-b687-06884123c866';
+  const f = fixture({ readObjectGuid: async (id, signal) => { assert.equal(signal.aborted, false); reads.push(id); return guid; } });
+  await f.loaded(); const before = f.fetches.length;
+  const command = f.send('READ_OBJECT_GUID', { sdkObjectId: 29713 }); await turn();
+  assert.deepEqual(f.messages('OBJECT_GUID').at(-1)?.payload, { sdkObjectId: 29713, guid });
+  assert.equal(f.messages('OBJECT_GUID').at(-1)?.requestId, command.requestId);
+  assert.deepEqual(reads, [29713]);
+  assert.equal(f.fetches.slice(before).filter(x => x.url.endsWith('/pathfinder-authorization')).length, 2);
+  assert.equal(f.messages('ERROR').length, 0);
+  assert.equal(f.messages('ROUTE_CLEARED').length, 0);
+});
+test('unavailable GUID properties stay recoverable and a later read can succeed', async () => {
+  let fail = true;
+  const f = fixture({ readObjectGuid: async () => { if (fail) throw Object.assign(new Error('metadata unavailable'), { code: 'OBJECT_GUID_UNAVAILABLE' }); return null; } });
+  await f.loaded(); f.send('READ_OBJECT_GUID', { sdkObjectId: 29713 }); await turn();
+  assert.equal(f.messages('ERROR').at(-1)?.payload.code, 'OBJECT_GUID_UNAVAILABLE');
+  assert.equal(f.states.at(-1).phase, 'loaded');
+  fail = false; f.send('READ_OBJECT_GUID', { sdkObjectId: 29713 }); await turn();
+  assert.equal(f.messages('OBJECT_GUID').at(-1)?.payload.guid, null);
+});
+
+
+test('rapid GUID hovers retain a foreground slot and capacity refusals never unload the model', async () => {
+  const wait = deferred(), reads = [];
+  const f = fixture({ readObjectGuid: async id => { reads.push(id); await wait.promise; return null; } });
+  await f.loaded(); const first = f.send('READ_OBJECT_GUID', { sdkObjectId: 29713 }); await turn();
+  const second = f.send('READ_OBJECT_GUID', { sdkObjectId: 29714 }); await turn();
+  const third = f.send('READ_OBJECT_GUID', { sdkObjectId: 29715 }); await turn();
+  assert.deepEqual(reads, [29713]);
+  for (const request of [second, third]) assert.equal(f.messages('ERROR').find(x => x.requestId === request.requestId)?.payload.code, 'OBJECT_GUID_UNAVAILABLE');
+  assert.equal(f.states.at(-1).phase, 'loaded');
+  wait.resolve(); await turn();
+  assert.equal(f.messages('OBJECT_GUID').at(-1)?.requestId, first.requestId);
+  assert.equal(f.states.at(-1).phase, 'loaded');
+});
+test('a GUID hover while two foreground capabilities are pending remains a local refusal', async () => {
+  const wait = deferred();
+  const f = fixture({ readTrayRootSelection: async (_signal, beforeCommit) => { await wait.promise; await beforeCommit(); return { objects: [] }; } });
+  await f.loaded(); f.send('READ_TRAY_ROOT_SELECTION', {}); f.send('READ_TRAY_ROOT_SELECTION', {}); await turn();
+  const guid = f.send('READ_OBJECT_GUID', { sdkObjectId: 29713 }); await turn();
+  assert.equal(f.messages('ERROR').find(x => x.requestId === guid.requestId)?.payload.code, 'OBJECT_GUID_UNAVAILABLE');
+  assert.equal(f.states.at(-1).phase, 'loaded');
+  wait.resolve(); await turn();
+  assert.equal(f.messages('TRAY_ROOT_SELECTION').length, 2);
+});
+
+test('typed model capture failure preserves numeric context without forwarding SDK text or failing rendered model', async () => {
+  const f=fixture({startModelCapture:async()=>{throw Object.assign(Error('PRIVATE-SDK-MESSAGE'),{code:'MODEL_CAPTURE_GEOMETRY_NOT_RESIDENT',objectId:29713,fragmentId:7,privatePath:'secret'});}});
+  await f.loaded();f.send('START_MODEL_CAPTURE',{captureId:uuid(901),routeCodes:['BC1'],allowedCategories:['LV'],equipmentNames:[]});await turn();
+  const payload=f.messages('ERROR').at(-1).payload;
+  assert.equal(payload.code,'MODEL_CAPTURE_GEOMETRY_NOT_RESIDENT');assert.equal(payload.objectId,29713);assert.equal(payload.fragmentId,7);
+  assert.equal(payload.retryable,true);assert.equal(JSON.stringify(payload).includes('PRIVATE'),false);assert.equal(Object.hasOwn(payload,'privatePath'),false);
+  assert.notEqual(f.states.at(-1).phase,'error');f.bridge.dispose();
+});
+
+test('batched model capture still checks authority before and after each packet and discards a revoked packet', async () => {
+  let revoked = false;
+  const f = fixture({ readModelCapture: async ({ captureId, index, maxEvents }) => {
+    assert.equal(maxEvents, 32); revoked = true;
+    return { captureId, index, done: true, eventJsons: ['{}', '{}'] };
+  }, fetchImpl: async url => url.endsWith('/pathfinder-authorization')
+    ? revoked ? new Response('', { status: 403 }) : Response.json({ authorized: true, loadId: uuid(4) })
+    : Response.json({ projectId: uuid(2), modelVersionId: uuid(3), loadId: uuid(4), contentFingerprint: 'b'.repeat(64), supportProfile: 'svf-local-7.130.0-v1', format: 'svf', sdkVersion: '7.130.0', entrypoint: 'resources/output/0/0.svf', resourceCount: 1, totalBytes: 1 }) });
+  await f.loaded(); const captureId = uuid(118);
+  f.send('START_MODEL_CAPTURE', { captureId, routeCodes: ['BC1'], allowedCategories: ['LV'], equipmentNames: [] }); await turn();
+  assert.equal(f.messages('MODEL_CAPTURE_EVENT').length, 1);
+  f.send('READ_MODEL_CAPTURE', { captureId, index: 1, maxEvents: 32 }); await turn();
+  assert.equal(f.fetches.filter(value => value.url.endsWith('/pathfinder-authorization')).length, 4);
+  assert.equal(f.messages('MODEL_CAPTURE_EVENT').length, 1);
+  assert.equal(f.messages('ERROR').at(-1).payload.code, 'ACCESS_REVOKED'); f.bridge.dispose();
+});
+
+test('saved point display rechecks authorization and leaves committed route ownership intact', async () => {
+  let shown, authorized = 0;
+  const f = fixture({ showLocationPoint: async (point, _signal, beforeCommit) => { await beforeCommit(); authorized++; shown = point; } });
+  await f.loaded();
+  const priorClears = f.facts.clears;
+  const command = f.send('SHOW_LOCATION_POINT', { pointProjectMetres: [1, 2, 3] }); await turn();
+  assert.deepEqual(shown, [1, 2, 3]); assert.equal(authorized, 1); assert.equal(f.facts.clears, priorClears);
+  assert.ok(f.sent.some(({ value }) => value.type === 'LOCATION_POINT_SHOWN' && value.requestId === command.requestId));
+  f.bridge.dispose();
+});
+
+test('saved point display cannot commit after authorization loss, cancellation or load replacement', async () => {
+  for (const mode of ['denied', 'cancel', 'load']) {
+    const wait = deferred(); let checks = 0, displayed = 0;
+    const f = fixture({ showLocationPoint: async (_point, signal, beforeCommit) => { await wait.promise; if (signal.aborted) throw new DOMException('cancelled', 'AbortError'); await beforeCommit(); displayed++; },
+      fetchImpl: async url => url.endsWith('/pathfinder-authorization')
+        ? ++checks === 2 && mode === 'denied' ? new Response(null, { status: 403 }) : Response.json({ authorized: true, loadId: uuid(4) }) : descriptorResponse() });
+    await f.loaded(); const command = f.send('SHOW_LOCATION_POINT', { pointProjectMetres: [1, 2, 3] }); await turn();
+    if (mode === 'cancel') f.send('CANCEL_REQUEST', { targetRequestId: command.requestId });
+    if (mode === 'load') f.send('LOAD_MODEL', { sessionId: uuid(6) }, { loadId: uuid(9903) });
+    await turn(); wait.resolve(); await turn();
+    assert.equal(displayed, 0); assert.equal(f.messages('LOCATION_POINT_SHOWN').length, 0); f.bridge.dispose();
+  }
 });

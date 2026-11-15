@@ -1,5 +1,6 @@
+import { digestSha256 } from '../utils/sha256';
 import { generateId } from '@/utils/generateId';
-import { FRAME_PATH, MAX_PATH_POINTS, MAX_PATH_CHUNK_POINTS, isCanonicalPoint, validateEnvelope, type BridgeEnvelope, type ComputedPath, type PickedPoint, type ViewerModelObjectsPage, type ViewerSelection, type ViewerTrayRootSelection, type ModelCaptureRequest, type ModelCaptureProgress } from '../../viewer-runtime/protocol.mjs';
+import { FRAME_PATH, MAX_PATH_POINTS, MAX_PATH_CHUNK_POINTS, MAX_LOCATION_OBJECT_IDS, MAX_PATH_OBJECT_IDS, isCanonicalPoint, validateEnvelope, type BridgeEnvelope, type ComputedPath, type CanonicalPoint, type PickedPoint, type ViewerModelObjectsPage, type ViewerSelection, type ViewerTrayRootSelection, type ModelCaptureRequest, type ModelCaptureProgress } from '../../viewer-runtime/protocol.mjs';
 import { createModelCaptureAssembler } from '../../viewer-runtime/model-capture.mjs';
 import { createBarrierCaptureAssembler, validateBarrierCaptureRequest, validateBarrierFrameObservation, barrierFrameObservationHashInput, type BarrierCaptureRequest } from '../../viewer-runtime/barrier-capture.mjs';
 import { validateBarrierMultipartFrameRequest, validateBarrierMultipartStart, validateBarrierMultipartIntentControl,
@@ -8,13 +9,14 @@ import type { BarrierFrameObservation } from '../../viewer-runtime/barrier-captu
 import { BARRIER_LIMITS, barrierCanonicalJson, barrierCaptureSchema } from '../../shared/pathfinderBarriers';
 import { bindCompletedCaptureEvidence,verifyCompletedCaptureEvidence,type CompletedModelCaptureSummary } from '../../viewer-runtime/capture-evidence.mjs';
 import { CAPTURE_INPUT_LIMITS, planModelCaptureInput, validateModelCaptureInputAck, validateModelCaptureInputScope, type ModelCaptureInputDescriptor } from '../../viewer-runtime/capture-input.mjs';
-import { validatePreparationDiscoveryRequest, validatePreparationDiscoveryPage, type PreparationDiscoveryRequest, type PreparationDiscoveryPage } from '../../viewer-runtime/preparation-input.mjs';
+import { validatePreparationDiscoveryRequest, validatePreparationDiscoveryPage, type PreparationDiscoveryRequest, type PreparationDiscoveryPage, type PreparationDiscoveryProgress } from '../../viewer-runtime/preparation-input.mjs';
+import { validateTrayIdentityRequest, validateTrayIdentityResponse, type TrayIdentityRequest, type TrayIdentityResponse } from '../../viewer-runtime/tray-identity.mjs';
 import { watchViewerLogin } from './loginLifecycle';
 import { supportedBarrierCaptureCommandSchema, supportedBarrierPublicationOutcomeSchema as barrierPublicationOutcomeSchema,
   supportedBarrierSnapshotReferenceSchema as barrierSnapshotReferenceSchema, type AnyBarrierCaptureCommand } from '../../shared/pathfinderBarrierSupported';
 import { sessionBase, viewerRequest, ViewerAccessError, type ViewerSession, type ModelSelection } from './sessionApi';
 
-type Pending = { envelope: BridgeEnvelope; terminal: string; timer: number; resolve?: (event: ViewerEvent) => void; reject?: (error: Error) => void; quietRecoverableErrors?: boolean };
+type Pending = { envelope: BridgeEnvelope; terminal: string; timer: number; resolve?: (event: ViewerEvent) => void; reject?: (error: Error) => void; quietRecoverableErrors?: boolean; discoveryProgress?: (progress: PreparationDiscoveryProgress) => void };
 type LifecycleScope = Readonly<{
   generation: number; session: ViewerSession; modelVersionId: string | null; loadId: string | null;
   selectionRevision: number | null; deadline: number; signal: AbortSignal;
@@ -61,6 +63,7 @@ export class ViewerController {
   iframe: HTMLIFrameElement;
   private disposed = false;
   private ready = false;
+  private modelCaptureBatch = false;
   private loaded = false;
   private helloSeen = false;
   private generation = 0;
@@ -68,6 +71,7 @@ export class ViewerController {
   private loadId: string | null = null;
   private session: ViewerSession | null = null;
   private routeRequestId: string | null = null;
+  private trayDisplayGeneration: number | null = null;
   private activeLoadRequestId: string | null = null;
   private selectionRevision: number | null = null;
   private pending = new Map<string, Pending>();
@@ -124,13 +128,18 @@ export class ViewerController {
         this.emit('ERROR', { code: 'BARRIER_MULTIPART_RECONCILE_REQUIRED', message: 'Barrier control timed out. Check the retained capture status before trying another command.', retryable: true, operation: pending.envelope.type });
         return;
       }
-      if (pending.envelope.type === 'SHOW_LOCATION' || pending.envelope.type === 'SHOW_TRAY') {
+      if (['SHOW_LOCATION', 'SHOW_LOCATION_POINT'].includes(pending.envelope.type) || pending.envelope.type === 'SHOW_TRAY') {
         const cancelId = this.cancel(pending.envelope.requestId), cancellation = this.pending.get(cancelId);
         // Cancellation is best-effort cleanup after a display timeout. A lost
         // cleanup ACK must not turn this recoverable failure into model loss.
         if (cancellation) { window.clearTimeout(cancellation.timer); this.pending.delete(cancelId); }
         const tray = pending.envelope.type === 'SHOW_TRAY';
         this.emit('ERROR', { code: tray ? 'TRAY_UNAVAILABLE' : 'LOCATION_UNAVAILABLE', message: tray ? 'The tray could not be shown. Try again.' : 'The location could not be shown. Try again.', retryable: true, operation: pending.envelope.type });
+        return;
+      }
+      if (pending.envelope.type === 'READ_OBJECT_GUID') {
+        const cancelId = this.cancel(pending.envelope.requestId), cancellation = this.pending.get(cancelId);
+        if (cancellation) { window.clearTimeout(cancellation.timer); this.pending.delete(cancelId); }
         return;
       }
       if (pending.envelope.type === 'READ_TRAY_ROOT_SELECTION') {
@@ -141,13 +150,19 @@ export class ViewerController {
         if (!pending.quietRecoverableErrors) this.emit('ERROR', { code: 'TRAY_ROOT_SELECTION_UNAVAILABLE', message: 'Reading the selected tray roots timed out. Keep the intended objects selected and try again.', retryable: true, operation: 'READ_TRAY_ROOT_SELECTION' });
         return;
       }
+      if (pending.envelope.type === 'RESOLVE_TRAY_IDENTITIES') {
+        const cancelId = this.cancel(pending.envelope.requestId), cancellation = this.pending.get(cancelId);
+        if (cancellation) { window.clearTimeout(cancellation.timer); this.pending.delete(cancelId); }
+        this.emit('ERROR', { code: 'TRAY_IDENTITY_TIMEOUT', message: 'Checking saved tray objects timed out. Check the trays again.', retryable: true, operation: pending.envelope.type });
+        return;
+      }
       this.fail(pending.envelope.type === 'LOAD_MODEL' ? 'MODEL_TIMEOUT' : 'REQUEST_TIMEOUT');
     // A discovery page may build the bounded model-wide property index (300s
     // inside the frame). Allow its terminal reply to arrive before failing load.
-    }, pending.envelope.type === 'READ_TRAY_ROOT_SELECTION' ? 15_000 : pending.envelope.type.includes('BARRIER_MULTIPART') ? 195_000 : pending.envelope.type === 'READ_PREPARATION_OBJECTS' ? 310_000 : ['START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE'].includes(pending.envelope.type) ? 125_000 : ['CLEAR_ROUTE', 'COMMIT_COMPUTED_PATH', 'SET_PATH_TRANSPARENCY', 'SHOW_LOCATION', 'SHOW_TRAY'].includes(pending.envelope.type) ? MODEL_APPEARANCE_TIMEOUT_MILLISECONDS : ['LOAD_MODEL', 'READ_MODEL_OBJECTS', 'READ_SELECTION'].includes(pending.envelope.type) ? 60_000 : pending.envelope.type === 'PICK_POINT' ? 125_000 : 10_000);
+    }, pending.envelope.type === 'READ_TRAY_ROOT_SELECTION' ? 15_000 : pending.envelope.type.includes('BARRIER_MULTIPART') ? 195_000 : ['READ_PREPARATION_OBJECTS', 'RESOLVE_TRAY_IDENTITIES'].includes(pending.envelope.type) ? 310_000 : ['START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE'].includes(pending.envelope.type) ? 125_000 : ['CLEAR_ROUTE', 'COMMIT_COMPUTED_PATH', 'SET_PATH_TRANSPARENCY', 'SHOW_LOCATION', 'SHOW_LOCATION_POINT', 'SHOW_TRAY'].includes(pending.envelope.type) ? MODEL_APPEARANCE_TIMEOUT_MILLISECONDS : ['LOAD_MODEL', 'READ_MODEL_OBJECTS', 'READ_SELECTION'].includes(pending.envelope.type) ? 60_000 : pending.envelope.type === 'PICK_POINT' ? 125_000 : 10_000);
   }
 
-  private send(type: string, payload: Record<string, unknown>, terminal: string, callbacks: Pick<Pending, 'resolve' | 'reject' | 'quietRecoverableErrors'> = {}): string {
+  private send(type: string, payload: Record<string, unknown>, terminal: string, callbacks: Pick<Pending, 'resolve' | 'reject' | 'quietRecoverableErrors' | 'discoveryProgress'> = {}): string {
     if (this.disposed) throw new Error('Viewer disposed');
     const envelope = {
       channel: 'wfc-routings-viewer', protocolVersion: 1, instanceId: this.instanceId,
@@ -191,6 +206,12 @@ export class ViewerController {
       this.emit(message.type, message.payload, message.requestId, identity);
       return;
     }
+    if (message.type === 'PREPARATION_PROGRESS' && pending.envelope.type === 'READ_PREPARATION_OBJECTS'
+      && (pending.envelope.payload.mode === 'equipment' || pending.envelope.payload.mode === 'names' && pending.envelope.payload.includeProperties === true)) {
+      // Cosmetic progress belongs to this exact live request. It neither settles
+      // discovery nor extends its fixed deadline.
+      pending.discoveryProgress?.(message.payload as unknown as PreparationDiscoveryProgress); return;
+    }
     if (message.type === 'MODEL_CAPTURE_PROGRESS' && ['START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE'].includes(pending.envelope.type) && message.payload.captureId === pending.envelope.payload.captureId) {
       this.arm(pending); this.emit(message.type, message.payload, message.requestId, identity); return;
     }
@@ -202,15 +223,16 @@ export class ViewerController {
     window.clearTimeout(pending.timer);
     this.pending.delete(message.requestId);
     if (message.type === 'ERROR') {
-      pending.reject?.(new ViewerAccessError(String(message.payload.code), 0));
-      if (pending.envelope.type === 'LOAD_MODEL' || ['SESSION_EXPIRED', 'ACCESS_REVOKED', 'MODEL_SELECTION_CHANGED', 'BARRIER_CAPTURE_MODEL_CHANGED', 'MODEL_UNAVAILABLE', 'RESOURCE_FAILED'].includes(String(message.payload.code))) {
+      pending.reject?.(new ViewerAccessError(String(message.payload.code), 0, typeof message.payload.objectId === 'number' ? message.payload.objectId : undefined, typeof message.payload.fragmentId === 'number' ? message.payload.fragmentId : undefined));
+      if (pending.envelope.type === 'LOAD_MODEL' || ['SESSION_EXPIRED', 'ACCESS_REVOKED', 'MODEL_SELECTION_CHANGED', 'BARRIER_CAPTURE_MODEL_CHANGED', 'MODEL_CAPTURE_MODEL_CHANGED', 'MODEL_UNAVAILABLE', 'RESOURCE_FAILED'].includes(String(message.payload.code))) {
         this.fail(String(message.payload.code));
-      } else if (!(pending.envelope.type === 'READ_TRAY_ROOT_SELECTION' && pending.quietRecoverableErrors)) this.emit('ERROR', message.payload, message.requestId, identity);
+      } else if (!(['READ_TRAY_ROOT_SELECTION', 'READ_OBJECT_GUID'].includes(pending.envelope.type) && pending.quietRecoverableErrors)) this.emit('ERROR', message.payload, message.requestId, identity);
       return;
     }
     if (message.type === 'RUNTIME_READY') {
       window.clearTimeout(this.handshakeTimer);
       this.ready = true;
+      this.modelCaptureBatch = message.payload.modelCaptureBatch === true;
       if (this.queuedLoad) {
         const queued = this.queuedLoad;
         this.queuedLoad = null;
@@ -238,7 +260,8 @@ export class ViewerController {
       }
       if (expectedPhase === 'displayed') this.routeRequestId = message.requestId;
     }
-    if (message.type === 'MODEL_CAPTURE_EVENT' && (message.payload.captureId !== pending.envelope.payload.captureId || message.payload.index !== (pending.envelope.type === 'START_MODEL_CAPTURE' ? 0 : pending.envelope.payload.index))) {
+    if (message.type === 'MODEL_CAPTURE_EVENT' && (message.payload.captureId !== pending.envelope.payload.captureId || message.payload.index !== (pending.envelope.type === 'START_MODEL_CAPTURE' ? 0 : pending.envelope.payload.index)
+      || Array.isArray(message.payload.eventJsons) && (!this.modelCaptureBatch || typeof pending.envelope.payload.maxEvents !== 'number' || message.payload.eventJsons.length > pending.envelope.payload.maxEvents))) {
       pending.reject?.(new Error('Model capture identity mismatch')); this.fail('ROUTE_RESULT_MISMATCH'); return;
     }
     if (message.type === 'BARRIER_CAPTURE_EVENT' && (message.payload.captureId !== pending.envelope.payload.captureId || message.payload.index !== (pending.envelope.type === 'START_BARRIER_CAPTURE' ? 0 : pending.envelope.payload.index))) {
@@ -247,7 +270,11 @@ export class ViewerController {
     if (message.type === 'PATH_TRANSPARENCY_UPDATED' && (message.payload.routeRequestId !== pending.envelope.payload.routeRequestId || message.payload.percent !== pending.envelope.payload.percent)) {
       pending.reject?.(new Error('Path transparency acknowledgement mismatch')); return;
     }
-    if (message.type === 'LOCATION_SHOWN' && message.payload.sdkObjectId !== pending.envelope.payload.sdkObjectId) {
+    if (message.type === 'LOCATION_POINT_SHOWN' && JSON.stringify(message.payload.pointProjectMetres) !== JSON.stringify(pending.envelope.payload.pointProjectMetres)) {
+      pending.reject?.(new Error('Location point acknowledgement mismatch')); return;
+    }
+    if (message.type === 'LOCATION_SHOWN' && (message.payload.sdkObjectId !== pending.envelope.payload.sdkObjectId
+      || JSON.stringify(message.payload.sdkObjectIds) !== JSON.stringify(pending.envelope.payload.sdkObjectIds))) {
       pending.reject?.(new Error('Location acknowledgement mismatch')); return;
     }
     if (message.type === 'TRAY_SHOWN' && JSON.stringify(message.payload.sdkObjectIds) !== JSON.stringify(pending.envelope.payload.sdkObjectIds)) {
@@ -485,7 +512,7 @@ export class ViewerController {
 
   async showRoute(rawRouting: string, source: 'manual' | 'cable' = 'manual', cableId: string | null = null): Promise<string | null> {
     if (this.disposed || !this.loaded) throw new Error('Model is not ready');
-    this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'READ_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'SET_PATH_TRANSPARENCY', 'SHOW_LOCATION', 'SHOW_TRAY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE']);
+    this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'READ_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'SET_PATH_TRANSPARENCY', 'SHOW_LOCATION', 'SHOW_LOCATION_POINT', 'SHOW_TRAY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE']);
     this.routeRequestId = null;
     const generation = ++this.routeGeneration;
     // Clear immediately, even for malformed input or a superseded access check.
@@ -497,10 +524,10 @@ export class ViewerController {
   /** Render the engine's exact ordered metre points; no browser route fitting. */
   async showComputedPath(path: ComputedPath): Promise<string | null> {
     if (this.disposed || !this.loaded) throw new Error('Model is not ready');
-    if (!UUID.test(path.pathId) || !Array.isArray(path.points) || path.points.length < 1 || path.points.length > MAX_PATH_POINTS || !path.points.every(isCanonicalPoint) || !Array.isArray(path.objectIds) || path.objectIds.length > 512 || !path.objectIds.every(id => Number.isInteger(id) && id > 0 && id <= 2147483647) || new Set(path.objectIds).size !== path.objectIds.length) throw new Error('Invalid computed path');
+    if (!UUID.test(path.pathId) || !Array.isArray(path.points) || path.points.length < 1 || path.points.length > MAX_PATH_POINTS || !path.points.every(isCanonicalPoint) || !Array.isArray(path.objectIds) || path.objectIds.length > MAX_PATH_OBJECT_IDS || !path.objectIds.every(id => Number.isInteger(id) && id > 0 && id <= 2147483647) || new Set(path.objectIds).size !== path.objectIds.length) throw new Error('Invalid computed path');
     // Freeze caller-owned arrays before asynchronous selection and capability checks.
     const points = path.points.map(point => [...point]), objectIds = [...path.objectIds], pathId = path.pathId;
-    this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'READ_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'SET_PATH_TRANSPARENCY', 'SHOW_LOCATION', 'SHOW_TRAY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE']);
+    this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'READ_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'SET_PATH_TRANSPARENCY', 'SHOW_LOCATION', 'SHOW_LOCATION_POINT', 'SHOW_TRAY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE']);
     this.routeRequestId = null;
     const generation = ++this.routeGeneration;
     // BEGIN clears the frame's previous route too. Do not arm its small-message
@@ -535,26 +562,68 @@ export class ViewerController {
     return reply.payload as unknown as ViewerModelObjectsPage;
   }
 
-  async discoverPreparationObjects(request: PreparationDiscoveryRequest, options: {signal?:AbortSignal;isCurrent?:()=>boolean} = {}): Promise<PreparationDiscoveryPage> {
+  async discoverPreparationObjects(request: PreparationDiscoveryRequest, options: {signal?:AbortSignal;isCurrent?:()=>boolean;onProgress?:(progress:PreparationDiscoveryProgress)=>void} = {}): Promise<PreparationDiscoveryPage> {
     if (!validatePreparationDiscoveryRequest(request)) throw new Error('Invalid project discovery scope');
     const input:PreparationDiscoveryRequest = JSON.parse(JSON.stringify(request)), generation = this.routeGeneration, instanceId = this.instanceId, modelId = this.modelVersionId, loadId = this.loadId;
     const current = () => { if (this.disposed || !this.loaded || options.signal?.aborted || options.isCurrent?.() === false || generation !== this.routeGeneration || instanceId !== this.instanceId || modelId !== this.modelVersionId || loadId !== this.loadId) throw new DOMException('Project discovery cancelled.','AbortError'); };
     current(); if (!await this.checkSelection()) throw new DOMException('Project discovery cancelled.','AbortError'); current();
     let requestId:string|undefined;
     const abort = () => { if (requestId && this.pending.has(requestId) && !this.disposed) this.cancel(requestId); };
+    let lastProgress: PreparationDiscoveryProgress | undefined;
+    const discoveryProgress = (progress: PreparationDiscoveryProgress) => {
+      try { current(); } catch { return; }
+      if (lastProgress && (lastProgress.total !== progress.total || progress.loaded < lastProgress.loaded)) return;
+      lastProgress = { ...progress }; options.onProgress?.({ ...progress });
+    };
     options.signal?.addEventListener('abort',abort,{once:true});
     try {
       current();
-      const reply = await new Promise<ViewerEvent>((resolve,reject) => { try { requestId = this.send('READ_PREPARATION_OBJECTS', input as unknown as Record<string,unknown>, 'PREPARATION_OBJECTS',{resolve,reject}); } catch(error) { reject(error); } });
+      const reply = await new Promise<ViewerEvent>((resolve,reject) => { try { requestId = this.send('READ_PREPARATION_OBJECTS', input as unknown as Record<string,unknown>, 'PREPARATION_OBJECTS',{resolve,reject,discoveryProgress}); } catch(error) { reject(error); } });
       current();
       const page = reply.payload;
       if (!validatePreparationDiscoveryPage(page) || page.mode !== input.mode || page.rootObjectId !== input.rootObjectId || page.cursor !== input.cursor || JSON.stringify(page.names) !== JSON.stringify(input.names) || page.objects.length > input.limit
         || JSON.stringify(page.rootObjectIds) !== JSON.stringify(input.rootObjectIds)
         || page.includeAnchors !== input.includeAnchors
+        || page.includeProperties !== input.includeProperties
         || input.visibilityScope&&page.visibilityScope.contentSha256!==input.visibilityScope.contentSha256) throw new Error('Project discovery acknowledgement mismatch');
       if (!await this.checkSelection()) throw new DOMException('Project discovery cancelled.','AbortError'); current();
       return page;
     } finally { options.signal?.removeEventListener('abort',abort); }
+  }
+
+  /** Resolve saved object identities within this exact active model load. */
+  async resolveTrayIdentities(request: TrayIdentityRequest, options: { signal?: AbortSignal; isCurrent?: () => boolean } = {}): Promise<TrayIdentityResponse> {
+    if (!validateTrayIdentityRequest(request)) throw new Error('Invalid tray identity request');
+    const input: TrayIdentityRequest = structuredClone(request), generation = this.routeGeneration,
+      instanceId = this.instanceId, modelId = this.modelVersionId, loadId = this.loadId;
+    const current = () => { if (this.disposed || !this.loaded || options.signal?.aborted || options.isCurrent?.() === false
+      || generation !== this.routeGeneration || instanceId !== this.instanceId || modelId !== this.modelVersionId || loadId !== this.loadId)
+      throw new DOMException('Tray identity check cancelled.', 'AbortError'); };
+    current(); if (!await this.checkSelection()) throw new DOMException('Tray identity check cancelled.', 'AbortError'); current();
+    let requestId: string | undefined;
+    const abort = () => { if (requestId && this.pending.has(requestId) && !this.disposed) this.cancel(requestId); };
+    options.signal?.addEventListener('abort', abort, { once: true });
+    try {
+      current();
+      const reply = await new Promise<ViewerEvent>((resolve, reject) => { try { requestId = this.send('RESOLVE_TRAY_IDENTITIES', input as unknown as Record<string, unknown>, 'TRAY_IDENTITIES', { resolve, reject }); } catch (error) { reject(error); } });
+      current(); const response = reply.payload;
+      if (!validateTrayIdentityResponse(response) || response.matches.length !== input.identities.length
+        || response.matches.some((match, index) => (['externalId', 'guid', 'sourceFile'] as const).some(key => match.identity[key] !== input.identities[index][key])))
+        throw new Error('Tray identity acknowledgement mismatch');
+      if (!await this.checkSelection()) throw new DOMException('Tray identity check cancelled.', 'AbortError'); current();
+      return response;
+    } finally { options.signal?.removeEventListener('abort', abort); }
+  }
+
+  async readObjectGuid(sdkObjectId: number): Promise<string | null> {
+    if (!Number.isSafeInteger(sdkObjectId) || sdkObjectId <= 0 || sdkObjectId > 2147483647) throw new Error('Invalid object');
+    const load = this.getLoadSnapshot();
+    const current = () => { const now = this.getLoadSnapshot(); return !!load?.ready && !!now?.ready && now.instanceId === load.instanceId
+      && now.loadId === load.loadId && now.modelVersionId === load.modelVersionId && now.selectionRevision === load.selectionRevision; };
+    if (!current() || !await this.checkSelection() || !current()) throw new Error('Model is not ready');
+    const reply = await this.sendAsync('READ_OBJECT_GUID', { sdkObjectId }, 'OBJECT_GUID', { quietRecoverableErrors: true });
+    if (!current() || reply.payload.sdkObjectId !== sdkObjectId) throw new Error('Object GUID context changed');
+    return reply.payload.guid as string | null;
   }
 
   async readSelection(): Promise<ViewerSelection> {
@@ -573,9 +642,10 @@ export class ViewerController {
     return reply.payload as unknown as ViewerTrayRootSelection;
   }
 
-  /** Reveal and focus one object without changing selection or route ownership. */
-  async showLocation(sdkObjectId: number): Promise<void> {
-    if (!Number.isSafeInteger(sdkObjectId) || sdkObjectId <= 0 || sdkObjectId > 2147483647) throw new Error('Invalid location object');
+  /** Focus an exact saved project point without changing model visibility or a route. */
+  async showLocationPoint(point: CanonicalPoint): Promise<void> {
+    if (!isCanonicalPoint(point)) throw new Error('Invalid location point');
+    const pointProjectMetres = [...point] as CanonicalPoint;
     const { instanceId, modelVersionId, loadId, selectionRevision, generation, routeGeneration } = this;
     const current = () => {
       if (this.disposed || !this.loaded || !modelVersionId || !loadId || this.instanceId !== instanceId || this.modelVersionId !== modelVersionId
@@ -585,16 +655,38 @@ export class ViewerController {
     current();
     if (!await this.checkSelection()) throw new Error('Model is not ready');
     current();
-    await this.sendAsync('SHOW_LOCATION', { sdkObjectId }, 'LOCATION_SHOWN');
+    await this.sendAsync('SHOW_LOCATION_POINT', { pointProjectMetres }, 'LOCATION_POINT_SHOWN');
     current();
   }
 
-  /** Reveal and focus all resolved tray roots without taking route/selection ownership. */
+  /** Reveal one logical location and all its model parts without changing route ownership. */
+  async showLocation(sdkObjectId: number, sdkObjectIds?: number[]): Promise<void> {
+    if (!Number.isSafeInteger(sdkObjectId) || sdkObjectId <= 0 || sdkObjectId > 2147483647) throw new Error('Invalid location object');
+    if (sdkObjectIds !== undefined && (!Array.isArray(sdkObjectIds) || sdkObjectIds.length === 0 || sdkObjectIds.length > MAX_LOCATION_OBJECT_IDS))
+      throw new Error('Invalid location objects');
+    const ids = sdkObjectIds === undefined ? undefined : [...sdkObjectIds];
+    if (ids && (ids[0] !== sdkObjectId || !ids.every((id, at) => Number.isSafeInteger(id) && id > 0 && id <= 2147483647
+      && (at === 0 || id > ids[at - 1])))) throw new Error('Invalid location objects');
+    const { instanceId, modelVersionId, loadId, selectionRevision, generation, routeGeneration } = this;
+    const current = () => {
+      if (this.disposed || !this.loaded || !modelVersionId || !loadId || this.instanceId !== instanceId || this.modelVersionId !== modelVersionId
+        || this.loadId !== loadId || this.selectionRevision !== selectionRevision || this.generation !== generation || this.routeGeneration !== routeGeneration)
+        throw new DOMException('Location display cancelled.', 'AbortError');
+    };
+    current();
+    if (!await this.checkSelection()) throw new Error('Model is not ready');
+    current();
+    await this.sendAsync('SHOW_LOCATION', { sdkObjectId, ...(ids ? { sdkObjectIds: ids } : {}) }, 'LOCATION_SHOWN');
+    current();
+  }
+
+  /** Inspect resolved tray roots in Ghost mode, replacing the previous route display. */
   async showTray(sdkObjectIds: number[]): Promise<void> {
     if (!Array.isArray(sdkObjectIds) || sdkObjectIds.length === 0 || sdkObjectIds.length > 512) throw new Error('Invalid tray objects');
     const ids = [...sdkObjectIds];
     if (!ids.every(id => Number.isSafeInteger(id) && id > 0 && id <= 2147483647) || new Set(ids).size !== ids.length) throw new Error('Invalid tray objects');
-    const { instanceId, modelVersionId, loadId, selectionRevision, generation, routeGeneration } = this;
+    const { instanceId, modelVersionId, loadId, selectionRevision, generation } = this;
+    let routeGeneration = this.routeGeneration;
     const current = () => {
       if (this.disposed || !this.loaded || !modelVersionId || !loadId || this.instanceId !== instanceId || this.modelVersionId !== modelVersionId
         || this.loadId !== loadId || this.selectionRevision !== selectionRevision || this.generation !== generation || this.routeGeneration !== routeGeneration)
@@ -603,8 +695,26 @@ export class ViewerController {
     current();
     if (!await this.checkSelection()) throw new Error('Model is not ready');
     current();
+    this.resetRouteRequests();
+    routeGeneration = this.routeGeneration;
+    this.trayDisplayGeneration = routeGeneration;
     await this.sendAsync('SHOW_TRAY', { sdkObjectIds: ids }, 'TRAY_SHOWN');
     current();
+  }
+
+  /** Restore the model and wait until the viewer confirms that Ghost was cleared. */
+  async hideTray(): Promise<void> {
+    // A newer route owns its own appearance; stale panel cleanup must leave it alone.
+    if (this.trayDisplayGeneration !== this.routeGeneration) return;
+    if (this.disposed || !this.loaded || !this.modelVersionId || !this.loadId) throw new Error('Model is not ready');
+    const { generation, modelVersionId, loadId } = this;
+    this.resetRouteRequests();
+    const routeGeneration = this.routeGeneration;
+    this.trayDisplayGeneration = routeGeneration;
+    await this.sendAsync('CLEAR_ROUTE', { reason: 'user', preserveCamera: true }, 'ROUTE_CLEARED');
+    if (this.disposed || !this.loaded || this.generation !== generation || this.modelVersionId !== modelVersionId
+      || this.loadId !== loadId || this.routeGeneration !== routeGeneration) throw new DOMException('Tray display cancelled.', 'AbortError');
+    this.trayDisplayGeneration = null;
   }
 
   async setPathTransparency(percent: number): Promise<void> {
@@ -667,7 +777,7 @@ export class ViewerController {
   async captureBarriers(request: BarrierCaptureRequest, options: { signal?: AbortSignal; isCurrent?: () => boolean } = {}) {
     if (!validateBarrierCaptureRequest(request) || this.disposed || !this.loaded) throw new Error('Barrier capture is unavailable');
     const input: BarrierCaptureRequest = JSON.parse(JSON.stringify(request));
-    this.clear('selection');
+    this.clear('selection', { preserveCamera: true, preserveSelection: true });
     const generation = this.routeGeneration, { instanceId, modelVersionId, loadId } = this;
     if (!loadId || !modelVersionId || input.scope.projectId !== this.options.projectId || input.scope.modelVersionId !== modelVersionId
       || input.scope.selectionRevision !== String(this.selectionRevision)) throw new Error('Barrier capture scope changed');
@@ -734,7 +844,7 @@ export class ViewerController {
       || capture.scope.selectionRevision !== String(this.selectionRevision) || !validateBarrierFrameObservation(frame) || frame.loadId !== session.loadId
       || frame.projectId !== capture.scope.projectId || frame.modelVersionId !== capture.scope.modelVersionId
       || frame.contentFingerprint !== capture.scope.contentFingerprint) throw new Error('Barrier publication scope changed');
-    const frameDigest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(barrierCanonicalJson(barrierFrameObservationHashInput(frame)))))]
+    const frameDigest = [...new Uint8Array(await digestSha256(new TextEncoder().encode(barrierCanonicalJson(barrierFrameObservationHashInput(frame)))))]
       .map(value => value.toString(16).padStart(2, '0')).join('');
     if (frameDigest !== frame.contentSha256 || !sameSession()) throw new Error('Barrier publication frame changed');
     if (new TextEncoder().encode(JSON.stringify(observation)).byteLength > BARRIER_LIMITS.captureBytes + 16 * 1024) throw new Error('Barrier publication exceeds its byte limit');
@@ -759,13 +869,13 @@ export class ViewerController {
         || String(this.selectionRevision) !== capture.scope.selectionRevision) throw new Error('Barrier publication response arrived after its context changed');
       const outcome = barrierPublicationOutcomeSchema.parse(result);
       if (outcome.schemaVersion === 'wfc.pf.barrier-publication-refusal.v1') {
-        const captureDigest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(barrierCanonicalJson(capture))))]
+        const captureDigest = [...new Uint8Array(await digestSha256(new TextEncoder().encode(barrierCanonicalJson(capture))))]
           .map(value => value.toString(16).padStart(2, '0')).join('');
         if (controller.signal.aborted || !sameSession() || String(this.selectionRevision) !== capture.scope.selectionRevision
           || outcome.intentId !== intentId || outcome.captureSha256 !== captureDigest || outcome.frameSha256 !== frameDigest)
           throw new Error('Barrier refusal receipt scope changed');
         if (command) {
-          const commandDigest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(barrierCanonicalJson(command))))]
+          const commandDigest = [...new Uint8Array(await digestSha256(new TextEncoder().encode(barrierCanonicalJson(command))))]
             .map(value => value.toString(16).padStart(2, '0')).join('');
           if (controller.signal.aborted || !sameSession() || String(this.selectionRevision) !== capture.scope.selectionRevision
             || outcome.commandSha256 !== commandDigest) throw new Error('Barrier refusal original command changed');
@@ -797,7 +907,7 @@ export class ViewerController {
     try {
       if (this.disposed || !this.loaded) throw new Error('Model is not ready');
       const input:ModelCaptureRequest = measureSync('planningMs', () => JSON.parse(JSON.stringify(request)));
-      this.clear('selection'); const generation = this.routeGeneration;
+      this.clear('selection', { preserveCamera: true }); const generation = this.routeGeneration;
       const operation = new AbortController(); this.captureInputAbort = operation;
       const abort = () => { operation.abort(); for (const pending of [...this.pending.values()]) if (['START_MODEL_CAPTURE','READ_MODEL_CAPTURE'].includes(pending.envelope.type) && !this.disposed) this.cancel(pending.envelope.requestId); };
       options.signal?.addEventListener('abort',abort,{once:true}); if (options.signal?.aborted) abort();
@@ -836,6 +946,7 @@ export class ViewerController {
           try { const value = await bounded(() => this.sendAsync(type, payload, terminal)); current(); return value; }
           finally { const duration = elapsed(start); timing.roundWaitMs += duration; timing.maxRoundWaitMs = Math.max(timing.maxRoundWaitMs, duration); }
         };
+        const readPayload = (index: number) => ({ captureId, index, ...(this.modelCaptureBatch ? { maxEvents: 32 } : {}) });
         let reply: ViewerEvent;
         if (input.lookupRouteCodes) reply = await round('START_MODEL_CAPTURE', { captureId, ...input }, 'MODEL_CAPTURE_EVENT');
         else {
@@ -853,16 +964,18 @@ export class ViewerController {
             acknowledged(await round('READ_MODEL_CAPTURE', { ...chunk }, 'MODEL_CAPTURE_INPUT_ACK'), chunk.equipmentOffset + chunk.equipmentNames.length);
             onProgress({ index: responses - 1, type: 'input' });
           }
-          reply = await round('READ_MODEL_CAPTURE', { captureId, index: 0 }, 'MODEL_CAPTURE_EVENT');
+          reply = await round('READ_MODEL_CAPTURE', readPayload(0), 'MODEL_CAPTURE_EVENT');
         }
         const assembler = createModelCaptureAssembler({ eventLimit: 3000 - (descriptor ? 1 + descriptor.chunkCount : 0) });
+        let packetOffset = 0;
         for (let index = 0; index < 3000; index++) {
           current();
-          const event: unknown = measureSync('assemblyMs', () => { const value: unknown = JSON.parse(String(reply.payload.eventJson)); assembler.accept(value); return value; });
+          const packet = Array.isArray(reply.payload.eventJsons) ? reply.payload.eventJsons : [reply.payload.eventJson];
+          const event: unknown = measureSync('assemblyMs', () => { const value: unknown = JSON.parse(String(packet[packetOffset++])); assembler.accept(value); return value; });
           timing.eventCount++;
           const eventRecord = event as Record<string, unknown>;
           onProgress({ index, type: String(eventRecord.type), ...(typeof eventRecord.objectCount === 'number' ? { objectCount: eventRecord.objectCount } : {}) });
-          if (reply.payload.done === true) {
+          if (reply.payload.done === true && packetOffset === packet.length) {
             if (eventRecord.type !== 'complete') throw new Error('Model capture ended without a complete receipt');
             const { snapshot, summary } = measureSync('assemblyMs', () => {
               const snapshot = assembler.finish(), summary = assembler.summary();
@@ -889,10 +1002,13 @@ export class ViewerController {
             return { snapshot, summary };
           }
           if (eventRecord.type === 'complete') throw new Error('Model capture completion mismatch');
-          reply = await round('READ_MODEL_CAPTURE', { captureId, index: index + 1 }, 'MODEL_CAPTURE_EVENT');
+          if (packetOffset === packet.length) {
+            reply = await round('READ_MODEL_CAPTURE', readPayload(index + 1), 'MODEL_CAPTURE_EVENT');
+            packetOffset = 0;
+          }
         }
         throw new Error('Model capture exceeded its bounded event budget');
-      } catch (error) { if (!this.disposed && generation === this.routeGeneration) this.clear('user'); throw deadlineExpired ? deadlineError : error; }
+      } catch (error) { if (!this.disposed && generation === this.routeGeneration) this.clear('user', { preserveCamera: true }); throw deadlineExpired ? deadlineError : error; }
       finally { window.clearTimeout(wallTimer); options.signal?.removeEventListener('abort',abort); if (this.captureInputAbort === operation) this.captureInputAbort = null; }
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') outcome = 'cancelled';
@@ -909,12 +1025,16 @@ export class ViewerController {
     }
   }
 
-  clear(reason: 'user' | 'empty' | 'selection' | 'model-change' | 'logout' = 'user'): string {
+  private resetRouteRequests(): void {
     this.captureInputAbort?.abort(); this.captureInputAbort = null;
+    this.trayDisplayGeneration = null;
     ++this.routeGeneration;
     this.routeRequestId = null;
-    this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'READ_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'SET_PATH_TRANSPARENCY', 'SHOW_LOCATION', 'SHOW_TRAY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE']);
-    return this.send('CLEAR_ROUTE', { reason }, 'ROUTE_CLEARED');
+    this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'READ_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'SET_PATH_TRANSPARENCY', 'SHOW_LOCATION', 'SHOW_LOCATION_POINT', 'SHOW_TRAY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE']);
+  }
+  clear(reason: 'user' | 'empty' | 'selection' | 'model-change' | 'logout' = 'user', options: { preserveCamera?: boolean; preserveSelection?: boolean } = {}): string {
+    this.resetRouteRequests();
+    return this.send('CLEAR_ROUTE', { reason, ...(options.preserveCamera ? { preserveCamera: true } : {}), ...(options.preserveSelection ? { preserveSelection: true } : {}) }, 'ROUTE_CLEARED');
   }
   zoom(): string {
     if (!this.routeRequestId) throw new Error('No drawable route');

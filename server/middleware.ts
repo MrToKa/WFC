@@ -105,13 +105,14 @@ export function requireProjectReadOnly(req: Request, res: Response, next: NextFu
 // Mounted at /:projectId before every project endpoint. New sections are denied by default.
 const basicProjectReadPaths = [
   /^\/$/,
-  /^\/(cable-types|cables|trays|roxtec|tray-data)\/?$/i,
+  /^\/(cable-types|cables|trays|roxtec|tray-data|tray-purposes)\/?$/i,
   /^\/model-versions\/?$/i,
   /^\/model-imports\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/?$/i,
   /^\/model-versions\/[0-9a-f-]{36}\/viewer-sessions\/[0-9a-f-]{36}\/(descriptor|resources\/.+)$/i,
   /^\/cable-types\/[0-9a-f-]+\/details\/?$/i,
   /^\/cables\/[0-9a-f-]+\/(details|versions)\/?$/i,
   /^\/trays\/[0-9a-f-]+\/?$/i,
+  /^\/trays\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/auto-length\/?$/i,
   /^\/trays\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/drawing-snapshot\/?$/i,
   /^\/roxtec\/\d+\/?$/i,
 ];

@@ -3,6 +3,8 @@ import {
   Toast,
   ToastBody,
   ToastTitle,
+  ToastFooter,
+  Button,
   Toaster,
   useId,
   useToastController,
@@ -15,6 +17,7 @@ type ShowToastOptions = {
   body?: string;
   intent?: ToastIntent;
   timeout?: number;
+  action?: { label: string; onClick: () => void };
 };
 
 type ToastContextValue = {
@@ -29,7 +32,7 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
 
   const value = useMemo(
     () => ({
-      showToast: ({ title, body, intent = 'info', timeout }: ShowToastOptions) => {
+      showToast: ({ title, body, intent = 'info', timeout, action }: ShowToastOptions) => {
         dispatchToast(
           <Toast>
             <ToastTitle>{title}</ToastTitle>
@@ -38,6 +41,7 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
                 {body}
               </ToastBody>
             ) : null}
+            {action ? <ToastFooter><Button appearance="transparent" size="small" onClick={action.onClick}>{action.label}</Button></ToastFooter> : null}
           </Toast>,
           { intent, ...(timeout === undefined ? {} : { timeout }) },
         );

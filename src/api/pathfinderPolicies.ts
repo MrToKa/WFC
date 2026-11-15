@@ -1,3 +1,4 @@
+import { digestSha256 } from '../utils/sha256';
 import {
   policyUuidSchema, policyRevisionSchema, catalogSchema, catalogManifestSchema, catalogPageSchema, routePurposePolicySchema,
   routePurposeWriteSchema, policySaveSchema, policyHistorySchema, policyErrorSchema,
@@ -58,8 +59,7 @@ async function request(projectId: string, token: string, suffix: string, method:
   return value;
 }
 async function sha256(value: unknown): Promise<string> {
-  if (!globalThis.crypto?.subtle) throw new PathFinderPolicyApiError('HASH_UNAVAILABLE', 502, 'Catalog verification is unavailable. Refresh in a secure local browser.');
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalPurposeJson(value)));
+  const digest = await digestSha256(new TextEncoder().encode(canonicalPurposeJson(value)));
   return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
 }
 function invalid(): never { throw new PathFinderPolicyApiError('INVALID_RESPONSE', 502); }

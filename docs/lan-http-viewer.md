@@ -45,11 +45,11 @@ Start in a clean checkout and fetch the branch:
 
 ```powershell
 git fetch origin
-git switch --track origin/fix/http-compatible-uuid
+git switch main
+git pull --ff-only origin main
 ```
 
-If the local branch already exists, use `git switch fix/http-compatible-uuid`
-and `git pull --ff-only` instead. After updating the existing `.env`, rebuild
+After updating the existing `.env`, rebuild
 **both API and web**. Do not replace the working installation with another
 Compose template.
 
@@ -98,7 +98,20 @@ against interception of HTTP traffic. The iframe still receives no Bearer token.
 Browser UUID generation is shared through `src/utils/generateId.ts` and
 `viewer-runtime/generate-id.mjs`. It uses Web Crypto `getRandomValues` and UUID v4
 version/variant bits, with no `Math.random` fallback. The static runtime packager
-includes the shared module. Server-side UUID generation is unchanged.
+includes the shared module. Path Finder panels, saved commands and the isolated
+geometry producer use the same helper. Server-side UUID generation is unchanged.
+
+Content and command SHA-256 verification is shared through `src/utils/sha256.ts`
+and `viewer-runtime/sha256.mjs`. It uses native `crypto.subtle.digest` when present
+and the same SHA-256 algorithm in JavaScript when LAN HTTP makes SubtleCrypto
+unavailable. Native digest failures still propagate. Catalog, location, geometry
+and receipt hashes are checked against the same server values; no integrity
+check is skipped. Both web and server runtime packaging include the helper.
+
+`VIEWER_ORIGIN_DENIED` means the server refused the browser address, independently
+of the user's administrator role. Check the exact scheme, IP address and port
+in the configuration above; do not add a wildcard or remove the origin check.
+Other known loading failures display a diagnostic code with the retry message.
 
 On a second computer, open the exact configured LAN URL, sign in freshly and
 open a project with a healthy selected model. Check model loading, manual and
@@ -118,6 +131,7 @@ continue to use the existing certificate/proxy setup.
 ```sh
 node --test viewer-runtime/test/*.test.mjs
 npx vitest run server/viewerSessions/http.test.ts server/viewerSessions/resources.test.ts src/viewer/ViewerController.test.ts src/pages/ProjectDetails/hooks/useRoutingsViewer.test.ts
+npx vitest run src/api/httpCryptoCompatibility.test.ts src/pages/ProjectDetails/EndpointBindingPanel.test.tsx
 npm run typecheck
 npm run lint
 npm run build

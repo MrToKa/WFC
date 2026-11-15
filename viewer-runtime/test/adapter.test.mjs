@@ -22,6 +22,11 @@ function sdkFixture(options = {}) {
   const model = { getInstanceTree: () => options.lazyTree ? null : tree, getObjectTree: options.getObjectTree ?? (success => success(tree)),
     getProperties(id, success, failure) { facts.propertyReads++; if (options.getProperties) options.getProperties(id, success, failure); else success({ properties: [{ displayName: 'Length', displayValue: '1' }, { displayName: 'Width', displayValue: '2' }] }); },
     getFragmentList: () => ({ getCount: () => 12 }), getData: () => ({ fragments: { length: 12 } }), isLoadDone: () => false };
+  if (options.trayVisibility) model.visibilityManager = {
+    defaultVisible: true, states: [[3, false]],
+    getDefaultVisibility() { return this.defaultVisible; }, getVisibility() { return this.states.map(entry => [...entry]); },
+    setVisibility(defaultVisible, states) { this.defaultVisible = defaultVisible; this.states = states.map(entry => [...entry]); },
+  };
   class Viewer {
     constructor(_container, config = {}) {
       this.config = config; this.model = model; this.listeners = new Map(); this.theme = null;
@@ -46,7 +51,7 @@ function sdkFixture(options = {}) {
     resize() {}
     clearSelection() {}
     setGhosting() {}
-    isolate(ids) { facts.isolated.push(ids); }
+    isolate(ids) { facts.isolated.push(ids); if (model.visibilityManager) { model.visibilityManager.defaultVisible = false; model.visibilityManager.states = ids.map(id => [id, true]); } }
     finish() { facts.finishes++; }
   }
   const viewing = { GuiViewer3D: Viewer, GEOMETRY_LOADED_EVENT: 'geometry', PROGRESS_UPDATE_EVENT: 'progress', ERROR_EVENT: 'error',
@@ -61,6 +66,22 @@ function sdkFixture(options = {}) {
   const adapter = createViewerAdapter({ window, container, onEvidence: value => evidence.push(value) });
   return { adapter, window, facts, assets, viewers, evidence, model, tree, container };
 }
+
+test('tray identity resolution reads the loaded model without moving the camera or replacing its appearance', async t => {
+  const f = sdkFixture(), identity = { externalId: 'stable-external-id', guid: null, sourceFile: null };
+  const previous = globalThis.window; globalThis.window = f.window;
+  t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
+  f.model.getExternalIdMapping = success => success({ 'stable-external-id': 2 });
+  await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
+  let fits = 0; f.viewers[0].fitToView = () => { fits++; };
+  assert.deepEqual(await handle.resolveTrayIdentities({ schemaVersion: 'wfc.pf.tray-identity-request.v1', identities: [identity] }), {
+    schemaVersion: 'wfc.pf.tray-identity-response.v1', matches: [{ identity, status: 'unique', objectIds: [2] }],
+  });
+  assert.equal(fits, 0); assert.deepEqual(f.facts.isolated, []); assert.equal(f.facts.finishes, 0);
+  const cancelled = new AbortController(); cancelled.abort();
+  await assert.rejects(handle.resolveTrayIdentities({ schemaVersion: 'wfc.pf.tray-identity-request.v1', identities: [identity] }, cancelled.signal), { name: 'AbortError' });
+  f.adapter.dispose();
+});
 
 test('SDK initialization uses pinned local assets, explicit local worker root and cookie credentials only', async () => {
   const f = sdkFixture(); await f.adapter.initialize();
@@ -148,26 +169,103 @@ test('location SDK failure stays recoverable and a finished model cannot be disp
   handle.finish(); await assert.rejects(handle.showLocation(2), { code: 'MODEL_SELECTION_CHANGED' });
 });
 
-test('tray display reveals and focuses every root together without changing selection, route appearance or Ghost', async t => {
-  const f = sdkFixture(), previous = globalThis.window; globalThis.window = f.window;
+test('grouped location reveals and fits all members only after whole-group membership and authority checks',async t=>{
+  const f=sdkFixture(),previous=globalThis.window;globalThis.window=f.window;t.after(()=>{f.adapter.dispose();globalThis.window=previous;});
+  await f.adapter.initialize();const handle=await f.adapter.load({modelUrl:'http://localhost:18085/model.svf',descriptor:loadedDescriptor()});
+  const calls=[],viewer=f.viewers[0];viewer.show=ids=>calls.push(['show',[...ids]]);viewer.fitToView=ids=>calls.push(['fit',[...ids]]);
+  await handle.showLocation(2,undefined,async()=>{assert.equal(calls.length,0);},[2,3]);
+  assert.deepEqual(calls,[['show',[2,3]],['fit',[2,3]]]);
+  calls.length=0;
+  for(const ids of [[],[3],[2,2],[3,2],[2,999],[2,0],Array.from({length:513},(_,at)=>at+2)])
+    await assert.rejects(handle.showLocation(2,undefined,undefined,ids),{code:'LOCATION_UNAVAILABLE'});
+  assert.deepEqual(calls,[]);
+  await assert.rejects(handle.showLocation(2,undefined,async()=>{throw Object.assign(Error('denied'),{code:'ACCESS_REVOKED'});},[2,3]),{code:'ACCESS_REVOKED'});
+  assert.deepEqual(calls,[]);
+});
+
+test('location Show accepts every member of a complete4096-object match scope without truncation',async t=>{
+  const f=sdkFixture(),previous=globalThis.window;globalThis.window=f.window;t.after(()=>{f.adapter.dispose();globalThis.window=previous;});
+  const ids=Array.from({length:4096},(_,at)=>at+2);
+  f.tree.getNodeIndex=id=>id>=1&&id<=4097?id-1:undefined;
+  await f.adapter.initialize();const handle=await f.adapter.load({modelUrl:'http://localhost:18085/model.svf',descriptor:loadedDescriptor()});
+  const calls=[],viewer=f.viewers[0];viewer.show=members=>calls.push(['show',[...members]]);viewer.fitToView=members=>calls.push(['fit',[...members]]);
+  await handle.showLocation(2,undefined,async()=>{assert.equal(calls.length,0);},ids);
+  assert.deepEqual(calls,[['show',ids],['fit',ids]]);calls.length=0;
+  await assert.rejects(handle.showLocation(2,undefined,undefined,ids.concat(4098)),{code:'LOCATION_UNAVAILABLE'});
+  assert.deepEqual(calls,[]);
+});
+
+test('tray display ghosts the background, fits every root and restores the previous view on Clear', async t => {
+  const f = sdkFixture({ trayVisibility: true }), previous = globalThis.window; globalThis.window = f.window;
   t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
   await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
   const viewer = f.viewers[0], calls = [], background = { opacity: viewer.impl.fadeMaterial.opacity, ghost: viewer.impl.showGhosting };
-  viewer.show = (ids, model) => { calls.push(['show', [...ids], model]); };
-  viewer.fitToView = (ids, model) => { calls.push(['fit', [...ids], model]); };
-  for (const method of ['clearSelection', 'select', 'isolate', 'setGhosting']) viewer[method] = () => { throw Error('Display must not call ' + method); };
+  const isolate = viewer.isolate.bind(viewer);
+  viewer.isolate = (ids, model) => { calls.push(['isolate', [...ids], model]); isolate(ids); };
+  viewer.fitToView = (ids, model) => { calls.push(['fit', ids && [...ids], model]); };
+  for (const method of ['clearSelection', 'select']) viewer[method] = () => { throw Error('Display must not call ' + method); };
   const ids = [2, 3]; let authorized = 0;
   await handle.showTray(ids, undefined, async () => { assert.equal(calls.length, 0); ids[0] = 999; authorized++; });
-  assert.equal(authorized, 1); assert.deepEqual(calls, [['show', [2, 3], f.model], ['fit', [2, 3], f.model]]);
+  assert.equal(authorized, 1); assert.deepEqual(calls, [['isolate', [2, 3], f.model], ['fit', [2, 3], f.model]]);
+  assert.equal(viewer.impl.fadeMaterial.opacity, 0.025); assert.equal(viewer.impl.fadeMaterial.variants[0].opacity, 0.025);
+  assert.equal(viewer.impl.showGhosting, true); assert.deepEqual(f.facts.isolated, [[2, 3]]);
+  assert.deepEqual(f.model.visibilityManager.states, [[2, true], [3, true]]);
+  viewer.clearSelection = () => {};
+  handle.clearRoute();
   assert.deepEqual({ opacity: viewer.impl.fadeMaterial.opacity, ghost: viewer.impl.showGhosting }, background);
-  assert.deepEqual(f.facts.isolated, []);
+  assert.deepEqual(f.model.visibilityManager.getVisibility(), [[3, false]]); assert.equal(f.model.visibilityManager.defaultVisible, true);
+  assert.deepEqual(calls.at(-1), ['fit', undefined, undefined]);
+});
+
+test('Hide and repeated assignment cleanup restore Ghost without moving the current camera', async t => {
+  const f = sdkFixture({ trayVisibility: true }), previous = globalThis.window; globalThis.window = f.window;
+  t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
+  await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
+  const viewer = f.viewers[0]; let fits = 0;
+  viewer.fitToView = () => { fits++; viewer.camera = { position: [0, 0, 1000], target: [0, 0, 0], up: [0, 1, 0], zoom: 1 }; };
+  await handle.showTray([2]); assert.equal(fits, 1);
+  // A user can navigate after Show. Hide must keep this camera, not the
+  // pre-Show camera or the whole-model overview. No SDK camera write is needed.
+  const camera = { position: [15, 23, 31], target: [12, 20, 28], up: [0, 0, 1], zoom: 7 };
+  viewer.camera = structuredClone(camera);
+  handle.clearRoute({ preserveCamera: true });
+  handle.clearRoute({ preserveCamera: true });
+  assert.deepEqual(viewer.camera, camera); assert.equal(fits, 1);
+  assert.equal(viewer.impl.fadeMaterial.opacity, 0.4);
+  assert.deepEqual(f.model.visibilityManager.getVisibility(), [[3, false]]);
+  assert.equal(f.model.visibilityManager.defaultVisible, true);
+  handle.clearRoute(); assert.equal(fits, 2); // Explicit Clear/Restore still fits.
+});
+
+test('capture cleanup preserves selected objects with no display, a tray or a legacy route while user Clear still deselects', async () => {
+  for (const display of ['none', 'tray', 'legacy']) {
+    const f = sdkFixture({ trayVisibility: true }), previous = globalThis.window; globalThis.window = f.window;
+    try {
+      await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
+      const viewer = f.viewers[0];
+      if (display === 'tray') await handle.showTray([2]);
+      if (display === 'legacy') await handle.showRoute('BC1');
+      let selectedIds = [2, 3], fits = 0;
+      viewer.clearSelection = () => { selectedIds = []; };
+      viewer.fitToView = () => { fits++; };
+      handle.clearRoute({ preserveCamera: true, preserveSelection: true });
+      assert.deepEqual(selectedIds, [2, 3], display); assert.equal(fits, 0, display);
+      assert.equal(viewer.impl.fadeMaterial.opacity, 0.4, display);
+      assert.equal(f.model.visibilityManager.defaultVisible, true, display);
+      assert.deepEqual(f.model.visibilityManager.getVisibility(), [[3, false]], display);
+      handle.clearRoute({ preserveCamera: true, preserveSelection: true });
+      assert.deepEqual(selectedIds, [2, 3], 'Repeated capture cleanup retains selection');
+      handle.clearRoute();
+      assert.deepEqual(selectedIds, [], 'Explicit user Clear still deselects'); assert.equal(fits, 1, display);
+    } finally { f.adapter.dispose(); globalThis.window = previous; }
+  }
 });
 
 test('tray display validates the whole root set before any SDK mutation', async t => {
-  const f = sdkFixture(), previous = globalThis.window; globalThis.window = f.window;
+  const f = sdkFixture({ trayVisibility: true }), previous = globalThis.window; globalThis.window = f.window;
   t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
   await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
-  let displayed = 0, authorized = 0; f.viewers[0].show = () => { displayed++; };
+  let displayed = 0, authorized = 0; f.viewers[0].isolate = () => { displayed++; };
   for (const ids of [[], [2, 999], [0], [-1], [1.5], [2147483648], ['2'], [2, 2], Array(1), Array.from({ length: 513 }, (_, at) => at + 1), null, 2])
     await assert.rejects(handle.showTray(ids, undefined, async () => { authorized++; }), { code: 'TRAY_UNAVAILABLE' });
   assert.equal(displayed, 0); assert.equal(authorized, 0);
@@ -176,10 +274,10 @@ test('tray display validates the whole root set before any SDK mutation', async 
 
 test('delayed tray display refuses changed model, denied authority and cancellation before revealing any root', async t => {
   for (const action of ['model', 'denied', 'cancel']) {
-    let treeReady; const f = sdkFixture({ lazyTree: true, getObjectTree: callback => { treeReady = callback; } }), previous = globalThis.window;
+    let treeReady; const f = sdkFixture({ trayVisibility: true, lazyTree: true, getObjectTree: callback => { treeReady = callback; } }), previous = globalThis.window;
     globalThis.window = f.window; t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
     await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
-    let displayed = 0; f.viewers[0].show = () => { displayed++; }; const controller = new AbortController();
+    let displayed = 0; f.viewers[0].isolate = () => { displayed++; }; const controller = new AbortController();
     const showing = handle.showTray([2, 3], controller.signal, async () => { if (action === 'denied') throw Object.assign(Error('No access'), { code: 'ACCESS_REVOKED' }); });
     const rejected = assert.rejects(showing, action === 'cancel' ? { name: 'AbortError' } : { code: action === 'model' ? 'MODEL_SELECTION_CHANGED' : 'ACCESS_REVOKED' });
     if (action === 'model') f.viewers[0].model = {};
@@ -189,14 +287,35 @@ test('delayed tray display refuses changed model, denied authority and cancellat
 });
 
 test('tray display sanitizes missing-tree and SDK failures while keeping terminal model identity', async t => {
-  const f = sdkFixture(), previous = globalThis.window; globalThis.window = f.window;
+  const f = sdkFixture({ trayVisibility: true }), previous = globalThis.window; globalThis.window = f.window;
   t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
   await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
-  f.viewers[0].show = () => { throw Error('private SDK detail'); };
+  f.viewers[0].isolate = () => { throw Error('private SDK detail'); };
   await assert.rejects(handle.showTray([2, 3]), error => error.code === 'TRAY_UNAVAILABLE' && !error.message.includes('private'));
   f.model.getInstanceTree = () => { throw Error('private tree detail'); };
   await assert.rejects(handle.showTray([2, 3]), error => error.code === 'TRAY_UNAVAILABLE' && !error.message.includes('private'));
   handle.finish(); await assert.rejects(handle.showTray([2, 3]), { code: 'MODEL_SELECTION_CHANGED' });
+});
+
+test('tray focus replaces a legacy route without capturing its Ghost view as the restoration baseline', async t => {
+  const f = sdkFixture({ trayVisibility: true }), previous = globalThis.window; globalThis.window = f.window;
+  t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
+  await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
+  await handle.showRoute('BC1'); assert.equal(f.viewers[0].impl.fadeMaterial.opacity, 0.025);
+  await handle.showTray([3]); assert.deepEqual(f.facts.isolated.at(-1), [3]);
+  handle.clearRoute(); assert.equal(f.viewers[0].impl.fadeMaterial.opacity, 0.4);
+  assert.equal(f.model.visibilityManager.defaultVisible, true); assert.deepEqual(f.model.visibilityManager.getVisibility(), [[3, false]]);
+});
+
+test('tray focus rolls back Ghost if fitting fails and remains recoverable', async t => {
+  const f = sdkFixture({ trayVisibility: true }), previous = globalThis.window; globalThis.window = f.window;
+  t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
+  await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
+  const viewer = f.viewers[0]; viewer.fitToView = () => { throw Error('private fit failure'); };
+  await assert.rejects(handle.showTray([2]), { code: 'TRAY_UNAVAILABLE' });
+  assert.equal(viewer.impl.fadeMaterial.opacity, 0.4); assert.deepEqual(f.model.visibilityManager.getVisibility(), [[3, false]]);
+  viewer.fitToView = () => {}; await handle.showTray([3]); handle.clearRoute();
+  assert.equal(viewer.impl.fadeMaterial.opacity, 0.4); assert.deepEqual(f.model.visibilityManager.getVisibility(), [[3, false]]);
 });
 
 test('pinned SDK show delegates only target visibility and exposes a read-only tree membership index', () => {
@@ -293,7 +412,7 @@ test('pinned SDK selectOnly keeps a clicked parent and reads its descendant bott
 test('capture adapter preserves only the typed empty lookup scope error and keeps unexpected SDK errors generic', async t => {
   const previous = { window: globalThis.window, Autodesk: globalThis.Autodesk, THREE: globalThis.THREE, LMV_VIEWER_VERSION: globalThis.LMV_VIEWER_VERSION };
   t.after(() => Object.assign(globalThis, previous));
-  for (const fail of [false, true]) {
+  for (const fail of [false, true, 'typed']) {
     const f = sdkFixture(); globalThis.window = f.window;
     class Matrix { constructor() { this.elements = new Float64Array(16); } makeScale(x, y, z) { this.elements.fill(0); this.elements[0] = x; this.elements[5] = y; this.elements[10] = z; this.elements[15] = 1; return this; } }
     f.window.Autodesk.Viewing.Private = { LmvMatrix4: Matrix, enumMeshVertices() {}, enumMeshTriangles() {} };
@@ -303,8 +422,12 @@ test('capture adapter preserves only the typed empty lookup scope error and keep
     await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: { projectId: '11111111-1111-4111-8111-111111111111', modelVersionId: '22222222-2222-4222-8222-222222222222', contentFingerprint: 'a'.repeat(64) } });
     const captureId = '33333333-3333-4333-8333-333333333333';
     await handle.startModelCapture({ captureId, lookupRouteCodes: ['/BC1'], equipmentNames: [] });
-    if (fail) f.tree.getNodeName = () => { throw new Error('private SDK field'); };
-    await assert.rejects(handle.readModelCapture({ captureId, index: 1 }), { code: fail ? 'EXTRACTION_FAILED' : 'LOOKUP_GEOMETRY_NOT_FOUND', message: 'The local model or one of its resources could not be read.' });
+    if (fail) f.tree.getNodeName = () => { throw fail === 'typed' ? Object.assign(new Error('private SDK field'), { code: 'MODEL_CAPTURE_GEOMETRY_NOT_RESIDENT', objectId: 29713, fragmentId: 7, privatePath: 'SECRET' }) : new Error('private SDK field'); };
+    await assert.rejects(handle.readModelCapture({ captureId, index: 1 }), error => {
+      if (fail === 'typed') { assert.equal(error.code, 'MODEL_CAPTURE_GEOMETRY_NOT_RESIDENT'); assert.equal(error.objectId, 29713); assert.equal(error.fragmentId, 7); assert.equal(error.privatePath, undefined); assert.doesNotMatch(error.message, /private SDK/); }
+      else { assert.equal(error.code, fail ? 'EXTRACTION_FAILED' : 'LOOKUP_GEOMETRY_NOT_FOUND'); assert.equal(error.message, 'The local model or one of its resources could not be read.'); }
+      return true;
+    });
     f.adapter.dispose();
   }
 });
@@ -492,4 +615,70 @@ test('adapter binds published roots to the loaded descriptor identity before rou
   const result = await handle.showRoute('/A105', { routingBindings: response });
   assert.equal(result.segments[0].count, 1); assert.equal(result.segments[0].mapped, true); assert.equal(result.segments[0].drawable, false);
   assert.deepEqual(f.facts.isolated.at(-1), [2, 3]);
+});
+
+test('production adapter packs events, retains lookahead, completes once and cancels a partial batch', async t => {
+  // Replace only the SDK event generator; run the production adapter transport
+  // state machine unchanged against deterministic, escaped event-sized input.
+  const sourceUrl = new URL('../adapter.mjs', import.meta.url);
+  const source = readFileSync(sourceUrl, 'utf8').replace("import { captureSelectedModel } from './model-capture.mjs';", 'const captureSelectedModel = (...args) => globalThis.__batchCaptureFixture(...args);')
+    .replace(/from '(\.\/[^']+)'/g, (_match, specifier) => 'from ' + JSON.stringify(new URL(specifier, sourceUrl).href));
+  const runtimeSource = source.replaceAll('import.meta.url', JSON.stringify(sourceUrl.href));
+  const { createViewerAdapter: createBatchAdapter } = await import('data:text/javascript;base64,' + Buffer.from(runtimeSource).toString('base64'));
+  const previous = globalThis.__batchCaptureFixture;
+  t.after(() => { globalThis.__batchCaptureFixture = previous; });
+  const f = sdkFixture(); f.adapter.dispose();
+  const adapter = createBatchAdapter({ window: f.window, container: f.container });
+  t.after(() => adapter.dispose());
+  let produced = 0, abortDuringRead = null;
+  globalThis.__batchCaptureFixture = async function* (_viewer, request) {
+    for (let index = 0; index < 8; index++) {
+      produced++;
+      if (abortDuringRead && index === 2) abortDuringRead.abort();
+      yield { captureId: request.captureId, type: index === 7 ? 'complete' : 'geometry', index, data: 'x'.repeat(16300) + String.fromCharCode(34, 92) };
+    }
+  };
+  await adapter.initialize();
+  const handle = await adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
+  const captureId = '66666666-6666-4666-8666-666666666666';
+  const start = () => handle.startModelCapture({ captureId, lookupRouteCodes: ['/BC1'], equipmentNames: [] });
+  const first = await start(); assert.equal(JSON.parse(first.eventJson).index, 0);
+  const batch = await handle.readModelCapture({ captureId, index: 1, maxEvents: 32 });
+  assert.deepEqual(batch.eventJsons.map(text => JSON.parse(text).index), [1, 2, 3]);
+  assert.equal(batch.done, false); assert.equal(produced, 5, 'fourth event is retained as lookahead');
+  const next = await handle.readModelCapture({ captureId, index: 4, maxEvents: 32 });
+  assert.deepEqual(next.eventJsons.map(text => JSON.parse(text).index), [4, 5, 6]);
+  const final = await handle.readModelCapture({ captureId, index: 7, maxEvents: 32 });
+  assert.equal(final.done, true); assert.equal(JSON.parse(final.eventJsons[0]).type, 'complete');
+  assert.equal(produced, 8, 'lookahead is emitted once without regenerating it');
+  await assert.rejects(handle.readModelCapture({ captureId, index: 8, maxEvents: 32 }), { code: 'EXTRACTION_FAILED' });
+  await start(); handle.clearRoute();
+  await assert.rejects(handle.readModelCapture({ captureId, index: 1, maxEvents: 32 }), { code: 'EXTRACTION_FAILED' });
+  await start(); abortDuringRead = new AbortController();
+  await assert.rejects(handle.readModelCapture({ captureId, index: 1, maxEvents: 32 }, abortDuringRead.signal), { name: 'AbortError' });
+  await assert.rejects(handle.readModelCapture({ captureId, index: 1, maxEvents: 32 }), { code: 'EXTRACTION_FAILED' });
+});
+
+test('saved point focus rechecks load and authorization, then actual-object Show clears only the point marker', async t => {
+  const f = sdkFixture(), previous = globalThis.window; globalThis.window = f.window;
+  t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
+  class Vector3 { constructor(...values) { this.set(...values); } set(...values) { this.values = values; } }
+  class Box3 { points = []; expandByPoint(point) { this.points.push(point.values); } }
+  class Disposable { dispose() { this.disposed = true; } }
+  class Mesh { constructor(geometry, material) { Object.assign(this, { geometry, material, position: new Vector3() }); } }
+  Object.assign(f.window.THREE, { Vector3, Box3, SphereGeometry: Disposable, MeshBasicMaterial: Disposable, Mesh });
+  Object.assign(f.model, { getUnitScale: () => 0.001, getUpVector: () => [0, 0, 1], getGlobalOffset: () => [1000, 2000, 3000] });
+  await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
+  const viewer = f.viewers[0], meshes = [], fits = []; viewer.navigation = { fitBounds: (_animated, box) => fits.push(box) };
+  viewer.overlays.addMesh = mesh => meshes.push(mesh); viewer.overlays.removeMesh = mesh => meshes.splice(meshes.indexOf(mesh), 1);
+  for (const method of ['clearSelection', 'isolate', 'setGhosting']) viewer[method] = () => { throw Error('Must preserve ' + method); };
+  await assert.rejects(handle.showLocationPoint([1, 2, 3], undefined, async () => { throw Object.assign(Error('denied'), { code: 'ACCESS_REVOKED' }); }), { code: 'ACCESS_REVOKED' });
+  assert.equal(meshes.length, 0); assert.equal(fits.length, 0);
+  await handle.showLocationPoint([1.004, 2.005, 3.006], undefined, async () => { assert.equal(meshes.length, 0); });
+  assert.ok(meshes[0].position.values.every((n, i) => Math.abs(n - [4, 5, 6][i]) < 1e-9));
+  const first = meshes[0]; viewer.show = () => {}; await handle.showLocation(2);
+  assert.equal(meshes.length, 0); assert.equal(first.geometry.disposed, true);
+  await handle.showLocationPoint([1, 2, 3]); const last = meshes[0]; handle.finish();
+  assert.equal(meshes.length, 0); assert.equal(last.material.disposed, true);
+  await assert.rejects(handle.showLocationPoint([1, 2, 3]), { code: 'MODEL_SELECTION_CHANGED' });
 });

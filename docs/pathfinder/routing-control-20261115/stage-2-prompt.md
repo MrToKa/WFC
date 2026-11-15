@@ -1,0 +1,11 @@
+# Stage 2 — persisted intent, execution locks and write guards
+
+Execute automatically under 2026-11-15 user approval. Read plan.md and stage-1-report.md; baseline cf7c64d with substantial prior working changes, preserve them. Stage1 shared/cableRoutingControl.ts defines authoritative pure transitions (17 tests PASS). Do not reinterpret full cable history changes as route intent.
+
+Implement additive repeatable migration and persisted per-cable controls + automatic route read projection. Existing execution columns already exist in cables/cable_versions. Migrate existing nonblank effective routes once to protected manual, existing facts to sticky execution freeze; future starts must not reclassify subsequent automatic writes. Preserve all old receipts, dates, installed lengths and result authority fences.
+
+Integrate authenticated version-aware manual route edits/checkbox/clear, explicit audited execution unlock after facts cleared, and all effective-route automatic/Apply write paths. Auto calculations/results remain recorded even if effective route cannot be overwritten. Incidental delivery/date/import revision changes no longer establish manual ownership; still compare exact current baseline and lock rows transactionally. Keep false/stale results ineligible to write. Existing finite login/administrator/grant policies remain intact.
+
+Own server schema+control repository, cable PATCH/version helpers in cablesRoutes.ts, automatic admission/writer/Apply guards, server read projection and shared DTO as agreed. Do not implement Excel parsing/export sections yet; retain single writer for cablesRoutes. Expose reusable helper for stage4 to apply import transitions per row and return tagged blocked reasons, preserving other permitted fields. Expose post-commit manual route invalidation/enqueue seam for stage3; no fake lookup length.
+
+Coordinate proposed API/read DTO with parent BEFORE cross-boundary changes. Prefer new focused modules over expanding monolith. Validate migration idempotency on isolated PostgreSQL, manual/auto/clear/checkbox/date/sticky/unlock matrix, result recorded under locks, immutable receipts and permissions/concurrency. Run relevant writer/admission/manual cable regressions. Record PASS/FAIL/evidence and stage2 report. Parent generates stage3 prompt from actual outputs; no production deployment.

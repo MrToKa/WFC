@@ -195,6 +195,37 @@ describe('showing the popup From/To locations without changing them', () => {
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Show To location' })); });
     expect(show.mock.calls).toEqual([[123], [444]]);
   });
+  it.each([3, 513, 4096])('shows all %i saved location parts together without calculating or saving again', async partCount => {
+    const saved = context('to', 'confirmed'), p = props(), sdkObjectIds = Array.from({ length: partCount }, (_, index) => 444 + index);
+    assignment.to.context = { ...saved, confirmedSelection: null, confirmedDisplaySelection: { source: 'confirmed-display-only', mode: 'fixed-world',
+      sdkObjectId: 444, sdkObjectIds, pointProjectMetres: [2, 2, 3], current: saved.current!, bindingId: saved.head!.id,
+      bindingContentSha256: saved.head!.contentSha256, commandSha256: 'e'.repeat(64) } };
+    const show = vi.fn(async () => true); render(<PathFinderCableRoutingPanel {...p} onShowLocation={show} />);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Show To location' })); });
+    expect(show).toHaveBeenCalledExactlyOnceWith(444, sdkObjectIds);
+    expect(assignment.save).not.toHaveBeenCalled(); expect(assignment.to.selectObject).not.toHaveBeenCalled(); expect(p.onCalculate).not.toHaveBeenCalled();
+  });
+  it('enables Show From for a preserved manual point after its source item is rediscovered', async () => {
+    const saved = context('from', 'confirmed'), p = props(), sdkObjectIds = [444, 445, 446, 447, 448];
+    assignment.from.context = cableEndpointContextSchema.parse({ ...saved, confirmedSelection: null,
+      head: { ...saved.head!, mode: 'fixed-world', sourceObject: null, derivation: 'manual-world-point' },
+      confirmedDisplaySelection: { source: 'confirmed-display-only', mode: 'fixed-world', sdkObjectId: 444, sdkObjectIds,
+        preservedMatchObjectGroup: { guid: id(90), sourceFile: 'plant/instruments.dwg', objectIds: sdkObjectIds },
+        pointProjectMetres: saved.head!.pointProjectMetres, current: saved.current!, bindingId: saved.head!.id,
+        bindingContentSha256: saved.head!.contentSha256, commandSha256: 'e'.repeat(64) } });
+    const show = vi.fn(async () => true); render(<PathFinderCableRoutingPanel {...p} onShowLocation={show} />);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Show From location' })); });
+    expect(show).toHaveBeenCalledExactlyOnceWith(444, sdkObjectIds);
+    expect(p.onCalculate).not.toHaveBeenCalled(); expect(assignment.save).not.toHaveBeenCalled();
+  });
+  it('does not show an invalid partial or reordered saved location group', () => {
+    const saved = context('to', 'confirmed');
+    assignment.to.context = { ...saved, confirmedSelection: null, confirmedDisplaySelection: { source: 'confirmed-display-only', mode: 'fixed-world',
+      sdkObjectId: 444, sdkObjectIds: [445, 444], pointProjectMetres: [2, 2, 3], current: saved.current!, bindingId: saved.head!.id,
+      bindingContentSha256: saved.head!.contentSha256, commandSha256: 'e'.repeat(64) } };
+    render(<PathFinderCableRoutingPanel {...props()} onShowLocation={vi.fn(async () => true)} />);
+    expect(screen.getByRole('button', { name: 'Show To location' })).toBeDisabled();
+  });
   it('does not substitute an older object for a manually entered point', () => {
     assignment.from.context = context('from', 'confirmed'); assignment.from.draftSource = 'selected';
     assignment.from.draft = { mode: 'fixed-world', point: [7, 8, 9], derivation: 'manual-world-point', displaySdkObjectId: null };
@@ -235,6 +266,32 @@ describe('persistent nonmodal cable routing panel with atomic drafts', () => {
     expect(screen.getByText('Routing and length saved')).toBeVisible();
     expect(screen.queryByRole('button',{name:'Review proposed routing'})).toBeNull();
     expect(screen.queryByRole('button',{name:'Apply reviewed routing'})).toBeNull();
+  });
+  it('shows independently verified stored values as saved while retaining a later failed calculation diagnostic',()=>{
+    const p=props();p.cable!.cable.routing='/SAVED';p.cable!.cable.designLength='58';
+    p.cable!.calculation={...p.cable!.calculation,jobId:id(99),jobStatus:'failed',itemState:'blocked',outcome:'failed',currentness:'unavailable',reasonCodes:['CALCULATION_FAILED']};
+    p.cable!.savedRoute={receiptId:id(90),jobId:id(79),proposalId:id(80),proposalHash:'b'.repeat(64),currentness:'current'};
+    render(<PathFinderCableRoutingPanel {...p} pathReady calculatedRouting="/SAVED" calculatedDesignLength="58"
+      calculationDiagnostics={{cableId:id(3),jobId:id(99),jobStatus:'failed',itemState:'blocked',itemStatus:'failed',itemMessage:'The later attempt exceeded its routing limit.',jobFailure:null,readError:null}} />);
+    expect(screen.getByRole('button',{name:'Show'})).toBeEnabled();
+    expect(screen.getByText('Routing and length saved')).toBeVisible();
+    expect(screen.getByText('Routing and Design length match the verified result in Cable list.')).toBeVisible();
+    expect(screen.getByText('Calculation stopped: The later attempt exceeded its routing limit.')).toBeVisible();
+    expect(screen.queryByRole('button',{name:'Review proposed routing'})).toBeNull();
+    expect(screen.queryByRole('button',{name:'Apply reviewed routing'})).toBeNull();
+    expect(p.onCalculate).not.toHaveBeenCalled();
+  });
+  it.each(['failed', 'cancelled'] as const)('does not call a verified saved cable outdated because its parent is %s', status => {
+    const p = props(); p.cable!.cable.routing = '/SAVED'; p.cable!.cable.designLength = '27';
+    p.cable!.calculation = { ...p.cable!.calculation, jobId: id(79), jobStatus: status, itemState: 'complete',
+      outcome: 'calculated', currentness: 'current', proposalId: id(80), proposalHash: 'b'.repeat(64), acceptedMatchesCurrent: true };
+    const review = { ...reviewController(p), canReview: false, message: 'This result is outdated. Calculate routing again.',
+      comparisonError: 'The batch is no longer available for review.' };
+    render(<PathFinderCableRoutingPanel {...p} review={review} pathReady calculatedRouting="/SAVED" calculatedDesignLength="27" />);
+    expect(screen.getByRole('button', { name: 'Show' })).toBeEnabled();
+    expect(screen.getByText('Routing and length saved')).toBeVisible();
+    expect(screen.queryByText(review.message)).toBeNull(); expect(screen.queryByText(review.comparisonError)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Apply reviewed routing' })).toBeNull();
   });
   it('shows automatic pair write progress without offering Review or Apply during that write', () => {
     const p=props(); p.cable!.calculation.automaticUpdate={status:'running',receiptId:null,reasonCode:null};
@@ -697,12 +754,22 @@ describe('persistent nonmodal cable routing panel with atomic drafts', () => {
     expect(screen.getByRole('button', { name: 'Hide' })).toBeEnabled(); fireEvent.click(screen.getByRole('button', { name: 'Hide' }));
     expect(p.onTogglePath).toHaveBeenCalledOnce(); expect(assignment.save).not.toHaveBeenCalled(); expect(p.onCalculate).not.toHaveBeenCalled();
   });
-  it('does not invoke the hook for denied, cross-project, MV or unknown categories', () => {
+  it('does not invoke the hook for denied, cross-project or explicit MV cables', () => {
     const p = props(), view = render(<PathFinderCableRoutingPanel {...p} access={{ ...p.access, isAdmin: false }} />);
     expect(screen.queryByRole('dialog')).toBeNull(); view.rerender(<PathFinderCableRoutingPanel {...p} access={{ ...p.access, accountId: null }} />);
     view.rerender(<PathFinderCableRoutingPanel {...p} cable={{ ...p.cable!, projectId: id(99) }} />);
-    for (const mto of ['MV', null, 'Unknown']) { view.rerender(<PathFinderCableRoutingPanel {...p} cable={{ ...p.cable!, mto }} />); expect(screen.queryByRole('dialog')).toBeNull(); }
+    view.rerender(<PathFinderCableRoutingPanel {...p} cable={{ ...p.cable!, mto: 'MV' }} />); expect(screen.queryByRole('dialog')).toBeNull();
     expect(useCableEndpointPairSelection).not.toHaveBeenCalled();
+  });
+  it.each([null, '', 'Power', 'Plastic tubing'])('renders the real popup and assignment controls with optional MTO %s', mto => {
+    const p = props(); p.cable = { ...p.cable!, mto };
+    render(<PathFinderCableRoutingPanel {...p} />);
+    expect(screen.getByRole('dialog', { name: 'Cable <literal>' })).toBeVisible();
+    expect(useCableEndpointPairSelection).toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Assign From' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Assign To' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Calculate routing' })).toBeEnabled();
+    expect(assignment.save).not.toHaveBeenCalled(); expect(p.onCalculate).not.toHaveBeenCalled();
   });
   it('remounts ownership when cable/account changes and scopes its current hook to the new owner', () => {
     const p = props(), view = render(<PathFinderCableRoutingPanel {...p} />); fireEvent.click(screen.getByRole('button', { name: 'Collapse' }));
@@ -775,5 +842,40 @@ describe('Path Finder detached window integration', () => {
     render(<PathFinderCableRoutingPanel {...props()} requestedPopup={{ window: null, blocked: true, id: 'blocked' }} />);
     expect(screen.getByRole('dialog')).toBeVisible(); expect(screen.getByText(/browser blocked the separate window/)).toBeVisible();
     expect(screen.getByRole('button', { name: 'Open in separate window' })).toBeEnabled();
+  });
+});
+
+describe('saved coordinate-only location display', () => {
+  function savedPoint() {
+    const base = context('from', 'confirmed');
+    return cableEndpointContextSchema.parse({ ...base, confirmedSelection: null, head: { ...base.head!, mode: 'fixed-world',
+      derivation: 'manual-world-point', sourceObject: null, attachment: null } });
+  }
+  it('shows the saved point without inventing an SDK ID, selection, Save or calculation', async () => {
+    assignment.from.context = savedPoint(); const p = props(), showPoint = vi.fn(async () => true), showObject = vi.fn();
+    render(<PathFinderCableRoutingPanel {...p} onShowLocation={showObject} onShowLocationPoint={showPoint} />);
+    expect(screen.getByText('Saved project point; no linked model object.')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Show From location' })).toBeEnabled();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Show From location' })); });
+    expect(showPoint).toHaveBeenCalledExactlyOnceWith([1, 2, 3], assignment.from.context.current);
+    expect(screen.getByText('Saved project point shown; no linked model object.')).toBeVisible();
+    expect(showObject).not.toHaveBeenCalled(); expect(p.onCalculate).not.toHaveBeenCalled(); expect(assignment.save).not.toHaveBeenCalled();
+  });
+  it.each(['model', 'fingerprint', 'selection', 'frame', 'artifact', 'aggregate', 'projection', 'revision', 'stale', 'retired', 'read error', 'retained'])('refuses a %s saved point', change => {
+    assignment.from.context = savedPoint(); const p = props(), c = assignment.from.context;
+    if (change === 'model') c.head!.modelVersionId = id(99);
+    if (change === 'fingerprint') c.current!.contentFingerprint = 'b'.repeat(64);
+    if (change === 'selection') c.current!.selectionRevision = '99';
+    if (change === 'frame') c.head!.captureFrameId = id(99);
+    if (change === 'artifact') c.head!.artifactId = id(99);
+    if (change === 'aggregate') c.head!.aggregateId = id(99);
+    if (change === 'projection') c.head!.projectionSha256 = 'b'.repeat(64);
+    if (change === 'revision') c.location!.revision = '999';
+    if (change === 'stale') c.head!.status = 'stale';
+    if (change === 'retired') assignment.retired = true;
+    if (change === 'read error') assignment.from.error = 'Read unavailable';
+    const view = render(<PathFinderCableRoutingPanel {...p} onShowLocationPoint={vi.fn(async () => true)} />);
+    if (change === 'retained') { assignment.from.context = null; view.rerender(<PathFinderCableRoutingPanel {...p} onShowLocationPoint={vi.fn(async () => true)} />); }
+    expect(screen.getByRole('button', { name: 'Show From location' })).toBeDisabled();
   });
 });

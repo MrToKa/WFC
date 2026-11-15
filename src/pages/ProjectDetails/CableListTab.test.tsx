@@ -176,6 +176,65 @@ const headers = () =>
     .map((cell) => cell.textContent);
 
 describe('personal cable list columns', () => {
+  it('renders newly saved ordinary Routing, Auto length and Design business values without remounting the list', async () => {
+    const mounted = render(view(false, false, { ...cable, routing: null, designLength: null }));
+    await screen.findByRole('table');
+    expect(screen.getByLabelText('Routing: Not set')).toHaveTextContent('-');
+    mounted.rerender(view(false, false, { ...cable, routing: '/B002/B003/SECONDARY', designLength: 122,
+      autoCalculatedLength: 122, autoLengthStatus: 'calculated', autoLengthCalculatedAt: '2026-11-15T12:00:00Z',
+      autoLengthBarrierStatus: 'clear', autoLengthMatchesLatestRequest: true }));
+    expect(screen.getByLabelText('Routing: /B002/B003/SECONDARY')).toHaveTextContent('/B002/B003/SECONDARY');
+    expect(within(screen.getByRole('row', { name: /CABLE-42/ })).getAllByText('122')).toHaveLength(2);
+  });
+  it('keeps execution columns hidden by default and saves an explicit execution-column selection', async () => {
+    render(
+      view(false, true, {
+        ...cable,
+        installLength: 23,
+        pullDate: '2026-11-15',
+        connectedFrom: '2026-11-16',
+        connectedTo: null,
+        tested: null,
+      }),
+    );
+    await screen.findByRole('table');
+    expect(headers()).not.toContain('Install length [m]');
+    expect(headers()).not.toContain('Pull date');
+    const dialog = await openColumns();
+    for (const label of [
+      'Install length [m]',
+      'Pull date',
+      'Connected From',
+      'Connected To',
+      'Cable tested',
+    ]) {
+      const checkbox = dialog.getByLabelText(label);
+      expect(checkbox).not.toBeChecked();
+      fireEvent.click(checkbox);
+    }
+    await saveColumns();
+    expect(headers()).toEqual(
+      expect.arrayContaining([
+        'Install length [m]',
+        'Pull date',
+        'Connected From',
+        'Connected To',
+        'Cable tested',
+      ]),
+    );
+    expect(screen.getByRole('cell', { name: '23' })).toBeVisible();
+    expect(screen.getByText('2026-11-15', { selector: 'time' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Export to Excel' }));
+    expect(exportList.mock.calls.at(-1)?.[0]).toEqual(
+      expect.arrayContaining([
+        'installLength',
+        'pullDate',
+        'connectedFrom',
+        'connectedTo',
+        'tested',
+      ]),
+    );
+  });
   it('adds diameter, weight and delivery to a saved selection and exports that selection', async () => {
     stored.set('user-a', ['tag']);
     render(view(false, true));
@@ -186,8 +245,11 @@ describe('personal cable list columns', () => {
     }
     await saveColumns();
     expect(headers()).toEqual(['Tag', 'Diameter [mm]', 'Weight [kg/m]', 'Delivery']);
-    expect(within(screen.getByRole('table')).getAllByRole('cell').map((cell) => cell.textContent))
-      .toEqual(['CABLE-42', '-', '-', '-']);
+    expect(
+      within(screen.getByRole('table'))
+        .getAllByRole('cell')
+        .map((cell) => cell.textContent),
+    ).toEqual(['CABLE-42', '-', '-', '-']);
     fireEvent.click(screen.getByRole('button', { name: 'Export to Excel' }));
     expect(exportList).toHaveBeenCalledWith(['tag', 'diameterMm', 'weightKgPerM', 'delivery']);
   });
@@ -214,27 +276,63 @@ describe('personal cable list columns', () => {
 
   it('shows PF Auto as a separate read-only value while Design stays editable and updates the projection after a new read', async () => {
     stored.set('user-a', ['tag', 'autoCalculatedLength', 'designLength', 'actions']);
-    const checked: Cable = { ...cable, autoCalculatedLength: 54, autoLengthStatus: 'calculated',
-      autoLengthCalculatedAt: '2026-10-21T12:00:00Z', autoLengthBarrierStatus: 'clear', autoLengthMatchesLatestRequest: true };
-    const page = render(view(true, false, checked)); await screen.findByRole('table');
-    expect(headers()).toEqual(['Tag', 'Auto calculated length [m]', 'Design length [m]', 'Actions']);
+    const checked: Cable = {
+      ...cable,
+      autoCalculatedLength: 54,
+      autoLengthStatus: 'calculated',
+      autoLengthCalculatedAt: '2026-10-21T12:00:00Z',
+      autoLengthBarrierStatus: 'clear',
+      autoLengthMatchesLatestRequest: true,
+    };
+    const page = render(view(true, false, checked));
+    await screen.findByRole('table');
+    expect(headers()).toEqual([
+      'Tag',
+      'Auto calculated length [m]',
+      'Design length [m]',
+      'Actions',
+    ]);
     const auto = screen.getByRole('region', { name: 'Path Finder automatic length' });
-    expect(within(auto).getByText('54')).toBeVisible(); expect(within(auto).queryByRole('spinbutton')).toBeNull();
+    expect(within(auto).getByText('54')).toBeVisible();
+    expect(within(auto).queryByRole('spinbutton')).toBeNull();
     expect(screen.getByRole('spinbutton', { name: 'Design length' })).toHaveValue(25);
-    page.rerender(view(true, false, { ...checked, autoCalculatedLength: 61, autoLengthBarrierStatus: 'bypassed' }));
-    expect(within(auto).getByText('61')).toBeVisible(); expect(within(auto).getByText(/Drill through the walls enabled/)).toBeVisible();
-    expect(screen.getByRole('spinbutton', { name: 'Design length' })).toHaveValue(25); expect(draftChange).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByRole('spinbutton', { name: 'Design length' }), { target: { value: '30' } });
-    expect(draftChange).toHaveBeenCalledWith(cable.id, 'designLength', '30'); expect(within(auto).getByText('61')).toBeVisible();
+    page.rerender(
+      view(true, false, {
+        ...checked,
+        autoCalculatedLength: 61,
+        autoLengthBarrierStatus: 'bypassed',
+      }),
+    );
+    expect(within(auto).getByText('61')).toBeVisible();
+    expect(within(auto).getByText(/Drill through the walls enabled/)).toBeVisible();
+    expect(screen.getByRole('spinbutton', { name: 'Design length' })).toHaveValue(25);
+    expect(draftChange).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Design length' }), {
+      target: { value: '30' },
+    });
+    expect(draftChange).toHaveBeenCalledWith(cable.id, 'designLength', '30');
+    expect(within(auto).getByText('61')).toBeVisible();
   });
   it('preserves a previously saved column list and offers the new Auto field without silently selecting it', async () => {
-    stored.set('user-a', ['tag', 'designLength', 'actions']); render(view());
+    stored.set('user-a', ['tag', 'designLength', 'actions']);
+    render(view());
     const dialog = await openColumns();
     expect(headers()).toEqual(['Tag', 'Design length [m]', 'Actions']);
     expect(dialog.getByRole('checkbox', { name: 'Auto calculated length [m]' })).not.toBeChecked();
-    fireEvent.click(dialog.getByRole('checkbox', { name: 'Auto calculated length [m]' })); await saveColumns();
-    expect(headers()).toEqual(['Tag', 'Auto calculated length [m]', 'Design length [m]', 'Actions']);
-    expect(stored.get('user-a')).toEqual(['tag', 'designLength', 'actions', 'autoCalculatedLength']);
+    fireEvent.click(dialog.getByRole('checkbox', { name: 'Auto calculated length [m]' }));
+    await saveColumns();
+    expect(headers()).toEqual([
+      'Tag',
+      'Auto calculated length [m]',
+      'Design length [m]',
+      'Actions',
+    ]);
+    expect(stored.get('user-a')).toEqual([
+      'tag',
+      'designLength',
+      'actions',
+      'autoCalculatedLength',
+    ]);
   });
   it('exports the currently applied selection after changing columns', async () => {
     stored.set('user-a', ['tag', 'routing', 'actions']);

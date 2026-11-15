@@ -42,6 +42,29 @@ describe('separate exact saved display capability',()=>{
   });
 });
 
+describe('receipt-qualified stored route independent of latest attempt',()=>{
+  const saved=():CableWorkflowRow=>row({cable:{...row().cable,routing:'/SAVED',designLength:'58'},
+    calculation:calculation({jobId:id(30),jobStatus:'failed',itemState:'blocked',outcome:'failed',currentness:'unavailable',reasonCodes:['CALCULATION_FAILED']}),
+    savedRoute:{receiptId:id(40),jobId:id(20),proposalId:id(21),proposalHash:'a'.repeat(64),currentness:'current'}});
+  it('classifies proven current cable values without replacing the failed latest calculation',()=>{
+    const value=cableWorkflowRowSchema.parse(saved());
+    expect(value.calculation).toMatchObject({jobId:id(30),jobStatus:'failed',reviewable:false,acceptedMatchesCurrent:false});
+    expect(classifyCableWorkflow(value)).toEqual({status:'up-to-date',reasonCodes:['CALCULATION_FAILED']});
+    expect(cableWorkflowRowSchema.parse({...value,savedRoute:{...value.savedRoute,currentness:'saved-exact'}}).calculation).toEqual(value.calculation);
+  });
+  it.each([{jobStatus:'running',itemState:'waiting',outcome:'not-evaluated'},
+    {jobStatus:'complete',itemState:'complete',outcome:'calculated',proposalId:id(21),proposalHash:'a'.repeat(64)}] as const)('refuses stored-route fallback over active or calculated work (%j)',patch=>{
+    const value=saved();expect(cableWorkflowRowSchema.safeParse({...value,calculation:{...value.calculation,...patch}}).success).toBe(false);
+  });
+  it('requires exact stored identity, available endpoints and nonblank stored values',()=>{
+    const value=saved();
+    for(const savedRoute of [{...value.savedRoute,proposalHash:'invalid'},{...value.savedRoute,receiptId:null}])expect(cableWorkflowRowSchema.safeParse({...value,savedRoute}).success).toBe(false);
+    expect(cableWorkflowRowSchema.safeParse({...value,from:unavailable('missing')}).success).toBe(false);
+    expect(cableWorkflowRowSchema.safeParse({...value,cable:{...value.cable,routing:null}}).success).toBe(false);
+    expect(cableWorkflowRowSchema.safeParse({...value,calculation:{...value.calculation,automaticUpdate:{status:'pending',receiptId:null,reasonCode:null}}}).success).toBe(false);
+  });
+});
+
 describe('explicit sealed v7 item display evidence',()=>{
   const proof=()=>({schemaVersion:'wfc.pf.sealed-cable-applicability.v1' as const,dependencyVersion:'pathfinder.dependencies.v7' as const,
     projectId:id(1),jobId:id(20),cableId:id(10),proposalId:id(21),dependencyHash:'b'.repeat(64),scope:'sealed-cable-item' as const});
@@ -88,17 +111,17 @@ describe('initial-fill display decision, never write authority', () => {
   ])('does not treat unavailable or malformed current values as blank %j', value => {
     expect(classifyCableInitialFill({ mto: 'Control', ...value }).mode).toBe('blocked');
   });
-  it('excludes MV and blocks unknown categories without inventing a default', () => {
+  it('excludes explicit MV while optional or custom MTO metadata does not block a candidate', () => {
     expect(classifyCableInitialFill({ mto: 'MV', routing: null, designLength: null }).mode).toBe('excluded');
     for (const mto of [undefined, null, '', 'lv', 'Unknown', ' Control ']) {
-      expect(classifyCableCategory(mto).status).toBe('blocked');
-      expect(classifyCableInitialFill({ mto, routing: null, designLength: null }).mode).toBe('blocked');
+      expect(classifyCableCategory(mto).status).toBe('eligible');
+      expect(classifyCableInitialFill({ mto, routing: null, designLength: null }).mode).toBe('initial-fill-candidate');
     }
     expect(classifyCableCategory('Instrumentation')).toEqual({ status: 'eligible', routingCategory: 'Control', reasonCodes: [] });
   });
   it('never returns a permission or changes the current cable values', () => {
     const current = row(), before = structuredClone(current);
-    expect(classifyCableInitialFill({ mto: undefined, ...current.cable })).toEqual({ mode: 'blocked', reasonCodes: ['CABLE_CATEGORY_REQUIRED'] });
+    expect(classifyCableInitialFill({ mto: undefined, ...current.cable })).toEqual({ mode: 'initial-fill-candidate', reasonCodes: [] });
     const decision = classifyCableInitialFill({ mto: current.mto, routing: current.cable.routing, designLength: current.cable.designLength });
     expect(Object.keys(decision).sort()).toEqual(['mode', 'reasonCodes']);
     expect(current).toEqual(before); expect(current.cable.installLength).toBe('123');
@@ -170,8 +193,26 @@ describe('cable workflow status is a display projection', () => {
   it('requires explicit current accepted-result evidence for up-to-date rather than the presence of old values', () => {
     const input = row({ cable: { ...row().cable, routing: '/EXISTING', designLength: '20' } });
     expect(classifyCableWorkflow(input).status).toBe('needs-routing');
-    expect(classifyCableWorkflow({ ...input, calculation: calculation({ currentness: 'current', acceptedMatchesCurrent: true }) }).status).toBe('up-to-date');
-    expect(classifyCableWorkflow(row({ calculation: calculation({ currentness: 'current', acceptedMatchesCurrent: true }) })).status).toBe('blocked');
+    expect(classifyCableWorkflow({ ...input, calculation: { ...ready(), reviewable: false, acceptedMatchesCurrent: true } }).status).toBe('up-to-date');
+    expect(classifyCableWorkflow(row({ calculation: { ...ready(), reviewable: false, acceptedMatchesCurrent: true } })).status).toBe('blocked');
+  });
+  it.each(['cancelled', 'failed'] as const)('keeps an independently saved completed cable up to date after background parent %s', jobStatus => {
+    const input = row({ cable: { ...row().cable, routing: '/SAVED', designLength: '27' },
+      calculation: { ...ready(), jobStatus, reviewable: false, acceptedMatchesCurrent: true } });
+    const parsed = cableWorkflowRowSchema.parse(input);
+    expect(classifyCableWorkflow(parsed)).toEqual({ status: 'up-to-date', reasonCodes: [] });
+    expect(parsed.calculation.reviewable).toBe(false);
+    expect(classifyCableWorkflow({ ...parsed, calculation: { ...parsed.calculation, acceptedMatchesCurrent: false } }).status).toBe('blocked');
+  });
+  it.each([
+    { itemState: 'waiting', outcome: 'not-evaluated' }, { itemState: 'running', outcome: 'not-evaluated' },
+    { itemState: 'blocked', outcome: 'failed' }, { outcome: 'no-path' }, { currentness: 'changed' },
+    { proposalId: null, proposalHash: null },
+  ] as const)('rejects accepted saved evidence inconsistent with its exact completed item: %j', patch => {
+    const input = row({ cable: { ...row().cable, routing: '/SAVED', designLength: '27' },
+      calculation: { ...ready(), jobStatus: 'failed', reviewable: false, acceptedMatchesCurrent: true, ...patch } });
+    expect(cableWorkflowRowSchema.safeParse(input).success).toBe(false);
+    expect(classifyCableWorkflow(input).status).toBe('blocked');
   });
   it('keeps no-path, stale, cancellation and failed jobs distinguishable from missing endpoints', () => {
     for (const [outcome, reason] of [['no-path', 'NO_PATH'], ['stale', 'CALCULATION_STALE']] as const)
@@ -183,9 +224,10 @@ describe('cable workflow status is a display projection', () => {
       .toEqual({ status: 'blocked', reasonCodes: ['CALCULATION_CURRENTNESS_UNAVAILABLE'] });
     expect(classifyCableWorkflow(row({ from: unavailable('missing') }))).toEqual({ status: 'needs-routing', reasonCodes: ['MISSING'] });
   });
-  it('cannot classify MV/unknown categories as ready even when a complete proposal is supplied', () => {
+  it('excludes MV while missing or custom MTO metadata does not override a complete proposal', () => {
     expect(classifyCableWorkflow(row({ mto: 'MV', calculation: ready() })).status).toBe('excluded');
-    expect(classifyCableWorkflow(row({ mto: 'Other', calculation: ready() })).status).toBe('blocked');
+    for (const mto of [null, '', 'Other', 'Plastic tubing'])
+      expect(classifyCableWorkflow(row({ mto, calculation: ready() })).status).toBe('ready-for-review');
   });
 });
 

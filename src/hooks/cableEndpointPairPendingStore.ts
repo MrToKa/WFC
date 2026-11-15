@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { parsePurposeJson, policyUuidSchema } from '../../shared/pathfinderPurposePolicy';
 import { cableEndpointPairCommandSchema, type CableEndpointPairCommand } from '../../shared/pathfinderCableEndpointPair';
 import { LEGACY_CABLE_ENDPOINT_PENDING_PREFIX, CABLE_ENDPOINT_PAIR_PENDING_PREFIX } from './cableEndpointPendingKeys';
+import { EndpointPendingLockError, withEndpointPendingLock } from './endpointPendingLock';
 export { CABLE_ENDPOINT_PAIR_PENDING_PREFIX } from './cableEndpointPendingKeys';
 
 const ownerSchema = z.object({ accountId: policyUuidSchema, projectId: policyUuidSchema }).strict();
@@ -21,14 +22,14 @@ export function readPendingCableEndpointPair(owner: CableEndpointPairPendingOwne
   return parsed;
 }
 async function locked<T>(owner: CableEndpointPairPendingOwner, work: () => T): Promise<T> {
-  if (!navigator.locks?.request) throw new CableEndpointPairStorageError('Safe Save recovery requires browser storage and Web Locks. No Save was sent.');
-  const abort = new AbortController(), timer = setTimeout(() => abort.abort(), 5000);
   try {
     // Existing per-endpoint writers use the legacy lock; pair writers acquire
     // that same lock first, then their own, so neither pending kind races past it.
-    return await navigator.locks.request(key(owner, LEGACY_CABLE_ENDPOINT_PENDING_PREFIX), { mode: 'exclusive', signal: abort.signal },
-      () => navigator.locks.request(key(owner), { mode: 'exclusive', signal: abort.signal }, work));
-  } finally { clearTimeout(timer); }
+    return await withEndpointPendingLock([key(owner, LEGACY_CABLE_ENDPOINT_PENDING_PREFIX), key(owner)], work);
+  } catch (error) {
+    if (error instanceof EndpointPendingLockError) throw new CableEndpointPairStorageError(error.message);
+    throw error;
+  }
 }
 export function retainPendingCableEndpointPair(owner: CableEndpointPairPendingOwner, cableId: string, command: CableEndpointPairCommand): Promise<PendingCableEndpointPair> {
   return locked(owner, () => {

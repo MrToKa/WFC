@@ -125,7 +125,7 @@ export function createCableWorkflowProofReader(client: PoolClient, projectId: st
     },
     /** Only a receipt-proven own write can explain the pre/post cable revision difference. */
     async accepted(cable: CableWorkflowRow['cable'], currentForOptions: (options: unknown,version:DependencySnapshot['schemaVersion']) => Promise<DependencySnapshot | null>,
-      expected?:{jobId:string;proposalId:string;proposalHash:string}): Promise<boolean> {
+      expected?:{jobId:string;proposalId:string;proposalHash:string;receiptId?:string}): Promise<boolean> {
       check(); const receipt = (await client.query<Data>(`/* cable-workflow:accepted-proof */ SELECT r.id,r.project_id,r.cable_id,r.proposal_id,r.actor_id,r.idempotency_key,r.payload_hash,
         CASE WHEN octet_length(r.before_snapshot::text)+octet_length(r.after_snapshot::text)+octet_length(r.provenance::text)<=$3 THEN r.before_snapshot ELSE NULL END AS before_snapshot,
         CASE WHEN octet_length(r.before_snapshot::text)+octet_length(r.after_snapshot::text)+octet_length(r.provenance::text)<=$3 THEN r.after_snapshot ELSE NULL END AS after_snapshot,
@@ -139,7 +139,8 @@ export function createCableWorkflowProofReader(client: PoolClient, projectId: st
         // A valid older own-write receipt cannot certify a newer displayed
         // proposal, even when its route text and length happen to be identical.
         if(expected&&(!policyUuidSchema.safeParse(expected.jobId).success||!policyUuidSchema.safeParse(expected.proposalId).success
-          ||!policyHashSchema.safeParse(expected.proposalHash).success||receipt.proposal_id!==expected.proposalId))return false;
+          ||!policyHashSchema.safeParse(expected.proposalHash).success||receipt.proposal_id!==expected.proposalId
+          ||expected.receiptId!==undefined&&(!policyUuidSchema.safeParse(expected.receiptId).success||receipt.id!==expected.receiptId)))return false;
         const before = object(receipt.before_snapshot), after = object(receipt.after_snapshot), provenance = object(receipt.provenance);
         if (!before || !after || !provenance || !['pathfinder.apply.v2', 'pathfinder.apply.v3', 'pathfinder.initial-fill.v1', 'pathfinder.initial-fill.v2', 'pathfinder.automatic-pair.v1'].includes(provenance.schemaVersion)
           || before.id !== cable.id || after.id !== cable.id || before.project_id !== projectId || after.project_id !== projectId
@@ -188,7 +189,7 @@ export function createCableWorkflowProofReader(client: PoolClient, projectId: st
     /** Display the exact already-written path after supported implementation or
      * planning metadata updates. Never certifies a current calculation/write. */
     async savedExactDisplay(cable: CableWorkflowRow['cable'], currentForOptions: (options: unknown, version: DependencySnapshot['schemaVersion']) => Promise<DependencySnapshot | null>,
-      expected: { jobId: string; proposalId: string; proposalHash: string }): Promise<boolean> {
+      expected: { jobId: string; proposalId: string; proposalHash: string; receiptId?: string }): Promise<boolean> {
       try {
         if (!policyUuidSchema.safeParse(expected.jobId).success || !policyUuidSchema.safeParse(expected.proposalId).success
           || !policyHashSchema.safeParse(expected.proposalHash).success) return false;

@@ -75,8 +75,8 @@ export function fixture() {
     receipts.set(c.idempotencyKey, structuredClone(receipt)); controls.entered?.(); if (controls.hold) await controls.hold;
     if (controls.afterStage) return controls.afterStage(receipt, c); return reply(receipt);
   };
-  const transport = () => createBarrierMultipartTransport({ origin: 'http://127.0.0.1:5192', projectId: id(1), modelVersionId: id(2), sessionId: id(10), loadId: id(4),
-    isCurrent: () => controls.current, fetchImpl, sha256: async bytes => hash(bytes), randomUUID: () => id(keys++) });
+  const transport = (options = {}) => createBarrierMultipartTransport({ origin: 'http://127.0.0.1:5192', projectId: id(1), modelVersionId: id(2), sessionId: id(10), loadId: id(4),
+    isCurrent: () => controls.current, fetchImpl, sha256: async bytes => hash(bytes), randomUUID: () => id(keys++), ...options });
   const page = (changes = {}) => { const value = { schemaVersion: 'wfc.pf.barrier-multipart-page.v2', kind: 'nodes', scopeSha256: session.scopeSha256, profileSha256: session.profileSha256,
     index: 0, firstOrdinal: 0, previousPageSha256: null, records: [{ dbId: 3, membershipMask: '0'.repeat(31) + '1' }], ...changes }; return { ...value, pageSha256: domain('page', value) }; };
   const seal = nodePage => { const value = { schemaVersion: 'wfc.pf.barrier-multipart-seal.v2', kind: 'nodes', scopeSha256: session.scopeSha256, profileSha256: session.profileSha256,

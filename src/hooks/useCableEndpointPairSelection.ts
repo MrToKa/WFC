@@ -1,3 +1,4 @@
+import { generateId } from '@/utils/generateId';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { canonicalPurposeJson, policyUuidSchema } from '../../shared/pathfinderPurposePolicy';
 import { cableEndpointCommandSchema, type CableEndpointContext, type CableEndpointCommand } from '../../shared/pathfinderCableEndpoints';
@@ -203,7 +204,7 @@ export function useCableEndpointPairSelection(access: CableEndpointPairSelection
       if (!context.canBind || !context.logicalName || !context.current) { update({ error: 'Resolve the current logical endpoint before saving its assignment.' }); return false; }
       const command = cableEndpointCommandSchema.parse({ ...(automaticPolicyKey === 'unspecified'
         ? { schemaVersion: 'wfc.pf.cable-endpoint-command.v3' }
-        : { schemaVersion: 'wfc.pf.cable-endpoint-command.v4', automaticPairPolicy: JSON.parse(automaticPolicyKey) }), idempotencyKey: crypto.randomUUID(),
+        : { schemaVersion: 'wfc.pf.cable-endpoint-command.v4', automaticPairPolicy: JSON.parse(automaticPolicyKey) }), idempotencyKey: generateId(),
         calculation: JSON.parse(calculationKey), initialFill: JSON.parse(policyKey), expectedContextSha256: context.contextSha256,
         expectedCableWriteRevision: context.cableWriteRevision, expectedLogicalName: context.logicalName, expectedRegistryRevision: context.registryRevision,
         expectedLocationId: context.location?.id ?? null, expectedLocationRevision: context.location?.revision ?? null, expectedHeadId: context.head?.id ?? null,
@@ -215,7 +216,7 @@ export function useCableEndpointPairSelection(access: CableEndpointPairSelection
     }
     if (!endpoints.length) return false;
     const command = cableEndpointPairCommandSchema.parse({ schemaVersion: automaticPolicyKey === 'unspecified'
-      ? 'wfc.pf.cable-endpoint-pair-command.v1' : 'wfc.pf.cable-endpoint-pair-command.v2', idempotencyKey: crypto.randomUUID(),
+      ? 'wfc.pf.cable-endpoint-pair-command.v1' : 'wfc.pf.cable-endpoint-pair-command.v2', idempotencyKey: generateId(),
       expectedContexts: { from: start.context!.contextSha256, to: end.context!.contextSha256 }, endpoints });
     const abort = new AbortController(); request.current = abort; update({ busy: true, error: null });
     try {

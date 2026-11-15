@@ -25,6 +25,7 @@ function fixture() {
   const original = f.client.query;
   const query = vi.fn(async (sql: string, args: unknown[] = []) => {
     if (sql.startsWith('BEGIN ISOLATION')) return original('BEGIN');
+    if (sql.startsWith('/* model-location-match:preserved-display */')) return { rows: [] };
     if (sql.startsWith('/* cable-endpoint:')) {
       f.queries.push(sql); f.parameters.push(args); const p = args as string[];
       if (sql.startsWith('/* cable-endpoint:cable */')) { const c = f.state.cables.find(c => c.id === p[1]); return { rows: c && !settings.missing ? [{ ...c, cable_write_revision: settings.cableRevision, mto: settings.mto, oversized: settings.oversized }] : [] }; }
@@ -132,16 +133,36 @@ describe('cable endpoint commands with synthetic SQL; selection reader independe
     expect(receipt.binding.binding.confirmedBy).toBe(f.who.userId); expect(receipt.impact).toEqual({ fromOccurrences: 2, toOccurrences: 2, distinctCables: 2, cableIds: [id(10), id(11)] });
     expect(f.state.locations.size).toBe(1); expect(f.state.locations.get(f.locationId)?.name).toBe('Equipment'); expect(f.state.registry).toBe('5');
   });
+  it('changes one shared location once and targets every referencing cable across both ends', async () => {
+    const f = fixture();
+    await endpointBindingTransaction(f.pool, f.projectId, f.who, client => confirmEndpointBindingChangeInTransaction(client, f.projectId, f.who, f.locationId, f.legacyCommand()));
+    const many = Array.from({ length: 250 }, (_, index) => ({ id: id(1000 + index),
+      from_location: index % 2 ? 'Alias' : 'OTHER', to_location: index % 2 ? 'equipment' : 'EQUIPMENT' }));
+    f.state.cables.push(...many);
+    const context = await f.read(), base = f.command(context);
+    const command = { ...base, schemaVersion: 'wfc.pf.cable-endpoint-command.v4' as const,
+      selection: { ...base.selection, mode: 'fixed-world' as const, pointProjectMetres: [8, 9, 10] as [number, number, number], derivation: 'manual-world-point' as const, displaySdkObjectId: null },
+      calculation: calculationFor(f.projectId, context.current!), initialFill: null, automaticPairPolicy: null };
+    const receipt = await f.save(command);
+    const affected = [id(10), id(11), ...many.map(cable => cable.id)].sort();
+    expect(receipt.impact.cableIds).toEqual(affected); expect(receipt.impact.distinctCables).toBe(252);
+    expect(mocks.append).toHaveBeenCalledExactlyOnceWith(f.client, expect.objectContaining({ affectedCableIds: affected }), expect.any(Function));
+    expect(f.state.locations.size).toBe(1);
+    for (const [cable, end] of [[id(10), 'from'], [id(11), 'to'], [id(1000), 'to'], [id(1001), 'from']] as const)
+      expect((await f.read(cable, end)).head?.pointProjectMetres).toEqual([8, 9, 10]);
+    expect(receipt.impact.cableIds).not.toContain(id(12));
+  });
   it('keeps command actor distinct from a no-op binding historical confirmer', async () => {
     const f = fixture(), first = await f.save(f.command(await f.read())), old = f.state.bindings.get(first.binding.binding.id)!;
     const { contentSha256: _hash, ...body } = old, changed = { ...body, confirmedBy: id(999) };
     f.state.bindings.set(old.id, { ...changed, contentSha256: endpointBindingHash(changed) });
     const receipt = await f.save(f.command(await f.read())); expect(receipt.actorId).toBe(f.who.userId); expect(receipt.binding.binding.confirmedBy).toBe(id(999)); expect(receipt.binding.duplicate).toBe(true);
   });
-  it.each(['LV', 'Control', 'Instrumentation'])('allows named %s, never inferring category from geometry', async mto => {
-    const f = fixture(); f.settings.mto = mto; expect((await f.read()).canBind).toBe(true);
+  it.each(['LV', 'Control', 'Instrumentation', null, 'Other', ''])('assigns a named endpoint with MTO %s without changing its MTO', async mto => {
+    const f = fixture(); f.settings.mto = mto; const c = await f.read(); expect(c.canBind).toBe(true);
+    const receipt = await f.save(f.command(c)); expect(receipt.logicalName).toBe(c.logicalName); expect(f.settings.mto).toBe(mto);
   });
-  it.each([['MV', 'CABLE_ENDPOINT_MV_EXCLUDED'], [null, 'CABLE_ENDPOINT_CATEGORY_REQUIRED'], ['Other', 'CABLE_ENDPOINT_CATEGORY_REQUIRED']])('blocks category %s explicitly', async (mto, reason) => {
+  it.each([['MV', 'CABLE_ENDPOINT_MV_EXCLUDED']])('blocks category %s explicitly', async (mto, reason) => {
     const f = fixture(); f.settings.mto = mto; const c = await f.read(); expect(c.canBind).toBe(false); expect(c.reasonCodes).toContain(reason);
     await expect(f.save(f.command(c))).rejects.toMatchObject({ code: 'CABLE_ENDPOINT_UNAVAILABLE' }); expect(f.state.bindings.size).toBe(0);
   });

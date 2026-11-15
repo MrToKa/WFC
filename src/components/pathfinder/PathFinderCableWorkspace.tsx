@@ -15,10 +15,12 @@ import { usePathfinderInitialFillProgress } from '@/hooks/usePathfinderInitialFi
 import type { EndpointCurrentScope } from '../../../shared/pathfinderEndpointBindings';
 import type { LocationImpactCalculation } from '../../../shared/pathfinderLocationImpacts';
 import { cableWorkflowRowSchema, classifyCableWorkflow } from '../../../shared/pathfinderCableWorkflow';
+import { isPathFinderCableEligible } from '../../../shared/pathfinderCableEligibility';
 import type { usePathFinder } from '@/pages/ProjectDetails/hooks/usePathFinder';
 import type { PathFinderWorkflowDisplay, PathFinderWorkflowReview, PathFinderWorkflowCalculationPreferences } from '@/pages/ProjectDetails/PathFinderResults';
 import { pathFinderWorkflowDisplayScope } from '@/pages/ProjectDetails/PathFinderResults';
 import { policyUuidSchema } from '../../../shared/pathfinderPurposePolicy';
+import { canonicalDecimalString } from '../../../shared/pathfinderLengthLedger';
 import { cableWorkflowReason, PathFinderNeedsRoutingList } from './PathFinderNeedsRoutingList';
 import { PathFinderCableRoutingPanel, type PathFinderCalculationDiagnostics } from './PathFinderCableRoutingPanel';
 import type { PathFinderEndpointForegroundContexts } from '@/pages/ProjectDetails/pathFinderEndpointVisibility';
@@ -39,6 +41,7 @@ export type PathFinderCableWorkspaceProps = Access & { pf: ReturnType<typeof use
   display?: PathFinderWorkflowDisplay; onTogglePath?: (cableId: string) => void; review?: PathFinderWorkflowReview | null;
   onEndpointForegroundContexts?: (value: PathFinderEndpointForegroundContexts | null) => void;
   onCalculationStart?: (cableId: string) => void; onConfigureCalculation?: () => void;
+  onResultRefresh?: (cableId: string) => void;
   getCalculationPreferences?: (drillThroughWalls: boolean) => PathFinderPreferences | null;
   onCalculationPreferences?: (value: PathFinderWorkflowCalculationPreferences) => void };
 type Impact = { id: string; current: EndpointCurrentScope; calculation: LocationImpactCalculation | null; originCableId: string | null };
@@ -50,9 +53,18 @@ type SettledDiagnostics = { owner: string; model: string; cableId: string; jobId
 type CalculationDiagnosticSnapshot = { owner: string; model: string; value: PathFinderCalculationDiagnostics };
 const displayCandidate = (calculation: CableWorkflowRow['calculation']) => calculation.outcome === 'calculated'
   && calculation.currentness === 'current' && calculation.itemState === 'complete' && calculation.proposalId !== null && calculation.proposalHash !== null;
-const savedDisplayCandidate = (calculation: CableWorkflowRow['calculation']) => calculation.savedExactDisplay === true
-  && calculation.outcome === 'calculated' && calculation.itemState === 'complete' && calculation.jobStatus === 'complete'
-  && calculation.proposalId !== null && calculation.proposalHash !== null;
+/** A later batch stop cannot revoke an exact, already saved cable item.
+ * The Results owner still supplies the verified read-only display handoff. */
+function acceptedStoppedDisplay(row: CableWorkflowRow, display: PathFinderWorkflowDisplay | null | undefined) {
+  if (!display?.ready || display.source !== 'current-calculation' || !displayCandidate(row.calculation)
+    || !row.calculation.acceptedMatchesCurrent || !['failed', 'cancelled'].includes(row.calculation.jobStatus ?? '')
+    || row.cable.routing !== display.routing || row.cable.designLength === null || display.designLength === null) return false;
+  try { return canonicalDecimalString(row.cable.designLength) === canonicalDecimalString(display.designLength); } catch { return false; }
+}
+const displayIdentity = (row: CableWorkflowRow) => row.savedRoute ?? row.calculation;
+const savedDisplayCandidate = (row: CableWorkflowRow) => row.savedRoute?.currentness === 'saved-exact'
+  || row.calculation.savedExactDisplay === true && row.calculation.outcome === 'calculated' && row.calculation.itemState === 'complete'
+    && row.calculation.jobStatus === 'complete' && row.calculation.proposalId !== null && row.calculation.proposalHash !== null;
 const MAX_RETAINED_CALCULATION_ATTEMPTS = 128;
 // Charge a status/detail round once. Its terminal read, state refresh and exact
 // recheck must still finish on the last allowed round. Recovery remains GET-only.
@@ -119,6 +131,9 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   const [impact, setImpact] = useState<Impact | null>(null), [revision, setRevision] = useState(0), [notice, setNotice] = useState<string | null>(null);
   const [calculating, setCalculating] = useState(false);
   const [refreshingSelected, setRefreshingSelected] = useState(false), [selectedReadError, setSelectedReadError] = useState<string | null>(null);
+  const [refreshingState, setRefreshingState] = useState(false);
+  const manualRefresh = useRef<AbortController | null>(null);
+  const metadataCommit = useRef<{ ticket: AbortController; scope: string; resolve: () => void } | null>(null);
   const [drillDraft, setDrillDraft] = useState<{ cableId: string; checked: boolean } | null>(null);
   const [calculationFeedback, setCalculationFeedback] = useState<CalculationFeedback | null>(null);
   const attemptEpoch = useRef(0);
@@ -160,10 +175,11 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
     dwell.current = setTimeout(() => { dwell.current = null; if (callbacks.current.active && anchor.isConnected) setPreview({ row, anchor }); }, 1000);
   };
   const openCable = (row: CableWorkflowRow) => {
-    if (!enabled || row.projectId !== props.projectId || !['LV', 'Control', 'Instrumentation'].includes(row.mto ?? '')) return;
+    if (!enabled || row.projectId !== props.projectId || !isPathFinderCableEligible(row.mto)) return;
     // User activation belongs to this click, before the editor is mounted.
     const request = requestFloatingCableWindow({ title: row.cable.tag || 'Cable routing' }, popupRef.current);
     popupRef.current = request; setPopup(request); dismissPreview();
+    manualRefresh.current?.abort(); manualRefresh.current = null; setRefreshingState(false);
     diagnosticsEpoch.current++; settledDiagnosticsRef.current = null; protectedDiagnostics.current = null; setSettledDiagnostics(null);
     read.current?.abort(); setRefreshingSelected(false);
     if (selectedRef.current?.cable.id !== row.cable.id) setSelectedReadError(null);
@@ -191,11 +207,12 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   const panelActive = props.active && props.pf.viewerPhase === 'ready' && Boolean(model?.modelVersionId);
   const enabled = panelActive && Boolean(readPreferences);
   const calculationEnabled = enabled && Boolean(preferences);
+  const selectedEligible = Boolean(selected && isPathFinderCableEligible(selected.mto));
   const drillThroughWalls = Boolean(selected && drillDraft?.cableId === selected.cable.id && drillDraft.checked);
   const selectedPreferences = props.getCalculationPreferences ? props.getCalculationPreferences(drillThroughWalls) : preferences;
   const calculationBlockedReason = enabled && !selectedPreferences
     ? 'You can save From/To assignments now. Configure the current route settings and barriers before calculating routing. Existing Cable list values are retained.' : null;
-  const calculation = calculationEnabled && preferences ? { preferences, timeoutMilliseconds: 120000 } : null;
+  const calculation = calculationEnabled && selectedEligible && preferences ? { preferences, timeoutMilliseconds: 120000 } : null;
   const selectedReadScope = workspaceReadScope(props);
   const previousReadScope = useRef(selectedReadScope);
   const acceptVerifiedRefresh = useCallback((row: CableWorkflowRow, state: WorkspaceState) => {
@@ -256,7 +273,12 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
         jobId: savedImpact.jobId!, preferences: structuredClone(savedWatch.preferences) });
       if ((retryResult || JSON.stringify(row) !== JSON.stringify(detail.row))
         && (savedWatch?.cableId !== row.cable.id || savedJobMatches && calculationFinished(detail.row.calculation))
-        && !automaticUpdatePending(detail.row.calculation)) current.onSelect(detail.row);
+        && !automaticUpdatePending(detail.row.calculation)) {
+        current.onSelect(detail.row);
+        // A fresh successful GET is an explicit request to hydrate the same
+        // immutable result again, even if none of its identity fields changed.
+        if (retryResult) current.onResultRefresh?.(row.cable.id);
+      }
       const submitted = submittedRef.current, observed = detail.row.calculation;
       if (submitted?.cableId === row.cable.id && submitted.jobId !== null && observed.jobId === submitted.jobId
         && calculationFinished(observed)
@@ -291,6 +313,39 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
     } }
     finally { if (read.current === ticket) { read.current = null; if (alive.current) setRefreshingSelected(false); } }
   }, [rememberSubmission, rememberFeedback, authorityLost, deferDiagnostics]);
+  const refreshCableStatus = useCallback(async () => {
+    const current = callbacks.current, row = selectedRef.current;
+    if (!alive.current || !current.active || !row || manualRefresh.current) return;
+    const owner = calculationWatchOwner(current), model = modelScope(current), ticket = new AbortController();
+    manualRefresh.current = ticket; setRefreshingState(true);
+    // Refresh model/preparation metadata before checking the selected row.
+    // Background impact progress has no authority over this read and must not
+    // be awaited here. No calculation or replacement write is submitted.
+    try {
+      const deadline = Date.now() + 30_000;
+      try {
+        const state = await readWithinCalculationBudget(ticket.signal, deadline, () => backgroundStateRefresh());
+        if (state && state.projectId === current.projectId && activeModelScope(state.activeModel) === model) {
+          const nextScope = workspaceReadScope(current, state);
+          // The state GET can resolve before React has committed its new
+          // preparation snapshot. Starting the row GET sooner lets that commit
+          // abort it as an old-scope read. Wait for the actual rendered scope.
+          if (previousReadScope.current !== nextScope)
+            await readWithinCalculationBudget(ticket.signal, deadline, () => new Promise<void>(resolve => {
+              metadataCommit.current = { ticket, scope: nextScope, resolve };
+            }));
+        }
+      }
+      catch { /* The exact reader still checks authority and currentness. */ }
+      if (!alive.current || ticket.signal.aborted || !callbacks.current.active || selectedRef.current?.cable.id !== row.cable.id
+        || calculationWatchOwner(callbacks.current) !== owner || modelScope(callbacks.current) !== model) return;
+      await refreshSelected(true);
+    } finally {
+      if (metadataCommit.current?.ticket === ticket) metadataCommit.current = null;
+      if (manualRefresh.current === ticket) { manualRefresh.current = null; if (alive.current) setRefreshingState(false); }
+    }
+  }, [backgroundStateRefresh, refreshSelected]);
+  useEffect(() => () => { manualRefresh.current?.abort(); }, []);
   const refreshDiagnostics = useCallback((forceSelected = false) => {
     // Owned calculations already have a bounded selected-item watcher. Progress
     // notifications must not race it with expensive full cable/list reads while
@@ -321,6 +376,10 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
     }
     if (selectedRef.current) setSelectedReadError('The current model or route settings changed. Refresh this cable before reviewing or applying its result.');
   }, [selectedReadScope]);
+  useEffect(() => {
+    const pending = metadataCommit.current;
+    if (pending?.scope === selectedReadScope) { metadataCommit.current = null; pending.resolve(); }
+  }, [selectedReadScope]);
   // A same-model Viewer reload remounts this owner while Tab retains the user's
   // selected ID. Restore its current row by GET, never an old display payload or
   // a replayed command. Opening the popup still requires user activation.
@@ -349,7 +408,10 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   useEffect(() => {
     if (lastExternalRefresh.current === props.refreshKey) return;
     if (!props.active) return;
-    lastExternalRefresh.current = props.refreshKey; refreshDiagnostics(true);
+    lastExternalRefresh.current = props.refreshKey;
+    // Find/assign can restore display identity without changing coordinates,
+    // the binding head or the Cable list revision. Refresh the open endpoints too.
+    setEndpointRefreshKey(value => value + 1); refreshDiagnostics(true);
   }, [props.active, props.refreshKey, refreshDiagnostics]);
   useEffect(() => {
     if (!props.active) read.current?.abort();
@@ -650,7 +712,8 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   }, [savedCalculation, submittedCalculation, enabled, props.projectId, props.token, selected?.cable.id, authorityLost, rememberFeedback, acceptVerifiedRefresh, deferDiagnostics, retainCalculationDiagnostics]);
   const calculateSelected = async () => {
     const row = selectedRef.current, current = callbacks.current;
-    if (!alive.current || !enabled || !current.active || calculating || submittedRef.current || !row || savedCalculationRef.current?.cableId === row.cable.id || selectedCalculationPending(row.calculation)) return;
+    if (!alive.current || !enabled || !current.active || calculating || submittedRef.current || !row
+      || !isPathFinderCableEligible(row.mto) || savedCalculationRef.current?.cableId === row.cable.id || selectedCalculationPending(row.calculation)) return;
     const attempt = Object.freeze({ epoch: ++attemptEpoch.current, owner: calculationAttemptOwner(current) });
     const selectedPreferences = current.getCalculationPreferences ? current.getCalculationPreferences(drillThroughWalls) : current.preferences;
     if (!selectedPreferences) {
@@ -700,17 +763,20 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   };
   const parsedVerifiedRow = cableWorkflowRowSchema.safeParse(props.display?.verifiedRow);
   const verifiedRow = parsedVerifiedRow.success ? parsedVerifiedRow.data : null;
+  const selectedIdentity = selected ? displayIdentity(selected) : null;
+  const verifiedIdentity = verifiedRow ? displayIdentity(verifiedRow) : null;
   const observedRevision = props.pf.data?.cables?.find(row => row.id === selected?.cable.id)?.cableWriteRevision;
   const verifiedRowMatches = Boolean(props.active && enabled && selected && verifiedRow && !submittedCalculation && !savedCalculation && !refreshingSelected && !selectedReadError
     && previousReadScope.current === selectedReadScope && props.display?.verifiedScope === pathFinderWorkflowDisplayScope(props.pf, props.accountId)
     && props.display?.cableId === selected.cable.id && verifiedRow.projectId === props.projectId && verifiedRow.cable.id === selected.cable.id
-    && props.display.jobId === selected.calculation.jobId && props.display.proposalId === selected.calculation.proposalId
-    && props.display.proposalHash === selected.calculation.proposalHash && verifiedRow.calculation.jobId === props.display.jobId
-    && verifiedRow.calculation.proposalId === props.display.proposalId && verifiedRow.calculation.proposalHash === props.display.proposalHash
-    && (props.display.source !== 'saved-exact' && displayCandidate(verifiedRow.calculation)
-      || props.display.source === 'saved-exact' && savedDisplayCandidate(verifiedRow.calculation))
+    && verifiedRow.savedRoute?.receiptId === selected.savedRoute?.receiptId
+    && props.display.jobId === selectedIdentity?.jobId && props.display.proposalId === selectedIdentity?.proposalId
+    && props.display.proposalHash === selectedIdentity?.proposalHash && verifiedIdentity?.jobId === props.display.jobId
+    && verifiedIdentity.proposalId === props.display.proposalId && verifiedIdentity.proposalHash === props.display.proposalHash
+    && (props.display.source !== 'saved-exact' && (verifiedRow.savedRoute?.currentness === 'current' || displayCandidate(verifiedRow.calculation))
+      || props.display.source === 'saved-exact' && savedDisplayCandidate(verifiedRow))
     && !automaticUpdatePending(verifiedRow.calculation)
-    && !['failed', 'cancelled'].includes(verifiedRow.calculation.jobStatus ?? '')
+    && (verifiedRow.savedRoute || !['failed', 'cancelled'].includes(verifiedRow.calculation.jobStatus ?? '') || acceptedStoppedDisplay(verifiedRow, props.display))
     && BigInt(verifiedRow.cable.cableWriteRevision) >= BigInt(selected.cable.cableWriteRevision)
     && (observedRevision === undefined || BigInt(verifiedRow.cable.cableWriteRevision) >= BigInt(observedRevision)));
   const displayedSelection = verifiedRowMatches ? verifiedRow! : selected;
@@ -787,24 +853,28 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   // proof. The next-calculation draft cannot change that review policy.
   const popupReview = matchedReview;
   const selectedCalculation = displayedSelection?.calculation;
+  const displayedIdentity = displayedSelection ? displayIdentity(displayedSelection) : null;
   const displaySourceMatches = Boolean(selected && props.display?.cableId === selected.cable.id
     && props.display.verifiedScope === pathFinderWorkflowDisplayScope(props.pf, props.accountId)
     && (!props.display.verifiedRow || verifiedRowMatches)
-    && props.display.jobId === selectedCalculation?.jobId && props.display.proposalId === selectedCalculation?.proposalId
-    && props.display.proposalHash === selectedCalculation?.proposalHash
-    && (props.display.source !== 'saved-exact' && selectedCalculation?.currentness === 'current'
-      || props.display.source === 'saved-exact' && verifiedRowMatches && selectedCalculation && savedDisplayCandidate(selectedCalculation))
+    && (displayedSelection?.savedRoute || !['failed', 'cancelled'].includes(selectedCalculation?.jobStatus ?? '')
+      || verifiedRowMatches && displayedSelection && acceptedStoppedDisplay(displayedSelection, props.display))
+    && props.display.jobId === displayedIdentity?.jobId && props.display.proposalId === displayedIdentity?.proposalId
+    && props.display.proposalHash === displayedIdentity?.proposalHash
+    && (props.display.source !== 'saved-exact' && (displayedSelection?.savedRoute?.currentness === 'current' && verifiedRowMatches || selectedCalculation?.currentness === 'current')
+      || props.display.source === 'saved-exact' && verifiedRowMatches && displayedSelection && savedDisplayCandidate(displayedSelection))
     && !submittedCalculation && !(displayedSelection && automaticUpdatePending(displayedSelection.calculation)) && savedCalculation?.cableId !== selected.cable.id && !refreshingSelected && !selectedReadError);
   const displayMatches = displaySourceMatches && Boolean(props.display?.ready);
   // Exact proposal text can be read before its viewer foreground is ready.
   // Show still requires the complete verified display payload above.
-  const displayTextMatches = displaySourceMatches && selectedCalculation?.outcome === 'calculated' && selectedCalculation.itemState === 'complete'
-    && !['failed', 'cancelled'].includes(selectedCalculation.jobStatus ?? '')
+  const displayTextMatches = displaySourceMatches && (displayedSelection?.savedRoute || selectedCalculation?.outcome === 'calculated' && selectedCalculation.itemState === 'complete'
+    && (!['failed', 'cancelled'].includes(selectedCalculation.jobStatus ?? '')
+      || verifiedRowMatches && displayedSelection && acceptedStoppedDisplay(displayedSelection, props.display)))
     && (Boolean(props.display?.ready) || typeof props.display?.routing === 'string');
   const waitingForSavedCalculation = savedCalculation?.cableId === selected?.cable.id && Boolean(savedCalculation);
   const displayCheckFeedback = !displayMatches && !waitingForSavedCalculation && !submittedCalculation && selected
-    && props.display?.cableId === selected.cable.id && props.display.jobId === selected.calculation.jobId
-    && props.display.proposalId === selected.calculation.proposalId && props.display.proposalHash === selected.calculation.proposalHash
+    && props.display?.cableId === selected.cable.id && props.display.jobId === selectedIdentity?.jobId
+    && props.display.proposalId === selectedIdentity?.proposalId && props.display.proposalHash === selectedIdentity?.proposalHash
     && props.display.message ? { cableId: selected.cable.id, working: props.display.checking === true, message: props.display.message } : null;
   const selectedFeedback = calculationFeedback?.cableId === selected?.cable.id ? calculationFeedback : null;
   const currentFeedback = selectedFeedback ? { cableId: selectedFeedback.cableId, working: selectedFeedback.working,
@@ -813,7 +883,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
     currentFeedback.working = false;
     currentFeedback.message = selected?.calculation.acceptedMatchesCurrent
       ? 'The current route and Design length are saved in Cable list. Use Show to inspect this result.'
-      : 'The current route is ready. Manually changed cable values are retained; compare them, then Review and Apply.';
+      : 'The calculated route is ready. Protected cable values remain unchanged; manage routing protection in Cable details.';
   }
   const preparationUpdated = selected?.calculation.outcome === 'stale' && selected.calculation.currentness === 'changed'
     && selected.calculation.reasonCodes.includes('ROUTING_PREPARATION_UPDATED');
@@ -830,7 +900,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
       : selectedStatus?.status === 'ready-for-review' && !displayMatches ? 'Checking the calculated result' : selectedStatus?.status === 'up-to-date' ? 'Updated in Cable list'
       : selectedStatus?.status === 'ready-for-review' ? 'Ready for review; existing values remain until Apply' : selectedStatus?.status === 'calculating' ? 'Recalculating' : 'Needs routing or attention'}.</p> : null}
     {selected && !open ? <Button onClick={() => openCable(selected)}>Open selected cable</Button> : null}
-    {selected ? <Button disabled={!panelActive || refreshingSelected} onClick={() => { setRevision(value => value + 1); void refreshSelected(true); void progress.refresh(); void writes.refresh(); }}>Refresh selected cable</Button> : null}
+    {selected ? <Button disabled={!panelActive || refreshingSelected || refreshingState} onClick={() => { setRevision(value => value + 1); void refreshCableStatus(); void progress.refresh(); void writes.refresh(); }}>Refresh selected cable</Button> : null}
     {impact ? <section aria-label="Affected cable progress">
       <h4>Shared location progress</h4>
       {progress.impact ? <p role="status">{progress.impact.status === 'complete' ? 'Calculation complete' : progress.impact.status.replaceAll('-', ' ')}: {progress.impact.completed} / {progress.impact.total} affected cables.</p> : <p>Reading affected calculation…</p>}
@@ -850,9 +920,9 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
       preparationKey: JSON.stringify([props.pf.preparationViewerGeneration, props.pf.data?.artifacts.map(item => [item.id, item.snapshotSha256])]),
       // Endpoint-only Save requests no calculation or write authority. New
       // ready saves use the explicit automatic-ownership policy.
-      calculation, initialFill: null, automaticPairPolicy: calculationEnabled ? AUTOMATIC_PAIR_POLICY : null,
+      calculation, initialFill: null, automaticPairPolicy: calculationEnabled && selectedEligible ? AUTOMATIC_PAIR_POLICY : null,
       readSelection: props.pf.readSelection, onSaved: saved, onAuthorityLost: authorityLost,
-    }} onCalculate={enabled && !submittedCalculation && !waitingForSavedCalculation && !popupReview?.pending && selected && !selectedCalculationPending(selected.calculation) ? calculateSelected : undefined}
+    }} onCalculate={enabled && selectedEligible && !submittedCalculation && !waitingForSavedCalculation && !popupReview?.pending && selected && !selectedCalculationPending(selected.calculation) ? calculateSelected : undefined}
       calculationBlockedReason={calculationBlockedReason} onConfigureCalculation={props.onConfigureCalculation}
       drillThroughWalls={drillThroughWalls} onDrillThroughWallsChange={checked => {
         if (selected) setDrillDraft({ cableId: selected.cable.id, checked });
@@ -861,9 +931,10 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
       calculationDiagnostics={!selectedReadError && calculationDiagnostics?.owner === calculationWatchOwner(props)
         && calculationDiagnostics.model === modelScope(props) && calculationDiagnostics.value.cableId === selected?.cable.id
         && calculationDiagnostics.value.jobId === selected?.calculation.jobId ? calculationDiagnostics.value : null}
-      onRefresh={async () => { await progress.refresh(); await refreshSelected(true); }} refreshing={refreshingSelected} refreshError={selectedReadError}
+      onRefresh={() => { void progress.refresh(); return refreshCableStatus(); }} refreshing={refreshingSelected || refreshingState} refreshError={selectedReadError}
       onTogglePath={selected && props.onTogglePath ? () => props.onTogglePath?.(selected.cable.id) : undefined}
       onShowLocation={props.pf.viewerPhase === 'ready' ? props.pf.showLocation : undefined}
+      onShowLocationPoint={props.pf.viewerPhase === 'ready' ? props.pf.showLocationPoint : undefined}
       onEndpointForegroundContexts={props.onEndpointForegroundContexts}
       pathVisible={displayMatches && props.display?.visible}
       pathReady={displayMatches} pathSource={displayTextMatches ? props.display?.source : null} endpointRefreshKey={endpointRefreshKey}
@@ -887,7 +958,8 @@ function CableHoverPreview({ row, anchor, onEnter, onLeave, onClose, onOpen }: {
     onPointerEnter={onEnter} onPointerLeave={onLeave} onFocus={onEnter} onBlur={onLeave} data-cable-preview="true">
     <h3 className={styles.heading}>{row.cable.tag || 'Cable preview'}</h3>
     <p>From: {row.cable.fromLocation || 'No location name'}<br />To: {row.cable.toLocation || 'No location name'}</p>
-    <p>{cableWorkflowReason(row)}</p><p>Routing: {row.cable.routing || 'Not set'}<br />Design length: {row.cable.designLength ?? 'Not set'} m</p>
+    <p>{cableWorkflowReason(row)}</p>
+    <p>Routing: {row.cable.routing || 'Not set'}<br />Design length: {row.cable.designLength ?? 'Not set'} m</p>
     <div className={styles.actions}><Button onClick={onOpen}>Open cable in separate window</Button><Button onClick={onClose}>Close preview</Button></div>
   </div></Portal>;
 }

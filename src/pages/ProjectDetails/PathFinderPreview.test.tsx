@@ -143,8 +143,8 @@ describe('standalone path endpoint foreground', () => {
   });
 
   it('retains the complete result without truncating foreground IDs beyond the protected bridge budget', async () => {
-    const pf = model(), result = preview(); result.result!.route!.objectIds = Array.from({ length: 512 }, (_, index) => `dbid:${index + 1}`);
-    result.result!.to = { ...result.result!.to, source: 'equipment-bottom-aabb', objectId: 'dbid:600' }; pf.readPreview.mockResolvedValue(result);
+    const pf = model(), result = preview(); result.result!.route!.objectIds = Array.from({ length: 8704 }, (_, index) => `dbid:${index + 1}`);
+    result.result!.to = { ...result.result!.to, source: 'equipment-bottom-aabb', objectId: 'dbid:9000' }; pf.readPreview.mockResolvedValue(result);
     mount(pf); enterNames(); fireEvent.click(screen.getByRole('button', { name: 'Calculate path' }));
     await screen.findByText('The exact path exceeds the viewer object budget. Its result is retained without truncation.');
     expect(pf.showPath).not.toHaveBeenCalled(); expect(screen.getByTestId('pathfinder-preview')).toHaveAttribute('data-state', 'complete');

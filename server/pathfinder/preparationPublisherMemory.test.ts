@@ -3,6 +3,7 @@ import {createHash} from 'node:crypto';
 import {beforeEach,describe,expect,it,vi} from 'vitest';
 import type {PoolClient} from 'pg';
 import type {PreparationPlan,PreparationSession} from '../../shared/pathfinderPreparation.js';
+import {EXTENDED_PREPARATION_CAPACITY_PROFILE} from '../../shared/pathfinderCapacity.js';
 const state=vi.hoisted(()=>({cache:Buffer.alloc(0),projection:Buffer.alloc(0),active:0,maximum:0,order:[] as string[]}));
 async function read(kind:string,bytes:Buffer){state.order.push(kind);state.active++;state.maximum=Math.max(state.maximum,state.active);await Promise.resolve();state.active--;return Buffer.from(bytes);}
 vi.mock('./storage.js',async original=>({...await original<typeof import('./storage.js')>(),readSnapshot:()=>read('cache',state.cache)}));
@@ -11,7 +12,7 @@ vi.mock('./repository.js',()=>({bumpRegistry:vi.fn(async()=>'2')}));
 import {createPreparationPublisher} from './preparationPublisher.js';
 const id=(n:number)=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 function fixture(){
-  const plan={id:id(1),projectId:id(2),modelVersionId:id(3),contentFingerprint:'a'.repeat(64),catalogRevision:'1',routingContentSha256:'b'.repeat(64),routingPolicyRevision:'1',routingPolicySha256:'c'.repeat(64)} as PreparationPlan;
+  const plan={id:id(1),projectId:id(2),modelVersionId:id(3),contentFingerprint:'a'.repeat(64),catalogRevision:'1',routingContentSha256:'b'.repeat(64),routingPolicyRevision:'1',routingPolicySha256:'c'.repeat(64),limitsProfile:EXTENDED_PREPARATION_CAPACITY_PROFILE} as PreparationPlan;
   const matrix=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
   const snapshot={schemaVersion:'pathfinder.model.snapshot.v1',model:{projectId:plan.projectId,modelVersionId:plan.modelVersionId,contentSha256:plan.contentFingerprint},capture:{adapterVersion:'synthetic-test',sourceKind:'synthetic',inventoryComplete:false,geometryComplete:false,unitsVerified:false,transformsVerified:false,planningVisibilityKnown:false,sourceLinkVerified:false,evidenceSha256:[]},coordinates:{vertexFrame:'canonical-world-metres',sourceUnits:'m',metresPerSourceUnit:1,sourceToWorldMetres:matrix,displayToWorldMetres:matrix,globalOffsetMetres:[0,0,0]},objects:[{id:' dbid:1 ',dbId:1,parentId:null,name:'STRAIGHT',geometryRole:'routing-leaf',leafToRootNames:['STRAIGHT'],properties:[],nativeHidden:false,planningExcluded:false,allowedCategories:['LV'],categoryAssignmentSource:'synthetic',routeName:'/B001',shapeName:'STRAIGHT',bounds:{minimum:[0,0,0],maximum:[1,1,0]},fragments:[{id:' fragment:1 ',vertices:[[0,0,0],[1,0,0],[0,1,0]],triangleIndices:[0,1,2],fragmentToWorldMetres:matrix,transformAlreadyApplied:true}]}]};
   state.cache=Buffer.from(JSON.stringify(snapshot));state.projection=Buffer.from(state.cache);

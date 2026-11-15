@@ -1,9 +1,10 @@
 import { webcrypto } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { assignModelLocations, fetchModelLocationMatchContext, isModelLocationMatchBusy, ModelLocationMatchApiError } from './pathfinderModelLocationMatch';
+import { assignModelLocations, fetchModelLocationMatchContext, fetchModelLocationMatchSummary, isModelLocationMatchBusy, ModelLocationMatchApiError } from './pathfinderModelLocationMatch';
 import { modelMatchContext, modelMatchIds as ids, modelMatchReceipt } from '@/test/modelLocationMatchFixtures';
 import type { ModelLocationMatchAssign } from '../../shared/pathfinderModelLocationMatch';
 import { fetchPathFinderState } from './pathfinder';
+import { modelLocationMatchCounts, type ModelLocationMatchSummary } from '../../shared/pathfinderModelLocationMatch';
 const command = (): ModelLocationMatchAssign => ({ schemaVersion: 'wfc.pf.model-location-match-assign.v1', current: modelMatchContext().current,
   namesSha256: modelMatchContext().namesSha256, expectedRegistryRevision: '7', idempotencyKey: ids.frame, names: ['TAG-1'],
   scan: { matchingPolicyVersion: 'wfc.pf.project-exact-candidates.v3', visibilityScope: { schemaVersion: 'wfc.pf.sdk-display-visibility.v1',
@@ -13,6 +14,27 @@ const command = (): ModelLocationMatchAssign => ({ schemaVersion: 'wfc.pf.model-
 beforeEach(() => { vi.stubGlobal('crypto', webcrypto); vi.stubGlobal('fetch', vi.fn()); });
 afterEach(() => vi.unstubAllGlobals());
 describe('independent model location matching transport', () => {
+  it('reads persisted results without submitting a matching command', async () => {
+    const results = modelMatchReceipt(command()).results;
+    const summary: ModelLocationMatchSummary = { schemaVersion: 'wfc.pf.model-location-match-summary.v1', context: modelMatchContext(),
+      results, counts: modelLocationMatchCounts(results), complete: true };
+    vi.mocked(fetch).mockResolvedValue(Response.json(summary));
+    expect(await fetchModelLocationMatchSummary(ids.project, 'token')).toEqual(summary);
+    expect(fetch).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('/locations/model-match/summary'), expect.objectContaining({ method: 'GET', cache: 'no-store', headers: { Authorization: 'Bearer token' } }));
+  });
+  it.each(['project', 'namesHash', 'counts', 'complete', 'duplicate', 'foreignName'] as const)('rejects an inconsistent saved summary (%s)', async kind => {
+    const results = modelMatchReceipt(command()).results;
+    const summary: ModelLocationMatchSummary = { schemaVersion: 'wfc.pf.model-location-match-summary.v1', context: modelMatchContext(),
+      results, counts: modelLocationMatchCounts(results), complete: true };
+    if (kind === 'project') summary.context.projectId = ids.model;
+    if (kind === 'namesHash') summary.context.namesSha256 = '0'.repeat(64);
+    if (kind === 'counts') summary.counts.assigned++;
+    if (kind === 'complete') summary.complete = false;
+    if (kind === 'duplicate') summary.results.push(summary.results[0]);
+    if (kind === 'foreignName') summary.results[0].name = 'FOREIGN-TAG';
+    vi.mocked(fetch).mockResolvedValue(Response.json(summary));
+    await expect(fetchModelLocationMatchSummary(ids.project, 'token')).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+  });
   it.each(['PREFLIGHT_DATABASE_BUSY', 'ENDPOINT_DATABASE_BUSY', 'WORKFLOW_DATABASE_BUSY'])('identifies only typed503 %s as a bounded replay candidate', code => {
     expect(isModelLocationMatchBusy(new ModelLocationMatchApiError(code, 503, 'unknown', 'Busy.'))).toBe(true);
     expect(isModelLocationMatchBusy(new ModelLocationMatchApiError(code, 409, 'refused', 'Refused.'))).toBe(false);
@@ -29,6 +51,30 @@ describe('independent model location matching transport', () => {
     vi.mocked(fetch).mockResolvedValue(Response.json(modelMatchContext()));
     expect(await fetchModelLocationMatchContext(ids.project, 'token')).toEqual(modelMatchContext());
     expect(fetch).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('/locations/model-match/context'), expect.objectContaining({ method: 'GET', cache: 'no-store', redirect: 'error', headers: { Authorization: 'Bearer token' } }));
+  });
+  it('explains missing published preparation on the context GET without submitting an assignment or starting preparation', async () => {
+    vi.mocked(fetch).mockResolvedValue(Response.json({ schemaVersion: 'wfc.pf.endpoint-binding-error.v1', code: 'ENDPOINT_PREPARATION_REQUIRED', message: 'Preparation required.', outcome: 'refused' }, { status: 409 }));
+    const error = await fetchModelLocationMatchContext(ids.project, 'token').catch(error => error);
+    expect(error).toBeInstanceOf(ModelLocationMatchApiError);
+    expect(error).toMatchObject({ code: 'ENDPOINT_PREPARATION_REQUIRED', status: 409, outcome: 'refused' });
+    expect(error.message).toContain('no valid published routing preparation');
+    expect(error.message).toContain('In Routes, choose Generate network or Regenerate network');
+    expect(error.message).toContain('retry Find and assign From/To');
+    expect(error.message).toContain('No location assignment was submitted.');
+    expect(error.message).not.toContain('administrator access');
+    expect(fetch).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('/locations/model-match/context'), expect.objectContaining({ method: 'GET' }));
+  });
+  it('keeps a refused POST distinct from the read-only prerequisite error and preserves the exact saved command', async () => {
+    const body = command(), before = JSON.stringify(body);
+    vi.mocked(fetch).mockResolvedValue(Response.json({ schemaVersion: 'wfc.pf.endpoint-binding-error.v1', code: 'ENDPOINT_PREPARATION_REQUIRED', message: 'Preparation required.', outcome: 'refused' }, { status: 409 }));
+    const error = await assignModelLocations(ids.project, 'token', body).catch(error => error);
+    expect(error).toMatchObject({ code: 'ENDPOINT_PREPARATION_REQUIRED', status: 409, outcome: 'refused' });
+    expect(error.message).toContain('no valid published routing preparation');
+    expect(error.message).toContain('Generate network or Regenerate network');
+    expect(error.message).toContain('Existing locations are kept. Preserve and reconcile any pending assignment');
+    expect(error.message).not.toContain('No location assignment was submitted');
+    expect(JSON.stringify(body)).toBe(before);
+    expect(fetch).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('/locations/model-match/assign'), expect.objectContaining({ method: 'POST', body: before }));
   });
   it('refuses a context whose complete name scope hash does not match', async () => {
     vi.mocked(fetch).mockResolvedValue(Response.json({ ...modelMatchContext(), namesSha256: 'd'.repeat(64) }));
@@ -56,7 +102,10 @@ describe('independent model location matching transport', () => {
   });
   it('carries an explicit server refusal separately from an unknown outcome', async () => {
     vi.mocked(fetch).mockResolvedValue(Response.json({ schemaVersion: 'wfc.pf.endpoint-binding-error.v1', code: 'MODEL_LOCATION_MATCH_CONTEXT_CHANGED', message: 'Current context changed.', outcome: 'refused' }, { status: 409 }));
-    await expect(assignModelLocations(ids.project, 'token', command())).rejects.toMatchObject({ code: 'MODEL_LOCATION_MATCH_CONTEXT_CHANGED', status: 409, outcome: 'refused' });
+    const error = await assignModelLocations(ids.project, 'token', command()).catch(error => error);
+    expect(error).toMatchObject({ code: 'MODEL_LOCATION_MATCH_CONTEXT_CHANGED', status: 409, outcome: 'refused' });
+    expect(error.message).toContain('The project, model or locations changed.');
+    expect(error.message).not.toContain('published routing preparation');
   });
   it.each(['malformed', 'server'])('retains unknown outcome for a %s refusal envelope', async kind => {
     const body = { code: 'MODEL_LOCATION_MATCH_CONTEXT_CHANGED', outcome: 'refused' };

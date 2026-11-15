@@ -6,7 +6,7 @@ import {canonicalPurposeJson} from '../../shared/pathfinderPurposePolicy.js';
 import {buildPreparationPlan} from './preparationPlans.js';
 import {snapshotSchema,type ComputationalSnapshot} from './contracts.js';
 import {executePreparationUnionTask,preparationUnionInputSchema,preparationUnionMessageSchema,checkPreparationUnionInputBytes,parseOwnedPreparationSnapshot,type PreparationUnionTaskStorage} from './preparationUnionTask.js';
-import {LEGACY_PREPARATION_CAPACITY_PROFILE,LARGE_PREPARATION_CAPACITY_PROFILE,preparationCapacity} from '../../shared/pathfinderCapacity.js';
+import {LEGACY_PREPARATION_CAPACITY_PROFILE,LARGE_PREPARATION_CAPACITY_PROFILE, EXTENDED_PREPARATION_CAPACITY_PROFILE,preparationCapacity} from '../../shared/pathfinderCapacity.js';
 const uuid=(n:number)=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const matrix=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
 function fixture(){
@@ -73,7 +73,7 @@ describe('isolated preparation union geometry task',()=>{
   const{input}=fixture();
   expect(()=>checkPreparationUnionInputBytes(input.plan,[{partId:input.parts[0].partId,payload:{text:'x'.repeat(32*1024**2)}}])).toThrow('PREPARATION_UNION_LIMIT');expect(()=>checkPreparationUnionInputBytes({...input.plan,text:'x'.repeat(16*1024**2)},[])).toThrow('PREPARATION_UNION_LIMIT');
  });
- it.each([LEGACY_PREPARATION_CAPACITY_PROFILE,LARGE_PREPARATION_CAPACITY_PROFILE])('accounts exact cumulative input boundary for frozen %s without enlarging transport or geometry limits',profile=>{
+ it.each([LEGACY_PREPARATION_CAPACITY_PROFILE,LARGE_PREPARATION_CAPACITY_PROFILE,EXTENDED_PREPARATION_CAPACITY_PROFILE])('accounts exact cumulative input boundary for frozen %s without enlarging transport or geometry limits',profile=>{
   // Synthetic byte accounting only: no large model is allocated or claimed to fit the worker heap.
   const actual=Buffer.byteLength.bind(Buffer),maximum=preparationCapacity(profile).validationInputBytes;
   const bytes=vi.spyOn(Buffer,'byteLength').mockImplementation((value,encoding)=>typeof value==='string'&&value==='{"counted":1}'?maximum:typeof value==='string'&&value==='{"counted":2}'?1:actual(value,encoding));
@@ -122,8 +122,8 @@ describe('isolated preparation union geometry task',()=>{
   payload.objects[2].properties=[{category:'Source',name:'Changed',value:'yes'}];vi.mocked(storage.storePreparationBlob).mockClear();
   await expect(executePreparationUnionTask({...input,parts:[...input.parts,duplicate]},storage)).rejects.toThrow('PREPARATION_UNION_INVALID');expect(storage.storePreparationBlob).not.toHaveBeenCalled();
  });
- it('uses one exact canonical byte representation for quota projection before the independently stored cache',async()=>{
-  const{input,storage}=twoPartFixture(),refs=referencesFor(input),writes:{kind:string;bytes:Buffer}[]=[];
+ it.each([LEGACY_PREPARATION_CAPACITY_PROFILE,EXTENDED_PREPARATION_CAPACITY_PROFILE])('uses one exact canonical byte representation for quota projection before the independently stored cache under %s',async profile=>{
+  const{input,storage}=twoPartFixture(),refs=referencesFor(input),writes:{kind:string;bytes:Buffer}[]=[];input.plan.limitsProfile=profile;rehash(input.plan);
   storage.readPreparationBlob=vi.fn(async(_project,_session,ref)=>Buffer.from(refs.bytes.get(ref.payloadRef)!));
   const hash=(bytes:Buffer)=>({sha256:createHash('sha256').update(bytes).digest('hex'),bytes:bytes.length});
   storage.storePreparationBytes=vi.fn(async(_project,_session,id,bytes)=>{writes.push({kind:'projection',bytes:Buffer.from(bytes)});return{payloadRef:id,...hash(bytes)};});
@@ -131,7 +131,8 @@ describe('isolated preparation union geometry task',()=>{
   const result=await executePreparationUnionTask(preparationUnionInputSchema.parse({...input,schemaVersion:'wfc.pf.preparation-union-task.v2',parts:refs.parts}),storage);
   expect(writes.map(write=>write.kind)).toEqual(['projection','cache']);expect(writes[0].bytes.equals(writes[1].bytes)).toBe(true);
   const encoded=writes[0].bytes.toString('utf8');expect(encoded).toBe(canonicalPurposeJson(JSON.parse(encoded)));expect(result.projection.sha256).toBe(hash(writes[0].bytes).sha256);
-  expect(storage.storeSnapshot).not.toHaveBeenCalled();expect(storage.storePreparationBlob).toHaveBeenCalledExactlyOnceWith(input.plan.projectId,input.plan.id,expect.any(String),expect.objectContaining({schemaVersion:'wfc.pf.preparation-trace-index.v1'}),256*1024**2);
+  expect(storage.storeSnapshot).not.toHaveBeenCalled();expect(storage.storePreparationBlob).toHaveBeenCalledExactlyOnceWith(input.plan.projectId,input.plan.id,expect.any(String),expect.objectContaining({schemaVersion:'wfc.pf.preparation-trace-index.v1'}),(profile===EXTENDED_PREPARATION_CAPACITY_PROFILE?512:256)*1024**2);
+  expect(vi.mocked(storage.storeSnapshotBytes).mock.calls[0].slice(2)).toEqual(profile===EXTENDED_PREPARATION_CAPACITY_PROFILE?[profile]:[]);
  });
  it.each(['hash','bytes','schema','wrong-scope','nonfinite','unknown-header','unknown-object'] as const)('refuses reference %s before either projection or cache write',async kind=>{
   const{input,storage}=fixture(),refs=referencesFor(input);let bytes=refs.bytes.get(refs.parts[0].reference.payloadRef)!;

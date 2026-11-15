@@ -1,3 +1,4 @@
+import { digestSha256 } from '../../../utils/sha256';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 import { fetchCalculationGrantContext, sendCalculationGrantCommand, CalculationGrantsApiError, type CalculationGrantContext, type CalculationGrantCommand } from '@/api/pathfinderCalculationGrants';
@@ -10,7 +11,7 @@ const storedSchema = z.object({ version: z.literal(1), projectId: policyUuidSche
   tokenEpoch: z.string().regex(/^[a-f0-9]{64}(?![\s\S])/), savedAt: z.number().int().nonnegative(), command: calculationGrantCommandSchema }).strict();
 const clearSaved = () => { try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* Pending recovery remains in memory. */ } };
 async function tokenEpoch(token: string): Promise<string> {
-  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token)))].map(b => b.toString(16).padStart(2, '0')).join('');
+  return [...new Uint8Array(await digestSha256(new TextEncoder().encode(token)))].map(b => b.toString(16).padStart(2, '0')).join('');
 }
 function freezeCommand(command: CalculationGrantCommand): CalculationGrantCommand {
   const copy = structuredClone(command); if ('preferences' in copy) Object.freeze(copy.preferences); return Object.freeze(copy);

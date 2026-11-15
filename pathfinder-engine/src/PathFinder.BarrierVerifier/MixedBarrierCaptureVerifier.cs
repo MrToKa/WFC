@@ -39,7 +39,7 @@ public static class MixedBarrierCaptureVerifier
             budget.Spend(built.Work);
             if (built.Status != BarrierBuildStatus.Ready || built.Kernel is null)
             {
-                var diagnostic = built.Diagnostics.FirstOrDefault(); throw new VerifierRefusal(diagnostic?.Code ?? "MIXED_GEOMETRY_REFUSED", diagnostic?.Message ?? "Mixed geometry could not be qualified.");
+                var diagnostic = built.Diagnostics.FirstOrDefault(); throw new VerifierRefusal(diagnostic?.Code ?? "MIXED_GEOMETRY_REFUSED", diagnostic?.Message ?? "Mixed geometry could not be qualified.", built.RefusalObjectIds);
             }
             var summary = built.Kernel.Summary;
             var memberships = new List<MixedBarrierComponentMembership>();
@@ -51,7 +51,7 @@ public static class MixedBarrierCaptureVerifier
             var receipt = new MixedBarrierVerifierReceipt("geometry-qualified", captureHash, evidence, Array.Empty<BarrierVerifierDiagnostic>());
             _ = ReceiptBytes(receipt, maximumReceiptBytes); budget.Checkpoint(); return new(receipt, new(built.Kernel, built.Kernel.Components));
         }
-        catch (VerifierRefusal error) { return Refused(captureHash, error.Code, error.Message); }
+        catch (VerifierRefusal error) { return Refused(captureHash, error.Code, error.Message, error.ObjectIds); }
         catch (Exception error) when (error is JsonException or DecoderFallbackException or OverflowException or ArgumentException)
         { return Refused(captureHash, "INVALID_CAPTURE", "Capture parsing/geometry bounds refused: " + error.GetType().Name + "."); }
     }
@@ -91,8 +91,8 @@ public static class MixedBarrierCaptureVerifier
         return new(component.Id, kind, Array.AsReadOnly(fragments.ToArray()), Array.AsReadOnly(parents.ToArray()), component.Triangles.Count,
             Convert.ToHexString(digest.GetHashAndReset()).ToLowerInvariant());
     }
-    private static MixedBarrierVerificationResult Refused(string? hash, string code, string message) => new(new("refused", hash, null,
-        new ReadOnlyCollection<BarrierVerifierDiagnostic>([new(code, message.Length > 2048 ? message[..2048] : message)])), null);
+    private static MixedBarrierVerificationResult Refused(string? hash, string code, string message, IReadOnlyList<string>? objectIds = null) => new(new("refused", hash, null,
+        new ReadOnlyCollection<BarrierVerifierDiagnostic>([new(code, message.Length > 2048 ? message[..2048] : message, objectIds)])), null);
     private static void ValidateLimits(BarrierVerifierLimits limits, int maximumReceiptBytes)
     {
         bool largeSelection = maximumReceiptBytes == LargeSelectionMaximumReceiptBytes;

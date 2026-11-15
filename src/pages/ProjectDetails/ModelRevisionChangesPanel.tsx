@@ -1,3 +1,4 @@
+import { generateId } from '@/utils/generateId';
 import { useEffect, useState } from 'react';
 import { Button, Field, Spinner, Textarea } from '@fluentui/react-components';
 import {
@@ -65,7 +66,7 @@ function AdminRevisionChangesPanel(props: Props) {
       source: pair(source),
       target: pair(target),
       expectedComparisonRevision: context.comparisonRevision,
-      idempotencyKey: crypto.randomUUID(),
+      idempotencyKey: generateId(),
       reason: reason.trim(),
     };
     void state.create(command);

@@ -1,3 +1,5 @@
+import { digestSha256 } from './sha256.mjs';
+import { generateId } from './generate-id.mjs';
 // Direct protected-frame staging. There is deliberately no general URL/fetch API.
 import { BARRIER_MULTIPART_PRODUCER_PROFILE as PROFILE, BARRIER_MULTIPART_TRANSPORT_LIMITS as L,
   barrierMultipartTransportCanonical as canonical, barrierMultipartContextHashInput,
@@ -49,7 +51,7 @@ async function responseJson(response, expectedUrl, maximum) {
  * fields. Server authorization, exact cookie/context and immutable storage remain
  * authoritative; browser checks grant no geometry or publication authority. */
 export function createBarrierMultipartTransport({ origin, projectId, modelVersionId, sessionId, loadId, isCurrent,
-  fetchImpl = globalThis.fetch, sha256, randomUUID = () => globalThis.crypto.randomUUID(), signal: lifetime } = {}) {
+  fetchImpl = globalThis.fetch, sha256, randomUUID = () => generateId(), signal: lifetime } = {}) {
   let parsed; try { parsed = new URL(origin); } catch { fail('BARRIER_MULTIPART_ORIGIN'); }
   need(['http:', 'https:'].includes(parsed.protocol) && parsed.origin === origin && !parsed.username && !parsed.password, 'BARRIER_MULTIPART_ORIGIN');
   need([projectId, modelVersionId, sessionId, loadId].every(uuid) && typeof isCurrent === 'function' && typeof fetchImpl === 'function' && typeof randomUUID === 'function');
@@ -67,7 +69,7 @@ export function createBarrierMultipartTransport({ origin, projectId, modelVersio
   }
   async function digest(value, operationSignal, deadline, raw = false) {
     const bytes = raw ? value : E.encode(canonical(value));
-    return bounded(async () => { const result = sha256 ? await sha256(bytes) : [...new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', bytes))].map(n => n.toString(16).padStart(2, '0')).join('');
+    return bounded(async () => { const result = sha256 ? await sha256(bytes) : [...new Uint8Array(await digestSha256(bytes))].map(n => n.toString(16).padStart(2, '0')).join('');
       need(hash(result), 'BARRIER_MULTIPART_HASH'); return result; }, operationSignal, deadline);
   }
   const domainHash = (domain, value, operationSignal, deadline) => digest({ domain: 'wfc.pf.barrier-multipart.v2/' + domain, value }, operationSignal, deadline);

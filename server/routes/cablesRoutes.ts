@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import type { ProjectChangeLogEntry } from '../models/project.js';
 import { recordCableMaterialChanges } from '../services/cableMaterialChangeLogService.js';
 import path from 'node:path';
@@ -18,7 +18,14 @@ interface Request extends ExpressRequest {
 }
 import { pool } from '../db.js';
 import { readAutoLengths } from '../pathfinder/autoLengthStore.js';
+import { applyCableRoutingControlInTransaction, initializeImportedCableRoutingControl, cableExecutionFacts, readCableRoutingViews } from '../pathfinder/cableRoutingControlRepository.js';
+import { requestPrincipal } from '../pathfinder/auth.js';
+import { CABLE_EXECUTION_EXCEL_COLUMNS, parseCableExcelDate, styleCableRoutingCell } from '../utils/cableRoutingExcel.js';
+import { executionRoutingReasons, normalizeRouting } from '../../shared/cableRoutingControl.js';
+import type { CableRoutingImportSummary } from '../../shared/cableRoutingImport.js';
+import { PathFinderError } from '../pathfinder/errors.js';
 import { autoLengthViewSchema, emptyAutoLengthView, type AutoLengthView } from '../../shared/pathfinderAutoLength.js';
+import { policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
 import {
   CABLE_MTO_VALUES,
   mapCableRow,
@@ -94,6 +101,7 @@ const LIST_OUTPUT_HEADERS = {
   routing: 'Routing',
   autoCalculatedLength: 'Auto calculated length [m]',
   designLength: 'Design Length [m]',
+  installLength: 'Install length [m]', pullDate: 'Pull date', connectedFrom: 'Connected From', connectedTo: 'Connected To', tested: 'Cable tested',
 } as const;
 
 const CHANGE_TRACKER_OUTPUT_HEADERS = {
@@ -182,6 +190,7 @@ const CABLE_LIST_EXPORT_COLUMNS = [
     key: 'designLength',
     width: 18,
   },
+  ...Object.entries(CABLE_EXECUTION_EXCEL_COLUMNS).map(([key, value]) => ({ name: value.header, key, width: key === 'installLength' ? 20 : 18 })),
 ] as const;
 
 const CHANGE_TRACKER_REVISION_COLUMNS = [
@@ -565,6 +574,10 @@ const buildCableListExportRow = (row: CableWithTypeRow, autoLength: AutoLengthVi
   row.routing ?? '',
   autoLength.autoCalculatedLength ?? '',
   row.design_length !== null && row.design_length !== '' ? Number(row.design_length) : '',
+  row.install_length !== null && row.install_length !== '' ? Number(row.install_length) : '',
+  ...[row.pull_date, row.connected_from, row.connected_to, row.tested].map(value => value instanceof Date
+    ? new Date(Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()))
+    : value ? new Date(`${value.slice(0,10)}T00:00:00.000Z`) : ''),
 ];
 
 const formatCableVersionUserLabel = (version: PublicCableVersion): string => {
@@ -2202,7 +2215,9 @@ const readCableAutoLengthViews = async (projectId: string, rows: CableWithTypeRo
 };
 const mapCableRowsWithAutoLength = async (projectId: string, rows: CableWithTypeRow[]): Promise<PublicCableWithAutoLength[]> => {
   const views = await readCableAutoLengthViews(projectId, rows);
-  return rows.map(row => ({ ...mapCableRow(row), ...autoLengthViewSchema.parse(views.get(row.id) ?? emptyAutoLengthView()) }));
+  let routingViews = new Map();
+  try { routingViews = await readCableRoutingViews(pool, projectId, rows.map(row => row.id)); } catch { /* Retain ordinary cable visibility if a derived projection is unavailable. */ }
+  return rows.map(row => ({ ...mapCableRow(row), ...autoLengthViewSchema.parse(views.get(row.id) ?? emptyAutoLengthView()), ...(routingViews.get(row.id) ?? {}) }));
 };
 
 const cablesRouter = Router({ mergeParams: true });
@@ -2213,6 +2228,21 @@ cablesRouter.get('/', async (req: Request, res: Response): Promise<void> => {
   if (!projectId) {
     res.status(400).json({ error: 'Project ID is required' });
     return;
+  }
+
+  let selectedIds: string[] | undefined;
+  if (req.query.ids !== undefined) {
+    const raw = req.query.ids;
+    const values = typeof raw === 'string' && raw.length <= 3699 ? raw.split(',') : [];
+    if (values.length < 1 || values.length > 100 || values.some(value => !policyUuidSchema.safeParse(value).success)) {
+      res.status(400).json({ error: 'ids must contain 1 to 100 unique cable UUIDs' });
+      return;
+    }
+    selectedIds = values.map(value => value.toLowerCase());
+    if (new Set(selectedIds).size !== selectedIds.length) {
+      res.status(400).json({ error: 'ids must contain 1 to 100 unique cable UUIDs' });
+      return;
+    }
   }
 
   try {
@@ -2227,10 +2257,11 @@ cablesRouter.get('/', async (req: Request, res: Response): Promise<void> => {
       `
         ${selectCablesQuery}
         WHERE c.project_id = $1
+        ${selectedIds ? 'AND c.id = ANY($2::uuid[])' : ''}
         ORDER BY LOWER(COALESCE(c.tag, c.cable_id::text)) ASC,
           c.cable_id ASC;
       `,
-      [projectId],
+      selectedIds ? [projectId, selectedIds] : [projectId],
     );
 
     res.json({ cables: await mapCableRowsWithAutoLength(projectId, result.rows) });
@@ -2291,6 +2322,7 @@ cablesRouter.post('/', authenticate, async (req: Request, res: Response): Promis
   try {
     client = await pool.connect();
     await client.query('BEGIN');
+    await client.query('SELECT id FROM projects WHERE id=$1 FOR NO KEY UPDATE', [projectId]);
 
     const typeResult = await client.query<CableTypeRow>(
       `
@@ -2394,6 +2426,9 @@ cablesRouter.post('/', authenticate, async (req: Request, res: Response): Promis
       return;
     }
 
+    await initializeImportedCableRoutingControl(client, {projectId,cableId:inserted.id,actorId:req.userId!,after:inserted,
+      protect:parseResult.data.manualRoutingProtected ?? Boolean(inserted.routing), reason:'Cable creation',
+      ...(req.loginId && req.loginExpiresAt ? {principal:requestPrincipal(req)} : {})});
     await resetCableMaterialsToCableTypeDefaults(
       client,
       projectId,
@@ -2499,6 +2534,7 @@ cablesRouter.patch(
       client = await pool.connect();
       await client.query('BEGIN');
 
+      await client.query('SELECT id FROM projects WHERE id=$1 FOR NO KEY UPDATE',[projectId]);
       const existingCable = await findProjectCableVersionSourceById(client, projectId, cableId,true);
 
       if (!existingCable) {
@@ -2586,6 +2622,23 @@ cablesRouter.patch(
         }
       }
 
+      const controls = parseResult.data;
+      if (controls.expectedCableWriteRevision !== undefined) {
+        const observed = (await client.query<{revision:string}>('SELECT cable_write_revision::text AS revision FROM cables WHERE project_id=$1 AND id=$2 FOR UPDATE', [projectId, cableId])).rows[0];
+        if (observed?.revision !== controls.expectedCableWriteRevision) throw new PathFinderError('CABLE_WRITE_CONFLICT',409);
+      }
+      const routeEdited = routing !== undefined && nextSnapshot.routing !== currentSnapshot.routing;
+      const factsChanged = JSON.stringify(cableExecutionFacts(currentSnapshot)) !== JSON.stringify(cableExecutionFacts(nextSnapshot));
+      if (routeEdited || controls.manualRoutingProtected !== undefined || controls.executionUnlockReason !== undefined || factsChanged) {
+        const auto = (await readCableRoutingViews(client, projectId, [cableId])).get(cableId);
+        const controlResult = await applyCableRoutingControlInTransaction(client, { projectId, cableId, actorId: req.userId!,
+          before: currentSnapshot, after: nextSnapshot, automaticRouting: auto?.autoCalculatedRouting ?? null,
+          expectedRevision: controls.expectedRoutingControlRevision, unlockReason: controls.executionUnlockReason,
+          ...(routeEdited || controls.manualRoutingProtected !== undefined ? {mutation:{kind:'manual' as const,routing:routing !== undefined ? nextSnapshot.routing : auto?.routingControl.manualRouting ?? currentSnapshot.routing,manualProtected:controls.manualRoutingProtected}} : {}),
+          ...(req.loginId && req.loginExpiresAt ? {principal:requestPrincipal(req)} : {}) });
+        if (controlResult.blockedReasons.length) throw new PathFinderError('ROUTING_EXECUTION_PROTECTED',409,controlResult.blockedReasons.join(', '));
+        nextSnapshot.routing = controlResult.routing;
+      }
       const { assignments, values } = buildCableUpdateAssignments(currentSnapshot, nextSnapshot);
 
       if (assignments.length === 0) {
@@ -2689,6 +2742,8 @@ cablesRouter.patch(
         await client.query('ROLLBACK').catch(() => undefined);
       }
 
+      if (error instanceof PathFinderError) { res.status(error.status).json({ code:error.code,error:error.message,
+        ...(error.code==='ROUTING_EXECUTION_PROTECTED'?{routingConflict:{reasons:error.message.split(', ')}}:{}) }); return; }
       console.error('Update cable error', error);
       res.status(500).json({ error: 'Failed to update cable' });
     } finally {
@@ -3419,10 +3474,21 @@ cablesRouter.post(
       return;
     }
 
+    const preview = req.query.preview === 'true';
+    const protectRouting = req.query.protectRouting === 'true';
+    const expectedDigest = req.query.expectedRevisionDigest;
+    if ((req.query.preview !== undefined && !['true','false'].includes(req.query.preview)) ||
+        (req.query.protectRouting !== undefined && !['true','false'].includes(req.query.protectRouting)) ||
+        (expectedDigest !== undefined && (typeof expectedDigest !== 'string' || !/^[a-f0-9]{64}$/.test(expectedDigest)))) {
+      res.status(400).json({ error: 'Invalid import options' }); return;
+    }
+    let revisionDigest = '';
+    let date1904 = false;
     let worksheet: XLSX.WorkSheet | null = null;
 
     try {
       const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+      date1904 = Boolean(workbook.Workbook?.WBProps?.date1904);
       const sheetName = workbook.SheetNames[0];
 
       if (!sheetName) {
@@ -3442,6 +3508,7 @@ cablesRouter.post(
     const rows = readExcelImportRows(worksheet, [
       ...CABLE_ID_INPUT_HEADERS,
       INPUT_HEADERS.designLength,
+      ...Object.values(CABLE_EXECUTION_EXCEL_COLUMNS).flatMap(column => [...column.aliases]),
     ]);
 
     const headerRows = XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, raw: true });
@@ -3474,7 +3541,6 @@ cablesRouter.post(
         INPUT_HEADERS.tag,
         INPUT_HEADERS.fromLocation,
         INPUT_HEADERS.toLocation,
-        LIST_OUTPUT_HEADERS.routing,
         INPUT_HEADERS.delivery,
       ].map((header) => ({ headers: [header], maxLength: 500 })),
       {
@@ -3484,13 +3550,26 @@ cablesRouter.post(
         min: 0,
         max: 1_000_000,
       },
+      { headers: [LIST_OUTPUT_HEADERS.routing], maxLength: 16384 },
+      { headers: CABLE_EXECUTION_EXCEL_COLUMNS.installLength.aliases, type: 'number', integer: true, min: 0, max: 1_000_000 },
     ]);
+    for (const [index, row] of rows.entries()) {
+      for (const [key, column] of Object.entries(CABLE_EXECUTION_EXCEL_COLUMNS)) {
+        if (key === 'installLength' || !hasAnyColumn(column.aliases)) continue;
+        try { parseCableExcelDate(getCellValue(row, column.aliases), date1904); }
+        catch (error) { issues.push({ row: getExcelRowNumber(row, index), column: column.header, message: (error as Error).message }); }
+      }
+      if (hasColumn(LIST_OUTPUT_HEADERS.routing)) {
+        try { normalizeRouting(String(row[LIST_OUTPUT_HEADERS.routing] ?? '')); }
+        catch { issues.push({ row: getExcelRowNumber(row,index), column: LIST_OUTPUT_HEADERS.routing, message: 'Routing must contain at most 16384 characters without control characters.' }); }
+      }
+    }
 
-    const summary = {
+    const summary: CableRoutingImportSummary = {
       inserted: 0,
       updated: 0,
       unchanged: 0,
-      skipped: 0,
+      skipped: 0, blockedRouting: [], routesProtected: 0, routesCleared: 0, executionLocksAdded: 0,
     };
 
     type PreparedCableFields = {
@@ -3502,6 +3581,7 @@ cablesRouter.post(
       routing?: string | null;
       delivery?: string | null;
       designLength?: number | null;
+      installLength?: number | null; pullDate?: string | null; connectedFrom?: string | null; connectedTo?: string | null; tested?: string | null;
     };
 
     type PreparedCableRow = {
@@ -3532,6 +3612,11 @@ cablesRouter.post(
       routing: hasColumn(LIST_OUTPUT_HEADERS.routing),
       delivery: hasColumn(INPUT_HEADERS.delivery),
       designLength: hasColumn(INPUT_HEADERS.designLength),
+      installLength: hasAnyColumn(CABLE_EXECUTION_EXCEL_COLUMNS.installLength.aliases),
+      pullDate: hasAnyColumn(CABLE_EXECUTION_EXCEL_COLUMNS.pullDate.aliases),
+      connectedFrom: hasAnyColumn(CABLE_EXECUTION_EXCEL_COLUMNS.connectedFrom.aliases),
+      connectedTo: hasAnyColumn(CABLE_EXECUTION_EXCEL_COLUMNS.connectedTo.aliases),
+      tested: hasAnyColumn(CABLE_EXECUTION_EXCEL_COLUMNS.tested.aliases),
     };
 
     for (const [index, row] of rows.entries()) {
@@ -3625,6 +3710,10 @@ cablesRouter.post(
         fields.designLength = parseExcelNumber(row[INPUT_HEADERS.designLength]);
       }
 
+      if (columnAvailability.installLength) fields.installLength = parseExcelNumber(getCellValue(row, CABLE_EXECUTION_EXCEL_COLUMNS.installLength.aliases));
+      for (const key of ['pullDate', 'connectedFrom', 'connectedTo', 'tested'] as const)
+        if (columnAvailability[key]) fields[key] = parseCableExcelDate(getCellValue(row, CABLE_EXECUTION_EXCEL_COLUMNS[key].aliases), date1904);
+
       prepared.push({
         rowNumber: getExcelRowNumber(row, index),
         cableId,
@@ -3638,6 +3727,9 @@ cablesRouter.post(
     }
 
     if (prepared.length === 0) {
+      revisionDigest = createHash('sha256').update('[]').digest('hex');
+      if (expectedDigest && expectedDigest !== revisionDigest) { res.status(409).json({error:'Import preview is no longer current. Preview the file again.'}); return; }
+      if (preview) { res.json({preview:true,revisionDigest,summary,cables:[]}); return; }
       try {
         const existing = await pool.query<CableWithTypeRow>(
           `
@@ -3670,6 +3762,7 @@ cablesRouter.post(
     try {
       client = await pool.connect();
       await client.query('BEGIN');
+      await client.query('SELECT id FROM projects WHERE id=$1 FOR NO KEY UPDATE', [projectId]);
 
       const typeKeys = Array.from(new Set(prepared.flatMap((row) => row.typeKey ? [row.typeKey] : [])));
 
@@ -3712,6 +3805,8 @@ cablesRouter.post(
         `
           SELECT
             c.id,
+            c.project_id,
+            c.cable_write_revision::text,
             c.cable_id,
             c.revision,
             c.mto,
@@ -3732,6 +3827,7 @@ cablesRouter.post(
           JOIN cable_types ct ON ct.id = c.cable_type_id
           WHERE c.project_id = $1
             AND c.cable_id = ANY($2::int[])
+          ORDER BY c.id
           FOR UPDATE OF c;
         `,
         [projectId, prepared.map((row) => row.cableKey)],
@@ -3743,6 +3839,17 @@ cablesRouter.post(
         existingMap.set(cable.cable_id, cable);
       }
 
+      const routingViews = await readCableRoutingViews(client, projectId, existingResult.rows.map(row => row.id));
+      const digestRows = prepared.map(row => {
+        const old = existingMap.get(row.cableKey), view = old ? routingViews.get(old.id) : undefined;
+        return [row.cableKey, old?.id ?? null, old ? String((old as ExistingCable & {cable_write_revision:string}).cable_write_revision) : null,
+          view?.routingControlRevision ?? null, view?.autoCalculatedRouting ?? null, row.typeKey ? typeMap.get(row.typeKey)?.id : null];
+      }).sort((a,b) => Number(a[0])-Number(b[0]));
+      revisionDigest = createHash('sha256').update(JSON.stringify(digestRows)).digest('hex');
+      if (expectedDigest && expectedDigest !== revisionDigest) {
+        await client.query('ROLLBACK'); res.status(409).json({ error: 'Import preview is no longer current. Preview the file again.', code: 'IMPORT_PREVIEW_CHANGED' }); return;
+      }
+      const principal = requestPrincipal(req);
       const missingCableTypes = prepared
         .filter((row) => !existingMap.has(row.cableKey) && row.typeKey === null)
         .map((row) => ({
@@ -3777,11 +3884,11 @@ cablesRouter.post(
             routing: fields.routing ?? null,
             delivery: fields.delivery ?? null,
             designLength: fields.designLength ?? null,
-            installLength: null,
-            pullDate: null,
-            connectedFrom: null,
-            connectedTo: null,
-            tested: null,
+            installLength: fields.installLength ?? null,
+            pullDate: fields.pullDate ?? null,
+            connectedFrom: fields.connectedFrom ?? null,
+            connectedTo: fields.connectedTo ?? null,
+            tested: fields.tested ?? null,
           };
 
           await client.query(
@@ -3820,13 +3927,12 @@ cablesRouter.post(
               insertedSnapshot.routing,
               insertedSnapshot.delivery,
               insertedSnapshot.designLength,
-              null,
-              null,
-              null,
-              null,
-              null,
+              insertedSnapshot.installLength, insertedSnapshot.pullDate, insertedSnapshot.connectedFrom, insertedSnapshot.connectedTo, insertedSnapshot.tested,
             ],
           );
+          const initialControl = await initializeImportedCableRoutingControl(client, {projectId, cableId:insertedCableId, actorId:req.userId!, after:insertedSnapshot, protect:protectRouting, principal});
+          if (initialControl.control.manualProtected) summary.routesProtected!++;
+          if (initialControl.control.executionLocked) summary.executionLocksAdded!++;
           await resetCableMaterialsToCableTypeDefaults(
             client,
             projectId,
@@ -3882,19 +3988,30 @@ cablesRouter.post(
             columnAvailability.designLength && fields.designLength !== undefined
               ? (fields.designLength ?? null)
               : currentSnapshot.designLength,
-          installLength: currentSnapshot.installLength,
-          pullDate: currentSnapshot.pullDate,
-          connectedFrom: currentSnapshot.connectedFrom,
-          connectedTo: currentSnapshot.connectedTo,
-          tested: currentSnapshot.tested,
+          installLength: columnAvailability.installLength ? fields.installLength ?? null : currentSnapshot.installLength,
+          pullDate: columnAvailability.pullDate ? fields.pullDate ?? null : currentSnapshot.pullDate,
+          connectedFrom: columnAvailability.connectedFrom ? fields.connectedFrom ?? null : currentSnapshot.connectedFrom,
+          connectedTo: columnAvailability.connectedTo ? fields.connectedTo ?? null : currentSnapshot.connectedTo,
+          tested: columnAvailability.tested ? fields.tested ?? null : currentSnapshot.tested,
         };
 
+        const oldView = routingViews.get(existing.id);
+        const controlled = await applyCableRoutingControlInTransaction(client, {projectId,cableId:existing.id,actorId:req.userId!,
+          before:currentSnapshot,after:nextSnapshot,automaticRouting:oldView?.autoCalculatedRouting ?? null,principal,
+          expectedRevision:oldView?.routingControlRevision,
+          mutation:{kind:'import',present:columnAvailability.routing,routing:fields.routing ?? null,protect:protectRouting}});
+        nextSnapshot.routing = controlled.routing;
+        if (controlled.blockedReasons.length) summary.blockedRouting!.push({cableId:row.cableId,tag:currentSnapshot.tag,reasons:controlled.blockedReasons});
+        if (controlled.control.manualProtected && !oldView?.routingControl.manualProtected) summary.routesProtected!++;
+        if (!controlled.control.manualRouting && oldView?.routingControl.manualRouting) summary.routesCleared!++;
+        if ((controlled.control.executionLocked || executionRoutingReasons(cableExecutionFacts(nextSnapshot)).length) && !oldView?.routingControl.executionLocked) summary.executionLocksAdded!++;
+        const controlChanged = oldView?.routingControlRevision !== controlled.revision;
         const shouldResetMaterials = currentSnapshot.cableTypeId !== nextSnapshot.cableTypeId;
         const { assignments: updateAssignments, values: updateValues } =
           buildCableUpdateAssignments(currentSnapshot, nextSnapshot);
 
         if (updateAssignments.length === 0) {
-          summary.unchanged += 1;
+          if (controlChanged) summary.updated += 1; else summary.unchanged! += 1;
           continue;
         }
 
@@ -3942,11 +4059,14 @@ cablesRouter.post(
         summary.updated += 1;
       }
 
+      if (preview) {
+        await client.query('ROLLBACK'); res.json({preview:true,revisionDigest,summary,cables:[]}); return;
+      }
       await client.query('COMMIT');
     } catch (error) {
       await client?.query('ROLLBACK').catch(() => undefined);
       console.error('Import cables error', error);
-      res.status(500).json({ error: 'Failed to import cables' });
+      res.status(error instanceof PathFinderError ? error.status : 500).json({ error: error instanceof PathFinderError ? error.message : 'Failed to import cables' });
       return;
     } finally {
       client?.release();
@@ -4553,6 +4673,7 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
       const columns = columnIndexes.map((index) => CABLE_LIST_EXPORT_COLUMNS[index]);
       const hasIdColumn = columns.some((column) => column.key === 'cableId');
       const autoLengths = await readCableAutoLengthViews(projectId, result.rows);
+      const routingViews = await readCableRoutingViews(pool, projectId, result.rows.flatMap(row => row.id ? [row.id] : []));
       const rows = [...result.rows].sort((a, b) => a.cable_id - b.cable_id).map((row) => {
         const values = buildCableListExportRow(row, autoLengths.get(row.id));
         return columnIndexes.map((index) => values[index]);
@@ -4578,6 +4699,10 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
       });
 
       table.commit();
+      const routeIndex = columns.findIndex(column => column.key === 'routing');
+      if (routeIndex >= 0) [...result.rows].sort((a,b) => a.cable_id-b.cable_id).forEach((row,index) => {
+        styleCableRoutingCell(worksheet.getCell(index+2,routeIndex+1), {routing:row.routing,...routingViews.get(row.id)});
+      });
 
       columns.forEach((column, index) => {
         const worksheetColumn = worksheet.getColumn(index + 1);
@@ -4588,6 +4713,8 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
         if (column.key === 'weight') {
           worksheetColumn.numFmt = '#,##0.000';
         }
+        if (['pullDate','connectedFrom','connectedTo','tested'].includes(column.key)) worksheetColumn.numFmt = 'yyyy-mm-dd';
+        if (column.key === 'installLength') worksheetColumn.numFmt = '#,##0.00';
         if (column.key === 'designLength' || column.key === 'autoCalculatedLength') {
           worksheetColumn.numFmt = '#,##0';
         }
@@ -4700,6 +4827,7 @@ cablesRouter.get('/template', authenticate, async (req: Request, res: Response):
               key: 'designLength',
               width: 18,
             },
+            ...Object.entries(CABLE_EXECUTION_EXCEL_COLUMNS).map(([key, column]) => ({name:column.header,key,width:20})),
           ] as const);
 
     const table = worksheet.addTable({
@@ -4725,7 +4853,8 @@ cablesRouter.get('/template', authenticate, async (req: Request, res: Response):
 
     columns.forEach((column, index) => {
       worksheet.getColumn(index + 1).width = column.width;
-      if (column.key === 'designLength') {
+      if (['pullDate','connectedFrom','connectedTo','tested'].includes(column.key)) worksheet.getColumn(index+1).numFmt = 'yyyy-mm-dd';
+      if (column.key === 'designLength' || column.key === 'installLength') {
         worksheet.getColumn(index + 1).numFmt = '#,##0';
       }
     });

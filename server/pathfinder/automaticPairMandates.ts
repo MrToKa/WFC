@@ -14,6 +14,7 @@ import { locationImpactRecordSchema } from '../../shared/pathfinderLocationImpac
 import { cableEndpointCommandSchema, cableEndpointEndSchema } from '../../shared/pathfinderCableEndpoints.js';
 import { PathFinderError } from './errors.js';
 import { requireAutomaticGenerationOutput } from './automaticGenerationOutput.js';
+import { automaticPairBaselineSnapshot, automaticPairMaterialState } from './automaticPairSnapshot.js';
 
 type Row = Record<string, any>;
 const fail = (code: string, status = 409): never => { throw new PathFinderError(code, status, 'Automatic Cable list update is unavailable. Existing cable values are retained.'); };
@@ -110,11 +111,15 @@ export async function appendAutomaticPairMandatesInTransaction(client: PoolClien
     const ownership: AutomaticPairOwnershipDecision = await (adapters.ownership ?? readAutomaticPairOwnership)(client,
       { projectId: input.projectId, cableId: item.cableId, currentSnapshot: before }, check);
     if (ownership.kind === 'review-required') continue;
+    const materials = automaticPairMaterialState(before);
+    if (!materials) return fail('AUTOMATIC_PAIR_BASELINE_INVALID');
+    const baselinePolicy = { schemaVersion: 'wfc.pf.automatic-pair-engineering-snapshot.v1' as const, materials };
     const draft = automaticPairMandateSchema.parse({ schemaVersion: 'wfc.pf.automatic-pair-mandate.v1', id: randomUUID(), projectId: input.projectId,
       jobId: input.jobId, cableId: item.cableId, actorId: who.userId, actorAdminRevision: principal.admin_revision, loginId: who.loginId,
       loginExpiresAt: new Date(who.loginExpiresAt).toISOString(), authorityExpiresAt: new Date(expiry).toISOString(), installationEpoch: principal.installation_epoch,
       createdAt: now.toISOString(), policy: input.policy, source: input.source, requestSha256: input.requestSha256, dependencyHash: item.dependencyHash,
-      cableWriteRevision: item.cableWriteRevision, baselineSha256: automaticPairHash(before), ownership, contentSha256: '0'.repeat(64) });
+      cableWriteRevision: item.cableWriteRevision, baselineSha256: automaticPairHash(automaticPairBaselineSnapshot(before, baselinePolicy)),
+      baselinePolicy, ownership, contentSha256: '0'.repeat(64) });
     const record = { ...draft, contentSha256: automaticPairHash(automaticPairMandateHashInput(draft)) };
     if (Buffer.byteLength(canonicalPurposeJson(record)) > AUTOMATIC_PAIR_LIMITS.recordBytes) return fail('AUTOMATIC_PAIR_RECORD_LIMIT', 413);
     await client.query(`INSERT INTO pf_automatic_pair_mandates(project_id,job_id,cable_id,id,actor_id,login_id,record_sha256,record,created_at)

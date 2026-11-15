@@ -30,7 +30,8 @@ public sealed record MixedBarrierBuildLimits
     public int MaximumParents { get; init; } = 128;
     public BarrierLimits Geometry { get; init; } = new();
 }
-public sealed record MixedBarrierBuildResult(BarrierBuildStatus Status, MixedBarrierKernel? Kernel, IReadOnlyList<BarrierDiagnostic> Diagnostics, long Work);
+public sealed record MixedBarrierBuildResult(BarrierBuildStatus Status, MixedBarrierKernel? Kernel, IReadOnlyList<BarrierDiagnostic> Diagnostics, long Work,
+    IReadOnlyList<string>? RefusalObjectIds = null);
 public sealed record MixedBarrierQueryLimits
 {
     public long MaximumWork { get; init; } = 2_000_000;
@@ -113,7 +114,10 @@ public sealed class MixedBarrierKernel
             fragments.Sort((a, b) => { budget.Spend(); return a.Source.FragmentId.CompareTo(b.Source.FragmentId); });
             double effectiveTolerance = Math.Max(geometry.NumericToleranceMeters, 64 * Geometry.MachineEpsilon * magnitude);
             var weld = new Dictionary<BarrierPoint, int>(); var points = new List<BarrierPoint>();
-            var triangles = new List<Original>(); var edges = new Dictionary<(int, int), Edge>(); var unique = new HashSet<(int, int, int)>();
+            var triangles = new List<Original>(); var edges = new Dictionary<(int, int), Edge>(); var unique = new Dictionary<(int, int, int), int>();
+            Dictionary<(int First, string Owner), int>? coincidentOwners = null;
+            List<(int First, int Second)>? coincidentFaces = null; long coincidentAdditionalBytes = 0;
+            bool hasOverfullEdge = false;
             foreach (var fragment in fragments)
             {
                 var mapped = new int[fragment.Vertices.Count];
@@ -128,22 +132,166 @@ public sealed class MixedBarrierKernel
                     if (!double.IsFinite(longest) || longest <= effectiveTolerance || primitive.Normal.Length / longest <= effectiveTolerance) Refuse("DEGENERATE_TRIANGLE", "An original triangle is degenerate or below the supported numerical resolution.");
                     // Conditioning is resolved only after topology identifies an original surface or closed solid.
                     int x = Math.Min(a, Math.Min(b, c)), z = Math.Max(a, Math.Max(b, c)), y = a + b + c - x - z;
-                    if (!unique.Add((x, y, z))) Refuse("DUPLICATE_TRIANGLE", "Coincident original triangles are ambiguous and are not deduplicated.");
+                    if (unique.TryGetValue((x, y, z), out int first))
+                    {
+                        string owner = original.Source.OwnerObjectId;
+                        if (triangles[first].Value.Source.OwnerObjectId == owner)
+                            Duplicate(first, original, "Coincident original triangles from the same owner are ambiguous and are not deduplicated.");
+                        // Exact cap faces of separate original bodies may coincide.
+                        // Keep every original triangle; ownership is only a hint
+                        // until partitioning and the unchanged closed verifier pass.
+                        coincidentAdditionalBytes = checked(4096L + ((coincidentFaces?.Count ?? 0) + 1L) * 192L);
+                        Estimate(vertexCount, triangleCount, fragments.Count, geometry, largeSelection,
+                            parentMemberships, allParents.Count, additionalBytes: coincidentAdditionalBytes);
+                        coincidentOwners ??= new(); coincidentFaces ??= new();
+                        if (!coincidentOwners.TryAdd((first, owner), triangles.Count))
+                            Duplicate(coincidentOwners[(first, owner)], original, "Coincident original triangles from the same owner are ambiguous and are not deduplicated.");
+                        coincidentFaces.Add((first, triangles.Count));
+                    }
+                    else unique.Add((x, y, z), triangles.Count);
                     int index = triangles.Count; triangles.Add(new(original, a, b, c)); AddEdge(a, b, index); AddEdge(b, c, index); AddEdge(c, a, index);
                 }
             }
             var adjacency = new List<int>[triangles.Count]; for (int at = 0; at < adjacency.Length; at++) adjacency[at] = new();
-            foreach (var edge in edges.Values) { budget.Spend(); if (edge.Second >= 0) { adjacency[edge.First].Add(edge.Second); adjacency[edge.Second].Add(edge.First); } }
-            var seen = new bool[triangles.Count]; var componentOf = new int[triangles.Count]; var componentIds = new List<List<int>>();
-            for (int at = 0; at < triangles.Count; at++)
+            foreach (var edge in edges.Values)
             {
-                budget.Spend(); if (seen[at]) continue;
-                if (componentIds.Count >= geometry.MaximumMeshes) Refuse("COMPONENT_LIMIT", "The connected component bound was exhausted.");
-                var local = new List<int>(); var queue = new Queue<int>(); queue.Enqueue(at); seen[at] = true;
-                while (queue.Count > 0) { budget.Spend(); int next = queue.Dequeue(); local.Add(next); componentOf[next] = componentIds.Count; foreach (int neighbour in adjacency[next]) if (!seen[neighbour]) { seen[neighbour] = true; queue.Enqueue(neighbour); } }
-                local.Sort((a, b) => { budget.Spend(); return a.CompareTo(b); }); componentIds.Add(local);
+                budget.Spend();
+                // Do not pair faces across an overfull edge. Several separately
+                // closed original bodies can touch along that exact edge.
+                if (edge.Overfull) continue;
+                if (edge.Inconsistent) Refuse("INCONSISTENT_WINDING", "Adjacent original faces have inconsistent winding; no orientation repair was attempted.");
+                if (edge.Second >= 0) { adjacency[edge.First].Add(edge.Second); adjacency[edge.Second].Add(edge.First); }
+            }
+            var seen = new bool[triangles.Count]; var componentOf = new int[triangles.Count]; var componentIds = new List<List<int>>();
+            DiscoverComponents(false);
+            void DiscoverComponents(bool reset)
+            {
+                if (reset) { budget.Spend(triangles.Count + componentIds.Count); Array.Clear(seen); componentIds.Clear(); }
+                for (int at = 0; at < triangles.Count; at++)
+                {
+                    budget.Spend(); if (seen[at]) continue;
+                    if (componentIds.Count >= geometry.MaximumMeshes) Refuse("COMPONENT_LIMIT", "The connected component bound was exhausted.");
+                    var local = new List<int>(); var queue = new Queue<int>(); queue.Enqueue(at); seen[at] = true;
+                    while (queue.Count > 0) { budget.Spend(); int next = queue.Dequeue(); local.Add(next); componentOf[next] = componentIds.Count; foreach (int neighbour in adjacency[next]) if (!seen[neighbour]) { seen[neighbour] = true; queue.Enqueue(neighbour); } }
+                    local.Sort((a, b) => { budget.Spend(); return a.CompareTo(b); }); componentIds.Add(local);
+                }
             }
             var boundary = new bool[componentIds.Count]; foreach (var edge in edges.Values) { budget.Spend(); if (edge.Second < 0) boundary[componentOf[edge.First]] = true; }
+            bool[]? separatedClosed = null; long partitionAdditionalBytes = coincidentAdditionalBytes;
+            if (hasOverfullEdge)
+            {
+                // This extra lane never lowers a failed solid to a surface. Its
+                // local edge maps are linear in the original triangle count;
+                // account for them before allocation, under the existing cap.
+                partitionAdditionalBytes = checked(partitionAdditionalBytes + 4096L + componentIds.Count * 16L + triangles.Count * 3L * 96L);
+                Estimate(vertexCount, triangleCount, fragments.Count, geometry, largeSelection,
+                    parentMemberships, allParents.Count, componentIds.Count, partitionAdditionalBytes);
+                MarkAffectedComponents();
+                if (!AffectedComponentsClose(out var offendingOwners))
+                {
+                    // Face-contacting original bodies can have different cap
+                    // diagonals. Cutting all four rim edges detaches their caps.
+                    // Only after that historical partition fails, use owner
+                    // provenance to propose pairs; it never certifies occupancy.
+                    partitionAdditionalBytes = checked(partitionAdditionalBytes + 4096L + componentIds.Count * 16L
+                        + triangles.Count * (3L * 128L + 64L + 3L * 96L));
+                    Estimate(vertexCount, triangleCount, fragments.Count, geometry, largeSelection,
+                        parentMemberships, allParents.Count, componentIds.Count, partitionAdditionalBytes);
+                    var ownerEdges = new Dictionary<(int A, int B, string Owner), Edge>();
+                    for (int at = 0; at < triangles.Count; at++)
+                    {
+                        budget.Spend(); var t = triangles[at];
+                        OwnerEdge(t.A, t.B, at, t.Value.Source.OwnerObjectId); OwnerEdge(t.B, t.C, at, t.Value.Source.OwnerObjectId); OwnerEdge(t.C, t.A, at, t.Value.Source.OwnerObjectId);
+                    }
+                    foreach (var pair in ownerEdges)
+                    {
+                        budget.Spend(); var edge = pair.Value;
+                        if (edge.Second < 0 || edge.Overfull || edge.Inconsistent)
+                        {
+                            var key = (pair.Key.A, pair.Key.B); edges[key] = edges[key] with { OwnerPairingInvalid = true };
+                        }
+                    }
+                    bool restored = false;
+                    foreach (var pair in ownerEdges)
+                    {
+                        budget.Spend(); if (edges[(pair.Key.A, pair.Key.B)].OwnerPairingInvalid) continue;
+                        var edge = pair.Value; adjacency[edge.First].Add(edge.Second); adjacency[edge.Second].Add(edge.First); restored = true;
+                    }
+                    // Every owner on an edge must supply exactly two opposing
+                    // original faces. A 1+3 split, same-direction pair or ambiguous
+                    // same-owner junction restores no adjacency on that edge.
+                    if (restored)
+                    {
+                        DiscoverComponents(true); boundary = new bool[componentIds.Count];
+                        foreach (var edge in edges.Values) { budget.Spend(); if (edge.Second < 0) boundary[componentOf[edge.First]] = true; }
+                        MarkAffectedComponents();
+                    }
+                    if (!restored || !AffectedComponentsClose(out offendingOwners))
+                        Refuse("NONMANIFOLD_EDGE", "More than two original triangles share an exactly welded edge, and the affected original component is not independently closed with consistent orientation.", offendingOwners);
+                    void OwnerEdge(int a, int b, int index, string owner)
+                    {
+                        budget.Spend(); var key = Key(a, b); if (!edges[key].Overfull) return;
+                        var ownerKey = (key.Item1, key.Item2, owner); int direction = a < b ? 1 : -1;
+                        if (!ownerEdges.TryGetValue(ownerKey, out var edge)) ownerEdges.Add(ownerKey, new(index, -1, direction));
+                        else if (edge.Second < 0) ownerEdges[ownerKey] = edge with { Second = index, Inconsistent = edge.Direction == direction };
+                        else ownerEdges[ownerKey] = edge with { Overfull = true };
+                    }
+                }
+                void MarkAffectedComponents()
+                {
+                    separatedClosed = new bool[componentIds.Count];
+                    for (int at = 0; at < triangles.Count; at++)
+                    {
+                        budget.Spend(3); var t = triangles[at];
+                        if (edges[Key(t.A, t.B)].Overfull || edges[Key(t.B, t.C)].Overfull || edges[Key(t.C, t.A)].Overfull)
+                            separatedClosed[componentOf[at]] = true;
+                    }
+                }
+                bool AffectedComponentsClose(out IReadOnlyList<string>? offending)
+                {
+                    offending = null;
+                    for (int ordinal = 0; ordinal < componentIds.Count; ordinal++)
+                    {
+                        budget.Spend(); if (!separatedClosed![ordinal]) continue;
+                        var localEdges = new Dictionary<(int, int), Edge>(); var owners = new HashSet<string>(StringComparer.Ordinal);
+                        foreach (int index in componentIds[ordinal])
+                        {
+                            budget.Spend(); var t = triangles[index];
+                            if (owners.Count <= 16) owners.Add(t.Value.Source.OwnerObjectId);
+                            LocalEdge(t.A, t.B, index); LocalEdge(t.B, t.C, index); LocalEdge(t.C, t.A, index);
+                        }
+                        foreach (var edge in localEdges.Values)
+                        {
+                            budget.Spend();
+                            if (edge.Second < 0 || edge.Overfull || edge.Inconsistent)
+                            {
+                                offending = owners.Count <= 16 ? Array.AsReadOnly(owners.Order(StringComparer.Ordinal).ToArray()) : null;
+                                return false;
+                            }
+                        }
+                        // Only a locally closed candidate reaches the unchanged
+                        // solid verifier below, including fan/embedding/volume tests.
+                        boundary[ordinal] = false;
+                        void LocalEdge(int a, int b, int index)
+                        {
+                            budget.Spend(); var key = Key(a, b); int direction = a < b ? 1 : -1;
+                            if (!localEdges.TryGetValue(key, out var edge)) localEdges.Add(key, new(index, -1, direction));
+                            else if (edge.Second < 0) localEdges[key] = edge with { Second = index, Inconsistent = edge.Direction == direction };
+                            else localEdges[key] = edge with { Overfull = true };
+                        }
+                    }
+                    return true;
+                }
+            }
+            if (coincidentFaces is not null) foreach (var pair in coincidentFaces)
+            {
+                budget.Spend(); int first = componentOf[pair.First], second = componentOf[pair.Second];
+                // Repeated surface faces and faces in one component remain
+                // ambiguous. Only separate, independently closed candidates may
+                // reach full solid qualification with their original cap faces.
+                if (first == second || boundary[first] || boundary[second])
+                    Duplicate(pair.First, triangles[pair.Second].Value, "Coincident original triangles were not separated into independently closed original bodies; nothing was deduplicated.");
+            }
             // Original surfaces may contain separate face fans that touch only
             // at an original point, including fans reconnected elsewhere in the
             // same edge component. Preserve their triangles and exact contacts;
@@ -161,10 +309,23 @@ public sealed class MixedBarrierKernel
                     budget.Spend(); int current = fanQueue.Dequeue(); fan++;
                     foreach (int next in adjacency[current]) { budget.Spend(); var t = triangles[next]; if (marks[next] == stamp || t.A != vertex && t.B != vertex && t.C != vertex) continue; marks[next] = stamp; fanQueue.Enqueue(next); }
                 }
-                if (fan != faces.Count) foreach (int face in faces)
+                if (fan != faces.Count)
                 {
-                    budget.Spend();
-                    if (!boundary[componentOf[face]]) Refuse("NONMANIFOLD_VERTEX", "An exactly welded vertex involving a closed component has disconnected original face fans.");
+                    // The fallback may separate independently closed bodies at
+                    // their shared edge endpoints. Every implicated component
+                    // must be one of those locally closed candidates. Point-only
+                    // contacts and contacts with open surfaces retain the old rule.
+                    bool independentlyClosedOnly = separatedClosed is not null;
+                    if (separatedClosed is not null) foreach (int face in faces)
+                    {
+                        budget.Spend(); int component = componentOf[face];
+                        if (!separatedClosed[component] || boundary[component]) independentlyClosedOnly = false;
+                    }
+                    foreach (int face in faces)
+                    {
+                        budget.Spend();
+                        if (!boundary[componentOf[face]] && !independentlyClosedOnly) Refuse("NONMANIFOLD_VERTEX", "An exactly welded vertex involving a closed component has disconnected original face fans.");
+                    }
                 }
             }
             var components = new List<Component>(); var closed = new List<BarrierMeshInput>(); int surfaceCount = 0; long componentParentMemberships = 0;
@@ -182,7 +343,7 @@ public sealed class MixedBarrierKernel
                 if (componentParents is not null)
                 {
                     componentParentMemberships = checked(componentParentMemberships + componentParents.Count);
-                    Estimate(vertexCount, triangleCount, fragments.Count, geometry, true, parentMemberships + componentParentMemberships, allParents.Count, ordinal + 1);
+                    Estimate(vertexCount, triangleCount, fragments.Count, geometry, true, parentMemberships + componentParentMemberships, allParents.Count, ordinal + 1, partitionAdditionalBytes);
                 }
                 var kind = boundary[ordinal] ? MixedBarrierComponentKind.OriginalSurface : MixedBarrierComponentKind.QualifiedClosedSolid;
                 if (boundary[ordinal])
@@ -213,24 +374,42 @@ public sealed class MixedBarrierKernel
             {
                 budget.Check(); var qualified = BarrierCollisionKernel.Build(closed, geometry with { MaximumBuildWork = budget.RemainingWork, MaximumBuildMilliseconds = budget.RemainingMilliseconds }, cancellationToken);
                 budget.Spend(qualified.Work);
-                if (qualified.Status != BarrierBuildStatus.Ready || qualified.Kernel is null) Refuse("CLOSED_SOLID_QUALIFICATION_REFUSED", "Independent unchanged closed-solid qualification refused: " + string.Join("; ", qualified.Diagnostics.Take(4).Select(value => value.Code)));
+                if (qualified.Status != BarrierBuildStatus.Ready || qualified.Kernel is null)
+                {
+                    // The closed verifier identifies the exact failed component.
+                    // Attribute only that component's original owners. A global
+                    // resource failure has no such witness and names no object.
+                    var failedId = qualified.Diagnostics.Count == 1 ? qualified.Diagnostics[0].BarrierId : null;
+                    var failed = failedId is null ? null : components.Find(component => component.Id == failedId);
+                    var owners = failed?.Triangles.Select(triangle => triangle.Source.OwnerObjectId).Distinct(StringComparer.Ordinal)
+                        .Take(17).Order(StringComparer.Ordinal).ToArray();
+                    Refuse("CLOSED_SOLID_QUALIFICATION_REFUSED", "Independent unchanged closed-solid qualification refused: "
+                        + string.Join("; ", qualified.Diagnostics.Take(4).Select(value => value.Code)), owners is { Length: > 0 and <= 16 } ? Array.AsReadOnly(owners) : null);
+                }
             }
             string sourceHash = SourceHash(components, fragments, budget);
             var summary = new MixedBarrierSummary(components.Count, surfaceCount, closed.Count, fragments.Count, vertexCount, triangleCount, sourceHash,
-                Estimate(vertexCount, triangleCount, fragments.Count, geometry, largeSelection, parentMemberships + componentParentMemberships, allParents.Count, components.Count), effectiveTolerance);
+                Estimate(vertexCount, triangleCount, fragments.Count, geometry, largeSelection, parentMemberships + componentParentMemberships, allParents.Count, components.Count, partitionAdditionalBytes), effectiveTolerance);
             budget.Check(); return new(BarrierBuildStatus.Ready, new(components.ToArray(), summary, geometry), Array.Empty<BarrierDiagnostic>(), budget.Work);
             void AddEdge(int a, int b, int index)
             {
-                budget.Spend(); var key = (Math.Min(a, b), Math.Max(a, b)); int direction = a < b ? 1 : -1;
+                budget.Spend(); var key = Key(a, b); int direction = a < b ? 1 : -1;
                 if (!edges.TryGetValue(key, out var edge)) edges.Add(key, new(index, -1, direction));
-                else { if (edge.Second >= 0) Refuse("NONMANIFOLD_EDGE", "More than two original triangles share an exactly welded edge."); if (edge.Direction == direction) Refuse("INCONSISTENT_WINDING", "Adjacent original faces have inconsistent winding; no orientation repair was attempted."); edges[key] = edge with { Second = index }; }
+                else if (edge.Second < 0) edges[key] = edge with { Second = index, Inconsistent = edge.Direction == direction };
+                else { edges[key] = edge with { Overfull = true }; hasOverfullEdge = true; }
+            }
+            void Duplicate(int first, MixedOriginalTriangle second, string reason)
+            {
+                string[] owners = new[] { triangles[first].Value.Source.OwnerObjectId, second.Source.OwnerObjectId }
+                    .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+                Refuse("DUPLICATE_TRIANGLE", reason, Array.AsReadOnly(owners));
             }
         }
-        catch (MixedRefusal error) { return new(BarrierBuildStatus.Refused, null, Array.AsReadOnly(new[] { new BarrierDiagnostic(error.Code, error.Message) }), budget.Work); }
+        catch (MixedRefusal error) { return new(BarrierBuildStatus.Refused, null, Array.AsReadOnly(new[] { new BarrierDiagnostic(error.Code, error.Message) }), budget.Work, error.ObjectIds); }
         catch (InvalidOperationException error) when (error.InnerException is MixedRefusal)
         {
             var refusal = (MixedRefusal)error.InnerException;
-            return new(BarrierBuildStatus.Refused, null, Array.AsReadOnly(new[] { new BarrierDiagnostic(refusal.Code, refusal.Message) }), budget.Work);
+            return new(BarrierBuildStatus.Refused, null, Array.AsReadOnly(new[] { new BarrierDiagnostic(refusal.Code, refusal.Message) }), budget.Work, refusal.ObjectIds);
         }
         catch (InvalidOperationException error) when (error.InnerException is OperationCanceledException)
         { System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(error.InnerException).Throw(); throw; }
@@ -238,12 +417,21 @@ public sealed class MixedBarrierKernel
         catch (OverflowException) { return new(BarrierBuildStatus.Refused, null, Array.AsReadOnly(new[] { new BarrierDiagnostic("RESOURCE_LIMIT", "Geometry arithmetic/count overflowed its bound.") }), budget.Work); }
     }
     public MixedBarrierSegmentResult CheckSegment(BarrierPoint from, BarrierPoint to, MixedBarrierQueryLimits? limits = null, CancellationToken cancellationToken = default)
+        => CheckSegmentCore(from, to, null, null, limits, cancellationToken);
+
+    public MixedBarrierSegmentResult CheckRouteSegment(BarrierPoint from, BarrierPoint to, BarrierPoint terminalFrom, BarrierPoint terminalTo,
+        MixedBarrierQueryLimits? limits = null, CancellationToken cancellationToken = default)
+        => CheckSegmentCore(from, to, terminalFrom, terminalTo, limits, cancellationToken);
+
+    private MixedBarrierSegmentResult CheckSegmentCore(BarrierPoint from, BarrierPoint to, BarrierPoint? terminalFrom, BarrierPoint? terminalTo,
+        MixedBarrierQueryLimits? limits, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested(); limits ??= new() { MaximumWork = maximumQueryWork, MaximumMilliseconds = maximumQueryMilliseconds }; var budget = new MixedBudget(limits.MaximumWork, limits.MaximumMilliseconds, cancellationToken);
         if (limits.MaximumWork is < 1 or > 2_000_000 || limits.MaximumWork > maximumQueryWork || limits.MaximumMilliseconds is < 1 or > 10_000 || limits.MaximumMilliseconds > maximumQueryMilliseconds || !Valid(from, 1e9) || !Valid(to, 1e9)) return new(MixedBarrierSegmentStatus.Indeterminate, "INVALID_QUERY", 0);
         try
         {
             double guard = Math.Max(tolerance, 64 * Geometry.MachineEpsilon * Math.Max(Magnitude(from), Magnitude(to))); var first = new V(from); var last = new V(to);
+            var firstBoundary = new HashSet<string>(); var lastBoundary = new HashSet<string>();
             // Every component participates in contact. A closed-solid label may
             // add containment, never remove any original surface triangle.
             foreach (var component in components)
@@ -263,14 +451,24 @@ public sealed class MixedBarrierKernel
                         }
                         return Result(MixedBarrierSegmentStatus.Indeterminate, "TRIANGLE_ARITHMETIC_UNCERTAINTY");
                     }
-                    if (contact.Status == OriginalTriangleContactStatus.Contact) return Result(MixedBarrierSegmentStatus.Blocked, "ORIGINAL_TRIANGLE_CONTACT", new(component.Id, component.Kind, "surface-contact", triangle));
+                    if (contact.Status == OriginalTriangleContactStatus.Contact)
+                    {
+                        var terminal = TerminalSurfaceContact.Check(first, last, Primitive(triangle), guard, terminalFrom, terminalTo, budget.Spend, cancellationToken);
+                        if (!terminal.Contact) return Result(MixedBarrierSegmentStatus.Indeterminate, "TERMINAL_CONTACT_ARITHMETIC_UNCERTAINTY");
+                        if (!terminal.Allowed) return Result(MixedBarrierSegmentStatus.Blocked, "ORIGINAL_TRIANGLE_CONTACT", new(component.Id, component.Kind, "surface-contact", triangle));
+                        if (terminal.FirstBoundary) firstBoundary.Add(component.Id);
+                        if (terminal.LastBoundary) lastBoundary.Add(component.Id);
+                    }
                 }
             }
             foreach (var component in components)
             {
                 budget.Spend(); if (component.Kind != MixedBarrierComponentKind.QualifiedClosedSolid) continue;
-                foreach (var point in first == last ? new[] { first } : new[] { first, last })
+                var midpoint = first + (last - first) * .5;
+                foreach (var point in first == last ? new[] { first } : firstBoundary.Contains(component.Id) || lastBoundary.Contains(component.Id)
+                    ? new[] { first, last, midpoint } : new[] { first, last })
                 {
+                    if (point == first && firstBoundary.Contains(component.Id) || point == last && lastBoundary.Contains(component.Id)) continue;
                     if (!component.Bounds.Contains(new(point.X, point.Y, point.Z), guard)) continue;
                     double sum = 0, correction = 0;
                     foreach (var original in component.Triangles)
@@ -285,7 +483,8 @@ public sealed class MixedBarrierKernel
                     if (winding > .5) return Result(MixedBarrierSegmentStatus.Blocked, "QUALIFIED_CLOSED_SOLID_OCCUPANCY", new(component.Id, component.Kind, "qualified-solid-occupancy", null));
                 }
             }
-            return Result(MixedBarrierSegmentStatus.Clear, "CLEAR_OF_PROVIDED_MIXED_GEOMETRY");
+            return Result(MixedBarrierSegmentStatus.Clear, firstBoundary.Count + lastBoundary.Count > 0
+                ? "CLEAR_EXCEPT_ACTUAL_TERMINAL_BOUNDARY_CONTACT" : "CLEAR_OF_PROVIDED_MIXED_GEOMETRY");
         }
         catch (MixedRefusal error) { return new(MixedBarrierSegmentStatus.Indeterminate, error.Code, budget.Work); }
         catch (GeometryUncertaintyException) { return new(MixedBarrierSegmentStatus.Indeterminate, "ARITHMETIC_UNCERTAINTY", budget.Work); }
@@ -298,13 +497,13 @@ public sealed class MixedBarrierKernel
     private static bool Uuid(string value) => value is not null && value.Length == 36 && Guid.TryParseExact(value, "D", out _) && value == value.ToLowerInvariant();
     private static int ParseOwner(string value) { if (value is null || !value.StartsWith("dbid:", StringComparison.Ordinal) || !int.TryParse(value.AsSpan(5), out int id) || id < 0) Refuse("INVALID_PROVENANCE", "A version-local owner dbId is required."); return int.Parse(value.AsSpan(5), System.Globalization.CultureInfo.InvariantCulture); }
     private static long Estimate(int vertices, int triangles, int fragments, BarrierLimits limits, bool largeSelection = false,
-        long parentMemberships = 0, int parents = 0, int components = 0)
+        long parentMemberships = 0, int parents = 0, int components = 0, long additionalBytes = 0)
     {
         // Historical 128-parent profiles retain their exact estimate. The new
         // explicit capacity also budgets copied membership sets and components;
         // many overlapping parents cannot bypass the unchanged 128 MiB ceiling.
         long estimate = checked(4096L + vertices * 256L + triangles * 512L + fragments * 2048L
-            + (largeSelection ? parentMemberships * 128L + parents * 96L + components * 1024L : 0));
+            + (largeSelection ? parentMemberships * 128L + parents * 96L + components * 1024L : 0) + additionalBytes);
         if (estimate > limits.MaximumEstimatedBytes) Refuse("ESTIMATED_MEMORY_LIMIT", largeSelection
             ? "Conservative temporary/copy/topology/membership memory exceeds the bound." : "Conservative temporary/copy/topology memory exceeds the bound."); return estimate;
     }
@@ -336,8 +535,9 @@ public sealed class MixedBarrierKernel
         foreach (var component in components) { budget.Spend(); Text(component.Id); Text(component.Kind.ToString()); Number(component.Triangles.Length); foreach (var t in component.Triangles) { budget.Spend(); Number(t.Source.FragmentId); Number(t.LocalTriangleIndex); Number(t.OriginalVertexA); Number(t.OriginalVertexB); Number(t.OriginalVertexC); Point(t.A); Point(t.B); Point(t.C); } }
         return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
     }
-    [System.Diagnostics.CodeAnalysis.DoesNotReturn] private static void Refuse(string code, string reason) => throw new MixedRefusal(code, reason);
-    private sealed class MixedRefusal(string code, string reason) : Exception(reason) { internal string Code { get; } = code; }
+    [System.Diagnostics.CodeAnalysis.DoesNotReturn] private static void Refuse(string code, string reason, IReadOnlyList<string>? objectIds = null) => throw new MixedRefusal(code, reason, objectIds);
+    private sealed class MixedRefusal(string code, string reason, IReadOnlyList<string>? objectIds) : Exception(reason)
+    { internal string Code { get; } = code; internal IReadOnlyList<string>? ObjectIds { get; } = objectIds; }
     private sealed class MixedBudget(long maximum, int milliseconds, CancellationToken token)
     {
         private readonly long started = Stopwatch.GetTimestamp(); internal long Work { get; private set; }
@@ -348,7 +548,8 @@ public sealed class MixedBarrierKernel
     }
     private sealed record Component(string Id, MixedBarrierComponentKind Kind, MixedOriginalTriangle[] Triangles, Bounds Bounds);
     private readonly record struct Original(MixedOriginalTriangle Value, int A, int B, int C);
-    private readonly record struct Edge(int First, int Second, int Direction);
+    private static (int, int) Key(int a, int b) => (Math.Min(a, b), Math.Max(a, b));
+    private readonly record struct Edge(int First, int Second, int Direction, bool Overfull = false, bool Inconsistent = false, bool OwnerPairingInvalid = false);
     private readonly record struct Bounds(BarrierPoint Minimum, BarrierPoint Maximum)
     {
         internal static Bounds Of(IReadOnlyList<BarrierPoint> points) => new(new(points.Min(p => p.X), points.Min(p => p.Y), points.Min(p => p.Z)), new(points.Max(p => p.X), points.Max(p => p.Y), points.Max(p => p.Z)));

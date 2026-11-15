@@ -12,12 +12,16 @@ import type { TrayRow } from '../models/tray.js';
 import { mapProjectRow } from '../models/project.js';
 import { drawingAccessTransaction } from '../pathfinder/drawingAccess.js';
 import { readProjectDrawingFreeSpace } from '../pathfinder/drawingSnapshots.js';
-import { requestPrincipal } from '../pathfinder/auth.js';
+import { requestPrincipal, principalTransaction, requireCurrentLogin } from '../pathfinder/auth.js';
 import { PathFinderError } from '../pathfinder/errors.js';
 import { projectDrawingMetricsSchema } from '../../shared/trayDrawingSnapshot.js';
 import { authenticate, requireProjectEdit, requireProjectExport } from '../middleware.js';
 import { ensureProjectExists } from '../services/projectService.js';
 import { recordTrayChanges } from '../services/trayChangeLogService.js';
+import { readCurrentTrayAutoLength, TrayAutoLengthError } from '../services/trayAutoLengthService.js';
+import { readTrayAutoLengthCaptureContext } from '../services/trayAutoLengthCaptureService.js';
+import { getPathFinderRuntime } from '../pathfinder/runtime.js';
+import { canonicalPurposeJson } from '../../shared/pathfinderPurposePolicy.js';
 import {
   excelImportError,
   getExcelRowNumber,
@@ -94,6 +98,8 @@ const selectTraysQuery = `
     width_mm,
     height_mm,
     length_mm,
+    length_source,
+    length_calculation,
     include_grounding_cable,
     grounding_cable_type_id,
     use_trefoil_clamps,
@@ -216,7 +222,7 @@ traysRouter.get(
         excelColumn.width = column.width;
 
         if (column.key === 'length') {
-          excelColumn.numFmt = '#,##0.00';
+          excelColumn.numFmt = '#,##0.000';
         }
       });
 
@@ -320,7 +326,7 @@ traysRouter.post(
         if (column.key === 'width' || column.key === 'height') {
           excelColumn.numFmt = '#,##0.00';
         } else if (column.key === 'length') {
-          excelColumn.numFmt = '#,##0.00';
+          excelColumn.numFmt = '#,##0.000';
         } else if (column.key === 'freeSpace') {
           excelColumn.numFmt = '0.00" %"';
         }
@@ -355,6 +361,66 @@ traysRouter.post(
     }
   },
 );
+
+traysRouter.get('/:trayId/auto-length/capture-context', requireProjectEdit, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { projectId, trayId } = req.params;
+    const context = await principalTransaction(pool, projectId, requestPrincipal(req), client => readTrayAutoLengthCaptureContext(client, projectId, trayId));
+    res.setHeader('Cache-Control', 'private, no-store'); res.json({ context });
+  } catch (error) {
+    if (error instanceof TrayAutoLengthError || error instanceof PathFinderError) { res.status(error.status).json({ error: error.message, code: error.code }); return; }
+    res.status(500).json({ error: 'The tray assignment could not be read. Try Auto-length again.' });
+  }
+});
+
+traysRouter.post('/:trayId/auto-length/capture', requireProjectEdit, async (req: Request, res: Response): Promise<void> => {
+  const controller = new AbortController(), abort = () => controller.abort(), timer = setTimeout(abort, 140000);
+  req.once('aborted', abort);
+  try {
+    const { projectId, trayId } = req.params, who = requestPrincipal(req);
+    await principalTransaction(pool, projectId, who, async () => undefined);
+    const authorize = async (client: PoolClient) => {
+      if (!(await client.query('SELECT id FROM projects WHERE id=$1 FOR NO KEY UPDATE', [projectId])).rows.length) throw new PathFinderError('PROJECT_NOT_FOUND', 404);
+      const user = (await client.query<{ is_admin: boolean }>('SELECT is_admin FROM users WHERE id=$1 FOR SHARE', [who.userId])).rows[0];
+      if (!user?.is_admin) throw new PathFinderError('ADMIN_REQUIRED', 403);
+      await requireCurrentLogin(client, who);
+    };
+    const autoLength = await getPathFinderRuntime().trayAutoLengths.capture(projectId, trayId, req.body, authorize, controller.signal);
+    res.setHeader('Cache-Control', 'private, no-store'); res.json({ autoLength });
+  } catch (error) {
+    if (error instanceof TrayAutoLengthError || error instanceof PathFinderError) { res.status(error.status).json({ error: error.message, code: error.code }); return; }
+    res.status(controller.signal.aborted ? 503 : 500).json({ error: 'The tray measurement could not finish. Its previous length was kept. Try Auto-length again.', code: 'TRAY_AUTO_LENGTH_CAPTURE_FAILED' });
+  } finally { clearTimeout(timer); req.removeListener('aborted', abort); }
+});
+
+traysRouter.get('/:trayId/auto-length', async (req: Request, res: Response): Promise<void> => {
+  const { projectId, trayId } = req.params;
+  if (!projectId || !trayId) {
+    res.status(400).json({ error: 'Project ID and tray ID are required' });
+    return;
+  }
+  try {
+    if (!await ensureProjectExists(projectId)) {
+      res.status(404).json({ error: 'Project not found' });
+      return;
+    }
+    const tray = await pool.query('SELECT id FROM trays WHERE project_id = $1 AND id = $2', [projectId, trayId]);
+    if (!tray.rows[0]) {
+      res.status(404).json({ error: 'Tray not found' });
+      return;
+    }
+    const autoLength = await readCurrentTrayAutoLength(pool, projectId, trayId);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.json({ autoLength });
+  } catch (error) {
+    if (error instanceof TrayAutoLengthError) {
+      res.status(error.status).json({ error: error.message, code: error.code });
+      return;
+    }
+    console.error('Calculate tray length error', error);
+    res.status(500).json({ error: 'The automatic tray length could not be read. Try again.' });
+  }
+});
 
 traysRouter.get('/:trayId', async (req: Request, res: Response): Promise<void> => {
   const { projectId, trayId } = req.params;
@@ -466,6 +532,8 @@ traysRouter.post(
             width_mm,
             height_mm,
             length_mm,
+            length_source,
+            length_calculation,
             include_grounding_cable,
             grounding_cable_type_id,
             use_trefoil_clamps,
@@ -536,6 +604,9 @@ traysRouter.patch(
       widthMm,
       heightMm,
       lengthMm,
+      lengthSource,
+      autoLengthReference,
+      approvedManualLengthMm,
       includeGroundingCable,
       groundingCableTypeId,
       useTrefoilClamps,
@@ -650,6 +721,27 @@ traysRouter.patch(
         res.status(404).json({ error: 'Tray not found' });
         return;
       }
+      if (lengthSource === 'auto') {
+        const oldLengthMm = toNumberOrNull(previous.rows[0].length_mm);
+        if (previous.rows[0].length_source !== 'auto' && oldLengthMm !== null && approvedManualLengthMm !== oldLengthMm) {
+          await client.query('ROLLBACK');
+          res.status(409).json({ error: 'Approve replacing the current manual length with Auto-length before saving. Refresh the tray if its manual length changed.', code: 'TRAY_MANUAL_LENGTH_APPROVAL_REQUIRED' });
+          return;
+        }
+        const measured = await readCurrentTrayAutoLength(client, projectId, trayId);
+        const { lengthMm: _measuredLength, elementCount: _elementCount, ...measuredReference } = measured;
+        if (measured.lengthMm !== lengthMm || !autoLengthReference ||
+          canonicalPurposeJson(measuredReference) !== canonicalPurposeJson(autoLengthReference)) {
+          await client.query('ROLLBACK');
+          res.status(409).json({ error: 'The model or tray geometry changed after the preview. Choose Auto-length again before saving.', code: 'TRAY_AUTO_LENGTH_STALE' });
+          return;
+        }
+        fields.push(`length_source = $${index++}`, `length_calculation = $${index++}`);
+        values.push('auto', JSON.stringify({ ...measured, calculatedAt: new Date().toISOString() }));
+      } else if (lengthSource === 'manual' || (lengthMm !== undefined && lengthMm !== toNumberOrNull(previous.rows[0].length_mm))) {
+        fields.push(`length_source = $${index++}`, `length_calculation = $${index++}`);
+        values.push('manual', null);
+      }
       const result = await client.query<TrayRow>(
         `
           UPDATE trays
@@ -665,6 +757,8 @@ traysRouter.patch(
             width_mm,
             height_mm,
             length_mm,
+            length_source,
+            length_calculation,
             include_grounding_cable,
             grounding_cable_type_id,
             use_trefoil_clamps,
@@ -689,6 +783,10 @@ traysRouter.patch(
       res.json({ tray: mapTrayRow(tray) });
     } catch (error) {
       await client?.query('ROLLBACK').catch(() => undefined);
+      if (error instanceof TrayAutoLengthError) {
+        res.status(error.status).json({ error: error.message, code: error.code });
+        return;
+      }
       console.error('Update tray error', error);
       res.status(500).json({ error: 'Failed to update tray' });
     } finally {
@@ -983,6 +1081,8 @@ traysRouter.post(
                 width_mm = $3,
                 height_mm = $4,
                 length_mm = $5,
+                length_source = 'manual',
+                length_calculation = NULL,
                 updated_at = NOW()
               WHERE id = $6
               RETURNING *;

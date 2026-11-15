@@ -1,4 +1,6 @@
+import { routingDiagnosticText } from '../../shared/cableRoutingLabels';
 import { CableAutoCalculatedLength } from '@/components/pathfinder/CableAutoCalculatedLength';
+import { CableRoutingValue } from '@/components/pathfinder/CableRoutingValue';
 import { ChangeLogTable } from '@/components/ChangeLogTable';
 import { canEditProject, canExportChangeLogs } from '@/utils/permissions';
 import type { ChangeEvent, FormEvent } from 'react';
@@ -66,6 +68,7 @@ import {
 } from './ProjectDetails/cableVersionUtils';
 import {
   buildCableInput,
+  changeCableFormField,
   emptyCableForm,
   parseCableFormErrors,
   toCableFormState,
@@ -119,6 +122,11 @@ const CABLE_DETAILS_DIALOG_VISIBLE_FIELDS: CableDialogField[] = [
   'routing',
   'delivery',
   'designLength',
+  'installLength',
+  'pullDate',
+  'connectedFrom',
+  'connectedTo',
+  'tested',
 ];
 
 const normalizeMaterialUnit = (value: string | null | undefined): string => {
@@ -270,7 +278,11 @@ const formatCableVersionOption = (version: CableVersion): string => {
 
 const formatCableVersionChange = (version: CableVersion): string =>
   `${version.changeType === 'create' ? 'Created' : 'Updated'} via ${
-    version.changeSource === 'import' ? 'import' : version.changeSource === 'pathfinder' ? 'PathFinder apply' : 'manual save'
+    version.changeSource === 'import'
+      ? 'import'
+      : version.changeSource === 'pathfinder'
+        ? 'PathFinder apply'
+        : 'manual save'
   }`;
 
 const dateFormatter = new Intl.DateTimeFormat(undefined, {
@@ -458,6 +470,8 @@ export const CableDetails = () => {
   const [cableEditDialogSubmitting, setCableEditDialogSubmitting] = useState<boolean>(false);
 
   const detailsRequestId = useRef(0);
+  const latestDetails = useRef(details);
+  latestDetails.current = details;
   const versionsRequestId = useRef(0);
 
   const loadDetails = useCallback(async () => {
@@ -499,6 +513,66 @@ export const CableDetails = () => {
       detailsRequestId.current += 1;
     };
   }, [loadDetails]);
+
+  useEffect(() => {
+    if (
+      !projectId ||
+      !cableId ||
+      !['pending', 'stale'].includes(details?.cable.manualRouteLengthStatus ?? '')
+    )
+      return;
+    let closed = false,
+      timer: ReturnType<typeof setTimeout> | undefined,
+      attempts = 0;
+    const requestId = detailsRequestId.current;
+    const poll = async () => {
+      if (closed || requestId !== detailsRequestId.current || ++attempts > 30) return;
+      try {
+        const fresh = await fetchCableDetails(projectId, cableId);
+        if (closed || requestId !== detailsRequestId.current) return;
+        const isOlder = (previous: Cable, next: Cable) =>
+          (['routingControlRevision', 'cableWriteRevision'] as const).some((field) => {
+            const oldValue = previous[field],
+              nextValue = next[field];
+            return (
+              oldValue &&
+              nextValue &&
+              /^\d+$/.test(oldValue) &&
+              /^\d+$/.test(nextValue) &&
+              BigInt(nextValue) < BigInt(oldValue)
+            );
+          });
+        const current = latestDetails.current;
+        const accepted =
+          current?.cable.id === fresh.cable.id && !isOlder(current.cable, fresh.cable);
+        setDetails((previous) => {
+          if (
+            !previous ||
+            previous.cable.id !== fresh.cable.id ||
+            isOlder(previous.cable, fresh.cable)
+          )
+            return previous;
+          return { ...fresh, cableMaterials: sortMaterials(fresh.cableMaterials) };
+        });
+        if (accepted && !['pending', 'stale'].includes(fresh.cable.manualRouteLengthStatus ?? ''))
+          return;
+      } catch {
+        /* Keep the last visible result; the user can also Refresh. */
+      }
+      if (!closed && attempts < 30) timer = setTimeout(() => void poll(), 2000);
+    };
+    timer = setTimeout(() => void poll(), 1500);
+    return () => {
+      closed = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [
+    projectId,
+    cableId,
+    token,
+    details?.cable.manualRouteLengthStatus,
+    details?.cable.routingControlRevision,
+  ]);
 
   const loadVersions = useCallback(async () => {
     const requestId = ++versionsRequestId.current;
@@ -735,7 +809,7 @@ export const CableDetails = () => {
   const handleCableEditFieldChange =
     (field: keyof CableFormState) =>
     (_event: ChangeEvent<HTMLInputElement>, data: { value: string }) => {
-      setCableEditDialogValues((previous) => ({ ...previous, [field]: data.value }));
+      setCableEditDialogValues((previous) => changeCableFormField(previous, field, data.value));
       setCableEditDialogErrors((previous) => ({
         ...previous,
         [field]: undefined,
@@ -985,11 +1059,24 @@ export const CableDetails = () => {
       console.error('Save cable failed', err);
 
       if (err instanceof ApiError) {
-        setCableEditDialogErrors(parseCableFormErrors(err.payload));
+        const reasons = [
+          ['INSTALL_LENGTH_RECORDED', 'Install length'],
+          ['PULL_DATE_RECORDED', 'Pull date'],
+          ['CONNECTED_FROM_RECORDED', 'Connected From'],
+          ['CONNECTED_TO_RECORDED', 'Connected To'],
+          ['TESTED_DATE_RECORDED', 'Cable tested'],
+          ['EXECUTION_LOCK_RETAINED', 'retained execution protection'],
+        ]
+          .filter(([code]) => err.message.includes(code))
+          .map(([, label]) => label);
+        const message = reasons.length
+          ? `${details.cable.tag || details.cable.cableId}: route protected by ${reasons.join(', ')}. No changes were saved.`
+          : err.message;
+        setCableEditDialogErrors({ ...parseCableFormErrors(err.payload), general: message });
         showToast({
           intent: 'error',
           title: 'Failed to save cable',
-          body: err.message,
+          body: message,
         });
       } else {
         const message = 'Failed to save cable. Please try again.';
@@ -1384,11 +1471,98 @@ export const CableDetails = () => {
       </div>
 
       <Card appearance="outline" className={styles.fullWidthCard}>
-        <Title3>Cable routing</Title3>
-        <Body1 className={styles.routingText}>{formatOptionalText(details.cable.routing)}</Body1>
+        <div className={styles.sectionHeader}>
+          <Title3>Cable routing</Title3>
+          {canManageMaterials ? (
+            <Button onClick={openCableEditDialog}>Edit routing and execution</Button>
+          ) : null}
+        </div>
+        <Caption1 className={styles.label}>Used route</Caption1>
+        <CableRoutingValue cable={details.cable} />
+        <div className={styles.field}>
+          <Caption1 className={styles.label}>Manual route</Caption1>
+          <Body1 className={styles.routingText}>
+            {formatOptionalText(
+              details.cable.routingControl?.manualRouting ??
+                (details.cable.routingControl ? null : details.cable.routing),
+            )}
+          </Body1>
+          <Caption1>
+            {details.cable.routingControl?.manualProtected
+              ? 'Manually assigned route — keep'
+              : 'Automatic routing is allowed unless execution protection applies.'}
+          </Caption1>
+        </div>
+        <Field label="Automatically calculated route">
+          <Textarea
+            value={details.cable.autoCalculatedRouting ?? ''}
+            readOnly
+            placeholder="No calculated route"
+          />
+        </Field>
+        {details.cable.autoRoutingStatus ? (
+          <Caption1>Automatic route: {details.cable.autoRoutingStatus}</Caption1>
+        ) : null}
+        {!details.cable.routing &&
+        !details.cable.routingControl?.manualProtected &&
+        !details.cable.routingControl?.executionLocked ? (
+          <Body1 role="status">
+            Waiting for a current automatic route. Enable automatic recalculation or calculate this
+            cable in Path Finder.
+          </Body1>
+        ) : null}
+        {details.cable.routingControl?.executionLocked ? (
+          <Body1>
+            Execution protection keeps the used route unchanged. New automatic results remain
+            available separately.
+          </Body1>
+        ) : null}
+        {details.cable.routingDiagnostics?.length ? (
+          <Body1 role="status">
+            {details.cable.routingDiagnostics.map(routingDiagnosticText).join('; ')}
+          </Body1>
+        ) : null}
+        {details.cable.manualRouteLengthStatus &&
+        details.cable.manualRouteLengthStatus !== 'not-calculated' ? (
+          <div className={styles.field}>
+            <Caption1 className={styles.label}>Calculated manual route length [m]</Caption1>
+            <Body1>{formatNumeric(details.cable.manualRouteLength ?? null)}</Body1>
+            <Caption1>
+              {details.cable.manualRouteLengthStatus === 'calculated'
+                ? 'Calculated from the saved manual route.'
+                : `Manual route length is ${details.cable.manualRouteLengthStatus}. Earlier length is not current.`}
+            </Caption1>
+            <Caption1>
+              {details.cable.routingControl?.executionLocked
+                ? 'Execution protection keeps Design length unchanged.'
+                : 'A successful check of the used protected manual route updates Design length automatically.'}
+            </Caption1>
+          </div>
+        ) : null}
         <div className={styles.field}>
           <Caption1 className={styles.label}>Auto calculated length [m]</Caption1>
           <CableAutoCalculatedLength value={details.cable} />
+        </div>
+        <div className={styles.cardGrid}>
+          <div className={styles.field}>
+            <Caption1 className={styles.label}>Install length [m]</Caption1>
+            <Body1>{formatNumeric(details.cable.installLength)}</Body1>
+          </div>
+          {(['pullDate', 'connectedFrom', 'connectedTo', 'tested'] as const).map((field) => (
+            <div key={field} className={styles.field}>
+              <Caption1 className={styles.label}>
+                {
+                  {
+                    pullDate: 'Pull date',
+                    connectedFrom: 'Connected From',
+                    connectedTo: 'Connected To',
+                    tested: 'Cable tested',
+                  }[field]
+                }
+              </Caption1>
+              <Body1>{details.cable[field]?.slice(0, 10) || '-'}</Body1>
+            </div>
+          ))}
         </div>
       </Card>
 

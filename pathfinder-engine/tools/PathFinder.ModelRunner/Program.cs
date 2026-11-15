@@ -338,6 +338,13 @@ internal static partial class Program
             _ = Point(r.From); _ = Point(r.To); _ = SupportedBarrierValue(r);
         }
         else if (r.Barriers is not null) throw new ArgumentException("Barrier contexts require protected runtime v2; legacy fallback is prohibited.");
+        if (r.ManualRouteConstraint is { } manual)
+        {
+            if (r.SchemaVersion != "pathfinder.model.runner.v2" || r.Operation != "calculate" || r.Reverse
+                || manual.SchemaVersion != ManualOrderedRoute.SchemaVersion)
+                throw new ArgumentException("Manual ordered constraints require a forward protected calculation.");
+            _ = ManualOrderedRoute.Parse(manual.RouteText);
+        }
         _ = EffectivePreparationRules(r);
         if (r.IncludeLengthLedger && r.Operation is not ("calculate" or "design"))
             throw new ArgumentException("Length-component ledgers apply only to calculate and design operations.");
@@ -537,6 +544,8 @@ internal sealed record Request
     public RouteCostMultiplier[]? RouteCostMultipliers { get; init; }
     public RetainedRoute? Route { get; init; }
     public string? RouteText { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ManualRouteConstraintInput? ManualRouteConstraint { get; init; }
     public bool Reverse { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool IncludeLengthLedger { get; init; }
@@ -546,6 +555,12 @@ internal sealed record Request
     public FittedTraceExportRequest? FittedTraceExport { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public JsonElement? Barriers { get; init; }
+}
+
+internal sealed record ManualRouteConstraintInput
+{
+    public required string SchemaVersion { get; init; }
+    public required string RouteText { get; init; }
 }
 internal sealed record RetainedRoute
 {

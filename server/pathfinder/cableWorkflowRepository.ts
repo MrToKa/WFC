@@ -7,7 +7,7 @@ import { cableWorkflowQuerySchema, cableWorkflowDetailQuerySchema, cableWorkflow
   parseCableWorkflowHttpQuery, parseCableWorkflowDetailHttpQuery,
   type CableWorkflowQuery, type CableWorkflowDetailQuery } from '../../shared/pathfinderCableWorkflowQueries.js';
 import { calculationAvailabilitySchema, notEvaluatedCalculationAvailability, type CalculationAvailability } from '../../shared/pathfinderCalculationAvailability.js';
-import { canonicalPurposeJson, policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
+import { canonicalPurposeJson, policyHashSchema, policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { defaultOptions, optionsSchema, type JobPrincipal, type DependencySnapshot } from './jobContracts.js';
 import { collectCommonCalculationInputs, collectBarrierCommonCalculationInputs, freezeCableDependenciesForVersion, createCablePurposeRoutingReader, readLinkedCableTypePurposes, hash, type CommonCalculationCollection, type BarrierCommonCalculationCollection } from './dependencies.js';
 import { sameSupportedBarrierAdmissionIntent as sameBarrierAdmissionIntent } from '../../shared/pathfinderBarrierSupported.js';
@@ -20,9 +20,10 @@ import { PathFinderError } from './errors.js';
 import { cableWorkflowReadTransaction } from './cableWorkflowRead.js';
 import { createCableWorkflowCursor } from './cableWorkflowCursor.js';
 import { createCableWorkflowProofReader } from './cableWorkflowProof.js';
+import { isExpectedBarrierCurrentnessError } from './barrierCurrentness.js';
 
 type Data = Record<string, any>;
-type WorkflowCommon = CommonCalculationCollection | BarrierCommonCalculationCollection;
+type WorkflowCommon = (CommonCalculationCollection | BarrierCommonCalculationCollection) & { unavailableReasonCode?: string };
 export const CABLE_WORKFLOW_REPOSITORY_LIMITS = Object.freeze({ admissions: 10_000 });
 const fail = (code: string, status = 409): never => { throw new PathFinderError(code, status, 'Cable diagnostics could not be read within their supported scope. Refresh the current project.'); };
 const bounded = <T>(value: T): T => { if (Buffer.byteLength(canonicalPurposeJson(value)) > CABLE_WORKFLOW_READ_LIMITS.responseBytes) return fail('WORKFLOW_RESPONSE_LIMIT', 413); return value; };
@@ -73,13 +74,16 @@ function asciiSearchNeedle(search: string): string | null {
   return /^[\x20-\x7e]+$/.test(needle) ? needle : null;
 }
 const candidatesSql = `/* cable-workflow:candidates */ SELECT c.id,c.cable_type_id,c.cable_write_revision::text,
+ CASE WHEN char_length(ct.name)<=4096 THEN ct.name ELSE NULL END AS display_type_name,
+ CASE WHEN char_length(ct.purpose)<=4096 THEN ct.purpose ELSE NULL END AS display_purpose,
  CASE WHEN octet_length(c.tag)<=4096 THEN c.tag ELSE NULL END AS tag,
  CASE WHEN octet_length(c.from_location)<=4096 THEN c.from_location ELSE NULL END AS from_location,
  CASE WHEN octet_length(c.to_location)<=4096 THEN c.to_location ELSE NULL END AS to_location,
  CASE WHEN char_length(c.routing)<=8000 AND octet_length(c.routing)<=32000 THEN c.routing ELSE NULL END AS routing,
  CASE WHEN octet_length(c.mto)<=96 THEN c.mto ELSE NULL END AS mto,c.design_length::text,c.install_length::text,
  ${inputOversizeSql} AS input_oversize
- FROM cables c WHERE c.project_id=$1 AND c.mto IS DISTINCT FROM 'MV' AND ($2::uuid IS NULL OR c.id>$2)
+ FROM cables c LEFT JOIN cable_types ct ON ct.id=c.cable_type_id AND ct.project_id=c.project_id
+ WHERE c.project_id=$1 AND c.mto IS DISTINCT FROM 'MV' AND ($2::uuid IS NULL OR c.id>$2)
  AND ($3::uuid IS NULL OR c.id=$3)
  AND ($4::text IS NULL OR ${inputOversizeSql}
    OR strpos(translate(c.tag,'abcdefghijklmnopqrstuvwxyz','ABCDEFGHIJKLMNOPQRSTUVWXYZ'),$4)>0
@@ -110,16 +114,24 @@ async function readRows(client: PoolClient, projectId: string, candidates: Data[
   const getCommon = (raw: unknown) => {
     const parsed = optionsSchema.safeParse(raw); if (!parsed.success) return Promise.resolve(null);
     const key = canonicalPurposeJson(parsed.data);
-    if (!commonCache.has(key)) commonCache.set(key, parsed.data.barrierRouting ? collectBarrierCommonCalculationInputs(client,projectId,parsed.data) : collectCommonCalculationInputs(client, projectId, parsed.data));
+    if (!commonCache.has(key)) commonCache.set(key, (async (): Promise<WorkflowCommon> => {
+      try {
+        return await (parsed.data.barrierRouting ? collectBarrierCommonCalculationInputs(client,projectId,parsed.data) : collectCommonCalculationInputs(client, projectId, parsed.data));
+      } catch (error) {
+        check();
+        // An exact retained result can remain readable when its current barrier
+        // storage/frame cannot be proved. Cache that refusal for every option
+        // set, including recorded options with a different connection tolerance.
+        // Transient, authority and unknown failures retain their error boundary.
+        if (!(isExpectedBarrierCurrentnessError(error) && error.status === 409)
+          && !(error instanceof PathFinderError && error.code === 'PROJECT_SETTINGS_INVALID' && error.status === 409)) throw error;
+        return { inputs: null, bindingContext: null, status: error.code === 'PROJECT_SETTINGS_INVALID' ? 'settings_required' : 'model_unavailable',
+          message: '', unavailableReasonCode: error.code };
+      }
+    })());
     return commonCache.get(key)!;
   };
-  let common: WorkflowCommon | null;
-  try { common = await getCommon(requested); }
-  catch (error) {
-    check(); if (!(error instanceof PathFinderError)) throw error;
-    common = { inputs: null, bindingContext: null, status: error.code === 'PROJECT_SETTINGS_INVALID' ? 'settings_required' : 'model_unavailable', message: '' };
-    commonCache.set(canonicalPurposeJson(requested), Promise.resolve(common));
-  }
+  const common = await getCommon(requested);
   check(); if (!common) return fail('WORKFLOW_CONTEXT_UNAVAILABLE');
   if (common.inputs) commonCache.set(canonicalPurposeJson(common.inputs.options), Promise.resolve(common));
   const purposes = common.inputs ? await readLinkedCableTypePurposes(client, projectId, candidates) : new Map();
@@ -162,11 +174,13 @@ async function readRows(client: PoolClient, projectId: string, candidates: Data[
   const contextHash = hash({ database: readContext.context, admissionCount: readContext.admission_count, common: common.inputs ?? { status: common.status } });
   return { contextHash, async row(cable: Data): Promise<CableWorkflowRow> {
     check(); const from = endpoint(cable.from_location), to = endpoint(cable.to_location), meta = latest.get(cable.id);
+    const unavailableReasons = new Set<string>(common.unavailableReasonCode ? [common.unavailableReasonCode] : []);
     const fresh = async (raw: unknown,version:DependencySnapshot['schemaVersion']): Promise<DependencySnapshot | null> => {
       const options = optionsSchema.safeParse(raw); if (!options.success) return null;
       if (options.data.secondaryDistanceMeters !== preferences.secondaryDistanceMeters || options.data.preferVerticalApproach !== preferences.preferVerticalApproach
         || !sameBarrierAdmissionIntent(options.data.barrierRouting,preferences.barrierRouting)) return null;
       const coherent = await getCommon(options.data); check();
+      if (coherent?.unavailableReasonCode) unavailableReasons.add(coherent.unavailableReasonCode);
       if (!coherent?.inputs) return null;
       const frozen=freezeCableDependenciesForVersion(coherent.inputs, cable, from.point, to.point,version).dependencies;
       if (!frozen || !['pathfinder.dependencies.v7','pathfinder.dependencies.v8'].includes(version)) return frozen;
@@ -202,13 +216,34 @@ async function readRows(client: PoolClient, projectId: string, candidates: Data[
       itemApplicability='itemApplicability' in result?result.itemApplicability:null;
     }
     const cableSnapshot = snapshot(cable), accepted = Boolean(acceptedIds.has(cable.id) && meta?.job_id && meta.proposal_id && meta.proposal_hash
-      && await proof.accepted(cableSnapshot, fresh, {jobId:meta.job_id,proposalId:meta.proposal_id,proposalHash:meta.proposal_hash})); check();
+      && await proof.accepted(cableSnapshot, fresh, {jobId:meta.job_id,proposalId:meta.proposal_id,proposalHash:meta.proposal_hash})) && unavailableReasons.size === 0; check();
     if (accepted) currentness = 'current';
-    const savedExactDisplay = Boolean(!accepted && currentness === 'changed' && acceptedIds.has(cable.id)
+    const savedExactDisplay = Boolean(!accepted && unavailableReasons.size === 0 && currentness === 'changed' && acceptedIds.has(cable.id)
       && jobStatus === 'complete' && itemState === 'complete' && status === 'calculated' && meta?.cancel_requested === false
       && meta.job_id && meta.proposal_id && meta.proposal_hash
       && await proof.savedExactDisplay(cableSnapshot, fresh, { jobId: meta.job_id, proposalId: meta.proposal_id, proposalHash: meta.proposal_hash })); check();
+    let savedRoute: CableWorkflowRow['savedRoute'];
+    // A later terminal failure describes the attempt, not the already-written
+    // route. Keep its diagnostics and qualify the latest receipt independently.
+    if (unavailableReasons.size === 0 && acceptedIds.has(cable.id) && meta?.job_id && ['complete', 'failed', 'cancelled'].includes(jobStatus ?? '')
+      && !['waiting', 'running'].includes(itemState ?? '') && status !== 'calculated'
+      && !['pending', 'running', 'unknown'].includes(meta.automatic_update_status ?? '')
+      && from.availability.pointAvailable && to.availability.pointAvailable && cableSnapshot.routing?.trim() && cableSnapshot.designLength !== null) {
+      const retained = (await client.query<Data>(`/* cable-workflow:saved-route-identity */ SELECT r.id AS receipt_id,p.job_id,p.id AS proposal_id,p.proposal_hash
+        FROM (SELECT id,proposal_id FROM pf_apply_receipts WHERE project_id=$1 AND cable_id=$2 ORDER BY applied_at DESC,id DESC LIMIT 1) r
+        LEFT JOIN pf_proposals p ON p.project_id=$1 AND p.cable_id=$2 AND p.id=r.proposal_id`, [projectId, cable.id])).rows[0]; check();
+      if (retained && policyUuidSchema.safeParse(retained.receipt_id).success && policyUuidSchema.safeParse(retained.job_id).success
+        && policyUuidSchema.safeParse(retained.proposal_id).success && policyHashSchema.safeParse(retained.proposal_hash).success) {
+        const identity = { receiptId: retained.receipt_id, jobId: retained.job_id, proposalId: retained.proposal_id, proposalHash: retained.proposal_hash };
+        if (await proof.accepted(cableSnapshot, fresh, identity)) savedRoute = { ...identity, currentness: 'current' };
+        else if (await proof.savedExactDisplay(cableSnapshot, fresh, identity)) savedRoute = { ...identity, currentness: 'saved-exact' };
+        check();
+      }
+    }
+    if (unavailableReasons.size) { currentness = 'unavailable'; reviewable = false; savedRoute = undefined; reasons.push(...unavailableReasons); }
     return cableWorkflowRowSchema.parse({ projectId, cable: cableSnapshot, mto: cable.mto, from: from.availability, to: to.availability,
+      displayMetadata: { typeName: cable.display_type_name ?? null, purpose: cable.display_purpose ?? null },
+      ...(savedRoute ? { savedRoute } : {}),
       calculation: { jobId: jobStatus && meta ? meta.job_id : null, jobStatus, itemState: jobStatus ? itemState : null, outcome: status,
         // Historical item/job tables retain status and free-form text, not a structured error code. Never parse private messages into codes.
         reasonCodes: [...new Set(reasons)].slice(0, CABLE_WORKFLOW_LIMITS.reasonCodes), errorCode: null, currentness,

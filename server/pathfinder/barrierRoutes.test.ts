@@ -8,7 +8,7 @@ import { MIXED_BARRIER_POLICY } from '../../shared/pathfinderBarrierMixed.js';
 import { supportedBarrierCaptureCommandSchema, supportedBarrierRegistryCommandSchema } from '../../shared/pathfinderBarrierSupported.js';
 import { barrierCommandRecoveryTargetSchema } from '../../shared/pathfinderBarrierRecovery.js';
 import { PathFinderError } from './errors.js';
-const mocks = vi.hoisted(() => ({ verify: vi.fn(), authorize: vi.fn(), get: vi.fn(), list: vi.fn(), getSnapshot: vi.fn(), readCaptureOutcome: vi.fn(), readCommandRecovery: vi.fn(), closeCommand: vi.fn(), begin: vi.fn(), publish: vi.fn(), command: vi.fn(), adapters: vi.fn(), repository: vi.fn() }));
+const mocks = vi.hoisted(() => ({ verify: vi.fn(), authorize: vi.fn(), get: vi.fn(), list: vi.fn(), getSnapshot: vi.fn(), authoringRecovery: vi.fn(), readCaptureOutcome: vi.fn(), readCommandRecovery: vi.fn(), closeCommand: vi.fn(), begin: vi.fn(), publish: vi.fn(), command: vi.fn(), adapters: vi.fn(), repository: vi.fn() }));
 vi.mock('../auth.js', () => ({ verifyAccessToken: mocks.verify }));
 vi.mock('./barrierCaptureAuthority.js', () => ({ barrierCaptureAdapters: mocks.adapters }));
 vi.mock('./barrierRegistryRepository.js', () => ({ createBarrierRegistryRepository: mocks.repository }));
@@ -32,7 +32,7 @@ function upload() {
 beforeEach(() => {
   vi.resetAllMocks(); mocks.verify.mockReturnValue({ sub: id(4), jti: id(5), exp: Math.floor(Date.now() / 1000) + 3600 });
   mocks.repository.mockReturnValue(mocks); mocks.adapters.mockImplementation(context => ({ syntheticContext: context }));
-  for (const name of ['authorize', 'get', 'list', 'getSnapshot', 'publish'] as const) mocks[name].mockResolvedValue({ synthetic: name });
+  for (const name of ['authorize', 'get', 'list', 'getSnapshot', 'authoringRecovery', 'publish'] as const) mocks[name].mockResolvedValue({ synthetic: name });
   mocks.readCaptureOutcome.mockResolvedValue(null);
   // These mirror the mandatory production repository parsing. Route tests do not
   // pretend that a deliberately permissive mock proves repository validation.
@@ -59,6 +59,20 @@ function request({ url = '/barriers', mode = 'admin', method = 'GET', token = 'B
 }
 
 describe('barrier HTTP admission through in-memory Express router, no listener', () => {
+  it('reads missing-file authoring recovery only after current administrator authorization', async () => {
+    const r = request({ url: '/barriers/authoring', cookie: null, origin: null }); await r.run();
+    expect(r.res.statusCode).toBe(200);
+    expect(mocks.authorize).toHaveBeenCalledOnce();
+    expect(mocks.authoringRecovery).toHaveBeenCalledExactlyOnceWith(id(1), expect.any(Object));
+    expect(mocks.begin).not.toHaveBeenCalled(); expect(mocks.command).not.toHaveBeenCalled();
+  });
+  it('does not expose recovery metadata to a denied administrator or accept recovery query overrides', async () => {
+    mocks.authorize.mockRejectedValueOnce(new PathFinderError('ADMIN_REQUIRED', 403));
+    const denied = request({ url: '/barriers/authoring' }); await denied.run();
+    expect(denied.res.statusCode).toBe(403); expect(mocks.authoringRecovery).not.toHaveBeenCalled();
+    const extra = request({ url: '/barriers/authoring', query: { scope: 'untrusted' } }); await extra.run();
+    expect(extra.res.statusCode).toBe(400); expect(mocks.authoringRecovery).not.toHaveBeenCalled();
+  });
   it('admits 2048 bounded mixed parents through the actual raw-body parser and refuses 2049', async () => {
     const selectedParents = Array.from({ length: 2048 }, (_, at) => ({ ...parents()[0], selectionId: id(1000 + at),
       dbId: at + 1, objectId: 'dbid:' + (at + 1), name: 'Wall ' + at }));

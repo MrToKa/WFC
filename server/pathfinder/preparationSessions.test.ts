@@ -3,8 +3,8 @@ import type { Pool, PoolClient } from 'pg';
 import { createHash } from 'node:crypto';
 import { canonicalPurposeJson } from '../../shared/pathfinderPurposePolicy.js';
 const fake = vi.hoisted(() => ({ realAuthority: false, context: null as any, rows: new Map<string, any>(), parts: new Map<string, any>(), commands: new Map<string, any>(), blobs: new Map<string, Buffer>(), aggregates: [] as any[], calls: [] as string[], authorized: true, loseCommitAck: false, failBeforeCommit: false, current: { geometry_revision: '0', resolution_revision: '0', current_aggregate_id: null as string | null, current_artifact_id: null as string | null } }));
-vi.mock('./auth.js', () => ({ principalTransaction: async (_pool: unknown, _project: string, _who: unknown, operation: (client: PoolClient) => Promise<unknown>) => {
-  if (fake.realAuthority) return (await vi.importActual<typeof import('./auth.js')>('./auth.js')).principalTransaction(_pool as Pool, _project, _who as typeof who, operation);
+vi.mock('./auth.js', () => ({ principalTransaction: async (_pool: unknown, _project: string, _who: unknown, operation: (client: PoolClient) => Promise<unknown>, options?: { snapshot?: boolean }) => {
+  if (fake.realAuthority) return (await vi.importActual<typeof import('./auth.js')>('./auth.js')).principalTransaction(_pool as Pool, _project, _who as typeof who, operation, options);
   if (!fake.authorized) throw Object.assign(Error('revoked'), { code: 'ADMIN_REQUIRED', status: 403 });
   const before = structuredClone({ rows: fake.rows, parts: fake.parts, commands: fake.commands, aggregates: fake.aggregates, current: fake.current }); let committed = false;
   try { const result = await operation(client as unknown as PoolClient); if (fake.failBeforeCommit && fake.aggregates.length) throw Error('connection lost before commit'); committed = true; if (fake.loseCommitAck && fake.aggregates.length) { fake.loseCommitAck = false; throw Error('lost committed response'); } return result; }
@@ -20,7 +20,7 @@ import { createPreparationService, preparationTransaction, PREPARATION_SQL_BOUND
 import { PathFinderError } from './errors.js';
 import type { ComputationalSnapshot } from './contracts.js';
 import type { PreparationCreate, PreparationContext, PreparationPlan } from '../../shared/pathfinderPreparation.js';
-import { LEGACY_PREPARATION_CAPACITY_PROFILE, LARGE_PREPARATION_CAPACITY_PROFILE, type PreparationCapacityProfile } from '../../shared/pathfinderCapacity.js';
+import { LEGACY_PREPARATION_CAPACITY_PROFILE, LARGE_PREPARATION_CAPACITY_PROFILE, EXTENDED_PREPARATION_CAPACITY_PROFILE, type PreparationCapacityProfile } from '../../shared/pathfinderCapacity.js';
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const who = { userId: id(8), loginId: id(9), loginExpiresAt: Date.now() + 600000 };
 const client = { query: vi.fn(async (sql: string, p: any[] = []) => {
@@ -79,6 +79,22 @@ describe('bounded preparation SQL with real authority transaction and mocked pg 
     expect(await preparationTransaction(t.pool, id(1), who, async c => { await c.query('OWNED_OPERATION'); return 'done'; })).toBe('done');
     expect(t.sql).toEqual(['BEGIN', `SET LOCAL lock_timeout='${PREPARATION_SQL_BOUNDS.lockMilliseconds}ms'`, `SET LOCAL statement_timeout='${PREPARATION_SQL_BOUNDS.statementMilliseconds}ms'`, `SET LOCAL idle_in_transaction_session_timeout='${PREPARATION_SQL_BOUNDS.idleMilliseconds}ms'`, 'SELECT id FROM projects WHERE id=$1 FOR NO KEY UPDATE', 'SELECT is_admin FROM users WHERE id=$1 FOR SHARE', expect.stringContaining('INSERT INTO viewer_login_bindings'), 'SELECT user_id,expires_at,revoked_at FROM viewer_login_bindings WHERE login_id=$1 FOR SHARE', 'OWNED_OPERATION', 'COMMIT']);
     expect(t.release).toHaveBeenCalledTimes(1);
+  });
+  it('reads a coherent status snapshot without taking the project writer lock', async () => {
+    const t = transport(), operation = vi.fn(async (c: PoolClient) => { await c.query('OWNED_OPERATION'); return 'snapshot'; });
+    expect(await preparationTransaction(t.pool, id(1), who, operation, undefined, { snapshot: true })).toBe('snapshot');
+    expect(t.sql).toEqual(['BEGIN', `SET LOCAL lock_timeout='${PREPARATION_SQL_BOUNDS.lockMilliseconds}ms'`, `SET LOCAL statement_timeout='${PREPARATION_SQL_BOUNDS.statementMilliseconds}ms'`, `SET LOCAL idle_in_transaction_session_timeout='${PREPARATION_SQL_BOUNDS.idleMilliseconds}ms'`, 'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ', 'SELECT id FROM projects WHERE id=$1 FOR KEY SHARE', 'SELECT is_admin FROM users WHERE id=$1 FOR SHARE', expect.stringContaining('INSERT INTO viewer_login_bindings'), 'SELECT user_id,expires_at,revoked_at FROM viewer_login_bindings WHERE login_id=$1 FOR SHARE', 'OWNED_OPERATION', 'COMMIT']);
+    expect(operation).toHaveBeenCalledTimes(1); expect(t.release).toHaveBeenCalledTimes(1);
+  });
+  it('leaves a conflicting snapshot reconcilable without replaying its operation', async () => {
+    const t = transport('OWNED_OPERATION', '40001'), operation = vi.fn(async (c: PoolClient) => c.query('OWNED_OPERATION'));
+    await expect(preparationTransaction(t.pool, id(1), who, operation, undefined, { snapshot: true })).rejects.toMatchObject({ code: 'PREPARATION_DATABASE_BUSY', status: 503 });
+    expect(operation).toHaveBeenCalledTimes(1); expect(t.sql.at(-1)).toBe('ROLLBACK'); expect(t.sql).not.toContain('COMMIT');
+  });
+  it('does not reinterpret or retry a writer serialization failure', async () => {
+    const t = transport('OWNED_OPERATION', '40001'), operation = vi.fn(async (c: PoolClient) => c.query('OWNED_OPERATION'));
+    await expect(preparationTransaction(t.pool, id(1), who, operation)).rejects.toMatchObject({ code: '40001' });
+    expect(operation).toHaveBeenCalledTimes(1); expect(t.sql.at(-1)).toBe('ROLLBACK'); expect(t.sql).not.toContain('COMMIT');
   });
   it.each(['55P03', '57014'])('preserves a reconcilable command on SQL deadline %s before COMMIT', async code => {
     const t = transport('SELECT id FROM projects WHERE id=$1 FOR NO KEY UPDATE', code), operation = vi.fn();
@@ -160,14 +176,17 @@ describe('durable whole-network preparation lifecycle with mocked transactions a
     await expect(service(LARGE_PREPARATION_CAPACITY_PROFILE).get(id(1), who, session.id)).rejects.toMatchObject({ code: 'PREPARATION_PLAN_INTEGRITY' });
     expect(adapters.validateUnion).not.toHaveBeenCalled(); expect(fake.aggregates).toHaveLength(0);
   });
-  it.each([LEGACY_PREPARATION_CAPACITY_PROFILE, LARGE_PREPARATION_CAPACITY_PROFILE])('uses frozen %s for cumulative upload admission across multiple planned parts', async profile => {
+  it.each([LEGACY_PREPARATION_CAPACITY_PROFILE, LARGE_PREPARATION_CAPACITY_PROFILE, EXTENDED_PREPARATION_CAPACITY_PROFILE])('uses frozen %s for cumulative upload admission across multiple planned parts', async profile => {
     // Mocked receipt byte accounting exercises admission; this is not a real large-model memory claim.
     const { s, session, part } = await multipartCollected(profile);
     fake.parts.get(part.partId).payloadBytes = 32 * 1024 ** 2;
     const next = session.plan.partPlan[1];
     const uploading = s.upload(id(1), who, session.id, next.partId, session.plan.orderedPlanSha256, payload(id(1)));
     if (profile === LEGACY_PREPARATION_CAPACITY_PROFILE) {
-      await expect(uploading).rejects.toMatchObject({ code: 'PREPARATION_VALIDATION_INPUT_LIMIT', status: 413 });
+      await expect(uploading).rejects.toMatchObject({
+        code: 'PREPARATION_VALIDATION_INPUT_LIMIT', status: 413,
+        message: expect.stringMatching(/32 MiB calculation limit\..*committed parts are retained.*published network is unchanged/),
+      });
       expect(fake.parts.size).toBe(1); expect(fake.blobs.size).toBe(1);
     } else {
       expect((await uploading).part.partId).toBe(next.partId);

@@ -12,7 +12,7 @@ const hardEngineFailure = (error: unknown): boolean => error !== null && typeof 
   ['ENGINE_SESSION_REAP_FAILED', 'ENGINE_IMPLEMENTATION_RESTART_REQUIRED'].includes((error as { code?: string }).code ?? '');
 
 /** One bounded preparation request, dispatched only by the advisory-owned worker. */
-export function createPreparationEngineLane() {
+export function createPreparationEngineLane(manualRoutingOnly = false) {
   let active = false, fatal = false, ticket: Ticket | undefined;
   const settle = (item: Ticket, error?: unknown, value?: EngineResponse) => {
     if (ticket === item) ticket = undefined;
@@ -24,7 +24,9 @@ export function createPreparationEngineLane() {
     enqueue(request: EngineInvocation, signal: AbortSignal): Promise<EngineResponse> {
       if (!active) return Promise.reject(failure('PREPARATION_WORKER_UNAVAILABLE', 503));
       if (ticket) return Promise.reject(failure('PREPARATION_ENGINE_BUSY'));
-      if (request.operation !== 'prepare' || !Number.isSafeInteger(request.timeoutMilliseconds)
+      const validOperation = manualRoutingOnly ? request.operation === 'calculate' && request.schemaVersion === 'pathfinder.model.runner.v2'
+        && request.manualRouteConstraint !== null && typeof request.manualRouteConstraint === 'object' : request.operation === 'prepare';
+      if (!validOperation || !Number.isSafeInteger(request.timeoutMilliseconds)
         || request.timeoutMilliseconds < 1 || request.timeoutMilliseconds > 120000)
         return Promise.reject(failure('PREPARATION_ENGINE_REQUEST', 400));
       let frozen: EngineInvocation;

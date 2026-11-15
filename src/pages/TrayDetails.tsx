@@ -1,3 +1,4 @@
+import { generateId } from '@/utils/generateId';
 import { TrayReportGeneration } from '@/utils/trayReportGeneration';
 import { LoadCurveDrawingService } from './TrayDetails/loadCurveDrawingService';
 import { TRAY_REPORT_PLACEHOLDERS } from './TrayDetails/trayReportVariables';
@@ -29,9 +30,11 @@ import {
   downloadTemplateFile
 } from '@/api/client';
 import { fetchTrayDrawingSnapshot, saveTrayDrawingSettings, exportTrayDrawing, drawingBlobBase64, TrayDrawingApiError, type DrawingSettingsWrite } from '@/api/trayDrawing';
+import { resolveTrayAutoLength } from '@/viewer/trayAutoLength';
 import { computeTrayDrawing, replayTrayDrawing, type DrawingCanvas } from '../../shared/trayDrawing/index';
 import { makeTrayDrawingInput } from '../../shared/trayDrawingInputs';
 import { trayBundleOverrideSchema } from '../../shared/trayDrawingSnapshot';
+import type { TrayAutoLengthMeasurement } from '../../shared/trayAutoLength';
 import type {
   CableBundleSpacing,
   ProjectCableCategorySettings,
@@ -39,6 +42,7 @@ import type {
 } from '@/api/types';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
+import { useProjectTrayPurposes } from '@/hooks/useProjectTrayPurposes';
 import {
   getProjectPlaceholders,
   setProjectPlaceholders,
@@ -74,6 +78,10 @@ import {
   toTrayFormState,
   parseNumberInput,
   buildTrayInput,
+  applyTrayAutoLength,
+  requiresTrayAutoLengthApproval,
+  updateTrayFormField,
+  TrayAutoLengthRequest,
   formatDimensionValue,
   formatWeightValue,
   matchCableCategory,
@@ -778,6 +786,7 @@ export const TrayDetails = () => {
   const canonicalProjectId = project?.id ?? projectId ?? null;
 
   const [isEditing, setIsEditing] = useState<boolean>(false);
+  const projectTrayPurposes = useProjectTrayPurposes(projectId, token, isEditing);
   const { materialTrays, isLoadingMaterials, materialsError, findMaterialTrayByType } =
     useMaterialData(isEditing ? projectId : undefined, isEditing && canReadCatalogs(user));
 
@@ -800,10 +809,27 @@ export const TrayDetails = () => {
     widthMm: '',
     heightMm: '',
     lengthMm: '',
+    lengthSource: 'manual',
     weightKgPerM: ''
   });
   const [formErrors, setFormErrors] = useState<TrayFormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [autoLengthPending, setAutoLengthPending] = useState(false);
+  const [autoLengthProgress, setAutoLengthProgress] = useState<string | null>(null);
+  const autoLengthAbort = useRef<AbortController | null>(null);
+  const [autoLengthError, setAutoLengthError] = useState<string | null>(null);
+  const [autoLengthProposal, setAutoLengthProposal] = useState<{ owner: string; measurement: TrayAutoLengthMeasurement; currentLengthMm: string; savedManualLengthMm?: number } | null>(null);
+  const autoLengthRequest = useRef(new TrayAutoLengthRequest());
+  const autoLengthOwner = JSON.stringify([projectId, trayId, token, canEdit, isEditing, tray?.id, tray?.updatedAt]);
+  const latestAutoLengthOwner = useRef(autoLengthOwner); latestAutoLengthOwner.current = autoLengthOwner;
+  const resetAutoLength = useCallback(() => {
+    autoLengthAbort.current?.abort(); autoLengthAbort.current = null; setAutoLengthProgress(null);
+    autoLengthRequest.current.cancel(); setAutoLengthPending(false); setAutoLengthError(null); setAutoLengthProposal(null);
+  }, []);
+  useEffect(() => {
+    resetAutoLength();
+    return () => { autoLengthAbort.current?.abort(); autoLengthRequest.current.cancel(); };
+  }, [autoLengthOwner, resetAutoLength]);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [isGeneratingReport, setIsGeneratingReport] = useState<boolean>(false);
   const reportGeneration = useRef<TrayReportGeneration | null>(null);
@@ -1723,11 +1749,42 @@ export const TrayDetails = () => {
   const handleFieldChange =
     (field: keyof TrayFormState) =>
     (_event: ChangeEvent<HTMLInputElement>, data: { value: string }) => {
-      setFormValues((previous) => ({
-        ...previous,
-        [field]: data.value
-      }));
+      if (field === 'lengthMm') resetAutoLength();
+      setFormValues((previous) => updateTrayFormField(previous, field, data.value));
     };
+
+  const handleAutoLength = async () => {
+    if (!project || !tray || !token || !canEdit || !isEditing || isSubmitting || isDeleting || isGeneratingReport || autoLengthRequest.current.pending
+      || bundleSaving || drawingSaveUnknown || pendingDrawingSave.current || pendingDrawingExport.current || reportGeneration.current) return;
+    const owner = autoLengthOwner, current = autoLengthRequest.current.start(owner, () => latestAutoLengthOwner.current);
+    const abort = new AbortController(); autoLengthAbort.current = abort;
+    setAutoLengthPending(true); setAutoLengthError(null); setAutoLengthProposal(null);
+    try {
+      const measurement = await resolveTrayAutoLength(token, project.id, tray.id, { signal: abort.signal,
+        onProgress: message => { if (current()) setAutoLengthProgress(message); } });
+      if (!current()) return;
+      if (requiresTrayAutoLengthApproval(formValues, tray)) {
+        setAutoLengthProposal({ owner, measurement, currentLengthMm: formValues.lengthMm.trim(),
+          ...(tray.lengthSource !== 'auto' && tray.lengthMm !== null ? { savedManualLengthMm: tray.lengthMm } : {}) });
+      } else {
+        setFormValues(previous => applyTrayAutoLength(previous, measurement));
+        setFormErrors(previous => ({ ...previous, lengthMm: undefined }));
+      }
+    } catch (error) {
+      if (current()) setAutoLengthError(error instanceof Error ? error.message : 'The tray length could not be calculated. Try Auto-length again.');
+    } finally {
+      if (autoLengthAbort.current === abort) autoLengthAbort.current = null;
+      if (current()) { autoLengthRequest.current.cancel(); setAutoLengthPending(false); setAutoLengthProgress(null); }
+    }
+  };
+
+  const handleAcceptAutoLength = () => {
+    if (!autoLengthProposal || autoLengthProposal.owner !== latestAutoLengthOwner.current || !canEdit || !isEditing || isSubmitting || autoLengthRequest.current.pending
+      || bundleSaving || drawingSaveUnknown || pendingDrawingSave.current || pendingDrawingExport.current || reportGeneration.current) return;
+    setFormValues(previous => applyTrayAutoLength(previous, autoLengthProposal.measurement, autoLengthProposal.savedManualLengthMm));
+    setFormErrors(previous => ({ ...previous, lengthMm: undefined }));
+    setAutoLengthProposal(null);
+  };
 
   const handleTypeSelect = useCallback(
     (_event: unknown, data: { optionValue?: string }) => {
@@ -2047,7 +2104,7 @@ export const TrayDetails = () => {
     const pending = pendingDrawingSave.current;
     const body: DrawingSettingsWrite = pending ?? {
       schemaVersion: 'pathfinder.tray-drawing-settings.write.v1', expectedDrawingInputRevision: drawingResponse.snapshot.drawingInputRevision,
-      expectedRevision: drawingResponse.override.revision, idempotencyKey: crypto.randomUUID(), value: override === null ? null : trayBundleOverrideSchema.parse(override),
+      expectedRevision: drawingResponse.override.revision, idempotencyKey: generateId(), value: override === null ? null : trayBundleOverrideSchema.parse(override),
     };
     pendingDrawingSave.current = body; setBundleSaving(true); setDrawingSaveUnknown(false); setDrawingSaveError(null);
     try {
@@ -2158,9 +2215,9 @@ export const TrayDetails = () => {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (pendingDrawingSave.current || pendingDrawingExport.current || reportGeneration.current) return;
+    if (pendingDrawingSave.current || pendingDrawingExport.current || reportGeneration.current || autoLengthRequest.current.pending) return;
 
-    if (!project || !tray || !token) {
+    if (!project || !tray || !token || !canEdit) {
       showToast({
         intent: 'error',
         title: 'Admin access required',
@@ -2270,6 +2327,7 @@ export const TrayDetails = () => {
   }, [project, tray, token, navigate, showToast]);
 
   const handleCancelEdit = () => {
+    resetAutoLength();
     if (tray) {
       setFormValues(toTrayFormState(tray));
     }
@@ -2850,7 +2908,7 @@ export const TrayDetails = () => {
       const exportBody = {
         schemaVersion: 'pathfinder.tray-drawing-export.write.v1' as const,
         snapshotId: drawingResponse.snapshot.snapshotId, expectedContentSha256: drawingResponse.snapshot.contentSha256,
-        idempotencyKey: crypto.randomUUID(), files: [
+        idempotencyKey: generateId(), files: [
           { kind: 'load-curve' as const, fileName: loadCurve, contentType: 'image/jpeg' as const, base64: await generation.wait(drawingBlobBase64(loadCurveBlob)) },
           { kind: 'bundles' as const, fileName: bundles, contentType: 'image/jpeg' as const, base64: await generation.wait(drawingBlobBase64(bundlesBlob)) },
           { kind: 'report' as const, fileName: report, contentType: WORD_MIME_TYPE as 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', base64: await generation.wait(drawingBlobBase64(updatedDocumentBlob)) },
@@ -2973,6 +3031,9 @@ export const TrayDetails = () => {
       {/* Tray Details Section */}
       {isEditing ? (
         <TrayEditForm
+          purposeOptions={projectTrayPurposes.purposes.map(purpose => purpose.name)}
+          purposeOptionsLoading={projectTrayPurposes.loading}
+          purposeOptionsError={projectTrayPurposes.error}
           formValues={formValues}
           formErrors={formErrors}
           materialsError={materialsError}
@@ -2981,6 +3042,16 @@ export const TrayDetails = () => {
           currentTypeHasMaterial={currentTypeHasMaterial}
           isLoadingMaterials={isLoadingMaterials}
           isSubmitting={isSubmitting || drawingSaveUnknown || bundleSaving}
+          autoLengthPending={autoLengthPending}
+          autoLengthProgress={autoLengthProgress}
+          autoLengthError={autoLengthError}
+          autoLengthDisabled={!canEdit || drawingSaveUnknown || bundleSaving || isDeleting || isGeneratingReport}
+          onAutoLength={() => void handleAutoLength()}
+          autoLengthProposal={autoLengthProposal?.owner === autoLengthOwner ? {
+            currentLengthMm: autoLengthProposal.currentLengthMm, proposedLengthMm: autoLengthProposal.measurement.lengthMm.toFixed(3),
+            savedManualLengthMm: autoLengthProposal.savedManualLengthMm,
+          } : null}
+          onAcceptAutoLength={handleAcceptAutoLength}
           onFieldChange={handleFieldChange}
           onTypeSelect={handleTypeSelect}
           onPurposeSelect={handlePurposeSelect}

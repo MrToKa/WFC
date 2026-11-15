@@ -1,4 +1,6 @@
+import { initializeProjectTrayPurposeSchema } from './services/projectTrayPurposeService.js';
 import { initializeStandardMaterialCategories } from './services/standardMaterialCategorySchema.js';
+import { TRAY_AUTO_LENGTH_CAPTURE_SQL } from './services/trayAutoLengthCaptureService.js';
 import { initializeMaterialIdentity } from './services/materialIdentitySchema.js';
 import { initializeMaterialChangeLog } from './services/materialChangeLogSchema.js';
 import { initializeModelRegistry } from './modelRegistry/schema.js';
@@ -886,6 +888,22 @@ export async function initializeDatabase(): Promise<void> {
     ALTER TABLE trays
     ADD COLUMN IF NOT EXISTS change_log JSONB NOT NULL DEFAULT '[]'::jsonb;
   `);
+
+  await pool.query(`
+    ALTER TABLE trays
+      ADD COLUMN IF NOT EXISTS length_source TEXT NOT NULL DEFAULT 'manual'
+        CHECK (length_source IN ('manual', 'auto')),
+      ADD COLUMN IF NOT EXISTS length_calculation JSONB;
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'trays'::regclass AND conname = 'trays_length_calculation_source_check') THEN
+        ALTER TABLE trays ADD CONSTRAINT trays_length_calculation_source_check CHECK (
+          (length_source = 'manual' AND length_calculation IS NULL) OR
+          (length_source = 'auto' AND length_mm IS NOT NULL AND length_calculation IS NOT NULL AND jsonb_typeof(length_calculation) = 'object')
+        );
+      END IF;
+    END $$;
+  `);
+  await pool.query(TRAY_AUTO_LENGTH_CAPTURE_SQL);
 
   await pool.query(`
     ALTER TABLE trays
@@ -2323,6 +2341,7 @@ export async function initializeDatabase(): Promise<void> {
   await initializeModelRegistry(pool);
   await initializeViewerSessions(pool);
   await initializePathFinder(pool);
+  await initializeProjectTrayPurposeSchema(pool);
 }
 
 export async function shutdownDatabase(): Promise<void> {

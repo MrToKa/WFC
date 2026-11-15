@@ -133,6 +133,20 @@ function mixedResult(kind:Kind='network') {
 }
 
 describe('barrier engine strategy admission after strict transport parsing', () => {
+  it('admits absent direct shortcuts only in the explicitly frozen manual lane',()=>{
+    const f=result('network');f.response.barriers.directSecondary=null;
+    expect(()=>requireBarrierEngineStrategy(f.response,f.input)).toThrow();
+    const input={...f.input,manualRouteConstraint:{schemaVersion:'pathfinder.manual-ordered-route.v1' as const,routeText:'/BC001'}};
+    expect(()=>requireBarrierEngineStrategy(f.response,input)).not.toThrow();
+    expect(()=>requireBarrierEngineStrategy(f.response,{...input,reverse:true})).toThrow();
+  });
+  it('requires complete ordered occurrences and all ordinary barrier/endpoint proofs in manual mode',()=>{
+    const f=result('network');f.response.barriers.directSecondary=null;
+    const input={...f.input,manualRouteConstraint:{schemaVersion:'pathfinder.manual-ordered-route.v1' as const,routeText:'/BC001/BC002/BC001'}};
+    expect(()=>requireBarrierEngineStrategy(f.response,input)).toThrow();
+    input.manualRouteConstraint.routeText='/BC001';f.response.route!.pathPoints[0].x+=1;
+    expect(()=>requireBarrierEngineStrategy(f.response,input)).toThrow();
+  });
   it.each(['network','direct'] as const)('retains a fresh final proof under the explicit opening profile for %s',kind=>{
     const f=mixedResult(kind);
     if(f.input.context.schemaVersion!=='wfc.pf.barrier-runtime.v2'||f.response.schemaVersion!=='pathfinder.model.response.v3'

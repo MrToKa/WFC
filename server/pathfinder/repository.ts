@@ -65,7 +65,7 @@ export async function latestArtifact(client: PoolClient, projectId: string, mode
   }
   return (await client.query<Row>("SELECT * FROM pf_artifacts WHERE project_id=$1 AND model_version_id=$2 AND purpose='planning' ORDER BY created_at DESC,id DESC LIMIT 1",[projectId,modelVersionId])).rows[0] ?? null;
 }
-async function locations(client: PoolClient, projectId: string, modelId: string | null, artifactId: string | null, locationIds?: string[]) {
+async function locations(client: PoolClient, projectId: string, modelId: string | null, _artifactId: string | null, locationIds?: string[]) {
   const context = await readCurrentEndpointBindingContext(client, projectId);
   const heads = locationIds ? await readNeededEndpointBindingHeads(client, { projectId, current: context, locationIds,
     deadline: Date.now() + RECALCULATION_LIMITS.collectionMilliseconds }) : await readEndpointBindingHeads(client, projectId, context);
@@ -81,8 +81,8 @@ async function locations(client: PoolClient, projectId: string, modelId: string 
     const head = heads.get(row.id);
     const binding: LocationDto['binding'] = head ? {
       modelVersionId: head.binding.modelVersionId, revision: head.binding.bindingRevision,
-      point: head.binding.pointProjectMetres, objectId: null, externalId: null, source: head.binding.derivation === 'matched-model-bottom-aabb.v1' ? 'automatic' : 'manual',
-      derivation: head.binding.mode === 'object-derived' ? 'equipment-bottom-aabb' : head.binding.derivation === 'matched-model-bottom-aabb.v1' ? 'matched-model-bottom-aabb.v1' : head.binding.derivation === 'picked-surface-point' ? 'picked-surface-point' : 'manual-world-point',
+      point: head.binding.pointProjectMetres, objectId: null, externalId: null, source: ['matched-model-bottom-aabb.v1','matched-model-centre-fallback.v1'].includes(head.binding.derivation) ? 'automatic' : 'manual',
+      derivation: head.binding.mode === 'object-derived' ? 'equipment-bottom-aabb' : head.binding.derivation === 'matched-model-centre-fallback.v1' ? 'matched-model-centre-fallback.v1' : head.binding.derivation === 'matched-model-bottom-aabb.v1' ? 'matched-model-bottom-aabb.v1' : head.binding.derivation === 'picked-surface-point' ? 'picked-surface-point' : 'manual-world-point',
       coordinateFrame: 'canonical-world-metres', status: head.ready ? 'confirmed' : 'stale',
     } : row.model_version_id ? {
       modelVersionId:row.model_version_id,revision:row.binding_revision,point:row.point,objectId:row.object_id,externalId:row.external_id,source:row.source,derivation:row.derivation,coordinateFrame:row.coordinate_frame,

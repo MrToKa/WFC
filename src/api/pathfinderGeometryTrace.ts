@@ -1,3 +1,4 @@
+import { digestSha256 } from '../utils/sha256';
 import { z } from 'zod';
 import { getApiBaseUrl } from './http';
 import { pathFinderRequestDeadline, discardPathFinderBody, releasePathFinderReader } from './pathfinderRequestDeadline';
@@ -8,6 +9,9 @@ import {
 } from '../../shared/pathfinderPurposePolicy';
 import {
   geometryTraceCreateSchema,
+  geometryTraceCreateV2Schema,
+  geometryTraceRuntimeSchema,
+  GEOMETRY_TRACE_DERIVATION,
   geometryTraceManifestSchema,
   geometryTraceReceiptSchema,
   geometryObjectPageSchema,
@@ -19,6 +23,8 @@ import {
   captureEvidenceReceiptSchema,
   geometryTraceContentHashInput,
   type GeometryTraceCreate,
+  type GeometryTraceCreateV2,
+  type GeometryTraceRuntime,
   type GeometryTraceManifest,
   type GeometryObjectRevision,
 } from '../../shared/pathfinderGeometryTrace';
@@ -26,7 +32,7 @@ import {
   verifyCompletedCaptureEvidence,
   type CompletedCaptureEvidence,
 } from '../../viewer-runtime/capture-evidence.mjs';
-export type { GeometryTraceCreate, GeometryTraceManifest, GeometryObjectRevision };
+export type { GeometryTraceCreate, GeometryTraceCreateV2, GeometryTraceRuntime, GeometryTraceManifest, GeometryObjectRevision };
 export type GeometryObjectPage = z.infer<typeof geometryObjectPageSchema>;
 export type GeometryTraceList = z.infer<typeof geometryTraceListSchema>;
 export class GeometryTraceApiError extends Error {
@@ -48,8 +54,9 @@ const invalid = (): never => {
 };
 type Endpoint =
   | { kind: 'list'; offset: number }
+  | { kind: 'runtime' }
   | { kind: 'create' }
-  | { kind: 'manifest'; traceId: string }
+  | { kind: 'manifest'; traceId: string; requireProjection?: true }
   | { kind: 'objects' | 'diagnostics'; traceId: string; offset: number }
   | { kind: 'object'; traceId: string; objectRevisionId: string }
   | { kind: 'evidence' | 'read-evidence'; sessionId: string; partId: string };
@@ -87,8 +94,12 @@ async function request(
     case 'create':
       method = 'POST';
       break;
+    case 'runtime':
+      suffix += '/runtime';
+      break;
     case 'manifest':
       suffix += `/${endpoint.traceId}/manifest`;
+      if (endpoint.requireProjection) suffix += '?requireProjection=true';
       break;
     case 'objects':
     case 'diagnostics':
@@ -131,7 +142,7 @@ async function request(
       ...(encoded ? { body: encoded } : {}),
     }), late => discardPathFinderBody(late.body));
     const maximumResponseBytes =
-      endpoint.kind === 'read-evidence'
+      endpoint.kind === 'runtime' ? 65536 : endpoint.kind === 'read-evidence'
         ? 4 * 1024 ** 2 + 4096
         : endpoint.kind === 'object'
           ? 512 * 1024 + 65536
@@ -194,9 +205,7 @@ async function verifyManifest(value: unknown, projectId: string, traceId?: strin
     return invalid();
   const digest = [
     ...new Uint8Array(
-      await crypto.subtle.digest(
-        'SHA-256',
-        new TextEncoder().encode(canonicalPurposeJson(geometryTraceContentHashInput(parsed.data))),
+      await digestSha256(new TextEncoder().encode(canonicalPurposeJson(geometryTraceContentHashInput(parsed.data))),
       ),
     ),
   ]
@@ -224,12 +233,31 @@ export async function fetchGeometryTraceManifest(
   token: string,
   traceId: string,
   signal?: AbortSignal,
+  options: { requireProjection?: true } = {},
 ) {
   return verifyManifest(
-    await request(projectId, token, { kind: 'manifest', traceId }, undefined, signal),
+    await request(projectId, token, { kind: 'manifest', traceId, requireProjection: options.requireProjection }, undefined, signal),
     projectId,
     traceId,
   );
+}
+export async function fetchGeometryTraceRuntime(projectId: string, token: string, signal?: AbortSignal): Promise<GeometryTraceRuntime> {
+  const parsed = geometryTraceRuntimeSchema.safeParse(await request(projectId, token, { kind: 'runtime' }, undefined, signal));
+  if (!parsed.success) return invalid();
+  const digest = [...new Uint8Array(await digestSha256(new TextEncoder().encode(canonicalPurposeJson(parsed.data.runtimeFingerprint))))]
+    .map(value => value.toString(16).padStart(2, '0')).join('');
+  signal?.throwIfAborted();
+  if (digest !== parsed.data.runtimeFingerprintSha256) return invalid();
+  return parsed.data;
+}
+/** Build only new commands. A retained command must be replayed without rebuilding it. */
+export async function buildGeometryTraceCommand(projectId: string, aggregateId: string, projectionSha256: string, runtimeFingerprintSha256: string): Promise<GeometryTraceCreateV2> {
+  policyUuidSchema.parse(projectId);
+  const fields = geometryTraceCreateV2Schema.omit({ idempotencyKey: true }).parse({ schemaVersion: 'wfc.pf.geometry-trace-create.v2',
+    aggregateId, expectedProjectionSha256: projectionSha256, derivationVersion: GEOMETRY_TRACE_DERIVATION, expectedRuntimeFingerprintSha256: runtimeFingerprintSha256 });
+  const input = canonicalPurposeJson({ schemaVersion: 'wfc.pf.geometry-trace-command-key.v2', projectId, command: fields });
+  const hex = [...new Uint8Array(await digestSha256(new TextEncoder().encode(input)))].map(value => value.toString(16).padStart(2, '0')).join('');
+  return { ...fields, idempotencyKey: `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}` };
 }
 export async function createGeometryTrace(
   projectId: string,
@@ -255,6 +283,11 @@ export async function createGeometryTrace(
   )
     return invalid();
   await verifyManifest(parsed.data.trace, projectId);
+  if (input.schemaVersion === 'wfc.pf.geometry-trace-create.v2') {
+    const fingerprintSha256 = [...new Uint8Array(await digestSha256(new TextEncoder().encode(canonicalPurposeJson(parsed.data.trace.runtimeFingerprint))))]
+      .map(value => value.toString(16).padStart(2, '0')).join('');
+    if (fingerprintSha256 !== input.expectedRuntimeFingerprintSha256) return invalid();
+  }
   return parsed.data;
 }
 export async function fetchGeometryTraceObjects(

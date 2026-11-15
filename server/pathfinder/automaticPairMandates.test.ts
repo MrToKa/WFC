@@ -4,11 +4,13 @@ import type { PoolClient } from 'pg';
 import { AUTOMATIC_PAIR_POLICY } from '../../shared/pathfinderAutomaticPair.js';
 import { appendAutomaticPairMandatesInTransaction, requireCurrentAutomaticPairMandate, type AppendAutomaticPairMandatesInput } from './automaticPairMandates.js';
 import { automaticPairHash } from './automaticPairReceiptProof.js';
+import { automaticPairBaselineSnapshot } from './automaticPairSnapshot.js';
 
 const id = (n: number) => `ba000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 function fixture() {
   const expires = Date.now() + 3600000, principal = { userId: id(3), loginId: id(4), loginExpiresAt: expires };
-  const before = { id: id(2), project_id: id(1), cable_write_revision: '7', mto: 'LV', routing: null, design_length: null };
+  const before = { id: id(2), project_id: id(1), cable_write_revision: '7', mto: 'LV', routing: null, design_length: null,
+    materials_initialized: false, materials_customized: false, updated_at: new Date(Date.now() - 1000).toISOString() };
   const dependencies = { schemaVersion: 'pathfinder.dependencies.v8', projectId: id(1), cableId: id(2), cableWriteRevision: '7' };
   const input: AppendAutomaticPairMandatesInput = { projectId: id(1), jobId: id(5), principal, policy: AUTOMATIC_PAIR_POLICY,
     source: { kind: 'explicit-job' }, requestSha256: 'a'.repeat(64), items: [{ cableId: id(2), cableWriteRevision: '7', dependencyHash: automaticPairHash(dependencies) }] };
@@ -65,7 +67,10 @@ function fixture() {
 describe('fresh exact automatic pair mandate admission', () => {
   it('binds current human job/item, revision, baseline and finite policy outside math inputs', async () => {
     const f = fixture(); expect(await f.run()).toBe(1); const m = f.state.inserted[0];
-    expect(m.baselineSha256).toBe(automaticPairHash(f.before)); expect(m.dependencyHash).toBe(automaticPairHash(f.dependencies));
+    expect(m.baselineSha256).toBe(automaticPairHash(automaticPairBaselineSnapshot(f.before, m.baselinePolicy)));
+    expect(m.baselinePolicy).toEqual({ schemaVersion: 'wfc.pf.automatic-pair-engineering-snapshot.v1',
+      materials: { initialized: false, customized: false, updatedAt: f.before.updated_at } });
+    expect(m.dependencyHash).toBe(automaticPairHash(f.dependencies));
     expect(Date.parse(m.authorityExpiresAt) - Date.parse(m.createdAt)).toBe(1800000); expect(m.ownership).toEqual({ kind: 'empty' });
   });
   it('does not authorize a calculation-grant job', async () => { const f = fixture(); f.state.authorityKind = 'calculation-grant';

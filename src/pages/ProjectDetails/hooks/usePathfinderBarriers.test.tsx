@@ -14,7 +14,7 @@ import { BARRIER_PENDING_STORAGE_KEY, barrierPendingHash, createBarrierCommandSe
 import { BARRIER_COMMAND_HASH_FENCE, barrierCommandClosureHashInput, barrierCommandClosureSchema,
   barrierCommandRecoveryResponseSchema, barrierCommandRecoveryTargetHashInput, type BarrierCommandRecoveryResponse } from '../../../../shared/pathfinderBarrierRecovery';
 
-vi.mock('@/api/pathfinderBarriers', async original => ({ ...await original<typeof api>(), getBarrierRegistry: vi.fn(), getBarrierSnapshot: vi.fn(), getLatestBarrierSnapshot: vi.fn(), beginBarrierCapture: vi.fn(), changeBarrierRegistry: vi.fn(), getBarrierCaptureOutcome: vi.fn(), getBarrierCommandRecovery: vi.fn(), closeBarrierCommand: vi.fn() }));
+vi.mock('@/api/pathfinderBarriers', async original => ({ ...await original<typeof api>(), getBarrierRegistry: vi.fn(), getBarrierAuthoringRecovery: vi.fn(), getBarrierSnapshot: vi.fn(), getLatestBarrierSnapshot: vi.fn(), beginBarrierCapture: vi.fn(), changeBarrierRegistry: vi.fn(), getBarrierCaptureOutcome: vi.fn(), getBarrierCommandRecovery: vi.fn(), closeBarrierCommand: vi.fn() }));
 const id = (n: number) => `b5000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const scope = { projectId: id(1), modelVersionId: id(2), contentFingerprint: 'a'.repeat(64), selectionRevision: '1', captureFrameId: id(3), captureFrameSha256: 'b'.repeat(64), coordinateFrame: 'canonical-world-metres' as const };
 const parent = (n: number): BarrierSelectedParent => ({ selectionId: id(n + 1000), kind: 'wall', objectId: `dbid:${n}`, dbId: n, externalId: null, name: `Selected parent ${n}`, identityBasis: 'version-local-only', inclusion: 'own-and-all-descendant-fragments' });
@@ -92,6 +92,7 @@ function fixture(initial: number[] = []) {
   const pf = { data: { activeModel: { modelVersionId: scope.modelVersionId, selectionRevision: '1', contentFingerprint: scope.contentFingerprint } }, viewerPhase: 'ready', preparationViewerGeneration: 1, busy: false, readSelection, runProjectPreparation, ...appearance } as unknown as Options['pf'];
   const options: Options = { projectId: scope.projectId, loadedProjectId: scope.projectId, token: 'synthetic-login', isAdmin: true, pf };
   vi.mocked(api.getBarrierRegistry).mockImplementation(async () => structuredClone(current));
+  vi.mocked(api.getBarrierAuthoringRecovery).mockRejectedValue(Object.assign(new Error('BARRIER_BLOB_MISSING'), { code: 'BARRIER_BLOB_MISSING', status: 409 }));
   vi.mocked(api.getLatestBarrierSnapshot).mockResolvedValue(null);
   vi.mocked(api.getBarrierCommandRecovery).mockResolvedValue(null);
   vi.mocked(api.closeBarrierCommand).mockRejectedValue(Error('No synthetic close response configured'));
@@ -199,6 +200,8 @@ describe('durable exact barrier publication outcomes', () => {
     });
     await act(() => view.result.current.save());
     expect(view.result.current.phase).toBe('refused'); expect(view.result.current.pending).toBe(false);
+    expect(view.result.current.error).toContain('No detailed verification reason was recorded');
+    expect(view.result.current.error).not.toContain('Change the selection');
     expect(view.result.current.registry?.snapshot).toEqual(previous); expect(await readPendingBarrierCommand(sessionStorage, scope.projectId)).toBeNull();
     expect(view.result.current.canAuthor).toBe(true); expect(view.result.current.draftParents).toEqual(savedDraft);
     const firstKey = vi.mocked(api.beginBarrierCapture).mock.calls[0]?.[2].idempotencyKey;
@@ -211,6 +214,43 @@ describe('durable exact barrier publication outcomes', () => {
     expect(vi.mocked(api.beginBarrierCapture).mock.calls[1]?.[2].selectedParents).toMatchObject([{ kind: 'floor', dbId: 174115 }]);
     expect(api.changeBarrierRegistry).not.toHaveBeenCalled(); expect(api.getBarrierCaptureOutcome).not.toHaveBeenCalled();
     for (const action of Object.values(f.appearance)) expect(action).not.toHaveBeenCalled();
+  });
+  it.each([
+    { code: 'NONMANIFOLD_EDGE' as const, message: 'More than two captured triangles share an edge.', objectIds: ['dbid:29711'], action: 'Check the reported geometry' },
+    { code: 'WORK_LIMIT' as const, message: 'Geometry verification exhausted its work limit.', action: 'check the verifier limits' },
+    { code: 'CLOSED_SOLID_QUALIFICATION_REFUSED' as const, message: 'A closed component failed independent solid verification. Verification reason: resource_limit.', action: 'check the verifier limits' },
+    { code: 'KERNEL_QUALIFICATION_REFUSED' as const, message: 'A closed component failed independent solid verification. Verification reason: deadline_exceeded.', action: 'check the verifier limits' },
+  ])('shows the exact capture refusal reason and distinguishes geometry from verifier budgets ($code)', async diagnostic => {
+    const f = fixture([8]), view = await mounted(f); await add(view); const previous = f.getRegistry().snapshot;
+    f.publishBarriers.mockImplementationOnce(async () => {
+      const retained = await readPendingBarrierCommand(sessionStorage, scope.projectId);
+      if (retained?.kind !== 'publication') throw Error('Publication was not retained before PUT');
+      const detail = { code: diagnostic.code, message: diagnostic.message, ...('objectIds' in diagnostic ? { objectIds: diagnostic.objectIds } : {}) };
+      return { ...refusal(retained), diagnostics: [detail] };
+    });
+    await act(() => view.result.current.save());
+    expect(view.result.current.error).toContain(diagnostic.message);
+    expect(view.result.current.error).toContain(diagnostic.code);
+    expect(view.result.current.error).toContain(diagnostic.action);
+    if ('objectIds' in diagnostic) expect(view.result.current.error).toContain('Object: dbid:29711');
+    expect(view.result.current.registry?.snapshot).toEqual(previous);
+    expect(view.result.current.pending).toBe(false); expect(view.result.current.canAuthor).toBe(true);
+    expect(await readPendingBarrierCommand(sessionStorage, scope.projectId)).toBeNull();
+  });
+  it('retains the detailed native refusal when inspecting a restored command without resubmitting it', async () => {
+    const f = fixture(), first = await mounted(f); await add(first); f.publishBarriers.mockRejectedValueOnce(Error('lost acknowledgement'));
+    await act(() => first.result.current.save()); const retained = await readPendingBarrierCommand(sessionStorage, scope.projectId);
+    if (retained?.kind !== 'publication') throw Error('Missing retained fixture'); first.unmount();
+    const changed = { ...f.options, pf: { ...f.pf, preparationViewerGeneration: 2, viewerPhase: 'loading' as const } };
+    const second = renderHook(() => usePathfinderBarriers(changed)); await waitFor(() => expect(second.result.current.canRetry).toBe(true));
+    const response = await recoveryResponse(retained, 'geometry-refused');
+    if (response.outcome !== 'geometry-refused') throw Error('Missing refusal fixture');
+    response.refusal.diagnostics = [{ code: 'DUPLICATE_TRIANGLE', message: 'The captured geometry contains coincident or repeated triangles.', objectIds: ['dbid:29711'] }];
+    vi.mocked(api.getBarrierCommandRecovery).mockResolvedValueOnce(response);
+    await act(() => second.result.current.inspect());
+    expect(second.result.current.message).toContain('DUPLICATE_TRIANGLE'); expect(second.result.current.message).toContain('Object: dbid:29711');
+    expect(second.result.current.pending).toBe(false); expect(f.publishBarriers).toHaveBeenCalledOnce();
+    expect(api.beginBarrierCapture).toHaveBeenCalledOnce(); expect(await readPendingBarrierCommand(sessionStorage, scope.projectId)).toBeNull();
   });
   it('restores an unknown publication after reload and settles by exact GET while the Viewer is unavailable without re-PUT', async () => {
     const f = fixture(), first = await mounted(f); await add(first); f.publishBarriers.mockRejectedValueOnce(Error('lost acknowledgement'));
@@ -438,6 +478,57 @@ describe('durable exact barrier publication outcomes', () => {
 });
 
 describe('saved barrier selection persistence and historical display', () => {
+  it('restores a missing-file selection as an explicit replacement draft and allows adding without publishing', async () => {
+    const f = fixture([7]), saved = manifest(f.getRegistry());
+    f.readSelection.mockResolvedValue(selection(8));
+    const stale = { ...f.getRegistry(), state: 'stale' as const, reasonCodes: ['BARRIER_BLOB_MISSING'] };
+    vi.mocked(api.getBarrierRegistry).mockImplementation(async () => {
+      if (f.getRegistry().registryRevision === stale.registryRevision) throw Object.assign(new Error('BARRIER_BLOB_MISSING'), { code: 'BARRIER_BLOB_MISSING', status: 409 });
+      return structuredClone(f.getRegistry());
+    });
+    vi.mocked(api.getBarrierAuthoringRecovery).mockResolvedValue({ schemaVersion: 'wfc.pf.barrier-authoring-recovery.v1', registry: stale, savedManifest: saved, geometryAvailable: false });
+    const view = await mounted(f);
+    expect(view.result.current.saved?.status).toBe('unavailable');
+    expect(view.result.current.draftParents).toEqual([parent(7)]); expect(view.result.current.dirty).toBe(true);
+    expect(view.result.current.canAuthor).toBe(true); expect(view.result.current.message).toContain('geometry files are missing');
+    expect(view.result.current.registry?.registryRevision).toBe(stale.registryRevision);
+    await add(view);
+    expect(view.result.current.draftParents).toHaveLength(2);
+    expect(api.getBarrierSnapshot).not.toHaveBeenCalled();
+    expect(api.beginBarrierCapture).not.toHaveBeenCalled(); expect(f.publishBarriers).not.toHaveBeenCalled();
+    expect(f.getRegistry().state).toBe('ready');
+    await act(() => view.result.current.save());
+    expect(vi.mocked(api.beginBarrierCapture).mock.calls[0][2].expectedRegistryRevision).toBe(stale.registryRevision);
+    expect(vi.mocked(api.beginBarrierCapture).mock.calls[0][2].selectedParents.map(parent => parent.dbId)).toEqual([7, 8]);
+    expect(view.result.current.saved?.status).toBe('current'); expect(view.result.current.registry?.registryRevision).toBe('2');
+  });
+  it('does not reuse missing-file object identifiers from a different source model', async () => {
+    const f = fixture([7]), saved = manifest(f.getRegistry());
+    const registry = { ...f.getRegistry(), state: 'stale' as const, reasonCodes: ['BARRIER_BLOB_MISSING'] };
+    saved.scope = { ...saved.scope, modelVersionId: id(901) };
+    registry.snapshot = { ...registry.snapshot!, scope: saved.scope };
+    vi.mocked(api.getBarrierRegistry).mockRejectedValue(Object.assign(new Error('BARRIER_BLOB_MISSING'), { code: 'BARRIER_BLOB_MISSING', status: 409 }));
+    vi.mocked(api.getBarrierAuthoringRecovery).mockResolvedValue({ schemaVersion: 'wfc.pf.barrier-authoring-recovery.v1', registry, savedManifest: saved, geometryAvailable: false });
+    const view = await mounted(f);
+    expect(view.result.current.draftParents).toEqual([]); expect(view.result.current.dirty).toBe(false);
+    expect(api.beginBarrierCapture).not.toHaveBeenCalled(); expect(api.changeBarrierRegistry).not.toHaveBeenCalled();
+  });
+  it('keeps recapture required after a duplicate Add or removing an added object back to the original missing-file selection', async () => {
+    const f = fixture([7]), saved = manifest(f.getRegistry());
+    const stale = { ...f.getRegistry(), state: 'stale' as const, reasonCodes: ['BARRIER_BLOB_MISSING'] };
+    vi.mocked(api.getBarrierRegistry).mockRejectedValue(Object.assign(new Error('BARRIER_BLOB_MISSING'), { code: 'BARRIER_BLOB_MISSING', status: 409 }));
+    vi.mocked(api.getBarrierAuthoringRecovery).mockResolvedValue({ schemaVersion: 'wfc.pf.barrier-authoring-recovery.v1', registry: stale, savedManifest: saved, geometryAvailable: false });
+    const view = await mounted(f);
+    await add(view);
+    expect(view.result.current.draftParents.map(parent => parent.dbId)).toEqual([7]);
+    expect(view.result.current.dirty).toBe(true);
+    f.readSelection.mockResolvedValue(selection(8)); await add(view);
+    const added = view.result.current.draftParents.find(parent => parent.dbId === 8)!;
+    act(() => view.result.current.removeParent(added.selectionId));
+    expect(view.result.current.draftParents.map(parent => parent.dbId)).toEqual([7]);
+    expect(view.result.current.dirty).toBe(true); expect(view.result.current.canAuthor).toBe(true);
+    expect(api.beginBarrierCapture).not.toHaveBeenCalled(); expect(f.publishBarriers).not.toHaveBeenCalled();
+  });
   it('restores a published set on remount and Viewer generation change without any capture or write', async () => {
     const f = fixture([7]), first = await mounted(f);
     expect(first.result.current.saved).toMatchObject({ status: 'current', manifest: { selectedParents: [parent(7)] } });
@@ -478,6 +569,36 @@ describe('saved barrier selection persistence and historical display', () => {
     expect(view.result.current.saved?.manifest.selectedParents).toEqual([parent(7)]); expect(api.getLatestBarrierSnapshot).not.toHaveBeenCalled();
     await act(() => view.result.current.save()); expect(api.beginBarrierCapture).not.toHaveBeenCalled();
   });
+  it('explains missing restored barrier files without requesting new preparation or replacing saved selection', async () => {
+    const f = fixture([7]), view = await mounted(f), published = view.result.current.saved?.manifest;
+    vi.mocked(api.getBarrierRegistry).mockRejectedValueOnce(Object.assign(new Error('BARRIER_BLOB_MISSING'), { code: 'BARRIER_BLOB_MISSING', status: 409 }));
+    await act(() => view.result.current.refresh());
+    expect(view.result.current.error).toContain('Saved barrier geometry files are missing from this environment');
+    expect(view.result.current.error).toContain('Restore the matching Path Finder files');
+    expect(view.result.current.error).not.toContain('Discover project tray candidates');
+    expect(view.result.current.saved).toEqual({ manifest: published, status: 'unavailable' });
+    expect(view.result.current.registry).toBeNull(); expect(view.result.current.canAuthor).toBe(false);
+    await act(() => view.result.current.save());
+    expect(api.beginBarrierCapture).not.toHaveBeenCalled(); expect(api.changeBarrierRegistry).not.toHaveBeenCalled();
+    expect(f.runProjectPreparation).not.toHaveBeenCalled(); expect(api.getLatestBarrierSnapshot).not.toHaveBeenCalled();
+    await act(() => view.result.current.refresh());
+    expect(view.result.current.saved?.status).toBe('current'); expect(view.result.current.error).toBeNull();
+  });
+  it('keeps the exact uncertain publication and saved names when a later refresh finds missing files', async () => {
+    const f = fixture([7]), view = await mounted(f); await add(view);
+    f.publishBarriers.mockRejectedValueOnce(new Error('Lost acknowledgement')); await act(() => view.result.current.save());
+    const retained = sessionStorage.getItem(BARRIER_PENDING_STORAGE_KEY), published = view.result.current.saved?.manifest;
+    expect(retained).not.toBeNull();
+    vi.mocked(api.getBarrierRegistry).mockRejectedValueOnce(Object.assign(new Error('BARRIER_BLOB_MISSING'), { code: 'BARRIER_BLOB_MISSING', status: 409 }));
+    await act(() => view.result.current.refresh());
+    expect(view.result.current.error).toContain('Saved barrier geometry files are missing');
+    expect(view.result.current.error).toContain('command outcome is still unknown');
+    expect(view.result.current.phase).toBe('unknown'); expect(view.result.current.pending).toBe(true);
+    expect(view.result.current.saved).toEqual({ manifest: published, status: 'unavailable' });
+    expect(sessionStorage.getItem(BARRIER_PENDING_STORAGE_KEY)).toBe(retained);
+    expect(api.beginBarrierCapture).toHaveBeenCalledOnce(); expect(f.publishBarriers).toHaveBeenCalledOnce();
+    expect(api.changeBarrierRegistry).not.toHaveBeenCalled();
+  });
   it('uses one historical fallback for a cold missing frame, with saved names display-only and no current draft', async () => {
     const f = fixture([7]), published = manifest(f.getRegistry());
     vi.mocked(api.getBarrierRegistry).mockRejectedValueOnce(frameUnavailable()); vi.mocked(api.getLatestBarrierSnapshot).mockResolvedValueOnce(published);
@@ -485,6 +606,9 @@ describe('saved barrier selection persistence and historical display', () => {
     await waitFor(() => expect(view.result.current.saved).toEqual({ manifest: published, status: 'unavailable' }));
     expect(api.getLatestBarrierSnapshot).toHaveBeenCalledExactlyOnceWith(id(1), 'synthetic-login', expect.any(AbortSignal));
     expect(view.result.current.registry).toBeNull(); expect(view.result.current.draftParents).toEqual([]); expect(view.result.current.canAuthor).toBe(false);
+    expect(view.result.current.error).toContain('Open Routes and choose Generate network or Regenerate network');
+    expect(view.result.current.error).not.toContain('BARRIER_CURRENT_FRAME_UNAVAILABLE');
+    expect(view.result.current.message).toContain('Saved obstacles are retained for reference');
     await act(() => view.result.current.addSelection()); await act(() => view.result.current.save());
     expect(f.runProjectPreparation).not.toHaveBeenCalled(); expect(api.beginBarrierCapture).not.toHaveBeenCalled(); expect(api.changeBarrierRegistry).not.toHaveBeenCalled();
   });
@@ -552,6 +676,28 @@ describe('saved barrier selection persistence and historical display', () => {
 });
 
 describe('barrier readiness after project preparation', () => {
+  it.each(['ready', 'missing-frame'] as const)('rechecks unchanged preparation metadata after explicit refresh and keeps authority %s', async outcome => {
+    const f = fixture([7]), options = { ...preparedOptions(f.options, 800), refreshKey: JSON.stringify(['verified-network', 0]) };
+    vi.mocked(api.getBarrierRegistry).mockRejectedValueOnce(frameUnavailable());
+    const view = renderHook((props: Options) => usePathfinderBarriers(props), { initialProps: options });
+    await waitFor(() => expect(view.result.current.message).toBe('No saved barrier snapshot was found.'));
+    expect(view.result.current.canAuthor).toBe(false); expect(view.result.current.registry).toBeNull();
+    if (outcome === 'missing-frame') vi.mocked(api.getBarrierRegistry).mockRejectedValueOnce(frameUnavailable());
+    view.rerender({ ...options, refreshKey: JSON.stringify(['verified-network', 1]) });
+    expect(view.result.current.registry).toBeNull();
+    await waitFor(() => expect(api.getBarrierRegistry).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(view.result.current.busy).toBe(false));
+    if (outcome === 'ready') {
+      expect(view.result.current.canAuthor).toBe(true); expect(view.result.current.registry?.state).toBe('ready');
+      expect(view.result.current.saved?.status).toBe('current'); expect(view.result.current.error).toBeNull();
+    } else {
+      expect(view.result.current.canAuthor).toBe(false); expect(view.result.current.registry).toBeNull();
+      expect(view.result.current.saved).toBeNull(); expect(view.result.current.draftParents).toEqual([]);
+      expect(view.result.current.error).toContain('Open Routes and choose Generate network or Regenerate network');
+    }
+    expect(api.beginBarrierCapture).not.toHaveBeenCalled(); expect(api.changeBarrierRegistry).not.toHaveBeenCalled();
+    expect(f.runProjectPreparation).not.toHaveBeenCalled(); expect(f.captureBarriers).not.toHaveBeenCalled();
+  });
   it('rereads a cold missing frame when trace readiness changes with the same model and artifact', async () => {
     const f = fixture([7]), options = preparedOptions(f.options, 800), published = manifest(f.getRegistry());
     vi.mocked(api.getBarrierRegistry).mockRejectedValueOnce(frameUnavailable());
@@ -799,6 +945,20 @@ describe('administrator barrier authoring lifecycle', () => {
     await act(() => view.result.current.discardPending()); await act(() => view.result.current.save());
     expect(view.result.current.pending).toBe(true); expect(view.result.current.phase).toBe('unknown'); expect(f.publishBarriers).toHaveBeenCalledOnce();
   });
+  it('explains a missing server verifier while retaining the pending command and published barriers', async () => {
+    const f = fixture([7]), view = await mounted(f); f.readSelection.mockResolvedValue(selection(8)); await add(view);
+    const old = view.result.current.registry!.snapshot;
+    f.publishBarriers.mockRejectedValueOnce(Object.assign(new Error('private server path'), { status: 503, code: 'BARRIER_VERIFIER_NOT_CONFIGURED' }));
+    await act(() => view.result.current.save());
+    expect(view.result.current.phase).toBe('unknown'); expect(view.result.current.pending).toBe(true);
+    expect(view.result.current.error).toContain('Update the API container');
+    expect(view.result.current.error).toContain('BARRIER_VERIFIER_NOT_CONFIGURED');
+    expect(view.result.current.error).not.toContain('private server path');
+    expect(view.result.current.registry!.snapshot).toEqual(old); expect(view.result.current.canDiscard).toBe(false);
+    await act(() => view.result.current.save());
+    expect(api.beginBarrierCapture).toHaveBeenCalledOnce(); expect(f.captureBarriers).toHaveBeenCalledOnce();
+    expect(f.publishBarriers).toHaveBeenCalledOnce();
+  });
   it('retains a dispatched publication refusal as unknown without a validated exact success receipt', async () => {
     const f = fixture([7]), view = await mounted(f); f.readSelection.mockResolvedValue(selection(8)); await add(view);
     f.publishBarriers.mockRejectedValueOnce(Object.assign(new Error('Publication refused'), { status: 409, code: 'BARRIER_CAPTURE_SCOPE' }));
@@ -841,6 +1001,8 @@ describe('administrator barrier authoring lifecycle', () => {
   });
   it('removes a subset by recapturing all remaining parents rather than sending a remove mutation', async () => {
     const f = fixture([7, 8]); const view = await mounted(f); await act(() => view.result.current.removeParent(parent(7).selectionId)); expect(view.result.current.draftParents.map(p => p.dbId)).toEqual([8]);
+    for (const operation of Object.values(f.appearance)) expect(operation).not.toHaveBeenCalled();
+    expect(f.runProjectPreparation).not.toHaveBeenCalled();
     expect(api.changeBarrierRegistry).not.toHaveBeenCalled(); await act(() => view.result.current.save());
     expect(vi.mocked(api.beginBarrierCapture).mock.calls[0][2].selectedParents.map(p => p.dbId)).toEqual([8]); expect(api.changeBarrierRegistry).not.toHaveBeenCalled();
   });

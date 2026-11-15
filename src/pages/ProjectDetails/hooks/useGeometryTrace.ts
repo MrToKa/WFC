@@ -1,6 +1,9 @@
+import { digestSha256 } from '../../../utils/sha256';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   createGeometryTrace,
+  fetchGeometryTraceRuntime,
+  buildGeometryTraceCommand,
   fetchGeometryTraces,
   fetchGeometryTraceManifest,
   fetchGeometryTraceObjects,
@@ -16,7 +19,6 @@ import {
 } from '@/api/pathfinderGeometryTrace';
 import type { CompletedCaptureEvidence } from '../../../../viewer-runtime/capture-evidence.mjs';
 import {
-  GEOMETRY_TRACE_DERIVATION,
   type GeometryTraceDiagnosticsPage,
 } from '../../../../shared/pathfinderGeometryTrace';
 import { canonicalPurposeJson } from '../../../../shared/pathfinderPurposePolicy';
@@ -123,7 +125,11 @@ export function useGeometryTrace(pf: ReturnType<typeof usePathFinder>, active: b
               error instanceof DOMException && error.name === 'AbortError'
                 ? null
                 : unknown
-                  ? 'Trace creation outcome is unknown. Retry the same saved command.'
+                  ? 'Trace creation outcome is unknown. Retry the same saved command.' + (error instanceof GeometryTraceApiError ? ` (${error.code})` : '')
+                  : error instanceof GeometryTraceApiError
+                    ? error.code === 'GEOMETRY_TRACE_DERIVATION_CHANGED' && error.outcome === 'refused'
+                      ? 'The geometry trace runtime changed. This command was refused. Create a new trace command for the current runtime. (GEOMETRY_TRACE_DERIVATION_CHANGED)'
+                      : `${error.message} (${error.code})`
                   : error instanceof Error
                     ? error.message
                     : 'Traceability could not be read.',
@@ -226,9 +232,7 @@ export function useGeometryTrace(pf: ReturnType<typeof usePathFinder>, active: b
         current(signal);
         const digest = [
           ...new Uint8Array(
-            await crypto.subtle.digest(
-              'SHA-256',
-              new TextEncoder().encode(canonicalPurposeJson(object)),
+            await digestSha256(new TextEncoder().encode(canonicalPurposeJson(object)),
             ),
           ),
         ]
@@ -268,18 +272,13 @@ export function useGeometryTrace(pf: ReturnType<typeof usePathFinder>, active: b
     (aggregateId: string, projectionSha256: string) =>
       run(async (signal) => {
         if (pending.current) return;
-        await execute(
-          {
-            schemaVersion: 'wfc.pf.geometry-trace-create.v1',
-            aggregateId,
-            expectedProjectionSha256: projectionSha256,
-            derivationVersion: GEOMETRY_TRACE_DERIVATION,
-            idempotencyKey: crypto.randomUUID(),
-          },
-          signal,
-        );
+        const runtime = await fetchGeometryTraceRuntime(access.projectId!, access.token!, signal);
+        current(signal);
+        const command = await buildGeometryTraceCommand(access.projectId!, aggregateId, projectionSha256, runtime.runtimeFingerprintSha256);
+        current(signal);
+        await execute(command, signal);
       }),
-    [run, execute],
+    [access?.projectId, access?.token, current, run, execute],
   );
   const retry = useCallback(
     () =>
@@ -309,9 +308,7 @@ export function useGeometryTrace(pf: ReturnType<typeof usePathFinder>, active: b
         current(signal);
         const digest = [
           ...new Uint8Array(
-            await crypto.subtle.digest(
-              'SHA-256',
-              new TextEncoder().encode(canonicalPurposeJson(evidence)),
+            await digestSha256(new TextEncoder().encode(canonicalPurposeJson(evidence)),
             ),
           ),
         ]

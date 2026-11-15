@@ -1,3 +1,4 @@
+import { MODEL_CAPTURE_ERROR_MESSAGES, modelCaptureErrorMessage, modelCaptureErrorContext } from './model-capture-errors.mjs';
 import { CHANNEL, PROTOCOL_VERSION, SDK_VERSION, validateEnvelope, validateDescriptor, parseRouting } from './protocol.mjs';
 import { generateId } from './generate-id.mjs';
 import { isStagedModelCaptureStart, isModelCaptureInputAppend, CAPTURE_INPUT_LIMITS } from './capture-input.mjs';
@@ -14,9 +15,11 @@ const messages = {
   BARRIER_MULTIPART_JOIN_REQUIRED: 'The previous barrier producer has not confirmed it stopped.',
   BARRIER_MULTIPART_CONTROL_LIMIT: 'This Viewer has reached its observation control budget. Cancel or reconcile the retained capture before reloading.',
   ...BARRIER_CAPTURE_ERROR_MESSAGES,
+  ...MODEL_CAPTURE_ERROR_MESSAGES,
   INVALID_STATE: 'The viewer is not ready for this operation.', ROUTE_INVALID: 'The route contains invalid identifiers.',
   NO_DRAWABLE_ROUTE: 'There is no drawable route to zoom to.', SDK_UNSUPPORTED: 'The local Viewer version is not supported.',
   LOCATION_UNAVAILABLE: 'The location object could not be shown in the current model. Try again.',
+  OBJECT_GUID_UNAVAILABLE: 'The object GUID could not be read. Try again.',
   TRAY_UNAVAILABLE: 'The tray could not be shown in the current model. Check its model assignment and try again.',
   RESOURCE_FAILED: 'The model or a local resource could not be loaded.', MODEL_UNAVAILABLE: 'The selected model is unavailable.',
   SESSION_EXPIRED: 'The viewer session has expired.', ACCESS_REVOKED: 'Access to the model has been revoked.',
@@ -38,6 +41,12 @@ const messages = {
   PREPARATION_EQUIPMENT_PROPERTIES_INVALID: 'The model property service returned unexpected or malformed From/To discovery rows. The published preparation was kept.',
   PREPARATION_DISCOVERY_RESULT_INVALID: 'The model discovery page did not pass its format checks. The published preparation was kept.',
   SELECTION_TOO_LARGE: 'Select at most 16 model objects at a time, then add another route rule.',
+  TRAY_IDENTITY_READ_FAILED: 'The saved tray objects could not be checked in this model revision. Try checking the trays again.',
+  TRAY_IDENTITY_SCOPE_INVALID: 'The saved tray identity request could not be checked. Refresh the preparation status, then check the trays again.',
+  TRAY_IDENTITY_RESULT_INVALID: 'The saved tray identity result could not be checked. Try checking the trays again.',
+  TRAY_IDENTITY_TIMEOUT: 'Checking saved tray object identities timed out. Try checking the trays again.',
+  TRAY_IDENTITY_INDEX_LIMIT: 'Checking saved tray identities exceeded the supported model size. Review unresolved tray assignments.',
+  TRAY_IDENTITY_ROW_LIMIT: 'The saved tray identity properties exceeded the supported size. Review unresolved tray assignments.',
   TRAY_ROOT_SELECTION_TOO_LARGE: 'Select at most 512 model objects for one tray-root resolution.',
   TRAY_ROOT_SELECTION_UNAVAILABLE: 'The selected tray roots could not be read. Select objects in the active model and try again.',
   TRAY_ROOT_SELECTION_CHANGED: 'The model selection changed while it was being read. Keep the intended objects selected and try again.',
@@ -85,17 +94,20 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     const recoverableCapture = (['START_BARRIER_CAPTURE', 'READ_BARRIER_CAPTURE'].includes(command.type)
       && code !== 'BARRIER_CAPTURE_MODEL_CHANGED' && (barrierCaptureErrorMessage(code) !== null || code === 'EXTRACTION_FAILED'))
       || command.type.includes('BARRIER_MULTIPART') && code.startsWith('BARRIER_MULTIPART_');
-    const recoverableLocation = command.type === 'SHOW_LOCATION' && code === 'LOCATION_UNAVAILABLE';
+    const recoverableModelCapture = ['START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE'].includes(command.type) && modelCaptureErrorMessage(code) !== null && code !== 'MODEL_CAPTURE_MODEL_CHANGED';
+    const recoverableLocation = ['SHOW_LOCATION', 'SHOW_LOCATION_POINT'].includes(command.type) && code === 'LOCATION_UNAVAILABLE';
+    const recoverableGuid = command.type === 'READ_OBJECT_GUID' && code === 'OBJECT_GUID_UNAVAILABLE';
     const recoverableTray = command.type === 'SHOW_TRAY' && code === 'TRAY_UNAVAILABLE';
     const recoverableRootSelection = command.type === 'READ_TRAY_ROOT_SELECTION'
       && ['TRAY_ROOT_SELECTION_UNAVAILABLE', 'TRAY_ROOT_SELECTION_TOO_LARGE', 'TRAY_ROOT_SELECTION_CHANGED'].includes(code);
     // Discovery evidence may be incomplete while the rendered model is healthy.
     // Only named, allowlisted refusals stay local to this metadata operation;
     // a real SDK resource/access/model failure keeps its terminal identity.
+    const recoverableTrayIdentity = command.type === 'RESOLVE_TRAY_IDENTITIES' && code.startsWith('TRAY_IDENTITY_');
     const recoverableDiscovery = command.type === 'READ_PREPARATION_OBJECTS' && code.startsWith('PREPARATION_') && Object.hasOwn(messages, code);
-    emit(command, 'ERROR', { code, message: messages[code], retryable: recoverableCapture || recoverableLocation || recoverableTray || recoverableRootSelection || recoverableDiscovery || ['RESOURCE_FAILED', 'SESSION_EXPIRED', 'APPEARANCE_RESTORE_FAILED'].includes(code), operation: command.type });
+    emit(command, 'ERROR', { code, message: messages[code], retryable: recoverableModelCapture || recoverableCapture || recoverableLocation || recoverableGuid || recoverableTray || recoverableRootSelection || recoverableTrayIdentity || recoverableDiscovery || ['RESOURCE_FAILED', 'SESSION_EXPIRED', 'APPEARANCE_RESTORE_FAILED'].includes(code), operation: command.type, ...(modelCaptureErrorMessage(code) ? modelCaptureErrorContext(cause) : {}) });
     finish(command);
-    onState({ phase: recoverableCapture || recoverableLocation || recoverableTray || recoverableRootSelection || recoverableDiscovery ? phase : 'error', code, operation: command.type });
+    onState({ phase: recoverableModelCapture || recoverableCapture || recoverableLocation || recoverableGuid || recoverableTray || recoverableRootSelection || recoverableTrayIdentity || recoverableDiscovery ? phase : 'error', code, operation: command.type });
   }
   function releaseCapture(scope, abort = false) {
     if (!scope) return;
@@ -120,6 +132,9 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     try { return await work(); }
     finally { timing[phase + 'Milliseconds'] = Math.min(3_600_000, timing[phase + 'Milliseconds'] + elapsed(started)); timing[pending]--; }
   }
+  function captureClearOptions(scope) {
+    return { preserveCamera: true, ...(scope.kind === 'barrier' ? { preserveSelection: true } : {}) };
+  }
   function beginCapture(command) {
     const scope = { captureId: command.payload.captureId, kind: command.type === 'START_BARRIER_CAPTURE' ? 'barrier' : 'model', startedAt: Date.now(), controller: new AbortController(), installed: false, closed: false, timer: null,
       timing: { commandCount: 0, authorizationCalls: 0, authorizationMilliseconds: 0, adapterCalls: 0, adapterMilliseconds: 0, pendingAuthorizationCalls: 0, pendingAdapterCalls: 0 } };
@@ -127,7 +142,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
       const owned = captureScope === scope;
       for (const entry of requests.values()) if (entry.captureScope === scope && entry.status === 'pending') error(entry.command, failure(scope.kind === 'barrier' ? 'BARRIER_CAPTURE_DEADLINE' : 'EXTRACTION_FAILED'));
       releaseCapture(scope, true);
-      if (owned) { try { handle?.clearRoute(); } catch { /* Deadline remains terminal; cleanup details are not transported. */ } }
+      if (owned) { try { handle?.clearRoute(captureClearOptions(scope)); } catch { /* Deadline remains terminal; cleanup details are not transported. */ } }
     }, CAPTURE_INPUT_LIMITS.milliseconds);
     return scope;
   }
@@ -161,7 +176,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     if (!parsed) throw failure('INVALID_MESSAGE');
     return { descriptor: parsed, modelUrl: new URL(parsed.entrypoint, base).href };
   }
-  function stopRoute(exceptRequestId) {
+  function stopRoute(exceptRequestId, clearAppearance = true, clearOptions) {
     routeController?.abort(); routeController = undefined;
     releaseCapture(captureScope, true);
     if (routeRequest) { const entry = requests.get(routeRequest.requestId); if (entry?.status === 'pending') entry.status = 'cancelled'; }
@@ -170,13 +185,13 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     computed = undefined;
     for (const [id, controller] of capabilities) {
       const entry = requests.get(id);
-      if (id !== exceptRequestId && (entry?.command.type.includes('COMPUTED_PATH') || entry?.command.type.includes('MODEL_CAPTURE') || entry?.command.type.includes('BARRIER_CAPTURE') || ['PICK_POINT', 'READ_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'SET_PATH_TRANSPARENCY', 'SHOW_LOCATION', 'SHOW_TRAY'].includes(entry?.command.type))) {
+      if (id !== exceptRequestId && (entry?.command.type.includes('COMPUTED_PATH') || entry?.command.type.includes('MODEL_CAPTURE') || entry?.command.type.includes('BARRIER_CAPTURE') || ['PICK_POINT', 'READ_SELECTION', 'READ_TRAY_ROOT_SELECTION', 'SET_PATH_TRANSPARENCY', 'SHOW_LOCATION', 'SHOW_LOCATION_POINT', 'SHOW_TRAY'].includes(entry?.command.type))) {
         if (entry?.status === 'pending') entry.status = 'cancelled';
         if (['START_MODEL_CAPTURE', 'START_BARRIER_CAPTURE'].includes(entry?.command.type)) releaseCapture(entry.captureScope, true);
         controller.abort();
       }
     }
-    handle?.clearRoute();
+    if (clearAppearance) handle?.clearRoute(clearOptions);
   }
   function stopLoad() {
     releaseCapture(captureScope, true);
@@ -201,6 +216,9 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     if (disposed || signal.aborted || !identityMatches(command) || phase !== 'loaded') throw failure('INVALID_STATE');
   }
   async function pathFinder(command) {
+    // Tooltip metadata must never consume the foreground operation slot or
+    // turn a burst of hovers into a terminal model failure.
+    if (command.type === 'READ_OBJECT_GUID' && capabilities.size >= 1) { error(command, failure('OBJECT_GUID_UNAVAILABLE')); return; }
     if (capabilities.size >= 2) { error(command, failure('INVALID_STATE')); return; }
     const controller = new AbortController(); capabilities.set(command.requestId, controller);
     const barrierCapture = command.type === 'START_BARRIER_CAPTURE' || command.type === 'READ_BARRIER_CAPTURE';
@@ -222,7 +240,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
         // unchanged 4,096-command replay budget, leaving room for cleanup.
         if (captureStart && requests.size > 1091) throw failure('CAPTURE_RELOAD_REQUIRED');
         if (barrierCapture && command.type === 'START_BARRIER_CAPTURE' && command.payload.scope.contentFingerprint !== loadedDescriptor.contentFingerprint) throw failure('MODEL_SELECTION_CHANGED');
-        if (captureStart) { stopRoute(command.requestId); captureScope = ownedCapture; ownedCapture.installed = true; ownedCapture.kind = barrierCapture ? 'barrier' : 'model'; }
+        if (captureStart) { stopRoute(command.requestId, true, captureClearOptions(ownedCapture)); captureScope = ownedCapture; ownedCapture.installed = true; ownedCapture.kind = barrierCapture ? 'barrier' : 'model'; }
         if (ownedCapture.kind !== (barrierCapture ? 'barrier' : 'model')) throw failure('EXTRACTION_FAILED');
         const progress = value => { if (live()) emit(command, barrierCapture ? 'BARRIER_CAPTURE_PROGRESS' : 'MODEL_CAPTURE_PROGRESS', { captureId: command.payload.captureId, ...value }); };
         const result = await measuredCapture(ownedCapture, 'adapter', () => barrierCapture
@@ -276,22 +294,39 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
         });
         if (!live()) return;
         emit(command, 'PATH_TRANSPARENCY_UPDATED', command.payload);
+      } else if (command.type === 'SHOW_LOCATION_POINT') {
+        await handle.showLocationPoint(command.payload.pointProjectMetres, signal, async () => {
+          await requirePathFinder(command, signal);
+          if (!live()) throw failure('INVALID_STATE');
+        });
+        if (!live()) return;
+        if (!emit(command, 'LOCATION_POINT_SHOWN', command.payload)) throw failure('INVALID_MESSAGE');
       } else if (command.type === 'SHOW_LOCATION') {
         await handle.showLocation(command.payload.sdkObjectId, signal, async () => {
           // Preparing the object tree can yield. Recheck the protected load and
           // authority immediately before reveal/focus, without changing a route.
           await requirePathFinder(command, signal);
           if (!live()) throw failure('INVALID_STATE');
-        });
+        }, command.payload.sdkObjectIds);
         if (!live()) return;
         if (!emit(command, 'LOCATION_SHOWN', command.payload)) throw failure('INVALID_MESSAGE');
       } else if (command.type === 'SHOW_TRAY') {
         await handle.showTray(command.payload.sdkObjectIds, signal, async () => {
           await requirePathFinder(command, signal);
           if (!live()) throw failure('INVALID_STATE');
+          // The tray peek replaces route appearance. Retire stale route and
+          // transparency commands before the current, authorized peek commits.
+          // The adapter restores the old appearance while retaining the model
+          // selection needed by the adjacent tray-assignment action.
+          stopRoute(command.requestId, false);
         });
         if (!live()) return;
         if (!emit(command, 'TRAY_SHOWN', command.payload)) throw failure('INVALID_MESSAGE');
+      } else if (command.type === 'READ_OBJECT_GUID') {
+        const guid = await handle.readObjectGuid(command.payload.sdkObjectId, signal);
+        await requirePathFinder(command, signal);
+        if (!live()) return;
+        if (!emit(command, 'OBJECT_GUID', { sdkObjectId: command.payload.sdkObjectId, guid })) throw failure('INVALID_MESSAGE');
       } else if (command.type === 'READ_TRAY_ROOT_SELECTION') {
         const result = await handle.readTrayRootSelection(signal, async () => {
           await requirePathFinder(command, signal);
@@ -299,8 +334,14 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
         });
         if (!live()) return;
         if (!emit(command, 'TRAY_ROOT_SELECTION', result)) throw failure('TRAY_ROOT_SELECTION_UNAVAILABLE');
+      } else if (command.type === 'RESOLVE_TRAY_IDENTITIES') {
+        const result = await handle.resolveTrayIdentities(command.payload, signal);
+        await requirePathFinder(command, signal);
+        if (!live()) return;
+        if (!emit(command, 'TRAY_IDENTITIES', result)) throw failure('TRAY_IDENTITY_READ_FAILED');
       } else if (command.type === 'READ_MODEL_OBJECTS' || command.type === 'READ_PREPARATION_OBJECTS' || command.type === 'READ_SELECTION') {
-        const result = command.type === 'READ_SELECTION' ? await handle.readSelection(signal) : command.type === 'READ_PREPARATION_OBJECTS' ? await handle.readPreparationObjects(command.payload, signal) : await handle.readModelObjects(command.payload, signal);
+        const progress = value => { if (live()) emit(command, 'PREPARATION_PROGRESS', value); };
+        const result = command.type === 'READ_SELECTION' ? await handle.readSelection(signal) : command.type === 'READ_PREPARATION_OBJECTS' ? await handle.readPreparationObjects(command.payload, signal, progress) : await handle.readModelObjects(command.payload, signal);
         // Metadata and picks may outlive an ACL change while the SDK worker runs.
         await requirePathFinder(command, signal);
         if (!live()) return;
@@ -318,7 +359,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
         const owned = captureScope === ownedCapture;
         releaseCapture(ownedCapture, true);
         if (owned) {
-          try { handle?.clearRoute(); }
+          try { handle?.clearRoute(captureClearOptions(ownedCapture)); }
           catch {
             // Preserve the request's extraction/authority failure. Restoration
             // is secondary and must not disguise it as a broken model load.
@@ -428,7 +469,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
       else if (command.type !== 'DISPOSE') return;
     } else requests.set(command.requestId, { command, status: 'pending' });
     try { switch (command.type) {
-      case 'BEGIN_COMPUTED_PATH': case 'APPEND_COMPUTED_PATH': case 'COMMIT_COMPUTED_PATH': case 'PICK_POINT': case 'READ_MODEL_OBJECTS': case 'READ_PREPARATION_OBJECTS': case 'READ_SELECTION': case 'READ_TRAY_ROOT_SELECTION': case 'SHOW_LOCATION': case 'SHOW_TRAY': case 'SET_PATH_TRANSPARENCY': case 'START_MODEL_CAPTURE': case 'READ_MODEL_CAPTURE': case 'START_BARRIER_CAPTURE': case 'READ_BARRIER_CAPTURE':
+      case 'BEGIN_COMPUTED_PATH': case 'APPEND_COMPUTED_PATH': case 'COMMIT_COMPUTED_PATH': case 'PICK_POINT': case 'READ_MODEL_OBJECTS': case 'READ_PREPARATION_OBJECTS': case 'RESOLVE_TRAY_IDENTITIES': case 'READ_SELECTION': case 'READ_TRAY_ROOT_SELECTION': case 'READ_OBJECT_GUID': case 'SHOW_LOCATION': case 'SHOW_LOCATION_POINT': case 'SHOW_TRAY': case 'SET_PATH_TRANSPARENCY': case 'START_MODEL_CAPTURE': case 'READ_MODEL_CAPTURE': case 'START_BARRIER_CAPTURE': case 'READ_BARRIER_CAPTURE':
       case 'READ_BARRIER_MULTIPART_FRAME': case 'START_BARRIER_MULTIPART': case 'STATUS_BARRIER_MULTIPART': case 'CANCEL_BARRIER_MULTIPART': case 'RECONCILE_BARRIER_MULTIPART':
         if (phase !== 'loaded' || !handle) { error(command, failure('INVALID_STATE')); return; }
         void pathFinder(command); break;
@@ -439,7 +480,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
         void adapter.initialize({ signal: AbortSignal.any([lifetime.signal, initController.signal]) }).then(() => {
           if (disposed || initCommand !== command || requests.get(command.requestId)?.status !== 'pending') return;
           phase = 'initialized'; finish(command);
-          emit(command, 'RUNTIME_READY', { sdkVersion: SDK_VERSION }); onState({ phase });
+          emit(command, 'RUNTIME_READY', { sdkVersion: SDK_VERSION, modelCaptureBatch: true }); onState({ phase });
         }).catch(cause => { if (!disposed && initCommand === command && requests.get(command.requestId)?.status === 'pending') { phase = 'hello'; error(command, cause); } });
         break;
       case 'LOAD_MODEL':
@@ -449,7 +490,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
         if (phase !== 'loaded' || !handle) { error(command, failure('INVALID_STATE')); return; }
         void show(command); break;
       case 'CLEAR_ROUTE':
-        stopRoute(); finish(command); emit(command, 'ROUTE_CLEARED', {}); break;
+        stopRoute(undefined, true, { preserveCamera: command.payload.preserveCamera === true, ...(command.payload.preserveSelection === true ? { preserveSelection: true } : {}) }); finish(command); emit(command, 'ROUTE_CLEARED', {}); break;
       case 'ZOOM_ROUTE':
         if (phase !== 'loaded' || !routeHasLine || command.payload.routeRequestId !== routeRequest?.requestId) { error(command, failure('NO_DRAWABLE_ROUTE')); return; }
         handle.fitRoute(); finish(command); emit(command, 'ROUTE_ZOOMED', command.payload); break;
@@ -461,7 +502,11 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
           if (entry.command === current) { stopLoad(); phase = 'initialized'; }
           else if (entry.command === routeRequest) stopRoute();
           else if (entry.command === initCommand) { initController?.abort(); initCommand = undefined; phase = 'hello'; }
-          else if (capabilities.has(entry.command.requestId)) { capabilities.get(entry.command.requestId).abort(); if (entry.command.type.includes('COMPUTED_PATH') || entry.command.type.includes('MODEL_CAPTURE') || entry.command.type.includes('BARRIER_CAPTURE')) stopRoute(); }
+          else if (capabilities.has(entry.command.requestId)) {
+            capabilities.get(entry.command.requestId).abort();
+            if (entry.command.type.includes('COMPUTED_PATH') || entry.command.type.includes('MODEL_CAPTURE') || entry.command.type.includes('BARRIER_CAPTURE'))
+              stopRoute(undefined, true, { preserveCamera: entry.command.type.includes('CAPTURE'), ...(entry.command.type.includes('BARRIER_CAPTURE') ? { preserveSelection: true } : {}) });
+          }
         }
         finish(command); emit(command, 'REQUEST_CANCELLED', { targetRequestId: command.payload.targetRequestId, outcome }); break;
       }

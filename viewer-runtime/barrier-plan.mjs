@@ -1,3 +1,4 @@
+import { digestSha256 } from './sha256.mjs';
 // Structural planning only. No SDK, files, network, publication or collision authority.
 const VERSION = 'wfc.pf.barrier-multipart-', POLICY = 'original-triangles-structural-only.v2';
 export const BARRIER_MULTIPART_PLANNER_PROFILE = Object.freeze({
@@ -57,7 +58,7 @@ const domainValue = (domain, value) => ({ domain: 'wfc.pf.barrier-multipart.v2/'
 const stripped = (value, key) => Object.fromEntries(Object.entries(value).filter(([name]) => name !== key));
 export async function barrierPlanHash(domain, value, sha256, signal) {
   check(signal); need(['scope', 'profile', 'page', 'seal', 'range'].includes(domain), 'BARRIER_PLAN_HASH'); const bytes = encoder.encode(barrierPlanCanonical(domainValue(domain, value)));
-  const result = await abortable(async () => sha256 ? await sha256(bytes) : [...new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', bytes))].map(n => n.toString(16).padStart(2, '0')).join(''), signal);
+  const result = await abortable(async () => sha256 ? await sha256(bytes) : [...new Uint8Array(await digestSha256(bytes))].map(n => n.toString(16).padStart(2, '0')).join(''), signal);
   check(signal); need(hash(result), 'BARRIER_PLAN_HASH'); return result;
 }
 function profileValid(profile) { need(barrierPlanCanonical(profile) === barrierPlanCanonical(P), 'BARRIER_PLAN_PROFILE'); }

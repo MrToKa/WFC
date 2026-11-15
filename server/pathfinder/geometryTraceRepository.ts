@@ -2,37 +2,79 @@ import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { canonicalPurposeJson, policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
-import { geometryTraceCreateSchema, geometryTraceManifestSchema, geometryTraceReceiptSchema, geometryObjectRevisionSchema, geometryObjectPageSchema, geometryTraceListSchema, geometryTraceSummarySchema, geometryTraceDiagnosticsPageSchema, geometryRuntimeFingerprintSchema, declaredLengthObservationSchema, captureEvidenceUploadSchema, captureEvidenceReceiptSchema, GEOMETRY_TRACE_LIMITS, type GeometryRuntimeFingerprint, type FittedTraceReference, type GeometryTraceManifest } from '../../shared/pathfinderGeometryTrace.js';
+import { geometryTraceCreateSchema, geometryTraceRuntimeSchema, geometryTraceManifestSchema, geometryTraceReceiptSchema, geometryObjectRevisionSchema, geometryObjectPageSchema, geometryTraceListSchema, geometryTraceSummarySchema, geometryTraceDiagnosticsPageSchema, geometryRuntimeFingerprintSchema, declaredLengthObservationSchema, captureEvidenceUploadSchema, captureEvidenceReceiptSchema, GEOMETRY_TRACE_LIMITS, type GeometryRuntimeFingerprint, type FittedTraceReference, type GeometryTraceManifest } from '../../shared/pathfinderGeometryTrace.js';
 import { preparationAggregateSchema, preparationPlanSchema, preparationPartSchema } from '../../shared/pathfinderPreparation.js';
+import { preparationCapacity } from '../../shared/pathfinderCapacity.js';
 import { validateCompletedCaptureEvidence, verifyCompletedCaptureEvidence, canonicalCaptureEvidenceJson } from '../../viewer-runtime/capture-evidence.mjs';
 import { assertLoginNotExpired, requireCurrentLogin } from './auth.js';
 import type { OperationPrincipal } from './operationAuthority.js';
 import { isGrantPrincipal, operationTransaction, requireGrantModelScope,grantProvenance } from './operationAuthority.js';
 import { PathFinderError } from './errors.js';
 import { readPreparationBlob, storePreparationBlob, storePreparationBytes } from './preparationStorage.js';
+import { readSnapshot } from './storage.js';
 import { geometryTraceFrozenSchema, geometryTraceHash, geometryTraceBytesHash } from './geometryTraceBuilder.js';
 import { withFittedExportAllowance, discardAdoptedFittedExportReference } from './geometryTraceStorage.js';
 import { runGeometryTraceWorker, runGeometryEvidenceWorker } from './geometryTraceWorker.js';
 import { parsePolicyJson } from './policyJson.js';
 import { markRecalculationDirty } from './recalculationSchema.js';
+import { readRoutingPolicyScope } from './purposePolicy.js';
 
 const fail = (code: string, status = 409): never => { throw new PathFinderError(code, status, 'Geometry trace evidence is unavailable or changed. Keep the same command to reconcile an uncertain operation.'); };
+/** Outside SQL and before export. Return no bytes: the authenticated projection
+ * buffer belongs only to this check, never the frozen intent or worker input. */
+async function requireTraceProjection(frozen: z.infer<typeof geometryTraceFrozenSchema>): Promise<void> {
+  const projection = frozen.aggregate.projection;
+  if (projection.bytes > preparationCapacity(frozen.plan.limitsProfile).projectionInputBytes) return fail('GEOMETRY_TRACE_BUILD_LIMIT', 413);
+  let bytes: Buffer;
+  try { bytes = await readSnapshot(projection.payloadRef, projection.sha256, frozen.plan.limitsProfile); }
+  catch (error) {
+    if (['ENOENT', 'ENOTDIR'].includes((error as NodeJS.ErrnoException)?.code ?? ''))
+      throw new PathFinderError('PREPARATION_SNAPSHOT_MISSING', 409, 'The saved routing network file is missing. Choose Regenerate network in Routes to capture it from the current model. Saved assignments and cable results are retained.');
+    throw error;
+  }
+  if (bytes.length !== projection.bytes) return fail('ARTIFACT_INTEGRITY');
+}
 export type GeometryTraceAdapters = { getRuntimeFingerprint: () => Promise<GeometryRuntimeFingerprint>; exportFittedTrace: (input: { projectId: string; modelVersionId: string; snapshotId: string; snapshotSha256: string; exportId: string; maxBytes: number }, signal: AbortSignal) => Promise<FittedTraceReference> };
 export const GEOMETRY_TRACE_SQL_BOUNDS = Object.freeze({ acquisitionMilliseconds: 5000, lockMilliseconds: 3000, statementMilliseconds: 15000, idleMilliseconds: 30000 });
 async function connectBounded(pool: Pool): Promise<PoolClient> { let expired = false, timer: ReturnType<typeof setTimeout> | undefined; const pending = pool.connect().then(c => { if (expired) { c.release(); return fail('GEOMETRY_TRACE_DATABASE_BUSY', 503); } return c; }); try { return await Promise.race([pending, new Promise<never>((_, reject) => { timer = setTimeout(() => { expired = true; reject(new PathFinderError('GEOMETRY_TRACE_DATABASE_BUSY', 503)); }, GEOMETRY_TRACE_SQL_BOUNDS.acquisitionMilliseconds); })]); } finally { if (timer) clearTimeout(timer); } }
 /** Project-first ordering, deferred project disclosure and current authority through COMMIT. */
-export async function geometryTraceTransaction<T>(pool: Pool, projectId: string, who: OperationPrincipal, operation: (client: PoolClient) => Promise<T>, signal?: AbortSignal): Promise<T> {
+export async function geometryTraceTransaction<T>(pool: Pool, projectId: string, who: OperationPrincipal, operation: (client: PoolClient) => Promise<T>, signal?: AbortSignal, options: { snapshot?: boolean } = {}): Promise<T> {
   if(isGrantPrincipal(who)) return operationTransaction(pool,projectId,who,'trace',operation,signal);
   policyUuidSchema.parse(projectId); policyUuidSchema.parse(who.userId); policyUuidSchema.parse(who.loginId); if(!isGrantPrincipal(who))assertLoginNotExpired(who); signal?.throwIfAborted(); const c = await connectBounded(pool); let commitStarted = false, discardConnection = false;
-  try { await c.query('BEGIN'); await c.query("SET LOCAL lock_timeout='3000ms';SET LOCAL statement_timeout='15000ms';SET LOCAL idle_in_transaction_session_timeout='30000ms'");
-    const exists = (await c.query('SELECT id FROM projects WHERE id=$1 FOR NO KEY UPDATE', [projectId])).rows.length === 1;
+  try { await c.query('BEGIN'); if (options.snapshot) await c.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ'); await c.query("SET LOCAL lock_timeout='3000ms';SET LOCAL statement_timeout='15000ms';SET LOCAL idle_in_transaction_session_timeout='30000ms'");
+    // Immutable trace reads need a coherent snapshot, not the publication mutex.
+    // Authority rows remain locked until COMMIT, including for snapshot readers.
+    const exists = (await c.query(`SELECT id FROM projects WHERE id=$1 FOR ${options.snapshot ? 'KEY SHARE' : 'NO KEY UPDATE'}`, [projectId])).rows.length === 1;
     const user = (await c.query<{ is_admin: boolean }>('SELECT is_admin FROM users WHERE id=$1 FOR SHARE', [who.userId])).rows[0];
     if (!user) return fail('LOGIN_REVOKED', 401); if (!user.is_admin) return fail('ADMIN_REQUIRED', 403); await requireCurrentLogin(c, who); if (!exists) return fail('PROJECT_NOT_FOUND', 404);
     signal?.throwIfAborted(); const result = await operation(c); signal?.throwIfAborted(); if(!isGrantPrincipal(who))assertLoginNotExpired(who); commitStarted = true; await c.query('COMMIT'); return result;
-  } catch (error) { discardConnection = commitStarted; try { await c.query('ROLLBACK'); } catch { discardConnection = true; } if (commitStarted) return fail('GEOMETRY_TRACE_COMMIT_OUTCOME_UNKNOWN', 503); if (['55P03', '57014'].includes((error as { code?: string })?.code ?? '')) return fail('GEOMETRY_TRACE_DATABASE_BUSY', 503); throw error; } finally { c.release(discardConnection ? true : undefined); }
+  } catch (error) { discardConnection = commitStarted; try { await c.query('ROLLBACK'); } catch { discardConnection = true; } if (commitStarted) return fail('GEOMETRY_TRACE_COMMIT_OUTCOME_UNKNOWN', 503); if (['55P03', '57014', ...(options.snapshot ? ['40001'] : [])].includes((error as { code?: string })?.code ?? '')) return fail('GEOMETRY_TRACE_DATABASE_BUSY', 503); throw error; } finally { c.release(discardConnection ? true : undefined); }
 }
 const frozenSchema = geometryTraceFrozenSchema;
 type Intent = { id: string; input_sha256: string; frozen: unknown; state: string; lease_token: string; lease_expires_at: Date };
+type Admission = { request_sha256: string; request: unknown; intent_id: string; input_sha256: string };
+type TraceCommand = z.infer<typeof geometryTraceCreateSchema>;
+async function admission(c: PoolClient, projectId: string, who: OperationPrincipal, command: TraceCommand): Promise<Admission | null> {
+  const row = (await c.query<Admission>(`/* geometry-trace:admission */ SELECT request_sha256,request,intent_id,input_sha256
+    FROM pf_geometry_trace_admissions WHERE project_id=$1 AND actor_id=$2 AND idempotency_key=$3`, [projectId, who.userId, command.idempotencyKey])).rows[0];
+  if (row && (row.request_sha256 !== geometryTraceHash(command) || canonicalPurposeJson(row.request) !== canonicalPurposeJson(command))) return fail('GEOMETRY_TRACE_IDEMPOTENCY_CONFLICT');
+  return row ?? null;
+}
+async function bindAdmission(c: PoolClient, projectId: string, who: OperationPrincipal, command: TraceCommand, intentId: string, inputSha256: string, existing: Admission | null) {
+  if (command.schemaVersion !== 'wfc.pf.geometry-trace-create.v2') return;
+  if (existing) {
+    if (existing.intent_id !== intentId || existing.input_sha256 !== inputSha256) return fail('GEOMETRY_TRACE_ADMISSION_INTEGRITY');
+    return;
+  }
+  await c.query(`INSERT INTO pf_geometry_trace_admissions(project_id,actor_id,idempotency_key,request_sha256,request,intent_id,input_sha256)
+    VALUES($1,$2,$3,$4,$5,$6,$7)`, [projectId, who.userId, command.idempotencyKey, geometryTraceHash(command), command, intentId, inputSha256]);
+}
+/** A current aggregate still has one published trace. Runtime generations repair
+ * abandoned work; they never replace a completed historical set or its object IDs. */
+async function requireUnpublishedTrace(c: PoolClient, projectId: string, command: TraceCommand) {
+  if ((await c.query('/* geometry-trace:published-generation */ SELECT id FROM pf_geometry_trace_sets WHERE project_id=$1 AND aggregate_id=$2 AND derivation_version=$3 LIMIT 1',
+    [projectId, command.aggregateId, command.derivationVersion])).rows.length) return fail('GEOMETRY_TRACE_DERIVATION_CHANGED');
+}
 async function aggregateInput(c: PoolClient, projectId: string, id: string) {
   const row = (await c.query<{ manifest: unknown; plan: unknown; snapshot_sha256: string; snapshot_bytes: string; model_version_id: string }>(`/* geometry-trace:aggregate */ SELECT a.manifest,s.plan,f.snapshot_sha256,f.snapshot_bytes::text,f.model_version_id FROM pf_preparation_aggregates a JOIN pf_preparation_sessions s ON s.project_id=a.project_id AND s.id=a.session_id JOIN pf_artifacts f ON f.project_id=a.project_id AND f.id=a.artifact_id WHERE a.project_id=$1 AND a.id=$2 FOR SHARE OF a,s,f`, [projectId, id])).rows[0];
   if (!row) return fail('GEOMETRY_TRACE_AGGREGATE_NOT_FOUND', 404); const aggregate = preparationAggregateSchema.parse(row.manifest), plan = preparationPlanSchema.parse(row.plan);
@@ -55,34 +97,72 @@ function equal(a: unknown, b: unknown) { return canonicalPurposeJson(a) === cano
 function pageOptions(options: { offset?: number; limit?: number }) { return z.object({ offset: z.number().int().nonnegative().max(1_000_000).default(0), limit: z.number().int().min(1).max(GEOMETRY_TRACE_LIMITS.pageSize).default(50) }).strict().parse(options); }
 export function createGeometryTraceRepository(pool: Pool, adapters: GeometryTraceAdapters) {
   const tx = <T>(projectId: string, who: OperationPrincipal, operation: (c: PoolClient) => Promise<T>, signal?: AbortSignal) => geometryTraceTransaction(pool, projectId, who, operation, signal);
+  const readTx = <T>(projectId: string, who: OperationPrincipal, operation: (c: PoolClient) => Promise<T>, signal?: AbortSignal) => geometryTraceTransaction(pool, projectId, who, operation, signal, { snapshot: true });
   const captureTx = <T>(projectId:string,who:OperationPrincipal,operation:(c:PoolClient)=>Promise<T>,signal?:AbortSignal)=>isGrantPrincipal(who)
     ?operationTransaction(pool,projectId,who,'prepare',operation,signal):tx(projectId,who,operation,signal);
-  const authorize = (projectId: string, who: OperationPrincipal) => tx(projectId, who, async () => undefined);
-  const get = (projectId: string, who: OperationPrincipal, traceId: string) => tx(projectId, who, c => manifestRow(c, projectId, traceId));
+  const authorize = (projectId: string, who: OperationPrincipal) => readTx(projectId, who, async () => undefined);
+  const runtime = (projectId: string, who: OperationPrincipal) => readTx(projectId, who, async () => {
+    const runtimeFingerprint = geometryRuntimeFingerprintSchema.parse(await adapters.getRuntimeFingerprint());
+    return geometryTraceRuntimeSchema.parse({ schemaVersion: 'wfc.pf.geometry-trace-runtime.v1', runtimeFingerprint,
+      runtimeFingerprintSha256: geometryTraceHash(runtimeFingerprint) });
+  });
+  const get = (projectId: string, who: OperationPrincipal, traceId: string, options: { requireProjection?: true } = {}) => readTx(projectId, who, async c => {
+    const manifest = await manifestRow(c, projectId, traceId);
+    if (options.requireProjection) {
+      let bytes: Buffer;
+      try { bytes = await readSnapshot(manifest.projection.payloadRef, manifest.projection.sha256); }
+      catch (error) {
+        if (['ENOENT', 'ENOTDIR'].includes((error as NodeJS.ErrnoException)?.code ?? ''))
+          throw new PathFinderError('PREPARATION_SNAPSHOT_MISSING', 409, 'The saved routing network file is missing from this installation. Restore the Path Finder files from the matching backup, or choose Regenerate network in Routes to build it from the current model. Your assignments and saved results are retained.');
+        throw error;
+      }
+      if (bytes.length !== manifest.projection.bytes) return fail('ARTIFACT_INTEGRITY');
+    }
+    return manifest;
+  });
   async function create(projectId: string, who: OperationPrincipal, raw: unknown, signal?: AbortSignal) {
     await authorize(projectId, who); const command = geometryTraceCreateSchema.parse(raw), fingerprint = geometryRuntimeFingerprintSchema.parse(await adapters.getRuntimeFingerprint());
     const admitted = await tx(projectId, who, async c => {
       const oldReceipt = await prior(c, projectId, who, command.idempotencyKey, command); if (oldReceipt) { if (!equal(oldReceipt.trace.runtimeFingerprint, fingerprint)) return fail('GEOMETRY_TRACE_DERIVATION_CHANGED'); return { replay: oldReceipt }; }
+      const runtimeBound = command.schemaVersion === 'wfc.pf.geometry-trace-create.v2';
+      const recorded = await admission(c, projectId, who, command);
+      if (runtimeBound && command.expectedRuntimeFingerprintSha256 !== geometryTraceHash(fingerprint)) return fail('GEOMETRY_TRACE_DERIVATION_CHANGED');
       const { aggregate, plan } = await aggregateInput(c, projectId, command.aggregateId); requireGrantModelScope(who,aggregate); if (aggregate.projection.sha256 !== command.expectedProjectionSha256) return fail('GEOMETRY_TRACE_PROJECTION_CONFLICT');
       const inputSha = geometryTraceHash({ aggregate, derivationVersion: command.derivationVersion, fingerprint });
-      let intent = (await c.query<Intent>('SELECT id,input_sha256,frozen,state,lease_token,lease_expires_at FROM pf_geometry_trace_intents WHERE project_id=$1 AND aggregate_id=$2 AND derivation_version=$3 FOR UPDATE', [projectId, aggregate.id, command.derivationVersion])).rows[0];
+      if (recorded && recorded.input_sha256 !== inputSha) return fail('GEOMETRY_TRACE_ADMISSION_INTEGRITY');
+      const intent = (await c.query<Intent>(recorded
+        ? 'SELECT id,input_sha256,frozen,state,lease_token,lease_expires_at FROM pf_geometry_trace_intents WHERE project_id=$1 AND id=$2 FOR UPDATE'
+        : `SELECT id,input_sha256,frozen,state,lease_token,lease_expires_at FROM pf_geometry_trace_intents WHERE project_id=$1 AND aggregate_id=$2 AND derivation_version=$3${runtimeBound ? ' AND input_sha256=$4' : " AND admission_protocol='legacy-v1'"} FOR UPDATE`,
+      recorded ? [projectId, recorded.intent_id] : runtimeBound ? [projectId, aggregate.id, command.derivationVersion, inputSha] : [projectId, aggregate.id, command.derivationVersion])).rows[0];
+      if (recorded && !intent) return fail('GEOMETRY_TRACE_ADMISSION_INTEGRITY');
       if (intent) {
         if (intent.input_sha256 !== inputSha) return fail('GEOMETRY_TRACE_DERIVATION_CHANGED');
         const frozen = frozenSchema.parse(intent.frozen);
-        if (intent.state === 'complete') { const receipt = geometryTraceReceiptSchema.parse({ schemaVersion: 'wfc.pf.geometry-trace-receipt.v1', trace: await manifestRow(c, projectId, intent.id), duplicate: true }); await saveReceipt(c, projectId, who, command, receipt); return { replay: receipt }; }
+        if (frozen.traceId !== intent.id || !equal(frozen.aggregate, aggregate) || !equal(frozen.plan, plan) || !equal(frozen.runtimeFingerprint, fingerprint)) return fail('GEOMETRY_TRACE_AGGREGATE_INTEGRITY');
+        if (intent.state === 'complete') { const receipt = geometryTraceReceiptSchema.parse({ schemaVersion: 'wfc.pf.geometry-trace-receipt.v1', trace: await manifestRow(c, projectId, intent.id), duplicate: true }); await bindAdmission(c, projectId, who, command, intent.id, inputSha, recorded); await saveReceipt(c, projectId, who, command, receipt); return { replay: receipt }; }
+        await requireUnpublishedTrace(c, projectId, command);
         if (new Date(intent.lease_expires_at).getTime() > Date.now()) return fail('GEOMETRY_TRACE_IN_PROGRESS', 503);
+        await bindAdmission(c, projectId, who, command, intent.id, inputSha, recorded);
         const token = randomUUID(); await c.query("UPDATE pf_geometry_trace_intents SET lease_token=$3,lease_expires_at=$4 WHERE project_id=$1 AND id=$2 AND state='pending'", [projectId, intent.id, token, new Date(Date.now() + GEOMETRY_TRACE_LIMITS.leaseMilliseconds)]); return { frozen, token };
       }
+      // Old commands retain their original namespace. They cannot attach to a
+      // newer runtime generation whose admission was made with a different body.
+      if (!runtimeBound && (await c.query('/* geometry-trace:existing-generation */ SELECT id FROM pf_geometry_trace_intents WHERE project_id=$1 AND aggregate_id=$2 AND derivation_version=$3 LIMIT 1', [projectId, aggregate.id, command.derivationVersion])).rows.length)
+        return fail('GEOMETRY_TRACE_DERIVATION_CHANGED');
+      await requireUnpublishedTrace(c, projectId, command);
       const createdAt = new Date().toISOString(), trayIds = plan.requestedScope.trays.map(t => t.projectTrayId);
       const declared = (await c.query<{ id: string; value: string | null; source_revision: string | null }>("SELECT id::text,length_mm::text AS value,to_jsonb(trays)->>'updated_at' AS source_revision FROM trays WHERE project_id=$1 AND id=ANY($2::uuid[]) ORDER BY id", [projectId, trayIds])).rows.map(row => declaredLengthObservationSchema.parse({ projectTrayId: row.id, valueMm: row.value, status: row.value === null ? 'missing' : /^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$(?![\s\S])/.test(row.value) ? 'valid' : 'invalid', observedAt: createdAt, sourceRevision: row.source_revision, source: 'trays.length_mm::text' }));
       const evidence = (await c.query<{ part_id: string; receipt: unknown }>('SELECT part_id,receipt FROM pf_capture_evidence WHERE project_id=$1 AND session_id=$2 ORDER BY part_id', [projectId, aggregate.sessionId])).rows.map(row => ({ partId: row.part_id, blob: captureEvidenceReceiptSchema.parse(row.receipt).evidence }));
       const frozen = frozenSchema.parse({ traceId: randomUUID(), exportId: randomUUID(), fittedBlobId: randomUUID(), recordsBlobId: randomUUID(), frozenBlobId: randomUUID(), aggregate, plan, runtimeFingerprint: fingerprint, declaredLengths: declared, evidence, createdAt, createdBy: who.userId });
       if (Buffer.byteLength(canonicalPurposeJson(frozen)) > GEOMETRY_TRACE_LIMITS.frozenBytes) return fail('GEOMETRY_TRACE_INTENT_LIMIT', 413);
-      const token = randomUUID(); await c.query("INSERT INTO pf_geometry_trace_intents(id,project_id,aggregate_id,derivation_version,input_sha256,frozen,state,lease_token,lease_expires_at,created_by) VALUES($1,$2,$3,$4,$5,$6,'pending',$7,$8,$9)", [frozen.traceId, projectId, aggregate.id, command.derivationVersion, inputSha, frozen, token, new Date(Date.now() + GEOMETRY_TRACE_LIMITS.leaseMilliseconds), who.userId]); return { frozen, token };
+      const token = randomUUID(); await c.query("INSERT INTO pf_geometry_trace_intents(id,project_id,aggregate_id,derivation_version,input_sha256,frozen,state,lease_token,lease_expires_at,created_by,admission_protocol) VALUES($1,$2,$3,$4,$5,$6,'pending',$7,$8,$9,$10)", [frozen.traceId, projectId, aggregate.id, command.derivationVersion, inputSha, frozen, token, new Date(Date.now() + GEOMETRY_TRACE_LIMITS.leaseMilliseconds), who.userId, runtimeBound ? 'runtime-v2' : 'legacy-v1']);
+      await bindAdmission(c, projectId, who, command, frozen.traceId, inputSha, recorded); return { frozen, token };
     }, signal);
     if ('replay' in admitted) return geometryTraceReceiptSchema.parse(admitted.replay);
     const { frozen, token } = admitted, controller = new AbortController(), abort = () => controller.abort(); signal?.addEventListener('abort', abort, { once: true }); if (signal?.aborted) abort(); const timer = setTimeout(abort, 140000);
     try {
+      await requireTraceProjection(frozen);
+      controller.signal.throwIfAborted();
       const result = await withFittedExportAllowance(frozen.exportId, async existing => {
         controller.signal.throwIfAborted();
         const reference = existing ? undefined : await adapters.exportFittedTrace({ projectId, modelVersionId: frozen.aggregate.modelVersionId, snapshotId: frozen.aggregate.projection.payloadRef, snapshotSha256: frozen.aggregate.projection.sha256, exportId: frozen.exportId, maxBytes: GEOMETRY_TRACE_LIMITS.exportBytes }, controller.signal);
@@ -90,6 +170,25 @@ export function createGeometryTraceRepository(pool: Pool, adapters: GeometryTrac
         const validated = await runGeometryTraceWorker({ projectId, sessionId: frozen.aggregate.sessionId, traceId: frozen.traceId, exportId: frozen.exportId, frozenBlob, ...(reference ? { exportReference: reference } : {}) }, controller.signal);
         const manifest = geometryTraceManifestSchema.parse(parsePolicyJson(await readPreparationBlob(projectId, frozen.aggregate.sessionId, validated.manifest, GEOMETRY_TRACE_LIMITS.manifestBytes), { maxBytes: GEOMETRY_TRACE_LIMITS.manifestBytes }));
         if (manifest.id !== frozen.traceId || manifest.projectId !== projectId || manifest.aggregateId !== frozen.aggregate.id || manifest.objectRecords.payloadRef !== frozen.recordsBlobId || manifest.fittedTrace.payloadRef !== frozen.fittedBlobId || !equal(manifest.runtimeFingerprint, frozen.runtimeFingerprint) || manifest.counts.objects !== validated.objectCount || manifest.counts.diagnostics !== validated.diagnosticCount) return fail('GEOMETRY_TRACE_WORKER_INTEGRITY');
+        // The worker outputs immutable, hash-bound blobs. Verify and stage them
+        // before taking the project publication lock; large disk reads and JSON
+        // validation must not make unrelated preparation status requests queue.
+        await readPreparationBlob(projectId, frozen.aggregate.sessionId, validated.fittedTrace, GEOMETRY_TRACE_LIMITS.exportBytes);
+        await readPreparationBlob(projectId, frozen.aggregate.sessionId, validated.objectRecords, GEOMETRY_TRACE_LIMITS.exportBytes);
+        const stagePages = async (pages: typeof validated.indexPages, expectedCount: number): Promise<string[]> => {
+          const staged: string[] = []; let next = 0;
+          for (const page of pages) {
+            controller.signal.throwIfAborted(); if (!isGrantPrincipal(who)) assertLoginNotExpired(who);
+            const bytes = await readPreparationBlob(projectId, frozen.aggregate.sessionId, page, GEOMETRY_TRACE_LIMITS.pageBytes);
+            const rows = parsePolicyJson(bytes, { maxBytes: GEOMETRY_TRACE_LIMITS.pageBytes }) as { order_index: number }[];
+            if (!Array.isArray(rows) || page.firstIndex !== next || rows.length !== page.rowCount || rows.some((r, i) => !r || r.order_index !== next + i)) return fail('GEOMETRY_TRACE_INDEX_INTEGRITY');
+            staged.push(bytes.toString('utf8')); next += rows.length;
+          }
+          if (next !== expectedCount) return fail('GEOMETRY_TRACE_INDEX_INTEGRITY');
+          return staged;
+        };
+        const stagedIndex = await stagePages(validated.indexPages, manifest.counts.objects);
+        const stagedDiagnostics = await stagePages(validated.diagnosticPages, manifest.counts.diagnostics);
         controller.signal.throwIfAborted();
         const receipt = await tx(projectId, who, async c => {
           const old = await prior(c, projectId, who, command.idempotencyKey, command); if (old) return old;
@@ -97,44 +196,58 @@ export function createGeometryTraceRepository(pool: Pool, adapters: GeometryTrac
           if (!locked || !equal(locked.frozen, frozen) || locked.lease_token !== token || locked.state !== 'pending' || new Date(locked.lease_expires_at).getTime() <= Date.now()) return fail('GEOMETRY_TRACE_LEASE_CHANGED');
           const current = await aggregateInput(c, projectId, frozen.aggregate.id); requireGrantModelScope(who,current.aggregate); if (!equal(current.aggregate, frozen.aggregate) || !equal(current.plan, frozen.plan)) return fail('GEOMETRY_TRACE_AGGREGATE_INTEGRITY');
           if (!equal(geometryRuntimeFingerprintSchema.parse(await adapters.getRuntimeFingerprint()), frozen.runtimeFingerprint)) return fail('GEOMETRY_TRACE_DERIVATION_CHANGED');
-          await readPreparationBlob(projectId, frozen.aggregate.sessionId, validated.fittedTrace, GEOMETRY_TRACE_LIMITS.exportBytes); await readPreparationBlob(projectId, frozen.aggregate.sessionId, validated.objectRecords, 32 * 1024 ** 2);
+          // The worker deliberately runs without the project mutex. Recheck the
+          // current routing scope before publishing a new receipt, so edits made
+          // during that work cannot make a historical network look current.
+          // Exact receipt replays above remain historical, idempotent results.
+          if (!isGrantPrincipal(who)) {
+            const selected = (await c.query<{ current_aggregate_id: string | null; current_artifact_id: string | null; geometry_revision: string; resolution_revision: string; active_model_version_id: string | null; selection_revision: string; content_fingerprint: string; state: string; health: string }>(`/* geometry-trace:ordinary-current */ SELECT p.current_aggregate_id,p.current_artifact_id,p.geometry_revision::text,p.resolution_revision::text,
+              s.active_model_version_id,s.selection_revision::text,v.content_fingerprint,v.state,v.health
+              FROM pf_project_preparations p JOIN project_model_selections s ON s.project_id=p.project_id
+              JOIN model_versions v ON v.project_id=s.project_id AND v.id=s.active_model_version_id
+              WHERE p.project_id=$1 FOR SHARE OF p,s,v`, [projectId])).rows;
+            const scope = selected[0], aggregate = frozen.aggregate, routing = await readRoutingPolicyScope(c, projectId);
+            if (selected.length !== 1 || scope.current_aggregate_id !== aggregate.id || scope.current_artifact_id !== aggregate.artifactId || scope.geometry_revision !== aggregate.geometryRevision || scope.resolution_revision !== aggregate.resolutionRevision || scope.active_model_version_id !== aggregate.modelVersionId || scope.selection_revision !== aggregate.selectionRevision || scope.content_fingerprint !== aggregate.contentFingerprint || scope.state !== 'ready' || scope.health !== 'healthy' || routing.catalogRevision !== aggregate.catalogRevision || routing.routingContentSha256 !== aggregate.routingContentSha256 || routing.routingPolicyRevision !== aggregate.routingPolicyRevision || routing.routingPolicySha256 !== aggregate.routingPolicySha256 || manifest.modelVersionId !== aggregate.modelVersionId || manifest.geometryRevision !== aggregate.geometryRevision || manifest.projection.sha256 !== aggregate.projection.sha256) {
+              throw new PathFinderError('PREPARATION_SCOPE_STALE', 409, 'The model, tray assignments or routing permissions changed while the network was being prepared. Your assignments are saved. Discover the project trays again to prepare the current network.');
+            }
+          }
+          await requireUnpublishedTrace(c, projectId, command);
           await c.query('INSERT INTO pf_geometry_trace_sets(id,project_id,aggregate_id,model_version_id,derivation_version,manifest) VALUES($1,$2,$3,$4,$5,$6)', [frozen.traceId, projectId, frozen.aggregate.id, frozen.aggregate.modelVersionId, command.derivationVersion, manifest]);
-          let next = 0;
-          for (const page of validated.indexPages) { controller.signal.throwIfAborted(); if(!isGrantPrincipal(who))assertLoginNotExpired(who); const bytes = await readPreparationBlob(projectId, frozen.aggregate.sessionId, page, GEOMETRY_TRACE_LIMITS.pageBytes), rows = parsePolicyJson(bytes, { maxBytes: GEOMETRY_TRACE_LIMITS.pageBytes }) as { order_index: number }[]; if (!Array.isArray(rows) || page.firstIndex !== next || rows.length !== page.rowCount || rows.some((r, i) => r.order_index !== next + i)) return fail('GEOMETRY_TRACE_INDEX_INTEGRITY'); await c.query(`INSERT INTO pf_geometry_object_revisions(id,project_id,trace_id,object_id,order_index,project_tray_id,summary,record) SELECT x.id,$1,$2,x.object_id,x.order_index,x.project_tray_id,x.summary,x.record FROM jsonb_to_recordset($3::jsonb) AS x(id uuid,object_id text,order_index int,project_tray_id uuid,summary jsonb,record jsonb)`, [projectId, frozen.traceId, bytes.toString('utf8')]); next += rows.length; }
-          if (next !== manifest.counts.objects) return fail('GEOMETRY_TRACE_INDEX_INTEGRITY'); next = 0;
-          for (const page of validated.diagnosticPages) { controller.signal.throwIfAborted(); if(!isGrantPrincipal(who))assertLoginNotExpired(who); const bytes = await readPreparationBlob(projectId, frozen.aggregate.sessionId, page, GEOMETRY_TRACE_LIMITS.pageBytes), rows = parsePolicyJson(bytes, { maxBytes: GEOMETRY_TRACE_LIMITS.pageBytes }) as { order_index: number }[]; if (!Array.isArray(rows) || page.firstIndex !== next || rows.length !== page.rowCount || rows.some((r, i) => r.order_index !== next + i)) return fail('GEOMETRY_TRACE_INDEX_INTEGRITY'); await c.query('INSERT INTO pf_geometry_trace_diagnostics(project_id,trace_id,order_index,message) SELECT $1,$2,x.order_index,x.message FROM jsonb_to_recordset($3::jsonb) AS x(order_index int,message text)', [projectId, frozen.traceId, bytes.toString('utf8')]); next += rows.length; }
-          if (next !== manifest.counts.diagnostics) return fail('GEOMETRY_TRACE_INDEX_INTEGRITY');
+          for (const page of stagedIndex) { controller.signal.throwIfAborted(); if(!isGrantPrincipal(who))assertLoginNotExpired(who); await c.query(`INSERT INTO pf_geometry_object_revisions(id,project_id,trace_id,object_id,order_index,project_tray_id,summary,record) SELECT x.id,$1,$2,x.object_id,x.order_index,x.project_tray_id,x.summary,x.record FROM jsonb_to_recordset($3::jsonb) AS x(id uuid,object_id text,order_index int,project_tray_id uuid,summary jsonb,record jsonb)`, [projectId, frozen.traceId, page]); }
+          for (const page of stagedDiagnostics) { controller.signal.throwIfAborted(); if(!isGrantPrincipal(who))assertLoginNotExpired(who); await c.query('INSERT INTO pf_geometry_trace_diagnostics(project_id,trace_id,order_index,message) SELECT $1,$2,x.order_index,x.message FROM jsonb_to_recordset($3::jsonb) AS x(order_index int,message text)', [projectId, frozen.traceId, page]); }
           await c.query("UPDATE pf_geometry_trace_intents SET state='complete' WHERE project_id=$1 AND id=$2 AND lease_token=$3", [projectId, frozen.traceId, token]);
           const receipt = geometryTraceReceiptSchema.parse({ schemaVersion: 'wfc.pf.geometry-trace-receipt.v1', trace: manifest, duplicate: false }); await saveReceipt(c, projectId, who, command, receipt);
           // Managed grants own their separate journaled emitter. Replays above
           // never reach this genuinely new, ordinary publication boundary.
           if(!isGrantPrincipal(who)){
-            const selected=(await c.query<{current_aggregate_id:string|null;current_artifact_id:string|null;geometry_revision:string;active_model_version_id:string|null;selection_revision:string;content_fingerprint:string;state:string;health:string}>(`/* geometry-trace:ordinary-current */ SELECT p.current_aggregate_id,p.current_artifact_id,p.geometry_revision::text,
-              s.active_model_version_id,s.selection_revision::text,v.content_fingerprint,v.state,v.health
-              FROM pf_project_preparations p JOIN project_model_selections s ON s.project_id=p.project_id
-              JOIN model_versions v ON v.project_id=s.project_id AND v.id=s.active_model_version_id
-              WHERE p.project_id=$1 FOR SHARE OF p,s,v`,[projectId])).rows;
-            const scope=selected[0],aggregate=frozen.aggregate;
-            if(selected.length===1&&scope.current_aggregate_id===aggregate.id&&scope.current_artifact_id===aggregate.artifactId&&scope.geometry_revision===aggregate.geometryRevision&&scope.active_model_version_id===aggregate.modelVersionId&&scope.selection_revision===aggregate.selectionRevision&&scope.content_fingerprint===aggregate.contentFingerprint&&scope.state==='ready'&&scope.health==='healthy'&&manifest.modelVersionId===aggregate.modelVersionId&&manifest.geometryRevision===aggregate.geometryRevision&&manifest.projection.sha256===aggregate.projection.sha256){
-              // Last SQL mutation: trace, receipt and dirty generation commit or
-              // roll back together under the existing final authority/cancel gates.
-              await markRecalculationDirty(c,{projectId,domain:'geometry',reason:'GEOMETRY_TRACE_PUBLISHED',sourceRevision:manifest.id+':'+manifest.contentSha256});
-            }
+            // Last SQL mutation: trace, receipt and dirty generation commit or
+            // roll back together under the existing final authority/cancel gates.
+            await markRecalculationDirty(c,{projectId,domain:'geometry',reason:'GEOMETRY_TRACE_PUBLISHED',sourceRevision:manifest.id+':'+manifest.contentSha256});
           }
+          if (!equal(geometryRuntimeFingerprintSchema.parse(await adapters.getRuntimeFingerprint()), frozen.runtimeFingerprint)) return fail('GEOMETRY_TRACE_DERIVATION_CHANGED');
           return receipt;
         }, controller.signal);
         // Publication is already durable. A cleanup failure cannot undo it or invent a new receipt.
         await discardAdoptedFittedExportReference(validated.transientExport).catch(() => undefined); return receipt;
       }); return result;
     } catch (error) {
-      const reconciled = await tx(projectId, who, c => prior(c, projectId, who, command.idempotencyKey, command)).catch(() => null); if (reconciled) return reconciled; throw error;
+      const reconciled = await readTx(projectId, who, c => prior(c, projectId, who, command.idempotencyKey, command)).catch(() => null); if (reconciled) return reconciled;
+      // A stopped worker can be retried against the same frozen input immediately.
+      // Keep an unjoined worker quarantined; the token also fences a newer owner.
+      if (!(error && typeof error === 'object' && 'code' in error && error.code === 'GEOMETRY_TRACE_JOIN_UNCONFIRMED')) {
+        await tx(projectId, who, c => c.query(
+          "UPDATE pf_geometry_trace_intents SET lease_expires_at=clock_timestamp() WHERE project_id=$1 AND id=$2 AND lease_token=$3 AND state='pending'",
+          [projectId, frozen.traceId, token],
+        )).catch(() => undefined);
+      }
+      throw error;
     } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
   }
-  const objects = (projectId: string, who: OperationPrincipal, traceId: string, options: { offset?: number; limit?: number } = {}) => tx(projectId, who, async c => { const { offset, limit } = pageOptions(options), manifest = await manifestRow(c, projectId, traceId), rows = (await c.query<{ summary: unknown }>('SELECT summary FROM pf_geometry_object_revisions WHERE project_id=$1 AND trace_id=$2 ORDER BY order_index LIMIT $3 OFFSET $4', [projectId, traceId, limit, offset])).rows; return geometryObjectPageSchema.parse({ schemaVersion: 'wfc.pf.geometry-object-page.v1', projectId, traceId, contentSha256: manifest.contentSha256, offset, limit, total: manifest.counts.objects, nextOffset: offset + rows.length < manifest.counts.objects ? offset + rows.length : null, objects: rows.map(r => r.summary) }); });
-  const object = (projectId: string, who: OperationPrincipal, traceId: string, id: string) => tx(projectId, who, async c => { await manifestRow(c, projectId, traceId); policyUuidSchema.parse(id); const row = (await c.query<{ record: unknown; summary: { recordSha256: string } }>('SELECT record,summary FROM pf_geometry_object_revisions WHERE project_id=$1 AND trace_id=$2 AND id=$3', [projectId, traceId, id])).rows[0]; if (!row) return fail('GEOMETRY_TRACE_OBJECT_NOT_FOUND', 404); const value = geometryObjectRevisionSchema.parse(row.record); if (value.id !== id || value.traceId !== traceId || value.projectId !== projectId || geometryTraceHash(value) !== row.summary.recordSha256) return fail('GEOMETRY_TRACE_RECORD_INTEGRITY'); return value; });
-  const list = (projectId: string, who: OperationPrincipal, options: { offset?: number; limit?: number; aggregateId?: string; modelVersionId?: string; projectTrayId?: string } = {}) => tx(projectId, who, async c => { const parsed = z.object({ offset: z.number().optional(), limit: z.number().optional(), aggregateId: policyUuidSchema.optional(), modelVersionId: policyUuidSchema.optional(), projectTrayId: policyUuidSchema.optional() }).strict().parse(options), { offset, limit } = pageOptions({ offset: parsed.offset, limit: parsed.limit }); const rows = (await c.query<{ manifest: unknown }>(`SELECT t.manifest FROM pf_geometry_trace_sets t WHERE t.project_id=$1 AND ($2::uuid IS NULL OR t.aggregate_id=$2) AND ($3::uuid IS NULL OR t.model_version_id=$3) AND ($4::uuid IS NULL OR EXISTS(SELECT 1 FROM pf_geometry_object_revisions o WHERE o.project_id=t.project_id AND o.trace_id=t.id AND o.project_tray_id=$4)) ORDER BY t.created_at DESC,t.id DESC LIMIT $5 OFFSET $6`, [projectId, parsed.aggregateId ?? null, parsed.modelVersionId ?? null, parsed.projectTrayId ?? null, limit + 1, offset])).rows; return geometryTraceListSchema.parse({ schemaVersion: 'wfc.pf.geometry-trace-list.v1', projectId, offset, nextOffset: rows.length > limit ? offset + limit : null, traces: rows.slice(0, limit).map(row => { const m = geometryTraceManifestSchema.parse(row.manifest); return geometryTraceSummarySchema.parse({ id: m.id, projectId: m.projectId, modelVersionId: m.modelVersionId, aggregateId: m.aggregateId, geometryRevision: m.geometryRevision, derivationVersion: m.derivationVersion, counts: m.counts, contentSha256: m.contentSha256, createdAt: m.createdAt }); }) }); });
-  const diagnostics = (projectId: string, who: OperationPrincipal, traceId: string, options: { offset?: number; limit?: number } = {}) => tx(projectId, who, async c => { const { offset, limit } = pageOptions(options), manifest = await manifestRow(c, projectId, traceId), rows = (await c.query<{ message: string }>('SELECT message FROM pf_geometry_trace_diagnostics WHERE project_id=$1 AND trace_id=$2 ORDER BY order_index LIMIT $3 OFFSET $4', [projectId, traceId, limit, offset])).rows; return geometryTraceDiagnosticsPageSchema.parse({ schemaVersion: 'wfc.pf.geometry-diagnostics-page.v1', projectId, traceId, contentSha256: manifest.contentSha256, offset, limit, total: manifest.counts.diagnostics, nextOffset: offset + rows.length < manifest.counts.diagnostics ? offset + rows.length : null, items: rows.map(r => r.message) }); });
-  async function evidenceGet(projectId: string, who: OperationPrincipal, sessionId: string, partId: string) { return tx(projectId, who, async c => { policyUuidSchema.parse(sessionId); policyUuidSchema.parse(partId); const row = (await c.query<{ receipt: unknown }>('SELECT receipt FROM pf_capture_evidence WHERE project_id=$1 AND session_id=$2 AND part_id=$3', [projectId, sessionId, partId])).rows[0]; if (!row) return fail('CAPTURE_EVIDENCE_NOT_FOUND', 404); const receipt = captureEvidenceReceiptSchema.parse(row.receipt), bytes = await readPreparationBlob(projectId, sessionId, receipt.evidence, GEOMETRY_TRACE_LIMITS.evidenceBytes), evidence = parsePolicyJson(bytes, { maxBytes: GEOMETRY_TRACE_LIMITS.evidenceBytes }); if (!validateCompletedCaptureEvidence(evidence) || !await verifyCompletedCaptureEvidence(evidence) || evidence.binding.projectId !== projectId || evidence.binding.sessionId !== sessionId || evidence.binding.partId !== partId) return fail('CAPTURE_EVIDENCE_INTEGRITY'); return evidence; }); }
+  const objects = (projectId: string, who: OperationPrincipal, traceId: string, options: { offset?: number; limit?: number } = {}) => readTx(projectId, who, async c => { const { offset, limit } = pageOptions(options), manifest = await manifestRow(c, projectId, traceId), rows = (await c.query<{ summary: unknown }>('SELECT summary FROM pf_geometry_object_revisions WHERE project_id=$1 AND trace_id=$2 ORDER BY order_index LIMIT $3 OFFSET $4', [projectId, traceId, limit, offset])).rows; return geometryObjectPageSchema.parse({ schemaVersion: 'wfc.pf.geometry-object-page.v1', projectId, traceId, contentSha256: manifest.contentSha256, offset, limit, total: manifest.counts.objects, nextOffset: offset + rows.length < manifest.counts.objects ? offset + rows.length : null, objects: rows.map(r => r.summary) }); });
+  const object = (projectId: string, who: OperationPrincipal, traceId: string, id: string) => readTx(projectId, who, async c => { await manifestRow(c, projectId, traceId); policyUuidSchema.parse(id); const row = (await c.query<{ record: unknown; summary: { recordSha256: string } }>('SELECT record,summary FROM pf_geometry_object_revisions WHERE project_id=$1 AND trace_id=$2 AND id=$3', [projectId, traceId, id])).rows[0]; if (!row) return fail('GEOMETRY_TRACE_OBJECT_NOT_FOUND', 404); const value = geometryObjectRevisionSchema.parse(row.record); if (value.id !== id || value.traceId !== traceId || value.projectId !== projectId || geometryTraceHash(value) !== row.summary.recordSha256) return fail('GEOMETRY_TRACE_RECORD_INTEGRITY'); return value; });
+  const list = (projectId: string, who: OperationPrincipal, options: { offset?: number; limit?: number; aggregateId?: string; modelVersionId?: string; projectTrayId?: string } = {}) => readTx(projectId, who, async c => { const parsed = z.object({ offset: z.number().optional(), limit: z.number().optional(), aggregateId: policyUuidSchema.optional(), modelVersionId: policyUuidSchema.optional(), projectTrayId: policyUuidSchema.optional() }).strict().parse(options), { offset, limit } = pageOptions({ offset: parsed.offset, limit: parsed.limit }); const rows = (await c.query<{ manifest: unknown }>(`SELECT t.manifest FROM pf_geometry_trace_sets t WHERE t.project_id=$1 AND ($2::uuid IS NULL OR t.aggregate_id=$2) AND ($3::uuid IS NULL OR t.model_version_id=$3) AND ($4::uuid IS NULL OR EXISTS(SELECT 1 FROM pf_geometry_object_revisions o WHERE o.project_id=t.project_id AND o.trace_id=t.id AND o.project_tray_id=$4)) ORDER BY t.created_at DESC,t.id DESC LIMIT $5 OFFSET $6`, [projectId, parsed.aggregateId ?? null, parsed.modelVersionId ?? null, parsed.projectTrayId ?? null, limit + 1, offset])).rows; return geometryTraceListSchema.parse({ schemaVersion: 'wfc.pf.geometry-trace-list.v1', projectId, offset, nextOffset: rows.length > limit ? offset + limit : null, traces: rows.slice(0, limit).map(row => { const m = geometryTraceManifestSchema.parse(row.manifest); return geometryTraceSummarySchema.parse({ id: m.id, projectId: m.projectId, modelVersionId: m.modelVersionId, aggregateId: m.aggregateId, geometryRevision: m.geometryRevision, derivationVersion: m.derivationVersion, counts: m.counts, contentSha256: m.contentSha256, createdAt: m.createdAt }); }) }); });
+  const diagnostics = (projectId: string, who: OperationPrincipal, traceId: string, options: { offset?: number; limit?: number } = {}) => readTx(projectId, who, async c => { const { offset, limit } = pageOptions(options), manifest = await manifestRow(c, projectId, traceId), rows = (await c.query<{ message: string }>('SELECT message FROM pf_geometry_trace_diagnostics WHERE project_id=$1 AND trace_id=$2 ORDER BY order_index LIMIT $3 OFFSET $4', [projectId, traceId, limit, offset])).rows; return geometryTraceDiagnosticsPageSchema.parse({ schemaVersion: 'wfc.pf.geometry-diagnostics-page.v1', projectId, traceId, contentSha256: manifest.contentSha256, offset, limit, total: manifest.counts.diagnostics, nextOffset: offset + rows.length < manifest.counts.diagnostics ? offset + rows.length : null, items: rows.map(r => r.message) }); });
+  async function evidenceGet(projectId: string, who: OperationPrincipal, sessionId: string, partId: string) { return readTx(projectId, who, async c => { policyUuidSchema.parse(sessionId); policyUuidSchema.parse(partId); const row = (await c.query<{ receipt: unknown }>('SELECT receipt FROM pf_capture_evidence WHERE project_id=$1 AND session_id=$2 AND part_id=$3', [projectId, sessionId, partId])).rows[0]; if (!row) return fail('CAPTURE_EVIDENCE_NOT_FOUND', 404); const receipt = captureEvidenceReceiptSchema.parse(row.receipt), bytes = await readPreparationBlob(projectId, sessionId, receipt.evidence, GEOMETRY_TRACE_LIMITS.evidenceBytes), evidence = parsePolicyJson(bytes, { maxBytes: GEOMETRY_TRACE_LIMITS.evidenceBytes }); if (!validateCompletedCaptureEvidence(evidence) || !await verifyCompletedCaptureEvidence(evidence) || evidence.binding.projectId !== projectId || evidence.binding.sessionId !== sessionId || evidence.binding.partId !== partId) return fail('CAPTURE_EVIDENCE_INTEGRITY'); return evidence; }); }
   async function evidencePut(projectId: string, who: OperationPrincipal, sessionId: string, partId: string, raw: unknown, signal?: AbortSignal) {
     await captureTx(projectId,who,async()=>undefined,signal); policyUuidSchema.parse(sessionId); policyUuidSchema.parse(partId); const command = captureEvidenceUploadSchema.parse(raw), evidence = command.evidence;
     const evidenceBytes = Buffer.from(canonicalCaptureEvidenceJson(evidence)); if (evidenceBytes.length > GEOMETRY_TRACE_LIMITS.evidenceBytes) return fail('CAPTURE_EVIDENCE_LIMIT', 413);
@@ -150,6 +263,6 @@ export function createGeometryTraceRepository(pool: Pool, adapters: GeometryTrac
     await runGeometryEvidenceWorker({ projectId, sessionId, partId, evidenceBlob: blob, partBlob: { payloadRef: admitted.part.payloadRef, sha256: admitted.part.payloadSha256, bytes: admitted.part.payloadBytes }, expected: { modelVersionId: admitted.plan.modelVersionId, contentFingerprint: admitted.plan.contentFingerprint, selectionRevision: admitted.plan.selectionRevision, planSha256: admitted.plan.orderedPlanSha256, coordinateFrameId: admitted.plan.coordinateFrameId } }, signal ?? new AbortController().signal);
     return captureTx(projectId, who, async c => { const current = await evidencePartInput(c, projectId, sessionId, partId, who); if (!equal(current.part, admitted.part) || !equal(current.plan, admitted.plan)) return fail('CAPTURE_EVIDENCE_SCOPE'); const old = (await c.query<{ receipt: unknown }>('SELECT receipt FROM pf_capture_evidence WHERE project_id=$1 AND session_id=$2 AND part_id=$3', [projectId, sessionId, partId])).rows[0]; if (old) { const receipt = captureEvidenceReceiptSchema.parse(old.receipt); if (receipt.evidence.sha256 !== blob.sha256 || receipt.evidence.bytes !== blob.bytes) return fail('CAPTURE_EVIDENCE_CONFLICT'); await readPreparationBlob(projectId, sessionId, receipt.evidence, GEOMETRY_TRACE_LIMITS.evidenceBytes); return captureEvidenceReceiptSchema.parse({ ...receipt, duplicate: true }); } await readPreparationBlob(projectId, sessionId, blob, GEOMETRY_TRACE_LIMITS.evidenceBytes); const receipt = captureEvidenceReceiptSchema.parse({ schemaVersion: 'wfc.pf.capture-evidence-receipt.v1', sessionId, partId, evidence: blob, duplicate: false }); await c.query('INSERT INTO pf_capture_evidence(project_id,session_id,part_id,receipt,created_by) VALUES($1,$2,$3,$4,$5)', [projectId, sessionId, partId, receipt, who.userId]); return receipt; }, signal);
   }
-  return { authorize, create, get, list, objects, object, diagnostics, evidenceGet, evidencePut };
+  return { authorize, runtime, create, get, list, objects, object, diagnostics, evidenceGet, evidencePut };
 }
 export type GeometryTraceRepository = ReturnType<typeof createGeometryTraceRepository>;

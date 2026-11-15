@@ -2,9 +2,10 @@ import { z } from 'zod';
 import { parsePurposeJson, policyUuidSchema } from '../../shared/pathfinderPurposePolicy';
 import { cableEndpointCommandSchema, cableEndpointEndSchema, type CableEndpointCommand } from '../../shared/pathfinderCableEndpoints';
 import { LEGACY_CABLE_ENDPOINT_PENDING_PREFIX, CABLE_ENDPOINT_PAIR_PENDING_PREFIX } from './cableEndpointPendingKeys';
+import { EndpointPendingLockError, withEndpointPendingLock } from './endpointPendingLock';
 
 export const CABLE_ENDPOINT_PENDING_PREFIX = LEGACY_CABLE_ENDPOINT_PENDING_PREFIX;
-const MAX_BYTES = 128 * 1024, LOCK_MILLISECONDS = 5000;
+const MAX_BYTES = 128 * 1024;
 const ownerSchema = z.object({ accountId: policyUuidSchema, projectId: policyUuidSchema }).strict();
 const pendingSchema = ownerSchema.extend({ schemaVersion: z.literal('wfc.pf.pending-cable-endpoint.v1'), cableId: policyUuidSchema,
   end: cableEndpointEndSchema, createdAt: z.string().datetime(), command: cableEndpointCommandSchema }).strict();
@@ -20,10 +21,11 @@ export function readPendingCableEndpoint(owner: CableEndpointPendingOwner): Pend
   return value;
 }
 async function locked<T>(owner: CableEndpointPendingOwner, work: () => T): Promise<T> {
-  if (!navigator.locks?.request) throw new CableEndpointStorageError('Safe endpoint recovery requires browser storage and Web Locks. No save was sent.');
-  const abort = new AbortController(), timer = setTimeout(() => abort.abort(), LOCK_MILLISECONDS);
-  try { return await navigator.locks.request(key(owner), { mode: 'exclusive', signal: abort.signal }, () => work()); }
-  finally { clearTimeout(timer); }
+  try { return await withEndpointPendingLock([key(owner)], work); }
+  catch (error) {
+    if (error instanceof EndpointPendingLockError) throw new CableEndpointStorageError(error.message);
+    throw error;
+  }
 }
 function writePending(owner: CableEndpointPendingOwner, value: PendingCableEndpoint) {
   const encoded = JSON.stringify(pendingSchema.parse(value));

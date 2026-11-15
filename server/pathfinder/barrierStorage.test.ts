@@ -1,5 +1,6 @@
 import path from 'node:path';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import fs from 'node:fs/promises';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const state = vi.hoisted(() => ({ files: new Map<string, Buffer>(), dirs: new Set<string>(), symlinks: new Set<string>(), links: new Map<string, number>(), sizes: new Map<string, number>(), inodes: new Map<string, number>(), devices: new Map<string, number>(), nextInode: 1, syncs: [] as string[], failSync: false }));
 vi.mock('./storage.js', () => ({ pathFinderRoot: async () => path.resolve('C:/owned-pf-barrier-storage-test') }));
 vi.mock('node:fs/promises', () => ({ default: {
@@ -21,6 +22,7 @@ import { BARRIER_STORAGE_LIMITS, encodeBarrierJson, readBarrierBytes, storeBarri
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const bytes = (value: unknown) => Buffer.from(JSON.stringify(value));
 beforeEach(() => { state.files.clear(); state.dirs.clear(); state.symlinks.clear(); state.links.clear(); state.sizes.clear(); state.inodes.clear(); state.devices.clear(); state.nextInode = 1; state.syncs = []; state.failSync = false; });
+afterEach(() => { vi.restoreAllMocks(); });
 
 describe('server-owned immutable barrier storage', () => {
   it('preserves exact source UTF-8 and freezes the caller buffer before the first await', async () => {
@@ -51,6 +53,25 @@ describe('server-owned immutable barrier storage', () => {
     state.links.set(filename, 3); await expect(readBarrierBytes(id(1), id(2), ref)).rejects.toMatchObject({ code: 'BARRIER_BLOB_INTEGRITY' }); state.links.clear();
     state.symlinks.add(filename); await expect(readBarrierBytes(id(1), id(2), ref)).rejects.toMatchObject({ code: 'BARRIER_BLOB_INTEGRITY' }); state.symlinks.clear();
     state.files.set(filename, bytes({ a: 2 })); await expect(readBarrierBytes(id(1), id(2), ref)).rejects.toMatchObject({ code: 'BARRIER_BLOB_INTEGRITY' });
+  });
+  it('reports a missing saved file separately from corrupt geometry and never recreates its bytes', async () => {
+    const ref = await storeBarrierBytes(id(1), id(2), id(3), bytes({ a: 1 })), filename = [...state.files.keys()][0];
+    state.files.delete(filename);
+    await expect(readBarrierBytes(id(1), id(2), ref)).rejects.toMatchObject({ code: 'BARRIER_BLOB_MISSING', status: 409 });
+    expect(state.files.size).toBe(0);
+    expect(await storeBarrierBytes(id(1), id(2), id(3), bytes({ a: 1 }))).toEqual(ref);
+    expect(await readBarrierBytes(id(1), id(2), ref)).toEqual(bytes({ a: 1 }));
+  });
+  it.each(['ENOENT', 'ENOTDIR'])('reports an unavailable saved-file ancestor (%s) as missing storage', async code => {
+    const ref = await storeBarrierBytes(id(1), id(2), id(3), bytes({ a: 1 })), before = [...state.files.entries()];
+    vi.spyOn(fs, 'lstat').mockRejectedValueOnce(Object.assign(Error('storage unavailable'), { code }));
+    await expect(readBarrierBytes(id(1), id(2), ref)).rejects.toMatchObject({ code: 'BARRIER_BLOB_MISSING', status: 409 });
+    expect([...state.files.entries()]).toEqual(before);
+  });
+  it('does not classify another filesystem failure as a missing saved file', async () => {
+    const ref = await storeBarrierBytes(id(1), id(2), id(3), bytes({ a: 1 }));
+    const denied = Object.assign(Error('denied'), { code: 'EACCES' }); vi.spyOn(fs, 'lstat').mockRejectedValueOnce(denied);
+    await expect(readBarrierBytes(id(1), id(2), ref)).rejects.toBe(denied);
   });
   it('retains its recoverable private temporary file after uncertain fsync instead of acknowledging it', async () => {
     state.failSync = true; await expect(storeBarrierBytes(id(1), id(2), id(3), bytes({}))).rejects.toThrow('uncertain fsync');

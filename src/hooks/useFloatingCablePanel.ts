@@ -1,3 +1,4 @@
+import { generateId } from '@/utils/generateId';
 import { useCallback, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
 
 export type FloatingCableWindowRequest = { window: Window | null; blocked: boolean; id: string };
@@ -12,7 +13,7 @@ type Options = { open: boolean; title: string; scopeKey: ScopeKey; width?: numbe
 export function requestFloatingCableWindow(options: WindowOptions, existing?: FloatingCableWindowRequest | null): FloatingCableWindowRequest {
   try {
     if (existing?.window && !existing.window.closed) { existing.window.focus(); return existing; }
-  } catch { return { window: null, blocked: true, id: crypto.randomUUID() }; }
+  } catch { return { window: null, blocked: true, id: generateId() }; }
   let child: Window | null = null;
   try {
     child = window.open('about:blank', '_blank', `popup=yes,width=${options.width ?? 520},height=${options.height ?? 780},resizable=yes,scrollbars=yes`);
@@ -21,7 +22,7 @@ export function requestFloatingCableWindow(options: WindowOptions, existing?: Fl
     child?.close();
     child = null;
   }
-  return { window: child, blocked: child === null, id: crypto.randomUUID() };
+  return { window: child, blocked: child === null, id: generateId() };
 }
 
 function copyAttributes(source: HTMLElement, destination: HTMLElement) {
@@ -200,7 +201,8 @@ export function useFloatingCablePanel({ open, title, scopeKey, width = 420, pref
   const panelStyle: CSSProperties = detached
     ? { position: 'relative', inset: 'auto', width: '100%', minWidth: 0, minHeight: '100vh', maxWidth: 'none', maxHeight: 'none', margin: 0, overflow: 'visible' }
     : { position: 'fixed', ...(position ? { left: position.left, top: position.top, right: 'auto' } : { right: 16, top: Math.max(8, Math.min(preferredTop, window.innerHeight - 104)) }),
-      width, maxWidth: 'calc(100vw - 16px)', minWidth: 0, maxHeight: 'calc(100vh - 16px)', overflow: 'auto' };
+      width, maxWidth: 'calc(100vw - 16px)', minWidth: 0,
+      maxHeight: `calc(100vh - ${position?.top ?? Math.max(8, Math.min(preferredTop, window.innerHeight - 104))}px - 8px)`, overflow: 'auto' };
   return { panelRef, portalTarget: detached ? child!.target : null, isPoppedOut: detached, panelStyle,
     dragHandleProps: { tabIndex: detached ? -1 : 0, role: 'group', 'aria-label': 'Move cable panel. Use arrow keys to move and Home to reset.',
       style: { cursor: detached ? 'default' : 'move', touchAction: 'none' } as CSSProperties,

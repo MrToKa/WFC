@@ -1,3 +1,4 @@
+import { EXTENDED_PREPARATION_CAPACITY_PROFILE, MAX_PREPARATION_BLOB_BYTES, preparationCapacityProfileSchema, type PreparationCapacityProfile } from '../../shared/pathfinderCapacity.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -18,26 +19,31 @@ export async function snapshotFilename(id: string): Promise<string> {
   if (created) {const parent=await fs.open(root,'r');try{await parent.sync();}finally{await parent.close();}}
   return path.join(directory,`${safe}.json`);
 }
-function encodeSnapshot(value:unknown):Buffer {
+function snapshotLimit(profile?:PreparationCapacityProfile):number {
+  return profile !== undefined && preparationCapacityProfileSchema.parse(profile) === EXTENDED_PREPARATION_CAPACITY_PROFILE ? MAX_PREPARATION_BLOB_BYTES : 256 * 1024 ** 2;
+}
+function encodeSnapshot(value:unknown,profile?:PreparationCapacityProfile):Buffer {
+  const limit=snapshotLimit(profile);
   const bytes = Buffer.from(JSON.stringify(value,(_key,item) => {
     if (typeof item === 'number' && !Number.isFinite(item)) throw new PathFinderError('NON_FINITE_SNAPSHOT');
     return item;
   }));
-  if (bytes.length > 256 * 1024 * 1024) throw new PathFinderError('SNAPSHOT_BUDGET',413);
+  if (bytes.length > limit) throw new PathFinderError('SNAPSHOT_BUDGET',413);
   return bytes;
 }
 /** Exact bytes shared by lookup reuse and storage publication; this does not canonicalize geometry. */
-export function snapshotDigest(value:unknown):string {return createHash('sha256').update(encodeSnapshot(value)).digest('hex');}
-export async function storeSnapshot(id: string, value: unknown): Promise<{sha256:string;bytes:number}> {
-  const bytes=encodeSnapshot(value);
+export function snapshotDigest(value:unknown,profile?:PreparationCapacityProfile):string {return createHash('sha256').update(encodeSnapshot(value,profile)).digest('hex');}
+export async function storeSnapshot(id: string, value: unknown, profile?:PreparationCapacityProfile): Promise<{sha256:string;bytes:number}> {
+  const bytes=encodeSnapshot(value,profile);
   return writeSnapshotBytes(id,bytes);
 }
 /** Exact server-produced UTF-8 after the caller's strict DTO validation. Copy
  * before the first await so concurrent mutation cannot change immutable bytes.
  * This creates an independent cache file; quota-accounted backing is owned by
  * the preparation publisher and must be committed first. */
-export async function storeSnapshotBytes(id: string, value: Buffer): Promise<{sha256:string;bytes:number}> {
-  if (!Buffer.isBuffer(value) || value.length === 0 || value.length > 256 * 1024 * 1024)
+export async function storeSnapshotBytes(id: string, value: Buffer, profile?:PreparationCapacityProfile): Promise<{sha256:string;bytes:number}> {
+  const limit=snapshotLimit(profile);
+  if (!Buffer.isBuffer(value) || value.length === 0 || value.length > limit)
     throw new PathFinderError('SNAPSHOT_BUDGET',413);
   return writeSnapshotBytes(id,Buffer.from(value));
 }
@@ -50,10 +56,14 @@ async function writeSnapshotBytes(id: string, bytes: Buffer): Promise<{sha256:st
   const directory=await fs.open(path.dirname(filename),'r');try{await directory.sync();}finally{await directory.close();}
   return {sha256:createHash('sha256').update(bytes).digest('hex'),bytes:bytes.length};
 }
-export async function readSnapshot(id: string, expectedHash: string): Promise<Buffer> {
+/** Reads authenticated, immutable server-produced artifacts across frozen profiles.
+ * Writers select the frozen profile; readers without plan context use only the absolute ceiling. */
+export async function readSnapshot(id: string, expectedHash: string, profile?:PreparationCapacityProfile): Promise<Buffer> {
+  const limit=profile===undefined?MAX_PREPARATION_BLOB_BYTES:snapshotLimit(profile);
   const filename = await snapshotFilename(id), stat = await fs.lstat(filename);
-  if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || stat.size > 256 * 1024 * 1024) throw new PathFinderError('ARTIFACT_INTEGRITY',409);
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || stat.size > limit) throw new PathFinderError('ARTIFACT_INTEGRITY',409);
   const value = await fs.readFile(filename);
+  if (value.length > limit) throw new PathFinderError('ARTIFACT_INTEGRITY',409);
   if (createHash('sha256').update(value).digest('hex') !== expectedHash) throw new PathFinderError('ARTIFACT_INTEGRITY',409);
   return value;
 }

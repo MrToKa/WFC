@@ -58,9 +58,11 @@ describe('separate v8 barrier calculation implementation identity',()=>{
     expect(verifyEngineIdentity(value,sha)).toBe(false);
     const closure=barrierCalculationProjectionFiles();expect(closure.length).toBeGreaterThan(32);expect(closure.length).toBeLessThanOrEqual(BARRIER_IDENTITY_PROJECTION_LIMIT);
     for(const name of ['./barrierCalculationScope.js','./barrierStrategy.js','../../shared/pathfinderBarrierRuntime.js'])expect(closure.map(x=>x.name)).toContain(name);
-    expect(closure.slice(-4).map(file=>file.name)).toEqual(['./sameEndpointCalculationReuse.js','./verifiedSameEndpointReuse.js','./runtime.js','./automaticPairWriter.js']);
-    expect(closure).toHaveLength(calculationProjectionFiles().length+16);
-    expect(calculationProjectionFiles()).toHaveLength(35);
+    for(const name of ['./sameEndpointCalculationReuse.js','./verifiedSameEndpointReuse.js','./runtime.js','./automaticPairWriter.js','./manualRoutingContracts.js','./manualRoutingWorker.js','./manualRoutingSchema.js','./preparationEngineLane.js'])expect(closure.map(file=>file.name)).toContain(name);
+    expect(closure).toHaveLength(calculationProjectionFiles().length+25);
+    expect(closure.map(file=>file.name)).toContain('./manualRoutingDesignWriter.js');
+    expect(calculationProjectionFiles()).toHaveLength(36);
+    expect(calculationProjectionFiles().map(file => file.name)).toContain('./ownedPreparationSnapshot.js');
   });
   it.each(['PathFinder.Barriers.dll','PathFinder.BarrierVerifier.dll'])('invalidates exact identity when %s bytes change',async name=>{
     const f=fixture(true),first=await f.reader.read(),entry=f.files.get(path.join(f.root,name))!;

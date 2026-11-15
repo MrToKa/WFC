@@ -2,7 +2,6 @@ import React, { ChangeEvent, FormEvent } from 'react';
 import { Body1, Button, Field, Input, Dropdown, Option, Combobox } from '@fluentui/react-components';
 import { MaterialTray } from '../../../api/client';
 import { TrayFormState, TrayFormErrors } from '../TrayDetails.types';
-import { TRAY_PURPOSE_OPTIONS } from '@/constants/trayPurposeOptions';
 
 interface TrayEditFormProps {
   formValues: TrayFormState;
@@ -12,7 +11,17 @@ interface TrayEditFormProps {
   currentTypeHasMaterial: boolean;
   isLoadingMaterials: boolean;
   isSubmitting: boolean;
+  autoLengthPending: boolean;
+  autoLengthProgress?: string | null;
+  autoLengthError: string | null;
+  autoLengthDisabled: boolean;
+  onAutoLength: () => void;
+  autoLengthProposal: { currentLengthMm: string; proposedLengthMm: string; savedManualLengthMm?: number } | null;
+  onAcceptAutoLength: () => void;
   materialTrays: MaterialTray[];
+  purposeOptions?: string[];
+  purposeOptionsLoading?: boolean;
+  purposeOptionsError?: string | null;
   onFieldChange: (field: keyof TrayFormState) => (
     _event: ChangeEvent<HTMLInputElement>,
     data: { value: string }
@@ -32,7 +41,17 @@ export const TrayEditForm: React.FC<TrayEditFormProps> = ({
   currentTypeHasMaterial,
   isLoadingMaterials,
   isSubmitting,
+  autoLengthPending,
+  autoLengthProgress,
+  autoLengthError,
+  autoLengthDisabled,
+  onAutoLength,
+  autoLengthProposal,
+  onAcceptAutoLength,
   materialTrays,
+  purposeOptions = [],
+  purposeOptionsLoading = false,
+  purposeOptionsError = null,
   onFieldChange,
   onTypeSelect,
   onPurposeSelect,
@@ -40,9 +59,10 @@ export const TrayEditForm: React.FC<TrayEditFormProps> = ({
   onCancel,
   styles
 }) => {
-  const hasCustomPurposeOption =
-    formValues.purpose.trim() !== '' &&
-    !TRAY_PURPOSE_OPTIONS.some((purpose) => purpose === formValues.purpose);
+  const availablePurposes = Array.from(new Set([
+    ...purposeOptions,
+    ...(formValues.purpose.trim() ? [formValues.purpose] : [])
+  ]));
 
   return (
     <form className={styles.grid} onSubmit={onSubmit}>
@@ -97,6 +117,9 @@ export const TrayEditForm: React.FC<TrayEditFormProps> = ({
         label="Purpose"
         validationState={formErrors.purpose ? 'error' : undefined}
         validationMessage={formErrors.purpose}
+        hint={purposeOptionsError || (purposeOptionsLoading
+          ? 'Loading project tray purposes…'
+          : purposeOptions.length === 0 ? 'Add tray purposes in Project Details → Tray report templates.' : undefined)}
       >
         <Combobox
           placeholder="Select purpose"
@@ -105,16 +128,11 @@ export const TrayEditForm: React.FC<TrayEditFormProps> = ({
           onOptionSelect={onPurposeSelect}
           freeform={false}
         >
-          {TRAY_PURPOSE_OPTIONS.map((purpose) => (
+          {availablePurposes.map((purpose) => (
             <Option key={purpose} value={purpose}>
               {purpose}
             </Option>
           ))}
-          {hasCustomPurposeOption ? (
-            <Option key="custom-purpose" value={formValues.purpose}>
-              {formValues.purpose}
-            </Option>
-          ) : null}
         </Combobox>
       </Field>
       <Field
@@ -139,10 +157,23 @@ export const TrayEditForm: React.FC<TrayEditFormProps> = ({
         validationState={formErrors.lengthMm ? 'error' : undefined}
         validationMessage={formErrors.lengthMm}
       >
-        <Input
-          value={formValues.lengthMm}
-          onChange={onFieldChange('lengthMm')}
-        />
+        {(controlProps) => <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Input {...controlProps} value={formValues.lengthMm} onChange={onFieldChange('lengthMm')} style={{ flex: 1, minWidth: 0 }} />
+            <Button type="button" aria-label="Auto-length" disabled={isSubmitting || autoLengthPending || autoLengthDisabled} onClick={onAutoLength}>
+              {autoLengthPending ? 'Calculating…' : 'Auto-length'}
+            </Button>
+          </div>
+          {formValues.lengthSource === 'auto' ? <p>Auto-calculated</p> : null}
+          {autoLengthPending ? <p role="status">{autoLengthProgress || 'Calculating length from tray centerlines…'}</p> : null}
+          {autoLengthError ? <p role="alert">{autoLengthError}</p> : null}
+          {autoLengthProposal ? <div>
+            <p role="status">Current manual length: {autoLengthProposal.currentLengthMm ? `${autoLengthProposal.currentLengthMm} mm` : 'Empty'}. Proposed auto-length: {autoLengthProposal.proposedLengthMm} mm.
+              {autoLengthProposal.savedManualLengthMm !== undefined && (!autoLengthProposal.currentLengthMm.trim() || Number(autoLengthProposal.currentLengthMm.replace(',', '.')) !== autoLengthProposal.savedManualLengthMm)
+                ? ` Saved manual length: ${autoLengthProposal.savedManualLengthMm} mm.` : ''}</p>
+            <Button type="button" disabled={isSubmitting || autoLengthPending || autoLengthDisabled} onClick={onAcceptAutoLength}>Use auto-length</Button>
+          </div> : null}
+        </div>}
       </Field>
       <div className={styles.actions}>
         <Button
@@ -153,7 +184,7 @@ export const TrayEditForm: React.FC<TrayEditFormProps> = ({
         >
           Cancel
         </Button>
-        <Button appearance="primary" type="submit" disabled={isSubmitting}>
+        <Button appearance="primary" type="submit" disabled={isSubmitting || autoLengthPending}>
           {isSubmitting ? 'Saving...' : 'Save changes'}
         </Button>
       </div>

@@ -19,7 +19,6 @@ import type { MaterialTray } from '@/api/client';
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 import type { TrayFormErrors, TrayFormState } from '../ProjectDetails.forms';
-import { TRAY_PURPOSE_OPTIONS } from '@/constants/trayPurposeOptions';
 
 type TrayDialogProps = {
   styles: ProjectDetailsStyles;
@@ -29,6 +28,9 @@ type TrayDialogProps = {
   errors: TrayFormErrors;
   submitting: boolean;
   materialTrays: MaterialTray[];
+  purposeOptions?: string[];
+  purposeOptionsLoading?: boolean;
+  purposeOptionsError?: string | null;
   onFieldChange: (
     field: keyof TrayFormState
   ) => (event: ChangeEvent<HTMLInputElement>, data: { value: string }) => void;
@@ -46,6 +48,9 @@ export const TrayDialog = ({
   errors,
   submitting,
   materialTrays,
+  purposeOptions = [],
+  purposeOptionsLoading = false,
+  purposeOptionsError = null,
   onFieldChange,
   onTypeSelect,
   onPurposeSelect,
@@ -60,6 +65,10 @@ export const TrayDialog = ({
     )
   ).sort((a, b) => a.localeCompare(b));
   const hasTrayTypes = trayTypes.length > 0;
+  const availablePurposes = Array.from(new Set([
+    ...purposeOptions,
+    ...(values.purpose.trim() ? [values.purpose] : [])
+  ]));
 
   return (
     <Dialog
@@ -115,6 +124,9 @@ export const TrayDialog = ({
                 label="Purpose"
                 validationState={errors.purpose ? 'error' : undefined}
                 validationMessage={errors.purpose}
+                hint={purposeOptionsError || (purposeOptionsLoading
+                  ? 'Loading project tray purposes…'
+                  : purposeOptions.length === 0 ? 'Add tray purposes in Project Details → Tray report templates.' : undefined)}
               >
                 <Combobox
                   placeholder="Select purpose"
@@ -123,7 +135,7 @@ export const TrayDialog = ({
                   onOptionSelect={onPurposeSelect}
                   freeform={false}
                 >
-                  {TRAY_PURPOSE_OPTIONS.map((purpose) => (
+                  {availablePurposes.map((purpose) => (
                     <Option key={purpose} value={purpose}>
                       {purpose}
                     </Option>

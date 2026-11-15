@@ -1,13 +1,14 @@
+import { digestSha256 } from '../utils/sha256';
 import { getApiBaseUrl } from './http';
 import { pathFinderRequestDeadline, discardPathFinderBody, releasePathFinderReader } from './pathfinderRequestDeadline';
 import { canonicalPurposeJson, parsePurposeJson, policyUuidSchema } from '../../shared/pathfinderPurposePolicy';
 import { endpointBindingErrorSchema, normalizeEndpointLocation } from '../../shared/pathfinderEndpointBindings';
 import {
   MODEL_LOCATION_MATCH_LIMITS, modelLocationMatchContextSchema, modelLocationMatchAssignSchema,
-  modelLocationMatchReceiptSchema, modelLocationMatchNamesHashInput,
-  type ModelLocationMatchContext, type ModelLocationMatchAssign, type ModelLocationMatchReceipt,
+  modelLocationMatchReceiptSchema, modelLocationMatchSummarySchema, modelLocationMatchNamesHashInput,
+  type ModelLocationMatchContext, type ModelLocationMatchAssign, type ModelLocationMatchReceipt, type ModelLocationMatchSummary,
 } from '../../shared/pathfinderModelLocationMatch';
-export type { ModelLocationMatchContext, ModelLocationMatchAssign, ModelLocationMatchReceipt, ModelLocationMatchResult } from '../../shared/pathfinderModelLocationMatch';
+export type { ModelLocationMatchContext, ModelLocationMatchAssign, ModelLocationMatchReceipt, ModelLocationMatchResult, ModelLocationMatchSummary } from '../../shared/pathfinderModelLocationMatch';
 
 export class ModelLocationMatchApiError extends Error {
   constructor(public readonly code: string, public readonly status: number | null,
@@ -18,11 +19,11 @@ export function isModelLocationMatchBusy(error: unknown): error is ModelLocation
   return error instanceof ModelLocationMatchApiError && error.status === 503 && busyCodes.has(error.code);
 }
 export async function modelLocationMatchHash(value: unknown): Promise<string> {
-  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalPurposeJson(value)));
+  const bytes = await digestSha256(new TextEncoder().encode(canonicalPurposeJson(value)));
   return Array.from(new Uint8Array(bytes), n => n.toString(16).padStart(2, '0')).join('');
 }
 const invalid = (): never => { throw new ModelLocationMatchApiError('INVALID_RESPONSE', null, 'unknown', 'The location matching response could not be verified. Retain any pending assignment and check its status.'); };
-async function request(projectId: string, token: string, command?: ModelLocationMatchAssign, signal?: AbortSignal): Promise<unknown> {
+async function request(projectId: string, token: string, command?: ModelLocationMatchAssign, signal?: AbortSignal, summary = false): Promise<unknown> {
   if (!policyUuidSchema.safeParse(projectId).success || !token || token.length > 16384)
     throw new ModelLocationMatchApiError('INVALID_REQUEST', 400, 'refused', 'Use the current administrator project.');
   const encoded = command === undefined ? undefined : JSON.stringify(modelLocationMatchAssignSchema.parse(command));
@@ -31,7 +32,7 @@ async function request(projectId: string, token: string, command?: ModelLocation
   const deadline = pathFinderRequestDeadline(signal, 30_000, () => new ModelLocationMatchApiError('REQUEST_TIMEOUT', null, 'unknown', 'The location matching request timed out. Retry the same pending assignment before starting again.'));
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
   try {
-    const response = await deadline.wait(() => fetch(`${getApiBaseUrl()}/api/projects/${projectId}/pathfinder/locations/model-match/${command ? 'assign' : 'context'}`, {
+    const response = await deadline.wait(() => fetch(`${getApiBaseUrl()}/api/projects/${projectId}/pathfinder/locations/model-match/${command ? 'assign' : summary ? 'summary' : 'context'}`, {
       method: command ? 'POST' : 'GET', signal: deadline.signal, cache: 'no-store', redirect: 'error', credentials: 'same-origin',
       headers: { Authorization: `Bearer ${token}`, ...(encoded === undefined ? {} : { 'Content-Type': 'application/json' }) },
       ...(encoded === undefined ? {} : { body: encoded }),
@@ -49,8 +50,13 @@ async function request(projectId: string, token: string, command?: ModelLocation
       const code = failure.success ? failure.data.code : 'MODEL_LOCATION_MATCH_UNAVAILABLE';
       const outcome = failure.success && response.status < 500 && failure.data.outcome === 'refused' ? 'refused' : 'unknown';
       throw new ModelLocationMatchApiError(code, response.status, outcome,
-        response.status === 503 && busyCodes.has(code) ? 'The project is temporarily busy. The same saved location assignment is retained.'
+        response.status === 503 && busyCodes.has(code) ? command
+          ? 'The project is temporarily busy. The same saved location assignment is retained.'
+          : 'The database is temporarily busy. Saved locations are retained. Refresh Path Finder to retry loading their status; no model search or location assignment was submitted.'
           : response.status === 401 || response.status === 403 ? 'Current administrator access is required. Any pending assignment is retained.'
+          : response.status === 409 && code === 'ENDPOINT_PREPARATION_REQUIRED'
+            ? 'The active model has no valid published routing preparation. In Routes, choose Generate network or Regenerate network, then retry Find and assign From/To. '
+              + (command ? 'Existing locations are kept. Preserve and reconcile any pending assignment before starting again.' : 'No location assignment was submitted.')
           : response.status === 409 ? 'The project, model or locations changed. Reconcile any pending assignment before finding locations again.'
             : 'Location matching could not be completed. Any pending assignment is retained.');
     }
@@ -61,6 +67,12 @@ export async function fetchModelLocationMatchContext(projectId: string, token: s
   const parsed = modelLocationMatchContextSchema.safeParse(await request(projectId, token, undefined, signal));
   if (!parsed.success || parsed.data.projectId !== projectId
     || await modelLocationMatchHash(modelLocationMatchNamesHashInput(parsed.data.names)) !== parsed.data.namesSha256) return invalid();
+  return parsed.data;
+}
+export async function fetchModelLocationMatchSummary(projectId: string, token: string, signal?: AbortSignal): Promise<ModelLocationMatchSummary> {
+  const parsed = modelLocationMatchSummarySchema.safeParse(await request(projectId, token, undefined, signal, true));
+  if (!parsed.success || parsed.data.context.projectId !== projectId
+    || await modelLocationMatchHash(modelLocationMatchNamesHashInput(parsed.data.context.names)) !== parsed.data.context.namesSha256) return invalid();
   return parsed.data;
 }
 export async function assignModelLocations(projectId: string, token: string, command: ModelLocationMatchAssign, signal?: AbortSignal): Promise<ModelLocationMatchReceipt> {

@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { collectPreparationDiscovery } from './collectPreparationDiscovery';
-import { preparationEquipmentNameBatches, PreparationDiscoveryError } from '../../../../shared/collectPreparationDiscovery';
-import { PREPARATION_MATCHING_POLICY, PREPARATION_VIEWER_LIMITS } from '../../../../viewer-runtime/preparation-input.mjs';
+import { preparationEquipmentIndexBatches, preparationEquipmentNameBatches, PreparationDiscoveryError } from '../../../../shared/collectPreparationDiscovery';
+import { PREPARATION_MATCHING_POLICY, PREPARATION_VIEWER_LIMITS, validatePreparationDiscoveryRequest } from '../../../../viewer-runtime/preparation-input.mjs';
 import { preparationFixture, preparationIds as ids } from '../../../test/preparationFixtures';
 import type { ProjectPreparationViewer } from './usePathFinder';
 import type {
   PreparationDiscoveryPage,
   PreparationDiscoveryRequest,
+  PreparationDiscoveryProgress,
 } from '../../../../viewer-runtime/preparation-input.mjs';
 const visibilityScope={schemaVersion:'wfc.pf.sdk-display-visibility.v1' as const,basis:'sdk-display-before-pf-appearance' as const,contentSha256:'a'.repeat(64)};
 function viewer(
@@ -29,7 +30,7 @@ function viewer(
     matchedNames,
   });
   const discover = vi.fn(
-    async (request: PreparationDiscoveryRequest): Promise<PreparationDiscoveryPage> => {
+    async (request: PreparationDiscoveryRequest, _onProgress?: (value: PreparationDiscoveryProgress) => void): Promise<PreparationDiscoveryPage> => {
       let objects: PreparationDiscoveryPage['objects'] = [],
         nextCursor: number | null = null;
       if (request.mode === 'names') {
@@ -58,15 +59,16 @@ function viewer(
         ...(request.rootObjectIds ? { rootObjectIds: [...request.rootObjectIds] } : {}),
         cursor: request.cursor,
         matchingPolicyVersion: PREPARATION_MATCHING_POLICY,
+        ...(request.includeProperties ? { includeProperties: true as const } : {}),
         visibilityScope,
         indexedObjectCount: 10,
         propertyScan:
-          request.mode === 'equipment'
+          request.mode === 'equipment' || request.includeProperties
             ? {
                 attemptedObjectCount: 10,
-                returnedObjectCount: options.incomplete ? 9 : 10,
-                omittedObjectCount: options.incomplete ? 1 : 0,
-                complete: !options.incomplete,
+                returnedObjectCount: request.mode === 'equipment' && options.incomplete ? 9 : 10,
+                omittedObjectCount: request.mode === 'equipment' && options.incomplete ? 1 : 0,
+                complete: request.mode !== 'equipment' || !options.incomplete,
               }
             : null,
         objects,
@@ -88,10 +90,63 @@ function viewer(
   };
 }
 describe('complete exact preparation discovery', () => {
+  it('shows scoped tray Properties progress while rejecting regressed, invalid and late cosmetic reports',async()=>{
+    const {context}=preparationFixture(),io=viewer(),original=io.discover.getMockImplementation()!,progress=vi.fn();
+    let late:((value:PreparationDiscoveryProgress)=>void)|undefined;
+    io.discover.mockImplementation(async(request,onProgress)=>{
+      if(request.mode==='names'&&request.cursor===0){late=onProgress;onProgress?.({phase:'properties',loaded:2,total:10});
+        onProgress?.({phase:'properties',loaded:1,total:10});onProgress?.({phase:'properties',loaded:3,total:11});
+        onProgress?.({phase:'properties',loaded:11,total:10});}
+      return original(request);
+    });
+    const report=await collectPreparationDiscovery(context,io,progress,{skipEquipment:true});
+    expect(report.complete).toBe(true);
+    expect(progress.mock.calls.filter(([message])=>message.startsWith('Reading model Properties'))).toEqual([['Reading model Properties for project trays: 2 of 10 objects checked.']]);
+    const count=progress.mock.calls.length;late?.({phase:'properties',loaded:10,total:10});expect(progress).toHaveBeenCalledTimes(count);
+  });
+  it('generates capture discovery only from current persisted roots without searching names or Properties', async () => {
+    const {context}=preparationFixture(), io=viewer(); context.endpointNames=['EQ-01'];
+    context.resolutions=[{id:ids.session,projectTrayId:ids.tray,mode:'roots',rootObjectIds:['dbid:1'],reason:'Saved assignment',actorId:ids.actor,createdAt:'2026-10-27T00:00:00Z',scope:{...context.scope}}];
+    const report=await collectPreparationDiscovery(context,io,()=>{},{assignedOnly:true});
+    expect(io.discover.mock.calls.map(([request])=>request.mode)).toEqual(['subtree']);
+    expect(io.discover).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({rootObjectId:1,names:[]}));
+    expect(report.objects.map(object=>object.objectId)).toEqual(['dbid:1','dbid:2']);
+    expect(report.trays).toEqual([{projectTrayId:ids.tray,candidateRootObjectIds:[]}]);
+    expect(report.endpointCandidates).toEqual([]); expect(report.endpointScope?.mode).toBe('not-requested');
+    expect(io.capture).not.toHaveBeenCalled();
+  });
+  it('does not rediscover replacements when persisted assignments are missing or belong to another model', async () => {
+    const {context}=preparationFixture(),io=viewer();
+    context.resolutions=[{id:ids.session,projectTrayId:ids.tray,mode:'roots',rootObjectIds:['dbid:1'],reason:'Older assignment',actorId:ids.actor,createdAt:'2026-10-27T00:00:00Z',scope:{...context.scope,selectionRevision:'0'}}];
+    await expect(collectPreparationDiscovery(context,io,()=>{},{assignedOnly:true})).rejects.toThrow('No current tray assignments');
+    expect(io.discover).not.toHaveBeenCalled();
+  });
+  it('refuses a missing persisted root even if a descendant was returned during assigned-only coverage',async()=>{
+    const {context}=preparationFixture(),io=viewer(),original=io.discover.getMockImplementation()!;
+    context.resolutions=[{id:ids.session,projectTrayId:ids.tray,mode:'roots',rootObjectIds:['dbid:1'],reason:'Saved assignment',actorId:ids.actor,createdAt:'2026-10-27T00:00:00Z',scope:{...context.scope}}];
+    io.discover.mockImplementation(async request=>{const page=await original(request);return {...page,objects:page.objects.filter(object=>object.objectId!==1)};});
+    await expect(collectPreparationDiscovery(context,io,()=>{},{assignedOnly:true})).rejects.toThrow('did not return every requested tray root');
+  });
+  it.each([false,true])('retains all raw roots and groups only the same GUID and source file (foreign source %s)',async foreignSource=>{
+    const {context}=preparationFixture(),io=viewer(),original=io.discover.getMockImplementation()!;
+    const identity={guid:'7586ffbb-1d0a-5942-b687-06884123c866',sourceFile:'plant/trays.dwg'};
+    io.discover.mockImplementation(async request=>{const page=await original(request);return request.mode==='names'?{...page,objects:page.objects.map(object=>({...object,objectIdentity:{...identity,sourceFile:foreignSource&&object.objectId===3?'other/trays.dwg':identity.sourceFile}}))}:page;});
+    const report=await collectPreparationDiscovery(context,io,()=>{},{skipEquipment:true});
+    expect(report.trays[0].candidateRootObjectIds).toEqual(['dbid:1','dbid:3']);
+    expect(report.trays[0].candidateRootGroups).toEqual(foreignSource?
+      [{rootObjectIds:['dbid:1'],identity},{rootObjectIds:['dbid:3'],identity:{...identity,sourceFile:'other/trays.dwg'}}]:
+      [{rootObjectIds:['dbid:1','dbid:3'],identity}]);
+    expect(report.objects.every(object=>!('objectIdentity' in object))).toBe(true);
+  });
+  it('refuses incomplete tray Properties coverage before returning automatic assignments',async()=>{
+    const {context}=preparationFixture(),io=viewer(),original=io.discover.getMockImplementation()!;
+    io.discover.mockImplementation(async request=>{const page=await original(request);return {...page,propertyScan:{attemptedObjectCount:10,returnedObjectCount:9,omittedObjectCount:1,complete:false}};});
+    await expect(collectPreparationDiscovery(context,io,()=>{},{skipEquipment:true})).rejects.toThrow('did not report complete model coverage');
+  });
   it('manual tray-only discovery never calls the From/To property scanner and retains every project tray', async () => {
     const {context}=preparationFixture(),io=viewer();context.endpointNames=['EQ-01'];
     const result=await collectPreparationDiscovery(context,io,()=>{},{skipEquipment:true});
-    expect(io.discover.mock.calls.every(([request])=>request.mode==='names'||request.mode==='subtree'||request.mode==='subtrees')).toBe(true);
+    expect(io.discover.mock.calls.every(([request])=>request.mode==='names'&&request.includeProperties===true)).toBe(true);
     expect(result.trays).toHaveLength(context.trays.length);expect(result.complete).toBe(true);expect(result.propertyScan).toBeNull();
     expect(result.endpointCandidates).toEqual([]);
     expect(result.endpointScope).toEqual({ schemaVersion: 'wfc.pf.endpoint-discovery-scope.v1', mode: 'not-requested' });
@@ -146,8 +201,9 @@ describe('complete exact preparation discovery', () => {
     const io = viewer();
     io.discover.mockImplementation(async request => ({ schemaVersion: 'wfc.pf.viewer-discovery.v1', mode: request.mode,
       rootObjectId: request.rootObjectId, names: request.names, cursor: request.cursor, matchingPolicyVersion: PREPARATION_MATCHING_POLICY,
+      ...(request.includeProperties ? { includeProperties: true as const } : {}),
       ...(request.rootObjectIds ? { rootObjectIds: [...request.rootObjectIds] } : {}),
-      visibilityScope, indexedObjectCount: 328, propertyScan: null, nextCursor: null, complete: true,
+      visibilityScope, indexedObjectCount: 328, propertyScan: request.includeProperties ? {attemptedObjectCount:328,returnedObjectCount:328,omittedObjectCount:0,complete:true} : null, nextCursor: null, complete: true,
       objects: objects.filter(object => request.mode === 'names' ? request.names.includes(object.name) : request.rootObjectIds?.includes(object.objectId) ?? object.objectId === request.rootObjectId)
         .map(object => ({ ...object, matchedNames: request.mode === 'names' ? [object.name] : [] })) }));
     const result = await collectPreparationDiscovery(context, io, progress);
@@ -187,7 +243,7 @@ describe('complete exact preparation discovery', () => {
   it('packs all1527 exact endpoint names into a few UTF8-bounded query scopes without truncating candidates',async()=>{
     const {context}=preparationFixture(),io=viewer();context.trays=[];
     context.endpointNames=Array.from({length:1527},(_,index)=>`=F1=SECTION${String(index).padStart(4,'0')}=EQ001`);
-    const groups=preparationEquipmentNameBatches(context.endpointNames);expect(groups.length).toBeGreaterThan(1);expect(groups.length).toBeLessThan(10);
+    const groups=preparationEquipmentIndexBatches(context.endpointNames).flatMap(preparationEquipmentNameBatches);expect(groups.length).toBeGreaterThan(1);expect(groups.length).toBeLessThan(10);
     expect(groups.flat()).toEqual(context.endpointNames);for(const group of groups)expect(new TextEncoder().encode(JSON.stringify(group)).length).toBeLessThanOrEqual(PREPARATION_VIEWER_LIMITS.equipmentNameBytes);
     const result=await collectPreparationDiscovery(context,io),requests=io.discover.mock.calls.map(([request])=>request).filter(request=>request.mode==='equipment');
     expect(requests).toHaveLength(groups.length);expect(requests.flatMap(request=>request.names)).toEqual(context.endpointNames);
@@ -208,13 +264,48 @@ describe('complete exact preparation discovery', () => {
     expect(result.endpointCandidates.map(item => item.name)).toEqual(context.endpointNames);
     expect(result.endpointCandidates.every(item => item.objectIds.join() === 'dbid:9')).toBe(true);
   });
-  it('retains the original per-query indexing fallback when the full project-name universe exceeds 32KiB', async () => {
+  it('reuses bounded index universes instead of rescanning the model for each query above 32KiB', async () => {
     const { context } = preparationFixture(), io = viewer(); context.trays = [];
     context.endpointNames = Array.from({ length: 400 }, (_, index) => `=${'X'.repeat(100)}${index}`);
     expect(new TextEncoder().encode(JSON.stringify(context.endpointNames)).length).toBeGreaterThan(PREPARATION_VIEWER_LIMITS.equipmentIndexNameBytes);
+    const universes = preparationEquipmentIndexBatches(context.endpointNames);
+    expect(universes).toHaveLength(2);
     const result = await collectPreparationDiscovery(context, io);
-    expect(io.discover.mock.calls.every(([request]) => !('indexNames' in request))).toBe(true);
+    const requests = io.discover.mock.calls.map(([request]) => request).filter(request => request.mode === 'equipment');
+    expect(requests.map(request => request.names)).toEqual(universes.flatMap(preparationEquipmentNameBatches));
+    expect(new Set(requests.map(request => JSON.stringify(request.indexNames))).size).toBe(universes.length);
+    expect(requests).toHaveLength(8);
+    for (const request of requests) {
+      expect(universes).toContainEqual(request.indexNames);
+      expect(validatePreparationDiscoveryRequest(request)).toBe(true);
+      expect(request.names.every(name => request.indexNames!.includes(name))).toBe(true);
+    }
+    expect(requests.flatMap(request => request.names)).toEqual(context.endpointNames);
     expect(result.endpointCandidates).toHaveLength(400); expect(result.complete).toBe(true);
+  });
+  it('packs the exact index byte boundary without increasing the request envelope or dropping names', () => {
+    const first = Array.from({ length: 126 }, (_, index) => `${'A'.repeat(251)}${String(index).padStart(5, '0')}`);
+    first.push('B'.repeat(130));
+    expect(new TextEncoder().encode(JSON.stringify(first)).length).toBe(PREPARATION_VIEWER_LIMITS.equipmentIndexNameBytes);
+    const names = [...first, 'TAIL'], groups = preparationEquipmentIndexBatches(names);
+    expect(groups).toEqual([first, ['TAIL']]);
+    for (const group of groups) expect(validatePreparationDiscoveryRequest({ schemaVersion: 'wfc.pf.viewer-discovery.v1', mode: 'equipment',
+      names: [group[0]], indexNames: group, rootObjectId: null, cursor: 0, limit: 1 })).toBe(true);
+  });
+  it('keeps escaped UTF8 index groups maximal and validates the complete scope before partitioning', () => {
+    const names = Array.from({ length: 500 }, (_, index) => `界${'"\\'.repeat(30)}${index}`), groups = preparationEquipmentIndexBatches(names);
+    expect(groups.flat()).toEqual(names); expect(groups.length).toBeGreaterThan(1);
+    for (const [index, group] of groups.entries()) {
+      expect(new TextEncoder().encode(JSON.stringify(group)).length).toBeLessThanOrEqual(PREPARATION_VIEWER_LIMITS.equipmentIndexNameBytes);
+      expect(group.length).toBeLessThanOrEqual(PREPARATION_VIEWER_LIMITS.equipmentNames);
+      if (index < groups.length - 1) expect(new TextEncoder().encode(JSON.stringify([...group, groups[index + 1][0]])).length)
+        .toBeGreaterThan(PREPARATION_VIEWER_LIMITS.equipmentIndexNameBytes);
+    }
+    expect(preparationEquipmentIndexBatches([])).toEqual([]);
+    expect(preparationEquipmentIndexBatches(Array.from({ length: 4096 }, (_, index) => `E${index}`)).flat()).toHaveLength(4096);
+    expect(() => preparationEquipmentIndexBatches(['DUPLICATE', 'DUPLICATE'])).toThrow('exact discovery scope');
+    expect(() => preparationEquipmentIndexBatches(['X'.repeat(257)])).toThrow('protected discovery limits');
+    expect(() => preparationEquipmentIndexBatches(Array.from({ length: 4097 }, (_, index) => `E${index}`))).toThrow('exact discovery scope');
   });
   it('counts escaped and multibyte name bytes exactly rather than assuming32 names or UTF16 size',()=>{
     const names=Array.from({length:200},(_,index)=>`界${'"\\'.repeat(30)}${index}`),groups=preparationEquipmentNameBatches(names);
@@ -285,9 +376,10 @@ describe('complete exact preparation discovery', () => {
           ...(request.rootObjectIds ? { rootObjectIds: [...request.rootObjectIds] } : {}),
           cursor: request.cursor,
           matchingPolicyVersion: PREPARATION_MATCHING_POLICY,
+          ...(request.includeProperties ? { includeProperties: true as const } : {}),
           visibilityScope,
           indexedObjectCount: records.length,
-          propertyScan: null,
+          propertyScan: request.includeProperties ? {attemptedObjectCount:records.length,returnedObjectCount:records.length,omittedObjectCount:0,complete:true} : null,
           objects: records
             .filter((record) =>
               request.mode === 'names'
@@ -313,6 +405,7 @@ describe('complete exact preparation discovery', () => {
       });
       expect(discover).toHaveBeenCalledWith(
         expect.objectContaining({ mode: 'names', names: ['R-010', '/R-010'] }),
+        expect.any(Function),
       );
       expect(result.trays[0].candidateRootObjectIds).toEqual(
         both ? ['dbid:4', 'dbid:3'] : ['dbid:4'],
@@ -379,7 +472,9 @@ describe('complete exact preparation discovery', () => {
       io = viewer();
     const result = await collectPreparationDiscovery(context, io);
     expect(result.trays).toEqual([
-      { projectTrayId: ids.tray, candidateRootObjectIds: ['dbid:1', 'dbid:3'] },
+      { projectTrayId: ids.tray, candidateRootObjectIds: ['dbid:1', 'dbid:3'], candidateRootGroups: [
+        {rootObjectIds:['dbid:1'],identity:null},{rootObjectIds:['dbid:3'],identity:null},
+      ] },
     ]);
     expect(result.objects.map((value) => value.objectId)).toEqual(['dbid:1', 'dbid:2', 'dbid:3']);
     expect(result.complete).toBe(true);

@@ -12,6 +12,13 @@ import {
 import { preparationFixture, preparationIds as ids } from '../test/preparationFixtures';
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 describe('strict project preparation transport', () => {
+  it.each([false, true])('accepts current tray details and older contexts without them: details=%s', async includeDetails => {
+    const { context } = preparationFixture();
+    if (includeDetails) context.trays[0].details = { type: 'Cable ladder RA 60', widthMm: 600, heightMm: 77 };
+    const fetch = vi.fn().mockResolvedValue(Response.json(context)); vi.stubGlobal('fetch', fetch);
+    await expect(fetchPreparationContext(ids.project, 'login')).resolves.toEqual(context);
+    expect(fetch).toHaveBeenCalledOnce();
+  });
   it('verifies frozen plan and part bindings without accepting foreign sessions or altered plan bytes', async () => {
     const { session } = preparationFixture();
     await expect(verifyPreparationSession(session, ids.project, ids.session)).resolves.toEqual(

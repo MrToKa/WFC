@@ -30,7 +30,7 @@ function barrierRuntime():BarrierRuntimeContext {
 }
 function barrierOptions(){const value=barrierRuntime();return{...defaultOptions,barrierRouting:{schemaVersion:'wfc.pf.barrier-admission-intent.v1' as const,scope:value.binding.scope,expectedRegistryRevision:'0',expectedSnapshot:null,drillThroughWalls:true}};}
 const binding=(locationId:string)=>({id:id(locationId===id(6)?16:17),locationId,artifactId,locationRevision:'2',bindingRevision:'3',pointProjectMetres:[1,2,3],contentSha256:'a'.repeat(64),mode:'fixed-world',captureFrameId:frameId,qualifiedProjectFrameId:null,aggregateId,projectionSha256:'d'.repeat(64),sourceObject:null,sourceDecisionId:null});
-function database(from='  =a-01 ',to='=B.02',shared=false,registry='9',mto='Instrumentation'){
+function database(from='  =a-01 ',to='=B.02',shared=false,registry='9',mto:string|null='Instrumentation'){
  const query=vi.fn(async(sql:string,args:unknown[]=[])=>{
   if(sql.includes('FROM cables WHERE'))return{rows:[{id:args[1],from_location:from,to_location:to,mto,cable_type_id:id(10),cable_type_purpose:'Control',cable_write_revision:'4',routing:'/OLD',design_length:23,install_length:24}]};
   if(sql.includes('cable-purpose:locked-scope-types'))return{rows:[{id:(args[1] as string[])[0],cable_type_id:id(10),cable_type_purpose:'Control',cable_write_revision:'4'}]};
@@ -52,6 +52,14 @@ beforeEach(()=>{
  mocked.barriers.mockResolvedValue(barrierRuntime());
 });
 describe('additive v8 barrier dependency projection',()=>{
+ it.each([null,'','Custom reporting group'])('admits optional MTO %s with exact Purpose permissions while retaining its stored value',async mto=>{
+  retainOptions();
+  const value=await collectDependenciesForVersion(database('=A-01','=B.02',false,'9',mto).client,pid,id(8),barrierOptions(),'pathfinder.dependencies.v8');
+  expect(value.status).toBe('ready');expect(value.dependencies?.cableInputs.mto).toBe(mto);
+  expect(value.dependencies).toHaveProperty('cablePurposeRouting',{purpose:'Control',allowedRouteCodes:['/B001']});
+  const legacy=await collectDependencies(database('=A-01','=B.02',false,'9',mto).client,pid,id(8),defaultOptions);
+  expect(legacy.dependencies).toBeNull();expect(legacy.status).toBe('category_required');
+ });
  it('keeps MV excluded before protected dispatch rather than enrolling a guaranteed runner refusal',async()=>{
   const value=await collectDependenciesForVersion(database('  =a-01 ','=B.02',false,'9','MV').client,pid,id(8),barrierOptions(),'pathfinder.dependencies.v8');
   expect(value.dependencies).toBeNull();expect(value.status).toBe('category_required');expect(value.message).toContain('MV cables are excluded');

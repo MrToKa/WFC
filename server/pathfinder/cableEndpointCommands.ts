@@ -110,7 +110,6 @@ async function context(client: PoolClient, projectId: string, cableId: string, e
   else if (logicalName.length > 500) reasons.push('CABLE_ENDPOINT_NAME_LIMIT');
   else if (!endpointLocationNameSchema.safeParse(logicalName).success) reasons.push('CABLE_ENDPOINT_NAME_INVALID');
   if (cable.mto === 'MV') reasons.push('CABLE_ENDPOINT_MV_EXCLUDED');
-  else if (!['LV', 'Control', 'Instrumentation'].includes(cable.mto ?? '')) reasons.push('CABLE_ENDPOINT_CATEGORY_REQUIRED');
   if (!current) reasons.push('ENDPOINT_PREPARATION_REQUIRED');
   let automaticSelection: CableEndpointContext['automaticSelection'] = null, confirmedSelection: CableEndpointContext['confirmedSelection'] = null;
   if (!head && reasons.length === 0 && current && logicalName) {

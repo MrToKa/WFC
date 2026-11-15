@@ -1,3 +1,4 @@
+import { assertAutomaticRoutingControl } from './cableRoutingControlRepository.js';
 import {randomUUID} from 'node:crypto';
 import type {Pool,PoolClient} from 'pg';
 import {INITIAL_FILL_ROUTING_WHITESPACE,initialFillApplyRequestSchema,initialFillProvenanceSchema,initialFillRequestHashInput,
@@ -109,6 +110,7 @@ export function createInitialFillWriter(pool:Pool,adapters:InitialFillWriterAdap
       await artifact(dependencies.artifact.id,dependencies.artifact.sha256);signal?.throwIfAborted();await fence(client);
       await requireCurrentInitialFillMandate(client,{projectId,mandateId:request.mandateId,impactId:mandate.impactId,jobId:proposal.job_id,cableId:proposal.cable_id,principal:who,lock:true});
       await client.query("SELECT set_config('wfc.pathfinder_apply','1',true)");
+      await assertAutomaticRoutingControl(client, projectId, proposal.cable_id, before);
       const after=(await client.query<Row>(`UPDATE cables c SET routing=$3,design_length=$4,updated_at=NOW() WHERE c.project_id=$1 AND c.id=$2
         AND c.cable_write_revision=$5 AND c.design_length IS NULL AND (c.routing IS NULL OR btrim(c.routing,$6)='')
         RETURNING to_jsonb(c)||jsonb_build_object('design_length',c.design_length::text,'install_length',c.install_length::text,'cable_write_revision',c.cable_write_revision::text) AS value`,

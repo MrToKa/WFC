@@ -65,10 +65,16 @@ describe('same-transaction impact append protocol with synthetic SQL, not actual
     expect(f.state.items[0].record.fromLogicalKey).toBe('EQUIPMENT'); expect(f.state.items[1].record.toLogicalKey).toBe('EQUIPMENT');
     expect(f.query.mock.calls.map(([sql]) => sql).join('\n')).not.toMatch(/UPDATE cables|INSERT INTO pf_jobs|INSERT INTO pf_reviews|pf_recalculation_dirty/);
   });
-  it('partitions Instrumentation, MV and unknown categories exactly without treating unknown as allowed', async () => {
+  it('excludes MV while including missing MTO in shared-location updates', async () => {
     const f = await fixture(); f.state.categories.set(id(10), 'Instrumentation'); f.state.categories.set(id(11), 'MV'); f.state.categories.set(id(12), null);
-    const ref = await f.append(); expect(ref).toMatchObject({ status: 'pending', eligibleCables: 1, excludedMvCables: 1, blockedCategoryCables: 1 });
-    expect(f.state.targets.has(id(11))).toBe(false); expect(f.state.items.find(item => item.cable_id === id(12))?.eligible).toBe(false);
+    const ref = await f.append(); expect(ref).toMatchObject({ status: 'pending', eligibleCables: 2, excludedMvCables: 1, blockedCategoryCables: 0 });
+    expect(f.state.targets.has(id(11))).toBe(false); expect(f.state.items.find(item => item.cable_id === id(12))?.eligible).toBe(true);
+  });
+  it.each([null,'Custom MTO',''])('prioritizes an origin with MTO %j and retains that exact value in its sealed item', async mto => {
+    const f=await fixture();f.state.categories.set(id(11),mto);
+    const ref=await f.append({...f.input,originCableId:id(11)}),record=f.state.records.get(ref.id)!.record as LocationImpactRecord;
+    expect(record).toMatchObject({originCableId:id(11),eligibleCableIds:f.input.affectedCableIds,blockedCategoryCableIds:[]});
+    expect(f.state.items.find(item=>item.cable_id===id(11))?.record).toMatchObject({category:mto,eligible:true});
   });
   it('seals real original admin revision/login/installation epoch and bounds the finite authority to login expiry', async () => {
     const f = await fixture(); f.state.adminRevision = '9007199254740993'; const ref = await f.append(), record = f.state.records.get(ref.id)!.record as LocationImpactRecord;

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isPathFinderCableEligible } from './pathfinderCableEligibility.js';
 import { policyHashSchema as hash, policyRevisionSchema as revision, policyUuidSchema as uuid } from './pathfinderPurposePolicy.js';
 import { endpointCurrentScopeSchema } from './pathfinderEndpointBindings.js';
 import { recalculationPreferencesSchema, recalculationReasonSchema, recalculationTimeoutSchema } from './pathfinderRecalculation.js';
@@ -43,7 +44,8 @@ export type LocationImpactRecord = z.infer<typeof locationImpactRecordSchema>;
 export const locationImpactItemSchema = z.object({ schemaVersion: z.literal('wfc.pf.location-impact-item.v1'), projectId: uuid, impactId: uuid,
   cableId: uuid, generation: revision, cableWriteRevision: revision, fromLogicalKey: z.string().max(8192).nullable(), toLogicalKey: z.string().max(8192).nullable(),
   category: z.string().max(96).nullable(), eligible: z.boolean(), contentSha256: hash }).strict().refine(value =>
-  value.eligible === ['LV', 'Control', 'Instrumentation'].includes(value.category ?? '') && value.category !== 'MV'
+  // Retain pre-MTO-independent blocked items as immutable historical evidence.
+  (value.eligible ? isPathFinderCableEligible(value.category) : !['LV', 'Control', 'Instrumentation'].includes(value.category ?? '')) && value.category !== 'MV'
   && BigInt(value.generation) > 0n
   && [value.fromLogicalKey, value.toLogicalKey].every(key => key === null || key === key.trim().toUpperCase()));
 export type LocationImpactItem = z.infer<typeof locationImpactItemSchema>;

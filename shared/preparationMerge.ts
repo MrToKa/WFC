@@ -1,3 +1,4 @@
+import { EXTENDED_PREPARATION_CAPACITY_PROFILE, MAX_PREPARATION_BLOB_BYTES } from './pathfinderCapacity.js';
 import type { ComputationalSnapshot, SnapshotObject } from '../server/pathfinder/contracts.js';
 import { equipmentEligibilitySchema, type PreparationPlan } from './pathfinderPreparation.js';
 import type { ModelCaptureRequest } from '../viewer-runtime/protocol.mjs';
@@ -141,7 +142,7 @@ function createMerge(plan:PreparationPlan,owned:boolean):{addPart:(partId:string
   }
   for(const object of ordered)if(object.geometryRole==='hierarchy'){const box=hierarchyBoxes.get(object.id);if(!box)refuse('EMPTY_ANCESTOR_SCOPE');object.bounds=box;}
   const snapshot:ComputationalSnapshot={schemaVersion:'pathfinder.model.snapshot.v1',model:clone(first!.model),capture:{adapterVersion:'wfc.project-preparation-aggregate.v1',sourceKind:first!.sourceKind,inventoryComplete:false,geometryComplete:false,unitsVerified:false,transformsVerified:false,planningVisibilityKnown:false,sourceLinkVerified:false,evidenceSha256:[plan.orderedPlanSha256]},coordinates:clone(first!.coordinates),objects:ordered};
-  const counts=countGeometry(ordered);if(byteLength(snapshot)>PREPARATION_MERGE_LIMITS.unionBytes)refuse('GEOMETRY_UNION_BUDGET');
+  const counts=countGeometry(ordered);if(byteLength(snapshot)>(plan.limitsProfile===EXTENDED_PREPARATION_CAPACITY_PROFILE?MAX_PREPARATION_BLOB_BYTES:PREPARATION_MERGE_LIMITS.unionBytes))refuse('GEOMETRY_UNION_BUDGET');
   const traceIndex:PreparationTraceIndex={schemaVersion:'wfc.pf.preparation-trace-index.v1',sessionId:plan.id,coordinateFrameId:plan.coordinateFrameId,objects:ordered.map(object=>({objectId:object.id,projectTrayId:owners.get(object.id)?.projectTrayId??null,rootObjectId:owners.get(object.id)?.rootObjectId??null,geometryRole:object.geometryRole,partIds:origins.get(object.id)!}))};
   active();return {snapshot,traceIndex,counts};
   }

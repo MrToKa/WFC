@@ -20,6 +20,12 @@ const tray: TrayRow = {
 };
 
 describe('tray change history', () => {
+  it('records approval of an automatic source even when the measured length is unchanged', () => {
+    const calculation = { lengthMm: 3000, elementCount: 1, modelVersionId: '00000000-0000-4000-8000-000000000001', geometryRevision: '2', aggregateId: '00000000-0000-4000-8000-000000000002', traceId: '00000000-0000-4000-8000-000000000003', calculatedAt: '2026-10-29T12:00:00.000Z' };
+    const automatic = { ...tray, length_source: 'auto' as const, length_calculation: calculation };
+    expect(describeTrayChanges(tray, automatic)).toEqual(['Length source: manual → auto']);
+    expect(describeTrayChanges(automatic, { ...tray, length_source: 'manual', length_calculation: null })).toEqual(['Length source: auto → manual']);
+  });
   it('treats missing clamp preferences as the default settings', () => {
     expect(
       describeTrayChanges(tray, {

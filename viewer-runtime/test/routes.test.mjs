@@ -79,6 +79,19 @@ test('mapped leaf geometry keeps original colors, a yellow line and filled Ghost
   assert.equal(f.facts.removed.length, f.facts.meshes.length); assert.equal(f.facts.disposed, 3);
 });
 
+test('preparation restores a legacy route appearance without fitting the model', async t => {
+  const f = fixture(t);
+  f.viewer.model.visibilityManager = { getDefaultVisibility: () => true, getVisibility: () => [], setVisibility() {} };
+  await f.controller.showRoute('/A105', { routingBindings: bindings(['dbid:2']) });
+  const fits = f.facts.fits.length;
+  f.controller.prepareForVisibilityObservation();
+  assert.equal(f.facts.fits.length, fits);
+  assert.equal(f.viewer.impl.fadeMaterial.opacity, 0.4);
+  assert.equal(f.facts.removed.length, f.facts.meshes.length);
+  f.controller.clearRoute({ preserveCamera: true }); assert.equal(f.facts.fits.length, fits);
+  f.controller.clearRoute(); assert.equal(f.facts.fits.length, fits + 1);
+});
+
 test('unmapped routes retain exact normalized-name fallback and occurrence order', async t => {
   const f = fixture(t); const response = { ...bindings(), bindings: [] };
   const result = await f.controller.showRoute('/A105-x/A105-x/MISSING', { routingBindings: response });

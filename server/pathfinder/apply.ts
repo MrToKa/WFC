@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { assertAutomaticRoutingControl } from './cableRoutingControlRepository.js';
 import type { Pool } from 'pg';
 import type { z } from 'zod';
 import { PathFinderError } from './errors.js';
@@ -66,6 +67,7 @@ export function createPathFinderApply(pool:Pool) {
     if (compatibilityIssue) throw new PathFinderError('ROUTING_OUTSIDE_WFC_LIMIT',409,compatibilityIssue);
     assertLoginNotExpired(who);
     const before = (await client.query<Row>(`SELECT to_jsonb(c)||jsonb_build_object('design_length',c.design_length::text,'install_length',c.install_length::text,'cable_write_revision',c.cable_write_revision::text) AS value FROM cables c WHERE c.project_id=$1 AND c.id=$2`,[projectId,proposal.cable_id])).rows[0].value;
+    await assertAutomaticRoutingControl(client, projectId, proposal.cable_id, before);
     await requireEnrollmentAuthority(client,{projectId,jobId:proposal.job_id,cableId:proposal.cable_id});
     await client.query("SELECT set_config('wfc.pathfinder_apply','1',true)");
     const after = (await client.query<Row>(`UPDATE cables c SET routing=$3,design_length=$4,updated_at=NOW()

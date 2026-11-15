@@ -126,6 +126,31 @@ describe('manual Routings viewer lifecycle', () => {
     expect(h.result.current.phase).toBe('login-required'); expect(h.result.current.message).toContain('Sign in again');
     expect(mocks.metadata).toHaveBeenCalledTimes(1); expect(controller.dispose).toHaveBeenCalled();
   });
+  it('distinguishes a refused server address from a missing login or revoked project access', async () => {
+    const h = start(); await waitFor(() => expect(mocks.controllers).toHaveLength(1));
+    const controller = mocks.controllers[0];
+    await act(async () => { emit(controller, 'RUNTIME_READY'); });
+    act(() => emit(controller, 'ERROR', { code: 'VIEWER_ORIGIN_DENIED' }));
+    expect(h.result.current.phase).toBe('error');
+    expect(h.result.current.message).toBe('The 3D viewer is not enabled for this server address. Check the server\'s viewer address settings, then retry. (VIEWER_ORIGIN_DENIED)');
+    expect(h.result.current.canShow).toBe(false); expect(controller.dispose).toHaveBeenCalled();
+    expect(mocks.metadata).toHaveBeenCalledTimes(1);
+    act(() => h.result.current.retry()); await loaded(h, 2);
+    expect(h.result.current.phase).toBe('ready');
+  });
+  it.each(['RESOURCE_FAILED', 'SESSION_FAILED', 'MODEL_TIMEOUT'])('shows the public %s load diagnostic without raw server details', async code => {
+    const h = start(); const controller = await loaded(h);
+    act(() => emit(controller, 'ERROR', { code, message: 'private raw failure detail' }));
+    expect(h.result.current.message).toContain(`(${code})`);
+    expect(h.result.current.message).not.toContain('private raw failure detail');
+    expect(h.result.current.canShow).toBe(false);
+  });
+  it('does not expose unrecognized error codes or arbitrary server messages', async () => {
+    const h = start(); const controller = await loaded(h);
+    act(() => emit(controller, 'ERROR', { code: 'PRIVATE_BACKEND_DETAIL', message: 'private raw failure detail' }));
+    expect(h.result.current.message).toBe('The protected model could not be loaded. Retry to check the active model and your access.');
+    expect(h.result.current.canShow).toBe(false);
+  });
   it('invalidates and aborts a previous metadata read immediately when Retry starts', async () => {
     const old = deferred<ProjectModelSnapshot>(); mocks.metadata.mockReturnValueOnce(old.promise);
     const h = start(); await waitFor(() => expect(mocks.metadata).toHaveBeenCalledTimes(1));

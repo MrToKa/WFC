@@ -18,7 +18,7 @@ export function humanScalarPropertyValues(properties) {
     if (!property || typeof property !== 'object' || Array.isArray(property) || ![Object.prototype, null].includes(Object.getPrototypeOf(property))) continue;
     if (['hidden', 'isHidden', 'isInternal'].some(key => {
       const descriptor = Object.getOwnPropertyDescriptor(property, key);
-      return descriptor && (descriptor.get || descriptor.set || descriptor.value !== false && descriptor.value !== undefined);
+      return descriptor && (descriptor.get || descriptor.set || descriptor.value !== false && descriptor.value !== 0 && descriptor.value !== undefined);
     }) || ['displayCategory', 'category', 'attributeName', 'displayName', 'name'].some(key => {
       const descriptor = Object.getOwnPropertyDescriptor(property, key);
       return descriptor && (descriptor.get || descriptor.set) || internal(own(property, key));
@@ -27,6 +27,39 @@ export function humanScalarPropertyValues(properties) {
     if (typeof value === 'string' || typeof value === 'boolean' || typeof value === 'number' && Number.isFinite(value)) values.push(String(value));
   }
   return values;
+}
+
+/** Item GUID and source identify parts of the same source object, never a Tag
+ * alone. Keep raw model IDs separate; the host retains every candidate and its
+ * visibility/bounds before deciding whether a complete group is assignable.
+ */
+export function equipmentObjectIdentity(properties) {
+  if (!Array.isArray(properties)) return null;
+  const guids = new Set(), sources = new Set(); let invalid = false;
+  const key = value => typeof value === 'string' ? value.normalize('NFKC').replace(/[\s_.-]/g, '').toLowerCase() : '';
+  for (const property of properties) {
+    if (!property || typeof property !== 'object' || Array.isArray(property) || ![Object.prototype, null].includes(Object.getPrototypeOf(property))) continue;
+    if (['displayCategory', 'category'].some(name => internal(own(property, name)))) continue;
+    const labels = ['displayName', 'attributeName', 'name'].map(name => key(own(property, name)));
+    // SDK categories are exporter/localization text, not a stable Item label.
+    const itemGuid = labels.some(name => ['guid', 'globalid', 'ifcguid'].includes(name));
+    const sourceFile = labels.some(name => ['sourcefile', 'sourcefilename', 'quelldatei'].includes(name));
+    if (!itemGuid && !sourceFile) continue;
+    const descriptor = Object.getOwnPropertyDescriptor(property, 'displayValue') ?? Object.getOwnPropertyDescriptor(property, 'value');
+    const value = descriptor && !descriptor.get && !descriptor.set ? descriptor.value : undefined;
+    if (typeof value !== 'string') { invalid = true; continue; }
+    if (itemGuid) {
+      const normalized = value.normalize('NFC').trim().replace(/^\{(.*)\}$/, '$1').toLowerCase();
+      if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(normalized)) invalid = true;
+      else guids.add(normalized);
+    }
+    if (sourceFile) {
+      const normalized = value.normalize('NFC').trim().replaceAll('\\', '/').toLowerCase();
+      if (!normalized || normalized.length > 1024 || /[\u0000-\u001f\u007f-\u009f]/u.test(normalized)) invalid = true;
+      else sources.add(normalized);
+    }
+  }
+  return !invalid && guids.size === 1 && sources.size === 1 ? { guid: [...guids][0], sourceFile: [...sources][0] } : null;
 }
 
 /** Preserve the exact normalized model key and one explicit SVF decoration.

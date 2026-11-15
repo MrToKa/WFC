@@ -1,3 +1,5 @@
+import {evaluateCrossModelEndpointMatch} from './crossModelEndpointMatch.js';
+import type {ModelLocationMatchAssign} from '../../shared/pathfinderModelLocationMatch.js';
 import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
@@ -8,7 +10,8 @@ import { preparationAggregateSchema } from '../../shared/pathfinderPreparation.j
 import { geometryObjectRevisionSchema, geometryTraceManifestSchema, type GeometryObjectRevision } from '../../shared/pathfinderGeometryTrace.js';
 import { normalizeLocation } from './matching.js';
 import { assertLoginNotExpired, requireCurrentLogin } from './auth.js';
-import type { JobPrincipal } from './jobContracts.js';
+import { engineResponseSchema, type JobPrincipal, type BarrierDependencySnapshot } from './jobContracts.js';
+import { requireBarrierWriteEvidence } from './barrierWrites.js';
 import { PathFinderError } from './errors.js';
 import { deriveEquipmentBottomAnchor, evaluateEndpointMigration } from '../../shared/pathfinderEndpointAttachment.js';
 import { createConfirmedRevisionBindingValidator, readConfirmedRevisionBindingValidity } from './revisionComparisonEvidenceReader.js';
@@ -76,6 +79,11 @@ export async function readEndpointBindingScope(c: PoolClient, input: { projectId
   if (!location || location.revision !== value.locationRevision) return { status: 'stale', code: 'ENDPOINT_LOCATION_CHANGED' };
   if (value.status !== 'confirmed') return { status: value.status === 'unsupported-attachment' ? 'unsupported' : 'stale', code: 'ENDPOINT_BINDING_UNCONFIRMED' };
   if (value.modelVersionId !== input.modelVersionId || value.aggregateId !== input.aggregateId || value.projectionSha256 !== input.projectionSha256 || value.captureFrameId !== input.captureFrameId) return { status: 'stale', code: 'ENDPOINT_BINDING_STALE' };
+  if (value.sameModelReuse) {
+    const current = await readCurrentEndpointBindingContext(c, input.projectId);
+    if (!current || value.sameModelReuse.targetTraceId !== current.traceId || value.sameModelReuse.contentFingerprint !== current.contentFingerprint
+      || current.aggregateId !== input.aggregateId || current.modelVersionId !== input.modelVersionId) return { status: 'stale', code: 'ENDPOINT_BINDING_STALE' };
+  }
   if (value.mode === 'object-attached') return { status: 'unsupported', code: 'ENDPOINT_ATTACHMENT_EVIDENCE_UNAVAILABLE' };
   if (value.sourceDecisionId !== null) { const proof = await readConfirmedRevisionBindingValidity(c, value); if (!proof.valid) return { status: 'stale', code: proof.code }; }
   return { status: 'confirmed', binding: value };
@@ -143,7 +151,8 @@ function readiness(binding: EndpointBinding | null, current: EndpointBindingCont
   if (!binding) return { status: 'missing', calculationReady: false, reasonCodes: ['ENDPOINT_BINDING_REQUIRED'] };
   if (binding.locationRevision !== locationRevision) return { status: 'stale', calculationReady: false, reasonCodes: ['ENDPOINT_LOCATION_CHANGED'] };
   if (binding.modelVersionId !== current.modelVersionId || binding.aggregateId !== current.aggregateId || binding.artifactId !== current.artifactId || binding.projectionSha256 !== current.projectionSha256 || binding.captureFrameId !== current.captureFrameId) return { status: 'stale', calculationReady: false, reasonCodes: ['ENDPOINT_BINDING_STALE'] };
-  if (binding.derivation === 'matched-model-bottom-aabb.v1' && canonicalPurposeJson(binding.autoMatchEvidence?.current) !== canonicalPurposeJson(current)) return { status: 'stale', calculationReady: false, reasonCodes: ['MODEL_LOCATION_MATCH_RECHECK_REQUIRED'] };
+  if (binding.sameModelReuse && (binding.sameModelReuse.targetTraceId !== current.traceId || binding.sameModelReuse.contentFingerprint !== current.contentFingerprint)) return { status: 'stale', calculationReady: false, reasonCodes: ['ENDPOINT_BINDING_STALE'] };
+  if (['matched-model-bottom-aabb.v1', 'matched-model-centre-fallback.v1'].includes(binding.derivation) && !binding.sameModelReuse && canonicalPurposeJson(binding.centreFallbackEvidence?.current ?? binding.autoMatchEvidence?.current) !== canonicalPurposeJson(current)) return { status: 'stale', calculationReady: false, reasonCodes: ['MODEL_LOCATION_MATCH_RECHECK_REQUIRED'] };
   if (binding.mode === 'object-attached') return { status: 'unsupported-attachment', calculationReady: false, reasonCodes: ['ENDPOINT_ATTACHMENT_EVIDENCE_UNAVAILABLE'] };
   return binding.status === 'confirmed' ? { status: 'confirmed', calculationReady: true, reasonCodes: [] } : { status: binding.status, calculationReady: false, reasonCodes: ['ENDPOINT_BINDING_UNCONFIRMED'] };
 }
@@ -168,7 +177,7 @@ async function oldCommand(c: PoolClient, projectId: string, who: JobPrincipal, k
 }
 async function saveCommand(c: PoolClient, projectId: string, who: JobPrincipal, key: string, kind: string, command: unknown, receipt: unknown) { await c.query('INSERT INTO pf_endpoint_binding_commands(project_id,actor_id,idempotency_key,kind,request_sha256,request,receipt) VALUES($1,$2,$3,$4,$5,$6,$7)', [projectId, who.userId, key, kind, endpointBindingHash(command), command, budget(receipt)]); }
 
-type BindingProposal = Pick<EndpointBinding, 'mode' | 'pointProjectMetres' | 'derivation' | 'sourceObject' | 'attachment' | 'qualifiedProjectFrameId' | 'sourceDecisionId'> & Pick<EndpointBinding, 'autoMatchEvidence'>;
+type BindingProposal = Pick<EndpointBinding, 'mode' | 'pointProjectMetres' | 'derivation' | 'sourceObject' | 'attachment' | 'qualifiedProjectFrameId' | 'sourceDecisionId'> & Pick<EndpointBinding, 'autoMatchEvidence' | 'centreFallbackEvidence'>;
 async function checkLocation(c: PoolClient, pid: string, id: string, expectedLocationRevision: string | null, expectedHeadId: string | null) {
   const value = await location(c, pid, id), previous = value ? await head(c, pid, id) : null;
   if (expectedLocationRevision === null ? value !== null : !value || value.revision !== expectedLocationRevision) return fail('ENDPOINT_LOCATION_CONFLICT');
@@ -223,7 +232,7 @@ export async function confirmEndpointBindingChangeInTransaction(c: PoolClient, p
 export async function confirmMatchedEndpointInTransaction(c: PoolClient, pid: string, who: JobPrincipal, input: {
   locationId: string; location: { name: string; aliases: string[] }; current: EndpointCurrentScope;
   expectedRegistryRevision: string; expectedLocationRevision: string | null; expectedHeadId: string | null; reason: string;
-  evidence: NonNullable<EndpointBinding['autoMatchEvidence']>;
+  evidence: NonNullable<EndpointBinding['autoMatchEvidence']>; crossModelCandidates?:ModelLocationMatchAssign['scan']['candidates'];
 }, signal?: AbortSignal) {
   policyUuidSchema.parse(pid); policyUuidSchema.parse(input.locationId); assertLoginNotExpired(who); signal?.throwIfAborted();
   // Parse through the binding evidence schema independently of any outer route.
@@ -236,14 +245,114 @@ export async function confirmMatchedEndpointInTransaction(c: PoolClient, pid: st
     || canonicalPurposeJson(evidence.current) !== canonicalPurposeJson(current)
     || ![input.location.name, ...input.location.aliases].map(normalizeLocation).includes(evidence.logicalKey))
     return fail('MODEL_LOCATION_MATCH_CONTEXT_CHANGED');
-  if (before.previous && (before.previous.derivation !== ENDPOINT_MODEL_MATCH_DERIVATION
+  let crossModelAccepted=false;
+  if(input.crossModelCandidates){
+    const decision=evaluateCrossModelEndpointMatch({previous:before.previous,locationRevision:before.value?.revision??'',currentModelVersionId:current.modelVersionId,logicalName:evidence.logicalKey,candidates:input.crossModelCandidates});
+    if(!decision.accepted)return fail(decision.reasonCode);
+    if(canonicalPurposeJson(decision.candidate.bottomCentre)!==canonicalPurposeJson(evidence.bottomCentre)||decision.candidate.objectId!==evidence.sdkObjectId||canonicalPurposeJson(decision.candidate.objectGroup??null)!==canonicalPurposeJson(evidence.objectGroup??null))return fail('MODEL_LOCATION_CROSS_MODEL_CANDIDATE_CHANGED');
+    crossModelAccepted=true;
+  }
+  if (before.previous && !crossModelAccepted && (before.previous.derivation !== ENDPOINT_MODEL_MATCH_DERIVATION
     || before.previous.status === 'confirmed' && before.previous.locationRevision === before.value?.revision
       && canonicalPurposeJson(before.previous.autoMatchEvidence?.current) === canonicalPurposeJson(current))
-    || await legacy(c, pid, input.locationId, current.modelVersionId)) return fail('MODEL_LOCATION_MATCH_EXISTING_BINDING');
+    || !crossModelAccepted && await legacy(c, pid, input.locationId, current.modelVersionId)) return fail('MODEL_LOCATION_MATCH_EXISTING_BINDING');
   return commitBinding(c, pid, who, input.locationId, input.location, current, before, revision, input.reason, {
     mode: 'fixed-world', derivation: ENDPOINT_MODEL_MATCH_DERIVATION, pointProjectMetres: evidence.bottomCentre,
     sourceObject: null, attachment: null, qualifiedProjectFrameId: null, sourceDecisionId: null, autoMatchEvidence: evidence,
   }, signal);
+}
+
+/** Internal machine write, after a complete successful native probe. The caller
+ * owns the human job, exact current dependency/proof/capacity fences and project
+ * transaction. This neither impersonates a new human decision nor admits the
+ * probe as a cable result: changing the head requires fresh normal admission. */
+export async function appendEquipmentCentreFallbackInTransaction(c: PoolClient, pid: string, who: JobPrincipal, input: {
+  source: EndpointBinding; current: EndpointCurrentScope;
+  evidence: NonNullable<EndpointBinding['centreFallbackEvidence']>; proofRecord: Record<string, unknown>;
+}, signal?: AbortSignal) {
+  assertLoginNotExpired(who); signal?.throwIfAborted();
+  const source = record(input.source), evidence = (await import('../../shared/pathfinderEndpointBindings.js')).endpointCentreFallbackEvidenceSchema.parse(input.evidence);
+  if (source.projectId !== pid || source.status !== 'confirmed' || source.derivation !== 'matched-model-bottom-aabb.v1'
+    || !source.autoMatchEvidence || source.centreFallbackEvidence || evidence.sourceBindingId !== source.id
+    || evidence.sourceBindingSha256 !== source.contentSha256 || evidence.actorId !== who.userId
+    || canonicalPurposeJson(evidence.current)!==canonicalPurposeJson(input.current)) return fail('ENDPOINT_CENTRE_SOURCE_INVALID');
+  const failed = engineResponseSchema.parse(input.proofRecord.failedResult), trial = engineResponseSchema.parse(input.proofRecord.trialResult);
+  const requestBody = input.proofRecord.trialRequest as Record<string, unknown> | undefined;
+  if (failed.requestId !== evidence.failedRequestId || endpointBindingHash(failed) !== evidence.failedResultSha256
+    || trial.requestId !== evidence.trialRequestId || requestBody?.requestId !== trial.requestId
+    || endpointBindingHash(requestBody) !== evidence.trialRequestSha256 || endpointBindingHash(trial) !== evidence.trialResultSha256
+    || trial.status !== 'calculated' || !trial.route?.success || !('barriers' in trial) || !trial.barriers?.proof
+    || trial.barriers.context.binding.policy.drillThroughWalls || trial.barriers.diagnostics.status !== 'clear'
+    || endpointBindingHash(trial.barriers.proof) !== evidence.barrierProofSha256) return fail('ENDPOINT_CENTRE_PROOF_INVALID');
+  const request = { schemaVersion: 'wfc.pf.endpoint-centre-fallback-owner.v1', sourceBindingId: source.id,
+    sourceBindingSha256: source.contentSha256, current: input.current, evidence, proof: input.proofRecord };
+  if (Buffer.byteLength(canonicalPurposeJson(request)) > 1024 * 1024) return fail('ENDPOINT_CENTRE_PROOF_LIMIT', 413);
+  const old = (await c.query<{request_sha256:string;request:unknown;receipt:unknown}>(`/* centre-fallback:command */ SELECT request_sha256,request,receipt
+    FROM pf_endpoint_binding_commands WHERE project_id=$1 AND actor_id=$2 AND idempotency_key=$3 AND kind='confirm' FOR SHARE`,
+  [pid, who.userId, evidence.commandId])).rows[0];
+  if (old) {
+    if (old.request_sha256 !== endpointBindingHash(request) || canonicalPurposeJson(old.request) !== canonicalPurposeJson(request)) return fail('ENDPOINT_CENTRE_COMMAND_CONFLICT');
+    return endpointBindingReceiptSchema.parse(old.receipt);
+  }
+  const sealed = (await c.query<{dependencies:BarrierDependencySnapshot;result:Record<string,unknown>;status:string}>(`/* centre-fallback:source-proposal */ SELECT dependencies,result,status FROM pf_proposals
+    WHERE project_id=$1 AND job_id=$2 AND cable_id=$3 AND octet_length(dependencies::text)<=1048576 AND octet_length(result::text)<=1048576 FOR SHARE`,
+  [pid, evidence.sourceJobId, evidence.sourceCableId])).rows[0];
+  const deps = sealed?.dependencies;
+  if (!deps || deps.schemaVersion !== 'pathfinder.dependencies.v8' || endpointBindingHash(deps) !== evidence.sourceDependencySha256
+    || deps.projectId !== pid || deps.cableId !== evidence.sourceCableId || sealed.status !== 'no_path') return fail('ENDPOINT_CENTRE_PROPOSAL_INVALID');
+  const {calculationMode,...sourceResult} = sealed.result;
+  if (calculationMode !== 'calculate' || endpointBindingHash(sourceResult) !== evidence.failedResultSha256
+    || !('barriers' in failed) || failed.status !== 'no_path' || !failed.barriers || failed.barriers.context.binding.policy.drillThroughWalls
+    || failed.barriers.diagnostics.status !== 'blocked' || !failed.barriers.diagnostics.searchComplete)
+    return fail('ENDPOINT_CENTRE_PROPOSAL_INVALID');
+  const reason = failed.barriers.diagnostics.reasonCode;
+  const blockedSides = reason === 'BOTH_ENDPOINTS_IN_BARRIER' ? ['from','to'] as const
+    : reason === 'FROM_ENDPOINT_IN_BARRIER' ? ['from'] as const : reason === 'TO_ENDPOINT_IN_BARRIER' ? ['to'] as const : [];
+  if (!blockedSides.includes(evidence.side as never)) return fail('ENDPOINT_CENTRE_SIDE_INVALID');
+  const admitted = deps[evidence.side];
+  if (!('bindingId' in admitted) || admitted.bindingId !== source.id || admitted.bindingContentSha256 !== source.contentSha256
+    || canonicalPurposeJson(admitted.point) !== canonicalPurposeJson(source.pointProjectMetres)) return fail('ENDPOINT_CENTRE_SOURCE_INVALID');
+  const trialDependencies = structuredClone(deps);
+  if(requestBody?.reverse===true||requestBody?.projectId!==pid||requestBody?.modelVersionId!==deps.model.id
+    ||requestBody?.snapshotId!==deps.artifact.id||requestBody?.snapshotSha256!==deps.artifact.sha256)return fail('ENDPOINT_CENTRE_REQUEST_INVALID');
+  for (const side of ['from','to'] as const) {
+    const actual = requestBody?.[side] as {x?:unknown;y?:unknown;z?:unknown}|undefined;
+    if (!actual) return fail('ENDPOINT_CENTRE_REQUEST_INVALID');
+    const expected = deps[side];
+    let point = expected.point;
+    if (blockedSides.includes(side as never)) {
+      if (!('bindingId' in expected)) return fail('ENDPOINT_CENTRE_SOURCE_INVALID');
+      const row = (await c.query<{record:unknown;record_sha256:string}>(`/* centre-fallback:original-head */ SELECT record,record_sha256 FROM pf_endpoint_binding_revisions
+        WHERE project_id=$1 AND location_id=$2 AND id=$3 AND octet_length(record::text)<=65536 FOR SHARE`,[pid,expected.locationId,expected.bindingId])).rows[0];
+      const original = row ? record(row.record) : null;
+      if (!original || original.id !== expected.bindingId || original.contentSha256 !== row?.record_sha256
+        || original.contentSha256 !== expected.bindingContentSha256 || original.derivation !== 'matched-model-bottom-aabb.v1'
+        || !original.autoMatchEvidence || original.centreFallbackEvidence) return fail('ENDPOINT_CENTRE_SOURCE_INVALID');
+      const bounds = original.autoMatchEvidence.bounds;
+      point = bounds.minimum.map((n,i)=>(n+bounds.maximum[i])/2) as [number,number,number];
+    }
+    if (canonicalPurposeJson([actual.x,actual.y,actual.z]) !== canonicalPurposeJson(point)) return fail('ENDPOINT_CENTRE_REQUEST_POINT_INVALID');
+    trialDependencies[side] = {...trialDependencies[side],point};
+  }
+  const writeProof = requireBarrierWriteEvidence(trialDependencies,{...trial,calculationMode:'calculate'});
+  if (writeProof.status !== 'clear' || writeProof.drillThroughWalls) return fail('ENDPOINT_CENTRE_PROOF_INVALID');
+  const current = await readCurrentEndpointBindingContext(c, pid);
+  if (!current || canonicalPurposeJson(current) !== canonicalPurposeJson(input.current)) return fail('ENDPOINT_CENTRE_CONTEXT_CHANGED');
+  const revision = await registry(c, pid), before = await checkLocation(c, pid, source.locationId, source.locationRevision, source.id);
+  if (!before.previous || before.previous.contentSha256 !== source.contentSha256 || !before.value) return fail('ENDPOINT_CENTRE_HEAD_CHANGED');
+  const bounds = source.autoMatchEvidence.bounds;
+  const point = bounds.minimum.map((n, i) => (n + bounds.maximum[i]) / 2) as [number, number, number];
+  // No scoped impact command is created here. Keep the ordinary global dirty
+  // trigger active so every cable sharing this location receives fresh admission.
+  await c.query("SET LOCAL wfc.pathfinder_location_impact='0'");
+  const receipt = await commitBinding(c, pid, who, source.locationId, before.value, current, before, revision,
+    'Automatic approximate equipment-centre fallback after blocked bottom anchor and complete active-barrier route verification; no physical connector acceptance.',
+    { mode: 'fixed-world', pointProjectMetres: point, derivation: 'matched-model-centre-fallback.v1', sourceObject: null,
+      attachment: null, qualifiedProjectFrameId: null, sourceDecisionId: null, autoMatchEvidence: source.autoMatchEvidence,
+      centreFallbackEvidence: evidence }, signal);
+  await c.query(`INSERT INTO pf_endpoint_binding_commands(project_id,actor_id,idempotency_key,kind,request_sha256,request,receipt)
+    VALUES($1,$2,$3,'confirm',$4,$5,$6)`, [pid, who.userId, evidence.commandId, endpointBindingHash(request), request, receipt]);
+  return receipt;
 }
 
 export interface EndpointBindingAdapters {
@@ -325,6 +434,8 @@ export function createEndpointBindingRepository(pool: Pool, adapters: EndpointBi
       await saveCommand(c, pid, who, input.idempotencyKey, 'migration-confirm', command, receipt); return receipt;
     }, signal);
   }
-  return { authorize, context, list, history, confirm, migrate, confirmMigration };
+  const requalify = async (pid: string, who: JobPrincipal, raw: unknown, signal?: AbortSignal) =>
+    (await import('./endpointBindingRequalification.js')).requalifyCableEndpointBindings(pool, pid, who, raw, signal);
+  return { authorize, context, list, history, confirm, migrate, confirmMigration, requalify };
 }
 export type EndpointBindingRepository = ReturnType<typeof createEndpointBindingRepository>;

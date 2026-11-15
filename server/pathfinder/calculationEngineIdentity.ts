@@ -122,7 +122,7 @@ export function calculationProjectionFiles(): ProjectionFile[] {
   const extension = import.meta.url.endsWith('.ts') ? '.ts' : '.js';
   const names = ['calculationEngineIdentity', 'dependencies', 'dependencyBatch', 'settings', 'jobContracts',
     'endpointCalculationProvenance', 'comparisonCalculationProvenance', 'routingScope', 'worker', 'previews', 'engineSession', 'lengthLedger',
-    'automaticEndpointCandidates', 'matching', 'policyJson', 'directSecondaryStrategy', 'contracts', 'preparationUnionTask', 'purposePolicy', 'catalog'];
+    'automaticEndpointCandidates', 'matching', 'policyJson', 'directSecondaryStrategy', 'contracts', 'preparationUnionTask', 'ownedPreparationSnapshot', 'purposePolicy', 'catalog'];
   return [
     ...names.map(name => ({ name: './' + name + '.js', filename: fileURLToPath(new URL('./' + name + extension, import.meta.url)) })),
     { name: '../../shared/pathfinderEngineIdentity.js', filename: fileURLToPath(new URL('../../shared/pathfinderEngineIdentity' + extension, import.meta.url)) },
@@ -150,6 +150,7 @@ export function barrierCalculationProjectionFiles(): ProjectionFile[] {
       name: '../../shared/' + name + '.js', filename: fileURLToPath(new URL('../../shared/' + name + extension, import.meta.url)) })),
     { name: './sameEndpointCalculationReuse.js', filename: fileURLToPath(new URL('./sameEndpointCalculationReuse' + extension, import.meta.url)) },
     ...['verifiedSameEndpointReuse','runtime','automaticPairWriter'].map(name=>({name:'./'+name+'.js',filename:fileURLToPath(new URL('./'+name+extension,import.meta.url))})),
+    ...['manualRoutingContracts','manualRoutingValidation','manualRoutingWorker','manualRoutingDesignWriter','manualRoutingSchema','currentAutomaticRouting','cableRoutingControlRepository','cableRoutingControlSchema','preparationEngineLane'].map(name=>({name:'./'+name+'.js',filename:fileURLToPath(new URL('./'+name+extension,import.meta.url))})),
   ];
 }
 const barrierConfigured = createCalculationEngineIdentityReader({ barriers: true,

@@ -16,7 +16,7 @@ export function PathFinderCableComparison({ input, className }: PathFinderCableC
   const before = value.current.cable, after = value.proposal, initial = comparison.initialFill;
   return <section className={className} aria-label="Current and proposed cable values" style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
     <h4>Current and proposed cable values</h4>
-    <Caption1>This is a read-only comparison. Existing or partially populated values require explicit Review and Apply. Installed length is preserved.</Caption1>
+    <Caption1>This comparison does not change cable values. Manual and execution protection also apply to reviewed results. Installed length is preserved.</Caption1>
     {comparison.state === 'stale' ? <p role="alert">The current cable revision differs from this proposal. Refresh or recalculate before reviewing or applying it.</p> : null}
     <section aria-label="Current cable values"><h5>Current cable values</h5>
       <Caption1>Live cable read; revision {before.cableWriteRevision}.</Caption1>
@@ -32,7 +32,7 @@ export function PathFinderCableComparison({ input, className }: PathFinderCableC
     <p>Design length delta: {comparison.length.deltaMeters === null ? 'Unavailable — both values must be recorded valid decimals.'
       : `${comparison.length.deltaMeters !== '0' && !comparison.length.deltaMeters.startsWith('-') ? '+' : ''}${comparison.length.deltaMeters} m`}</p>
     {initial?.mode === 'initial-fill-candidate' ? <p>Both current fields are empty. This is only a candidate for initial fill; a separate current administrator mandate and server checks are required.</p>
-      : initial?.mode === 'manual-review' ? <p>Existing or partial cable values are retained until explicit human Review and Apply.</p>
+      : initial?.mode === 'manual-review' ? <p>Existing values remain while this proposal is reviewed. Protected routes cannot be replaced; manage protection in Cable details.</p>
         : <p>This cable is not eligible for automatic initial fill.</p>}
     <section aria-label="Ordered route changes"><h5>Ordered route changes</h5>
       {route.state === 'not-compared' ? <p role="status">The ordered difference exceeds the comparison work limit. Exact old and new route text remains above without truncation.</p>

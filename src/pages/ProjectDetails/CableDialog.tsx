@@ -4,6 +4,7 @@ import {
   Body1,
   Button,
   Combobox,
+  Checkbox,
   Dialog,
   DialogActions,
   DialogBody,
@@ -13,7 +14,7 @@ import {
   Dropdown,
   Field,
   Input,
-  Option
+  Option,
 } from '@fluentui/react-components';
 
 import { CABLE_MTO_OPTIONS, type CableType } from '@/api/client';
@@ -30,7 +31,12 @@ export type CableDialogField =
   | 'toLocation'
   | 'routing'
   | 'delivery'
-  | 'designLength';
+  | 'designLength'
+  | 'installLength'
+  | 'pullDate'
+  | 'connectedFrom'
+  | 'connectedTo'
+  | 'tested';
 
 type CableDialogProps = {
   styles: Pick<ProjectDetailsStyles, 'dialogForm' | 'dialogActions' | 'errorText'>;
@@ -42,16 +48,10 @@ type CableDialogProps = {
   cableTypes: Pick<CableType, 'id' | 'name'>[];
   visibleFields: CableDialogField[];
   onFieldChange: (
-    field: keyof CableFormState
+    field: keyof CableFormState,
   ) => (event: ChangeEvent<HTMLInputElement>, data: { value: string }) => void;
-  onCableTypeSelect: (
-    event: unknown,
-    data: { optionValue?: string }
-  ) => void;
-  onMtoSelect: (
-    event: unknown,
-    data: { optionValue?: string }
-  ) => void;
+  onCableTypeSelect: (event: unknown, data: { optionValue?: string }) => void;
+  onMtoSelect: (event: unknown, data: { optionValue?: string }) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onDismiss: () => void;
 };
@@ -69,11 +69,9 @@ export const CableDialog = ({
   onCableTypeSelect,
   onMtoSelect,
   onSubmit,
-  onDismiss
+  onDismiss,
 }: CableDialogProps) => {
-  const selectedCableType = cableTypes.find(
-    (type) => type.id === values.cableTypeId
-  );
+  const selectedCableType = cableTypes.find((type) => type.id === values.cableTypeId);
 
   const isFieldVisible = (field: CableDialogField) => visibleFields.includes(field);
 
@@ -89,16 +87,11 @@ export const CableDialog = ({
       <DialogSurface>
         <form className={styles.dialogForm} onSubmit={onSubmit}>
           <DialogBody>
-            <DialogTitle>
-              {mode === 'create' ? 'Add cable' : 'Edit cable'}
-            </DialogTitle>
+            <DialogTitle>{mode === 'create' ? 'Add cable' : 'Edit cable'}</DialogTitle>
             <DialogContent>
               {isFieldVisible('revision') ? (
                 <Field label="Revision">
-                  <Input
-                    value={values.revision}
-                    onChange={onFieldChange('revision')}
-                  />
+                  <Input value={values.revision} onChange={onFieldChange('revision')} />
                 </Field>
               ) : null}
               {isFieldVisible('mto') ? (
@@ -129,11 +122,7 @@ export const CableDialog = ({
                   validationState={errors.tag ? 'error' : undefined}
                   validationMessage={errors.tag}
                 >
-                  <Input
-                    value={values.tag}
-                    onChange={onFieldChange('tag')}
-                    required
-                  />
+                  <Input value={values.tag} onChange={onFieldChange('tag')} required />
                 </Field>
               ) : null}
               {isFieldVisible('cableTypeId') ? (
@@ -145,9 +134,7 @@ export const CableDialog = ({
                 >
                   <Combobox
                     placeholder="Select or search cable type"
-                    selectedOptions={
-                      values.cableTypeId ? [values.cableTypeId] : []
-                    }
+                    selectedOptions={values.cableTypeId ? [values.cableTypeId] : []}
                     value={selectedCableType?.name ?? ''}
                     onOptionSelect={onCableTypeSelect}
                   >
@@ -161,42 +148,60 @@ export const CableDialog = ({
               ) : null}
               {isFieldVisible('fromLocation') ? (
                 <Field label="From location">
-                  <Input
-                    value={values.fromLocation}
-                    onChange={onFieldChange('fromLocation')}
-                  />
+                  <Input value={values.fromLocation} onChange={onFieldChange('fromLocation')} />
                 </Field>
               ) : null}
               {isFieldVisible('toLocation') ? (
                 <Field label="To location">
-                  <Input
-                    value={values.toLocation}
-                    onChange={onFieldChange('toLocation')}
-                  />
+                  <Input value={values.toLocation} onChange={onFieldChange('toLocation')} />
                 </Field>
               ) : null}
               {isFieldVisible('routing') ? (
-                <Field label="Routing">
-                  <Input
-                    value={values.routing}
-                    onChange={onFieldChange('routing')}
+                <>
+                  <Field label="Routing">
+                    <Input value={values.routing} onChange={onFieldChange('routing')} />
+                  </Field>
+                  <Checkbox
+                    label="Manually assigned route — keep"
+                    checked={values.manualRoutingProtected === 'true'}
+                    onChange={(event, data) =>
+                      onFieldChange('manualRoutingProtected')(event, {
+                        value: data.checked ? 'true' : 'false',
+                      })
+                    }
                   />
-                </Field>
+                  <Body1>
+                    Clearing the manual route uses the calculated route. Execution protection takes
+                    priority.
+                  </Body1>
+                  {values.executionLocked === 'true' ? (
+                    <>
+                      <Body1>
+                        This cable has execution protection. Clearing dates does not unlock its
+                        route automatically.
+                      </Body1>
+                      <Field
+                        label="Execution unlock reason"
+                        hint="Clear the execution fields and save first. Enter a reason on a separate save to unlock the route."
+                      >
+                        <Input
+                          value={values.executionUnlockReason ?? ''}
+                          onChange={onFieldChange('executionUnlockReason')}
+                        />
+                      </Field>
+                    </>
+                  ) : null}
+                </>
               ) : null}
               {isFieldVisible('delivery') ? (
                 <Field label="Delivery">
-                  <Input
-                    value={values.delivery}
-                    onChange={onFieldChange('delivery')}
-                  />
+                  <Input value={values.delivery} onChange={onFieldChange('delivery')} />
                 </Field>
               ) : null}
               {isFieldVisible('designLength') ? (
                 <Field
                   label="Design length [m]"
-                  validationState={
-                    errors.designLength ? 'error' : undefined
-                  }
+                  validationState={errors.designLength ? 'error' : undefined}
                   validationMessage={errors.designLength}
                 >
                   <Input
@@ -207,9 +212,44 @@ export const CableDialog = ({
                   />
                 </Field>
               ) : null}
-              {errors.general ? (
-                <Body1 className={styles.errorText}>{errors.general}</Body1>
+              {isFieldVisible('installLength') ? (
+                <Field
+                  label="Install length [m]"
+                  validationState={errors.installLength ? 'error' : undefined}
+                  validationMessage={errors.installLength}
+                >
+                  <Input
+                    type="number"
+                    min={0}
+                    value={values.installLength ?? ''}
+                    onChange={onFieldChange('installLength')}
+                  />
+                </Field>
               ) : null}
+              {(['pullDate', 'connectedFrom', 'connectedTo', 'tested'] as const).map((field) =>
+                isFieldVisible(field) ? (
+                  <Field
+                    key={field}
+                    label={
+                      {
+                        pullDate: 'Pull date',
+                        connectedFrom: 'Connected From',
+                        connectedTo: 'Connected To',
+                        tested: 'Cable tested',
+                      }[field]
+                    }
+                    validationState={errors[field] ? 'error' : undefined}
+                    validationMessage={errors[field]}
+                  >
+                    <Input
+                      type="date"
+                      value={values[field] ?? ''}
+                      onChange={onFieldChange(field)}
+                    />
+                  </Field>
+                ) : null,
+              )}
+              {errors.general ? <Body1 className={styles.errorText}>{errors.general}</Body1> : null}
             </DialogContent>
             <DialogActions className={styles.dialogActions}>
               <Button
@@ -220,16 +260,8 @@ export const CableDialog = ({
               >
                 Cancel
               </Button>
-              <Button
-                type="submit"
-                appearance="primary"
-                disabled={submitting}
-              >
-                {submitting
-                  ? 'Saving...'
-                  : mode === 'create'
-                    ? 'Add cable'
-                    : 'Save changes'}
+              <Button type="submit" appearance="primary" disabled={submitting}>
+                {submitting ? 'Saving...' : mode === 'create' ? 'Add cable' : 'Save changes'}
               </Button>
             </DialogActions>
           </DialogBody>

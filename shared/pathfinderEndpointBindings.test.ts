@@ -14,7 +14,7 @@ describe('strict endpoint wire contracts and legacy separation', () => {
     expect(endpointBindingWriteSchema.safeParse({ ...write(), location: { name: 'A-001', aliases: ['a-001'] } }).success).toBe(false);
     expect(endpointBindingWriteSchema.safeParse({ ...write(), location: { name: 'A-001', aliases: ['Room 1', 'room 1'] } }).success).toBe(false);
   });
-  it.each(['actorId', 'isAdmin', 'qualifiedProjectFrameId', 'objectLocalToProjectMetres', 'locationId', 'path'] as const)('rejects caller-supplied %s authority/paths/qualification', key => { expect(endpointBindingWriteSchema.safeParse({ ...write(), [key]: endpointTestId(99) }).success).toBe(false); });
+  it.each(['actorId', 'isAdmin', 'qualifiedProjectFrameId', 'objectLocalToProjectMetres', 'locationId', 'path', 'sameModelReuse'] as const)('rejects caller-supplied %s authority/paths/qualification', key => { expect(endpointBindingWriteSchema.safeParse({ ...write(), [key]: endpointTestId(99) }).success).toBe(false); });
   it('refuses expected old head on a new UUID location', () => { expect(endpointBindingWriteSchema.safeParse({ ...write(), expectedHeadId: endpointTestId(99) }).success).toBe(false); });
   it.each(['uuid', 'revision', 'hash'] as const)('rejects newline suffixed %s', kind => { const v = write(); if (kind === 'uuid') v.modelVersionId += '\n'; if (kind === 'revision') v.expectedRegistryRevision += '\n'; if (kind === 'hash') v.projectionSha256 += '\n'; expect(endpointBindingWriteSchema.safeParse(v).success).toBe(false); });
   it.each([Infinity, -Infinity, NaN, 1e9 + 1])('rejects nonfinite or out-of-bounds points %s', value => { expect(endpointPointSchema.safeParse([value, 0, 0]).success).toBe(false); });

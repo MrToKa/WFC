@@ -78,6 +78,14 @@ function openingProfileInputs(){
 
 beforeEach(()=>vi.resetAllMocks());
 describe('pure exact protected write evidence',()=>{
+  it.each([null,'Custom MTO',''])('recognizes immutable barrier and length proof independently of MTO %j',mto=>{
+    const f=syntheticBarrierWriteInputs();f.dependencies.cableInputs.mto=mto;
+    f.dependencies.cablePurposeRouting={purpose:'Control',allowedRouteCodes:['/A']};
+    const original=structuredClone(f.dependencies);
+    expect(requireBarrierWriteEvidence(f.dependencies,f.result)).toMatchObject({dependencySha256:hash(f.dependencies),status:'no-barriers-declared'});
+    expect(f.dependencies).toEqual(original);
+    delete f.dependencies.cablePurposeRouting;expect(readBarrierWriteEvidence(f.dependencies,f.result)).toBeNull();
+  });
   it('recognizes the explicit new profile through complete unchanged final geometry and length proof gates',()=>{
     const f=openingProfileInputs(),before=structuredClone({dependencies:f.dependencies,result:f.result});
     expect(requireBarrierWriteEvidence(f.dependencies,f.result)).toMatchObject({schemaVersion:'wfc.pf.barrier-write-evidence.v2',

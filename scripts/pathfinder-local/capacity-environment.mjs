@@ -1,11 +1,12 @@
 export const LEGACY_CAPACITY_PROFILE='wfc.pf.current-bounded-capture-and-model.v1';
 export const LARGE_CAPACITY_PROFILE='wfc.pf.bounded-128m-capture-and-model.v2';
+export const EXTENDED_CAPACITY_PROFILE='wfc.pf.bounded-512m-capture-and-model.v3';
 const fail=()=>{throw Object.assign(Error('PF_CAPACITY_CONFIG_INVALID'),{code:'PF_CAPACITY_CONFIG_INVALID'});};
 const key='PF_PREPARATION_CAPACITY_PROFILE';
 const plain=value=>value!==null&&typeof value==='object'&&Object.getPrototypeOf(value)===Object.prototype;
 export function localCapacityProfile(value){
   if(value===undefined)return LEGACY_CAPACITY_PROFILE;
-  if(value!==LEGACY_CAPACITY_PROFILE&&value!==LARGE_CAPACITY_PROFILE)return fail();
+  if(value!==LEGACY_CAPACITY_PROFILE&&value!==LARGE_CAPACITY_PROFILE&&value!==EXTENDED_CAPACITY_PROFILE)return fail();
   return value;
 }
 export function assertCapacityEnvironment(environment,configured){
