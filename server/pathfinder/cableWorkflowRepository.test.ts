@@ -104,25 +104,25 @@ describe('stored route after a separate later unsuccessful attempt',()=>{
 });
 
 describe('read-only saved geometry qualification in workflow projection',()=>{
-  function savedRow(){
+  function savedRow(jobStatus: 'complete' | 'failed' = 'complete'){
     const f=fixture();f.state.hasReceipt=true;f.state.cables[0].routing='/SAVED' as never;f.state.cables[0].design_length='58' as never;
-    f.state.metadata.set(id(1000),meta(0,{job_status:'complete',item_state:'complete',proposal_status:'calculated',proposal_id:id(30),proposal_hash:'f'.repeat(64)}));
+    f.state.metadata.set(id(1000),meta(0,{job_status:jobStatus,item_state:'complete',proposal_status:'calculated',proposal_id:id(30),proposal_hash:'f'.repeat(64)}));
     mocks.reviewable.mockResolvedValue({currentness:'changed',reviewable:false,reasonCodes:['PROPOSAL_DEPENDENCIES_CHANGED']});mocks.savedExactDisplay.mockResolvedValue(true);
     return f;
   }
-  it('exposes only the qualified exact saved tuple and leaves write authority changed/false',async()=>{
-    const f=savedRow(),detail=await f.repo.detail(projectId,who,id(1000),{});
+  it.each(['complete', 'failed'] as const)('exposes only the qualified saved tuple after %s parent with changed write authority',async jobStatus=>{
+    const f=savedRow(jobStatus),detail=await f.repo.detail(projectId,who,id(1000),{});
     expect(detail.row.calculation).toMatchObject({savedExactDisplay:true,currentness:'changed',reviewable:false,acceptedMatchesCurrent:false,proposalId:id(30),proposalHash:'f'.repeat(64)});
     expect(mocks.savedExactDisplay).toHaveBeenCalledWith(expect.objectContaining({id:id(1000),routing:'/SAVED',designLength:'58'}),expect.any(Function),{jobId:id(11),proposalId:id(30),proposalHash:'f'.repeat(64)});
-    expect(classifyCableWorkflow(detail.row).status).toBe('needs-routing');
+    expect(classifyCableWorkflow(detail.row).status).toBe(jobStatus === 'failed' ? 'blocked' : 'needs-routing');
   });
-  it.each(['current','accepted','no-receipt','cancelled','failed','pending'] as const)('does not perform extra saved proof for %s evidence',async kind=>{
+  it.each(['current','accepted','no-receipt','cancelled','running','pending'] as const)('does not perform extra saved proof for %s evidence',async kind=>{
     const f=savedRow();
     if(kind==='current')mocks.reviewable.mockResolvedValue({currentness:'current',reviewable:true,reasonCodes:[]});
     if(kind==='accepted')mocks.accepted.mockResolvedValue(true);
     if(kind==='no-receipt')f.state.hasReceipt=false;
     if(kind==='cancelled')f.state.metadata.get(id(1000))!.cancel_requested=true;
-    if(kind==='failed')f.state.metadata.get(id(1000))!.job_status='failed';
+    if(kind==='running')f.state.metadata.get(id(1000))!.job_status='running';
     if(kind==='pending'){f.state.metadata.get(id(1000))!.job_status='running';f.state.metadata.get(id(1000))!.item_state='running';}
     const detail=await f.repo.detail(projectId,who,id(1000),{});
     expect(detail.row.calculation.savedExactDisplay).toBeUndefined();expect(mocks.savedExactDisplay).not.toHaveBeenCalled();

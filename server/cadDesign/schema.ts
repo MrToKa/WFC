@@ -1,7 +1,7 @@
 import type { Pool } from 'pg';
 
 /**
- * Additive POC tables. The original model registry, model resources and WFC project
+ * Additive CAD tables. The original model registry, model resources and WFC project
  * records remain untouched. Called after initializeModelRegistry(), when
  * model_versions and project_model_selections already exist.
  */

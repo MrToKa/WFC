@@ -121,7 +121,7 @@ materialComponentsRouter.post('/:componentId/cad-assets', requireAdmin, (req, re
   if (!originalFilename) { bad(res, 'INVALID_STEP_FILENAME'); return; }
   const bucket = getProjectBucket();
   const converted = await convertStepToMesh(req.file.buffer);
-  // Limit expensive geometry conversions to the existing isolated converter; no
+  // Limit expensive geometry conversions to the private application converter; no
   // caller-provided URL, storage key, mesh or product identity is accepted here.
   let committed = false;
   try {

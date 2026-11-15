@@ -99,7 +99,7 @@ export const cableWorkflowCalculationSchema = z.object({
   if (value.acceptedMatchesCurrent && (value.currentness !== 'current' || value.itemState !== 'complete'
     || value.outcome !== 'calculated' || value.proposalId === null))
     context.addIssue({ code: 'custom', message: 'An up-to-date display requires an exact completed calculated item and current accepted-result evidence.' });
-  if (value.savedExactDisplay && (value.jobStatus !== 'complete' || value.itemState !== 'complete' || value.outcome !== 'calculated'
+  if (value.savedExactDisplay && (!['complete', 'failed'].includes(value.jobStatus ?? '') || value.itemState !== 'complete' || value.outcome !== 'calculated'
     || value.currentness !== 'changed' || value.proposalId === null || value.reviewable || value.acceptedMatchesCurrent))
     context.addIssue({ code: 'custom', message: 'Saved exact display is separate from current calculation and write authority.' });
 });

@@ -196,7 +196,7 @@ export function createCableWorkflowProofReader(client: PoolClient, projectId: st
         check(); const verified = await proposal(cable.id, expected.proposalId); check();
         if (!verified || verified.dependencies.schemaVersion !== 'pathfinder.dependencies.v8'
           || verified.raw.job_id !== expected.jobId || verified.raw.proposal_hash !== expected.proposalHash
-          || verified.raw.job_state !== 'complete' || verified.raw.cancel_requested !== false
+          || !['complete', 'failed'].includes(verified.raw.job_state) || verified.raw.cancel_requested !== false
           || verified.raw.item_state !== 'complete' || verified.raw.item_status !== 'calculated'
           || !verified.result.route || verified.result.route.pathPoints.length < 2) return false;
         const frozen = verified.dependencies;

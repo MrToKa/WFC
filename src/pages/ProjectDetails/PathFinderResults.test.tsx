@@ -286,17 +286,19 @@ describe('selected current cable workflow result', () => {
     await waitFor(()=>expect(changed.mock.calls.at(-1)?.[0].message).toContain('Retrying the exact result'));
     expect(changed.mock.calls.at(-1)?.[0].ready).toBe(false);expect(f.pf.showPath).not.toHaveBeenCalled();
   });
-  it('qualifies only read-only saved exact display after an engine update while current review remains blocked', async () => {
+  it.each(['complete', 'failed'] as const)('qualifies saved exact display after an engine update with %s parent while write authority stays blocked', async jobStatus => {
     const f = workflowFixture(), changed = vi.fn<(value: PathFinderWorkflowDisplay) => void>(), review = vi.fn<(value: PathFinderWorkflowReview | null) => void>();
+    Object.assign(f.parent, { status: jobStatus }); f.live.row.calculation.jobStatus = jobStatus;
     f.proposal.stale = true; f.proposal.canApply = false;
     f.live.row.cable = { ...f.live.row.cable, routing: '/BC1', designLength: '7', cableWriteRevision: '10' };
     f.live.row.calculation = { ...f.live.row.calculation, currentness: 'changed', reviewable: false, acceptedMatchesCurrent: false, savedExactDisplay: true };
-    const view = render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} workflowSelection={f.live.row} accountId={id(2)} options={options}
+    const checkedPf = asPf({ ...f.pf, data: { ...f.pf.data, jobs: [f.parent] } });
+    const view = render(<PathFinderResults pf={checkedPf} selectedCableId={id(4)} workflowSelection={f.live.row} accountId={id(2)} options={options}
       onWorkflowDisplayChange={changed} onWorkflowReviewChange={review} />);
     await waitFor(() => expect(changed.mock.calls.at(-1)?.[0]).toMatchObject({ ready: true, source: 'saved-exact', routing: '/BC1', designLength: '7' }));
     expect(changed.mock.calls.at(-1)?.[0].verifiedRow?.calculation).toMatchObject({ currentness: 'changed', reviewable: false, acceptedMatchesCurrent: false });
     expect(review.mock.calls.at(-1)?.[0]).toMatchObject({ canReview: false, canApply: false });
-    view.rerender(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} workflowSelection={f.live.row} accountId={id(2)} options={options}
+    view.rerender(<PathFinderResults pf={checkedPf} selectedCableId={id(4)} workflowSelection={f.live.row} accountId={id(2)} options={options}
       onWorkflowDisplayChange={changed} onWorkflowReviewChange={review} workflowDisplayRequest={{ cableId: id(4), requestId: 1, action: 'show' }} />);
     await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledExactlyOnceWith({ pathId: id(3), points: f.proposal.route!.points, objectIds: [23] }));
     expect(f.pf.calculate).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled(); expect(f.pf.reviewProposal).not.toHaveBeenCalled();

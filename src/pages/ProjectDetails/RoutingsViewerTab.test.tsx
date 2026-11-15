@@ -1,14 +1,21 @@
 import { FluentProvider, webDarkTheme, webLightTheme } from '@fluentui/react-components';
+import type { ComponentProps } from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RouteCheckResult } from '@/viewer/routeValidation';
 import { RoutingsViewerTab } from './RoutingsViewerTab';
 import { useRoutingsViewer } from './hooks/useRoutingsViewer';
 import { useRoutingCables } from './hooks/useRoutingCables';
+import type { CadComponentsPanel } from './CadComponentsPanel';
 
 vi.mock('./hooks/useRoutingsViewer', () => ({ useRoutingsViewer: vi.fn() }));
 vi.mock('./hooks/useRoutingCables', () => ({ useRoutingCables: vi.fn() }));
 vi.mock('./hooks/useRoutingsViewerHeight', () => ({ useRoutingsViewerHeight: () => 560 }));
+const cadCapture = vi.hoisted(() => ({ render: vi.fn() }));
+vi.mock('./CadComponentsPanel', () => ({ CadComponentsPanel: (props: ComponentProps<typeof CadComponentsPanel>) => {
+  cadCapture.render(props);
+  return <section aria-label="Tray drawing controls"><input aria-label="Tray name draft" defaultValue="" /></section>;
+} }));
 const projectId = '11111111-1111-4111-8111-111111111111';
 const modelId = '22222222-2222-4222-8222-222222222222';
 type State = ReturnType<typeof useRoutingsViewer>;
@@ -38,8 +45,48 @@ beforeEach(() => {
   vi.mocked(useRoutingsViewer).mockImplementation(() => current);
   vi.mocked(useRoutingCables).mockImplementation(() => cables);
 });
-afterEach(() => { vi.restoreAllMocks(); });
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 describe('Routings builder controls', () => {
+  it('offers ordinary drawing alongside Manual and Cables, sharing one model and preserving drafts between modes', () => {
+    current.model = { id: modelId, label: 'Current project model' } as NonNullable<State['model']>;
+    const refreshed = vi.fn(), props = { projectId, loadedProjectId: projectId, token: 'token-a', canDrawTrays: true, onTraysChanged: refreshed };
+    render(<FluentProvider theme={webLightTheme}><RoutingsViewerTab {...props} /></FluentProvider>);
+    const host = screen.getByTestId('routings-model-host');
+    expect(screen.getByRole('tab', { name: 'Manual routing' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Cables' })).toBeVisible(); expect(cadCapture.render).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Manual routing' }), { target: { value: '/BC182' } });
+    fireEvent.click(screen.getByRole('tab', { name: 'Draw trays' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Tray name draft' }), { target: { value: 'BC183' } });
+    expect(cadCapture.render.mock.lastCall?.[0]).toMatchObject({ projectId, token: 'token-a', modelVersionId: modelId, ready: true,
+      onShow: current.showCadComponent, onPick: current.pickCadAnchor, onTraysChanged: refreshed });
+    fireEvent.click(screen.getByRole('tab', { name: 'Manual routing' }));
+    expect(screen.getByRole('textbox', { name: 'Manual routing' })).toHaveValue('/BC182');
+    fireEvent.click(screen.getByRole('tab', { name: 'Cables' })); expect(screen.getByRole('textbox', { name: 'Search cable tags' })).toBeVisible();
+    fireEvent.click(screen.getByRole('tab', { name: 'Draw trays' }));
+    expect(screen.getByRole('textbox', { name: 'Tray name draft' })).toHaveValue('BC183');
+    expect(screen.getByTestId('routings-model-host')).toBe(host);
+    expect(current.retry).not.toHaveBeenCalled(); expect(current.clear).not.toHaveBeenCalled(); expect(current.show).not.toHaveBeenCalled();
+    expect(current.removeCadComponent).not.toHaveBeenCalled();
+  });
+  it.each(['disabled', 'read-only'] as const)('preserves the ordinary viewer when CAD is %s', reason => {
+    if (reason === 'disabled') vi.stubEnv('VITE_CAD_DESIGN_ENABLED', 'false');
+    render(<FluentProvider theme={webLightTheme}><RoutingsViewerTab projectId={projectId} loadedProjectId={projectId} token="token-a" canDrawTrays={reason !== 'read-only'} /></FluentProvider>);
+    expect(screen.queryByRole('tab', { name: 'Draw trays' })).toBeNull();
+    expect(screen.getByRole('tab', { name: 'Manual routing' })).toBeVisible(); expect(screen.getByRole('tab', { name: 'Cables' })).toBeVisible();
+    expect(cadCapture.render).not.toHaveBeenCalled();
+  });
+  it('retires drawing drafts on account change and permission loss without replacing the model host', () => {
+    const props = { projectId, loadedProjectId: projectId, token: 'token-a', canDrawTrays: true };
+    const mounted = render(<FluentProvider theme={webLightTheme}><RoutingsViewerTab {...props} /></FluentProvider>), host = screen.getByTestId('routings-model-host');
+    fireEvent.click(screen.getByRole('tab', { name: 'Draw trays' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Tray name draft' }), { target: { value: 'Old account draft' } });
+    mounted.rerender(<FluentProvider theme={webLightTheme}><RoutingsViewerTab {...props} token="token-b" /></FluentProvider>);
+    expect(screen.getByRole('tab', { name: 'Manual routing' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('region', { name: 'Tray drawing controls' })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: 'Draw trays' })); expect(screen.getByRole('textbox', { name: 'Tray name draft' })).toHaveValue('');
+    mounted.rerender(<FluentProvider theme={webLightTheme}><RoutingsViewerTab {...props} token="token-b" canDrawTrays={false} /></FluentProvider>);
+    expect(screen.queryByRole('tab', { name: 'Draw trays' })).toBeNull(); expect(screen.getByTestId('routings-model-host')).toBe(host);
+  });
   it.each(['loading', 'no-model'] as const)('offers keyboard information while %s without enabling cable routing', phase => {
     const cable = { id: modelId, projectId, tag: 'Information only', routing: '/A', fromLocation: '  From\n日本語  ', toLocation: null };
     cables = { ...cables, cables: [cable], rows: [cable], snapshotGeneration: 1, hasSnapshot: true, hasActivated: true, stale: false, canActivate: true, taggedCount: 1 };

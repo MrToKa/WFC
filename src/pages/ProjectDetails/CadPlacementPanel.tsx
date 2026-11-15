@@ -859,8 +859,7 @@ export function CadPlacementPanel({
           {sourcePorts.length ? (
             <section aria-label="Connector snap">
               <Caption1>
-                PoC connector snap — measured from the two supplied STEP files; no certified splice
-                plate clearance.
+                Connect components using their saved connector positions.
               </Caption1>
               <Field label="Snap to placed component">
                 <select

@@ -27,12 +27,12 @@ const ready = (): CableWorkflowCalculation => calculation({ jobId: id(20), jobSt
 
 describe('separate exact saved display capability',()=>{
   const saved=():CableWorkflowRow=>row({cable:{...row().cable,routing:'/SAVED',designLength:'58'},calculation:{...ready(),currentness:'changed',reviewable:false,savedExactDisplay:true}});
-  it('keeps absence backward compatible and does not promote display-only evidence to authority',()=>{
+  it.each(['complete', 'failed'] as const)('keeps %s saved display separate from calculation authority',jobStatus=>{
     expect(cableWorkflowCalculationSchema.parse(calculation()).savedExactDisplay).toBeUndefined();
-    const value=cableWorkflowRowSchema.parse(saved());expect(value.calculation).toMatchObject({savedExactDisplay:true,currentness:'changed',reviewable:false,acceptedMatchesCurrent:false});
-    expect(classifyCableWorkflow(value).status).toBe('needs-routing');
+    const source=saved();source.calculation.jobStatus=jobStatus;const value=cableWorkflowRowSchema.parse(source);expect(value.calculation).toMatchObject({savedExactDisplay:true,currentness:'changed',reviewable:false,acceptedMatchesCurrent:false});
+    expect(classifyCableWorkflow(value).status).toBe(jobStatus === 'failed' ? 'blocked' : 'needs-routing');
   });
-  it.each([{jobStatus:'running'},{jobStatus:'cancelled'},{jobStatus:'failed'},{itemState:'running'},{outcome:'failed'},
+  it.each([{jobStatus:'running'},{jobStatus:'cancelled'},{jobStatus:'queued'},{itemState:'running'},{outcome:'failed'},
     {currentness:'current'},{reviewable:true},{acceptedMatchesCurrent:true},{proposalId:null,proposalHash:null}] as const)('rejects incoherent saved authority/progress %j',patch=>{
       const value=saved();expect(cableWorkflowRowSchema.safeParse({...value,calculation:{...value.calculation,...patch}}).success).toBe(false);
   });

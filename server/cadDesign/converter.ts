@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { readCadConverterConfiguration } from './configuration.js';
 
 const MAX_MESH_BYTES = 16 * 1024 * 1024;
 const MAX_TRIANGLES = 20_000;
@@ -34,18 +35,8 @@ export async function convertStepToMesh(source: Buffer, options: { lengthMm?: nu
   if (options.lengthMm != null && (!Number.isFinite(options.lengthMm) || options.lengthMm < 1 || options.lengthMm > 6000)) {
     throw new Error('Cut length must be between 1 and 6000 mm.');
   }
-  const endpoint = process.env.WFC_CAD_CONVERTER_URL;
-  const token = process.env.POC_CONVERTER_TOKEN;
-  if (!endpoint || !token || token.length < 32) {
-    throw new Error('The isolated CAD conversion service has not been configured.');
-  }
-  const parsedEndpoint = new URL(endpoint);
-  if (parsedEndpoint.protocol !== 'http:' || parsedEndpoint.hostname !== 'cad-converter' ||
-      parsedEndpoint.port !== '8090' || parsedEndpoint.pathname !== '/convert' ||
-      parsedEndpoint.username || parsedEndpoint.password || parsedEndpoint.search || parsedEndpoint.hash) {
-    throw new Error('The CAD converter URL does not match the isolated PoC service.');
-  }
-  const result = await fetch(endpoint, {
+  const { convertUrl, token } = readCadConverterConfiguration();
+  const result = await fetch(convertUrl, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,

@@ -2,6 +2,30 @@
 # scripts/update-local-app.ps1 reuses credentials from the current backend process.
 name: wfc-app
 services:
+  cad-converter:
+    image: wfc/cad-converter:local
+    build:
+      context: .
+      dockerfile: Dockerfile.cad-converter
+    restart: unless-stopped
+    read_only: true
+    user: "10001:10001"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 128
+    mem_limit: 1g
+    cpus: 2.0
+    tmpfs: ["/tmp:size=64m,mode=1777"]
+    environment:
+      WFC_CAD_CONVERTER_TOKEN: ${WFC_CAD_CONVERTER_TOKEN:?Configure the private CAD converter token}
+      PYTHONUNBUFFERED: "1"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+    networks: [application]
+
   backend:
     image: wfc/backend:local
     build:
@@ -9,9 +33,13 @@ services:
       target: api-runtime
       args:
         VITE_VIEWER_HARNESS: "false"
+        VITE_CAD_DESIGN_ENABLED: "true"
     restart: unless-stopped
     stop_grace_period: 45s
     environment:
+      WFC_CAD_DESIGN_ENABLED: ${WFC_CAD_DESIGN_ENABLED:-true}
+      WFC_CAD_CONVERTER_URL: http://cad-converter:8090/convert
+      WFC_CAD_CONVERTER_TOKEN: ${WFC_CAD_CONVERTER_TOKEN:?Configure the private CAD converter token}
       NODE_ENV: production
       API_HOST: 0.0.0.0
       API_PORT: 4000
@@ -29,6 +57,7 @@ services:
       MINIO_BUCKET_TEMPLATES: ${MINIO_BUCKET_TEMPLATES:-wfc-template-files}
       MINIO_URL_EXPIRY_SECONDS: ${MINIO_URL_EXPIRY_SECONDS:-900}
       WFC_MODEL_BUCKET: ${WFC_MODEL_BUCKET:-wfc-models}
+      PF_PREPARATION_CAPACITY_PROFILE: ${PF_PREPARATION_CAPACITY_PROFILE:-wfc.pf.bounded-512m-capture-and-model.v3}
       WFC_MODEL_IMPORT_ROOT: /var/lib/wfc/model-imports
       WFC_VIEWER_ALLOWED_ORIGINS: ${WFC_VIEWER_ALLOWED_ORIGINS:-http://127.0.0.1:5180,http://localhost:5180}
       WFC_VIEWER_ALLOW_HTTP_LOOPBACK: ${WFC_VIEWER_ALLOW_HTTP_LOOPBACK:-true}
@@ -36,6 +65,7 @@ services:
       WFC_VIEWER_TRUST_PROXY: ${WFC_VIEWER_TRUST_PROXY:-true}
     volumes:
       - model-imports:/var/lib/wfc/model-imports
+      - pathfinder-data:/var/lib/wfc/pathfinder
     networks:
       application:
         aliases: [api]
@@ -46,6 +76,9 @@ services:
       start_period: 20s
       retries: 5
   frontend:
+    depends_on:
+      backend:
+        condition: service_healthy
     image: wfc/frontend:local
     build:
       context: .
@@ -53,6 +86,7 @@ services:
       args:
         VITE_API_URL: /
         VITE_VIEWER_HARNESS: "false"
+        VITE_CAD_DESIGN_ENABLED: "true"
     restart: unless-stopped
     ports: ["${WFC_HTTP_BIND_ADDRESS:-127.0.0.1}:${WFC_HTTP_PORT:-5180}:80"]
     networks: [application]
@@ -68,3 +102,4 @@ networks:
     name: wfc-app_application
 volumes:
   model-imports:
+  pathfinder-data:

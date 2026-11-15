@@ -64,7 +64,14 @@ function acceptedStoppedDisplay(row: CableWorkflowRow, display: PathFinderWorkfl
 const displayIdentity = (row: CableWorkflowRow) => row.savedRoute ?? row.calculation;
 const savedDisplayCandidate = (row: CableWorkflowRow) => row.savedRoute?.currentness === 'saved-exact'
   || row.calculation.savedExactDisplay === true && row.calculation.outcome === 'calculated' && row.calculation.itemState === 'complete'
-    && row.calculation.jobStatus === 'complete' && row.calculation.proposalId !== null && row.calculation.proposalHash !== null;
+    && ['complete', 'failed'].includes(row.calculation.jobStatus ?? '') && row.calculation.proposalId !== null && row.calculation.proposalHash !== null;
+/** Server receipt proof can retain saved geometry after implementation drift and a later batch failure. */
+function savedExactStoppedDisplay(row: CableWorkflowRow, display: PathFinderWorkflowDisplay | null | undefined) {
+  if (!display?.ready || display.source !== 'saved-exact' || row.calculation.jobStatus !== 'failed'
+    || !row.calculation.savedExactDisplay || !savedDisplayCandidate(row)
+    || row.cable.routing !== display.routing || row.cable.designLength === null || display.designLength === null) return false;
+  try { return canonicalDecimalString(row.cable.designLength) === canonicalDecimalString(display.designLength); } catch { return false; }
+}
 const MAX_RETAINED_CALCULATION_ATTEMPTS = 128;
 // Charge a status/detail round once. Its terminal read, state refresh and exact
 // recheck must still finish on the last allowed round. Recovery remains GET-only.
@@ -776,7 +783,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
     && (props.display.source !== 'saved-exact' && (verifiedRow.savedRoute?.currentness === 'current' || displayCandidate(verifiedRow.calculation))
       || props.display.source === 'saved-exact' && savedDisplayCandidate(verifiedRow))
     && !automaticUpdatePending(verifiedRow.calculation)
-    && (verifiedRow.savedRoute || !['failed', 'cancelled'].includes(verifiedRow.calculation.jobStatus ?? '') || acceptedStoppedDisplay(verifiedRow, props.display))
+    && (verifiedRow.savedRoute || !['failed', 'cancelled'].includes(verifiedRow.calculation.jobStatus ?? '') || (acceptedStoppedDisplay(verifiedRow, props.display) || savedExactStoppedDisplay(verifiedRow, props.display)))
     && BigInt(verifiedRow.cable.cableWriteRevision) >= BigInt(selected.cable.cableWriteRevision)
     && (observedRevision === undefined || BigInt(verifiedRow.cable.cableWriteRevision) >= BigInt(observedRevision)));
   const displayedSelection = verifiedRowMatches ? verifiedRow! : selected;
@@ -858,7 +865,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
     && props.display.verifiedScope === pathFinderWorkflowDisplayScope(props.pf, props.accountId)
     && (!props.display.verifiedRow || verifiedRowMatches)
     && (displayedSelection?.savedRoute || !['failed', 'cancelled'].includes(selectedCalculation?.jobStatus ?? '')
-      || verifiedRowMatches && displayedSelection && acceptedStoppedDisplay(displayedSelection, props.display))
+      || verifiedRowMatches && displayedSelection && (acceptedStoppedDisplay(displayedSelection, props.display) || savedExactStoppedDisplay(displayedSelection, props.display)))
     && props.display.jobId === displayedIdentity?.jobId && props.display.proposalId === displayedIdentity?.proposalId
     && props.display.proposalHash === displayedIdentity?.proposalHash
     && (props.display.source !== 'saved-exact' && (displayedSelection?.savedRoute?.currentness === 'current' && verifiedRowMatches || selectedCalculation?.currentness === 'current')
@@ -869,7 +876,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   // Show still requires the complete verified display payload above.
   const displayTextMatches = displaySourceMatches && (displayedSelection?.savedRoute || selectedCalculation?.outcome === 'calculated' && selectedCalculation.itemState === 'complete'
     && (!['failed', 'cancelled'].includes(selectedCalculation.jobStatus ?? '')
-      || verifiedRowMatches && displayedSelection && acceptedStoppedDisplay(displayedSelection, props.display)))
+      || verifiedRowMatches && displayedSelection && (acceptedStoppedDisplay(displayedSelection, props.display) || savedExactStoppedDisplay(displayedSelection, props.display))))
     && (Boolean(props.display?.ready) || typeof props.display?.routing === 'string');
   const waitingForSavedCalculation = savedCalculation?.cableId === selected?.cable.id && Boolean(savedCalculation);
   const displayCheckFeedback = !displayMatches && !waitingForSavedCalculation && !submittedCalculation && selected

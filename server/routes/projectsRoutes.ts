@@ -28,6 +28,7 @@ import { projectTrayDataRouter } from './projectTrayDataRoutes.js';
 import { modelRegistryRouter } from './modelRegistryRoutes.js';
 import { pathfinderRouter } from './pathfinderRoutes.js';
 import { cadDesignRouter } from '../cadDesign/routes.js';
+import { cadDesignEnabled } from '../cadDesign/configuration.js';
 
 const projectsRouter = Router();
 projectsRouter.use(authenticate, loadCurrentUserRole, requireProjectReadOnly);
@@ -1004,8 +1005,8 @@ projectsRouter.delete(
 projectsRouter.use('/:projectId/cable-types', cableTypesRouter);
 projectsRouter.use('/:projectId', modelRegistryRouter);
 projectsRouter.use('/:projectId/pathfinder', pathfinderRouter);
-// The draft 3D design API is available only in explicitly isolated PoC deployments.
-if (process.env.WFC_CAD_DESIGN_ENABLED === 'true') {
+// CAD uses the existing project authorization and selected model.
+if (cadDesignEnabled()) {
   projectsRouter.use('/:projectId/cad-design', cadDesignRouter);
 }
 projectsRouter.use('/:projectId/cables', cablesRouter);

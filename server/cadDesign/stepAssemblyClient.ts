@@ -2,6 +2,7 @@ import { getObjectStream, getProjectBucket } from '../services/objectStorageServ
 import { MAX_STEP_ASSEMBLY_PARTS } from '../../shared/cadExportLimits.js';
 import { createHash } from 'node:crypto';
 import type { CadSectionMetadata, CadSectionRoute } from './scopedExports.js';
+import { readCadConverterConfiguration } from './configuration.js';
 
 type CadPlacement = {
   metadata?: CadSectionMetadata;
@@ -36,15 +37,7 @@ export async function exportStepAssembly(parts: CadPlacement[]): Promise<Buffer>
   if (!Array.isArray(parts) || parts.length < 1 || parts.length > MAX_STEP_ASSEMBLY_PARTS) {
     throw new Error(`A STEP assembly must contain 1 to ${MAX_STEP_ASSEMBLY_PARTS} placed components.`);
   }
-  const token = process.env.POC_CONVERTER_TOKEN;
-  const rawUrl = process.env.WFC_CAD_CONVERTER_URL;
-  if (!token || token.length < 32 || !rawUrl) throw new Error('CAD converter is not configured.');
-  const parsed = new URL(rawUrl);
-  if (parsed.protocol !== 'http:' || parsed.hostname !== 'cad-converter' ||
-      parsed.port !== '8090' || parsed.pathname !== '/convert' ||
-      parsed.username || parsed.password || parsed.search || parsed.hash) {
-    throw new Error('Invalid isolated CAD converter endpoint.');
-  }
+  const { token, assembleUrl } = readCadConverterConfiguration();
   const requestParts: Array<{
     name: string; sourceId: string; positionMm: [number,number,number]; rotation: [number,number,number,number];
     cutLengthMm?: number;metadata?:CadSectionMetadata;route?:CadSectionRoute;
@@ -77,7 +70,7 @@ export async function exportStepAssembly(parts: CadPlacement[]): Promise<Buffer>
   }
   const payload = Buffer.from(JSON.stringify({sources:[...sources].map(([id,stepBase64])=>({id,stepBase64})),parts:requestParts}), 'utf8');
   if (payload.byteLength > 12 * 1024 * 1024) throw new Error('The STEP assembly request is too large.');
-  const result = await fetch(new URL('/assemble', parsed), {
+  const result = await fetch(assembleUrl, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: new Uint8Array(payload),

@@ -16,7 +16,7 @@ import { initializeModelRegistry, stopModelRegistry } from './modelRegistry/runt
 import { stopViewerSessions } from './viewerSessions/runtime.js';
 import { viewerHttpPolicy } from './viewerSessions/http.js';
 import { initializePathFinderRuntime, stopPathFinderRuntime } from './pathfinder/runtime.js';
-import { assertCadPocIsolation } from './cadDesign/isolation.js';
+import { assertCadConfiguration, cadDesignEnabled } from './cadDesign/configuration.js';
 
 const app = createApp();
 if (viewerHttpPolicy().allowInsecureLanHttp) {
@@ -55,12 +55,12 @@ function startListening(server: http.Server | https.Server, protocol: string): v
 const startServer = async (): Promise<void> => {
   try {
     // Fail before any ordinary WFC schema/storage initialization can write.
-    assertCadPocIsolation(process.env);
+    assertCadConfiguration(process.env);
     await initializeDatabase();
     await initializeObjectStorage();
     await initializeModelRegistry();
-    // Explicit PoC gate: production must not run these additive migrations by default.
-    if (process.env.WFC_CAD_DESIGN_ENABLED === 'true') {
+    // Additive CAD/Materials migrations use this application's existing database.
+    if (cadDesignEnabled()) {
       await initializeMaterialTrayCadSchema(pool);
       await initializeCadDesignSchema(pool);
       await initializeCadRouteGroupsSchema(pool);

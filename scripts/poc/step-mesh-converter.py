@@ -22,7 +22,7 @@ MAX_INPUT_BYTES = 8 * 1024 * 1024
 MAX_ASSEMBLY_PARTS = 128
 MAX_TRIANGLES = 20000
 MAX_OUTPUT_BYTES = 16 * 1024 * 1024
-TOKEN = os.environ.get("POC_CONVERTER_TOKEN", "")
+TOKEN = os.environ.get("WFC_CAD_CONVERTER_TOKEN", os.environ.get("POC_CONVERTER_TOKEN", ""))
 
 
 def cut_straight_solids(solids, length_mm):
@@ -535,5 +535,5 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     if len(TOKEN) < 32:
-        raise RuntimeError("POC_CONVERTER_TOKEN must be at least 32 characters")
+        raise RuntimeError("WFC_CAD_CONVERTER_TOKEN must be at least 32 characters")
     HTTPServer(("0.0.0.0", 8090), Handler).serve_forever()

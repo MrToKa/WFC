@@ -1286,8 +1286,8 @@ describe('fresh initial selection and current proof handoff', () => {
       await openListCable(); expect(panelProps.pathReady).toBe(false); expect(panelProps.pathVisible).toBe(false);
       expect(panelProps.calculatedRouting).toBeUndefined(); expect(p.pf.submitCalculation).not.toHaveBeenCalled(); expect(p.pf.calculate).not.toHaveBeenCalled();
     });
-  it('uses separately qualified saved display without promoting its calculation authority', async () => {
-    const p = props(), saved = calculatedRow(); saved.calculation = { ...saved.calculation, currentness: 'changed', reviewable: false,
+  it.each(['complete', 'failed'] as const)('uses separately qualified saved display with %s parent without promoting its calculation authority', async jobStatus => {
+    const p = props(), saved = calculatedRow(); saved.calculation = { ...saved.calculation, jobStatus, currentness: 'changed', reviewable: false,
       acceptedMatchesCurrent: false, savedExactDisplay: true }; saved.cable = { ...saved.cable, routing: '/SAVED', designLength: '58' };
     listRow = saved;
     vi.mocked(fetchPathFinderCableWorkflowDetail).mockReset().mockResolvedValue({ projectId: id(1), cableId: id(3), row: saved } as never);

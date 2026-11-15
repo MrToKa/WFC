@@ -5,6 +5,7 @@ import { canonicalPurposeJson, catalogRoutingHashInput } from '../../shared/path
 import { projectRoutingCatalogRows } from './catalog.js';
 import { PathFinderError } from './errors.js';
 import type { RoutingScope } from './routingScope.js';
+import { cadDesignEnabled } from '../cadDesign/configuration.js';
 
 const digest = (value: unknown) => createHash('sha256').update(canonicalPurposeJson(value)).digest('hex');
 export function encodeCadOverlay(value: unknown): CadOverlayEnvelope {
@@ -19,7 +20,7 @@ export function encodeCadOverlay(value: unknown): CadOverlayEnvelope {
  * Every non-CAD catalog row must still have the exact originally prepared projection. */
 export async function readCadOverlay(client: PoolClient, projectId: string, artifactId: string,
   snapshotSha256: string, modelVersionId: string, prepared: RoutingScope, current: RoutingScope): Promise<CadOverlayEnvelope | 'retired-base-proof' | null> {
-  if (process.env.WFC_CAD_DESIGN_ENABLED !== 'true') return null;
+  if (!cadDesignEnabled()) return null;
   const groups = await client.query<{status:string;project_tray_id:string|null;publication:unknown}>(
     `SELECT status,project_tray_id,publication FROM cad_route_groups WHERE project_id=$1 AND publication IS NOT NULL ORDER BY id FOR SHARE`,[projectId]);
   if (!groups.rows.length) return null;

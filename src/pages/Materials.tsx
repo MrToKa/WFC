@@ -71,7 +71,7 @@ export const Materials = () => {
   const [restorePhase, setRestorePhase] = useState(returnState ? 'filters' : 'done');
   const [pageSizes, setPageSizes] = useState<Record<string, number>>(returnState?.pageSizes ?? {});
   const isAdmin = Boolean(user?.isAdmin);
-  const componentsEnabled = import.meta.env.VITE_CAD_DESIGN_ENABLED === 'true';
+  const componentsEnabled = import.meta.env.VITE_CAD_DESIGN_ENABLED !== 'false';
   const [stepTray, setStepTray] = useState<MaterialTray | null>(null);
   const [stepBusy, setStepBusy] = useState(false);
   const requestedTab = parseMaterialsTab(searchParams.get('tab'));

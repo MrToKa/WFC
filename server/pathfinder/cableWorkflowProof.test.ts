@@ -115,8 +115,8 @@ function protectedAcceptedFixture(priorRevision = beforeRevision, writtenRevisio
   return f;
 }
 
-function savedDisplayFixture() {
-  const f = protectedAcceptedFixture('18', '19'); f.receipt.provenance.schemaVersion = 'pathfinder.automatic-pair.v1';
+function savedDisplayFixture(jobState: 'complete' | 'failed' = 'failed') {
+  const f = protectedAcceptedFixture('18', '19'); f.raw.job_state = jobState; f.receipt.provenance.schemaVersion = 'pathfinder.automatic-pair.v1';
   proof.automaticPair.mockResolvedValue({before:f.receipt.before_snapshot,after:f.receipt.after_snapshot});
   const current = structuredClone({...f.dependencies,cableWriteRevision:'19'});
   current.engineIdentity.coreModuleSha256 = '9'.repeat(64);
@@ -126,8 +126,8 @@ function savedDisplayFixture() {
 }
 
 describe('read-only saved exact path after an implementation-only engine update',()=>{
-  it('retains the proven18→19 saved geometry without granting current review or acceptance',async()=>{
-    const f=savedDisplayFixture(),before=structuredClone(f.current),dependencyHash=f.raw.dependency_hash;
+  it.each(['complete', 'failed'] as const)('retains proven18→19 geometry after %s parent without review authority',async jobState=>{
+    const f=savedDisplayFixture(jobState),before=structuredClone(f.current),dependencyHash=f.raw.dependency_hash;
     expect(await f.reader.savedExactDisplay(f.cable,f.fresh,f.expected)).toBe(true);
     expect(await f.reader.accepted(f.cable,f.fresh,f.expected)).toBe(false);
     expect(await f.reader.reviewable(cableId,jobId,proposalId,f.current)).toMatchObject({currentness:'changed',reviewable:false,reasonCodes:['PROPOSAL_DEPENDENCIES_CHANGED']});
@@ -158,7 +158,7 @@ describe('read-only saved exact path after an implementation-only engine update'
     const f=savedDisplayFixture();f.expected[field]=field==='proposalHash'?'0'.repeat(64):id(99);
     expect(await f.reader.savedExactDisplay(f.cable,f.fresh,f.expected)).toBe(false);
   });
-  it.each(['job-queued','job-running','job-cancelled','job-failed','cancel-requested','item-running','item-failed'] as const)('rejects %s execution state',async kind=>{
+  it.each(['job-queued','job-running','job-cancelled','cancel-requested','item-running','item-failed'] as const)('rejects %s execution state',async kind=>{
     const f=savedDisplayFixture();if(kind.startsWith('job-'))f.raw.job_state=kind.slice(4);
     else if(kind==='cancel-requested')f.raw.cancel_requested=true;
     else if(kind==='item-running')f.raw.item_state='running';else f.raw.item_status='failed';

@@ -1,6 +1,30 @@
 name: wfc
 
 services:
+  cad-converter:
+    image: wfc/cad-converter:local
+    build:
+      context: .
+      dockerfile: Dockerfile.cad-converter
+    restart: unless-stopped
+    read_only: true
+    user: "10001:10001"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 128
+    mem_limit: 1g
+    cpus: 2.0
+    tmpfs: ["/tmp:size=64m,mode=1777"]
+    environment:
+      WFC_CAD_CONVERTER_TOKEN: ${WFC_CAD_CONVERTER_TOKEN:?Configure the private CAD converter token}
+      PYTHONUNBUFFERED: "1"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+    networks: [wfc-internal]
+
   postgres:
     image: ${POSTGRES_IMAGE:-postgres:18}
     container_name: wfc-postgres
@@ -47,6 +71,9 @@ services:
     restart: unless-stopped
     stop_grace_period: 45s
     environment:
+      WFC_CAD_DESIGN_ENABLED: "true"
+      WFC_CAD_CONVERTER_URL: http://cad-converter:8090/convert
+      WFC_CAD_CONVERTER_TOKEN: ${WFC_CAD_CONVERTER_TOKEN:?Configure the private CAD converter token}
       NODE_ENV: production
       API_HOST: 0.0.0.0
       API_PORT: 4000
@@ -95,6 +122,7 @@ services:
       target: web-runtime
       args:
         VITE_API_URL: /
+        VITE_CAD_DESIGN_ENABLED: "true"
     image: wfc-web:local
     container_name: wfc-web
     restart: unless-stopped

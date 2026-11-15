@@ -287,14 +287,14 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
     workflowTarget.calculation.currentness, workflowTarget.calculation.reviewable, workflowTarget.calculation.savedExactDisplay === true]) : null;
   // A retained proposal is useful history, but it cannot stand in for a newer
   // calculation while its exact metadata and endpoint foreground are loading.
-  const displayReady = Boolean(active && (!observedWorkflowStop || workflowDisplayProof?.accepted) && workflowKey && workflowDisplayProof?.key === workflowKey && proposal && workflowTarget
+  const displayReady = Boolean(active && (!observedWorkflowStop || workflowDisplayProof?.accepted || observedWorkflowStop === 'failed' && workflowDisplayProof?.source === 'saved-exact' && workflowProposalRead?.row.calculation.savedExactDisplay === true) && workflowKey && workflowDisplayProof?.key === workflowKey && proposal && workflowTarget
     && workflowDisplayProof.proposalId === proposal.id && workflowDisplayProof.proposalHash === proposal.proposalHash
     && workflowProposalRead?.key === workflowKey && workflowProposalRead.scope === displayVerificationScope
     && (workflowProposalRead.row.savedRoute || workflowProposalRead.row.calculation.itemState === 'complete')
     && (workflowDisplayProof.source === 'current-calculation' && workflowProposalRead.source === 'current-calculation'
       && (workflowProposalRead.row.savedRoute?.currentness === 'current' || workflowProposalRead.row.calculation.currentness === 'current')
       || workflowDisplayProof.source === 'saved-exact' && workflowProposalRead.source === 'saved-exact'
-        && (workflowProposalRead.row.savedRoute?.currentness === 'saved-exact' || workflowProposalRead.row.calculation.savedExactDisplay === true && workflowProposalRead.row.calculation.jobStatus === 'complete'))
+        && (workflowProposalRead.row.savedRoute?.currentness === 'saved-exact' || workflowProposalRead.row.calculation.savedExactDisplay === true && ['complete', 'failed'].includes(workflowProposalRead.row.calculation.jobStatus ?? '')))
     && workflowTargetIdentity?.jobId === proposal.jobId && workflowTargetIdentity.proposalId === proposal.id
     && workflowTargetIdentity.proposalHash === proposal.proposalHash);
   const proposalCableId = proposal?.cableId ?? null, proposalJobId = proposal?.jobId ?? null,
@@ -414,7 +414,8 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
     setWorkflowProposalRead(null);
     setWorkflowCheck({ key: workflowKey, checking: true, message: 'Checking this cable’s calculated path for Show…' });
     adoptScope({ admissionId: null, jobId: targetIdentity.jobId, ready: false, message: 'Checking the selected cable calculation…' }, true);
-    if (observedWorkflowStop && !target.calculation.acceptedMatchesCurrent && target.savedRoute?.currentness !== 'current') {
+    if (observedWorkflowStop && !target.calculation.acceptedMatchesCurrent && target.savedRoute?.currentness !== 'current'
+      && !(observedWorkflowStop === 'failed' && target.calculation.jobStatus === 'failed' && target.calculation.savedExactDisplay === true)) {
       setPreviewLoading(false);
       const message = 'This calculation was cancelled or failed. Its saved path is preview only.';
       setNotice(message); setWorkflowCheck({ key: workflowKey, checking: false, message });
@@ -554,7 +555,8 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
         // calculation scope, Review or Apply authority.
         const savedExactDisplayReady = Boolean(envelope && live && (live.row.savedRoute?.currentness === 'saved-exact' || live.row.calculation.savedExactDisplay === true
           && live.row.calculation.itemState === 'complete' && live.row.calculation.outcome === 'calculated'
-          && live.row.calculation.jobStatus === 'complete') && parent?.status === 'complete' && !parent.cancelRequested
+          && ['complete', 'failed'].includes(live.row.calculation.jobStatus ?? '')) && parent && !parent.cancelRequested
+          && (parent.status === 'complete' || parent.status === 'failed' && live.row.calculation.jobStatus === 'failed' && live.row.calculation.savedExactDisplay === true)
           && detail.route?.success && detail.design && live.row.cable.routing === detail.route.routeText
           && live.row.cable.designLength !== null && (() => {
             try { return canonicalDecimalString(live.row.cable.designLength) === canonicalDecimalString(detail.design.designLengthMeters); } catch { return false; }
@@ -563,8 +565,8 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
         const issue = !envelope ? 'This historical path has no verifiable calculation admission. It is preview only; use Cable revision results or calculate a fresh proposal before Review and Apply.'
           : !parent ? 'The exact calculation state is unavailable. This path is preview only; reopen the selected cable result to check again.'
             : acceptedDisplayReady ? 'The current route is saved in Cable list and ready to show.'
-              : parent.cancelRequested || ['cancelled', 'failed'].includes(parent.status) ? 'This calculation was cancelled or failed. Its saved path is preview only.'
-                : savedExactDisplayReady ? 'The saved route is ready to show. Calculate routing to review a new result.'
+              : savedExactDisplayReady ? 'The saved route is ready to show. Calculate routing to review a new result.'
+                : parent.cancelRequested || ['cancelled', 'failed'].includes(parent.status) ? 'This calculation was cancelled or failed. Its saved path is preview only.'
                   : barrierIssue ?? (!liveCurrent ? 'The current cable proof is unavailable or changed. This path is preview only; refresh the cable list and calculate again when needed.'
                     : !wholeJobReady && !itemReady ? 'This calculation is still running and this cable has no current sealed item. Review is blocked until it is ready.' : null);
         const selectedScope: PathFinderCalculationScope = { admissionId: envelope?.admissionId ?? null, jobId: detail.jobId, ready: wholeJobReady || itemReady,

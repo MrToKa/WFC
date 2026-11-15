@@ -15,17 +15,20 @@ const summaries: Record<RouteCheckResult['status'], string> = {
   none: 'No drawable route was found in the model.', empty: 'Enter a route.',
   invalid: 'The route is invalid. Check the identifiers and input limits.',
 };
-type Props = { projectId: string | null; loadedProjectId: string | null; token: string | null; onTraysChanged?: () => Promise<void> };
+type Props = { projectId: string | null; loadedProjectId: string | null; token: string | null; canDrawTrays?: boolean; onTraysChanged?: () => Promise<void> };
 
-export function RoutingsViewerTab({ projectId, loadedProjectId, token, onTraysChanged }: Props) {
+export function RoutingsViewerTab({ projectId, loadedProjectId, token, canDrawTrays = false, onTraysChanged }: Props) {
   const styles = useRoutingsViewerStyles();
   const anchor = useRef<HTMLElement>(null);
   const container = useRef<HTMLDivElement>(null);
   const searchInput = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState({ projectId, token, value: '' });
   const [sourceTab, setSourceTab] = useState({ projectId, token, value: 'manual' });
-  const componentsOnly = import.meta.env.VITE_CAD_DESIGN_ENABLED === 'true';
-  const mode = componentsOnly ? 'components' : sourceTab.projectId === projectId && sourceTab.token === token ? sourceTab.value : 'manual';
+  const [drawing, setDrawing] = useState({ projectId, token, activated: false });
+  const drawingEnabled = import.meta.env.VITE_CAD_DESIGN_ENABLED !== 'false' && canDrawTrays;
+  const requestedMode = sourceTab.projectId === projectId && sourceTab.token === token ? sourceTab.value : 'manual';
+  const mode = requestedMode === 'components' && !drawingEnabled ? 'manual' : requestedMode;
+  const drawingMounted = drawingEnabled && drawing.projectId === projectId && drawing.token === token && drawing.activated;
   const routing = draft.projectId === projectId && draft.token === token ? draft.value : '';
   const height = useRoutingsViewerHeight(anchor);
   const viewer = useRoutingsViewer({ projectId, loadedProjectId, token, container });
@@ -47,11 +50,17 @@ export function RoutingsViewerTab({ projectId, loadedProjectId, token, onTraysCh
   return <section ref={anchor} aria-label="Routings builder" data-testid="routings-viewer-tab">
     <div className={styles.layout} style={{ height }} data-testid="routings-layout">
       <div className={styles.controls}>
-        {!componentsOnly ? <TabList className={styles.sources} selectedValue={mode} aria-label="Routing source"
-          onTabSelect={(_, data) => { if (data.value === 'manual' || data.value === 'cables' || data.value === 'components') setSourceTab({ projectId, token, value: data.value }); }}>
+        <TabList className={styles.sources} selectedValue={mode} aria-label="Routing source"
+          onTabSelect={(_, data) => {
+            if (data.value === 'manual' || data.value === 'cables' || data.value === 'components' && drawingEnabled) {
+              setSourceTab({ projectId, token, value: data.value });
+              if (data.value === 'components') setDrawing({ projectId, token, activated: true });
+            }
+          }}>
           <Tab value="manual">Manual routing</Tab>
           <Tab value="cables">Cables</Tab>
-        </TabList> : null}
+          {drawingEnabled ? <Tab value="components">Draw trays</Tab> : null}
+        </TabList>
         <div className={styles.status} aria-live="polite" aria-atomic="true" data-testid="routings-viewer-status" data-phase={viewer.phase}>
           {loading ? <Spinner size="tiny" label={viewer.message} /> : <Body1>{viewer.message}</Body1>}
           {viewer.model ? <Caption1>Active model: {viewer.model.label}</Caption1> : null}
@@ -66,10 +75,7 @@ export function RoutingsViewerTab({ projectId, loadedProjectId, token, onTraysCh
           <div className={styles.actions}>
             <Button type="submit" appearance="primary" disabled={!viewer.canShow}>Show route</Button>
           </div>
-        </form> : mode === 'components' && import.meta.env.VITE_CAD_DESIGN_ENABLED === 'true' ?
-          <CadComponentsPanel projectId={projectId} token={token} modelVersionId={viewer.model?.id ?? null}
-            ready={viewer.phase === 'ready'} onPick={viewer.pickCadAnchor} onShow={viewer.showCadComponent} onMove={viewer.moveCadComponent} onFocus={viewer.focusCadComponent} onRemove={viewer.removeCadComponent} onColor={viewer.setCadComponentColor} onProperties={viewer.setCadComponentProperties} onTraysChanged={onTraysChanged} />
-          : <div className={styles.cablePanel}>
+        </form> : mode === 'cables' ? <div className={styles.cablePanel}>
           <Field className={styles.field} label="Search cable tags">
             <Input ref={searchInput} aria-label="Search cable tags" value={cables.search} onChange={(_, data) => cables.setSearch(data.value)} />
           </Field>
@@ -100,7 +106,11 @@ export function RoutingsViewerTab({ projectId, loadedProjectId, token, onTraysCh
                   const selected = cables.select(cable.id); if (selected) void viewer.showCable(selected); }}>{cable.tag}</Button>
             </li>)}
           </ul>
-        </div>}
+        </div> : null}
+        {drawingMounted ? <div hidden={mode !== 'components'}>
+          <CadComponentsPanel projectId={projectId} token={token} modelVersionId={viewer.model?.id ?? null}
+            ready={viewer.phase === 'ready'} onPick={viewer.pickCadAnchor} onShow={viewer.showCadComponent} onMove={viewer.moveCadComponent} onFocus={viewer.focusCadComponent} onRemove={viewer.removeCadComponent} onColor={viewer.setCadComponentColor} onProperties={viewer.setCadComponentProperties} onTraysChanged={onTraysChanged} />
+        </div> : null}
         {cableReadScope && cables.selectedCable ? <Caption1 data-testid="selected-routing-cable">Selected cable: {cables.selectedCable.tag}</Caption1> : null}
         {cableReadScope && cables.selectedHidden ? <Caption1>The selected cable is hidden by this filter.</Caption1> : null}
         {cableReadScope && cables.notice ? <Body1 role="status">{cables.notice}</Body1> : null}

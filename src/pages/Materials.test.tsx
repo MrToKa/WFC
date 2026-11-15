@@ -131,8 +131,8 @@ const Navigation = () => {
 };
 
 describe('Materials category navigation', () => {
-  it.each([false, true])('gates Components and its direct URL when enabled=%s', async (enabled) => {
-    vi.stubEnv('VITE_CAD_DESIGN_ENABLED', String(enabled));
+  it.each([false, true, undefined])('gates Components and its direct URL when enabled=%s', async (enabled) => {
+    vi.stubEnv('VITE_CAD_DESIGN_ENABLED', enabled === undefined ? undefined : String(enabled));
     try {
       await act(async () => {
         render(
@@ -143,7 +143,7 @@ describe('Materials category navigation', () => {
           </FluentProvider>,
         );
       });
-      if (enabled) {
+      if (enabled !== false) {
         expect(screen.getByRole('tab', { name: 'Components' })).toHaveAttribute(
           'aria-selected',
           'true',

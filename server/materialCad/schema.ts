@@ -1,6 +1,6 @@
 import type { Pool } from 'pg';
 
-/** Additive global Materials catalogue. Runs only behind the CAD PoC feature flag.
+/** Additive global Materials catalogue in the existing application database.
  * Existing trays remain the owner of curves/images/prices; only straight components
  * may link them. No project owns product identities or original STEP revisions.
  */

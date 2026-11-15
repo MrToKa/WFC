@@ -24,7 +24,24 @@ const meshResponse = () => {
   return new Response(bytes, { headers: { 'Content-Type': 'application/json', 'Content-Length': String(Buffer.byteLength(bytes)) } });
 };
 
-describe('isolated CAD converter length contracts', () => {
+describe('private application CAD converter length contracts', () => {
+  it('authenticates mesh conversion and assembly with the canonical application token', async () => {
+    vi.stubEnv('WFC_CAD_CONVERTER_TOKEN','canonical'.repeat(8));
+    fetchMock.mockResolvedValueOnce(meshResponse());
+    await convertStepToMesh(Buffer.from('original STEP'));
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({headers:{Authorization:'Bearer '+ 'canonical'.repeat(8)},redirect:'error'});
+    storage.getObjectStream.mockImplementation(async()=>Readable.from([Buffer.from('original STEP')]));
+    const output='ISO-10303-21;'+' '.repeat(120);
+    fetchMock.mockResolvedValueOnce(new Response(output,{headers:{'Content-Type':'application/step','Content-Length':String(output.length)}}));
+    await exportStepAssembly([{original_filename:'stock.step',source_object_key:'source',x_mm:0,y_mm:0,z_mm:0,qx:0,qy:0,qz:0,qw:1}]);
+    expect(fetchMock.mock.calls[1][1]).toMatchObject({headers:{Authorization:'Bearer '+ 'canonical'.repeat(8)},redirect:'error'});
+  });
+  it('rejects a converter destination change before any network or object storage read',async()=>{
+    vi.stubEnv('WFC_CAD_CONVERTER_URL','http://169.254.169.254/convert');
+    await expect(convertStepToMesh(Buffer.from('original STEP'))).rejects.toThrow('private application network');
+    await expect(exportStepAssembly([{original_filename:'stock.step',source_object_key:'source',x_mm:0,y_mm:0,z_mm:0,qx:0,qy:0,qz:0,qw:1}])).rejects.toThrow('private application network');
+    expect(fetchMock).not.toHaveBeenCalled();expect(storage.getObjectStream).not.toHaveBeenCalled();
+  });
   it('passes a cut as a converter header and keeps source bytes intact', async () => {
     fetchMock.mockResolvedValue(meshResponse());
     const bytes = Buffer.from('original STEP');

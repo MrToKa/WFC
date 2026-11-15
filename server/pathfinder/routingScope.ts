@@ -12,6 +12,7 @@ import { verifySupportedBarrierEngineIdentity as verifyBarrierEngineIdentity,
 import { MIXED_BARRIER_POLICY, mixedBarrierVerifierEvidenceSchema } from '../../shared/pathfinderBarrierMixed.js';
 import { barrierCanonicalJson } from '../../shared/pathfinderBarriers.js';
 import { cadOverlayEnvelopeSchema } from '../../shared/pathfinderCadOverlay.js';
+import { cadDesignEnabled } from '../cadDesign/configuration.js';
 
 /** This projection deliberately cannot carry drawing or private full-source facts. */
 export const routingScopeSchema = z.object({
@@ -55,7 +56,7 @@ export async function requirePreparedRoutingScope(client: PoolClient, projectId:
   if (!row || row.producer_version !== 'pathfinder.catalog-preparation.v1' || !prepared.success || prepared.data.cadOverlay)
     throw new PathFinderError('ROUTING_PREPARATION_REQUIRED', 409,
       'Prepare the project network against the current tray catalog and routing permissions before calculating. Existing diagnostic snapshots remain available for Path lookup.');
-  if (process.env.WFC_CAD_DESIGN_ENABLED === 'true') {
+  if (cadDesignEnabled()) {
     const artifact = (await client.query<{snapshot_sha256:string;model_version_id:string}>(
       'SELECT snapshot_sha256,model_version_id FROM pf_artifacts WHERE project_id=$1 AND id=$2',[projectId,artifactId])).rows[0];
     if (!artifact) throw new PathFinderError('PREPARATION_CURRENT_INTEGRITY',409);

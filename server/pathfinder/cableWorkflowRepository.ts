@@ -219,7 +219,7 @@ async function readRows(client: PoolClient, projectId: string, candidates: Data[
       && await proof.accepted(cableSnapshot, fresh, {jobId:meta.job_id,proposalId:meta.proposal_id,proposalHash:meta.proposal_hash})) && unavailableReasons.size === 0; check();
     if (accepted) currentness = 'current';
     const savedExactDisplay = Boolean(!accepted && unavailableReasons.size === 0 && currentness === 'changed' && acceptedIds.has(cable.id)
-      && jobStatus === 'complete' && itemState === 'complete' && status === 'calculated' && meta?.cancel_requested === false
+      && ['complete', 'failed'].includes(jobStatus ?? '') && itemState === 'complete' && status === 'calculated' && meta?.cancel_requested === false
       && meta.job_id && meta.proposal_id && meta.proposal_hash
       && await proof.savedExactDisplay(cableSnapshot, fresh, { jobId: meta.job_id, proposalId: meta.proposal_id, proposalHash: meta.proposal_hash })); check();
     let savedRoute: CableWorkflowRow['savedRoute'];

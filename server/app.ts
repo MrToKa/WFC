@@ -14,6 +14,7 @@ import {
 import { materialTrayInstallationMaterialsRouter } from './routes/materialTrayInstallationMaterialsRoutes.js';
 import { materialsRouter } from './routes/materialsRoutes.js';
 import { materialComponentsRouter, materialTrayCadRouter } from './materialCad/routes.js';
+import { cadDesignEnabled } from './cadDesign/configuration.js';
 import { projectsRouter } from './routes/projectsRoutes.js';
 import { templateFilesRouter } from './routes/templateFilesRoutes.js';
 import { userRouter } from './routes/userRoutes.js';
@@ -149,7 +150,7 @@ export const createApp = (): Express => {
     materialInstrumentInstallationMaterialsRouter,
   );
   app.use('/api/materials/cable-types', materialCableTypesRouter);
-  if (process.env.WFC_CAD_DESIGN_ENABLED === 'true') {
+  if (cadDesignEnabled()) {
     app.use('/api/materials/components', materialComponentsRouter);
     app.use('/api/materials/trays', materialTrayCadRouter);
   }
