@@ -136,7 +136,7 @@ async function readRows(client: PoolClient, projectId: string, candidates: Data[
   const common = await getCommon(requested);
   check(); if (!common) return fail('WORKFLOW_CONTEXT_UNAVAILABLE');
   if (common.inputs) commonCache.set(canonicalPurposeJson(common.inputs.options), Promise.resolve(common));
-  const purposes = common.inputs ? await readLinkedCableTypePurposes(client, projectId, candidates) : new Map();
+  let purposes = common.inputs ? await readLinkedCableTypePurposes(client, projectId, candidates) : null;
   let current = shared.current === undefined ? common.bindingContext ?? await readCurrentEndpointBindingContext(client, projectId) : shared.current;
   if (current && (current.modelVersionId !== readContext.active_model_version_id || current.selectionRevision !== readContext.selection_revision)) current = null;
   shared.current = current;
@@ -177,18 +177,28 @@ async function readRows(client: PoolClient, projectId: string, candidates: Data[
   return { contextHash, async row(cable: Data): Promise<CableWorkflowRow> {
     check(); const from = endpoint(cable.from_location), to = endpoint(cable.to_location), meta = latest.get(cable.id);
     const unavailableReasons = new Set<string>(common.unavailableReasonCode ? [common.unavailableReasonCode] : []);
+    const savedUnavailableReasons = new Set<string>();
+    // A saved pair is checked against the recorded calculation options. Draft
+    // controls for the next calculation cannot invalidate a proven own write.
+    const freshSaved = async (raw: unknown,version:DependencySnapshot['schemaVersion']): Promise<DependencySnapshot | null> => {
+      const options = optionsSchema.safeParse(raw); if (!options.success) return null;
+      const coherent = await getCommon(options.data); check();
+      if (coherent?.unavailableReasonCode) savedUnavailableReasons.add(coherent.unavailableReasonCode);
+      if (!coherent?.inputs) return null;
+      const frozen=freezeCableDependenciesForVersion(coherent.inputs, cable, from.point, to.point,version).dependencies;
+      if (!frozen || !['pathfinder.dependencies.v7','pathfinder.dependencies.v8'].includes(version)) return frozen;
+      purposes ??= await readLinkedCableTypePurposes(client, projectId, candidates); check();
+      shared.purposeRouting ??= createCablePurposeRoutingReader(client,projectId);
+      const cablePurposeRouting=(await shared.purposeRouting)(purposes.get(cable.id));
+      return cablePurposeRouting ? {...frozen,cablePurposeRouting} as DependencySnapshot : null;
+    };
     const fresh = async (raw: unknown,version:DependencySnapshot['schemaVersion']): Promise<DependencySnapshot | null> => {
       const options = optionsSchema.safeParse(raw); if (!options.success) return null;
       if (options.data.secondaryDistanceMeters !== preferences.secondaryDistanceMeters || options.data.preferVerticalApproach !== preferences.preferVerticalApproach
         || !sameBarrierAdmissionIntent(options.data.barrierRouting,preferences.barrierRouting)) return null;
-      const coherent = await getCommon(options.data); check();
-      if (coherent?.unavailableReasonCode) unavailableReasons.add(coherent.unavailableReasonCode);
-      if (!coherent?.inputs) return null;
-      const frozen=freezeCableDependenciesForVersion(coherent.inputs, cable, from.point, to.point,version).dependencies;
-      if (!frozen || !['pathfinder.dependencies.v7','pathfinder.dependencies.v8'].includes(version)) return frozen;
-      shared.purposeRouting ??= createCablePurposeRoutingReader(client,projectId);
-      const cablePurposeRouting=(await shared.purposeRouting)(purposes.get(cable.id));
-      return cablePurposeRouting ? {...frozen,cablePurposeRouting} as DependencySnapshot : null;
+      const frozen = await freshSaved(options.data,version);
+      for (const reason of savedUnavailableReasons) unavailableReasons.add(reason);
+      return frozen;
     };
     const rawState = meta?.item_state, itemState = ['waiting', 'running', 'complete', 'blocked'].includes(rawState) ? rawState as CableWorkflowCalculation['itemState'] : null;
     const jobStatus = ['queued', 'running', 'complete', 'cancelled', 'failed'].includes(meta?.job_status) ? meta!.job_status as CableWorkflowCalculation['jobStatus'] : null;
@@ -218,16 +228,17 @@ async function readRows(client: PoolClient, projectId: string, candidates: Data[
       itemApplicability='itemApplicability' in result?result.itemApplicability:null;
     }
     const cableSnapshot = snapshot(cable), accepted = Boolean(acceptedIds.has(cable.id) && meta?.job_id && meta.proposal_id && meta.proposal_hash
-      && await proof.accepted(cableSnapshot, fresh, {jobId:meta.job_id,proposalId:meta.proposal_id,proposalHash:meta.proposal_hash})) && unavailableReasons.size === 0; check();
+      && await proof.accepted(cableSnapshot, freshSaved, {jobId:meta.job_id,proposalId:meta.proposal_id,proposalHash:meta.proposal_hash})) && savedUnavailableReasons.size === 0; check();
     if (accepted) currentness = 'current';
-    const savedExactDisplay = Boolean(!accepted && unavailableReasons.size === 0 && currentness === 'changed' && acceptedIds.has(cable.id)
+    const savedExactDisplay = Boolean(!accepted && savedUnavailableReasons.size === 0 && ['changed', 'unavailable'].includes(currentness) && acceptedIds.has(cable.id)
       && ['complete', 'failed'].includes(jobStatus ?? '') && itemState === 'complete' && status === 'calculated' && meta?.cancel_requested === false
       && meta.job_id && meta.proposal_id && meta.proposal_hash
-      && await proof.savedExactDisplay(cableSnapshot, fresh, { jobId: meta.job_id, proposalId: meta.proposal_id, proposalHash: meta.proposal_hash })); check();
+      && await proof.savedExactDisplay(cableSnapshot, freshSaved, { jobId: meta.job_id, proposalId: meta.proposal_id, proposalHash: meta.proposal_hash })); check();
+    if (savedExactDisplay) currentness = 'changed';
     let savedRoute: CableWorkflowRow['savedRoute'];
     // A later terminal failure describes the attempt, not the already-written
     // route. Keep its diagnostics and qualify the latest receipt independently.
-    if (unavailableReasons.size === 0 && acceptedIds.has(cable.id) && meta?.job_id && ['complete', 'failed', 'cancelled'].includes(jobStatus ?? '')
+    if (savedUnavailableReasons.size === 0 && acceptedIds.has(cable.id) && meta?.job_id && ['complete', 'failed', 'cancelled'].includes(jobStatus ?? '')
       && !['waiting', 'running'].includes(itemState ?? '') && status !== 'calculated'
       && !['pending', 'running', 'unknown'].includes(meta.automatic_update_status ?? '')
       && from.availability.pointAvailable && to.availability.pointAvailable && cableSnapshot.routing?.trim() && cableSnapshot.designLength !== null) {
@@ -237,12 +248,15 @@ async function readRows(client: PoolClient, projectId: string, candidates: Data[
       if (retained && policyUuidSchema.safeParse(retained.receipt_id).success && policyUuidSchema.safeParse(retained.job_id).success
         && policyUuidSchema.safeParse(retained.proposal_id).success && policyHashSchema.safeParse(retained.proposal_hash).success) {
         const identity = { receiptId: retained.receipt_id, jobId: retained.job_id, proposalId: retained.proposal_id, proposalHash: retained.proposal_hash };
-        if (await proof.accepted(cableSnapshot, fresh, identity)) savedRoute = { ...identity, currentness: 'current' };
-        else if (await proof.savedExactDisplay(cableSnapshot, fresh, identity)) savedRoute = { ...identity, currentness: 'saved-exact' };
+        if (await proof.accepted(cableSnapshot, freshSaved, identity)) savedRoute = { ...identity, currentness: 'current' };
+        else if (await proof.savedExactDisplay(cableSnapshot, freshSaved, identity)) savedRoute = { ...identity, currentness: 'saved-exact' };
         check();
       }
     }
-    if (unavailableReasons.size) { currentness = 'unavailable'; reviewable = false; savedRoute = undefined; reasons.push(...unavailableReasons); }
+    if (unavailableReasons.size || savedUnavailableReasons.size) {
+      reviewable = false; reasons.push(...unavailableReasons, ...savedUnavailableReasons);
+      if (!accepted && !savedExactDisplay && !savedRoute) currentness = 'unavailable';
+    }
     return cableWorkflowRowSchema.parse({ projectId, cable: cableSnapshot, mto: cable.mto, from: from.availability, to: to.availability,
       displayMetadata: { typeName: cable.display_type_name ?? null, purpose: cable.display_purpose ?? null },
       ...(savedRoute ? { savedRoute } : {}),

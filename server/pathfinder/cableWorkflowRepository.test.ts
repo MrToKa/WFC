@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Pool, PoolClient } from 'pg';
 import { createCableWorkflowRepository } from './cableWorkflowRepository.js';
 import { classifyCableWorkflow } from '../../shared/pathfinderCableWorkflow.js';
-import { defaultOptions } from './jobContracts.js';
+import type { CableWorkflowDetailQuery } from '../../shared/pathfinderCableWorkflowQueries.js';
+import { defaultOptions, type DependencySnapshot } from './jobContracts.js';
 import { endpointBindingFixture } from '../../shared/pathfinderEndpointFixtures.js';
 import { MIXED_BARRIER_POLICY } from '../../shared/pathfinderBarrierMixed.js';
 import { supportedBarrierAdmissionIntentSchema } from '../../shared/pathfinderBarrierSupported.js';
@@ -153,6 +154,59 @@ describe('bounded cable diagnostics, mocked SQL protocol and explicit proof/auth
       expectedRegistryRevision:'3',expectedSnapshot:{schemaVersion:'wfc.pf.barrier-snapshot-reference.v2',geometryPolicy:MIXED_BARRIER_POLICY,
         snapshotId:id(50),scope:structuredClone(scope),registryRevision:'3',contentSha256:'d'.repeat(64),mode:'explicit-empty'},drillThroughWalls:false});
   }
+  it.each(['secondary', 'vertical', 'missing-barrier', 'drilling', 'unavailable-barrier'] as const)(
+    'keeps a receipt-proven saved route Updated independently of draft %s preferences', async kind => {
+      const f = fixture(), intent = mixedIntent();
+      const recorded = { ...f.state.common.inputs.options, barrierRouting: intent };
+      const requested: CableWorkflowDetailQuery = { secondaryDistanceMeters: recorded.secondaryDistanceMeters, preferVerticalApproach: recorded.preferVerticalApproach,
+        ...(kind === 'missing-barrier' ? {} : { barrierRouting: ['drilling', 'unavailable-barrier'].includes(kind) ? { ...intent, drillThroughWalls: true } : intent }) };
+      if (kind === 'secondary') requested.secondaryDistanceMeters = 99;
+      if (kind === 'vertical') requested.preferVerticalApproach = !recorded.preferVerticalApproach;
+      f.state.hasReceipt = true; f.state.cables[0].routing = '/SAVED' as never; f.state.cables[0].design_length = '58' as never;
+      f.state.metadata.set(id(1000), meta(0, { job_status: 'complete', item_state: 'complete', proposal_status: 'calculated', proposal_id: id(30), proposal_hash: 'f'.repeat(64) }));
+      mocks.barrierCommon.mockImplementation(async (_client, _project, options) => {
+        if (kind === 'unavailable-barrier' && options.barrierRouting.drillThroughWalls)
+          throw new PathFinderError('BARRIER_CONTEXT_CHANGED', 409);
+        return { ...f.state.common, inputs: { ...f.state.common.inputs, options } };
+      });
+      mocks.verified.mockResolvedValue({ dependencies: { schemaVersion: 'pathfinder.dependencies.v8', options: recorded } });
+      mocks.accepted.mockImplementation(async (_cable, currentForOptions) => {
+        const current = await currentForOptions(recorded, 'pathfinder.dependencies.v8');
+        return current?.settings.revision === '1' && JSON.stringify(current.options) === JSON.stringify(recorded)
+          && current.cablePurposeRouting?.purpose === 'Control';
+      });
+      const before = structuredClone(f.state.cables[0]);
+      const detail = await f.repo.detail(projectId, who, id(1000), requested);
+      expect(mocks.reviewable.mock.calls[0][3]).toBeNull();
+      expect(detail.row.calculation).toMatchObject({ currentness: 'current', acceptedMatchesCurrent: true, reviewable: false });
+      expect(classifyCableWorkflow(detail.row).status).toBe('up-to-date');
+      expect((await f.repo.page(projectId, who, { ...requested, filter: 'needs-routing' })).rows).toEqual([]);
+      expect((await f.repo.page(projectId, who, { ...requested, filter: 'up-to-date' })).rows).toHaveLength(1);
+      expect(f.state.cables[0]).toEqual(before);
+      // A real shared-settings change still fails the same saved dependency check.
+      f.state.common.inputs.settings.revision = '2';
+      const stale = await f.repo.detail(projectId, who, id(1000), requested);
+      expect(stale.row.calculation).toMatchObject({ currentness: kind === 'unavailable-barrier' ? 'unavailable' : 'changed', acceptedMatchesCurrent: false, reviewable: false });
+      expect((await f.repo.page(projectId, who, { ...requested, filter: 'needs-routing' })).rows).toHaveLength(1);
+    },
+  );
+  it.each(['current', 'saved-exact'] as const)('checks a separate %s saved receipt with its recorded options after a failed attempt', async currentness => {
+    const f = fixture(), recorded = { ...f.state.common.inputs.options, barrierRouting: mixedIntent() };
+    f.state.hasReceipt = true; f.state.cables[0].routing = '/SAVED' as never; f.state.cables[0].design_length = '58' as never;
+    f.state.savedIdentity = { receipt_id: id(90), job_id: id(80), proposal_id: id(81), proposal_hash: 'a'.repeat(64) };
+    f.state.metadata.set(id(1000), meta(0, { job_status: 'complete', item_state: 'complete', item_status: 'no_path' }));
+    mocks.barrierCommon.mockImplementation(async (_client, _project, options) => ({ ...f.state.common, inputs: { ...f.state.common.inputs, options } }));
+    const verifyRecorded = async (_cable: unknown, currentForOptions: (options: unknown, version: DependencySnapshot['schemaVersion']) => Promise<DependencySnapshot | null>) => {
+      const current = await currentForOptions(recorded, 'pathfinder.dependencies.v8');
+      return current !== null && JSON.stringify(current.options) === JSON.stringify(recorded);
+    };
+    if (currentness === 'current') mocks.accepted.mockImplementation(verifyRecorded);
+    else mocks.savedExactDisplay.mockImplementation(verifyRecorded);
+    const detail = await f.repo.detail(projectId, who, id(1000), { preferVerticalApproach: false });
+    expect(detail.row.savedRoute?.currentness).toBe(currentness);
+    expect(detail.row.calculation).toMatchObject({ outcome: 'no-path', acceptedMatchesCurrent: false, reviewable: false });
+    expect(classifyCableWorkflow(detail.row).status).toBe(currentness === 'current' ? 'up-to-date' : 'blocked');
+  });
   it('recognizes exact mixed current preferences through the existing proof/readiness seam',async()=>{
     const f=fixture(),intent=mixedIntent(),options={...f.state.common.inputs.options,barrierRouting:intent};
     f.state.metadata.set(id(1000),meta(0,{job_status:'complete',item_state:'complete',proposal_status:'calculated',proposal_id:id(30),proposal_hash:'f'.repeat(64)}));
