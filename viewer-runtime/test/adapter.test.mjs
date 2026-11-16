@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createViewerAdapter } from '../adapter.mjs';
 import { createRouteController } from '../routes.mjs';
+import { nativeTreeSdk, nativeSetObjectTree, nativeSetDbId, nativeFragmentIds } from './sdk-object-tree-fixture.mjs';
 import { planModelCaptureInput } from '../capture-input.mjs';
 import { BARRIER_CAPTURE_ERROR_CODES, BARRIER_CAPTURE_ERROR_MESSAGES } from '../barrier-capture-errors.mjs';
 
@@ -681,4 +682,55 @@ test('saved point focus rechecks load and authorization, then actual-object Show
   await handle.showLocationPoint([1, 2, 3]); const last = meshes[0]; handle.finish();
   assert.equal(meshes.length, 0); assert.equal(last.material.disposed, true);
   await assert.rejects(handle.showLocationPoint([1, 2, 3]), { code: 'MODEL_SELECTION_CHANGED' });
+});
+
+test('tray and legacy route focus suppress streamed manual CAD and Hide restores its prior visibility', async t => {
+  const f = sdkFixture({ trayVisibility: true }), previous = globalThis.window; globalThis.window = f.window;
+  t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
+  const av = f.window.Autodesk.Viewing;
+  f.model.getUnitScale = () => 1; f.model.getUpVector = () => [0, 0, 1]; f.model.getGlobalOffset = () => [0, 0, 0];
+  class Geometry { setAttribute() {} setIndices() {} }
+  class Matrix { compose() { return this; } }
+  class DynamicModel {
+    id = 77; data = { loadOptions: {} }; records = new Map(); next = 0;
+    instances = {
+      fragments: { length: 0, fragId2dbId: [] }, setDbId: nativeSetDbId, _dbIdToInstanceIds: nativeFragmentIds,
+      add: () => { const id = this.next++; this.records.set(id, { visible: true }); return id; },
+      remove: id => this.records.delete(id),
+    };
+    getData() { return this.data; } getInstances() { return this.instances; }
+    getObjectTree() { return this.data.instanceTree; } setObjectTree = nativeSetObjectTree;
+    _dispatchEvent() {} isInitialized() { return true; } isLoadDone() { return true; }
+    setVisibility(id, visible) { this.records.get(id).visible = visible; }
+  }
+  av.Model = DynamicModel; av.ObjectTreeBuilder = nativeTreeSdk.ObjectTreeBuilder;
+  av.Scene = { BufferGeometry: Geometry, BufferAttribute: class {}, UnlitMaterial: class {}, Side: { Double: 2 } };
+  av.Math = { Matrix4: Matrix, Quaternion: class {}, Vector3: class {} };
+  await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: loadedDescriptor() });
+  const viewer = f.viewers[0]; let dynamic;
+  viewer.showModel = model => { dynamic = model; }; viewer.unloadModel = () => {}; viewer.refresh = () => {};
+  const mesh = { schemaVersion: 1, units: 'mm', triangleCount: 1, positions: [0,0,0,1,0,0,0,1,0], normals: [0,0,1,0,0,1,0,0,1], indices: [0,1,2] };
+  const transform = { positionMm: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0, w: 1 } };
+  await handle.showTray([2]);
+  // The CAD scene is first created after focus, as happens during rehydration.
+  handle.cadAdd('one', mesh, transform); assert.equal(dynamic.records.get(0).visible, false);
+  handle.clearRoute({ preserveCamera: true }); assert.equal(dynamic.records.get(0).visible, true);
+  handle.cadAdd('two', mesh, transform); handle.cadVisibility('two', false);
+  await handle.showTray([3]); assert.deepEqual([...dynamic.records.values()].map(row => row.visible), [false, false]);
+  handle.clearRoute({ preserveCamera: true }); assert.deepEqual([...dynamic.records.values()].map(row => row.visible), [true, false]);
+  await handle.showRoute('/BC1'); assert.equal(dynamic.records.get(0).visible, false);
+  handle.clearRoute({ preserveCamera: true }); assert.deepEqual([...dynamic.records.values()].map(row => row.visible), [true, false]);
+  await handle.showTray([2]);
+  await assert.rejects(handle.showRoute(''));
+  assert.deepEqual([...dynamic.records.values()].map(row => row.visible), [true, false]);
+  // Cancellation of an older route read cannot restore CAD over a newer tray.
+  const obsolete = handle.showRoute('/BC1');
+  const obsoleteRejected = assert.rejects(obsolete, { name: 'AbortError' });
+  await handle.showTray([3]); await obsoleteRejected;
+  assert.deepEqual([...dynamic.records.values()].map(row => row.visible), [false, false]);
+  handle.clearRoute({ preserveCamera: true });
+  // A fitting failure rolls back both source appearance and CAD suppression.
+  viewer.fitToView = () => { throw Error('fit failure'); };
+  await assert.rejects(handle.showTray([2]), { code: 'TRAY_UNAVAILABLE' });
+  assert.deepEqual([...dynamic.records.values()].map(row => row.visible), [true, false]);
 });

@@ -31,6 +31,8 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
   let propertyPanel;
   let tree;
   let disposed = false;
+  let routeFilter = null;
+  const routeKey = value => String(value ?? '').normalize('NFKC').trim().replace(/^\/+|\/+$/g, '').toUpperCase();
 
   function cadMaterial(color) {
     // SDK 7.130 Scene.UnlitMaterial is MeshBasicMaterial with environment maps
@@ -147,6 +149,7 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
       properties.set(componentId, { ...savedProperties, positionMm: positions.get(componentId) });
     tree.upsert(componentId, instanceId, properties.get(componentId));
     if (savedHidden) setVisibility(componentId, false);
+    if (routeFilter !== null) applyRouteVisibility(componentId);
     restoreOwnedSelection(selection);
     viewer.refresh(true);
   }
@@ -237,7 +240,40 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
     const objectId = tree.objectId(componentId);
     dynamicModel.getObjectTree().setNodeHidden(objectId, !visible);
     dynamicModel.setVisibility(id, visible);
+    if (routeFilter !== null) applyRouteVisibility(componentId);
     viewer.refresh(true);
+  }
+
+  // Keep native tree flags as the user's baseline while route focus temporarily
+  // suppresses owned fragments. Clearing focus must preserve prior hiding.
+  function applyRouteVisibility(componentId) {
+    tree.flush();
+    const objectTree = dynamicModel.getObjectTree();
+    let objectId = tree.objectId(componentId), visible = true;
+    const seen = new Set();
+    while (objectId != null && !seen.has(objectId)) {
+      seen.add(objectId);
+      if (objectTree.isNodeHidden(objectId) || objectTree.isNodeOff?.(objectId)) visible = false;
+      if (objectId === objectTree.getRootId()) break;
+      objectId = objectTree.getNodeParentId(objectId);
+    }
+    if (routeFilter !== null && !routeFilter.has(routeKey(properties.get(componentId)?.route?.name))) visible = false;
+    dynamicModel.setVisibility(registry.get(componentId), visible);
+  }
+
+  function setRouteVisibility(routeNames) {
+    if (routeNames !== null && (!Array.isArray(routeNames) || !routeNames.every(name => typeof name === 'string')))
+      throw new Error('Invalid CAD route visibility.');
+    if (disposed) throw new Error('CAD scene is disposed.');
+    routeFilter = routeNames === null ? null : new Set(routeNames.map(routeKey));
+    // Retain desired state after a partial SDK failure so Clear can retry and
+    // asynchronously arriving geometry obeys the current focus.
+    let failure;
+    for (const componentId of registry.keys()) {
+      try { applyRouteVisibility(componentId); } catch (error) { failure ??= error; }
+    }
+    viewer.refresh(true);
+    if (failure) throw failure;
   }
 
   function focus(componentId) {
@@ -260,6 +296,7 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
       positionMm: positions.get(componentId),
     });
     tree.setProperties(componentId, properties.get(componentId));
+    if (routeFilter !== null) applyRouteVisibility(componentId);
     if (!propertyPanel)
       propertyPanel = installCadPropertyPanel(viewer, av, (model, instanceId) => {
         if (model !== dynamicModel) return undefined;
@@ -275,6 +312,7 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
     focus,
     setColor,
     setVisibility,
+    setRouteVisibility,
     setProperties,
     dispose() {
       disposed = true;

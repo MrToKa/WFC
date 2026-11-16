@@ -1,7 +1,7 @@
 import { modelCaptureErrorMessage, modelCaptureErrorContext } from './model-capture-errors.mjs';
 import { MODEL_CAPTURE_BATCH_EVENTS, MODEL_CAPTURE_BATCH_BYTES, capturePacketBytes } from './capture-batch.mjs';
 import { readModelObjectGuid, resolveTrayObjectIdentities, validateTrayIdentityRequest } from './tray-identity.mjs';
-import { createRouteController } from './routes.mjs';
+import { createRouteController, parseRoute } from './routes.mjs';
 import { createPathFinderController } from './pathfinder.mjs';
 import { createLocationPointController } from './location-point.mjs';
 import { createCadSceneController } from './cad-scene.mjs';
@@ -287,11 +287,19 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
         prepareForEndpointVisibility();
         return captureSelectedModel(viewer, { ...request, projectId: descriptor.projectId, modelVersionId: descriptor.modelVersionId, contentFingerprint: descriptor.contentFingerprint,loadId:descriptor.loadId }, { signal: AbortSignal.any([signal, state.controller.signal].filter(Boolean)), startedAt: state.startedAt, eventLimit, onProgress(progress) { if (capture === state) state.onProgress?.(progress); } });
       }
+      let cadRouteFilter = null;
+      let displayGeneration = 0;
+      function setCadRouteFilter(names) {
+        cadRouteFilter = names;
+        cadScene?.setRouteVisibility(names);
+      }
       function prepareForEndpointVisibility() {
+        displayGeneration++;
         // Restore only our route appearance. Ghost/isolation must not become an
         // automatic endpoint exclusion, and a failed restoration must refuse.
         routes.prepareForVisibilityObservation(); legacyPath = false;
         pathfinder.prepareForVisibilityObservation(); computedPath = trayDisplay = false;
+        setCadRouteFilter(null);
       }
       async function inputAck(state, request, operationSignal) {
         if (capture !== state || state.reading || state.iterator) throw safeError('EXTRACTION_FAILED');
@@ -307,7 +315,10 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
       }
       const ensureCadScene = () => {
         if (finished || !loadedModel || viewer.model !== loadedModel) throw safeError('MODEL_SELECTION_CHANGED');
-        if (!cadScene) cadScene = createCadSceneController(viewer, { window, sourceModel: loadedModel });
+        if (!cadScene) {
+          cadScene = createCadSceneController(viewer, { window, sourceModel: loadedModel });
+          if (cadRouteFilter !== null) cadScene.setRouteVisibility(cadRouteFilter);
+        }
         return cadScene;
       };
       const handle = {
@@ -340,19 +351,44 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
         showRoute(text, options = {}) {
           const bindings = options.routingBindings === undefined ? undefined : parseRoutingBindings(options.routingBindings, descriptor);
           if (options.routingBindings !== undefined && !bindings) throw safeError('ROUTING_BINDINGS_INVALID');
+          const generation = ++displayGeneration;
           pathfinder.clear(); computedPath = trayDisplay = false; legacyPath = true;
-          return routes.showRoute(text, { ...options, routingBindings: bindings });
+          return routes.showRoute(text, { ...options, routingBindings: bindings }).then(result => {
+            if (!finished && generation === displayGeneration) setCadRouteFilter(parseRoute(text));
+            return result;
+          }).catch(error => {
+            // A failed obsolete read must never clear its replacement focus.
+            // A current failure, including CAD filtering, restores both models.
+            if (!finished && generation === displayGeneration) {
+              try { routes.clearRoute({ preserveCamera: true }); setCadRouteFilter(null); legacyPath = false; }
+              catch { throw safeError('APPEARANCE_RESTORE_FAILED'); }
+            }
+            throw error;
+          });
         },
         clearRoute({ preserveCamera = false, preserveSelection = false } = {}) {
+          displayGeneration++;
           cancelCapture();
           // Hide and geometry preparation restore appearance at the user's
           // current camera, including repeated cleanup after the tray is gone.
           if (computedPath || trayDisplay) pathfinder.clear({ preserveSelection }); else if (legacyPath) routes.clearRoute({ preserveCamera, preserveSelection }); else { if (!preserveSelection) viewer.clearSelection(); if (!preserveCamera) viewer.fitToView(); }
           if (trayDisplay && !preserveCamera) viewer.fitToView();
           computedPath = legacyPath = trayDisplay = false;
+          setCadRouteFilter(null);
         },
         fitRoute() { if (computedPath) pathfinder.fit(); else routes.fitRoute(); },
-        showComputedPath(value) { if (legacyPath) routes.clearRoute(); legacyPath = false; const result = pathfinder.showPath(value); computedPath = true; trayDisplay = false; return result; },
+        showComputedPath(value) {
+          displayGeneration++;
+          if (legacyPath) routes.clearRoute(); legacyPath = false;
+          try {
+            const result = pathfinder.showPath(value); computedPath = true; trayDisplay = false;
+            setCadRouteFilter([]); return result;
+          } catch (error) {
+            try { pathfinder.clear({ preserveSelection: true }); setCadRouteFilter(null); computedPath = trayDisplay = false; }
+            catch { throw safeError('APPEARANCE_RESTORE_FAILED'); }
+            throw error;
+          }
+        },
         readModelObjects: pathfinder.readObjects,
         readPreparationObjects(request, operationSignal, onProgress) {
           active(operationSignal); prepareForEndpointVisibility();
@@ -428,12 +464,14 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
           await beforeCommit();
           currentModel();
           try {
+            displayGeneration++;
             if (legacyPath) { routes.clearRoute(); legacyPath = false; }
             trayDisplay = true;
             pathfinder.showTray(ids); computedPath = false;
+            setCadRouteFilter([]);
             viewer.fitToView(ids, loadedModel);
           } catch {
-            try { pathfinder.clear({ preserveSelection: true }); computedPath = trayDisplay = false; }
+            try { pathfinder.clear({ preserveSelection: true }); setCadRouteFilter(null); computedPath = trayDisplay = false; }
             catch { throw safeError('APPEARANCE_RESTORE_FAILED'); }
             throw safeError('TRAY_UNAVAILABLE');
           }

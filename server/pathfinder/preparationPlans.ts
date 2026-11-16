@@ -45,17 +45,21 @@ export async function readPreparationContext(c: PoolClient, projectId: string, o
   const catalog = await readRoutingCatalog(c, projectId,{lock}), routing = await readRoutingPolicyScope(c, projectId,{lock});
   // Current display facts are intentionally separate from the routing catalog's
   // null dimension placeholders, immutable plans and drawing proof budgets.
-  const detailRows = (await c.query<{ id: string; tray_type: unknown; width_mm: unknown; height_mm: unknown; cad_geometry?:boolean }>(
+  const detailRows = (await c.query<{ id: string; tray_type: unknown; width_mm: unknown; height_mm: unknown; cad_geometry?:boolean; cad_published?:boolean }>(
     cadDesignEnabled()?`/* preparation-tray-details */ SELECT t.id::text,t.tray_type,t.width_mm::text,t.height_mm::text,
       EXISTS(SELECT 1 FROM cad_route_tray_exports e JOIN cad_designs d ON d.project_id=e.project_id AND d.id=e.design_id
         JOIN cad_route_groups g ON g.project_id=e.project_id AND g.design_id=e.design_id AND g.id=e.route_group_id
-        WHERE e.project_id=t.project_id AND e.tray_id=t.id AND d.model_version_id=$2 AND d.status='proposed') AS cad_geometry
+        WHERE e.project_id=t.project_id AND e.tray_id=t.id AND d.model_version_id=$2 AND d.status='proposed') AS cad_geometry,
+      EXISTS(SELECT 1 FROM cad_route_groups g JOIN cad_designs d ON d.project_id=g.project_id AND d.id=g.design_id
+        WHERE g.project_id=t.project_id AND g.project_tray_id=t.id AND g.status='published'
+          AND d.model_version_id=$2 AND d.status='proposed') AS cad_published
       FROM trays t WHERE t.project_id=$1 ORDER BY t.id LIMIT 100001`:
       '/* preparation-tray-details */ SELECT id::text,tray_type,width_mm::text,height_mm::text FROM trays WHERE project_id=$1 ORDER BY id LIMIT 100001',
       cadDesignEnabled()?[projectId,model.active_model_version_id]:[projectId])).rows;
   if (detailRows.length > PURPOSE_POLICY_LIMITS.catalogRows) return fail('PREPARATION_TRAY_DETAILS_LIMIT', 413);
   const detailsById = new Map(detailRows.map(row => [row.id, { type: presentationType(row.tray_type),
     widthMm: presentationMillimetres(row.width_mm), heightMm: presentationMillimetres(row.height_mm) }]));
+  const publishedCadTrayIds = new Set(detailRows.filter(row => row.cad_published === true).map(row => row.id));
   const cadTrayIds=new Set(detailRows.filter(row=>row.cad_geometry===true).map(row=>row.id));
   const state = await readPreparationState(c, projectId,{lock});
   const registry = (await c.query<{ revision: string }>(`SELECT registry_revision::text AS revision FROM pf_project_state WHERE project_id=$1${lock?' FOR UPDATE':''}`, [projectId])).rows[0];
@@ -77,7 +81,8 @@ export async function readPreparationContext(c: PoolClient, projectId: string, o
       ? Array.isArray(rule.allowed_categories) && rule.allowed_categories.length ? ['MV', 'LV', 'Control'] : [] : undefined;
     return { projectTrayId: row.projectTrayId, rawName: row.rawName, purposeKey: row.purposeKey, routeName, allowedCategories: allowedCategories ?? [], policyState: codes.length ? 'invalid' as const : !rule ? 'unconfigured' as const : allowedCategories?.length ? 'configured' as const : 'excluded' as const, diagnosticCodes: codes,
       details: detailsById.get(row.projectTrayId) ?? { type: null, widthMm: null, heightMm: null },
-      ...(cadTrayIds.has(row.projectTrayId)?{geometrySource:'saved-cad-route' as const}:{}) };
+      ...(publishedCadTrayIds.has(row.projectTrayId) ? { geometrySource: 'published-cad-route' as const }
+        : cadTrayIds.has(row.projectTrayId) ? { geometrySource: 'saved-cad-route' as const } : {}) };
   });
   for (const ids of codeNames.values()) if (ids.length > 1) for (const tray of trays) if (ids.includes(tray.projectTrayId)) { tray.diagnosticCodes.push('ROUTE_CODE_COLLISION'); tray.policyState = 'invalid'; }
   const endpointRows = (await c.query<{ name: string }>(`SELECT DISTINCT value COLLATE "C" AS name FROM cables c CROSS JOIN LATERAL(VALUES(c.from_location),(c.to_location)) e(value) WHERE c.project_id=$1 AND value IS NOT NULL AND btrim(value)<>'' ORDER BY name LIMIT 4097`, [projectId])).rows;
@@ -125,7 +130,7 @@ export function buildPreparationPlan(context: PreparationContext, input: Prepara
     if (tray.policyState !== 'configured' || !tray.purposeKey) { add(tray.policyState === 'unconfigured' ? 'PURPOSE_UNCONFIGURED' : 'TRAY_POLICY_INVALID', [tray.projectTrayId]); continue; }
     // Saved CAD centerlines enter through verified publication, never an SDK
     // name match. Keep their catalog dependency while capturing only base trays.
-    if(tray.geometrySource==='saved-cad-route'){excluded.push(tray.projectTrayId);deferredCadTrayIds.push(tray.projectTrayId);continue;}
+    if(tray.geometrySource==='saved-cad-route' || tray.geometrySource==='published-cad-route'){excluded.push(tray.projectTrayId);deferredCadTrayIds.push(tray.projectTrayId);continue;}
     const candidates = discovery.trays.find(t => t.projectTrayId === tray.projectTrayId)!.candidateRootObjectIds;
     if (candidates.some(root => { const candidate = objects.get(root); if (!candidate) return true; const exact = normalizeCatalogKey(candidate.name); return exact !== normalizeCatalogKey(tray.rawName) && exact !== normalizeCatalogKey(tray.routeName); })) return fail('PREPARATION_EXACT_CANDIDATE_INVALID');
     // A name match in a new model is not evidence that it is the physical object
