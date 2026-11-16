@@ -490,7 +490,11 @@ describe('saved route component scope and exports', { timeout: 20000 }, () => {
     const list = screen.getByRole('list', { name: 'Placed tray components' });
     expect(await within(list).findByRole('button', { name: /FREE-PART/ })).toBeInTheDocument();
     await screen.findByRole('button', { name: /A-ROUTE · 1 components/ });
-    expect(within(list).queryByRole('button', { name: /A-PART|B-PART/ })).not.toBeInTheDocument();
+    // Route membership reaches the parent after the route buttons render.
+    await waitFor(() => {
+      expect(within(list).queryAllByRole('button', { name: /A-PART|B-PART/ })).toHaveLength(0);
+      expect(within(list).getByRole('button', { name: /FREE-PART/ })).toBeInTheDocument();
+    });
     fireEvent.click(screen.getByRole('button', { name: /A-ROUTE · 1 components/ }));
     expect(within(list).getByRole('button', { name: /A-PART/ })).toBeInTheDocument();
     expect(
