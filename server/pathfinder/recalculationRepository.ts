@@ -91,11 +91,13 @@ export async function readRecalculationProgress(c:Pick<PoolClient,'query'>,input
     JOIN pf_jobs j ON j.project_id=e.project_id AND j.id=e.job_id
     WHERE s.project_id=$1 AND s.current_job_id=$2 AND s.desired_generation=$3::bigint AND s.enrolled_generation=$3::bigint
   ), scoped AS (
-    SELECT i.cable_id,i.eligible,i.state,i.status,d.status AS output_status,d.receipt_id
+    SELECT i.cable_id,i.eligible,i.state,i.status,
+      COALESCE(d.status,CASE WHEN decision.reason_code IS NOT NULL THEN 'review-required' END) AS output_status,d.receipt_id
     FROM current_job j JOIN LATERAL (
       SELECT i.cable_id,i.dependencies IS NOT NULL AS eligible,i.state,i.status FROM pf_job_items i
       WHERE i.project_id=$1 AND i.job_id=j.id ORDER BY i.cable_id LIMIT 10001
     ) i ON true LEFT JOIN pf_automatic_pair_dispatch d ON d.project_id=$1 AND d.job_id=j.id AND d.cable_id=i.cable_id
+    LEFT JOIN pf_automatic_pair_admission_decisions decision ON decision.project_id=$1 AND decision.job_id=j.id AND decision.cable_id=i.cable_id
   ), classified AS (
     SELECT *,CASE WHEN eligible AND state='complete' AND status='calculated' THEN CASE
       WHEN output_status IN('written','already-written') AND receipt_id IS NOT NULL THEN 'saved'

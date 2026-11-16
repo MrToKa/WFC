@@ -131,7 +131,8 @@ function BackgroundPass({ projectId, accountId, token, preferences, disabled, bl
       {submitting ? <Spinner size="tiny" label="Starting background recalculation…" /> : running ? <Spinner size="tiny" label={job?.status === 'complete' ? 'Saving calculated routes…' : 'Recalculating cables in the background…'} /> : job ? <Caption1 block>{job.status === 'complete' ? 'Background recalculation finished.' : `Background recalculation ${job.status}.`}</Caption1> : null}
       {job && counts ? <>
         <ProgressBar value={job.total ? job.completed / job.total : 1} />
-        <Caption1 block>Processed: {job.completed} / {job.total}. Calculated: {counts.calculated}; saved: {counts.saved}; saving: {counts.saving}; need review: {counts.review}; skipped or failed: {counts.blocked}; not saved: {counts.unsaved}.</Caption1>
+        <Caption1 block>Processed: {job.completed} / {job.total}. Calculated: {counts.calculated}; saved: {counts.saved}; saving: {counts.saving}; need review: {counts.review}; skipped or failed: {counts.blocked}; not saved by this run: {counts.unsaved}.</Caption1>
+        {counts.unsaved > 0 ? <Caption1 block>Not saved by this run does not mean the cable has no saved route. Existing routes remain in Cable list; inspect the update reason and protection for each cable before retrying.</Caption1> : null}
         {job.failure ? <Caption1 block>{job.failure}</Caption1> : null}
       </> : null}
     </div>

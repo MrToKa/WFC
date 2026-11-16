@@ -15,6 +15,7 @@ import { cableEndpointCommandSchema, cableEndpointEndSchema } from '../../shared
 import { PathFinderError } from './errors.js';
 import { requireAutomaticGenerationOutput } from './automaticGenerationOutput.js';
 import { automaticPairBaselineSnapshot, automaticPairMaterialState } from './automaticPairSnapshot.js';
+import { appendAutomaticPairAdmissionDecision, readAutomaticPairAdmissionDecision } from './automaticPairAdmissionDecisions.js';
 
 type Row = Record<string, any>;
 const fail = (code: string, status = 409): never => { throw new PathFinderError(code, status, 'Automatic Cable list update is unavailable. Existing cable values are retained.'); };
@@ -108,9 +109,14 @@ export async function appendAutomaticPairMandatesInTransaction(client: PoolClien
       THEN to_jsonb(c)||jsonb_build_object('design_length',c.design_length::text,'install_length',c.install_length::text,'cable_write_revision',c.cable_write_revision::text) ELSE NULL END AS value
       FROM cables c WHERE project_id=$1 AND id=$2 FOR UPDATE`, [input.projectId, item.cableId])).rows[0]?.value;
     if (!before || before.cable_write_revision !== item.cableWriteRevision) return fail('AUTOMATIC_PAIR_BASELINE_CHANGED');
+    const admissionKey = { projectId: input.projectId, jobId: input.jobId, cableId: item.cableId };
+    if (await readAutomaticPairAdmissionDecision(client, admissionKey)) return fail('AUTOMATIC_PAIR_ADMISSION_ALREADY_DECIDED');
     const ownership: AutomaticPairOwnershipDecision = await (adapters.ownership ?? readAutomaticPairOwnership)(client,
       { projectId: input.projectId, cableId: item.cableId, currentSnapshot: before }, check);
-    if (ownership.kind === 'review-required') continue;
+    if (ownership.kind === 'review-required') {
+      await appendAutomaticPairAdmissionDecision(client, { ...admissionKey, reasonCode: ownership.reasonCode });
+      continue;
+    }
     const materials = automaticPairMaterialState(before);
     if (!materials) return fail('AUTOMATIC_PAIR_BASELINE_INVALID');
     const baselinePolicy = { schemaVersion: 'wfc.pf.automatic-pair-engineering-snapshot.v1' as const, materials };

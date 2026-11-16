@@ -15,6 +15,19 @@ CREATE TABLE IF NOT EXISTS pf_automatic_pair_dispatch(
  reason_code text CHECK(reason_code~'^[A-Z][A-Z0-9_]{0,95}$'),receipt_id uuid,updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
  PRIMARY KEY(project_id,job_id,cable_id),CHECK((owner_token IS NULL)=(lease_until IS NULL)),
  FOREIGN KEY(project_id,job_id,cable_id) REFERENCES pf_automatic_pair_mandates(project_id,job_id,cable_id) ON DELETE CASCADE);
+-- A refusal records admission evidence without granting a write mandate.
+CREATE TABLE IF NOT EXISTS pf_automatic_pair_admission_decisions(
+ project_id uuid NOT NULL,job_id uuid NOT NULL,cable_id uuid NOT NULL,
+ reason_code text NOT NULL CHECK(reason_code~'^[A-Z][A-Z0-9_]{0,95}$'),
+ created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ PRIMARY KEY(project_id,job_id,cable_id),
+ FOREIGN KEY(project_id,job_id,cable_id) REFERENCES pf_job_items(project_id,job_id,cable_id) ON DELETE CASCADE);
+CREATE OR REPLACE FUNCTION pf_automatic_pair_admission_immutable() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+ IF TG_OP='DELETE' AND NOT EXISTS(SELECT 1 FROM projects WHERE id=OLD.project_id) THEN RETURN OLD; END IF;
+ RAISE EXCEPTION 'Automatic pair admission decision is immutable';END $$;
+DROP TRIGGER IF EXISTS pf_automatic_pair_admission_immutable ON pf_automatic_pair_admission_decisions;
+CREATE TRIGGER pf_automatic_pair_admission_immutable BEFORE UPDATE OR DELETE ON pf_automatic_pair_admission_decisions
+ FOR EACH ROW EXECUTE FUNCTION pf_automatic_pair_admission_immutable();
 CREATE INDEX IF NOT EXISTS pf_automatic_pair_due ON pf_automatic_pair_dispatch(not_before,project_id,job_id,cable_id)
  WHERE status IN('pending','running','unknown');
 CREATE OR REPLACE FUNCTION pf_automatic_pair_mandate_immutable() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN

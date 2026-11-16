@@ -206,8 +206,10 @@ export function createPathFinderJobs(pool:Pool,registry:PathFinderRepository) {
         const row = (await client.query<Row>('SELECT * FROM pf_jobs WHERE project_id=$1 AND id=$2',[projectId,jobId])).rows[0];
         if (!row) throw new PathFinderError('JOB_NOT_FOUND',404);
         const items = await client.query<Row>(`/* job-output-items */ SELECT i.cable_id,i.state,i.status,i.message,
-          d.status AS automatic_update_status,d.receipt_id AS automatic_update_receipt,d.reason_code AS automatic_update_reason
+          COALESCE(d.status,CASE WHEN a.reason_code IS NOT NULL THEN 'review-required' END) AS automatic_update_status,
+          d.receipt_id AS automatic_update_receipt,CASE WHEN d.status IS NOT NULL THEN d.reason_code ELSE a.reason_code END AS automatic_update_reason
           FROM pf_job_items i LEFT JOIN pf_automatic_pair_dispatch d ON d.project_id=i.project_id AND d.job_id=i.job_id AND d.cable_id=i.cable_id
+          LEFT JOIN pf_automatic_pair_admission_decisions a ON a.project_id=i.project_id AND a.job_id=i.job_id AND a.cable_id=i.cable_id
           WHERE i.project_id=$1 AND i.job_id=$2 ORDER BY i.cable_id`,[projectId,jobId]);
         return {...jobDto(row),items:items.rows.map(item => {
           const value = {cableId:item.cable_id,status:item.status,state:item.state,message:item.message};

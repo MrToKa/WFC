@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
 import { schedulerTransaction } from './schedulerTransaction.js';
+import { repairAutomaticRoutingMigrationControls } from './automaticRoutingMigrationRepair.js';
 
 export const CABLE_ROUTING_CONTROL_SQL = `
 CREATE TABLE IF NOT EXISTS pf_cable_routing_controls(
@@ -33,7 +34,8 @@ INSERT INTO pf_cable_routing_controls(project_id,cable_id,manual_routing,manual_
  SELECT project_id,id,NULLIF(btrim(routing),''),NULLIF(btrim(routing),'') IS NOT NULL,
  (coalesce(install_length,0)>0 OR pull_date IS NOT NULL OR connected_from IS NOT NULL OR connected_to IS NOT NULL OR tested IS NOT NULL),
  CASE WHEN coalesce(install_length,0)>0 OR pull_date IS NOT NULL OR connected_from IS NOT NULL OR connected_to IS NOT NULL OR tested IS NOT NULL THEN routing ELSE NULL END
- FROM cables ON CONFLICT(project_id,cable_id) DO NOTHING;
+ FROM cables ON CONFLICT(project_id,cable_id) DO NOTHING
+ RETURNING project_id,cable_id,manual_protected,execution_locked,'routing-control-bootstrap.v1' AS migration_kind;
 INSERT INTO pf_manual_route_jobs(project_id,cable_id,manual_revision)
  SELECT project_id,cable_id,manual_revision FROM pf_cable_routing_controls WHERE manual_routing IS NOT NULL
  ON CONFLICT(project_id,cable_id) DO NOTHING;
@@ -69,6 +71,20 @@ CREATE TRIGGER pf_cable_routing_execution_latch AFTER UPDATE ON cables FOR EACH 
 export async function initializeCableRoutingControlSchema(pool: Pool) {
   await schedulerTransaction(pool, async client => {
     await client.query("SELECT pg_advisory_xact_lock(hashtext('wfc-cable-routing-control-schema-v1'))");
-    await client.query(CABLE_ROUTING_CONTROL_SQL);
+    const migration = await client.query(CABLE_ROUTING_CONTROL_SQL);
+    // Only controls created by this bootstrap are candidates here. Existing
+    // controls require an explicitly scoped repair; restarts never reclassify them.
+    const results = Array.isArray(migration) ? migration : [migration];
+    const fresh = results.flatMap(result => result.rows).filter(row => row.migration_kind === 'routing-control-bootstrap.v1'
+      && row.manual_protected === true && row.execution_locked === false) as { project_id: string; cable_id: string }[];
+    if (fresh.length > 10000) throw new Error('Automatic routing bootstrap repair exceeds its bounded scope.');
+    const byProject = new Map<string, string[]>();
+    for (const row of fresh) byProject.set(row.project_id, [...(byProject.get(row.project_id) ?? []), row.cable_id]);
+    const repairDeadline = Date.now() + 30000;
+    const check = () => { if (Date.now() >= repairDeadline) throw new Error('Automatic routing bootstrap repair deadline exceeded.'); };
+    for (const [projectId, cableIds] of byProject) {
+      for (let start = 0; start < cableIds.length; start += 500)
+        await repairAutomaticRoutingMigrationControls(client, { projectId, cableIds: cableIds.slice(start, start + 500), dryRun: false }, check);
+    }
   });
 }

@@ -15,7 +15,7 @@ function fixture() {
   const input: AppendAutomaticPairMandatesInput = { projectId: id(1), jobId: id(5), principal, policy: AUTOMATIC_PAIR_POLICY,
     source: { kind: 'explicit-job' }, requestSha256: 'a'.repeat(64), items: [{ cableId: id(2), cableWriteRevision: '7', dependencyHash: automaticPairHash(dependencies) }] };
   const state = { authorityKind: 'current-login', existing: [] as any[], inserted: [] as any[], impact: null as any, command: null as any, admin: true,
-    adminRevision: '2', epoch: id(6), cancelled: false, revoked: false };
+    adminRevision: '2', epoch: id(6), cancelled: false, revoked: false, decisions: [] as any[] };
   const query = vi.fn(async (sql: string, args: any[] = []) => {
     if (sql.startsWith('INSERT INTO viewer_login_bindings')) return { rows: [] };
     if (sql.startsWith('SELECT user_id,expires_at')) return { rows: [{ user_id: principal.userId, expires_at: new Date(expires), revoked_at: state.revoked ? new Date() : null }] };
@@ -30,11 +30,15 @@ function fixture() {
     if (sql.includes('original-impact')) return { rows: state.impact ? [state.impact] : [] };
     if (sql.includes('original-command')) return { rows: state.command ? [state.command] : [] };
     if (sql.includes('automatic-pair:mandate')) return { rows: state.existing };
+    if (sql.includes('automatic-pair:admission-decision')) return { rows: state.decisions.map(decision => ({ reason_code: decision.reasonCode })) };
     if (sql.includes('admitted-item')) return { rows: [{ dependencies }] };
     if (sql.includes('impact-target')) { const body = { projectId: id(1), impactId: id(7), cableId: id(2), generation: '1', cableWriteRevision: '7', eligible: true };
       const sha = automaticPairHash(body); return { rows: [{ generation: '1', record_sha256: sha, record: { ...body, contentSha256: sha } }] }; }
     if (sql.includes('cable-baseline')) return { rows: [{ value: before }] };
     if (sql.startsWith('INSERT INTO pf_automatic_pair_mandates')) { state.inserted.push(args[7]); return { rows: [] }; }
+    if (sql.startsWith('INSERT INTO pf_automatic_pair_admission_decisions')) {
+      state.decisions.push({ projectId: args[0], jobId: args[1], cableId: args[2], reasonCode: args[3] }); return { rows: [] };
+    }
     if (sql.startsWith('INSERT INTO pf_automatic_pair_dispatch')) return { rows: [] }; throw Error(sql);
   });
   const ownership = vi.fn(async () => ({ kind: 'empty' as const }));
@@ -72,6 +76,7 @@ describe('fresh exact automatic pair mandate admission', () => {
       materials: { initialized: false, customized: false, updatedAt: f.before.updated_at } });
     expect(m.dependencyHash).toBe(automaticPairHash(f.dependencies));
     expect(Date.parse(m.authorityExpiresAt) - Date.parse(m.createdAt)).toBe(1800000); expect(m.ownership).toEqual({ kind: 'empty' });
+    expect(f.state.decisions).toHaveLength(0);
   });
   it('does not authorize a calculation-grant job', async () => { const f = fixture(); f.state.authorityKind = 'calculation-grant';
     await expect(f.run()).rejects.toMatchObject({ code: 'AUTOMATIC_PAIR_JOB_AUTHORITY_REQUIRED' }); expect(f.state.inserted).toHaveLength(0); });
@@ -81,7 +86,22 @@ describe('fresh exact automatic pair mandate admission', () => {
     if (f.input.source.kind === 'location-impact') f.input.source.authorityExpiresAt = new Date(Date.now() + 600000).toISOString();
     await expect(f.run()).rejects.toMatchObject({ code: 'AUTOMATIC_PAIR_ORIGINAL_IMPACT_REQUIRED' }); });
   it('does not manufacture automatic ownership for unproven legacy data', async () => { const f = fixture(); f.ownership.mockResolvedValue({ kind: 'review-required', reasonCode: 'UNPROVEN' } as never);
-    expect(await f.run()).toBe(0); expect(f.state.inserted).toHaveLength(0); });
+    expect(await f.run()).toBe(0); expect(f.state.inserted).toHaveLength(0);
+    expect(f.state.decisions).toEqual([{ projectId: f.input.projectId, jobId: f.input.jobId, cableId: f.input.items[0].cableId, reasonCode: 'UNPROVEN' }]);
+    expect(f.query.mock.calls.some(([sql]) => sql.startsWith('INSERT INTO pf_automatic_pair_dispatch'))).toBe(false);
+  });
+  it.each(['ROUTING_MANUAL_PROTECTED', 'ROUTING_EXECUTION_PROTECTED'])('retains the exact %s admission reason without scheduling a write', async reasonCode => {
+    const f = fixture(); f.ownership.mockResolvedValue({ kind: 'review-required', reasonCode } as never);
+    expect(await f.run()).toBe(0); expect(f.state.decisions[0].reasonCode).toBe(reasonCode);
+    expect(f.state.inserted).toHaveLength(0);
+    expect(f.query.mock.calls.some(([sql]) => sql.startsWith('INSERT INTO pf_automatic_pair_dispatch'))).toBe(false);
+  });
+  it('does not upgrade an already refused admission after protection changes', async () => {
+    const f = fixture(); f.ownership.mockResolvedValueOnce({ kind: 'review-required', reasonCode: 'ROUTING_MANUAL_PROTECTED' } as never);
+    expect(await f.run()).toBe(0); f.ownership.mockClear();
+    await expect(f.run()).rejects.toMatchObject({ code: 'AUTOMATIC_PAIR_ADMISSION_ALREADY_DECIDED' });
+    expect(f.ownership).not.toHaveBeenCalled(); expect(f.state.inserted).toHaveLength(0); expect(f.state.decisions).toHaveLength(1);
+  });
   it('rejects a changed baseline revision before ownership discovery', async () => { const f = fixture(); f.before.cable_write_revision = '8';
     await expect(f.run()).rejects.toMatchObject({ code: 'AUTOMATIC_PAIR_BASELINE_CHANGED' }); expect(f.ownership).not.toHaveBeenCalled(); });
   it('keeps old when-both-empty commands from gaining a new mandate', async () => { const f = fixture(); const { command } = f.impact(); command.schemaVersion = 'wfc.pf.cable-endpoint-command.v3';

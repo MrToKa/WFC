@@ -96,11 +96,13 @@ async function metadata(client: PoolClient, projectId: string, ids: string[]): P
   if (!ids.length) return new Map();
   const rows = (await client.query<Data>(`/* cable-workflow:latest-admissions */ SELECT DISTINCT ON(b.cable_id) b.cable_id,b.status AS baseline_status,a.id AS admission_id,a.job_id,
     j.state AS job_status,j.cancel_requested,i.state AS item_state,i.status AS item_status,p.id AS proposal_id,p.proposal_hash,p.status AS proposal_status,
-    d.status AS automatic_update_status,d.receipt_id AS automatic_update_receipt,d.reason_code AS automatic_update_reason
+    COALESCE(d.status,CASE WHEN decision.reason_code IS NOT NULL THEN 'review-required' END) AS automatic_update_status,
+    d.receipt_id AS automatic_update_receipt,CASE WHEN d.status IS NOT NULL THEN d.reason_code ELSE decision.reason_code END AS automatic_update_reason
     FROM pf_revision_baselines b JOIN pf_revision_admissions a ON a.project_id=b.project_id AND a.id=b.admission_id
     LEFT JOIN pf_jobs j ON j.project_id=a.project_id AND j.id=a.job_id LEFT JOIN pf_job_items i ON i.project_id=a.project_id AND i.job_id=a.job_id AND i.cable_id=b.cable_id
     LEFT JOIN pf_proposals p ON p.project_id=a.project_id AND p.job_id=a.job_id AND p.cable_id=b.cable_id
     LEFT JOIN pf_automatic_pair_dispatch d ON d.project_id=a.project_id AND d.job_id=a.job_id AND d.cable_id=b.cable_id
+    LEFT JOIN pf_automatic_pair_admission_decisions decision ON decision.project_id=a.project_id AND decision.job_id=a.job_id AND decision.cable_id=b.cable_id
     WHERE b.project_id=$1 AND b.cable_id=ANY($2::uuid[]) ORDER BY b.cable_id,a.created_at DESC,a.id DESC`, [projectId, ids])).rows;
   const result = new Map<string, Data>();
   for (const row of rows) { if (!ids.includes(row.cable_id) || result.has(row.cable_id)) return fail('WORKFLOW_ADMISSION_INTEGRITY'); result.set(row.cable_id, row); }
