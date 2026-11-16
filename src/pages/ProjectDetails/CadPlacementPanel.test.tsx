@@ -4,6 +4,14 @@ import { useCallback, useState, type ComponentProps } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CadPlacementPanel } from './CadPlacementPanel';
 
+vi.mock('@/api/projectTrayPurposes', () => ({
+  projectTrayPurposesRequest: vi.fn(async () => [
+    { name: 'Low voltage cable tray', trayCount: 9 },
+    { name: 'Medium voltage cable tray', trayCount: 1 },
+    { name: 'LV and I and C cable tray', trayCount: 74 },
+  ]),
+}));
+
 const projectId = '00000000-0000-4000-8000-000000000001';
 const modelVersionId = '00000000-0000-4000-8000-000000000002';
 const designId = '00000000-0000-4000-8000-000000000003';

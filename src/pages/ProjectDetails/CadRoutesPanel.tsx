@@ -14,7 +14,7 @@ import {
   Title3,
 } from '@fluentui/react-components';
 import { getApiBaseUrl } from '@/api/http';
-import { TRAY_PURPOSE_OPTIONS } from '@/constants/trayPurposeOptions';
+import { useProjectTrayPurposes } from '@/hooks/useProjectTrayPurposes';
 import { cadRouteGroupInputSchema, type CadRouteGroup } from '../../../shared/cadRouteGroups';
 
 type Instance = {
@@ -109,6 +109,8 @@ export function CadRoutesPanel({
   externalBusy = false,
   creationActive = false,
 }: Props) {
+  const projectPurposes = useProjectTrayPurposes(projectId, token);
+  const purposeOptions = projectPurposes.purposes.map((purpose) => purpose.name);
   const [routes, setRoutes] = useState<CadRouteGroup[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [fields, setFields] = useState(empty);
@@ -291,6 +293,13 @@ export function CadRoutesPanel({
       );
       return;
     }
+    if (
+      selected?.status !== 'published' &&
+      (projectPurposes.loading || projectPurposes.error || !purposeOptions.includes(fields.purpose))
+    ) {
+      setMessage('Choose a purpose available in this project before saving.');
+      return;
+    }
     if (busy || externalBusy) return;
     setBusy(true);
     setMessage('');
@@ -448,7 +457,7 @@ export function CadRoutesPanel({
           disabled={busy || loading}
           onClick={() => {
             setBusy(true);
-            void reload()
+            void Promise.all([reload(), projectPurposes.refresh()])
               .then(async () => {
                 await onMetadataChanged?.();
                 memberSelectionEpoch.current++;
@@ -508,22 +517,40 @@ export function CadRoutesPanel({
                 }
               />
             </Field>
-            <Field label="Route purpose">
+            <Field
+              label="Route purpose"
+              hint={
+                projectPurposes.error ||
+                (projectPurposes.loading
+                  ? 'Loading project purposes…'
+                  : purposeOptions.length === 0
+                    ? 'No tray purposes are available in this project.'
+                    : fields.purpose && !purposeOptions.includes(fields.purpose)
+                      ? 'This saved purpose is unavailable in this project. Choose a current purpose.'
+                      : undefined)
+              }
+            >
               <select
                 aria-label="Route purpose"
                 value={fields.purpose}
-                disabled={busy || selected?.status === 'published'}
+                disabled={
+                  busy ||
+                  projectPurposes.loading ||
+                  Boolean(projectPurposes.error) ||
+                  selected?.status === 'published'
+                }
                 onChange={(event) => setFields((old) => ({ ...old, purpose: event.target.value }))}
               >
                 <option value="">Choose purpose</option>
-                {TRAY_PURPOSE_OPTIONS.map((purpose) => (
+                {purposeOptions.map((purpose) => (
                   <option key={purpose} value={purpose}>
                     {purpose}
                   </option>
                 ))}
-                {fields.purpose &&
-                !(TRAY_PURPOSE_OPTIONS as readonly string[]).includes(fields.purpose) ? (
-                  <option value={fields.purpose}>{fields.purpose}</option>
+                {fields.purpose && !purposeOptions.includes(fields.purpose) ? (
+                  <option value={fields.purpose} disabled>
+                    {fields.purpose} (unavailable in this project)
+                  </option>
                 ) : null}
               </select>
             </Field>
@@ -588,6 +615,11 @@ export function CadRoutesPanel({
               disabled={
                 busy ||
                 loading ||
+                (selected?.status !== 'published' &&
+                  (projectPurposes.loading ||
+                    Boolean(projectPurposes.error) ||
+                    (Boolean(fields.purpose) && !purposeOptions.includes(fields.purpose)) ||
+                    purposeOptions.length === 0)) ||
                 (selected?.status === 'published' && selected.color === fields.color)
               }
             >

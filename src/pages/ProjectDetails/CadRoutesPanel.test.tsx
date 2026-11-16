@@ -1,8 +1,12 @@
 import { FluentProvider, webLightTheme } from '@fluentui/react-components';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CadRouteGroup } from '../../../shared/cadRouteGroups';
 import { CadRoutesPanel } from './CadRoutesPanel';
+import { projectTrayPurposesRequest } from '@/api/projectTrayPurposes';
+
+vi.mock('@/api/projectTrayPurposes', () => ({ projectTrayPurposesRequest: vi.fn() }));
+const purposesRequest = vi.mocked(projectTrayPurposesRequest);
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const instances = [1, 2, 3].map((n) => ({
@@ -69,6 +73,7 @@ function catalogue(routes: CadRouteGroup[]) {
   }));
 }
 beforeEach(() => {
+  purposesRequest.mockReset().mockResolvedValue([{ name: draft.purpose, trayCount: 9 }]);
   vi.stubGlobal('fetch', fetchMock);
   fetchMock.mockReset();
   onColor.mockClear();
@@ -77,6 +82,78 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('complete CAD routes', () => {
+  it('offers only the current project purposes, including custom project names', async () => {
+    purposesRequest.mockResolvedValue([
+      { name: draft.purpose, trayCount: 9 },
+      { name: 'Project-specific purpose', trayCount: 0 },
+    ]);
+    show();
+    const select = screen.getByLabelText('Route purpose');
+    await within(select).findByRole('option', { name: 'Project-specific purpose' });
+    expect(
+      within(select)
+        .getAllByRole('option')
+        .map((option) => option.textContent),
+    ).toEqual(['Choose purpose', draft.purpose, 'Project-specific purpose']);
+    expect(purposesRequest).toHaveBeenCalledWith(id(50), 'cad-token');
+    fireEvent.change(select, { target: { value: 'Project-specific purpose' } });
+    expect(select).toHaveValue('Project-specific purpose');
+  });
+
+  it('marks a removed saved purpose unavailable and requires a current choice', async () => {
+    purposesRequest.mockResolvedValue([{ name: 'Current purpose', trayCount: 1 }]);
+    catalogue([draft]);
+    show();
+    fireEvent.click(await screen.findByRole('button', { name: /Main riser/ }));
+    expect(
+      screen.getByRole('option', { name: `${draft.purpose} (unavailable in this project)` }),
+    ).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save route changes' })).toBeDisabled();
+    fireEvent.submit(screen.getByRole('button', { name: 'Save route changes' }).closest('form')!);
+    expect(
+      screen.getByText('Choose a purpose available in this project before saving.'),
+    ).toBeInTheDocument();
+    expect(writes()).toHaveLength(0);
+    fireEvent.change(screen.getByLabelText('Route purpose'), {
+      target: { value: 'Current purpose' },
+    });
+    expect(screen.getByRole('button', { name: 'Save route changes' })).toBeEnabled();
+    await screen.findByRole('button', { name: 'Align whole route to network point' });
+    await waitFor(() =>
+      expect(screen.queryByText('Finding connection points…')).not.toBeInTheDocument(),
+    );
+  });
+
+  it('keeps choices unavailable while loading and reports an empty project catalog', async () => {
+    let finish!: (purposes: []) => void;
+    purposesRequest.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    show();
+    expect(screen.getByLabelText('Route purpose')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save complete route' })).toBeDisabled();
+    await act(async () => {
+      finish([]);
+    });
+    expect(screen.getByText('No tray purposes are available in this project.')).toBeInTheDocument();
+    expect(screen.getAllByRole('option')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Save complete route' })).toBeDisabled();
+  });
+
+  it('blocks choices after a catalog failure and retries through Refresh routes', async () => {
+    purposesRequest.mockRejectedValueOnce(new Error('Purpose catalog unavailable'));
+    show();
+    await screen.findByText('Purpose catalog unavailable');
+    expect(screen.getByLabelText('Route purpose')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save complete route' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh routes' }));
+    await screen.findByRole('option', { name: draft.purpose });
+    expect(screen.getByLabelText('Route purpose')).toBeEnabled();
+  });
+
   it('does not submit stale automatic draft IDs that are outside the current unassigned component scope', async () => {
     let routes: CadRouteGroup[] = [];
     fetchMock.mockImplementation(async (url: string, options: RequestInit = {}) => {
