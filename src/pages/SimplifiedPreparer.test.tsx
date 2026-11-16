@@ -8,17 +8,17 @@ import { SimplifiedPreparer } from './SimplifiedPreparer';
 const page = () => <FluentProvider theme={webLightTheme}><SimplifiedPreparer /></FluentProvider>;
 beforeEach(() => {
   vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
-  mocks.token = 'fixture-wfc-token'; mocks.user = { isAdmin: true }; mocks.open.mockReset().mockResolvedValue({ url: 'http://127.0.0.1:5193' });
+  mocks.token = 'fixture-wfc-token'; mocks.user = { isAdmin: true }; mocks.open.mockReset().mockResolvedValue({ url: 'http://192.168.5.55:8083' });
 });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 describe('admin preparer entry', () => {
   it('opens a separate isolated tab with current account and leaves APS inputs in the preparer page', async () => {
     const target = { opener: window, closed: false, close: vi.fn(), location: { replace: vi.fn() } }; vi.spyOn(window, 'open').mockReturnValue(target as unknown as Window);
     render(page()); fireEvent.click(screen.getByRole('button', { name: 'Open model preparer' }));
-    expect(target.opener).toBeNull(); expect(mocks.open).toHaveBeenCalledWith('fixture-wfc-token', expect.any(AbortSignal)); await waitFor(() => expect(target.location.replace).toHaveBeenCalledWith('http://127.0.0.1:5193'));
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument(); expect(screen.getByText(/each time you open its page/)).toBeInTheDocument();
+    expect(target.opener).toBeNull(); expect(mocks.open).toHaveBeenCalledWith('fixture-wfc-token', expect.any(AbortSignal)); await waitFor(() => expect(target.location.replace).toHaveBeenCalledWith('http://192.168.5.55:8083'));
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument(); expect(screen.getByText(/Manage your Autodesk connection/)).toBeInTheDocument();
   });
-  it('provides a clear link if the browser blocks the new tab', async () => { vi.spyOn(window, 'open').mockReturnValue(null); render(page()); fireEvent.click(screen.getByRole('button', { name: 'Open model preparer' })); expect(await screen.findByRole('link', { name: 'continue to the model preparer' })).toHaveAttribute('href', 'http://127.0.0.1:5193'); });
+  it('provides a clear link if the browser blocks the new tab', async () => { vi.spyOn(window, 'open').mockReturnValue(null); render(page()); fireEvent.click(screen.getByRole('button', { name: 'Open model preparer' })); expect(await screen.findByRole('link', { name: 'continue to the model preparer' })).toHaveAttribute('href', 'http://192.168.5.55:8083'); });
   it('refuses engineer access even when mounted without the route guard', () => { mocks.user = { isAdmin: false }; render(page()); expect(screen.queryByRole('button', { name: 'Open model preparer' })).not.toBeInTheDocument(); expect(mocks.open).not.toHaveBeenCalled(); });
   it('closes the pending tab and explains setup failure without exposing credentials', async () => {
     const target = { opener: window, close: vi.fn() }; vi.spyOn(window, 'open').mockReturnValue(target as unknown as Window); mocks.open.mockRejectedValue(new Error('The model preparer is not configured.'));

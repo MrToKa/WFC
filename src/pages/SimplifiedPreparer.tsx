@@ -29,7 +29,7 @@ export const SimplifiedPreparer = () => {
     <Title2 id="preparer-heading">Model preparer</Title2>
     {user?.isAdmin !== true ? <Body1>A current WFC administrator account is required.</Body1> : <>
       <Body1>Prepare a 3D model and save it to a WFC project. The preparer opens in a separate tab using your current WFC account.</Body1>
-      <Body1>Enter your Autodesk Client ID and Client Secret in the preparer each time you open its page. Keep that page open while working.</Body1>
+      <Body1>Manage your Autodesk connection in the preparer. Keep that page open while working.</Body1>
       <Button appearance="primary" disabled={busy || !token} onClick={() => { void launch(); }}>Open model preparer</Button>
       {busy ? <Spinner size="small" label="Opening model preparer..." /> : null}
       {error ? <MessageBar intent="error"><MessageBarBody>{error}</MessageBarBody></MessageBar> : null}

@@ -3,7 +3,7 @@ import { ApiError } from './http';
 export function validatedPreparerUrl(value: unknown): string {
   if (typeof value !== 'string') throw new ApiError(503, 'The model preparer address could not be verified.');
   let url: URL; try { url = new URL(value); } catch { throw new ApiError(503, 'The model preparer address could not be verified.'); }
-  if (!['http:', 'https:'].includes(url.protocol) || url.port !== '5193' || url.username || url.password || url.pathname !== '/' || url.search || url.hash || url.origin !== value) throw new ApiError(503, 'The model preparer address could not be verified.');
+  if (!['http:', 'https:'].includes(url.protocol) || !['8083', '5193'].includes(url.port) || url.username || url.password || url.pathname !== '/' || url.search || url.hash || url.origin !== value) throw new ApiError(503, 'The model preparer address could not be verified.');
   return url.origin;
 }
 export async function openPreparerSession(token: string, signal?: AbortSignal): Promise<{ url: string }> {

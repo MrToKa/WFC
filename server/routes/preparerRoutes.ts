@@ -20,7 +20,7 @@ function origin(value: string | undefined): string {
 }
 export function preparerSettings(env: NodeJS.ProcessEnv): Settings {
   const internalOrigin = origin(env.WFC_PREPARER_INTERNAL_ORIGIN), publicOrigin = origin(env.WFC_PREPARER_PUBLIC_ORIGIN);
-  if (new URL(publicOrigin).port !== '5193' || internalOrigin === publicOrigin) throw unavailable();
+  if (!['8083', '5193'].includes(new URL(publicOrigin).port)) throw unavailable();
   return { internalOrigin, publicOrigin };
 }
 export function preparerCookie(header: string | undefined): string | undefined {

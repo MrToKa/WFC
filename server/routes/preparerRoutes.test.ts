@@ -17,15 +17,26 @@ function route(router: Router, method: string) { const value = (router as unknow
 const responseStub = () => { const value = { status: vi.fn(), json: vi.fn(), setHeader: vi.fn() }; value.status.mockReturnValue(value); return value as unknown as ExpressResponse; };
 const request = (changes: Partial<Request> = {}) => ({ userId: USER, isAdmin: true, headers: { cookie: 'unrelated=PRIVATE_OTHER; ' + COOKIE }, body: {}, header: (name: string) => name === 'authorization' ? 'Bearer PRIVATE_WFC_TOKEN' : undefined, ...changes }) as Request;
 const json = (body: unknown, options: ResponseInit = {}) => new Response(JSON.stringify(body), { status: 200, ...options });
-function fixture() {
+function fixture(settings = env) {
   const fetcher = vi.fn<typeof fetch>(), currentAdmin = vi.fn().mockResolvedValue(true);
   fetcher.mockResolvedValueOnce(json({ authenticated: false, csrfToken: CSRF })).mockResolvedValueOnce(json({ user: { id: USER, isAdmin: true }, expiresAt: 'fixture' }, { headers: { 'Set-Cookie': SET_COOKIE } }));
-  const router = createPreparerRouter({ fetch: fetcher, env, currentAdmin });
+  const router = createPreparerRouter({ fetch: fetcher, env: settings, currentAdmin });
   return { fetcher, currentAdmin, router, run: (req = request(), response = responseStub()) => ({ response, done: route(router, 'post').stack.at(-1)!.handle(req, response) }) };
 }
 afterEach(() => vi.restoreAllMocks());
 
 describe('fixed admin preparer gateway', () => {
+  it('hands off to a shared internal and public LAN origin on port 8083', async () => {
+    const origin = 'http://192.168.5.55:8083';
+    const settings = { WFC_PREPARER_INTERNAL_ORIGIN: origin, WFC_PREPARER_PUBLIC_ORIGIN: origin };
+    expect(preparerSettings(settings)).toEqual({ internalOrigin: origin, publicOrigin: origin });
+    const f = fixture(settings), action = f.run(); await action.done;
+    expect(f.fetcher).toHaveBeenCalledTimes(2);
+    expect(f.fetcher.mock.calls[0]).toEqual([origin + '/api/session', expect.objectContaining({ headers: expect.objectContaining({ Origin: origin, Host: '192.168.5.55:8083' }) })]);
+    expect(f.fetcher.mock.calls[1]).toEqual([origin + '/api/session/handoff', expect.objectContaining({ body: JSON.stringify({ token: 'PRIVATE_WFC_TOKEN' }), headers: expect.objectContaining({ Origin: origin, Host: '192.168.5.55:8083', 'X-Preparer-CSRF': CSRF }) })]);
+    expect(action.response.setHeader).toHaveBeenCalledWith('Set-Cookie', SET_COOKIE);
+    expect(action.response.json).toHaveBeenCalledWith({ url: origin });
+  });
   it('attaches authenticate and current requireAdmin only to handoff, keeps authenticated logout available', () => {
     const { router } = fixture(); expect(route(router, 'post').stack.map(item => item.handle).slice(0, 2)).toEqual([mocks.authenticate, mocks.requireAdmin]); expect(route(router, 'delete').stack[0].handle).toBe(mocks.authenticate); expect(route(router, 'delete').stack).toHaveLength(2);
   });
@@ -77,6 +88,10 @@ describe('fixed admin preparer gateway', () => {
   });
 });
 describe('origin and cookie boundaries', () => {
+  it.each(['http://user:password@192.168.5.55:8083', 'http://192.168.5.55:8083/path', 'http://192.168.5.55:8083/', 'http://192.168.5.55:8083?token=secret', 'http://192.168.5.55:8083#fragment', 'ftp://192.168.5.55:8083'])('refuses malformed port 8083 origins for either endpoint: %s', value => {
+    expect(() => preparerSettings({ ...env, WFC_PREPARER_PUBLIC_ORIGIN: value })).toThrow();
+    expect(() => preparerSettings({ ...env, WFC_PREPARER_INTERNAL_ORIGIN: value })).toThrow();
+  });
   it.each(['http://127.0.0.1:5191', 'http://127.0.0.1:5192', 'http://a:b@127.0.0.1:5193', PUBLIC + '/path', PUBLIC + '/', PUBLIC + '?token=secret', PUBLIC + '#fragment', 'javascript:alert(1)'])('refuses unexpected public target %s', value => expect(() => preparerSettings({ ...env, WFC_PREPARER_PUBLIC_ORIGIN: value })).toThrow());
   it('forwards no unrelated cookie and refuses duplicated or malformed session cookies', () => {
     expect(preparerCookie('other=PRIVATE; ' + COOKIE)).toBe(COOKIE); expect(preparerCookie('other=PRIVATE')).toBeUndefined();

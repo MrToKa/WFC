@@ -13,7 +13,8 @@ const image = value => 'sha256:' + value.repeat(64);
 const apiEnv = { DATABASE_URL: 'postgres://fixture', JWT_SECRET: 'fixture-jwt', MINIO_ENDPOINT: 'fixture-storage',
   MINIO_ACCESS_KEY: 'fixture-key', MINIO_SECRET_KEY: 'fixture-secret', WFC_CAD_DESIGN_ENABLED: 'true',
   WFC_CAD_CONVERTER_TOKEN: 'old-canonical-'.repeat(4), WFC_CAD_CONVERTER_URL: 'http://cad-converter:8090/convert',
-  WFC_VIEWER_ALLOWED_ORIGINS: 'http://fixture.invalid', PF_PREPARATION_CAPACITY_PROFILE: 'fixture-profile' };
+  WFC_VIEWER_ALLOWED_ORIGINS: 'http://fixture.invalid', PF_PREPARATION_CAPACITY_PROFILE: 'fixture-profile',
+  WFC_PREPARER_INTERNAL_ORIGIN: 'http://preparer:8080', WFC_PREPARER_PUBLIC_ORIGIN: 'http://fixture.invalid:8083' };
 const original = (converter = 'running', legacy = false) => ({
   backend: { image: image('a'), running: true, environment: legacy ? Object.fromEntries(Object.entries(apiEnv).filter(([name]) => !name.startsWith('WFC_CAD_'))) : { ...apiEnv } },
   frontend: { image: image('b'), running: true, environment: { FIXTURE_FRONTEND: 'retained' } },
@@ -33,6 +34,8 @@ $global:BackendHealthy=$true
 $global:SecretFreeOverrides=$true
 $env:WFC_CAD_CONVERTER_TOKEN=$null
 $env:WFC_CAD_DESIGN_ENABLED='process-original'
+$env:WFC_PREPARER_INTERNAL_ORIGIN='http://process-original.invalid:8083'
+$env:WFC_PREPARER_PUBLIC_ORIGIN='http://process-original.invalid:8083'
 function global:docker {
   param([Parameter(ValueFromRemainingArguments=$true)][string[]]$DockerArgs)
   [void]$global:Events.Add(@{args=$DockerArgs;token=$env:WFC_CAD_CONVERTER_TOKEN;cadEnabled=$env:WFC_CAD_DESIGN_ENABLED})
@@ -82,6 +85,7 @@ function global:docker {
     }else{
       $target=switch($name){'cad-converter'{'wfc/cad-converter:local'} 'backend'{'wfc/backend:local'} 'frontend'{'wfc/frontend:local'}}
       $values=@{WFC_CAD_CONVERTER_TOKEN=$env:WFC_CAD_CONVERTER_TOKEN;WFC_CAD_DESIGN_ENABLED=$env:WFC_CAD_DESIGN_ENABLED}
+      if($key -eq 'backend'){$values.WFC_PREPARER_INTERNAL_ORIGIN=$env:WFC_PREPARER_INTERNAL_ORIGIN;$values.WFC_PREPARER_PUBLIC_ORIGIN=$env:WFC_PREPARER_PUBLIC_ORIGIN}
       $global:State[$key]=@{image=$global:Images[$target];environment=$values;running=$true}
     }
   }
@@ -98,6 +102,7 @@ try{
 }catch{$failure=$_.Exception.Message}
 @{failure=$failure;state=$global:State;events=@($global:Events.ToArray());secretFreeOverrides=$global:SecretFreeOverrides;
   processToken=$env:WFC_CAD_CONVERTER_TOKEN;processFlag=$env:WFC_CAD_DESIGN_ENABLED;
+  processPreparerInternal=$env:WFC_PREPARER_INTERNAL_ORIGIN;processPreparerPublic=$env:WFC_PREPARER_PUBLIC_ORIGIN;
   temporaryVariables=@([Environment]::GetEnvironmentVariables('Process').Keys|Where-Object {[string]$_ -like 'WFC_UPDATER_ROLLBACK_*'})
 }|ConvertTo-Json -Depth 30|Set-Content -LiteralPath $OutputPath
 `;
@@ -112,6 +117,8 @@ function run(input = {}) {
     assert.equal(result.status, 0, result.stderr || result.error?.message);
     const value = JSON.parse(fs.readFileSync(path.join(root, 'out.json'), 'utf8').replace(/^\uFEFF/, ''));
     assert.equal(value.processToken || null, null); assert.equal(value.processFlag, 'process-original');
+    assert.equal(value.processPreparerInternal, 'http://process-original.invalid:8083');
+    assert.equal(value.processPreparerPublic, 'http://process-original.invalid:8083');
     assert.deepEqual(value.temporaryVariables, []); assert.equal(value.secretFreeOverrides, true);
     return { ...value, stdout: result.stdout, original: source.original };
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
@@ -150,6 +157,12 @@ test('all three verified image IDs avoid builds and deploy exactly those images'
   const verified = { api: image('1'), web: image('2'), converter: image('3') }, value = run({ verified });
   assert.equal(value.failure, null); assert.equal(value.events.some(event => event.args.includes('build')), false);
   assert.equal(value.state.backend.image, verified.api); assert.equal(value.state.frontend.image, verified.web); assert.equal(value.state.converter.image, verified.converter);
+});
+
+test('ordinary updates retain both configured preparer gateway origins', () => {
+  const value = run(); assert.equal(value.failure, null);
+  assert.equal(value.state.backend.environment.WFC_PREPARER_INTERNAL_ORIGIN, apiEnv.WFC_PREPARER_INTERNAL_ORIGIN);
+  assert.equal(value.state.backend.environment.WFC_PREPARER_PUBLIC_ORIGIN, apiEnv.WFC_PREPARER_PUBLIC_ORIGIN);
 });
 test('verified API/web without a converter ID explicitly builds only the converter', () => {
   const value = run({ verified: { api: image('1'), web: image('2') } }); assert.equal(value.failure, null);
