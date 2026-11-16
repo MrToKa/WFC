@@ -30,7 +30,7 @@ describe('separate exact saved display capability',()=>{
   it.each(['complete', 'failed'] as const)('keeps %s saved display separate from calculation authority',jobStatus=>{
     expect(cableWorkflowCalculationSchema.parse(calculation()).savedExactDisplay).toBeUndefined();
     const source=saved();source.calculation.jobStatus=jobStatus;const value=cableWorkflowRowSchema.parse(source);expect(value.calculation).toMatchObject({savedExactDisplay:true,currentness:'changed',reviewable:false,acceptedMatchesCurrent:false});
-    expect(classifyCableWorkflow(value).status).toBe(jobStatus === 'failed' ? 'blocked' : 'needs-routing');
+    expect(classifyCableWorkflow(value).status).toBe('up-to-date');
   });
   it.each([{jobStatus:'running'},{jobStatus:'cancelled'},{jobStatus:'queued'},{itemState:'running'},{outcome:'failed'},
     {currentness:'current'},{reviewable:true},{acceptedMatchesCurrent:true},{proposalId:null,proposalHash:null}] as const)('rejects incoherent saved authority/progress %j',patch=>{
@@ -50,7 +50,9 @@ describe('receipt-qualified stored route independent of latest attempt',()=>{
     const value=cableWorkflowRowSchema.parse(saved());
     expect(value.calculation).toMatchObject({jobId:id(30),jobStatus:'failed',reviewable:false,acceptedMatchesCurrent:false});
     expect(classifyCableWorkflow(value)).toEqual({status:'up-to-date',reasonCodes:['CALCULATION_FAILED']});
-    expect(cableWorkflowRowSchema.parse({...value,savedRoute:{...value.savedRoute,currentness:'saved-exact'}}).calculation).toEqual(value.calculation);
+    const compatible=cableWorkflowRowSchema.parse({...value,savedRoute:{...value.savedRoute,currentness:'saved-exact'}});
+    expect(compatible.calculation).toEqual(value.calculation);
+    expect(classifyCableWorkflow(compatible).status).toBe('up-to-date');
   });
   it.each([{jobStatus:'running',itemState:'waiting',outcome:'not-evaluated'},
     {jobStatus:'complete',itemState:'complete',outcome:'calculated',proposalId:id(21),proposalHash:'a'.repeat(64)}] as const)('refuses stored-route fallback over active or calculated work (%j)',patch=>{

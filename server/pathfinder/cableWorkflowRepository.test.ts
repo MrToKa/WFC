@@ -32,7 +32,7 @@ function common() { return { status: 'ready', bindingContext: { modelVersionId: 
 function fixture(count = 1) {
   const state = { cables: Array.from({ length: count }, (_, n) => cable(n)), metadata: new Map<string, ReturnType<typeof meta>>(),
     admissionCount: 1, generation: '1', latest: id(10), aliases: true, common: common(), badScan: false, hasReceipt: false, allowReview: true,
-    savedIdentity: null as Record<string, unknown> | null };
+    savedIdentity: null as Record<string, unknown> | null, receiptCableIds: [] as string[] };
   const query = vi.fn(async (sql: string, values: unknown[] = []) => {
     if (sql.includes('cable-workflow:context')) return { rows: [{ active_model_version_id: id(5), selection_revision: '1', admission_count: state.admissionCount,
       context: { generation: state.generation, latest: state.latest } }] };
@@ -48,7 +48,8 @@ function fixture(count = 1) {
     if (sql.includes('cable-workflow:needed-locations')) return { rows: state.aliases ? [{ normalized_alias: 'A', id: id(20), name: 'A', revision: '1', has_legacy: false },
       { normalized_alias: 'B', id: id(21), name: 'B', revision: '1', has_legacy: false }] : [] };
     if (sql.includes('cable-workflow:latest-admissions')) return { rows: (values[1] as string[]).flatMap(cableId => state.metadata.has(cableId) ? [state.metadata.get(cableId)!] : []) };
-    if (sql.includes('cable-workflow:accepted-identities')) return { rows: state.hasReceipt ? [{ cable_id: state.cables[0].id }] : [] };
+    if (sql.includes('cable-workflow:accepted-identities')) return { rows: [...new Set([...state.receiptCableIds, ...(state.hasReceipt ? [state.cables[0].id] : [])])]
+      .filter(cableId => (values[1] as string[]).includes(cableId)).map(cable_id => ({ cable_id })) };
     if (sql.includes('cable-workflow:saved-route-identity')) return { rows: state.savedIdentity ? [state.savedIdentity] : [] };
     throw Error('Unexpected SQL in explicit mocked read-model protocol: ' + sql.slice(0, 80));
   });
@@ -82,8 +83,9 @@ describe('stored route after a separate later unsuccessful attempt',()=>{
     expect(detail.row.savedRoute).toEqual({receiptId:id(90),jobId:id(80),proposalId:id(81),proposalHash:'a'.repeat(64),currentness});
     expect(mocks.accepted).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({id:id(1000),routing:'/SAVED',designLength:'58'}),expect.any(Function),
       {receiptId:id(90),jobId:id(80),proposalId:id(81),proposalHash:'a'.repeat(64)});
-    expect(classifyCableWorkflow(detail.row).status).toBe(currentness==='current'?'up-to-date':'needs-routing');
-    expect((await f.repo.page(projectId,who,{filter:currentness==='current'?'up-to-date':'needs-routing'})).rows).toEqual([detail.row]);
+    expect(classifyCableWorkflow(detail.row).status).toBe('up-to-date');
+    expect((await f.repo.page(projectId,who,{filter:'up-to-date'})).rows).toEqual([detail.row]);
+    expect((await f.repo.page(projectId,who,{filter:'needs-routing'})).rows).toEqual([]);
     expect(f.query.mock.calls.every(([sql])=>!/^\s*(?:INSERT|UPDATE|DELETE)\b/i.test(sql))).toBe(true);
   });
   it.each(['failed','cancelled'] as const)('retains a %s later job without changing its saved route identity',async jobStatus=>{
@@ -115,7 +117,7 @@ describe('read-only saved geometry qualification in workflow projection',()=>{
     const f=savedRow(jobStatus),detail=await f.repo.detail(projectId,who,id(1000),{});
     expect(detail.row.calculation).toMatchObject({savedExactDisplay:true,currentness:'changed',reviewable:false,acceptedMatchesCurrent:false,proposalId:id(30),proposalHash:'f'.repeat(64)});
     expect(mocks.savedExactDisplay).toHaveBeenCalledWith(expect.objectContaining({id:id(1000),routing:'/SAVED',designLength:'58'}),expect.any(Function),{jobId:id(11),proposalId:id(30),proposalHash:'f'.repeat(64)});
-    expect(classifyCableWorkflow(detail.row).status).toBe(jobStatus === 'failed' ? 'blocked' : 'needs-routing');
+    expect(classifyCableWorkflow(detail.row).status).toBe('up-to-date');
   });
   it.each(['current','accepted','no-receipt','cancelled','running','pending'] as const)('does not perform extra saved proof for %s evidence',async kind=>{
     const f=savedRow();
@@ -131,6 +133,36 @@ describe('read-only saved geometry qualification in workflow projection',()=>{
   it('does not expose a failed saved proof',async()=>{
     const f=savedRow();mocks.savedExactDisplay.mockResolvedValue(false);const detail=await f.repo.detail(projectId,who,id(1000),{});
     expect(detail.row.calculation.savedExactDisplay).toBeUndefined();expect(detail.row.calculation).toMatchObject({currentness:'changed',reviewable:false,acceptedMatchesCurrent:false});
+  });
+});
+
+describe('saved route status after a compatible engine upgrade', () => {
+  it('keeps fifteen compatible saved pairs and one strict current pair Updated while retaining the two real exceptions', async () => {
+    const f = fixture(18), compatible = new Set(f.state.cables.slice(0, 15).map(value => value.id));
+    const strictCurrent = f.state.cables[15], manuallyChanged = f.state.cables[16], missingLocation = f.state.cables[17];
+    for (const [n, value] of f.state.cables.entries()) {
+      if (value === missingLocation) {
+        f.state.metadata.set(value.id, meta(n, { job_status: 'complete', item_state: 'blocked', item_status: 'locations_required' }));
+        continue;
+      }
+      Object.assign(value, { routing: '/SAVED/SECONDARY', design_length: '20' });
+      f.state.receiptCableIds.push(value.id);
+      f.state.metadata.set(value.id, meta(n, { job_status: 'complete', item_state: 'complete', proposal_status: 'calculated',
+        proposal_id: id(2000 + n), proposal_hash: 'f'.repeat(64) }));
+    }
+    Object.assign(manuallyChanged, { routing: '/MANUAL/SECONDARY', design_length: '25', cable_write_revision: '9' });
+    mocks.reviewable.mockResolvedValue({ currentness: 'changed', reviewable: false, reasonCodes: ['PROPOSAL_DEPENDENCIES_CHANGED'] });
+    mocks.accepted.mockImplementation(async (value: { id: string }) => value.id === strictCurrent.id);
+    mocks.savedExactDisplay.mockImplementation(async (value: { id: string }) => compatible.has(value.id));
+    const before = structuredClone(f.state.cables);
+    const needs = await f.repo.page(projectId, who, { filter: 'needs-routing' });
+    expect(needs.rows.map(value => value.cable.id)).toEqual([manuallyChanged.id, missingLocation.id]);
+    const updated = await f.repo.page(projectId, who, { filter: 'up-to-date' });
+    expect(updated.rows).toHaveLength(16);
+    expect(updated.rows.slice(0, 15).every(value => value.calculation.savedExactDisplay === true
+      && value.calculation.currentness === 'changed' && !value.calculation.reviewable && !value.calculation.acceptedMatchesCurrent)).toBe(true);
+    expect(f.state.cables).toEqual(before);
+    expect(f.query.mock.calls.every(([sql]) => !/^\s*(?:INSERT|UPDATE|DELETE)\b/i.test(sql))).toBe(true);
   });
 });
 
@@ -205,7 +237,7 @@ describe('bounded cable diagnostics, mocked SQL protocol and explicit proof/auth
     const detail = await f.repo.detail(projectId, who, id(1000), { preferVerticalApproach: false });
     expect(detail.row.savedRoute?.currentness).toBe(currentness);
     expect(detail.row.calculation).toMatchObject({ outcome: 'no-path', acceptedMatchesCurrent: false, reviewable: false });
-    expect(classifyCableWorkflow(detail.row).status).toBe(currentness === 'current' ? 'up-to-date' : 'blocked');
+    expect(classifyCableWorkflow(detail.row).status).toBe('up-to-date');
   });
   it('recognizes exact mixed current preferences through the existing proof/readiness seam',async()=>{
     const f=fixture(),intent=mixedIntent(),options={...f.state.common.inputs.options,barrierRouting:intent};

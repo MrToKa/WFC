@@ -712,6 +712,23 @@ describe('persistent nonmodal cable routing panel with atomic drafts', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show' })); expect(p.onTogglePath).toHaveBeenCalledOnce();
     expect(p.onCalculate).not.toHaveBeenCalled(); expect(assignment.save).not.toHaveBeenCalled(); expect(review.review).not.toHaveBeenCalled(); expect(review.apply).not.toHaveBeenCalled();
   });
+  it('shows a receipt-proven compatible saved path as valid without offering the historical proposal for Apply', () => {
+    const p = props();
+    p.cable = cableWorkflowRowSchema.parse({ ...p.cable,
+      cable: { ...p.cable!.cable, routing: '/SAVED', designLength: '58' },
+      calculation: { ...p.cable!.calculation, jobId: id(79), jobStatus: 'complete', itemState: 'complete', outcome: 'calculated',
+        proposalId: id(80), proposalHash: 'b'.repeat(64), currentness: 'changed', reviewable: false,
+        acceptedMatchesCurrent: false, savedExactDisplay: true, reasonCodes: ['PROPOSAL_DEPENDENCIES_CHANGED'] } });
+    const review = reviewController(p); review.canReview = true; review.canApply = true;
+    render(<PathFinderCableRoutingPanel {...p} pathSource="saved-exact" pathReady calculatedRouting="/SAVED" calculatedDesignLength="58" review={review} />);
+    expect(screen.getByRole('heading', { name: 'Routing and length saved' })).toBeVisible();
+    expect(screen.getByText('The saved route and Design length remain valid for the current model, locations and routing settings. No further approval is required.')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Review proposed routing' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Apply reviewed routing' })).toBeNull();
+    expect(screen.queryByText('This result is outdated. Calculate routing again.')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Show' })).toBeEnabled();
+    expect(review.review).not.toHaveBeenCalled(); expect(review.apply).not.toHaveBeenCalled(); expect(assignment.save).not.toHaveBeenCalled();
+  });
   it.each(['save', 'legacy', 'review'] as const)('blocks a retained saved exact Show during pending %s while permitting Hide', kind => {
     const p = props(), review = reviewController(p);
     if (kind === 'save') assignment.pending = { cableId: id(3) } as Assignment['pending'];

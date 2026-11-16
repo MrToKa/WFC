@@ -74,7 +74,8 @@ export const cableWorkflowCalculationSchema = z.object({
   proposalHash: policyHashSchema.nullable(),
   reviewable: z.boolean(),
   acceptedMatchesCurrent: z.boolean(),
-  /** Read-only exact saved geometry; never currentness or Review/Apply authority. */
+  /** Receipt-proven saved path with unchanged engineering inputs. Its calculation
+   * may use an older compatible implementation; never grants Review/Apply. */
   savedExactDisplay: z.boolean().optional(),
   automaticUpdate: z.object({status:z.enum(automaticPairStatuses),receiptId:policyUuidSchema.nullable(),reasonCode:recalculationReasonSchema.nullable()}).strict()
     .refine(value => ['written','already-written'].includes(value.status) === (value.receiptId !== null)).optional(),
@@ -159,6 +160,12 @@ export type CableWorkflowCalculation = z.infer<typeof cableWorkflowCalculationSc
 export type CableWorkflowRow = z.infer<typeof cableWorkflowRowSchema>;
 export type CableWorkflowPage = z.infer<typeof cableWorkflowPageSchema>;
 
+/** Saved cable validity is separate from whether a historical calculation can
+ * be applied again by the current implementation. Callers use verified rows. */
+export function hasVerifiedSavedCableRoute(row: CableWorkflowRow): boolean {
+  return row.calculation.acceptedMatchesCurrent || row.calculation.savedExactDisplay === true || row.savedRoute !== undefined;
+}
+
 /** Display only: no status, including ready-for-review/up-to-date, permits a write. */
 export function classifyCableWorkflow(input: unknown): CableWorkflowDecision {
   const parsed = cableWorkflowRowSchema.safeParse(input);
@@ -167,10 +174,10 @@ export function classifyCableWorkflow(input: unknown): CableWorkflowDecision {
   if (category.status !== 'eligible') return { status: category.status, reasonCodes: category.reasonCodes };
   const calculation = row.calculation;
   const reasons = (...codes: string[]) => [...new Set([...calculation.reasonCodes, ...(calculation.errorCode ? [calculation.errorCode] : []), ...codes])];
-  // A later failure or cancellation of background siblings does not undo this
-  // cable's independently verified saved result. This is display classification
-  // only; the separate Review/Apply gates still retain their own job authority.
-  if (calculation.acceptedMatchesCurrent || row.savedRoute?.currentness === 'current') return { status: 'up-to-date', reasonCodes: reasons() };
+  // Engine/planning upgrades and a later failed attempt do not invalidate a
+  // receipt-proven saved path when its engineering dependencies still match.
+  // Historical calculation currentness and all Review/Apply gates stay strict.
+  if (hasVerifiedSavedCableRoute(row)) return { status: 'up-to-date', reasonCodes: reasons() };
   if (calculation.jobStatus === 'cancelled' || calculation.jobStatus === 'failed')
     return { status: 'blocked', reasonCodes: reasons(calculation.jobStatus === 'cancelled' ? 'CALCULATION_CANCELLED' : 'CALCULATION_FAILED') };
   const activeJob = calculation.jobStatus === 'queued' || calculation.jobStatus === 'running';

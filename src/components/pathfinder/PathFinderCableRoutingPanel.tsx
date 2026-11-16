@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useFloatingCablePanel, type FloatingCableWindowRequest } from '@/hooks/useFloatingCablePanel';
 import { Button, Caption1, Checkbox, Portal, Spinner } from '@fluentui/react-components';
 import { useCableEndpointPairSelection, type CableEndpointPairSelectionAccess } from '@/hooks/useCableEndpointPairSelection';
-import type { CableWorkflowRow } from '../../../shared/pathfinderCableWorkflow';
+import { hasVerifiedSavedCableRoute, type CableWorkflowRow } from '../../../shared/pathfinderCableWorkflow';
 import { isPathFinderCableEligible } from '../../../shared/pathfinderCableEligibility';
 import { CablePopupSurface, type CablePopupSurfaceStyles } from '@/components/CablePopupSurface';
 import type { PathFinderWorkflowDisplay, PathFinderWorkflowReview } from '@/pages/ProjectDetails/PathFinderResults';
@@ -162,7 +162,7 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
     && cable.calculation.proposalHash === null && !cable.calculation.reviewable && !cable.calculation.acceptedMatchesCurrent;
   const calculationMessage = preparationUpdated ? calculationFeedback?.currentAttempt ? calculationFeedback.message
     : 'Network ready. Calculate routing to create a current route.' : stoppedMessage;
-  const pairSaved = (cable.calculation.acceptedMatchesCurrent || cable.savedRoute?.currentness === 'current') && !calculationPending && !unsaved;
+  const pairSaved = hasVerifiedSavedCableRoute(cable) && !calculationPending && !unsaved;
   // Stored routes have a separate read-only current-model display. They never
   // supply calculation, barrier acceptance or review authority.
   const hasCalculatedRouting = typeof calculatedRouting === 'string' && calculatedRouting.trim().length > 0;
@@ -351,7 +351,9 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
           {currentReview.autoLengthError ? <p role="alert" className={styles.note}>{currentReview.autoLengthError}</p> : null}
           {currentReview.refreshAutoLength ? <Button disabled={currentReview.autoLengthLoading} onClick={currentReview.refreshAutoLength}>Refresh automatic length</Button> : null}
         </section> : null}
-        <p className={styles.note}>{pairSaved ? 'The exact current result is already saved in Cable list. No further approval is required.'
+        <p className={styles.note}>{pairSaved ? cable.calculation.acceptedMatchesCurrent
+          ? 'The exact current result is already saved in Cable list. No further approval is required.'
+          : 'The saved route and Design length remain valid for the current model, locations and routing settings. No further approval is required.'
           : automaticStopped ? 'The automatic Routing and Design length update was not saved. Existing Cable list values were retained.'
             : usingSavedExactPath ? 'The saved route and Design length are available for viewing. Calculate routing to review a new result.'
             : automaticRecoveryRequired ? 'The automatic cable update could not be confirmed. Use Refresh cable status to check the exact saved receipt. No replacement calculation or write will be submitted.'

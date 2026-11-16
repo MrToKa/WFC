@@ -14,7 +14,8 @@ import { createInitialFillReceiptProofReader } from './initialFillReceiptProof.j
 import { createAutomaticPairReceiptProofReader } from './automaticPairReceiptProof.js';
 import { readBarrierWriteEvidence } from './barrierWrites.js';
 import { verifyBarrierEngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
-import { verifyMixedBarrierEngineIdentity } from '../../shared/pathfinderBarrierMixed.js';
+import { verifyMixedBarrierEngineIdentity, MIXED_BARRIER_MEASURED_FIT_RUNTIME_PROFILE,
+  MIXED_BARRIER_FULL_PAIR_RUNTIME_PROFILE, MIXED_BARRIER_EXPANDED_CANDIDATE_RUNTIME_PROFILE } from '../../shared/pathfinderBarrierMixed.js';
 
 export const WORKFLOW_PROOF_BYTES = 256 * 1024;
 type Data = Record<string, any>;
@@ -25,8 +26,13 @@ const decimalEqual = (a: unknown, b: unknown): boolean => {
   if (a === null || b === null) return a === b;
   try { return typeof a === 'string' && typeof b === 'string' && canonicalDecimalString(a) === canonicalDecimalString(b); } catch { return false; }
 };
-/** Local comparison for drawing an already-written exact path. The two declared
- * upgrades below affect planning/resources, not the saved physical scene. */
+/** Only these canonical profiles expand search choices without changing the
+ * recorded geometry fitting, collision predicates or final route proof. */
+const savedPlanningProfiles = [MIXED_BARRIER_MEASURED_FIT_RUNTIME_PROFILE,
+  MIXED_BARRIER_FULL_PAIR_RUNTIME_PROFILE, MIXED_BARRIER_EXPANDED_CANDIDATE_RUNTIME_PROFILE] as const;
+
+/** Local comparison for an already-written exact path. Supported upgrades
+ * affect planning/resources, not the saved physical scene or write authority. */
 export function normalizeSavedDisplayComparison(current: DependencySnapshot, frozen: DependencySnapshot): DependencySnapshot | null {
   if (current.schemaVersion !== 'pathfinder.dependencies.v8' || frozen.schemaVersion !== 'pathfinder.dependencies.v8') return null;
   const freshProfile = object(current.barriers.profile), priorProfile = object(frozen.barriers.profile);
@@ -34,12 +40,17 @@ export function normalizeSavedDisplayComparison(current: DependencySnapshot, fro
   let barriers = current.barriers, profileUpgrade = false;
   if (!same(freshProfile, priorProfile)) {
     const freshLimits = object(freshProfile.qualification), priorLimits = object(priorProfile.qualification);
+    const priorPlanning = savedPlanningProfiles.findIndex(profile => same(profile, priorProfile));
+    const freshPlanning = savedPlanningProfiles.findIndex(profile => same(profile, freshProfile));
+    const expandedPlanning = priorPlanning >= 0 && freshPlanning > priorPlanning;
+    const expandedSelection = priorProfile.schemaVersion === 'wfc.pf.barrier-runtime-profile.v3'
+      && freshProfile.schemaVersion === 'wfc.pf.barrier-runtime-profile.v4'
+      && priorLimits?.maximumParents === 128 && priorLimits.maximumComponents === 256
+      && freshLimits?.maximumParents === 2048 && freshLimits.maximumComponents === 2048
+      && same({ ...freshProfile, schemaVersion: priorProfile.schemaVersion,
+        qualification: { ...freshLimits, maximumParents: 128, maximumComponents: 256 } }, priorProfile);
     if (current.barriers.schemaVersion !== 'wfc.pf.barrier-runtime.v2' || frozen.barriers.schemaVersion !== 'wfc.pf.barrier-runtime.v2'
-      || priorProfile.schemaVersion !== 'wfc.pf.barrier-runtime-profile.v3' || freshProfile.schemaVersion !== 'wfc.pf.barrier-runtime-profile.v4'
-      || priorLimits?.maximumParents !== 128 || priorLimits.maximumComponents !== 256
-      || freshLimits?.maximumParents !== 2048 || freshLimits.maximumComponents !== 2048
-      || !same({ ...freshProfile, schemaVersion: priorProfile.schemaVersion,
-        qualification: { ...freshLimits, maximumParents: 128, maximumComponents: 256 } }, priorProfile)) return null;
+      || !expandedPlanning && !expandedSelection) return null;
     profileUpgrade = true;
     barriers = { ...current.barriers, profile: frozen.barriers.profile, profileSha256: frozen.barriers.profileSha256 };
   }

@@ -3,14 +3,17 @@ import type { PoolClient } from 'pg';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CableWorkflowRow } from '../../shared/pathfinderCableWorkflow.js';
 import type { BarrierDependencySnapshot, DependencySnapshot, EngineResponse } from './jobContracts.js';
-import { defaultOptions } from './jobContracts.js';
+import { defaultOptions, optionsSchema, engineResponseSchema } from './jobContracts.js';
 import { hash } from './dependencies.js';
 import { createCableWorkflowProofReader, readWorkflowVerifiedProposal, WORKFLOW_PROOF_BYTES, normalizeSavedDisplayComparison } from './cableWorkflowProof.js';
 import { BARRIER_RUNTIME_PROFILE, barrierRouteHashInput, createBarrierRuntimePolicy, type BarrierRuntimeContext } from '../../shared/pathfinderBarrierRuntime.js';
 import { syntheticBarrierEngineIdentity } from './calculationFixtures.js';
 import { readBarrierWriteEvidence } from './barrierWrites.js';
 import { mixedBarrierEngineIdentityBodySchema, MIXED_BARRIER_OPENING_RUNTIME_PROFILE, MIXED_BARRIER_LARGE_SELECTION_RUNTIME_PROFILE,
-  MIXED_BARRIER_POLICY, MIXED_BARRIER_COLLISION_VERSION, MIXED_BARRIER_VERIFIER_VERSION, INTER_TRAY_OPENING_MANEUVER_POLICY } from '../../shared/pathfinderBarrierMixed.js';
+  MIXED_BARRIER_POLICY, MIXED_BARRIER_COLLISION_VERSION, MIXED_BARRIER_VERIFIER_VERSION, INTER_TRAY_OPENING_MANEUVER_POLICY,
+  MIXED_BARRIER_MEASURED_FIT_RUNTIME_PROFILE, MIXED_BARRIER_FULL_PAIR_RUNTIME_PROFILE, MIXED_BARRIER_EXPANDED_CANDIDATE_RUNTIME_PROFILE,
+  NEAREST_ANCHORED_LOCAL_SEARCH_POLICY, MEASURED_BEND_MESH_FITTING_PROFILE, MEASURED_BEND_MESH_FITTING_POLICY,
+  MIXED_BARRIER_QUERY_DOMAIN, createMixedBarrierRuntimePolicy, mixedBarrierRuntimeContextSchema, mixedBarrierExecutionSchema } from '../../shared/pathfinderBarrierMixed.js';
 
 const proof = vi.hoisted(() => ({ seal: vi.fn(), enrollment: vi.fn(), scope: vi.fn(),scoped:vi.fn(), initialFill: vi.fn(),automaticPair:vi.fn() }));
 vi.mock('./revisionResultRepository.js', () => ({ verifyRevisionResultForProposal: proof.seal }));
@@ -124,6 +127,105 @@ function savedDisplayFixture(jobState: 'complete' | 'failed' = 'failed') {
   const expected={jobId,proposalId,proposalHash:f.raw.proposal_hash},fresh=vi.fn(async()=>current);
   return {...f,current,expected,fresh};
 }
+
+const planningProfiles = [MIXED_BARRIER_MEASURED_FIT_RUNTIME_PROFILE, MIXED_BARRIER_FULL_PAIR_RUNTIME_PROFILE,
+  MIXED_BARRIER_EXPANDED_CANDIDATE_RUNTIME_PROFILE] as const;
+function planningIdentity(profile: string, implementation = 'c'.repeat(64)) {
+  const { schemaVersion: _schema, contentSha256: _sha, ...base } = syntheticBarrierEngineIdentity();
+  const body = mixedBarrierEngineIdentityBodySchema.parse({ ...base, schemaVersion: 'wfc.pf.engine-identity.v3', coreModuleSha256: implementation,
+    policyVersions: { ...base.policyVersions, projection: 'wfc.pf.model-runner-v3-mixed-barrier-projection.v1',
+      barriers: MIXED_BARRIER_COLLISION_VERSION, qualification: MIXED_BARRIER_VERIFIER_VERSION, runtimeProfile: profile,
+      geometryPolicy: MIXED_BARRIER_POLICY, interTrayManeuvers: INTER_TRAY_OPENING_MANEUVER_POLICY,
+      localSearch: NEAREST_ANCHORED_LOCAL_SEARCH_POLICY, fitting: MEASURED_BEND_MESH_FITTING_PROFILE.modelBuildRules,
+      geometryFitting: MEASURED_BEND_MESH_FITTING_POLICY } });
+  return { ...body, contentSha256: hash(body) };
+}
+/** Synthetic explicit-empty publication exercises the real immutable response,
+ * strategy, ledger and receipt checks; it does not claim production geometry. */
+function planningSavedFixture(prior: 0 | 1 | 2 = 0, next: 0 | 1 | 2 = 2) {
+  const f = barrierFixture(), dependencies = f.dependencies as unknown as Data, result = f.result as Data;
+  dependencies.cableWriteRevision = '1'; f.before.cable_write_revision = '1';
+  f.after.cable_write_revision = '2'; f.cable.cableWriteRevision = '2';
+  const policy = createMixedBarrierRuntimePolicy(false), old = dependencies.barriers;
+  const binding = { ...old.binding, schemaVersion: 'wfc.pf.barrier-calculation-binding.v2', policy, policySha256: hash(policy),
+    snapshot: { ...old.binding.snapshot, schemaVersion: 'wfc.pf.barrier-snapshot-reference.v2', geometryPolicy: MIXED_BARRIER_POLICY } };
+  const context = { ...old, schemaVersion: 'wfc.pf.barrier-runtime.v2', binding,
+    profile: structuredClone(planningProfiles[prior]), profileSha256: hash(planningProfiles[prior]) };
+  dependencies.barriers = context; dependencies.barrierQualification = null;
+  dependencies.engineIdentity = planningIdentity(context.profile.schemaVersion);
+  dependencies.cablePurposeRouting = { purpose: 'Control', allowedRouteCodes: ['/A'] };
+  dependencies.options.barrierRouting = { schemaVersion: 'wfc.pf.barrier-admission-intent.v2', geometryPolicy: MIXED_BARRIER_POLICY,
+    scope: binding.scope, expectedRegistryRevision: binding.registryRevision, expectedSnapshot: binding.snapshot, drillThroughWalls: false };
+  const noAuthority = { engineeringAccepted: false, ownTerminalExemptionsSupported: false, authority: 'none' };
+  result.barriers = { ...result.barriers, ...noAuthority, schemaVersion: 'wfc.pf.barrier-execution.v2', context,
+    proof: { ...result.barriers.proof, ...noAuthority, schemaVersion: 'wfc.pf.barrier-mixed-check-proof.v2', binding,
+      domain: MIXED_BARRIER_QUERY_DOMAIN, globalModelCoverageVerified: false, physicalCableRadiusChecked: false },
+    directSecondary: { ...result.barriers.directSecondary, schemaVersion: 'wfc.pf.mixed-constrained-direct-secondary.v2', binding } };
+  delete result.barriers.directSecondary.policyVersion;
+  optionsSchema.parse(dependencies.options); mixedBarrierRuntimeContextSchema.parse(context); mixedBarrierExecutionSchema.parse(result.barriers);
+  const { calculationMode: _mode, ...response } = result; engineResponseSchema.parse(response);
+  f.reseal();
+  const evidence = readBarrierWriteEvidence(dependencies, result);
+  if (!evidence) throw Error('Expected complete mixed saved planning fixture evidence.');
+  f.receipt.provenance = { schemaVersion: 'pathfinder.automatic-pair.v1', barrierEvidence: evidence,
+    revisionResult: { engineResultSha256: evidence.engineResultSha256, dependencyHash: evidence.dependencySha256 } };
+  proof.automaticPair.mockResolvedValue({ before: f.before, after: f.after });
+  const current: Data = structuredClone({ ...dependencies, cableWriteRevision: '2' });
+  current.barriers.profile = structuredClone(planningProfiles[next]); current.barriers.profileSha256 = hash(current.barriers.profile);
+  current.engineIdentity = planningIdentity(current.barriers.profile.schemaVersion, '9'.repeat(64));
+  const expected = { jobId, proposalId, proposalHash: f.raw.proposal_hash };
+  return { ...f, dependencies, result, current, expected, fresh: vi.fn(async () => current as DependencySnapshot) };
+}
+
+describe('receipt-proven saved routes across canonical search-only profile upgrades', () => {
+  it.each([[0, 1], [0, 2], [1, 2], [0, 0]] as const)('retains the saved pair for profile %i to %i without approving the old calculation', async (prior, next) => {
+    const f = planningSavedFixture(prior, next), before = structuredClone(f.current), frozen = structuredClone(f.dependencies);
+    expect(await f.reader.savedExactDisplay(f.cable, f.fresh, f.expected)).toBe(true);
+    expect(await f.reader.accepted(f.cable, f.fresh, f.expected)).toBe(false);
+    expect(await f.reader.reviewable(cableId, jobId, proposalId, f.current as DependencySnapshot)).toMatchObject({ currentness: 'changed', reviewable: false });
+    expect(f.current).toEqual(before); expect(f.dependencies).toEqual(frozen);
+    expect(f.query.mock.calls.every(([sql]) => !/^\s*(?:INSERT|UPDATE|DELETE)/.test(sql))).toBe(true);
+  });
+  it.each(['from', 'to', 'model', 'barrier-registry', 'barrier-storage', 'settings-revision', 'length-setting', 'purpose', 'route-permissions',
+    'drilling', 'manual-revision', 'saved-routing', 'saved-length', 'receipt', 'receipt-tuple', 'route-proof'] as const)('still refuses changed %s evidence', async kind => {
+    const f = planningSavedFixture();
+    if (kind === 'from' || kind === 'to') f.current[kind].point = [99, 0, 0];
+    if (kind === 'model') f.current.model.id = id(99);
+    if (kind === 'barrier-registry') f.current.barriers.binding.registryRevision = '99';
+    if (kind === 'barrier-storage') f.current.barriers.storage.manifest.sha256 = '0'.repeat(64);
+    if (kind === 'settings-revision') f.current.settings.revision = '99';
+    if (kind === 'length-setting') f.current.settings.endConnectionLength = '99';
+    if (kind === 'purpose') f.current.cablePurposeRouting.purpose = 'Power';
+    if (kind === 'route-permissions') f.current.cablePurposeRouting.allowedRouteCodes = ['/OTHER'];
+    if (kind === 'drilling') f.current.options.barrierRouting.drillThroughWalls = true;
+    if (kind === 'manual-revision') f.cable.cableWriteRevision = '4';
+    if (kind === 'saved-routing') f.cable.routing = '/MANUAL';
+    if (kind === 'saved-length') f.cable.designLength = '15';
+    if (kind === 'receipt') proof.automaticPair.mockResolvedValue(null);
+    if (kind === 'receipt-tuple') f.receipt.proposal_id = id(99);
+    if (kind === 'route-proof') f.result.route.pathPoints[0].x = 99;
+    expect(await f.reader.savedExactDisplay(f.cable, f.fresh, f.expected)).toBe(false);
+  });
+  it.each(['downgrade', 'unknown-profile', 'changed-budget', 'collision-profile', 'engine-policy', 'engine-digest', 'upstream-version'] as const)('refuses unqualified %s compatibility', async kind => {
+    const f = planningSavedFixture();
+    if (kind === 'downgrade') {
+      f.current.barriers.profile = structuredClone(MIXED_BARRIER_OPENING_RUNTIME_PROFILE);
+      f.current.engineIdentity = planningIdentity(MIXED_BARRIER_MEASURED_FIT_RUNTIME_PROFILE.schemaVersion);
+    }
+    if (kind === 'unknown-profile') f.current.barriers.profile.schemaVersion = 'wfc.pf.barrier-runtime-profile.v99';
+    if (kind === 'changed-budget') f.current.barriers.profile.routing.maxPairs++;
+    if (kind === 'collision-profile') f.current.barriers.profile.kernel.collisionVersion = 'different-collision-policy';
+    f.current.barriers.profileSha256 = hash(f.current.barriers.profile);
+    if (kind === 'engine-policy') f.current.engineIdentity.policyVersions.barriers = 'different-collision-policy';
+    if (kind === 'engine-digest') f.current.engineIdentity.contentSha256 = '0'.repeat(64);
+    if (kind === 'upstream-version') f.current.engineIdentity.version = 'different-upstream';
+    expect(await f.reader.savedExactDisplay(f.cable, f.fresh, f.expected)).toBe(false);
+  });
+  it.each([[1, 0], [2, 0], [2, 1]] as const)('refuses the canonical profile downgrade %i to %i', async (prior, next) => {
+    const f = planningSavedFixture(prior, next);
+    expect(await f.reader.savedExactDisplay(f.cable, f.fresh, f.expected)).toBe(false);
+  });
+});
 
 describe('read-only saved exact path after an implementation-only engine update',()=>{
   it.each(['complete', 'failed'] as const)('retains proven18→19 geometry after %s parent without review authority',async jobState=>{
