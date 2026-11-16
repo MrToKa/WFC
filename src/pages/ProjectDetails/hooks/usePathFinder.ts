@@ -13,6 +13,7 @@ import { AUTOMATIC_PAIR_POLICY } from '../../../../shared/pathfinderAutomaticPai
 import { requalifyStaleCableEndpoints, hasPendingEndpointRequalification } from '@/api/pathfinderEndpointRequalification';
 import { createStoredRouteDisplay, type StoredRouteDisplay } from '@/viewer/storedRouteDisplay';
 import type { RouteCheckResult } from '@/viewer/routeValidation';
+import { createPublishedCadDisplay, type PublishedCadDisplay } from '@/viewer/publishedCadDisplay';
 
 export type ProjectPreparationViewer = {
   readSelection: ViewerController['readSelection'];
@@ -28,7 +29,7 @@ export type ProjectPreparationViewer = {
 
 type Options = { projectId: string | null; loadedProjectId: string | null; token: string | null; isAdmin: boolean; container: RefObject<HTMLDivElement | null>; automaticStatePolling?: boolean };
 type View = { data: PathFinderState | null; loading: boolean; busy: boolean; error: string | null; viewerPhase: 'loading' | 'ready' | 'no-model' | 'error'; viewerMessage: string };
-type Run = { closed: boolean; abort: AbortController; viewer: ViewerController | null; storedRoute: StoredRouteDisplay | null; modelVersionId: string | null; selectionRevision: string | null; contentFingerprint: string | null; generation: number; captureProgressAt: number | null; stateRead: Promise<PathFinderState | null> | null };
+type Run = { closed: boolean; abort: AbortController; viewer: ViewerController | null; storedRoute: StoredRouteDisplay | null; publishedCad: PublishedCadDisplay | null; modelVersionId: string | null; selectionRevision: string | null; contentFingerprint: string | null; generation: number; captureProgressAt: number | null; stateRead: Promise<PathFinderState | null> | null };
 // Cosmetic text only. Capture protocol, geometry assembly and terminal/auth
 // updates retain their original delivery; dropping progress needs no timer.
 const CAPTURE_PROGRESS_INTERVAL_MILLISECONDS = 1000;
@@ -84,7 +85,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
     update(run, { viewerMessage: text() });
   }, [live, update]);
   const accessFailure = useCallback((run: Run, error: unknown) => {
-    if (error instanceof PathFinderApiError && [401, 403, 404].includes(error.status)) { run.viewer?.dispose('reload'); dataRef.current = null; update(run, { data: null, busy: false, loading: false, error: error.message, viewerPhase: 'error', viewerMessage: error.message }); run.closed = true; run.abort.abort(); }
+    if (error instanceof PathFinderApiError && [401, 403, 404].includes(error.status)) { run.publishedCad?.dispose(); run.viewer?.dispose('reload'); dataRef.current = null; update(run, { data: null, busy: false, loading: false, error: error.message, viewerPhase: 'error', viewerMessage: error.message }); run.closed = true; run.abort.abort(); }
   }, [update]);
   const refresh = useCallback(async (run = runRef.current, afterWrite = false): Promise<PathFinderState | null> => {
     if (!run || !live(run) || !projectId || !token || !isAdmin) return null;
@@ -103,8 +104,8 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
         if (!live(run)) return null;
         dataRef.current = data; update(run, { data, loading: false, error: null });
         if (run.modelVersionId !== data.activeModel.modelVersionId || run.selectionRevision !== data.activeModel.selectionRevision) {
-          run.viewer?.dispose('reload'); setRevision(value => value + 1);
-        }
+          run.publishedCad?.dispose(); run.viewer?.dispose('reload'); setRevision(value => value + 1);
+        } else void run.publishedCad?.refresh();
         return data;
       } catch (error) { if (live(run)) { accessFailure(run, error); update(run, { loading: false, error: message(error) }); } return null; }
       finally { deadline.dispose(); }
@@ -114,7 +115,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
     finally { if (run.stateRead === pending) run.stateRead = null; }
   }, [accessFailure, isAdmin, live, projectId, token, update]);
   useEffect(() => {
-    const run: Run = { closed: false, abort: new AbortController(), viewer: null, storedRoute: null, modelVersionId: null, selectionRevision: null, contentFingerprint:null, generation: revision, captureProgressAt: null, stateRead: null };
+    const run: Run = { closed: false, abort: new AbortController(), viewer: null, storedRoute: null, publishedCad: null, modelVersionId: null, selectionRevision: null, contentFingerprint:null, generation: revision, captureProgressAt: null, stateRead: null };
     runRef.current = run; dataRef.current = null; renderedScope.current = scope; setView(initial);
     if (!projectId || !token || !isAdmin || projectId !== loadedProjectId || !container.current) {
       update(run, { loading: false, viewerPhase: 'error', viewerMessage: 'Current administrator project access is required.', error: 'Path Finder is available only to administrators.' });
@@ -133,13 +134,33 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
           if (!live(run)) return;
           run.storedRoute?.onEvent(event);
           if (event.type === 'RUNTIME_READY' && run.modelVersionId) void run.viewer?.load(run.modelVersionId);
-          if (event.type === 'MODEL_LOADING') update(run, { viewerPhase: 'loading', viewerMessage: 'Loading the protected model…' });
-          if (event.type === 'MODEL_LOADED') update(run, { viewerPhase: 'ready', viewerMessage: 'The active model is ready.' });
+          if (event.type === 'MODEL_LOADING') {
+            run.publishedCad?.dispose(); run.publishedCad = null;
+            update(run, { viewerPhase: 'loading', viewerMessage: 'Loading the protected model…' });
+          }
+          if (event.type === 'MODEL_LOADED') {
+            update(run, { viewerPhase: 'ready', viewerMessage: 'The active model is ready.' });
+            run.publishedCad?.dispose();
+            const viewer = run.viewer;
+            if (viewer && run.modelVersionId) {
+              const display = createPublishedCadDisplay({ viewer, projectId, token, modelVersionId: run.modelVersionId,
+                isCurrent: () => live(run) && run.viewer === viewer && run.publishedCad === display,
+                onError: error => {
+                  if (!live(run)) return;
+                  if (error instanceof PathFinderApiError && [401, 403].includes(error.status)) accessFailure(run, error);
+                  else update(run, { error: 'Published routes could not be fully displayed. Refresh Path Finder to retry.' });
+                },
+              });
+              run.publishedCad = display;
+              void display.refresh();
+            }
+          }
           if (event.type === 'ROUTE_CLEARED') update(run, { error: null });
           if (event.type === 'MODEL_CAPTURE_PROGRESS') captureProgress(run, () => `Preparing ${event.payload.phase === 'properties' ? 'equipment candidates' : event.payload.phase === 'geometry' ? 'routing geometry' : 'model identifiers'}: ${Number(event.payload.loaded).toLocaleString()} / ${Number(event.payload.total).toLocaleString()}…`);
           if (event.type === 'BARRIER_CAPTURE_PROGRESS') captureProgress(run, () => `Reading ${event.payload.phase === 'geometry' ? 'barrier geometry' : 'barrier object hierarchy'}: ${Number(event.payload.loaded).toLocaleString()} / ${Number(event.payload.total).toLocaleString()}…`);
           if (event.type === 'ERROR') {
             const code = String(event.payload.code), terminal = event.payload.operation === 'viewer' || ['SESSION_EXPIRED', 'ACCESS_REVOKED', 'MODEL_SELECTION_CHANGED', 'MODEL_UNAVAILABLE', 'RESOURCE_FAILED', 'BARRIER_CAPTURE_MODEL_CHANGED'].includes(code);
+            if (terminal) { run.publishedCad?.dispose(); run.publishedCad = null; }
             update(run, terminal ? { viewerPhase: 'error', viewerMessage: terminalViewerMessage(code), error: terminalViewerMessage(code) }
               : { viewerMessage: 'The active model is ready.', error: message(new ViewerAccessError(code, 0)) });
           }
@@ -158,7 +179,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
         });
       } catch (error) { if (live(run)) { accessFailure(run, error); update(run, { loading: false, viewerPhase: 'error', viewerMessage: 'The active model is unavailable. Refresh to check again.', error: message(error) }); } }
     })();
-    return () => { run.storedRoute?.cancel(); run.closed = true; run.abort.abort(); run.viewer?.dispose('unmount'); };
+    return () => { run.storedRoute?.cancel(); run.publishedCad?.dispose(); run.closed = true; run.abort.abort(); run.viewer?.dispose('unmount'); };
   }, [accessFailure, captureProgress, container, isAdmin, live, loadedProjectId, projectId, refresh, revision, scope, token, update]);
   const perform = useCallback(async <T,>(operation: (data: PathFinderState, run: Run) => Promise<T>, options: { refresh?: boolean } = {}): Promise<T | null> => {
     const run = runRef.current, data = dataRef.current;

@@ -5,8 +5,15 @@ import { fetchPathFinderState, fetchPathFinderLookupPlan, fetchPathFinderProposa
 import { requalifyStaleCableEndpoints, hasPendingEndpointRequalification } from '@/api/pathfinderEndpointRequalification';
 import { fetchProjectModels } from '@/api/projectModels';
 import { ViewerAccessError } from '@/viewer/sessionApi';
+import { createPublishedCadDisplay } from '@/viewer/publishedCadDisplay';
 import type { ViewerController } from '@/viewer/ViewerController';
 import { BARRIER_CAPTURE_ERROR_CODES, BARRIER_CAPTURE_ERROR_MESSAGES, barrierCaptureErrorMessage } from '../../../../viewer-runtime/barrier-capture-errors.mjs';
+
+const cadDisplays = vi.hoisted(() => [] as { refresh: ReturnType<typeof vi.fn<() => Promise<void>>>; dispose: ReturnType<typeof vi.fn<() => void>> }[]);
+vi.mock('@/viewer/publishedCadDisplay', () => ({ createPublishedCadDisplay: vi.fn(() => {
+  const display = { refresh: vi.fn<() => Promise<void>>().mockResolvedValue(undefined), dispose: vi.fn<() => void>() };
+  cadDisplays.push(display); return display;
+}) }));
 
 const facts = vi.hoisted(() => ({ disposed: vi.fn(), load: vi.fn(), capture: vi.fn(), barrierCapture: vi.fn(), barrierPublish: vi.fn(), readSelection: vi.fn(), readTrayRootSelection: vi.fn(), resolveTrayIdentities: vi.fn(), ready: true, showLocationPoint: vi.fn(), showLocation: vi.fn(), showTray: vi.fn(), hideTray: vi.fn(), transparency: vi.fn(), clear: vi.fn(), cancelPicking: vi.fn(), instances: 0, events: [] as ((event: { type: string; payload: Record<string, unknown> }) => void)[] }));
 vi.mock('@/api/pathfinder', async importOriginal => {
@@ -35,7 +42,7 @@ function state(): PathFinderState { return { schemaVersion: 1, projectId, regist
   locations: [{ id: locationId, name: 'EQ-001', aliases: ['Equipment A'], revision: '1', binding: null }] }; }
 let container: { current: HTMLDivElement };
 beforeEach(() => {
-  vi.clearAllMocks(); sessionStorage.clear(); vi.mocked(requalifyStaleCableEndpoints).mockResolvedValue(true); vi.mocked(hasPendingEndpointRequalification).mockResolvedValue(false); facts.instances = 0; facts.events.length = 0; facts.ready = true; facts.readTrayRootSelection.mockReset(); facts.resolveTrayIdentities.mockReset(); facts.showTray.mockReset().mockResolvedValue(undefined); facts.hideTray.mockReset().mockResolvedValue(undefined); container = { current: document.createElement('div') }; document.body.append(container.current);
+  vi.clearAllMocks(); cadDisplays.length = 0; sessionStorage.clear(); vi.mocked(requalifyStaleCableEndpoints).mockResolvedValue(true); vi.mocked(hasPendingEndpointRequalification).mockResolvedValue(false); facts.instances = 0; facts.events.length = 0; facts.ready = true; facts.readTrayRootSelection.mockReset(); facts.resolveTrayIdentities.mockReset(); facts.showTray.mockReset().mockResolvedValue(undefined); facts.hideTray.mockReset().mockResolvedValue(undefined); container = { current: document.createElement('div') }; document.body.append(container.current);
   vi.mocked(fetchPathFinderState).mockResolvedValue(state()); vi.mocked(pathFinderRequest).mockResolvedValue({ locationId });
   vi.mocked(submitPathFinderCalculation).mockReset().mockResolvedValue({ kind: 'acknowledged', jobId: locationId, registryRevision: '8', duplicate: false });
   vi.mocked(fetchPathFinderProposal).mockReset(); vi.mocked(fetchPathFinderJob).mockReset();
@@ -44,6 +51,76 @@ beforeEach(() => {
   facts.barrierCapture.mockReset().mockResolvedValue({ capture: { fixture: 'opaque protected barrier observation' }, frameObservation: {} });
   facts.barrierPublish.mockReset().mockResolvedValue({ fixture: 'opaque protected publication receipt' });
   vi.mocked(fetchProjectModels).mockResolvedValue({ selection: { projectId, activeModelVersionId: modelId, selectionRevision: 2, updatedAt: '2026-10-18T00:00:00Z' }, versions: [{ id: modelId, projectId, label: 'Model', source: { name: 'test.nwd', bytes: 1, sha256: 'a'.repeat(64), identityBasis: 'observed-local-file' }, preparedAt: '2026-10-18T00:00:00Z', importedAt: null, state: 'ready', health: 'healthy' }] });
+});
+
+describe('published Routings builder geometry in Path Finder', () => {
+  const mount = () => renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container, automaticStatePolling: false }));
+  it('loads published CAD geometry only after the protected model has loaded, using the current project and model', async () => {
+    const view = mount();
+    await waitFor(() => expect(facts.instances).toBe(1));
+    expect(createPublishedCadDisplay).not.toHaveBeenCalled();
+    act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+    expect(createPublishedCadDisplay).toHaveBeenCalledOnce();
+    expect(createPublishedCadDisplay).toHaveBeenCalledWith(expect.objectContaining({ projectId, token: 'token', modelVersionId: modelId, viewer: expect.any(Object) }));
+    expect(cadDisplays[0].refresh).toHaveBeenCalledOnce();
+    expect(vi.mocked(createPublishedCadDisplay).mock.calls[0][0].isCurrent()).toBe(true);
+    expect(facts.clear).not.toHaveBeenCalled();
+    expect(pathFinderRequest).not.toHaveBeenCalled();
+    view.unmount();
+    expect(cadDisplays[0].dispose).toHaveBeenCalledOnce();
+    expect(vi.mocked(createPublishedCadDisplay).mock.calls[0][0].isCurrent()).toBe(false);
+  });
+  it('refreshes published geometry when explicitly refreshing the same model', async () => {
+    const view = mount();
+    await waitFor(() => expect(facts.instances).toBe(1));
+    act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+    await act(async () => { await view.result.current.refresh(); });
+    expect(cadDisplays[0].refresh).toHaveBeenCalledTimes(2);
+    expect(createPublishedCadDisplay).toHaveBeenCalledOnce();
+    expect(facts.instances).toBe(1);
+    expect(facts.clear).not.toHaveBeenCalled();
+    view.unmount();
+  });
+  it('disposes old geometry on model loading and recreates it after model load', async () => {
+    const view = mount();
+    await waitFor(() => expect(facts.instances).toBe(1));
+    act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+    act(() => facts.events[0]({ type: 'MODEL_LOADING', payload: {} }));
+    expect(cadDisplays[0].dispose).toHaveBeenCalledOnce();
+    await act(async () => { await view.result.current.refresh(); });
+    expect(cadDisplays[0].refresh).toHaveBeenCalledOnce();
+    act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+    expect(createPublishedCadDisplay).toHaveBeenCalledTimes(2);
+    expect(cadDisplays[1].refresh).toHaveBeenCalledOnce();
+    view.unmount();
+    expect(cadDisplays[1].dispose).toHaveBeenCalledOnce();
+  });
+  it('ignores events and invalidates geometry from a previous viewer after reload', async () => {
+    const view = mount();
+    await waitFor(() => expect(facts.instances).toBe(1));
+    act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+    const oldDisplayScope = vi.mocked(createPublishedCadDisplay).mock.calls[0][0];
+    act(() => view.result.current.reloadViewer());
+    await waitFor(() => expect(facts.instances).toBe(2));
+    expect(cadDisplays[0].dispose).toHaveBeenCalledOnce();
+    expect(oldDisplayScope.isCurrent()).toBe(false);
+    act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+    expect(createPublishedCadDisplay).toHaveBeenCalledOnce();
+    act(() => facts.events[1]({ type: 'MODEL_LOADED', payload: {} }));
+    expect(createPublishedCadDisplay).toHaveBeenCalledTimes(2);
+    expect(cadDisplays[1].refresh).toHaveBeenCalledOnce();
+    view.unmount();
+  });
+  it('stops refreshing published geometry after terminal viewer access failure', async () => {
+    const view = mount();
+    await waitFor(() => expect(facts.instances).toBe(1));
+    act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+    act(() => facts.events[0]({ type: 'ERROR', payload: { code: 'ACCESS_REVOKED', operation: 'viewer' } }));
+    expect(cadDisplays[0].dispose).toHaveBeenCalledOnce();
+    await act(async () => { await view.result.current.refresh(); });
+    expect(cadDisplays[0].refresh).toHaveBeenCalledOnce();
+    view.unmount();
+  });
 });
 
 describe('fresh popup calculation submission without Viewer appearance changes', () => {
