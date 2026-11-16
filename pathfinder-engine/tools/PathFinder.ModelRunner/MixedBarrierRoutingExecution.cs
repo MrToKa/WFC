@@ -27,23 +27,24 @@ internal static partial class Program
                 : observation.Status == MixedBarrierSegmentStatus.Blocked ? RouteCollisionStatus.Blocked : RouteCollisionStatus.Indeterminate,
                 observation.Witness?.ComponentId, observation.Reason, observation.Work);
         };
+        var limits = new ConstrainedRoutingLimits { MaxPairs = context.FullPairs ? 264 : 64 };
         ConstrainedSecondaryEvaluation? secondary = null; LocalApproachRouteEvaluation local;
         var localOptions = context.NearestAnchoredSearch ? new LocalConnectorOptions { UseNearestAnchoredSearch = true } : null;
         var purposeTrays = PurposeRouting.Filter(prepared.Segments, request.AllowedPurposeRouteCodes, token);
         if (request.ManualRouteConstraint is { } manual)
             local = new RouteCalculator().CalculateManualOrdered(CapacityRouting.Filter(purposeTrays, request.ExcludedRouteCodes, token),
                 manual.RouteText, Point(request.From), Point(request.To), category, oracle, options,
-                localOptions: localOptions, drillThroughWalls: bypass, cancellationToken: token, interTrayManeuvers: context.InterTrayManeuvers);
+                limits: limits, localOptions: localOptions, drillThroughWalls: bypass, cancellationToken: token, interTrayManeuvers: context.InterTrayManeuvers);
         else if (request.DirectSecondaryPolicy is not null)
         {
             var calculated = CapacityRouting.CalculateSecondaryWithLocalApproaches(purposeTrays, request.ExcludedRouteCodes,
-                Point(request.From), Point(request.To), category, oracle, options, localOptions: localOptions, drillThroughWalls: bypass,
+                Point(request.From), Point(request.To), category, oracle, options, limits: limits, localOptions: localOptions, drillThroughWalls: bypass,
                 cancellationToken: token, finalReverse: request.Reverse, interTrayManeuvers: context.InterTrayManeuvers,
                 routeCostMultipliers: request.RouteCostMultipliers);
             secondary = calculated.SecondaryEvaluation; local = calculated.LocalApproaches;
         }
         else local = CapacityRouting.CalculateWithLocalApproaches(purposeTrays, request.ExcludedRouteCodes,
-            Point(request.From), Point(request.To), category, oracle, options, localOptions: localOptions, drillThroughWalls: bypass,
+            Point(request.From), Point(request.To), category, oracle, options, limits: limits, localOptions: localOptions, drillThroughWalls: bypass,
             cancellationToken: token, interTrayManeuvers: context.InterTrayManeuvers, routeCostMultipliers: request.RouteCostMultipliers);
         token.ThrowIfCancellationRequested(); var evaluated = local.RouteEvaluation;
         var route = evaluated.Route;

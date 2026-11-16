@@ -471,3 +471,44 @@ describe('scope, frozen limits, final route and original evidence stay exact', (
     expect(mixed.mixedBarrierDirectSecondarySchema.safeParse(unavailable).success).toBe(false);
   });
 });
+
+describe('full retained candidate pair runtime profile', () => {
+  const fullContext = (): mixed.MixedBarrierRuntimeContext => ({ ...context(),
+    profile: structuredClone(mixed.MIXED_BARRIER_FULL_PAIR_RUNTIME_PROFILE),
+    profileSha256: digest(mixed.MIXED_BARRIER_FULL_PAIR_RUNTIME_PROFILE) });
+  it('changes only the version and pair budget while preserving historical profiles', () => {
+    const next = mixed.MIXED_BARRIER_FULL_PAIR_RUNTIME_PROFILE, previous = mixed.MIXED_BARRIER_MEASURED_FIT_RUNTIME_PROFILE;
+    expect(next.routing.maxPairs).toBe(8 + 16 * 16); expect(previous.routing.maxPairs).toBe(64);
+    expect({ ...next, schemaVersion: previous.schemaVersion, routing: { ...next.routing, maxPairs: 64 } }).toEqual(previous);
+    const current = fullContext(); current.storage!.manifest.bytes = 1024 * 1024;
+    expect(mixed.verifyMixedBarrierRuntimeContext(current, hash)).toBe(true);
+    const changed = { ...next, routing: { ...next.routing, maxPairs: 265 } };
+    expect(mixed.verifyMixedBarrierRuntimeContext({ ...current, profile: changed, profileSha256: digest(changed) }, hash)).toBe(false);
+    expect(mixed.mixedBarrierSupportedRuntimeProfileSchema.safeParse({ ...previous, routing: next.routing }).success).toBe(false);
+  });
+  it('validates pair diagnostics against their exact profile and retains final proof', () => {
+    const current = fullContext(), value = { ...execution(), context: current };
+    value.diagnostics.pairAttempts = 264;
+    expect(mixed.verifyMixedBarrierExecutionRoute(value, { context: current, points,
+      componentMemberships: evidence().componentMemberships, qualificationEvidence: evidence() }, hash)).toBe(true);
+    expect(mixed.mixedBarrierExecutionSchema.safeParse({ ...value, proof: null }).success).toBe(false);
+    value.diagnostics.pairAttempts = 265;
+    expect(mixed.mixedBarrierExecutionSchema.safeParse(value).success).toBe(false);
+    value.diagnostics.pairAttempts = 65;
+    expect(mixed.mixedBarrierExecutionSchema.safeParse({ ...value, context: context() }).success).toBe(false);
+    expect(mixed.mixedBarrierExecutionSchema.safeParse({ ...value, context: { ...current,
+      profile: mixed.MIXED_BARRIER_MEASURED_FIT_RUNTIME_PROFILE,
+      profileSha256: digest(mixed.MIXED_BARRIER_MEASURED_FIT_RUNTIME_PROFILE) } }).success).toBe(false);
+  });
+  it('binds the expanded budget to its own engine identity while accepting historical identities', () => {
+    const { contentSha256: _oldHash, ...previous } = identity();
+    const body = { ...previous, policyVersions: { ...previous.policyVersions,
+      runtimeProfile: mixed.MIXED_BARRIER_FULL_PAIR_RUNTIME_PROFILE.schemaVersion,
+      fitting: mixed.MEASURED_BEND_MESH_FITTING_PROFILE.modelBuildRules,
+      interTrayManeuvers: mixed.INTER_TRAY_OPENING_MANEUVER_POLICY,
+      localSearch: mixed.NEAREST_ANCHORED_LOCAL_SEARCH_POLICY, geometryFitting: mixed.MEASURED_BEND_MESH_FITTING_POLICY } };
+    expect(mixed.verifyMixedBarrierEngineIdentity({ ...body, contentSha256: digest(body) }, hash)).toBe(true);
+    expect(mixed.verifyMixedBarrierEngineIdentity({ ...body, contentSha256: identity().contentSha256 }, hash)).toBe(false);
+    expect(mixed.verifyMixedBarrierEngineIdentity(identity(), hash)).toBe(true);
+  });
+});

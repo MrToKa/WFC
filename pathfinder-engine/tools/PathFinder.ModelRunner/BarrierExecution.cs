@@ -151,7 +151,7 @@ internal static partial class Program
             || kernel.MaximumBuildWork != 40000000 || kernel.MaximumBuildMilliseconds != 60000 || kernel.MaximumQueryWork != 2000000
             || kernel.MaximumQueryMilliseconds != 10000 || kernel.MaximumEstimatedBytes != 134217728 || kernel.BvhLeafSize != 8
             || kernel.NumericToleranceMeters != 1e-7 || kernel.MaximumCoordinateMagnitude != 1e9
-            || routing.MaxCandidatesPerEnd != 16 || routing.MaxPairs != 64 || routing.MaxCollisionQueries != 100000 || routing.MaxWork != 20000000
+            || routing.MaxCandidatesPerEnd != 16 || routing.MaxPairs != 264 || routing.MaxCollisionQueries != 100000 || routing.MaxWork != 20000000
             || routing.TimeoutMilliseconds != 30000 || routing.MaxInputTrays != 4096 || routing.MaxInputPieces != 50000
             || routing.MaxGraphNodes != 100000 || routing.MaxGraphConnections != 300000 || local.StepMeters != .25 || local.PaddingMeters != 1
             || local.MaxAxisSpanMeters != 20 || local.MaxNodes != 4096 || local.MaxEdgeChecks != 16384 || local.MaxPlans != 8 || local.MaxStraightPairs != 8

@@ -14,7 +14,7 @@ internal static class Program
     private static int Main(string[] args)
     {
         if (args.Length != 0) return 2;
-        LegacyParity(); PhysicalRoutes(); ConnectorGeometry(); DirectStrategy(); BypassedAlternatives(); RefusalAndBudgets(); SearchReuse();
+        LegacyParity(); PhysicalRoutes(); ConnectorGeometry(); DirectStrategy(); BypassedAlternatives(); RefusalAndBudgets(); SearchReuse(); CompleteCandidateDomain();
         IndependentNetworkChecks.Run(Run);
         ShortestAdmissibleChecks.Run(Run);
         Console.WriteLine(JsonSerializer.Serialize(new
@@ -148,6 +148,22 @@ internal static class Program
             var value = Route(Network(), from, to, Query(kernel), options);
             NotSuccess(value); Need(value.CollisionQueries > 0); Need(value.Status != ConstrainedRouteStatus.Bypassed);
             Equal(0, value.FinalChecks.Count);
+        });
+    }
+    private static void CompleteCandidateDomain()
+    {
+        Run("straight constrained search exhausts all retained pairs while preserving wall collision refusal", () =>
+        {
+            var kernel = Kernel(Box("separating-wall", x0: -100, x1: 200, y0: 1.4, y1: 1.6));
+            var trays = Enumerable.Range(0, 16).Select(rank => Tray("T" + rank.ToString("D2"), P(1 + 2 * rank, 1), P(1 + 2 * rank, 2))).ToArray();
+            var from = P(0); var to = P(100, 3);
+            var limited = Route(trays, from, to, Query(kernel), limits: new() { MaxPairs = 64 });
+            NotSuccess(limited); Equal("CANDIDATE_PAIR_LIMIT", limited.Reason); Equal(64, limited.PairAttempts); Need(!limited.SearchComplete);
+            var expanded = Route(trays, from, to, Query(kernel));
+            NotSuccess(expanded); Equal("NO_CLEAR_CONNECTED_CANDIDATE_PAIR", expanded.Reason);
+            Equal(256, expanded.PairAttempts); Need(expanded.SearchComplete && !expanded.CandidatesTruncated);
+            Equal(ConstrainedRouteStatus.Blocked, expanded.Status);
+            Need(expanded.CollisionQueries > 0); Equal(0, expanded.FinalChecks.Count);
         });
     }
     private static void ExactRoute(RouteResult expected, RouteResult observed)

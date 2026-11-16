@@ -27,21 +27,22 @@ internal static partial class Program
                 : observation.Status == BarrierSegmentStatus.Blocked ? RouteCollisionStatus.Blocked : RouteCollisionStatus.Indeterminate,
                 observation.BarrierId, observation.Reason, observation.Work);
         };
+        var limits = new ConstrainedRoutingLimits { MaxPairs = 64 };
         ConstrainedSecondaryEvaluation? secondary = null; LocalApproachRouteEvaluation local;
         var purposeTrays = PurposeRouting.Filter(prepared.Segments, request.AllowedPurposeRouteCodes, token);
         if (request.ManualRouteConstraint is { } manual)
             local = new RouteCalculator().CalculateManualOrdered(CapacityRouting.Filter(purposeTrays, request.ExcludedRouteCodes, token),
                 manual.RouteText, Point(request.From), Point(request.To), category, oracle, options,
-                drillThroughWalls: bypass, cancellationToken: token);
+                limits: limits, drillThroughWalls: bypass, cancellationToken: token);
         else if (request.DirectSecondaryPolicy is not null)
         {
             var calculated = CapacityRouting.CalculateSecondaryWithLocalApproaches(purposeTrays, request.ExcludedRouteCodes, Point(request.From), Point(request.To), category,
-                oracle, options, drillThroughWalls: bypass, cancellationToken: token, finalReverse: request.Reverse,
+                oracle, options, limits: limits, drillThroughWalls: bypass, cancellationToken: token, finalReverse: request.Reverse,
                 routeCostMultipliers: request.RouteCostMultipliers);
             secondary = calculated.SecondaryEvaluation; local = calculated.LocalApproaches;
         }
         else local = CapacityRouting.CalculateWithLocalApproaches(purposeTrays, request.ExcludedRouteCodes, Point(request.From), Point(request.To), category,
-            oracle, options, drillThroughWalls: bypass, cancellationToken: token, routeCostMultipliers: request.RouteCostMultipliers);
+            oracle, options, limits: limits, drillThroughWalls: bypass, cancellationToken: token, routeCostMultipliers: request.RouteCostMultipliers);
         token.ThrowIfCancellationRequested(); var evaluated = local.RouteEvaluation;
         var route = evaluated.Route;
         var distance = secondary?.DistanceDecision is { } raw ? DirectSecondaryDecision.Capture(raw) : null;

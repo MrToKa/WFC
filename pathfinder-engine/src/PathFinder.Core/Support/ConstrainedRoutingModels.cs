@@ -48,8 +48,12 @@ namespace AddinRibbon.Routing
     /// result can therefore exceed MaxWork by that last separately bounded query.</summary>
     public sealed class ConstrainedRoutingLimits
     {
+        // The complete retained Cartesian domain plus the straight preflight
+        // allowance. Straight-only search needs at most 257 (legacy + 16*16).
+        // Keep this aligned with the candidate and local preflight ceilings.
+        public const int CompleteCandidatePairAllowance = 16 * 16 + 8;
         public int MaxCandidatesPerEnd { get; set; } = 16;
-        public int MaxPairs { get; set; } = 64;
+        public int MaxPairs { get; set; } = CompleteCandidatePairAllowance;
         public int MaxCollisionQueries { get; set; } = 100000;
         public long MaxWork { get; set; } = 20000000;
         public int TimeoutMilliseconds { get; set; } = 30000;
@@ -60,7 +64,7 @@ namespace AddinRibbon.Routing
 
         internal ConstrainedRoutingLimits Snapshot()
         {
-            if (MaxCandidatesPerEnd < 1 || MaxCandidatesPerEnd > 16 || MaxPairs < 1 || MaxPairs > 64
+            if (MaxCandidatesPerEnd < 1 || MaxCandidatesPerEnd > 16 || MaxPairs < 1 || MaxPairs > CompleteCandidatePairAllowance
                 || MaxCollisionQueries < 1 || MaxCollisionQueries > 100000 || MaxWork < 1 || MaxWork > 20000000
                 || TimeoutMilliseconds < 1 || TimeoutMilliseconds > 30000 || MaxInputTrays < 1 || MaxInputTrays > 4096
                 || MaxInputPieces < 1 || MaxInputPieces > 50000 || MaxGraphNodes < 2 || MaxGraphNodes > 100000

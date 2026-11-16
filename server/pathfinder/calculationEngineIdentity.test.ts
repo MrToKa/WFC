@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { calculationProjectionFiles, barrierCalculationProjectionFiles, BARRIER_IDENTITY_PROJECTION_LIMIT, CALCULATION_IDENTITY_PROJECTION_LIMIT, createCalculationEngineIdentityReader } from './calculationEngineIdentity.js';
 import { verifyEngineIdentity, verifyBarrierEngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
-import { MIXED_BARRIER_MEASURED_FIT_RUNTIME_PROFILE, MEASURED_BEND_MESH_FITTING_POLICY, INTER_TRAY_OPENING_MANEUVER_POLICY, NEAREST_ANCHORED_LOCAL_SEARCH_POLICY, verifyMixedBarrierEngineIdentity } from '../../shared/pathfinderBarrierMixed.js';
+import { MIXED_BARRIER_FULL_PAIR_RUNTIME_PROFILE, MEASURED_BEND_MESH_FITTING_POLICY, INTER_TRAY_OPENING_MANEUVER_POLICY, NEAREST_ANCHORED_LOCAL_SEARCH_POLICY, verifyMixedBarrierEngineIdentity } from '../../shared/pathfinderBarrierMixed.js';
 
 vi.mock('node:fs/promises', () => ({ default: { lstat: vi.fn(), realpath: vi.fn(), readFile: vi.fn() } }));
 const sha = (value: Buffer | string) => createHash('sha256').update(value).digest('hex');
@@ -44,7 +44,7 @@ describe('separate v8 barrier calculation implementation identity',()=>{
   it('pins the fresh mixed runtime profile and maneuver policy as an inseparable identity pair',async()=>{
     const f=fixture(true,true),value=await f.reader.read();
     if(value.schemaVersion!=='wfc.pf.engine-identity.v3')throw Error('Expected mixed identity');
-    expect(value.policyVersions).toMatchObject({runtimeProfile:MIXED_BARRIER_MEASURED_FIT_RUNTIME_PROFILE.schemaVersion,
+    expect(value.policyVersions).toMatchObject({runtimeProfile:MIXED_BARRIER_FULL_PAIR_RUNTIME_PROFILE.schemaVersion,
       interTrayManeuvers:INTER_TRAY_OPENING_MANEUVER_POLICY,localSearch:NEAREST_ANCHORED_LOCAL_SEARCH_POLICY,
       fitting:'pf2.rules.v2',
       geometryFitting:MEASURED_BEND_MESH_FITTING_POLICY});

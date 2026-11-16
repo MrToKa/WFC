@@ -375,7 +375,7 @@ internal static class Program
             var trays = new List<TraySegment> { Tray("A-connected", P(0, 1), P(0, 2)) };
             for (int rank = 0; rank < 15; rank++) trays.Add(Tray("B" + rank.ToString("D2"), P(100 + .01 * rank), P(100 + .01 * rank, .2)));
             var from = P(0); var to = P(100); var routing = Options(); routing.PreferVerticalApproach = false;
-            var historical = Route(trays.ToArray(), from, to, Query(kernel), routing);
+            var historical = Route(trays.ToArray(), from, to, Query(kernel), routing, limits: new() { MaxPairs = 64 });
             Need(!historical.RouteEvaluation.Route.Success); Equal("CANDIDATE_PAIR_LIMIT", historical.RouteEvaluation.Reason);
             Equal(64, historical.RouteEvaluation.PairAttempts); Need(historical.PlannerAttempts <= 8);
             var options = new LocalConnectorOptions { UseNearestAnchoredSearch = true };
@@ -389,6 +389,47 @@ internal static class Program
             Equal(current.RouteEvaluation.PairAttempts, permuted.RouteEvaluation.PairAttempts);
             var limited = Route(trays.ToArray(), from, to, Query(kernel), routing, limits: new() { MaxPairs = 1 }, local: options);
             Need(!limited.RouteEvaluation.Route.Success); Equal("CANDIDATE_PAIR_LIMIT", limited.RouteEvaluation.Reason); Equal(1, limited.RouteEvaluation.PairAttempts);
+        });
+        Run("expanded search finds and physically verifies the last retained interior pair after the old sixty-four-pair refusal", () =>
+        {
+            var kernel = Kernel(Box("remote", x0: 200, x1: 201));
+            var trays = new List<TraySegment> { Tray("connected", P(50, 1), P(50, 2)) };
+            for (int rank = 0; rank < 15; rank++)
+            {
+                trays.Add(Tray("F" + rank.ToString("D2"), P(2 * rank, 1), P(2 * rank, 2)));
+                trays.Add(Tray("T" + rank.ToString("D2"), P(100 - 2 * rank, 1), P(100 - 2 * rank, 2)));
+            }
+            var routing = Options(); routing.PreferVerticalApproach = false;
+            var local = new LocalConnectorOptions { UseNearestAnchoredSearch = true };
+            var limited = Route(trays.ToArray(), P(0), P(100), Query(kernel), routing, limits: new() { MaxPairs = 64 }, local: local);
+            Need(!limited.RouteEvaluation.Route.Success); Equal("CANDIDATE_PAIR_LIMIT", limited.RouteEvaluation.Reason);
+            Equal(64, limited.RouteEvaluation.PairAttempts);
+            var expanded = Route(trays.ToArray(), P(0), P(100), Query(kernel), routing, local: local);
+            ClearRoute(expanded, kernel);
+            Equal(ConstrainedRoutingLimits.CompleteCandidatePairAllowance, expanded.RouteEvaluation.PairAttempts);
+            Need(expanded.RouteEvaluation.Route.SegmentIds.SequenceEqual(new[] { "connected" }));
+            Need(expanded.RouteEvaluation.FinalChecks.Count > 0, "Expanded search skipped the fresh final collision checks.");
+            Equal(0, expanded.PlannerAttempts); Need(expanded.RouteEvaluation.CollisionQueries <= 100000 && expanded.LocalEdgeChecks <= 16384);
+        });
+        Run("all sixteen by sixteen local target pairs are visited without bypassing original barrier material", () =>
+        {
+            var kernel = Kernel(Box("all-targets-in-material", x0: 0, x1: 99, y0: -2, y1: 3));
+            var trays = Enumerable.Range(0, 16).Select(rank => Tray("T" + rank.ToString("D2"), P(1 + 2 * rank, 1), P(1 + 2 * rank, 2))).ToArray();
+            var routing = Options(); routing.PreferVerticalApproach = false;
+            foreach (var anchored in new[] { false, true })
+            {
+                var value = Route(trays, P(-1), P(100), Query(kernel), routing,
+                    local: new() { UseNearestAnchoredSearch = anchored });
+                Need(!value.RouteEvaluation.Route.Success, "Expanded search crossed original barrier material.");
+                Equal(257, value.RouteEvaluation.PairAttempts); // One legacy preflight plus all 256 local pairs.
+                Need(value.RouteEvaluation.Reason is "LOCAL_CANDIDATE_DOMAIN_EXHAUSTED" or "LOCAL_PLAN_OR_EDGE_LIMIT", value.RouteEvaluation.Reason);
+                Need(value.LocalPhaseUsed && value.RouteEvaluation.CollisionQueries > 0);
+                Equal(0, value.RouteEvaluation.FinalChecks.Count);
+                var limited = Route(trays, P(-1), P(100), Query(kernel), routing,
+                    limits: new() { MaxPairs = 64 }, local: new() { UseNearestAnchoredSearch = anchored });
+                Equal("CANDIDATE_PAIR_LIMIT", limited.RouteEvaluation.Reason); Equal(64, limited.RouteEvaluation.PairAttempts);
+                Need(!limited.RouteEvaluation.Route.Success && !limited.RouteEvaluation.SearchComplete);
+            }
         });
         Run("nearest-anchored opt-in preserves the exact legacy clear first pair and unchanged published ceilings", () =>
         {
