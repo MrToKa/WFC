@@ -213,7 +213,9 @@ describe('read-access Routings builder tab', () => {
     expect(sections[index - 1]).toBe(tabs.getByRole('tab', { name: 'Cables list' }));
     expect(sections[index + 1]).toBe(tabs.getByRole('tab', { name: 'Trays' }));
     expect(sections[index]).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: /^Cables$/ })).toBeEnabled();
+    expect(screen.getByRole('heading', { name: 'Draw trays' })).toBeVisible();
+    expect(screen.queryByRole('tab', { name: /^Cables$/ })).toBeNull();
+    expect(screen.queryByRole('tab', { name: 'Manual routing' })).toBeNull();
     expect(document.querySelector('iframe')).toBeNull();
     expect(requests.filter(path => [`/api/projects/${projectId}/cables`, `/api/projects/${projectId}/cable-types`, `/api/projects/${projectId}/trays`].includes(path))).toEqual([]);
     expect(requests.filter(path => path.startsWith('/api/materials/') || path === `/api/projects/${projectId}/tray-data`)).toEqual([]);
