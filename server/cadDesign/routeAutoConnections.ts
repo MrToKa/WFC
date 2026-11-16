@@ -35,7 +35,10 @@ export function inferCadConnections(instances:PublicationInstance[],existing:Con
   const used=new Set<string>(),parents=new Map(instances.map(row=>[row.id,row.id]));
   const find=(id:string):string=>{while(parents.get(id)!==id)id=parents.get(id)!;return id;};
   const unite=(a:string,b:string)=>{const first=find(a),last=find(b);if(first===last)fail('CAD_ROUTE_AUTO_CONNECT_LOOP','The route forms a closed loop. Keep an open route chain before publishing.');parents.set(last,first);};
-  const aligned=(first:typeof ports[number],last:typeof ports[number],gap=1)=>connectorAlignmentIsValid(world(first.row),first.local,world(last.row),last.local,MATE_OPPOSING_FACE,gap,.1);
+  const aligned=(first:typeof ports[number],last:typeof ports[number],gap=1)=>
+    Math.abs(first.frame.widthMetres-last.frame.widthMetres)<.000001&&
+    Math.abs(first.frame.heightMetres-last.frame.heightMetres)<.000001&&
+    connectorAlignmentIsValid(world(first.row),first.local,world(last.row),last.local,MATE_OPPOSING_FACE,gap,.1);
   const gapBetween=(first:typeof ports[number],last:typeof ports[number])=>Math.hypot(...first.frame.pointMetres.map((value,index)=>(value-last.frame.pointMetres[index])*1000));
   for(const connection of [...existing.map(edge=>({...edge,kind:'physical' as const})),...transitions]){
     if(!rows.has(connection.source_instance_id)||!rows.has(connection.target_instance_id))
@@ -145,7 +148,7 @@ export function selectAutoAttachments(instances:PublicationInstance[],endpoints:
   if(ambiguousAligned)return {status:'ambiguous' as const,attachments:[],diagnostics:{message:'Several existing network ports fit the same route end. An unambiguous physical connection is required.'}};
   if(aligned.length)return {status:'aligned' as const,...describe(aligned),diagnostics:{message:'Matching network connection points are already aligned.'}};
   candidates.sort((a,b)=>a.gapMm-b.gapMm||a.option.objectRevisionId.localeCompare(b.option.objectRevisionId)||a.option.portIndex-b.option.portIndex);
-  if(!candidates.length)return {status:'unavailable' as const,attachments:[],diagnostics:{message:'No existing network port has a matching verified 300 × 60 mm profile.'}};
+  if(!candidates.length)return {status:'unavailable' as const,attachments:[],diagnostics:{message:'No existing network port has a matching verified component profile.'}};
   if(candidates[1]&&Math.abs(candidates[0].gapMm-candidates[1].gapMm)<=.001)
     return {status:'ambiguous' as const,attachments:[],diagnostics:{message:'Two network connections are equally close. Move the route nearer the intended connection before automatic selection.'}};
   return {status:'alignment-required' as const,...describe([candidates[0]]),diagnostics:{message:`The nearest compatible network point is ${candidates[0].gapMm.toFixed(1)} mm away. Align the whole route before publishing.`}};

@@ -5,6 +5,7 @@ import type { AddressInfo } from 'node:net';
 import { Readable } from 'node:stream';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getInstanceCadPorts, normalizeCutLengthMm, STRAIGHT_SOURCE_SHA256, supportsStraightCut } from '../../shared/cadLengths.js';
+import { STRAIGHT_SOURCES } from '../../shared/cadStraightSources.js';
 
 const db = vi.hoisted(() => ({ query: vi.fn(), connect: vi.fn() }));
 const storage = vi.hoisted(() => ({ getObjectStream: vi.fn(), getProjectBucket: vi.fn(() => 'isolated-bucket') }));
@@ -68,6 +69,20 @@ describe('pinned straight length and connector geometry', () => {
 });
 
 describe('proposed instance length API', () => {
+  it.each(STRAIGHT_SOURCES)('creates and resizes the verified $filename source', async source => {
+    const part = { original_filename: source.filename, source_sha256: source.sha256, component_kind: 'straight' };
+    db.query.mockImplementation(async (sql: string) => ({ rows: sql.includes('SELECT c.original_filename,c.source_sha256,p.component_kind') ? [part] : [{ id: instance, revision: 2 }] }));
+    expect((await save(1500)).status).toBe(201);
+    expect(db.query.mock.calls.at(-1)![1][12]).toBe(1500);
+    expect((await save(1250.5, true)).status).toBe(200);
+    expect(db.query.mock.calls.at(-1)![1].at(-1)).toBe(1250.5);
+    const ports = getInstanceCadPorts(source.filename, source.sha256, 1250.5);
+    expect(ports.map(port => port.local.position)).toEqual([
+      { x: 0, y: source.heightMm / 2, z: 0 },
+      { x: 0, y: source.heightMm / 2, z: 1250.5 },
+    ]);
+    expect(ports[0].profile).toBe(`${source.heightMm}x${source.widthMm}`);
+  });
   it.each([0, -1, 6001, '2500', {}])('rejects invalid length %j before database access', async length => {
     expect((await save(length)).status).toBe(400);
     expect(db.query).not.toHaveBeenCalled();

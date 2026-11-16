@@ -1,11 +1,12 @@
 import { getAalborgPocPorts } from './cadPocPorts.js';
+import { getStraightSource } from './cadStraightSources.js';
 
 export const STRAIGHT_SOURCE_LENGTH_MM = 6000;
 export const STRAIGHT_SOURCE_SHA256 = 'd381a3f4a09559e99119e3e591137f73780d16bf832019f93b20627adc5609cd';
 
-/** Cutting is approved only for the supplied straight, whose longitudinal axis is local Z. */
+/** Verified sources share the local-Z 0..6000 mm stock cutting contract. */
 export function supportsStraightCut(filename: string, sha256: string): boolean {
-  return filename.trim().toUpperCase() === 'NDX_KL_60-303_F_MED_214.STEP' && sha256 === STRAIGHT_SOURCE_SHA256;
+  return getStraightSource(filename, sha256) !== undefined;
 }
 
 export function normalizeCutLengthMm(value: number | null | undefined): number | null {

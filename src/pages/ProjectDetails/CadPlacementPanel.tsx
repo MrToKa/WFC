@@ -1050,7 +1050,7 @@ export function CadPlacementPanel({
                   ? 'Disconnect this component before changing its length.'
                   : canSetLength
                     ? 'Original piece: 6000 mm. Shorter pieces are cut without stretching the profile or rungs.'
-                    : 'Choose a prepared straight component to set a cut length. Fittings keep their original dimensions.'
+                    : 'Choose a supported Niedax straight component to set a cut length. Fittings and unverified STEP files keep their original dimensions.'
               }
             >
               <Input

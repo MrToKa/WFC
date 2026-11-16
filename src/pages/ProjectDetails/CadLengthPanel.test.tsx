@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CadPlacementPanel } from './CadPlacementPanel';
 import { rotateVector } from '../../../shared/cadTransforms';
+import { STRAIGHT_SOURCES } from '../../../shared/cadStraightSources';
 
 const projectId = '00000000-0000-4000-8000-000000000001';
 const modelVersionId = '00000000-0000-4000-8000-000000000002';
@@ -12,7 +13,9 @@ const instanceId = '00000000-0000-4000-8000-000000000005';
 const row = { id: instanceId, catalogItemId: catalogId, partNumber: 'STRAIGHT-300', manufacturer: 'Niedax',
   revision: 1, xMm: 100, yMm: 200, zMm: 300, qx: 0, qy: 0, qz: 0, qw: 1, lengthMm: 1500 };
 
-function mount(existing = false, connected = false, kind = 'straight') {
+function mount(existing = false, connected = false, kind = 'straight', source = {
+  filename: 'NDX_KL_60-303_F_MED_214.step', sha256: 'd381a3f4a09559e99119e3e591137f73780d16bf832019f93b20627adc5609cd',
+}) {
   let rows = existing ? [{ ...row }] : [];
   const request = vi.fn(async (input: string, options?: RequestInit) => {
     if (options?.method === 'POST' && input.endsWith('/instances')) {
@@ -33,7 +36,7 @@ function mount(existing = false, connected = false, kind = 'straight') {
   const onShow = vi.fn().mockResolvedValue(undefined);
   render(<FluentProvider theme={webLightTheme}><CadPlacementPanel projectId={projectId} modelVersionId={modelVersionId}
     token="test-token" catalogue={[{ id: catalogId, partNumber: 'STRAIGHT-300', manufacturer: 'Niedax',
-      originalFilename: 'NDX_KL_60-303_F_MED_214.step', sourceSha256: 'd381a3f4a09559e99119e3e591137f73780d16bf832019f93b20627adc5609cd',
+      originalFilename: source.filename, sourceSha256: source.sha256,
       componentKind: kind, conversionStatus: 'ready', materialAssetId: catalogId }]}
     onPick={vi.fn()} onShow={onShow} onMove={vi.fn()} /></FluentProvider>);
   return { request, onShow };
@@ -41,6 +44,26 @@ function mount(existing = false, connected = false, kind = 'straight') {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('straight component length', () => {
+  it.each(STRAIGHT_SOURCES.filter(source => [
+    'NDX_KL_60-303_MED_214.step', 'NDX_KL_60-603_E3_MED_214.step',
+    'NDX_KL_60-603_E5_MED_214.step', 'NDX_KL_60-603_F_MED_214.step',
+    'NDX_KL_60-603_MED_214.step', 'NDX_KL_100-603_MED_214.step',
+  ].includes(source.filename)))('unlocks and saves a shortened existing $filename component', async source => {
+    const { request } = mount(true, false, 'straight', source);
+    fireEvent.click(await screen.findByRole('button', { name: /STRAIGHT-300 · 1500 mm — X/ }));
+    const length = screen.getByRole('spinbutton', { name: 'Length (mm)' });
+    expect(length).toBeEnabled();
+    fireEvent.change(length, { target: { value: '1250.5' } });
+    fireEvent.submit(screen.getByRole('form', { name: 'Save component position' }));
+    await waitFor(() => expect(request).toHaveBeenCalledWith(expect.stringContaining(`/instances/${instanceId}`), expect.objectContaining({
+      method: 'PATCH', body: expect.stringContaining('"lengthMm":1250.5'),
+    })));
+  });
+  it('keeps a recognized filename with different STEP bytes locked', () => {
+    mount(false, false, 'straight', { filename: 'NDX_KL_60-603_MED_214.step', sha256: '0'.repeat(64) });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Catalogue component' }), { target: { value: catalogId } });
+    expect(screen.getByRole('spinbutton', { name: 'Length (mm)' })).toBeDisabled();
+  });
   it.each([['center', -650, 1050], ['end', -1400, 1800]] as const)('holds the %s pivot fixed while rotating local y', async (pivot, x, z) => {
     const { request } = mount(true);
     fireEvent.click(await screen.findByRole('button', { name: /STRAIGHT-300 · 1500 mm — X/ }));

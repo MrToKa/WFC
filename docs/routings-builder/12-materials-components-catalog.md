@@ -81,10 +81,11 @@ The saved placement, rather than the Materials SKU or CAD revision, owns optiona
 PATCH preserves the saved length. Explicit 6000 is normalized to the original.
 Paths here are relative to `/api/projects/:projectId/cad-design`.
 
-Cutting currently requires a Materials component of kind `straight` and the exact
-approved source `NDX_KL_60-303_F_MED_214.step`, SHA-256
-`d381a3f4a09559e99119e3e591137f73780d16bf832019f93b20627adc5609cd`.
-Other sources and fittings reject a requested custom length; their original STEP
+Cutting requires a Materials component of kind `straight` and an exact filename
+and SHA-256 pair from `shared/cadStraightSources.ts`. This covers all 30 supplied
+Niedax KL 60/100-high straight sources, including plain/F/E3/E5 variants where
+supplied. See [measured source support](16-niedax-straight-lengths.md).
+Unverified sources and fittings reject a requested custom length; their original STEP
 geometry remains usable. The API and database both enforce the source/kind guard.
 The additive nullable `cad_design_instances.cut_length_mm` column preserves existing
 placements. Connected instances must be disconnected before resizing.
@@ -102,7 +103,7 @@ MTO groups by SKU, pinned CAD asset and cut length, adding `Length (mm)` and
 In Routings builder, select a saved component row, change **Length (mm)** and press
 **Save changes**. For a new piece, choose the component, enter its length before
 saving, and use the normal placement action. The field is enabled only for the
-approved straight. Use **Disconnect** first when the selected piece is connected;
+verified straight sources. Use **Disconnect** first when the selected piece is connected;
 after resizing, snap and reconnect it at its new end. Enter 6000 to restore stock
 length. Only the selected saved piece changes; other pieces of the same SKU keep
 their lengths.

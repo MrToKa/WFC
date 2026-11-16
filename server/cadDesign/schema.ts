@@ -1,4 +1,8 @@
 import type { Pool } from 'pg';
+import { STRAIGHT_SOURCES } from '../../shared/cadStraightSources.js';
+import { cadPocPortSeeds } from './pocPortSeed.js';
+
+const sqlLiteral = (value: string) => `'${value.replaceAll("'", "''")}'`;
 
 /**
  * Additive CAD tables. The original model registry, model resources and WFC project
@@ -6,6 +10,14 @@ import type { Pool } from 'pg';
  * model_versions and project_model_selections already exist.
  */
 export async function initializeCadDesignSchema(pool: Pool): Promise<void> {
+  const verifiedSources = STRAIGHT_SOURCES.map(source =>
+    `(${sqlLiteral(source.filename.toUpperCase())},${sqlLiteral(source.sha256)})`,
+  ).join(',\n');
+  const verifiedPorts = STRAIGHT_SOURCES.flatMap(source =>
+    cadPocPortSeeds(source.filename, source.sha256).map(port =>
+      `(${sqlLiteral(source.filename.toUpperCase())},${sqlLiteral(source.sha256)},${sqlLiteral(port.name)},${sqlLiteral(port.portType)},${sqlLiteral(JSON.stringify(port.localTransform))}::jsonb)`,
+    ),
+  ).join(',\n');
   await pool.query(`
     CREATE TABLE IF NOT EXISTS cad_catalog_items (
       id UUID PRIMARY KEY,
@@ -133,8 +145,7 @@ export async function initializeCadDesignSchema(pool: Pool): Promise<void> {
           JOIN material_components p ON p.id=a.component_id
         WHERE c.project_id=NEW.project_id AND c.id=NEW.catalog_item_id
           AND p.component_kind='straight'
-          AND upper(trim(c.original_filename))='NDX_KL_60-303_F_MED_214.STEP'
-          AND c.source_sha256='d381a3f4a09559e99119e3e591137f73780d16bf832019f93b20627adc5609cd'
+          AND (upper(trim(c.original_filename)),c.source_sha256) IN (VALUES ${verifiedSources})
       ) THEN
         RAISE EXCEPTION 'Cut length is unsupported for this CAD component' USING ERRCODE='23514';
       END IF;
@@ -160,6 +171,18 @@ export async function initializeCadDesignSchema(pool: Pool): Promise<void> {
       UNIQUE (project_id, catalog_item_id, id),
       FOREIGN KEY (project_id, catalog_item_id) REFERENCES cad_catalog_items(project_id, id) ON DELETE CASCADE
     );
+
+    -- Existing catalog references may predate support for their measured source.
+    -- Add missing anchors without replacing IDs referenced by saved connections.
+    INSERT INTO cad_catalog_ports(id,project_id,catalog_item_id,name,port_type,local_transform)
+      SELECT gen_random_uuid(),c.project_id,c.id,s.name,s.port_type,s.local_transform
+      FROM cad_catalog_items c
+      JOIN material_component_cad_assets a ON a.id=c.material_component_cad_asset_id
+      JOIN material_components p ON p.id=a.component_id AND p.component_kind='straight'
+      JOIN (VALUES ${verifiedPorts})
+        AS s(filename,sha256,name,port_type,local_transform)
+        ON upper(trim(c.original_filename))=s.filename AND c.source_sha256=s.sha256
+      ON CONFLICT (catalog_item_id,name) DO NOTHING;
 
     CREATE TABLE IF NOT EXISTS cad_design_connections (
       id UUID PRIMARY KEY,

@@ -3,6 +3,7 @@ import express from 'express';
 import type { Server } from 'node:http';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { STRAIGHT_SOURCE_SHA256 } from '../../shared/cadLengths.js';
+import { STRAIGHT_SOURCES } from '../../shared/cadStraightSources.js';
 import type { PublicationConnection, PublicationInstance } from './routePublication.js';
 
 const mocks=vi.hoisted(()=>({raw:vi.fn(),network:vi.fn(),query:vi.fn(),transaction:vi.fn()}));
@@ -36,6 +37,22 @@ describe('physical CAD internal connection inference',()=>{
   it('preserves valid existing joins and is idempotent',()=>{
     const result=inferCadConnections([row(10),row(11,1500)],[pair()]);
     expect(result.missing).toEqual([]);expect(result.connected).toBe(true);
+  });
+  it.each(['NDX_KL_60-603_MED_214.step','NDX_KL_100-303_MED_214.step'])('keeps %s out of physical mates with a 300 × 60 profile',filename=>{
+    const source=STRAIGHT_SOURCES.find(part=>part.filename.toUpperCase()===filename.toUpperCase())!;
+    const other={...row(11,1500),original_filename:source.filename,source_sha256:source.sha256,y_mm:30-source.centerYmm};
+    const result=inferCadConnections([row(10),other],[]);
+    expect(result.missing).toEqual([]);
+    // A logical installation transition remains distinct from a physical mate.
+    expect(result.missingTransitions).toHaveLength(1);
+    expect(result.connected).toBe(true);
+    expect(()=>inferCadConnections([row(10),other],[pair()])).toThrow('no longer aligned');
+  });
+  it('physically mates matching 600 × 100 mm pieces using their measured frames',()=>{
+    const source=STRAIGHT_SOURCES.find(part=>part.filename.toUpperCase()==='NDX_KL_100-603_MED_214.STEP')!;
+    const instances=[row(10),row(11,1500)].map(part=>({...part,original_filename:source.filename,source_sha256:source.sha256}));
+    const result=inferCadConnections(instances,[]);
+    expect(result.missing).toEqual([pair()]);expect(result.missingTransitions).toEqual([]);
   });
   it('retains partial verified progress and diagnoses remaining gaps without fabricating a chain',()=>{
     const result=inferCadConnections([row(10),row(11,1500),row(12,3401)],[]);

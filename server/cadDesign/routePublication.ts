@@ -12,6 +12,7 @@ import { cadOverlayPayloadSchema, type CadOverlaySegment } from '../../shared/pa
 import { geometryObjectRevisionSchema } from '../../shared/pathfinderGeometryTrace.js';
 import { canonicalPurposeJson, normalizeCatalogKey } from '../../shared/pathfinderPurposePolicy.js';
 import { getInstanceCadPorts, supportsStraightCut } from '../../shared/cadLengths.js';
+import { getStraightSource } from '../../shared/cadStraightSources.js';
 import { composeTransform, rotateVector, connectorAlignmentIsValid, type RigidTransform } from '../../shared/cadTransforms.js';
 import { MATE_OPPOSING_FACE } from '../../shared/cadPocPorts.js';
 import { recordTrayChanges } from '../services/trayChangeLogService.js';
@@ -73,24 +74,26 @@ export function routePort(row:PublicationInstance,name:string) {
   const selected=ports(row).find(port=>port.id===name);
   if (!selected) return refuse('CAD_ROUTE_INVALID_PORT','The saved connection references an unsupported port.');
   const direction=(v:{x:number;y:number;z:number})=>{const p=rotateVector(v,selected.world.rotation);return [p.x,p.y,p.z] as Point;};
-  return {pointMetres:metres(selected.world.position),outward:direction({x:0,y:0,z:1}),u:direction({x:1,y:0,z:0}),v:direction({x:0,y:1,z:0}),widthMetres:0.3,heightMetres:0.06};
+  const straight=getStraightSource(row.original_filename,row.source_sha256);
+  return {pointMetres:metres(selected.world.position),outward:direction({x:0,y:0,z:1}),u:direction({x:1,y:0,z:0}),v:direction({x:0,y:1,z:0}),widthMetres:(straight?.widthMm??300)/1000,heightMetres:(straight?.heightMm??60)/1000};
 }
 /** Approved source-specific centerlines; never replace a bend by its shorter chord. */
 function centerline(row:PublicationInstance):Point[] {
-  ports(row);
+  const available=ports(row);
   // The hash-pinned STEP's 500/800 mm coaxial surfaces establish R650,
   // center (-500,-145), with 145 mm straight legs at both ends.
-  const local = row.component_kind==='straight' ? [{x:0,y:30,z:0},{x:0,y:30,z:row.cut_length_mm??6000}] :
+  const local = row.component_kind==='straight' ? available.map(port=>port.local.position) :
     [{x:150,y:30,z:0},...Array.from({length:257},(_,index)=>{const angle=index*Math.PI/512;return {x:-500+650*Math.cos(angle),y:30,z:-145-650*Math.sin(angle)};}),{x:-645,y:30,z:-795}];
   return local.map(position=>metres(composeTransform(world(row),{position,rotation:{x:0,y:0,z:0,w:1}}).position));
 }
 export function resolveCadRouteMaterial(instances:PublicationInstance[]) {
   const material=instances.find(row=>row.component_kind==='straight'&&row.material_tray_id&&row.material_tray_type);
   if(!material)return refuse('CAD_ROUTE_MATERIAL_REQUIRED','Publishing requires a straight component linked to the Materials tray catalog. Bend-only groups can remain saved drafts.');
-  if(Number(material.material_width_mm)!==300||Number(material.material_height_mm)!==60||
+  const source=getStraightSource(material.original_filename,material.source_sha256);
+  if(!source||Number(material.material_width_mm)!==source.widthMm||Number(material.material_height_mm)!==source.heightMm||
     material.material_tray_type!.trim().toUpperCase()!==material.part_number.trim().toUpperCase())
-    return refuse('CAD_ROUTE_MATERIAL_PROFILE_CHANGED','The straight Materials identity or dimensions no longer match the pinned 300 × 60 mm source. Select its current catalog reference.');
-  return {trayType:material.part_number,widthMm:300,heightMm:60};
+    return refuse('CAD_ROUTE_MATERIAL_PROFILE_CHANGED','The straight Materials identity or dimensions no longer match the verified STEP source. Select its current catalog reference.');
+  return {trayType:material.part_number,widthMm:source.widthMm,heightMm:source.heightMm};
 }
 export function buildCadChain(instances:PublicationInstance[],connections:PublicationConnection[],transitions:PublicationTransition[]=[]) {
   if (!instances.length||instances.length>32) return refuse('CAD_ROUTE_PART_LIMIT','A published route must contain 1–32 verified components.');
@@ -104,6 +107,8 @@ export function buildCadChain(instances:PublicationInstance[],connections:Public
     const a=ports(source).find(p=>p.id===connection.source_name),b=ports(target).find(p=>p.id===connection.target_name);
     if (!a||!b)
       return refuse('CAD_ROUTE_INVALID_PORT','The saved route references an unsupported endpoint.');
+    if(connection.kind!=='routing-transition'&&a.profile!==b.profile)
+      return refuse('CAD_ROUTE_CONNECTION_PROFILE_MISMATCH','Connected component profiles must match before publishing.');
     if(connection.kind==='routing-transition'){
       const gapMm=distance(metres(a.world.position),metres(b.world.position))*1000;
       if(gapMm>MAX_CAD_TRANSITION_GAP_MM+1e-6)

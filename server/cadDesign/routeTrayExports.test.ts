@@ -4,6 +4,7 @@ import type { Server } from 'node:http';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TrayRow } from '../models/tray.js';
 import { STRAIGHT_SOURCE_SHA256 } from '../../shared/cadLengths.js';
+import { STRAIGHT_SOURCES } from '../../shared/cadStraightSources.js';
 import { trayLengthCalculationSchema } from '../../shared/trayAutoLength.js';
 import type { PublicationInstance, PublicationTransition } from './routePublication.js';
 
@@ -68,10 +69,20 @@ const writes=()=>mocks.query.mock.calls.filter(([sql])=>/^INSERT INTO trays|^UPD
 
 describe('server-derived route-list source and projection',()=>{
   it('selects the first placed straight SKU, preserving source order instead of sorting UUIDs',()=>{
-    const bend={...instance(5),component_kind:'bend',part_number:'BEND-SKU'};
+    const bend={...instance(5),component_kind:'bend',part_number:'BEND-SKU',original_filename:'NDX_KLBK_60-303_MED_214.step',source_sha256:'7a5cf4947a9ea5fa213ceef84ba952fe2a9a63dee752f0c23a598320802c0014',cut_length_mm:null};
     const first={...instance(99),part_number:'FIRST-PLACED-STRAIGHT'},second={...instance(10),part_number:'LATER-STRAIGHT'};
     expect(deriveCadTrayExport(projectId,designId,group,[bend,first,second],{points:[[0,0,0],[0,0,1]],lengthMetres:1}).fields.trayType).toBe('FIRST-PLACED-STRAIGHT');
     expect(deriveCadTrayExport(projectId,designId,group,[bend],{points:[[0,0,0],[0,0,1]],lengthMetres:1}).fields.trayType).toBe('BEND-SKU');
+  });
+  it.each([
+    ['NDX_KL_60-603_E3_MED_214.step',600,60],
+    ['NDX_KL_100-403_F_MED_214.step',400,100],
+  ] as const)('exports actual %s profile dimensions to Trays', (filename,widthMm,heightMm)=>{
+    const source=STRAIGHT_SOURCES.find(part=>part.filename.toUpperCase()===filename.toUpperCase())!;
+    instances=[{...instance(),original_filename:source.filename,source_sha256:source.sha256}];
+    const result=deriveCadTrayExport(projectId,designId,group,instances,chain());
+    expect(result.fields).toMatchObject({widthMm,heightMm,lengthMm:1500});
+    expect(result.source).toMatchObject({widthMm,heightMm});
   });
   it('uses the exact saved name/purpose and actual centerline including logical installation gaps',()=>{
     group.name='Legacy descriptive route';group.purpose='Special purpose';

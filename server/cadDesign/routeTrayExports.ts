@@ -8,7 +8,7 @@ import { canonicalPurposeJson } from '../../shared/pathfinderPurposePolicy.js';
 import { trayLengthCalculationSchema } from '../../shared/trayAutoLength.js';
 import { recordTrayChanges } from '../services/trayChangeLogService.js';
 import type { TrayRow } from '../models/tray.js';
-import { groupInputs, publicationTransaction, PublicationError, type PublicationInstance, type PublicationTransition } from './routePublication.js';
+import { groupInputs, publicationTransaction, PublicationError, routePort, type PublicationInstance, type PublicationTransition } from './routePublication.js';
 
 export const cadRouteTrayExportsRouter=Router({mergeParams:true});
 const input=z.object({expectedRevision:z.number().int().positive()}).strict();
@@ -26,8 +26,9 @@ export function cadTrayProjection(row:TrayRow):Projection {
 export function deriveCadTrayExport(projectId:string,designId:string,group:Group,instances:PublicationInstance[],chain:Chain,transitions:PublicationTransition[]=[]) {
   const first=instances.find(row=>row.component_kind==='straight')??instances[0];
   if(!first)return fail('CAD_ROUTE_PART_LIMIT','Connect at least one component before adding the route to the Trays list.');
+  const profile=routePort(first,'start');
   const centerlineSha256=hash(chain.points),lengthMm=chain.lengthMetres*1000;
-  const fields={name:group.name,purpose:group.purpose,trayType:first.part_number,widthMm:300,heightMm:60,lengthMm};
+  const fields={name:group.name,purpose:group.purpose,trayType:first.part_number,widthMm:profile.widthMetres*1000,heightMm:profile.heightMetres*1000,lengthMm};
   const source={schemaVersion:'wfc.cad.route-tray-source.v1',projectId,designId,routeId:group.id,...fields,centerlineSha256,centerlineMetres:chain.points,
     elements:instances.map(row=>({instanceId:row.id,instanceRevision:row.revision,catalogItemId:row.catalog_item_id,assetId:row.material_asset_id,
       sourceSha256:row.source_sha256,originalFilename:row.original_filename,componentKind:row.component_kind,partNumber:row.part_number,lengthMm:row.cut_length_mm,
