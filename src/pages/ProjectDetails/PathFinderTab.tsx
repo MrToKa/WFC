@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { ControlPanelOpenButton, ControlPanelPart, useControlPanelDetached } from '@/components/ControlPanelWindow';
 import { Body1, Button, Caption1, Checkbox, Field, Input, Spinner, Tab, TabList, makeStyles, tokens } from '@fluentui/react-components';
 import type { PathFinderCable, PathFinderLocation, PathFinderPreferences } from '@/api/pathfinder';
 import { usePathFinder } from './hooks/usePathFinder';
@@ -33,7 +34,7 @@ const useStyles = makeStyles({
   candidate: { padding: '0.5rem', border: `1px solid ${tokens.colorNeutralStroke2}`, borderRadius: tokens.borderRadiusMedium },
   panel: { flexDirection: 'column', gap: '0.75rem', minWidth: 0 },
 });
-type Props = { projectId: string | null; loadedProjectId: string | null; token: string | null; isAdmin: boolean; accountId?: string | null };
+type Props = { projectId: string | null; loadedProjectId: string | null; token: string | null; isAdmin: boolean; accountId?: string | null; controlsVisible?: boolean };
 type Draft = { locationId: string | null; name: string };
 const emptyDraft = (): Draft => ({locationId: null, name: ''});
 const normalized = (value: string) => value.normalize('NFC').trim().toUpperCase();
@@ -54,7 +55,8 @@ const pointLabels: Record<CalculationAvailability['status'], string> = {
 export function PathFinderTab(props: Props) {
   return props.isAdmin ? <AdminPathFinderTab {...props} /> : <Body1>Path Finder is available only to administrators.</Body1>;
 }
-function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accountId }: Props) {
+function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accountId, controlsVisible = true }: Props) {
+  const detached = useControlPanelDetached();
   const cablePurposes = useProjectCablePurposes({ projectId, loadedProjectId, token, isAdmin });
   const styles = useRoutingsViewerStyles(), extra = useStyles();
   const anchor = useRef<HTMLElement>(null), container = useRef<HTMLDivElement>(null);
@@ -189,10 +191,14 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
     const location = data?.locations.find(value => value.id === match.locationId) ?? data?.locations.find(value => [value.name, ...value.aliases].some(alias => normalized(alias) === normalized(name)));
     fillLocation(location, name);
   };
-  return <section ref={anchor} aria-label="Path Finder" data-testid="pathfinder-tab">
-    <div className={styles.layout} style={{ height }}>
-      <div className={styles.controls}>
-        <h2 className={extra.heading}>Path Finder</h2>
+  return <section ref={anchor} hidden={!controlsVisible && !detached} aria-label="Path Finder" data-testid="pathfinder-tab">
+    <div className={styles.layout} style={{ height, ...(detached ? { gridTemplateColumns: 'minmax(0, 1fr)', gridTemplateRows: 'minmax(0, 1fr)' } : {}) }}>
+      <ControlPanelPart order={1} hidden={!controlsVisible}>
+      <div className={styles.controls} style={detached ? { overflowY: 'visible' } : undefined}>
+        <div className={styles.actions} style={{ alignItems: 'center', justifyContent: 'space-between' }}>
+          <h2 className={extra.heading}>Path Finder</h2>
+          <ControlPanelOpenButton />
+        </div>
         <div role="status" aria-live="polite" data-testid="pathfinder-status" data-phase={pf.viewerPhase}>
           {pf.loading || pf.viewerPhase === 'loading' ? <Spinner size="tiny" label={pf.viewerMessage} /> : <Body1>{pf.viewerMessage}</Body1>}
         </div>
@@ -312,6 +318,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
           <PathFinderLookup pf={pf} selectedCable={selected} active={mode === 'lookup'} displayOwned={mode === 'lookup' && displayOwner === 'lookup'} claimViewer={() => claimViewer('lookup')} onInputChange={clearView} onBusyChange={setLookupBusy} />
         </div>
       </div>
+      </ControlPanelPart>
       <div className={styles.host} style={{ position: 'relative' }}>
         <div ref={container} data-testid="pathfinder-model-host" style={{ height: '100%' }} />
         {pf.viewerPhase === 'error' ? <div role="alert" style={{ position: 'absolute', inset: 0, padding: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem', color: tokens.colorNeutralForeground1, backgroundColor: tokens.colorNeutralBackground1 }}>

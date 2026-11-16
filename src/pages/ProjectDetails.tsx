@@ -1,4 +1,5 @@
 import { useProjectTrayPurposes } from '@/hooks/useProjectTrayPurposes';
+import { ControlPanelOpenButton, ControlPanelPart, ControlPanelWindow } from '@/components/ControlPanelWindow';
 import { projectTrayPurposesRequest } from '@/api/projectTrayPurposes';
 import { TRAY_REPORT_VARIABLES } from './TrayDetails/trayReportVariables';
 import { canEditProject, canExportChangeLogs, canReadCatalogs } from '@/utils/permissions';
@@ -140,6 +141,15 @@ export const ProjectDetails = () => {
       ? tabParam
       : 'details';
   const [selectedCableReportMto, setSelectedCableReportMto] = useState<CableMtoOption | null>(null);
+  const controlScope = JSON.stringify([projectId, user?.id, token]);
+  const [lastModelTab, setLastModelTab] = useState<{ scope: string; tab: ProjectDetailsTab } | null>(null);
+  useEffect(() => {
+    if (selectedTab === 'pathfinder' || selectedTab === 'routings-viewer') {
+      setLastModelTab(previous => previous?.scope === controlScope && previous.tab === selectedTab ? previous : { scope: controlScope, tab: selectedTab });
+    }
+  }, [controlScope, selectedTab]);
+  const modelTab = selectedTab === 'pathfinder' || selectedTab === 'routings-viewer'
+    ? selectedTab : lastModelTab?.scope === controlScope ? lastModelTab.tab : null;
 
   const [trayTemplateSaving, setTrayTemplateSaving] = useState<Record<string, boolean>>({});
   const trayTemplateSaveOperation = useRef<object | null>(null);
@@ -1373,7 +1383,9 @@ export const ProjectDetails = () => {
   }
 
   return (
+    <ControlPanelWindow scopeKey={controlScope} actionsInPanel>{() => (
     <section className={styles.root} aria-labelledby="project-details-heading">
+      <ControlPanelPart order={0} inlineOnly>
       <div className={styles.header}>
         <div className={styles.headerRow}>
           <Title3 id="project-details-heading" className={styles.projectTitle}>
@@ -1403,14 +1415,17 @@ export const ProjectDetails = () => {
         {canReadFiles ? <Tab value="files">Files</Tab> : null}
         {canViewAll ? <Tab value="variables-api">Variables API</Tab> : null}
       </TabList>
+      {selectedTab !== 'pathfinder' && selectedTab !== 'routings-viewer' ? <ControlPanelOpenButton /> : null}
+      </ControlPanelPart>
 
-      {selectedTab === 'routings-viewer' ? (
-        <RoutingsViewerTab projectId={projectId ?? null} loadedProjectId={project.id} token={token} canDrawTrays={canEdit} onTraysChanged={() => reloadTrays({ showSpinner: false })} />
+      {modelTab === 'routings-viewer' ? (
+        <RoutingsViewerTab controlsVisible={selectedTab === 'routings-viewer'} projectId={projectId ?? null} loadedProjectId={project.id} token={token} canDrawTrays={canEdit} onTraysChanged={() => reloadTrays({ showSpinner: false })} />
       ) : null}
-      {selectedTab === 'pathfinder' && user?.isAdmin ? (
-        <PathFinderTab key={projectId} projectId={projectId ?? null} loadedProjectId={project.id} token={token} isAdmin={Boolean(user.isAdmin)} accountId={user.id} />
+      {modelTab === 'pathfinder' && user?.isAdmin ? (
+        <PathFinderTab controlsVisible={selectedTab === 'pathfinder'} key={projectId} projectId={projectId ?? null} loadedProjectId={project.id} token={token} isAdmin={Boolean(user.isAdmin)} accountId={user.id} />
       ) : null}
 
+      <ControlPanelPart order={2}>
       {selectedTab === 'details' ? (
         <DetailsTab
           canExport={canExportHistory}
@@ -1746,6 +1761,8 @@ export const ProjectDetails = () => {
         onDismiss={cableDialog.reset}
         visibleFields={cableDialogVisibleFields}
       />
+      </ControlPanelPart>
     </section>
+    )}</ControlPanelWindow>
   );
 };

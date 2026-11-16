@@ -1,13 +1,15 @@
 import { useRef } from 'react';
+import { ControlPanelOpenButton, ControlPanelPart, useControlPanelDetached } from '@/components/ControlPanelWindow';
 import { Body1, Button, Caption1, Spinner, Subtitle2 } from '@fluentui/react-components';
 import { useRoutingsViewer } from './hooks/useRoutingsViewer';
 import { useRoutingsViewerHeight } from './hooks/useRoutingsViewerHeight';
 import { CadComponentsPanel } from './CadComponentsPanel';
 import { useRoutingsViewerStyles } from './RoutingsViewerTab.styles';
 
-type Props = { projectId: string | null; loadedProjectId: string | null; token: string | null; canDrawTrays?: boolean; onTraysChanged?: () => Promise<void> };
+type Props = { projectId: string | null; loadedProjectId: string | null; token: string | null; canDrawTrays?: boolean; onTraysChanged?: () => Promise<void>; controlsVisible?: boolean };
 
-export function RoutingsViewerTab({ projectId, loadedProjectId, token, canDrawTrays = false, onTraysChanged }: Props) {
+export function RoutingsViewerTab({ projectId, loadedProjectId, token, canDrawTrays = false, onTraysChanged, controlsVisible = true }: Props) {
+  const detached = useControlPanelDetached();
   const styles = useRoutingsViewerStyles();
   const anchor = useRef<HTMLElement>(null);
   const container = useRef<HTMLDivElement>(null);
@@ -16,10 +18,14 @@ export function RoutingsViewerTab({ projectId, loadedProjectId, token, canDrawTr
   const viewer = useRoutingsViewer({ projectId, loadedProjectId, token, container });
   const loading = viewer.phase === 'metadata' || viewer.phase === 'loading';
   const retryable = !loading && viewer.phase !== 'ready' && viewer.phase !== 'login-required';
-  return <section ref={anchor} aria-label="Routings builder" data-testid="routings-viewer-tab">
-    <div className={styles.layout} style={{ height }} data-testid="routings-layout">
-      <div className={styles.controls}>
-        <Subtitle2 as="h3">Draw trays</Subtitle2>
+  return <section ref={anchor} hidden={!controlsVisible && !detached} aria-label="Routings builder" data-testid="routings-viewer-tab">
+    <div className={styles.layout} style={{ height, ...(detached ? { gridTemplateColumns: 'minmax(0, 1fr)', gridTemplateRows: 'minmax(0, 1fr)' } : {}) }} data-testid="routings-layout">
+      <ControlPanelPart order={1} hidden={!controlsVisible}>
+      <div className={styles.controls} style={detached ? { overflowY: 'visible' } : undefined}>
+        <div className={styles.actions} style={{ alignItems: 'center', justifyContent: 'space-between' }}>
+          <Subtitle2 as="h3">Draw trays</Subtitle2>
+          <ControlPanelOpenButton />
+        </div>
         <div className={styles.status} aria-live="polite" aria-atomic="true" data-testid="routings-viewer-status" data-phase={viewer.phase}>
           {loading ? <Spinner size="tiny" label={viewer.message} /> : <Body1>{viewer.message}</Body1>}
           {viewer.model ? <Caption1>Active model: {viewer.model.label}</Caption1> : null}
@@ -32,6 +38,7 @@ export function RoutingsViewerTab({ projectId, loadedProjectId, token, canDrawTr
           onColor={viewer.setCadComponentColor} onVisibility={viewer.setCadComponentVisibility} onProperties={viewer.setCadComponentProperties} onTraysChanged={onTraysChanged} />
           : <Body1>{canDrawTrays ? 'Tray drawing is disabled.' : 'You do not have permission to draw trays in this project.'}</Body1>}
       </div>
+      </ControlPanelPart>
       <div className={styles.host} ref={container} data-testid="routings-model-host" />
     </div>
   </section>;

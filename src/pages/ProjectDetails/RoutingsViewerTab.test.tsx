@@ -1,8 +1,9 @@
 import { FluentProvider, webDarkTheme, webLightTheme } from '@fluentui/react-components';
 import type { ComponentProps } from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RoutingsViewerTab } from './RoutingsViewerTab';
+import { ControlPanelWindow } from '@/components/ControlPanelWindow';
 import { useRoutingsViewer } from './hooks/useRoutingsViewer';
 import type { CadComponentsPanel } from './CadComponentsPanel';
 
@@ -35,6 +36,46 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
 describe('Routings builder drawing controls', () => {
+  it('preserves the tray draft and main model host through control panel pop-up return and native close', () => {
+    const frame = document.createElement('iframe'); document.body.appendChild(frame);
+    const popup = frame.contentWindow!;
+    Object.defineProperty(popup, 'closed', { configurable: true, writable: true, value: false });
+    popup.focus = vi.fn();
+    popup.close = vi.fn(() => {
+      Object.defineProperty(popup, 'closed', { configurable: true, writable: true, value: true });
+      const event = popup.document.createEvent('Event'); event.initEvent('beforeunload', false, false); popup.dispatchEvent(event);
+    });
+    vi.spyOn(window, 'open').mockReturnValue(popup);
+    const mounted = render(<FluentProvider theme={webDarkTheme}><ControlPanelWindow scopeKey="builder-draft" actionsInPanel>
+      {() => <RoutingsViewerTab {...props} />}
+    </ControlPanelWindow></FluentProvider>);
+    try {
+      const host = screen.getByTestId('routings-model-host');
+      const draft = screen.getByRole('textbox', { name: 'Tray name draft' });
+      fireEvent.change(draft, { target: { value: 'Unsaved tray' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Pop-up control panel' }));
+      const child = within(popup.document.body);
+      expect(child.getByRole('textbox', { name: 'Tray name draft' })).toBe(draft);
+      expect((draft as HTMLInputElement).value).toBe('Unsaved tray');
+      expect(host.ownerDocument).toBe(document);
+      expect(screen.getByTestId('routings-model-host')).toBe(host);
+      expect(child.queryByTestId('routings-model-host')).toBeNull();
+      expect(screen.getByTestId('routings-layout')).toHaveStyle({ gridTemplateColumns: 'minmax(0, 1fr)' });
+      fireEvent.change(draft, { target: { value: 'Changed in popup' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Return to main window' }));
+      expect(screen.getByRole('textbox', { name: 'Tray name draft' })).toBe(draft);
+      expect((draft as HTMLInputElement).value).toBe('Changed in popup');
+      expect(screen.getByTestId('routings-model-host')).toBe(host);
+      Object.defineProperty(popup, 'closed', { value: false });
+      fireEvent.click(screen.getByRole('button', { name: 'Pop-up control panel' }));
+      fireEvent.change(child.getByRole('textbox', { name: 'Tray name draft' }), { target: { value: 'Native close draft' } });
+      act(() => popup.close());
+      expect(screen.getByRole('textbox', { name: 'Tray name draft' })).toBe(draft);
+      expect((draft as HTMLInputElement).value).toBe('Native close draft');
+      expect(screen.getByTestId('routings-model-host')).toBe(host);
+      expect(current.retry).not.toHaveBeenCalled();
+    } finally { mounted.unmount(); frame.remove(); }
+  });
   it.each([false, true])('opens Draw trays directly with no obsolete route controls (dark: %s)', dark => {
     const refreshed = vi.fn();
     render(view({ onTraysChanged: refreshed }, dark));

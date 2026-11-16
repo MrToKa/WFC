@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PathFinderTab } from './PathFinderTab';
+import { ControlPanelWindow } from '@/components/ControlPanelWindow';
+import { FluentProvider, webDarkTheme } from '@fluentui/react-components';
 import { usePathFinder } from './hooks/usePathFinder';
 import type { PathFinderLookup, PathFinderProposal, PathFinderPreview, PathFinderState } from '@/api/pathfinder';
 import { fetchPathFinderJob, submitAllPathFinderCalculations } from '@/api/pathfinder';
@@ -151,6 +153,56 @@ function preview(id: string, reverse = false): PathFinderPreview { return { id, 
 
 // Fluent's expanded sidebar makes jsdom role/style queries expensive; assertions still use their normal wait budgets.
 describe('admin PathFinder interface', { timeout: 60_000 }, () => {
+  it('preserves Path Finder selections and unsaved settings through control panel pop-up return and native close', () => {
+    const frame = document.createElement('iframe'); document.body.appendChild(frame);
+    const popup = frame.contentWindow!;
+    Object.defineProperty(popup, 'closed', { configurable: true, writable: true, value: false });
+    popup.focus = vi.fn();
+    popup.close = vi.fn(() => {
+      Object.defineProperty(popup, 'closed', { configurable: true, writable: true, value: true });
+      const event = popup.document.createEvent('Event'); event.initEvent('beforeunload', false, false); popup.dispatchEvent(event);
+    });
+    const open = vi.spyOn(window, 'open').mockReturnValue(popup);
+    const mounted = render(<FluentProvider theme={webDarkTheme}><ControlPanelWindow scopeKey="pathfinder-draft" actionsInPanel>
+      {() => <PathFinderTab projectId={projectId} loadedProjectId={projectId} token="isolated-test-token" accountId={accountId} isAdmin />}
+    </ControlPanelWindow></FluentProvider>);
+    try {
+      const host = screen.getByTestId('pathfinder-model-host');
+      const distance = screen.getByRole('textbox', { name: 'SECONDARY trigger distance in metres' });
+      const transparency = screen.getByRole('textbox', { name: 'Background transparency to apply percent' });
+      fireEvent.change(distance, { target: { value: '7.5' } });
+      fireEvent.change(transparency, { target: { value: '42' } });
+      fireEvent.click(screen.getByRole('tab', { name: 'Path lookup' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Pop-up control panel' }));
+      const child = within(popup.document.body);
+      expect(child.getByRole('tab', { name: 'Path lookup' }).getAttribute('aria-selected')).toBe('true');
+      expect(child.getByRole('textbox', { name: 'Background transparency to apply percent' })).toBe(transparency);
+      expect((transparency as HTMLInputElement).value).toBe('42');
+      expect(host.ownerDocument).toBe(document);
+      expect(screen.getByTestId('pathfinder-model-host')).toBe(host);
+      expect(child.queryByTestId('pathfinder-model-host')).toBeNull();
+      fireEvent.click(child.getByRole('tab', { name: 'Path' }));
+      expect(child.getByRole('textbox', { name: 'SECONDARY trigger distance in metres' })).toBe(distance);
+      expect((distance as HTMLInputElement).value).toBe('7.5');
+      fireEvent.change(distance, { target: { value: '8.25' } });
+      fireEvent.change(transparency, { target: { value: '31' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Return to main window' }));
+      expect(screen.getByRole('tab', { name: 'Path' })).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByRole('textbox', { name: 'SECONDARY trigger distance in metres' })).toBe(distance);
+      expect((distance as HTMLInputElement).value).toBe('8.25');
+      expect((transparency as HTMLInputElement).value).toBe('31');
+      Object.defineProperty(popup, 'closed', { value: false });
+      fireEvent.click(screen.getByRole('button', { name: 'Pop-up control panel' }));
+      fireEvent.change(child.getByRole('textbox', { name: 'Background transparency to apply percent' }), { target: { value: '26' } });
+      act(() => popup.close());
+      expect(screen.getByRole('textbox', { name: 'Background transparency to apply percent' })).toBe(transparency);
+      expect((transparency as HTMLInputElement).value).toBe('26');
+      expect((distance as HTMLInputElement).value).toBe('8.25');
+      expect(screen.getByTestId('pathfinder-model-host')).toBe(host);
+      expect(pf.reloadViewer).not.toHaveBeenCalled();
+      expect(pf.action).not.toHaveBeenCalled();
+    } finally { mounted.unmount(); frame.remove(); open.mockRestore(); }
+  });
   it('restores continuous automatic recalculation alongside the one-shot pass without blocking the popup or resetting on tab changes', async () => {
     const user = userEvent.setup(), current = { ...proposalModel(), data: { ...pf.data, artifacts: [artifact()] } };
     vi.mocked(usePathFinder).mockReturnValue(current);
