@@ -217,7 +217,7 @@ describe('removing a proposed CAD component', { timeout: 20000 }, () => {
   });
 });
 
-function mountScoped(holdFirstExport = false, withMetadata = false) {
+function mountScoped(holdFirstExport = false, withMetadata = false, unassignedOnly = false) {
   const secondId = '00000000-0000-4000-8000-000000000006';
   const freeId = '00000000-0000-4000-8000-000000000007';
   const newId = '00000000-0000-4000-8000-000000000008';
@@ -261,6 +261,10 @@ function mountScoped(holdFirstExport = false, withMetadata = false) {
       projectTrayId: null,
     },
   ];
+  if (unassignedOnly) {
+    rows = rows.slice(0, 1);
+    groups.splice(0);
+  }
   const onShow = vi.fn(async () => {}),
     onRemove = vi.fn(async () => {}),
     onColor = vi.fn(async () => {});
@@ -277,6 +281,18 @@ function mountScoped(holdFirstExport = false, withMetadata = false) {
     return { ok: true, json: async () => structuredClone(snapshot) };
   };
   const request = vi.fn(async (url: string, options: RequestInit = {}) => {
+    if (url.includes('/instances/') && options.method === 'PATCH') {
+      const row = rows.find((row) => url.endsWith('/' + row.id));
+      if (!row) throw new Error('Unknown test component');
+      const input = JSON.parse(String(options.body));
+      Object.assign(row, {
+        xMm: input.transform.positionMm.x,
+        yMm: input.transform.positionMm.y,
+        zMm: input.transform.positionMm.z,
+        revision: row.revision + 1,
+      });
+      return jsonResponse({ id: row.id, revision: row.revision });
+    }
     if (/\/(assembly\.step|materials\.csv)(?:\?|$)/.test(url)) {
       if (holdFirstExport) {
         holdFirstExport = false;
@@ -437,6 +453,52 @@ function mountScoped(holdFirstExport = false, withMetadata = false) {
 }
 
 describe('saved route component scope and exports', { timeout: 20000 }, () => {
+  it('opens and updates a saved unassigned component after reload without creating a tray', async () => {
+    const fixture = mountScoped(false, false, true);
+    await waitFor(() => expect(fixture.onShow).toHaveBeenCalledOnce());
+    expect(
+      screen.getByText(/Unassigned components: 1\. Select a component to edit/),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('form', { name: 'Save component position' })).not.toBeInTheDocument();
+    const list = screen.getByRole('list', { name: 'Placed tray components' });
+    fireEvent.click(within(list).getByRole('button', { name: /A-PART/ }));
+    expect(screen.getByLabelText('x')).toHaveValue(123.123456789);
+    expect(screen.queryByLabelText('Catalogue component')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('x'), { target: { value: '456.75' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Update saved position' }));
+    await waitFor(() =>
+      expect(within(list).getByRole('button', { name: /A-PART — X 456.75/ })).toBeInTheDocument(),
+    );
+    const saved = fixture.request.mock.calls.find(
+      ([url, options]) => url.endsWith(`/instances/${instanceId}`) && options?.method === 'PATCH',
+    );
+    expect(JSON.parse(String(saved?.[1]?.body))).toEqual(
+      expect.objectContaining({
+        expectedRevision: 1,
+        transform: expect.objectContaining({ positionMm: { x: 456.75, y: 200, z: 300 } }),
+      }),
+    );
+    expect(fixture.request.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(
+      false,
+    );
+    expect(fixture.onRemove).not.toHaveBeenCalled();
+    await act(async () => {});
+  });
+
+  it('shows unassigned components by default while keeping named-route members scoped', async () => {
+    mountScoped();
+    const list = screen.getByRole('list', { name: 'Placed tray components' });
+    expect(await within(list).findByRole('button', { name: /FREE-PART/ })).toBeInTheDocument();
+    await screen.findByRole('button', { name: /A-ROUTE · 1 components/ });
+    expect(within(list).queryByRole('button', { name: /A-PART|B-PART/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /A-ROUTE · 1 components/ }));
+    expect(within(list).getByRole('button', { name: /A-PART/ })).toBeInTheDocument();
+    expect(
+      within(list).queryByRole('button', { name: /FREE-PART|B-PART/ }),
+    ).not.toBeInTheDocument();
+    await act(async () => {});
+  });
+
   it('refreshes canonical properties after a route Purpose edit without recreating saved geometry', async () => {
     const fixture = mountScoped(false, true);
     await waitFor(() => expect(fixture.onProperties).toHaveBeenCalledTimes(3));

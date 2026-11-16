@@ -174,12 +174,11 @@ export function CadPlacementPanel({
   const visibleIds = useMemo(() => {
     if (!managedCreation) return instances.map((instance) => instance.id);
     if (selectedRoute) return selectedRoute.instanceIds;
-    if (!newTrayMode) return [];
     const assigned = new Set(routeGroups.flatMap((route) => route.instanceIds));
     return instances
       .filter((instance) => !assigned.has(instance.id))
       .map((instance) => instance.id);
-  }, [managedCreation, instances, selectedRoute, newTrayMode, routeGroups]);
+  }, [managedCreation, instances, selectedRoute, routeGroups]);
   const visibleInstances = instances.filter((instance) => visibleIds.includes(instance.id));
   useEffect(() => {
     onBusyChange?.(busy || routeBusy);
@@ -1199,7 +1198,7 @@ export function CadPlacementPanel({
             ? `Components in ${selectedRoute.name}: ${visibleInstances.length}`
             : newTrayMode
               ? `New tray — unassigned components: ${visibleInstances.length}`
-              : 'Choose a complete route below, or select New tray.'}
+              : `Unassigned components: ${visibleInstances.length}. Select a component to edit, or choose a complete route below.`}
         </Caption1>
       ) : null}
       <ul aria-label="Placed tray components">
