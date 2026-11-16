@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Dropdown, FluentProvider, Option, Tab, TabList, webDarkTheme, webLightTheme } from '@fluentui/react-components';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ControlPanelPart, ControlPanelWindow } from './ControlPanelWindow';
+import { ControlPanelOpenButton, ControlPanelPart, ControlPanelWindow } from './ControlPanelWindow';
 
 const frames: HTMLIFrameElement[] = [];
 function popupWindow() {
@@ -24,6 +24,7 @@ function Fields({ onMount }: { onMount: () => void }) {
   const [mode, setMode] = useState('Routes');
   useEffect(onMount, [onMount]);
   return <div data-testid="sidebar">
+    <ControlPanelOpenButton />
     <TabList aria-label="Path Finder tools" selectedValue={mode} onTabSelect={(_, data) => setMode(String(data.value))}>
       {['Routes', 'Path', 'Path lookup'].map(tool => <Tab key={tool} value={tool}>{tool}</Tab>)}
     </TabList>
@@ -58,7 +59,7 @@ function Harness({ onMount = () => undefined, dark = false }: { onMount?: () => 
   const [selected, setSelected] = useState('Path Finder');
   return <FluentProvider theme={dark ? webDarkTheme : webLightTheme}
     style={{ backgroundColor: dark ? '#292929' : '#ffffff', color: dark ? '#ffffff' : '#242424', fontFamily: 'Segoe UI' }}>
-    <ControlPanelWindow scopeKey="project-session-account">
+    <ControlPanelWindow scopeKey={JSON.stringify(['project-session-account', selected])} enabled={selected === 'Path Finder' || selected === 'Routings builder'} actionsInPanel>
       {detached => <>
         <ControlPanelPart order={0} inlineOnly>
           <TabList aria-label="Project sections" selectedValue={selected} onTabSelect={(_, data) => setSelected(String(data.value))}>
@@ -82,6 +83,24 @@ afterEach(() => {
 });
 
 describe('ControlPanelWindow integration', () => {
+  it.each(sections)('closes on navigation and restricts the popup action in %s', selected => {
+    const popup = popupWindow(); vi.spyOn(window, 'open').mockReturnValue(popup);
+    render(<Harness />);
+    const draft = screen.getByLabelText('Controlled draft') as HTMLInputElement;
+    fireEvent.change(draft, { target: { value: 'unsaved before tab switch' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Pop-up control panel' }));
+    fireEvent.click(screen.getByRole('tab', { name: selected }));
+    const supported = selected === 'Path Finder' || selected === 'Routings builder';
+    expect(screen.queryByRole('button', { name: 'Pop-up control panel' }) !== null).toBe(supported);
+    if (selected !== 'Path Finder') {
+      expect(popup.close).toHaveBeenCalledOnce();
+      expect(screen.queryByRole('button', { name: 'Return to main window' })).toBeNull();
+      expect(screen.getByLabelText('Controlled draft')).toBe(draft);
+      expect(draft.value).toBe('unsaved before tab switch');
+      expect(draft.ownerDocument).toBe(document);
+    } else expect(popup.close).not.toHaveBeenCalled();
+  });
+
   it('keeps project navigation and the viewer in the main window while moving controls and preserving drafts', () => {
     const popup = popupWindow(); vi.spyOn(window, 'open').mockReturnValue(popup);
     const mounted = vi.fn(); render(<Harness onMount={mounted} />);
@@ -108,8 +127,7 @@ describe('ControlPanelWindow integration', () => {
     expect(frame.ownerDocument).toBe(document); expect(frame.parentNode).toBe(frameParent);
     expect(popup.document.querySelector('iframe')).toBeNull();
     fireEvent.change(controlled, { target: { value: 'edited in separate window' } });
-    fireEvent.click(screen.getByRole('tab', { name: 'Trays' }));
-    expect(screen.getByTestId('selected-section').textContent).toBe('Trays');
+    expect(screen.getByTestId('selected-section').textContent).toBe('Path Finder');
     expect(child.getByTestId('sidebar')).toBe(sidebar);
     expect(child.getByLabelText('Controlled draft')).toBe(controlled);
     fireEvent.click(child.getByRole('tab', { name: 'Path lookup' }));
@@ -120,7 +138,7 @@ describe('ControlPanelWindow integration', () => {
     expect(screen.getByLabelText('Controlled draft')).toBe(controlled);
     expect(controlled.value).toBe('edited in separate window');
     expect(screen.getByLabelText('Uncontrolled draft')).toHaveValue('browser-local draft');
-    expect(screen.getByTestId('selected-section')).toHaveTextContent('Trays');
+    expect(screen.getByTestId('selected-section')).toHaveTextContent('Path Finder');
     expect(screen.getByRole('tab', { name: 'Path lookup' })).toHaveAttribute('aria-selected', 'true');
     expect(mounted).toHaveBeenCalledOnce();
     expect(frame.parentNode).toBe(frameParent); expect(frame.ownerDocument).toBe(document);

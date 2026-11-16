@@ -1,5 +1,5 @@
 import { useProjectTrayPurposes } from '@/hooks/useProjectTrayPurposes';
-import { ControlPanelOpenButton, ControlPanelPart, ControlPanelWindow } from '@/components/ControlPanelWindow';
+import { ControlPanelPart, ControlPanelWindow } from '@/components/ControlPanelWindow';
 import { projectTrayPurposesRequest } from '@/api/projectTrayPurposes';
 import { TRAY_REPORT_VARIABLES } from './TrayDetails/trayReportVariables';
 import { canEditProject, canExportChangeLogs, canReadCatalogs } from '@/utils/permissions';
@@ -1383,7 +1383,7 @@ export const ProjectDetails = () => {
   }
 
   return (
-    <ControlPanelWindow scopeKey={controlScope} actionsInPanel>{() => (
+    <ControlPanelWindow scopeKey={JSON.stringify([controlScope, selectedTab])} enabled={selectedTab === 'pathfinder' || selectedTab === 'routings-viewer'} actionsInPanel>{() => (
     <section className={styles.root} aria-labelledby="project-details-heading">
       <ControlPanelPart order={0} inlineOnly>
       <div className={styles.header}>
@@ -1415,7 +1415,6 @@ export const ProjectDetails = () => {
         {canReadFiles ? <Tab value="files">Files</Tab> : null}
         {canViewAll ? <Tab value="variables-api">Variables API</Tab> : null}
       </TabList>
-      {selectedTab !== 'pathfinder' && selectedTab !== 'routings-viewer' ? <ControlPanelOpenButton /> : null}
       </ControlPanelPart>
 
       {modelTab === 'routings-viewer' ? (

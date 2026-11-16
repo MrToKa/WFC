@@ -44,7 +44,7 @@ function copyStyles(source: Document, destination: Document) {
 }
 
 /** Keep the portal destination constant: changing it would remount children and discard drafts. */
-export function useControlPanelWindow(scopeKey: string) {
+export function useControlPanelWindow(scopeKey: string, enabled = true) {
   const homeRef = useRef<HTMLDivElement>(null);
   const [contentHost] = useState(() => {
     const host = document.createElement('div');
@@ -85,6 +85,7 @@ export function useControlPanelWindow(scopeKey: string) {
 
   const returnToPage = useCallback(() => { restore(true); setNotice(null); }, [restore]);
   const openInWindow = useCallback(() => {
+    if (!enabled) return;
     if (owned.current && !owned.current.window.closed) { owned.current.window.focus(); return; }
     if (owned.current) restore(false);
     if (!homeRef.current) return;
@@ -152,7 +153,7 @@ export function useControlPanelWindow(scopeKey: string) {
       else if (!popup.closed) popup.close();
       setNotice('The control panel window could not be opened. Your selections and unsaved changes remain here.');
     }
-  }, [moveHost, resizeModel, restore]);
+  }, [enabled, moveHost, resizeModel, restore]);
 
   useLayoutEffect(() => {
     mounted.current = true;
@@ -171,9 +172,9 @@ export function useControlPanelWindow(scopeKey: string) {
     owned.current?.synchronize();
   });
   useLayoutEffect(() => {
-    if (previousScope.current !== scopeKey) { restore(true); setNotice(null); }
+    if (!enabled || previousScope.current !== scopeKey) { restore(true); setNotice(null); }
     previousScope.current = scopeKey;
-  }, [scopeKey, restore]);
+  }, [enabled, scopeKey, restore]);
 
-  return { homeRef, contentHost, detached: Boolean(popupDocument), popupDocument, openInWindow, returnToPage, notice };
+  return { homeRef, contentHost, detached: enabled && Boolean(popupDocument), popupDocument, openInWindow, returnToPage, notice };
 }

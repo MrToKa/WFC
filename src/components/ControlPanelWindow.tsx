@@ -3,16 +3,16 @@ import { createPortal } from 'react-dom';
 import { Button, FluentProvider, PortalMountNodeProvider } from '@fluentui/react-components';
 import { useControlPanelWindow } from '@/hooks/useControlPanelWindow';
 
-const ControlPanelContext = createContext<(ReturnType<typeof useControlPanelWindow> & { actionsInPanel: boolean }) | null>(null);
+const ControlPanelContext = createContext<(ReturnType<typeof useControlPanelWindow> & { actionsInPanel: boolean; enabled: boolean }) | null>(null);
 
 export function useControlPanelDetached() {
   return useContext(ControlPanelContext)?.detached ?? false;
 }
 
-export function ControlPanelWindow({ scopeKey, children, actionsInPanel = false }: { scopeKey: string; children: (detached: boolean) => ReactNode; actionsInPanel?: boolean }) {
-  const panel = useControlPanelWindow(scopeKey);
-  return <ControlPanelContext.Provider value={{ ...panel, actionsInPanel }}>
-    {(!actionsInPanel || panel.detached || panel.notice) ?
+export function ControlPanelWindow({ scopeKey, children, actionsInPanel = false, enabled = true }: { scopeKey: string; children: (detached: boolean) => ReactNode; actionsInPanel?: boolean; enabled?: boolean }) {
+  const panel = useControlPanelWindow(scopeKey, enabled);
+  return <ControlPanelContext.Provider value={{ ...panel, actionsInPanel, enabled }}>
+    {enabled && (!actionsInPanel || panel.detached || panel.notice) ?
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
       {(!actionsInPanel || panel.detached) ? <Button onClick={panel.openInWindow}>Pop-up control panel</Button> : null}
       {panel.detached ? <Button onClick={panel.returnToPage}>Return to main window</Button> : null}
@@ -31,7 +31,7 @@ export function ControlPanelWindow({ scopeKey, children, actionsInPanel = false 
 /** Place the inline action in the active controls, immediately below project navigation. */
 export function ControlPanelOpenButton() {
   const panel = useContext(ControlPanelContext);
-  if (!panel?.actionsInPanel || panel.detached) return null;
+  if (!panel?.enabled || !panel.actionsInPanel || panel.detached) return null;
   return <Button style={{ alignSelf: 'flex-start' }} onClick={panel.openInWindow}>Pop-up control panel</Button>;
 }
 
