@@ -623,3 +623,50 @@ test('component visibility changes only its owned fragment and survives replacem
   assert.throws(() => scene.setVisibility('one', 1), /Invalid CAD visibility/);
   scene.dispose();
 });
+test('route focus filters manual CAD while preserving native hiding and late streamed geometry', () => {
+  const f = fixture(), scene = createCadSceneController(f.viewer, { window: f.window, sourceModel: f.sourceModel });
+  scene.add('one', f.mesh, f.transform); scene.add('two', f.mesh, f.transform);
+  const model = f.viewer.shown[0], rows = () => [...model.instances.records.values()];
+  scene.setVisibility('two', false);
+  scene.setRouteVisibility([]);
+  assert.deepEqual(rows().map(row => row.visible), [false, false]);
+  // Focus does not overwrite native hiding flags, including the visible first leaf.
+  assert.equal(model.getObjectTree().isNodeHidden(model.instances.fragments.fragId2dbId[0]), false);
+  scene.add('three', f.mesh, f.transform);
+  assert.equal(rows()[2].visible, false);
+  scene.add('one', f.mesh, f.transform);
+  assert.equal(model.instances.records.get(3).visible, false);
+  scene.setVisibility('one', true);
+  assert.equal(model.instances.records.get(3).visible, false);
+  scene.setRouteVisibility(null);
+  assert.equal(model.instances.records.get(1).visible, false);
+  assert.equal(model.instances.records.get(2).visible, true);
+  assert.equal(model.instances.records.get(3).visible, true);
+  scene.dispose();
+});
+
+test('CAD route focus follows route metadata arriving after its mesh and retries partial SDK failures', () => {
+  const f = fixture(), scene = createCadSceneController(f.viewer, { window: f.window, sourceModel: f.sourceModel });
+  f.window.Autodesk.Viewing.Extensions = { ViewerPropertyPanel: class {
+    setVisible() {} isVisible() { return false; } uninitialize() {}
+  } };
+  f.window.Autodesk.Viewing.PropertySet = class {};
+  f.viewer.getExtension = () => ({ setPanel() {}, setDefaultPanel() {} });
+  f.viewer.addEventListener = f.viewer.removeEventListener = () => {};
+  const componentId = '00000000-0000-4000-8000-000000000001';
+  scene.setRouteVisibility(['/bc901']);
+  scene.add(componentId, f.mesh, f.transform);
+  const model = f.viewer.shown[0], row = model.instances.records.get(0);
+  assert.equal(row.visible, false);
+  scene.setProperties(componentId, {
+    instanceId: componentId, name: 'BC901 / section 1', actualLengthMm: 3750, widthMm: 300, heightMm: 60,
+    partNumber: 'KL 60.303 F', manufacturer: 'Niedax', purpose: 'LV', componentKind: 'straight', cadAssetId: null, cadRevision: 1,
+  }, { id: '00000000-0000-4000-8000-000000000002', name: 'BC901', purpose: 'LV' });
+  assert.equal(row.visible, true);
+  scene.setRouteVisibility(['C001']); assert.equal(row.visible, false);
+  const nativeSet = model.setVisibility.bind(model); let fail = true;
+  model.setVisibility = (...args) => { if (fail) throw Error('SDK failure'); nativeSet(...args); };
+  assert.throws(() => scene.setRouteVisibility(null), /SDK failure/);
+  fail = false; scene.setRouteVisibility(null); assert.equal(row.visible, true);
+  scene.dispose();
+});

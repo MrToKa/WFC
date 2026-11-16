@@ -27,9 +27,9 @@ describe('server-owned routing preparation plan', () => {
     expect(plan.requestedScope.skippedTrays?.map(tray=>tray.projectTrayId)).toEqual([id(10)]);
     expect(plan.partPlan.flatMap(part=>part.objects).map(object=>object.projectTrayId)).toEqual([id(11)]);
   });
-  it('defers saved CAD geometry without an SDK root or arbitrary unresolved skip',()=>{
+  it.each(['saved-cad-route', 'published-cad-route'] as const)('defers %s without an SDK root or arbitrary unresolved skip',geometrySource=>{
     const {context,input}=preparationFixture();
-    context.trays.push({...context.trays[0],projectTrayId:id(11),rawName:'CAD001',routeName:'/CAD001',geometrySource:'saved-cad-route'});
+    context.trays.push({...context.trays[0],projectTrayId:id(11),rawName:'CAD001',routeName:'/CAD001',geometrySource});
     input.discovery.trays.push({projectTrayId:id(11),candidateRootObjectIds:[]});
     const plan=buildPreparationPlan(context,input);
     expect(plan.diagnostics).toEqual([]);

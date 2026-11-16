@@ -47,6 +47,21 @@ describe('simple project tray preparation', () => {
     expect(screen.getByText(/CAD routes use their saved STEP geometry/)).toHaveTextContent('CAD001');
     expect(screen.getByRole('button',{name:'Use current model selection for CAD001'})).toBeDisabled();
   });
+  it('shows a manually published tray as assigned without requiring source model objects', () => {
+    const { state, pf } = setup();
+    state.context.trays = [{ ...state.context.trays[0], rawName: 'BC901', routeName: '/BC901', geometrySource: 'published-cad-route',
+      details: { type: 'Cable ladder', widthMm: 300, heightMm: 77 } }];
+    state.session = null as unknown as typeof state.session;
+    render(<ProjectPreparationPanel pf={pf} active />);
+    const card = screen.getByRole('article', { name: 'Tray BC901' });
+    expect(within(card).getByText('Assigned')).toBeVisible();
+    expect(within(card).queryByText('Not assigned')).toBeNull();
+    expect(within(card).getByText('Cable ladder')).toBeVisible();
+    expect(within(card).getByText('300 × 77 mm')).toBeVisible();
+    expect(within(card).queryByText(/No model objects/)).toBeNull();
+    expect(within(card).getByRole('button', { name: 'Use current model selection for BC901' })).toBeDisabled();
+    expect(within(card).getByText(/assigned to its published geometry/)).toBeVisible();
+  });
   it('offers an explicit frame finish action independently of recapturing the network', () => {
     const { state, pf } = setup(); state.canFinishNetwork = true; state.networkReady = false;
     render(<ProjectPreparationPanel pf={pf} active />);

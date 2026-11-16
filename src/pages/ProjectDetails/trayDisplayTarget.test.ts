@@ -20,6 +20,12 @@ function fixture() {
 }
 
 describe('tray display targets', () => {
+  it.each(['saved-cad-route', 'published-cad-route'] as const)('keeps %s independent of source-model name matches and old roots', geometrySource => {
+    const input = fixture();
+    input.context.trays[0].geometrySource = geometrySource;
+    input.context.resolutions = [input.assignment()];
+    expect(trayDisplayTarget(input)).toEqual({ objectIds: [], source: null, message: expect.stringContaining('Use Draw trays') });
+  });
   it('does not show transferred sections through an emptied old assignment or frozen plan', () => {
     const input=fixture();
     const roots=input.plan.requestedScope.trays[0].orderedRootObjectIds;

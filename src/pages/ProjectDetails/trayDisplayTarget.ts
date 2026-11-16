@@ -41,8 +41,10 @@ function fromRoots(roots: string[], source: Source): TrayDisplayTarget {
 /** Display evidence only. A same-model historical assignment may be inspected;
  * this never upgrades its routing permissions or preparation/write provenance. */
 export function trayDisplayTarget({ trayId, context, plan, discovery, draftRoots }: Input): TrayDisplayTarget {
-  if (!context.trays.some(tray => tray.projectTrayId === trayId))
+  const tray = context.trays.find(tray => tray.projectTrayId === trayId);
+  if (!tray)
     return unavailable(null, 'This tray is no longer in the current project. Refresh preparation status.');
+  if (tray.geometrySource) return unavailable(null, 'This tray uses saved CAD geometry. Use Draw trays to show it.');
   if (draftRoots !== undefined) return fromRoots(draftRoots, 'draft');
   const assignment = context.resolutions.find(resolution => resolution.projectTrayId === trayId
     && sameModel(resolution.scope, context.scope));

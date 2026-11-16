@@ -46,6 +46,16 @@ beforeEach(()=>{
     trays:[],endpointNames:[],resolutions:[],diagnostics:[],currentAggregate:null};trays(1);
 });
 describe('persisted tray discovery assignments without network preparation',()=>{
+  it.each(['saved-cad-route', 'published-cad-route'] as const)('keeps %s geometry without claiming source roots or reporting it missing', async geometrySource => {
+    trays(3);
+    state.context.trays[0].geometrySource = geometrySource;
+    state.context.trays[1].geometrySource = geometrySource;
+    const result = await service().trayMatches(id(1), who, command([match(1, []), match(2, ['dbid:13']), match(3, ['dbid:13'])]));
+    expect(result.counts).toEqual({ assigned: 1, kept: 2, missing: 0, ambiguous: 0 });
+    expect(result.results.slice(0, 2)).toEqual([1, 2].map(n => ({ projectTrayId: id(100+n), status: 'kept', rootObjectIds: [] })));
+    expect(state.context.resolutions).toHaveLength(1);
+    expect(state.context.resolutions[0].projectTrayId).toBe(id(103));
+  });
   it('assigns unique logical matches in one context read, preserving manual roots and exclusions and reporting every tray',async()=>{
     trays(6);const manual=saved(2),excluded=saved(3,'exclude');manual.scope.modelVersionId=id(99);
     const before=structuredClone([manual,excluded]);
