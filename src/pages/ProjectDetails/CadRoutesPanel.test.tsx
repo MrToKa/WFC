@@ -82,10 +82,12 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('complete CAD routes', () => {
-  it('offers only the current project purposes, including custom project names', async () => {
+  it('offers only purposes used by existing project trays, including custom names', async () => {
     purposesRequest.mockResolvedValue([
       { name: draft.purpose, trayCount: 9 },
-      { name: 'Project-specific purpose', trayCount: 0 },
+      { name: 'Project-specific purpose', trayCount: 2 },
+      { name: 'Medium voltage cable tray', trayCount: 0 },
+      { name: 'EMC cable tray', trayCount: 0 },
     ]);
     show();
     const select = screen.getByLabelText('Route purpose');
@@ -98,6 +100,14 @@ describe('complete CAD routes', () => {
     expect(purposesRequest).toHaveBeenCalledWith(id(50), 'cad-token');
     fireEvent.change(select, { target: { value: 'Project-specific purpose' } });
     expect(select).toHaveValue('Project-specific purpose');
+  });
+
+  it('does not offer configured or template purposes when the project has no trays', async () => {
+    purposesRequest.mockResolvedValue([{ name: draft.purpose, trayCount: 0 }]);
+    show();
+    await screen.findByText('No tray purposes are available in this project.');
+    expect(within(screen.getByLabelText('Route purpose')).getAllByRole('option')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Save complete route' })).toBeDisabled();
   });
 
   it('marks a removed saved purpose unavailable and requires a current choice', async () => {

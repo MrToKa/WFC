@@ -110,7 +110,9 @@ export function CadRoutesPanel({
   creationActive = false,
 }: Props) {
   const projectPurposes = useProjectTrayPurposes(projectId, token);
-  const purposeOptions = projectPurposes.purposes.map((purpose) => purpose.name);
+  const purposeOptions = projectPurposes.purposes
+    .filter((purpose) => purpose.trayCount > 0)
+    .map((purpose) => purpose.name);
   const [routes, setRoutes] = useState<CadRouteGroup[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [fields, setFields] = useState(empty);
