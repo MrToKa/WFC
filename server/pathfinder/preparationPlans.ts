@@ -111,6 +111,9 @@ export function buildPreparationPlan(context: PreparationContext, input: Prepara
   const parentChain = (id: string): string[] => { const cached = chainCache.get(id); if (cached) return cached; const result: string[] = [], seen = new Set<string>([id]); let next = objects.get(id)?.parentId; while (next !== null && next !== undefined) { budget(); if (seen.has(next) || result.length >= 512 || !objects.has(next)) return fail('PREPARATION_HIERARCHY_INVALID'); seen.add(next); result.push(next); next = objects.get(next)!.parentId; } chainCache.set(id, result); return result; };
   for (const object of discovery.objects) parentChain(object.objectId);
   const trayIds = new Set(context.trays.map(t => t.projectTrayId));
+  const explicitRootOwners = new Map(context.resolutions.filter(resolution => resolution.mode === 'roots'
+    && trayIds.has(resolution.projectTrayId) && preparationResolutionMatchesScope(resolution.scope, context.scope))
+    .flatMap(resolution => resolution.rootObjectIds.map(root => [root, resolution.projectTrayId] as const)));
   if (discovery.trays.length !== context.trays.length || discovery.trays.some(t => !trayIds.has(t.projectTrayId))) return fail('PREPARATION_DISCOVERY_TRAYS');
   const excluded: string[] = [], deferredCadTrayIds:string[]=[], skipped: NonNullable<PreparationPlan['requestedScope']['skippedTrays']> = [], trays: PreparationPlan['requestedScope']['trays'] = [], leafOwners = new Map<string, { trayId: string; root: string }>();
   const sliceObjects: Array<PreparationPlan['partPlan'][number]['objects'][number]> = [];
@@ -129,7 +132,8 @@ export function buildPreparationPlan(context: PreparationContext, input: Prepara
     // assigned previously. Restore that assignment by stable identity first.
     const awaitingModelIdentity = !resolution && savedResolution?.mode === 'roots'
       && (['modelVersionId', 'contentFingerprint', 'selectionRevision'] as const).some(key => savedResolution.scope[key] !== context.scope[key]);
-    const roots = resolution?.mode === 'roots' ? resolution.rootObjectIds : !awaitingModelIdentity && candidates.length === 1 ? candidates : [];
+    const roots = resolution?.mode === 'roots' ? resolution.rootObjectIds : !awaitingModelIdentity && candidates.length === 1
+      && !candidates.some(root => explicitRootOwners.has(root) && explicitRootOwners.get(root) !== tray.projectTrayId) ? candidates : [];
     if (!roots.length) {
       const reason = !awaitingModelIdentity && candidates.length ? 'TRAY_ROOT_AMBIGUOUS' as const : 'TRAY_ROOT_MISSING' as const;
       if (input.unresolvedTrayPolicy === 'skip') { excluded.push(tray.projectTrayId); skipped.push({ projectTrayId: tray.projectTrayId, reason }); }

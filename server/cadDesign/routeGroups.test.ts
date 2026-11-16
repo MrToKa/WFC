@@ -63,6 +63,127 @@ const configurePublished = (instanceIds = [instanceId],identity = {name:route.na
     return fallback(sql,values);
   });
 };
+describe('atomic section assignment', () => {
+  const sourceId = '00000000-0000-4000-8000-000000000010';
+  const targetMemberId = '00000000-0000-4000-8000-000000000011';
+  const assignment = { instanceId,expectedRevision:1,sourceRouteId:sourceId,expectedSourceRevision:3 };
+  function setupTransfer(options: { sourceStatus?: string; targetStatus?: string; failInsert?: boolean; targetCount?: number; free?: boolean } = {}) {
+    let routes = [
+      {...route,instanceIds: Array.from({length: options.targetCount ?? 1},(_,index) => index === 0 ? targetMemberId : `member-${index}`),status:options.targetStatus ?? 'draft'},
+      {...route,id:sourceId,name:'SOURCE',tag:'SOURCE',revision:3,instanceIds:options.free ? [] : [instanceId],status:options.sourceStatus ?? 'draft'},
+    ];
+    let snapshot = structuredClone(routes);
+    mocks.query.mockImplementation(async (sql: string,values?: unknown[]) => {
+      if (sql === 'BEGIN') snapshot = structuredClone(routes);
+      if (sql === 'ROLLBACK') routes = structuredClone(snapshot);
+      if (sql.startsWith('SELECT d.id')) return { rows: [{id:designId}] };
+      if (sql.startsWith('SELECT g.id')) return { rows: routes.filter(row => row.id === values?.[2]).map(row => structuredClone(row)) };
+      if (sql.startsWith('SELECT id FROM cad_design_instances')) return {rows:[{id:instanceId}]};
+      if (sql.startsWith('SELECT route_group_id')) {
+        const source = routes.find(row => row.instanceIds.includes(instanceId));
+        return { rows: source ? [{routeGroupId:source.id}] : [] };
+      }
+      if (sql.startsWith('DELETE FROM cad_route_group_members')) {
+        const source = routes.find(row => row.id === values?.[2])!;
+        source.instanceIds = source.instanceIds.filter(id => id !== values?.[3]);
+      }
+      if (sql.startsWith('INSERT INTO cad_route_group_members')) {
+        if (options.failInsert || routes.some(row => row.instanceIds.includes(instanceId)))
+          throw Object.assign(new Error('Membership conflict'),{code:'23505'});
+        routes.find(row => row.id === values?.[2])!.instanceIds.push(instanceId);
+      }
+      if (sql.startsWith('UPDATE cad_route_groups SET revision=')) {
+        const current = routes.find(row => row.id === values?.[2]);
+        if (!current || current.revision !== values?.[3] || current.status !== 'draft') return {rows:[]};
+        current.revision++;
+        return {rows:[{id:current.id}]};
+      }
+      return {rows:[]};
+    });
+    return () => structuredClone(routes);
+  }
+  it('moves the sole source section in one commit while preserving geometry and retaining the empty source', async () => {
+    const read = setupTransfer();
+    const base = await start();
+    const response = await mutate(base,'POST',assignment,`/${groupId}/sections`);
+    expect(response.status).toBe(200);
+    const [target,source] = read();
+    expect(source).toMatchObject({id:sourceId,revision:4,instanceIds:[],status:'draft'});
+    expect(target).toMatchObject({revision:2,instanceIds:[targetMemberId,instanceId]});
+    expect(await response.json()).toEqual({route:target});
+    expect(read().flatMap(row => row.instanceIds).filter(id => id === instanceId)).toHaveLength(1);
+    const queries = mocks.query.mock.calls.map(([sql]) => sql as string);
+    expect(queries.findIndex(sql => sql.startsWith('DELETE FROM cad_route_group_members')))
+      .toBeLessThan(queries.findIndex(sql => sql.startsWith('INSERT INTO cad_route_group_members')));
+    expect(queries.at(-1)).toBe('COMMIT');
+    expect(queries.some(sql => /(?:UPDATE|DELETE FROM) cad_design_instances|cad_design_connections|DELETE FROM cad_route_groups/.test(sql))).toBe(false);
+    // A stale retry cannot put the same instance in both routes or change revisions.
+    const repeated = await mutate(base,'POST',assignment,`/${groupId}/sections`);
+    expect(repeated.status).toBe(409);
+    expect(read()).toEqual([target,source]);
+  });
+  it('assigns an unowned section only when the caller also observed it as unowned', async () => {
+    const read = setupTransfer({free:true});
+    const base = await start();
+    const response = await mutate(base,'POST',{instanceId,expectedRevision:1,sourceRouteId:null},`/${groupId}/sections`);
+    expect(response.status).toBe(200);
+    expect(read()[0].instanceIds).toEqual([targetMemberId,instanceId]);
+    expect(read()[1].revision).toBe(3);
+  });
+  it.each([
+    [{...assignment,expectedRevision:2},'STALE_CAD_ROUTE'],
+    [{...assignment,expectedSourceRevision:2},'STALE_CAD_SOURCE_ROUTE'],
+    [{instanceId,expectedRevision:1,sourceRouteId:null},'STALE_CAD_SECTION_ASSIGNMENT'],
+  ])('refuses stale observations without changing either route: %j', async (input,code) => {
+    const read = setupTransfer(), before = read();
+    const base = await start();
+    const response = await mutate(base,'POST',input,`/${groupId}/sections`);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({code});
+    expect(read()).toEqual(before);
+    expect(mocks.query.mock.calls.some(([sql]) => /^(?:UPDATE|DELETE|INSERT)/.test(sql))).toBe(false);
+    expect(mocks.query.mock.calls.at(-1)?.[0]).toBe('ROLLBACK');
+  });
+  it.each([{sourceStatus:'published'},{targetStatus:'published'}])('refuses published membership changes %j', async options => {
+    const read = setupTransfer(options), before = read();
+    const base = await start();
+    const response = await mutate(base,'POST',assignment,`/${groupId}/sections`);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({code:'CAD_ROUTE_PUBLISHED'});
+    expect(read()).toEqual(before);
+  });
+  it('rolls the source removal and revision back when the target membership cannot be inserted', async () => {
+    const read = setupTransfer({failInsert:true}), before = read();
+    const base = await start();
+    const response = await mutate(base,'POST',assignment,`/${groupId}/sections`);
+    expect(response.status).toBe(409);
+    expect(read()).toEqual(before);
+    expect(mocks.query.mock.calls.some(([sql]) => sql.startsWith('DELETE FROM cad_route_group_members'))).toBe(true);
+    expect(mocks.query.mock.calls.at(-1)?.[0]).toBe('ROLLBACK');
+  });
+  it('rejects a full target before removing a source member', async () => {
+    const read = setupTransfer({targetCount:200}), before = read();
+    const base = await start();
+    const response = await mutate(base,'POST',assignment,`/${groupId}/sections`);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({code:'CAD_ROUTE_MEMBER_LIMIT'});
+    expect(read()).toEqual(before);
+  });
+  it('rejects incomplete or unexpected assignment details before opening a transaction', async () => {
+    const base = await start();
+    for (const invalid of [
+      {...assignment,expectedSourceRevision:undefined},
+      {...assignment,sourceRouteId:null},
+      {...assignment,instanceId:'foreign'},
+      {...assignment,expectedRevision:0},
+      {...assignment,unexpected:true},
+    ]) {
+      expect((await mutate(base,'POST',invalid,`/${groupId}/sections`)).status).toBe(400);
+    }
+    expect(mocks.connect).not.toHaveBeenCalled();
+  });
+});
+
 describe('CAD route authoring contract', () => {
   it('uses one canonical uppercase route name without requiring a separate tag', () => {
     const { tag: _legacyTag,...nameOnly } = body;

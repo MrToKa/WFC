@@ -1256,7 +1256,7 @@ describe('automatic tray workflow', () => {
     expect(api.savePreparationResolution).toHaveBeenCalledWith(ids.project, 'login', expect.objectContaining({ projectTrayId: ids.tray,
       mode: 'roots', rootObjectIds: ['dbid:23', 'dbid:24'], expected: f.context.scope, reason: 'Assigned from the current model selection.' }), expect.any(AbortSignal));
     expect(api.createPreparation).not.toHaveBeenCalled(); expect(f.capture).not.toHaveBeenCalled(); expect(api.mutatePreparation).not.toHaveBeenCalled();
-    expect(result.current.notice).toBe('Tray assignment saved. Choose Generate network or Regenerate network to update the routing network.');
+    expect(result.current.notice).toBe('Tray assignment saved. Selected sections belong only to this tray and were removed from any previous tray. Choose Generate network or Regenerate network to update the routing network.');
     expect(result.current.context?.resolutions[0].rootObjectIds).toEqual(['dbid:23', 'dbid:24']);
     expect(result.current.canMutate).toBe(true); expect(result.current.networkReady).toBe(false);
     await act(() => result.current.generateNetwork());

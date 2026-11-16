@@ -1267,3 +1267,18 @@ test('canonical CAD properties reach only the current owned component and acknow
   await turn(); assert.equal(calls.length, 1);
   f.bridge.dispose();
 });
+
+test('CAD visibility acknowledges the owned component and rejects stale loads', async () => {
+  const f = fixture(), calls = [];
+  f.handle.cadVisibility = (id, visible) => calls.push({ id, visible });
+  await f.loaded();
+  const command = f.send('CAD_VISIBILITY', { componentId: uuid(801), visible: false });
+  await turn();
+  assert.deepEqual(calls, [{ id: uuid(801), visible: false }]);
+  assert.deepEqual(f.messages('CAD_ACK').find(value => value.requestId === command.requestId).payload,
+    { componentId: uuid(801), phase: 'visibility', received: 0 });
+  f.send('CAD_VISIBILITY', { componentId: uuid(801), visible: true }, { loadId: uuid(999) });
+  await turn();
+  assert.equal(calls.length, 1);
+  f.bridge.dispose();
+});

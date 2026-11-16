@@ -87,6 +87,7 @@ type Props = {
   onRemove?: ViewerController['removeCadComponent'];
   onColor?: ViewerController['setCadComponentColor'];
   onProperties?: ViewerController['setCadComponentProperties'];
+  onVisibility?: (id: string, visible: boolean) => Promise<void>;
   onTraysChanged?: () => Promise<void>;
   newTrayMode?: boolean;
   newTrayEpoch?: number;
@@ -126,6 +127,7 @@ export function CadPlacementPanel({
   onRemove,
   onColor,
   onProperties,
+  onVisibility,
   onTraysChanged,
   newTrayMode,
   newTrayEpoch = 0,
@@ -169,8 +171,19 @@ export function CadPlacementPanel({
   const [routeBusy, setRouteBusy] = useState(false);
   const [routeDirty, setRouteDirty] = useState(false);
   const [newDraftInstanceIds, setNewDraftInstanceIds] = useState<string[]>([]);
+  const [newSection, setNewSection] = useState(false);
+  const [updatedRoute, setUpdatedRoute] = useState<CadRouteGroup>();
+  const [hiddenSectionIds, setHiddenSectionIds] = useState<string[]>([]);
+  const changeSectionVisibility = onVisibility
+    ? async (id: string, visible: boolean) => {
+        await onVisibility(id, visible);
+        setHiddenSectionIds((old) =>
+          visible ? old.filter((value) => value !== id) : [...new Set([...old, id])],
+        );
+      }
+    : undefined;
   const managedCreation = newTrayMode !== undefined;
-  const toolsOpen = !managedCreation || newTrayMode || Boolean(editingId);
+  const toolsOpen = !managedCreation || newTrayMode || newSection || Boolean(editingId);
   const visibleIds = useMemo(() => {
     if (!managedCreation) return instances.map((instance) => instance.id);
     if (selectedRoute) return selectedRoute.instanceIds;
@@ -184,6 +197,8 @@ export function CadPlacementPanel({
     onBusyChange?.(busy || routeBusy);
   }, [busy, routeBusy, onBusyChange]);
   useEffect(() => {
+    setNewSection(false);
+    setUpdatedRoute(undefined);
     setSelectedRoute(null);
     setEditingId('');
     setSelectedId('');
@@ -195,6 +210,10 @@ export function CadPlacementPanel({
   }, [newTrayEpoch]);
   const selectRoute = useCallback(
     (route: CadRouteGroup | null) => {
+      setNewSection(false);
+      setSnapTarget('');
+      setSnapTargetPort('');
+      setSnapSourcePort('');
       setSelectedRoute(route);
       setEditingId('');
       setSelectedId('');
@@ -452,6 +471,7 @@ export function CadPlacementPanel({
   };
 
   const selectInstance = (id: string) => {
+    setNewSection(false);
     setPendingSnap(null);
     const instance = instances.find((row) => row.id === id);
     setEditingId(id);
@@ -666,6 +686,8 @@ export function CadPlacementPanel({
         });
         const payload: { id: string } = await created.json();
         savedId = payload.id;
+        // Retain the saved ID if a later connection or membership write fails.
+        setEditingId(savedId);
         if (newTrayMode) setNewDraftInstanceIds((ids) => [...new Set([...ids, savedId])]);
         setNotice('New component placement saved. Displaying the 3D mesh…');
       }
@@ -688,6 +710,30 @@ export function CadPlacementPanel({
             `Position saved, but connector relation failed: ${error instanceof Error ? error.message : 'unknown error'}`,
           );
         }
+      }
+      if (newSection && selectedRoute && !editing) {
+        try {
+          const response = await api(`/designs/${currentId}/routes/${selectedRoute.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: selectedRoute.name,
+              tag: selectedRoute.tag,
+              color: selectedRoute.color,
+              purpose: selectedRoute.purpose,
+              instanceIds: [...new Set([...selectedRoute.instanceIds, savedId])],
+              expectedRevision: selectedRoute.revision,
+            }),
+          });
+          const data: { route: CadRouteGroup } = await response.json();
+          setSelectedRoute(data.route);
+          setUpdatedRoute(data.route);
+        } catch (error) {
+          setNotice(
+            `Section saved, but could not add it to ${selectedRoute.name}: ${error instanceof Error ? error.message : 'unknown error'}. Use Add existing section to retry.`,
+          );
+        }
+        setNewSection(false);
       }
       await reload();
     } catch (error) {
@@ -826,13 +872,51 @@ export function CadPlacementPanel({
         before delivery.
       </Caption1>
       {loading ? <Spinner size="tiny" label="Reading proposal…" /> : null}
+      {selectedRoute ? (
+        <div>
+          <Caption1 block>Selected route: {selectedRoute.name}</Caption1>
+          <Button
+            disabled={
+              busy || routeBusy || externalBusy || routeDirty || selectedRoute.status !== 'draft'
+            }
+            onClick={() => {
+              setNewSection(true);
+              setEditingId('');
+              setSelectedId('');
+              setLengthMm('6000');
+              setCoordinates(empty);
+              setPendingSnap(null);
+              setSnapTarget('');
+              setSnapTargetPort('');
+              setSnapSourcePort('');
+              setNotice(
+                'Choose a component and a snap target, or pick a position in the 3D model.',
+              );
+            }}
+          >
+            New section
+          </Button>
+          {newSection ? (
+            <Button
+              disabled={busy || routeBusy || externalBusy}
+              onClick={() => {
+                setNewSection(false);
+                setSelectedId('');
+                setPendingSnap(null);
+              }}
+            >
+              Cancel new section
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       {toolsOpen ? (
         <fieldset
           aria-label="Component placement tools"
           disabled={busy || routeBusy || externalBusy}
           style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}
         >
-          {!managedCreation || newTrayMode ? (
+          {!managedCreation || newTrayMode || newSection ? (
             <Field label="Catalogue component">
               <select
                 aria-label="Catalogue component"
@@ -857,14 +941,13 @@ export function CadPlacementPanel({
           ) : null}
           {sourcePorts.length ? (
             <section aria-label="Connector snap">
-              <Caption1>
-                Connect components using their saved connector positions.
-              </Caption1>
+              <Caption1>Connect components using their saved connector positions.</Caption1>
               <Field label="Snap to placed component">
                 <select
                   aria-label="Snap target"
                   value={snapTarget}
                   onChange={(event) => {
+                    setPendingSnap(null);
                     setSnapTarget(event.target.value);
                     setSnapTargetPort('');
                   }}
@@ -884,7 +967,10 @@ export function CadPlacementPanel({
                 <select
                   aria-label="Target connector"
                   value={snapTargetPort}
-                  onChange={(event) => setSnapTargetPort(event.target.value)}
+                  onChange={(event) => {
+                    setPendingSnap(null);
+                    setSnapTargetPort(event.target.value);
+                  }}
                   disabled={busy}
                 >
                   <option value="">Choose port</option>
@@ -899,7 +985,10 @@ export function CadPlacementPanel({
                 <select
                   aria-label="Source connector"
                   value={snapSourcePort}
-                  onChange={(event) => setSnapSourcePort(event.target.value)}
+                  onChange={(event) => {
+                    setPendingSnap(null);
+                    setSnapSourcePort(event.target.value);
+                  }}
                   disabled={busy}
                 >
                   <option value="">Choose port</option>
@@ -1231,6 +1320,9 @@ export function CadPlacementPanel({
           onDirtyChange={setRouteDirty}
           onBusyChange={setRouteBusy}
           resetKey={newTrayEpoch}
+          updatedRoute={updatedRoute}
+          onSectionVisibility={changeSectionVisibility}
+          hiddenSectionIds={hiddenSectionIds}
           memberScopeIds={managedCreation ? visibleIds : undefined}
           newDraftInstanceIds={newDraftInstanceIds}
           onNewRoute={onNewTray}

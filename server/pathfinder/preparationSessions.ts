@@ -182,7 +182,32 @@ export function createPreparationService(pool: Pool, adapters: PreparationAdapte
         const replay = await priorCommand(c, projectId, who, input.idempotencyKey, 'resolve', sha); if (replay) return preparationResolutionReceiptSchema.parse({ ...replay as object, duplicate: true });
         const context = await readPreparationContext(c, projectId); if (!equalPreparationScope(context.scope, input.expected)) return fail('PREPARATION_SCOPE_STALE');
         if (!context.trays.some(t => t.projectTrayId === input.projectTrayId)) return fail('PREPARATION_TRAY_NOT_FOUND', 404);
-        const before = context.resolutions.find(r => r.projectTrayId === input.projectTrayId) ?? null, revision = nextRevision(context.scope.resolutionRevision);
+        const before = context.resolutions.find(r => r.projectTrayId === input.projectTrayId) ?? null;
+        let revision = context.scope.resolutionRevision;
+        if (input.mode === 'roots') {
+          const selected = new Set(input.rootObjectIds);
+          // Model object IDs are scoped to their model bytes. A manual assignment
+          // transfers these roots, retaining every other root of each prior owner.
+          // Persist an empty owner's exclusion so discovery cannot reclaim them.
+          for (const prior of context.resolutions) {
+            if (prior.projectTrayId === input.projectTrayId || prior.mode !== 'roots'
+              || prior.scope.modelVersionId !== input.expected.modelVersionId
+              || prior.scope.contentFingerprint !== input.expected.contentFingerprint
+              || !prior.rootObjectIds.some(root => selected.has(root))) continue;
+            const retained = prior.rootObjectIds.filter(root => !selected.has(root));
+            const replacement = preparationResolutionSchema.parse({
+              id: randomUUID(), projectTrayId: prior.projectTrayId,
+              mode: retained.length ? 'roots' : 'exclude', rootObjectIds: retained,
+              reason: `Model sections reassigned to tray ${input.projectTrayId}.`,
+              actorId: who.userId, createdAt: new Date().toISOString(), scope: input.expected,
+            });
+            revision = nextRevision(revision);
+            await c.query('DELETE FROM pf_preparation_resolutions WHERE project_id=$1 AND project_tray_id=$2', [projectId, prior.projectTrayId]);
+            await c.query('INSERT INTO pf_preparation_resolutions(project_id,project_tray_id,resolution) VALUES($1,$2,$3)', [projectId, prior.projectTrayId, replacement]);
+            await c.query('INSERT INTO pf_preparation_resolution_events(id,project_id,actor_id,login_id,revision,request,before_value,after_value) VALUES($1,$2,$3,$4,$5,$6,$7,$8)', [randomUUID(), projectId, who.userId, who.loginId, revision, input, prior, replacement]);
+          }
+        }
+        revision = nextRevision(revision);
         const resolution = input.mode === 'reset' ? null : preparationResolutionSchema.parse({ id: randomUUID(), projectTrayId: input.projectTrayId, mode: input.mode, rootObjectIds: input.rootObjectIds, reason: input.reason, actorId: who.userId, createdAt: new Date().toISOString(), scope: input.expected });
         await c.query('DELETE FROM pf_preparation_resolutions WHERE project_id=$1 AND project_tray_id=$2', [projectId, input.projectTrayId]);
         if (resolution) await c.query('INSERT INTO pf_preparation_resolutions(project_id,project_tray_id,resolution) VALUES($1,$2,$3)', [projectId, input.projectTrayId, resolution]);

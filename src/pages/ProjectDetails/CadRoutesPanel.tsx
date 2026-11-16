@@ -24,6 +24,7 @@ type Instance = {
   xMm: number;
   yMm: number;
   zMm: number;
+  lengthMm?: number | null;
 };
 type Props = {
   projectId: string;
@@ -46,6 +47,9 @@ type Props = {
   newDraftInstanceIds?: string[];
   externalBusy?: boolean;
   creationActive?: boolean;
+  updatedRoute?: CadRouteGroup;
+  onSectionVisibility?: (id: string, visible: boolean) => Promise<void>;
+  hiddenSectionIds?: string[];
 };
 type AutoAttachment = {
   instanceId: string;
@@ -108,12 +112,18 @@ export function CadRoutesPanel({
   newDraftInstanceIds,
   externalBusy = false,
   creationActive = false,
+  updatedRoute,
+  onSectionVisibility,
+  hiddenSectionIds = [],
 }: Props) {
   const projectPurposes = useProjectTrayPurposes(projectId, token);
   const purposeOptions = projectPurposes.purposes
     .filter((purpose) => purpose.trayCount > 0)
     .map((purpose) => purpose.name);
   const [routes, setRoutes] = useState<CadRouteGroup[]>([]);
+  const [addingExisting, setAddingExisting] = useState(false);
+  const [existingId, setExistingId] = useState('');
+  const [visibilityBusy, setVisibilityBusy] = useState(false);
   const [selectedId, setSelectedId] = useState('');
   const [fields, setFields] = useState(empty);
   const [members, setMembers] = useState<string[]>([]);
@@ -128,6 +138,22 @@ export function CadRoutesPanel({
   const [attachmentMessage, setAttachmentMessage] = useState('');
   const colors = useRef(new Map<string, string>());
   const selected = routes.find((route) => route.id === selectedId);
+  const availableSections = instances.filter(
+    (instance) => !selected?.instanceIds.includes(instance.id),
+  );
+  useEffect(() => {
+    if (!updatedRoute) return;
+    setRoutes((old) => old.map((route) => (route.id === updatedRoute.id ? updatedRoute : route)));
+    memberSelectionEpoch.current++;
+    selectedMembershipRoute.current = updatedRoute.id;
+    setSelectedId(updatedRoute.id);
+    setFields({
+      name: updatedRoute.name,
+      color: updatedRoute.color,
+      purpose: updatedRoute.purpose,
+    });
+    setMembers(updatedRoute.instanceIds);
+  }, [updatedRoute]);
   const geometryKey = instances
     .filter((instance) => selected?.instanceIds.includes(instance.id))
     .map((instance) => `${instance.id}:${instance.revision}`)
@@ -155,6 +181,8 @@ export function CadRoutesPanel({
   useEffect(() => {
     memberSelectionEpoch.current++;
     selectedMembershipRoute.current = '';
+    setAddingExisting(false);
+    setExistingId('');
     setSelectedId('');
     setFields(empty);
     setMembers([]);
@@ -268,6 +296,8 @@ export function CadRoutesPanel({
     };
   }, [routes, instances, displayedIds, onColor]);
   const edit = (route: CadRouteGroup) => {
+    setAddingExisting(false);
+    setExistingId('');
     memberSelectionEpoch.current++;
     selectedMembershipRoute.current = route.id;
     setSelectedId(route.id);
@@ -275,6 +305,21 @@ export function CadRoutesPanel({
     setMembers(route.instanceIds);
     setMessage('');
     onSelectionChange?.(route);
+  };
+  const toggleRoute = (route: CadRouteGroup) => {
+    if (selectedId !== route.id) {
+      edit(route);
+      return;
+    }
+    memberSelectionEpoch.current++;
+    selectedMembershipRoute.current = '';
+    setSelectedId('');
+    setFields(empty);
+    setMembers([]);
+    setAddingExisting(false);
+    setExistingId('');
+    setMessage('');
+    onSelectionChange?.(null);
   };
   const save = async (event: FormEvent) => {
     event.preventDefault();
@@ -326,6 +371,60 @@ export function CadRoutesPanel({
       setMessage('Route saved. Its colour is applied to all member components.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Cannot save route.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const addExisting = async () => {
+    if (
+      !selected ||
+      selected.status !== 'draft' ||
+      busy ||
+      externalBusy ||
+      unsavedChanges ||
+      !availableSections.some((instance) => instance.id === existingId)
+    )
+      return;
+    const source = routes.find((route) => route.instanceIds.includes(existingId));
+    if (source?.status === 'published') return;
+    setBusy(true);
+    try {
+      await onSectionVisibility?.(existingId, true);
+      const data = await (
+        await request(source ? `/${selected.id}/sections` : `/${selected.id}`, {
+          method: source ? 'POST' : 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(
+            source
+              ? {
+                  instanceId: existingId,
+                  expectedRevision: selected.revision,
+                  sourceRouteId: source.id,
+                  expectedSourceRevision: source.revision,
+                }
+              : {
+                  name: selected.name,
+                  tag: selected.tag,
+                  color: selected.color,
+                  purpose: selected.purpose,
+                  instanceIds: [...new Set([...selected.instanceIds, existingId])],
+                  expectedRevision: selected.revision,
+                },
+          ),
+        })
+      ).json();
+      if (source) await reload();
+      else
+        setRoutes((old) => old.map((route) => (route.id === data.route.id ? data.route : route)));
+      edit(data.route);
+      await onMetadataChanged?.();
+      setMessage(
+        source
+          ? `Section moved from ${source.name} to ${data.route.name}.`
+          : `Section added to ${data.route.name}.`,
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Cannot add section.');
     } finally {
       setBusy(false);
     }
@@ -484,7 +583,8 @@ export function CadRoutesPanel({
               <Button
                 disabled={busy}
                 appearance={selectedId === route.id ? 'primary' : 'subtle'}
-                onClick={() => edit(route)}
+                aria-pressed={selectedId === route.id}
+                onClick={() => toggleRoute(route)}
               >
                 {route.name} · {route.instanceIds.length} components · {route.status}
               </Button>
@@ -501,6 +601,97 @@ export function CadRoutesPanel({
             </li>
           ))}
         </ul>
+        {selected ? (
+          <Button
+            disabled={
+              busy ||
+              loading ||
+              unsavedChanges ||
+              selected.status !== 'draft' ||
+              !availableSections.length
+            }
+            onClick={() => {
+              setExistingId('');
+              setAddingExisting(true);
+            }}
+          >
+            Add existing section
+          </Button>
+        ) : null}
+        {addingExisting ? (
+          <section aria-label="Add existing section">
+            <Caption1 block>Add existing section to {selected?.name}</Caption1>
+            <div>
+              <Caption1>
+                Toggle Show/Hide to identify a section in the 3D model. Sections assigned to another
+                route will be moved to this route.
+              </Caption1>
+              <fieldset disabled={busy || visibilityBusy || externalBusy}>
+                <legend>Available sections</legend>
+                {availableSections.map((instance) => {
+                  const source = routes.find((route) => route.instanceIds.includes(instance.id));
+                  return (
+                    <div key={instance.id}>
+                      <label>
+                        <input
+                          type="radio"
+                          name="existing-section"
+                          value={instance.id}
+                          checked={existingId === instance.id}
+                          disabled={source?.status === 'published'}
+                          onChange={() => setExistingId(instance.id)}
+                        />
+                        {instance.partNumber}
+                        {instance.lengthMm != null ? ` · ${instance.lengthMm} mm` : ''} · X{' '}
+                        {instance.xMm}, Y {instance.yMm}, Z {instance.zMm} mm
+                        {source
+                          ? ` · ${source.name}${source.status === 'published' ? ' (withdraw from routing network before moving)' : ' → move to ' + selected?.name}`
+                          : ' · Unassigned'}
+                      </label>
+                      {onSectionVisibility ? (
+                        <Button
+                          aria-label={`${hiddenSectionIds.includes(instance.id) ? 'Show' : 'Hide'} section ${instance.id}`}
+                          disabled={!displayedIds.includes(instance.id)}
+                          onClick={() => {
+                            setVisibilityBusy(true);
+                            void onSectionVisibility(
+                              instance.id,
+                              hiddenSectionIds.includes(instance.id),
+                            )
+                              .catch((error) =>
+                                setMessage(
+                                  error instanceof Error
+                                    ? error.message
+                                    : 'Cannot change section visibility.',
+                                ),
+                              )
+                              .finally(() => setVisibilityBusy(false));
+                          }}
+                        >
+                          {hiddenSectionIds.includes(instance.id) ? 'Show' : 'Hide'}
+                        </Button>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </fieldset>
+            </div>
+            <div>
+              <Button disabled={busy || visibilityBusy} onClick={() => setAddingExisting(false)}>
+                Cancel
+              </Button>
+              <Button
+                appearance="primary"
+                disabled={busy || visibilityBusy || externalBusy || !existingId}
+                onClick={() => {
+                  void addExisting();
+                }}
+              >
+                Add section
+              </Button>
+            </div>
+          </section>
+        ) : null}
         {!onNewRoute || selected || creationActive ? (
           <form
             aria-label="Save complete route"

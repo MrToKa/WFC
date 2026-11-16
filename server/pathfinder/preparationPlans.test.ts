@@ -15,6 +15,18 @@ export function preparationFixture() {
   return { context, input };
 }
 describe('server-owned routing preparation plan', () => {
+  it('gives explicit moved roots priority over an old inferred name match without duplicating capture ownership', () => {
+    const { context, input } = preparationFixture();
+    context.trays.push({ ...context.trays[0], projectTrayId:id(11), rawName:'/B002', routeName:'/B002' });
+    input.discovery.trays.push({ projectTrayId:id(11), candidateRootObjectIds:[] });
+    context.resolutions=[{ id:id(71), projectTrayId:id(11), mode:'roots', rootObjectIds:['dbid:2'],
+      reason:'Moved model sections', actorId:id(72), createdAt:'2026-10-27T00:00:00Z', scope:{...context.scope} }];
+    const plan=buildPreparationPlan(context,{...input,unresolvedTrayPolicy:'skip'});
+    expect(plan.requestedScope.trays.map(tray=>tray.projectTrayId)).toEqual([id(11)]);
+    expect(plan.requestedScope.orderedPhysicalLeafIds).toEqual(['dbid:3']);
+    expect(plan.requestedScope.skippedTrays?.map(tray=>tray.projectTrayId)).toEqual([id(10)]);
+    expect(plan.partPlan.flatMap(part=>part.objects).map(object=>object.projectTrayId)).toEqual([id(11)]);
+  });
   it('defers saved CAD geometry without an SDK root or arbitrary unresolved skip',()=>{
     const {context,input}=preparationFixture();
     context.trays.push({...context.trays[0],projectTrayId:id(11),rawName:'CAD001',routeName:'/CAD001',geometrySource:'saved-cad-route'});
@@ -198,6 +210,7 @@ describe('server-owned routing preparation plan', () => {
     context.resolutions.push({ id: id(8), projectTrayId: id(10), mode: 'roots', rootObjectIds: ['dbid:2', 'dbid:4'], reason: 'Synthetic multi-root proof', actorId: id(9), createdAt: '2026-01-01T00:00:00.000Z', scope: context.scope });
     expect(buildPreparationPlan(context, input).requestedScope.orderedPhysicalLeafIds).toEqual(['dbid:3', 'dbid:5']);
     context.trays.push({ ...context.trays[0], projectTrayId: id(11) }); input.discovery.trays.push({ projectTrayId: id(11), candidateRootObjectIds: ['dbid:2'] });
+    context.resolutions.push({ ...context.resolutions[0], id:id(12), projectTrayId:id(11), rootObjectIds:['dbid:2'] });
     expect(() => buildPreparationPlan(context, input)).toThrowError(expect.objectContaining({ code: 'PREPARATION_LEAF_OWNERSHIP_CONFLICT' }));
   });
   it.each([['unique automatic match', ['dbid:2']], ['missing automatic match', []]] as const)(

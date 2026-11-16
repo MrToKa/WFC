@@ -101,9 +101,11 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
     if (!context || !modelCurrent) return false;
     const resolution = context.resolutions.find(item => item.projectTrayId === trayId && sameModel(item.scope, context.scope));
     if (resolution) return resolution.mode === 'roots' && resolution.rootObjectIds.length > 0;
+    const claimedElsewhere = new Set(context.resolutions.filter(item => item.projectTrayId !== trayId
+      && item.mode === 'roots' && sameModel(item.scope, context.scope)).flatMap(item => item.rootObjectIds));
     const matches = discovery?.trays.find(item => item.projectTrayId === trayId)?.candidateRootObjectIds;
-    if (matches) return matches.length === 1;
-    return Boolean(plan?.requestedScope.trays.some(item => item.projectTrayId === trayId && item.orderedRootObjectIds.length));
+    if (matches) return matches.length === 1 && !claimedElsewhere.has(matches[0]);
+    return Boolean(plan?.requestedScope.trays.some(item => item.projectTrayId === trayId && item.orderedRootObjectIds.some(root => !claimedElsewhere.has(root))));
   };
   const modelTrays=context?.trays.filter(tray=>tray.geometrySource!=='saved-cad-route')??[];
   const cadTrays=context?.trays.filter(tray=>tray.geometrySource==='saved-cad-route')??[];
@@ -273,6 +275,7 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange, onNetworkRea
         <Input type="search" aria-label="Search project trays" placeholder="Tray name or purpose" value={query}
           onChange={(_, data) => setQuery(data.value)} />
       </Field>
+      <p>Use current model selection moves the selected sections to that tray and removes them from any previous tray assignment.</p>
       {!filtered.length ? <p>No project trays match this search.</p> : null}
       <div aria-label="Project trays" style={{ display: 'grid', gap: 12 }}>
         {filtered.map(tray => {

@@ -27,7 +27,7 @@ beforeEach(() => {
     lifecycleKey: 'test-lifecycle', model: { id: modelId, label: 'Current project model' } as NonNullable<State['model']>, canShow: true,
     retry: vi.fn(), showCadComponent: vi.fn(async () => {}),
     pickCadAnchor: vi.fn(async () => ({ objectId: 1, point: [1, 2, 3] as [number, number, number], derivation: 'picked-surface-point' as const })),
-    moveCadComponent: vi.fn(async () => {}), setCadComponentProperties: vi.fn(async () => {}), setCadComponentColor: vi.fn(async () => {}),
+    moveCadComponent: vi.fn(async () => {}), setCadComponentProperties: vi.fn(async () => {}), setCadComponentColor: vi.fn(async () => {}), setCadComponentVisibility: vi.fn(async () => {}),
     removeCadComponent: vi.fn(async () => {}), focusCadComponent: vi.fn(async () => {}),
   };
   vi.mocked(useRoutingsViewer).mockImplementation(() => current);
@@ -48,7 +48,7 @@ describe('Routings builder drawing controls', () => {
     expect(screen.queryByTestId('routing-result')).toBeNull();
     expect(cadCapture.render.mock.lastCall?.[0]).toMatchObject({ projectId, token: 'token-a', modelVersionId: modelId, ready: true,
       onShow: current.showCadComponent, onPick: current.pickCadAnchor, onMove: current.moveCadComponent,
-      onFocus: current.focusCadComponent, onRemove: current.removeCadComponent, onColor: current.setCadComponentColor,
+      onFocus: current.focusCadComponent, onRemove: current.removeCadComponent, onColor: current.setCadComponentColor, onVisibility: current.setCadComponentVisibility,
       onProperties: current.setCadComponentProperties, onTraysChanged: refreshed });
     expect(screen.getByTestId('routings-model-host')).toBeInTheDocument();
     expect(screen.getByText('Active model: Current project model')).toBeVisible();

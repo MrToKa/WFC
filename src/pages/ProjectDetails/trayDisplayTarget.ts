@@ -45,15 +45,17 @@ export function trayDisplayTarget({ trayId, context, plan, discovery, draftRoots
     return unavailable(null, 'This tray is no longer in the current project. Refresh preparation status.');
   if (draftRoots !== undefined) return fromRoots(draftRoots, 'draft');
   const assignment = context.resolutions.find(resolution => resolution.projectTrayId === trayId
-    && resolution.mode === 'roots' && sameModel(resolution.scope, context.scope));
-  if (assignment) return fromRoots(assignment.rootObjectIds, 'assignment');
+    && sameModel(resolution.scope, context.scope));
+  if (assignment?.mode === 'roots') return fromRoots(assignment.rootObjectIds, 'assignment');
+  const claimedElsewhere = new Set(context.resolutions.filter(resolution => resolution.projectTrayId !== trayId
+    && resolution.mode === 'roots' && sameModel(resolution.scope, context.scope)).flatMap(resolution => resolution.rootObjectIds));
   if (plan && plan.projectId === context.projectId && sameModel(plan, context.scope)) {
     const tray = plan.requestedScope.trays.find(value => value.projectTrayId === trayId);
-    if (tray) return fromRoots(tray.orderedRootObjectIds, 'plan');
+    if (tray) return fromRoots(tray.orderedRootObjectIds.filter(root => !claimedElsewhere.has(root)), 'plan');
   }
   if (discovery && sameModel(discovery, context.scope)) {
     const candidate = discovery.trays.find(tray => tray.projectTrayId === trayId);
-    if (candidate?.candidateRootObjectIds.length) return fromRoots(candidate.candidateRootObjectIds, 'candidate');
+    if (candidate?.candidateRootObjectIds.length) return fromRoots(candidate.candidateRootObjectIds.filter(root => !claimedElsewhere.has(root)), 'candidate');
   }
   return unavailable(null, 'No model objects for this tray are known in the current model. Discover candidates or assign its model objects first.');
 }

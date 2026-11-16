@@ -139,6 +139,11 @@ export function useRoutingsViewer({ projectId, loadedProjectId, token, container
     if (!run || run.scope !== scope || !current(run) || !run.controller?.getLoadSnapshot()?.ready) throw new Error('Active model unavailable.');
     await run.controller.setCadComponentColor(...args);
   }, [scope, current]);
+  const setCadComponentVisibility = useCallback(async (...args: Parameters<ViewerController['setCadComponentVisibility']>): Promise<void> => {
+    const run = runRef.current;
+    if (!run || run.scope !== scope || !current(run) || !run.controller?.getLoadSnapshot()?.ready) throw new Error('Active model unavailable.');
+    await run.controller.setCadComponentVisibility(...args);
+  }, [scope, current]);
   const setCadComponentProperties = useCallback(async (...args: Parameters<ViewerController['setCadComponentProperties']>): Promise<void> => {
     const run = runRef.current;
     if (!run || run.scope !== scope || !current(run) || !run.controller?.getLoadSnapshot()?.ready) throw new Error('Active model unavailable.');
@@ -146,5 +151,5 @@ export function useRoutingsViewer({ projectId, loadedProjectId, token, container
   }, [scope, current]);
   const visible = state.scope === scope ? state : initial(scope);
   return { ...visible, pickCadAnchor, showCadComponent, moveCadComponent, removeCadComponent, focusCadComponent,
-    setCadComponentColor, setCadComponentProperties, retry, canShow: visible.phase === 'ready' };
+    setCadComponentColor, setCadComponentVisibility, setCadComponentProperties, retry, canShow: visible.phase === 'ready' };
 }

@@ -151,6 +151,18 @@ describe('PathFinder protected Viewer capabilities', () => {
     expect(s.send.mock.calls.some(call => call[0].type === 'CAD_FOCUS')).toBe(false);
   });
 
+it('changes CAD visibility through an acknowledged current-model command', async () => {
+  const s = await loaded(), componentId = generateId();
+  const pending = s.c.setCadComponentVisibility(componentId, false);
+  await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'CAD_VISIBILITY')).toBe(true));
+  const command = s.send.mock.calls.find(call => call[0].type === 'CAD_VISIBILITY')![0];
+  expect(command.payload).toEqual({ componentId, visible: false });
+  expect(command.modelVersionId).toBe(versionId);
+  expect(command.loadId).toBe(s.identity.loadId);
+  s.message('CAD_ACK', { componentId, phase: 'visibility', received: 0 }, command.requestId, s.identity);
+  await expect(pending).resolves.toBeUndefined();
+});
+
   it('colors only through an acknowledged current-model CAD command', async () => {
     const s = await loaded();
     const componentId = generateId();

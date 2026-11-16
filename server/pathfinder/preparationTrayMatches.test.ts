@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { beforeEach,describe,expect,it,vi } from 'vitest';
 import type { Pool,PoolClient } from 'pg';
-import type { PreparationContext } from '../../shared/pathfinderPreparation.js';
+import type { PreparationContext, PreparationResolutionWrite } from '../../shared/pathfinderPreparation.js';
 import { preparationTrayMatchesWriteSchema,type PreparationTrayMatchesWrite } from '../../shared/pathfinderTrayMatches.js';
 import { createPreparationService } from './preparationSessions.js';
 import { PathFinderError } from './errors.js';
@@ -19,6 +19,7 @@ const client={query:vi.fn(async(sql:string,p:any[]=[])=>{
   state.sql.push(sql);
   if(sql.startsWith('SELECT kind,request_sha256'))return{rows:state.commands.has(p[2])?[structuredClone(state.commands.get(p[2]))]:[]};
   if(sql.startsWith('INSERT INTO pf_preparation_commands')){state.commands.set(p[2],{kind:p[3],request_sha256:p[4],receipt:structuredClone(p[5])});return{rows:[]};}
+  if(sql.startsWith('DELETE FROM pf_preparation_resolutions')){state.context.resolutions=state.context.resolutions.filter(r=>r.projectTrayId!==p[1]);return{rows:[]};}
   if(sql.startsWith('INSERT INTO pf_preparation_resolutions')){if(state.context.resolutions.some(r=>r.projectTrayId===p[1]))throw Error('Would overwrite saved assignment');state.context.resolutions.push(structuredClone(p[2]));return{rows:[]};}
   if(sql.startsWith('INSERT INTO pf_preparation_resolution_events')){if(state.failEvent)throw Error('Synthetic event write failure');state.events.push(structuredClone(p));return{rows:[]};}
   if(sql.startsWith('UPDATE pf_project_preparations SET resolution_revision=')){state.context.scope.resolutionRevision=p[1];return{rows:[]};}
@@ -99,5 +100,53 @@ describe('persisted tray discovery assignments without network preparation',()=>
     if(kind==='unidentified-multiple'){input.matches[0].rootObjectIds.push('dbid:12');input.matches[0].candidateRootGroups=[{rootObjectIds:['dbid:11','dbid:12'],identity:null}];}
     expect(preparationTrayMatchesWriteSchema.safeParse(input).success).toBe(false);await expect(service().trayMatches(id(1),who,input)).rejects.toThrow();
     expect(state.reads).toBe(0);expect(state.commands.size).toBe(0);
+  });
+});
+
+describe('manual tray assignment transfers',()=>{
+  const assignment = (projectTrayId=id(103),rootObjectIds=['dbid:11','dbid:13']):PreparationResolutionWrite => ({
+    schemaVersion:'wfc.pf.preparation-resolution.write.v1',expected:structuredClone(state.context.scope),
+    idempotencyKey:id(80),projectTrayId,mode:'roots',rootObjectIds,reason:'Assigned from the current model selection.',
+  });
+  it('moves roots from all previous owners in one transaction, preserving their other sections and refreshing every audit',async()=>{
+    trays(3);saved(1).rootObjectIds.push('dbid:12');saved(2).rootObjectIds=['dbid:13'];saved(3).rootObjectIds=['dbid:14'];
+    const input=assignment(),result=await service().resolve(id(1),who,input);
+    expect(result.resolutionRevision).toBe('3');
+    expect(state.context.resolutions.find(r=>r.projectTrayId===id(101))).toMatchObject({mode:'roots',rootObjectIds:['dbid:12']});
+    expect(state.context.resolutions.find(r=>r.projectTrayId===id(102))).toMatchObject({mode:'exclude',rootObjectIds:[]});
+    expect(state.context.resolutions.find(r=>r.projectTrayId===id(103))).toMatchObject({mode:'roots',rootObjectIds:['dbid:11','dbid:13']});
+    for(const root of input.rootObjectIds)expect(state.context.resolutions.filter(r=>r.rootObjectIds.includes(root)).map(r=>r.projectTrayId)).toEqual([id(103)]);
+    expect(state.events.map(e=>e[4])).toEqual(['1','2','3']);
+    expect(state.events.map(e=>e[6].projectTrayId)).toEqual([id(101),id(102),id(103)]);
+    // The emptied source stays explicitly empty instead of reclaiming its name match.
+    const discovery=await service().trayMatches(id(1),who,{...command([match(1,['dbid:11']),match(2,['dbid:13']),match(3,['dbid:14'])]),idempotencyKey:id(81)});
+    expect(discovery.counts.kept).toBe(3);
+    expect(state.context.resolutions.find(r=>r.projectTrayId===id(102))?.rootObjectIds).toEqual([]);
+  });
+  it('replays the exact transfer without writing twice, even after scope changes',async()=>{
+    trays(3);saved(1);const input=assignment(id(103),['dbid:11']),s=service();
+    const first=await s.resolve(id(1),who,input),events=state.events.length;
+    state.context.scope.catalogRevision='99';
+    expect(await s.resolve(id(1),who,input)).toEqual({...first,duplicate:true});
+    expect(state.events).toHaveLength(events);
+    await expect(s.resolve(id(1),who,{...input,rootObjectIds:['dbid:12']})).rejects.toMatchObject({code:'IDEMPOTENCY_CONFLICT'});
+  });
+  it('does not transfer the same numeric object ID from a different model',async()=>{
+    trays(3);const old=saved(1);old.scope.modelVersionId=id(99);
+    await service().resolve(id(1),who,assignment(id(103),['dbid:11']));
+    expect(state.context.resolutions.find(r=>r.projectTrayId===id(101))).toEqual(old);
+    expect(state.events).toHaveLength(1);
+  });
+  it('refuses stale scope before removing any source ownership',async()=>{
+    trays(3);saved(1);const input=assignment(id(103),['dbid:11']),before=structuredClone(state.context.resolutions);
+    state.context.scope.resolutionRevision='1';
+    await expect(service().resolve(id(1),who,input)).rejects.toMatchObject({code:'PREPARATION_SCOPE_STALE'});
+    expect(state.context.resolutions).toEqual(before);expect(state.events).toHaveLength(0);
+  });
+  it('rolls back both ownership changes if an audit write fails',async()=>{
+    trays(3);saved(1);saved(3);const before=structuredClone(state.context);
+    state.failEvent=true;
+    await expect(service().resolve(id(1),who,assignment(id(103),['dbid:11']))).rejects.toThrow('Synthetic event write failure');
+    expect(state.context).toEqual(before);expect(state.events).toHaveLength(0);expect(state.commands.size).toBe(0);
   });
 });

@@ -20,6 +20,14 @@ function fixture() {
 }
 
 describe('tray display targets', () => {
+  it('does not show transferred sections through an emptied old assignment or frozen plan', () => {
+    const input=fixture();
+    const roots=input.plan.requestedScope.trays[0].orderedRootObjectIds;
+    input.context.resolutions=[{...input.assignment([]),mode:'exclude'}, {...input.assignment(roots),projectTrayId:'other-tray'}];
+    expect(trayDisplayTarget(input).objectIds).toEqual([]);
+    input.context.resolutions=[{...input.assignment(['dbid:72']),projectTrayId:'other-tray'}];
+    expect(trayDisplayTarget({...input,plan:null}).objectIds).toEqual([]);
+  });
   it('prefers a multi-root draft, preserves order and leaves every input unchanged', () => {
     const input = fixture();
     input.context.resolutions = [input.assignment()];

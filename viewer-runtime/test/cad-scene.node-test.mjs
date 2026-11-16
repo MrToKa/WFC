@@ -598,3 +598,28 @@ test('native saved world coordinates follow add, move, metadata refresh and geom
   assert.equal(f.viewer.model, f.sourceModel);
   scene.dispose();
 });
+
+test('component visibility changes only its owned fragment and survives replacement geometry', () => {
+  const f = fixture();
+  const scene = createCadSceneController(f.viewer, { window: f.window, sourceModel: f.sourceModel });
+  scene.add('one', f.mesh, f.transform);
+  scene.add('two', f.mesh, f.transform);
+  const model = f.viewer.shown[0];
+  const rows = () => [...model.instances.records.values()];
+  const leaf = model.instances.fragments.fragId2dbId[0];
+  scene.setVisibility('one', false);
+  assert.equal(rows()[0].visible, false);
+  assert.equal(rows()[1].visible, undefined);
+  assert.equal(model.getObjectTree().isNodeHidden(leaf), true);
+  scene.update('one', f.transform);
+  scene.add('one', f.mesh, f.transform);
+  const replacement = model.instances.records.get(2);
+  assert.equal(replacement.visible, false);
+  scene.setVisibility('one', true);
+  assert.equal(replacement.visible, true);
+  assert.equal(model.getObjectTree().isNodeHidden(leaf), false);
+  assert.equal(f.viewer.model, f.sourceModel);
+  assert.throws(() => scene.setVisibility('absent', false), /Unknown CAD instance/);
+  assert.throws(() => scene.setVisibility('one', 1), /Invalid CAD visibility/);
+  scene.dispose();
+});

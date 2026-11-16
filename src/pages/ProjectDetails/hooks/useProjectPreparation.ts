@@ -1313,8 +1313,12 @@ export function useProjectPreparation(pf: PF, active: boolean) {
       if (!sameModel(origin, fresh.context.scope)) throw new Error('The active model changed. Select the tray again in the current model.');
       if (!fresh.context.trays.some(tray => tray.projectTrayId === projectTrayId)) throw new Error('This tray is no longer in the project. Check the trays again.');
       const saved = fresh.context.resolutions.find(resolution => resolution.projectTrayId === projectTrayId);
+      const hasOtherOwner = fresh.context.resolutions.some(resolution => resolution.projectTrayId !== projectTrayId
+        && resolution.mode === 'roots' && resolution.scope.modelVersionId === fresh.context.scope.modelVersionId
+        && resolution.scope.contentFingerprint === fresh.context.scope.contentFingerprint
+        && resolution.rootObjectIds.some(root => roots.includes(root)));
       if (!saved || saved.mode !== 'roots' || !preparationResolutionMatchesScope(saved.scope, fresh.context.scope) ||
-        saved.rootObjectIds.length !== roots.length || !roots.every(root => saved.rootObjectIds.includes(root))) {
+        hasOtherOwner || saved.rootObjectIds.length !== roots.length || !roots.every(root => saved.rootObjectIds.includes(root))) {
         update(value => ({ ...value, progress: 'Assigning the selected model tray…' }));
         fresh = await execute({ kind: 'resolution', body: {
           schemaVersion: 'wfc.pf.preparation-resolution.write.v1', expected: fresh.context.scope,
@@ -1323,7 +1327,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
         } }, signal, true);
       }
       update(value => ({ ...value, progress: null,
-        notice: 'Tray assignment saved. Choose Generate network or Regenerate network to update the routing network.' }));
+        notice: 'Tray assignment saved. Selected sections belong only to this tray and were removed from any previous tray. Choose Generate network or Regenerate network to update the routing network.' }));
     });
   }, [execute, operate, readScopeOnly, reconcileAutomatic, update]);
   const currentModel = pf.data?.activeModel;

@@ -119,6 +119,8 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
   function add(componentId, mesh, transform) {
     // Rehydration after switching tabs may reuse the same component UUID.
     // Replace only this dynamic instance, never mutate the client SVF.
+    const savedHidden = registry.has(componentId) &&
+      dynamicModel?.getObjectTree()?.isNodeHidden(tree.objectId(componentId));
     const savedColor = colors.get(componentId);
     const savedProperties = properties.get(componentId);
     validateMesh(mesh);
@@ -144,6 +146,7 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
     if (savedProperties)
       properties.set(componentId, { ...savedProperties, positionMm: positions.get(componentId) });
     tree.upsert(componentId, instanceId, properties.get(componentId));
+    if (savedHidden) setVisibility(componentId, false);
     restoreOwnedSelection(selection);
     viewer.refresh(true);
   }
@@ -225,6 +228,18 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
     viewer.refresh(true);
   }
 
+  function setVisibility(componentId, visible) {
+    const id = registry.get(componentId);
+    if (typeof visible !== 'boolean') throw new Error('Invalid CAD visibility.');
+    if (disposed || id === undefined || !dynamicModel) throw new Error('Unknown CAD instance.');
+    tree.flush();
+    // The owned tree leaf keeps browser state and fragment visibility consistent.
+    const objectId = tree.objectId(componentId);
+    dynamicModel.getObjectTree().setNodeHidden(objectId, !visible);
+    dynamicModel.setVisibility(id, visible);
+    viewer.refresh(true);
+  }
+
   function focus(componentId) {
     const id = registry.get(componentId);
     if (disposed || id === undefined || !dynamicModel) throw new Error('Unknown CAD instance.');
@@ -259,6 +274,7 @@ export function createCadSceneController(viewer, { window, sourceModel }) {
     remove,
     focus,
     setColor,
+    setVisibility,
     setProperties,
     dispose() {
       disposed = true;

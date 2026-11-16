@@ -72,3 +72,10 @@ test('CAD properties require exact canonical identity, bounded values and curren
   assert.equal(validateEnvelope(parent('CAD_PROPERTIES', { componentId, metadata, route }, { modelVersionId: null, loadId: null }), 'parent-to-frame'), null);
   assert.ok(validateEnvelope(parent('CAD_ACK', { componentId, phase: 'properties', received: 0 }), 'frame-to-parent'));
 });
+
+test('CAD visibility requires an exact current-model boolean payload', () => {
+  for (const visible of [true, false]) assert.ok(validateEnvelope(parent('CAD_VISIBILITY', { componentId, visible }), 'parent-to-frame'));
+  for (const visible of [null, 0, 'false']) assert.equal(validateEnvelope(parent('CAD_VISIBILITY', { componentId, visible }), 'parent-to-frame'), null);
+  assert.equal(validateEnvelope(parent('CAD_VISIBILITY', { componentId, visible: false, objectId: 1 }), 'parent-to-frame'), null);
+  assert.equal(validateEnvelope(parent('CAD_VISIBILITY', { componentId, visible: false }, { modelVersionId: null, loadId: null }), 'parent-to-frame'), null);
+});

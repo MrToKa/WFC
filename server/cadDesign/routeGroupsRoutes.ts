@@ -8,6 +8,13 @@ import { requireProjectEdit } from '../middleware.js';
 
 export const cadRouteGroupsRouter = Router({ mergeParams: true });
 const uuid = z.string().uuid();
+const sectionAssignmentSchema = z.object({
+  instanceId: uuid,
+  expectedRevision: z.number().int().positive().max(2147483646),
+  sourceRouteId: uuid.nullable(),
+  expectedSourceRevision: z.number().int().positive().max(2147483646).optional(),
+}).strict().refine(value => value.sourceRouteId === null
+  ? value.expectedSourceRevision === undefined : value.expectedSourceRevision !== undefined);
 class RouteGroupError extends Error {
   constructor(readonly code: string, readonly status = 409) { super(code); }
 }
@@ -103,6 +110,50 @@ cadRouteGroupsRouter.post('/designs/:designId/routes', requireProjectEdit, safe(
   });
   res.setHeader('Cache-Control','private, no-store');
   res.status(201).json({ route });
+}));
+cadRouteGroupsRouter.post('/designs/:designId/routes/:routeId/sections', requireProjectEdit, safe(async (req,res) => {
+  validateParams(req);
+  const parsed = sectionAssignmentSchema.safeParse(req.body);
+  if (!parsed.success) throw new RouteGroupError('INVALID_CAD_SECTION_ASSIGNMENT',400);
+  const value = parsed.data, projectId = req.params.projectId, designId = req.params.designId, id = req.params.routeId;
+  const route = await withCadRouteDesignTransaction(projectId,designId,async client => {
+    const target = await readRoute(client,projectId,designId,id);
+    if (target.revision !== value.expectedRevision) throw new RouteGroupError('STALE_CAD_ROUTE');
+    if (target.status !== 'draft') throw new RouteGroupError('CAD_ROUTE_PUBLISHED');
+    const instance = await client.query<{ id: string }>(`SELECT id FROM cad_design_instances
+      WHERE project_id=$1 AND design_id=$2 AND id=$3 FOR SHARE`,[projectId,designId,value.instanceId]);
+    if (!instance.rows[0]) throw new RouteGroupError('CAD_ROUTE_MEMBERS_NOT_IN_DESIGN',400);
+    const membership = await client.query<{ routeGroupId: string }>(`SELECT route_group_id AS "routeGroupId" FROM cad_route_group_members
+      WHERE project_id=$1 AND design_id=$2 AND instance_id=$3 FOR UPDATE`,[projectId,designId,value.instanceId]);
+    const sourceId = membership.rows[0]?.routeGroupId ?? null;
+    if (sourceId?.toLowerCase() !== value.sourceRouteId?.toLowerCase()) throw new RouteGroupError('STALE_CAD_SECTION_ASSIGNMENT');
+    if (sourceId?.toLowerCase() === id.toLowerCase()) throw new RouteGroupError('CAD_SECTION_ALREADY_IN_ROUTE');
+    if (target.instanceIds.length >= 200) throw new RouteGroupError('CAD_ROUTE_MEMBER_LIMIT');
+    if (sourceId) {
+      const source = await readRoute(client,projectId,designId,sourceId);
+      if (source.revision !== value.expectedSourceRevision) throw new RouteGroupError('STALE_CAD_SOURCE_ROUTE');
+      if (source.status !== 'draft') throw new RouteGroupError('CAD_ROUTE_PUBLISHED');
+      // The design lock serializes membership writers. Remove the old ownership
+      // before inserting the new one; the unique project/member key stays enforced.
+      // Keep an empty source draft when its final section is moved.
+      await client.query(`DELETE FROM cad_route_group_members
+        WHERE project_id=$1 AND design_id=$2 AND route_group_id=$3 AND instance_id=$4`,[projectId,designId,sourceId,value.instanceId]);
+      const changedSource = await client.query(`UPDATE cad_route_groups SET revision=revision+1,updated_at=now()
+        WHERE project_id=$1 AND design_id=$2 AND id=$3 AND revision=$4 AND status='draft' RETURNING id`,
+      [projectId,designId,sourceId,value.expectedSourceRevision]);
+      if (!changedSource.rows[0]) throw new RouteGroupError('STALE_CAD_SOURCE_ROUTE');
+    }
+    await client.query(`INSERT INTO cad_route_group_members(project_id,design_id,route_group_id,instance_id)
+      VALUES ($1,$2,$3,$4)`,[projectId,designId,id,value.instanceId]);
+    const changedTarget = await client.query(`UPDATE cad_route_groups SET revision=revision+1,updated_at=now()
+      WHERE project_id=$1 AND design_id=$2 AND id=$3 AND revision=$4 AND status='draft' RETURNING id`,
+    [projectId,designId,id,value.expectedRevision]);
+    if (!changedTarget.rows[0]) throw new RouteGroupError('STALE_CAD_ROUTE');
+    await touchDesign(client,projectId,designId);
+    return readRoute(client,projectId,designId,id);
+  });
+  res.setHeader('Cache-Control','private, no-store');
+  res.json({ route });
 }));
 cadRouteGroupsRouter.patch('/designs/:designId/routes/:routeId', requireProjectEdit, safe(async (req,res) => {
   validateParams(req);

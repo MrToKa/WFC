@@ -244,6 +244,12 @@ export class ViewerController {
     await this.sendAsync('CAD_COLOR', { componentId, color }, 'CAD_ACK');
   }
 
+  async setCadComponentVisibility(componentId: string, visible: boolean): Promise<void> {
+    if (typeof visible !== 'boolean') throw new Error('CAD visibility must be a boolean.');
+    if (!this.getLoadSnapshot()?.ready || !await this.checkSelection()) throw new Error('Viewer model access changed.');
+    await this.sendAsync('CAD_VISIBILITY', { componentId, visible }, 'CAD_ACK');
+  }
+
   async setCadComponentProperties(componentId: string, metadata: CadSectionMetadata, route: CadSectionRoute): Promise<void> {
     if (!validateCadProperties(componentId, metadata, route)) throw new Error('Invalid CAD section properties.');
     const payload = structuredClone({ componentId, metadata, route });
@@ -340,7 +346,7 @@ export class ViewerController {
     if (message.type === 'CAD_ACK') {
       const expected: Record<string, string> = {
         CAD_BEGIN: 'begun', CAD_APPEND: 'appended', CAD_COMMIT: 'displayed',
-        CAD_TRANSFORM: 'moved', CAD_REMOVE: 'removed', CAD_FOCUS: 'focused', CAD_COLOR: 'colored', CAD_PROPERTIES: 'properties',
+        CAD_TRANSFORM: 'moved', CAD_REMOVE: 'removed', CAD_FOCUS: 'focused', CAD_COLOR: 'colored', CAD_PROPERTIES: 'properties', CAD_VISIBILITY: 'visibility',
       };
       const phase = expected[pending.envelope.type];
       const payload = pending.envelope.payload;

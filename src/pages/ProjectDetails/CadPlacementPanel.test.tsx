@@ -217,7 +217,13 @@ describe('removing a proposed CAD component', { timeout: 20000 }, () => {
   });
 });
 
-function mountScoped(holdFirstExport = false, withMetadata = false, unassignedOnly = false) {
+function mountScoped(
+  holdFirstExport = false,
+  withMetadata = false,
+  unassignedOnly = false,
+  verifiedPorts = false,
+  failMembership = false,
+) {
   const secondId = '00000000-0000-4000-8000-000000000006';
   const freeId = '00000000-0000-4000-8000-000000000007';
   const newId = '00000000-0000-4000-8000-000000000008';
@@ -273,6 +279,7 @@ function mountScoped(holdFirstExport = false, withMetadata = false, unassignedOn
   );
   const onMove = vi.fn(async () => {}),
     onPick = vi.fn();
+  const onVisibility = vi.fn(async (_id: string, _visible: boolean) => {});
   const downloads: string[] = [];
   let finishExport: ((response: unknown) => void) | undefined;
   const exportResponse = { ok: true, blob: async () => new Blob(['test export']) };
@@ -281,7 +288,7 @@ function mountScoped(holdFirstExport = false, withMetadata = false, unassignedOn
     return { ok: true, json: async () => structuredClone(snapshot) };
   };
   const request = vi.fn(async (url: string, options: RequestInit = {}) => {
-    if (url.includes('/instances/') && options.method === 'PATCH') {
+    if (url.includes('/instances/') && options?.method === 'PATCH') {
       const row = rows.find((row) => url.endsWith('/' + row.id));
       if (!row) throw new Error('Unknown test component');
       const input = JSON.parse(String(options.body));
@@ -302,7 +309,7 @@ function mountScoped(holdFirstExport = false, withMetadata = false, unassignedOn
       }
       return exportResponse;
     }
-    if (url.endsWith('/instances') && options.method === 'POST') {
+    if (url.endsWith('/instances') && options?.method === 'POST') {
       const input = JSON.parse(String(options.body));
       rows = [
         ...rows,
@@ -317,13 +324,27 @@ function mountScoped(holdFirstExport = false, withMetadata = false, unassignedOn
       ];
       return jsonResponse({ id: newId });
     }
-    if (url.includes('/routes/') && options.method === 'PATCH') {
+    if (url.endsWith('/sections') && options?.method === 'POST') {
+      const input = JSON.parse(String(options.body));
+      const source = groups.find((row) => row.id === input.sourceRouteId)!;
+      const target = groups.find((row) => url.endsWith(`/${row.id}/sections`))!;
+      source.instanceIds = source.instanceIds.filter((id) => id !== input.instanceId);
+      source.revision++;
+      target.instanceIds.push(input.instanceId);
+      target.revision++;
+      return jsonResponse({ route: target });
+    }
+    if (url.includes('/routes/') && options?.method === 'PATCH') {
+      if (failMembership) {
+        failMembership = false;
+        return { ok: false, status: 409, json: async () => ({ code: 'STALE_ROUTE' }) };
+      }
       const route = groups.find((row) => url.endsWith('/' + row.id));
       if (!route) throw new Error('Unknown test route');
       Object.assign(route, JSON.parse(String(options.body)), { revision: route.revision + 1 });
       return jsonResponse({ route });
     }
-    if (url.endsWith('/routes') && options.method === 'POST') {
+    if (url.endsWith('/routes') && options?.method === 'POST') {
       const input = JSON.parse(String(options.body));
       const route = {
         ...groups[0],
@@ -412,8 +433,11 @@ function mountScoped(holdFirstExport = false, withMetadata = false, unassignedOn
               id: catalogId,
               partNumber: 'SOURCE-PART',
               manufacturer: 'Niedax',
-              originalFilename: 'custom.step',
-              sourceSha256: 'a'.repeat(64),
+              originalFilename: verifiedPorts ? 'NDX_KL_100-203_F_MED_214.step' : 'custom.step',
+              sourceSha256: verifiedPorts
+                ? '0b0afd99c5be6ea619859897c91e5439f7d8e8c64e61ef44f808d09b54b4599c'
+                : 'a'.repeat(64),
+              componentKind: 'straight',
               conversionStatus: 'ready',
               materialAssetId: catalogId,
               cadRevision: 1,
@@ -425,6 +449,7 @@ function mountScoped(holdFirstExport = false, withMetadata = false, unassignedOn
           onRemove={onRemove}
           onColor={onColor}
           onProperties={withMetadata ? onProperties : undefined}
+          onVisibility={onVisibility}
           newTrayMode={newTrayMode}
           newTrayEpoch={epoch}
           onNewTray={open}
@@ -440,6 +465,7 @@ function mountScoped(holdFirstExport = false, withMetadata = false, unassignedOn
     onShow,
     onRemove,
     onProperties,
+    onVisibility,
     downloads,
     routeA,
     routeB,
@@ -453,6 +479,162 @@ function mountScoped(holdFirstExport = false, withMetadata = false, unassignedOn
 }
 
 describe('saved route component scope and exports', { timeout: 20000 }, () => {
+  it('toggles the route name to return to unassigned components and select a free component', async () => {
+    const fixture = mountScoped();
+    await waitFor(() => expect(fixture.onShow).toHaveBeenCalledTimes(3));
+    const route = await screen.findByRole('button', { name: /A-ROUTE · 1 components/ });
+    const list = screen.getByRole('list', { name: 'Placed tray components' });
+    expect(route).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(route);
+    expect(route).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(within(list).getByRole('button', { name: /A-PART/ }));
+    expect(screen.getByRole('button', { name: 'Update saved position' })).toBeInTheDocument();
+    fireEvent.click(route);
+    expect(route).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByText('Selected route: A-ROUTE')).not.toBeInTheDocument();
+    expect(screen.queryByRole('form', { name: 'Save component position' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Export selected tray STEP' })).toBeDisabled();
+    expect(within(list).queryByRole('button', { name: /A-PART/ })).not.toBeInTheDocument();
+    fireEvent.click(within(list).getByRole('button', { name: /FREE-PART/ }));
+    expect(screen.getByLabelText('x')).toHaveValue(2000);
+    fireEvent.click(route);
+    expect(route).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText('Include component ' + instanceId)).toBeChecked();
+    expect(within(list).queryByRole('button', { name: /FREE-PART/ })).not.toBeInTheDocument();
+    expect(
+      fixture.request.mock.calls.some(
+        ([, options]) => options?.method === 'POST' || options?.method === 'PATCH',
+      ),
+    ).toBe(false);
+    await act(async () => {});
+  });
+  it('moves an assigned section to the selected route and refreshes both memberships', async () => {
+    const fixture = mountScoped();
+    await waitFor(() => expect(fixture.onShow).toHaveBeenCalledTimes(3));
+    fireEvent.click(await screen.findByRole('button', { name: /A-ROUTE · 1 components/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add existing section' }));
+    const panel = screen.getByRole('region', { name: 'Add existing section' });
+    fireEvent.click(within(panel).getByRole('radio', { name: /B-PART.*B-ROUTE/ }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Add section' }));
+    await screen.findByText('Section moved from B-ROUTE to A-ROUTE.');
+    expect(screen.getByRole('button', { name: /A-ROUTE · 2 components/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /B-ROUTE · 0 components/ })).toBeInTheDocument();
+    expect(screen.getByText('Selected route: A-ROUTE')).toBeInTheDocument();
+    const move = fixture.request.mock.calls.find(
+      ([url, options]) => url.endsWith('/sections') && options?.method === 'POST',
+    );
+    expect(JSON.parse(String(move?.[1]?.body))).toMatchObject({
+      sourceRouteId: fixture.routeB,
+      expectedRevision: 1,
+      expectedSourceRevision: 1,
+    });
+    fireEvent.click(screen.getByRole('button', { name: /B-ROUTE · 0 components/ }));
+    expect(
+      within(screen.getByRole('list', { name: 'Placed tray components' })).queryAllByRole('button'),
+    ).toHaveLength(0);
+    await act(async () => {});
+  });
+  it('keeps a saved section available after membership refusal without creating it twice', async () => {
+    const fixture = mountScoped(false, false, false, false, true);
+    fireEvent.click(await screen.findByRole('button', { name: /A-ROUTE · 1 components/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'New section' }));
+    fireEvent.change(screen.getByLabelText('Catalogue component'), {
+      target: { value: catalogId },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save new component' }));
+    await screen.findByText(/Section saved, but could not add it to A-ROUTE: STALE_ROUTE/);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Add existing section' })).toBeEnabled(),
+    );
+    expect(screen.getByText('Selected route: A-ROUTE')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save new component' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Add existing section' }));
+    const panel = screen.getByRole('region', { name: 'Add existing section' });
+    fireEvent.click(within(panel).getByRole('radio', { name: /NEW-PART/ }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Add section' }));
+    await screen.findByRole('button', { name: /A-ROUTE · 2 components/ });
+    expect(
+      fixture.request.mock.calls.filter(
+        ([url, options]) => url.endsWith('/instances') && options?.method === 'POST',
+      ),
+    ).toHaveLength(1);
+  });
+  it('adds a new snapped section to the selected route and retains its selection', async () => {
+    const fixture = mountScoped(false, true, false, true);
+    fireEvent.click(await screen.findByRole('button', { name: /A-ROUTE · 1 components/ }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'New section' })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'New section' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'New section' }));
+    fireEvent.change(screen.getByLabelText('Catalogue component'), {
+      target: { value: catalogId },
+    });
+    const targets = screen.getByLabelText('Snap target');
+    expect(within(targets).getAllByRole('option')).toHaveLength(2);
+    fireEvent.change(targets, { target: { value: instanceId } });
+    fireEvent.change(screen.getByLabelText('Target connector'), { target: { value: 'end' } });
+    fireEvent.change(screen.getByLabelText('Source connector'), { target: { value: 'start' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Snap to connector' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save new component' }));
+    await screen.findByRole('button', { name: /A-ROUTE · 2 components/ });
+    expect(screen.getByText('Selected route: A-ROUTE')).toBeInTheDocument();
+    expect(screen.getByText('Components in A-ROUTE: 2')).toBeInTheDocument();
+    const membership = fixture.request.mock.calls.find(
+      ([url, options]) => url.endsWith(`/routes/${fixture.routeA}`) && options?.method === 'PATCH',
+    );
+    expect(JSON.parse(String(membership?.[1]?.body))).toMatchObject({
+      instanceIds: [instanceId, fixture.newId],
+      expectedRevision: 1,
+    });
+    const connection = fixture.request.mock.calls.find(
+      ([url, options]) => url.endsWith('/connections') && options?.method === 'POST',
+    );
+    expect(JSON.parse(String(connection?.[1]?.body))).toEqual({
+      sourceInstanceId: fixture.newId,
+      sourcePortName: 'start',
+      targetInstanceId: instanceId,
+      targetPortName: 'end',
+    });
+    expect(screen.getByRole('button', { name: 'New section' })).toBeEnabled();
+  });
+
+  it('shows and hides a free section before adding it, preserving the route and next revision', async () => {
+    const fixture = mountScoped();
+    await waitFor(() => expect(fixture.onShow).toHaveBeenCalledTimes(3));
+    fireEvent.click(await screen.findByRole('button', { name: /A-ROUTE · 1 components/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add existing section' }));
+    const dialog = screen.getByRole('region', { name: 'Add existing section' });
+    expect(within(dialog).getAllByRole('radio')).toHaveLength(2);
+    fireEvent.click(within(dialog).getByRole('button', { name: `Hide section ${fixture.freeId}` }));
+    await within(dialog).findByRole('button', { name: `Show section ${fixture.freeId}` });
+    expect(fixture.onVisibility).toHaveBeenLastCalledWith(fixture.freeId, false);
+    expect(fixture.request.mock.calls.some(([, options]) => options?.method === 'PATCH')).toBe(
+      false,
+    );
+    fireEvent.click(within(dialog).getByRole('radio', { name: /FREE-PART/ }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add section' }));
+    await screen.findByRole('button', { name: /A-ROUTE · 2 components/ });
+    expect(fixture.onVisibility).toHaveBeenLastCalledWith(fixture.freeId, true);
+    expect(screen.getByText('Components in A-ROUTE: 2')).toBeInTheDocument();
+    expect(
+      fixture.request.mock.calls.some(
+        ([url, options]) => url.endsWith('/instances') && options?.method === 'POST',
+      ),
+    ).toBe(false);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'New section' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'New section' }));
+    fireEvent.change(screen.getByLabelText('Catalogue component'), {
+      target: { value: catalogId },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save new component' }));
+    await screen.findByRole('button', { name: /A-ROUTE · 3 components/ });
+    const patches = fixture.request.mock.calls.filter(
+      ([url, options]) => url.endsWith(`/routes/${fixture.routeA}`) && options?.method === 'PATCH',
+    );
+    expect(JSON.parse(String(patches[1][1]?.body))).toMatchObject({
+      expectedRevision: 2,
+      instanceIds: [instanceId, fixture.freeId, fixture.newId],
+    });
+  });
   it('opens and updates a saved unassigned component after reload without creating a tray', async () => {
     const fixture = mountScoped(false, false, true);
     await waitFor(() => expect(fixture.onShow).toHaveBeenCalledOnce());
