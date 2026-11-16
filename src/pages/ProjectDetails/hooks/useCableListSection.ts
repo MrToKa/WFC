@@ -35,6 +35,7 @@ import {
   emptyCableForm,
   parseCableFormErrors,
   toCableFormState,
+  toCableEditFormState,
 } from '../../ProjectDetails.forms';
 import { sanitizeFileSegment } from '../../ProjectDetails.utils';
 
@@ -588,7 +589,7 @@ export const useCableListSection = ({
     manualReadEpoch.current++;
     setDialogMode('edit');
     setDialogErrors({});
-    setDialogValues(toCableFormState(cable));
+    setDialogValues(toCableEditFormState(cable));
     setDialogOpen(true);
     setEditingCableId(cable.id);
   }, []);

@@ -309,6 +309,9 @@ export type CableFormState = {
   fromLocation: string;
   toLocation: string;
   routing: string;
+  initialRouting?: string;
+  initialManualRouting?: string;
+  initialManualRoutingProtected?: string;
   delivery: string;
   designLength: string;
   installLength?: string;
@@ -371,6 +374,18 @@ export const toCableFormState = (cable: Cable): CableFormState => ({
   expectedCableWriteRevision: cable.cableWriteRevision,
   expectedRoutingControlRevision: cable.routingControlRevision,
 });
+
+export const toCableEditFormState = (cable: Cable): CableFormState => {
+  const form = toCableFormState(cable);
+  const usedRouting = cable.routing ?? form.routing;
+  return {
+    ...form,
+    routing: usedRouting,
+    initialRouting: usedRouting,
+    initialManualRouting: form.routing,
+    initialManualRoutingProtected: form.manualRoutingProtected,
+  };
+};
 
 /** Shared by Details, edit dialogs and inline edits: typing a route expresses manual intent. */
 export function changeCableFormField(
@@ -456,7 +471,15 @@ export const buildCableInput = (
     tag,
     fromLocation: normalize(values.fromLocation),
     toLocation: normalize(values.toLocation),
-    routing: normalize(values.routing),
+    // Prefilling the used route must not turn an unchanged automatic/execution route
+    // into a manual mutation when saving another field.
+    routing: normalize(
+      values.initialRouting !== undefined &&
+        values.routing === values.initialRouting &&
+        values.manualRoutingProtected === values.initialManualRoutingProtected
+        ? (values.initialManualRouting ?? values.routing)
+        : values.routing,
+    ),
     delivery: normalize(values.delivery),
   };
 

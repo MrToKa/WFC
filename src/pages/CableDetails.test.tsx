@@ -248,7 +248,7 @@ it('edits the manual route and execution dates without copying the calculated ro
   const dialog = await screen.findByRole('dialog', { name: 'Edit cable' });
   const route = within(dialog).getByRole('textbox', { name: 'Routing' });
   const protect = within(dialog).getByRole('checkbox', { name: 'Manually assigned route — keep' });
-  expect(route).toHaveValue('');
+  expect(route).toHaveValue('/AUTO');
   expect(protect).not.toBeChecked();
   fireEvent.change(route, { target: { value: '/BC182/BC183' } });
   expect(protect).toBeChecked();

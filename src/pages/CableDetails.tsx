@@ -71,7 +71,7 @@ import {
   changeCableFormField,
   emptyCableForm,
   parseCableFormErrors,
-  toCableFormState,
+  toCableEditFormState,
   type CableFormErrors,
   type CableFormState,
 } from './ProjectDetails.forms';
@@ -867,7 +867,7 @@ export const CableDetails = () => {
       return;
     }
 
-    setCableEditDialogValues(toCableFormState(details.cable));
+    setCableEditDialogValues(toCableEditFormState(details.cable));
     setCableEditDialogErrors({});
     setCableEditDialogOpen(true);
   }, [details]);

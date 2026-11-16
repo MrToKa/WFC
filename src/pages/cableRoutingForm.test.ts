@@ -3,7 +3,7 @@ import {
   buildCableInput,
   changeCableFormField,
   emptyCableForm,
-  toCableFormState,
+  toCableEditFormState as toCableFormState,
 } from './ProjectDetails.forms';
 import type { Cable } from '@/api/client';
 import { emptyRoutingControl } from '../../shared/cableRoutingControl';
@@ -21,7 +21,7 @@ describe('routing and execution edit form', () => {
       changeCableFormField(unchecked, 'routing', unchecked.routing).manualRoutingProtected,
     ).toBe('false');
   });
-  it('edits only the manual value and retains revision fences without copying the automatic display value', () => {
+  it('prefills the used automatic route while preserving manual intent and revision fences on unchanged save', () => {
     const cable = {
       cableId: 1,
       cableTypeId: 'type-1',
@@ -37,7 +37,7 @@ describe('routing and execution edit form', () => {
     } as Cable;
     const form = toCableFormState(cable),
       result = buildCableInput(form);
-    expect(form.routing).toBe('');
+    expect(form.routing).toBe('/AUTO');
     expect(form.pullDate).toBe('2026-11-15');
     expect(result.errors).toEqual({});
     expect(result.input).toMatchObject({
@@ -58,6 +58,34 @@ describe('routing and execution edit form', () => {
       );
     },
   );
+  it.each([
+    { manualRouting: null, manualProtected: false, executionLocked: false },
+    { manualRouting: '/OLD-MANUAL', manualProtected: false, executionLocked: false },
+    { manualRouting: '/USED', manualProtected: true, executionLocked: false },
+    { manualRouting: '/OLD-MANUAL', manualProtected: true, executionLocked: true },
+  ])('preserves unchanged routing controls: %j', (control) => {
+    const form = toCableFormState({
+      cableId: 1, cableTypeId: 'type-1', tag: 'C-1', designLength: 25,
+      routing: '/USED', autoCalculatedRouting: '/DIFFERENT-CALCULATION',
+      routingControl: { ...emptyRoutingControl(), ...control,
+        executionRouting: control.executionLocked ? '/USED' : null },
+    } as Cable);
+    expect(form.routing).toBe('/USED');
+    expect(buildCableInput(changeCableFormField(form, 'delivery', 'Updated')).input)
+      .toMatchObject({ routing: control.manualRouting ?? '', manualRoutingProtected: control.manualProtected });
+  });
+  it('allows editing, protecting or clearing a prefilled automatic route', () => {
+    const form = toCableFormState({
+      cableId: 1, cableTypeId: 'type-1', tag: 'C-1', designLength: 25,
+      routing: '/AUTO', routingControl: emptyRoutingControl(),
+    } as Cable);
+    expect(buildCableInput(changeCableFormField(form, 'routing', '/EDITED')).input)
+      .toMatchObject({ routing: '/EDITED', manualRoutingProtected: true });
+    expect(buildCableInput(changeCableFormField(form, 'manualRoutingProtected', 'true')).input)
+      .toMatchObject({ routing: '/AUTO', manualRoutingProtected: true });
+    expect(buildCableInput(changeCableFormField(form, 'routing', '')).input)
+      .toMatchObject({ routing: '', manualRoutingProtected: false });
+  });
   it('accepts valid leap day and empty execution fields and rejects negative installed length', () => {
     expect(
       buildCableInput({ ...base, tested: '2028-02-29', pullDate: '', installLength: '0' }).input,
